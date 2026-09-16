@@ -426,8 +426,15 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             .map(a => a.textContent.trim()).sort(),
           selects: [...document.querySelectorAll('select')].filter(outside)
             .map(s => s.id).sort(),
+          // NAMED, NOT COUNTED BY TYPE. This read `i.type`, so every text
+          // box in the page arrived as the word 'text' and the list was
+          // three indistinguishable entries: a control swapped for another
+          // of the same type moved nothing, and only a change in the COUNT
+          // was ever visible. `buttons` above already reads `id || text`,
+          // so this is the file's own convention rather than a new idea --
+          // and every input on the page has an id.
           inputs: [...document.querySelectorAll('input')].filter(outside)
-            .map(i => i.type).sort(),
+            .map(i => i.id || i.type).sort(),
           toolKinds: [...new Set([...document.querySelectorAll('#tool-slot *')]
             .filter(el => ['BUTTON', 'INPUT', 'SELECT'].includes(el.tagName))
             .map(toolKind))].sort(),
@@ -604,7 +611,14 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             //
             // No absence row changes. Nothing listens on onOrder yet, and the
             // page could already reach this board.
-            'units-toggle', 'dt-open', 'dt-close', 'dt-bone', 'outline',
+            // UNITS IS TWO BUTTONS NOW, not one naming the unit in force
+            // (Movie, 15 Sep). They carry no id, so the census sees them by
+            // their faces. Neither authors an entity: they change how a
+            // length is READ, which is why no absence row moves.
+            'IMPERIAL', 'METRIC',
+            // The previews tab, the second of the right edge's two.
+            'previews-tab',
+            'dt-open', 'dt-close', 'dt-bone', 'outline',
             // PRINTSCREEN PRINTS THE SCREEN, and that is the whole of it: a
             // three-page presentation made from pictures the page has
             // already painted -- this view, the whole plan, the rail's
@@ -614,6 +628,12 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // which still belongs to the layout sheet.
             'printscreen',
             'strip-ruler', 'strip-tsquare', 'strip-scale',
+            // THE READOUT IS A WORD UNTIL IT IS ASKED FOR (Movie, 15 Sep), so
+            // the counts that used to sit open at the foot are behind two
+            // presses now: `readout-tab` shows them and `readout-close` puts
+            // them away. Both only SHOW what the page already counted, so no
+            // absence row moves.
+            'readout-tab', 'readout-close',
             'TOY', 'DRAFTING', 'RUFF', 'ROUGH', 'NIGHT', 'DAY',
             'Continue', 'Stay in TOY',
             'Break here', 'Move this wall',
@@ -645,7 +665,21 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // The three stock chips are absent from `buttons` above for a
           // real reason rather than an oversight: they exist only while a
           // detached garage entry is chosen, and nothing is chosen at rest.
-          inputs: ['file', 'number', 'number', 'text', 'text'].sort(),
+          // THE ANGLE BOX IS THE SIXTH (Movie, 15 Sep: "we should have a
+          // angle textbox actually"). It is TEXT and not number for the
+          // reason the length box is: a bearing is typed the way a drafter
+          // says it, not spun. It turns the run in hand and authors nothing
+          // the length box does not already author.
+          //
+          // It arrived undeclared -- this
+          // check went red naming one more 'text' than the list held, which
+          // is the job it advertises. It is the LENGTH box's twin: dead
+          // until a run is in hand, so it cannot START one, and it commits
+          // through draw-wall's own gesture exactly as the length box does.
+          // It authors no entity and moves no point, so no absence row
+          // changes.
+          inputs: ['size-w', 'size-d', 'frozen-length', 'frozen-angle',
+            'file-input', 'save-as-name'].sort(),
           railKinds: ['seat'],
           // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
           // no unlabelled button: an entry this cannot name would arrive as

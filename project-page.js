@@ -130,6 +130,11 @@ if (!window.DraftProjectPage) {
     item('heel', 'ROOF HEEL', 'in', 'roofHeelIn', ALL_TYPES),
     item('upperStud', '2ND FL STUD', 'stud', 'upperWallHeightFt', ['house', 'modifiedBilevel']),
     item('upperJoists', '2ND FL JOISTS', 'in', 'upperJoistDepthIn', ['house', 'modifiedBilevel']),
+    // THE SPLIT'S UPPER DECK, measured off the ENTRY floor. Only the modified
+    // bilevel has the cell, because only it has a floor that stands somewhere
+    // other than on the level below it.
+    item('upperDeck', '2ND FL OVER ENTRY', 'ftin', 'upperDeckAboveEntryFt', ['modifiedBilevel']),
+    item('upperExtent', 'BALCONY DEPTH', 'ftin', 'upperExtentFt', ['modifiedBilevel']),
     item('mainStud', 'MAIN FL STUD', 'stud', 'mainWallHeightFt', ALL_TYPES),
     // NO ENTRY FLOOR ROWS HERE, deliberately. They were added to this table
     // on 5 Sep and taken out the same evening once Movie settled that ENTRY
@@ -176,6 +181,26 @@ if (!window.DraftProjectPage) {
     // BILEVEL row has no cell for it, so this sits unused there rather than
     // wrongly -- one shared default, as the harness requires.
     upperWallHeightFt: SPLIT_WALL_FT,
+    // AND IT IS NOT A SECOND STOREY. Movie, 16 Sep: "these have lower 2nd
+    // floor than typical 2 storey", "it should be lower and roof lower", "the
+    // 2nd floor balcony is about 9 ft above the entry floor (i will varify
+    // later)". Stacking it on MAIN FL -- which is what this row did until now
+    // -- put its deck 13'-7" over the entry and took the roof up with it.
+    //
+    // PROVISIONAL BY HIS OWN WORDS, which is the argument for it being a typed
+    // cell rather than a constant: he corrects it in the card, not in a file.
+    upperDeckAboveEntryFt: 9,
+    // The balcony is joisted like a house floor, not like the deck over the
+    // garage: "the balcony floor can be 11 7/8\"tji but over the garage default
+    // 19.25\" (plus 3/4\"". One level, two depths -- so the garage's package
+    // stays level-assembly.js's overGarage role and never this cell.
+    upperJoistDepthIn: 11.875,
+    // HOW FAR THE BALCONY REACHES IN from the front wall -- the landing's
+    // half of the entry, past which the main area is open and its ceiling
+    // drops. Movie, 16 Sep: "only the garage and the half of the entry area
+    // which is the balcony over the landing". A starting number: it is a
+    // plan dimension, so a section can only be told it.
+    upperExtentFt: 5.5,
   });
   // A GARAGE DOES NOT HAVE A BASEMENT WALL, and until now the table said it
   // did. Neither garage row carried a default, so both fell back to the
@@ -451,22 +476,13 @@ if (!window.DraftProjectPage) {
   // 3.3pt apart vertically at slope -0.333, which is 3.13pt perpendicular =
   // 3.42" at that sheet's scale. A 2x4 chord.
   const ROOF_CHORD_IN = 3.5;
-  // One face of a drilled pile, shown dotted because the pile is BEYOND the
-  // cut -- at ~8 ft on centre the section almost never lands on one, so what
-  // is drawn is where the nearest one would be, not one that is there. Movie,
-  // 4 Sep: "a dotted line about 5 inches in from the garage section line
-  // (which will represent one side of the pile)... extend down further than
-  // the footing by about 8"".
-  const PILE_FACE_FROM_CUT_IN = 5;
-  const PILE_BELOW_LOWEST_IN = 8;
-  // How far the pile's top end shows above the void form. Movie, 4 Sep: "the
-  // dotted line should start above the 4" void form under the concrete grade
-  // beam". It ran from the TOP of the beam's concrete before, the full depth
-  // of the pour -- but a pile does not pass through the beam, the beam bears
-  // ON it, so the line starting at the top drew a pile going up through
-  // concrete it never reaches. Starting just above the void form shows the
-  // pile arriving at the beam's underside, which is what it does.
-  const PILE_TOP_ABOVE_VOID_IN = 4;
+  // HALF A PILE. The cut runs along the beam and through the shaft, so the
+  // face drawn is the pile's centreline and the half between it and the break
+  // is what shows -- Movie, 16 Sep: "only half a pile will show due to the
+  // cut line". The earlier 5" dotted line was the same pile understood as
+  // something standing BEHIND the cut, which is why it was dotted and why it
+  // started inside the beam rather than under it.
+  const PILE_HALF_WIDTH_IN = 5;
   // The attached garage's roof cavity. Movie, 4 Sep: "the roof cavity with
   // 3.5" top and bottom chords could also be shown with 4' space between
   // ceiling height and top of top chord", then "just flat section", "talking
@@ -582,6 +598,9 @@ if (!window.DraftProjectPage) {
   // PILES". The beam is cast on it and it crushes, so frost heave lifts the
   // soil and not the garage.
   const VOID_FORM_IN = 4;
+  // Hatch pitch, in SCREEN pixels: fine enough to read as fill at the pile's
+  // 5" width, coarse enough not to flood the 4" void form band.
+  const HATCH_PITCH_PX = 5;
 
   // Section geometry in world feet: x = 0 at the exterior wall face,
   // positive inward; y = elevation with the MAIN FL floor surface at 0.
@@ -589,8 +608,8 @@ if (!window.DraftProjectPage) {
   // Draws whichever hold-down was chosen, in the 1 1/2" band above the
   // concrete. Shared by the house and the garage so the two can never drift
   // into drawing the same detail differently.
-  const attachment = (rect, line, kind, x, concTop, wallFt) => {
-    const proudFt = sillPlateIn() / 12;
+  const attachment = (rect, line, kind, x, concTop, wallFt, proudIn = sillPlateIn()) => {
+    const proudFt = proudIn / 12;
     if (kind !== 'ladder') { rect(x, concTop, wallFt, proudFt, 1.5); return; }
     // Two members on edge at the wall faces, most of them below the pour.
     const memberFt = LADDER_MEMBER_IN / 12, deepFt = LADDER_DEPTH_IN / 12;
@@ -608,6 +627,12 @@ if (!window.DraftProjectPage) {
     const roof = values.roof;      // {pitch, overhangFt, fasciaIn}
     const wallIn = values.wallThicknessIn;
     const wallFt = wallIn / 12;
+    // HOW FAR IN THE CUT REACHES, per section rather than per page. Movie,
+    // 16 Sep: "move the cut line over on the house to 10ft rather than 4" --
+    // asked of the bilevel, whose stair needs floor to show, not of the
+    // bungalow, where 4 ft is the wall detail he specified. So the number is
+    // the drawing's, defaulting to the bungalow's.
+    const cut = values.cutDepthFt ?? CUT_DEPTH_FT;
     const fdnFt = fdn.thicknessIn / 12;
     const parts = [];
     const anchors = {};
@@ -629,19 +654,78 @@ if (!window.DraftProjectPage) {
       sum + level.wallHeightFt + (level.joistDepthIn + level.sheathingIn) / 12, 0);
     let y = -below;
     const mainDepthFt = (floors[datumIndex].joistDepthIn + floors[datumIndex].sheathingIn) / 12;
+    // WHERE EACH DECK ENDED UP, so a level can stand on one that is not the
+    // level below it. A split's upper floor bears over the ENTRY and the
+    // garage -- Movie, 16 Sep: "the main floor area doesn't have a 2nd floor
+    // over it typically only the garage and the half of the entry area which
+    // is the balcony" -- so climbing the stack one level at a time puts it a
+    // full main-floor storey too high and lifts the roof with it.
+    const deckY = new Map();
+    // WHERE THE STAIR COMES THROUGH. Movie, 16 Sep, marking the floors in
+    // red: "the red means to delete that floor area part" -- a stair rises
+    // through an opening, and a deck drawn solid across the cut says the
+    // flights pass through structure.
+    //
+    // The opening and the flights are one number, not two: the well is the
+    // stair's own footprint, so moving the stair moves the hole and they
+    // cannot drift apart -- which is exactly what a second, typed-in well
+    // position would allow.
+    const stairRunFt = Math.min(2.6, (cut - fdnFt - 0.8) / 2);
+    const stairWellX0 = fdnFt + 1.9;
+    const well = values.stairs ? { x0: stairWellX0, x1: stairWellX0 + stairRunFt } : null;
+    // A DECK STOPS AT THE WELL. The first version kept the far side too --
+    // a floor, a hole, then floor again to the break -- and Movie struck
+    // those far pieces out: past the stair the cut is into open stairwell,
+    // so a band drawn there is floor that is not in this view.
+    const deckRuns = span => (well && well.x0 < span
+      ? [[0, Math.min(well.x0, span)]]
+      : [[0, span]]).filter(([a, b]) => b - a > 0.01);
+    // AND THE ROOF SITS ON THE TALLEST, not on the last one drawn. With the
+    // stack no longer strictly climbing, `y` after the loop is whatever the
+    // final level happened to be, which on a split is the balcony rather than
+    // the top of the building.
+    let plateTop = null;
     floors.forEach((level, index) => {
       const depthFt = (level.joistDepthIn + level.sheathingIn) / 12;
-      rect(0, y - depthFt, CUT_DEPTH_FT, depthFt, 1);           // floor band
-      line(0, y, CUT_DEPTH_FT, y, 1.5);                          // sheathing top
-      anchors[`floor-${level.id}`] = { x: CUT_DEPTH_FT * 0.62, y: y - depthFt / 2 };
+      // `over` names the deck this level's own wall stands off, and
+      // `deckAboveFt` is deck to deck -- the dimension a drafter reads off a
+      // section, rather than a wall height that would have to be re-derived
+      // every time the joist depth changed.
+      if (level.over != null && deckY.has(level.over)) {
+        y = deckY.get(level.over) + level.deckAboveFt;
+      }
+      // HOW FAR THE LEVEL REACHES IN. Every level but one runs the width of
+      // the cut; a split's balcony stops where the open main area starts,
+      // which is the fact the section has to show -- Movie, 16 Sep, marking
+      // the drawing: "the ceiling drops from 2nd to main area".
+      const span = level.extentFt ?? cut;
+      // The LANDING deck a flight arrives on is the one level whose own
+      // opening would swallow it: a floor at the bottom of the well has
+      // nothing above it to come through. Every framed deck here is passed
+      // through, so all of them are cut the same way.
+      deckRuns(span).forEach(([x0, x1]) => {
+        rect(x0, y - depthFt, x1 - x0, depthFt, 1);              // floor band
+        line(x0, y, x1, y, 1.5);                                 // sheathing top
+        // The trimmed end at the well -- the header the joists hang off, and
+        // the edge that says the opening is deliberate rather than a floor
+        // that ran out of drawing.
+        if (x1 < span) line(x1, y, x1, y - depthFt, 1.5);
+      });
+      anchors[`floor-${level.id}`] = { x: span * 0.62, y: y - depthFt / 2 };
       line(0, y, 0, y + level.wallHeightFt, 2);                  // exterior face
       line(wallFt, y, wallFt, y + level.wallHeightFt, 1.5);      // interior face
+      // The inner end of a level that stops short: the framing the balcony
+      // ends against, and the wall the ceiling drops down.
+      if (span < cut) line(span, y, span, y + level.wallHeightFt, 1.5);
       anchors[`wallHeight-${level.id}`] = { x: wallFt + 0.9, y: y + level.wallHeightFt / 2 };
       if (index === 0) anchors.wallType = { x: -0.35, y: y + level.wallHeightFt * 0.24 };
-      y += level.wallHeightFt + ((floors[index + 1])
+      deckY.set(level.id, y);
+      const topY = y + level.wallHeightFt;
+      plateTop = plateTop == null ? topY : Math.max(plateTop, topY);
+      y = topY + ((floors[index + 1])
         ? (floors[index + 1].joistDepthIn + floors[index + 1].sheathingIn) / 12 : 0);
     });
-    const plateY = y;
+    const plateY = plateTop;
 
     // Roof: fascia bottom rides level with the top plate at the overhang's
     // end; the surface climbs inward at pitch:12, so the heel at the wall
@@ -671,8 +755,18 @@ if (!window.DraftProjectPage) {
     // weight as the face below it, because it is the same face.
     if (heelLiftFt > 0) line(0, plateY, 0, eaveY, 2);
     const riseAt = x => heelLiftFt + fasciaFt + (roof.overhangFt + x) * (roof.pitch / 12);
-    rect(-roof.overhangFt - 0.1, eaveY, 0.1, fasciaFt, 1.5);    // fascia board
-    line(-roof.overhangFt, eaveY, 0, eaveY, 1);                 // soffit
+    // NOTHING TO SEE OUTSIDE. Movie, 16 Sep: "we probably won't see any eaves
+    // on this one" -- the split is cut at the wall the garage shares, so the
+    // overhang is not in this view. The roof keeps its slope and height; the
+    // section simply starts at the wall face.
+    const eaves = values.eaves !== false;
+    const roofStartX = eaves ? -roof.overhangFt : 0;
+    if (eaves) {
+      rect(-roof.overhangFt - 0.1, eaveY, 0.1, fasciaFt, 1.5);  // fascia board
+      line(-roof.overhangFt, eaveY, 0, eaveY, 1);               // soffit
+      anchors.overhang = { x: -roof.overhangFt / 2, y: eaveY - 0.55 };
+      anchors.fascia = { x: -roof.overhangFt - 0.55, y: eaveY + fasciaFt / 2 };
+    }
     // TWO LINES, NOT ONE. The offset is PERPENDICULAR to the slope -- a chord
     // is 3 1/2" thick measured across itself, not measured vertically -- so
     // the vertical drop between the two lines grows with the pitch. At 4:12
@@ -681,18 +775,16 @@ if (!window.DraftProjectPage) {
     // gets thinner as the roof gets steeper.
     const chordDropFt = (ROOF_CHORD_IN / 12)
       * Math.hypot(1, roof.pitch / 12);
-    line(-roof.overhangFt, eaveY + fasciaFt, CUT_DEPTH_FT, plateY + riseAt(CUT_DEPTH_FT), 2);
+    line(roofStartX, plateY + riseAt(roofStartX), cut, plateY + riseAt(cut), 2);
     // ONE UNBROKEN UNDERSIDE, out to the eave. Movie: "the top chord extends
     // to the eave". It had been drawn in two pieces with a gap at the wall,
     // which is what the top PLATE does to a rafter -- but this is a truss:
     // the top chord passes over the wall in one piece and the heel web below
     // it carries the load down. Breaking it drew a rafter's detail on a
     // truss.
-    line(-roof.overhangFt, eaveY + fasciaFt - chordDropFt,
-      CUT_DEPTH_FT, plateY + riseAt(CUT_DEPTH_FT) - chordDropFt, 1);
-    anchors.pitch = { x: CUT_DEPTH_FT * 0.45, y: plateY + riseAt(CUT_DEPTH_FT * 0.45) + 0.55 };
-    anchors.overhang = { x: -roof.overhangFt / 2, y: eaveY - 0.55 };
-    anchors.fascia = { x: -roof.overhangFt - 0.55, y: eaveY + fasciaFt / 2 };
+    line(roofStartX, plateY + riseAt(roofStartX) - chordDropFt,
+      cut, plateY + riseAt(cut) - chordDropFt, 1);
+    anchors.pitch = { x: cut * 0.45, y: plateY + riseAt(cut * 0.45) + 0.55 };
     // Movie, 4 Sep: the heel reads UNDER the overhang and OVER the 2nd floor
     // wall. Since a label now keeps only its height, the heel sitting at its
     // own mid-height put it above the fascia and overhang -- above the things
@@ -713,8 +805,31 @@ if (!window.DraftProjectPage) {
     //
     // The chord's UNDERSIDE is the ceiling plane -- that is the face the
     // finish attaches to -- so the member sits above it, not straddling it.
-    line(0, plateY, CUT_DEPTH_FT, plateY, 1);
-    line(0, plateY + ROOF_CHORD_IN / 12, CUT_DEPTH_FT, plateY + ROOF_CHORD_IN / 12, 1);
+    //
+    // AND IT STEPS where a level stops short. On a split the balcony's
+    // ceiling is a storey higher than the main area's, and the wall between
+    // them is the drop -- Movie marked it "ceiling drop" on the section and
+    // asked for it dimensioned. Both ceilings carry their bottom chord; the
+    // attic runs over the pair, which is why only the ceiling breaks and the
+    // roof stays one plane.
+    const chordFt = ROOF_CHORD_IN / 12;
+    const stepLevel = floors.find(level =>
+      level.extentFt != null && level.extentFt < cut);
+    const lowerPlate = stepLevel == null ? null
+      : Math.max(...floors.filter(level => level !== stepLevel)
+        .map(level => deckY.get(level.id) + level.wallHeightFt));
+    if (stepLevel && lowerPlate != null && lowerPlate < plateY) {
+      const ext = stepLevel.extentFt;
+      line(0, plateY, ext, plateY, 1);
+      line(0, plateY + chordFt, ext, plateY + chordFt, 1);
+      line(ext, lowerPlate, ext, plateY, 1.5);                  // the drop
+      line(ext, lowerPlate, cut, lowerPlate, 1);
+      line(ext, lowerPlate + chordFt, cut, lowerPlate + chordFt, 1);
+      anchors.ceilingDrop = { x: ext + 0.6, y: (lowerPlate + plateY) / 2 };
+    } else {
+      line(0, plateY, cut, plateY, 1);
+      line(0, plateY + chordFt, cut, plateY + chordFt, 1);
+    }
     // BETWEEN THE PITCH AND THE HEEL, by construction. Movie, 4 Sep: "put
     // attic space under pitch over heel". Placed as the midpoint of the two
     // rather than at a height of its own, so it stays between them at any
@@ -722,9 +837,24 @@ if (!window.DraftProjectPage) {
     // the moment the roof got steeper, which is exactly how the label order
     // went wrong the first time.
     anchors.attic = {
-      x: CUT_DEPTH_FT * 0.55,
+      x: cut * 0.55,
       y: (anchors.pitch.y + anchors.heel.y) / 2,
     };
+    // ONE CAVITY, ONE LABEL, even where the ceiling steps. Movie, 16 Sep:
+    // "the ATTIC SPACE TEXT is doubled remove the doubled text THAT IS ATTIC
+    // SPACE" -- the stepped ceiling makes two ROOMS below and one attic
+    // above, because the roof does not break where the ceiling does. Naming
+    // each side separately said there were two attics.
+    //
+    // It sits over the LOWER ceiling, which is the taller half of the cavity
+    // and the half a reader is least sure about.
+    if (stepLevel && lowerPlate != null && lowerPlate < plateY) {
+      const lowerMidX = (stepLevel.extentFt + cut) / 2;
+      anchors.attic = {
+        x: lowerMidX,
+        y: (lowerPlate + chordFt + plateY + riseAt(lowerMidX) - chordDropFt) / 2,
+      };
+    }
     // THE HEEL WEB. A 2x4 standing at the wall with its outer face flush
     // with the outside, so what shows in section is its INNER face, 3 1/2"
     // in, running from the bottom chord up to the underside of the top
@@ -751,14 +881,19 @@ if (!window.DraftProjectPage) {
     // draw a zero-height rect and a plate on top of nothing.
     const fillFt = fdn.woodFillHeightFt ?? null;
     const fdnTop = -mainDepthFt;
-    const attachFt = sillPlateIn() / 12;
+    // TYPED, DEFAULTING TO THE MODULE'S SILL. Movie, 16 Sep: "ATTACHMENT
+    // HEIGHT 1.5\" default and allow them to change it". The pour is
+    // fdn.wallHeightFt and this band sits on top of it, which is the split
+    // the same message asked for: "the foundation should be 8' and then the
+    // sill plat is 1.5\"".
+    const attachFt = (fdn.attachmentIn ?? sillPlateIn()) / 12;
     // The bearing line does not move: the floor still lands one attachment
     // below MAIN FL. What changes is how far down the CONCRETE starts, since
     // the fill wall now occupies the top of that distance.
     const concTopFt = fdnTop - attachFt - (fillFt || 0);
     const fdnBot = concTopFt - fdn.wallHeightFt;
     rect(0, fdnBot, fdnFt, concTopFt - fdnBot, 2);
-    attachment(rect, line, fdn.attachment, 0, concTopFt, fdnFt);
+    attachment(rect, line, fdn.attachment, 0, concTopFt, fdnFt, attachFt * 12);
     // The fill wall stands on the attachment, its own faces at the wall's
     // thickness rather than the concrete's -- it is framing, not pour.
     if (fillFt) {
@@ -768,6 +903,11 @@ if (!window.DraftProjectPage) {
       anchors.woodFill = { x: wallFt + 0.9, y: fillBot + fillFt / 2 };
     }
     anchors.attachment = { x: fdnFt / 2, y: concTopFt + attachFt / 2 };
+    // THE SAME BAND, TWICE: what it is and how thick it is. The type and the
+    // height are one detail on the drawing and two rows in the schedule, so
+    // the second points at the first's part rather than being a row with
+    // nothing to name -- which the no-anchor rule hides outright.
+    anchors.attachmentHeight = anchors.attachment;
     anchors.fdnHeight = { x: fdnFt + 0.9, y: fdnTop - fdn.wallHeightFt / 2 };
     // BELOW the sill, not above it. Labels keep only their height now, so
     // three of them -- the floor joists, the attachment, and this -- were
@@ -780,8 +920,49 @@ if (!window.DraftProjectPage) {
     anchors.footingWidth = { x: fdnFt / 2, y: fdnBot - footD - 0.5 };
     anchors.footingDepth = { x: fdnFt / 2 + footW / 2 + 0.85, y: fdnBot - footD / 2 };
     const slabFt = fdn.slabIn / 12;
-    rect(fdnFt, fdnBot, CUT_DEPTH_FT - fdnFt, slabFt, 1);
-    anchors.slab = { x: CUT_DEPTH_FT * 0.62, y: fdnBot + slabFt + 0.5 };
+    rect(fdnFt, fdnBot, cut - fdnFt, slabFt, 1);
+    anchors.slab = { x: cut * 0.62, y: fdnBot + slabFt + 0.5 };
+
+    // THE FLIGHTS, DIAGRAMMATIC. Movie, 16 Sep: "show a stair dropping down
+    // (doesn't need to be to scale just so they understand what is there and
+    // how the stairs drop from the balcony to the main floor and then to the
+    // entry and then from entry to basement", then "the rise should be about
+    // right, but run can be very short to fit better".
+    //
+    // So the RISER COUNT is real -- it is what tells a reader how far apart
+    // two levels are -- and the going is squeezed to whatever fits the cut.
+    // That makes this a stair diagram, not a stair: no stringer, no nosing,
+    // no headroom check. A page that lays out an actual stair needs a code
+    // rise/run pair, and it will not live inside a wall-section builder.
+    if (values.stairs) {
+      // Every deck this section drew, plus the basement floor, top down: the
+      // flights fall out of the levels themselves, so a split with a balcony
+      // draws three and one without draws two, neither case written down.
+      const landings = [...deckY.values(), fdnBot + slabFt].sort((a, b) => b - a);
+      const runFt = stairRunFt;
+      // Off the wall and into the cut, where Movie moved it: hard against the
+      // foundation the flights ran through the fill wall's own dimensions and
+      // read as part of the wall rather than as the stair. The floors above
+      // open over this same band.
+      const bandX = stairWellX0;
+      landings.slice(0, -1).forEach((top, index) => {
+        const rise = top - landings[index + 1];
+        if (!(rise > 0.5)) return;
+        const steps = Math.max(2, Math.round(rise / (7.5 / 12))); // ~7 1/2" risers
+        // SWITCHBACK, alternating by flight -- which is both what a split's
+        // stair does and the only way three flights fit a 10 ft cut.
+        const rightward = index % 2 === 0;
+        const x0 = rightward ? bandX : bandX + runFt;
+        const step = (rightward ? runFt : -runFt) / steps;
+        for (let i = 0; i < steps; i += 1) {
+          const tread = top - (rise / steps) * i;
+          const x1 = x0 + step * i;
+          line(x1, tread, x1 + step, tread, 1);
+          line(x1 + step, tread, x1 + step, tread - rise / steps, 1);
+        }
+      });
+      anchors.stair = { x: bandX + runFt / 2, y: landings[0] - 1.2 };
+    }
 
     // GRADE RUNS THE WHOLE WIDTH, DOTTED. Movie, 4 Sep: "for the grade line
     // just show a dotted line where the grade height is across the full width
@@ -798,15 +979,15 @@ if (!window.DraftProjectPage) {
     anchors.grade = { x: -roof.overhangFt - 0.6, y: gradeY - 0.55 };
 
     // The cut's break edge: everything stops at 4 ft with a jog.
-    const topY = plateY + riseAt(CUT_DEPTH_FT);
-    parts.push({ kind: 'break', x: CUT_DEPTH_FT, y1: fdnBot - footD - 0.3, y2: topY + 0.3 });
+    const topY = plateY + riseAt(cut);
+    parts.push({ kind: 'break', x: cut, y1: fdnBot - footD - 0.3, y2: topY + 0.3 });
 
     return {
       parts,
       anchors,
       extents: {
         minX: -roof.overhangFt - 1.3,
-        maxX: CUT_DEPTH_FT + 1.6,
+        maxX: cut + 1.6,
         minY: fdnBot - footD - 1.1,
         maxY: topY + 1.1,
       },
@@ -1083,6 +1264,16 @@ if (!window.DraftProjectPage) {
     const anchors = {};
     const line = (x1, y1, x2, y2, weight = 1.5) => parts.push({ kind: 'line', x1, y1, x2, y2, weight });
     const rect = (x, y, w, h, weight = 1.5) => parts.push({ kind: 'rect', x, y, w, h, weight });
+    // Section-cut fill. Normalised here rather than in the painter so a
+    // region written right-to-left (the void form runs back from the pile)
+    // hatches the same as one written left-to-right.
+    const hatch = (x, y, w, h) => parts.push({
+      kind: 'hatch',
+      x: Math.min(x, x + w),
+      y: Math.min(y, y + h),
+      w: Math.abs(w),
+      h: Math.abs(h),
+    });
 
     const cut = -GARAGE_CUT_FT;                // the break edge, 2 ft out
     const fdnFt = g.thicknessIn / 12;
@@ -1168,7 +1359,7 @@ if (!window.DraftProjectPage) {
     // of the drawing, ending at the break. The void form does the same,
     // because it is cast under the beam for its whole run.
     const frostWall = g.foundation === 'frostwall';
-    const sillFt = sillPlateIn() / 12;
+    const sillFt = (g.attachmentIn ?? sillPlateIn()) / 12;
     const fdnTop = sillY;
     const concTop = fdnTop - sillFt;
     const fdnBot = frostWall ? g.houseFootingTopFt : concTop - g.fdnWallHeightFt;
@@ -1183,11 +1374,22 @@ if (!window.DraftProjectPage) {
     // ever goes down. Three sides: it runs into the beam at the house end
     // rather than stopping against it, the same way the footing does.
     const slabTopHouse = concTop - GARAGE_SLAB_BELOW_CONCRETE_IN / 12;
-    const slabFall = GARAGE_CUT_FT * GARAGE_SLAB_SLOPE_IN_PER_FT / 12;
-    const slabTopCut = slabTopHouse - slabFall;
-    line(cut, slabTopCut, 0, slabTopHouse, 1);
-    line(cut, slabTopCut - slabFt, 0, slabTopHouse - slabFt, 1);
-    line(cut, slabTopCut - slabFt, cut, slabTopCut, 1);
+    const slabTopCut = slabTopHouse
+      - GARAGE_CUT_FT * GARAGE_SLAB_SLOPE_IN_PER_FT / 12;
+    // NOT DRAWN, ON EITHER BAND. The cut runs ALONG the beam, so the beam is
+    // the cut face and the slab is a few inches BEHIND it: its two sloping
+    // lines landed inside the beam band, reading as strays at the sill on a
+    // drawing where every other line there is concrete. Movie found them
+    // twice, once per band -- 16 Sep, on the split: "you have 2 or 3 extra
+    // lines in there what are those" / "take out those extra lines they were
+    // probably slab before", then again on the bungalow, struck out in red.
+    //
+    // WHAT THIS COSTS, SAID PLAINLY: the 1/8"-per-foot fall to the doors is
+    // now drawn nowhere. It is still composed (garageSlabFallIn) and still
+    // reported by the strip, which is where a fall of 3" over 24 ft belongs
+    // -- at this scale it was a third of a line's width anyway. GARAGE SLAB
+    // THICKNESS stays a typed cell and keeps its anchor below, because the
+    // number is still the drawing's; only the linework goes.
     anchors.garageSlab = { x: cut * 0.55, y: slabTopCut - slabFt - 0.45 };
     // THE FLOOR ITSELF, which had no anchor because nothing named it. The
     // typed offset is the SILL, 5 1/2" above this line, and the schedule
@@ -1197,7 +1399,6 @@ if (!window.DraftProjectPage) {
     // meets the house wall, which is the end that shares the datum.
     anchors.garageFloor = { x: cut * 0.28, y: slabTopHouse + 0.42 };
 
-    let lowest;
     if (frostWall) {
       // A footing, the house's own size, its bottom level with the house's.
       // NO RIGHT-HAND EDGE. Movie struck a line off the footing in red, and
@@ -1214,23 +1415,23 @@ if (!window.DraftProjectPage) {
       line(cut, fdnBot, 0, fdnBot, 1.5);                   // top
       line(cut, fdnBot - footD, cut, fdnBot, 1.5);         // the cut end
       anchors.garageFooting = { x: cut * 0.5, y: fdnBot - footD / 2 };
-      lowest = fdnBot - footD;
     } else {
       // 4" void form under the beam, between the piles: the beam is cast on
       // it and the form crushes, so heaving soil lifts nothing.
-      rect(cut, fdnBot - VOID_FORM_IN / 12, GARAGE_CUT_FT, VOID_FORM_IN / 12, 1);
-      anchors.garageVoidForm = { x: cut * 0.5, y: fdnBot - VOID_FORM_IN / 24 };
-      lowest = fdnBot - VOID_FORM_IN / 12;
+      // It stops at the pile: the beam bears ON the pile there, so a form
+      // carried through would draw the beam sitting on crushable board at
+      // the one point it is meant to be held up.
+      const voidFrom = cut + PILE_HALF_WIDTH_IN / 12;
+      rect(voidFrom, fdnBot - VOID_FORM_IN / 12, -voidFrom, VOID_FORM_IN / 12, 1);
+      hatch(voidFrom, fdnBot - VOID_FORM_IN / 12, -voidFrom, VOID_FORM_IN / 12);
+      anchors.garageVoidForm = { x: voidFrom * 0.5, y: fdnBot - VOID_FORM_IN / 24 };
     }
     // NO FOOTING. Movie, 4 Sep: "why does your garage have a footing?" -- it
     // does not. A grade beam bears on drilled piles at about 8 ft on centre,
     // over a 4" void form between them; there is no spread footing under it.
     // The first draft copied the house's foundation pattern, which put a
     // strip footing under a beam that is deliberately hung off piles.
-    //
-    // The piles themselves are not drawn here either, and that is correct
-    // rather than missing: at 8 ft o.c. and a 2 ft cut, the first pile is
-    // beyond the break. (Movie: "first pile won't be shown too far".)
+    // What holds it up is the pile below, drawn further down.
 
     // THE GARAGE HAS NO WALL HERE. This is the junction: the house's exterior
     // wall IS the wall at this cut, and the house section next door draws it.
@@ -1256,22 +1457,74 @@ if (!window.DraftProjectPage) {
     // is measured from that plane to the TOP of the top chord, so the cavity
     // between the two members is 4'-0" less both chords.
     const chordFt = ROOF_CHORD_IN / 12;
-    const cavityTop = plateY + GARAGE_CAVITY_FT;
-    line(0, plateY, cut, plateY, 2);
-    line(0, plateY + chordFt, cut, plateY + chordFt, 1);
-    line(0, cavityTop - chordFt, cut, cavityTop - chordFt, 1);
-    line(0, cavityTop, cut, cavityTop, 2);
-    anchors.garageCavity = { x: cut * 0.42, y: plateY + GARAGE_CAVITY_FT / 2 };
+    // WHERE THE PRESS LIVES. Movie, 15 Sep: "put it under the ATTIC SPACE...
+    // put it inline with the garage ceiling line". The ceiling plane, not an
+    // offset from it, so the button follows the wall when the wall moves --
+    // which it does, since pressing it is what moves the wall.
+    anchors.garageCeiling = { x: cut * 0.42, y: plateY };
 
-    const topY = cavityTop;
-    // The pile face, dotted, running past everything above it. It has no
-    // bottom in this drawing on purpose: a pile is drilled to depth per the
-    // soils report, so a drawn end would be a number nobody has.
-    const pileX = cut + PILE_FACE_FROM_CUT_IN / 12;
-    const pileBot = lowest - PILE_BELOW_LOWEST_IN / 12;
-    const pileTop = fdnBot + PILE_TOP_ABOVE_VOID_IN / 12;
-    parts.push({ kind: 'dashed', x1: pileX, y1: pileTop, x2: pileX, y2: pileBot });
-    anchors.garagePile = { x: pileX, y: (pileTop + pileBot) / 2 };
+    let topY;
+    if (g.roomOver) {
+      // A STOREY OVER THE GARAGE. What was the truss cavity is a floor: the
+      // ceiling plane is now the underside of the joists, and the deck on top
+      // of them is the house's own second floor carrying on across.
+      //
+      // The package is the overGarage role's, out of level-assembly.js --
+      // 19 1/4" of joist and 3/4" of sheathing, the deeper member the longer
+      // span over a garage needs. The two numbers arrive as values rather
+      // than being written here, because the level cards edit that same
+      // assembly and a second copy would be a number that agrees until
+      // somebody changes one of them.
+      const joistFt = g.overJoistIn / 12;
+      const deckFt = joistFt + g.overSheathingIn / 12;
+      line(0, plateY, cut, plateY, 2);                    // joist underside = ceiling
+      line(0, plateY + joistFt, cut, plateY + joistFt, 1); // top of the joists
+      line(0, plateY + deckFt, cut, plateY + deckFt, 2);   // top of the sheathing
+      anchors.overGarageFloor = { x: cut * 0.42, y: plateY + joistFt / 2 };
+      topY = plateY + deckFt;
+    } else {
+      // Ceiling, bottom chord, cavity, top chord.
+      const cavityTop = plateY + GARAGE_CAVITY_FT;
+      line(0, plateY, cut, plateY, 2);
+      line(0, plateY + chordFt, cut, plateY + chordFt, 1);
+      line(0, cavityTop - chordFt, cut, cavityTop - chordFt, 1);
+      line(0, cavityTop, cut, cavityTop, 2);
+      anchors.garageCavity = { x: cut * 0.42, y: plateY + GARAGE_CAVITY_FT / 2 };
+      topY = cavityTop;
+    }
+    // HALF A PILE, CUT LENGTHWISE. Movie, 16 Sep: "only half a pile will
+    // show due to the cut line" -- the section passes through the shaft, so
+    // what draws is the near half: a face at the pile's centreline and no
+    // line at the break, the same way the footing runs off into the house.
+    //
+    // TOP AT THE BEAM'S UNDERSIDE, because the beam is cast on the pile --
+    // "where is the top of the pile" / at the beam. The previous version
+    // started it 4" up inside the beam and drew it dotted, as something
+    // behind the cut rather than something the cut goes through.
+    //
+    // BOTTOM ON THE HOUSE FOOTING LINE, by Movie's instruction and his own
+    // caveat: "draw the bottom of the pile in line with the bottom of the
+    // footing (although its actually alot further)". A real pile is drilled
+    // to a depth the soils report gives, which is off this page -- so this
+    // end is a drawing convention, not a dimension, and carries no label.
+    //
+    // A FROST WALL HAS NO PILE. It bears on its own footing -- that is what
+    // choosing it means -- so the shaft only draws under a grade beam.
+    //
+    // AND IT IS POURED, SO IT IS HATCHED. Movie, 16 Sep, filling the shaft in
+    // green over the drawing: as two thin lines it read as a stray rather
+    // than as a member, because everything else down there -- beam, footing,
+    // wall -- is a closed band and this was not. Hatch is what section-cut
+    // concrete gets, and it is the one thing here that says the cut goes
+    // THROUGH the pile rather than past it.
+    const pileX = cut + PILE_HALF_WIDTH_IN / 12;
+    const pileBot = g.houseFootingTopFt - g.footingDepthIn / 12;
+    if (!frostWall) {
+      line(pileX, fdnBot, pileX, pileBot, 1.5);      // the shaft's face
+      line(cut, pileBot, pileX, pileBot, 1.5);       // its end, conventional
+      hatch(cut, pileBot, PILE_HALF_WIDTH_IN / 12, fdnBot - pileBot);
+      anchors.garagePile = { x: pileX, y: (fdnBot + pileBot) / 2 };
+    }
 
     parts.push({ kind: 'break', x: cut, y1: pileBot - 0.3, y2: topY + 0.3 });
 
@@ -1362,6 +1615,28 @@ if (!window.DraftProjectPage) {
         ctx.beginPath(); ctx.moveTo(X(part.x1), Y(part.y1)); ctx.lineTo(X(part.x2), Y(part.y2)); ctx.stroke();
       } else if (part.kind === 'rect') {
         ctx.strokeRect(X(part.x), Y(part.y + part.h), part.w * scale, part.h * scale);
+      } else if (part.kind === 'hatch') {
+        // Diagonals at a FIXED SCREEN PITCH, clipped to the region. Pitch in
+        // feet would space out as the drawing zooms and close up as it
+        // shrinks, so a pile would go from hatched to solid black on a small
+        // canvas -- which is how hatch usually ruins a section. 45 degrees
+        // and one weight, because this says "cut concrete" and nothing else.
+        const x0 = X(part.x);
+        const y0 = Y(part.y + part.h);
+        const bw = part.w * scale;
+        const bh = part.h * scale;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x0, y0, bw, bh);
+        ctx.clip();
+        ctx.lineWidth = 0.75;
+        ctx.beginPath();
+        for (let d = -bh; d < bw + bh; d += HATCH_PITCH_PX) {
+          ctx.moveTo(x0 + d, y0 + bh);
+          ctx.lineTo(x0 + d + bh, y0);
+        }
+        ctx.stroke();
+        ctx.restore();
       } else if (part.kind === 'dashed') {
         ctx.save();
         ctx.setLineDash([3, 3]);

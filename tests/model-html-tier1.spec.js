@@ -254,6 +254,11 @@ test.describe('MODEL.html tier 1', () => {
       // branch that loads it -- an undeclared dependency is undeclared no
       // matter whose commit brought it.
       './building-bodies.js',
+      // AND WHERE AN ORDERED GARAGE STANDS. 40 lines, no dependency of its
+      // own: a traced loop says where it goes by being traced, an autobuilt
+      // one has to be told, and PROJECT will have to be told the same thing
+      // the day it offers to place one.
+      './garage-site.js',
       './profile-manager.js',
       // ADDED ON PURPOSE, which is what this list is for. tool-roster.js is
       // the seventeen tools as data -- 80 lines, no dependency of its own, and

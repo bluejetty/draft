@@ -67,12 +67,19 @@ test('the foot bar: PROJECT and MODEL left, the pair in the middle, the sheets r
       el => (el.textContent || '').trim().replace(/\s+/g, ' '))),
     'the foot\'s left end is the project, the page you are on, and the '
     + 'marketing plan that is a drawing of it')
-      .toEqual(['PROJECT', 'MODEL', 'REAL ESTATE LAYOUT']);
+      // RUFF/ROUGH CAME DOWNSTAIRS (Movie, 15 Sep): "move it to the right of
+      // REAL ESTATE LAYOUT on bottom bar". It is one tenant -- the pair
+      // travels as a set -- and it sits at the END of this group, so the
+      // three pages above it keep their order and their reading.
+      .toEqual(['PROJECT', 'MODEL', 'REAL ESTATE LAYOUT', 'RUFF ROUGH']);
 
     expect(await page.locator('#sheet-row > *').evaluateAll(els => els.map(
       el => (el.textContent || '').trim().replace(/\s+/g, ' '))),
     'the sheets belong at the far right, in reading order')
-      .toEqual(['CONSTRUCTION LAYOUT', 'SPECIFICATIONS', 'ESTIMATES']);
+      // And NIGHT/DAY leads this group for the same reason, on the other
+      // side of the middle: "to the left of CONSTRUCTION LAYOUT".
+      .toEqual(['NIGHT DAY', 'CONSTRUCTION LAYOUT', 'SPECIFICATIONS',
+        'ESTIMATES']);
 
     // The middle is the two presses and nothing else -- DELETE lives here too
     // but is hidden until something is selected, which is the shell's rule

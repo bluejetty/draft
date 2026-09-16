@@ -91,15 +91,48 @@
      the bottom bar -- out of the drawing's centre, and beside nothing that
      grows with a level name. The view counter reads in the same panel: the
      level and the view are counts like the rest, not a separate instrument. */
-  #readout { position:fixed; left:40px; bottom:var(--readout-bottom); z-index:5;
+  /* SHUT BY DEFAULT, BEHIND ITS OWN WORD. Movie: "make it collapsed into only
+     TEXT that can be clicked to open this, similar to the DRAG TO PAN text on
+     the right side, but put this text on the left side: STATUS READOUT". The
+     panel is instrumentation -- twelve counts and six state fields -- and it
+     was standing open over the bottom-left of the sheet at all times to say
+     so. Collapsed it costs one line of the same quiet uppercase the hint uses
+     on the other end of the same edge, so the two ends of the foot read as a
+     pair: the hint tells you what the mouse does, the tab offers the numbers.
+     THE TEXT IS NEVER REMOVED, only hidden -- updateReadout keeps writing to
+     it shut, so the counts are already right the instant it opens, and the
+     many specs that read the page's own scale and wall count out of it keep
+     working whether the drafter has it open or not. */
+  #readout[hidden] { display:none; }
+  #readout-tab { position:fixed; left:12px; bottom:var(--readout-bottom);
+    z-index:5; color: var(--ink-quiet);
+    font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
+    text-transform:uppercase; cursor:pointer;
+    border:none; background:none; padding:0; }
+  #readout-tab:hover { color: var(--accent); }
+  /* OPEN, THE WORD GOES AND AN X TAKES OVER (Movie): the tab and the panel
+     are one control, so having both on screen at once said the same thing
+     twice. The X sits in the panel's own bottom-right, in the open area
+     under the second line rather than on a number. */
+  #readout-tab[aria-expanded="true"] { display:none; }
+  #readout { display:flex; flex-direction:column; align-items:flex-end;
+    position:fixed; left:12px; bottom:var(--readout-bottom); z-index:5;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px;
+    /* THE PANEL STAYS CLICK-THROUGH and only the X takes the pointer: open,
+       it covers a corner of the sheet, and a drafter who draws there should
+       reach the drawing, not a wall of numbers. */
     padding:8px 11px; white-space:pre; pointer-events:none;
     /* Instrument text: tabular figures so the counts do not jitter as they
        change, and the mono face so a column of numbers reads as a column. */
     font-family: var(--font-mono); font-size:12px;
     font-variant-numeric:tabular-nums; letter-spacing:0.01em; }
   #readout b { color: var(--accent); font-weight:600; }
+  #readout-text { align-self:flex-start; }
+  #readout-close { pointer-events:auto; margin-top:2px; padding:0 2px; border:none; background:none;
+    cursor:pointer; color: var(--ink-quiet);
+    font-family: var(--font-ui); font-size:14px; line-height:1; }
+  #readout-close:hover { color: var(--accent); }
 
   #hint { position:fixed; right:12px; bottom:var(--readout-bottom); z-index:5; color: var(--ink-quiet);
     font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
@@ -183,7 +216,26 @@
     color: var(--ink-primary); }
   #settings-corner a:hover, #settings-corner button:hover {
     border-color: var(--accent); color: var(--accent); }
-  #units-toggle { padding:4px 8px; }
+  /* THE UNIT STACK borrows the settings stack's rows exactly -- same font,
+     same 64px minimum, same 1px gap -- because the DC corner's fault was
+     two 44px targets on top of each other, and the cure is the row height
+     that already works two inches to the left, not a new shape. */
+  #units-corner { display:flex; align-items:center; flex:0 0 auto; }
+  #units-corner .stack { display:flex; flex-direction:column; gap:1px; }
+  #units-corner button {
+    font-family: var(--font-ui); font-size:9px; font-weight:600;
+    letter-spacing:0.05em; text-transform:uppercase;
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:64px; padding:2px 6px; cursor:pointer;
+    border:1px solid var(--edge-panel); border-radius:3px;
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    color: var(--ink-quiet); }
+  #units-corner button:hover { border-color: var(--accent); color: var(--accent); }
+  /* SHADED MEANS IN FORCE (Movie, 15 Sep). The same accent fill the mode
+     corner uses, so a drafter reads "this one is on" once and it is true
+     everywhere on the page. */
+  #units-corner button[aria-pressed="true"] { color: var(--accent-ink);
+    background-color: var(--accent); border-color: var(--accent); }
   /* PRINTSCREEN borrows the settings corner's own button rules rather than
      inventing a third button shape on the same bar. */
   #printscreen {
@@ -261,19 +313,50 @@
      arithmetic and cannot overlap anything. */
   #strip-center { flex:0 0 auto; height:var(--strip-h);
     display:flex; align-items:center; gap:10px; padding:0 8px; }
+  /* CENTRED ON THE SHEET, not on what is left over. Two flex spacers centre
+     the cluster only when the two corners weigh the same, and they never do
+     -- the settings/units/mode stack is wide, the file row hides itself at
+     narrow widths -- so the kit sat right of middle. Movie: "put all the
+     instrument lights and textboxes centered".
+     ABOVE 1280 ONLY, which is the whole guard against the bug the note above
+     records: absolute centring can slide a chip over a corner control, and
+     1280 is the width at which the tenants first want more bar than there is.
+     Below it the cluster goes back to being a flex child between spacers,
+     where it cannot overlap anything. */
+  @media (min-width: 1281px) {
+    #strip-center { position:absolute; left:50%; transform:translateX(-50%); }
+  }
   /* WHEN THE BAR RUNS OUT OF SHEET, the things with nothing behind them go
      first. At 1280 the tenants want 1422px, so the file row -- NEW, OPEN,
      SAVE, SAVE AS -- was pushed off the right edge and could not be clicked
      at all. A control that does nothing yet must never cost one that saves
      the drawing, so the three not-built-yet chips and the LENGTH caption are
-     dropped on a narrow sheet and the instruments close up. */
+     dropped on a narrow sheet and the instruments close up.
+
+     THE THRESHOLD CAME DOWN when RUFF/ROUGH and NIGHT/DAY went to the bottom
+     bar: that is ~150px the left corner no longer spends, and 1500 was still
+     charging for it -- so a 1366 laptop, which now has room to spare, lost
+     the brush and the rest of the not-built chips for nothing. Movie, 15
+     Sep: "the drafting brush and a bunch of other unused instrument lights
+     vanished can we put them back". */
+  @media (max-width: 1180px) {
+    #strip-center .chip.dormant { display:none; }
+  }
+  /* THE LABEL OUTLASTS THE WIDTH IT COSTS. Dropping the word LENGTH saved
+     ~48px and spent the thing the box was for: an unlabelled field next to
+     an unlabelled field is two boxes a drafter has to try. Movie, 15 Sep:
+     "there is a big blank spot where it should say LENGTH". The box gives up
+     the width instead -- 72px still holds 12'-11 1/2". */
   @media (max-width: 1500px) {
     #strip-center { gap:6px; }
-    #strip-center .chip.dormant { display:none; }
-    #strip-length-box > span { display:none; }
     #frozen-length { width:72px; }
-    #strip-len { min-width:66px; }
+    #strip-len:not(:empty) { min-width:66px; }
   }
+  /* AND THEY SIT AGAINST THE WORKING ONES. Movie: "snug them to the sides of
+     the working ones". A dormant chip spaced like an instrument reads as one
+     of the instruments; pulled tight to the live cluster it reads as what it
+     is -- the rest of the kit, not yet in hand. */
+  #strip-center .chip.dormant { margin-inline:-3px; padding:2px 2px; }
   .chip { display:inline-flex; align-items:center; gap:3px; padding:2px 4px;
     border:1px solid transparent; border-radius:4px; background:none;
     color: var(--ink-secondary); cursor:pointer; }
@@ -283,8 +366,17 @@
   .chip.dormant:hover { border-color:transparent; }
   #strip .num { font-family: var(--font-mono); font-size:12px;
     font-variant-numeric:tabular-nums; color: var(--ink-primary); }
-  #strip-len { min-width:74px; text-align:right; }
-  #strip-ang { min-width:44px; color: var(--ink-quiet); }
+  /* THE READ-OUTS RESERVE THEIR WIDTH ONLY WHEN THEY ARE READING. The
+     min-width is there so a number growing from 4' to 12'-11 1/2" does not
+     shove the instruments sideways mid-gesture -- but with nothing in hand
+     it was 118px of held-open nothing between the ruler and LENGTH, which is
+     what Movie saw: "why big gap?". Empty, they take no room; the moment
+     they have a number they take the same room as before, so the jitter the
+     min-width was written for still cannot happen. */
+  #strip-len:not(:empty) { min-width:74px; }
+  #strip-len { text-align:right; }
+  #strip-ang:not(:empty) { min-width:44px; }
+  #strip-ang { color: var(--ink-quiet); }
   #strip-length-box { display:flex; align-items:center; gap:5px;
     font-size:11px; color: var(--ink-quiet); }
   #frozen-length { width:96px; text-align:right; padding:3px 6px;
@@ -293,6 +385,19 @@
     border:1px solid var(--edge-panel); border-radius:4px; outline:none; }
   #frozen-length:disabled { color: var(--ink-quiet); opacity:0.5; }
   #frozen-length:focus { border-color: var(--accent); }
+  /* THE WORD SITS AFTER ITS BOX, between the box and the protractor, where
+     Movie put it: the instrument and its number read as one thing with the
+     name in the middle naming both. It stays at every width -- the angle box
+     is narrow enough to be taken for a second length box, and the label is
+     what tells them apart. */
+  #strip-angle-box { display:flex; align-items:center; gap:5px;
+    font-size:11px; color: var(--ink-quiet); }
+  #frozen-angle { width:62px; text-align:right; padding:3px 6px;
+    font-family: var(--font-mono); font-size:12px;
+    background-color: var(--surface-chip); color: var(--ink-primary);
+    border:1px solid var(--edge-panel); border-radius:4px; outline:none; }
+  #frozen-angle:disabled { color: var(--ink-quiet); opacity:0.5; }
+  #frozen-angle:focus { border-color: var(--accent); }
 
   /* THE MODE CORNER, upper-left (§7b): what the drawing IS -- board, finish,
      day/night. It sat at the right-hand end of the foot strip; Movie moved it
@@ -302,20 +407,63 @@
   #mode-corner { display:flex; align-items:center; gap:5px; flex:0 0 auto;
     font-family: var(--font-ui); font-size:12px; font-weight:600;
     letter-spacing:0.04em; }
-  #mode-corner .set { display:flex; align-items:center;
+  #mode-corner .set, #house-strip .set { display:flex; align-items:center;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border:1px solid var(--edge-panel); border-radius:4px; overflow:hidden; }
-  #mode-corner button { font:inherit; letter-spacing:inherit;
+  /* STACKED, and the stack is why the bar got NARROWER rather than wider
+     when the units gained a second button: TOY over DRAFTING is the width of
+     DRAFTING alone, where side by side it was both plus a divider. The bar
+     overflowed 1280 by 142px once already (PRINTSCREEN, 15 Sep); a
+     rearrangement that spent width would have walked back into it. */
+  #mode-corner .set.stack { flex-direction:column; align-items:stretch; }
+  #mode-corner button, #house-strip .set button { font:inherit; letter-spacing:inherit;
     padding:4px 7px; font-size:11px;
     text-transform:uppercase; cursor:pointer; border:none; background:none;
     color: var(--ink-quiet); }
-  #mode-corner button[aria-pressed="true"] { color: var(--accent-ink);
+  #mode-corner .set.stack button { padding:2px 7px; font-size:9px; }
+  /* THE BOARD SWITCH IS THE UNIT STACK'S TWIN. Movie: "make the TOY /
+     DRAFTING buttons same size as IMPERIAL / METRIC ... and same shading".
+     Two stacked pairs standing side by side on the same bar, built to two
+     different shapes, read as two different KINDS of control -- so this
+     borrows the unit rows outright: the 64px minimum, the 9px row, the 1px
+     gap, the chip fill and the accent for the one in force. The set's own
+     frame goes with it, since the frame is what made the pair one welded
+     block rather than two buttons. */
+  #mode-corner .set.stack[data-board-switch] { border:none; background:none;
+    gap:1px; overflow:visible; }
+  #mode-corner .set.stack[data-board-switch] button {
+    font-family: var(--font-ui); font-size:9px; font-weight:600;
+    letter-spacing:0.05em;
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:64px; padding:2px 6px;
+    border:1px solid var(--edge-panel); border-radius:3px;
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    color: var(--ink-quiet); }
+  #mode-corner .set.stack[data-board-switch] button:hover {
+    border-color: var(--accent); color: var(--accent); }
+  #mode-corner .set.stack[data-board-switch] button[aria-pressed="true"] {
+    color: var(--accent-ink); background-color: var(--accent);
+    border-color: var(--accent); }
+  #mode-corner button[aria-pressed="true"],
+  #house-strip .set button[aria-pressed="true"] { color: var(--accent-ink);
     background-color: var(--accent); }
+  /* A BUTTON'S WIDTH OF AIR (Movie, 15 Sep), on the inner side of each
+     switch. 44px is the page row's own button plus its gap, so the space
+     reads as "one missing button" rather than as a guessed margin. */
+  #house-strip .set.spaced { margin-left:44px; }
+  #house-strip .set.spaced-after { margin-right:44px; }
 
   /* THE FILE ROW, upper-right (§1): what the FILE is -- NEW, OPEN, SAVE with
      its three words, SAVE AS, and the extension the generated name takes.
      The row from MODEL.dc.html:573-590 without its PROJECT button: Movie has
      another place for that and it is the page row at the lower left. */
+  /* THE ROW IS ALWAYS THERE (Movie): it came up hidden until a drawing
+     loaded, so an origin with nothing stored showed a bar with no way to
+     start one -- NEW and OPEN, the two that need no drawing, were the ones
+     hidden hardest. The row stands from the first paint and the two WRITE
+     buttons are dead until there is something to write, which is the rule
+     the lease already uses below: a missing button reads as a broken page,
+     a dead one says the drafter is in the right place. */
   #file-row { flex:0 0 auto; display:flex; align-items:center; gap:6px; }
   #file-row[hidden] { display:none; }
   #file-row button, #file-row select {
@@ -326,6 +474,8 @@
     border:1px solid var(--edge-panel); border-radius:5px; padding:5px 9px; }
   #file-row button:hover, #file-row select:hover { border-color: var(--accent); }
   #file-row select { padding:5px 6px; text-transform:none; }
+  #file-row button:disabled, #file-row button:disabled:hover {
+    color: var(--ink-quiet); border-color: var(--edge-panel); cursor:default; }
   /* SAVE IS ALSO THE STATUS, and that is a decision rather than a shortcut.
      §1 draws NEW · OPEN · SAVE · status · SAVE AS, and the .dc page has two
      elements there because its SAVE is a download and its status describes a
@@ -334,8 +484,6 @@
      paid for twice -- and the three words SAVE / UNSAVED / SAVED are already
      load-bearing in the specs. `data-save-status` is on the button that
      carries them. */
-  #save { display:none; }
-  #file-row #save.show { display:inline-block; }
   #save:disabled { color: var(--ink-quiet); cursor:default; }
   /* Unsaved edits. The accent is the page's one attention colour, so the
      button stops being furniture the moment there is something to lose. */
@@ -350,7 +498,11 @@
   #page-row, #sheet-row { flex:0 0 auto; display:flex; align-items:center; gap:4px;
     font-family: var(--font-ui); font-size:11px; font-weight:600;
     letter-spacing:0.06em; }
-  #page-row a, #page-row button, #page-row span,
+  /* THE SWITCH SPANS ARE NOT PAGES. `#page-row span` is the chip treatment
+     for MODEL's you-are-here, and RUFF/ROUGH sitting in the same row would
+     have taken it -- a switch wearing a page's border, inside the row that
+     means "places you can go". */
+  #page-row a, #page-row button, #page-row > span:not(.set),
   #sheet-row a, #sheet-row button { font:inherit;
     letter-spacing:inherit; display:inline-flex; align-items:center;
     height:24px; padding:0 8px; text-transform:uppercase; text-decoration:none;
@@ -619,10 +771,20 @@
   .rail-tab:hover { color: var(--accent); border-color: var(--accent); }
   .rail-tab[hidden] { display:none; }
   #left-tab { left:0; border-left:none; border-radius:0 4px 4px 0; }
-  /* The right tab reads bottom-to-top so both tabs run outward from the edge
-     they hang on. */
-  #right-tab { right:0; border-right:none; border-radius:4px 0 0 4px;
-    writing-mode:vertical-lr; }
+  /* The right tabs read bottom-to-top so both edges' tabs run outward from
+     the edge they hang on. */
+  #right-tab, #previews-tab { right:0; border-right:none;
+    border-radius:4px 0 0 4px; writing-mode:vertical-lr;
+    max-height:32vh; }
+  /* THE SECOND TAB STARTS WHERE THE FIRST ENDS, and the gap is derived
+     rather than eyeballed: 32vh is each tab's cap, so 32vh + 8px clears the
+     first at every window height instead of at the one I happened to test.
+     A fixed pixel top would have overlapped the moment the viewport grew. */
+  #previews-tab { top: calc(var(--rail-top) + 32vh + 8px); }
+  /* THE TAB OF THE OPEN PANE IS LIT, so the edge says which of the two the
+     panel is showing without the drafter opening both to find out. */
+  .rail-tab[aria-selected="true"] { color: var(--accent);
+    border-color: var(--accent); }
   /* A panel is pinned to its own edge and is as tall as it needs to be, for
      the same reason as the tab: full height costs drawing area that a panel
      holding three rows of seats is not using. */
@@ -728,8 +890,20 @@
      the nine tenths of a point buys the thing §7c will not go without --
      a level switch that is still there when the rail is shut. */
   #right-rail[data-collapsed] { box-sizing:border-box; padding:6px; max-height:182px; }
-  #right-rail[data-collapsed] #view-rail { grid-template-columns:repeat(3, 84px); }
+  /* THE SEAT GRID IS TWO COLUMNS, OPEN OR COLLAPSED (Movie, 15 Sep: "only
+     the one with 2 columns"). The three-column collapsed variant above was
+     measured and it did hide less of the drawing -- 4.3% against the two
+     column 5.8% in the chart -- so this is a price being paid knowingly,
+     not the chart being forgotten. What it buys is one seat grid instead of
+     two: the rail a drafter learns open is the rail he meets collapsed,
+     where the widths changing under a collapse made the same six seats land
+     in different places depending on a state he was not thinking about. */
   #right-rail[data-collapsed] #props-slot { display:none; }
+  /* PROPERTIES BELONG TO THE LEVELS PANE. The slot shows itself when a tool
+     fills it, and that press can happen while the seats are showing -- so
+     the pane rules it out here rather than trusting every future caller to
+     remember which pane is up. */
+  #right-rail[data-pane-showing="previews"] #props-slot { display:none; }
   /* THE TOOL COLUMN. Four square keys a row, which is the old page's own
      shape and not a taste: at four across, DRAW/EDIT is three rows and BUILD
      is two, and the whole roster is reachable without the panel scrolling on
@@ -852,8 +1026,13 @@
 
      Carried from MODEL.dc.html:1850-1955 by SHAPE, not by stylesheet: a card
      per level with its layer rows inside, the active one lit. */
-  #levels-panel { display:flex; flex-direction:column; gap:6px; margin-top:8px;
-    max-height:42vh; overflow-y:auto; scrollbar-width:none; }
+  /* NO SECOND SCROLLER, AND NO 42vh (Movie, 15 Sep: "take a look at the DC
+     version that is the best version"). MODEL.dc.html's rail scrolls AS ONE
+     (:1840, `overflow-y:auto` on the rail itself) so ELEVATIONS, LEVELS with
+     their layer sets, SECTIONS and the BONEYARD read as one list. Capping
+     this pane at 42vh put a short window inside a tall panel: the levels
+     scrolled away inside it while the rail below them stood empty. */
+  #levels-panel { display:flex; flex-direction:column; gap:6px; }
   #levels-panel::-webkit-scrollbar { display:none; }
   /* THE LEVELS SURVIVE THE COLLAPSE (§7c). This rule used to read
      `display:none`, which was true while the chrome bar carried a LEVEL
@@ -862,17 +1041,43 @@
      page with NO way to change level -- the hole the order names, and the
      reason it forbids deleting the picker before this line changes.
 
-     COLLAPSED IS THE NAMES ONLY: no layer rows, no datum, no add or delete,
-     the cards wrapping across the panel's width the way the seats do. Same
-     buttons and the same `data-level-row` the expanded panel carries, so the
-     collapsed rail is the SAME control drawn short -- not a second one that
-     can come to disagree with it. */
-  #right-rail[data-collapsed] #levels-panel { display:flex; flex-flow:row wrap;
-    gap:4px; margin-top:6px; max-height:none; overflow:visible; }
+     COLLAPSED IS THE NAMES ONLY: no layer rows, no datum, no add or delete.
+     Same buttons and the same `data-level-row` the expanded panel carries, so
+     the collapsed rail is the SAME control drawn short -- not a second one
+     that can come to disagree with it. */
+  /* ONE COLUMN, SHUT AS WELL AS OPEN (Movie, 15 Sep: "it should be one column
+     not 5"). Wrapping the names across the panel's width read as a paragraph
+     of levels rather than a storey stack, and a storey stack is what a level
+     list IS -- DC's rail has never drawn them any other way. */
+  #right-rail[data-collapsed] #levels-panel { display:flex; flex-direction:column;
+    gap:2px; margin-top:6px; max-height:150px; overflow-y:auto;
+    scrollbar-width:none; }
+  #right-rail[data-collapsed] #levels-panel::-webkit-scrollbar { display:none; }
+  /* A COLUMN COSTS HEIGHT, AND THE SEATS ARE UNDER IT. Shut on the previews
+     pane the level names share the 182px cap with the seat grid, so the
+     column is cut to three names there and scrolls for the rest -- the whole
+     point of keeping it shut is that the chart is in sight. */
+  #right-rail[data-collapsed][data-pane-showing="previews"] #levels-panel {
+    max-height:66px; }
   #right-rail[data-collapsed] #levels-panel > *:not(.lv-card) { display:none; }
   #right-rail[data-collapsed] #levels-panel .lv-card { flex:0 0 auto; }
   #right-rail[data-collapsed] #levels-panel .lv-layers,
   #right-rail[data-collapsed] #levels-panel .lv-del { display:none; }
+  /* ONE PANE SHOWS AT A TIME, and `hidden` is not enough on its own: both
+     panes set `display` in their own rules, which beats the attribute's UA
+     style. Named rather than matched by [data-pane] because the collapsed
+     rules above carry two ids and would outrank an attribute selector, and
+     placed after them because they tie on specificity -- a hidden pane that
+     draws itself anyway is the silent kind of wrong this page keeps paying
+     for. */
+  #right-rail #levels-panel[hidden],
+  #right-rail #view-rail[hidden] { display:none; }
+  /* EXCEPT THE CHIPS, SHUT (§7c). Collapsed, the levels panel is not a pane
+     -- it is the level switch, reduced to the names, and it is the only one
+     the page has left now the chrome bar's picker is gone. Shutting the rail
+     on the previews pane would otherwise take the drafter's level switch away
+     as a side effect of which tab he last pressed. */
+  #right-rail[data-collapsed] #levels-panel[hidden] { display:flex; }
   .lv-head { display:flex; align-items:center; gap:6px; }
   .lv-head-title { flex:1; font-family: var(--font-ui); font-size:9px;
     letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet); }
@@ -1007,10 +1212,15 @@
     font-weight:600; letter-spacing:0.04em; }
   .promote-row button:hover { border-color: var(--accent); color: var(--accent); }
   [data-promote-go] { border-color: var(--accent); color: var(--accent); }
+  /* THE NOTICE IS A MESSAGE, NOT A DOOR. It covers the whole sheet to be
+     read, and while it did so with pointer events it also swallowed every
+     press aimed at the bars behind it -- including NEW and OPEN, the two
+     controls the "no saved drawing" notice is asking the drafter to use. */
   #notice { position:fixed; inset:0; z-index:6; display:none;
-    align-items:center; justify-content:center; padding:24px; text-align:center; }
+    align-items:center; justify-content:center; padding:24px; text-align:center;
+    pointer-events:none; }
   #notice.show { display:flex; }
-  #notice div { max-width:34em; }
+  #notice div { max-width:34em; pointer-events:auto; }
   #notice h1 { font-family: var(--font-ui); font-size:19px; font-weight:600;
     letter-spacing:0.02em; margin:0 0 8px; color: var(--accent); }
   #notice p { margin:0 0 6px; color: var(--ink-secondary); }
@@ -1022,7 +1232,17 @@
 <body>
 
 <canvas id="plan"></canvas>
-<div id="readout">loading…</div>
+<button id="readout-tab" type="button" data-readout-tab
+  aria-expanded="false" aria-controls="readout"
+  title="The page's own counts: what is drawn on this level, and what the drawing holds">STATUS READOUT</button>
+<div id="readout" hidden>
+  <!-- THE COUNTS GO IN THEIR OWN SPAN so the close button survives them: the
+       readout is rewritten by innerHTML on every paint, and a child of the
+       panel itself would be wiped by the first repaint after it opened. -->
+  <span id="readout-text">loading…</span>
+  <button id="readout-close" type="button" data-readout-close
+    aria-label="Close the status readout" title="Close">×</button>
+</div>
 
 <div id="elsewhere" data-changed-elsewhere hidden>changed elsewhere</div>
 <div id="lease" data-lease-banner hidden>
@@ -1042,16 +1262,36 @@
   <div id="tool-slot" data-tool-slot></div>
 </aside>
 
-<button id="right-tab" class="rail-tab" type="button" data-right-tab hidden>VIEWS · PROPERTIES</button>
+<!-- TWO TABS ON THE RIGHT EDGE (Movie, 15 Sep): "2 seperate tabs top will be
+     LEVELS / LAYERS, and then next down LAYOUT PREVIEWS".
+
+     THIS OVERTURNS A RULING OF MINE, and the reason it can is that the
+     ruling's evidence was about OVERLAP, not about count: two tabs on one
+     edge is how #389's chrome-on-chrome collisions happened, when both were
+     pinned to the same top. These two are pinned in sequence -- the second
+     starts where the first ends -- and the pairwise chrome check measures
+     every pair of boxes on the page, so a tab that grows into its neighbour
+     fails a run rather than reaching a drafter.
+
+     ONE PANE AT A TIME, because the panel is bounded at 288px and stacking
+     both panes inside it was the arrangement that made the rail scroll past
+     the levels to reach the seats. Pressing the open tab shuts the rail;
+     pressing the other swaps the pane without shutting. -->
+<button id="right-tab" class="rail-tab" type="button" data-right-tab
+  data-pane-tab="levels" hidden>LEVELS / LAYERS</button>
+<button id="previews-tab" class="rail-tab" type="button" data-previews-tab
+  data-pane-tab="previews" hidden>LAYOUT PREVIEWS</button>
 <aside id="right-rail" data-right-rail data-collapsed hidden>
-  <div id="view-rail"></div>
   <!-- LEVELS / LAYERS. The rail's EDITOR, not its companion: the layer rows
        inside a level card are the same objects as the seats, so adding a
        level adds two seats and deleting one takes them away. -->
-  <div id="levels-panel" data-levels-panel></div>
+  <div id="levels-panel" data-levels-panel data-pane="levels"></div>
   <!-- PER-TOOL PROPERTIES, the slot and nothing in it. Gilligan fills this;
-       the contract is in the comment beside setToolProperties below. -->
+       the contract is in the comment beside setToolProperties below. It
+       rides with LEVELS / LAYERS: properties belong to the thing selected,
+       which is what that pane is about. -->
   <div id="props-slot" data-props-slot hidden></div>
+  <div id="view-rail" data-pane="previews"></div>
 </aside>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
 
@@ -1088,6 +1328,13 @@
        has always kept its dormant chips: the row is the map of the job. -->
   <button type="button" data-page="real-estate" disabled
     title="REAL ESTATE LAYOUT — the marketing floor plan, not built yet">REAL ESTATE LAYOUT</button>
+  <!-- THE FINISH SWITCH, a button's width clear of the pages (Movie, 15 Sep:
+       "add extra space of about 1 button between them"). The gap is the
+       sentence: this is not a seventh page, and a switch flush against the
+       page row would read as one. --><span class="set spaced" data-theme-switch data-switch-home>
+    <button type="button" data-theme="ruff" aria-pressed="false">RUFF</button>
+    <button type="button" data-theme="rough" aria-pressed="false">ROUGH</button>
+  </span>
 </div>
   <div class="grow"></div>
   <!-- THE MIDDLE PAIR (Movie, 15 Sep): "2 buttons, the DRIVE-THRU MENU, and
@@ -1148,6 +1395,12 @@
        row's dormant chips always were -- the row is the map of the job, and
        a map with a town missing teaches the drafter a shape that is wrong. -->
   <div id="sheet-row" data-sheet-row>
+    <!-- NIGHT/DAY, the mirror of RUFF/ROUGH at the other end and spaced the
+         same way, so the two switches read as a pair holding the bar's ends
+         rather than as two more sheets. --><span class="set spaced-after" data-mode-switch data-switch-home>
+      <button type="button" data-skin-mode="night" aria-pressed="false">NIGHT</button>
+      <button type="button" data-skin-mode="day" aria-pressed="false">DAY</button>
+    </span>
     <a data-page="construction" href="./LAYOUT.dc.html"
       title="The construction layout: the sheet that goes to site">CONSTRUCTION LAYOUT</a>
     <a data-page="specs" href="./SPECS.html"
@@ -1220,17 +1473,11 @@
      page has a night skin. Everything here paints in currentColor and takes
      it from a palette role. -->
 <div id="strip" data-instrument-strip>
-  <!-- THE SETTINGS CORNER, first on the bar: the two profile pages and the
-       unit in force. SETTINGS and STANDARDS are PAGES on this side of the
-       shop (SETTINGS.html, STANDARDS.html), where MODEL.dc.html opens them as
-       dialogs -- the page row already teaches that a place you go is a link,
-       and a modal that only links onward would be a door in front of a door.
-
-       UNITS IS ONE BUTTON NAMING THE UNIT IN FORCE, which is MODEL.dc.html's
-       own ruling (:435-442) and its reason: two stacked buttons at a 44px
-       touch target overlap, so METRIC ate every tap aimed at IMPERIAL. The
-       label is a STATEMENT, not a command -- "UNITS: IMPERIAL" cannot be
-       misread as "tapping makes it imperial" the way a lone "METRIC" can. -->
+  <!-- THE SETTINGS CORNER, first on the bar: the two profile pages. SETTINGS
+       and STANDARDS are PAGES on this side of the shop (SETTINGS.html,
+       STANDARDS.html), where MODEL.dc.html opens them as dialogs -- the page
+       row already teaches that a place you go is a link, and a modal that
+       only links onward would be a door in front of a door. -->
   <div id="settings-corner" data-settings-corner>
     <div id="settings-stack">
       <a data-page="settings" href="./SETTINGS.html"
@@ -1238,25 +1485,44 @@
       <a data-page="standards" href="./STANDARDS.html"
         title="Company standard layers, names and print rules">STANDARDS</a>
     </div>
-    <button type="button" id="units-toggle" data-unit-toggle>UNITS: IMPERIAL</button>
   </div>
-  <!-- PRINTSCREEN (Movie, 15 Sep), and it is NOT a print of the drawing.
-       There is no print path on this page on purpose: a sheet's scale and
-       title block live on the layout, and a second renderer here would be a
-       second thing the city could be handed. What this makes is a
-       PRESENTATION -- three screen grabs for a client to look at -- and
-       every page says NOT TO SCALE above the logo so it can never be walked
-       into a builder's office as a drawing. Its place on the bar is Movie's:
-       between UNITS and the mode corner. -->
-  <button type="button" id="printscreen" data-printscreen
-    title="Three pages to show a client — this view, the whole plan, and the views rail. Not to scale.">PRINTSCREEN</button>
+  <!-- UNITS, THE SECOND STACK (Movie, 15 Sep): "put IMPERIAL (and then under a
+       second button) METRIC - and shade in the one being used".
+
+       THIS REPLACES A DC RULING RATHER THAN IGNORING IT. MODEL.dc.html
+       (:435-442) made units ONE button naming the unit in force because its
+       two stacked buttons, at a 44px touch target, OVERLAPPED -- METRIC ate
+       every tap aimed at IMPERIAL. The failure was the hit boxes, not the
+       stacking: these two are the settings stack's own 9px rows, the shape
+       already standing beside them without that fault. What kept the ruling
+       honest was a measurement, so what replaces it carries one --
+       model-html-shell's "a tap aimed at a stacked button lands on that
+       button" sends a tap at each button's own CENTRE COORDINATE and asserts
+       the boxes never overlap, which is the exact check the old corner would
+       have failed. It measures all three of the bar's stacks, the settings
+       rows this argument leans on included.
+
+       THIS CITATION WAS WRONG WHEN THE STACK SHIPPED. It named
+       model-html-topbar, which is about house families and holds no hit test
+       of any kind, so the ruling was overturned on the strength of a
+       measurement nobody had taken. The check named here exists and is
+       mutation-gated by proto/units-stack-mutants.js -- a claim of coverage
+       is the one kind of comment that can be checked by reading it. -->
+  <div id="units-corner" data-units-corner data-switch-home>
+    <div class="stack">
+      <button type="button" data-units="imperial" aria-pressed="true"
+        title="Read this drawing in feet and inches">IMPERIAL</button>
+      <button type="button" data-units="metric" aria-pressed="false"
+        title="Read this drawing in metres">METRIC</button>
+    </div>
+  </div>
 <!-- THE MODE CORNER (§7b): WHAT THE DRAWING IS. Carried whole out of the foot
      strip -- same buttons, same data-* attributes, same listeners. TOY still
      means cardinal, square and whole-foot and DRAFTING is still one-way; a
      control that changed meaning because it changed corner would be the
      re-scope §7b forbids. -->
-<div id="mode-corner" data-mode-corner>
-  <span class="set" data-board-switch>
+<div id="mode-corner" data-mode-corner data-switch-home>
+  <span class="set stack" data-board-switch>
     <!-- NO title HERE. These two are set from script below, and a static one
          would be overwritten -- which is exactly what happened when this
          markup was given titles first: they read correctly in the file and
@@ -1265,15 +1531,24 @@
     <button type="button" data-board="toy" aria-pressed="false">TOY</button>
     <button type="button" data-board="drafting" aria-pressed="false">DRAFTING</button>
   </span>
-  <span class="set" data-theme-switch>
-    <button type="button" data-theme="ruff" aria-pressed="false">RUFF</button>
-    <button type="button" data-theme="rough" aria-pressed="false">ROUGH</button>
-  </span>
-  <span class="set" data-mode-switch>
-    <button type="button" data-skin-mode="night" aria-pressed="false">NIGHT</button>
-    <button type="button" data-skin-mode="day" aria-pressed="false">DAY</button>
-  </span>
 </div>
+<!-- RUFF/ROUGH AND NIGHT/DAY WENT DOWNSTAIRS (Movie, 15 Sep), to either side
+     of the bottom bar. They are not instruments and they are not what the
+     drawing IS in the sense TOY/DRAFTING is -- they are how the sheet is
+     LOOKED AT -- and the bottom bar is where the page's other "which way am I
+     looking at this" controls already live. The markup moved whole: same
+     data-* attributes, same listeners, same aria-pressed shading. -->
+  <!-- PRINTSCREEN (Movie, 15 Sep), and it is NOT a print of the drawing.
+       There is no print path on this page on purpose: a sheet's scale and
+       title block live on the layout, and a second renderer here would be a
+       second thing the city could be handed. What this makes is a
+       PRESENTATION -- three screen grabs for a client to look at -- and
+       every page says NOT TO SCALE above the logo so it can never be walked
+       into a builder's office as a drawing. Its place on the bar is Movie's:
+       "next over printscreen button by itself", after the three stacks and
+       before the instruments. -->
+  <button type="button" id="printscreen" data-printscreen
+    title="Three pages to show a client — this view, the whole plan, and the views rail. Not to scale.">PRINTSCREEN</button>
   <span id="strip-message" data-strip-message></span>
   <div class="grow"></div>
 
@@ -1298,9 +1573,6 @@
       </svg>
     </span>
 
-    <span id="strip-len" class="num" data-model-len></span>
-    <span id="strip-ang" class="num" data-model-ang></span>
-
     <button type="button" id="strip-ruler" class="chip" data-mode-ruler
       title="RULER — measure between two points without drawing anything">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
@@ -1309,10 +1581,33 @@
       </svg>
     </button>
 
+    <span id="strip-len" class="num" data-model-len></span>
+    <span id="strip-ang" class="num" data-model-ang></span>
+
     <span id="strip-length-box">
       <span>LENGTH</span>
       <input id="frozen-length" data-frozen-length type="text" disabled
         placeholder="—" aria-label="Frozen length" autocomplete="off" />
+    </span>
+
+    <!-- THE ANGLE BOX IS THE LENGTH BOX'S TWIN, and deliberately so: a
+         drafter who can type 12'-6" should be able to type 30° for the same
+         reason, and one instrument reading a number the drafter cannot set is
+         half a tool. It lives beside the protractor because the protractor is
+         where the number is read. -->
+    <span id="strip-angle-box">
+      <input id="frozen-angle" data-frozen-angle type="text" disabled
+        placeholder="—" aria-label="Frozen angle" autocomplete="off" />
+      <span>ANGLE</span>
+    </span>
+
+    <span class="chip" data-mode-protractor title="PROTRACTOR — reads the angle of the run in hand">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <path d="M2 12.5 A6 6 0 0 1 14 12.5 Z"></path>
+        <path d="M8 12.5 L11.6 8.3" stroke-width="0.9"></path>
+        <path d="M4.2 9.9 L5.1 10.8 M8 6.5 V7.9 M11.8 9.9 L10.9 10.8" stroke-width="0.9"></path>
+      </svg>
+      <span id="strip-protractor-angle" data-protractor-angle>—</span>
     </span>
 
     <button type="button" id="strip-tsquare" class="chip" data-mode-tsquare
@@ -1323,15 +1618,6 @@
         <path d="M8 6.5 H10.5 M8 9.5 H10.5 M8 12.5 H10.5" stroke-width="0.9"></path>
       </svg>
     </button>
-
-    <span class="chip" data-mode-protractor title="PROTRACTOR — reads the angle of the run in hand">
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-        <path d="M2 12.5 A6 6 0 0 1 14 12.5 Z"></path>
-        <path d="M8 12.5 L11.6 8.3" stroke-width="0.9"></path>
-        <path d="M4.2 9.9 L5.1 10.8 M8 6.5 V7.9 M11.8 9.9 L10.9 10.8" stroke-width="0.9"></path>
-      </svg>
-      <span id="strip-protractor-angle" data-protractor-angle>—</span>
-    </span>
 
     <button type="button" id="strip-scale" class="chip" data-mode-scale
       title="FOOT — every point and every drag lands on the whole foot">
@@ -1356,7 +1642,7 @@
      itself -- see the stylesheet note. The picker chooses what the GENERATED
      NAME ends in and nothing else: every one of the four is plain JSON, which
      is why OPEN takes all four without asking which it was given. -->
-<div id="file-row" data-file-row hidden>
+<div id="file-row" data-file-row>
   <button id="file-new" type="button" data-file-new title="Start an empty drawing">NEW</button>
   <button id="file-open" type="button" data-file-open title="Open a drawing file">OPEN</button>
   <input id="file-input" type="file" data-file-input hidden
@@ -1365,8 +1651,8 @@
        once landed on top of this button and every spec that pressed SAVE
        timed out, so where it sits is measured, not chosen. The pairwise
        chrome check is what keeps it that way. -->
-  <button id="save" type="button" data-model-save data-save-status>SAVE</button>
-  <button id="file-save-as" type="button" data-file-save-as
+  <button id="save" type="button" data-model-save data-save-status disabled>SAVE</button>
+  <button id="file-save-as" type="button" data-file-save-as disabled
     title="Save, and download a copy under a name you pick">SAVE AS</button>
   <select id="file-ext" data-file-ext aria-label="File extension for the saved copy">
     <option value="draft" selected>.draft</option>
@@ -1482,6 +1768,10 @@
      detached garage. The bone reads it to know whether there is anything
      left to offer. -->
 <script src="./building-bodies.js"></script>
+<!-- Where an ordered garage stands. A traced loop says where it goes by
+     being traced; an autobuilt one has to be told, and that is a rule about
+     buildings rather than about this page. -->
+<script src="./garage-site.js"></script>
 <script src="./profile-manager.js"></script>
 <!-- The seventeen tools as data, so the keypad renders a list rather than
      seventeen hand-written buttons that can drift apart. It reads
@@ -1583,6 +1873,18 @@
   // it claims to show is the defect this suite keeps meeting.
   let ctx = canvas.getContext('2d');
   const readout = document.getElementById('readout');
+  // THE TAB IS THE ONLY THING THAT MOVES THE PANEL. Nothing else opens or
+  // shuts it -- not a level change, not a save -- so the state on screen is
+  // the drafter's own last decision and never a surprise mid-gesture.
+  const readoutTab = document.getElementById('readout-tab');
+  const readoutText = document.getElementById('readout-text');
+  const showReadout = open => {
+    readout.hidden = !open;
+    readoutTab.setAttribute('aria-expanded', String(open));
+  };
+  readoutTab.addEventListener('click', () => showReadout(true));
+  document.getElementById('readout-close')
+    .addEventListener('click', () => showReadout(false));
   const notice = document.getElementById('notice');
   const noticeBody = document.getElementById('notice-body');
   const saveButton = document.getElementById('save');
@@ -1703,6 +2005,9 @@
     noticeBody.innerHTML = `<h1>${title}</h1>${body}`;
     notice.classList.add('show');
   };
+  // A NOTICE OUTLIVES ITS SUBJECT OTHERWISE. "No saved drawing on this
+  // origin" is true until NEW or OPEN answers it, and nothing took it down.
+  const hideNotice = () => notice.classList.remove('show');
 
   // ── canvas sizing ─────────────────────────────────────────────────────────
   // Backing store in device pixels, drawing in CSS pixels, so lines are crisp
@@ -3210,7 +3515,7 @@
       // console full of noise behind a blank page; this puts it on screen
       // once, in the same notice the store errors use.
       ctx.restore();
-      readout.textContent = 'painter failed';
+      readoutText.textContent = 'painter failed';
       say('The drawing could not be painted',
         `<p><code>${String(err && err.message || err)}</code></p>`);
       throw err;
@@ -3357,8 +3662,8 @@
     // walls() and the rest filter by layer view, and under a section every one
     // of them reads 0 while the section shows the whole house.
     const cut = activeCut();
-    if (cut) { readout.innerHTML = sectionReadout(cut); return; }
-    readout.innerHTML =
+    if (cut) { readoutText.innerHTML = sectionReadout(cut); return; }
+    readoutText.innerHTML =
       `walls <b>${shownOfTotal(walls().length, drawing.walls)}</b>   `
       + `lines <b>${shownOfTotal(lines().length, drawing.lines)}</b>   `
       + `floors <b>${shownOfTotal(floors().length, drawing.floors)}</b>   `
@@ -3467,10 +3772,12 @@
   // BOTH DEFAULT SHUT, which is MODEL.dc.html's own default (:3009, "pull-out
   // tabs: both side rails start hidden") and the only state that costs the
   // drafter nothing. tests/model-html-shell.spec.js measures all four.
-  const RAILS = [
-    { side: 'left', param: 'left', tab: 'left-tab', panel: 'left-rail' },
-    { side: 'right', param: 'right', tab: 'right-tab', panel: 'right-rail' },
-  ];
+  //
+  // THE TABLE OF RAILS IS GONE, not mislaid: it paired one tab with one
+  // param, and the right edge now has two tabs driving one param plus a
+  // pane. A row that said `tab: 'right-tab'` would have been a second,
+  // wrong answer to "which tab opens the right rail" sitting beside the
+  // real one.
   const railOpen = param => params.get(param) === '1';
   const setRail = (param, open) => {
     if (open) params.set(param, '1'); else params.delete(param);
@@ -3489,6 +3796,27 @@
   // open panel on purpose (:1766) -- "every view stays one tap away". Shut to
   // zero would have taken that away, so shut means ONE SEAT WIDE: all six
   // seats, single column, no properties.
+  // WHICH PANE THE RIGHT RAIL IS SHOWING, in the URL beside `right` for the
+  // same reason `right` is there: it is what the drafter is looking at, it
+  // survives a reload, and it is shareable. `right` still says OPEN or SHUT
+  // on its own, so every check written against `?right=1` keeps its meaning
+  // -- the pane is a second, independent fact, not a repacking of the first.
+  const PANES = ['levels', 'previews'];
+  const paneShowing = () =>
+    PANES.includes(params.get('pane')) ? params.get('pane') : 'levels';
+  const setPane = pane => {
+    // Pressing the tab that is already up SHUTS the rail, which is what the
+    // one tab did and the gesture a drafter already has. Pressing the other
+    // swaps panes and leaves it open -- shutting on a swap would make the
+    // second tab cost two presses to use.
+    if (pane === paneShowing() && railOpen('right')) { setRail('right', false); return; }
+    params.set('pane', pane);
+    if (!railOpen('right')) { setRail('right', true); return; }
+    syncUrl();
+    syncShell();
+    paint();
+  };
+
   const syncShell = () => {
     const leftOpen = railOpen('left');
     const leftPanel = document.getElementById('left-rail');
@@ -3502,14 +3830,23 @@
     // Never hidden: collapsed is a width, not an absence.
     rightPanel.hidden = false;
     rightPanel.toggleAttribute('data-collapsed', !rightOpen);
-    const rightTab = document.getElementById('right-tab');
-    rightTab.hidden = false;
-    rightTab.setAttribute('aria-expanded', String(rightOpen));
+    const pane = paneShowing();
+    rightPanel.dataset.paneShowing = pane;
+    rightPanel.querySelectorAll('[data-pane]').forEach(el => {
+      el.hidden = el.dataset.pane !== pane;
+    });
+    [...document.querySelectorAll('.rail-tab[data-pane-tab]')].forEach(tab => {
+      tab.hidden = false;
+      tab.setAttribute('aria-expanded',
+        String(rightOpen && tab.dataset.paneTab === pane));
+      tab.setAttribute('aria-selected', String(tab.dataset.paneTab === pane));
+    });
   };
 
-  RAILS.forEach(({ param, tab }) => {
-    document.getElementById(tab)
-      .addEventListener('click', () => setRail(param, !railOpen(param)));
+  document.getElementById('left-tab')
+    .addEventListener('click', () => setRail('left', !railOpen('left')));
+  [...document.querySelectorAll('.rail-tab[data-pane-tab]')].forEach(tab => {
+    tab.addEventListener('click', () => setPane(tab.dataset.paneTab));
   });
 
   // ── the build bar, and the seam behind it ─────────────────────────────────
@@ -3948,6 +4285,19 @@
       paintSign();
       return;
     }
+    // AND ONE DETACHED GARAGE IS THE CAP (Movie's standing rule). Building
+    // a second would put two of a body the project may hold one of, and
+    // the tile is pressable because the board opens on a half-full
+    // project -- so the refusal belongs at the order, not at the tile.
+    if (picked?.entry?.needsSize
+        && window.DraftBuildingBodies.hasDetachedGarage(drawing)) {
+      signRefusal = {
+        line: 'YOU\u2019VE GOT ONE ALREADY.',
+        note: 'One house and one detached garage is the lot.',
+      };
+      paintSign();
+      return;
+    }
     fireOrder();
   });
   // Escape shuts the sign, as it shuts every other thing this page puts over
@@ -4018,22 +4368,30 @@
   // it is the one this page can keep -- a re-snap that rounded a permit
   // drawing's walls on a button press is the opposite of what Movie asked
   // the foot light for.
-  const unitsToggle = document.getElementById('units-toggle');
+  //
+  // TWO BUTTONS NOW, NOT ONE (Movie, 15 Sep), and the shading is what makes
+  // that safe to say: with a toggle, the label had to carry the state,
+  // which is why it read "UNITS: IMPERIAL" rather than "IMPERIAL". Two
+  // buttons name the two systems and the accent says which is in force, so
+  // neither label has to do a second job. Each is a SET, not a toggle --
+  // pressing IMPERIAL while imperial is in force does nothing, where a
+  // toggle pressed twice by a slipping thumb changed the drawing.
+  const unitButtons =
+    [...document.querySelectorAll('#units-corner button[data-units]')];
   const metric = () => drawing?.units === 'metric';
   const paintUnits = () => {
-    if (!unitsToggle) return;
-    unitsToggle.textContent = metric() ? 'UNITS: METRIC' : 'UNITS: IMPERIAL';
-    unitsToggle.title = metric()
-      ? 'The drawing is in metric — tap to switch to imperial'
-      : 'The drawing is in imperial — tap to switch to metric';
+    unitButtons.forEach(b => b.setAttribute('aria-pressed',
+      String((b.dataset.units === 'metric') === metric())));
   };
-  unitsToggle?.addEventListener('click', () => {
+  unitButtons.forEach(b => b.addEventListener('click', () => {
     if (!drawing) return;
-    drawing.units = metric() ? 'imperial' : 'metric';
+    const wanted = b.dataset.units === 'metric';
+    if (wanted === metric()) return;
+    drawing.units = wanted ? 'metric' : 'imperial';
     markDirty();
     paintUnits();
     paint();
-  });
+  }));
 
   // replaceState, not pushState: a switch is a change of viewpoint, not a
   // navigation, and forty pushes would bury whatever page the drafter came
@@ -4565,6 +4923,15 @@
     buildLevelsPanel();
     paintUnits();
     if (fileRow) fileRow.hidden = false;
+    // THE WRITE BUTTONS COME ALIVE WITH THE THING THEY WRITE, and here rather
+    // than in the loader because a drawing arrives two ways -- stored on
+    // arrival, and NEW/OPEN once the page is up -- and only one of them used
+    // to say so. The lease painter may put them straight back down if
+    // another page holds the file: something to save first, permission to
+    // save second.
+    const saveAsButton = document.getElementById('file-save-as');
+    if (saveButton) saveButton.disabled = !drawing;
+    if (saveAsButton) saveAsButton.disabled = !drawing;
   };
 
   // ONE WAY INTO THE BONEYARD, and one way out. The card and every shelf row
@@ -6121,7 +6488,12 @@
     return retired;
   };
 
-  const commitWall = (startPt, endPt) => {
+  // `bone: false` for a run that brings its own outline. The autobuilt
+  // garage writes a garage-flagged loop of its own, and letting the TOY
+  // bone grow a second one off the same four walls would leave the level
+  // holding two footprints for one building -- one of them saying nothing
+  // about being a garage, which is the record building-bodies.js counts.
+  const commitWall = (startPt, endPt, { bone = true } = {}) => {
     const { levelId, viewId } = onActiveLevel();
     const homeView = wallHomeView(viewId);
     const wall = {
@@ -6141,7 +6513,7 @@
     };
     drawing.walls.push(wall);
     undoStack.push({ kind: 'add', wall });
-    extendToyBone(startPt, endPt, levelId);
+    if (bone) extendToyBone(startPt, endPt, levelId);
     markDirty();
     return wall;
   };
@@ -6242,6 +6614,66 @@
       pendingBone = null;
     }
   };
+
+  // ── THE ORDERED GARAGE BUILDS ITSELF ─────────────────────────────────────
+  //
+  // Movie, 15 Sep: "now i need the garage to be AUTOBUILT ... it should
+  // make a rectangle outline of that size and then build it with the
+  // project data". This is the FIRST listener on the order seam: until now
+  // a press recorded what was wanted and drew nothing.
+  //
+  // THE OUTLINE IS THE ORDER AND THE WALLS FOLLOW IT, in that sequence,
+  // because the loop is what says "this is a detached garage of this size"
+  // -- four walls alone are a shape the file cannot tell from a shed. The
+  // walls are committed through the same commitWall the drafter's own
+  // trace uses, so the garage carries the project's wall type, heights and
+  // reference line rather than a second set of defaults invented here.
+  //
+  // WHERE IT STANDS IS garage-site.js's ANSWER, not this page's: PROJECT
+  // will place one too, and a second derivation of "beside the house" is
+  // the copy the ruling is about.
+  //
+  // ONE PRESS, ONE UNDO. Five separate steps would have Ctrl+Z leave three
+  // walls and a garage-flagged loop standing around them, which is not a
+  // state any gesture can otherwise produce.
+  const buildOrderedGarage = order => {
+    if (!drawing || !order?.entry?.needsSize || !order.size) return null;
+    const { levelId } = onActiveLevel();
+    const corners = window.DraftGarageSite.plotFor(drawing, levelId, order.size);
+    if (!corners) return null;
+    drawing.outlines = drawing.outlines || [];
+    const outline = {
+      id: newDrawingItemId('outline'),
+      masterId: null,
+      levelId,
+      garage: true,
+      // DETACHED, SAID ON THE RECORD. It is the detached family's own tile,
+      // and an outline that only implies it would not spend the detached
+      // garage's slot -- building-bodies.js reads the flag, not the family.
+      detached: true,
+      foundation: order.entry.foundation || null,
+      points: corners.map(pt => ({ x: pt.x, y: 0, z: pt.z })),
+      overriddenSrcIds: [],
+    };
+    drawing.outlines.push(outline);
+    // The four walls' own 'add' steps are dropped for the single 'built'
+    // one below. Left in, the first Ctrl+Z would take the whole garage and
+    // the next four would each hunt a wall that is already gone.
+    const mark = undoStack.length;
+    const walls = corners.map((corner, index) =>
+      commitWall(corner, corners[(index + 1) % corners.length], { bone: false }));
+    undoStack.length = mark;
+    undoStack.push({ kind: 'built', walls, outline, list: drawing.outlines });
+    markDirty();
+    paint();
+    return outline;
+  };
+  // AND THE BOARD GETS OUT OF THE WAY once it has built what was ordered:
+  // the drafter's next move is to look at the garage, and it is behind the
+  // sign.
+  window.ModelBuild.onOrder(order => {
+    if (buildOrderedGarage(order)) setSign(false);
+  });
 
   // ── STRUCTURE: PLACING A COLUMN AND A BEAM ───────────────────────────────
   //
@@ -7102,6 +7534,7 @@
   const tsquareChip = strip.querySelector('[data-mode-tsquare]');
   const scaleChip = strip.querySelector('[data-mode-scale]');
   const lengthBox = document.getElementById('frozen-length');
+  const angleBox = document.getElementById('frozen-angle');
 
   const F = window.DraftFormatters;
   const feetLabel = ft => F.formatArchitecturalInches(ft * 12);
@@ -7213,6 +7646,15 @@
     if (lengthBox.disabled === typable) {
       lengthBox.disabled = !typable;
       if (!typable) lengthBox.value = '';
+    }
+    // THE ANGLE BOX LIVES UNDER THE SAME RULE, for the same reason: a typed
+    // bearing needs a start point to turn about.
+    if (angleBox.disabled === typable) {
+      angleBox.disabled = !typable;
+      if (!typable) angleBox.value = '';
+    }
+    if (typable && document.activeElement !== angleBox) {
+      angleBox.value = run ? angleLabel(run.from, run.to) : '';
     }
     // While the drafter is typing, the box is his; the live length would
     // overwrite the digits mid-word.
@@ -7351,6 +7793,52 @@
     stripRefresh();
     paint();
   };
+  // TYPING AN ANGLE COMMITS THE WALL TOO, and it is the length path with the
+  // two halves swapped: there the typed number is the distance and the cursor
+  // gives the direction, here the typed number is the direction and the
+  // distance comes from whatever the other box or the cursor is holding.
+  //
+  // WHICH WAY 30° POINTS is decided by the hand, not by the sign of the
+  // number. The protractor reads -90..90 off +X -- a wall drawn left reads
+  // the same as the same wall drawn right, deliberately -- so the typed
+  // bearing gives a LINE and the cursor's own aim picks the end of it. Type
+  // the number the protractor is showing and nothing moves, which is the test
+  // of a readout a drafter can also set.
+  const commitTypedAngle = () => {
+    const deg = parseFloat(String(angleBox.value).replace(/[°\s]/g, ''));
+    if (!Number.isFinite(deg) || Math.abs(deg) > 180) {
+      stripMessage.textContent = 'angle in degrees, -180 to 180';
+      return;
+    }
+    if (!drawStart || !cursorWorld) return;
+    if (board === 'toy' && !drawing?.boardPromptSeen) {
+      askToPromote(() => commitTypedAngle());
+      return;
+    }
+    const aim = squareTo(drawStart, cursorWorld);
+    const rad = deg * Math.PI / 180;
+    let ux = Math.cos(rad), uz = -Math.sin(rad);
+    if ((aim.x - drawStart.x) * ux + (aim.z - drawStart.z) * uz < 0) { ux = -ux; uz = -uz; }
+    // THE LENGTH THE DRAFTER CAN SEE, in the order he can see it: the length
+    // box if he has typed one, else the run the cursor is making.
+    const typed = F.parseArchitecturalLength(lengthBox.value);
+    const feet = typed.ok && typed.inches > 0 ? typed.inches / 12
+      : Math.hypot(aim.x - drawStart.x, aim.z - drawStart.z);
+    if (!(feet > 1e-6)) { stripMessage.textContent = 'point away from the start first'; return; }
+    const end = { x: drawStart.x + ux * feet, y: 0, z: drawStart.z + uz * feet };
+    const wall = commitWall(drawStart, end);
+    drawStart = wall.end;
+    setSelection([{ type: 'wall', item: wall }]);
+    angleBox.blur();
+    stripRefresh();
+    paint();
+  };
+  angleBox.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); commitTypedAngle(); }
+    if (e.key === 'Escape') { e.preventDefault(); angleBox.blur(); stripRefresh(); }
+    e.stopPropagation();
+  });
+
   lengthBox.addEventListener('keydown', e => {
     if (e.key === 'Enter') { e.preventDefault(); commitTypedLength(); }
     if (e.key === 'Escape') { e.preventDefault(); lengthBox.blur(); stripRefresh(); }
@@ -7368,13 +7856,20 @@
   // THE THREE SWITCHES LIVE IN THE MODE CORNER, not the strip: §7b moved them
   // to the head-left so the strip carries instruments and readings only.
   //
-  // BUTTONS ONLY, and inside the corner. `html` carries `data-theme` and
-  // `body` carries `data-board` -- those are the marks the switches SET --
-  // so a document-wide query hands the switch code its own output as a
+  // BUTTONS ONLY, AND INSIDE A DECLARED HOME. `html` carries `data-theme`
+  // and `body` carries `data-board` -- those are the marks the switches SET
+  // -- so a document-wide query hands the switch code its own output as a
   // control: every click then bubbles to `html`, re-reads the theme off it
   // and rewrites the skin key without the board in it.
+  //
+  // THE HOME IS AN ATTRIBUTE, NOT A LIST OF IDS, because the switches no
+  // longer live in one place: TOY/DRAFTING is on the strip and RUFF/ROUGH
+  // and NIGHT/DAY went to the bottom bar (Movie, 15 Sep). `#mode-corner,
+  // #house-strip` would have worked today and gone stale the first time one
+  // moved again -- and it fails SILENTLY, with the switch simply never
+  // wired, which is the failure shape this page keeps paying for.
   const switchSet = attr =>
-    [...document.querySelectorAll(`#mode-corner button[${attr}]`)];
+    [...document.querySelectorAll(`[data-switch-home] button[${attr}]`)];
   const themeButtons = switchSet('data-theme');
   const modeButtons = switchSet('data-skin-mode');
   const boardButtons = switchSet('data-board');
@@ -8724,6 +9219,18 @@
         // in the step, so one branch puts a line, floor, outline, column or
         // beam back without knowing which it is holding.
         step.list.splice(Math.min(step.index, step.list.length), 0, step.item);
+      } else if (step.kind === 'built') {
+        // A WHOLE ORDER GOES BACK AT ONCE, walls and the loop that names
+        // them, and the corners it minted are retired with them -- the
+        // same reason single-wall undo retires its own.
+        step.walls.forEach(wall => {
+          const at = drawing.walls.indexOf(wall);
+          if (at >= 0) drawing.walls.splice(at, 1);
+        });
+        setSelection(selection.filter(entry => !step.walls.includes(entry.item)));
+        retirePoolCorners(step.walls.flatMap(wall => [wall.start, wall.end]));
+        const outlineAt = step.list.indexOf(step.outline);
+        if (outlineAt >= 0) step.list.splice(outlineAt, 1);
       } else if (step.kind === 'add') {
         const at = drawing.walls.indexOf(step.wall);
         if (at >= 0) drawing.walls.splice(at, 1);
@@ -8777,7 +9284,7 @@
     try {
       parsed = JSON.parse(await file.text());
     } catch (err) {
-      readout.textContent = 'unreadable';
+      readoutText.textContent = 'unreadable';
       say('The saved drawing could not be parsed',
         `<p><code>${String(err && err.message || err)}</code></p>`);
       return false;
@@ -8789,7 +9296,7 @@
     const check = window.DraftDrawingFormat?.checkEnvelope(parsed)
       || { ok: true, reason: 'unchecked' };
     if (!check.ok) {
-      readout.textContent = `envelope ${check.reason}`;
+      readoutText.textContent = `envelope ${check.reason}`;
       say('That drawing is not one this page can read',
         `<p>checkEnvelope said <code>${check.reason}</code>.
             <code>version</code> means it was written by a newer MODEL than this page knows.</p>`);
@@ -8970,14 +9477,14 @@
       file = at.file;
       storeRev = at.rev;
     } catch (err) {
-      readout.textContent = 'store unavailable';
+      readoutText.textContent = 'store unavailable';
       say('The drawing store could not be opened',
         `<p>IndexedDB refused to open: <code>${String(err && err.message || err)}</code></p>
          <p>Private-browsing windows and blocked site data both do this.</p>`);
       return;
     }
     if (!file) {
-      readout.textContent = 'no drawing saved';
+      readoutText.textContent = 'no drawing saved';
       say('No saved drawing on this origin',
         `<p>Nothing is stored under <code>${BUCKET}</code> yet.</p>
          <p>Draw something in <code>MODEL.dc.html</code> on this same origin and save it,
@@ -8999,7 +9506,6 @@
     // The switchers can only be built once the drawing is on the page: their
     // options ARE its levels. Before this the bar stays hidden, like #save.
     buildChrome();
-    saveButton.classList.add('show');
     // CLEAN ON ARRIVAL, and stamped rather than assumed: without this the
     // attribute is absent, and absent is not '0' to anything reading it.
     document.body.dataset.saveDirty = '0';
@@ -9295,6 +9801,7 @@
 
   const adoptAndShow = async file => {
     if (!(await adoptFile(file))) return false;
+    hideNotice();
     bumpModelEpoch();
     fit();
     paint();
@@ -9443,7 +9950,7 @@
     // who watches drafters pick it; THIS IS A PICK, NOT A SPECIFICATION. A
     // missing button reads as a broken page, where a dead one says the drafter
     // is looking at the right place and cannot use it yet.
-    if (saveButton) saveButton.disabled = !held;
+    if (saveButton) saveButton.disabled = !held || !drawing;
   };
 
   const askForLease = async ({ takeover = false } = {}) => {

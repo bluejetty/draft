@@ -176,6 +176,32 @@ test.describe('MODEL.html instrument strip', () => {
       }
     });
 
+  // A LAPTOP IS NOT A NARROW SHEET. The drop rule is right -- a chip that
+  // does nothing must never cost the file row -- but it was priced for a bar
+  // that still carried RUFF/ROUGH and NIGHT/DAY, and after those went
+  // downstairs a 1366 screen was paying for space it had. Movie found it the
+  // way anyone would: "the drafting brush and a bunch of other unused
+  // instrument lights vanished".
+  //
+  // Asserted as the PAIR -- the kit is shown AND the file row is still on the
+  // sheet -- because either half alone is the bug: hiding them passes the
+  // second, restoring them blindly fails it.
+  test('a 1366 laptop keeps the whole kit, file row and all', async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await seed(page);
+    await openModel(page);
+
+    for (const sel of ['[data-mode-compass]', '[data-mode-triangle]',
+      '[data-mode-brush]', '[data-mode-shield]']) {
+      await expect(page.locator(sel)).toBeVisible();
+    }
+    const room = await page.evaluate(() => ({
+      row: document.querySelector('[data-file-save-as]').getBoundingClientRect().right,
+      sheet: window.innerWidth,
+    }));
+    expect(room.row).toBeLessThanOrEqual(room.sheet);
+  });
+
   test('the length and angle read the run in hand, and go blank when there is none',
     async ({ page }) => {
       await seed(page);
@@ -279,6 +305,44 @@ test.describe('MODEL.html instrument strip', () => {
       // length that lands within a few inches of what was asked for is not a
       // typed length, it is a snap.
       expect(length, "12' typed must be 12' stored").toBeCloseTo(12, 3);
+    });
+
+  // THE ANGLE BOX IS THE OTHER HALF OF THE PROTRACTOR. Movie: "we should have
+  // a angle textbox actually" — the page could read a bearing and not take
+  // one, which makes the protractor a gauge rather than an instrument.
+  //
+  // The check is the round trip a drafter would do: aim off-square, type the
+  // square number, and the stored wall is square while keeping the length the
+  // length box was holding.
+  test('the ANGLE box turns the wall to a typed bearing, and is dead with nothing in hand',
+    async ({ page }) => {
+      await seed(page, { board: 'drafting' });
+      await openModel(page);
+
+      const box = page.locator('#frozen-angle');
+      await expect(box, 'no run in hand: a typed bearing has nothing to turn')
+        .toBeDisabled();
+
+      await h.armWall(page);
+      await tapAt(page, -4, -4);
+      await hoverAt(page, 2, -2);        // deliberately off square
+      await expect(box).toBeEnabled();
+
+      await page.locator('#frozen-length').fill("10'");
+      await box.click();
+      await box.fill('0');
+      await box.press('Enter');
+      await page.waitForTimeout(80);
+      await page.locator('[data-model-save]').click();
+      await page.waitForTimeout(200);
+
+      const walls = (await stored(page)).walls;
+      const turned = walls.find(w => w.id !== 'w-a');
+      expect(turned, 'the turned wall reached the file').toBeTruthy();
+      expect(turned.end.z, '0° is level, whatever the cursor was doing')
+        .toBeCloseTo(turned.start.z, 6);
+      expect(Math.hypot(turned.end.x - turned.start.x, turned.end.z - turned.start.z),
+        'and it took the length the other box was holding').toBeCloseTo(10, 3);
     });
 
   test('the RULER measures and writes nothing — the one instrument that must not draw',

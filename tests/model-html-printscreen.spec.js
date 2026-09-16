@@ -74,7 +74,7 @@ const printedDoc = async page => {
   return html;
 };
 
-test('PRINTSCREEN sits between the units and the mode switches', async ({ page }) => {
+test('PRINTSCREEN sits after the stacks and before the instruments', async ({ page }) => {
   await openHouse(page);
   await expect(page.locator('#printscreen')).toBeVisible();
 
@@ -84,13 +84,26 @@ test('PRINTSCREEN sits between the units and the mode switches', async ({ page }
   const order = await page.evaluate(() => {
     const all = [...document.querySelectorAll('#strip button, #strip a')];
     return {
-      units: all.indexOf(document.getElementById('units-toggle')),
-      print: all.indexOf(document.getElementById('printscreen')),
+      units: all.indexOf(document.querySelector('#units-corner [data-units="imperial"]')),
       toy: all.indexOf(document.querySelector('#mode-corner [data-board="toy"]')),
+      print: all.indexOf(document.getElementById('printscreen')),
+      ruler: all.indexOf(document.getElementById('strip-ruler')),
     };
   });
-  expect(order.units).toBeLessThan(order.print);
-  expect(order.print).toBeLessThan(order.toy);
+  // FOUND FIRST, ORDERED SECOND. `indexOf` answers -1 for an element that is
+  // not in the bar -- because it moved out, or because the selector stopped
+  // matching it -- and -1 is less than every real seat, so `units < toy`
+  // passes loudest exactly when UNITS has fallen off the bar altogether.
+  // Two of these four were moved by the same commit that re-ordered them.
+  for (const [name, at] of Object.entries(order)) {
+    expect(at, `${name} is not on the top bar at all`).toBeGreaterThanOrEqual(0);
+  }
+
+  // Movie re-ordered the bar on 15 Sep: the stacks first, PRINTSCREEN "by
+  // itself" after them, the instruments centred past it.
+  expect(order.units).toBeLessThan(order.toy);
+  expect(order.toy).toBeLessThan(order.print);
+  expect(order.print).toBeLessThan(order.ruler);
 });
 
 test('three pages: this view, the whole plan, and the views rail', async ({ page }) => {
@@ -258,7 +271,7 @@ test('every page says NOT TO SCALE immediately above the logo', async ({ page })
 // drawing presents under the RUFF mark without anyone choosing a file.
 test('the logo follows the ROUGH switch', async ({ page }) => {
   await openHouse(page);
-  await page.locator('#mode-corner [data-theme="rough"]').click();
+  await page.locator('[data-theme-switch] [data-theme="rough"]').click();
   await page.locator('#printscreen').click();
 
   const html = await printedDoc(page);
@@ -276,7 +289,7 @@ test('the drafter\'s own view is where it was afterwards', async ({ page }) => {
   // DAY, so that page 1 and the screen buffer are comparable byte for byte:
   // at night the presentation is painted in daylight on purpose, and this
   // check is about the FRAMING rather than the colours.
-  await page.locator('#mode-corner [data-skin-mode="day"]').click();
+  await page.locator('[data-mode-switch] [data-skin-mode="day"]').click();
   await settleRail(page);
   // Somewhere that is deliberately NOT the fit, so a restore that quietly
   // refits shows up.
@@ -310,7 +323,7 @@ test('the drafter\'s own view is where it was afterwards', async ({ page }) => {
 test('the pictures are daylight even when the drafter is working at night', async ({ page }) => {
   await openHouse(page);
   await settleRail(page);
-  await expect(page.locator('#mode-corner [data-skin-mode="night"]'))
+  await expect(page.locator('[data-mode-switch] [data-skin-mode="night"]'))
     .toHaveAttribute('aria-pressed', 'true');
 
   const nightScreen = await planBuffer(page);
@@ -350,7 +363,7 @@ test('the pictures are daylight even when the drafter is working at night', asyn
   // AND THE DRAFTER IS STILL AT NIGHT. Taking the picture is not the drafter
   // changing their mind about the skin, so the switch, the stored choice and
   // the screen all have to be where they were left.
-  await expect(page.locator('#mode-corner [data-skin-mode="night"]'))
+  await expect(page.locator('[data-mode-switch] [data-skin-mode="night"]'))
     .toHaveAttribute('aria-pressed', 'true');
   expect(await page.evaluate(() =>
     JSON.parse(localStorage.getItem('draft-skin') || '{}').mode)).not.toBe('day');

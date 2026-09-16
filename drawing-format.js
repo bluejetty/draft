@@ -1032,6 +1032,28 @@ if (!window.DraftDrawingFormat) {
   const SPLIT_BUILD_TYPES = Object.freeze(['bilevel', 'modifiedBilevel']);
   const buildType = raw => oneOf(raw, BUILD_TYPES, null);
 
+  // WHAT THE PROJECT ASSUMES ABOUT ITS ATTACHED GARAGE. Movie, 15 Sep, on the
+  // press that sits on the section: it "will cause the floor thickness of
+  // default 20\" to be added to the 2nd floor (19.25\" plus 3/4\" sheathing
+  // which will line up with the other 2nd fl sheathing)".
+  //
+  // ONE VOCABULARY, NOT TWO BOOLEANS. A garage flag and an over-garage flag
+  // can be set to "no garage, storey over it", which is not a building. The
+  // three states below are the three the drafter can press and nothing else
+  // is representable.
+  //
+  // build-menu.js stores no `garage` and no `overGarage` on purpose -- an
+  // entry there is an instruction to DRAW, and a stored claim could contradict
+  // the geometry it produced. This key is the other kind of statement, the one
+  // buildType already is: what the office assumes about this project before
+  // anything is drawn. It decides what the PROJECT section draws and what the
+  // garage wall is derived to be; it moves nothing already in the model.
+  //
+  // NULL IS A REAL STATE, the same way it is for buildType: a drawing older
+  // than the key never said, and a read must not invent 'none' for it.
+  const GARAGE_PLANS = Object.freeze(['none', 'attached', 'attachedRoomOver']);
+  const garagePlan = raw => oneOf(raw, GARAGE_PLANS, null);
+
   // ── the board ─────────────────────────────────────────────────────────────
   // WHICH BOARD THIS DRAWING IS ON, and it belongs to the DRAWING rather than
   // the browser. GILLIGAN-TOY-BONES-WORKORDER §7: "the same drafter meets it
@@ -1221,6 +1243,18 @@ if (!window.DraftDrawingFormat) {
     'roofPitch', 'roofOverhangFt', 'roofHeelIn',
     'mainWallHeightFt', 'mainJoistDepthIn', 'mainSheathingIn',
     'upperWallHeightFt', 'upperJoistDepthIn',
+    // HOW FAR THE SPLIT'S UPPER DECK SITS ABOVE THE ENTRY FLOOR, and the only
+    // field here measured from something other than its own level. Movie,
+    // 16 Sep: "the 2nd floor balcony is about 9 ft above the entry floor",
+    // and the reason it cannot be stored as a wall height is the sentence
+    // before it -- that floor stands over the ENTRY and the GARAGE, not over
+    // MAIN FL, so nothing in the main stack gives its elevation.
+    'upperDeckAboveEntryFt',
+    // HOW FAR IN THE BALCONY REACHES, which is what makes the ceiling drop a
+    // position rather than just a height: past this the main area is open to
+    // its own lower ceiling. Typed, because it is a plan dimension the
+    // section can only be told.
+    'upperExtentFt',
     'fdnWallHeightFt', 'woodFillHeightFt',
     'slabThicknessIn', 'footingWidthIn', 'footingDepthIn',
   ]);
@@ -1488,6 +1522,8 @@ if (!window.DraftDrawingFormat) {
     roofIntent,
     buildType,
     BUILD_TYPES,
+    garagePlan,
+    GARAGE_PLANS,
     board,
     BOARDS,
     boardPromptSeen,
