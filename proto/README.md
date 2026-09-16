@@ -35,9 +35,12 @@ described from memory:
 
 - **50 dimensions against 20 walls** — 2.50 per wall. No other fixture comes
   near that ratio, and the dimension pass is a real share of a plan paint.
-- **4 beams and 3 columns.** `MODEL.html` has no `drawBeam2D` or
-  `drawColumn2D` call today, so seven pieces of structure in this file are
-  stored and not painted. That is an acceptance case sitting in the repo.
+- **4 beams and 3 columns.** When this fixture was written `MODEL.html` had
+  no `drawBeam2D` or `drawColumn2D` call, so seven pieces of structure here
+  were stored and not painted -- an acceptance case sitting in the repo
+  waiting for a painter. The painter landed in `53bc397` and both calls are
+  wired now, so the seven are seven real structure draws in every plan paint
+  of this file. The acceptance case is spent; the timing value went up.
 - **16 fenestrations and 2 stairs**, where the other fixtures are mostly bare
   walls.
 - **Two non-orthogonal `lines`** (`line-1`, `line-2`, level 3, `draft` layer)
