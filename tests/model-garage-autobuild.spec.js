@@ -153,6 +153,11 @@ test('the board gets out of the way once it has built the thing',
     await expect(page.locator('#drivethru'),
       'the sign stayed up over the garage it just built')
       .toHaveAttribute('data-shut', '');
+    // AND THE CHOICE IS SPENT with the order. A tile that stays pressed
+    // after its garage lands makes the next foot-bone press a re-build
+    // instead of a menu -- the page's own word for it is chosen().
+    expect(await page.evaluate(() => window.ModelBuild.chosen()),
+      'the served order is still on the board').toBeNull();
   });
 
 test('one press of undo takes the whole order back, and only it',
@@ -186,13 +191,26 @@ test('one press of undo takes the whole order back, and only it',
       .toEqual({ walls: before.walls, outlines: before.outlines });
   });
 
-test('a second detached garage is refused out loud', async ({ page }) => {
+test('a second detached garage cannot even be ordered', async ({ page }) => {
+  // THE CAP IS THE DOOR, not the counter. With the house standing and one
+  // detached garage built the project is full, and Movie's rule for the
+  // bone is "it will do nothing once both house and garage both made" --
+  // so the board never rises and there is no tile to spend twice. The
+  // "YOU'VE GOT ONE ALREADY" refusal at the order stays behind this as
+  // the deeper guard, for any future door that opens on a full project.
   await openPage(page);
   await orderGarage(page, '16x24');
   const afterFirst = await state(page);
+  // DETACHED ones only for the precondition: the fixture's attached garage
+  // rides the house outline onto every level, so `garages` starts at five.
+  expect(afterFirst.garages.filter(g => g.detached).length,
+    'the first garage never landed').toBe(1);
 
-  await orderGarage(page, '25x25');
-  await expect(page.locator('[data-drivethru-line]')).toContainText('ALREADY');
+  await page.locator('#bone').click();
+  await page.waitForTimeout(3000);   // past the sign's 2s rise-glow
+  await expect(page.locator('#drivethru'),
+    'the board rose over a full project')
+    .toHaveAttribute('data-shut', '');
   const afterSecond = await state(page);
   expect(afterSecond.garages.length,
     'the cap of one detached garage was spent twice')
