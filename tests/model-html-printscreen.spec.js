@@ -74,36 +74,43 @@ const printedDoc = async page => {
   return html;
 };
 
-test('PRINTSCREEN sits after the stacks and before the instruments', async ({ page }) => {
+test('PRINTSCREEN holds the far right corner, past the save stuff', async ({ page }) => {
   await openHouse(page);
   await expect(page.locator('#printscreen')).toBeVisible();
 
   // Movie named the seat, so the seat is asserted and not merely the
-  // button's existence -- one that drifted to the far end of the bar would
+  // button's existence -- one that drifted back among the instruments would
   // pass every other check in this file.
   const order = await page.evaluate(() => {
     const all = [...document.querySelectorAll('#strip button, #strip a')];
     return {
       units: all.indexOf(document.querySelector('#units-corner [data-units="imperial"]')),
       toy: all.indexOf(document.querySelector('#mode-corner [data-board="toy"]')),
-      print: all.indexOf(document.getElementById('printscreen')),
       ruler: all.indexOf(document.getElementById('strip-ruler')),
+      save: all.indexOf(document.getElementById('save')),
+      print: all.indexOf(document.getElementById('printscreen')),
+      last: all.length - 1,
     };
   });
   // FOUND FIRST, ORDERED SECOND. `indexOf` answers -1 for an element that is
   // not in the bar -- because it moved out, or because the selector stopped
   // matching it -- and -1 is less than every real seat, so `units < toy`
   // passes loudest exactly when UNITS has fallen off the bar altogether.
-  // Two of these four were moved by the same commit that re-ordered them.
   for (const [name, at] of Object.entries(order)) {
     expect(at, `${name} is not on the top bar at all`).toBeGreaterThanOrEqual(0);
   }
 
-  // Movie re-ordered the bar on 15 Sep: the stacks first, PRINTSCREEN "by
-  // itself" after them, the instruments centred past it.
+  // Movie re-seated the button on 16 Sep: "move the PRINTSCREEN BUTTON fully
+  // to the RIGHT in upper corner to RIGHT of the save stuff". The stacks
+  // first, the instruments centred, the file row, and PRINTSCREEN closing
+  // the bar -- the button that makes PAPER sits with the file controls, not
+  // among the instruments that measure.
   expect(order.units).toBeLessThan(order.toy);
-  expect(order.toy).toBeLessThan(order.print);
-  expect(order.print).toBeLessThan(order.ruler);
+  expect(order.toy).toBeLessThan(order.ruler);
+  expect(order.ruler).toBeLessThan(order.save);
+  expect(order.save).toBeLessThan(order.print);
+  expect(order.print, 'PRINTSCREEN is not the last control on the bar')
+    .toBe(order.last);
 });
 
 test('three pages: this view, the whole plan, and the views rail', async ({ page }) => {

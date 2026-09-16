@@ -1,11 +1,11 @@
-// GRUFF'S DRIVE-THRU on MODEL.html — the foot's middle pair and the sign.
+// GRUFF'S DRIVE-THRU on MODEL.html — the foot's bone and the sign.
 //
-// Movie, 15 Sep: "the middle area i'd like to change it so there will be 2
-// buttons, the DRIVE-THRU MENU, and the BONE... when it is pressed the drive
-// thru menu should pop up from the bottom of the screen and cover both the
-// DRIVETHRU MENU BUTTON, and the BONE BUTTON (there will be another BONE
-// BUTTON on the Drivethru menu.) and when it pops up the dog on screen will
-// take them through the menu of home types."
+// Movie, 15 Sep put two buttons and later an OUTLINE press in the middle of
+// the foot; Movie, 16 Sep took them back out: "remove the two house buttons
+// and keep the BONE button just go to the drivethru". So the BONE is the one
+// press under the board now — it calls the sign up, and the drafter who
+// wants to trace his own outline uses the OUTLINE command instead of a
+// second button.
 //
 // WHAT THIS SUITE IS FOR, and it is not the picture. A menu that rises is
 // easy to eyeball and easy to get subtly wrong in the two ways that cost
@@ -21,8 +21,8 @@
 //     decoration.
 //
 // The board's cover is asserted in geometry rather than by eye, because
-// "covers both buttons" is the requirement and a sign that stops an inch
-// short reads as a bug in the bar, not in the sign.
+// covering the press that called it is the requirement and a sign that stops
+// an inch short reads as a bug in the bar, not in the sign.
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
@@ -48,15 +48,13 @@ async function openPage(page) {
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 
-// The rectangles, in page pixels, of the two presses the board must cover.
+// The rectangles, in page pixels, of the press the board must cover.
 const boxes = async page => ({
-  open: await page.locator('#dt-open').boundingBox(),
   bone: await page.locator('#bone').boundingBox(),
-  outline: await page.locator('#outline').boundingBox(),
   sign: await page.locator('#dt-frame').boundingBox(),
 });
 
-test('the foot bar: PROJECT and MODEL left, the pair in the middle, the sheets right',
+test('the foot bar: PROJECT and MODEL left, the bone in the middle, the sheets right',
   async ({ page }) => {
     await openPage(page);
 
@@ -81,13 +79,13 @@ test('the foot bar: PROJECT and MODEL left, the pair in the middle, the sheets r
       .toEqual(['NIGHT DAY', 'CONSTRUCTION LAYOUT', 'SPECIFICATIONS',
         'ESTIMATES']);
 
-    // The middle is the two presses and nothing else -- DELETE lives here too
-    // but is hidden until something is selected, which is the shell's rule
-    // and not this suite's business.
+    // The middle is the bone and nothing else (Movie, 16 Sep) -- DELETE,
+    // COPY and PASTE live here too but are hidden until something is
+    // selected, which is the shell's rule and not this suite's business.
     expect(await page.locator('#dt-bar > *:not([hidden])').evaluateAll(els => els.map(
       el => (el.textContent || '').trim().replace(/\s+/g, ' '))),
-    'the middle of the foot is the drive-thru, the bone and the outline')
-      .toEqual(['DRIVE-THRU MENU', 'BONE', 'OUTLINE']);
+    'the middle of the foot is the bone alone')
+      .toEqual(['BONE']);
 
     // AND THE PAGES THAT ARE NOT BUILT ARE STILL DOWN. Moving a chip between
     // groups must not have quietly lit it.
@@ -95,31 +93,31 @@ test('the foot bar: PROJECT and MODEL left, the pair in the middle, the sheets r
     await expect(page.locator('#sheet-row [data-page="estimates"]')).toBeDisabled();
   });
 
-test('the sign rises from the foot and covers both presses', async ({ page }) => {
+test('the sign rises from the foot and covers the bone', async ({ page }) => {
   await openPage(page);
   await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
 
   const down = await boxes(page);
   expect(down.sign.y, 'the sign is parked below the foot until it is called')
-    .toBeGreaterThan(down.open.y);
+    .toBeGreaterThan(down.bone.y);
 
   await h.openDriveThru(page);
   const up = await boxes(page);
 
-  // COVERS BOTH, which is the requirement in Movie's own words. Read as
-  // containment of each press's rectangle in the board's, so a sign that
+  // COVERS THE PRESS that called it, which was the requirement when the
+  // middle held three presses and stays the requirement at one. Read as
+  // containment of the bone's rectangle in the board's, so a sign that
   // rises but stops short of the bone fails here rather than in a squint.
-  for (const [name, box] of [['DRIVE-THRU MENU', up.open], ['BONE', up.bone],
-    ['OUTLINE', up.outline]]) {
-    expect(box.y >= up.sign.y && box.y + box.height <= up.sign.y + up.sign.height
-      && box.x >= up.sign.x && box.x + box.width <= up.sign.x + up.sign.width,
-    `the board left ${name} showing underneath it`).toBe(true);
-  }
+  expect(up.bone.y >= up.sign.y
+    && up.bone.y + up.bone.height <= up.sign.y + up.sign.height
+    && up.bone.x >= up.sign.x
+    && up.bone.x + up.bone.width <= up.sign.x + up.sign.width,
+  'the board left BONE showing underneath it').toBe(true);
 
   // And it goes back down, leaving the foot as it was.
   await page.locator('[data-drivethru-close]').click();
   await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
-  await expect(page.locator('#dt-open')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#bone')).toHaveAttribute('aria-expanded', 'false');
 });
 
 test('the board carries the office\'s house types and its own bone',
@@ -222,6 +220,10 @@ test('the post\'s bone orders off the menu; the foot\'s builds what was drawn',
       await new Promise(r => setTimeout(r, 60));
       const chosen = window.ModelBuild.chosen()?.entry?.id ?? 'null';
       document.getElementById('dt-bone').click();
+      // The foot's bone is under the board and disabled while the sign is
+      // up; its verb is for a drafter standing at the drawing, so the board
+      // is dropped before it is pressed.
+      document.getElementById('dt-close').click();
       document.getElementById('bone').click();
       return { built, ordered, chosen };
     });
@@ -232,40 +234,10 @@ test('the post\'s bone orders off the menu; the foot\'s builds what was drawn',
       .toEqual([seen.chosen]);
   });
 
-test('OUTLINE calls up the same board, and its bone means draw it yourself',
-  async ({ page }) => {
-    await openPage(page);
-
-    // Movie, 15 Sep: "if they press it lets also have the same drivethru
-    // menu come up, but when they press the bone at the end after that
-    // round, they are guided through drawing" it. ONE BOARD, TWO EXITS --
-    // and the only thing separating them is which button called it up, so
-    // the round has to survive the trip to the seam or the premade design
-    // lands on a drafter who asked to draw his own.
-    await page.locator('#outline').click();
-    await expect(page.locator('#drivethru'))
-      .not.toHaveAttribute('data-shut', '', { timeout: 5000 });
-
-    const seen = await page.evaluate(async () => {
-      const ordered = [];
-      window.ModelBuild.onOrder(p => ordered.push(p?.round ?? 'none'));
-      document.querySelector('#dt-tiles [data-build-family="bungalow"]').click();
-      await new Promise(r => setTimeout(r, 60));
-      document.querySelector('#dt-tiles [data-build-entry]').click();
-      await new Promise(r => setTimeout(r, 60));
-      const note = document.querySelector('[data-drivethru-note]').textContent;
-      document.getElementById('dt-bone').click();
-      return { ordered, note };
-    });
-
-    expect(seen.ordered, 'the OUTLINE round did not reach the seam')
-      .toEqual(['outline']);
-    // AND GRUFF SAYS WHICH ROUND IT IS. Both rounds end on the same bone;
-    // the screen is the drafter's only warning of what pressing it does.
-    expect(seen.note.toLowerCase(),
-      'the dog promised to build it on the round where the drafter draws it')
-      .toContain('drawing it');
-  });
+// THE OUTLINE BUTTON RETIRED (Movie, 16 Sep): "i will add the OUTLINE part
+// later in a different way (or they can just press the OUTLINE command
+// normally)". The outline ROUND still exists in the page's `round` state —
+// what left was its button, so the suite that pressed it left with it.
 
 test('every tile is on the shelf and says its own name, card or no card',
   async ({ page }) => {
@@ -313,10 +285,10 @@ test('every tile is on the shelf and says its own name, card or no card',
     }
   });
 
-test('the house button lights first, and the sign follows it up',
+test('the bone lights first, and the sign follows it up',
   async ({ page }) => {
     await openPage(page);
-    const press = page.locator('#dt-open');
+    const press = page.locator('#bone');
     const sign = page.locator('#drivethru');
 
     // MOVIE, 15 Sep: "change the button to light up for about 2 seconds
@@ -358,8 +330,8 @@ test('coming in from the front screen, the board rises by itself',
     await page.goto('/MODEL.html?from=entry');
     await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 
-    // Same two seconds as the press: the house glows first, then the board.
-    await expect(page.locator('#dt-open')).toHaveAttribute('data-lit', '');
+    // Same two seconds as the press: the bone glows first, then the board.
+    await expect(page.locator('#bone')).toHaveAttribute('data-lit', '');
     await expect(page.locator('#drivethru'))
       .not.toHaveAttribute('data-shut', '', { timeout: 5000 });
 
@@ -385,7 +357,7 @@ test('a hand on the page inside the two seconds calls the board off',
 
     await page.goto('/MODEL.html?from=entry');
     await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-    await expect(page.locator('#dt-open')).toHaveAttribute('data-lit', '');
+    await expect(page.locator('#bone')).toHaveAttribute('data-lit', '');
 
     // Someone who starts drawing inside the glow has said what they came
     // for; the board rising over them would take the press they were making.
@@ -394,7 +366,7 @@ test('a hand on the page inside the two seconds calls the board off',
     await expect(page.locator('#drivethru'),
       'the board came up over a drafter who had already started')
       .toHaveAttribute('data-shut', '');
-    await expect(page.locator('#dt-open')).not.toHaveAttribute('data-lit', '');
+    await expect(page.locator('#bone')).not.toHaveAttribute('data-lit', '');
   });
 
 // ── THE BONE WITH NOTHING BEHIND IT ──────────────────────────────────────
@@ -468,7 +440,7 @@ test('with a house and a detached garage already standing, the bone does nothing
     await expect(page.locator('#drivethru'),
       'the board rose on a project that has nothing left to build')
       .toHaveAttribute('data-shut', '');
-    await expect(page.locator('#dt-open')).not.toHaveAttribute('data-lit', '');
+    await expect(page.locator('#bone')).not.toHaveAttribute('data-lit', '');
   });
 
 // ── HOW BIG IS THE GARAGE ────────────────────────────────────────────────

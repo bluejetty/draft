@@ -106,6 +106,11 @@ test('the seam hands over the entry, and BONE fires even with nothing picked',
       window.ModelBuild.onChoose(p => log.push(`choose:${p?.entry?.id ?? 'null'}`));
       window.ModelBuild.onBuild(p => log.push(`build:${p?.entry?.id ?? 'null'}`));
 
+      // The board is up from openBar and covers the foot's bone -- disabled
+      // under it, deliberately -- so it is dropped before the bone is
+      // pressed. The tiles stay wired either way.
+      document.getElementById('dt-close').click();
+
       // BONE with nothing chosen this session: fires with null rather than
       // swallowing the press. What an empty press means is the geometry
       // side's call, so it has to be told the press happened.

@@ -47,7 +47,11 @@ async function openWith(page, cuts = []) {
   // about seats has to say which pane it is standing in -- the alternative,
   // pressing a seat in a pane that is not up, is the sort of click that
   // "works" against a hidden element and proves nothing.
-  await page.goto('/MODEL.html?mode=night&pane=previews');
+  //
+  // AND THE RAIL ITSELF HAS TO BE UP (Movie, 16 Sep): a shut rail is
+  // display:none whole -- the short collapsed strip is deleted -- so the
+  // pane name alone puts the seats in a rail that is not on the sheet.
+  await page.goto('/MODEL.html?mode=night&right=1&pane=previews');
   // THE READY SIGNAL IS THE READOUT, not `data-model-ready` — that attribute
   // belongs to MODEL.dc.html and this page never sets it.
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });

@@ -376,7 +376,7 @@ async function pickBuild(page, type, { tap = false } = {}) {
 }
 
 // MODEL.html's HOUSE TYPES MOVED ONTO GRUFF'S DRIVE-THRU SIGN (Movie, 15
-// Sep): the foot keeps two presses, DRIVE-THRU MENU and BONE, and the family
+// Sep): the foot keeps one press, the BONE (Movie, 16 Sep), and the family
 // and entry chips are tiles on the board the sign raises. So a spec that
 // wants a chip has to order at the window first.
 //
@@ -387,7 +387,7 @@ async function pickBuild(page, type, { tap = false } = {}) {
 async function openDriveThru(page) {
   const sign = page.locator('#drivethru');
   if (await sign.getAttribute('data-shut') === null) return;
-  await page.locator('[data-drivethru-open]').click();
+  await page.locator('#bone').click();
   await expect(sign).not.toHaveAttribute('data-shut', '');
   await expect(page.locator('#build-families button').first()).toBeVisible();
 }
@@ -401,9 +401,9 @@ async function openDriveThru(page) {
 // through here instead, so the next time the control moves one function moves
 // with it rather than sixty call sites.
 //
-// THE RAIL IS OPENED FIRST. Collapsed shows the level names -- that is §7c's
-// whole point -- but not the layer rows, so a helper that works either way is
-// a helper that quietly does nothing half the time.
+// THE RAIL IS OPENED FIRST. Shut is shut (Movie, 16 Sep) -- a collapsed rail
+// shows nothing at all, so every row a spec wants to press is behind the
+// LEVELS / LAYERS tab.
 async function openModelRail(page) {
   const rail = page.locator('#right-rail');
   if (await rail.getAttribute('data-collapsed') === null) return;
