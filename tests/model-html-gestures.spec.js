@@ -628,6 +628,12 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // which still belongs to the layout sheet.
             'printscreen',
             'strip-ruler', 'strip-tsquare', 'strip-scale',
+            // THE READOUT IS A WORD UNTIL IT IS ASKED FOR (Movie, 15 Sep), so
+            // the counts that used to sit open at the foot are behind two
+            // presses now: `readout-tab` shows them and `readout-close` puts
+            // them away. Both only SHOW what the page already counted, so no
+            // absence row moves.
+            'readout-tab', 'readout-close',
             'TOY', 'DRAFTING', 'RUFF', 'ROUGH', 'NIGHT', 'DAY',
             'Continue', 'Stay in TOY',
             'Break here', 'Move this wall',
@@ -659,7 +665,13 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // The three stock chips are absent from `buttons` above for a
           // real reason rather than an oversight: they exist only while a
           // detached garage entry is chosen, and nothing is chosen at rest.
-          // THE ANGLE BOX IS THE SIXTH, and it arrived undeclared -- this
+          // THE ANGLE BOX IS THE SIXTH (Movie, 15 Sep: "we should have a
+          // angle textbox actually"). It is TEXT and not number for the
+          // reason the length box is: a bearing is typed the way a drafter
+          // says it, not spun. It turns the run in hand and authors nothing
+          // the length box does not already author.
+          //
+          // It arrived undeclared -- this
           // check went red naming one more 'text' than the list held, which
           // is the job it advertises. It is the LENGTH box's twin: dead
           // until a run is in hand, so it cannot START one, and it commits

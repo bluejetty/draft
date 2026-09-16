@@ -457,6 +457,13 @@
      its three words, SAVE AS, and the extension the generated name takes.
      The row from MODEL.dc.html:573-590 without its PROJECT button: Movie has
      another place for that and it is the page row at the lower left. */
+  /* THE ROW IS ALWAYS THERE (Movie): it came up hidden until a drawing
+     loaded, so an origin with nothing stored showed a bar with no way to
+     start one -- NEW and OPEN, the two that need no drawing, were the ones
+     hidden hardest. The row stands from the first paint and the two WRITE
+     buttons are dead until there is something to write, which is the rule
+     the lease already uses below: a missing button reads as a broken page,
+     a dead one says the drafter is in the right place. */
   #file-row { flex:0 0 auto; display:flex; align-items:center; gap:6px; }
   #file-row[hidden] { display:none; }
   #file-row button, #file-row select {
@@ -467,6 +474,8 @@
     border:1px solid var(--edge-panel); border-radius:5px; padding:5px 9px; }
   #file-row button:hover, #file-row select:hover { border-color: var(--accent); }
   #file-row select { padding:5px 6px; text-transform:none; }
+  #file-row button:disabled, #file-row button:disabled:hover {
+    color: var(--ink-quiet); border-color: var(--edge-panel); cursor:default; }
   /* SAVE IS ALSO THE STATUS, and that is a decision rather than a shortcut.
      §1 draws NEW · OPEN · SAVE · status · SAVE AS, and the .dc page has two
      elements there because its SAVE is a download and its status describes a
@@ -475,8 +484,6 @@
      paid for twice -- and the three words SAVE / UNSAVED / SAVED are already
      load-bearing in the specs. `data-save-status` is on the button that
      carries them. */
-  #save { display:none; }
-  #file-row #save.show { display:inline-block; }
   #save:disabled { color: var(--ink-quiet); cursor:default; }
   /* Unsaved edits. The accent is the page's one attention colour, so the
      button stops being furniture the moment there is something to lose. */
@@ -1019,8 +1026,13 @@
 
      Carried from MODEL.dc.html:1850-1955 by SHAPE, not by stylesheet: a card
      per level with its layer rows inside, the active one lit. */
-  #levels-panel { display:flex; flex-direction:column; gap:6px;
-    max-height:42vh; overflow-y:auto; scrollbar-width:none; }
+  /* NO SECOND SCROLLER, AND NO 42vh (Movie, 15 Sep: "take a look at the DC
+     version that is the best version"). MODEL.dc.html's rail scrolls AS ONE
+     (:1840, `overflow-y:auto` on the rail itself) so ELEVATIONS, LEVELS with
+     their layer sets, SECTIONS and the BONEYARD read as one list. Capping
+     this pane at 42vh put a short window inside a tall panel: the levels
+     scrolled away inside it while the rail below them stood empty. */
+  #levels-panel { display:flex; flex-direction:column; gap:6px; }
   #levels-panel::-webkit-scrollbar { display:none; }
   /* THE LEVELS SURVIVE THE COLLAPSE (§7c). This rule used to read
      `display:none`, which was true while the chrome bar carried a LEVEL
@@ -1029,13 +1041,24 @@
      page with NO way to change level -- the hole the order names, and the
      reason it forbids deleting the picker before this line changes.
 
-     COLLAPSED IS THE NAMES ONLY: no layer rows, no datum, no add or delete,
-     the cards wrapping across the panel's width the way the seats do. Same
-     buttons and the same `data-level-row` the expanded panel carries, so the
-     collapsed rail is the SAME control drawn short -- not a second one that
-     can come to disagree with it. */
-  #right-rail[data-collapsed] #levels-panel { display:flex; flex-flow:row wrap;
-    gap:4px; margin-top:6px; max-height:none; overflow:visible; }
+     COLLAPSED IS THE NAMES ONLY: no layer rows, no datum, no add or delete.
+     Same buttons and the same `data-level-row` the expanded panel carries, so
+     the collapsed rail is the SAME control drawn short -- not a second one
+     that can come to disagree with it. */
+  /* ONE COLUMN, SHUT AS WELL AS OPEN (Movie, 15 Sep: "it should be one column
+     not 5"). Wrapping the names across the panel's width read as a paragraph
+     of levels rather than a storey stack, and a storey stack is what a level
+     list IS -- DC's rail has never drawn them any other way. */
+  #right-rail[data-collapsed] #levels-panel { display:flex; flex-direction:column;
+    gap:2px; margin-top:6px; max-height:150px; overflow-y:auto;
+    scrollbar-width:none; }
+  #right-rail[data-collapsed] #levels-panel::-webkit-scrollbar { display:none; }
+  /* A COLUMN COSTS HEIGHT, AND THE SEATS ARE UNDER IT. Shut on the previews
+     pane the level names share the 182px cap with the seat grid, so the
+     column is cut to three names there and scrolls for the rest -- the whole
+     point of keeping it shut is that the chart is in sight. */
+  #right-rail[data-collapsed][data-pane-showing="previews"] #levels-panel {
+    max-height:66px; }
   #right-rail[data-collapsed] #levels-panel > *:not(.lv-card) { display:none; }
   #right-rail[data-collapsed] #levels-panel .lv-card { flex:0 0 auto; }
   #right-rail[data-collapsed] #levels-panel .lv-layers,
@@ -1189,10 +1212,15 @@
     font-weight:600; letter-spacing:0.04em; }
   .promote-row button:hover { border-color: var(--accent); color: var(--accent); }
   [data-promote-go] { border-color: var(--accent); color: var(--accent); }
+  /* THE NOTICE IS A MESSAGE, NOT A DOOR. It covers the whole sheet to be
+     read, and while it did so with pointer events it also swallowed every
+     press aimed at the bars behind it -- including NEW and OPEN, the two
+     controls the "no saved drawing" notice is asking the drafter to use. */
   #notice { position:fixed; inset:0; z-index:6; display:none;
-    align-items:center; justify-content:center; padding:24px; text-align:center; }
+    align-items:center; justify-content:center; padding:24px; text-align:center;
+    pointer-events:none; }
   #notice.show { display:flex; }
-  #notice div { max-width:34em; }
+  #notice div { max-width:34em; pointer-events:auto; }
   #notice h1 { font-family: var(--font-ui); font-size:19px; font-weight:600;
     letter-spacing:0.02em; margin:0 0 8px; color: var(--accent); }
   #notice p { margin:0 0 6px; color: var(--ink-secondary); }
@@ -1614,7 +1642,7 @@
      itself -- see the stylesheet note. The picker chooses what the GENERATED
      NAME ends in and nothing else: every one of the four is plain JSON, which
      is why OPEN takes all four without asking which it was given. -->
-<div id="file-row" data-file-row hidden>
+<div id="file-row" data-file-row>
   <button id="file-new" type="button" data-file-new title="Start an empty drawing">NEW</button>
   <button id="file-open" type="button" data-file-open title="Open a drawing file">OPEN</button>
   <input id="file-input" type="file" data-file-input hidden
@@ -1623,8 +1651,8 @@
        once landed on top of this button and every spec that pressed SAVE
        timed out, so where it sits is measured, not chosen. The pairwise
        chrome check is what keeps it that way. -->
-  <button id="save" type="button" data-model-save data-save-status>SAVE</button>
-  <button id="file-save-as" type="button" data-file-save-as
+  <button id="save" type="button" data-model-save data-save-status disabled>SAVE</button>
+  <button id="file-save-as" type="button" data-file-save-as disabled
     title="Save, and download a copy under a name you pick">SAVE AS</button>
   <select id="file-ext" data-file-ext aria-label="File extension for the saved copy">
     <option value="draft" selected>.draft</option>
@@ -1977,6 +2005,9 @@
     noticeBody.innerHTML = `<h1>${title}</h1>${body}`;
     notice.classList.add('show');
   };
+  // A NOTICE OUTLIVES ITS SUBJECT OTHERWISE. "No saved drawing on this
+  // origin" is true until NEW or OPEN answers it, and nothing took it down.
+  const hideNotice = () => notice.classList.remove('show');
 
   // ── canvas sizing ─────────────────────────────────────────────────────────
   // Backing store in device pixels, drawing in CSS pixels, so lines are crisp
@@ -4892,6 +4923,15 @@
     buildLevelsPanel();
     paintUnits();
     if (fileRow) fileRow.hidden = false;
+    // THE WRITE BUTTONS COME ALIVE WITH THE THING THEY WRITE, and here rather
+    // than in the loader because a drawing arrives two ways -- stored on
+    // arrival, and NEW/OPEN once the page is up -- and only one of them used
+    // to say so. The lease painter may put them straight back down if
+    // another page holds the file: something to save first, permission to
+    // save second.
+    const saveAsButton = document.getElementById('file-save-as');
+    if (saveButton) saveButton.disabled = !drawing;
+    if (saveAsButton) saveAsButton.disabled = !drawing;
   };
 
   // ONE WAY INTO THE BONEYARD, and one way out. The card and every shelf row
@@ -9466,7 +9506,6 @@
     // The switchers can only be built once the drawing is on the page: their
     // options ARE its levels. Before this the bar stays hidden, like #save.
     buildChrome();
-    saveButton.classList.add('show');
     // CLEAN ON ARRIVAL, and stamped rather than assumed: without this the
     // attribute is absent, and absent is not '0' to anything reading it.
     document.body.dataset.saveDirty = '0';
@@ -9762,6 +9801,7 @@
 
   const adoptAndShow = async file => {
     if (!(await adoptFile(file))) return false;
+    hideNotice();
     bumpModelEpoch();
     fit();
     paint();
@@ -9910,7 +9950,7 @@
     // who watches drafters pick it; THIS IS A PICK, NOT A SPECIFICATION. A
     // missing button reads as a broken page, where a dead one says the drafter
     // is looking at the right place and cannot use it yet.
-    if (saveButton) saveButton.disabled = !held;
+    if (saveButton) saveButton.disabled = !held || !drawing;
   };
 
   const askForLease = async ({ takeover = false } = {}) => {

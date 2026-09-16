@@ -505,6 +505,29 @@ test('a tap aimed at a stacked button lands on that button, not its neighbour',
       .toHaveAttribute('aria-pressed', 'false');
   });
 
+// AN ORIGIN WITH NOTHING STORED STILL HAS A FILE ROW (Movie, 15 Sep): "the
+// OPEN or NEW button those should show ... and just the save buttons won't do
+// anything if there hasn't been anything done". The row was hidden whole until
+// a drawing loaded, so the page that most needed NEW was the page that did not
+// offer it.
+test('the file row stands on an empty origin, with the writes dead', async ({ page }) => {
+  await h.openModel(page, { webgl: false });
+  await page.goto('/MODEL.html?mode=night');
+  await expect(page.locator('#notice')).toContainText('No saved drawing');
+
+  await expect(page.locator('#file-new'), 'nothing stored is when NEW matters most')
+    .toBeEnabled();
+  await expect(page.locator('#file-open')).toBeEnabled();
+  await expect(page.locator('#save'), 'there is nothing to save yet')
+    .toBeDisabled();
+  await expect(page.locator('#file-save-as')).toBeDisabled();
+
+  // NEW makes the drawing, and the writes come up with it.
+  await page.locator('#file-new').click();
+  await expect(page.locator('#save')).toBeEnabled();
+  await expect(page.locator('#file-save-as')).toBeEnabled();
+});
+
 // THE RIGHT EDGE HAS TWO TABS NOW (Movie, 15 Sep): "top will be LEVELS /
 // LAYERS, and then next down LAYOUT PREVIEWS". One pane shows at a time, and
 // the pane is in the URL for the same reason the rail's open/shut is.
