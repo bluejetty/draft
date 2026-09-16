@@ -91,7 +91,31 @@
      the bottom bar -- out of the drawing's centre, and beside nothing that
      grows with a level name. The view counter reads in the same panel: the
      level and the view are counts like the rest, not a separate instrument. */
-  #readout { position:fixed; left:40px; bottom:var(--readout-bottom); z-index:5;
+  /* SHUT BY DEFAULT, BEHIND ITS OWN WORD. Movie: "make it collapsed into only
+     TEXT that can be clicked to open this, similar to the DRAG TO PAN text on
+     the right side, but put this text on the left side: STATUS READOUT". The
+     panel is instrumentation -- twelve counts and six state fields -- and it
+     was standing open over the bottom-left of the sheet at all times to say
+     so. Collapsed it costs one line of the same quiet uppercase the hint uses
+     on the other end of the same edge, so the two ends of the foot read as a
+     pair: the hint tells you what the mouse does, the tab offers the numbers.
+     THE TEXT IS NEVER REMOVED, only hidden -- updateReadout keeps writing to
+     it shut, so the counts are already right the instant it opens, and the
+     many specs that read the page's own scale and wall count out of it keep
+     working whether the drafter has it open or not. */
+  #readout[hidden] { display:none; }
+  #readout-tab { position:fixed; left:12px; bottom:var(--readout-bottom);
+    z-index:5; color: var(--ink-quiet);
+    font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
+    text-transform:uppercase; cursor:pointer;
+    border:none; background:none; padding:0; }
+  #readout-tab:hover { color: var(--accent); }
+  #readout-tab[aria-expanded="true"] { color: var(--accent); }
+  /* OPEN, IT STANDS ON ITS OWN TAB rather than on top of it -- the tab has to
+     stay clickable to shut again, and the pairwise chrome check counts the
+     two as separate pieces. */
+  #readout { position:fixed; left:12px;
+    bottom:calc(var(--readout-bottom) + 24px); z-index:5;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px;
     padding:8px 11px; white-space:pre; pointer-events:none;
@@ -1171,7 +1195,10 @@
 <body>
 
 <canvas id="plan"></canvas>
-<div id="readout">loading…</div>
+<button id="readout-tab" type="button" data-readout-tab
+  aria-expanded="false" aria-controls="readout"
+  title="The page's own counts: what is drawn on this level, and what the drawing holds">STATUS READOUT</button>
+<div id="readout" hidden>loading…</div>
 
 <div id="elsewhere" data-changed-elsewhere hidden>changed elsewhere</div>
 <div id="lease" data-lease-banner hidden>
@@ -1802,6 +1829,15 @@
   // it claims to show is the defect this suite keeps meeting.
   let ctx = canvas.getContext('2d');
   const readout = document.getElementById('readout');
+  // THE TAB IS THE ONLY THING THAT MOVES THE PANEL. Nothing else opens or
+  // shuts it -- not a level change, not a save -- so the state on screen is
+  // the drafter's own last decision and never a surprise mid-gesture.
+  const readoutTab = document.getElementById('readout-tab');
+  readoutTab.addEventListener('click', () => {
+    const open = readout.hidden;
+    readout.hidden = !open;
+    readoutTab.setAttribute('aria-expanded', String(open));
+  });
   const notice = document.getElementById('notice');
   const noticeBody = document.getElementById('notice-body');
   const saveButton = document.getElementById('save');

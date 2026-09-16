@@ -300,6 +300,11 @@ test('each side remembers its own state across a reload', async ({ page }) => {
 test('every control is a tenant of a bar, and the counters sit above the foot',
   async ({ page }) => {
     await openShell(page);
+    // THE COUNTERS ARE BEHIND THEIR TAB NOW, so the band they sit in is only
+    // a fact about the panel OPEN -- shut it has no box to measure. The rule
+    // being guarded is unchanged: when the drafter asks for the counts they
+    // come up in the lower half of the sheet and clear of the foot bar.
+    await page.locator('#readout-tab').click();
 
     const where = await page.evaluate(() => {
       const owner = id => document.getElementById(id)?.parentElement?.id || null;
@@ -583,6 +588,30 @@ test('the instrument group is centred on the sheet, not on what is left over',
     }
   });
 
+// THE COUNTS ARE OFFERED, NOT IMPOSED (Movie, 15 Sep). Shut, the panel must
+// still be WRITTEN -- the drafter opens it to read a number that is already
+// true, and half this suite measures the page's scale out of the same text --
+// so the check is both halves: nothing on the sheet when shut, the counts
+// there the moment it opens.
+test('the readout is a word until it is asked for', async ({ page }) => {
+  await openShell(page);
+  const panel = page.locator('#readout');
+  const tab = page.locator('#readout-tab');
+
+  await expect(tab).toHaveText('STATUS READOUT');
+  await expect(panel, 'the counts do not stand open over the sheet')
+    .toBeHidden();
+  expect(await panel.textContent(),
+    'shut, the panel is still being written').toContain('walls');
+
+  await tab.click();
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText('scale');
+
+  await tab.click();
+  await expect(panel, 'the same word shuts it again').toBeHidden();
+});
+
 test('NO PIECE OF CHROME COVERS ANY OTHER, shut or open', async ({ page }) => {
   // THE GUARD THIS SHELL KEPT NEEDING. Four collisions were shipped and caught
   // one at a time, each as a confusing failure somewhere else:
@@ -612,7 +641,7 @@ test('NO PIECE OF CHROME COVERS ANY OTHER, shut or open', async ({ page }) => {
   // tabs pinned to the same top, and the only thing that distinguishes this
   // arrangement from that one is a check that measures the pair.
   const ids = ['left-tab', 'left-rail', 'right-tab', 'previews-tab', 'right-rail',
-    'readout', 'hint', 'elsewhere', 'strip', 'file-row', 'mode-corner',
+    'readout', 'readout-tab', 'hint', 'elsewhere', 'strip', 'file-row', 'mode-corner',
     'settings-corner', 'page-row', 'house-strip'];
   const clashesIn = () => page.evaluate(list => {
     const vis = list.map(id => document.getElementById(id))
