@@ -296,9 +296,13 @@
   @media (max-width: 1180px) {
     #strip-center .chip.dormant { display:none; }
   }
+  /* THE LABEL OUTLASTS THE WIDTH IT COSTS. Dropping the word LENGTH saved
+     ~48px and spent the thing the box was for: an unlabelled field next to
+     an unlabelled field is two boxes a drafter has to try. Movie, 15 Sep:
+     "there is a big blank spot where it should say LENGTH". The box gives up
+     the width instead -- 72px still holds 12'-11 1/2". */
   @media (max-width: 1500px) {
     #strip-center { gap:6px; }
-    #strip-length-box > span { display:none; }
     #frozen-length { width:72px; }
     #strip-len { min-width:66px; }
   }
