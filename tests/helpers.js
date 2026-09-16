@@ -197,6 +197,37 @@ async function planFrame(page) {
   return { at, cx, cz, scale, box };
 }
 
+// WHERE THE MODEL.dc.html PLAN PUTS A WORLD POINT, asked of the page.
+// Companion to planFrame above, which does this for MODEL.html's #plan.
+//
+// worldToClient is the older, FIXED-camera version of this same question: it
+// reads box.height / (2 * HALF_HEIGHT_FT) and places world 0,0 at the middle
+// of the canvas. Both halves are true at the page's opening defaults and both
+// stop being true the moment a spec pans or zooms -- so a spec that MOVES the
+// view cannot use it to ask where anything is, and a spec that wants to know
+// whether the view moved has nothing to read at all. This reads the camera the
+// page publishes instead.
+async function modelFrame(page) {
+  const canvas = page.locator('[data-model-canvas]');
+  const box = await canvas.boundingBox();
+  const view = await canvas.getAttribute('data-view');
+  // No attribute is not "assume the origin". It means the PLAN is not what is
+  // on screen -- an elevation, a section or 3D -- or that no frame has painted
+  // yet. Say which, loudly; the silent fallback is the bug class both this and
+  // planFrame exist to end.
+  if (!view) {
+    throw new Error('[data-model-canvas] carries no data-view '
+      + '\u2014 is the PLAN view open, and has the page painted?');
+  }
+  const [cx, cz, scale] = view.trim().split(/\s+/).map(Number);
+  if (![cx, cz, scale].every(Number.isFinite) || !(scale > 0)) {
+    throw new Error(`[data-model-canvas] data-view is not three numbers: ${JSON.stringify(view)}`);
+  }
+  const at = (x, z) => ({ x: box.x + box.width / 2 + (x - cx) * scale,
+    y: box.y + box.height / 2 + (z - cz) * scale });
+  return { at, cx, cz, scale, box };
+}
+
 async function moveTo(page, x, z) {
   const p = await worldToClient(page, x, z);
   await page.mouse.move(p.x, p.y);
@@ -524,6 +555,7 @@ module.exports = {
   suppressEntryCoach,
   worldToClient,
   planFrame,
+  modelFrame,
   moveTo,
   clickWorld,
   selectTool,

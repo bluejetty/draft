@@ -146,6 +146,7 @@ test('a finger works the view keys and the HAND', async ({ page, browser }) => {
   await expect(touchPage.locator('[data-hand-toggle]')).toHaveAttribute('aria-pressed', 'true');
 
   // One finger, dragging: the pan an iPad has no other way to perform.
+  const before = await h.modelFrame(touchPage);
   const box = await touchPage.locator('[data-model-canvas]').boundingBox();
   const client = await context.newCDPSession(touchPage);
   const from = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
@@ -157,6 +158,34 @@ test('a finger works the view keys and the HAND', async ({ page, browser }) => {
   await touch('touchEnd', { x: from.x - 120, y: from.y });
   await client.detach();
   await touchPage.waitForTimeout(200);
+
+  // THE HAND ACTUALLY TOOK THE DRAG. This half used to be missing, and its
+  // absence is why the assertion below could not fail: "nothing was drawn" is
+  // equally true of a page that panned correctly and of a page where the
+  // canvas ignored the finger entirely, which is the C2 regression this file
+  // group exists to catch. Measured against a canvas made deaf to touch, the
+  // old test passed in 3.1s against 3.3s green -- it cost the same whether
+  // the feature worked or not.
+  //
+  // Read, not assumed: the page publishes its plan camera as `data-view` and
+  // h.modelFrame reads it. worldToClient cannot answer this -- it hard-codes
+  // the opening camera, so it reports the same numbers before and after a pan.
+  //
+  // LOOSE ON PURPOSE, and this is the interesting part. The finger travelled
+  // 120px left, which at this zoom is 7.2993 ft if the view tracks the finger
+  // 1:1. It actually travels 7.9919 ft -- a factor of 1.0949, which is exactly
+  // the canvas aspect ratio, because _panBy applies it a second time on the x
+  // axis (the frustum is already 2*half*asp wide across w pixels, so feet per
+  // pixel horizontally is 2*half/h -- fpx itself). The z axis has no such
+  // factor and is right. That over-travel is a PRODUCT question, not this
+  // spec's to settle, so the bound below is satisfied by the behaviour today
+  // AND by a corrected 1:1 pan, and by nothing that fails to move the view.
+  const after = await h.modelFrame(touchPage);
+  const oneToOne = 120 / before.scale;
+  expect(after.cx - before.cx,
+    'the HAND walked the camera the way the finger went').toBeGreaterThan(oneToOne * 0.8);
+  expect(Math.abs(after.cz - before.cz),
+    'and did not wander off the axis the finger moved on').toBeLessThan(oneToOne * 0.2);
 
   // Nothing was drawn by that drag — the HAND owned it.
   const saved = await touchPage.evaluate(async bucket => {

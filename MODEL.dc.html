@@ -7126,7 +7126,43 @@ class Component extends DCLogic {
     if (!this._needsRedraw && !orbiting) return;
     this._needsRedraw = false;
     if (this._renderer) this._renderer.render(this._scene, this._camera);
+    this._publishView();
     this._redrawOverlay();
+  }
+
+  // WHERE THIS PAGE IS LOOKING, published on the canvas for the same reason
+  // MODEL.html publishes it (MODEL.html:3551): a spec that rebuilds the
+  // mapping itself keeps a second copy of the arithmetic, and the two drift.
+  // tests/helpers.js worldToClient holds that second copy today -- it reads
+  // `box.height / (2 * 25)` and assumes the view is centred on world 0,0,
+  // which is true at the _init() defaults on line 6711 and false the moment
+  // anything pans or zooms. This is the number to read instead.
+  //
+  // NOT A CODE MIRROR OF MODEL.html, because the cameras are not alike: that
+  // page paints a 2D canvas and already holds cx/cz/scale, while this one
+  // frames the plan with a THREE ortho camera. The same three numbers are
+  // derived here -- the pan state _panBy moves, and pixels per foot from the
+  // frustum half-height that _zoomStep, the wheel and the pinch all move.
+  //
+  // PLAN ONLY. The ortho camera also serves the elevations, and _panBy walks
+  // a different pair of axes in each (x/y in FRONT, z/y in SIDE), so "cx cz"
+  // is a plan fact and nothing else. In any other view the attribute is
+  // REMOVED rather than left behind: a reader that finds nothing throws and
+  // says so, and a reader that finds last frame's plan camera while the page
+  // shows an elevation believes a wrong number quietly. Absent beats stale.
+  _publishView() {
+    const canvas = this._canvas;
+    if (!canvas) return;
+    const h = canvas.clientHeight || 0;
+    if (this.state.activeView !== 'top' || !(h > 0) || !(this._orthoHalfH > 0)) {
+      canvas.removeAttribute('data-view');
+      return;
+    }
+    const scale = h / (2 * this._orthoHalfH);
+    const cx = this._orthoCamX, cz = this._orthoCamZ;
+    if (![cx, cz, scale].every(Number.isFinite)) { canvas.removeAttribute('data-view'); return; }
+    canvas.setAttribute('data-view',
+      `${cx.toFixed(6)} ${cz.toFixed(6)} ${scale.toFixed(6)}`);
   }
 
   // ── View galleries (boards #265 / #291) ────────────────────────────────
