@@ -110,20 +110,29 @@
     text-transform:uppercase; cursor:pointer;
     border:none; background:none; padding:0; }
   #readout-tab:hover { color: var(--accent); }
-  #readout-tab[aria-expanded="true"] { color: var(--accent); }
-  /* OPEN, IT STANDS ON ITS OWN TAB rather than on top of it -- the tab has to
-     stay clickable to shut again, and the pairwise chrome check counts the
-     two as separate pieces. */
-  #readout { position:fixed; left:12px;
-    bottom:calc(var(--readout-bottom) + 24px); z-index:5;
+  /* OPEN, THE WORD GOES AND AN X TAKES OVER (Movie): the tab and the panel
+     are one control, so having both on screen at once said the same thing
+     twice. The X sits in the panel's own bottom-right, in the open area
+     under the second line rather than on a number. */
+  #readout-tab[aria-expanded="true"] { display:none; }
+  #readout { display:flex; flex-direction:column; align-items:flex-end;
+    position:fixed; left:12px; bottom:var(--readout-bottom); z-index:5;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px;
+    /* THE PANEL STAYS CLICK-THROUGH and only the X takes the pointer: open,
+       it covers a corner of the sheet, and a drafter who draws there should
+       reach the drawing, not a wall of numbers. */
     padding:8px 11px; white-space:pre; pointer-events:none;
     /* Instrument text: tabular figures so the counts do not jitter as they
        change, and the mono face so a column of numbers reads as a column. */
     font-family: var(--font-mono); font-size:12px;
     font-variant-numeric:tabular-nums; letter-spacing:0.01em; }
   #readout b { color: var(--accent); font-weight:600; }
+  #readout-text { align-self:flex-start; }
+  #readout-close { pointer-events:auto; margin-top:2px; padding:0 2px; border:none; background:none;
+    cursor:pointer; color: var(--ink-quiet);
+    font-family: var(--font-ui); font-size:14px; line-height:1; }
+  #readout-close:hover { color: var(--accent); }
 
   #hint { position:fixed; right:12px; bottom:var(--readout-bottom); z-index:5; color: var(--ink-quiet);
     font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
@@ -1198,7 +1207,14 @@
 <button id="readout-tab" type="button" data-readout-tab
   aria-expanded="false" aria-controls="readout"
   title="The page's own counts: what is drawn on this level, and what the drawing holds">STATUS READOUT</button>
-<div id="readout" hidden>loading…</div>
+<div id="readout" hidden>
+  <!-- THE COUNTS GO IN THEIR OWN SPAN so the close button survives them: the
+       readout is rewritten by innerHTML on every paint, and a child of the
+       panel itself would be wiped by the first repaint after it opened. -->
+  <span id="readout-text">loading…</span>
+  <button id="readout-close" type="button" data-readout-close
+    aria-label="Close the status readout" title="Close">×</button>
+</div>
 
 <div id="elsewhere" data-changed-elsewhere hidden>changed elsewhere</div>
 <div id="lease" data-lease-banner hidden>
@@ -1833,11 +1849,14 @@
   // shuts it -- not a level change, not a save -- so the state on screen is
   // the drafter's own last decision and never a surprise mid-gesture.
   const readoutTab = document.getElementById('readout-tab');
-  readoutTab.addEventListener('click', () => {
-    const open = readout.hidden;
+  const readoutText = document.getElementById('readout-text');
+  const showReadout = open => {
     readout.hidden = !open;
     readoutTab.setAttribute('aria-expanded', String(open));
-  });
+  };
+  readoutTab.addEventListener('click', () => showReadout(true));
+  document.getElementById('readout-close')
+    .addEventListener('click', () => showReadout(false));
   const notice = document.getElementById('notice');
   const noticeBody = document.getElementById('notice-body');
   const saveButton = document.getElementById('save');
@@ -3465,7 +3484,7 @@
       // console full of noise behind a blank page; this puts it on screen
       // once, in the same notice the store errors use.
       ctx.restore();
-      readout.textContent = 'painter failed';
+      readoutText.textContent = 'painter failed';
       say('The drawing could not be painted',
         `<p><code>${String(err && err.message || err)}</code></p>`);
       throw err;
@@ -3612,8 +3631,8 @@
     // walls() and the rest filter by layer view, and under a section every one
     // of them reads 0 while the section shows the whole house.
     const cut = activeCut();
-    if (cut) { readout.innerHTML = sectionReadout(cut); return; }
-    readout.innerHTML =
+    if (cut) { readoutText.innerHTML = sectionReadout(cut); return; }
+    readoutText.innerHTML =
       `walls <b>${shownOfTotal(walls().length, drawing.walls)}</b>   `
       + `lines <b>${shownOfTotal(lines().length, drawing.lines)}</b>   `
       + `floors <b>${shownOfTotal(floors().length, drawing.floors)}</b>   `
@@ -9225,7 +9244,7 @@
     try {
       parsed = JSON.parse(await file.text());
     } catch (err) {
-      readout.textContent = 'unreadable';
+      readoutText.textContent = 'unreadable';
       say('The saved drawing could not be parsed',
         `<p><code>${String(err && err.message || err)}</code></p>`);
       return false;
@@ -9237,7 +9256,7 @@
     const check = window.DraftDrawingFormat?.checkEnvelope(parsed)
       || { ok: true, reason: 'unchecked' };
     if (!check.ok) {
-      readout.textContent = `envelope ${check.reason}`;
+      readoutText.textContent = `envelope ${check.reason}`;
       say('That drawing is not one this page can read',
         `<p>checkEnvelope said <code>${check.reason}</code>.
             <code>version</code> means it was written by a newer MODEL than this page knows.</p>`);
@@ -9418,14 +9437,14 @@
       file = at.file;
       storeRev = at.rev;
     } catch (err) {
-      readout.textContent = 'store unavailable';
+      readoutText.textContent = 'store unavailable';
       say('The drawing store could not be opened',
         `<p>IndexedDB refused to open: <code>${String(err && err.message || err)}</code></p>
          <p>Private-browsing windows and blocked site data both do this.</p>`);
       return;
     }
     if (!file) {
-      readout.textContent = 'no drawing saved';
+      readoutText.textContent = 'no drawing saved';
       say('No saved drawing on this origin',
         `<p>Nothing is stored under <code>${BUCKET}</code> yet.</p>
          <p>Draw something in <code>MODEL.dc.html</code> on this same origin and save it,

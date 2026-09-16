@@ -607,9 +607,14 @@ test('the readout is a word until it is asked for', async ({ page }) => {
   await tab.click();
   await expect(panel).toBeVisible();
   await expect(panel).toContainText('scale');
+  // ONE CONTROL, NOT TWO. Open, the word is gone and the X in the panel's own
+  // corner is the way back -- a tab still standing beside an open panel says
+  // the same thing twice.
+  await expect(tab, 'the word gives way to the panel it opened').toBeHidden();
 
-  await tab.click();
-  await expect(panel, 'the same word shuts it again').toBeHidden();
+  await page.locator('#readout-close').click();
+  await expect(panel, 'the X shuts it').toBeHidden();
+  await expect(tab).toBeVisible();
 });
 
 test('NO PIECE OF CHROME COVERS ANY OTHER, shut or open', async ({ page }) => {
