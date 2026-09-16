@@ -599,7 +599,16 @@ test.describe('MODEL.html write tier', () => {
 
     await page.goto('/MODEL.html');
     await expect(readout(page)).toContainText('walls', { timeout: 5000 });
-    await expect(saveButton(page)).toHaveClass(/show/);
+    // SAVE IS OFFERED, asked of the mechanism that now carries it. The file
+    // row used to be hidden until a drawing loaded and SAVE wore a `show`
+    // class; the row stands on an empty origin now with the writes DISABLED
+    // instead, so `show` is never added and a check for it could only ever
+    // fail. The claim is unchanged -- a drawing is loaded, so the page offers
+    // to save it -- and it is the precondition for the save below, not
+    // decoration: without it the click that follows would be a no-op on a
+    // dead button and the key-for-key comparison would read back the legacy
+    // file untouched.
+    await expect(saveButton(page)).toBeEnabled();
 
     await saveButton(page).click();
     await expect(saveButton(page)).toHaveText('SAVED', { timeout: 5000 });
