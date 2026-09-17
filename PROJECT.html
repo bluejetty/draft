@@ -295,6 +295,12 @@
       };
       const EXTERIOR_CHOICES = ['stud_2x4', 'stud_2x6', 'icf', 'icf_13'];
       const FOUNDATION_TYPE_IDS = ['concrete_8', 'icf', 'icf_13', 'pt_wood_fdn', 'insulation_6'];
+      // What the FOUNDATION WALL TYPE row offers. Movie, 16 Sep: "foundation
+      // wall types will be 8\" conc, and then ICF and PT WOOD" — the insul
+      // wall stays out of the picker because it LINES a foundation wall
+      // rather than being one; FOUNDATION_TYPE_IDS above keeps recognising it
+      // on drawings that already used it.
+      const FOUNDATION_CHOICES = ['concrete_8', 'icf', 'icf_13', 'pt_wood_fdn'];
       const ROOF_FASCIA_IN = 5.5;
 
       // Same defaults the level cards fall back to (normaliseLevelAssembly
@@ -490,19 +496,29 @@
           ...levelAssemblies[levelId], ...assembly(levelId), [field]: value,
         };
       };
-      // The foundation wall's thickness reads from the drawn foundation
-      // walls when there are any — the same derivation the Model uses.
-      const fdnThicknessIn = () => {
+      // WHICH FOUNDATION WALL THIS HOUSE GETS. The chosen type leads — it
+      // lives on the FOUNDATION level's assembly, so it rides levelAssemblies
+      // everywhere that key already goes. A drawing that never chose keeps
+      // its old answer: the drawn foundation walls, then 8" concrete — the
+      // same derivation the Model uses.
+      const fdnWallType = () => {
+        const choice = assembly(1).wallType;
+        if (FOUNDATION_CHOICES.includes(choice)) return choice;
         const wall = (drawing?.walls || []).find(candidate =>
           candidate?.view === 'foundation' && WALL_TYPE_VIEW[candidate?.wallType]
           && FOUNDATION_TYPE_IDS.includes(candidate.wallType));
-        return WALL_TYPE_VIEW[wall ? wall.wallType : 'concrete_8'].totalIn;
+        return wall ? wall.wallType : 'concrete_8';
       };
-      const fdnIsIcf = () => {
-        const wall = (drawing?.walls || []).find(candidate =>
-          candidate?.view === 'foundation' && String(candidate?.wallType || '').startsWith('icf'));
-        return !!wall;
+      const fdnThicknessIn = () => WALL_TYPE_VIEW[fdnWallType()].totalIn;
+      const fdnIsIcf = () => fdnWallType().startsWith('icf');
+      // A floor's exterior wall: its own stored override when it has one,
+      // otherwise the house's shared type — the 99% case.
+      const floorWallType = levelId => {
+        const override = assembly(levelId).wallType;
+        return EXTERIOR_CHOICES.includes(override) && WALL_TYPE_VIEW[override]
+          ? override : activeWallType;
       };
+      const floorWallIn = levelId => WALL_TYPE_VIEW[floorWallType(levelId)].totalIn;
       // THE POUR, WHICH IS NOT WHAT THE FOUNDATION LEVEL STORES. The stored
       // wallHeightFt is the BEARING LINE -- 8'-1 1/2", pour plus plate --
       // because that is the height MODEL.dc.html stands the wall at and the
@@ -683,7 +699,8 @@
         floors: floorLevels.map(level => {
           const asm = assembly(level.id);
           return { id: level.id, name: level.name, wallHeightFt: asm.wallHeightFt,
-            joistDepthIn: asm.joistDepthIn, sheathingIn: asm.sheathingIn };
+            joistDepthIn: asm.joistDepthIn, sheathingIn: asm.sheathingIn,
+            wallIn: floorWallIn(level.id) };
         }),
         foundation: (() => {
           const asm = assembly(1);
@@ -1374,6 +1391,42 @@
             return false;
           },
         });
+        // THE RARE SPLIT. Movie, 16 Sep: the floors "are usually the same but
+        // the odd time they might be different 1% of the time" — so each
+        // floor's row DEFAULTS to the house's shared exterior type and only a
+        // deliberate pick here stores its own. SAME AS HOUSE stores null, not
+        // a copy of today's shared value: a copy would freeze the 99% case
+        // into a fake override the next shared-type change silently misses.
+        addInput(`wallType-${level.id}`, `${level.name} WALL TYPE`, {
+          name: `wallType-${level.id}`,
+          kind: 'choice',
+          choices: () => [{ id: '', label: 'SAME AS HOUSE' },
+            ...EXTERIOR_CHOICES.map(id => ({ id, label: WALL_TYPE_VIEW[id].label }))],
+          get: () => {
+            const override = assembly(level.id).wallType;
+            return EXTERIOR_CHOICES.includes(override) ? override : '';
+          },
+          set: value => {
+            if (value === '') { setAssembly(level.id, 'wallType', null); return true; }
+            if (!EXTERIOR_CHOICES.includes(value)) return false;
+            setAssembly(level.id, 'wallType', value);
+            return true;
+          },
+        });
+      });
+      // THE FOUNDATION WALL TYPE, a choice rather than an inference. It sits
+      // above the attachment rows because the ICF answer gates them.
+      addInput('fdnWallType', 'FDN WALL TYPE', {
+        name: 'fdnWallType',
+        kind: 'choice',
+        choices: () => FOUNDATION_CHOICES
+          .map(id => ({ id, label: WALL_TYPE_VIEW[id].label })),
+        get: fdnWallType,
+        set: value => {
+          if (!FOUNDATION_CHOICES.includes(value)) return false;
+          setAssembly(1, 'wallType', value);
+          return true;
+        },
       });
       // SILL OR LADDER, and ICF gets no choice. Movie, 4 Sep: "it will work
       // for the 8" concrete wall but the sill plate is the only option for
