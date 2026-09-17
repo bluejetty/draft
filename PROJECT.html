@@ -60,6 +60,17 @@
     .strip-tag { position:absolute; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px;
       font-weight:600; letter-spacing:.06em; color:rgba(29,31,32,.62); white-space:nowrap; pointer-events:none; }
     .band { display:grid; grid-template-columns:minmax(0,1fr) 600px minmax(0,1fr); max-width:1090px; margin:0 auto; gap:0 12px; align-items:start; justify-content:center; }
+    /* EACH PIECE NAMES ITS OWN COLUMN, and that is the whole fix for a
+       drawing that slid off to the left. Band 1's garage column is hidden
+       whenever there is no garage -- a 1 STOREY, a 2 STOREY -- and a hidden
+       grid child is not a blank column, it is no child at all: auto
+       placement then walked the drawing into track 1 (233px wide, holding a
+       600px canvas) and the house schedule into track 2, on top of it. So
+       the three tracks are assigned rather than counted, and an empty garage
+       column stays an empty column with the section centred beside it. */
+    #sched-garage { grid-column:1; }
+    #detail-wrap { grid-column:2; }
+    #sched-house { grid-column:3; }
     .sched { align-self:start; padding-top:2px; }
     /* The garage column reads bottom-up like its drawing: the footing is the
        last row and the deepest part, so the whole stack sits down by it. */
@@ -139,7 +150,10 @@
     .drop-slot { margin-top:16px; border:1.5px dashed rgba(29,31,32,.28); background:rgba(29,31,32,.02); padding:26px 16px; text-align:center; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
     .drop-slot small { display:block; margin-top:5px; text-transform:none; letter-spacing:0; font-family:'Barlow',system-ui,sans-serif; font-weight:400; font-size:11px; }
     #status { margin-top:14px; min-height:16px; color:#557a46; font-size:12px; }
-    @media (max-width:1180px) { .band, .band.band-eave { grid-template-columns:1fr; justify-items:center; } .sched { width:min(420px,100%); } }
+    @media (max-width:1180px) { .band, .band.band-eave { grid-template-columns:1fr; justify-items:center; } .sched { width:min(420px,100%); }
+      /* One track, so the assignments above would spill into implicit
+         columns nobody can see. Stacked, order is the source order again. */
+      #sched-garage, #detail-wrap, #sched-house { grid-column:1; } }
     @media (max-width:980px) { .identity-grid { grid-template-columns:1fr 1fr; } }
   </style>
 </head>
@@ -439,6 +453,33 @@
       // have their own parts.
       const floorLevels = levels.filter(level => ![1, 7, 8].includes(level.id))
         .sort((a, b) => a.elev - b.elev);
+      // A ONE STOREY HOUSE HAS ONE FLOOR, and the section drew two on it.
+      // 2ND FL is in every drawing's level list, so pressing 1 STOREY still
+      // came up with a second storey's wall, its floor package, and a roof
+      // sitting on top of the pair. Movie, 17 Sep: "take out second floor
+      // wall and floor and drop the upper roof down to the main floor
+      // ceiling."
+      //
+      // THE ROOF NEEDS NOTHING OF ITS OWN. buildWallSection sets the plate
+      // line from the TALLEST level it was handed, so a stack that stops at
+      // the main floor lands the eave on the main floor's ceiling by itself.
+      // Dropping the roof separately would have been a second answer to the
+      // question the stack already answers.
+      //
+      // THE LEVEL IS NOT DELETED, IT IS NOT DRAWN. Its stored assembly is
+      // the drafter's -- typed on a 2 STOREY, or waiting for one -- and
+      // pressing 1 STOREY is a statement about this house, not permission to
+      // throw the numbers away. Press 2 STOREY again and they are all there.
+      //
+      // BUNGALOW ONLY, deliberately. The other three types in the vocabulary
+      // all frame something above the main floor, and a split's upper level
+      // is not this band's to remove.
+      const oneStorey = () => buildType === 'bungalow';
+      // Everything ABOVE the main floor comes off, and the main floor is
+      // floorLevels[0] -- the same one mainFloor() names below. A level
+      // under it, if a drawing ever carries one, is not a storey and stays.
+      const drawnFloorLevels = () => (oneStorey() ? floorLevels.slice(0, 1) : floorLevels);
+      const levelDrawn = levelId => drawnFloorLevels().some(level => level.id === levelId);
       let roofPitch = positive(drawing?.roofPitch, 4);
       // NULL MEANS DERIVE, A NUMBER IS AN OVERRIDE -- the same contract the
       // garage offset and the grade line already keep. Read through
@@ -695,8 +736,27 @@
       const ftIn = ft => fmt.formatArchitecturalInches(ft * 12);
       const inchesOnly = inches => fmt.formatInchesOnly(inches);
 
+      // HOW FAR THE HOUSE CUT REACHES IN, on this card. Movie, 17 Sep, on the
+      // garage roof dying into the house roof: "maybe move the cut line to
+      // the right and make the house roof a bit higher on the left side."
+      //
+      // At the module's 4 ft the junction landed 5 1/4" short of the break
+      // line and the house roof cleared the garage roof by an inch and a
+      // half, so the two arrived together in a corner and neither read. A
+      // foot more cut is a foot more roof climbing past the junction, which
+      // is the same thing his second half asks for -- the house roof standing
+      // clearly higher where the garage meets it.
+      //
+      // ONE NUMBER FOR EVERY BUNGALOW VIEW, not just the ones with a garage:
+      // a drawing that got wider when the garage was pressed would be the
+      // card redrawing itself around a part rather than showing a house. The
+      // bilevel band already sets its own 7 ft for its own reason, which is
+      // what makes this a per-drawing value rather than the constant.
+      const HOUSE_CUT_FT = 5;
+
       const detailValues = () => ({
-        floors: floorLevels.map(level => {
+        cutDepthFt: HOUSE_CUT_FT,
+        floors: drawnFloorLevels().map(level => {
           const asm = assembly(level.id);
           return { id: level.id, name: level.name, wallHeightFt: asm.wallHeightFt,
             joistDepthIn: asm.joistDepthIn, sheathingIn: asm.sheathingIn,
@@ -721,6 +781,23 @@
         roof: { pitch: roofPitch, overhangFt: roofOverhang, fasciaIn: ROOF_FASCIA_IN, heelIn: roofHeelIn() },
         wallThicknessIn: WALL_TYPE_VIEW[activeWallType].totalIn,
       });
+
+      // THE TOP PLATE, by the same climb buildWallSection makes: each level
+      // stands on the one below plus its own floor package, and the plate is
+      // the tallest wall top in the stack. Derived from the same floors() the
+      // section is drawn from, for the reason upperDeckFt() is: the garage
+      // roof has to agree with the house it dies into.
+      const housePlateFt = () => {
+        const floors = detailValues().floors;
+        let y = 0, plate = 0;
+        floors.forEach((level, index) => {
+          plate = Math.max(plate, y + level.wallHeightFt);
+          const next = floors[index + 1];
+          y += level.wallHeightFt
+            + (next ? (next.joistDepthIn + next.sheathingIn) / 12 : 0);
+        });
+        return plate;
+      };
 
       // ── BAND 2: the modified bilevel ────────────────────────────────────
       // Movie, 5 Sep: "copy the other one you made and we can adjust to match
@@ -1373,6 +1450,7 @@
       [...floorLevels].reverse().forEach(level => {
         addInput(`wallHeight-${level.id}`, `${level.name} WALL HT`, {
           name: `wallHeight-${level.id}`,
+          levelId: level.id,
           get: () => ftIn(assembly(level.id).wallHeightFt),
           set: text => {
             const value = parseFtIn(text);
@@ -1388,6 +1466,7 @@
         // into a fake override the next shared-type change silently misses.
         addInput(`wallType-${level.id}`, `${level.name} WALL TYPE`, {
           name: `wallType-${level.id}`,
+          levelId: level.id,
           kind: 'choice',
           choices: () => [{ id: '', label: 'SAME AS HOUSE' },
             ...EXTERIOR_CHOICES.map(id => ({ id, label: WALL_TYPE_VIEW[id].label }))],
@@ -1404,6 +1483,7 @@
         });
         addInput(`sheathing-${level.id}`, `${level.name} SHEATHING`, {
           name: `sheathing-${level.id}`,
+          levelId: level.id,
           get: () => inchesOnly(assembly(level.id).sheathingIn),
           set: text => {
             const value = parseInches(text);
@@ -1413,6 +1493,7 @@
         });
         addInput(`floor-${level.id}`, `${level.name} JST`, {
           name: `floor-${level.id}`,
+          levelId: level.id,
           get: () => inchesOnly(assembly(level.id).joistDepthIn),
           set: text => {
             const value = parseInches(text);
@@ -1638,32 +1719,19 @@
         return row;
       };
 
-      // The exterior wall type governs the whole section, so it heads the
-      // house's schedule rather than floating on the wall body it used to sit
-      // against.
-      const wallTypeSelect = document.createElement('select');
-      wallTypeSelect.className = 'sched-value';
-      wallTypeSelect.dataset.detailInput = 'wallType';
-      wallTypeSelect.setAttribute('aria-label', 'Exterior wall type');
-      EXTERIOR_CHOICES.forEach(id => {
-        const option = document.createElement('option');
-        option.value = id;
-        option.textContent = WALL_TYPE_VIEW[id].label;
-        wallTypeSelect.appendChild(option);
-      });
-      if (!EXTERIOR_CHOICES.includes(activeWallType)) {
-        const option = document.createElement('option');
-        option.value = activeWallType;
-        option.textContent = WALL_TYPE_VIEW[activeWallType].label;
-        wallTypeSelect.appendChild(option);
-      }
-      wallTypeSelect.value = activeWallType;
-      wallTypeSelect.disabled = readOnly;
-      wallTypeSelect.addEventListener('change', () => {
-        activeWallType = wallTypeSelect.value;
-        save('Exterior wall type saved.');
-        repaint();
-      });
+      // THE SHARED EXTERIOR WALL TYPE ROW IS GONE. Movie, 17 Sep: "we don't
+      // need the EXTERIOR WALL TYPE box it is taken care of on each floor
+      // level." It headed the house's schedule and every level below it
+      // offered SAME AS HOUSE, so the same question was asked twice on one
+      // card and the top one governed a wall the drafter could already name
+      // floor by floor.
+      //
+      // activeWallType ITSELF STAYS, and this is the whole reason the row
+      // could go rather than the value. It is the drawing's shared exterior
+      // type, set where walls are actually drawn -- MODEL's wall picker --
+      // read here for any level left on SAME AS HOUSE, and still saved with
+      // the drawing. Deleting the value would have made SAME AS HOUSE mean
+      // nothing; deleting the row only stops this card asking a second time.
 
       const controlEls = new Map();
 
@@ -1703,8 +1771,6 @@
 
       schedHead(garageSched, 'Attached garage');
       schedHead(houseSched, 'House');
-
-      schedRow(houseSched, 'wallType', 'Exterior wall type', wallTypeSelect);
 
       ANNOTATIONS.forEach(({ key, text, beside }) => {
         const tag = document.createElement('span');
@@ -1876,16 +1942,22 @@
       // THE SCHEDULE WALKS THE SECTION. Movie's 17 Sep markup reads the rows
       // top-down in the order the parts stack, a head starting the roof, each
       // storey and the foundation.
-      const insertHead = (key, text) => {
+      const insertHead = (key, text, levelId = null) => {
         const row = houseSched.querySelector(`[data-sched-row="${key}"]`);
         if (!row) return;
         const head = document.createElement('div');
         head.className = 'sched-head';
         head.textContent = text;
+        // A HEAD IS NOT A ROW, so nothing that hides rows reaches it. When
+        // 2ND FL's four rows went off a bungalow, the word 2ND FL stayed
+        // printed over the gap where they had been. It carries its level so
+        // the repaint can take it along.
+        if (levelId != null) head.dataset.schedHeadLevel = String(levelId);
         houseSched.insertBefore(head, row);
       };
       insertHead('pitch', 'Roof');
-      [...floorLevels].reverse().forEach(level => insertHead(`wallHeight-${level.id}`, level.name));
+      [...floorLevels].reverse().forEach(level =>
+        insertHead(`wallHeight-${level.id}`, level.name, level.id));
       insertHead('attachment', 'Foundation');
 
       // ── The attached garage's own numbers ────────────────────────────────
@@ -2162,6 +2234,18 @@
             roomOver: roomOver(),
             overJoistIn: assembly(OVER_GARAGE_LEVEL_ID).joistDepthIn,
             overSheathingIn: assembly(OVER_GARAGE_LEVEL_ID).sheathingIn,
+            // WHAT THE GARAGE ROOF DIES INTO. Over the house's top plate
+            // there is no house wall for it to stop against, only the house's
+            // own roof climbing inward -- so the section is handed that plane
+            // rather than left to assume a wall is there. On a 2 STOREY the
+            // wall really is there and the same test leaves the drawing
+            // exactly as it was.
+            houseRoof: {
+              plateFt: housePlateFt(),
+              heelIn: roofHeelIn(),
+              pitch: roofPitch,
+              cutFt: HOUSE_CUT_FT,
+            },
           },
         };
       };
@@ -2200,6 +2284,19 @@
       const doorHeadNoticeEl = document.querySelector('#garage-door-head-notice');
       const fillDoorHeadNotice = () => {
         if (!doorHeadNoticeEl || !window.DraftDesignNotices) return;
+        // NO GARAGE, NO GARAGE DOOR. Movie, 17 Sep: "you are right about the
+        // garage door warning we won't need that if no garage." The height
+        // it reads is the garage's own wall, which still has a stored value
+        // when the garage is not in the drawing -- so the notice went on
+        // warning about the head room over a door this house does not have.
+        // Cleared rather than skipped, for the same reason the null case
+        // below is: a notice that only ever appears never leaves.
+        if (!garageShown()) {
+          doorHeadNoticeEl.textContent = '';
+          doorHeadNoticeEl.classList.remove('visible');
+          delete doorHeadNoticeEl.dataset.noticeKind;
+          return;
+        }
         const notice = window.DraftDesignNotices.garageDoorHeadNotice({
           wallHeightFt: garageValues().garage.wallHeightFt,
           headDropIn: projectPage.OPENING_HEAD_DROP_IN,
@@ -2308,6 +2405,17 @@
         controlEls.forEach(({ control, el, tag }, key) => {
           const at = anchors[key];
           const row = el.closest ? el.closest('.sched-row') : null;
+          // A LEVEL THIS HOUSE DOES NOT FRAME TAKES ITS WHOLE ROW WITH IT.
+          // The no-anchor rule further down catches the three measured rows
+          // by itself -- an undrawn level anchors nothing -- but a `choice`
+          // is deliberately exempt from it, so 2ND FL WALL TYPE outlived the
+          // second floor by one branch. Asked here instead, where the answer
+          // is which levels this build has rather than what the section drew.
+          if (control.levelId != null && !levelDrawn(control.levelId)) {
+            tag.style.display = 'none';
+            if (row) row.hidden = true;
+            return;
+          }
           if (!garageShown() && key.startsWith('garage')) {
             tag.style.display = 'none';
             if (row) row.hidden = true;
@@ -2432,6 +2540,9 @@
             if (tag && tag.textContent !== short) tag.textContent = short;
           }
           syncValue(control, el);
+        });
+        houseSched.querySelectorAll('[data-sched-head-level]').forEach(head => {
+          head.hidden = !levelDrawn(Number(head.dataset.schedHeadLevel));
         });
         spreadTags(detailWrap);
       };
