@@ -14,8 +14,21 @@
 //   width    6 chase     + 60 tub length       + 1 finish =  67" = 5'-7"
 //
 // The unit brings its own walls OUTSIDE those faces, so its stud footprint
-// is 9'-4" x 6'-2". Anyone reading "8'-7" outside of stud" is starting from
-// the error this comment exists to stop.
+// is 9'-2" x 6'-4":
+//
+//   length  103 + 3.5 + 3.5 (a 2x4 at each end)          = 110" = 9'-2"
+//   width    67 + 5.5 (the wet wall) + 3.5 (a 2x4)       =  76" = 6'-4"
+//
+// WHICH WAY ROUND THE 2x6 GOES IS THE WHOLE TRICK. The wet wall runs the
+// FULL LENGTH at v = 0 (see layout() below), so it thickens the WIDTH, not
+// the length. Pairing it the other way gives 9'-4" x 6'-2" -- which is what
+// this comment claimed until 17 Sep, wrong in both directions by 2". Nothing
+// asserts these two numbers, so the error sat here unchallenged while the
+// code stayed right: a comment nobody can see fail is worth what a check
+// nobody can see fail is worth. Derive them from layout() if you doubt them.
+//
+// Anyone reading "8'-7" outside of stud" is starting from the error this
+// comment exists to stop.
 //
 // ── WHY THE 6" WALL ──────────────────────────────────────────────────────
 // It stands between the wet wall and the tub, on the wet wall side, and it
