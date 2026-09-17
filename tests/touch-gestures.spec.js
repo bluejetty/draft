@@ -152,6 +152,23 @@ test('lifting to one finger does not resume drawing mid-gesture', async ({ page 
   const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
   await h.selectTool(page, 'Wall');
 
+  // SOMETHING TO RESUME. The name of this test promises one and the body never
+  // started one: it armed WALL and went straight into the gesture with no
+  // point down, so "does not resume" had nothing to resume and the assertions
+  // below could only ever have said "nothing was drawn" -- which is equally
+  // true of a page that ignored every finger. Against a canvas made deaf to
+  // touch this test passed in 2.2s against 2.2s green: it cost exactly the
+  // same whether the feature worked or not.
+  //
+  // FINISH is the proof the run is really live, the same anchor its sibling
+  // at :132 uses, and the reason an absence below now means something.
+  const start = await h.worldToClient(page, -6, -4);
+  await page.touchscreen.tap(start.x, start.y);
+  await page.waitForTimeout(300);
+  await expect(page.locator('[data-finish-chain]')).toBeVisible();
+
+  const before = await h.modelFrame(page);
+
   const client = await page.context().newCDPSession(page);
   const send = (type, points) => client.send('Input.dispatchTouchEvent', {
     type, touchPoints: points.map((p, i) => ({ x: p.x, y: p.y, id: i + 1 })),
@@ -166,8 +183,18 @@ test('lifting to one finger does not resume drawing mid-gesture', async ({ page 
   await client.detach();
   await page.waitForTimeout(250);
 
+  // THE GESTURE WAS SEEN, read off the camera the page publishes. The two
+  // fingers walk their midpoint 30px left before the lift, so a view that did
+  // not move at all is a view that never received the sequence -- which is the
+  // one reading the assertions below cannot tell apart on their own.
+  const after = await h.modelFrame(page);
+  expect(Math.abs(after.cx - before.cx),
+    'the two fingers took the view with them').toBeGreaterThan(15 / before.scale);
+
   // That trailing finger drew nothing: the gesture owned the whole sequence
-  // until the last finger lifted.
+  // until the last finger lifted. The pending run went with it rather than
+  // committing behind the drafter's back.
+  await expect(page.locator('[data-finish-chain]')).toHaveCount(0);
   const saved = await h.savedDrawing(page);
   expect(h.allWalls(saved || {})).toHaveLength(0);
   expect(h.allLines(saved || {})).toHaveLength(0);
