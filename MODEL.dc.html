@@ -18,6 +18,7 @@
 <script src="./render-2d.js"></script>
 <script src="./cut-view.js"></script>
 <script src="./cut-marks.js"></script>
+<script src="./outline-master.js"></script>
 <script src="./level-assembly.js"></script>
 <script src="./design-notices.js"></script>
 <script src="./stair-geometry.js"></script>
@@ -2624,7 +2625,9 @@ const SHAPE_COLOR = '#3f8f7a';
 // The first completed outline becomes the master on the active BONEYARD shelf
 // and copies to every level; master edits flow to each level's common points
 // while local per-level adjustments are preserved.
-const OUTLINE_LAYER = 'OUTLINE';
+// The layer name lives in outline-master.js with the rest of the copy
+// shape, so the two pages cannot disagree about it. Read, not restated.
+const OUTLINE_LAYER = window.DraftOutlineMaster.OUTLINE_LAYER;
 const clampRoofOverhang = value => Math.min(MAX_ROOF_OVERHANG_FT, Math.max(0, value));
 const clampRoofPitch = value => Math.min(MAX_ROOF_PITCH, Math.max(0, value));
 // Stored-drawing readers and the format version live in drawing-format.js;
@@ -12024,15 +12027,25 @@ class Component extends DCLogic {
 
     const garage = !!this.state.outlineGarage;
     if (!garage && (this.state.boneyardActive || !shelfHasMaster)) {
-      const master = {
-        id: this._newDrawingItemId('outline'),
+      // The house master's shape comes from outline-master.js for the reason
+      // the copy's does. The garage masters below still build their own,
+      // because they carry keys a house outline has never had (cornerStubs,
+      // the attach ids, a foundation choice) and this rung does not touch
+      // them; what all three DO share is the copy derivation, which is where
+      // masterId and srcId are written and therefore where a drift would cost
+      // a drawing its links.
+      const spec = window.DraftOutlineMaster.masterFromLoop({
+        points,
         shelfId: shelf.id,
         sourceLevelId: level ? level.id : null,
-        garage: false,
-        marks: [],
-        points: points.map(point => {
+        newItemId: () => this._newDrawingItemId('outline'),
+        newPointId: () => this._newDrawingItemId('op'),
+      });
+      const master = {
+        ...spec,
+        points: spec.points.map(point => {
           const vtx = new THREE.Vector3(point.x, 0, point.z);
-          vtx.pointId = this._newDrawingItemId('op');
+          vtx.pointId = point.pointId;
           return vtx;
         }),
       };
@@ -12079,8 +12092,19 @@ class Component extends DCLogic {
   }
 
   _outlineCopyForLevel(master, level) {
+    // THE SHAPE COMES FROM outline-master.js, because MODEL.html has to write
+    // the same one and a hand-rolled twin is how #401 lost a shard. What stays
+    // here is the half that is genuinely this page's: turning the descriptor's
+    // plain points into the Vector3 objects this page's drag code moves in
+    // place, and resolving which of them an attached garage SHARES.
+    const spec = window.DraftOutlineMaster.copyForLevel(master, level, {
+      newItemId: () => this._newDrawingItemId('outline'),
+    });
     // An attached-garage end point reuses the house copy's Vector3 on the
     // same level, so dragging the shared node moves both outlines together.
+    // The module carries the `attach` marker across and stops there: WHICH
+    // object a corner shares is a question about identity, and only a page
+    // holding the other outlines can answer it.
     const sharedHousePoint = attachId => {
       const host = this._outlines.find(outline => outline.levelId === level.id
         && outline.masterId && outline.masterId !== master.id && !outline.garage
@@ -12088,25 +12112,17 @@ class Component extends DCLogic {
       return host ? host.points.find(point => point.srcId === attachId) : null;
     };
     return {
-      id: this._newDrawingItemId('outline'),
-      masterId: master.id,
-      levelId: level.id,
-      garage: master.garage === true,
-      open: master.open === true,
-      detached: master.detached === true,
-      foundation: master.foundation || null,
-      points: master.points.map(point => {
+      ...spec,
+      points: spec.points.map(point => {
         if (master.open === true && point.attach) {
           const shared = sharedHousePoint(point.attach);
           if (shared) return shared;
         }
-        const vtx = new THREE.Vector3(point.x, level.elev, point.z);
-        vtx.srcId = point.pointId;
-        vtx.bulge = point.bulge || 0;
+        const vtx = new THREE.Vector3(point.x, point.y, point.z);
+        vtx.srcId = point.srcId;
+        vtx.bulge = point.bulge;
         return vtx;
       }),
-      overriddenSrcIds: [],
-      layer: OUTLINE_LAYER,
     };
   }
 
