@@ -1260,8 +1260,12 @@
        inside a level card are the same objects as the seats, so adding a
        level adds two seats and deleting one takes them away. -->
   <div id="levels-panel" data-levels-panel data-pane="levels"></div>
-  <!-- PER-TOOL PROPERTIES, the slot and nothing in it. Gilligan fills this;
-       the contract is in the comment beside setToolProperties below. It
+  <!-- PER-TOOL PROPERTIES, the slot and nothing in it. COLUMN and BEAM fill
+       it from the SELECTION (showStructureProps); ROOF fills it from the
+       ARMED TOOL, which is the second of the two ways in. The contract is in
+       the comment beside window.ModelProps below -- NOT beside a
+       `setToolProperties`, which this comment named and which has never
+       existed in this repo. It
        rides with LEVELS / LAYERS: properties belong to the thing selected,
        which is what that pane is about. -->
   <div id="props-slot" data-props-slot hidden></div>
@@ -6387,6 +6391,7 @@
   //   { kind: 'add',    wall }                undo removes it again
   //   { kind: 'remove', wall, index, deps }   undo puts it and its dependents back
   //   { kind: 'remove-item', list, index, item }  the same for a non-wall
+  //   { kind: 'edge-tag', roof, index, was }  a roof edge's EAVE / GABLE flip
   //
   // The pool is still what keeps 'move' small — restoring those objects'
   // numbers puts back every wall that travelled with them. 'add' and 'remove'
@@ -6779,6 +6784,124 @@
     // next beam starts where the drafter next presses.
     beamStart = null;
     return selectPlaced('beam', beam);
+  };
+
+  // ── ROOF: THE FOOTPRINT IS THE GESTURE ────────────────────────────────────
+  //
+  // Parity with MODEL.dc.html:16704 `_buildRoofFromShape` -- the from-a-shape
+  // rework, board #31 -- and with nothing else. The old page has a SECOND way
+  // in: click an edge, click the side the body runs toward, drop a square
+  // (:16584 `_handleRoofClick`, phases 'edge' / 'direction' / 'overhang').
+  // That path is deliberately not ported. It is a second control on one piece
+  // of state, which is the drift this page was rebuilt to end, and the order
+  // is explicit: no new entry path.
+  //
+  // WHAT IS WRITTEN IS drawing-format.js:490's record, key for key. Every
+  // field below is one that validator already rebuilds, so the roof this
+  // gesture writes and the roof the reader restores are the same object.
+  //
+  // POINTS ARE PLAIN, NOT POOLED. Walls pool their endpoints through
+  // poolVertex(pt, levelId, viewId), but that pool is keyed by VIEW and a roof
+  // has none -- roofs take the level-only rule (see roofs(), :2221). A roof
+  // corner filed under a view roofs do not have is a corner nothing can find
+  // again. The old page pools because its node drag hit-tests roof vertices;
+  // this page has no such gesture, so pooling here would add state with no
+  // way to reach it.
+  //
+  // 5.5 IS NOT A CHOICE THE PANEL MAKES, AND NOT A NUMBER THIS PAGE OWNS.
+  // drawing-format.js writes `fascia` unconditionally on load, so a
+  // drafter-set one would be dropped on the next open -- store-vs-derive, the
+  // bug class task #28 named. The panel DERIVES the heel and stores nothing,
+  // and it takes the fascia from the module that decides what a roof record
+  // is rather than keeping a second 5.5 here to drift from it.
+  const ROOF_FASCIA_IN = window.DraftDrawingFormat.ROOF_FASCIA_IN;
+  const ROOF_EDGE_GRAB_PX = 12;
+  let roofOverhangFt = 2;   // drawing-format.js:503's own default
+  let roofPitch = 4;        //  ..and :504's
+
+  // THE HEEL IS NOT RE-DERIVED HERE. drawing-format.js owns
+  // `fasciaIn + overhangFt * pitch` beside the fascia it starts from, and
+  // proto/section-table-harness.js:204 measures it (5.5, 2, 4 -> 13.5);
+  // project-page.js delegates to the same function. A second copy in this file
+  // would be a second answer the moment either moved.
+  //
+  // IT IS READ FROM A MODULE THIS PAGE ALREADY LOADS. Getting it from
+  // project-page.js instead cost nothing at the panel and 1855 lines at the
+  // door, and tests/model-html-tier1.spec.js:244 -- the guard on what this
+  // page is allowed to depend on -- went red for exactly that reason.
+  const roofHeelIn = () =>
+    window.DraftDrawingFormat.roofHeelIn(ROOF_FASCIA_IN, roofOverhangFt, roofPitch);
+
+  // The footprint the roof is cut from: the level's outline, offset OUT by the
+  // overhang. Last one wins, as the old page takes the last shape (:16718).
+  const roofSourceOutline = () => {
+    const list = outlines().filter(o => (o.points || []).length >= 3);
+    return list.length ? list[list.length - 1] : null;
+  };
+
+  const buildRoofFromFootprint = () => {
+    const { levelId } = onActiveLevel();
+    const source = roofSourceOutline();
+    if (levelId == null || !source) return null;
+    const pts = window.DraftGeometry2D.offsetOutline(
+      source.points.map(pt => ({ x: pt.x, z: pt.z })), roofOverhangFt);
+    // An offset that collapses the loop is not a roof. Writing the degenerate
+    // one would put a record in the file that drawing-format.js:494 drops on
+    // load -- present on screen, gone after a reload, which is the silent loss
+    // beamPress refuses for the same reason.
+    if (!Array.isArray(pts) || pts.length < 3) return null;
+    drawing.roofs = drawing.roofs || [];
+    return addItem(drawing.roofs, {
+      id: newDrawingItemId('roof'),
+      points: pts.map(pt => ({ x: pt.x, z: pt.z })),
+      levelId,
+      sourceLevelId: source.levelId ?? null,
+      sourceShapeId: source.id || null,
+      edges: pts.map(() => 'eave'),
+      overhang: roofOverhangFt,
+      pitch: roofPitch,
+      fascia: ROOF_FASCIA_IN,
+      layer: 'A-ROOF',
+    });
+  };
+
+  // Nearest roof EDGE to a world point, threshold converted at the current
+  // zoom exactly as wallAt does, so the grab stays 12px on screen at any
+  // scale. Mirrors MODEL.dc.html:_findRoofEdgeAt, whose threshold is the same
+  // conversion written through the frustum instead of view.scale.
+  const roofEdgeAt = worldPt => {
+    const G = window.DraftGeometry2D;
+    const thresh = ROOF_EDGE_GRAB_PX / view.scale;
+    let best = null, bestD = thresh;
+    roofs().forEach(roof => {
+      const pts = roof.points || [];
+      pts.forEach((pt, index) => {
+        const next = pts[(index + 1) % pts.length];
+        const { d } = G.pointToSegment(worldPt, { start: pt, end: next });
+        if (d < bestD) { bestD = d; best = { roof, index }; }
+      });
+    });
+    return best;
+  };
+
+  // A GABLE IS PLACED BY FLIPPING AN EDGE, NOT BY DRAWING ONE (the BONE note's
+  // ruled pick-target model). The press does nothing at all when it lands off
+  // every edge -- it does not start a roof, because there is only one way to
+  // start one and it is the panel's button.
+  const roofPress = at => {
+    const hit = roofEdgeAt(at);
+    if (!hit) return null;
+    const was = hit.roof.edges[hit.index] === 'gable' ? 'gable' : 'eave';
+    const now = was === 'gable' ? 'eave' : 'gable';
+    hit.roof.edges[hit.index] = now;
+    // A FOURTH UNDO KIND rather than a wider existing one, for the reason
+    // addItem's comment gives: 'add-item' pops a record OUT of a list, and a
+    // tag flip adds nothing. Undoing one through that branch would splice a
+    // whole roof away for a one-word change.
+    undoStack.push({ kind: 'edge-tag', roof: hit.roof, index: hit.index, was });
+    markDirty();
+    paint();
+    return hit;
   };
 
   // DELETE CASCADES, IT DOES NOT REFUSE — MODEL.dc.html:22225-22251 does, and
@@ -8558,6 +8681,108 @@
     P.set(picked.type === 'column' ? 'COLUMN' : 'BEAM', box);
   };
   selectionWatchers.push(showStructureProps);
+
+  // ── THE ROOF PANEL ────────────────────────────────────────────────────────
+  //
+  // The second way into this slot. COLUMN and BEAM above fill it from the
+  // SELECTION -- they are properties OF a placed thing. ROOF's overhang and
+  // pitch are properties of the NEXT roof, so they hang off the armed tool
+  // and have to exist before anything is placed.
+  //
+  // The four presets are the order's, and they are feet because the record is
+  // (drawing-format.js:503 clamps overhang to 0..6 feet). The free entry is
+  // the same range; a value outside it is not silently clamped here, because
+  // a box that swallows 9 and shows 6 teaches the drafter that 9 was taken.
+  const ROOF_OVERHANGS = [['0.5', "6\""], ['1', "1'"], ['1.5', "1'-6\""], ['2', "2'"]];
+  let roofPanelUp = false;
+
+  const roofNumberField = (label, value, min, max, step, commit) => {
+    const row = document.createElement('div');
+    row.dataset.propRow = label.toLowerCase();
+    const name = document.createElement('div');
+    name.className = 'props-title';
+    name.textContent = label;
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.className = 'roof-field';
+    input.dataset.roofField = label.toLowerCase();
+    input.min = String(min); input.max = String(max); input.step = String(step);
+    input.value = String(value);
+    const apply = () => {
+      const raw = Number(input.value);
+      // REFUSE, DO NOT ROUND. Number('') is 0 and a blank box would otherwise
+      // read as a zero overhang -- a roof cut flush to the wall, which is a
+      // drawing nobody asked for and no message would explain.
+      if (!Number.isFinite(raw) || raw < min || raw > max) {
+        input.value = String(commit(null));
+        return;
+      }
+      input.value = String(commit(raw));
+    };
+    input.addEventListener('change', apply);
+    row.append(name, input);
+    return row;
+  };
+
+  const showRoofProps = () => {
+    const P = window.ModelProps;
+    if (!P) return;
+    const box = document.createElement('div');
+
+    box.append(propRow('OVERHANG', ROOF_OVERHANGS, String(roofOverhangFt), id => {
+      roofOverhangFt = Number(id);
+      showRoofProps();
+    }));
+    box.append(roofNumberField('OVERHANG FT', roofOverhangFt, 0, 6, 0.25, v => {
+      if (v !== null) roofOverhangFt = v;
+      showRoofProps();
+      return roofOverhangFt;
+    }));
+    box.append(roofNumberField('PITCH', roofPitch, 0, 24, 1, v => {
+      if (v !== null) roofPitch = v;
+      showRoofProps();
+      return roofPitch;
+    }));
+
+    // READ, NOT SET. The heel is fascia + rise and the drafter cannot type it
+    // here: it has no field in the roof record at all, so a typed one would
+    // have nowhere to go.
+    const heel = document.createElement('div');
+    heel.className = 'props-title';
+    heel.dataset.roofHeel = '';
+    heel.textContent = `HEEL ${window.DraftFormatters.formatArchitecturalInches(roofHeelIn())}`
+      + ` (FASCIA ${window.DraftFormatters.formatArchitecturalInches(ROOF_FASCIA_IN)})`;
+    box.append(heel);
+
+    const build = document.createElement('button');
+    build.type = 'button';
+    build.className = 'sel-chip';
+    build.dataset.roofBuild = '';
+    build.textContent = 'BUILD FROM FOOTPRINT';
+    // DISABLED, NOT HIDDEN -- the same rule the tool keys follow. A button
+    // that vanishes when the level has no outline teaches the drafter that
+    // ROOF does nothing here; one that is greyed says what is missing.
+    const source = roofSourceOutline();
+    build.disabled = !source;
+    build.title = source
+      ? 'Cut a roof from this level’s outline, offset by the overhang.'
+      : 'No outline on this level yet — draw one first.';
+    build.addEventListener('click', () => {
+      if (buildRoofFromFootprint()) showRoofProps();
+    });
+    box.append(build);
+
+    P.set('ROOF', box);
+    roofPanelUp = true;
+  };
+
+  toolListeners.push(tool => {
+    if (tool === 'roof') { showRoofProps(); return; }
+    // Only clear what this panel put there. COLUMN and BEAM's rows belong to
+    // the selection, which a tool change does not touch, and clearing them
+    // here would blank a panel the drafter is reading.
+    if (roofPanelUp) { window.ModelProps.clear(); roofPanelUp = false; }
+  });
   deleteButton.addEventListener('click', pressDelete);
   if (copyButton) copyButton.addEventListener('click', () => { copySelection(); paint(); });
   if (pasteButton) pasteButton.addEventListener('click', () => { pasteHeld(); });
@@ -8744,6 +8969,7 @@
     // that one line with the press/lift split. Neither claim is about the other.
     if (activeTool === 'column') { placeColumn(at); return; }
     if (activeTool === 'beam') { beamPress(at); return; }
+    if (activeTool === 'roof') { roofPress(at); return; }
     if (activeTool === 'wall') {
       // §1: "either drag, or press again and drag -- both must work". The lift
       // needs two facts this press knows and pointerup does not: where the
@@ -9231,6 +9457,11 @@
           // whose difference nothing on screen would show.
           if (b.offX !== undefined) { b.vtx.offX = b.offX; b.vtx.offZ = b.offZ; }
         });
+      } else if (step.kind === 'edge-tag') {
+        // The roof's own edges array is mutated in place, so undo puts the one
+        // word back rather than restoring a copy of the roof -- a copy would
+        // detach the record every other reader already holds by reference.
+        step.roof.edges[step.index] = step.was;
       } else if (step.kind === 'add-item') {
         // Structure placement. The list is captured in the step, so this works
         // for columns and beams without knowing which it is holding.

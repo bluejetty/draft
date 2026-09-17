@@ -487,6 +487,23 @@ if (!window.DraftDrawingFormat) {
   // Roof footprints are closed outlines owned by a whole level; each footprint
   // segment classifies as EAVE or GABLE, and the overhang / pitch stay clamped
   // to the drafting limits so the stored heel is always derivable.
+  // THE FASCIA, AND THE HEEL THAT FOLLOWS FROM IT.
+  //
+  // 5.5 was a bare literal here and a second `const ROOF_FASCIA_IN = 5.5` in
+  // PROJECT.html and cut-view.js. It gets one home in the module that decides
+  // what a roof record IS, because this is the copy that wins: roofs() writes
+  // it unconditionally, so a fascia typed anywhere else is replaced on the
+  // next load whatever the page believed.
+  //
+  // roofHeelIn came from project-page.js:345, which now delegates here. It is
+  // the same arithmetic, moved for the reason level-assembly.js exists: a
+  // second copy is free to drift, and proto/section-table-harness.js:204 is
+  // the check that would go on passing while the two disagreed. MODEL.html's
+  // ROOF panel needs it and cannot afford the PROJECT page's 1855 lines --
+  // tests/model-html-tier1.spec.js:244 is the guard that says so, by name.
+  const ROOF_FASCIA_IN = 5.5;
+  const roofHeelIn = (fasciaIn, overhangFt, pitch) => fasciaIn + overhangFt * pitch;
+
   const roofs = (rawRoofs, levelIds) => (Array.isArray(rawRoofs) ? rawRoofs : [])
     .map(roof => {
       const roofLevelId = levelId(roof?.levelId, levelIds);
@@ -502,7 +519,7 @@ if (!window.DraftDrawingFormat) {
           (Array.isArray(roof?.edges) && roof.edges[index] === 'gable' ? 'gable' : 'eave')),
         overhang: Math.min(6, Math.max(0, number(roof?.overhang, 2))),
         pitch: Math.min(24, Math.max(0, number(roof?.pitch, 4))),
-        fascia: 5.5,
+        fascia: ROOF_FASCIA_IN,
         garage: roof?.garage === true,
         // A real number or nothing: `Number(null)` is 0, and a stored null
         // read as a plate height of ZERO bears a garage roof at the main
@@ -1512,6 +1529,8 @@ if (!window.DraftDrawingFormat) {
     surfaceOpenings,
     shapes,
     roofs,
+    ROOF_FASCIA_IN,
+    roofHeelIn,
     walls,
     lines,
     floors,
