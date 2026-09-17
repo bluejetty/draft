@@ -4,8 +4,8 @@ The Node harnesses under `proto/`. For the Playwright suite see
 [README.md](../README.md#running-the-tests) — different tool, different rules,
 and nothing here applies to it.
 
-Everything below was run against `main` on 17 Sep 2026 on a Linux container
-with **no `node_modules` present**. Where a number is quoted it was measured
+Everything below was run on 17 Sep 2026 on a Linux container with **no
+`node_modules` present**. Where a number is quoted it was measured
 then, not remembered.
 
 ## The one command
@@ -16,8 +16,7 @@ node proto/areas-harness.js        # one harness
 
 No install, no server, no browser. A harness reads `fs`, `path`, `vm` and
 files in this checkout, and nothing else — which is why the CI job that runs
-all of them finishes in about two seconds while the suite is still installing
-Chromium.
+all of them finishes in seconds while the suite is still installing Chromium.
 
 All of them, the way CI does it:
 
@@ -26,7 +25,7 @@ for h in proto/*-harness.js; do node "$h" >/dev/null 2>&1 \
   && echo "ok    $h" || echo "FAIL  $h ($?)"; done
 ```
 
-41 harnesses, 2.0 s wall clock, all green.
+42 harnesses, 3.1 s wall clock, all green.
 
 ## Exit codes
 
@@ -66,7 +65,7 @@ for h in proto/*-harness.js; do
 done
 ```
 
-11 of the 41 on the day this was written. CI derives the same list the same
+11 of the 42 on the day this was written. CI derives the same list the same
 way and then checks it still contains four engines it names by hand — a floor,
 so that a rename or a moved `require` goes red instead of silently dropping an
 engine from a green run.
@@ -145,6 +144,13 @@ and each one asks more of you than a harness does:
 | `perf-bungalow-*.js`, `tool-column-occlusion.js` | `npm ci`, Chromium, and **a server you started yourself** |
 | `w0-census.js` | nothing — read-only, like a harness |
 | `w0-census-diff.js` | nothing, but takes two `w0-census.js --json` outputs as arguments |
+
+One harness does look at the drivers: `mutant-anchors-harness.js` reads their
+mutation tables as data and checks that every anchor still occurs in its
+subject exactly once, that each `with` differs from its `find`, and that each
+`test` grep still matches a title. It never runs a mutation, so it stays in
+the cheap CI job — but it means a dead anchor now goes red on a push rather
+than waiting for someone to run the expensive gate by hand.
 
 **The `*-mutants.js` drivers edit your real files.** Each one writes a mutant
 into a source file on disk, shells out to `npx playwright test`, and restores
