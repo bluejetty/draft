@@ -699,6 +699,41 @@
     border-radius:4px; padding:3px 8px; }
   #dt-close:hover { border-color:#ff4033; color:#ff4033; }
 
+  /* ROUGH'S BOARD IS A SHEET, NOT A SIGN. Movie, 17 Sep: "the blueprint will
+     replace the drivethru", "in the ROUGH version it isn't going to show the
+     dog", "no dog will ask questions they will just see the selections".
+
+     THE ZONES ARE RE-MEASURED, NOT NUDGED, which is what the block above
+     demands of anyone who replaces the art. assets/draft-board.png is a
+     1536x1024 sheet reduced to 896x597, and its blue rule runs from 2.539% to
+     97.266% across and 3.809% to 95.996% down -- measured off the file's own
+     pixels, not read off a ruler. Every zone below sits inside that rule with
+     room to spare, so a sheet re-scanned at another size moves the rule and
+     the zones with it.
+
+     THE SIGN'S FURNITURE IS GONE RATHER THAN RESTYLED. A sign has a portrait
+     bezel, an LED screen and a post; a sheet of paper has none of them, so
+     the screen is not shown here at all. What is lost with it is one line --
+     signNote's "press the bone and I'll build it" -- and with the outline
+     button retired (see `round`) that line has one wording in practice. The
+     selections and the press are what is left, which is the whole of what was
+     asked for.
+
+     THE TILES NEED NO SKIN OF THEIR OWN. They were already "the board's own
+     blueprint cards: paper, blue ink, a hard edge" for a sign that had no
+     paper on it. On actual paper they are simply at home, which is why this
+     block sets geometry and one button's colours and nothing else. */
+  html[data-theme="rough"] #dt-frame { aspect-ratio:3 / 2; }
+  html[data-theme="rough"] #dt-screen { display:none; }
+  html[data-theme="rough"] #dt-tiles { left:6%; top:11%; width:88%; height:44%; }
+  html[data-theme="rough"] #dt-bone { top:58%; width:16%; }
+  /* Inside the rule, and in the sheet's own ink. The sign's CLOSE is light
+     lettering on a dark plate because it sits on a dark sign; the same plate
+     on paper reads as a sticker. */
+  html[data-theme="rough"] #dt-close { right:4.6%; top:6.4%; color:#1f3f6b;
+    background:rgba(241,233,210,0.72); border-color:#1f3f6b; }
+  html[data-theme="rough"] #dt-close:hover { border-color:#8f2a1d; color:#8f2a1d; }
+
   /* THE BUILD BAR, now the sign's tile shelf rather than a row on the foot. */
   #build-bar { flex:0 1 auto;
     display:flex; flex-direction:column; align-items:stretch; gap:4px; }
@@ -4266,6 +4301,24 @@
     rough: Object.freeze({ src: './assets/house-blue-off.png',
       lit: './assets/house-blue-on.png', label: 'HOUSE' }),
   });
+  // AND THE BOARD IS THE SECOND LOGO. The note above says a theme is "mainly
+  // through logos and colors" and that the press was the first to arrive;
+  // this is the second, so it rides the same switch rather than growing a
+  // third way to be on ROUGH. One entry per theme, for the same reason.
+  const BOARD_ART = Object.freeze({
+    ruff:  './assets/drivethru-menu-board.png',
+    rough: './assets/draft-board.png',
+  });
+  const signBoard = document.querySelector('[data-drivethru-board]');
+  const paintSignBoard = () => {
+    const src = BOARD_ART[theme];
+    if (!src || !signBoard) {
+      console.warn(`MODEL: no board artwork for theme "${theme}"; leaving it as it is.`);
+      return;
+    }
+    const next = new URL(src, location.href).href;
+    if (signBoard.src !== next) signBoard.src = next;
+  };
   const bonePressArt = [...document.querySelectorAll('[data-bone-art]')];
   // THE SPOKEN NAME MOVES WITH THE PICTURE. One of the two images carries the
   // press's only label (the sign's), the other is decorative beside a visually
@@ -4349,10 +4402,25 @@
   // moves; it does not choose, build, mark the drawing dirty or touch a
   // level. A drafter who opens it to look and shuts it again has made no
   // edit, and the spec says so.
+  // THE PRESS ON THE POST IS LIT FOR AS LONG AS THE BOARD IS UP. Movie, 17
+  // Sep: "when the blueprint is showing the blue house button should be light
+  // and when it goes down unlit". The foot bar's bone lights for the two
+  // seconds before the rise and goes out; this one is the light while the
+  // board stands, and it is the only one of the two the board does not cover.
+  //
+  // IT IS `data-lit` ON THIS BUTTON, not a flag beside it, because
+  // paintBonePress already reads each press's own state -- "the foot bar's
+  // bone lights and the sign's does not, and they are two buttons". So this
+  // says the same thing about the other button and the artwork follows. RUFF
+  // ships no ON state, so there it is an attribute nothing looks at, and the
+  // stylesheet's glow names #bone and not this one.
+  const signBone = document.getElementById('dt-bone');
   const setSign = show => {
     sign.toggleAttribute('data-shut', !show);
     boneFoot.setAttribute('aria-expanded', String(show));
     if (show) paintSign();
+    if (signBone) signBone.toggleAttribute('data-lit', show);
+    paintBonePress();
     // The board covers the bone; nothing under it should be tabbed into.
     boneFoot.disabled = show;
   };
@@ -8342,6 +8410,7 @@
     markSwitch(themeButtons, 'theme', theme);
     markSwitch(modeButtons, 'skinMode', mode);
     paintBonePress();
+    paintSignBoard();
     // MERGED, not replaced: the board seed shares this key, and a skin write
     // that rebuilt the object dropped it.
     try {
@@ -8421,6 +8490,7 @@
   markSwitch(themeButtons, 'theme', theme);
   markSwitch(modeButtons, 'skinMode', mode);
   paintBonePress();
+  paintSignBoard();
   applyBoard();
   stripRefresh();
 

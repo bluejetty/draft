@@ -311,8 +311,13 @@ test.describe('MODEL.html skins', () => {
     await page.locator('[data-theme-switch] [data-theme="rough"]').click();
     expect((await artOf(barBone)).file, 'ROUGH puts a blue house on the bar')
       .toBe('house-blue-off.png');
+    // THE ON STATE, BECAUSE THE BOARD IS UP. The sign's press is lit for as
+    // long as the board stands, so the two presses wear different files here
+    // -- which is the point: it is one theme's artwork in two states, and a
+    // press stuck on the other theme would read bone-red.png whichever state
+    // it was in.
     expect((await artOf(signBone)).file,
-      'and on the post, with the board already up').toBe('house-blue-off.png');
+      'and on the post, with the board already up').toBe('house-blue-on.png');
 
     // THE SPOKEN NAME MOVES WITH THE PICTURE. A screen reader told BONE while
     // the screen shows a house is the same defect one sense over.
@@ -323,9 +328,90 @@ test.describe('MODEL.html skins', () => {
     // AND BACK, because a one-way swap passes every test written forwards.
     await page.locator('[data-theme-switch] [data-theme="ruff"]').click();
     expect((await artOf(barBone)).file, 'RUFF takes the bone back').toBe('bone-red.png');
+    // Lit or not, RUFF has one file. The board is still up here, so this also
+    // says that a theme with no ON state is not left reaching for one.
     expect((await artOf(signBone)).file, 'on both presses').toBe('bone-red.png');
     await expect(page.locator('#bone .said')).toHaveText('BONE');
   });
+
+  // THE BOARD IS THE SECOND LOGO, and it moves on the same switch. Movie, 17
+  // Sep: "the blueprint will replace the drivethru", "in the ROUGH version it
+  // isn't going to show the dog", "no dog will ask questions they will just
+  // see the selections".
+  //
+  // TWO THINGS, AND THE SECOND IS THE ONE WORTH PINNING. Swapping the picture
+  // is one attribute; taking the dog's screen off it is a stylesheet rule that
+  // a later edit to #dt-screen could undo without touching anything named
+  // rough. The selections are asserted to survive both, because the whole
+  // instruction was that they are what is left.
+  test('ROUGH trades the sign for a sheet, and the dog goes with it',
+    async ({ page }) => {
+      await houseOnOldPage(page);
+      await page.goto('/MODEL.html?theme=ruff&mode=night');
+      await expect(page.locator('#readout')).toContainText('walls', { timeout: 5000 });
+      const boardFile = () => page.locator('#dt-board')
+        .evaluate(el => new URL(el.src).pathname.split('/').pop());
+
+      // THE BOARD UP FOR THE WHOLE SWAP, for the same reason the press test
+      // does it: a shut board is a board nobody can see is wrong.
+      await page.locator('#bone').click();
+      await expect(page.locator('#dt-bone')).toBeVisible({ timeout: 4000 });
+
+      expect(await boardFile(), 'RUFF keeps the sign')
+        .toBe('drivethru-menu-board.png');
+      await expect(page.locator('#dt-screen'), 'and Gruff has his screen on it')
+        .toBeVisible();
+      await expect(page.locator('[data-drivethru-line]')).not.toBeEmpty();
+
+      await page.locator('[data-theme-switch] [data-theme="rough"]').click();
+      expect(await boardFile(), 'ROUGH puts the blueprint up instead')
+        .toBe('draft-board.png');
+      await expect(page.locator('#dt-screen'),
+        'and the dog\'s screen is not on a sheet of paper').toBeHidden();
+      await expect(page.locator('#build-families button').first(),
+        'the selections are what is left').toBeVisible();
+
+      // AND BACK. A one-way swap passes every test written forwards.
+      await page.locator('[data-theme-switch] [data-theme="ruff"]').click();
+      expect(await boardFile(), 'RUFF takes the sign back')
+        .toBe('drivethru-menu-board.png');
+      await expect(page.locator('#dt-screen')).toBeVisible();
+    });
+
+  // THE SHEET'S PRESS IS LIT WHILE THE SHEET IS UP. Movie, 17 Sep: "when the
+  // blueprint is showing the blue house button should be light and when it
+  // goes down unlit".
+  //
+  // NOT THE SAME LIGHT AS THE BAR'S. The foot bar's bone lights for the two
+  // seconds BEFORE the rise and goes out as the board arrives; this one comes
+  // on when the board arrives and stays. The test above pins the first, so
+  // this one reads the press the board does not cover, and reads it on both
+  // edges -- a light that came on and never went off would pass a check that
+  // only opened the board.
+  test('the sheet\'s own press is lit for as long as the sheet is up',
+    async ({ page }) => {
+      await houseOnOldPage(page);
+      await page.goto('/MODEL.html?theme=rough&mode=night');
+      await expect(page.locator('#readout')).toContainText('walls', { timeout: 5000 });
+      const signBone = page.locator('#dt-bone');
+      const file = () => signBone.locator('img')
+        .evaluate(el => new URL(el.src).pathname.split('/').pop());
+
+      expect(await file(), 'behind a shut board it is the OFF house')
+        .toBe('house-blue-off.png');
+
+      await page.locator('#bone').click();
+      await expect(signBone).toBeVisible({ timeout: 4000 });
+      await expect(signBone).toHaveAttribute('data-lit', '');
+      expect(await file(), 'the sheet is up, so the house is lit')
+        .toBe('house-blue-on.png');
+
+      await page.locator('[data-drivethru-close]').click();
+      await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
+      await expect(signBone).not.toHaveAttribute('data-lit', '');
+      expect(await file(), 'and out again when it goes down')
+        .toBe('house-blue-off.png');
+    });
 
   // THE GLOW IS A SECOND FILE ON ROUGH, and the two seconds it lasts are the
   // whole of the feedback before the board rises. RUFF's is a CSS filter over
@@ -361,6 +447,12 @@ test.describe('MODEL.html skins', () => {
       await expect(page.locator('#readout')).toContainText('walls', { timeout: 5000 });
       const ok = await page.locator('#bone img').evaluate(el => el.complete && el.naturalWidth > 0);
       expect(ok, `${theme}: the build press's artwork is missing or failed to decode`).toBe(true);
+      // THE BOARD TOO, and it needs the check more than the press does: it is
+      // behind a shut drive-thru, so a missing file draws its broken image
+      // where nobody looks until they open the menu.
+      const boardOk = await page.locator('#dt-board')
+        .evaluate(el => el.complete && el.naturalWidth > 0);
+      expect(boardOk, `${theme}: the board's artwork is missing or failed to decode`).toBe(true);
     }
     // The ON state too, which no page shows at rest and so no other check
     // would ever fetch.
