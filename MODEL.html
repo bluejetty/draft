@@ -666,7 +666,10 @@
     transform:translateX(-50%); aspect-ratio:1 / 1; border:none; padding:0;
     border-radius:50%; background:transparent; cursor:pointer;
     pointer-events:auto; }
-  #dt-bone img { width:100%; height:100%; display:block; }
+  /* CONTAIN, BECAUSE THE ARTWORK IS NO LONGER SQUARE. The post's box is a
+     1:1 circle and the bone filled it; a house is taller than it is wide and
+     a stretched one reads as a different building. */
+  #dt-bone img { width:100%; height:100%; display:block; object-fit:contain; }
   #dt-bone:hover img { filter:brightness(1.12); }
   #dt-close { position:absolute; right:2%; top:1%; pointer-events:auto;
     font-family: var(--font-ui); font-size:11px; font-weight:700;
@@ -744,6 +747,11 @@
      filter rather than a second file -- and it is the same two seconds. */
   #bone[data-lit] img { filter:brightness(1.3)
     drop-shadow(0 0 7px rgba(255,64,51,0.75)); }
+  /* THE GLOW IS THE ARTWORK'S OWN COLOUR. A red halo around a blue house is
+     a second light source, and the two seconds before the board rises are
+     exactly when the press has the drafter's eye. */
+  html[data-theme="rough"] #bone[data-lit] img { filter:brightness(1.3)
+    drop-shadow(0 0 7px rgba(107,145,182,0.8)); }
   #bone .said {
     position:absolute; width:1px; height:1px; margin:-1px; padding:0;
     overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
@@ -1332,6 +1340,7 @@
     <button id="bone" type="button" data-bone-press aria-controls="drivethru"
       aria-expanded="false"
       title="Gruff's drive-thru: pick a house type, then build it"><img
+        data-bone-art
         src="./assets/bone-red.png"
         alt="" /><span class="said">BONE</span></button>
     <!-- ONE DELETE FOR EVERYTHING SELECTED (§7a), where there were two verbs
@@ -1428,7 +1437,7 @@
     </div>
     <button id="dt-bone" type="button" data-drivethru-bone
       title="Build the house you picked">
-      <img src="./assets/bone-red.png" alt="BONE — build it" />
+      <img data-bone-art src="./assets/bone-red.png" alt="BONE — build it" />
     </button>
   </div>
 </div>
@@ -8190,10 +8199,53 @@
   const markSwitch = (buttons, attr, value) =>
     buttons.forEach(b => b.setAttribute('aria-pressed', String(b.dataset[attr] === value)));
 
+  // THE PRESS'S ARTWORK IS PART OF THE FINISH. Movie, 17 Sep: the bone
+  // becomes a blue house on the ROUGH DRAFTER version. A theme was already
+  // "mainly through logos and colors" (palette.js's own note) -- this is the
+  // first logo to arrive, so it rides the same switch the colours do rather
+  // than growing a second way to be on ROUGH.
+  //
+  // ONE ENTRY PER THEME, AND EVERY THEME HAS ONE, so a theme added to
+  // DraftPalette.THEMES without an artwork is a missing key here rather than
+  // a press that silently keeps the last theme's picture.
+  //
+  // BOTH PRESSES, FOUND BY ATTRIBUTE. The foot bar's bone and the one on the
+  // sign's post are one verb wearing one artwork -- the stylesheet says so in
+  // as many words -- and a query that named only #bone would have left the
+  // sign showing a bone under a blue house on the bar.
+  const BONE_ART = Object.freeze({
+    ruff:  Object.freeze({ src: './assets/bone-red.png',    label: 'BONE' }),
+    rough: Object.freeze({ src: './assets/house-blue.png',  label: 'HOUSE' }),
+  });
+  const bonePressArt = [...document.querySelectorAll('[data-bone-art]')];
+  // THE SPOKEN NAME MOVES WITH THE PICTURE. One of the two images carries the
+  // press's only label (the sign's), the other is decorative beside a visually
+  // hidden span -- so an empty alt stays empty and a spoken one is rewritten.
+  // A screen reader told "BONE" while the screen shows a house is the same
+  // defect as the sign keeping the old artwork, one sense over.
+  const boneSaid = document.querySelector('#bone .said');
+  const paintBonePress = () => {
+    const art = BONE_ART[theme];
+    if (!art) {
+      console.warn(`MODEL: no bone artwork for theme "${theme}"; leaving it as it is.`);
+      return;
+    }
+    bonePressArt.forEach(img => {
+      // ONLY ON A CHANGE. Assigning the src it already has is a no-op in
+      // every browser this page is tested in, but applySkin runs on every
+      // NIGHT/DAY press too, and a needless assignment is a needless decode.
+      const next = new URL(art.src, location.href).href;
+      if (img.src !== next) img.src = next;
+      if (img.alt) img.alt = `${art.label} — build it`;
+    });
+    if (boneSaid) boneSaid.textContent = art.label;
+  };
+
   const applySkin = () => {
     skin = window.DraftPalette.apply(document, theme, mode);
     markSwitch(themeButtons, 'theme', theme);
     markSwitch(modeButtons, 'skinMode', mode);
+    paintBonePress();
     // MERGED, not replaced: the board seed shares this key, and a skin write
     // that rebuilt the object dropped it.
     try {
@@ -8272,6 +8324,7 @@
 
   markSwitch(themeButtons, 'theme', theme);
   markSwitch(modeButtons, 'skinMode', mode);
+  paintBonePress();
   applyBoard();
   stripRefresh();
 
