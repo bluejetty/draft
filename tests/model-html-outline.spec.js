@@ -71,11 +71,58 @@ async function newPageOnSavedHouse(page) {
 
 // Press a house type on the build bar, which is what arms the tracing on the
 // old page and must arm it here.
-async function pickHouseType(page) {
+async function pickHouseType(page, family = 'bungalow', entry = family) {
   await h.openDriveThru(page);
-  await page.locator('[data-build-family="bungalow"]').click();
-  await page.locator('[data-build-entry="bungalow"]').click();
+  await page.locator(`[data-build-family="${family}"]`).click();
+  await page.locator(`[data-build-entry="${entry}"]`).click();
 }
+
+// Press corners WITHOUT closing, which is the state the colour is about: a
+// committed outline is a level copy in the scope colours, and the family's
+// colour only ever shows while the loop is still in the drafter's hands.
+async function traceCorners(page, corners) {
+  const frame = await h.planFrame(page);
+  for (const [x, z] of corners) {
+    const at = frame.at(x, z);
+    await page.mouse.click(at[0], at[1]);
+    await page.waitForTimeout(120);
+  }
+  return frame;
+}
+
+// WHAT IS ACTUALLY ON THE GLASS around a world point.
+//
+// The colour assertions read the canvas rather than recording strokeStyle,
+// which this suite does elsewhere and which would have been easier. A
+// recorded strokeStyle says the painter was TOLD a colour; it passes just as
+// happily when the colour is set on a context that then strokes nothing, and
+// "the pending loop is invisible" is the exact defect this rung is fixing.
+//
+// A PLACED CORNER IS THE TARGET, not the middle of a leg: the legs are dashed
+// (5 on, 4 off) and hairline, while every placed corner is a filled 6x6 block
+// of the trace colour. Sampling solid ink is the difference between an
+// assertion about colour and an assertion about anti-aliasing.
+async function inkAround(page, frame, x, z, radius = 10) {
+  const [clientX, clientY] = frame.at(x, z);
+  return page.evaluate(({ clientX, clientY, radius }) => {
+    const canvas = document.getElementById('plan');
+    const rect = canvas.getBoundingClientRect();
+    const sx = canvas.width / rect.width;
+    const sy = canvas.height / rect.height;
+    const px = Math.round((clientX - rect.left) * sx);
+    const py = Math.round((clientY - rect.top) * sy);
+    const size = Math.max(2, Math.round(radius * 2 * sx));
+    const data = canvas.getContext('2d').getImageData(
+      Math.max(0, px - size / 2), Math.max(0, py - size / 2), size, size,
+    ).data;
+    return Array.from(data);
+  }, { clientX, clientY, radius });
+}
+
+// The two family colours, as MODEL.html declares them. Written out in RGB
+// because that is what comes back off the canvas.
+const HOUSE_RED = [192, 57, 43];    // #c0392b -- the old page's own traceHouse
+const SPLIT_BLUE = [63, 127, 214];  // #3f7fd6 -- the order's "blue split"
 
 // Press a list of world corners, closing on the first. The close IS the
 // gesture's ending — no Enter, no FINISH — because that is the old page's
@@ -217,3 +264,63 @@ test('the old page reads the outline the new page drew, and its bone builds from
     expect(Math.min(...zs)).toBeCloseTo(-8, 0);
     expect(Math.max(...zs)).toBeCloseTo(8, 0);
   });
+
+test('a part-drawn loop is on the glass, in the bungalow family-s red', async ({ page }) => {
+  await newPageOnSavedHouse(page);
+  await pickHouseType(page);
+
+  // TWO CORNERS AND NO CLOSE. The loop is unfinished on purpose: this is the
+  // state that had nothing drawn in it at all before this change -- the tool
+  // took the presses, held the corners and showed the drafter a blank sheet.
+  const frame = await traceCorners(page, [[-10, -8], [10, -8]]);
+
+  const ink = await inkAround(page, frame, 10, -8);
+  expect(h.countColor(ink, HOUSE_RED),
+    'the corner the drafter just placed is drawn, in the house red')
+    .toBeGreaterThan(0);
+  expect(h.countColor(ink, SPLIT_BLUE),
+    'and not in the other family-s colour').toBe(0);
+});
+
+test('a BILEVEL trace draws in the split blue instead', async ({ page }) => {
+  await newPageOnSavedHouse(page);
+  await pickHouseType(page, 'bilevel', 'bilevel');
+  const frame = await traceCorners(page, [[-10, -8], [10, -8]]);
+
+  const ink = await inkAround(page, frame, 10, -8);
+  expect(h.countColor(ink, SPLIT_BLUE),
+    'the trace wears the family that armed it').toBeGreaterThan(0);
+  // THE NEGATIVE IS THE HALF THAT CAN FAIL. A colour keyed off nothing still
+  // paints something red here; only "and it is not the house red" tells the
+  // two families apart.
+  expect(h.countColor(ink, HOUSE_RED),
+    'a bilevel trace is not the house red').toBe(0);
+});
+
+test('a DETACHED GARAGE press arms no house trace, and says why', async ({ page }) => {
+  await newPageOnSavedHouse(page);
+
+  // THE HOUSE LOOP FIRST, and it is not scene-setting: it is what proves the
+  // presses in the second half are real. An absence after a press is also
+  // what a dead page shows, so the test needs the SAME gesture, on the same
+  // canvas, known to draw -- and then counts.
+  await pickHouseType(page);
+  await traceLoop(page, SQUARE);
+
+  // THE BOARD IS STILL UP -- pressing an entry does not shut it -- so the
+  // garage press is the drafter's next press, with nothing reset in between.
+  await pickHouseType(page, 'detachedGarage', 'detached-thickened');
+  await expect(page.locator('#strip-message'))
+    .toContainText('Detached garages are not on this page yet');
+
+  await traceLoop(page, SQUARE);
+  await saveOnNewPage(page);
+
+  const masters = (await savedFile(page)).boneyardOutlines || [];
+  expect(masters.filter(outline => !outline.garage).length,
+    'exactly one house master -- the garage press armed nothing, because the '
+    + 'old page sends those entries to its garage mode and this page has none '
+    + 'yet, so a house master would be a wrong drawing rather than a missing '
+    + 'feature')
+    .toBe(1);
+});

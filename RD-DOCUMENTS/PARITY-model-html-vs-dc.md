@@ -130,6 +130,25 @@ second half is here, and the claim that used to need holding down is now the
 thing being asserted -- `model-html-outline.spec.js` traces a loop on this
 page and lets the OLD page's bone build a house from it.
 
+**The part-drawn trace is visible, and it is visible in a colour.** The
+painter's preview branch has been in `render-2d.js` all along, guarded on
+four env keys this page passed as `false` and empty while it only read
+outlines; filling them in is the whole of the preview, and the corners now
+paint as they are placed with a rubber band to the cursor and a close ring
+on the start. The colour is the armed build family's -- house red, split
+blue -- which is rule 4 of the order and is NOT something the old page does:
+a bilevel trace there is house red like every other, and the SPLIT button
+that stood in that strip before the build menu never drew anything at all.
+So the blue is a colour this rung introduces rather than one it carries
+across, and the row below says so rather than implying parity.
+
+**A DETACHED GARAGE press arms nothing.** The old page sends those entries
+to `_toggleGarageMode('detached')` with the foundation they pre-answered;
+garage outlines are out of this rung, so the alternative to refusing was
+arming the house trace and persisting a master carrying `garage: false` --
+a wrong drawing rather than a missing feature, and one nothing downstream
+can tell from a house the drafter meant.
+
 `model-html-topbar.spec.js` still asserts the wall count does not move across
 a family press, an entry press or BONE, and that is not a leftover: pressing a
 house type arms a trace and writes nothing, so the wall count holding still is
@@ -153,7 +172,7 @@ as a tap guard naming `level-pick`.
 | Draw a wall | wall tool | **present** — survives a reload | must-have | **driven**; the mutation row: `drawPress` no-op makes this fail |
 | Draw a line | line tool | absent | must-have | |
 | Draw a floor | floor tool | absent | must-have | it paints floors it cannot create |
-| Draw an outline | outline tool | **present** | done | BUILD HOUSE reads outlines. #389 put the house-type buttons and BONE on the page and this row did not move, because the old page's `_pressBuildType` does two things — records the type AND arms the outline tool — and only the first half came across. The second half is here now: a house-type press arms the trace, successive presses drop corners, and pressing the first corner again closes the loop. It persists the old page's shape through `outline-master.js` rather than a twin of it — master on the boneyard shelf, a copy on every level, linked by `masterId` and per-point `srcId`. This page still shows no BONEYARD and writes the master anyway, sight unseen. Round trip is the acceptance and it runs both ways: `model-html-outline.spec.js` draws on this page and the OLD page's bone builds the traced loop from it. Out of scope and still absent: garage outlines, arc segments, the R typed-length ruler, and node drag on a drawn outline |
+| Draw an outline | outline tool | **present** | done | BUILD HOUSE reads outlines. #389 put the house-type buttons and BONE on the page and this row did not move, because the old page's `_pressBuildType` does two things — records the type AND arms the outline tool — and only the first half came across. The second half is here now: a house-type press arms the trace, successive presses drop corners, and pressing the first corner again closes the loop. It persists the old page's shape through `outline-master.js` rather than a twin of it — master on the boneyard shelf, a copy on every level, linked by `masterId` and per-point `srcId`. This page still shows no BONEYARD and writes the master anyway, sight unseen. Round trip is the acceptance and it runs both ways: `model-html-outline.spec.js` draws on this page and the OLD page's bone builds the traced loop from it. The part-drawn trace paints in the armed family's colour — house red, split blue — through the same painter the old page traces with. Out of scope and still absent: garage outlines (a DETACHED GARAGE press says so on the strip and arms nothing), arc segments, the R typed-length ruler, and node drag on a drawn outline |
 | Place a roof | roof tool | absent | must-have | paints, cannot place |
 | Place a stair | stair tool | absent | must-have | paints, cannot place |
 | Place fenestration | fenestration tool | absent | must-have | |
