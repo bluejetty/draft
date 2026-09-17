@@ -58,6 +58,36 @@ const css = P.toCSS('ruff', 'night');
 P.TEXTURABLE.forEach(role => check(`--${role}-tex declared`, css.includes(`--${role}-tex: none;`)));
 check('only surfaces are texturable', P.TEXTURABLE.every(r => r.startsWith('surface-')));
 
+// MODEL.html CARRIES A COPY, AND A COPY DRIFTS. Its :root block declares the
+// night values so the page is never unpainted between parse and boot; the
+// comment there says palette.js overwrites all of them, which is true and is
+// exactly why nothing on screen reveals it when one goes stale.
+//
+// IT WENT STALE THE DAY THIS WAS WRITTEN. The accent moved to red in
+// palette.js and the fallback kept the old gold, and the only symptom was a
+// gold frame before boot -- invisible in every screenshot and every spec.
+// Caught by reading the file, which is not a method. So it is asserted.
+console.log('\n--- the pre-boot fallbacks in MODEL.html match the night skin');
+{
+  const fs = require('fs');
+  const path = require('path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'MODEL.html'), 'utf8');
+  // The :root block only -- the rest of the file is full of var() references.
+  const root = html.slice(html.indexOf(':root'), html.indexOf('html, body'));
+  const night = P.resolve('ruff', 'night');
+  // Only the roles the block actually declares: it is a paint-before-boot
+  // stopgap for the CHROME, not a second copy of all 30 drawing roles, and
+  // demanding the rest would be inventing a requirement nobody has.
+  const declared = [...root.matchAll(/--([a-z-]+):\s*([^;]+);/g)]
+    .map(m => [m[1], m[2].trim()])
+    .filter(([role]) => P.ROLES.includes(role));
+  check('the block declares something', declared.length > 0, `${declared.length} roles`);
+  declared.forEach(([role, value]) => {
+    check(`--${role} matches palette.js`, value === night[role],
+      value === night[role] ? value : `${value} in MODEL.html, ${night[role]} in palette.js`);
+  });
+}
+
 console.log('\n--- legibility, measured (WCAG AA: 4.5 body, 3.0 large)');
 // The pairs a reader actually sees. Panel ink is composited over the page
 // first, because a panel at 0.82 alpha is not its own colour on screen.
@@ -68,17 +98,84 @@ const PAIRS = [
   ['accent', 'surface-page', 4.5],
   ['accent-ink', 'accent', 4.5],
   ['ink-primary', 'surface-panel', 4.5],
+  // THE MARK IS A HAIRLINE AND A 9px LABEL ON THE PANEL, which is the ground
+  // it has to separate from -- not the page. Asserted at 4.5 because half of
+  // what it paints is text, and this pair is the whole reason the role exists:
+  // RUFF's red measured 4.06 here, which is what "hard to see when its small"
+  // was.
+  ['accent-mark', 'surface-panel', 4.5],
   ['ink-primary', 'surface-chip', 4.5],
 ];
+// THE ACCENT IS ASKED FOR TWO THINGS THAT PULL APART, AND SOMETIMES 4.5 IS
+// NOT AVAILABLE FOR BOTH. It is read as text ON the page (#readout b), so it
+// wants to be far from the page; and it is the fill that accent-ink is
+// lettered on, so it wants to be far from that ink too. Between a page and an
+// ink at opposite ends -- white lettering on a near-black page, which is what
+// RUFF asks for from 17 Sep -- the accent is squeezed from both sides.
+//
+// THE CEILING IS SWEPT, NOT SOLVED, AND THAT IS THE SECOND VERSION OF THIS.
+// The first closed form was ceiling = sqrt(contrast(ink, page)), from setting
+// the two ratios equal. It is right when the accent is TRAPPED between the
+// ink and the page -- white lettering, near-black page -- and badly wrong
+// otherwise: on day both the ink and the page are near white, the accent
+// escapes downward and both ratios grow together, but sqrt(1.06) = 1.03 and
+// the check declared every day skin "squeezed" and then waved it through at
+// 1.03. A cap that fires where there is no tension is a green light, which is
+// worse than the red it replaced.
+//
+// So the ceiling is what it always was by definition: the best achievable
+// value of min(both ratios), found by walking the accent's luminance across
+// its whole range. No case analysis to get wrong -- when ink and page sit
+// at opposite ends the sweep returns ~4.07 and the cap binds; when they sit
+// together it returns ~18 and 4.5 is asked for as usual.
+//
+// SO THE BAR IS min(4.5, ceiling), AND IT IS A BAND, NOT A FLOOR, once the
+// ceiling binds. A floor alone would pass a skin that scraped 4.07 by being
+// 4.07 on one pair and 12 on the other, which is exactly the lopsided choice
+// this is here to prevent -- so where the ceiling binds, both pairs must be
+// AT it, within a tolerance. That makes this fail two ways: a lazy accent
+// fails low, and an accent that could have been better fails for being
+// unbalanced.
+const CEILING_SLACK = 0.10;
+// Relative luminance, read back through the one contrast function this file
+// already trusts, rather than a second copy of the WCAG curve to keep in step:
+// contrast(c, black) is (L + 0.05) / 0.05.
+const lum = c => P.contrast(c, '#000000') * 0.05 - 0.05;
+const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+const accentCeiling = v => {
+  const ink = lum(v['accent-ink']);
+  const page = lum(v['surface-page']);
+  let best = 0;
+  for (let i = 0; i <= 2000; i++) {
+    const accent = i / 2000;
+    best = Math.max(best, Math.min(ratio(ink, accent), ratio(accent, page)));
+  }
+  return best;
+};
 let worst = Infinity, worstName = '';
 for (const theme of P.THEMES) {
   for (const mode of P.MODES) {
     const v = P.resolve(theme, mode);
+    const ceiling = accentCeiling(v);
+    const squeezed = ceiling < 4.5;
     PAIRS.forEach(([fg, bg, min]) => {
       const ratio = P.contrast(v[fg], v[bg], v['surface-page']);
       if (ratio < worst) { worst = ratio; worstName = `${theme}/${mode} ${fg} on ${bg}`; }
-      check(`${theme}/${mode}  ${fg} on ${bg}`, ratio >= min, `${ratio.toFixed(2)} (min ${min})`);
+      const isAccentPair = (fg === 'accent' && bg === 'surface-page')
+        || (fg === 'accent-ink' && bg === 'accent');
+      if (!(isAccentPair && squeezed)) {
+        check(`${theme}/${mode}  ${fg} on ${bg}`, ratio >= min, `${ratio.toFixed(2)} (min ${min})`);
+        return;
+      }
+      check(`${theme}/${mode}  ${fg} on ${bg}`,
+        ratio >= ceiling - CEILING_SLACK,
+        `${ratio.toFixed(2)} (ceiling ${ceiling.toFixed(2)} — 4.5 is unavailable `
+        + `for both accent pairs on this skin; clears AA large text)`);
     });
+    if (squeezed) {
+      console.log(`  note  ${theme}/${mode}  both accent pairs are capped at `
+        + `${ceiling.toFixed(2)} by white-on-near-black; asserted at the cap, not at 4.5`);
+    }
   }
 }
 console.log(`\n  worst pair anywhere: ${worst.toFixed(2)} — ${worstName}`);
@@ -135,12 +232,12 @@ for (const theme of P.THEMES) {
     // now is what makes that cheap later, and a green line here means the
     // value is sound, NOT that anything consumes it. See palette.js.
 
-    // NOT ASSERTED, AND THAT IS THE POINT: draw-underlay and draw-origin
-    // carry the same pair today. Pinning them EQUAL would make the divergence
-    // the separate key exists to allow into a test failure -- a check that
-    // fails when the design works. The comment in palette.js is what says
-    // do not collapse them; a test cannot say it without forbidding the
-    // thing it is protecting.
+    // NOT ASSERTED, AND THE DIVERGENCE ARRIVED. draw-underlay and draw-origin
+    // carried the same pair from 5 Sep until 17 Sep, when the datum went gold
+    // and the underlay stayed green. Pinning them EQUAL would have made that
+    // a test failure -- a check that fails when the design works -- and a
+    // shared key would have dragged the underlay along with it. Both were
+    // argued for in advance on exactly this scenario, and both held.
 
     // draw-dim is the one drawing role that is TEXT as well as line, so it
     // answers to 4.5 (WCAG AA body), not the 3.0 above -- and to it TWICE.

@@ -63,13 +63,14 @@
        and boot -- and never a SECOND definition to keep in step, because
        palette.js overwrites all of them. See RD-DOCUMENTS/SPEC-skins.md. */
     --surface-page: #1d1f20;
-    --surface-panel: rgba(20,22,23,0.82);
+    --surface-panel: rgba(20,22,23,0.50);
     --surface-chip: #2a2d2e;
     --edge-panel: #3a3d3f;
     --ink-primary: #e7e5e2;
     --ink-secondary: #b9bcbe;
     --ink-quiet: #8b8f92;
-    --accent: #f0b429;
+    --accent: #fd0000;
+    --accent-mark: #f0b429;
   }
   html, body { margin:0; height:100%; overflow:hidden;
     /* Two properties rather than the `background:` shorthand: its layer list
@@ -210,23 +211,39 @@
     font-family: var(--font-ui); font-size:9px; font-weight:600;
     letter-spacing:0.05em; text-transform:uppercase; text-decoration:none;
     display:inline-flex; align-items:center; justify-content:center;
-    min-width:64px; padding:2px 6px; cursor:pointer;
+    min-width:56px; padding:2px 6px; cursor:pointer;
     border:1px solid var(--edge-panel); border-radius:3px;
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     color: var(--ink-primary); }
   #settings-corner a:hover, #settings-corner button:hover {
     border-color: var(--accent); color: var(--accent); }
   /* THE UNIT STACK borrows the settings stack's rows exactly -- same font,
-     same 64px minimum, same 1px gap -- because the DC corner's fault was
-     two 44px targets on top of each other, and the cure is the row height
-     that already works two inches to the left, not a new shape. */
+     same minimum, same 1px gap -- because the DC corner's fault was two 44px
+     targets on top of each other, and the cure is the row height that
+     already works two inches to the left, not a new shape.
+
+     THE MINIMUM IS 56px AND IT WAS 64px. Two more stacked pairs came up to
+     this bar on 17 Sep, and at 64 the bar overflowed 1280 by 10px --
+     PRINTSCREEN off the sheet at 1213..1290, caught by model-html-shell's
+     own guard, which is the second time that check has earned its keep.
+
+     MEASURED RATHER THAN NUDGED. The widest label on any of these rows is
+     DRAFTING at 35px of ink; with the 6px padding each side and the 1px
+     border that is 49px, so 56 clears it by 7px and 64 was carrying 15px of
+     slack that nothing asked for. Four columns at 8px each gives the bar 32px
+     back, which is 1280 with 22px to spare. Still well over the 44px touch
+     target the DC corner failed on.
+
+     ONE NUMBER FOR THE WHOLE FAMILY, so a fifth pair cannot arrive built to a
+     fifth width. Settings is unchanged by it: STANDARDS is wider than either
+     minimum, so that stack is sized by its own word. */
   #units-corner { display:flex; align-items:center; flex:0 0 auto; }
   #units-corner .stack { display:flex; flex-direction:column; gap:1px; }
   #units-corner button {
     font-family: var(--font-ui); font-size:9px; font-weight:600;
     letter-spacing:0.05em; text-transform:uppercase;
     display:inline-flex; align-items:center; justify-content:center;
-    min-width:64px; padding:2px 6px; cursor:pointer;
+    min-width:56px; padding:2px 6px; cursor:pointer;
     border:1px solid var(--edge-panel); border-radius:3px;
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     color: var(--ink-quiet); }
@@ -434,7 +451,10 @@
   #mode-corner { display:flex; align-items:center; gap:5px; flex:0 0 auto;
     font-family: var(--font-ui); font-size:12px; font-weight:600;
     letter-spacing:0.04em; }
-  #mode-corner .set, #house-strip .set { display:flex; align-items:center;
+  /* `#house-strip .set` came off these three rules on 17 Sep: both switches
+     went back up to the mode corner and the bottom bar now carries no set at
+     all. A selector kept "in case" is a selector nobody can reason about. */
+  #mode-corner .set { display:flex; align-items:center;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border:1px solid var(--edge-panel); border-radius:4px; overflow:hidden; }
   /* STACKED, and the stack is why the bar got NARROWER rather than wider
@@ -443,42 +463,43 @@
      overflowed 1280 by 142px once already (PRINTSCREEN, 15 Sep); a
      rearrangement that spent width would have walked back into it. */
   #mode-corner .set.stack { flex-direction:column; align-items:stretch; }
-  #mode-corner button, #house-strip .set button { font:inherit; letter-spacing:inherit;
+  #mode-corner button { font:inherit; letter-spacing:inherit;
     padding:4px 7px; font-size:11px;
     text-transform:uppercase; cursor:pointer; border:none; background:none;
     color: var(--ink-quiet); }
   #mode-corner .set.stack button { padding:2px 7px; font-size:9px; }
-  /* THE BOARD SWITCH IS THE UNIT STACK'S TWIN. Movie: "make the TOY /
-     DRAFTING buttons same size as IMPERIAL / METRIC ... and same shading".
-     Two stacked pairs standing side by side on the same bar, built to two
-     different shapes, read as two different KINDS of control -- so this
-     borrows the unit rows outright: the 64px minimum, the 9px row, the 1px
-     gap, the chip fill and the accent for the one in force. The set's own
-     frame goes with it, since the frame is what made the pair one welded
-     block rather than two buttons. */
-  #mode-corner .set.stack[data-board-switch] { border:none; background:none;
+  /* EVERY STACKED PAIR IS THE UNIT STACK'S TWIN. Movie, first for the board
+     switch -- "make the TOY / DRAFTING buttons same size as IMPERIAL / METRIC
+     ... and same shading" -- and on 17 Sep for the two that came back up:
+     "make them the same style as up top style". Stacked pairs standing side
+     by side on one bar, built to different shapes, read as different KINDS of
+     control -- so they borrow the unit rows outright: the 64px minimum, the
+     9px row, the 1px gap, the chip fill and the accent for the one in force.
+     The set's own frame goes with it, since the frame is what made a pair one
+     welded block rather than two buttons.
+
+     KEYED ON THE SHAPE, NOT ON WHICH SWITCH IT IS. This named
+     [data-board-switch] while the board switch was the only stack up here,
+     and the two arriving would each have had to be added to the selector by
+     hand -- a rule that has to be edited every time it should already apply
+     is the kind that goes stale silently. */
+  #mode-corner .set.stack { border:none; background:none;
     gap:1px; overflow:visible; }
-  #mode-corner .set.stack[data-board-switch] button {
+  #mode-corner .set.stack button {
     font-family: var(--font-ui); font-size:9px; font-weight:600;
     letter-spacing:0.05em;
     display:inline-flex; align-items:center; justify-content:center;
-    min-width:64px; padding:2px 6px;
+    min-width:56px; padding:2px 6px;
     border:1px solid var(--edge-panel); border-radius:3px;
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     color: var(--ink-quiet); }
-  #mode-corner .set.stack[data-board-switch] button:hover {
+  #mode-corner .set.stack button:hover {
     border-color: var(--accent); color: var(--accent); }
-  #mode-corner .set.stack[data-board-switch] button[aria-pressed="true"] {
+  #mode-corner .set.stack button[aria-pressed="true"] {
     color: var(--accent-ink); background-color: var(--accent);
     border-color: var(--accent); }
-  #mode-corner button[aria-pressed="true"],
-  #house-strip .set button[aria-pressed="true"] { color: var(--accent-ink);
+  #mode-corner button[aria-pressed="true"] { color: var(--accent-ink);
     background-color: var(--accent); }
-  /* A BUTTON'S WIDTH OF AIR (Movie, 15 Sep), on the inner side of each
-     switch. 44px is the page row's own button plus its gap, so the space
-     reads as "one missing button" rather than as a guessed margin. */
-  #house-strip .set.spaced { margin-left:44px; }
-  #house-strip .set.spaced-after { margin-right:44px; }
 
   /* THE FILE ROW, upper-right (§1): what the FILE is -- NEW, OPEN, SAVE with
      its three words, SAVE AS, and the extension the generated name takes.
@@ -666,7 +687,10 @@
     transform:translateX(-50%); aspect-ratio:1 / 1; border:none; padding:0;
     border-radius:50%; background:transparent; cursor:pointer;
     pointer-events:auto; }
-  #dt-bone img { width:100%; height:100%; display:block; }
+  /* CONTAIN, BECAUSE THE ARTWORK IS NO LONGER SQUARE. The post's box is a
+     1:1 circle and the bone filled it; a house is taller than it is wide and
+     a stretched one reads as a different building. */
+  #dt-bone img { width:100%; height:100%; display:block; object-fit:contain; }
   #dt-bone:hover img { filter:brightness(1.12); }
   #dt-close { position:absolute; right:2%; top:1%; pointer-events:auto;
     font-family: var(--font-ui); font-size:11px; font-weight:700;
@@ -744,6 +768,13 @@
      filter rather than a second file -- and it is the same two seconds. */
   #bone[data-lit] img { filter:brightness(1.3)
     drop-shadow(0 0 7px rgba(255,64,51,0.75)); }
+  /* AND ROUGH'S GLOW IS DRAWN, NOT FILTERED. Its ON state is its own file --
+     the neon is painted into it, with a falloff and a white-hot core no
+     filter produces -- so the swap IS the light, and the rule above would
+     only wash it out. A red halo around a blue house would be a second light
+     source besides, and the two seconds before the board rises are exactly
+     when the press has the drafter's eye. */
+  html[data-theme="rough"] #bone[data-lit] img { filter:none; }
   #bone .said {
     position:absolute; width:1px; height:1px; margin:-1px; padding:0;
     overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
@@ -808,6 +839,28 @@
   /* A panel is pinned to its own edge and is as tall as it needs to be, for
      the same reason as the tab: full height costs drawing area that a panel
      holding three rows of seats is not using. */
+  /* INSIDE A MENU, THE ACCENT IS THE MARK COLOUR. Movie, 17 Sep: "small
+     things for NIGHT version only to turn gold - the stuff outlines and text
+     in the menu areas (easier to see when its small if gold when black
+     background)", with the SELECT key's red border and red label ringed on
+     the screenshot he sent back.
+
+     ONE REDEFINITION, NOT THIRTY-FIVE EDITS. The accent is read through
+     var(--accent) at 35 line-and-text sites, and rewriting each to name a
+     second token would be 35 chances to miss one -- and a miss would be
+     invisible, since a red hairline on black looks like a styling choice
+     rather than a bug. Redeclaring the property on the subtree lets every one
+     of them pick the mark up unchanged, including any added later.
+
+     AND IT CARRIES NO SKIN LOGIC. accent-mark EQUALS accent on three of the
+     four skins, so this rule is true everywhere and the one place the two
+     differ is the palette table. An html[data-theme][data-mode] selector here
+     would have put the same fact in two files.
+
+     THE RAIL TABS NEED THEIR OWN NAME because they are fixed siblings of the
+     panel rather than children of it -- they are the menu's edge, and the
+     drafter reads them as part of it. */
+  aside, .rail-tab { --accent: var(--accent-mark); }
   aside { position:fixed; top:var(--rail-top);
     /* STOPS ABOVE THE HINT. 100vh - 60 let the panel run to within 12px of the
        bottom, which was fine while it held a rail and an empty slot and is not
@@ -1306,13 +1359,8 @@
        has always kept its dormant chips: the row is the map of the job. -->
   <button type="button" data-page="real-estate" disabled
     title="REAL ESTATE LAYOUT — the marketing floor plan, not built yet">REAL ESTATE LAYOUT</button>
-  <!-- THE FINISH SWITCH, a button's width clear of the pages (Movie, 15 Sep:
-       "add extra space of about 1 button between them"). The gap is the
-       sentence: this is not a seventh page, and a switch flush against the
-       page row would read as one. --><span class="set spaced" data-theme-switch data-switch-home>
-    <button type="button" data-theme="ruff" aria-pressed="false">RUFF</button>
-    <button type="button" data-theme="rough" aria-pressed="false">ROUGH</button>
-  </span>
+  <!-- THE FINISH SWITCH WENT BACK UPSTAIRS (Movie, 17 Sep). See the mode
+       corner, where it now stands with the other three stacked pairs. -->
 </div>
   <div class="grow"></div>
   <!-- THE MIDDLE PAIR (Movie, 15 Sep): "2 buttons, the DRIVE-THRU MENU, and
@@ -1332,6 +1380,7 @@
     <button id="bone" type="button" data-bone-press aria-controls="drivethru"
       aria-expanded="false"
       title="Gruff's drive-thru: pick a house type, then build it"><img
+        data-bone-art
         src="./assets/bone-red.png"
         alt="" /><span class="said">BONE</span></button>
     <!-- ONE DELETE FOR EVERYTHING SELECTED (§7a), where there were two verbs
@@ -1366,12 +1415,7 @@
        row's dormant chips always were -- the row is the map of the job, and
        a map with a town missing teaches the drafter a shape that is wrong. -->
   <div id="sheet-row" data-sheet-row>
-    <!-- NIGHT/DAY, the mirror of RUFF/ROUGH at the other end and spaced the
-         same way, so the two switches read as a pair holding the bar's ends
-         rather than as two more sheets. --><span class="set spaced-after" data-mode-switch data-switch-home>
-      <button type="button" data-skin-mode="night" aria-pressed="false">NIGHT</button>
-      <button type="button" data-skin-mode="day" aria-pressed="false">DAY</button>
-    </span>
+    <!-- NIGHT/DAY WENT UP WITH IT (Movie, 17 Sep), to the mode corner. -->
     <a data-page="construction" href="./LAYOUT.dc.html"
       title="The construction layout: the sheet that goes to site">CONSTRUCTION LAYOUT</a>
     <a data-page="specs" href="./SPECS.html"
@@ -1428,7 +1472,7 @@
     </div>
     <button id="dt-bone" type="button" data-drivethru-bone
       title="Build the house you picked">
-      <img src="./assets/bone-red.png" alt="BONE — build it" />
+      <img data-bone-art src="./assets/bone-red.png" alt="BONE — build it" />
     </button>
   </div>
 </div>
@@ -1493,6 +1537,30 @@
      control that changed meaning because it changed corner would be the
      re-scope §7b forbids. -->
 <div id="mode-corner" data-mode-corner data-switch-home>
+  <!-- HOW THE SHEET IS LOOKED AT, BACK BESIDE THE UNITS. Movie, 17 Sep: "put
+       NIGHT DAY up beside IMPERIAL METRIC (and change the style to match the
+       IMPERIAL METRIC (UP DOWN not SIDE SIDE), and put the RUFF / ROUGH to the
+       left of NIGHT DAY before the last one which will be TOY DRAFTING", then
+       "make them the same style as up top style".
+    
+       SO THE BAR NOW READS AS FOUR STACKED PAIRS: units, finish, mode, board.
+       They were sent downstairs on 15 Sep on the argument that a switch is not
+       an instrument -- which is still true, and is now answered by the shape
+       instead of the distance: four pairs built to one pattern read as one
+       family of "which way am I looking at this", and the strip's instruments
+       are chips, not stacks. Nothing about what they DO moved; same data-*
+       attributes, same listeners, same aria-pressed shading.
+    
+       THE ORDER IS HIS, LEFT TO RIGHT: IMPERIAL/METRIC (already there), then
+       RUFF/ROUGH, then NIGHT/DAY, and TOY/DRAFTING last. -->
+  <span class="set stack" data-theme-switch>
+    <button type="button" data-theme="ruff" aria-pressed="false">RUFF</button>
+    <button type="button" data-theme="rough" aria-pressed="false">ROUGH</button>
+  </span>
+  <span class="set stack" data-mode-switch>
+    <button type="button" data-skin-mode="night" aria-pressed="false">NIGHT</button>
+    <button type="button" data-skin-mode="day" aria-pressed="false">DAY</button>
+  </span>
   <span class="set stack" data-board-switch>
     <!-- NO title HERE. These two are set from script below, and a static one
          would be overwritten -- which is exactly what happened when this
@@ -1503,12 +1571,15 @@
     <button type="button" data-board="drafting" aria-pressed="false">DRAFTING</button>
   </span>
 </div>
-<!-- RUFF/ROUGH AND NIGHT/DAY WENT DOWNSTAIRS (Movie, 15 Sep), to either side
-     of the bottom bar. They are not instruments and they are not what the
-     drawing IS in the sense TOY/DRAFTING is -- they are how the sheet is
-     LOOKED AT -- and the bottom bar is where the page's other "which way am I
-     looking at this" controls already live. The markup moved whole: same
-     data-* attributes, same listeners, same aria-pressed shading. -->
+<!-- RUFF/ROUGH AND NIGHT/DAY CAME BACK (Movie, 17 Sep) and now stand in the
+     mode corner above, stacked like the units and the board. They went down
+     on 15 Sep because a switch is not an instrument; that is still true, and
+     the strip still carries instruments only -- what changed is that the
+     argument is now made by the SHAPE. Four stacked pairs in one corner, all
+     built to the unit rows, read as one family; a chip on the strip reads as
+     a tool. Distance was the cruder way to say the same thing, and it cost
+     the two switches their kinship with TOY/DRAFTING, which is the control
+     they are most like. -->
   <span id="strip-message" data-strip-message></span>
   <div class="grow"></div>
 
@@ -4162,6 +4233,75 @@
   // the reader listens for. The outline ROUND still exists in `round` --
   // what retired is its button, not its meaning.
   const boneFoot = document.getElementById('bone');
+
+  // THE PRESS'S ARTWORK IS PART OF THE FINISH. Movie, 17 Sep: the bone
+  // becomes a blue house on the ROUGH DRAFTER version. A theme was already
+  // "mainly through logos and colors" (palette.js's own note) -- this is the
+  // first logo to arrive, so it rides the same switch the colours do rather
+  // than growing a second way to be on ROUGH.
+  //
+  // ONE ENTRY PER THEME, AND EVERY THEME HAS ONE, so a theme added to
+  // DraftPalette.THEMES without an artwork is a missing key here rather than
+  // a press that silently keeps the last theme's picture.
+  //
+  // BOTH PRESSES, FOUND BY ATTRIBUTE. The foot bar's bone and the one on the
+  // sign's post are one verb wearing one artwork -- the stylesheet says so in
+  // as many words -- and a query that named only #bone would have left the
+  // sign showing a bone under a blue house on the bar.
+  //
+  // `lit` IS A SECOND FILE, NOT A FILTER, AND ONLY WHERE ONE WAS DRAWN. The
+  // bone's glow is a brightness filter over one artwork; the house arrived as
+  // an ON and an OFF pair, drawn that way, and a filter cannot invent the
+  // neon its ON state has. So a theme that ships two files gets the swap and
+  // one that ships a single file keeps the filter the stylesheet gives it.
+  //
+  // IT LIVES HERE, BESIDE THE PRESS, rather than with the skin switches lower
+  // down. callSign lights the bone during module evaluation on the ?from=entry
+  // path, and a `const` declared after that line is in its dead zone when that
+  // runs -- so the page would have thrown on the one entry that most needs to
+  // work, and only on that entry.
+  const BONE_ART = Object.freeze({
+    ruff:  Object.freeze({ src: './assets/bone-red.png',       lit: null,
+      label: 'BONE' }),
+    rough: Object.freeze({ src: './assets/house-blue-off.png',
+      lit: './assets/house-blue-on.png', label: 'HOUSE' }),
+  });
+  const bonePressArt = [...document.querySelectorAll('[data-bone-art]')];
+  // THE SPOKEN NAME MOVES WITH THE PICTURE. One of the two images carries the
+  // press's only label (the sign's), the other is decorative beside a visually
+  // hidden span -- so an empty alt stays empty and a spoken one is rewritten.
+  // A screen reader told "BONE" while the screen shows a house is the same
+  // defect as the sign keeping the old artwork, one sense over.
+  const boneSaid = document.querySelector('#bone .said');
+  // THE ON STATE, FETCHED BEFORE IT IS WANTED. The glow lasts two seconds and
+  // is the whole of the feedback; a file that starts downloading when the
+  // press is hit shows an empty box for the part of it that matters.
+  Object.values(BONE_ART).forEach(art => {
+    if (art.lit) { const pre = new Image(); pre.src = art.lit; }
+  });
+  const paintBonePress = () => {
+    const art = BONE_ART[theme];
+    if (!art) {
+      console.warn(`MODEL: no bone artwork for theme "${theme}"; leaving it as it is.`);
+      return;
+    }
+    bonePressArt.forEach(img => {
+      // THE PRESS'S OWN STATE, not a shared one: the foot bar's bone lights
+      // and the sign's does not, and they are two buttons.
+      const press = img.closest('button');
+      const wanted = (art.lit && press && press.hasAttribute('data-lit'))
+        ? art.lit : art.src;
+      // ONLY ON A CHANGE. Assigning the src it already has is a no-op in
+      // every browser this page is tested in, but this runs on every
+      // NIGHT/DAY press and on both edges of the glow, and a needless
+      // assignment is a needless decode.
+      const next = new URL(wanted, location.href).href;
+      if (img.src !== next) img.src = next;
+      if (img.alt) img.alt = `${art.label} — build it`;
+    });
+    if (boneSaid) boneSaid.textContent = art.label;
+  };
+
   const signShut = () => sign.hasAttribute('data-shut');
 
   // WHAT GRUFF SAYS WHEN HE IS REFUSING, set by the press that was refused
@@ -4231,9 +4371,14 @@
     if (!signShut()) { setSign(false); return; }
     round = which;
     button.toggleAttribute('data-lit', true);
+    // BOTH EDGES, because a theme whose ON state is its own file has to be
+    // put back as well as put on. RUFF's filter needs neither and this is a
+    // no-op there.
+    paintBonePress();
     lighting = window.setTimeout(() => {
       lighting = 0;
       button.toggleAttribute('data-lit', false);
+      paintBonePress();
       setSign(true);
     }, SIGN_LIGHT_MS);
   };
@@ -4294,6 +4439,7 @@
       window.clearTimeout(lighting);
       lighting = 0;
       boneFoot.toggleAttribute('data-lit', false);
+      paintBonePress();
     };
     ['pointerdown', 'keydown', 'wheel'].forEach(type =>
       document.addEventListener(type, cancel, true));
@@ -8175,11 +8321,12 @@
   // control: every click then bubbles to `html`, re-reads the theme off it
   // and rewrites the skin key without the board in it.
   //
-  // THE HOME IS AN ATTRIBUTE, NOT A LIST OF IDS, because the switches no
-  // longer live in one place: TOY/DRAFTING is on the strip and RUFF/ROUGH
-  // and NIGHT/DAY went to the bottom bar (Movie, 15 Sep). `#mode-corner,
-  // #house-strip` would have worked today and gone stale the first time one
-  // moved again -- and it fails SILENTLY, with the switch simply never
+  // THE HOME IS AN ATTRIBUTE, NOT A LIST OF IDS, and this is the second time
+  // that has paid for itself. The switches were split across the strip and
+  // the bottom bar (Movie, 15 Sep) and all four are back in the mode corner
+  // (Movie, 17 Sep) -- two moves, and not one line of wiring in between,
+  // because `#mode-corner, #house-strip` would have gone stale on the first
+  // of them. It fails SILENTLY when it does, with the switch simply never
   // wired, which is the failure shape this page keeps paying for.
   const switchSet = attr =>
     [...document.querySelectorAll(`[data-switch-home] button[${attr}]`)];
@@ -8194,6 +8341,7 @@
     skin = window.DraftPalette.apply(document, theme, mode);
     markSwitch(themeButtons, 'theme', theme);
     markSwitch(modeButtons, 'skinMode', mode);
+    paintBonePress();
     // MERGED, not replaced: the board seed shares this key, and a skin write
     // that rebuilt the object dropped it.
     try {
@@ -8272,6 +8420,7 @@
 
   markSwitch(themeButtons, 'theme', theme);
   markSwitch(modeButtons, 'skinMode', mode);
+  paintBonePress();
   applyBoard();
   stripRefresh();
 

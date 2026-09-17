@@ -817,12 +817,17 @@ if (!window.DraftRender2D) {
     // and a datum is the drafter's FIRST CLICK, so it lands on the building
     // far more often than on bare page.
     //
-    // The fallback is the same literal, and that is not a placeholder hiding a
-    // gap: MODEL.dc.html has no skins and its ground is always light, so this
-    // value IS correct for that page -- it is the day skin's value too. A
-    // caller that supplies colours gets its own; the one that does not keeps
-    // exactly what it painted before.
-    ctx.strokeStyle = (env.colors && env.colors.origin) || '#557a46';
+    // The fallback is not a placeholder hiding a gap: MODEL.dc.html passes no
+    // colours at all (it has no skins and its ground is always light), so the
+    // fallback IS that page's datum colour, and it is kept equal to the DAY
+    // skin's value for exactly that reason.
+    //
+    // WHICH MEANS IT MOVES WHEN THE DAY VALUE MOVES. Movie, 17 Sep: the green
+    // target goes gold. Left at #557a46 this would have turned the datum gold
+    // on MODEL.html and left it green on the other board -- one mark, two
+    // colours, which is the drift the shared painter exists to prevent. If
+    // palette.js's day draw-origin changes again, this changes with it.
+    ctx.strokeStyle = (env.colors && env.colors.origin) || '#966b0b';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.arc(o.x, o.y, 6, 0, Math.PI * 2);

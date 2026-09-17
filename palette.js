@@ -43,9 +43,10 @@ if (!window.DraftPalette) {
                          // fine 1ft / major 10ft / coarse 100ft.
     'draw-line',        // sketch lines: the drafter's own construction ink
     'draw-origin',      // the 0,0 datum marker -- a ring and crosshairs on the
-                        // point the drafter first clicked. GREEN on purpose:
-                        // it is not geometry, it is the paper's registration
-                        // mark, and it must not read as a wall or a shape.
+                        // point the drafter first clicked. GOLD since 17 Sep,
+                        // green before it; either way the point stands: it is
+                        // not geometry, it is the paper's registration mark,
+                        // and it must not read as a wall or a shape.
     'draw-dim',         // dimension strings, their witness lines and arrows.
                         // The only drawing role that is TEXT as well as line,
                         // so it answers to AA body contrast (4.5), not the 3.0
@@ -123,6 +124,26 @@ if (!window.DraftPalette) {
     // Brand -- the family that actually differs between RUFF and ROUGH
     'accent',           // the one colour that carries the brand
     'accent-ink',       // text that sits ON the accent
+    'accent-mark',      // the accent as an OUTLINE or a small label inside a
+                        // panel, where the accent is a 1px line or 9px text on
+                        // the panel's own ground rather than a fill with
+                        // accent-ink on it. Movie, 17 Sep: "small things for
+                        // NIGHT version only to turn gold - the stuff outlines
+                        // and text in the menu areas (easier to see when its
+                        // small if gold when black background)".
+                        //
+                        // A SECOND ROLE RATHER THAN AN ALPHA OR A TINT of the
+                        // accent, because the two are not the same colour made
+                        // lighter -- RUFF's red is legible as a filled chip
+                        // with white on it and hard to read as a hairline on
+                        // black, and the fix for that is a different HUE, not
+                        // a different weight of the same one.
+                        //
+                        // THREE OF THE FOUR SKINS SET IT EQUAL TO accent, and
+                        // that is not redundancy: it is the same argument
+                        // draw-note and draw-underlay won -- a shared key
+                        // cannot diverge without a refactor, and this one is
+                        // diverging on exactly one skin today.
   ]);
 
   // Night is Movie's decided taste, 2 Sep: black ground, white and grey lines,
@@ -132,7 +153,26 @@ if (!window.DraftPalette) {
   const BASE = Object.freeze({
     night: Object.freeze({
       'surface-page':    '#1d1f20',
-      'surface-panel':   'rgba(20,22,23,0.82)',
+      // HALF TRANSPARENT, AND THE SAME HALF ON BOTH MODES. Movie, 17 Sep:
+      // "i'd like to allow the transparency to increase to about 50% or maybe
+      // more for that 'tint area' on the side menus and on the top and bott",
+      // and "i'd like the tinted panels to be used on both day and night
+      // versions". It was 0.82 here and 0.88 on day -- two different amounts
+      // of tint for the same idea, which is why the day chrome read as solid
+      // white and the night chrome nearly as solid black.
+      //
+      // ONE TOKEN REACHES ALL OF IT. Every surface he named is this role:
+      // both sidebars, the top strip, the bottom bar, and the readout, the
+      // switch sets, the seats and the promote card besides.
+      //
+      // THE DIMENSION LABEL PLATE IS THIS ROLE TOO, and that is the one place
+      // the alpha is doing work rather than decoration -- drawDimension2D
+      // fills it behind the string. The plate stays legible because this
+      // colour is within nine points of surface-page on every channel, so
+      // compositing at 0.50 instead of 0.82 moves the ground by about three
+      // points, not by the width of the drawing underneath. The harness
+      // measures that pair rather than trusting it (proto/palette-harness.js).
+      'surface-panel':   'rgba(20,22,23,0.50)',
       'surface-chip':    '#2a2d2e',
       'edge-panel':      '#3a3d3f',
       'ink-primary':     '#e7e5e2',
@@ -143,7 +183,18 @@ if (!window.DraftPalette) {
       'draw-grid-coarse': '#454a4c',
       'draw-line':       '#7f8688',
       'draw-dim':        '#6b93bd',   // 5.15 on the page, 5.56 on the plate
-      'draw-origin':     '#6a9a57',   // 5.02 page / 4.40 over a floor wash
+      // GOLD, AND IT IS THE GOLD RUFF JUST GAVE UP. Movie, 17 Sep: "can you
+      // make the green target in the model space that GOLD color instead of
+      // Green". The accent went red the same afternoon, so the amber the page
+      // has worn since 3 Sep lands on the datum -- the same pair it always
+      // was, bright on night and the dark one on day, moved from the brand to
+      // the registration mark.
+      //
+      // IT IS A DRAWING ROLE, SO BOTH BRANDS GET IT. draw-* lives in BASE and
+      // not in the theme overrides: the datum is a fact about the sheet, not
+      // about whose shop it is, and a marker that changed colour with the
+      // brand would be the page teaching two meanings for one mark.
+      'draw-origin':     '#f0b429',   // 8.88 page / 7.78 over a floor wash
       // THE NIGHT COLUMN IS THE NEW INFORMATION HERE; day below is unchanged.
       // Four of these five were painted in their day colour on both skins,
       // and two of them -- notes and fixtures -- were #1d1f20, which IS
@@ -155,7 +206,12 @@ if (!window.DraftPalette) {
       'draw-fixture':    '#e7e5e2',   // 13.16
       'draw-stair':      '#9d8ec9',   // 5.63
       'draw-cut':        '#d4788f',   // 5.42
-      'draw-underlay':   '#6a9a57',   // 5.02 -- draw-origin's value, its own key
+      // AND HERE IS WHY IT WAS ITS OWN KEY. This held draw-origin's exact
+      // value for two weeks under a comment saying the two were different
+      // things that happened to be the same green, and that one moving was
+      // not the other moving. On 17 Sep the datum went gold and this did not.
+      // A shared key would have taken the underlay with it.
+      'draw-underlay':   '#6a9a57',   // 5.02 -- the green the datum used to be
       'draw-floor':      'rgba(120,140,150,0.10)',
       'draw-floor-edge': '#5980a6',
       'draw-wall':       '#2f3335',   // 1.30 on the page -- poche, deliberately quiet
@@ -187,7 +243,13 @@ if (!window.DraftPalette) {
     }),
     day: Object.freeze({
       'surface-page':    '#f2f2f3',
-      'surface-panel':   'rgba(255,255,255,0.88)',
+      // 0.80, NOT NIGHT'S 0.50. Movie, 17 Sep, on seeing it: "make the daytime
+      // tint 80% maybe, it looks better darker". So the two modes do NOT carry
+      // one number after all -- and that is a taste ruling on a white ground
+      // rather than a retreat from "the same tint on both": a panel that
+      // passes 50% of a light page through reads as barely there, where the
+      // same 50% over a dark one still reads as a panel.
+      'surface-panel':   'rgba(255,255,255,0.80)',
       'surface-chip':    '#e4e4e6',
       'edge-panel':      '#c6c8ca',
       'ink-primary':     '#1d1f20',
@@ -198,7 +260,18 @@ if (!window.DraftPalette) {
       'draw-grid-coarse': '#b0b3b5',
       'draw-line':       '#6b7274',
       'draw-dim':        '#365e86',   // 6.05 on the page, 6.68 on the plate
-      'draw-origin':     '#557a46',   // 4.41 page / 3.90 wash -- the old page's own green
+      // The dark gold, because the bright one is 1.67 on a near-white page --
+      // under the 3.0 floor for a non-text mark and not a close call. Same
+      // reasoning the day accent took when it was this colour.
+      //
+      // PICKED TO MATCH THE GREEN IT REPLACES, not to be the boldest gold that
+      // passes: the green read 4.41 on the page and 3.90 over a wash, and this
+      // is 4.26 and 3.77 -- the closest of the family on both. A hue change
+      // should be a hue change, and a datum that got louder on the day skin
+      // while only its colour was asked about is a second edit nobody made.
+      // The first value tried here, #a37409, sat 0.28 over the non-text floor
+      // on the wash, which is a margin to spend on nothing.
+      'draw-origin':     '#966b0b',   // 4.26 page / 3.77 wash
       // EVERY ONE OF THESE IS WHAT THE PAINTER ALREADY DREW, so the day page
       // is pixel-identical after this lands. Three came from env keys
       // (NOTE_COLOR, FIXTURE_COLOR, STAIR_COLOR) and two were hardcoded
@@ -207,7 +280,7 @@ if (!window.DraftPalette) {
       'draw-fixture':    '#1d1f20',   // 14.79
       'draw-stair':      '#5d4a8a',   // 6.68
       'draw-cut':        '#b04060',   // 5.01
-      'draw-underlay':   '#557a46',   // 4.41 -- draw-origin's value, its own key
+      'draw-underlay':   '#557a46',   // 4.41 -- the green the datum used to be
       'draw-floor':      'rgba(90,110,120,0.10)',
       'draw-floor-edge': '#5980a6',
       'draw-wall':       '#ffffff',   // 1.12 on the page -- the same quiet relationship
@@ -231,14 +304,54 @@ if (!window.DraftPalette) {
   // second table -- and today it overrides exactly one role each way, which is
   // the honest size of the difference until the skins are designed.
   const THEME_OVERRIDES = Object.freeze({
+    // RUFF IS RED, AND ITS BOXES ARE LETTERED IN WHITE. Movie, 17 Sep:
+    // "i guess change all the gold to red, but if there is a red box and text
+    // in the box make the text white (not black)", "in the RUFF version",
+    // "both night and day to red not gold". So the amber goes on both modes,
+    // and night's accent-ink -- which was the page's own near-black, the one
+    // thing he named -- goes with it.
+    //
+    // THE TWO JOBS PULL APART ON NIGHT, AND NO RED SETTLES IT. The accent is
+    // read as TEXT on the page (#readout b) and it is also the fill that white
+    // lettering sits on, so it must be light enough to clear a near-black page
+    // and dark enough to carry white. Solve the two for equality and the
+    // ceiling is 4.07:1 -- both bars at once, for EVERY colour, not just for
+    // red. 4.5 on both is arithmetically unavailable here, so the harness
+    // asserts this pair at the ceiling and says why; see palette-harness.js.
+    //
+    // #fd0000 IS THE MAXIMIN, searched rather than chosen: of every red that
+    // reads as one, it is the value whose WORSE ratio is highest -- 4.08 on
+    // the page, 4.06 under white. Prettier reds exist a tenth lower (#e8342a
+    // is 3.90/4.24); a tenth of contrast is not worth spending on taste when
+    // the budget is already short. Both clear AA large text (3.0) with room.
+    //
+    // DAY HAS NO SUCH TENSION and so takes no exception: its page is near
+    // white, both jobs want a DARK red, and #c0392b clears 4.5 twice over at
+    // 4.86 and 5.44. It is the brick the old dark gold was, in red.
     ruff: Object.freeze({
-      night: Object.freeze({ accent: '#f0b429' }),  // the warm amber already on the page
-      day:   Object.freeze({ accent: '#8a6207', 'accent-ink': '#ffffff' }),
+      // THE ONE SKIN WHERE THE MARK LEAVES THE BRAND. Gold is the amber this
+      // theme wore until the accent went red, and it is here for a measured
+      // reason rather than nostalgia: on the night panel a hairline of #fd0000
+      // sits at 4.06, while this gold is at 8.79. At a 1px border and a 9px
+      // label that difference is the whole of whether it reads.
+      //
+      // DAY IS THE ACCENT ITSELF, because he scoped it -- "for NIGHT version
+      // only" -- and because the reason does not apply: the day mark is a dark
+      // red on a near-white panel at 4.74, which is already comfortable.
+      night: Object.freeze({ accent: '#fd0000', 'accent-ink': '#ffffff',
+        'accent-mark': '#f0b429' }),
+      day:   Object.freeze({ accent: '#c0392b', 'accent-ink': '#ffffff',
+        'accent-mark': '#c0392b' }),
     }),
+    // ROUGH'S MARK IS ROUGH'S ACCENT, on both modes. The gold above is RUFF's
+    // own colour and the argument for it was RUFF's red being hard to read
+    // small; this brand's blue has no such problem (5.00 on the night panel),
+    // and gold marks inside a blue-branded skin would be a second brand.
     rough: Object.freeze({
-      night: Object.freeze({ accent: '#6b91b6' }),  // the drafting blue (#5980a6, 81 uses
-                                                   // in MODEL) lifted to clear AA on black
-      day:   Object.freeze({ accent: '#365e86', 'accent-ink': '#ffffff' }),
+      night: Object.freeze({ accent: '#6b91b6',     // the drafting blue (#5980a6, 81 uses
+        'accent-mark': '#6b91b6' }),                // in MODEL) lifted to clear AA on black
+      day:   Object.freeze({ accent: '#365e86', 'accent-ink': '#ffffff',
+        'accent-mark': '#365e86' }),
     }),
   });
 

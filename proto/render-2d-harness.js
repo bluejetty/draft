@@ -106,8 +106,8 @@ const dropMitre = src => {
 const dropOriginEnvColour = src => {
   const before = src;
   const out = src.replace(
-    "ctx.strokeStyle = (env.colors && env.colors.origin) || '#557a46';",
-    "ctx.strokeStyle = '#557a46';",
+    "ctx.strokeStyle = (env.colors && env.colors.origin) || '#966b0b';",
+    "ctx.strokeStyle = '#966b0b';",
   );
   if (out === before) throw new Error('dropOriginEnvColour matched nothing -- the colour line moved');
   return out;
@@ -166,7 +166,7 @@ const unDeriveShapePreview = src => {
 const dropOriginFallback = src => {
   const before = src;
   const out = src.replace(
-    "ctx.strokeStyle = (env.colors && env.colors.origin) || '#557a46';",
+    "ctx.strokeStyle = (env.colors && env.colors.origin) || '#966b0b';",
     'ctx.strokeStyle = env.colors && env.colors.origin;',
   );
   if (out === before) throw new Error('dropOriginFallback matched nothing -- the colour line moved');
@@ -409,7 +409,7 @@ suite('drawOrigin2D', 'a caller that supplies a colour gets it', R => {
 suite('drawOrigin2D', 'a caller that supplies none keeps the literal', R => {
   const ctx = recordingCtx();
   R.drawOrigin2D(ctx, toS, { datum: { x: 0, z: 0 }, elev: 0 });
-  expect('the fallback is the day value', sets(ctx, 'strokeStyle')[0], '#557a46');
+  expect('the fallback is the day value', sets(ctx, 'strokeStyle')[0], '#966b0b');
 });
 
 // A colors object is not the same as an origin colour in it. The page that
@@ -417,7 +417,7 @@ suite('drawOrigin2D', 'a caller that supplies none keeps the literal', R => {
 suite('drawOrigin2D', 'a colours object without an origin key still falls back', R => {
   const ctx = recordingCtx();
   R.drawOrigin2D(ctx, toS, { datum: { x: 0, z: 0 }, elev: 0, colors: { grid: '#123456' } });
-  expect('the fallback still applies', sets(ctx, 'strokeStyle')[0], '#557a46');
+  expect('the fallback still applies', sets(ctx, 'strokeStyle')[0], '#966b0b');
 });
 
 // Ring and crosshair are one colour decision, not two. If a later edit gives

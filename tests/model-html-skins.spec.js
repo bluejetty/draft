@@ -274,6 +274,105 @@ test.describe('MODEL.html skins', () => {
     expect(rough.ink, 'the ink is the mode\'s job, not the brand\'s').toBe(ruff.ink);
   });
 
+  // THE FIRST LOGO TO ARRIVE ON THE THEME AXIS. Movie, 17 Sep: the bone
+  // becomes a blue house on the ROUGH DRAFTER version. palette.js's own note
+  // said a theme is "mainly through logos and colors" and until now only the
+  // colours had anything to prove.
+  //
+  // BOTH PRESSES, AND THE SIGN'S IS THE ONE THAT ROTS. The foot bar's bone is
+  // in front of whoever presses the switch; the one on the sign's post is
+  // behind a shut board, so a swap that reached only the visible one would
+  // look right all day and show a red bone the first time someone opened the
+  // drive-thru. This drives the switch with the board UP for exactly that
+  // reason.
+  test('the build press wears the theme\'s own artwork, on both presses', async ({ page }) => {
+    await houseOnOldPage(page);
+    await page.goto('/MODEL.html?theme=ruff&mode=night');
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 5000 });
+
+    const artOf = locator => locator.evaluate(el => ({
+      // The file, not the whole URL: the assertion is about which artwork,
+      // and a port number in the expectation is a spec that fails on a
+      // second worktree.
+      file: new URL(el.src).pathname.split('/').pop(),
+      alt: el.alt,
+    }));
+    const barBone = page.locator('#bone img');
+    const signBone = page.locator('#dt-bone img');
+
+    expect((await artOf(barBone)).file, 'RUFF keeps the bone').toBe('bone-red.png');
+    expect((await artOf(signBone)).file, 'and so does the sign').toBe('bone-red.png');
+
+    // The board UP, so the sign's press is on screen while the theme changes
+    // under it.
+    await page.locator('#bone').click();
+    await expect(page.locator('#dt-bone')).toBeVisible({ timeout: 4000 });
+
+    await page.locator('[data-theme-switch] [data-theme="rough"]').click();
+    expect((await artOf(barBone)).file, 'ROUGH puts a blue house on the bar')
+      .toBe('house-blue-off.png');
+    expect((await artOf(signBone)).file,
+      'and on the post, with the board already up').toBe('house-blue-off.png');
+
+    // THE SPOKEN NAME MOVES WITH THE PICTURE. A screen reader told BONE while
+    // the screen shows a house is the same defect one sense over.
+    await expect(page.locator('#bone .said')).toHaveText('HOUSE');
+    expect((await artOf(signBone)).alt, 'the sign\'s press says what it is')
+      .toContain('HOUSE');
+
+    // AND BACK, because a one-way swap passes every test written forwards.
+    await page.locator('[data-theme-switch] [data-theme="ruff"]').click();
+    expect((await artOf(barBone)).file, 'RUFF takes the bone back').toBe('bone-red.png');
+    expect((await artOf(signBone)).file, 'on both presses').toBe('bone-red.png');
+    await expect(page.locator('#bone .said')).toHaveText('BONE');
+  });
+
+  // THE GLOW IS A SECOND FILE ON ROUGH, and the two seconds it lasts are the
+  // whole of the feedback before the board rises. RUFF's is a CSS filter over
+  // one artwork and has nothing to swap, which is the asymmetry this pins.
+  test('the ROUGH press lights by swapping to its ON artwork, and back',
+    async ({ page }) => {
+      await houseOnOldPage(page);
+      await page.goto('/MODEL.html?theme=rough&mode=night');
+      await expect(page.locator('#readout')).toContainText('walls', { timeout: 5000 });
+      const file = async () => page.locator('#bone img')
+        .evaluate(el => new URL(el.src).pathname.split('/').pop());
+
+      expect(await file(), 'at rest it is the OFF house').toBe('house-blue-off.png');
+      await page.locator('#bone').click();
+      // Read it DURING the glow. The board takes two seconds to rise and the
+      // press is lit for exactly that window, so this asserts inside it
+      // rather than waiting for the board and finding the light already out.
+      await expect.poll(file, { timeout: 1500 })
+        .toBe('house-blue-on.png');
+      // And out again when the board is up.
+      await expect(page.locator('#dt-bone')).toBeVisible({ timeout: 4000 });
+      await expect.poll(file, { timeout: 3000 }).toBe('house-blue-off.png');
+    });
+
+  // THE ARTWORK IS REACHABLE, which a src assertion cannot tell you. A missing
+  // file leaves the attribute exactly as this spec expects and draws a broken
+  // image -- the one failure the swap is most likely to ship with, since the
+  // houses arrive as separate uploads.
+  test('every theme\'s build artwork actually loads', async ({ page }) => {
+    await houseOnOldPage(page);
+    for (const theme of ['ruff', 'rough']) {
+      await page.goto(`/MODEL.html?theme=${theme}&mode=night`);
+      await expect(page.locator('#readout')).toContainText('walls', { timeout: 5000 });
+      const ok = await page.locator('#bone img').evaluate(el => el.complete && el.naturalWidth > 0);
+      expect(ok, `${theme}: the build press's artwork is missing or failed to decode`).toBe(true);
+    }
+    // The ON state too, which no page shows at rest and so no other check
+    // would ever fetch.
+    const lit = await page.evaluate(() => new Promise(ok => {
+      const img = new Image();
+      img.onload = () => ok(img.naturalWidth > 0);
+      img.onerror = () => ok(false);
+      img.src = './assets/house-blue-on.png';
+    }));
+    expect(lit, "ROUGH's lit artwork is missing or failed to decode").toBe(true);
+  });
+
   test('a typo in the URL falls back instead of blanking the page', async ({ page }) => {
     await houseOnOldPage(page);
     const warnings = [];

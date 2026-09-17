@@ -14,21 +14,18 @@
 //
 // So the painter now reads `env.colors.origin`, and the assertion below is
 // that MODEL.html actually supplies it. A page that stopped supplying it would
-// still draw a marker -- the old literal is the fallback -- and would look
+// still draw a marker -- the literal is the fallback -- and would look
 // completely fine on the day skin. Only night shows the difference.
+//
+// THE MARKER IS GOLD NOW (Movie, 17 Sep: "can you make the green target in the
+// model space that GOLD color instead of Green"), and the literal moved with
+// the day value, as the comment in drawOrigin2D says it must. The seam this
+// file guards did not move: it is still "does the page supply the colour", and
+// the statistic below is the old one rotated to the new hue.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
 const BUCKET = 'model-drawing';
-// palette.js's two draw-origin values, hardcoded. Asking the page which colour
-// it used and then checking it used that colour proves nothing.
-const NIGHT_GREEN = [0x6a, 0x9a, 0x57];
-const DAY_GREEN = [0x55, 0x7a, 0x46];
-// Tight enough that the two greens cannot be confused for each other: their
-// green channels differ by 32, so a +/-12 window around each is disjoint. Also
-// disjoint from draw-shape's greens on both skins, which are the only other
-// green ink on the canvas.
-const TOL = 12;
 
 // THE WHOLE CANVAS, BUT NOT AS 3.7 MILLION JSON NUMBERS.
 //
@@ -56,49 +53,61 @@ const canvasPixels = async (page) => {
   return Buffer.from(b64, 'base64');
 };
 
-// CLEARLY GREEN, and everything else on this canvas is not. Grid ink, walls,
-// the page and the floor wash are all grey or near-grey (r ~ g ~ b); the only
-// green the datum can add is the marker. 15 is a wide margin, not a tuned one:
-// both markers clear it by 20-plus (night 48, day 37) and grey ink scores 0.
-const isGreen = (r, g, b) => g - Math.max(r, b) >= 15;
+// CLEARLY GOLD, and everything else on this canvas is not. Grid ink, walls,
+// the page and the floor wash are all grey or near-grey (r ~ g ~ b), which
+// scores 0 here; the only warm ink the datum can add is the marker. 15 is a
+// wide margin, not a tuned one: both markers clear it by 80-plus (night 140,
+// day 96) and grey ink scores 0.
+const isGold = (r, g, b) => Math.min(r, g) - b >= 15;
 
-// THE PEAK GREEN CHANNEL AMONG THE PIXELS THE DATUM ADDED.
+// THE PEAK GOLDNESS AMONG THE PIXELS THE DATUM ADDED.
 //
 // Two decisions here, and the first version of this file got both wrong.
 //
 // DIFFERENCE, not the whole canvas: the datum drives the grid as well as the
 // marker, so differencing datum against no-datum leaves grid ink and marker
-// ink and nothing else. isGreen then drops the grid.
+// ink and nothing else. isGold then drops the grid.
 //
-// GREENNESS, and it took two wrong statistics to get here. Both were the same
-// error -- measuring the anti-aliased halo instead of the stroke.
+// CHROMA, NOT A CHANNEL, and it took two wrong statistics to get here. Both
+// were the same error -- measuring the anti-aliased halo instead of the
+// stroke. Both were measured on the green marker this one replaced, and both
+// would be just as wrong in gold.
 //
-//   1. Counting pixels near each skin's green, and asserting the crossover.
-//      FAILED in the full suite, 44 against 75. #557a46 is almost exactly
-//      #6a9a57 blended a quarter of the way to #1d1f20, so on the night skin
-//      THE TWO GREENS SIT ON THE SAME BLEND RAY between marker and page. A
-//      1.5px stroke is mostly edge, so the halo lands nearer the day green
-//      than the core lands to the night green.
+//   1. Counting pixels near each skin's own value, and asserting the
+//      crossover. FAILED in the full suite, 44 against 75. The day value was
+//      almost exactly the night value blended a quarter of the way to the
+//      night page, so ON THE NIGHT SKIN THE TWO SAT ON THE SAME BLEND RAY
+//      between marker and page. A 1.5px stroke is mostly edge, so the halo
+//      landed nearer the day value than the core landed to the night one.
 //
-//   2. The peak GREEN CHANNEL. Correct on night -- it read 154, exactly
-//      #6a9a57 -- and wrong on day, where it read 187 against a marker whose
-//      green channel is 122. Blending toward a LIGHT page RAISES the green
-//      channel while the pixel still reads green, so the statistic found the
-//      halo again, in the other direction.
+//   2. One channel on its own -- then the green channel, 154 on night and
+//      exactly right, and 187 on day against a marker whose green channel is
+//      122. Blending toward a LIGHT page RAISES a channel while the pixel
+//      still reads as the marker, so the statistic found the halo again, in
+//      the other direction.
 //
-// Greenness -- how far the green channel stands above the other two -- falls
-// monotonically toward zero as any colour blends toward a grey ground, on a
-// dark page and a light one alike. So its maximum is the stroke's own colour
-// whichever skin is up: 48 for #6a9a57, 37 for #557a46. The halo can only
-// reduce it, never inflate it.
-function peakGreen(before, after) {
+// What survives both is CHROMA: how far the marker's strong channels stand
+// above its weak one. Blending toward a grey ground scales such a statistic by
+// the blend factor exactly, whatever the ground's level, because
+// min(t*r+k, t*g+k) - (t*b+k) = t*(min(r,g)-b). So it falls monotonically to
+// zero toward grey on a dark page and a light one alike, and its maximum over
+// stroke plus halo is the stroke's own colour. Measured: 96 for #966b0b, which
+// is that colour exactly, and 140 for #f0b429 against a nominal 139 -- one
+// count of rasterising a 1.5px stroke, not the halo, which can only reduce the
+// statistic and never inflate it.
+//
+// IT WAS GREENNESS -- g - max(r, b) -- UNTIL THE MARKER WENT GOLD. The
+// rotation is the only edit the hue change needed here, because the argument
+// above is about the SHAPE of the statistic and not about which hue it points
+// at: any zero-sum combination of the channels has the same blending law.
+function peakGold(before, after) {
   let peak = -1;
   for (let i = 0; i < after.length; i += 4) {
     if (before[i] === after[i] && before[i + 1] === after[i + 1]
       && before[i + 2] === after[i + 2]) continue;
     const r = after[i], g = after[i + 1], b = after[i + 2];
-    const greenness = g - Math.max(r, b);
-    if (greenness >= 15 && greenness > peak) peak = greenness;
+    const goldness = Math.min(r, g) - b;
+    if (goldness >= 15 && goldness > peak) peak = goldness;
   }
   return peak;
 }
@@ -143,7 +152,7 @@ async function markerOn(page, mode) {
   await loadWith(page, AT_DATUM, mode);
   await expect(page.locator('#readout')).toContainText('datum 0.00,0.00');
   const after = await canvasPixels(page);
-  return { peak: peakGreen(before, after), before, after };
+  return { peak: peakGold(before, after), before, after };
 }
 
 // MEASURED FIRST, THEN HOISTED -- the same finding as
@@ -177,20 +186,20 @@ test.describe('MODEL.html datum marker', () => {
   });
 
   // NO THRESHOLD, and none is needed: this is the same statistic measured on
-  // two skins. draw-origin is #6a9a57 on night and #557a46 on day, so a page
-  // that supplies the colour paints a LIGHTER green on night than on day. A
+  // two skins. draw-origin is #f0b429 on night and #966b0b on day, so a page
+  // that supplies the colour paints a BRIGHTER gold on night than on day. A
   // page that does not supply it falls back to the literal -- which is the day
-  // value -- so both skins paint #557a46 and the two peaks become equal.
+  // value -- so both skins paint #966b0b and the two peaks become equal.
   // Nothing here has to know what the numbers are, only which is bigger.
-  test('the marker is painted in the SKIN\'s green, not the hardcoded one',
+  test('the marker is painted in the SKIN\'s gold, not the hardcoded one',
     async () => {
 
-      expect(night.peak, 'the datum must add green ink to the night canvas')
+      expect(night.peak, 'the datum must add gold ink to the night canvas')
         .toBeGreaterThan(0);
       expect(day.peak, 'and to the day canvas').toBeGreaterThan(0);
       expect(night.peak,
-        `night green ${night.peak} vs day green ${day.peak} -- the night skin's `
-        + 'marker must be the LIGHTER green. Equal peaks mean the page stopped '
+        `night gold ${night.peak} vs day gold ${day.peak} -- the night skin's `
+        + 'marker must be the BRIGHTER gold. Equal peaks mean the page stopped '
         + 'supplying env.colors.origin and both skins fell back to the literal')
         .toBeGreaterThan(day.peak);
     });
@@ -198,16 +207,16 @@ test.describe('MODEL.html datum marker', () => {
   test('no datum, no marker -- the same three states as the grid',
     async () => {
       const { before, after } = night;
-      const green = pixels => {
+      const gold = pixels => {
         let n = 0;
         for (let i = 0; i < pixels.length; i += 4) {
-          if (isGreen(pixels[i], pixels[i + 1], pixels[i + 2])) n += 1;
+          if (isGold(pixels[i], pixels[i + 1], pixels[i + 2])) n += 1;
         }
         return n;
       };
-      expect(green(after),
-        'a datum puts a marker on the canvas; without one the page has no '
-        + 'green ink on it at all')
-        .toBeGreaterThan(green(before));
+      expect(gold(after),
+        'a datum puts a marker on the canvas, and the no-datum render of the '
+        + 'same drawing must carry strictly less gold ink than it does')
+        .toBeGreaterThan(gold(before));
     });
 });
