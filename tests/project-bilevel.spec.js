@@ -220,9 +220,11 @@ test('band 2 schedule reads the split stack', async ({ page }) => {
 // throughout -- a canvas does not care that the words over it are illegible,
 // and neither does a screenshot comparison.
 //
-// Both bands, because the de-collision pass is shared and band 2 exercises the
-// tighter stack: POUR and FILL WALL are 6 3/4" apart in the drawing.
-for (const [label, host] of [['band 1', '#detail-wrap'], ['band 2', '#bilevel-wrap']]) {
+// Band 2 only, now: band 1's word columns are gone (Movie, 17 Sep -- the
+// schedule names every number), so the stack this guarded no longer exists
+// there. Band 2 keeps its margin labels and exercises the tighter stack:
+// POUR and FILL WALL are 6 3/4" apart in the drawing.
+for (const [label, host] of [['band 2', '#bilevel-wrap']]) {
   test(`${label} labels do not overlap each other`, async ({ page }) => {
     await openProject(page);
     await expect(page.locator(`${host} .detail-tag`).first()).toBeAttached();
