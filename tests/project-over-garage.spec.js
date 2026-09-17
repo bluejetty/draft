@@ -74,33 +74,19 @@ test('the pressed family button glows and the one before it does not', async ({ 
     .toHaveAttribute('aria-pressed', 'true');
 });
 
-test('ROOM OVER sits on the garage ceiling line, under the attic label', async ({ page }) => {
+// The margin copy went with the word columns (Movie, 17 Sep: "the (+ROOM
+// BOX) is still there") -- the press now lives on the garage schedule's own
+// row, one door onto the state the family row shares.
+test('ROOM OVER lives on the garage schedule row, and nowhere on the margins', async ({ page }) => {
   await openProject(page);
 
-  const button = page.locator('[data-room-over]');
+  const button = page.locator('[data-room-over-row]');
   await expect(button).toBeVisible();
+  await expect(page.locator('#sched-garage [data-room-over-row]')).toBeVisible();
+  await expect(button).toHaveText('+ ROOM OVER');
 
-  const attic = page.locator('.detail-tag', { hasText: 'ATTIC SPACE' }).first();
-  const atticBox = await attic.boundingBox();
-  const buttonBox = await button.boundingBox();
-  const canvasBox = await page.locator('#detail-canvas').boundingBox();
-
-  // UNDER the attic label, not beside it, and over the drawing rather than
-  // out in the page: "put it under the ATTIC SPACE ... inline with the
-  // garage ceiling line".
-  expect(buttonBox.y).toBeGreaterThan(atticBox.y);
-  expect(buttonBox.y).toBeLessThan(canvasBox.y + canvasBox.height);
-  expect(buttonBox.x).toBeGreaterThanOrEqual(canvasBox.x);
-
-  // The ceiling is the plate the garage wall tops out at, so the button has
-  // to travel when that wall changes. A fixed offset would pass every other
-  // check in this file and be wrong the moment a height is typed.
-  const before = buttonBox.y;
-  const wall = page.locator('[data-detail-input="garageWallHeight"]');
-  await wall.fill(`12'-0"`);
-  await wall.dispatchEvent('change');
-  await expect(page.locator('#status')).toContainText('saved');
-  expect(Math.abs((await button.boundingBox()).y - before)).toBeGreaterThan(2);
+  // The old floating copy is gone, not merely moved.
+  await expect(page.locator('[data-room-over]')).toHaveCount(0);
 });
 
 test('the press adds the 20" package and lands its deck on the 2nd floor', async ({ page }) => {
@@ -110,10 +96,8 @@ test('the press adds the 20" package and lands its deck on the 2nd floor', async
   await page.locator('[data-family-entry="twoStorey-garage"]').click();
   await expect(page.locator('#status')).toContainText(/garage|method/i);
 
-  const button = page.locator('[data-room-over]');
+  const button = page.locator('[data-room-over-row]');
   await expect(button).toHaveAttribute('aria-pressed', 'false');
-  // The attic is what a room replaces, so it is on the drawing until then.
-  await expect(page.locator('.detail-tag', { hasText: 'ATTIC SPACE' }).nth(1)).toBeVisible();
 
   await button.click();
   await expect(button).toHaveAttribute('aria-pressed', 'true');
@@ -152,10 +136,5 @@ test('the press adds the 20" package and lands its deck on the 2nd floor', async
   expect(deckFt).toBeCloseTo(upperDeckFt, 5);
 
   await page.reload();
-  await expect(page.locator('[data-room-over]')).toHaveAttribute('aria-pressed', 'true');
-  // No attic over a room: the garage's label goes with the space it named.
-  // Hidden, not removed -- so this asks whether it is SEEN, which is the
-  // claim; a count would pass on a display:none element still in the page.
-  await expect(page.locator('.detail-tag', { hasText: 'ATTIC SPACE' }).nth(1)).toBeHidden();
-  await expect(page.locator('.detail-tag', { hasText: 'ATTIC SPACE' }).first()).toBeVisible();
+  await expect(page.locator('[data-room-over-row]')).toHaveAttribute('aria-pressed', 'true');
 });

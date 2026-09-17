@@ -702,6 +702,7 @@ if (!window.DraftProjectPage) {
         if (x1 < span) line(x1, y, x1, y - depthFt, 1.5);
       });
       anchors[`floor-${level.id}`] = { x: span * 0.62, y: y - depthFt / 2 };
+      anchors[`sheathing-${level.id}`] = { x: span * 0.4, y: y - (level.sheathingIn / 12) / 2 };
       // A floor with its own wall type draws at its own width; the shared
       // wallThicknessIn is the answer for every level that never split.
       const levelWallFt = (level.wallIn ?? wallIn) / 12;
@@ -769,20 +770,24 @@ if (!window.DraftProjectPage) {
     const chordDropFt = (ROOF_CHORD_IN / 12)
       * Math.hypot(1, roof.pitch / 12);
     line(roofStartX, plateY + riseAt(roofStartX), cut, plateY + riseAt(cut), 2);
-    // ONE UNBROKEN UNDERSIDE, out to the eave. Movie: "the top chord extends
-    // to the eave". It had been drawn in two pieces with a gap at the wall,
-    // which is what the top PLATE does to a rafter -- but this is a truss:
-    // the top chord passes over the wall in one piece and the heel web below
-    // it carries the load down. Breaking it drew a rafter's detail on a
-    // truss.
+    // THE HEEL SIDE CHORD -- SETTLED RULING (Movie, 17 Sep 2026: "BEAUTIFUL
+    // you finally got it !! lock that in !!"). Do not redraw this joint.
+    // A 3 1/2" chord PIECE stands at the wall exterior connecting the bottom
+    // chord to the top chord -- outside face on the wall face, inside face
+    // 3 1/2" in, and the bottom chord's upper line stops against it. The top
+    // chord's underside stays OPEN across those 3 1/2" so the side chord
+    // connects straight into the top chord -- no line across the joint. It
+    // is a truss member, so it draws at chord weight, not wall weight.
+    // Chords only: the truss's internal webs are the truss designer's part
+    // and are deliberately never drawn.
+    const heelWebX = ROOF_CHORD_IN / 12;
     line(roofStartX, plateY + riseAt(roofStartX) - chordDropFt,
+      0, plateY + riseAt(0) - chordDropFt, 1);
+    line(heelWebX, plateY + riseAt(heelWebX) - chordDropFt,
       cut, plateY + riseAt(cut) - chordDropFt, 1);
-    // THE WALL FACE CLOSES THE EAVE. Movie, 16 Sep, marking the eave in pink:
-    // one vertical at the exterior face, soffit up to the top chord's
-    // underside -- the outside of the building carried up to the roof. It
-    // replaces the heel web that used to stand 3 1/2" inside, whose inner
-    // face read as a stray line between the chords.
-    if (eaves) line(0, eaveY, 0, plateY + riseAt(0) - chordDropFt, 2);
+    line(0, plateY, 0, plateY + riseAt(0) - chordDropFt, 1);
+    line(heelWebX, plateY + ROOF_CHORD_IN / 12,
+      heelWebX, plateY + riseAt(heelWebX) - chordDropFt, 1);
     anchors.pitch = { x: cut * 0.45, y: plateY + riseAt(cut * 0.45) + 0.55 };
     // Movie, 4 Sep: the heel reads UNDER the overhang and OVER the 2nd floor
     // wall. Since a label now keeps only its height, the heel sitting at its
@@ -820,14 +825,14 @@ if (!window.DraftProjectPage) {
     if (stepLevel && lowerPlate != null && lowerPlate < plateY) {
       const ext = stepLevel.extentFt;
       line(0, plateY, ext, plateY, 1);
-      line(0, plateY + chordFt, ext, plateY + chordFt, 1);
+      line(heelWebX, plateY + chordFt, ext, plateY + chordFt, 1);
       line(ext, lowerPlate, ext, plateY, 1.5);                  // the drop
       line(ext, lowerPlate, cut, lowerPlate, 1);
       line(ext, lowerPlate + chordFt, cut, lowerPlate + chordFt, 1);
       anchors.ceilingDrop = { x: ext + 0.6, y: (lowerPlate + plateY) / 2 };
     } else {
       line(0, plateY, cut, plateY, 1);
-      line(0, plateY + chordFt, cut, plateY + chordFt, 1);
+      line(heelWebX, plateY + chordFt, cut, plateY + chordFt, 1);
     }
     // BETWEEN THE PITCH AND THE HEEL, by construction. Movie, 4 Sep: "put
     // attic space under pitch over heel". Placed as the midpoint of the two
@@ -906,25 +911,18 @@ if (!window.DraftProjectPage) {
     // is at the top, and down there it has the space to itself.
     anchors.fdnThickness = { x: fdnFt / 2, y: concTopFt - 0.55 };
     const footW = fdn.footingWidthIn / 12, footD = fdn.footingDepthIn / 12;
-    // FLUSH WHERE A GARAGE STANDS. A footing projects past the faces of its
-    // wall (~6" a side), and on a bare exterior that is what draws. With the
-    // attached garage against this face there is no soil there to project
-    // into -- Movie, 16 Sep: "the footing extends over ... but it shouldn't
-    // go over there" -- so the near edge stops at the shared face and only
-    // the interior side keeps its projection.
-    //
-    // Two garages, two ends. Against a GRADE BEAM ('end') the footing truly
-    // stops at the shared face -- the beam hangs off piles above it -- so it
-    // draws its end line. Against a FROST WALL ('merge') the two footings are
-    // one continuous pour at one depth, so no line at all where they meet:
-    // three sides, the way the garage's own footing already runs off into
-    // this one.
+    // ONLY THE FROST WALL MERGES. Against a frost wall the two footings are
+    // one continuous pour at one depth, so the house's stops drawing its own
+    // near side where they meet: three sides. Against a GRADE BEAM there is
+    // no footing next door at all -- the beam hangs off piles above -- so
+    // this footing is a bare exterior end and keeps its full projection.
+    // Movie, 17 Sep: "the footing in the middle is missing the 6\" piece on
+    // the left side".
     const footRight = fdnFt / 2 + footW / 2;
-    if (values.footingFlushLeft) {
+    if (values.footingFlushLeft === 'merge') {
       line(0, fdnBot, footRight, fdnBot, 1.5);
       line(0, fdnBot - footD, footRight, fdnBot - footD, 1.5);
       line(footRight, fdnBot - footD, footRight, fdnBot, 1.5);
-      if (values.footingFlushLeft === 'end') line(0, fdnBot - footD, 0, fdnBot, 1.5);
     } else {
       rect(fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);
     }
@@ -1485,6 +1483,10 @@ if (!window.DraftProjectPage) {
       line(cut - proj, fdnBot, cut, fdnBot, 1.5);                 // projecting top
       line(cut, fdnBot, 0, fdnBot, 1.5);                          // top under the wall
       line(cut - proj, fdnBot - footD, cut - proj, fdnBot, 1.5);  // the far end
+      // THE HOUSE END CLOSES. Movie, 17 Sep, a vertical stroke at the house
+      // face: the garage's footing ENDS where the house foundation stands,
+      // and an open band read as a footing that ran off the page.
+      line(0, fdnBot - footD, 0, fdnBot, 1.5);
       anchors.garageFooting = { x: cut * 0.5, y: fdnBot - footD / 2 };
     }
     // NO FOOTING. Movie, 4 Sep: "why does your garage have a footing?" -- it
@@ -1537,8 +1539,9 @@ if (!window.DraftProjectPage) {
       roofBase = plateY + deckFt;
     } else {
       // Ceiling and bottom chord; the top chord is the roof slope above.
+      // The upper line stops against the heel side chord at the eave end.
       line(0, plateY, cut, plateY, 2);
-      line(0, plateY + chordFt, cut, plateY + chordFt, 1);
+      line(0, plateY + chordFt, cut + chordFt, plateY + chordFt, 1);
       roofBase = plateY;
     }
 
@@ -1557,14 +1560,44 @@ if (!window.DraftProjectPage) {
     const eaveY = roofBase + heelLiftFt;
     const riseAt = x =>
       heelLiftFt + fasciaFt + (overhangFt + (x - cut)) * (pitch / 12);
+    // THE CUT TURNS AT THE BREAK. Movie, 17 Sep, marking the section: near
+    // the house the cut runs ALONG the garage's roof slope, so the chords
+    // read LEVEL into the house wall -- two flat lines -- and only past the
+    // break line does the drawing show the roof's true pitched eave. The
+    // break is a drawing device, not a part: it says the two stretches are
+    // seen from different places along one roof.
+    const breakX = cut * 0.38;
+    // Perpendicular chord thickness, same rule as the house's roof: a chord
+    // is 3 1/2" across itself, so its vertical drop grows with the pitch.
+    const chordDropFt = chordFt * Math.hypot(1, pitch / 12);
     rect(cut - overhangFt - 0.1, eaveY, 0.1, fasciaFt, 1.5);         // fascia
     line(cut - overhangFt, eaveY, cut, eaveY, 1);                    // soffit
     line(cut - overhangFt, eaveY + fasciaFt,
-      0, roofBase + riseAt(0), 2);                                   // top chord
-    // The eave face: the one vertical at the wall's outside, soffit up to
-    // the top chord's underside -- the same clean eave the house draws.
-    line(cut, eaveY, cut, roofBase + riseAt(cut) - chordFt, 2);
-    const topY = roofBase + riseAt(0);
+      breakX, roofBase + riseAt(breakX), 2);                         // top chord
+    // THE HEEL SIDE CHORD, same member as the house eave's -- the SETTLED
+    // RULING there (Movie, 17 Sep 2026) governs this joint too: a 3 1/2"
+    // chord piece at the wall exterior connecting bottom and top chords,
+    // drawn at chord weight, the top chord's underside OPEN across those
+    // 3 1/2" so the side chord connects straight into the top chord -- no
+    // line across the joint, and no internal webs (the truss designer's
+    // part).
+    line(cut - overhangFt, eaveY + fasciaFt - chordDropFt,
+      cut, roofBase + riseAt(cut) - chordDropFt, 1);
+    line(cut + chordFt, roofBase + riseAt(cut + chordFt) - chordDropFt,
+      breakX, roofBase + riseAt(breakX) - chordDropFt, 1);
+    line(cut, eaveY, cut, roofBase + riseAt(cut) - chordDropFt, 1);
+    line(cut + chordFt, roofBase + chordFt,
+      cut + chordFt, roofBase + riseAt(cut + chordFt) - chordDropFt, 1);
+    // The level stretch: the same chord pair carried flat into the house.
+    const flatY = roofBase + riseAt(breakX);
+    line(breakX, flatY, 0, flatY, 2);
+    line(breakX, flatY - chordFt, 0, flatY - chordFt, 1);
+    // THE DOUBLE BREAK, through everything the cut goes through at this
+    // station: roof, wall cavity, beam or frost wall, footing.
+    const breakBot = g.houseFootingTopFt - g.footingDepthIn / 12 - 0.3;
+    parts.push({ kind: 'break', x: breakX, y1: breakBot, y2: flatY + 0.35 });
+    parts.push({ kind: 'break', x: breakX + 0.35, y1: breakBot, y2: flatY + 0.35 });
+    const topY = flatY;
     if (!g.roomOver) {
       anchors.garageCavity = { x: cut * 0.42,
         y: plateY + (chordFt + riseAt(cut * 0.42) - chordFt) / 2 };

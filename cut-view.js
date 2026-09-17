@@ -90,6 +90,9 @@ if (!window.DraftCutView) {
   // back up to the field.
   const GARAGE_EDGE_DEPTH_IN = 12;
   const ROOF_FASCIA_IN = 5.5;
+  // A truss chord in section: 3 1/2" measured ACROSS the member, so the
+  // vertical drop under a sloped top chord grows with the pitch.
+  const ROOF_CHORD_IN = 3.5;
 
   // Top of a frost-wall garage's concrete, on the section's foundation
   // datum. See GARAGE_SILL_BELOW_HOUSE_FT for the rule.
@@ -374,9 +377,21 @@ if (!window.DraftCutView) {
       // sine of the crossing angle, capped so near-parallel walls stay sane.
       const cutLen = Math.hypot(b.x - a.x, b.z - a.z);
       const sin = Math.abs(denom) / (cutLen * wallLen || 1);
-      const width = (type ? type.totalIn : 5.5) / 12 / Math.max(sin, 0.35);
+      const totalFt = (type ? type.totalIn : 5.5) / 12;
+      const width = totalFt / Math.max(sin, 0.35);
+      // The stored line is the wall's REFERENCE LINE, not its centre: an
+      // exterior wall keeps the outline on its exterior face (refLine
+      // 'left'/'right', render-2d.js's rule), so the band centre sits half
+      // the thickness inside it, along the wall's own +normal (-dz, dx).
+      const nx = -(d.z - c.z) / (wallLen || 1), nz = (d.x - c.x) / (wallLen || 1);
+      const axisDotN = axis.x * nx + axis.z * nz;
+      const ref = wall.refLine || 'center';
+      const acrossMid = ref === 'left' ? totalFt / 2
+        : ref === 'right' ? -totalFt / 2 : 0;
+      const uShift = acrossMid / ((axisDotN < 0 ? -1 : 1)
+        * Math.max(Math.abs(axisDotN), 0.35));
       crossings.push({
-        wall, u: px * axis.x + pz * axis.z,
+        wall, u: px * axis.x + pz * axis.z + uShift,
         width,
         alongWall: t * wallLen,
         garage: garageFor(wall),
@@ -531,7 +546,10 @@ if (!window.DraftCutView) {
             .map(pt => ({ u: pt.u, rise: base + fasciaFt + pt.rise }));
           if (profile.length < 2) return;
           profiles.push(profile);
-          roofChords.push({ u0: profile[0].u, u1: profile[profile.length - 1].u, elev: base });
+          roofChords.push({
+            u0: profile[0].u, u1: profile[profile.length - 1].u, elev: base,
+            profile, overhang: Number(roof.overhang) || 0,
+          });
         });
       geo().profileEnvelope(profiles).forEach(pt => {
         roofSamples.push({ u: pt.u, elev: pt.rise });
@@ -755,12 +773,93 @@ if (!window.DraftCutView) {
       });
       if (pen) ctx.lineTo(X(pen.u), Y(pen.elev - fasciaFt));
       ctx.stroke();
-      // Bottom chord: each roof's flat ceiling line at its own plate.
+      // The truss in section, chords only -- the settled ruling (Movie,
+      // 17 Sep 2026, on the PROJECT detail: "lock that in !!"), drawn with
+      // the same joints here. The plate line doubles as soffit and ceiling;
+      // a 3 1/2" bottom chord band sits over it between the heels; the top
+      // chord's underside follows the slope 3 1/2" perpendicular below the
+      // surface and opens across each heel's width, so the side chord piece
+      // at the wall face connects straight into the top chord -- no line
+      // across the joint. The truss's internal webs are the truss designer's
+      // part and are deliberately never drawn.
+      const chordFt = ROOF_CHORD_IN / 12;
       ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
       ctx.beginPath();
       roofChords.forEach(chord => {
         ctx.moveTo(X(chord.u0), Y(chord.elev));
         ctx.lineTo(X(chord.u1), Y(chord.elev));
+        const prof = chord.profile;
+        // An end is an EAVE when the surface lands on the fascia top there;
+        // the bearing wall stands the overhang inside it, and the heel's two
+        // faces rise from the plate and the bottom chord to the underside.
+        const eaveAt = pt => Math.abs(pt.rise - (chord.elev + fasciaFt)) < 0.05;
+        const first = prof[0], last = prof[prof.length - 1];
+        const span = last.u - first.u;
+        const hasHeel = chord.overhang > 0.05
+          && span > 2 * (chord.overhang + chordFt);
+        const leftEave = hasHeel && eaveAt(first);
+        const rightEave = hasHeel && eaveAt(last);
+        const underAt = u => {
+          for (let i = 1; i < prof.length; i++) {
+            if (u <= prof[i].u + 1e-9) {
+              const a = prof[i - 1], b = prof[i];
+              const m = b.u - a.u > 1e-9 ? (b.rise - a.rise) / (b.u - a.u) : 0;
+              return a.rise + (u - a.u) * m - chordFt * Math.hypot(1, m);
+            }
+          }
+          return last.rise - chordFt;
+        };
+        // Crisp verticals: a 1px translucent line astride a pixel boundary
+        // antialiases into two half-strength columns that read as concrete
+        // gray, so each heel face snaps onto a pixel centre.
+        const crisp = px => Math.round(px) + 0.5;
+        const heelFace = (u, footY) => {
+          const px = crisp(X(u));
+          ctx.moveTo(px, Y(footY));
+          ctx.lineTo(px, Y(underAt(u)));
+        };
+        const gaps = [];
+        if (leftEave) {
+          const wallU = first.u + chord.overhang;
+          gaps.push([wallU, wallU + chordFt]);
+          heelFace(wallU, chord.elev);
+          heelFace(wallU + chordFt, chord.elev + chordFt);
+        }
+        if (rightEave) {
+          const wallU = last.u - chord.overhang;
+          gaps.push([wallU - chordFt, wallU]);
+          heelFace(wallU, chord.elev);
+          heelFace(wallU - chordFt, chord.elev + chordFt);
+        }
+        // The bottom chord's upper line stops against the heels.
+        const bcLo = leftEave ? first.u + chord.overhang + chordFt : first.u;
+        const bcHi = rightEave ? last.u - chord.overhang - chordFt : last.u;
+        if (bcHi > bcLo) {
+          ctx.moveTo(X(bcLo), Y(chord.elev + chordFt));
+          ctx.lineTo(X(bcHi), Y(chord.elev + chordFt));
+        }
+        // The top chord's underside, segment by segment, open over the heels.
+        for (let i = 1; i < prof.length; i++) {
+          const a = prof[i - 1], b = prof[i];
+          if (b.u - a.u < 1e-9) continue;
+          const m = (b.rise - a.rise) / (b.u - a.u);
+          const drop = chordFt * Math.hypot(1, m);
+          let spans = [[a.u, b.u]];
+          gaps.forEach(([g0, g1]) => {
+            spans = spans.flatMap(([s0, s1]) => {
+              const parts = [];
+              if (s0 < g0) parts.push([s0, Math.min(s1, g0)]);
+              if (s1 > g1) parts.push([Math.max(s0, g1), s1]);
+              return parts;
+            });
+          });
+          const eAt = u => a.rise + (u - a.u) * m - drop;
+          spans.forEach(([s0, s1]) => {
+            if (s1 - s0 < 1e-6) return;
+            ctx.moveTo(X(s0), Y(eAt(s0)));
+            ctx.lineTo(X(s1), Y(eAt(s1)));
+          });
+        }
       });
       ctx.stroke();
     }

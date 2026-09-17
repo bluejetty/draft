@@ -35,26 +35,22 @@ test('a build-default edit redraws the detail — the anchors move with the part
   await h.openModel(page);
   await openProjectPage(page);
 
-  // MEASURE THE LABEL, NOT THE BOX. The numbers moved off the drawing into a
-  // schedule beside it, so an input sits in a fixed row and cannot travel --
-  // asserting on the box here would fail for the layout rather than for the
-  // painter, and pinning it to zero travel would then pass with the redraw
-  // removed entirely. What still rides the anchor is the grey part label, so
-  // that is what this measures. Same claim as before: change a number and the
-  // drawing re-anchors.
+  // MEASURE WHAT STILL RIDES AN ANCHOR. The word columns are gone (Movie,
+  // 17 Sep): the schedule names every number, so no grey margin label is
+  // left to measure -- except the beside-the-line annotations, and (PILE)
+  // rides the garage pile, which hangs off the house footing. Same claim as
+  // before: change a number and the drawing re-anchors.
   const tagY = async name => (await page
     .locator(`.detail-tag`, { hasText: name }).first().boundingBox()).y;
-  const fdnBefore = await tagY('FDN WALL HT');
-  const footingBefore = await tagY('FTG DEPTH');
+  const pileBefore = await tagY('(PILE)');
 
-  // A much shorter foundation wall: its own anchor rides up its mid-height
-  // and the footing below it climbs too. The detail is drawn small beside the
+  // A much shorter foundation wall: the footing climbs and the garage's
+  // grade beam and piles climb with it. The detail is drawn small beside the
   // section table, so a few pixels of travel is the whole four feet.
   await commitDetail(page, 'fdnHeight', `4'-0"`);
   await expect(page.locator('#status')).toContainText('saved');
 
-  expect(Math.abs(await tagY('FDN WALL HT') - fdnBefore)).toBeGreaterThan(2);
-  expect(Math.abs(await tagY('FTG DEPTH') - footingBefore)).toBeGreaterThan(2);
+  expect(Math.abs(await tagY('(PILE)') - pileBefore)).toBeGreaterThan(2);
 
   // Garbage never sticks: the box snaps back to the stored number.
   await commitDetail(page, 'pitch', 'steep');

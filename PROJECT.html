@@ -1347,16 +1347,13 @@
           return false;
         },
       });
-      // PITCH / HEEL / FASCIA / OVERHANG, in that order. Movie, 4 Sep:
-      // "order them PITCH :12 / HEEL / FASCIA / OVERHANG in that order for
-      // the identification titles and for the measurement input text area",
-      // "move heel and fascia up", "on both house and garage".
-      //
-      // The two derived ones sat at the bottom with the other chips, which
-      // grouped them by HOW they are produced rather than by what they
+      // PITCH / FASCIA / OVERHANG / HEEL, in that order — the order the eye
+      // walks the eave detail coming down the roof plane (Movie's 17 Sep
+      // markup supersedes the 4 Sep PITCH/HEEL/FASCIA/OVERHANG row order).
+      // The two derived ones used to sit at the bottom with the other chips,
+      // which grouped them by HOW they are produced rather than by what they
       // describe. A roof is four numbers and they belong together, typed or
-      // not. The drawing's labels take the same order below.
-      addChip('heel', 'HEEL', () => fmt.formatArchitecturalInches(roofHeelIn()));
+      // not.
       addChip('fascia', 'FASCIA', () => inchesOnly(ROOF_FASCIA_IN));
       addInput('overhang', 'OVERHANG', {
         name: 'overhang',
@@ -1367,6 +1364,7 @@
           return false;
         },
       });
+      addChip('heel', 'HEEL', () => fmt.formatArchitecturalInches(roofHeelIn()));
       // TOP DOWN, like the drawing. floorLevels runs bottom-up -- MAIN FL then
       // 2ND FL -- which put the main floor's rows ABOVE the second floor's in
       // a schedule sitting beside a section where the second floor is higher.
@@ -1379,15 +1377,6 @@
           set: text => {
             const value = parseFtIn(text);
             if (value != null) { setAssembly(level.id, 'wallHeightFt', value); return true; }
-            return false;
-          },
-        });
-        addInput(`floor-${level.id}`, `${level.name} JST`, {
-          name: `floor-${level.id}`,
-          get: () => inchesOnly(assembly(level.id).joistDepthIn),
-          set: text => {
-            const value = parseInches(text);
-            if (value != null) { setAssembly(level.id, 'joistDepthIn', value); return true; }
             return false;
           },
         });
@@ -1413,20 +1402,24 @@
             return true;
           },
         });
-      });
-      // THE FOUNDATION WALL TYPE, a choice rather than an inference. It sits
-      // above the attachment rows because the ICF answer gates them.
-      addInput('fdnWallType', 'FDN WALL TYPE', {
-        name: 'fdnWallType',
-        kind: 'choice',
-        choices: () => FOUNDATION_CHOICES
-          .map(id => ({ id, label: WALL_TYPE_VIEW[id].label })),
-        get: fdnWallType,
-        set: value => {
-          if (!FOUNDATION_CHOICES.includes(value)) return false;
-          setAssembly(1, 'wallType', value);
-          return true;
-        },
+        addInput(`sheathing-${level.id}`, `${level.name} SHEATHING`, {
+          name: `sheathing-${level.id}`,
+          get: () => inchesOnly(assembly(level.id).sheathingIn),
+          set: text => {
+            const value = parseInches(text);
+            if (value != null && value <= 3) { setAssembly(level.id, 'sheathingIn', value); return true; }
+            return false;
+          },
+        });
+        addInput(`floor-${level.id}`, `${level.name} JST`, {
+          name: `floor-${level.id}`,
+          get: () => inchesOnly(assembly(level.id).joistDepthIn),
+          set: text => {
+            const value = parseInches(text);
+            if (value != null) { setAssembly(level.id, 'joistDepthIn', value); return true; }
+            return false;
+          },
+        });
       });
       // SILL OR LADDER, and ICF gets no choice. Movie, 4 Sep: "it will work
       // for the 8" concrete wall but the sill plate is the only option for
@@ -1468,6 +1461,23 @@
           return true;
         },
       });
+      // THE FOUNDATION WALL TYPE, a choice rather than an inference. Its row
+      // follows the attachment pair the way the section reads — attachment on
+      // the foundation top, then the wall the attachment sits on — and its
+      // derived thickness chip rides directly under it.
+      addInput('fdnWallType', 'FDN WALL TYPE', {
+        name: 'fdnWallType',
+        kind: 'choice',
+        choices: () => FOUNDATION_CHOICES
+          .map(id => ({ id, label: WALL_TYPE_VIEW[id].label })),
+        get: fdnWallType,
+        set: value => {
+          if (!FOUNDATION_CHOICES.includes(value)) return false;
+          setAssembly(1, 'wallType', value);
+          return true;
+        },
+      });
+      addChip('fdnThickness', 'FDN', () => inchesOnly(fdnThicknessIn()));
       addInput('fdnHeight', 'FDN WALL HT', {
         name: 'fdnHeight',
         get: () => ftIn(housePourFt()),
@@ -1505,7 +1515,6 @@
           return false;
         },
       });
-      addChip('fdnThickness', 'FDN', () => inchesOnly(fdnThicknessIn()));
       addInput('grade', 'GRADE OFF FDN TOP', {
         name: 'grade',
         get: () => signedFtIn(gradeOffsetFt()),
@@ -1706,41 +1715,17 @@
       });
 
       // ── THE STOREY OVER THE GARAGE ──────────────────────────────────────
-      // Movie, 15 Sep: "put it under the ATTIC SPACE, make it similar text
-      // but make an obvious BUTTON you can press. put it inline with the
-      // garage ceiling line and when they press it it will cause the floor
-      // thickness of default 20" to be added to the 2nd floor (19.25" plus
-      // 3/4" sheathing which will line up with the other 2nd fl sheathing)".
+      // ONE DOOR, IN THE SCHEDULE. The press writes the wall the alignment
+      // needs, says what it wrote, and leaves it typeable -- Movie, 15 Sep:
+      // "when they press it it will cause the floor thickness of default
+      // 20\" to be added to the 2nd floor (19.25\" plus 3/4\" sheathing
+      // which will line up with the other 2nd fl sheathing)". The press
+      // lives on the garageRoomOver schedule row; the floating copy that
+      // rode the ceiling anchor went with the word columns.
       //
-      // A CONTROL ON THE DRAWING, not in a schedule, because what it does is
-      // spatial: the thing it replaces is the ATTIC SPACE label sitting in
-      // the same cavity. It rides the section's own ceiling anchor, so it
-      // cannot drift off the line it names -- and it moves that line itself,
-      // which is the point.
-      //
-      // THE PRESS MOVES A TYPED NUMBER rather than switching the section to a
-      // derived one. The garage wall has to change for the two decks to meet,
-      // and a wall this page silently derived would be a height the drafter
-      // can see in the schedule and cannot edit. So the press writes the wall
-      // the alignment needs, says what it wrote, and leaves it typeable.
-      const overGarageButton = document.createElement('button');
-      overGarageButton.type = 'button';
-      overGarageButton.className = 'detail-button';
-      overGarageButton.dataset.roomOver = '';
-      overGarageButton.disabled = readOnly;
-      wrap.appendChild(overGarageButton);
-      const syncOverGarageButton = () => {
-        const on = roomOver();
-        overGarageButton.textContent = on ? 'ROOM OVER ✓' : '+ ROOM OVER';
-        overGarageButton.setAttribute('aria-pressed', on ? 'true' : 'false');
-        overGarageButton.setAttribute('aria-label', on
-          ? 'Remove the storey over the garage'
-          : 'Add a storey over the garage');
-      };
-      syncOverGarageButton();
-      // Shared with the family buttons below: pressing 2 STOREY + GARAGE +
-      // ROOM OVER and pressing the one on the drawing are two doors onto the
-      // same state, and a second copy of this is how they come to disagree.
+      // Shared with the family buttons below: the schedule row and the
+      // family row are two doors onto the same state, and a second copy of
+      // this is how they come to disagree.
       const applyGaragePlan = plan => {
         const turningOn = plan === 'attachedRoomOver' && !roomOver();
         garagePlan = plan;
@@ -1762,19 +1747,12 @@
               + 'floor yet, so the garage wall was left where it is.';
           }
         }
-        syncOverGarageButton();
         syncFamilyRow();
         save(note);
         repaint();
         fillZones();
         fillTable();
       };
-      overGarageButton.addEventListener('click', () => {
-        if (readOnly) return;
-        applyGaragePlan(roomOver() ? 'attached' : 'attachedRoomOver');
-      });
-      controlEls.set('garageCeiling',
-        { control: { kind: 'button' }, el: overGarageButton, tag: overGarageButton });
 
       // ── THE FAMILY ROW ──────────────────────────────────────────────────
       // Movie, 15 Sep: the card is BUNGALOWS and under the title goes "all
@@ -1894,6 +1872,21 @@
           controlEls.set(control.key, { control, el: chip, tag, host: wrap });
         }
       });
+
+      // THE SCHEDULE WALKS THE SECTION. Movie's 17 Sep markup reads the rows
+      // top-down in the order the parts stack, a head starting the roof, each
+      // storey and the foundation.
+      const insertHead = (key, text) => {
+        const row = houseSched.querySelector(`[data-sched-row="${key}"]`);
+        if (!row) return;
+        const head = document.createElement('div');
+        head.className = 'sched-head';
+        head.textContent = text;
+        houseSched.insertBefore(head, row);
+      };
+      insertHead('pitch', 'Roof');
+      [...floorLevels].reverse().forEach(level => insertHead(`wallHeight-${level.id}`, level.name));
+      insertHead('attachment', 'Foundation');
 
       // ── The attached garage's own numbers ────────────────────────────────
       //
@@ -2401,13 +2394,14 @@
             tag.style.transform = 'translate(-100%,-50%)';
             return;
           }
-          const garageSide = key.startsWith('garage');
-          tag.style.left = garageSide
-            ? `${Math.max(2, left - GREY_COL)}px` : `${right + GREY_GAP}px`;
-          tag.style.top = `${at.y}px`;
-          tag.style.transform = 'translate(0,-50%)';
-          if (control.kind === 'annotation') return;   // the label IS the whole control
-          if (control.kind === 'button') return;       // ditto: it is its own label
+          // THE WORD COLUMNS ARE GONE. Movie, 17 Sep, boxing both grey
+          // columns in pink on the markup: the schedule already names every
+          // number, so the margin words said everything twice. The margin
+          // + ROOM OVER went with them ("the (+ROOM BOX) is still there") --
+          // the schedule row is the same press. Only an annotation that sits
+          // BESIDE its own line (handled above) still draws on the margins.
+          tag.style.display = 'none';
+          if (control.kind === 'annotation') return;
           if (control.kind === 'choice' && control.choices) {
             // OPTIONS ARE REBUILT, NOT BUILT ONCE. The ICF gate depends on the
             // wall type, which the drafter can change after the dropdown was
