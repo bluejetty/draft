@@ -126,14 +126,24 @@ const MUTANTS = [
     // same defect and leaves the rest of the object intact.
     find: "      { ...ctx, mode: T.MODE.TOY, welds: [[wall.id]],",
     with: "      { ...ctx, mode: T.MODE.TOY,",
-    test: 'leave the next wall on an angle' },
+    // GREP CORRECTED: the title reads 'never LEAVES the next wall on an
+    // angle'. One conjugation was the whole defect -- 'leave' is not a
+    // substring of 'leaves ', so -g matched nothing, playwright ran nothing
+    // and exited non-zero, and all three of these scored KILLED off an empty
+    // run. This file's 16/16 was three kills lighter than it read.
+    test: 'never leaves the next wall on an angle' },
   { file: 'toy-constraints.js',
     name: 'NOTHING CHECKS THE SHAPE AFTER THE MOVE, so the diagonal comes back',
     // RE-POINTED. wouldAngle gained a `ctx.detached` argument and the
     // statement wrapped onto two lines.
     find: "      const angled = mode === MODE.TOY\n        ? wouldAngle(wall, groupIds, walls, d, ctx.detached) : null;",
     with: '      const angled = null;',
-    test: 'leave the next wall on an angle' },
+    // GREP CORRECTED: the title reads 'never LEAVES the next wall on an
+    // angle'. One conjugation was the whole defect -- 'leave' is not a
+    // substring of 'leaves ', so -g matched nothing, playwright ran nothing
+    // and exited non-zero, and all three of these scored KILLED off an empty
+    // run. This file's 16/16 was three kills lighter than it read.
+    test: 'never leaves the next wall on an angle' },
   { file: 'toy-constraints.js',
     name: 'THE ANGLE RULE LEAKS INTO DRAFTING, where off-axis is the freedom',
     // RE-POINTED, as directly above.
@@ -147,7 +157,12 @@ const MUTANTS = [
     name: 'the refusal is renamed to a distance problem it is not',
     find: '      if (blocked.reason !== REASON.WOULD_ANGLE_NEIGHBOUR) {',
     with: '      if (true) {',
-    test: 'leave the next wall on an angle' },
+    // GREP CORRECTED: the title reads 'never LEAVES the next wall on an
+    // angle'. One conjugation was the whole defect -- 'leave' is not a
+    // substring of 'leaves ', so -g matched nothing, playwright ran nothing
+    // and exited non-zero, and all three of these scored KILLED off an empty
+    // run. This file's 16/16 was three kills lighter than it read.
+    test: 'never leaves the next wall on an angle' },
   { file: 'toy-constraints.js',
     name: 'THE ANGLE TEST IS INVERTED: square neighbours refuse, bent ones pass',
     // Replaces the "is the skip reachable" question, which the gate answered:

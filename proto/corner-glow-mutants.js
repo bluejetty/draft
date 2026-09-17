@@ -40,8 +40,13 @@ const MUTANTS = [
 
   { file: 'MODEL.html',
     name: 'the ring offers a grab the drag would refuse: an unselected wall lights',
-    find: '    const selectedSeg = selectedWall();\n    if (!selectedSeg || !walls().includes(selectedSeg)) return null;',
-    with: '    const selectedSeg = selectedWall() || walls()[0];\n    if (!selectedSeg || !walls().includes(selectedSeg)) return null;',
+    // DISAMBIGUATED. Those two lines occur TWICE in MODEL.html -- here in the
+    // corner/ring path, and again in wallBodyAt (:6341). replace() takes the
+    // first, so this happened to be hitting the right one; a reordering would
+    // have moved it to the body grab silently, still reporting a clean result.
+    // The third line is what tells them apart.
+    find: "    const selectedSeg = selectedWall();\n    if (!selectedSeg || !walls().includes(selectedSeg)) return null;\n    const G = window.DraftGeometry2D;",
+    with: "    const selectedSeg = selectedWall() || walls()[0];\n    if (!selectedSeg || !walls().includes(selectedSeg)) return null;\n    const G = window.DraftGeometry2D;",
     test: 'UNSELECTED wall gets no ring' },
 ];
 

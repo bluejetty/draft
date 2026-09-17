@@ -53,7 +53,12 @@ const MUTANTS = [
     // RE-AIMED: the second-bone check starts its garage after the house is a
     // finished bone, so the pending slot is empty and this never runs against
     // it. The unfinished-run check is the one that can see it.
-    test: 'does not adopt an unfinished bone' },
+    // GREP CORRECTED. 'does not adopt an unfinished bone' is a PARAPHRASE of
+    // the test, not its title, and matched nothing. A -g that matches nothing
+    // makes playwright exit non-zero, which this runner reads as 'failed' and
+    // scores as KILLED -- so this mutation has been reporting itself caught by
+    // a run that executed no tests at all.
+    test: 'an unfinished run refuses a new one' },
   { file: 'MODEL.html',
     name: 'the bone claims a master it never came from',
     // RE-POINTED. The id is no longer minted here -- it is assigned when the
