@@ -34,12 +34,12 @@ const MUTANTS = [
       + '    font-family: var(--font-ui); font-size:9px; font-weight:600;\n'
       + '    letter-spacing:0.05em; text-transform:uppercase;\n'
       + '    display:inline-flex; align-items:center; justify-content:center;\n'
-      + '    min-width:64px; padding:2px 6px; cursor:pointer;',
+      + '    min-width:56px; padding:2px 6px; cursor:pointer;',
     with: '  #units-corner button {\n'
       + '    font-family: var(--font-ui); font-size:9px; font-weight:600;\n'
       + '    letter-spacing:0.05em; text-transform:uppercase;\n'
       + '    display:inline-flex; align-items:center; justify-content:center;\n'
-      + '    min-width:64px; padding:14px 6px; margin:-12px 0; cursor:pointer;' },
+      + '    min-width:56px; padding:14px 6px; margin:-12px 0; cursor:pointer;' },
 
   { file: 'MODEL.html',
     name: 'METRIC alone reaches up over IMPERIAL — the stylesheet still says '
