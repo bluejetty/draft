@@ -239,10 +239,16 @@ check('the section is cut 4 ft into the wall', P => [P.CUT_DEPTH_FT, 4]);
 // the name used to say. Then the sill lands where the slab belongs, the whole
 // garage rises 5 1/2", and every part of it still draws in the right order --
 // which is exactly the kind of wrong that looks right.
+//
+// Found by the plate's own 1 1/2", not as the top of everything: the garage
+// draws whole now (16 Sep), so its roof stands above the sill and the
+// highest rect is a fascia board.
 check('the garage offset is the SILL TOP, with the concrete a sill plate under it', P => {
-  const top = Math.max(...P.buildGarageSection(GARAGE).parts
-    .filter(p => p.kind === 'rect').map(p => p.y + p.h));
-  return [top, GARAGE.garage.sillOffsetFt];
+  const rs = P.buildGarageSection(GARAGE).parts.filter(p => p.kind === 'rect');
+  const plates = rs.filter(p => near(p.h, P.SILL_PLATE_IN / 12));
+  if (plates.length !== 1) return [`${plates.length} sill-plate bands`, 'exactly one'];
+  const concrete = rs.some(p => near(p.y + p.h, plates[0].y) && p.h > plates[0].h);
+  return [concrete && near(plates[0].y + plates[0].h, GARAGE.garage.sillOffsetFt), true];
 });
 // THE SLAB IS 5 1/2" DOWN, AND IT IS NOT DRAWN. Both halves are the check,
 // because they arrived together: this used to read the slab's own lines at
@@ -271,9 +277,11 @@ check('and no line is drawn between the sill and the beam soffit', P => {
 // over the render: two hairlines beside the break read as a stray, where
 // everything else down there -- beam, sill, footing -- is a closed band. The
 // hatch is what says the cut goes THROUGH it, and it is the only thing on
-// this drawing that does, so it is worth pinning that it exists, spans the
-// half width the cut leaves, and runs beam soffit to footing bottom.
-check('the pile is hatched over its half width, soffit to footing bottom', P => {
+// this drawing that does, so it is worth pinning that it exists and runs
+// beam soffit to footing bottom. WHOLE piles now: the garage draws complete
+// to its own end wall, so nothing cuts through a shaft any more and the
+// hatch spans the full 10" rather than the half a break used to leave.
+check('the pile is hatched over its whole width, soffit to footing bottom', P => {
   const s = garage(P);
   const fill = s.parts.filter(p => p.kind === 'hatch');
   const soffit = GARAGE.garage.sillOffsetFt - P.SILL_PLATE_IN / 12
@@ -283,7 +291,7 @@ check('the pile is hatched over its half width, soffit to footing bottom', P => 
   return [shaft && [
     Math.round(shaft.w * 12 * 16) / 16,
     Math.round((shaft.y + shaft.h - soffit) * 16) / 16,
-  ].join(','), '5,0'];
+  ].join(','), '10,0'];
 });
 // AND THE VOID FORM IS TOO, because it is the same pour's formwork read at
 // the same scale: a 4" band outlined and left white is a gap, and a gap under
@@ -583,21 +591,25 @@ check('the roof stands the reported heel above the plate at the wall face', P =>
   const want = P.roofHeelIn(R.fasciaIn, R.overhangFt, R.pitch) / 12;
   return [chord ? near(atX(chord, 0) - plateY, want) : 'no top chord', true];
 });
-// Movie, 4 Sep: "the purple line thats the 3 1/2\" from the outside to connect
-// the top and bottom chords". A 2x4 standing at the wall with its outer face
-// flush with the outside, so what shows in section is its INNER face. Pinned
-// by WHERE IT LANDS -- top of the bottom chord up to the underside of the top
-// chord -- and not by a length, because the length grows with the pitch and a
-// number here would only be true at 4:12.
-check('the heel web stands 3 1/2\" in and meets both chords', P => {
+// THE EAVE CLOSES ON THE WALL FACE, NOT A WEB 3 1/2" IN. Movie, 16 Sep,
+// marking the eave: "the lines i deleted are the 3.5 section near exterior of
+// top and bottom chord inside lines" -- the heel web's inner face read as a
+// stray between the chords -- and the line he added (pink-marked) is one
+// vertical at the building's outside, soffit up to the top chord's underside.
+// This reverses the 4 Sep purple-line ruling this check used to pin. Located
+// by WHERE IT LANDS rather than by a length, because the drop to the chord's
+// underside grows with the pitch and a number here would only be true at 4:12.
+check('the eave closes on the wall face, with no web 3 1/2\" in', P => {
   const s = section(P);
   const plateY = (97.125 / 12) * 2 + (9.25 + 0.75) / 12;
   const chordFt = P.ROOF_CHORD_IN / 12;
   const webs = s.parts.filter(p => p.kind === 'line' && near(p.x1, chordFt) && near(p.x2, chordFt));
+  if (webs.length !== 0) return [`${webs.length} verticals 3 1/2" in from the outside`, 'none'];
   const under = topChordUnder(s);
-  if (webs.length !== 1) return [`${webs.length} verticals 3 1/2" in from the outside`, 'exactly one'];
-  if (!under) return ['no top chord underside to meet', 'exactly one'];
-  return [near(webs[0].y1, plateY + chordFt) && near(webs[0].y2, atX(under, chordFt)), true];
+  if (!under) return ['no top chord underside to meet', 'one wall face'];
+  const faces = s.parts.filter(p => p.kind === 'line' && near(p.x1, 0) && near(p.x2, 0)
+    && near(Math.max(p.y1, p.y2), atX(under, 0)));
+  return [faces.length === 1 && near(Math.min(faces[0].y1, faces[0].y2), plateY), true];
 });
 // THE OVERRIDE, WITH THE CONTROL THAT MUST MOVE BESIDE IT. Movie, 5 Sep:
 // the heel is calculated, and typeable. A check that only proved the derived
@@ -762,15 +774,15 @@ const MUTATIONS = [
   // as a failure here.
   ['the mod bilevel loses its default (falls back to the house)',
     s => s.replace('    modifiedBilevel: SPLIT_BASE,\n', '')],
-  ['the heel web goes back on the wall face (the line Movie struck out)',
-    s => s.replace('line(ROOF_CHORD_IN / 12, plateY + ROOF_CHORD_IN / 12,\n      ROOF_CHORD_IN / 12, plateY + riseAt(ROOF_CHORD_IN / 12) - chordDropFt, 1);',
-      'line(0, plateY + ROOF_CHORD_IN / 12,\n      0, plateY + riseAt(0) - chordDropFt, 1);')],
+  ['the heel web comes back 3 1/2" in (the lines Movie struck out, 16 Sep)',
+    s => s.replace('if (eaves) line(0, eaveY, 0, plateY + riseAt(0) - chordDropFt, 2);',
+      'if (eaves) line(ROOF_CHORD_IN / 12, plateY + ROOF_CHORD_IN / 12,\n      ROOF_CHORD_IN / 12, plateY + riseAt(ROOF_CHORD_IN / 12) - chordDropFt, 2);')],
   // The flat-drop mistake the module's own comment warns about, made on the
-  // web instead of the chord: it stops short of the top chord's underside by
-  // an amount that is zero at 0:12 and grows with the pitch.
-  ['the heel web is dropped a flat 3 1/2" and stops short of the top chord',
-    s => s.replace('ROOF_CHORD_IN / 12, plateY + riseAt(ROOF_CHORD_IN / 12) - chordDropFt, 1);',
-      'ROOF_CHORD_IN / 12, plateY + riseAt(ROOF_CHORD_IN / 12) - ROOF_CHORD_IN / 12, 1);')],
+  // eave face instead of the chord: it stops short of the top chord's
+  // underside by an amount that is zero at 0:12 and grows with the pitch.
+  ['the eave face is dropped a flat 3 1/2" and stops short of the top chord',
+    s => s.replace('if (eaves) line(0, eaveY, 0, plateY + riseAt(0) - chordDropFt, 2);',
+      'if (eaves) line(0, eaveY, 0, plateY + riseAt(0) - ROOF_CHORD_IN / 12, 2);')],
   ['a raised heel is ignored and the roof stays on the plate',
     s => s.replace('const heelLiftFt = roof.heelIn == null ? 0', 'const heelLiftFt = true ? 0')],
   // The plausible misreading of "raise the heel": deepen the board instead of
