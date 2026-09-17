@@ -84,14 +84,31 @@ test('stamps project dashed boundary claims — preview only, nothing saved unti
 });
 
 test('the bone grows 2x4 interior walls from the stamp program and the rooms clear their minimums', async ({ page }) => {
-  // DORMANT — BOARD #331. The bone no longer grows interior partitions from
-  // the stamp program (BONE_GROWS_ROOMS in MODEL.dc.html), so there is
-  // nothing here to observe. NOT deleted: this is the page-wiring proof that
-  // must come back WITH the dealer rework, and rebuilding it from the boards
-  // later is exactly the waste the "bypass, not delete" rule exists to avoid.
-  // The grower's own logic stays covered offline — proto/room-grow-harness.js,
-  // 69 checks. Flip the constant and these wake up with it.
-  test.skip(true, 'board #331: the bone grows no rooms — wake with BONE_GROWS_ROOMS');
+  // DORMANT — BOARD #331, REDEFINED 16 SEP. The bone no longer grows interior
+  // partitions from the stamp program (BONE_GROWS_ROOMS in MODEL.dc.html), so
+  // there is nothing here to observe.
+  //
+  // WHAT CHANGED IS THE STANDING, NOT THE BEHAVIOUR. #331 was written as a
+  // BYPASS — a switch to flip back once the dealer was fixed, and the reason
+  // was "didn't work good, i need to fix it later". Movie redefined it on
+  // 16 Sep: structure + stairs + one washroom a floor IS the contract now, and
+  // a room dealer is a later UPGRADE that may or may not be commissioned. So
+  // "wake with BONE_GROWS_ROOMS" no longer reads as pending; it reads as
+  // conditional on a decision nobody has made.
+  //
+  // STILL NOT DELETED, and now for a second reason. It was the page-wiring
+  // proof the "bypass, not delete" rule keeps for the dealer rework. It is
+  // also the thing that stops the contract being rewritten by accident: the
+  // day someone commissions a dealer, these are what say what the page has to
+  // do, and rebuilding them from the boards is the waste the rule exists to
+  // avoid. The grower's own logic stays covered offline —
+  // proto/room-grow-harness.js, 69 checks.
+  //
+  // THE CONTRACT ITSELF IS PINNED ELSEWHERE, and awake: see
+  // tests/bone-skips-rooms.spec.js — structure, stairs and one washroom per
+  // shelled floor, plus the stamped press that proves no partitions grow.
+  test.skip(true, 'board #331 redefined: structure + stairs + one WC a floor is '
+    + 'the contract — these wake only if a room dealer is commissioned');
 
   await h.openModel(page, { tourEscort: true, roomGrow: true });
   // 28x22: room for the four-stamp program at minimums beside the stair
@@ -248,14 +265,31 @@ async function traceLHouse(page) {
 }
 
 test('an L-shaped house grows nothing into the notch (board #290)', async ({ page }) => {
-  // DORMANT — BOARD #331. The bone no longer grows interior partitions from
-  // the stamp program (BONE_GROWS_ROOMS in MODEL.dc.html), so there is
-  // nothing here to observe. NOT deleted: this is the page-wiring proof that
-  // must come back WITH the dealer rework, and rebuilding it from the boards
-  // later is exactly the waste the "bypass, not delete" rule exists to avoid.
-  // The grower's own logic stays covered offline — proto/room-grow-harness.js,
-  // 69 checks. Flip the constant and these wake up with it.
-  test.skip(true, 'board #331: the bone grows no rooms — wake with BONE_GROWS_ROOMS');
+  // DORMANT — BOARD #331, REDEFINED 16 SEP. The bone no longer grows interior
+  // partitions from the stamp program (BONE_GROWS_ROOMS in MODEL.dc.html), so
+  // there is nothing here to observe.
+  //
+  // WHAT CHANGED IS THE STANDING, NOT THE BEHAVIOUR. #331 was written as a
+  // BYPASS — a switch to flip back once the dealer was fixed, and the reason
+  // was "didn't work good, i need to fix it later". Movie redefined it on
+  // 16 Sep: structure + stairs + one washroom a floor IS the contract now, and
+  // a room dealer is a later UPGRADE that may or may not be commissioned. So
+  // "wake with BONE_GROWS_ROOMS" no longer reads as pending; it reads as
+  // conditional on a decision nobody has made.
+  //
+  // STILL NOT DELETED, and now for a second reason. It was the page-wiring
+  // proof the "bypass, not delete" rule keeps for the dealer rework. It is
+  // also the thing that stops the contract being rewritten by accident: the
+  // day someone commissions a dealer, these are what say what the page has to
+  // do, and rebuilding them from the boards is the waste the rule exists to
+  // avoid. The grower's own logic stays covered offline —
+  // proto/room-grow-harness.js, 69 checks.
+  //
+  // THE CONTRACT ITSELF IS PINNED ELSEWHERE, and awake: see
+  // tests/bone-skips-rooms.spec.js — structure, stairs and one washroom per
+  // shelled floor, plus the stamped press that proves no partitions grow.
+  test.skip(true, 'board #331 redefined: structure + stairs + one WC a floor is '
+    + 'the contract — these wake only if a room dealer is commissioned');
 
   await h.openModel(page, { tourEscort: true, roomGrow: true });
   await traceLHouse(page);

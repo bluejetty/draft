@@ -2208,6 +2208,21 @@ const FENESTRATION_WALL_PICK_PX = 18;
 // dealer fix flips THIS ONE CONSTANT back and the machinery wakes up; it does
 // not have to be rebuilt from the boards.
 //
+// REDEFINED 16 SEP, and what moved is the STANDING rather than the code.
+// Movie: the bone builds structure + stairs + one washroom a floor, and
+// nothing else inside. That is what this constant already produces -- so
+// nothing here changed -- but it is no longer a switch waiting to be flipped
+// back. It is the CONTRACT, and a room dealer is an upgrade that may or may
+// not be commissioned. The line above still describes how a dealer would
+// arrive; it no longer promises that one will.
+//
+// The contract is pinned awake in tests/bone-skips-rooms.spec.js: structure,
+// stairs, one washroom per SHELLED FLOOR (a twoStorey bare outline is dealt
+// two, on levels 3 and 5 -- "one WC" is per floor, not per house), and a
+// stamped press proving no partitions grow. The seven dormant page-wiring
+// tests in room-grow*.spec.js keep their bodies for the day a dealer is
+// commissioned.
+//
 // WHY A CONSTANT AND NOT state.roomGrow. That flag is the DRAFTER'S -- a
 // checkbox in SETTINGS ("Room growing"). Forcing it false to get this skip
 // would be the app quietly overruling a choice the drafter made in their own

@@ -83,9 +83,68 @@ test('a bone press grows no partitions from a stamped program, and the washroom 
   const stamps = (saved.roomTags || []).filter(tag => tag.stamped && tag.base);
   expect(stamps.length, 'a stamp program was on the floor to be skipped').toBeGreaterThan(2);
   expect(washrooms(saved).length, 'and the washroom is there — it is not what gets skipped').toBeGreaterThan(0);
+  // ONE PER SHELLED FLOOR, AND NO SECOND ONE ON A RE-PRESS. `> 0` above is
+  // the old, loose half: it passes just as happily on a floor dealt three.
+  // The press under test is the SECOND, so this is also the re-press guard --
+  // _dealWashrooms skips a floor that already holds one, and a duplicate here
+  // is that guard failing.
+  const seats = washrooms(saved).map(g => g.washroomLevelId);
+  expect(new Set(seats).size, 'a floor was dealt more than one washroom').toBe(seats.length);
 
   expect(grownWalls(saved), 'no interior partitions were grown from the program').toEqual([]);
 });
+
+// THE CONTRACT, NAMED RATHER THAN IMPLIED (board #331 redefined, 16 Sep).
+//
+// #331 began as a BYPASS -- the dealer "didn't work good, i need to fix it
+// later" -- and the tests above pin the half that is an absence: no partitions
+// grow. An absence is a weak thing to build on. What the bone actually
+// promises now is a POSITIVE list, and until this test nothing said it:
+// structure and stairs and one washroom per shelled floor, and nothing else
+// inside.
+//
+// MEASURED, NOT ASSUMED. A bare-outline twoStorey press deals TWO washrooms --
+// levels 3 and 5, one per floor the shell just went up on. "Exactly one WC"
+// reads as one per house and is wrong; the rule is one per shelled floor, and
+// an assertion written from the phrase rather than from the press would have
+// pinned the wrong number.
+//
+// IT DOES NOT BOX OUT A LATER DEALER. Every assertion is about what the bone
+// builds TODAY, at floor granularity. A dealer upgrade adds partitions and
+// turns the `noPartitions` line red -- which is correct, because that IS the
+// contract changing, and it should be a decision rather than a drift.
+test('the bone builds structure, stairs and one washroom a floor — and nothing else inside',
+  async ({ page }) => {
+    await h.openModel(page, { autoStairs: true, tourEscort: true, roomGrow: true });
+    await bareOutline(page);
+    await page.locator('[data-build-house]').click();
+    await h.waitForSaved(page);
+    const saved = await h.savedDrawing(page);
+
+    // STRUCTURE KEEPS GENERATING. Beams, columns and footings are BUILD
+    // HOUSE's job and were never what #331 switched off.
+    expect((saved.beams || []).length, 'the bone stopped generating beams').toBeGreaterThan(0);
+    expect((saved.columns || []).length, 'the bone stopped generating columns').toBeGreaterThan(0);
+    expect((saved.stairs || []).length, 'the bone stopped building stairs').toBeGreaterThan(0);
+
+    // ONE WASHROOM A FLOOR, on the floors the shell just went up on.
+    const seats = washrooms(saved).map(g => g.washroomLevelId);
+    expect(seats.length, 'no washroom was dealt at all').toBeGreaterThan(0);
+    expect(new Set(seats).size, 'a floor was dealt more than one washroom').toBe(seats.length);
+
+    // NO "AND NOTHING ELSE INSIDE" LINE HERE, DELIBERATELY. It belongs to this
+    // contract and it is the one claim this fixture cannot carry: a bare
+    // outline has no stamp program, so nothing grows whether the grower is on
+    // or off, and `grownWalls === []` would pass either way. Measured -- with
+    // BONE_GROWS_ROOMS flipped true this test stayed green while the stamped
+    // test above went red naming the partitions.
+    //
+    // That is false start #1 at the top of this file arriving again by a new
+    // road: a skip test on a floor with nothing to skip proves nothing. The
+    // absence half is carried by 'a bone press grows no partitions from a
+    // stamped program', which puts a four-room program down first and has
+    // teeth. This test carries the POSITIVE half -- what the bone does build.
+  });
 
 test('the build summary says nothing about rooms rather than lying about them', async ({ page }) => {
   await h.openModel(page, { autoStairs: true, tourEscort: true, roomGrow: true });
