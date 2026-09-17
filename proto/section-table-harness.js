@@ -586,7 +586,6 @@ const chordLines = s => s.parts
   .filter(p => p.kind === 'line' && near(p.x1, -ASSEMBLY.roof.overhangFt) && near(p.x2, CUT))
   .sort((a, b) => b.y1 - a.y1);
 const topChordFace = s => chordLines(s)[0];
-const topChordUnder = s => chordLines(s)[1];
 const CUT = 4;
 const atX = (l, x) => l.y1 + (x - l.x1) * (l.y2 - l.y1) / (l.x2 - l.x1);
 
@@ -597,25 +596,40 @@ check('the roof stands the reported heel above the plate at the wall face', P =>
   const want = P.roofHeelIn(R.fasciaIn, R.overhangFt, R.pitch) / 12;
   return [chord ? near(atX(chord, 0) - plateY, want) : 'no top chord', true];
 });
-// THE EAVE CLOSES ON THE WALL FACE, NOT A WEB 3 1/2" IN. Movie, 16 Sep,
-// marking the eave: "the lines i deleted are the 3.5 section near exterior of
-// top and bottom chord inside lines" -- the heel web's inner face read as a
-// stray between the chords -- and the line he added (pink-marked) is one
-// vertical at the building's outside, soffit up to the top chord's underside.
-// This reverses the 4 Sep purple-line ruling this check used to pin. Located
-// by WHERE IT LANDS rather than by a length, because the drop to the chord's
-// underside grows with the pitch and a number here would only be true at 4:12.
-check('the eave closes on the wall face, with no web 3 1/2\" in', P => {
+// THE HEEL SIDE CHORD -- SETTLED RULING (Movie, 17 Sep 2026: "BEAUTIFUL you
+// finally got it !! lock that in !!"), superseding the 16 Sep wall-face
+// close this check used to pin. A 3 1/2" chord PIECE stands at the wall
+// exterior connecting the bottom chord to the top chord: outside face on the
+// wall face, inside face 3 1/2" in, the top chord's underside OPEN across
+// those 3 1/2" so the piece connects straight into the top chord -- no line
+// across the joint -- and the bottom chord's upper line stopping against it.
+// Chords only: the truss's internal webs are the truss designer's part and
+// are deliberately never drawn.
+check('the heel side chord stands at the wall face and the top chord opens over it', P => {
   const s = section(P);
   const plateY = (97.125 / 12) * 2 + (9.25 + 0.75) / 12;
   const chordFt = P.ROOF_CHORD_IN / 12;
-  const webs = s.parts.filter(p => p.kind === 'line' && near(p.x1, chordFt) && near(p.x2, chordFt));
-  if (webs.length !== 0) return [`${webs.length} verticals 3 1/2" in from the outside`, 'none'];
-  const under = topChordUnder(s);
-  if (!under) return ['no top chord underside to meet', 'one wall face'];
-  const faces = s.parts.filter(p => p.kind === 'line' && near(p.x1, 0) && near(p.x2, 0)
-    && near(Math.max(p.y1, p.y2), atX(under, 0)));
-  return [faces.length === 1 && near(Math.min(faces[0].y1, faces[0].y2), plateY), true];
+  const R = ASSEMBLY.roof;
+  const lines = s.parts.filter(p => p.kind === 'line');
+  // The underside draws in two pieces around the heel's 3 1/2": out to the
+  // wall face, then from the inside face to the cut -- never one line across.
+  // Sloped, which tells the underside apart from the flat soffit outside the
+  // wall and the flat bottom chord inside it on the same x-spans.
+  const sloped = p => Math.abs(p.y2 - p.y1) > 0.01;
+  const outer = lines.find(p => near(p.x1, -R.overhangFt) && near(p.x2, 0) && sloped(p));
+  const inner = lines.find(p => near(p.x1, chordFt) && near(p.x2, CUT) && sloped(p));
+  if (!outer || !inner) return ['underside not split open at the heel', 'two pieces'];
+  const underAt = x => atX(outer, x);
+  // Both edges of the piece: the outside face plate-to-underside on the wall
+  // face, the inside face from the bottom chord's top up into the top chord.
+  const face = lines.find(p => near(p.x1, 0) && near(p.x2, 0)
+    && near(Math.min(p.y1, p.y2), plateY) && near(Math.max(p.y1, p.y2), underAt(0)));
+  const inside = lines.find(p => near(p.x1, chordFt) && near(p.x2, chordFt)
+    && near(Math.min(p.y1, p.y2), plateY + chordFt)
+    && near(Math.max(p.y1, p.y2), underAt(chordFt)));
+  if (!face) return ['no outside face on the wall face', 'the heel piece'];
+  if (!inside) return ['no inside face 3 1/2" in', 'the heel piece'];
+  return [true, true];
 });
 // THE OVERRIDE, WITH THE CONTROL THAT MUST MOVE BESIDE IT. Movie, 5 Sep:
 // the heel is calculated, and typeable. A check that only proved the derived
@@ -786,15 +800,15 @@ const MUTATIONS = [
   // as a failure here.
   ['the mod bilevel loses its default (falls back to the house)',
     s => s.replace('    modifiedBilevel: SPLIT_BASE,\n', '')],
-  ['the heel web comes back 3 1/2" in (the lines Movie struck out, 16 Sep)',
-    s => s.replace('if (eaves) line(0, eaveY, 0, plateY + riseAt(0) - chordDropFt, 2);',
-      'if (eaves) line(ROOF_CHORD_IN / 12, plateY + ROOF_CHORD_IN / 12,\n      ROOF_CHORD_IN / 12, plateY + riseAt(ROOF_CHORD_IN / 12) - chordDropFt, 2);')],
-  // The flat-drop mistake the module's own comment warns about, made on the
-  // eave face instead of the chord: it stops short of the top chord's
-  // underside by an amount that is zero at 0:12 and grows with the pitch.
-  ['the eave face is dropped a flat 3 1/2" and stops short of the top chord',
-    s => s.replace('if (eaves) line(0, eaveY, 0, plateY + riseAt(0) - chordDropFt, 2);',
-      'if (eaves) line(0, eaveY, 0, plateY + riseAt(0) - ROOF_CHORD_IN / 12, 2);')],
+  // The 17 Sep heel piece drawn the way Movie refused it ("no its not a
+  // line"): the inside face goes, leaving one vertical where the member was.
+  ['the heel piece thins back to a single line at the wall face',
+    s => s.replace('line(heelWebX, plateY + ROOF_CHORD_IN / 12,\n      heelWebX, plateY + riseAt(heelWebX) - chordDropFt, 1);', '')],
+  // The joint sealed shut: one underside line across the heel's 3 1/2"
+  // instead of the two pieces that leave it open into the top chord.
+  ['the top chord underside closes across the heel joint',
+    s => s.replace('line(roofStartX, plateY + riseAt(roofStartX) - chordDropFt,\n      0, plateY + riseAt(0) - chordDropFt, 1);\n    line(heelWebX, plateY + riseAt(heelWebX) - chordDropFt,\n      cut, plateY + riseAt(cut) - chordDropFt, 1);',
+      'line(roofStartX, plateY + riseAt(roofStartX) - chordDropFt,\n      cut, plateY + riseAt(cut) - chordDropFt, 1);')],
   ['a raised heel is ignored and the roof stays on the plate',
     s => s.replace('const heelLiftFt = roof.heelIn == null ? 0', 'const heelLiftFt = true ? 0')],
   // The plausible misreading of "raise the heel": deepen the board instead of
