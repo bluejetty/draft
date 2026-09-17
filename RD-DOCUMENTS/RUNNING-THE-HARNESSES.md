@@ -151,15 +151,23 @@ into a source file on disk, shells out to `npx playwright test`, and restores
 with `git checkout -- <file>`. That restores **HEAD**, not your working state:
 uncommitted work in a mutated file is gone, without a prompt.
 
-13 of the 16 refuse to start against a dirty tree for that reason, in a line
-that begins `REFUSING TO RUN:` and names the files it guards.
-**Three do not** — `corner-glow-mutants.js`, `level-lock-port-mutants.js` and
-`units-stack-mutants.js` restore from HEAD like the others but check nothing
-first. (Counted 17 Sep 2026. Their `REFUSING TO RUN` lines are a different
-guard: the spec was already red before any mutant ran.)
+All 16 refuse to start against a dirty tree for that reason:
 
-So: **commit before you run any of them**, and do not read a clean start as
-proof that this one is guarded. The README's four rules for reading a mutation run
+```
+REFUSING TO RUN: uncommitted changes; this restores from HEAD.
+```
+
+Three of them — `corner-glow-mutants.js`, `level-lock-port-mutants.js` and
+`units-stack-mutants.js` — did not, until 17 Sep 2026. They restored from HEAD
+like the others and checked nothing first, and each already printed a
+`REFUSING TO RUN:` line for a *different* guard (the spec was red before any
+mutant ran), so they read as protected when they were not.
+
+The guard goes **before** each driver's baseline run, not after. The baseline
+is a full Playwright pass of the spec — minutes — so a guard behind it lets
+you walk away believing the gate is running when it has already refused.
+
+Commit before you run one anyway. The README's four rules for reading a mutation run
 ([README.md](../README.md#running-the-tests)) apply to these, not to the
 in-memory engines above.
 
