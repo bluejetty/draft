@@ -246,7 +246,26 @@ test.describe('MODEL.html tier 1', () => {
       './shared-file-store.js', './wall-types.js', './formatters.js',
       './cut-view.js', './drawing-format.js', './render-2d.js',
       './fixture-geometry.js', './closets.js',
-      './cut-marks.js', './build-menu.js',
+      './cut-marks.js',
+      // outline-master.js joined with the OUTLINE tool, and it is the kind of
+      // entry the build-menu.js note calls the one this list should grow by:
+      // it DELETES a duplicate rather than adding a capability. The shape of a
+      // stored outline -- a master on a boneyard shelf, a copy per level, and
+      // the two identifiers linking them -- was MODEL.dc.html's alone until
+      // this page had to write it too, and the order for that rung was
+      // explicit that a hand-rolled twin is how #401 lost a shard.
+      //
+      // It also holds the one fact this page would most easily have got wrong
+      // on its own: storage spells a master point's id `id`, MODEL.dc.html
+      // holds `pointId`, and this page writes straight to the file with no
+      // serializer in between. The wrong spelling produces an outline that
+      // renders perfectly and is linked to nothing.
+      //
+      // It was refused once already -- added here in the extraction PR before
+      // anything on this page called it, and this list said no. It is loaded
+      // now because the tool calls it.
+      './outline-master.js',
+      './build-menu.js',
       // building-bodies.js is DEVIN'S, carried in this branch with his
       // garage-sizing commits: what counts as "a house already stands" and "a
       // garage already stands", which PROJECT and the drive-thru tiles both

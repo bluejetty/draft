@@ -1748,6 +1748,7 @@
      alternative was office defaults, which would have shown four elevation
      marks to a drafter who had switched them off. -->
 <script src="./cut-marks.js"></script>
+<script src="./outline-master.js"></script>
 <!-- The house types the build bar offers. Lifted out of MODEL.dc.html so both
      pages read one list (build-menu.js says why). -->
 <script src="./build-menu.js"></script>
@@ -7644,6 +7645,109 @@
     paint();
   };
 
+  // ── THE OUTLINE TOOL ─────────────────────────────────────────────────────
+  //
+  // PARITY-model-html-vs-dc.md has carried "Draw an outline — absent,
+  // must-have" since #389, and the reason is written at :3866: the old page's
+  // _pressBuildType does TWO things, records the type and arms the outline
+  // tool, and only the first half came across because there was no tool to
+  // arm. This is the second half.
+  //
+  // THE GESTURE IS drawPress's SIBLING, not a new idea: successive presses
+  // drop corners, and pressing the first corner again closes the loop. No
+  // Enter and no FINISH button, because that is the old page's contract and a
+  // tool that needs a keyboard is not one an iPad at the counter can use.
+  //
+  // WHAT IT PERSISTS IS THE OLD PAGE'S SHAPE, through outline-master.js rather
+  // than a second copy of it: a master on the BONEYARD shelf holding the
+  // common geometry, and a copy on every level linked back corner by corner.
+  // This page still shows no BONEYARD -- that absence is settled -- and writes
+  // the master anyway, sight unseen, because BUILD HOUSE reads outlines and
+  // the drawing is shared with a page that does show it.
+  let outlineCorners = [];
+  // Which build family armed the trace, so the pending loop draws in that
+  // family's colour -- red house, blue split -- the way the old page's
+  // select-first strip does.
+  let outlineFamily = null;
+
+  // HOW NEAR COUNTS AS CLOSING. In FEET rather than pixels, so the same press
+  // closes the same loop whatever the zoom: a pixel tolerance would demand
+  // surgical aim zoomed out and would swallow a deliberate second corner
+  // zoomed in.
+  const OUTLINE_CLOSE_FT = 1.5;
+
+  const armOutline = picked => {
+    activeTool = 'outline';
+    outlineCorners = [];
+    outlineFamily = picked?.family ?? null;
+    drawStart = null;
+    paint();
+  };
+
+  const outlinePress = at => {
+    const here = { x: at.x, z: at.z };
+    // THREE CORNERS BEFORE CLOSING IS LEGAL, because two enclose no floor --
+    // the same floor the old page's own guard is about. Below three, a press
+    // near the first corner is a drafter placing a corner there, not closing.
+    if (outlineCorners.length >= 3) {
+      const first = outlineCorners[0];
+      if (Math.hypot(here.x - first.x, here.z - first.z) <= OUTLINE_CLOSE_FT) {
+        commitOutline();
+        return;
+      }
+    }
+    outlineCorners.push(here);
+    paint();
+  };
+
+  const commitOutline = () => {
+    const loop = outlineCorners.slice();
+    if (loop.length < 3) return null;
+    // A CROSSED LOOP ENCLOSES NO FLOOR, and the old page refuses it at
+    // MODEL.dc.html's own close with the same test from the same module. The
+    // pending corners are KEPT on a refusal so the drafter can move the last
+    // one rather than retrace the whole house.
+    if (window.DraftGeometry2D.selfIntersects(loop)) {
+      sayOnStrip('That outline crosses itself, so it encloses no floor area.');
+      return null;
+    }
+    const OM = window.DraftOutlineMaster;
+    const spec = OM.masterFromLoop({
+      points: loop,
+      shelfId: activeShelfId(),
+      sourceLevelId: activeLevelId(),
+      newItemId: () => newDrawingItemId('outline'),
+      newPointId: () => newDrawingItemId('op'),
+    });
+    // THE FILE'S SPELLING, AT THE MOMENT OF WRITING. This page has no
+    // serializer between the push and the file (see commitWall's note on
+    // 'centre'), and storage spells a master point's id `id` while
+    // MODEL.dc.html holds `pointId`. Writing the memory spelling would produce
+    // a master whose points have no id at all once the old page loads it --
+    // and it would look perfect until a corner was dragged.
+    const master = OM.storageMaster(spec);
+    const levels = (drawing.levels || []);
+    const copies = OM.copiesForLevels(master, levels, {
+      newItemId: () => newDrawingItemId('outline'),
+    });
+    if (!Array.isArray(drawing.boneyardOutlines)) drawing.boneyardOutlines = [];
+    if (!Array.isArray(drawing.outlines)) drawing.outlines = [];
+    drawing.boneyardOutlines.push(master);
+    copies.forEach(copy => drawing.outlines.push(copy));
+    undoStack.push({ kind: 'add-outline', master, copies });
+    outlineCorners = [];
+    activeTool = RESTING_TOOL;
+    markDirty();
+    stripRefresh();
+    paint();
+    return master;
+  };
+
+  // THE ARMING, through the seam :3875 declared for exactly this. A house type
+  // press records the type (that half already worked) and now arms the trace,
+  // which is what _pressBuildType has always done in one motion.
+  window.ModelBuild.onChoose(picked => { if (picked) armOutline(picked); });
+
   // ── the instrument strip ──────────────────────────────────────────────────
   // MODEL.dc.html:1963's bottom panel, rebuilt on this page's terms. Movie,
   // 13 Sep: "we also still need the bottom bar which should look like lights
@@ -8970,6 +9074,7 @@
     if (activeTool === 'column') { placeColumn(at); return; }
     if (activeTool === 'beam') { beamPress(at); return; }
     if (activeTool === 'roof') { roofPress(at); return; }
+    if (activeTool === 'outline') { outlinePress(at); return; }
     if (activeTool === 'wall') {
       // §1: "either drag, or press again and drag -- both must work". The lift
       // needs two facts this press knows and pointerup does not: where the

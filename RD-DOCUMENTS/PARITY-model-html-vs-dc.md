@@ -121,13 +121,21 @@ naming every one of them. **Four rows above were wrong**, two of them because
 they describe the control surface by *listing* it, which is a note that goes
 stale the moment a button is added anywhere on the page.
 
-The row worth arguing about is **Draw an outline**. A reader who saw BUNGALOW
-on the page would reasonably conclude BUILD HOUSE had arrived, and it has not:
-the old page's `_pressBuildType` records a type *and* arms the outline tool,
-and only the first half came across, because this page has no outline tool to
-arm. That is a claim a test has to hold rather than a note, so
-`model-html-topbar.spec.js` asserts the wall count does not move across a
-family press, an entry press or BONE.
+The row worth arguing about **was Draw an outline, and it has now moved.** For
+two rungs a reader who saw BUNGALOW on the page would reasonably have
+concluded BUILD HOUSE had arrived, and it had not: the old page's
+`_pressBuildType` records a type *and* arms the outline tool, and only the
+first half came across because this page had no outline tool to arm. The
+second half is here, and the claim that used to need holding down is now the
+thing being asserted -- `model-html-outline.spec.js` traces a loop on this
+page and lets the OLD page's bone build a house from it.
+
+`model-html-topbar.spec.js` still asserts the wall count does not move across
+a family press, an entry press or BONE, and that is not a leftover: pressing a
+house type arms a trace and writes nothing, so the wall count holding still is
+exactly right. What changed is that the outline the trace commits is the
+drafter's own, drawn corner by corner -- the bar still decides no geometry,
+which is the seam #389 drew and this rung did not cross.
 
 **The luck of geometry ran out and was replaced by a measurement.** The clicks
 still land, but not by accident now: the rail is inside a sidebar that starts
@@ -145,7 +153,7 @@ as a tap guard naming `level-pick`.
 | Draw a wall | wall tool | **present** — survives a reload | must-have | **driven**; the mutation row: `drawPress` no-op makes this fail |
 | Draw a line | line tool | absent | must-have | |
 | Draw a floor | floor tool | absent | must-have | it paints floors it cannot create |
-| Draw an outline | outline tool | absent | must-have | BUILD HOUSE reads outlines. **#389 put the house-type buttons and BONE on the page and this row did not move**: the old page's `_pressBuildType` also arms the outline tool, and that half was deliberately left behind — there is no outline tool to arm. The bar records a choice; `model-html-topbar.spec.js` holds the wall count across every press |
+| Draw an outline | outline tool | **present** | done | BUILD HOUSE reads outlines. #389 put the house-type buttons and BONE on the page and this row did not move, because the old page's `_pressBuildType` does two things — records the type AND arms the outline tool — and only the first half came across. The second half is here now: a house-type press arms the trace, successive presses drop corners, and pressing the first corner again closes the loop. It persists the old page's shape through `outline-master.js` rather than a twin of it — master on the boneyard shelf, a copy on every level, linked by `masterId` and per-point `srcId`. This page still shows no BONEYARD and writes the master anyway, sight unseen. Round trip is the acceptance and it runs both ways: `model-html-outline.spec.js` draws on this page and the OLD page's bone builds the traced loop from it. Out of scope and still absent: garage outlines, arc segments, the R typed-length ruler, and node drag on a drawn outline |
 | Place a roof | roof tool | absent | must-have | paints, cannot place |
 | Place a stair | stair tool | absent | must-have | paints, cannot place |
 | Place fenestration | fenestration tool | absent | must-have | |
