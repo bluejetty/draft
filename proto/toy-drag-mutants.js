@@ -119,20 +119,62 @@ const MUTANTS = [
   // naming the wrong rule. The fifth is a guard I believe is UNREACHABLE and
   // am asking the gate about rather than deleting on my own reasoning -- the
   // last time I deleted a line the gate called redundant, it was load-bearing.
-  { file: 'MODEL.html',
-    name: 'THE PAGE LIES ABOUT WHAT MOVES: the weld group swallows the house',
-    find: '      { ...ctx, mode: T.MODE.TOY, welds: [[wall.id]] });',
-    with: '      { ...ctx, mode: T.MODE.TOY });',
-    test: 'leave the next wall on an angle' },
+  // REMOVED, WITH THE READING AS THE MEASUREMENT: 'THE PAGE LIES ABOUT WHAT
+  // MOVES: the weld group swallows the house'. It dropped the
+  // `welds: [[wall.id]]` override and SURVIVED once its test grep was
+  // corrected -- and it is unkillable from this page today, for a reason that
+  // is read off the files rather than inferred:
+  //
+  //   MIN_ROOM               needs a room category   MODEL.html passes no
+  //                                                  categoryFor, so every
+  //                                                  derived room is
+  //                                                  category: null and
+  //                                                  evaluateRoom returns ok
+  //   OPENING_WOULD_NOT_FIT  needs openings          gather({ walls }) at
+  //                                                  MODEL.html:8910 passes
+  //                                                  none
+  //   CANTILEVER             needs wall.cantileverFt the field is in NO page
+  //                                                  file -- only
+  //                                                  toy-constraints.js,
+  //                                                  toy-context.js and three
+  //                                                  harnesses
+  //   NEEDS_A_BEAM           needs shortSpanFt       zero occurrences in
+  //                                                  MODEL.html
+  //
+  // One uniform reason, not four: THE PAGE HANDS THE MODULE WALLS AND NOTHING
+  // ELSE. The eligibility path IS live and its refusals do reach the strip
+  // (inertReason reads geometry alone, toy-constraints.js:181) -- but
+  // eligibility never reads the weld group, and every rule that would read it
+  // never runs. So no drag can make the two group shapes answer differently.
+  //
+  // A mutation nothing can catch is not evidence, it is a permanent survivor
+  // sitting in the file's total. The override stays; what goes is the claim
+  // that this file measures it.
+  //
+  // WHAT WOULD MAKE THIS LIVE AGAIN, so this reads as a deferral and not a
+  // deletion: pass `shortSpanFt` or `openings` into the gather call at
+  // MODEL.html:8910. Either one starts a wall-keyed rule firing, at which
+  // point a drag CAN make the two weld shapes answer differently and this
+  // mutation is worth restoring -- it would be measuring something real.
+  // Nothing about the page is broken today; those rules are simply not built
+  // yet, and the drag, the geometry and the eligibility refusals all work.
   { file: 'toy-constraints.js',
     name: 'NOTHING CHECKS THE SHAPE AFTER THE MOVE, so the diagonal comes back',
-    find: '      const angled = mode === MODE.TOY ? wouldAngle(wall, groupIds, walls, d) : null;',
+    // RE-POINTED. wouldAngle gained a `ctx.detached` argument and the
+    // statement wrapped onto two lines.
+    find: "      const angled = mode === MODE.TOY\n        ? wouldAngle(wall, groupIds, walls, d, ctx.detached) : null;",
     with: '      const angled = null;',
-    test: 'leave the next wall on an angle' },
+    // GREP CORRECTED: the title reads 'never LEAVES the next wall on an
+    // angle'. One conjugation was the whole defect -- 'leave' is not a
+    // substring of 'leaves ', so -g matched nothing, playwright ran nothing
+    // and exited non-zero, and all three of these scored KILLED off an empty
+    // run. This file's 16/16 was three kills lighter than it read.
+    test: 'never leaves the next wall on an angle' },
   { file: 'toy-constraints.js',
     name: 'THE ANGLE RULE LEAKS INTO DRAFTING, where off-axis is the freedom',
-    find: '      const angled = mode === MODE.TOY ? wouldAngle(wall, groupIds, walls, d) : null;',
-    with: '      const angled = wouldAngle(wall, groupIds, walls, d);',
+    // RE-POINTED, as directly above.
+    find: "      const angled = mode === MODE.TOY\n        ? wouldAngle(wall, groupIds, walls, d, ctx.detached) : null;",
+    with: '      const angled = wouldAngle(wall, groupIds, walls, d, ctx.detached);',
     // ASKED OF THE MODULE. Aimed at the page check first, where it SURVIVED:
     // DRAFTING never calls the module from this page, so the page cannot tell
     // a TOY-only rule from a rule that does not exist.
@@ -141,7 +183,12 @@ const MUTANTS = [
     name: 'the refusal is renamed to a distance problem it is not',
     find: '      if (blocked.reason !== REASON.WOULD_ANGLE_NEIGHBOUR) {',
     with: '      if (true) {',
-    test: 'leave the next wall on an angle' },
+    // GREP CORRECTED: the title reads 'never LEAVES the next wall on an
+    // angle'. One conjugation was the whole defect -- 'leave' is not a
+    // substring of 'leaves ', so -g matched nothing, playwright ran nothing
+    // and exited non-zero, and all three of these scored KILLED off an empty
+    // run. This file's 16/16 was three kills lighter than it read.
+    test: 'never leaves the next wall on an angle' },
   { file: 'toy-constraints.js',
     name: 'THE ANGLE TEST IS INVERTED: square neighbours refuse, bent ones pass',
     // Replaces the "is the skip reachable" question, which the gate answered:

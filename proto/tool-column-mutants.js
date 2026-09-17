@@ -59,18 +59,28 @@ const MUTANTS = [
     with: "      if (btn.dataset.toolKey === next) btn.setAttribute('aria-pressed', 'true');",
     test: 'the register holds one tool',
   },
-  {
-    name: 'the keypad keeps its own state and leaves the old button behind',
-    file: 'MODEL.html',
-    find: "    drawButton.classList.toggle('armed', next === 'wall');",
-    with: '',
-    test: 'ONE register',
-  },
+  // REMOVED, NOT RE-POINTED: 'the keypad keeps its own state and leaves the
+  // old button behind'. It mutated `drawButton.classList.toggle('armed', ...)`
+  // -- a SECOND source of truth for which key looked armed, living beside the
+  // register. That button and that class are gone from MODEL.html entirely:
+  // the column is now driven from the register by the toolListeners push at
+  // :8205, whose own comment is "The register tells the column, never the
+  // other way round." There is no longer a second state to fall out of step,
+  // so a mutation for it would be inventing a check rather than restoring
+  // one, and the mutation directly above -- 'the register lets two tools be
+  // armed at once' -- already guards the line that replaced it.
   {
     name: 'the press dispatch stops reading the register',
     file: 'MODEL.html',
-    find: "    if (activeTool === 'wall') { drawPress(at); return; }",
-    with: '',
+    // RE-POINTED. The anchor was the one-line wall case; §1 replaced it with
+    // the press/lift split, so the old string stopped matching and this
+    // mutation reported SKIPPED -- counting toward the score while checking
+    // nothing. The BEHAVIOUR is unchanged: the dispatch still asks the
+    // register which tool is armed. Blanking the whole block would not
+    // compile, so this falsifies the condition instead, which is the same
+    // defect: a press that no longer reaches the wall gesture.
+    find: "    if (activeTool === 'wall') {",
+    with: '    if (false) {',
     test: 'a wall still commits',
   },
 ];

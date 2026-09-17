@@ -56,14 +56,24 @@ const MUTANTS = [
   },
   {
     name: 'shift adds but never removes',
-    find: "          setSelection(at >= 0\n            ? selection.filter((_, i) => i !== at)\n            : selection.concat([hit]));",
-    with: '          setSelection(at >= 0 ? selection : selection.concat([hit]));',
+    // RE-POINTED. Both arms were rewritten when withGroup() arrived: the
+    // toggle now compares by item identity across a group rather than by
+    // index. The DEFECT is the same one -- shift adds and never takes away --
+    // so only the removing arm is neutralised.
+    find: "          setSelection(at >= 0\n            ? selection.filter(entry => !whole.some(w => w.item === entry.item))\n            : selection.concat(whole.filter(w =>\n              !selection.some(entry => entry.item === w.item))));",
+    with: "          setSelection(at >= 0\n            ? selection\n            : selection.concat(whole.filter(w =>\n              !selection.some(entry => entry.item === w.item))));",
     test: 'shift adds and shift removes',
   },
   {
     name: 'a plain click stops clearing the selection',
-    find: "        // the drafter has no way to put a selection down.\n        setSelection(hit ? [hit] : []);",
-    with: "        // the drafter has no way to put a selection down.\n        if (hit) setSelection([hit]);",
+    // RE-POINTED. `setSelection(hit ? [hit] : [])` became
+    // `setSelection(withGroup(hit))`, which returns the same empty array for
+    // a miss. The comment is kept in the anchor because the bare call now
+    // appears twice in MODEL.html -- the other is the never-armed press path
+    // at :9253 -- and an anchor that matches the wrong one mutates the wrong
+    // branch while still reporting a result.
+    find: "        // An empty click clears, which is the other half of select: without it\n        // the drafter has no way to put a selection down.\n        setSelection(withGroup(hit));",
+    with: "        // An empty click clears, which is the other half of select: without it\n        // the drafter has no way to put a selection down.\n        if (hit) setSelection(withGroup(hit));",
     test: 'a plain click on empty space',
   },
   {
