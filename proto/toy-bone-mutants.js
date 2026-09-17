@@ -22,7 +22,11 @@ const ROOT = require('path').resolve(__dirname, '..');
 const MUTANTS = [
   { file: 'MODEL.html',
     name: 'the gesture stops writing a bone at all',
-    find: '    extendToyBone(startPt, endPt, levelId);',
+    // RE-POINTED. The call grew an `if (bone)` guard -- commitWall takes
+    // `bone: false` for a run that brings its own outline (the autobuilt
+    // garage), so the bone is no longer grown unconditionally. Deleting the
+    // whole guarded statement is still exactly this defect.
+    find: "    if (bone) extendToyBone(startPt, endPt, levelId);",
     with: '',
     test: 'acceptance 2b' },
   { file: 'MODEL.html',
@@ -42,18 +46,33 @@ const MUTANTS = [
     find: "    .find(o => Number(o.levelId) === Number(levelId) && !o.masterId\n      && endsAt(o, from)) || null;",
     with: "    .find(o => Number(o.levelId) === Number(levelId) && !o.masterId) || null;",
     test: 'a second bone, not one polygon' },
-  { file: 'MODEL.html',
-    name: 'the pending bone is joined regardless of where the run starts',
-    find: '    if (!bone && pendingBone\n        && Number(pendingBone.levelId) === Number(levelId)\n        && endsAt(pendingBone, from)) {',
-    with: '    if (!bone && pendingBone\n        && Number(pendingBone.levelId) === Number(levelId)) {',
-    // RE-AIMED: the second-bone check starts its garage after the house is a
-    // finished bone, so the pending slot is empty and this never runs against
-    // it. The unfinished-run check is the one that can see it.
-    test: 'does not adopt an unfinished bone' },
+  // REMOVED, WITH THE REASON RECORDED: 'the pending bone is joined regardless
+  // of where the run starts'. It dropped `endsAt(pendingBone, from)` and
+  // SURVIVED once its test grep was corrected. MODEL.html:6591 says why, and
+  // a passing test backs it: drawPress REFUSES a disconnected run while one is
+  // unfinished ('an unfinished run refuses a new one, and says so'), so
+  // reaching that branch with a pending bone that does not end at `from` is
+  // not a state the gesture can produce. The branch is defensive, and no
+  // gesture-driven test can tell the mutant from the original.
+  //
+  // THE GUARD ITSELF IS LEFT ALONE, deliberately. Deleting an unreachable
+  // guard is the repo's own precedent (see the dedupe note at MODEL.html:6608)
+  // and may well be right here -- but it is a behaviour change, and this file
+  // is a test-cleanup lane. It is boarded rather than smuggled in beside a
+  // measurement fix.
+  //
+  // WHAT WOULD MAKE THIS LIVE AGAIN: a gesture that can start a run away from
+  // an unfinished one. The day drawPress stops refusing that -- or the day the
+  // refusal is relaxed for a second footprint -- the branch becomes reachable
+  // and this mutation is worth restoring.
   { file: 'MODEL.html',
     name: 'the bone claims a master it never came from',
-    find: "      pendingBone = { id: newDrawingItemId('outline'), masterId: null,",
-    with: "      pendingBone = { id: newDrawingItemId('outline'), masterId: 'made-up',",
+    // RE-POINTED. The id is no longer minted here -- it is assigned when the
+    // bone is committed -- so the anchor now carries `id: null`. The
+    // mutation is unchanged in substance: claim a master this bone never
+    // came from.
+    find: "      pendingBone = { id: null, masterId: null,",
+    with: "      pendingBone = { id: null, masterId: 'made-up',",
     test: 'acceptance 2b' },
   // ── THE FOUR BEHAVIOURS THAT LANDED AFTER THIS GATE LAST RAN ────────────
   // Each is one deleted line from silently not happening, and the notice-slot

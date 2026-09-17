@@ -85,8 +85,12 @@ const MUTANTS = [
     test: 'does not ask twice' },
   { file: 'MODEL.html',
     name: 'the confirm fires in DRAFTING too',
-    find: "    if (board === 'toy' && !drawing?.boardPromptSeen) {",
-    with: '    if (!drawing?.boardPromptSeen) {',
+    // DISAMBIGUATED. That line guards BOTH typed-length and typed-angle
+    // (:7959). This mutation is the LENGTH one -- its test says so -- and
+    // replace() taking the first match is the only reason it has been
+    // landing there. The askToPromote call names which.
+    find: "    if (board === 'toy' && !drawing?.boardPromptSeen) {\n      askToPromote(() => commitTypedLength());",
+    with: "    if (!drawing?.boardPromptSeen) {\n      askToPromote(() => commitTypedLength());",
     test: 'in DRAFTING a typed length just commits' },
   { file: 'MODEL.html',
     name: 'TOY stops squaring when the T-square is down',
@@ -100,12 +104,14 @@ const MUTANTS = [
     test: 'does not leak' },
   { file: 'MODEL.html',
     name: 'TOY stops rounding to the foot',
-    find: "    return board === 'toy' ? onTheFoot(drawStart, free) : free;",
+    // RE-POINTED: the board test moved into onTheFoot_if().
+    find: "    return onTheFoot_if() ? onTheFoot(drawStart, free) : free;",
     with: '    return free;',
     test: 'TOY commits an axis' },
   { file: 'MODEL.html',
     name: 'the foot rounding leaks into DRAFTING',
-    find: "    return board === 'toy' ? onTheFoot(drawStart, free) : free;",
+    // RE-POINTED: the board test moved into onTheFoot_if().
+    find: "    return onTheFoot_if() ? onTheFoot(drawStart, free) : free;",
     with: '    return onTheFoot(drawStart, free);',
     test: 'does not leak' },
   { file: 'MODEL.html',

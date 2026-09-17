@@ -42,22 +42,38 @@ const MUTANTS = [
   },
   {
     name: 'ASSEMBLY stays pressable with nothing selected',
-    find: '      asmBtn.disabled = n === 0;',
-    with: '      asmBtn.disabled = false;',
+    // RE-POINTED. A board gate (`!on ||`) was added in front of the count, so
+    // the old anchor stopped matching. The mutation keeps that gate and drops
+    // only the SELECTION half -- otherwise it would be testing two rules at
+    // once and a pass would not say which one held.
+    find: '      asmBtn.disabled = !on || n === 0;',
+    with: '      asmBtn.disabled = !on;',
     test: 'ASSEMBLY is dead until something is selected',
   },
   {
     name: 'the help line stops counting',
-    find: "        ? `${n} selected item${n === 1 ? '' : 's'} · make a named assembly.`",
-    with: "        ? 'items selected · make a named assembly.'",
+    // RE-POINTED. The ternary grew a third arm (nothing-selected now has its
+    // own sentence), so the old anchor's `? ` prefix no longer matches.
+    // Taken from the subject verbatim: the line carries a backtick
+    // template and a ·, both easy to break by retyping.
+    find: "        : (n ? `${n} selected item${n === 1 ? '' : 's'} · make a named assembly.`",
+    with: "        : (n ? 'items selected · make a named assembly.'",
     test: 'ASSEMBLY is dead until something is selected',
   },
-  {
-    name: 'clicking a member takes only that member',
-    find: '    const members = itemsOfGroup(group);',
-    with: '    const members = [];',
-    test: 'clicking one member takes the whole assembly',
-  },
+  // REMOVED, NOT RE-POINTED: 'clicking a member takes only that member'.
+  // It is no longer a defect -- it is the shipped behaviour. MODEL.html:6013
+  // reduced the group expansion to `withGroup = entry => (entry ? [entry] : [])`
+  // deliberately, and its comment says why: expanding a click to the whole
+  // assembly made a tap meant for ONE wall select two and quietly turned
+  // "delete this wall" into "delete this assembly". The test it grepped,
+  // 'clicking one member takes the whole assembly', was removed with it.
+  //
+  // THAT ABSENT TEST IS WHY THIS MATTERS BEYOND TIDINESS. This runner passes
+  // `test` to playwright as -g; a grep that matches nothing exits non-zero,
+  // which this file reads as 'failed' and scores as KILLED. Had the anchor
+  // survived the rewrite, the mutation would have been counted as caught by a
+  // test run that executed no tests at all. Every other grep in this file was
+  // checked against the spec; this was the only dead one.
   {
     name: 'UNGROUP shows for a bare selection too',
     find: '      unBtn.hidden = held.length === 0;',
