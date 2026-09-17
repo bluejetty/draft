@@ -361,68 +361,62 @@ test('on a grade beam the garage sill is inline on either build type', async ({ 
   expect(offsetFt(bungalow)).toBeCloseTo(-(11.875 + 0.75) / 12, 5);
 });
 
-// THE GARAGE'S TYPED NUMBER IS A SILL, AND ITS FLOOR IS A SEPARATE ROW.
-// The typed box was labelled "Garage floor off main fl" and has never held the
-// floor: the section reads it as sillOffsetFt, puts the concrete a sill plate
-// below it and the slab 4" below that. Storage did not move — Movie's whole
-// vocabulary here is sill to sill — so the box was renamed and the floor got
-// its own derived row.
-test('the garage schedule shows a sill and a floor 5 1/2" apart', async ({ page }) => {
+// THE GARAGE'S TYPED NUMBER READS SILL TO SILL. Movie, 16 Sep: "lets make it
+// garage sill off foundation sill (its usually to the ft and makes more
+// sense)" — so the one visible offset row measures against the HOUSE's
+// foundation sill, and the two MAIN FL rows (sill and the floor row that
+// never held a floor) retired with the datum change.
+test('the garage sill reads off the foundation sill and the MAIN FL rows are gone', async ({ page }) => {
   await page.goto('/PROJECT.html');
-  const read = async label => {
-    const row = page.locator('#sched-garage .sched-row')
-      .filter({ has: page.locator('.sched-name', { hasText: label }) });
-    await expect(row).toHaveCount(1);
-    return (await row.locator('.sched-value').inputValue()).trim();
-  };
-  const sill = await read('Garage sill off main fl');
-  const floor = await read('Garage floor off main fl');
+  const rows = label => page.locator('#sched-garage .sched-row')
+    .filter({ has: page.locator('.sched-name', { hasText: label }) });
+  await expect(rows('Garage sill off foundation sill')).toHaveCount(1);
+  await expect(rows('Garage sill off main fl')).toHaveCount(0);
+  await expect(rows('Garage floor off main fl')).toHaveCount(0);
 
-  // NEITHER IS BLANK. The sill row was an empty box for as long as its drawing
-  // tag has been struck off: repaint returned on "no tag to place" before
-  // anything wrote the value in, so a row whose whole point is that the number
-  // is still the drafter's showed no number at all. A row with a name, an
-  // editable field and nothing in it reads as not-yet-entered.
-  expect(sill).not.toBe('');
-  expect(floor).not.toBe('');
-
-  // And the drop between them is the sill plate plus the slab's set-down: the
-  // two numbers are one relationship, so they are asserted as one.
-  const inches = t => {
-    const m = /^(-?)(\d+)'-(\d+)(?: (\d+)\/(\d+))?"$/.exec(t);
-    expect(m, `unparsed: ${t}`).toBeTruthy();
-    return (m[1] ? -1 : 1) * (+m[2] * 12 + +m[3] + (m[4] ? +m[4] / +m[5] : 0));
-  };
-  expect(inches(sill) - inches(floor)).toBeCloseTo(5.5, 5);
+  // NOT BLANK: the number is the drafter's, so the box has to show it.
+  const box = rows('Garage sill off foundation sill').locator('.sched-value');
+  expect((await box.inputValue()).trim()).not.toBe('');
 });
 
-// THE BUILDING METHOD, AND THE DOOR THIS PAGE JUST GAINED ONTO IT. Movie,
-// 15 Sep: "if they go to the project area we should allow them to select
-// which method they would like to be currently using ... when they go
-// through the dog menu this is basically a way to easily 'change' the
-// project data". So the drive-thru and this page set ONE value, and the
-// old rule -- buildType is MODEL's alone, kept out of this page's writable
-// keys -- is deliberately reversed.
-//
-// RADIOS, NOT TICK BOXES, and that is the part worth a check of its own:
-// the bone builds "whatever the project says", so two methods on at once
-// has no answer. Pressing a second one must turn the first off.
-test('PROJECT sets the building method, one at a time, and it saves',
+// AND THE STORE DID NOT MOVE. The box converts at the boundary: a typed 0
+// means "on the house's foundation sill", which off MAIN FL is one main-floor
+// package down — the persisted key stays MAIN-FL-relative so the section and
+// every older reader keep the datum they had.
+test('a typed 0 lands the sill on the house sill, stored off MAIN FL', async ({ page }) => {
+  await h.openModel(page);
+  await openProjectPage(page);
+
+  const box = page.locator('[data-detail-input="garageOffset"]');
+  await box.fill(`0'-0"`);
+  await box.dispatchEvent('change');
+
+  const house = -(11.875 + 0.75) / 12;   // main joists + sheathing, in feet
+  await expect.poll(async () =>
+    (await h.savedDrawing(page)).zoneHeights?.zones?.attachedGarage?.offsetFt)
+    .toBeCloseTo(house, 5);
+  // The box still shows the number the drafter typed, in its own datum.
+  expect(offsetFt(await box.inputValue())).toBeCloseTo(0, 5);
+});
+
+// THE BUILDING METHOD, owned by the family buttons now. The Building method
+// radios retired 16 Sep — "they can select below" — so the family rows on
+// the section cards are this page's one door onto buildType, the same key
+// the drive-thru sets. One at a time, and it reaches the file.
+test('a family press sets the building method, one at a time, and it saves',
   async ({ page }) => {
     await h.openModel(page);
     await openProjectPage(page);
 
-    // A fresh drawing has been through no build row, so nothing is chosen --
-    // and NOT CHOSEN is a real choice on the page rather than a blank,
-    // because the office reads an untyped drawing as the bungalow rule and
-    // a drafter has to be able to come back to it.
-    await expect(page.locator('[data-build-method="none"]')).toBeChecked();
+    // A fresh drawing has been through no build row, so nothing glows --
+    // lighting a button would be the card answering for the drafter.
+    await expect(page.locator('.family-button[aria-pressed="true"]')).toHaveCount(0);
 
-    await page.locator('[data-build-method="bilevel"]').check();
-    await expect(page.locator('#status')).toContainText('BILEVEL');
-    await expect(page.locator('[data-build-method="none"]')).not.toBeChecked();
+    await page.locator('[data-family-entry="bilevel-garage"]').click();
+    await expect(page.locator('[data-family-entry="bilevel-garage"]'))
+      .toHaveAttribute('aria-pressed', 'true');
 
-    // IT REACHED THE FILE, not just the radio. This page's save merges its
+    // IT REACHED THE FILE, not just the button. This page's save merges its
     // own keys onto the stored drawing, so a key it does not own is dropped
     // silently -- exactly what happened to buildType before this landed.
     await expect.poll(async () => (await h.savedDrawing(page)).buildType,
@@ -442,16 +436,19 @@ test('PROJECT sets the building method, one at a time, and it saves',
     await foundation.dispatchEvent('change');
     const offset = await page.locator('[data-zone-offset="attachedGarage"]').inputValue();
 
-    await page.locator('[data-build-method="bungalow"]').check();
-    await expect(page.locator('#status')).toContainText('BUNGALOW');
-    await expect(page.locator('[data-build-method="bilevel"]')).not.toBeChecked();
+    await page.locator('[data-family-entry="bungalow-garage"]').click();
+    await expect(page.locator('[data-family-entry="bilevel-garage"]'))
+      .toHaveAttribute('aria-pressed', 'false');
     expect(await page.locator('[data-zone-offset="attachedGarage"]').inputValue(),
       'the garage sill did not follow the method change')
       .not.toBe(offset);
 
     // Survives the reload, which is the whole claim of "project data".
+    await expect.poll(async () => (await h.savedDrawing(page)).buildType)
+      .toBe('bungalow');
     await page.reload();
-    await expect(page.locator('[data-build-method="bungalow"]')).toBeChecked();
+    await expect(page.locator('[data-family-entry="bungalow-garage"]'))
+      .toHaveAttribute('aria-pressed', 'true');
   });
 
 // THE TWO DOORS, AND WHICH ONE WINS. Last press, and the trap it avoids is
@@ -463,7 +460,7 @@ test('a method chosen elsewhere is not clobbered by an unrelated PROJECT save',
   async ({ page }) => {
     await h.openModel(page);
     await openProjectPage(page);
-    await expect(page.locator('[data-build-method="none"]')).toBeChecked();
+    await expect(page.locator('.family-button[aria-pressed="true"]')).toHaveCount(0);
 
     // MODEL's press, arriving underneath the open page. A drawing nobody has
     // saved yet has no file at all -- MODEL writes one on its first edit --
@@ -488,9 +485,8 @@ test('a method chosen elsewhere is not clobbered by an unrelated PROJECT save',
       'an unrelated PROJECT save reset the method chosen in the model space')
       .toBe('twoStorey');
 
-    // AND THE PAGE CATCHES UP. A save re-reads the file, so it is also the
-    // moment this page can stop showing a method that is no longer the
-    // drawing's -- otherwise the radios sit there saying NOT CHOSEN over a
-    // two-storey, and the next press here is made on a false reading.
-    await expect(page.locator('[data-build-method="twoStorey"]')).toBeChecked();
+    // AND NOTHING GLOWS FALSELY. A family button says the type AND the
+    // garage plan, and the planted drawing never said a plan -- so the row
+    // stays dark rather than answering the half it does not know.
+    await expect(page.locator('.family-button[aria-pressed="true"]')).toHaveCount(0);
   });

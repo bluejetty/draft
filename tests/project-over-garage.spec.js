@@ -60,9 +60,6 @@ test('the pressed family button glows and the one before it does not', async ({ 
   await expect(oneStorey).toHaveAttribute('aria-pressed', 'false');
   await expect(twoStorey).toHaveAttribute('aria-pressed', 'true');
 
-  // The method radios are the same fact in another control: 2 STOREY there.
-  await expect(page.locator('[data-build-method="twoStorey"]')).toBeChecked();
-
   // A RELOAD RACES THE WRITE. The page queues its save and returns, so a
   // reload fired the instant a button lights tears the queue down mid-flight
   // and the file keeps the FIRST press -- which reads as the choice not

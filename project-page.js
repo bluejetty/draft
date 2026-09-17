@@ -476,30 +476,19 @@ if (!window.DraftProjectPage) {
   // 3.3pt apart vertically at slope -0.333, which is 3.13pt perpendicular =
   // 3.42" at that sheet's scale. A 2x4 chord.
   const ROOF_CHORD_IN = 3.5;
-  // HALF A PILE. The cut runs along the beam and through the shaft, so the
-  // face drawn is the pile's centreline and the half between it and the break
-  // is what shows -- Movie, 16 Sep: "only half a pile will show due to the
-  // cut line". The earlier 5" dotted line was the same pile understood as
-  // something standing BEHIND the cut, which is why it was dotted and why it
-  // started inside the beam rather than under it.
+  // Half a 10" pile shaft. It earned the HALF name when the old break line
+  // passed through a shaft and only the near half drew -- Movie, 16 Sep:
+  // "only half a pile will show due to the cut line". The garage draws whole
+  // now, so piles draw whole too, at twice this.
   const PILE_HALF_WIDTH_IN = 5;
-  // The attached garage's roof cavity. Movie, 4 Sep: "the roof cavity with
-  // 3.5" top and bottom chords could also be shown with 4' space between
-  // ceiling height and top of top chord", then "just flat section", "talking
-  // about attached garage".
-  //
-  // THE ROOF IS NOT FLAT. Movie: "it is sloped but not the direction we are
-  // cutting" -- the garage roof falls across this section rather than along
-  // it, so the cut runs parallel to its ridge and every chord projects level.
-  // Worth saying, because "drawn level" and "is level" are different claims
-  // and only the first one is true here; someone reading this later should
-  // not come away thinking a garage has a flat roof, or "fix" the drawing by
-  // adding a pitch to it.
-  //
-  // It is also why the house and the garage draw the same members
-  // differently on one sheet: the house is cut ACROSS its slope and gets the
-  // sloping pair, the garage ALONG its slope and gets four level lines.
-  const GARAGE_CAVITY_FT = 4;
+  // Drilled piles under a grade beam land at about 8 ft on centre -- the
+  // spacing BUILD HOUSE and the drafters both work to. Now that the section
+  // draws the garage whole, the run carries every pile, not just the one the
+  // old break line happened to cut through.
+  const PILE_SPACING_FT = 8;
+  // The garage's own framing, a 2x6 wall on the sill. Its end wall shows now
+  // that the section runs the garage's whole depth.
+  const GARAGE_STUD_FT = 5.5 / 12;
   // The garage slab, from Movie, 4 Sep: "draw the 4" sloping slab in there,
   // 5" down from the top and then slope down to the cut line at 1/8" per ft",
   // then exactly: "4" down from top of CONCRETE, 5.5" down from top of GRADE
@@ -527,6 +516,11 @@ if (!window.DraftProjectPage) {
   // fall, because a rate needs a run. So a sloped slab was drawn at whatever
   // station its author happened to be thinking of, and nothing said which.
   const GARAGE_DEPTH_FT = 24;
+  // How much of that depth the section CARD draws. The card is a schematic,
+  // not a scaled plan: Movie's 16 Sep markup draws the garage a few feet
+  // wide with its far end wall, one pile and the eave all showing -- the
+  // parts, not the acreage. The real 24 ft still owns the slab fall above.
+  const GARAGE_DRAWN_DEPTH_FT = 6;
   // 24 ft at 1/8"/ft = 3". The fall is COMPOSED, never written as 3", so it
   // follows if either number moves.
   const garageSlabFallIn = (depthFt = GARAGE_DEPTH_FT) => depthFt * GARAGE_SLAB_SLOPE_IN_PER_FT;
@@ -581,19 +575,10 @@ if (!window.DraftProjectPage) {
   const LADDER_DEPTH_IN = 5.5;    // and its width, standing vertical
   const LADDER_WIDTH_IN = 8;      // outside to outside, the wall's own 8"
   const CUT_DEPTH_FT = 4; // "the first 4 ft of the exterior wall cut inward"
-  // Movie, 4 Sep: the garage panel is the JUNCTION, not a garage -- it is cut
-  // where the garage meets the house. His own drawing dimensions 4'-6" out
-  // from the house wall face, so that is what the section shows.
-  //
-  // Measured off the PDF rather than guessed: the 4'-6" label carries a
-  // HORIZONTAL dimension line from x=107.8 to x=157.0, and x=157 is the wall
-  // face. At 1.0925 in/pt (taken from the 8'-1 1/8" wall drawn 88.9pt tall)
-  // that run is 53.7" -- 4'-6". An earlier "2 ft of straight roof until the
-  // cut" was about the ROOF, and 2 ft of roof sits inside a 4'-6" cut.
-  //
-  // One constant, so if 4'-6" turns out to show too much, every section moves
-  // together and nothing has to be re-measured.
-  const GARAGE_CUT_FT = 4.5;
+  // The garage panel used to be the JUNCTION only -- a 4'-6" slice measured
+  // off Movie's 4 Sep PDF. On 16 Sep he redrew the card with the garage
+  // WHOLE ("the garage side also added too"), so the slice constant retired
+  // and buildGarageSection runs the full GARAGE_DEPTH_FT instead.
   // spec-master.js already says it: "4" POLYSTYRENE VOID FORM UNDER, BETWEEN
   // PILES". The beam is cast on it and it crushes, so frost heave lifts the
   // soil and not the garage.
@@ -784,6 +769,12 @@ if (!window.DraftProjectPage) {
     // truss.
     line(roofStartX, plateY + riseAt(roofStartX) - chordDropFt,
       cut, plateY + riseAt(cut) - chordDropFt, 1);
+    // THE WALL FACE CLOSES THE EAVE. Movie, 16 Sep, marking the eave in pink:
+    // one vertical at the exterior face, soffit up to the top chord's
+    // underside -- the outside of the building carried up to the roof. It
+    // replaces the heel web that used to stand 3 1/2" inside, whose inner
+    // face read as a stray line between the chords.
+    if (eaves) line(0, eaveY, 0, plateY + riseAt(0) - chordDropFt, 2);
     anchors.pitch = { x: cut * 0.45, y: plateY + riseAt(cut * 0.45) + 0.55 };
     // Movie, 4 Sep: the heel reads UNDER the overhang and OVER the 2nd floor
     // wall. Since a label now keeps only its height, the heel sitting at its
@@ -855,15 +846,6 @@ if (!window.DraftProjectPage) {
         y: (lowerPlate + chordFt + plateY + riseAt(lowerMidX) - chordDropFt) / 2,
       };
     }
-    // THE HEEL WEB. A 2x4 standing at the wall with its outer face flush
-    // with the outside, so what shows in section is its INNER face, 3 1/2"
-    // in, running from the bottom chord up to the underside of the top
-    // chord. It replaces a line drawn on the wall face itself that ran the
-    // full height of the heel -- which drew the outside of the building, not
-    // a member.
-    line(ROOF_CHORD_IN / 12, plateY + ROOF_CHORD_IN / 12,
-      ROOF_CHORD_IN / 12, plateY + riseAt(ROOF_CHORD_IN / 12) - chordDropFt, 1);
-
     // Foundation: wall top carries the main floor, footing centered under
     // it, slab pouring against the wall at the footing.
     // The house gets the band it has always been missing: the concrete stopped
@@ -916,7 +898,28 @@ if (!window.DraftProjectPage) {
     // is at the top, and down there it has the space to itself.
     anchors.fdnThickness = { x: fdnFt / 2, y: concTopFt - 0.55 };
     const footW = fdn.footingWidthIn / 12, footD = fdn.footingDepthIn / 12;
-    rect(fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);
+    // FLUSH WHERE A GARAGE STANDS. A footing projects past the faces of its
+    // wall (~6" a side), and on a bare exterior that is what draws. With the
+    // attached garage against this face there is no soil there to project
+    // into -- Movie, 16 Sep: "the footing extends over ... but it shouldn't
+    // go over there" -- so the near edge stops at the shared face and only
+    // the interior side keeps its projection.
+    //
+    // Two garages, two ends. Against a GRADE BEAM ('end') the footing truly
+    // stops at the shared face -- the beam hangs off piles above it -- so it
+    // draws its end line. Against a FROST WALL ('merge') the two footings are
+    // one continuous pour at one depth, so no line at all where they meet:
+    // three sides, the way the garage's own footing already runs off into
+    // this one.
+    const footRight = fdnFt / 2 + footW / 2;
+    if (values.footingFlushLeft) {
+      line(0, fdnBot, footRight, fdnBot, 1.5);
+      line(0, fdnBot - footD, footRight, fdnBot - footD, 1.5);
+      line(footRight, fdnBot - footD, footRight, fdnBot, 1.5);
+      if (values.footingFlushLeft === 'end') line(0, fdnBot - footD, 0, fdnBot, 1.5);
+    } else {
+      rect(fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);
+    }
     anchors.footingWidth = { x: fdnFt / 2, y: fdnBot - footD - 0.5 };
     anchors.footingDepth = { x: fdnFt / 2 + footW / 2 + 0.85, y: fdnBot - footD / 2 };
     const slabFt = fdn.slabIn / 12;
@@ -992,6 +995,53 @@ if (!window.DraftProjectPage) {
         maxY: topY + 1.1,
       },
     };
+  };
+
+  // THE OTHER EAVE, MIRRORED. Movie, 16 Sep: "we should also add the extra
+  // eave part of the house because on some cuts we won't see an eave
+  // otherwise", then "yes there are cut lines the house would actually be
+  // wider". So the section stays a SLICE of a wider house -- break, daylight,
+  // break -- and the far edge comes back as its own short run of wall with
+  // the eave on, mirrored so its outside faces away. It is the same builder's
+  // work flipped, not a second hand-drawn eave, so the two edges can never
+  // drift into disagreeing about the roof.
+  const FAR_EAVE_CUT_FT = 2;    // how much wall the far edge carries
+  const FAR_EAVE_GAP_FT = 1.1;  // the daylight between the two break edges
+  const mirrorSection = (section, atX, keep) => ({
+    parts: section.parts
+      // The main slice already carries grade across the whole drawing.
+      .filter(part => part.kind !== 'grade')
+      .map(part => {
+        if (part.kind === 'rect' || part.kind === 'hatch') {
+          return { ...part, x: atX - part.x - part.w };
+        }
+        if (part.kind === 'break') return { ...part, x: atX - part.x };
+        return { ...part, x1: atX - part.x1, x2: atX - part.x2 };
+      }),
+    // Only the named labels come along -- everything else keeps pointing at
+    // the main slice, where the schedule reads.
+    anchors: Object.fromEntries(Object.entries(section.anchors)
+      .filter(([key]) => keep.includes(key))
+      .map(([key, at]) => [key, { ...at, x: atX - at.x }])),
+    extents: {
+      minX: atX - section.extents.maxX,
+      maxX: atX - section.extents.minX,
+      minY: section.extents.minY,
+      maxY: section.extents.maxY,
+    },
+  });
+  const buildFarEaveSection = values => {
+    const cut = values.cutDepthFt ?? CUT_DEPTH_FT;
+    // The eave's own labels ride to the far edge: when the garage stands at
+    // the near face there is no eave there at all, and this is the one place
+    // on the drawing an OVERHANG or FASCIA label has something to point at.
+    return mirrorSection(buildWallSection({
+      ...values,
+      cutDepthFt: FAR_EAVE_CUT_FT,
+      stairs: false,
+      eaves: true,
+      footingFlushLeft: null,
+    }), cut + FAR_EAVE_GAP_FT + FAR_EAVE_CUT_FT, ['overhang', 'fascia']);
   };
 
   // ── The attached garage, quasi-attached ─────────────────────────────────
@@ -1275,7 +1325,14 @@ if (!window.DraftProjectPage) {
       h: Math.abs(h),
     });
 
-    const cut = -GARAGE_CUT_FT;                // the break edge, 2 ft out
+    // THE WHOLE GARAGE, NOT A SLIVER. Movie, 16 Sep, marking the drawing:
+    // "you notice the house side has been added and the garage side also
+    // added too?" -- his example draws the garage complete, far wall to
+    // house, roof to pile, while the HOUSE keeps its cut lines ("yes there
+    // are cut lines the house would actually be wider"). So this section
+    // ends at a real end wall with its own eave, drawn a schematic
+    // GARAGE_DRAWN_DEPTH_FT out rather than the true 24.
+    const cut = -GARAGE_DRAWN_DEPTH_FT;        // the far end wall's face
     const fdnFt = g.thicknessIn / 12;
     const slabFt = g.slabIn / 12;
 
@@ -1363,8 +1420,8 @@ if (!window.DraftProjectPage) {
     const fdnTop = sillY;
     const concTop = fdnTop - sillFt;
     const fdnBot = frostWall ? g.houseFootingTopFt : concTop - g.fdnWallHeightFt;
-    rect(cut, fdnBot, GARAGE_CUT_FT, concTop - fdnBot, 2);
-    rect(cut, concTop, GARAGE_CUT_FT, sillFt, 1.5);
+    rect(cut, fdnBot, -cut, concTop - fdnBot, 2);
+    rect(cut, concTop, -cut, sillFt, 1.5);
     anchors.garageFdnHeight = { x: cut * 0.5, y: (concTop + fdnBot) / 2 };
     anchors.garageSill = { x: cut * 0.5, y: concTop + sillFt / 2 };
 
@@ -1375,7 +1432,7 @@ if (!window.DraftProjectPage) {
     // rather than stopping against it, the same way the footing does.
     const slabTopHouse = concTop - GARAGE_SLAB_BELOW_CONCRETE_IN / 12;
     const slabTopCut = slabTopHouse
-      - GARAGE_CUT_FT * GARAGE_SLAB_SLOPE_IN_PER_FT / 12;
+      - GARAGE_DEPTH_FT * GARAGE_SLAB_SLOPE_IN_PER_FT / 12;
     // NOT DRAWN, ON EITHER BAND. The cut runs ALONG the beam, so the beam is
     // the cut face and the slab is a few inches BEHIND it: its two sloping
     // lines landed inside the beam band, reading as strays at the sill on a
@@ -1410,21 +1467,17 @@ if (!window.DraftProjectPage) {
       //
       // Three sides, not four. The garage's footing simply runs off into the
       // house's, which is what it does.
+      // A FOOTING PROJECTS, at its real exterior end. The far face at `cut`
+      // is a true outside, so the footing steps past it the way the house's
+      // own does -- half the difference between footing and wall widths.
       const footD = g.footingDepthIn / 12;
-      line(cut, fdnBot - footD, 0, fdnBot - footD, 1.5);   // underside
-      line(cut, fdnBot, 0, fdnBot, 1.5);                   // top
-      line(cut, fdnBot - footD, cut, fdnBot, 1.5);         // the cut end
+      const proj = (g.footingWidthIn == null ? 0
+        : (g.footingWidthIn / 12 - fdnFt) / 2);
+      line(cut - proj, fdnBot - footD, 0, fdnBot - footD, 1.5);   // underside
+      line(cut - proj, fdnBot, cut, fdnBot, 1.5);                 // projecting top
+      line(cut, fdnBot, 0, fdnBot, 1.5);                          // top under the wall
+      line(cut - proj, fdnBot - footD, cut - proj, fdnBot, 1.5);  // the far end
       anchors.garageFooting = { x: cut * 0.5, y: fdnBot - footD / 2 };
-    } else {
-      // 4" void form under the beam, between the piles: the beam is cast on
-      // it and the form crushes, so heaving soil lifts nothing.
-      // It stops at the pile: the beam bears ON the pile there, so a form
-      // carried through would draw the beam sitting on crushable board at
-      // the one point it is meant to be held up.
-      const voidFrom = cut + PILE_HALF_WIDTH_IN / 12;
-      rect(voidFrom, fdnBot - VOID_FORM_IN / 12, -voidFrom, VOID_FORM_IN / 12, 1);
-      hatch(voidFrom, fdnBot - VOID_FORM_IN / 12, -voidFrom, VOID_FORM_IN / 12);
-      anchors.garageVoidForm = { x: voidFrom * 0.5, y: fdnBot - VOID_FORM_IN / 24 };
     }
     // NO FOOTING. Movie, 4 Sep: "why does your garage have a footing?" -- it
     // does not. A grade beam bears on drilled piles at about 8 ft on centre,
@@ -1445,17 +1498,9 @@ if (!window.DraftProjectPage) {
     const plateY = sillY + g.wallHeightFt;
     anchors.garageWallHeight = { x: -0.75, y: sillY + g.wallHeightFt / 2 };
 
-    // STRAIGHT, and no grade. Movie: "no roof slop just 2ft of straight roof
-    // until the cut... we want to show where the connection happens". The
-    // slope and the eave belong to a garage; what happens AT the house is a
-    // level run into the wall. And no grade line on this side at all -- the
-    // garage is standing there, so soil ticks would draw earth inside a
-    // building. The house's own section still carries grade, because a
-    // typical exterior wall does have some.
-    // Ceiling, bottom chord, cavity, top chord. The bottom chord's UNDERSIDE
-    // is the ceiling plane -- the face the finish hangs off -- and the 4'-0"
-    // is measured from that plane to the TOP of the top chord, so the cavity
-    // between the two members is 4'-0" less both chords.
+    // NO GRADE on this side at all -- the garage is standing there, so soil
+    // ticks would draw earth inside a building. The house's own section
+    // still carries grade, because a typical exterior wall does have some.
     const chordFt = ROOF_CHORD_IN / 12;
     // WHERE THE PRESS LIVES. Movie, 15 Sep: "put it under the ATTIC SPACE...
     // put it inline with the garage ceiling line". The ceiling plane, not an
@@ -1463,7 +1508,7 @@ if (!window.DraftProjectPage) {
     // which it does, since pressing it is what moves the wall.
     anchors.garageCeiling = { x: cut * 0.42, y: plateY };
 
-    let topY;
+    let roofBase;
     if (g.roomOver) {
       // A STOREY OVER THE GARAGE. What was the truss cavity is a floor: the
       // ceiling plane is now the underside of the joists, and the deck on top
@@ -1481,22 +1526,54 @@ if (!window.DraftProjectPage) {
       line(0, plateY + joistFt, cut, plateY + joistFt, 1); // top of the joists
       line(0, plateY + deckFt, cut, plateY + deckFt, 2);   // top of the sheathing
       anchors.overGarageFloor = { x: cut * 0.42, y: plateY + joistFt / 2 };
-      topY = plateY + deckFt;
+      roofBase = plateY + deckFt;
     } else {
-      // Ceiling, bottom chord, cavity, top chord.
-      const cavityTop = plateY + GARAGE_CAVITY_FT;
+      // Ceiling and bottom chord; the top chord is the roof slope above.
       line(0, plateY, cut, plateY, 2);
       line(0, plateY + chordFt, cut, plateY + chordFt, 1);
-      line(0, cavityTop - chordFt, cut, cavityTop - chordFt, 1);
-      line(0, cavityTop, cut, cavityTop, 2);
-      anchors.garageCavity = { x: cut * 0.42, y: plateY + GARAGE_CAVITY_FT / 2 };
-      topY = cavityTop;
+      roofBase = plateY;
     }
-    // HALF A PILE, CUT LENGTHWISE. Movie, 16 Sep: "only half a pile will
-    // show due to the cut line" -- the section passes through the shaft, so
-    // what draws is the near half: a face at the pile's centreline and no
-    // line at the break, the same way the footing runs off into the house.
-    //
+
+    // THE ROOF, sloped to a real eave. While the card drew only the junction
+    // the chords ran level into the break; with the end wall drawn, the far
+    // face is a true outside and gets the garage's own eave -- fascia,
+    // soffit, overhang, heel -- from the same numbers its schedule rows
+    // edit, the top chord rising toward the house at the garage's pitch and
+    // butting the house wall.
+    const pitch = g.roofPitch ?? 4;
+    const overhangFt = g.roofOverhangFt ?? 2;
+    const fasciaFt = (g.fasciaIn ?? 5.5) / 12;
+    const heelLiftFt = g.heelIn == null ? 0
+      : Math.max(0, (g.heelIn
+        - roofHeelIn(g.fasciaIn ?? 5.5, overhangFt, pitch)) / 12);
+    const eaveY = roofBase + heelLiftFt;
+    const riseAt = x =>
+      heelLiftFt + fasciaFt + (overhangFt + (x - cut)) * (pitch / 12);
+    rect(cut - overhangFt - 0.1, eaveY, 0.1, fasciaFt, 1.5);         // fascia
+    line(cut - overhangFt, eaveY, cut, eaveY, 1);                    // soffit
+    line(cut - overhangFt, eaveY + fasciaFt,
+      0, roofBase + riseAt(0), 2);                                   // top chord
+    // The eave face: the one vertical at the wall's outside, soffit up to
+    // the top chord's underside -- the same clean eave the house draws.
+    line(cut, eaveY, cut, roofBase + riseAt(cut) - chordFt, 2);
+    const topY = roofBase + riseAt(0);
+    if (!g.roomOver) {
+      anchors.garageCavity = { x: cut * 0.42,
+        y: plateY + (chordFt + riseAt(cut * 0.42) - chordFt) / 2 };
+    }
+    anchors.garagePitch = { x: cut * 0.55,
+      y: roofBase + riseAt(cut * 0.55) + 0.5 };
+    anchors.garageOverhang = { x: cut - overhangFt / 2, y: eaveY - 0.45 };
+    anchors.garageFascia = { x: cut - overhangFt - 0.1,
+      y: eaveY + fasciaFt / 2 };
+    anchors.garageHeel = { x: cut, y: (eaveY + roofBase + riseAt(cut)) / 2 };
+
+    // THE END WALL. The far face at `cut` is the garage's own outside --
+    // the run is drawn whole now, so this is a real wall standing on the
+    // sill, not a break.
+    line(cut, sillY, cut, eaveY, 2);
+    line(cut + GARAGE_STUD_FT, sillY, cut + GARAGE_STUD_FT, plateY, 1.5);
+
     // TOP AT THE BEAM'S UNDERSIDE, because the beam is cast on the pile --
     // "where is the top of the pile" / at the beam. The previous version
     // started it 4" up inside the beam and drew it dotted, as something
@@ -1517,22 +1594,46 @@ if (!window.DraftProjectPage) {
     // wall -- is a closed band and this was not. Hatch is what section-cut
     // concrete gets, and it is the one thing here that says the cut goes
     // THROUGH the pile rather than past it.
-    const pileX = cut + PILE_HALF_WIDTH_IN / 12;
+    const pileW = 2 * PILE_HALF_WIDTH_IN / 12;
     const pileBot = g.houseFootingTopFt - g.footingDepthIn / 12;
     if (!frostWall) {
-      line(pileX, fdnBot, pileX, pileBot, 1.5);      // the shaft's face
-      line(cut, pileBot, pileX, pileBot, 1.5);       // its end, conventional
-      hatch(cut, pileBot, PILE_HALF_WIDTH_IN / 12, fdnBot - pileBot);
-      anchors.garagePile = { x: pileX, y: (fdnBot + pileBot) / 2 };
+      // WHOLE PILES NOW, at roughly 8 ft on centre from the far corner in.
+      // The half-pile-at-the-break convention retired with the break itself:
+      // nothing cuts through a shaft any more, so each one draws both faces,
+      // its conventional bottom on the house footing line, and its hatch.
+      const spans = [];
+      for (let x = cut; x + pileW < 0; x += PILE_SPACING_FT) {
+        spans.push([x, x + pileW]);
+      }
+      spans.forEach(([x0, x1]) => {
+        line(x0, fdnBot, x0, pileBot, 1.5);
+        line(x1, fdnBot, x1, pileBot, 1.5);
+        line(x0, pileBot, x1, pileBot, 1.5);
+        hatch(x0, pileBot, pileW, fdnBot - pileBot);
+      });
+      anchors.garagePile = { x: cut + pileW / 2, y: (fdnBot + pileBot) / 2 };
+      // 4" void form under the beam, BETWEEN the piles: the beam is cast on
+      // it and the form crushes, so heaving soil lifts nothing. It stops at
+      // every pile, because the beam bears ON the pile there -- a form
+      // carried through would draw the beam sitting on crushable board at
+      // the points it is meant to be held up.
+      let from = cut;
+      const voidY = fdnBot - VOID_FORM_IN / 12;
+      spans.concat([[0, 0]]).forEach(([x0, x1]) => {
+        if (x0 > from) {
+          rect(from, voidY, x0 - from, VOID_FORM_IN / 12, 1);
+          hatch(from, voidY, x0 - from, VOID_FORM_IN / 12);
+        }
+        from = Math.max(from, x1);
+      });
+      anchors.garageVoidForm = { x: cut * 0.6, y: fdnBot - VOID_FORM_IN / 24 };
     }
-
-    parts.push({ kind: 'break', x: cut, y1: pileBot - 0.3, y2: topY + 0.3 });
 
     return {
       parts,
       anchors,
       extents: {
-        minX: cut - 1.1,
+        minX: cut - overhangFt - 1.3,
         maxX: 0,      // the shared wall face: the house's own extents carry on
                       // from here, and the two together are one drawing
         minY: pileBot - 1.1,
@@ -1743,6 +1844,7 @@ if (!window.DraftProjectPage) {
     studInFromWallHeightFt,
     roofHeelIn,
     buildWallSection,
+    buildFarEaveSection,
     buildGarageSection,
     buildDetachedGarageSection,
     buildDetachedFoundationDetail,

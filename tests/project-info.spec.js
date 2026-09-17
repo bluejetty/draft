@@ -22,9 +22,8 @@ test.describe('PROJECT page', () => {
   test('the PROJECT button navigates to the project page and back', async ({ page }) => {
     await h.openModel(page);
     await openProjectPage(page);
-    await page.locator('.back').click();
-    await page.waitForURL(/MODEL\.dc\.html/);
-    await h.waitForModelReady(page);
+    await page.locator('.home').click();
+    await page.waitForURL(/MODEL\.html/);
   });
 
   test('project information saves with the drawing and survives a reload', async ({ page }) => {

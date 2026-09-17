@@ -23,13 +23,8 @@
     * { box-sizing:border-box; }
     body { margin:0; min-height:100vh; background:#f5f5f4; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; }
     .topbar { height:52px; display:flex; align-items:center; gap:14px; padding:0 20px; border-bottom:1px solid rgba(29,31,32,.16); background:#fff; }
-    .brand { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:21px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
-    .slash { color:rgba(29,31,32,.32); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:18px; }
-    .section { color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; }
-    .back, .nav-away { margin-left:auto; color:rgba(29,31,32,.56); text-decoration:none; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; }
-    .back:hover, .nav-away:hover { color:#5980a6; }
+    .home { display:block; }
     main { width:min(1180px, calc(100vw - 32px)); margin:30px auto 48px; }
-    h1 { margin:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:27px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
     .intro { max-width:720px; margin:7px 0 0; color:rgba(29,31,32,.63); font-size:14px; line-height:1.5; }
     .notice { display:none; margin-top:18px; padding:10px 12px; border-left:3px solid #a06035; background:rgba(160,96,53,.08); color:rgba(29,31,32,.68); font-size:12px; line-height:1.45; }
     .notice.visible { display:block; }
@@ -66,6 +61,9 @@
       font-weight:600; letter-spacing:.06em; color:rgba(29,31,32,.62); white-space:nowrap; pointer-events:none; }
     .band { display:grid; grid-template-columns:minmax(0,1fr) 600px minmax(0,1fr); max-width:1090px; margin:0 auto; gap:0 12px; align-items:start; justify-content:center; }
     .sched { align-self:start; padding-top:2px; }
+    /* The garage column reads bottom-up like its drawing: the footing is the
+       last row and the deepest part, so the whole stack sits down by it. */
+    #sched-garage { align-self:end; padding-bottom:2px; }
     .sched-head { padding:0 4px 5px; color:rgba(29,31,32,.65); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; }
     /* A VALUE BOX AND A DROPDOWN ARE NOT THE SAME WIDTH. 58px fits the
        longest measurement on the page, 8'-1 1/8" -- but a select also has to
@@ -76,6 +74,15 @@
        house, where the eave is, beside the 7 ft interior cut. */
     .band.band-eave { grid-template-columns:minmax(0,1fr) 600px 210px minmax(0,1fr); max-width:1300px; }
     .sched-row:has(select) { grid-template-columns:minmax(0,1fr) 104px; }
+    /* A wide row is a control that IS its own label -- the foundation
+       dropdown says GRADE BEAM/FROST WALL, the room-over button says ROOM
+       OVER -- so the grey name column would just repeat the box. One cell,
+       box over to the left. */
+    .sched-row.wide, .sched-row.wide:has(select) { grid-template-columns:minmax(0,1fr); }
+    button.sched-value { width:100%; height:23px; border:1px solid #5980a6; background:#fff; color:#1d1f20; padding:2px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; text-align:center; cursor:pointer; }
+    button.sched-value:hover:not(:disabled) { background:rgba(89,128,166,.12); }
+    button.sched-value[aria-pressed="true"] { background:rgba(89,128,166,.22); box-shadow:0 0 0 1px #5980a6 inset; }
+    button.sched-value:disabled { cursor:default; border-color:rgba(29,31,32,.28); color:rgba(29,31,32,.45); }
     .sched-row { display:grid; grid-template-columns:minmax(0,1fr) 58px; gap:7px; align-items:center; padding:3px 4px; border-bottom:1px solid rgba(29,31,32,.07); }
     .sched-row:last-child { border-bottom:0; }
     .sched-row[hidden] { display:none; }
@@ -99,10 +106,6 @@
     .zone-input:hover, .zone-input:focus { border-color:#5980a6; background:rgba(89,128,166,.08); }
     .strip-caption { max-width:1090px; margin:6px auto 0; text-align:center; color:rgba(29,31,32,.55); font-size:12px; line-height:1.45; }
     .zone-note { margin-top:9px; color:rgba(29,31,32,.5); font-size:11px; line-height:1.4; }
-    .method-row { display:flex; flex-wrap:wrap; gap:8px 18px; }
-    .method-choice { display:flex; align-items:center; gap:7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; }
-    .method-choice input { width:15px; height:15px; accent-color:#5980a6; cursor:pointer; }
-    .method-choice input:disabled, .method-choice:has(input:disabled) { cursor:default; color:rgba(29,31,32,.45); }
     /* THE FAMILY ROW. Movie, 15 Sep: "show all the buttons available. the one
        they have currently selection should glow." Worded buttons standing in
        for the cartoon sections he is drawing -- "i will make better buttons
@@ -142,14 +145,11 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">Draft</div>
-    <div class="slash">/</div>
-    <div class="section">Project</div>
-    <a class="nav-away" data-nav-specs href="./SPECS.html">Specifications &rarr;</a>
-    <a class="back" style="margin-left:14px;" href="./MODEL.dc.html">&larr; Back to Model</a>
+    <a class="home" href="./MODEL.html" aria-label="Back to Model">
+      <img src="./assets/rough-drafter-logo.png" alt="Rough Drafter" style="height:38px; display:block;" />
+    </a>
   </header>
   <main>
-    <h1>Project</h1>
     <div class="notice" id="no-drawing-notice">Browser storage is unavailable &mdash; showing the office defaults, read-only.</div>
 
     <section class="card" aria-label="Project identity">
@@ -182,14 +182,6 @@
           <div class="field-label">Rooms &mdash; from the plan&#8217;s stamps</div>
           <div class="zone-note" data-room-counts>Counted when the bone builds &mdash; the room stamps are the latest word.</div>
         </div>
-      </div>
-    </section>
-
-    <section class="card" aria-label="Building method">
-      <div class="card-title">Building method</div>
-      <div class="card-body">
-        <div class="method-row" id="method-row" role="radiogroup" aria-label="Building method"></div>
-        <div class="zone-note">The method this drawing is being built to. The drive-thru sets the same one &mdash; it is the quick way to change it, this is the long one &mdash; and whichever was pressed last is the one the bone builds. Changing it here does not move anything already drawn; it changes what the office assumes about it, starting with where an attached garage&#8217;s sill sits.</div>
       </div>
     </section>
 
@@ -598,7 +590,7 @@
       // succession write in the order they were made. Each pass re-reads, so
       // the second sees the first's revision.
       let saveQueue = Promise.resolve();
-      // Set once the method radios exist: a save re-reads the stored file, so
+      // Set once the family rows exist: a save re-reads the stored file, so
       // it is also this page's chance to notice a method chosen elsewhere
       // since the tab opened and stop showing the stale one.
       let refreshMethodRow = null;
@@ -645,66 +637,14 @@
       });
 
       // ── The building method ─────────────────────────────────────────────
-      // ONE CURRENT METHOD, so radios and not tick boxes: the bone builds
-      // "whatever the project says", and a pair of boxes both ticked has no
-      // answer to what that is.
-      //
-      // NULL IS A REAL STATE and gets its own choice. A drawing that has
-      // never been through the build row carries no type, and the office
-      // treats that as the bungalow rule (derivedAttachedOffsetFt) -- said
-      // out loud here rather than left as a blank nobody can return to.
-      //
-      // The names are build-menu.js's, which is the drive-thru's list, so
-      // the two doors cannot come to disagree about what the office builds.
-      // The list here is BUILD_TYPE_BUTTONS rather than the menu families:
-      // a family is a shelf of whole houses (garage, room over) and only the
-      // `type` on an entry reaches the file, which is what this chooses.
-      const methodRow = document.querySelector('#method-row');
-      const methodChoices = [
-        { id: null, label: 'NOT CHOSEN' },
-        ...window.DraftBuildMenu.BUILD_TYPE_BUTTONS.map(b => ({ id: b.id, label: b.label })),
-      ];
-      methodChoices.forEach(choice => {
-        const label = document.createElement('label');
-        label.className = 'method-choice';
-        const input = document.createElement('input');
-        input.type = 'radio';
-        input.name = 'building-method';
-        input.value = choice.id ?? '';
-        input.checked = buildType === choice.id;
-        input.disabled = readOnly;
-        input.dataset.buildMethod = choice.id ?? 'none';
-        input.addEventListener('change', () => {
-          if (!input.checked) return;
-          buildType = choice.id;
-          methodPressedHere = true;
-          // The garage sill branches on it, so the section, the zones and the
-          // table are all answering a different question now.
-          syncFamilyRow();
-          repaint(); fillZones(); fillTable();
-          save(`Building method: ${choice.label}.`);
-        });
-        label.appendChild(input);
-        label.appendChild(document.createTextNode(choice.label));
-        methodRow.appendChild(label);
-      });
-      // The radios follow `buildType` whoever set it — the family buttons on
-      // the section card set the same key, and two controls for one fact that
-      // do not track each other is the page telling two stories.
-      const refreshMethodRadios = () => {
-        methodRow.querySelectorAll('input').forEach(input => {
-          input.checked = (input.dataset.buildMethod === 'none' ? null
-            : input.dataset.buildMethod) === buildType;
-        });
-      };
+      // ONE CURRENT METHOD, owned by the family buttons on the section cards
+      // (build-menu.js's list, the same key the drive-thru sets). A save
+      // re-reads the stored file, so this is where a method chosen elsewhere
+      // since the tab opened stops being shown stale.
       refreshMethodRow = () => {
         const stored = format.buildType(drawing?.buildType);
         if (stored === buildType) return;
         buildType = stored;
-        methodRow.querySelectorAll('input').forEach(input => {
-          input.checked = (input.dataset.buildMethod === 'none' ? null
-            : input.dataset.buildMethod) === stored;
-        });
         syncFamilyRow();
         repaint(); fillZones(); fillTable();
       };
@@ -961,6 +901,10 @@
             fdnWallHeightFt: cellValue('attachedGarage', 'fdnWallHeightFt').value,
             slabIn: cellValue('attachedGarage', 'slabThicknessIn').value,
             thicknessIn: fdnThicknessIn(),
+            roofPitch: cellValue('attachedGarage', 'roofPitch').value,
+            roofOverhangFt: cellValue('attachedGarage', 'roofOverhangFt').value,
+            fasciaIn: ROOF_FASCIA_IN,
+            heelIn: garageHeelIn(),
             roomOver: true,
             overJoistIn: over.joistDepthIn,
             overSheathingIn: over.sheathingIn,
@@ -1319,6 +1263,13 @@
       // two ways out of the repaint loop and only one of them used to do it.
       const syncValue = (control, el) => {
         if (control.kind === 'chip') { el.textContent = control.text(); return; }
+        if (control.kind === 'rowbutton') {
+          el.textContent = control.get();
+          if (control.pressed) {
+            el.setAttribute('aria-pressed', control.pressed() ? 'true' : 'false');
+          }
+          return;
+        }
         if (document.activeElement !== el) el.value = control.get();
       };
 
@@ -1799,7 +1750,6 @@
           if (readOnly) return;
           buildType = entry.type;
           methodPressedHere = true;
-          refreshMethodRadios();
           applyGaragePlan(planForEntry(entry));
         });
         familyRow.appendChild(button);
@@ -1830,7 +1780,6 @@
             if (readOnly) return;
             buildType = entry.type;
             methodPressedHere = true;
-            refreshMethodRadios();
             applyGaragePlan(planForEntry(entry));
           });
           bilevelFamilyRow.appendChild(button);
@@ -1902,8 +1851,8 @@
       // somewhere else: it is a ZONE HEIGHT, because it is a height relative
       // to MAIN FL rather than a property of the garage's assembly.
       const garageControls = [];
-      const addGarage = (key, name, get, set, kind, offSection) =>
-        garageControls.push({ key, name, get, set, kind, offSection });
+      const addGarage = (key, name, get, set, kind, offSection, wide) =>
+        garageControls.push({ key, name, get, set, kind, offSection, wide });
 
       // The bottom of the house's foundation wall -- the top of its footing.
       // Derived from the same numbers the house section is drawn from: MAIN FL
@@ -1952,10 +1901,22 @@
       //
       // All three read and write the ATTACHED GARAGE row of the table below:
       // one pitch for the garage, not two that agree until someone edits one.
+      // THE ORDER IS MOVIE'S, 16 Sep: roof block first (pitch, fascia,
+      // overhang, heel last), then the ROOM OVER press, wall height, sill
+      // plate, the foundation dropdown, slab, the frost wall / grade beam
+      // height, footing last -- top of the garage to the bottom, the way the
+      // drawing beside it reads.
       garageCell('garagePitch', 'Garage roof pitch : 12', 'roofPitch', String, text => {
         const value = Number(text);
         return Number.isFinite(value) && value > 0 && value <= 24 ? value : null;
       }, true);
+      // The garage had no fascia row at all. Movie asked for the four in one
+      // order "on both house and garage", and a set of four with one missing
+      // is not the same set -- so it gains the row the house already had.
+      addGarage('garageFascia', 'Garage fascia depth',
+        () => inchesOnly(ROOF_FASCIA_IN), () => false, undefined, true);
+      garageCell('garageOverhang', 'Garage eave overhang', 'roofOverhangFt', ftIn,
+        text => { const v = parseFtIn(text); return v != null && v <= 6 ? v : null; }, true);
       // SAME RULE AS THE HOUSE, and same band. Movie, 5 Sep: "garage roof
       // should act the same yes". Calculated by default from fascia + rise,
       // typeable when somebody raises it, and cleared back to the calculation
@@ -1981,43 +1942,38 @@
           writeCell('attachedGarage', 'roofHeelIn', value);
           return true;
         }, undefined, true);
-      // The garage had no fascia row at all. Movie asked for the four in one
-      // order "on both house and garage", and a set of four with one missing
-      // is not the same set -- so it gains the row the house already had.
-      addGarage('garageFascia', 'Garage fascia depth',
-        () => inchesOnly(ROOF_FASCIA_IN), () => false, undefined, true);
-      garageCell('garageOverhang', 'Garage eave overhang', 'roofOverhangFt', ftIn,
-        text => { const v = parseFtIn(text); return v != null && v <= 6 ? v : null; }, true);
+
+      // THE SECOND DOOR ONTO THE STOREY OVER. The press on the drawing stays
+      // where the ceiling line is; this row is the same state in the column,
+      // sized like the foundation dropdown below it -- Movie, 16 Sep: "add
+      // the + ROOM OVER box (but match its size to the frost wall box size)".
+      // Its label is its face, so the row is wide and carries no grey name.
+      addGarage('garageRoomOver', 'Storey over the garage',
+        () => (roomOver() ? 'ROOM OVER ✓' : '+ ROOM OVER'),
+        () => false, 'rowbutton', true, true);
 
       garageCell('garageWallHeight', 'Garage wall height', 'mainWallHeightFt', ftIn, parseFtIn);
-      // THE FOUNDATION BLOCK, read top down like the drawing. Movie, 4 Sep:
-      // "the 2 up top GARAGE FOUNDATION and GARAGE FLOOR OFF MAIN, put over
-      // the SILL PLATE (on top), bring them down." At the top of the list
-      // they were the first thing read and the last thing drawn.
-      addGarage('garageFoundationType', 'Garage foundation',
-        garageFoundation,
-        value => { writeCell('attachedGarage', 'garageFoundation', value); return true; },
-        'choice');
-      // THE TYPED NUMBER IS THE SILL. It was labelled "Garage floor off main
-      // fl" and it has never been the floor -- the section reads it as
-      // sillOffsetFt, puts the concrete a sill plate under it and the slab 4"
-      // under that, so the floor a drafter pictures is 5 1/2" lower.
+      addGarage('garageSill', 'Sill plate',
+        () => inchesOnly(attachmentIn()), () => false);
+      // THE TYPED NUMBER IS THE SILL, MEASURED SILL TO SILL. Movie, 16 Sep:
+      // "lets make it garage sill off foundation sill (its usually to the ft
+      // and makes more sense)". Off MAIN FL the inline garage read as a
+      // floor-package fraction; off the house's foundation sill it reads 0
+      // when inline and a clean -2'-0" when stepped down.
       //
-      // STORAGE DID NOT MOVE, deliberately. Movie's whole vocabulary for this
-      // is sill to sill -- GARAGE_SILL_BELOW_HOUSE_FT, "95% inline" on a
-      // bilevel -- and derivedAttachedOffsetFt computes it FROM houseSillFt().
-      // Storing the floor instead would fight that derivation and need every
-      // saved drawing migrated 5 1/2", to fix a word. The box was wrong, not
-      // the number.
-      //
-      // The floor did not just lose its label though: it gets its own derived
-      // row below, so the number the old name promised is still on the page,
-      // now attached to the thing it names.
-      addGarage('garageOffset', 'Garage sill off main fl',
-        () => signedFtIn(attachedOffsetFt()),
+      // STORAGE DID NOT MOVE, deliberately. The zone key stays MAIN-FL
+      // relative -- derivedAttachedOffsetFt, the painter and the zone card
+      // all speak that language -- so the box converts at its own edge:
+      // shown less houseSillFt(), typed plus it. The old GARAGE FLOOR OFF
+      // MAIN FL row is gone outright; the floor is one relationship off the
+      // sill and a second box would be a number that agrees with the first
+      // until somebody edits one of them.
+      addGarage('garageOffset', 'Garage sill off foundation sill',
+        () => signedFtIn(attachedOffsetFt() - houseSillFt()),
         text => {
           const value = parseSignedFtIn(text);
           if (value == null) return false;
+          const stored = value + houseSillFt();
           // ONLY DOWN, AND ONLY AS FAR AS THERE IS FOUNDATION. Movie, 4 Sep:
           // "the garage is adjustable compared to the house for both but only
           // down on the foundation (can't go up)", and "needs foundation to
@@ -2029,36 +1985,33 @@
           // the garage's beam is fastened to that wall -- past its bottom
           // there is nothing to fasten to. A deeper basement therefore lets
           // the garage go lower, with no second number to keep in step.
-          if (value > 0) {
+          if (stored > 0) {
             showStatus('A garage sill only steps DOWN from MAIN FL, never up.');
             return false;
           }
           const lowest = houseFootingTopFt();
-          if (value < lowest) {
-            showStatus(`Nothing to attach to below ${signedFtIn(lowest)} — `
+          if (stored < lowest) {
+            showStatus(`Nothing to attach to below ${
+              signedFtIn(lowest - houseSillFt())} — `
               + 'that is where the house foundation stops.');
             return false;
           }
           zoneHeights = format.zoneHeights({ ...zoneHeights,
-            zones: { ...zoneHeights.zones, attachedGarage: { offsetFt: value } } });
+            zones: { ...zoneHeights.zones, attachedGarage: { offsetFt: stored } } });
           return true;
         });
 
-      // THE FLOOR, DERIVED, sitting directly under the sill it hangs from so
-      // the pair reads as the drop it is. Not typeable: there is exactly one
-      // floor for a given sill, and a second box would be a number that agrees
-      // with the first until somebody edits one of them.
-      const garageFloorOffsetFt = () => attachedOffsetFt()
-        - (attachmentIn() + projectPage.GARAGE_SLAB_BELOW_CONCRETE_IN) / 12;
-      addGarage('garageFloor', 'Garage floor off main fl',
-        () => signedFtIn(garageFloorOffsetFt()), () => false);
-
-      addGarage('garageSill', 'Sill plate',
-        () => inchesOnly(attachmentIn()), () => false);
+      // THE DROPDOWN IS ITS OWN TITLE. Movie, 16 Sep: "foundation dropdown
+      // (box moved over to left and no title (covered by box))" -- the box
+      // says GRADE BEAM or FROST WALL, so a grey GARAGE FOUNDATION beside it
+      // named nothing the box had not already said.
+      addGarage('garageFoundationType', 'Garage foundation',
+        garageFoundation,
+        value => { writeCell('attachedGarage', 'garageFoundation', value); return true; },
+        'choice', undefined, true);
+      garageCell('garageSlab', 'Garage slab thickness', 'slabThicknessIn', inchesOnly, parseInches);
       // NOT "FOUNDATION WALL". Movie: "call it GARAGE GRADE BEAM HEIGHT, not
-      // 'foundation wall'". With the sill directly above it the two rows read
-      // as the 33 1/2" stack, which is the reading the old wording invited
-      // people to get wrong.
+      // 'foundation wall'".
       //
       // The name follows the CHOICE: this same 2'-8" field is a frost wall
       // when the dropdown says so, and a row labelled "grade beam" on a frost
@@ -2068,12 +2021,9 @@
         () => (garageFoundation() === 'frostwall'
           ? 'Garage frost wall height' : 'Garage grade beam height'),
         'fdnWallHeightFt', ftIn, parseFtIn);
-      garageCell('garageSlab', 'Garage slab thickness', 'slabThicknessIn', inchesOnly, parseInches);
       // No footing rows: a grade beam on piles has no spread footing. A FROST
       // WALL garage would -- that is the variant that gets one -- and it is
       // not a foundation type this page offers yet.
-      addGarage('garageVoidForm', 'Void form under beam',
-        () => inchesOnly(projectPage.VOID_FORM_IN), () => false);
       addGarage('garageFooting', 'Footing — level with the house',
         () => {
           const asm = assembly(1);
@@ -2087,8 +2037,9 @@
         tag.textContent =
           drawTagFor(control.key, nameOf(control).replace(/^Garage /, '').toUpperCase()) || '';
         garageWrap.appendChild(tag);
-        const input = control.kind === 'choice'
-          ? document.createElement('select') : document.createElement('input');
+        const input = control.kind === 'rowbutton' ? document.createElement('button')
+          : control.kind === 'choice'
+            ? document.createElement('select') : document.createElement('input');
         if (control.kind === 'choice') {
           projectPage.GARAGE_FOUNDATIONS.attachedGarage.forEach(id => {
             const option = document.createElement('option');
@@ -2099,17 +2050,36 @@
         }
         input.className = 'sched-value';
         input.dataset.detailInput = control.key;
-        input.setAttribute('aria-label', control.name);
+        input.setAttribute('aria-label', nameOf(control));
         input.disabled = readOnly;
-        input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
-        input.addEventListener('change', () => {
-          if (control.set(input.value)) save('Garage default saved.');
-          repaint();
-          fillZones();
-          fillTable();
-          input.value = control.get();
-        });
-        link(schedRow(garageSched, control.key, nameOf(control), input), tag);
+        if (control.kind === 'rowbutton') {
+          // The same door the button on the drawing opens: one applyGaragePlan,
+          // so the two presses cannot disagree about what a press means.
+          input.type = 'button';
+          input.dataset.roomOverRow = '';
+          control.pressed = roomOver;
+          syncValue(control, input);
+          input.addEventListener('click', () => {
+            if (readOnly) return;
+            applyGaragePlan(roomOver() ? 'attached' : 'attachedRoomOver');
+          });
+        } else {
+          input.addEventListener('keydown', e => { if (e.key === 'Enter') input.blur(); });
+          input.addEventListener('change', () => {
+            if (control.set(input.value)) save('Garage default saved.');
+            repaint();
+            fillZones();
+            fillTable();
+            input.value = control.get();
+          });
+        }
+        const row = schedRow(garageSched, control.key,
+          control.wide ? '' : nameOf(control), input);
+        if (control.wide) {
+          row.classList.add('wide');
+          row.querySelector('.sched-name').remove();
+        }
+        link(row, tag);
         controlEls.set(control.key, { control, el: input, tag, host: garageWrap });
       });
 
@@ -2134,6 +2104,10 @@
             fdnWallHeightFt: cell('fdnWallHeightFt'),
             slabIn: cell('slabThicknessIn'),
             thicknessIn: fdnThicknessIn(),
+            roofPitch: cell('roofPitch'),
+            roofOverhangFt: cell('roofOverhangFt'),
+            fasciaIn: ROOF_FASCIA_IN,
+            heelIn: garageHeelIn(),
             // A STOREY OVER IT, and the package is the overGarage level's own
             // -- level-assembly.js answers 19 1/4" and 3/4" for role 4, the
             // same object the sidebar level card edits. Read, never retyped:
@@ -2213,9 +2187,18 @@
         // still on the sheet would be the card showing a house the drafter
         // just said this is not -- and every garage label goes with it,
         // because the loop below hides what has no anchor.
+        // The house's own footing stops clean at the shared face when a
+        // garage stands there: no soil to project into. Against a grade beam
+        // that end is a real end and draws; against a frost wall the two
+        // footings are one pour and no line marks where they meet.
+        const footingFlushLeft = !garageShown() ? null
+          : garageFoundation() === 'frostwall' ? 'merge' : 'end';
         const { anchors, view } = projectPage.paintSections(canvas, [
           ...(garageShown() ? [projectPage.buildGarageSection(garageValues())] : []),
-          projectPage.buildWallSection(detailValues()),
+          projectPage.buildWallSection({ ...detailValues(), footingFlushLeft }),
+          // The far edge of the wider house, back from beyond the break: the
+          // slice's second eave, mirrored from the same numbers.
+          projectPage.buildFarEaveSection(detailValues()),
         ]);
         // Band 2 rides along on every repaint. It shares the roof, the wall
         // type and the grade offset with band 1, so a pitch or eave change up
@@ -2234,7 +2217,9 @@
             // over the garage"; a MODIFIED BILEVEL without it is the type
             // minus the thing that names it.
             projectPage.buildGarageSection(bilevelGarageValues()),
-            projectPage.buildWallSection(bilevelValues()),
+            projectPage.buildWallSection({ ...bilevelValues(),
+              footingFlushLeft:
+                garageFoundation() === 'frostwall' ? 'merge' : 'end' }),
           ]);
           fillBilevel(bilevelCanvas.paintedSection);
         }
@@ -2292,7 +2277,7 @@
             // true: real values, not visible in this view.
             tag.style.display = 'none';
             if (row) row.hidden = false;
-            if (document.activeElement !== el) el.value = control.get();
+            syncValue(control, el);
             return;
           }
           if (!at && control.kind === 'choice') {
@@ -2303,7 +2288,7 @@
             // the one control that changes the drawing most disappear.
             tag.style.display = 'none';
             if (row) row.hidden = false;
-            if (document.activeElement !== el) el.value = control.get();
+            syncValue(control, el);
             return;
           }
           if (!at) {

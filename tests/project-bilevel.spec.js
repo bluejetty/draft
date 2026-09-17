@@ -257,7 +257,7 @@ for (const [label, host] of [['band 1', '#detail-wrap'], ['band 2', '#bilevel-wr
 test('no schedule row states a direction and then contradicts it', async ({ page }) => {
   await openProject(page);
   const bad = await page.evaluate(() => [...document.querySelectorAll('.sched-row')]
-    .filter(r => !r.hidden)
+    .filter(r => !r.hidden && r.children.length > 1)
     .map(r => {
       const name = (r.children[0].textContent || '').toLowerCase();
       const el = r.children[1];
