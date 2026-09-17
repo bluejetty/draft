@@ -736,7 +736,26 @@
       const ftIn = ft => fmt.formatArchitecturalInches(ft * 12);
       const inchesOnly = inches => fmt.formatInchesOnly(inches);
 
+      // HOW FAR THE HOUSE CUT REACHES IN, on this card. Movie, 17 Sep, on the
+      // garage roof dying into the house roof: "maybe move the cut line to
+      // the right and make the house roof a bit higher on the left side."
+      //
+      // At the module's 4 ft the junction landed 5 1/4" short of the break
+      // line and the house roof cleared the garage roof by an inch and a
+      // half, so the two arrived together in a corner and neither read. A
+      // foot more cut is a foot more roof climbing past the junction, which
+      // is the same thing his second half asks for -- the house roof standing
+      // clearly higher where the garage meets it.
+      //
+      // ONE NUMBER FOR EVERY BUNGALOW VIEW, not just the ones with a garage:
+      // a drawing that got wider when the garage was pressed would be the
+      // card redrawing itself around a part rather than showing a house. The
+      // bilevel band already sets its own 7 ft for its own reason, which is
+      // what makes this a per-drawing value rather than the constant.
+      const HOUSE_CUT_FT = 5;
+
       const detailValues = () => ({
+        cutDepthFt: HOUSE_CUT_FT,
         floors: drawnFloorLevels().map(level => {
           const asm = assembly(level.id);
           return { id: level.id, name: level.name, wallHeightFt: asm.wallHeightFt,
@@ -762,6 +781,23 @@
         roof: { pitch: roofPitch, overhangFt: roofOverhang, fasciaIn: ROOF_FASCIA_IN, heelIn: roofHeelIn() },
         wallThicknessIn: WALL_TYPE_VIEW[activeWallType].totalIn,
       });
+
+      // THE TOP PLATE, by the same climb buildWallSection makes: each level
+      // stands on the one below plus its own floor package, and the plate is
+      // the tallest wall top in the stack. Derived from the same floors() the
+      // section is drawn from, for the reason upperDeckFt() is: the garage
+      // roof has to agree with the house it dies into.
+      const housePlateFt = () => {
+        const floors = detailValues().floors;
+        let y = 0, plate = 0;
+        floors.forEach((level, index) => {
+          plate = Math.max(plate, y + level.wallHeightFt);
+          const next = floors[index + 1];
+          y += level.wallHeightFt
+            + (next ? (next.joistDepthIn + next.sheathingIn) / 12 : 0);
+        });
+        return plate;
+      };
 
       // ── BAND 2: the modified bilevel ────────────────────────────────────
       // Movie, 5 Sep: "copy the other one you made and we can adjust to match
@@ -1683,32 +1719,19 @@
         return row;
       };
 
-      // The exterior wall type governs the whole section, so it heads the
-      // house's schedule rather than floating on the wall body it used to sit
-      // against.
-      const wallTypeSelect = document.createElement('select');
-      wallTypeSelect.className = 'sched-value';
-      wallTypeSelect.dataset.detailInput = 'wallType';
-      wallTypeSelect.setAttribute('aria-label', 'Exterior wall type');
-      EXTERIOR_CHOICES.forEach(id => {
-        const option = document.createElement('option');
-        option.value = id;
-        option.textContent = WALL_TYPE_VIEW[id].label;
-        wallTypeSelect.appendChild(option);
-      });
-      if (!EXTERIOR_CHOICES.includes(activeWallType)) {
-        const option = document.createElement('option');
-        option.value = activeWallType;
-        option.textContent = WALL_TYPE_VIEW[activeWallType].label;
-        wallTypeSelect.appendChild(option);
-      }
-      wallTypeSelect.value = activeWallType;
-      wallTypeSelect.disabled = readOnly;
-      wallTypeSelect.addEventListener('change', () => {
-        activeWallType = wallTypeSelect.value;
-        save('Exterior wall type saved.');
-        repaint();
-      });
+      // THE SHARED EXTERIOR WALL TYPE ROW IS GONE. Movie, 17 Sep: "we don't
+      // need the EXTERIOR WALL TYPE box it is taken care of on each floor
+      // level." It headed the house's schedule and every level below it
+      // offered SAME AS HOUSE, so the same question was asked twice on one
+      // card and the top one governed a wall the drafter could already name
+      // floor by floor.
+      //
+      // activeWallType ITSELF STAYS, and this is the whole reason the row
+      // could go rather than the value. It is the drawing's shared exterior
+      // type, set where walls are actually drawn -- MODEL's wall picker --
+      // read here for any level left on SAME AS HOUSE, and still saved with
+      // the drawing. Deleting the value would have made SAME AS HOUSE mean
+      // nothing; deleting the row only stops this card asking a second time.
 
       const controlEls = new Map();
 
@@ -1748,8 +1771,6 @@
 
       schedHead(garageSched, 'Attached garage');
       schedHead(houseSched, 'House');
-
-      schedRow(houseSched, 'wallType', 'Exterior wall type', wallTypeSelect);
 
       ANNOTATIONS.forEach(({ key, text, beside }) => {
         const tag = document.createElement('span');
@@ -2213,6 +2234,18 @@
             roomOver: roomOver(),
             overJoistIn: assembly(OVER_GARAGE_LEVEL_ID).joistDepthIn,
             overSheathingIn: assembly(OVER_GARAGE_LEVEL_ID).sheathingIn,
+            // WHAT THE GARAGE ROOF DIES INTO. Over the house's top plate
+            // there is no house wall for it to stop against, only the house's
+            // own roof climbing inward -- so the section is handed that plane
+            // rather than left to assume a wall is there. On a 2 STOREY the
+            // wall really is there and the same test leaves the drawing
+            // exactly as it was.
+            houseRoof: {
+              plateFt: housePlateFt(),
+              heelIn: roofHeelIn(),
+              pitch: roofPitch,
+              cutFt: HOUSE_CUT_FT,
+            },
           },
         };
       };

@@ -1012,16 +1012,31 @@ if (!window.DraftProjectPage) {
   // work flipped, not a second hand-drawn eave, so the two edges can never
   // drift into disagreeing about the roof.
   const FAR_EAVE_CUT_FT = 2;    // how much wall the far edge carries
-  const FAR_EAVE_GAP_FT = 1.1;  // the daylight between the two break edges
+  // ONE BREAK LINE, AND THE TWO HALVES MEET ON IT. Movie, 17 Sep: "for the
+  // cut lines can you only put 1 line and just let the cut house both sides
+  // meet at that same line ... there will be 2 total 1 for garage one for
+  // house."
+  //
+  // The slice and the far edge each ended in a break of their own with 1.1 ft
+  // of daylight between them, which is the textbook way to say "and the house
+  // carries on out here" -- and on a drawing this narrow it read as two cuts
+  // rather than one. Closing the gap to zero lands the far edge's break on
+  // the slice's, and dropping the mirrored copy below leaves exactly one line
+  // where the two halves join. The house is still a SLICE of a wider house;
+  // the single break is what now says so.
+  const FAR_EAVE_GAP_FT = 0;
   const mirrorSection = (section, atX, keep) => ({
     parts: section.parts
       // The main slice already carries grade across the whole drawing.
       .filter(part => part.kind !== 'grade')
+      // AND IT ALREADY CARRIES THE BREAK. Mirrored, this one lands on top of
+      // the slice's with its jog flipped, so the pair drew a lens where a
+      // single line belongs.
+      .filter(part => part.kind !== 'break')
       .map(part => {
         if (part.kind === 'rect' || part.kind === 'hatch') {
           return { ...part, x: atX - part.x - part.w };
         }
-        if (part.kind === 'break') return { ...part, x: atX - part.x };
         return { ...part, x1: atX - part.x1, x2: atX - part.x2 };
       }),
     // Only the named labels come along -- everything else keeps pointing at
@@ -1590,8 +1605,39 @@ if (!window.DraftProjectPage) {
       cut + chordFt, roofBase + riseAt(cut + chordFt) - chordDropFt, 1);
     // The level stretch: the same chord pair carried flat into the house.
     const flatY = roofBase + riseAt(breakX);
-    line(breakX, flatY, 0, flatY, 2);
-    line(breakX, flatY - chordFt, 0, flatY - chordFt, 1);
+    // WHERE THE GARAGE ROOF ACTUALLY ENDS. Movie, 17 Sep: "the upper garage
+    // roof that is cut off where it hits the ext wall (but no wall there) it
+    // could continue until it is cut off by the top roof line of the house."
+    //
+    // Both chord lines used to stop dead at x = 0 because that is the shared
+    // wall FACE -- but a face is not a wall above the house's top plate, and
+    // on a bungalow the garage roof arrives better than a foot over it. What
+    // is actually there is the house's own roof, climbing inward at its
+    // pitch, and that is what cuts this one off.
+    //
+    // A HEIGHT DECIDES, NOT A BUILD TYPE. Below the house plate there IS wall
+    // and the line still stops at the face, which is a 2 STOREY with nothing
+    // further asked of it. Above the plate it runs on to where the house's
+    // roof plane stands at that same height, clamped to the house's own cut
+    // so it can never outrun the drawing. The top chord and its underside
+    // meet that plane at different x, and the gap between the two is what
+    // draws the raked end the junction really has.
+    //
+    // THE HEEL IS THE ROOF AT THE WALL. roofHeelIn is fascia plus the rise
+    // across the overhang, which is exactly the house roof's height over its
+    // plate at x = 0 -- so the plane is plate + heel, sloping at pitch:12,
+    // and nothing here re-derives an eave that buildWallSection already owns.
+    const house = g.houseRoof;
+    const intoHouseAt = y => {
+      if (!house || y <= house.plateFt) return 0;
+      const slope = house.pitch / 12;
+      if (!(slope > 0)) return 0;
+      const x = (y - (house.plateFt + house.heelIn / 12)) / slope;
+      return Math.max(0, Math.min(x, house.cutFt));
+    };
+    const roofEndX = Math.max(intoHouseAt(flatY), intoHouseAt(flatY - chordFt));
+    line(breakX, flatY, intoHouseAt(flatY), flatY, 2);
+    line(breakX, flatY - chordFt, intoHouseAt(flatY - chordFt), flatY - chordFt, 1);
     // THE DOUBLE BREAK, through everything the cut goes through at this
     // station: roof, wall cavity, beam or frost wall, footing.
     const breakBot = g.houseFootingTopFt - g.footingDepthIn / 12 - 0.3;
@@ -1675,8 +1721,10 @@ if (!window.DraftProjectPage) {
       anchors,
       extents: {
         minX: cut - overhangFt - 1.3,
-        maxX: 0,      // the shared wall face: the house's own extents carry on
-                      // from here, and the two together are one drawing
+        // The shared wall face, or as far past it as the roof ran before the
+        // house's own roof cut it off. The house's extents carry on from
+        // here either way, and the two together are one drawing.
+        maxX: Math.max(0, roofEndX),
         minY: pileBot - 1.1,
         maxY: topY + 1.1,
       },
