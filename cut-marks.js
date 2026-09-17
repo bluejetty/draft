@@ -92,8 +92,45 @@ if (!window.DraftCutMarks) {
     const edge = eMarkDimEdges(walls, dimensions);
     const { minX, maxX, minZ, maxZ } = box;
     const pad = 2;
-    const at = id => edge[E_MARK_SIDES[id].side]
-      + E_MARK_SIDES[id].sign * eMarkClearFt(elevationMarkOffsets, id);
+    // ONE RING, SIZED BY THE DEEPEST SIDE (board #271).
+    //
+    // Each corner carries two marks, one from each side, and the ruling is
+    // that the pair reads as one composition: each bubble is the other
+    // reflected across that corner's 45 degree diagonal.
+    //
+    // THAT FORCES A UNIFORM RING, and the arithmetic leaves no choice. The
+    // reflection swaps the two legs, so it maps one mark's CLEARANCE onto the
+    // other mark's clearance -- a corner can only mirror when both marks stand
+    // the same distance out. Seating each mark at a fixed clearance off its
+    // OWN dim edge therefore mirrors only while every side's dim stack is the
+    // same depth, which is why this looked right for so long: the plain
+    // fixtures are even on all four sides (5.00 each), and only a plan with an
+    // attached garage -- repro-garage-house, 5/5/5/8 -- came out wrong, on
+    // exactly the two corners touching its deeper side.
+    //
+    // OUTWARD, NEVER INWARD. Of the two ways to equalise a corner, pulling the
+    // deeper mark in would bury it in its own dimension strings, so the ring
+    // takes the DEEPEST side's clearance and the shallower sides stand further
+    // off their own numbers than they strictly need. That is the cost, and it
+    // is the one that keeps every bubble outside every string.
+    const boxEdge = { N: minZ, S: maxZ, W: minX, E: maxX };
+    const ringClear = Math.max(
+      minZ - edge.N, edge.S - maxZ, minX - edge.W, edge.E - maxX, 0,
+    ) + E_MARK_CLEAR_FT;
+    // A DRAGGED MARK IS STILL THE DRAFTER'S WORD, and it keeps meaning what it
+    // has always meant: a clearance off its own dim edge, which is the frame
+    // the drag itself stores (_eMarkDrag captures `base: edge[side]`). Reading
+    // it in any other frame would move every mark anyone has ever dragged. The
+    // two frames meet without a jump -- grabbing a ring-seated mark reads back
+    // the clearance it is already standing at -- so symmetry is the default
+    // here and never a cage.
+    const at = id => {
+      const { side, sign } = E_MARK_SIDES[id];
+      const stored = (elevationMarkOffsets || {})[id];
+      return Number.isFinite(stored)
+        ? edge[side] + sign * stored
+        : boxEdge[side] + sign * ringClear;
+    };
     return [
       { id: 'E1', name: 'E1', auto: true, elev: 0, levelId: null,
         startPt: { x: minX - pad, z: at('E1') }, endPt: { x: maxX + pad, z: at('E1') }, dirVec: { x: 0, z: 1 } },

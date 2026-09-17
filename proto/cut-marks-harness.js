@@ -206,14 +206,107 @@ check('a dimension string below the house pushes E1 further out',
         .find(c => c.id === 'E1').startPt.z
         > byId(G, 'E1').startPt.z, true]);
 
-check('and does not move E3 on the far side',
-  G => [G.autoElevationCuts({ walls: HOUSE, dimensions: [D(0, 30, 30, 30)],
-          elevationMarkOffsets: {}, autoElevations: true })
-        .find(c => c.id === 'E3').startPt.z, byId(G, 'E3').startPt.z]);
+// THIS CHECK USED TO SAY THE OPPOSITE, and board #271 overturned it rather
+// than this being a test bent to fit a change. It read "and does not move E3
+// on the far side": a string under the house moved E1 out and left the north
+// mark where it was. That is per-side seating, and per-side seating is what
+// broke the corners -- two marks can only mirror across their shared corner
+// when both stand the same distance out, so one deep side has to move all
+// four or none of them mirror.
+//
+// So the far side does move now, and what is worth pinning is the property
+// that replaced it: whatever one side's strings do, the ring stays square. It
+// is a stronger claim than the old one and it still fails if a side is ever
+// seated on its own edge again.
+check('a string on one side moves every mark, and the ring stays square',
+  G => {
+    const list = G.autoElevationCuts({ walls: HOUSE, dimensions: [D(0, 30, 30, 30)],
+      elevationMarkOffsets: {}, autoElevations: true });
+    const out = {
+      E1: round(list.find(c => c.id === 'E1').startPt.z - 24),
+      E2: round(0 - list.find(c => c.id === 'E2').startPt.x),
+      E3: round(0 - list.find(c => c.id === 'E3').startPt.z),
+      E4: round(list.find(c => c.id === 'E4').startPt.x - 30),
+    };
+    return [`${out.E1},${out.E2},${out.E3},${out.E4}`, '8,8,8,8'];
+  });
 
 check('the marks span the whole house, with room past each end',
   G => { const e1 = byId(G, 'E1');
          return [e1.startPt.x < 0 && e1.endPt.x > 30, true]; });
+
+// ── board #271: the corner pairs mirror across their own diagonal ──
+//
+// Each corner of the plan carries two marks, one from each side -- the top
+// right belongs to both E3 (north) and E4 (east). Movie's ruling: the pair
+// must read as ONE corner composition, which means each bubble is the other
+// reflected across that corner's 45 degree diagonal.
+//
+// WHY THE STACKS ARE UNEVEN HERE, and why an even fixture would prove
+// nothing: with every side the same depth the marks already mirrored, before
+// any of this was written. Three of the four repro drawings in proto/ have
+// dim depths of exactly 5.00 on all four sides, and the mirror held on all of
+// them. Only repro-garage-house differs -- 5/5/5/8 -- and only there did the
+// corners come out wrong. A check seated on an even fixture is a check that
+// cannot fail, so this one is seated on an uneven one: east is 8 deep, the
+// other three are 4.
+const UNEVEN = [
+  D(0, -4, 30, -4),   // north, 4 out
+  D(0, 28, 30, 28),   // south, 4 out
+  D(-4, 0, -4, 24),   // west,  4 out
+  D(38, 0, 38, 24),   // east,  8 out -- the odd one, as an attached garage makes it
+];
+
+// The corner's two marks, each as an OUTWARD distance along the two legs, so a
+// mirror is simply the pair with its legs swapped.
+const CORNERS = [
+  { name: 'NE', cx: 30, cz: 0,  a: 'E3', b: 'E4', ax: 1,  az: -1 },
+  { name: 'NW', cx: 0,  cz: 0,  a: 'E3', b: 'E2', ax: -1, az: -1 },
+  { name: 'SE', cx: 30, cz: 24, a: 'E1', b: 'E4', ax: 1,  az: 1 },
+  { name: 'SW', cx: 0,  cz: 24, a: 'E1', b: 'E2', ax: -1, az: 1 },
+];
+
+const seatAt = (list, id, c) => {
+  const cut = list.find(k => k.id === id);
+  const near = [cut.startPt, cut.endPt].reduce((best, p) =>
+    Math.hypot(p.x - c.cx, p.z - c.cz) < Math.hypot(best.x - c.cx, best.z - c.cz) ? p : best);
+  return { outX: round((near.x - c.cx) * c.ax), outZ: round((near.z - c.cz) * c.az) };
+};
+
+// Reported as numbers rather than a verdict: a bare "not mirrored" says which
+// corner is wrong and nothing about how, and the how is what a fix is aimed at.
+const mirrorReport = list => CORNERS.map(c => {
+  const A = seatAt(list, c.a, c), B = seatAt(list, c.b, c);
+  const ok = A.outX === B.outZ && A.outZ === B.outX;
+  return `${c.name} ${ok ? 'ok' : `${c.a}(${A.outX},${A.outZ}) vs ${c.b}(${B.outX},${B.outZ})`}`;
+}).join(' | ');
+
+check('every corner pair mirrors across its diagonal, on uneven dim stacks',
+  G => [mirrorReport(cuts(G, { dimensions: UNEVEN })), 'NE ok | NW ok | SE ok | SW ok']);
+
+// The deepest side sets the ring, so no mark is ever pulled INSIDE its own
+// dimension strings to buy symmetry -- it is always pushed out, never in.
+check('no mark sits inside its own dimension strings',
+  G => {
+    const list = cuts(G, { dimensions: UNEVEN });
+    const e = G.eMarkDimEdges(HOUSE, UNEVEN);
+    const clear = {
+      E1: round(list.find(c => c.id === 'E1').startPt.z - e.S),
+      E2: round(e.W - list.find(c => c.id === 'E2').startPt.x),
+      E3: round(e.N - list.find(c => c.id === 'E3').startPt.z),
+      E4: round(list.find(c => c.id === 'E4').startPt.x - e.E),
+    };
+    return [Object.values(clear).every(v => v >= 2), true];
+  });
+
+// A dragged mark is the drafter's word and still wins on its own axis, so
+// symmetry is the DEFAULT and never a cage.
+check('a dragged mark keeps its own clearance off its own dim edge',
+  G => {
+    const list = cuts(G, { dimensions: UNEVEN, elevationMarkOffsets: { E3: 3 } });
+    const e = G.eMarkDimEdges(HOUSE, UNEVEN);
+    return [round(e.N - list.find(c => c.id === 'E3').startPt.z), 3];
+  });
 
 // ── cutLineSpan: the infinite line, clipped ──
 const span = (G, a, b, gap = 0.75) => G.cutLineSpan(HOUSE, a, b, gap);
@@ -342,17 +435,32 @@ const MUTATIONS = [
   ['the auto-elevation switch is ignored',
     s => s.replace('if (!autoElevations) return [];', '')],
   ['the marks are placed with no clearance at all',
-    s => s.replace('+ E_MARK_SIDES[id].sign * eMarkClearFt(elevationMarkOffsets, id)', '')],
+    s => s.replace('boxEdge[side] + sign * ringClear', 'boxEdge[side]')],
   ['every mark steps the same way off its edge',
-    s => s.replace('E_MARK_SIDES[id].sign *', '1 *')],
+    s => s.replace('boxEdge[side] + sign * ringClear', 'boxEdge[side] + 1 * ringClear')],
+  // Board #271's own mutant: go back to seating each mark off its OWN dim
+  // edge. That is what the code did before the ring, and it is what the
+  // corner-mirror check exists to refuse.
+  ['each mark is seated off its own dim edge again, per side',
+    s => s.replace('boxEdge[side] + sign * ringClear',
+      'edge[side] + sign * E_MARK_CLEAR_FT')],
+  // And the other half of the ring: taking the shallowest side instead of the
+  // deepest still equalises, but buries the deep side's mark in its numbers.
+  ['the ring is sized by the shallowest side instead of the deepest',
+    s => s.replace('const ringClear = Math.max(', 'const ringClear = Math.min(')],
   ['the marks are measured off the walls, ignoring the dimension strings',
     s => s.replace('const edge = eMarkDimEdges(walls, dimensions);',
       'const edge = { N: box.minZ, S: box.maxZ, W: box.minX, E: box.maxX };')],
   ['E1 looks away from the house',
     s => s.replace("endPt: { x: maxX + pad, z: at('E1') }, dirVec: { x: 0, z: 1 }",
       "endPt: { x: maxX + pad, z: at('E1') }, dirVec: { x: 0, z: -1 }")],
+  // ANCHORED ON THE LINE BELOW IT, because `const pad = 2;` appears twice --
+  // once here for the along-line overrun and once in eMarkDimEdges for the
+  // corner brush -- and a bare string replace takes the first, which is the
+  // wrong one. It silently mutated the other pad and nothing caught it, which
+  // is how this mutation spent a run proving nothing.
   ['the marks stop at the house instead of running past it',
-    s => s.replace('const pad = 2;\n    const at = id =>', 'const pad = 0;\n    const at = id =>')],
+    s => s.replace('const pad = 2;\n    // ONE RING', 'const pad = 0;\n    // ONE RING')],
   ['a zero-length cut is clipped like any other',
     s => s.replace('if (len < 0.001) return { start, end };', '')],
   ['the clip ignores the gap, stopping at the walls',
