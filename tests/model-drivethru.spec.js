@@ -65,19 +65,31 @@ test('the foot bar: PROJECT and MODEL left, the bone in the middle, the sheets r
       el => (el.textContent || '').trim().replace(/\s+/g, ' '))),
     'the foot\'s left end is the project, the page you are on, and the '
     + 'marketing plan that is a drawing of it')
-      // RUFF/ROUGH CAME DOWNSTAIRS (Movie, 15 Sep): "move it to the right of
-      // REAL ESTATE LAYOUT on bottom bar". It is one tenant -- the pair
-      // travels as a set -- and it sits at the END of this group, so the
-      // three pages above it keep their order and their reading.
-      .toEqual(['PROJECT', 'MODEL', 'REAL ESTATE LAYOUT', 'RUFF ROUGH']);
+      // AND RUFF/ROUGH WENT BACK UP (Movie, 17 Sep). It came down here on
+      // 15 Sep and spent two days at the end of this group; the bottom bar is
+      // pages and sheets again, with no switch on it at either end.
+      .toEqual(['PROJECT', 'MODEL', 'REAL ESTATE LAYOUT']);
 
     expect(await page.locator('#sheet-row > *').evaluateAll(els => els.map(
       el => (el.textContent || '').trim().replace(/\s+/g, ' '))),
     'the sheets belong at the far right, in reading order')
-      // And NIGHT/DAY leads this group for the same reason, on the other
-      // side of the middle: "to the left of CONSTRUCTION LAYOUT".
-      .toEqual(['NIGHT DAY', 'CONSTRUCTION LAYOUT', 'SPECIFICATIONS',
-        'ESTIMATES']);
+      // NIGHT/DAY went up with it, so this group is the sheets alone.
+      .toEqual(['CONSTRUCTION LAYOUT', 'SPECIFICATIONS', 'ESTIMATES']);
+
+    // WHERE THEY WENT, asserted here rather than left implied. A pair that
+    // vanished from the bottom bar and reached nowhere would pass both
+    // assertions above, and the switch would simply be gone.
+    //
+    // THE ORDER IS THE RULING (Movie, 17 Sep): "put NIGHT DAY up beside
+    // IMPERIAL METRIC ... and put the RUFF / ROUGH to the left of NIGHT DAY
+    // before the last one which will be TOY DRAFTING". Read off the bar
+    // left to right, the units included, because the units are the pair the
+    // other three were told to match.
+    expect(await page.locator('#units-corner, #mode-corner > .set')
+      .evaluateAll(els => els.map(
+        el => (el.textContent || '').trim().replace(/\s+/g, ' '))),
+    'the four stacked pairs, in the order he gave them')
+      .toEqual(['IMPERIAL METRIC', 'RUFF ROUGH', 'NIGHT DAY', 'TOY DRAFTING']);
 
     // The middle is the bone and nothing else (Movie, 16 Sep) -- DELETE,
     // COPY and PASTE live here too but are hidden until something is
