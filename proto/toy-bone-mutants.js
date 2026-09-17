@@ -22,7 +22,11 @@ const ROOT = require('path').resolve(__dirname, '..');
 const MUTANTS = [
   { file: 'MODEL.html',
     name: 'the gesture stops writing a bone at all',
-    find: '    extendToyBone(startPt, endPt, levelId);',
+    // RE-POINTED. The call grew an `if (bone)` guard -- commitWall takes
+    // `bone: false` for a run that brings its own outline (the autobuilt
+    // garage), so the bone is no longer grown unconditionally. Deleting the
+    // whole guarded statement is still exactly this defect.
+    find: "    if (bone) extendToyBone(startPt, endPt, levelId);",
     with: '',
     test: 'acceptance 2b' },
   { file: 'MODEL.html',
@@ -52,8 +56,12 @@ const MUTANTS = [
     test: 'does not adopt an unfinished bone' },
   { file: 'MODEL.html',
     name: 'the bone claims a master it never came from',
-    find: "      pendingBone = { id: newDrawingItemId('outline'), masterId: null,",
-    with: "      pendingBone = { id: newDrawingItemId('outline'), masterId: 'made-up',",
+    // RE-POINTED. The id is no longer minted here -- it is assigned when the
+    // bone is committed -- so the anchor now carries `id: null`. The
+    // mutation is unchanged in substance: claim a master this bone never
+    // came from.
+    find: "      pendingBone = { id: null, masterId: null,",
+    with: "      pendingBone = { id: null, masterId: 'made-up',",
     test: 'acceptance 2b' },
   // ── THE FOUR BEHAVIOURS THAT LANDED AFTER THIS GATE LAST RAN ────────────
   // Each is one deleted line from silently not happening, and the notice-slot

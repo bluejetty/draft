@@ -71,7 +71,8 @@ const MUTANTS = [
     test: 'goes out when the run does' },
   { file: 'MODEL.html',
     name: 'the squaring moves into the gesture, so TOY leaks into DRAFTING',
-    find: "    return board === 'toy' ? onTheFoot(drawStart, free) : free;",
+    // RE-POINTED: the board test moved into onTheFoot_if().
+    find: "    return onTheFoot_if() ? onTheFoot(drawStart, free) : free;",
     with: '    return onTheFoot(drawStart, free);',
     test: 'DRAFTING keeps the off-axis' },
 ];

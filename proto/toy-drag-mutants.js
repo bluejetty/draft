@@ -121,18 +121,24 @@ const MUTANTS = [
   // last time I deleted a line the gate called redundant, it was load-bearing.
   { file: 'MODEL.html',
     name: 'THE PAGE LIES ABOUT WHAT MOVES: the weld group swallows the house',
-    find: '      { ...ctx, mode: T.MODE.TOY, welds: [[wall.id]] });',
-    with: '      { ...ctx, mode: T.MODE.TOY });',
+    // RE-POINTED. The ctx object grew more keys (§4's unshared corners), so
+    // the line no longer ends the call. Dropping just the `welds` key is the
+    // same defect and leaves the rest of the object intact.
+    find: "      { ...ctx, mode: T.MODE.TOY, welds: [[wall.id]],",
+    with: "      { ...ctx, mode: T.MODE.TOY,",
     test: 'leave the next wall on an angle' },
   { file: 'toy-constraints.js',
     name: 'NOTHING CHECKS THE SHAPE AFTER THE MOVE, so the diagonal comes back',
-    find: '      const angled = mode === MODE.TOY ? wouldAngle(wall, groupIds, walls, d) : null;',
+    // RE-POINTED. wouldAngle gained a `ctx.detached` argument and the
+    // statement wrapped onto two lines.
+    find: "      const angled = mode === MODE.TOY\n        ? wouldAngle(wall, groupIds, walls, d, ctx.detached) : null;",
     with: '      const angled = null;',
     test: 'leave the next wall on an angle' },
   { file: 'toy-constraints.js',
     name: 'THE ANGLE RULE LEAKS INTO DRAFTING, where off-axis is the freedom',
-    find: '      const angled = mode === MODE.TOY ? wouldAngle(wall, groupIds, walls, d) : null;',
-    with: '      const angled = wouldAngle(wall, groupIds, walls, d);',
+    // RE-POINTED, as directly above.
+    find: "      const angled = mode === MODE.TOY\n        ? wouldAngle(wall, groupIds, walls, d, ctx.detached) : null;",
+    with: '      const angled = wouldAngle(wall, groupIds, walls, d, ctx.detached);',
     // ASKED OF THE MODULE. Aimed at the page check first, where it SURVIVED:
     // DRAFTING never calls the module from this page, so the page cannot tell
     // a TOY-only rule from a rule that does not exist.
