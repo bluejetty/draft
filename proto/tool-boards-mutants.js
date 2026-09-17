@@ -137,7 +137,14 @@ const MUTANTS = [
   // ── §8 ──────────────────────────────────────────────────────────────────
   { file: 'MODEL.html',
     name: 'the disclaimer comes back after the constraint landed',
-    find: "    b.title = b.dataset.board === 'toy'\n      ? 'TOY board — walls only; the other tools are put away'\n      : 'DRAFTING board — the full tool column';",
+    // RE-POINTED. The anchor held the title as §6 left it; §1-§5 rewrote it
+    // to name the geometry rule too, so the old string stopped matching and
+    // this mutation reported SKIPPED -- counted in the score, checking
+    // nothing. The behaviour is unchanged: the title states what the board
+    // DOES, and must not fall back to disclaiming that nothing is
+    // constrained. Taken from the subject verbatim rather than retyped --
+    // the em dashes are why this anchor is easy to break by hand.
+    find: "    b.title = b.dataset.board === 'toy'\n      ? 'TOY board — walls only, square and whole-foot; the other tools are put away'\n      : 'DRAFTING board — the full tool column, any angle and any length';",
     with: "    b.title = 'Board mode — remembered, but nothing is constrained by it yet';",
     test: 'no longer disclaim' },
 ];
