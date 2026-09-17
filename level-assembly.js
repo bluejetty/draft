@@ -176,6 +176,15 @@ if (!window.DraftLevelAssembly) {
     slabThicknessIn: DEFAULT_FDN_SLAB_THICKNESS_IN,
     footingDepthIn: DEFAULT_FOOTING_DEPTH_IN,
     footingWidthIn: null, // null → derived from the foundation wall type
+    // The level's exterior wall assembly id. null → the drawing's shared
+    // answer: activeWallType's exterior default for a framed floor, 8"
+    // concrete for the FOUNDATION. Floors share one type almost always, so
+    // this is the rare-split override, not the usual home of the choice.
+    // Validated as an id against wall-types.js by the pages that draw — this
+    // module holds no wall table and must stay loadable without one.
+    // Stud SPACING stays out on purpose: a per-floor spacing is estimating
+    // data for later, not part of the assembly's drawn thickness.
+    wallType: null,
     ...(ROLE_DEFAULTS[role] || {}),
   });
 
@@ -194,6 +203,7 @@ if (!window.DraftLevelAssembly) {
       footingDepthIn: positive(raw.footingDepthIn, base.footingDepthIn),
       footingWidthIn: Number.isFinite(Number(raw.footingWidthIn)) && Number(raw.footingWidthIn) > 0
         ? Number(raw.footingWidthIn) : null,
+      wallType: typeof raw.wallType === 'string' && raw.wallType ? raw.wallType : null,
     };
   };
 

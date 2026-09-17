@@ -2329,7 +2329,9 @@ const {
 } = window.DraftFormatters;
 
 // Wall assemblies come from wall-types.js, shared with the LAYOUT sheets.
-const { WALL_TYPES, LEGACY_WALL_TYPES, FOUNDATION_WALL_TYPE_IDS } = window.DraftWallTypes;
+const {
+  WALL_TYPES, LEGACY_WALL_TYPES, FOUNDATION_WALL_TYPE_IDS, EXTERIOR_WALL_TYPE_IDS,
+} = window.DraftWallTypes;
 // Fenestration defaults — door and window openings hosted on a wall. Heights
 // are measured from the bottom of the host wall; doors sit on it (sill 0).
 const DEFAULT_DOOR_WIDTH_FT = 3;
@@ -12485,9 +12487,32 @@ class Component extends DCLogic {
   _foundationWallThicknessIn() {
     const wall = this._walls.find(candidate => (candidate.view || 'plan') === 'foundation'
       && FOUNDATION_WALL_TYPE_IDS.includes(candidate.wallType));
-    const id = wall ? wall.wallType
-      : (FOUNDATION_WALL_TYPE_IDS.includes(this.state.activeWallType) ? this.state.activeWallType : 'concrete_8');
+    const id = wall ? wall.wallType : this._foundationWallType();
     return WALL_TYPES.find(type => type.id === id)?.totalIn || 8;
+  }
+
+  // Which wall the bone pours the foundation from: the PROJECT page's chosen
+  // type — stored on the FOUNDATION level's assembly — first, then the active
+  // foundation wall tool, then the 8" concrete default.
+  _foundationWallType() {
+    const chosen = this._levelAssembly(1).wallType;
+    if (FOUNDATION_WALL_TYPE_IDS.includes(chosen)) return chosen;
+    if (FOUNDATION_WALL_TYPE_IDS.includes(this.state.activeWallType)) {
+      return this.state.activeWallType;
+    }
+    return 'concrete_8';
+  }
+
+  // Which wall a floor's generated shell is framed with: the level's own
+  // stored override first — the rare split — then the drawing's shared
+  // exterior type, then the 2×6 default.
+  _exteriorWallTypeFor(levelId) {
+    const override = this._levelAssembly(levelId).wallType;
+    if (EXTERIOR_WALL_TYPE_IDS.includes(override)) return override;
+    if (EXTERIOR_WALL_TYPE_IDS.includes(this.state.activeWallType)) {
+      return this.state.activeWallType;
+    }
+    return 'stud_2x6';
   }
 
   // The chosen stub shifts the corner leg over perpendicular — toward the
@@ -14573,13 +14598,13 @@ class Component extends DCLogic {
       // speech exactly as a room stamp is. auto-house.spec.js caught this:
       // it hand-draws one wall on the main floor, expects BUILD HOUSE to
       // leave that floor alone, and found a washroom dealt onto it.
-      if (this._buildHouseWalls(level.id, 'plan', 'stud_2x6')) {
+      if (this._buildHouseWalls(level.id, 'plan', this._exteriorWallTypeFor(level.id))) {
         built.push(`${level.name} walls`);
         (this._shellBuiltLevels ||= new Set()).add(level.id);
       }
       if (this._buildHouseFloor(level.id, 'floor')) built.push(`${level.name} floor`);
     });
-    if (this._buildHouseWalls(1, 'foundation', 'concrete_8')) built.push('FOUNDATION walls');
+    if (this._buildHouseWalls(1, 'foundation', this._foundationWallType())) built.push('FOUNDATION walls');
     if (this._buildHouseFloor(1, 'slab')) built.push('slab');
     if (this._buildHouseFootings()) built.push('footings');
     const garages = [1, ...floors.map(level => level.id)]

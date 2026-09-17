@@ -20,11 +20,16 @@ if (!window.DraftWallTypes) {
   // Structural assemblies live on the FOUNDATION layer set only; every other
   // context offers the stud / insul walls.
   const FOUNDATION_WALL_TYPE_IDS = Object.freeze(['concrete_8', 'icf', 'icf_13', 'pt_wood_fdn']);
+  // The assemblies a house's exterior walls come in — what the PROJECT page
+  // offers for the shared exterior type and its per-floor overrides. ICF runs
+  // above grade too, so the two lists overlap without being each other.
+  const EXTERIOR_WALL_TYPE_IDS = Object.freeze(['stud_2x4', 'stud_2x6', 'icf', 'icf_13']);
 
   window.DraftWallTypes = Object.freeze({
     WALL_TYPES,
     LEGACY_WALL_TYPES,
     FOUNDATION_WALL_TYPE_IDS,
+    EXTERIOR_WALL_TYPE_IDS,
   });
 })();
 }
