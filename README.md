@@ -13,6 +13,7 @@ See [ARCHITECTURE.md](RD-DOCUMENTS/ARCHITECTURE.md) for how the app is put toget
 | | |
 |---|---|
 | [`DEEP-CLEANUP-ITEMS.md`](RD-DOCUMENTS/DEEP-CLEANUP-ITEMS.md) | work deliberately left for a deep clean, with the traps already mapped |
+| [`RUNNING-THE-HARNESSES.md`](RD-DOCUMENTS/RUNNING-THE-HARNESSES.md) | the Node harnesses under `proto/` — how to run them, what CI does differently, and which scripts edit your tree |
 | [`DEFINITIONS.md`](RD-DOCUMENTS/DEFINITIONS.md) | **what our words mean here** — the terms we use in a particular way, and the ones that collide |
 | [`IMPORTANT-WORK-ORDERS/`](RD-DOCUMENTS/IMPORTANT-WORK-ORDERS/) | what is being built now — TOY MODE's status, the turtle path, how the boneyard works |
 | [`ARCHITECTURE.md`](RD-DOCUMENTS/ARCHITECTURE.md) · [`BRANCHING.md`](RD-DOCUMENTS/BRANCHING.md) · [`REFACTOR-PLAN.md`](RD-DOCUMENTS/REFACTOR-PLAN.md) | how the app is put together, how work lands, and why `MODEL.dc.html` is the shape it is |
@@ -29,6 +30,8 @@ Copyright (c) 2026 bluejetty. All rights reserved. This code is publicly viewabl
 ## Running the tests
 
 The suite is end-to-end Playwright: it serves the repo over plain HTTP and drives the real pages in Chromium. There is no unit-test layer and no build step.
+
+There is a second, much faster gate: the Node harnesses under `proto/`, which need no install and no browser. [`RUNNING-THE-HARNESSES.md`](RD-DOCUMENTS/RUNNING-THE-HARNESSES.md) covers those.
 
 ```sh
 npm install                       # @playwright/test (pinned in package.json)
