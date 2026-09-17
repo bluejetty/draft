@@ -76,6 +76,12 @@ function load(mutate) {
   // fine and then throws inside buildWallSection; this window is the page's,
   // and on the page the module is always there.
   new Function('window', fs.readFileSync(path.join(__dirname, '..', 'level-assembly.js'), 'utf8'))(window);
+  // drawing-format.js FOR REAL too, and for the reason directly above: the
+  // roof's fascia and the heel derived from it now have one home there, and
+  // project-page.js delegates. A stub would let this harness keep measuring a
+  // number the page no longer computes -- the check would pass while the two
+  // disagreed, which is the failure this file exists to make impossible.
+  new Function('window', fs.readFileSync(path.join(__dirname, '..', 'drawing-format.js'), 'utf8'))(window);
   new Function('window', src)(window);
   return window.DraftProjectPage;
 }
@@ -765,8 +771,14 @@ const MUTATIONS = [
     s => s.replace('(roof.overhangFt + x) * (roof.pitch / 12);', '(roof.overhangFt + x) * roof.pitch;')],
   ['the foundation forgets the floor it carries',
     s => s.replace('const fdnTop = -mainDepthFt;', 'const fdnTop = 0;')],
+  // RE-POINTED AT THE DELEGATE. The sum itself moved to drawing-format.js, so
+  // the old anchor -- project-page.js's one-line body -- matches nothing now,
+  // and a mutation that never applies proves nothing while still reading as
+  // part of a near-perfect score. This mutates what project-page.js still
+  // owns: which arguments it hands the shared calc. Dropping the overhang at
+  // the call is the same defect from this file's side.
   ['the heel forgets the overhang',
-    s => s.replace('const roofHeelIn = (fasciaIn, overhangFt, pitch) => fasciaIn + overhangFt * pitch;', 'const roofHeelIn = (fasciaIn, overhangFt, pitch) => fasciaIn;')],
+    s => s.replace('window.DraftDrawingFormat.roofHeelIn(fasciaIn, overhangFt, pitch);', 'window.DraftDrawingFormat.roofHeelIn(fasciaIn, 0, pitch);')],
   ['stud from wall height forgets the plates',
     s => s.replace('const studInFromWallHeightFt = wallHeightFt => wallHeightFt * 12 - PLATE_STACK_IN;', 'const studInFromWallHeightFt = wallHeightFt => wallHeightFt * 12;')],
   // Caught by the shared-default rule, not by a count of who has defaults:

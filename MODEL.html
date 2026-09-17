@@ -1795,14 +1795,6 @@
      sits here rather than earlier or later for any load-order reason. -->
 <script src="./level-lock.js"></script>
 <script src="./stair-geometry.js"></script>
-<!-- THE HEEL CALC, AND ONLY FOR THAT. The ROOF panel reads a heel out of
-     fascia + overhang + pitch, and that arithmetic already exists once, in
-     project-page.js, measured by proto/section-table-harness.js. A second
-     copy here is the derive/store split this page has paid for before, so
-     the page loads the module the old page already loads (MODEL.dc.html)
-     rather than re-deriving three inches of trigonometry. The file is pure
-     -- an `if (!window.DraftProjectPage)` guard round one IIFE, no DOM. -->
-<script src="./project-page.js"></script>
 
 <script>
 (() => {
@@ -6816,25 +6808,29 @@
   // this page has no such gesture, so pooling here would add state with no
   // way to reach it.
   //
-  // 5.5 IS NOT A CHOICE THE PANEL MAKES. drawing-format.js:505 writes
-  // `fascia: 5.5` unconditionally, so a drafter-set fascia would be dropped on
-  // the next load -- store-vs-derive, the bug class task #28 named. The panel
-  // DERIVES the heel from it and stores nothing. The constant is named here
-  // only because the readout has to exist before any roof does, and
-  // model-roof-gesture.spec.js pins it against what the format actually
-  // writes so the two cannot drift apart in silence.
-  const ROOF_FASCIA_IN = 5.5;
+  // 5.5 IS NOT A CHOICE THE PANEL MAKES, AND NOT A NUMBER THIS PAGE OWNS.
+  // drawing-format.js writes `fascia` unconditionally on load, so a
+  // drafter-set one would be dropped on the next open -- store-vs-derive, the
+  // bug class task #28 named. The panel DERIVES the heel and stores nothing,
+  // and it takes the fascia from the module that decides what a roof record
+  // is rather than keeping a second 5.5 here to drift from it.
+  const ROOF_FASCIA_IN = window.DraftDrawingFormat.ROOF_FASCIA_IN;
   const ROOF_EDGE_GRAB_PX = 12;
   let roofOverhangFt = 2;   // drawing-format.js:503's own default
   let roofPitch = 4;        //  ..and :504's
 
-  // THE HEEL IS NOT RE-DERIVED HERE. project-page.js:345 already owns
-  // `fasciaIn + overhangFt * pitch`, and proto/section-table-harness.js:204
-  // measures it (5.5, 2, 4 -> 13.5). A second copy in this file would be a
-  // second answer the moment either moved. A missing module throws rather
-  // than reading zero: a heel of 0" looks like an answer.
+  // THE HEEL IS NOT RE-DERIVED HERE. drawing-format.js owns
+  // `fasciaIn + overhangFt * pitch` beside the fascia it starts from, and
+  // proto/section-table-harness.js:204 measures it (5.5, 2, 4 -> 13.5);
+  // project-page.js delegates to the same function. A second copy in this file
+  // would be a second answer the moment either moved.
+  //
+  // IT IS READ FROM A MODULE THIS PAGE ALREADY LOADS. Getting it from
+  // project-page.js instead cost nothing at the panel and 1855 lines at the
+  // door, and tests/model-html-tier1.spec.js:244 -- the guard on what this
+  // page is allowed to depend on -- went red for exactly that reason.
   const roofHeelIn = () =>
-    window.DraftProjectPage.roofHeelIn(ROOF_FASCIA_IN, roofOverhangFt, roofPitch);
+    window.DraftDrawingFormat.roofHeelIn(ROOF_FASCIA_IN, roofOverhangFt, roofPitch);
 
   // The footprint the roof is cut from: the level's outline, offset OUT by the
   // overhang. Last one wins, as the old page takes the last shape (:16718).

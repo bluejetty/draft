@@ -20,9 +20,9 @@ const BUCKET = 'model-drawing';
 
 // The fascia the FORMAT writes, hard-coded here rather than read off the page.
 // Asking MODEL.html what fascia it used and checking it used that fascia
-// asserts nothing; this constant is the independent witness, and the check
-// below is what makes MODEL.html's own ROOF_FASCIA_IN and
-// drawing-format.js:505 unable to drift apart in silence.
+// asserts nothing; this constant is the independent witness. The page now
+// reads its fascia FROM drawing-format.js rather than keeping a second 5.5,
+// so this is the check that would catch that shared constant moving.
 const FASCIA_IN = 5.5;
 
 // SEED ON THE OLD PAGE, THEN OPEN THE NEW ONE. h.openModel drives
@@ -168,11 +168,13 @@ test.describe('MODEL.html ROOF', () => {
     const panel = page.locator('#props-slot');
     await panel.locator('[data-prop-row="overhang"] [data-prop-value="2"]').click();
 
-    // project-page.js:345 is the one owner of fascia + overhang * pitch, and
-    // proto/section-table-harness.js:204 measures it at (5.5, 2, 4) -> 13.5".
-    // The panel must AGREE with that module rather than carry its own sum.
+    // drawing-format.js is the one owner of fascia + overhang * pitch -- it
+    // sits beside the fascia the format writes, and project-page.js delegates
+    // to it. proto/section-table-harness.js:204 measures it at
+    // (5.5, 2, 4) -> 13.5". The panel must AGREE with that module rather than
+    // carry its own sum.
     const want = await page.evaluate(
-      ([f, o, p]) => window.DraftProjectPage.roofHeelIn(f, o, p), [FASCIA_IN, 2, 4]);
+      ([f, o, p]) => window.DraftDrawingFormat.roofHeelIn(f, o, p), [FASCIA_IN, 2, 4]);
     expect(want, 'the shared calc itself, as the harness pins it').toBe(13.5);
 
     const shown = await panel.locator('[data-roof-heel]').textContent();
