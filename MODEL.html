@@ -69,7 +69,8 @@
     --ink-primary: #e7e5e2;
     --ink-secondary: #b9bcbe;
     --ink-quiet: #8b8f92;
-    --accent: #f0b429;
+    --accent: #fd0000;
+    --accent-mark: #f0b429;
   }
   html, body { margin:0; height:100%; overflow:hidden;
     /* Two properties rather than the `background:` shorthand: its layer list
@@ -838,6 +839,28 @@
   /* A panel is pinned to its own edge and is as tall as it needs to be, for
      the same reason as the tab: full height costs drawing area that a panel
      holding three rows of seats is not using. */
+  /* INSIDE A MENU, THE ACCENT IS THE MARK COLOUR. Movie, 17 Sep: "small
+     things for NIGHT version only to turn gold - the stuff outlines and text
+     in the menu areas (easier to see when its small if gold when black
+     background)", with the SELECT key's red border and red label ringed on
+     the screenshot he sent back.
+
+     ONE REDEFINITION, NOT THIRTY-FIVE EDITS. The accent is read through
+     var(--accent) at 35 line-and-text sites, and rewriting each to name a
+     second token would be 35 chances to miss one -- and a miss would be
+     invisible, since a red hairline on black looks like a styling choice
+     rather than a bug. Redeclaring the property on the subtree lets every one
+     of them pick the mark up unchanged, including any added later.
+
+     AND IT CARRIES NO SKIN LOGIC. accent-mark EQUALS accent on three of the
+     four skins, so this rule is true everywhere and the one place the two
+     differ is the palette table. An html[data-theme][data-mode] selector here
+     would have put the same fact in two files.
+
+     THE RAIL TABS NEED THEIR OWN NAME because they are fixed siblings of the
+     panel rather than children of it -- they are the menu's edge, and the
+     drafter reads them as part of it. */
+  aside, .rail-tab { --accent: var(--accent-mark); }
   aside { position:fixed; top:var(--rail-top);
     /* STOPS ABOVE THE HINT. 100vh - 60 let the panel run to within 12px of the
        bottom, which was fine while it held a rail and an empty slot and is not

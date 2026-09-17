@@ -58,6 +58,36 @@ const css = P.toCSS('ruff', 'night');
 P.TEXTURABLE.forEach(role => check(`--${role}-tex declared`, css.includes(`--${role}-tex: none;`)));
 check('only surfaces are texturable', P.TEXTURABLE.every(r => r.startsWith('surface-')));
 
+// MODEL.html CARRIES A COPY, AND A COPY DRIFTS. Its :root block declares the
+// night values so the page is never unpainted between parse and boot; the
+// comment there says palette.js overwrites all of them, which is true and is
+// exactly why nothing on screen reveals it when one goes stale.
+//
+// IT WENT STALE THE DAY THIS WAS WRITTEN. The accent moved to red in
+// palette.js and the fallback kept the old gold, and the only symptom was a
+// gold frame before boot -- invisible in every screenshot and every spec.
+// Caught by reading the file, which is not a method. So it is asserted.
+console.log('\n--- the pre-boot fallbacks in MODEL.html match the night skin');
+{
+  const fs = require('fs');
+  const path = require('path');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'MODEL.html'), 'utf8');
+  // The :root block only -- the rest of the file is full of var() references.
+  const root = html.slice(html.indexOf(':root'), html.indexOf('html, body'));
+  const night = P.resolve('ruff', 'night');
+  // Only the roles the block actually declares: it is a paint-before-boot
+  // stopgap for the CHROME, not a second copy of all 30 drawing roles, and
+  // demanding the rest would be inventing a requirement nobody has.
+  const declared = [...root.matchAll(/--([a-z-]+):\s*([^;]+);/g)]
+    .map(m => [m[1], m[2].trim()])
+    .filter(([role]) => P.ROLES.includes(role));
+  check('the block declares something', declared.length > 0, `${declared.length} roles`);
+  declared.forEach(([role, value]) => {
+    check(`--${role} matches palette.js`, value === night[role],
+      value === night[role] ? value : `${value} in MODEL.html, ${night[role]} in palette.js`);
+  });
+}
+
 console.log('\n--- legibility, measured (WCAG AA: 4.5 body, 3.0 large)');
 // The pairs a reader actually sees. Panel ink is composited over the page
 // first, because a panel at 0.82 alpha is not its own colour on screen.
@@ -68,6 +98,12 @@ const PAIRS = [
   ['accent', 'surface-page', 4.5],
   ['accent-ink', 'accent', 4.5],
   ['ink-primary', 'surface-panel', 4.5],
+  // THE MARK IS A HAIRLINE AND A 9px LABEL ON THE PANEL, which is the ground
+  // it has to separate from -- not the page. Asserted at 4.5 because half of
+  // what it paints is text, and this pair is the whole reason the role exists:
+  // RUFF's red measured 4.06 here, which is what "hard to see when its small"
+  // was.
+  ['accent-mark', 'surface-panel', 4.5],
   ['ink-primary', 'surface-chip', 4.5],
 ];
 // THE ACCENT IS ASKED FOR TWO THINGS THAT PULL APART, AND SOMETIMES 4.5 IS
@@ -196,12 +232,12 @@ for (const theme of P.THEMES) {
     // now is what makes that cheap later, and a green line here means the
     // value is sound, NOT that anything consumes it. See palette.js.
 
-    // NOT ASSERTED, AND THAT IS THE POINT: draw-underlay and draw-origin
-    // carry the same pair today. Pinning them EQUAL would make the divergence
-    // the separate key exists to allow into a test failure -- a check that
-    // fails when the design works. The comment in palette.js is what says
-    // do not collapse them; a test cannot say it without forbidding the
-    // thing it is protecting.
+    // NOT ASSERTED, AND THE DIVERGENCE ARRIVED. draw-underlay and draw-origin
+    // carried the same pair from 5 Sep until 17 Sep, when the datum went gold
+    // and the underlay stayed green. Pinning them EQUAL would have made that
+    // a test failure -- a check that fails when the design works -- and a
+    // shared key would have dragged the underlay along with it. Both were
+    // argued for in advance on exactly this scenario, and both held.
 
     // draw-dim is the one drawing role that is TEXT as well as line, so it
     // answers to 4.5 (WCAG AA body), not the 3.0 above -- and to it TWICE.
