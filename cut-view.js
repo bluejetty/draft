@@ -377,9 +377,21 @@ if (!window.DraftCutView) {
       // sine of the crossing angle, capped so near-parallel walls stay sane.
       const cutLen = Math.hypot(b.x - a.x, b.z - a.z);
       const sin = Math.abs(denom) / (cutLen * wallLen || 1);
-      const width = (type ? type.totalIn : 5.5) / 12 / Math.max(sin, 0.35);
+      const totalFt = (type ? type.totalIn : 5.5) / 12;
+      const width = totalFt / Math.max(sin, 0.35);
+      // The stored line is the wall's REFERENCE LINE, not its centre: an
+      // exterior wall keeps the outline on its exterior face (refLine
+      // 'left'/'right', render-2d.js's rule), so the band centre sits half
+      // the thickness inside it, along the wall's own +normal (-dz, dx).
+      const nx = -(d.z - c.z) / (wallLen || 1), nz = (d.x - c.x) / (wallLen || 1);
+      const axisDotN = axis.x * nx + axis.z * nz;
+      const ref = wall.refLine || 'center';
+      const acrossMid = ref === 'left' ? totalFt / 2
+        : ref === 'right' ? -totalFt / 2 : 0;
+      const uShift = acrossMid / ((axisDotN < 0 ? -1 : 1)
+        * Math.max(Math.abs(axisDotN), 0.35));
       crossings.push({
-        wall, u: px * axis.x + pz * axis.z,
+        wall, u: px * axis.x + pz * axis.z + uShift,
         width,
         alongWall: t * wallLen,
         garage: garageFor(wall),
