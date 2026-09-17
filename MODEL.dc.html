@@ -4341,16 +4341,20 @@ class Component extends DCLogic {
     };
     if (!plan.beams.length) {
       if (escort) {
-        this._tourTimers = [setTimeout(() => showPopup(
-          'Every span is under 19\' — no mid-span beam needed. Press ENTER, SPACE, or tap to climb.'), 450)];
+        // writes: false -- a popup changes no file, so nothing waits on it.
+        this._armTourTimers([{ ms: 450, writes: false, run: () => showPopup(
+          'Every span is under 19\' — no mid-span beam needed. Press ENTER, SPACE, or tap to climb.') }]);
       }
       return;
     }
     // The mini reveal, three staged frames: the beam lands, the teleposts
     // follow, then the popup — "the tool is working for you."
     const elev = fdnLevel ? fdnLevel.elev : 0;
-    this._tourTimers = [
-      setTimeout(() => {
+    // ARMED THROUGH _armTourTimers, which is what holds the SAVED claim back
+    // until the last WRITING stage has run. The two stages below each put
+    // structure in the drawing; the popup does not, and is marked so.
+    this._armTourTimers([
+      { ms: 400, writes: true, run: () => {
         plan.beams.forEach(beam => this._beams.push({
           id: this._nextBeamId++,
           start: this._linkPlanPoint(new THREE.Vector3(beam.start.x, elev, beam.start.z), master, beam.start.srcIndex),
@@ -4363,8 +4367,8 @@ class Component extends DCLogic {
         }));
         this._markUnsaved();
         this.setState({ drawingMessage: 'The clear span passes 19\' — a beam lands mid-span.', drawingMessageError: false });
-      }, 400),
-      setTimeout(() => {
+      } },
+      { ms: 800, writes: true, run: () => {
         plan.columns.forEach(column => this._columns.push({
           id: this._nextColumnId++,
           point: this._linkPlanPoint(new THREE.Vector3(column.x, elev, column.z), master, column.srcIndex),
@@ -4376,14 +4380,85 @@ class Component extends DCLogic {
         }));
         this._markUnsaved();
         this.setState({ drawingMessage: 'Teleposts on pad footings split the beam into working spans.', drawingMessageError: false });
-      }, 800),
-      setTimeout(() => showPopup('Beam and teleposts are in — press ENTER, SPACE, or tap to climb.'), 1200),
-    ];
+      } },
+      { ms: 1200, writes: false, run: () => showPopup('Beam and teleposts are in — press ENTER, SPACE, or tap to climb.') },
+    ]);
   }
 
   _clearTourTimers() {
     (this._tourTimers || []).forEach(clearTimeout);
     this._tourTimers = [];
+    // Cancelled IS finished: nothing more is coming, which is the only thing
+    // the flag claims.
+    this._sayBuildSettling(false);
+  }
+
+  // SAVED IS A PROMISE, AND THE REVEAL WAS BREAKING IT (Devin's ruling).
+  //
+  // The reveal above writes the beam and the teleposts on TIMERS, and each is
+  // an ordinary edit with its own save. So between two stages the page was
+  // honestly clean by every measure it had -- and said SAVED, while the rest
+  // of the house was still queued. A drafter who closed the tab in that beat
+  // kept a house with no structure in it that the page had told him was
+  // saved, and write-tier.spec.js compared a mid-reveal read of the file
+  // against a finished one and flaked on whichever side the machine landed:
+  // pass, fail, pass on one commit.
+  //
+  // SO SAVED NOW MEANS QUIESCENT, not "saved what I had so far". The writes
+  // themselves are untouched -- every stage still reaches the store the
+  // moment it happens, so nothing is held hostage to an animation -- but the
+  // page does not CLAIM saved until nothing is queued behind it.
+  //
+  // `data-save-dirty` cannot carry this on its own: it is about the edit that
+  // has happened, and this is about the edit still to come. Between stages
+  // both are truthfully "clean", which is exactly how the lie got out.
+  //
+  // ON <body> beside data-save-dirty, and written only once a reveal has
+  // armed -- absent means a page that never staged anything, which is not
+  // settling. Both are beacons rather than rendered text, because a condition
+  // wait needs the answer synchronously with the edit and the status text
+  // lands a frame later.
+  _sayBuildSettling(on) {
+    this._buildSettling = !!on;
+    document.body.dataset.buildSettling = on ? '1' : '0';
+    // COMING OUT OF A REVEAL THAT WAS CANCELLED, the last write may have
+    // landed while the claim was being held back -- and with no further stage
+    // coming, nothing would ever publish it. Equal generations mean the store
+    // has everything this page has, which is the whole of what SAVED says.
+    if (!on && this._lastSavedGeneration === this._saveGeneration) this._publishSaved();
+  }
+
+  // The one place SAVED is declared, so the claim cannot be made in two
+  // voices that disagree.
+  _publishSaved() {
+    document.body.dataset.saveDirty = '0';
+    this.setState({ persistenceStatus: 'SAVED' });
+  }
+
+  // THE TIMERS AND THE FLAG ARE ARMED IN ONE PLACE, because a flag set
+  // anywhere else is free to disagree with the timers it describes -- and a
+  // "still working" flag that outlives the work is worse than none, since
+  // everything waiting on it waits forever.
+  //
+  // `writes` is what makes the wait as short as the truth allows: a stage
+  // that only shows a popup changes no file, so holding a reader for it would
+  // be charging them for an animation. The flag clears when the last WRITING
+  // stage has run.
+  _armTourTimers(stages) {
+    this._clearTourTimers();
+    if (!stages.length) return;
+    let pending = stages.filter(stage => stage.writes).length;
+    if (pending) this._sayBuildSettling(true);
+    this._tourTimers = stages.map(stage => setTimeout(() => {
+      try {
+        stage.run();
+      } finally {
+        // In `finally` on purpose: a stage that threw still is not coming
+        // back, and leaving the flag up would hang every reader on a failure
+        // that already happened.
+        if (stage.writes && (pending -= 1) === 0) this._sayBuildSettling(false);
+      }
+    }, stage.ms));
   }
 
   // The popup ladder (slice 2): every floor transition is the same popup
@@ -6623,10 +6698,16 @@ class Component extends DCLogic {
       .catch(() => {})
       .then(() => this._writeDrawingToStore(file))
       .then(() => {
+        this._lastSavedGeneration = generation;
         if (generation === this._saveGeneration) {
           document.body.dataset.saveSeq = String(generation);
-          document.body.dataset.saveDirty = '0';
-          this.setState({ persistenceStatus: 'SAVED' });
+          // THE WRITE LANDED; THE DRAWING IS NOT FINISHED. A staged reveal has
+          // more edits queued on timers, and announcing SAVED here is the
+          // promise this page used to break -- see _sayBuildSettling. The
+          // bytes are already in the store either way; what waits is the
+          // claim, and the stage that clears the flag publishes it.
+          if (this._buildSettling) return;
+          this._publishSaved();
         }
       })
       .catch(error => {
