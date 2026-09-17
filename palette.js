@@ -132,7 +132,26 @@ if (!window.DraftPalette) {
   const BASE = Object.freeze({
     night: Object.freeze({
       'surface-page':    '#1d1f20',
-      'surface-panel':   'rgba(20,22,23,0.82)',
+      // HALF TRANSPARENT, AND THE SAME HALF ON BOTH MODES. Movie, 17 Sep:
+      // "i'd like to allow the transparency to increase to about 50% or maybe
+      // more for that 'tint area' on the side menus and on the top and bott",
+      // and "i'd like the tinted panels to be used on both day and night
+      // versions". It was 0.82 here and 0.88 on day -- two different amounts
+      // of tint for the same idea, which is why the day chrome read as solid
+      // white and the night chrome nearly as solid black.
+      //
+      // ONE TOKEN REACHES ALL OF IT. Every surface he named is this role:
+      // both sidebars, the top strip, the bottom bar, and the readout, the
+      // switch sets, the seats and the promote card besides.
+      //
+      // THE DIMENSION LABEL PLATE IS THIS ROLE TOO, and that is the one place
+      // the alpha is doing work rather than decoration -- drawDimension2D
+      // fills it behind the string. The plate stays legible because this
+      // colour is within nine points of surface-page on every channel, so
+      // compositing at 0.50 instead of 0.82 moves the ground by about three
+      // points, not by the width of the drawing underneath. The harness
+      // measures that pair rather than trusting it (proto/palette-harness.js).
+      'surface-panel':   'rgba(20,22,23,0.50)',
       'surface-chip':    '#2a2d2e',
       'edge-panel':      '#3a3d3f',
       'ink-primary':     '#e7e5e2',
@@ -187,7 +206,7 @@ if (!window.DraftPalette) {
     }),
     day: Object.freeze({
       'surface-page':    '#f2f2f3',
-      'surface-panel':   'rgba(255,255,255,0.88)',
+      'surface-panel':   'rgba(255,255,255,0.50)',   // see night: one tint, both modes
       'surface-chip':    '#e4e4e6',
       'edge-panel':      '#c6c8ca',
       'ink-primary':     '#1d1f20',
@@ -231,9 +250,33 @@ if (!window.DraftPalette) {
   // second table -- and today it overrides exactly one role each way, which is
   // the honest size of the difference until the skins are designed.
   const THEME_OVERRIDES = Object.freeze({
+    // RUFF IS RED, AND ITS BOXES ARE LETTERED IN WHITE. Movie, 17 Sep:
+    // "i guess change all the gold to red, but if there is a red box and text
+    // in the box make the text white (not black)", "in the RUFF version",
+    // "both night and day to red not gold". So the amber goes on both modes,
+    // and night's accent-ink -- which was the page's own near-black, the one
+    // thing he named -- goes with it.
+    //
+    // THE TWO JOBS PULL APART ON NIGHT, AND NO RED SETTLES IT. The accent is
+    // read as TEXT on the page (#readout b) and it is also the fill that white
+    // lettering sits on, so it must be light enough to clear a near-black page
+    // and dark enough to carry white. Solve the two for equality and the
+    // ceiling is 4.07:1 -- both bars at once, for EVERY colour, not just for
+    // red. 4.5 on both is arithmetically unavailable here, so the harness
+    // asserts this pair at the ceiling and says why; see palette-harness.js.
+    //
+    // #fd0000 IS THE MAXIMIN, searched rather than chosen: of every red that
+    // reads as one, it is the value whose WORSE ratio is highest -- 4.08 on
+    // the page, 4.06 under white. Prettier reds exist a tenth lower (#e8342a
+    // is 3.90/4.24); a tenth of contrast is not worth spending on taste when
+    // the budget is already short. Both clear AA large text (3.0) with room.
+    //
+    // DAY HAS NO SUCH TENSION and so takes no exception: its page is near
+    // white, both jobs want a DARK red, and #c0392b clears 4.5 twice over at
+    // 4.86 and 5.44. It is the brick the old dark gold was, in red.
     ruff: Object.freeze({
-      night: Object.freeze({ accent: '#f0b429' }),  // the warm amber already on the page
-      day:   Object.freeze({ accent: '#8a6207', 'accent-ink': '#ffffff' }),
+      night: Object.freeze({ accent: '#fd0000', 'accent-ink': '#ffffff' }),
+      day:   Object.freeze({ accent: '#c0392b', 'accent-ink': '#ffffff' }),
     }),
     rough: Object.freeze({
       night: Object.freeze({ accent: '#6b91b6' }),  // the drafting blue (#5980a6, 81 uses
