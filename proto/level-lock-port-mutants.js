@@ -99,6 +99,24 @@ const run = name => {
   } catch { return 'failed'; }
 };
 
+// EVERY FILE THIS GATE MUTATES. The restore is `git checkout -- <file>`, so a
+// file left out of this guard has any uncommitted work in it silently
+// destroyed the first time a mutant touches it. This gate mutates MODEL.html
+// and nothing else.
+//
+// BEFORE THE BASELINE, NOT AFTER, and that ordering is the whole value. The
+// baseline below is a full Playwright run of the spec -- minutes -- and it
+// answers a question about the spec, not about your tree. A guard that fires
+// only after it lets you walk away believing the gate is running when it has
+// already refused, and the uncommitted work it was protecting is the thing
+// you were least willing to lose.
+const dirty = execSync('git status --porcelain MODEL.html',
+  { cwd: ROOT }).toString().trim();
+if (dirty) {
+  console.error('REFUSING TO RUN: uncommitted changes; this restores from HEAD.\n' + dirty);
+  process.exit(1);
+}
+
 // THE BASELINE FIRST, AND THIS IS NOT CEREMONY. A mutant is counted KILLED
 // when the spec FAILS -- so if the spec is already failing for a reason that
 // has nothing to do with the mutant, every mutant "dies" and the gate prints a
