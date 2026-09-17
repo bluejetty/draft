@@ -178,6 +178,34 @@ check('and an id of zero is an id, not an absence',
   G => [G.copyForLevel({ id: 'm1', points: [{ x: 0, z: 0, id: 0 }] },
     LEVELS[0], { newItemId: mint().item }).points[0].srcId, 0]);
 
+// ── storageMaster: the file's spelling ──
+//
+// MODEL.dc.html holds `pointId` and its loader does the renaming. MODEL.html
+// has no loader and no serializer: what it pushes IS what reaches the file, so
+// it needs the storage spelling at the moment of writing. That rename is the
+// same fact the reader half owns, which is why it lives here and not on a page.
+check('storageMaster spells a master point id the way the file does',
+  G => [Object.keys(G.storageMaster(makeMaster(G)).points[0]).sort().join(','), 'id,x,z']);
+
+check('and it is the same value, not a fresh one',
+  G => { const m = makeMaster(G);
+         return [G.storageMaster(m).points[0].id, m.points[0].pointId]; });
+
+check('the rest of the master travels untouched',
+  G => { const st = G.storageMaster(makeMaster(G));
+         return [`${st.shelfId},${st.sourceLevelId},${st.garage}`, '1,3,false']; });
+
+// Calling it twice must not strip an id away -- a master already in storage
+// spelling has no pointId to read, and a naive rename would leave it with
+// neither.
+check('storageMaster is idempotent',
+  G => { const once = G.storageMaster(makeMaster(G));
+         return [G.storageMaster(once).points[0].id, once.points[0].id]; });
+
+check('and a point with neither spelling is refused here too',
+  G => { try { G.storageMaster({ id: 'm', points: [{ x: 0, z: 0 }] }); return ['accepted', 'refused']; }
+         catch { return ['refused', 'refused']; } });
+
 // ── MUTATIONS ──
 const MUTATIONS = [
   ['a copy forgets which master it belongs to',
@@ -212,6 +240,10 @@ const MUTATIONS = [
     s => s.replace('bulge: point.bulge || 0,', 'bulge: 0,')],
   ['the attach marker is dropped, so a shared garage node cannot be resolved',
     s => s.replace('attach: point.attach || null,', 'attach: null,')],
+  ['storageMaster leaves the point id out of the file entirely',
+    s => s.replace('return { ...rest, id: masterPointId(point) };', 'return rest;')],
+  ['storageMaster writes the memory spelling into the file instead',
+    s => s.replace('const { pointId, ...rest } = point;', 'const rest = point;')],
 ];
 
 // ── Run ──

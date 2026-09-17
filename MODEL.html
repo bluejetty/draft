@@ -1748,6 +1748,7 @@
      alternative was office defaults, which would have shown four elevation
      marks to a drafter who had switched them off. -->
 <script src="./cut-marks.js"></script>
+<script src="./outline-master.js"></script>
 <!-- The house types the build bar offers. Lifted out of MODEL.dc.html so both
      pages read one list (build-menu.js says why). -->
 <script src="./build-menu.js"></script>
@@ -2727,22 +2728,21 @@
   // there -- which is the whole difference between a painter that moved and a
   // painter that is shared.
   //
-  // THE LIVE-EDITING KEYS ARE PASSED EXPLICITLY AS FALSE AND EMPTY, not left
-  // undefined and not deleted. Two blocks of the painter are guarded on them --
-  // the fenestration ghost (`boneyardActive && activeTool === 'fenestration'
-  // && snapPt`) and the in-progress outline (`outlineDrawing &&
-  // outlinePoints.length`) -- and this page, which reads and never writes, can
-  // never enter either. MODEL.dc.html's own env says as much: "a caller working
-  // from a saved drawing passes none of it and the preview branches stay
-  // inert." Naming them here rather than relying on undefined means the day
+  // THE LIVE-EDITING KEYS WERE PASSED EXPLICITLY AS FALSE AND EMPTY while this
+  // page only read outlines, under the note that naming them meant "the day
   // this page grows an outline tool, the keys to fill are already listed and
   // the branches are already wired -- instead of a reader concluding the
-  // painter has no preview and quietly building a second one.
+  // painter has no preview and quietly building a second one". That day is
+  // this one, and the note held: the part-drawn trace below is filled-in keys,
+  // not a new preview. The FENESTRATION ghost's keys stay inert, because this
+  // page still places no marks.
   //
-  // The six colours are copied verbatim from MODEL.dc.html:7441. They are
-  // hardcoded in BOTH pages now, which is one literal set too many -- flagged
+  // FIVE OF THE SIX COLOURS are copied verbatim from MODEL.dc.html:8276. They
+  // are hardcoded in BOTH pages, which is one literal set too many -- flagged
   // for whoever takes the palette work, not fixed here, because moving a colour
-  // into palette.js is a decision about the drawing rather than about this lift.
+  // into palette.js is a decision about the drawing rather than about this
+  // lift. The sixth, the house TRACE, is no longer a literal on this page: it
+  // is the armed build family's colour, and the block below says why.
   const paintOutlines = () => {
     const R = window.DraftRender2D;
     const G = window.DraftGeometry2D;
@@ -2774,21 +2774,45 @@
       // so the reader can see the branch exists rather than infer it is gone.
       geometryFor: () => null,
       markPlacement: () => null,
-      // Live interaction state -- inert here, listed here. See above.
-      activeTool: null,
+      // LIVE INTERACTION STATE, AND IT IS LIVE NOW. These keys were passed
+      // false and empty against the day this page grew an outline tool, with
+      // the note that then "the keys to fill are already listed and the
+      // branches are already wired". That day is this one: the trace the
+      // drafter is part-way through paints through the SAME painter the old
+      // page traces with, rather than a second preview drawn here.
+      activeTool,
       fenestrationType: null,
+      // Garage runs are not on this page yet -- this rung draws the house
+      // loop -- so the painter's two garage branches stay unreachable and the
+      // trace takes the house colour below.
       outlineGarage: null,
-      snapPt: null,
-      outlineDrawing: false,
-      outlinePoints: [],
-      outlineStart: null,
+      // THE RUBBER BAND'S FAR END, and it is only supplied while a trace is
+      // actually part-drawn. cursorWorld survives a finger lifting and a tool
+      // changing; handing it over with no corners placed would band from
+      // nothing, and handing it over after the loop commits would band from a
+      // trace that is gone.
+      snapPt: activeTool === 'outline' && outlineCorners.length ? cursorWorld : null,
+      outlineDrawing: activeTool === 'outline' && outlineCorners.length > 0,
+      outlinePoints: outlineCorners,
+      // The close target. The painter rings it once three corners are down,
+      // which is the same press count outlinePress will accept as a close --
+      // the ring is the page saying where the loop can be finished, so it has
+      // to appear on the press that makes finishing possible and not before.
+      outlineStart: outlineCorners[0] || null,
       frozenEnd: null,
       colors: {
         boneyard: '#b04050',
         level: '#5980a6',
         garageBoneyard: '#cf7a1f',
         garageLevel: '#7d5ba6',
-        traceHouse: '#c0392b',
+        // THE HOUSE TRACE COLOUR IS A QUESTION ON THIS PAGE, not a constant.
+        // The painter asks what colour a house trace is; here the answer is
+        // the colour of the build-bar family that armed it, which is the
+        // order's rule 4. Reading the family HERE rather than teaching the
+        // shared painter about families keeps build families out of a module
+        // that draws for both pages -- the old page has no per-family trace
+        // colour and is not being given one by this rung.
+        traceHouse: outlineTraceColor(),
         traceAttached: '#3f7fd6',
       },
     });
@@ -3862,13 +3886,13 @@
   // walls. If this code ever decides where a bedroom goes, it has crossed the
   // seam and should be deleted back to here.
   //
-  // ONE HALF OF THE OLD PAGE'S ARMING DELIBERATELY DOES NOT COME ACROSS.
-  // _pressBuildType does two things: it records the type AND arms the outline
-  // tool so the next press starts tracing the house (:14156). This page has no
-  // outline tool -- the tool column arms a wall and the file row saves it --
-  // so carrying the trace-arm would mean inventing the
-  // tool it arms. The type is recorded; the tracing waits for whoever builds
-  // that tool.
+  // BOTH HALVES OF THE OLD PAGE'S ARMING ARRIVE NOW. _pressBuildType does two
+  // things: it records the type AND arms the outline tool so the next press
+  // starts tracing the house (:14156). The second half was left behind while
+  // this page had no outline tool to arm -- "the tracing waits for whoever
+  // builds that tool" -- and it now waits no longer: the geometry side takes
+  // the choose seam below and arms its trace. This bar still records the type
+  // and nothing else; which is the whole point of the seam.
   //
   // THE SEAM, for whoever writes the geometry side:
   //
@@ -7644,6 +7668,150 @@
     paint();
   };
 
+  // ── THE OUTLINE TOOL ─────────────────────────────────────────────────────
+  //
+  // PARITY-model-html-vs-dc.md has carried "Draw an outline — absent,
+  // must-have" since #389, and the reason is written at :3866: the old page's
+  // _pressBuildType does TWO things, records the type and arms the outline
+  // tool, and only the first half came across because there was no tool to
+  // arm. This is the second half.
+  //
+  // THE GESTURE IS drawPress's SIBLING, not a new idea: successive presses
+  // drop corners, and pressing the first corner again closes the loop. No
+  // Enter and no FINISH button, because that is the old page's contract and a
+  // tool that needs a keyboard is not one an iPad at the counter can use.
+  //
+  // WHAT IT PERSISTS IS THE OLD PAGE'S SHAPE, through outline-master.js rather
+  // than a second copy of it: a master on the BONEYARD shelf holding the
+  // common geometry, and a copy on every level linked back corner by corner.
+  // This page still shows no BONEYARD -- that absence is settled -- and writes
+  // the master anyway, sight unseen, because BUILD HOUSE reads outlines and
+  // the drawing is shared with a page that does show it.
+  let outlineCorners = [];
+  // WHICH BUILD FAMILY ARMED THE TRACE, kept for the colour: the order's rule
+  // 4 is that a house outline draws in the build-bar family's colour, "red
+  // house / blue split".
+  let outlineFamily = null;
+
+  // THE FAMILY COLOURS, and what each one is answerable to.
+  //
+  // BUNGALOW is the old page's house trace EXACTLY -- #c0392b is
+  // MODEL.dc.html's own `traceHouse` (:8276), not a red picked to match it.
+  //
+  // BILEVEL is the "blue split" half of the order and it has NO counterpart on
+  // the old page: a bilevel trace there is house red like every other, and the
+  // SPLIT button that stood in that strip before the build menu never drew
+  // anything -- _pressSplitLevel was a stub that said "coming soon". So this
+  // is a colour the rung INTRODUCES rather than one it carries across, and it
+  // is the page's existing trace blue rather than a seventh hex. That blue is
+  // also the ATTACHED garage run's on the old page. The two cannot collide
+  // today, because garage runs are not on this page at all; whoever lands them
+  // owns telling them apart, and this note is the warning rather than a
+  // surprise waiting in the palette.
+  //
+  // THE GARAGE FAMILY IS ABSENT ON PURPOSE -- see armOutline, which refuses it
+  // rather than colouring it.
+  const OUTLINE_TRACE_COLORS = Object.freeze({
+    bungalow: '#c0392b',
+    bilevel: '#3f7fd6',
+  });
+  // The colour the PAINTER is handed for a house trace. Falls back to the
+  // house red rather than throwing: a family the map has not heard of is a
+  // menu that grew, and a trace drawn in the ordinary house colour is a far
+  // better answer to that than a trace that does not draw.
+  const outlineTraceColor = () =>
+    OUTLINE_TRACE_COLORS[outlineFamily?.id] || OUTLINE_TRACE_COLORS.bungalow;
+
+  // HOW NEAR COUNTS AS CLOSING. In FEET rather than pixels, so the same press
+  // closes the same loop whatever the zoom: a pixel tolerance would demand
+  // surgical aim zoomed out and would swallow a deliberate second corner
+  // zoomed in.
+  const OUTLINE_CLOSE_FT = 1.5;
+
+  const armOutline = picked => {
+    // A DETACHED GARAGE PRESS IS NOT A HOUSE TRACE, and answering it with one
+    // is worse than answering it with nothing. The old page sends those
+    // entries to _toggleGarageMode('detached') with the foundation they
+    // pre-answered (MODEL.dc.html:14339); garages are out of this rung
+    // entirely, so arming the house trace here would take a garage press and
+    // persist a master carrying `garage: false` -- a wrong drawing rather than
+    // a missing feature, and one nothing downstream can tell from a house the
+    // drafter meant to draw.
+    if (picked?.family?.id === 'detachedGarage' || picked?.entry?.foundation) {
+      sayOnStrip('Detached garages are not on this page yet — the house outline is.');
+      return;
+    }
+    activeTool = 'outline';
+    outlineCorners = [];
+    outlineFamily = picked?.family ?? null;
+    drawStart = null;
+    paint();
+  };
+
+  const outlinePress = at => {
+    const here = { x: at.x, z: at.z };
+    // THREE CORNERS BEFORE CLOSING IS LEGAL, because two enclose no floor --
+    // the same floor the old page's own guard is about. Below three, a press
+    // near the first corner is a drafter placing a corner there, not closing.
+    if (outlineCorners.length >= 3) {
+      const first = outlineCorners[0];
+      if (Math.hypot(here.x - first.x, here.z - first.z) <= OUTLINE_CLOSE_FT) {
+        commitOutline();
+        return;
+      }
+    }
+    outlineCorners.push(here);
+    paint();
+  };
+
+  const commitOutline = () => {
+    const loop = outlineCorners.slice();
+    if (loop.length < 3) return null;
+    // A CROSSED LOOP ENCLOSES NO FLOOR, and the old page refuses it at
+    // MODEL.dc.html's own close with the same test from the same module. The
+    // pending corners are KEPT on a refusal so the drafter can move the last
+    // one rather than retrace the whole house.
+    if (window.DraftGeometry2D.selfIntersects(loop)) {
+      sayOnStrip('That outline crosses itself, so it encloses no floor area.');
+      return null;
+    }
+    const OM = window.DraftOutlineMaster;
+    const spec = OM.masterFromLoop({
+      points: loop,
+      shelfId: activeShelfId(),
+      sourceLevelId: activeLevelId(),
+      newItemId: () => newDrawingItemId('outline'),
+      newPointId: () => newDrawingItemId('op'),
+    });
+    // THE FILE'S SPELLING, AT THE MOMENT OF WRITING. This page has no
+    // serializer between the push and the file (see commitWall's note on
+    // 'centre'), and storage spells a master point's id `id` while
+    // MODEL.dc.html holds `pointId`. Writing the memory spelling would produce
+    // a master whose points have no id at all once the old page loads it --
+    // and it would look perfect until a corner was dragged.
+    const master = OM.storageMaster(spec);
+    const levels = (drawing.levels || []);
+    const copies = OM.copiesForLevels(master, levels, {
+      newItemId: () => newDrawingItemId('outline'),
+    });
+    if (!Array.isArray(drawing.boneyardOutlines)) drawing.boneyardOutlines = [];
+    if (!Array.isArray(drawing.outlines)) drawing.outlines = [];
+    drawing.boneyardOutlines.push(master);
+    copies.forEach(copy => drawing.outlines.push(copy));
+    undoStack.push({ kind: 'add-outline', master, copies });
+    outlineCorners = [];
+    activeTool = RESTING_TOOL;
+    markDirty();
+    stripRefresh();
+    paint();
+    return master;
+  };
+
+  // THE ARMING, through the seam :3875 declared for exactly this. A house type
+  // press records the type (that half already worked) and now arms the trace,
+  // which is what _pressBuildType has always done in one motion.
+  window.ModelBuild.onChoose(picked => { if (picked) armOutline(picked); });
+
   // ── the instrument strip ──────────────────────────────────────────────────
   // MODEL.dc.html:1963's bottom panel, rebuilt on this page's terms. Movie,
   // 13 Sep: "we also still need the bottom bar which should look like lights
@@ -8970,6 +9138,7 @@
     if (activeTool === 'column') { placeColumn(at); return; }
     if (activeTool === 'beam') { beamPress(at); return; }
     if (activeTool === 'roof') { roofPress(at); return; }
+    if (activeTool === 'outline') { outlinePress(at); return; }
     if (activeTool === 'wall') {
       // §1: "either drag, or press again and drag -- both must work". The lift
       // needs two facts this press knows and pointerup does not: where the

@@ -121,10 +121,37 @@ if (!window.DraftOutlineMaster) {
   const copiesForLevels = (master, levels, opts) =>
     (levels || []).map(level => copyForLevel(master, level, opts));
 
+  // THE SAME MASTER, SPELLED THE WAY THE FILE SPELLS IT.
+  //
+  // masterFromLoop hands back `pointId`, because that is what MODEL.dc.html
+  // holds in memory and it is the page that has always built these. Storage
+  // spells the same value `id` (drawing-format.js), and MODEL.dc.html's loader
+  // is what renames it on the way in.
+  //
+  // MODEL.html has no loader and no serializer in between: what it pushes IS
+  // what reaches the file. So it needs the storage spelling at the moment of
+  // writing, and the rename belongs HERE rather than in a page -- it is the
+  // same fact the reader half already owns, and a page that renamed keys on
+  // its own would be keeping format knowledge the module exists to hold.
+  //
+  // Idempotent on purpose: a master already in storage spelling passes through
+  // unchanged, so calling it twice cannot strip an id away.
+  const storageMaster = master => {
+    if (!master) throw new Error('storageMaster needs a master');
+    return {
+      ...master,
+      points: (master.points || []).map(point => {
+        const { pointId, ...rest } = point;
+        return { ...rest, id: masterPointId(point) };
+      }),
+    };
+  };
+
   window.DraftOutlineMaster = Object.freeze({
     OUTLINE_LAYER,
     masterPointId,
     masterFromLoop,
+    storageMaster,
     copyForLevel,
     copiesForLevels,
   });
