@@ -438,7 +438,12 @@ test("the sign's bone takes the board down and hands over the trace",
     const before = houseMaster(await savedFile(page));
     expect(before, 'no house master to start with').toBeNull();
 
-    await pickHouseType(page);
+    // 2 STOREY, BECAUSE THE HANDOVER IS NOW THE FALLBACK. Movie ruled the
+    // window is for premade designs, so 1 STOREY builds its bungalow there and
+    // never reaches this path. The handover is what a tile with NO design yet
+    // still gets, and 2 STOREY is one of those until its plan lands -- at
+    // which point this test moves to whatever is still undesigned, or goes.
+    await pickHouseType(page, 'bungalow', 'twoStorey');
     const sign = page.locator('#drivethru');
     await expect(sign, 'the tile does not shut the board').not.toHaveAttribute('data-shut', '');
 
@@ -451,7 +456,7 @@ test("the sign's bone takes the board down and hands over the trace",
     // before building anything AND before taking the sign down. The drafter
     // pressed the bone and got a board still standing in front of the drawing.
     await expect(sign, 'the board comes down on a house order').toHaveAttribute('data-shut', '');
-    await expect(page.locator('#strip-message')).toContainText('Trace your 1 STOREY');
+    await expect(page.locator('#strip-message')).toContainText('Trace your 2 STOREY');
 
     // AND THE TRACE IS REALLY THERE, which is the half a message cannot prove:
     // a page that printed the sentence and armed nothing would pass every
@@ -467,7 +472,9 @@ test("the sign's bone takes the board down and hands over the trace",
 test('a house order does not spend the tile, because nothing was built',
   async ({ page }) => {
     await newPageOnSavedHouse(page);
-    await pickHouseType(page);
+    // A TILE WITH NO PREMADE DESIGN -- see the note above. A tile that has one
+    // IS spent, because something really was built.
+    await pickHouseType(page, 'bungalow', 'twoStorey');
     await page.locator('#dt-bone').click();
     await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
 
@@ -500,7 +507,7 @@ test('a house order does not spend the tile, because nothing was built',
 test('the bone re-arms the trace, so a tool picked in between does not eat it',
   async ({ page }) => {
     await newPageOnSavedHouse(page);
-    await pickHouseType(page);
+    await pickHouseType(page, 'bungalow', 'twoStorey');
 
     // THE WANDER. The tile armed the trace; the drafter then reaches for a
     // tool, changes his mind and goes back to the window to press the bone.

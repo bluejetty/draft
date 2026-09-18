@@ -1974,6 +1974,11 @@
      a house raised here and a house raised there cannot disagree about which
      side of the traced line the wall body sits on. -->
 <script src="./build-house.js"></script>
+<!-- The designs the drive-thru hands over. Movie, 18 Sep: "i'd just like to
+     offer them premade designs in there at the beginning". A DESIGN, not a
+     generator -- starter-shape.js invents a house, this one is the building
+     in the picture the drafter pressed. -->
+<script src="./premade-plans.js"></script>
 <!-- Where an ordered garage stands. A traced loop says where it goes by
      being traced; an autobuilt one has to be told, and that is a rule about
      buildings rather than about this page. -->
@@ -4275,6 +4280,9 @@
     orderServed,
     onChoose: fn => { if (typeof fn === 'function') chooseHandlers.push(fn); },
     onBuild: fn => { if (typeof fn === 'function') buildHandlers.push(fn); },
+    // The geometry side's word that the FOOT's bone raised something. See
+    // fireBuild: said out loud rather than inferred from a return value.
+    buildServed: () => { buildWasServed = true; },
     onOrder: fn => { if (typeof fn === 'function') orderHandlers.push(fn); },
   });
 
@@ -4398,16 +4406,30 @@
   [sizeWidth, sizeDepth].forEach(field =>
     field.addEventListener('input', () => paintSign()));
 
-  // A HANDLER THAT BUILT SOMETHING SAYS SO BY RETURNING IT, and fireBuild
-  // passes that word back to the press. Without it the foot bone could not
-  // tell "I raised the house" from "nobody was listening": it falls through to
-  // NOTHING TO BUILD YET and calls the board up, so a drafter who had just
-  // watched his walls appear would get the drive-thru over the top of them.
+  // A HANDLER THAT BUILT SOMETHING SAYS SO, and fireBuild passes that word back
+  // to the press. Without it the foot bone cannot tell "I raised the house"
+  // from "nobody was listening": it falls through to NOTHING TO BUILD YET and
+  // calls the board up, so a drafter who had just watched his walls appear
+  // would get the drive-thru over the top of them.
   //
-  // EVERY handler is called first and the answers are reduced after -- `.map`
-  // then `.some`, not `.some` -- because a short circuit would silently skip
-  // whatever was registered after the first one to build.
-  const fireBuild = () => buildHandlers.map(fn => fn(chosen())).some(Boolean);
+  // IT SAYS SO BY CALLING buildServed, NOT BY RETURNING SOMETHING. The first
+  // version read the handlers' return values, and that is a trap: a handler
+  // written for any other purpose reports a build by accident. The one in
+  // model-drivethru.spec.js does exactly that -- `p => seen.push(p)` returns
+  // the array's new LENGTH, which is truthy, so a spec that only wanted to
+  // watch the seam silenced the board. Found by that test.
+  //
+  // So the word is deliberate, and it is the seam's own existing idiom:
+  // orderServed already means "the geometry side BUILT it" (:4262) and this is
+  // its twin for the foot's bone. Nothing incidental can say it by mistake.
+  let buildWasServed = false;
+  const fireBuild = () => {
+    buildWasServed = false;
+    // EVERY handler is called, and the flag is read after -- never a short
+    // circuit, which would silently skip whatever registered later.
+    buildHandlers.forEach(fn => fn(chosen()));
+    return buildWasServed;
+  };
   // THE ORDER CARRIES ITS ROUND: 'menu' means hand over the premade design
   // for this type, 'outline' means walk the drafter through drawing it.
   // AND ITS SIZE, when the entry asked for one. `size` is null on every
@@ -4745,6 +4767,25 @@
         && window.DraftBuildingBodies.hasDetachedGarage(drawing)) {
       signRefusal = {
         line: 'YOU\u2019VE GOT ONE ALREADY.',
+        note: 'One house and one detached garage is the lot.',
+      };
+      paintSign();
+      return;
+    }
+    // AND ONE HOUSE IS THE CAP, the same rule the garage above is held to and
+    // from the same module: building-bodies.js says what is standing, so
+    // PROJECT and this board cannot come to different answers. A second press
+    // on a project that already has a house would otherwise lay a second
+    // bungalow exactly on top of the first -- which looks like one house until
+    // something is dragged.
+    //
+    // ASKED ONLY OF A TILE THAT HAS A DESIGN. A 2 STOREY press still falls
+    // through to the trace handover, and refusing that because a house stands
+    // would stop a drafter drawing a second storey.
+    if (window.DraftPremadePlans?.planFor(picked?.entry?.id)
+        && window.DraftBuildingBodies.hasHouse(drawing)) {
+      signRefusal = {
+        line: 'YOU\u2019VE GOT A HOUSE ALREADY.',
         note: 'One house and one detached garage is the lot.',
       };
       paintSign();
@@ -7135,7 +7176,10 @@
     const walls = corners.map((corner, index) =>
       commitWall(corner, corners[(index + 1) % corners.length], { bone: false }));
     undoStack.length = mark;
-    undoStack.push({ kind: 'built', walls, outline, list: drawing.outlines });
+    // `outlines` PLURAL, because a premade bungalow raises two bodies on one
+    // press and one press is one undo. The garage passes its single loop as a
+    // list of one rather than the branch learning two shapes.
+    undoStack.push({ kind: 'built', walls, outlines: [outline], list: drawing.outlines });
     markDirty();
     paint();
     return outline;
@@ -8302,6 +8346,11 @@
     if (!Array.isArray(drawing.outlines)) drawing.outlines = [];
     drawing.boneyardOutlines.push(master);
     copies.forEach(copy => drawing.outlines.push(copy));
+    // WHAT THE BONE WILL BUILD, remembered as it is drawn. See outlineToBuild:
+    // the copy on the level the drafter is standing on, because that is the
+    // loop he just walked.
+    tracedOutline = copies.find(copy =>
+      Number(copy.levelId) === Number(activeLevelId())) || null;
     undoStack.push({ kind: 'add-outline', master, copies });
     outlineCorners = [];
     activeTool = RESTING_TOOL;
@@ -8342,18 +8391,33 @@
         || (samePoint(wall.start, b) && samePoint(wall.end, a))));
   };
 
-  // THE NEWEST UNBUILT LOOP ON THE LEVEL THE DRAFTER IS STANDING ON. Newest
-  // because the bone answers the gesture just made; on this level because a
-  // house on the floor below is not what the press was about; and not a
-  // garage, which has its own builder and its own bone.
+  // THE LOOP THIS PAGE JUST TRACED, and only that one.
+  //
+  // THE FIRST VERSION TOOK ANY UNBUILT HOUSE OUTLINE ON THE LEVEL, and that is
+  // too greedy by a long way: a drawing loaded from a file can carry outlines
+  // whose walls were never made -- the repro fixture in
+  // model-drivethru.spec.js carries five -- and the bone would then raise
+  // walls round a loop the drafter had never drawn and was not asking about.
+  // It also swallowed Movie's own rule for the empty press (15 Sep): "take
+  // them to the full house flow if there isn't a house and detached garage
+  // already ... it will do nothing once both house and garage both made". A
+  // build that fires on a drawing which already has houses is not nothing.
+  // model-drivethru.spec.js:477 is what caught it.
+  //
+  // So the bone answers a GESTURE, not a search: commitOutline records the
+  // loop as it is drawn and this hands back that one, still unbuilt, still in
+  // the drawing. An undo splices it out, and the test below it fails -- which
+  // is the behaviour a drafter would expect from taking his trace back.
+  let tracedOutline = null;
+
   const outlineToBuild = () => {
     const { levelId } = onActiveLevel();
-    const here = (drawing?.outlines || []).filter(outline =>
-      Number(outline.levelId) === Number(levelId)
-      && outline.garage !== true
-      && (outline.points || []).length >= 3
-      && !outlineIsBuilt(outline, levelId));
-    return here.length ? here[here.length - 1] : null;
+    const outline = tracedOutline;
+    if (!outline) return null;
+    if (!(drawing?.outlines || []).includes(outline)) return null;
+    if (Number(outline.levelId) !== Number(levelId)) return null;
+    if ((outline.points || []).length < 3) return null;
+    return outlineIsBuilt(outline, levelId) ? null : outline;
   };
 
   const buildFromDrawnOutline = () => {
@@ -8377,7 +8441,7 @@
     undoStack.length = mark;
     // `outline: null` -- the loop is the DRAFTER'S and it stays. See the
     // 'built' branch in undo, which now asks before it splices.
-    undoStack.push({ kind: 'built', walls, outline: null, list: null });
+    undoStack.push({ kind: 'built', walls, outlines: [], list: null });
     sayOnStrip(`House built — ${walls.length} walls off your outline.`);
     markDirty();
     buildChrome();
@@ -8385,14 +8449,83 @@
     return walls;
   };
 
-  // THE SEAM'S FIRST LISTENER. It answers with the walls, which is how
-  // fireBuild tells the press that the house went up -- see its comment.
-  window.ModelBuild.onBuild(() => buildFromDrawnOutline());
+  // THE SEAM'S FIRST LISTENER. It says buildServed when the house went up,
+  // which is how the press learns it has been answered -- see fireBuild.
+  window.ModelBuild.onBuild(() => {
+    if (buildFromDrawnOutline()) window.ModelBuild.buildServed();
+  });
 
   // THE ARMING, through the seam :3875 declared for exactly this. A house type
   // press records the type (that half already worked) and now arms the trace,
   // which is what _pressBuildType has always done in one motion.
   window.ModelBuild.onChoose(picked => { if (picked) armOutline(picked); });
+
+  // ── THE PREMADE DESIGN THE BOARD OFFERED ─────────────────────────────────
+  //
+  // Movie, 18 Sep: "we shouldn't put it in the drivethru window yet, i'd just
+  // like to offer them premade designs in there at the beginning". So the
+  // window's bone builds the building in the picture the drafter pressed --
+  // the trace handover below is what a tile with no design yet still gets.
+  //
+  // THE DESIGN IS NOT DECIDED HERE. premade-plans.js holds the numbers and the
+  // reasoning behind every one of them, with a harness on the arithmetic;
+  // this reads points and commits them, exactly as the ordered garage reads
+  // garage-site.js. A page that carried the dimensions itself would be the
+  // second home of a rule, and the day the bungalow changes width the two
+  // would disagree quietly.
+  //
+  // TWO BODIES, ONE PRESS. The bungalow with a garage raises a house loop and
+  // an ATTACHED garage loop -- `garage: true` and `detached: false`, which is
+  // what building-bodies.js reads to tell the attached one from the detached
+  // one (:37). An attached garage is part of the house it hangs off, so it
+  // does not spend the detached garage's slot.
+  const raiseLoop = (points, levelId, { garage = false } = {}) => {
+    const BH = window.DraftBuildHouse;
+    const outline = {
+      id: newDrawingItemId('outline'),
+      masterId: null,
+      levelId,
+      garage,
+      // SAID ON THE RECORD rather than left to the absence of a key.
+      // building-bodies.js reads `detached === true`, so a missing key would
+      // answer the same today -- and would stop answering the moment anything
+      // asks the question the other way round.
+      detached: garage ? false : undefined,
+      points: points.map(point => ({ x: point.x, y: 0, z: point.z })),
+      overriddenSrcIds: [],
+    };
+    if (outline.detached === undefined) delete outline.detached;
+    drawing.outlines.push(outline);
+    const refLine = BH.outlineInteriorRef(points);
+    const walls = BH.houseWallRuns(points)
+      .map(run => commitWall(run.start, run.end, { bone: false, refLine }));
+    return { outline, walls };
+  };
+
+  const buildPremadePlan = order => {
+    if (!drawing) return null;
+    const plan = window.DraftPremadePlans.planFor(order?.entry?.id);
+    if (!plan) return null;
+    const { levelId } = onActiveLevel();
+    if (!Array.isArray(drawing.outlines)) drawing.outlines = [];
+    // ONE GESTURE, ONE UNDO, the same as the ordered garage: the walls' own
+    // 'add' steps are dropped for the single 'built' one covering both bodies.
+    const mark = undoStack.length;
+    const raised = [raiseLoop(plan.house, levelId)];
+    if (plan.garage) raised.push(raiseLoop(plan.garage, levelId, { garage: true }));
+    undoStack.length = mark;
+    undoStack.push({
+      kind: 'built',
+      walls: raised.flatMap(body => body.walls),
+      outlines: raised.map(body => body.outline),
+      list: drawing.outlines,
+    });
+    sayOnStrip(`${order.entry.label} built — ${plan.garage ? 'house and garage' : 'house'}.`);
+    markDirty();
+    buildChrome();
+    paint();
+    return raised;
+  };
 
   // A HOUSE ORDER AT THE WINDOW MEANS "I'LL DRAW IT MYSELF" -- for now.
   //
@@ -8418,6 +8551,17 @@
   // tile through the same predicate and stands off.
   window.ModelBuild.onOrder(order => {
     if (!order?.entry || isGarageChoice(order)) return;
+    // THE DESIGN FIRST, and the trace only for a tile that has none. Movie
+    // ruled the window is for premade designs; the handover below is what is
+    // left for 2 STOREY and the bilevels until their plans land, and it goes
+    // when they do.
+    if (buildPremadePlan(order)) {
+      setSign(false);
+      // SPENT, unlike the handover: something was BUILT, which is exactly what
+      // orderServed means (:4262).
+      window.ModelBuild.orderServed();
+      return;
+    }
     // Re-armed rather than assumed. The order carries the choice, and a
     // drafter who picked a type, wandered off into another tool and came back
     // to press the bone would otherwise get the sign down over whatever he
@@ -10432,15 +10576,16 @@
         });
         setSelection(selection.filter(entry => !step.walls.includes(entry.item)));
         retirePoolCorners(step.walls.flatMap(wall => [wall.start, wall.end]));
-        // THE LOOP GOES BACK ONLY IF THE ORDER MADE IT. An ordered garage
-        // mints its own outline and takes it back with the walls; a house
-        // raised from a loop the DRAFTER traced leaves that loop standing --
-        // he drew it, the bone only built on it, and an undo that swallowed
-        // his trace would take back a gesture he never asked to undo.
-        if (step.list && step.outline) {
-          const outlineAt = step.list.indexOf(step.outline);
+        // THE LOOPS GO BACK ONLY IF THE ORDER MADE THEM. An ordered garage and
+        // a premade bungalow mint their own and take them back with the walls;
+        // a house raised from a loop the DRAFTER traced leaves that loop
+        // standing -- he drew it, the bone only built on it, and an undo that
+        // swallowed his trace would take back a gesture he never asked to
+        // undo. So a build that owns nothing carries an empty list.
+        (step.outlines || []).forEach(outline => {
+          const outlineAt = step.list ? step.list.indexOf(outline) : -1;
           if (outlineAt >= 0) step.list.splice(outlineAt, 1);
-        }
+        });
       } else if (step.kind === 'add') {
         const at = drawing.walls.indexOf(step.wall);
         if (at >= 0) drawing.walls.splice(at, 1);

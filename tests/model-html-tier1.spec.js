@@ -294,6 +294,12 @@ test.describe('MODEL.html tier 1', () => {
       // refuse it: the cost of a script is the request, and the alternative to
       // paying it is a twin of the half that IS called.
       './build-house.js',
+      // premade-plans.js is the drive-thru's catalogue: the bungalow's
+      // dimensions and the reasoning behind each of them, with
+      // proto/premade-plans-harness.js on the arithmetic. It is here for the
+      // reason garage-site.js is -- a design is a domain rule, and a page that
+      // carried the numbers itself would be the second home of one.
+      './premade-plans.js',
       // AND WHERE AN ORDERED GARAGE STANDS. 40 lines, no dependency of its
       // own: a traced loop says where it goes by being traced, an autobuilt
       // one has to be told, and PROJECT will have to be told the same thing
