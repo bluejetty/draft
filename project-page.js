@@ -1862,6 +1862,19 @@ if (!window.DraftProjectPage) {
         // chord's drop below it -- the chord has thickness and the two
         // undersides meet there.
         line(wallX, heelY - chordDropFt, ridgeX, ridgeY - chordDropFt, 1);
+        // AND THE SIDE CHORD'S OWN TWO FACES. Movie, 18 Sep: "missing side
+        // chords", marked at both walls. The line above is where the top
+        // chord's underside crosses the heel; the member standing in that
+        // gap is the piece the garage's own eave gets a few lines down --
+        // outside face on the wall, inside face a chord in, each run from
+        // what it lands on up to the top chord's underside. INBOARD IS THE
+        // WAY THE ROOF GOES, which is the opposite of the way the eave
+        // hangs, so one sign serves both walls.
+        const inw = -out;
+        const innerX = wallX + inw * chordFt;
+        line(wallX, eaveY, wallX, heelY - chordDropFt, 1);
+        line(innerX, roofBase + chordFt,
+          innerX, roofBase + riseGable(innerX) - chordDropFt, 1);
       });
       anchors.garagePitch = { x: (cut + ridgeX) / 2,
         y: roofBase + riseGable((cut + ridgeX) / 2) + 0.5 };
@@ -1875,10 +1888,14 @@ if (!window.DraftProjectPage) {
       // wall it springs from.
       roofEndX = houseFaceFt + overhangFt;
       topY = ridgeY;
-      // The break marks the GARAGE below, and stops at the room's plate: the
-      // roof over it is drawn whole, both slopes, so a cut line carried up
-      // through it would say the drawing stops somewhere it does not.
-      breakTopY = roofBase + 0.35;
+      // THE CUT RUNS THE WHOLE HEIGHT. Movie, 18 Sep: "the cut line should
+      // extend to over the top of the roof". It used to stop at the room's
+      // plate, on my reasoning that a roof drawn whole is not a roof that
+      // has been cut. But the cut is not a statement about the roof: it is
+      // where this section was taken, and it was taken through the building,
+      // roof included. So it clears the ridge by the same 4 1/4" the garage
+      // roof's own break clears its high side by.
+      breakTopY = ridgeY + 0.35;
     } else {
     rect(cut - overhangFt - 0.1, eaveY, 0.1, fasciaFt, 1.5);         // fascia
     line(cut - overhangFt, eaveY, cut, eaveY, 1);                    // soffit
