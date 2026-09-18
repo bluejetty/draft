@@ -317,8 +317,24 @@ test('the bone lights first, and the sign follows it up',
     await expect(press).toHaveAttribute('data-lit', '');
 
     await expect(sign).not.toHaveAttribute('data-shut', '', { timeout: 5000 });
-    // The light goes out once the board is up; a button still glowing under
-    // an open sign is a button that looks like it is still working.
+    // AND IT STAYS LIT NOW, which is the reverse of what this line used to
+    // say. It read "the light goes out once the board is up; a button still
+    // glowing under an open sign is a button that looks like it is still
+    // working" -- and on 17 Sep Movie asked for exactly that: "when the
+    // blueprint is showing the blue house button should be light and when it
+    // goes down unlit".
+    //
+    // THE OLD WORRY IS ANSWERED RATHER THAN OVERRULED. It is still working:
+    // ROUGH's sheet rides above the bar and leaves this press standing, and
+    // it is the press that builds what you picked off the board. RUFF's sign
+    // covers it, so there the light is under the board and nobody reads it
+    // either way.
+    await expect(press).toHaveAttribute('data-lit', '');
+
+    // And out when the board goes down, which is the edge that carries the
+    // meaning now.
+    await page.locator('[data-drivethru-close]').click();
+    await expect(sign).toHaveAttribute('data-shut', '');
     await expect(press).not.toHaveAttribute('data-lit', '');
   });
 

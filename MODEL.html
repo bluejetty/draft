@@ -194,12 +194,38 @@
     user-select:none; }
   #strip a, #strip button { font:inherit; letter-spacing:inherit; }
   #strip .grow { flex:1; }
-  /* THE MESSAGE YIELDS. It shares the left end with the settings stack and
-     the mode corner now, and a message long enough to push either of them off
-     the bar would cost a control to report a sentence. */
-  #strip-message { font-size:11px; text-transform:uppercase;
-    color: var(--ink-quiet); white-space:nowrap; overflow:hidden;
-    text-overflow:ellipsis; max-width:16vw; flex:0 1 auto; min-width:0; }
+  /* THE MESSAGE CAME OFF THE BAR (Movie, 18 Sep: "what is this text up in
+     here?" -- "if its a warning of som sort we should move it down just into
+     the model area below the top bar area").
+
+     IT WAS ALWAYS GOING TO END UP GARBLED THERE, and the rule that replaced
+     this one said so in as many words: "THE MESSAGE YIELDS. It shares the
+     left end with the settings stack and the mode corner now, and a message
+     long enough to push either of them off the bar would cost a control to
+     report a sentence." So it was given 16vw and an ellipsis -- and 16vw is
+     218px on a 1366 sheet, which cuts "Detached garages are not on this page
+     yet -- the house outline is." off at about a third. Yielding was the
+     right call for a control that had to be on that bar. Taking it off the
+     bar is the better one: nothing yields, and the sentence is read whole.
+
+     LINED UP WITH STATUS READOUT, in its type and at its inset (Movie: "move
+     it to the left make it look like lined up and same text and size and the
+     STATUS READOUT down below", then "STATUS READOUT same location leftwise
+     but at top of model area"). Same left:12px, same 12px UI face, same quiet
+     ink -- so the two ends of the sheet's left edge read as one voice, the
+     page telling you something at the top and offering you the numbers at
+     the bottom. --note-top is where this page already puts a line that sits
+     just under the bar; #elsewhere uses it on the right.
+
+     CLICK-THROUGH, for #readout's reason one line up the file: it lies over
+     the sheet, and a drafter drawing under it should reach the drawing. The
+     nowrap and the ellipsis stay as a backstop for a sentence longer than
+     any this page has, not as the working constraint they used to be. */
+  #strip-message { position:fixed; left:12px; top:var(--note-top); z-index:5;
+    font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
+    text-transform:uppercase; color: var(--ink-quiet); pointer-events:none;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    max-width:calc(100vw - 24px); }
 
   /* THE SETTINGS STACK, first thing on the bar (Movie, 15 Sep): SETTINGS and
      STANDARDS over each other and the unit toggle beside them -- MODEL.dc.html's
@@ -650,40 +676,66 @@
      under the foot takes a stray press.
 
      THE BOARD IS ONE IMAGE and every zone on it is a percentage of that
-     image, measured off assets/drivethru-menu-board.png (1024x1024). The
+     image, measured off assets/drivethru-menu-board.png (1020x1500). The
      art moves, the zones move with it, and nothing here hardcodes a pixel.
      The same arrangement as gruff-drivethru.js, for the same reason: the
      board is a PICTURE, and only the controls painted on top of it take a
      press. */
   /* BIGGER, BECAUSE MOVIE COULD NOT READ IT (16 Sep: "make the stuff in the
-     drivethru menu bigger its hard to see"). The board grows and the type on
-     it grows with it -- the zones are percentages of the picture, so nothing
-     re-measures. */
+     drivethru menu bigger its hard to see"), and then bigger again on 17 Sep
+     with a new sign drawn for it: "i'd like this one so the stuff inside can
+     be bigger". The shelf went from a sixth of the picture's height to two
+     fifths of it, which is what let the cards below grow.
+
+     RE-MEASURED, NOT RESCALED. The art changed shape as well as size, so
+     every figure here was read off the new file's own pixels: the screen's
+     black runs x 427..948 and y 175..510, the shelf's x 87..932 and y
+     536..1150, the post's disc y 1217..1333 centred on x 509.5. Nothing was
+     carried over from the square board by proportion. */
+  /* TWO BOARDS, TWO SHAPES, ONE RULE. The sign is a tall portrait now and the
+     blueprint is a landscape sheet, so the shape is a variable the skin sets
+     rather than a second copy of this block.
+
+     AND THE HEIGHT IS A CONSTRAINT, not an outcome. 720px of width on a 0.68
+     board is 1059px of height, which is taller than the laptop this is drawn
+     on -- a board sized on width alone would hang its post through the floor
+     and take the tiles with it. The third term is that: the widest this can
+     be and still stand inside the sheet. */
   #drivethru { position:fixed; left:50%; bottom:0; z-index:7;
-    width:min(720px, calc(100vw - 24px)); transform:translate(-50%, 0);
+    --dt-aspect:0.68; --dt-headroom:16px;
+    --dt-w:min(720px, calc(100vw - 24px),
+      calc((100vh - var(--dt-headroom)) * var(--dt-aspect)));
+    width:var(--dt-w);
+    transform:translate(-50%, 0);
     transition:transform 220ms ease-out, visibility 220ms;
     pointer-events:none; }
   #drivethru[data-shut] { transform:translate(-50%, 104%); visibility:hidden; }
-  #dt-frame { position:relative; width:100%; aspect-ratio:1 / 1; }
+  #dt-frame { position:relative; width:100%; aspect-ratio:var(--dt-aspect); }
   #dt-board { position:absolute; inset:0; width:100%; height:100%;
     display:block; pointer-events:none; }
   /* Gruff's screen: what he is saying, and the one line under it that says
      what the press will do. Live so a drafter on a reader hears the order
      move without watching the board. */
-  #dt-screen { position:absolute; left:41.2%; top:7.6%; width:50.4%; height:33.4%;
+  #dt-screen { position:absolute; left:41.863%; top:11.667%; width:51.078%; height:22.333%;
     box-sizing:border-box; padding:3% 4%; pointer-events:none;
     display:flex; flex-direction:column; justify-content:center; gap:6px;
     font-family: var(--font-mono); color:#ff4033;
     text-shadow:0 0 10px rgba(255,64,51,0.45); letter-spacing:0.03em;
     line-height:1.35; overflow:hidden; }
-  #dt-line { font-size:clamp(13px, 2.6vw, 22px); font-weight:600; }
-  #dt-note { font-size:clamp(11px, 1.9vw, 17px); opacity:0.7; }
+  /* SCALED TO THE BOX IT HAS, not to the one it used to have. The square
+     board gave the screen 363x240 at a 1366-wide sheet and 22px sat in it;
+     the new art's screen is 261x168 there, and 22px in it wraps "BUNGALOW --
+     WHICH ONE?" onto three lines. 22 * 261/363 is about 16, which is what
+     these ceilings are -- the same type at the same size relative to the
+     screen it is printed on. */
+  #dt-line { font-size:clamp(11px, 1.9vw, 17px); font-weight:600; }
+  #dt-note { font-size:clamp(9px, 1.4vw, 14px); opacity:0.7; }
   /* The tile strip: the house types, on the board's own shelf. */
-  #dt-tiles { position:absolute; left:8%; top:43%; width:84%; height:23%;
+  #dt-tiles { position:absolute; left:9.5%; top:37%; width:81%; height:38.4%;
     box-sizing:border-box; display:flex; flex-direction:column;
     justify-content:center; gap:4px; pointer-events:none; }
   #dt-tiles > * { pointer-events:auto; }
-  #dt-bone { position:absolute; left:50%; top:72.4%; width:12%;
+  #dt-bone { position:absolute; left:50%; top:81.1%; width:11.4%;
     transform:translateX(-50%); aspect-ratio:1 / 1; border:none; padding:0;
     border-radius:50%; background:transparent; cursor:pointer;
     pointer-events:auto; }
@@ -692,12 +744,77 @@
      a stretched one reads as a different building. */
   #dt-bone img { width:100%; height:100%; display:block; object-fit:contain; }
   #dt-bone:hover img { filter:brightness(1.12); }
-  #dt-close { position:absolute; right:2%; top:1%; pointer-events:auto;
+  #dt-close { position:absolute; right:8%; top:9.4%; pointer-events:auto;
     font-family: var(--font-ui); font-size:11px; font-weight:700;
     letter-spacing:0.08em; cursor:pointer; color:#f2efe9;
     background:rgba(0,0,0,0.45); border:1px solid rgba(242,239,233,0.45);
     border-radius:4px; padding:3px 8px; }
   #dt-close:hover { border-color:#ff4033; color:#ff4033; }
+
+  /* ROUGH'S BOARD IS A SHEET, NOT A SIGN. Movie, 17 Sep: "the blueprint will
+     replace the drivethru", "in the ROUGH version it isn't going to show the
+     dog", "no dog will ask questions they will just see the selections".
+
+     THE ZONES ARE RE-MEASURED, NOT NUDGED, which is what the block above
+     demands of anyone who replaces the art. assets/draft-board.png is a
+     1536x1024 sheet reduced to 896x597, and its blue rule runs from 2.539% to
+     97.266% across and 3.809% to 95.996% down -- measured off the file's own
+     pixels, not read off a ruler. Every zone below sits inside that rule with
+     room to spare, so a sheet re-scanned at another size moves the rule and
+     the zones with it.
+
+     THE SIGN'S FURNITURE IS GONE RATHER THAN RESTYLED. A sign has a portrait
+     bezel, an LED screen and a post; a sheet of paper has none of them, so
+     the screen is not shown here at all. What is lost with it is one line --
+     signNote's "press the bone and I'll build it" -- and with the outline
+     button retired (see `round`) that line has one wording in practice. The
+     selections and the press are what is left, which is the whole of what was
+     asked for.
+
+     THE TILES NEED NO SKIN OF THEIR OWN. They were already "the board's own
+     blueprint cards: paper, blue ink, a hard edge" for a sign that had no
+     paper on it. On actual paper they are simply at home, which is why this
+     block sets geometry and one button's colours and nothing else. */
+  /* IT RIDES ABOVE THE BAR RATHER THAN OVER IT. Movie, 17 Sep: "don't put the
+     house on the blueprint, just bring the blueprint up high enough so the
+     house button on the model area can be seen still" -- "i mean the blue
+     house button don't put it on the blueprint".
+
+     So the sheet has no press on it at all. The sign covers the bone and
+     carries its own copy of it on the post; the sheet leaves the bone
+     standing in the bar underneath, and that one press is both the way up to
+     the board and the way to build what you picked off it. Which is also
+     which button he meant by the one that lights while the blueprint shows.
+
+     THE LIFT IS `--house-h` AND A GAP, and --house-h is a min-height, so a
+     foot bar whose row wrapped would be taller than this clears. The spec
+     asserts the bone's rectangle is clear of the sheet's rather than
+     asserting this number, so a wrap fails there instead of on a squint. */
+  /* AND IT SITS IN THE MIDDLE OF THE SHEET, not just above the bar (Movie,
+     18 Sep: "can you move the blueprint to closer to middle (top
+     bottomwise)").
+
+     CENTRED, OR CLEAR OF THE BAR, WHICHEVER IS LOWER. Centring alone is a
+     rule that works on the screen it was written on: on a short sheet half
+     the board is taller than the room above the foot, and the centred sheet
+     lands back on the bone it was lifted off. `max` says the real rule --
+     put it in the middle, and never below the bar -- rather than leaving the
+     two in tension. The height it needs for that is the width it took
+     divided by its own aspect, which is why the width became a variable. */
+  html[data-theme="rough"] #drivethru { --dt-aspect:1.5;
+    --dt-headroom:calc(var(--house-h) + 28px);
+    bottom:max(calc(var(--house-h) + 12px),
+      calc(50vh - var(--dt-w) / var(--dt-aspect) / 2)); }
+  html[data-theme="rough"] #dt-screen { display:none; }
+  html[data-theme="rough"] #dt-bone { display:none; }
+  /* With no screen and no press on it, the selections have the sheet. */
+  html[data-theme="rough"] #dt-tiles { left:6%; top:13%; width:88%; height:72%; }
+  /* Inside the rule, and in the sheet's own ink. The sign's CLOSE is light
+     lettering on a dark plate because it sits on a dark sign; the same plate
+     on paper reads as a sticker. */
+  html[data-theme="rough"] #dt-close { right:4.6%; top:6.4%; color:#1f3f6b;
+    background:rgba(241,233,210,0.72); border-color:#1f3f6b; }
+  html[data-theme="rough"] #dt-close:hover { border-color:#8f2a1d; color:#8f2a1d; }
 
   /* THE BUILD BAR, now the sign's tile shelf rather than a row on the foot. */
   #build-bar { flex:0 1 auto;
@@ -724,7 +841,7 @@
      on the board at once, so the card is sized so that pair clears the
      black strip -- a tile that spills past the frame is an order the
      drafter cannot reach. */
-  #build-bar button.card img { display:block; height:clamp(34px, 6.5vw, 60px);
+  #build-bar button.card img { display:block; height:clamp(44px, 8vw, 86px);
     width:auto; border:1px solid transparent; border-radius:2px; }
   #build-bar button.card:hover img { border-color:#8f2a1d; }
   #build-bar button.card.open img, #build-bar button.card.chosen img {
@@ -1580,7 +1697,6 @@
      a tool. Distance was the cruder way to say the same thing, and it cost
      the two switches their kinship with TOY/DRAFTING, which is the control
      they are most like. -->
-  <span id="strip-message" data-strip-message></span>
   <div class="grow"></div>
 
   <div id="strip-center" data-strip-center>
@@ -1720,6 +1836,12 @@
   <button type="button" id="printscreen" data-printscreen
     title="Three pages to show a client — this view, the whole plan, and the views rail. Not to scale.">PRINTSCREEN</button>
 </div>
+
+<!-- WHAT THE PAGE IS SAYING, on the sheet rather than on the bar. It kept
+     its id when it moved: eight specs across four files read the page's
+     refusals out of it, and the thing that moved is where it is printed, not
+     what it is. -->
+<span id="strip-message" data-strip-message></span>
 
 <div id="notice"><div id="notice-body"></div></div>
 <!-- THE PROMOTION CONFIRM. Its own element rather than a window.confirm,
@@ -4266,6 +4388,34 @@
     rough: Object.freeze({ src: './assets/house-blue-off.png',
       lit: './assets/house-blue-on.png', label: 'HOUSE' }),
   });
+  // AND THE BOARD IS THE SECOND LOGO. The note above says a theme is "mainly
+  // through logos and colors" and that the press was the first to arrive;
+  // this is the second, so it rides the same switch rather than growing a
+  // third way to be on ROUGH. One entry per theme, for the same reason.
+  // WHETHER IT COVERS THE BONE IS A FACT ABOUT THE ART, so it is kept beside
+  // the art rather than derived from the theme's name further down. The sign
+  // rises over the foot and hides the bone -- the stylesheet has said so since
+  // the strip was built -- and carries its own copy of the press on its post.
+  // The sheet stops above the bar and leaves the bone standing, so there the
+  // bone is not something to disable, it is the press the drafter uses.
+  const BOARD_ART = Object.freeze({
+    ruff:  Object.freeze({ src: './assets/drivethru-menu-board.png', coversBone: true }),
+    rough: Object.freeze({ src: './assets/draft-board.png',          coversBone: false }),
+  });
+  const signBoard = document.querySelector('[data-drivethru-board]');
+  const paintSignBoard = () => {
+    const art = BOARD_ART[theme];
+    if (!art || !signBoard) {
+      console.warn(`MODEL: no board artwork for theme "${theme}"; leaving it as it is.`);
+      return;
+    }
+    const next = new URL(art.src, location.href).href;
+    if (signBoard.src !== next) signBoard.src = next;
+    // A THEME PRESSED WITH THE BOARD ALREADY UP changes who is covered, and
+    // a bone left disabled under a sheet that is not on top of it is a press
+    // the drafter can see and cannot use.
+    boneFoot.disabled = !sign.hasAttribute('data-shut') && art.coversBone;
+  };
   const bonePressArt = [...document.querySelectorAll('[data-bone-art]')];
   // THE SPOKEN NAME MOVES WITH THE PICTURE. One of the two images carries the
   // press's only label (the sign's), the other is decorative beside a visually
@@ -4349,12 +4499,29 @@
   // moves; it does not choose, build, mark the drawing dirty or touch a
   // level. A drafter who opens it to look and shuts it again has made no
   // edit, and the spec says so.
+  // THE PRESS STAYS LIT FOR AS LONG AS THE BOARD IS UP. Movie, 17 Sep: "when
+  // the blueprint is showing the blue house button should be light and when it
+  // goes down unlit" -- and then, naming which button: "i mean the blue house
+  // button", the one in the bar that the sheet now rides above.
+  //
+  // SO THE GLOW IS NO LONGER TWO SECONDS, it is the whole visit. callSign
+  // lights the press and the light simply never goes out until the board does,
+  // which is why the timeout below hands the attribute to this function rather
+  // than clearing it and letting this set it again a line later.
+  //
+  // ON RUFF NOBODY SEES IT, because the sign covers the bone -- and that is
+  // not a reason to make this conditional. The rule is "the press that called
+  // the board is lit while the board is up", the same rule on both finishes,
+  // and RUFF's sign already carries its own lit copy of the press on its post.
   const setSign = show => {
     sign.toggleAttribute('data-shut', !show);
     boneFoot.setAttribute('aria-expanded', String(show));
     if (show) paintSign();
-    // The board covers the bone; nothing under it should be tabbed into.
-    boneFoot.disabled = show;
+    boneFoot.toggleAttribute('data-lit', show);
+    paintBonePress();
+    // Covered is not reachable: the sign hides the bone and nothing under it
+    // should be tabbed into. The sheet does not, so there it stays live.
+    boneFoot.disabled = show && (BOARD_ART[theme] || {}).coversBone === true;
   };
   // THE BUTTON LIGHTS BEFORE THE SIGN RISES (Movie, 15 Sep): the house
   // button glows, then the board comes up. One constant, because he said
@@ -4377,8 +4544,10 @@
     paintBonePress();
     lighting = window.setTimeout(() => {
       lighting = 0;
-      button.toggleAttribute('data-lit', false);
-      paintBonePress();
+      // THE LIGHT IS NOT PUT OUT HERE ANY MORE. It was two seconds and then
+      // dark; it is now on until the board goes down, and setSign owns that.
+      // Clearing it first would paint the OFF artwork for one frame between
+      // the glow and the board.
       setSign(true);
     }, SIGN_LIGHT_MS);
   };
@@ -8342,6 +8511,7 @@
     markSwitch(themeButtons, 'theme', theme);
     markSwitch(modeButtons, 'skinMode', mode);
     paintBonePress();
+    paintSignBoard();
     // MERGED, not replaced: the board seed shares this key, and a skin write
     // that rebuilt the object dropped it.
     try {
@@ -8421,6 +8591,7 @@
   markSwitch(themeButtons, 'theme', theme);
   markSwitch(modeButtons, 'skinMode', mode);
   paintBonePress();
+  paintSignBoard();
   applyBoard();
   stripRefresh();
 
