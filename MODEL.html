@@ -6444,8 +6444,51 @@
     }) || null;
   };
 
+  // ── AN OPENING ANSWERS A PRESS ───────────────────────────────────────────
+  //
+  // Movie asked for the bungalow's windows and doors so he could "change them
+  // if i need to afterwards". Stage 1 put them in; this is the half that takes
+  // one out.
+  //
+  // THE TARGET IS THE CARVED QUAD, which is the shape on the sheet: the
+  // opening's width along the wall by the wall's own thickness across. Not a
+  // radius round its centre, because a 16 ft overhead door and a 2'-6" man
+  // door would then have the same grab, and pressing the middle of the big one
+  // is not where a drafter aims.
+  //
+  // IT IS NOT A SECOND HIT TEST -- the same rule the hover ring follows, and
+  // here it pays twice. The list comes from openingsOn, which is what PAINTS
+  // them, so the press cannot pick an opening that is not on the sheet: one
+  // hosted on a wall from another level, or one the clamp refuses because its
+  // wall is too short to carry it.
+  //
+  // AND THE SLACK ARRIVES WITH THE SHAPE. The old page grabs an opening with
+  // "a couple of pixels of slack so a click on the wall face still counts" --
+  // its reference line is where the wall's boundary stroke is CENTRED, so
+  // half the ink a drafter presses at is outside the opening proper. This
+  // page needs no such figure of its own, because openingGeometry is already
+  // handed padFt (2px, openingPadFt) so the gap fill reaches past each face
+  // to interrupt that same stroke. The painted quad IS the padded quad, and
+  // pressing what is painted is the whole point.
+  //
+  // A SEPARATE OPENING_SLACK_PX STOOD HERE and was removed: a mutation
+  // setting it to zero changed no answer, because the two pixels were already
+  // in the shape. Two slacks for one reason is the drift this file keeps
+  // paying for -- and the one that is left is the one the drafter can see.
+  const openingAt = worldPt => {
+    const hit = openingsOn(walls())
+      .find(({ geometry }) => pointInRing(geometry.corners, worldPt));
+    return hit ? hit.opening : null;
+  };
+
   // 'all' passes everything; any other filter passes only its own type. The old
   // page's whole rule, in one line (_selectFilterAllows :18180).
+  //
+  // AN OPENING IS REACHABLE ONLY UNDER ALL, and that falls out rather than
+  // being written: the OBJECT TYPE vocabulary is 'all' | 'line' | 'wall' |
+  // 'outline' | 'floor', so `selectFilter === 'fenestration'` is a comparison
+  // that can never be true. Same as the old page, whose filter list is the
+  // same five.
   const filterAllows = type => selectFilter === 'all' || selectFilter === type;
 
   // ── the window drag ───────────────────────────────────────────────────────
@@ -6676,6 +6719,15 @@
 
   // Returns { type, item } or null, in the old page's precedence.
   const hitAt = worldPt => {
+    // AN OPENING BEATS ITS HOST WALL, and the old page says why in its own
+    // words: "Openings under a select click take priority over their host
+    // wall, so an opening can be picked and deleted without grabbing the wall
+    // around it." An opening is always ON a wall, so a wall-first chain would
+    // make every opening unselectable -- not hard to select, impossible.
+    if (filterAllows('fenestration')) {
+      const opening = openingAt(worldPt);
+      if (opening) return { type: 'fenestration', item: opening };
+    }
     if (filterAllows('wall')) {
       const wall = segAt(walls(), worldPt);
       if (wall) return { type: 'wall', item: wall };
@@ -6737,6 +6789,13 @@
   const paintSelection = () => {
     if (!selection.length) return;
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines() };
+    // THE OPENINGS AND THEIR SHAPES IN ONE PASS. openingsOn resolves geometry
+    // per opening, which is not free, and the highlight needs both the list
+    // (to answer "is it still on screen") and the quad (to draw it). Calling
+    // it twice would also let the two answers disagree.
+    const openingShapes = new Map(openingsOn(walls())
+      .map(({ opening, geometry }) => [opening, geometry]));
+    onScreen.fenestration = [...openingShapes.keys()];
     const lone = selectedWall();
     ctx.save();
     ctx.strokeStyle = SELECT_INK;
@@ -6759,6 +6818,23 @@
           ctx.fillStyle = SELECT_HANDLE;
           [a, b].forEach(pt => ctx.fillRect(pt.x - 4, pt.y - 4, 8, 8));
         }
+        return;
+      }
+      // AN OPENING HAS NO `points` OF ITS OWN -- it is a width and an offset
+      // along a wall -- so its outline comes from the geometry resolved
+      // above. Falling through to the branch below would read `item.points`,
+      // find nothing, and silently paint no highlight at all: a selection the
+      // drafter cannot see, about to be deleted.
+      if (type === 'fenestration') {
+        const quad = openingShapes.get(item)?.corners || [];
+        if (quad.length < 3) return;
+        ctx.beginPath();
+        quad.forEach((pt, i) => {
+          const p = toS(pt);
+          if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+        });
+        ctx.closePath();
+        ctx.stroke();
         return;
       }
       const pts = (item.points || []).filter(Boolean);
@@ -7659,6 +7735,11 @@
     outline: 'outlines',
     column: 'columns',
     beam: 'beams',
+    // DELETE COMES FREE WITH THE ENTRY. deleteEntry splices out of whatever
+    // list this names and pushes the undo step, so an opening needs no branch
+    // of its own -- and the cascade the other way already worked: deleteWall
+    // takes its openings with it.
+    fenestration: 'fenestrations',
   });
 
   const deleteEntry = entry => {

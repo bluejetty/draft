@@ -266,3 +266,166 @@ test('one undo takes the opening back', async ({ page }) => {
   await save(page);
   expect((await survives(page)).raw, 'and it is not in the file').toBe(0);
 });
+
+// ── STAGE 2: the opening answers a press, and DELETE takes it out ─────────
+//
+// Movie's own words when he asked for the bungalow's openings were "i'll
+// change them if i need to afterwards", and stage 1 only added. Taking one
+// out is the other half of the smallest useful loop.
+//
+// THE ACCEPTANCE IS WHAT SURVIVES THE DELETE, not what lights up. A press
+// that selected the HOST WALL instead of the opening looks almost identical
+// on screen -- both draw a blue highlight over the same stretch of wall --
+// and the difference only shows when DELETE is pressed and a wall disappears
+// with every opening in it. So each check below presses, deletes, and then
+// counts both.
+const shownWalls = async page => Number(
+  (await readout(page).textContent()).match(/walls (\d+)\/(\d+)/)?.[2] ?? -1);
+
+const canvasHash = page => page.evaluate(() => {
+  const c = document.getElementById('plan');
+  const { data } = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+  let n = 0x811c9dc5;
+  for (let i = 0; i < data.length; i += 4) {
+    n ^= data[i] | (data[i + 1] << 8) | (data[i + 2] << 16);
+    n = Math.imul(n, 0x01000193) >>> 0;
+  }
+  return n.toString(16);
+});
+
+// Place one door in the middle of the north wall and come back to SELECT.
+async function doorOnTheNorthWall(page) {
+  await open(page);
+  await armOpening(page);
+  const f = await frame(page);
+  await pressAt(page, f, 0, -10);
+  expect(await shownOpenings(page), 'the fixture door went in').toBe(1);
+  // SELECT is the resting tool, and the tool column is how a drafter gets
+  // back to it -- the opening tool stays armed by design, so without this
+  // the next press would place a second door on top of the first.
+  await page.locator('[data-tool-key="select"]').click();
+  return f;
+}
+
+test('a press on an opening selects the opening, not the wall under it',
+  async ({ page }) => {
+    const f = await doorOnTheNorthWall(page);
+    await pressAt(page, f, 0, -10);
+    await expect(page.locator('[data-delete]'), 'something is selected')
+      .toBeVisible();
+
+    await page.locator('[data-delete]').click();
+    await page.waitForTimeout(150);
+
+    // BOTH COUNTS, and the second is the one that matters. Selecting the host
+    // wall instead would delete the wall AND cascade its opening away -- so
+    // "the opening is gone" alone passes for both outcomes.
+    expect(await shownOpenings(page), 'the opening went').toBe(0);
+    expect(await shownWalls(page), 'and all four walls are still standing')
+      .toBe(4);
+  });
+
+test('the wall is still selectable away from its opening', async ({ page }) => {
+  // THE COST OF THE PRECEDENCE, kept honest. An opening beats its host wall,
+  // so the slack around it is wall the drafter can no longer reach -- two
+  // pixels of it, the old page's own figure. This is the check that says the
+  // rest of the wall still answers.
+  const f = await doorOnTheNorthWall(page);
+  await pressAt(page, f, -8, -10);   // the same wall, 8 ft from the door
+  await expect(page.locator('[data-delete]')).toBeVisible();
+
+  await page.locator('[data-delete]').click();
+  await page.waitForTimeout(150);
+  expect(await shownWalls(page), 'the wall went').toBe(3);
+  // AND ITS OPENING WENT WITH IT, which is the cascade that already worked
+  // before this rung -- named here because the count would otherwise look
+  // like the opening had been selected after all.
+  expect(await shownOpenings(page), 'and the door it carried went with it')
+    .toBe(0);
+});
+
+test('a press on the wall face still takes the opening', async ({ page }) => {
+  // WHERE THE GRAB ACTUALLY ENDS, and the only check in this file that can
+  // tell. The rest press the middle of the opening, deep inside its quad, so
+  // the margin never comes into play.
+  //
+  // THE FACE IS WHERE A DRAFTER AIMS. The opening's quad starts on the wall's
+  // reference line, and the wall's boundary stroke is CENTRED on that line --
+  // so half the ink being pressed at is outside the opening proper. The old
+  // page slackens its grab by "a couple of pixels" for exactly this; this page
+  // gets the same two pixels from the PAINTER, which pads the quad so the gap
+  // fill interrupts that stroke. The grab is what is painted.
+  //
+  // A SEPARATE 2px SLACK WAS WRITTEN HERE FIRST and removed when a mutation
+  // zeroing it changed no answer -- the pixels were already in the shape.
+  const f = await doorOnTheNorthWall(page);
+  // A pixel and a half outside the quad, converted to feet through the
+  // published camera so the press is the same distance out at any zoom.
+  const justOutside = -10 - 1.5 / f.scale;
+  await pressAt(page, f, 0, justOutside);
+  await expect(page.locator('[data-delete]'), 'the press hit something')
+    .toBeVisible();
+
+  await page.locator('[data-delete]').click();
+  await page.waitForTimeout(150);
+  // Without the slack this press falls through to the wall, and DELETE takes
+  // the wall and cascades the door away with it -- so the opening count is 0
+  // either way and only the WALL count separates the two outcomes.
+  expect(await shownWalls(page), 'the wall was not the thing selected').toBe(4);
+  expect(await shownOpenings(page), 'the opening was').toBe(0);
+});
+
+test('and a press clear of the wall face takes the wall, not the opening',
+  async ({ page }) => {
+    // THE OTHER SIDE OF THE SAME EDGE, so the grab cannot quietly grow. An
+    // opening BEATS its host wall, so every pixel it reaches is a pixel of
+    // wall the drafter can no longer select -- a hit test that answered for
+    // anything near the wall would make the wall unselectable along the
+    // opening's whole width, and the check above alone would not notice.
+    const f = await doorOnTheNorthWall(page);
+    const wellClear = -10 - 6 / f.scale;   // three times the painter's pad
+    await pressAt(page, f, 0, wellClear);
+    await expect(page.locator('[data-delete]')).toBeVisible();
+
+    await page.locator('[data-delete]').click();
+    await page.waitForTimeout(150);
+    expect(await shownWalls(page), 'the wall was taken').toBe(3);
+  });
+
+test('a selected opening is visible as selected', async ({ page }) => {
+  // WHOLE-CANVAS HASHES, the idiom model-html-select.spec.js established for
+  // exactly this question: nothing in the drawing changes between these two
+  // renders, so the only thing that can move the hash is the overlay.
+  //
+  // An opening has no `points` of its own -- it is a width and an offset
+  // along a wall -- so a highlight that fell through to the polygon branch
+  // would read `item.points`, find nothing, and paint NOTHING: a selection
+  // the drafter cannot see, about to be deleted.
+  const f = await doorOnTheNorthWall(page);
+  const before = await canvasHash(page);
+  await pressAt(page, f, 0, -10);
+  await expect(page.locator('[data-delete]')).toBeVisible();
+  const after = await canvasHash(page);
+  expect(after, 'selecting the opening painted something').not.toBe(before);
+});
+
+test('one undo brings a deleted opening back', async ({ page }) => {
+  const f = await doorOnTheNorthWall(page);
+  await pressAt(page, f, 0, -10);
+  await page.locator('[data-delete]').click();
+  await page.waitForTimeout(150);
+  expect(await shownOpenings(page)).toBe(0);
+
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(200);
+  expect(await shownOpenings(page), 'the door is back').toBe(1);
+
+  // AND IT IS THE SAME RECORD, back on the same wall. 'remove-item' splices
+  // the item into the list at the index it came out of; a restore that put
+  // back a copy, or put it back hosted on nothing, would count the same here
+  // and be dropped by the loader on the next open.
+  await save(page);
+  const after = await survives(page);
+  expect(after.openings.length, 'and a reload keeps it').toBe(1);
+  expect(after.wallIds).toContain(String(after.openings[0].wallId));
+});
