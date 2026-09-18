@@ -8580,7 +8580,7 @@
   // what building-bodies.js reads to tell the attached one from the detached
   // one (:37). An attached garage is part of the house it hangs off, so it
   // does not spend the detached garage's slot.
-  const raiseLoop = (points, levelId, { garage = false } = {}) => {
+  const raiseLoop = (points, levelId, { garage = false, openings = [] } = {}) => {
     const BH = window.DraftBuildHouse;
     const outline = {
       id: newDrawingItemId('outline'),
@@ -8600,7 +8600,49 @@
     const refLine = BH.outlineInteriorRef(points);
     const walls = BH.houseWallRuns(points)
       .map(run => commitWall(run.start, run.end, { bone: false, refLine }));
-    return { outline, walls };
+
+    // ── AND THE WINDOWS AND DOORS THE DESIGN CALLS FOR ─────────────────────
+    //
+    // Movie, 18 Sep: "i'd like the windows to be in set positions for each
+    // house in the drivethru menu, but for the 'AUTOHOUSE' when they draw the
+    // outline and create the house that one could have the fenestrations auto
+    // generated". So these come from the PLAN, fixed, and auto-windows.js is
+    // the other thing entirely -- the records carry `auto: false` so a re-deal
+    // leaves the design's own openings alone.
+    //
+    // THE EDGE INDEX IS THE WALL INDEX, and that is not a coincidence to be
+    // relied on quietly: houseWallRuns walks the points in order and skips
+    // only DEGENERATE edges (two corners in the same place). The plans here
+    // have none -- the harness checks every corner is a whole foot and every
+    // edge is square -- so run i is edge i. If a plan ever did carry one, this
+    // would hang an opening on the wrong wall, so the guard below refuses an
+    // edge index the walls do not have rather than writing a wrong record.
+    if (!Array.isArray(drawing.fenestrations)) drawing.fenestrations = [];
+    const made = openings.map(spec => {
+      const wall = walls[spec.edge];
+      if (!wall) return null;
+      const record = {
+        id: newDrawingItemId('fenestration'),
+        wallId: wall.id,
+        levelId,
+        view: wall.view || 'plan',
+        type: spec.type,
+        // drawing-format.js:230 derives this from the type on load, so it
+        // cannot come out wrong -- but this page has no serializer between the
+        // push and the file, and a record that is only right AFTER a reload is
+        // a file that is wrong until then.
+        layer: spec.type === 'door' ? 'A-DOOR' : 'A-GLAZ',
+        offset: spec.offsetFt,
+        width: spec.widthFt,
+        sillHeight: spec.sillFt,
+        headHeight: spec.headFt,
+        garage: spec.garage === true,
+        auto: false,
+      };
+      drawing.fenestrations.push(record);
+      return record;
+    }).filter(Boolean);
+    return { outline, walls, openings: made };
   };
 
   const buildPremadePlan = order => {
@@ -8612,14 +8654,24 @@
     // ONE GESTURE, ONE UNDO, the same as the ordered garage: the walls' own
     // 'add' steps are dropped for the single 'built' one covering both bodies.
     const mark = undoStack.length;
-    const raised = [raiseLoop(plan.house, levelId)];
-    if (plan.garage) raised.push(raiseLoop(plan.garage, levelId, { garage: true }));
+    const raised = [raiseLoop(plan.house, levelId,
+      { openings: plan.houseOpenings })];
+    if (plan.garage) {
+      raised.push(raiseLoop(plan.garage, levelId,
+        { garage: true, openings: plan.garageOpenings }));
+    }
     undoStack.length = mark;
     undoStack.push({
       kind: 'built',
       walls: raised.flatMap(body => body.walls),
       outlines: raised.map(body => body.outline),
       list: drawing.outlines,
+      // ONE PRESS IS STILL ONE UNDO, and the openings are part of that press.
+      // Left out, Ctrl+Z would take the house and leave eleven windows and
+      // doors hosted on walls that no longer exist -- records the loader drops
+      // on the next open, so the drawing would quietly repair itself and the
+      // drafter would never know what had been in the file.
+      openings: raised.flatMap(body => body.openings || []),
     });
     // AND THE TRACE GOES DOWN WITH IT. Pressing the tile armed the outline
     // through onChoose -- that is the old page's own two-things-at-once and it
@@ -10691,6 +10743,11 @@
         (step.outlines || []).forEach(outline => {
           const outlineAt = step.list ? step.list.indexOf(outline) : -1;
           if (outlineAt >= 0) step.list.splice(outlineAt, 1);
+        });
+        // The openings the order hung on those walls go with them.
+        (step.openings || []).forEach(record => {
+          const at = (drawing.fenestrations || []).indexOf(record);
+          if (at >= 0) drawing.fenestrations.splice(at, 1);
         });
       } else if (step.kind === 'add') {
         const at = drawing.walls.indexOf(step.wall);
