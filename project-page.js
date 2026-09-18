@@ -1638,11 +1638,19 @@ if (!window.DraftProjectPage) {
     const roofEndX = Math.max(intoHouseAt(flatY), intoHouseAt(flatY - chordFt));
     line(breakX, flatY, intoHouseAt(flatY), flatY, 2);
     line(breakX, flatY - chordFt, intoHouseAt(flatY - chordFt), flatY - chordFt, 1);
-    // THE DOUBLE BREAK, through everything the cut goes through at this
-    // station: roof, wall cavity, beam or frost wall, footing.
+    // ONE BREAK, through everything the cut goes through at this station:
+    // roof, wall cavity, beam or frost wall, footing. Movie, 17 Sep: "on the
+    // ATTACHED GARAGE there are 2 cut lines, please delete one of those" --
+    // the same ruling the house's far eave got, now applied here.
+    //
+    // It was a DOUBLE break, 0.35 ft apart, which is the textbook way to say
+    // "a slice has been taken out here". Nothing is drawn in that 4 1/4"
+    // gap -- the pitched stretch ends on the line and the level stretch
+    // starts on it -- so the second line was saying a slice was removed that
+    // never existed, and at this scale it simply read as two cuts. One line,
+    // and the two stretches meet on it.
     const breakBot = g.houseFootingTopFt - g.footingDepthIn / 12 - 0.3;
     parts.push({ kind: 'break', x: breakX, y1: breakBot, y2: flatY + 0.35 });
-    parts.push({ kind: 'break', x: breakX + 0.35, y1: breakBot, y2: flatY + 0.35 });
     const topY = flatY;
     if (!g.roomOver) {
       anchors.garageCavity = { x: cut * 0.42,
