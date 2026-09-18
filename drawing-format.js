@@ -1323,24 +1323,6 @@ if (!window.DraftDrawingFormat) {
   // "completes".
   const SECTION_TABLE_CHOICES = Object.freeze({
     garageFoundation: Object.freeze(['gradebeam', 'frostwall', 'thickened']),
-    // THE HOUSE CAN BE A GRADE BEAM TOO. Movie, 17 Sep: "on house foundation
-    // side i realized we sill also need a house GRADE BEAM", and when asked
-    // whether it belonged in the foundation dropdown or beside it: "it will be
-    // part of the foundation dropdown because the grade beam will replace the
-    // foundation wall".
-    //
-    // NOT A WALL TYPE, though the drafter picks it from the same box. The wall
-    // types are a THICKNESS and a layer stack -- wall-types.js owns them, and
-    // MODEL.html validates a stored id against that table on load. A grade
-    // beam is not a thicker wall: it is a different foundation, with no strip
-    // footing under it and piles instead, so putting it in that table would
-    // hand every reader of a wallType a value that is not one. It stores here,
-    // where the garage's own foundation kind already stores, and the page
-    // offers the union in one dropdown because that is one question.
-    //
-    // 'wall' IS THE DEFAULT AND MEANS "whatever wallType says". Two keys, one
-    // question, and this one decides which of them is being asked.
-    houseFoundation: Object.freeze(['wall', 'gradebeam']),
     // How the framing is held down to the foundation. Movie, 4 Sep: a
     // 1 1/2" sill plate on embedded anchor bolts every 4 ft, or a PT SPF 2x6
     // ladder set into the top of the pour with the floor header and joists

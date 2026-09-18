@@ -220,6 +220,18 @@ if (!window.DraftProjectPage) {
   // table's own TO SILL note adds to every row, so writing 33.5 here would
   // count the sill twice and read 2'-11" to bearing instead of 2'-9 1/2".
   const GARAGE_GRADE_BEAM_IN = 32;
+  // AND THE HOUSE CAN HAVE ONE NOW. Movie, 17 Sep: "the grade beam is 8"",
+  // and the height "make min. 32"". Same member as the garage's, so the same
+  // minimum -- but stated separately rather than shared, because the garage's
+  // 32 is a DEFAULT the drafter types over ("32" conc for garage grade beam
+  // is DEFAULT - changeable") and this one is a FLOOR the page refuses to go
+  // under. One number, two different meanings, and collapsing them would make
+  // whichever comment survived a lie about the other.
+  const HOUSE_GRADE_BEAM_MIN_IN = 32;
+  // 8" of concrete, the beam's own width -- not the foundation wall's, which
+  // is whatever wall type the drafter picked. Choosing a grade beam replaces
+  // that wall, so it replaces its thickness too.
+  const GRADE_BEAM_THICKNESS_IN = 8;
   // A THICKENED EDGE IS 1'-0" DEEP, and this is a second copy of cut-view.js's
   // GARAGE_EDGE_DEPTH_IN. Declared here rather than beside the slab slope with
   // the other duplicate because SECTION_TABLE_DEFAULTS reads it, and a const
@@ -893,8 +905,19 @@ if (!window.DraftProjectPage) {
     // the fill wall now occupies the top of that distance.
     const concTopFt = fdnTop - attachFt - (fillFt || 0);
     const fdnBot = concTopFt - fdn.wallHeightFt;
-    rect(0, fdnBot, fdnFt, concTopFt - fdnBot, 2);
-    attachment(rect, line, fdn.attachment, 0, concTopFt, fdnFt, attachFt * 12);
+    // A GRADE BEAM REPLACES THE WALL, it does not stand beside it. Movie,
+    // 17 Sep, on where the choice belonged: "it will be part of the
+    // foundation dropdown because the grade beam will replace the foundation
+    // wall". So this is the same band of concrete between the same two
+    // elevations, at the beam's own 8" -- everything above it, the
+    // attachment, the floor package, the whole house, is untouched. What
+    // changes is what is UNDER it: no strip footing, piles instead, and the
+    // void form between them.
+    const gradeBeam = fdn.foundationKind === 'gradebeam';
+    const beamFt = GRADE_BEAM_THICKNESS_IN / 12;
+    const bandFt = gradeBeam ? beamFt : fdnFt;
+    rect(0, fdnBot, bandFt, concTopFt - fdnBot, 2);
+    attachment(rect, line, fdn.attachment, 0, concTopFt, bandFt, attachFt * 12);
     // The fill wall stands on the attachment, its own faces at the wall's
     // thickness rather than the concrete's -- it is framing, not pour.
     if (fillFt) {
@@ -915,7 +938,7 @@ if (!window.DraftProjectPage) {
     // landing within a few inches of each other and reading as one string.
     // The foundation's thickness is as true half a foot down the wall as it
     // is at the top, and down there it has the space to itself.
-    anchors.fdnThickness = { x: fdnFt / 2, y: concTopFt - 0.55 };
+    anchors.fdnThickness = { x: bandFt / 2, y: concTopFt - 0.55 };
     const footW = fdn.footingWidthIn / 12, footD = fdn.footingDepthIn / 12;
     // ONLY THE FROST WALL MERGES. Against a frost wall the two footings are
     // one continuous pour at one depth, so the house's stops drawing its own
@@ -925,17 +948,52 @@ if (!window.DraftProjectPage) {
     // Movie, 17 Sep: "the footing in the middle is missing the 6\" piece on
     // the left side".
     const footRight = fdnFt / 2 + footW / 2;
-    if (values.footingFlushLeft === 'merge') {
+    if (gradeBeam) {
+      // NO FOOTING, FOR THE REASON THE GARAGE HAS NONE: a grade beam is hung
+      // off drilled piles and cast on a crushable void form, so a spread
+      // footing under it would be drawing the one thing choosing a beam means
+      // you are not building.
+      //
+      // THE PILES ARE THE CORNERS. Movie, 17 Sep, asked for them in the
+      // section -- "just do them for the section", "on the corners only" --
+      // and the corner this cut passes through is the exterior one at x = 0.
+      // The far corner of the house is out past the break line, so this slice
+      // honestly shows one; the run between them is the plan's to lay out.
+      const pileW = 2 * PILE_HALF_WIDTH_IN / 12;
+      const pileBot = fdnBot - footD;
+      line(0, fdnBot, 0, pileBot, 1.5);
+      line(pileW, fdnBot, pileW, pileBot, 1.5);
+      line(0, pileBot, pileW, pileBot, 1.5);
+      parts.push({ kind: 'hatch', x: 0, y: pileBot, w: pileW, h: fdnBot - pileBot });
+      anchors.housePile = { x: pileW / 2, y: (fdnBot + pileBot) / 2 };
+      // The void form, from the pile's inside face to the break: 4" of board
+      // the beam is cast on, which crushes so heaving soil lifts nothing.
+      const voidY = fdnBot - VOID_FORM_IN / 12;
+      rect(pileW, voidY, cut - pileW, VOID_FORM_IN / 12, 1);
+      parts.push({ kind: 'hatch', x: pileW, y: voidY, w: cut - pileW, h: VOID_FORM_IN / 12 });
+      anchors.houseVoidForm = { x: cut * 0.55, y: fdnBot - VOID_FORM_IN / 24 };
+    } else if (values.footingFlushLeft === 'merge') {
       line(0, fdnBot, footRight, fdnBot, 1.5);
       line(0, fdnBot - footD, footRight, fdnBot - footD, 1.5);
       line(footRight, fdnBot - footD, footRight, fdnBot, 1.5);
     } else {
       rect(fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);
     }
-    anchors.footingWidth = { x: fdnFt / 2, y: fdnBot - footD - 0.5 };
-    anchors.footingDepth = { x: fdnFt / 2 + footW / 2 + 0.85, y: fdnBot - footD / 2 };
+    // NO FOOTING DRAWN, SO NO FOOTING ROWS. The page hides a schedule row
+    // whose part has no anchor, which is exactly the right behaviour here:
+    // offering FOOTING WIDTH and FOOTING DEPTH on a foundation that has
+    // neither would be two numbers for a part the drafter just said they are
+    // not pouring. (The pile still reaches the house's footing DEPTH for its
+    // conventional bottom -- a drawing convention, not a dimension, which is
+    // why it carries no label of its own either.)
+    if (!gradeBeam) {
+      anchors.footingWidth = { x: fdnFt / 2, y: fdnBot - footD - 0.5 };
+      anchors.footingDepth = { x: fdnFt / 2 + footW / 2 + 0.85, y: fdnBot - footD / 2 };
+    }
     const slabFt = fdn.slabIn / 12;
-    rect(fdnFt, fdnBot, cut - fdnFt, slabFt, 1);
+    // The slab pours against whatever is standing there -- the wall's face on
+    // a poured foundation, the beam's on a grade beam.
+    rect(bandFt, fdnBot, cut - bandFt, slabFt, 1);
     anchors.slab = { x: cut * 0.62, y: fdnBot + slabFt + 0.5 };
 
     // THE FLIGHTS, DIAGRAMMATIC. Movie, 16 Sep: "show a stair dropping down
@@ -1989,6 +2047,8 @@ if (!window.DraftProjectPage) {
     garageSlabFallIn,
     GARAGE_EDGE_DEPTH_IN,
     GARAGE_GRADE_BEAM_IN,
+    HOUSE_GRADE_BEAM_MIN_IN,
+    GRADE_BEAM_THICKNESS_IN,
     GARAGE_SILL_BELOW_HOUSE_FT,
     GARAGE_SLAB_BELOW_CONCRETE_IN,
     GARAGE_WALL_FT,

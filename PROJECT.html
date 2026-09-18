@@ -566,8 +566,45 @@
           && FOUNDATION_TYPE_IDS.includes(candidate.wallType));
         return wall ? wall.wallType : 'concrete_8';
       };
-      const fdnThicknessIn = () => WALL_TYPE_VIEW[fdnWallType()].totalIn;
-      const fdnIsIcf = () => fdnWallType().startsWith('icf');
+      // ── WHAT KIND OF FOUNDATION THE HOUSE HAS ───────────────────────────
+      // Movie, 17 Sep: "it will be part of the foundation dropdown because
+      // the grade beam will replace the foundation wall". So one box asks one
+      // question and the answer lands in one of two places -- a wall type is
+      // a material, a grade beam is a different foundation -- which is why
+      // GRADE_BEAM is not an id in WALL_TYPE_VIEW.
+      const GRADE_BEAM = 'gradebeam';
+      const houseIsGradeBeam = () => assembly(1).foundationKind === GRADE_BEAM;
+      // ONE DOOR ONTO THE POUR, because there are two controls onto it: the
+      // schedule's FDN WALL HT row and the section table's HOUSE column. Both
+      // write the same number and both have to honour the same floor, so the
+      // rule lives here rather than in whichever of them is looked at first.
+      //
+      // Movie, 17 Sep: "make min. 32"". REFUSED, NOT CLAMPED -- a box that
+      // silently corrects what was typed teaches a drafter that it accepted
+      // it. Returns whether the write happened, which is what both callers
+      // already say to their own caller.
+      const setHousePourFt = value => {
+        if (value == null || value <= 0) return false;
+        const minFt = projectPage.HOUSE_GRADE_BEAM_MIN_IN / 12;
+        if (houseIsGradeBeam() && value < minFt) {
+          showStatus(`A grade beam is at least ${
+            inchesOnly(projectPage.HOUSE_GRADE_BEAM_MIN_IN)} deep.`);
+          return false;
+        }
+        setAssembly(1, 'wallHeightFt', value + attachmentFt());
+        return true;
+      };
+      // A BEAM IS 8", WHATEVER THE WALL TYPE SAYS. Movie: "the grade beam is
+      // 8"". The stored wallType is left alone when a beam is chosen, so
+      // switching back to 8" CONCRETE or ICF returns the drafter to the
+      // thickness they had rather than to a default.
+      const fdnThicknessIn = () => (houseIsGradeBeam()
+        ? projectPage.GRADE_BEAM_THICKNESS_IN
+        : WALL_TYPE_VIEW[fdnWallType()].totalIn);
+      // AND A BEAM IS NOT ICF. This answer widens a footing to 24" and there
+      // is no footing on a grade beam, so asking it of a beam would be a wide
+      // footing under a foundation that has none.
+      const fdnIsIcf = () => !houseIsGradeBeam() && fdnWallType().startsWith('icf');
       // A floor's exterior wall: its own stored override when it has one,
       // otherwise the house's shared type — the 99% case.
       const floorWallType = levelId => {
@@ -792,6 +829,10 @@
             gradeOffsetFt: gradeOffsetFt(),
             attachment: attachmentChoice(),
             attachmentIn: attachmentIn(),
+            // Which of the two the drafter picked in FDN TYPE. The section
+            // reads it to decide what goes UNDER the concrete -- a strip
+            // footing, or piles and a void form.
+            foundationKind: assembly(1).foundationKind,
           };
         })(),
         roof: { pitch: roofPitch, overhangFt: roofOverhang, fasciaIn: ROOF_FASCIA_IN, heelIn: roofHeelIn() },
@@ -1565,11 +1606,29 @@
       addInput('fdnWallType', 'FDN TYPE', {
         name: 'fdnWallType',
         kind: 'choice',
-        choices: () => FOUNDATION_CHOICES
-          .map(id => ({ id, label: WALL_TYPE_VIEW[id].label })),
-        get: fdnWallType,
+        // GRADE BEAM LAST, after the walls, because it is the answer that
+        // says "none of these": choosing it replaces the wall rather than
+        // picking one.
+        choices: () => [
+          ...FOUNDATION_CHOICES.map(id => ({ id, label: WALL_TYPE_VIEW[id].label })),
+          { id: GRADE_BEAM, label: 'GRADE BEAM' },
+        ],
+        get: () => (houseIsGradeBeam() ? GRADE_BEAM : fdnWallType()),
         set: value => {
+          if (value === GRADE_BEAM) {
+            setAssembly(1, 'foundationKind', GRADE_BEAM);
+            // A BEAM HAS A MINIMUM AND THE WALL IT REPLACES DOES NOT. Movie:
+            // "make min. 32"". An 8'-0" basement wall switched to a beam is
+            // a 8 ft grade beam, which is not what anybody means by the word,
+            // so the pour comes down to the minimum on the way in -- once, on
+            // the press, not silently on every read. A drafter who wants a
+            // deeper beam types one; the floor below stops them going under.
+            const minFt = projectPage.HOUSE_GRADE_BEAM_MIN_IN / 12;
+            if (housePourFt() > minFt) setHousePourFt(minFt);
+            return true;
+          }
           if (!FOUNDATION_CHOICES.includes(value)) return false;
+          setAssembly(1, 'foundationKind', 'wall');
           setAssembly(1, 'wallType', value);
           return true;
         },
@@ -1578,12 +1637,7 @@
       addInput('fdnHeight', 'FDN WALL HT', {
         name: 'fdnHeight',
         get: () => ftIn(housePourFt()),
-        set: text => {
-          const value = parseFtIn(text);
-          if (value == null || value <= 0) return false;
-          setAssembly(1, 'wallHeightFt', value + attachmentFt());
-          return true;
-        },
+        set: text => setHousePourFt(parseFtIn(text)),
       });
       addInput('slab', 'SLAB', {
         name: 'slab',
@@ -1772,6 +1826,7 @@
         { key: 'attic', text: 'ATTIC SPACE' },
         { key: 'garageCavity', text: 'ATTIC SPACE' },
         { key: 'garagePile', text: '(PILE)', beside: true },
+        { key: 'gradeWord', text: '(GRADE)', beside: true },
       ];
 
       // Hover a row and its part lights up on the drawing; hover the part and
@@ -2388,7 +2443,24 @@
             houseFootingTopFt: houseFootingTopFt(),
             footingWidthIn: asm.footingWidthIn ?? (fdnIsIcf() ? 24 : 20),
             footingDepthIn: asm.footingDepthIn,
-            sillOffsetFt: attachedOffsetFt(),
+            // LEVEL WITH THE HOUSE WHEN THE HOUSE IS A BEAM. Movie, 17 Sep:
+            // "the garage would need to be level at that height". Two grade
+            // beams on one set of piles are poured to one elevation; a garage
+            // stepped down from a house beam would be a second beam hanging
+            // off nothing, which is the same reasoning the split band already
+            // applies to its own grade beam ("move the sill plate for grade
+            // beam inline with house").
+            //
+            // THE DROP RULE NEEDS NO CODE, and that is worth saying rather
+            // than adding some. Movie: "if the house grade beam is heightened
+            // the garage grade beam could drop the new amount of height." How
+            // far the garage may drop is already the house's footing top --
+            // past the bottom of the house's foundation there is nothing to
+            // fasten to -- and houseFootingTopFt() is derived from the pour,
+            // so deepening the house beam deepens that limit by exactly the
+            // amount it gained. A second rule here would be a number that
+            // agrees with that one until somebody edits it.
+            sillOffsetFt: houseIsGradeBeam() ? houseSillFt() : attachedOffsetFt(),
             attachmentIn: attachmentIn(),
             wallHeightFt: cell('mainWallHeightFt'),
             fdnWallHeightFt: cell('fdnWallHeightFt'),
@@ -2517,6 +2589,38 @@
           // slice's second eave, mirrored from the same numbers.
           projectPage.buildFarEaveSection(detailValues()),
         ]);
+        // ── THE WORD UNDER THE GRADE LINE ──────────────────────────────────
+        // Movie, 17 Sep: "can you add the word (GRADE) just under the grade
+        // line on one of the sides, lets go left side".
+        //
+        // The dashed line runs the full width of whatever is drawn, so it is
+        // the one part on the sheet that no single section owns -- the house
+        // builder emits it and the garage stands over its left half. That is
+        // why this anchor is composed HERE, out of the two things only the
+        // page has after painting: the line's own height, which comes back on
+        // anchors.grade, and where the drawing's left edge landed, which is
+        // the view. A section asked to place it would be guessing at the
+        // other section's width.
+        //
+        // NOT THE EXISTING 'grade' TAG. That one is a schedule label, and
+        // every schedule label is hidden now that the word columns are gone
+        // -- reviving it would put GRADE back in a margin that no longer
+        // exists. This is an annotation, which is the kind of label that sits
+        // by its own line.
+        if (anchors.grade) {
+          const drawingLeft = (canvas.width - view.span * view.scale) / 2;
+          anchors.gradeWord = {
+            // `beside` draws the word to the LEFT of its anchor and centred
+            // on it, so the anchor sits a word's width in from the edge and a
+            // line's breadth below the dashes: under the line, at the left
+            // end, clear of the eave above it.
+            x: drawingLeft + 58,
+            // anchors.grade already sits a little over half a foot below the
+            // dashes -- it is where the schedule label used to point -- so the
+            // word needs no drop of its own.
+            y: anchors.grade.y,
+          };
+        }
         // Band 2 rides along on every repaint. It shares the roof, the wall
         // type and the grade offset with band 1, so a pitch or eave change up
         // there has to move down here too or the two bands stop being
@@ -2789,10 +2893,13 @@
         // see housePourFt. Every other row's fdnWallHeightFt is already a
         // pour (the split's 5'-0", the garage's 32" beam), so this is what
         // makes the column one question down its whole length.
+        // The table's HOUSE column, through the same guarded setter the
+        // schedule's FDN WALL HT row uses -- see setHousePourFt.
         fdnWallHeightFt: {
           get: () => housePourFt(),
-          set: value => setAssembly(1, 'wallHeightFt', value + attachmentFt()),
+          set: value => { setHousePourFt(value); },
         },
+
         // A bungalow has no wood fill wall and no second floor — the cell is
         // there, it simply has nothing behind it.
         woodFillHeightFt: { get: () => null, set: () => {} },
@@ -2809,6 +2916,19 @@
           set: value => setAssembly(1, 'footingDepthIn', value),
         },
       };
+
+      // ── A GRADE BEAM HAS NO BASEMENT UNDER IT ───────────────────────────
+      // Movie, 17 Sep: "it will become a 'crawl space' rather than a
+      // 'basement'". BSMT CLG HT is the same arithmetic either way -- the
+      // pour, plus the plate, less the slab -- so the number stays and only
+      // the word changes. Read at paint time rather than stored, because the
+      // drafter can switch the dropdown back and a heading that remembered
+      // the old answer is worse than one that never had it.
+      //
+      // The column header is the only place the word appears; the schedule
+      // beside the drawing never named it.
+      const columnLabel = item => (item.id === 'basementClg' && houseIsGradeBeam()
+        ? 'CRAWL CLG HT' : item.label);
 
       // What a cell shows, and whether the number is its own or inherited.
       const cellValue = (rowId, field) => {
@@ -2908,7 +3028,7 @@
         headRow.appendChild(corner);
         projectPage.SECTION_TABLE_ITEMS.forEach(item => {
           const th = document.createElement('th');
-          th.textContent = item.label;
+          th.textContent = columnLabel(item);
           th.dataset.sectionCol = item.id;
           headRow.appendChild(th);
         });
@@ -2970,6 +3090,12 @@
       }
 
       const fillTable = () => {
+        // The header is built once; this word is not fixed for the life of the
+        // page, so it is refreshed with the numbers under it.
+        projectPage.SECTION_TABLE_ITEMS.forEach(item => {
+          const th = tableEl.querySelector(`th[data-section-col="${item.id}"]`);
+          if (th) th.textContent = columnLabel(item);
+        });
         cellEls.forEach(({ row, item, el, note }) => {
           if (item.unit === 'derived') {
             el.textContent = derivedText(row.id, item.id);
