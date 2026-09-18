@@ -185,6 +185,20 @@ if (!window.DraftLevelAssembly) {
     // Stud SPACING stays out on purpose: a per-floor spacing is estimating
     // data for later, not part of the assembly's drawn thickness.
     wallType: null,
+    // WHAT KIND OF FOUNDATION THIS IS, where wallType says what it is made
+    // of. Movie, 17 Sep: "on house foundation side i realized we sill also
+    // need a house GRADE BEAM", and, asked whether that belonged beside the
+    // wall-type dropdown or inside it: "it will be part of the foundation
+    // dropdown because the grade beam will replace the foundation wall".
+    //
+    // TWO KEYS BECAUSE THEY ARE TWO FACTS, offered as one question. A wall
+    // type is a THICKNESS and a layer stack -- wall-types.js owns that table
+    // and every page validates a stored id against it -- and a grade beam is
+    // none of those things: no strip footing, piles instead, and a crawl
+    // space rather than a basement behind it. Filing it as a wall type would
+    // hand every reader of wallType a value that is not one. 'wall' is the
+    // default and means "ask wallType", so nothing already saved changes.
+    foundationKind: 'wall',
     ...(ROLE_DEFAULTS[role] || {}),
   });
 
@@ -204,6 +218,10 @@ if (!window.DraftLevelAssembly) {
       footingWidthIn: Number.isFinite(Number(raw.footingWidthIn)) && Number(raw.footingWidthIn) > 0
         ? Number(raw.footingWidthIn) : null,
       wallType: typeof raw.wallType === 'string' && raw.wallType ? raw.wallType : null,
+      // Anything but the one other kind normalises back to 'wall', so a
+      // hand-edited file or an older save cannot strand a drawing on a
+      // foundation no page knows how to draw.
+      foundationKind: raw.foundationKind === 'gradebeam' ? 'gradebeam' : 'wall',
     };
   };
 
