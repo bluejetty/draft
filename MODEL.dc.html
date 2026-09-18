@@ -2251,8 +2251,12 @@ const {
   levelAssemblyFor, levelWallTopFt,
   JOIST_TYPES, DEFAULT_WALL_TOP_FT, DEFAULT_FLOOR_ASSEMBLY, DEFAULT_JOIST_TYPE,
   DEFAULT_FOOTING_DEPTH_IN, DEFAULT_FDN_SLAB_THICKNESS_IN,
+  // 12 5/8" -- the joist plus its sheathing. It was a local here while the
+  // assembly it adds up lived in the module, and MODEL.html had a third
+  // opinion (0.75 ft) in the fallback it hands drawing-format. Derived there
+  // now, from the assembly, so the three cannot drift again.
+  DEFAULT_FLOOR_THICKNESS_IN,
 } = window.DraftLevelAssembly;
-const DEFAULT_FLOOR_THICKNESS_IN = 12 + 5 / 8;
 const DEFAULT_SLAB_THICKNESS_IN = 4;
 // The physical garage / grade / fascia standards live with the shared cut
 // painter (cut-view.js), which draws them in sections and elevations.
@@ -9259,10 +9263,11 @@ class Component extends DCLogic {
 
   // Floor outlines drawn on a FOUNDATION context are concrete slabs on S-SLAB;
   // everywhere else they are framed assemblies that save home to FLOOR.
+  // THE RULE IS layer-views.js's NOW. It is a layer-views question and
+  // MODEL.html was about to need the same answer; drawing-format.js:218
+  // records what a second opinion about it costs.
   _floorHomeView(viewId = this._activeLayerViewId()) {
-    if (viewId === 'foundation') return 'foundation';
-    const views = this._layerViewsForLevel(this._activeLevelId());
-    return views.some(view => view.id === 'foundation') ? 'foundation' : 'floor';
+    return window.DraftLayerViews.floorHomeView(viewId, this._activeLevelId());
   }
 
   // Where a tool's geometry saves: walls live in PLAN (or FOUNDATION when drawn

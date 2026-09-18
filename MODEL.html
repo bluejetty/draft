@@ -10900,7 +10900,14 @@
         drops: refusedItems.lines,
       }),
       floors: F.floors(parsed.floors, levelIds, {
-        defaultFloorThickness: 0.75,
+        // 0.75 WAS THIS PAGE'S OWN NUMBER and nothing else in the app agreed
+        // with it: MODEL.dc.html's floor is 12 5/8" (1.052 ft), the joist plus
+        // its sheathing. The fallback is only reached by a floor with no
+        // stored thickness -- which the old page never writes -- so the two
+        // pages would have drawn one hand-edited drawing at two different
+        // thicknesses, in section, where it shows. level-assembly.js derives
+        // it from the assembly now and both pages read it there.
+        defaultFloorThickness: window.DraftLevelAssembly.DEFAULT_FLOOR_THICKNESS_IN / 12,
         drops: refusedItems.floors,
       }),
       // Dimensions already had a rule; this page just never called it. Running
