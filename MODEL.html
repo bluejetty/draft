@@ -677,8 +677,9 @@
      be and still stand inside the sheet. */
   #drivethru { position:fixed; left:50%; bottom:0; z-index:7;
     --dt-aspect:0.68; --dt-headroom:16px;
-    width:min(720px, calc(100vw - 24px),
+    --dt-w:min(720px, calc(100vw - 24px),
       calc((100vh - var(--dt-headroom)) * var(--dt-aspect)));
+    width:var(--dt-w);
     transform:translate(-50%, 0);
     transition:transform 220ms ease-out, visibility 220ms;
     pointer-events:none; }
@@ -763,9 +764,21 @@
      foot bar whose row wrapped would be taller than this clears. The spec
      asserts the bone's rectangle is clear of the sheet's rather than
      asserting this number, so a wrap fails there instead of on a squint. */
+  /* AND IT SITS IN THE MIDDLE OF THE SHEET, not just above the bar (Movie,
+     18 Sep: "can you move the blueprint to closer to middle (top
+     bottomwise)").
+
+     CENTRED, OR CLEAR OF THE BAR, WHICHEVER IS LOWER. Centring alone is a
+     rule that works on the screen it was written on: on a short sheet half
+     the board is taller than the room above the foot, and the centred sheet
+     lands back on the bone it was lifted off. `max` says the real rule --
+     put it in the middle, and never below the bar -- rather than leaving the
+     two in tension. The height it needs for that is the width it took
+     divided by its own aspect, which is why the width became a variable. */
   html[data-theme="rough"] #drivethru { --dt-aspect:1.5;
     --dt-headroom:calc(var(--house-h) + 28px);
-    bottom:calc(var(--house-h) + 12px); }
+    bottom:max(calc(var(--house-h) + 12px),
+      calc(50vh - var(--dt-w) / var(--dt-aspect) / 2)); }
   html[data-theme="rough"] #dt-screen { display:none; }
   html[data-theme="rough"] #dt-bone { display:none; }
   /* With no screen and no press on it, the selections have the sheet. */

@@ -421,6 +421,17 @@ test.describe('MODEL.html skins', () => {
       await expect(page.locator('#bone'),
         'and the press it left showing is the one that builds').toBeEnabled();
 
+      // AND IT SITS IN THE MIDDLE OF THE SHEET (Movie, 18 Sep: "can you move
+      // the blueprint to closer to middle (top bottomwise)"). The rule is
+      // "centred, or clear of the bar, whichever is lower", and this viewport
+      // has room for the first -- so the tolerance is 2px for rounding, not a
+      // window wide enough for the fallback to slip through.
+      const middle = page.viewportSize().height / 2;
+      expect(Math.abs(up.board.y + up.board.height / 2 - middle),
+        `the sheet's centre is at ${Math.round(up.board.y + up.board.height / 2)}, `
+        + `the sheet's middle at ${middle}`)
+        .toBeLessThanOrEqual(2);
+
       // THE SIGN STILL COVERS IT, read on the same page with one press of the
       // switch between. Two boards, two behaviours, one rule about coverage.
       await page.locator('[data-theme-switch] [data-theme="ruff"]').click();
