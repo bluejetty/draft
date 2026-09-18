@@ -2251,8 +2251,12 @@ const {
   levelAssemblyFor, levelWallTopFt,
   JOIST_TYPES, DEFAULT_WALL_TOP_FT, DEFAULT_FLOOR_ASSEMBLY, DEFAULT_JOIST_TYPE,
   DEFAULT_FOOTING_DEPTH_IN, DEFAULT_FDN_SLAB_THICKNESS_IN,
+  // 12 5/8" -- the joist plus its sheathing. It was a local here while the
+  // assembly it adds up lived in the module, and MODEL.html had a third
+  // opinion (0.75 ft) in the fallback it hands drawing-format. Derived there
+  // now, from the assembly, so the three cannot drift again.
+  DEFAULT_FLOOR_THICKNESS_IN,
 } = window.DraftLevelAssembly;
-const DEFAULT_FLOOR_THICKNESS_IN = 12 + 5 / 8;
 const DEFAULT_SLAB_THICKNESS_IN = 4;
 // The physical garage / grade / fascia standards live with the shared cut
 // painter (cut-view.js), which draws them in sections and elevations.
@@ -2335,10 +2339,18 @@ const {
 } = window.DraftWallTypes;
 // Fenestration defaults — door and window openings hosted on a wall. Heights
 // are measured from the bottom of the host wall; doors sit on it (sill 0).
-const DEFAULT_DOOR_WIDTH_FT = 3;
-const DEFAULT_WINDOW_WIDTH_FT = 4;
-const DEFAULT_WINDOW_SILL_FT = 2.5;
-const DEFAULT_OPENING_HEAD_FT = (6 * 12 + 8) / 12;
+// WHAT AN OPENING IS WHEN NOBODY HAS SAID, and these four were the originals.
+// They now live in geometry-2d.js beside the bearing rule, because this set was
+// copied into premade-plans.js for the bungalow and MODEL.html was about to
+// type a third. Three copies of 6'-8" do not disagree the day they are written;
+// they disagree the day one page raises the head height, and the drawing then
+// carries two head heights with nothing on the plan to say which is which.
+const {
+  DEFAULT_DOOR_WIDTH_FT,
+  DEFAULT_WINDOW_WIDTH_FT,
+  DEFAULT_WINDOW_SILL_FT,
+  DEFAULT_OPENING_HEAD_FT,
+} = window.DraftGeometry2D;
 const FENESTRATION_LAYERS = Object.freeze({ door: 'A-DOOR', window: 'A-GLAZ' });
 // BEARING AT THE ENDS OF A LINTEL, and the NBC citation that settles the
 // numbers, now live in geometry-2d.js beside the arithmetic that reads them.
@@ -9259,10 +9271,11 @@ class Component extends DCLogic {
 
   // Floor outlines drawn on a FOUNDATION context are concrete slabs on S-SLAB;
   // everywhere else they are framed assemblies that save home to FLOOR.
+  // THE RULE IS layer-views.js's NOW. It is a layer-views question and
+  // MODEL.html was about to need the same answer; drawing-format.js:218
+  // records what a second opinion about it costs.
   _floorHomeView(viewId = this._activeLayerViewId()) {
-    if (viewId === 'foundation') return 'foundation';
-    const views = this._layerViewsForLevel(this._activeLevelId());
-    return views.some(view => view.id === 'foundation') ? 'foundation' : 'floor';
+    return window.DraftLayerViews.floorHomeView(viewId, this._activeLevelId());
   }
 
   // Where a tool's geometry saves: walls live in PLAN (or FOUNDATION when drawn
@@ -13159,16 +13172,24 @@ class Component extends DCLogic {
 
   // True when both endpoints and the midpoint of the edge a→b sit on the
   // house outline's boundary — the garage side shared with the house.
+  // WHICH EDGES A GARAGE SHARES WITH THE HOUSE, and the test itself now lives
+  // in geometry-2d.js so MODEL.html's premade bungalow cannot come to a
+  // different answer -- it raises the same attached garage and was raising the
+  // shared walls (Movie, 18 Sep, with the wall marked in green: "the garage
+  // walls should link into the house (look at how the DC version did it)").
+  //
+  // THE SEGMENTS ARE BUILT HERE, NOT THERE, and that is what keeps this a
+  // move rather than a rewrite: _outlineSegment carries each edge's BULGE and
+  // knows that an open outline has one fewer edge than it has points. Handing
+  // the module a list of corners instead would straighten every arc on the way
+  // past, which is a different answer on exactly the outlines where it is hard
+  // to see.
   _edgeOnOutline(a, b, outline, eps = 0.1) {
     if (!outline) return false;
     const count = this._outlineSegmentCount(outline);
-    const onBoundary = pt => outline.points.some((point, index) => {
-      if (index >= count) return false;
-      const { d } = this._distToLineSeg(pt, this._outlineSegment(outline, index));
-      return d <= eps;
-    });
-    return onBoundary(a) && onBoundary(b)
-      && onBoundary({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });
+    const segments = [];
+    for (let index = 0; index < count; index++) segments.push(this._outlineSegment(outline, index));
+    return window.DraftGeometry2D.edgeOnLoop(a, b, segments, eps);
   }
 
   // The garage grade beam walks the OPEN garage legs only — the house side

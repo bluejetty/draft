@@ -110,12 +110,108 @@ if (!window.DraftPremadePlans) {
     ];
   };
 
+  // ── WHERE THE WINDOWS AND DOORS GO ───────────────────────────────────────
+  //
+  // Movie, 18 Sep: "i'd like the windows to be in set positions for each house
+  // in the drivethru menu, but for the 'AUTOHOUSE' when they draw the outline
+  // and create the house that one could have the fenestrations auto
+  // generated". So these are part of the DESIGN, the way the wall positions
+  // are -- not the bone's deal. auto-windows.js is the other thing, and the
+  // records below carry `auto: false` so a re-deal leaves them alone.
+  //
+  // "please windows and doors into the bungalow and i'll change them if i need
+  // to afterwards", so these are a first pass to be corrected against, and
+  // they are arranged to be easy to correct: every one is an offset along a
+  // NAMED EDGE of the loop, so moving a window is moving one number.
+  //
+  // AN OPENING IS KEYED TO AN EDGE, NOT TO A POINT. `edge: 2` is the run from
+  // points[2] to points[3], which is exactly what build-house.js's
+  // houseWallRuns hands back in that order -- so the committer can hang an
+  // opening on the wall it just made without matching coordinates back up.
+  // `offsetFt` is from that edge's START to the opening's CENTRE, which is
+  // what drawing-format.js:211 means by offset.
+  // THE APP'S OWN DEFAULTS, read rather than typed. These were 6'-8" and 2'-6"
+  // written out here with a comment pointing at MODEL.dc.html -- which is a
+  // copy with a citation, and a citation does not update itself. geometry-2d.js
+  // holds the one set now; a design that quietly disagreed with the page's own
+  // defaults would put two head heights in one drawing.
+  const G = window.DraftGeometry2D;
+  const DOOR_HEAD_FT = G.DEFAULT_OPENING_HEAD_FT;
+  const WINDOW_SILL_FT = G.DEFAULT_WINDOW_SILL_FT;
+  // NOT a default: an overhead door heads at 7'-0" because that is the door,
+  // not because nobody said. It stays a number of this design's own.
+  const GARAGE_DOOR_HEAD_FT = 7;
+  const opening = (edge, offsetFt, widthFt, type, over = {}) => Object.freeze({
+    edge,
+    offsetFt,
+    widthFt,
+    type,
+    sillFt: type === 'door' ? 0 : WINDOW_SILL_FT,
+    headFt: DOOR_HEAD_FT,
+    garage: false,
+    ...over,
+  });
+
+  // THE HOUSE. Its loop is wound [back, right, front, left] from
+  // houseLoop() -- edge 0 runs along the back wall, 1 up the right, 2 back
+  // along the FRONT, 3 down the left.
+  //
+  // THE FRONT CARRIES ONLY WHAT FITS IN THE 12 FT THE GARAGE LEAVES. Edge 2
+  // starts at the house's right corner and runs left, so the garage covers its
+  // first 20 ft and the visible stretch is offset 20 to 32. A window on the
+  // covered part would look into the garage.
+  const houseOpenings = () => {
+    // WHERE THE GARAGE STOPS, in offsets along edge 2. That edge starts at the
+    // house's RIGHT corner and runs left, and the garage covers the first
+    // twenty feet of it -- Movie's own "20 ft covered by garage", which is the
+    // garage's width less the part standing proud of the house.
+    //
+    // THE FIRST DRAFT USED THE 12 AS AN OFFSET, which is the VISIBLE width,
+    // not where the visible part begins -- so the door and the window both
+    // landed on the covered stretch, looking into the garage. Two numbers in
+    // this design add up to 32 and it is easy to reach for the wrong one.
+    const covered = GARAGE_WIDTH_FT - GARAGE_PAST_FT;
+    return [
+      // Front: the door, then a window, both inside the visible stretch.
+      opening(2, covered + 3.5, 3, 'door'),
+      opening(2, covered + 8.5, 4, 'window'),
+      // Back: three, evenly spread and clear of both corners.
+      opening(0, 8, 4, 'window'),
+      opening(0, 16, 4, 'window'),
+      opening(0, 24, 4, 'window'),
+      // Right: two. The garage ties into this wall's far end (the last foot),
+      // so both sit well short of it.
+      opening(1, 12, 4, 'window'),
+      opening(1, 28, 4, 'window'),
+      // Left: two, mirroring them.
+      opening(3, 12, 4, 'window'),
+      opening(3, 28, 4, 'window'),
+    ];
+  };
+
+  // THE GARAGE. Its loop runs [tie, rear, right, door wall, left, shared] --
+  // see garageLoop, which builds it in that order.
+  //
+  // THE MAN-DOOR IS WHY THE 4 FT REAR WALL EXISTS. Movie: the garage stands
+  // proud of the house "so a man-door can be installed that leads on a path to
+  // backyard". Four feet is not four feet of door: the bearing has to come off
+  // each end, and what is left is a shade under 2'-8". A 2'-6" leaf fits with
+  // room to spare, which is the difference between a door and a door that the
+  // clamp refuses on a rounding error.
+  const garageOpenings = () => [
+    opening(1, GARAGE_PAST_FT / 2, 2.5, 'door'),
+    opening(3, GARAGE_WIDTH_FT / 2, 16, 'door',
+      { garage: true, headFt: GARAGE_DOOR_HEAD_FT }),
+  ];
+
   // `garage` is the ATTACHED one. A detached garage is a different body with
   // a different rule and it has its own module (garage-site.js); asking for
   // one here would be a second answer to a question already answered.
   const bungalow = ({ garage = false } = {}) => ({
     house: houseLoop(),
+    houseOpenings: houseOpenings(),
     garage: garage ? garageLoop() : null,
+    garageOpenings: garage ? garageOpenings() : null,
   });
 
   // WHAT THE BOARD CAN ACTUALLY BUILD, keyed by build-menu.js entry id. A

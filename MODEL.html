@@ -2786,12 +2786,18 @@
       // taper runs (edge - field) inches in plan. STANDARDS exports the two
       // depths but not this difference, so both pages compute it.
       garageEdgeTaperRunIn: S.GARAGE_EDGE_DEPTH_IN - S.GARAGE_SLAB_THICKNESS_IN,
-      // drawFloor2D's own five-colour set. This page shows committed slabs
-      // only -- its one draw gesture and its selection are both wall-only --
-      // so the preview and selected entries are wired to the committed look
-      // and to the brand accent. Deliberate placeholders, not omissions:
-      // were a preview ever to appear it would read as committed, which is
-      // visible and diagnosable, rather than throwing on an absent colour.
+      // drawFloor2D's own five-colour set. The preview pair was written
+      // against the day this page grew a floor gesture, on the grounds that a
+      // preview reading as committed is visible and diagnosable while an
+      // absent colour throws. THAT DAY IS THIS ONE, and the pair is left
+      // pointing at the committed look ON PURPOSE rather than by inheritance:
+      // a floor being traced is the floor it is about to be, and the painter
+      // already separates the two states by DASHING the preview edge and
+      // withholding the corner handles. A second colour would be a second
+      // thing to keep in step with the palette for no fact gained.
+      //
+      // `selected` is still the placeholder it was: this page's selection is
+      // wall-only, so that entry has no way to be reached yet.
       colors: {
         fill: skin['draw-floor'],
         fillPreview: skin['draw-floor'],
@@ -3892,6 +3898,57 @@
           }
           ctx.restore();
         }
+        // THE FLOOR BEING TRACED. The same reason the cut preview above
+        // exists: a press that changes nothing on the sheet cannot be told
+        // from a press that missed, which is exactly how the OUTLINE tool read
+        // before it painted -- Movie, 17 Sep: "outline command doesn't work".
+        //
+        // THROUGH drawFloor2D, not a second polygon drawn here. That painter
+        // has had a `preview` mode all along -- dashed edge, wash, and no
+        // corner handles -- and floorEnv() has carried its two preview colours
+        // since tier 2c against this day.
+        //
+        // TWO MARKS THE PAINTER DOES NOT MAKE are added after it. It returns
+        // early under two points, so the FIRST press would paint nothing at
+        // all; and it knows nothing about closing, so there would be no
+        // target to close on.
+        if (activeTool === 'floor' && floorCorners.length) {
+          const R = window.DraftRender2D;
+          // THE RUBBER BAND'S FAR END, supplied only while there is a cursor
+          // to band to. A finger leaves none behind, so on a tablet the trace
+          // is the placed corners alone -- which is the truth rather than a
+          // degraded version of it.
+          const trace = cursorWorld
+            ? floorCorners.concat([{ x: cursorWorld.x, z: cursorWorld.z }])
+            : floorCorners;
+          R.drawFloor2D(ctx, toS, { points: trace }, { preview: true }, floorEnv());
+          ctx.save();
+          ctx.fillStyle = skin['draw-floor-edge'];
+          ctx.strokeStyle = skin['draw-floor-edge'];
+          ctx.lineWidth = 2;
+          // ROUND, where a committed floor's handles are square (drawFloor2D
+          // fills 5x5 blocks). The shape is the difference a drafter reads at
+          // a glance; the colour is deliberately the same, because this is
+          // the floor they are drawing and not a different kind of thing.
+          floorCorners.forEach(corner => {
+            const p = toS(corner);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+          });
+          // THE CLOSE TARGET, rung once the loop CAN be closed and not before
+          // -- three corners, the same count floorPress accepts as a close.
+          // The ring is the page saying where the gesture can be finished, so
+          // it appears on the press that makes finishing possible and not one
+          // earlier.
+          if (floorCorners.length >= 3) {
+            const first = toS(floorCorners[0]);
+            ctx.beginPath();
+            ctx.arc(first.x, first.y, 7, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
         // THE RULER'S OWN LINE, dashed so it cannot be mistaken for geometry.
         // It is the only mark on this canvas that is not in the drawing and
         // never will be, and the dash is how a drafter knows that without
@@ -4079,6 +4136,18 @@
       // whole drawing.
       + `columns <b>${shownOfTotal(columns().length, drawing.columns)}</b>   `
       + `beams <b>${shownOfTotal(beams().length, drawing.beams)}</b>   `
+      // AND OPENINGS, which were in exactly the state the two rows above
+      // describe: painted since the painter landed, counted nowhere. A
+      // drafter placing a window had no on-page way to see it arrive, and
+      // the one that got REFUSED -- a wall too short to carry it -- looked
+      // identical to the one that landed.
+      //
+      // THE LEFT NUMBER IS WHAT RESOLVED, not what is on this level.
+      // openingsOn drops an opening whose host wall is not here and one the
+      // clamp refuses, so `openings 10/11` is the page saying one of them is
+      // not being drawn -- which is the only warning this page gives that a
+      // record is in the file and not on the sheet.
+      + `openings <b>${shownOfTotal(openingsOn(walls()).length, drawing.fenestrations)}</b>   `
       // BOTH SIDES LEVEL-SCOPED. The loader decodes every underlay in the
       // drawing, not just this level's, so that switching level is instant --
       // which means underlayImages.size counts images the drafter cannot
@@ -8273,6 +8342,12 @@
   // 4 is that a house outline draws in the build-bar family's colour, "red
   // house / blue split".
   let outlineFamily = null;
+  // The floor being traced, corner by corner. A SEPARATE LIST from the
+  // outline's on purpose: the two tools draw the same SHAPE and mean entirely
+  // different things -- an outline is a guide that never prints, a floor is
+  // structure -- and one shared array would let an abandoned trace of either
+  // finish as the other.
+  let floorCorners = [];
 
   // THE FAMILY COLOURS, and what each one is answerable to.
   //
@@ -8389,6 +8464,7 @@
   // first drafter who armed a tool early.
   toolListeners.push(next => {
     outlineCorners = [];
+    floorCorners = [];
     outlineFamily = null;
     // ARMED FROM THE KEY, which carries no house type with it -- so the trace
     // is the plain house red that outlineTraceColor falls back to, and the
@@ -8556,6 +8632,241 @@
     if (buildFromDrawnOutline()) window.ModelBuild.buildServed();
   });
 
+  // ── THE FLOOR TOOL: a closed loop, and what it saves as ──────────────────
+  //
+  // The parity row read "Draw a floor -- absent, must-have: it paints floors it
+  // cannot create", which is this page's recurring shape: the painter arrived
+  // with tier 1 and the gesture did not.
+  //
+  // THE SAME GESTURE AS THE OUTLINE, deliberately -- press corners, close on
+  // the first. That is MODEL.dc.html's floor gesture too
+  // (_handleFloorClick:11572), so a drafter who has learnt one has learnt
+  // both. What is NOT shared is the state; see floorCorners.
+  //
+  // OUT OF SCOPE AND ABSENT RATHER THAN HALF-DONE: the typed-length ruler, arc
+  // edges, the slope and thickened-edge properties, and the FLOOR JOISTS box.
+  // Each is a panel of its own and none of them is the gesture.
+  const floorPress = at => {
+    const here = { x: at.x, z: at.z };
+    // THREE CORNERS BEFORE CLOSING IS LEGAL and two is not, for the reason the
+    // outline's own guard gives: two enclose no area. Below three, a press near
+    // the first corner is a drafter putting a corner there.
+    if (floorCorners.length >= 3) {
+      const first = floorCorners[0];
+      if (Math.hypot(here.x - first.x, here.z - first.z) <= OUTLINE_CLOSE_FT) {
+        commitFloor();
+        return;
+      }
+    }
+    floorCorners.push(here);
+    paint();
+  };
+
+  const commitFloor = () => {
+    const loop = floorCorners.slice();
+    if (loop.length < 3) return null;
+    // A CROSSED LOOP ENCLOSES NO AREA -- the same refusal the outline makes
+    // on this page, through the same module. The pending corners are KEPT on a
+    // refusal so the drafter can move the last one rather than retrace the room.
+    //
+    // AND THIS IS AN ADDITION, NOT PARITY, which is worth saying plainly: the
+    // old page's _finishFloor checks the corner COUNT and nothing else, so a
+    // bowtie drawn there commits and renders as two triangles with a fill that
+    // fights itself. The outline tool here already refuses one, and a page
+    // where the same gesture is legal for a guide and illegal for structure
+    // would be teaching two rules for one motion.
+    if (window.DraftGeometry2D.selfIntersects(loop)) {
+      sayOnStrip('That floor crosses itself, so it encloses no area.');
+      return null;
+    }
+    const LV = window.DraftLayerViews;
+    const LA = window.DraftLevelAssembly;
+    const { levelId, viewId } = onActiveLevel();
+    // WHERE IT SAVES IS NOT WHERE IT WAS DRAWN, and layer-views.js owns that
+    // rule. The surprising half is the second clause: a level that HAS a
+    // foundation set puts its floor there whichever set the drafter was
+    // looking at, because such a level's floor IS its foundation.
+    const homeView = LV.floorHomeView(viewId, levelId);
+    const slab = homeView === 'foundation';
+    const floor = {
+      id: newDrawingItemId('floor'),
+      points: loop.map(point => ({ x: point.x, y: 0, z: point.z })),
+      levelId,
+      view: homeView,
+      structure: slab ? 'slab' : 'floor',
+      garage: false,
+      slopeInPerFt: 0,
+      // A CONCRETE SLAB IS AS THICK AS ITS LEVEL POURS; a framed floor is its
+      // assembly's own depth. Both are MODEL.dc.html:11641's rule read from
+      // the modules it reads them from -- this page has no floor-thickness
+      // setting of its own, and inventing one here would be a third number for
+      // a thing that has just stopped having three.
+      // assemblyFor IS this page's one level-assembly lookup, and its own
+      // comment says why there is exactly one: "the module's own comment says
+      // the TABLE had one home while the LOOKUP had four, and that is how
+      // #325's role-less callers happened".
+      thickness: slab
+        ? assemblyFor(levelId).slabThicknessIn / 12
+        : LA.DEFAULT_FLOOR_THICKNESS_IN / 12,
+      thickenedEdge: false,
+      assembly: { ...LA.DEFAULT_FLOOR_ASSEMBLY },
+    };
+    if (!Array.isArray(drawing.floors)) drawing.floors = [];
+    drawing.floors.push(floor);
+    undoStack.push({ kind: 'add-item', list: drawing.floors, item: floor });
+    floorCorners = [];
+    setTool(RESTING_TOOL);
+    // THE MESSAGE HAS TO SAY WHERE IT WENT WHEN IT WENT SOMEWHERE ELSE.
+    // floorHomeView's second clause files a floor drawn on FOUNDATION's WALLS
+    // plan onto the FOUNDATION set, which is right -- and from the drafter's
+    // seat it means the slab they just closed is nowhere on the sheet in front
+    // of them. The old page softens that with a courtesy set (_courtesyFloorIds)
+    // that keeps such a floor on screen until the layer set changes; this page
+    // has no courtesy set and is not being given one on this rung, so it OWES
+    // the drafter the sentence instead. A silent vanish is the one outcome
+    // that reads as the tool having failed.
+    const homeLabel = (LV.layerViewsForLevelId(levelId)
+      .find(view => view.id === homeView) || {}).label || homeView;
+    sayOnStrip(homeView === viewId
+      ? (slab ? 'Slab drawn — it saves to S-SLAB.' : 'Floor drawn.')
+      : `${slab ? 'Slab' : 'Floor'} drawn — it belongs to ${homeLabel}, `
+        + 'so it is not on this layer set.');
+    markDirty();
+    paint();
+    return floor;
+  };
+
+  // ── PLACING A WINDOW OR A DOOR ───────────────────────────────────────────
+  //
+  // Movie, 18 Sep, asking for the bungalow's openings: "please windows and
+  // doors into the bungalow and i'll change them if i need to afterwards".
+  // The design's eleven arrived that day and this page had no way to change
+  // them -- no gesture to add one, move one or take one out. This is the first
+  // of the three.
+  //
+  // ONE PRESS ON A WALL, which is the old page's own gesture
+  // (_handleFenestrationClick:15180) and the only one a finger can make
+  // without a keyboard. The press picks the nearest wall within reach and the
+  // opening lands centred on the point pressed, then slides to fit.
+  //
+  // THE TOOL STAYS ARMED. A house has a dozen windows and resting after each
+  // would cost a trip to the tool column between every one -- the old page
+  // stays armed for the same reason. This is the opposite choice from FLOOR
+  // and OUTLINE, and the difference is that those two gestures END: a closed
+  // loop is finished, an opening is one press and the next press is the next
+  // window.
+  //
+  // OUT OF SCOPE HERE AND EACH ITS OWN THING, exactly as the old page's
+  // handler splits them: stair openings (its `stairs` type), boneyard marks on
+  // a master outline, and shaped holes cut into a floor or a roof.
+  const FENESTRATION_PICK_PX = 18;   // MODEL.dc.html:2198's own pick distance
+
+  // DOOR FIRST, because the old page's state opens on 'door' (:2912) and a
+  // drafter switching pages should not find the tool set to something else.
+  let fenestrationType = 'door';
+  let openingPanelUp = false;
+
+  const OPENING_TYPES = Object.freeze([['door', 'DOOR'], ['window', 'WINDOW']]);
+
+  const showOpeningProps = () => {
+    const P = window.ModelProps;
+    if (!P) return;
+    const G = window.DraftGeometry2D;
+    const box = document.createElement('div');
+    box.append(propRow('OPENING', OPENING_TYPES, fenestrationType, id => {
+      fenestrationType = id;
+      showOpeningProps();
+    }));
+    // WHAT THE NEXT PRESS WILL MAKE, spelled out. The width, sill and head are
+    // not typeable on this page yet, and a panel that offered only a type
+    // would leave the drafter to find out the rest by placing one.
+    const F = window.DraftFormatters;
+    const note = document.createElement('div');
+    note.className = 'props-title';
+    note.dataset.openingNote = '';
+    const width = G.defaultOpeningWidthFt(fenestrationType);
+    const sill = fenestrationType === 'window' ? G.DEFAULT_WINDOW_SILL_FT : 0;
+    note.textContent = `${F.formatArchitecturalInches(width * 12)} WIDE, `
+      + `SILL ${F.formatArchitecturalInches(sill * 12)}, `
+      + `HEAD ${F.formatArchitecturalInches(G.DEFAULT_OPENING_HEAD_FT * 12)}`;
+    box.append(note);
+    P.set('FENESTRATION', box);
+    openingPanelUp = true;
+  };
+
+  // The wall nearest the press, with how far along it the press landed.
+  // SEPARATE FROM wallAt(), which uses the SELECT grab distance: this one is
+  // the old page's 18px fenestration pick, and the two numbers are different
+  // there for a reason -- an opening is aimed at a wall FACE, a selection at a
+  // wall LINE.
+  const wallForOpening = worldPt => {
+    const G = window.DraftGeometry2D;
+    const thresh = FENESTRATION_PICK_PX / view.scale;
+    let best = null, bestD = thresh;
+    walls().forEach(wall => {
+      if (!wall.start || !wall.end) return;
+      const { d, t } = G.pointToSegment(worldPt, wall);
+      if (d < bestD) { bestD = d; best = { wall, t }; }
+    });
+    return best;
+  };
+
+  const placeOpening = at => {
+    const G = window.DraftGeometry2D;
+    const best = wallForOpening(at);
+    if (!best) {
+      sayOnStrip('Press a wall to put an opening in it.');
+      return null;
+    }
+    const type = fenestrationType === 'window' ? 'window' : 'door';
+    const width = G.defaultOpeningWidthFt(type);
+    const wall = best.wall;
+    const length = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+    // CLAMPED, NOT REFUSED, when the press lands near a corner: the opening
+    // slides along until its bearing fits. clampOpeningToWall returns null
+    // only when the wall cannot carry the width AT ALL, which is a different
+    // answer and gets a different sentence.
+    const clamped = G.clampOpeningToWall(wall, best.t * length, width, {
+      walls: walls(),
+      thicknessFt: openingThicknessFt(),
+    });
+    if (!clamped) {
+      sayOnStrip(`That wall is too short to carry a ${window.DraftFormatters
+        .formatArchitecturalInches(width * 12)} opening.`);
+      return null;
+    }
+    const record = {
+      id: newDrawingItemId('fenestration'),
+      wallId: wall.id,
+      levelId: wall.levelId,
+      // THE HOST WALL'S VIEW, not the drafter's. An opening is cut into a
+      // wall and belongs wherever that wall is drawn; filing it under the
+      // layer set that happened to be open would hide it from its own wall.
+      view: wall.view || 'plan',
+      type,
+      // drawing-format.js derives the layer from the type on load, so this
+      // cannot come out wrong -- but this page has no serializer between the
+      // push and the file, and a record that is only right AFTER a reload is
+      // a file that is wrong until then.
+      layer: type === 'door' ? 'A-DOOR' : 'A-GLAZ',
+      offset: clamped.offset,
+      width,
+      sillHeight: type === 'door' ? 0 : G.DEFAULT_WINDOW_SILL_FT,
+      headHeight: G.DEFAULT_OPENING_HEAD_FT,
+      // NOT THE BONE'S. auto-windows.js re-deals what it dealt; one the
+      // drafter placed by hand is his from the moment it lands.
+      auto: false,
+    };
+    if (!Array.isArray(drawing.fenestrations)) drawing.fenestrations = [];
+    drawing.fenestrations.push(record);
+    undoStack.push({ kind: 'add-item', list: drawing.fenestrations, item: record });
+    sayOnStrip(`${type === 'door' ? 'Door' : 'Window'} placed on `
+      + `${record.layer}.`);
+    markDirty();
+    paint();
+    return record;
+  };
+
   // THE ARMING, through the seam :3875 declared for exactly this. A house type
   // press records the type (that half already worked) and now arms the trace,
   // which is what _pressBuildType has always done in one motion.
@@ -8580,8 +8891,10 @@
   // what building-bodies.js reads to tell the attached one from the detached
   // one (:37). An attached garage is part of the house it hangs off, so it
   // does not spend the detached garage's slot.
-  const raiseLoop = (points, levelId, { garage = false } = {}) => {
+  const raiseLoop = (points, levelId,
+    { garage = false, openings = [], against = null } = {}) => {
     const BH = window.DraftBuildHouse;
+    const G = window.DraftGeometry2D;
     const outline = {
       id: newDrawingItemId('outline'),
       masterId: null,
@@ -8598,9 +8911,86 @@
     if (outline.detached === undefined) delete outline.detached;
     drawing.outlines.push(outline);
     const refLine = BH.outlineInteriorRef(points);
-    const walls = BH.houseWallRuns(points)
-      .map(run => commitWall(run.start, run.end, { bone: false, refLine }));
-    return { outline, walls };
+    // ── THE WALLS THIS BODY ACTUALLY OWNS ────────────────────────────────
+    //
+    // AN ATTACHED GARAGE DOES NOT RAISE THE WALLS IT SHARES WITH THE HOUSE.
+    // Movie, 18 Sep, with the wall marked in green on a screenshot: "the
+    // garage has an extra wall that is not needed. the garage walls should
+    // link into the house (look at how the DC version did it)". The DC
+    // version is one line of _buildGarageWalls -- skip an edge that lies on
+    // the house outline -- and that test is now geometry-2d.js's edgeOnLoop,
+    // read from there by both pages rather than written twice.
+    //
+    // TWO EDGES GO ON THIS BUNGALOW, not the one that was visible. The 20 ft
+    // along the house's front wall is the one in the screenshot; the 1 ft TIE
+    // down the house's right wall is the same mistake a foot long, and it is
+    // the one nobody would have reported. Both are a second wall standing in
+    // the same place as a house wall: doubled linework on the plan, a doubled
+    // stud count off it, and two walls to drag when the house moves.
+    //
+    // THE FOOTPRINT KEEPS ALL SIX CORNERS. Only the WALLS are skipped -- the
+    // outline above is the garage's shape, and the slab, the roof and the
+    // grade beam are all cut from it. Trimming the loop to the walls raised
+    // would leave the garage open along the house.
+    const sharedWith = against ? G.loopSegments(against) : null;
+    // BY EDGE NUMBER, not by position. The openings below are keyed to the
+    // plan's edges, and both the skip above and houseWallRuns' own degenerate
+    // skip take runs OUT of the list -- so a wall's place in an array stopped
+    // meaning its edge the moment either could fire.
+    const wallsByEdge = [];
+    BH.houseWallRuns(points).forEach(run => {
+      if (sharedWith && G.edgeOnLoop(run.start, run.end, sharedWith)) return;
+      wallsByEdge[run.edge] = commitWall(run.start, run.end, { bone: false, refLine });
+    });
+    const walls = wallsByEdge.filter(Boolean);
+
+    // ── AND THE WINDOWS AND DOORS THE DESIGN CALLS FOR ─────────────────────
+    //
+    // Movie, 18 Sep: "i'd like the windows to be in set positions for each
+    // house in the drivethru menu, but for the 'AUTOHOUSE' when they draw the
+    // outline and create the house that one could have the fenestrations auto
+    // generated". So these come from the PLAN, fixed, and auto-windows.js is
+    // the other thing entirely -- the records carry `auto: false` so a re-deal
+    // leaves the design's own openings alone.
+    //
+    // THE EDGE INDEX IS LOOKED UP, NOT COUNTED. This read `walls[spec.edge]`
+    // while the only thing that could remove a run was a degenerate edge, and
+    // the plans have none -- so run i WAS edge i and the shortcut held. It
+    // stopped holding the moment an attached garage began skipping its shared
+    // edges: on the bungalow that drops edges 0 and 5, and by position the
+    // man-door on edge 1 would have moved onto the exposed rear wall's
+    // neighbour and the 16 ft overhead door onto the wall beside the one it
+    // belongs to. Both would still have LOOKED like doors on a garage.
+    //
+    // The guard below is unchanged and still earns its place: an opening keyed
+    // to an edge that raised no wall -- a shared one, or a degenerate one --
+    // is dropped rather than written against the wrong wall.
+    if (!Array.isArray(drawing.fenestrations)) drawing.fenestrations = [];
+    const made = openings.map(spec => {
+      const wall = wallsByEdge[spec.edge];
+      if (!wall) return null;
+      const record = {
+        id: newDrawingItemId('fenestration'),
+        wallId: wall.id,
+        levelId,
+        view: wall.view || 'plan',
+        type: spec.type,
+        // drawing-format.js:230 derives this from the type on load, so it
+        // cannot come out wrong -- but this page has no serializer between the
+        // push and the file, and a record that is only right AFTER a reload is
+        // a file that is wrong until then.
+        layer: spec.type === 'door' ? 'A-DOOR' : 'A-GLAZ',
+        offset: spec.offsetFt,
+        width: spec.widthFt,
+        sillHeight: spec.sillFt,
+        headHeight: spec.headFt,
+        garage: spec.garage === true,
+        auto: false,
+      };
+      drawing.fenestrations.push(record);
+      return record;
+    }).filter(Boolean);
+    return { outline, walls, openings: made };
   };
 
   const buildPremadePlan = order => {
@@ -8612,14 +9002,30 @@
     // ONE GESTURE, ONE UNDO, the same as the ordered garage: the walls' own
     // 'add' steps are dropped for the single 'built' one covering both bodies.
     const mark = undoStack.length;
-    const raised = [raiseLoop(plan.house, levelId)];
-    if (plan.garage) raised.push(raiseLoop(plan.garage, levelId, { garage: true }));
+    const raised = [raiseLoop(plan.house, levelId,
+      { openings: plan.houseOpenings })];
+    if (plan.garage) {
+      // THE HOUSE IS WHAT THE GARAGE IS MEASURED AGAINST, and it is handed
+      // over rather than found: the garage hangs off the house by
+      // construction (premade-plans.js builds its loop from the house's own
+      // right and front lines), so the body it shares edges with is known
+      // here and searching the drawing for it would be a second, weaker
+      // answer to a question this function already holds.
+      raised.push(raiseLoop(plan.garage, levelId,
+        { garage: true, openings: plan.garageOpenings, against: plan.house }));
+    }
     undoStack.length = mark;
     undoStack.push({
       kind: 'built',
       walls: raised.flatMap(body => body.walls),
       outlines: raised.map(body => body.outline),
       list: drawing.outlines,
+      // ONE PRESS IS STILL ONE UNDO, and the openings are part of that press.
+      // Left out, Ctrl+Z would take the house and leave eleven windows and
+      // doors hosted on walls that no longer exist -- records the loader drops
+      // on the next open, so the drawing would quietly repair itself and the
+      // drafter would never know what had been in the file.
+      openings: raised.flatMap(body => body.openings || []),
     });
     // AND THE TRACE GOES DOWN WITH IT. Pressing the tile armed the outline
     // through onChoose -- that is the old page's own two-things-at-once and it
@@ -9976,10 +10382,18 @@
 
   toolListeners.push(tool => {
     if (tool === 'roof') { showRoofProps(); return; }
+    if (tool === 'fenestration') { showOpeningProps(); return; }
     // Only clear what this panel put there. COLUMN and BEAM's rows belong to
     // the selection, which a tool change does not touch, and clearing them
     // here would blank a panel the drafter is reading.
+    //
+    // EACH PANEL CLEARS ITS OWN, and the two flags are not one flag: arming
+    // ROOF from FENESTRATION has to take the opening rows down and put the
+    // roof rows up, which a single `panelUp` would get right by luck and a
+    // shared `clear()` before both branches would get wrong the moment a
+    // third panel arrived that does not want clearing.
     if (roofPanelUp) { window.ModelProps.clear(); roofPanelUp = false; }
+    if (openingPanelUp) { window.ModelProps.clear(); openingPanelUp = false; }
   });
   deleteButton.addEventListener('click', pressDelete);
   if (copyButton) copyButton.addEventListener('click', () => { copySelection(); paint(); });
@@ -10169,6 +10583,8 @@
     if (activeTool === 'beam') { beamPress(at); return; }
     if (activeTool === 'roof') { roofPress(at); return; }
     if (activeTool === 'outline') { outlinePress(at); return; }
+    if (activeTool === 'floor') { floorPress(at); return; }
+    if (activeTool === 'fenestration') { placeOpening(at); return; }
     if (activeTool === 'cut') { cutPress(at); return; }
     if (activeTool === 'wall') {
       // §1: "either drag, or press again and drag -- both must work". The lift
@@ -10692,6 +11108,11 @@
           const outlineAt = step.list ? step.list.indexOf(outline) : -1;
           if (outlineAt >= 0) step.list.splice(outlineAt, 1);
         });
+        // The openings the order hung on those walls go with them.
+        (step.openings || []).forEach(record => {
+          const at = (drawing.fenestrations || []).indexOf(record);
+          if (at >= 0) drawing.fenestrations.splice(at, 1);
+        });
       } else if (step.kind === 'add') {
         const at = drawing.walls.indexOf(step.wall);
         if (at >= 0) drawing.walls.splice(at, 1);
@@ -10843,7 +11264,14 @@
         drops: refusedItems.lines,
       }),
       floors: F.floors(parsed.floors, levelIds, {
-        defaultFloorThickness: 0.75,
+        // 0.75 WAS THIS PAGE'S OWN NUMBER and nothing else in the app agreed
+        // with it: MODEL.dc.html's floor is 12 5/8" (1.052 ft), the joist plus
+        // its sheathing. The fallback is only reached by a floor with no
+        // stored thickness -- which the old page never writes -- so the two
+        // pages would have drawn one hand-edited drawing at two different
+        // thicknesses, in section, where it shows. level-assembly.js derives
+        // it from the assembly now and both pages read it there.
+        defaultFloorThickness: window.DraftLevelAssembly.DEFAULT_FLOOR_THICKNESS_IN / 12,
         drops: refusedItems.floors,
       }),
       // Dimensions already had a rule; this page just never called it. Running

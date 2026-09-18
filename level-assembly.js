@@ -29,6 +29,16 @@ if (!window.DraftLevelAssembly) {
     joistSpacingIn: 16,
     sheathingIn: 3 / 4,
   });
+  // HOW THICK THAT FLOOR IS, 12 5/8" -- the TJI plus its sheathing, which is
+  // the assembly above added up. It lived as a MODEL.dc.html local while the
+  // assembly it describes lived here, and the two pages then disagreed:
+  // MODEL.html told drawing-format a floor with no stored thickness was 0.75
+  // ft, this page said 1.052. Nothing had caught it because the old page
+  // always writes the field, so the fallback was only ever reached by a
+  // hand-edited file -- and then the two pages would have drawn the same
+  // drawing at different thicknesses, in section, where it shows.
+  const DEFAULT_FLOOR_THICKNESS_IN = DEFAULT_FLOOR_ASSEMBLY.joistDepthIn
+    + DEFAULT_FLOOR_ASSEMBLY.sheathingIn;
   // Framed floor joist choices offered by the FLOOR JOISTS box. OWJ depth is
   // entered by hand since open-web joists come in many depths.
   const JOIST_TYPES = Object.freeze([
@@ -249,6 +259,7 @@ if (!window.DraftLevelAssembly) {
   };
 
   window.DraftLevelAssembly = Object.freeze({
+    DEFAULT_FLOOR_THICKNESS_IN,
     defaultLevelAssembly,
     normaliseLevelAssembly,
     levelRole,

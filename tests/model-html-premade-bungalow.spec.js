@@ -147,10 +147,87 @@ test('1 STOREY + GARAGE raises both bodies, and the garage is an ATTACHED one',
       'the garage-s right wall is 4 ft closer to the lot line than the house-s')
       .toBeCloseTo(plan.past, 3);
 
-    // TEN WALLS: four round the house, six round the garage's six-cornered
-    // loop. A garage stored as a plain rectangle would give nine.
+    // EIGHT WALLS: four round the house, and four of the garage's six edges.
+    // THIS READ TEN, and ten was the defect -- Movie, 18 Sep, with the wall
+    // marked in green: "the garage has an extra wall that is not needed. the
+    // garage walls should link into the house (look at how the DC version did
+    // it)". An attached garage does not raise the edges it shares with the
+    // house; the next test is the one that says which, and why.
     expect((saved.walls || []).length,
-      'both bodies were walled, the garage on all six of its corners').toBe(10);
+      'both bodies were walled, the garage on the four edges it owns').toBe(8);
+  });
+
+// THE TWO EDGES THE GARAGE DOES NOT OWN, and what happens to the doors when
+// they are dropped. Both halves are here together because they are one
+// change: taking runs out of the list is what stopped a wall's POSITION
+// meaning its edge.
+test('the attached garage raises no wall the house already has',
+  async ({ page }) => {
+    await open(page);
+    await order(page, 'bungalow', 'bungalow-garage');
+    await saveOnNewPage(page);
+
+    const saved = await savedFile(page);
+    const house = houseOf(saved);
+    const garage = garageOf(saved);
+    const len = wall => Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+
+    // THE MEASUREMENT IS MADE AGAINST THE HOUSE OUTLINE, in the test's own
+    // arithmetic rather than through the page's edgeOnLoop. Asking the page
+    // whether it obeyed its own rule, using its own rule, is a tautology; this
+    // walks the house's corners here.
+    const onHouse = pt => house.points.some((corner, index) => {
+      const next = house.points[(index + 1) % house.points.length];
+      const dx = next.x - corner.x, dz = next.z - corner.z;
+      const len2 = dx * dx + dz * dz;
+      if (len2 < 1e-6) return false;
+      const t = Math.max(0, Math.min(1,
+        ((pt.x - corner.x) * dx + (pt.z - corner.z) * dz) / len2));
+      return Math.hypot(pt.x - corner.x - t * dx, pt.z - corner.z - t * dz) <= 0.1;
+    });
+    const sharesWithHouse = wall => onHouse(wall.start) && onHouse(wall.end)
+      && onHouse({ x: (wall.start.x + wall.end.x) / 2,
+        z: (wall.start.z + wall.end.z) / 2 });
+
+    // The control, and it is the half that keeps the assertion honest: the
+    // GARAGE LOOP still has two such edges. If the plan ever stopped sharing
+    // any, "no wall shares one" would be true of a rule that had been deleted.
+    const sharedEdges = garage.points.filter((corner, index) => {
+      const next = garage.points[(index + 1) % garage.points.length];
+      return sharesWithHouse({ start: corner, end: next });
+    });
+    expect(sharedEdges.length, 'the garage loop still shares two edges with '
+      + "the house -- the 20 ft along its front wall and the 1 ft tie down "
+      + 'its side').toBe(2);
+
+    const garageCorner = pt => (garage.points || []).some(corner =>
+      Math.hypot(corner.x - pt.x, corner.z - pt.z) < 0.01);
+    const garageWalls = (saved.walls || [])
+      .filter(wall => garageCorner(wall.start) && garageCorner(wall.end));
+    expect(garageWalls.length, 'four garage walls, not six').toBe(4);
+    for (const wall of garageWalls) {
+      expect(sharesWithHouse(wall),
+        `the garage wall ${wall.id} stands where no house wall does`).toBe(false);
+    }
+
+    // AND THE DOORS FOLLOWED THEIR EDGES. The design keys an opening to an
+    // EDGE NUMBER; dropping two runs out of the list is exactly what makes a
+    // wall's position stop meaning its edge, and by position the man-door
+    // would land on the 27 ft side and the overhead door on the 26 ft one.
+    // Both would still have read as "doors on a garage" from any count.
+    const byId = new Map((saved.walls || []).map(wall => [String(wall.id), wall]));
+    const openings = (saved.fenestrations || []);
+    const manDoor = openings.find(o => o.garage !== true && o.width === 2.5);
+    const overhead = openings.find(o => o.garage === true);
+    expect(manDoor, 'the man-door was written').toBeTruthy();
+    expect(overhead, 'and the overhead door').toBeTruthy();
+    // 4 ft is the exposed rear wall, the only wall a man-door belongs on --
+    // it is why the garage stands proud of the house at all.
+    expect(len(byId.get(String(manDoor.wallId))),
+      'the man-door is on the 4 ft rear wall').toBeCloseTo(4, 2);
+    // 24 ft is the door wall, the garage's full width.
+    expect(len(byId.get(String(overhead.wallId))),
+      'the overhead door is on the 24 ft door wall').toBeCloseTo(24, 2);
   });
 
 test('the attached garage does not spend the detached garage-s slot',
@@ -244,4 +321,110 @@ test('building the design puts the trace down with it', async ({ page }) => {
   await expect(page.locator('#save'),
     'four presses on the finished house drew no second outline -- the page is '
     + 'still exactly what was saved').toHaveText('SAVED');
+});
+
+// ── THE DESIGN'S OWN WINDOWS AND DOORS ───────────────────────────────────
+//
+// Movie, 18 Sep: "i'd like the windows to be in set positions for each house in
+// the drivethru menu, but for the 'AUTOHOUSE' when they draw the outline and
+// create the house that one could have the fenestrations auto generated" --
+// and then "please windows and doors into the bungalow and i'll change them if
+// I need to afterwards".
+//
+// WHERE they go is the harness's business (proto/premade-plans-harness.js
+// measures every one against the wall it hangs on, bearing included). What
+// this file checks is that they ARRIVE: hung on the right walls, in a shape
+// drawing-format.js will keep, and taken back by the same one undo.
+
+const openingsOf = saved => saved?.fenestrations || [];
+
+test('the bungalow arrives with its openings, hung on its own walls',
+  async ({ page }) => {
+    await open(page);
+    await order(page, 'bungalow', 'bungalow-garage');
+    await saveOnNewPage(page);
+
+    const saved = await savedFile(page);
+    const openings = openingsOf(saved);
+    const planned = await page.evaluate(() => {
+      const plan = window.DraftPremadePlans.bungalow({ garage: true });
+      return plan.houseOpenings.length + plan.garageOpenings.length;
+    });
+    expect(openings.length, 'every opening the design names was written')
+      .toBe(planned);
+
+    // HOSTED ON WALLS THAT EXIST. An opening whose wallId matches nothing is
+    // dropped by the loader without a word, so the drawing would repair itself
+    // on the next open and the drafter would never learn what had been lost.
+    const wallIds = new Set((saved.walls || []).map(w => String(w.id)));
+    for (const o of openings) {
+      expect(wallIds.has(String(o.wallId)),
+        `opening ${o.id} is hosted on a wall that is in the drawing`).toBe(true);
+    }
+
+    // AND IN A SHAPE THE FORMAT KEEPS: a head above the sill, a positive
+    // width, a layer matching the type. drawing-format.js:216 drops a record
+    // failing any of those.
+    for (const o of openings) {
+      expect(o.headHeight > o.sillHeight, `${o.id} has a head above its sill`).toBe(true);
+      expect(o.width > 0, `${o.id} has a width`).toBe(true);
+      expect(o.layer, `${o.id} is on the layer its type calls for`)
+        .toBe(o.type === 'door' ? 'A-DOOR' : 'A-GLAZ');
+      // NOT THE BONE'S. auto-windows.js re-deals what it dealt; the design's
+      // openings are the drafter's from the moment they land.
+      expect(o.auto, `${o.id} is the design's, not a dealt one`).toBe(false);
+    }
+
+    // THE GARAGE DOOR IS ON THE GARAGE, which is the one that would be easiest
+    // to hang on the wrong body: both loops are raised in the same call.
+    const garageDoor = openings.find(o => o.garage === true);
+    expect(garageDoor, 'the overhead door was written').toBeTruthy();
+    const garageWallIds = new Set((saved.walls || [])
+      .filter(w => {
+        const g = garageOf(saved);
+        return (g.points || []).some(p =>
+          Math.hypot(p.x - w.start.x, p.z - w.start.z) < 0.01);
+      }).map(w => String(w.id)));
+    expect(garageWallIds.has(String(garageDoor.wallId)),
+      'the overhead door hangs on a garage wall, not a house one').toBe(true);
+  });
+
+test('and the loader keeps every one of them', async ({ page }) => {
+  await open(page);
+  await order(page, 'bungalow', 'bungalow-garage');
+  await saveOnNewPage(page);
+  const written = openingsOf(await savedFile(page)).length;
+
+  // THE ROUND TRIP IS THE ACCEPTANCE. Everything above measures what this page
+  // WROTE; this measures what survives being read back, which is the half that
+  // catches a record the format refuses. A dropped opening is silent -- the
+  // house simply has fewer windows than the design.
+  await page.reload();
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  const onScreen = await page.evaluate(() =>
+    Number(/(\d+)\/\d+/.exec(
+      /fenestrations? \d+\/\d+/.exec(document.getElementById('readout').textContent)
+      || [''])?.[1] ?? NaN));
+  // The readout does not count fenestrations, so the file is the witness: a
+  // save after the reload re-writes what the page LOADED.
+  await page.locator('#save').click().catch(() => {});
+  expect(openingsOf(await savedFile(page)).length,
+    'every opening survived the read back').toBe(written);
+});
+
+test('one Ctrl+Z takes the openings back with the house', async ({ page }) => {
+  await open(page);
+  await order(page, 'bungalow', 'bungalow-garage');
+  await saveOnNewPage(page);
+  expect(openingsOf(await savedFile(page)).length).toBeGreaterThan(0);
+
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(200);
+  await saveOnNewPage(page);
+
+  // LEFT BEHIND, they would be openings hosted on walls that no longer exist
+  // -- which the loader drops on the next open, so the drawing repairs itself
+  // and nothing ever says the file had been wrong.
+  expect(openingsOf(await savedFile(page)),
+    'the openings went back with the walls they hung on').toHaveLength(0);
 });

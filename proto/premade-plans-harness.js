@@ -17,6 +17,12 @@
 const fs = require('fs');
 const path = require('path');
 const SRC = path.join(__dirname, '..', 'premade-plans.js');
+// premade-plans.js reads the app's opening defaults (head height, window sill)
+// out of geometry-2d.js rather than typing its own, so the window it is given
+// has to have that module in it. Loaded from source into the SAME window the
+// plan gets, not required as a node module: this harness's whole method is to
+// run the subject's own text, and a mutation is applied to that text.
+const GEO = path.join(__dirname, '..', 'geometry-2d.js');
 const MUTATION_MODE = require('./harness-args.js').mutationMode();
 
 function load(mutate) {
@@ -27,6 +33,7 @@ function load(mutate) {
     src = next;
   }
   const window = {};
+  new Function('window', fs.readFileSync(GEO, 'utf8'))(window);
   new Function('window', src)(window);
   return window.DraftPremadePlans;
 }
@@ -207,6 +214,118 @@ check('every edge of both loops is square',
 check('the garage loop closes on six corners',
   P => [P.bungalow({ garage: true }).garage.length, 6]);
 
+// ── the windows and doors ────────────────────────────────────────────────
+//
+// THE BEARING NUMBERS ARE WRITTEN OUT HERE, not imported, and that is the
+// point: they are the INDEPENDENT WITNESS. geometry-2d.js's clamp is what
+// refuses an opening that will not fit, and a harness that asked the clamp
+// would be checking the clamp against itself. These are the same rule stated
+// a second time, from MODEL.dc.html's own constants, so a design that drifts
+// past what the clamp allows fails HERE -- at the design, where it is a
+// drawing decision -- rather than silently at build time, where the opening
+// just never appears.
+//
+//   a stud_2x6 is 5 1/2"        the carrier at each end of the opening
+//   1 1/2" bearing              up to a 3 m span
+//   3" bearing                  past it
+const WALL_FT = 5.5 / 12;
+const SPAN_FT = 3 / 0.3048;
+const reserveFor = widthFt => WALL_FT + (widthFt > SPAN_FT ? 3 : 1.5) / 12;
+
+const edgeOf = (points, index) => edges(points)[index];
+
+// Every opening, paired with the edge it hangs on.
+const placed = plan => [
+  ...plan.houseOpenings.map(o => ({ o, edge: edgeOf(plan.house, o.edge), where: 'house' })),
+  ...(plan.garageOpenings || []).map(o => ({ o, edge: edgeOf(plan.garage, o.edge), where: 'garage' })),
+];
+
+check('every opening names an edge the loop actually has',
+  P => { const plan = P.bungalow({ garage: true });
+         return [placed(plan).every(({ edge }) => !!edge), true]; });
+
+// THE ONE THAT MATTERS. An opening wider than its wall can carry with the
+// bearing left at each end is REFUSED by the clamp at build time -- it simply
+// does not appear, and nothing says why. A design is the wrong place to find
+// that out from.
+check('every opening fits its wall with the bearing left at each end',
+  P => { const plan = P.bungalow({ garage: true });
+         const tight = placed(plan).filter(({ o, edge }) => {
+           const reserve = reserveFor(o.widthFt);
+           return o.offsetFt - o.widthFt / 2 < reserve - 1e-9
+             || o.offsetFt + o.widthFt / 2 > edge.len - reserve + 1e-9;
+         });
+         return [tight.map(({ o }) => `${o.type}@${o.edge}:${o.offsetFt}`).join(','), '']; });
+
+check('and no two openings on the same wall overlap',
+  P => { const plan = P.bungalow({ garage: true });
+         const clashes = [];
+         placed(plan).forEach((a, i) => placed(plan).slice(i + 1).forEach(b => {
+           if (a.where !== b.where || a.o.edge !== b.o.edge) return;
+           const aa = [a.o.offsetFt - a.o.widthFt / 2, a.o.offsetFt + a.o.widthFt / 2];
+           const bb = [b.o.offsetFt - b.o.widthFt / 2, b.o.offsetFt + b.o.widthFt / 2];
+           if (aa[0] < bb[1] && bb[0] < aa[1]) clashes.push(`${a.o.type}/${b.o.type}`);
+         }));
+         return [clashes.join(','), '']; });
+
+// NOTHING ON THE STRETCH THE GARAGE COVERS. Twenty of the house's thirty-two
+// front feet are behind the garage, and a window there looks into it. This is
+// the check the first draft of the design needed and did not have: it used the
+// 12 ft VISIBLE width as an offset instead of the 20 ft covered one, and put
+// both the front door and the front window inside the garage.
+check('no front opening sits on the stretch the garage covers',
+  P => { const plan = P.bungalow({ garage: true });
+         const house = bbox(plan.house);
+         const garage = bbox(plan.garage);
+         const covered = house.maxX - garage.minX;
+         const front = plan.houseOpenings.filter(o => o.edge === 2);
+         return [front.every(o => o.offsetFt - o.widthFt / 2 >= covered), true]; });
+
+check('the front carries a door, and it is the only door on the house',
+  P => { const doors = P.bungalow().houseOpenings.filter(o => o.type === 'door');
+         return [`${doors.length}@${doors.map(d => d.edge).join('')}`, '1@2']; });
+
+check('every other wall of the house carries windows',
+  P => { const plan = P.bungalow();
+         const edgesWith = new Set(plan.houseOpenings
+           .filter(o => o.type === 'window').map(o => o.edge));
+         return [[...edgesWith].sort().join(','), '0,1,2,3']; });
+
+// A HOUSE WITH NO GARAGE STILL HAS ITS WINDOWS. The openings belong to the
+// house, not to the pairing, and a plain 1 STOREY that arrived blank would be
+// the same defect this whole rung is about.
+check('1 STOREY on its own still comes with its openings',
+  P => [P.bungalow().houseOpenings.length > 0 && P.bungalow().garageOpenings === null, true]);
+
+check('the garage door is 16 ft on the door wall, and says it is a garage door',
+  P => { const plan = P.bungalow({ garage: true });
+         const door = plan.garageOpenings.find(o => o.garage === true);
+         const wall = edgeOf(plan.garage, door.edge);
+         return [`${n(door.widthFt)} on a ${n(wall.len)} ft wall`, `${n(16)} on a ${n(24)} ft wall`]; });
+
+// THE MAN-DOOR IS WHY THE 4 FT WALL EXISTS. Movie: the garage stands proud
+// "so a man-door can be installed that leads on a path to backyard". Four feet
+// is not four feet of door -- take the bearing off each end and 2'-10" of it
+// is usable -- so this measures that the leaf FITS, not merely that it is
+// there.
+check('the man-door is on the exposed rear wall, and fits it',
+  P => { const plan = P.bungalow({ garage: true });
+         const man = plan.garageOpenings.find(o => o.garage !== true);
+         const wall = edgeOf(plan.garage, man.edge);
+         const room = wall.len - 2 * reserveFor(man.widthFt);
+         return [`${n(wall.len)} ft wall, ${n(man.widthFt)} leaf, fits=${man.widthFt <= room}`,
+           `${n(4)} ft wall, ${n(2.5)} leaf, fits=true`]; });
+
+check('a door sits on the floor and a window does not',
+  P => { const plan = P.bungalow({ garage: true });
+         const all = [...plan.houseOpenings, ...plan.garageOpenings];
+         return [all.every(o => (o.type === 'door' ? o.sillFt === 0 : o.sillFt > 0)), true]; });
+
+check('and every opening has a head above its sill, which the format demands',
+  P => { const plan = P.bungalow({ garage: true });
+         const all = [...plan.houseOpenings, ...plan.garageOpenings];
+         return [all.every(o => o.headFt > o.sillFt), true]; });
+
 // ── the catalogue ──
 check('the board offers a plan for 1 STOREY and 1 STOREY + GARAGE',
   P => [P.entryIds().sort().join(','), 'bungalow,bungalow-garage']);
@@ -257,6 +376,19 @@ const MUTATIONS = [
   ['an entry with no design gets the bungalow anyway',
     s => s.replace('const planFor = entryId => (PLANS[entryId] ? PLANS[entryId]() : null);',
       'const planFor = entryId => (PLANS[entryId] || PLANS.bungalow)();')],
+  ['the front door is placed by the VISIBLE width instead of the covered one',
+    s2 => s2.replace('const covered = GARAGE_WIDTH_FT - GARAGE_PAST_FT;',
+      'const covered = WIDTH_FT - GARAGE_WIDTH_FT + GARAGE_PAST_FT;')],
+  ['the man-door is a standard 3 ft leaf, which the 4 ft wall cannot carry',
+    s2 => s2.replace('opening(1, GARAGE_PAST_FT / 2, 2.5, ', 'opening(1, GARAGE_PAST_FT / 2, 3, ')],
+  ['the garage door is hung on the garage-s long wall instead of the door wall',
+    s2 => s2.replace('opening(3, GARAGE_WIDTH_FT / 2, 16, ', 'opening(2, GARAGE_WIDTH_FT / 2, 16, ')],
+  ['two front openings are given the same offset',
+    s2 => s2.replace('opening(2, covered + 8.5, 4,', 'opening(2, covered + 3.5, 4,')],
+  ['the windows sit on the floor like doors',
+    s2 => s2.replace("sillFt: type === 'door' ? 0 : WINDOW_SILL_FT,", 'sillFt: 0,')],
+  ['1 STOREY comes with no openings at all',
+    s2 => s2.replace('    houseOpenings: houseOpenings(),', '    houseOpenings: [],')],
   ['the two loops are wound against each other',
     s => s.replace('      pt(houseRight, houseFront),   // where it leaves the house',
       '      ...[].concat(), pt(left, houseFront), pt(left, doorZ), pt(right, doorZ), pt(right, tieZ), pt(houseRight, tieZ), pt(houseRight, houseFront), ...[], // reversed\n      ...[], // was: pt(houseRight, houseFront),   // where it leaves the house')],

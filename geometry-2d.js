@@ -1132,6 +1132,56 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   // paramAlongSegment either: that returns 0 for a degenerate segment where
   // this must report Infinity, and quietly swapping one for the other would
   // change what a click on a zero-length wall does.
+  // ── IS THIS EDGE ON THAT LOOP? ───────────────────────────────────────────
+  //
+  // WHAT AN ATTACHED GARAGE ASKS BEFORE IT RAISES A WALL. Movie, 18 Sep, with
+  // the offending wall marked in green on a screenshot: "the garage has an
+  // extra wall that is not needed. the garage walls should link into the house
+  // (look at how the DC version did it)". The DC version is one line of
+  // _buildGarageWalls -- `if (!open && !detached && house &&
+  // this._edgeOnOutline(a, b, house)) continue;` -- and this is that test,
+  // lifted here so the two pages cannot come to different answers about which
+  // edges are shared.
+  //
+  // THE MIDPOINT IS THE WHOLE TEST. Both ENDS of an edge lying on the loop is
+  // not enough and the difference is not academic: a garage tucked into an L
+  // can have both its corners on the house and its wall crossing open air
+  // between them -- a chord. Dropping that wall would leave the building open
+  // to the weather. Three samples is still only three samples, which is honest
+  // for the straight runs this is asked about; a shape that needed more would
+  // be a shape whose "shared" edge was a curve, and the loop below already
+  // follows one of those through pointToSegment.
+  //
+  // SEGMENTS, NOT POINTS, is why the old page can hand this its own outline
+  // unchanged. pointToSegment FOLLOWS A BULGE (it samples the arc), so a
+  // points-only version of this would quietly straighten every arc edge it was
+  // asked about and answer a different question on exactly the drawings where
+  // the answer is hard.
+  function edgeOnLoop(a, b, segments, eps = 0.1) {
+    // A body with no loop to compare against — a DETACHED garage — shares
+    // nothing, and is told so rather than thrown at. An EMPTY list needs no
+    // guard of its own: `some` on nothing is false, so the first sample
+    // already answers. A `|| !segments.length` stood here and was removed
+    // after a mutation that deleted it changed no answer at all — a line
+    // that cannot be wrong is a line that cannot be right either.
+    if (!Array.isArray(segments)) return false;
+    const near = pt => segments.some(seg => pointToSegment(pt, seg).d <= eps);
+    return near(a) && near(b)
+      && near({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });
+  }
+
+  // The closed ring of segments a list of corners makes, in the shape
+  // pointToSegment and edgeOnLoop read. Straight edges only: a caller holding
+  // bulges builds its own segments and keeps them.
+  function loopSegments(points) {
+    const list = Array.isArray(points) ? points : [];
+    return list.map((point, index) => ({
+      start: point,
+      end: list[(index + 1) % list.length],
+      bulge: 0,
+    }));
+  }
+
   function pointToSegment(worldPt, seg) {
     if (!seg.bulge) {
       const ax = seg.start.x, az = seg.start.z;
@@ -1190,6 +1240,39 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   const OPENING_BEARING_SHORT_IN = 1.5;
   const OPENING_BEARING_LONG_IN = 3;
   const OPENING_BEARING_SPAN_FT = 3 / 0.3048;   // the code's 3 m, 9'-10 1/8"
+
+  // ── WHAT AN OPENING IS WHEN NOBODY HAS SAID ──────────────────────────────
+  //
+  // A door is 3'-0" wide, a window 4'-0", a window sill sits 2'-6" off the
+  // floor, and both head out at 6'-8". Ordinary residential numbers, and none
+  // of them is a geometry fact -- they are here because they were in THREE
+  // PLACES and about to be in a fourth. MODEL.dc.html:2342-2345 held the
+  // originals; premade-plans.js wrote its own DOOR_HEAD_FT and WINDOW_SILL_FT
+  // for the bungalow; and MODEL.html was about to type a third set for its
+  // placing gesture.
+  //
+  // THE FAILURE THAT ENDS IS A QUIET ONE. Three copies of 6'-8" do not
+  // disagree on the day they are written. They disagree the day someone raises
+  // the head height for one page -- and the drawing then has two head heights
+  // in it, the designed windows at one and the drafted ones at the other, with
+  // nothing on the plan to say so. It is the DEFAULT_FLOOR_THICKNESS_IN
+  // lesson, one module over.
+  //
+  // THEY LIVE BESIDE THE BEARING because this file already owns what an
+  // opening must reserve and what shape it cuts; a default width is asked in
+  // the same breath as "will it fit". Nothing here is a limit -- a drafter
+  // types over any of them -- so they are named DEFAULT, not MIN or MAX.
+  const DEFAULT_DOOR_WIDTH_FT = 3;
+  const DEFAULT_WINDOW_WIDTH_FT = 4;
+  const DEFAULT_WINDOW_SILL_FT = 2.5;
+  const DEFAULT_OPENING_HEAD_FT = (6 * 12 + 8) / 12;
+
+  // The width an opening of this type takes when the drafter has not typed
+  // one. A door and a window are the only two kinds this app cuts into a
+  // wall, so anything that is not a window is a door -- the same fallback
+  // every caller was already writing for itself.
+  const defaultOpeningWidthFt = type => (type === 'window'
+    ? DEFAULT_WINDOW_WIDTH_FT : DEFAULT_DOOR_WIDTH_FT);
 
   // What this opening must keep back from each end of its wall, so the lintel
   // has wood to bear on.
@@ -1378,6 +1461,13 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     lineControlPoint,
     pointOnLineSeg,
     pointToSegment,
+    edgeOnLoop,
+    loopSegments,
+    DEFAULT_DOOR_WIDTH_FT,
+    DEFAULT_WINDOW_WIDTH_FT,
+    DEFAULT_WINDOW_SILL_FT,
+    DEFAULT_OPENING_HEAD_FT,
+    defaultOpeningWidthFt,
     OPENING_FREE_END_POST_IN,
     OPENING_BEARING_SHORT_IN,
     OPENING_BEARING_LONG_IN,
