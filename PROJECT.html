@@ -2491,7 +2491,14 @@
             // carry its own wall there, flipped. One question, asked of the
             // floor stack rather than of the build type, so a 2ND FL deleted
             // from a 2 STOREY answers it correctly without anybody saying so.
-            houseStopsBelow: floorLevels.length < 2,
+            // WHAT IS DRAWN, NOT WHAT IS STORED. floorLevels is the raw level
+            // list and 2ND FL is in every drawing's, bungalow or not -- the
+            // level is not deleted on a 1 STOREY, it is not DRAWN. Asking the
+            // stored list gave "the house carries on up here" on every build,
+            // so the flipped wall and the gable never appeared on the one
+            // type they exist for. drawnFloorLevels() is the same question
+            // the section's own floor stack is built from.
+            houseStopsBelow: drawnFloorLevels().length < 2,
             houseWallIn: WALL_TYPE_VIEW[activeWallType].totalIn,
             // WHAT THE GARAGE ROOF DIES INTO. Over the house's top plate
             // there is no house wall for it to stop against, only the house's
