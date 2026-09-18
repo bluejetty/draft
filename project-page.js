@@ -1764,8 +1764,8 @@ if (!window.DraftProjectPage) {
     // between them.
     const ceilingFarX = gableOver ? houseFaceFt : 0;
     line(cut, roofBase, ceilingFarX, roofBase, 2);
-    line(gableOver ? cut : cut + chordFt, roofBase + chordFt,
-      ceilingFarX, roofBase + chordFt, 1);
+    line(cut + chordFt, roofBase + chordFt,
+      gableOver ? ceilingFarX - chordFt : ceilingFarX, roofBase + chordFt, 1);
 
     // THE ROOF, sloped to a real eave. While the card drew only the junction
     // the chords ran level into the break; with the end wall drawn, the far
@@ -1799,18 +1799,6 @@ if (!window.DraftProjectPage) {
     // Perpendicular chord thickness, same rule as the house's roof: a chord
     // is 3 1/2" across itself, so its vertical drop grows with the pitch.
     const chordDropFt = chordFt * Math.hypot(1, pitch / 12);
-    // ── THE GABLE OVER THE ROOM ────────────────────────────────────────────
-    // Movie, 17 Sep: "in the section we will basically see boths sides of the
-    // roof with both eaves."
-    //
-    // ONE RISE FUNCTION, MEASURED FROM THE NEARER WALL. riseAt below measures
-    // from the far wall alone, which is what a roof with one slope in this cut
-    // needs; a gable is the same rule applied to whichever wall is closer, so
-    // the two halves cannot disagree about pitch or about where the ridge
-    // lands. Every number it reads -- pitch, overhang, fascia, the raised heel
-    // -- is the same GARAGE ROOF row the rest of the section draws from, so a
-    // different roof form later is a change to this one branch rather than a
-    // second set of inputs to keep in step.
     // WHAT EVERY ROOF HANDS ONWARD, whichever form it took: how far right the
     // roof reaches (the drawing's own edge) and how high its top sits. Both
     // are read below by the extents and by the break, so they are declared
@@ -1818,84 +1806,90 @@ if (!window.DraftProjectPage) {
     let roofEndX = 0;
     let topY;
     let breakTopY;
-    const ridgeX = (cut + houseFaceFt) / 2;
-    const riseGable = x => heelLiftFt + fasciaFt
-      + (overhangFt + Math.min(x - cut, houseFaceFt - x)) * (pitch / 12);
-    const ridgeY = roofBase + riseGable(ridgeX);
     if (gableOver) {
-      // ── TWO EAVES, AND THEY MATCH ────────────────────────────────────────
-      // Movie, 18 Sep, with a version of this roof he had drawn himself: a
-      // plain symmetrical gable, the full overhang projecting past BOTH
-      // walls.
-      //
-      // The house side used to stop dead at the wall face, which was my
+      // ── A GABLE OVER THE ROOM, AND THE CUT THROUGH IT ────────────────────
+      // Movie, 17 Sep: "in the section we will basically see boths sides of
+      // the roof with both eaves"; 18 Sep, over a version he drew himself, a
+      // plain symmetrical gable with the full overhang past BOTH walls. The
+      // house side used to stop dead at its wall, which was my too-broad
       // reading of "shouldn't go over to the main house roof it will be to
-      // high up" (17 Sep) -- I took it to rule out the overhang on that end.
-      // His drawing says otherwise, and in front of it he is plainly right:
-      // what would have been too high is this roof carrying ON to the
-      // house's, and it does not. It stops at its own wall and throws the
-      // same 2'-0" eave the other side throws, into clear air a storey above
-      // a one-storey house's roof. A roof with an eave on one end and a
-      // sawn-off other end is not something anybody frames.
+      // high up" -- what would have been too high is this roof carrying ON to
+      // the house's, and it does not.
       //
-      // So the two sides differ in one thing, which way they face, and every
-      // number under them -- overhang, fascia, heel, pitch -- is the one
-      // GARAGE ROOF row read twice.
+      // AND NO PEAK IS DRAWN. Movie, 18 Sep: "don't show the peak, make the
+      // cut more obvious". The ridge is BEHIND the cut, and a section that
+      // draws it reads as an elevation of a whole gable rather than a slice
+      // through one. So each slope climbs from its own wall and is severed at
+      // the break, arriving there at different heights -- which says plainly
+      // that what is left and what is right of that line are seen from
+      // different places, the same thing the garage's break below says.
+      //
+      // EACH SLOPE MEASURES FROM ITS OWN WALL, so the two cannot disagree
+      // about pitch, and every number they read -- pitch, overhang, fascia,
+      // the raised heel -- is the one GARAGE ROOF row read twice.
       const sides = [
         { eaveX: cut - overhangFt, wallX: cut, out: -1 },
         { eaveX: houseFaceFt + overhangFt, wallX: houseFaceFt, out: 1 },
-      ];
-      sides.forEach(({ eaveX, wallX, out }) => {
-        const heelY = roofBase + riseGable(wallX);
+      ].map(side => ({
+        ...side,
+        rise: x => heelLiftFt + fasciaFt
+          + (overhangFt + side.out * (side.wallX - x)) * (pitch / 12),
+      }));
+      sides.forEach(({ eaveX, wallX, out, rise }) => {
+        const heelY = roofBase + rise(wallX);
+        // INBOARD IS THE WAY THE ROOF GOES, which is the opposite of the way
+        // the eave hangs, so one sign serves both walls.
+        const innerX = wallX - out * chordFt;
         // The fascia board, standing on the eave line, cut to depth.
         rect(eaveX, eaveY, 0.1 * out, fasciaFt, 1.5);
         // The soffit, wall face out to the fascia.
         line(eaveX, eaveY, wallX, eaveY, 1);
-        line(eaveX, eaveY + fasciaFt, ridgeX, ridgeY, 2);         // top chord
+        line(eaveX, eaveY + fasciaFt, breakX, roofBase + rise(breakX), 2);
         // THE HEEL SIDE CHORD, the same member the eave detail elsewhere on
         // this section uses: a 3 1/2" piece at the wall exterior joining the
-        // bottom chord to the top, with the top chord's underside open
-        // across it and no line drawn over the joint.
+        // bottom chord to the top.
+        //
+        // NOTHING IS DRAWN ACROSS IT. Movie, 18 Sep: "on the 3.5\" side
+        // chords don't put a seperation line between the top and bottom
+        // chords" -- which is the SETTLED RULING the garage's own eave has
+        // followed since 17 Sep, now kept here too. The top chord's underside
+        // is open across those 3 1/2" and the bottom chord stops short of
+        // them, so the side chord connects straight into both and no line
+        // sits over either joint.
         line(eaveX, eaveY + fasciaFt - chordDropFt,
           wallX, heelY - chordDropFt, 1);
-        // The underside, carried from the heel up to the ridge, stopping a
-        // chord's drop below it -- the chord has thickness and the two
-        // undersides meet there.
-        line(wallX, heelY - chordDropFt, ridgeX, ridgeY - chordDropFt, 1);
-        // AND THE SIDE CHORD'S OWN TWO FACES. Movie, 18 Sep: "missing side
-        // chords", marked at both walls. The line above is where the top
-        // chord's underside crosses the heel; the member standing in that
-        // gap is the piece the garage's own eave gets a few lines down --
-        // outside face on the wall, inside face a chord in, each run from
-        // what it lands on up to the top chord's underside. INBOARD IS THE
-        // WAY THE ROOF GOES, which is the opposite of the way the eave
-        // hangs, so one sign serves both walls.
-        const inw = -out;
-        const innerX = wallX + inw * chordFt;
+        line(innerX, roofBase + rise(innerX) - chordDropFt,
+          breakX, roofBase + rise(breakX) - chordDropFt, 1);
+        // Its two faces: outside on the wall, inside a chord in, each run
+        // from what it lands on up to the top chord's underside.
         line(wallX, eaveY, wallX, heelY - chordDropFt, 1);
         line(innerX, roofBase + chordFt,
-          innerX, roofBase + riseGable(innerX) - chordDropFt, 1);
+          innerX, roofBase + rise(innerX) - chordDropFt, 1);
       });
-      anchors.garagePitch = { x: (cut + ridgeX) / 2,
-        y: roofBase + riseGable((cut + ridgeX) / 2) + 0.5 };
+      // The tags sit on the near slope, the one whose eave and pitch the
+      // garage's own rows are describing.
+      const [near] = sides;
+      const tagX = (cut + breakX) / 2;
+      anchors.garagePitch = { x: tagX, y: roofBase + near.rise(tagX) + 0.5 };
       anchors.garageOverhang = { x: cut - overhangFt / 2, y: eaveY - 0.45 };
       anchors.garageFascia = { x: cut - overhangFt - 0.1,
         y: eaveY + fasciaFt / 2 };
-      anchors.garageHeel = { x: cut, y: (eaveY + roofBase + riseGable(cut)) / 2 };
-      anchors.garageCavity = { x: ridgeX,
-        y: (roofBase + chordFt + ridgeY - chordDropFt) / 2 };
+      anchors.garageHeel = { x: cut, y: (eaveY + roofBase + near.rise(cut)) / 2 };
+      anchors.garageCavity = { x: tagX,
+        y: roofBase + (chordFt + near.rise(tagX) - chordDropFt) / 2 };
       // The drawing's right-hand edge is this roof's own eave now, not the
       // wall it springs from.
       roofEndX = houseFaceFt + overhangFt;
-      topY = ridgeY;
       // THE CUT RUNS THE WHOLE HEIGHT. Movie, 18 Sep: "the cut line should
       // extend to over the top of the roof". It used to stop at the room's
-      // plate, on my reasoning that a roof drawn whole is not a roof that
-      // has been cut. But the cut is not a statement about the roof: it is
-      // where this section was taken, and it was taken through the building,
-      // roof included. So it clears the ridge by the same 4 1/4" the garage
-      // roof's own break clears its high side by.
-      breakTopY = ridgeY + 0.35;
+      // plate, on my reasoning that a roof drawn whole is not a roof that has
+      // been cut -- the same mistake as drawing the peak. The cut is not a
+      // statement about the roof; it is where this section was taken, and it
+      // was taken through the building, roof included. So it clears the
+      // higher of the two severed slopes by the same 4 1/4" the garage roof's
+      // own break clears its high side by.
+      topY = Math.max(...sides.map(side => roofBase + side.rise(breakX)));
+      breakTopY = topY + 0.35;
     } else {
     rect(cut - overhangFt - 0.1, eaveY, 0.1, fasciaFt, 1.5);         // fascia
     line(cut - overhangFt, eaveY, cut, eaveY, 1);                    // soffit
