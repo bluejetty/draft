@@ -3110,6 +3110,107 @@
       if (!wall.start || !wall.end) return;
       R.drawWallSeg2D(ctx, toS, wall, false, joins, 'both', wallEnv());
     });
+
+    // ── AND THE OPENINGS IN THEM ─────────────────────────────────────────
+    //
+    // ON TOP OF THE WALLS, NEVER BESIDE THEM. An opening is a HOLE: it fills
+    // its own footprint with the page colour so the wall reads as cut through,
+    // then draws the jambs and the sash back in. Painted before the walls it
+    // would be poche-d over and disappear; the order is the drawing.
+    //
+    // Until now this page drew none of them. A house with windows and doors --
+    // every real drawing in this app -- opened here showing BLANK WALLS, and
+    // nothing said so: the records were loaded, saved back untouched, and
+    // simply never drawn.
+    openingsOn(shown).forEach(({ opening, geometry }) =>
+      R.drawOpening2D(ctx, toS, opening, { geometry }, openingEnv()));
+  };
+
+  // ── WHAT AN OPENING NEEDS TO KNOW ABOUT ITS WALL ────────────────────────
+  //
+  // geometry-2d.js's openingGeometry (#426) does the arithmetic and asks the
+  // caller for the two things only a page can answer: how thick the host wall
+  // is, and how much to pad the hole by so its edges do not shimmer against
+  // the wall faces at this zoom.
+  //
+  // THE THICKNESS RULE IS MODEL.dc.html:14970, to the character -- the type's
+  // totalIn over twelve, defaulting to stud_2x6 and falling back to
+  // WALL_TYPES[1] for a type this build has never heard of. It is three lines,
+  // which is exactly why it is worth copying carefully rather than
+  // approximating: an opening cut half an inch too deep leaves a hairline of
+  // wall across the hole and reads as a rendering artefact.
+  const openingThicknessFt = () => wall => {
+    const types = window.DraftWallTypes.WALL_TYPES;
+    const def = types.find(type => type.id === (wall?.wallType || 'stud_2x6'))
+      || types[1];
+    return def.totalIn / 12;
+  };
+
+  // TWO PIXELS' WORTH OF WORLD, which is what the old page asks for
+  // (worldPerPixel(halfH, canvasHeight) * 2). It is a PAINT pad, not geometry:
+  // the hole is cut a couple of pixels proud of both wall faces so the fill
+  // covers the wall's own edge line instead of landing exactly on it, where
+  // the two would fight over the same pixel row at some zooms and not others.
+  // view.scale is px per foot, so its reciprocal is the foot-per-pixel the old
+  // page derives from its ortho camera.
+  const openingPadFt = () => (view.scale > 0 ? 2 / view.scale : 0.02);
+
+  // THE TWO COLOURS, and they are the reason drawOpening2D takes them at all.
+  // The old page fills the hole with #fafafa because that matches ITS clear
+  // colour and the gap reads as paper; on this page's night ground the same
+  // fill is a near-white hole punched through a dark wall. surface-page is
+  // whatever the current skin's paper is, so the hole reads as paper on both.
+  //
+  // THE INK IS draw-wall-edge RATHER THAN A ROLE OF ITS OWN. An opening's
+  // jambs ARE wall edges -- the line that carries the wall where the body
+  // stops -- and that role already documents the two grounds this linework
+  // sits on: the draw-wall fill it usually crosses, and bare page inside the
+  // hole. Both of its values clear 3.0 on both skins, which is the measurement
+  // a new role would have had to repeat.
+  const openingEnv = () => ({
+    isPrinting: false,
+    openingColor: skin['draw-wall-edge'],
+    openingGapColor: skin['surface-page'],
+    selectColor: skin['accent'],
+  });
+
+  // The openings that belong to the walls being drawn, each with its geometry
+  // already resolved -- drawOpening2D takes the answer rather than fetching
+  // it, the way drawColumn2D takes its footing.
+  //
+  // AN OPENING WHOSE WALL IS NOT ON SCREEN IS NOT DRAWN, and it is matched by
+  // wallId against the walls this pass is painting rather than by level: a
+  // wall can be shown from another level through a shared context, and its
+  // openings have to come with it or the wall arrives solid.
+  const openingsOn = shown => {
+    // Resolved HERE rather than captured at module scope: eight modules in
+    // this repo bind a global at load and break when their dependency arrives
+    // later, and MODEL.html's own head comment is about exactly that. Every
+    // other user of the geometry module in this file does the same.
+    const G = window.DraftGeometry2D;
+    const byId = new Map(shown.map(wall => [String(wall.id), wall]));
+    const opts = {
+      walls: shown,
+      thicknessFt: openingThicknessFt(),
+      padFt: openingPadFt(),
+    };
+    return (drawing?.fenestrations || []).reduce((out, opening) => {
+      const wall = byId.get(String(opening.wallId));
+      if (!wall || !wall.start || !wall.end) return out;
+      const geometry = G.openingGeometry(opening, wall, opts);
+      // NULL IS A REAL ANSWER: clampOpeningToWall refuses an opening wider
+      // than its wall can carry with the bearing left at each end.
+      //
+      // AND THIS IS THE SECOND OF TWO GUARDS, not the only one. An earlier
+      // version of this comment said a painter handed the null would throw on
+      // the first corner; it would not -- drawOpening2D opens with its own
+      // `if (!geoInfo) return`, and the mutation that dropped this line
+      // survived every check, which is how the claim was caught. What this
+      // line actually buys is a list with nothing refused in it, so a caller
+      // counting what was drawn is counting what was drawn.
+      if (geometry) out.push({ opening, geometry });
+      return out;
+    }, []);
   };
 
   // drawDimension2D reads exactly two things: a label function and five
