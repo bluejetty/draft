@@ -1241,6 +1241,39 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   const OPENING_BEARING_LONG_IN = 3;
   const OPENING_BEARING_SPAN_FT = 3 / 0.3048;   // the code's 3 m, 9'-10 1/8"
 
+  // ── WHAT AN OPENING IS WHEN NOBODY HAS SAID ──────────────────────────────
+  //
+  // A door is 3'-0" wide, a window 4'-0", a window sill sits 2'-6" off the
+  // floor, and both head out at 6'-8". Ordinary residential numbers, and none
+  // of them is a geometry fact -- they are here because they were in THREE
+  // PLACES and about to be in a fourth. MODEL.dc.html:2342-2345 held the
+  // originals; premade-plans.js wrote its own DOOR_HEAD_FT and WINDOW_SILL_FT
+  // for the bungalow; and MODEL.html was about to type a third set for its
+  // placing gesture.
+  //
+  // THE FAILURE THAT ENDS IS A QUIET ONE. Three copies of 6'-8" do not
+  // disagree on the day they are written. They disagree the day someone raises
+  // the head height for one page -- and the drawing then has two head heights
+  // in it, the designed windows at one and the drafted ones at the other, with
+  // nothing on the plan to say so. It is the DEFAULT_FLOOR_THICKNESS_IN
+  // lesson, one module over.
+  //
+  // THEY LIVE BESIDE THE BEARING because this file already owns what an
+  // opening must reserve and what shape it cuts; a default width is asked in
+  // the same breath as "will it fit". Nothing here is a limit -- a drafter
+  // types over any of them -- so they are named DEFAULT, not MIN or MAX.
+  const DEFAULT_DOOR_WIDTH_FT = 3;
+  const DEFAULT_WINDOW_WIDTH_FT = 4;
+  const DEFAULT_WINDOW_SILL_FT = 2.5;
+  const DEFAULT_OPENING_HEAD_FT = (6 * 12 + 8) / 12;
+
+  // The width an opening of this type takes when the drafter has not typed
+  // one. A door and a window are the only two kinds this app cuts into a
+  // wall, so anything that is not a window is a door -- the same fallback
+  // every caller was already writing for itself.
+  const defaultOpeningWidthFt = type => (type === 'window'
+    ? DEFAULT_WINDOW_WIDTH_FT : DEFAULT_DOOR_WIDTH_FT);
+
   // What this opening must keep back from each end of its wall, so the lintel
   // has wood to bear on.
   const openingBearingFt = widthFt => (widthFt > OPENING_BEARING_SPAN_FT
@@ -1430,6 +1463,11 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     pointToSegment,
     edgeOnLoop,
     loopSegments,
+    DEFAULT_DOOR_WIDTH_FT,
+    DEFAULT_WINDOW_WIDTH_FT,
+    DEFAULT_WINDOW_SILL_FT,
+    DEFAULT_OPENING_HEAD_FT,
+    defaultOpeningWidthFt,
     OPENING_FREE_END_POST_IN,
     OPENING_BEARING_SHORT_IN,
     OPENING_BEARING_LONG_IN,

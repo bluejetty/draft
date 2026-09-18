@@ -4136,6 +4136,18 @@
       // whole drawing.
       + `columns <b>${shownOfTotal(columns().length, drawing.columns)}</b>   `
       + `beams <b>${shownOfTotal(beams().length, drawing.beams)}</b>   `
+      // AND OPENINGS, which were in exactly the state the two rows above
+      // describe: painted since the painter landed, counted nowhere. A
+      // drafter placing a window had no on-page way to see it arrive, and
+      // the one that got REFUSED -- a wall too short to carry it -- looked
+      // identical to the one that landed.
+      //
+      // THE LEFT NUMBER IS WHAT RESOLVED, not what is on this level.
+      // openingsOn drops an opening whose host wall is not here and one the
+      // clamp refuses, so `openings 10/11` is the page saying one of them is
+      // not being drawn -- which is the only warning this page gives that a
+      // record is in the file and not on the sheet.
+      + `openings <b>${shownOfTotal(openingsOn(walls()).length, drawing.fenestrations)}</b>   `
       // BOTH SIDES LEVEL-SCOPED. The loader decodes every underlay in the
       // drawing, not just this level's, so that switching level is instant --
       // which means underlayImages.size counts images the drafter cannot
@@ -8724,6 +8736,137 @@
     return floor;
   };
 
+  // ── PLACING A WINDOW OR A DOOR ───────────────────────────────────────────
+  //
+  // Movie, 18 Sep, asking for the bungalow's openings: "please windows and
+  // doors into the bungalow and i'll change them if i need to afterwards".
+  // The design's eleven arrived that day and this page had no way to change
+  // them -- no gesture to add one, move one or take one out. This is the first
+  // of the three.
+  //
+  // ONE PRESS ON A WALL, which is the old page's own gesture
+  // (_handleFenestrationClick:15180) and the only one a finger can make
+  // without a keyboard. The press picks the nearest wall within reach and the
+  // opening lands centred on the point pressed, then slides to fit.
+  //
+  // THE TOOL STAYS ARMED. A house has a dozen windows and resting after each
+  // would cost a trip to the tool column between every one -- the old page
+  // stays armed for the same reason. This is the opposite choice from FLOOR
+  // and OUTLINE, and the difference is that those two gestures END: a closed
+  // loop is finished, an opening is one press and the next press is the next
+  // window.
+  //
+  // OUT OF SCOPE HERE AND EACH ITS OWN THING, exactly as the old page's
+  // handler splits them: stair openings (its `stairs` type), boneyard marks on
+  // a master outline, and shaped holes cut into a floor or a roof.
+  const FENESTRATION_PICK_PX = 18;   // MODEL.dc.html:2198's own pick distance
+
+  // DOOR FIRST, because the old page's state opens on 'door' (:2912) and a
+  // drafter switching pages should not find the tool set to something else.
+  let fenestrationType = 'door';
+  let openingPanelUp = false;
+
+  const OPENING_TYPES = Object.freeze([['door', 'DOOR'], ['window', 'WINDOW']]);
+
+  const showOpeningProps = () => {
+    const P = window.ModelProps;
+    if (!P) return;
+    const G = window.DraftGeometry2D;
+    const box = document.createElement('div');
+    box.append(propRow('OPENING', OPENING_TYPES, fenestrationType, id => {
+      fenestrationType = id;
+      showOpeningProps();
+    }));
+    // WHAT THE NEXT PRESS WILL MAKE, spelled out. The width, sill and head are
+    // not typeable on this page yet, and a panel that offered only a type
+    // would leave the drafter to find out the rest by placing one.
+    const F = window.DraftFormatters;
+    const note = document.createElement('div');
+    note.className = 'props-title';
+    note.dataset.openingNote = '';
+    const width = G.defaultOpeningWidthFt(fenestrationType);
+    const sill = fenestrationType === 'window' ? G.DEFAULT_WINDOW_SILL_FT : 0;
+    note.textContent = `${F.formatArchitecturalInches(width * 12)} WIDE, `
+      + `SILL ${F.formatArchitecturalInches(sill * 12)}, `
+      + `HEAD ${F.formatArchitecturalInches(G.DEFAULT_OPENING_HEAD_FT * 12)}`;
+    box.append(note);
+    P.set('FENESTRATION', box);
+    openingPanelUp = true;
+  };
+
+  // The wall nearest the press, with how far along it the press landed.
+  // SEPARATE FROM wallAt(), which uses the SELECT grab distance: this one is
+  // the old page's 18px fenestration pick, and the two numbers are different
+  // there for a reason -- an opening is aimed at a wall FACE, a selection at a
+  // wall LINE.
+  const wallForOpening = worldPt => {
+    const G = window.DraftGeometry2D;
+    const thresh = FENESTRATION_PICK_PX / view.scale;
+    let best = null, bestD = thresh;
+    walls().forEach(wall => {
+      if (!wall.start || !wall.end) return;
+      const { d, t } = G.pointToSegment(worldPt, wall);
+      if (d < bestD) { bestD = d; best = { wall, t }; }
+    });
+    return best;
+  };
+
+  const placeOpening = at => {
+    const G = window.DraftGeometry2D;
+    const best = wallForOpening(at);
+    if (!best) {
+      sayOnStrip('Press a wall to put an opening in it.');
+      return null;
+    }
+    const type = fenestrationType === 'window' ? 'window' : 'door';
+    const width = G.defaultOpeningWidthFt(type);
+    const wall = best.wall;
+    const length = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+    // CLAMPED, NOT REFUSED, when the press lands near a corner: the opening
+    // slides along until its bearing fits. clampOpeningToWall returns null
+    // only when the wall cannot carry the width AT ALL, which is a different
+    // answer and gets a different sentence.
+    const clamped = G.clampOpeningToWall(wall, best.t * length, width, {
+      walls: walls(),
+      thicknessFt: openingThicknessFt(),
+    });
+    if (!clamped) {
+      sayOnStrip(`That wall is too short to carry a ${window.DraftFormatters
+        .formatArchitecturalInches(width * 12)} opening.`);
+      return null;
+    }
+    const record = {
+      id: newDrawingItemId('fenestration'),
+      wallId: wall.id,
+      levelId: wall.levelId,
+      // THE HOST WALL'S VIEW, not the drafter's. An opening is cut into a
+      // wall and belongs wherever that wall is drawn; filing it under the
+      // layer set that happened to be open would hide it from its own wall.
+      view: wall.view || 'plan',
+      type,
+      // drawing-format.js derives the layer from the type on load, so this
+      // cannot come out wrong -- but this page has no serializer between the
+      // push and the file, and a record that is only right AFTER a reload is
+      // a file that is wrong until then.
+      layer: type === 'door' ? 'A-DOOR' : 'A-GLAZ',
+      offset: clamped.offset,
+      width,
+      sillHeight: type === 'door' ? 0 : G.DEFAULT_WINDOW_SILL_FT,
+      headHeight: G.DEFAULT_OPENING_HEAD_FT,
+      // NOT THE BONE'S. auto-windows.js re-deals what it dealt; one the
+      // drafter placed by hand is his from the moment it lands.
+      auto: false,
+    };
+    if (!Array.isArray(drawing.fenestrations)) drawing.fenestrations = [];
+    drawing.fenestrations.push(record);
+    undoStack.push({ kind: 'add-item', list: drawing.fenestrations, item: record });
+    sayOnStrip(`${type === 'door' ? 'Door' : 'Window'} placed on `
+      + `${record.layer}.`);
+    markDirty();
+    paint();
+    return record;
+  };
+
   // THE ARMING, through the seam :3875 declared for exactly this. A house type
   // press records the type (that half already worked) and now arms the trace,
   // which is what _pressBuildType has always done in one motion.
@@ -10239,10 +10382,18 @@
 
   toolListeners.push(tool => {
     if (tool === 'roof') { showRoofProps(); return; }
+    if (tool === 'fenestration') { showOpeningProps(); return; }
     // Only clear what this panel put there. COLUMN and BEAM's rows belong to
     // the selection, which a tool change does not touch, and clearing them
     // here would blank a panel the drafter is reading.
+    //
+    // EACH PANEL CLEARS ITS OWN, and the two flags are not one flag: arming
+    // ROOF from FENESTRATION has to take the opening rows down and put the
+    // roof rows up, which a single `panelUp` would get right by luck and a
+    // shared `clear()` before both branches would get wrong the moment a
+    // third panel arrived that does not want clearing.
     if (roofPanelUp) { window.ModelProps.clear(); roofPanelUp = false; }
+    if (openingPanelUp) { window.ModelProps.clear(); openingPanelUp = false; }
   });
   deleteButton.addEventListener('click', pressDelete);
   if (copyButton) copyButton.addEventListener('click', () => { copySelection(); paint(); });
@@ -10433,6 +10584,7 @@
     if (activeTool === 'roof') { roofPress(at); return; }
     if (activeTool === 'outline') { outlinePress(at); return; }
     if (activeTool === 'floor') { floorPress(at); return; }
+    if (activeTool === 'fenestration') { placeOpening(at); return; }
     if (activeTool === 'cut') { cutPress(at); return; }
     if (activeTool === 'wall') {
       // §1: "either drag, or press again and drag -- both must work". The lift

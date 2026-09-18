@@ -2339,10 +2339,18 @@ const {
 } = window.DraftWallTypes;
 // Fenestration defaults — door and window openings hosted on a wall. Heights
 // are measured from the bottom of the host wall; doors sit on it (sill 0).
-const DEFAULT_DOOR_WIDTH_FT = 3;
-const DEFAULT_WINDOW_WIDTH_FT = 4;
-const DEFAULT_WINDOW_SILL_FT = 2.5;
-const DEFAULT_OPENING_HEAD_FT = (6 * 12 + 8) / 12;
+// WHAT AN OPENING IS WHEN NOBODY HAS SAID, and these four were the originals.
+// They now live in geometry-2d.js beside the bearing rule, because this set was
+// copied into premade-plans.js for the bungalow and MODEL.html was about to
+// type a third. Three copies of 6'-8" do not disagree the day they are written;
+// they disagree the day one page raises the head height, and the drawing then
+// carries two head heights with nothing on the plan to say which is which.
+const {
+  DEFAULT_DOOR_WIDTH_FT,
+  DEFAULT_WINDOW_WIDTH_FT,
+  DEFAULT_WINDOW_SILL_FT,
+  DEFAULT_OPENING_HEAD_FT,
+} = window.DraftGeometry2D;
 const FENESTRATION_LAYERS = Object.freeze({ door: 'A-DOOR', window: 'A-GLAZ' });
 // BEARING AT THE ENDS OF A LINTEL, and the NBC citation that settles the
 // numbers, now live in geometry-2d.js beside the arithmetic that reads them.

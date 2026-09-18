@@ -130,8 +130,16 @@ if (!window.DraftPremadePlans) {
   // opening on the wall it just made without matching coordinates back up.
   // `offsetFt` is from that edge's START to the opening's CENTRE, which is
   // what drawing-format.js:211 means by offset.
-  const DOOR_HEAD_FT = (6 * 12 + 8) / 12;   // 6'-8", MODEL.dc.html's own default
-  const WINDOW_SILL_FT = 2.5;               // and its window sill
+  // THE APP'S OWN DEFAULTS, read rather than typed. These were 6'-8" and 2'-6"
+  // written out here with a comment pointing at MODEL.dc.html -- which is a
+  // copy with a citation, and a citation does not update itself. geometry-2d.js
+  // holds the one set now; a design that quietly disagreed with the page's own
+  // defaults would put two head heights in one drawing.
+  const G = window.DraftGeometry2D;
+  const DOOR_HEAD_FT = G.DEFAULT_OPENING_HEAD_FT;
+  const WINDOW_SILL_FT = G.DEFAULT_WINDOW_SILL_FT;
+  // NOT a default: an overhead door heads at 7'-0" because that is the door,
+  // not because nobody said. It stays a number of this design's own.
   const GARAGE_DOOR_HEAD_FT = 7;
   const opening = (edge, offsetFt, widthFt, type, over = {}) => Object.freeze({
     edge,

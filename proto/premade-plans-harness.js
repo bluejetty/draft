@@ -17,6 +17,12 @@
 const fs = require('fs');
 const path = require('path');
 const SRC = path.join(__dirname, '..', 'premade-plans.js');
+// premade-plans.js reads the app's opening defaults (head height, window sill)
+// out of geometry-2d.js rather than typing its own, so the window it is given
+// has to have that module in it. Loaded from source into the SAME window the
+// plan gets, not required as a node module: this harness's whole method is to
+// run the subject's own text, and a mutation is applied to that text.
+const GEO = path.join(__dirname, '..', 'geometry-2d.js');
 const MUTATION_MODE = require('./harness-args.js').mutationMode();
 
 function load(mutate) {
@@ -27,6 +33,7 @@ function load(mutate) {
     src = next;
   }
   const window = {};
+  new Function('window', fs.readFileSync(GEO, 'utf8'))(window);
   new Function('window', src)(window);
   return window.DraftPremadePlans;
 }
