@@ -202,6 +202,69 @@ test.describe('MODEL.html instrument strip', () => {
     expect(room.row).toBeLessThanOrEqual(room.sheet);
   });
 
+  // WHAT THE PAGE SAYS IS OFF THE BAR NOW. Movie, 18 Sep, reading a clipped
+  // sentence beside the LENGTH box: "what is this text up in here?", then "if
+  // its a warning of som sort we should move it down just into the model area
+  // below the top bar area", and "move it to the left make it look like lined
+  // up and same text and size and the STATUS READOUT down below".
+  //
+  // THE SENTENCE IS THE CHECK, not the position alone. On the bar the message
+  // had 16vw and an ellipsis -- 218px on this viewport, against a refusal that
+  // wants 329 -- so it was cut off at about a third and read as garble. A rule
+  // that only asserted left:12px would pass on a message still clipped to
+  // "DETACHED GARAGES ARE NOT ON TH...", which is the defect he actually saw.
+  //
+  // AND LINED UP, read off the two elements rather than off the stylesheet:
+  // same inset and same type as STATUS READOUT at the other end of the same
+  // edge, which is what "make it look like lined up" asks for and what a
+  // number copied into an expectation would stop proving the moment either
+  // one moved.
+  test('the page says its piece on the sheet, lined up with the readout',
+    async ({ page }) => {
+      await page.setViewportSize({ width: 1366, height: 768 });
+      await seed(page);
+      await openModel(page);
+
+      const bar = page.locator('#strip');
+      const msg = page.locator('#strip-message');
+      await expect(msg, 'the message is not a tenant of the bar any more')
+        .not.toHaveCount(0);
+      expect(await bar.locator('#strip-message').count(),
+        'the message is still inside the instrument bar').toBe(0);
+
+      // The longest thing this page says, set the way the page sets it.
+      await page.evaluate(() => {
+        document.getElementById('strip-message').textContent =
+          'Detached garages are not on this page yet \u2014 the house outline is.';
+      });
+
+      const read = await page.evaluate(() => {
+        const m = document.getElementById('strip-message');
+        const tab = document.getElementById('readout-tab');
+        const mb = m.getBoundingClientRect(), tb = tab.getBoundingClientRect();
+        const ms = getComputedStyle(m), ts = getComputedStyle(tab);
+        const strip = document.getElementById('strip').getBoundingClientRect();
+        return {
+          left: mb.left, tabLeft: tb.left, top: mb.top, barBottom: strip.bottom,
+          clipped: m.scrollWidth > m.clientWidth + 1,
+          size: ms.fontSize, tabSize: ts.fontSize,
+          family: ms.fontFamily, tabFamily: ts.fontFamily,
+          colour: ms.color, tabColour: ts.color,
+          caps: ms.textTransform, tabCaps: ts.textTransform,
+        };
+      });
+
+      expect(read.clipped,
+        'the refusal is cut off, which is the whole complaint').toBe(false);
+      expect(read.top, 'the message is not below the bar it came off')
+        .toBeGreaterThanOrEqual(read.barBottom);
+      expect(read.left, `the message sits at ${read.left} and STATUS READOUT `
+        + `at ${read.tabLeft}`).toBeCloseTo(read.tabLeft, 0);
+      expect([read.size, read.family, read.colour, read.caps],
+        'the message does not read as the same voice as STATUS READOUT')
+        .toEqual([read.tabSize, read.tabFamily, read.tabColour, read.tabCaps]);
+    });
+
   test('the length and angle read the run in hand, and go blank when there is none',
     async ({ page }) => {
       await seed(page);

@@ -194,12 +194,38 @@
     user-select:none; }
   #strip a, #strip button { font:inherit; letter-spacing:inherit; }
   #strip .grow { flex:1; }
-  /* THE MESSAGE YIELDS. It shares the left end with the settings stack and
-     the mode corner now, and a message long enough to push either of them off
-     the bar would cost a control to report a sentence. */
-  #strip-message { font-size:11px; text-transform:uppercase;
-    color: var(--ink-quiet); white-space:nowrap; overflow:hidden;
-    text-overflow:ellipsis; max-width:16vw; flex:0 1 auto; min-width:0; }
+  /* THE MESSAGE CAME OFF THE BAR (Movie, 18 Sep: "what is this text up in
+     here?" -- "if its a warning of som sort we should move it down just into
+     the model area below the top bar area").
+
+     IT WAS ALWAYS GOING TO END UP GARBLED THERE, and the rule that replaced
+     this one said so in as many words: "THE MESSAGE YIELDS. It shares the
+     left end with the settings stack and the mode corner now, and a message
+     long enough to push either of them off the bar would cost a control to
+     report a sentence." So it was given 16vw and an ellipsis -- and 16vw is
+     218px on a 1366 sheet, which cuts "Detached garages are not on this page
+     yet -- the house outline is." off at about a third. Yielding was the
+     right call for a control that had to be on that bar. Taking it off the
+     bar is the better one: nothing yields, and the sentence is read whole.
+
+     LINED UP WITH STATUS READOUT, in its type and at its inset (Movie: "move
+     it to the left make it look like lined up and same text and size and the
+     STATUS READOUT down below", then "STATUS READOUT same location leftwise
+     but at top of model area"). Same left:12px, same 12px UI face, same quiet
+     ink -- so the two ends of the sheet's left edge read as one voice, the
+     page telling you something at the top and offering you the numbers at
+     the bottom. --note-top is where this page already puts a line that sits
+     just under the bar; #elsewhere uses it on the right.
+
+     CLICK-THROUGH, for #readout's reason one line up the file: it lies over
+     the sheet, and a drafter drawing under it should reach the drawing. The
+     nowrap and the ellipsis stay as a backstop for a sentence longer than
+     any this page has, not as the working constraint they used to be. */
+  #strip-message { position:fixed; left:12px; top:var(--note-top); z-index:5;
+    font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
+    text-transform:uppercase; color: var(--ink-quiet); pointer-events:none;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    max-width:calc(100vw - 24px); }
 
   /* THE SETTINGS STACK, first thing on the bar (Movie, 15 Sep): SETTINGS and
      STANDARDS over each other and the unit toggle beside them -- MODEL.dc.html's
@@ -1671,7 +1697,6 @@
      a tool. Distance was the cruder way to say the same thing, and it cost
      the two switches their kinship with TOY/DRAFTING, which is the control
      they are most like. -->
-  <span id="strip-message" data-strip-message></span>
   <div class="grow"></div>
 
   <div id="strip-center" data-strip-center>
@@ -1811,6 +1836,12 @@
   <button type="button" id="printscreen" data-printscreen
     title="Three pages to show a client — this view, the whole plan, and the views rail. Not to scale.">PRINTSCREEN</button>
 </div>
+
+<!-- WHAT THE PAGE IS SAYING, on the sheet rather than on the bar. It kept
+     its id when it moved: eight specs across four files read the page's
+     refusals out of it, and the thing that moved is where it is printed, not
+     what it is. -->
+<span id="strip-message" data-strip-message></span>
 
 <div id="notice"><div id="notice-body"></div></div>
 <!-- THE PROMOTION CONFIRM. Its own element rather than a window.confirm,
