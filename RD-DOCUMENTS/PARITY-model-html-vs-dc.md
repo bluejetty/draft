@@ -216,7 +216,7 @@ sees.
 a family press, an entry press or BONE, and that is not a leftover -- but it
 now says something narrower than it did. It presses `twoStorey-garage`, a tile
 with no design, so the bone REFUSES and the count holds. A tile that HAS a
-design writes ten walls on that press, deliberately, and the seam is still
+design writes EIGHT walls on that press, deliberately, and the seam is still
 uncrossed: the bar records a type and decides no geometry, and the geometry
 side reads `premade-plans.js`. What changed is that the outline the trace commits is the
 drafter's own, drawn corner by corner -- the bar still decides no geometry,
