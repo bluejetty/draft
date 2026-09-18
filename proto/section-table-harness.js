@@ -286,7 +286,14 @@ check('and no line is drawn between the sill and the beam soffit', P => {
 // this drawing that does, so it is worth pinning that it exists and runs
 // beam soffit to footing bottom. WHOLE piles now: the garage draws complete
 // to its own end wall, so nothing cuts through a shaft any more and the
-// hatch spans the full 10" rather than the half a break used to leave.
+// hatch spans the full shaft rather than the half a break used to leave.
+//
+// THE WIDTH IS READ, NOT TYPED. It was 10" here until 18 Sep, when Movie
+// gave the pile its real size -- "the piles should show 12" dia. and the
+// center of the pile should be center of the wall" -- and this check went
+// red on a drawing that was right. A literal here is a second copy of a
+// number the builder already owns, so it asks the builder's own constant
+// and fails only if the hatch stops covering the pile.
 check('the pile is hatched over its whole width, soffit to footing bottom', P => {
   const s = garage(P);
   const fill = s.parts.filter(p => p.kind === 'hatch');
@@ -297,7 +304,7 @@ check('the pile is hatched over its whole width, soffit to footing bottom', P =>
   return [shaft && [
     Math.round(shaft.w * 12 * 16) / 16,
     Math.round((shaft.y + shaft.h - soffit) * 16) / 16,
-  ].join(','), '10,0'];
+  ].join(','), `${P.PILE_DIAMETER_IN},0`];
 });
 // AND THE VOID FORM IS TOO, because it is the same pour's formwork read at
 // the same scale: a 4" band outlined and left white is a gap, and a gap under
