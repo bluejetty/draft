@@ -429,3 +429,136 @@ test('one undo brings a deleted opening back', async ({ page }) => {
   expect(after.openings.length, 'and a reload keeps it').toBe(1);
   expect(after.wallIds).toContain(String(after.openings[0].wallId));
 });
+
+// ── STAGE 3: sliding an opening along its wall ───────────────────────────
+//
+// The last of the three. "Change" most often means a window that is a foot
+// off, and until now the only way to move one was to delete it and place
+// another -- which loses nothing on a default door and loses everything the
+// day an opening carries a type, a size or a head the drafter typed.
+//
+// WHAT IS MEASURED IS THE OFFSET, because that is the whole of what a slide
+// changes: an opening is a width and an offset along a wall, and a drag that
+// moved anything else would be a drag that moved the wrong thing.
+
+// The centre of an opening in world coordinates, off the saved file: the
+// offset is measured from the host wall's START, and the north wall of the
+// fixture starts at x = -10.
+const centreX = cut => -10 + cut.offset;
+
+// Press, move, release -- the page arms a drag past 4px of travel, so every
+// drag here is well past that. The intermediate move matters: a down and an
+// up at two places is not a drag, it is two clicks.
+async function slide(page, f, fromWorld, toWorld) {
+  const a = f.at(fromWorld[0], fromWorld[1]);
+  const b = f.at(toWorld[0], toWorld[1]);
+  await page.mouse.move(a[0], a[1]);
+  await page.mouse.down();
+  await page.mouse.move((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, { steps: 4 });
+  await page.mouse.move(b[0], b[1], { steps: 4 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+}
+
+test('a selected opening slides along its wall', async ({ page }) => {
+  const f = await doorOnTheNorthWall(page);
+  await save(page);
+  const before = (await survives(page)).openings[0];
+  expect(centreX(before), 'the door starts in the middle of the wall')
+    .toBeGreaterThan(-1);
+
+  // TWO STEPS: press it to choose it, then press again and drag. The same
+  // gesture the wall body drag uses, and for the same reason -- a press that
+  // both selected and started moving would make every mis-aimed tap an edit.
+  await pressAt(page, f, 0, -10);
+  await expect(page.locator('[data-delete]'), 'it is selected').toBeVisible();
+  await slide(page, f, [0, -10], [5, -10]);
+
+  await save(page);
+  const after = (await survives(page)).openings[0];
+  expect(centreX(after), 'the door followed the drag five feet along the wall')
+    .toBeCloseTo(5, 0);
+  // AND IT IS STILL THE SAME OPENING ON THE SAME WALL. A slide that wrote a
+  // new record, or rehosted it, would move the door on screen and be a
+  // different thing in the file.
+  expect(after.id).toBe(before.id);
+  expect(String(after.wallId)).toBe(String(before.wallId));
+  expect(after.width).toBeCloseTo(before.width, 3);
+});
+
+test('an unselected opening does not move under a drag', async ({ page }) => {
+  // THE COST OF THE TWO-STEP, kept honest. The first press is a selection and
+  // nothing else, so a drag that begins on an opening the drafter has not
+  // chosen pans the sheet -- it does not quietly edit the drawing.
+  const f = await doorOnTheNorthWall(page);
+  await save(page);
+  const before = (await survives(page)).openings[0];
+
+  await slide(page, f, [0, -10], [5, -10]);
+  await save(page);
+  const after = (await survives(page)).openings[0];
+  expect(after.offset, 'the door stayed where it was')
+    .toBeCloseTo(before.offset, 3);
+});
+
+test('it slides along the wall and not with the pointer', async ({ page }) => {
+  // THE PROJECTION IS THE POINT. A drag is two-dimensional and an opening has
+  // one dimension of freedom: it can only move ALONG its wall. A handler that
+  // took the raw pointer would need the drafter to trace a six-inch strip to
+  // move a window three feet, and would drop the opening off the wall the
+  // moment the finger wandered.
+  const f = await doorOnTheNorthWall(page);
+  await pressAt(page, f, 0, -10);
+  await expect(page.locator('[data-delete]')).toBeVisible();
+  // Four feet along the wall and six feet off it, which is well outside any
+  // grab distance the page uses.
+  await slide(page, f, [0, -10], [4, -4]);
+
+  await save(page);
+  const after = (await survives(page)).openings[0];
+  expect(centreX(after), 'it took the along-the-wall part of the drag')
+    .toBeCloseTo(4, 0);
+  // The across part is discarded rather than stored anywhere: an opening has
+  // no coordinate of its own to put it in, and a record that grew one would
+  // be a record drawing-format.js drops on the next load.
+  expect(after.offset).toBeGreaterThan(0);
+});
+
+test('it will not slide off the end of its wall', async ({ page }) => {
+  // THE CLAMP HOLDS DURING THE DRAG, not after it. An opening allowed to run
+  // off the end and be pulled back on release would be a drawing that was
+  // briefly impossible -- and would stay impossible if the drag ended off the
+  // canvas, where no release arrives.
+  const f = await doorOnTheNorthWall(page);
+  await pressAt(page, f, 0, -10);
+  await expect(page.locator('[data-delete]')).toBeVisible();
+  // Thirty feet along a twenty-foot wall.
+  await slide(page, f, [0, -10], [30, -10]);
+
+  await save(page);
+  const after = (await survives(page)).openings[0];
+  expect(after, 'the opening survived the drag').toBeTruthy();
+  // Both ends still on the wall with the bearing left under the lintel. The
+  // wall is 20 ft and the door 3 ft, so a centre past 18.5 has no wood at the
+  // far end -- and one at 30 is not on the wall at all.
+  expect(after.offset + DOOR_W / 2, 'its far jamb is still on the wall')
+    .toBeLessThan(20);
+  expect(after.offset, 'and it did travel toward that end')
+    .toBeGreaterThan(10);
+});
+
+test('one undo puts a slid opening back', async ({ page }) => {
+  const f = await doorOnTheNorthWall(page);
+  await save(page);
+  const before = (await survives(page)).openings[0];
+
+  await pressAt(page, f, 0, -10);
+  await slide(page, f, [0, -10], [5, -10]);
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(200);
+
+  await save(page);
+  const after = (await survives(page)).openings[0];
+  expect(after.offset, 'one keystroke, one slide undone')
+    .toBeCloseTo(before.offset, 3);
+});

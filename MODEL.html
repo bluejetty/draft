@@ -6481,6 +6481,17 @@
     return hit ? hit.opening : null;
   };
 
+  // AN ALREADY-SELECTED OPENING IS A GRAB, which is the page's own two-step
+  // for moving anything: press it to choose it, press it again and drag. The
+  // wall body drag reads the same way (wallBodyAt only answers for a wall
+  // already in the selection), and the reason is the same -- a press that both
+  // selected and started moving would make every mis-aimed tap a small edit.
+  const openingBodyAt = worldPt => {
+    const opening = openingAt(worldPt);
+    return opening && selection.some(entry => entry.item === opening)
+      ? opening : null;
+  };
+
   // 'all' passes everything; any other filter passes only its own type. The old
   // page's whole rule, in one line (_selectFilterAllows :18180).
   //
@@ -10705,6 +10716,34 @@
     // MODEL.dc.html:16791, then _findLineHit at :16799). A press near a corner
     // is a corner press even though it is also on the wall.
     const corner = cornerAt(at);
+    // ── SLIDING AN OPENING ALONG ITS WALL ────────────────────────────────
+    //
+    // The third of the three Movie asked for: "i'll change them if i need to
+    // afterwards". Place, take out, and now MOVE -- which is what "change"
+    // most often means about a window that is a foot off.
+    //
+    // AFTER THE CORNER AND BEFORE THE WALL BODY, which is the same order the
+    // pick chain keeps: a vertex beats what runs through it, and an opening
+    // beats the wall it is cut into. In practice a corner and an opening
+    // cannot be in the same place -- the bearing reserve keeps an opening off
+    // both ends of its wall -- so the corner half is a rule stated rather
+    // than a conflict resolved.
+    const slide = corner ? null : openingBodyAt(at);
+    if (slide) {
+      const host = walls().find(wall => String(wall.id) === String(slide.wallId));
+      if (host) {
+        moveDrag = {
+          kind: 'opening', opening: slide, host,
+          // THE OFFSET IT STARTED AT, for the undo. One number, because that
+          // is the whole of what a slide changes: an opening is a width and
+          // an offset along a wall, and nothing else about it moves.
+          was: slide.offset,
+          sx: e.clientX, sy: e.clientY, active: false,
+        };
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
     const body = corner ? null : wallBodyAt(at);
     if (corner || body) {
       // A grabbed corner or wall takes the gesture whole: no pan starts, so
@@ -10802,6 +10841,31 @@
       if (md.active) {
         const rect = canvas.getBoundingClientRect();
         const raw = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+        if (md.kind === 'opening') {
+          const G = window.DraftGeometry2D;
+          const wall = md.host;
+          const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+          const length = Math.hypot(dx, dz);
+          // ALONG THE WALL, AND ONLY ALONG IT. The pointer is projected onto
+          // the wall's own axis, so the opening tracks the finger down the
+          // wall and ignores everything across it -- which is the only motion
+          // an opening HAS. A drag that read the raw point would need the
+          // drafter to trace a 6" strip to move a window three feet.
+          const along = ((raw.x - wall.start.x) * dx + (raw.z - wall.start.z) * dz)
+            / (length * length) * length;
+          // CLAMPED EVERY EVENT, not checked at the end. The clamp is what
+          // keeps the bearing under the lintel, and an opening allowed to run
+          // off the end and be pulled back on release would be a drawing that
+          // was briefly impossible -- and would stay impossible if the drag
+          // ended off-canvas.
+          const clamped = G.clampOpeningToWall(wall, along, md.opening.width, {
+            walls: walls(),
+            thicknessFt: openingThicknessFt(),
+          });
+          if (clamped) md.opening.offset = clamped.offset;
+          paint();
+          return;
+        }
         if (md.kind === 'group') {
           // THE ASSEMBLY MOVES BY THE DELTA, measured absolutely from the
           // grab for the same reason the wall branch below does it: every
@@ -10959,6 +11023,26 @@
       if (md.active) {
         // Both halves of a locked move go into ONE history entry: the drafter
         // made one gesture, so one Ctrl+Z undoes all of it. See lockBefore.
+        if (md.kind === 'opening') {
+          // ONE GESTURE, ONE UNDO, and the step carries the one number that
+          // changed. A 'move' step restores VERTICES and an opening has none
+          // of its own; pushing one here would hand undo a `before` list it
+          // would walk as vertex snapshots and throw on.
+          //
+          // AND IT IS PUSHED ONLY IF THE OPENING ACTUALLY MOVED. A drag armed
+          // past 4px whose clamp refused every event -- a window already hard
+          // against its bearing, pulled further -- changed nothing, and an
+          // undo step for it would cost the drafter a Ctrl+Z that appears to
+          // do nothing.
+          if (md.opening.offset !== md.was) {
+            undoStack.push({ kind: 'move-opening', opening: md.opening, was: md.was });
+            markDirty();
+          }
+          moveDrag = null;
+          if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+          paint();
+          return;
+        }
         undoStack.push({ kind: 'move',
           before: md.lockBefore ? [...md.before, ...md.lockBefore] : md.before });
         markDirty();
@@ -11154,6 +11238,11 @@
           // whose difference nothing on screen would show.
           if (b.offX !== undefined) { b.vtx.offX = b.offX; b.vtx.offZ = b.offZ; }
         });
+      } else if (step.kind === 'move-opening') {
+        // The record is mutated in place, so undo puts the one number back
+        // rather than restoring a copy -- a copy would detach the opening
+        // every other reader already holds by reference.
+        step.opening.offset = step.was;
       } else if (step.kind === 'edge-tag') {
         // The roof's own edges array is mutated in place, so undo puts the one
         // word back rather than restoring a copy of the roof -- a copy would
