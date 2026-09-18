@@ -1152,6 +1152,161 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     return { d: bestD, t: bestT };
   }
 
+  // ─── AN OPENING ON ITS HOST WALL ─────────────────────────────────────────
+  //
+  // LIFTED OUT OF MODEL.dc.html, and the comments below the constants are
+  // Movie's own reasoning carried across with them rather than mine.
+  //
+  // WHY IT MOVED. MODEL.html has to place doors and windows now, and the old
+  // page has derived this since fenestration existed. A hand-rolled twin is
+  // how #401 lost a shard, so the arithmetic lives here and both pages call
+  // it. What each page does with the result stays its own business.
+  //
+  // EVERYTHING IS PASSED IN, including the wall list and a thickness lookup,
+  // because this file holds no component state and must load under node. The
+  // thickness lookup is a FUNCTION rather than a table: what a wall type is
+  // belongs to wall-types.js, and a second copy of that lookup here is the
+  // drift this extraction exists to prevent.
+
+  // BEARING AT THE ENDS OF A LINTEL. NBC Table 9.23.12.3.-A note (4):
+  // "provide minimum 38 mm bearing for lintel spans up to 3 m, or minimum
+  // 76 mm bearing for lintel spans greater than 3 m". 38 mm is 1 1/2", 76 mm
+  // is 3" -- and 3" is the figure Movie gave from the yard on 5 Sep before
+  // either of us had opened the code book, which is a good sign for both.
+  //
+  // It is what an opening must keep back from the end of its wall, and before
+  // #294 that was 0.01 ft -- an eighth of an inch, which is nothing. A window
+  // could sit hard against a corner with no wood under the lintel to carry it.
+
+  // A 6x6 post where no wall stands at the end of a run. Movie, 5 Sep: "if
+  // nothing there use a 6x6 post". He first said 5.25" and corrected it to
+  // 5.5" -- a dressed 6x6 is 5 1/2", the same dressing rule as his 2x8 at
+  // 7 1/4". So a free end and a 2x6 corner reserve the same 8 1/2", which is
+  // one number to remember rather than two that are nearly equal.
+  const OPENING_FREE_END_POST_IN = 5.5;
+  // SPAN-DEPENDENT, not a flat 3". A 3'-0" window and a 16'-0" garage door do
+  // not need the same bearing, and rounding every opening up to the long-span
+  // figure would refuse narrow walls that build perfectly well.
+  const OPENING_BEARING_SHORT_IN = 1.5;
+  const OPENING_BEARING_LONG_IN = 3;
+  const OPENING_BEARING_SPAN_FT = 3 / 0.3048;   // the code's 3 m, 9'-10 1/8"
+
+  // What this opening must keep back from each end of its wall, so the lintel
+  // has wood to bear on.
+  const openingBearingFt = widthFt => (widthFt > OPENING_BEARING_SPAN_FT
+    ? OPENING_BEARING_LONG_IN : OPENING_BEARING_SHORT_IN) / 12;
+
+  // The wall meeting this one at `point`, if any. Matched on the endpoint
+  // rather than through wallJoins on purpose: the clamp runs once per opening
+  // per hit test, and building the join map in here would make that quadratic.
+  // NOT ITSELF, BY ID AS WELL AS BY IDENTITY. The page this came from always
+  // held the live wall object, so `other !== wall` was enough there. A module
+  // is called by whoever has the numbers, and MODEL.html hands its painters
+  // plain copies -- under identity alone a wall would find ITS OWN COPY
+  // standing at its corner and take that as the carrier, reserving a whole
+  // wall thickness that is not there. It renders perfectly and the lintel has
+  // nowhere to bear.
+  const wallMeetingAt = (wall, point, walls) => (walls || []).find(other => other !== wall
+    && !(other.id !== undefined && wall.id !== undefined && String(other.id) === String(wall.id))
+    && other.levelId === wall.levelId
+    && (other.view || 'plan') === (wall.view || 'plan')
+    && (distance(other.start, point) < 0.02 || distance(other.end, point) < 0.02));
+
+  // WHAT ACTUALLY CARRIES THE END OF A LINTEL, and it is not the endpoint.
+  // A wall's endpoint is a CENTRELINE intersection -- it sits INSIDE the wall
+  // it runs into -- so reserving the bearing from it puts the opening that far
+  // from a line in the middle of somebody else's studs, and counts those studs
+  // as the bearing under the lintel.
+  //
+  // Movie, 5 Sep: the bearing is "measured from inside of exterior wall (5.5"
+  // typ)". 5.5 + 3 = 8.5, which is his own older rule -- "make a wood wall max
+  // to corner allowed 8.5"" -- arriving from the other direction.
+  //
+  // AND THERE IS NO FREE END. "If nothing there use a 6x6 post" -- something
+  // always carries it, so the reserve is always (what is there) + bearing and
+  // the rule has no undefined case. A rule with an "and otherwise, nothing" in
+  // it is a bug with a delay on it.
+  const openingEndReserveFt = (wall, point, bearingFt, { walls, thicknessFt }) => {
+    const meeting = wallMeetingAt(wall, point, walls);
+    const carrier = meeting ? thicknessFt(meeting) : OPENING_FREE_END_POST_IN / 12;
+    return carrier + bearingFt;
+  };
+
+  // Keep the whole opening on the wall, with its bearing left at each end.
+  // Returns null when the wall is too short for the width plus both bearings.
+  //
+  // faceReferenced:false is the OLD bearing-from-the-endpoint rule, and it
+  // exists for exactly one caller: restore. Widening a rule must not reach
+  // backwards into drawings that were sound when they were saved -- an opening
+  // inside the new margin would MOVE on load, and one on a wall shorter than
+  // width + 2 x 8 1/2" would be DROPPED and counted into the load message's
+  // "skipped". Load repairs damaged files; it does not re-rule sound ones.
+  const clampOpeningToWall = (wall, offset, width, opts = {}) => {
+    const { walls, thicknessFt, faceReferenced = true } = opts;
+    if (faceReferenced && typeof thicknessFt !== 'function') {
+      throw new Error('clampOpeningToWall needs thicknessFt to know what carries each end — '
+        + 'without it every end would reserve the free-post figure and openings would '
+        + 'sit closer to a corner than the wood allows');
+    }
+    const bearing = openingBearingFt(width);
+    // Each end is measured against whatever stands at THAT end -- a 2x6
+    // exterior and a 2x4 partition do not reserve the same, and one wall can
+    // meet a different thing at each of its ends.
+    const ends = { walls, thicknessFt };
+    const atStart = faceReferenced ? openingEndReserveFt(wall, wall.start, bearing, ends) : bearing;
+    const atEnd = faceReferenced ? openingEndReserveFt(wall, wall.end, bearing, ends) : bearing;
+    const len = distance(wall.start, wall.end);
+    if (!(width > 0) || len < width + atStart + atEnd) return null;
+    const half = width / 2;
+    return { offset: Math.min(Math.max(offset, half + atStart), len - half - atEnd) };
+  };
+
+  // World-space footprint of an opening on its host wall: the carved quad, the
+  // two jamb caps, the glazing centreline and the centre grab/snap point.
+  //
+  // `padFt` is the zoom fact, not a geometry one: the wall boundary stroke is
+  // centred on the face, so the gap fill must reach a little past each face to
+  // fully interrupt it, and "a little" is a couple of SCREEN pixels. The
+  // caller owns the camera, so the caller converts. Zero is the honest value
+  // for anything not painting to a canvas.
+  const openingGeometry = (opening, wall, opts = {}) => {
+    if (!wall || !opening) return null;
+    const { walls, thicknessFt, padFt = 0, faceReferenced = true } = opts;
+    const clamped = clampOpeningToWall(wall, opening.offset, opening.width,
+      { walls, thicknessFt, faceReferenced });
+    if (!clamped) return null;
+    const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+    const len = Math.hypot(dx, dz);
+    const ux = dx / len, uz = dz / len;
+    const nx = -uz, nz = ux;
+    const totalFt = thicknessFt(wall);
+    const refLine = wall.refLine || 'center';
+    const startOff = refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -totalFt / 2;
+    const endOff = startOff + totalFt;
+    const midOff = (startOff + endOff) / 2;
+    const half = opening.width / 2;
+    const at = (along, across) => ({
+      x: wall.start.x + ux * along + nx * across,
+      y: wall.start.y || 0,
+      z: wall.start.z + uz * along + nz * across,
+    });
+    return {
+      wall,
+      center: at(clamped.offset, midOff),
+      corners: [
+        at(clamped.offset - half, startOff - padFt),
+        at(clamped.offset + half, startOff - padFt),
+        at(clamped.offset + half, endOff + padFt),
+        at(clamped.offset - half, endOff + padFt),
+      ],
+      jambs: [
+        [at(clamped.offset - half, startOff - padFt), at(clamped.offset - half, endOff + padFt)],
+        [at(clamped.offset + half, startOff - padFt), at(clamped.offset + half, endOff + padFt)],
+      ],
+      glazing: [at(clamped.offset - half, midOff), at(clamped.offset + half, midOff)],
+    };
+  };
+
   window.DraftGeometry2D = {
     distance,
     worldPerPixel,
@@ -1183,6 +1338,15 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     lineControlPoint,
     pointOnLineSeg,
     pointToSegment,
+    OPENING_FREE_END_POST_IN,
+    OPENING_BEARING_SHORT_IN,
+    OPENING_BEARING_LONG_IN,
+    OPENING_BEARING_SPAN_FT,
+    openingBearingFt,
+    wallMeetingAt,
+    openingEndReserveFt,
+    clampOpeningToWall,
+    openingGeometry,
   };
 })();
 }
