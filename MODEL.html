@@ -1969,6 +1969,11 @@
      detached garage. The bone reads it to know whether there is anything
      left to offer. -->
 <script src="./building-bodies.js"></script>
+<!-- BUILD HOUSE's derivations, pure: an outline in, wall runs and the
+     interior reference side out. The old page builds from the same module, so
+     a house raised here and a house raised there cannot disagree about which
+     side of the traced line the wall body sits on. -->
+<script src="./build-house.js"></script>
 <!-- Where an ordered garage stands. A traced loop says where it goes by
      being traced; an autobuilt one has to be told, and that is a rule about
      buildings rather than about this page. -->
@@ -4393,7 +4398,16 @@
   [sizeWidth, sizeDepth].forEach(field =>
     field.addEventListener('input', () => paintSign()));
 
-  const fireBuild = () => { buildHandlers.forEach(fn => fn(chosen())); };
+  // A HANDLER THAT BUILT SOMETHING SAYS SO BY RETURNING IT, and fireBuild
+  // passes that word back to the press. Without it the foot bone could not
+  // tell "I raised the house" from "nobody was listening": it falls through to
+  // NOTHING TO BUILD YET and calls the board up, so a drafter who had just
+  // watched his walls appear would get the drive-thru over the top of them.
+  //
+  // EVERY handler is called first and the answers are reduced after -- `.map`
+  // then `.some`, not `.some` -- because a short circuit would silently skip
+  // whatever was registered after the first one to build.
+  const fireBuild = () => buildHandlers.map(fn => fn(chosen())).some(Boolean);
   // THE ORDER CARRIES ITS ROUND: 'menu' means hand over the premade design
   // for this type, 'outline' means walk the drafter through drawing it.
   // AND ITS SIZE, when the entry asked for one. `size` is null on every
@@ -4649,7 +4663,11 @@
   // The seam still hears every press either way -- what an empty press
   // means to the geometry side stays the geometry side's call.
   boneFoot.addEventListener('click', () => {
-    fireBuild();
+    // BUILT IS AN ANSWER. Movie, 18 Sep: "when they draw the U outline, they
+    // should still press the BONE or blue house to cause the house to be
+    // created" -- so the press that raises a house is a press that has been
+    // answered, and the board has nothing left to ask.
+    if (fireBuild()) return;
     if (chosen()) return;
     if (window.DraftBuildingBodies.isFull(drawing)) return;
     signRefusal = {
@@ -6938,7 +6956,15 @@
   // bone grow a second one off the same four walls would leave the level
   // holding two footprints for one building -- one of them saying nothing
   // about being a garage, which is the record building-bodies.js counts.
-  const commitWall = (startPt, endPt, { bone = true } = {}) => {
+  // refLine IS AN ARGUMENT NOW, and it is `undefined` everywhere but the house
+  // build. A drawn wall takes the drafter's setting, which is what he set it
+  // for; a wall raised FROM AN OUTLINE takes the side the outline's own
+  // winding dictates (build-house.js's outlineInteriorRef), because the
+  // traced line is the exterior face and the body has to land inside it. A
+  // freehand loop is wound whichever way the drafter walked it, so reading
+  // the setting there would put the walls outside the house on every
+  // clockwise trace -- and the drawing would look almost right.
+  const commitWall = (startPt, endPt, { bone = true, refLine } = {}) => {
     const { levelId, viewId } = onActiveLevel();
     const homeView = wallHomeView(viewId);
     const wall = {
@@ -6954,7 +6980,8 @@
       // spelling on LOAD, but this page has no serializer — a record written
       // with 'centre' reaches the file unvalidated and only the next load
       // repairs it, moving the wall half an assembly thickness in between.
-      refLine: (raw => (raw === 'centre' ? 'center' : raw))(wallSetting('wallRefLine', 'left')),
+      refLine: (raw => (raw === 'centre' ? 'center' : raw))(
+        refLine || wallSetting('wallRefLine', 'left')),
     };
     drawing.walls.push(wall);
     undoStack.push({ kind: 'add', wall });
@@ -8283,6 +8310,84 @@
     paint();
     return master;
   };
+
+  // ── THE BONE BUILDS WHAT THE DRAFTER DREW ────────────────────────────────
+  //
+  // Movie, 18 Sep: "when they draw the U outline, they should still press the
+  // BONE or blue house to cause the house to be created". The seam for it was
+  // declared with the build bar (:4174, onBuild -- "build what the drafter
+  // drew, his own outline") and NOTHING HAS EVER REGISTERED ON IT. The foot
+  // bone fired into an empty list: a drafter traced his house, pressed the
+  // bone, and the page called the drive-thru up over his loop.
+  //
+  // ALREADY BUILT IS DERIVED, NOT STORED. A `built: true` on the outline would
+  // be a new key in the file for both pages to agree about, and the answer is
+  // already in the drawing: a loop whose first edge has a wall running along
+  // it has been built. Same rule as the cut id -- the old page writes
+  // nextCutId and then refuses to trust it on load, so this page derives.
+  //
+  // THE FIRST EDGE IS ENOUGH and the whole ring would be worse. A drafter who
+  // deletes one wall of a built house and presses the bone again means "put my
+  // house back"; a ring test would call that unbuilt and lay a second wall
+  // along every edge that survived.
+  const NEAR_FT = 0.05;
+  const samePoint = (a, b) => a && b && Math.hypot(a.x - b.x, a.z - b.z) < NEAR_FT;
+
+  const outlineIsBuilt = (outline, levelId) => {
+    const points = outline?.points || [];
+    if (points.length < 2) return false;
+    const [a, b] = points;
+    return (drawing.walls || []).some(wall => Number(wall.levelId) === Number(levelId)
+      && ((samePoint(wall.start, a) && samePoint(wall.end, b))
+        || (samePoint(wall.start, b) && samePoint(wall.end, a))));
+  };
+
+  // THE NEWEST UNBUILT LOOP ON THE LEVEL THE DRAFTER IS STANDING ON. Newest
+  // because the bone answers the gesture just made; on this level because a
+  // house on the floor below is not what the press was about; and not a
+  // garage, which has its own builder and its own bone.
+  const outlineToBuild = () => {
+    const { levelId } = onActiveLevel();
+    const here = (drawing?.outlines || []).filter(outline =>
+      Number(outline.levelId) === Number(levelId)
+      && outline.garage !== true
+      && (outline.points || []).length >= 3
+      && !outlineIsBuilt(outline, levelId));
+    return here.length ? here[here.length - 1] : null;
+  };
+
+  const buildFromDrawnOutline = () => {
+    if (!drawing) return null;
+    const outline = outlineToBuild();
+    if (!outline) return null;
+    const BH = window.DraftBuildHouse;
+    const points = outline.points.map(point => ({ x: point.x, z: point.z }));
+    // THE OUTLINE DECIDES WHICH SIDE THE BODY SITS ON, through the module the
+    // old page builds with rather than a second copy of the winding test.
+    const refLine = BH.outlineInteriorRef(points);
+    const runs = BH.houseWallRuns(points);
+    if (!runs.length) return null;
+    // ONE GESTURE, ONE UNDO. The runs' own 'add' steps are dropped for the
+    // single 'built' one, exactly as the ordered garage drops its four: left
+    // in, the first Ctrl+Z would take the whole house and the next several
+    // would each hunt a wall that was already gone.
+    const mark = undoStack.length;
+    const walls = runs.map(run => commitWall(run.start, run.end,
+      { bone: false, refLine }));
+    undoStack.length = mark;
+    // `outline: null` -- the loop is the DRAFTER'S and it stays. See the
+    // 'built' branch in undo, which now asks before it splices.
+    undoStack.push({ kind: 'built', walls, outline: null, list: null });
+    sayOnStrip(`House built — ${walls.length} walls off your outline.`);
+    markDirty();
+    buildChrome();
+    paint();
+    return walls;
+  };
+
+  // THE SEAM'S FIRST LISTENER. It answers with the walls, which is how
+  // fireBuild tells the press that the house went up -- see its comment.
+  window.ModelBuild.onBuild(() => buildFromDrawnOutline());
 
   // THE ARMING, through the seam :3875 declared for exactly this. A house type
   // press records the type (that half already worked) and now arms the trace,
@@ -10327,8 +10432,15 @@
         });
         setSelection(selection.filter(entry => !step.walls.includes(entry.item)));
         retirePoolCorners(step.walls.flatMap(wall => [wall.start, wall.end]));
-        const outlineAt = step.list.indexOf(step.outline);
-        if (outlineAt >= 0) step.list.splice(outlineAt, 1);
+        // THE LOOP GOES BACK ONLY IF THE ORDER MADE IT. An ordered garage
+        // mints its own outline and takes it back with the walls; a house
+        // raised from a loop the DRAFTER traced leaves that loop standing --
+        // he drew it, the bone only built on it, and an undo that swallowed
+        // his trace would take back a gesture he never asked to undo.
+        if (step.list && step.outline) {
+          const outlineAt = step.list.indexOf(step.outline);
+          if (outlineAt >= 0) step.list.splice(outlineAt, 1);
+        }
       } else if (step.kind === 'add') {
         const at = drawing.walls.indexOf(step.wall);
         if (at >= 0) drawing.walls.splice(at, 1);

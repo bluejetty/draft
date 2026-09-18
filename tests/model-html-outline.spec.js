@@ -599,3 +599,131 @@ test('and a house-type press drops them too, because it goes through the registe
     expect(master, 'the traced loop committed').not.toBeNull();
     expect(master.points, 'the abandoned corners did not join it').toHaveLength(4);
   });
+
+// ── THE BONE BUILDS WHAT WAS DRAWN ───────────────────────────────────────
+//
+// Movie, 18 Sep: "when they draw the U outline, they should still press the
+// BONE or blue house to cause the house to be created." The seam for it was
+// declared when the build bar was written -- onBuild, "build what the drafter
+// drew" -- and nothing had ever registered on it, so the foot bone fired into
+// an empty list and then called the drive-thru up over the loop.
+
+const wallsOf = (saved, levelId = 3) =>
+  (saved?.walls || []).filter(wall => Number(wall.levelId) === Number(levelId));
+
+test('the foot bone raises walls around the loop that was traced', async ({ page }) => {
+  await newPageOnSavedHouse(page);
+  await page.keyboard.press('U');
+  await traceLoop(page, SQUARE);
+
+  const before = wallsOf(await savedFile(page)).length;
+  await page.locator('#bone').click();
+  await page.waitForTimeout(200);
+  await saveOnNewPage(page);
+
+  const after = wallsOf(await savedFile(page));
+  expect(after.length - before, 'a wall on each of the square-s four sides')
+    .toBe(4);
+
+  // ON THE CORNERS THAT WERE PRESSED, in world feet. A build that raised four
+  // walls somewhere else passes a count and nothing else.
+  const corners = new Set(after.flatMap(wall => [wall.start, wall.end])
+    .map(pt => `${Math.round(pt.x)},${Math.round(pt.z)}`));
+  for (const [x, z] of SQUARE) {
+    expect(corners, `a wall corner at ${x},${z}`).toContain(`${x},${z}`);
+  }
+
+  // AND THE BOARD STAYS DOWN. The press was answered by the house going up;
+  // before this rung it fell through to NOTHING TO BUILD YET and called the
+  // drive-thru over the drafter-s own walls. callSign lights the button and
+  // waits two seconds before the sign rises, so the lit press is the immediate
+  // tell -- reading the board alone would read it from inside that glow.
+  await expect(page.locator('#bone'),
+    'the bone did not start calling the board back over the new house')
+    .not.toHaveAttribute('data-lit', '');
+});
+
+test('pressing it twice does not build the house twice', async ({ page }) => {
+  await newPageOnSavedHouse(page);
+  await page.keyboard.press('U');
+  await traceLoop(page, SQUARE);
+
+  await page.locator('#bone').click();
+  await page.waitForTimeout(200);
+  await saveOnNewPage(page);
+  const once = wallsOf(await savedFile(page)).length;
+
+  // ALREADY BUILT IS DERIVED FROM THE DRAWING, not stored on the outline: a
+  // loop whose first edge carries a wall has been built. A second press on a
+  // house that is already up would otherwise lay a second wall along every
+  // side -- four records exactly on top of four others, which looks like one
+  // house until something is dragged.
+  await page.locator('#bone').click();
+  await page.waitForTimeout(200);
+  await saveOnNewPage(page);
+
+  expect(wallsOf(await savedFile(page)).length,
+    'the second press built nothing').toBe(once);
+});
+
+test('one Ctrl+Z takes the house back, and leaves the outline standing',
+  async ({ page }) => {
+    // AN EXCEPTION IN THE UNDO HANDLER IS INVISIBLE FROM THE OUTSIDE, which is
+    // how the first version of this test passed against a mutation that threw.
+    // The walls are spliced before the outline is, so a throw on the outline
+    // still leaves the drawing looking undone -- and takes the repaint and the
+    // rail rebuild that come after it. Nothing on the page says so. This is
+    // the witness.
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+
+    await newPageOnSavedHouse(page);
+    await page.keyboard.press('U');
+    await traceLoop(page, SQUARE);
+    await saveOnNewPage(page);
+    const before = wallsOf(await savedFile(page)).length;
+
+    await page.locator('#bone').click();
+    await page.waitForTimeout(200);
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(150);
+    await saveOnNewPage(page);
+
+    const saved = await savedFile(page);
+    expect(wallsOf(saved).length, 'ONE undo took the whole house -- the runs- '
+      + 'own add steps are dropped for the single built one').toBe(before);
+
+    // THE LOOP IS THE DRAFTER-S AND IT STAYS. An ordered garage mints its own
+    // outline and takes it back with the walls; he drew this one, and an undo
+    // that swallowed it would take back a gesture nobody asked to undo.
+    expect(houseMaster(saved), 'his trace survived the undo of the build')
+      .not.toBeNull();
+    expect(errors, 'and the undo handler ran to its end rather than throwing '
+      + 'part way and skipping the repaint').toEqual([]);
+  });
+
+test('the walls sit inside the loop whichever way it was walked', async ({ page }) => {
+  await newPageOnSavedHouse(page);
+  await page.keyboard.press('U');
+
+  // THE SAME SQUARE, WALKED THE OTHER WAY. A freehand loop is wound whichever
+  // way the drafter went round it, and the wall BODY has to land inside it
+  // either way -- the traced line is the exterior face. build-house.js's
+  // outlineInteriorRef reads the winding and answers 'left' or 'right'.
+  //
+  // THIS TEST EXISTS BECAUSE THE FORWARD SQUARE CANNOT FAIL. Walked as SQUARE
+  // is written, the answer is 'left' -- which is also the page's default wall
+  // setting, so a build that ignored the outline entirely would agree with it
+  // and prove nothing. Reversed, the two answers part.
+  await traceLoop(page, [...SQUARE].reverse());
+  await page.locator('#bone').click();
+  await page.waitForTimeout(200);
+  await saveOnNewPage(page);
+
+  const walls = wallsOf(await savedFile(page)).slice(-4);
+  expect(walls, 'four walls went up').toHaveLength(4);
+  for (const wall of walls) {
+    expect(wall.refLine, 'a clockwise loop puts the body on the right of each '
+      + 'run, not on the drafter-s default').toBe('right');
+  }
+});
