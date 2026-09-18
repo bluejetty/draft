@@ -214,3 +214,34 @@ test('the board comes down once it has built what was ordered', async ({ page })
     'the drafter-s next move is to look at his house, and it is behind the sign')
     .toHaveAttribute('data-shut', '');
 });
+
+test('building the design puts the trace down with it', async ({ page }) => {
+  await open(page);
+  // Pressing the tile arms the outline trace through onChoose -- the old
+  // page's own two-things-at-once, and it still stands, because a drafter who
+  // CLOSES the board instead of pressing the bone means to draw it himself.
+  await order(page, 'bungalow', 'bungalow');
+  await saveOnNewPage(page);
+
+  // ONCE THE HOUSE IS BUILT HE DOES NOT. An armed trace left over a finished
+  // house turns the drafter's next press -- a press at his own new house, to
+  // look at it or to pick something on it -- into the first corner of a second
+  // one. Nothing on screen would say that had happened until he pressed again.
+  const frame = await h.planFrame(page);
+  for (const [x, z] of [[-4, -4], [4, -4], [4, 4], [-4, -4]]) {
+    const at = frame.at(x, z);
+    await page.mouse.click(at[0], at[1]);
+    await page.waitForTimeout(100);
+  }
+  await page.waitForTimeout(150);
+
+  // THE DIRTY FLAG IS THE WITNESS, not the saved file. The first draft of this
+  // read the file back and compared counts -- against the file it had saved
+  // BEFORE the presses, which of course had not moved. It passed with the
+  // trace armed and the mutation that leaves it armed survived. This page does
+  // not autosave: an edit shows up as UNSAVED on the button and nowhere else
+  // until somebody presses it.
+  await expect(page.locator('#save'),
+    'four presses on the finished house drew no second outline -- the page is '
+    + 'still exactly what was saved').toHaveText('SAVED');
+});

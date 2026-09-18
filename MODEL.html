@@ -8621,6 +8621,13 @@
       outlines: raised.map(body => body.outline),
       list: drawing.outlines,
     });
+    // AND THE TRACE GOES DOWN WITH IT. Pressing the tile armed the outline
+    // through onChoose -- that is the old page's own two-things-at-once and it
+    // still stands, because a drafter who closes the board instead of pressing
+    // the bone means to draw it himself. Once the house is BUILT he does not,
+    // and an armed trace left over a finished house turns his next press into
+    // the first corner of a second one.
+    setTool(RESTING_TOOL);
     sayOnStrip(`${order.entry.label} built — ${plan.garage ? 'house and garage' : 'house'}.`);
     markDirty();
     buildChrome();
@@ -8628,7 +8635,7 @@
     return raised;
   };
 
-  // A HOUSE ORDER AT THE WINDOW MEANS "I'LL DRAW IT MYSELF" -- for now.
+  // A HOUSE ORDER AT THE WINDOW IS BUILT, OR IT IS REFUSED OUT LOUD.
   //
   // The sign's bone had ONE listener and it builds garages: buildOrderedGarage
   // (:7085) opens with `if (!drawing || !order?.entry?.needsSize || !order.size)
@@ -8638,45 +8645,43 @@
   // just said "press the bone and I'll build it", and got silence and a board
   // still in his way. Measured from Movie's own screen, 18 Sep.
   //
-  // THE PREMADE HOUSE IS THE NEXT RUNG, not this one: this page carries
-  // garage-site.js but neither starter-shape.js nor build-house.js, which are
-  // where the old page's "press the bone and a house appears" lives. Until
-  // those land, the honest answer to the press is the one the page can keep --
-  // the trace is ALREADY ARMED, because the tile armed it through onChoose the
-  // moment it was pressed. So the sign gets out of the way and the strip says
-  // what to press. A bone that does nothing teaches a drafter the button is
-  // broken; this hands him the gesture he was one press away from.
+  // IT HANDED OVER THE ARMED TRACE FOR A WHILE, which Movie then ruled out:
+  // "we shouldn't put it in the drivethru window yet, i'd just like to offer
+  // them premade designs in there at the beginning", and for the tiles with no
+  // design yet, "have those tiles say 'not ready yet' and build nothing". So
+  // the window does one thing and says when it cannot: a board that answered a
+  // press by quietly arming a tool somewhere else is a board teaching the
+  // drafter that its button means something other than what it says.
+  //
+  // THE REFUSAL IS THE SIGN'S, not the strip's, because the sign is what the
+  // drafter is looking at when he presses that bone -- the same place the
+  // garage's HOW BIG, THOUGH? and YOU'VE GOT ONE ALREADY land.
+  //
+  // AND IT IS DECIDED HERE RATHER THAN IN THE BONE'S HANDLER, where the other
+  // refusals live. The seam's own rule is that what an order MEANS is the
+  // geometry side's call (:4184); refusing before fireOrder would also stop
+  // the order reaching the seam at all, and model-drivethru.spec.js measures
+  // that each press fires its own seam and not the other's.
   //
   // THE GARAGE ORDER IS NOT TOUCHED. It is served by the listener above, which
   // runs first, builds, and spends the order; this one recognises the same
   // tile through the same predicate and stands off.
   window.ModelBuild.onOrder(order => {
     if (!order?.entry || isGarageChoice(order)) return;
-    // THE DESIGN FIRST, and the trace only for a tile that has none. Movie
-    // ruled the window is for premade designs; the handover below is what is
-    // left for 2 STOREY and the bilevels until their plans land, and it goes
-    // when they do.
     if (buildPremadePlan(order)) {
       setSign(false);
-      // SPENT, unlike the handover: something was BUILT, which is exactly what
-      // orderServed means (:4262).
+      // SPENT: something was BUILT, which is exactly what orderServed means
+      // (:4262). A refusal below spends nothing -- the drafter's choice still
+      // stands, because he has not been answered.
       window.ModelBuild.orderServed();
       return;
     }
-    // Re-armed rather than assumed. The order carries the choice, and a
-    // drafter who picked a type, wandered off into another tool and came back
-    // to press the bone would otherwise get the sign down over whatever he
-    // was last holding.
-    armOutline(order);
-    setSign(false);
-    // AND THE ORDER IS NOT SPENT, which the garage's is. orderServed means
-    // "the geometry side BUILT it" (:4262) and nothing was built here -- the
-    // drafter is about to build it himself, and the type he is drawing is the
-    // one he just picked. Two things go wrong if this lies about that: the
-    // board would re-open with no tile pressed under a drafter who is plainly
-    // mid-house, and the foot bone's `if (chosen()) return` (:4652) would stop
-    // recognising the choice and pop the sign back up over the trace in
-    // progress. The tile is spent when a house lands, which is the next rung.
+    signRefusal = {
+      line: 'NOT READY YET.',
+      note: `${order.entry.label} has no design on the board yet. `
+        + '1 STOREY and 1 STOREY + GARAGE do.',
+    };
+    paintSign();
   });
 
   // ── THE CUT TOOL: a section line and the way it looks ─────────────────────

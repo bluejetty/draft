@@ -432,112 +432,36 @@ test('a house tile says what to trace, in the words of the thing picked',
     await expect(page.locator('#strip-message')).toContainText('Trace your 1 STOREY');
   });
 
-test("the sign's bone takes the board down and hands over the trace",
-  async ({ page }) => {
-    await newPageOnSavedHouse(page);
-    const before = houseMaster(await savedFile(page));
-    expect(before, 'no house master to start with').toBeNull();
+test('a tile with no design yet says so, and builds nothing', async ({ page }) => {
+  await newPageOnSavedHouse(page);
+  const before = (await savedFile(page)).outlines?.length || 0;
 
-    // 2 STOREY, BECAUSE THE HANDOVER IS NOW THE FALLBACK. Movie ruled the
-    // window is for premade designs, so 1 STOREY builds its bungalow there and
-    // never reaches this path. The handover is what a tile with NO design yet
-    // still gets, and 2 STOREY is one of those until its plan lands -- at
-    // which point this test moves to whatever is still undesigned, or goes.
-    await pickHouseType(page, 'bungalow', 'twoStorey');
-    const sign = page.locator('#drivethru');
-    await expect(sign, 'the tile does not shut the board').not.toHaveAttribute('data-shut', '');
+  // 2 STOREY, which has no premade plan. Movie, 18 Sep: "have those tiles say
+  // 'not ready yet' and build nothing".
+  //
+  // THIS REPLACED A HANDOVER. For one rung the bone answered an undesigned
+  // tile by taking the board down and handing over the armed outline trace,
+  // which was better than the silence it replaced and still the wrong answer:
+  // "we shouldn't put it in the drivethru window yet, i'd just like to offer
+  // them premade designs in there at the beginning". A board that answers a
+  // press by quietly arming a tool somewhere else teaches the drafter that its
+  // button means something other than what it says.
+  await pickHouseType(page, 'bungalow', 'twoStorey');
+  await page.locator('#dt-bone').click();
+  await page.waitForTimeout(250);
 
-    await page.locator('#dt-bone').click();
+  await expect(page.locator('[data-drivethru-line]'),
+    'the board says why rather than doing nothing').toContainText('NOT READY YET');
 
-    // THE BOARD GETS OUT OF THE WAY. Before this rung the bone's only listener
-    // was the garage builder, whose first line is
-    // `if (!drawing || !order?.entry?.needsSize || !order.size) return null`
-    // -- and no house entry carries needsSize, so a house order fell out of it
-    // before building anything AND before taking the sign down. The drafter
-    // pressed the bone and got a board still standing in front of the drawing.
-    await expect(sign, 'the board comes down on a house order').toHaveAttribute('data-shut', '');
-    await expect(page.locator('#strip-message')).toContainText('Trace your 2 STOREY');
+  // THE BOARD STAYS UP, unlike a served order. Nothing was built, so the
+  // drafter has not been answered and the tiles are still in front of him --
+  // 1 STOREY is one press away.
+  await expect(page.locator('#drivethru')).not.toHaveAttribute('data-shut', '');
 
-    // AND THE TRACE IS REALLY THERE, which is the half a message cannot prove:
-    // a page that printed the sentence and armed nothing would pass every
-    // assertion above. This one draws the house.
-    await traceLoop(page, SQUARE);
-    await saveOnNewPage(page);
-
-    const master = houseMaster(await savedFile(page));
-    expect(master, 'the loop the bone handed over became a master').not.toBeNull();
-    expect(master.points).toHaveLength(4);
-  });
-
-test('a house order does not spend the tile, because nothing was built',
-  async ({ page }) => {
-    await newPageOnSavedHouse(page);
-    // A TILE WITH NO PREMADE DESIGN -- see the note above. A tile that has one
-    // IS spent, because something really was built.
-    await pickHouseType(page, 'bungalow', 'twoStorey');
-    await page.locator('#dt-bone').click();
-    await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
-
-    // orderServed() means "the geometry side BUILT it", and nothing was built
-    // -- the drafter is about to build it himself. Spent, the board would
-    // re-open with no tile pressed under a drafter who is plainly mid-house,
-    // and the foot bone would stop recognising the choice and pop the sign
-    // back up over the trace in progress. THE FOOT BONE IS THE WITNESS: with a
-    // type still chosen it builds and returns; with the choice spent it falls
-    // through to callSign.
-    await page.locator('#bone').click();
-
-    // THE LIT PRESS IS THE IMMEDIATE TELL, and the reason this assertion is
-    // here rather than the board check alone: callSign LIGHTS THE BUTTON AND
-    // THEN WAITS TWO SECONDS before the sign rises (SIGN_LIGHT_MS). The first
-    // draft of this test read `data-shut` the moment the press landed, which
-    // is inside that glow -- so it passed with the order spent and the board
-    // already on its way up. Found by mutation.
-    await expect(page.locator('#bone'),
-      'the foot bone did not start calling the board back').not.toHaveAttribute('data-lit', '');
-
-    // AND THEN PAST THE GLOW, because the tell above is about the mechanism
-    // and this is about what the drafter sees.
-    await page.waitForTimeout(2600);
-    await expect(page.locator('#drivethru'),
-      'the choice still stands, so the foot bone does not call the board back '
-      + 'over a trace in progress').toHaveAttribute('data-shut', '');
-  });
-
-test('the bone re-arms the trace, so a tool picked in between does not eat it',
-  async ({ page }) => {
-    await newPageOnSavedHouse(page);
-    await pickHouseType(page, 'bungalow', 'twoStorey');
-
-    // THE WANDER. The tile armed the trace; the drafter then reaches for a
-    // tool, changes his mind and goes back to the window to press the bone.
-    // Without the re-arm the board comes down over whatever he was last
-    // holding and his corners are drawn as WALLS -- a wrong drawing rather
-    // than a missing feature, and a worse answer than the silence this rung
-    // replaced.
-    await h.armWall(page);
-    expect(await h.wallArmed(page), 'the wall tool really is holding the '
-      + 'presses before the bone').toBe(true);
-
-    await page.locator('#dt-bone').click();
-    await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
-
-    await traceLoop(page, SQUARE);
-    await saveOnNewPage(page);
-
-    const master = houseMaster(await savedFile(page));
-    expect(master, 'the loop became an outline master, not four walls')
-      .not.toBeNull();
-    expect(master.points).toHaveLength(4);
-  });
-
-// ── U, THE OLD PAGE'S OWN KEY ─────────────────────────────────────────────
-//
-// Movie, 18 Sep: "check the model.dc file it has a tool was U before". It is
-// U (profile-manager.js, `outline: 'U'`), and the old page has no OUTLINE
-// button to go with it -- its column is the same seventeen keys this page
-// draws. So the drafter's way to a trace that is not a house-type press is
-// the letter, and on this page the letters were painted and dead.
+  await saveOnNewPage(page);
+  expect((await savedFile(page)).outlines?.length || 0,
+    'and not one record was written').toBe(before);
+});
 
 test('U arms the trace, and the loop it takes becomes a master', async ({ page }) => {
   await newPageOnSavedHouse(page);
