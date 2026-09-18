@@ -51,6 +51,18 @@
     { id: 'beam',         name: 'BEAM',         group: 'build', kind: 'contextual', command: null },
     { id: 'stair',        name: 'STAIR',        group: 'build', kind: 'contextual', command: null },
     { id: 'fixture',      name: 'FIXTURE',      group: 'build', kind: 'contextual', command: null },
+    // OUTLINE HAS A KEY AND NO BUTTON, which is not an oversight in this list
+    // -- it is what the old page is. MODEL.dc.html's own column is these
+    // seventeen and no more (:24035), while `outline` is a live activeTool
+    // there with its own binding, U (profile-manager.js). It is reached by
+    // pressing U or by picking a house type, never by a key in the column.
+    //
+    // `group: null` IS THE MECHANISM. The column is built from
+    // GROUPS.map(g => inGroup(g.id)), and a tool in no group is in no group's
+    // list, so it renders nothing while still answering availableOn, keyFor
+    // and the register. A `hidden: true` flag would have needed the column
+    // builder to learn about it; this needs nobody to.
+    { id: 'outline',      name: 'OUTLINE',      group: null,    kind: 'contextual', command: 'outline' },
   ].map(Object.freeze));
 
   const byId = new Map(TOOLS.map(tool => [tool.id, tool]));
@@ -90,7 +102,18 @@
   // RESTING is available on EVERY board rather than trusting the list below.
   const BOARDS = Object.freeze(['toy', 'drafting']);
   const RESTING = 'select';
-  const TOY_TOOLS = Object.freeze([RESTING, 'wall']);
+  // AND OUTLINE JOINS TOY, which is the ruling this file already carried in
+  // prose: "no drafting tools EXCEPT the one gesture that makes the outline".
+  // Until now that gesture had no tool of its own and the exception had to be
+  // spelled 'wall'.
+  //
+  // WALL STAYS, and the note above predicted it would go. It does not go here
+  // and the reason is a measurement I have not made: §1's squaring and
+  // foot-landing rule is built on the WALL gesture, so taking wall off this
+  // board moves TOY's drawing onto a path that rule does not cover. That is
+  // its own rung with its own checks, not a line to change on the way past.
+  // Adding outline takes nothing away from anybody; swapping them would.
+  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline']);
 
   // An unknown board is treated as DRAFTING -- the unrestricted one. The other
   // way round, an unknown board would silently strip sixteen tools off the

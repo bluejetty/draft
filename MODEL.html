@@ -8174,13 +8174,56 @@
       sayOnStrip('Pick a size, then press the bone — I’ll set the garage on the lot.');
       return;
     }
-    activeTool = 'outline';
-    outlineCorners = [];
+    // THROUGH THE REGISTER, NOT AROUND IT. This line was `activeTool =
+    // 'outline'` and had to be: outline was not in the roster at all, so
+    // setTool would have found it unavailable on every board and put SELECT on
+    // instead. Now that it is a tool, arming it any other way would make the
+    // board a look rather than a rule -- the exact thing setTool's own comment
+    // is about -- and would leave the strip and the key faces reading a tool
+    // the page is not actually holding.
+    //
+    // THE ORDER MATTERS. setTool fires the listeners, and the one below clears
+    // the pending corners and the family for whatever is being armed; the
+    // choice's own family and its named sentence land after, on top.
+    //
+    // PUTTING THE OLD LINE BACK WAS TRIED AS A MUTATION AND SURVIVED, which is
+    // worth writing down rather than leaving as a caught row nobody checked.
+    // `activeTool = 'outline'` plus by-hand copies of the two clears setTool
+    // does is behaviourally identical to this for everything today's two
+    // boards can express. What it does NOT copy is `beamStart` -- a drafter
+    // who anchored a beam and then picked a house type would keep that anchor,
+    // which is the chain-commits-into-the-next-tool defect setTool's comment
+    // describes -- and the board's refusal, which neither board can currently
+    // demonstrate because both offer outline. So the register is the right
+    // door for reasons no check here can fail on; that is the reason, not a
+    // measurement, and it is labelled as such.
+    setTool('outline');
     outlineFamily = picked?.family ?? null;
-    drawStart = null;
     sayTraceThe(picked);
     paint();
   };
+
+  // PUTTING THE TRACE DOWN IS PART OF PUTTING THE TOOL DOWN. setTool clears
+  // the wall's anchor and the beam's for the reason its comment gives -- a
+  // half-finished gesture belongs to the tool being put down, and an anchor
+  // carried across is how a chain commits into the next tool's first tap. The
+  // outline's pending corners are a third one of exactly that kind, and they
+  // were the one nothing cleared: switch to SELECT mid-house, come back, and
+  // the next press continued a loop the drafter had walked away from.
+  //
+  // They are cleared HERE rather than inside setTool because setTool is a
+  // const several hundred lines above these `let`s and runs once at load --
+  // naming them from inside it would be a temporal dead zone waiting for the
+  // first drafter who armed a tool early.
+  toolListeners.push(next => {
+    outlineCorners = [];
+    outlineFamily = null;
+    // ARMED FROM THE KEY, which carries no house type with it -- so the trace
+    // is the plain house red that outlineTraceColor falls back to, and the
+    // sentence is the one without a name in it. A house-type press says the
+    // named version immediately after this, over the top.
+    if (next === 'outline') sayTraceThe(null);
+  });
 
   const outlinePress = at => {
     const here = { x: at.x, z: at.z };
@@ -8960,6 +9003,55 @@
   });
 
   buildToolColumn();
+
+  // ── THE LETTERS ON THE KEYS DO SOMETHING ─────────────────────────────────
+  //
+  // The column has painted a letter on every key since it was built and not
+  // one of them was wired. The faces are real -- they come from the roster,
+  // which reads the drafter's OWN bindings, so a profile that moves TRIM off Q
+  // moves the face too -- and pressing the key the page drew did nothing at
+  // all. Seventeen keys, seventeen instructions the page could not carry out.
+  //
+  // Movie, 18 Sep: "check the model.dc file it has a tool was U before". It is
+  // U -- profile-manager.js, `outline: 'U'` -- and he was pressing it. The old
+  // page has no OUTLINE button either (its column is the same seventeen,
+  // :24035); outline is reached there by that key or by picking a house type.
+  // So the missing tool and the dead letters are one gap, not two.
+  //
+  // A KEY FACE THAT DOES NOTHING IS THE SAME DEFECT AS THE STALE GARAGE
+  // REFUSAL two rungs back: the page stating something about itself that is
+  // not true, and a drafter believing it.
+  //
+  // THE VERB IS THE COLUMN'S, not a second one. Pressing the armed tool's
+  // letter returns to SELECT exactly as pressing its key does, because they
+  // are one sentence said two ways -- and both go through setTool, so the
+  // board refuses a tool it does not offer whichever way it was asked for.
+  document.addEventListener('keydown', event => {
+    const kb = window.DraftKeyboard;
+    const roster = window.DraftToolRoster;
+    if (!kb || !roster) return;
+    // A DRAFTER TYPING A GARAGE WIDTH IS NOT ARMING THE WALL TOOL. The size
+    // fields on the sign are the live case -- 'W' is a digit's neighbour and
+    // a name is nothing but letters -- and a page that armed a tool out from
+    // under a field would also eat the character.
+    const el = event.target;
+    if (el && (el.isContentEditable
+      || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) return;
+    // NO COMBINATIONS FALL THROUGH HERE BY ACCIDENT: eventMatchesBinding
+    // compares every modifier exactly, so Ctrl+Z is not 'Z' and the undo
+    // handler keeps it.
+    const map = roster.bindings();
+    const tool = roster.TOOLS.find(entry => entry.command
+      && kb.eventMatchesBinding(event, map[entry.command]));
+    if (!tool) return;
+    // ASKED OF THE BOARD BEFORE THE PRESS IS SPENT. setTool would refuse a
+    // tool the board does not offer and fall back to SELECT, which would put
+    // down the tool the drafter was holding as the price of a key that was
+    // never going to work.
+    if (!roster.availableOn(tool.id, board)) return;
+    event.preventDefault();
+    setTool(tool.id === activeTool ? RESTING_TOOL : tool.id);
+  });
 
   // A BOARD CHANGE PUTS DOWN A TOOL THE NEW BOARD DOES NOT OFFER, and ONLY
   // such a tool. Leaving it armed would keep ROOF live behind a greyed ROOF

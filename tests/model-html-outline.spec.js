@@ -523,3 +523,79 @@ test('the bone re-arms the trace, so a tool picked in between does not eat it',
       .not.toBeNull();
     expect(master.points).toHaveLength(4);
   });
+
+// ── U, THE OLD PAGE'S OWN KEY ─────────────────────────────────────────────
+//
+// Movie, 18 Sep: "check the model.dc file it has a tool was U before". It is
+// U (profile-manager.js, `outline: 'U'`), and the old page has no OUTLINE
+// button to go with it -- its column is the same seventeen keys this page
+// draws. So the drafter's way to a trace that is not a house-type press is
+// the letter, and on this page the letters were painted and dead.
+
+test('U arms the trace, and the loop it takes becomes a master', async ({ page }) => {
+  await newPageOnSavedHouse(page);
+  expect(houseMaster(await savedFile(page)), 'no master to start with').toBeNull();
+
+  await page.keyboard.press('U');
+  await expect(page.locator('#strip-message')).toContainText('Trace your house');
+
+  // THE DRAWING IS THE ACCEPTANCE, not the strip. A page that printed the
+  // sentence and armed nothing passes the line above and fails here.
+  await traceLoop(page, SQUARE);
+  await saveOnNewPage(page);
+
+  const master = houseMaster(await savedFile(page));
+  expect(master, 'the letter armed a real trace').not.toBeNull();
+  expect(master.points).toHaveLength(4);
+});
+
+test('putting the tool down drops the corners, the way every other gesture is dropped',
+  async ({ page }) => {
+    await newPageOnSavedHouse(page);
+
+    await page.keyboard.press('U');
+    await traceCorners(page, [[-10, -8], [10, -8]]);
+
+    // SELECT, and back. setTool clears the wall's anchor and the beam's for
+    // the reason its own comment gives -- a half-finished gesture belongs to
+    // the tool being put down, and an anchor carried across is how a chain
+    // commits into the next tool's first tap. The outline's pending corners
+    // are a third of exactly that kind and nothing cleared them: walk away
+    // mid-house, come back, and the next press continued a loop the drafter
+    // had abandoned.
+    await page.keyboard.press('S');
+    await page.keyboard.press('U');
+
+    await traceLoop(page, SQUARE);
+    await saveOnNewPage(page);
+
+    const master = houseMaster(await savedFile(page));
+    expect(master, 'the second trace committed').not.toBeNull();
+    // FOUR, NOT SIX. The two abandoned corners are the whole measurement: they
+    // sit at the same x as two of the square-s own, so a master that kept them
+    // is a six-cornered house nothing on screen distinguishes from a bad trace.
+    expect(master.points, 'the abandoned corners did not join the new loop')
+      .toHaveLength(4);
+  });
+
+test('and a house-type press drops them too, because it goes through the register',
+  async ({ page }) => {
+    await newPageOnSavedHouse(page);
+
+    await page.keyboard.press('U');
+    await traceCorners(page, [[-10, -8], [10, -8]]);
+
+    // THE SECOND DOOR TO THE SAME TOOL. armOutline used to set `activeTool`
+    // by hand, because outline was not in the roster and setTool would have
+    // refused it on every board. Now that it is a tool, arming it around the
+    // register would make the board a look rather than a rule -- and would
+    // skip the clearing this checks, leaving a house-type press to inherit
+    // corners from a trace the drafter had walked away from.
+    await pickHouseType(page);
+    await traceLoop(page, SQUARE);
+    await saveOnNewPage(page);
+
+    const master = houseMaster(await savedFile(page));
+    expect(master, 'the traced loop committed').not.toBeNull();
+    expect(master.points, 'the abandoned corners did not join it').toHaveLength(4);
+  });
