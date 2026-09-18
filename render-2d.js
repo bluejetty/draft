@@ -1613,6 +1613,110 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+  // ── AN OPENING IN A WALL, in plan ────────────────────────────────────────
+  //
+  // Lifted from MODEL.dc.html:7646 unchanged in what it draws. It lived on the
+  // page and the page is not the only thing that draws plans: the cut views
+  // and LAYOUT's sheets want the same window, and a painter that lives in one
+  // page is the five-copies mistake this module exists against.
+  //
+  // THE GEOMETRY IS RESOLVED BY THE CALLER and passed in, the way drawColumn2D
+  // takes its footing. Which corners an opening has is geometry-2d.js's answer
+  // (openingGeometry), and it needs the host wall, its thickness rule and the
+  // page's pixel size -- three things a painter has no business knowing. A
+  // painter that fetched them would answer differently from the page that owns
+  // the answer.
+  //
+  // THE TWO COLOURS COME FROM env, with the old page's literals as fallbacks.
+  // Its gap fill is #fafafa, chosen to match the renderer's clear colour so
+  // the hole reads as paper -- which is exactly right on a page with one skin
+  // and exactly wrong on a page with a night ground, where a near-white gap is
+  // a bright hole punched through a dark wall. Same fault drawRoof2D was moved
+  // off. MODEL.dc.html has no night skin, keeps the literals through these
+  // fallbacks, and is untouched.
+  function drawOpening2D(ctx, toS, opening, options = {}, env = {}) {
+    const geoInfo = options.geometry;
+    if (!geoInfo) return;
+    const { preview = false, selected = false } = options;
+    const ink = env.openingColor || '#1d1f20';
+    const gap = env.openingGapColor || '#fafafa';
+    const selectColor = env.selectColor || '#5980a6';
+    const pts = geoInfo.corners.map(toS);
+    ctx.save();
+    ctx.beginPath();
+    pts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+    ctx.closePath();
+    ctx.globalAlpha = preview ? 0.75 : 1;
+    ctx.fillStyle = gap;
+    ctx.fill();
+    ctx.strokeStyle = preview ? atAlpha(ink, 0.5) : ink;
+    ctx.lineWidth = 1.5;
+    geoInfo.jambs.forEach(([a, b]) => {
+      const sa = toS(a), sb = toS(b);
+      ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
+    });
+    const [gwa, gwb] = geoInfo.glazing;
+    const glazeRun = Math.hypot(gwb.x - gwa.x, gwb.z - gwa.z) || 1;
+    const gux = (gwb.x - gwa.x) / glazeRun, guz = (gwb.z - gwa.z) / glazeRun;
+    const gnx = -guz, gnz = gux;
+    if (opening.type === 'window') {
+      // Double-glazed unit: two panes 1/2" apart on the wall centreline, with
+      // 2"-wide frame blocks at each jamb reaching 1/2" past both wall faces.
+      ctx.lineWidth = 1.25;
+      [0.375 / 12, -0.375 / 12].forEach(off => {
+        const a = toS({ x: gwa.x + gnx * off, z: gwa.z + gnz * off });
+        const b = toS({ x: gwb.x + gnx * off, z: gwb.z + gnz * off });
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      });
+      const halfDepth = Math.max(...geoInfo.corners.map(corner =>
+        Math.abs((corner.x - geoInfo.center.x) * gnx + (corner.z - geoInfo.center.z) * gnz)));
+      const poke = halfDepth + 0.5 / 12;
+      const frameAlong = 2 / 12;
+      [[gwa, 1], [gwb, -1]].forEach(([end, sgn]) => {
+        const quad = [
+          { x: end.x + gnx * poke, z: end.z + gnz * poke },
+          { x: end.x - gnx * poke, z: end.z - gnz * poke },
+          { x: end.x + gux * sgn * frameAlong - gnx * poke, z: end.z + guz * sgn * frameAlong - gnz * poke },
+          { x: end.x + gux * sgn * frameAlong + gnx * poke, z: end.z + guz * sgn * frameAlong + gnz * poke },
+        ].map(toS);
+        ctx.beginPath();
+        ctx.moveTo(quad[0].x, quad[0].y); ctx.lineTo(quad[1].x, quad[1].y);
+        ctx.lineTo(quad[2].x, quad[2].y); ctx.lineTo(quad[3].x, quad[3].y);
+        ctx.closePath(); ctx.stroke();
+      });
+    }
+    if (opening.type === 'door' && !opening.garage) {
+      // Leaf and quarter swing: the flat slab standing open off the hinge
+      // jamb, the arc sweeping back to the latch jamb.
+      const hinge = toS(gwa);
+      const tip = toS({ x: gwa.x + gnx * glazeRun, z: gwa.z + gnz * glazeRun });
+      const latch = toS(gwb);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(hinge.x, hinge.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+      const r = Math.hypot(tip.x - hinge.x, tip.y - hinge.y);
+      const a0 = Math.atan2(tip.y - hinge.y, tip.x - hinge.x);
+      const a1 = Math.atan2(latch.y - hinge.y, latch.x - hinge.x);
+      let sweep = a1 - a0;
+      while (sweep > Math.PI) sweep -= 2 * Math.PI;
+      while (sweep < -Math.PI) sweep += 2 * Math.PI;
+      ctx.lineWidth = 1.25;
+      ctx.beginPath(); ctx.arc(hinge.x, hinge.y, r, a0, a0 + sweep, sweep < 0); ctx.stroke();
+    }
+    if (!env.isPrinting) {
+      // Centre grab point -- the dimension / snap anchor.
+      const c = toS(geoInfo.center);
+      ctx.fillStyle = preview ? atAlpha(selectColor, 0.85) : ink;
+      ctx.beginPath(); ctx.arc(c.x, c.y, 2.5, 0, Math.PI * 2); ctx.fill();
+    }
+    if (selected) {
+      ctx.strokeStyle = selectColor; ctx.lineWidth = 2;
+      ctx.beginPath();
+      pts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+      ctx.closePath(); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   window.DraftRender2D = Object.freeze({
     drawWallSeg2D,
     drawRoof2D,
@@ -1633,6 +1737,7 @@ if (!window.DraftRender2D) {
     drawCutPreview2D,
     drawBeam2D,
     drawColumn2D,
+    drawOpening2D,
   });
 })();
 }

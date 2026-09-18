@@ -149,10 +149,76 @@ arming the house trace and persisting a master carrying `garage: false` --
 a wrong drawing rather than a missing feature, and one nothing downstream
 can tell from a house the drafter meant.
 
+**What the refusal SAID went stale, and cost a bug report.** It read
+"Detached garages are not on this page yet -- the house outline is", which
+was true when it was written and stopped being true when `buildOrderedGarage`
+landed: the sign's bone sets a garage on the lot. Movie read that sentence on
+18 Sep, believed the page, and reported the garage as broken; he found the
+working gesture only by pressing the bone anyway. The refusal now names that
+gesture. A stale refusal is worse than no refusal -- it argues the drafter
+out of something that works -- and the assertion that held the old sentence
+in place is the reason it survived the feature that falsified it.
+
+**THE BONE AT THE WINDOW NOW ANSWERS A HOUSE ORDER.** It had exactly one
+listener and that listener builds garages: `buildOrderedGarage` opens with
+`if (!drawing || !order?.entry?.needsSize || !order.size) return null`, and
+no house entry carries `needsSize`. So a house order fell out of it before it
+built anything AND before it took the sign down -- the drafter pressed the
+bone under a dog that had just said "press the bone and I'll build it", and
+got silence behind a board still standing in his way. Measured from Movie's
+own screen, 18 Sep.
+
+For one rung the press meant **"I'll draw it myself"** -- the sign came down
+and the armed trace was handed over -- and Movie ruled that out the same day:
+*"we shouldn't put it in the drivethru window yet, i'd just like to offer them
+premade designs in there at the beginning"*, and for the tiles with no design,
+*"have those tiles say 'not ready yet' and build nothing"*.
+
+So the window does ONE thing and says when it cannot. **1 STOREY and 1 STOREY
++ GARAGE build**, from `premade-plans.js`; **2 STOREY and the bilevels answer
+`NOT READY YET.` on the sign and write nothing**, and the board STAYS UP,
+because nothing was built and the drafter has not been answered -- 1 STOREY is
+one press away, in front of him. A board that replies to a press by quietly
+arming a tool somewhere else teaches the drafter that its button means
+something other than what it says.
+
+The refusal is the SIGN'S, where the garage's `HOW BIG, THOUGH?` and `YOU'VE
+GOT ONE ALREADY` already land, and it is decided on the GEOMETRY side rather
+than in the bone's handler with those two. The seam's rule is that what an
+order MEANS is the geometry side's call (`:4184`), and refusing earlier would
+also stop the order reaching the seam at all -- which `model-drivethru.spec.js`
+measures, each press firing its own seam and not the other's.
+
+Movie's scope for the designs, 18 Sep: bungalows and attached garages first,
+bilevel later because it "will be more complex and need more work".
+
+**A built design puts the trace down with it.** Pressing the tile arms the
+outline through `onChoose` and that still stands -- a drafter who CLOSES the
+board instead of pressing the bone means to draw it himself. Once the house is
+built he does not, and a trace left armed over a finished house turns his next
+press, at his own new house, into the first corner of a second one.
+
+
+**A REFUSED order is not spent; a BUILT one is.** `orderServed()` means the
+geometry side BUILT it (`MODEL.html:4262`), so a `NOT READY YET.` leaves the
+choice standing -- the drafter has not been answered, and spending it would
+re-open the board with no tile pressed under a drafter who is plainly still
+asking. It would also stop the foot bone recognising the choice
+(`if (chosen()) return`) and pop the sign back up over whatever he was doing.
+
+The check that catches that had to be repaired before it could: `callSign`
+lights the button and waits two seconds before the sign rises, so the first
+draft read the board's state from INSIDE that glow and passed with the order
+spent. The lit press is the immediate tell; the board is the one the drafter
+sees.
+
 `model-html-topbar.spec.js` still asserts the wall count does not move across
-a family press, an entry press or BONE, and that is not a leftover: pressing a
-house type arms a trace and writes nothing, so the wall count holding still is
-exactly right. What changed is that the outline the trace commits is the
+a family press, an entry press or BONE, and that is not a leftover -- but it
+now says something narrower than it did. It presses `twoStorey-garage`, a tile
+with no design, so the bone REFUSES and the count holds. A tile that HAS a
+design writes ten walls on that press, deliberately, and the seam is still
+uncrossed: the bar records a type and decides no geometry, and the geometry
+side reads `premade-plans.js`. What changed is that the outline the trace commits is the
 drafter's own, drawn corner by corner -- the bar still decides no geometry,
 which is the seam #389 drew and this rung did not cross.
 
@@ -172,13 +238,14 @@ as a tap guard naming `level-pick`.
 | Draw a wall | wall tool | **present** — survives a reload | must-have | **driven**; the mutation row: `drawPress` no-op makes this fail |
 | Draw a line | line tool | absent | must-have | |
 | Draw a floor | floor tool | absent | must-have | it paints floors it cannot create |
-| Draw an outline | outline tool | **present** | done | BUILD HOUSE reads outlines. #389 put the house-type buttons and BONE on the page and this row did not move, because the old page's `_pressBuildType` does two things — records the type AND arms the outline tool — and only the first half came across. The second half is here now: a house-type press arms the trace, successive presses drop corners, and pressing the first corner again closes the loop. It persists the old page's shape through `outline-master.js` rather than a twin of it — master on the boneyard shelf, a copy on every level, linked by `masterId` and per-point `srcId`. This page still shows no BONEYARD and writes the master anyway, sight unseen. Round trip is the acceptance and it runs both ways: `model-html-outline.spec.js` draws on this page and the OLD page's bone builds the traced loop from it. The part-drawn trace paints in the armed family's colour — house red, split blue — through the same painter the old page traces with. Out of scope and still absent: garage outlines (a DETACHED GARAGE press says so on the strip and arms nothing), arc segments, the R typed-length ruler, and node drag on a drawn outline |
-| Place a roof | roof tool | absent | must-have | paints, cannot place |
+| Draw an outline | outline tool | **present** | done | BUILD HOUSE reads outlines. #389 put the house-type buttons and BONE on the page and this row did not move, because the old page's `_pressBuildType` does two things — records the type AND arms the outline tool — and only the first half came across. The second half is here now: a house-type press arms the trace, successive presses drop corners, and pressing the first corner again closes the loop. It persists the old page's shape through `outline-master.js` rather than a twin of it — master on the boneyard shelf, a copy on every level, linked by `masterId` and per-point `srcId`. This page still shows no BONEYARD and writes the master anyway, sight unseen. Round trip is the acceptance and it runs both ways: `model-html-outline.spec.js` draws on this page and the OLD page's bone builds the traced loop from it. The part-drawn trace paints in the armed family's colour — house red, split blue — through the same painter the old page traces with. The way IN is **U, or the house strip** — and the old page is the same shape: its column is the same seventeen keys (`MODEL.dc.html:24035`) with no OUTLINE button on it, while `outline` is a live tool there reached by its binding, `U` (`profile-manager.js`). So outline is in this page's roster with `group: null`, which keeps it out of every group's list and therefore out of the column while it still answers `availableOn`, `keyFor` and the register. It is on the TOY board too, which is the ruling the roster already carried in prose ("no drafting tools EXCEPT the one gesture that makes the outline"); WALL stays beside it rather than being replaced, because §1's squaring and foot-landing rule is built on the wall gesture and moving TOY off it is its own rung. Either half of the strip arms it — pressing the tile, or pressing the sign's bone, which also takes the board down and names the gesture on the strip. Out of scope and still absent: garage outlines (a DETACHED GARAGE press arms no house trace and points at the bone, which builds one), arc segments, the R typed-length ruler, and node drag on a drawn outline |
+| Place a roof | roof tool | **present** — footprint in, edges tagged | done | this row read `absent` long after it stopped being true (the tool landed in `1c48b0d`), which is what a hand-kept table costs. The gesture is the from-a-shape path only — build from the footprint, then flip each edge EAVE / GABLE — and NOT the old page's second entry at `:16584`. `model-roof-gesture.spec.js` checks the PERSISTED record rather than the paint, because a roof with a wrong key still draws: `drawRoof2D` reads points and edges and ignores the rest |
 | Place a stair | stair tool | absent | must-have | paints, cannot place |
-| Place fenestration | fenestration tool | absent | must-have | |
+| Place fenestration | fenestration tool | **absent — but openings PAINT now** | must-have | the page drew no windows or doors at all until 18 Sep: every real drawing in this app has fenestrations, and a house opened here showed BLANK WALLS. The records loaded, saved back untouched, and were never painted — the quiet kind of wrong, where the drawing is not damaged, it is just not the drawing. The painter is `render-2d.js drawOpening2D`, lifted out of `MODEL.dc.html:7646` unchanged in what it draws, with the old page delegating to it and passing no colours so its own two literals survive through the fallbacks. This page supplies `surface-page` for the gap (the old page's `#fafafa` matches ITS clear colour; on a night ground the same fill is a bright hole punched through a dark wall) and `draw-wall-edge` for the ink — an opening's jambs ARE wall edges, and that role already documents the two grounds they sit on, which is the measurement a new role would have had to repeat. Still absent: the gesture that PLACES one |
 | Place a dimension | dimension tool | absent | must-have | paints, cannot place |
 | Beam / column / trim / shape / node / annotation / fixture | seven tools | **absent — unreachable, measured** | ? **Movie's call, not mine** | **driven**: the page's entire DRAWING surface is `draw-wall`, `delete-wall`, `save`, `take-over`, `level-pick`, `view-pick` and zero inputs. #389 added chrome around it — two sidebar tabs, three house-type families and BONE — and none of those is a tool: the tabs open panels, and the build bar is on the far side of a seam that draws nothing. The left panel is the slot those seven will land in. Whether their absence blocks a day's work is still not a measurement |
-| Cut a section | cut tool | absent | must-have | and no viewer either — see cut-view spec |
+| Cut a section | cut tool | **present** — three presses: the two ends, then the side to look FROM | done | the arithmetic is `geometry-2d.js` (`cutPerpendiculars` / `cutSide` / `cutDirVec`), shared rather than twinned, with `proto/cut-direction-harness.js` on it. **What the specs measure is the record, not the picture**: a cut stored backwards draws an IDENTICAL line on the plan and mirrors every section built from it, so the check is a dot product — the stored direction points AWAY from the pressed side — which holds at any angle and cannot be satisfied by swapping a convention in two places. The id is a NUMBER, derived as `max(1, ...cuts.map(id + 1))` the way the old page derives it on load, because `drawing-format.js:79` reads a cut id with `Number.isInteger` and this page's own minter hands out strings. Still absent: no viewer — the old page draws the section |
+| Tool keyboard shortcuts | every tool answers its letter | **present** — the letters were painted and dead until 18 Sep | must-have | the column has drawn a letter on every key since it was built, from the roster, which reads the drafter's OWN bindings — and pressing the key the page drew did nothing. Seventeen instructions the page could not carry out, which is the same defect class as the stale garage refusal: the page stating something about itself that is not true. One handler now matches the event against each tool's binding through `DraftKeyboard.eventMatchesBinding`, so no combination falls through by accident (`Ctrl+Z` is not `Z`), a letter typed into a field stays a character, and a board that refuses a tool refuses its letter **without spending the drafter's armed tool** — `setTool` falls back to SELECT on a refused id, so availability is asked before the press is spent. Tools with `command: null` (ANNOTATION, COLUMN, BEAM, STAIR, FIXTURE) have no binding on the old page either, so they have no letter to press. `C` for the cut tool is NOT wired: cut is not a roster tool, it is the SECTIONS panel's `+ CUT` |
 | Select a thing | select tool | **partial** — a wall answers a click, a floor and a dimension do not | must-have | **driven**: click each, press Delete; only the wall goes. Read as `present` |
 | Drag an endpoint | corner drag | **present** — pointer drag, undo captures `move` | must-have | |
 | Delete a thing | delete | **present** — button, `Delete`, `Backspace` | must-have | |
@@ -200,7 +267,7 @@ as a tap guard naming `level-pick`.
 | Save | press | **present** — press, plus the rung-4 hide-save | must-have | |
 | Cut-view seats and plan seats | right-hand cards, twelve on the bungalow | **present** — the seating chart is DERIVED from `drawing.levels`, not listed | must-have | fourteen seats on `perf-bungalow` — twelve filled and two empty section chairs — in the old page's own order and pairing, `FOUNDATION \| BASEMENT (WALLS)` included. **Driven**: add a level in the panel and two named seats appear without a reload; delete it and they leave. Plan seats go through this page's own painters, so a thumbnail cannot drift from the plan it shows |
 | LEVELS / LAYERS panel | right-edge panel, `:1850-1955` | **present** — a third pane in the right-edge tab group | must-have | a card per level with its layer rows from `layerViewsForLevelId`, the active one lit, and the DATUM read off `elevationDatum`. It is the RAIL'S EDITOR: the rows are the same objects as the seats |
-| SECTIONS list | cuts, with `Press [C] to cut a view` | **partial — listed and deletable, not cuttable** | **settled** | the hint is **deliberately not carried**: there is no `[C]` handler and no cut tool on this page, so the empty state says sections are cut in LAYOUT. Driven: `c` is pressed and neither the page nor the file changes |
+| SECTIONS list | cuts, with `Press [C] to cut a view` | **present — listed, deletable and cuttable** | done | the panel carries a `+ CUT` button rather than the old page's `[C]`: this page's letters come from the roster and a section is not a roster tool, so the gesture is named where it is used. The empty line used to read "this page has no cut tool — sections are cut in LAYOUT" and now names the three presses. Undo takes the row and the record together — the undo handler rebuilds the rails, which it never needed to do before a section had a row of its own |
 | BONEYARD shelves | shelves, `+ SHELF` | **listed, not editable** | **settled** | consistent with the boneyard row above — the level picker offers no way to reach one, so a `+ SHELF` would write a shelf this page can never open |
 | 3D VIEW | `⬡ 3D` button | **absent — a chair, not a button** | ? **Movie's call** | Movie: "we are leaving 3D to last once everything else is perfect". There is no WebGL, three.js or perspective camera in `MODEL.html` at all, so the row is disabled rather than wired to nothing |
 | Chrome over the drawing area | `#save` / `#chrome` / `#readout` overlay as **strips**, plus pull-out tabs on both edges | **present, and now measured** — #389 moved the rail into a collapsible right sidebar and added a left one, both shut by default | ? **Movie's call** | the block in the corner is gone, so the difference this row recorded no longer holds. It IS a measurement now. Re-measured when the chart grew to fourteen seats: collapsed is capped at two rows and scrolls, at **4.3%** of the drawing — better than the 5.4% the shell shipped at, with more than twice the seats. Uncapped it was 13.2%, worse than the full-height version #389 rejected. What is still a look-at-it decision is whether that is too much |

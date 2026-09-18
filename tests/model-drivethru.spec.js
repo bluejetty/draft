@@ -228,7 +228,12 @@ test('the post\'s bone orders off the menu; the foot\'s builds what was drawn',
       window.ModelBuild.onOrder(p => ordered.push(p?.entry?.id ?? 'null'));
       document.querySelector('#dt-tiles [data-build-family="bungalow"]').click();
       await new Promise(r => setTimeout(r, 60));
-      document.querySelector('#dt-tiles [data-build-entry]').click();
+      // 2 STOREY, DELIBERATELY: this test is about the PLUMBING -- each press
+      // firing its own seam and not the other's -- and 1 STOREY now carries a
+      // premade design, so on this fixture (which already has houses) the
+      // board refuses the order before it ever reaches the seam. A refusal is
+      // the right answer to that press and the wrong thing to measure here.
+      document.querySelector('#dt-tiles [data-build-entry="twoStorey"]').click();
       await new Promise(r => setTimeout(r, 60));
       const chosen = window.ModelBuild.chosen()?.entry?.id ?? 'null';
       document.getElementById('dt-bone').click();
@@ -501,7 +506,11 @@ test('the bone with nothing chosen opens the house round, not the outline one',
       window.ModelBuild.onOrder(p => seen.push(p?.round ?? 'none'));
       document.querySelector('#dt-tiles [data-build-family="bungalow"]').click();
       await new Promise(r => setTimeout(r, 60));
-      document.querySelector('#dt-tiles [data-build-entry]').click();
+      // 2 STOREY again, and for the same reason as the seam test above: the
+      // ROUND is what this measures, and 1 STOREY now carries a premade design
+      // that this fixture's existing houses make the board refuse before the
+      // order is ever fired.
+      document.querySelector('#dt-tiles [data-build-entry="twoStorey"]').click();
       await new Promise(r => setTimeout(r, 60));
       document.getElementById('dt-bone').click();
       return seen;

@@ -90,7 +90,18 @@ test('THE SEAM: choosing a house draws nothing at all', async ({ page }) => {
 
   // And the one on the foot, which is only reachable with the sign down --
   // the board covers it, deliberately.
-  await page.locator('[data-drivethru-close]').click();
+  //
+  // THE BOARD IS ALREADY DOWN, and this used to press CLOSE to put it there.
+  // A house order now takes the sign with it: the bone hands the drafter the
+  // armed outline trace and gets out of the way, so CLOSE is no longer on the
+  // page to press and the click sat there until the test timed out. The
+  // assertion this test exists for is untouched -- handing over a trace draws
+  // no geometry, which is exactly what the count below still says.
+  // Asked by VISIBILITY, not by count: a shut sign keeps its CLOSE button in
+  // the document and merely hides it, so a count check finds one and then
+  // waits three minutes for something that is never going to be clickable.
+  const close = page.locator('[data-drivethru-close]');
+  if (await close.isVisible()) await close.click();
   await page.locator('#bone').click();
   await page.waitForTimeout(300);
   expect(await wallCount(page), 'BONE drew geometry — the generator is wired in')

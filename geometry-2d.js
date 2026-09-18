@@ -1307,6 +1307,46 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     };
   };
 
+  // ─── WHICH WAY A SECTION LOOKS ───────────────────────────────────────────
+  //
+  // A cut is a line plus a direction, and the direction is the half of it that
+  // is easy to store backwards. The drafter draws the line and then presses
+  // the side they want to SEE; what the file keeps is where the VIEWER
+  // STANDS, which is the opposite perpendicular. MODEL.dc.html:22324 says so
+  // in its own words -- "the clicked arrow is the way the view LOOKS; dirVec
+  // records where the viewer STANDS" -- and a cut stored the wrong way round
+  // draws an identical line on the plan and a mirrored section everywhere
+  // else.
+  //
+  // Lifted here because MODEL.html has to cut sections now, and this is the
+  // one piece of the gesture that cannot be checked by looking at the plan.
+
+  // The two perpendiculars of a cut line, as unit vectors. Null when the line
+  // has no length, because a cut with no direction is not a cut.
+  const cutPerpendiculars = (start, end) => {
+    const dx = end.x - start.x, dz = end.z - start.z;
+    const len = Math.hypot(dx, dz);
+    if (!(len > 0)) return null;
+    const nx = dx / len, nz = dz / len;
+    return { left: { x: -nz, z: nx }, right: { x: nz, z: -nx } };
+  };
+
+  // Which side of the cut line a point falls on: the 2D cross product, so
+  // positive is one side and negative the other. Zero means ON the line, and
+  // the caller decides what to do about a press that picks no side.
+  const cutSide = (start, end, at) =>
+    (end.x - start.x) * (at.z - start.z) - (end.z - start.z) * (at.x - start.x);
+
+  // THE STORED DIRECTION for a press on one side, with the flip already in it.
+  // Ported from the old page exactly: a positive side takes the RIGHT
+  // perpendicular, and that is the answer whichever way it reads, because the
+  // press is where the drafter looks FROM the other side.
+  const cutDirVec = (start, end, at) => {
+    const perps = cutPerpendiculars(start, end);
+    if (!perps) return null;
+    return cutSide(start, end, at) > 0 ? perps.right : perps.left;
+  };
+
   window.DraftGeometry2D = {
     distance,
     worldPerPixel,
@@ -1347,6 +1387,9 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     openingEndReserveFt,
     clampOpeningToWall,
     openingGeometry,
+    cutPerpendiculars,
+    cutSide,
+    cutDirVec,
   };
 })();
 }
