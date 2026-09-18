@@ -243,13 +243,40 @@ if (!window.DraftPalette) {
     }),
     day: Object.freeze({
       'surface-page':    '#f2f2f3',
-      // 0.80, NOT NIGHT'S 0.50. Movie, 17 Sep, on seeing it: "make the daytime
-      // tint 80% maybe, it looks better darker". So the two modes do NOT carry
-      // one number after all -- and that is a taste ruling on a white ground
-      // rather than a retreat from "the same tint on both": a panel that
-      // passes 50% of a light page through reads as barely there, where the
-      // same 50% over a dark one still reads as a panel.
-      'surface-panel':   'rgba(255,255,255,0.80)',
+      // A GREY, NOT A WHITE, AND THAT IS THE WHOLE FIX. Movie, 17 Sep: "make
+      // the daytime tint 80% maybe, it looks better darker" -- which was
+      // written in as rgba(255,255,255,0.80), and an alpha of 0.80 is 80%
+      // OPAQUE. It went the wrong way. Movie, 18 Sep, looking at the live
+      // page: "doesn't look like it".
+      //
+      // MEASURED BEFORE IT WAS CHANGED, out of 255. A white panel at 0.80
+      // passes a fifth of what is behind it, so a minor grid line under the
+      // panel sat 3.4 off the panel's own ground and a major one 7.5. At the
+      // 0.88 it replaced those were 2.0 and 4.7 -- so the whole ruling moved
+      // the picture by a point and a bit, which is exactly what "doesn't look
+      // like it" describes.
+      //
+      // AND TURNING THE ALPHA DOWN CANNOT RESCUE IT. The panel is white and
+      // the page is #f2f2f3, near enough white already: at 0.50 the grid comes
+      // up to 8.6 but the panel ends up only 6 lighter than the page and stops
+      // reading as a panel at all. That is the trap the previous note here
+      // described and then walked into -- on a light ground the alpha trades
+      // the panel away for the grid, and there is no setting that keeps both.
+      //
+      // SO THE PANEL IS DARKER THAN THE PAGE INSTEAD OF LIGHTER. This grey at
+      // 0.60 sits 6.3 under the page, which is what makes it read as a panel,
+      // and passes two fifths of what is behind it: a minor grid line shows at
+      // 6.9, against night's 4.9. That is the "darker" that was asked for, and
+      // it is the first value here that is a colour decision rather than an
+      // opacity one.
+      //
+      // WHAT SETS THE CEILING IS THE MARK, not taste. accent-mark on day is
+      // the red #c0392b, and the harness wants 4.5 of it on this panel. A
+      // first pass at rgba(226,228,230,0.75) -- 10.9 under the page, which
+      // looks better -- put the red at 4.41 and went red in the gate. These
+      // numbers are the darkest panel the red still reads on, at 4.60, and the
+      // next person to want it darker has to move the mark first.
+      'surface-panel':   'rgba(230,232,234,0.60)',
       'surface-chip':    '#e4e4e6',
       'edge-panel':      '#c6c8ca',
       'ink-primary':     '#1d1f20',
@@ -337,7 +364,13 @@ if (!window.DraftPalette) {
       //
       // DAY IS THE ACCENT ITSELF, because he scoped it -- "for NIGHT version
       // only" -- and because the reason does not apply: the day mark is a dark
-      // red on a near-white panel at 4.74, which is already comfortable.
+      // red and it reads on the day panel at 4.60.
+      //
+      // IT USED TO BE 4.74, ON A PANEL THAT WAS NEARLY WHITE. The day panel is
+      // now a grey (see surface-panel above, 18 Sep) and this pair is what
+      // stopped it going darker still -- so this red and that grey are a pair
+      // now, and moving either without the other is what the harness will
+      // catch.
       night: Object.freeze({ accent: '#fd0000', 'accent-ink': '#ffffff',
         'accent-mark': '#f0b429' }),
       day:   Object.freeze({ accent: '#c0392b', 'accent-ink': '#ffffff',
