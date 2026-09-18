@@ -8137,23 +8137,48 @@
   // zoomed in.
   const OUTLINE_CLOSE_FT = 1.5;
 
+  // IS THIS A GARAGE ORDER? Asked in ONE place because two copies of it is
+  // how the trace and the bone come to disagree about the same tile -- and
+  // they answer opposite questions from the same test, so a copy that drifted
+  // would arm a house trace for a garage at one end and refuse to build it at
+  // the other.
+  const isGarageChoice = picked =>
+    picked?.family?.id === 'detachedGarage' || Boolean(picked?.entry?.foundation);
+
+  // WHAT THE DRAFTER PRESSES NEXT, in the words of the thing he picked. One
+  // sentence, said from both ways in -- the tile arms the trace, and the
+  // bone takes the sign down over the top of it -- so the page cannot tell
+  // him two different things about one gesture.
+  const sayTraceThe = picked => sayOnStrip(
+    `Trace your ${picked?.entry?.label || 'house'} — press each corner, then the `
+    + 'first corner again to close.');
+
   const armOutline = picked => {
     // A DETACHED GARAGE PRESS IS NOT A HOUSE TRACE, and answering it with one
     // is worse than answering it with nothing. The old page sends those
     // entries to _toggleGarageMode('detached') with the foundation they
-    // pre-answered (MODEL.dc.html:14339); garages are out of this rung
-    // entirely, so arming the house trace here would take a garage press and
-    // persist a master carrying `garage: false` -- a wrong drawing rather than
-    // a missing feature, and one nothing downstream can tell from a house the
-    // drafter meant to draw.
-    if (picked?.family?.id === 'detachedGarage' || picked?.entry?.foundation) {
-      sayOnStrip('Detached garages are not on this page yet — the house outline is.');
+    // pre-answered (MODEL.dc.html:14339); garages are not traced on this page,
+    // so arming the house trace here would take a garage press and persist a
+    // master carrying `garage: false` -- a wrong drawing rather than a missing
+    // feature, and one nothing downstream can tell from a house the drafter
+    // meant to draw.
+    //
+    // AND IT NO LONGER SAYS THEY ARE NOT ON THIS PAGE, because they are:
+    // buildOrderedGarage (:7085) sets one on the lot off the sign's bone. The
+    // old sentence was written before that landed and it cost Movie a bug
+    // report -- he read "not on this page yet", believed the page, and only
+    // found the working gesture by pressing the bone anyway. A refusal that
+    // is out of date is worse than no refusal: it argues the drafter out of
+    // something that works.
+    if (isGarageChoice(picked)) {
+      sayOnStrip('Pick a size, then press the bone — I’ll set the garage on the lot.');
       return;
     }
     activeTool = 'outline';
     outlineCorners = [];
     outlineFamily = picked?.family ?? null;
     drawStart = null;
+    sayTraceThe(picked);
     paint();
   };
 
@@ -8220,6 +8245,46 @@
   // press records the type (that half already worked) and now arms the trace,
   // which is what _pressBuildType has always done in one motion.
   window.ModelBuild.onChoose(picked => { if (picked) armOutline(picked); });
+
+  // A HOUSE ORDER AT THE WINDOW MEANS "I'LL DRAW IT MYSELF" -- for now.
+  //
+  // The sign's bone had ONE listener and it builds garages: buildOrderedGarage
+  // (:7085) opens with `if (!drawing || !order?.entry?.needsSize || !order.size)
+  // return null`, and only the detached garage carries `needsSize`. So every
+  // house order fell out of that guard before it built anything AND before it
+  // took the sign down -- the drafter pressed the bone under a dog that had
+  // just said "press the bone and I'll build it", and got silence and a board
+  // still in his way. Measured from Movie's own screen, 18 Sep.
+  //
+  // THE PREMADE HOUSE IS THE NEXT RUNG, not this one: this page carries
+  // garage-site.js but neither starter-shape.js nor build-house.js, which are
+  // where the old page's "press the bone and a house appears" lives. Until
+  // those land, the honest answer to the press is the one the page can keep --
+  // the trace is ALREADY ARMED, because the tile armed it through onChoose the
+  // moment it was pressed. So the sign gets out of the way and the strip says
+  // what to press. A bone that does nothing teaches a drafter the button is
+  // broken; this hands him the gesture he was one press away from.
+  //
+  // THE GARAGE ORDER IS NOT TOUCHED. It is served by the listener above, which
+  // runs first, builds, and spends the order; this one recognises the same
+  // tile through the same predicate and stands off.
+  window.ModelBuild.onOrder(order => {
+    if (!order?.entry || isGarageChoice(order)) return;
+    // Re-armed rather than assumed. The order carries the choice, and a
+    // drafter who picked a type, wandered off into another tool and came back
+    // to press the bone would otherwise get the sign down over whatever he
+    // was last holding.
+    armOutline(order);
+    setSign(false);
+    // AND THE ORDER IS NOT SPENT, which the garage's is. orderServed means
+    // "the geometry side BUILT it" (:4262) and nothing was built here -- the
+    // drafter is about to build it himself, and the type he is drawing is the
+    // one he just picked. Two things go wrong if this lies about that: the
+    // board would re-open with no tile pressed under a drafter who is plainly
+    // mid-house, and the foot bone's `if (chosen()) return` (:4652) would stop
+    // recognising the choice and pop the sign back up over the trace in
+    // progress. The tile is spent when a house lands, which is the next rung.
+  });
 
   // ── THE CUT TOOL: a section line and the way it looks ─────────────────────
   //

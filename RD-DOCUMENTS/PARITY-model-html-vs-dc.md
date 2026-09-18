@@ -149,6 +149,46 @@ arming the house trace and persisting a master carrying `garage: false` --
 a wrong drawing rather than a missing feature, and one nothing downstream
 can tell from a house the drafter meant.
 
+**What the refusal SAID went stale, and cost a bug report.** It read
+"Detached garages are not on this page yet -- the house outline is", which
+was true when it was written and stopped being true when `buildOrderedGarage`
+landed: the sign's bone sets a garage on the lot. Movie read that sentence on
+18 Sep, believed the page, and reported the garage as broken; he found the
+working gesture only by pressing the bone anyway. The refusal now names that
+gesture. A stale refusal is worse than no refusal -- it argues the drafter
+out of something that works -- and the assertion that held the old sentence
+in place is the reason it survived the feature that falsified it.
+
+**THE BONE AT THE WINDOW NOW ANSWERS A HOUSE ORDER.** It had exactly one
+listener and that listener builds garages: `buildOrderedGarage` opens with
+`if (!drawing || !order?.entry?.needsSize || !order.size) return null`, and
+no house entry carries `needsSize`. So a house order fell out of it before it
+built anything AND before it took the sign down -- the drafter pressed the
+bone under a dog that had just said "press the bone and I'll build it", and
+got silence behind a board still standing in his way. Measured from Movie's
+own screen, 18 Sep.
+
+Today the press means **"I'll draw it myself"**: the sign comes down, the
+trace is re-armed for the chosen type, and the strip names the gesture in the
+entry's own words -- *"Trace your 1 STOREY -- press each corner, then the
+first corner again to close."* The tile armed that trace already, at the
+moment it was pressed; what was missing was a page that said so and a board
+that got out of the way. **The premade house per type is the next rung**, and
+it is not here: this page carries `garage-site.js` but neither
+`starter-shape.js` nor `build-house.js`, which is where the old page's "press
+the bone and a house appears" lives. Movie's scope for it, 18 Sep: bungalows
+and attached garages first, bilevel later.
+
+**The house order is NOT spent.** `orderServed()` means the geometry side
+BUILT it (`MODEL.html:4262`) and nothing was built -- the drafter is about to
+build it himself. Spending it would re-open the board with no tile pressed
+under a drafter plainly mid-house, and would stop the foot bone recognising
+the choice (`if (chosen()) return`), popping the sign back up over a trace in
+progress. Caught by mutation, and the check that catches it had to be repaired
+first: `callSign` lights the button and waits two seconds before the sign
+rises, so the first draft read the board's state from inside that glow and
+passed with the order spent.
+
 `model-html-topbar.spec.js` still asserts the wall count does not move across
 a family press, an entry press or BONE, and that is not a leftover: pressing a
 house type arms a trace and writes nothing, so the wall count holding still is
@@ -172,7 +212,7 @@ as a tap guard naming `level-pick`.
 | Draw a wall | wall tool | **present** — survives a reload | must-have | **driven**; the mutation row: `drawPress` no-op makes this fail |
 | Draw a line | line tool | absent | must-have | |
 | Draw a floor | floor tool | absent | must-have | it paints floors it cannot create |
-| Draw an outline | outline tool | **present** | done | BUILD HOUSE reads outlines. #389 put the house-type buttons and BONE on the page and this row did not move, because the old page's `_pressBuildType` does two things — records the type AND arms the outline tool — and only the first half came across. The second half is here now: a house-type press arms the trace, successive presses drop corners, and pressing the first corner again closes the loop. It persists the old page's shape through `outline-master.js` rather than a twin of it — master on the boneyard shelf, a copy on every level, linked by `masterId` and per-point `srcId`. This page still shows no BONEYARD and writes the master anyway, sight unseen. Round trip is the acceptance and it runs both ways: `model-html-outline.spec.js` draws on this page and the OLD page's bone builds the traced loop from it. The part-drawn trace paints in the armed family's colour — house red, split blue — through the same painter the old page traces with. Out of scope and still absent: garage outlines (a DETACHED GARAGE press says so on the strip and arms nothing), arc segments, the R typed-length ruler, and node drag on a drawn outline |
+| Draw an outline | outline tool | **present** | done | BUILD HOUSE reads outlines. #389 put the house-type buttons and BONE on the page and this row did not move, because the old page's `_pressBuildType` does two things — records the type AND arms the outline tool — and only the first half came across. The second half is here now: a house-type press arms the trace, successive presses drop corners, and pressing the first corner again closes the loop. It persists the old page's shape through `outline-master.js` rather than a twin of it — master on the boneyard shelf, a copy on every level, linked by `masterId` and per-point `srcId`. This page still shows no BONEYARD and writes the master anyway, sight unseen. Round trip is the acceptance and it runs both ways: `model-html-outline.spec.js` draws on this page and the OLD page's bone builds the traced loop from it. The part-drawn trace paints in the armed family's colour — house red, split blue — through the same painter the old page traces with. The way IN is the house strip, not a tool key: there is no OUTLINE key in the seventeen-key column and `tool-roster.js` leaves it out on purpose ("drawing the outline is not a drafting tool, it is how a TOY house begins"). Either half of the strip arms it — pressing the tile, or pressing the sign's bone, which also takes the board down and names the gesture on the strip. Out of scope and still absent: garage outlines (a DETACHED GARAGE press arms no house trace and points at the bone, which builds one), arc segments, the R typed-length ruler, and node drag on a drawn outline |
 | Place a roof | roof tool | **present** — footprint in, edges tagged | done | this row read `absent` long after it stopped being true (the tool landed in `1c48b0d`), which is what a hand-kept table costs. The gesture is the from-a-shape path only — build from the footprint, then flip each edge EAVE / GABLE — and NOT the old page's second entry at `:16584`. `model-roof-gesture.spec.js` checks the PERSISTED record rather than the paint, because a roof with a wrong key still draws: `drawRoof2D` reads points and edges and ignores the rest |
 | Place a stair | stair tool | absent | must-have | paints, cannot place |
 | Place fenestration | fenestration tool | absent | must-have | |

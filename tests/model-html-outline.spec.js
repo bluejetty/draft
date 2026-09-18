@@ -389,8 +389,17 @@ test('a DETACHED GARAGE press arms no house trace, and says why', async ({ page 
   // THE BOARD IS STILL UP -- pressing an entry does not shut it -- so the
   // garage press is the drafter's next press, with nothing reset in between.
   await pickHouseType(page, 'detachedGarage', 'detached-thickened');
-  await expect(page.locator('#strip-message'))
-    .toContainText('Detached garages are not on this page yet');
+  // WHAT IT SAYS NOW POINTS AT THE GESTURE THAT WORKS. This assertion used to
+  // read 'Detached garages are not on this page yet', which was true when it
+  // was written and stopped being true when buildOrderedGarage landed -- the
+  // sign's bone sets one on the lot. Movie read that sentence on 18 Sep,
+  // believed the page, and only found the working gesture by pressing the
+  // bone anyway. What the trace refuses is still exactly what it refused:
+  // arming a HOUSE trace for a garage tile. Only the sentence changed.
+  await expect(page.locator('#strip-message')).toContainText('press the bone');
+  await expect(page.locator('#strip-message'),
+    'and it no longer argues the drafter out of a gesture that works')
+    .not.toContainText('not on this page yet');
 
   await traceLoop(page, SQUARE);
   await saveOnNewPage(page);
@@ -403,3 +412,114 @@ test('a DETACHED GARAGE press arms no house trace, and says why', async ({ page 
     + 'feature')
     .toBe(1);
 });
+
+// ── THE WAY IN: THE TILE, AND THE BONE AT THE WINDOW ─────────────────────
+//
+// Movie, 18 Sep, at the drive-thru with 1 STOREY picked and Gruff saying
+// "press the bone and I'll build it": "outline command doesn't work". The
+// trace WAS armed -- the tile armed it the moment it was pressed -- and the
+// page said nothing about it, behind a board that did not come down. Both
+// halves of that are measured here.
+
+test('a house tile says what to trace, in the words of the thing picked',
+  async ({ page }) => {
+    await newPageOnSavedHouse(page);
+    await pickHouseType(page);
+
+    // THE ENTRY'S OWN LABEL, not "house". A sentence that named the family
+    // would read the same for 1 STOREY and 2 STOREY, and a drafter who picked
+    // the wrong tile would have nothing to notice it by.
+    await expect(page.locator('#strip-message')).toContainText('Trace your 1 STOREY');
+  });
+
+test("the sign's bone takes the board down and hands over the trace",
+  async ({ page }) => {
+    await newPageOnSavedHouse(page);
+    const before = houseMaster(await savedFile(page));
+    expect(before, 'no house master to start with').toBeNull();
+
+    await pickHouseType(page);
+    const sign = page.locator('#drivethru');
+    await expect(sign, 'the tile does not shut the board').not.toHaveAttribute('data-shut', '');
+
+    await page.locator('#dt-bone').click();
+
+    // THE BOARD GETS OUT OF THE WAY. Before this rung the bone's only listener
+    // was the garage builder, whose first line is
+    // `if (!drawing || !order?.entry?.needsSize || !order.size) return null`
+    // -- and no house entry carries needsSize, so a house order fell out of it
+    // before building anything AND before taking the sign down. The drafter
+    // pressed the bone and got a board still standing in front of the drawing.
+    await expect(sign, 'the board comes down on a house order').toHaveAttribute('data-shut', '');
+    await expect(page.locator('#strip-message')).toContainText('Trace your 1 STOREY');
+
+    // AND THE TRACE IS REALLY THERE, which is the half a message cannot prove:
+    // a page that printed the sentence and armed nothing would pass every
+    // assertion above. This one draws the house.
+    await traceLoop(page, SQUARE);
+    await saveOnNewPage(page);
+
+    const master = houseMaster(await savedFile(page));
+    expect(master, 'the loop the bone handed over became a master').not.toBeNull();
+    expect(master.points).toHaveLength(4);
+  });
+
+test('a house order does not spend the tile, because nothing was built',
+  async ({ page }) => {
+    await newPageOnSavedHouse(page);
+    await pickHouseType(page);
+    await page.locator('#dt-bone').click();
+    await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
+
+    // orderServed() means "the geometry side BUILT it", and nothing was built
+    // -- the drafter is about to build it himself. Spent, the board would
+    // re-open with no tile pressed under a drafter who is plainly mid-house,
+    // and the foot bone would stop recognising the choice and pop the sign
+    // back up over the trace in progress. THE FOOT BONE IS THE WITNESS: with a
+    // type still chosen it builds and returns; with the choice spent it falls
+    // through to callSign.
+    await page.locator('#bone').click();
+
+    // THE LIT PRESS IS THE IMMEDIATE TELL, and the reason this assertion is
+    // here rather than the board check alone: callSign LIGHTS THE BUTTON AND
+    // THEN WAITS TWO SECONDS before the sign rises (SIGN_LIGHT_MS). The first
+    // draft of this test read `data-shut` the moment the press landed, which
+    // is inside that glow -- so it passed with the order spent and the board
+    // already on its way up. Found by mutation.
+    await expect(page.locator('#bone'),
+      'the foot bone did not start calling the board back').not.toHaveAttribute('data-lit', '');
+
+    // AND THEN PAST THE GLOW, because the tell above is about the mechanism
+    // and this is about what the drafter sees.
+    await page.waitForTimeout(2600);
+    await expect(page.locator('#drivethru'),
+      'the choice still stands, so the foot bone does not call the board back '
+      + 'over a trace in progress').toHaveAttribute('data-shut', '');
+  });
+
+test('the bone re-arms the trace, so a tool picked in between does not eat it',
+  async ({ page }) => {
+    await newPageOnSavedHouse(page);
+    await pickHouseType(page);
+
+    // THE WANDER. The tile armed the trace; the drafter then reaches for a
+    // tool, changes his mind and goes back to the window to press the bone.
+    // Without the re-arm the board comes down over whatever he was last
+    // holding and his corners are drawn as WALLS -- a wrong drawing rather
+    // than a missing feature, and a worse answer than the silence this rung
+    // replaced.
+    await h.armWall(page);
+    expect(await h.wallArmed(page), 'the wall tool really is holding the '
+      + 'presses before the bone').toBe(true);
+
+    await page.locator('#dt-bone').click();
+    await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
+
+    await traceLoop(page, SQUARE);
+    await saveOnNewPage(page);
+
+    const master = houseMaster(await savedFile(page));
+    expect(master, 'the loop became an outline master, not four walls')
+      .not.toBeNull();
+    expect(master.points).toHaveLength(4);
+  });
