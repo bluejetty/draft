@@ -220,6 +220,18 @@ if (!window.DraftProjectPage) {
   // table's own TO SILL note adds to every row, so writing 33.5 here would
   // count the sill twice and read 2'-11" to bearing instead of 2'-9 1/2".
   const GARAGE_GRADE_BEAM_IN = 32;
+  // AND THE HOUSE CAN HAVE ONE NOW. Movie, 17 Sep: "the grade beam is 8"",
+  // and the height "make min. 32"". Same member as the garage's, so the same
+  // minimum -- but stated separately rather than shared, because the garage's
+  // 32 is a DEFAULT the drafter types over ("32" conc for garage grade beam
+  // is DEFAULT - changeable") and this one is a FLOOR the page refuses to go
+  // under. One number, two different meanings, and collapsing them would make
+  // whichever comment survived a lie about the other.
+  const HOUSE_GRADE_BEAM_MIN_IN = 32;
+  // 8" of concrete, the beam's own width -- not the foundation wall's, which
+  // is whatever wall type the drafter picked. Choosing a grade beam replaces
+  // that wall, so it replaces its thickness too.
+  const GRADE_BEAM_THICKNESS_IN = 8;
   // A THICKENED EDGE IS 1'-0" DEEP, and this is a second copy of cut-view.js's
   // GARAGE_EDGE_DEPTH_IN. Declared here rather than beside the slab slope with
   // the other duplicate because SECTION_TABLE_DEFAULTS reads it, and a const
@@ -481,16 +493,48 @@ if (!window.DraftProjectPage) {
   // 3.3pt apart vertically at slope -0.333, which is 3.13pt perpendicular =
   // 3.42" at that sheet's scale. A 2x4 chord.
   const ROOF_CHORD_IN = 3.5;
-  // Half a 10" pile shaft. It earned the HALF name when the old break line
-  // passed through a shaft and only the near half drew -- Movie, 16 Sep:
-  // "only half a pile will show due to the cut line". The garage draws whole
-  // now, so piles draw whole too, at twice this.
-  const PILE_HALF_WIDTH_IN = 5;
-  // Drilled piles under a grade beam land at about 8 ft on centre -- the
-  // spacing BUILD HOUSE and the drafters both work to. Now that the section
-  // draws the garage whole, the run carries every pile, not just the one the
-  // old break line happened to cut through.
-  const PILE_SPACING_FT = 8;
+  // A 12" PILE, CENTRED ON THE WALL IT CARRIES. Movie, 18 Sep: "the piles
+  // should show 12" dia. and the center of the pile should be center of the
+  // wall so about 2" should exten on each side of the 8" conc wall".
+  //
+  // Two numbers, and the second is the interesting one: 12" and an 8" beam
+  // give 2" of shaft standing proud on each face, so the shaft is drawn from
+  // the wall's own face rather than from its centre -- which is what makes it
+  // land right when the beam is not 8" and when the drawing is measured from
+  // an outside face, as the whole of this section is.
+  //
+  // It replaces a PILE_HALF_WIDTH_IN of 5. That name dated from the break
+  // line that used to pass through a shaft so only its near half drew (Movie,
+  // 16 Sep: "only half a pile will show due to the cut line"); nothing is cut
+  // through a pile any more, and a half-width that is no longer half of
+  // anything is a name that has to be read twice.
+  const PILE_DIAMETER_IN = 12;
+  // How far the shaft stands outside the face it is measured from. Derived,
+  // so a wider beam or a different pile keeps the shaft centred instead of
+  // drifting off it.
+  const pileProudFt = wallIn => (PILE_DIAMETER_IN - wallIn) / 24;
+  // A PILE IS NOT POURED AGAINST A FOOTING. Movie, 18 Sep: "that pile beside
+  // the foundation wouldn't be there it needs min 4'6 from footing." So a
+  // corner that falls inside this of a spread footing gets no pile at all --
+  // the beam spans past it and bears on the next one along.
+  const PILE_CLEAR_OF_FOOTING_FT = 4.5;
+  // How much shaft the section shows before cutting it off. Movie, 18 Sep:
+  // "extend the piles about 2 ft down before cutting them off". A real pile
+  // goes as deep as the soils report says, which is not a number this page
+  // has, so this is how much of it the drawing draws -- a convention, which
+  // is why it carries no dimension.
+  const HOUSE_PILE_SHOWN_FT = 2;
+  // WHERE THE SPACING RULE WENT. A const here said 8 ft on centre and the
+  // section stepped piles out along the beam from it. Movie, 17 Sep, settled
+  // both halves of that: the rule is richer than one number -- a pile at every
+  // corner, then under 8 ft between where it can, 10 ft at the outside, and
+  // never closer than 4 ft -- and it is the FOUNDATION PLAN's to apply, not
+  // this section's ("on the corners only", "will show 2"). A section that
+  // invents intermediate piles is drawing a layout it cannot see.
+  //
+  // So the number is gone rather than left unused: the spacing belongs with
+  // the plan that places them, and a spare 8 here would be a second opinion
+  // for that code to drift against.
   // The garage's own framing, a 2x6 wall on the sill. Its end wall shows now
   // that the section runs the garage's whole depth.
   const GARAGE_STUD_FT = 5.5 / 12;
@@ -887,8 +931,19 @@ if (!window.DraftProjectPage) {
     // the fill wall now occupies the top of that distance.
     const concTopFt = fdnTop - attachFt - (fillFt || 0);
     const fdnBot = concTopFt - fdn.wallHeightFt;
-    rect(0, fdnBot, fdnFt, concTopFt - fdnBot, 2);
-    attachment(rect, line, fdn.attachment, 0, concTopFt, fdnFt, attachFt * 12);
+    // A GRADE BEAM REPLACES THE WALL, it does not stand beside it. Movie,
+    // 17 Sep, on where the choice belonged: "it will be part of the
+    // foundation dropdown because the grade beam will replace the foundation
+    // wall". So this is the same band of concrete between the same two
+    // elevations, at the beam's own 8" -- everything above it, the
+    // attachment, the floor package, the whole house, is untouched. What
+    // changes is what is UNDER it: no strip footing, piles instead, and the
+    // void form between them.
+    const gradeBeam = fdn.foundationKind === 'gradebeam';
+    const beamFt = GRADE_BEAM_THICKNESS_IN / 12;
+    const bandFt = gradeBeam ? beamFt : fdnFt;
+    rect(0, fdnBot, bandFt, concTopFt - fdnBot, 2);
+    attachment(rect, line, fdn.attachment, 0, concTopFt, bandFt, attachFt * 12);
     // The fill wall stands on the attachment, its own faces at the wall's
     // thickness rather than the concrete's -- it is framing, not pour.
     if (fillFt) {
@@ -909,7 +964,7 @@ if (!window.DraftProjectPage) {
     // landing within a few inches of each other and reading as one string.
     // The foundation's thickness is as true half a foot down the wall as it
     // is at the top, and down there it has the space to itself.
-    anchors.fdnThickness = { x: fdnFt / 2, y: concTopFt - 0.55 };
+    anchors.fdnThickness = { x: bandFt / 2, y: concTopFt - 0.55 };
     const footW = fdn.footingWidthIn / 12, footD = fdn.footingDepthIn / 12;
     // ONLY THE FROST WALL MERGES. Against a frost wall the two footings are
     // one continuous pour at one depth, so the house's stops drawing its own
@@ -919,17 +974,67 @@ if (!window.DraftProjectPage) {
     // Movie, 17 Sep: "the footing in the middle is missing the 6\" piece on
     // the left side".
     const footRight = fdnFt / 2 + footW / 2;
-    if (values.footingFlushLeft === 'merge') {
+    if (gradeBeam) {
+      // NO FOOTING, FOR THE REASON THE GARAGE HAS NONE: a grade beam is hung
+      // off drilled piles and cast on a crushable void form, so a spread
+      // footing under it would be drawing the one thing choosing a beam means
+      // you are not building.
+      //
+      // THE PILES ARE THE CORNERS. Movie, 17 Sep, asked for them in the
+      // section -- "just do them for the section", "on the corners only" --
+      // and the corner this cut passes through is the exterior one at x = 0.
+      // The far corner of the house is out past the break line, so this slice
+      // honestly shows one; the run between them is the plan's to lay out.
+      // CENTRED ON THE BEAM, which here the cut shows in its thickness: the
+      // 12" shaft stands 2" proud of each face of the 8" beam, so it starts
+      // that far outside the exterior face rather than on it.
+      const proudFt = pileProudFt(GRADE_BEAM_THICKNESS_IN);
+      const pileX0 = -proudFt;
+      const pileX1 = bandFt + proudFt;
+      // TWO FEET FURTHER DOWN. Movie, 18 Sep: "on the house grade beam
+      // version extend the piles about 2 ft down before cutting them off".
+      //
+      // The bottom is a DRAWING CONVENTION, not a dimension -- a real pile is
+      // drilled to whatever the soils report gives, which is off this page --
+      // and the old one borrowed the footing depth, which on a beam is a
+      // number for a footing that is not there. Two feet of shaft reads as a
+      // pile going somewhere; eight inches read as a stub.
+      const pileBot = fdnBot - HOUSE_PILE_SHOWN_FT;
+      line(pileX0, fdnBot, pileX0, pileBot, 1.5);
+      line(pileX1, fdnBot, pileX1, pileBot, 1.5);
+      line(pileX0, pileBot, pileX1, pileBot, 1.5);
+      parts.push({ kind: 'hatch',
+        x: pileX0, y: pileBot, w: pileX1 - pileX0, h: fdnBot - pileBot });
+      anchors.housePile = { x: (pileX0 + pileX1) / 2, y: (fdnBot + pileBot) / 2 };
+      // The void form, from the pile's inside face to the break: 4" of board
+      // the beam is cast on, which crushes so heaving soil lifts nothing.
+      const voidY = fdnBot - VOID_FORM_IN / 12;
+      rect(pileX1, voidY, cut - pileX1, VOID_FORM_IN / 12, 1);
+      parts.push({ kind: 'hatch',
+        x: pileX1, y: voidY, w: cut - pileX1, h: VOID_FORM_IN / 12 });
+      anchors.houseVoidForm = { x: cut * 0.55, y: fdnBot - VOID_FORM_IN / 24 };
+    } else if (values.footingFlushLeft === 'merge') {
       line(0, fdnBot, footRight, fdnBot, 1.5);
       line(0, fdnBot - footD, footRight, fdnBot - footD, 1.5);
       line(footRight, fdnBot - footD, footRight, fdnBot, 1.5);
     } else {
       rect(fdnFt / 2 - footW / 2, fdnBot - footD, footW, footD, 1.5);
     }
-    anchors.footingWidth = { x: fdnFt / 2, y: fdnBot - footD - 0.5 };
-    anchors.footingDepth = { x: fdnFt / 2 + footW / 2 + 0.85, y: fdnBot - footD / 2 };
+    // NO FOOTING DRAWN, SO NO FOOTING ROWS. The page hides a schedule row
+    // whose part has no anchor, which is exactly the right behaviour here:
+    // offering FOOTING WIDTH and FOOTING DEPTH on a foundation that has
+    // neither would be two numbers for a part the drafter just said they are
+    // not pouring. (The pile still reaches the house's footing DEPTH for its
+    // conventional bottom -- a drawing convention, not a dimension, which is
+    // why it carries no label of its own either.)
+    if (!gradeBeam) {
+      anchors.footingWidth = { x: fdnFt / 2, y: fdnBot - footD - 0.5 };
+      anchors.footingDepth = { x: fdnFt / 2 + footW / 2 + 0.85, y: fdnBot - footD / 2 };
+    }
     const slabFt = fdn.slabIn / 12;
-    rect(fdnFt, fdnBot, cut - fdnFt, slabFt, 1);
+    // The slab pours against whatever is standing there -- the wall's face on
+    // a poured foundation, the beam's on a grade beam.
+    rect(bandFt, fdnBot, cut - bandFt, slabFt, 1);
     anchors.slab = { x: cut * 0.62, y: fdnBot + slabFt + 0.5 };
 
     // THE FLIGHTS, DIAGRAMMATIC. Movie, 16 Sep: "show a stair dropping down
@@ -997,7 +1102,10 @@ if (!window.DraftProjectPage) {
       extents: {
         minX: -roof.overhangFt - 1.3,
         maxX: cut + 1.6,
-        minY: fdnBot - footD - 1.1,
+        // THE DEEPEST THING DRAWN, which on a grade beam is the pile and not
+        // the footing. Measuring from the footing alone clipped two feet of
+        // shaft off the bottom of the canvas.
+        minY: Math.min(fdnBot - footD, gradeBeam ? fdnBot - HOUSE_PILE_SHOWN_FT : Infinity) - 1.1,
         maxY: topY + 1.1,
       },
     };
@@ -1380,6 +1488,26 @@ if (!window.DraftProjectPage) {
     const sillY = g.sillOffsetFt;
     anchors.garageOffset = { x: cut / 2, y: sillY + 0.62 };
 
+    // THE FAR FACE OF THE WALL OVER THE HOUSE'S. On a bungalow with a storey
+    // over the garage that wall is the room's own (see the flip, below), and
+    // its outside face -- the one looking at the house -- is where this end
+    // of the roof springs from. Declared up here because both the wall and
+    // the roof measure off it.
+    const houseFaceFt = (g.houseWallIn ?? 0) / 12;
+    // ── WHICH ROOF THIS BUILD GETS ──────────────────────────────────────────
+    // Movie, 17 Sep, describing the new bungalow-with-a-room-over type: "on
+    // top of the 2nd storey will be the roof so in the section we will
+    // basically see boths sides of the roof with both eaves."
+    //
+    // That is only true where the room stands CLEAR of the house. On a
+    // 2 STOREY the house is the same height beside it and the garage roof
+    // dies into the house's, which is the roof this section has always drawn;
+    // on a bungalow the room is the tallest thing on the drawing and carries
+    // a gable of its own, cut across, so both slopes and both eaves show.
+    //
+    // Asked before building it and answered on 18 Sep: the gable.
+    const gableOver = g.roomOver && g.houseStopsBelow && houseFaceFt > 0;
+
 
     // TWO FOUNDATIONS, ONE TOP. Movie, 4 Sep: "that should actually be an
     // option to switch from grade beam to frost wall on these drawings...
@@ -1551,14 +1679,93 @@ if (!window.DraftProjectPage) {
       line(0, plateY + joistFt, cut, plateY + joistFt, 1); // top of the joists
       line(0, plateY + deckFt, cut, plateY + deckFt, 2);   // top of the sheathing
       anchors.overGarageFloor = { x: cut * 0.42, y: plateY + joistFt / 2 };
-      roofBase = plateY + deckFt;
+      const deck = plateY + deckFt;
+
+      // ── AND THE STOREY STANDS ON IT ─────────────────────────────────────
+      // Movie, 17 Sep: "right now the walls are missing. in the other 2
+      // storey version the walls are also missing."
+      //
+      // He is right, and it was one line: roofBase went straight to the top
+      // of this deck, so the roof sprang off the floor with no storey between
+      // them. A floor and a roof with nothing holding them apart is not a
+      // room, and the drawing said so on every ROOM OVER build there has ever
+      // been -- the 2 STOREY included, which is why the defect is in both.
+      //
+      // THE HEIGHT IS HANDED IN, NOT DECIDED HERE. On a 2 STOREY it is
+      // whatever lands this plate on the house's own -- Movie: "in the 2
+      // storey version the ceilings should line up" -- and on a bungalow
+      // there is no house plate to meet ("in this verions (1 storey) it won't
+      // apply because we don't have a 2nd storey"), so it is the drafter's
+      // typed row. Both are the page's arithmetic; the section draws the
+      // answer.
+      const overWallFt = g.overWallHeightFt ?? 0;
+      const overStudFt = (g.overWallIn ?? GARAGE_STUD_FT * 12) / 12;
+      if (overWallFt > 0) {
+        // The garage's own perimeter, carried up: outside face on the same
+        // plane as the storey below, inside face a wall thickness in.
+        line(cut, deck, cut, deck + overWallFt, 2);
+        line(cut + overStudFt, deck, cut + overStudFt, deck + overWallFt, 1.5);
+        // KEYED TO THE ROW, because the schedule links a row to the drawing
+        // by the control's own key -- an anchor under any other name is a row
+        // the no-anchor rule hides.
+        anchors.garageOverWallHeight = {
+          x: cut + overStudFt + 0.55, y: deck + overWallFt / 2,
+        };
+
+        // ── THE WALL OVER THE HOUSE'S EXTERIOR WALL ───────────────────────
+        // Movie, same message: "the full perimeter garage wall will need to
+        // be filled in over the house ext wall (and flipped so the exterior
+        // is on the interior and interior on the exteriore)".
+        //
+        // ONLY WHERE THE HOUSE HAS STOPPED. On a 2 STOREY the house's own
+        // upper wall already stands in this band and buildWallSection draws
+        // it; a second set of faces there would be two walls where there is
+        // one, which is the exact defect the junction comment below warns
+        // about. On a bungalow the house is finished a storey down, so this
+        // band is empty and the room over the garage needs its own.
+        //
+        // AND IT IS FLIPPED, which is not decoration. The face that used to
+        // look out at the weather now looks at the house's attic, and the
+        // face that looked into the house looks into a heated room -- so the
+        // sheathing side is drawn toward the house and the finished side
+        // toward the garage. Same wall, turned around, because which side is
+        // outside changed.
+        if (gableOver) {
+          line(0, deck, 0, deck + overWallFt, 1.5);            // now the INSIDE face
+          line(houseFaceFt, deck, houseFaceFt, deck + overWallFt, 2); // sheathing, facing the house
+          anchors.garageOverFlip = { x: houseFaceFt / 2, y: deck + overWallFt * 0.5 };
+        }
+      }
+      // The plate, and what the roof now stands on.
+      roofBase = deck + overWallFt;
     } else {
-      // Ceiling and bottom chord; the top chord is the roof slope above.
-      // The upper line stops against the heel side chord at the eave end.
-      line(0, plateY, cut, plateY, 2);
-      line(0, plateY + chordFt, cut + chordFt, plateY + chordFt, 1);
       roofBase = plateY;
     }
+
+    // ── THE CEILING, AND THE BOTTOM CHORD OVER IT ──────────────────────────
+    // Movie, 18 Sep: "the 2 storey + garage + room over is missing 2 lines on
+    // the roof (ceiling bottom roof chord)".
+    //
+    // He is right, and it is the same shape of mistake the missing walls were:
+    // the pair was written inside the NO-ROOM-OVER arm above and keyed to
+    // plateY, so putting a storey on the garage raised the roof and left its
+    // ceiling down on the garage. THE PAIR BELONGS TO THE ROOF, not to the
+    // garage -- every roof on this section has a room under it, whether that
+    // room is the garage itself or the storey over it -- so it is drawn once,
+    // here, off whatever roofBase the branches above settled on. The ceiling
+    // is the bottom chord's underside; the light line 3 1/2" over it is the
+    // chord's top, and the top chord is the roof slope further up.
+    //
+    // WHERE THE FAR END LANDS is the only thing the form changes. A garage
+    // roof running at the house stops on the shared face; a gable over the
+    // room is a closed box and stops on its own far wall. The near end holds
+    // off a chord's thickness where a heel side chord is drawn to meet it,
+    // and runs to the wall on the gable, whose heel the two slopes make
+    // between them.
+    const ceilingFarX = gableOver ? houseFaceFt : 0;
+    line(cut, roofBase, ceilingFarX, roofBase, 2);
+    line(cut + chordFt, roofBase + chordFt,
+      gableOver ? ceilingFarX - chordFt : ceilingFarX, roofBase + chordFt, 1);
 
     // THE ROOF, sloped to a real eave. While the card drew only the junction
     // the chords ran level into the break; with the end wall drawn, the far
@@ -1581,10 +1788,109 @@ if (!window.DraftProjectPage) {
     // break line does the drawing show the roof's true pitched eave. The
     // break is a drawing device, not a part: it says the two stretches are
     // seen from different places along one roof.
+    //
+    // A GABLE OVER THE ROOM HAS NO SUCH TURN. It is the tallest thing on the
+    // drawing and the cut runs straight across it, so both slopes are true
+    // pitch for their whole length and there is no second viewpoint to
+    // announce. The break below still marks where the GARAGE is cut; it just
+    // stops at the room's plate rather than running on through a roof this
+    // section is showing whole.
     const breakX = cut * 0.38;
     // Perpendicular chord thickness, same rule as the house's roof: a chord
     // is 3 1/2" across itself, so its vertical drop grows with the pitch.
     const chordDropFt = chordFt * Math.hypot(1, pitch / 12);
+    // WHAT EVERY ROOF HANDS ONWARD, whichever form it took: how far right the
+    // roof reaches (the drawing's own edge) and how high its top sits. Both
+    // are read below by the extents and by the break, so they are declared
+    // once here rather than in whichever branch happens to run.
+    let roofEndX = 0;
+    let topY;
+    let breakTopY;
+    if (gableOver) {
+      // ── A GABLE OVER THE ROOM, AND THE CUT THROUGH IT ────────────────────
+      // Movie, 17 Sep: "in the section we will basically see boths sides of
+      // the roof with both eaves"; 18 Sep, over a version he drew himself, a
+      // plain symmetrical gable with the full overhang past BOTH walls. The
+      // house side used to stop dead at its wall, which was my too-broad
+      // reading of "shouldn't go over to the main house roof it will be to
+      // high up" -- what would have been too high is this roof carrying ON to
+      // the house's, and it does not.
+      //
+      // AND NO PEAK IS DRAWN. Movie, 18 Sep: "don't show the peak, make the
+      // cut more obvious". The ridge is BEHIND the cut, and a section that
+      // draws it reads as an elevation of a whole gable rather than a slice
+      // through one. So each slope climbs from its own wall and is severed at
+      // the break, arriving there at different heights -- which says plainly
+      // that what is left and what is right of that line are seen from
+      // different places, the same thing the garage's break below says.
+      //
+      // EACH SLOPE MEASURES FROM ITS OWN WALL, so the two cannot disagree
+      // about pitch, and every number they read -- pitch, overhang, fascia,
+      // the raised heel -- is the one GARAGE ROOF row read twice.
+      const sides = [
+        { eaveX: cut - overhangFt, wallX: cut, out: -1 },
+        { eaveX: houseFaceFt + overhangFt, wallX: houseFaceFt, out: 1 },
+      ].map(side => ({
+        ...side,
+        rise: x => heelLiftFt + fasciaFt
+          + (overhangFt + side.out * (side.wallX - x)) * (pitch / 12),
+      }));
+      sides.forEach(({ eaveX, wallX, out, rise }) => {
+        const heelY = roofBase + rise(wallX);
+        // INBOARD IS THE WAY THE ROOF GOES, which is the opposite of the way
+        // the eave hangs, so one sign serves both walls.
+        const innerX = wallX - out * chordFt;
+        // The fascia board, standing on the eave line, cut to depth.
+        rect(eaveX, eaveY, 0.1 * out, fasciaFt, 1.5);
+        // The soffit, wall face out to the fascia.
+        line(eaveX, eaveY, wallX, eaveY, 1);
+        line(eaveX, eaveY + fasciaFt, breakX, roofBase + rise(breakX), 2);
+        // THE HEEL SIDE CHORD, the same member the eave detail elsewhere on
+        // this section uses: a 3 1/2" piece at the wall exterior joining the
+        // bottom chord to the top.
+        //
+        // NOTHING IS DRAWN ACROSS IT. Movie, 18 Sep: "on the 3.5\" side
+        // chords don't put a seperation line between the top and bottom
+        // chords" -- which is the SETTLED RULING the garage's own eave has
+        // followed since 17 Sep, now kept here too. The top chord's underside
+        // is open across those 3 1/2" and the bottom chord stops short of
+        // them, so the side chord connects straight into both and no line
+        // sits over either joint.
+        line(eaveX, eaveY + fasciaFt - chordDropFt,
+          wallX, heelY - chordDropFt, 1);
+        line(innerX, roofBase + rise(innerX) - chordDropFt,
+          breakX, roofBase + rise(breakX) - chordDropFt, 1);
+        // Its two faces: outside on the wall, inside a chord in, each run
+        // from what it lands on up to the top chord's underside.
+        line(wallX, eaveY, wallX, heelY - chordDropFt, 1);
+        line(innerX, roofBase + chordFt,
+          innerX, roofBase + rise(innerX) - chordDropFt, 1);
+      });
+      // The tags sit on the near slope, the one whose eave and pitch the
+      // garage's own rows are describing.
+      const [near] = sides;
+      const tagX = (cut + breakX) / 2;
+      anchors.garagePitch = { x: tagX, y: roofBase + near.rise(tagX) + 0.5 };
+      anchors.garageOverhang = { x: cut - overhangFt / 2, y: eaveY - 0.45 };
+      anchors.garageFascia = { x: cut - overhangFt - 0.1,
+        y: eaveY + fasciaFt / 2 };
+      anchors.garageHeel = { x: cut, y: (eaveY + roofBase + near.rise(cut)) / 2 };
+      anchors.garageCavity = { x: tagX,
+        y: roofBase + (chordFt + near.rise(tagX) - chordDropFt) / 2 };
+      // The drawing's right-hand edge is this roof's own eave now, not the
+      // wall it springs from.
+      roofEndX = houseFaceFt + overhangFt;
+      // THE CUT RUNS THE WHOLE HEIGHT. Movie, 18 Sep: "the cut line should
+      // extend to over the top of the roof". It used to stop at the room's
+      // plate, on my reasoning that a roof drawn whole is not a roof that has
+      // been cut -- the same mistake as drawing the peak. The cut is not a
+      // statement about the roof; it is where this section was taken, and it
+      // was taken through the building, roof included. So it clears the
+      // higher of the two severed slopes by the same 4 1/4" the garage roof's
+      // own break clears its high side by.
+      topY = Math.max(...sides.map(side => roofBase + side.rise(breakX)));
+      breakTopY = topY + 0.35;
+    } else {
     rect(cut - overhangFt - 0.1, eaveY, 0.1, fasciaFt, 1.5);         // fascia
     line(cut - overhangFt, eaveY, cut, eaveY, 1);                    // soffit
     line(cut - overhangFt, eaveY + fasciaFt,
@@ -1635,15 +1941,11 @@ if (!window.DraftProjectPage) {
       const x = (y - (house.plateFt + house.heelIn / 12)) / slope;
       return Math.max(0, Math.min(x, house.cutFt));
     };
-    const roofEndX = Math.max(intoHouseAt(flatY), intoHouseAt(flatY - chordFt));
+    roofEndX = Math.max(intoHouseAt(flatY), intoHouseAt(flatY - chordFt));
     line(breakX, flatY, intoHouseAt(flatY), flatY, 2);
     line(breakX, flatY - chordFt, intoHouseAt(flatY - chordFt), flatY - chordFt, 1);
-    // THE DOUBLE BREAK, through everything the cut goes through at this
-    // station: roof, wall cavity, beam or frost wall, footing.
-    const breakBot = g.houseFootingTopFt - g.footingDepthIn / 12 - 0.3;
-    parts.push({ kind: 'break', x: breakX, y1: breakBot, y2: flatY + 0.35 });
-    parts.push({ kind: 'break', x: breakX + 0.35, y1: breakBot, y2: flatY + 0.35 });
-    const topY = flatY;
+    topY = flatY;
+    breakTopY = flatY + 0.35;
     if (!g.roomOver) {
       anchors.garageCavity = { x: cut * 0.42,
         y: plateY + (chordFt + riseAt(cut * 0.42) - chordFt) / 2 };
@@ -1654,6 +1956,20 @@ if (!window.DraftProjectPage) {
     anchors.garageFascia = { x: cut - overhangFt - 0.1,
       y: eaveY + fasciaFt / 2 };
     anchors.garageHeel = { x: cut, y: (eaveY + roofBase + riseAt(cut)) / 2 };
+    }
+    // ONE BREAK, through everything the cut goes through at this station:
+    // roof, wall cavity, beam or frost wall, footing. Movie, 17 Sep: "on the
+    // ATTACHED GARAGE there are 2 cut lines, please delete one of those" --
+    // the same ruling the house's far eave got, now applied here.
+    //
+    // It was a DOUBLE break, 0.35 ft apart, which is the textbook way to say
+    // "a slice has been taken out here". Nothing is drawn in that 4 1/4"
+    // gap -- the pitched stretch ends on the line and the level stretch
+    // starts on it -- so the second line was saying a slice was removed that
+    // never existed, and at this scale it simply read as two cuts. One line,
+    // and the two stretches meet on it.
+    const breakBot = g.houseFootingTopFt - g.footingDepthIn / 12 - 0.3;
+    parts.push({ kind: 'break', x: breakX, y1: breakBot, y2: breakTopY });
 
     // THE END WALL. The far face at `cut` is the garage's own outside --
     // the run is drawn whole now, so this is a real wall standing on the
@@ -1681,16 +1997,58 @@ if (!window.DraftProjectPage) {
     // wall -- is a closed band and this was not. Hatch is what section-cut
     // concrete gets, and it is the one thing here that says the cut goes
     // THROUGH the pile rather than past it.
-    const pileW = 2 * PILE_HALF_WIDTH_IN / 12;
-    const pileBot = g.houseFootingTopFt - g.footingDepthIn / 12;
+    // AT LEAST TWO FEET OF SHAFT. Movie, 18 Sep: "extend the piles about 2 ft
+    // down before cutting them off". The old bottom was the house's footing
+    // line alone -- Movie, 16 Sep, "draw the bottom of the pile in line with
+    // the bottom of the footing (although its actually alot further)" -- which
+    // is deep and right under a basement, and eight inches of stub under a
+    // house that is itself on a grade beam, because then there is no footing
+    // for it to reach. The deeper of the two, so the old case is untouched.
+    const pileBot = Math.min(g.houseFootingTopFt - g.footingDepthIn / 12,
+      fdnBot - HOUSE_PILE_SHOWN_FT);
     if (!frostWall) {
-      // WHOLE PILES NOW, at roughly 8 ft on centre from the far corner in.
-      // The half-pile-at-the-break convention retired with the break itself:
-      // nothing cuts through a shaft any more, so each one draws both faces,
-      // its conventional bottom on the house footing line, and its hatch.
-      const spans = [];
-      for (let x = cut; x + pileW < 0; x += PILE_SPACING_FT) {
-        spans.push([x, x + pileW]);
+      // THE CORNERS, AND ONLY THE CORNERS. Movie, 17 Sep, on what the section
+      // should draw: "on the corners only", "(will show 2)".
+      //
+      // The real beam carries piles at every corner and then evenly between
+      // them -- under 8 ft where it can, 10 ft at the outside, never closer
+      // than 4 ft -- but THAT LAYOUT IS A PLAN'S JOB, not a section's. This
+      // section is one cut across the garage; the intermediate piles it used
+      // to step out at a fixed 8 ft were a guess at where a plan would put
+      // them, drawn as fact.
+      //
+      // AND THEN ONE OF THE TWO CORNERS LOST ITS PILE. Movie, 18 Sep, looking
+      // at the drawing: "why is there an extra pile beside the footing?",
+      // then "that pile beside the foundation wouldn't be there it needs min
+      // 4'6 from footing." The garage's house-end corner sits hard against
+      // the house's own foundation, so a shaft there would be drilled through
+      // the ground the footing bears on. The beam spans past that corner and
+      // lands on the next pile along, which is out past this cut.
+      //
+      // ASKED OF THE DISTANCE, NOT OF THE CORNER, so a garage that ever
+      // stands clear of the house keeps its pile. Against a frost wall next
+      // door there is no shaft at all, which the branch above already says.
+      //
+      // Whole piles, not the old half-at-the-break: that convention retired
+      // with the break itself, so each draws both faces, its conventional
+      // bottom, and its hatch. And 12" of shaft, centred on the wall it
+      // carries -- 2" proud of each face of an 8" beam.
+      const proudFt = pileProudFt(g.thicknessIn);
+      const pileW = PILE_DIAMETER_IN / 12;
+      // The far corner always has one: it stands in open ground.
+      const spans = [[cut - proudFt, cut - proudFt + pileW]];
+      // The house-end corner is measured rather than assumed. Both in the
+      // shared coordinate, where 0 is the wall face and positive runs into
+      // the house: the footing's garage-side edge, and the face of the shaft
+      // that would sit nearest it. On the ordinary build the two OVERLAP --
+      // a 20" footing under an 8" wall reaches 6" onto the garage side and
+      // the shaft stands 2" proud the other way -- so the clear distance
+      // comes out negative, nowhere near the 4'-6" a pile needs, and no shaft
+      // draws. A garage that ever stood clear of the house would keep its
+      // pile without this line being touched.
+      const footEdgeFt = fdnFt / 2 - (g.footingWidthIn ?? 0) / 24;
+      if (footEdgeFt - proudFt >= PILE_CLEAR_OF_FOOTING_FT) {
+        spans.push([proudFt - pileW, proudFt]);
       }
       spans.forEach(([x0, x1]) => {
         line(x0, fdnBot, x0, pileBot, 1.5);
@@ -1698,13 +2056,13 @@ if (!window.DraftProjectPage) {
         line(x0, pileBot, x1, pileBot, 1.5);
         hatch(x0, pileBot, pileW, fdnBot - pileBot);
       });
-      anchors.garagePile = { x: cut + pileW / 2, y: (fdnBot + pileBot) / 2 };
+      anchors.garagePile = { x: cut - proudFt + pileW / 2, y: (fdnBot + pileBot) / 2 };
       // 4" void form under the beam, BETWEEN the piles: the beam is cast on
       // it and the form crushes, so heaving soil lifts nothing. It stops at
       // every pile, because the beam bears ON the pile there -- a form
       // carried through would draw the beam sitting on crushable board at
       // the points it is meant to be held up.
-      let from = cut;
+      let from = cut - proudFt;
       const voidY = fdnBot - VOID_FORM_IN / 12;
       spans.concat([[0, 0]]).forEach(([x0, x1]) => {
         if (x0 > from) {
@@ -1909,6 +2267,9 @@ if (!window.DraftProjectPage) {
     garageSlabFallIn,
     GARAGE_EDGE_DEPTH_IN,
     GARAGE_GRADE_BEAM_IN,
+    HOUSE_GRADE_BEAM_MIN_IN,
+    PILE_DIAMETER_IN,
+    GRADE_BEAM_THICKNESS_IN,
     GARAGE_SILL_BELOW_HOUSE_FT,
     GARAGE_SLAB_BELOW_CONCRETE_IN,
     GARAGE_WALL_FT,

@@ -68,13 +68,19 @@
        600px canvas) and the house schedule into track 2, on top of it. So
        the three tracks are assigned rather than counted, and an empty garage
        column stays an empty column with the section centred beside it. */
-    #sched-garage { grid-column:1; }
+    #sched-garage, #sched-garage-add { grid-column:1; }
     #detail-wrap { grid-column:2; }
     #sched-house { grid-column:3; }
     .sched { align-self:start; padding-top:2px; }
     /* The garage column reads bottom-up like its drawing: the footing is the
        last row and the deepest part, so the whole stack sits down by it. */
     #sched-garage { align-self:end; padding-bottom:2px; }
+    /* The ADD box stands where the garage's roof numbers would start, not
+       down at its footing: there is no drawing under it yet to read up from,
+       and a press pinned to the bottom of an empty column reads as a footnote
+       rather than as the way in. */
+    #sched-garage-add { align-self:start; padding-top:2px; }
+    #sched-garage-add[hidden] { display:none; }
     .sched-head { padding:0 4px 5px; color:rgba(29,31,32,.65); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; }
     /* A VALUE BOX AND A DROPDOWN ARE NOT THE SAME WIDTH. 58px fits the
        longest measurement on the page, 8'-1 1/8" -- but a select also has to
@@ -153,7 +159,7 @@
     @media (max-width:1180px) { .band, .band.band-eave { grid-template-columns:1fr; justify-items:center; } .sched { width:min(420px,100%); }
       /* One track, so the assignments above would spill into implicit
          columns nobody can see. Stacked, order is the source order again. */
-      #sched-garage, #detail-wrap, #sched-house { grid-column:1; } }
+      #sched-garage, #sched-garage-add, #detail-wrap, #sched-house { grid-column:1; } }
     @media (max-width:980px) { .identity-grid { grid-template-columns:1fr 1fr; } }
   </style>
 </head>
@@ -205,6 +211,16 @@
         <div class="family-row" id="family-row" aria-label="Bungalow family"></div>
         <div class="band">
           <div class="sched" id="sched-garage"></div>
+          <!-- THE DOOR IN, where the garage's own numbers would be. Movie,
+               17 Sep: "on the house (with no garage) we should add a BOX on
+               the left side that has + ADD ATTACHED GARAGE". The garage
+               column is empty on a 1 STOREY or a 2 STOREY, and an empty
+               column is not an invitation -- so the press that the family
+               row already offers gets a second door, standing where the
+               thing it adds will draw. Its own element rather than a row
+               inside #sched-garage, because that whole column is hidden
+               exactly when this has to show. -->
+          <div class="sched" id="sched-garage-add" hidden></div>
           <div class="detail-wrap" id="detail-wrap">
             <canvas id="detail-canvas" width="600" height="500" aria-label="Live section — house and attached garage"></canvas>
           </div>
@@ -550,8 +566,45 @@
           && FOUNDATION_TYPE_IDS.includes(candidate.wallType));
         return wall ? wall.wallType : 'concrete_8';
       };
-      const fdnThicknessIn = () => WALL_TYPE_VIEW[fdnWallType()].totalIn;
-      const fdnIsIcf = () => fdnWallType().startsWith('icf');
+      // ── WHAT KIND OF FOUNDATION THE HOUSE HAS ───────────────────────────
+      // Movie, 17 Sep: "it will be part of the foundation dropdown because
+      // the grade beam will replace the foundation wall". So one box asks one
+      // question and the answer lands in one of two places -- a wall type is
+      // a material, a grade beam is a different foundation -- which is why
+      // GRADE_BEAM is not an id in WALL_TYPE_VIEW.
+      const GRADE_BEAM = 'gradebeam';
+      const houseIsGradeBeam = () => assembly(1).foundationKind === GRADE_BEAM;
+      // ONE DOOR ONTO THE POUR, because there are two controls onto it: the
+      // schedule's FDN WALL HT row and the section table's HOUSE column. Both
+      // write the same number and both have to honour the same floor, so the
+      // rule lives here rather than in whichever of them is looked at first.
+      //
+      // Movie, 17 Sep: "make min. 32"". REFUSED, NOT CLAMPED -- a box that
+      // silently corrects what was typed teaches a drafter that it accepted
+      // it. Returns whether the write happened, which is what both callers
+      // already say to their own caller.
+      const setHousePourFt = value => {
+        if (value == null || value <= 0) return false;
+        const minFt = projectPage.HOUSE_GRADE_BEAM_MIN_IN / 12;
+        if (houseIsGradeBeam() && value < minFt) {
+          showStatus(`A grade beam is at least ${
+            inchesOnly(projectPage.HOUSE_GRADE_BEAM_MIN_IN)} deep.`);
+          return false;
+        }
+        setAssembly(1, 'wallHeightFt', value + attachmentFt());
+        return true;
+      };
+      // A BEAM IS 8", WHATEVER THE WALL TYPE SAYS. Movie: "the grade beam is
+      // 8"". The stored wallType is left alone when a beam is chosen, so
+      // switching back to 8" CONCRETE or ICF returns the drafter to the
+      // thickness they had rather than to a default.
+      const fdnThicknessIn = () => (houseIsGradeBeam()
+        ? projectPage.GRADE_BEAM_THICKNESS_IN
+        : WALL_TYPE_VIEW[fdnWallType()].totalIn);
+      // AND A BEAM IS NOT ICF. This answer widens a footing to 24" and there
+      // is no footing on a grade beam, so asking it of a beam would be a wide
+      // footing under a foundation that has none.
+      const fdnIsIcf = () => !houseIsGradeBeam() && fdnWallType().startsWith('icf');
       // A floor's exterior wall: its own stored override when it has one,
       // otherwise the house's shared type — the 99% case.
       const floorWallType = levelId => {
@@ -776,6 +829,10 @@
             gradeOffsetFt: gradeOffsetFt(),
             attachment: attachmentChoice(),
             attachmentIn: attachmentIn(),
+            // Which of the two the drafter picked in FDN TYPE. The section
+            // reads it to decide what goes UNDER the concrete -- a strip
+            // footing, or piles and a void form.
+            foundationKind: assembly(1).foundationKind,
           };
         })(),
         roof: { pitch: roofPitch, overhangFt: roofOverhang, fasciaIn: ROOF_FASCIA_IN, heelIn: roofHeelIn() },
@@ -1546,14 +1603,32 @@
       // follows the attachment pair the way the section reads — attachment on
       // the foundation top, then the wall the attachment sits on — and its
       // derived thickness chip rides directly under it.
-      addInput('fdnWallType', 'FDN WALL TYPE', {
+      addInput('fdnWallType', 'FDN TYPE', {
         name: 'fdnWallType',
         kind: 'choice',
-        choices: () => FOUNDATION_CHOICES
-          .map(id => ({ id, label: WALL_TYPE_VIEW[id].label })),
-        get: fdnWallType,
+        // GRADE BEAM LAST, after the walls, because it is the answer that
+        // says "none of these": choosing it replaces the wall rather than
+        // picking one.
+        choices: () => [
+          ...FOUNDATION_CHOICES.map(id => ({ id, label: WALL_TYPE_VIEW[id].label })),
+          { id: GRADE_BEAM, label: 'GRADE BEAM' },
+        ],
+        get: () => (houseIsGradeBeam() ? GRADE_BEAM : fdnWallType()),
         set: value => {
+          if (value === GRADE_BEAM) {
+            setAssembly(1, 'foundationKind', GRADE_BEAM);
+            // A BEAM HAS A MINIMUM AND THE WALL IT REPLACES DOES NOT. Movie:
+            // "make min. 32"". An 8'-0" basement wall switched to a beam is
+            // a 8 ft grade beam, which is not what anybody means by the word,
+            // so the pour comes down to the minimum on the way in -- once, on
+            // the press, not silently on every read. A drafter who wants a
+            // deeper beam types one; the floor below stops them going under.
+            const minFt = projectPage.HOUSE_GRADE_BEAM_MIN_IN / 12;
+            if (housePourFt() > minFt) setHousePourFt(minFt);
+            return true;
+          }
           if (!FOUNDATION_CHOICES.includes(value)) return false;
+          setAssembly(1, 'foundationKind', 'wall');
           setAssembly(1, 'wallType', value);
           return true;
         },
@@ -1562,12 +1637,7 @@
       addInput('fdnHeight', 'FDN WALL HT', {
         name: 'fdnHeight',
         get: () => ftIn(housePourFt()),
-        set: text => {
-          const value = parseFtIn(text);
-          if (value == null || value <= 0) return false;
-          setAssembly(1, 'wallHeightFt', value + attachmentFt());
-          return true;
-        },
+        set: text => setHousePourFt(parseFtIn(text)),
       });
       addInput('slab', 'SLAB', {
         name: 'slab',
@@ -1663,6 +1733,13 @@
         heel: 'Roof heel',
         fdnThickness: 'Foundation thickness',
         attachmentHeight: 'Attachment height',
+        // NOT "FDN WALL TYPE". Movie, 17 Sep, naming it twice: "FDN TYPE:",
+        // then "not FDN WALL TYPE". The row beneath it is FOUNDATION
+        // THICKNESS, which is the wall's number -- so "wall" here was the
+        // word that made two adjacent rows sound like the same subject when
+        // one is a TYPE and the other a dimension. The same words now name
+        // the garage's own dropdown, so the two columns ask one question.
+        fdnWallType: 'FDN type:',
       };
       const fullName = control => FULL_NAME[control.key]
         || control.tag.replace('FL JST', 'joist depth').replace('WALL HT', 'wall height');
@@ -1749,6 +1826,7 @@
         { key: 'attic', text: 'ATTIC SPACE' },
         { key: 'garageCavity', text: 'ATTIC SPACE' },
         { key: 'garagePile', text: '(PILE)', beside: true },
+        { key: 'gradeWord', text: '(GRADE)', beside: true },
       ];
 
       // Hover a row and its part lights up on the drawing; hover the part and
@@ -1771,6 +1849,48 @@
 
       schedHead(garageSched, 'Attached garage');
       schedHead(houseSched, 'House');
+
+      // ── THE WAY IN, FROM THE EMPTY COLUMN ───────────────────────────────
+      // Movie, 17 Sep: "on the house (with no garage) we should add a BOX on
+      // the left side that has + ADD ATTACHED GARAGE".
+      //
+      // A THIRD DOOR ONTO ONE STATE, not a third meaning of one. The family
+      // row already says 1 STOREY + GARAGE and the garage column already
+      // carries + ROOM OVER, and both of those are applyGaragePlan -- so this
+      // is too. A press here is exactly the press of the family button for
+      // the garage version of whatever type is drawn, which is why it keeps
+      // `buildType` alone and only moves the garage plan: a 2 STOREY that
+      // gains a garage is still a 2 STOREY.
+      //
+      // It lands on 'attached', never 'attachedRoomOver'. The storey over is
+      // the NEXT decision and it already has its own press one row down the
+      // column this creates; adding two things on one button is how a press
+      // starts meaning something the face does not say.
+      const garageAddSched = document.querySelector('#sched-garage-add');
+      let syncGarageAdd = () => {};
+      if (garageAddSched) {
+        schedHead(garageAddSched, 'Attached garage');
+        const addButton = document.createElement('button');
+        addButton.type = 'button';
+        addButton.className = 'sched-value';
+        addButton.dataset.addGarage = '';
+        addButton.textContent = '+ ADD ATTACHED GARAGE';
+        addButton.setAttribute('aria-label', 'Add an attached garage');
+        addButton.disabled = readOnly;
+        addButton.addEventListener('click', () => {
+          if (readOnly) return;
+          applyGaragePlan('attached');
+        });
+        const addRow = schedRow(garageAddSched, 'garageAdd', '', addButton);
+        // Same shape as + ROOM OVER: the label IS the box, so the grey name
+        // column beside it would only repeat what the button already says.
+        addRow.classList.add('wide');
+        addRow.querySelector('.sched-name').remove();
+        // HIDDEN IS THE WHOLE RULE. There is one press and one state, so the
+        // box shows exactly when the column beside it does not -- never both,
+        // and never neither.
+        syncGarageAdd = () => { garageAddSched.hidden = garageShown(); };
+      }
 
       ANNOTATIONS.forEach(({ key, text, beside }) => {
         const tag = document.createElement('span');
@@ -1968,9 +2088,32 @@
       // cannot disagree about a garage. Only the floor offset comes from
       // somewhere else: it is a ZONE HEIGHT, because it is a height relative
       // to MAIN FL rather than a property of the garage's assembly.
+      // WHERE THE HOUSE'S SECOND FLOOR DECK SITS, in the section's own feet.
+      // DECLARED ABOVE THE GARAGE ROWS, not beside its other reader below:
+      // the room-over wall height's default calls it while the schedule is
+      // being built, and a const read before its line runs is a TDZ throw,
+      // not an undefined.
+      // buildWallSection stacks floors from MAIN FL at 0: a wall, then the
+      // next floor's joists and sheathing on top of it, so the top of the
+      // second floor's sheathing is the first wall plus the second floor's
+      // package. Derived from the same floors() the section is drawn from,
+      // because the whole point of the press is that the two decks agree.
+      const upperDeckFt = () => {
+        const floors = detailValues().floors;
+        if (floors.length < 2) return null;
+        return floors[0].wallHeightFt
+          + (floors[1].joistDepthIn + floors[1].sheathingIn) / 12;
+      };
+
       const garageControls = [];
-      const addGarage = (key, name, get, set, kind, offSection, wide) =>
-        garageControls.push({ key, name, get, set, kind, offSection, wide });
+      // `extra` rather than a seventh and eighth positional: the list was
+      // already at `(key, name, get, set, kind, offSection, wide)` and two
+      // more booleans in a row is how a call site ends up reading
+      // `undefined, undefined, true`. It carries `choices` (a picker with its
+      // own option list, instead of the garage foundations every other choice
+      // row here wants) and `roomOverOnly` (see the repaint rule).
+      const addGarage = (key, name, get, set, kind, offSection, wide, extra = {}) =>
+        garageControls.push({ key, name, get, set, kind, offSection, wide, ...extra });
 
       // The bottom of the house's foundation wall -- the top of its footing.
       // Derived from the same numbers the house section is drawn from: MAIN FL
@@ -2070,6 +2213,74 @@
         () => (roomOver() ? 'ROOM OVER ✓' : '+ ROOM OVER'),
         () => false, 'rowbutton', true, true);
 
+      // ── THE STOREY OVER'S OWN WALL ──────────────────────────────────────
+      // Movie, 17 Sep: "we will need to add a wall height and wall type boxes
+      // for that on garage side, make default 8-1 1/8"", then "(one 2nd floor
+      // is added)(once)" -- so the pair belongs to the room over and appears
+      // with it. The repaint's garage rule already hides every `garage` key
+      // when there is no garage; these two carry `roomOverOnly` so they also
+      // go when there is a garage and no storey on it.
+      //
+      // THE DEFAULT IS THE HOUSE'S ANSWER WHERE THE HOUSE HAS ONE. Movie, on
+      // the same build: "in the 2 storey version the ceilings should line up.
+      // in this verions (1 storey) it won't apply because we don't have a 2nd
+      // storey." So on a 2 STOREY the untyped default is whatever puts this
+      // plate on the house's plate -- which, because pressing ROOM OVER
+      // already landed the deck on the house's deck, is simply the house's
+      // own upper wall height. On a bungalow there is no plate to meet and it
+      // falls back on the bungalow precut he named.
+      //
+      // DERIVED, NOT WRITTEN. Storing the lined-up number would freeze it:
+      // raise the house's 2nd floor wall afterwards and the ceilings would
+      // quietly stop lining up, with two cells that agreed when they were
+      // written. Typing in the box is still what overrides it, and clearing
+      // the box is the way back.
+      const BUNGALOW_OVER_WALL_FT = projectPage.wallHeightFtFromStud(
+        projectPage.STUD_LENGTHS_IN[0]);
+      const derivedOverWallFt = () => {
+        const deck = upperDeckFt();
+        if (deck == null) return BUNGALOW_OVER_WALL_FT;
+        return Math.max(0, housePlateFt() - deck);
+      };
+      const overWallHeightFt = () =>
+        sectionTable.rows.attachedGarage?.overWallHeightFt ?? derivedOverWallFt();
+      const overWallTypeStored = () => {
+        const stored = sectionTable.rows.attachedGarage?.overWallType;
+        return EXTERIOR_CHOICES.includes(stored) ? stored : null;
+      };
+      const overWallIn = () =>
+        WALL_TYPE_VIEW[overWallTypeStored() ?? activeWallType].totalIn;
+      addGarage('garageOverWallHeight', 'Room over wall height',
+        () => ftIn(overWallHeightFt()),
+        text => {
+          // Empty puts the cell back on the derivation, the same way the roof
+          // heel's does -- and on a 2 STOREY that derivation is the whole
+          // "ceilings line up" rule, so it has to stay reachable.
+          if (text.trim() === '') {
+            writeCell('attachedGarage', 'overWallHeightFt', null);
+            return true;
+          }
+          const value = parseFtIn(text);
+          if (value == null || value <= 0 || value > 20) return false;
+          writeCell('attachedGarage', 'overWallHeightFt', value);
+          return true;
+        }, undefined, undefined, undefined, { roomOverOnly: true });
+      // SAME AS HOUSE is the default and it is a real answer, not a blank:
+      // every other wall-type picker on the page spells "follow the drawing"
+      // that way -- stored as null rather than a copy of today's shared type,
+      // because a copy freezes the 99% case into a fake override that the
+      // next shared-type change silently misses.
+      addGarage('garageOverWallType', 'Room over wall type',
+        () => overWallTypeStored() ?? '',
+        value => {
+          writeCell('attachedGarage', 'overWallType', value === '' ? null : value);
+          return true;
+        }, 'choice', undefined, undefined, {
+          roomOverOnly: true,
+          choices: () => [{ id: '', label: 'SAME AS HOUSE' },
+            ...EXTERIOR_CHOICES.map(id => ({ id, label: WALL_TYPE_VIEW[id].label }))],
+        });
+
       garageCell('garageWallHeight', 'Garage wall height', 'mainWallHeightFt', ftIn, parseFtIn);
       addGarage('garageSill', 'Sill plate',
         () => inchesOnly(attachmentIn()), () => false);
@@ -2119,14 +2330,24 @@
           return true;
         });
 
-      // THE DROPDOWN IS ITS OWN TITLE. Movie, 16 Sep: "foundation dropdown
-      // (box moved over to left and no title (covered by box))" -- the box
-      // says GRADE BEAM or FROST WALL, so a grey GARAGE FOUNDATION beside it
-      // named nothing the box had not already said.
-      addGarage('garageFoundationType', 'Garage foundation',
+      // AND NOW IT IS NAMED. Movie, 16 Sep had it as its own title --
+      // "foundation dropdown (box moved over to left and no title (covered by
+      // box))" -- because GARAGE FOUNDATION beside a box reading GRADE BEAM
+      // said nothing the box had not. 17 Sep replaces that: "on the garage
+      // side for the foundation type put in the text: FDN TYPE: and make the
+      // box same size as on the house version".
+      //
+      // FDN TYPE: IS NOT THE ANSWER REPEATED, which is why this one earns the
+      // grey column the old name did not: GRADE BEAM and 8" CONCRETE are the
+      // same KIND of answer to the same question, and the two columns now ask
+      // it in the same words, at the same box width. Dropping `wide` is the
+      // whole of the sizing -- the row falls back to the page's own
+      // `:has(select)` track, which is where the house's 104px comes from, so
+      // the two boxes cannot drift apart by a number typed in two places.
+      addGarage('garageFoundationType', 'FDN type:',
         garageFoundation,
         value => { writeCell('attachedGarage', 'garageFoundation', value); return true; },
-        'choice', undefined, true);
+        'choice');
       garageCell('garageSlab', 'Garage slab thickness', 'slabThicknessIn', inchesOnly, parseInches);
       // NOT "FOUNDATION WALL". Movie: "call it GARAGE GRADE BEAM HEIGHT, not
       // 'foundation wall'".
@@ -2159,10 +2380,16 @@
           : control.kind === 'choice'
             ? document.createElement('select') : document.createElement('input');
         if (control.kind === 'choice') {
-          projectPage.GARAGE_FOUNDATIONS.attachedGarage.forEach(id => {
+          // A row with its own list uses it; everything else is a garage
+          // foundation, which is what every choice row here was until the
+          // storey over the garage gained a wall type.
+          const options = control.choices ? control.choices()
+            : projectPage.GARAGE_FOUNDATIONS.attachedGarage.map(id =>
+              ({ id, label: projectPage.GARAGE_FOUNDATION_LABEL[id] }));
+          options.forEach(({ id, label }) => {
             const option = document.createElement('option');
             option.value = id;
-            option.textContent = projectPage.GARAGE_FOUNDATION_LABEL[id];
+            option.textContent = label;
             input.appendChild(option);
           });
         }
@@ -2216,7 +2443,24 @@
             houseFootingTopFt: houseFootingTopFt(),
             footingWidthIn: asm.footingWidthIn ?? (fdnIsIcf() ? 24 : 20),
             footingDepthIn: asm.footingDepthIn,
-            sillOffsetFt: attachedOffsetFt(),
+            // LEVEL WITH THE HOUSE WHEN THE HOUSE IS A BEAM. Movie, 17 Sep:
+            // "the garage would need to be level at that height". Two grade
+            // beams on one set of piles are poured to one elevation; a garage
+            // stepped down from a house beam would be a second beam hanging
+            // off nothing, which is the same reasoning the split band already
+            // applies to its own grade beam ("move the sill plate for grade
+            // beam inline with house").
+            //
+            // THE DROP RULE NEEDS NO CODE, and that is worth saying rather
+            // than adding some. Movie: "if the house grade beam is heightened
+            // the garage grade beam could drop the new amount of height." How
+            // far the garage may drop is already the house's footing top --
+            // past the bottom of the house's foundation there is nothing to
+            // fasten to -- and houseFootingTopFt() is derived from the pour,
+            // so deepening the house beam deepens that limit by exactly the
+            // amount it gained. A second rule here would be a number that
+            // agrees with that one until somebody edits it.
+            sillOffsetFt: houseIsGradeBeam() ? houseSillFt() : attachedOffsetFt(),
             attachmentIn: attachmentIn(),
             wallHeightFt: cell('mainWallHeightFt'),
             fdnWallHeightFt: cell('fdnWallHeightFt'),
@@ -2234,6 +2478,28 @@
             roomOver: roomOver(),
             overJoistIn: assembly(OVER_GARAGE_LEVEL_ID).joistDepthIn,
             overSheathingIn: assembly(OVER_GARAGE_LEVEL_ID).sheathingIn,
+            // THE STOREY ITSELF: how tall its wall is and what it is framed
+            // in. Both are the schedule's two new rows, and the height is the
+            // derivation on a 2 STOREY -- the plate landing on the house's so
+            // the ceilings line up -- rather than a number written twice.
+            overWallHeightFt: overWallHeightFt(),
+            overWallIn: overWallIn(),
+            // AND WHETHER THE HOUSE IS STILL THERE AT THAT HEIGHT. On a
+            // 2 STOREY the house's own upper wall stands in the band over its
+            // exterior wall and buildWallSection draws it; on a bungalow the
+            // house stopped a storey down and the room over the garage has to
+            // carry its own wall there, flipped. One question, asked of the
+            // floor stack rather than of the build type, so a 2ND FL deleted
+            // from a 2 STOREY answers it correctly without anybody saying so.
+            // WHAT IS DRAWN, NOT WHAT IS STORED. floorLevels is the raw level
+            // list and 2ND FL is in every drawing's, bungalow or not -- the
+            // level is not deleted on a 1 STOREY, it is not DRAWN. Asking the
+            // stored list gave "the house carries on up here" on every build,
+            // so the flipped wall and the gable never appeared on the one
+            // type they exist for. drawnFloorLevels() is the same question
+            // the section's own floor stack is built from.
+            houseStopsBelow: drawnFloorLevels().length < 2,
+            houseWallIn: WALL_TYPE_VIEW[activeWallType].totalIn,
             // WHAT THE GARAGE ROOF DIES INTO. Over the house's top plate
             // there is no house wall for it to stop against, only the house's
             // own roof climbing inward -- so the section is handed that plane
@@ -2248,19 +2514,6 @@
             },
           },
         };
-      };
-
-      // WHERE THE HOUSE'S SECOND FLOOR DECK SITS, in the section's own feet.
-      // buildWallSection stacks floors from MAIN FL at 0: a wall, then the
-      // next floor's joists and sheathing on top of it, so the top of the
-      // second floor's sheathing is the first wall plus the second floor's
-      // package. Derived from the same floors() the section is drawn from,
-      // because the whole point of the press is that the two decks agree.
-      const upperDeckFt = () => {
-        const floors = detailValues().floors;
-        if (floors.length < 2) return null;
-        return floors[0].wallHeightFt
-          + (floors[1].joistDepthIn + floors[1].sheathingIn) / 12;
       };
 
       // What the garage wall has to be for the floor over it to land its
@@ -2343,6 +2596,38 @@
           // slice's second eave, mirrored from the same numbers.
           projectPage.buildFarEaveSection(detailValues()),
         ]);
+        // ── THE WORD UNDER THE GRADE LINE ──────────────────────────────────
+        // Movie, 17 Sep: "can you add the word (GRADE) just under the grade
+        // line on one of the sides, lets go left side".
+        //
+        // The dashed line runs the full width of whatever is drawn, so it is
+        // the one part on the sheet that no single section owns -- the house
+        // builder emits it and the garage stands over its left half. That is
+        // why this anchor is composed HERE, out of the two things only the
+        // page has after painting: the line's own height, which comes back on
+        // anchors.grade, and where the drawing's left edge landed, which is
+        // the view. A section asked to place it would be guessing at the
+        // other section's width.
+        //
+        // NOT THE EXISTING 'grade' TAG. That one is a schedule label, and
+        // every schedule label is hidden now that the word columns are gone
+        // -- reviving it would put GRADE back in a margin that no longer
+        // exists. This is an annotation, which is the kind of label that sits
+        // by its own line.
+        if (anchors.grade) {
+          const drawingLeft = (canvas.width - view.span * view.scale) / 2;
+          anchors.gradeWord = {
+            // `beside` draws the word to the LEFT of its anchor and centred
+            // on it, so the anchor sits a word's width in from the edge and a
+            // line's breadth below the dashes: under the line, at the left
+            // end, clear of the eave above it.
+            x: drawingLeft + 58,
+            // anchors.grade already sits a little over half a foot below the
+            // dashes -- it is where the schedule label used to point -- so the
+            // word needs no drop of its own.
+            y: anchors.grade.y,
+          };
+        }
         // Band 2 rides along on every repaint. It shares the roof, the wall
         // type and the grade offset with band 1, so a pitch or eave change up
         // there has to move down here too or the two bands stop being
@@ -2402,6 +2687,8 @@
         // are right when there IS a garage whose part this view cannot show,
         // and wrong when there is no garage at all.
         if (garageSched) garageSched.hidden = !garageShown();
+        // And the door in takes the column's place when there is no garage.
+        syncGarageAdd();
         controlEls.forEach(({ control, el, tag }, key) => {
           const at = anchors[key];
           const row = el.closest ? el.closest('.sched-row') : null;
@@ -2417,6 +2704,17 @@
             return;
           }
           if (!garageShown() && key.startsWith('garage')) {
+            tag.style.display = 'none';
+            if (row) row.hidden = true;
+            return;
+          }
+          // A ROW FOR A STOREY THAT IS NOT THERE. Movie, 17 Sep, on the wall
+          // height and wall type pair: "(one 2nd floor is added)(once)" --
+          // they describe the room over the garage, so they arrive with it
+          // and leave with it. The garage rule above is the same shape one
+          // level down; this one cannot be folded into it, because these two
+          // are hidden on a garage that is fully drawn.
+          if (control.roomOverOnly && !roomOver()) {
             tag.style.display = 'none';
             if (row) row.hidden = true;
             return;
@@ -2602,10 +2900,13 @@
         // see housePourFt. Every other row's fdnWallHeightFt is already a
         // pour (the split's 5'-0", the garage's 32" beam), so this is what
         // makes the column one question down its whole length.
+        // The table's HOUSE column, through the same guarded setter the
+        // schedule's FDN WALL HT row uses -- see setHousePourFt.
         fdnWallHeightFt: {
           get: () => housePourFt(),
-          set: value => setAssembly(1, 'wallHeightFt', value + attachmentFt()),
+          set: value => { setHousePourFt(value); },
         },
+
         // A bungalow has no wood fill wall and no second floor — the cell is
         // there, it simply has nothing behind it.
         woodFillHeightFt: { get: () => null, set: () => {} },
@@ -2622,6 +2923,19 @@
           set: value => setAssembly(1, 'footingDepthIn', value),
         },
       };
+
+      // ── A GRADE BEAM HAS NO BASEMENT UNDER IT ───────────────────────────
+      // Movie, 17 Sep: "it will become a 'crawl space' rather than a
+      // 'basement'". BSMT CLG HT is the same arithmetic either way -- the
+      // pour, plus the plate, less the slab -- so the number stays and only
+      // the word changes. Read at paint time rather than stored, because the
+      // drafter can switch the dropdown back and a heading that remembered
+      // the old answer is worse than one that never had it.
+      //
+      // The column header is the only place the word appears; the schedule
+      // beside the drawing never named it.
+      const columnLabel = item => (item.id === 'basementClg' && houseIsGradeBeam()
+        ? 'CRAWL CLG HT' : item.label);
 
       // What a cell shows, and whether the number is its own or inherited.
       const cellValue = (rowId, field) => {
@@ -2721,7 +3035,7 @@
         headRow.appendChild(corner);
         projectPage.SECTION_TABLE_ITEMS.forEach(item => {
           const th = document.createElement('th');
-          th.textContent = item.label;
+          th.textContent = columnLabel(item);
           th.dataset.sectionCol = item.id;
           headRow.appendChild(th);
         });
@@ -2783,6 +3097,12 @@
       }
 
       const fillTable = () => {
+        // The header is built once; this word is not fixed for the life of the
+        // page, so it is refreshed with the numbers under it.
+        projectPage.SECTION_TABLE_ITEMS.forEach(item => {
+          const th = tableEl.querySelector(`th[data-section-col="${item.id}"]`);
+          if (th) th.textContent = columnLabel(item);
+        });
         cellEls.forEach(({ row, item, el, note }) => {
           if (item.unit === 'derived') {
             el.textContent = derivedText(row.id, item.id);

@@ -1285,6 +1285,17 @@ if (!window.DraftDrawingFormat) {
     'upperExtentFt',
     'fdnWallHeightFt', 'woodFillHeightFt',
     'slabThicknessIn', 'footingWidthIn', 'footingDepthIn',
+    // THE STOREY OVER THE GARAGE HAS A WALL, and this is its height. Movie,
+    // 17 Sep, asked how tall it should be on a one-storey bungalow: "we will
+    // need to add a wall height and wall type boxes for that on garage side,
+    // make default 8-1 1/8"", and "(one 2nd floor is added)(once)" -- so the
+    // pair only shows when the room over exists.
+    //
+    // ITS OWN FIELD, not mainWallHeightFt. That one is the GARAGE's wall, the
+    // storey below this one, and the two move independently: pressing ROOM
+    // OVER on a 2 STOREY already rewrites the garage wall so the decks line
+    // up, which would drag this with it if they shared a cell.
+    'overWallHeightFt',
   ]);
   // Not every per-type value is a measurement. A garage's foundation is a
   // CHOICE between two things it can be, and `positive()` would quietly turn
@@ -1319,6 +1330,11 @@ if (!window.DraftDrawingFormat) {
     // detail and nothing above it. Sill is the default -- Movie: "sill plate
     // stronger attachment I think / I prefer".
     foundationAttachment: Object.freeze(['sill', 'ladder']),
+    // What the storey over the garage is framed in -- the exterior wall types,
+    // the same set the house's own levels pick from. Null means SAME AS HOUSE,
+    // which is how every other wall-type cell on the page spells "follow the
+    // drawing" and the only answer that cannot go stale.
+    overWallType: Object.freeze(['stud_2x4', 'stud_2x6', 'icf', 'icf_13']),
   });
   const SECTION_TABLE_CHOICES_BY_TYPE = Object.freeze({
     attachedGarage: Object.freeze({ garageFoundation: Object.freeze(['gradebeam', 'frostwall']) }),

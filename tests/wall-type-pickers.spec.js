@@ -37,11 +37,16 @@ test('the FOUNDATION WALL TYPE picker offers the ruled set and its choice persis
   // The ruled set, in the registry's ids: 8" conc, the two ICFs, PT wood.
   // The insul wall LINES a foundation wall rather than being one, so it is
   // not offered.
+  //
+  // AND GRADE BEAM, LAST. Movie, 17 Sep: "it will be part of the foundation
+  // dropdown because the grade beam will replace the foundation wall". It is
+  // not a wall type and is not in wall-types.js -- it is the answer that says
+  // none of these -- so it sits after the walls it replaces.
   const picker = page.locator('[data-detail-input="fdnWallType"]');
   await expect(picker).toBeVisible();
   const ids = await picker.locator('option').evaluateAll(
     options => options.map(option => option.value));
-  expect(ids).toEqual(['concrete_8', 'icf', 'icf_13', 'pt_wood_fdn']);
+  expect(ids).toEqual(['concrete_8', 'icf', 'icf_13', 'pt_wood_fdn', 'gradebeam']);
 
   // A drawing that never chose reads the old default.
   await expect(picker).toHaveValue('concrete_8');
@@ -59,6 +64,53 @@ test('the FOUNDATION WALL TYPE picker offers the ruled set and its choice persis
   await expect(page.locator('[data-detail-input="fdnWallType"]')).toHaveValue('icf');
   const saved = await h.savedDrawing(page);
   expect(saved.levelAssemblies['1'].wallType).toBe('icf');
+});
+
+test('GRADE BEAM replaces the foundation wall: 8" thick, 32" floor, no footing', async ({ page }) => {
+  await h.openModel(page);
+  await openProjectPage(page);
+
+  const picker = page.locator('[data-detail-input="fdnWallType"]');
+  const thickness = page.locator('[data-detail-chip="fdnThickness"]');
+  const height = page.locator('[data-detail-input="fdnHeight"]');
+
+  // A GRADE BEAM IS 8", whatever wall type the drafter had picked. Choosing a
+  // 13 1/4" ICF first is what makes this a real test: if the thickness still
+  // came off wallType the beam would draw 13 1/4" wide.
+  await picker.selectOption('icf_13');
+  await expect(thickness).toHaveText('13 1/4"');
+  await picker.selectOption('gradebeam');
+  await expect(thickness).toHaveText('8"');
+
+  // An 8 ft basement wall switched to a beam is not an 8 ft grade beam:
+  // Movie, "make min. 32"", so the pour comes down on the way in.
+  await expect(height).toHaveValue('2\'-8"');
+
+  // No footing under it -- it hangs off piles -- so the two footing rows go
+  // with the part, the same rule that hides any row the drawing has nothing
+  // to point at.
+  await expect(page.locator('[data-sched-row="footingWidth"]')).toBeHidden();
+  await expect(page.locator('[data-sched-row="footingDepth"]')).toBeHidden();
+
+  // And the space under the house is a crawl space now, not a basement.
+  await expect(page.locator('th[data-section-col="basementClg"]'))
+    .toHaveText('CRAWL CLG HT');
+
+  // The floor is a refusal, not a clamp: a typed 2'-0" leaves the cell where
+  // it was and says why.
+  await height.fill('2\'-0"');
+  await height.blur();
+  await expect(page.locator('#status')).toContainText('at least 32"');
+  await expect(height).toHaveValue('2\'-8"');
+
+  // Stored on the FOUNDATION level beside wallType -- two keys, because a
+  // beam is a kind of foundation and not a material -- so the wall type the
+  // drafter had is still there to come back to.
+  await page.reload();
+  await expect(page.locator('[data-detail-input="fdnWallType"]')).toHaveValue('gradebeam');
+  const saved = await h.savedDrawing(page);
+  expect(saved.levelAssemblies['1'].foundationKind).toBe('gradebeam');
+  expect(saved.levelAssemblies['1'].wallType).toBe('icf_13');
 });
 
 test('a floor defaults to SAME AS HOUSE and only a deliberate pick stores its own', async ({ page }) => {

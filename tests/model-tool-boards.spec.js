@@ -91,8 +91,18 @@ test('the roster answers per board, and every board can rest', async ({ page }) 
       unknownId: R.availableOn('teleporter', 'drafting'),
     };
   });
-  expect(r.toy, 'TOY offers select and wall, and nothing else')
-    .toEqual(['select', 'wall']);
+  // OUTLINE JOINED THE BOARD when it became a tool of its own (U, the old
+  // page's key). This file's own header carries the ruling it implements --
+  // Movie, 13 Sep: the OUTLINE GETS DRAWN IN TOY, drawing the outline is not a
+  // drafting tool but how a TOY house begins. Until there was an `outline`
+  // tool the exception had to be spelled 'wall'.
+  //
+  // AND WALL STAYS, which the roster's note predicted would not be the case.
+  // Taking it off this board moves TOY's drawing onto a path §1's squaring and
+  // foot-landing rule does not cover; that is its own rung with its own
+  // checks. Adding outline takes nothing from anybody, swapping them would.
+  expect(r.toy, 'TOY offers select, wall and the outline gesture, and nothing else')
+    .toEqual(['select', 'wall', 'outline']);
   expect(r.drafting).toBe(r.all);
   expect(r.unknown).toBe(r.all);
   expect(r.restsEverywhere).toBe(true);

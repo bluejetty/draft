@@ -273,6 +273,33 @@ test.describe('MODEL.html tier 1', () => {
       // branch that loads it -- an undeclared dependency is undeclared no
       // matter whose commit brought it.
       './building-bodies.js',
+      // build-house.js arrived with the BONE that builds the drafter's own
+      // outline, and it is the DELETES-A-DUPLICATE kind this list should grow
+      // by. Walking a loop into wall runs is a few lines and reading its
+      // winding to decide which side the body sits on is a few more -- so a
+      // page doing it by hand would look cheaper than this and would be
+      // another home for a rule the old page already builds from.
+      //
+      // THE WINDING HALF EARNS THE REQUEST ON ITS OWN. A freehand loop is
+      // wound whichever way the drafter walked it, and a build that read the
+      // page's refLine SETTING instead would put the wall bodies outside the
+      // house on every clockwise trace: a drawing that looks almost right,
+      // which is this suite's worst class of defect. The spec walks the same
+      // square both ways for exactly that reason -- walked forwards the
+      // module's answer and the setting's agree, so only the reversed loop can
+      // fail.
+      //
+      // It also carries the tour's mid-span beam and footing-ring
+      // derivations, and NEITHER is called from here. That is not a reason to
+      // refuse it: the cost of a script is the request, and the alternative to
+      // paying it is a twin of the half that IS called.
+      './build-house.js',
+      // premade-plans.js is the drive-thru's catalogue: the bungalow's
+      // dimensions and the reasoning behind each of them, with
+      // proto/premade-plans-harness.js on the arithmetic. It is here for the
+      // reason garage-site.js is -- a design is a domain rule, and a page that
+      // carried the numbers itself would be the second home of one.
+      './premade-plans.js',
       // AND WHERE AN ORDERED GARAGE STANDS. 40 lines, no dependency of its
       // own: a traced loop says where it goes by being traced, an autobuilt
       // one has to be told, and PROJECT will have to be told the same thing
