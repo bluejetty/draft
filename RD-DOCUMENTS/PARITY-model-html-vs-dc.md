@@ -168,31 +168,57 @@ bone under a dog that had just said "press the bone and I'll build it", and
 got silence behind a board still standing in his way. Measured from Movie's
 own screen, 18 Sep.
 
-Today the press means **"I'll draw it myself"**: the sign comes down, the
-trace is re-armed for the chosen type, and the strip names the gesture in the
-entry's own words -- *"Trace your 1 STOREY -- press each corner, then the
-first corner again to close."* The tile armed that trace already, at the
-moment it was pressed; what was missing was a page that said so and a board
-that got out of the way. **The premade house per type is the next rung**, and
-it is not here: this page carries `garage-site.js` but neither
-`starter-shape.js` nor `build-house.js`, which is where the old page's "press
-the bone and a house appears" lives. Movie's scope for it, 18 Sep: bungalows
-and attached garages first, bilevel later.
+For one rung the press meant **"I'll draw it myself"** -- the sign came down
+and the armed trace was handed over -- and Movie ruled that out the same day:
+*"we shouldn't put it in the drivethru window yet, i'd just like to offer them
+premade designs in there at the beginning"*, and for the tiles with no design,
+*"have those tiles say 'not ready yet' and build nothing"*.
 
-**The house order is NOT spent.** `orderServed()` means the geometry side
-BUILT it (`MODEL.html:4262`) and nothing was built -- the drafter is about to
-build it himself. Spending it would re-open the board with no tile pressed
-under a drafter plainly mid-house, and would stop the foot bone recognising
-the choice (`if (chosen()) return`), popping the sign back up over a trace in
-progress. Caught by mutation, and the check that catches it had to be repaired
-first: `callSign` lights the button and waits two seconds before the sign
-rises, so the first draft read the board's state from inside that glow and
-passed with the order spent.
+So the window does ONE thing and says when it cannot. **1 STOREY and 1 STOREY
++ GARAGE build**, from `premade-plans.js`; **2 STOREY and the bilevels answer
+`NOT READY YET.` on the sign and write nothing**, and the board STAYS UP,
+because nothing was built and the drafter has not been answered -- 1 STOREY is
+one press away, in front of him. A board that replies to a press by quietly
+arming a tool somewhere else teaches the drafter that its button means
+something other than what it says.
+
+The refusal is the SIGN'S, where the garage's `HOW BIG, THOUGH?` and `YOU'VE
+GOT ONE ALREADY` already land, and it is decided on the GEOMETRY side rather
+than in the bone's handler with those two. The seam's rule is that what an
+order MEANS is the geometry side's call (`:4184`), and refusing earlier would
+also stop the order reaching the seam at all -- which `model-drivethru.spec.js`
+measures, each press firing its own seam and not the other's.
+
+Movie's scope for the designs, 18 Sep: bungalows and attached garages first,
+bilevel later because it "will be more complex and need more work".
+
+**A built design puts the trace down with it.** Pressing the tile arms the
+outline through `onChoose` and that still stands -- a drafter who CLOSES the
+board instead of pressing the bone means to draw it himself. Once the house is
+built he does not, and a trace left armed over a finished house turns his next
+press, at his own new house, into the first corner of a second one.
+
+
+**A REFUSED order is not spent; a BUILT one is.** `orderServed()` means the
+geometry side BUILT it (`MODEL.html:4262`), so a `NOT READY YET.` leaves the
+choice standing -- the drafter has not been answered, and spending it would
+re-open the board with no tile pressed under a drafter who is plainly still
+asking. It would also stop the foot bone recognising the choice
+(`if (chosen()) return`) and pop the sign back up over whatever he was doing.
+
+The check that catches that had to be repaired before it could: `callSign`
+lights the button and waits two seconds before the sign rises, so the first
+draft read the board's state from INSIDE that glow and passed with the order
+spent. The lit press is the immediate tell; the board is the one the drafter
+sees.
 
 `model-html-topbar.spec.js` still asserts the wall count does not move across
-a family press, an entry press or BONE, and that is not a leftover: pressing a
-house type arms a trace and writes nothing, so the wall count holding still is
-exactly right. What changed is that the outline the trace commits is the
+a family press, an entry press or BONE, and that is not a leftover -- but it
+now says something narrower than it did. It presses `twoStorey-garage`, a tile
+with no design, so the bone REFUSES and the count holds. A tile that HAS a
+design writes ten walls on that press, deliberately, and the seam is still
+uncrossed: the bar records a type and decides no geometry, and the geometry
+side reads `premade-plans.js`. What changed is that the outline the trace commits is the
 drafter's own, drawn corner by corner -- the bar still decides no geometry,
 which is the seam #389 drew and this rung did not cross.
 
