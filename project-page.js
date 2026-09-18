@@ -486,11 +486,17 @@ if (!window.DraftProjectPage) {
   // "only half a pile will show due to the cut line". The garage draws whole
   // now, so piles draw whole too, at twice this.
   const PILE_HALF_WIDTH_IN = 5;
-  // Drilled piles under a grade beam land at about 8 ft on centre -- the
-  // spacing BUILD HOUSE and the drafters both work to. Now that the section
-  // draws the garage whole, the run carries every pile, not just the one the
-  // old break line happened to cut through.
-  const PILE_SPACING_FT = 8;
+  // WHERE THE SPACING RULE WENT. A const here said 8 ft on centre and the
+  // section stepped piles out along the beam from it. Movie, 17 Sep, settled
+  // both halves of that: the rule is richer than one number -- a pile at every
+  // corner, then under 8 ft between where it can, 10 ft at the outside, and
+  // never closer than 4 ft -- and it is the FOUNDATION PLAN's to apply, not
+  // this section's ("on the corners only", "will show 2"). A section that
+  // invents intermediate piles is drawing a layout it cannot see.
+  //
+  // So the number is gone rather than left unused: the spacing belongs with
+  // the plan that places them, and a spare 8 here would be a second opinion
+  // for that code to drift against.
   // The garage's own framing, a 2x6 wall on the sill. Its end wall shows now
   // that the section runs the garage's whole depth.
   const GARAGE_STUD_FT = 5.5 / 12;
@@ -1551,7 +1557,66 @@ if (!window.DraftProjectPage) {
       line(0, plateY + joistFt, cut, plateY + joistFt, 1); // top of the joists
       line(0, plateY + deckFt, cut, plateY + deckFt, 2);   // top of the sheathing
       anchors.overGarageFloor = { x: cut * 0.42, y: plateY + joistFt / 2 };
-      roofBase = plateY + deckFt;
+      const deck = plateY + deckFt;
+
+      // ── AND THE STOREY STANDS ON IT ─────────────────────────────────────
+      // Movie, 17 Sep: "right now the walls are missing. in the other 2
+      // storey version the walls are also missing."
+      //
+      // He is right, and it was one line: roofBase went straight to the top
+      // of this deck, so the roof sprang off the floor with no storey between
+      // them. A floor and a roof with nothing holding them apart is not a
+      // room, and the drawing said so on every ROOM OVER build there has ever
+      // been -- the 2 STOREY included, which is why the defect is in both.
+      //
+      // THE HEIGHT IS HANDED IN, NOT DECIDED HERE. On a 2 STOREY it is
+      // whatever lands this plate on the house's own -- Movie: "in the 2
+      // storey version the ceilings should line up" -- and on a bungalow
+      // there is no house plate to meet ("in this verions (1 storey) it won't
+      // apply because we don't have a 2nd storey"), so it is the drafter's
+      // typed row. Both are the page's arithmetic; the section draws the
+      // answer.
+      const overWallFt = g.overWallHeightFt ?? 0;
+      const overStudFt = (g.overWallIn ?? GARAGE_STUD_FT * 12) / 12;
+      if (overWallFt > 0) {
+        // The garage's own perimeter, carried up: outside face on the same
+        // plane as the storey below, inside face a wall thickness in.
+        line(cut, deck, cut, deck + overWallFt, 2);
+        line(cut + overStudFt, deck, cut + overStudFt, deck + overWallFt, 1.5);
+        // KEYED TO THE ROW, because the schedule links a row to the drawing
+        // by the control's own key -- an anchor under any other name is a row
+        // the no-anchor rule hides.
+        anchors.garageOverWallHeight = {
+          x: cut + overStudFt + 0.55, y: deck + overWallFt / 2,
+        };
+
+        // ── THE WALL OVER THE HOUSE'S EXTERIOR WALL ───────────────────────
+        // Movie, same message: "the full perimeter garage wall will need to
+        // be filled in over the house ext wall (and flipped so the exterior
+        // is on the interior and interior on the exteriore)".
+        //
+        // ONLY WHERE THE HOUSE HAS STOPPED. On a 2 STOREY the house's own
+        // upper wall already stands in this band and buildWallSection draws
+        // it; a second set of faces there would be two walls where there is
+        // one, which is the exact defect the junction comment below warns
+        // about. On a bungalow the house is finished a storey down, so this
+        // band is empty and the room over the garage needs its own.
+        //
+        // AND IT IS FLIPPED, which is not decoration. The face that used to
+        // look out at the weather now looks at the house's attic, and the
+        // face that looked into the house looks into a heated room -- so the
+        // sheathing side is drawn toward the house and the finished side
+        // toward the garage. Same wall, turned around, because which side is
+        // outside changed.
+        const houseWallFt = (g.houseWallIn ?? 0) / 12;
+        if (g.houseStopsBelow && houseWallFt > 0) {
+          line(0, deck, 0, deck + overWallFt, 1.5);            // now the INSIDE face
+          line(houseWallFt, deck, houseWallFt, deck + overWallFt, 2); // sheathing, facing the house
+          anchors.garageOverFlip = { x: houseWallFt / 2, y: deck + overWallFt * 0.5 };
+        }
+      }
+      // The plate, and what the roof now stands on.
+      roofBase = deck + overWallFt;
     } else {
       // Ceiling and bottom chord; the top chord is the roof slope above.
       // The upper line stops against the heel side chord at the eave end.
@@ -1692,14 +1757,21 @@ if (!window.DraftProjectPage) {
     const pileW = 2 * PILE_HALF_WIDTH_IN / 12;
     const pileBot = g.houseFootingTopFt - g.footingDepthIn / 12;
     if (!frostWall) {
-      // WHOLE PILES NOW, at roughly 8 ft on centre from the far corner in.
-      // The half-pile-at-the-break convention retired with the break itself:
-      // nothing cuts through a shaft any more, so each one draws both faces,
-      // its conventional bottom on the house footing line, and its hatch.
-      const spans = [];
-      for (let x = cut; x + pileW < 0; x += PILE_SPACING_FT) {
-        spans.push([x, x + pileW]);
-      }
+      // THE CORNERS, AND ONLY THE CORNERS. Movie, 17 Sep, on what the section
+      // should draw: "on the corners only", "(will show 2)".
+      //
+      // The real beam carries piles at every corner and then evenly between
+      // them -- under 8 ft where it can, 10 ft at the outside, never closer
+      // than 4 ft -- but THAT LAYOUT IS A PLAN'S JOB, not a section's. This
+      // section is one cut across the garage; the intermediate piles it used
+      // to step out at a fixed 8 ft were a guess at where a plan would put
+      // them, drawn as fact. Two corners are what this cut actually passes
+      // through, so two are what it draws.
+      //
+      // Whole piles, not the old half-at-the-break: that convention retired
+      // with the break itself, so each draws both faces, its conventional
+      // bottom on the house footing line, and its hatch.
+      const spans = [[cut, cut + pileW], [-pileW, 0]];
       spans.forEach(([x0, x1]) => {
         line(x0, fdnBot, x0, pileBot, 1.5);
         line(x1, fdnBot, x1, pileBot, 1.5);

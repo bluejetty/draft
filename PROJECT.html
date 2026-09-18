@@ -2033,9 +2033,32 @@
       // cannot disagree about a garage. Only the floor offset comes from
       // somewhere else: it is a ZONE HEIGHT, because it is a height relative
       // to MAIN FL rather than a property of the garage's assembly.
+      // WHERE THE HOUSE'S SECOND FLOOR DECK SITS, in the section's own feet.
+      // DECLARED ABOVE THE GARAGE ROWS, not beside its other reader below:
+      // the room-over wall height's default calls it while the schedule is
+      // being built, and a const read before its line runs is a TDZ throw,
+      // not an undefined.
+      // buildWallSection stacks floors from MAIN FL at 0: a wall, then the
+      // next floor's joists and sheathing on top of it, so the top of the
+      // second floor's sheathing is the first wall plus the second floor's
+      // package. Derived from the same floors() the section is drawn from,
+      // because the whole point of the press is that the two decks agree.
+      const upperDeckFt = () => {
+        const floors = detailValues().floors;
+        if (floors.length < 2) return null;
+        return floors[0].wallHeightFt
+          + (floors[1].joistDepthIn + floors[1].sheathingIn) / 12;
+      };
+
       const garageControls = [];
-      const addGarage = (key, name, get, set, kind, offSection, wide) =>
-        garageControls.push({ key, name, get, set, kind, offSection, wide });
+      // `extra` rather than a seventh and eighth positional: the list was
+      // already at `(key, name, get, set, kind, offSection, wide)` and two
+      // more booleans in a row is how a call site ends up reading
+      // `undefined, undefined, true`. It carries `choices` (a picker with its
+      // own option list, instead of the garage foundations every other choice
+      // row here wants) and `roomOverOnly` (see the repaint rule).
+      const addGarage = (key, name, get, set, kind, offSection, wide, extra = {}) =>
+        garageControls.push({ key, name, get, set, kind, offSection, wide, ...extra });
 
       // The bottom of the house's foundation wall -- the top of its footing.
       // Derived from the same numbers the house section is drawn from: MAIN FL
@@ -2134,6 +2157,74 @@
       addGarage('garageRoomOver', 'Storey over the garage',
         () => (roomOver() ? 'ROOM OVER ✓' : '+ ROOM OVER'),
         () => false, 'rowbutton', true, true);
+
+      // ── THE STOREY OVER'S OWN WALL ──────────────────────────────────────
+      // Movie, 17 Sep: "we will need to add a wall height and wall type boxes
+      // for that on garage side, make default 8-1 1/8"", then "(one 2nd floor
+      // is added)(once)" -- so the pair belongs to the room over and appears
+      // with it. The repaint's garage rule already hides every `garage` key
+      // when there is no garage; these two carry `roomOverOnly` so they also
+      // go when there is a garage and no storey on it.
+      //
+      // THE DEFAULT IS THE HOUSE'S ANSWER WHERE THE HOUSE HAS ONE. Movie, on
+      // the same build: "in the 2 storey version the ceilings should line up.
+      // in this verions (1 storey) it won't apply because we don't have a 2nd
+      // storey." So on a 2 STOREY the untyped default is whatever puts this
+      // plate on the house's plate -- which, because pressing ROOM OVER
+      // already landed the deck on the house's deck, is simply the house's
+      // own upper wall height. On a bungalow there is no plate to meet and it
+      // falls back on the bungalow precut he named.
+      //
+      // DERIVED, NOT WRITTEN. Storing the lined-up number would freeze it:
+      // raise the house's 2nd floor wall afterwards and the ceilings would
+      // quietly stop lining up, with two cells that agreed when they were
+      // written. Typing in the box is still what overrides it, and clearing
+      // the box is the way back.
+      const BUNGALOW_OVER_WALL_FT = projectPage.wallHeightFtFromStud(
+        projectPage.STUD_LENGTHS_IN[0]);
+      const derivedOverWallFt = () => {
+        const deck = upperDeckFt();
+        if (deck == null) return BUNGALOW_OVER_WALL_FT;
+        return Math.max(0, housePlateFt() - deck);
+      };
+      const overWallHeightFt = () =>
+        sectionTable.rows.attachedGarage?.overWallHeightFt ?? derivedOverWallFt();
+      const overWallTypeStored = () => {
+        const stored = sectionTable.rows.attachedGarage?.overWallType;
+        return EXTERIOR_CHOICES.includes(stored) ? stored : null;
+      };
+      const overWallIn = () =>
+        WALL_TYPE_VIEW[overWallTypeStored() ?? activeWallType].totalIn;
+      addGarage('garageOverWallHeight', 'Room over wall height',
+        () => ftIn(overWallHeightFt()),
+        text => {
+          // Empty puts the cell back on the derivation, the same way the roof
+          // heel's does -- and on a 2 STOREY that derivation is the whole
+          // "ceilings line up" rule, so it has to stay reachable.
+          if (text.trim() === '') {
+            writeCell('attachedGarage', 'overWallHeightFt', null);
+            return true;
+          }
+          const value = parseFtIn(text);
+          if (value == null || value <= 0 || value > 20) return false;
+          writeCell('attachedGarage', 'overWallHeightFt', value);
+          return true;
+        }, undefined, undefined, undefined, { roomOverOnly: true });
+      // SAME AS HOUSE is the default and it is a real answer, not a blank:
+      // every other wall-type picker on the page spells "follow the drawing"
+      // that way -- stored as null rather than a copy of today's shared type,
+      // because a copy freezes the 99% case into a fake override that the
+      // next shared-type change silently misses.
+      addGarage('garageOverWallType', 'Room over wall type',
+        () => overWallTypeStored() ?? '',
+        value => {
+          writeCell('attachedGarage', 'overWallType', value === '' ? null : value);
+          return true;
+        }, 'choice', undefined, undefined, {
+          roomOverOnly: true,
+          choices: () => [{ id: '', label: 'SAME AS HOUSE' },
+            ...EXTERIOR_CHOICES.map(id => ({ id, label: WALL_TYPE_VIEW[id].label }))],
+        });
 
       garageCell('garageWallHeight', 'Garage wall height', 'mainWallHeightFt', ftIn, parseFtIn);
       addGarage('garageSill', 'Sill plate',
@@ -2234,10 +2325,16 @@
           : control.kind === 'choice'
             ? document.createElement('select') : document.createElement('input');
         if (control.kind === 'choice') {
-          projectPage.GARAGE_FOUNDATIONS.attachedGarage.forEach(id => {
+          // A row with its own list uses it; everything else is a garage
+          // foundation, which is what every choice row here was until the
+          // storey over the garage gained a wall type.
+          const options = control.choices ? control.choices()
+            : projectPage.GARAGE_FOUNDATIONS.attachedGarage.map(id =>
+              ({ id, label: projectPage.GARAGE_FOUNDATION_LABEL[id] }));
+          options.forEach(({ id, label }) => {
             const option = document.createElement('option');
             option.value = id;
-            option.textContent = projectPage.GARAGE_FOUNDATION_LABEL[id];
+            option.textContent = label;
             input.appendChild(option);
           });
         }
@@ -2309,6 +2406,21 @@
             roomOver: roomOver(),
             overJoistIn: assembly(OVER_GARAGE_LEVEL_ID).joistDepthIn,
             overSheathingIn: assembly(OVER_GARAGE_LEVEL_ID).sheathingIn,
+            // THE STOREY ITSELF: how tall its wall is and what it is framed
+            // in. Both are the schedule's two new rows, and the height is the
+            // derivation on a 2 STOREY -- the plate landing on the house's so
+            // the ceilings line up -- rather than a number written twice.
+            overWallHeightFt: overWallHeightFt(),
+            overWallIn: overWallIn(),
+            // AND WHETHER THE HOUSE IS STILL THERE AT THAT HEIGHT. On a
+            // 2 STOREY the house's own upper wall stands in the band over its
+            // exterior wall and buildWallSection draws it; on a bungalow the
+            // house stopped a storey down and the room over the garage has to
+            // carry its own wall there, flipped. One question, asked of the
+            // floor stack rather than of the build type, so a 2ND FL deleted
+            // from a 2 STOREY answers it correctly without anybody saying so.
+            houseStopsBelow: floorLevels.length < 2,
+            houseWallIn: WALL_TYPE_VIEW[activeWallType].totalIn,
             // WHAT THE GARAGE ROOF DIES INTO. Over the house's top plate
             // there is no house wall for it to stop against, only the house's
             // own roof climbing inward -- so the section is handed that plane
@@ -2323,19 +2435,6 @@
             },
           },
         };
-      };
-
-      // WHERE THE HOUSE'S SECOND FLOOR DECK SITS, in the section's own feet.
-      // buildWallSection stacks floors from MAIN FL at 0: a wall, then the
-      // next floor's joists and sheathing on top of it, so the top of the
-      // second floor's sheathing is the first wall plus the second floor's
-      // package. Derived from the same floors() the section is drawn from,
-      // because the whole point of the press is that the two decks agree.
-      const upperDeckFt = () => {
-        const floors = detailValues().floors;
-        if (floors.length < 2) return null;
-        return floors[0].wallHeightFt
-          + (floors[1].joistDepthIn + floors[1].sheathingIn) / 12;
       };
 
       // What the garage wall has to be for the floor over it to land its
@@ -2494,6 +2593,17 @@
             return;
           }
           if (!garageShown() && key.startsWith('garage')) {
+            tag.style.display = 'none';
+            if (row) row.hidden = true;
+            return;
+          }
+          // A ROW FOR A STOREY THAT IS NOT THERE. Movie, 17 Sep, on the wall
+          // height and wall type pair: "(one 2nd floor is added)(once)" --
+          // they describe the room over the garage, so they arrive with it
+          // and leave with it. The garage rule above is the same shape one
+          // level down; this one cannot be folded into it, because these two
+          // are hidden on a garage that is fully drawn.
+          if (control.roomOverOnly && !roomOver()) {
             tag.style.display = 'none';
             if (row) row.hidden = true;
             return;
