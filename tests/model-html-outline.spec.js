@@ -77,11 +77,88 @@ async function pickHouseType(page, family = 'bungalow', entry = family) {
   await page.locator(`[data-build-entry="${entry}"]`).click();
 }
 
+// A PRESS AIMED AT THE SHEET HAS TO LAND ON THE SHEET, and with the board up
+// that is not free. The board is a PICTURE and passes presses through, but the
+// cards on its shelf are controls and take their own -- so a corner that falls
+// on a card is a corner the sheet never hears, and the loop never closes.
+//
+// WHERE A CORNER FALLS IS THE CAMERA'S BUSINESS, not this file's. These
+// presses are aimed at world points; fit() frames whatever the fixture left
+// standing, and the scale it picks moves from run to run -- 10.5 to 18.8 feet
+// per pixel across four runs of this file, measured. So the same world square
+// lands on the shelf some runs and clear of it others, which is exactly how
+// this file behaved: green here, red on CI, and red on a different test each
+// time. Movie ruled this class once already (model-html-fit-insets.spec.js,
+// 15 Sep: give fit() the chrome's insets rather than shave the bar, "on the
+// grounds that shaving moves the cliff to whichever control gets added next"),
+// and shaving the cards to miss the square would be the same mistake.
+//
+// SO THE VIEW MOVES, NOT THE LOOP. Every corner below is named in an
+// assertion -- x AND z, at -10 and -8 -- so a loop opened out to miss the
+// shelf would be a loop the test then fails to recognise. Zooming changes
+// where world points LAND without changing what they are, which is the whole
+// reason planFrame reads the published camera instead of assuming one. A
+// drafter does the same thing for the same reason: the board is over the
+// drawing, so they zoom until they can see what they are tracing.
+//
+// The board cannot simply be shut instead. Once a type is chosen the foot bone
+// BUILDS rather than re-opening the window (MODEL.html's boneFoot handler:
+// `if (chosen()) return`), so a spec that shuts the board has no way back to
+// the shelf -- and the DETACHED GARAGE test below needs it twice.
+//
+// THE BROWSER'S OWN HIT-TESTING IS WHAT SAYS WHEN IT IS CLEAR. Arithmetic
+// against the shelf's box would be a second copy of the page's layout, free
+// to disagree with it the next time the art changes; elementFromPoint asks
+// the question the press itself asks.
+const onSheet = (page, points) => page.evaluate(list => list.map(([cx, cy]) => {
+  const el = document.elementFromPoint(cx, cy);
+  return !!el && el.id === 'plan';
+}), points);
+
+async function clearOfTheShelf(page, corners) {
+  const mid = k => corners.reduce((sum, corner) => sum + corner[k], 0) / corners.length;
+  const middle = [mid(0), mid(1)];
+
+  // ZOOM ABOUT THE LOOP'S OWN MIDDLE, so the corners open outward from where
+  // they already are instead of sliding across the sheet. The wheel is only
+  // heard by the canvas, so the point it is aimed at has to be canvas: if the
+  // middle of the loop is itself under a card, the anchor walks up the sheet
+  // until it is clear of the board altogether.
+  let frame = await h.planFrame(page);
+  for (let notch = 0; notch < 10; notch += 1) {
+    const points = corners.map(([x, z]) => frame.at(x, z));
+    if ((await onSheet(page, points)).every(Boolean)) return frame;
+
+    const anchor = frame.at(middle[0], middle[1]);
+    const candidates = [anchor, [frame.box.x + 120, anchor[1]],
+      [frame.box.x + frame.box.width - 120, anchor[1]]];
+    const live = await onSheet(page, candidates);
+    const at = candidates[live.indexOf(true)];
+    if (!at) throw new Error('nowhere to aim the wheel: the board covers the '
+      + 'sheet from edge to edge');
+
+    await page.mouse.move(at[0], at[1]);
+    await page.mouse.wheel(0, -120);
+    await page.waitForTimeout(80);
+    frame = await h.planFrame(page);
+
+    // OFF THE SHEET IS NOT CLEAR OF THE SHELF. Zoomed far enough, a corner
+    // leaves the canvas -- which is a press on nothing, not a press on the
+    // drawing -- so stop and say so rather than trade one swallowed press for
+    // another.
+    const opened = corners.map(([x, z]) => frame.at(x, z));
+    if (opened.some(([x, y]) => x < frame.box.x || x > frame.box.x + frame.box.width
+      || y < frame.box.y || y > frame.box.y + frame.box.height)) break;
+  }
+  throw new Error('no zoom puts every corner of this loop on the sheet — the '
+    + 'board\'s shelf covers the drawing wherever the camera puts it');
+}
+
 // Press corners WITHOUT closing, which is the state the colour is about: a
 // committed outline is a level copy in the scope colours, and the family's
 // colour only ever shows while the loop is still in the drafter's hands.
 async function traceCorners(page, corners) {
-  const frame = await h.planFrame(page);
+  const frame = await clearOfTheShelf(page, corners);
   for (const [x, z] of corners) {
     const at = frame.at(x, z);
     await page.mouse.click(at[0], at[1]);
@@ -127,8 +204,10 @@ const SPLIT_BLUE = [63, 127, 214];  // #3f7fd6 -- the order's "blue split"
 // Press a list of world corners, closing on the first. The close IS the
 // gesture's ending — no Enter, no FINISH — because that is the old page's
 // contract and a tool that needs a keyboard is not one an iPad can use.
+//
+// The view is zoomed clear of the board's shelf first -- see clearOfTheShelf.
 async function traceLoop(page, corners) {
-  const frame = await h.planFrame(page);
+  const frame = await clearOfTheShelf(page, corners);
   for (const [x, z] of corners) {
     const at = frame.at(x, z);
     await page.mouse.click(at[0], at[1]);

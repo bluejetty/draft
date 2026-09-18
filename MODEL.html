@@ -734,7 +734,27 @@
   #dt-tiles { position:absolute; left:9.5%; top:37%; width:81%; height:38.4%;
     box-sizing:border-box; display:flex; flex-direction:column;
     justify-content:center; gap:4px; pointer-events:none; }
-  #dt-tiles > * { pointer-events:auto; }
+  /* ONLY THE CARDS TAKE A PRESS, not the shelf they stand on. This read
+     `#dt-tiles > *`, and `> *` is #build-bar -- a flex COLUMN, not a control,
+     and one that spans the shelf corner to corner. So the gaps between cards,
+     and the strip of shelf either side of them, were taken by a container and
+     never reached the sheet underneath.
+
+     THE RULE IS THE ONE THE BOARD'S OWN COMMENT STATES two blocks up: the
+     board is a PICTURE, and only the controls painted on top of it take a
+     press. pointer-events inherits, so the container passes the press through
+     and the buttons and fields take it back. model-drivethru.spec.js pins
+     every zone of it, the way gruff-drivethru.spec.js pins the other board's.
+
+     WHAT THIS DOES NOT FIX, so nobody looks for it here: a corner pressed onto
+     a CARD. A card is a control and swallowing that press is correct. The
+     deeper shelf on Movie's 18 Sep art grew the cards, which put more of the
+     sheet behind a control, and model-html-outline -- which traces a square
+     with the board up -- started failing on CI when the camera framed the
+     drawing small. That belongs to the spec, and clearOfTheShelf there is
+     where it is answered. */
+  #dt-tiles > * { pointer-events:none; }
+  #dt-tiles button, #dt-tiles input { pointer-events:auto; }
   #dt-bone { position:absolute; left:50%; top:81.1%; width:11.4%;
     transform:translateX(-50%); aspect-ratio:1 / 1; border:none; padding:0;
     border-radius:50%; background:transparent; cursor:pointer;
