@@ -3724,6 +3724,63 @@
           ctx.stroke();
           ctx.restore();
         }
+        // THE CUT BEING PLACED. Without this the three presses land on a
+        // sheet that never changes, which is the defect the outline tool had
+        // and is the reason a drafter cannot tell a press that missed from a
+        // press that worked.
+        //
+        // AND THE ARROW IS THE OPPOSITE OF WHAT GETS STORED, by construction
+        // rather than by a second copy of the rule: the arrow shows the way
+        // the view will LOOK, the file keeps where the viewer STANDS, and the
+        // one is negated from the other here so the preview cannot drift from
+        // the commit.
+        if (activeTool === 'cut' && cutStart) {
+          const G = window.DraftGeometry2D;
+          const far = cutEnd || cursorWorld;
+          ctx.save();
+          ctx.strokeStyle = skin['draw-cut'];
+          ctx.fillStyle = skin['draw-cut'];
+          ctx.lineWidth = 1.5;
+          if (far) {
+            const a = toS(cutStart), b = toS(far);
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+          }
+          const s0 = toS(cutStart);
+          ctx.beginPath();
+          ctx.arc(s0.x, s0.y, 4, 0, Math.PI * 2);
+          ctx.stroke();
+          if (cutEnd && cursorWorld) {
+            const stored = G.cutDirVec(cutStart, cutEnd, cursorWorld);
+            if (stored) {
+              // Screen space, so the arrow is the same size at any zoom: the
+              // world direction is projected through the same toS the geometry
+              // uses rather than converted by a second scale factor here.
+              const mid = { x: (cutStart.x + cutEnd.x) / 2, z: (cutStart.z + cutEnd.z) / 2 };
+              const m = toS(mid);
+              const tip = toS({ x: mid.x - stored.x, z: mid.z - stored.z });
+              const dx = tip.x - m.x, dy = tip.y - m.y;
+              const len = Math.hypot(dx, dy) || 1;
+              const ux = dx / len, uy = dy / len;
+              const end = { x: m.x + ux * 26, y: m.y + uy * 26 };
+              ctx.beginPath();
+              ctx.moveTo(m.x, m.y);
+              ctx.lineTo(end.x, end.y);
+              ctx.stroke();
+              ctx.beginPath();
+              ctx.moveTo(end.x, end.y);
+              ctx.lineTo(end.x - ux * 7 - uy * 4, end.y - uy * 7 + ux * 4);
+              ctx.lineTo(end.x - ux * 7 + uy * 4, end.y - uy * 7 - ux * 4);
+              ctx.closePath();
+              ctx.fill();
+            }
+          }
+          ctx.restore();
+        }
         // THE RULER'S OWN LINE, dashed so it cannot be mistaken for geometry.
         // It is the only mark on this canvas that is not in the drawing and
         // never will be, and the dash is how a drafter knows that without
@@ -5168,17 +5225,34 @@
 
     // ── SECTIONS ────────────────────────────────────────────────────────────
     const stored = cuts();
-    section('Sections');
+    // + CUT, AND NOT A KEY. The old page's hint is "Press [C] to cut a view",
+    // and `cut: 'C'` is in DEFAULT_KEYBINDINGS to this day -- but this page
+    // binds no tool letters at all, and a cut a drafter can only reach from a
+    // keyboard is no cut on the iPad at the counter. The button is the
+    // affordance; the letter can follow it whenever the keypad does.
+    //
+    // It sits in the SECTIONS head beside its own list, where + ADD sits for
+    // levels and + SHELF for the boneyard -- the place a drafter already looks
+    // to make one more of the thing under it.
+    const cutBtn = document.createElement('button');
+    cutBtn.type = 'button';
+    cutBtn.className = 'lv-add';
+    cutBtn.dataset.addCut = '';
+    cutBtn.textContent = '+ CUT';
+    cutBtn.title = 'Cut a section — press the two ends of the line, then the '
+      + 'side you want to look from';
+    cutBtn.addEventListener('click', event => { event.stopPropagation(); armCut(); });
+    section('Sections', cutBtn);
     if (!stored.length) {
-      // THE OLD PAGE SAYS "Press [C] to cut a view" AND THIS PAGE MUST NOT.
-      // There is no [C] handler here and no cut tool -- grep the file. A hint
-      // telling a drafter to press a key that does nothing is worse than no
-      // hint, and it is the same seam the build bar is built on: say what is
-      // true of THIS page, not what was true of the old one.
+      // THIS SAID "This page has no cut tool -- sections are cut in LAYOUT",
+      // which was true when it was written and is not any more. An empty state
+      // is the one piece of text a drafter reads when nothing else is on
+      // screen, so it names the gesture rather than an absence.
       const none = document.createElement('div');
       none.className = 'lv-empty';
       none.dataset.noSections = '';
-      none.textContent = 'No sections. This page has no cut tool — sections are cut in LAYOUT.';
+      none.textContent = 'No sections yet. Press + CUT, then the two ends of the '
+        + 'line and the side to look from.';
       levelsPanel.append(none);
     }
     stored.forEach(cut => {
@@ -8147,6 +8221,110 @@
   // which is what _pressBuildType has always done in one motion.
   window.ModelBuild.onChoose(picked => { if (picked) armOutline(picked); });
 
+  // ── THE CUT TOOL: a section line and the way it looks ─────────────────────
+  //
+  // The parity row said "SECTIONS list -- listed and deletable, not cuttable",
+  // and the panel said so out loud: "This page has no cut tool -- sections are
+  // cut in LAYOUT." Both are true until this block, and neither is after it.
+  //
+  // THREE PRESSES, WHICH IS THE OLD PAGE'S GESTURE (MODEL.dc.html:22284):
+  // where the cut starts, where it ends, and which side the drafter wants to
+  // look from. The third press is the one that carries meaning a plan cannot
+  // show -- see geometry-2d.js's cutDirVec, and the harness beside it.
+  //
+  // NO PHASE VARIABLE. The old page keeps `cutPhase: 'idle'|'placing'|
+  // 'choosing'` beside the two points, which is a second fact about the same
+  // state and free to disagree with it. Here the points ARE the phase: no
+  // start is "place the start", a start alone is "place the end", both is
+  // "choose the side". A state that cannot be out of step with itself.
+  let cutStart = null;
+  let cutEnd = null;
+
+  const armCut = () => {
+    activeTool = 'cut';
+    cutStart = null;
+    cutEnd = null;
+    drawStart = null;
+    sayOnStrip('CUT — press where the section line starts.');
+    paint();
+  };
+
+  const cutPress = at => {
+    const here = { x: at.x, z: at.z };
+    if (!cutStart) {
+      cutStart = here;
+      sayOnStrip('Now press the other end of the section line.');
+      paint();
+      return;
+    }
+    if (!cutEnd) {
+      // THE OLD PAGE'S OWN GUARD, and it is not a nicety: a cut with no length
+      // has no perpendicular, so it has no direction to store. Refusing the
+      // second press leaves the drafter placing it again rather than making a
+      // record that can never say which way it looks.
+      if (Math.hypot(here.x - cutStart.x, here.z - cutStart.z) < 0.001) return;
+      cutEnd = here;
+      sayOnStrip('Now press the side you want the section to look FROM.');
+      paint();
+      return;
+    }
+    commitCut(here);
+  };
+
+  const commitCut = at => {
+    const G = window.DraftGeometry2D;
+    const dirVec = G.cutDirVec(cutStart, cutEnd, at);
+    if (!dirVec) return;
+    if (!Array.isArray(drawing.cuts)) drawing.cuts = [];
+    const stored = drawing.cuts;
+    // THE ID IS DERIVED FROM THE CUTS THEMSELVES rather than kept in a
+    // counter. The old page stores `nextCutId` in the file and then, on load,
+    // ignores it in favour of max(1, ...cuts.map(id + 1)) anyway
+    // (MODEL.dc.html:5623) -- so the counter is a value the loader already
+    // refuses to trust. Deriving it here means the two pages cannot disagree
+    // about the next number, and there is no key to leave stale.
+    //
+    // drawing-format.js reads a cut id with Number.isInteger (:79), so this is
+    // the one id on this page that is a NUMBER: newDrawingItemId mints
+    // strings, and a string here would be dropped on load without a word.
+    const id = Math.max(1, ...stored.map(cut => Number(cut.id) + 1));
+    // S1, S2 ... after the standard E1-E4 elevations, taking the first free
+    // number rather than the count: deleting S2 of three should let the next
+    // cut be S2 again rather than mint an S4 beside an existing one.
+    const used = new Set(stored.map(cut => cut.name));
+    let n = 1;
+    while (used.has(`S${n}`)) n += 1;
+    const levelId = activeLevelId();
+    const level = (drawing.levels || []).find(lvl => Number(lvl.id) === Number(levelId));
+    const cut = {
+      id,
+      name: `S${n}`,
+      startPt: { x: cutStart.x, z: cutStart.z },
+      endPt: { x: cutEnd.x, z: cutEnd.z },
+      dirVec: { x: dirVec.x, z: dirVec.z },
+      // The old page stores `this._drawElev`, which _applyLevelElevation sets
+      // to the active level's own elev (:9860). Same number, read from the
+      // level rather than from a field that shadows it.
+      elev: Number(level?.elev) || 0,
+      levelId,
+    };
+    stored.push(cut);
+    // THE EXISTING GENERIC UNDO ENTRY, which captures the LIST as well as the
+    // item -- so this needed no new branch. It is also why the push above is
+    // in place rather than `drawing.cuts = [...stored, cut]`: a new array
+    // would leave undo holding the old one and taking the cut out of a list
+    // nothing reads.
+    undoStack.push({ kind: 'add-item', list: stored, item: cut });
+    cutStart = null;
+    cutEnd = null;
+    activeTool = RESTING_TOOL;
+    sayOnStrip(`${cut.name} cut.`);
+    markDirty();
+    buildChrome();
+    paint();
+    return cut;
+  };
+
   // ── the instrument strip ──────────────────────────────────────────────────
   // MODEL.dc.html:1963's bottom panel, rebuilt on this page's terms. Movie,
   // 13 Sep: "we also still need the bottom bar which should look like lights
@@ -9479,6 +9657,7 @@
     if (activeTool === 'beam') { beamPress(at); return; }
     if (activeTool === 'roof') { roofPress(at); return; }
     if (activeTool === 'outline') { outlinePress(at); return; }
+    if (activeTool === 'cut') { cutPress(at); return; }
     if (activeTool === 'wall') {
       // §1: "either drag, or press again and drag -- both must work". The lift
       // needs two facts this press knows and pointerup does not: where the
@@ -10024,6 +10203,15 @@
       // file — going back to where you started is only free if you never
       // saved the trip out.
       markDirty();
+      // AND THE RAILS ARE PART OF THE DRAWING ON SCREEN. Until the CUT tool
+      // there was no undoable thing with a row of its own — a wall, a column
+      // and a beam all live on the canvas, so paint() alone put the page
+      // back. A section has a row in SECTIONS, and undo without this line
+      // took the cut out of the record and left its row sitting there: press
+      // it and the page looks for a cut that is gone. The rebuild is the same
+      // one every commit already runs, and it is a no-op for the kinds that
+      // touch nothing but the canvas.
+      buildChrome();
       paint();
     }
   });
