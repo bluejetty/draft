@@ -1739,12 +1739,33 @@ if (!window.DraftProjectPage) {
       // The plate, and what the roof now stands on.
       roofBase = deck + overWallFt;
     } else {
-      // Ceiling and bottom chord; the top chord is the roof slope above.
-      // The upper line stops against the heel side chord at the eave end.
-      line(0, plateY, cut, plateY, 2);
-      line(0, plateY + chordFt, cut + chordFt, plateY + chordFt, 1);
       roofBase = plateY;
     }
+
+    // ── THE CEILING, AND THE BOTTOM CHORD OVER IT ──────────────────────────
+    // Movie, 18 Sep: "the 2 storey + garage + room over is missing 2 lines on
+    // the roof (ceiling bottom roof chord)".
+    //
+    // He is right, and it is the same shape of mistake the missing walls were:
+    // the pair was written inside the NO-ROOM-OVER arm above and keyed to
+    // plateY, so putting a storey on the garage raised the roof and left its
+    // ceiling down on the garage. THE PAIR BELONGS TO THE ROOF, not to the
+    // garage -- every roof on this section has a room under it, whether that
+    // room is the garage itself or the storey over it -- so it is drawn once,
+    // here, off whatever roofBase the branches above settled on. The ceiling
+    // is the bottom chord's underside; the light line 3 1/2" over it is the
+    // chord's top, and the top chord is the roof slope further up.
+    //
+    // WHERE THE FAR END LANDS is the only thing the form changes. A garage
+    // roof running at the house stops on the shared face; a gable over the
+    // room is a closed box and stops on its own far wall. The near end holds
+    // off a chord's thickness where a heel side chord is drawn to meet it,
+    // and runs to the wall on the gable, whose heel the two slopes make
+    // between them.
+    const ceilingFarX = gableOver ? houseFaceFt : 0;
+    line(cut, roofBase, ceilingFarX, roofBase, 2);
+    line(gableOver ? cut : cut + chordFt, roofBase + chordFt,
+      ceilingFarX, roofBase + chordFt, 1);
 
     // THE ROOF, sloped to a real eave. While the card drew only the junction
     // the chords ran level into the break; with the end wall drawn, the far
@@ -1802,46 +1823,46 @@ if (!window.DraftProjectPage) {
       + (overhangFt + Math.min(x - cut, houseFaceFt - x)) * (pitch / 12);
     const ridgeY = roofBase + riseGable(ridgeX);
     if (gableOver) {
-      // ── WHERE EACH SLOPE ENDS ──────────────────────────────────────────
-      // The far wall is a true outside and gets the garage's own eave, the
-      // full overhang projecting past it. The house side does NOT. Movie,
-      // 18 Sep: "shouldn't go over to the main house roof it will be to high
-      // up" -- an overhang there lands on top of a one-storey house's roof,
-      // which is a roof sitting on a roof. So that slope stops at the wall
-      // face and the roof ends where the room does.
+      // ── TWO EAVES, AND THEY MATCH ────────────────────────────────────────
+      // Movie, 18 Sep, with a version of this roof he had drawn himself: a
+      // plain symmetrical gable, the full overhang projecting past BOTH
+      // walls.
       //
-      // BOTH SLOPES STILL SHOW, which is what he asked for -- "the room over
-      // the 1 storey should have 2 eave ends right?" -- because the ridge is
-      // between the two walls, not against the house. Clipping the overhang
-      // does not move it: the heel sits at the same height on both walls, so
-      // the ridge lands midway whatever either side does past its wall.
+      // The house side used to stop dead at the wall face, which was my
+      // reading of "shouldn't go over to the main house roof it will be to
+      // high up" (17 Sep) -- I took it to rule out the overhang on that end.
+      // His drawing says otherwise, and in front of it he is plainly right:
+      // what would have been too high is this roof carrying ON to the
+      // house's, and it does not. It stops at its own wall and throws the
+      // same 2'-0" eave the other side throws, into clear air a storey above
+      // a one-storey house's roof. A roof with an eave on one end and a
+      // sawn-off other end is not something anybody frames.
+      //
+      // So the two sides differ in one thing, which way they face, and every
+      // number under them -- overhang, fascia, heel, pitch -- is the one
+      // GARAGE ROOF row read twice.
       const sides = [
         { eaveX: cut - overhangFt, wallX: cut, out: -1 },
-        { eaveX: houseFaceFt, wallX: houseFaceFt, out: 1 },
+        { eaveX: houseFaceFt + overhangFt, wallX: houseFaceFt, out: 1 },
       ];
       sides.forEach(({ eaveX, wallX, out }) => {
         const heelY = roofBase + riseGable(wallX);
-        const fasciaBaseY = eaveX === wallX ? heelY : eaveY;
         // The fascia board, standing on the eave line, cut to depth.
-        rect(eaveX, fasciaBaseY, 0.1 * out, fasciaFt, 1.5);
-        // The soffit, where there is one to draw.
-        if (eaveX !== wallX) line(eaveX, eaveY, wallX, eaveY, 1);
-        line(eaveX, fasciaBaseY + fasciaFt, ridgeX, ridgeY, 2);   // top chord
+        rect(eaveX, eaveY, 0.1 * out, fasciaFt, 1.5);
+        // The soffit, wall face out to the fascia.
+        line(eaveX, eaveY, wallX, eaveY, 1);
+        line(eaveX, eaveY + fasciaFt, ridgeX, ridgeY, 2);         // top chord
         // THE HEEL SIDE CHORD, the same member the eave detail elsewhere on
         // this section uses: a 3 1/2" piece at the wall exterior joining the
         // bottom chord to the top, with the top chord's underside open
         // across it and no line drawn over the joint.
-        line(eaveX, fasciaBaseY + fasciaFt - chordDropFt,
+        line(eaveX, eaveY + fasciaFt - chordDropFt,
           wallX, heelY - chordDropFt, 1);
         // The underside, carried from the heel up to the ridge, stopping a
         // chord's drop below it -- the chord has thickness and the two
         // undersides meet there.
         line(wallX, heelY - chordDropFt, ridgeX, ridgeY - chordDropFt, 1);
       });
-      // THE CEILING. A room with a roof over it has one, and it is the
-      // bottom chord running wall to wall -- the same line the garage below
-      // gets when there is no storey on it.
-      line(cut, roofBase + chordFt, houseFaceFt, roofBase + chordFt, 1);
       anchors.garagePitch = { x: (cut + ridgeX) / 2,
         y: roofBase + riseGable((cut + ridgeX) / 2) + 0.5 };
       anchors.garageOverhang = { x: cut - overhangFt / 2, y: eaveY - 0.45 };
@@ -1850,9 +1871,9 @@ if (!window.DraftProjectPage) {
       anchors.garageHeel = { x: cut, y: (eaveY + roofBase + riseGable(cut)) / 2 };
       anchors.garageCavity = { x: ridgeX,
         y: (roofBase + chordFt + ridgeY - chordDropFt) / 2 };
-      // The roof ends at the house wall rather than reaching over it, so the
-      // drawing's right-hand edge is the room, not the junction.
-      roofEndX = houseFaceFt;
+      // The drawing's right-hand edge is this roof's own eave now, not the
+      // wall it springs from.
+      roofEndX = houseFaceFt + overhangFt;
       topY = ridgeY;
       // The break marks the GARAGE below, and stops at the room's plate: the
       // roof over it is drawn whole, both slopes, so a cut line carried up
