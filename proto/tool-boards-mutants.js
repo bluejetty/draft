@@ -31,15 +31,27 @@ const MUTANTS = [
     find: "    return board === 'toy' ? TOY_TOOLS.includes(id) : true;",
     with: '    return TOY_TOOLS.includes(id);',
     test: 'the roster answers per board' },
+  // THE ANCHOR MOVED WHEN OUTLINE BECAME A TOOL OF ITS OWN (18 Sep) and this
+  // file went red the same run, which is exactly what it is for: a mutation
+  // whose `find` no longer matches stops testing anything and says nothing.
   { file: 'tool-roster.js',
     name: 'TOY loses the wall tool, so §1 has nothing to run on',
-    find: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall']);",
-    with: '  const TOY_TOOLS = Object.freeze([RESTING]);',
+    find: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline']);",
+    with: "  const TOY_TOOLS = Object.freeze([RESTING, 'outline']);",
     test: 'the roster answers per board' },
   { file: 'tool-roster.js',
     name: 'TOY loses SELECT, so the fallback lands on a refused tool',
-    find: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall']);",
-    with: "  const TOY_TOOLS = Object.freeze(['wall']);",
+    find: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline']);",
+    with: "  const TOY_TOOLS = Object.freeze(['wall', 'outline']);",
+    test: 'the roster answers per board' },
+  // AND THE NEW MEMBER GETS ITS OWN. Movie's ruling is that the outline
+  // gesture survives on TOY -- "drawing the outline is not a drafting tool, it
+  // is how a TOY house begins" -- so a board that drops it is a board that
+  // will not let a TOY house start.
+  { file: 'tool-roster.js',
+    name: 'TOY loses the outline gesture, so a TOY house cannot begin',
+    find: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline']);",
+    with: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall']);",
     test: 'the roster answers per board' },
   { file: 'tool-roster.js',
     name: 'an id that is not a tool is available',

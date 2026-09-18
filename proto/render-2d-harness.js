@@ -2252,6 +2252,124 @@ function expect(label, got, want) {
   }
 }
 
+// ── drawOpening2D: the hole, its jambs, and the two colours ──────────────
+//
+// Lifted out of MODEL.dc.html on 18 Sep so MODEL.html, the cut views and
+// LAYOUT could stop wanting their own copy of a window. The geometry is the
+// CALLER'S -- geometry-2d.js resolves it and hands it in, the way drawColumn2D
+// takes its footing -- so the fixture below is a plain 4 ft opening in a 6"
+// wall, written out rather than computed. A harness that derived it would be
+// checking the arithmetic twice and the painter not at all.
+//
+// SENTINELS, for the reason the beam and column suites give: the old page's
+// #fafafa gap and #1d1f20 ink are the literals this painter carried, and both
+// are wrong on a night ground -- a near-white hole punched through a dark
+// wall. A check that accepted them would be blessing the bug it was moved to
+// fix, so the assertions demand the env's colours AND deny the literals.
+const SENTINEL_GAP = '#00ff88';
+const SENTINEL_OPENING_INK = '#ff6600';
+const SENTINEL_SELECT = '#8800ff';
+const openEnv = over => ({
+  openingColor: SENTINEL_OPENING_INK, openingGapColor: SENTINEL_GAP,
+  selectColor: SENTINEL_SELECT, isPrinting: false, ...over,
+});
+const pz = (x, z) => ({ x, y: 0, z });
+const OPENING_GEO = {
+  corners: [pz(-2, -0.25), pz(2, -0.25), pz(2, 0.25), pz(-2, 0.25)],
+  jambs: [[pz(-2, -0.25), pz(-2, 0.25)], [pz(2, -0.25), pz(2, 0.25)]],
+  glazing: [pz(-2, 0), pz(2, 0)],
+  center: pz(0, 0),
+};
+const WINDOW = { id: 'f1', type: 'window', wallId: 'w1' };
+const DOOR = { id: 'f2', type: 'door', wallId: 'w1' };
+
+suite('drawOpening2D', 'an opening with no geometry paints nothing', R => {
+  const ctx = recordingCtx();
+  R.drawOpening2D(ctx, toS, WINDOW, {}, openEnv());
+  expect('nothing is drawn without the caller-s answer', painted(ctx), false);
+});
+
+suite('drawOpening2D', 'the hole is filled in the skin-s paper, not the old literal', R => {
+  const ctx = recordingCtx();
+  R.drawOpening2D(ctx, toS, WINDOW, { geometry: OPENING_GEO }, openEnv());
+  expect('filled in the colour the page supplied',
+    sets(ctx, 'fillStyle').includes(SENTINEL_GAP), true);
+  expect('and no #fafafa survives -- that is the OLD page-s clear colour, and '
+    + 'a bright hole in a dark wall on this one',
+    sets(ctx, 'fillStyle').map(String).some(v => v.toLowerCase().includes('fafafa')), false);
+});
+
+suite('drawOpening2D', 'the jambs are drawn in the skin-s ink, not the old literal', R => {
+  const ctx = recordingCtx();
+  R.drawOpening2D(ctx, toS, WINDOW, { geometry: OPENING_GEO }, openEnv());
+  expect('stroked in the colour the page supplied',
+    sets(ctx, 'strokeStyle').includes(SENTINEL_OPENING_INK), true);
+  expect('and no #1d1f20 survives',
+    sets(ctx, 'strokeStyle').map(String).some(v => v.toLowerCase().includes('1d1f20')), false);
+  // A HOLE WITH NO EDGES IS A GAP IN THE WALL. The jambs are what say the wall
+  // carries on past the opening, and they are two strokes the fill does not
+  // make on its own.
+  expect('both jambs were stroked', calls(ctx, 'stroke').length >= 2, true);
+});
+
+suite('drawOpening2D', 'a window draws its double-glazed unit and no swing', R => {
+  const ctx = recordingCtx();
+  R.drawOpening2D(ctx, toS, WINDOW, { geometry: OPENING_GEO }, openEnv());
+  // The two panes and the two frame blocks are strokes beyond the jambs; the
+  // swing is an arc, and a window has none.
+  expect('a window has no door swing',
+    calls(ctx, 'arc').some(args => args[3] !== 0 || args[4] !== Math.PI * 2), false);
+  expect('and it draws more than its two jambs',
+    calls(ctx, 'stroke').length > 2, true);
+});
+
+suite('drawOpening2D', 'a door draws a leaf and a quarter swing', R => {
+  const ctx = recordingCtx();
+  R.drawOpening2D(ctx, toS, DOOR, { geometry: OPENING_GEO }, openEnv());
+  // THE SWING IS AN ARC THAT IS NOT THE CENTRE DOT. The dot is a full circle
+  // (0 to 2pi); the swing is the partial one, which is the whole point of it.
+  const swings = calls(ctx, 'arc')
+    .filter(args => !(args[3] === 0 && args[4] === Math.PI * 2));
+  expect('the swing arc is drawn', swings.length, 1);
+  expect('and it sweeps less than a full turn',
+    Math.abs(swings[0][4] - swings[0][3]) < Math.PI * 2, true);
+});
+
+suite('drawOpening2D', 'a garage door gets no leaf and no swing', R => {
+  const ctx = recordingCtx();
+  R.drawOpening2D(ctx, toS, { ...DOOR, garage: true },
+    { geometry: OPENING_GEO }, openEnv());
+  // A 16 ft overhead door has no hinge to swing off, and drawing one would put
+  // a quarter circle the size of the garage across the plan.
+  const swings = calls(ctx, 'arc')
+    .filter(args => !(args[3] === 0 && args[4] === Math.PI * 2));
+  expect('no swing on an overhead door', swings.length, 0);
+});
+
+suite('drawOpening2D', 'the centre grab dot is desk furniture and does not print', R => {
+  const on = recordingCtx();
+  R.drawOpening2D(on, toS, WINDOW, { geometry: OPENING_GEO }, openEnv());
+  const off = recordingCtx();
+  R.drawOpening2D(off, toS, WINDOW, { geometry: OPENING_GEO },
+    openEnv({ isPrinting: true }));
+  const dots = ctx => calls(ctx, 'arc')
+    .filter(args => args[3] === 0 && args[4] === Math.PI * 2).length;
+  expect('on screen the drafter gets something to grab', dots(on), 1);
+  expect('on paper he does not', dots(off), 0);
+});
+
+suite('drawOpening2D', 'a selected opening is outlined in the select colour', R => {
+  const plain = recordingCtx();
+  R.drawOpening2D(plain, toS, WINDOW, { geometry: OPENING_GEO }, openEnv());
+  const picked = recordingCtx();
+  R.drawOpening2D(picked, toS, WINDOW,
+    { geometry: OPENING_GEO, selected: true }, openEnv());
+  expect('unselected, the select colour is nowhere',
+    sets(plain, 'strokeStyle').includes(SENTINEL_SELECT), false);
+  expect('selected, the outline wears it',
+    sets(picked, 'strokeStyle').includes(SENTINEL_SELECT), true);
+});
+
 function runAll(R) {
   const results = [];
   for (const s of SUITES) {
