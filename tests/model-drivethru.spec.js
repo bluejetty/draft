@@ -297,6 +297,75 @@ test('every tile is on the shelf and says its own name, card or no card',
     }
   });
 
+test('the board is a picture with live cards on it, and nothing else takes a press',
+  async ({ page }) => {
+    // AN OVERLAY THAT SWALLOWS PRESSES HAS COST THIS PROJECT TWICE, and
+    // gruff-drivethru.spec.js opens on that sentence for the other board. This
+    // one earned the same check the hard way: the shelf was declared
+    // `#dt-tiles > * { pointer-events:auto }`, and `> *` is #build-bar -- a
+    // flex COLUMN, not a control, spanning the shelf corner to corner. So the
+    // gaps between cards, and the strip of shelf either side of them, took
+    // presses meant for the sheet underneath and gave the drafter nothing.
+    //
+    // THE CARDS THEMSELVES ARE A DIFFERENT QUESTION and are asked about at
+    // the end: a card is a control, and a press on one is the card's. What is
+    // wrong above is the GROUND they stand on answering for them.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openPage(page);
+    await h.openDriveThru(page);
+    await page.locator('#dt-tiles [data-build-family="bungalow"]').click();
+    await expect(page.locator('#dt-tiles [data-build-entry]').first())
+      .toBeVisible();
+
+    // WHAT THE BROWSER SAYS IS ON TOP, which is the crispest statement of
+    // "this zone is decorative" there is -- and it reads the same rule the
+    // press would.
+    const at = (x, y) => page.evaluate(({ cx, cy }) => {
+      const el = document.elementFromPoint(cx, cy);
+      if (!el) return 'none';
+      if (el.closest('#dt-tiles button')) return 'card';
+      if (el.closest('#dt-close')) return 'close';
+      if (el.closest('#drivethru')) return `board:${el.id || el.tagName}`;
+      if (el.id === 'plan') return 'sheet';
+      return `other:${el.id || el.tagName}`;
+    }, { cx: x, cy: y });
+
+    const board = await page.locator('#dt-frame').boundingBox();
+    const shelf = await page.locator('#dt-tiles').boundingBox();
+    const bar = await page.locator('#build-bar').boundingBox();
+
+    // THE ART ITSELF: the frame down the side of the screen, and the band
+    // between the screen and the shelf. Both are paint, and a press on paint
+    // belongs to the sheet. The very TOP of the board is not asked about --
+    // the instrument strip is fixed over it, and that one is real chrome.
+    expect(await at(board.x + 6, board.y + board.height * 0.25),
+      'the board frame took a press').toBe('sheet');
+    expect(await at(board.x + board.width / 2, shelf.y - 8),
+      'the band above the shelf took a press').toBe('sheet');
+
+    // THE SHELF EITHER SIDE OF THE CARD ROW -- which is the exact ground the
+    // old rule lost. #build-bar is the shelf's full width by design (it is
+    // what centres the rows on it), so this point is inside the container and
+    // outside every card: under the old rule it was the container's, and the
+    // sheet never heard it.
+    const card = await page.locator('#dt-tiles button').first().boundingBox();
+    expect(card.x, 'the cards reach the edge of the bar, so this proves nothing')
+      .toBeGreaterThan(bar.x + 8);
+    expect(await at(bar.x + 3, card.y + card.height / 2),
+      'the shelf beside the cards took a press').toBe('sheet');
+    expect(shelf.width, 'the bar stopped spanning the shelf')
+      .toBeGreaterThanOrEqual(bar.width - 1);
+
+    // AND THE CARDS DO TAKE THEIRS. Everything above is only worth having if
+    // the controls still work, which is the half a careless fix for this
+    // breaks: pointer-events:none on the container and nothing put back.
+    expect(await at(card.x + card.width / 2, card.y + card.height / 2),
+      'a card went decorative with the shelf').toBe('card');
+    const close = await page.locator('#dt-close').boundingBox();
+    expect(await at(close.x + close.width / 2, close.y + close.height / 2),
+      'the close cross went decorative').toBe('close');
+  });
+
 test('the bone lights first, and the sign follows it up',
   async ({ page }) => {
     await openPage(page);
