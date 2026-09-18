@@ -2786,12 +2786,18 @@
       // taper runs (edge - field) inches in plan. STANDARDS exports the two
       // depths but not this difference, so both pages compute it.
       garageEdgeTaperRunIn: S.GARAGE_EDGE_DEPTH_IN - S.GARAGE_SLAB_THICKNESS_IN,
-      // drawFloor2D's own five-colour set. This page shows committed slabs
-      // only -- its one draw gesture and its selection are both wall-only --
-      // so the preview and selected entries are wired to the committed look
-      // and to the brand accent. Deliberate placeholders, not omissions:
-      // were a preview ever to appear it would read as committed, which is
-      // visible and diagnosable, rather than throwing on an absent colour.
+      // drawFloor2D's own five-colour set. The preview pair was written
+      // against the day this page grew a floor gesture, on the grounds that a
+      // preview reading as committed is visible and diagnosable while an
+      // absent colour throws. THAT DAY IS THIS ONE, and the pair is left
+      // pointing at the committed look ON PURPOSE rather than by inheritance:
+      // a floor being traced is the floor it is about to be, and the painter
+      // already separates the two states by DASHING the preview edge and
+      // withholding the corner handles. A second colour would be a second
+      // thing to keep in step with the palette for no fact gained.
+      //
+      // `selected` is still the placeholder it was: this page's selection is
+      // wall-only, so that entry has no way to be reached yet.
       colors: {
         fill: skin['draw-floor'],
         fillPreview: skin['draw-floor'],
@@ -3889,6 +3895,57 @@
               ctx.closePath();
               ctx.fill();
             }
+          }
+          ctx.restore();
+        }
+        // THE FLOOR BEING TRACED. The same reason the cut preview above
+        // exists: a press that changes nothing on the sheet cannot be told
+        // from a press that missed, which is exactly how the OUTLINE tool read
+        // before it painted -- Movie, 17 Sep: "outline command doesn't work".
+        //
+        // THROUGH drawFloor2D, not a second polygon drawn here. That painter
+        // has had a `preview` mode all along -- dashed edge, wash, and no
+        // corner handles -- and floorEnv() has carried its two preview colours
+        // since tier 2c against this day.
+        //
+        // TWO MARKS THE PAINTER DOES NOT MAKE are added after it. It returns
+        // early under two points, so the FIRST press would paint nothing at
+        // all; and it knows nothing about closing, so there would be no
+        // target to close on.
+        if (activeTool === 'floor' && floorCorners.length) {
+          const R = window.DraftRender2D;
+          // THE RUBBER BAND'S FAR END, supplied only while there is a cursor
+          // to band to. A finger leaves none behind, so on a tablet the trace
+          // is the placed corners alone -- which is the truth rather than a
+          // degraded version of it.
+          const trace = cursorWorld
+            ? floorCorners.concat([{ x: cursorWorld.x, z: cursorWorld.z }])
+            : floorCorners;
+          R.drawFloor2D(ctx, toS, { points: trace }, { preview: true }, floorEnv());
+          ctx.save();
+          ctx.fillStyle = skin['draw-floor-edge'];
+          ctx.strokeStyle = skin['draw-floor-edge'];
+          ctx.lineWidth = 2;
+          // ROUND, where a committed floor's handles are square (drawFloor2D
+          // fills 5x5 blocks). The shape is the difference a drafter reads at
+          // a glance; the colour is deliberately the same, because this is
+          // the floor they are drawing and not a different kind of thing.
+          floorCorners.forEach(corner => {
+            const p = toS(corner);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+          });
+          // THE CLOSE TARGET, rung once the loop CAN be closed and not before
+          // -- three corners, the same count floorPress accepts as a close.
+          // The ring is the page saying where the gesture can be finished, so
+          // it appears on the press that makes finishing possible and not one
+          // earlier.
+          if (floorCorners.length >= 3) {
+            const first = toS(floorCorners[0]);
+            ctx.beginPath();
+            ctx.arc(first.x, first.y, 7, 0, Math.PI * 2);
+            ctx.stroke();
           }
           ctx.restore();
         }
@@ -8273,6 +8330,12 @@
   // 4 is that a house outline draws in the build-bar family's colour, "red
   // house / blue split".
   let outlineFamily = null;
+  // The floor being traced, corner by corner. A SEPARATE LIST from the
+  // outline's on purpose: the two tools draw the same SHAPE and mean entirely
+  // different things -- an outline is a guide that never prints, a floor is
+  // structure -- and one shared array would let an abandoned trace of either
+  // finish as the other.
+  let floorCorners = [];
 
   // THE FAMILY COLOURS, and what each one is answerable to.
   //
@@ -8389,6 +8452,7 @@
   // first drafter who armed a tool early.
   toolListeners.push(next => {
     outlineCorners = [];
+    floorCorners = [];
     outlineFamily = null;
     // ARMED FROM THE KEY, which carries no house type with it -- so the trace
     // is the plain house red that outlineTraceColor falls back to, and the
@@ -8555,6 +8619,110 @@
   window.ModelBuild.onBuild(() => {
     if (buildFromDrawnOutline()) window.ModelBuild.buildServed();
   });
+
+  // ── THE FLOOR TOOL: a closed loop, and what it saves as ──────────────────
+  //
+  // The parity row read "Draw a floor -- absent, must-have: it paints floors it
+  // cannot create", which is this page's recurring shape: the painter arrived
+  // with tier 1 and the gesture did not.
+  //
+  // THE SAME GESTURE AS THE OUTLINE, deliberately -- press corners, close on
+  // the first. That is MODEL.dc.html's floor gesture too
+  // (_handleFloorClick:11572), so a drafter who has learnt one has learnt
+  // both. What is NOT shared is the state; see floorCorners.
+  //
+  // OUT OF SCOPE AND ABSENT RATHER THAN HALF-DONE: the typed-length ruler, arc
+  // edges, the slope and thickened-edge properties, and the FLOOR JOISTS box.
+  // Each is a panel of its own and none of them is the gesture.
+  const floorPress = at => {
+    const here = { x: at.x, z: at.z };
+    // THREE CORNERS BEFORE CLOSING IS LEGAL and two is not, for the reason the
+    // outline's own guard gives: two enclose no area. Below three, a press near
+    // the first corner is a drafter putting a corner there.
+    if (floorCorners.length >= 3) {
+      const first = floorCorners[0];
+      if (Math.hypot(here.x - first.x, here.z - first.z) <= OUTLINE_CLOSE_FT) {
+        commitFloor();
+        return;
+      }
+    }
+    floorCorners.push(here);
+    paint();
+  };
+
+  const commitFloor = () => {
+    const loop = floorCorners.slice();
+    if (loop.length < 3) return null;
+    // A CROSSED LOOP ENCLOSES NO AREA -- the same refusal the outline makes
+    // on this page, through the same module. The pending corners are KEPT on a
+    // refusal so the drafter can move the last one rather than retrace the room.
+    //
+    // AND THIS IS AN ADDITION, NOT PARITY, which is worth saying plainly: the
+    // old page's _finishFloor checks the corner COUNT and nothing else, so a
+    // bowtie drawn there commits and renders as two triangles with a fill that
+    // fights itself. The outline tool here already refuses one, and a page
+    // where the same gesture is legal for a guide and illegal for structure
+    // would be teaching two rules for one motion.
+    if (window.DraftGeometry2D.selfIntersects(loop)) {
+      sayOnStrip('That floor crosses itself, so it encloses no area.');
+      return null;
+    }
+    const LV = window.DraftLayerViews;
+    const LA = window.DraftLevelAssembly;
+    const { levelId, viewId } = onActiveLevel();
+    // WHERE IT SAVES IS NOT WHERE IT WAS DRAWN, and layer-views.js owns that
+    // rule. The surprising half is the second clause: a level that HAS a
+    // foundation set puts its floor there whichever set the drafter was
+    // looking at, because such a level's floor IS its foundation.
+    const homeView = LV.floorHomeView(viewId, levelId);
+    const slab = homeView === 'foundation';
+    const floor = {
+      id: newDrawingItemId('floor'),
+      points: loop.map(point => ({ x: point.x, y: 0, z: point.z })),
+      levelId,
+      view: homeView,
+      structure: slab ? 'slab' : 'floor',
+      garage: false,
+      slopeInPerFt: 0,
+      // A CONCRETE SLAB IS AS THICK AS ITS LEVEL POURS; a framed floor is its
+      // assembly's own depth. Both are MODEL.dc.html:11641's rule read from
+      // the modules it reads them from -- this page has no floor-thickness
+      // setting of its own, and inventing one here would be a third number for
+      // a thing that has just stopped having three.
+      // assemblyFor IS this page's one level-assembly lookup, and its own
+      // comment says why there is exactly one: "the module's own comment says
+      // the TABLE had one home while the LOOKUP had four, and that is how
+      // #325's role-less callers happened".
+      thickness: slab
+        ? assemblyFor(levelId).slabThicknessIn / 12
+        : LA.DEFAULT_FLOOR_THICKNESS_IN / 12,
+      thickenedEdge: false,
+      assembly: { ...LA.DEFAULT_FLOOR_ASSEMBLY },
+    };
+    if (!Array.isArray(drawing.floors)) drawing.floors = [];
+    drawing.floors.push(floor);
+    undoStack.push({ kind: 'add-item', list: drawing.floors, item: floor });
+    floorCorners = [];
+    setTool(RESTING_TOOL);
+    // THE MESSAGE HAS TO SAY WHERE IT WENT WHEN IT WENT SOMEWHERE ELSE.
+    // floorHomeView's second clause files a floor drawn on FOUNDATION's WALLS
+    // plan onto the FOUNDATION set, which is right -- and from the drafter's
+    // seat it means the slab they just closed is nowhere on the sheet in front
+    // of them. The old page softens that with a courtesy set (_courtesyFloorIds)
+    // that keeps such a floor on screen until the layer set changes; this page
+    // has no courtesy set and is not being given one on this rung, so it OWES
+    // the drafter the sentence instead. A silent vanish is the one outcome
+    // that reads as the tool having failed.
+    const homeLabel = (LV.layerViewsForLevelId(levelId)
+      .find(view => view.id === homeView) || {}).label || homeView;
+    sayOnStrip(homeView === viewId
+      ? (slab ? 'Slab drawn — it saves to S-SLAB.' : 'Floor drawn.')
+      : `${slab ? 'Slab' : 'Floor'} drawn — it belongs to ${homeLabel}, `
+        + 'so it is not on this layer set.');
+    markDirty();
+    paint();
+    return floor;
+  };
 
   // THE ARMING, through the seam :3875 declared for exactly this. A house type
   // press records the type (that half already worked) and now arms the trace,
@@ -10221,6 +10389,7 @@
     if (activeTool === 'beam') { beamPress(at); return; }
     if (activeTool === 'roof') { roofPress(at); return; }
     if (activeTool === 'outline') { outlinePress(at); return; }
+    if (activeTool === 'floor') { floorPress(at); return; }
     if (activeTool === 'cut') { cutPress(at); return; }
     if (activeTool === 'wall') {
       // §1: "either drag, or press again and drag -- both must work". The lift
