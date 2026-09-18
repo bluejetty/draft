@@ -2340,28 +2340,10 @@ const DEFAULT_WINDOW_WIDTH_FT = 4;
 const DEFAULT_WINDOW_SILL_FT = 2.5;
 const DEFAULT_OPENING_HEAD_FT = (6 * 12 + 8) / 12;
 const FENESTRATION_LAYERS = Object.freeze({ door: 'A-DOOR', window: 'A-GLAZ' });
-// BEARING AT THE ENDS OF A LINTEL. NBC Table 9.23.12.3.-A note (4): "provide
-// minimum 38 mm bearing for lintel spans up to 3 m, or minimum 76 mm bearing
-// for lintel spans greater than 3 m". 38 mm is 1 1/2", 76 mm is 3" -- and 3"
-// is the figure Movie gave from the yard on 5 Sep before either of us had
-// opened the code book, which is a good sign for both.
-//
-// It is what an opening must keep back from the end of its wall, and until now
-// that was 0.01 ft -- an eighth of an inch, which is nothing. A window could
-// sit hard against a corner with no wood under the lintel to carry it.
-//
-// SPAN-DEPENDENT, not a flat 3". A 3'-0" window and a 16'-0" garage door do not
-// need the same bearing, and rounding every opening up to the long-span figure
-// would refuse narrow walls that build perfectly well.
-// A 6x6 post where no wall stands at the end of a run. Movie, 5 Sep: "if
-// nothing there use a 6x6 post". He first said 5.25" and corrected it to 5.5"
-// -- a dressed 6x6 is 5 1/2", the same dressing rule as his 2x8 at 7 1/4".
-// So a free end and a 2x6 corner reserve the same 8 1/2", which is one number
-// to remember rather than two that are nearly equal.
-const OPENING_FREE_END_POST_IN = 5.5;
-const OPENING_BEARING_SHORT_IN = 1.5;
-const OPENING_BEARING_LONG_IN = 3;
-const OPENING_BEARING_SPAN_FT = 3 / 0.3048;   // the code's 3 m, 9'-10 1/8"
+// BEARING AT THE ENDS OF A LINTEL, and the NBC citation that settles the
+// numbers, now live in geometry-2d.js beside the arithmetic that reads them.
+// MODEL.html has to place openings too, and a second copy of a code-book
+// figure is a second thing to get wrong when the code book changes.
 // Auto garage doors — BUILD HOUSE hangs the overhead door on the longest open
 // leg (16' × 7', dropping to 9' when the leg is short) and a 2'-8" man door
 // on another leg, cutting both the garage stud wall and the grade beam,
@@ -15006,10 +14988,15 @@ class Component extends DCLogic {
   }
 
   // What this opening must keep back from each end of its wall, so the lintel
-  // has wood to bear on. See OPENING_BEARING_* above for the code reference.
+  // has wood to bear on. The rule and its code citation are in geometry-2d.js.
   _openingBearingFt(width) {
-    return (width > OPENING_BEARING_SPAN_FT
-      ? OPENING_BEARING_LONG_IN : OPENING_BEARING_SHORT_IN) / 12;
+    return geo.openingBearingFt(width);
+  }
+
+  // The thickness lookup the opening maths is handed. A method rather than the
+  // table itself, so the module never learns what a wall TYPE is.
+  _openingThicknessFt() {
+    return wall => this._wallThicknessFt(wall);
   }
 
   // Keep the whole opening on the wall, with its bearing left at each end.
@@ -15053,17 +15040,13 @@ class Component extends DCLogic {
   // two-wall mitre corners and says so, and an interior wall butting into an
   // exterior one is a TEE, the case it skips.
   _wallMeetingAt(wall, point) {
-    const near = (a, b) => Math.hypot(a.x - b.x, a.z - b.z) < 0.02;
-    return this._walls.find(other => other !== wall
-      && other.levelId === wall.levelId
-      && (other.view || 'plan') === (wall.view || 'plan')
-      && (near(other.start, point) || near(other.end, point)));
+    return geo.wallMeetingAt(wall, point, this._walls);
   }
 
   _openingEndReserveFt(wall, point, bearing) {
-    const meeting = this._wallMeetingAt(wall, point);
-    const carrier = meeting ? this._wallThicknessFt(meeting) : OPENING_FREE_END_POST_IN / 12;
-    return carrier + bearing;
+    return geo.openingEndReserveFt(wall, point, bearing, {
+      walls: this._walls, thicknessFt: this._openingThicknessFt(),
+    });
   }
 
   // faceReferenced:false is the OLD bearing-from-the-endpoint rule, and it
@@ -15074,17 +15057,16 @@ class Component extends DCLogic {
   // "skipped". A number printed for a file nobody damaged is still the wrong
   // shape. Skipper raised this, and he is right: load repairs damaged files,
   // it does not re-rule sound ones. Drawings converge as walls are edited.
+  //
+  // TEN CALLERS SHARE THIS METHOD, which is why it stays a method: placement,
+  // the boneyard marks, auto-windows, the garage doors and restore all reach
+  // the rule through it. What moved is the arithmetic underneath, not the door
+  // into it -- the page still owns which walls are in play and what a wall
+  // type is thick.
   _clampOpeningToWall(wall, offset, width, { faceReferenced = true } = {}) {
-    const bearing = this._openingBearingFt(width);
-    // Each end is measured against whatever stands at THAT end -- a 2x6
-    // exterior and a 2x4 partition do not reserve the same, and one wall can
-    // meet a different thing at each of its ends.
-    const atStart = faceReferenced ? this._openingEndReserveFt(wall, wall.start, bearing) : bearing;
-    const atEnd = faceReferenced ? this._openingEndReserveFt(wall, wall.end, bearing) : bearing;
-    const len = this._wallLength(wall);
-    if (!(width > 0) || len < width + atStart + atEnd) return null;
-    const half = width / 2;
-    return { offset: Math.min(Math.max(offset, half + atStart), len - half - atEnd) };
+    return geo.clampOpeningToWall(wall, offset, width, {
+      walls: this._walls, thicknessFt: this._openingThicknessFt(), faceReferenced,
+    });
   }
 
   _fenestrationWidth(type = this.state.fenestrationType) {
@@ -15101,46 +15083,26 @@ class Component extends DCLogic {
 
   // World-space footprint of an opening on its host wall: the carved quad, the
   // two jamb caps, the glazing centreline and the centre grab/snap point.
+  // The arithmetic is geometry-2d.js's; what this page supplies is the three
+  // things a module with no component state cannot know -- which walls are in
+  // play, what a wall type is thick, and how big a screen pixel currently is.
   _openingGeometry(opening, wall = this._walls.find(w => w.id === opening.wallId)) {
-    if (!wall) return null;
-    const clamped = this._clampOpeningToWall(wall, opening.offset, opening.width);
-    if (!clamped) return null;
-    const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
-    const len = Math.hypot(dx, dz);
-    const ux = dx / len, uz = dz / len;
-    const nx = -uz, nz = ux;
-    const def = WALL_TYPES.find(w => w.id === (wall.wallType || 'stud_2x6')) || WALL_TYPES[1];
-    const totalFt = def.totalIn / 12;
-    const refLine = wall.refLine || 'center';
-    const startOff = refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -totalFt / 2;
-    const endOff = startOff + totalFt;
-    const midOff = (startOff + endOff) / 2;
-    const half = opening.width / 2;
-    // The wall boundary stroke is centred on the face, so the gap fill must
-    // reach a couple of pixels past each face to fully interrupt it.
-    const pad = this._canvas
-      ? (this._orthoHalfH * 2) / this._canvas.clientHeight * 2
-      : 0.02;
-    const at = (along, across) => ({
-      x: wall.start.x + ux * along + nx * across,
-      y: wall.start.y || 0,
-      z: wall.start.z + uz * along + nz * across,
+    return geo.openingGeometry(opening, wall, {
+      walls: this._walls,
+      thicknessFt: this._openingThicknessFt(),
+      padFt: this._openingPadFt(),
     });
-    return {
-      wall,
-      center: at(clamped.offset, midOff),
-      corners: [
-        at(clamped.offset - half, startOff - pad),
-        at(clamped.offset + half, startOff - pad),
-        at(clamped.offset + half, endOff + pad),
-        at(clamped.offset - half, endOff + pad),
-      ],
-      jambs: [
-        [at(clamped.offset - half, startOff - pad), at(clamped.offset - half, endOff + pad)],
-        [at(clamped.offset + half, startOff - pad), at(clamped.offset + half, endOff + pad)],
-      ],
-      glazing: [at(clamped.offset - half, midOff), at(clamped.offset + half, midOff)],
-    };
+  }
+
+  // THE PAD IS A ZOOM FACT, NOT A GEOMETRY ONE. The wall boundary stroke is
+  // centred on the face, so the gap fill has to reach a couple of SCREEN
+  // pixels past each face to interrupt it at any zoom. 0.02 ft is the
+  // stand-in before a canvas exists, which is the value this page has always
+  // used there.
+  _openingPadFt() {
+    return this._canvas
+      ? geo.worldPerPixel(this._orthoHalfH, this._canvas.clientHeight) * 2
+      : 0.02;
   }
 
   // Nearest editable wall within the pick radius → { wall, offset, width } or
