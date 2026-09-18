@@ -13164,16 +13164,24 @@ class Component extends DCLogic {
 
   // True when both endpoints and the midpoint of the edge a→b sit on the
   // house outline's boundary — the garage side shared with the house.
+  // WHICH EDGES A GARAGE SHARES WITH THE HOUSE, and the test itself now lives
+  // in geometry-2d.js so MODEL.html's premade bungalow cannot come to a
+  // different answer -- it raises the same attached garage and was raising the
+  // shared walls (Movie, 18 Sep, with the wall marked in green: "the garage
+  // walls should link into the house (look at how the DC version did it)").
+  //
+  // THE SEGMENTS ARE BUILT HERE, NOT THERE, and that is what keeps this a
+  // move rather than a rewrite: _outlineSegment carries each edge's BULGE and
+  // knows that an open outline has one fewer edge than it has points. Handing
+  // the module a list of corners instead would straighten every arc on the way
+  // past, which is a different answer on exactly the outlines where it is hard
+  // to see.
   _edgeOnOutline(a, b, outline, eps = 0.1) {
     if (!outline) return false;
     const count = this._outlineSegmentCount(outline);
-    const onBoundary = pt => outline.points.some((point, index) => {
-      if (index >= count) return false;
-      const { d } = this._distToLineSeg(pt, this._outlineSegment(outline, index));
-      return d <= eps;
-    });
-    return onBoundary(a) && onBoundary(b)
-      && onBoundary({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });
+    const segments = [];
+    for (let index = 0; index < count; index++) segments.push(this._outlineSegment(outline, index));
+    return window.DraftGeometry2D.edgeOnLoop(a, b, segments, eps);
   }
 
   // The garage grade beam walks the OPEN garage legs only — the house side

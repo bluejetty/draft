@@ -1132,6 +1132,56 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   // paramAlongSegment either: that returns 0 for a degenerate segment where
   // this must report Infinity, and quietly swapping one for the other would
   // change what a click on a zero-length wall does.
+  // ── IS THIS EDGE ON THAT LOOP? ───────────────────────────────────────────
+  //
+  // WHAT AN ATTACHED GARAGE ASKS BEFORE IT RAISES A WALL. Movie, 18 Sep, with
+  // the offending wall marked in green on a screenshot: "the garage has an
+  // extra wall that is not needed. the garage walls should link into the house
+  // (look at how the DC version did it)". The DC version is one line of
+  // _buildGarageWalls -- `if (!open && !detached && house &&
+  // this._edgeOnOutline(a, b, house)) continue;` -- and this is that test,
+  // lifted here so the two pages cannot come to different answers about which
+  // edges are shared.
+  //
+  // THE MIDPOINT IS THE WHOLE TEST. Both ENDS of an edge lying on the loop is
+  // not enough and the difference is not academic: a garage tucked into an L
+  // can have both its corners on the house and its wall crossing open air
+  // between them -- a chord. Dropping that wall would leave the building open
+  // to the weather. Three samples is still only three samples, which is honest
+  // for the straight runs this is asked about; a shape that needed more would
+  // be a shape whose "shared" edge was a curve, and the loop below already
+  // follows one of those through pointToSegment.
+  //
+  // SEGMENTS, NOT POINTS, is why the old page can hand this its own outline
+  // unchanged. pointToSegment FOLLOWS A BULGE (it samples the arc), so a
+  // points-only version of this would quietly straighten every arc edge it was
+  // asked about and answer a different question on exactly the drawings where
+  // the answer is hard.
+  function edgeOnLoop(a, b, segments, eps = 0.1) {
+    // A body with no loop to compare against — a DETACHED garage — shares
+    // nothing, and is told so rather than thrown at. An EMPTY list needs no
+    // guard of its own: `some` on nothing is false, so the first sample
+    // already answers. A `|| !segments.length` stood here and was removed
+    // after a mutation that deleted it changed no answer at all — a line
+    // that cannot be wrong is a line that cannot be right either.
+    if (!Array.isArray(segments)) return false;
+    const near = pt => segments.some(seg => pointToSegment(pt, seg).d <= eps);
+    return near(a) && near(b)
+      && near({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });
+  }
+
+  // The closed ring of segments a list of corners makes, in the shape
+  // pointToSegment and edgeOnLoop read. Straight edges only: a caller holding
+  // bulges builds its own segments and keeps them.
+  function loopSegments(points) {
+    const list = Array.isArray(points) ? points : [];
+    return list.map((point, index) => ({
+      start: point,
+      end: list[(index + 1) % list.length],
+      bulge: 0,
+    }));
+  }
+
   function pointToSegment(worldPt, seg) {
     if (!seg.bulge) {
       const ax = seg.start.x, az = seg.start.z;
@@ -1378,6 +1428,8 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     lineControlPoint,
     pointOnLineSeg,
     pointToSegment,
+    edgeOnLoop,
+    loopSegments,
     OPENING_FREE_END_POST_IN,
     OPENING_BEARING_SHORT_IN,
     OPENING_BEARING_LONG_IN,

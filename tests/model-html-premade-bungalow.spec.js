@@ -147,10 +147,87 @@ test('1 STOREY + GARAGE raises both bodies, and the garage is an ATTACHED one',
       'the garage-s right wall is 4 ft closer to the lot line than the house-s')
       .toBeCloseTo(plan.past, 3);
 
-    // TEN WALLS: four round the house, six round the garage's six-cornered
-    // loop. A garage stored as a plain rectangle would give nine.
+    // EIGHT WALLS: four round the house, and four of the garage's six edges.
+    // THIS READ TEN, and ten was the defect -- Movie, 18 Sep, with the wall
+    // marked in green: "the garage has an extra wall that is not needed. the
+    // garage walls should link into the house (look at how the DC version did
+    // it)". An attached garage does not raise the edges it shares with the
+    // house; the next test is the one that says which, and why.
     expect((saved.walls || []).length,
-      'both bodies were walled, the garage on all six of its corners').toBe(10);
+      'both bodies were walled, the garage on the four edges it owns').toBe(8);
+  });
+
+// THE TWO EDGES THE GARAGE DOES NOT OWN, and what happens to the doors when
+// they are dropped. Both halves are here together because they are one
+// change: taking runs out of the list is what stopped a wall's POSITION
+// meaning its edge.
+test('the attached garage raises no wall the house already has',
+  async ({ page }) => {
+    await open(page);
+    await order(page, 'bungalow', 'bungalow-garage');
+    await saveOnNewPage(page);
+
+    const saved = await savedFile(page);
+    const house = houseOf(saved);
+    const garage = garageOf(saved);
+    const len = wall => Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+
+    // THE MEASUREMENT IS MADE AGAINST THE HOUSE OUTLINE, in the test's own
+    // arithmetic rather than through the page's edgeOnLoop. Asking the page
+    // whether it obeyed its own rule, using its own rule, is a tautology; this
+    // walks the house's corners here.
+    const onHouse = pt => house.points.some((corner, index) => {
+      const next = house.points[(index + 1) % house.points.length];
+      const dx = next.x - corner.x, dz = next.z - corner.z;
+      const len2 = dx * dx + dz * dz;
+      if (len2 < 1e-6) return false;
+      const t = Math.max(0, Math.min(1,
+        ((pt.x - corner.x) * dx + (pt.z - corner.z) * dz) / len2));
+      return Math.hypot(pt.x - corner.x - t * dx, pt.z - corner.z - t * dz) <= 0.1;
+    });
+    const sharesWithHouse = wall => onHouse(wall.start) && onHouse(wall.end)
+      && onHouse({ x: (wall.start.x + wall.end.x) / 2,
+        z: (wall.start.z + wall.end.z) / 2 });
+
+    // The control, and it is the half that keeps the assertion honest: the
+    // GARAGE LOOP still has two such edges. If the plan ever stopped sharing
+    // any, "no wall shares one" would be true of a rule that had been deleted.
+    const sharedEdges = garage.points.filter((corner, index) => {
+      const next = garage.points[(index + 1) % garage.points.length];
+      return sharesWithHouse({ start: corner, end: next });
+    });
+    expect(sharedEdges.length, 'the garage loop still shares two edges with '
+      + "the house -- the 20 ft along its front wall and the 1 ft tie down "
+      + 'its side').toBe(2);
+
+    const garageCorner = pt => (garage.points || []).some(corner =>
+      Math.hypot(corner.x - pt.x, corner.z - pt.z) < 0.01);
+    const garageWalls = (saved.walls || [])
+      .filter(wall => garageCorner(wall.start) && garageCorner(wall.end));
+    expect(garageWalls.length, 'four garage walls, not six').toBe(4);
+    for (const wall of garageWalls) {
+      expect(sharesWithHouse(wall),
+        `the garage wall ${wall.id} stands where no house wall does`).toBe(false);
+    }
+
+    // AND THE DOORS FOLLOWED THEIR EDGES. The design keys an opening to an
+    // EDGE NUMBER; dropping two runs out of the list is exactly what makes a
+    // wall's position stop meaning its edge, and by position the man-door
+    // would land on the 27 ft side and the overhead door on the 26 ft one.
+    // Both would still have read as "doors on a garage" from any count.
+    const byId = new Map((saved.walls || []).map(wall => [String(wall.id), wall]));
+    const openings = (saved.fenestrations || []);
+    const manDoor = openings.find(o => o.garage !== true && o.width === 2.5);
+    const overhead = openings.find(o => o.garage === true);
+    expect(manDoor, 'the man-door was written').toBeTruthy();
+    expect(overhead, 'and the overhead door').toBeTruthy();
+    // 4 ft is the exposed rear wall, the only wall a man-door belongs on --
+    // it is why the garage stands proud of the house at all.
+    expect(len(byId.get(String(manDoor.wallId))),
+      'the man-door is on the 4 ft rear wall').toBeCloseTo(4, 2);
+    // 24 ft is the door wall, the garage's full width.
+    expect(len(byId.get(String(overhead.wallId))),
+      'the overhead door is on the 24 ft door wall').toBeCloseTo(24, 2);
   });
 
 test('the attached garage does not spend the detached garage-s slot',

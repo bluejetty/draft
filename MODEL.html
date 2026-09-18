@@ -8748,8 +8748,10 @@
   // what building-bodies.js reads to tell the attached one from the detached
   // one (:37). An attached garage is part of the house it hangs off, so it
   // does not spend the detached garage's slot.
-  const raiseLoop = (points, levelId, { garage = false, openings = [] } = {}) => {
+  const raiseLoop = (points, levelId,
+    { garage = false, openings = [], against = null } = {}) => {
     const BH = window.DraftBuildHouse;
+    const G = window.DraftGeometry2D;
     const outline = {
       id: newDrawingItemId('outline'),
       masterId: null,
@@ -8766,8 +8768,38 @@
     if (outline.detached === undefined) delete outline.detached;
     drawing.outlines.push(outline);
     const refLine = BH.outlineInteriorRef(points);
-    const walls = BH.houseWallRuns(points)
-      .map(run => commitWall(run.start, run.end, { bone: false, refLine }));
+    // ── THE WALLS THIS BODY ACTUALLY OWNS ────────────────────────────────
+    //
+    // AN ATTACHED GARAGE DOES NOT RAISE THE WALLS IT SHARES WITH THE HOUSE.
+    // Movie, 18 Sep, with the wall marked in green on a screenshot: "the
+    // garage has an extra wall that is not needed. the garage walls should
+    // link into the house (look at how the DC version did it)". The DC
+    // version is one line of _buildGarageWalls -- skip an edge that lies on
+    // the house outline -- and that test is now geometry-2d.js's edgeOnLoop,
+    // read from there by both pages rather than written twice.
+    //
+    // TWO EDGES GO ON THIS BUNGALOW, not the one that was visible. The 20 ft
+    // along the house's front wall is the one in the screenshot; the 1 ft TIE
+    // down the house's right wall is the same mistake a foot long, and it is
+    // the one nobody would have reported. Both are a second wall standing in
+    // the same place as a house wall: doubled linework on the plan, a doubled
+    // stud count off it, and two walls to drag when the house moves.
+    //
+    // THE FOOTPRINT KEEPS ALL SIX CORNERS. Only the WALLS are skipped -- the
+    // outline above is the garage's shape, and the slab, the roof and the
+    // grade beam are all cut from it. Trimming the loop to the walls raised
+    // would leave the garage open along the house.
+    const sharedWith = against ? G.loopSegments(against) : null;
+    // BY EDGE NUMBER, not by position. The openings below are keyed to the
+    // plan's edges, and both the skip above and houseWallRuns' own degenerate
+    // skip take runs OUT of the list -- so a wall's place in an array stopped
+    // meaning its edge the moment either could fire.
+    const wallsByEdge = [];
+    BH.houseWallRuns(points).forEach(run => {
+      if (sharedWith && G.edgeOnLoop(run.start, run.end, sharedWith)) return;
+      wallsByEdge[run.edge] = commitWall(run.start, run.end, { bone: false, refLine });
+    });
+    const walls = wallsByEdge.filter(Boolean);
 
     // ── AND THE WINDOWS AND DOORS THE DESIGN CALLS FOR ─────────────────────
     //
@@ -8778,16 +8810,21 @@
     // the other thing entirely -- the records carry `auto: false` so a re-deal
     // leaves the design's own openings alone.
     //
-    // THE EDGE INDEX IS THE WALL INDEX, and that is not a coincidence to be
-    // relied on quietly: houseWallRuns walks the points in order and skips
-    // only DEGENERATE edges (two corners in the same place). The plans here
-    // have none -- the harness checks every corner is a whole foot and every
-    // edge is square -- so run i is edge i. If a plan ever did carry one, this
-    // would hang an opening on the wrong wall, so the guard below refuses an
-    // edge index the walls do not have rather than writing a wrong record.
+    // THE EDGE INDEX IS LOOKED UP, NOT COUNTED. This read `walls[spec.edge]`
+    // while the only thing that could remove a run was a degenerate edge, and
+    // the plans have none -- so run i WAS edge i and the shortcut held. It
+    // stopped holding the moment an attached garage began skipping its shared
+    // edges: on the bungalow that drops edges 0 and 5, and by position the
+    // man-door on edge 1 would have moved onto the exposed rear wall's
+    // neighbour and the 16 ft overhead door onto the wall beside the one it
+    // belongs to. Both would still have LOOKED like doors on a garage.
+    //
+    // The guard below is unchanged and still earns its place: an opening keyed
+    // to an edge that raised no wall -- a shared one, or a degenerate one --
+    // is dropped rather than written against the wrong wall.
     if (!Array.isArray(drawing.fenestrations)) drawing.fenestrations = [];
     const made = openings.map(spec => {
-      const wall = walls[spec.edge];
+      const wall = wallsByEdge[spec.edge];
       if (!wall) return null;
       const record = {
         id: newDrawingItemId('fenestration'),
@@ -8825,8 +8862,14 @@
     const raised = [raiseLoop(plan.house, levelId,
       { openings: plan.houseOpenings })];
     if (plan.garage) {
+      // THE HOUSE IS WHAT THE GARAGE IS MEASURED AGAINST, and it is handed
+      // over rather than found: the garage hangs off the house by
+      // construction (premade-plans.js builds its loop from the house's own
+      // right and front lines), so the body it shares edges with is known
+      // here and searching the drawing for it would be a second, weaker
+      // answer to a question this function already holds.
       raised.push(raiseLoop(plan.garage, levelId,
-        { garage: true, openings: plan.garageOpenings }));
+        { garage: true, openings: plan.garageOpenings, against: plan.house }));
     }
     undoStack.length = mark;
     undoStack.push({
