@@ -549,17 +549,54 @@ test('and a house-type press drops them too, because it goes through the registe
 // drew" -- and nothing had ever registered on it, so the foot bone fired into
 // an empty list and then called the drive-thru up over the loop.
 
+// ── THE FOOT BONE ASKS NOW, AND ITS BUILD IS ON THE CARD ────────────────
+//
+// Movie ruled it 19 Sep, against his own earlier instruction: "go with the
+// 19 sep rule, on 1st press go to drivethru questions and on 2nd always offer
+// choice between drivetrhu or house build". So a traced loop is no longer
+// raised by the press itself -- the press asks, and the card's BUILD raises
+// it. The loop is still what gets built, which is the half of his 18 Sep rule
+// that survives.
+//
+// THE TYPE IS PICKED FIRST, because the card is the SECOND press and there is
+// no second press until the drafter has been through the window once. That is
+// also the order a drafter works in: he tells Gruff what he is building
+// before he traces it.
+//
+// AND TWO OF THESE CHECKS WENT ON PASSING WITHOUT IT, which is why every one
+// of them was changed and not just the two that went red. With no type picked
+// the press opens the BOARD and builds nothing -- so "the second press built
+// nothing" and "one undo takes the house back" were both true of a page that
+// had never built anything at all. An assertion two worlds satisfy.
+async function armedTypeAndLoop(page, corners = SQUARE) {
+  await pickHouseType(page);
+  await page.locator('#dt-close').click();
+  await page.waitForTimeout(150);
+  // NO `U` HERE. Picking a type at the window already ARMS the trace -- the
+  // old page's _pressBuildType "does two things, records the type AND arms
+  // the outline tool" -- and pressing the armed key again puts it DOWN, which
+  // is the register's own rule. An earlier draft of this helper pressed it
+  // and traced with SELECT in hand.
+  await traceLoop(page, corners);
+}
+
+async function boneBuild(page) {
+  await page.locator('#bone').click();
+  await expect(page.locator('#build-choice'),
+    'the foot press did not offer the choice').toBeVisible();
+  await page.locator('[data-build-choice-build]').click();
+  await page.waitForTimeout(200);
+}
+
 const wallsOf = (saved, levelId = 3) =>
   (saved?.walls || []).filter(wall => Number(wall.levelId) === Number(levelId));
 
 test('the foot bone raises walls around the loop that was traced', async ({ page }) => {
   await newPageOnSavedHouse(page);
-  await page.keyboard.press('U');
-  await traceLoop(page, SQUARE);
+  await armedTypeAndLoop(page);
 
   const before = wallsOf(await savedFile(page)).length;
-  await page.locator('#bone').click();
-  await page.waitForTimeout(200);
+  await boneBuild(page);
   await saveOnNewPage(page);
 
   const after = wallsOf(await savedFile(page));
@@ -586,21 +623,20 @@ test('the foot bone raises walls around the loop that was traced', async ({ page
 
 test('pressing it twice does not build the house twice', async ({ page }) => {
   await newPageOnSavedHouse(page);
-  await page.keyboard.press('U');
-  await traceLoop(page, SQUARE);
+  await armedTypeAndLoop(page);
 
-  await page.locator('#bone').click();
-  await page.waitForTimeout(200);
+  await boneBuild(page);
   await saveOnNewPage(page);
   const once = wallsOf(await savedFile(page)).length;
+  expect(once, 'the first press built nothing, so "not twice" proves nothing')
+    .toBeGreaterThan(0);
 
   // ALREADY BUILT IS DERIVED FROM THE DRAWING, not stored on the outline: a
   // loop whose first edge carries a wall has been built. A second press on a
   // house that is already up would otherwise lay a second wall along every
   // side -- four records exactly on top of four others, which looks like one
   // house until something is dragged.
-  await page.locator('#bone').click();
-  await page.waitForTimeout(200);
+  await boneBuild(page);
   await saveOnNewPage(page);
 
   expect(wallsOf(await savedFile(page)).length,
@@ -619,13 +655,15 @@ test('one Ctrl+Z takes the house back, and leaves the outline standing',
     page.on('pageerror', error => errors.push(error.message));
 
     await newPageOnSavedHouse(page);
-    await page.keyboard.press('U');
-    await traceLoop(page, SQUARE);
+    await armedTypeAndLoop(page);
     await saveOnNewPage(page);
     const before = wallsOf(await savedFile(page)).length;
 
-    await page.locator('#bone').click();
-    await page.waitForTimeout(200);
+    await boneBuild(page);
+    await saveOnNewPage(page);
+    expect(wallsOf(await savedFile(page)).length,
+      'nothing was built, so "one undo takes it back" proves nothing')
+      .toBeGreaterThan(before);
     await page.keyboard.press('Control+z');
     await page.waitForTimeout(150);
     await saveOnNewPage(page);
@@ -645,7 +683,6 @@ test('one Ctrl+Z takes the house back, and leaves the outline standing',
 
 test('the walls sit inside the loop whichever way it was walked', async ({ page }) => {
   await newPageOnSavedHouse(page);
-  await page.keyboard.press('U');
 
   // THE SAME SQUARE, WALKED THE OTHER WAY. A freehand loop is wound whichever
   // way the drafter went round it, and the wall BODY has to land inside it
@@ -656,9 +693,8 @@ test('the walls sit inside the loop whichever way it was walked', async ({ page 
   // is written, the answer is 'left' -- which is also the page's default wall
   // setting, so a build that ignored the outline entirely would agree with it
   // and prove nothing. Reversed, the two answers part.
-  await traceLoop(page, [...SQUARE].reverse());
-  await page.locator('#bone').click();
-  await page.waitForTimeout(200);
+  await armedTypeAndLoop(page, [...SQUARE].reverse());
+  await boneBuild(page);
   await saveOnNewPage(page);
 
   const walls = wallsOf(await savedFile(page)).slice(-4);
