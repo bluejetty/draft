@@ -9197,10 +9197,21 @@
   // choice for garage walls (`_floorLevels()[0]`). Never the active level: a
   // drafter looking at the foundation when he presses the bone is not asking
   // for a house made of basement walls.
-  const lowestFloorLevel = () => {
-    const floors = window.DraftLayerViews.floorLevels(drawing?.levels || []);
-    return floors.length ? floors[0] : null;
-  };
+  const lowestFloorLevel = () => storeyLevels(1)[0] || null;
+
+  // THE LEVELS A BUILDING'S STOREYS GO ON, bottom-up and no more than the
+  // design asks for. floorLevels() is already bottom-up, so [0] is the lowest
+  // storey -- MAIN FL on the standard stack.
+  //
+  // A DESIGN CAN WANT MORE STOREYS THAN THE DRAWING HAS LEVELS, and this
+  // returns what is there rather than inventing one. Ordering a 2 STOREY into
+  // a drawing with a single floor level builds a single storey of it, which
+  // is the same principle as the foundation guard: a record filed against a
+  // level the drawing does not list is dropped on the next load, and a bone
+  // press is not permission to restructure somebody's level stack.
+  const storeyLevels = wanted => window.DraftLayerViews
+    .floorLevels(drawing?.levels || [])
+    .slice(0, Math.max(1, Number(wanted) || 1));
 
   // A LEVEL THE DRAWING ACTUALLY HAS. drawing-format.js validates every
   // record's levelId against the drawing's own level list and DROPS the ones
@@ -9425,8 +9436,21 @@
     // ONE GESTURE, ONE UNDO, the same as the ordered garage: the walls' own
     // 'add' steps are dropped for the single 'built' one covering both bodies.
     const mark = undoStack.length;
-    const raised = [raiseLoop(plan.house, levelId,
-      { openings: plan.houseOpenings })];
+    // ── THE SHELL, ONE STOREY AT A TIME ──────────────────────────────────
+    //
+    // MODEL.dc.html's _buildHouse walks `floors.forEach` and calls
+    // _buildHouseWalls once per floor level; a bungalow simply has an outline
+    // on one of them. Here the DESIGN says how many storeys it has, so the
+    // walk is over the levels the design asks for and the drawing can hold.
+    //
+    // UPSTAIRS GETS ITS OWN OPENINGS, not the ground floor's. The design
+    // carries both sets, and the reason is a front door: dealt again on the
+    // storey above it would open into air, which the clamp accepts and the
+    // elevation shows.
+    const storeys = storeyLevels(plan.storeys);
+    const raised = storeys.map((level, index) => raiseLoop(plan.house, level.id,
+      { openings: index === 0 ? plan.houseOpenings
+        : (plan.upperOpenings || plan.houseOpenings) }));
     if (plan.garage) {
       // THE HOUSE IS WHAT THE GARAGE IS MEASURED AGAINST, and it is handed
       // over rather than found: the garage hangs off the house by
@@ -9440,6 +9464,10 @@
       // section painters tell its framing from the house's. The ordered
       // detached garage carried body from the start and this one did not --
       // a split the wall tally found the moment it began counting by body.
+      // THE GARAGE IS A SINGLE STOREY -- Movie, 19 Sep: "make a single story
+      // garage" -- so it goes on the lowest storey only, however many the
+      // house has. The floor OVER it is a different body on a different
+      // level, not this loop raised twice.
       raised.push(raiseLoop(plan.garage, levelId,
         { garage: true, body: 'garage',
           openings: plan.garageOpenings, against: plan.house }));
@@ -9452,10 +9480,15 @@
     // worse than none.
     const extra = [];
     const parts = ['house'];
+    // A FLOOR UNDER EVERY STOREY, which is _buildHouse's own per-level pass:
+    // walls AND a floor, once per floor level. A second storey framed with no
+    // deck under it is a storey the section draws standing on nothing.
     drawing.floors = drawing.floors || [];
-    const deck = floorRecord(plan.house, levelId, 'floor');
-    drawing.floors.push(deck);
-    extra.push({ list: drawing.floors, item: deck });
+    storeys.forEach(level => {
+      const deck = floorRecord(plan.house, level.id, 'floor');
+      drawing.floors.push(deck);
+      extra.push({ list: drawing.floors, item: deck });
+    });
 
     // EACH PIECE ONLY WHERE THE DRAWING HAS SOMEWHERE TO PUT IT, and the
     // strip says which pieces went up rather than claiming all of them.
@@ -9508,7 +9541,12 @@
     // the storey is the difference between an empty sheet that looks broken
     // and an empty sheet that tells you where to look.
     if (plan.garage) parts.splice(1, 0, 'garage');
-    sayOnStrip(`${order.entry.label} built on ${storey.name || 'the main floor'}`
+    // WHERE IT STARTS, not where it sits, once there is more than one storey.
+    // "built on MAIN FL" is true of a bungalow and misleading of a 2 STOREY,
+    // whose upper half is somewhere else entirely.
+    if (storeys.length > 1) parts[0] = `house on ${storeys.length} storeys`;
+    sayOnStrip(`${order.entry.label} built ${storeys.length > 1 ? 'from' : 'on'} `
+      + `${storey.name || 'the main floor'}${storeys.length > 1 ? ' up' : ''}`
       + ` — ${parts.join(', ')}.`);
     markDirty();
     buildChrome();

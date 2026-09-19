@@ -719,3 +719,135 @@ test('one Ctrl+Z takes the whole building back', async ({ page }) => {
   expect((saved.outlines || []).length, 'the footprint went').toBe(0);
   expect((saved.fenestrations || []).length, 'and the openings went').toBe(0);
 });
+
+// ── 2 STOREY: the shell goes up on every storey the design has ───────────
+//
+// Movie, 19 Sep: "make the 2 storey the same for now sizewise" and "make a
+// single story garage". The designs landed first and nothing read them: the
+// build raised ONE storey, so ordering a 2 STOREY produced a bungalow with a
+// 2 STOREY label on the strip.
+//
+// WHAT SEPARATES THE TWO IS NOT A COUNT OF WALLS. Both designs have the same
+// footprint — deliberately — so "eight walls instead of four" is true of a
+// 2 STOREY and of a bungalow built twice. The checks below read WHICH LEVELS
+// carry them.
+
+const byLevel = (list, key = 'levelId') => (list || []).reduce((tally, item) => {
+  tally[item[key]] = (tally[item[key]] || 0) + 1;
+  return tally;
+}, {});
+
+test('a 2 STOREY frames both storeys, a bungalow only one', async ({ page }) => {
+  await open(page);
+  await order(page, 'bungalow', 'bungalow');
+  await saveOnNewPage(page);
+  const one = await savedFile(page);
+
+  await open(page);
+  await order(page, 'bungalow', 'twoStorey');
+  await saveOnNewPage(page);
+  const two = await savedFile(page);
+
+  const studs = saved => byLevel((saved.walls || [])
+    .filter(wall => wall.wallType === 'stud_2x6'));
+  // MAIN FL only, against MAIN FL and 2ND FL. The footprints are identical,
+  // so the level keys are the whole of the difference.
+  expect(studs(one), 'a bungalow frames one storey').toEqual({ 3: 4 });
+  expect(studs(two), 'a 2 STOREY frames two').toEqual({ 3: 4, 5: 4 });
+
+  // AND A DECK UNDER EACH. A storey framed with no floor under it is a storey
+  // the section draws standing on nothing — _buildHouse's per-level pass does
+  // walls AND a floor, and doing only the first is the easy half.
+  const decks = saved => byLevel((saved.floors || [])
+    .filter(floor => floor.structure === 'floor'));
+  expect(decks(one)).toEqual({ 3: 1 });
+  expect(decks(two), 'both storeys got a floor').toEqual({ 3: 1, 5: 1 });
+
+  // One outline per storey: each level carries its own copy of the footprint,
+  // which is how the old page holds a multi-storey house.
+  expect(byLevel(two.outlines), 'a footprint on each storey').toEqual({ 3: 1, 5: 1 });
+});
+
+test('upstairs gets windows and no doors', async ({ page }) => {
+  // A FRONT DOOR DEALT AGAIN ON THE STOREY ABOVE opens into air. The clamp
+  // accepts it — it fits the wall — and it shows up on the elevation, which
+  // is the one place nobody looks until the drawing is out.
+  await open(page);
+  await order(page, 'bungalow', 'twoStorey');
+  await saveOnNewPage(page);
+  const saved = await savedFile(page);
+
+  const upstairs = (saved.fenestrations || []).filter(o => o.levelId === 5);
+  const downstairs = (saved.fenestrations || []).filter(o => o.levelId === 3);
+  expect(upstairs.length, 'the upper storey was glazed').toBeGreaterThan(0);
+  expect(upstairs.some(o => o.type === 'door'), 'and no door up there').toBe(false);
+  // The control: the ground floor DOES have one, so this is a difference
+  // between the two sets and not a design with no doors anywhere.
+  expect(downstairs.some(o => o.type === 'door'),
+    'while the ground floor keeps its front door').toBe(true);
+});
+
+test('the garage stays a single storey under a 2 STOREY', async ({ page }) => {
+  // Movie, 19 Sep: "make a single story garage". The house grows upward and
+  // the garage does not follow it — the floor OVER a garage is a different
+  // body on a different level, not this loop raised twice.
+  await open(page);
+  await order(page, 'bungalow', 'twoStorey-garage');
+  await saveOnNewPage(page);
+  const saved = await savedFile(page);
+
+  const garageStuds = (saved.walls || [])
+    .filter(wall => wall.body === 'garage' && wall.view === 'plan');
+  expect(garageStuds.length, 'four garage walls, framed once').toBe(4);
+  expect(byLevel(garageStuds), 'all of them on the lowest storey').toEqual({ 3: 4 });
+
+  // The house, meanwhile, did go up.
+  const houseStuds = (saved.walls || [])
+    .filter(wall => wall.wallType === 'stud_2x6' && wall.body !== 'garage');
+  expect(byLevel(houseStuds), 'the house is on both').toEqual({ 3: 4, 5: 4 });
+});
+
+test('a design wanting more storeys than the drawing has levels builds what fits',
+  async ({ page }) => {
+    // THE SAME PRINCIPLE AS THE FOUNDATION GUARD. A record filed against a
+    // level the drawing does not list is dropped on the next load, so a
+    // second storey written into a single-floor drawing would paint once and
+    // vanish. A bone press is not permission to restructure someone's level
+    // stack, so the build takes the levels that are there.
+    const oneFloor = {
+      ...empty(),
+      levels: [
+        { id: 7, name: 'ROOF', elev: 0 },
+        { id: 3, name: 'MAIN FL', elev: 0 },
+        { id: 1, name: 'FOUNDATION', elev: -8 },
+      ],
+      activeLevelIdx: 1,
+    };
+    await h.openModel(page, { webgl: false });
+    await page.evaluate(async ({ bucket, f }) => {
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(f)], 'drawing.json',
+          { type: 'application/json' }), bucket);
+    }, { bucket: BUCKET, f: oneFloor });
+    await page.goto('/MODEL.html');
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+    await order(page, 'bungalow', 'twoStorey');
+    await page.keyboard.press('Escape');
+    await saveOnNewPage(page);
+
+    const kept = await page.evaluate(async bucket => {
+      const file = await window.SharedFileStore.loadSharedFile(bucket);
+      const raw = JSON.parse(await file.text());
+      const F = window.DraftDrawingFormat;
+      const levelIds = new Set((raw.levels || []).map(level => Number(level.id)));
+      return {
+        wrote: (raw.walls || []).length,
+        keeps: F.walls(raw.walls, levelIds, {}).length,
+      };
+    }, BUCKET);
+    // Four studs on MAIN FL and four of concrete: one storey's worth, and
+    // every one of them survives the reload.
+    expect(kept.wrote, 'one storey plus its foundation').toBe(8);
+    expect(kept.keeps, 'and nothing was written that the reload loses')
+      .toBe(kept.wrote);
+  });
