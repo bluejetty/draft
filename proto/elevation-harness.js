@@ -858,6 +858,72 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
     `bearing ${gStack2.bearing.toFixed(3)} vs top ${gTop.wallTop.toFixed(3)}`);
 }
 
+// ── THE FASCIA IS BANDED ONCE, OVER THE EAVE'S TRUE LENGTH ─────────────────
+//
+// Movie, 19 Sep, on the far right of a bungalow's front elevation: "the fascia
+// still has extra line (that is a long lasting problem we haven-t been able to
+// solve)". Measured rather than eyeballed, by recording both passes' spans:
+//
+//     silhouette run   u0 -22        u1 46.25
+//     eave face edge   u0  22.947    u1 48      -> 46.25..48 survives
+//
+// Twenty-one inches of fascia hanging off the end of an eave already banded to
+// within two feet of there. The silhouette is SAMPLED -- 240 steps along the
+// cut, 40 depth probes each -- and near a roof's outer corner the roof is a
+// sliver in depth that every probe misses, so the run stops early. The face
+// edge is exact. Three runs in that one elevation ended short, by 1.75 ft,
+// 1.0 ft and 0.167 ft, and the `> 0.2` filter downstream is why only some were
+// ever visible: 0.167 was dropped by luck and 1.75 was not.
+//
+// So the run is grown to what it approximates. Raising the filter instead
+// would trade the stub for a GAP -- the shortfall is real, the eave would just
+// stop early -- and a tolerance is what produced this in the first place.
+//
+// THESE CHECK THE ARITHMETIC, which is why it was pulled out of the canvas
+// work: everything around it has to be looked at, and this can be measured.
+{
+  const CV = win.DraftCutView;
+  const run = (u0, u1, top) => ({ u0, u1, base: top - 5.5 / 12, top });
+  const TOP = 8.552083333333334;
+
+  // THE MEASURED CASE, in its own numbers.
+  const grown = CV.extendRunsToEaves([run(-22, 46.25, TOP)],
+    [{ u0: 22.947, u1: 48, top: TOP }]);
+  check('a run that stops short of its eave is grown to the eave-s end',
+    Math.abs(grown[0].u1 - 48) < 1e-9,
+    `u1 ${grown[0].u1} -- the silhouette sampled to 46.25, the eave runs to 48`);
+  check('and its other end is left where it was',
+    Math.abs(grown[0].u0 - -22) < 1e-9, `u0 ${grown[0].u0}`);
+
+  // TOUCHING COUNTS. The sampling stops short, so the run's end and the edge's
+  // start are a sample apart rather than crossing -- an overlap test that
+  // demanded a crossing would leave exactly the stub this exists to remove.
+  const touch = CV.extendRunsToEaves([run(0, 10, TOP)], [{ u0: 10, u1: 14, top: TOP }]);
+  check('an eave that merely meets the run-s end still extends it',
+    Math.abs(touch[0].u1 - 14) < 1e-9, `u1 ${touch[0].u1}`);
+
+  // AND WHAT IT MUST NOT DO, which is the half that keeps the rest honest.
+  const apart = CV.extendRunsToEaves([run(0, 10, TOP)], [{ u0: 30, u1: 40, top: TOP }]);
+  check('an eave nowhere near the run does not stretch it across the gap',
+    apart[0].u0 === 0 && apart[0].u1 === 10,
+    `${apart[0].u0}..${apart[0].u1}`);
+
+  // A GARAGE ROOF RUNS AT ANOTHER HEIGHT THROUGH THE SAME STRETCH OF PAPER.
+  // Grown to that, one band would stretch across a roof it has nothing to do
+  // with -- the same confusion that put a house roof on a garage plate.
+  const lower = CV.extendRunsToEaves([run(0, 10, TOP)],
+    [{ u0: 5, u1: 40, top: TOP - 9 }]);
+  check('an eave at another height does not extend a band that is not its own',
+    lower[0].u1 === 10, `u1 ${lower[0].u1} -- a different roof-s eave`);
+
+  check('a run with no eaves at all is left alone',
+    CV.extendRunsToEaves([run(0, 10, TOP)], [])[0].u1 === 10);
+  // The run keeps everything else it carried: `base` is what the band is drawn
+  // from and what the subtraction downstream matches on.
+  check('and a grown run keeps the base it was banded at',
+    Math.abs(grown[0].base - (TOP - 5.5 / 12)) < 1e-9, `base ${grown[0].base}`);
+}
+
 console.log(`elevation harness: ${passed} checks passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach(line => console.log(`  \u2718 ${line}`));
