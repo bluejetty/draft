@@ -9570,21 +9570,42 @@
     sourceLevelId = null, against = null } = {}) => {
     const G = window.DraftGeometry2D;
     const ring = loop.map(pt => ({ x: pt.x, z: pt.z }));
-    const pts = G.offsetOutline(ring, roofOverhangFt);
+    // ── THE EDGES AGAINST THE HOUSE ARE CUT FLUSH, NOT OVERHUNG ──────────
+    //
+    // A roof that dies into a house wall has no eave there and no board to
+    // hang one on: the sheet stops at the wall. MODEL.dc.html's
+    // _buildGarageRoof says so by building its offset with
+    // offsetOutlineVariable and a distance of ZERO on every house-path edge.
+    //
+    // OFFSET UNIFORMLY, THE GARAGE ROOF GREW INTO THE HOUSE. Measured on the
+    // bungalow: the shared edge (16,20)-(-4,20) moved out to z=18, two feet
+    // inside the house -- and the elevation then drew a RAKE FASCIA along it,
+    // a pair of parallel lines floating in the middle of the house's own roof
+    // with no gable under them. Movie marked exactly that in green.
+    //
+    // So the shared edges take zero and the rest take the overhang, which is
+    // the same `against` loop the walls and the gable flags already use --
+    // one question asked once, three ways round.
+    const sharedWith = against ? G.loopSegments(against) : null;
+    const sharedEdge = index => {
+      if (!sharedWith) return false;
+      const a = ring[index], b = ring[(index + 1) % ring.length];
+      return G.edgeOnLoop(a, b, sharedWith);
+    };
+    const pts = sharedWith
+      ? G.offsetOutlineVariable(ring,
+        ring.map((_, index) => (sharedEdge(index) ? 0 : roofOverhangFt)))
+      : G.offsetOutline(ring, roofOverhangFt);
     // An offset that collapses the loop is not a roof, and the record would be
     // dropped on load anyway -- present on screen, gone after a reload.
     if (!Array.isArray(pts) || pts.length < 3) return null;
     // READ OFF THE SOURCE RING, NOT THE OFFSET ONE. The overhang moves every
-    // point outward, so an offset edge no longer lies on the house it was cut
-    // against -- asking there would find no gables at all. The two rings have
-    // the same edge count and the same order, which is what makes the answer
-    // for edge i of one the answer for edge i of the other.
-    const sharedWith = against ? G.loopSegments(against) : null;
-    const gableAt = index => {
-      if (!sharedWith || ring.length !== pts.length) return false;
-      const a = ring[index], b = ring[(index + 1) % ring.length];
-      return G.edgeOnLoop(a, b, sharedWith);
-    };
+    // unshared point outward, so an offset edge no longer lies on the house it
+    // was cut against -- asking there would find no gables at all. The two
+    // rings have the same edge count and the same order, which is what makes
+    // the answer for edge i of one the answer for edge i of the other.
+    const gableAt = index =>
+      ring.length === pts.length && sharedEdge(index);
     drawing.roofs = drawing.roofs || [];
     const roof = {
       id: newDrawingItemId('roof'),

@@ -1205,6 +1205,64 @@ test('the garage roof takes its plate from the storey it stands on', async ({ pa
     .toBeCloseTo(m.mainWallHeight, 4);
 });
 
+test('a roof that dies into the house is cut flush there, not overhung', async ({ page }) => {
+  // A ROOF MEETING A WALL HAS NO EAVE THERE and no board to hang one on --
+  // the sheet stops at the wall. MODEL.dc.html's _buildGarageRoof says so by
+  // offsetting every house-path edge by ZERO.
+  //
+  // OFFSET UNIFORMLY, THE GARAGE ROOF GREW INTO THE HOUSE: measured on this
+  // design, the shared edge moved from z=20 to z=18, two feet inside, and the
+  // elevation drew a RAKE FASCIA along it -- a pair of parallel lines
+  // floating in the middle of the house's own roof with no gable under them.
+  // Movie marked exactly that on a screenshot.
+  await open(page);
+  await order(page, 'bungalow', 'bungalow-garage');
+  await saveOnNewPage(page);
+  const saved = await savedFile(page);
+
+  const garageRoof = (saved.roofs || []).find(r => r.garage === true);
+  expect(garageRoof, 'there is a garage roof to measure').toBeTruthy();
+
+  // THE SHARED EDGES ARE STILL WHERE THE GARAGE PUT THEM. Asked of the plan
+  // rather than of a typed coordinate: the roof's gable edges must lie on the
+  // house loop, which is the same test that marked them gable in the first
+  // place. An overhung edge has moved off it by the overhang.
+  const onHouse = await page.evaluate(roofPoints => {
+    const G = window.DraftGeometry2D;
+    const plan = window.DraftPremadePlans.planFor('bungalow-garage');
+    const segs = G.loopSegments(plan.house);
+    return roofPoints.map((pt, index) => {
+      const next = roofPoints[(index + 1) % roofPoints.length];
+      return G.edgeOnLoop(pt, next, segs);
+    });
+  }, garageRoof.points.map(p => ({ x: p.x, z: p.z })));
+
+  const flush = onHouse.filter(Boolean).length;
+  expect(flush, 'no edge of the garage roof still meets the house')
+    .toBe(2);
+  // AND THOSE ARE EXACTLY THE ONES MARKED GABLE, so the two answers about the
+  // same edges agree rather than being arrived at twice.
+  const gables = (garageRoof.edges || [])
+    .map((kind, index) => (kind === 'gable' ? index : -1)).filter(i => i >= 0);
+  expect(gables, 'the flush edges and the gable edges are not the same edges')
+    .toEqual(onHouse.map((yes, index) => (yes ? index : -1)).filter(i => i >= 0));
+
+  // THE CONTROL: the rest of the roof still overhangs, so this is a rule
+  // about SHARED edges and not a roof that lost its eaves.
+  const houseRoof = (saved.roofs || []).find(r => r.garage !== true);
+  const span = pts => {
+    const xs = pts.map(p => p.x), zs = pts.map(p => p.z);
+    return { x: Math.max(...xs) - Math.min(...xs), z: Math.max(...zs) - Math.min(...zs) };
+  };
+  const plan = await page.evaluate(() =>
+    window.DraftPremadePlans.planFor('bungalow-garage').garageRoof);
+  const roofSpan = span(garageRoof.points);
+  const loopSpan = span(plan);
+  expect(roofSpan.x - loopSpan.x, 'the garage roof lost the overhang it should keep')
+    .toBeGreaterThan(1);
+  expect(houseRoof, 'and the house roof is still there to compare against').toBeTruthy();
+});
+
 test('the roofs meet the house with gables, not with eaves running into a wall', async ({ page }) => {
   // AN EAVE AGAINST THE HOUSE runs the roof plane into the house wall; a
   // gable cuts it vertically at the wall, which is what the wall is there to
