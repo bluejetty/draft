@@ -25,8 +25,24 @@
   var beacon = new Image(1, 1);
   beacon.src = base + '/count?p=' + encodeURIComponent(path) + '&rnd=' + Date.now();
 
+  // WHERE A PAGE WANTS IT, IF IT SAYS. Every page but one is happy with the
+  // corner beside PROJECT; MODEL.html is not, because its lower left is two
+  // bars deep and the count belongs on the instruments row rather than on
+  // the row of page links (Movie, 19 Sep: "lets put it on lower left (2nd row
+  // from bottom to the left of 'STATUS READOUT'"). A page that names a home
+  // gets it, and the module learns no page names -- which is the difference
+  // between this and an `if (MODEL.html)` here.
+  //
+  // NAMED HOME MEANS INSIDE IT; the PROJECT corner means AFTER it. That is
+  // not an inconsistency: the corner is a link the count stands beside, and
+  // a named home is an empty slot that exists to be filled.
+  var homeOf = function () {
+    return document.querySelector('[data-visit-counter-home]')
+      || document.querySelector('[data-project-corner-bl]');
+  };
+
   var mount = function (label) {
-    var anchor = document.querySelector('[data-project-corner-bl]');
+    var anchor = homeOf();
     var el = document.createElement('a');
     el.setAttribute('data-traffic-counter', '');
     el.href = base;
@@ -37,7 +53,8 @@
     var common = 'font-family:\'Barlow Condensed\',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; color:rgba(29,31,32,0.45); text-decoration:none; white-space:nowrap;';
     if (anchor) {
       el.style.cssText = common + ' display:inline-flex; align-items:center; height:20px; padding:0 6px; flex-shrink:0;';
-      anchor.insertAdjacentElement('afterend', el);
+      if (anchor.hasAttribute('data-visit-counter-home')) anchor.appendChild(el);
+      else anchor.insertAdjacentElement('afterend', el);
     } else {
       el.style.cssText = common + ' position:fixed; left:12px; bottom:8px; z-index:40;';
       document.body.appendChild(el);
@@ -48,7 +65,7 @@
   // framework-rendered strip that may arrive after load, so give it a few
   // beats before settling for the fixed corner.
   var show = function (label, tries) {
-    if (document.querySelector('[data-project-corner-bl]') || tries <= 0 || document.readyState !== 'loading') {
+    if (homeOf() || tries <= 0 || document.readyState !== 'loading') {
       if (document.body) return mount(label);
     }
     setTimeout(function () { show(label, tries - 1); }, 300);

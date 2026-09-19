@@ -614,6 +614,21 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // is NOT the print path the boneyard's non-printing rule needs,
             // which still belongs to the layout sheet.
             'printscreen',
+            // AND A SIXTH TIME, with the PROPERTIES box (Movie, 19 Sep: "i'm
+            // thinking add a collapsable box on the left side under the
+            // DRAFTING TOOLS"). This is its FOLD -- one button that shows and
+            // hides what is already in the box. It authors nothing and reads
+            // nothing; it is the same kind of control as `readout-tab`.
+            //
+            // WHAT THE BOX HOLDS DOES MOVE A ROW, and the row moved: "Change
+            // a wall's type" was `absent` and is not any more. The chips and
+            // fields inside are not in this list because the census runs on
+            // an untouched page, where nothing is selected and the box is
+            // empty -- which is worth knowing about this check's reach
+            // rather than worth fixing, since a control that only exists
+            // once something is selected is not part of "what the page
+            // offers" in the sense the absences are read against.
+            'PROPERTIES',
             'strip-ruler', 'strip-tsquare', 'strip-scale',
             // THE READOUT IS A WORD UNTIL IT IS ASKED FOR (Movie, 15 Sep), so
             // the counts that used to sit open at the foot are behind two

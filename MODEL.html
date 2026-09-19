@@ -105,19 +105,30 @@
      many specs that read the page's own scale and wall count out of it keep
      working whether the drafter has it open or not. */
   #readout[hidden] { display:none; }
-  #readout-tab { position:fixed; left:12px; bottom:var(--readout-bottom);
-    z-index:5; color: var(--ink-quiet);
+  /* THE ROW CARRIES THE POSITION NOW, not the tab: the count stands to the
+     tab's left on the same line, and two separately fixed elements at one
+     inset would be a layout kept in step by hand. */
+  #lower-left { position:fixed; left:12px; bottom:var(--readout-bottom);
+    z-index:5; display:flex; align-items:baseline; gap:10px; }
+  #readout-tab { color: var(--ink-quiet);
     font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
     text-transform:uppercase; cursor:pointer;
     border:none; background:none; padding:0; }
+  /* AN EMPTY SLOT TAKES NO ROOM, so the tab is where it has always been
+     until the count actually arrives. `gap` would otherwise pay for a child
+     that is not there. */
+  #lower-left > [data-visit-counter-home]:empty { display:none; }
   #readout-tab:hover { color: var(--accent); }
   /* OPEN, THE WORD GOES AND AN X TAKES OVER (Movie): the tab and the panel
      are one control, so having both on screen at once said the same thing
      twice. The X sits in the panel's own bottom-right, in the open area
      under the second line rather than on a number. */
   #readout-tab[aria-expanded="true"] { display:none; }
+  /* OVER THE ROW, not beside it. The panel opens on the same corner the row
+     stands in; one z above means it covers the count instead of sharing a
+     line with it, and the tab hides itself as it always did. */
   #readout { display:flex; flex-direction:column; align-items:flex-end;
-    position:fixed; left:12px; bottom:var(--readout-bottom); z-index:5;
+    position:fixed; left:12px; bottom:var(--readout-bottom); z-index:6;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px;
     /* THE PANEL STAYS CLICK-THROUGH and only the X takes the pointer: open,
@@ -912,6 +923,28 @@
      source besides, and the two seconds before the board rises are exactly
      when the press has the drafter's eye. */
   html[data-theme="rough"] #bone[data-lit] img { filter:none; }
+  /* THE NUMBER RIDES ON THE PRESS (board #261, MODEL.dc.html:558), and WHERE
+     it rides is a fact about the ARTWORK rather than about the wallet --
+     which is why the offset lives in BONE_ART beside the two pictures and
+     not here. Movie, 19 Sep: "put the number on the bone under the bone in
+     the red area and put the number in the house centered in the middle of
+     the house outline", and then, on being shown why those are one rule:
+     "yes exactly the style is different but the bone and house are the same
+     button".
+
+     aria-hidden, and the title carries the wallet in words instead. A screen
+     reader reading "3" off a button called BONE says nothing useful; the
+     title says three bones, when the next one lands, and what a build costs. */
+  #bone-balance { position:absolute; left:0; right:0;
+    transform:translateY(-50%); text-align:center; pointer-events:none;
+    font-family: var(--font-ui); font-weight:700; color:#fff;
+    text-shadow:0 1px 2px rgba(29,31,32,0.55); letter-spacing:0.02em;
+    line-height:1; }
+  #bone-balance:empty { display:none; }
+  /* AN EMPTY WALLET GREYS OUT, and grey beats the lit glow: a bone glowing
+     with nothing to spend is a contradiction. The rule sits after
+     [data-lit] so it wins on the one press where both are true. */
+  #bone[data-broke] img { filter:grayscale(1) brightness(0.82); }
   #bone .said {
     position:absolute; width:1px; height:1px; margin:-1px; padding:0;
     overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
@@ -1102,11 +1135,6 @@
      §7c's worry (a shut rail takes the level switch away) is answered by
      the tab itself: LEVELS / LAYERS is one press, same as the chips were. */
   #right-rail[data-collapsed] { display:none; }
-  /* PROPERTIES BELONG TO THE LEVELS PANE. The slot shows itself when a tool
-     fills it, and that press can happen while the seats are showing -- so
-     the pane rules it out here rather than trusting every future caller to
-     remember which pane is up. */
-  #right-rail[data-pane-showing="previews"] #props-slot { display:none; }
   /* THE TOOL COLUMN. Four square keys a row, which is the old page's own
      shape and not a taste: at four across, DRAW/EDIT is three rows and BUILD
      is two, and the whole roster is reachable without the panel scrolling on
@@ -1228,7 +1256,6 @@
     background: var(--surface-chip); color: var(--ink);
     font-family: var(--font-ui); font-size:10px; letter-spacing:0.04em;
     text-transform:uppercase; }
-  #props-slot[hidden] { display:none; }
 
   /* THE LEVELS / LAYERS PANEL. Movie: "i will also need the LEVELS / LAYERS
      menu too", and "the level layers should be a tab on the right side like
@@ -1285,9 +1312,25 @@
   .props-title { font-family: var(--font-ui); font-size:9px; font-weight:600;
     letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet);
     margin-bottom:6px; }
-  #props-slot { margin-top:10px; padding-top:10px;
-    border-top:1px solid var(--edge-panel);
-    font-family: var(--font-ui); font-size:10px; color: var(--ink-quiet); }
+  /* THE PROPERTIES BOX, under the tool column in the left rail. The rule the
+     slot used to carry is now the BOX's -- the divider belongs above the
+     fold button, or a folded box would sit on the tools with no line between
+     them. */
+  #props-box { margin-top:10px; padding-top:10px;
+    border-top:1px solid var(--edge-panel); }
+  #props-box[hidden] { display:none; }
+  .props-fold { display:block; width:100%; padding:0 0 6px; border:0;
+    background:none; cursor:pointer; text-align:left;
+    font-family: var(--font-ui); font-size:9px; font-weight:600;
+    letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet); }
+  .props-fold:hover { color: var(--ink); }
+  /* The fold's arrow is the button's own, so the word never moves. */
+  .props-fold::after { content:' \25B4'; opacity:0.7; }
+  [data-folded] > .props-fold::after { content:' \25BE'; }
+  #props-slot { font-family: var(--font-ui); font-size:10px;
+    color: var(--ink-quiet); }
+  #props-slot[hidden] { display:none; }
+  [data-folded] > #props-slot { display:none; }
 
   /* THE SEATING CHART: six cut views, all six always shown. The shape is
      MODEL.dc.html's rail (:188-200) and the PAIRING is its own -- E1|E3 over
@@ -1407,9 +1450,25 @@
 <body>
 
 <canvas id="plan"></canvas>
-<button id="readout-tab" type="button" data-readout-tab
-  aria-expanded="false" aria-controls="readout"
-  title="The page's own counts: what is drawn on this level, and what the drawing holds">STATUS READOUT</button>
+<!-- THE LOWER-LEFT ROW. Movie, 19 Sep: "i need the viewcounter lets put it
+     on lower left (2nd row from bottom to the left of 'STATUS READOUT'". The
+     count used to mount beside the PROJECT link, which on this page is the
+     BOTTOM row; the row above is where the instruments are, and a count of
+     visits reads as one.
+
+     THE SLOT IS EMPTY ON EVERY DESK AND IN EVERY TEST, deliberately and
+     unavoidably: traffic-counter.js reports nothing and mounts nothing on
+     localhost, 127.0.0.1 or file:, so STATUS READOUT sits at the same 12px
+     here that it always has and only moves right on the live site. That is
+     the same shape the count already has on the five other pages -- it
+     shifts the row it joins -- and it is why the slot is a real element with
+     a name rather than a gap measured in pixels. -->
+<div id="lower-left" data-lower-left>
+  <span data-visit-counter-home></span>
+  <button id="readout-tab" type="button" data-readout-tab
+    aria-expanded="false" aria-controls="readout"
+    title="The page's own counts: what is drawn on this level, and what the drawing holds">STATUS READOUT</button>
+</div>
 <div id="readout" hidden>
   <!-- THE COUNTS GO IN THEIR OWN SPAN so the close button survives them: the
        readout is rewritten by innerHTML on every paint, and a child of the
@@ -1435,6 +1494,29 @@
 <button id="left-tab" class="rail-tab" type="button" data-left-tab hidden>DRAFTING TOOLS</button>
 <aside id="left-rail" data-left-rail hidden>
   <div id="tool-slot" data-tool-slot></div>
+  <!-- PROPERTIES SITS UNDER THE TOOLS. Movie, 19 Sep: "we should designate an
+       area on the model page for the PROPERTIES box (which will change
+       depending on what you are using) i'm thinking add a collapsable box on
+       the left side under the DRAFTING TOOLS". It was in the RIGHT rail under
+       LEVELS / LAYERS until then, which put the thing you change a wall with
+       on the far side of the sheet from the thing you draw a wall with.
+
+       IT FOLDS ON ITS OWN, and that is the point of the box rather than a
+       flourish: the tool column above it is six rows tall, so folding the
+       properties away has to be possible WITHOUT shutting the rail that holds
+       the keys. The fold is in the URL beside `left` and `right`, for the
+       reason those are: it is what the drafter is looking at, and it survives
+       a reload.
+
+       THE TITLE STAYS INSIDE THE SLOT, not on the fold button. The button
+       says PROPERTIES always; the slot says WALL, ROOF, COLUMN -- whatever is
+       in hand. Putting the changing word on the button would have made the
+       fold's own label move under the drafter's cursor. -->
+  <div id="props-box" data-props-box hidden>
+    <button class="props-fold" type="button" data-props-fold
+      aria-expanded="true">PROPERTIES</button>
+    <div id="props-slot" data-props-slot hidden></div>
+  </div>
 </aside>
 
 <!-- TWO TABS ON THE RIGHT EDGE (Movie, 15 Sep): "2 seperate tabs top will be
@@ -1461,15 +1543,6 @@
        inside a level card are the same objects as the seats, so adding a
        level adds two seats and deleting one takes them away. -->
   <div id="levels-panel" data-levels-panel data-pane="levels"></div>
-  <!-- PER-TOOL PROPERTIES, the slot and nothing in it. COLUMN and BEAM fill
-       it from the SELECTION (showStructureProps); ROOF fills it from the
-       ARMED TOOL, which is the second of the two ways in. The contract is in
-       the comment beside window.ModelProps below -- NOT beside a
-       `setToolProperties`, which this comment named and which has never
-       existed in this repo. It
-       rides with LEVELS / LAYERS: properties belong to the thing selected,
-       which is what that pane is about. -->
-  <div id="props-slot" data-props-slot hidden></div>
   <div id="view-rail" data-pane="previews"></div>
 </aside>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
@@ -1530,7 +1603,8 @@
       title="Gruff's drive-thru: pick a house type, then build it"><img
         data-bone-art
         src="./assets/bone-red.png"
-        alt="" /><span class="said">BONE</span></button>
+        alt="" /><span id="bone-balance" data-bone-balance
+        aria-hidden="true"></span><span class="said">BONE</span></button>
     <!-- ONE DELETE FOR EVERYTHING SELECTED (§7a), where there were two verbs
          for one of the types. It rides with the pair rather than with the
          places, because it is a verb. -->
@@ -1995,6 +2069,7 @@
      offer them premade designs in there at the beginning". A DESIGN, not a
      generator -- starter-shape.js invents a house, this one is the building
      in the picture the drafter pressed. -->
+<script src="./bone-wallet.js"></script>
 <script src="./premade-plans.js"></script>
 <!-- Where an ordered garage stands. A traced loop says where it goes by
      being traced; an autobuilt one has to be told, and that is a rule about
@@ -4492,7 +4567,52 @@
   // built has been answered, and the tile un-presses. The persisted
   // buildType stays: the FILE remembers what the project is; the menu
   // only remembers the question currently being asked.
+  // ── WHAT A BUILD COSTS (board #261) ──────────────────────────────────
+  //
+  // A BUILD IS A BUILD, whichever door it came through. This page raises a
+  // building from TWO presses -- the foot's bone, which builds what the
+  // drafter drew, and the sign's bone, which builds the premade design --
+  // and the geometry side says so through two different words, buildServed
+  // and orderServed. A toll written at one press would be free at the other,
+  // which is exactly the shape of the defect Movie is already living with on
+  // the same button. So the CHARGE hangs off both served-signals and the
+  // REFUSAL off both presses, and both are these three lines rather than
+  // four copies of them.
+  //
+  // A DETACHED GARAGE COSTS A BONE TOO -- MOVIE'S RULING, 19 Sep, asked for
+  // and given: "sure every produced home or garage is 1 bone now (these will
+  // change and be applied to other stuff later)". MODEL.dc.html charges only
+  // COSTS.buildHouse because a house is all it builds; here a garage is an
+  // order the geometry side serves like any other, and making it free would
+  // have the wallet report what KIND of thing was built rather than that
+  // something was.
+  //
+  // AND THE PRICE LIST IS EXPECTED TO GROW, which is why nothing here knows
+  // a number: the cost is COSTS.buildHouse out of bone-wallet.js, and the
+  // day a second thing is charged for it joins that table rather than this
+  // file. One produced body, one bone, is the rule as it stands.
+  const canAffordBuild = () => {
+    const W = window.DraftBoneWallet;
+    return !W || readWallet().balance >= W.COSTS.buildHouse;
+  };
+  const refuseForBones = () => {
+    signRefusal = {
+      line: 'OUT OF BONES.',
+      note: `The next free one lands in ${waitLabel(readWallet().nextDripMs)}.`,
+    };
+    refreshWallet();
+  };
+  const chargeForBuild = () => {
+    const W = window.DraftBoneWallet;
+    if (!W) return;
+    W.spend(W.COSTS.buildHouse);
+    refreshWallet();
+  };
+
   const orderServed = () => {
+    // PAID ON DELIVERY, and this is the word the geometry side says when it
+    // has actually raised the order -- not when the press happened.
+    chargeForBuild();
     chosenEntryId = null;
     chosenSizeId = null;
     openFamilyId = null;
@@ -4648,10 +4768,23 @@
   // its twin for the foot's bone. Nothing incidental can say it by mistake.
   let buildWasServed = false;
   const fireBuild = () => {
+    // A BUILD COSTS A BONE (board #261), AND THE TOLL IS HERE rather than in
+    // the handlers. MODEL.dc.html checks the wallet inside its build method,
+    // which is one place because it has one caller; this page fires the same
+    // seam from the foot press, from the sign's own bone on the post, and
+    // from anything that registers later. A check per caller is a rule with
+    // as many copies as there are doors, and the door added next year is the
+    // one that forgets. So: refused before any handler runs, and paid for
+    // only if one of them actually served.
+    if (!canAffordBuild()) { refuseForBones(); return false; }
     buildWasServed = false;
     // EVERY handler is called, and the flag is read after -- never a short
     // circuit, which would silently skip whatever registered later.
     buildHandlers.forEach(fn => fn(chosen()));
+    // PAID ON DELIVERY. A press the geometry side declined to serve -- no
+    // type picked, nothing the design can make -- costs nothing, which is
+    // what `buildWasServed` is already the page's word for.
+    if (buildWasServed) chargeForBuild();
     return buildWasServed;
   };
   // THE ORDER CARRIES ITS ROUND: 'menu' means hand over the premade design
@@ -4719,11 +4852,18 @@
   // path, and a `const` declared after that line is in its dead zone when that
   // runs -- so the page would have thrown on the one entry that most needs to
   // work, and only on that entry.
+  //
+  // `balanceTop` IS PART OF THE ARTWORK, not part of the wallet. The bone's
+  // number sits low, in the red under the bone; the house's sits in the
+  // middle of its outline. Same number, two pictures -- so the offset is
+  // declared where the pictures are, and a third theme that ships a third
+  // drawing says where its number goes in the same line it names its file.
+  // 74% is MODEL.dc.html:558's own figure, carried rather than re-eyeballed.
   const BONE_ART = Object.freeze({
     ruff:  Object.freeze({ src: './assets/bone-red.png',       lit: null,
-      label: 'BONE' }),
+      label: 'BONE', balanceTop: '74%' }),
     rough: Object.freeze({ src: './assets/house-blue-off.png',
-      lit: './assets/house-blue-on.png', label: 'HOUSE' }),
+      lit: './assets/house-blue-on.png', label: 'HOUSE', balanceTop: '50%' }),
   });
   // AND THE BOARD IS THE SECOND LOGO. The note above says a theme is "mainly
   // through logos and colors" and that the press was the first to arrive;
@@ -4787,7 +4927,78 @@
       if (img.alt) img.alt = `${art.label} — build it`;
     });
     if (boneSaid) boneSaid.textContent = art.label;
+    // The number follows the picture it is drawn on -- low in the red on the
+    // bone, in the middle of the outline on the house.
+    if (boneBalanceEl) boneBalanceEl.style.top = art.balanceTop;
   };
+
+  // ── THE FREE-BONE WALLET (board #261) ─────────────────────────────────
+  //
+  // Movie, 19 Sep: "can you bring the BONE number / TOKEN system over too",
+  // "bring it like it was in model.dc". MODEL.html did not load
+  // bone-wallet.js at all, so the whole economy was missing here: builds
+  // were free, the press said nothing about what it cost, and a drafter
+  // moving between the two pages met two different rules.
+  //
+  // THE WALLET IS APP STATE, NEVER DRAWING STATE. It lives in localStorage
+  // and belongs to the browser, not to the file -- so nothing here marks the
+  // drawing dirty, and a build that spends a bone does not make the drawing
+  // need saving for that reason.
+  //
+  // THE MODULE'S OWN HEADER CALLS IT AN HONOUR SYSTEM: localStorage, editable
+  // with devtools, real enforcement waiting on the server ledger (#52). This
+  // page inherits that and does not pretend otherwise.
+  const boneBalanceEl = document.getElementById('bone-balance');
+  const waitLabel = ms => {
+    if (ms == null) return '';
+    const minutes = Math.ceil(ms / 60000);
+    return minutes <= 1 ? '<1m' : `${minutes}m`;
+  };
+  let walletShown = { balance: null, nextDripMs: null };
+  const readWallet = () => (window.DraftBoneWallet
+    ? window.DraftBoneWallet.read() : { balance: Infinity, nextDripMs: null });
+
+  const paintWallet = () => {
+    const W = window.DraftBoneWallet;
+    if (!W || !boneBalanceEl) return;
+    const { balance, nextDripMs } = walletShown;
+    const broke = balance < 1;
+    // AN EMPTY WALLET SHOWS THE COUNTDOWN, not a bare 0 -- the number on the
+    // press is the answer to "can I build", and "no" is only half of it.
+    boneBalanceEl.textContent = broke
+      ? `0 \u00b7 ${waitLabel(nextDripMs)}` : String(balance);
+    // THE DIGIT LADDER (MODEL.dc.html:23499), carried rather than re-derived:
+    // sized for one digit and stepping down so even a five-digit paid wallet
+    // never overflows the artwork.
+    const chars = broke ? 8 : String(balance).length;
+    boneBalanceEl.style.fontSize =
+      `${chars <= 1 ? 15 : chars <= 3 ? 11 : chars <= 5 ? 8 : 7}px`;
+    boneFoot.toggleAttribute('data-broke', broke);
+    boneFoot.title = broke
+      ? `Out of bones \u2014 the next free bone lands in ${waitLabel(nextDripMs)}. `
+        + `One drips in every hour, up to ${W.DRIP_CAP}.`
+      : nextDripMs != null
+        ? `${balance} bone${balance === 1 ? '' : 's'} \u00b7 next free bone in `
+          + `${waitLabel(nextDripMs)}. Each BUILD costs 1.`
+        : `${balance} bones \u2014 the free wallet is full. Each BUILD costs 1.`;
+  };
+
+  // REPAINTED ONLY ON A CHANGE, which is what makes the minute tick below
+  // cheap enough to leave running: read() is a localStorage parse and a
+  // little arithmetic, and the DOM is touched only when the answer moved.
+  const refreshWallet = () => {
+    if (!window.DraftBoneWallet) return;
+    const now = readWallet();
+    if (now.balance === walletShown.balance
+      && now.nextDripMs === walletShown.nextDripMs) return;
+    walletShown = { balance: now.balance, nextDripMs: now.nextDripMs };
+    paintWallet();
+  };
+  refreshWallet();
+  // ONE TICK A MINUTE, because the countdown on an empty press is in minutes
+  // and a drip lands on the hour. Faster would redraw nothing; slower would
+  // leave a bone in the wallet that the press says is not there.
+  window.setInterval(refreshWallet, 60000);
 
   const signShut = () => sign.hasAttribute('data-shut');
 
@@ -4914,13 +5125,24 @@
     // created" -- so the press that raises a house is a press that has been
     // answered, and the board has nothing left to ask.
     if (fireBuild()) return;
-    if (chosen()) return;
+    // AT THE WINDOW, THIS PRESS IS THE POST'S. The board is up, so the
+    // drafter is inside the drive-thru and a press means build -- whichever
+    // of the two bones is the one in front of him. On RUFF he never gets
+    // here because the board covers this press; on ROUGH it does not, and
+    // this is the press he actually reaches for.
+    if (!signShut()) { orderAtWindow(); return; }
+    // AND WITH THE BOARD DOWN, A PICKED TYPE OPENS IT. This used to be
+    // `if (chosen()) return;` -- a bare return, which is the only outcome on
+    // this page that tells the drafter nothing whatsoever. Movie's rule:
+    // "when the bone is pressed we should go to the DRIVE THRU menu always
+    // on the first press". Nothing is drawn to build from (fireBuild said
+    // so), so the board is where the answer is.
+    if (chosen()) { callSign(boneFoot, 'menu'); return; }
     if (window.DraftBuildingBodies.isFull(drawing)) return;
     signRefusal = {
       line: 'NOTHING TO BUILD YET.',
       note: 'Pick a type off the board and I\u2019ll build it.',
     };
-    if (!signShut()) { paintSign(); return; }
     callSign(boneFoot, 'menu');
   });
 
@@ -4970,7 +5192,24 @@
   // whole design of a box, so an order without one has nothing in it --
   // and the drafter who typed 4ft by 900ft is told so rather than watching
   // a press do nothing.
-  document.getElementById('dt-bone').addEventListener('click', () => {
+  // WHAT A PRESS AT THE WINDOW MEANS, once, for BOTH presses that can make
+  // it. Movie, 19 Sep: "unless they are inside the drive thru, if they press
+  // it then (or when the house is glowing blue) that will count as only
+  // BUILD HOUSE".
+  //
+  // THIS WAS THE BLUE HOUSE BUG. There are two presses at the window -- the
+  // bone on the post and the one on the foot -- and only the post's did this.
+  // On RUFF that is invisible, because BOARD_ART.ruff covers the foot press
+  // and setSign disables it; on ROUGH the sheet stops above the bar, the foot
+  // press stays live in front of the drafter, and its handler read
+  // `if (chosen()) return;` -- a bare return with no refusal, no board and no
+  // sound. Pick a house on ROUGH, press the blue house, nothing happens.
+  // Movie: "sometimes i have to switch to RUFF to make it work."
+  //
+  // So the meaning lives here and both presses call it. A second copy is what
+  // made one of them wrong, and a second copy is what would make one of them
+  // wrong again.
+  const orderAtWindow = () => {
     const picked = chosen();
     if (picked?.entry?.needsSize && !chosenSize()) {
       signRefusal = {
@@ -5015,8 +5254,14 @@
       paintSign();
       return;
     }
+    // AND THE LAST REFUSAL IS THE WALLET'S, after the caps rather than
+    // before them: a drafter with no bones AND a house already standing
+    // should be told about the house, which is the thing he can do nothing
+    // about by waiting.
+    if (!canAffordBuild()) { refuseForBones(); paintSign(); return; }
     fireOrder();
-  });
+  };
+  document.getElementById('dt-bone').addEventListener('click', orderAtWindow);
   // Escape shuts the sign, as it shuts every other thing this page puts over
   // the drawing. Captured before the drawing's own Escape so an open sign is
   // not also a cleared selection.
@@ -5047,9 +5292,38 @@
   // about beams, columns, fixtures or annotations. The armed tool decides what
   // goes here and when; this only owns the space and the show/hide.
   const propsSlot = document.getElementById('props-slot');
+  const propsBox = document.getElementById('props-box');
+  const propsFold = propsBox.querySelector('[data-props-fold]');
+
+  // FOLDED IS IN THE URL, beside `left` and `right`, for the reason those
+  // are: it is what the drafter is looking at and it survives a reload.
+  //
+  // DEFAULT OPEN, and the absent-means-open spelling is deliberate. A drafter
+  // who has just pressed a wall wants to see what he pressed; the box has to
+  // earn being shut rather than be shut until asked. `props=0` is the only
+  // value that means anything, so a stale or hand-typed URL opens.
+  const propsFolded = () => params.get('props') === '0';
+  const syncPropsFold = () => {
+    propsBox.toggleAttribute('data-folded', propsFolded());
+    propsFold.setAttribute('aria-expanded', String(!propsFolded()));
+  };
+  propsFold.addEventListener('click', () => {
+    if (propsFolded()) params.delete('props'); else params.set('props', '0');
+    syncUrl();
+    syncPropsFold();
+  });
+  syncPropsFold();
+
   window.ModelProps = Object.freeze({
     slot: () => propsSlot,
-    clear: () => { propsSlot.replaceChildren(); propsSlot.hidden = true; },
+    clear: () => {
+      propsSlot.replaceChildren();
+      propsSlot.hidden = true;
+      // THE BOX GOES WITH ITS CONTENTS. An empty box would leave a PROPERTIES
+      // heading and a fold arrow under the tools with nothing behind them --
+      // a control that does nothing, which is the same lie a stale panel is.
+      propsBox.hidden = true;
+    },
     set: (title, node) => {
       propsSlot.replaceChildren();
       if (title) {
@@ -5060,6 +5334,7 @@
       }
       if (node) propsSlot.append(node);
       propsSlot.hidden = !(title || node);
+      propsBox.hidden = propsSlot.hidden;
     },
   });
 
@@ -9010,7 +9285,7 @@
   // the next opening would come out the old size while the box said
   // otherwise. So a bad entry says why on the strip and the box goes back to
   // the number actually in force.
-  const openingField = (label, valueFt, commit) => {
+  const propField = (label, valueFt, commit, redraw) => {
     const F = window.DraftFormatters;
     const row = document.createElement('div');
     row.dataset.propRow = label.toLowerCase();
@@ -9021,20 +9296,31 @@
     input.type = 'text';
     input.className = 'prop-field';
     input.dataset.propField = label.toLowerCase();
-    input.value = F.formatArchitecturalInches(valueFt * 12);
+    // NULL IS "THEY DO NOT AGREE", which only a selection of several can be.
+    // An empty box with a dash behind it says so; showing the first one's
+    // number would be a claim about all of them, and typing over it is how
+    // the drafter says "all of these, this".
+    const shown = () => (valueFt == null ? ''
+      : F.formatArchitecturalInches(valueFt * 12));
+    input.value = shown();
+    if (valueFt == null) input.placeholder = '\u2014';
     input.setAttribute('aria-label', label);
     const apply = () => {
+      // A disagreeing field left untouched is not an edit. Without this an
+      // empty box would go through the parser on every blur and refuse,
+      // putting an error on the strip for a drafter who typed nothing.
+      if (valueFt == null && !input.value.trim()) return;
       const parsed = F.parseArchitecturalLength(input.value);
       if (!parsed.ok) {
         sayOnStrip(parsed.error);
-        input.value = F.formatArchitecturalInches(valueFt * 12);
+        input.value = shown();
         return;
       }
       const refusal = commit(parsed.inches / 12);
       if (refusal) sayOnStrip(refusal);
       // REDRAWN FROM THE STATE EITHER WAY, so the box shows what is in force
       // rather than what was typed -- 3.5 comes back as 3'-6".
-      showOpeningProps();
+      redraw();
     };
     input.addEventListener('blur', apply);
     input.addEventListener('keydown', event => {
@@ -9043,6 +9329,11 @@
     row.append(name, input);
     return row;
   };
+
+  // The opening panel's own fields, which is what the above WAS until walls
+  // needed the same row. Only the redraw differs: this panel knows its name.
+  const openingField = (label, valueFt, commit) =>
+    propField(label, valueFt, commit, showOpeningProps);
 
   const showOpeningProps = () => {
     const P = window.ModelProps;
@@ -11239,44 +11530,191 @@
     return row;
   };
 
-  const showStructureProps = () => {
+  // A BUILDER RETURNS A NODE AND NOTHING ELSE. It used to call ModelProps.set
+  // itself and return EARLY when the selection was not its own kind -- which
+  // left whatever was in the box standing. See the router below.
+  const columnPropsNode = item => {
+    const box = document.createElement('div');
+    box.append(propRow('FOOTING', FOOTINGS, item.footing, id => {
+      item.footing = id;
+      // A pile has a fixed diameter, so a pad's custom size is meaningless
+      // on one. The format drops padIn for piles anyway (:534); dropping it
+      // here too keeps the page's record and the reader's identical.
+      if (id.startsWith('pile')) delete item.padIn;
+      markDirty();
+      showSelectionProps();
+      paint();
+    }));
+    return box;
+  };
+
+  const beamPropsNode = item => {
+    const box = document.createElement('div');
+    const span = Math.hypot(item.end.x - item.start.x, item.end.z - item.start.z);
+    box.append(propRow('BEAM', BEAM_MODES, item.mode, id => {
+      item.mode = id;
+      markDirty();
+      showSelectionProps();
+      paint();
+    }));
+    const len = document.createElement('div');
+    len.dataset.propSpan = '';
+    len.className = 'props-title';
+    // The span is read from the geometry, never stored: a stored length and
+    // a moved endpoint are two facts that can disagree, and the drafter
+    // would believe the one on the panel.
+    len.textContent = `SPAN ${feetLabel(span)}`;
+    box.append(len);
+    return box;
+  };
+
+  // ── WALL PROPERTIES ───────────────────────────────────────────────────────
+  //
+  // Movie, 19 Sep: "if they select a specific wall or multiples they can
+  // change the properties". A wall, or several -- NOT the old page's rule.
+  // MODEL.dc.html has this editor only on an ASSEMBLY
+  // (_selectedGroupForWallEditing), so changing one wall's type there means
+  // bundling it into a named group first. Movie ruled otherwise for this
+  // page. The RECORD it writes is the old page's, field for field
+  // (_applyGroupWallSettings :18110-18118).
+  //
+  // WHY IT MATTERS MORE THAN IT LOOKS. A wall's height is copied in when it
+  // is drawn, from the storey's default, and never looked at again -- on both
+  // pages. Movie's rule for the default moving ("if the floor or ceiling is
+  // the same height as the DEFAULT, if they change the PROJECT DEFAULT, also
+  // change those heights to match") leaves behind exactly the walls somebody
+  // had already adjusted, and he answered that himself: "(the user may need
+  // to manually change the 'previously adjusted' height". This is the panel
+  // he changes them with.
+  const REF_LINES = [['left', 'LEFT'], ['center', 'CENTRE'], ['right', 'RIGHT']];
+
+  // What the walls in hand AGREE on, or null. A LIT CHIP IS A CLAIM ABOUT
+  // EVERY WALL IN THE SELECTION, so two walls of different types light
+  // nothing rather than lighting the first one's -- the drafter would
+  // otherwise read the panel as "these are all 2x6" and be wrong about one.
+  const agreedOn = (walls, read) => {
+    const first = read(walls[0]);
+    return walls.every(wall => read(wall) === first) ? first : null;
+  };
+
+  const applyToWalls = (walls, patch) => {
+    walls.forEach(wall => {
+      Object.assign(wall, patch);
+      // A DRAFTER'S CHANGE ENDS THE SUBSTITUTION (MODEL.dc.html:18114). The
+      // loader records a wall whose retired type was mapped onto a current
+      // one and the saver puts the ORIGINAL back; without this line a wall
+      // somebody just set to RAIL would save as concrete_12 again. "Never
+      // persist the substitute" turned into "never persist the drafter's
+      // change" is the failure the fix itself creates if this is missed.
+      if (patch.wallType !== undefined) substitutedWallTypes.delete(wall.id);
+    });
+    markDirty();
+    showSelectionProps();
+    paint();
+  };
+
+  const wallPropsNode = walls => {
+    const WT = window.DraftWallTypes;
+    const F = window.DraftFormatters;
+    const ftIn = feet => F.formatArchitecturalInches(feet * 12);
+    const box = document.createElement('div');
+
+    // THE TYPES ON OFFER ARE THE CONTEXT'S, not the whole table. Foundation
+    // assemblies and framed ones are disjoint lists (contextWallTypes), so
+    // offering an 8" pour for a wall on the main floor is not a near miss, it
+    // is a wall of the wrong kind. Read off the WALLS rather than the active
+    // view, because the walls are what is being changed; a selection spanning
+    // two views agrees on nothing and gets the whole table.
+    const view = agreedOn(walls, wall => wall.view || 'plan');
+    const types = view === null ? WT.WALL_TYPES : contextWallTypes(view);
+    box.append(propRow('TYPE', types.map(type => [type.id, type.label]),
+      agreedOn(walls, wall => wall.wallType || 'stud_2x6'),
+      id => applyToWalls(walls, { wallType: id })));
+
+    box.append(propRow('REFERENCE', REF_LINES,
+      agreedOn(walls, wall => wall.refLine || 'center'),
+      id => applyToWalls(walls, { refLine: id })));
+
+    // A WALL STANDS ON ITS BASE. Refused per wall rather than against the
+    // agreed pair, because a selection whose tops differ has no agreed pair
+    // to check and would accept a base above one of them.
+    const height = (which, label) => propField(label,
+      agreedOn(walls, wall => Number(which === 'base' ? wall.baseHeight : wall.topHeight) || 0),
+      feet => {
+        const bad = walls.find(wall => {
+          const base = which === 'base' ? feet : Number(wall.baseHeight) || 0;
+          const top = which === 'base' ? Number(wall.topHeight) || 0 : feet;
+          return !(top > base);
+        });
+        if (bad) {
+          return `A wall from ${ftIn(which === 'base' ? feet : Number(bad.baseHeight) || 0)} `
+            + `to ${ftIn(which === 'base' ? Number(bad.topHeight) || 0 : feet)} is not a wall.`;
+        }
+        applyToWalls(walls, which === 'base' ? { baseHeight: feet } : { topHeight: feet });
+        return null;
+      }, showSelectionProps);
+    box.append(height('base', 'BASE'), height('top', 'TOP'));
+    return box;
+  };
+
+  // ── PROPERTIES BELONG TO WHAT IS SELECTED ─────────────────────────────────
+  //
+  // Movie, 19 Sep: "There should be a PROPERTIES box with in this case WALL
+  // PROPERTIES, but there should also a PROPERTIES for ROOF, FLOOR, FENST,
+  // LINE, etc (all objects)". This table is where the rest land.
+  //
+  // ONE ROUTER, SO THE BOX CANNOT DESCRIBE SOMETHING THAT IS NOT SELECTED.
+  // showStructureProps was a watcher that returned early when the selection
+  // was not a column or a beam AND LEFT THE OLD PANEL STANDING: place a
+  // column, then press a wall, and COLUMN properties sat there with the
+  // column long since deselected -- a panel whose edits went to a thing the
+  // drafter could not see selected. Returning early is exactly how a panel
+  // and its subject come apart, so no builder is allowed to decide for
+  // itself whether to leave the box alone.
+  const SELECTION_PANELS = {
+    wall: items => ({ title: 'WALL', node: wallPropsNode(items) }),
+    column: items => (items.length === 1
+      ? { title: 'COLUMN', node: columnPropsNode(items[0]) } : null),
+    beam: items => (items.length === 1
+      ? { title: 'BEAM', node: beamPropsNode(items[0]) } : null),
+  };
+
+  let selectionPanelUp = false;
+  const showSelectionProps = () => {
     const P = window.ModelProps;
     if (!P) return;
-    const picked = selection.length === 1 ? selection[0] : null;
-    if (!picked || (picked.type !== 'column' && picked.type !== 'beam')) return;
-    const item = picked.item;
-    const box = document.createElement('div');
-    if (picked.type === 'column') {
-      box.append(propRow('FOOTING', FOOTINGS, item.footing, id => {
-        item.footing = id;
-        // A pile has a fixed diameter, so a pad's custom size is meaningless
-        // on one. The format drops padIn for piles anyway (:534); dropping it
-        // here too keeps the page's record and the reader's identical.
-        if (id.startsWith('pile')) delete item.padIn;
-        markDirty();
-        showStructureProps();
-        paint();
-      }));
-    } else {
-      const span = Math.hypot(item.end.x - item.start.x, item.end.z - item.start.z);
-      box.append(propRow('BEAM', BEAM_MODES, item.mode, id => {
-        item.mode = id;
-        markDirty();
-        showStructureProps();
-        paint();
-      }));
-      const len = document.createElement('div');
-      len.dataset.propSpan = '';
-      len.className = 'props-title';
-      // The span is read from the geometry, never stored: a stored length and
-      // a moved endpoint are two facts that can disagree, and the drafter
-      // would believe the one on the panel.
-      len.textContent = `SPAN ${feetLabel(span)}`;
-      box.append(len);
+    const kinds = [...new Set(selection.map(entry => entry.type))];
+    const build = kinds.length === 1 ? SELECTION_PANELS[kinds[0]] : null;
+    const panel = build ? build(selection.map(entry => entry.item)) : null;
+    if (panel) {
+      P.set(panel.title, panel.node);
+      selectionPanelUp = true;
+      return;
     }
-    P.set(picked.type === 'column' ? 'COLUMN' : 'BEAM', box);
+    // MIXED SAYS SO. An empty box beside a selection of six things reads as
+    // "this page has no properties for these", which is not what is true:
+    // they are properties of different kinds and there is no one panel for
+    // them. The sentence costs a line and answers the question the blank
+    // would raise.
+    if (kinds.length > 1) {
+      const note = document.createElement('div');
+      note.dataset.propsMixed = '';
+      note.textContent = `${selection.length} THINGS OF ${kinds.length} KINDS. `
+        + 'PROPERTIES SHOW WHEN THEY ARE ALL ONE KIND.';
+      P.set('SELECTION', note);
+      selectionPanelUp = true;
+      return;
+    }
+    if (!selectionPanelUp) return;
+    // THE PANEL COMES DOWN WITH ITS SUBJECT, and the box goes back to the
+    // ARMED TOOL rather than simply empty -- a drafter who was setting a
+    // roof's overhang, pressed a wall and pressed the sheet should find the
+    // overhang where he left it.
+    selectionPanelUp = false;
+    P.clear();
+    showToolProps(activeTool);
   };
-  selectionWatchers.push(showStructureProps);
+  selectionWatchers.push(showSelectionProps);
 
   // ── THE ROOF PANEL ────────────────────────────────────────────────────────
   //
@@ -11453,7 +11891,7 @@
     dimensionPanelUp = true;
   };
 
-  toolListeners.push(tool => {
+  const showToolProps = tool => {
     if (tool === 'roof') { showRoofProps(); return; }
     if (tool === 'fenestration') { showOpeningProps(); return; }
     if (tool === 'dimension') { showDimensionProps(); return; }
@@ -11469,6 +11907,16 @@
     if (roofPanelUp) { window.ModelProps.clear(); roofPanelUp = false; }
     if (openingPanelUp) { window.ModelProps.clear(); openingPanelUp = false; }
     if (dimensionPanelUp) { window.ModelProps.clear(); dimensionPanelUp = false; }
+  };
+
+  toolListeners.push(tool => {
+    // ARMING A TOOL TAKES DOWN A PANEL THE SELECTION PUT UP, so the box
+    // describes the thing the drafter just reached for. The three flags above
+    // stay each panel's own -- that ruling holds -- and this is a fourth
+    // owner, not a shared clear(): the selection's panel is the only one a
+    // tool change must always take down, because the others ARE the tool.
+    if (selectionPanelUp) { window.ModelProps.clear(); selectionPanelUp = false; }
+    showToolProps(tool);
   });
   deleteButton.addEventListener('click', pressDelete);
   if (copyButton) copyButton.addEventListener('click', () => { copySelection(); paint(); });
