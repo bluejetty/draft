@@ -1061,3 +1061,217 @@ test('the strip says the room went up, and says so when it cannot', async ({ pag
   await order(page, 'bungalow', 'twoStorey-over');
   await expect(page.locator('#strip-message')).toContainText('NO room over', { timeout: 4000 });
 });
+
+// ── THE ROOFS ───────────────────────────────────────────────────────────────
+//
+// A SINGLE-STOREY GARAGE BESIDE A 2 STOREY BEARS ITS ROOF A STOREY LOWER, and
+// the format already carries that: cut-view.js's roofBaseElev bears a roof on
+// the full wall stack UNLESS it holds `garage: true` and a real
+// `plateHeightFt`, in which case it bears at the first floor's top plus the
+// plate. Movie, 19 Sep, confirming the reading: "the front of garage roof is
+// lower yes your right".
+//
+// THE HEIGHT IS ASKED OF THE PAGE'S OWN ARITHMETIC, never recomputed here. A
+// spec that worked out where a roof ought to bear would be a second home for
+// the rule, free to agree with a broken page. sectionLevelStack builds the
+// stack and roofBaseElev answers, both out of cut-view.js; this file only
+// hands them the drawing.
+const cutStack = page => page.evaluate(async bucket => {
+  const file = await window.SharedFileStore.loadSharedFile(bucket);
+  const raw = JSON.parse(await file.text());
+  const LV = window.DraftLayerViews, LA = window.DraftLevelAssembly;
+  const CV = window.DraftCutView;
+  const assemblyFor = id => LA.normaliseLevelAssembly(
+    (raw.levelAssemblies || {})[id], LA.levelRole(id));
+  // The inputs sectionLevelStack reads, written the way MODEL.html's own
+  // cutEnv writes them -- one line each, over the same two modules. The last
+  // two are for the FOUNDATION half of the stack, which the roofs above do
+  // not use but the builder insists on having.
+  const env = {
+    floorLevels: () => LV.floorLevels(raw.levels),
+    levelAssembly: id => assemblyFor(id),
+    levelFloorFt: id => LA.levelFloorFt(assemblyFor(id)),
+    levelWallTopFt: (id, view = 'plan') =>
+      LA.levelWallTopFt(raw.walls || [], id, view),
+    footingWidthIn: id => assemblyFor(id).footingWidthIn,
+  };
+  const stack = CV.sectionLevelStack(env);
+  const roofs = raw.roofs || [];
+  const base = roof => CV.roofBaseElev(roof, stack, {});
+  const garage = roofs.filter(r => r.garage === true);
+  const house = roofs.filter(r => r.garage !== true);
+  return {
+    roofs: roofs.length,
+    garageRoofs: garage.length,
+    houseRoofs: house.length,
+    storeys: stack.floors.length,
+    // The two bases, and the height of one storey read off the SAME stack --
+    // so the comparison below quotes no arithmetic of its own.
+    garageBase: garage.length ? base(garage[0]) : null,
+    houseBase: house.length ? base(house[0]) : null,
+    oneStorey: stack.floors.length > 1
+      ? stack.floors[1].wallTop - stack.floors[0].wallTop : 0,
+    // The top of the LOWEST storey's walls -- the ones a single-storey
+    // garage actually stands on, whatever the house does above it.
+    mainWallTop: stack.floors[0].wallTop,
+    bearing: stack.bearing,
+    plates: garage.map(r => r.plateHeightFt),
+    mainWallHeight: assemblyFor(3).wallHeightFt,
+  };
+}, BUCKET);
+
+test('the garage roof bears on the garage-s own walls, under either house', async ({ page }) => {
+  // THE WHOLE POINT OF THE PLATE, stated as the thing a builder would say: a
+  // roof sits on the walls holding it up. The garage is a single storey under
+  // both designs, so its roof bears on the lowest storey's wall top in both --
+  // and that is a stronger claim than either "same as the house" or "lower
+  // than the house", because it names the right number rather than a
+  // relationship to another roof that might itself be wrong.
+  //
+  // IT WAS WRITTEN THE WEAKER WAY FIRST, and the weaker way was false. The
+  // first version asserted that on a bungalow the garage roof and the house
+  // roof bear together, on the reasoning that a one-storey house bears on its
+  // one storey. They do not: 8.09 against 17.24. `bearing` is the top of the
+  // TOPMOST FLOOR LEVEL IN THE STACK, and floorLevels() keeps a level because
+  // it has a floor layer view, not because anything stands on it -- so the
+  // default stack's 2ND FL puts a bungalow's house roof a phantom storey up.
+  // MODEL.dc.html does the same: _buildHouseRoof hunts down the levels for an
+  // outline but still bases the roof on stack.bearing.
+  //
+  // THAT IS NOT THIS CHANGE'S TO FIX -- it is cut-view's stack semantics and
+  // both pages share it -- but it is not going to be quietly asserted away
+  // either. What is checked here is the garage roof, which this change owns.
+  for (const entry of ['bungalow-garage', 'twoStorey-garage']) {
+    await open(page);
+    await order(page, 'bungalow', entry);
+    await saveOnNewPage(page);
+    const m = await cutStack(page);
+
+    expect(m.garageRoofs, `${entry}: the garage got a roof of its own`).toBe(1);
+    expect(m.houseRoofs, `${entry}: and the house one`).toBe(1);
+    expect(m.garageBase, `${entry}: the garage roof left its own walls`)
+      .toBeCloseTo(m.mainWallTop, 4);
+  }
+});
+
+test('a 2 STOREY-s garage roof bears one storey below the house-s', async ({ page }) => {
+  await open(page);
+  await order(page, 'bungalow', 'twoStorey-garage');
+  await saveOnNewPage(page);
+  const m = await cutStack(page);
+
+  expect(m.storeys, 'the fixture has two storeys to tell apart').toBe(2);
+  expect(m.garageRoofs).toBe(1);
+  expect(m.houseRoofs).toBe(1);
+  // EXACTLY ONE STOREY, and the storey is measured off the same stack that
+  // placed the roofs -- not a number typed into this file.
+  expect(m.houseBase - m.garageBase,
+    'the garage roof did not drop a storey below the house-s')
+    .toBeCloseTo(m.oneStorey, 4);
+  // AND IT IS A DROP, not a coincidence of two zeroes.
+  expect(m.oneStorey, 'a storey has height, so the check above says something')
+    .toBeGreaterThan(6);
+});
+
+test('the garage roof takes its plate from the storey it stands on', async ({ page }) => {
+  // NOT A TYPED NUMBER. The plate is what makes the drop the right size, and
+  // a literal here would pass on a page that had stopped asking the assembly.
+  await open(page);
+  await order(page, 'bungalow', 'twoStorey-garage');
+  await saveOnNewPage(page);
+  const m = await cutStack(page);
+
+  expect(m.plates.length, 'there is a garage roof to read a plate off').toBe(1);
+  // A REAL NUMBER FIRST: drawing-format.js reads a stored null as a plate of
+  // ZERO, which bears the garage roof on the slab instead of on its walls --
+  // a roof at ground level, which looks like a missing roof. Asked before the
+  // comparison so a missing plate reports itself rather than throwing inside
+  // toBeCloseTo.
+  expect(Number.isFinite(m.plates[0]), 'the garage roof carries no plate at all')
+    .toBe(true);
+  expect(m.plates[0], 'the plate is the main floor-s own wall height')
+    .toBeCloseTo(m.mainWallHeight, 4);
+});
+
+test('the roofs meet the house with gables, not with eaves running into a wall', async ({ page }) => {
+  // AN EAVE AGAINST THE HOUSE runs the roof plane into the house wall; a
+  // gable cuts it vertically at the wall, which is what the wall is there to
+  // meet. MODEL.dc.html's _buildGarageRoof makes the same call through the
+  // same test -- an edge lying on the house outline.
+  await open(page);
+  await order(page, 'bungalow', 'bungalow-garage');
+  await saveOnNewPage(page);
+  const saved = await savedFile(page);
+
+  const garageRoof = (saved.roofs || []).find(r => r.garage === true);
+  const houseRoof = (saved.roofs || []).find(r => r.garage !== true);
+  expect(garageRoof, 'there is a garage roof').toBeTruthy();
+
+  // THE GARAGE'S TWO SHARED EDGES, and it is TWO -- the 20 ft along the
+  // house front and the 1 ft tie down its right wall. The tie is the one
+  // nobody would report, and it is the reason this counts rather than
+  // asserting "at least one".
+  const gables = (garageRoof.edges || []).filter(e => e === 'gable').length;
+  expect(gables, 'the garage roof meets the house on its two shared edges').toBe(2);
+
+  // THE CONTROL: the house roof touches nothing, so every edge of it is an
+  // eave. Without this, "2 gables" is also satisfied by a page that gables
+  // edges at random.
+  expect((houseRoof.edges || []).every(e => e === 'eave'),
+    'the house roof is all eaves, having nothing to meet').toBe(true);
+});
+
+test('2 STOREY + GARAGE + ROOM OVER roofs all three, and none of them indoors', async ({ page }) => {
+  await open(page);
+  await order(page, 'bungalow', 'twoStorey-over');
+  await saveOnNewPage(page);
+  const saved = await savedFile(page);
+  const m = await cutStack(page);
+
+  // THREE ROOFS, THREE HEIGHTS IN TWO GROUPS: the house and the room bear on
+  // the full stack, the garage stub a storey below. Movie's own description
+  // of the shape -- "so the front of the garage will have some roof on the
+  // main floor area".
+  expect(m.roofs, 'the house, the room over, and the stub in front of it').toBe(3);
+  expect(m.garageRoofs, 'only the stub is a garage roof').toBe(1);
+  expect(m.houseBase - m.garageBase, 'and only it drops a storey')
+    .toBeCloseTo(m.oneStorey, 4);
+
+  // THE ROOM'S ROOF IS NOT FLAGGED. The room IS the second storey, so a
+  // garage flag on it would drop it a storey and roof the room at the height
+  // of its own floor.
+  const stub = (saved.roofs || []).find(r => r.garage === true);
+  const overRoof = (saved.roofs || [])
+    .find(r => r.garage !== true && Number(r.sourceLevelId) === 5);
+  expect(overRoof, 'the room over the garage got a roof').toBeTruthy();
+
+  // NO ROOF UNDER A FLOOR. The stub must stop where the room begins: a sheet
+  // reaching back under the room would be a roof inside the building. Read as
+  // a Z overlap of the two footprints, since both span the garage's width.
+  const zSpan = roof => ({
+    lo: Math.min(...roof.points.map(p => p.z)),
+    hi: Math.max(...roof.points.map(p => p.z)),
+  });
+  const a = zSpan(stub), b = zSpan(overRoof);
+  const overlap = Math.min(a.hi, b.hi) - Math.max(a.lo, b.lo);
+  // The two roofs each carry an overhang, so their sheets are MEANT to lap at
+  // the join. What they must not do is lap by a room's length.
+  expect(overlap, 'the garage roof reaches back under the room over it')
+    .toBeLessThan(2 * 2 + 0.01);
+
+  // EVERY ROOF SURVIVES THE RELOAD. drawing-format.js drops what it cannot
+  // place, and this page has no serializer between the push and the file.
+  const kept = await page.evaluate(async bucket => {
+    const file = await window.SharedFileStore.loadSharedFile(bucket);
+    const raw = JSON.parse(await file.text());
+    const F = window.DraftDrawingFormat;
+    const levelIds = new Set((raw.levels || []).map(l => Number(l.id)));
+    const back = F.roofs(raw.roofs, levelIds);
+    return { wrote: (raw.roofs || []).length, keeps: back.length,
+      garageKept: back.filter(r => r.garage === true).length,
+      platesKept: back.filter(r => Number.isFinite(r.plateHeightFt)).length };
+  }, BUCKET);
+  expect(kept.keeps, 'nothing was written that the reload loses').toBe(kept.wrote);
+  expect(kept.garageKept, 'and the garage flag came back').toBe(1);
+  expect(kept.platesKept, 'and so did the plate that makes it drop').toBe(1);
+});
