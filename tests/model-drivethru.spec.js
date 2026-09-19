@@ -113,6 +113,49 @@ test('the foot bar: PROJECT and MODEL left, the bone in the middle, the sheets r
     await expect(page.locator('#sheet-row [data-page="estimates"]')).toBeDisabled();
   });
 
+// THE QUIET WAY OUT TO THE CONSTRUCTION DETAILS. Movie, 19 Sep: "on the
+// bottom of the drivethru menu area (where display area is) we should put a
+// button to the PROJECT area that says 'CLICK HERE TO GO OVER THE
+// CONSTRUCTION DETAILS / SECTIONS FOR YOUR PROJECT'", then, before anything
+// was built: "make it smaller text like don't draw attention to it, it will
+// just be there for people who want to use it".
+//
+// QUIET IS THE REQUIREMENT, so quiet is what is measured -- smaller AND
+// dimmer than the line it sits under, read off the computed style rather
+// than trusted to a stylesheet nobody re-reads. A second call to action
+// beside the bone would compete with the one thing this board is for.
+test('the drive-thru offers the construction details without competing with the bone',
+  async ({ page }) => {
+    await openPage(page);
+    await h.openDriveThru(page);
+
+    const link = page.locator('#dt-project');
+    await expect(link).toBeVisible();
+    await expect(link).toHaveText(/CONSTRUCTION DETAILS/);
+    // A PLACE YOU GO IS A LINK, the rule the page row at the foot already
+    // teaches. A button that navigated would be a third control on this page
+    // pretending to be a press when it is a door.
+    await expect(link).toHaveAttribute('href', './PROJECT.html');
+
+    const read = sel => page.locator(sel).evaluate(el => {
+      const css = getComputedStyle(el);
+      return { size: parseFloat(css.fontSize), opacity: parseFloat(css.opacity),
+        events: css.pointerEvents };
+    });
+    const note = await read('#dt-note');
+    const out = await read('#dt-project');
+    expect(out.size, `the way out is ${out.size}px against the note's `
+      + `${note.size}px -- it was asked to be smaller`).toBeLessThan(note.size);
+    expect(out.opacity, 'and dimmer, so it does not read as the next step')
+      .toBeLessThan(note.opacity);
+
+    // THE SCREEN IS pointer-events:none so the board behind it stays a
+    // picture. This line has to take its press back, and it is the only
+    // thing in there that does.
+    expect(out.events).toBe('auto');
+    expect((await read('#dt-screen')).events).toBe('none');
+  });
+
 test('the sign rises from the foot and covers the bone', async ({ page }) => {
   await openPage(page);
   await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');

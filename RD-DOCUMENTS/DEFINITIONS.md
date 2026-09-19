@@ -766,6 +766,32 @@ An answer nobody gave, filled from the standing defaults **and named in the
 order**. A default that is not disclosed is a decision taken behind someone's
 back.
 
+### PROPERTIES vs CONSTRUCTION DETAILS
+
+**Movie ruled it on himself, 19 Sep**, having used the first word for the
+second thing an hour earlier: *"when i said house PROPERTIES i might have used
+the wrong word - properties is associated with the OBJECTS, the house
+Construction Details is more appropriate name for the PROJECT information"*.
+
+| | belongs to | lives in | edited in |
+|---|---|---|---|
+| **PROPERTIES** | ONE OBJECT the drafter selected | the object's own record — a wall's `wallType`, `refLine`, `baseHeight`, `topHeight` | `#props-slot`, left rail, routed by `SELECTION_PANELS` off the selection |
+| **CONSTRUCTION DETAILS** | THE PROJECT | `drawing.levelAssemblies` — `wallHeightFt`, `joistDepthIn`, `slabThicknessIn`, the footings | `PROJECT.html`, `setAssembly` (`:528`), the only writer of that key |
+
+**Why it collided.** They are the same kind of fact about two different
+subjects — a height, a thickness, an assembly id — and one is the DEFAULT the
+other starts from. `MODEL.html` reads `levelAssemblies` in exactly two places
+(`:3578`, `:5218`) and both are reads; the numbers flow one way, into a wall
+when it is drawn, and never back. So a drafter looking at 8'-1 1/2" on a wall
+and 8'-1 1/2" in PROJECT is looking at two records that agree by history
+rather than by rule, and calling both of them "properties" hides exactly that.
+
+**Say instead.** PROPERTIES for the box that opens when something is selected,
+and CONSTRUCTION DETAILS for everything PROJECT holds. The drive-thru's quiet
+link out says the second (`#dt-project`), and the bone's unbuilt second press
+must say it too — Movie's own phrasing for that press, "REQUEST TO CHANGE
+HOUSE PROPERTIES", is the wording this entry retires.
+
 ---
 
 ## Drawing

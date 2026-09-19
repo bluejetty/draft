@@ -647,8 +647,22 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // list has to account for.
           // SETTINGS and STANDARDS join them: destinations in the top bar,
           // and links for the same reason PROJECT is one.
+          // AND THE DRIVE-THRU'S QUIET WAY OUT (Movie, 19 Sep). It is a
+          // DESTINATION, which is why it is an anchor and not a button --
+          // the page row already teaches that a place you go is a link. It
+          // draws nothing and builds nothing, so no absence row moves; the
+          // board's own check measures the thing Movie actually asked for,
+          // which is that it stays quieter than the line above it.
+          //
+          // CONSTRUCTION DETAILS, NOT PROPERTIES, and that distinction is
+          // now a ruling rather than a wording choice -- Movie, same day:
+          // "properties is associated with the OBJECTS, the house
+          // Construction Details is more appropriate name for the PROJECT
+          // information". RD-DOCUMENTS/DEFINITIONS.md carries it.
           anchors: ['PROJECT', 'CONSTRUCTION LAYOUT', 'SPECIFICATIONS',
-            'SETTINGS', 'STANDARDS'].sort(),
+            'SETTINGS', 'STANDARDS',
+            'CLICK HERE TO GO OVER THE CONSTRUCTION DETAILS / SECTIONS FOR YOUR PROJECT',
+          ].sort(),
           selects: ['file-ext'],
           // THE LENGTH BOX and the SAVE AS name, plus ONE file input -- the
           // drawing picker OPEN hangs on. It is named here rather than

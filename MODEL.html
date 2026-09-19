@@ -741,6 +741,15 @@
      screen it is printed on. */
   #dt-line { font-size:clamp(11px, 1.9vw, 17px); font-weight:600; }
   #dt-note { font-size:clamp(9px, 1.4vw, 14px); opacity:0.7; }
+  /* SMALLER THAN THE NOTE AND DIMMER, at every width -- the ceilings and the
+     floors both step down, so there is no sheet size where this line grows
+     into the one above it. The screen is pointer-events:none so that the
+     board behind it stays a picture; this line takes its press back, and it
+     is the only thing in there that does. */
+  #dt-project { pointer-events:auto; margin-top:2px;
+    font-size:clamp(7px, 1vw, 10px); opacity:0.55; letter-spacing:0.06em;
+    color:inherit; text-decoration:none; line-height:1.25; }
+  #dt-project:hover { opacity:0.95; text-decoration:underline; }
   /* The tile strip: the house types, on the board's own shelf. */
   #dt-tiles { position:absolute; left:9.5%; top:37%; width:81%; height:38.4%;
     box-sizing:border-box; display:flex; flex-direction:column;
@@ -1668,6 +1677,33 @@
     <div id="dt-screen" aria-live="polite">
       <div id="dt-line" data-drivethru-line></div>
       <div id="dt-note" data-drivethru-note></div>
+      <!-- THE WAY OUT FOR THE DRAFTER WHO WANTS THE NUMBERS. Movie, 19 Sep:
+           "on the bottom of the drivethru menu area (where display area is)
+           we should put a button to the PROJECT area that says 'CLICK HERE
+           TO GO OVER THE CONSTRUCTION DETAILS / SECTIONS FOR YOUR PROJECT'",
+           and immediately after: "make it smaller text like don't draw
+           attention to it, it will just be there for people who want to use
+           it".
+
+           SO IT IS DELIBERATELY QUIET, and that is the requirement rather
+           than a style note: this board's job is to get a house built in one
+           press, and a second call to action beside the bone would compete
+           with the one thing it is for. Smaller than the note above it,
+           dimmed, and last.
+
+           A LINK, NOT A BUTTON, because PROJECT.html is a PLACE. The page row
+           at the foot already teaches that a place you go is a link; a button
+           that navigates would be the third thing on this page pretending to
+           be a press when it is a door.
+
+           OUTSIDE aria-live's USEFUL RANGE but inside its element, which is
+           accepted: the screen announces what Gruff says, and this line never
+           changes, so it is announced once when the board rises and not
+           again. Moving it out of the screen to avoid that would put it on
+           the board's artwork, where it has no dark ground to sit on. -->
+      <a id="dt-project" data-drivethru-project href="./PROJECT.html"
+        title="The project: wall and floor assemblies, heights, and the sections they make"
+        >CLICK HERE TO GO OVER THE CONSTRUCTION DETAILS / SECTIONS FOR YOUR PROJECT</a>
     </div>
     <div id="dt-tiles" data-drivethru-tiles>
       <div id="build-bar" data-build-bar hidden>

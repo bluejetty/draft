@@ -234,6 +234,97 @@ test('a wall height set on the PROJECT page lands in the saved assembly', async 
   expect(saved.levelAssemblies['3'].wallHeightFt).toBeCloseTo((9 * 12 + 2) / 12, 5);
 });
 
+// AND THE WALLS ALREADY STANDING ON THAT HEIGHT COME UP WITH IT.
+//
+// Movie, 19 Sep: "if the floor or ceiling is the same height as the DEFAULT,
+// if they change the PROJECT DEFAULT, also change those heights to match",
+// and in the same breath, about the rest: "(the user may need to manually
+// change the 'previously adjusted' height".
+//
+// UNTIL NOW THE NUMBER WENT ONE WAY. A wall's top is copied in at the moment
+// it is drawn, from its storey's wallHeightFt, and never looked at again --
+// on BOTH pages -- so raising MAIN FL moved nothing already on the sheet and
+// the drafter's only remedy was to redraw the house.
+//
+// THE ARITHMETIC IS NOT TESTED HERE. wallsFollowingHeights is a pure function
+// in level-assembly.js with proto/wall-height-follow-harness.js on it: twelve
+// checks, seven mutations, including the one that caught the first draft
+// dragging the walls of a storey this page has never heard of. What THIS
+// measures is the wiring -- that PROJECT's save actually calls it, against
+// the file it just re-read, and that the result reaches the store.
+test('the walls that were standing on the storey-s height come up with it',
+  async ({ page }) => {
+    await h.openModel(page);
+
+    // A FIXTURE, NOT THE STARTER HOUSE, and the heights are written out
+    // rather than read off the office default: the claim is "8 became 9'-2"
+    // and 10 did not", and a fixture that borrowed whatever the module
+    // currently defaults to would make the check depend on a number it is
+    // not about. ONE WALL AT 10 so "they all moved" and "the ones on the
+    // storey-s height moved" cannot be the same measurement.
+    const FIXTURE = {
+      version: 1,
+      levels: [
+        { id: 7, name: 'ROOF', elev: 0 },
+        { id: 5, name: '2ND FL', elev: 9 },
+        { id: 3, name: 'MAIN FL', elev: 0 },
+        { id: 1, name: 'FOUNDATION', elev: -8 },
+      ],
+      activeLevelIdx: 3,
+      levelAssemblies: { 3: { wallHeightFt: 8 }, 5: { wallHeightFt: 8 } },
+      walls: [
+        { id: 1, levelId: 3, view: 'plan', wallType: 'stud_2x6',
+          baseHeight: 0, topHeight: 8, refLine: 'center',
+          start: { x: 0, z: 0 }, end: { x: 20, z: 0 } },
+        { id: 2, levelId: 3, view: 'plan', wallType: 'stud_2x6',
+          baseHeight: 0, topHeight: 8, refLine: 'center',
+          start: { x: 20, z: 0 }, end: { x: 20, z: 20 } },
+        { id: 3, levelId: 3, view: 'plan', wallType: 'stud_2x6',
+          baseHeight: 0, topHeight: 10, refLine: 'center',
+          start: { x: 20, z: 20 }, end: { x: 0, z: 20 } },
+        { id: 4, levelId: 5, view: 'plan', wallType: 'stud_2x6',
+          baseHeight: 0, topHeight: 8, refLine: 'center',
+          start: { x: 0, z: 0 }, end: { x: 20, z: 0 } },
+      ],
+      lines: [], floors: [], roofs: [], fenestrations: [], dimensions: [],
+      outlines: [], shapes: [], surfaceOpenings: [], stairs: [], notes: [],
+      roomTags: [], columns: [], beams: [], boneyardOutlines: [],
+      boneyardShelves: [], groups: [], levelLocks: [], underlays: [],
+    };
+    await page.evaluate(async ({ bucket, d }) => {
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(d)], 'drawing.json',
+          { type: 'application/json' }), bucket);
+    }, { bucket: 'model-drawing', d: FIXTURE });
+
+    await page.goto('/PROJECT.html');
+    await expect(page.locator('[data-detail-input="pitch"]')).toBeVisible();
+    await commitDetail(page, 'wallHeight-3', `9'-2"`);
+    await expect(page.locator('#status')).toContainText('saved');
+
+    const after = await h.savedDrawing(page);
+    const wantFt = (9 * 12 + 2) / 12;
+    expect(after.levelAssemblies['3'].wallHeightFt).toBeCloseTo(wantFt, 5);
+
+    const top = id => after.walls.find(w => Number(w.id) === id).topHeight;
+    expect(top(1), 'a wall standing on the storey-s height did not come up')
+      .toBeCloseTo(wantFt, 5);
+    expect(top(2)).toBeCloseTo(wantFt, 5);
+    expect(top(3),
+      'a wall the drafter set himself is his -- the default leaves it behind, '
+      + 'which is what WALL PROPERTIES is for')
+      .toBe(10);
+    expect(top(4), 'a storey nobody touched keeps every wall on it').toBe(8);
+
+    // AND NOTHING ELSE IN THE FILE MOVED. This page writes its own keys onto
+    // a freshly re-read file precisely so a house drawn in the Model Space
+    // beside an open PROJECT tab is not flattened; the walls are the first
+    // thing it has ever touched outside those keys, so the rest is asserted.
+    expect(after.walls.map(w => `${w.id}:${w.start.x},${w.end.x}:${w.wallType}`))
+      .toEqual(FIXTURE.walls.map(w => `${w.id}:${w.start.x},${w.end.x}:${w.wallType}`));
+    expect(after.levels).toEqual(FIXTURE.levels);
+  });
+
 // A ZONE HEIGHT EDIT HAS TO REDRAW, and until 5 Sep it did not. Movie's whole
 // point about the attached garage: "it's 'quasi attached' only because it will
 // move up and down as the user enters new heights for it". The garage section
