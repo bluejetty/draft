@@ -298,6 +298,39 @@ if (!window.DraftPremadePlans) {
     opening(4, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),
   ];
 
+  // ── WHAT THE GARAGE'S OWN ROOF COVERS ────────────────────────────────────
+  //
+  // The whole garage, usually. NOT where a room sits on it: a roof over the
+  // part the room stands on would be a roof INSIDE the building, under a
+  // floor. So the garage roof takes what the room leaves, and on the designs
+  // with no room that is the garage entire.
+  //
+  // THE STUB IS THE THING MOVIE ASKED FOR, not a remainder. 19 Sep: "so the
+  // front of the garage will have some roof on the main floor area". The room
+  // stops two thirds along on purpose, and this is the third it stops short
+  // of -- the piece of single-storey roof at the garage door end that gives
+  // the front its step down.
+  //
+  // IT IS CUT FROM THE GARAGE'S OWN NUMBERS rather than clipped out of the
+  // garage polygon by the page. The design knows where the room ends because
+  // the design put it there, and a boolean subtraction is a second, weaker
+  // answer to a question that is already answered here.
+  const garageRoofLoop = ({ overGarage = false } = {}) => {
+    const loop = garageLoop();
+    if (!overGarage) return loop;
+    const houseRight = WIDTH_FT / 2;
+    const houseFront = DEPTH_FT / 2;
+    const right = houseRight + GARAGE_PAST_FT;
+    const left = right - GARAGE_WIDTH_FT;
+    // FROM WHERE THE ROOM STOPS TO WHERE THE GARAGE DOES. The room's front
+    // wall is the stub's back one -- they meet on that line, which is what
+    // makes the upper roof's edge and the lower roof's edge the same line
+    // rather than two lines a few inches apart.
+    const back = houseFront + OVER_GARAGE_LENGTH_FT;
+    const front = houseFront + GARAGE_DEPTH_FT;
+    return [pt(left, back), pt(right, back), pt(right, front), pt(left, front)];
+  };
+
   // ── 2 STOREY ─────────────────────────────────────────────────────────────
   //
   // Movie, 19 Sep: "make the 2 storey the same for now sizewise". So it is the
@@ -331,6 +364,11 @@ if (!window.DraftPremadePlans) {
     storeys: 2,
     garage: garage ? garageLoop() : null,
     garageOpenings: garage ? garageOpenings() : null,
+    // WHAT THE GARAGE'S OWN ROOF COVERS, which is the garage itself unless a
+    // room sits on it -- see garageRoofLoop. Carried as its own loop rather
+    // than left for the committer to work out, because the design is where
+    // the room's length is decided and so it is where the leftover is known.
+    garageRoof: garage ? garageRoofLoop({ overGarage }) : null,
     // THE ROOM OVER IS ITS OWN BODY, on its own level. It is not the garage
     // raised twice and not the upper storey stretched: level-assembly.js
     // gives the over-garage level its own role and a deeper joist, because a
@@ -354,6 +392,11 @@ if (!window.DraftPremadePlans) {
     storeys: 1,
     garage: garage ? garageLoop() : null,
     garageOpenings: garage ? garageOpenings() : null,
+    // A BUNGALOW'S GARAGE ROOF COVERS THE WHOLE GARAGE: nothing sits on it.
+    // Said through the same helper the 2 STOREY uses rather than written as
+    // `garageLoop()` again -- one home for "what the garage roof covers", so
+    // the day that answer changes it changes once.
+    garageRoof: garage ? garageRoofLoop() : null,
   });
 
   // WHAT THE BOARD CAN ACTUALLY BUILD, keyed by build-menu.js entry id. A

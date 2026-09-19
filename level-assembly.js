@@ -144,6 +144,52 @@ if (!window.DraftLevelAssembly) {
   const ROLE_BY_LEVEL_ID = Object.freeze({ 1: 'foundation', 2: 'entry', 4: 'overGarage' });
   const levelRole = levelId => ROLE_BY_LEVEL_ID[levelId] || 'floor';
 
+  // ── WHAT A LEVEL IS CALLED ON SCREEN ────────────────────────────────────
+  //
+  // Movie, 19 Sep: "lets name them 0.5 MAIN FL / 1 MAIN FL / 1.5 2ND FL /
+  // 2 2ND FL --- this will actually make most sense". The number is WHERE the
+  // level sits and the name is WHICH FLOOR IT BELONGS TO, so a bilevel's
+  // entry reads as a partial main floor and the room over a garage as a lower
+  // second floor -- which is what he called it when he ruled the room over a
+  // 2 STOREY garage onto 2ND FL: "the 'over garage' layer is for bilevels
+  // when that would be a 'lower' 2nd floor".
+  //
+  // ONLY THE STOREYS ARE NUMBERED. Movie, same conversation, on FOUNDATION,
+  // ROOF, SITE and BONEYARD: those carry no number, because a number here
+  // means a floor to stand on and they are not floors. A level a drafter adds
+  // himself gets none either -- _addLevel hands out ids from 9 up, which are
+  // outside this scheme entirely.
+  //
+  // DERIVED, NEVER STORED, and that is not a style preference. A level is a
+  // RECORD with a `name`, so changing the stored strings would leave every
+  // file made before today reading MAIN FL while a new one read 1 MAIN FL --
+  // the same level under two names depending on when it was saved. It would
+  // also break the lookups that find a level BY name. Derived, a file saved
+  // either side of this change is byte-identical, `levels.find(l => l.name
+  // === 'MAIN FL')` goes on working, and a locator matching 'MAIN FL' still
+  // matches because '1 MAIN FL' contains it.
+  //
+  // THE ID IS THE IDENTITY. These four ids are constants the pages share and
+  // never allocate, so id 2 is the bilevel entry and id 4 the over-garage
+  // wherever they turn up. The stored name is honoured where it says
+  // something this table does not know -- a drawing whose id 3 is called
+  // GROUND reads '1 GROUND', not '1 MAIN FL' -- so the rename never silently
+  // eats a word somebody chose.
+  const STOREY_NUMBER = Object.freeze({ 2: '0.5', 3: '1', 4: '1.5', 5: '2' });
+  const STOREY_FLOOR = Object.freeze({ 2: 'MAIN FL', 3: 'MAIN FL', 4: '2ND FL', 5: '2ND FL' });
+  // What these levels are called in a file today, which is the only thing
+  // this table is allowed to replace.
+  const STOREY_STORED = Object.freeze({ 2: 'ENTRY', 3: 'MAIN FL', 4: 'OVER GARAGE', 5: '2ND FL' });
+
+  const levelLabel = (levelId, storedName) => {
+    const number = STOREY_NUMBER[levelId];
+    const stored = String(storedName == null ? '' : storedName).trim();
+    if (!number) return stored || `level ${levelId}`;
+    const floor = (!stored || stored === STOREY_STORED[levelId])
+      ? STOREY_FLOOR[levelId] : stored;
+    return `${number} ${floor}`;
+  };
+
   // Only what the role CHANGES. Everything unlisted stays the house default,
   // so a role can never quietly re-answer a field it has no opinion about.
   // ONLY WHAT COMMANDER DEVIN RULED, which is the half-levels and nothing
@@ -263,6 +309,8 @@ if (!window.DraftLevelAssembly) {
     defaultLevelAssembly,
     normaliseLevelAssembly,
     levelRole,
+    levelLabel,
+    STOREY_NUMBER,
     LEVEL_ROLES,
     ROLE_BY_LEVEL_ID,
     FOUNDATION_POUR_FT,

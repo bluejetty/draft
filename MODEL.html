@@ -3526,6 +3526,13 @@
   // module's own comment says the TABLE had one home while the LOOKUP had
   // four, and that is how #325's role-less callers happened. Rolling a fifth
   // copy here would have re-made that bug in the file that warns about it.
+  // WHAT A LEVEL IS CALLED ON SCREEN, asked of level-assembly.js rather than
+  // read off the record. The stored `name` is what the file holds; this is
+  // what the drafter reads -- "1 MAIN FL", "1.5 2ND FL" -- and the two are
+  // deliberately different so no file changes and no lookup by stored name
+  // breaks. See levelLabel's own note for why it is derived.
+  const levelLabel = (id, name) => window.DraftLevelAssembly.levelLabel(id, name);
+
   const assemblyFor = id => window.DraftLevelAssembly
     .levelAssemblyFor(drawing?.levelAssemblies, id);
 
@@ -4054,8 +4061,17 @@
     updateReadout();
   };
 
-  const levelName = () => (drawing?.levels || [])
-    .find(level => Number(level.id) === activeLevelId())?.name || 'level';
+  // THE NAME THE DRAFTER READS, which is the derived one -- the same string
+  // the level card shows. The readout and the panel are two instruments on one
+  // piece of state, and this file has already been bitten once by letting two
+  // of them answer differently (see the LEVELS panel's agreement check): a
+  // card reading "1 MAIN FL" beside a readout reading "MAIN FL" is two names
+  // for one level on screen at the same time.
+  const levelName = () => {
+    const level = (drawing?.levels || [])
+      .find(entry => Number(entry.id) === activeLevelId());
+    return level ? levelLabel(level.id, level.name) : 'level';
+  };
 
   // THE READOUT IS THE ONLY INSTRUMENT ON THIS PAGE. Movie, 3 Sep: keep adding
   // to it, never prune -- he decides later what earns its place. So counts are
@@ -5392,8 +5408,13 @@
       // select is gone: these rows are THE way to change level, and a name
       // that once collided with the select is the name every spec drives.
       name.dataset.levelRow = String(level.id);
-      name.textContent = level.name || `level ${level.id}`;
-      name.title = `Switch to ${level.name || level.id}`;
+      // THE NUMBERED NAME, derived rather than stored -- level-assembly.js's
+      // levelLabel. The record keeps whatever it was saved with, so a file is
+      // byte-identical either side of this and every lookup by stored name
+      // goes on working; only what the drafter READS changes.
+      const label = levelLabel(level.id, level.name);
+      name.textContent = label;
+      name.title = `Switch to ${label}`;
       name.addEventListener('click', () => goToLevel(level.id));
 
       const del = document.createElement('button');
@@ -5401,7 +5422,7 @@
       del.className = 'lv-del';
       del.dataset.deleteLevel = String(level.id);
       del.textContent = '×';
-      del.title = `Delete ${level.name || level.id}`;
+      del.title = `Delete ${label}`;
       del.addEventListener('click', event => {
         event.stopPropagation();
         deleteLevel(level.id);
@@ -5779,8 +5800,9 @@
         planSeat(level, 'foundation', 'FOUNDATION');
         planSeat(level, 'plan', 'BASEMENT (WALLS)');
       } else {
-        planSeat(level, 'plan', `${level.name} PLAN (WALLS)`);
-        planSeat(level, 'floor', `${level.name} LAYOUT (FLOOR)`);
+        const seatName = levelLabel(level.id, level.name);
+        planSeat(level, 'plan', `${seatName} PLAN (WALLS)`);
+        planSeat(level, 'floor', `${seatName} LAYOUT (FLOOR)`);
       }
     });
     // SECTIONS FILL ACROSS, with two chairs standing ready before anything is
@@ -9397,25 +9419,60 @@
   // on the ROOF level. Every edge starts an EAVE, which is _buildHouseRoof's
   // own default -- the drafter flips the gables with the ROOF tool, and this
   // page already has that gesture.
-  const raiseRoofOver = loop => {
+  // A ROOF OVER A LOOP, at the height the body under it bears at.
+  //
+  // TWO ROOFS OVER ONE BUILDING SIT AT TWO HEIGHTS, and the format already
+  // says how. cut-view.js's roofBaseElev bears a roof on the full wall stack
+  // UNLESS it carries `garage: true` and a real `plateHeightFt`, in which case
+  // it bears at the first floor's top plus that plate -- so a single-storey
+  // garage beside a 2 STOREY keeps a single-storey roof instead of a sheet
+  // sailing out of the upper wall. drawing-format.js round-trips both fields,
+  // so nothing about the file has to change for this.
+  //
+  // `plateHeightFt` IS A REAL NUMBER OR IT IS ABSENT. The loader reads a
+  // stored null as a plate height of ZERO, which bears a garage roof at the
+  // main-floor LINE -- on the slab, not on its walls.
+  //
+  // AND THE EDGES AGAINST THE HOUSE ARE GABLES. An eave there runs the roof
+  // plane into the house wall; a gable cuts it vertically at the wall, which
+  // is what the wall is there to meet. MODEL.dc.html's _buildGarageRoof makes
+  // the same call through the same test -- an edge lying on the house outline
+  // -- and it is edgeOnLoop here for the reason the garage's own walls use it:
+  // one rule, one home.
+  const raiseRoofOver = (loop, { garage = false, plateHeightFt = null,
+    sourceLevelId = null, against = null } = {}) => {
     const G = window.DraftGeometry2D;
-    const pts = G.offsetOutline(loop.map(pt => ({ x: pt.x, z: pt.z })), roofOverhangFt);
+    const ring = loop.map(pt => ({ x: pt.x, z: pt.z }));
+    const pts = G.offsetOutline(ring, roofOverhangFt);
     // An offset that collapses the loop is not a roof, and the record would be
     // dropped on load anyway -- present on screen, gone after a reload.
     if (!Array.isArray(pts) || pts.length < 3) return null;
+    // READ OFF THE SOURCE RING, NOT THE OFFSET ONE. The overhang moves every
+    // point outward, so an offset edge no longer lies on the house it was cut
+    // against -- asking there would find no gables at all. The two rings have
+    // the same edge count and the same order, which is what makes the answer
+    // for edge i of one the answer for edge i of the other.
+    const sharedWith = against ? G.loopSegments(against) : null;
+    const gableAt = index => {
+      if (!sharedWith || ring.length !== pts.length) return false;
+      const a = ring[index], b = ring[(index + 1) % ring.length];
+      return G.edgeOnLoop(a, b, sharedWith);
+    };
     drawing.roofs = drawing.roofs || [];
     const roof = {
       id: newDrawingItemId('roof'),
       points: pts.map(pt => ({ x: pt.x, z: pt.z })),
       levelId: ROOF_LEVEL_ID,
-      sourceLevelId: null,
+      sourceLevelId,
       sourceShapeId: null,
-      edges: pts.map(() => 'eave'),
+      edges: pts.map((_, index) => (gableAt(index) ? 'gable' : 'eave')),
       overhang: roofOverhangFt,
       pitch: roofPitch,
       fascia: ROOF_FASCIA_IN,
+      garage,
       layer: 'A-ROOF',
     };
+    if (garage && Number.isFinite(plateHeightFt)) roof.plateHeightFt = plateHeightFt;
     drawing.roofs.push(roof);
     return { list: drawing.roofs, item: roof };
   };
@@ -9559,8 +9616,51 @@
       : { walls: [], items: [] };
     extra.push(...garageConcrete.items);
 
-    const roof = levelPresent(ROOF_LEVEL_ID) ? raiseRoofOver(plan.house) : null;
-    if (roof) { extra.push(roof); parts.push('roof'); }
+    // ── AND THE ROOFS, ONE PER BODY THAT NEEDS ONE ───────────────────────
+    //
+    // NOT ONE ROOF OVER EVERYTHING. A single-storey garage beside a 2 STOREY
+    // bears its roof a whole storey lower than the house does, and the format
+    // already carries that: cut-view.js's roofBaseElev reads `garage` and
+    // `plateHeightFt` and bears such a roof at the first floor's top plus the
+    // plate instead of on the full wall stack.
+    //
+    // AND IT IS NOT A SPECIAL CASE FOR THE BUNGALOW. `bearing` is the top of
+    // the topmost wall, so on a one-storey house the flagged garage roof and
+    // an unflagged one land on the same number -- the flag changes nothing
+    // there and does the right thing beside a 2 STOREY. That agreement is
+    // checked rather than assumed.
+    const madeRoofs = [];
+    if (levelPresent(ROOF_LEVEL_ID)) {
+      madeRoofs.push(raiseRoofOver(plan.house));
+      if (plan.garageRoof) {
+        // THE PLATE IS THE STOREY THE GARAGE ACTUALLY STANDS ON, asked of the
+        // same assembly its walls were raised to rather than typed again.
+        madeRoofs.push(raiseRoofOver(plan.garageRoof, {
+          garage: true,
+          plateHeightFt: assemblyFor(levelId).wallHeightFt,
+          sourceLevelId: levelId,
+          // WHATEVER THIS ROOF WAS CUT AGAINST. With a room over the garage
+          // the stub abuts the ROOM and never reaches the house; without one
+          // the garage roof abuts the house along the two edges its walls
+          // already skip. Either way it is the body the footprint stops at.
+          against: plan.overGarage || plan.house,
+        }));
+      }
+      // THE ROOM'S OWN ROOF, at the full bearing: the room IS the second
+      // storey, so it is not a garage roof and must not carry the flag that
+      // would drop it one.
+      if (overGarageBody) {
+        madeRoofs.push(raiseRoofOver(plan.overGarage, {
+          sourceLevelId: upperStorey.id,
+          against: plan.house,
+        }));
+      }
+    }
+    const built = madeRoofs.filter(Boolean);
+    if (built.length) {
+      extra.push(...built);
+      parts.push(built.length > 1 ? `${built.length} roofs` : 'roof');
+    }
 
     undoStack.length = mark;
     undoStack.push({
@@ -9607,7 +9707,8 @@
     // whose upper half is somewhere else entirely.
     if (storeys.length > 1) parts[0] = `house on ${storeys.length} storeys`;
     sayOnStrip(`${order.entry.label} built ${storeys.length > 1 ? 'from' : 'on'} `
-      + `${storey.name || 'the main floor'}${storeys.length > 1 ? ' up' : ''}`
+      + `${levelLabel(storey.id, storey.name) || 'the main floor'}`
+      + `${storeys.length > 1 ? ' up' : ''}`
       + ` — ${parts.join(', ')}.`);
     markDirty();
     buildChrome();

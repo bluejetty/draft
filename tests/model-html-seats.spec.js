@@ -137,11 +137,19 @@ test('the rail seats the chart the old page seats', async ({ page }) => {
   //     MAIN FL PLAN (WALLS)  MAIN FL LAYOUT (FLOOR)
   //     FOUNDATION            BASEMENT (WALLS)
   //     S1                    S2
+  //
+  // THE FLOOR SEATS CARRY THE STOREY NUMBER the level cards carry, because a
+  // seat is named after its level and the level's name on screen is derived
+  // -- level-assembly.js's levelLabel. Movie, 19 Sep: "lets name them 0.5
+  // MAIN FL / 1 MAIN FL / 1.5 2ND FL / 2 2ND FL". The chart itself is
+  // unchanged: same fourteen seats, same two columns, same order. Only the
+  // words on four of them moved, and the old page's own reading is kept above
+  // so the two can still be compared line for line.
   expect(seats.map(s => s.label)).toEqual([
     'E1 · FRONT', 'E3 · BACK', 'E2 · LEFT', 'E4 · RIGHT',
     'ROOF PLAN', 'SITE PLAN',
-    '2ND FL PLAN (WALLS)', '2ND FL LAYOUT (FLOOR)',
-    'MAIN FL PLAN (WALLS)', 'MAIN FL LAYOUT (FLOOR)',
+    '2 2ND FL PLAN (WALLS)', '2 2ND FL LAYOUT (FLOOR)',
+    '1 MAIN FL PLAN (WALLS)', '1 MAIN FL LAYOUT (FLOOR)',
     'FOUNDATION', 'BASEMENT (WALLS)',
     'S1', 'S2',
   ]);
@@ -448,8 +456,16 @@ test('ADD A LEVEL AND TWO SEATS APPEAR; DELETE IT AND THEY LEAVE', async ({ page
   // AND THEY LAND IN THE RIGHT ROW, above the floor below them rather than at
   // the end: the chart is ordered by the building, not by insertion.
   const labels = added.map(s => s.label);
+  // FOUND BY SUFFIX, not by the whole label: the 2ND FL seat reads '2 2ND FL
+  // PLAN (WALLS)' now that the storey number is on it. An indexOf on the old
+  // string returns -1, and -1 < -1 is false -- so this would have gone red for
+  // the right reason today and quietly green the day ATTIC moved, which is
+  // the comparison it exists to make.
+  const seatAt = word => labels.findIndex(l => l.endsWith(word));
+  expect(seatAt('2ND FL PLAN (WALLS)'), 'there is still a 2ND FL seat to sit above')
+    .toBeGreaterThanOrEqual(0);
   expect(labels.indexOf('ATTIC PLAN (WALLS)'))
-    .toBeLessThan(labels.indexOf('2ND FL PLAN (WALLS)'));
+    .toBeLessThan(seatAt('2ND FL PLAN (WALLS)'));
 
   // DELETE IT AND THEY LEAVE, and nothing else moves.
   await page.evaluate(() => { window.confirm = () => true; });

@@ -471,6 +471,49 @@ check('every window in the room fits the edge it names, clear of both corners',
          });
          return [bad.length, 0]; });
 
+// ── WHAT THE GARAGE'S OWN ROOF COVERS ──
+//
+// A roof over the part of the garage the room stands on would be a roof
+// INSIDE the building, under a floor. So the garage roof takes what the room
+// leaves -- and on the designs with no room, that is the garage entire.
+
+check('a garage with nothing on it is roofed entire',
+  P => { const plan = P.twoStorey({ garage: true });
+         return [lengths(plan.garageRoof), lengths(plan.garage)]; });
+
+check('and the bungalow-s garage the same, through the same answer',
+  P => { const plan = P.planFor('bungalow-garage');
+         return [lengths(plan.garageRoof), lengths(plan.garage)]; });
+
+// THE STUB IS THE PIECE MOVIE ASKED FOR. 19 Sep: "so the front of the garage
+// will have some roof on the main floor area". It is checked as a JOIN rather
+// than as a depth: the room's front wall and the stub's back edge are the same
+// line, which is what stops a gap or an overlap between the two roofs.
+check('a garage with a room on it is roofed from where the room stops',
+  P => { const plan = P.twoStorey({ garage: true, overGarage: true });
+         const roof = bbox(plan.garageRoof), over = bbox(plan.overGarage);
+         return [n(roof.minZ), n(over.maxZ)]; });
+
+check('and carries on to the garage-s own far end',
+  P => { const plan = P.twoStorey({ garage: true, overGarage: true });
+         const roof = bbox(plan.garageRoof), garage = bbox(plan.garage);
+         return [n(roof.maxZ), n(garage.maxZ)]; });
+
+check('over the garage-s full width, so the step down spans the front',
+  P => { const plan = P.twoStorey({ garage: true, overGarage: true });
+         const roof = bbox(plan.garageRoof), garage = bbox(plan.garage);
+         return [`${n(roof.minX)},${n(roof.maxX)}`,
+           `${n(garage.minX)},${n(garage.maxX)}`]; });
+
+// THE ONE THAT SAYS WHY. The three above pin where the stub is; this pins
+// what it must never be -- a sheet under the floor of the room above it.
+check('and never reaches under the room, which would roof the inside of a house',
+  P => { const plan = P.twoStorey({ garage: true, overGarage: true });
+         return [overlaps(bbox(plan.garageRoof), bbox(plan.overGarage)), false]; });
+
+check('no garage, no roof over one',
+  P => [P.twoStorey({ overGarage: true }).garageRoof, null]);
+
 check('no garage, no room over it',
   P => [P.twoStorey({ overGarage: true }).overGarage, null]);
 
@@ -523,6 +566,21 @@ const MUTATIONS = [
     `  const upperOpenings = () => [
     // Front: three across the whole width, since nothing is in front of it.
     opening(2, 8, 4, 'door'),`)],
+  // THE ROOM IS FORGOTTEN WHEN THE ROOF IS CUT: the garage is roofed entire,
+  // and the sheet runs under the floor of the room standing on it.
+  ['the garage is roofed entire even with a room standing on it',
+    s2 => s2.replace('    if (!overGarage) return loop;', '    return loop;')],
+  // The stub is cut from the house instead of from where the room ends, so
+  // it reaches back under the room.
+  ['the garage roof starts at the house instead of where the room stops',
+    s2 => s2.replace('    const back = houseFront + OVER_GARAGE_LENGTH_FT;\n'
+      + '    const front = houseFront + GARAGE_DEPTH_FT;',
+      '    const back = houseFront;\n'
+      + '    const front = houseFront + GARAGE_DEPTH_FT;')],
+  // It stops short of the garage door end, leaving the front unroofed.
+  ['the garage roof stops short of the garage-s own front',
+    s2 => s2.replace('    const front = houseFront + GARAGE_DEPTH_FT;',
+      '    const front = houseFront + GARAGE_DEPTH_FT - 4;')],
   ['the room over gets a window in the wall against the house',
     s2 => s2.replace('    opening(2, OVER_GARAGE_LENGTH_FT / 2, 4, ',
       '    opening(0, OVER_GARAGE_LENGTH_FT / 2, 4, ')],
