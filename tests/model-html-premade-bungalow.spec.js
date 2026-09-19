@@ -27,10 +27,23 @@ const BUCKET = 'model-drawing';
 // An EMPTY sheet, because a premade design is what a project starts with.
 // The bone fixture's house would trip the one-house cap before anything
 // interesting happened.
+//
+// THE WHOLE LEVEL STACK, and that is not decoration. A bone press raises a
+// building ACROSS the levels -- storey walls on MAIN FL, concrete on
+// FOUNDATION, the roof on ROOF -- and drawing-format.js drops any record whose
+// levelId the drawing does not list. A fixture with MAIN FL alone would write
+// a foundation into a file that loses it on the next open, and every check
+// below would pass while measuring the page's memory rather than the drawing.
 const empty = () => ({
   version: 1,
-  levels: [{ id: 3, name: 'MAIN FL', elev: 0 }],
-  activeLevelIdx: 0,
+  levels: [
+    { id: 8, name: 'SITE', elev: 0 },
+    { id: 7, name: 'ROOF', elev: 0 },
+    { id: 5, name: '2ND FL', elev: 9 },
+    { id: 3, name: 'MAIN FL', elev: 0 },
+    { id: 1, name: 'FOUNDATION', elev: -8 },
+  ],
+  activeLevelIdx: 3,
   walls: [], lines: [], floors: [], roofs: [], fenestrations: [], dimensions: [],
   outlines: [], shapes: [], surfaceOpenings: [], stairs: [], notes: [],
   roomTags: [], columns: [], beams: [], boneyardOutlines: [], boneyardShelves: [],
@@ -86,6 +99,18 @@ const span = (points, axis) => {
   return Math.max(...values) - Math.min(...values);
 };
 
+// WALLS COUNTED BY WHERE THEY LIVE, not in total. A bone press now raises a
+// building across the stack -- studs on the storey, concrete on FOUNDATION --
+// so a bare total answers "did enough walls appear" and never "did the right
+// walls appear on the right sets". Two of the checks below used to read a
+// total and both had to change when the foundation arrived; keyed counts say
+// what changed instead of just how much.
+const wallsBy = saved => (saved?.walls || []).reduce((tally, wall) => {
+  const key = `L${wall.levelId}/${wall.view}/${wall.wallType}`;
+  tally[key] = (tally[key] || 0) + 1;
+  return tally;
+}, {});
+
 const houseOf = saved => (saved?.outlines || []).find(o => o.garage !== true) || null;
 const garageOf = saved => (saved?.outlines || []).find(o => o.garage === true) || null;
 
@@ -105,7 +130,14 @@ test('1 STOREY builds the bungalow off the window bone', async ({ page }) => {
   // A WALL ON EVERY SIDE, which is the half an outline check cannot see: the
   // ordered garage taught this page that a loop with no walls renders as a
   // house and is a guide line.
-  expect((saved.walls || []).length, 'four walls off the four sides').toBe(4);
+  //
+  // AND ON THE RIGHT SET. Movie, 19 Sep: "the current houses are missing
+  // foundation and roof you only did the main level so far it looks like".
+  // The studs go on the storey and the concrete goes on FOUNDATION, which is
+  // MODEL.dc.html's _buildHouse calling _buildHouseWalls once per level with
+  // the level and the view as arguments.
+  expect(wallsBy(saved), 'studs on the storey, concrete on FOUNDATION')
+    .toEqual({ 'L3/plan/stud_2x6': 4, 'L1/foundation/concrete_8': 4 });
 
   // 1 STOREY ON ITS OWN CARRIES NO GARAGE. Without this the plain tile could
   // hand over the tile beside it and nothing here would notice.
@@ -153,8 +185,9 @@ test('1 STOREY + GARAGE raises both bodies, and the garage is an ATTACHED one',
     // garage walls should link into the house (look at how the DC version did
     // it)". An attached garage does not raise the edges it shares with the
     // house; the next test is the one that says which, and why.
-    expect((saved.walls || []).length,
-      'both bodies were walled, the garage on the four edges it owns').toBe(8);
+    expect(wallsBy(saved), 'the house and the garage in studs, the house-s '
+      + 'foundation in concrete, and the garage on the four edges it owns')
+      .toEqual({ 'L3/plan/stud_2x6': 8, 'L1/foundation/concrete_8': 4 });
   });
 
 // THE TWO EDGES THE GARAGE DOES NOT OWN, and what happens to the doors when
@@ -427,4 +460,241 @@ test('one Ctrl+Z takes the openings back with the house', async ({ page }) => {
   // and nothing ever says the file had been wrong.
   expect(openingsOf(await savedFile(page)),
     'the openings went back with the walls they hung on').toHaveLength(0);
+});
+
+// ── THE WHOLE BUILDING, NOT ONE STOREY OF IT ─────────────────────────────
+//
+// Movie, 19 Sep, looking at a bungalow he had just ordered: "the current
+// houses are missing foundation and roof you only did the main level so far
+// it looks like". He is right, and the elevations were the visible cost.
+//
+// MODEL.dc.html:14632 `_buildHouse` is the reference -- his ruling on it is
+// "it worked decent in that version not perfect but real nice" -- and it
+// raises, from one press: walls and a floor per floor level, then FOUNDATION's
+// concrete walls, its slab and its strip footings, then the roof.
+
+// Order a design while looking at FOUNDATION, which is where the entry screen
+// leaves a drafter. That was the state Movie reported from.
+async function orderFromFoundation(page, entry = 'bungalow') {
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json',
+        { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f: empty() });
+  await page.goto('/MODEL.html?level=1&view=plan');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await order(page, 'bungalow', entry);
+  await page.keyboard.press('Escape');
+  await saveOnNewPage(page);
+  return savedFile(page);
+}
+
+test('the building goes on the lowest floor level, not the one being looked at',
+  async ({ page }) => {
+    // THE DEFECT, STATED. buildPremadePlan raised the house on
+    // onActiveLevel(), so ordering from the entry screen -- which opens on
+    // FOUNDATION -- filed the whole bungalow on level 1. Nothing said so: the
+    // walls painted, the file saved, and only the elevations showed it, by
+    // being blank.
+    const saved = await orderFromFoundation(page);
+    const studs = (saved.walls || []).filter(w => w.wallType === 'stud_2x6');
+    expect(studs.length, 'the storey was framed').toBe(4);
+    for (const wall of studs) {
+      expect(wall.levelId, 'a stud wall belongs to the storey, not the '
+        + 'foundation the drafter happened to be looking at').toBe(3);
+      expect(wall.view).toBe('plan');
+    }
+    // The control: this is not vacuous only because the order WAS placed from
+    // somewhere else. A house on level 1 is what the bug produced.
+    expect(studs.every(w => w.levelId !== 1)).toBe(true);
+  });
+
+test('it comes with its foundation — walls, slab and footings',
+  async ({ page }) => {
+    const saved = await orderFromFoundation(page);
+
+    const concrete = (saved.walls || []).filter(w => w.view === 'foundation');
+    expect(concrete.length, 'a foundation wall under every storey wall').toBe(4);
+    for (const wall of concrete) {
+      expect(wall.levelId).toBe(1);
+      // The type comes from the page's own foundation choices, never the
+      // stud default -- the two lists are DISJOINT, so this is not a near
+      // miss but a wall of the wrong kind.
+      expect(wall.wallType).toBe('concrete_8');
+    }
+
+    // THE SLAB, poured to the level's own thickness, on the FOUNDATION set.
+    const slab = (saved.floors || []).find(f => f.structure === 'slab');
+    expect(slab, 'the slab was poured').toBeTruthy();
+    expect(slab.levelId).toBe(1);
+    expect(slab.view).toBe('foundation');
+    expect(slab.thickness * 12).toBeCloseTo(3, 2);
+
+    // AND THE STOREY'S OWN FLOOR, which is the other half of _buildHouse's
+    // per-level pass and is framed, not poured.
+    const deck = (saved.floors || []).find(f => f.structure === 'floor');
+    expect(deck, 'the storey got its floor').toBeTruthy();
+    expect(deck.levelId).toBe(3);
+    expect(deck.view).toBe('floor');
+    expect(deck.thickness * 12).toBeCloseTo(12.625, 2);
+
+    // THE STRIP FOOTINGS: two rings, one outside the wall and one inside, so
+    // a four-sided house gets eight legs. They are LINES on S-FOOTING, which
+    // is what the old page writes -- not a wall and not a floor.
+    const footings = (saved.lines || []).filter(l => l.layer === 'S-FOOTING');
+    expect(footings.length, 'two rings of four').toBe(8);
+    for (const line of footings) {
+      expect(line.levelId).toBe(1);
+      expect(line.view).toBe('foundation');
+    }
+  });
+
+test('it comes with its roof, on the ROOF level', async ({ page }) => {
+  const saved = await orderFromFoundation(page);
+  const roofs = saved.roofs || [];
+  expect(roofs.length, 'one roof, not one per storey').toBe(1);
+  const roof = roofs[0];
+  // MODEL.dc.html's own number: _buildHouseRoof both looks for the footprint
+  // on level 7 and refuses a second house roof by testing `levelId === 7`.
+  expect(roof.levelId, 'the roof lives on ROOF').toBe(7);
+  expect(roof.points.length, 'one corner per corner of the house').toBe(4);
+  // EVERY EDGE AN EAVE, which is _buildHouseRoof's own default -- the drafter
+  // flips the gables with the ROOF tool, and this page has that gesture.
+  expect(roof.edges.every(e => e === 'eave'), 'all eaves to start').toBe(true);
+  // It oversails the house by the overhang, so the roof is bigger than the
+  // footprint it was cut from. Equal would mean the offset never ran.
+  const house = houseOf(saved);
+  expect(span(roof.points, 'x')).toBeGreaterThan(span(house.points, 'x'));
+});
+
+test('one footprint, not one per ring', async ({ page }) => {
+  // The foundation is the SAME loop raised again in concrete. An outline for
+  // it would be a second footprint for one building -- which the one-house
+  // cap reads as a house already built, and every count of outlines reads as
+  // two buildings.
+  const saved = await orderFromFoundation(page);
+  expect((saved.outlines || []).length, 'one building, one outline').toBe(1);
+});
+
+test('and the elevations draw', async ({ page }) => {
+  // THE WHOLE POINT, from the drafter's seat. drawElevationView looks each
+  // wall's level up in the floor stack and returns false when it collects no
+  // faces; drawCutView then prints "The cut line crosses no walls" instead of
+  // a house. All four of Movie's elevations read that.
+  //
+  // MEASURED, NOT GUESSED. With nothing built, E1 covers 0.006 of the canvas
+  // -- that is the sentence itself. With the building up: 0.028 to 0.032, a
+  // fivefold gap, so the threshold below sits clear of both ends rather than
+  // just past one measurement.
+  await orderFromFoundation(page);
+  for (const id of ['E1', 'E2', 'E3', 'E4']) {
+    await page.goto(`/MODEL.html?view=cut:${id}`);
+    await page.waitForTimeout(600);
+    const ink = await page.evaluate(() => {
+      const canvas = document.getElementById('plan');
+      const { data } = canvas.getContext('2d').getImageData(
+        0, 0, canvas.width, canvas.height);
+      const bg = [data[0], data[1], data[2]];
+      let n = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if (Math.max(Math.abs(data[i] - bg[0]), Math.abs(data[i + 1] - bg[1]),
+          Math.abs(data[i + 2] - bg[2])) > 12) n += 1;
+      }
+      return n / (data.length / 4);
+    });
+    expect(ink, `${id} draws a building, not the "crosses no walls" sentence`)
+      .toBeGreaterThan(0.015);
+  }
+});
+
+test('it writes nothing the reload would lose', async ({ page }) => {
+  // A DRAWING WITHOUT A FOUNDATION, which is a drawing somebody made that way
+  // -- and a bone press is not permission to restructure it.
+  //
+  // THE FAILURE THIS GUARDS IS SILENT. drawing-format.js validates every
+  // record's levelId against the drawing's own level list and DROPS what it
+  // does not recognise, so concrete written to a FOUNDATION this drawing has
+  // not got would sit in the file, paint once, and be gone on the next open.
+  // Written after a mutation removing the guard survived every other check in
+  // this file -- because the fixture above HAS a foundation, so nothing could
+  // tell whether the guard was there.
+  const noFoundation = {
+    ...empty(),
+    levels: [
+      { id: 7, name: 'ROOF', elev: 0 },
+      { id: 3, name: 'MAIN FL', elev: 0 },
+    ],
+    activeLevelIdx: 1,
+  };
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json',
+        { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f: noFoundation });
+  await page.goto('/MODEL.html');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await order(page, 'bungalow', 'bungalow');
+  await page.keyboard.press('Escape');
+  await saveOnNewPage(page);
+
+  // THE GENERAL FORM, not "no foundation walls": what the page wrote and what
+  // a reload keeps must be the same counts. Anything filed against a level
+  // the drawing has not got fails this, whatever kind of record it is.
+  const kept = await page.evaluate(async bucket => {
+    const file = await window.SharedFileStore.loadSharedFile(bucket);
+    const raw = JSON.parse(await file.text());
+    const F = window.DraftDrawingFormat;
+    const levelIds = new Set((raw.levels || []).map(level => Number(level.id)));
+    return {
+      wroteWalls: (raw.walls || []).length,
+      keptWalls: F.walls(raw.walls, levelIds, {}).length,
+      wroteFloors: (raw.floors || []).length,
+      keptFloors: F.floors(raw.floors, levelIds, {}).length,
+      wroteLines: (raw.lines || []).length,
+      keptLines: F.lines(raw.lines, levelIds, {}).length,
+      wroteRoofs: (raw.roofs || []).length,
+      keptRoofs: F.roofs(raw.roofs, levelIds).length,
+    };
+  }, BUCKET);
+
+  expect(kept.wroteWalls, 'the storey was still framed').toBe(4);
+  expect(kept.keptWalls, 'and every wall survives the reload').toBe(kept.wroteWalls);
+  expect(kept.keptFloors, 'every floor survives').toBe(kept.wroteFloors);
+  expect(kept.keptLines, 'every footing line survives').toBe(kept.wroteLines);
+  expect(kept.keptRoofs, 'and the roof survives').toBe(kept.wroteRoofs);
+  // The control: this drawing HAS a roof level, so the roof is the proof that
+  // the build still does everything the drawing can hold. Were it zero, the
+  // equalities above would be true of a press that built nothing.
+  expect(kept.wroteRoofs, 'the roof went up, since ROOF is here').toBe(1);
+});
+
+test('one Ctrl+Z takes the whole building back', async ({ page }) => {
+  // ONE PRESS IS ONE UNDO however many records it made. The press now writes
+  // walls on two levels, two floors, eight footing lines, a roof, an outline
+  // and eleven openings -- and a Ctrl+Z that took the walls and left the
+  // footings would leave concrete linework under nothing.
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json',
+        { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f: empty() });
+  await page.goto('/MODEL.html?level=1&view=plan');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await order(page, 'bungalow', 'bungalow');
+  await page.keyboard.press('Escape');
+
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(250);
+  await saveOnNewPage(page);
+
+  const saved = await savedFile(page);
+  expect((saved.walls || []).length, 'the walls went').toBe(0);
+  expect((saved.floors || []).length, 'the floor and the slab went').toBe(0);
+  expect((saved.lines || []).length, 'the footings went').toBe(0);
+  expect((saved.roofs || []).length, 'the roof went').toBe(0);
+  expect((saved.outlines || []).length, 'the footprint went').toBe(0);
+  expect((saved.fenestrations || []).length, 'and the openings went').toBe(0);
 });
