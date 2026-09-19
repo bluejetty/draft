@@ -294,6 +294,76 @@ if (!window.DraftLevelAssembly) {
   const levelAssemblyFor = (levelAssemblies, levelId) =>
     normaliseLevelAssembly(levelAssemblies?.[levelId], levelRole(levelId));
 
+  // ── THE WALLS THAT WERE ON THE DEFAULT FOLLOW IT ────────────────────────
+  //
+  // Movie, 19 Sep: "if the floor or ceiling is the same height as the
+  // DEFAULT, if they change the PROJECT DEFAULT, also change those heights to
+  // match", and, accepting what that leaves behind in the same breath: "(the
+  // user may need to manually change the 'previously adjusted' height".
+  //
+  // WHAT WAS BROKEN. A wall's top is COPIED IN when it is drawn, from its
+  // storey's wallHeightFt, and never looked at again -- on both pages. So
+  // changing the storey's height moved nothing already on the sheet, and a
+  // drafter who raised MAIN FL to 9' had to redraw every wall on it.
+  //
+  // NO NEW KEY, AND NOTHING TO MIGRATE, because Movie's rule IS the
+  // comparison: a wall whose top equals the height in force is ON that
+  // height, and one that differs is the drafter's. That reading costs
+  // nothing and cannot go stale; a stored "I am on the default" flag would
+  // be a second fact about the same wall, free to disagree with the first.
+  //
+  // IT TAKES BOTH TABLES, BEFORE AND AFTER, and that is the whole reason this
+  // is a function rather than a rule written at the box that edits a height.
+  // Only the moment of the write knows the OLD number -- which is what says
+  // which walls were following it. One tick later, the wall at 8'-1 1/2" on a
+  // storey now set to 9' is indistinguishable from one a drafter typed.
+  //
+  // THE TOP, NOT THE BASE. wallHeightFt governs where a wall STOPS; where it
+  // starts is the level's own elevation, which is a different number changed
+  // by a different control. A base that followed this would move walls for a
+  // reason nobody asked for.
+  //
+  // Returns null when nothing moved, so a caller can leave the walls key
+  // alone entirely rather than writing an identical array back.
+  const wallsFollowingHeights = (walls, before, after) => {
+    if (!Array.isArray(walls) || !walls.length) return null;
+    const topFor = (table, levelId) =>
+      normaliseLevelAssembly(table?.[levelId], levelRole(levelId)).wallHeightFt;
+    // WHICH STOREYS MOVED -- and the key set is the AFTER table's, which is
+    // the storeys actually being written. A first-time write is still
+    // covered, because such a storey IS in `after`; it simply has no record
+    // in `before` and reads the office default there, which is the height it
+    // really had.
+    //
+    // THE UNION OF BOTH WOULD BE A DEFECT, and it was one for as long as it
+    // took a mutation to survive and be read properly. A storey present in
+    // `before` and absent from `after` is not a storey somebody lowered: it
+    // is one the writer's table does not know about -- a level added
+    // elsewhere while this tab sat open. Under the union its walls would be
+    // dragged to the office default because `after` answered the default for
+    // a storey nobody asked about. That is the same snapshot hazard the
+    // caller's re-read exists to avoid, arriving by a side door.
+    const moved = new Map();
+    const ids = new Set(Object.keys(after || {}));
+    ids.forEach(id => {
+      const was = topFor(before, id);
+      const now = topFor(after, id);
+      if (Number.isFinite(was) && Number.isFinite(now) && Math.abs(was - now) > 1e-9) {
+        moved.set(String(id), { was, now });
+      }
+    });
+    if (!moved.size) return null;
+    let changed = false;
+    const next = walls.map(wall => {
+      const step = moved.get(String(wall?.levelId));
+      if (!step) return wall;
+      if (!(Math.abs(Number(wall.topHeight) - step.was) < 1e-9)) return wall;
+      changed = true;
+      return { ...wall, topHeight: step.now };
+    });
+    return changed ? next : null;
+  };
+
   // The top of the tallest wall on a level, per view. Falls back to the office
   // default when a level has no walls yet -- a level being empty is not the
   // same as its walls being at height zero, and returning 0 would sink a stair.
@@ -320,6 +390,7 @@ if (!window.DraftLevelAssembly) {
     OVER_GARAGE_JOIST_IN,
     levelFloorFt,
     levelAssemblyFor,
+    wallsFollowingHeights,
     levelWallTopFt,
     DEFAULT_WALL_TOP_FT,
     DEFAULT_FLOOR_ASSEMBLY,
