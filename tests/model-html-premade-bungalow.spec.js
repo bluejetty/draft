@@ -1094,6 +1094,18 @@ const cutStack = page => page.evaluate(async bucket => {
     levelWallTopFt: (id, view = 'plan') =>
       LA.levelWallTopFt(raw.walls || [], id, view),
     footingWidthIn: id => assemblyFor(id).footingWidthIn,
+    // THE WALLS, because sectionLevelStack asks which storeys are OCCUPIED
+    // before it decides where a roof bears -- a level list is not a building.
+    //
+    // THIS MIRROR DROPPED IT AND THE MODULE THREW, which is the right way
+    // round. cut-view.js takes walls() as part of its env contract and every
+    // page that builds one supplies it; a cut-down env written here is a
+    // MIRROR of that contract, and elevation-harness.js already carries the
+    // note for this exact mistake -- "a mirror that quietly drops a field the
+    // module reads is the audit rule wearing the harness's own hat". A
+    // fallback inside the module would have handed this helper the old wrong
+    // bearing in silence instead.
+    walls: () => raw.walls || [],
   };
   const stack = CV.sectionLevelStack(env);
   const roofs = raw.roofs || [];

@@ -136,9 +136,42 @@ if (!window.DraftCutView) {
     const foundationAssembly = env.levelAssembly(1);
     const wallTop = lowest.floorBottom;
     const wallBottom = wallTop - env.levelWallTopFt(1, 'foundation');
+    // ── A ROOF BEARS ON THE WALLS THAT HOLD IT UP ────────────────────────
+    //
+    // `bearing` was the top of the TOPMOST FLOOR LEVEL IN THE STACK, and the
+    // stack comes from floorLevels(), which keeps a level because it has a
+    // floor layer view -- never because anything was built there. The default
+    // stack always carries 2ND FL, so every ONE-STOREY house on both pages
+    // drew its roof a whole storey above the walls under it.
+    //
+    // Measured on Movie's own bungalow, kept as the harness fixture: the
+    // house roof bore at 17.240 and the garage roof -- which carries its own
+    // plate and was therefore right -- at 8.094, with ZERO walls on the level
+    // the house roof was standing on. He reported it as "the roof is real
+    // messed on this one"; it was the roof standing on nothing.
+    //
+    // IT WENT UNSEEN FOR WANT OF SOMETHING CORRECT BESIDE IT. Until the
+    // garage got a roof there was no second one in the elevation to disagree
+    // with, and one floating roof alone reads as how the thing draws.
+    //
+    // THE TOPMOST OCCUPIED STOREY, then -- and occupancy is asked of the
+    // walls rather than of the level list, because the level list is the
+    // thing that was wrong. env.walls() is already in this env's contract, so
+    // nothing new is required of the three pages that build one.
+    //
+    // A NO-OP WHEREVER THE TOP FLOOR IS OCCUPIED, which is what makes it safe
+    // in the one file that draws every elevation and section on both pages:
+    // `standing` ends at the same level `stack` does, so the number does not
+    // move. With NO level occupied it falls back to the old answer rather
+    // than to the ground -- an empty drawing has no walls to bear on and a
+    // bearing at zero would put its roof through the floor.
+    const built = new Set((env.walls() || []).map(wall => Number(wall.levelId)));
+    const standing = stack.filter(level => built.has(Number(level.id)));
+    const bearer = standing.length ? standing[standing.length - 1]
+      : stack[stack.length - 1];
     return {
       floors: stack,
-      bearing: stack[stack.length - 1].wallTop,
+      bearing: bearer.wallTop,
       foundation: {
         wallTop, wallBottom,
         grade: wallTop - GRADE_BELOW_FOUNDATION_TOP_FT,
