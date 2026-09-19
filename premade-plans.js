@@ -110,12 +110,293 @@ if (!window.DraftPremadePlans) {
     ];
   };
 
+  // ── WHERE THE WINDOWS AND DOORS GO ───────────────────────────────────────
+  //
+  // Movie, 18 Sep: "i'd like the windows to be in set positions for each house
+  // in the drivethru menu, but for the 'AUTOHOUSE' when they draw the outline
+  // and create the house that one could have the fenestrations auto
+  // generated". So these are part of the DESIGN, the way the wall positions
+  // are -- not the bone's deal. auto-windows.js is the other thing, and the
+  // records below carry `auto: false` so a re-deal leaves them alone.
+  //
+  // "please windows and doors into the bungalow and i'll change them if i need
+  // to afterwards", so these are a first pass to be corrected against, and
+  // they are arranged to be easy to correct: every one is an offset along a
+  // NAMED EDGE of the loop, so moving a window is moving one number.
+  //
+  // AN OPENING IS KEYED TO AN EDGE, NOT TO A POINT. `edge: 2` is the run from
+  // points[2] to points[3], which is exactly what build-house.js's
+  // houseWallRuns hands back in that order -- so the committer can hang an
+  // opening on the wall it just made without matching coordinates back up.
+  // `offsetFt` is from that edge's START to the opening's CENTRE, which is
+  // what drawing-format.js:211 means by offset.
+  // THE APP'S OWN DEFAULTS, read rather than typed. These were 6'-8" and 2'-6"
+  // written out here with a comment pointing at MODEL.dc.html -- which is a
+  // copy with a citation, and a citation does not update itself. geometry-2d.js
+  // holds the one set now; a design that quietly disagreed with the page's own
+  // defaults would put two head heights in one drawing.
+  const G = window.DraftGeometry2D;
+  const DOOR_HEAD_FT = G.DEFAULT_OPENING_HEAD_FT;
+  const WINDOW_SILL_FT = G.DEFAULT_WINDOW_SILL_FT;
+  // NOT a default: an overhead door heads at 7'-0" because that is the door,
+  // not because nobody said. It stays a number of this design's own.
+  const GARAGE_DOOR_HEAD_FT = 7;
+  const opening = (edge, offsetFt, widthFt, type, over = {}) => Object.freeze({
+    edge,
+    offsetFt,
+    widthFt,
+    type,
+    sillFt: type === 'door' ? 0 : WINDOW_SILL_FT,
+    headFt: DOOR_HEAD_FT,
+    garage: false,
+    ...over,
+  });
+
+  // THE HOUSE. Its loop is wound [back, right, front, left] from
+  // houseLoop() -- edge 0 runs along the back wall, 1 up the right, 2 back
+  // along the FRONT, 3 down the left.
+  //
+  // THE FRONT CARRIES ONLY WHAT FITS IN THE 12 FT THE GARAGE LEAVES. Edge 2
+  // starts at the house's right corner and runs left, so the garage covers its
+  // first 20 ft and the visible stretch is offset 20 to 32. A window on the
+  // covered part would look into the garage.
+  const houseOpenings = () => {
+    // WHERE THE GARAGE STOPS, in offsets along edge 2. That edge starts at the
+    // house's RIGHT corner and runs left, and the garage covers the first
+    // twenty feet of it -- Movie's own "20 ft covered by garage", which is the
+    // garage's width less the part standing proud of the house.
+    //
+    // THE FIRST DRAFT USED THE 12 AS AN OFFSET, which is the VISIBLE width,
+    // not where the visible part begins -- so the door and the window both
+    // landed on the covered stretch, looking into the garage. Two numbers in
+    // this design add up to 32 and it is easy to reach for the wrong one.
+    const covered = GARAGE_WIDTH_FT - GARAGE_PAST_FT;
+    return [
+      // Front: the door, then a window, both inside the visible stretch.
+      opening(2, covered + 3.5, 3, 'door'),
+      opening(2, covered + 8.5, 4, 'window'),
+      // Back: three, evenly spread and clear of both corners.
+      opening(0, 8, 4, 'window'),
+      opening(0, 16, 4, 'window'),
+      opening(0, 24, 4, 'window'),
+      // Right: two. The garage ties into this wall's far end (the last foot),
+      // so both sit well short of it.
+      opening(1, 12, 4, 'window'),
+      opening(1, 28, 4, 'window'),
+      // Left: two, mirroring them.
+      opening(3, 12, 4, 'window'),
+      opening(3, 28, 4, 'window'),
+    ];
+  };
+
+  // THE GARAGE. Its loop runs [tie, rear, right, door wall, left, shared] --
+  // see garageLoop, which builds it in that order.
+  //
+  // THE MAN-DOOR IS WHY THE 4 FT REAR WALL EXISTS. Movie: the garage stands
+  // proud of the house "so a man-door can be installed that leads on a path to
+  // backyard". Four feet is not four feet of door: the bearing has to come off
+  // each end, and what is left is a shade under 2'-8". A 2'-6" leaf fits with
+  // room to spare, which is the difference between a door and a door that the
+  // clamp refuses on a rounding error.
+  const garageOpenings = () => [
+    opening(1, GARAGE_PAST_FT / 2, 2.5, 'door'),
+    opening(3, GARAGE_WIDTH_FT / 2, 16, 'door',
+      { garage: true, headFt: GARAGE_DOOR_HEAD_FT }),
+  ];
+
+  // ── THE UPPER STOREY'S WINDOWS ───────────────────────────────────────────
+  //
+  // NO DOORS UP HERE. The ground floor's set carries the front door, and a
+  // door on the second storey opens into air -- which the clamp would accept
+  // and the drafter would find on the elevation.
+  //
+  // AND THE FRONT IS WHOLE. On the ground floor the garage covers the first
+  // twenty feet of the front wall, so the design keeps its openings clear of
+  // it; the garage is a SINGLE STOREY, so upstairs that stretch is a wall
+  // looking over the garage roof and takes windows like any other.
+  const upperOpenings = () => [
+    // Front: three across the whole width, since nothing is in front of it.
+    opening(2, 8, 4, 'window'),
+    opening(2, 16, 4, 'window'),
+    opening(2, 24, 4, 'window'),
+    // Back: three, mirroring the ground floor's.
+    opening(0, 8, 4, 'window'),
+    opening(0, 16, 4, 'window'),
+    opening(0, 24, 4, 'window'),
+    // The two long sides, clear of both corners.
+    opening(1, 12, 4, 'window'),
+    opening(1, 28, 4, 'window'),
+    opening(3, 12, 4, 'window'),
+    opening(3, 28, 4, 'window'),
+  ];
+
+  // ── THE ROOM OVER THE GARAGE ─────────────────────────────────────────────
+  //
+  // Movie, 19 Sep: "put the 2nd story over the garage only 2/3 the garage
+  // length (make it about 18ft long by 24 or 26 wide" ... "so the front of the
+  // garage will have some roof on the main floor area".
+  //
+  // SO IT IS NOT THE GARAGE'S FOOTPRINT. The room sits against the house and
+  // stops short, and the stretch it does not cover is what gives the garage
+  // door end its own roof at the main-floor level -- which is the shape Movie
+  // is describing and the reason for the 2/3.
+  //
+  //   24 ft WIDE, the garage's own width, so the walls above land on the
+  //   walls below rather than mid-span.
+  //   18 ft LONG from the house, which is two thirds of the 27 ft the garage
+  //   runs including its tie -- his "about 18ft" and his "2/3" agree, and
+  //   that agreement is the check.
+  //
+  // It leaves 9 ft at the door end. That is not a leftover: it is the piece
+  // of single-storey garage roof he asked for.
+  const OVER_GARAGE_LENGTH_FT = 18;
+
+  const overGarageLoop = () => {
+    const houseRight = WIDTH_FT / 2;
+    const houseFront = DEPTH_FT / 2;
+    const right = houseRight + GARAGE_PAST_FT;
+    const left = right - GARAGE_WIDTH_FT;
+    // FROM THE HOUSE'S FRONT WALL, not from the tie. The tie is a one-foot
+    // strip of garage that reaches back along the house's side wall; a room
+    // starting there would hang a foot past the house's own front face.
+    const back = houseFront;
+    const front = back + OVER_GARAGE_LENGTH_FT;
+    // A CORNER AT THE HOUSE'S OWN, and it is the whole reason this loop has
+    // five points instead of four.
+    //
+    // The room is wider than the house is long here: its back run starts
+    // inside the house's front wall and carries on 4 ft past the house's
+    // right corner, because that is how far the garage sticks out. Left as
+    // ONE edge, that run is only PARTLY shared -- and edgeOnLoop tests whole
+    // edges, by design, so it would answer "not shared" and the room's back
+    // wall would be raised in full. Twenty feet of it would then stand in
+    // exactly the same place as the house's own upper front wall: doubled
+    // linework, a doubled stud count, and two walls to drag when the house
+    // moves. That is the wall Movie marked in green on the garage, one floor
+    // further up.
+    //
+    // Splitting the run at the house's corner makes the shared stretch an
+    // edge of its own, which edgeOnLoop then skips whole -- the same shape
+    // garageLoop has carried from the start, and the reason IT has a vertex
+    // at this exact point.
+    return [pt(left, back), pt(houseRight, back), pt(right, back),
+      pt(right, front), pt(left, front)];
+  };
+
+  // Windows on three sides. NOT on either back edge -- the long one is
+  // interior, against the house, and a window in it would look into the upper
+  // hall; the 4 ft stub beside it is too short to take one clear of both
+  // corners.
+  //
+  // EDGES 2, 3 AND 4, not 1, 2 and 3: the corner above put an edge in front of
+  // them. These indices are the loop's, and the loop is the only thing that
+  // decides them -- which is why premade-plans-harness.js reads the edge each
+  // opening names and measures ITS length rather than trusting the number.
+  const overGarageOpenings = () => [
+    opening(2, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),
+    opening(3, GARAGE_WIDTH_FT / 2, 4, 'window'),
+    opening(4, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),
+  ];
+
+  // ── WHAT THE GARAGE'S OWN ROOF COVERS ────────────────────────────────────
+  //
+  // The whole garage, usually. NOT where a room sits on it: a roof over the
+  // part the room stands on would be a roof INSIDE the building, under a
+  // floor. So the garage roof takes what the room leaves, and on the designs
+  // with no room that is the garage entire.
+  //
+  // THE STUB IS THE THING MOVIE ASKED FOR, not a remainder. 19 Sep: "so the
+  // front of the garage will have some roof on the main floor area". The room
+  // stops two thirds along on purpose, and this is the third it stops short
+  // of -- the piece of single-storey roof at the garage door end that gives
+  // the front its step down.
+  //
+  // IT IS CUT FROM THE GARAGE'S OWN NUMBERS rather than clipped out of the
+  // garage polygon by the page. The design knows where the room ends because
+  // the design put it there, and a boolean subtraction is a second, weaker
+  // answer to a question that is already answered here.
+  const garageRoofLoop = ({ overGarage = false } = {}) => {
+    const loop = garageLoop();
+    if (!overGarage) return loop;
+    const houseRight = WIDTH_FT / 2;
+    const houseFront = DEPTH_FT / 2;
+    const right = houseRight + GARAGE_PAST_FT;
+    const left = right - GARAGE_WIDTH_FT;
+    // FROM WHERE THE ROOM STOPS TO WHERE THE GARAGE DOES. The room's front
+    // wall is the stub's back one -- they meet on that line, which is what
+    // makes the upper roof's edge and the lower roof's edge the same line
+    // rather than two lines a few inches apart.
+    const back = houseFront + OVER_GARAGE_LENGTH_FT;
+    const front = houseFront + GARAGE_DEPTH_FT;
+    return [pt(left, back), pt(right, back), pt(right, front), pt(left, front)];
+  };
+
+  // ── 2 STOREY ─────────────────────────────────────────────────────────────
+  //
+  // Movie, 19 Sep: "make the 2 storey the same for now sizewise". So it is the
+  // bungalow's footprint with a storey on top -- same 32 x 40, same garage,
+  // same openings on the ground floor. Nothing here is a new dimension, which
+  // is the point: a 2 STOREY that quietly measured differently from the
+  // 1 STOREY beside it on the same board would be the catalogue disagreeing
+  // with itself.
+  //
+  // THE GARAGE STAYS SINGLE STOREY. Movie, same message: "make a single story
+  // garage". The board's third 2-storey entry -- 2 STOREY + GARAGE + ROOM
+  // OVER -- is the one where the floor reaches over it.
+  //
+  // AND THE ROOM GOES ON 2ND FL, NOT ON THE OVER-GARAGE LEVEL. That level
+  // exists, it has id 4 and its own deeper joist, and it is the wrong one:
+  // Movie, 19 Sep, asked directly -- "no it will be the '2 storey', the 'over
+  // garage' layer is for bilevels when that would be a 'lower' 2nd floor",
+  // then "this one is even with the 2nd floor so will be considered 2nd
+  // floor". A half-level is for a room that sits half a storey off the floors
+  // around it. This room is FLUSH with the storey above, so it is that
+  // storey: more 2ND FL, on the level the house already has.
+  //
+  // WHICH IS WHY THIS ENTRY NEEDS NOTHING ADDED TO ANYBODY'S LEVEL STACK.
+  // It was unserved for a while on the belief that it wanted level 4, and a
+  // drawing has no level 4 by default -- so the tile built a house and a
+  // garage and no room, and said nothing about the missing one.
+  const twoStorey = ({ garage = false, overGarage = false } = {}) => ({
+    house: houseLoop(),
+    houseOpenings: houseOpenings(),
+    upperOpenings: upperOpenings(),
+    storeys: 2,
+    garage: garage ? garageLoop() : null,
+    garageOpenings: garage ? garageOpenings() : null,
+    // WHAT THE GARAGE'S OWN ROOF COVERS, which is the garage itself unless a
+    // room sits on it -- see garageRoofLoop. Carried as its own loop rather
+    // than left for the committer to work out, because the design is where
+    // the room's length is decided and so it is where the leftover is known.
+    garageRoof: garage ? garageRoofLoop({ overGarage }) : null,
+    // THE ROOM OVER IS ITS OWN BODY, on its own level. It is not the garage
+    // raised twice and not the upper storey stretched: level-assembly.js
+    // gives the over-garage level its own role and a deeper joist, because a
+    // garage spans clear and the 11 7/8" that draws perfectly over a bedroom
+    // will not cross a double bay.
+    overGarage: overGarage && garage ? overGarageLoop() : null,
+    overGarageOpenings: overGarage && garage ? overGarageOpenings() : null,
+  });
+
   // `garage` is the ATTACHED one. A detached garage is a different body with
   // a different rule and it has its own module (garage-site.js); asking for
   // one here would be a second answer to a question already answered.
   const bungalow = ({ garage = false } = {}) => ({
     house: houseLoop(),
+    houseOpenings: houseOpenings(),
+    // SAID, NOT IMPLIED. A bungalow is one storey, and the committer reads
+    // this number to know how many floor levels to raise the shell on --
+    // leaving it out would make "absent" mean "one", which is the kind of
+    // default that is right until the day something asks the question the
+    // other way round.
+    storeys: 1,
     garage: garage ? garageLoop() : null,
+    garageOpenings: garage ? garageOpenings() : null,
+    // A BUNGALOW'S GARAGE ROOF COVERS THE WHOLE GARAGE: nothing sits on it.
+    // Said through the same helper the 2 STOREY uses rather than written as
+    // `garageLoop()` again -- one home for "what the garage roof covers", so
+    // the day that answer changes it changes once.
+    garageRoof: garage ? garageRoofLoop() : null,
   });
 
   // WHAT THE BOARD CAN ACTUALLY BUILD, keyed by build-menu.js entry id. A
@@ -126,14 +407,20 @@ if (!window.DraftPremadePlans) {
   const PLANS = Object.freeze({
     bungalow: () => bungalow({ garage: false }),
     'bungalow-garage': () => bungalow({ garage: true }),
+    // build-menu.js's own entry ids, so the board needs no editing when a
+    // design arrives. `twoStorey-over` is deliberately absent -- see the note
+    // on twoStorey: the room over the garage wants the over-garage level.
+    twoStorey: () => twoStorey({ garage: false }),
+    'twoStorey-garage': () => twoStorey({ garage: true }),
+    'twoStorey-over': () => twoStorey({ garage: true, overGarage: true }),
   });
 
   const planFor = entryId => (PLANS[entryId] ? PLANS[entryId]() : null);
 
   window.DraftPremadePlans = Object.freeze({
     WIDTH_FT, DEPTH_FT, GARAGE_WIDTH_FT, GARAGE_DEPTH_FT,
-    GARAGE_PAST_FT, GARAGE_TIE_FT,
-    bungalow, planFor,
+    GARAGE_PAST_FT, GARAGE_TIE_FT, OVER_GARAGE_LENGTH_FT,
+    bungalow, twoStorey, planFor,
     entryIds: () => Object.keys(PLANS),
   });
 })();

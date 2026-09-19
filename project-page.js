@@ -549,11 +549,13 @@ if (!window.DraftProjectPage) {
   // actually poured against; the sill plate is above it and has nothing to do
   // with where a slab sits.
   const GARAGE_SLAB_BELOW_CONCRETE_IN = 4;
-  // DUPLICATED, and saying so. MODEL.dc.html carries the same 1/8" as
-  // GARAGE_SLAB_SLOPE_IN_PER_FT. It belongs in cut-view.js STANDARDS with the
-  // beam and the sill -- but PROJECT.html does not load cut-view yet, which
-  // is the deferred tidy-up. Until it does, this is a second copy of a number
-  // that must agree with a first, which is exactly what happened to the 32".
+  // DUPLICATED, and saying so. IT NOW HAS THE HOME THIS COMMENT ASKED FOR:
+  // cut-view.js STANDARDS carries GARAGE_SLAB_SLOPE_IN_PER_FT beside the same
+  // slab's thickness, and MODEL.dc.html and MODEL.html both read it from
+  // there. PROJECT.html still does not load cut-view, so this is the one
+  // remaining copy rather than one of three -- and the load order is now the
+  // only thing holding it, which is a smaller and more specific debt than
+  // "the constant has nowhere to live".
   const GARAGE_SLAB_SLOPE_IN_PER_FT = 1 / 8;
   // HOW DEEP A GARAGE IS, and until 5 Sep nothing in the repo said. Movie:
   // "24ft deep garage typical". GARAGE_OVERHEAD_DOOR_FT is the door's WIDTH,

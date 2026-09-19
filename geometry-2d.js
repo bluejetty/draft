@@ -540,6 +540,51 @@ if (!window.DraftGeometry2D) {
     // read straight off an arc — height = t × pitch/12 above the eave line.
     // 2D consumers read only a/b; the t fields are for the 3D lift.
     const queue = [{ pts, kinds, t0: 0 }];
+    // Two events at the same instant fold a ring back over itself: one edge
+    // of the ring ends up lying on top of another, pointing the other way,
+    // and between them is a spike of no width. That spike is a finished
+    // ridge -- the two wavefronts have already met along it -- so emit it and
+    // trim the ring back to the shape that is actually left.
+    //
+    // THE RING MUST NOT BE QUEUED WITH THE SPIKE STILL ON IT. The corner at
+    // the spike's base has one edge facing each way, its velocity solves to
+    // the outward direction, and from the next event on the wavefront walks
+    // out of the building. That is how a garage-plus-house outline came back
+    // with its ridge a full storey too high.
+    const trimSpikes = (loopPts, loopKinds, t) => {
+      let trimmed = true;
+      while (trimmed && loopPts.length >= 3) {
+        trimmed = false;
+        for (let index = 0; index < loopPts.length; index++) {
+          const size = loopPts.length;
+          const prev = loopPts[(index + size - 1) % size];
+          const pt = loopPts[index];
+          const next = loopPts[(index + 1) % size];
+          const lenA = Math.hypot(pt.x - prev.x, pt.z - prev.z) || 1;
+          const lenB = Math.hypot(next.x - pt.x, next.z - pt.z) || 1;
+          const ax = (pt.x - prev.x) / lenA, az = (pt.z - prev.z) / lenA;
+          const bx = (next.x - pt.x) / lenB, bz = (next.z - pt.z) / lenB;
+          if (Math.abs(ax * bz - az * bx) > 1e-4 || ax * bx + az * bz > -0.9999) continue;
+          const tail = lenA <= lenB ? prev : next;
+          if (Math.hypot(pt.x - tail.x, pt.z - tail.z) > eps) arcs.push({ a: pt, b: tail, ta: t, tb: t });
+          loopPts.splice(index, 1);
+          loopKinds.splice(index, 1);
+          trimmed = true;
+          break;
+        }
+      }
+    };
+    // A ring is done when it is a single segment: that segment is the ridge.
+    const settle = (loop) => {
+      trimSpikes(loop.pts, loop.kinds, loop.t0);
+      if (loop.pts.length === 2) {
+        if (Math.hypot(loop.pts[1].x - loop.pts[0].x, loop.pts[1].z - loop.pts[0].z) > eps) {
+          arcs.push({ a: loop.pts[0], b: loop.pts[1], ta: loop.t0, tb: loop.t0 });
+        }
+        return;
+      }
+      if (loop.pts.length >= 3) queue.push(loop);
+    };
     let guard = initialCount * 8;
     while (queue.length && guard-- > 0) {
       const loop = queue.shift();
@@ -638,7 +683,8 @@ if (!window.DraftGeometry2D) {
           loopB.pts.push(moved[index]);
           loopB.kinds.push(kinds[index]);
         }
-        queue.push(loopA, loopB);
+        settle(loopA);
+        settle(loopB);
         continue;
       }
       // Drop collapsed edges; each surviving edge keeps its start vertex.
@@ -651,36 +697,7 @@ if (!window.DraftGeometry2D) {
         nextKinds.push(kinds[index]);
       }
       if (nextPts.length === count && splitT >= collapseT) continue; // no topological change — stop this loop
-      // Simultaneous collapses can fold the ring back over itself: a zero-width
-      // spike is a finished ridge, so emit it and trim the ring.
-      let trimmed = true;
-      while (trimmed && nextPts.length >= 3) {
-        trimmed = false;
-        for (let index = 0; index < nextPts.length; index++) {
-          const size = nextPts.length;
-          const prev = nextPts[(index + size - 1) % size];
-          const pt = nextPts[index];
-          const next = nextPts[(index + 1) % size];
-          const lenA = Math.hypot(pt.x - prev.x, pt.z - prev.z) || 1;
-          const lenB = Math.hypot(next.x - pt.x, next.z - pt.z) || 1;
-          const ax = (pt.x - prev.x) / lenA, az = (pt.z - prev.z) / lenA;
-          const bx = (next.x - pt.x) / lenB, bz = (next.z - pt.z) / lenB;
-          if (Math.abs(ax * bz - az * bx) > 1e-4 || ax * bx + az * bz > -0.9999) continue;
-          const tail = lenA <= lenB ? prev : next;
-          if (Math.hypot(pt.x - tail.x, pt.z - tail.z) > eps) arcs.push({ a: pt, b: tail, ta: t1, tb: t1 });
-          nextPts.splice(index, 1);
-          nextKinds.splice(index, 1);
-          trimmed = true;
-          break;
-        }
-      }
-      if (nextPts.length === 2) {
-        if (Math.hypot(nextPts[1].x - nextPts[0].x, nextPts[1].z - nextPts[0].z) > eps) {
-          arcs.push({ a: nextPts[0], b: nextPts[1], ta: t1, tb: t1 }); // the ridge
-        }
-        continue;
-      }
-      queue.push({ pts: nextPts, kinds: nextKinds, t0: t1 });
+      settle({ pts: nextPts, kinds: nextKinds, t0: t1 });
     }
     // A gable corner slides along its own gable edge — that trace is the edge
     // itself, not a roof line, so drop arcs lying on a single gable edge.
@@ -1132,6 +1149,56 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   // paramAlongSegment either: that returns 0 for a degenerate segment where
   // this must report Infinity, and quietly swapping one for the other would
   // change what a click on a zero-length wall does.
+  // ── IS THIS EDGE ON THAT LOOP? ───────────────────────────────────────────
+  //
+  // WHAT AN ATTACHED GARAGE ASKS BEFORE IT RAISES A WALL. Movie, 18 Sep, with
+  // the offending wall marked in green on a screenshot: "the garage has an
+  // extra wall that is not needed. the garage walls should link into the house
+  // (look at how the DC version did it)". The DC version is one line of
+  // _buildGarageWalls -- `if (!open && !detached && house &&
+  // this._edgeOnOutline(a, b, house)) continue;` -- and this is that test,
+  // lifted here so the two pages cannot come to different answers about which
+  // edges are shared.
+  //
+  // THE MIDPOINT IS THE WHOLE TEST. Both ENDS of an edge lying on the loop is
+  // not enough and the difference is not academic: a garage tucked into an L
+  // can have both its corners on the house and its wall crossing open air
+  // between them -- a chord. Dropping that wall would leave the building open
+  // to the weather. Three samples is still only three samples, which is honest
+  // for the straight runs this is asked about; a shape that needed more would
+  // be a shape whose "shared" edge was a curve, and the loop below already
+  // follows one of those through pointToSegment.
+  //
+  // SEGMENTS, NOT POINTS, is why the old page can hand this its own outline
+  // unchanged. pointToSegment FOLLOWS A BULGE (it samples the arc), so a
+  // points-only version of this would quietly straighten every arc edge it was
+  // asked about and answer a different question on exactly the drawings where
+  // the answer is hard.
+  function edgeOnLoop(a, b, segments, eps = 0.1) {
+    // A body with no loop to compare against — a DETACHED garage — shares
+    // nothing, and is told so rather than thrown at. An EMPTY list needs no
+    // guard of its own: `some` on nothing is false, so the first sample
+    // already answers. A `|| !segments.length` stood here and was removed
+    // after a mutation that deleted it changed no answer at all — a line
+    // that cannot be wrong is a line that cannot be right either.
+    if (!Array.isArray(segments)) return false;
+    const near = pt => segments.some(seg => pointToSegment(pt, seg).d <= eps);
+    return near(a) && near(b)
+      && near({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });
+  }
+
+  // The closed ring of segments a list of corners makes, in the shape
+  // pointToSegment and edgeOnLoop read. Straight edges only: a caller holding
+  // bulges builds its own segments and keeps them.
+  function loopSegments(points) {
+    const list = Array.isArray(points) ? points : [];
+    return list.map((point, index) => ({
+      start: point,
+      end: list[(index + 1) % list.length],
+      bulge: 0,
+    }));
+  }
+
   function pointToSegment(worldPt, seg) {
     if (!seg.bulge) {
       const ax = seg.start.x, az = seg.start.z;
@@ -1190,6 +1257,39 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   const OPENING_BEARING_SHORT_IN = 1.5;
   const OPENING_BEARING_LONG_IN = 3;
   const OPENING_BEARING_SPAN_FT = 3 / 0.3048;   // the code's 3 m, 9'-10 1/8"
+
+  // ── WHAT AN OPENING IS WHEN NOBODY HAS SAID ──────────────────────────────
+  //
+  // A door is 3'-0" wide, a window 4'-0", a window sill sits 2'-6" off the
+  // floor, and both head out at 6'-8". Ordinary residential numbers, and none
+  // of them is a geometry fact -- they are here because they were in THREE
+  // PLACES and about to be in a fourth. MODEL.dc.html:2342-2345 held the
+  // originals; premade-plans.js wrote its own DOOR_HEAD_FT and WINDOW_SILL_FT
+  // for the bungalow; and MODEL.html was about to type a third set for its
+  // placing gesture.
+  //
+  // THE FAILURE THAT ENDS IS A QUIET ONE. Three copies of 6'-8" do not
+  // disagree on the day they are written. They disagree the day someone raises
+  // the head height for one page -- and the drawing then has two head heights
+  // in it, the designed windows at one and the drafted ones at the other, with
+  // nothing on the plan to say so. It is the DEFAULT_FLOOR_THICKNESS_IN
+  // lesson, one module over.
+  //
+  // THEY LIVE BESIDE THE BEARING because this file already owns what an
+  // opening must reserve and what shape it cuts; a default width is asked in
+  // the same breath as "will it fit". Nothing here is a limit -- a drafter
+  // types over any of them -- so they are named DEFAULT, not MIN or MAX.
+  const DEFAULT_DOOR_WIDTH_FT = 3;
+  const DEFAULT_WINDOW_WIDTH_FT = 4;
+  const DEFAULT_WINDOW_SILL_FT = 2.5;
+  const DEFAULT_OPENING_HEAD_FT = (6 * 12 + 8) / 12;
+
+  // The width an opening of this type takes when the drafter has not typed
+  // one. A door and a window are the only two kinds this app cuts into a
+  // wall, so anything that is not a window is a door -- the same fallback
+  // every caller was already writing for itself.
+  const defaultOpeningWidthFt = type => (type === 'window'
+    ? DEFAULT_WINDOW_WIDTH_FT : DEFAULT_DOOR_WIDTH_FT);
 
   // What this opening must keep back from each end of its wall, so the lintel
   // has wood to bear on.
@@ -1378,6 +1478,13 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     lineControlPoint,
     pointOnLineSeg,
     pointToSegment,
+    edgeOnLoop,
+    loopSegments,
+    DEFAULT_DOOR_WIDTH_FT,
+    DEFAULT_WINDOW_WIDTH_FT,
+    DEFAULT_WINDOW_SILL_FT,
+    DEFAULT_OPENING_HEAD_FT,
+    defaultOpeningWidthFt,
     OPENING_FREE_END_POST_IN,
     OPENING_BEARING_SHORT_IN,
     OPENING_BEARING_LONG_IN,

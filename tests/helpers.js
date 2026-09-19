@@ -17,6 +17,10 @@ async function openModel(page, {
   // turn it back on rather than being deleted. A parked feature with no
   // coverage is one flag from shipping with nothing watching it.
   tourEscort = false, perfNotice = false,
+  // THE STARTER HOUSE IS PINNED, because otherwise the fixture is a different
+  // house every run -- see the block by the init script below. `null` opts
+  // back into the real random one.
+  starterHouse = { kind: 'rectangle', widthFt: 48 },
 } = {}) {
   // Init scripts run on every navigation, so the flag keeps a reload inside a
   // test from wiping the drawing the test just made. The FAT TEST WALLET
@@ -75,6 +79,64 @@ async function openModel(page, {
     await page.addInitScript(() => {
       try { localStorage.setItem('draft-entry-coach-seen', '1'); } catch (err) { /* private window */ }
     });
+  }
+  // THE BONE BUILDS A DIFFERENT HOUSE EVERY RUN, and 35 spec files press it as
+  // setup. MODEL.dc.html's _firstHousePress calls DraftStarterShape.generate()
+  // with no arguments, so it falls back to Math.random and picks a shape
+  // (rectangle, L or T) and a width (40-56ft) fresh each time.
+  //
+  // THAT IS WHAT MOVES THE CAMERA. MODEL.html's fit() frames whatever the
+  // fixture left standing, so a random footprint is a random zoom: measured
+  // across six runs of the outline fixture the same file opened at 13.5, 14.0,
+  // 14.6, 15.2, 15.9 and 16.7 pixels per foot, with the canvas and both chrome
+  // bars byte-identical each time. Every one of the 51 houses generate() can
+  // produce puts it somewhere between 12.5 and 22.6. A spec that aims a press
+  // at a world point therefore lands somewhere different run to run, which is
+  // how model-html-outline.spec.js came to be green locally and red on CI on a
+  // different test each time. With the shape pinned, four runs of that fixture
+  // gave 21.8762 px/ft and the same camera centre to four decimals.
+  //
+  // fit() ITSELF IS NOT AT FAULT and was measured before this was written: it
+  // is a pure function of the points, the canvas and the bars, and all three
+  // were stable. Pinning the house is the fix; nothing in MODEL.html changed.
+  //
+  // NO TEST HOOK IN THE PAGE, per this file's opening line. starter-shape.js
+  // already takes `rng` as an argument -- its own comment says "so a test gets
+  // the same house twice" -- and nothing in the app ever passes one, so this
+  // wraps the module the way the webgl patch below wraps getContext: test-side,
+  // in the browser, leaving the shipped file alone. The REAL generator still
+  // runs and still builds the shape; only its coin is loaded.
+  //
+  // A PROPERTY SETTER RATHER THAN A TIMER, because the wrap has to happen
+  // between starter-shape.js assigning the module and the drafter pressing the
+  // bone, and "after DOMContentLoaded" is a guess about script order that would
+  // be right until somebody moves the tag. The module is frozen, but the window
+  // property holding it is not, so the assignment itself is what is caught.
+  //
+  // A CONSTANT rng, not a sequence: generate() calls it once when `kind` is
+  // forced and twice when it is not, so a constant cannot be knocked out of
+  // step by a change to the caller. WIDTH_RANGE is read off the module rather
+  // than copied here, so a future range change moves this with it instead of
+  // silently producing a different house.
+  if (starterHouse) {
+    await page.addInitScript(({ kind, widthFt }) => {
+      let wrapped;
+      Object.defineProperty(window, 'DraftStarterShape', {
+        configurable: true,
+        get: () => wrapped,
+        set: real => {
+          const { least, most } = real.WIDTH_RANGE;
+          if (widthFt < least || widthFt > most) {
+            throw new Error(`openModel: starterHouse widthFt ${widthFt} is outside `
+              + `starter-shape.js's WIDTH_RANGE ${least}-${most}`);
+          }
+          const at = (widthFt - least) / (most - least);
+          const rng = () => at;
+          wrapped = Object.freeze({ ...real,
+            generate: (r, k) => real.generate(r || rng, k || kind) });
+        },
+      });
+    }, starterHouse);
   }
   if (!webgl) {
     await page.addInitScript(() => {
@@ -512,6 +574,33 @@ async function openToolRail(page) {
   await expect(rail).toBeVisible();
 }
 
+// A TILE THE CATALOGUE HAS NO DESIGN FOR, asked of the page rather than typed.
+//
+// THREE SPECS HARD-CODED ONE AND ALL THREE ROTTED. They named 1 STOREY, then
+// moved to 2 STOREY when 1 STOREY got a premade design -- with a comment
+// explaining the move -- and then broke again the day 2 STOREY got one. The
+// name is the wrong thing to fix in place: every design that lands claims one
+// more of them, so a test that needs "an undesigned tile" has to ASK.
+//
+// It reads the board's own entry list and the catalogue's own key set, so it
+// answers correctly on the day the last design lands too -- by returning null,
+// which its callers skip on rather than pressing something that builds.
+const undesignedTile = page => page.evaluate(() => {
+  const BM = window.DraftBuildMenu;
+  const designed = new Set(window.DraftPremadePlans.entryIds());
+  for (const family of BM.BUILD_MENU) {
+    for (const entry of family.entries || []) {
+      // `needsSize` entries are the detached garage's, which answer a
+      // different prompt entirely -- they ask HOW BIG before the bone means
+      // anything, so they are not "a tile with no design".
+      if (!entry.needsSize && !designed.has(entry.id)) {
+        return { family: family.id, entry: entry.id, label: entry.label };
+      }
+    }
+  }
+  return null;
+});
+
 const wallKey = page => page.locator('[data-tool-key="wall"]');
 
 async function wallArmed(page) {
@@ -535,6 +624,7 @@ async function disarmWall(page) {
 }
 
 module.exports = {
+  undesignedTile,
   HALF_HEIGHT_FT,
   STORAGE_BUCKET,
   openModel,

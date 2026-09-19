@@ -32,6 +32,15 @@ if (!window.DraftCutView) {
   // Physical drafting standards, shared with the Model Space via STANDARDS.
   // Garage slab: 4" pour over the grade beam at the doors.
   const GARAGE_SLAB_THICKNESS_IN = 4;
+  // HOW FAR A GARAGE SLAB FALLS, per foot of depth, toward the door. Movie,
+  // 4 Sep: "slab 4\" conc slope 1/8\" down from back to the garage door
+  // opening (front)". It sits beside the thickness because it is the same
+  // slab's other number, and project-page.js:553 asked for exactly this:
+  // "it belongs in cut-view.js STANDARDS with the beam and the sill -- but
+  // PROJECT.html does not load cut-view yet, which is the deferred tidy-up".
+  // Two of the three copies can stop being copies now; that page's load order
+  // is the only thing still holding the third.
+  const GARAGE_SLAB_SLOPE_IN_PER_FT = 1 / 8;
   // Attached-garage grade beam stack: concrete + 1.5" sill plate, hung with
   // the top of concrete 1'-0" above grade — level with the top of the house
   // foundation wall at the default grade.
@@ -104,6 +113,58 @@ if (!window.DraftCutView) {
     return fdn.wallTop - (split ? 0 : GARAGE_SILL_BELOW_HOUSE_FT);
   }
 
+  // ── THE FASCIA IS BANDED ONCE, OVER THE EAVE'S TRUE LENGTH ───────────────
+  //
+  // An eave gets its band from two passes. The SILHOUETTE bands each run it
+  // finds; the FACE-EDGE pass then bands eaves from the real face polygons and
+  // subtracts whatever the silhouette already drew, so the stretches the
+  // silhouette could not see still get one.
+  //
+  // THE SILHOUETTE IS SAMPLED AND THE FACE EDGE IS EXACT, and that is the
+  // whole bug. It walks the cut in 240 steps and probes 40 depths at each for
+  // the tallest roof surface; near a roof's outer corner the roof is a sliver
+  // in depth, every probe misses it, and the run simply stops early. Measured
+  // on the bungalow's front elevation:
+  //
+  //     silhouette run   u0 -22        u1 46.25
+  //     eave face edge   u0  22.947    u1 48      -> 46.25..48 survives
+  //
+  // Twenty-one inches of fascia, hanging off the end of an eave that had
+  // already been banded to within two feet of there. Three runs in that one
+  // elevation ended short -- by 1.75 ft, 1.0 ft and 0.167 ft -- and the
+  // `> 0.2` filter downstream is why only some of them were ever visible:
+  // 0.167 was dropped by luck and 1.75 was not.
+  //
+  // SO THE RUN IS GROWN TO WHAT IT APPROXIMATES, rather than the leftover
+  // being filtered harder. A run that overlaps an eave edge is part of that
+  // eave, and the eave's own ends are known exactly -- so the band is drawn
+  // over them and the subtraction downstream then finds nothing left. Raising
+  // the filter instead would trade the stub for a GAP, since the sampling
+  // shortfall is real and the eave would simply stop early; and a tolerance
+  // is what produced this in the first place.
+  //
+  // PURE, AND SEPARATE, so it can be checked. Everything around it is canvas
+  // work that has to be looked at; this is arithmetic that can be measured.
+  function extendRunsToEaves(runs, eaves, eps = 0.05) {
+    if (!Array.isArray(runs) || !Array.isArray(eaves)) return runs;
+    return runs.map(run => {
+      let u0 = run.u0, u1 = run.u1;
+      eaves.forEach(eave => {
+        // SAME BAND, OR IT IS A DIFFERENT EAVE. A garage roof on its own plate
+        // runs at another height through the same stretch of paper, and
+        // growing one to the other's ends would stretch a band across a roof
+        // it has nothing to do with.
+        if (Math.abs(eave.top - run.top) > eps) return;
+        // TOUCHING COUNTS AS OVERLAP. The sampling stops short, so the run's
+        // end and the edge's start can be a sample apart rather than crossing.
+        if (eave.u1 < u0 - eps || eave.u0 > u1 + eps) return;
+        u0 = Math.min(u0, eave.u0);
+        u1 = Math.max(u1, eave.u1);
+      });
+      return { ...run, u0, u1 };
+    });
+  }
+
   function sectionLevelStack(env) {
     const floors = env.floorLevels();
     if (!floors.length) return null;
@@ -127,9 +188,42 @@ if (!window.DraftCutView) {
     const foundationAssembly = env.levelAssembly(1);
     const wallTop = lowest.floorBottom;
     const wallBottom = wallTop - env.levelWallTopFt(1, 'foundation');
+    // ── A ROOF BEARS ON THE WALLS THAT HOLD IT UP ────────────────────────
+    //
+    // `bearing` was the top of the TOPMOST FLOOR LEVEL IN THE STACK, and the
+    // stack comes from floorLevels(), which keeps a level because it has a
+    // floor layer view -- never because anything was built there. The default
+    // stack always carries 2ND FL, so every ONE-STOREY house on both pages
+    // drew its roof a whole storey above the walls under it.
+    //
+    // Measured on Movie's own bungalow, kept as the harness fixture: the
+    // house roof bore at 17.240 and the garage roof -- which carries its own
+    // plate and was therefore right -- at 8.094, with ZERO walls on the level
+    // the house roof was standing on. He reported it as "the roof is real
+    // messed on this one"; it was the roof standing on nothing.
+    //
+    // IT WENT UNSEEN FOR WANT OF SOMETHING CORRECT BESIDE IT. Until the
+    // garage got a roof there was no second one in the elevation to disagree
+    // with, and one floating roof alone reads as how the thing draws.
+    //
+    // THE TOPMOST OCCUPIED STOREY, then -- and occupancy is asked of the
+    // walls rather than of the level list, because the level list is the
+    // thing that was wrong. env.walls() is already in this env's contract, so
+    // nothing new is required of the three pages that build one.
+    //
+    // A NO-OP WHEREVER THE TOP FLOOR IS OCCUPIED, which is what makes it safe
+    // in the one file that draws every elevation and section on both pages:
+    // `standing` ends at the same level `stack` does, so the number does not
+    // move. With NO level occupied it falls back to the old answer rather
+    // than to the ground -- an empty drawing has no walls to bear on and a
+    // bearing at zero would put its roof through the floor.
+    const built = new Set((env.walls() || []).map(wall => Number(wall.levelId)));
+    const standing = stack.filter(level => built.has(Number(level.id)));
+    const bearer = standing.length ? standing[standing.length - 1]
+      : stack[stack.length - 1];
     return {
       floors: stack,
-      bearing: stack[stack.length - 1].wallTop,
+      bearing: bearer.wallTop,
       foundation: {
         wallTop, wallBottom,
         grade: wallTop - GRADE_BELOW_FOUNDATION_TOP_FT,
@@ -1065,6 +1159,14 @@ if (!window.DraftCutView) {
     const Y = e => Math.round(y0 + (yTop - e) * pxPerFt - 0.5) + 0.5;
 
     const INK = '#1d1f20';
+    // WHAT MAKES A FACE EDGE AN EAVE: both ends sitting on the fascia top.
+    // ONE HOME, because two passes ask it -- the band below grows its runs to
+    // the eave's true ends, and the face-edge pass decides which edges wear a
+    // fascia. Written twice, the day one of them widened its tolerance the
+    // other would go on banding a different set of edges and the stub would
+    // come back wearing a new number.
+    const isEaveEdge = (ea, eb, eaveTop) =>
+      Math.abs(ea - eaveTop) < 0.01 && Math.abs(eb - eaveTop) < 0.01;
     header(`${cut.name} — GENERATED ELEVATION`);
 
     const datum = env.elevationDatum();
@@ -1543,6 +1645,11 @@ if (!window.DraftCutView) {
       // where a differently-based roof (the garage) takes over the front.
       // The fascia's lower edge carries the roof's shadow — the heaviest
       // roof line on the sheet.
+      //
+      // AND THE RUNS ARE GROWN TO THE EAVE'S TRUE ENDS FIRST. The silhouette
+      // is sampled and stops short of a roof's outer corner; the face edges
+      // below know exactly where the eave ends. See extendRunsToEaves for the
+      // measurement and for why this is not a filter.
       const runs = [];
       let run = null;
       silhouette.forEach(s => {
@@ -1551,6 +1658,33 @@ if (!window.DraftCutView) {
         if (!run) { run = { base: s.base, u0: s.u, u1: s.u }; runs.push(run); }
         else run.u1 = s.u;
       });
+      // EVERY EAVE EDGE'S TRUE EXTENT, read off the same faces the pass below
+      // reads, through the same test -- isEaveEdge is defined once for both,
+      // so the two cannot come to different answers about what an eave is.
+      const eaveSpans = [];
+      if (facesByRoof) {
+        facesByRoof.forEach((roofFaces, roof) => {
+          const top = roofBaseElev(roof, stack, env) + ROOF_FASCIA_IN / 12;
+          roofFaces.forEach(face => {
+            const poly = face.points;
+            for (let i = 0; i < poly.length; i++) {
+              const a = poly[i], b = poly[(i + 1) % poly.length];
+              const ea = top + geo().roofFaceRise(face, a, roof.pitch || 4);
+              const eb = top + geo().roofFaceRise(face, b, roof.pitch || 4);
+              if (!isEaveEdge(ea, eb, top)) continue;
+              const ua = a.x * axis.x + a.z * axis.z;
+              const ub = b.x * axis.x + b.z * axis.z;
+              eaveSpans.push({ u0: Math.min(ua, ub), u1: Math.max(ua, ub), top });
+            }
+          });
+        });
+      }
+      extendRunsToEaves(runs.map(r => ({ ...r, top: r.base + ROOF_FASCIA_IN / 12 })),
+        eaveSpans).forEach((grown, index) => {
+        runs[index].u0 = grown.u0;
+        runs[index].u1 = grown.u1;
+      });
+
       runs.filter(r => r.u1 - r.u0 > 0.5).forEach(r => {
         drawnFascia.push(r);
         ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
@@ -1666,7 +1800,7 @@ if (!window.DraftCutView) {
               if (!run) { run = { u0: u, e0: elev, u1: u, e1: elev }; runs.push(run); }
               else { run.u1 = u; run.e1 = elev; }
             }
-            const eave = Math.abs(ea - eaveTop) < 0.01 && Math.abs(eb - eaveTop) < 0.01;
+            const eave = isEaveEdge(ea, eb, eaveTop);
             const rake = !eave && onGable(a, b);
             // A run of a single station paints nothing, and the corner it
             // stands on is not "shown" for the soffit return either — a rake
@@ -1857,6 +1991,7 @@ if (!window.DraftCutView) {
   window.DraftCutView = Object.freeze({
     STANDARDS: Object.freeze({
       GARAGE_SLAB_THICKNESS_IN,
+      GARAGE_SLAB_SLOPE_IN_PER_FT,
       GARAGE_BEAM_PLATE_IN,
     GARAGE_BEAM_CONCRETE_IN,
       GRADE_BELOW_FOUNDATION_TOP_FT,
@@ -1869,6 +2004,7 @@ if (!window.DraftCutView) {
     roofHeelIn,
     cutAxis,
     sectionLevelStack,
+    extendRunsToEaves,
     sectionWallCrossings,
     cutViewExtents,
     roofBaseElev,

@@ -47,7 +47,20 @@ test('a card per level, and the layer rows are the module\'s not a copy', async 
   // claim is "a card per LEVEL" and the selector says so now, rather than
   // meaning it only while nothing else happened to be a .lv-card.
   const names = await page.locator('.lv-card[data-level] .lv-name').allTextContents();
-  expect(names).toEqual(HOUSE.levels.map(l => l.name));
+  // THE LABEL IS DERIVED, so this asks the module what each level should read
+  // rather than the record what it is called. Movie, 19 Sep: "lets name them
+  // 0.5 MAIN FL / 1 MAIN FL / 1.5 2ND FL / 2 2ND FL". A card reads '1 MAIN FL'
+  // while the record goes on holding 'MAIN FL' -- deliberately, so no file
+  // changes and no lookup by stored name breaks.
+  const labels = await page.evaluate(levels => levels
+    .map(l => window.DraftLevelAssembly.levelLabel(l.id, l.name)), HOUSE.levels);
+  expect(names).toEqual(labels);
+  // AND THE TWO ARE ACTUALLY DIFFERENT on this fixture, so the check above is
+  // comparing a derivation against a panel rather than a record against
+  // itself. Without this it would pass just as well on a page that had never
+  // heard of levelLabel.
+  expect(labels, 'the fixture has no level whose label differs from its name')
+    .not.toEqual(HOUSE.levels.map(l => l.name));
 
   // ROOF AND SITE HAVE NO LAYER VIEWS and must therefore show no rows. This
   // is the same fact that seats them together in one rail row rather than
@@ -61,11 +74,15 @@ test('a card per level, and the layer rows are the module\'s not a copy', async 
     });
     return out;
   });
+  // KEYED BY THE LABEL THE CARD SHOWS, since that is what the map above was
+  // built from -- and the label is derived, so it is asked for here the same
+  // way the panel asks for it.
   const fromModule = await page.evaluate(ids => {
     const LV = window.DraftLayerViews;
+    const LA = window.DraftLevelAssembly;
     const out = {};
     ids.forEach(([id, name]) => {
-      out[name] = LV.layerViewsForLevelId(id).map(v => v.label || v.id);
+      out[LA.levelLabel(id, name)] = LV.layerViewsForLevelId(id).map(v => v.label || v.id);
     });
     return out;
   }, HOUSE.levels.map(l => [l.id, l.name]));
@@ -104,8 +121,11 @@ test('THE AGREEMENT: a layer row moves the level, the view, the readout and the 
       .evaluateAll(els => els.map(e => e.dataset.layer)),
     'the panel lit a different row than the page is showing').toEqual([target]);
     // And exactly one card is marked, on the level actually being shown.
+    const activeLevel = HOUSE.levels.find(l => String(l.id) === levelId);
+    const activeLabel = await page.evaluate(l =>
+      window.DraftLevelAssembly.levelLabel(l.id, l.name), activeLevel);
     expect(await page.locator('.lv-card[data-active] .lv-name').allTextContents())
-      .toEqual([HOUSE.levels.find(l => String(l.id) === levelId).name]);
+      .toEqual([activeLabel]);
   });
 
 test('every chrome hook is still exactly one control', async ({ page }) => {
@@ -184,8 +204,15 @@ test('+ ADD appends a real level, and the panel grows by one card', async ({ pag
   // ABOVE THE TOP FLOOR AND BELOW ROOF — the old page's stacking rule, and the
   // reason the seating chart puts it where it does. Appending at the end would
   // read as correct on a count and be wrong on the rail.
-  expect(names.indexOf('ATTIC')).toBeLessThan(names.indexOf('2ND FL'));
-  expect(names.indexOf('ATTIC')).toBeGreaterThan(names.indexOf('ROOF'));
+  // BY LABEL, because the cards read the derived name now -- 2ND FL's card
+  // says '2 2ND FL'. Found by prefix rather than typed, so the day the scheme
+  // changes again this moves with it instead of going quietly green on an
+  // indexOf that returns -1 for both sides and compares -1 to -1.
+  const at = word => names.findIndex(n => n.endsWith(word));
+  expect(at('2ND FL'), 'the fixture still has a 2ND FL card to stack under')
+    .toBeGreaterThanOrEqual(0);
+  expect(names.indexOf('ATTIC')).toBeLessThan(at('2ND FL'));
+  expect(names.indexOf('ATTIC')).toBeGreaterThan(at('ROOF'));
 
   // It is an EDIT, so the page says so before anything is written.
   await expect(page.locator('[data-model-save]')).toHaveText(/unsaved/i);
@@ -378,3 +405,85 @@ test('the BONEYARD is a workspace now, and the panel holds no 3D chair', async (
   // cannot draw; the LEVELS pane is all text now, so the place is not held.
   await expect(page.locator('[data-view3d]')).toHaveCount(0);
 });
+
+test('the cards read as storeys: 1 MAIN FL, 2 2ND FL, and no number on the rest',
+  async ({ page }) => {
+    // Movie, 19 Sep: "lets name them 0.5 MAIN FL / 1 MAIN FL / 1.5 2ND FL /
+    // 2 2ND FL --- this will actually make most sense" -- the number is where
+    // the level sits, the name is which floor it belongs to. And on what gets
+    // none: "(and foundation boneyard etc roof site". A number here means a
+    // floor to stand on, and those are not floors.
+    //
+    // THE CHECK ABOVE ONLY SAYS THE PANEL AND THE MODULE AGREE. Both could
+    // agree on the old names. This one says what the drafter actually reads,
+    // in Movie's own words, so the scheme cannot quietly revert to a panel
+    // that still matches its module.
+    await openPanel(page);
+    const cards = await page.evaluate(() => {
+      const out = {};
+      document.querySelectorAll('.lv-card[data-level]').forEach(card => {
+        out[card.dataset.level] = card.querySelector('.lv-name').textContent;
+      });
+      return out;
+    });
+
+    expect(cards[3], 'the main floor is storey 1').toBe('1 MAIN FL');
+    expect(cards[5], 'and the floor above it storey 2').toBe('2 2ND FL');
+    // UNNUMBERED, and named exactly as the record has them.
+    expect(cards[1], 'the foundation is not a storey').toBe('FOUNDATION');
+    expect(cards[7], 'nor is the roof').toBe('ROOF');
+    expect(cards[8], 'nor the site').toBe('SITE');
+  });
+
+test('a level a drafter adds himself is not given a storey number', async ({ page }) => {
+  // _addLevel hands out ids from 9 up, outside the scheme entirely. Numbering
+  // one would seat it at a storey nobody chose -- and the numbering exists
+  // precisely because position matters.
+  await openPanel(page);
+  await page.evaluate(() => {
+    window.prompt = q => (/Level name/.test(q) ? 'ATTIC' : '20');
+  });
+  await page.locator('[data-add-level]').click();
+  await page.waitForTimeout(250);
+
+  const names = await page.locator('.lv-card .lv-name').allTextContents();
+  expect(names, 'the drafter-s own name, unnumbered').toContain('ATTIC');
+  // THE CONTROL: the numbered ones are on the same panel at the same time, so
+  // this is a difference between two kinds of level rather than a page that
+  // numbers nothing.
+  expect(names, 'while the storeys are still numbered beside it').toContain('1 MAIN FL');
+});
+
+test('the record keeps the name it was saved with, whatever the card reads',
+  async ({ page }) => {
+    // THE WHOLE REASON THE LABEL IS DERIVED. Written into the record, every
+    // file made before today would read MAIN FL while a new one read 1 MAIN
+    // FL -- one level under two names depending on when it was saved -- and
+    // every lookup that finds a level BY name would break.
+    //
+    // MEASURED THROUGH A SAVE, not by reading page state: this page has no
+    // serializer between the push and the file, so the file is the only place
+    // the question can honestly be asked.
+    await openPanel(page);
+    await expect(page.locator('#save')).toBeEnabled({ timeout: 4000 });
+    await page.locator('#save').click();
+    await expect(page.locator('#save')).toHaveText('SAVED', { timeout: 6000 });
+
+    const stored = await page.evaluate(async bucket => {
+      const file = await window.SharedFileStore.loadSharedFile(bucket);
+      const raw = JSON.parse(await file.text());
+      return (raw.levels || []).map(l => `${l.id}:${l.name}`);
+    }, BUCKET);
+    expect(stored, 'a label was written into the drawing')
+      .toEqual(HOUSE.levels.map(l => `${l.id}:${l.name}`));
+
+    // AND THE LOOKUP BY STORED NAME STILL FINDS IT, which is the thing that
+    // would have broken: audit-repros and specs alike do
+    // `levels.find(l => l.name === 'MAIN FL')`.
+    const found = await page.evaluate(async bucket => {
+      const file = await window.SharedFileStore.loadSharedFile(bucket);
+      const raw = JSON.parse(await file.text());
+      return (raw.levels.find(l => l.name === 'MAIN FL') || {}).id ?? null;
+    }, BUCKET);
+    expect(found, 'a level can still be found by the name it stores').toBe(3);
+  });

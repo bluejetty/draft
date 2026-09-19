@@ -71,9 +71,32 @@ if (!window.DraftLayerViews) {
     .slice()
     .reverse();
 
+  // WHERE A FLOOR OUTLINE SAVES, which is not always the layer set it was
+  // drawn on. Lifted from MODEL.dc.html:9262 so the two pages cannot come to
+  // different answers -- it is a layer-views question, the same as floorLevels
+  // above, and the pages were each about to ask it in their own words.
+  //
+  // THE SECOND CLAUSE IS THE ONE THAT SURPRISES. Drawn on FOUNDATION, a floor
+  // is a concrete slab, which is obvious. Drawn anywhere else on a level that
+  // HAS a foundation set, it is STILL a slab -- because a level with a
+  // foundation is a level whose floor IS the foundation, whichever layer set
+  // the drafter happened to be looking at. Only a level with no foundation set
+  // at all gets a plain framed floor.
+  //
+  // drawing-format.js:218 records what this costs when it is got wrong: "THE
+  // FALLBACK IS 'floor', NOT 'plan' ... MODEL.html got this wrong in tier 2a
+  // and no fixture could catch it, because the old page always writes the
+  // field explicitly."
+  const floorHomeView = (viewId, levelId) => {
+    if (viewId === 'foundation') return 'foundation';
+    return layerViewsForLevelId(levelId).some(view => view.id === 'foundation')
+      ? 'foundation' : 'floor';
+  };
+
   window.DraftLayerViews = Object.freeze({
     FLOOR_LEVEL_VIEWS, LEVEL_LAYER_VIEWS, WHOLE_LEVEL_IDS,
     layerViewsForLevelId, defaultLayerViewId, layersFor, floorLevels,
+    floorHomeView,
   });
 })();
 }

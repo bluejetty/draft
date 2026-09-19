@@ -182,6 +182,13 @@ test('shut is shut; one press seats the whole chart, every seat reachable',
       .not.toContain('view=cut%3AE1');
   });
 
+// THE SLOT MOVED TO THE LEFT RAIL, under the tool column. Movie, 19 Sep: "we
+// should designate an area on the model page for the PROPERTIES box (which
+// will change depending on what you are using) i'm thinking add a collapsable
+// box on the left side under the DRAFTING TOOLS". It lived under LEVELS /
+// LAYERS on the right until then. The CONTRACT below did not change with the
+// address -- set puts a node under a title and shows it, clear hides it --
+// which is why this test keeps its shape and only swaps which tab it opens.
 test('the properties slot belongs to the open panel, not the strip', async ({ page }) => {
   await openShell(page);
 
@@ -193,7 +200,7 @@ test('the properties slot belongs to the open panel, not the strip', async ({ pa
   // The contract Gilligan builds against, exercised from outside exactly as he
   // would: set puts a node under a title and shows the slot, clear empties and
   // hides it. Nothing here knows what a beam is.
-  await page.locator('#right-tab').click();
+  await page.locator('#left-tab').click();
   await page.waitForTimeout(150);
   await page.evaluate(() => {
     const node = document.createElement('div');
@@ -205,18 +212,65 @@ test('the properties slot belongs to the open panel, not the strip', async ({ pa
   await expect(slot).toContainText('BEAM PROPERTIES');
   await expect(page.locator('#zz-probe-props')).toBeVisible();
 
+  // AND THE BOX AROUND IT GOES WITH THE CONTENTS. An empty box would leave a
+  // PROPERTIES heading and a fold arrow under the tools with nothing behind
+  // them -- a control that does nothing.
+  await expect(page.locator('#props-box')).toBeVisible();
   await page.evaluate(() => window.ModelProps.clear());
   await expect(slot).toBeHidden();
+  await expect(page.locator('#props-box')).toBeHidden();
 
   // ARMING A TOOL MUST NOT YANK A PANEL OPEN. The slot owns the space and the
   // show/hide; whether the drafter is looking at the panel is the drafter's.
-  await page.locator('#right-tab').click();
+  await page.locator('#left-tab').click();
   await page.waitForTimeout(150);
-  await expect(page.locator('#right-rail')).toHaveAttribute('data-collapsed', '');
+  await expect(page.locator('#left-rail')).toBeHidden();
   await page.evaluate(() => window.ModelProps.set('FIXTURE PROPERTIES', null));
-  await expect(page.locator('#right-rail'),
+  await expect(page.locator('#left-rail'),
     'setting properties must not open a panel the drafter closed')
-    .toHaveAttribute('data-collapsed', '');
+    .toBeHidden();
+});
+
+// THE FOLD IS THE BOX'S OWN, and it has to be: the tool column above it is six
+// rows tall, so a drafter who wants the keys and not the properties would
+// otherwise have to shut the whole rail and lose both.
+test('the properties box folds without shutting the rail it sits in', async ({ page }) => {
+  await openShell(page);
+  await page.locator('#left-tab').click();
+  await page.waitForTimeout(150);
+  await page.evaluate(() => {
+    const node = document.createElement('div');
+    node.id = 'zz-fold-probe';
+    node.textContent = 'stud 2x6';
+    window.ModelProps.set('WALL', node);
+  });
+  const slot = page.locator('#props-slot');
+  await expect(slot).toBeVisible();
+
+  await page.locator('[data-props-fold]').click();
+  await expect(slot, 'folding must hide what is in the box').toBeHidden();
+  await expect(page.locator('#left-rail'),
+    'folding the properties must not shut the rail holding the tool keys')
+    .toBeVisible();
+  await expect(page.locator('[data-tool-key="wall"]')).toBeVisible();
+
+  // IT SURVIVES A RELOAD, like the two rails either side of it, and for the
+  // same reason: a drafter who folded it does not want it back every time the
+  // page comes up.
+  await page.reload();
+  await page.waitForTimeout(400);
+  await expect(page.locator('[data-props-fold]'))
+    .toHaveAttribute('aria-expanded', 'false');
+
+  // The probe does not survive a reload -- nothing is selected and no tool is
+  // armed, so the box is empty and hidden. Fill it again to press the fold:
+  // the fold's STATE persisted, which is the claim; a box that is empty is
+  // not a box that is open.
+  await page.evaluate(() => window.ModelProps.set('WALL', null));
+  await page.locator('[data-props-fold]').click();
+  await expect(page.locator('[data-props-fold]'))
+    .toHaveAttribute('aria-expanded', 'true');
+  await expect(page.locator('#props-slot')).toBeVisible();
 });
 
 test('each side opens and shuts without disturbing the other', async ({ page }) => {

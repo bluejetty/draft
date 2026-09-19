@@ -194,14 +194,43 @@ test('NEW past the guard is the five-level blank, read in through the format',
 
     const fresh = await page.evaluate(() => {
       const text = document.getElementById('readout').textContent;
-      const names = [...document.querySelectorAll('.lv-card .lv-name')]
-        .map(el => el.textContent);
-      return { text, names };
+      const cards = [...document.querySelectorAll('.lv-card[data-level]')]
+        .map(card => ({
+          id: Number(card.dataset.level),
+          label: card.querySelector('.lv-name').textContent,
+        }));
+      return { text, cards };
     });
     expect(fresh.text, 'a new drawing has nothing in it').toContain('walls 0/0');
+
     // THE OLD PAGE'S LEVELS, not an empty drawing: a drawing with no levels
     // has nowhere to draw.
-    expect(fresh.names).toEqual(['SITE', 'ROOF', '2ND FL', 'MAIN FL', 'FOUNDATION']);
+    //
+    // BY ID, WHICH IS WHAT THE FORMAT ACTUALLY FIXES. This read the cards'
+    // text and compared it to the stored names, which held only while the two
+    // were the same string -- and they stopped being the same the day the
+    // cards began reading '1 MAIN FL'. The claim was never about the words on
+    // screen: it is that NEW lays down the five-level blank, and a level's
+    // identity in this repo is its id. So the ids are the assertion and the
+    // labels are checked against the module that derives them.
+    expect(fresh.cards.map(c => c.id), 'NEW must lay down the five-level blank')
+      .toEqual([8, 7, 5, 3, 1]);
+    // THE STOREYS ARE NUMBERED AND THE REST ARE NOT -- Movie, 19 Sep, "lets
+    // name them ... 1 MAIN FL ... 2 2ND FL" and, on the others, "(and
+    // foundation boneyard etc roof site". Written out in his own words so this
+    // cannot go quietly green on a page that derives nothing.
+    expect(fresh.cards.map(c => c.label), 'the cards must read as storeys')
+      .toEqual(['SITE', 'ROOF', '2 2ND FL', '1 MAIN FL', 'FOUNDATION']);
+    // AND THE MODULE IS WHERE THOSE TWO COME FROM, not this file: the blank's
+    // stored names are the old page's, and levelLabel is what turns them into
+    // what the card shows. Only the numbered pair is asked, because the other
+    // three are names this table has no opinion about and passes through.
+    const derived = await page.evaluate(() => [
+      window.DraftLevelAssembly.levelLabel(5, '2ND FL'),
+      window.DraftLevelAssembly.levelLabel(3, 'MAIN FL'),
+    ]);
+    expect(derived, 'the cards agree with the module that derives them')
+      .toEqual(['2 2ND FL', '1 MAIN FL']);
   });
 
 test('a clean page does not ask at all', async ({ page }) => {

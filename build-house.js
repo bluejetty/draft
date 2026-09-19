@@ -27,12 +27,20 @@ if (!window.DraftBuildHouse) {
   // Walk the outline into wall runs, skipping degenerate edges. Points pass
   // through untouched (x, z, srcId) in ring order — the commit side reads
   // them exactly as it read the outline.
+  //
+  // EACH RUN SAYS WHICH EDGE IT IS. The index is not the run's position in
+  // this list, and callers were relying on it being one: a degenerate edge is
+  // skipped here, so from that point on every run sits one place earlier than
+  // the edge it came from. MODEL.html hangs a premade plan's windows and doors
+  // on walls BY EDGE NUMBER, and an attached garage now drops the runs it
+  // shares with the house — two more ways for a position to stop meaning an
+  // edge. Saying it outright costs a field and ends the class.
   const houseWallRuns = points => {
     const runs = [];
     points.forEach((point, index) => {
       const next = points[(index + 1) % points.length];
       if (Math.hypot(next.x - point.x, next.z - point.z) < 0.01) return;
-      runs.push({ start: point, end: next });
+      runs.push({ start: point, end: next, edge: index });
     });
     return runs;
   };

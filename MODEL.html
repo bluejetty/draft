@@ -105,19 +105,30 @@
      many specs that read the page's own scale and wall count out of it keep
      working whether the drafter has it open or not. */
   #readout[hidden] { display:none; }
-  #readout-tab { position:fixed; left:12px; bottom:var(--readout-bottom);
-    z-index:5; color: var(--ink-quiet);
+  /* THE ROW CARRIES THE POSITION NOW, not the tab: the count stands to the
+     tab's left on the same line, and two separately fixed elements at one
+     inset would be a layout kept in step by hand. */
+  #lower-left { position:fixed; left:12px; bottom:var(--readout-bottom);
+    z-index:5; display:flex; align-items:baseline; gap:10px; }
+  #readout-tab { color: var(--ink-quiet);
     font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
     text-transform:uppercase; cursor:pointer;
     border:none; background:none; padding:0; }
+  /* AN EMPTY SLOT TAKES NO ROOM, so the tab is where it has always been
+     until the count actually arrives. `gap` would otherwise pay for a child
+     that is not there. */
+  #lower-left > [data-visit-counter-home]:empty { display:none; }
   #readout-tab:hover { color: var(--accent); }
   /* OPEN, THE WORD GOES AND AN X TAKES OVER (Movie): the tab and the panel
      are one control, so having both on screen at once said the same thing
      twice. The X sits in the panel's own bottom-right, in the open area
      under the second line rather than on a number. */
   #readout-tab[aria-expanded="true"] { display:none; }
+  /* OVER THE ROW, not beside it. The panel opens on the same corner the row
+     stands in; one z above means it covers the count instead of sharing a
+     line with it, and the tab hides itself as it always did. */
   #readout { display:flex; flex-direction:column; align-items:flex-end;
-    position:fixed; left:12px; bottom:var(--readout-bottom); z-index:5;
+    position:fixed; left:12px; bottom:var(--readout-bottom); z-index:6;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px;
     /* THE PANEL STAYS CLICK-THROUGH and only the X takes the pointer: open,
@@ -912,6 +923,28 @@
      source besides, and the two seconds before the board rises are exactly
      when the press has the drafter's eye. */
   html[data-theme="rough"] #bone[data-lit] img { filter:none; }
+  /* THE NUMBER RIDES ON THE PRESS (board #261, MODEL.dc.html:558), and WHERE
+     it rides is a fact about the ARTWORK rather than about the wallet --
+     which is why the offset lives in BONE_ART beside the two pictures and
+     not here. Movie, 19 Sep: "put the number on the bone under the bone in
+     the red area and put the number in the house centered in the middle of
+     the house outline", and then, on being shown why those are one rule:
+     "yes exactly the style is different but the bone and house are the same
+     button".
+
+     aria-hidden, and the title carries the wallet in words instead. A screen
+     reader reading "3" off a button called BONE says nothing useful; the
+     title says three bones, when the next one lands, and what a build costs. */
+  #bone-balance { position:absolute; left:0; right:0;
+    transform:translateY(-50%); text-align:center; pointer-events:none;
+    font-family: var(--font-ui); font-weight:700; color:#fff;
+    text-shadow:0 1px 2px rgba(29,31,32,0.55); letter-spacing:0.02em;
+    line-height:1; }
+  #bone-balance:empty { display:none; }
+  /* AN EMPTY WALLET GREYS OUT, and grey beats the lit glow: a bone glowing
+     with nothing to spend is a contradiction. The rule sits after
+     [data-lit] so it wins on the one press where both are true. */
+  #bone[data-broke] img { filter:grayscale(1) brightness(0.82); }
   #bone .said {
     position:absolute; width:1px; height:1px; margin:-1px; padding:0;
     overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
@@ -1102,11 +1135,6 @@
      §7c's worry (a shut rail takes the level switch away) is answered by
      the tab itself: LEVELS / LAYERS is one press, same as the chips were. */
   #right-rail[data-collapsed] { display:none; }
-  /* PROPERTIES BELONG TO THE LEVELS PANE. The slot shows itself when a tool
-     fills it, and that press can happen while the seats are showing -- so
-     the pane rules it out here rather than trusting every future caller to
-     remember which pane is up. */
-  #right-rail[data-pane-showing="previews"] #props-slot { display:none; }
   /* THE TOOL COLUMN. Four square keys a row, which is the old page's own
      shape and not a taste: at four across, DRAW/EDIT is three rows and BUILD
      is two, and the whole roster is reachable without the panel scrolling on
@@ -1183,6 +1211,17 @@
     color: var(--ink-quiet); font-family: var(--font-ui); font-size:9px;
     font-weight:600; letter-spacing:0.04em; line-height:1; }
   .sel-chip:hover { border-color: var(--accent); color: var(--accent); }
+  /* A TYPED DIMENSION, wearing the panel's own furniture rather than the
+     browser's: the chips beside it set the border, the ink and the face, and
+     a field that looked like neither would read as a hole in the panel. It is
+     a text box, so it takes the READING font -- a dimension is meant to be
+     read back, and the chips' 9px caps are a label voice, not a value one. */
+  .prop-field { width:100%; box-sizing:border-box; padding:4px 5px;
+    border:1px solid var(--edge-panel); border-radius:2px;
+    background: var(--surface-field, var(--surface-chip));
+    color: var(--ink); font-family: var(--font-ui); font-size:11px;
+    letter-spacing:0.02em; line-height:1.2; }
+  .prop-field:focus { outline:none; border-color: var(--accent); }
   /* §6's other two surfaces go down the same way the keys do, and the same
      0.35 so one number governs "unavailable" across the whole column. Read as
      computed opacity by the spec, never as the attribute. */
@@ -1217,7 +1256,6 @@
     background: var(--surface-chip); color: var(--ink);
     font-family: var(--font-ui); font-size:10px; letter-spacing:0.04em;
     text-transform:uppercase; }
-  #props-slot[hidden] { display:none; }
 
   /* THE LEVELS / LAYERS PANEL. Movie: "i will also need the LEVELS / LAYERS
      menu too", and "the level layers should be a tab on the right side like
@@ -1274,9 +1312,25 @@
   .props-title { font-family: var(--font-ui); font-size:9px; font-weight:600;
     letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet);
     margin-bottom:6px; }
-  #props-slot { margin-top:10px; padding-top:10px;
-    border-top:1px solid var(--edge-panel);
-    font-family: var(--font-ui); font-size:10px; color: var(--ink-quiet); }
+  /* THE PROPERTIES BOX, under the tool column in the left rail. The rule the
+     slot used to carry is now the BOX's -- the divider belongs above the
+     fold button, or a folded box would sit on the tools with no line between
+     them. */
+  #props-box { margin-top:10px; padding-top:10px;
+    border-top:1px solid var(--edge-panel); }
+  #props-box[hidden] { display:none; }
+  .props-fold { display:block; width:100%; padding:0 0 6px; border:0;
+    background:none; cursor:pointer; text-align:left;
+    font-family: var(--font-ui); font-size:9px; font-weight:600;
+    letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet); }
+  .props-fold:hover { color: var(--ink); }
+  /* The fold's arrow is the button's own, so the word never moves. */
+  .props-fold::after { content:' \25B4'; opacity:0.7; }
+  [data-folded] > .props-fold::after { content:' \25BE'; }
+  #props-slot { font-family: var(--font-ui); font-size:10px;
+    color: var(--ink-quiet); }
+  #props-slot[hidden] { display:none; }
+  [data-folded] > #props-slot { display:none; }
 
   /* THE SEATING CHART: six cut views, all six always shown. The shape is
      MODEL.dc.html's rail (:188-200) and the PAIRING is its own -- E1|E3 over
@@ -1396,9 +1450,25 @@
 <body>
 
 <canvas id="plan"></canvas>
-<button id="readout-tab" type="button" data-readout-tab
-  aria-expanded="false" aria-controls="readout"
-  title="The page's own counts: what is drawn on this level, and what the drawing holds">STATUS READOUT</button>
+<!-- THE LOWER-LEFT ROW. Movie, 19 Sep: "i need the viewcounter lets put it
+     on lower left (2nd row from bottom to the left of 'STATUS READOUT'". The
+     count used to mount beside the PROJECT link, which on this page is the
+     BOTTOM row; the row above is where the instruments are, and a count of
+     visits reads as one.
+
+     THE SLOT IS EMPTY ON EVERY DESK AND IN EVERY TEST, deliberately and
+     unavoidably: traffic-counter.js reports nothing and mounts nothing on
+     localhost, 127.0.0.1 or file:, so STATUS READOUT sits at the same 12px
+     here that it always has and only moves right on the live site. That is
+     the same shape the count already has on the five other pages -- it
+     shifts the row it joins -- and it is why the slot is a real element with
+     a name rather than a gap measured in pixels. -->
+<div id="lower-left" data-lower-left>
+  <span data-visit-counter-home></span>
+  <button id="readout-tab" type="button" data-readout-tab
+    aria-expanded="false" aria-controls="readout"
+    title="The page's own counts: what is drawn on this level, and what the drawing holds">STATUS READOUT</button>
+</div>
 <div id="readout" hidden>
   <!-- THE COUNTS GO IN THEIR OWN SPAN so the close button survives them: the
        readout is rewritten by innerHTML on every paint, and a child of the
@@ -1424,6 +1494,29 @@
 <button id="left-tab" class="rail-tab" type="button" data-left-tab hidden>DRAFTING TOOLS</button>
 <aside id="left-rail" data-left-rail hidden>
   <div id="tool-slot" data-tool-slot></div>
+  <!-- PROPERTIES SITS UNDER THE TOOLS. Movie, 19 Sep: "we should designate an
+       area on the model page for the PROPERTIES box (which will change
+       depending on what you are using) i'm thinking add a collapsable box on
+       the left side under the DRAFTING TOOLS". It was in the RIGHT rail under
+       LEVELS / LAYERS until then, which put the thing you change a wall with
+       on the far side of the sheet from the thing you draw a wall with.
+
+       IT FOLDS ON ITS OWN, and that is the point of the box rather than a
+       flourish: the tool column above it is six rows tall, so folding the
+       properties away has to be possible WITHOUT shutting the rail that holds
+       the keys. The fold is in the URL beside `left` and `right`, for the
+       reason those are: it is what the drafter is looking at, and it survives
+       a reload.
+
+       THE TITLE STAYS INSIDE THE SLOT, not on the fold button. The button
+       says PROPERTIES always; the slot says WALL, ROOF, COLUMN -- whatever is
+       in hand. Putting the changing word on the button would have made the
+       fold's own label move under the drafter's cursor. -->
+  <div id="props-box" data-props-box hidden>
+    <button class="props-fold" type="button" data-props-fold
+      aria-expanded="true">PROPERTIES</button>
+    <div id="props-slot" data-props-slot hidden></div>
+  </div>
 </aside>
 
 <!-- TWO TABS ON THE RIGHT EDGE (Movie, 15 Sep): "2 seperate tabs top will be
@@ -1450,15 +1543,6 @@
        inside a level card are the same objects as the seats, so adding a
        level adds two seats and deleting one takes them away. -->
   <div id="levels-panel" data-levels-panel data-pane="levels"></div>
-  <!-- PER-TOOL PROPERTIES, the slot and nothing in it. COLUMN and BEAM fill
-       it from the SELECTION (showStructureProps); ROOF fills it from the
-       ARMED TOOL, which is the second of the two ways in. The contract is in
-       the comment beside window.ModelProps below -- NOT beside a
-       `setToolProperties`, which this comment named and which has never
-       existed in this repo. It
-       rides with LEVELS / LAYERS: properties belong to the thing selected,
-       which is what that pane is about. -->
-  <div id="props-slot" data-props-slot hidden></div>
   <div id="view-rail" data-pane="previews"></div>
 </aside>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
@@ -1519,7 +1603,8 @@
       title="Gruff's drive-thru: pick a house type, then build it"><img
         data-bone-art
         src="./assets/bone-red.png"
-        alt="" /><span class="said">BONE</span></button>
+        alt="" /><span id="bone-balance" data-bone-balance
+        aria-hidden="true"></span><span class="said">BONE</span></button>
     <!-- ONE DELETE FOR EVERYTHING SELECTED (§7a), where there were two verbs
          for one of the types. It rides with the pair rather than with the
          places, because it is a verb. -->
@@ -1974,10 +2059,17 @@
      a house raised here and a house raised there cannot disagree about which
      side of the traced line the wall body sits on. -->
 <script src="./build-house.js"></script>
+<!-- AUTO DIMS: the exterior dimension strings. Extracted pure out of the old
+     page -- plain data in, segments out, no THREE and no DOM -- and this page
+     is its second caller. The computation is not ported anywhere: both pages
+     call the same function with the same arguments, and the two tuning
+     numbers live in it rather than in either page. -->
+<script src="./auto-dims.js"></script>
 <!-- The designs the drive-thru hands over. Movie, 18 Sep: "i'd just like to
      offer them premade designs in there at the beginning". A DESIGN, not a
      generator -- starter-shape.js invents a house, this one is the building
      in the picture the drafter pressed. -->
+<script src="./bone-wallet.js"></script>
 <script src="./premade-plans.js"></script>
 <!-- Where an ordered garage stands. A traced loop says where it goes by
      being traced; an autobuilt one has to be told, and that is a rule about
@@ -2786,12 +2878,18 @@
       // taper runs (edge - field) inches in plan. STANDARDS exports the two
       // depths but not this difference, so both pages compute it.
       garageEdgeTaperRunIn: S.GARAGE_EDGE_DEPTH_IN - S.GARAGE_SLAB_THICKNESS_IN,
-      // drawFloor2D's own five-colour set. This page shows committed slabs
-      // only -- its one draw gesture and its selection are both wall-only --
-      // so the preview and selected entries are wired to the committed look
-      // and to the brand accent. Deliberate placeholders, not omissions:
-      // were a preview ever to appear it would read as committed, which is
-      // visible and diagnosable, rather than throwing on an absent colour.
+      // drawFloor2D's own five-colour set. The preview pair was written
+      // against the day this page grew a floor gesture, on the grounds that a
+      // preview reading as committed is visible and diagnosable while an
+      // absent colour throws. THAT DAY IS THIS ONE, and the pair is left
+      // pointing at the committed look ON PURPOSE rather than by inheritance:
+      // a floor being traced is the floor it is about to be, and the painter
+      // already separates the two states by DASHING the preview edge and
+      // withholding the corner handles. A second colour would be a second
+      // thing to keep in step with the palette for no fact gained.
+      //
+      // `selected` is still the placeholder it was: this page's selection is
+      // wall-only, so that entry has no way to be reached yet.
       colors: {
         fill: skin['draw-floor'],
         fillPreview: skin['draw-floor'],
@@ -3520,8 +3618,53 @@
   // module's own comment says the TABLE had one home while the LOOKUP had
   // four, and that is how #325's role-less callers happened. Rolling a fifth
   // copy here would have re-made that bug in the file that warns about it.
+  // WHAT A LEVEL IS CALLED ON SCREEN, asked of level-assembly.js rather than
+  // read off the record. The stored `name` is what the file holds; this is
+  // what the drafter reads -- "1 MAIN FL", "1.5 2ND FL" -- and the two are
+  // deliberately different so no file changes and no lookup by stored name
+  // breaks. See levelLabel's own note for why it is derived.
+  const levelLabel = (id, name) => window.DraftLevelAssembly.levelLabel(id, name);
+
   const assemblyFor = id => window.DraftLevelAssembly
     .levelAssemblyFor(drawing?.levelAssemblies, id);
+
+  // A GARAGE'S MASTER, if it has one: a level COPY points at one by masterId
+  // and a master IS a master because it carries its own shelfId. The old page
+  // reads the same two ways round (_garageMaster).
+  //
+  // THESE TWO CAME OUT OF cutEnv WITH garageFoundationOf, which calls both.
+  // Left inside, the lifted function referenced names that only existed while
+  // the env was being built -- and the page threw `garageMaster is not
+  // defined` on every paint after a garage went up. Found by a probe watching
+  // for page errors, not by a spec: the throw was inside a React render, so
+  // the canvas kept painting and only UNDO looked broken.
+  const garageMaster = garage => {
+    if (garage?.shelfId != null) return garage;
+    return (drawing?.boneyardOutlines || [])
+      .find(master => master.id === garage?.masterId) || null;
+  };
+  const garageDetached = garage =>
+    garage?.detached === true || garageMaster(garage)?.detached === true;
+
+  // WHICH FOUNDATION A GARAGE HAS, ported from _garageFoundation: the outline
+  // answers first, then its master, then the section table's row for this
+  // garage's kind, and a gradebeam when nothing has said.
+  //
+  // IT LIVES OUT HERE because two callers need it and they must not differ.
+  // It was written inside cutEnv, where it answered "what concrete should I
+  // DRAW"; the build asks "what concrete should I MAKE", and a garage drawn
+  // with a frost wall and built with a grade beam is a drawing that disagrees
+  // with itself.
+  const garageFoundationOf = garage => {
+    const stored = garage?.foundation || garageMaster(garage)?.foundation;
+    if (stored === 'thickened' || stored === 'frostwall') return stored;
+    if (stored === 'gradebeam') return 'gradebeam';
+    const row = garageDetached(garage) ? 'detachedGarage' : 'attachedGarage';
+    const cell = drawing?.sectionTable?.rows?.[row]?.garageFoundation;
+    if (cell === 'frostwall') return 'frostwall';
+    if (cell === 'thickened' && row === 'detachedGarage') return 'thickened';
+    return 'gradebeam';
+  };
 
   // ── the cut-view env ────────────────────────────────────────────────────────
   // SPEC-model-html-cut-views.md. cut-view.js's drawCutView reads its world
@@ -3549,16 +3692,6 @@
     const ftIn = feet => F.formatArchitecturalInches(feet * 12);
 
     // A garage outline's master lives on the boneyard shelf; an outline that
-    // IS a master carries its own shelfId. The old page reads the same two
-    // ways round (_garageMaster).
-    const garageMaster = garage => {
-      if (garage?.shelfId != null) return garage;
-      return (drawing?.boneyardOutlines || [])
-        .find(master => master.id === garage?.masterId) || null;
-    };
-    const garageDetached = garage =>
-      garage?.detached === true || garageMaster(garage)?.detached === true;
-
     return {
       floorLevels: () => LV.floorLevels(drawing?.levels),
       levelAssembly: levelId => assemblyFor(levelId),
@@ -3604,18 +3737,11 @@
       fenestrations: () => drawing?.fenestrations || [],
       garageOutlines: levelId => (drawing?.outlines || [])
         .filter(outline => outline.levelId === levelId && outline.garage),
-      // Ported from _garageFoundation: the outline answers first, then the
-      // master, then the section table's row for this garage's kind.
-      garageFoundation: garage => {
-        const stored = garage?.foundation || garageMaster(garage)?.foundation;
-        if (stored === 'thickened' || stored === 'frostwall') return stored;
-        if (stored === 'gradebeam') return 'gradebeam';
-        const row = garageDetached(garage) ? 'detachedGarage' : 'attachedGarage';
-        const cell = drawing?.sectionTable?.rows?.[row]?.garageFoundation;
-        if (cell === 'frostwall') return 'frostwall';
-        if (cell === 'thickened' && row === 'detachedGarage') return 'thickened';
-        return 'gradebeam';
-      },
+      // WHICH FOUNDATION A GARAGE HAS. Lifted OUT of this env (see
+      // garageFoundationOf above) the day the build needed it too: the
+      // section painter asks what kind of concrete to draw and the builder
+      // asks what kind of concrete to make, and those must be one question.
+      garageFoundation: garageFoundationOf,
       buildType: () => drawing?.buildType ?? null,
       // BOTH ENDS AND THE MIDDLE, as the old page asks it: an edge lying along
       // an outline needs all three on the boundary, or a chord across a
@@ -3892,6 +4018,57 @@
           }
           ctx.restore();
         }
+        // THE FLOOR BEING TRACED. The same reason the cut preview above
+        // exists: a press that changes nothing on the sheet cannot be told
+        // from a press that missed, which is exactly how the OUTLINE tool read
+        // before it painted -- Movie, 17 Sep: "outline command doesn't work".
+        //
+        // THROUGH drawFloor2D, not a second polygon drawn here. That painter
+        // has had a `preview` mode all along -- dashed edge, wash, and no
+        // corner handles -- and floorEnv() has carried its two preview colours
+        // since tier 2c against this day.
+        //
+        // TWO MARKS THE PAINTER DOES NOT MAKE are added after it. It returns
+        // early under two points, so the FIRST press would paint nothing at
+        // all; and it knows nothing about closing, so there would be no
+        // target to close on.
+        if (activeTool === 'floor' && floorCorners.length) {
+          const R = window.DraftRender2D;
+          // THE RUBBER BAND'S FAR END, supplied only while there is a cursor
+          // to band to. A finger leaves none behind, so on a tablet the trace
+          // is the placed corners alone -- which is the truth rather than a
+          // degraded version of it.
+          const trace = cursorWorld
+            ? floorCorners.concat([{ x: cursorWorld.x, z: cursorWorld.z }])
+            : floorCorners;
+          R.drawFloor2D(ctx, toS, { points: trace }, { preview: true }, floorEnv());
+          ctx.save();
+          ctx.fillStyle = skin['draw-floor-edge'];
+          ctx.strokeStyle = skin['draw-floor-edge'];
+          ctx.lineWidth = 2;
+          // ROUND, where a committed floor's handles are square (drawFloor2D
+          // fills 5x5 blocks). The shape is the difference a drafter reads at
+          // a glance; the colour is deliberately the same, because this is
+          // the floor they are drawing and not a different kind of thing.
+          floorCorners.forEach(corner => {
+            const p = toS(corner);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+          });
+          // THE CLOSE TARGET, rung once the loop CAN be closed and not before
+          // -- three corners, the same count floorPress accepts as a close.
+          // The ring is the page saying where the gesture can be finished, so
+          // it appears on the press that makes finishing possible and not one
+          // earlier.
+          if (floorCorners.length >= 3) {
+            const first = toS(floorCorners[0]);
+            ctx.beginPath();
+            ctx.arc(first.x, first.y, 7, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
         // THE RULER'S OWN LINE, dashed so it cannot be mistaken for geometry.
         // It is the only mark on this canvas that is not in the drawing and
         // never will be, and the dash is how a drafter knows that without
@@ -3976,8 +4153,17 @@
     updateReadout();
   };
 
-  const levelName = () => (drawing?.levels || [])
-    .find(level => Number(level.id) === activeLevelId())?.name || 'level';
+  // THE NAME THE DRAFTER READS, which is the derived one -- the same string
+  // the level card shows. The readout and the panel are two instruments on one
+  // piece of state, and this file has already been bitten once by letting two
+  // of them answer differently (see the LEVELS panel's agreement check): a
+  // card reading "1 MAIN FL" beside a readout reading "MAIN FL" is two names
+  // for one level on screen at the same time.
+  const levelName = () => {
+    const level = (drawing?.levels || [])
+      .find(entry => Number(entry.id) === activeLevelId());
+    return level ? levelLabel(level.id, level.name) : 'level';
+  };
 
   // THE READOUT IS THE ONLY INSTRUMENT ON THIS PAGE. Movie, 3 Sep: keep adding
   // to it, never prune -- he decides later what earns its place. So counts are
@@ -4079,6 +4265,18 @@
       // whole drawing.
       + `columns <b>${shownOfTotal(columns().length, drawing.columns)}</b>   `
       + `beams <b>${shownOfTotal(beams().length, drawing.beams)}</b>   `
+      // AND OPENINGS, which were in exactly the state the two rows above
+      // describe: painted since the painter landed, counted nowhere. A
+      // drafter placing a window had no on-page way to see it arrive, and
+      // the one that got REFUSED -- a wall too short to carry it -- looked
+      // identical to the one that landed.
+      //
+      // THE LEFT NUMBER IS WHAT RESOLVED, not what is on this level.
+      // openingsOn drops an opening whose host wall is not here and one the
+      // clamp refuses, so `openings 10/11` is the page saying one of them is
+      // not being drawn -- which is the only warning this page gives that a
+      // record is in the file and not on the sheet.
+      + `openings <b>${shownOfTotal(openingsOn(walls()).length, drawing.fenestrations)}</b>   `
       // BOTH SIDES LEVEL-SCOPED. The loader decodes every underlay in the
       // drawing, not just this level's, so that switching level is instant --
       // which means underlayImages.size counts images the drafter cannot
@@ -4369,7 +4567,52 @@
   // built has been answered, and the tile un-presses. The persisted
   // buildType stays: the FILE remembers what the project is; the menu
   // only remembers the question currently being asked.
+  // ── WHAT A BUILD COSTS (board #261) ──────────────────────────────────
+  //
+  // A BUILD IS A BUILD, whichever door it came through. This page raises a
+  // building from TWO presses -- the foot's bone, which builds what the
+  // drafter drew, and the sign's bone, which builds the premade design --
+  // and the geometry side says so through two different words, buildServed
+  // and orderServed. A toll written at one press would be free at the other,
+  // which is exactly the shape of the defect Movie is already living with on
+  // the same button. So the CHARGE hangs off both served-signals and the
+  // REFUSAL off both presses, and both are these three lines rather than
+  // four copies of them.
+  //
+  // A DETACHED GARAGE COSTS A BONE TOO -- MOVIE'S RULING, 19 Sep, asked for
+  // and given: "sure every produced home or garage is 1 bone now (these will
+  // change and be applied to other stuff later)". MODEL.dc.html charges only
+  // COSTS.buildHouse because a house is all it builds; here a garage is an
+  // order the geometry side serves like any other, and making it free would
+  // have the wallet report what KIND of thing was built rather than that
+  // something was.
+  //
+  // AND THE PRICE LIST IS EXPECTED TO GROW, which is why nothing here knows
+  // a number: the cost is COSTS.buildHouse out of bone-wallet.js, and the
+  // day a second thing is charged for it joins that table rather than this
+  // file. One produced body, one bone, is the rule as it stands.
+  const canAffordBuild = () => {
+    const W = window.DraftBoneWallet;
+    return !W || readWallet().balance >= W.COSTS.buildHouse;
+  };
+  const refuseForBones = () => {
+    signRefusal = {
+      line: 'OUT OF BONES.',
+      note: `The next free one lands in ${waitLabel(readWallet().nextDripMs)}.`,
+    };
+    refreshWallet();
+  };
+  const chargeForBuild = () => {
+    const W = window.DraftBoneWallet;
+    if (!W) return;
+    W.spend(W.COSTS.buildHouse);
+    refreshWallet();
+  };
+
   const orderServed = () => {
+    // PAID ON DELIVERY, and this is the word the geometry side says when it
+    // has actually raised the order -- not when the press happened.
+    chargeForBuild();
     chosenEntryId = null;
     chosenSizeId = null;
     openFamilyId = null;
@@ -4525,10 +4768,23 @@
   // its twin for the foot's bone. Nothing incidental can say it by mistake.
   let buildWasServed = false;
   const fireBuild = () => {
+    // A BUILD COSTS A BONE (board #261), AND THE TOLL IS HERE rather than in
+    // the handlers. MODEL.dc.html checks the wallet inside its build method,
+    // which is one place because it has one caller; this page fires the same
+    // seam from the foot press, from the sign's own bone on the post, and
+    // from anything that registers later. A check per caller is a rule with
+    // as many copies as there are doors, and the door added next year is the
+    // one that forgets. So: refused before any handler runs, and paid for
+    // only if one of them actually served.
+    if (!canAffordBuild()) { refuseForBones(); return false; }
     buildWasServed = false;
     // EVERY handler is called, and the flag is read after -- never a short
     // circuit, which would silently skip whatever registered later.
     buildHandlers.forEach(fn => fn(chosen()));
+    // PAID ON DELIVERY. A press the geometry side declined to serve -- no
+    // type picked, nothing the design can make -- costs nothing, which is
+    // what `buildWasServed` is already the page's word for.
+    if (buildWasServed) chargeForBuild();
     return buildWasServed;
   };
   // THE ORDER CARRIES ITS ROUND: 'menu' means hand over the premade design
@@ -4596,11 +4852,18 @@
   // path, and a `const` declared after that line is in its dead zone when that
   // runs -- so the page would have thrown on the one entry that most needs to
   // work, and only on that entry.
+  //
+  // `balanceTop` IS PART OF THE ARTWORK, not part of the wallet. The bone's
+  // number sits low, in the red under the bone; the house's sits in the
+  // middle of its outline. Same number, two pictures -- so the offset is
+  // declared where the pictures are, and a third theme that ships a third
+  // drawing says where its number goes in the same line it names its file.
+  // 74% is MODEL.dc.html:558's own figure, carried rather than re-eyeballed.
   const BONE_ART = Object.freeze({
     ruff:  Object.freeze({ src: './assets/bone-red.png',       lit: null,
-      label: 'BONE' }),
+      label: 'BONE', balanceTop: '74%' }),
     rough: Object.freeze({ src: './assets/house-blue-off.png',
-      lit: './assets/house-blue-on.png', label: 'HOUSE' }),
+      lit: './assets/house-blue-on.png', label: 'HOUSE', balanceTop: '50%' }),
   });
   // AND THE BOARD IS THE SECOND LOGO. The note above says a theme is "mainly
   // through logos and colors" and that the press was the first to arrive;
@@ -4677,7 +4940,78 @@
       if (img.alt) img.alt = `${art.label} — build it`;
     });
     if (boneSaid) boneSaid.textContent = art.label;
+    // The number follows the picture it is drawn on -- low in the red on the
+    // bone, in the middle of the outline on the house.
+    if (boneBalanceEl) boneBalanceEl.style.top = art.balanceTop;
   };
+
+  // ── THE FREE-BONE WALLET (board #261) ─────────────────────────────────
+  //
+  // Movie, 19 Sep: "can you bring the BONE number / TOKEN system over too",
+  // "bring it like it was in model.dc". MODEL.html did not load
+  // bone-wallet.js at all, so the whole economy was missing here: builds
+  // were free, the press said nothing about what it cost, and a drafter
+  // moving between the two pages met two different rules.
+  //
+  // THE WALLET IS APP STATE, NEVER DRAWING STATE. It lives in localStorage
+  // and belongs to the browser, not to the file -- so nothing here marks the
+  // drawing dirty, and a build that spends a bone does not make the drawing
+  // need saving for that reason.
+  //
+  // THE MODULE'S OWN HEADER CALLS IT AN HONOUR SYSTEM: localStorage, editable
+  // with devtools, real enforcement waiting on the server ledger (#52). This
+  // page inherits that and does not pretend otherwise.
+  const boneBalanceEl = document.getElementById('bone-balance');
+  const waitLabel = ms => {
+    if (ms == null) return '';
+    const minutes = Math.ceil(ms / 60000);
+    return minutes <= 1 ? '<1m' : `${minutes}m`;
+  };
+  let walletShown = { balance: null, nextDripMs: null };
+  const readWallet = () => (window.DraftBoneWallet
+    ? window.DraftBoneWallet.read() : { balance: Infinity, nextDripMs: null });
+
+  const paintWallet = () => {
+    const W = window.DraftBoneWallet;
+    if (!W || !boneBalanceEl) return;
+    const { balance, nextDripMs } = walletShown;
+    const broke = balance < 1;
+    // AN EMPTY WALLET SHOWS THE COUNTDOWN, not a bare 0 -- the number on the
+    // press is the answer to "can I build", and "no" is only half of it.
+    boneBalanceEl.textContent = broke
+      ? `0 \u00b7 ${waitLabel(nextDripMs)}` : String(balance);
+    // THE DIGIT LADDER (MODEL.dc.html:23499), carried rather than re-derived:
+    // sized for one digit and stepping down so even a five-digit paid wallet
+    // never overflows the artwork.
+    const chars = broke ? 8 : String(balance).length;
+    boneBalanceEl.style.fontSize =
+      `${chars <= 1 ? 15 : chars <= 3 ? 11 : chars <= 5 ? 8 : 7}px`;
+    boneFoot.toggleAttribute('data-broke', broke);
+    boneFoot.title = broke
+      ? `Out of bones \u2014 the next free bone lands in ${waitLabel(nextDripMs)}. `
+        + `One drips in every hour, up to ${W.DRIP_CAP}.`
+      : nextDripMs != null
+        ? `${balance} bone${balance === 1 ? '' : 's'} \u00b7 next free bone in `
+          + `${waitLabel(nextDripMs)}. Each BUILD costs 1.`
+        : `${balance} bones \u2014 the free wallet is full. Each BUILD costs 1.`;
+  };
+
+  // REPAINTED ONLY ON A CHANGE, which is what makes the minute tick below
+  // cheap enough to leave running: read() is a localStorage parse and a
+  // little arithmetic, and the DOM is touched only when the answer moved.
+  const refreshWallet = () => {
+    if (!window.DraftBoneWallet) return;
+    const now = readWallet();
+    if (now.balance === walletShown.balance
+      && now.nextDripMs === walletShown.nextDripMs) return;
+    walletShown = { balance: now.balance, nextDripMs: now.nextDripMs };
+    paintWallet();
+  };
+  refreshWallet();
+  // ONE TICK A MINUTE, because the countdown on an empty press is in minutes
+  // and a drip lands on the hour. Faster would redraw nothing; slower would
+  // leave a bone in the wallet that the press says is not there.
+  window.setInterval(refreshWallet, 60000);
 
   const signShut = () => sign.hasAttribute('data-shut');
 
@@ -4696,10 +5030,19 @@
   // outline tool's refusals already use. Both halves are spoken because the
   // shout is the WHAT and the note is the WHAT TO DO, and on one line the
   // drafter needs both.
-  const refuseOrder = said => {
-    if (boardHasDog()) { signRefusal = said; paintSign(); return; }
+  //
+  // TWO WAYS IN, because a refusal is sometimes STAGED by a helper rather
+  // than written at the press: refuseForBones sets signRefusal and leaves it
+  // for the next paint. So this shows whatever is staged, and refuseOrder is
+  // the one-liner for a press that has the words to hand.
+  const showRefusal = () => {
+    if (!signRefusal) return;
+    if (boardHasDog()) { paintSign(); return; }
+    const said = signRefusal;
+    signRefusal = null;
     sayOnStrip(`${said.line} ${said.note}`);
   };
+  const refuseOrder = said => { signRefusal = said; showRefusal(); };
 
   paintSign = () => {
     const picked = chosen();
@@ -4820,33 +5163,24 @@
     // created" -- so the press that raises a house is a press that has been
     // answered, and the board has nothing left to ask.
     if (fireBuild()) return;
-    // AND WHEN NOTHING WAS BUILT, THE ORDER PRESS IS NOT ALWAYS ON THE BOARD.
-    // RUFF's sign carries the dog and the dog's bone, so an order is closed up
-    // there and this press is covered over anyway. The sheet carries neither,
-    // and stops above the bar precisely so this press stays reachable -- which
-    // makes it the only press left to close an order with. Without this line a
-    // type picked off the sheet could be chosen, sized and never ordered: the
-    // press fired the BUILD seam instead, which builds what is already drawn
-    // and therefore did nothing at all. Movie, 18 Sep: "when i press the BLUE
-    // HOUSE it doesn't build the garage in ROUGH mode, but in RUFF mode the
-    // bone button works".
-    //
-    // AFTER THE BUILD, NOT BEFORE, and the order matters on the sheet alone.
-    // There the board stays up while the drafter traces -- it passes presses
-    // through -- so a drafter can have an outline drawn AND a type picked at
-    // the same moment. A house he has drawn is the thing in front of him, so
-    // it is built; the order is what is left when there was nothing to build.
-    //
-    // ONLY WHILE THE BOARD IS UP. Shut, this press is what raises the board,
-    // and with a house standing it is what builds -- both unchanged.
-    if (!signShut() && !boardHasDog()) { placeOrder(); return; }
-    if (chosen()) return;
+    // AT THE WINDOW, THIS PRESS IS THE POST'S. The board is up, so the
+    // drafter is inside the drive-thru and a press means build -- whichever
+    // of the two bones is the one in front of him. On RUFF he never gets
+    // here because the board covers this press; on ROUGH it does not, and
+    // this is the press he actually reaches for.
+    if (!signShut()) { orderAtWindow(); return; }
+    // AND WITH THE BOARD DOWN, A PICKED TYPE OPENS IT. This used to be
+    // `if (chosen()) return;` -- a bare return, which is the only outcome on
+    // this page that tells the drafter nothing whatsoever. Movie's rule:
+    // "when the bone is pressed we should go to the DRIVE THRU menu always
+    // on the first press". Nothing is drawn to build from (fireBuild said
+    // so), so the board is where the answer is.
+    if (chosen()) { callSign(boneFoot, 'menu'); return; }
     if (window.DraftBuildingBodies.isFull(drawing)) return;
     signRefusal = {
       line: 'NOTHING TO BUILD YET.',
       note: 'Pick a type off the board and I\u2019ll build it.',
     };
-    if (!signShut()) { paintSign(); return; }
     callSign(boneFoot, 'menu');
   });
 
@@ -4896,11 +5230,24 @@
   // whole design of a box, so an order without one has nothing in it --
   // and the drafter who typed 4ft by 900ft is told so rather than watching
   // a press do nothing.
+  // WHAT A PRESS AT THE WINDOW MEANS, once, for BOTH presses that can make
+  // it. Movie, 19 Sep: "unless they are inside the drive thru, if they press
+  // it then (or when the house is glowing blue) that will count as only
+  // BUILD HOUSE".
   //
-  // NAMED, BECAUSE TWO PRESSES CLOSE IT. On a board carrying the dog this is
-  // his bone and nothing else; on the sheet, which carries no bone at all,
-  // it is the press that raised the board. Both are the same order.
-  const placeOrder = () => {
+  // THIS WAS THE BLUE HOUSE BUG. There are two presses at the window -- the
+  // bone on the post and the one on the foot -- and only the post's did this.
+  // On RUFF that is invisible, because BOARD_ART.ruff covers the foot press
+  // and setSign disables it; on ROUGH the sheet stops above the bar, the foot
+  // press stays live in front of the drafter, and its handler read
+  // `if (chosen()) return;` -- a bare return with no refusal, no board and no
+  // sound. Pick a house on ROUGH, press the blue house, nothing happens.
+  // Movie: "sometimes i have to switch to RUFF to make it work."
+  //
+  // So the meaning lives here and both presses call it. A second copy is what
+  // made one of them wrong, and a second copy is what would make one of them
+  // wrong again.
+  const orderAtWindow = () => {
     const picked = chosen();
     if (picked?.entry?.needsSize && !chosenSize()) {
       refuseOrder({
@@ -4936,16 +5283,20 @@
     // would stop a drafter drawing a second storey.
     if (window.DraftPremadePlans?.planFor(picked?.entry?.id)
         && window.DraftBuildingBodies.hasHouse(drawing)) {
-      signRefusal = {
+      refuseOrder({
         line: 'YOU\u2019VE GOT A HOUSE ALREADY.',
         note: 'One house and one detached garage is the lot.',
-      };
-      paintSign();
+      });
       return;
     }
+    // AND THE LAST REFUSAL IS THE WALLET'S, after the caps rather than
+    // before them: a drafter with no bones AND a house already standing
+    // should be told about the house, which is the thing he can do nothing
+    // about by waiting.
+    if (!canAffordBuild()) { refuseForBones(); showRefusal(); return; }
     fireOrder();
   };
-  document.getElementById('dt-bone').addEventListener('click', placeOrder);
+  document.getElementById('dt-bone').addEventListener('click', orderAtWindow);
   // Escape shuts the sign, as it shuts every other thing this page puts over
   // the drawing. Captured before the drawing's own Escape so an open sign is
   // not also a cleared selection.
@@ -4976,9 +5327,38 @@
   // about beams, columns, fixtures or annotations. The armed tool decides what
   // goes here and when; this only owns the space and the show/hide.
   const propsSlot = document.getElementById('props-slot');
+  const propsBox = document.getElementById('props-box');
+  const propsFold = propsBox.querySelector('[data-props-fold]');
+
+  // FOLDED IS IN THE URL, beside `left` and `right`, for the reason those
+  // are: it is what the drafter is looking at and it survives a reload.
+  //
+  // DEFAULT OPEN, and the absent-means-open spelling is deliberate. A drafter
+  // who has just pressed a wall wants to see what he pressed; the box has to
+  // earn being shut rather than be shut until asked. `props=0` is the only
+  // value that means anything, so a stale or hand-typed URL opens.
+  const propsFolded = () => params.get('props') === '0';
+  const syncPropsFold = () => {
+    propsBox.toggleAttribute('data-folded', propsFolded());
+    propsFold.setAttribute('aria-expanded', String(!propsFolded()));
+  };
+  propsFold.addEventListener('click', () => {
+    if (propsFolded()) params.delete('props'); else params.set('props', '0');
+    syncUrl();
+    syncPropsFold();
+  });
+  syncPropsFold();
+
   window.ModelProps = Object.freeze({
     slot: () => propsSlot,
-    clear: () => { propsSlot.replaceChildren(); propsSlot.hidden = true; },
+    clear: () => {
+      propsSlot.replaceChildren();
+      propsSlot.hidden = true;
+      // THE BOX GOES WITH ITS CONTENTS. An empty box would leave a PROPERTIES
+      // heading and a fold arrow under the tools with nothing behind them --
+      // a control that does nothing, which is the same lie a stale panel is.
+      propsBox.hidden = true;
+    },
     set: (title, node) => {
       propsSlot.replaceChildren();
       if (title) {
@@ -4989,6 +5369,7 @@
       }
       if (node) propsSlot.append(node);
       propsSlot.hidden = !(title || node);
+      propsBox.hidden = propsSlot.hidden;
     },
   });
 
@@ -5354,8 +5735,13 @@
       // select is gone: these rows are THE way to change level, and a name
       // that once collided with the select is the name every spec drives.
       name.dataset.levelRow = String(level.id);
-      name.textContent = level.name || `level ${level.id}`;
-      name.title = `Switch to ${level.name || level.id}`;
+      // THE NUMBERED NAME, derived rather than stored -- level-assembly.js's
+      // levelLabel. The record keeps whatever it was saved with, so a file is
+      // byte-identical either side of this and every lookup by stored name
+      // goes on working; only what the drafter READS changes.
+      const label = levelLabel(level.id, level.name);
+      name.textContent = label;
+      name.title = `Switch to ${label}`;
       name.addEventListener('click', () => goToLevel(level.id));
 
       const del = document.createElement('button');
@@ -5363,7 +5749,7 @@
       del.className = 'lv-del';
       del.dataset.deleteLevel = String(level.id);
       del.textContent = '×';
-      del.title = `Delete ${level.name || level.id}`;
+      del.title = `Delete ${label}`;
       del.addEventListener('click', event => {
         event.stopPropagation();
         deleteLevel(level.id);
@@ -5741,8 +6127,9 @@
         planSeat(level, 'foundation', 'FOUNDATION');
         planSeat(level, 'plan', 'BASEMENT (WALLS)');
       } else {
-        planSeat(level, 'plan', `${level.name} PLAN (WALLS)`);
-        planSeat(level, 'floor', `${level.name} LAYOUT (FLOOR)`);
+        const seatName = levelLabel(level.id, level.name);
+        planSeat(level, 'plan', `${seatName} PLAN (WALLS)`);
+        planSeat(level, 'floor', `${seatName} LAYOUT (FLOOR)`);
       }
     });
     // SECTIONS FILL ACROSS, with two chairs standing ready before anything is
@@ -6427,8 +6814,62 @@
     }) || null;
   };
 
+  // ── AN OPENING ANSWERS A PRESS ───────────────────────────────────────────
+  //
+  // Movie asked for the bungalow's windows and doors so he could "change them
+  // if i need to afterwards". Stage 1 put them in; this is the half that takes
+  // one out.
+  //
+  // THE TARGET IS THE CARVED QUAD, which is the shape on the sheet: the
+  // opening's width along the wall by the wall's own thickness across. Not a
+  // radius round its centre, because a 16 ft overhead door and a 2'-6" man
+  // door would then have the same grab, and pressing the middle of the big one
+  // is not where a drafter aims.
+  //
+  // IT IS NOT A SECOND HIT TEST -- the same rule the hover ring follows, and
+  // here it pays twice. The list comes from openingsOn, which is what PAINTS
+  // them, so the press cannot pick an opening that is not on the sheet: one
+  // hosted on a wall from another level, or one the clamp refuses because its
+  // wall is too short to carry it.
+  //
+  // AND THE SLACK ARRIVES WITH THE SHAPE. The old page grabs an opening with
+  // "a couple of pixels of slack so a click on the wall face still counts" --
+  // its reference line is where the wall's boundary stroke is CENTRED, so
+  // half the ink a drafter presses at is outside the opening proper. This
+  // page needs no such figure of its own, because openingGeometry is already
+  // handed padFt (2px, openingPadFt) so the gap fill reaches past each face
+  // to interrupt that same stroke. The painted quad IS the padded quad, and
+  // pressing what is painted is the whole point.
+  //
+  // A SEPARATE OPENING_SLACK_PX STOOD HERE and was removed: a mutation
+  // setting it to zero changed no answer, because the two pixels were already
+  // in the shape. Two slacks for one reason is the drift this file keeps
+  // paying for -- and the one that is left is the one the drafter can see.
+  const openingAt = worldPt => {
+    const hit = openingsOn(walls())
+      .find(({ geometry }) => pointInRing(geometry.corners, worldPt));
+    return hit ? hit.opening : null;
+  };
+
+  // AN ALREADY-SELECTED OPENING IS A GRAB, which is the page's own two-step
+  // for moving anything: press it to choose it, press it again and drag. The
+  // wall body drag reads the same way (wallBodyAt only answers for a wall
+  // already in the selection), and the reason is the same -- a press that both
+  // selected and started moving would make every mis-aimed tap a small edit.
+  const openingBodyAt = worldPt => {
+    const opening = openingAt(worldPt);
+    return opening && selection.some(entry => entry.item === opening)
+      ? opening : null;
+  };
+
   // 'all' passes everything; any other filter passes only its own type. The old
   // page's whole rule, in one line (_selectFilterAllows :18180).
+  //
+  // AN OPENING IS REACHABLE ONLY UNDER ALL, and that falls out rather than
+  // being written: the OBJECT TYPE vocabulary is 'all' | 'line' | 'wall' |
+  // 'outline' | 'floor', so `selectFilter === 'fenestration'` is a comparison
+  // that can never be true. Same as the old page, whose filter list is the
+  // same five.
   const filterAllows = type => selectFilter === 'all' || selectFilter === type;
 
   // ── the window drag ───────────────────────────────────────────────────────
@@ -6659,6 +7100,15 @@
 
   // Returns { type, item } or null, in the old page's precedence.
   const hitAt = worldPt => {
+    // AN OPENING BEATS ITS HOST WALL, and the old page says why in its own
+    // words: "Openings under a select click take priority over their host
+    // wall, so an opening can be picked and deleted without grabbing the wall
+    // around it." An opening is always ON a wall, so a wall-first chain would
+    // make every opening unselectable -- not hard to select, impossible.
+    if (filterAllows('fenestration')) {
+      const opening = openingAt(worldPt);
+      if (opening) return { type: 'fenestration', item: opening };
+    }
     if (filterAllows('wall')) {
       const wall = segAt(walls(), worldPt);
       if (wall) return { type: 'wall', item: wall };
@@ -6720,6 +7170,13 @@
   const paintSelection = () => {
     if (!selection.length) return;
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines() };
+    // THE OPENINGS AND THEIR SHAPES IN ONE PASS. openingsOn resolves geometry
+    // per opening, which is not free, and the highlight needs both the list
+    // (to answer "is it still on screen") and the quad (to draw it). Calling
+    // it twice would also let the two answers disagree.
+    const openingShapes = new Map(openingsOn(walls())
+      .map(({ opening, geometry }) => [opening, geometry]));
+    onScreen.fenestration = [...openingShapes.keys()];
     const lone = selectedWall();
     ctx.save();
     ctx.strokeStyle = SELECT_INK;
@@ -6742,6 +7199,23 @@
           ctx.fillStyle = SELECT_HANDLE;
           [a, b].forEach(pt => ctx.fillRect(pt.x - 4, pt.y - 4, 8, 8));
         }
+        return;
+      }
+      // AN OPENING HAS NO `points` OF ITS OWN -- it is a width and an offset
+      // along a wall -- so its outline comes from the geometry resolved
+      // above. Falling through to the branch below would read `item.points`,
+      // find nothing, and silently paint no highlight at all: a selection the
+      // drafter cannot see, about to be deleted.
+      if (type === 'fenestration') {
+        const quad = openingShapes.get(item)?.corners || [];
+        if (quad.length < 3) return;
+        ctx.beginPath();
+        quad.forEach((pt, i) => {
+          const p = toS(pt);
+          if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+        });
+        ctx.closePath();
+        ctx.stroke();
         return;
       }
       const pts = (item.points || []).filter(Boolean);
@@ -7158,8 +7632,23 @@
   // freehand loop is wound whichever way the drafter walked it, so reading
   // the setting there would put the walls outside the house on every
   // clockwise trace -- and the drawing would look almost right.
-  const commitWall = (startPt, endPt, { bone = true, refLine } = {}) => {
-    const { levelId, viewId } = onActiveLevel();
+  // WHERE A COMMITTED WALL GOES, and until now that was always "wherever the
+  // drafter is standing". That is right for a DRAWN wall and wrong for a BUILT
+  // one: a building is raised across the whole stack -- storey walls on each
+  // floor level, concrete on FOUNDATION -- and MODEL.dc.html's _buildHouse
+  // says so by calling _buildHouseWalls once per level with the level and the
+  // view as arguments (:14640, :14646).
+  //
+  // raiseLoop ALREADY TOOK A levelId and put it on the outline, then let the
+  // walls take the active one instead. The two agreed only because its one
+  // caller passed the active level in -- a split waiting for the first caller
+  // that did not, which is this rung.
+  const commitWall = (startPt, endPt,
+    { bone = true, refLine, levelId: onLevel, view: onView, wallType,
+      baseHeight, topHeight, body } = {}) => {
+    const active = onActiveLevel();
+    const levelId = onLevel ?? active.levelId;
+    const viewId = onView ?? active.viewId;
     const homeView = wallHomeView(viewId);
     const wall = {
       id: newDrawingItemId('wall'),
@@ -7167,9 +7656,13 @@
       end: poolVertex(endPt, levelId, homeView),
       levelId,
       view: homeView,
-      wallType: contextWallType(viewId),
-      baseHeight: wallSetting('wallBaseHeight', 0),
-      topHeight: wallSetting('wallTopHeight', 8),
+      wallType: wallType || contextWallType(viewId),
+      // A BUILT WALL KNOWS ITS OWN HEIGHTS. The drafter's stored defaults are
+      // right for a wall he DRAWS and meaningless for a grade beam, which is
+      // a band of concrete hanging off grade -- its base and top are derived
+      // from the foundation datum, not from a setting.
+      baseHeight: baseHeight ?? wallSetting('wallBaseHeight', 0),
+      topHeight: topHeight ?? wallSetting('wallTopHeight', 8),
       // 'center', not 'centre'. drawing-format.js:400 folds the British
       // spelling on LOAD, but this page has no serializer — a record written
       // with 'centre' reaches the file unvalidated and only the next load
@@ -7177,6 +7670,10 @@
       refLine: (raw => (raw === 'centre' ? 'center' : raw))(
         refLine || wallSetting('wallRefLine', 'left')),
     };
+    // WHOSE WALL IT IS. building-bodies.js and the section painters tell a
+    // garage's concrete from the house's by `body`, and a grade beam filed as
+    // house concrete is drawn at the house's own height.
+    if (body) wall.body = body;
     drawing.walls.push(wall);
     undoStack.push({ kind: 'add', wall });
     if (bone) extendToyBone(startPt, endPt, levelId);
@@ -7304,7 +7801,16 @@
   // state any gesture can otherwise produce.
   const buildOrderedGarage = order => {
     if (!drawing || !order?.entry?.needsSize || !order.size) return null;
-    const { levelId } = onActiveLevel();
+    // THE LOWEST FLOOR LEVEL, NOT THE ACTIVE ONE -- the same fix the premade
+    // house needed, and the other half of what Movie reported. A garage
+    // ordered while looking at FOUNDATION had its STUD walls committed
+    // through the active view, so contextWallType handed back concrete_8 and
+    // the drafter got a garage framed in eight inches of concrete on the
+    // foundation set. MODEL.dc.html's _buildGarageWalls uses
+    // `_floorLevels()[0]` for exactly this reason.
+    const storey = lowestFloorLevel();
+    if (!storey) return null;
+    const levelId = storey.id;
     const corners = window.DraftGarageSite.plotFor(drawing, levelId, order.size);
     if (!corners) return null;
     drawing.outlines = drawing.outlines || [];
@@ -7326,13 +7832,21 @@
     // one below. Left in, the first Ctrl+Z would take the whole garage and
     // the next four would each hunt a wall that is already gone.
     const mark = undoStack.length;
+    // STUDS ON THE STOREY, said explicitly rather than inherited: `plan` is
+    // where a garage's framed walls live whatever set the drafter is on.
     const walls = corners.map((corner, index) =>
-      commitWall(corner, corners[(index + 1) % corners.length], { bone: false }));
+      commitWall(corner, corners[(index + 1) % corners.length],
+        { bone: false, levelId, view: 'plan', body: 'garage' }));
+    // AND ITS CONCRETE. Movie ordered a "detached garage 25x25 with frost
+    // wall" and got four stud walls: the tile asked him which foundation and
+    // then threw the answer away, because nothing on this page read it.
+    const concrete = raiseGarageConcrete(corners, outline);
     undoStack.length = mark;
     // `outlines` PLURAL, because a premade bungalow raises two bodies on one
     // press and one press is one undo. The garage passes its single loop as a
     // list of one rather than the branch learning two shapes.
-    undoStack.push({ kind: 'built', walls, outlines: [outline], list: drawing.outlines });
+    undoStack.push({ kind: 'built', walls: walls.concat(concrete.walls),
+      outlines: [outline], list: drawing.outlines, items: concrete.items });
     markDirty();
     paint();
     return outline;
@@ -7642,6 +8156,11 @@
     outline: 'outlines',
     column: 'columns',
     beam: 'beams',
+    // DELETE COMES FREE WITH THE ENTRY. deleteEntry splices out of whatever
+    // list this names and pushes the undo step, so an opening needs no branch
+    // of its own -- and the cascade the other way already worked: deleteWall
+    // takes its openings with it.
+    fenestration: 'fenestrations',
   });
 
   const deleteEntry = entry => {
@@ -8325,6 +8844,12 @@
   // 4 is that a house outline draws in the build-bar family's colour, "red
   // house / blue split".
   let outlineFamily = null;
+  // The floor being traced, corner by corner. A SEPARATE LIST from the
+  // outline's on purpose: the two tools draw the same SHAPE and mean entirely
+  // different things -- an outline is a guide that never prints, a floor is
+  // structure -- and one shared array would let an abandoned trace of either
+  // finish as the other.
+  let floorCorners = [];
 
   // THE FAMILY COLOURS, and what each one is answerable to.
   //
@@ -8441,6 +8966,7 @@
   // first drafter who armed a tool early.
   toolListeners.push(next => {
     outlineCorners = [];
+    floorCorners = [];
     outlineFamily = null;
     // ARMED FROM THE KEY, which carries no house type with it -- so the trace
     // is the plain house red that outlineTraceColor falls back to, and the
@@ -8608,6 +9134,374 @@
     if (buildFromDrawnOutline()) window.ModelBuild.buildServed();
   });
 
+  // ── THE FLOOR TOOL: a closed loop, and what it saves as ──────────────────
+  //
+  // The parity row read "Draw a floor -- absent, must-have: it paints floors it
+  // cannot create", which is this page's recurring shape: the painter arrived
+  // with tier 1 and the gesture did not.
+  //
+  // THE SAME GESTURE AS THE OUTLINE, deliberately -- press corners, close on
+  // the first. That is MODEL.dc.html's floor gesture too
+  // (_handleFloorClick:11572), so a drafter who has learnt one has learnt
+  // both. What is NOT shared is the state; see floorCorners.
+  //
+  // OUT OF SCOPE AND ABSENT RATHER THAN HALF-DONE: the typed-length ruler, arc
+  // edges, the slope and thickened-edge properties, and the FLOOR JOISTS box.
+  // Each is a panel of its own and none of them is the gesture.
+  const floorPress = at => {
+    const here = { x: at.x, z: at.z };
+    // THREE CORNERS BEFORE CLOSING IS LEGAL and two is not, for the reason the
+    // outline's own guard gives: two enclose no area. Below three, a press near
+    // the first corner is a drafter putting a corner there.
+    if (floorCorners.length >= 3) {
+      const first = floorCorners[0];
+      if (Math.hypot(here.x - first.x, here.z - first.z) <= OUTLINE_CLOSE_FT) {
+        commitFloor();
+        return;
+      }
+    }
+    floorCorners.push(here);
+    paint();
+  };
+
+  // WHAT A FLOOR RECORD IS, in one place. The gesture below and the premade
+  // build both make one, and a second copy of these seven fields is how a
+  // drawn floor and a built one come to disagree about what a floor IS.
+  //
+  // A CONCRETE SLAB IS AS THICK AS ITS LEVEL POURS; a framed floor is its
+  // assembly's own depth. Both are MODEL.dc.html:11641's rule read from the
+  // modules it reads them from -- this page has no floor-thickness setting of
+  // its own, and inventing one here would be a third number for a thing that
+  // has just stopped having three. assemblyFor IS this page's one
+  // level-assembly lookup, and its own comment says why there is exactly one.
+  const floorRecord = (loop, levelId, homeView, { garage = false } = {}) => {
+    const LA = window.DraftLevelAssembly;
+    const slab = homeView === 'foundation';
+    return {
+      id: newDrawingItemId('floor'),
+      points: loop.map(point => ({ x: point.x, y: 0, z: point.z })),
+      levelId,
+      view: homeView,
+      structure: slab ? 'slab' : 'floor',
+      garage,
+      slopeInPerFt: 0,
+      thickness: slab
+        ? assemblyFor(levelId).slabThicknessIn / 12
+        : LA.DEFAULT_FLOOR_THICKNESS_IN / 12,
+      thickenedEdge: false,
+      assembly: { ...LA.DEFAULT_FLOOR_ASSEMBLY },
+    };
+  };
+
+  const commitFloor = () => {
+    const loop = floorCorners.slice();
+    if (loop.length < 3) return null;
+    // A CROSSED LOOP ENCLOSES NO AREA -- the same refusal the outline makes
+    // on this page, through the same module. The pending corners are KEPT on a
+    // refusal so the drafter can move the last one rather than retrace the room.
+    //
+    // AND THIS IS AN ADDITION, NOT PARITY, which is worth saying plainly: the
+    // old page's _finishFloor checks the corner COUNT and nothing else, so a
+    // bowtie drawn there commits and renders as two triangles with a fill that
+    // fights itself. The outline tool here already refuses one, and a page
+    // where the same gesture is legal for a guide and illegal for structure
+    // would be teaching two rules for one motion.
+    if (window.DraftGeometry2D.selfIntersects(loop)) {
+      sayOnStrip('That floor crosses itself, so it encloses no area.');
+      return null;
+    }
+    const LV = window.DraftLayerViews;
+    const LA = window.DraftLevelAssembly;
+    const { levelId, viewId } = onActiveLevel();
+    // WHERE IT SAVES IS NOT WHERE IT WAS DRAWN, and layer-views.js owns that
+    // rule. The surprising half is the second clause: a level that HAS a
+    // foundation set puts its floor there whichever set the drafter was
+    // looking at, because such a level's floor IS its foundation.
+    const homeView = LV.floorHomeView(viewId, levelId);
+    const slab = homeView === 'foundation';
+    const floor = floorRecord(loop, levelId, homeView);
+    if (!Array.isArray(drawing.floors)) drawing.floors = [];
+    drawing.floors.push(floor);
+    undoStack.push({ kind: 'add-item', list: drawing.floors, item: floor });
+    floorCorners = [];
+    setTool(RESTING_TOOL);
+    // THE MESSAGE HAS TO SAY WHERE IT WENT WHEN IT WENT SOMEWHERE ELSE.
+    // floorHomeView's second clause files a floor drawn on FOUNDATION's WALLS
+    // plan onto the FOUNDATION set, which is right -- and from the drafter's
+    // seat it means the slab they just closed is nowhere on the sheet in front
+    // of them. The old page softens that with a courtesy set (_courtesyFloorIds)
+    // that keeps such a floor on screen until the layer set changes; this page
+    // has no courtesy set and is not being given one on this rung, so it OWES
+    // the drafter the sentence instead. A silent vanish is the one outcome
+    // that reads as the tool having failed.
+    const homeLabel = (LV.layerViewsForLevelId(levelId)
+      .find(view => view.id === homeView) || {}).label || homeView;
+    sayOnStrip(homeView === viewId
+      ? (slab ? 'Slab drawn — it saves to S-SLAB.' : 'Floor drawn.')
+      : `${slab ? 'Slab' : 'Floor'} drawn — it belongs to ${homeLabel}, `
+        + 'so it is not on this layer set.');
+    markDirty();
+    paint();
+    return floor;
+  };
+
+  // ── PLACING A WINDOW OR A DOOR ───────────────────────────────────────────
+  //
+  // Movie, 18 Sep, asking for the bungalow's openings: "please windows and
+  // doors into the bungalow and i'll change them if i need to afterwards".
+  // The design's eleven arrived that day and this page had no way to change
+  // them -- no gesture to add one, move one or take one out. This is the first
+  // of the three.
+  //
+  // ONE PRESS ON A WALL, which is the old page's own gesture
+  // (_handleFenestrationClick:15180) and the only one a finger can make
+  // without a keyboard. The press picks the nearest wall within reach and the
+  // opening lands centred on the point pressed, then slides to fit.
+  //
+  // THE TOOL STAYS ARMED. A house has a dozen windows and resting after each
+  // would cost a trip to the tool column between every one -- the old page
+  // stays armed for the same reason. This is the opposite choice from FLOOR
+  // and OUTLINE, and the difference is that those two gestures END: a closed
+  // loop is finished, an opening is one press and the next press is the next
+  // window.
+  //
+  // OUT OF SCOPE HERE AND EACH ITS OWN THING, exactly as the old page's
+  // handler splits them: stair openings (its `stairs` type), boneyard marks on
+  // a master outline, and shaped holes cut into a floor or a roof.
+  const FENESTRATION_PICK_PX = 18;   // MODEL.dc.html:2198's own pick distance
+
+  // DOOR FIRST, because the old page's state opens on 'door' (:2912) and a
+  // drafter switching pages should not find the tool set to something else.
+  let fenestrationType = 'door';
+  let openingPanelUp = false;
+
+  // ── WHAT THE NEXT OPENING WILL MEASURE ──────────────────────────────────
+  //
+  // A WIDTH PER TYPE, one sill, one head -- the old page's own shape
+  // (:2925-2930). A door and a window are different sizes of thing, and a
+  // drafter who sets a 5 ft window does not mean his next door to be 5 ft
+  // wide. The sill and head belong to the WALL rather than to the opening, so
+  // they are single numbers.
+  //
+  // SESSION STATE, NOT THE DRAWING'S. The old page keeps these in component
+  // state and writes none of them to the file -- drawing-format.js has no
+  // rule for any of them. A page that persisted them would invent a key the
+  // other page ignores, and every save would differ from the last for no edit
+  // the drafter made.
+  //
+  // THE DEFAULTS COME FROM geometry-2d.js, which is where the openings the
+  // BONE deals get theirs. Typed here and hardcoded there, a drafter's 5 ft
+  // window and a bone press would disagree about what a window is.
+  const openingSizes = {
+    door: window.DraftGeometry2D.DEFAULT_DOOR_WIDTH_FT,
+    window: window.DraftGeometry2D.DEFAULT_WINDOW_WIDTH_FT,
+  };
+  let openingSill = window.DraftGeometry2D.DEFAULT_WINDOW_SILL_FT;
+  let openingHead = window.DraftGeometry2D.DEFAULT_OPENING_HEAD_FT;
+
+  const openingWidthFt = (type = fenestrationType) =>
+    openingSizes[type === 'window' ? 'window' : 'door'];
+
+  // A SILL BELONGS TO A WINDOW. A door's is zero by construction -- it stands
+  // on the floor -- which is the old page's rule at the point of writing the
+  // record rather than a second number kept beside the first.
+  const openingSillFt = (type = fenestrationType) => (type === 'door' ? 0 : openingSill);
+
+  const OPENING_TYPES = Object.freeze([['door', 'DOOR'], ['window', 'WINDOW']]);
+
+  // A TYPED DIMENSION, parsed by the app's own reader. formatters.js's
+  // parseArchitecturalLength takes 3, 3', 3-6, 3'-6", 42" and the rest, and
+  // answers {ok, inches} or {ok:false, error} -- so the field never has to
+  // know what a valid dimension looks like, which is the whole reason that
+  // parser is shared.
+  //
+  // COMMITTED ON BLUR AND ON ENTER, REVERTED ON A REFUSAL. A field left
+  // holding text the page did not accept is a field lying about the state:
+  // the next opening would come out the old size while the box said
+  // otherwise. So a bad entry says why on the strip and the box goes back to
+  // the number actually in force.
+  const propField = (label, valueFt, commit, redraw) => {
+    const F = window.DraftFormatters;
+    const row = document.createElement('div');
+    row.dataset.propRow = label.toLowerCase();
+    const name = document.createElement('div');
+    name.className = 'props-title';
+    name.textContent = label;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'prop-field';
+    input.dataset.propField = label.toLowerCase();
+    // NULL IS "THEY DO NOT AGREE", which only a selection of several can be.
+    // An empty box with a dash behind it says so; showing the first one's
+    // number would be a claim about all of them, and typing over it is how
+    // the drafter says "all of these, this".
+    const shown = () => (valueFt == null ? ''
+      : F.formatArchitecturalInches(valueFt * 12));
+    input.value = shown();
+    if (valueFt == null) input.placeholder = '\u2014';
+    input.setAttribute('aria-label', label);
+    const apply = () => {
+      // A disagreeing field left untouched is not an edit. Without this an
+      // empty box would go through the parser on every blur and refuse,
+      // putting an error on the strip for a drafter who typed nothing.
+      if (valueFt == null && !input.value.trim()) return;
+      const parsed = F.parseArchitecturalLength(input.value);
+      if (!parsed.ok) {
+        sayOnStrip(parsed.error);
+        input.value = shown();
+        return;
+      }
+      const refusal = commit(parsed.inches / 12);
+      if (refusal) sayOnStrip(refusal);
+      // REDRAWN FROM THE STATE EITHER WAY, so the box shows what is in force
+      // rather than what was typed -- 3.5 comes back as 3'-6".
+      redraw();
+    };
+    input.addEventListener('blur', apply);
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Enter') { event.preventDefault(); input.blur(); }
+    });
+    row.append(name, input);
+    return row;
+  };
+
+  // The opening panel's own fields, which is what the above WAS until walls
+  // needed the same row. Only the redraw differs: this panel knows its name.
+  const openingField = (label, valueFt, commit) =>
+    propField(label, valueFt, commit, showOpeningProps);
+
+  const showOpeningProps = () => {
+    const P = window.ModelProps;
+    if (!P) return;
+    const F = window.DraftFormatters;
+    const box = document.createElement('div');
+    box.append(propRow('OPENING', OPENING_TYPES, fenestrationType, id => {
+      fenestrationType = id;
+      showOpeningProps();
+    }));
+
+    // WIDTH IS PER TYPE, so the field edits the one the drafter is holding.
+    box.append(openingField('WIDTH', openingWidthFt(), feet => {
+      if (!(feet > 0)) return 'An opening needs a width greater than zero.';
+      openingSizes[fenestrationType === 'window' ? 'window' : 'door'] = feet;
+      return null;
+    }));
+
+    // NO SILL FIELD ON A DOOR, because a door has no sill to set -- it stands
+    // on the floor. Offering a box that the record then ignores would be the
+    // panel telling the drafter something about the page that is not true.
+    if (fenestrationType === 'window') {
+      box.append(openingField('SILL', openingSill, feet => {
+        if (feet < 0) return 'A sill cannot be below the floor.';
+        if (feet >= openingHead) {
+          return `A sill at ${F.formatArchitecturalInches(feet * 12)} is not `
+            + `below the head at ${F.formatArchitecturalInches(openingHead * 12)}.`;
+        }
+        openingSill = feet;
+        return null;
+      }));
+    }
+
+    box.append(openingField('HEAD', openingHead, feet => {
+      // THE HEAD MUST STAND ABOVE THE SILL IT IS PAIRED WITH, and the pairing
+      // is per type: a door's sill is zero whatever the window's is, so the
+      // comparison asks openingSillFt rather than the stored window number.
+      const sill = openingSillFt();
+      if (!(feet > sill)) {
+        return `A head at ${F.formatArchitecturalInches(feet * 12)} is not `
+          + `above the sill at ${F.formatArchitecturalInches(sill * 12)}.`;
+      }
+      openingHead = feet;
+      return null;
+    }));
+
+    // WHAT THE NEXT PRESS WILL MAKE, spelled out -- kept now that the numbers
+    // are typeable, because the fields show three values separately and this
+    // is the one line that says what they add up to.
+    const note = document.createElement('div');
+    note.className = 'props-title';
+    note.dataset.openingNote = '';
+    note.textContent = `${F.formatArchitecturalInches(openingWidthFt() * 12)} WIDE, `
+      + `SILL ${F.formatArchitecturalInches(openingSillFt() * 12)}, `
+      + `HEAD ${F.formatArchitecturalInches(openingHead * 12)}`;
+    box.append(note);
+    P.set('FENESTRATION', box);
+    openingPanelUp = true;
+  };
+
+  // The wall nearest the press, with how far along it the press landed.
+  // SEPARATE FROM wallAt(), which uses the SELECT grab distance: this one is
+  // the old page's 18px fenestration pick, and the two numbers are different
+  // there for a reason -- an opening is aimed at a wall FACE, a selection at a
+  // wall LINE.
+  const wallForOpening = worldPt => {
+    const G = window.DraftGeometry2D;
+    const thresh = FENESTRATION_PICK_PX / view.scale;
+    let best = null, bestD = thresh;
+    walls().forEach(wall => {
+      if (!wall.start || !wall.end) return;
+      const { d, t } = G.pointToSegment(worldPt, wall);
+      if (d < bestD) { bestD = d; best = { wall, t }; }
+    });
+    return best;
+  };
+
+  const placeOpening = at => {
+    const G = window.DraftGeometry2D;
+    const best = wallForOpening(at);
+    if (!best) {
+      sayOnStrip('Press a wall to put an opening in it.');
+      return null;
+    }
+    const type = fenestrationType === 'window' ? 'window' : 'door';
+    const width = openingWidthFt(type);
+    const wall = best.wall;
+    const length = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+    // CLAMPED, NOT REFUSED, when the press lands near a corner: the opening
+    // slides along until its bearing fits. clampOpeningToWall returns null
+    // only when the wall cannot carry the width AT ALL, which is a different
+    // answer and gets a different sentence.
+    const clamped = G.clampOpeningToWall(wall, best.t * length, width, {
+      walls: walls(),
+      thicknessFt: openingThicknessFt(),
+    });
+    if (!clamped) {
+      sayOnStrip(`That wall is too short to carry a ${window.DraftFormatters
+        .formatArchitecturalInches(width * 12)} opening.`);
+      return null;
+    }
+    const record = {
+      id: newDrawingItemId('fenestration'),
+      wallId: wall.id,
+      levelId: wall.levelId,
+      // THE HOST WALL'S VIEW, not the drafter's. An opening is cut into a
+      // wall and belongs wherever that wall is drawn; filing it under the
+      // layer set that happened to be open would hide it from its own wall.
+      view: wall.view || 'plan',
+      type,
+      // drawing-format.js derives the layer from the type on load, so this
+      // cannot come out wrong -- but this page has no serializer between the
+      // push and the file, and a record that is only right AFTER a reload is
+      // a file that is wrong until then.
+      layer: type === 'door' ? 'A-DOOR' : 'A-GLAZ',
+      offset: clamped.offset,
+      width,
+      sillHeight: openingSillFt(type),
+      headHeight: openingHead,
+      // NOT THE BONE'S. auto-windows.js re-deals what it dealt; one the
+      // drafter placed by hand is his from the moment it lands.
+      auto: false,
+    };
+    if (!Array.isArray(drawing.fenestrations)) drawing.fenestrations = [];
+    drawing.fenestrations.push(record);
+    undoStack.push({ kind: 'add-item', list: drawing.fenestrations, item: record });
+    sayOnStrip(`${type === 'door' ? 'Door' : 'Window'} placed on `
+      + `${record.layer}.`);
+    markDirty();
+    paint();
+    return record;
+  };
+
   // THE ARMING, through the seam :3875 declared for exactly this. A house type
   // press records the type (that half already worked) and now arms the trace,
   // which is what _pressBuildType has always done in one motion.
@@ -8632,8 +9526,12 @@
   // what building-bodies.js reads to tell the attached one from the detached
   // one (:37). An attached garage is part of the house it hangs off, so it
   // does not spend the detached garage's slot.
-  const raiseLoop = (points, levelId, { garage = false } = {}) => {
+  const raiseLoop = (points, levelId,
+    { garage = false, openings = [], against = null,
+      viewId = 'plan', wallType = null, withOutline = true,
+      baseHeight, topHeight, body } = {}) => {
     const BH = window.DraftBuildHouse;
+    const G = window.DraftGeometry2D;
     const outline = {
       id: newDrawingItemId('outline'),
       masterId: null,
@@ -8648,30 +9546,784 @@
       overriddenSrcIds: [],
     };
     if (outline.detached === undefined) delete outline.detached;
-    drawing.outlines.push(outline);
+    // ONE OUTLINE PER BODY, NOT ONE PER RING. The foundation walls under a
+    // house are the same loop raised again in concrete, and an outline for
+    // them would be a second footprint for one building -- which BUILD HOUSE
+    // reads as "this level already has a house" and every count of outlines
+    // reads as two buildings.
+    if (withOutline) drawing.outlines.push(outline);
     const refLine = BH.outlineInteriorRef(points);
-    const walls = BH.houseWallRuns(points)
-      .map(run => commitWall(run.start, run.end, { bone: false, refLine }));
-    return { outline, walls };
+    // ── THE WALLS THIS BODY ACTUALLY OWNS ────────────────────────────────
+    //
+    // AN ATTACHED GARAGE DOES NOT RAISE THE WALLS IT SHARES WITH THE HOUSE.
+    // Movie, 18 Sep, with the wall marked in green on a screenshot: "the
+    // garage has an extra wall that is not needed. the garage walls should
+    // link into the house (look at how the DC version did it)". The DC
+    // version is one line of _buildGarageWalls -- skip an edge that lies on
+    // the house outline -- and that test is now geometry-2d.js's edgeOnLoop,
+    // read from there by both pages rather than written twice.
+    //
+    // TWO EDGES GO ON THIS BUNGALOW, not the one that was visible. The 20 ft
+    // along the house's front wall is the one in the screenshot; the 1 ft TIE
+    // down the house's right wall is the same mistake a foot long, and it is
+    // the one nobody would have reported. Both are a second wall standing in
+    // the same place as a house wall: doubled linework on the plan, a doubled
+    // stud count off it, and two walls to drag when the house moves.
+    //
+    // THE FOOTPRINT KEEPS ALL SIX CORNERS. Only the WALLS are skipped -- the
+    // outline above is the garage's shape, and the slab, the roof and the
+    // grade beam are all cut from it. Trimming the loop to the walls raised
+    // would leave the garage open along the house.
+    const sharedWith = against ? G.loopSegments(against) : null;
+    // THE LEVEL AND VIEW THIS BODY IS FOR, handed to every wall rather than
+    // left to the active one. See commitWall's own note: this function took a
+    // levelId, put it on the outline, and let the walls file themselves
+    // wherever the drafter happened to be standing.
+    const on = { levelId, view: viewId, wallType, baseHeight, topHeight, body };
+    // BY EDGE NUMBER, not by position. The openings below are keyed to the
+    // plan's edges, and both the skip above and houseWallRuns' own degenerate
+    // skip take runs OUT of the list -- so a wall's place in an array stopped
+    // meaning its edge the moment either could fire.
+    const wallsByEdge = [];
+    BH.houseWallRuns(points).forEach(run => {
+      if (sharedWith && G.edgeOnLoop(run.start, run.end, sharedWith)) return;
+      wallsByEdge[run.edge] = commitWall(run.start, run.end,
+        { bone: false, refLine, ...on });
+    });
+    const walls = wallsByEdge.filter(Boolean);
+
+    // ── AND THE WINDOWS AND DOORS THE DESIGN CALLS FOR ─────────────────────
+    //
+    // Movie, 18 Sep: "i'd like the windows to be in set positions for each
+    // house in the drivethru menu, but for the 'AUTOHOUSE' when they draw the
+    // outline and create the house that one could have the fenestrations auto
+    // generated". So these come from the PLAN, fixed, and auto-windows.js is
+    // the other thing entirely -- the records carry `auto: false` so a re-deal
+    // leaves the design's own openings alone.
+    //
+    // THE EDGE INDEX IS LOOKED UP, NOT COUNTED. This read `walls[spec.edge]`
+    // while the only thing that could remove a run was a degenerate edge, and
+    // the plans have none -- so run i WAS edge i and the shortcut held. It
+    // stopped holding the moment an attached garage began skipping its shared
+    // edges: on the bungalow that drops edges 0 and 5, and by position the
+    // man-door on edge 1 would have moved onto the exposed rear wall's
+    // neighbour and the 16 ft overhead door onto the wall beside the one it
+    // belongs to. Both would still have LOOKED like doors on a garage.
+    //
+    // The guard below is unchanged and still earns its place: an opening keyed
+    // to an edge that raised no wall -- a shared one, or a degenerate one --
+    // is dropped rather than written against the wrong wall.
+    if (!Array.isArray(drawing.fenestrations)) drawing.fenestrations = [];
+    const made = openings.map(spec => {
+      const wall = wallsByEdge[spec.edge];
+      if (!wall) return null;
+      const record = {
+        id: newDrawingItemId('fenestration'),
+        wallId: wall.id,
+        levelId,
+        view: wall.view || 'plan',
+        type: spec.type,
+        // drawing-format.js:230 derives this from the type on load, so it
+        // cannot come out wrong -- but this page has no serializer between the
+        // push and the file, and a record that is only right AFTER a reload is
+        // a file that is wrong until then.
+        layer: spec.type === 'door' ? 'A-DOOR' : 'A-GLAZ',
+        offset: spec.offsetFt,
+        width: spec.widthFt,
+        sillHeight: spec.sillFt,
+        headHeight: spec.headFt,
+        garage: spec.garage === true,
+        auto: false,
+      };
+      drawing.fenestrations.push(record);
+      return record;
+    }).filter(Boolean);
+    return { outline: withOutline ? outline : null, walls, openings: made };
+  };
+
+  // ── THE WHOLE BUILDING, NOT ONE STOREY OF IT ─────────────────────────────
+  //
+  // Movie, 18 Sep, looking at a bungalow he had just ordered: "the current
+  // houses are missing foundation and roof you only did the main level so far
+  // it looks like". Exactly so. buildPremadePlan raised ONE ring of exterior
+  // stud walls and its windows and called that a house.
+  //
+  // MODEL.dc.html:14632 `_buildHouse` IS THE REFERENCE, and Movie's ruling on
+  // it is "it worked decent in that version not perfect but real nice". From
+  // one bone press it raises walls and a floor on every floor level, then
+  // FOUNDATION's concrete walls, its slab and its strip footings, then the
+  // roof. That order is kept below, and each piece reads its numbers from the
+  // same modules the old page reads them from.
+  //
+  // AND IT IS WHY THE ELEVATIONS WERE BLANK, which is the same fact from the
+  // other end. drawElevationView looks each wall's level up in the floor stack
+  // and returns false when it collects no faces; a house with no foundation,
+  // no floor and no roof, whose one ring of walls was filed on FOUNDATION
+  // because that is where the drafter was standing, has nothing to stand up.
+  // The page then printed "the cut line crosses no walls" four times.
+  // ROOF_LEVEL_ID is already declared above for the seating chart, and the
+  // roof below lands on that same 7 -- MODEL.dc.html's own number, which
+  // _buildHouseRoof uses both to find the roof footprint and to refuse
+  // building a second house roof (`roof.levelId === 7`).
+  const FOUNDATION_LEVEL_ID = 1;
+
+  // The level a BUILDING starts on. floorLevels is bottom-up, so [0] is the
+  // lowest storey -- MAIN FL on the standard stack, and MODEL.dc.html's own
+  // choice for garage walls (`_floorLevels()[0]`). Never the active level: a
+  // drafter looking at the foundation when he presses the bone is not asking
+  // for a house made of basement walls.
+  const lowestFloorLevel = () => storeyLevels(1)[0] || null;
+
+  // THE LEVELS A BUILDING'S STOREYS GO ON, bottom-up and no more than the
+  // design asks for. floorLevels() is already bottom-up, so [0] is the lowest
+  // storey -- MAIN FL on the standard stack.
+  //
+  // A DESIGN CAN WANT MORE STOREYS THAN THE DRAWING HAS LEVELS, and this
+  // returns what is there rather than inventing one. Ordering a 2 STOREY into
+  // a drawing with a single floor level builds a single storey of it, which
+  // is the same principle as the foundation guard: a record filed against a
+  // level the drawing does not list is dropped on the next load, and a bone
+  // press is not permission to restructure somebody's level stack.
+  const storeyLevels = wanted => window.DraftLayerViews
+    .floorLevels(drawing?.levels || [])
+    .slice(0, Math.max(1, Number(wanted) || 1));
+
+  // A LEVEL THE DRAWING ACTUALLY HAS. drawing-format.js validates every
+  // record's levelId against the drawing's own level list and DROPS the ones
+  // it does not recognise -- so concrete written to a FOUNDATION that this
+  // drawing has not got would sit in the file, paint once, and be gone on the
+  // next load. That is the silent loss this page keeps having to refuse: a
+  // record only right until it is reloaded is a file that is wrong now.
+  //
+  // NOT "ADD THE LEVEL". A drawing with no foundation is a drawing somebody
+  // made that way, and a bone press is not permission to restructure it.
+  const levelPresent = id => (drawing?.levels || [])
+    .some(level => Number(level.id) === id);
+
+  // THE CONCRETE UNDER THE HOUSE: walls, slab and footings, all on FOUNDATION.
+  //
+  // NO SECOND OUTLINE. The foundation is the same loop raised again in
+  // concrete, and an outline for it would be a second footprint for one
+  // building -- which every count of outlines reads as two houses.
+  const raiseFoundationUnder = (loop, { garage = false } = {}) => {
+    const made = { walls: [], items: [] };
+    const levelId = FOUNDATION_LEVEL_ID;
+    const fdn = raiseLoop(loop, levelId, {
+      viewId: 'foundation',
+      wallType: contextWallType('foundation'),
+      withOutline: false,
+    });
+    made.walls.push(...fdn.walls);
+
+    // THE SLAB, poured to the level's own thickness through floorRecord --
+    // the same record the floor gesture writes, so a built slab and a drawn
+    // one cannot differ in what a slab IS.
+    drawing.floors = drawing.floors || [];
+    const slab = floorRecord(loop, levelId, 'foundation', { garage });
+    drawing.floors.push(slab);
+    made.items.push({ list: drawing.floors, item: slab });
+
+    // THE STRIP FOOTINGS, two rings of ordinary linework with the footing
+    // centred on the wall: equal projection past each face. Lifted from
+    // _buildHouseFootings, arithmetic and all -- build-house.js already owns
+    // the ring offsetting, and the two numbers it needs come from the wall
+    // type and the level's own footing width rather than from a literal here.
+    const WT = window.DraftWallTypes;
+    const wallFt = (WT.WALL_TYPES.find(t => t.id === 'concrete_8')?.totalIn || 8) / 12;
+    const projFt = Math.max(0, (assemblyFor(levelId).footingWidthIn / 12) - wallFt) / 2;
+    const rings = window.DraftBuildHouse.footingRings(
+      loop.map(pt => ({ x: pt.x, z: pt.z })), wallFt, projFt);
+    drawing.lines = drawing.lines || [];
+    rings.forEach(ring => ring.forEach((point, index) => {
+      const next = ring[(index + 1) % ring.length];
+      // A degenerate footing leg is not linework. The offset of a tight
+      // corner can collapse one, and drawing-format.js drops a zero-length
+      // line on load -- so writing it would be a record that vanishes.
+      if (Math.hypot(next.x - point.x, next.z - point.z) < 0.01) return;
+      const line = {
+        id: newDrawingItemId('line'),
+        start: poolVertex({ x: point.x, z: point.z }, levelId, 'foundation'),
+        end: poolVertex({ x: next.x, z: next.z }, levelId, 'foundation'),
+        levelId,
+        view: 'foundation',
+        layer: 'S-FOOTING',
+      };
+      drawing.lines.push(line);
+      made.items.push({ list: drawing.lines, item: line });
+    }));
+    return made;
+  };
+
+  // ── THE GARAGE'S OWN CONCRETE ────────────────────────────────────────────
+  //
+  // Movie ordered a "detached garage 25x25 with frost wall" and got four stud
+  // walls. The FROST WALL was recorded on the outline and read by nothing,
+  // because the thing that reads it -- MODEL.dc.html's _buildGarageGradeBeam
+  // -- had never been ported. So the tile asked him a question and then threw
+  // the answer away.
+  //
+  // THREE FOUNDATIONS, THREE DIFFERENT BUILDINGS, and the difference is not
+  // cosmetic:
+  //
+  //   FROST WALL     concrete standing on a strip footing at the house's
+  //                  footing depth -- so it gets footings, and its base is 0.
+  //   GRADE BEAM     a band of concrete HANGING off grade, no footing under
+  //                  it at all. Its base is its own top less the pour.
+  //   THICKENED EDGE no beam and no footing: the slab's own perimeter IS the
+  //                  footing, which is what `thickenedEdge` on the slab says.
+  //
+  // Reading `foundation` and building the same thing for all three would be
+  // worse than building nothing, because the drawing would then state a
+  // foundation it does not have.
+  const raiseGarageConcrete = (loop, garage, { against = null } = {}) => {
+    const made = { walls: [], items: [] };
+    const levelId = FOUNDATION_LEVEL_ID;
+    if (!levelPresent(levelId)) return made;
+    const S = window.DraftCutView.STANDARDS;
+    const kind = garageFoundationOf(garage);
+    const detached = garage?.detached === true;
+    const houseTop = assemblyFor(levelId).wallHeightFt;
+    const grade = houseTop - S.GRADE_BELOW_FOUNDATION_TOP_FT;
+
+    // THE TOP OF THE CONCRETE, per kind. A detached garage sits on its own
+    // lot and answers to grade; an attached one is set down from the house so
+    // the two sills relate -- Movie, 4 Sep, "sill to sill".
+    //
+    // AND THE RULE EXISTS TWICE IN THIS REPO, which is worth saying rather
+    // than quietly picking a winner. cut-view.js's frostWallTop DRAWS it and
+    // MODEL.dc.html's _garageFrostWallTopFt BUILDS it, and they differ by one
+    // clause: the builder honours a typed zone offset
+    // (zoneHeights.zones.attachedGarage.offsetFt) that the painter knows
+    // nothing about. This page has no typed offsets, so both readings agree
+    // here -- and reconciling them is a change to the OLD page's behaviour,
+    // which is not this rung's to make.
+    const frostTop = detached
+      ? grade + S.DETACHED_BEAM_ABOVE_GRADE_IN / 12
+      : houseTop - S.GARAGE_SILL_BELOW_HOUSE_FT;
+    const beamTop = detached ? grade + S.DETACHED_BEAM_ABOVE_GRADE_IN / 12 : houseTop;
+
+    if (kind !== 'thickened') {
+      const topHeight = kind === 'frostwall' ? frostTop : beamTop;
+      // A FROST WALL STANDS, A GRADE BEAM HANGS. The one number that says so.
+      const baseHeight = kind === 'frostwall' ? 0
+        : detached ? topHeight - S.GARAGE_BEAM_CONCRETE_IN / 12 : 0;
+      const beam = raiseLoop(loop, levelId, {
+        viewId: 'foundation',
+        wallType: 'concrete_8',
+        withOutline: false,
+        against,
+        baseHeight,
+        topHeight,
+        body: 'garage',
+      });
+      made.walls.push(...beam.walls);
+    }
+
+    // THE SLAB. Four inches, and it FALLS toward the door unless its edge is
+    // the footing -- Movie, 4 Sep: "slab 4\" conc slope 1/8\" down from back
+    // to the garage door opening (front)".
+    drawing.floors = drawing.floors || [];
+    const slab = {
+      ...floorRecord(loop, levelId, 'foundation', { garage: true }),
+      slopeInPerFt: kind === 'thickened' ? 0 : S.GARAGE_SLAB_SLOPE_IN_PER_FT,
+      thickness: S.GARAGE_SLAB_THICKNESS_IN / 12,
+      thickenedEdge: kind === 'thickened',
+    };
+    drawing.floors.push(slab);
+    made.items.push({ list: drawing.floors, item: slab });
+
+    // THE FOOTINGS, UNDER A FROST WALL ONLY. A grade beam has none by
+    // definition and a thickened edge is its own, so writing rings for either
+    // would draw concrete that is not there.
+    if (kind === 'frostwall') {
+      const WT = window.DraftWallTypes;
+      const wallFt = (WT.WALL_TYPES.find(t => t.id === 'concrete_8')?.totalIn || 8) / 12;
+      const projFt = Math.max(0, (assemblyFor(levelId).footingWidthIn / 12) - wallFt) / 2;
+      const shared = against ? window.DraftGeometry2D.loopSegments(against) : null;
+      const rings = window.DraftBuildHouse.footingRings(
+        loop.map(pt => ({ x: pt.x, z: pt.z })), wallFt, projFt);
+      drawing.lines = drawing.lines || [];
+      rings.forEach(ring => ring.forEach((point, index) => {
+        const next = ring[(index + 1) % ring.length];
+        if (Math.hypot(next.x - point.x, next.z - point.z) < 0.01) return;
+        // THE SHARED EDGES GET NO FOOTING EITHER, tested on the SOURCE loop
+        // rather than the offset ring -- the ring has been moved off the
+        // house, so asking whether IT lies on the house would answer no for
+        // every leg. The old page tests `polygon[index]` for the same reason.
+        const a = loop[index], b = loop[(index + 1) % loop.length];
+        if (shared && window.DraftGeometry2D.edgeOnLoop(a, b, shared)) return;
+        const line = {
+          id: newDrawingItemId('line'),
+          start: poolVertex({ x: point.x, z: point.z }, levelId, 'foundation'),
+          end: poolVertex({ x: next.x, z: next.z }, levelId, 'foundation'),
+          levelId,
+          view: 'foundation',
+          layer: 'S-FOOTING',
+        };
+        drawing.lines.push(line);
+        made.items.push({ list: drawing.lines, item: line });
+      }));
+    }
+    made.kind = kind;
+    return made;
+  };
+
+  // THE ROOF OVER IT, cut from the house loop offset by the overhang and laid
+  // on the ROOF level. Every edge starts an EAVE, which is _buildHouseRoof's
+  // own default -- the drafter flips the gables with the ROOF tool, and this
+  // page already has that gesture.
+  // A ROOF OVER A LOOP, at the height the body under it bears at.
+  //
+  // TWO ROOFS OVER ONE BUILDING SIT AT TWO HEIGHTS, and the format already
+  // says how. cut-view.js's roofBaseElev bears a roof on the full wall stack
+  // UNLESS it carries `garage: true` and a real `plateHeightFt`, in which case
+  // it bears at the first floor's top plus that plate -- so a single-storey
+  // garage beside a 2 STOREY keeps a single-storey roof instead of a sheet
+  // sailing out of the upper wall. drawing-format.js round-trips both fields,
+  // so nothing about the file has to change for this.
+  //
+  // `plateHeightFt` IS A REAL NUMBER OR IT IS ABSENT. The loader reads a
+  // stored null as a plate height of ZERO, which bears a garage roof at the
+  // main-floor LINE -- on the slab, not on its walls.
+  //
+  // AND THE EDGES AGAINST THE HOUSE ARE GABLES. An eave there runs the roof
+  // plane into the house wall; a gable cuts it vertically at the wall, which
+  // is what the wall is there to meet. MODEL.dc.html's _buildGarageRoof makes
+  // the same call through the same test -- an edge lying on the house outline
+  // -- and it is edgeOnLoop here for the reason the garage's own walls use it:
+  // one rule, one home.
+  const raiseRoofOver = (loop, { garage = false, plateHeightFt = null,
+    sourceLevelId = null, against = null } = {}) => {
+    const G = window.DraftGeometry2D;
+    const ring = loop.map(pt => ({ x: pt.x, z: pt.z }));
+    // ── THE EDGES AGAINST THE HOUSE ARE CUT FLUSH, NOT OVERHUNG ──────────
+    //
+    // A roof that dies into a house wall has no eave there and no board to
+    // hang one on: the sheet stops at the wall. MODEL.dc.html's
+    // _buildGarageRoof says so by building its offset with
+    // offsetOutlineVariable and a distance of ZERO on every house-path edge.
+    //
+    // OFFSET UNIFORMLY, THE GARAGE ROOF GREW INTO THE HOUSE. Measured on the
+    // bungalow: the shared edge (16,20)-(-4,20) moved out to z=18, two feet
+    // inside the house -- and the elevation then drew a RAKE FASCIA along it,
+    // a pair of parallel lines floating in the middle of the house's own roof
+    // with no gable under them. Movie marked exactly that in green.
+    //
+    // So the shared edges take zero and the rest take the overhang, which is
+    // the same `against` loop the walls and the gable flags already use --
+    // one question asked once, three ways round.
+    const sharedWith = against ? G.loopSegments(against) : null;
+    const sharedEdge = index => {
+      if (!sharedWith) return false;
+      const a = ring[index], b = ring[(index + 1) % ring.length];
+      return G.edgeOnLoop(a, b, sharedWith);
+    };
+    const pts = sharedWith
+      ? G.offsetOutlineVariable(ring,
+        ring.map((_, index) => (sharedEdge(index) ? 0 : roofOverhangFt)))
+      : G.offsetOutline(ring, roofOverhangFt);
+    // An offset that collapses the loop is not a roof, and the record would be
+    // dropped on load anyway -- present on screen, gone after a reload.
+    if (!Array.isArray(pts) || pts.length < 3) return null;
+    // READ OFF THE SOURCE RING, NOT THE OFFSET ONE. The overhang moves every
+    // unshared point outward, so an offset edge no longer lies on the house it
+    // was cut against -- asking there would find no gables at all. The two
+    // rings have the same edge count and the same order, which is what makes
+    // the answer for edge i of one the answer for edge i of the other.
+    const gableAt = index =>
+      ring.length === pts.length && sharedEdge(index);
+    drawing.roofs = drawing.roofs || [];
+    const roof = {
+      id: newDrawingItemId('roof'),
+      points: pts.map(pt => ({ x: pt.x, z: pt.z })),
+      levelId: ROOF_LEVEL_ID,
+      sourceLevelId,
+      sourceShapeId: null,
+      edges: pts.map((_, index) => (gableAt(index) ? 'gable' : 'eave')),
+      overhang: roofOverhangFt,
+      pitch: roofPitch,
+      fascia: ROOF_FASCIA_IN,
+      garage,
+      layer: 'A-ROOF',
+    };
+    if (garage && Number.isFinite(plateHeightFt)) roof.plateHeightFt = plateHeightFt;
+    drawing.roofs.push(roof);
+    return { list: drawing.roofs, item: roof };
+  };
+
+  // ── AUTO DIMS ────────────────────────────────────────────────────────────
+  //
+  // Exterior dimension strings on all four sides of a plan. Per side the
+  // closest string dims corner to corner through the fenestration centres
+  // facing that side, the next dims every footprint jog, and the outermost is
+  // the overall.
+  //
+  // THE COMPUTATION IS NOT PORTED, BECAUSE IT WAS ALREADY SHARED. auto-dims.js
+  // was extracted pure out of the old page -- plain data in, segments out, no
+  // THREE and no DOM -- and had exactly one caller. This is the second, and it
+  // passes the same arguments to the same function. Everything below is the
+  // stateful shell the module deliberately does not own: filtering the
+  // collections, resolving opening centres, and turning segments into records.
+  //
+  // AN INTEGER ID, WHICH IS NOT THIS PAGE'S USUAL KIND. Walls and outlines
+  // wear `wall-3`; drawing-format.js:dimensions requires `Number.isInteger`
+  // and refuses anything else, so a dimension carrying this page's ordinary id
+  // would be dropped on the next load -- present on screen, gone after a
+  // reload. The counter is the old page's `nextDimensionId`, which survives
+  // here on `...parsed`, and it is recovered the way the old LOADER recovers
+  // it rather than trusted: the max of the stored counter and every id already
+  // in the drawing. A counter alone is wrong the moment a file arrives without
+  // one, and a collision writes a dimension that silently replaces another.
+  const newDimensionId = () => {
+    const used = (drawing?.dimensions || [])
+      .map(dimension => Number(dimension.id))
+      .filter(Number.isInteger);
+    const stored = Number.isInteger(drawing?.nextDimensionId) ? drawing.nextDimensionId : 1;
+    const next = Math.max(1, stored, ...used.map(id => id + 1));
+    drawing.nextDimensionId = next + 1;
+    return next;
+  };
+
+  // WHAT THE STRINGS ARE DRAWN AROUND, for one level and one layer view.
+  // Returns { placed, removed }, or -1 when the level holds nothing with
+  // enough size to string -- the old page's own signal, and the reason a
+  // caller can tell "nothing to dimension" from "dimensioned nothing".
+  //
+  // BOTH LISTS, because re-running REPLACES this level and view's own auto
+  // strings, and an undo that only took the new ones away would leave the
+  // drafter with neither: the ones it swept would be gone for good. They are
+  // rarely anything -- a fresh build sweeps nothing -- and that is exactly
+  // why a loss here would go unnoticed until the one drawing where it did.
+  const placeAutoDims = (levelId, view) => {
+    if (!drawing) return -1;
+    const G = window.DraftGeometry2D;
+    const AD = window.DraftAutoDims;
+    // The ELECTRIC sheet dims the walls it is drawn over, which live on the
+    // plan -- MODEL.dc.html's own first line of _placeAutoDims.
+    const wallView = view === 'e-power' ? 'plan' : view;
+    const walls = (drawing.walls || []).filter(wall =>
+      Number(wall.levelId) === levelId && (wall.view || 'plan') === wallView);
+    const outlines = (drawing.outlines || []).filter(outline =>
+      Number(outline.levelId) === levelId && (outline.points || []).length >= 3);
+    // ROOFS ONLY ON THE ROOF LEVEL, where the module strings each footprint
+    // for the truss designer instead of stringing the walls.
+    const roofs = levelId === ROOF_LEVEL_ID
+      ? (drawing.roofs || []).filter(roof =>
+        Number(roof.levelId) === levelId && (roof.points || []).length >= 3)
+      : [];
+    // THE OPENING CENTRES, resolved through the same geometry the painter
+    // uses. openingsOn already refuses an opening its wall cannot carry, so
+    // this list holds nothing the drawing does not really have.
+    //
+    // AND THE HOST WALL COMES WITH EACH ONE, because the module needs it: it
+    // reads the wall's own direction to decide which side of which footprint
+    // the opening belongs to, and hands a wall shared by two footprints to the
+    // smaller group so a garage door dims with the garage. Looked up by id
+    // from the SAME filtered list, so an opening whose wall is not on this
+    // level and view drops out rather than dragging a foreign wall in.
+    const wallById = new Map(walls.map(wall => [String(wall.id), wall]));
+    const openings = openingsOn(walls)
+      .map(entry => ({
+        center: entry.geometry && entry.geometry.center,
+        wall: wallById.get(String(entry.opening.wallId)),
+      }))
+      .filter(entry => entry.center && entry.wall);
+    const segments = AD.computeAutoDimStrings({
+      walls, outlines, roofs, openings,
+      offsetOutline: (pts, dist) => G.offsetOutline(pts, dist),
+      firstOffset: autoDimFirstOffsetFt(),
+      jogMergeFt: AD.JOG_MERGE_FT,
+      stringSpacingFt: AD.STRING_SPACING_FT,
+    });
+    if (!segments) return -1;
+    if (!Array.isArray(drawing.dimensions)) drawing.dimensions = [];
+    // RE-RUNNING REPLACES THIS LEVEL AND VIEW'S OWN AUTO STRINGS and nothing
+    // else. `auto: true` is what separates a generated string from one a
+    // drafter drew, and a hand-drawn dimension must survive a rebuild --
+    // which is why commitWall's note says this page never invents that key.
+    const made = [];
+    const removed = [];
+    drawing.dimensions = (drawing.dimensions || []).filter(dimension => {
+      const mine = dimension.auto === true && Number(dimension.levelId) === levelId
+        && dimension.view === view;
+      if (mine) removed.push(dimension);
+      return !mine;
+    });
+    segments.forEach(segment => {
+      // THE srcIds ARE DROPPED, AND THAT IS A REAL LOSS RATHER THAN A TIDY-UP.
+      // The module returns srcStartId/srcEndId so the old page can link each
+      // end to a master corner, and its dims then FOLLOW when that corner is
+      // dragged. This page writes no srcIds on anything -- not outlines, not
+      // roofs -- so there is nothing here to link to, and a dimension that
+      // claimed a link it does not have would be worse than one that admits
+      // it has none. Re-run after an edit, which is what the old page's own
+      // message tells a drafter to do.
+      const dimension = {
+        id: newDimensionId(),
+        start: { x: segment.start.x, y: 0, z: segment.start.z },
+        end: { x: segment.end.x, y: 0, z: segment.end.z },
+        levelId,
+        view,
+        auto: true,
+      };
+      drawing.dimensions.push(dimension);
+      made.push(dimension);
+    });
+    return { placed: made, removed };
   };
 
   const buildPremadePlan = order => {
     if (!drawing) return null;
     const plan = window.DraftPremadePlans.planFor(order?.entry?.id);
     if (!plan) return null;
-    const { levelId } = onActiveLevel();
+    // THE LOWEST FLOOR LEVEL, NOT THE ACTIVE ONE. A drafter standing on
+    // FOUNDATION when he presses the bone is not asking for a house made of
+    // basement walls -- and that is exactly what he got: ordered from the
+    // entry screen, which opens on level 1, the whole bungalow was filed
+    // there and every elevation came back "the cut line crosses no walls".
+    const storey = lowestFloorLevel();
+    if (!storey) return null;
+    const levelId = storey.id;
     if (!Array.isArray(drawing.outlines)) drawing.outlines = [];
     // ONE GESTURE, ONE UNDO, the same as the ordered garage: the walls' own
     // 'add' steps are dropped for the single 'built' one covering both bodies.
     const mark = undoStack.length;
-    const raised = [raiseLoop(plan.house, levelId)];
-    if (plan.garage) raised.push(raiseLoop(plan.garage, levelId, { garage: true }));
+    // ── THE SHELL, ONE STOREY AT A TIME ──────────────────────────────────
+    //
+    // MODEL.dc.html's _buildHouse walks `floors.forEach` and calls
+    // _buildHouseWalls once per floor level; a bungalow simply has an outline
+    // on one of them. Here the DESIGN says how many storeys it has, so the
+    // walk is over the levels the design asks for and the drawing can hold.
+    //
+    // UPSTAIRS GETS ITS OWN OPENINGS, not the ground floor's. The design
+    // carries both sets, and the reason is a front door: dealt again on the
+    // storey above it would open into air, which the clamp accepts and the
+    // elevation shows.
+    const storeys = storeyLevels(plan.storeys);
+    // HELD BY NAME, NEVER BY POSITION. `raised` is a list of bodies whose
+    // length depends on how many storeys the design has and what hangs off
+    // it, and the garage's concrete used to be found at `raised[1]` -- true
+    // of a bungalow, and the UPPER STOREY of a 2 STOREY. Both outlines answer
+    // `attachedGarage` and neither is detached, so the wrong one gave the
+    // right foundation and nothing looked amiss; the moment a garage outline
+    // carried its own `foundation`, or the room over it became a fourth body,
+    // it would stop agreeing. The same trap wallsByEdge was built to close.
+    let garageBody = null;
+    let overGarageBody = null;
+    const raised = storeys.map((level, index) => raiseLoop(plan.house, level.id,
+      { openings: index === 0 ? plan.houseOpenings
+        : (plan.upperOpenings || plan.houseOpenings) }));
+    if (plan.garage) {
+      // THE HOUSE IS WHAT THE GARAGE IS MEASURED AGAINST, and it is handed
+      // over rather than found: the garage hangs off the house by
+      // construction (premade-plans.js builds its loop from the house's own
+      // right and front lines), so the body it shares edges with is known
+      // here and searching the drawing for it would be a second, weaker
+      // answer to a question this function already holds.
+      // `garage` AND `body` ARE TWO DIFFERENT FLAGS and both are needed.
+      // `garage: true` marks the OUTLINE as a garage footprint; `body` marks
+      // each WALL as the garage's, which is how building-bodies.js and the
+      // section painters tell its framing from the house's. The ordered
+      // detached garage carried body from the start and this one did not --
+      // a split the wall tally found the moment it began counting by body.
+      // THE GARAGE IS A SINGLE STOREY -- Movie, 19 Sep: "make a single story
+      // garage" -- so it goes on the lowest storey only, however many the
+      // house has. The floor OVER it is a different body on a different
+      // level, not this loop raised twice.
+      garageBody = raiseLoop(plan.garage, levelId,
+        { garage: true, body: 'garage',
+          openings: plan.garageOpenings, against: plan.house });
+      raised.push(garageBody);
+    }
+
+    // ── AND THE ROOM OVER IT ─────────────────────────────────────────────
+    //
+    // ON 2ND FL, NOT ON THE OVER-GARAGE LEVEL. Movie, 19 Sep, asked directly:
+    // "no it will be the '2 storey', the 'over garage' layer is for bilevels
+    // when that would be a 'lower' 2nd floor" -- then "this one is even with
+    // the 2nd floor so will be considered 2nd floor". A half-level is for a
+    // room sitting half a storey off the floors around it; this one is flush
+    // with the storey above, so it IS that storey.
+    //
+    // WHICH MEANS NOTHING GETS ADDED TO ANYBODY'S LEVEL STACK. The room goes
+    // on a level the house is already using, so this tile needs no more
+    // permission than the other two.
+    //
+    // ITS OWN BODY, NOT THE UPPER STOREY STRETCHED. It is a separate loop
+    // with its own walls and its own windows, and `against: plan.house` is
+    // what stops its back wall being raised on top of the house's -- twenty
+    // feet of the two run in the same place, and premade-plans.js splits that
+    // stretch into an edge of its own so this skip can take it whole.
+    //
+    // AND IT NEEDS AN UPPER STOREY TO BE ON. storeyLevels returns the levels
+    // the drawing HAS, not the ones the design wants, so a room-over ordered
+    // into a drawing with a single floor level has nowhere to go. Raised when
+    // there is somewhere, named when there is not -- the same rule the
+    // foundation and the roof already follow below, and the alternative is
+    // what this tile did until now: build a house and a garage, no room, and
+    // not one word about the one that went missing.
+    const upperStorey = storeys[1] || null;
+    if (plan.overGarage && upperStorey) {
+      overGarageBody = raiseLoop(plan.overGarage, upperStorey.id,
+        { openings: plan.overGarageOpenings, against: plan.house });
+      raised.push(overGarageBody);
+    }
+    // ── AND THE REST OF THE BUILDING ─────────────────────────────────────
+    // _buildHouse's order: the storey's own floor, then the concrete under
+    // it, then the roof over it. The garage keeps its stud walls only on this
+    // rung -- its grade beam, footings, piles and slab are a different set of
+    // members with their own rules, and half a garage foundation would be
+    // worse than none.
+    const extra = [];
+    const parts = ['house'];
+    // A FLOOR UNDER EVERY STOREY, which is _buildHouse's own per-level pass:
+    // walls AND a floor, once per floor level. A second storey framed with no
+    // deck under it is a storey the section draws standing on nothing.
+    drawing.floors = drawing.floors || [];
+    storeys.forEach(level => {
+      const deck = floorRecord(plan.house, level.id, 'floor');
+      drawing.floors.push(deck);
+      extra.push({ list: drawing.floors, item: deck });
+    });
+    // THE ROOM OVER THE GARAGE GETS ITS OWN DECK, because it is its own
+    // footprint. The storey loop above lays a floor the shape of the HOUSE,
+    // and the room hangs off the side of it -- so a room framed by that pass
+    // alone is a room standing on nothing, which is the same thing a storey
+    // with no deck under it would be.
+    if (overGarageBody) {
+      const deck = floorRecord(plan.overGarage, upperStorey.id, 'floor');
+      drawing.floors.push(deck);
+      extra.push({ list: drawing.floors, item: deck });
+    }
+
+    // EACH PIECE ONLY WHERE THE DRAWING HAS SOMEWHERE TO PUT IT, and the
+    // strip says which pieces went up rather than claiming all of them.
+    const under = levelPresent(FOUNDATION_LEVEL_ID)
+      ? raiseFoundationUnder(plan.house) : { walls: [], items: [] };
+    if (under.items.length) parts.push('foundation');
+    extra.push(...under.items);
+
+    // THE GARAGE'S OWN CONCRETE, measured against the house so the edges they
+    // share get neither a beam nor a footing -- the same rule its stud walls
+    // already follow, through the same edgeOnLoop.
+    const garageConcrete = (plan.garage && garageBody?.outline)
+      ? raiseGarageConcrete(plan.garage, garageBody.outline, { against: plan.house })
+      : { walls: [], items: [] };
+    extra.push(...garageConcrete.items);
+
+    // ── AND THE ROOFS, ONE PER BODY THAT NEEDS ONE ───────────────────────
+    //
+    // NOT ONE ROOF OVER EVERYTHING. A single-storey garage beside a 2 STOREY
+    // bears its roof a whole storey lower than the house does, and the format
+    // already carries that: cut-view.js's roofBaseElev reads `garage` and
+    // `plateHeightFt` and bears such a roof at the first floor's top plus the
+    // plate instead of on the full wall stack.
+    //
+    // AND IT IS NOT A SPECIAL CASE FOR THE BUNGALOW. `bearing` is the top of
+    // the topmost wall, so on a one-storey house the flagged garage roof and
+    // an unflagged one land on the same number -- the flag changes nothing
+    // there and does the right thing beside a 2 STOREY. That agreement is
+    // checked rather than assumed.
+    const madeRoofs = [];
+    if (levelPresent(ROOF_LEVEL_ID)) {
+      madeRoofs.push(raiseRoofOver(plan.house));
+      if (plan.garageRoof) {
+        // THE PLATE IS THE STOREY THE GARAGE ACTUALLY STANDS ON, asked of the
+        // same assembly its walls were raised to rather than typed again.
+        madeRoofs.push(raiseRoofOver(plan.garageRoof, {
+          garage: true,
+          plateHeightFt: assemblyFor(levelId).wallHeightFt,
+          sourceLevelId: levelId,
+          // WHATEVER THIS ROOF WAS CUT AGAINST. With a room over the garage
+          // the stub abuts the ROOM and never reaches the house; without one
+          // the garage roof abuts the house along the two edges its walls
+          // already skip. Either way it is the body the footprint stops at.
+          against: plan.overGarage || plan.house,
+        }));
+      }
+      // THE ROOM'S OWN ROOF, at the full bearing: the room IS the second
+      // storey, so it is not a garage roof and must not carry the flag that
+      // would drop it one.
+      if (overGarageBody) {
+        madeRoofs.push(raiseRoofOver(plan.overGarage, {
+          sourceLevelId: upperStorey.id,
+          against: plan.house,
+        }));
+      }
+    }
+    const built = madeRoofs.filter(Boolean);
+    if (built.length) {
+      extra.push(...built);
+      parts.push(built.length > 1 ? `${built.length} roofs` : 'roof');
+    }
+
+    // ── AND THE DIMENSIONS, ON EVERY LEVEL THE PRESS TOUCHED ─────────────
+    //
+    // MODEL.dc.html's BUILD HOUSE calls _placeAutoDims for every level it
+    // built on, and so does this: a house that arrives undimensioned is a
+    // drawing somebody still has to measure by hand, which is the whole thing
+    // AUTO DIMS exists to stop.
+    //
+    // EVERY LEVEL THAT GOT GEOMETRY, gathered from the records rather than
+    // from a list written out here -- the storeys, the foundation under them
+    // and the roof over, each already knows which level it went to. Written
+    // as a list, this would have to be edited again by the same hand that
+    // added the next body, and the one it forgot would simply arrive without
+    // dimensions and say nothing about it.
+    //
+    // THE HOME VIEW OF EACH, not the active one: a dimension is filed against
+    // a layer view, and a string filed against the view the drafter happens
+    // to be standing in would be invisible on the plan it measures.
+    const dimensioned = [];
+    const touched = new Map();
+    const noteLevel = (id, view) => {
+      if (id == null) return;
+      const key = `${id}:${view}`;
+      if (!touched.has(key)) touched.set(key, { levelId: Number(id), view });
+    };
+    storeys.forEach(level => noteLevel(level.id, 'plan'));
+    if (under.items.length) noteLevel(FOUNDATION_LEVEL_ID, 'foundation');
+    if (built.length) noteLevel(ROOF_LEVEL_ID, 'plan');
+    const sweptDims = [];
+    touched.forEach(({ levelId: id, view }) => {
+      const result = placeAutoDims(id, view);
+      // -1 IS A REAL ANSWER: the level holds nothing big enough to string.
+      // It is not an error and it is not a count of zero.
+      if (result === -1) return;
+      dimensioned.push(...result.placed);
+      sweptDims.push(...result.removed);
+    });
+    if (dimensioned.length) {
+      extra.push(...dimensioned.map(item => ({ list: drawing.dimensions, item })));
+      parts.push(`${dimensioned.length} dims`);
+    }
+
     undoStack.length = mark;
     undoStack.push({
       kind: 'built',
-      walls: raised.flatMap(body => body.walls),
-      outlines: raised.map(body => body.outline),
+      walls: raised.flatMap(body => body.walls)
+        .concat(under.walls, garageConcrete.walls),
+      outlines: raised.map(body => body.outline).filter(Boolean),
       list: drawing.outlines,
+      // EVERY OTHER RECORD THE PRESS MADE, each with the list it went into, so
+      // one Ctrl+Z takes the whole building. Kept as {list, item} pairs rather
+      // than four typed fields because the undo branch then needs no knowledge
+      // of what a floor, a footing line or a roof IS -- the same trick
+      // 'add-item' plays, which is why a column and a beam share one branch.
+      items: extra,
+      // AND ANYTHING THE PRESS SWEPT, put back on the way out. The only
+      // thing it sweeps is auto dims already on a level it dimensioned --
+      // nothing on a fresh drawing, which is why an undo that forgot them
+      // would look correct on every fixture and lose them on the one drawing
+      // that had them.
+      restored: sweptDims.length
+        ? [{ list: drawing.dimensions, items: sweptDims }] : [],
+      // ONE PRESS IS STILL ONE UNDO, and the openings are part of that press.
+      // Left out, Ctrl+Z would take the house and leave eleven windows and
+      // doors hosted on walls that no longer exist -- records the loader drops
+      // on the next open, so the drawing would quietly repair itself and the
+      // drafter would never know what had been in the file.
+      openings: raised.flatMap(body => body.openings || []),
     });
     // AND THE TRACE GOES DOWN WITH IT. Pressing the tile armed the outline
     // through onChoose -- that is the old page's own two-things-at-once and it
@@ -8680,7 +10332,27 @@
     // and an armed trace left over a finished house turns his next press into
     // the first corner of a second one.
     setTool(RESTING_TOOL);
-    sayOnStrip(`${order.entry.label} built — ${plan.garage ? 'house and garage' : 'house'}.`);
+    // WHAT WENT UP AND WHERE, because the drafter is very likely not looking
+    // at the level it went on -- the entry screen opens on FOUNDATION. Naming
+    // the storey is the difference between an empty sheet that looks broken
+    // and an empty sheet that tells you where to look.
+    if (plan.garage) parts.splice(1, 0, 'garage');
+    // WHAT WENT UP, AND WHAT DID NOT. A design carrying a room over the
+    // garage into a drawing with one floor level has nowhere to put it, and
+    // the drafter pressed a tile with ROOM OVER written on it -- so the strip
+    // says which of the two happened rather than reading the same either way.
+    if (plan.overGarage) {
+      parts.splice(parts.indexOf('garage') + 1, 0,
+        overGarageBody ? 'room over' : 'NO room over (no storey above it)');
+    }
+    // WHERE IT STARTS, not where it sits, once there is more than one storey.
+    // "built on MAIN FL" is true of a bungalow and misleading of a 2 STOREY,
+    // whose upper half is somewhere else entirely.
+    if (storeys.length > 1) parts[0] = `house on ${storeys.length} storeys`;
+    sayOnStrip(`${order.entry.label} built ${storeys.length > 1 ? 'from' : 'on'} `
+      + `${levelLabel(storey.id, storey.name) || 'the main floor'}`
+      + `${storeys.length > 1 ? ' up' : ''}`
+      + ` — ${parts.join(', ')}.`);
     markDirty();
     buildChrome();
     paint();
@@ -9893,44 +11565,191 @@
     return row;
   };
 
-  const showStructureProps = () => {
+  // A BUILDER RETURNS A NODE AND NOTHING ELSE. It used to call ModelProps.set
+  // itself and return EARLY when the selection was not its own kind -- which
+  // left whatever was in the box standing. See the router below.
+  const columnPropsNode = item => {
+    const box = document.createElement('div');
+    box.append(propRow('FOOTING', FOOTINGS, item.footing, id => {
+      item.footing = id;
+      // A pile has a fixed diameter, so a pad's custom size is meaningless
+      // on one. The format drops padIn for piles anyway (:534); dropping it
+      // here too keeps the page's record and the reader's identical.
+      if (id.startsWith('pile')) delete item.padIn;
+      markDirty();
+      showSelectionProps();
+      paint();
+    }));
+    return box;
+  };
+
+  const beamPropsNode = item => {
+    const box = document.createElement('div');
+    const span = Math.hypot(item.end.x - item.start.x, item.end.z - item.start.z);
+    box.append(propRow('BEAM', BEAM_MODES, item.mode, id => {
+      item.mode = id;
+      markDirty();
+      showSelectionProps();
+      paint();
+    }));
+    const len = document.createElement('div');
+    len.dataset.propSpan = '';
+    len.className = 'props-title';
+    // The span is read from the geometry, never stored: a stored length and
+    // a moved endpoint are two facts that can disagree, and the drafter
+    // would believe the one on the panel.
+    len.textContent = `SPAN ${feetLabel(span)}`;
+    box.append(len);
+    return box;
+  };
+
+  // ── WALL PROPERTIES ───────────────────────────────────────────────────────
+  //
+  // Movie, 19 Sep: "if they select a specific wall or multiples they can
+  // change the properties". A wall, or several -- NOT the old page's rule.
+  // MODEL.dc.html has this editor only on an ASSEMBLY
+  // (_selectedGroupForWallEditing), so changing one wall's type there means
+  // bundling it into a named group first. Movie ruled otherwise for this
+  // page. The RECORD it writes is the old page's, field for field
+  // (_applyGroupWallSettings :18110-18118).
+  //
+  // WHY IT MATTERS MORE THAN IT LOOKS. A wall's height is copied in when it
+  // is drawn, from the storey's default, and never looked at again -- on both
+  // pages. Movie's rule for the default moving ("if the floor or ceiling is
+  // the same height as the DEFAULT, if they change the PROJECT DEFAULT, also
+  // change those heights to match") leaves behind exactly the walls somebody
+  // had already adjusted, and he answered that himself: "(the user may need
+  // to manually change the 'previously adjusted' height". This is the panel
+  // he changes them with.
+  const REF_LINES = [['left', 'LEFT'], ['center', 'CENTRE'], ['right', 'RIGHT']];
+
+  // What the walls in hand AGREE on, or null. A LIT CHIP IS A CLAIM ABOUT
+  // EVERY WALL IN THE SELECTION, so two walls of different types light
+  // nothing rather than lighting the first one's -- the drafter would
+  // otherwise read the panel as "these are all 2x6" and be wrong about one.
+  const agreedOn = (walls, read) => {
+    const first = read(walls[0]);
+    return walls.every(wall => read(wall) === first) ? first : null;
+  };
+
+  const applyToWalls = (walls, patch) => {
+    walls.forEach(wall => {
+      Object.assign(wall, patch);
+      // A DRAFTER'S CHANGE ENDS THE SUBSTITUTION (MODEL.dc.html:18114). The
+      // loader records a wall whose retired type was mapped onto a current
+      // one and the saver puts the ORIGINAL back; without this line a wall
+      // somebody just set to RAIL would save as concrete_12 again. "Never
+      // persist the substitute" turned into "never persist the drafter's
+      // change" is the failure the fix itself creates if this is missed.
+      if (patch.wallType !== undefined) substitutedWallTypes.delete(wall.id);
+    });
+    markDirty();
+    showSelectionProps();
+    paint();
+  };
+
+  const wallPropsNode = walls => {
+    const WT = window.DraftWallTypes;
+    const F = window.DraftFormatters;
+    const ftIn = feet => F.formatArchitecturalInches(feet * 12);
+    const box = document.createElement('div');
+
+    // THE TYPES ON OFFER ARE THE CONTEXT'S, not the whole table. Foundation
+    // assemblies and framed ones are disjoint lists (contextWallTypes), so
+    // offering an 8" pour for a wall on the main floor is not a near miss, it
+    // is a wall of the wrong kind. Read off the WALLS rather than the active
+    // view, because the walls are what is being changed; a selection spanning
+    // two views agrees on nothing and gets the whole table.
+    const view = agreedOn(walls, wall => wall.view || 'plan');
+    const types = view === null ? WT.WALL_TYPES : contextWallTypes(view);
+    box.append(propRow('TYPE', types.map(type => [type.id, type.label]),
+      agreedOn(walls, wall => wall.wallType || 'stud_2x6'),
+      id => applyToWalls(walls, { wallType: id })));
+
+    box.append(propRow('REFERENCE', REF_LINES,
+      agreedOn(walls, wall => wall.refLine || 'center'),
+      id => applyToWalls(walls, { refLine: id })));
+
+    // A WALL STANDS ON ITS BASE. Refused per wall rather than against the
+    // agreed pair, because a selection whose tops differ has no agreed pair
+    // to check and would accept a base above one of them.
+    const height = (which, label) => propField(label,
+      agreedOn(walls, wall => Number(which === 'base' ? wall.baseHeight : wall.topHeight) || 0),
+      feet => {
+        const bad = walls.find(wall => {
+          const base = which === 'base' ? feet : Number(wall.baseHeight) || 0;
+          const top = which === 'base' ? Number(wall.topHeight) || 0 : feet;
+          return !(top > base);
+        });
+        if (bad) {
+          return `A wall from ${ftIn(which === 'base' ? feet : Number(bad.baseHeight) || 0)} `
+            + `to ${ftIn(which === 'base' ? Number(bad.topHeight) || 0 : feet)} is not a wall.`;
+        }
+        applyToWalls(walls, which === 'base' ? { baseHeight: feet } : { topHeight: feet });
+        return null;
+      }, showSelectionProps);
+    box.append(height('base', 'BASE'), height('top', 'TOP'));
+    return box;
+  };
+
+  // ── PROPERTIES BELONG TO WHAT IS SELECTED ─────────────────────────────────
+  //
+  // Movie, 19 Sep: "There should be a PROPERTIES box with in this case WALL
+  // PROPERTIES, but there should also a PROPERTIES for ROOF, FLOOR, FENST,
+  // LINE, etc (all objects)". This table is where the rest land.
+  //
+  // ONE ROUTER, SO THE BOX CANNOT DESCRIBE SOMETHING THAT IS NOT SELECTED.
+  // showStructureProps was a watcher that returned early when the selection
+  // was not a column or a beam AND LEFT THE OLD PANEL STANDING: place a
+  // column, then press a wall, and COLUMN properties sat there with the
+  // column long since deselected -- a panel whose edits went to a thing the
+  // drafter could not see selected. Returning early is exactly how a panel
+  // and its subject come apart, so no builder is allowed to decide for
+  // itself whether to leave the box alone.
+  const SELECTION_PANELS = {
+    wall: items => ({ title: 'WALL', node: wallPropsNode(items) }),
+    column: items => (items.length === 1
+      ? { title: 'COLUMN', node: columnPropsNode(items[0]) } : null),
+    beam: items => (items.length === 1
+      ? { title: 'BEAM', node: beamPropsNode(items[0]) } : null),
+  };
+
+  let selectionPanelUp = false;
+  const showSelectionProps = () => {
     const P = window.ModelProps;
     if (!P) return;
-    const picked = selection.length === 1 ? selection[0] : null;
-    if (!picked || (picked.type !== 'column' && picked.type !== 'beam')) return;
-    const item = picked.item;
-    const box = document.createElement('div');
-    if (picked.type === 'column') {
-      box.append(propRow('FOOTING', FOOTINGS, item.footing, id => {
-        item.footing = id;
-        // A pile has a fixed diameter, so a pad's custom size is meaningless
-        // on one. The format drops padIn for piles anyway (:534); dropping it
-        // here too keeps the page's record and the reader's identical.
-        if (id.startsWith('pile')) delete item.padIn;
-        markDirty();
-        showStructureProps();
-        paint();
-      }));
-    } else {
-      const span = Math.hypot(item.end.x - item.start.x, item.end.z - item.start.z);
-      box.append(propRow('BEAM', BEAM_MODES, item.mode, id => {
-        item.mode = id;
-        markDirty();
-        showStructureProps();
-        paint();
-      }));
-      const len = document.createElement('div');
-      len.dataset.propSpan = '';
-      len.className = 'props-title';
-      // The span is read from the geometry, never stored: a stored length and
-      // a moved endpoint are two facts that can disagree, and the drafter
-      // would believe the one on the panel.
-      len.textContent = `SPAN ${feetLabel(span)}`;
-      box.append(len);
+    const kinds = [...new Set(selection.map(entry => entry.type))];
+    const build = kinds.length === 1 ? SELECTION_PANELS[kinds[0]] : null;
+    const panel = build ? build(selection.map(entry => entry.item)) : null;
+    if (panel) {
+      P.set(panel.title, panel.node);
+      selectionPanelUp = true;
+      return;
     }
-    P.set(picked.type === 'column' ? 'COLUMN' : 'BEAM', box);
+    // MIXED SAYS SO. An empty box beside a selection of six things reads as
+    // "this page has no properties for these", which is not what is true:
+    // they are properties of different kinds and there is no one panel for
+    // them. The sentence costs a line and answers the question the blank
+    // would raise.
+    if (kinds.length > 1) {
+      const note = document.createElement('div');
+      note.dataset.propsMixed = '';
+      note.textContent = `${selection.length} THINGS OF ${kinds.length} KINDS. `
+        + 'PROPERTIES SHOW WHEN THEY ARE ALL ONE KIND.';
+      P.set('SELECTION', note);
+      selectionPanelUp = true;
+      return;
+    }
+    if (!selectionPanelUp) return;
+    // THE PANEL COMES DOWN WITH ITS SUBJECT, and the box goes back to the
+    // ARMED TOOL rather than simply empty -- a drafter who was setting a
+    // roof's overhang, pressed a wall and pressed the sheet should find the
+    // overhang where he left it.
+    selectionPanelUp = false;
+    P.clear();
+    showToolProps(activeTool);
   };
-  selectionWatchers.push(showStructureProps);
+  selectionWatchers.push(showSelectionProps);
 
   // ── THE ROOF PANEL ────────────────────────────────────────────────────────
   //
@@ -10026,12 +11845,113 @@
     roofPanelUp = true;
   };
 
-  toolListeners.push(tool => {
+  // ── THE DIMENSION PANEL: AUTO DIMS ──────────────────────────────────────
+  //
+  // Movie, 19 Sep: "we will need to get the autodimensioning from the
+  // model.dc.html too". The bone press dimensions what it builds; this is the
+  // other half -- the drafter asking for strings around what is already on the
+  // sheet, which is MODEL.dc.html's own AUTO DIMS button in the DIMENSION
+  // panel (:1387).
+  //
+  // AND IT SAYS WHAT THE TOOL CANNOT DO YET. Arming DIMENSION on this page
+  // draws nothing: the gesture is not built. A panel offering only AUTO DIMS,
+  // with no word about the rest, would leave a drafter pressing the canvas and
+  // concluding the page is broken -- so the note says which half is here.
+  let dimensionPanelUp = false;
+
+  const pressAutoDims = () => {
+    if (!drawing) return;
+    const levelId = activeLevelId();
+    const view = activeViewId();
+    // WHERE THE STRINGS GO IS WHERE THE DRAFTER IS STANDING, which is the old
+    // page's rule too -- it dims the active level and its active layer view.
+    const result = placeAutoDims(levelId, view);
+    if (result === -1) {
+      sayOnStrip('AUTO DIMS needs walls or an outline with some size on this '
+        + 'level first.');
+      return;
+    }
+    const { placed, removed } = result;
+    // NOTHING PLACED IS NOT NOTHING DONE. A re-run over a level whose strings
+    // were already there sweeps and re-lays them, so the step is pushed on the
+    // strength of either list -- an undo that skipped because `placed` was
+    // empty would strand a sweep with no way back.
+    if (placed.length || removed.length) {
+      undoStack.push({
+        kind: 'built',
+        walls: [],
+        outlines: [],
+        list: null,
+        items: placed.map(item => ({ list: drawing.dimensions, item })),
+        restored: removed.length
+          ? [{ list: drawing.dimensions, items: removed }] : [],
+      });
+      markDirty();
+    }
+    // THE LEVEL IS NAMED, because the strings land on the level the drafter is
+    // standing on and he may well be looking at another one -- and it is named
+    // the way every other reader of a level names it, through levelLabel.
+    const level = (drawing.levels || [])
+      .find(entry => Number(entry.id) === levelId);
+    sayOnStrip(`AUTO DIMS placed ${placed.length} dimensions on `
+      + `${levelLabel(levelId, level && level.name)} — re-run after edits to `
+      + 'refresh them.');
+    buildChrome();
+    paint();
+  };
+
+  const showDimensionProps = () => {
+    const P = window.ModelProps;
+    if (!P) return;
+    const box = document.createElement('div');
+
+    const row = document.createElement('div');
+    row.className = 'chip-row';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sel-chip';
+    btn.dataset.autoDims = '';
+    btn.textContent = 'AUTO DIMS';
+    btn.addEventListener('click', pressAutoDims);
+    row.append(btn);
+
+    const note = document.createElement('div');
+    note.className = 'props-title';
+    note.dataset.dimensionNote = '';
+    note.textContent = 'STRINGS THE ACTIVE LEVEL. DRAWING ONE BY HAND IS NOT '
+      + 'BUILT YET.';
+
+    box.append(row, note);
+    P.set('DIMENSION', box);
+    dimensionPanelUp = true;
+  };
+
+  const showToolProps = tool => {
     if (tool === 'roof') { showRoofProps(); return; }
+    if (tool === 'fenestration') { showOpeningProps(); return; }
+    if (tool === 'dimension') { showDimensionProps(); return; }
     // Only clear what this panel put there. COLUMN and BEAM's rows belong to
     // the selection, which a tool change does not touch, and clearing them
     // here would blank a panel the drafter is reading.
+    //
+    // EACH PANEL CLEARS ITS OWN, and the two flags are not one flag: arming
+    // ROOF from FENESTRATION has to take the opening rows down and put the
+    // roof rows up, which a single `panelUp` would get right by luck and a
+    // shared `clear()` before both branches would get wrong the moment a
+    // third panel arrived that does not want clearing.
     if (roofPanelUp) { window.ModelProps.clear(); roofPanelUp = false; }
+    if (openingPanelUp) { window.ModelProps.clear(); openingPanelUp = false; }
+    if (dimensionPanelUp) { window.ModelProps.clear(); dimensionPanelUp = false; }
+  };
+
+  toolListeners.push(tool => {
+    // ARMING A TOOL TAKES DOWN A PANEL THE SELECTION PUT UP, so the box
+    // describes the thing the drafter just reached for. The three flags above
+    // stay each panel's own -- that ruling holds -- and this is a fourth
+    // owner, not a shared clear(): the selection's panel is the only one a
+    // tool change must always take down, because the others ARE the tool.
+    if (selectionPanelUp) { window.ModelProps.clear(); selectionPanelUp = false; }
+    showToolProps(tool);
   });
   deleteButton.addEventListener('click', pressDelete);
   if (copyButton) copyButton.addEventListener('click', () => { copySelection(); paint(); });
@@ -10221,6 +12141,8 @@
     if (activeTool === 'beam') { beamPress(at); return; }
     if (activeTool === 'roof') { roofPress(at); return; }
     if (activeTool === 'outline') { outlinePress(at); return; }
+    if (activeTool === 'floor') { floorPress(at); return; }
+    if (activeTool === 'fenestration') { placeOpening(at); return; }
     if (activeTool === 'cut') { cutPress(at); return; }
     if (activeTool === 'wall') {
       // §1: "either drag, or press again and drag -- both must work". The lift
@@ -10260,6 +12182,34 @@
     // MODEL.dc.html:16791, then _findLineHit at :16799). A press near a corner
     // is a corner press even though it is also on the wall.
     const corner = cornerAt(at);
+    // ── SLIDING AN OPENING ALONG ITS WALL ────────────────────────────────
+    //
+    // The third of the three Movie asked for: "i'll change them if i need to
+    // afterwards". Place, take out, and now MOVE -- which is what "change"
+    // most often means about a window that is a foot off.
+    //
+    // AFTER THE CORNER AND BEFORE THE WALL BODY, which is the same order the
+    // pick chain keeps: a vertex beats what runs through it, and an opening
+    // beats the wall it is cut into. In practice a corner and an opening
+    // cannot be in the same place -- the bearing reserve keeps an opening off
+    // both ends of its wall -- so the corner half is a rule stated rather
+    // than a conflict resolved.
+    const slide = corner ? null : openingBodyAt(at);
+    if (slide) {
+      const host = walls().find(wall => String(wall.id) === String(slide.wallId));
+      if (host) {
+        moveDrag = {
+          kind: 'opening', opening: slide, host,
+          // THE OFFSET IT STARTED AT, for the undo. One number, because that
+          // is the whole of what a slide changes: an opening is a width and
+          // an offset along a wall, and nothing else about it moves.
+          was: slide.offset,
+          sx: e.clientX, sy: e.clientY, active: false,
+        };
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
     const body = corner ? null : wallBodyAt(at);
     if (corner || body) {
       // A grabbed corner or wall takes the gesture whole: no pan starts, so
@@ -10357,6 +12307,31 @@
       if (md.active) {
         const rect = canvas.getBoundingClientRect();
         const raw = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+        if (md.kind === 'opening') {
+          const G = window.DraftGeometry2D;
+          const wall = md.host;
+          const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+          const length = Math.hypot(dx, dz);
+          // ALONG THE WALL, AND ONLY ALONG IT. The pointer is projected onto
+          // the wall's own axis, so the opening tracks the finger down the
+          // wall and ignores everything across it -- which is the only motion
+          // an opening HAS. A drag that read the raw point would need the
+          // drafter to trace a 6" strip to move a window three feet.
+          const along = ((raw.x - wall.start.x) * dx + (raw.z - wall.start.z) * dz)
+            / (length * length) * length;
+          // CLAMPED EVERY EVENT, not checked at the end. The clamp is what
+          // keeps the bearing under the lintel, and an opening allowed to run
+          // off the end and be pulled back on release would be a drawing that
+          // was briefly impossible -- and would stay impossible if the drag
+          // ended off-canvas.
+          const clamped = G.clampOpeningToWall(wall, along, md.opening.width, {
+            walls: walls(),
+            thicknessFt: openingThicknessFt(),
+          });
+          if (clamped) md.opening.offset = clamped.offset;
+          paint();
+          return;
+        }
         if (md.kind === 'group') {
           // THE ASSEMBLY MOVES BY THE DELTA, measured absolutely from the
           // grab for the same reason the wall branch below does it: every
@@ -10514,6 +12489,26 @@
       if (md.active) {
         // Both halves of a locked move go into ONE history entry: the drafter
         // made one gesture, so one Ctrl+Z undoes all of it. See lockBefore.
+        if (md.kind === 'opening') {
+          // ONE GESTURE, ONE UNDO, and the step carries the one number that
+          // changed. A 'move' step restores VERTICES and an opening has none
+          // of its own; pushing one here would hand undo a `before` list it
+          // would walk as vertex snapshots and throw on.
+          //
+          // AND IT IS PUSHED ONLY IF THE OPENING ACTUALLY MOVED. A drag armed
+          // past 4px whose clamp refused every event -- a window already hard
+          // against its bearing, pulled further -- changed nothing, and an
+          // undo step for it would cost the drafter a Ctrl+Z that appears to
+          // do nothing.
+          if (md.opening.offset !== md.was) {
+            undoStack.push({ kind: 'move-opening', opening: md.opening, was: md.was });
+            markDirty();
+          }
+          moveDrag = null;
+          if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+          paint();
+          return;
+        }
         undoStack.push({ kind: 'move',
           before: md.lockBefore ? [...md.before, ...md.lockBefore] : md.before });
         markDirty();
@@ -10709,6 +12704,11 @@
           // whose difference nothing on screen would show.
           if (b.offX !== undefined) { b.vtx.offX = b.offX; b.vtx.offZ = b.offZ; }
         });
+      } else if (step.kind === 'move-opening') {
+        // The record is mutated in place, so undo puts the one number back
+        // rather than restoring a copy -- a copy would detach the opening
+        // every other reader already holds by reference.
+        step.opening.offset = step.was;
       } else if (step.kind === 'edge-tag') {
         // The roof's own edges array is mutated in place, so undo puts the one
         // word back rather than restoring a copy of the roof -- a copy would
@@ -10743,6 +12743,25 @@
         (step.outlines || []).forEach(outline => {
           const outlineAt = step.list ? step.list.indexOf(outline) : -1;
           if (outlineAt >= 0) step.list.splice(outlineAt, 1);
+        });
+        // The openings the order hung on those walls go with them.
+        (step.openings || []).forEach(record => {
+          const at = (drawing.fenestrations || []).indexOf(record);
+          if (at >= 0) drawing.fenestrations.splice(at, 1);
+        });
+        // AND THE REST OF THE BUILDING: the storey's floor, the slab, the
+        // footing lines and the roof. Each carries the list it went into, so
+        // this branch needs to know nothing about what any of them IS.
+        (step.items || []).forEach(({ list, item }) => {
+          const at = list.indexOf(item);
+          if (at >= 0) list.splice(at, 1);
+        });
+        // AND WHAT THE PRESS TOOK OUT GOES BACK IN. Removing what a press
+        // added is only half an undo when the press also replaced something:
+        // AUTO DIMS sweeps a level's previous auto strings before laying
+        // fresh ones, and without this the drafter would end with neither.
+        (step.restored || []).forEach(({ list, items }) => {
+          items.forEach(item => { if (!list.includes(item)) list.push(item); });
         });
       } else if (step.kind === 'add') {
         const at = drawing.walls.indexOf(step.wall);
@@ -10895,7 +12914,14 @@
         drops: refusedItems.lines,
       }),
       floors: F.floors(parsed.floors, levelIds, {
-        defaultFloorThickness: 0.75,
+        // 0.75 WAS THIS PAGE'S OWN NUMBER and nothing else in the app agreed
+        // with it: MODEL.dc.html's floor is 12 5/8" (1.052 ft), the joist plus
+        // its sheathing. The fallback is only reached by a floor with no
+        // stored thickness -- which the old page never writes -- so the two
+        // pages would have drawn one hand-edited drawing at two different
+        // thicknesses, in section, where it shows. level-assembly.js derives
+        // it from the assembly now and both pages read it there.
+        defaultFloorThickness: window.DraftLevelAssembly.DEFAULT_FLOOR_THICKNESS_IN / 12,
         drops: refusedItems.floors,
       }),
       // Dimensions already had a rule; this page just never called it. Running

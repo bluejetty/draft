@@ -294,11 +294,27 @@ test.describe('MODEL.html tier 1', () => {
       // refuse it: the cost of a script is the request, and the alternative to
       // paying it is a twin of the half that IS called.
       './build-house.js',
+      // auto-dims.js is the exterior dimension strings, and it is the SECOND
+      // kind of entry this list welcomes rather than the first: it was already
+      // extracted pure out of the old page and had exactly one caller, so this
+      // page calling it adds no computation anywhere -- it deletes the
+      // alternative, which would have been a second stack of string arithmetic
+      // written here. The two tuning numbers moved into it at the same time,
+      // off the top of MODEL.dc.html, for the same reason.
+      './auto-dims.js',
       // premade-plans.js is the drive-thru's catalogue: the bungalow's
       // dimensions and the reasoning behind each of them, with
       // proto/premade-plans-harness.js on the arithmetic. It is here for the
       // reason garage-site.js is -- a design is a domain rule, and a page that
       // carried the numbers itself would be the second home of one.
+      // bone-wallet.js is the free-bone economy's arithmetic -- the seed, the
+      // hourly drip, the cap and what a build costs. Movie, 19 Sep: "can you
+      // bring the BONE number / TOKEN system over too ... bring it like it
+      // was in model.dc". It is here for the reason auto-dims.js is: already
+      // pure, already extracted, already the OLD page's only copy, with
+      // proto/bone-wallet-harness.js on the arithmetic. Carrying the rules
+      // here instead would have given one economy two sets of books.
+      './bone-wallet.js',
       './premade-plans.js',
       // AND WHERE AN ORDERED GARAGE STANDS. 40 lines, no dependency of its
       // own: a traced loop says where it goes by being traced, an autobuilt
