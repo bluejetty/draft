@@ -1102,11 +1102,6 @@
      §7c's worry (a shut rail takes the level switch away) is answered by
      the tab itself: LEVELS / LAYERS is one press, same as the chips were. */
   #right-rail[data-collapsed] { display:none; }
-  /* PROPERTIES BELONG TO THE LEVELS PANE. The slot shows itself when a tool
-     fills it, and that press can happen while the seats are showing -- so
-     the pane rules it out here rather than trusting every future caller to
-     remember which pane is up. */
-  #right-rail[data-pane-showing="previews"] #props-slot { display:none; }
   /* THE TOOL COLUMN. Four square keys a row, which is the old page's own
      shape and not a taste: at four across, DRAW/EDIT is three rows and BUILD
      is two, and the whole roster is reachable without the panel scrolling on
@@ -1228,7 +1223,6 @@
     background: var(--surface-chip); color: var(--ink);
     font-family: var(--font-ui); font-size:10px; letter-spacing:0.04em;
     text-transform:uppercase; }
-  #props-slot[hidden] { display:none; }
 
   /* THE LEVELS / LAYERS PANEL. Movie: "i will also need the LEVELS / LAYERS
      menu too", and "the level layers should be a tab on the right side like
@@ -1285,9 +1279,25 @@
   .props-title { font-family: var(--font-ui); font-size:9px; font-weight:600;
     letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet);
     margin-bottom:6px; }
-  #props-slot { margin-top:10px; padding-top:10px;
-    border-top:1px solid var(--edge-panel);
-    font-family: var(--font-ui); font-size:10px; color: var(--ink-quiet); }
+  /* THE PROPERTIES BOX, under the tool column in the left rail. The rule the
+     slot used to carry is now the BOX's -- the divider belongs above the
+     fold button, or a folded box would sit on the tools with no line between
+     them. */
+  #props-box { margin-top:10px; padding-top:10px;
+    border-top:1px solid var(--edge-panel); }
+  #props-box[hidden] { display:none; }
+  .props-fold { display:block; width:100%; padding:0 0 6px; border:0;
+    background:none; cursor:pointer; text-align:left;
+    font-family: var(--font-ui); font-size:9px; font-weight:600;
+    letter-spacing:0.1em; text-transform:uppercase; color: var(--ink-quiet); }
+  .props-fold:hover { color: var(--ink); }
+  /* The fold's arrow is the button's own, so the word never moves. */
+  .props-fold::after { content:' \25B4'; opacity:0.7; }
+  [data-folded] > .props-fold::after { content:' \25BE'; }
+  #props-slot { font-family: var(--font-ui); font-size:10px;
+    color: var(--ink-quiet); }
+  #props-slot[hidden] { display:none; }
+  [data-folded] > #props-slot { display:none; }
 
   /* THE SEATING CHART: six cut views, all six always shown. The shape is
      MODEL.dc.html's rail (:188-200) and the PAIRING is its own -- E1|E3 over
@@ -1435,6 +1445,29 @@
 <button id="left-tab" class="rail-tab" type="button" data-left-tab hidden>DRAFTING TOOLS</button>
 <aside id="left-rail" data-left-rail hidden>
   <div id="tool-slot" data-tool-slot></div>
+  <!-- PROPERTIES SITS UNDER THE TOOLS. Movie, 19 Sep: "we should designate an
+       area on the model page for the PROPERTIES box (which will change
+       depending on what you are using) i'm thinking add a collapsable box on
+       the left side under the DRAFTING TOOLS". It was in the RIGHT rail under
+       LEVELS / LAYERS until then, which put the thing you change a wall with
+       on the far side of the sheet from the thing you draw a wall with.
+
+       IT FOLDS ON ITS OWN, and that is the point of the box rather than a
+       flourish: the tool column above it is six rows tall, so folding the
+       properties away has to be possible WITHOUT shutting the rail that holds
+       the keys. The fold is in the URL beside `left` and `right`, for the
+       reason those are: it is what the drafter is looking at, and it survives
+       a reload.
+
+       THE TITLE STAYS INSIDE THE SLOT, not on the fold button. The button
+       says PROPERTIES always; the slot says WALL, ROOF, COLUMN -- whatever is
+       in hand. Putting the changing word on the button would have made the
+       fold's own label move under the drafter's cursor. -->
+  <div id="props-box" data-props-box hidden>
+    <button class="props-fold" type="button" data-props-fold
+      aria-expanded="true">PROPERTIES</button>
+    <div id="props-slot" data-props-slot hidden></div>
+  </div>
 </aside>
 
 <!-- TWO TABS ON THE RIGHT EDGE (Movie, 15 Sep): "2 seperate tabs top will be
@@ -1461,15 +1494,6 @@
        inside a level card are the same objects as the seats, so adding a
        level adds two seats and deleting one takes them away. -->
   <div id="levels-panel" data-levels-panel data-pane="levels"></div>
-  <!-- PER-TOOL PROPERTIES, the slot and nothing in it. COLUMN and BEAM fill
-       it from the SELECTION (showStructureProps); ROOF fills it from the
-       ARMED TOOL, which is the second of the two ways in. The contract is in
-       the comment beside window.ModelProps below -- NOT beside a
-       `setToolProperties`, which this comment named and which has never
-       existed in this repo. It
-       rides with LEVELS / LAYERS: properties belong to the thing selected,
-       which is what that pane is about. -->
-  <div id="props-slot" data-props-slot hidden></div>
   <div id="view-rail" data-pane="previews"></div>
 </aside>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
@@ -5047,9 +5071,38 @@
   // about beams, columns, fixtures or annotations. The armed tool decides what
   // goes here and when; this only owns the space and the show/hide.
   const propsSlot = document.getElementById('props-slot');
+  const propsBox = document.getElementById('props-box');
+  const propsFold = propsBox.querySelector('[data-props-fold]');
+
+  // FOLDED IS IN THE URL, beside `left` and `right`, for the reason those
+  // are: it is what the drafter is looking at and it survives a reload.
+  //
+  // DEFAULT OPEN, and the absent-means-open spelling is deliberate. A drafter
+  // who has just pressed a wall wants to see what he pressed; the box has to
+  // earn being shut rather than be shut until asked. `props=0` is the only
+  // value that means anything, so a stale or hand-typed URL opens.
+  const propsFolded = () => params.get('props') === '0';
+  const syncPropsFold = () => {
+    propsBox.toggleAttribute('data-folded', propsFolded());
+    propsFold.setAttribute('aria-expanded', String(!propsFolded()));
+  };
+  propsFold.addEventListener('click', () => {
+    if (propsFolded()) params.delete('props'); else params.set('props', '0');
+    syncUrl();
+    syncPropsFold();
+  });
+  syncPropsFold();
+
   window.ModelProps = Object.freeze({
     slot: () => propsSlot,
-    clear: () => { propsSlot.replaceChildren(); propsSlot.hidden = true; },
+    clear: () => {
+      propsSlot.replaceChildren();
+      propsSlot.hidden = true;
+      // THE BOX GOES WITH ITS CONTENTS. An empty box would leave a PROPERTIES
+      // heading and a fold arrow under the tools with nothing behind them --
+      // a control that does nothing, which is the same lie a stale panel is.
+      propsBox.hidden = true;
+    },
     set: (title, node) => {
       propsSlot.replaceChildren();
       if (title) {
@@ -5060,6 +5113,7 @@
       }
       if (node) propsSlot.append(node);
       propsSlot.hidden = !(title || node);
+      propsBox.hidden = propsSlot.hidden;
     },
   });
 
@@ -9010,7 +9064,7 @@
   // the next opening would come out the old size while the box said
   // otherwise. So a bad entry says why on the strip and the box goes back to
   // the number actually in force.
-  const openingField = (label, valueFt, commit) => {
+  const propField = (label, valueFt, commit, redraw) => {
     const F = window.DraftFormatters;
     const row = document.createElement('div');
     row.dataset.propRow = label.toLowerCase();
@@ -9021,20 +9075,31 @@
     input.type = 'text';
     input.className = 'prop-field';
     input.dataset.propField = label.toLowerCase();
-    input.value = F.formatArchitecturalInches(valueFt * 12);
+    // NULL IS "THEY DO NOT AGREE", which only a selection of several can be.
+    // An empty box with a dash behind it says so; showing the first one's
+    // number would be a claim about all of them, and typing over it is how
+    // the drafter says "all of these, this".
+    const shown = () => (valueFt == null ? ''
+      : F.formatArchitecturalInches(valueFt * 12));
+    input.value = shown();
+    if (valueFt == null) input.placeholder = '\u2014';
     input.setAttribute('aria-label', label);
     const apply = () => {
+      // A disagreeing field left untouched is not an edit. Without this an
+      // empty box would go through the parser on every blur and refuse,
+      // putting an error on the strip for a drafter who typed nothing.
+      if (valueFt == null && !input.value.trim()) return;
       const parsed = F.parseArchitecturalLength(input.value);
       if (!parsed.ok) {
         sayOnStrip(parsed.error);
-        input.value = F.formatArchitecturalInches(valueFt * 12);
+        input.value = shown();
         return;
       }
       const refusal = commit(parsed.inches / 12);
       if (refusal) sayOnStrip(refusal);
       // REDRAWN FROM THE STATE EITHER WAY, so the box shows what is in force
       // rather than what was typed -- 3.5 comes back as 3'-6".
-      showOpeningProps();
+      redraw();
     };
     input.addEventListener('blur', apply);
     input.addEventListener('keydown', event => {
@@ -9043,6 +9108,11 @@
     row.append(name, input);
     return row;
   };
+
+  // The opening panel's own fields, which is what the above WAS until walls
+  // needed the same row. Only the redraw differs: this panel knows its name.
+  const openingField = (label, valueFt, commit) =>
+    propField(label, valueFt, commit, showOpeningProps);
 
   const showOpeningProps = () => {
     const P = window.ModelProps;
@@ -11239,44 +11309,191 @@
     return row;
   };
 
-  const showStructureProps = () => {
+  // A BUILDER RETURNS A NODE AND NOTHING ELSE. It used to call ModelProps.set
+  // itself and return EARLY when the selection was not its own kind -- which
+  // left whatever was in the box standing. See the router below.
+  const columnPropsNode = item => {
+    const box = document.createElement('div');
+    box.append(propRow('FOOTING', FOOTINGS, item.footing, id => {
+      item.footing = id;
+      // A pile has a fixed diameter, so a pad's custom size is meaningless
+      // on one. The format drops padIn for piles anyway (:534); dropping it
+      // here too keeps the page's record and the reader's identical.
+      if (id.startsWith('pile')) delete item.padIn;
+      markDirty();
+      showSelectionProps();
+      paint();
+    }));
+    return box;
+  };
+
+  const beamPropsNode = item => {
+    const box = document.createElement('div');
+    const span = Math.hypot(item.end.x - item.start.x, item.end.z - item.start.z);
+    box.append(propRow('BEAM', BEAM_MODES, item.mode, id => {
+      item.mode = id;
+      markDirty();
+      showSelectionProps();
+      paint();
+    }));
+    const len = document.createElement('div');
+    len.dataset.propSpan = '';
+    len.className = 'props-title';
+    // The span is read from the geometry, never stored: a stored length and
+    // a moved endpoint are two facts that can disagree, and the drafter
+    // would believe the one on the panel.
+    len.textContent = `SPAN ${feetLabel(span)}`;
+    box.append(len);
+    return box;
+  };
+
+  // ── WALL PROPERTIES ───────────────────────────────────────────────────────
+  //
+  // Movie, 19 Sep: "if they select a specific wall or multiples they can
+  // change the properties". A wall, or several -- NOT the old page's rule.
+  // MODEL.dc.html has this editor only on an ASSEMBLY
+  // (_selectedGroupForWallEditing), so changing one wall's type there means
+  // bundling it into a named group first. Movie ruled otherwise for this
+  // page. The RECORD it writes is the old page's, field for field
+  // (_applyGroupWallSettings :18110-18118).
+  //
+  // WHY IT MATTERS MORE THAN IT LOOKS. A wall's height is copied in when it
+  // is drawn, from the storey's default, and never looked at again -- on both
+  // pages. Movie's rule for the default moving ("if the floor or ceiling is
+  // the same height as the DEFAULT, if they change the PROJECT DEFAULT, also
+  // change those heights to match") leaves behind exactly the walls somebody
+  // had already adjusted, and he answered that himself: "(the user may need
+  // to manually change the 'previously adjusted' height". This is the panel
+  // he changes them with.
+  const REF_LINES = [['left', 'LEFT'], ['center', 'CENTRE'], ['right', 'RIGHT']];
+
+  // What the walls in hand AGREE on, or null. A LIT CHIP IS A CLAIM ABOUT
+  // EVERY WALL IN THE SELECTION, so two walls of different types light
+  // nothing rather than lighting the first one's -- the drafter would
+  // otherwise read the panel as "these are all 2x6" and be wrong about one.
+  const agreedOn = (walls, read) => {
+    const first = read(walls[0]);
+    return walls.every(wall => read(wall) === first) ? first : null;
+  };
+
+  const applyToWalls = (walls, patch) => {
+    walls.forEach(wall => {
+      Object.assign(wall, patch);
+      // A DRAFTER'S CHANGE ENDS THE SUBSTITUTION (MODEL.dc.html:18114). The
+      // loader records a wall whose retired type was mapped onto a current
+      // one and the saver puts the ORIGINAL back; without this line a wall
+      // somebody just set to RAIL would save as concrete_12 again. "Never
+      // persist the substitute" turned into "never persist the drafter's
+      // change" is the failure the fix itself creates if this is missed.
+      if (patch.wallType !== undefined) substitutedWallTypes.delete(wall.id);
+    });
+    markDirty();
+    showSelectionProps();
+    paint();
+  };
+
+  const wallPropsNode = walls => {
+    const WT = window.DraftWallTypes;
+    const F = window.DraftFormatters;
+    const ftIn = feet => F.formatArchitecturalInches(feet * 12);
+    const box = document.createElement('div');
+
+    // THE TYPES ON OFFER ARE THE CONTEXT'S, not the whole table. Foundation
+    // assemblies and framed ones are disjoint lists (contextWallTypes), so
+    // offering an 8" pour for a wall on the main floor is not a near miss, it
+    // is a wall of the wrong kind. Read off the WALLS rather than the active
+    // view, because the walls are what is being changed; a selection spanning
+    // two views agrees on nothing and gets the whole table.
+    const view = agreedOn(walls, wall => wall.view || 'plan');
+    const types = view === null ? WT.WALL_TYPES : contextWallTypes(view);
+    box.append(propRow('TYPE', types.map(type => [type.id, type.label]),
+      agreedOn(walls, wall => wall.wallType || 'stud_2x6'),
+      id => applyToWalls(walls, { wallType: id })));
+
+    box.append(propRow('REFERENCE', REF_LINES,
+      agreedOn(walls, wall => wall.refLine || 'center'),
+      id => applyToWalls(walls, { refLine: id })));
+
+    // A WALL STANDS ON ITS BASE. Refused per wall rather than against the
+    // agreed pair, because a selection whose tops differ has no agreed pair
+    // to check and would accept a base above one of them.
+    const height = (which, label) => propField(label,
+      agreedOn(walls, wall => Number(which === 'base' ? wall.baseHeight : wall.topHeight) || 0),
+      feet => {
+        const bad = walls.find(wall => {
+          const base = which === 'base' ? feet : Number(wall.baseHeight) || 0;
+          const top = which === 'base' ? Number(wall.topHeight) || 0 : feet;
+          return !(top > base);
+        });
+        if (bad) {
+          return `A wall from ${ftIn(which === 'base' ? feet : Number(bad.baseHeight) || 0)} `
+            + `to ${ftIn(which === 'base' ? Number(bad.topHeight) || 0 : feet)} is not a wall.`;
+        }
+        applyToWalls(walls, which === 'base' ? { baseHeight: feet } : { topHeight: feet });
+        return null;
+      }, showSelectionProps);
+    box.append(height('base', 'BASE'), height('top', 'TOP'));
+    return box;
+  };
+
+  // ── PROPERTIES BELONG TO WHAT IS SELECTED ─────────────────────────────────
+  //
+  // Movie, 19 Sep: "There should be a PROPERTIES box with in this case WALL
+  // PROPERTIES, but there should also a PROPERTIES for ROOF, FLOOR, FENST,
+  // LINE, etc (all objects)". This table is where the rest land.
+  //
+  // ONE ROUTER, SO THE BOX CANNOT DESCRIBE SOMETHING THAT IS NOT SELECTED.
+  // showStructureProps was a watcher that returned early when the selection
+  // was not a column or a beam AND LEFT THE OLD PANEL STANDING: place a
+  // column, then press a wall, and COLUMN properties sat there with the
+  // column long since deselected -- a panel whose edits went to a thing the
+  // drafter could not see selected. Returning early is exactly how a panel
+  // and its subject come apart, so no builder is allowed to decide for
+  // itself whether to leave the box alone.
+  const SELECTION_PANELS = {
+    wall: items => ({ title: 'WALL', node: wallPropsNode(items) }),
+    column: items => (items.length === 1
+      ? { title: 'COLUMN', node: columnPropsNode(items[0]) } : null),
+    beam: items => (items.length === 1
+      ? { title: 'BEAM', node: beamPropsNode(items[0]) } : null),
+  };
+
+  let selectionPanelUp = false;
+  const showSelectionProps = () => {
     const P = window.ModelProps;
     if (!P) return;
-    const picked = selection.length === 1 ? selection[0] : null;
-    if (!picked || (picked.type !== 'column' && picked.type !== 'beam')) return;
-    const item = picked.item;
-    const box = document.createElement('div');
-    if (picked.type === 'column') {
-      box.append(propRow('FOOTING', FOOTINGS, item.footing, id => {
-        item.footing = id;
-        // A pile has a fixed diameter, so a pad's custom size is meaningless
-        // on one. The format drops padIn for piles anyway (:534); dropping it
-        // here too keeps the page's record and the reader's identical.
-        if (id.startsWith('pile')) delete item.padIn;
-        markDirty();
-        showStructureProps();
-        paint();
-      }));
-    } else {
-      const span = Math.hypot(item.end.x - item.start.x, item.end.z - item.start.z);
-      box.append(propRow('BEAM', BEAM_MODES, item.mode, id => {
-        item.mode = id;
-        markDirty();
-        showStructureProps();
-        paint();
-      }));
-      const len = document.createElement('div');
-      len.dataset.propSpan = '';
-      len.className = 'props-title';
-      // The span is read from the geometry, never stored: a stored length and
-      // a moved endpoint are two facts that can disagree, and the drafter
-      // would believe the one on the panel.
-      len.textContent = `SPAN ${feetLabel(span)}`;
-      box.append(len);
+    const kinds = [...new Set(selection.map(entry => entry.type))];
+    const build = kinds.length === 1 ? SELECTION_PANELS[kinds[0]] : null;
+    const panel = build ? build(selection.map(entry => entry.item)) : null;
+    if (panel) {
+      P.set(panel.title, panel.node);
+      selectionPanelUp = true;
+      return;
     }
-    P.set(picked.type === 'column' ? 'COLUMN' : 'BEAM', box);
+    // MIXED SAYS SO. An empty box beside a selection of six things reads as
+    // "this page has no properties for these", which is not what is true:
+    // they are properties of different kinds and there is no one panel for
+    // them. The sentence costs a line and answers the question the blank
+    // would raise.
+    if (kinds.length > 1) {
+      const note = document.createElement('div');
+      note.dataset.propsMixed = '';
+      note.textContent = `${selection.length} THINGS OF ${kinds.length} KINDS. `
+        + 'PROPERTIES SHOW WHEN THEY ARE ALL ONE KIND.';
+      P.set('SELECTION', note);
+      selectionPanelUp = true;
+      return;
+    }
+    if (!selectionPanelUp) return;
+    // THE PANEL COMES DOWN WITH ITS SUBJECT, and the box goes back to the
+    // ARMED TOOL rather than simply empty -- a drafter who was setting a
+    // roof's overhang, pressed a wall and pressed the sheet should find the
+    // overhang where he left it.
+    selectionPanelUp = false;
+    P.clear();
+    showToolProps(activeTool);
   };
-  selectionWatchers.push(showStructureProps);
+  selectionWatchers.push(showSelectionProps);
 
   // ── THE ROOF PANEL ────────────────────────────────────────────────────────
   //
@@ -11453,7 +11670,7 @@
     dimensionPanelUp = true;
   };
 
-  toolListeners.push(tool => {
+  const showToolProps = tool => {
     if (tool === 'roof') { showRoofProps(); return; }
     if (tool === 'fenestration') { showOpeningProps(); return; }
     if (tool === 'dimension') { showDimensionProps(); return; }
@@ -11469,6 +11686,16 @@
     if (roofPanelUp) { window.ModelProps.clear(); roofPanelUp = false; }
     if (openingPanelUp) { window.ModelProps.clear(); openingPanelUp = false; }
     if (dimensionPanelUp) { window.ModelProps.clear(); dimensionPanelUp = false; }
+  };
+
+  toolListeners.push(tool => {
+    // ARMING A TOOL TAKES DOWN A PANEL THE SELECTION PUT UP, so the box
+    // describes the thing the drafter just reached for. The three flags above
+    // stay each panel's own -- that ruling holds -- and this is a fourth
+    // owner, not a shared clear(): the selection's panel is the only one a
+    // tool change must always take down, because the others ARE the tool.
+    if (selectionPanelUp) { window.ModelProps.clear(); selectionPanelUp = false; }
+    showToolProps(tool);
   });
   deleteButton.addEventListener('click', pressDelete);
   if (copyButton) copyButton.addEventListener('click', () => { copySelection(); paint(); });

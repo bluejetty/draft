@@ -10,6 +10,24 @@ if (!window.DraftWallTypes) {
     // wall, 5½" batt filling out to a ½" air space at the concrete, VB on the
     // warm side under ½" drywall; lines the concrete on the foundation PLAN.
     { id:'insulation_6', label:'Insul Wall  (6½")',   totalIn:6.5,   layers:[{in:2.5,   fill:'insulation'},{in:3.5, fill:'insulation'},{in:0.5, fill:'stud'}] },
+    // A RAIL IS A WALL. Movie, 19 Sep: "lets consider a 'RAIL' a wall type",
+    // and "any wall could be made into a 'RAIL'" -- so a pony wall is a wall
+    // whose TYPE is this one, and needs no key of its own in the file.
+    //
+    // 3 1/2" IS A HELD DEFAULT, not a measurement. A 2x4 rail is the common
+    // one; Movie has not ruled the rest and named what is still open -- "we
+    // will need extra special 'properties' for the RAIL ... or Subwall type
+    // maybe ... will have to work on it", and "will need walls with
+    // Ballusters specially made for specialty rails". None of that is here.
+    // What is here is the ASSEMBLY, so the type can be picked, stored and
+    // drawn while the rest is decided.
+    //
+    // IN NEITHER SPECIAL LIST, and that is the placement rather than an
+    // omission: FOUNDATION_WALL_TYPE_IDS is what holds a house up and
+    // EXTERIOR_WALL_TYPE_IDS is what PROJECT offers for its skin. A rail is
+    // neither, so it lands in the framed group a drafter picks from on a
+    // floor and nowhere else.
+    { id:'rail',        label:'Rail  (3\u00bd")',        totalIn:3.5,   layers:[{in:3.5,   fill:'stud'}] },
     { id:'concrete_8',  label:'8" Concrete',         totalIn:8,     layers:[{in:8,     fill:'concrete'}] },
     { id:'icf',         label:'ICF  (11¼")',         totalIn:11.25, layers:[{in:2.625,fill:'insulation'},{in:6,fill:'concrete'},{in:2.625,fill:'insulation'}] },
     { id:'icf_13',      label:'ICF  (13¼")',         totalIn:13.25, layers:[{in:2.625,fill:'insulation'},{in:8,fill:'concrete'},{in:2.625,fill:'insulation'}] },
