@@ -436,8 +436,14 @@ test('a tile with no design yet says so, and builds nothing', async ({ page }) =
   await newPageOnSavedHouse(page);
   const before = (await savedFile(page)).outlines?.length || 0;
 
-  // 2 STOREY, which has no premade plan. Movie, 18 Sep: "have those tiles say
-  // 'not ready yet' and build nothing".
+  // A TILE THE CATALOGUE HAS NO DESIGN FOR, asked of the page rather than
+  // named. Movie, 18 Sep: "have those tiles say 'not ready yet' and build
+  // nothing".
+  //
+  // THIS NAMED A TILE TWICE AND ROTTED TWICE: 1 STOREY, then 2 STOREY when
+  // 1 STOREY got a design, then broken again the day 2 STOREY got one. Every
+  // design that lands claims one more name, so the test asks which tiles are
+  // still undesigned instead of betting on one.
   //
   // THIS REPLACED A HANDOVER. For one rung the bone answered an undesigned
   // tile by taking the board down and handing over the armed outline trace,
@@ -446,7 +452,11 @@ test('a tile with no design yet says so, and builds nothing', async ({ page }) =
   // them premade designs in there at the beginning". A board that answers a
   // press by quietly arming a tool somewhere else teaches the drafter that its
   // button means something other than what it says.
-  await pickHouseType(page, 'bungalow', 'twoStorey');
+  const tile = await h.undesignedTile(page);
+  // THE DAY THE LAST DESIGN LANDS, this check has nothing to be about and says
+  // so rather than pressing something that builds.
+  test.skip(!tile, 'every tile on the board now has a design');
+  await pickHouseType(page, tile.family, tile.entry);
   await page.locator('#dt-bone').click();
   await page.waitForTimeout(250);
 

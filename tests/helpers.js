@@ -574,6 +574,33 @@ async function openToolRail(page) {
   await expect(rail).toBeVisible();
 }
 
+// A TILE THE CATALOGUE HAS NO DESIGN FOR, asked of the page rather than typed.
+//
+// THREE SPECS HARD-CODED ONE AND ALL THREE ROTTED. They named 1 STOREY, then
+// moved to 2 STOREY when 1 STOREY got a premade design -- with a comment
+// explaining the move -- and then broke again the day 2 STOREY got one. The
+// name is the wrong thing to fix in place: every design that lands claims one
+// more of them, so a test that needs "an undesigned tile" has to ASK.
+//
+// It reads the board's own entry list and the catalogue's own key set, so it
+// answers correctly on the day the last design lands too -- by returning null,
+// which its callers skip on rather than pressing something that builds.
+const undesignedTile = page => page.evaluate(() => {
+  const BM = window.DraftBuildMenu;
+  const designed = new Set(window.DraftPremadePlans.entryIds());
+  for (const family of BM.BUILD_MENU) {
+    for (const entry of family.entries || []) {
+      // `needsSize` entries are the detached garage's, which answer a
+      // different prompt entirely -- they ask HOW BIG before the bone means
+      // anything, so they are not "a tile with no design".
+      if (!entry.needsSize && !designed.has(entry.id)) {
+        return { family: family.id, entry: entry.id, label: entry.label };
+      }
+    }
+  }
+  return null;
+});
+
 const wallKey = page => page.locator('[data-tool-key="wall"]');
 
 async function wallArmed(page) {
@@ -597,6 +624,7 @@ async function disarmWall(page) {
 }
 
 module.exports = {
+  undesignedTile,
   HALF_HEIGHT_FT,
   STORAGE_BUCKET,
   openModel,

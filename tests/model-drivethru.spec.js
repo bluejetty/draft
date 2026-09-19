@@ -221,19 +221,24 @@ test('the post\'s bone orders off the menu; the foot\'s builds what was drawn',
     // walls and pressed the bone beneath them, wiping the thing he drew. The
     // separation is the whole safety of the arrangement, so it is checked in
     // both directions: each press fires its own seam and NOT the other's.
-    const seen = await page.evaluate(async () => {
+    const tile = await h.undesignedTile(page);
+    test.skip(!tile, 'every tile on the board now has a design');
+    const seen = await page.evaluate(async tile => {
       const built = [];
       const ordered = [];
       window.ModelBuild.onBuild(p => built.push(p?.entry?.id ?? 'null'));
       window.ModelBuild.onOrder(p => ordered.push(p?.entry?.id ?? 'null'));
-      document.querySelector('#dt-tiles [data-build-family="bungalow"]').click();
+      document.querySelector(`#dt-tiles [data-build-family="${tile.family}"]`).click();
       await new Promise(r => setTimeout(r, 60));
-      // 2 STOREY, DELIBERATELY: this test is about the PLUMBING -- each press
-      // firing its own seam and not the other's -- and 1 STOREY now carries a
-      // premade design, so on this fixture (which already has houses) the
-      // board refuses the order before it ever reaches the seam. A refusal is
-      // the right answer to that press and the wrong thing to measure here.
-      document.querySelector('#dt-tiles [data-build-entry="twoStorey"]').click();
+      // AN UNDESIGNED TILE, DELIBERATELY, and asked for rather than named:
+      // this test is about the PLUMBING -- each press firing its own seam and
+      // not the other's -- and a tile WITH a design makes the board refuse the
+      // order on this fixture, which already has houses. A refusal is the
+      // right answer to that press and the wrong thing to measure here.
+      //
+      // It said `twoStorey` until 2 STOREY got a design, and `bungalow`
+      // before that. The name was never the point.
+      document.querySelector(`#dt-tiles [data-build-entry="${tile.entry}"]`).click();
       await new Promise(r => setTimeout(r, 60));
       const chosen = window.ModelBuild.chosen()?.entry?.id ?? 'null';
       document.getElementById('dt-bone').click();
@@ -243,7 +248,7 @@ test('the post\'s bone orders off the menu; the foot\'s builds what was drawn',
       document.getElementById('dt-close').click();
       document.getElementById('bone').click();
       return { built, ordered, chosen };
-    });
+    }, tile);
 
     expect(seen.ordered, 'the sign\'s bone did not order the chosen design')
       .toEqual([seen.chosen]);
@@ -501,20 +506,21 @@ test('the bone with nothing chosen opens the house round, not the outline one',
     // bone asked for a house, not for a drawing lesson -- and the round is
     // invisible until the bone on the post is pressed, so it is read off
     // the seam rather than off the board.
-    const round = await page.evaluate(async () => {
+    const tile2 = await h.undesignedTile(page);
+    test.skip(!tile2, 'every tile on the board now has a design');
+    const round = await page.evaluate(async tile => {
       const seen = [];
       window.ModelBuild.onOrder(p => seen.push(p?.round ?? 'none'));
-      document.querySelector('#dt-tiles [data-build-family="bungalow"]').click();
+      document.querySelector(`#dt-tiles [data-build-family="${tile.family}"]`).click();
       await new Promise(r => setTimeout(r, 60));
-      // 2 STOREY again, and for the same reason as the seam test above: the
-      // ROUND is what this measures, and 1 STOREY now carries a premade design
-      // that this fixture's existing houses make the board refuse before the
-      // order is ever fired.
-      document.querySelector('#dt-tiles [data-build-entry="twoStorey"]').click();
+      // An undesigned tile again, for the same reason as the seam test above:
+      // the ROUND is what this measures, and a designed tile is refused on
+      // this fixture before the order is ever fired.
+      document.querySelector(`#dt-tiles [data-build-entry="${tile.entry}"]`).click();
       await new Promise(r => setTimeout(r, 60));
       document.getElementById('dt-bone').click();
       return seen;
-    });
+    }, tile2);
     expect(round, 'the bone sent the drafter down the guided trace he did not ask for')
       .toEqual(['menu']);
 
