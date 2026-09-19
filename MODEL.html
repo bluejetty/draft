@@ -4579,11 +4579,18 @@
   // REFUSAL off both presses, and both are these three lines rather than
   // four copies of them.
   //
-  // A DETACHED GARAGE COSTS A BONE TOO. MODEL.dc.html charges only
-  // COSTS.buildHouse because it has one build; here a garage is an order the
-  // geometry side serves like any other, and making it free would mean the
-  // wallet says what KIND of thing was built rather than that something was.
-  // Worth Movie's ruling, not mine -- flagged rather than decided quietly.
+  // A DETACHED GARAGE COSTS A BONE TOO -- MOVIE'S RULING, 19 Sep, asked for
+  // and given: "sure every produced home or garage is 1 bone now (these will
+  // change and be applied to other stuff later)". MODEL.dc.html charges only
+  // COSTS.buildHouse because a house is all it builds; here a garage is an
+  // order the geometry side serves like any other, and making it free would
+  // have the wallet report what KIND of thing was built rather than that
+  // something was.
+  //
+  // AND THE PRICE LIST IS EXPECTED TO GROW, which is why nothing here knows
+  // a number: the cost is COSTS.buildHouse out of bone-wallet.js, and the
+  // day a second thing is charged for it joins that table rather than this
+  // file. One produced body, one bone, is the rule as it stands.
   const canAffordBuild = () => {
     const W = window.DraftBoneWallet;
     return !W || readWallet().balance >= W.COSTS.buildHouse;
