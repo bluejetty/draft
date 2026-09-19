@@ -7262,8 +7262,22 @@
   // freehand loop is wound whichever way the drafter walked it, so reading
   // the setting there would put the walls outside the house on every
   // clockwise trace -- and the drawing would look almost right.
-  const commitWall = (startPt, endPt, { bone = true, refLine } = {}) => {
-    const { levelId, viewId } = onActiveLevel();
+  // WHERE A COMMITTED WALL GOES, and until now that was always "wherever the
+  // drafter is standing". That is right for a DRAWN wall and wrong for a BUILT
+  // one: a building is raised across the whole stack -- storey walls on each
+  // floor level, concrete on FOUNDATION -- and MODEL.dc.html's _buildHouse
+  // says so by calling _buildHouseWalls once per level with the level and the
+  // view as arguments (:14640, :14646).
+  //
+  // raiseLoop ALREADY TOOK A levelId and put it on the outline, then let the
+  // walls take the active one instead. The two agreed only because its one
+  // caller passed the active level in -- a split waiting for the first caller
+  // that did not, which is this rung.
+  const commitWall = (startPt, endPt,
+    { bone = true, refLine, levelId: onLevel, view: onView, wallType } = {}) => {
+    const active = onActiveLevel();
+    const levelId = onLevel ?? active.levelId;
+    const viewId = onView ?? active.viewId;
     const homeView = wallHomeView(viewId);
     const wall = {
       id: newDrawingItemId('wall'),
@@ -7271,7 +7285,7 @@
       end: poolVertex(endPt, levelId, homeView),
       levelId,
       view: homeView,
-      wallType: contextWallType(viewId),
+      wallType: wallType || contextWallType(viewId),
       baseHeight: wallSetting('wallBaseHeight', 0),
       topHeight: wallSetting('wallTopHeight', 8),
       // 'center', not 'centre'. drawing-format.js:400 folds the British
@@ -8754,6 +8768,35 @@
     paint();
   };
 
+  // WHAT A FLOOR RECORD IS, in one place. The gesture below and the premade
+  // build both make one, and a second copy of these seven fields is how a
+  // drawn floor and a built one come to disagree about what a floor IS.
+  //
+  // A CONCRETE SLAB IS AS THICK AS ITS LEVEL POURS; a framed floor is its
+  // assembly's own depth. Both are MODEL.dc.html:11641's rule read from the
+  // modules it reads them from -- this page has no floor-thickness setting of
+  // its own, and inventing one here would be a third number for a thing that
+  // has just stopped having three. assemblyFor IS this page's one
+  // level-assembly lookup, and its own comment says why there is exactly one.
+  const floorRecord = (loop, levelId, homeView, { garage = false } = {}) => {
+    const LA = window.DraftLevelAssembly;
+    const slab = homeView === 'foundation';
+    return {
+      id: newDrawingItemId('floor'),
+      points: loop.map(point => ({ x: point.x, y: 0, z: point.z })),
+      levelId,
+      view: homeView,
+      structure: slab ? 'slab' : 'floor',
+      garage,
+      slopeInPerFt: 0,
+      thickness: slab
+        ? assemblyFor(levelId).slabThicknessIn / 12
+        : LA.DEFAULT_FLOOR_THICKNESS_IN / 12,
+      thickenedEdge: false,
+      assembly: { ...LA.DEFAULT_FLOOR_ASSEMBLY },
+    };
+  };
+
   const commitFloor = () => {
     const loop = floorCorners.slice();
     if (loop.length < 3) return null;
@@ -8780,29 +8823,7 @@
     // looking at, because such a level's floor IS its foundation.
     const homeView = LV.floorHomeView(viewId, levelId);
     const slab = homeView === 'foundation';
-    const floor = {
-      id: newDrawingItemId('floor'),
-      points: loop.map(point => ({ x: point.x, y: 0, z: point.z })),
-      levelId,
-      view: homeView,
-      structure: slab ? 'slab' : 'floor',
-      garage: false,
-      slopeInPerFt: 0,
-      // A CONCRETE SLAB IS AS THICK AS ITS LEVEL POURS; a framed floor is its
-      // assembly's own depth. Both are MODEL.dc.html:11641's rule read from
-      // the modules it reads them from -- this page has no floor-thickness
-      // setting of its own, and inventing one here would be a third number for
-      // a thing that has just stopped having three.
-      // assemblyFor IS this page's one level-assembly lookup, and its own
-      // comment says why there is exactly one: "the module's own comment says
-      // the TABLE had one home while the LOOKUP had four, and that is how
-      // #325's role-less callers happened".
-      thickness: slab
-        ? assemblyFor(levelId).slabThicknessIn / 12
-        : LA.DEFAULT_FLOOR_THICKNESS_IN / 12,
-      thickenedEdge: false,
-      assembly: { ...LA.DEFAULT_FLOOR_ASSEMBLY },
-    };
+    const floor = floorRecord(loop, levelId, homeView);
     if (!Array.isArray(drawing.floors)) drawing.floors = [];
     drawing.floors.push(floor);
     undoStack.push({ kind: 'add-item', list: drawing.floors, item: floor });
@@ -8984,7 +9005,8 @@
   // one (:37). An attached garage is part of the house it hangs off, so it
   // does not spend the detached garage's slot.
   const raiseLoop = (points, levelId,
-    { garage = false, openings = [], against = null } = {}) => {
+    { garage = false, openings = [], against = null,
+      viewId = 'plan', wallType = null, withOutline = true } = {}) => {
     const BH = window.DraftBuildHouse;
     const G = window.DraftGeometry2D;
     const outline = {
@@ -9001,7 +9023,12 @@
       overriddenSrcIds: [],
     };
     if (outline.detached === undefined) delete outline.detached;
-    drawing.outlines.push(outline);
+    // ONE OUTLINE PER BODY, NOT ONE PER RING. The foundation walls under a
+    // house are the same loop raised again in concrete, and an outline for
+    // them would be a second footprint for one building -- which BUILD HOUSE
+    // reads as "this level already has a house" and every count of outlines
+    // reads as two buildings.
+    if (withOutline) drawing.outlines.push(outline);
     const refLine = BH.outlineInteriorRef(points);
     // ── THE WALLS THIS BODY ACTUALLY OWNS ────────────────────────────────
     //
@@ -9025,6 +9052,11 @@
     // grade beam are all cut from it. Trimming the loop to the walls raised
     // would leave the garage open along the house.
     const sharedWith = against ? G.loopSegments(against) : null;
+    // THE LEVEL AND VIEW THIS BODY IS FOR, handed to every wall rather than
+    // left to the active one. See commitWall's own note: this function took a
+    // levelId, put it on the outline, and let the walls file themselves
+    // wherever the drafter happened to be standing.
+    const on = { levelId, view: viewId, wallType };
     // BY EDGE NUMBER, not by position. The openings below are keyed to the
     // plan's edges, and both the skip above and houseWallRuns' own degenerate
     // skip take runs OUT of the list -- so a wall's place in an array stopped
@@ -9032,7 +9064,8 @@
     const wallsByEdge = [];
     BH.houseWallRuns(points).forEach(run => {
       if (sharedWith && G.edgeOnLoop(run.start, run.end, sharedWith)) return;
-      wallsByEdge[run.edge] = commitWall(run.start, run.end, { bone: false, refLine });
+      wallsByEdge[run.edge] = commitWall(run.start, run.end,
+        { bone: false, refLine, ...on });
     });
     const walls = wallsByEdge.filter(Boolean);
 
@@ -9082,14 +9115,150 @@
       drawing.fenestrations.push(record);
       return record;
     }).filter(Boolean);
-    return { outline, walls, openings: made };
+    return { outline: withOutline ? outline : null, walls, openings: made };
+  };
+
+  // ── THE WHOLE BUILDING, NOT ONE STOREY OF IT ─────────────────────────────
+  //
+  // Movie, 18 Sep, looking at a bungalow he had just ordered: "the current
+  // houses are missing foundation and roof you only did the main level so far
+  // it looks like". Exactly so. buildPremadePlan raised ONE ring of exterior
+  // stud walls and its windows and called that a house.
+  //
+  // MODEL.dc.html:14632 `_buildHouse` IS THE REFERENCE, and Movie's ruling on
+  // it is "it worked decent in that version not perfect but real nice". From
+  // one bone press it raises walls and a floor on every floor level, then
+  // FOUNDATION's concrete walls, its slab and its strip footings, then the
+  // roof. That order is kept below, and each piece reads its numbers from the
+  // same modules the old page reads them from.
+  //
+  // AND IT IS WHY THE ELEVATIONS WERE BLANK, which is the same fact from the
+  // other end. drawElevationView looks each wall's level up in the floor stack
+  // and returns false when it collects no faces; a house with no foundation,
+  // no floor and no roof, whose one ring of walls was filed on FOUNDATION
+  // because that is where the drafter was standing, has nothing to stand up.
+  // The page then printed "the cut line crosses no walls" four times.
+  // ROOF_LEVEL_ID is already declared above for the seating chart, and the
+  // roof below lands on that same 7 -- MODEL.dc.html's own number, which
+  // _buildHouseRoof uses both to find the roof footprint and to refuse
+  // building a second house roof (`roof.levelId === 7`).
+  const FOUNDATION_LEVEL_ID = 1;
+
+  // The level a BUILDING starts on. floorLevels is bottom-up, so [0] is the
+  // lowest storey -- MAIN FL on the standard stack, and MODEL.dc.html's own
+  // choice for garage walls (`_floorLevels()[0]`). Never the active level: a
+  // drafter looking at the foundation when he presses the bone is not asking
+  // for a house made of basement walls.
+  const lowestFloorLevel = () => {
+    const floors = window.DraftLayerViews.floorLevels(drawing?.levels || []);
+    return floors.length ? floors[0] : null;
+  };
+
+  // A LEVEL THE DRAWING ACTUALLY HAS. drawing-format.js validates every
+  // record's levelId against the drawing's own level list and DROPS the ones
+  // it does not recognise -- so concrete written to a FOUNDATION that this
+  // drawing has not got would sit in the file, paint once, and be gone on the
+  // next load. That is the silent loss this page keeps having to refuse: a
+  // record only right until it is reloaded is a file that is wrong now.
+  //
+  // NOT "ADD THE LEVEL". A drawing with no foundation is a drawing somebody
+  // made that way, and a bone press is not permission to restructure it.
+  const levelPresent = id => (drawing?.levels || [])
+    .some(level => Number(level.id) === id);
+
+  // THE CONCRETE UNDER THE HOUSE: walls, slab and footings, all on FOUNDATION.
+  //
+  // NO SECOND OUTLINE. The foundation is the same loop raised again in
+  // concrete, and an outline for it would be a second footprint for one
+  // building -- which every count of outlines reads as two houses.
+  const raiseFoundationUnder = (loop, { garage = false } = {}) => {
+    const made = { walls: [], items: [] };
+    const levelId = FOUNDATION_LEVEL_ID;
+    const fdn = raiseLoop(loop, levelId, {
+      viewId: 'foundation',
+      wallType: contextWallType('foundation'),
+      withOutline: false,
+    });
+    made.walls.push(...fdn.walls);
+
+    // THE SLAB, poured to the level's own thickness through floorRecord --
+    // the same record the floor gesture writes, so a built slab and a drawn
+    // one cannot differ in what a slab IS.
+    drawing.floors = drawing.floors || [];
+    const slab = floorRecord(loop, levelId, 'foundation', { garage });
+    drawing.floors.push(slab);
+    made.items.push({ list: drawing.floors, item: slab });
+
+    // THE STRIP FOOTINGS, two rings of ordinary linework with the footing
+    // centred on the wall: equal projection past each face. Lifted from
+    // _buildHouseFootings, arithmetic and all -- build-house.js already owns
+    // the ring offsetting, and the two numbers it needs come from the wall
+    // type and the level's own footing width rather than from a literal here.
+    const WT = window.DraftWallTypes;
+    const wallFt = (WT.WALL_TYPES.find(t => t.id === 'concrete_8')?.totalIn || 8) / 12;
+    const projFt = Math.max(0, (assemblyFor(levelId).footingWidthIn / 12) - wallFt) / 2;
+    const rings = window.DraftBuildHouse.footingRings(
+      loop.map(pt => ({ x: pt.x, z: pt.z })), wallFt, projFt);
+    drawing.lines = drawing.lines || [];
+    rings.forEach(ring => ring.forEach((point, index) => {
+      const next = ring[(index + 1) % ring.length];
+      // A degenerate footing leg is not linework. The offset of a tight
+      // corner can collapse one, and drawing-format.js drops a zero-length
+      // line on load -- so writing it would be a record that vanishes.
+      if (Math.hypot(next.x - point.x, next.z - point.z) < 0.01) return;
+      const line = {
+        id: newDrawingItemId('line'),
+        start: poolVertex({ x: point.x, z: point.z }, levelId, 'foundation'),
+        end: poolVertex({ x: next.x, z: next.z }, levelId, 'foundation'),
+        levelId,
+        view: 'foundation',
+        layer: 'S-FOOTING',
+      };
+      drawing.lines.push(line);
+      made.items.push({ list: drawing.lines, item: line });
+    }));
+    return made;
+  };
+
+  // THE ROOF OVER IT, cut from the house loop offset by the overhang and laid
+  // on the ROOF level. Every edge starts an EAVE, which is _buildHouseRoof's
+  // own default -- the drafter flips the gables with the ROOF tool, and this
+  // page already has that gesture.
+  const raiseRoofOver = loop => {
+    const G = window.DraftGeometry2D;
+    const pts = G.offsetOutline(loop.map(pt => ({ x: pt.x, z: pt.z })), roofOverhangFt);
+    // An offset that collapses the loop is not a roof, and the record would be
+    // dropped on load anyway -- present on screen, gone after a reload.
+    if (!Array.isArray(pts) || pts.length < 3) return null;
+    drawing.roofs = drawing.roofs || [];
+    const roof = {
+      id: newDrawingItemId('roof'),
+      points: pts.map(pt => ({ x: pt.x, z: pt.z })),
+      levelId: ROOF_LEVEL_ID,
+      sourceLevelId: null,
+      sourceShapeId: null,
+      edges: pts.map(() => 'eave'),
+      overhang: roofOverhangFt,
+      pitch: roofPitch,
+      fascia: ROOF_FASCIA_IN,
+      layer: 'A-ROOF',
+    };
+    drawing.roofs.push(roof);
+    return { list: drawing.roofs, item: roof };
   };
 
   const buildPremadePlan = order => {
     if (!drawing) return null;
     const plan = window.DraftPremadePlans.planFor(order?.entry?.id);
     if (!plan) return null;
-    const { levelId } = onActiveLevel();
+    // THE LOWEST FLOOR LEVEL, NOT THE ACTIVE ONE. A drafter standing on
+    // FOUNDATION when he presses the bone is not asking for a house made of
+    // basement walls -- and that is exactly what he got: ordered from the
+    // entry screen, which opens on level 1, the whole bungalow was filed
+    // there and every elevation came back "the cut line crosses no walls".
+    const storey = lowestFloorLevel();
+    if (!storey) return null;
+    const levelId = storey.id;
     if (!Array.isArray(drawing.outlines)) drawing.outlines = [];
     // ONE GESTURE, ONE UNDO, the same as the ordered garage: the walls' own
     // 'add' steps are dropped for the single 'built' one covering both bodies.
@@ -9106,12 +9275,41 @@
       raised.push(raiseLoop(plan.garage, levelId,
         { garage: true, openings: plan.garageOpenings, against: plan.house }));
     }
+    // ── AND THE REST OF THE BUILDING ─────────────────────────────────────
+    // _buildHouse's order: the storey's own floor, then the concrete under
+    // it, then the roof over it. The garage keeps its stud walls only on this
+    // rung -- its grade beam, footings, piles and slab are a different set of
+    // members with their own rules, and half a garage foundation would be
+    // worse than none.
+    const extra = [];
+    const parts = ['house'];
+    drawing.floors = drawing.floors || [];
+    const deck = floorRecord(plan.house, levelId, 'floor');
+    drawing.floors.push(deck);
+    extra.push({ list: drawing.floors, item: deck });
+
+    // EACH PIECE ONLY WHERE THE DRAWING HAS SOMEWHERE TO PUT IT, and the
+    // strip says which pieces went up rather than claiming all of them.
+    const under = levelPresent(FOUNDATION_LEVEL_ID)
+      ? raiseFoundationUnder(plan.house) : { walls: [], items: [] };
+    if (under.items.length) parts.push('foundation');
+    extra.push(...under.items);
+
+    const roof = levelPresent(ROOF_LEVEL_ID) ? raiseRoofOver(plan.house) : null;
+    if (roof) { extra.push(roof); parts.push('roof'); }
+
     undoStack.length = mark;
     undoStack.push({
       kind: 'built',
-      walls: raised.flatMap(body => body.walls),
-      outlines: raised.map(body => body.outline),
+      walls: raised.flatMap(body => body.walls).concat(under.walls),
+      outlines: raised.map(body => body.outline).filter(Boolean),
       list: drawing.outlines,
+      // EVERY OTHER RECORD THE PRESS MADE, each with the list it went into, so
+      // one Ctrl+Z takes the whole building. Kept as {list, item} pairs rather
+      // than four typed fields because the undo branch then needs no knowledge
+      // of what a floor, a footing line or a roof IS -- the same trick
+      // 'add-item' plays, which is why a column and a beam share one branch.
+      items: extra,
       // ONE PRESS IS STILL ONE UNDO, and the openings are part of that press.
       // Left out, Ctrl+Z would take the house and leave eleven windows and
       // doors hosted on walls that no longer exist -- records the loader drops
@@ -9126,7 +9324,13 @@
     // and an armed trace left over a finished house turns his next press into
     // the first corner of a second one.
     setTool(RESTING_TOOL);
-    sayOnStrip(`${order.entry.label} built — ${plan.garage ? 'house and garage' : 'house'}.`);
+    // WHAT WENT UP AND WHERE, because the drafter is very likely not looking
+    // at the level it went on -- the entry screen opens on FOUNDATION. Naming
+    // the storey is the difference between an empty sheet that looks broken
+    // and an empty sheet that tells you where to look.
+    if (plan.garage) parts.splice(1, 0, 'garage');
+    sayOnStrip(`${order.entry.label} built on ${storey.name || 'the main floor'}`
+      + ` — ${parts.join(', ')}.`);
     markDirty();
     buildChrome();
     paint();
@@ -11282,6 +11486,13 @@
         (step.openings || []).forEach(record => {
           const at = (drawing.fenestrations || []).indexOf(record);
           if (at >= 0) drawing.fenestrations.splice(at, 1);
+        });
+        // AND THE REST OF THE BUILDING: the storey's floor, the slab, the
+        // footing lines and the roof. Each carries the list it went into, so
+        // this branch needs to know nothing about what any of them IS.
+        (step.items || []).forEach(({ list, item }) => {
+          const at = list.indexOf(item);
+          if (at >= 0) list.splice(at, 1);
         });
       } else if (step.kind === 'add') {
         const at = drawing.walls.indexOf(step.wall);
