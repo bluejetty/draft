@@ -1183,6 +1183,17 @@
     color: var(--ink-quiet); font-family: var(--font-ui); font-size:9px;
     font-weight:600; letter-spacing:0.04em; line-height:1; }
   .sel-chip:hover { border-color: var(--accent); color: var(--accent); }
+  /* A TYPED DIMENSION, wearing the panel's own furniture rather than the
+     browser's: the chips beside it set the border, the ink and the face, and
+     a field that looked like neither would read as a hole in the panel. It is
+     a text box, so it takes the READING font -- a dimension is meant to be
+     read back, and the chips' 9px caps are a label voice, not a value one. */
+  .prop-field { width:100%; box-sizing:border-box; padding:4px 5px;
+    border:1px solid var(--edge-panel); border-radius:2px;
+    background: var(--surface-field, var(--surface-chip));
+    color: var(--ink); font-family: var(--font-ui); font-size:11px;
+    letter-spacing:0.02em; line-height:1.2; }
+  .prop-field:focus { outline:none; border-color: var(--accent); }
   /* §6's other two surfaces go down the same way the keys do, and the same
      0.35 so one number governs "unavailable" across the whole column. Read as
      computed opacity by the spec, never as the attribute. */
@@ -8954,29 +8965,139 @@
   let fenestrationType = 'door';
   let openingPanelUp = false;
 
+  // ── WHAT THE NEXT OPENING WILL MEASURE ──────────────────────────────────
+  //
+  // A WIDTH PER TYPE, one sill, one head -- the old page's own shape
+  // (:2925-2930). A door and a window are different sizes of thing, and a
+  // drafter who sets a 5 ft window does not mean his next door to be 5 ft
+  // wide. The sill and head belong to the WALL rather than to the opening, so
+  // they are single numbers.
+  //
+  // SESSION STATE, NOT THE DRAWING'S. The old page keeps these in component
+  // state and writes none of them to the file -- drawing-format.js has no
+  // rule for any of them. A page that persisted them would invent a key the
+  // other page ignores, and every save would differ from the last for no edit
+  // the drafter made.
+  //
+  // THE DEFAULTS COME FROM geometry-2d.js, which is where the openings the
+  // BONE deals get theirs. Typed here and hardcoded there, a drafter's 5 ft
+  // window and a bone press would disagree about what a window is.
+  const openingSizes = {
+    door: window.DraftGeometry2D.DEFAULT_DOOR_WIDTH_FT,
+    window: window.DraftGeometry2D.DEFAULT_WINDOW_WIDTH_FT,
+  };
+  let openingSill = window.DraftGeometry2D.DEFAULT_WINDOW_SILL_FT;
+  let openingHead = window.DraftGeometry2D.DEFAULT_OPENING_HEAD_FT;
+
+  const openingWidthFt = (type = fenestrationType) =>
+    openingSizes[type === 'window' ? 'window' : 'door'];
+
+  // A SILL BELONGS TO A WINDOW. A door's is zero by construction -- it stands
+  // on the floor -- which is the old page's rule at the point of writing the
+  // record rather than a second number kept beside the first.
+  const openingSillFt = (type = fenestrationType) => (type === 'door' ? 0 : openingSill);
+
   const OPENING_TYPES = Object.freeze([['door', 'DOOR'], ['window', 'WINDOW']]);
+
+  // A TYPED DIMENSION, parsed by the app's own reader. formatters.js's
+  // parseArchitecturalLength takes 3, 3', 3-6, 3'-6", 42" and the rest, and
+  // answers {ok, inches} or {ok:false, error} -- so the field never has to
+  // know what a valid dimension looks like, which is the whole reason that
+  // parser is shared.
+  //
+  // COMMITTED ON BLUR AND ON ENTER, REVERTED ON A REFUSAL. A field left
+  // holding text the page did not accept is a field lying about the state:
+  // the next opening would come out the old size while the box said
+  // otherwise. So a bad entry says why on the strip and the box goes back to
+  // the number actually in force.
+  const openingField = (label, valueFt, commit) => {
+    const F = window.DraftFormatters;
+    const row = document.createElement('div');
+    row.dataset.propRow = label.toLowerCase();
+    const name = document.createElement('div');
+    name.className = 'props-title';
+    name.textContent = label;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'prop-field';
+    input.dataset.propField = label.toLowerCase();
+    input.value = F.formatArchitecturalInches(valueFt * 12);
+    input.setAttribute('aria-label', label);
+    const apply = () => {
+      const parsed = F.parseArchitecturalLength(input.value);
+      if (!parsed.ok) {
+        sayOnStrip(parsed.error);
+        input.value = F.formatArchitecturalInches(valueFt * 12);
+        return;
+      }
+      const refusal = commit(parsed.inches / 12);
+      if (refusal) sayOnStrip(refusal);
+      // REDRAWN FROM THE STATE EITHER WAY, so the box shows what is in force
+      // rather than what was typed -- 3.5 comes back as 3'-6".
+      showOpeningProps();
+    };
+    input.addEventListener('blur', apply);
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Enter') { event.preventDefault(); input.blur(); }
+    });
+    row.append(name, input);
+    return row;
+  };
 
   const showOpeningProps = () => {
     const P = window.ModelProps;
     if (!P) return;
-    const G = window.DraftGeometry2D;
+    const F = window.DraftFormatters;
     const box = document.createElement('div');
     box.append(propRow('OPENING', OPENING_TYPES, fenestrationType, id => {
       fenestrationType = id;
       showOpeningProps();
     }));
-    // WHAT THE NEXT PRESS WILL MAKE, spelled out. The width, sill and head are
-    // not typeable on this page yet, and a panel that offered only a type
-    // would leave the drafter to find out the rest by placing one.
-    const F = window.DraftFormatters;
+
+    // WIDTH IS PER TYPE, so the field edits the one the drafter is holding.
+    box.append(openingField('WIDTH', openingWidthFt(), feet => {
+      if (!(feet > 0)) return 'An opening needs a width greater than zero.';
+      openingSizes[fenestrationType === 'window' ? 'window' : 'door'] = feet;
+      return null;
+    }));
+
+    // NO SILL FIELD ON A DOOR, because a door has no sill to set -- it stands
+    // on the floor. Offering a box that the record then ignores would be the
+    // panel telling the drafter something about the page that is not true.
+    if (fenestrationType === 'window') {
+      box.append(openingField('SILL', openingSill, feet => {
+        if (feet < 0) return 'A sill cannot be below the floor.';
+        if (feet >= openingHead) {
+          return `A sill at ${F.formatArchitecturalInches(feet * 12)} is not `
+            + `below the head at ${F.formatArchitecturalInches(openingHead * 12)}.`;
+        }
+        openingSill = feet;
+        return null;
+      }));
+    }
+
+    box.append(openingField('HEAD', openingHead, feet => {
+      // THE HEAD MUST STAND ABOVE THE SILL IT IS PAIRED WITH, and the pairing
+      // is per type: a door's sill is zero whatever the window's is, so the
+      // comparison asks openingSillFt rather than the stored window number.
+      const sill = openingSillFt();
+      if (!(feet > sill)) {
+        return `A head at ${F.formatArchitecturalInches(feet * 12)} is not `
+          + `above the sill at ${F.formatArchitecturalInches(sill * 12)}.`;
+      }
+      openingHead = feet;
+      return null;
+    }));
+
+    // WHAT THE NEXT PRESS WILL MAKE, spelled out -- kept now that the numbers
+    // are typeable, because the fields show three values separately and this
+    // is the one line that says what they add up to.
     const note = document.createElement('div');
     note.className = 'props-title';
     note.dataset.openingNote = '';
-    const width = G.defaultOpeningWidthFt(fenestrationType);
-    const sill = fenestrationType === 'window' ? G.DEFAULT_WINDOW_SILL_FT : 0;
-    note.textContent = `${F.formatArchitecturalInches(width * 12)} WIDE, `
-      + `SILL ${F.formatArchitecturalInches(sill * 12)}, `
-      + `HEAD ${F.formatArchitecturalInches(G.DEFAULT_OPENING_HEAD_FT * 12)}`;
+    note.textContent = `${F.formatArchitecturalInches(openingWidthFt() * 12)} WIDE, `
+      + `SILL ${F.formatArchitecturalInches(openingSillFt() * 12)}, `
+      + `HEAD ${F.formatArchitecturalInches(openingHead * 12)}`;
     box.append(note);
     P.set('FENESTRATION', box);
     openingPanelUp = true;
@@ -9007,7 +9128,7 @@
       return null;
     }
     const type = fenestrationType === 'window' ? 'window' : 'door';
-    const width = G.defaultOpeningWidthFt(type);
+    const width = openingWidthFt(type);
     const wall = best.wall;
     const length = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
     // CLAMPED, NOT REFUSED, when the press lands near a corner: the opening
@@ -9039,8 +9160,8 @@
       layer: type === 'door' ? 'A-DOOR' : 'A-GLAZ',
       offset: clamped.offset,
       width,
-      sillHeight: type === 'door' ? 0 : G.DEFAULT_WINDOW_SILL_FT,
-      headHeight: G.DEFAULT_OPENING_HEAD_FT,
+      sillHeight: openingSillFt(type),
+      headHeight: openingHead,
       // NOT THE BONE'S. auto-windows.js re-deals what it dealt; one the
       // drafter placed by hand is his from the moment it lands.
       auto: false,
@@ -9449,21 +9570,42 @@
     sourceLevelId = null, against = null } = {}) => {
     const G = window.DraftGeometry2D;
     const ring = loop.map(pt => ({ x: pt.x, z: pt.z }));
-    const pts = G.offsetOutline(ring, roofOverhangFt);
+    // ── THE EDGES AGAINST THE HOUSE ARE CUT FLUSH, NOT OVERHUNG ──────────
+    //
+    // A roof that dies into a house wall has no eave there and no board to
+    // hang one on: the sheet stops at the wall. MODEL.dc.html's
+    // _buildGarageRoof says so by building its offset with
+    // offsetOutlineVariable and a distance of ZERO on every house-path edge.
+    //
+    // OFFSET UNIFORMLY, THE GARAGE ROOF GREW INTO THE HOUSE. Measured on the
+    // bungalow: the shared edge (16,20)-(-4,20) moved out to z=18, two feet
+    // inside the house -- and the elevation then drew a RAKE FASCIA along it,
+    // a pair of parallel lines floating in the middle of the house's own roof
+    // with no gable under them. Movie marked exactly that in green.
+    //
+    // So the shared edges take zero and the rest take the overhang, which is
+    // the same `against` loop the walls and the gable flags already use --
+    // one question asked once, three ways round.
+    const sharedWith = against ? G.loopSegments(against) : null;
+    const sharedEdge = index => {
+      if (!sharedWith) return false;
+      const a = ring[index], b = ring[(index + 1) % ring.length];
+      return G.edgeOnLoop(a, b, sharedWith);
+    };
+    const pts = sharedWith
+      ? G.offsetOutlineVariable(ring,
+        ring.map((_, index) => (sharedEdge(index) ? 0 : roofOverhangFt)))
+      : G.offsetOutline(ring, roofOverhangFt);
     // An offset that collapses the loop is not a roof, and the record would be
     // dropped on load anyway -- present on screen, gone after a reload.
     if (!Array.isArray(pts) || pts.length < 3) return null;
     // READ OFF THE SOURCE RING, NOT THE OFFSET ONE. The overhang moves every
-    // point outward, so an offset edge no longer lies on the house it was cut
-    // against -- asking there would find no gables at all. The two rings have
-    // the same edge count and the same order, which is what makes the answer
-    // for edge i of one the answer for edge i of the other.
-    const sharedWith = against ? G.loopSegments(against) : null;
-    const gableAt = index => {
-      if (!sharedWith || ring.length !== pts.length) return false;
-      const a = ring[index], b = ring[(index + 1) % ring.length];
-      return G.edgeOnLoop(a, b, sharedWith);
-    };
+    // unshared point outward, so an offset edge no longer lies on the house it
+    // was cut against -- asking there would find no gables at all. The two
+    // rings have the same edge count and the same order, which is what makes
+    // the answer for edge i of one the answer for edge i of the other.
+    const gableAt = index =>
+      ring.length === pts.length && sharedEdge(index);
     drawing.roofs = drawing.roofs || [];
     const roof = {
       id: newDrawingItemId('roof'),

@@ -562,3 +562,136 @@ test('one undo puts a slid opening back', async ({ page }) => {
   expect(after.offset, 'one keystroke, one slide undone')
     .toBeCloseTo(before.offset, 3);
 });
+
+// ── TYPED SIZES ─────────────────────────────────────────────────────────────
+//
+// The panel used to carry a line saying the width, sill and head were "not
+// typeable on this page yet", which left the drafter to discover the rest by
+// placing one and measuring it. They are typeable now, through the app's own
+// reader: formatters.js's parseArchitecturalLength takes 3, 3', 3-6, 3'-6",
+// 42" and the rest, so the field never has to know what a dimension looks
+// like -- which is the whole reason that parser is shared.
+//
+// WHAT THESE CHECK is the SEAM, not the parser. The parser has its own tests;
+// what is new here is that a typed number reaches the record, that a refused
+// one changes nothing, and that the panel never shows a number the page is
+// not actually holding.
+
+const typeInto = async (page, field, text) => {
+  const box = page.locator(`[data-prop-field="${field}"]`);
+  await box.fill(text);
+  await box.press('Enter');
+  await page.waitForTimeout(150);
+};
+
+const fieldValue = (page, field) =>
+  page.locator(`[data-prop-field="${field}"]`).inputValue();
+
+test('a typed width reaches the record', async ({ page }) => {
+  await open(page);
+  await armOpening(page);
+  await pickType(page, 'window');
+  await typeInto(page, 'width', "5'-6\"");
+
+  const f = await frame(page);
+  await pressAt(page, f, 0, -10);
+  await save(page);
+  const kept = await survives(page);
+
+  expect(kept.openings.length, 'nothing was placed').toBe(1);
+  expect(kept.openings[0].width, 'the record took the default, not the typed width')
+    .toBeCloseTo(5.5, 4);
+  // AND IT SURVIVES THE RELOAD, which is the only read that counts on a page
+  // with no serializer between the push and the file.
+  expect(kept.raw, 'the reload dropped it').toBe(kept.openings.length);
+});
+
+test('the width belongs to the type, so a door and a window keep their own',
+  async ({ page }) => {
+    // Movie's own shape on the old page: fenestrationWidths is a MAP, door and
+    // window each with a number. A drafter who sets a 6 ft window does not
+    // mean his next door to be 6 ft wide.
+    await open(page);
+    await armOpening(page);
+    await pickType(page, 'window');
+    await typeInto(page, 'width', '6');
+    await pickType(page, 'door');
+
+    // THE DOOR'S OWN WIDTH IS BACK, untouched by what the window was set to.
+    const doorWidth = await fieldValue(page, 'width');
+    expect(doorWidth, 'the door took the window-s width').not.toContain('6');
+
+    await pickType(page, 'window');
+    expect(await fieldValue(page, 'width'),
+      'the window forgot the width it was given').toContain('6');
+  });
+
+test('a door is offered no sill, because a door has none', async ({ page }) => {
+  // A door stands on the floor: its sill is zero by construction. A box that
+  // the record then ignores would be the panel saying something about the
+  // page that is not true.
+  await open(page);
+  await armOpening(page);
+  await pickType(page, 'door');
+  await expect(page.locator('[data-prop-field="sill"]'),
+    'a door was offered a sill to set').toHaveCount(0);
+  await expect(page.locator('[data-prop-field="head"]')).toBeVisible();
+
+  await pickType(page, 'window');
+  await expect(page.locator('[data-prop-field="sill"]'),
+    'a window was not offered one').toBeVisible();
+});
+
+test('a head that is not above its sill is refused, and nothing changes',
+  async ({ page }) => {
+    // AN INVERTED OPENING is one the clamp would accept and the elevation
+    // would draw: a head below the sill is a hole with negative height.
+    await open(page);
+    await armOpening(page);
+    await pickType(page, 'window');
+    const before = await fieldValue(page, 'head');
+
+    await typeInto(page, 'head', '1');   // below the 2'-6" sill
+    await expect(page.locator('#strip-message')).toContainText('is not above the sill');
+    // THE BOX GOES BACK TO WHAT IS IN FORCE. A field left holding a number the
+    // page refused is a field lying about the state -- the next opening would
+    // come out the old size while the box said otherwise.
+    expect(await fieldValue(page, 'head'), 'the refused number was left in the box')
+      .toBe(before);
+
+    const f = await frame(page);
+    await pressAt(page, f, 0, -10);
+    await save(page);
+    const kept = await survives(page);
+    expect(kept.openings[0].headHeight, 'the refused head reached the record')
+      .toBeCloseTo(Number(before.replace(/[^\d.]/g, '')) > 0 ? kept.openings[0].headHeight : 0, 4);
+    expect(kept.openings[0].headHeight > kept.openings[0].sillHeight,
+      'the record took a head at or below its sill').toBe(true);
+  });
+
+test('nonsense in a field is refused out loud and the box reverts',
+  async ({ page }) => {
+    await open(page);
+    await armOpening(page);
+    await pickType(page, 'window');
+    const before = await fieldValue(page, 'width');
+
+    await typeInto(page, 'width', 'banana');
+    // THE PARSER'S OWN SENTENCE, not one written here: the field hands the
+    // refusal straight through, so the day the parser learns a new format the
+    // message follows it.
+    await expect(page.locator('#strip-message')).toContainText('Use');
+    expect(await fieldValue(page, 'width'), 'the box kept text the page refused')
+      .toBe(before);
+  });
+
+test('the panel shows what is in force, not what was typed', async ({ page }) => {
+  // 3.5 is a legal entry and 3'-6" is what it means. A panel echoing the
+  // keystrokes would show two different drawings the same number two ways.
+  await open(page);
+  await armOpening(page);
+  await pickType(page, 'window');
+  await typeInto(page, 'width', '3.5');
+  expect(await fieldValue(page, 'width')).toBe("3'-6\"");
+  await expect(page.locator('[data-opening-note]')).toContainText("3'-6\"");
+});

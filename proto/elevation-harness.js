@@ -779,6 +779,85 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
     'the shared export refuses a zero-length edge, and refusing is correct here');
 }
 
+// ── A ROOF BEARS ON THE WALLS THAT HOLD IT UP ──────────────────────────────
+//
+// Movie, 19 Sep, on a bungalow's elevation: "the roof is real messed on this
+// one". Measured off that very drawing, which is the fixture below:
+//
+//     floor levels in the stack   MAIN FL wallTop 8.09   2ND FL wallTop 17.24
+//     stack.bearing                                                    17.240
+//     house roof bore at                                               17.240
+//     garage roof bore at                                               8.094
+//     walls on 2ND FL                                                        0
+//
+// The house roof floated nine feet above the walls under it, over a level
+// with nothing standing on it -- because `bearing` was the top of the TOPMOST
+// FLOOR LEVEL IN THE STACK, and floorLevels() keeps a level for having a
+// floor layer view rather than for having anything built there. The default
+// stack always carries 2ND FL, so every one-storey house on both pages drew
+// its roof a storey high, and always had.
+//
+// IT WENT UNSEEN BECAUSE NOTHING CORRECT STOOD BESIDE IT. A garage roof
+// carries `plateHeightFt` and bears on its own storey, so until the garage
+// got a roof there was no second roof in the elevation to disagree with.
+//
+// THE CHECKS ARE A PAIR, and the second is what keeps the first honest:
+// bearing must DROP to the occupied storey here, and must NOT move on a
+// drawing whose top floor is occupied. A fix that simply lowered every
+// bearing would satisfy the first alone.
+{
+  const bFile = path.join(ROOT, 'proto', 'repro-bungalow-garage-roofs.draft');
+  const bEnv = buildEnv(win, JSON.parse(fs.readFileSync(bFile, 'utf8')));
+  const CV = win.DraftCutView;
+  const bStack = CV.sectionLevelStack(bEnv);
+  const floors = bStack.floors;
+  const occupied = id => bEnv.walls().some(w => Number(w.levelId) === id);
+
+  // THE FIXTURE'S REACH, ASSERTED BEFORE IT IS TRUSTED -- the same rule the
+  // garage block above follows. Every check here is about an EMPTY top
+  // storey, and on a fixture that grew walls up there they would all pass
+  // while measuring nothing at all.
+  check('bungalow fixture: more than one floor level in the stack',
+    floors.length > 1, `${floors.length} floor levels`);
+  check('bungalow fixture: and its top floor level is empty',
+    !occupied(floors[floors.length - 1].id),
+    'the drawing must have a storey with nothing on it');
+  check('bungalow fixture: while a lower one is not',
+    occupied(floors[0].id), 'something has to stand somewhere');
+
+  check('a roof bears on the top storey that has walls, not the top of the list',
+    Math.abs(bStack.bearing - floors[0].wallTop) < 0.001,
+    `bearing ${bStack.bearing.toFixed(3)} vs the occupied storey's ${floors[0].wallTop.toFixed(3)}`);
+
+  const houseRoof = bEnv.roofs().find(r => r.garage !== true);
+  const garageRoof = bEnv.roofs().find(r => r.garage === true);
+  check('bungalow fixture: it has both a house roof and a garage roof',
+    !!houseRoof && !!garageRoof);
+  // AND THE TWO AGREE. On a one-storey house the garage roof's own plate and
+  // the house roof's bearing are the same line, and that agreement IS what a
+  // drafter reads as the roof sitting on the walls.
+  check('and on a one-storey house the house roof and the garage roof bear together',
+    Math.abs(CV.roofBaseElev(houseRoof, bStack, bEnv)
+      - CV.roofBaseElev(garageRoof, bStack, bEnv)) < 0.01,
+    `house ${CV.roofBaseElev(houseRoof, bStack, bEnv).toFixed(3)} `
+    + `garage ${CV.roofBaseElev(garageRoof, bStack, bEnv).toFixed(3)}`);
+
+  // THE CONTROL, on a fixture whose top storey IS occupied: the number must
+  // not move. This is what makes the change safe in the one file that draws
+  // every elevation and section on both pages -- it moves nothing except
+  // where it was already wrong.
+  const gEnv2 = buildEnv(win, JSON.parse(
+    fs.readFileSync(path.join(ROOT, 'proto', 'repro-garage-house.draft'), 'utf8')));
+  const gStack2 = CV.sectionLevelStack(gEnv2);
+  const gTop = gStack2.floors[gStack2.floors.length - 1];
+  check('control: the other fixture-s top floor level is occupied',
+    gEnv2.walls().some(w => Number(w.levelId) === gTop.id),
+    'or the check below proves nothing');
+  check('control: and its bearing is still the top of the stack, unmoved',
+    Math.abs(gStack2.bearing - gTop.wallTop) < 0.001,
+    `bearing ${gStack2.bearing.toFixed(3)} vs top ${gTop.wallTop.toFixed(3)}`);
+}
+
 console.log(`elevation harness: ${passed} checks passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach(line => console.log(`  \u2718 ${line}`));
