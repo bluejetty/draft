@@ -9448,6 +9448,16 @@
     // storey above it would open into air, which the clamp accepts and the
     // elevation shows.
     const storeys = storeyLevels(plan.storeys);
+    // HELD BY NAME, NEVER BY POSITION. `raised` is a list of bodies whose
+    // length depends on how many storeys the design has and what hangs off
+    // it, and the garage's concrete used to be found at `raised[1]` -- true
+    // of a bungalow, and the UPPER STOREY of a 2 STOREY. Both outlines answer
+    // `attachedGarage` and neither is detached, so the wrong one gave the
+    // right foundation and nothing looked amiss; the moment a garage outline
+    // carried its own `foundation`, or the room over it became a fourth body,
+    // it would stop agreeing. The same trap wallsByEdge was built to close.
+    let garageBody = null;
+    let overGarageBody = null;
     const raised = storeys.map((level, index) => raiseLoop(plan.house, level.id,
       { openings: index === 0 ? plan.houseOpenings
         : (plan.upperOpenings || plan.houseOpenings) }));
@@ -9468,9 +9478,43 @@
       // garage" -- so it goes on the lowest storey only, however many the
       // house has. The floor OVER it is a different body on a different
       // level, not this loop raised twice.
-      raised.push(raiseLoop(plan.garage, levelId,
+      garageBody = raiseLoop(plan.garage, levelId,
         { garage: true, body: 'garage',
-          openings: plan.garageOpenings, against: plan.house }));
+          openings: plan.garageOpenings, against: plan.house });
+      raised.push(garageBody);
+    }
+
+    // ── AND THE ROOM OVER IT ─────────────────────────────────────────────
+    //
+    // ON 2ND FL, NOT ON THE OVER-GARAGE LEVEL. Movie, 19 Sep, asked directly:
+    // "no it will be the '2 storey', the 'over garage' layer is for bilevels
+    // when that would be a 'lower' 2nd floor" -- then "this one is even with
+    // the 2nd floor so will be considered 2nd floor". A half-level is for a
+    // room sitting half a storey off the floors around it; this one is flush
+    // with the storey above, so it IS that storey.
+    //
+    // WHICH MEANS NOTHING GETS ADDED TO ANYBODY'S LEVEL STACK. The room goes
+    // on a level the house is already using, so this tile needs no more
+    // permission than the other two.
+    //
+    // ITS OWN BODY, NOT THE UPPER STOREY STRETCHED. It is a separate loop
+    // with its own walls and its own windows, and `against: plan.house` is
+    // what stops its back wall being raised on top of the house's -- twenty
+    // feet of the two run in the same place, and premade-plans.js splits that
+    // stretch into an edge of its own so this skip can take it whole.
+    //
+    // AND IT NEEDS AN UPPER STOREY TO BE ON. storeyLevels returns the levels
+    // the drawing HAS, not the ones the design wants, so a room-over ordered
+    // into a drawing with a single floor level has nowhere to go. Raised when
+    // there is somewhere, named when there is not -- the same rule the
+    // foundation and the roof already follow below, and the alternative is
+    // what this tile did until now: build a house and a garage, no room, and
+    // not one word about the one that went missing.
+    const upperStorey = storeys[1] || null;
+    if (plan.overGarage && upperStorey) {
+      overGarageBody = raiseLoop(plan.overGarage, upperStorey.id,
+        { openings: plan.overGarageOpenings, against: plan.house });
+      raised.push(overGarageBody);
     }
     // ── AND THE REST OF THE BUILDING ─────────────────────────────────────
     // _buildHouse's order: the storey's own floor, then the concrete under
@@ -9489,6 +9533,16 @@
       drawing.floors.push(deck);
       extra.push({ list: drawing.floors, item: deck });
     });
+    // THE ROOM OVER THE GARAGE GETS ITS OWN DECK, because it is its own
+    // footprint. The storey loop above lays a floor the shape of the HOUSE,
+    // and the room hangs off the side of it -- so a room framed by that pass
+    // alone is a room standing on nothing, which is the same thing a storey
+    // with no deck under it would be.
+    if (overGarageBody) {
+      const deck = floorRecord(plan.overGarage, upperStorey.id, 'floor');
+      drawing.floors.push(deck);
+      extra.push({ list: drawing.floors, item: deck });
+    }
 
     // EACH PIECE ONLY WHERE THE DRAWING HAS SOMEWHERE TO PUT IT, and the
     // strip says which pieces went up rather than claiming all of them.
@@ -9500,7 +9554,6 @@
     // THE GARAGE'S OWN CONCRETE, measured against the house so the edges they
     // share get neither a beam nor a footing -- the same rule its stud walls
     // already follow, through the same edgeOnLoop.
-    const garageBody = raised[1];
     const garageConcrete = (plan.garage && garageBody?.outline)
       ? raiseGarageConcrete(plan.garage, garageBody.outline, { against: plan.house })
       : { walls: [], items: [] };
@@ -9541,6 +9594,14 @@
     // the storey is the difference between an empty sheet that looks broken
     // and an empty sheet that tells you where to look.
     if (plan.garage) parts.splice(1, 0, 'garage');
+    // WHAT WENT UP, AND WHAT DID NOT. A design carrying a room over the
+    // garage into a drawing with one floor level has nowhere to put it, and
+    // the drafter pressed a tile with ROOM OVER written on it -- so the strip
+    // says which of the two happened rather than reading the same either way.
+    if (plan.overGarage) {
+      parts.splice(parts.indexOf('garage') + 1, 0,
+        overGarageBody ? 'room over' : 'NO room over (no storey above it)');
+    }
     // WHERE IT STARTS, not where it sits, once there is more than one storey.
     // "built on MAIN FL" is true of a bungalow and misleading of a 2 STOREY,
     // whose upper half is somewhere else entirely.

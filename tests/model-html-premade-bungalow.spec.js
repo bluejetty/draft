@@ -851,3 +851,213 @@ test('a design wanting more storeys than the drawing has levels builds what fits
     expect(kept.keeps, 'and nothing was written that the reload loses')
       .toBe(kept.wrote);
   });
+
+// ── THE ROOM OVER THE GARAGE ────────────────────────────────────────────────
+//
+// Movie, 19 Sep, asked outright where it goes: "no it will be the '2 storey',
+// the 'over garage' layer is for bilevels when that would be a 'lower' 2nd
+// floor" -- and then, plainer still, "this one is even with the 2nd floor so
+// will be considered 2nd floor". A half-level is for a room sitting half a
+// storey off the floors around it. This one is flush with the storey above, so
+// it IS that storey, and the tile needs nothing added to anybody's level stack.
+//
+// UNTIL THIS LANDED THE TILE BUILT NOTHING OF IT. 2 STOREY + GARAGE + ROOM
+// OVER raised a house and a garage -- byte for byte what 2 STOREY + GARAGE
+// raises -- and the strip said "house on 2 storeys, garage, foundation, roof"
+// without one word about the room that never went up. A press that quietly
+// drops the thing written on the tile is the silent loss this page keeps
+// refusing.
+
+test('2 STOREY + GARAGE + ROOM OVER puts the room on 2ND FL with the storey', async ({ page }) => {
+  await open(page);
+  await order(page, 'bungalow', 'twoStorey-over');
+  await saveOnNewPage(page);
+  const over = await savedFile(page);
+
+  // THE CONTROL IS THE TILE BESIDE IT. 2 STOREY + GARAGE is the same design
+  // without the room, so the DIFFERENCE between the two is the room and
+  // nothing else -- which is a far stronger reading than a count, because a
+  // count of walls on 2ND FL is also satisfied by the upper storey alone.
+  await open(page);
+  await order(page, 'bungalow', 'twoStorey-garage');
+  await saveOnNewPage(page);
+  const without = await savedFile(page);
+
+  const upperOutlines = saved => (saved.outlines || [])
+    .filter(o => Number(o.levelId) === 5);
+  expect(upperOutlines(without).length, 'the plain 2 STOREY has the storey alone').toBe(1);
+  expect(upperOutlines(over).length, 'and ROOM OVER adds a second footprint up there').toBe(2);
+
+  // NOT A GARAGE FOOTPRINT. building-bodies.js reads every outline that is not
+  // a garage as the house, and the room is living space -- marked `garage` it
+  // would count as a second garage and spend a slot the drafter still has.
+  expect(upperOutlines(over).every(o => o.garage !== true),
+    'the room is house, not garage').toBe(true);
+
+  // AND ON 2ND FL ONLY. Level 4 is the over-garage half-level, and a record
+  // filed against a level this drawing has not got is dropped by
+  // drawing-format.js on the next open -- so a room that went there would
+  // paint once and be gone, which is the failure that looks like nothing.
+  expect(byLevel(over.outlines)[4], 'nothing was filed on the half-level').toBe(undefined);
+});
+
+test('the room over the garage does not raise the house wall it stands against', async ({ page }) => {
+  // TWENTY FEET OF THE TWO RUN IN THE SAME PLACE. The room is wider than the
+  // stretch of house it sits against, so its back run starts inside the
+  // house's front wall and carries on past the house's right corner. Left as
+  // one edge that run is only PARTLY shared, edgeOnLoop answers "not shared"
+  // because it tests an edge end to end, and the whole back wall goes up --
+  // twenty feet of it standing in the same place as the house's own upper
+  // front wall. Doubled linework, a doubled stud count, and two walls to drag
+  // when the house moves. It is the wall Movie marked in green on the garage,
+  // one floor further up.
+  await open(page);
+  await order(page, 'bungalow', 'twoStorey-over');
+  await saveOnNewPage(page);
+  const saved = await savedFile(page);
+
+  // OVERLAP, NOT IDENTITY -- and the difference is the whole test.
+  //
+  // The first version of this check hashed each wall by its two endpoints and
+  // looked for a repeat. It passed against the bug. The room's back run is
+  // (-4,20)->(20,20) and the house's front wall is (16,20)->(-16,20): twenty
+  // feet of the same line, and not one endpoint in common. By identity they
+  // are two different walls, which is exactly what they are -- the defect is
+  // that they occupy the same twenty feet, and only a test that measures
+  // OVERLAP can see it.
+  //
+  // Grouped by the line each wall lies on -- a z for the horizontals, an x
+  // for the verticals, which is all these designs have -- and then no two
+  // spans on one line may share more than a rounding error.
+  const line = wall => {
+    const a = wall.start, b = wall.end;
+    if (Math.abs(a.z - b.z) < 0.01) {
+      return { id: `${wall.levelId}:h:${a.z.toFixed(2)}`,
+        lo: Math.min(a.x, b.x), hi: Math.max(a.x, b.x) };
+    }
+    if (Math.abs(a.x - b.x) < 0.01) {
+      return { id: `${wall.levelId}:v:${a.x.toFixed(2)}`,
+        lo: Math.min(a.z, b.z), hi: Math.max(a.z, b.z) };
+    }
+    return null;   // a diagonal: these designs have none, and it cannot pair
+  };
+  // EVERY LEVEL, not just 2ND FL. Two collinear stud walls overlapping on one
+  // level is wrong wherever it happens, and the garage below has the same
+  // shape of seam. Concrete is filtered out by `view` -- a foundation wall
+  // under a stud wall is the building working correctly.
+  const plan = (saved.walls || []).filter(wall => wall.view === 'plan');
+  const doubled = [];
+  plan.forEach((wall, i) => {
+    const a = line(wall);
+    if (!a) return;
+    plan.slice(i + 1).forEach(other => {
+      const b = line(other);
+      if (!b || b.id !== a.id) return;
+      const over = Math.min(a.hi, b.hi) - Math.max(a.lo, b.lo);
+      if (over > 0.01) doubled.push(`${a.id} overlapping ${over.toFixed(2)} ft`);
+    });
+  });
+  expect(doubled, 'two walls were raised along the same line').toEqual([]);
+
+  // AND THE CONTROL: the room DID raise walls up there, so the check above is
+  // measuring a room that exists rather than passing on an empty level.
+  const plain = await (async () => {
+    await open(page);
+    await order(page, 'bungalow', 'twoStorey-garage');
+    await saveOnNewPage(page);
+    return savedFile(page);
+  })();
+  const upperCount = file => (file.walls || [])
+    .filter(w => Number(w.levelId) === 5 && w.view === 'plan').length;
+  expect(upperCount(saved), 'the room added walls to 2ND FL')
+    .toBeGreaterThan(upperCount(plain));
+});
+
+test('the room over the garage gets its windows and its floor', async ({ page }) => {
+  await open(page);
+  await order(page, 'bungalow', 'twoStorey-over');
+  await saveOnNewPage(page);
+  const over = await savedFile(page);
+
+  await open(page);
+  await order(page, 'bungalow', 'twoStorey-garage');
+  await saveOnNewPage(page);
+  const without = await savedFile(page);
+
+  // THE DESIGN SAYS HOW MANY, and it is asked rather than typed in again: a
+  // spec carrying its own 3 would pass on a page that had stopped reading the
+  // module and grown a copy of the number.
+  const wanted = await page.evaluate(() =>
+    window.DraftPremadePlans.planFor('twoStorey-over').overGarageOpenings.length);
+  const upperGlazing = saved => (saved.fenestrations || [])
+    .filter(o => Number(o.levelId) === 5).length;
+  expect(upperGlazing(over) - upperGlazing(without),
+    'the room was glazed, by exactly what the design asks for').toBe(wanted);
+
+  // A FLOOR OF ITS OWN. The storey pass lays a deck the shape of the HOUSE,
+  // and the room hangs off the side of it -- so a room framed by that pass
+  // alone is a room standing on nothing.
+  const upperDecks = saved => (saved.floors || [])
+    .filter(f => Number(f.levelId) === 5 && f.structure === 'floor').length;
+  expect(upperDecks(without), 'the storey has its own deck').toBe(1);
+  expect(upperDecks(over), 'and the room has a second').toBe(2);
+
+  // EVERY RECORD THE PRESS WROTE SURVIVES THE RELOAD. drawing-format.js drops
+  // records it cannot place, and this page has no serializer between the push
+  // and the file -- so what it wrote and what a reload keeps must be the same.
+  const kept = await page.evaluate(async bucket => {
+    const file = await window.SharedFileStore.loadSharedFile(bucket);
+    const raw = JSON.parse(await file.text());
+    const F = window.DraftDrawingFormat;
+    const levelIds = new Set((raw.levels || []).map(level => Number(level.id)));
+    return { wrote: (raw.walls || []).length,
+      keeps: F.walls(raw.walls, levelIds, {}).length };
+  }, BUCKET);
+  expect(kept.keeps, 'nothing was written that the reload loses').toBe(kept.wrote);
+});
+
+test('the strip says the room went up, and says so when it cannot', async ({ page }) => {
+  // A PRESS THAT DROPS WHAT THE TILE PROMISES MUST SAY SO. The drafter is
+  // very likely not looking at 2ND FL when he presses -- the entry screen
+  // opens on FOUNDATION -- so an empty sheet that tells you where to look is
+  // the difference between a feature and a page that looks broken.
+  await open(page);
+  await order(page, 'bungalow', 'twoStorey-over');
+  // READ WITH ITS NEIGHBOUR, because 'room over' alone is a substring of the
+  // refusal below it -- "NO room over" contains it, so the loose assertion
+  // passed against a page that raised no room at all. The parts are joined
+  // with ', ', so the garage and the room adjacent is a sentence only the
+  // built case can produce.
+  await expect(page.locator('#strip-message'))
+    .toContainText('garage, room over,', { timeout: 4000 });
+  await expect(page.locator('#strip-message'),
+    'the built case must not read like the refusal')
+    .not.toContainText('NO room over');
+
+  // NOWHERE TO PUT IT. storeyLevels returns the levels the drawing HAS, so a
+  // room-over ordered into a drawing with one floor level has no storey above
+  // to sit on -- and a bone press is not permission to add one.
+  const oneFloor = {
+    version: 1,
+    levels: [
+      { id: 7, name: 'ROOF', elev: 0 },
+      { id: 3, name: 'MAIN FL', elev: 0 },
+      { id: 1, name: 'FOUNDATION', elev: -8 },
+    ],
+    activeLevelIdx: 1,
+    walls: [], lines: [], floors: [], roofs: [], fenestrations: [], dimensions: [],
+    outlines: [], shapes: [], surfaceOpenings: [], stairs: [], notes: [],
+    roomTags: [], columns: [], beams: [], boneyardOutlines: [], boneyardShelves: [],
+    groups: [], levelLocks: [], underlays: [],
+  };
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json',
+        { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f: oneFloor });
+  await page.goto('/MODEL.html');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await order(page, 'bungalow', 'twoStorey-over');
+  await expect(page.locator('#strip-message')).toContainText('NO room over', { timeout: 4000 });
+});

@@ -261,15 +261,41 @@ if (!window.DraftPremadePlans) {
     // starting there would hang a foot past the house's own front face.
     const back = houseFront;
     const front = back + OVER_GARAGE_LENGTH_FT;
-    return [pt(left, back), pt(right, back), pt(right, front), pt(left, front)];
+    // A CORNER AT THE HOUSE'S OWN, and it is the whole reason this loop has
+    // five points instead of four.
+    //
+    // The room is wider than the house is long here: its back run starts
+    // inside the house's front wall and carries on 4 ft past the house's
+    // right corner, because that is how far the garage sticks out. Left as
+    // ONE edge, that run is only PARTLY shared -- and edgeOnLoop tests whole
+    // edges, by design, so it would answer "not shared" and the room's back
+    // wall would be raised in full. Twenty feet of it would then stand in
+    // exactly the same place as the house's own upper front wall: doubled
+    // linework, a doubled stud count, and two walls to drag when the house
+    // moves. That is the wall Movie marked in green on the garage, one floor
+    // further up.
+    //
+    // Splitting the run at the house's corner makes the shared stretch an
+    // edge of its own, which edgeOnLoop then skips whole -- the same shape
+    // garageLoop has carried from the start, and the reason IT has a vertex
+    // at this exact point.
+    return [pt(left, back), pt(houseRight, back), pt(right, back),
+      pt(right, front), pt(left, front)];
   };
 
-  // Windows on three sides. NOT on the wall against the house -- that one is
-  // interior, and a window in it would look into the upper hall.
+  // Windows on three sides. NOT on either back edge -- the long one is
+  // interior, against the house, and a window in it would look into the upper
+  // hall; the 4 ft stub beside it is too short to take one clear of both
+  // corners.
+  //
+  // EDGES 2, 3 AND 4, not 1, 2 and 3: the corner above put an edge in front of
+  // them. These indices are the loop's, and the loop is the only thing that
+  // decides them -- which is why premade-plans-harness.js reads the edge each
+  // opening names and measures ITS length rather than trusting the number.
   const overGarageOpenings = () => [
-    opening(1, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),
-    opening(2, GARAGE_WIDTH_FT / 2, 4, 'window'),
-    opening(3, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),
+    opening(2, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),
+    opening(3, GARAGE_WIDTH_FT / 2, 4, 'window'),
+    opening(4, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),
   ];
 
   // ── 2 STOREY ─────────────────────────────────────────────────────────────
@@ -283,12 +309,21 @@ if (!window.DraftPremadePlans) {
   //
   // THE GARAGE STAYS SINGLE STOREY. Movie, same message: "make a single story
   // garage". The board's third 2-storey entry -- 2 STOREY + GARAGE + ROOM
-  // OVER -- is the one where the floor reaches over it, and that needs the
-  // OVER-GARAGE LEVEL (level-assembly.js's ROLE_BY_LEVEL_ID gives id 4 the
-  // `overGarage` role and a deeper joist, because a garage spans clear and
-  // 11 7/8" that draws perfectly over a bedroom will not cross a double bay).
-  // A drawing has no level 4 by default, so that entry is not served here yet
-  // rather than served with a floor on the wrong level.
+  // OVER -- is the one where the floor reaches over it.
+  //
+  // AND THE ROOM GOES ON 2ND FL, NOT ON THE OVER-GARAGE LEVEL. That level
+  // exists, it has id 4 and its own deeper joist, and it is the wrong one:
+  // Movie, 19 Sep, asked directly -- "no it will be the '2 storey', the 'over
+  // garage' layer is for bilevels when that would be a 'lower' 2nd floor",
+  // then "this one is even with the 2nd floor so will be considered 2nd
+  // floor". A half-level is for a room that sits half a storey off the floors
+  // around it. This room is FLUSH with the storey above, so it is that
+  // storey: more 2ND FL, on the level the house already has.
+  //
+  // WHICH IS WHY THIS ENTRY NEEDS NOTHING ADDED TO ANYBODY'S LEVEL STACK.
+  // It was unserved for a while on the belief that it wanted level 4, and a
+  // drawing has no level 4 by default -- so the tile built a house and a
+  // garage and no room, and said nothing about the missing one.
   const twoStorey = ({ garage = false, overGarage = false } = {}) => ({
     house: houseLoop(),
     houseOpenings: houseOpenings(),

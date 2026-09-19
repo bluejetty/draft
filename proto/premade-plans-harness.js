@@ -38,6 +38,17 @@ function load(mutate) {
   return window.DraftPremadePlans;
 }
 
+// THE GEOMETRY MODULE THE PAGE ITSELF USES, loaded once and never mutated:
+// every mutation here is to premade-plans.js, so this is the fixed ruler the
+// designs are measured against. `load` hands back only DraftPremadePlans, and
+// the checks below need edgeOnLoop -- the exact predicate MODEL.html raises
+// walls through -- rather than a second opinion about what "shared" means.
+const GEOM = (() => {
+  const w = {};
+  new Function('window', fs.readFileSync(GEO, 'utf8'))(w);
+  return w.DraftGeometry2D;
+})();
+
 const n = v => Number(v).toFixed(3);
 
 // The shoelace sign this app reads winding by, and build-house.js's
@@ -70,6 +81,30 @@ const lengths = points => edges(points).map(e => Number(e.len.toFixed(3)))
 // the garage is meant to sit against the house.
 const overlaps = (a, b) => a.minX < b.maxX && b.minX < a.maxX
   && a.minZ < b.maxZ && b.minZ < a.maxZ;
+
+// IS THIS POINT ON THAT LOOP? Asked through edgeOnLoop with the point given
+// as both ends, so it is the page's own predicate and the page's own epsilon
+// rather than a second definition of "touching" that could drift from it.
+const pointOn = (point, loop) => GEOM.edgeOnLoop(point, point, GEOM.loopSegments(loop));
+
+// WHICH EDGES LIE ON `loop` FOR PART OF THEIR LENGTH BUT NOT ALL OF IT.
+//
+// This is the shape of the doubled-wall bug, stated once. MODEL.html skips a
+// wall when edgeOnLoop says its edge is shared, and edgeOnLoop tests an edge
+// END TO END -- by design, because a wall is raised whole or not at all. So an
+// edge that runs along the house for twenty feet and then carries on past its
+// corner answers "not shared", and the whole thing goes up: twenty feet of it
+// standing in the same place as a house wall.
+//
+// SAMPLED BETWEEN THE ENDS, NEVER AT THEM. Two loops that merely meet at a
+// corner share that one point, and a corner is not a run -- testing the
+// endpoints would call every touching edge partly-shared and the check would
+// be noise.
+const partlyOn = (points, loop) => edges(points).filter(edge => {
+  const at = t => ({ x: edge.from.x + edge.dx * t, z: edge.from.z + edge.dz * t });
+  const on = [0.1, 0.3, 0.5, 0.7, 0.9].map(t => pointOn(at(t), loop));
+  return on.some(Boolean) && !on.every(Boolean);
+});
 
 const CHECKS = [];
 const check = (label, fn) => CHECKS.push({ label, fn });
@@ -396,6 +431,46 @@ check('three windows, none of them on the wall against the house',
   P => { const o = P.twoStorey({ garage: true, overGarage: true }).overGarageOpenings;
          return [`${o.length},${o.some(x => x.edge === 0)}`, '3,false']; });
 
+// ── AND THE WALL IT MUST NOT RAISE TWICE ──
+//
+// The room is wider than the piece of house it sits against: its back run
+// starts inside the house's front wall and carries on past the house's right
+// corner, because that is how far the garage sticks out. That run has to be
+// TWO edges -- the shared stretch and the rest -- or the skip in MODEL.html
+// cannot take it, and twenty feet of upper front wall gets built twice.
+//
+// THE CHECK IS THE GENERAL SHAPE, NOT THE VERTEX. Naming the corner would be
+// satisfied by a loop that happens to list that point and is wrong everywhere
+// else; "no edge is partly on the house" is the property the skip actually
+// needs, and it goes on being the right question if the design changes size.
+check('no edge of the room over the garage lies on the house for only part of itself',
+  P => { const plan = P.twoStorey({ garage: true, overGarage: true });
+         return [partlyOn(plan.overGarage, plan.house).length, 0]; });
+
+// AND IT IS SHARED AT ALL, which the check above does not say: a room floating
+// clear of the house has no partly-shared edge either, and would pass it.
+check('exactly one of its edges is shared with the house, and it is 20 ft of front wall',
+  P => { const plan = P.twoStorey({ garage: true, overGarage: true });
+         const segs = GEOM.loopSegments(plan.house);
+         const shared = edges(plan.overGarage)
+           .filter(e => GEOM.edgeOnLoop(e.from, e.to, segs));
+         return [`${shared.length},${shared.map(e => n(e.len)).join('')}`,
+           `1,${n(20)}`]; });
+
+// THE EDGE NUMBERS ARE THE LOOP'S, and splitting an edge renumbers everything
+// after it. Checked as a FIT rather than as a list of indices, because a list
+// would have to be rewritten by the same hand that broke it: a window whose
+// edge moved lands on a wall too short to hold it, and that is measurable.
+check('every window in the room fits the edge it names, clear of both corners',
+  P => { const plan = P.twoStorey({ garage: true, overGarage: true });
+         const es = edges(plan.overGarage);
+         const bad = plan.overGarageOpenings.filter(o => {
+           const edge = es[o.edge];
+           return !edge || o.offsetFt - o.widthFt / 2 < 0.5
+             || o.offsetFt + o.widthFt / 2 > edge.len - 0.5;
+         });
+         return [bad.length, 0]; });
+
 check('no garage, no room over it',
   P => [P.twoStorey({ overGarage: true }).overGarage, null]);
 
@@ -416,8 +491,24 @@ const MUTATIONS = [
       '    const front = houseFront + GARAGE_DEPTH_FT + GARAGE_TIE_FT;\n'
       + '    const back = front - OVER_GARAGE_LENGTH_FT;')],
   ['the room over is narrower than the garage it sits on',
-    s2 => s2.replace('    return [pt(left, back), pt(right, back), pt(right, front), pt(left, front)];',
-      '    return [pt(left + 2, back), pt(right - 2, back), pt(right - 2, front), pt(left + 2, front)];')],
+    s2 => s2.replace('    return [pt(left, back), pt(houseRight, back), pt(right, back),\n'
+      + '      pt(right, front), pt(left, front)];',
+      '    return [pt(left + 2, back), pt(houseRight, back), pt(right - 2, back),\n'
+      + '      pt(right - 2, front), pt(left + 2, front)];')],
+  // THE CORNER GOES BACK, and the loop is a rectangle again -- which is what
+  // it was, and what let the skip in MODEL.html miss the shared stretch.
+  ['the room-s back wall is one run again, partly on the house and raised whole',
+    s2 => s2.replace('    return [pt(left, back), pt(houseRight, back), pt(right, back),\n'
+      + '      pt(right, front), pt(left, front)];',
+      '    return [pt(left, back), pt(right, back), pt(right, front), pt(left, front)];')],
+  // The loop keeps its corner; the WINDOWS forget it moved them along one.
+  ['the room-s windows keep their old edge numbers after the split',
+    s2 => s2.replace(`    opening(2, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),
+    opening(3, GARAGE_WIDTH_FT / 2, 4, 'window'),
+    opening(4, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),`,
+    `    opening(1, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),
+    opening(2, GARAGE_WIDTH_FT / 2, 4, 'window'),
+    opening(3, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),`)],
   ['a 2 STOREY is bigger than the 1 STOREY beside it on the board',
     s2 => s2.replace('  const twoStorey = ({ garage = false, overGarage = false } = {}) => ({\n    house: houseLoop(),',
       '  const twoStorey = ({ garage = false, overGarage = false } = {}) => ({\n'
@@ -433,7 +524,7 @@ const MUTATIONS = [
     // Front: three across the whole width, since nothing is in front of it.
     opening(2, 8, 4, 'door'),`)],
   ['the room over gets a window in the wall against the house',
-    s2 => s2.replace('    opening(1, OVER_GARAGE_LENGTH_FT / 2, 4, ',
+    s2 => s2.replace('    opening(2, OVER_GARAGE_LENGTH_FT / 2, 4, ',
       '    opening(0, OVER_GARAGE_LENGTH_FT / 2, 4, ')],
   ['the garage hangs off the wrong side of the house',
     s => s.replace('const right = houseRight + GARAGE_PAST_FT;',
