@@ -1974,6 +1974,12 @@
      a house raised here and a house raised there cannot disagree about which
      side of the traced line the wall body sits on. -->
 <script src="./build-house.js"></script>
+<!-- AUTO DIMS: the exterior dimension strings. Extracted pure out of the old
+     page -- plain data in, segments out, no THREE and no DOM -- and this page
+     is its second caller. The computation is not ported anywhere: both pages
+     call the same function with the same arguments, and the two tuning
+     numbers live in it rather than in either page. -->
+<script src="./auto-dims.js"></script>
 <!-- The designs the drive-thru hands over. Movie, 18 Sep: "i'd just like to
      offer them premade designs in there at the beginning". A DESIGN, not a
      generator -- starter-shape.js invents a house, this one is the building
@@ -9477,6 +9483,119 @@
     return { list: drawing.roofs, item: roof };
   };
 
+  // ── AUTO DIMS ────────────────────────────────────────────────────────────
+  //
+  // Exterior dimension strings on all four sides of a plan. Per side the
+  // closest string dims corner to corner through the fenestration centres
+  // facing that side, the next dims every footprint jog, and the outermost is
+  // the overall.
+  //
+  // THE COMPUTATION IS NOT PORTED, BECAUSE IT WAS ALREADY SHARED. auto-dims.js
+  // was extracted pure out of the old page -- plain data in, segments out, no
+  // THREE and no DOM -- and had exactly one caller. This is the second, and it
+  // passes the same arguments to the same function. Everything below is the
+  // stateful shell the module deliberately does not own: filtering the
+  // collections, resolving opening centres, and turning segments into records.
+  //
+  // AN INTEGER ID, WHICH IS NOT THIS PAGE'S USUAL KIND. Walls and outlines
+  // wear `wall-3`; drawing-format.js:dimensions requires `Number.isInteger`
+  // and refuses anything else, so a dimension carrying this page's ordinary id
+  // would be dropped on the next load -- present on screen, gone after a
+  // reload. The counter is the old page's `nextDimensionId`, which survives
+  // here on `...parsed`, and it is recovered the way the old LOADER recovers
+  // it rather than trusted: the max of the stored counter and every id already
+  // in the drawing. A counter alone is wrong the moment a file arrives without
+  // one, and a collision writes a dimension that silently replaces another.
+  const newDimensionId = () => {
+    const used = (drawing?.dimensions || [])
+      .map(dimension => Number(dimension.id))
+      .filter(Number.isInteger);
+    const stored = Number.isInteger(drawing?.nextDimensionId) ? drawing.nextDimensionId : 1;
+    const next = Math.max(1, stored, ...used.map(id => id + 1));
+    drawing.nextDimensionId = next + 1;
+    return next;
+  };
+
+  // WHAT THE STRINGS ARE DRAWN AROUND, for one level and one layer view.
+  // Returns the dimension RECORDS it placed, or -1 when the level holds
+  // nothing with enough size to string -- the old page's own signal, and the
+  // reason a caller can tell "nothing to dimension" from "dimensioned
+  // nothing". The records rather than a count, because the build press has to
+  // take them back out again on one Ctrl+Z.
+  const placeAutoDims = (levelId, view) => {
+    if (!drawing) return -1;
+    const G = window.DraftGeometry2D;
+    const AD = window.DraftAutoDims;
+    // The ELECTRIC sheet dims the walls it is drawn over, which live on the
+    // plan -- MODEL.dc.html's own first line of _placeAutoDims.
+    const wallView = view === 'e-power' ? 'plan' : view;
+    const walls = (drawing.walls || []).filter(wall =>
+      Number(wall.levelId) === levelId && (wall.view || 'plan') === wallView);
+    const outlines = (drawing.outlines || []).filter(outline =>
+      Number(outline.levelId) === levelId && (outline.points || []).length >= 3);
+    // ROOFS ONLY ON THE ROOF LEVEL, where the module strings each footprint
+    // for the truss designer instead of stringing the walls.
+    const roofs = levelId === ROOF_LEVEL_ID
+      ? (drawing.roofs || []).filter(roof =>
+        Number(roof.levelId) === levelId && (roof.points || []).length >= 3)
+      : [];
+    // THE OPENING CENTRES, resolved through the same geometry the painter
+    // uses. openingsOn already refuses an opening its wall cannot carry, so
+    // this list holds nothing the drawing does not really have.
+    //
+    // AND THE HOST WALL COMES WITH EACH ONE, because the module needs it: it
+    // reads the wall's own direction to decide which side of which footprint
+    // the opening belongs to, and hands a wall shared by two footprints to the
+    // smaller group so a garage door dims with the garage. Looked up by id
+    // from the SAME filtered list, so an opening whose wall is not on this
+    // level and view drops out rather than dragging a foreign wall in.
+    const wallById = new Map(walls.map(wall => [String(wall.id), wall]));
+    const openings = openingsOn(walls)
+      .map(entry => ({
+        center: entry.geometry && entry.geometry.center,
+        wall: wallById.get(String(entry.opening.wallId)),
+      }))
+      .filter(entry => entry.center && entry.wall);
+    const segments = AD.computeAutoDimStrings({
+      walls, outlines, roofs, openings,
+      offsetOutline: (pts, dist) => G.offsetOutline(pts, dist),
+      firstOffset: autoDimFirstOffsetFt(),
+      jogMergeFt: AD.JOG_MERGE_FT,
+      stringSpacingFt: AD.STRING_SPACING_FT,
+    });
+    if (!segments) return -1;
+    if (!Array.isArray(drawing.dimensions)) drawing.dimensions = [];
+    // RE-RUNNING REPLACES THIS LEVEL AND VIEW'S OWN AUTO STRINGS and nothing
+    // else. `auto: true` is what separates a generated string from one a
+    // drafter drew, and a hand-drawn dimension must survive a rebuild --
+    // which is why commitWall's note says this page never invents that key.
+    const made = [];
+    drawing.dimensions = (drawing.dimensions || []).filter(dimension =>
+      !(dimension.auto === true && Number(dimension.levelId) === levelId
+        && dimension.view === view));
+    segments.forEach(segment => {
+      // THE srcIds ARE DROPPED, AND THAT IS A REAL LOSS RATHER THAN A TIDY-UP.
+      // The module returns srcStartId/srcEndId so the old page can link each
+      // end to a master corner, and its dims then FOLLOW when that corner is
+      // dragged. This page writes no srcIds on anything -- not outlines, not
+      // roofs -- so there is nothing here to link to, and a dimension that
+      // claimed a link it does not have would be worse than one that admits
+      // it has none. Re-run after an edit, which is what the old page's own
+      // message tells a drafter to do.
+      const dimension = {
+        id: newDimensionId(),
+        start: { x: segment.start.x, y: 0, z: segment.start.z },
+        end: { x: segment.end.x, y: 0, z: segment.end.z },
+        levelId,
+        view,
+        auto: true,
+      };
+      drawing.dimensions.push(dimension);
+      made.push(dimension);
+    });
+    return made;
+  };
+
   const buildPremadePlan = order => {
     if (!drawing) return null;
     const plan = window.DraftPremadePlans.planFor(order?.entry?.id);
@@ -9660,6 +9779,44 @@
     if (built.length) {
       extra.push(...built);
       parts.push(built.length > 1 ? `${built.length} roofs` : 'roof');
+    }
+
+    // ── AND THE DIMENSIONS, ON EVERY LEVEL THE PRESS TOUCHED ─────────────
+    //
+    // MODEL.dc.html's BUILD HOUSE calls _placeAutoDims for every level it
+    // built on, and so does this: a house that arrives undimensioned is a
+    // drawing somebody still has to measure by hand, which is the whole thing
+    // AUTO DIMS exists to stop.
+    //
+    // EVERY LEVEL THAT GOT GEOMETRY, gathered from the records rather than
+    // from a list written out here -- the storeys, the foundation under them
+    // and the roof over, each already knows which level it went to. Written
+    // as a list, this would have to be edited again by the same hand that
+    // added the next body, and the one it forgot would simply arrive without
+    // dimensions and say nothing about it.
+    //
+    // THE HOME VIEW OF EACH, not the active one: a dimension is filed against
+    // a layer view, and a string filed against the view the drafter happens
+    // to be standing in would be invisible on the plan it measures.
+    const dimensioned = [];
+    const touched = new Map();
+    const noteLevel = (id, view) => {
+      if (id == null) return;
+      const key = `${id}:${view}`;
+      if (!touched.has(key)) touched.set(key, { levelId: Number(id), view });
+    };
+    storeys.forEach(level => noteLevel(level.id, 'plan'));
+    if (under.items.length) noteLevel(FOUNDATION_LEVEL_ID, 'foundation');
+    if (built.length) noteLevel(ROOF_LEVEL_ID, 'plan');
+    touched.forEach(({ levelId: id, view }) => {
+      const placed = placeAutoDims(id, view);
+      // -1 IS A REAL ANSWER: the level holds nothing big enough to string.
+      // It is not an error and it is not a count of zero.
+      if (Array.isArray(placed)) dimensioned.push(...placed);
+    });
+    if (dimensioned.length) {
+      extra.push(...dimensioned.map(item => ({ list: drawing.dimensions, item })));
+      parts.push(`${dimensioned.length} dims`);
     }
 
     undoStack.length = mark;

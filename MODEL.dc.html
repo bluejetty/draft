@@ -2284,8 +2284,10 @@ const NODE_GRAB_HOLD_MS = 100;
 // Auto dims: exterior strings per side — openings closest, corner jogs one
 // string out, overall outside. The first string sits at an adjustable offset
 // from the plan and every further string steps out by the string spacing.
-const AUTO_DIM_STRING_SPACING_FT = 1.5;
-const AUTO_DIM_JOG_MERGE_FT = 2 / 12; // corners closer than this string as one coordinate
+// The auto-dim tuning lives in auto-dims.js, beside the computation it tunes:
+// each of these had exactly one use -- the call in _placeAutoDims -- and a
+// number kept in a page rather than in its module is a copy waiting for a
+// second page to disagree with it.
 const AUTO_DIM_FIRST_OFFSETS_FT = [
   { value: 1.5, label: '1\'-6"' },
   { value: 3, label: '3\'-0"' },
@@ -19395,8 +19397,8 @@ class Component extends DCLogic {
       walls, outlines, roofs, openings,
       offsetOutline: (pts, dist) => this._offsetOutline(pts, dist),
       firstOffset: this._autoDimFirstOffsetFt(),
-      jogMergeFt: AUTO_DIM_JOG_MERGE_FT,
-      stringSpacingFt: AUTO_DIM_STRING_SPACING_FT,
+      jogMergeFt: window.DraftAutoDims.JOG_MERGE_FT,
+      stringSpacingFt: window.DraftAutoDims.STRING_SPACING_FT,
     });
     if (!segments) return -1;
     const elev = this.state.levels.find(level => level.id === levelId)?.elev ?? 0;
