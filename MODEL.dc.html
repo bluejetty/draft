@@ -2272,7 +2272,9 @@ const {
   ROOF_FASCIA_IN,
 } = window.DraftCutView.STANDARDS;
 // Garage slab slopes 1/8" per foot toward the doors, over the grade beam.
-const GARAGE_SLAB_SLOPE_IN_PER_FT = 1 / 8;
+// The garage slab's fall per foot, now in cut-view.js STANDARDS beside the
+// same slab's thickness -- project-page.js:553 asked for that home by name.
+const { GARAGE_SLAB_SLOPE_IN_PER_FT } = window.DraftCutView.STANDARDS;
 // At 45° the thickened-edge taper runs (edge − field) inches in plan.
 const GARAGE_EDGE_TAPER_RUN_IN = GARAGE_EDGE_DEPTH_IN - GARAGE_SLAB_THICKNESS_IN;
 // A press on an existing node only turns into a GRAB after this hold; a

@@ -106,7 +106,12 @@ const span = (points, axis) => {
 // total and both had to change when the foundation arrived; keyed counts say
 // what changed instead of just how much.
 const wallsBy = saved => (saved?.walls || []).reduce((tally, wall) => {
-  const key = `L${wall.levelId}/${wall.view}/${wall.wallType}`;
+  // THE BODY IS PART OF THE KEY, because a house's foundation wall and a
+  // garage's grade beam are both `concrete_8` on the same set and are not the
+  // same thing at all -- one stands on a footing, the other hangs off grade.
+  // Without it this tally said "8 concrete walls" and could not say whose.
+  const key = `L${wall.levelId}/${wall.view}/${wall.wallType}`
+    + (wall.body ? `/${wall.body}` : '');
   tally[key] = (tally[key] || 0) + 1;
   return tally;
 }, {});
@@ -185,9 +190,18 @@ test('1 STOREY + GARAGE raises both bodies, and the garage is an ATTACHED one',
     // garage walls should link into the house (look at how the DC version did
     // it)". An attached garage does not raise the edges it shares with the
     // house; the next test is the one that says which, and why.
-    expect(wallsBy(saved), 'the house and the garage in studs, the house-s '
-      + 'foundation in concrete, and the garage on the four edges it owns')
-      .toEqual({ 'L3/plan/stud_2x6': 8, 'L1/foundation/concrete_8': 4 });
+    // FOUR BODIES OF WALL, and each is a different thing. The garage is
+    // framed AND has its own concrete -- a grade beam by default, hanging off
+    // grade -- which is not the house's foundation and must not be counted
+    // with it.
+    expect(wallsBy(saved), 'house studs, garage studs, house foundation, '
+      + 'garage grade beam -- four on each of its own edges')
+      .toEqual({
+        'L3/plan/stud_2x6': 4,
+        'L3/plan/stud_2x6/garage': 4,
+        'L1/foundation/concrete_8': 4,
+        'L1/foundation/concrete_8/garage': 4,
+      });
   });
 
 // THE TWO EDGES THE GARAGE DOES NOT OWN, and what happens to the doors when
@@ -237,7 +251,14 @@ test('the attached garage raises no wall the house already has',
       Math.hypot(corner.x - pt.x, corner.z - pt.z) < 0.01);
     const garageWalls = (saved.walls || [])
       .filter(wall => garageCorner(wall.start) && garageCorner(wall.end));
-    expect(garageWalls.length, 'four garage walls, not six').toBe(4);
+    // FOUR FRAMED AND FOUR IN CONCRETE, not six of either: the garage owns
+    // four of its six edges, and the rule applies to its grade beam exactly
+    // as it does to its studs -- the beam is raised through the same
+    // raiseLoop, measured against the same house loop.
+    expect(garageWalls.filter(w => w.view === 'plan').length,
+      'four framed garage walls, not six').toBe(4);
+    expect(garageWalls.filter(w => w.view === 'foundation').length,
+      'and four of concrete under them, not six').toBe(4);
     for (const wall of garageWalls) {
       expect(sharesWithHouse(wall),
         `the garage wall ${wall.id} stands where no house wall does`).toBe(false);

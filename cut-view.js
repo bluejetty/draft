@@ -32,6 +32,15 @@ if (!window.DraftCutView) {
   // Physical drafting standards, shared with the Model Space via STANDARDS.
   // Garage slab: 4" pour over the grade beam at the doors.
   const GARAGE_SLAB_THICKNESS_IN = 4;
+  // HOW FAR A GARAGE SLAB FALLS, per foot of depth, toward the door. Movie,
+  // 4 Sep: "slab 4\" conc slope 1/8\" down from back to the garage door
+  // opening (front)". It sits beside the thickness because it is the same
+  // slab's other number, and project-page.js:553 asked for exactly this:
+  // "it belongs in cut-view.js STANDARDS with the beam and the sill -- but
+  // PROJECT.html does not load cut-view yet, which is the deferred tidy-up".
+  // Two of the three copies can stop being copies now; that page's load order
+  // is the only thing still holding the third.
+  const GARAGE_SLAB_SLOPE_IN_PER_FT = 1 / 8;
   // Attached-garage grade beam stack: concrete + 1.5" sill plate, hung with
   // the top of concrete 1'-0" above grade — level with the top of the house
   // foundation wall at the default grade.
@@ -1857,6 +1866,7 @@ if (!window.DraftCutView) {
   window.DraftCutView = Object.freeze({
     STANDARDS: Object.freeze({
       GARAGE_SLAB_THICKNESS_IN,
+      GARAGE_SLAB_SLOPE_IN_PER_FT,
       GARAGE_BEAM_PLATE_IN,
     GARAGE_BEAM_CONCRETE_IN,
       GRADE_BELOW_FOUNDATION_TOP_FT,

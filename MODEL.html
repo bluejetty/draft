@@ -3529,6 +3529,44 @@
   const assemblyFor = id => window.DraftLevelAssembly
     .levelAssemblyFor(drawing?.levelAssemblies, id);
 
+  // A GARAGE'S MASTER, if it has one: a level COPY points at one by masterId
+  // and a master IS a master because it carries its own shelfId. The old page
+  // reads the same two ways round (_garageMaster).
+  //
+  // THESE TWO CAME OUT OF cutEnv WITH garageFoundationOf, which calls both.
+  // Left inside, the lifted function referenced names that only existed while
+  // the env was being built -- and the page threw `garageMaster is not
+  // defined` on every paint after a garage went up. Found by a probe watching
+  // for page errors, not by a spec: the throw was inside a React render, so
+  // the canvas kept painting and only UNDO looked broken.
+  const garageMaster = garage => {
+    if (garage?.shelfId != null) return garage;
+    return (drawing?.boneyardOutlines || [])
+      .find(master => master.id === garage?.masterId) || null;
+  };
+  const garageDetached = garage =>
+    garage?.detached === true || garageMaster(garage)?.detached === true;
+
+  // WHICH FOUNDATION A GARAGE HAS, ported from _garageFoundation: the outline
+  // answers first, then its master, then the section table's row for this
+  // garage's kind, and a gradebeam when nothing has said.
+  //
+  // IT LIVES OUT HERE because two callers need it and they must not differ.
+  // It was written inside cutEnv, where it answered "what concrete should I
+  // DRAW"; the build asks "what concrete should I MAKE", and a garage drawn
+  // with a frost wall and built with a grade beam is a drawing that disagrees
+  // with itself.
+  const garageFoundationOf = garage => {
+    const stored = garage?.foundation || garageMaster(garage)?.foundation;
+    if (stored === 'thickened' || stored === 'frostwall') return stored;
+    if (stored === 'gradebeam') return 'gradebeam';
+    const row = garageDetached(garage) ? 'detachedGarage' : 'attachedGarage';
+    const cell = drawing?.sectionTable?.rows?.[row]?.garageFoundation;
+    if (cell === 'frostwall') return 'frostwall';
+    if (cell === 'thickened' && row === 'detachedGarage') return 'thickened';
+    return 'gradebeam';
+  };
+
   // ── the cut-view env ────────────────────────────────────────────────────────
   // SPEC-model-html-cut-views.md. cut-view.js's drawCutView reads its world
   // through EIGHTEEN accessors and nothing else — there is no destructuring of
@@ -3555,16 +3593,6 @@
     const ftIn = feet => F.formatArchitecturalInches(feet * 12);
 
     // A garage outline's master lives on the boneyard shelf; an outline that
-    // IS a master carries its own shelfId. The old page reads the same two
-    // ways round (_garageMaster).
-    const garageMaster = garage => {
-      if (garage?.shelfId != null) return garage;
-      return (drawing?.boneyardOutlines || [])
-        .find(master => master.id === garage?.masterId) || null;
-    };
-    const garageDetached = garage =>
-      garage?.detached === true || garageMaster(garage)?.detached === true;
-
     return {
       floorLevels: () => LV.floorLevels(drawing?.levels),
       levelAssembly: levelId => assemblyFor(levelId),
@@ -3610,18 +3638,11 @@
       fenestrations: () => drawing?.fenestrations || [],
       garageOutlines: levelId => (drawing?.outlines || [])
         .filter(outline => outline.levelId === levelId && outline.garage),
-      // Ported from _garageFoundation: the outline answers first, then the
-      // master, then the section table's row for this garage's kind.
-      garageFoundation: garage => {
-        const stored = garage?.foundation || garageMaster(garage)?.foundation;
-        if (stored === 'thickened' || stored === 'frostwall') return stored;
-        if (stored === 'gradebeam') return 'gradebeam';
-        const row = garageDetached(garage) ? 'detachedGarage' : 'attachedGarage';
-        const cell = drawing?.sectionTable?.rows?.[row]?.garageFoundation;
-        if (cell === 'frostwall') return 'frostwall';
-        if (cell === 'thickened' && row === 'detachedGarage') return 'thickened';
-        return 'gradebeam';
-      },
+      // WHICH FOUNDATION A GARAGE HAS. Lifted OUT of this env (see
+      // garageFoundationOf above) the day the build needed it too: the
+      // section painter asks what kind of concrete to draw and the builder
+      // asks what kind of concrete to make, and those must be one question.
+      garageFoundation: garageFoundationOf,
       buildType: () => drawing?.buildType ?? null,
       // BOTH ENDS AND THE MIDDLE, as the old page asks it: an edge lying along
       // an outline needs all three on the boundary, or a chord across a
@@ -7274,7 +7295,8 @@
   // caller passed the active level in -- a split waiting for the first caller
   // that did not, which is this rung.
   const commitWall = (startPt, endPt,
-    { bone = true, refLine, levelId: onLevel, view: onView, wallType } = {}) => {
+    { bone = true, refLine, levelId: onLevel, view: onView, wallType,
+      baseHeight, topHeight, body } = {}) => {
     const active = onActiveLevel();
     const levelId = onLevel ?? active.levelId;
     const viewId = onView ?? active.viewId;
@@ -7286,8 +7308,12 @@
       levelId,
       view: homeView,
       wallType: wallType || contextWallType(viewId),
-      baseHeight: wallSetting('wallBaseHeight', 0),
-      topHeight: wallSetting('wallTopHeight', 8),
+      // A BUILT WALL KNOWS ITS OWN HEIGHTS. The drafter's stored defaults are
+      // right for a wall he DRAWS and meaningless for a grade beam, which is
+      // a band of concrete hanging off grade -- its base and top are derived
+      // from the foundation datum, not from a setting.
+      baseHeight: baseHeight ?? wallSetting('wallBaseHeight', 0),
+      topHeight: topHeight ?? wallSetting('wallTopHeight', 8),
       // 'center', not 'centre'. drawing-format.js:400 folds the British
       // spelling on LOAD, but this page has no serializer — a record written
       // with 'centre' reaches the file unvalidated and only the next load
@@ -7295,6 +7321,10 @@
       refLine: (raw => (raw === 'centre' ? 'center' : raw))(
         refLine || wallSetting('wallRefLine', 'left')),
     };
+    // WHOSE WALL IT IS. building-bodies.js and the section painters tell a
+    // garage's concrete from the house's by `body`, and a grade beam filed as
+    // house concrete is drawn at the house's own height.
+    if (body) wall.body = body;
     drawing.walls.push(wall);
     undoStack.push({ kind: 'add', wall });
     if (bone) extendToyBone(startPt, endPt, levelId);
@@ -7422,7 +7452,16 @@
   // state any gesture can otherwise produce.
   const buildOrderedGarage = order => {
     if (!drawing || !order?.entry?.needsSize || !order.size) return null;
-    const { levelId } = onActiveLevel();
+    // THE LOWEST FLOOR LEVEL, NOT THE ACTIVE ONE -- the same fix the premade
+    // house needed, and the other half of what Movie reported. A garage
+    // ordered while looking at FOUNDATION had its STUD walls committed
+    // through the active view, so contextWallType handed back concrete_8 and
+    // the drafter got a garage framed in eight inches of concrete on the
+    // foundation set. MODEL.dc.html's _buildGarageWalls uses
+    // `_floorLevels()[0]` for exactly this reason.
+    const storey = lowestFloorLevel();
+    if (!storey) return null;
+    const levelId = storey.id;
     const corners = window.DraftGarageSite.plotFor(drawing, levelId, order.size);
     if (!corners) return null;
     drawing.outlines = drawing.outlines || [];
@@ -7444,13 +7483,21 @@
     // one below. Left in, the first Ctrl+Z would take the whole garage and
     // the next four would each hunt a wall that is already gone.
     const mark = undoStack.length;
+    // STUDS ON THE STOREY, said explicitly rather than inherited: `plan` is
+    // where a garage's framed walls live whatever set the drafter is on.
     const walls = corners.map((corner, index) =>
-      commitWall(corner, corners[(index + 1) % corners.length], { bone: false }));
+      commitWall(corner, corners[(index + 1) % corners.length],
+        { bone: false, levelId, view: 'plan', body: 'garage' }));
+    // AND ITS CONCRETE. Movie ordered a "detached garage 25x25 with frost
+    // wall" and got four stud walls: the tile asked him which foundation and
+    // then threw the answer away, because nothing on this page read it.
+    const concrete = raiseGarageConcrete(corners, outline);
     undoStack.length = mark;
     // `outlines` PLURAL, because a premade bungalow raises two bodies on one
     // press and one press is one undo. The garage passes its single loop as a
     // list of one rather than the branch learning two shapes.
-    undoStack.push({ kind: 'built', walls, outlines: [outline], list: drawing.outlines });
+    undoStack.push({ kind: 'built', walls: walls.concat(concrete.walls),
+      outlines: [outline], list: drawing.outlines, items: concrete.items });
     markDirty();
     paint();
     return outline;
@@ -9006,7 +9053,8 @@
   // does not spend the detached garage's slot.
   const raiseLoop = (points, levelId,
     { garage = false, openings = [], against = null,
-      viewId = 'plan', wallType = null, withOutline = true } = {}) => {
+      viewId = 'plan', wallType = null, withOutline = true,
+      baseHeight, topHeight, body } = {}) => {
     const BH = window.DraftBuildHouse;
     const G = window.DraftGeometry2D;
     const outline = {
@@ -9056,7 +9104,7 @@
     // left to the active one. See commitWall's own note: this function took a
     // levelId, put it on the outline, and let the walls file themselves
     // wherever the drafter happened to be standing.
-    const on = { levelId, view: viewId, wallType };
+    const on = { levelId, view: viewId, wallType, baseHeight, topHeight, body };
     // BY EDGE NUMBER, not by position. The openings below are keyed to the
     // plan's edges, and both the skip above and houseWallRuns' own degenerate
     // skip take runs OUT of the list -- so a wall's place in an array stopped
@@ -9220,6 +9268,120 @@
     return made;
   };
 
+  // ── THE GARAGE'S OWN CONCRETE ────────────────────────────────────────────
+  //
+  // Movie ordered a "detached garage 25x25 with frost wall" and got four stud
+  // walls. The FROST WALL was recorded on the outline and read by nothing,
+  // because the thing that reads it -- MODEL.dc.html's _buildGarageGradeBeam
+  // -- had never been ported. So the tile asked him a question and then threw
+  // the answer away.
+  //
+  // THREE FOUNDATIONS, THREE DIFFERENT BUILDINGS, and the difference is not
+  // cosmetic:
+  //
+  //   FROST WALL     concrete standing on a strip footing at the house's
+  //                  footing depth -- so it gets footings, and its base is 0.
+  //   GRADE BEAM     a band of concrete HANGING off grade, no footing under
+  //                  it at all. Its base is its own top less the pour.
+  //   THICKENED EDGE no beam and no footing: the slab's own perimeter IS the
+  //                  footing, which is what `thickenedEdge` on the slab says.
+  //
+  // Reading `foundation` and building the same thing for all three would be
+  // worse than building nothing, because the drawing would then state a
+  // foundation it does not have.
+  const raiseGarageConcrete = (loop, garage, { against = null } = {}) => {
+    const made = { walls: [], items: [] };
+    const levelId = FOUNDATION_LEVEL_ID;
+    if (!levelPresent(levelId)) return made;
+    const S = window.DraftCutView.STANDARDS;
+    const kind = garageFoundationOf(garage);
+    const detached = garage?.detached === true;
+    const houseTop = assemblyFor(levelId).wallHeightFt;
+    const grade = houseTop - S.GRADE_BELOW_FOUNDATION_TOP_FT;
+
+    // THE TOP OF THE CONCRETE, per kind. A detached garage sits on its own
+    // lot and answers to grade; an attached one is set down from the house so
+    // the two sills relate -- Movie, 4 Sep, "sill to sill".
+    //
+    // AND THE RULE EXISTS TWICE IN THIS REPO, which is worth saying rather
+    // than quietly picking a winner. cut-view.js's frostWallTop DRAWS it and
+    // MODEL.dc.html's _garageFrostWallTopFt BUILDS it, and they differ by one
+    // clause: the builder honours a typed zone offset
+    // (zoneHeights.zones.attachedGarage.offsetFt) that the painter knows
+    // nothing about. This page has no typed offsets, so both readings agree
+    // here -- and reconciling them is a change to the OLD page's behaviour,
+    // which is not this rung's to make.
+    const frostTop = detached
+      ? grade + S.DETACHED_BEAM_ABOVE_GRADE_IN / 12
+      : houseTop - S.GARAGE_SILL_BELOW_HOUSE_FT;
+    const beamTop = detached ? grade + S.DETACHED_BEAM_ABOVE_GRADE_IN / 12 : houseTop;
+
+    if (kind !== 'thickened') {
+      const topHeight = kind === 'frostwall' ? frostTop : beamTop;
+      // A FROST WALL STANDS, A GRADE BEAM HANGS. The one number that says so.
+      const baseHeight = kind === 'frostwall' ? 0
+        : detached ? topHeight - S.GARAGE_BEAM_CONCRETE_IN / 12 : 0;
+      const beam = raiseLoop(loop, levelId, {
+        viewId: 'foundation',
+        wallType: 'concrete_8',
+        withOutline: false,
+        against,
+        baseHeight,
+        topHeight,
+        body: 'garage',
+      });
+      made.walls.push(...beam.walls);
+    }
+
+    // THE SLAB. Four inches, and it FALLS toward the door unless its edge is
+    // the footing -- Movie, 4 Sep: "slab 4\" conc slope 1/8\" down from back
+    // to the garage door opening (front)".
+    drawing.floors = drawing.floors || [];
+    const slab = {
+      ...floorRecord(loop, levelId, 'foundation', { garage: true }),
+      slopeInPerFt: kind === 'thickened' ? 0 : S.GARAGE_SLAB_SLOPE_IN_PER_FT,
+      thickness: S.GARAGE_SLAB_THICKNESS_IN / 12,
+      thickenedEdge: kind === 'thickened',
+    };
+    drawing.floors.push(slab);
+    made.items.push({ list: drawing.floors, item: slab });
+
+    // THE FOOTINGS, UNDER A FROST WALL ONLY. A grade beam has none by
+    // definition and a thickened edge is its own, so writing rings for either
+    // would draw concrete that is not there.
+    if (kind === 'frostwall') {
+      const WT = window.DraftWallTypes;
+      const wallFt = (WT.WALL_TYPES.find(t => t.id === 'concrete_8')?.totalIn || 8) / 12;
+      const projFt = Math.max(0, (assemblyFor(levelId).footingWidthIn / 12) - wallFt) / 2;
+      const shared = against ? window.DraftGeometry2D.loopSegments(against) : null;
+      const rings = window.DraftBuildHouse.footingRings(
+        loop.map(pt => ({ x: pt.x, z: pt.z })), wallFt, projFt);
+      drawing.lines = drawing.lines || [];
+      rings.forEach(ring => ring.forEach((point, index) => {
+        const next = ring[(index + 1) % ring.length];
+        if (Math.hypot(next.x - point.x, next.z - point.z) < 0.01) return;
+        // THE SHARED EDGES GET NO FOOTING EITHER, tested on the SOURCE loop
+        // rather than the offset ring -- the ring has been moved off the
+        // house, so asking whether IT lies on the house would answer no for
+        // every leg. The old page tests `polygon[index]` for the same reason.
+        const a = loop[index], b = loop[(index + 1) % loop.length];
+        if (shared && window.DraftGeometry2D.edgeOnLoop(a, b, shared)) return;
+        const line = {
+          id: newDrawingItemId('line'),
+          start: poolVertex({ x: point.x, z: point.z }, levelId, 'foundation'),
+          end: poolVertex({ x: next.x, z: next.z }, levelId, 'foundation'),
+          levelId,
+          view: 'foundation',
+          layer: 'S-FOOTING',
+        };
+        drawing.lines.push(line);
+        made.items.push({ list: drawing.lines, item: line });
+      }));
+    }
+    made.kind = kind;
+    return made;
+  };
+
   // THE ROOF OVER IT, cut from the house loop offset by the overhang and laid
   // on the ROOF level. Every edge starts an EAVE, which is _buildHouseRoof's
   // own default -- the drafter flips the gables with the ROOF tool, and this
@@ -9272,8 +9434,15 @@
       // right and front lines), so the body it shares edges with is known
       // here and searching the drawing for it would be a second, weaker
       // answer to a question this function already holds.
+      // `garage` AND `body` ARE TWO DIFFERENT FLAGS and both are needed.
+      // `garage: true` marks the OUTLINE as a garage footprint; `body` marks
+      // each WALL as the garage's, which is how building-bodies.js and the
+      // section painters tell its framing from the house's. The ordered
+      // detached garage carried body from the start and this one did not --
+      // a split the wall tally found the moment it began counting by body.
       raised.push(raiseLoop(plan.garage, levelId,
-        { garage: true, openings: plan.garageOpenings, against: plan.house }));
+        { garage: true, body: 'garage',
+          openings: plan.garageOpenings, against: plan.house }));
     }
     // ── AND THE REST OF THE BUILDING ─────────────────────────────────────
     // _buildHouse's order: the storey's own floor, then the concrete under
@@ -9295,13 +9464,23 @@
     if (under.items.length) parts.push('foundation');
     extra.push(...under.items);
 
+    // THE GARAGE'S OWN CONCRETE, measured against the house so the edges they
+    // share get neither a beam nor a footing -- the same rule its stud walls
+    // already follow, through the same edgeOnLoop.
+    const garageBody = raised[1];
+    const garageConcrete = (plan.garage && garageBody?.outline)
+      ? raiseGarageConcrete(plan.garage, garageBody.outline, { against: plan.house })
+      : { walls: [], items: [] };
+    extra.push(...garageConcrete.items);
+
     const roof = levelPresent(ROOF_LEVEL_ID) ? raiseRoofOver(plan.house) : null;
     if (roof) { extra.push(roof); parts.push('roof'); }
 
     undoStack.length = mark;
     undoStack.push({
       kind: 'built',
-      walls: raised.flatMap(body => body.walls).concat(under.walls),
+      walls: raised.flatMap(body => body.walls)
+        .concat(under.walls, garageConcrete.walls),
       outlines: raised.map(body => body.outline).filter(Boolean),
       list: drawing.outlines,
       // EVERY OTHER RECORD THE PRESS MADE, each with the list it went into, so
