@@ -10,6 +10,22 @@ if (!window.DraftAutoDims) {
   //   { start: {x, z}, end: {x, z}, srcStartId, srcEndId }
   // with srcIds naming the nearest master-linked corner for each end (null
   // when the group has no linked corners).
+  // ── THE TUNING, WHERE THE THING IT TUNES LIVES ──────────────────────────
+  //
+  // These two were `const AUTO_DIM_STRING_SPACING_FT` and
+  // `AUTO_DIM_JOG_MERGE_FT` at the top of MODEL.dc.html, and each had exactly
+  // ONE use: the call below it. That is a number living in a page rather than
+  // in the module it tunes, and the moment a second page called this module
+  // it would have become two numbers free to drift -- the fourth-copy problem
+  // this repo keeps paying for (RULING-a-ported-rule-keeps-one-home.md).
+  //
+  // They are DEFAULTS, not a law: computeAutoDimStrings still takes both as
+  // arguments, so a caller with a reason can pass its own. What it may not do
+  // is keep its own copy of the number it did not change.
+  const STRING_SPACING_FT = 1.5;
+  // Corners closer than this string as one coordinate.
+  const JOG_MERGE_FT = 2 / 12;
+
   // The grid the dimension labels print on: formatArchitecturalInches rounds
   // to the sixteenth, so 1/16" is 1/192 of a foot.
   const PRINT_GRID_FT = 1 / 192;
@@ -321,6 +337,8 @@ if (!window.DraftAutoDims) {
     return segments;
   }
 
-  window.DraftAutoDims = { computeAutoDimStrings };
+  window.DraftAutoDims = Object.freeze({
+    computeAutoDimStrings, STRING_SPACING_FT, JOG_MERGE_FT,
+  });
 })();
 }

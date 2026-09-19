@@ -294,6 +294,14 @@ test.describe('MODEL.html tier 1', () => {
       // refuse it: the cost of a script is the request, and the alternative to
       // paying it is a twin of the half that IS called.
       './build-house.js',
+      // auto-dims.js is the exterior dimension strings, and it is the SECOND
+      // kind of entry this list welcomes rather than the first: it was already
+      // extracted pure out of the old page and had exactly one caller, so this
+      // page calling it adds no computation anywhere -- it deletes the
+      // alternative, which would have been a second stack of string arithmetic
+      // written here. The two tuning numbers moved into it at the same time,
+      // off the top of MODEL.dc.html, for the same reason.
+      './auto-dims.js',
       // premade-plans.js is the drive-thru's catalogue: the bungalow's
       // dimensions and the reasoning behind each of them, with
       // proto/premade-plans-harness.js on the arithmetic. It is here for the
