@@ -540,6 +540,51 @@ if (!window.DraftGeometry2D) {
     // read straight off an arc — height = t × pitch/12 above the eave line.
     // 2D consumers read only a/b; the t fields are for the 3D lift.
     const queue = [{ pts, kinds, t0: 0 }];
+    // Two events at the same instant fold a ring back over itself: one edge
+    // of the ring ends up lying on top of another, pointing the other way,
+    // and between them is a spike of no width. That spike is a finished
+    // ridge -- the two wavefronts have already met along it -- so emit it and
+    // trim the ring back to the shape that is actually left.
+    //
+    // THE RING MUST NOT BE QUEUED WITH THE SPIKE STILL ON IT. The corner at
+    // the spike's base has one edge facing each way, its velocity solves to
+    // the outward direction, and from the next event on the wavefront walks
+    // out of the building. That is how a garage-plus-house outline came back
+    // with its ridge a full storey too high.
+    const trimSpikes = (loopPts, loopKinds, t) => {
+      let trimmed = true;
+      while (trimmed && loopPts.length >= 3) {
+        trimmed = false;
+        for (let index = 0; index < loopPts.length; index++) {
+          const size = loopPts.length;
+          const prev = loopPts[(index + size - 1) % size];
+          const pt = loopPts[index];
+          const next = loopPts[(index + 1) % size];
+          const lenA = Math.hypot(pt.x - prev.x, pt.z - prev.z) || 1;
+          const lenB = Math.hypot(next.x - pt.x, next.z - pt.z) || 1;
+          const ax = (pt.x - prev.x) / lenA, az = (pt.z - prev.z) / lenA;
+          const bx = (next.x - pt.x) / lenB, bz = (next.z - pt.z) / lenB;
+          if (Math.abs(ax * bz - az * bx) > 1e-4 || ax * bx + az * bz > -0.9999) continue;
+          const tail = lenA <= lenB ? prev : next;
+          if (Math.hypot(pt.x - tail.x, pt.z - tail.z) > eps) arcs.push({ a: pt, b: tail, ta: t, tb: t });
+          loopPts.splice(index, 1);
+          loopKinds.splice(index, 1);
+          trimmed = true;
+          break;
+        }
+      }
+    };
+    // A ring is done when it is a single segment: that segment is the ridge.
+    const settle = (loop) => {
+      trimSpikes(loop.pts, loop.kinds, loop.t0);
+      if (loop.pts.length === 2) {
+        if (Math.hypot(loop.pts[1].x - loop.pts[0].x, loop.pts[1].z - loop.pts[0].z) > eps) {
+          arcs.push({ a: loop.pts[0], b: loop.pts[1], ta: loop.t0, tb: loop.t0 });
+        }
+        return;
+      }
+      if (loop.pts.length >= 3) queue.push(loop);
+    };
     let guard = initialCount * 8;
     while (queue.length && guard-- > 0) {
       const loop = queue.shift();
@@ -638,7 +683,8 @@ if (!window.DraftGeometry2D) {
           loopB.pts.push(moved[index]);
           loopB.kinds.push(kinds[index]);
         }
-        queue.push(loopA, loopB);
+        settle(loopA);
+        settle(loopB);
         continue;
       }
       // Drop collapsed edges; each surviving edge keeps its start vertex.
@@ -651,36 +697,7 @@ if (!window.DraftGeometry2D) {
         nextKinds.push(kinds[index]);
       }
       if (nextPts.length === count && splitT >= collapseT) continue; // no topological change — stop this loop
-      // Simultaneous collapses can fold the ring back over itself: a zero-width
-      // spike is a finished ridge, so emit it and trim the ring.
-      let trimmed = true;
-      while (trimmed && nextPts.length >= 3) {
-        trimmed = false;
-        for (let index = 0; index < nextPts.length; index++) {
-          const size = nextPts.length;
-          const prev = nextPts[(index + size - 1) % size];
-          const pt = nextPts[index];
-          const next = nextPts[(index + 1) % size];
-          const lenA = Math.hypot(pt.x - prev.x, pt.z - prev.z) || 1;
-          const lenB = Math.hypot(next.x - pt.x, next.z - pt.z) || 1;
-          const ax = (pt.x - prev.x) / lenA, az = (pt.z - prev.z) / lenA;
-          const bx = (next.x - pt.x) / lenB, bz = (next.z - pt.z) / lenB;
-          if (Math.abs(ax * bz - az * bx) > 1e-4 || ax * bx + az * bz > -0.9999) continue;
-          const tail = lenA <= lenB ? prev : next;
-          if (Math.hypot(pt.x - tail.x, pt.z - tail.z) > eps) arcs.push({ a: pt, b: tail, ta: t1, tb: t1 });
-          nextPts.splice(index, 1);
-          nextKinds.splice(index, 1);
-          trimmed = true;
-          break;
-        }
-      }
-      if (nextPts.length === 2) {
-        if (Math.hypot(nextPts[1].x - nextPts[0].x, nextPts[1].z - nextPts[0].z) > eps) {
-          arcs.push({ a: nextPts[0], b: nextPts[1], ta: t1, tb: t1 }); // the ridge
-        }
-        continue;
-      }
-      queue.push({ pts: nextPts, kinds: nextKinds, t0: t1 });
+      settle({ pts: nextPts, kinds: nextKinds, t0: t1 });
     }
     // A gable corner slides along its own gable edge — that trace is the edge
     // itself, not a roof line, so drop arcs lying on a single gable edge.
