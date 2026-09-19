@@ -129,12 +129,29 @@ const tapAt = async (page, x, z) => {
   await page.waitForTimeout(60);
 };
 
+// WHERE A TAP MEANT FOR w-a HAS TO LAND, now that openings are selectable.
+//
+// w-a runs x -8 to 0, and the fixture's door `d1` sits at offset 4 with a 3 ft
+// width -- so it covers x -5.5 to -2.5 of that wall. Every tap below used to
+// be (-4, 0), the middle of the wall, which is the middle of the DOOR. It
+// selected the wall only because openings answered no press at all.
+//
+// They answer now, and they BEAT their host wall: an opening is always on a
+// wall, so a wall-first chain would make every opening unselectable. So a tap
+// that means the wall has to land on a stretch of wall the door is not on.
+// -7 is four feet clear of it and four feet from w-a's far end.
+//
+// This is a moved target, not a loosened assertion: each test below still
+// selects w-a and still checks the whole cascade. What a tap on the DOOR does
+// is model-html-fenestration.spec.js's business.
+const ON_W_A = -7;
+
 // PROVE THE MAPPING BEFORE TRUSTING IT. If fit() does not centre on the origin
 // for this fixture, every tap below lands somewhere the spec did not mean and
 // the failures would look like the feature being broken. One tap on a known
 // wall settles it.
 async function assertMappingSane(page) {
-  await tapAt(page, -4, 0);
+  await tapAt(page, ON_W_A, 0);
   await expect(page.locator('[data-delete]'),
     'a tap on w-a selects it, so world (0,0) really is canvas centre').toBeVisible();
   await page.keyboard.press('Escape');
@@ -284,7 +301,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
     async ({ page }) => {
       await seed(page);
       await openNewPage(page);
-      await tapAt(page, -4, 0);                      // select w-a
+      await tapAt(page, ON_W_A, 0);                  // select w-a, clear of its door
       await expect(page.locator('[data-delete]')).toBeVisible();
       await page.locator('[data-delete]').click();
       expect(await wallsShown(page)).toEqual({ shown: 1, total: 1 });
@@ -325,7 +342,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
   test('undo puts a deleted wall back WITH its dependents', async ({ page }) => {
     await seed(page);
     await openNewPage(page);
-    await tapAt(page, -4, 0);
+    await tapAt(page, ON_W_A, 0);
     await page.locator('[data-delete]').click();
     expect(await wallsShown(page)).toEqual({ shown: 1, total: 1 });
 

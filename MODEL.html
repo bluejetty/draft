@@ -6444,8 +6444,62 @@
     }) || null;
   };
 
+  // ── AN OPENING ANSWERS A PRESS ───────────────────────────────────────────
+  //
+  // Movie asked for the bungalow's windows and doors so he could "change them
+  // if i need to afterwards". Stage 1 put them in; this is the half that takes
+  // one out.
+  //
+  // THE TARGET IS THE CARVED QUAD, which is the shape on the sheet: the
+  // opening's width along the wall by the wall's own thickness across. Not a
+  // radius round its centre, because a 16 ft overhead door and a 2'-6" man
+  // door would then have the same grab, and pressing the middle of the big one
+  // is not where a drafter aims.
+  //
+  // IT IS NOT A SECOND HIT TEST -- the same rule the hover ring follows, and
+  // here it pays twice. The list comes from openingsOn, which is what PAINTS
+  // them, so the press cannot pick an opening that is not on the sheet: one
+  // hosted on a wall from another level, or one the clamp refuses because its
+  // wall is too short to carry it.
+  //
+  // AND THE SLACK ARRIVES WITH THE SHAPE. The old page grabs an opening with
+  // "a couple of pixels of slack so a click on the wall face still counts" --
+  // its reference line is where the wall's boundary stroke is CENTRED, so
+  // half the ink a drafter presses at is outside the opening proper. This
+  // page needs no such figure of its own, because openingGeometry is already
+  // handed padFt (2px, openingPadFt) so the gap fill reaches past each face
+  // to interrupt that same stroke. The painted quad IS the padded quad, and
+  // pressing what is painted is the whole point.
+  //
+  // A SEPARATE OPENING_SLACK_PX STOOD HERE and was removed: a mutation
+  // setting it to zero changed no answer, because the two pixels were already
+  // in the shape. Two slacks for one reason is the drift this file keeps
+  // paying for -- and the one that is left is the one the drafter can see.
+  const openingAt = worldPt => {
+    const hit = openingsOn(walls())
+      .find(({ geometry }) => pointInRing(geometry.corners, worldPt));
+    return hit ? hit.opening : null;
+  };
+
+  // AN ALREADY-SELECTED OPENING IS A GRAB, which is the page's own two-step
+  // for moving anything: press it to choose it, press it again and drag. The
+  // wall body drag reads the same way (wallBodyAt only answers for a wall
+  // already in the selection), and the reason is the same -- a press that both
+  // selected and started moving would make every mis-aimed tap a small edit.
+  const openingBodyAt = worldPt => {
+    const opening = openingAt(worldPt);
+    return opening && selection.some(entry => entry.item === opening)
+      ? opening : null;
+  };
+
   // 'all' passes everything; any other filter passes only its own type. The old
   // page's whole rule, in one line (_selectFilterAllows :18180).
+  //
+  // AN OPENING IS REACHABLE ONLY UNDER ALL, and that falls out rather than
+  // being written: the OBJECT TYPE vocabulary is 'all' | 'line' | 'wall' |
+  // 'outline' | 'floor', so `selectFilter === 'fenestration'` is a comparison
+  // that can never be true. Same as the old page, whose filter list is the
+  // same five.
   const filterAllows = type => selectFilter === 'all' || selectFilter === type;
 
   // ── the window drag ───────────────────────────────────────────────────────
@@ -6676,6 +6730,15 @@
 
   // Returns { type, item } or null, in the old page's precedence.
   const hitAt = worldPt => {
+    // AN OPENING BEATS ITS HOST WALL, and the old page says why in its own
+    // words: "Openings under a select click take priority over their host
+    // wall, so an opening can be picked and deleted without grabbing the wall
+    // around it." An opening is always ON a wall, so a wall-first chain would
+    // make every opening unselectable -- not hard to select, impossible.
+    if (filterAllows('fenestration')) {
+      const opening = openingAt(worldPt);
+      if (opening) return { type: 'fenestration', item: opening };
+    }
     if (filterAllows('wall')) {
       const wall = segAt(walls(), worldPt);
       if (wall) return { type: 'wall', item: wall };
@@ -6737,6 +6800,13 @@
   const paintSelection = () => {
     if (!selection.length) return;
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines() };
+    // THE OPENINGS AND THEIR SHAPES IN ONE PASS. openingsOn resolves geometry
+    // per opening, which is not free, and the highlight needs both the list
+    // (to answer "is it still on screen") and the quad (to draw it). Calling
+    // it twice would also let the two answers disagree.
+    const openingShapes = new Map(openingsOn(walls())
+      .map(({ opening, geometry }) => [opening, geometry]));
+    onScreen.fenestration = [...openingShapes.keys()];
     const lone = selectedWall();
     ctx.save();
     ctx.strokeStyle = SELECT_INK;
@@ -6759,6 +6829,23 @@
           ctx.fillStyle = SELECT_HANDLE;
           [a, b].forEach(pt => ctx.fillRect(pt.x - 4, pt.y - 4, 8, 8));
         }
+        return;
+      }
+      // AN OPENING HAS NO `points` OF ITS OWN -- it is a width and an offset
+      // along a wall -- so its outline comes from the geometry resolved
+      // above. Falling through to the branch below would read `item.points`,
+      // find nothing, and silently paint no highlight at all: a selection the
+      // drafter cannot see, about to be deleted.
+      if (type === 'fenestration') {
+        const quad = openingShapes.get(item)?.corners || [];
+        if (quad.length < 3) return;
+        ctx.beginPath();
+        quad.forEach((pt, i) => {
+          const p = toS(pt);
+          if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+        });
+        ctx.closePath();
+        ctx.stroke();
         return;
       }
       const pts = (item.points || []).filter(Boolean);
@@ -7659,6 +7746,11 @@
     outline: 'outlines',
     column: 'columns',
     beam: 'beams',
+    // DELETE COMES FREE WITH THE ENTRY. deleteEntry splices out of whatever
+    // list this names and pushes the undo step, so an opening needs no branch
+    // of its own -- and the cascade the other way already worked: deleteWall
+    // takes its openings with it.
+    fenestration: 'fenestrations',
   });
 
   const deleteEntry = entry => {
@@ -10624,6 +10716,34 @@
     // MODEL.dc.html:16791, then _findLineHit at :16799). A press near a corner
     // is a corner press even though it is also on the wall.
     const corner = cornerAt(at);
+    // ── SLIDING AN OPENING ALONG ITS WALL ────────────────────────────────
+    //
+    // The third of the three Movie asked for: "i'll change them if i need to
+    // afterwards". Place, take out, and now MOVE -- which is what "change"
+    // most often means about a window that is a foot off.
+    //
+    // AFTER THE CORNER AND BEFORE THE WALL BODY, which is the same order the
+    // pick chain keeps: a vertex beats what runs through it, and an opening
+    // beats the wall it is cut into. In practice a corner and an opening
+    // cannot be in the same place -- the bearing reserve keeps an opening off
+    // both ends of its wall -- so the corner half is a rule stated rather
+    // than a conflict resolved.
+    const slide = corner ? null : openingBodyAt(at);
+    if (slide) {
+      const host = walls().find(wall => String(wall.id) === String(slide.wallId));
+      if (host) {
+        moveDrag = {
+          kind: 'opening', opening: slide, host,
+          // THE OFFSET IT STARTED AT, for the undo. One number, because that
+          // is the whole of what a slide changes: an opening is a width and
+          // an offset along a wall, and nothing else about it moves.
+          was: slide.offset,
+          sx: e.clientX, sy: e.clientY, active: false,
+        };
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
     const body = corner ? null : wallBodyAt(at);
     if (corner || body) {
       // A grabbed corner or wall takes the gesture whole: no pan starts, so
@@ -10721,6 +10841,31 @@
       if (md.active) {
         const rect = canvas.getBoundingClientRect();
         const raw = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+        if (md.kind === 'opening') {
+          const G = window.DraftGeometry2D;
+          const wall = md.host;
+          const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+          const length = Math.hypot(dx, dz);
+          // ALONG THE WALL, AND ONLY ALONG IT. The pointer is projected onto
+          // the wall's own axis, so the opening tracks the finger down the
+          // wall and ignores everything across it -- which is the only motion
+          // an opening HAS. A drag that read the raw point would need the
+          // drafter to trace a 6" strip to move a window three feet.
+          const along = ((raw.x - wall.start.x) * dx + (raw.z - wall.start.z) * dz)
+            / (length * length) * length;
+          // CLAMPED EVERY EVENT, not checked at the end. The clamp is what
+          // keeps the bearing under the lintel, and an opening allowed to run
+          // off the end and be pulled back on release would be a drawing that
+          // was briefly impossible -- and would stay impossible if the drag
+          // ended off-canvas.
+          const clamped = G.clampOpeningToWall(wall, along, md.opening.width, {
+            walls: walls(),
+            thicknessFt: openingThicknessFt(),
+          });
+          if (clamped) md.opening.offset = clamped.offset;
+          paint();
+          return;
+        }
         if (md.kind === 'group') {
           // THE ASSEMBLY MOVES BY THE DELTA, measured absolutely from the
           // grab for the same reason the wall branch below does it: every
@@ -10878,6 +11023,26 @@
       if (md.active) {
         // Both halves of a locked move go into ONE history entry: the drafter
         // made one gesture, so one Ctrl+Z undoes all of it. See lockBefore.
+        if (md.kind === 'opening') {
+          // ONE GESTURE, ONE UNDO, and the step carries the one number that
+          // changed. A 'move' step restores VERTICES and an opening has none
+          // of its own; pushing one here would hand undo a `before` list it
+          // would walk as vertex snapshots and throw on.
+          //
+          // AND IT IS PUSHED ONLY IF THE OPENING ACTUALLY MOVED. A drag armed
+          // past 4px whose clamp refused every event -- a window already hard
+          // against its bearing, pulled further -- changed nothing, and an
+          // undo step for it would cost the drafter a Ctrl+Z that appears to
+          // do nothing.
+          if (md.opening.offset !== md.was) {
+            undoStack.push({ kind: 'move-opening', opening: md.opening, was: md.was });
+            markDirty();
+          }
+          moveDrag = null;
+          if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+          paint();
+          return;
+        }
         undoStack.push({ kind: 'move',
           before: md.lockBefore ? [...md.before, ...md.lockBefore] : md.before });
         markDirty();
@@ -11073,6 +11238,11 @@
           // whose difference nothing on screen would show.
           if (b.offX !== undefined) { b.vtx.offX = b.offX; b.vtx.offZ = b.offZ; }
         });
+      } else if (step.kind === 'move-opening') {
+        // The record is mutated in place, so undo puts the one number back
+        // rather than restoring a copy -- a copy would detach the opening
+        // every other reader already holds by reference.
+        step.opening.offset = step.was;
       } else if (step.kind === 'edge-tag') {
         // The roof's own edges array is mutated in place, so undo puts the one
         // word back rather than restoring a copy of the roof -- a copy would
