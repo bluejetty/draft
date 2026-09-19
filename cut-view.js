@@ -113,6 +113,58 @@ if (!window.DraftCutView) {
     return fdn.wallTop - (split ? 0 : GARAGE_SILL_BELOW_HOUSE_FT);
   }
 
+  // ── THE FASCIA IS BANDED ONCE, OVER THE EAVE'S TRUE LENGTH ───────────────
+  //
+  // An eave gets its band from two passes. The SILHOUETTE bands each run it
+  // finds; the FACE-EDGE pass then bands eaves from the real face polygons and
+  // subtracts whatever the silhouette already drew, so the stretches the
+  // silhouette could not see still get one.
+  //
+  // THE SILHOUETTE IS SAMPLED AND THE FACE EDGE IS EXACT, and that is the
+  // whole bug. It walks the cut in 240 steps and probes 40 depths at each for
+  // the tallest roof surface; near a roof's outer corner the roof is a sliver
+  // in depth, every probe misses it, and the run simply stops early. Measured
+  // on the bungalow's front elevation:
+  //
+  //     silhouette run   u0 -22        u1 46.25
+  //     eave face edge   u0  22.947    u1 48      -> 46.25..48 survives
+  //
+  // Twenty-one inches of fascia, hanging off the end of an eave that had
+  // already been banded to within two feet of there. Three runs in that one
+  // elevation ended short -- by 1.75 ft, 1.0 ft and 0.167 ft -- and the
+  // `> 0.2` filter downstream is why only some of them were ever visible:
+  // 0.167 was dropped by luck and 1.75 was not.
+  //
+  // SO THE RUN IS GROWN TO WHAT IT APPROXIMATES, rather than the leftover
+  // being filtered harder. A run that overlaps an eave edge is part of that
+  // eave, and the eave's own ends are known exactly -- so the band is drawn
+  // over them and the subtraction downstream then finds nothing left. Raising
+  // the filter instead would trade the stub for a GAP, since the sampling
+  // shortfall is real and the eave would simply stop early; and a tolerance
+  // is what produced this in the first place.
+  //
+  // PURE, AND SEPARATE, so it can be checked. Everything around it is canvas
+  // work that has to be looked at; this is arithmetic that can be measured.
+  function extendRunsToEaves(runs, eaves, eps = 0.05) {
+    if (!Array.isArray(runs) || !Array.isArray(eaves)) return runs;
+    return runs.map(run => {
+      let u0 = run.u0, u1 = run.u1;
+      eaves.forEach(eave => {
+        // SAME BAND, OR IT IS A DIFFERENT EAVE. A garage roof on its own plate
+        // runs at another height through the same stretch of paper, and
+        // growing one to the other's ends would stretch a band across a roof
+        // it has nothing to do with.
+        if (Math.abs(eave.top - run.top) > eps) return;
+        // TOUCHING COUNTS AS OVERLAP. The sampling stops short, so the run's
+        // end and the edge's start can be a sample apart rather than crossing.
+        if (eave.u1 < u0 - eps || eave.u0 > u1 + eps) return;
+        u0 = Math.min(u0, eave.u0);
+        u1 = Math.max(u1, eave.u1);
+      });
+      return { ...run, u0, u1 };
+    });
+  }
+
   function sectionLevelStack(env) {
     const floors = env.floorLevels();
     if (!floors.length) return null;
@@ -1107,6 +1159,14 @@ if (!window.DraftCutView) {
     const Y = e => Math.round(y0 + (yTop - e) * pxPerFt - 0.5) + 0.5;
 
     const INK = '#1d1f20';
+    // WHAT MAKES A FACE EDGE AN EAVE: both ends sitting on the fascia top.
+    // ONE HOME, because two passes ask it -- the band below grows its runs to
+    // the eave's true ends, and the face-edge pass decides which edges wear a
+    // fascia. Written twice, the day one of them widened its tolerance the
+    // other would go on banding a different set of edges and the stub would
+    // come back wearing a new number.
+    const isEaveEdge = (ea, eb, eaveTop) =>
+      Math.abs(ea - eaveTop) < 0.01 && Math.abs(eb - eaveTop) < 0.01;
     header(`${cut.name} — GENERATED ELEVATION`);
 
     const datum = env.elevationDatum();
@@ -1585,6 +1645,11 @@ if (!window.DraftCutView) {
       // where a differently-based roof (the garage) takes over the front.
       // The fascia's lower edge carries the roof's shadow — the heaviest
       // roof line on the sheet.
+      //
+      // AND THE RUNS ARE GROWN TO THE EAVE'S TRUE ENDS FIRST. The silhouette
+      // is sampled and stops short of a roof's outer corner; the face edges
+      // below know exactly where the eave ends. See extendRunsToEaves for the
+      // measurement and for why this is not a filter.
       const runs = [];
       let run = null;
       silhouette.forEach(s => {
@@ -1593,6 +1658,33 @@ if (!window.DraftCutView) {
         if (!run) { run = { base: s.base, u0: s.u, u1: s.u }; runs.push(run); }
         else run.u1 = s.u;
       });
+      // EVERY EAVE EDGE'S TRUE EXTENT, read off the same faces the pass below
+      // reads, through the same test -- isEaveEdge is defined once for both,
+      // so the two cannot come to different answers about what an eave is.
+      const eaveSpans = [];
+      if (facesByRoof) {
+        facesByRoof.forEach((roofFaces, roof) => {
+          const top = roofBaseElev(roof, stack, env) + ROOF_FASCIA_IN / 12;
+          roofFaces.forEach(face => {
+            const poly = face.points;
+            for (let i = 0; i < poly.length; i++) {
+              const a = poly[i], b = poly[(i + 1) % poly.length];
+              const ea = top + geo().roofFaceRise(face, a, roof.pitch || 4);
+              const eb = top + geo().roofFaceRise(face, b, roof.pitch || 4);
+              if (!isEaveEdge(ea, eb, top)) continue;
+              const ua = a.x * axis.x + a.z * axis.z;
+              const ub = b.x * axis.x + b.z * axis.z;
+              eaveSpans.push({ u0: Math.min(ua, ub), u1: Math.max(ua, ub), top });
+            }
+          });
+        });
+      }
+      extendRunsToEaves(runs.map(r => ({ ...r, top: r.base + ROOF_FASCIA_IN / 12 })),
+        eaveSpans).forEach((grown, index) => {
+        runs[index].u0 = grown.u0;
+        runs[index].u1 = grown.u1;
+      });
+
       runs.filter(r => r.u1 - r.u0 > 0.5).forEach(r => {
         drawnFascia.push(r);
         ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
@@ -1708,7 +1800,7 @@ if (!window.DraftCutView) {
               if (!run) { run = { u0: u, e0: elev, u1: u, e1: elev }; runs.push(run); }
               else { run.u1 = u; run.e1 = elev; }
             }
-            const eave = Math.abs(ea - eaveTop) < 0.01 && Math.abs(eb - eaveTop) < 0.01;
+            const eave = isEaveEdge(ea, eb, eaveTop);
             const rake = !eave && onGable(a, b);
             // A run of a single station paints nothing, and the corner it
             // stands on is not "shown" for the soffit return either — a rake
@@ -1912,6 +2004,7 @@ if (!window.DraftCutView) {
     roofHeelIn,
     cutAxis,
     sectionLevelStack,
+    extendRunsToEaves,
     sectionWallCrossings,
     cutViewExtents,
     roofBaseElev,
