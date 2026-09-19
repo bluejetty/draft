@@ -307,6 +307,14 @@ test.describe('MODEL.html tier 1', () => {
       // proto/premade-plans-harness.js on the arithmetic. It is here for the
       // reason garage-site.js is -- a design is a domain rule, and a page that
       // carried the numbers itself would be the second home of one.
+      // bone-wallet.js is the free-bone economy's arithmetic -- the seed, the
+      // hourly drip, the cap and what a build costs. Movie, 19 Sep: "can you
+      // bring the BONE number / TOKEN system over too ... bring it like it
+      // was in model.dc". It is here for the reason auto-dims.js is: already
+      // pure, already extracted, already the OLD page's only copy, with
+      // proto/bone-wallet-harness.js on the arithmetic. Carrying the rules
+      // here instead would have given one economy two sets of books.
+      './bone-wallet.js',
       './premade-plans.js',
       // AND WHERE AN ORDERED GARAGE STANDS. 40 lines, no dependency of its
       // own: a traced loop says where it goes by being traced, an autobuilt

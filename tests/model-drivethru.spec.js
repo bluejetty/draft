@@ -94,8 +94,16 @@ test('the foot bar: PROJECT and MODEL left, the bone in the middle, the sheets r
     // The middle is the bone and nothing else (Movie, 16 Sep) -- DELETE,
     // COPY and PASTE live here too but are hidden until something is
     // selected, which is the shell's rule and not this suite's business.
+    //
+    // READ BY NAME, NOT BY EVERY CHARACTER ON IT. The press wears the bone
+    // WALLET now (board #261, brought over 19 Sep), so its textContent is the
+    // balance and then its name -- "5BONE" -- and a flat text read would fail
+    // here for a number that is supposed to be there. The claim was never
+    // about the characters: it is that the middle of the foot holds ONE
+    // press. So each child answers with its spoken name where it has one.
     expect(await page.locator('#dt-bar > *:not([hidden])').evaluateAll(els => els.map(
-      el => (el.textContent || '').trim().replace(/\s+/g, ' '))),
+      el => ((el.querySelector('.said') || el).textContent || '')
+        .trim().replace(/\s+/g, ' '))),
     'the middle of the foot is the bone alone')
       .toEqual(['BONE']);
 

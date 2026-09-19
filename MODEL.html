@@ -105,19 +105,30 @@
      many specs that read the page's own scale and wall count out of it keep
      working whether the drafter has it open or not. */
   #readout[hidden] { display:none; }
-  #readout-tab { position:fixed; left:12px; bottom:var(--readout-bottom);
-    z-index:5; color: var(--ink-quiet);
+  /* THE ROW CARRIES THE POSITION NOW, not the tab: the count stands to the
+     tab's left on the same line, and two separately fixed elements at one
+     inset would be a layout kept in step by hand. */
+  #lower-left { position:fixed; left:12px; bottom:var(--readout-bottom);
+    z-index:5; display:flex; align-items:baseline; gap:10px; }
+  #readout-tab { color: var(--ink-quiet);
     font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
     text-transform:uppercase; cursor:pointer;
     border:none; background:none; padding:0; }
+  /* AN EMPTY SLOT TAKES NO ROOM, so the tab is where it has always been
+     until the count actually arrives. `gap` would otherwise pay for a child
+     that is not there. */
+  #lower-left > [data-visit-counter-home]:empty { display:none; }
   #readout-tab:hover { color: var(--accent); }
   /* OPEN, THE WORD GOES AND AN X TAKES OVER (Movie): the tab and the panel
      are one control, so having both on screen at once said the same thing
      twice. The X sits in the panel's own bottom-right, in the open area
      under the second line rather than on a number. */
   #readout-tab[aria-expanded="true"] { display:none; }
+  /* OVER THE ROW, not beside it. The panel opens on the same corner the row
+     stands in; one z above means it covers the count instead of sharing a
+     line with it, and the tab hides itself as it always did. */
   #readout { display:flex; flex-direction:column; align-items:flex-end;
-    position:fixed; left:12px; bottom:var(--readout-bottom); z-index:5;
+    position:fixed; left:12px; bottom:var(--readout-bottom); z-index:6;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px;
     /* THE PANEL STAYS CLICK-THROUGH and only the X takes the pointer: open,
@@ -912,6 +923,28 @@
      source besides, and the two seconds before the board rises are exactly
      when the press has the drafter's eye. */
   html[data-theme="rough"] #bone[data-lit] img { filter:none; }
+  /* THE NUMBER RIDES ON THE PRESS (board #261, MODEL.dc.html:558), and WHERE
+     it rides is a fact about the ARTWORK rather than about the wallet --
+     which is why the offset lives in BONE_ART beside the two pictures and
+     not here. Movie, 19 Sep: "put the number on the bone under the bone in
+     the red area and put the number in the house centered in the middle of
+     the house outline", and then, on being shown why those are one rule:
+     "yes exactly the style is different but the bone and house are the same
+     button".
+
+     aria-hidden, and the title carries the wallet in words instead. A screen
+     reader reading "3" off a button called BONE says nothing useful; the
+     title says three bones, when the next one lands, and what a build costs. */
+  #bone-balance { position:absolute; left:0; right:0;
+    transform:translateY(-50%); text-align:center; pointer-events:none;
+    font-family: var(--font-ui); font-weight:700; color:#fff;
+    text-shadow:0 1px 2px rgba(29,31,32,0.55); letter-spacing:0.02em;
+    line-height:1; }
+  #bone-balance:empty { display:none; }
+  /* AN EMPTY WALLET GREYS OUT, and grey beats the lit glow: a bone glowing
+     with nothing to spend is a contradiction. The rule sits after
+     [data-lit] so it wins on the one press where both are true. */
+  #bone[data-broke] img { filter:grayscale(1) brightness(0.82); }
   #bone .said {
     position:absolute; width:1px; height:1px; margin:-1px; padding:0;
     overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
@@ -1417,9 +1450,25 @@
 <body>
 
 <canvas id="plan"></canvas>
-<button id="readout-tab" type="button" data-readout-tab
-  aria-expanded="false" aria-controls="readout"
-  title="The page's own counts: what is drawn on this level, and what the drawing holds">STATUS READOUT</button>
+<!-- THE LOWER-LEFT ROW. Movie, 19 Sep: "i need the viewcounter lets put it
+     on lower left (2nd row from bottom to the left of 'STATUS READOUT'". The
+     count used to mount beside the PROJECT link, which on this page is the
+     BOTTOM row; the row above is where the instruments are, and a count of
+     visits reads as one.
+
+     THE SLOT IS EMPTY ON EVERY DESK AND IN EVERY TEST, deliberately and
+     unavoidably: traffic-counter.js reports nothing and mounts nothing on
+     localhost, 127.0.0.1 or file:, so STATUS READOUT sits at the same 12px
+     here that it always has and only moves right on the live site. That is
+     the same shape the count already has on the five other pages -- it
+     shifts the row it joins -- and it is why the slot is a real element with
+     a name rather than a gap measured in pixels. -->
+<div id="lower-left" data-lower-left>
+  <span data-visit-counter-home></span>
+  <button id="readout-tab" type="button" data-readout-tab
+    aria-expanded="false" aria-controls="readout"
+    title="The page's own counts: what is drawn on this level, and what the drawing holds">STATUS READOUT</button>
+</div>
 <div id="readout" hidden>
   <!-- THE COUNTS GO IN THEIR OWN SPAN so the close button survives them: the
        readout is rewritten by innerHTML on every paint, and a child of the
@@ -1554,7 +1603,8 @@
       title="Gruff's drive-thru: pick a house type, then build it"><img
         data-bone-art
         src="./assets/bone-red.png"
-        alt="" /><span class="said">BONE</span></button>
+        alt="" /><span id="bone-balance" data-bone-balance
+        aria-hidden="true"></span><span class="said">BONE</span></button>
     <!-- ONE DELETE FOR EVERYTHING SELECTED (§7a), where there were two verbs
          for one of the types. It rides with the pair rather than with the
          places, because it is a verb. -->
@@ -2019,6 +2069,7 @@
      offer them premade designs in there at the beginning". A DESIGN, not a
      generator -- starter-shape.js invents a house, this one is the building
      in the picture the drafter pressed. -->
+<script src="./bone-wallet.js"></script>
 <script src="./premade-plans.js"></script>
 <!-- Where an ordered garage stands. A traced loop says where it goes by
      being traced; an autobuilt one has to be told, and that is a rule about
@@ -4516,7 +4567,45 @@
   // built has been answered, and the tile un-presses. The persisted
   // buildType stays: the FILE remembers what the project is; the menu
   // only remembers the question currently being asked.
+  // ── WHAT A BUILD COSTS (board #261) ──────────────────────────────────
+  //
+  // A BUILD IS A BUILD, whichever door it came through. This page raises a
+  // building from TWO presses -- the foot's bone, which builds what the
+  // drafter drew, and the sign's bone, which builds the premade design --
+  // and the geometry side says so through two different words, buildServed
+  // and orderServed. A toll written at one press would be free at the other,
+  // which is exactly the shape of the defect Movie is already living with on
+  // the same button. So the CHARGE hangs off both served-signals and the
+  // REFUSAL off both presses, and both are these three lines rather than
+  // four copies of them.
+  //
+  // A DETACHED GARAGE COSTS A BONE TOO. MODEL.dc.html charges only
+  // COSTS.buildHouse because it has one build; here a garage is an order the
+  // geometry side serves like any other, and making it free would mean the
+  // wallet says what KIND of thing was built rather than that something was.
+  // Worth Movie's ruling, not mine -- flagged rather than decided quietly.
+  const canAffordBuild = () => {
+    const W = window.DraftBoneWallet;
+    return !W || readWallet().balance >= W.COSTS.buildHouse;
+  };
+  const refuseForBones = () => {
+    signRefusal = {
+      line: 'OUT OF BONES.',
+      note: `The next free one lands in ${waitLabel(readWallet().nextDripMs)}.`,
+    };
+    refreshWallet();
+  };
+  const chargeForBuild = () => {
+    const W = window.DraftBoneWallet;
+    if (!W) return;
+    W.spend(W.COSTS.buildHouse);
+    refreshWallet();
+  };
+
   const orderServed = () => {
+    // PAID ON DELIVERY, and this is the word the geometry side says when it
+    // has actually raised the order -- not when the press happened.
+    chargeForBuild();
     chosenEntryId = null;
     chosenSizeId = null;
     openFamilyId = null;
@@ -4672,10 +4761,23 @@
   // its twin for the foot's bone. Nothing incidental can say it by mistake.
   let buildWasServed = false;
   const fireBuild = () => {
+    // A BUILD COSTS A BONE (board #261), AND THE TOLL IS HERE rather than in
+    // the handlers. MODEL.dc.html checks the wallet inside its build method,
+    // which is one place because it has one caller; this page fires the same
+    // seam from the foot press, from the sign's own bone on the post, and
+    // from anything that registers later. A check per caller is a rule with
+    // as many copies as there are doors, and the door added next year is the
+    // one that forgets. So: refused before any handler runs, and paid for
+    // only if one of them actually served.
+    if (!canAffordBuild()) { refuseForBones(); return false; }
     buildWasServed = false;
     // EVERY handler is called, and the flag is read after -- never a short
     // circuit, which would silently skip whatever registered later.
     buildHandlers.forEach(fn => fn(chosen()));
+    // PAID ON DELIVERY. A press the geometry side declined to serve -- no
+    // type picked, nothing the design can make -- costs nothing, which is
+    // what `buildWasServed` is already the page's word for.
+    if (buildWasServed) chargeForBuild();
     return buildWasServed;
   };
   // THE ORDER CARRIES ITS ROUND: 'menu' means hand over the premade design
@@ -4743,11 +4845,18 @@
   // path, and a `const` declared after that line is in its dead zone when that
   // runs -- so the page would have thrown on the one entry that most needs to
   // work, and only on that entry.
+  //
+  // `balanceTop` IS PART OF THE ARTWORK, not part of the wallet. The bone's
+  // number sits low, in the red under the bone; the house's sits in the
+  // middle of its outline. Same number, two pictures -- so the offset is
+  // declared where the pictures are, and a third theme that ships a third
+  // drawing says where its number goes in the same line it names its file.
+  // 74% is MODEL.dc.html:558's own figure, carried rather than re-eyeballed.
   const BONE_ART = Object.freeze({
     ruff:  Object.freeze({ src: './assets/bone-red.png',       lit: null,
-      label: 'BONE' }),
+      label: 'BONE', balanceTop: '74%' }),
     rough: Object.freeze({ src: './assets/house-blue-off.png',
-      lit: './assets/house-blue-on.png', label: 'HOUSE' }),
+      lit: './assets/house-blue-on.png', label: 'HOUSE', balanceTop: '50%' }),
   });
   // AND THE BOARD IS THE SECOND LOGO. The note above says a theme is "mainly
   // through logos and colors" and that the press was the first to arrive;
@@ -4811,7 +4920,78 @@
       if (img.alt) img.alt = `${art.label} — build it`;
     });
     if (boneSaid) boneSaid.textContent = art.label;
+    // The number follows the picture it is drawn on -- low in the red on the
+    // bone, in the middle of the outline on the house.
+    if (boneBalanceEl) boneBalanceEl.style.top = art.balanceTop;
   };
+
+  // ── THE FREE-BONE WALLET (board #261) ─────────────────────────────────
+  //
+  // Movie, 19 Sep: "can you bring the BONE number / TOKEN system over too",
+  // "bring it like it was in model.dc". MODEL.html did not load
+  // bone-wallet.js at all, so the whole economy was missing here: builds
+  // were free, the press said nothing about what it cost, and a drafter
+  // moving between the two pages met two different rules.
+  //
+  // THE WALLET IS APP STATE, NEVER DRAWING STATE. It lives in localStorage
+  // and belongs to the browser, not to the file -- so nothing here marks the
+  // drawing dirty, and a build that spends a bone does not make the drawing
+  // need saving for that reason.
+  //
+  // THE MODULE'S OWN HEADER CALLS IT AN HONOUR SYSTEM: localStorage, editable
+  // with devtools, real enforcement waiting on the server ledger (#52). This
+  // page inherits that and does not pretend otherwise.
+  const boneBalanceEl = document.getElementById('bone-balance');
+  const waitLabel = ms => {
+    if (ms == null) return '';
+    const minutes = Math.ceil(ms / 60000);
+    return minutes <= 1 ? '<1m' : `${minutes}m`;
+  };
+  let walletShown = { balance: null, nextDripMs: null };
+  const readWallet = () => (window.DraftBoneWallet
+    ? window.DraftBoneWallet.read() : { balance: Infinity, nextDripMs: null });
+
+  const paintWallet = () => {
+    const W = window.DraftBoneWallet;
+    if (!W || !boneBalanceEl) return;
+    const { balance, nextDripMs } = walletShown;
+    const broke = balance < 1;
+    // AN EMPTY WALLET SHOWS THE COUNTDOWN, not a bare 0 -- the number on the
+    // press is the answer to "can I build", and "no" is only half of it.
+    boneBalanceEl.textContent = broke
+      ? `0 \u00b7 ${waitLabel(nextDripMs)}` : String(balance);
+    // THE DIGIT LADDER (MODEL.dc.html:23499), carried rather than re-derived:
+    // sized for one digit and stepping down so even a five-digit paid wallet
+    // never overflows the artwork.
+    const chars = broke ? 8 : String(balance).length;
+    boneBalanceEl.style.fontSize =
+      `${chars <= 1 ? 15 : chars <= 3 ? 11 : chars <= 5 ? 8 : 7}px`;
+    boneFoot.toggleAttribute('data-broke', broke);
+    boneFoot.title = broke
+      ? `Out of bones \u2014 the next free bone lands in ${waitLabel(nextDripMs)}. `
+        + `One drips in every hour, up to ${W.DRIP_CAP}.`
+      : nextDripMs != null
+        ? `${balance} bone${balance === 1 ? '' : 's'} \u00b7 next free bone in `
+          + `${waitLabel(nextDripMs)}. Each BUILD costs 1.`
+        : `${balance} bones \u2014 the free wallet is full. Each BUILD costs 1.`;
+  };
+
+  // REPAINTED ONLY ON A CHANGE, which is what makes the minute tick below
+  // cheap enough to leave running: read() is a localStorage parse and a
+  // little arithmetic, and the DOM is touched only when the answer moved.
+  const refreshWallet = () => {
+    if (!window.DraftBoneWallet) return;
+    const now = readWallet();
+    if (now.balance === walletShown.balance
+      && now.nextDripMs === walletShown.nextDripMs) return;
+    walletShown = { balance: now.balance, nextDripMs: now.nextDripMs };
+    paintWallet();
+  };
+  refreshWallet();
+  // ONE TICK A MINUTE, because the countdown on an empty press is in minutes
+  // and a drip lands on the hour. Faster would redraw nothing; slower would
+  // leave a bone in the wallet that the press says is not there.
+  window.setInterval(refreshWallet, 60000);
 
   const signShut = () => sign.hasAttribute('data-shut');
 
@@ -5039,6 +5219,11 @@
       paintSign();
       return;
     }
+    // AND THE LAST REFUSAL IS THE WALLET'S, after the caps rather than
+    // before them: a drafter with no bones AND a house already standing
+    // should be told about the house, which is the thing he can do nothing
+    // about by waiting.
+    if (!canAffordBuild()) { refuseForBones(); paintSign(); return; }
     fireOrder();
   });
   // Escape shuts the sign, as it shuts every other thing this page puts over
