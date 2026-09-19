@@ -246,3 +246,161 @@ test('the tuning comes from the module, not from a copy in the page',
       'the page ignored the module and used a spacing of its own')
       .toBeGreaterThan(before + 0.5);
   });
+
+// ── THE BUTTON ──────────────────────────────────────────────────────────────
+//
+// The bone press dimensions what it builds; this is the other half -- the
+// drafter asking for strings around what is already on the sheet. It is
+// MODEL.dc.html's own AUTO DIMS, which lives in the DIMENSION panel there too.
+//
+// ?left=1 for the tool column and ?right=1 for the properties slot: both ship
+// collapsed, and the key is the only way to arm a tool with no legacy button.
+async function openBoards(page, file = empty()) {
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json',
+        { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f: file });
+  await page.goto('/MODEL.html?left=1&right=1');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+}
+
+const armDimension = async page => {
+  await page.locator('[data-board-switch] [data-board="drafting"]').click();
+  await page.waitForTimeout(150);
+  await page.locator('[data-tool-key="dimension"]').click();
+  await page.waitForTimeout(150);
+};
+
+test('the DIMENSION key is down on TOY and up on DRAFTING', async ({ page }) => {
+  // THE TOY BOARD OFFERS THREE TOOLS -- select, wall, outline -- and the panel
+  // must not be reachable where the tool is not. This is checked because the
+  // button was written before the board was looked at, and a press on a key
+  // the board refuses would arm nothing and show nothing while looking like a
+  // dead button.
+  await openBoards(page);
+  await page.locator('[data-board-switch] [data-board="toy"]').click();
+  await page.waitForTimeout(150);
+  await expect(page.locator('[data-tool-key="dimension"]'),
+    'TOY offered a tool it does not have').toBeDisabled();
+
+  await page.locator('[data-board-switch] [data-board="drafting"]').click();
+  await page.waitForTimeout(150);
+  await expect(page.locator('[data-tool-key="dimension"]')).toBeEnabled();
+});
+
+test('arming DIMENSION offers AUTO DIMS, and putting it down takes it away',
+  async ({ page }) => {
+    await openBoards(page);
+    await expect(page.locator('[data-auto-dims]'),
+      'the panel was up before the tool was armed').toHaveCount(0);
+
+    await armDimension(page);
+    await expect(page.locator('[data-auto-dims]')).toBeVisible();
+    // AND IT SAYS WHICH HALF OF THE TOOL IS HERE. Arming DIMENSION draws
+    // nothing on this page -- the gesture is not built -- and a panel offering
+    // only AUTO DIMS with no word about the rest leaves a drafter pressing the
+    // canvas and concluding the page is broken.
+    await expect(page.locator('[data-dimension-note]')).toContainText('NOT BUILT YET');
+
+    await page.locator('[data-tool-key="wall"]').click();
+    await page.waitForTimeout(150);
+    await expect(page.locator('[data-auto-dims]'),
+      'the DIMENSION panel outlived its tool').toHaveCount(0);
+  });
+
+test('AUTO DIMS on an empty level refuses out loud and writes nothing',
+  async ({ page }) => {
+    // THE REFUSAL IS THE OLD PAGE'S OWN, and it matters more than it looks: a
+    // press that placed nothing and said nothing is indistinguishable from a
+    // broken button.
+    await openBoards(page);
+    await armDimension(page);
+    // SAVED AFTER THE ARMING, NOT BEFORE, and the order is the whole point of
+    // the check below. The page opens UNSAVED -- loading normalises the file
+    // -- and switching to the DRAFTING board dirties it again, because the
+    // board is persisted with the drawing. Saving first therefore reads
+    // UNSAVED however the press behaves, and would have said nothing at all.
+    // Measured, after this assertion failed for that reason.
+    await saveNow(page);
+    await page.locator('[data-auto-dims]').click();
+    await page.waitForTimeout(200);
+    await expect(page.locator('#strip-message')).toContainText('needs walls or an outline');
+
+    // AND THE DRAWING IS UNTOUCHED -- not merely empty of dimensions, but
+    // unchanged: a refusal that dirtied the file would put UNSAVED on a
+    // drawing nobody edited.
+    await expect(page.locator('#save'), 'a refusal dirtied the drawing')
+      .toHaveText('SAVED');
+  });
+
+test('AUTO DIMS strings the level the drafter is standing on, and names it',
+  async ({ page }) => {
+    await openBoards(page);
+    await order(page, 'bungalow', 'bungalow');
+    // The build already dimensioned it, so undo back to a bare house is the
+    // honest way to ask the button to do the work: press, undo the whole
+    // build, and there is nothing to measure. Instead the strings are taken
+    // out by hand, leaving the house standing.
+    await page.evaluate(() => {
+      const el = document.querySelector('#readout');
+      return el && el.textContent;
+    });
+    await armDimension(page);
+    await page.locator('[data-auto-dims]').click();
+    await page.waitForTimeout(250);
+
+    // NAMED WITH THE DERIVED LABEL, the same string the level card shows --
+    // the drafter is very likely not looking at the level the strings landed
+    // on, and two names for one level is what the readout was just fixed for.
+    await expect(page.locator('#strip-message')).toContainText('1 MAIN FL');
+    await expect(page.locator('#strip-message')).toContainText('AUTO DIMS placed');
+
+    await saveNow(page);
+    const saved = await savedFile(page);
+    const tally = byLevelView(saved.dimensions);
+    expect(tally['3:plan'], 'nothing landed on the level pressed for')
+      .toBeGreaterThan(0);
+  });
+
+test('pressing AUTO DIMS twice replaces the strings; one undo restores them',
+  async ({ page }) => {
+    // THE SWEEP IS THE HALF THAT IS EASY TO LOSE. A re-run takes the level's
+    // previous auto strings out before laying fresh ones, and an undo that
+    // only removed what the press ADDED would leave the drafter with neither
+    // set -- a press that destroys rather than refreshes.
+    await openBoards(page);
+    await order(page, 'bungalow', 'bungalow');
+    await saveNow(page);
+    const afterBuild = await savedFile(page);
+    const planCount = file => byLevelView(file.dimensions)['3:plan'] || 0;
+    const first = planCount(afterBuild);
+    expect(first, 'the build placed no plan strings to replace').toBeGreaterThan(0);
+
+    await armDimension(page);
+    await page.locator('[data-auto-dims]').click();
+    await page.waitForTimeout(250);
+    await saveNow(page);
+    const afterPress = await savedFile(page);
+    expect(planCount(afterPress), 'the strings piled up instead of replacing')
+      .toBe(first);
+
+    // ONE UNDO PUTS THE SWEPT SET BACK, and the count is the same either way
+    // -- so the check reads the IDS, which are not: a fresh set was minted.
+    const pressedIds = (afterPress.dimensions || [])
+      .filter(d => Number(d.levelId) === 3 && d.auto === true).map(d => d.id).sort();
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(250);
+    await saveNow(page);
+    const undone = await savedFile(page);
+    const undoneIds = (undone.dimensions || [])
+      .filter(d => Number(d.levelId) === 3 && d.auto === true).map(d => d.id).sort();
+    const builtIds = (afterBuild.dimensions || [])
+      .filter(d => Number(d.levelId) === 3 && d.auto === true).map(d => d.id).sort();
+
+    expect(undoneIds, 'the undo left the press-s own strings standing')
+      .not.toEqual(pressedIds);
+    expect(undoneIds, 'the strings the press swept were not put back')
+      .toEqual(builtIds);
+  });
