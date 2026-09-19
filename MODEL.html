@@ -3526,6 +3526,13 @@
   // module's own comment says the TABLE had one home while the LOOKUP had
   // four, and that is how #325's role-less callers happened. Rolling a fifth
   // copy here would have re-made that bug in the file that warns about it.
+  // WHAT A LEVEL IS CALLED ON SCREEN, asked of level-assembly.js rather than
+  // read off the record. The stored `name` is what the file holds; this is
+  // what the drafter reads -- "1 MAIN FL", "1.5 2ND FL" -- and the two are
+  // deliberately different so no file changes and no lookup by stored name
+  // breaks. See levelLabel's own note for why it is derived.
+  const levelLabel = (id, name) => window.DraftLevelAssembly.levelLabel(id, name);
+
   const assemblyFor = id => window.DraftLevelAssembly
     .levelAssemblyFor(drawing?.levelAssemblies, id);
 
@@ -4054,8 +4061,17 @@
     updateReadout();
   };
 
-  const levelName = () => (drawing?.levels || [])
-    .find(level => Number(level.id) === activeLevelId())?.name || 'level';
+  // THE NAME THE DRAFTER READS, which is the derived one -- the same string
+  // the level card shows. The readout and the panel are two instruments on one
+  // piece of state, and this file has already been bitten once by letting two
+  // of them answer differently (see the LEVELS panel's agreement check): a
+  // card reading "1 MAIN FL" beside a readout reading "MAIN FL" is two names
+  // for one level on screen at the same time.
+  const levelName = () => {
+    const level = (drawing?.levels || [])
+      .find(entry => Number(entry.id) === activeLevelId());
+    return level ? levelLabel(level.id, level.name) : 'level';
+  };
 
   // THE READOUT IS THE ONLY INSTRUMENT ON THIS PAGE. Movie, 3 Sep: keep adding
   // to it, never prune -- he decides later what earns its place. So counts are
@@ -5392,8 +5408,13 @@
       // select is gone: these rows are THE way to change level, and a name
       // that once collided with the select is the name every spec drives.
       name.dataset.levelRow = String(level.id);
-      name.textContent = level.name || `level ${level.id}`;
-      name.title = `Switch to ${level.name || level.id}`;
+      // THE NUMBERED NAME, derived rather than stored -- level-assembly.js's
+      // levelLabel. The record keeps whatever it was saved with, so a file is
+      // byte-identical either side of this and every lookup by stored name
+      // goes on working; only what the drafter READS changes.
+      const label = levelLabel(level.id, level.name);
+      name.textContent = label;
+      name.title = `Switch to ${label}`;
       name.addEventListener('click', () => goToLevel(level.id));
 
       const del = document.createElement('button');
@@ -5401,7 +5422,7 @@
       del.className = 'lv-del';
       del.dataset.deleteLevel = String(level.id);
       del.textContent = '×';
-      del.title = `Delete ${level.name || level.id}`;
+      del.title = `Delete ${label}`;
       del.addEventListener('click', event => {
         event.stopPropagation();
         deleteLevel(level.id);
@@ -5779,8 +5800,9 @@
         planSeat(level, 'foundation', 'FOUNDATION');
         planSeat(level, 'plan', 'BASEMENT (WALLS)');
       } else {
-        planSeat(level, 'plan', `${level.name} PLAN (WALLS)`);
-        planSeat(level, 'floor', `${level.name} LAYOUT (FLOOR)`);
+        const seatName = levelLabel(level.id, level.name);
+        planSeat(level, 'plan', `${seatName} PLAN (WALLS)`);
+        planSeat(level, 'floor', `${seatName} LAYOUT (FLOOR)`);
       }
     });
     // SECTIONS FILL ACROSS, with two chairs standing ready before anything is
@@ -9685,7 +9707,8 @@
     // whose upper half is somewhere else entirely.
     if (storeys.length > 1) parts[0] = `house on ${storeys.length} storeys`;
     sayOnStrip(`${order.entry.label} built ${storeys.length > 1 ? 'from' : 'on'} `
-      + `${storey.name || 'the main floor'}${storeys.length > 1 ? ' up' : ''}`
+      + `${levelLabel(storey.id, storey.name) || 'the main floor'}`
+      + `${storeys.length > 1 ? ' up' : ''}`
       + ` — ${parts.join(', ')}.`);
     markDirty();
     buildChrome();
