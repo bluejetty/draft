@@ -4718,10 +4718,23 @@
   // the strip was built -- and carries its own copy of the press on its post.
   // The sheet stops above the bar and leaves the bone standing, so there the
   // bone is not something to disable, it is the press the drafter uses.
+  //
+  // AND WHETHER THE DOG IS ON IT is the other fact about the art, and it is
+  // one fact rather than two: Gruff's screen and Gruff's bone are both Gruff.
+  // Movie, 17 Sep, on the sheet: "in the ROUGH version it isn't going to show
+  // the dog", and "no dog will ask questions they will just see the
+  // selections". The stylesheet hides #dt-screen and #dt-bone on rough; this
+  // flag is what the SCRIPT reads for the same fact, and model-drivethru pins
+  // the two together so they cannot drift apart.
+  //
+  // IT IS NOT DERIVABLE FROM coversBone, which is about where the board
+  // stands rather than what is painted on it. A board could stop above the
+  // bar and still carry a dog.
   const BOARD_ART = Object.freeze({
-    ruff:  Object.freeze({ src: './assets/drivethru-menu-board.png', coversBone: true }),
-    rough: Object.freeze({ src: './assets/draft-board.png',          coversBone: false }),
+    ruff:  Object.freeze({ src: './assets/drivethru-menu-board.png', coversBone: true,  dog: true }),
+    rough: Object.freeze({ src: './assets/draft-board.png',          coversBone: false, dog: false }),
   });
+  const boardHasDog = () => (BOARD_ART[theme] || {}).dog === true;
   const signBoard = document.querySelector('[data-drivethru-board]');
   const paintSignBoard = () => {
     const art = BOARD_ART[theme];
@@ -4777,6 +4790,22 @@
   // WHAT GRUFF SAYS WHEN HE IS REFUSING, set by the press that was refused
   // and spent by the next paint, so it cannot outlive the moment it explains.
   let signRefusal = null;
+
+  // A REFUSAL HAS TO LAND SOMEWHERE, and Gruff's screen is not always there.
+  // #dt-screen is hidden on the sheet with the rest of the dog, so every one
+  // of these -- "how big, though?", "you've got one already" -- was being
+  // painted onto a box nobody can see. A press that does nothing and says
+  // nothing is the worst answer the page can give.
+  //
+  // THE PAGE'S OWN LINE IS WHERE IT GOES INSTEAD. sayOnStrip is how this page
+  // says things when it is not wearing a dog, and it is the same line the
+  // outline tool's refusals already use. Both halves are spoken because the
+  // shout is the WHAT and the note is the WHAT TO DO, and on one line the
+  // drafter needs both.
+  const refuseOrder = said => {
+    if (boardHasDog()) { signRefusal = said; paintSign(); return; }
+    sayOnStrip(`${said.line} ${said.note}`);
+  };
 
   paintSign = () => {
     const picked = chosen();
@@ -4897,6 +4926,26 @@
     // created" -- so the press that raises a house is a press that has been
     // answered, and the board has nothing left to ask.
     if (fireBuild()) return;
+    // AND WHEN NOTHING WAS BUILT, THE ORDER PRESS IS NOT ALWAYS ON THE BOARD.
+    // RUFF's sign carries the dog and the dog's bone, so an order is closed up
+    // there and this press is covered over anyway. The sheet carries neither,
+    // and stops above the bar precisely so this press stays reachable -- which
+    // makes it the only press left to close an order with. Without this line a
+    // type picked off the sheet could be chosen, sized and never ordered: the
+    // press fired the BUILD seam instead, which builds what is already drawn
+    // and therefore did nothing at all. Movie, 18 Sep: "when i press the BLUE
+    // HOUSE it doesn't build the garage in ROUGH mode, but in RUFF mode the
+    // bone button works".
+    //
+    // AFTER THE BUILD, NOT BEFORE, and the order matters on the sheet alone.
+    // There the board stays up while the drafter traces -- it passes presses
+    // through -- so a drafter can have an outline drawn AND a type picked at
+    // the same moment. A house he has drawn is the thing in front of him, so
+    // it is built; the order is what is left when there was nothing to build.
+    //
+    // ONLY WHILE THE BOARD IS UP. Shut, this press is what raises the board,
+    // and with a house standing it is what builds -- both unchanged.
+    if (!signShut() && !boardHasDog()) { placeOrder(); return; }
     if (chosen()) return;
     if (window.DraftBuildingBodies.isFull(drawing)) return;
     signRefusal = {
@@ -4953,17 +5002,20 @@
   // whole design of a box, so an order without one has nothing in it --
   // and the drafter who typed 4ft by 900ft is told so rather than watching
   // a press do nothing.
-  document.getElementById('dt-bone').addEventListener('click', () => {
+  //
+  // NAMED, BECAUSE TWO PRESSES CLOSE IT. On a board carrying the dog this is
+  // his bone and nothing else; on the sheet, which carries no bone at all,
+  // it is the press that raised the board. Both are the same order.
+  const placeOrder = () => {
     const picked = chosen();
     if (picked?.entry?.needsSize && !chosenSize()) {
-      signRefusal = {
+      refuseOrder({
         line: 'HOW BIG, THOUGH?',
         note: chosenSizeId === 'custom'
           ? `Both figures, between ${BM.GARAGE_SIZE_MIN_FT} and `
             + `${BM.GARAGE_SIZE_MAX_FT} feet.`
           : 'Pick a size off the shelf, or press OTHER and type your own.',
-      };
-      paintSign();
+      });
       return;
     }
     // AND ONE DETACHED GARAGE IS THE CAP (Movie's standing rule). Building
@@ -4972,11 +5024,10 @@
     // project -- so the refusal belongs at the order, not at the tile.
     if (picked?.entry?.needsSize
         && window.DraftBuildingBodies.hasDetachedGarage(drawing)) {
-      signRefusal = {
+      refuseOrder({
         line: 'YOU\u2019VE GOT ONE ALREADY.',
         note: 'One house and one detached garage is the lot.',
-      };
-      paintSign();
+      });
       return;
     }
     // AND ONE HOUSE IS THE CAP, the same rule the garage above is held to and
@@ -4999,7 +5050,8 @@
       return;
     }
     fireOrder();
-  });
+  };
+  document.getElementById('dt-bone').addEventListener('click', placeOrder);
   // Escape shuts the sign, as it shuts every other thing this page puts over
   // the drawing. Captured before the drawing's own Escape so an open sign is
   // not also a cleared selection.
