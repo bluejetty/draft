@@ -5125,13 +5125,24 @@
     // created" -- so the press that raises a house is a press that has been
     // answered, and the board has nothing left to ask.
     if (fireBuild()) return;
-    if (chosen()) return;
+    // AT THE WINDOW, THIS PRESS IS THE POST'S. The board is up, so the
+    // drafter is inside the drive-thru and a press means build -- whichever
+    // of the two bones is the one in front of him. On RUFF he never gets
+    // here because the board covers this press; on ROUGH it does not, and
+    // this is the press he actually reaches for.
+    if (!signShut()) { orderAtWindow(); return; }
+    // AND WITH THE BOARD DOWN, A PICKED TYPE OPENS IT. This used to be
+    // `if (chosen()) return;` -- a bare return, which is the only outcome on
+    // this page that tells the drafter nothing whatsoever. Movie's rule:
+    // "when the bone is pressed we should go to the DRIVE THRU menu always
+    // on the first press". Nothing is drawn to build from (fireBuild said
+    // so), so the board is where the answer is.
+    if (chosen()) { callSign(boneFoot, 'menu'); return; }
     if (window.DraftBuildingBodies.isFull(drawing)) return;
     signRefusal = {
       line: 'NOTHING TO BUILD YET.',
       note: 'Pick a type off the board and I\u2019ll build it.',
     };
-    if (!signShut()) { paintSign(); return; }
     callSign(boneFoot, 'menu');
   });
 
@@ -5181,7 +5192,24 @@
   // whole design of a box, so an order without one has nothing in it --
   // and the drafter who typed 4ft by 900ft is told so rather than watching
   // a press do nothing.
-  document.getElementById('dt-bone').addEventListener('click', () => {
+  // WHAT A PRESS AT THE WINDOW MEANS, once, for BOTH presses that can make
+  // it. Movie, 19 Sep: "unless they are inside the drive thru, if they press
+  // it then (or when the house is glowing blue) that will count as only
+  // BUILD HOUSE".
+  //
+  // THIS WAS THE BLUE HOUSE BUG. There are two presses at the window -- the
+  // bone on the post and the one on the foot -- and only the post's did this.
+  // On RUFF that is invisible, because BOARD_ART.ruff covers the foot press
+  // and setSign disables it; on ROUGH the sheet stops above the bar, the foot
+  // press stays live in front of the drafter, and its handler read
+  // `if (chosen()) return;` -- a bare return with no refusal, no board and no
+  // sound. Pick a house on ROUGH, press the blue house, nothing happens.
+  // Movie: "sometimes i have to switch to RUFF to make it work."
+  //
+  // So the meaning lives here and both presses call it. A second copy is what
+  // made one of them wrong, and a second copy is what would make one of them
+  // wrong again.
+  const orderAtWindow = () => {
     const picked = chosen();
     if (picked?.entry?.needsSize && !chosenSize()) {
       signRefusal = {
@@ -5232,7 +5260,8 @@
     // about by waiting.
     if (!canAffordBuild()) { refuseForBones(); paintSign(); return; }
     fireOrder();
-  });
+  };
+  document.getElementById('dt-bone').addEventListener('click', orderAtWindow);
   // Escape shuts the sign, as it shuts every other thing this page puts over
   // the drawing. Captured before the drawing's own Escape so an open sign is
   // not also a cleared selection.
