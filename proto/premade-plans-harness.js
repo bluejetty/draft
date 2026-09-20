@@ -30,6 +30,29 @@ function load(mutate) {
   if (mutate) {
     const next = mutate(src);
     if (next === src) throw new Error('mutation matched nothing -- it would prove nothing');
+    // AND EXACTLY ONCE. proto/mutant-anchors-harness.js makes this check for
+    // every proto/*-mutants.js file and says why: the runners use
+    // String.replace(find, with), which rewrites THE FIRST MATCH ONLY, so an
+    // anchor occurring twice mutates whichever copy comes first -- quite
+    // possibly not the branch the mutation is named for -- and still reports a
+    // clean KILLED. But that gate globs `*-mutants.js` and this table lives in
+    // a `*-harness.js`, so it has never looked here.
+    //
+    // AND THIS FILE HAS NOW BEEN BITTEN BY IT TWICE. The note on "1 STOREY
+    // comes with no openings at all" records the first: `houseOpenings:
+    // houseOpenings(),` matched the bungalow's block until 2 STOREY was
+    // written above it, then silently became 2 STOREY's. The second was
+    // 20 Sep -- `pt(-halfW, -halfD), pt(halfW, -halfD),` is also the opening
+    // of houseLoop, so a mutant aimed at the wing loop trimmed the house.
+    //
+    // APPLIED TWICE, because the mutators here are opaque functions rather
+    // than the {find, with} pairs that gate can read as data. A second pass
+    // over the already-mutated text changes nothing when the anchor was
+    // unique, and changes something more when it was not.
+    if (mutate(next) !== next) {
+      throw new Error('mutation anchor matches more than once -- replace() takes '
+        + 'the FIRST, which may not be the code the mutation is named for');
+    }
     src = next;
   }
   const window = {};
@@ -50,6 +73,8 @@ const GEOM = (() => {
 })();
 
 const n = v => Number(v).toFixed(3);
+// The house's front line, which is where the garage roof's rear now sits.
+const DEPTH_HALF = 20;
 
 // The shoelace sign this app reads winding by, and build-house.js's
 // outlineInteriorRef reads the same one.
@@ -475,11 +500,27 @@ check('every window in the room fits the edge it names, clear of both corners',
 //
 // A roof over the part of the garage the room stands on would be a roof
 // INSIDE the building, under a floor. So the garage roof takes what the room
-// leaves -- and on the designs with no room, that is the garage entire.
+// leaves -- and on the designs with no room, that is the garage's full DEPTH.
+//
+// "ENTIRE" UNTIL 20 SEP, and the difference is the tie. This check compared
+// the roof's edge lengths to the garage's and found them equal, which said
+// the roof followed the footprint corner for corner -- jog and all. Movie
+// ruled that jog out of the roof the same day ("it should be gabled on the
+// house end (not cottage)"), so the roof is a rectangle on the house line
+// now and the garage keeps its six-cornered walls. The rule the check was
+// written for is unchanged: with no room over it, the garage roof reaches
+// all the way back to the house rather than stopping at a stub.
 
-check('a garage with nothing on it is roofed entire',
+check('a garage with nothing on it is roofed all the way back to the house',
   P => { const plan = P.twoStorey({ garage: true });
-         return [lengths(plan.garageRoof), lengths(plan.garage)]; });
+         const roof = bbox(plan.garageRoof), garage = bbox(plan.garage);
+         return [`${n(roof.minZ)},${n(roof.maxZ)},${n(roof.minX)},${n(roof.maxX)}`,
+           `${n(DEPTH_HALF)},${n(garage.maxZ)},${n(garage.minX)},${n(garage.maxX)}`]; });
+
+check('and it stops at the house line rather than following the tie behind it',
+  P => { const plan = P.twoStorey({ garage: true });
+         return [`${n(bbox(plan.garageRoof).minZ)},${n(bbox(plan.garage).minZ)}`,
+           `${n(DEPTH_HALF)},${n(DEPTH_HALF - 1)}`]; });
 
 // ── AND A BUNGALOW'S GARAGE HAS NO ROOF OF ITS OWN ──
 //
@@ -709,8 +750,290 @@ check('the overhead door is a garage door at 7 ft; the man door is neither',
 check('the window sits at the app-s own sill, not on the floor',
   P => [n(onEdge(detached(P, 25, 25), 0).sillFt), n(GEOM.DEFAULT_WINDOW_SILL_FT)]);
 
+// ── THE 2 STOREY'S ROOF, AND WHAT MUST STAY OUT OF IT ────────────────────
+//
+// Movie, 20 Sep, looking at the ROOF PLAN of a 2 STOREY + GARAGE + ROOM OVER:
+// "the 2 storey roofs have same problem the 1 storeys had earlier". Measured
+// before a line was changed:
+//
+//     house roof   z -20..20   at the two-storey plate
+//     room over    z  20..38   ALSO at the two-storey plate
+//     garage stub  z  38..46   one storey lower
+//
+// The room is on 2ND FL and FLUSH with it -- Movie, 19 Sep: "this one is even
+// with the 2nd floor so will be considered 2nd floor" -- so it bears on the
+// house's own plate, and two hips at one height meeting badly is the 1 STOREY
+// defect exactly, one floor up.
+//
+// SO THE INTERESTING CHECKS ARE THE EXCLUSIONS. "Did the room get roofed with
+// the house" is the easy half and one loop satisfies it; the half that can go
+// wrong quietly is everything the splice must NOT swallow, because a body a
+// storey lower under a two-storey hip is not a roof at all -- which is the
+// very thing houseRoofLoop's storey test was written to refuse.
+const inside = (pt, loop) => {
+  let hit = false;
+  for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
+    const a = loop[i], b = loop[j];
+    if ((a.z > pt.z) !== (b.z > pt.z)
+      && pt.x < (b.x - a.x) * (pt.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
+  }
+  return hit;
+};
+const covers = (loop, pt) => inside(pt, loop) || pointOn(pt, loop);
+
+const ROOM_PLAN = () => ({ garage: true, overGarage: true });
+
+check('2 STOREY + ROOM OVER roofs the house and the room under one loop',
+  P => [P.twoStorey(ROOM_PLAN()).houseRoof.length, 8]);
+
+check('and every corner of the house is under it',
+  P => { const plan = P.twoStorey(ROOM_PLAN());
+         return [plan.house.filter(pt => !covers(plan.houseRoof, pt)).length, 0]; });
+
+check('and every corner of the room is under it',
+  P => { const plan = P.twoStorey(ROOM_PLAN());
+         return [plan.overGarage.filter(pt => !covers(plan.houseRoof, pt)).length, 0]; });
+
+check('and the middle of the room is under it, not just its corners',
+  P => { const plan = P.twoStorey(ROOM_PLAN());
+         const box = bbox(plan.overGarage);
+         return [covers(plan.houseRoof,
+           { x: (box.minX + box.maxX) / 2, z: (box.minZ + box.maxZ) / 2 }), true]; });
+
+// ── AND NOW THE TWO THAT MATTER ──────────────────────────────────────────
+//
+// THE GARAGE STUB IS A STOREY LOWER. Movie: "make a single story garage". It
+// keeps its own roof and the valley between the two is the CRICKET, which is
+// not built -- fixing two hips at ONE height must not pretend to fix the one
+// junction that genuinely has two.
+check('the garage stub is NOT under the house roof -- it is a storey lower',
+  P => { const plan = P.twoStorey(ROOM_PLAN());
+         const box = bbox(plan.garageRoof);
+         return [covers(plan.houseRoof,
+           { x: (box.minX + box.maxX) / 2, z: (box.minZ + box.maxZ) / 2 }), false]; });
+
+// THE TIE IS THE SUBTLE ONE, and it is why this loop starts on the house's
+// front line rather than where the garage's back wall is. The tie is a 4 ft x
+// 1 ft strip of GARAGE reaching back along the house's side wall (x 16..20,
+// z 19..20) -- single storey, like the rest of the garage. The bungalow's own
+// loop DOES take it, correctly, because there the garage shares the house's
+// plate. Taking it here would put the two-storey roof over a single-storey
+// body, and nothing else in this file would notice.
+check('nor is the garage tie, which is the corner this loop is drawn to miss',
+  P => { const plan = P.twoStorey(ROOM_PLAN());
+         const houseRight = 16, tieZ = 19.5, intoTie = 18;
+         void houseRight;
+         return [covers(plan.houseRoof, { x: intoTie, z: tieZ }), false]; });
+
+check('and the bungalow-s loop DOES take its tie, because that garage is level with it',
+  P => [covers(P.bungalow({ garage: true }).houseRoof, { x: 18, z: 19.5 }), true]);
+
+check('the room has no roof of its own, which is the other half of the splice',
+  P => [P.twoStorey(ROOM_PLAN()).overGarageRoof, null]);
+
+// ── AND THE CASES THAT MUST NOT HAVE MOVED ───────────────────────────────
+check('a 2 STOREY + GARAGE with no room is still the house alone -- that one wants the cricket',
+  P => [P.twoStorey({ garage: true }).houseRoof.length, 4]);
+
+check('and a 2 STOREY with no garage at all is too',
+  P => [P.twoStorey({}).houseRoof.length, 4]);
+
+check('the bungalow-s spliced loop is untouched, corner for corner',
+  P => [JSON.stringify(P.bungalow({ garage: true }).houseRoof.map(pt => [pt.x, pt.z])),
+    JSON.stringify([[-16, -20], [16, -20], [16, 19], [20, 19], [20, 46], [-4, 46],
+      [-4, 20], [-16, 20]])]);
+
+// THE TWO WINGS ARE ONE SHAPE, which is why they are one function. If this
+// ever fails, the shared loop has grown a case and the sharing is a lie.
+check('the two wing loops differ in z alone -- same widths, same x',
+  P => { const room = P.twoStorey(ROOM_PLAN()).houseRoof;
+         const gar = P.bungalow({ garage: true }).houseRoof;
+         return [room.map(pt => pt.x).join(','), gar.map(pt => pt.x).join(',')]; });
+
+check('and the spliced roof is wound the way every other loop here is',
+  P => [Math.sign(area2(P.twoStorey(ROOM_PLAN()).houseRoof)),
+    Math.sign(area2(P.twoStorey({}).house))]);
+
+// ── THE SKELETON RESOLVES ON IT, which is not a given for this family ────
+//
+// This is the eight-corner, two-reflex-corner footprint that floated a ridge
+// a full storey high until #439: roofSkeleton acted on the first of two
+// simultaneous arrivals and left the second hanging off the ring as a spike.
+// The bungalow's loop is the same family and carries that shape as the
+// harness's Z case. A new member of it is checked, not assumed.
+//
+// SIX FEET IS THE ARITHMETIC, not a number read off a working build: the ring
+// is offset by the 2 ft overhang, so it is 36 ft across the house, and a hip
+// at 4:12 rises half of that times the pitch -- 18 x 4/12.
+check('a hip over the spliced loop peaks where the arithmetic says, not a storey up',
+  P => { const loop = P.twoStorey(ROOM_PLAN()).houseRoof.map(pt => ({ x: pt.x, z: pt.z }));
+         const ring = GEOM.offsetOutline(loop, 2);
+         const roof = { points: ring, edges: ring.map(() => 'eave'), pitch: 4, overhang: 2 };
+         const faces = GEOM.roofFaces(roof, GEOM.roofSkeleton(roof));
+         let peak = 0;
+         faces.forEach(face => face.points.forEach(pt => {
+           const h = GEOM.roofFaceRise(face, pt, 4);
+           if (Number.isFinite(h) && h > peak) peak = h;
+         }));
+         return [n(peak), n(18 * 4 / 12)]; });
+
+check('and it leaves no corner of the footprint unroofed',
+  P => { const loop = P.twoStorey(ROOM_PLAN()).houseRoof.map(pt => ({ x: pt.x, z: pt.z }));
+         const ring = GEOM.offsetOutline(loop, 2);
+         const roof = { points: ring, edges: ring.map(() => 'eave'), pitch: 4, overhang: 2 };
+         const faces = GEOM.roofFaces(roof, GEOM.roofSkeleton(roof));
+         // Every corner of the BUILDING -- not the offset ring -- has to have
+         // a face over it; a hole in the middle of a hip is what a dropped
+         // skeleton arrival looks like from above.
+         const missed = loop.filter(pt =>
+           !faces.some(face => inside({ x: pt.x + 0.01, z: pt.z + 0.01 }, face.points)
+             || inside({ x: pt.x - 0.01, z: pt.z - 0.01 }, face.points)));
+         return [missed.length, 0]; });
+
+// ── THE GARAGE ROOF'S HOUSE END ──────────────────────────────────────────
+//
+// Movie, 20 Sep, on the E4 RIGHT elevation of a 2 STOREY + GARAGE: "when the
+// main floor garage roof connects to the house that has 2 storey it should be
+// gabled on the house end (not cottage) i think this was a problem on model.dc
+// but was solved". He ruled B of two readings: cut the roof on the HOUSE LINE
+// rather than gable the jog.
+//
+// WHAT HE WAS LOOKING AT. garageLoop steps back a foot along the house's right
+// wall so the foundations connect. Taking that jog into the roof leaves a four
+// foot edge at z = 19 which is not on the house, so it hips -- a triangle of
+// roof tucked against the house wall.
+//
+// AND THE FIX NEEDS A DECLARATION, not a better geometric test, which is the
+// part worth checking rather than trusting. The rear runs the garage's full
+// width and the house stops four feet short of it, so "does this edge lie on
+// the house" answers NO for the very edge that most obviously is the house
+// end. MODEL.dc.html reached the same conclusion: its open garages mark the
+// closing edges gable BY INDEX (`index >= legCount - 1`), not by geometry.
+const houseEndOf = plan => (plan.garageRoofHouseEnd || []);
+
+// The page's own flush rule, replayed here: an edge is cut flush when the
+// design NAMES it or when it lies on the body behind it, and flush carries
+// both the gable and the zero overhang.
+const flushKinds = (plan, against) => {
+  const ring = plan.garageRoof.map(pt => ({ x: pt.x, z: pt.z }));
+  const named = new Set(houseEndOf(plan));
+  const shared = against ? GEOM.loopSegments(against) : null;
+  const flushAt = i => named.has(i)
+    || (shared ? GEOM.edgeOnLoop(ring[i], ring[(i + 1) % ring.length], shared) : false);
+  const pts = GEOM.offsetOutlineVariable(ring,
+    ring.map((_, i) => (flushAt(i) ? 0 : 2)));
+  return ring.map((_, i) => (ring.length === pts.length && flushAt(i) ? 'gable' : 'eave'));
+};
+
+check('the garage roof is cut on the house line, not on the tie',
+  P => { const plan = P.twoStorey({ garage: true });
+         return [n(Math.min(...plan.garageRoof.map(pt => pt.z))), n(DEPTH_HALF)]; });
+
+check('so the tie is behind it and not under it',
+  P => { const plan = P.twoStorey({ garage: true });
+         // The tie's own z -- one foot back of the house line -- must be
+         // outside the roof's footprint entirely.
+         return [plan.garageRoof.some(pt => pt.z < DEPTH_HALF), false]; });
+
+check('and the roof loop is four corners, the jog gone',
+  P => [P.twoStorey({ garage: true }).garageRoof.length, 4]);
+
+check('the house end gables and the other three hip -- 2 STOREY + GARAGE',
+  P => { const plan = P.twoStorey({ garage: true });
+         return [flushKinds(plan, plan.house).join(','), 'gable,eave,eave,eave']; });
+
+check('and the same with a room over it, where the stub dies into the room',
+  P => { const plan = P.twoStorey({ garage: true, overGarage: true });
+         return [flushKinds(plan, plan.overGarage).join(','), 'gable,eave,eave,eave']; });
+
+// THE ONE THAT SAYS WHY THE DECLARATION EXISTS. Without it the no-room case
+// hips at the house end, because the edge runs four feet past the house's
+// corner and edgeOnLoop is end-to-end by design.
+check('geometry alone cannot find that edge, which is why the design names it',
+  P => { const plan = P.twoStorey({ garage: true });
+         const ring = plan.garageRoof;
+         return [GEOM.edgeOnLoop(ring[0], ring[1], GEOM.loopSegments(plan.house)), false]; });
+
+check('the house end is edge 0 in both designs, so one index serves both',
+  P => [`${houseEndOf(P.twoStorey({ garage: true })).join(',')}/`
+    + `${houseEndOf(P.twoStorey({ garage: true, overGarage: true })).join(',')}`, '0/0']);
+
+check('a design with no garage names no house end',
+  P => [P.twoStorey({}).garageRoofHouseEnd, null]);
+
+check('and the garage roof is wound like every other loop here',
+  P => [Math.sign(area2(P.twoStorey({ garage: true }).garageRoof)),
+    Math.sign(area2(P.twoStorey({}).house))]);
+
+check('the stub with a room over is untouched by all of this',
+  P => [JSON.stringify(P.twoStorey({ garage: true, overGarage: true })
+    .garageRoof.map(pt => [pt.x, pt.z])),
+  JSON.stringify([[-4, 38], [20, 38], [20, 46], [-4, 46]])]);
+
 // ── Mutations ──
 const MUTATIONS = [
+  // ── THE GARAGE ROOF'S HOUSE END ──
+  ['the roof follows the tie again, hipping four feet against the house wall',
+    s2 => s2.replace('const back = houseFront + (overGarage ? OVER_GARAGE_LENGTH_FT : 0);',
+      'const back = houseFront + (overGarage ? OVER_GARAGE_LENGTH_FT : -GARAGE_TIE_FT);')],
+  ['the roof stops at the room-s front line even when there is no room',
+    s2 => s2.replace('const back = houseFront + (overGarage ? OVER_GARAGE_LENGTH_FT : 0);',
+      'const back = houseFront + OVER_GARAGE_LENGTH_FT;')],
+  ['no edge is declared the house end, so geometry alone decides and misses it',
+    s2 => s2.replace('const GARAGE_ROOF_HOUSE_END = Object.freeze([0]);',
+      'const GARAGE_ROOF_HOUSE_END = Object.freeze([]);')],
+  ['the wrong edge is declared the house end -- the garage-s long side',
+    s2 => s2.replace('const GARAGE_ROOF_HOUSE_END = Object.freeze([0]);',
+      'const GARAGE_ROOF_HOUSE_END = Object.freeze([1]);')],
+  ['the design stops naming its house end at all',
+    s2 => s2.replace('    garageRoofHouseEnd: garage ? GARAGE_ROOF_HOUSE_END : null,',
+      '    garageRoofHouseEnd: null,')],
+  ['a design with no garage names a house end anyway',
+    s2 => s2.replace('    garageRoofHouseEnd: garage ? GARAGE_ROOF_HOUSE_END : null,',
+      '    garageRoofHouseEnd: GARAGE_ROOF_HOUSE_END,')],
+  // ── THE 2 STOREY'S SPLICE ──
+  // ANCHORED ON THE WING LOOP'S OWN BLOCK, not on the two points. The first
+  // draft of this mutant used `pt(-halfW, -halfD), pt(halfW, -halfD),` alone,
+  // which is ALSO the opening of houseLoop twelve lines up -- so it trimmed
+  // the HOUSE, both loops moved together, and the check it was aimed at
+  // passed while a different one failed. The same trap this file already
+  // records for `houseOpenings: houseOpenings(),`, sprung a second way.
+  ['the house itself is trimmed out of the wing loop-s back corner',
+    s2 => s2.replace('      pt(-halfW, -halfD), pt(halfW, -halfD),\n      pt(halfW, backZ),',
+      '      pt(-halfW + 4, -halfD), pt(halfW, -halfD),\n      pt(halfW, backZ),')],
+  ['the wing-s far end is wound backwards, tying the loop into a bowtie',
+    s2 => s2.replace('      pt(right, frontZ),      // down the wing-s long side\n      pt(left, frontZ),       // its far end'.replace('wing-s', "wing's"),
+      '      pt(left, frontZ),\n      pt(right, frontZ),')],
+  ['every wing loop is wound the other way round',
+    s2 => s2.replace('      pt(left, halfD),        // back up to the house-s front line\n      pt(-halfW, halfD),\n    ];'.replace('house-s', "house's"),
+      '      pt(left, halfD),\n      pt(-halfW, halfD),\n    ].reverse();')],
+  ['a house with no wing at all is given one anyway',
+    s2 => s2.replace('    return garage && storeys === 1 ? houseGarageLoop() : houseLoop();',
+      '    return garage && storeys === 1 ? houseGarageLoop() : houseRoomLoop();')],
+  ['the room-s loop starts on the TIE, putting the 2-storey roof over single-storey garage',
+    s2 => s2.replace('houseWingLoop(DEPTH_FT / 2, DEPTH_FT / 2 + OVER_GARAGE_LENGTH_FT)',
+      'houseWingLoop(DEPTH_FT / 2 - GARAGE_TIE_FT, DEPTH_FT / 2 + OVER_GARAGE_LENGTH_FT)')],
+  ['the room-s loop runs to the garage door, swallowing the stub a storey below',
+    s2 => s2.replace('houseWingLoop(DEPTH_FT / 2, DEPTH_FT / 2 + OVER_GARAGE_LENGTH_FT)',
+      'houseWingLoop(DEPTH_FT / 2, DEPTH_FT / 2 + GARAGE_DEPTH_FT)')],
+  ['the room is never spliced in, so it keeps meeting the house roof badly',
+    s2 => s2.replace('if (garage && overGarage) return houseRoomLoop();',
+      'void overGarage;')],
+  ['the splice stops asking about the room, so a plain 2 STOREY + GARAGE gets it too',
+    s2 => s2.replace('if (garage && overGarage) return houseRoomLoop();',
+      'if (garage) return houseRoomLoop();')],
+  ['the room is given a roof of its own as well, so it gets one UNDER the house-s',
+    s2 => s2.replace('    overGarageRoof: null,',
+      '    overGarageRoof: overGarage && garage ? overGarageLoop() : null,')],
+  ['the wing loop loses the corner where the house wall meets it',
+    s2 => s2.replace('      pt(halfW, backZ),       // up the house-s right wall as far as the wing\n'
+      .replace('house-s', "house's"), '')],
+  ['the bungalow-s loop forgets its tie, which IS at its garage-s height',
+    s2 => s2.replace('houseWingLoop(DEPTH_FT / 2 - GARAGE_TIE_FT, DEPTH_FT / 2 + GARAGE_DEPTH_FT)',
+      'houseWingLoop(DEPTH_FT / 2, DEPTH_FT / 2 + GARAGE_DEPTH_FT)')],
+  ['the wing is squared off at the house width, so it stands proud of nothing',
+    s2 => s2.replace('    const right = halfW + GARAGE_PAST_FT;\n    const left = right - GARAGE_WIDTH_FT;\n    return [\n      pt(-halfW, -halfD), pt(halfW, -halfD),\n      pt(halfW, backZ),',
+      '    const right = halfW;\n    const left = right - GARAGE_WIDTH_FT;\n    return [\n      pt(-halfW, -halfD), pt(halfW, -halfD),\n      pt(halfW, backZ),')],
   // ── THE DETACHED GARAGE ──
   ['the overhead door is hung on the right wall instead of the door wall',
     s2 => s2.replace("out.push(opening(2, w / 2, overhead, 'door',",
@@ -802,15 +1125,23 @@ const MUTATIONS = [
     opening(2, 8, 4, 'door'),`)],
   // THE ROOM IS FORGOTTEN WHEN THE ROOF IS CUT: the garage is roofed entire,
   // and the sheet runs under the floor of the room standing on it.
-  ['the garage is roofed entire even with a room standing on it',
-    s2 => s2.replace('    if (!overGarage) return loop;', '    return loop;')],
+  // RE-AIMED 20 SEP. Both of these anchored on garageRoofLoop's old body --
+  // `if (!overGarage) return loop;` and a `back` computed unconditionally --
+  // and the house-end rewrite took both lines away. The guard in load() said
+  // so on the first run; before it existed they would have gone on reporting
+  // clean kills while testing nothing, which is the rot
+  // proto/mutant-anchors-harness.js was built for and does not look here.
+  //
+  // They are ONE mutation now, because the rewrite made them one: with the
+  // roof's rear computed from a single `back`, "roofed entire despite the
+  // room" and "cut from the house rather than from the room" are the same
+  // edit. The second name is kept, being the more precise of the two.
+  //
   // The stub is cut from the house instead of from where the room ends, so
   // it reaches back under the room.
   ['the garage roof starts at the house instead of where the room stops',
-    s2 => s2.replace('    const back = houseFront + OVER_GARAGE_LENGTH_FT;\n'
-      + '    const front = houseFront + GARAGE_DEPTH_FT;',
-      '    const back = houseFront;\n'
-      + '    const front = houseFront + GARAGE_DEPTH_FT;')],
+    s2 => s2.replace('const back = houseFront + (overGarage ? OVER_GARAGE_LENGTH_FT : 0);',
+      'const back = houseFront;')],
   // It stops short of the garage door end, leaving the front unroofed.
   ['the garage roof stops short of the garage-s own front',
     s2 => s2.replace('    const front = houseFront + GARAGE_DEPTH_FT;',
@@ -818,12 +1149,28 @@ const MUTATIONS = [
   ['the room over gets a window in the wall against the house',
     s2 => s2.replace('    opening(2, OVER_GARAGE_LENGTH_FT / 2, 4, ',
       '    opening(0, OVER_GARAGE_LENGTH_FT / 2, 4, ')],
+  // ── FOUR ANCHORS THAT WERE POINTING AT THE WRONG FUNCTION ──────────────
+  //
+  // Found on 20 Sep the moment load() began refusing an anchor that matches
+  // more than once. `const right = houseRight + GARAGE_PAST_FT;` occurs THREE
+  // times -- garageLoop, overGarageLoop, garageRoofLoop -- and
+  // `const left = right - GARAGE_WIDTH_FT;` FOUR. String.replace takes the
+  // first, so every one of these had been mutating garageLoop or houseLoop by
+  // luck of file order rather than by aim, and reporting clean kills for it.
+  //
+  // They were ambiguous on merged main too, not introduced by the wing-loop
+  // extraction: the counts are identical either side of it. The extraction is
+  // only what made somebody look.
+  //
+  // RE-ANCHORED ON A BLOCK EACH FUNCTION ALONE HAS. garageLoop is the only one
+  // that goes on to compute `doorZ`, and houseLoop is the only `halfW/halfD`
+  // pair that is followed by a bare four-corner return.
   ['the garage hangs off the wrong side of the house',
-    s => s.replace('const right = houseRight + GARAGE_PAST_FT;',
-      'const right = houseRight - GARAGE_PAST_FT;')],
+    s => s.replace(`    const right = houseRight + GARAGE_PAST_FT;\n    const left = right - GARAGE_WIDTH_FT;\n    const doorZ = houseFront + GARAGE_DEPTH_FT;`,
+      `    const right = houseRight - GARAGE_PAST_FT;\n    const left = right - GARAGE_WIDTH_FT;\n    const doorZ = houseFront + GARAGE_DEPTH_FT;`)],
   ['the garage is measured from the origin instead of from the house',
-    s => s.replace('const right = houseRight + GARAGE_PAST_FT;',
-      'const right = GARAGE_WIDTH_FT / 2;')],
+    s => s.replace(`    const right = houseRight + GARAGE_PAST_FT;\n    const left = right - GARAGE_WIDTH_FT;\n    const doorZ = houseFront + GARAGE_DEPTH_FT;`,
+      `    const right = GARAGE_WIDTH_FT / 2;\n    const left = right - GARAGE_WIDTH_FT;\n    const doorZ = houseFront + GARAGE_DEPTH_FT;`)],
   ['the extra foot goes on the left wall instead of the right',
     s => s.replace('pt(houseRight, tieZ),         // down the house-s right wall, the 1 ft tie'
       .replace('-s', "'s"), 'pt(houseRight, houseFront),')
@@ -836,16 +1183,14 @@ const MUTATIONS = [
     s => s.replace('const tieZ = houseFront - GARAGE_TIE_FT;',
       'const tieZ = houseFront - GARAGE_TIE_FT * 2;')],
   ['the garage is laid out as a 26 x 24 rather than a 24 x 26',
-    s => s.replace('const doorZ = houseFront + GARAGE_DEPTH_FT;',
-      'const doorZ = houseFront + GARAGE_WIDTH_FT;')
-      .replace('const left = right - GARAGE_WIDTH_FT;',
-        'const left = right - GARAGE_DEPTH_FT;')],
+    s => s.replace(`    const right = houseRight + GARAGE_PAST_FT;\n    const left = right - GARAGE_WIDTH_FT;\n    const doorZ = houseFront + GARAGE_DEPTH_FT;`,
+      `    const right = houseRight + GARAGE_PAST_FT;\n    const left = right - GARAGE_DEPTH_FT;\n    const doorZ = houseFront + GARAGE_WIDTH_FT;`)],
   ['the garage stands behind the house instead of in front of it',
     s => s.replace('const doorZ = houseFront + GARAGE_DEPTH_FT;',
       'const doorZ = houseFront - GARAGE_DEPTH_FT - DEPTH_FT;')],
   ['the house is laid out 40 wide and 32 deep',
-    s => s.replace('const halfW = WIDTH_FT / 2;\n    const halfD = DEPTH_FT / 2;',
-      'const halfW = DEPTH_FT / 2;\n    const halfD = WIDTH_FT / 2;')],
+    s => s.replace(`    const halfW = WIDTH_FT / 2;\n    const halfD = DEPTH_FT / 2;\n    return [\n      pt(-halfW, -halfD), pt(halfW, -halfD), pt(halfW, halfD), pt(-halfW, halfD),`,
+      `    const halfW = DEPTH_FT / 2;\n    const halfD = WIDTH_FT / 2;\n    return [\n      pt(-halfW, -halfD), pt(halfW, -halfD), pt(halfW, halfD), pt(-halfW, halfD),`)],
   ['the house is built from the corner rather than centred',
     s => s.replace('pt(-halfW, -halfD), pt(halfW, -halfD), pt(halfW, halfD), pt(-halfW, halfD),',
       'pt(0, 0), pt(halfW * 2, 0), pt(halfW * 2, halfD * 2), pt(0, halfD * 2),')],

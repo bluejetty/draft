@@ -402,21 +402,75 @@ if (!window.DraftPremadePlans) {
   // garage polygon by the page. The design knows where the room ends because
   // the design put it there, and a boolean subtraction is a second, weaker
   // answer to a question that is already answered here.
+  //
+  // ── AND THE ROOF DOES NOT FOLLOW THE TIE ────────────────────────────────
+  //
+  // Movie, 20 Sep, looking at the E4 RIGHT elevation of a 2 STOREY + GARAGE:
+  // "when the main floor garage roof connects to the house that has 2 storey
+  // it should be gabled on the house end (not cottage) i think this was a
+  // problem on model.dc but was solved". Ruled B of two readings, the one
+  // where the roof is cut on the HOUSE LINE rather than gabling the jog.
+  //
+  // WHAT HE WAS LOOKING AT. garageLoop steps back a foot along the house's
+  // right wall so the foundations connect -- his own "rather than fitting the
+  // concrete move it over 1ft exactly easier to construct". Taking that jog
+  // into the roof leaves a four-foot edge at z = 19 which is NOT on the house,
+  // so it gets an eave and hips: a little triangle of roof tucked against the
+  // house wall, which is the "cottage" end he is objecting to.
+  //
+  // THE TIE IS A FOUNDATION DETAIL AND THE ROOF IS NOT A FOUNDATION. So the
+  // roof's rear runs straight along the house's front line, and the one foot
+  // of tie behind it is simply not under this roof -- it sits under the
+  // house's own eave, which oversails it.
+  //
+  // MODEL.dc.html HAD ALREADY ANSWERED THIS, which is what Movie remembered.
+  // Its OPEN garages store only their LEGS and close the footprint along the
+  // house's own boundary path (_garageSlabPolygon :13327), and _buildGarageRoof
+  // then marks those closing edges gable BY INDEX with zero overhang --
+  // `index >= legCount - 1` -- rather than asking geometry whether they lie on
+  // the house. That is the piece that makes B work at all: see the note on
+  // `houseEnd` below.
   const garageRoofLoop = ({ overGarage = false } = {}) => {
-    const loop = garageLoop();
-    if (!overGarage) return loop;
     const houseRight = WIDTH_FT / 2;
     const houseFront = DEPTH_FT / 2;
     const right = houseRight + GARAGE_PAST_FT;
     const left = right - GARAGE_WIDTH_FT;
-    // FROM WHERE THE ROOM STOPS TO WHERE THE GARAGE DOES. The room's front
-    // wall is the stub's back one -- they meet on that line, which is what
-    // makes the upper roof's edge and the lower roof's edge the same line
-    // rather than two lines a few inches apart.
-    const back = houseFront + OVER_GARAGE_LENGTH_FT;
+    // WHERE THIS ROOF STARTS. With a room over it, the room's front wall is
+    // the stub's back one -- they meet on that line, which is what makes the
+    // upper roof's edge and the lower roof's edge the same line rather than
+    // two lines a few inches apart. With no room, it is the house's own front
+    // line: the tie is behind it and stays behind it.
+    const back = houseFront + (overGarage ? OVER_GARAGE_LENGTH_FT : 0);
     const front = houseFront + GARAGE_DEPTH_FT;
+    // EDGE 0 IS THE HOUSE END in both, which is what makes one index serve
+    // both designs -- see GARAGE_ROOF_HOUSE_END.
     return [pt(left, back), pt(right, back), pt(right, front), pt(left, front)];
   };
+
+  // ── THE EDGE THAT IS CUT FLUSH, DECLARED RATHER THAN DERIVED ─────────────
+  //
+  // WHY IT CANNOT BE DERIVED, which is the whole reason this key exists. The
+  // page gables a roof edge when it LIES ON the body it is raised against,
+  // end to end -- and end to end is deliberate, because a wall is raised whole
+  // or not at all. The stub's rear runs the garage's full width, from x = -4
+  // to x = 20, and the house it dies into stops at x = 16: four feet of that
+  // edge stands past the house's corner in open air. So the test answers NO
+  // for the whole edge and the house end hips, which is the bug.
+  //
+  // Measured, before this was written:
+  //     rear edge (-4,20)->(20,20) reads as on the house?  false
+  //
+  // AND THE ROOM-OVER CASE WOULD HAVE SURVIVED IT. There the stub dies into
+  // the ROOM, which is the garage's own width, so the edge does lie on it end
+  // to end and the derivation finds it. Declaring it in both says the same
+  // thing about the same edge rather than letting one design work by geometry
+  // and the other by luck.
+  //
+  // KEYED BY EDGE INDEX, which is this file's own idiom -- `opening(edge, ...)`
+  // keys every window and door the same way, and the committer looks the wall
+  // up rather than counting. It is also exactly what MODEL.dc.html does for
+  // the same edges: `index >= legCount - 1` marks the house path.
+  const GARAGE_ROOF_HOUSE_END = Object.freeze([0]);
 
   // ── ONE ROOF OVER BOTH BODIES ────────────────────────────────────────────
   //
@@ -446,23 +500,58 @@ if (!window.DraftPremadePlans) {
   // the first of two simultaneous arrivals and left the second hanging off
   // the ring as a spike. This loop is why that fix had to come first, and
   // proto/roof-skeleton-harness.js carries the shape as its Z case.
-  const houseGarageLoop = () => {
+  //
+  // TWO WINGS, ONE SHAPE. The garage and the room over it occupy the SAME
+  // stretch of x -- both are GARAGE_WIDTH_FT wide and both stand GARAGE_PAST_FT
+  // proud of the house's right wall, because the room is built on the garage.
+  // The only thing that differs is where the wing starts and stops in z. So
+  // the perimeter is written once and asked twice, rather than twice and
+  // compared never: two copies of an eight-corner loop are two places for the
+  // day the house width changes to land, and only one of them would get the
+  // edit.
+  const houseWingLoop = (backZ, frontZ) => {
     const halfW = WIDTH_FT / 2;
     const halfD = DEPTH_FT / 2;
     const right = halfW + GARAGE_PAST_FT;
     const left = right - GARAGE_WIDTH_FT;
-    const tieZ = halfD - GARAGE_TIE_FT;
-    const doorZ = halfD + GARAGE_DEPTH_FT;
     return [
       pt(-halfW, -halfD), pt(halfW, -halfD),
-      pt(halfW, tieZ),        // up the house's right wall as far as the tie
-      pt(right, tieZ),        // out along the garage's rear wall
-      pt(right, doorZ),       // down the garage's long side
-      pt(left, doorZ),        // the door wall
+      pt(halfW, backZ),       // up the house's right wall as far as the wing
+      pt(right, backZ),       // out along the wing's rear wall
+      pt(right, frontZ),      // down the wing's long side
+      pt(left, frontZ),       // its far end
       pt(left, halfD),        // back up to the house's front line
       pt(-halfW, halfD),
     ];
   };
+
+  // THE BUNGALOW'S: the wing starts one foot BEHIND the house's front line --
+  // the tie -- and runs to the garage door.
+  const houseGarageLoop = () =>
+    houseWingLoop(DEPTH_FT / 2 - GARAGE_TIE_FT, DEPTH_FT / 2 + GARAGE_DEPTH_FT);
+
+  // ── AND THE 2 STOREY'S, WHICH IS THE ROOM AND NOT THE GARAGE ─────────────
+  //
+  // Movie, 20 Sep, looking at the ROOF PLAN of a 2 STOREY + GARAGE + ROOM
+  // OVER: "the 2 storey roofs have same problem the 1 storeys had earlier".
+  //
+  // AND HE IS RIGHT, THOUGH THE REASON THIS WAS MISSED IS IN THE NOTE BELOW.
+  // houseRoofLoop refuses to splice a 2 STOREY because its GARAGE is a storey
+  // lower -- true, and it is why the stub keeps its own roof. But the ROOM
+  // OVER is not the garage: Movie ruled on 19 Sep that it is "even with the
+  // 2nd floor so will be considered 2nd floor", so it stands on the house's
+  // own plate. Two bodies, same height, each wearing its own hip -- which is
+  // the 1 STOREY's defect exactly, one floor up.
+  //
+  // THE WING STARTS ON THE HOUSE'S FRONT LINE, not on the tie. overGarageLoop
+  // says why in its own words: "The tie is a one-foot strip of garage that
+  // reaches back along the house's side wall; a room starting there would hang
+  // a foot past the house's own front face." So the tie stays with the GARAGE,
+  // and that is not a detail -- the tie is single storey, and taking it into
+  // this loop would put the two-storey roof over a body a floor lower, which
+  // is the very thing houseRoofLoop's storey test exists to refuse.
+  const houseRoomLoop = () =>
+    houseWingLoop(DEPTH_FT / 2, DEPTH_FT / 2 + OVER_GARAGE_LENGTH_FT);
 
   // ── WHICH LOOP THE HOUSE'S ROOF IS RAISED OVER ───────────────────────────
   //
@@ -479,8 +568,30 @@ if (!window.DraftPremadePlans) {
   // The cricket is NOT built, and that is why this asks about storeys rather
   // than always splicing: splicing a 2 STOREY would put one hip over bodies
   // at two different heights, which is not a roof at all.
-  const houseRoofLoop = ({ garage = false, storeys = 1 } = {}) =>
-    (garage && storeys === 1 ? houseGarageLoop() : houseLoop());
+  //
+  // ── AND THE ROOM OVER THE GARAGE IS THE THIRD CASE ──────────────────────
+  //
+  // THE HEIGHT IS THE QUESTION, NOT THE STOREY COUNT, and reading the rule as
+  // "2 STOREY never splices" is what let this through. The condition Movie
+  // gave is the same one it always was -- "it is easy WHEN THEY ARE THE SAME
+  // HEIGHT" -- and a 2 STOREY has a body at the house's own height whenever
+  // the room over the garage is there: he ruled on 19 Sep that the room is
+  // "even with the 2nd floor so will be considered 2nd floor", so it bears on
+  // the same plate the house does.
+  //
+  // So the three answers are three heights, not three tiles:
+  //   overGarage   the room shares the house's plate   -> splice house + room
+  //   1 storey     the garage shares it                -> splice house + garage
+  //   otherwise    nothing shares it                   -> the house alone
+  //
+  // THE GARAGE STUB IS OUT OF ALL OF THEM and keeps its own lower roof, which
+  // is garageRoofLoop's job. The valley between that stub and this roof is
+  // still the cricket, still unbuilt -- fixing the two hips at ONE height does
+  // not pretend to fix the one junction that genuinely has two.
+  const houseRoofLoop = ({ garage = false, storeys = 1, overGarage = false } = {}) => {
+    if (garage && overGarage) return houseRoomLoop();
+    return garage && storeys === 1 ? houseGarageLoop() : houseLoop();
+  };
 
   // ── 2 STOREY ─────────────────────────────────────────────────────────────
   //
@@ -513,9 +624,10 @@ if (!window.DraftPremadePlans) {
     houseOpenings: houseOpenings(),
     upperOpenings: upperOpenings(),
     storeys: 2,
-    // ITS OWN FOOTPRINT, because the garage is a storey lower: see
-    // houseRoofLoop. Two roofs and a valley, until the cricket is built.
-    houseRoof: houseRoofLoop({ garage, storeys: 2 }),
+    // OVER THE HOUSE, AND OVER THE ROOM WHEN THERE IS ONE -- see
+    // houseRoofLoop. The garage STUB is never in here: it is a storey lower,
+    // and the valley between it and this roof is the cricket, still unbuilt.
+    houseRoof: houseRoofLoop({ garage, storeys: 2, overGarage }),
     garage: garage ? garageLoop() : null,
     garageOpenings: garage ? garageOpenings() : null,
     // WHAT THE GARAGE'S OWN ROOF COVERS, which is the garage itself unless a
@@ -523,6 +635,10 @@ if (!window.DraftPremadePlans) {
     // than left for the committer to work out, because the design is where
     // the room's length is decided and so it is where the leftover is known.
     garageRoof: garage ? garageRoofLoop({ overGarage }) : null,
+    // WHICH OF ITS EDGES DIES INTO THE BUILDING BEHIND IT. Gabled and cut
+    // flush -- no rake overhang -- because a roof that dies into a wall has
+    // no eave there and no board to hang one on.
+    garageRoofHouseEnd: garage ? GARAGE_ROOF_HOUSE_END : null,
     // THE ROOM OVER IS ITS OWN BODY, on its own level. It is not the garage
     // raised twice and not the upper storey stretched: level-assembly.js
     // gives the over-garage level its own role and a deeper joist, because a
@@ -530,6 +646,18 @@ if (!window.DraftPremadePlans) {
     // will not cross a double bay.
     overGarage: overGarage && garage ? overGarageLoop() : null,
     overGarageOpenings: overGarage && garage ? overGarageOpenings() : null,
+    // AND NO ROOF OF ITS OWN, which is the other half of the splice above and
+    // is said here rather than left to the committer to infer. The bungalow's
+    // `garageRoof: null` is the same sentence about the same thing: a second
+    // roof over a body already under the house's would sit INSIDE it -- a roof
+    // under a roof, which is worse than the two hips meeting badly that this
+    // replaces.
+    //
+    // ALWAYS NULL, and that is not a key doing nothing. It is the design
+    // stating that this body is roofed by the house, so the page never has to
+    // decide -- the same contract `garageRoof` keeps, and the reason the page
+    // reads a LOOP rather than testing whether a room exists.
+    overGarageRoof: null,
   });
 
   // `garage` is the ATTACHED one. A detached garage is a different body with
@@ -577,7 +705,7 @@ if (!window.DraftPremadePlans) {
   window.DraftPremadePlans = Object.freeze({
     WIDTH_FT, DEPTH_FT, GARAGE_WIDTH_FT, GARAGE_DEPTH_FT,
     GARAGE_PAST_FT, GARAGE_TIE_FT, OVER_GARAGE_LENGTH_FT,
-    OVERHEAD_DOOR_WIDTHS_FT,
+    OVERHEAD_DOOR_WIDTHS_FT, GARAGE_ROOF_HOUSE_END,
     MAN_DOOR_WIDTH_FT, GARAGE_WINDOW_WIDTH_FT, GARAGE_DOOR_HEAD_FT,
     bungalow, twoStorey, planFor, detachedGarageOpenings,
     entryIds: () => Object.keys(PLANS),

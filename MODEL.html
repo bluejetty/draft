@@ -10172,7 +10172,7 @@
   // -- and it is edgeOnLoop here for the reason the garage's own walls use it:
   // one rule, one home.
   const raiseRoofOver = (loop, { garage = false, plateHeightFt = null,
-    sourceLevelId = null, against = null } = {}) => {
+    sourceLevelId = null, against = null, flush = null } = {}) => {
     const G = window.DraftGeometry2D;
     const ring = loop.map(pt => ({ x: pt.x, z: pt.z }));
     // ── THE EDGES AGAINST THE HOUSE ARE CUT FLUSH, NOT OVERHUNG ──────────
@@ -10192,14 +10192,37 @@
     // the same `against` loop the walls and the gable flags already use --
     // one question asked once, three ways round.
     const sharedWith = against ? G.loopSegments(against) : null;
-    const sharedEdge = index => {
+    // ── AND AN EDGE THE DESIGN NAMES, WHICH GEOMETRY CANNOT FIND ─────────
+    //
+    // Movie, 20 Sep, on the 2 STOREY's garage: "it should be gabled on the
+    // house end (not cottage)". The test below is END TO END on purpose -- a
+    // wall is raised whole or not at all -- and the garage's rear runs its
+    // full width while the house it dies into stops four feet short of that.
+    // So the edge that most obviously IS the house end answers `false`, and
+    // hips. Measured: `(-4,20)->(20,20)` on the house -> false.
+    //
+    // MODEL.dc.html SOLVED IT THE SAME WAY, which is where this comes from.
+    // Its open garages close their footprint along the house's own boundary
+    // path and _buildGarageRoof marks those closing edges gable BY INDEX --
+    // `index >= legCount - 1` -- with a distance of zero, rather than asking
+    // geometry a question geometry cannot answer.
+    //
+    // DECLARED IS A UNION WITH DERIVED, never a replacement: a design that
+    // names one edge does not stop the others being found. And it carries
+    // BOTH halves of "flush" -- the gable AND the zero overhang -- because
+    // they are one fact: a roof that dies into a wall has no eave there and
+    // no board to hang one on.
+    const named = new Set(Array.isArray(flush) ? flush : []);
+    const flushAt = index => {
+      if (named.has(index)) return true;
       if (!sharedWith) return false;
       const a = ring[index], b = ring[(index + 1) % ring.length];
       return G.edgeOnLoop(a, b, sharedWith);
     };
-    const pts = sharedWith
+    const sharedEdge = flushAt;
+    const pts = (sharedWith || named.size)
       ? G.offsetOutlineVariable(ring,
-        ring.map((_, index) => (sharedEdge(index) ? 0 : roofOverhangFt)))
+        ring.map((_, index) => (flushAt(index) ? 0 : roofOverhangFt)))
       : G.offsetOutline(ring, roofOverhangFt);
     // An offset that collapses the loop is not a roof, and the record would be
     // dropped on load anyway -- present on screen, gone after a reload.
@@ -10517,6 +10540,11 @@
           garage: true,
           plateHeightFt: assemblyFor(levelId).wallHeightFt,
           sourceLevelId: levelId,
+          // THE EDGE THE DESIGN SAYS DIES INTO THE BUILDING BEHIND IT. With a
+          // room over, that edge also lies on the room and the derivation
+          // would find it; with no room it runs four feet past the house's
+          // corner and nothing but the design knows.
+          flush: plan.garageRoofHouseEnd,
           // WHATEVER THIS ROOF WAS CUT AGAINST. With a room over the garage
           // the stub abuts the ROOM and never reaches the house; without one
           // the garage roof abuts the house along the two edges its walls
@@ -10524,11 +10552,25 @@
           against: plan.overGarage || plan.house,
         }));
       }
-      // THE ROOM'S OWN ROOF, at the full bearing: the room IS the second
-      // storey, so it is not a garage roof and must not carry the flag that
-      // would drop it one.
-      if (overGarageBody) {
-        madeRoofs.push(raiseRoofOver(plan.overGarage, {
+      // ── THE ROOM'S OWN ROOF, WHEN THE DESIGN GIVES IT ONE ─────────────
+      //
+      // AND TODAY IT NEVER DOES, which is the fix for what Movie reported on
+      // 20 Sep: "the 2 storey roofs have same problem the 1 storeys had
+      // earlier". The room over the garage bears on the HOUSE'S OWN PLATE --
+      // he ruled on 19 Sep that it is "even with the 2nd floor so will be
+      // considered 2nd floor" -- so a roof of its own is a second hip at the
+      // same height as the house's, meeting it badly. That is the 1 STOREY's
+      // defect exactly, one floor up, and premade-plans.js answers it the way
+      // it answered that one: houseRoof is the perimeter of both bodies and
+      // this loop is null.
+      //
+      // THE BRANCH STAYS, AND READS A LOOP RATHER THAN A BODY. It asked
+      // whether a room was BUILT and roofed it on that basis, which is the
+      // page deciding a question the design owns -- the same shape the
+      // garageRoof branch above avoids. A design that one day wants the room
+      // roofed separately says so by handing a loop, and nothing here moves.
+      if (overGarageBody && plan.overGarageRoof) {
+        madeRoofs.push(raiseRoofOver(plan.overGarageRoof, {
           sourceLevelId: upperStorey.id,
           against: plan.house,
         }));

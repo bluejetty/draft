@@ -192,6 +192,51 @@ measures, each press firing its own seam and not the other's.
 Movie's scope for the designs, 18 Sep: bungalows and attached garages first,
 bilevel later because it "will be more complex and need more work".
 
+**TWO BODIES AT ONE HEIGHT ARE ONE ROOF, AND THE RULE IS THE HEIGHT.** Movie,
+19 Sep, on a bungalow whose house and garage each wore their own hip: *"it
+doesn't know how to connect the garage and main floor roof - it is easy when
+they are the same height it would be like one large outline"*. That was fixed
+by splicing the two into one perimeter -- and the fix was written as a test of
+the STOREY COUNT, `garage && storeys === 1`, which is the same answer for the
+wrong reason.
+
+**SO IT CAME BACK ON THE 2 STOREY.** Movie, 20 Sep, with that tile's roof
+plan: *"the 2 storey roofs have same problem the 1 storeys had earlier"*. He
+is right, and the storey test is why it was missed. A 2 STOREY's GARAGE really
+is a floor lower -- Movie: *"make a single story garage"* -- but the ROOM OVER
+it is not: he ruled on 19 Sep that it is *"even with the 2nd floor so will be
+considered 2nd floor"*, so it bears on the house's own plate. Measured before
+anything was changed:
+
+```
+house roof   z -20..20   at the two-storey plate
+room over    z  20..38   ALSO at the two-storey plate
+garage stub  z  38..46   one storey lower
+```
+
+Two hips at one height, meeting badly, one floor up from where it was fixed.
+The condition is now the one Movie actually gave -- **the same height** -- and
+it has three answers rather than two: splice house and room when there is a
+room, splice house and garage when everything is one storey, otherwise the
+house alone.
+
+**THE GARAGE STUB IS OUT OF ALL THREE.** It genuinely stands a storey lower
+and keeps its own roof. The valley between it and the house roof is the
+CRICKET Movie asked for on 19 Sep -- *"when they are different heights it will
+need a 'cricket' between the roofs at places where low points could cause
+water damage"* -- and it is **still unbuilt**. Fixing the two hips at ONE
+height does not pretend to fix the one junction that genuinely has two.
+
+**AND THE TIE IS THE CORNER THE NEW LOOP IS DRAWN TO MISS.** The garage
+reaches a foot back along the house's side wall (x 16..20, z 19..20) so its
+foundation connects; the room deliberately starts on the house's front line
+instead, because *"a room starting there would hang a foot past the house's
+own front face"*. That one-foot strip is GARAGE, and garage is single storey
+-- taking it into a two-storey roof would be the very error the height test
+exists to refuse, in a 4 ft by 1 ft piece nothing else would notice. The
+bungalow's own loop DOES take its tie, correctly, because there the garage
+shares the house's plate. Both are checked.
+
 **AND THE DETACHED GARAGE IS A BUILDING, NOT A BOX.** Movie, 20 Sep, looking
 at the E3 LEFT elevation: *"also the detached garage doesn't have a roof or
 windows and doors yet i noticed"*. Four stud walls, its concrete, and nothing
