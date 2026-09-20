@@ -26,25 +26,33 @@ const MUTANTS = [
     name: 'THE SCREEN KEEPS THE PORTRAIT BOARD-S PERCENTAGES: the dog talks on the shelf',
     find: '  #dt-screen { position:absolute; left:22.2%; top:8%; width:73.4%; height:21.548%;',
     with: '  #dt-screen { position:absolute; left:41.863%; top:11.667%; width:51.078%; height:22.333%;',
-    test: 'the screen, the shelf and the bone sit on the panels drawn for them' },
+    test: 'the screen and the shelf sit on the panels drawn for them, the bone on a bare post' },
 
   { file: 'MODEL.html',
     name: 'THE SHELF KEEPS THEM TOO, so the cards stand off the edge of their strip',
     find: '  #dt-tiles { position:absolute; left:5.9%; top:32.5%; width:88.2%; height:44.1%;',
     with: '  #dt-tiles { position:absolute; left:9.5%; top:37%; width:81%; height:38.4%;',
-    test: 'the screen, the shelf and the bone sit on the panels drawn for them' },
+    test: 'the screen and the shelf sit on the panels drawn for them, the bone on a bare post' },
 
+  // THE DISC IT USED TO MISS IS NOT ON THE ART ANY MORE (Movie, 20 Sep:
+  // "there were 2 buttons showing so i deleted it from the drive thru"), so
+  // this mutant lands on a bare post rather than beside a painted one -- and
+  // it is still the mutant worth having, because the post is what the press
+  // has to stay on. At 11.4% and 81.1% the box grows to 228px and reaches
+  // down over the speaker plate, which is the only red left on this board:
+  // the check catches it twice over, on the red it finds and on the corners
+  // that are no longer grey.
   { file: 'MODEL.html',
-    name: 'THE BONE KEEPS THEM, so the press is beside the disc rather than on it',
+    name: 'THE BONE KEEPS THE PORTRAIT FIGURES, so the press slides off the post onto the speaker',
     find: '  #dt-bone { position:absolute; left:50%; top:81.7%; width:5.5%;',
     with: '  #dt-bone { position:absolute; left:50%; top:81.1%; width:11.4%;',
-    test: 'the screen, the shelf and the bone sit on the panels drawn for them' },
+    test: 'the screen and the shelf sit on the panels drawn for them, the bone on a bare post' },
 
   { file: 'MODEL.html',
     name: 'THE FRAME KEEPS THE OLD ASPECT, so the picture stretches and every zone slides',
     find: '    --dt-aspect:1.29; --dt-headroom:16px;',
     with: '    --dt-aspect:0.68; --dt-headroom:16px;',
-    test: 'the screen, the shelf and the bone sit on the panels drawn for them' },
+    test: 'the screen and the shelf sit on the panels drawn for them, the bone on a bare post' },
 
   // ── AND THE OVERFLOW, WHICH IS THE BUG MOVIE ACTUALLY REPORTED ──────────
   { file: 'MODEL.html',

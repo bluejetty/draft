@@ -206,9 +206,16 @@ test('nothing the dog says falls off the bottom of his board',
 //
 // SO THE CHECK ASKS THE IMAGE. Each zone's own corners are converted into
 // pixels of the board file and read: the screen and the shelf must land on
-// the black panels drawn for them, and the bone on the red disc. It fails the
-// moment either half moves without the other, and it names which zone.
-test('the screen, the shelf and the bone sit on the panels drawn for them',
+// the black panels drawn for them, and the bone on the bare face of the post.
+// It fails the moment either half moves without the other, and it names which
+// zone.
+//
+// THE BONE'S HALF CHANGED SHAPE ON 20 Sep and the block over that check says
+// why: the art painted a disc there, #dt-bone's own image stood on top of it,
+// and a drafter saw two buttons. The disc came off the board, so there is no
+// panel left to line the press up with -- and what replaced that measurement
+// is the reason it was worth making, which is that the press is on the post.
+test('the screen and the shelf sit on the panels drawn for them, the bone on a bare post',
   async ({ page }) => {
     await openPage(page);
     await h.openDriveThru(page);
@@ -233,12 +240,22 @@ test('the screen, the shelf and the bone sit on the panels drawn for them',
           w: r.width / frame.width * W, h: r.height / frame.height * H };
       };
       const dark = px => px[3] > 200 && px[0] < 60 && px[1] < 60 && px[2] < 60;
-      // RED-DOMINANT RATHER THAN BRIGHT RED. The disc is a lit dome with the
-      // white bone across the middle of it, so its centre pixel is a shaded
-      // 52,0,0 -- dark enough that a "bright red" test calls it black, and
-      // red enough that no part of the black panel could be mistaken for it.
+      // RED-DOMINANT RATHER THAN BRIGHT RED. This was written to FIND the
+      // painted disc and is kept to make sure one never comes back: the disc
+      // was a lit dome with the white bone across the middle of it, so its
+      // centre pixel was a shaded 52,0,0 -- dark enough that a "bright red"
+      // test calls it black, and red enough that no part of the black panel
+      // could be mistaken for it. A repaint that puts any of that back under
+      // the press is what this now catches.
       const red = px => px[3] > 200 && px[0] > 40
         && px[0] > px[1] * 2 + 20 && px[0] > px[2] * 2 + 20;
+      // THE POST'S FACE: opaque, neutral, and neither the black panels above
+      // it nor the dark air off the edge of the art. Measured on the board as
+      // 143,143,143 under the press and 144-149 either side of it, so the
+      // window is wide enough to survive a re-render of the same metal and
+      // narrow enough that a press hanging off the board fails.
+      const grey = px => px[3] > 200 && px[0] > 90 && px[0] < 210
+        && Math.abs(px[0] - px[1]) < 12 && Math.abs(px[1] - px[2]) < 12;
 
       // ── THE PANEL THE ZONE IS STANDING ON, MEASURED ────────────────────
       //
@@ -266,6 +283,12 @@ test('the screen, the shelf and the bone sit on the panels drawn for them',
       // five floods share one visited map and their extents are UNIONED: what
       // is wanted is how far the panel reaches, not how far one piece of it
       // does.
+      //
+      // THE DISC HAS SINCE COME OFF THE ART (below), so the five seeds now
+      // serve only the two black panels -- which have cards and lettering
+      // drawn on them and would break a single centre seed the same way.
+      // Kept as the reason rather than trimmed to the case that is left:
+      // the next panel with something painted across it needs this.
       const regionOf = (r, ok) => {
         const STEP = 2;
         const gw = Math.ceil(W / STEP), gh = Math.ceil(H / STEP);
@@ -323,7 +346,54 @@ test('the screen, the shelf and the bone sit on the panels drawn for them',
       };
       check('#dt-screen', dark, 'the dog-s black band');
       check('#dt-tiles', dark, 'the black shelf');
-      check('#dt-bone', red, 'the red disc');
+
+      // ── AND THE BONE STANDS ON A BARE POST ─────────────────────────────
+      //
+      // THE ART USED TO PAINT THE DISC AND #dt-bone STOOD ON TOP OF IT, which
+      // is two buttons in one place and reads as two buttons. Movie, 20 Sep:
+      // "there were 2 buttons showing so i deleted it from the drive thru
+      // (keep the actual button in that spot)". The painted one came off the
+      // artwork; the press did not move by a pixel.
+      //
+      // SO THERE IS NO LONGER A PANEL TO MEASURE THIS ZONE AGAINST, and the
+      // claim splits into the two halves that outlive the art:
+      //
+      //   NOTHING RED UNDER IT   the painted twin is gone and must not come
+      //                          back -- the failure the change was made for,
+      //                          and the one a redrawn board would bring back
+      //   THE POST UNDER IT      the press is on the post's face and not off
+      //                          the board, which is the half the old check
+      //                          was really buying with the disc
+      //
+      // A MARGIN, because a disc put back slightly off centre is the same
+      // defect as one put back exactly. 1.5% of the board each way: the only
+      // red left on this art is the speaker plate, and it starts 42px below
+      // the press, so this reaches for it and stops clear.
+      const bone = inImage('#dt-bone');
+      const MX = W * 0.015, MY = H * 0.015;
+      let painted = 0;
+      for (let y = bone.y - MY; y <= bone.y + bone.h + MY; y += 2) {
+        for (let x = bone.x - MX; x <= bone.x + bone.w + MX; x += 2) {
+          if (x < 0 || y < 0 || x >= W || y >= H) continue;
+          if (red(at(x, y))) painted += 1;
+        }
+      }
+      if (painted) {
+        out.push(`the art paints ${painted} red samples under #dt-bone -- `
+          + 'the disc is back, and that is two buttons again');
+      }
+      // FIVE POINTS AND THE CORNERS PULLED IN A WHISKER. The press is a
+      // circle in a square box, so its exact corner pixel is the most
+      // fragile sample on it; 8% in is still well outside the disc art the
+      // button itself draws and safely inside the box being checked.
+      [[0.5, 0.5], [0.08, 0.08], [0.92, 0.08], [0.08, 0.92], [0.92, 0.92]]
+        .forEach(([fx, fy]) => {
+          const px = at(bone.x + bone.w * fx, bone.y + bone.h * fy);
+          if (!grey(px)) {
+            out.push(`#dt-bone at (${fx}, ${fy}) of itself is over `
+              + `rgba(${px.join(',')}), which is not the post's face`);
+          }
+        });
 
       // ── AND THE PICTURE IS NOT STRETCHED ───────────────────────────────
       //
