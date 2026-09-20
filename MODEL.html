@@ -10328,7 +10328,11 @@
     // checked rather than assumed.
     const madeRoofs = [];
     if (levelPresent(ROOF_LEVEL_ID)) {
-      madeRoofs.push(raiseRoofOver(plan.house));
+      // THE ROOF'S OWN LOOP, which is NOT always the house's body. A
+      // bungalow with a garage is roofed over the perimeter of both -- the
+      // design says so through `houseRoof`, because where the two bodies
+      // meet is the design's arithmetic and not this page's.
+      madeRoofs.push(raiseRoofOver(plan.houseRoof || plan.house));
       if (plan.garageRoof) {
         // THE PLATE IS THE STOREY THE GARAGE ACTUALLY STANDS ON, asked of the
         // same assembly its walls were raised to rather than typed again.

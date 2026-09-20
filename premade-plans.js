@@ -331,6 +331,70 @@ if (!window.DraftPremadePlans) {
     return [pt(left, back), pt(right, back), pt(right, front), pt(left, front)];
   };
 
+  // ── ONE ROOF OVER BOTH BODIES ────────────────────────────────────────────
+  //
+  // Movie, 19 Sep, looking at a house and a garage each wearing their own
+  // hip: "it doesn't know how to connect the garage and main floor roof - it
+  // is easy when they are the same height it would be like one large outline
+  // (ignore the line between house and garage and make the roof full perimter
+  // as house and garage".
+  //
+  // SO THE PERIMETER IS THE TWO BODIES' OUTSIDE EDGE and the wall between
+  // them is not in it. Written out here rather than computed as a union: a
+  // boolean of two polygons is a second, weaker answer to a question this
+  // file already knows -- the garage is MEASURED from the house (see
+  // garageLoop), so where they meet is arithmetic, not a search.
+  //
+  //      (-16,-20) ---------------- (16,-20)
+  //          |                          |
+  //          |        HOUSE             |
+  //          |                     (16,19) --- (20,19)
+  //          |                                     |
+  //      (-16,20) --- (-4,20)                      |
+  //                      |        GARAGE           |
+  //                   (-4,46) ---------------- (20,46)
+  //
+  // TWO REFLEX CORNERS, ONE WING PROUD AND ONE INSET, which is the footprint
+  // that floated a ridge a full storey high until #439: roofSkeleton acted on
+  // the first of two simultaneous arrivals and left the second hanging off
+  // the ring as a spike. This loop is why that fix had to come first, and
+  // proto/roof-skeleton-harness.js carries the shape as its Z case.
+  const houseGarageLoop = () => {
+    const halfW = WIDTH_FT / 2;
+    const halfD = DEPTH_FT / 2;
+    const right = halfW + GARAGE_PAST_FT;
+    const left = right - GARAGE_WIDTH_FT;
+    const tieZ = halfD - GARAGE_TIE_FT;
+    const doorZ = halfD + GARAGE_DEPTH_FT;
+    return [
+      pt(-halfW, -halfD), pt(halfW, -halfD),
+      pt(halfW, tieZ),        // up the house's right wall as far as the tie
+      pt(right, tieZ),        // out along the garage's rear wall
+      pt(right, doorZ),       // down the garage's long side
+      pt(left, doorZ),        // the door wall
+      pt(left, halfD),        // back up to the house's front line
+      pt(-halfW, halfD),
+    ];
+  };
+
+  // ── WHICH LOOP THE HOUSE'S ROOF IS RAISED OVER ───────────────────────────
+  //
+  // THE SAME HEIGHT IS THE CONDITION, and it is Movie's own: "it is easy WHEN
+  // THEY ARE THE SAME HEIGHT ... when they are different heights it will need
+  // a 'cricket' between the roofs at places where low points could cause
+  // water damage".
+  //
+  // A BUNGALOW'S GARAGE STANDS ON THE SAME PLATE AS ITS HOUSE -- one storey
+  // each -- so the two roofs are one roof and this returns the perimeter of
+  // both. A 2 STOREY's garage is deliberately single storey (Movie: "make a
+  // single story garage"), so its roof lands a whole floor below the house's
+  // and they are two roofs with a valley between them that wants a cricket.
+  // The cricket is NOT built, and that is why this asks about storeys rather
+  // than always splicing: splicing a 2 STOREY would put one hip over bodies
+  // at two different heights, which is not a roof at all.
+  const houseRoofLoop = ({ garage = false, storeys = 1 } = {}) =>
+    (garage && storeys === 1 ? houseGarageLoop() : houseLoop());
+
   // ── 2 STOREY ─────────────────────────────────────────────────────────────
   //
   // Movie, 19 Sep: "make the 2 storey the same for now sizewise". So it is the
@@ -362,6 +426,9 @@ if (!window.DraftPremadePlans) {
     houseOpenings: houseOpenings(),
     upperOpenings: upperOpenings(),
     storeys: 2,
+    // ITS OWN FOOTPRINT, because the garage is a storey lower: see
+    // houseRoofLoop. Two roofs and a valley, until the cricket is built.
+    houseRoof: houseRoofLoop({ garage, storeys: 2 }),
     garage: garage ? garageLoop() : null,
     garageOpenings: garage ? garageOpenings() : null,
     // WHAT THE GARAGE'S OWN ROOF COVERS, which is the garage itself unless a
@@ -392,11 +459,14 @@ if (!window.DraftPremadePlans) {
     storeys: 1,
     garage: garage ? garageLoop() : null,
     garageOpenings: garage ? garageOpenings() : null,
-    // A BUNGALOW'S GARAGE ROOF COVERS THE WHOLE GARAGE: nothing sits on it.
-    // Said through the same helper the 2 STOREY uses rather than written as
-    // `garageLoop()` again -- one home for "what the garage roof covers", so
-    // the day that answer changes it changes once.
-    garageRoof: garage ? garageRoofLoop() : null,
+    // ONE ROOF OVER BOTH, when there is a garage. Same storey, same plate,
+    // same roof -- Movie's "like one large outline".
+    houseRoof: houseRoofLoop({ garage, storeys: 1 }),
+    // AND NO GARAGE ROOF OF ITS OWN, which is the other half of the same
+    // sentence. A second roof over the garage would now sit INSIDE the
+    // house's, which is worse than the two hips meeting badly that this
+    // replaces: a roof under a roof.
+    garageRoof: null,
   });
 
   // WHAT THE BOARD CAN ACTUALLY BUILD, keyed by build-menu.js entry id. A

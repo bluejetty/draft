@@ -1153,17 +1153,59 @@ test('the garage roof bears on the garage-s own walls, under either house', asyn
   // THAT IS NOT THIS CHANGE'S TO FIX -- it is cut-view's stack semantics and
   // both pages share it -- but it is not going to be quietly asserted away
   // either. What is checked here is the garage roof, which this change owns.
-  for (const entry of ['bungalow-garage', 'twoStorey-garage']) {
-    await open(page);
-    await order(page, 'bungalow', entry);
-    await saveOnNewPage(page);
-    const m = await cutStack(page);
+  // ONLY THE 2 STOREY NOW. A bungalow's garage stands on the same plate as
+  // its house, so the two are ONE ROOF over one perimeter -- Movie, 19 Sep:
+  // "it is easy when they are the same height it would be like one large
+  // outline". There is no garage roof there to bear on anything, which the
+  // check below this one is about. A 2 STOREY's garage is deliberately single
+  // storey, so its roof is a storey down and still its own.
+  await open(page);
+  await order(page, 'bungalow', 'twoStorey-garage');
+  await saveOnNewPage(page);
+  const m = await cutStack(page);
 
-    expect(m.garageRoofs, `${entry}: the garage got a roof of its own`).toBe(1);
-    expect(m.houseRoofs, `${entry}: and the house one`).toBe(1);
-    expect(m.garageBase, `${entry}: the garage roof left its own walls`)
-      .toBeCloseTo(m.mainWallTop, 4);
-  }
+  expect(m.garageRoofs, 'the garage got a roof of its own').toBe(1);
+  expect(m.houseRoofs, 'and the house one').toBe(1);
+  expect(m.garageBase, 'the garage roof left its own walls')
+    .toBeCloseTo(m.mainWallTop, 4);
+});
+
+// ── ONE ROOF OVER BOTH, WHEN THEY STAND AT THE SAME HEIGHT ────────────────
+//
+// Movie, 19 Sep, looking at a house and a garage each wearing their own hip
+// and meeting badly: "it doesn't know how to connect the garage and main
+// floor roof - it is easy when they are the same height it would be like one
+// large outline (ignore the line between house and garage and make the roof
+// full perimter as house and garage".
+//
+// THE FOOTPRINT IS WHY THIS COULD NOT BE DONE BEFORE. The union of the two
+// bodies has TWO REFLEX CORNERS, one wing proud and one inset, and on that
+// shape roofSkeleton floated the ridge a full storey high until #439 -- it
+// acted on the first of two simultaneous arrivals and left the second hanging
+// off the ring as a spike. proto/roof-skeleton-harness.js carries the shape.
+test('a bungalow and its garage are one roof over one perimeter', async ({ page }) => {
+  await open(page);
+  await order(page, 'bungalow', 'bungalow-garage');
+  await saveOnNewPage(page);
+  const saved = await savedFile(page);
+
+  const roofs = saved.roofs || [];
+  expect(roofs.length, 'a bungalow with a garage is roofed once').toBe(1);
+  expect(roofs[0].garage, 'and that roof is the house-s, not a garage roof')
+    .not.toBe(true);
+
+  // THE PERIMETER OF BOTH BODIES, counted rather than described: the union of
+  // a rectangle and a rectangle that overlaps one of its edges has EIGHT
+  // corners. Four would be the house alone, which is the drawing this
+  // replaces.
+  expect(roofs[0].points.length,
+    'the roof was raised over one body, not over both').toBe(8);
+
+  // AND IT REACHES THE GARAGE. The house alone stops at z=20; the garage runs
+  // to z=46, so a roof that does not get there is the house's roof wearing
+  // eight corners.
+  const far = Math.max(...roofs[0].points.map(p => p.z));
+  expect(far, 'the roof stops short of the garage').toBeGreaterThan(40);
 });
 
 test('a 2 STOREY-s garage roof bears one storey below the house-s', async ({ page }) => {
@@ -1215,8 +1257,13 @@ test('a roof that dies into the house is cut flush there, not overhung', async (
   // elevation drew a RAKE FASCIA along it -- a pair of parallel lines
   // floating in the middle of the house's own roof with no gable under them.
   // Movie marked exactly that on a screenshot.
+  //
+  // THE 2 STOREY IS THE SUBJECT NOW. A bungalow's garage roof was spliced
+  // into the house's -- same plate, one perimeter -- so there is no roof
+  // dying into a wall there to measure. The 2 STOREY's garage is a storey
+  // lower and still meets the house exactly this way.
   await open(page);
-  await order(page, 'bungalow', 'bungalow-garage');
+  await order(page, 'bungalow', 'twoStorey-garage');
   await saveOnNewPage(page);
   const saved = await savedFile(page);
 
@@ -1229,7 +1276,10 @@ test('a roof that dies into the house is cut flush there, not overhung', async (
   // place. An overhung edge has moved off it by the overhang.
   const onHouse = await page.evaluate(roofPoints => {
     const G = window.DraftGeometry2D;
-    const plan = window.DraftPremadePlans.planFor('bungalow-garage');
+    // THE PLAN THE TEST ORDERED, not a neighbour that happens to share a
+    // house loop. They do share one today; reading the other design's would
+    // be true by luck and silent the day it stops being.
+    const plan = window.DraftPremadePlans.planFor('twoStorey-garage');
     const segs = G.loopSegments(plan.house);
     return roofPoints.map((pt, index) => {
       const next = roofPoints[(index + 1) % roofPoints.length];
@@ -1254,8 +1304,11 @@ test('a roof that dies into the house is cut flush there, not overhung', async (
     const xs = pts.map(p => p.x), zs = pts.map(p => p.z);
     return { x: Math.max(...xs) - Math.min(...xs), z: Math.max(...zs) - Math.min(...zs) };
   };
+  // AGAIN THE ORDERED DESIGN. This read 'bungalow-garage' and went from a
+  // loop to NULL the moment that design's garage roof was spliced into its
+  // house's -- the control reaching for a body that no longer exists.
   const plan = await page.evaluate(() =>
-    window.DraftPremadePlans.planFor('bungalow-garage').garageRoof);
+    window.DraftPremadePlans.planFor('twoStorey-garage').garageRoof);
   const roofSpan = span(garageRoof.points);
   const loopSpan = span(plan);
   expect(roofSpan.x - loopSpan.x, 'the garage roof lost the overhang it should keep')
@@ -1268,8 +1321,11 @@ test('the roofs meet the house with gables, not with eaves running into a wall',
   // gable cuts it vertically at the wall, which is what the wall is there to
   // meet. MODEL.dc.html's _buildGarageRoof makes the same call through the
   // same test -- an edge lying on the house outline.
+  //
+  // THE 2 STOREY, for the reason the check above it gives: a bungalow's
+  // garage roof is now part of the house's.
   await open(page);
-  await order(page, 'bungalow', 'bungalow-garage');
+  await order(page, 'bungalow', 'twoStorey-garage');
   await saveOnNewPage(page);
   const saved = await savedFile(page);
 
