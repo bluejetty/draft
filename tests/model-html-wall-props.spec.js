@@ -150,14 +150,15 @@ test.describe('MODEL.html wall properties', () => {
         .toBe(8);
     });
 
-  test('RAIL is one of the assemblies a wall can be', async ({ page }) => {
-    // Movie, 19 Sep: "lets consider a 'RAIL' a wall type". A pony wall is a
-    // wall whose type is RAIL, so it needs no key of its own in the file.
+  test('GUARDRAIL is one of the assemblies a wall can be', async ({ page }) => {
+    // Movie, 19 Sep: "lets consider a 'RAIL' a wall type" -- clarified the
+    // next day to GUARDRAIL, "to be not confused with HANDRAIL". A pony wall
+    // is a wall whose type is this, so it needs no key of its own.
     await pressWorld(page, 0, 0);
-    await expect(chip(page, 'rail')).toBeVisible();
-    await chip(page, 'rail').click();
+    await expect(chip(page, 'guardrail')).toBeVisible();
+    await chip(page, 'guardrail').click();
     await save(page);
-    expect(wallsOf(await h.savedDrawing(page)).a.wallType).toBe('rail');
+    expect(wallsOf(await h.savedDrawing(page)).a.wallType).toBe('guardrail');
   });
 
   test('several walls change together, and a disagreement lights nothing',
@@ -220,6 +221,79 @@ test.describe('MODEL.html wall properties', () => {
     await save(page);
     expect(wallsOf(await h.savedDrawing(page)).a.topHeight).toBe(8);
   });
+
+  // ── RAIL ────────────────────────────────────────────────────────────────
+  //
+  // Movie, 20 Sep, refining "lets consider a 'RAIL' a wall type": "RAIL will
+  // be an option for WALL properties it will be toggle you can select turn on
+  // or off, and if you turn it on the height will be adjusted to what you
+  // input in that part (rail section) of the properties area".
+  //
+  // THE TOGGLE IS THE VERB AND THE WALL TYPE IS THE RECORD, which is the
+  // claim worth checking hardest: a `rail: true` beside a wallType would be
+  // two ways to say one thing and free to disagree. So every check below
+  // reads the TYPE back out of the saved file, and one of them asserts the
+  // two rows on screen answer the same way.
+  const railChip = (page, on) =>
+    page.locator(`#props-slot [data-prop-row="guardrail"] [data-prop-value="${on}"]`);
+
+  test('a wall is not a rail until it is switched on', async ({ page }) => {
+    await pressWorld(page, 0, 0);
+    await expect(railChip(page, 'off')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#props-slot [data-prop-row="guardrail height"]'),
+      'the guardrail height stands on a wall that is not one')
+      .toHaveCount(0);
+  });
+
+  test('switching GUARDRAIL on sets the type and brings 42\" with it',
+    async ({ page }) => {
+      await pressWorld(page, 0, 0);
+      await railChip(page, 'on').click();
+      await save(page);
+
+      const walls = wallsOf(await h.savedDrawing(page));
+      expect(walls.a.wallType, 'the toggle and the type are one fact')
+        .toBe('guardrail');
+      // A wall switched to a guardrail and left at eight feet is an
+      // eight-foot railing, which is not a thing. 42 inches is 3'-6".
+      expect(walls.a.topHeight, '42 inches, the guardrail height')
+        .toBeCloseTo(42 / 12, 5);
+      expect(walls.b.wallType, 'the wall nobody pressed must not move')
+        .toBe('stud_2x4');
+
+      // AND THE TWO ROWS AGREE, which is what "one fact" means on screen.
+      await expect(railChip(page, 'on')).toHaveAttribute('aria-pressed', 'true');
+      await expect(chip(page, 'guardrail')).toHaveAttribute('aria-pressed', 'true');
+    });
+
+  test('the guardrail height is the drafter-s once it is on', async ({ page }) => {
+    await pressWorld(page, 0, 0);
+    await railChip(page, 'on').click();
+    const field = page.locator('#props-slot [data-prop-field="guardrail height"]');
+    await expect(field).toBeVisible();
+    await field.fill(`3'-0"`);
+    await field.press('Enter');
+    await save(page);
+
+    expect(wallsOf(await h.savedDrawing(page)).a.topHeight).toBeCloseTo(3, 5);
+  });
+
+  test('switching it off returns the wall to an ordinary assembly',
+    async ({ page }) => {
+      await pressWorld(page, 0, 0);
+      await railChip(page, 'on').click();
+      await railChip(page, 'off').click();
+      await save(page);
+
+      const walls = wallsOf(await h.savedDrawing(page));
+      expect(walls.a.wallType, 'it stayed a guardrail after being switched off')
+        .toBe('stud_2x6');
+      // THE HEIGHT STAYS WHERE THE DRAFTER LEFT IT. Switching off says "this
+      // is not a guardrail", not "put back the wall I had" -- and a height that
+      // sprang back would undo an edit he may have made on purpose. Ctrl+Z
+      // is the page's answer to undoing.
+      expect(walls.a.topHeight).toBeCloseTo(42 / 12, 5);
+    });
 
   test('the box never describes something that is not selected',
     async ({ page }) => {

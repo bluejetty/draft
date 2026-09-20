@@ -639,6 +639,13 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'TOY', 'DRAFTING', 'RUFF', 'ROUGH', 'NIGHT', 'DAY',
             'Continue', 'Stay in TOY',
             'Break here', 'Move this wall',
+            // THE BONE'S SECOND PRESS (Movie, 19 Sep): "on 2nd always offer
+            // choice between drivetrhu or house build". Two answers to one
+            // question, like every other card on this page -- and neither
+            // is a new way to make anything. CHANGE IT opens the board the
+            // bone already opens; BUILD IT fires the seam the bone already
+            // fires. So no absence row moves.
+            'Change it', 'Build it',
             'Save first', 'Discard', 'Cancel',   // the unsaved guard
             'Save', 'Cancel'].sort(),           // the SAVE AS card
           // THE PAGE ROW'S LIVE DESTINATIONS. Links, not buttons, so they

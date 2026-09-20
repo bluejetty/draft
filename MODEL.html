@@ -1407,10 +1407,20 @@
   /* SAME SHELL AS #promote, deliberately. It is the same kind of question --
      a modal with two ways out -- and a second look would read as a second
      kind of thing. */
-  #bone-choice { position:fixed; inset:0; z-index:7; display:flex;
+  /* THE SAME SHELL for the bone's second press -- and it is a SEPARATE
+     element from #bone-choice above, deliberately. That one is the TOY
+     board's "break the bone here, or move this wall?", a different bone
+     entirely: reusing its id because both are about a bone and both offer
+     two answers is exactly the collision DEFINITIONS.md exists to stop. */
+  #bone-choice, #build-choice { position:fixed; inset:0; z-index:7; display:flex;
     align-items:center; justify-content:center; padding:24px;
     background:rgba(0,0,0,0.35); }
-  #bone-choice[hidden] { display:none; }
+  #bone-choice[hidden], #build-choice[hidden] { display:none; }
+  /* The queued house, named on its own line above the two answers -- Movie,
+     19 Sep: "(and should show what type of house they are currently going to
+     build - (1 storey bungalow, 2 storey over garage, Modified Bilevel
+     etc.)". A choice between two verbs with no subject is not a choice. */
+  [data-build-choice-house] { font-weight:700; letter-spacing:0.06em; }
   /* AND THE SAME SHELL AGAIN for the two file questions, for the same reason:
      three kinds of modal would teach the drafter that they are three
      different kinds of thing. They are one -- a question that must be
@@ -2012,6 +2022,33 @@
     <div class="promote-row">
       <button type="button" data-break-here>Break here</button>
       <button type="button" data-break-move>Move this wall</button>
+    </div>
+  </div>
+</div>
+
+<!-- THE BONE'S SECOND PRESS. Movie, 19 Sep: "when the bone is pressed we
+     should go to the DRIVE THRU menu always on the first press, and then on
+     the 2nd press ask them REQUEST TO CHANGE HOUSE PROPERTIES or BUILD
+     CURRENT HOUSE PROPERTIES (and should show what type of house they are
+     currently going to build", and, ruling on the collision with his own
+     18 Sep instruction: "go with the 19 sep rule, on 1st press go to
+     drivethru questions and on 2nd always offer choice between drivetrhu or
+     house build".
+
+     CONSTRUCTION DETAILS, NOT PROPERTIES, in the words on the buttons. Movie
+     corrected his own vocabulary the same day -- "properties is associated
+     with the OBJECTS" -- and DEFINITIONS.md carries the ruling. What this
+     press changes is WHICH HOUSE, so neither word is right for it and the
+     buttons say what they do instead.
+
+     NOT #bone-choice, which is the TOY board's break-or-move question about
+     a different bone. -->
+<div id="build-choice" data-build-choice hidden>
+  <div class="promote-card">
+    <p>Ready to build <span data-build-choice-house></span>.</p>
+    <div class="promote-row">
+      <button type="button" data-build-choice-change>Change it</button>
+      <button type="button" data-build-choice-build>Build it</button>
     </div>
   </div>
 </div>
@@ -5160,20 +5197,21 @@
     // should still press the BONE or blue house to cause the house to be
     // created" -- so the press that raises a house is a press that has been
     // answered, and the board has nothing left to ask.
-    if (fireBuild()) return;
     // AT THE WINDOW, THIS PRESS IS THE POST'S. The board is up, so the
-    // drafter is inside the drive-thru and a press means build -- whichever
-    // of the two bones is the one in front of him. On RUFF he never gets
-    // here because the board covers this press; on ROUGH it does not, and
-    // this is the press he actually reaches for.
+    // drafter is inside the drive-thru, and Movie said so twice: "unless
+    // they are inside the drive thru, if they press it then (or when the
+    // house is glowing blue) that will count as only BUILD HOUSE". On RUFF
+    // he never gets here because the board covers this press; on ROUGH it
+    // does not, and this is the press he actually reaches for.
     if (!signShut()) { orderAtWindow(); return; }
-    // AND WITH THE BOARD DOWN, A PICKED TYPE OPENS IT. This used to be
-    // `if (chosen()) return;` -- a bare return, which is the only outcome on
-    // this page that tells the drafter nothing whatsoever. Movie's rule:
-    // "when the bone is pressed we should go to the DRIVE THRU menu always
-    // on the first press". Nothing is drawn to build from (fireBuild said
-    // so), so the board is where the answer is.
-    if (chosen()) { callSign(boneFoot, 'menu'); return; }
+    // THE SECOND PRESS ASKS. A type is picked and the board is down, so the
+    // drafter has already been through the window once.
+    if (chosen()) { openBuildChoice(); return; }
+    // AND THE FIRST PRESS IS THE BOARD, ALWAYS -- including with an outline
+    // traced and waiting, which is the whole of Movie's ruling: "on 1st
+    // press go to drivethru questions". fireBuild used to run here and
+    // build on the spot; it now runs from the card's BUILD instead, so the
+    // traced shape is still what gets built, one press later and named.
     if (window.DraftBuildingBodies.isFull(drawing)) return;
     signRefusal = {
       line: 'NOTHING TO BUILD YET.',
@@ -5245,6 +5283,19 @@
   // So the meaning lives here and both presses call it. A second copy is what
   // made one of them wrong, and a second copy is what would make one of them
   // wrong again.
+  // A REFUSAL HAS TO BE READ, and the only place this page says one is on
+  // Gruff's screen. That was fine while the only press that could be refused
+  // stood ON the board; the bone's second press can order with the board
+  // DOWN, and paintSign() into a shut sign writes a sentence nobody sees --
+  // and worse, SPENDS it, because paintSign consumes signRefusal. So: raise
+  // the board and let its own paint carry the line.
+  const sayAtWindow = () => {
+    if (signShut()) callSign(boneFoot, 'menu'); else paintSign();
+    return false;
+  };
+
+  // Returns whether the order was actually placed, so a caller that pressed
+  // with the board down knows whether to expect a house or an explanation.
   const orderAtWindow = () => {
     const picked = chosen();
     if (picked?.entry?.needsSize && !chosenSize()) {
@@ -5255,8 +5306,7 @@
             + `${BM.GARAGE_SIZE_MAX_FT} feet.`
           : 'Pick a size off the shelf, or press OTHER and type your own.',
       };
-      paintSign();
-      return;
+      return sayAtWindow();
     }
     // AND ONE DETACHED GARAGE IS THE CAP (Movie's standing rule). Building
     // a second would put two of a body the project may hold one of, and
@@ -5268,8 +5318,7 @@
         line: 'YOU\u2019VE GOT ONE ALREADY.',
         note: 'One house and one detached garage is the lot.',
       };
-      paintSign();
-      return;
+      return sayAtWindow();
     }
     // AND ONE HOUSE IS THE CAP, the same rule the garage above is held to and
     // from the same module: building-bodies.js says what is standing, so
@@ -5287,17 +5336,69 @@
         line: 'YOU\u2019VE GOT A HOUSE ALREADY.',
         note: 'One house and one detached garage is the lot.',
       };
-      paintSign();
-      return;
+      return sayAtWindow();
     }
     // AND THE LAST REFUSAL IS THE WALLET'S, after the caps rather than
     // before them: a drafter with no bones AND a house already standing
     // should be told about the house, which is the thing he can do nothing
     // about by waiting.
-    if (!canAffordBuild()) { refuseForBones(); paintSign(); return; }
+    if (!canAffordBuild()) { refuseForBones(); return sayAtWindow(); }
     fireOrder();
+    return true;
   };
   document.getElementById('dt-bone').addEventListener('click', orderAtWindow);
+
+  // ── THE BONE'S SECOND PRESS ──────────────────────────────────────────
+  //
+  // Movie, 19 Sep, ruling on the collision between two of his own rules:
+  // "go with the 19 sep rule, on 1st press go to drivethru questions and on
+  // 2nd always offer choice between drivetrhu or house build". So a press
+  // with the board down NEVER builds straight off any more -- not even with
+  // an outline traced, which is what his 18 Sep instruction asked for and
+  // what this retires.
+  //
+  // WHAT THE CARD NAMES IS THE ENTRY'S OWN LABEL, out of build-menu.js:
+  // "1 STOREY", "2 STOREY + GARAGE + ROOM OVER", "MODIFIED BILEVEL" --
+  // Movie's own words for these houses, already written down once. The
+  // FAMILY is prefixed only for the detached garage, whose entries are named
+  // for their FOUNDATION ("THICKENED EDGE") and say nothing about what is
+  // being built on their own.
+  const buildChoice = document.getElementById('build-choice');
+  const queuedHouseLabel = () => {
+    const picked = chosen();
+    if (!picked?.entry) return '';
+    return picked.entry.needsSize
+      ? `${picked.family?.label || 'DETACHED GARAGE'} \u00b7 ${picked.entry.label}`
+      : picked.entry.label;
+  };
+  const closeBuildChoice = () => { buildChoice.hidden = true; };
+  const openBuildChoice = () => {
+    buildChoice.querySelector('[data-build-choice-house]').textContent =
+      queuedHouseLabel();
+    buildChoice.hidden = false;
+    buildChoice.querySelector('[data-build-choice-build]').focus();
+  };
+  buildChoice.querySelector('[data-build-choice-change]')
+    .addEventListener('click', () => { closeBuildChoice(); callSign(boneFoot, 'menu'); });
+  buildChoice.querySelector('[data-build-choice-build]')
+    .addEventListener('click', () => {
+      closeBuildChoice();
+      // HIS OWN OUTLINE FIRST, which is where the 18 Sep instruction went
+      // rather than being dropped: a drafter who traced a shape and picked a
+      // type gets the house on that shape. fireBuild answers false when
+      // there is nothing traced to build from, and the premade design is
+      // what the order round is for.
+      if (fireBuild()) return;
+      orderAtWindow();
+    });
+  // Escape backs out, as it does from every other card on this page. It
+  // CHANGES NOTHING -- the type stays picked and the next press asks again.
+  buildChoice.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    event.stopPropagation();
+    closeBuildChoice();
+    boneFoot.focus();
+  });
   // Escape shuts the sign, as it shuts every other thing this page puts over
   // the drawing. Captured before the drawing's own Escape so an open sign is
   // not also a cleared selection.
@@ -8295,7 +8396,7 @@
   // z-index 7 and asks a question that has to be answered first; the foot
   // strip sits at 6, under all of them. The drive-thru sign is not built and
   // will be the fifth entry in this list rather than a new mechanism.
-  const MODAL_IDS = ['promote', 'bone-choice', 'file-guard', 'save-as'];
+  const MODAL_IDS = ['promote', 'bone-choice', 'build-choice', 'file-guard', 'save-as'];
   const modalUp = () => MODAL_IDS.some(id => {
     const node = document.getElementById(id);
     return !!node && !node.hidden;
@@ -11624,6 +11725,20 @@
   // he changes them with.
   const REF_LINES = [['left', 'LEFT'], ['center', 'CENTRE'], ['right', 'RIGHT']];
 
+  // A GUARDRAIL IS 42", and that is a HELD DEFAULT rather than a code rule --
+  // the height one arrives at when it is first switched on, and Movie's to
+  // change. 42 inches is 3'-6", which is what the field shows.
+  //
+  // AND IT IS A GUARDRAIL, NOT A HANDRAIL. Movie drew the line, 20 Sep: "it
+  // should be clarified as GUARDRAIL (typical 42" height) / to be not
+  // confused with HANDRAIL which would be 3' height an accompany min one
+  // side of a staircase". Six inches apart and different jobs -- a guard
+  // stops a fall, a hand rail is what you hold going down. The handrail is
+  // NOT built, here or anywhere: it belongs to the stair, not to a wall
+  // type, and naming this one properly is what keeps the next reader from
+  // assuming it was.
+  const GUARDRAIL_HEIGHT_FT = 42 / 12;
+
   // What the walls in hand AGREE on, or null. A LIT CHIP IS A CLAIM ABOUT
   // EVERY WALL IN THE SELECTION, so two walls of different types light
   // nothing rather than lighting the first one's -- the drafter would
@@ -11690,6 +11805,59 @@
         return null;
       }, showSelectionProps);
     box.append(height('base', 'BASE'), height('top', 'TOP'));
+
+    // ── GUARDRAIL ─────────────────────────────────────────────────────────
+    //
+    // Movie, 20 Sep, refining his own earlier "lets consider a 'RAIL' a wall
+    // type": "RAIL will be an option for WALL properties it will be toggle
+    // you can select turn on or off, and if you turn it on the height will
+    // be adjusted to what you input in that part (rail section) of the
+    // properties area", and "properties area for WALL". Then the name, same
+    // day: "GUARDRAIL (typical 42" height) / to be not confused with
+    // HANDRAIL which would be 3' height an accompany min one side of a
+    // staircase".
+    //
+    // THE TOGGLE IS THE VERB; THE WALL TYPE IS THE RECORD. `wallType ===
+    // 'guardrail'` is what makes a wall one -- a single stored fact, no key
+    // of its own, nothing that can disagree with itself. A `rail: true` beside a
+    // type would be two ways to say one thing, which is the drift this file
+    // has paid for repeatedly; the toggle simply READS the type it already
+    // writes, and the TYPE row above shows the same answer.
+    //
+    // TURNING IT OFF RETURNS THE WALL TO ITS CONTEXT'S DEFAULT rather than
+    // to whatever it was before. Remembering the old type would be a second
+    // stored fact for the sake of one undo, and Ctrl+Z is the page's answer
+    // to that.
+    const isRail = wall => (wall.wallType || '') === 'guardrail';
+    const railOn = agreedOn(walls, isRail);
+    box.append(propRow('GUARDRAIL', [['on', 'ON'], ['off', 'OFF']],
+      railOn === null ? null : (railOn ? 'on' : 'off'),
+      id => {
+        if (id === 'off') {
+          applyToWalls(walls, { wallType: contextWallType(view || 'plan') });
+          return;
+        }
+        // THE HEIGHT COMES WITH IT. A wall switched to a guardrail and left
+        // at nine feet is a nine-foot railing, which is not a thing -- so
+        // the first switch brings 42" with it and the field below is how it
+        // is changed. A wall already at that height keeps the number it has.
+        applyToWalls(walls, { wallType: 'guardrail',
+          ...(walls.every(wall => Number(wall.topHeight) === GUARDRAIL_HEIGHT_FT)
+            ? {} : { topHeight: GUARDRAIL_HEIGHT_FT }) });
+      }));
+
+    // ONLY WHILE IT IS ON, because a guardrail height on a wall that is not
+    // one is a field that edits something else under another name -- it
+    // would be the TOP row again, wearing a word that does not apply.
+    if (railOn) {
+      box.append(propField('GUARDRAIL HEIGHT',
+        agreedOn(walls, wall => Number(wall.topHeight) || 0),
+        feet => {
+          if (!(feet > 0)) return 'A guardrail needs a height greater than zero.';
+          applyToWalls(walls, { topHeight: feet });
+          return null;
+        }, showSelectionProps));
+    }
     return box;
   };
 

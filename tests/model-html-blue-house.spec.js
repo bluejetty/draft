@@ -75,9 +75,29 @@ async function orderAtWindow(page, family, entry) {
   await page.locator(`[data-build-entry="${entry}"]`).click();
 }
 
+// Press a world point on the plan, through the camera the page publishes.
+// h.clickWorld reads [data-model-canvas], which is the OLD page's canvas.
+async function pressWorld(page, x, z) {
+  const frame = await h.planFrame(page);
+  const [cx, cy] = frame.at(x, z);
+  await page.mouse.click(cx, cy);
+  await page.waitForTimeout(80);
+}
+
 async function save(page) {
   await page.locator('#save').click();
   await expect(page.locator('#save')).toHaveText('SAVED', { timeout: 6000 });
+}
+
+// Saved, then counted: this page does not autosave, so the store holds the
+// fixture until SAVE is pressed.
+async function savedOutlines(page) {
+  await save(page);
+  return page.evaluate(async bucket => {
+    const file = await window.SharedFileStore.loadSharedFile(bucket);
+    if (!file) return 0;
+    return (JSON.parse(await file.text()).outlines || []).length;
+  }, BUCKET);
 }
 
 const wallCount = page => page.evaluate(async bucket => {
@@ -121,7 +141,16 @@ test.describe('the blue house builds', () => {
       expect(await wallCount(page)).toBeGreaterThan(0);
     });
 
-  test('with the board down and a type already picked, the press opens it',
+  // ── THE TWO PRESSES ────────────────────────────────────────────────────
+  //
+  // Movie ruled the collision between two of his own rules, 19 Sep: "go with
+  // the 19 sep rule, on 1st press go to drivethru questions and on 2nd always
+  // offer choice between drivetrhu or house build". So the 18 Sep rule --
+  // "when they draw the U outline, they should still press the BONE or blue
+  // house to cause the house to be created" -- no longer describes the FIRST
+  // press. The traced shape still gets built; it is built from the card.
+
+  test('the second press asks, and names the house it would build',
     async ({ page }) => {
       await open(page, 'rough');
       await orderAtWindow(page, 'bungalow', 'bungalow');
@@ -129,10 +158,105 @@ test.describe('the blue house builds', () => {
       await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
 
       await page.locator('#bone').click();
-      // The press lights for two seconds before the board rises, so this
-      // waits for the board rather than for the press.
-      await expect(page.locator('#drivethru'),
-        'a press with a type picked and nothing drawn did nothing at all')
-        .not.toHaveAttribute('data-shut', '', { timeout: 6000 });
+      const card = page.locator('#build-choice');
+      await expect(card).toBeVisible();
+      // "(and should show what type of house they are currently going to
+      // build - (1 storey bungalow, 2 storey over garage, Modified Bilevel
+      // etc.)". A choice between two verbs with no subject is not a choice.
+      await expect(card.locator('[data-build-choice-house]')).toHaveText('1 STOREY');
+      // AND IT HAS NOT BUILT ANYTHING BY ASKING. Escape first: the card is a
+      // full-sheet modal and SAVE is behind it, which is the point of a
+      // modal and not something to work around by reaching past it.
+      await page.keyboard.press('Escape');
+      await expect(card).toBeHidden();
+      await save(page);
+      expect(await wallCount(page)).toBe(0);
+    });
+
+  test('CHANGE IT goes back to the window', async ({ page }) => {
+    await open(page, 'rough');
+    await orderAtWindow(page, 'bungalow', 'bungalow');
+    await page.keyboard.press('Escape');
+    await page.locator('#bone').click();
+    await page.locator('[data-build-choice-change]').click();
+    await expect(page.locator('#build-choice')).toBeHidden();
+    // The press lights for two seconds before the board rises.
+    await expect(page.locator('#drivethru'))
+      .not.toHaveAttribute('data-shut', '', { timeout: 6000 });
+  });
+
+  test('BUILD IT builds the house that was named', async ({ page }) => {
+    await open(page, 'rough');
+    await orderAtWindow(page, 'bungalow', 'bungalow');
+    await page.keyboard.press('Escape');
+    await page.locator('#bone').click();
+    await page.locator('[data-build-choice-build]').click();
+    await page.waitForTimeout(600);
+    await expect(page.locator('#build-choice')).toBeHidden();
+    await save(page);
+    expect(await wallCount(page),
+      'the card offered to build and then did not').toBeGreaterThan(0);
+  });
+
+  // THE RULING'S SHARP EDGE, and the reason it is worth a check of its own:
+  // an outline traced and a type picked used to build ON THE FIRST PRESS.
+  // Movie chose the board over that. The shape is not lost -- it is what the
+  // card's BUILD then raises -- but the first press must not build it.
+  // A TYPE PICKED **AND** AN OUTLINE TRACED is the scenario Movie's 18 Sep
+  // rule described and his 19 Sep ruling overrode: "when they draw the U
+  // outline, they should still press the BONE or blue house to cause the
+  // house to be created". That press used to build on the spot, because
+  // fireBuild ran first. It asks now.
+  //
+  // BOTH HALVES ARE LOAD-BEARING. With no type picked fireBuild answers
+  // false and builds nothing anyway, so a check that only traced a shape
+  // would pass against the old code and prove nothing -- measured, by
+  // putting the old line back and watching it stay green.
+  test('a traced outline with a type picked asks before it builds',
+    async ({ page }) => {
+      await open(page, 'rough');
+      await orderAtWindow(page, 'bungalow', 'bungalow');
+      await page.keyboard.press('Escape');
+      await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
+
+      // NO selectTool HERE. Picking a type at the window ARMS the trace --
+      // "_pressBuildType does two things, records the type AND arms the
+      // outline tool" -- so pressing the key again would put it down, and
+      // the corners below would land on a SELECT tool. The first draft of
+      // this check did exactly that and traced nothing.
+      //
+      // pressWorld, NOT h.clickWorld: that helper reads
+      // [data-model-canvas], which is the OLD page's canvas, and waits out
+      // its timeout on this one.
+      const CORNERS = [[-14, -9], [14, -9], [14, 9], [-14, 9]];
+      for (const [x, z] of CORNERS) await pressWorld(page, x, z);
+      // CLOSED ON THE FIRST CORNER, which is the outline's own gesture on
+      // this page -- press the corners, press the first one again. Enter
+      // commits NOTHING here: an earlier draft of this check used it, traced
+      // no outline at all, and therefore passed against the very behaviour
+      // it was written to forbid. Measured by reading the saved file back:
+      // outlines 0.
+      await pressWorld(page, ...CORNERS[0]);
+      await page.waitForTimeout(250);
+      expect((await savedOutlines(page)),
+        'no outline was traced, so this check would prove nothing')
+        .toBeGreaterThan(0);
+
+      await page.locator('#bone').click();
+      await expect(page.locator('#build-choice'),
+        'the first press built the traced house instead of asking')
+        .toBeVisible();
+      await page.keyboard.press('Escape');
+      await save(page);
+      expect(await wallCount(page),
+        'and it built nothing by asking').toBe(0);
+
+      // THE TRACED SHAPE IS NOT LOST, which is the half of the 18 Sep rule
+      // that survives: the card's BUILD is where it gets raised.
+      await page.locator('#bone').click();
+      await page.locator('[data-build-choice-build]').click();
+      await page.waitForTimeout(600);
+      await save(page);
+      expect(await wallCount(page)).toBeGreaterThan(0);
     });
 });

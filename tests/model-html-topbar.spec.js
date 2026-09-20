@@ -108,7 +108,16 @@ test('THE SEAM: choosing a house draws nothing at all', async ({ page }) => {
     .toBe(before);
 });
 
-test('the seam hands over the entry, and BONE fires even with nothing picked',
+// THE BONE NO LONGER FIRES THE BUILD SEAM ON A PRESS OF ITS OWN. Movie
+// ruled it 19 Sep: "on 1st press go to drivethru questions and on 2nd always
+// offer choice between drivetrhu or house build". So the press that used to
+// hand the geometry side a null order now opens the board, and the press
+// that used to hand it the chosen entry now offers the card -- whose BUILD
+// is what reaches the seam.
+//
+// WHAT THIS TEST IS ABOUT DID NOT CHANGE: the TILES hand over the entry, and
+// the bone is never silent. Only where the build seam is fired from moved.
+test('the seam hands over the entry, and the bone answers an empty press',
   async ({ page }) => {
     await openBar(page);
 
@@ -122,23 +131,42 @@ test('the seam hands over the entry, and BONE fires even with nothing picked',
       // pressed. The tiles stay wired either way.
       document.getElementById('dt-close').click();
 
-      // BONE with nothing chosen this session: fires with null rather than
-      // swallowing the press. What an empty press means is the geometry
-      // side's call, so it has to be told the press happened.
+      // BONE WITH NOTHING CHOSEN: the board, not the seam. It used to fire
+      // build:null and open the board only when that served nothing; a press
+      // that cannot build should not be asking the geometry side whether it
+      // can.
       document.getElementById('bone').click();
       await new Promise(r => setTimeout(r, 80));
+      const afterEmpty = log.slice();
 
       document.querySelector('[data-build-family="bilevel"]').click();
       await new Promise(r => setTimeout(r, 80));
       document.querySelector('[data-build-entry="modifiedBilevel"]').click();
       await new Promise(r => setTimeout(r, 120));
-      document.getElementById('bone').click();
+      // The tile press ARMS THE TRACE and shuts nothing, so the board may be
+      // back up; drop it, or the next press is the window's build verb.
+      document.getElementById('dt-close').click();
       await new Promise(r => setTimeout(r, 80));
-      return { log, chosen: window.ModelBuild.chosen()?.entry?.id ?? null };
+
+      // AND THE SECOND PRESS ASKS. The card's BUILD is what fires the seam.
+      document.getElementById('bone').click();
+      await new Promise(r => setTimeout(r, 120));
+      const cardUp = !document.getElementById('build-choice').hidden;
+      const named = document.querySelector('[data-build-choice-house]').textContent;
+      document.querySelector('[data-build-choice-build]').click();
+      await new Promise(r => setTimeout(r, 120));
+      return { log, afterEmpty, cardUp, named,
+        chosen: window.ModelBuild.chosen()?.entry?.id ?? null };
     });
 
+    expect(seen.afterEmpty,
+      'the empty press reached the build seam instead of opening the board')
+      .toEqual([]);
+    expect(seen.cardUp, 'the second press did not offer the choice').toBe(true);
+    expect(seen.named, 'the card did not name the house it would build')
+      .toBe('MODIFIED BILEVEL');
     expect(seen.log).toEqual([
-      'build:null', 'choose:modifiedBilevel', 'build:modifiedBilevel',
+      'choose:modifiedBilevel', 'build:modifiedBilevel',
     ]);
     expect(seen.chosen).toBe('modifiedBilevel');
   });
