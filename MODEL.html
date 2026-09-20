@@ -852,12 +852,43 @@
   #dt-bone { position:absolute; left:50%; top:81.7%; width:5.5%;
     transform:translateX(-50%); aspect-ratio:1 / 1; border:none; padding:0;
     border-radius:50%; background:transparent; cursor:pointer;
-    pointer-events:auto; }
+    pointer-events:auto;
+    /* THE SHADOW THE ART USED TO CAST, cast by the press itself now (Movie,
+       20 Sep: "put the little shadow around the bone button on the bottom so
+       it looks more 3d"). The painted disc left the board with its shadow,
+       and a disc lying flat on the post is a sticker -- the shadow was the
+       whole of what made it a dome.
+
+       MEASURED OFF THE OLD ARTWORK, not dialled in by eye. On the 2000px
+       board the painted disc was 123px across, and the halo around it
+       reached 0px left, 0px right, 0px above and 10px BELOW -- which is why
+       Movie's word for it is "on the bottom" and why there is no x offset
+       here. Down the disc's centre line it ran 57 levels under the post's
+       143 grey about 4px below the edge and was gone by 10px: an offset of
+       4, a blur of 6, and 57/143 of black.
+
+       AS FRACTIONS OF --dt-w, BECAUSE THE SIGN IS NOT ONE SIZE. Every figure
+       on this board is a percentage of the picture and this is the same rule
+       one layer down: 4/2000 and 6/2000 are the two numbers the art was
+       measured in. Fixed pixels would be right at the 860px sign and wrong
+       at every other width -- a slab on a phone, a hairline on a wall.
+
+       ON THE IMAGE RATHER THAN THE BUTTON: drop-shadow traces the PNG's
+       alpha, which is the disc. The button's own box is a square with
+       transparent corners, so a box-shadow would cast a square.
+
+       AND IT IS A VARIABLE BECAUSE `filter` DOES NOT STACK. The hover
+       brightens the disc, and a bare `filter:brightness()` there would
+       REPLACE this rather than add to it -- the press would drop its shadow
+       at the exact moment the drafter points at it. */
+    --bone-lift: drop-shadow(0 calc(var(--dt-w) * 0.002)
+      calc(var(--dt-w) * 0.003) rgba(0,0,0,0.40)); }
   /* CONTAIN, BECAUSE THE ARTWORK IS NO LONGER SQUARE. The post's box is a
      1:1 circle and the bone filled it; a house is taller than it is wide and
      a stretched one reads as a different building. */
-  #dt-bone img { width:100%; height:100%; display:block; object-fit:contain; }
-  #dt-bone:hover img { filter:brightness(1.12); }
+  #dt-bone img { width:100%; height:100%; display:block; object-fit:contain;
+    filter:var(--bone-lift); }
+  #dt-bone:hover img { filter:var(--bone-lift) brightness(1.12); }
   #dt-close { position:absolute; right:5.5%; top:9%; pointer-events:auto;
     font-family: var(--font-ui); font-size:11px; font-weight:700;
     letter-spacing:0.08em; cursor:pointer; color:#f2efe9;
