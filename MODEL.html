@@ -11725,12 +11725,19 @@
   // he changes them with.
   const REF_LINES = [['left', 'LEFT'], ['center', 'CENTRE'], ['right', 'RIGHT']];
 
-  // A GUARD IS 3'-6", and that is a HELD DEFAULT rather than a code rule --
-  // the height a rail arrives at when it is first switched on, and Movie's
-  // to change. It is the number a guard rail is built to; the one a drafter
-  // wants for a pony wall under a half-height opening is his own, and the
-  // RAIL HEIGHT field is where he says so.
-  const RAIL_HEIGHT_FT = 3.5;
+  // A GUARDRAIL IS 42", and that is a HELD DEFAULT rather than a code rule --
+  // the height one arrives at when it is first switched on, and Movie's to
+  // change. 42 inches is 3'-6", which is what the field shows.
+  //
+  // AND IT IS A GUARDRAIL, NOT A HANDRAIL. Movie drew the line, 20 Sep: "it
+  // should be clarified as GUARDRAIL (typical 42" height) / to be not
+  // confused with HANDRAIL which would be 3' height an accompany min one
+  // side of a staircase". Six inches apart and different jobs -- a guard
+  // stops a fall, a hand rail is what you hold going down. The handrail is
+  // NOT built, here or anywhere: it belongs to the stair, not to a wall
+  // type, and naming this one properly is what keeps the next reader from
+  // assuming it was.
+  const GUARDRAIL_HEIGHT_FT = 42 / 12;
 
   // What the walls in hand AGREE on, or null. A LIT CHIP IS A CLAIM ABOUT
   // EVERY WALL IN THE SELECTION, so two walls of different types light
@@ -11799,17 +11806,20 @@
       }, showSelectionProps);
     box.append(height('base', 'BASE'), height('top', 'TOP'));
 
-    // ── RAIL ──────────────────────────────────────────────────────────────
+    // ── GUARDRAIL ─────────────────────────────────────────────────────────
     //
     // Movie, 20 Sep, refining his own earlier "lets consider a 'RAIL' a wall
     // type": "RAIL will be an option for WALL properties it will be toggle
     // you can select turn on or off, and if you turn it on the height will
     // be adjusted to what you input in that part (rail section) of the
-    // properties area", and "properties area for WALL".
+    // properties area", and "properties area for WALL". Then the name, same
+    // day: "GUARDRAIL (typical 42" height) / to be not confused with
+    // HANDRAIL which would be 3' height an accompany min one side of a
+    // staircase".
     //
     // THE TOGGLE IS THE VERB; THE WALL TYPE IS THE RECORD. `wallType ===
-    // 'rail'` is what makes a wall a rail -- one stored fact, no new key,
-    // and nothing that can disagree with itself. A `rail: true` beside a
+    // 'guardrail'` is what makes a wall one -- a single stored fact, no key
+    // of its own, nothing that can disagree with itself. A `rail: true` beside a
     // type would be two ways to say one thing, which is the drift this file
     // has paid for repeatedly; the toggle simply READS the type it already
     // writes, and the TYPE row above shows the same answer.
@@ -11818,33 +11828,32 @@
     // to whatever it was before. Remembering the old type would be a second
     // stored fact for the sake of one undo, and Ctrl+Z is the page's answer
     // to that.
-    const isRail = wall => (wall.wallType || '') === 'rail';
+    const isRail = wall => (wall.wallType || '') === 'guardrail';
     const railOn = agreedOn(walls, isRail);
-    box.append(propRow('RAIL', [['on', 'ON'], ['off', 'OFF']],
+    box.append(propRow('GUARDRAIL', [['on', 'ON'], ['off', 'OFF']],
       railOn === null ? null : (railOn ? 'on' : 'off'),
       id => {
         if (id === 'off') {
           applyToWalls(walls, { wallType: contextWallType(view || 'plan') });
           return;
         }
-        // THE HEIGHT COMES WITH IT. A wall switched to a rail and left at
-        // nine feet is a nine-foot railing, which is not a thing -- so the
-        // first switch brings the guard height with it and the field below
-        // is how it is changed. A wall already at a rail's height keeps the
-        // number it has.
-        applyToWalls(walls, { wallType: 'rail',
-          ...(walls.every(wall => Number(wall.topHeight) === RAIL_HEIGHT_FT)
-            ? {} : { topHeight: RAIL_HEIGHT_FT }) });
+        // THE HEIGHT COMES WITH IT. A wall switched to a guardrail and left
+        // at nine feet is a nine-foot railing, which is not a thing -- so
+        // the first switch brings 42" with it and the field below is how it
+        // is changed. A wall already at that height keeps the number it has.
+        applyToWalls(walls, { wallType: 'guardrail',
+          ...(walls.every(wall => Number(wall.topHeight) === GUARDRAIL_HEIGHT_FT)
+            ? {} : { topHeight: GUARDRAIL_HEIGHT_FT }) });
       }));
 
-    // ONLY WHILE IT IS ON, because a rail height on a wall that is not a
-    // rail is a field that edits something else under another name -- it
+    // ONLY WHILE IT IS ON, because a guardrail height on a wall that is not
+    // one is a field that edits something else under another name -- it
     // would be the TOP row again, wearing a word that does not apply.
     if (railOn) {
-      box.append(propField('RAIL HEIGHT',
+      box.append(propField('GUARDRAIL HEIGHT',
         agreedOn(walls, wall => Number(wall.topHeight) || 0),
         feet => {
-          if (!(feet > 0)) return 'A rail needs a height greater than zero.';
+          if (!(feet > 0)) return 'A guardrail needs a height greater than zero.';
           applyToWalls(walls, { topHeight: feet });
           return null;
         }, showSelectionProps));
