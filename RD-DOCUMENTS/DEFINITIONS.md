@@ -766,6 +766,58 @@ An answer nobody gave, filled from the standing defaults **and named in the
 order**. A default that is not disclosed is a decision taken behind someone's
 back.
 
+### GUARDRAIL vs HANDRAIL
+
+**Movie drew the line himself, 20 Sep**, the day after asking for "RAIL":
+*"i guess it should be clarified as GUARDRAIL (typical 42\" height) / to be
+not confused with HANDRAIL which would be 3' height an accompany min one side
+of a staircase"*.
+
+| | height | what it is | where it is |
+|---|---|---|---|
+| **GUARDRAIL** | **42"** (3'-6") | a wall that stops a fall | `wall-types.js` id `guardrail`; the toggle in WALL PROPERTIES sets it, and `GUARDRAIL_HEIGHT_FT` is what the first switch brings |
+| **HANDRAIL** | **36"** (3'-0") | what you hold going down | **not built, anywhere.** It belongs to the STAIR, not to a wall type |
+
+**Six inches apart and different jobs**, which is why the short word cannot
+serve both. A guardrail IS a wall — a drafter makes one by switching a wall
+to it, and its height is that wall's top. A handrail is not a wall at all: it
+runs along at least one side of a staircase and is the stair's business.
+
+**`rail` shipped for a day** under the short name, between #440 and this, and
+is retired to `LEGACY_WALL_TYPES` (`rail: 'guardrail'`) rather than deleted,
+so a drawing saved in those hours still opens. That table is exactly what a
+retired id is for, and this is the second entry in it.
+
+**Say instead.** GUARDRAIL for the wall and its toggle; HANDRAIL only when the
+stair grows one, and never for the wall. Naming this one properly is what
+stops the next reader assuming the other was built.
+
+### PROPERTIES vs CONSTRUCTION DETAILS
+
+**Movie ruled it on himself, 19 Sep**, having used the first word for the
+second thing an hour earlier: *"when i said house PROPERTIES i might have used
+the wrong word - properties is associated with the OBJECTS, the house
+Construction Details is more appropriate name for the PROJECT information"*.
+
+| | belongs to | lives in | edited in |
+|---|---|---|---|
+| **PROPERTIES** | ONE OBJECT the drafter selected | the object's own record — a wall's `wallType`, `refLine`, `baseHeight`, `topHeight` | `#props-slot`, left rail, routed by `SELECTION_PANELS` off the selection |
+| **CONSTRUCTION DETAILS** | THE PROJECT | `drawing.levelAssemblies` — `wallHeightFt`, `joistDepthIn`, `slabThicknessIn`, the footings | `PROJECT.html`, `setAssembly` (`:528`), the only writer of that key |
+
+**Why it collided.** They are the same kind of fact about two different
+subjects — a height, a thickness, an assembly id — and one is the DEFAULT the
+other starts from. `MODEL.html` reads `levelAssemblies` in exactly two places
+(`:3578`, `:5218`) and both are reads; the numbers flow one way, into a wall
+when it is drawn, and never back. So a drafter looking at 8'-1 1/2" on a wall
+and 8'-1 1/2" in PROJECT is looking at two records that agree by history
+rather than by rule, and calling both of them "properties" hides exactly that.
+
+**Say instead.** PROPERTIES for the box that opens when something is selected,
+and CONSTRUCTION DETAILS for everything PROJECT holds. The drive-thru's quiet
+link out says the second (`#dt-project`), and the bone's unbuilt second press
+must say it too — Movie's own phrasing for that press, "REQUEST TO CHANGE
+HOUSE PROPERTIES", is the wording this entry retires.
+
 ---
 
 ## Drawing

@@ -683,6 +683,29 @@
         // untouched bucket compares equal to.
         if (!base || typeof base !== 'object') base = drawing;
         const merged = { ...base, ...projectKeys() };
+        // ── AND THE WALLS THAT WERE ON A DEFAULT FOLLOW IT ────────────────
+        //
+        // Movie, 19 Sep: "if the floor or ceiling is the same height as the
+        // DEFAULT, if they change the PROJECT DEFAULT, also change those
+        // heights to match". A wall's top is copied in when it is drawn and
+        // never looked at again, so until now raising MAIN FL to 9' moved
+        // nothing already on the sheet.
+        //
+        // HERE, AND ONLY HERE, and that placement is the whole of the
+        // safety. This function is the one moment the page holds BOTH the
+        // stored table and the one about to replace it -- which is what says
+        // which walls were following the old number -- and it holds the
+        // FRESHLY RE-READ file rather than the snapshot this tab opened
+        // with. That is the same re-read the block above exists for: a house
+        // drawn in the Model Space while a PROJECT tab sits open must not be
+        // flattened, and transforming `base.walls` rather than writing our
+        // own copy of them keeps that promise while still moving them.
+        //
+        // NULL MEANS NOTHING MOVED, so the key is left off `merged` entirely
+        // and the write stays the six project keys it has always been.
+        const followed = window.DraftLevelAssembly.wallsFollowingHeights(
+          base.walls, base.levelAssemblies, merged.levelAssemblies);
+        if (followed) merged.walls = followed;
         const file = new File([JSON.stringify(merged)], fileName, { type: 'application/json' });
         try {
           await store.saveSharedFile(file, BUCKET, { ifRev: at.rev });
