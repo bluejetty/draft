@@ -751,8 +751,18 @@ test('NO PIECE OF CHROME COVERS ANY OTHER, shut or open', async ({ page }) => {
   // second tab on one edge is allowed at all: #389's collisions were two
   // tabs pinned to the same top, and the only thing that distinguishes this
   // arrangement from that one is a check that measures the pair.
+  // THE UPPER-RIGHT COLUMN IS DECLARED, AND SO IS WHAT IT HOLDS. The clock
+  // (Movie, 20 Sep) is the first thing on this page that stands under the top
+  // bar unconditionally -- the two file notes are hidden on a page with
+  // nothing wrong with the file, so that corner was empty in every run this
+  // check has ever made. An always-on element in a corner nothing measured is
+  // precisely the shape of the four collisions named above, so it goes in the
+  // list rather than being trusted. The column and its children are all here;
+  // a container is not a collision, so the pairs inside it are skipped and
+  // what is left is the column against every other piece of chrome.
   const ids = ['left-tab', 'left-rail', 'right-tab', 'previews-tab', 'right-rail',
-    'readout', 'readout-tab', 'hint', 'elsewhere', 'strip', 'file-row', 'mode-corner',
+    'readout', 'readout-tab', 'hint', 'upper-right', 'clock', 'elsewhere',
+    'strip', 'file-row', 'mode-corner',
     'settings-corner', 'page-row', 'house-strip'];
   const clashesIn = () => page.evaluate(list => {
     const vis = list.map(id => document.getElementById(id))

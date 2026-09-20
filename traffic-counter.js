@@ -50,7 +50,29 @@
     el.rel = 'noopener';
     el.title = 'Page visits — the full public count lives here';
     el.textContent = label;
-    var common = 'font-family:\'Barlow Condensed\',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; color:rgba(29,31,32,0.45); text-decoration:none; white-space:nowrap;';
+    // THE INK ASKS THE PAGE FIRST, and the literal is only the fallback.
+    //
+    // rgba(29,31,32,0.45) is 45% of #1d1f20, which is INK FOR A WHITE PAGE.
+    // Seven of the eight pages that carry this module are white and it is
+    // right on all of them. MODEL.html is not: it loads palette.js, it
+    // defaults to the NIGHT skin, and --surface-page there is #1d1f20 -- the
+    // same colour. Composited, that is a contrast ratio of 1.00:1. Not dim,
+    // not low-contrast: the count would paint in exactly the colour of the
+    // page behind it and be invisible, on the one page the whole named-slot
+    // change was made for. Measured on the day skin too, where the literal
+    // gives 2.75:1 against #f2f2f3 -- under the 4.5:1 small text wants, so
+    // that one was quietly wrong as well.
+    //
+    // --ink-quiet IS THE TOKEN FOR EXACTLY THIS -- palette.js:37 calls it
+    // "hints and captions, deliberately below the fold" -- and it is repainted
+    // for whichever skin is in force: 5.08:1 on night, 4.82:1 on day.
+    //
+    // THE FALLBACK IS NOT A LEFTOVER. Only MODEL.html defines the token; the
+    // other seven pages have no palette.js and no --role custom properties at
+    // all, so `var(--ink-quiet, ...)` resolves to the literal there and those
+    // pages are byte-for-byte what they were. That is the whole reason this is
+    // a var() with a fallback rather than a second colour to keep in step.
+    var common = 'font-family:\'Barlow Condensed\',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; color:var(--ink-quiet, rgba(29,31,32,0.45)); text-decoration:none; white-space:nowrap;';
     if (anchor) {
       el.style.cssText = common + ' display:inline-flex; align-items:center; height:20px; padding:0 6px; flex-shrink:0;';
       if (anchor.hasAttribute('data-visit-counter-home')) anchor.appendChild(el);

@@ -611,6 +611,48 @@
     color: var(--ink-quiet); opacity:0.35; cursor:not-allowed;
     border-color: var(--edge-panel); }
 
+  /* THE UPPER RIGHT IS A COLUMN, for the reason #lower-left is a row at the
+     other end of the sheet: separately fixed elements sharing one inset are a
+     layout kept in step by hand, and this corner was one -- the banner placed
+     at +34px and the change note stepping to +68px to get out from under it,
+     three numbers that had to be re-measured every time any of the three
+     changed height. A flex column does that arithmetic itself.
+
+     CLICK-THROUGH, for #readout's reason a few hundred lines up: it lies over
+     the sheet, and a drafter drawing under it should reach the drawing. The
+     column is wider than its narrowest child, so the transparent air beside a
+     short line would take a press if the column did not refuse it. */
+  #upper-right { position:fixed; right:12px; top:var(--note-top); z-index:6;
+    display:flex; flex-direction:column; align-items:flex-end; gap:8px;
+    pointer-events:none; }
+
+  /* THE DRAFTER'S OWN CLOCK, first in the column (Movie, 20 Sep: "in the
+     upper right under the top banner ... put in there the current time and
+     date of where the person is (timezonewise)"). That spot was the only
+     empty one at the head of the sheet: the file row is above it and both
+     file notes are below, and on a page with nothing wrong with the file
+     nothing at all was there.
+
+     THE COUNTER'S TYPE, which is what was asked for -- Barlow Condensed at
+     10px with the visit count's weight and tracking, so the page's two
+     ambient readings are one voice: what the drawing owes nobody, at the
+     head, and how many have been here, at the foot. THE INK IS THIS PAGE'S
+     TOKEN and not the counter's literal rgba(29,31,32,0.45), which is ink for
+     a white page; MODEL wears a night skin by default and palette.js repaints
+     --ink-quiet for whichever skin is in force.
+
+     TABULAR FIGURES, #readout's rule for the same reason: a proportional 1 is
+     narrower than a 4, so a clock set in them twitches sideways every time the
+     minute changes. */
+  #clock { font-family: var(--font-ui); font-size:10px; font-weight:600;
+    letter-spacing:0.06em; text-transform:uppercase; color: var(--ink-quiet);
+    font-variant-numeric:tabular-nums; white-space:nowrap; }
+  /* AN EMPTY SLOT TAKES NO ROOM -- the visit counter's slot keeps the same
+     rule at the foot. The clock is empty until it is written and stays empty
+     if it never is, and the column's gap must not pay for a line that is not
+     there. */
+  #clock:empty { display:none; }
+
   /* RUNG 2's QUIET NOTE. A page holding an unsaved edit re-reads nothing when
      another page writes — throwing away this drafter's work to avoid throwing
      away someone else's is the defect the ruling exists to remove — so the
@@ -618,9 +660,10 @@
      the file, it does not ask for a decision, and it sits under SAVE rather
      than over the drawing. */
   /* Follows SAVE to the left: it is SAVE's note, and it was under the shell
-     for the same reason SAVE was. */
-  #elsewhere { position:fixed; right:12px; top:var(--note-top); z-index:5;
-    font-family: var(--font-ui); font-size:11px; letter-spacing:0.06em;
+     for the same reason SAVE was. LAST IN THE COLUMN, under the banner that
+     can be up beside it -- which is the step-down the stylesheet used to do
+     by hand with a second `top`. */
+  #elsewhere { font-family: var(--font-ui); font-size:11px; letter-spacing:0.06em;
     text-transform:uppercase; color: var(--ink-quiet);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px; padding:5px 10px; }
@@ -630,8 +673,9 @@
      editing this" is not something a drafter can act on, and it carries the one
      press that resolves it. Sat under SAVE with the change note, so the page has
      one place where it says things about the file rather than three. */
-  #lease { position:fixed; right:12px; top:calc(var(--note-top) + 34px); z-index:6;
-    display:flex; gap:10px; align-items:center;
+  /* THE ONE THING IN THIS COLUMN THAT IS PRESSED, so it is the one that takes
+     the pointer back off #upper-right. */
+  #lease { display:flex; gap:10px; align-items:center; pointer-events:auto;
     font-family: var(--font-ui); font-size:11px; letter-spacing:0.06em;
     text-transform:uppercase; color: var(--ink-primary);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
@@ -640,8 +684,11 @@
   #take-over { font:inherit; letter-spacing:inherit; text-transform:inherit;
     color: var(--accent); background:none; border:1px solid var(--accent);
     border-radius:4px; padding:3px 8px; cursor:pointer; }
-  /* The change note steps down when the banner is up, so they never overlap. */
-  body[data-lease-held="0"] #elsewhere { top:calc(var(--note-top) + 68px); }
+  /* THE CHANGE NOTE USED TO STEP DOWN WHEN THE BANNER WAS UP -- 34px for the
+     banner's line, 68px to clear it -- and the column is where that goes: a
+     hidden child is `display:none`, which leaves the stack, so the two are
+     never in the same place and nobody has to measure the one to place the
+     other. */
 
   /* THE HOUSE STRIP, along the foot (§7b): what the drafter PICKS. This is
      the region the drive-thru sign rises into and covers, which is why
@@ -805,12 +852,43 @@
   #dt-bone { position:absolute; left:50%; top:81.7%; width:5.5%;
     transform:translateX(-50%); aspect-ratio:1 / 1; border:none; padding:0;
     border-radius:50%; background:transparent; cursor:pointer;
-    pointer-events:auto; }
+    pointer-events:auto;
+    /* THE SHADOW THE ART USED TO CAST, cast by the press itself now (Movie,
+       20 Sep: "put the little shadow around the bone button on the bottom so
+       it looks more 3d"). The painted disc left the board with its shadow,
+       and a disc lying flat on the post is a sticker -- the shadow was the
+       whole of what made it a dome.
+
+       MEASURED OFF THE OLD ARTWORK, not dialled in by eye. On the 2000px
+       board the painted disc was 123px across, and the halo around it
+       reached 0px left, 0px right, 0px above and 10px BELOW -- which is why
+       Movie's word for it is "on the bottom" and why there is no x offset
+       here. Down the disc's centre line it ran 57 levels under the post's
+       143 grey about 4px below the edge and was gone by 10px: an offset of
+       4, a blur of 6, and 57/143 of black.
+
+       AS FRACTIONS OF --dt-w, BECAUSE THE SIGN IS NOT ONE SIZE. Every figure
+       on this board is a percentage of the picture and this is the same rule
+       one layer down: 4/2000 and 6/2000 are the two numbers the art was
+       measured in. Fixed pixels would be right at the 860px sign and wrong
+       at every other width -- a slab on a phone, a hairline on a wall.
+
+       ON THE IMAGE RATHER THAN THE BUTTON: drop-shadow traces the PNG's
+       alpha, which is the disc. The button's own box is a square with
+       transparent corners, so a box-shadow would cast a square.
+
+       AND IT IS A VARIABLE BECAUSE `filter` DOES NOT STACK. The hover
+       brightens the disc, and a bare `filter:brightness()` there would
+       REPLACE this rather than add to it -- the press would drop its shadow
+       at the exact moment the drafter points at it. */
+    --bone-lift: drop-shadow(0 calc(var(--dt-w) * 0.002)
+      calc(var(--dt-w) * 0.003) rgba(0,0,0,0.40)); }
   /* CONTAIN, BECAUSE THE ARTWORK IS NO LONGER SQUARE. The post's box is a
      1:1 circle and the bone filled it; a house is taller than it is wide and
      a stretched one reads as a different building. */
-  #dt-bone img { width:100%; height:100%; display:block; object-fit:contain; }
-  #dt-bone:hover img { filter:brightness(1.12); }
+  #dt-bone img { width:100%; height:100%; display:block; object-fit:contain;
+    filter:var(--bone-lift); }
+  #dt-bone:hover img { filter:var(--bone-lift) brightness(1.12); }
   #dt-close { position:absolute; right:5.5%; top:9%; pointer-events:auto;
     font-family: var(--font-ui); font-size:11px; font-weight:700;
     letter-spacing:0.08em; cursor:pointer; color:#f2efe9;
@@ -1539,10 +1617,22 @@
     aria-label="Close the status readout" title="Close">×</button>
 </div>
 
-<div id="elsewhere" data-changed-elsewhere hidden>changed elsewhere</div>
-<div id="lease" data-lease-banner hidden>
-  <span data-lease-message></span>
-  <button id="take-over" type="button" data-take-over>TAKE OVER</button>
+<!-- THE UPPER-RIGHT COLUMN, under the file row: the clock the drafter reads
+     and the two things the page has to say about the FILE, stacked in the
+     order they are wanted. The clock is always there; the other two are the
+     exception, so they arrive beneath it rather than pushing it off.
+
+     THE ORDER IS THE STACK. `hidden` is `display:none` here, so a column of
+     three with two hidden is one line at the top and no gap paid for the
+     other two -- which is what replaced the three hand-measured `top` values
+     the stylesheet note above describes. -->
+<div id="upper-right" data-upper-right>
+  <div id="clock" data-local-clock></div>
+  <div id="lease" data-lease-banner hidden>
+    <span data-lease-message></span>
+    <button id="take-over" type="button" data-take-over>TAKE OVER</button>
+  </div>
+  <div id="elsewhere" data-changed-elsewhere hidden>changed elsewhere</div>
 </div>
 
 <!-- THE SHELL. Two pull-out sidebars, each with a tab on its own edge, after
@@ -14680,6 +14770,79 @@
   boot();
 })();
 </script>
+<!-- THE CLOCK IN THE UPPER-RIGHT COLUMN (Movie, 20 Sep). Inline, and that is
+     a decision rather than laziness: model-html-tier1.spec.js keeps an EXACT
+     list of the scripts this page may fetch, because the whole claim of the
+     migration is that MODEL.html is cheap. The cost of a module is the
+     request, and this is twenty lines that speak to nothing -- no store, no
+     drawing, no canvas, no network -- so a file would buy a round trip and
+     nothing else. The day a second page wants a clock is the day it earns
+     one.
+
+     EVERYTHING COMES FROM THE BROWSER, which is the whole of "where the
+     person is": `undefined` for the locale means the one they set, and no
+     `timeZone` option at all means the zone their machine is in. Berlin reads
+     its own 15:42 and Halifax reads 3:42 PM ADT, in each case because the
+     page never decided -- it never asks where they are and never sends it
+     anywhere. The zone is NAMED in the line for the same reason the date is:
+     a drafter working across a time difference is reading this to know which
+     clock the reading belongs to.
+
+     TO THE MINUTE, NOT THE SECOND. drawing-format.js already ruled on this
+     for the save name -- "two saves inside one minute are the same drafting
+     minute" -- and a seconds field in the corner of a page somebody draws on
+     all day is motion where the drawing should be the only thing moving.
+
+     THE TICK IS AIMED AT THE MINUTE, not set to 60 seconds from now. A timer
+     that counts sixty from whenever it last ran drifts a little later every
+     hour and eventually changes the reading half a minute after the minute
+     does; this one re-reads the clock every tick, so it also writes the right
+     time on the first tick after a laptop wakes from lunch rather than
+     counting on from where it dozed off. -->
+<script>
+(function () {
+  'use strict';
+
+  var el = document.getElementById('clock');
+  if (!el) return;
+
+  var day, clock;
+  try {
+    day = new Intl.DateTimeFormat(undefined,
+      { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    clock = new Intl.DateTimeFormat(undefined,
+      { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+  } catch (error) {
+    // FAIL SILENT, the visit counter's bargain at the other end of the sheet.
+    // A browser that cannot format a date leaves the slot empty, `:empty`
+    // takes the line out of the column, and the page is otherwise whole --
+    // nothing here is waiting on the time.
+    return;
+  }
+
+  var write = function () {
+    var now = new Date();
+    el.textContent = day.format(now) + ' \u00b7 ' + clock.format(now);
+  };
+
+  var tick = function () {
+    write();
+    // 250ms INSIDE the new minute rather than on its edge: a timer that fires
+    // a hair early would rewrite the minute that is ending and show it twice.
+    setTimeout(tick, 60000 - (Date.now() % 60000) + 250);
+  };
+
+  tick();
+
+  // A BACKGROUND TAB'S TIMERS ARE THROTTLED, so the first thing a returning
+  // drafter would read is however stale the throttle left it. Same write, at
+  // the moment they look.
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) write();
+  });
+})();
+</script>
+
 <!-- Visit counter: async, fail-silent, silent on localhost (see
      traffic-counter.js).
 
