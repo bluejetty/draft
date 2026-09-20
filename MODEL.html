@@ -7939,16 +7939,67 @@
     const walls = corners.map((corner, index) =>
       commitWall(corner, corners[(index + 1) % corners.length],
         { bone: false, levelId, view: 'plan', body: 'garage' }));
+    // ── AND A WAY INTO IT ────────────────────────────────────────────────
+    //
+    // Movie, 20 Sep: "also the detached garage doesn't have a roof or windows
+    // and doors yet i noticed". Four walls, its concrete, and nothing else --
+    // a sealed box on every sheet.
+    //
+    // BY EDGE, and this array IS edge-indexed rather than merely in order:
+    // corners.map raises one wall per edge and skips none, so `walls[i]` is
+    // edge i. Said out loud because the same assumption held in raiseLoop
+    // right up until an attached garage began skipping shared edges, and the
+    // openings then moved one wall over and still looked like doors.
+    //
+    // THE SIZE THE DRAFTER TYPED, handed to the design rather than re-derived
+    // from the corners: `order.size` is what build-menu.js checked and named,
+    // and measuring the loop back would be a second opinion about which of the
+    // two numbers is the width.
+    //
+    // AND THE WALL THICKNESS THIS PAGE FRAMED IT IN, because that is what
+    // carries the end of the overhead door's lintel -- premade-plans.js sizes
+    // the door to fit and cannot know what contextWallType handed back.
+    const openings = dealOpenings(
+      window.DraftPremadePlans.detachedGarageOpenings({
+        widthFt: order.size.widthFt,
+        depthFt: order.size.depthFt,
+        wallThicknessFt: openingThicknessFt()(walls[0]),
+      }), walls, levelId);
     // AND ITS CONCRETE. Movie ordered a "detached garage 25x25 with frost
     // wall" and got four stud walls: the tile asked him which foundation and
     // then threw the answer away, because nothing on this page read it.
     const concrete = raiseGarageConcrete(corners, outline);
+    // ── AND THE ROOF OVER IT ─────────────────────────────────────────────
+    //
+    // NO `against`, and that is the whole difference between this roof and the
+    // attached garage's. A detached garage touches nothing: every edge is an
+    // eave, every edge takes the full overhang, and there is no house wall for
+    // a gable to cut against. The attached one passes the house and gets both
+    // of those answers the other way round on two of its edges.
+    //
+    // FLAGGED `garage` WITH ITS OWN PLATE, for the same reason the attached
+    // one is: cut-view.js's roofBaseElev bears such a roof at the first floor's
+    // top plus the plate instead of on the full wall stack, so a single-storey
+    // garage beside a 2 STOREY keeps a single-storey roof. On a bungalow the
+    // two readings land on the same number, so the flag costs nothing there.
+    //
+    // AND ONLY WHERE THERE IS A ROOF LEVEL TO PUT IT ON, which is the rule the
+    // premade build already follows -- a drawing without one gets the garage it
+    // ordered rather than a silent failure or a roof filed nowhere.
+    const roof = levelPresent(ROOF_LEVEL_ID)
+      ? raiseRoofOver(corners, {
+        garage: true,
+        plateHeightFt: assemblyFor(levelId).wallHeightFt,
+        sourceLevelId: levelId,
+      })
+      : null;
     undoStack.length = mark;
     // `outlines` PLURAL, because a premade bungalow raises two bodies on one
     // press and one press is one undo. The garage passes its single loop as a
     // list of one rather than the branch learning two shapes.
     undoStack.push({ kind: 'built', walls: walls.concat(concrete.walls),
-      outlines: [outline], list: drawing.outlines, items: concrete.items });
+      outlines: [outline], list: drawing.outlines, openings,
+      items: concrete.items.concat(roof ? [roof] : []) });
     markDirty();
     paint();
     return outline;
@@ -9609,6 +9660,53 @@
   // which is what _pressBuildType has always done in one motion.
   window.ModelBuild.onChoose(picked => { if (picked) armOutline(picked); });
 
+  // ── HANGING A DESIGN'S OPENINGS ON THE WALLS IT JUST RAISED ──────────────
+  //
+  // ONE HOME, because there are now two builders. This lived inside raiseLoop,
+  // which is how a premade bungalow gets its windows; the ordered detached
+  // garage raises its four walls itself -- it mints its own outline, with its
+  // own `detached: true` and the foundation the drafter picked off the tile --
+  // and a second copy of the record shape here is how a `layer` or a `garage`
+  // flag comes to be written two different ways by one page.
+  //
+  // THE EDGE INDEX IS LOOKED UP, NOT COUNTED. `wallsByEdge` is sparse on
+  // purpose: an attached garage skips the edges it shares with the house, and
+  // houseWallRuns drops degenerate ones. By position, the bungalow's man-door
+  // would move onto the wall beside the one it belongs to and still LOOK like
+  // a door on a garage. An opening keyed to an edge that raised no wall is
+  // dropped rather than written against the wrong one.
+  const dealOpenings = (openings, wallsByEdge, levelId) => {
+    if (!Array.isArray(drawing.fenestrations)) drawing.fenestrations = [];
+    return (openings || []).map(spec => {
+      const wall = wallsByEdge[spec.edge];
+      if (!wall) return null;
+      const record = {
+        id: newDrawingItemId('fenestration'),
+        wallId: wall.id,
+        levelId,
+        // THE HOST WALL'S VIEW, not the drafter's -- an opening is cut into a
+        // wall and belongs wherever that wall is drawn.
+        view: wall.view || 'plan',
+        type: spec.type,
+        // drawing-format.js:230 derives this from the type on load, so it
+        // cannot come out wrong -- but this page has no serializer between the
+        // push and the file, and a record that is only right AFTER a reload is
+        // a file that is wrong until then.
+        layer: spec.type === 'door' ? 'A-DOOR' : 'A-GLAZ',
+        offset: spec.offsetFt,
+        width: spec.widthFt,
+        sillHeight: spec.sillFt,
+        headHeight: spec.headFt,
+        garage: spec.garage === true,
+        // NOT THE BONE'S. auto-windows.js re-deals what it dealt; a design's
+        // own openings are the design's, and a re-deal leaves them alone.
+        auto: false,
+      };
+      drawing.fenestrations.push(record);
+      return record;
+    }).filter(Boolean);
+  };
+
   // ── THE PREMADE DESIGN THE BOARD OFFERED ─────────────────────────────────
   //
   // Movie, 18 Sep: "we shouldn't put it in the drivethru window yet, i'd just
@@ -9703,43 +9801,13 @@
     // the other thing entirely -- the records carry `auto: false` so a re-deal
     // leaves the design's own openings alone.
     //
-    // THE EDGE INDEX IS LOOKED UP, NOT COUNTED. This read `walls[spec.edge]`
-    // while the only thing that could remove a run was a degenerate edge, and
-    // the plans have none -- so run i WAS edge i and the shortcut held. It
-    // stopped holding the moment an attached garage began skipping its shared
-    // edges: on the bungalow that drops edges 0 and 5, and by position the
-    // man-door on edge 1 would have moved onto the exposed rear wall's
-    // neighbour and the 16 ft overhead door onto the wall beside the one it
-    // belongs to. Both would still have LOOKED like doors on a garage.
-    //
-    // The guard below is unchanged and still earns its place: an opening keyed
-    // to an edge that raised no wall -- a shared one, or a degenerate one --
-    // is dropped rather than written against the wrong wall.
-    if (!Array.isArray(drawing.fenestrations)) drawing.fenestrations = [];
-    const made = openings.map(spec => {
-      const wall = wallsByEdge[spec.edge];
-      if (!wall) return null;
-      const record = {
-        id: newDrawingItemId('fenestration'),
-        wallId: wall.id,
-        levelId,
-        view: wall.view || 'plan',
-        type: spec.type,
-        // drawing-format.js:230 derives this from the type on load, so it
-        // cannot come out wrong -- but this page has no serializer between the
-        // push and the file, and a record that is only right AFTER a reload is
-        // a file that is wrong until then.
-        layer: spec.type === 'door' ? 'A-DOOR' : 'A-GLAZ',
-        offset: spec.offsetFt,
-        width: spec.widthFt,
-        sillHeight: spec.sillFt,
-        headHeight: spec.headFt,
-        garage: spec.garage === true,
-        auto: false,
-      };
-      drawing.fenestrations.push(record);
-      return record;
-    }).filter(Boolean);
+    // AND THE DEALING ITSELF IS SHARED, because the ordered detached garage
+    // hangs its own two doors and a window the same way -- see dealOpenings,
+    // which is also where the reasoning about `wallsByEdge` being a LOOKUP
+    // rather than a position now lives. Passed here as a sparse array on
+    // purpose: the shared edges above raised no wall, and an opening keyed to
+    // one of those is dropped rather than written against its neighbour.
+    const made = dealOpenings(openings, wallsByEdge, levelId);
     return { outline: withOutline ? outline : null, walls, openings: made };
   };
 
