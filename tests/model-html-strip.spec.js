@@ -159,17 +159,24 @@ test.describe('MODEL.html instrument strip', () => {
       // exhaustive, and an instrument that left one has to arrive in the
       // other or the count stops meaning anything.
       for (const sel of ['[data-mode-ruler]', '[data-mode-tsquare]',
-        '[data-mode-protractor]', '[data-mode-scale]', '#frozen-length']) {
+        '[data-mode-protractor]', '[data-mode-scale]', '[data-mode-brush]',
+        '#frozen-length']) {
         await expect(page.locator(sel)).toBeVisible();
         await expect(page.locator(sel)).not.toHaveClass(/dormant/);
       }
 
-      // THE FOUR THAT DO NOT, each marked dormant and each saying so in its
+      // THE THREE THAT DO NOT, each marked dormant and each saying so in its
       // own title. This is the panel's own rule — the disabled 3D chair —
       // applied to the strip: a chip that looks live and does nothing is
       // worse than a gap.
+      //
+      // THE BRUSH LEFT THIS SET ON 20 SEP, the way SCALE left it before, and
+      // it has to ARRIVE in the other one or the count stops meaning
+      // anything. That is the whole value of asserting both as exhaustive
+      // sets: an instrument cannot be quietly demoted, and one that is built
+      // cannot be quietly left looking dead.
       for (const sel of ['[data-mode-compass]', '[data-mode-triangle]',
-        '[data-mode-brush]', '[data-mode-shield]']) {
+        '[data-mode-shield]']) {
         const chip = page.locator(sel);
         await expect(chip).toHaveClass(/dormant/);
         await expect(chip).toHaveAttribute('title', /not built/);

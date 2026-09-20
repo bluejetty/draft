@@ -443,6 +443,11 @@
     color: var(--ink-secondary); cursor:pointer; }
   .chip:hover { border-color: var(--edge-panel); }
   .chip.lit { color: var(--accent); border-color: var(--accent); }
+  /* ARMED IS NOT LOADED, and the brush is the one instrument where the two
+     come apart: up and empty it takes every press and changes nothing, up and
+     loaded it repaints what it touches. One outline for "this is taking your
+     presses", the accent for "and here is what it will do with them". */
+  .chip.armed:not(.lit) { border-color: var(--ink-secondary); }
   .chip.dormant { color: var(--ink-quiet); opacity:0.35; cursor:default; }
   .chip.dormant:hover { border-color:transparent; }
   #strip .num { font-family: var(--font-mono); font-size:12px;
@@ -687,7 +692,7 @@
      under the foot takes a stray press.
 
      THE BOARD IS ONE IMAGE and every zone on it is a percentage of that
-     image, measured off assets/drivethru-menu-board.png (1020x1500). The
+     image, measured off assets/drivethru-menu-board.png (2000x1550). The
      art moves, the zones move with it, and nothing here hardcodes a pixel.
      The same arrangement as gruff-drivethru.js, for the same reason: the
      board is a PICTURE, and only the controls painted on top of it take a
@@ -703,18 +708,18 @@
      black runs x 427..948 and y 175..510, the shelf's x 87..932 and y
      536..1150, the post's disc y 1217..1333 centred on x 509.5. Nothing was
      carried over from the square board by proportion. */
-  /* TWO BOARDS, TWO SHAPES, ONE RULE. The sign is a tall portrait now and the
-     blueprint is a landscape sheet, so the shape is a variable the skin sets
+  /* TWO BOARDS, TWO SHAPES, ONE RULE. The shape is a variable the skin sets
      rather than a second copy of this block.
 
-     AND THE HEIGHT IS A CONSTRAINT, not an outcome. 720px of width on a 0.68
-     board is 1059px of height, which is taller than the laptop this is drawn
-     on -- a board sized on width alone would hang its post through the floor
-     and take the tiles with it. The third term is that: the widest this can
-     be and still stand inside the sheet. */
+     AND THE HEIGHT IS A CONSTRAINT, not an outcome. On the portrait sign this
+     was the binding term -- 720px of width on a 0.68 board is 1059px of
+     height, taller than the laptop it is drawn on. On the landscape one it is
+     slack and the WIDTH binds, which is why that width went up: see the note
+     on the screen below. The term stays because it is the rule, not the
+     answer, and the next board may be tall again. */
   #drivethru { position:fixed; left:50%; bottom:0; z-index:7;
-    --dt-aspect:0.68; --dt-headroom:16px;
-    --dt-w:min(720px, calc(100vw - 24px),
+    --dt-aspect:1.29; --dt-headroom:16px;
+    --dt-w:min(860px, calc(100vw - 24px),
       calc((100vh - var(--dt-headroom)) * var(--dt-aspect)));
     width:var(--dt-w);
     transform:translate(-50%, 0);
@@ -727,8 +732,26 @@
   /* Gruff's screen: what he is saying, and the one line under it that says
      what the press will do. Live so a drafter on a reader hears the order
      move without watching the board. */
-  #dt-screen { position:absolute; left:41.863%; top:11.667%; width:51.078%; height:22.333%;
-    box-sizing:border-box; padding:3% 4%; pointer-events:none;
+  /* ── RE-MEASURED FOR THE LANDSCAPE BOARD ───────────────────────────────
+     Movie, 20 Sep: "the text is coming off the top board so i increased the
+     text area for the dog", and then a second pass -- "i should make more
+     space for him". What he sent back is not the old sign made taller, it is
+     a different SHAPE: 2000x1550 landscape where the old was 1020x1500
+     portrait. So every figure below was read off the new file's own pixels
+     rather than carried over by proportion, the same way the 17 Sep art was.
+
+       the dog's band   x 444..1912   y  124.. 458
+       the shelf        x 104..1896   y  486..1198
+       the bone's disc  x 943..1053   y 1267..1374
+
+     AND THE OVERFLOW IS FIXED BY WIDTH, NOT BY HEIGHT, which is worth saying
+     because the band is SHORTER than the one it replaces. At a 1366 sheet the
+     old screen was 261x168 and the three lines in it wrapped to eight; this
+     one is 626x144 and they wrap to four. A band a third taller would not
+     have held the old wrapping either -- the line that was falling off the
+     bottom was falling off because seventeen characters is not a sentence. */
+  #dt-screen { position:absolute; left:22.2%; top:8%; width:73.4%; height:21.548%;
+    box-sizing:border-box; padding:1.6% 2.4%; pointer-events:none;
     display:flex; flex-direction:column; justify-content:center; gap:6px;
     font-family: var(--font-mono); color:#ff4033;
     text-shadow:0 0 10px rgba(255,64,51,0.45); letter-spacing:0.03em;
@@ -751,7 +774,7 @@
     color:inherit; text-decoration:none; line-height:1.25; }
   #dt-project:hover { opacity:0.95; text-decoration:underline; }
   /* The tile strip: the house types, on the board's own shelf. */
-  #dt-tiles { position:absolute; left:9.5%; top:37%; width:81%; height:38.4%;
+  #dt-tiles { position:absolute; left:5.9%; top:32.5%; width:88.2%; height:44.1%;
     box-sizing:border-box; display:flex; flex-direction:column;
     justify-content:center; gap:4px; pointer-events:none; }
   /* ONLY THE CARDS TAKE A PRESS, not the shelf they stand on. This read
@@ -775,7 +798,11 @@
      where it is answered. */
   #dt-tiles > * { pointer-events:none; }
   #dt-tiles button, #dt-tiles input { pointer-events:auto; }
-  #dt-bone { position:absolute; left:50%; top:81.1%; width:11.4%;
+  /* THE DISC IS A SMALLER SHARE OF A WIDER BOARD -- 110px of 2000 where it
+     was 116 of 1020 -- so the percentage halves while the button on screen
+     stays the size the art draws it. Centred on x 998 of 2000, which is half
+     a percent off centre and not worth a number of its own. */
+  #dt-bone { position:absolute; left:50%; top:81.7%; width:5.5%;
     transform:translateX(-50%); aspect-ratio:1 / 1; border:none; padding:0;
     border-radius:50%; background:transparent; cursor:pointer;
     pointer-events:auto; }
@@ -784,7 +811,7 @@
      a stretched one reads as a different building. */
   #dt-bone img { width:100%; height:100%; display:block; object-fit:contain; }
   #dt-bone:hover img { filter:brightness(1.12); }
-  #dt-close { position:absolute; right:8%; top:9.4%; pointer-events:auto;
+  #dt-close { position:absolute; right:5.5%; top:9%; pointer-events:auto;
     font-family: var(--font-ui); font-size:11px; font-weight:700;
     letter-spacing:0.08em; cursor:pointer; color:#f2efe9;
     background:rgba(0,0,0,0.45); border:1px solid rgba(242,239,233,0.45);
@@ -880,8 +907,23 @@
   /* TWO ROWS HAVE TO FIT THE SHELF. A family and its open submenu are both
      on the board at once, so the card is sized so that pair clears the
      black strip -- a tile that spills past the frame is an order the
-     drafter cannot reach. */
-  #build-bar button.card img { display:block; height:clamp(44px, 8vw, 86px);
+     drafter cannot reach.
+
+     MEASURED AGAINST THE BOARD, NOT THE VIEWPORT. This was 8vw, which is the
+     wrong ruler by one step: the shelf a card has to fit inside is a fraction
+     of --dt-w, and --dt-w is a min() of three terms of which the viewport is
+     only one. On the portrait sign the two happened to track each other. On
+     the landscape one they came apart -- the board grew and the cards did
+     not, and three tiles sat in the middle of a shelf twice their height.
+
+     THE CEILING IS THE SHELF'S OWN ARITHMETIC. The sign's shelf is 44.1% of
+     a board 1/1.29 as tall as it is wide, so at the 860px cap it is 294px and
+     two rows plus their gap must live in that: 2h + 4 <= 294, h <= 145. 120
+     leaves room for the label row the entries carry and is still a third
+     bigger than the 86 it replaces -- Movie, 16 Sep, and still standing:
+     "make the stuff in the drivethru menu bigger its hard to see". */
+  #build-bar button.card img { display:block;
+    height:clamp(44px, calc(var(--dt-w) * 0.115), 120px);
     width:auto; border:1px solid transparent; border-radius:2px; }
   #build-bar button.card:hover img { border-color:#8f2a1d; }
   #build-bar button.card.open img, #build-bar button.card.chosen img {
@@ -1865,12 +1907,21 @@
         <path d="M5 11.5 L8.5 11.5 L5 8 Z" stroke-width="0.9"></path>
       </svg>
     </span>
-    <span class="chip dormant" data-mode-brush title="DRAFTING BRUSH — not built on this page yet">
+    <!-- THE ICON IS UNTOUCHED. Movie, 5 Sep, looking at this exact drawing:
+         "the icon looks nice keep that for sure". A curved ferrule over four
+         bristles, the same two paths it has had since it was dimmed in. Only
+         the colour moves between empty and loaded, and the load's name sits
+         beside it -- so the brush always says what it is about to do before
+         the drafter does it, which is the whole defence against the usual
+         armed-tool surprise. -->
+    <button type="button" id="strip-brush" class="chip" data-mode-brush
+      title="DRAFTING BRUSH — press a thing to pick its properties up, then press another of the same kind to give them to it">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
         <path d="M2.5 8.5 Q8 5 13.5 8.5 L13.5 10.5 Q8 7 2.5 10.5 Z"></path>
         <path d="M4 10.7 V12.6 M6.5 9.6 V11.8 M9.5 9.6 V11.8 M12 10.7 V12.6" stroke-width="0.9"></path>
       </svg>
-    </span>
+      <span id="strip-brush-load" class="num" data-brush-load></span>
+    </button>
 
     <button type="button" id="strip-ruler" class="chip" data-mode-ruler
       title="RULER — measure between two points without drawing anything">
@@ -1929,11 +1980,29 @@
       </svg>
     </button>
 
+    <!-- A SQUARE TILE WITH 1' IN IT. Movie, 20 Sep: "you know that toy 'to
+         the foot' thing, we should make a features that can turn that on and
+         off. maybe just a square tile that has a 1' in it for the dashboard
+         light".
+
+         THE SWITCH WAS ALREADY HERE and he did not know it, which is the
+         whole report. footOn, its store and the guard that keeps it off TOY
+         have all worked since the FOOT LIGHT order landed -- what nobody
+         could read was the GLYPH, a scale triangle that says "mountain" to
+         anyone who has not been told. A control whose picture does not name
+         it is a control that is not there.
+
+         DRAWN IN PATHS, not <text>, because every other chip in this strip is
+         paths and an 8px glyph rendered as type goes soft at the sizes the
+         strip actually runs at. The square is the tile, the upright with its
+         flag is the 1, and the tick is the foot mark. -->
     <button type="button" id="strip-scale" class="chip" data-mode-scale
       title="FOOT — every point and every drag lands on the whole foot">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-        <path d="M2 11 L8 4 L14 11 Z"></path>
-        <path d="M5.5 11 L8 8 L10.5 11" stroke-width="0.9"></path>
+        <rect x="1.5" y="1.5" width="13" height="13" rx="1"></rect>
+        <path d="M6.6 4.8 V11.2" stroke-width="1.2"></path>
+        <path d="M5.1 6.1 L6.6 4.8" stroke-width="1.2"></path>
+        <path d="M9.7 4.8 L10.6 7.1" stroke-width="1.1"></path>
       </svg>
     </button>
     <span class="chip dormant" data-mode-shield title="ERASING SHIELD — not built on this page yet">
@@ -2288,6 +2357,8 @@
   // setting. Reported rather than quietly reinterpreted.
   let footOn = stored.footLight === true;
   let rulerOn = false;      // RULER down: presses measure instead of drawing
+  let brushOn = false;      // DRAFTING BRUSH up: presses lift and dust
+  let brushLoad = null;     // what the brush is holding — see BRUSH_PROPS
   let rulerFrom = null;     // the ruler's first press, in world feet
   let cursorWorld = null;   // where the cursor last was, for the live readouts
   // THE CORNER UNDER THE CURSOR, or null. Painted, not just cursored -- see
@@ -8507,6 +8578,13 @@
     // an unknown id does: there is no such thing as no tool.
     const next = roster && roster.availableOn(id, board) ? id : RESTING_TOOL;
     activeTool = next;
+    // THE BRUSH'S PRESS GOES DOWN AND ITS LOAD STAYS UP. Movie, 20 Sep: "if
+    // they change to WALL command and start drawing a wall those 'selected'
+    // drafting brush properties will remain". The brush takes pointerdown
+    // whole, so a tool armed under it could never be reached -- but clearing
+    // what it is holding here would delete the very thing that sentence asks
+    // to survive. Two facts, and only one of them is about the tool.
+    if (next !== RESTING_TOOL) brushOn = false;
     // Any half-finished gesture belongs to the tool being put down. Carrying an
     // anchor across a tool change is how a chain commits into the next tool's
     // first tap -- and the beam's anchor is a second one of exactly the same
@@ -8963,7 +9041,15 @@
     // 1e-6 on load, so committing one would write a record that vanishes on
     // the next open. Treat the second tap as a correction, not a commit.
     if (Math.hypot(end.x - drawStart.x, end.z - drawStart.z) < 0.001) { drawStart = end; paint(); return; }
-    const wall = commitWall(drawStart, end);
+    // WEARING WHAT THE BRUSH IS HOLDING, if it is holding a wall. Movie, 20
+    // Sep: "if they change to WALL command and start drawing a wall those
+    // 'selected' drafting brush properties will remain". Passed in HERE and
+    // at the two typed-commit sites below rather than read inside commitWall,
+    // because that function is also how a premade house and an ordered garage
+    // raise their walls -- a loaded brush must not change what the bone
+    // builds. Empty brush, empty options, and the drafter's stored defaults
+    // answer exactly as they did.
+    const wall = commitWall(drawStart, end, brushOptions('wall'));
     // CHAINING, the old page's habit: the next wall starts where this one
     // ended, so a room is four taps and not eight. The pooled END object is
     // the start, so the corner is shared by identity.
@@ -9606,8 +9692,26 @@
       sayOnStrip('Press a wall to put an opening in it.');
       return null;
     }
-    const type = fenestrationType === 'window' ? 'window' : 'door';
-    const width = openingWidthFt(type);
+    // ── WHAT IS BEING PLACED: THE BRUSH'S, OR THE TOOL'S ────────────────
+    //
+    // Movie, 20 Sep: "if you select FENSTRATION you should be able to put new
+    // windows into a WALL", and "so if there is a window in the drafting
+    // brush cursor area it will change it, but if a wall it will place a
+    // window or door". A brush holding an opening turns a press on bare wall
+    // into a placement of THAT opening -- the target decides the verb, and
+    // there is no mode to pick.
+    //
+    // ONE BUILDER, TWO CALLERS. The brush's press comes through here rather
+    // than minting its own record: this function already finds the wall,
+    // clamps to it, refuses a wall too short in the app's own words, files the
+    // record on the HOST'S level and view, and pushes the undo step. A second
+    // builder beside it would agree today and drift the first time either
+    // moved -- which is the drift dealOpenings was pulled out of raiseLoop to
+    // stop, one rung ago, in this same file.
+    const dusting = brushHas('fenestration') ? brushLoad.props : null;
+    const type = (dusting ? dusting.type : fenestrationType) === 'window'
+      ? 'window' : 'door';
+    const width = dusting ? Number(dusting.width) || 0 : openingWidthFt(type);
     const wall = best.wall;
     const length = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
     // CLAMPED, NOT REFUSED, when the press lands near a corner: the opening
@@ -9639,8 +9743,13 @@
       layer: type === 'door' ? 'A-DOOR' : 'A-GLAZ',
       offset: clamped.offset,
       width,
-      sillHeight: openingSillFt(type),
-      headHeight: openingHead,
+      sillHeight: dusting ? Number(dusting.sillHeight) || 0 : openingSillFt(type),
+      headHeight: dusting ? Number(dusting.headHeight) || 0 : openingHead,
+      // AN OVERHEAD DOOR STAYS ONE THROUGH THE BRUSH. `garage` is what makes
+      // it one, and it is written only when the brush is carrying it -- a
+      // `garage: false` on every hand-placed window would be a key the old
+      // page never wrote, in every file this page saves.
+      ...(dusting && dusting.garage === true ? { garage: true } : {}),
       // NOT THE BONE'S. auto-windows.js re-deals what it dealt; one the
       // drafter placed by hand is his from the moment it lands.
       auto: false,
@@ -10720,6 +10829,8 @@
   const rulerChip = strip.querySelector('[data-mode-ruler]');
   const tsquareChip = strip.querySelector('[data-mode-tsquare]');
   const scaleChip = strip.querySelector('[data-mode-scale]');
+  const brushChip = strip.querySelector('[data-mode-brush]');
+  const brushLoadOut = strip.querySelector('[data-brush-load]');
   const lengthBox = document.getElementById('frozen-length');
   const angleBox = document.getElementById('frozen-angle');
 
@@ -10825,6 +10936,18 @@
     rulerChip.classList.toggle('lit', rulerOn);
     tsquareChip.classList.toggle('lit', tsquareOn);
     scaleChip.classList.toggle('lit', footOn);
+    // LIT MEANS LOADED, not merely armed, and that is the whole reason this
+    // tool needs no mode indicator anywhere else: an armed-but-empty brush
+    // does nothing to the drawing, and a loaded one says what it will do.
+    brushChip.classList.toggle('lit', !!brushLoad);
+    brushChip.classList.toggle('armed', brushOn);
+    const said = brushSays();
+    brushLoadOut.textContent = said.short;
+    brushChip.title = brushLoad
+      ? `DRAFTING BRUSH — holding ${said.long}. Press another of the same kind `
+        + 'to give them to it. Escape puts it down.'
+      : 'DRAFTING BRUSH — press a thing to pick its properties up, then press '
+        + 'another of the same kind to give them to it';
     // THE LENGTH BOX IS LIVE ONLY WHILE A WALL IS IN HAND, because that is
     // the only moment a typed length has an anchor and a direction to be
     // measured along. Enabled at any other time it would take a number and
@@ -10900,6 +11023,249 @@
     paint();
   });
 
+  // ── THE DRAFTING BRUSH ────────────────────────────────────────────────────
+  //
+  // Movie, 20 Sep: "brush will copy the propeties of the object type - LINE /
+  // WALL / FLOOR / DIMENSIONS etc. and will copy the EXACT PROPERTIES over to
+  // a 'matching' object TYPE - a WALL will only change another WALL for
+  // example." Then, on what a loaded brush does next: "if they change to WALL
+  // command and start drawing a wall those 'selected' drafting brush
+  // properties will remain", and "if you select FENSTRATION you should be
+  // able to put new windows into a WALL".
+  //
+  // Designed with him on 5 Sep and written down then as
+  // RD-DOCUMENTS/SPEC-drafting-brush.md, which left two questions open and
+  // marked them "Needs Movie". Both are answered above and the answers are
+  // what this is built to.
+  //
+  // ── THE RULE THAT SETTLES EVERY EDGE CASE ───────────────────────────────
+  //
+  // THE BRUSH CARRIES WHAT A THING IS, NEVER WHERE IT IS. Type, size, head
+  // height, sill height -- yes. Which wall, which storey, how far along, which
+  // points -- never. Dust is a finish lifted off a surface; it is not the
+  // surface. Every list below is that sentence applied once, and the keys
+  // left OUT of them are the substance of it.
+  const BRUSH_PROPS = {
+    // The four the WALL panel edits. GUARDRAIL is not here because it is not
+    // stored: `wallType === 'guardrail'` IS the guardrail, so it travels
+    // inside wallType and cannot arrive disagreeing with itself.
+    wall: ['wallType', 'refLine', 'baseHeight', 'topHeight'],
+    // `garage` rides along although no panel edits it: it is what makes an
+    // overhead door an overhead door, and Movie's own example is dusting one.
+    // `offset` and `wallId` are the two that must NEVER travel -- they are
+    // where it is.
+    fenestration: ['type', 'layer', 'width', 'sillHeight', 'headHeight', 'garage'],
+    // NOT `structure`. Whether a floor is framed or a slab is read from the
+    // layer set it lives on (layer-views.js's floorHomeView), so copying it
+    // would make a floor's own two answers disagree -- and `points` is its
+    // shape, which is where it is.
+    floor: ['thickness', 'thickenedEdge', 'slopeInPerFt'],
+    // A line is two points, a level, a view and a layer. Three of those five
+    // are where it is; the layer is the whole of what it is.
+    line: ['layer'],
+  };
+
+  // WHAT THE BRUSH CANNOT REACH, AND WHY, said here rather than discovered.
+  // Movie named DIMENSIONS among the kinds. hitAt's chain is fenestration,
+  // wall, line, outline, floor -- a dimension cannot be pressed on this page
+  // at all, so a dimension entry above would be a promise with nothing behind
+  // it. Columns and beams are the same story from the other end: they are
+  // selected by being PLACED and never found again by a press. OUTLINE is in
+  // the chain and is deliberately absent: an outline is a guide, and what a
+  // drafter changes about one is its corners.
+  // `brushOn` and `brushLoad` are declared with the strip's other state, up
+  // beside rulerOn and footOn -- stripRefresh reads both, and a `let` down
+  // here would sit in the temporal dead zone for every call made before this
+  // line runs. The comments that belong to them are here, where the tool is.
+  //
+  // brushOn -- the chip: presses lift and dust instead of select
+  // THE LOAD OUTLIVES THE CHIP, which is Movie's second sentence and not an
+  // accident of scope: "if they change to WALL command and start drawing a
+  // wall those 'selected' drafting brush properties will remain". Arming a
+  // drawing tool puts the brush's PRESS down -- otherwise there would be no
+  // way to draw -- and keeps what it is holding, so the next wall comes out
+  // wearing it. One thing held, two ways to spend it.
+  // brushLoad -- { kind, props } or null
+
+  const brushHas = kind => brushLoad && brushLoad.kind === kind;
+
+  // The properties a drawing tool should use, or nothing. Handed to the
+  // COMMIT rather than read inside it: commitWall is also how a premade house
+  // and an ordered garage raise their walls, and a loaded brush must not
+  // change what the bone builds.
+  const brushOptions = kind => (brushHas(kind) ? { ...brushLoad.props } : {});
+
+  const brushPick = (item, kind) => {
+    const out = {};
+    (BRUSH_PROPS[kind] || []).forEach(key => {
+      if (item[key] !== undefined) out[key] = item[key];
+    });
+    return out;
+  };
+
+  // WHAT THE CHIP SAYS IT IS HOLDING. Short enough for the strip; the whole
+  // of it goes in the title, where there is room.
+  const brushSays = () => {
+    if (!brushLoad) return { short: '', long: '' };
+    const F = window.DraftFormatters;
+    const ftIn = feet => F.formatArchitecturalInches((Number(feet) || 0) * 12);
+    const p = brushLoad.props;
+    if (brushLoad.kind === 'wall') {
+      const type = window.DraftWallTypes.WALL_TYPES
+        .find(t => t.id === (p.wallType || 'stud_2x6'));
+      return { short: `WALL ${ftIn(p.topHeight)}`,
+        long: `${type ? type.label : p.wallType} — ${ftIn(p.baseHeight)} to `
+          + `${ftIn(p.topHeight)}, ${p.refLine} reference` };
+    }
+    if (brushLoad.kind === 'fenestration') {
+      const name = p.garage === true ? 'GARAGE DOOR'
+        : (p.type === 'door' ? 'DOOR' : 'WINDOW');
+      return { short: `${name} ${ftIn(p.width)}`,
+        long: `${name} ${ftIn(p.width)} wide, head ${ftIn(p.headHeight)}`
+          + (p.type === 'door' ? '' : `, sill ${ftIn(p.sillHeight)}`) };
+    }
+    if (brushLoad.kind === 'floor') {
+      return { short: `FLOOR ${ftIn(p.thickness)}`,
+        long: `FLOOR ${ftIn(p.thickness)} thick`
+          + (p.thickenedEdge ? ', thickened edge' : '')
+          + (p.slopeInPerFt ? `, falling ${p.slopeInPerFt}"/ft` : '') };
+    }
+    return { short: `LINE ${p.layer || ''}`.trim(), long: `LINE on ${p.layer}` };
+  };
+
+  // A KIND IN THE WORDS THE DRAFTER SEES, for the refusals. 'fenestration' is
+  // the record's word and nobody else's.
+  const BRUSH_KIND_SAID = { wall: 'WALL', fenestration: 'OPENING',
+    floor: 'FLOOR', line: 'LINE', outline: 'OUTLINE' };
+
+  // ── UNDO FOR A DUST ───────────────────────────────────────────────────────
+  //
+  // THE PANELS DO NOT PUSH ONE AND THIS DOES, which is a difference worth
+  // stating rather than leaving to be found. A panel edit is slow and
+  // deliberate: a drafter opens a field, types, and sees the number he typed.
+  // A brush is a repeated press -- ten things in five seconds -- so a
+  // misplaced one is not a rare event, it is the ordinary cost of using the
+  // tool at speed. The step below is the seam the panels should join when
+  // somebody gives them one; it is deliberately shaped for any property edit
+  // and not for the brush.
+  const brushUndoStep = items => ({
+    kind: 'props',
+    edits: items.map(item => ({ item, before: { ...item } })),
+  });
+
+  const brushDust = (hit) => {
+    const F = window.DraftFormatters;
+    const G = window.DraftGeometry2D;
+    const item = hit.item;
+    // ── AN OPENING IS PLACED AGAIN, NOT JUST OVERWRITTEN ────────────────
+    //
+    // Movie, 20 Sep, on dusting a small window with a garage door: "DOES NOT
+    // become a garage door - popup says 'TOO BIG' and won't be accepted the
+    // same window will remain it won't change PROPERTIES". Which is the fit
+    // rule, and it is his own from 5 Sep: "maybe don't allow to place in that
+    // case". So the width goes through clampOpeningToWall -- the same rule a
+    // press follows and the same rule the WIDTH field follows -- and a wall
+    // that cannot carry it keeps the opening it has, untouched.
+    //
+    // REFUSED, NOT SLID. A typed width may slide the opening along to make
+    // room, because the drafter asked for that width at that opening. A dusted
+    // one may not: he asked for THESE PROPERTIES, and quietly moving the
+    // window he aimed at would be the brush editing where a thing is.
+    if (hit.type === 'fenestration') {
+      const wall = openingHostWall(item);
+      const width = Number(brushLoad.props.width) || 0;
+      const fit = wall && G.clampOpeningToWall(wall, Number(item.offset) || 0, width,
+        { walls: walls(), thicknessFt: openingThicknessFt() });
+      if (!fit || Math.abs(fit.offset - (Number(item.offset) || 0)) > 1e-6) {
+        sayOnStrip(`TOO BIG — that wall cannot carry a `
+          + `${F.formatArchitecturalInches(width * 12)} opening there. Nothing changed.`);
+        return;
+      }
+    }
+    undoStack.push(brushUndoStep([item]));
+    Object.assign(item, brushLoad.props);
+    // A WALL'S SUBSTITUTION ENDS WITH A DRAFTER'S CHANGE, and a dust is one.
+    // Without this a wall just brushed to RAIL would save as concrete_12
+    // again -- see applyToWalls, whose rule this is.
+    if (hit.type === 'wall') substitutedWallTypes.delete(item.id);
+    markDirty();
+    showSelectionProps();
+    paint();
+    sayOnStrip(`${BRUSH_KIND_SAID[hit.type]} takes the brush's properties.`);
+  };
+
+  const brushPress = at => {
+    const hit = hitAt(at);
+    // ── NOTHING UNDER THE PRESS ──────────────────────────────────────────
+    if (!hit) {
+      sayOnStrip(brushLoad
+        ? 'Nothing there. Press something of the same kind to give it these properties.'
+        : 'Press a wall, an opening, a floor or a line to pick up its properties.');
+      return;
+    }
+    const kind = hit.type;
+    // ── EMPTY: THE PRESS LIFTS ───────────────────────────────────────────
+    if (!brushLoad) {
+      if (!BRUSH_PROPS[kind]) {
+        sayOnStrip(`The brush has nothing to lift off ${BRUSH_KIND_SAID[kind] || 'that'}.`);
+        return;
+      }
+      brushLoad = { kind, props: brushPick(hit.item, kind) };
+      stripRefresh();
+      paint();
+      sayOnStrip(`Brush loaded: ${brushSays().long}. Escape puts it down.`);
+      return;
+    }
+    // ── LOADED: A MATCHING KIND TAKES THEM ───────────────────────────────
+    //
+    // Movie: "a WALL will only change another WALL for example." The refusal
+    // names both sides, because "wrong kind" without saying which two is a
+    // sentence the drafter has to work out from what he can see.
+    if (kind === brushLoad.kind) { brushDust(hit); return; }
+    // ── AND A BARE WALL UNDER A LOADED OPENING GETS A NEW ONE ────────────
+    //
+    // Movie, 20 Sep: "if you select FENSTRATION you should be able to put new
+    // windows into a WALL". The target decides the verb -- press an opening
+    // and it becomes this one, press the wall between two and a new one lands
+    // there -- so there is no mode to pick and nothing to remember.
+    //
+    // THROUGH placeOpening, NOT A SECOND BUILDER. It already finds the wall,
+    // clamps to it, refuses a wall too short in the app's own words, files the
+    // record on the host's level and view, and pushes the undo step. A second
+    // one here would agree with it today and stop agreeing the first time
+    // either moved.
+    if (brushLoad.kind === 'fenestration' && kind === 'wall') {
+      placeOpening(at);
+      return;
+    }
+    sayOnStrip(`The brush is holding ${BRUSH_KIND_SAID[brushLoad.kind]} `
+      + `properties. That is a ${BRUSH_KIND_SAID[kind] || 'different kind of thing'}.`);
+  };
+
+  // THE LOAD GOES DOWN, THE TOOL STAYS UP -- which the chip alone cannot do,
+  // and is why the spec gives Escape a step of its own. Called from the
+  // canvas Escape branch, where every other half-taken gesture is put down.
+  const brushDrop = () => {
+    brushLoad = null;
+    stripRefresh();
+    sayOnStrip('Brush put down.');
+  };
+
+  brushChip.addEventListener('click', () => {
+    brushOn = !brushOn;
+    // A DRAFTER WHO SWITCHES THE BRUSH OFF AT THE CHIP IS DONE WITH IT, load
+    // and all. Escape is the one that keeps the tool and drops the load; the
+    // chip is the coarse one, exactly as the spec's three states describe.
+    if (!brushOn) brushLoad = null;
+    // THE ARMED TOOL GOES DOWN WITH THE BRUSH COMING UP, because the brush
+    // takes the press whole: a WALL left armed under a brush would be a tool
+    // the page says is on and that no press can reach.
+    if (brushOn && activeTool !== RESTING_TOOL) setTool(RESTING_TOOL);
+    canvas.style.cursor = brushOn ? 'copy' : (activeTool === 'wall' ? 'crosshair' : '');
+    stripRefresh();
+    paint();
+  });
+
   // TYPING A LENGTH COMMITS THE WALL, which is the instrument's whole point:
   // a drafter who knows the wall is 12'-6" should not have to find 12'-6"
   // with a mouse. The DIRECTION is the one the cursor is already giving --
@@ -10967,7 +11333,7 @@
     const len = Math.hypot(dx, dz);
     if (len < 1e-6) { stripMessage.textContent = 'point away from the start first'; return; }
     const end = { x: drawStart.x + dx / len * feet, y: 0, z: drawStart.z + dz / len * feet };
-    const wall = commitWall(drawStart, end);
+    const wall = commitWall(drawStart, end, brushOptions('wall'));
     drawStart = wall.end;
     // THE SELECTION IS A SET ON THIS BRANCH. #398 wrote this line as
     // `selectedSeg = wall` against the single-wall variable that the selection
@@ -11013,7 +11379,7 @@
       : Math.hypot(aim.x - drawStart.x, aim.z - drawStart.z);
     if (!(feet > 1e-6)) { stripMessage.textContent = 'point away from the start first'; return; }
     const end = { x: drawStart.x + ux * feet, y: 0, z: drawStart.z + uz * feet };
-    const wall = commitWall(drawStart, end);
+    const wall = commitWall(drawStart, end, brushOptions('wall'));
     drawStart = wall.end;
     setSelection([{ type: 'wall', item: wall }]);
     angleBox.blur();
@@ -12592,6 +12958,12 @@
     // placing. It writes nothing to the drawing -- two presses and a number
     // on the strip -- so taking the press costs him no geometry.
     if (rulerOn) { rulerPress(at); return; }
+    // AND THE BRUSH TAKES IT NEXT, for the ruler's own reason turned round:
+    // it is an instrument whose entire gesture is a press on something that
+    // is already drawn, so letting select or pan see the press first would
+    // leave it nothing to act on. It goes AFTER the ruler because the ruler
+    // writes nothing at all and this writes properties.
+    if (brushOn) { brushPress(at); return; }
     // ARMED TAKES THE PRESS WHOLE, before the corner/body hit test and before
     // panning. Otherwise the first tap of a wall that starts on an existing
     // corner would be read as grabbing that corner, and the drafter would drag
@@ -13114,6 +13486,12 @@
     // the other. The DRAW button is how this page puts the tool down, because
     // it is the affordance a drafter with no keyboard can reach.
     if (e.key === 'Escape') {
+      // THE BRUSH GETS THE FIRST STEP, and only when it is holding something.
+      // Loaded becomes empty; the tool stays up, which is the one thing the
+      // chip cannot do -- pressing that turns the brush off altogether. An
+      // empty brush is not an in-progress gesture, so it does not eat the
+      // press that a drafter meant for his selection.
+      if (brushLoad) { brushDrop(); return; }
       drawStart = null;
       // AND THE UNFINISHED BONE GOES WITH IT. The refusal below says "finish
       // or cancel the run you started", so a cancel has to exist -- a message
@@ -13182,6 +13560,24 @@
         // for columns and beams without knowing which it is holding.
         const at = step.list.indexOf(step.item);
         if (at >= 0) step.list.splice(at, 1);
+      } else if (step.kind === 'props') {
+        // A DUST GOES BACK. The step holds each item and a copy of it as it
+        // was, and the record is mutated IN PLACE rather than swapped for the
+        // copy -- the selection, the properties panel and every painter hold
+        // these by reference, and handing back a new object would leave all
+        // of them pointing at the one that is no longer in the drawing.
+        //
+        // KEYS THE BRUSH ADDED ARE REMOVED, not left at their old value:
+        // `garage` arrives on a window that never had one, and assigning the
+        // `before` copy over the top would leave it standing. What was not
+        // there before must not be there after.
+        step.edits.forEach(({ item, before }) => {
+          Object.keys(item).forEach(key => {
+            if (!(key in before)) delete item[key];
+          });
+          Object.assign(item, before);
+        });
+        showSelectionProps();
       } else if (step.kind === 'remove-item') {
         // The mirror of 'add-item', and the same trick: the list is captured
         // in the step, so one branch puts a line, floor, outline, column or
@@ -14205,5 +14601,19 @@
   boot();
 })();
 </script>
+<!-- Visit counter: async, fail-silent, silent on localhost (see
+     traffic-counter.js).
+
+     THE SLOT WAS BUILT AND THE SCRIPT WAS NOT LOADED, which is why the count
+     never appeared here. `[data-visit-counter-home]` went in on 19 Sep with
+     the CSS to hide it while empty and the module's own rule for filling it
+     by name -- and MODEL.html never asked for the module. Every other page
+     carries this line; this one was the page the whole change was FOR, and it
+     was the one that got the socket without the lamp.
+
+     LAST IN THE BODY, as on index.html and PROJECT.html: it owes the page
+     nothing and must never be in front of anything the drafter is waiting
+     for. -->
+<script src="./traffic-counter.js" defer></script>
 </body>
 </html>

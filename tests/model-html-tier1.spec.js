@@ -368,6 +368,22 @@ test.describe('MODEL.html tier 1', () => {
       // disagreeing about what a lock does. No dependency of its own; it is
       // arithmetic over ids and points.
       './level-lock.js', './stair-geometry.js',
+      // traffic-counter.js is the app's one deliberate off-site voice, and it
+      // has been on every other page since it was written -- index, PROJECT,
+      // SETTINGS, STANDARDS, SPECS, both DC pages. This page carried the SLOT
+      // it mounts into since 19 Sep and never asked for the script, which is
+      // why the count Movie asked for never appeared here.
+      //
+      // IT IS NOT THE KIND OF ENTRY THIS LIST EXISTS TO REFUSE. The list
+      // guards the migration's claim that this page is CHEAP: nothing here
+      // runs on the critical path, and this one runs after it entirely --
+      // deferred, last in the body, fail-silent, and mute on localhost. What
+      // it costs is one request the other eight pages already pay.
+      //
+      // And it is declared rather than exempted. no-third-party.spec.js is
+      // where the off-site call itself is argued; this list's job is only
+      // that nothing arrives without anyone noticing, and something did.
+      './traffic-counter.js',
     ]);
   });
 
