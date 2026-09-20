@@ -38,6 +38,66 @@ test('a page load reports a hit and wears the public count', async ({ page, base
   expect(hits).toEqual(['/index.html']);
 });
 
+// ── MODEL.html PUTS IT WHERE MOVIE ASKED, AND HAD NOWHERE TO PUT IT FROM ──
+//
+// Movie, 19 Sep: "i need the viewcounter lets put it on lower left (2nd row
+// from bottom to the left of 'STATUS READOUT'". The slot went in that day,
+// the module learned to prefer a named home over the PROJECT corner, and the
+// count still never appeared -- because MODEL.html never loaded the module.
+// A socket, wired, with no lamp in it.
+//
+// AND NOTHING COULD SEE IT. The module says nothing on localhost by design,
+// so the slot is empty on every desk and in every test that serves the app
+// the ordinary way; "the count is missing" and "the count is correctly
+// silent" look identical from there. This file already solved that for the
+// other pages -- serve the app under a stand-in domain and answer for the
+// counter host -- and the page the feature was actually for was the one page
+// not asked the question.
+test('MODEL.html wears the count on the instruments row, left of STATUS READOUT',
+  async ({ page, baseURL }) => {
+    await proxyApp(page, baseURL);
+    const hits = [];
+    await page.route(`${GC_HOST}/**`, async route => {
+      const url = new URL(route.request().url());
+      if (url.pathname === '/count') {
+        hits.push(url.searchParams.get('p'));
+        return route.fulfill({ status: 200, contentType: 'image/gif', body: Buffer.from('R0lGODlhAQABAAAAACw=', 'base64') });
+      }
+      if (url.pathname.endsWith('.json')) {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ count: '42' }) });
+      }
+      return route.fulfill({ status: 404, body: '' });
+    });
+
+    await page.goto('https://draft.test/MODEL.html');
+    const counter = page.locator('[data-traffic-counter]');
+    await expect(counter).toHaveText('42 VISITS');
+    expect(hits, 'and the page reported its own hit').toEqual(['/MODEL.html']);
+
+    // INSIDE THE NAMED HOME, not after the PROJECT corner. The two are
+    // different rules in the module -- a named home means append, the corner
+    // means insert after -- and this page has both, so landing in the wrong
+    // one would put the count on the row of page links a floor below.
+    const where = await page.evaluate(() => {
+      const el = document.querySelector('[data-traffic-counter]');
+      const home = document.querySelector('[data-visit-counter-home]');
+      const readout = document.querySelector('[data-readout-tab]');
+      return {
+        inHome: !!home && home.contains(el),
+        row: !!readout && readout.parentElement === home.parentElement,
+        // LEFT OF IT IN PIXELS, which is what Movie actually asked for --
+        // DOM order and screen order are the same here only because nothing
+        // in this row is reversed, and that is a fact worth asserting rather
+        // than assuming.
+        leftOf: el.getBoundingClientRect().right
+          <= readout.getBoundingClientRect().left + 0.5,
+      };
+    });
+    expect(where.inHome, 'it goes in the slot the page named').toBe(true);
+    expect(where.row, 'which is the row STATUS READOUT is on').toBe(true);
+    expect(where.leftOf, 'and it sits to the left of it').toBe(true);
+  });
+
 test('the count sits to the right of PROJECT where a strip has one', async ({ page, baseURL }) => {
   await proxyApp(page, baseURL);
   await page.route(`${GC_HOST}/**`, route => {

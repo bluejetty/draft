@@ -14601,5 +14601,19 @@
   boot();
 })();
 </script>
+<!-- Visit counter: async, fail-silent, silent on localhost (see
+     traffic-counter.js).
+
+     THE SLOT WAS BUILT AND THE SCRIPT WAS NOT LOADED, which is why the count
+     never appeared here. `[data-visit-counter-home]` went in on 19 Sep with
+     the CSS to hide it while empty and the module's own rule for filling it
+     by name -- and MODEL.html never asked for the module. Every other page
+     carries this line; this one was the page the whole change was FOR, and it
+     was the one that got the socket without the lamp.
+
+     LAST IN THE BODY, as on index.html and PROJECT.html: it owes the page
+     nothing and must never be in front of anything the drafter is waiting
+     for. -->
+<script src="./traffic-counter.js" defer></script>
 </body>
 </html>
