@@ -629,7 +629,24 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // once something is selected is not part of "what the page
             // offers" in the sense the absences are read against.
             'PROPERTIES',
-            'strip-ruler', 'strip-tsquare', 'strip-scale',
+            // AND A SEVENTH TIME, with the DRAFTING BRUSH (Movie, 20 Sep).
+            //
+            // NO ABSENCE ROW MOVES, and this one is worth saying carefully
+            // because the brush plainly DOES something to the drawing. It
+            // makes nothing the page could not already make: changing an
+            // existing object's properties is the PROPERTIES box, which moved
+            // its own row on 19 Sep, and placing an opening on a bare wall is
+            // the fenestration tool, present since tier 2. The brush is a
+            // faster way to reach both, and speed is not an absence.
+            //
+            // IT IS ALSO THE FIRST CONTROL HERE THE OLD PAGE DOES NOT HAVE.
+            // Every other entry on this list is parity or is argued as one;
+            // MODEL.dc.html's brush chip is a dimmed span with no handler to
+            // this day (:2009), which is where this one started too. So the
+            // table gains a row rather than losing an absence -- see "Copy
+            // one object's properties onto another" -- and the direction is
+            // the opposite of everything above it.
+            'strip-ruler', 'strip-tsquare', 'strip-scale', 'strip-brush',
             // THE READOUT IS A WORD UNTIL IT IS ASKED FOR (Movie, 15 Sep), so
             // the counts that used to sit open at the foot are behind two
             // presses now: `readout-tab` shows them and `readout-close` puts
