@@ -156,6 +156,114 @@ test('the drive-thru offers the construction details without competing with the 
     expect((await read('#dt-screen')).events).toBe('none');
   });
 
+// ── THE DOG'S TEXT STAYS ON HIS BOARD ────────────────────────────────────
+//
+// Movie, 20 Sep, with a screenshot of the sign: "the text is coming off the
+// top board". The way out to PROJECT had grown the screen a third line and
+// the band on the 17 Sep art could not hold three -- so the drafter's own
+// sentence ran off the bottom edge of the picture, clipped by an `overflow:
+// hidden` that had been doing its job silently since the art before that.
+//
+// AND THE BUG IS INVISIBLE TO EVERY CHECK THAT READS TEXT. `toHaveText` and
+// `toBeVisible` both pass on a line the box has cut in half: the node is in
+// the DOM, it has a rectangle, and the string is exactly right. The only way
+// to see it is to ask the box whether its contents fit, which is what
+// scrollHeight against clientHeight is.
+test('nothing the dog says falls off the bottom of his board',
+  async ({ page }) => {
+    await openPage(page);
+    await h.openDriveThru(page);
+    const fit = await page.locator('#dt-screen').evaluate(el => {
+      const kids = [...el.children].map(k => {
+        const r = k.getBoundingClientRect();
+        return { id: k.id, bottom: r.bottom, right: r.right };
+      });
+      const box = el.getBoundingClientRect();
+      return { scroll: el.scrollHeight, client: el.clientHeight,
+        bottom: box.bottom, right: box.right, kids };
+    });
+    expect(fit.scroll,
+      `the screen holds ${fit.scroll}px of text in ${fit.client}px of band`)
+      .toBeLessThanOrEqual(fit.client);
+    // AND EACH LINE INSIDE IT, because a flex column that centres its
+    // children can push the first one out of the top while the total still
+    // fits -- a different failure with the same screenshot.
+    for (const kid of fit.kids) {
+      expect(kid.bottom, `${kid.id} ends below the band`)
+        .toBeLessThanOrEqual(fit.bottom + 0.5);
+      expect(kid.right, `${kid.id} runs past the right of the band`)
+        .toBeLessThanOrEqual(fit.right + 0.5);
+    }
+  });
+
+// ── AND THE ZONES ARE STILL ON THE PICTURE THEY WERE MEASURED OFF ────────
+//
+// EVERY ZONE IS A PERCENTAGE OF THE ART, which makes the art and the CSS two
+// halves of one fact -- and a fact in two places drifts. Movie has redrawn
+// this board three times now, and the last one changed its SHAPE: 2000x1550
+// landscape where the one before was 1020x1500 portrait. Percentages carried
+// across that put the dog's speech on the shelf.
+//
+// SO THE CHECK ASKS THE IMAGE. Each zone's own corners are converted into
+// pixels of the board file and read: the screen and the shelf must land on
+// the black panels drawn for them, and the bone on the red disc. It fails the
+// moment either half moves without the other, and it names which zone.
+test('the screen, the shelf and the bone sit on the panels drawn for them',
+  async ({ page }) => {
+    await openPage(page);
+    await h.openDriveThru(page);
+    const verdict = await page.evaluate(async () => {
+      const board = document.querySelector('#dt-board');
+      await board.decode();
+      const W = board.naturalWidth, H = board.naturalHeight;
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      c.getContext('2d').drawImage(board, 0, 0);
+      const d = c.getContext('2d').getImageData(0, 0, W, H).data;
+      const at = (x, y) => {
+        const i = ((Math.round(y) * W) + Math.round(x)) * 4;
+        return [d[i], d[i + 1], d[i + 2], d[i + 3]];
+      };
+      const frame = document.querySelector('#dt-frame').getBoundingClientRect();
+      // The board fills the frame, so a point in the frame is that same
+      // fraction of the image.
+      const sample = (sel, fx, fy) => {
+        const r = document.querySelector(sel).getBoundingClientRect();
+        return at(((r.x - frame.x) + r.width * fx) / frame.width * W,
+          ((r.y - frame.y) + r.height * fy) / frame.height * H);
+      };
+      const dark = px => px[3] > 200 && px[0] < 60 && px[1] < 60 && px[2] < 60;
+      // RED-DOMINANT RATHER THAN BRIGHT RED. The disc is a lit dome with the
+      // white bone across the middle of it, so its centre pixel is a shaded
+      // 52,0,0 -- dark enough that a "bright red" test calls it black, and
+      // red enough that no part of the black panel could be mistaken for it.
+      // Dominance is the property that actually separates the two.
+      const red = px => px[3] > 200 && px[0] > 40
+        && px[0] > px[1] * 2 + 20 && px[0] > px[2] * 2 + 20;
+      const out = [];
+      // The corners, pulled a little inside so a one-pixel bevel on the
+      // panel's own edge is not what decides it.
+      [[0.04, 0.12], [0.96, 0.12], [0.04, 0.88], [0.96, 0.88], [0.5, 0.5]]
+        .forEach(([fx, fy]) => {
+          ['#dt-screen', '#dt-tiles'].forEach(sel => {
+            if (!dark(sample(sel, fx, fy))) {
+              out.push(`${sel} at ${fx},${fy} is ${sample(sel, fx, fy).join(',')}`);
+            }
+          });
+        });
+      // THREE POINTS DOWN THE DISC, because the white bone crosses its middle:
+      // a single centre sample reads the glyph on some art and the dome on
+      // other art, and "the button is on the disc" is a claim about the disc.
+      [0.2, 0.5, 0.8].forEach(fy => {
+        const px = sample('#dt-bone', 0.5, fy);
+        if (!red(px)) out.push(`#dt-bone at 0.5,${fy} is ${px.join(',')}`);
+      });
+      return { out, size: `${W}x${H}` };
+    });
+    expect(verdict.out,
+      `zones off the ${verdict.size} board art`).toEqual([]);
+  });
+
 test('the sign rises from the foot and covers the bone', async ({ page }) => {
   await openPage(page);
   await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
