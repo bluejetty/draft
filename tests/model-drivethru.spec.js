@@ -225,39 +225,118 @@ test('the screen, the shelf and the bone sit on the panels drawn for them',
         return [d[i], d[i + 1], d[i + 2], d[i + 3]];
       };
       const frame = document.querySelector('#dt-frame').getBoundingClientRect();
-      // The board fills the frame, so a point in the frame is that same
-      // fraction of the image.
-      const sample = (sel, fx, fy) => {
+      // The board fills the frame, so a zone's rectangle IS a rectangle of the
+      // image: the same fractions, whatever size the sign is drawn at.
+      const inImage = sel => {
         const r = document.querySelector(sel).getBoundingClientRect();
-        return at(((r.x - frame.x) + r.width * fx) / frame.width * W,
-          ((r.y - frame.y) + r.height * fy) / frame.height * H);
+        return { x: (r.x - frame.x) / frame.width * W, y: (r.y - frame.y) / frame.height * H,
+          w: r.width / frame.width * W, h: r.height / frame.height * H };
       };
       const dark = px => px[3] > 200 && px[0] < 60 && px[1] < 60 && px[2] < 60;
       // RED-DOMINANT RATHER THAN BRIGHT RED. The disc is a lit dome with the
       // white bone across the middle of it, so its centre pixel is a shaded
       // 52,0,0 -- dark enough that a "bright red" test calls it black, and
       // red enough that no part of the black panel could be mistaken for it.
-      // Dominance is the property that actually separates the two.
       const red = px => px[3] > 200 && px[0] > 40
         && px[0] > px[1] * 2 + 20 && px[0] > px[2] * 2 + 20;
-      const out = [];
-      // The corners, pulled a little inside so a one-pixel bevel on the
-      // panel's own edge is not what decides it.
-      [[0.04, 0.12], [0.96, 0.12], [0.04, 0.88], [0.96, 0.88], [0.5, 0.5]]
-        .forEach(([fx, fy]) => {
-          ['#dt-screen', '#dt-tiles'].forEach(sel => {
-            if (!dark(sample(sel, fx, fy))) {
-              out.push(`${sel} at ${fx},${fy} is ${sample(sel, fx, fy).join(',')}`);
-            }
-          });
+
+      // ── THE PANEL THE ZONE IS STANDING ON, MEASURED ────────────────────
+      //
+      // TWO DRAFTS OF THIS CHECK WERE WRONG IN OPPOSITE DIRECTIONS, which is
+      // worth recording because both looked right. The first only sampled
+      // INWARD, and three mutants walked through it: the old portrait board's
+      // figures for the shelf and the bone are strict SUBSETS of the panels
+      // on this art, so every inward sample landed on black and the check
+      // agreed while the cards sat in the middle of a strip twice their size.
+      // The second sampled outward too and failed the real board -- it cannot
+      // tell a deliberate one-percent inset from a wrong number, and the
+      // frame between the band and the shelf is dark anyway.
+      //
+      // So the panel is MEASURED rather than probed: flood out from the
+      // zone's own centre over pixels that match, and take what that region
+      // actually spans. Then the question is the one worth asking -- is this
+      // zone the same rectangle as the thing it is drawn on -- and the answer
+      // has a number in it either way.
+      //
+      // SEEDED FROM FIVE POINTS, NOT FROM THE CENTRE. The disc has the white
+      // bone drawn across its middle, and the exact centre of the button lands
+      // on that glyph's edge -- so a single centre seed found nothing red at
+      // all and the check reported the button was off the disc while it was
+      // sitting exactly on it. The glyph also cuts the red into pieces, so the
+      // five floods share one visited map and their extents are UNIONED: what
+      // is wanted is how far the panel reaches, not how far one piece of it
+      // does.
+      const regionOf = (r, ok) => {
+        const STEP = 2;
+        const gw = Math.ceil(W / STEP), gh = Math.ceil(H / STEP);
+        const seen = new Uint8Array(gw * gh);
+        let x0 = 1e9, x1 = -1, y0 = 1e9, y1 = -1, found = false;
+        const seeds = [[0.5, 0.5], [0.5, 0.15], [0.5, 0.85], [0.15, 0.5], [0.85, 0.5]];
+        seeds.forEach(([fx, fy]) => {
+          const gx = Math.round((r.x + r.w * fx) / STEP);
+          const gy = Math.round((r.y + r.h * fy) / STEP);
+          if (gx < 0 || gy < 0 || gx >= gw || gy >= gh) return;
+          const k0 = gy * gw + gx;
+          if (seen[k0] || !ok(at(gx * STEP, gy * STEP))) { seen[k0] = 1; return; }
+          found = true;
+          const stack = [k0];
+          seen[k0] = 1;
+          while (stack.length) {
+            const k = stack.pop();
+            const x = k % gw, y = (k - x) / gw;
+            if (x < x0) x0 = x; if (x > x1) x1 = x;
+            if (y < y0) y0 = y; if (y > y1) y1 = y;
+            const push = (nx, ny) => {
+              if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) return;
+              const j = ny * gw + nx;
+              if (seen[j]) return;
+              seen[j] = 1;
+              if (ok(at(nx * STEP, ny * STEP))) stack.push(j);
+            };
+            push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1);
+          }
         });
-      // THREE POINTS DOWN THE DISC, because the white bone crosses its middle:
-      // a single centre sample reads the glyph on some art and the dome on
-      // other art, and "the button is on the disc" is a claim about the disc.
-      [0.2, 0.5, 0.8].forEach(fy => {
-        const px = sample('#dt-bone', 0.5, fy);
-        if (!red(px)) out.push(`#dt-bone at 0.5,${fy} is ${px.join(',')}`);
-      });
+        if (!found) return null;
+        return { x: x0 * STEP, y: y0 * STEP, w: (x1 - x0) * STEP, h: (y1 - y0) * STEP };
+      };
+
+      // TWO PERCENT OF THE BOARD, which is the slack the zones are written
+      // with on purpose: the shelf is inset about a percent so a card does
+      // not stand on its bevel. The portrait board's own figures are three to
+      // twenty times that far out, so there is no question which side of this
+      // line a stale number falls.
+      const TOLX = W * 0.02, TOLY = H * 0.02;
+      const out = [];
+      const check = (sel, ok, what) => {
+        const r = inImage(sel);
+        const p = regionOf(r, ok);
+        if (!p) { out.push(`${sel} centre is not on ${what} at all`); return; }
+        const say = (name, a, b, tol) => {
+          if (Math.abs(a - b) > tol) {
+            out.push(`${sel} ${name} is ${Math.round(a)}, ${what} is ${Math.round(b)}`);
+          }
+        };
+        say('left', r.x, p.x, TOLX);
+        say('right', r.x + r.w, p.x + p.w, TOLX);
+        say('top', r.y, p.y, TOLY);
+        say('bottom', r.y + r.h, p.y + p.h, TOLY);
+      };
+      check('#dt-screen', dark, 'the dog-s black band');
+      check('#dt-tiles', dark, 'the black shelf');
+      check('#dt-bone', red, 'the red disc');
+
+      // ── AND THE PICTURE IS NOT STRETCHED ───────────────────────────────
+      //
+      // A SEPARATE FACT, and everything above is blind to it on purpose: the
+      // zones are fractions of the FRAME and the image fills the frame, so a
+      // wrong --dt-aspect distorts both together and every measurement still
+      // agrees. What it breaks is the drawing -- a sign squashed to two
+      // thirds of its width -- which nothing else here can see.
+      const drawn = frame.width / frame.height;
+      const real = W / H;
+      if (Math.abs(drawn - real) > 0.01) {
+        out.push(`the frame is drawn at ${drawn.toFixed(3)} and the art is ${real.toFixed(3)}`);
+      }
       return { out, size: `${W}x${H}` };
     });
     expect(verdict.out,
