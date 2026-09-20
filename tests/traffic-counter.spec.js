@@ -185,3 +185,70 @@ test('the counter says nothing at all on localhost', async ({ page, baseURL }) =
   expect(offSite).toEqual([]);
   await expect(page.locator('[data-traffic-counter]')).toHaveCount(0);
 });
+
+// ── AND IT HAS TO BE LEGIBLE WHERE IT LANDS ──
+//
+// The module sets its ink inline, and the literal it used was 45% of #1d1f20:
+// ink for a white page, right on the seven white pages that carry it. On
+// MODEL.html it composited to 1.00:1 against --surface-page, which is the same
+// #1d1f20 on the night skin that page defaults to -- the count would have
+// painted in exactly the colour behind it. The slot, the module and the mount
+// were all correct; every assertion above passed; and nobody would ever have
+// seen a number on the one page the named-slot change was made for.
+//
+// SO THE CHECK IS ON THE PIXELS, not on the string. `toHaveCSS` would have
+// passed the whole time it was invisible -- the colour WAS what the module
+// asked for. What was wrong is the relationship between that colour and the
+// page under it, so that relationship is what is asserted, on both skins.
+//
+// 4.5:1 IS WCAG AA FOR SMALL TEXT and this is 10px, which is as small as text
+// on this site gets. Measured with --ink-quiet in force: 5.08:1 night, 4.82:1
+// day. Neither has much room, so a skin change that spends it goes red here.
+const CONTRAST = `
+  const lum = ([r, g, b]) => {
+    const f = c => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  };
+  const rgb = s => {
+    const hex = s.trim().replace('#', '');
+    if (/^[0-9a-f]{6}$/i.test(hex)) return [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16));
+    const n = (s.match(/[\\d.]+/g) || []).map(Number);
+    return [n[0], n[1], n[2], n.length > 3 ? n[3] : 1];
+  };
+`;
+
+for (const mode of ['night', 'day']) {
+  test(`the count is legible on MODEL.html's ${mode} skin`, async ({ page, baseURL }) => {
+    await proxyApp(page, baseURL);
+    await page.route(`${GC_HOST}/**`, route => {
+      const url = new URL(route.request().url());
+      if (url.pathname.endsWith('.json')) {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ count: '42' }) });
+      }
+      return route.fulfill({ status: 200, contentType: 'image/gif', body: Buffer.from('R0lGODlhAQABAAAAACw=', 'base64') });
+    });
+
+    await page.goto(`https://draft.test/MODEL.html?mode=${mode}`);
+    await expect(page.locator('[data-traffic-counter]')).toHaveText('42 VISITS');
+
+    const measured = await page.evaluate(`(() => {${CONTRAST}
+      const el = document.querySelector('[data-traffic-counter]');
+      const ink = rgb(getComputedStyle(el).color);
+      // THE SHEET IS WHAT IS BEHIND IT: the count stands on #lower-left, which
+      // lies over the canvas, and the canvas is painted --surface-page.
+      const page_ = rgb(getComputedStyle(document.documentElement)
+        .getPropertyValue('--surface-page'));
+      const alpha = ink.length > 3 ? ink[3] : 1;
+      const over = [0, 1, 2].map(i => ink[i] * alpha + page_[i] * (1 - alpha));
+      const a = lum(over); const b = lum(page_);
+      return {
+        ink: getComputedStyle(el).color,
+        ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
+      };
+    })()`);
+
+    expect(measured.ratio,
+      `${measured.ink} on the ${mode} sheet reads at ${measured.ratio.toFixed(2)}:1`)
+      .toBeGreaterThanOrEqual(4.5);
+  });
+}
