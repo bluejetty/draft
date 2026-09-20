@@ -10524,11 +10524,25 @@
           against: plan.overGarage || plan.house,
         }));
       }
-      // THE ROOM'S OWN ROOF, at the full bearing: the room IS the second
-      // storey, so it is not a garage roof and must not carry the flag that
-      // would drop it one.
-      if (overGarageBody) {
-        madeRoofs.push(raiseRoofOver(plan.overGarage, {
+      // ── THE ROOM'S OWN ROOF, WHEN THE DESIGN GIVES IT ONE ─────────────
+      //
+      // AND TODAY IT NEVER DOES, which is the fix for what Movie reported on
+      // 20 Sep: "the 2 storey roofs have same problem the 1 storeys had
+      // earlier". The room over the garage bears on the HOUSE'S OWN PLATE --
+      // he ruled on 19 Sep that it is "even with the 2nd floor so will be
+      // considered 2nd floor" -- so a roof of its own is a second hip at the
+      // same height as the house's, meeting it badly. That is the 1 STOREY's
+      // defect exactly, one floor up, and premade-plans.js answers it the way
+      // it answered that one: houseRoof is the perimeter of both bodies and
+      // this loop is null.
+      //
+      // THE BRANCH STAYS, AND READS A LOOP RATHER THAN A BODY. It asked
+      // whether a room was BUILT and roofed it on that basis, which is the
+      // page deciding a question the design owns -- the same shape the
+      // garageRoof branch above avoids. A design that one day wants the room
+      // roofed separately says so by handing a loop, and nothing here moves.
+      if (overGarageBody && plan.overGarageRoof) {
+        madeRoofs.push(raiseRoofOver(plan.overGarageRoof, {
           sourceLevelId: upperStorey.id,
           against: plan.house,
         }));

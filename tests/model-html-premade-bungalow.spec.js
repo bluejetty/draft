@@ -1347,57 +1347,102 @@ test('the roofs meet the house with gables, not with eaves running into a wall',
     'the house roof is all eaves, having nothing to meet').toBe(true);
 });
 
-test('2 STOREY + GARAGE + ROOM OVER roofs all three, and none of them indoors', async ({ page }) => {
-  await open(page);
-  await order(page, 'bungalow', 'twoStorey-over');
-  await saveOnNewPage(page);
-  const saved = await savedFile(page);
-  const m = await cutStack(page);
+test('2 STOREY + GARAGE + ROOM OVER roofs the room WITH the house, and the stub apart',
+  async ({ page }) => {
+    await open(page);
+    await order(page, 'bungalow', 'twoStorey-over');
+    await saveOnNewPage(page);
+    const saved = await savedFile(page);
+    const m = await cutStack(page);
 
-  // THREE ROOFS, THREE HEIGHTS IN TWO GROUPS: the house and the room bear on
-  // the full stack, the garage stub a storey below. Movie's own description
-  // of the shape -- "so the front of the garage will have some roof on the
-  // main floor area".
-  expect(m.roofs, 'the house, the room over, and the stub in front of it').toBe(3);
-  expect(m.garageRoofs, 'only the stub is a garage roof').toBe(1);
-  expect(m.houseBase - m.garageBase, 'and only it drops a storey')
-    .toBeCloseTo(m.oneStorey, 4);
+    // ── TWO ROOFS, NOT THREE, and that is the fix rather than a loss ──────
+    //
+    // Movie, 20 Sep, looking at this tile's ROOF PLAN: "the 2 storey roofs
+    // have same problem the 1 storeys had earlier". This test used to assert
+    // THREE and called it correct, because three bodies had three sheets --
+    // but the room over the garage bears on the HOUSE'S OWN PLATE. Movie, 19
+    // Sep: "this one is even with the 2nd floor so will be considered 2nd
+    // floor". Two hips at one height meeting badly is the 1 STOREY defect
+    // exactly, one floor up, and the answer is the one that tile already got:
+    // one roof over one perimeter.
+    //
+    // THE STUB KEEPS ITS OWN, because it genuinely is a storey lower. The
+    // valley between it and the house roof is the CRICKET, still unbuilt --
+    // fixing the two hips at ONE height does not pretend to fix the junction
+    // that has two.
+    expect(m.roofs, 'the house-and-room, and the stub in front of it').toBe(2);
+    expect(m.garageRoofs, 'only the stub is a garage roof').toBe(1);
+    expect(m.houseBase - m.garageBase, 'and only it drops a storey')
+      .toBeCloseTo(m.oneStorey, 4);
 
-  // THE ROOM'S ROOF IS NOT FLAGGED. The room IS the second storey, so a
-  // garage flag on it would drop it a storey and roof the room at the height
-  // of its own floor.
-  const stub = (saved.roofs || []).find(r => r.garage === true);
-  const overRoof = (saved.roofs || [])
-    .find(r => r.garage !== true && Number(r.sourceLevelId) === 5);
-  expect(overRoof, 'the room over the garage got a roof').toBeTruthy();
+    const stub = (saved.roofs || []).find(r => r.garage === true);
+    const main = (saved.roofs || []).find(r => r.garage !== true);
+    expect(main, 'the house roof is there').toBeTruthy();
+    expect(stub, 'and so is the stub').toBeTruthy();
 
-  // NO ROOF UNDER A FLOOR. The stub must stop where the room begins: a sheet
-  // reaching back under the room would be a roof inside the building. Read as
-  // a Z overlap of the two footprints, since both span the garage's width.
-  const zSpan = roof => ({
-    lo: Math.min(...roof.points.map(p => p.z)),
-    hi: Math.max(...roof.points.map(p => p.z)),
+    // ── THE ROOM IS UNDER THE HOUSE ROOF, which is what "spliced" MEANS ───
+    //
+    // THE EASY HALF IS THE COUNT and a build that simply forgot the room's
+    // roof would pass it. This is the half that cannot be satisfied by
+    // forgetting: the house's sheet has to actually reach over the room.
+    const inside = (pt, poly) => {
+      let hit = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const a = poly[i], b = poly[j];
+        if ((a.z > pt.z) !== (b.z > pt.z)
+          && pt.x < (b.x - a.x) * (pt.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
+      }
+      return hit;
+    };
+    const mid = pts => ({
+      x: (Math.min(...pts.map(p => p.x)) + Math.max(...pts.map(p => p.x))) / 2,
+      z: (Math.min(...pts.map(p => p.z)) + Math.max(...pts.map(p => p.z))) / 2,
+    });
+    // The room's own footprint, read off the walls the build raised for it
+    // rather than off a number typed here: it is the only body on the upper
+    // storey that is not the house.
+    const roomWalls = (saved.walls || []).filter(w => Number(w.levelId) === 5
+      && Math.min(w.start.z, w.end.z) >= 19.5);
+    expect(roomWalls.length, 'the room over the garage was framed')
+      .toBeGreaterThan(2);
+    const roomPts = roomWalls.flatMap(w => [w.start, w.end]);
+    expect(inside(mid(roomPts), main.points),
+      'the house roof reaches over the room, which is the whole of the splice')
+      .toBe(true);
+
+    // AND NOT OVER THE STUB. A splice that swallowed the stub would put a
+    // two-storey hip over a single-storey body -- worse than the two hips it
+    // replaces, and exactly what the house roof's loop is drawn to avoid.
+    expect(inside(mid(stub.points), main.points),
+      'the house roof stops short of the stub, which is a storey lower')
+      .toBe(false);
+
+    // NO ROOF UNDER A FLOOR. The stub must stop where the room begins: a sheet
+    // reaching back under the room would be a roof inside the building.
+    const zSpan = roof => ({
+      lo: Math.min(...roof.points.map(p => p.z)),
+      hi: Math.max(...roof.points.map(p => p.z)),
+    });
+    const a = zSpan(stub), b = zSpan(main);
+    const overlap = Math.min(a.hi, b.hi) - Math.max(a.lo, b.lo);
+    // The two roofs each carry an overhang, so their sheets are MEANT to lap
+    // at the join. What they must not do is lap by a room's length.
+    expect(overlap, 'the garage roof reaches back under the room over it')
+      .toBeLessThan(2 * 2 + 0.01);
+
+    // EVERY ROOF SURVIVES THE RELOAD. drawing-format.js drops what it cannot
+    // place, and this page has no serializer between the push and the file.
+    const kept = await page.evaluate(async bucket => {
+      const file = await window.SharedFileStore.loadSharedFile(bucket);
+      const raw = JSON.parse(await file.text());
+      const F = window.DraftDrawingFormat;
+      const levelIds = new Set((raw.levels || []).map(l => Number(l.id)));
+      const back = F.roofs(raw.roofs, levelIds);
+      return { wrote: (raw.roofs || []).length, keeps: back.length,
+        garageKept: back.filter(r => r.garage === true).length,
+        platesKept: back.filter(r => Number.isFinite(r.plateHeightFt)).length };
+    }, BUCKET);
+    expect(kept.keeps, 'nothing was written that the reload loses').toBe(kept.wrote);
+    expect(kept.garageKept, 'and the garage flag came back').toBe(1);
+    expect(kept.platesKept, 'and so did the plate that makes it drop').toBe(1);
   });
-  const a = zSpan(stub), b = zSpan(overRoof);
-  const overlap = Math.min(a.hi, b.hi) - Math.max(a.lo, b.lo);
-  // The two roofs each carry an overhang, so their sheets are MEANT to lap at
-  // the join. What they must not do is lap by a room's length.
-  expect(overlap, 'the garage roof reaches back under the room over it')
-    .toBeLessThan(2 * 2 + 0.01);
-
-  // EVERY ROOF SURVIVES THE RELOAD. drawing-format.js drops what it cannot
-  // place, and this page has no serializer between the push and the file.
-  const kept = await page.evaluate(async bucket => {
-    const file = await window.SharedFileStore.loadSharedFile(bucket);
-    const raw = JSON.parse(await file.text());
-    const F = window.DraftDrawingFormat;
-    const levelIds = new Set((raw.levels || []).map(l => Number(l.id)));
-    const back = F.roofs(raw.roofs, levelIds);
-    return { wrote: (raw.roofs || []).length, keeps: back.length,
-      garageKept: back.filter(r => r.garage === true).length,
-      platesKept: back.filter(r => Number.isFinite(r.plateHeightFt)).length };
-  }, BUCKET);
-  expect(kept.keeps, 'nothing was written that the reload loses').toBe(kept.wrote);
-  expect(kept.garageKept, 'and the garage flag came back').toBe(1);
-  expect(kept.platesKept, 'and so did the plate that makes it drop').toBe(1);
-});
