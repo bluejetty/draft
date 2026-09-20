@@ -71,10 +71,26 @@ test('the flag does not survive arrival, so a reload is safe', async ({ page, ba
 // entry page on 4 Sep (nobody sees a bone until model space), so the logo is
 // the one way in and this pins that there is exactly one, not that there are
 // still two.
+//
+// THE DOOR MOVED TO MODEL.html on 20 Sep (Movie: "can you make the main page
+// link to the model.html"), and the flag moved with it. `new=1` is the OLD
+// page's word and starts a fresh drawing; `from=entry` is the new page's, and
+// it pulls the drive-thru up by itself after two seconds -- Movie's own rule
+// for arriving through the front door. A drafter with a drawing keeps it.
+//
+// THE PREVIEW LINK WENT AT THE SAME TIME, so "exactly one way in" is a
+// stronger claim than it was: there is no second, quieter door to the same
+// room any more.
 test('the entry link carries the flag', async ({ page, baseURL }) => {
   await page.goto(`${baseURL}/index.html`);
   const hrefs = await page.locator('a.enter-link').evaluateAll(
     els => els.map(el => el.getAttribute('href')));
   expect(hrefs).toHaveLength(1);
-  for (const href of hrefs) expect(href).toContain('new=1');
+  for (const href of hrefs) {
+    expect(href, 'the front door still opens the old page').toContain('MODEL.html');
+    expect(href, 'and it does not carry the old page-s flag').not.toContain('new=1');
+    expect(href).toContain('from=entry');
+  }
+  expect(await page.locator('a.preview-link').count(),
+    'the preview door is still on the front page beside the logo').toBe(0);
 });

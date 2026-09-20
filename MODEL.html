@@ -13437,13 +13437,21 @@
          <p>Private-browsing windows and blocked site data both do this.</p>`);
       return;
     }
+    // ── NOTHING STORED IS A BLANK SHEET, NOT A MESSAGE ───────────────────
+    //
+    // Movie, 20 Sep, on being shown this screen: "on this page take this part
+    // off - just show a NEW / BLANK page instead". It read "Draw something in
+    // MODEL.dc.html on this same origin and save it, then reload this page",
+    // which was honest while this page could only READ what the old one made.
+    // It writes now, and the same message sends a first-time drafter to a
+    // page he is not meant to use -- and on the same day the front door
+    // started pointing here, so he would meet it before anything else.
+    //
+    // THE SAME BLANK THE NEW BUTTON GIVES, through the same function, because
+    // "what an empty drawing is" is one answer. adoptAndShow marks it UNSAVED
+    // on arrival, which is true: the store has never seen it.
     if (!file) {
-      readoutText.textContent = 'no drawing saved';
-      say('No saved drawing on this origin',
-        `<p>Nothing is stored under <code>${BUCKET}</code> yet.</p>
-         <p>Draw something in <code>MODEL.dc.html</code> on this same origin and save it,
-            then reload this page. Storage is per-origin, so a drawing made on a
-            different host or port will not appear here.</p>`);
+      await adoptAndShow(blankDrawingFile());
       return;
     }
 
@@ -13775,16 +13783,20 @@
     return true;
   };
 
-  const newDrawing = () => guardUnsaved('starting a new one', async () => {
-    const blank = JSON.stringify({
-      version: window.DraftDrawingFormat.VERSION,
-      levels: BLANK_LEVELS.map(level => ({ ...level })),
-      activeLevelIdx: 3,
-      nextLevelId: 9,
-      nextDrawingItemId: 1,
-    });
-    await adoptAndShow(new File([blank], 'new-drawing.json', { type: 'application/json' }));
-  });
+  // AN EMPTY SHEET, and ONE of them: NEW presses this and so does a first
+  // visit to an origin with nothing stored. Written twice, the day one gained
+  // a level the other would open a different blank -- and a drafter would
+  // meet two different empty drawings depending on how he arrived.
+  const blankDrawingFile = () => new File([JSON.stringify({
+    version: window.DraftDrawingFormat.VERSION,
+    levels: BLANK_LEVELS.map(level => ({ ...level })),
+    activeLevelIdx: 3,
+    nextLevelId: 9,
+    nextDrawingItemId: 1,
+  })], 'new-drawing.json', { type: 'application/json' });
+
+  const newDrawing = () => guardUnsaved('starting a new one',
+    async () => { await adoptAndShow(blankDrawingFile()); });
 
   const openDrawing = () => guardUnsaved('opening another', () => {
     if (fileInput) fileInput.click();

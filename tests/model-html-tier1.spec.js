@@ -382,11 +382,21 @@ test.describe('MODEL.html tier 1', () => {
     });
     await page.goto('/MODEL.html');
 
-    await expect(notice(page)).toHaveClass(/show/, { timeout: 5000 });
-    await expect(notice(page)).toContainText('No saved drawing');
-    await expect(readout(page)).toContainText('no drawing saved');
-    // Nothing is painted at all, grid included: there is nothing to paint.
-    expect(await anyInk(page)).toBe(0);
+    // A BLANK SHEET, NOT A NOTICE (Movie, 20 Sep: "just show a NEW / BLANK
+    // page instead"). This read the other way for as long as the page could
+    // only READ what MODEL.dc.html made: the notice told the drafter to go
+    // and draw there and come back. It writes now, and the front door points
+    // here, so that sentence would be the first thing a first-time drafter
+    // read and it would send him to the page he is not meant to use.
+    await expect(notice(page)).not.toHaveClass(/show/);
+    await expect(readout(page)).toContainText('walls 0/0');
+
+    // AND IT PAINTS, which is the half of the old claim that reversed. "There
+    // is nothing to paint" was true of no drawing; a blank drawing has a
+    // grid, and a blank sheet with no grid on it is a page that failed to
+    // start rather than one with nothing on it.
+    expect(await anyInk(page), 'the blank sheet came up with no grid')
+      .toBeGreaterThan(0);
   });
 
   test('wheel zooms about the cursor and drag pans', async ({ page }) => {

@@ -149,64 +149,38 @@
            fit a phone. */
       }
 
-      /* THE PREVIEW DOOR. MODEL.html is the framework-free rebuild and until
-         7 Sep nothing in the repo linked to it -- index.html:157 was the only
-         entry point in the tree and it points at MODEL.dc.html, so the new page
-         could only be reached by typing its name. A page nobody can open is a
-         page nobody reviews, and it was being designed blind.
-         The bone door above is untouched: it is what every drafter uses and it
-         still goes straight to the live model space. This is a second, quieter
-         way in, and it says what it is so nobody mistakes it for the product. */
-      .preview {
-        margin: 2.25rem 0 0;
-        text-align: center;
-        font-size: 0.8125rem;
-        line-height: 1.5;
-        color: var(--muted);
-      }
-      .preview-link {
-        color: var(--blue-dark);
-        text-decoration: none;
-        border-bottom: 1px solid var(--line);
-        padding-bottom: 1px;
-      }
-      .preview-link:hover,
-      .preview-link:focus-visible {
-        border-bottom-color: var(--blue-dark);
-      }
-      .preview-link:focus-visible {
-        outline: 2px solid var(--blue-dark);
-        outline-offset: 3px;
-      }
-      .preview-what {
-        display: block;
-        margin-top: 0.35rem;
-        font-size: 0.75rem;
-      }
     </style>
   </head>
   <body>
     <div class="shell">
       <main>
         <div class="enter">
-          <a class="enter-link" href="MODEL.dc.html?new=1" aria-label="Open Rough Drafter model space">
+          <!-- THE DOOR MOVED (Movie, 20 Sep): "can you make the main page
+               link to the model.html". This pointed at MODEL.dc.html from the
+               first day the repo had a front page, and the parity document
+               has said for two weeks that the swap is two hrefs. This is one
+               of them.
+
+               ?from=entry, NOT ?new=1. The old page reads `new` and starts a
+               fresh drawing; the new page reads `from` and pulls the
+               drive-thru up by itself after two seconds, which is Movie's own
+               rule for arriving through the front door (15 Sep). A drafter
+               who has a drawing keeps it; one who has none gets a blank sheet
+               and the board over it. -->
+          <a class="enter-link" href="MODEL.html?from=entry" aria-label="Open Rough Drafter model space">
             <img class="enter-logo" src="assets/rough-drafter-logo.png"
                  width="225" height="225"
                  alt="Rough Drafter: a rolled blueprint lettered ROUGH DRAFTER" />
           </a>
         </div>
-        <!-- Reachable, and honest about what it is. It reads the drawing the
-             bone saved, paints it with the same painters, and saves it back
-             under the same revision guard (the Write Tier,
-             tests/write-tier.spec.js). -->
-        <p class="preview">
-          <!-- ?from=entry is how the model space knows the drafter arrived
-               through the front door, and pulls the drive-thru up by itself
-               after its two seconds (Movie, 15 Sep). MODEL.html spends the
-               flag as it reads it, so a reload lands in the drawing. -->
-          <a class="preview-link" href="MODEL.html?from=entry">Open the new model space (preview)</a>
-          <span class="preview-what">Reads, draws, and saves.</span>
-        </p>
+        <!-- THE PREVIEW LINE IS GONE (Movie, 20 Sep): "remove the extra link
+             text below the main logo", and "take off that text down at the
+             bottom (with the old (current) model .html link)". It existed
+             because nothing in the tree linked to MODEL.html and the page
+             was being designed blind. The LOGO links there now, so a second
+             quieter door to the same room would be one door too many -- and
+             the word "preview" would be the front page calling the product
+             unfinished. -->
       </main>
     </div>
 
