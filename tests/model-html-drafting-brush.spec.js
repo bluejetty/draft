@@ -52,10 +52,16 @@ const FIXTURE = `
       baseHeight: 0, topHeight: 8, refLine: 'center' },
     { id: 'd', start: { x: -12, z: -20 }, end: { x: 12, z: -20 },
       levelId: ${MAIN_FL}, view: 'plan', wallType: 'stud_2x6',
+      baseHeight: 0, topHeight: 8, refLine: 'center' },
+    { id: 'e', start: { x: -12, z: -30 }, end: { x: 12, z: -30 },
+      levelId: ${MAIN_FL}, view: 'plan', wallType: 'stud_2x6',
+      baseHeight: 0, topHeight: 8, refLine: 'center' },
+    { id: 'g', start: { x: -12, z: 10 }, end: { x: 12, z: 10 },
+      levelId: ${MAIN_FL}, view: 'plan', wallType: 'stud_2x6',
       baseHeight: 0, topHeight: 8, refLine: 'center' }
   ];
   d.fenestrations = [
-    { id: 'big', wallId: 'a', levelId: ${MAIN_FL}, view: 'plan', type: 'door',
+    { id: 'big', wallId: 'g', levelId: ${MAIN_FL}, view: 'plan', type: 'door',
       layer: 'A-DOOR', offset: 12, width: 16, sillHeight: 0, headHeight: 7,
       garage: true, auto: false },
     { id: 'win', wallId: 'b', levelId: ${MAIN_FL}, view: 'plan', type: 'window',
@@ -63,12 +69,22 @@ const FIXTURE = `
       auto: false },
     { id: 'tiny', wallId: 'c', levelId: ${MAIN_FL}, view: 'plan', type: 'window',
       layer: 'A-GLAZ', offset: 2, width: 2.5, sillHeight: 2.5, headHeight: 6.667,
+      auto: false },
+    // THREE FEET FROM THE CORNER OF A WALL THAT IS LONG ENOUGH. This is the
+    // case 'tiny' cannot make: wall e is 24 ft and CAN carry a 16'-0" door,
+    // just not centred three feet from its end -- clampOpeningToWall would
+    // slide it out to 8'-9" to leave the lintel its bearing. On 'tiny' the
+    // wall refuses the door outright, so a brush that slid instead of
+    // refusing would pass that check unchanged. Found by a mutant that
+    // survived: "REFUSED BECOMES SLID".
+    { id: 'edge', wallId: 'e', levelId: ${MAIN_FL}, view: 'plan', type: 'window',
+      layer: 'A-GLAZ', offset: 3, width: 3, sillHeight: 2.5, headHeight: 6.667,
       auto: false }
   ];
   d.lines = [
-    { id: 'l1', start: { x: -12, z: 8 }, end: { x: 12, z: 8 },
+    { id: 'l1', start: { x: -12, z: 20 }, end: { x: 12, z: 20 },
       levelId: ${MAIN_FL}, view: 'plan', layer: 'draft' },
-    { id: 'l2', start: { x: -12, z: 14 }, end: { x: 12, z: 14 },
+    { id: 'l2', start: { x: -12, z: 26 }, end: { x: 12, z: 26 },
       levelId: ${MAIN_FL}, view: 'plan', layer: 'S-FOOTING' }
   ];
   d.floors = []; d.dimensions = []; d.roofs = []; d.shapes = [];
@@ -92,7 +108,7 @@ async function open(page) {
       new File([JSON.stringify(out)], 'drawing.json', { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, src: FIXTURE });
   await page.goto('/MODEL.html?mode=night&left=1');
-  await expect(page.locator('#readout')).toContainText('walls 4/4', { timeout: 6000 });
+  await expect(page.locator('#readout')).toContainText('walls 6/6', { timeout: 6000 });
 }
 
 async function pressWorld(page, x, z) {
@@ -132,14 +148,28 @@ const linesOf = d => Object.fromEntries((d.lines || []).map(l => [l.id, l]));
 // the untouched window and agreed it was untouched. An assertion satisfied by
 // more than one world state, and the more interesting of the two was the one
 // nobody was looking at.
-const ON_A = [-8, 0];        // wall a, clear of the 16 ft door
-const ON_A_DOOR = [0, 0];    // the garage door on a: offset 12 from x = -12
-const ON_B = [-8, -10];      // wall b, clear of its window
+//
+// EVERY PRESS HAS FEET OF CLEARANCE, and the first two drafts of this file
+// did not. An offset is measured from its wall's START, and every wall here
+// begins at x = -12, so an opening at offset 12 is centred at x = 0 -- draft
+// one pressed at x = -4 and missed a three-foot window entirely. Draft two
+// put the sixteen-foot garage door on the same wall the WALL press used and
+// aimed that press at x = -8, which is the door's own EDGE: it read as a
+// wall at one zoom and as the door at the next, because the grab is in
+// SCREEN pixels and adding a wall to the fixture changed the fit.
+//
+// So the garage door has a wall to itself and nothing here is pressed within
+// five feet of anything else. A fixture whose answers depend on the camera is
+// a fixture that will change its mind later, on somebody else's branch.
+const ON_A = [-8, 0];        // wall a, which carries nothing
+const ON_A_DOOR = [0, 10];   // the garage door, alone on wall g
+const ON_B = [-8, -10];      // wall b, six feet clear of its window
 const ON_B_WIN = [0, -10];   // the 3 ft window on b: offset 12 from x = -12
 const ON_C_WIN = [22, 0];    // the 2'-6" window in the 4 ft wall
 const ON_D = [0, -20];       // wall d, which carries nothing at all
-const ON_L1 = [0, 8];
-const ON_L2 = [0, 14];
+const ON_E_EDGE = [-9, -30]; // the window three feet from wall e's corner
+const ON_L1 = [0, 20];
+const ON_L2 = [0, 26];
 
 test.describe('MODEL.html drafting brush', () => {
   test.beforeEach(async ({ page }) => {
@@ -213,7 +243,7 @@ test.describe('MODEL.html drafting brush', () => {
     const d = await saved(page);
     expect(linesOf(d).l1.layer, 'A-WALL is not a line layer — the loader '
       + 'normalises it to draft, which is what l1 starts as').toBe('S-FOOTING');
-    expect(linesOf(d).l1.start.z, 'and it is still where it was').toBeCloseTo(8, 6);
+    expect(linesOf(d).l1.start.z, 'and it is still where it was').toBeCloseTo(20, 6);
   });
 
   test('Escape puts the load down and leaves the brush up', async ({ page }) => {
@@ -268,6 +298,28 @@ test.describe('MODEL.html drafting brush', () => {
       expect(tiny.garage, 'and it did not become an overhead door').toBeUndefined();
     });
 
+  test('and it refuses rather than sliding the opening it was aimed at',
+    async ({ page }) => {
+      // THE OTHER HALF OF THE FIT RULE, and the half 'tiny' cannot show.
+      // Wall e IS long enough for a 16'-0" door -- it is twenty-four feet --
+      // so clampOpeningToWall does not refuse, it SLIDES: the door would land
+      // at 8'-9" from the corner instead of the 3'-0" the window sits at.
+      //
+      // A typed width may slide, because the drafter asked for that width AT
+      // that opening. A dusted one may not: he asked for these properties,
+      // and quietly moving the window he aimed at would be the brush editing
+      // where a thing is, which is the one thing it must never do.
+      await brush(page).click();
+      await pressWorld(page, ...ON_A_DOOR);
+      await pressWorld(page, ...ON_E_EDGE);
+      await expect(strip(page)).toContainText(/TOO BIG/i);
+      const d = await saved(page);
+      const edge = opsOf(d).edge;
+      expect(edge.offset, 'it did not slide out to make room').toBeCloseTo(3, 6);
+      expect(edge.width, 'and it is still the window it was').toBeCloseTo(3, 6);
+      expect(edge.type).toBe('window');
+    });
+
   test('a loaded opening on bare wall puts a new one there', async ({ page }) => {
     await brush(page).click();
     await pressWorld(page, ...ON_A_DOOR);
@@ -279,7 +331,7 @@ test.describe('MODEL.html drafting brush', () => {
     // openings it had found.
     await pressWorld(page, ...ON_D);
     const d = await saved(page);
-    const made = (d.fenestrations || []).filter(o => !['big', 'win', 'tiny'].includes(o.id));
+    const made = (d.fenestrations || []).filter(o => !['big','win','tiny','edge'].includes(o.id));
     expect(made.length, 'one new opening').toBe(1);
     expect(made[0].wallId, 'on the wall that was pressed').toBe('d');
     expect(made[0].type).toBe('door');
@@ -309,12 +361,12 @@ test.describe('MODEL.html drafting brush', () => {
       // the check reported "one wall was drawn: 0" with nothing wrong in the
       // page at all.
       const frame = await h.planFrame(page);
-      await page.mouse.click(...frame.at(16, 4));
+      await page.mouse.click(...frame.at(16, -4));
       await page.waitForTimeout(80);
-      await page.mouse.click(...frame.at(16, 10));
+      await page.mouse.click(...frame.at(16, -8));
       await page.waitForTimeout(150);
       const d = await saved(page);
-      const made = (d.walls || []).filter(w => !['a', 'b', 'c', 'd'].includes(String(w.id)));
+      const made = (d.walls || []).filter(w => !['a','b','c','d','e','g'].includes(String(w.id)));
       expect(made.length, 'one wall was drawn').toBe(1);
       expect(made[0].wallType, 'wearing the brush-s type').toBe('stud_2x6');
       expect(made[0].topHeight, 'and its height').toBeCloseTo(9, 6);
