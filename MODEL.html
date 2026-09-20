@@ -11748,6 +11748,15 @@
     return walls.every(wall => read(wall) === first) ? first : null;
   };
 
+  // The same patch onto every item in hand. applyToWalls is this plus the
+  // wall-type substitution, which is a wall's own business.
+  const applyToItems = (items, patch) => {
+    items.forEach(item => Object.assign(item, patch));
+    markDirty();
+    showSelectionProps();
+    paint();
+  };
+
   const applyToWalls = (walls, patch) => {
     walls.forEach(wall => {
       Object.assign(wall, patch);
@@ -11861,6 +11870,199 @@
     return box;
   };
 
+  // ── FENESTRATION PROPERTIES ───────────────────────────────────────────
+  //
+  // Movie, 18 Sep, on the bungalow's windows and doors: he wanted them so he
+  // could "change them if i need to afterwards". Stage 1 drew them, stage 2
+  // placed, picked and slid them, and the parity row has said since: "Also
+  // absent: typing a width, sill or head -- the properties panel STATES all
+  // three so they are not discovered by placing one." This is that row.
+  //
+  // A WIDTH CHANGE IS A PLACEMENT AGAIN. An opening has to fit its wall with
+  // bearing either side, and the rule for that is clampOpeningToWall --
+  // already the rule a press follows. Re-asking it with the new width slides
+  // the opening if it must and refuses when the wall cannot carry it at all,
+  // which is the same two answers, in the same words, as placing one.
+  const openingHostWall = opening =>
+    walls().find(wall => wall.id === opening.wallId) || null;
+
+  const openingPropsNode = openings => {
+    const F = window.DraftFormatters;
+    const G = window.DraftGeometry2D;
+    const box = document.createElement('div');
+    const typeOf = opening => (opening.type === 'door' ? 'door' : 'window');
+
+    box.append(propRow('OPENING', OPENING_TYPES,
+      agreedOn(openings, typeOf),
+      id => {
+        // A DOOR'S SILL IS ZERO BY CONSTRUCTION -- it stands on the floor --
+        // which is the old page's rule at the point of writing the record
+        // rather than a second number kept beside the first. So the switch
+        // carries it, and the SILL row below goes away with it.
+        applyToOpenings(openings, opening => ({
+          type: id, layer: id === 'door' ? 'A-DOOR' : 'A-GLAZ',
+          ...(id === 'door' ? { sillHeight: 0 } : {}),
+        }));
+      }));
+
+    box.append(propField('WIDTH', agreedOn(openings, o => Number(o.width) || 0),
+      feet => {
+        if (!(feet > 0)) return 'An opening needs a width greater than zero.';
+        const refused = [];
+        const clamped = new Map();
+        openings.forEach(opening => {
+          const wall = openingHostWall(opening);
+          if (!wall) { refused.push(opening); return; }
+          const fit = G.clampOpeningToWall(wall, Number(opening.offset) || 0, feet,
+            { walls: walls(), thicknessFt: openingThicknessFt() });
+          if (!fit) { refused.push(opening); return; }
+          clamped.set(opening, fit.offset);
+        });
+        if (refused.length) {
+          return `That wall is too short to carry a `
+            + `${F.formatArchitecturalInches(feet * 12)} opening.`;
+        }
+        applyToOpenings(openings, opening =>
+          ({ width: feet, offset: clamped.get(opening) }));
+        return null;
+      }, showSelectionProps));
+
+    // ONLY A WINDOW HAS ONE, for the reason above. A sill row on a door
+    // would edit a number the record writes as zero whatever it said.
+    if (agreedOn(openings, typeOf) === 'window') {
+      box.append(propField('SILL', agreedOn(openings, o => Number(o.sillHeight) || 0),
+        feet => {
+          const bad = openings.find(o => feet >= (Number(o.headHeight) || 0));
+          if (bad) {
+            return `A sill at ${F.formatArchitecturalInches(feet * 12)} is not `
+              + `below the head at `
+              + `${F.formatArchitecturalInches((Number(bad.headHeight) || 0) * 12)}.`;
+          }
+          applyToOpenings(openings, () => ({ sillHeight: feet }));
+          return null;
+        }, showSelectionProps));
+    }
+
+    box.append(propField('HEAD', agreedOn(openings, o => Number(o.headHeight) || 0),
+      feet => {
+        const bad = openings.find(o => feet <= (Number(o.sillHeight) || 0));
+        if (bad) {
+          return `A head at ${F.formatArchitecturalInches(feet * 12)} is not `
+            + `above the sill at `
+            + `${F.formatArchitecturalInches((Number(bad.sillHeight) || 0) * 12)}.`;
+        }
+        applyToOpenings(openings, () => ({ headHeight: feet }));
+        return null;
+      }, showSelectionProps));
+    return box;
+  };
+
+  // PER ITEM, because two of these edits are not one patch: a width clamps to
+  // each opening's own wall and lands at its own offset.
+  const applyToOpenings = (openings, patchFor) => {
+    openings.forEach(opening => Object.assign(opening, patchFor(opening)));
+    markDirty();
+    showSelectionProps();
+    paint();
+  };
+
+  // ── FLOOR PROPERTIES ──────────────────────────────────────────────────
+  //
+  // THE THREE THE FLOOR TOOL NAMED AS ABSENT. Its own comment listed what it
+  // left out -- "the typed-length ruler, arc edges, the slope and thickened-
+  // edge properties, and the FLOOR JOISTS box" -- and two of those are here,
+  // with the thickness that was derived at creation and never editable after.
+  //
+  // STRUCTURE IS READ, NOT WRITTEN. Whether a floor is framed or a slab is
+  // layer-views.js's answer from where it LIVES (floorHomeView), not a
+  // property of its own: a level with a foundation set files its floor there
+  // whichever set it was drawn on, "because such a level's floor IS its
+  // foundation". A picker here would let a drafter put a slab on a plan set
+  // and make the two answers disagree.
+  const floorPropsNode = floors => {
+    const F = window.DraftFormatters;
+    const box = document.createElement('div');
+
+    const structure = agreedOn(floors, floor =>
+      (floor.structure === 'slab' ? 'SLAB' : 'FRAMED'));
+    const said = document.createElement('div');
+    said.className = 'props-title';
+    said.dataset.propStructure = '';
+    said.textContent = structure === null ? 'MIXED' : structure;
+    box.append(said);
+
+    box.append(propField('THICKNESS',
+      agreedOn(floors, floor => Number(floor.thickness) || 0),
+      feet => {
+        if (!(feet > 0)) return 'A floor needs a thickness greater than zero.';
+        applyToItems(floors, { thickness: feet });
+        return null;
+      }, showSelectionProps));
+
+    // Movie asked for this one by name on 18 Sep, in the same breath as the
+    // roof: "i'd like the roof and thickened edge done".
+    const thick = agreedOn(floors, floor => floor.thickenedEdge === true);
+    box.append(propRow('THICKENED EDGE', [['on', 'ON'], ['off', 'OFF']],
+      thick === null ? null : (thick ? 'on' : 'off'),
+      id => applyToItems(floors, { thickenedEdge: id === 'on' })));
+
+    // INCHES PER FOOT, which is how a garage slab's fall is drawn and how the
+    // record already stores it. Not an architectural length: a slope is a
+    // ratio, and putting it through the foot-and-inch parser would make
+    // 1/4 read as a quarter of a foot.
+    box.append(numberField('SLOPE IN/FT',
+      agreedOn(floors, floor => Number(floor.slopeInPerFt) || 0) ?? 0,
+      0, 3, 0.125, value => {
+        if (value === null) return agreedOn(floors, floor => Number(floor.slopeInPerFt) || 0) ?? 0;
+        applyToItems(floors, { slopeInPerFt: value });
+        return value;
+      }));
+
+    // READ FROM THE GEOMETRY, never stored -- a stored area and a dragged
+    // corner are two facts that can disagree, and the drafter would believe
+    // the one on the panel.
+    const area = floors.reduce((sum, floor) => {
+      const points = floor.points || [];
+      return sum + Math.abs(points.reduce((acc, point, index) => {
+        const next = points[(index + 1) % points.length];
+        return acc + (point.x * next.z - next.x * point.z);
+      }, 0)) / 2;
+    }, 0);
+    const size = document.createElement('div');
+    size.dataset.propArea = '';
+    size.className = 'props-title';
+    size.textContent = `AREA ${Math.round(area)} SQ FT`;
+    box.append(size);
+    return box;
+  };
+
+  // ── LINE PROPERTIES ───────────────────────────────────────────────────
+  //
+  // A LINE CARRIES ALMOST NOTHING, and saying so is the panel. Its record is
+  // two points, a level, a view and a layer -- no type, no width, no height.
+  // What a drafter wants off it is the LENGTH, and that is read from the two
+  // points rather than stored, for the reason the beam's SPAN is.
+  //
+  // AN EMPTY BOX WOULD BE THE WRONG ANSWER. It would read as "this page has
+  // no properties for a line", which is not what is true: a line HAS no
+  // properties to change, and those are different sentences.
+  const linePropsNode = lines => {
+    const box = document.createElement('div');
+    const total = lines.reduce((sum, line) => sum
+      + Math.hypot(line.end.x - line.start.x, line.end.z - line.start.z), 0);
+    const len = document.createElement('div');
+    len.dataset.propSpan = '';
+    len.className = 'props-title';
+    len.textContent = `${lines.length > 1 ? 'TOTAL ' : ''}LENGTH ${feetLabel(total)}`;
+    box.append(len);
+    const note = document.createElement('div');
+    note.dataset.propNote = '';
+    note.className = 'props-title';
+    note.textContent = 'A LINE IS TWO POINTS. DRAG AN END TO CHANGE IT.';
+    box.append(note);
+    return box;
+  };
+
   // ── PROPERTIES BELONG TO WHAT IS SELECTED ─────────────────────────────────
   //
   // Movie, 19 Sep: "There should be a PROPERTIES box with in this case WALL
@@ -11877,6 +12079,17 @@
   // itself whether to leave the box alone.
   const SELECTION_PANELS = {
     wall: items => ({ title: 'WALL', node: wallPropsNode(items) }),
+    fenestration: items => ({ title: 'OPENING', node: openingPropsNode(items) }),
+    floor: items => ({ title: 'FLOOR', node: floorPropsNode(items) }),
+    line: items => ({ title: 'LINE', node: linePropsNode(items) }),
+    // ROOF IS NOT HERE, AND THAT IS A BLOCK RATHER THAN A CHOICE. hitAt's
+    // chain is fenestration, wall, line, outline, floor -- a roof cannot be
+    // selected on this page at all, so a panel for one would have nothing to
+    // be reached by. The roof TOOL's overhang and pitch box already exists
+    // and is about the NEXT roof, which is a different question.
+    //
+    // OUTLINE IS NOT HERE EITHER: it is a guide, and what a drafter changes
+    // about one is its corners, which is a drag.
     column: items => (items.length === 1
       ? { title: 'COLUMN', node: columnPropsNode(items[0]) } : null),
     beam: items => (items.length === 1
@@ -11934,7 +12147,16 @@
   const ROOF_OVERHANGS = [['0.5', "6\""], ['1', "1'"], ['1.5', "1'-6\""], ['2', "2'"]];
   let roofPanelUp = false;
 
-  const roofNumberField = (label, value, min, max, step, commit) => {
+  // A PLAIN NUMBER, not a foot-and-inch length. The roof's overhang and
+  // pitch use it, and so does a floor's slope -- a slope is a RATIO, and
+  // putting "1/4" through the architectural parser would read it as a
+  // quarter of a FOOT.
+  //
+  // IT KEEPS data-roof-field, which is now a small lie about its name and a
+  // deliberate one: two specs drive the roof's pitch through that attribute,
+  // and renaming it to buy a tidier word would be changing a hook that works
+  // in order to fix a comment. The name is what moved.
+  const numberField = (label, value, min, max, step, commit) => {
     const row = document.createElement('div');
     row.dataset.propRow = label.toLowerCase();
     const name = document.createElement('div');
@@ -11971,12 +12193,12 @@
       roofOverhangFt = Number(id);
       showRoofProps();
     }));
-    box.append(roofNumberField('OVERHANG FT', roofOverhangFt, 0, 6, 0.25, v => {
+    box.append(numberField('OVERHANG FT', roofOverhangFt, 0, 6, 0.25, v => {
       if (v !== null) roofOverhangFt = v;
       showRoofProps();
       return roofOverhangFt;
     }));
-    box.append(roofNumberField('PITCH', roofPitch, 0, 24, 1, v => {
+    box.append(numberField('PITCH', roofPitch, 0, 24, 1, v => {
       if (v !== null) roofPitch = v;
       showRoofProps();
       return roofPitch;
