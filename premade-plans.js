@@ -204,6 +204,93 @@ if (!window.DraftPremadePlans) {
       { garage: true, headFt: GARAGE_DOOR_HEAD_FT }),
   ];
 
+  // ── THE DETACHED GARAGE THE BOARD ORDERS ─────────────────────────────────
+  //
+  // Movie, 20 Sep: "also the detached garage doesn't have a roof or windows
+  // and doors yet i noticed". It was a bare box -- four stud walls and the
+  // concrete under them, and no way into it.
+  //
+  // ITS LOOP IS NOT THIS MODULE'S. A detached garage is PLACED rather than
+  // designed: the drafter typed the size and garage-site.js decided where the
+  // box stands. So this takes the two numbers and hands back openings keyed to
+  // THAT loop's edges, which run clockwise from its back-left corner --
+  //
+  //   edge 0  back      edge 1  right
+  //   edge 2  FRONT, the door wall ("the door wall faces the viewer (+z)")
+  //   edge 3  left, the side facing the house: plot() stands the garage at
+  //           `standing.maxX + SETBACK_FT`, so what is already built is west
+  //           of it and the path between the two runs off this wall.
+  //
+  // ── THE OVERHEAD DOOR IS SIZED TO THE WALL ───────────────────────────────
+  //
+  // Which the attached garage never had to be: its door wall is 26 ft every
+  // time. This one is anything from 8 ft to 60. A 16 ft door needs 17'-5" of
+  // wall to carry it -- the leaf, plus at each end the stud wall it runs into
+  // and the bearing the lintel sits on -- so the 16x24 ON THE BOARD cannot
+  // take one at all, and comes down the ladder to the 12.
+  //
+  // AND WRITING IT ANYWAY WOULD NOT SHOW UP AS A BUG. The record would reach
+  // the file, geometry-2d.js's clampOpeningToWall would refuse it on every
+  // paint, and the drafter would get a garage that is shut on the plan, shut
+  // on the elevation and shut in 3D, with nothing anywhere saying why. So the
+  // fit is asked HERE, against the same clamp the painter uses.
+  //
+  // A LADDER OF STOCK WIDTHS, widest first, and the first the wall can carry
+  // wins: 16 and 12 are doubles, 10, 9 and 8 singles. Below about 9'-2" of
+  // door wall none of them fits and the garage gets no overhead door -- an 8 ft
+  // box is a shed, and a made-up width would be a door nobody can order.
+  const OVERHEAD_DOOR_WIDTHS_FT = Object.freeze([16, 12, 10, 9, 8]);
+
+  // WHAT A WALL OF THIS LENGTH CAN CARRY, by the painter's own rule. Each end
+  // reserves the wall it runs into plus the lintel's bearing, which is
+  // openingEndReserveFt over a corner -- and at a corner of this box the
+  // carrier is always another wall of the same garage, so one thickness
+  // answers for both ends.
+  const carries = (wallLengthFt, widthFt, wallThicknessFt) =>
+    wallLengthFt >= widthFt + 2 * (wallThicknessFt + G.openingBearingFt(widthFt));
+
+  const widestDoorFor = (wallLengthFt, wallThicknessFt) =>
+    OVERHEAD_DOOR_WIDTHS_FT.find(w => carries(wallLengthFt, w, wallThicknessFt)) || null;
+
+  // A MAN DOOR AND ONE WINDOW, which is the "windows and doors" half of the
+  // report. The man door is the everyday way in, on the wall the house is on;
+  // the window is on the BACK, away from both the street and the neighbour,
+  // and it is one number to move when Movie wants it elsewhere -- the same
+  // promise houseOpenings makes.
+  const MAN_DOOR_WIDTH_FT = 2.5;
+  const GARAGE_WINDOW_WIDTH_FT = 3;
+
+  // `wallThicknessFt` IS ASKED FOR RATHER THAN ASSUMED. What carries the end
+  // of a lintel is the wall it runs into, and this module does not know what
+  // the page framed the garage in -- a 2x4 garage reserves an inch and a half
+  // less per end than a 2x6 one, which is the difference between a 9 ft door
+  // fitting and not on a wall near the line. The caller has just built the
+  // walls and knows.
+  const detachedGarageOpenings = ({ widthFt, depthFt, wallThicknessFt } = {}) => {
+    const w = Number(widthFt);
+    const d = Number(depthFt);
+    const t = Number(wallThicknessFt);
+    if (!Number.isFinite(w) || !Number.isFinite(d) || !Number.isFinite(t)) return [];
+    const out = [];
+    // THE BACK WALL'S WINDOW, first so the list reads round the loop.
+    if (carries(w, GARAGE_WINDOW_WIDTH_FT, t)) {
+      out.push(opening(0, w / 2, GARAGE_WINDOW_WIDTH_FT, 'window'));
+    }
+    const overhead = widestDoorFor(w, t);
+    if (overhead) {
+      out.push(opening(2, w / 2, overhead, 'door',
+        { garage: true, headFt: GARAGE_DOOR_HEAD_FT }));
+    }
+    // THE MAN DOOR ON THE HOUSE SIDE, centred on the depth. Only a box under
+    // about 3'-8" deep could refuse it, which the board's own 8 ft minimum
+    // already rules out -- but the question is asked rather than assumed,
+    // because a typed size is the one a drafter can get wrong.
+    if (carries(d, MAN_DOOR_WIDTH_FT, t)) {
+      out.push(opening(3, d / 2, MAN_DOOR_WIDTH_FT, 'door'));
+    }
+    return out;
+  };
+
   // ── THE UPPER STOREY'S WINDOWS ───────────────────────────────────────────
   //
   // NO DOORS UP HERE. The ground floor's set carries the front door, and a
@@ -490,7 +577,9 @@ if (!window.DraftPremadePlans) {
   window.DraftPremadePlans = Object.freeze({
     WIDTH_FT, DEPTH_FT, GARAGE_WIDTH_FT, GARAGE_DEPTH_FT,
     GARAGE_PAST_FT, GARAGE_TIE_FT, OVER_GARAGE_LENGTH_FT,
-    bungalow, twoStorey, planFor,
+    OVERHEAD_DOOR_WIDTHS_FT,
+    MAN_DOOR_WIDTH_FT, GARAGE_WINDOW_WIDTH_FT, GARAGE_DOOR_HEAD_FT,
+    bungalow, twoStorey, planFor, detachedGarageOpenings,
     entryIds: () => Object.keys(PLANS),
   });
 })();

@@ -192,6 +192,34 @@ measures, each press firing its own seam and not the other's.
 Movie's scope for the designs, 18 Sep: bungalows and attached garages first,
 bilevel later because it "will be more complex and need more work".
 
+**AND THE DETACHED GARAGE IS A BUILDING, NOT A BOX.** Movie, 20 Sep, looking
+at the E3 LEFT elevation: *"also the detached garage doesn't have a roof or
+windows and doors yet i noticed"*. Four stud walls, its concrete, and nothing
+else. The premade houses had both already, which is what makes this a gap
+rather than a feature nobody had reached: `raiseLoop` deals a design's
+openings and `buildPremadePlan` raises its roofs, and the ordered garage goes
+down neither path -- it mints its own outline, because it carries
+`detached: true` and the foundation the drafter picked off the tile.
+
+The dealer is now shared (`dealOpenings`), so the two builders write one
+opening record rather than two that drift; the roof goes up through the same
+`raiseRoofOver` the attached one uses, with **no `against`** -- a detached
+garage touches nothing, so every edge is an eave at the full overhang and
+there is no house wall for a gable to cut against.
+
+**THE DOOR IS SIZED TO THE WALL, and that is a rule rather than a number.**
+The attached garage's door wall is 26 ft every time; this one is anything the
+board accepts, 8 ft to 60. A 16 ft leaf needs 17'-5" of wall to carry it with
+the lintel's bearing left at each end -- so the **16x24 on the board cannot
+take one at all**, and written blind that door would reach the file, be
+refused by `clampOpeningToWall` on every paint, and leave the drafter a garage
+that is shut on the plan, shut on the elevation and shut in 3D with nothing
+anywhere saying why. `premade-plans.js` carries a ladder of stock widths
+(16, 12, 10, 9, 8), widest the wall can carry wins, and the harness measures
+each pick against the app's OWN clamp rather than against the arithmetic
+written out a second time. A 16x24 gets the 12; an 8 ft box gets no overhead
+door at all, and still gets its man door and its window.
+
 **A built design puts the trace down with it.** Pressing the tile arms the
 outline through `onChoose` and that still stands -- a drafter who CLOSES the
 board instead of pressing the bone means to draw it himself. Once the house is

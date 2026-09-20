@@ -548,8 +548,218 @@ check('and only the second of those carries a garage',
 check('an entry with no design yet answers null rather than a wrong house',
   P => [P.planFor('bilevel'), null]);
 
+// ── THE DETACHED GARAGE OFF THE BOARD ────────────────────────────────────
+//
+// A DIFFERENT KIND OF DESIGN, which is why it gets its own block. Everything
+// above is fixed: the bungalow is 32 x 40 whatever anybody types, so its
+// openings are constants and the checks read them back. A detached garage is
+// whatever size the drafter asked for -- eight feet to sixty, off the board or
+// typed -- so what is fixed here is the RULE, and a check that only looked at
+// a 25x25 would pin one point on it.
+//
+// THE FIT IS THE WHOLE RISK. An opening wider than its wall can carry reaches
+// the file, and then geometry-2d.js's clampOpeningToWall refuses it on every
+// paint: the record is there, nothing draws it, and the drafter gets a garage
+// that is shut on the plan, shut on the elevation and shut in 3D with no
+// error anywhere. So the door widths are checked against THAT clamp -- the
+// app's own, loaded above and never mutated -- rather than against arithmetic
+// written out a second time here.
+const STUD_2X6_FT = 5.5 / 12;
+const STUD_2X4_FT = 3.5 / 12;
+
+// A wall of this length with another wall standing at each end, which is what
+// every wall of a four-sided garage has. The clamp reserves the carrier's own
+// thickness plus the lintel bearing at each end, and a free end would reserve
+// a 6x6 post instead -- a different number, and not this building's.
+const clampOn = (lenFt, offsetFt, widthFt, tFt) => {
+  const wall = { id: 'w', levelId: 1, view: 'plan',
+    start: { x: 0, z: 0 }, end: { x: lenFt, z: 0 } };
+  const ends = [
+    { id: 'a', levelId: 1, view: 'plan', start: { x: 0, z: 0 }, end: { x: 0, z: -10 } },
+    { id: 'b', levelId: 1, view: 'plan', start: { x: lenFt, z: 0 }, end: { x: lenFt, z: -10 } },
+  ];
+  return GEOM.clampOpeningToWall(wall, offsetFt, widthFt,
+    { walls: [wall, ...ends], thicknessFt: () => tFt });
+};
+
+const detached = (P, widthFt, depthFt, tFt = STUD_2X6_FT) =>
+  P.detachedGarageOpenings({ widthFt, depthFt, wallThicknessFt: tFt });
+const onEdge = (list, edge) => list.find(o => o.edge === edge) || null;
+// The sizes the board offers, plus the two ends of the typed range and a
+// scatter between them -- 8 and 60 are build-menu.js's own bounds.
+const SWEEP = (() => {
+  const out = [];
+  for (let w = 8; w <= 60; w += 0.5) out.push(w);
+  return out;
+})();
+
+check('a 25x25 gets a window and two doors, one per wall',
+  P => [detached(P, 25, 25).map(o => o.edge).join(','), '0,2,3']);
+
+check('the overhead door is on the door wall, centred across it',
+  P => { const door = onEdge(detached(P, 25, 25), 2);
+         return [`${n(door.offsetFt)},${n(door.widthFt)},${door.type}`,
+           `${n(12.5)},${n(16)},door`]; });
+
+check('the man door is on the wall the house is on, centred along the depth',
+  P => { const door = onEdge(detached(P, 25, 24), 3);
+         return [`${n(door.offsetFt)},${n(door.widthFt)},${door.type}`,
+           `${n(12)},${n(2.5)},door`]; });
+
+check('the window is on the back wall, off both doors',
+  P => { const win = onEdge(detached(P, 25, 25), 0);
+         return [`${n(win.offsetFt)},${n(win.widthFt)},${win.type}`,
+           `${n(12.5)},${n(3)},window`]; });
+
+// ── THE 16x24 ON THE BOARD, which is the size that made this a rule ──────
+//
+// TWELVE, NOT SIXTEEN AND NOT NINE. Sixteen feet of door wall cannot carry a
+// 16 ft leaf -- that is the whole reason the ladder exists -- and the next
+// rung down that it CAN carry is the 12. Written out because the first draft
+// of this check said 9: a 16 ft garage reads like a single bay, and the rule
+// is not "a single bay gets a single door", it is "the widest the wall
+// carries". Nine is what a narrower wall would get, and nothing here decides
+// by what the size is called.
+check("the 16 ft board size gets a 12 ft door, not the double it cannot carry",
+  P => [n(onEdge(detached(P, 16, 24), 2).widthFt), n(12)]);
+
+check('and that is not an opinion: the app-s own clamp refuses a 16 on that wall',
+  P => [clampOn(16, 8, 16, STUD_2X6_FT), null]);
+
+check('while the 12 it picks clears the same clamp without being moved',
+  P => [n(clampOn(16, 8, 12, STUD_2X6_FT).offset), n(8)]);
+
+// ── AND EVERY OTHER SIZE, not just the two on the board ──────────────────
+//
+// THE CLAMP IS THE JUDGE. For every width the board will accept, the door the
+// ladder picked must be one the painter will draw, and it must sit where the
+// design put it -- a door the clamp SLIDES is a door that is not centred on
+// the wall any more, which on a garage is visible from the street.
+check('every overhead door it picks clears the clamp, unmoved, at every size',
+  P => { const bad = SWEEP.filter(w => {
+           const door = onEdge(detached(P, w, 24), 2);
+           if (!door) return false;
+           const got = clampOn(w, door.offsetFt, door.widthFt, STUD_2X6_FT);
+           return !got || Math.abs(got.offset - door.offsetFt) > 1e-9;
+         });
+         return [bad.join(','), '']; });
+
+check('and every man door does, down the depth',
+  P => { const bad = SWEEP.filter(d => {
+           const door = onEdge(detached(P, 24, d), 3);
+           if (!door) return false;
+           const got = clampOn(d, door.offsetFt, door.widthFt, STUD_2X6_FT);
+           return !got || Math.abs(got.offset - door.offsetFt) > 1e-9;
+         });
+         return [bad.join(','), '']; });
+
+check('and every window does, across the back',
+  P => { const bad = SWEEP.filter(w => {
+           const win = onEdge(detached(P, w, 24), 0);
+           if (!win) return false;
+           const got = clampOn(w, win.offsetFt, win.widthFt, STUD_2X6_FT);
+           return !got || Math.abs(got.offset - win.offsetFt) > 1e-9;
+         });
+         return [bad.join(','), '']; });
+
+check('no opening is ever keyed to an edge the plot has not got',
+  P => [SWEEP.flatMap(w => detached(P, w, w).map(o => o.edge))
+    .filter(edge => !(edge >= 0 && edge <= 3)).join(','), '']);
+
+// ── THE THICKNESS IS READ, NOT ASSUMED ───────────────────────────────────
+//
+// Ten feet of door wall is the length where the two framings disagree: a 2x4
+// garage reserves an inch and a half less at each end than a 2x6 one, which
+// is exactly the difference between a 9 ft door fitting and not.
+check('a 2x4 garage carries a door its 2x6 twin cannot',
+  P => [`${n(onEdge(detached(P, 10, 24, STUD_2X4_FT), 2).widthFt)},`
+    + `${n(onEdge(detached(P, 10, 24, STUD_2X6_FT), 2).widthFt)}`,
+    `${n(9)},${n(8)}`]);
+
+check('and with no thickness given it guesses nothing at all',
+  P => [P.detachedGarageOpenings({ widthFt: 25, depthFt: 25 }).length, 0]);
+
+check('nor with no size given',
+  P => [P.detachedGarageOpenings({ wallThicknessFt: STUD_2X6_FT }).length, 0]);
+
+// AND A SIZE THAT IS NOT A SIZE IS REFUSED, which is the case the finite
+// guard is actually there for. A missing width loses every comparison in
+// `carries` and would deal nothing even unguarded; an INFINITE one wins them
+// all, and the garage gets a window centred at infinity feet. NaN and
+// Infinity are not the same bad number and only one of them fails safe.
+check('and an infinite size is refused rather than dealt a window at infinity',
+  P => [P.detachedGarageOpenings({ widthFt: Infinity, depthFt: Infinity,
+    wallThicknessFt: STUD_2X6_FT }).length, 0]);
+
+// ── THE BOX TOO NARROW FOR ANY STOCK DOOR ────────────────────────────────
+//
+// build-menu.js will accept a typed 8 x 8. No overhead door made is carried by
+// eight feet of wall, so it gets none -- and it still gets the man door and the
+// window, because the shed it is still wants a way in and some light.
+check('an 8 ft box gets no overhead door, and still gets its man door and window',
+  P => [detached(P, 8, 8).map(o => `${o.edge}:${o.type}`).join(','),
+    '0:window,3:door']);
+
+check('the overhead door is a garage door at 7 ft; the man door is neither',
+  P => { const list = detached(P, 25, 25);
+         const oh = onEdge(list, 2), man = onEdge(list, 3);
+         return [`${oh.garage},${n(oh.headFt)},${man.garage},${n(man.headFt)}`,
+           `true,${n(7)},false,${n(GEOM.DEFAULT_OPENING_HEAD_FT)}`]; });
+
+check('the window sits at the app-s own sill, not on the floor',
+  P => [n(onEdge(detached(P, 25, 25), 0).sillFt), n(GEOM.DEFAULT_WINDOW_SILL_FT)]);
+
 // ── Mutations ──
 const MUTATIONS = [
+  // ── THE DETACHED GARAGE ──
+  ['the overhead door is hung on the right wall instead of the door wall',
+    s2 => s2.replace("out.push(opening(2, w / 2, overhead, 'door',",
+      "out.push(opening(1, w / 2, overhead, 'door',")],
+  ['the ladder is climbed from the bottom, so every garage gets the narrowest door',
+    s2 => s2.replace('Object.freeze([16, 12, 10, 9, 8])', 'Object.freeze([8, 9, 10, 12, 16])')],
+  ['the door is written whether the wall can carry it or not',
+    s2 => s2.replace('const overhead = widestDoorFor(w, t);',
+      'const overhead = OVERHEAD_DOOR_WIDTHS_FT[0];')],
+  ['the lintel bears at one end only',
+    s2 => s2.replace('wallLengthFt >= widthFt + 2 * (wallThicknessFt',
+      'wallLengthFt >= widthFt + 1 * (wallThicknessFt')],
+  ['the bearing is left out and only the wall it runs into is reserved',
+    s2 => s2.replace('(wallThicknessFt + G.openingBearingFt(widthFt))',
+      '(wallThicknessFt + 0 * G.openingBearingFt(widthFt))')],
+  ['the man door goes on the right wall, away from the house',
+    s2 => s2.replace("out.push(opening(3, d / 2, MAN_DOOR_WIDTH_FT, 'door'));",
+      "out.push(opening(1, d / 2, MAN_DOOR_WIDTH_FT, 'door'));")],
+  ['the overhead door is hung off the corner instead of centred',
+    s2 => s2.replace("out.push(opening(2, w / 2, overhead, 'door',",
+      "out.push(opening(2, 0, overhead, 'door',")],
+  ['the overhead door heads at the house-s own door height',
+    s2 => s2.replace("        { garage: true, headFt: GARAGE_DOOR_HEAD_FT }));",
+      "        { garage: true }));")],
+  ['what the garage is framed in is ignored',
+    s2 => s2.replace('const t = Number(wallThicknessFt);', 'const t = 0;')],
+  ['the window is put on the door wall, through the overhead door',
+    s2 => s2.replace("out.push(opening(0, w / 2, GARAGE_WINDOW_WIDTH_FT, 'window'));",
+      "out.push(opening(2, w / 2, GARAGE_WINDOW_WIDTH_FT, 'window'));")],
+  ['the size is taken on trust, so an infinite garage is dealt openings',
+    s2 => s2.replace('if (!Number.isFinite(w) || !Number.isFinite(d) || !Number.isFinite(t)) return [];',
+      'if (!Number.isFinite(t)) return [];')],
+  ['a missing size falls back to a default one instead of being refused',
+    s2 => s2.replace(`const w = Number(widthFt);
+    const d = Number(depthFt);`, `const w = Number(widthFt) || 24;
+    const d = Number(depthFt) || 24;`)],
+  ['the window is patio-sized and written whether the back wall carries it or not',
+    s2 => s2.replace(`if (carries(w, GARAGE_WINDOW_WIDTH_FT, t)) {
+      out.push(opening(0, w / 2, GARAGE_WINDOW_WIDTH_FT, 'window'));`,
+    `if (true) {
+      out.push(opening(0, w / 2, 8, 'window'));`)],
+  ['the man door is a 7 ft pair, written whether the wall carries it or not',
+    s2 => s2.replace(`if (carries(d, MAN_DOOR_WIDTH_FT, t)) {
+      out.push(opening(3, d / 2, MAN_DOOR_WIDTH_FT, 'door'));`,
+    `if (true) {
+      out.push(opening(3, d / 2, 7, 'door'));`)],
+  ['the man door is keyed one past the last edge of the plot',
+    s2 => s2.replace("out.push(opening(3, d / 2, MAN_DOOR_WIDTH_FT, 'door'));",
+      "out.push(opening(4, d / 2, MAN_DOOR_WIDTH_FT, 'door'));")],
   ['the room over the garage covers the whole garage',
     s2 => s2.replace('const OVER_GARAGE_LENGTH_FT = 18;',
       'const OVER_GARAGE_LENGTH_FT = 27;')],

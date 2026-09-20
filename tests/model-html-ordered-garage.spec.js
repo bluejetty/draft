@@ -200,6 +200,168 @@ test('one Ctrl+Z takes the garage and its concrete together',
     expect((saved.lines || []).length, 'the footings went').toBe(0);
     expect((saved.floors || []).length, 'the slab went').toBe(0);
     expect((saved.outlines || []).length, 'the footprint went').toBe(0);
+    // AND THE TWO PIECES THIS BOARD ADDED. One press is one undo, and a roof
+    // or a pair of doors left standing over a garage that is gone is the
+    // shape of an undo that only knew about half of what it built.
+    expect((saved.roofs || []).length, 'the roof went').toBe(0);
+    expect((saved.fenestrations || []).length, 'the doors and the window went')
+      .toBe(0);
   });
+
+// ── A BARE BOX — Movie, 20 Sep ───────────────────────────────────────────
+//
+// "also the detached garage doesn't have a roof or windows and doors yet i
+// noticed". He was looking at the E3 LEFT elevation, where a garage that had
+// been ordered, framed and poured stood as a flat rectangle: no sheet over it
+// and no way into it.
+//
+// THE PREMADE HOUSES HAD BOTH ALREADY, which is what makes this a gap rather
+// than a feature nobody had reached. raiseLoop deals a design's openings and
+// buildPremadePlan raises its roofs; the ordered garage went down a different
+// path — it mints its own outline, because it carries `detached: true` and the
+// foundation off the tile — and that path had neither.
+
+// THE WALLS OF THE BOX, NAMED BY WHERE THEY ARE. garage-site.js plots the
+// loop clockwise from the back-left corner and stands it EAST of whatever is
+// already built, so the door wall is the one at max z and the wall the house
+// is on is the one at min x. Asked of the coordinates rather than of array
+// order: a check that read walls[2] would keep passing if the loop were ever
+// rewound, and would then be checking a different wall.
+const wallWhere = (walls, value, want) => walls.find(wall => {
+  const got = value(wall);
+  return Math.abs(got - want) < 0.01;
+});
+const frontWall = walls => wallWhere(walls, w => Math.min(w.start.z, w.end.z),
+  Math.max(...walls.map(w => Math.min(w.start.z, w.end.z))));
+const backWall = walls => wallWhere(walls, w => Math.max(w.start.z, w.end.z),
+  Math.min(...walls.map(w => Math.max(w.start.z, w.end.z))));
+const houseSideWall = walls => wallWhere(walls, w => Math.max(w.start.x, w.end.x),
+  Math.min(...walls.map(w => Math.max(w.start.x, w.end.x))));
+
+const openingOn = (saved, wall) => (saved.fenestrations || [])
+  .filter(record => String(record.wallId) === String(wall.id));
+
+test('the ordered garage gets a roof, and every edge of it is an eave',
+  async ({ page }) => {
+    const saved = await orderGarage(page, 'detached-frostwall');
+    const roofs = saved.roofs || [];
+    expect(roofs.length, 'one sheet over the box').toBe(1);
+    const roof = roofs[0];
+    expect(roof.levelId, 'on the ROOF level').toBe(7);
+    expect(roof.sourceLevelId, 'cut from the storey the garage stands on').toBe(3);
+    // FLAGGED, WITH A REAL PLATE. cut-view.js's roofBaseElev bears a garage
+    // roof at the first floor's top plus the plate rather than on the whole
+    // wall stack — which is what keeps a single-storey garage's roof single
+    // storey when the drawing grows a second one. A stored null reads back as
+    // a plate of ZERO and would bear the sheet on the slab.
+    expect(roof.garage, 'it knows it is a garage roof').toBe(true);
+    expect(Number.isFinite(roof.plateHeightFt),
+      'and it bears at a real plate, not at null').toBe(true);
+    expect(roof.plateHeightFt, 'a storey above the floor').toBeGreaterThan(6);
+    // NO GABLES, and this is the difference from the attached garage's roof
+    // rather than a default nobody chose: a gable is what an edge gets when it
+    // dies into a house wall, and a DETACHED garage touches nothing.
+    expect(new Set(roof.edges || []), 'every edge is an eave')
+      .toEqual(new Set(['eave']));
+    // AND IT OVERHANGS ON EVERY SIDE, for the same reason: no edge is cut
+    // flush, because no edge meets anything.
+    const box = saved.outlines.find(outline => outline.garage === true);
+    const span = points => ({
+      minX: Math.min(...points.map(pt => pt.x)),
+      maxX: Math.max(...points.map(pt => pt.x)),
+      minZ: Math.min(...points.map(pt => pt.z)),
+      maxZ: Math.max(...points.map(pt => pt.z)),
+    });
+    const sheet = span(roof.points), walls = span(box.points);
+    expect(sheet.minX, 'it hangs past the left wall').toBeLessThan(walls.minX - 0.1);
+    expect(sheet.maxX, 'and the right').toBeGreaterThan(walls.maxX + 0.1);
+    expect(sheet.minZ, 'and the back').toBeLessThan(walls.minZ - 0.1);
+    expect(sheet.maxZ, 'and the front').toBeGreaterThan(walls.maxZ + 0.1);
+  });
+
+test('and a way into it: an overhead door, a man door and a window',
+  async ({ page }) => {
+    const saved = await orderGarage(page, 'detached-frostwall');
+    const studs = studsOf(saved);
+    expect((saved.fenestrations || []).length, 'three openings').toBe(3);
+
+    // THE OVERHEAD DOOR ON THE DOOR WALL, which is the one garage-site.js
+    // says faces the viewer. A 25 ft wall carries the 16, so this size gets
+    // the double — the 16x24 on the same board does not, and premade-plans.js
+    // has the ladder and the harness for that.
+    const overhead = openingOn(saved, frontWall(studs));
+    expect(overhead.length, 'one door on the door wall').toBe(1);
+    expect(overhead[0].type).toBe('door');
+    expect(overhead[0].width, '16 ft across a 25 ft wall').toBeCloseTo(16, 3);
+    expect(overhead[0].garage, 'and it is an overhead door').toBe(true);
+    expect(overhead[0].headHeight, 'heading at 7 ft, not at the house-s 6-8')
+      .toBeCloseTo(7, 3);
+    expect(overhead[0].layer, 'on the door layer').toBe('A-DOOR');
+
+    // THE MAN DOOR ON THE HOUSE SIDE. plot() stands the garage east of
+    // everything already built, so the path between the two runs off this
+    // wall — putting it on the far side would send the drafter round the box.
+    const man = openingOn(saved, houseSideWall(studs));
+    expect(man.length, 'one door on the wall the house is on').toBe(1);
+    expect(man[0].type).toBe('door');
+    expect(man[0].width, 'a 2-6 leaf').toBeCloseTo(2.5, 3);
+    expect(man[0].garage, 'a man door is not an overhead door').toBe(false);
+
+    // AND ONE WINDOW, on the back — away from the street and off both doors.
+    const win = openingOn(saved, backWall(studs));
+    expect(win.length, 'one window on the back').toBe(1);
+    expect(win[0].type).toBe('window');
+    expect(win[0].layer, 'on the glazing layer').toBe('A-GLAZ');
+    expect(win[0].sillHeight, 'at a sill, not on the floor').toBeGreaterThan(1);
+
+    // EVERY ONE ON A STUD WALL OF THIS GARAGE, not on its concrete and not on
+    // something else's wall. A door cut into the grade beam would draw on the
+    // FOUNDATION set and nowhere else.
+    for (const record of saved.fenestrations) {
+      const host = studs.find(wall => String(wall.id) === String(record.wallId));
+      expect(host, `opening ${record.id} hangs on a framed garage wall`).toBeTruthy();
+      expect(record.levelId, 'and is filed on the storey').toBe(3);
+      expect(record.view, 'on the same set as its wall').toBe('plan');
+      expect(record.auto, 'the design placed it, not the auto-dealer').toBe(false);
+    }
+  });
+
+test('and the drawing will actually draw them', async ({ page }) => {
+  // THE ONE THAT SAYS WHY THE WIDTHS ARE A RULE. An opening wider than its
+  // wall can carry with the lintel bearing left at each end reaches the file
+  // and is then refused by clampOpeningToWall on EVERY paint: nothing draws
+  // it, nothing says so, and the drafter gets a garage that is shut on the
+  // plan, shut on the elevation and shut in 3D.
+  //
+  // ASKED OF THE PAGE'S OWN CLAMP, in the page, with the page's own wall list
+  // and thicknesses — the same call render-2d goes through. A second copy of
+  // the arithmetic here would agree with itself and prove nothing.
+  await orderGarage(page, 'detached-frostwall');
+  const judged = await page.evaluate(async bucket => {
+    const file = await window.SharedFileStore.loadSharedFile(bucket);
+    const saved = JSON.parse(await file.text());
+    const G = window.DraftGeometry2D;
+    const types = window.DraftWallTypes.WALL_TYPES;
+    const thicknessFt = wall => (types.find(t => t.id === (wall.wallType || 'stud_2x6'))
+      || types[1]).totalIn / 12;
+    return (saved.fenestrations || []).map(record => {
+      const wall = saved.walls.find(w => String(w.id) === String(record.wallId));
+      if (!wall) return `${record.id}: no host wall`;
+      const got = G.clampOpeningToWall(wall, record.offset, record.width,
+        { walls: saved.walls, thicknessFt });
+      if (!got) return `${record.id}: ${record.width} ft refused by the wall`;
+      if (Math.abs(got.offset - record.offset) > 1e-6) {
+        return `${record.id}: slid from ${record.offset} to ${got.offset}`;
+      }
+      return null;
+    });
+  }, BUCKET);
+  // AND IT HAS SOMETHING TO JUDGE. An empty list passes a "nothing was
+  // refused" check perfectly, which is the same garage Movie reported — so
+  // the count is asserted first and the verdict second.
+  expect(judged.length, 'three openings to judge').toBe(3);
+  expect(judged.filter(Boolean), 'every opening fits its wall where it was put')
+    .toEqual([]);
+});
 
 test.beforeEach(async ({ page }) => { await open(page); });
