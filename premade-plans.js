@@ -402,21 +402,75 @@ if (!window.DraftPremadePlans) {
   // garage polygon by the page. The design knows where the room ends because
   // the design put it there, and a boolean subtraction is a second, weaker
   // answer to a question that is already answered here.
+  //
+  // ── AND THE ROOF DOES NOT FOLLOW THE TIE ────────────────────────────────
+  //
+  // Movie, 20 Sep, looking at the E4 RIGHT elevation of a 2 STOREY + GARAGE:
+  // "when the main floor garage roof connects to the house that has 2 storey
+  // it should be gabled on the house end (not cottage) i think this was a
+  // problem on model.dc but was solved". Ruled B of two readings, the one
+  // where the roof is cut on the HOUSE LINE rather than gabling the jog.
+  //
+  // WHAT HE WAS LOOKING AT. garageLoop steps back a foot along the house's
+  // right wall so the foundations connect -- his own "rather than fitting the
+  // concrete move it over 1ft exactly easier to construct". Taking that jog
+  // into the roof leaves a four-foot edge at z = 19 which is NOT on the house,
+  // so it gets an eave and hips: a little triangle of roof tucked against the
+  // house wall, which is the "cottage" end he is objecting to.
+  //
+  // THE TIE IS A FOUNDATION DETAIL AND THE ROOF IS NOT A FOUNDATION. So the
+  // roof's rear runs straight along the house's front line, and the one foot
+  // of tie behind it is simply not under this roof -- it sits under the
+  // house's own eave, which oversails it.
+  //
+  // MODEL.dc.html HAD ALREADY ANSWERED THIS, which is what Movie remembered.
+  // Its OPEN garages store only their LEGS and close the footprint along the
+  // house's own boundary path (_garageSlabPolygon :13327), and _buildGarageRoof
+  // then marks those closing edges gable BY INDEX with zero overhang --
+  // `index >= legCount - 1` -- rather than asking geometry whether they lie on
+  // the house. That is the piece that makes B work at all: see the note on
+  // `houseEnd` below.
   const garageRoofLoop = ({ overGarage = false } = {}) => {
-    const loop = garageLoop();
-    if (!overGarage) return loop;
     const houseRight = WIDTH_FT / 2;
     const houseFront = DEPTH_FT / 2;
     const right = houseRight + GARAGE_PAST_FT;
     const left = right - GARAGE_WIDTH_FT;
-    // FROM WHERE THE ROOM STOPS TO WHERE THE GARAGE DOES. The room's front
-    // wall is the stub's back one -- they meet on that line, which is what
-    // makes the upper roof's edge and the lower roof's edge the same line
-    // rather than two lines a few inches apart.
-    const back = houseFront + OVER_GARAGE_LENGTH_FT;
+    // WHERE THIS ROOF STARTS. With a room over it, the room's front wall is
+    // the stub's back one -- they meet on that line, which is what makes the
+    // upper roof's edge and the lower roof's edge the same line rather than
+    // two lines a few inches apart. With no room, it is the house's own front
+    // line: the tie is behind it and stays behind it.
+    const back = houseFront + (overGarage ? OVER_GARAGE_LENGTH_FT : 0);
     const front = houseFront + GARAGE_DEPTH_FT;
+    // EDGE 0 IS THE HOUSE END in both, which is what makes one index serve
+    // both designs -- see GARAGE_ROOF_HOUSE_END.
     return [pt(left, back), pt(right, back), pt(right, front), pt(left, front)];
   };
+
+  // ── THE EDGE THAT IS CUT FLUSH, DECLARED RATHER THAN DERIVED ─────────────
+  //
+  // WHY IT CANNOT BE DERIVED, which is the whole reason this key exists. The
+  // page gables a roof edge when it LIES ON the body it is raised against,
+  // end to end -- and end to end is deliberate, because a wall is raised whole
+  // or not at all. The stub's rear runs the garage's full width, from x = -4
+  // to x = 20, and the house it dies into stops at x = 16: four feet of that
+  // edge stands past the house's corner in open air. So the test answers NO
+  // for the whole edge and the house end hips, which is the bug.
+  //
+  // Measured, before this was written:
+  //     rear edge (-4,20)->(20,20) reads as on the house?  false
+  //
+  // AND THE ROOM-OVER CASE WOULD HAVE SURVIVED IT. There the stub dies into
+  // the ROOM, which is the garage's own width, so the edge does lie on it end
+  // to end and the derivation finds it. Declaring it in both says the same
+  // thing about the same edge rather than letting one design work by geometry
+  // and the other by luck.
+  //
+  // KEYED BY EDGE INDEX, which is this file's own idiom -- `opening(edge, ...)`
+  // keys every window and door the same way, and the committer looks the wall
+  // up rather than counting. It is also exactly what MODEL.dc.html does for
+  // the same edges: `index >= legCount - 1` marks the house path.
+  const GARAGE_ROOF_HOUSE_END = Object.freeze([0]);
 
   // ── ONE ROOF OVER BOTH BODIES ────────────────────────────────────────────
   //
@@ -581,6 +635,10 @@ if (!window.DraftPremadePlans) {
     // than left for the committer to work out, because the design is where
     // the room's length is decided and so it is where the leftover is known.
     garageRoof: garage ? garageRoofLoop({ overGarage }) : null,
+    // WHICH OF ITS EDGES DIES INTO THE BUILDING BEHIND IT. Gabled and cut
+    // flush -- no rake overhang -- because a roof that dies into a wall has
+    // no eave there and no board to hang one on.
+    garageRoofHouseEnd: garage ? GARAGE_ROOF_HOUSE_END : null,
     // THE ROOM OVER IS ITS OWN BODY, on its own level. It is not the garage
     // raised twice and not the upper storey stretched: level-assembly.js
     // gives the over-garage level its own role and a deeper joist, because a
@@ -647,7 +705,7 @@ if (!window.DraftPremadePlans) {
   window.DraftPremadePlans = Object.freeze({
     WIDTH_FT, DEPTH_FT, GARAGE_WIDTH_FT, GARAGE_DEPTH_FT,
     GARAGE_PAST_FT, GARAGE_TIE_FT, OVER_GARAGE_LENGTH_FT,
-    OVERHEAD_DOOR_WIDTHS_FT,
+    OVERHEAD_DOOR_WIDTHS_FT, GARAGE_ROOF_HOUSE_END,
     MAN_DOOR_WIDTH_FT, GARAGE_WINDOW_WIDTH_FT, GARAGE_DOOR_HEAD_FT,
     bungalow, twoStorey, planFor, detachedGarageOpenings,
     entryIds: () => Object.keys(PLANS),
