@@ -481,9 +481,33 @@ check('a garage with nothing on it is roofed entire',
   P => { const plan = P.twoStorey({ garage: true });
          return [lengths(plan.garageRoof), lengths(plan.garage)]; });
 
-check('and the bungalow-s garage the same, through the same answer',
-  P => { const plan = P.planFor('bungalow-garage');
-         return [lengths(plan.garageRoof), lengths(plan.garage)]; });
+// ── AND A BUNGALOW'S GARAGE HAS NO ROOF OF ITS OWN ──
+//
+// This check read the other way round until 20 Sep -- that a bungalow's
+// garage was roofed entire, through the same helper the 2 STOREY uses. Movie
+// replaced the arrangement it was describing: "it doesn't know how to connect
+// the garage and main floor roof - it is easy when they are the same height
+// it would be like one large outline (ignore the line between house and
+// garage and make the roof full perimter as house and garage".
+//
+// SAME HEIGHT IS THE CONDITION, so the two designs part here. A bungalow's
+// garage stands on the same plate as its house and the two are ONE roof; a
+// 2 STOREY's garage is deliberately single storey, so its roof is a storey
+// down and still its own -- and the check above still holds it.
+check('a bungalow-s garage is roofed by the house, so it has no roof of its own',
+  P => [P.planFor('bungalow-garage').garageRoof, null]);
+
+// THE PERIMETER OF BOTH BODIES, counted rather than described: a rectangle
+// and a rectangle overlapping one of its edges make EIGHT corners. Four would
+// be the house alone, which is the drawing this replaces.
+check('and the house roof is raised over both of them',
+  P => [P.planFor('bungalow-garage').houseRoof.length, 8]);
+
+// THE 2 STOREY IS NOT SPLICED, which is the other half of the same rule --
+// its roof is the house's footprint, four corners, with the garage's own
+// roof a storey below and a valley between them that wants a cricket.
+check('a 2 STOREY is not spliced, because its garage stands a storey lower',
+  P => [P.planFor('twoStorey-garage').houseRoof.length, 4]);
 
 // THE STUB IS THE PIECE MOVIE ASKED FOR. 19 Sep: "so the front of the garage
 // will have some roof on the main floor area". It is checked as a JOIN rather

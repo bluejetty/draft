@@ -540,22 +540,40 @@ test('a tap aimed at a stacked button lands on that button, not its neighbour',
 // anything if there hasn't been anything done". The row was hidden whole until
 // a drawing loaded, so the page that most needed NEW was the page that did not
 // offer it.
-test('the file row stands on an empty origin, with the writes dead', async ({ page }) => {
+//
+// AND NOTHING STORED IS A BLANK SHEET NOW, not a notice (Movie, 20 Sep: "just
+// show a NEW / BLANK page instead"), which moved half of what this check said.
+// The writes are no longer DEAD on an empty origin, because there is a drawing
+// on the page -- an empty one, which a drafter may perfectly well want to save.
+// What survives is the claim the check was written for: the row stands, and
+// NEW and OPEN are reachable on the page that most needs them.
+test('the file row stands on an empty origin, over a blank sheet', async ({ page }) => {
   await h.openModel(page, { webgl: false });
   await page.goto('/MODEL.html?mode=night');
-  await expect(page.locator('#notice')).toContainText('No saved drawing');
+
+  // NO NOTICE. The old one told a first-time drafter to go and draw in
+  // MODEL.dc.html, which is the page he is not meant to use -- and since the
+  // front door started pointing here, it is the first thing he would read.
+  await expect(page.locator('#notice')).not.toHaveClass(/show/);
 
   await expect(page.locator('#file-new'), 'nothing stored is when NEW matters most')
     .toBeEnabled();
   await expect(page.locator('#file-open')).toBeEnabled();
-  await expect(page.locator('#save'), 'there is nothing to save yet')
-    .toBeDisabled();
-  await expect(page.locator('#file-save-as')).toBeDisabled();
 
-  // NEW makes the drawing, and the writes come up with it.
-  await page.locator('#file-new').click();
+  // THE WRITES ARE LIVE, because a blank sheet is a drawing. It is UNSAVED,
+  // and that is the honest word: the store has never seen it.
   await expect(page.locator('#save')).toBeEnabled();
   await expect(page.locator('#file-save-as')).toBeEnabled();
+  await expect(page.locator('[data-save-status]')).toHaveText(/UNSAVED/);
+
+  // AND IT IS THE SAME BLANK THE NEW BUTTON GIVES. Pressing NEW on a sheet
+  // that is already blank changes nothing a drafter can see, which is what
+  // "one answer to what an empty drawing is" looks like from outside.
+  const levels = () => page.locator('.lv-card').count();
+  const before = await levels();
+  expect(before, 'a blank sheet still has its levels').toBeGreaterThan(0);
+  await page.locator('#file-new').click();
+  expect(await levels()).toBe(before);
 });
 
 // THE RIGHT EDGE HAS TWO TABS NOW (Movie, 15 Sep): "top will be LEVELS /

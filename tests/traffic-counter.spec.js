@@ -79,9 +79,12 @@ test('a blocked counter host leaves the page complete and quiet', async ({ page,
   // naturalWidth is 0 for an image that 404'd, so this catches a missing
   // or misnamed asset rather than merely a present <img> tag.
   await expect.poll(() => logo.evaluate(el => el.complete && el.naturalWidth > 0)).toBe(true);
+  // MODEL.html SINCE 20 Sep (Movie: "can you make the main page link to the
+  // model.html"). The claim is unchanged -- exactly one link, and it goes to
+  // the model space -- only which model space is the product moved.
   const targets = await page.locator('.enter-link').evaluateAll(
     links => links.map(link => new URL(link.href).pathname.split('/').pop()));
-  expect(targets).toEqual(['MODEL.dc.html']);
+  expect(targets).toEqual(['MODEL.html']);
 
   // The logo must PAINT the width of its box, not merely occupy it. With
   // object-fit: contain the two differ: a height attribute pins the box,
