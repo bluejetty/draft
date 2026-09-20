@@ -5019,10 +5019,23 @@
   // the strip was built -- and carries its own copy of the press on its post.
   // The sheet stops above the bar and leaves the bone standing, so there the
   // bone is not something to disable, it is the press the drafter uses.
+  //
+  // AND WHETHER THE DOG IS ON IT is the other fact about the art, and it is
+  // one fact rather than two: Gruff's screen and Gruff's bone are both Gruff.
+  // Movie, 17 Sep, on the sheet: "in the ROUGH version it isn't going to show
+  // the dog", and "no dog will ask questions they will just see the
+  // selections". The stylesheet hides #dt-screen and #dt-bone on rough; this
+  // flag is what the SCRIPT reads for the same fact, and model-drivethru pins
+  // the two together so they cannot drift apart.
+  //
+  // IT IS NOT DERIVABLE FROM coversBone, which is about where the board
+  // stands rather than what is painted on it. A board could stop above the
+  // bar and still carry a dog.
   const BOARD_ART = Object.freeze({
-    ruff:  Object.freeze({ src: './assets/drivethru-menu-board.png', coversBone: true }),
-    rough: Object.freeze({ src: './assets/draft-board.png',          coversBone: false }),
+    ruff:  Object.freeze({ src: './assets/drivethru-menu-board.png', coversBone: true,  dog: true }),
+    rough: Object.freeze({ src: './assets/draft-board.png',          coversBone: false, dog: false }),
   });
+  const boardHasDog = () => (BOARD_ART[theme] || {}).dog === true;
   const signBoard = document.querySelector('[data-drivethru-board]');
   const paintSignBoard = () => {
     const art = BOARD_ART[theme];
@@ -5360,7 +5373,31 @@
   // DOWN, and paintSign() into a shut sign writes a sentence nobody sees --
   // and worse, SPENDS it, because paintSign consumes signRefusal. So: raise
   // the board and let its own paint carry the line.
+  //
+  // AND ON ROUGH THERE IS NO SCREEN TO RAISE IT TO. The same bug one layer
+  // in: the stylesheet hides #dt-screen on the sheet with the rest of the
+  // dog, so "how big, though?", "you've got one already", "you've got a
+  // house already" and the wallet's refusal were all being written onto a
+  // box nobody can see. The board still comes up -- it is the selections --
+  // but it comes up silent, which is a press that does nothing and says
+  // nothing, the worst answer this page can give.
+  //
+  // THE PAGE'S OWN LINE IS WHERE THEY GO WITHOUT HIM. sayOnStrip is how this
+  // page speaks when it is not wearing a dog, and it is the same line the
+  // outline tool's refusals already use. Both halves are spoken, because the
+  // shout is the WHAT and the note is the WHAT TO DO, and on one line the
+  // drafter needs both. The words are taken off signRefusal rather than
+  // passed in, because refuseForBones STAGES its refusal for the next paint
+  // instead of handing it over -- and taken off means taken: leaving it
+  // staged would let Gruff say it later, in RUFF, about a press that is long
+  // over.
   const sayAtWindow = () => {
+    if (!boardHasDog()) {
+      const said = signRefusal;
+      signRefusal = null;
+      if (said) sayOnStrip(`${said.line} ${said.note}`);
+      return false;
+    }
     if (signShut()) callSign(boneFoot, 'menu'); else paintSign();
     return false;
   };

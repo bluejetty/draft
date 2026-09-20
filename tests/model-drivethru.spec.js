@@ -936,3 +936,91 @@ test('a size does not follow the drafter onto the next thing he picks',
     await expect(page.locator('#size-stock [data-build-size="16x24"]'))
       .not.toHaveClass(/chosen/);
   });
+
+// ── THE SHEET, WHICH CARRIES NO DOG ───────────────────────────────────────
+//
+// Movie, 17 Sep, on ROUGH: "in the ROUGH version it isn't going to show the
+// dog", and "no dog will ask questions they will just see the selections".
+// Hiding Gruff took his BONE with him, and his bone is the order -- so on the
+// sheet a type could be chosen, sized, and never ordered. Movie, 18 Sep:
+// "when i press the BLUE HOUSE it doesn't build the garage in ROUGH mode, but
+// in RUFF mode the bone button works".
+//
+// THE TWO HALVES ARE TESTED APART because they broke apart: the ORDER had
+// nowhere to be closed, and the REFUSAL had nowhere to be spoken. Fixing
+// either alone leaves a press that still does nothing, or one that does
+// nothing and cannot say why.
+const openRoughGarage = async page => {
+  await page.goto('/MODEL.html?mode=night&theme=rough');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  // THE DOG IS GONE, and both halves of him. This is the precondition rather
+  // than a second test of the stylesheet: everything below is only meaningful
+  // because there is no bone on the board to press and no screen to read.
+  await h.openDriveThru(page);
+  await expect(page.locator('#dt-bone')).toBeHidden();
+  await expect(page.locator('#dt-screen')).toBeHidden();
+  await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
+  await page.locator('#dt-tiles [data-build-entry="detached-thickened"]').click();
+};
+
+test('with no bone on the board, the press that raised it closes the order',
+  async ({ page }) => {
+    await openPage(page);
+    await openRoughGarage(page);
+    await page.locator('#size-stock [data-build-size="16x24"]').click();
+
+    // THE FOOT'S PRESS, not the board's -- there is no board's. It is the same
+    // button that opened the board, and while the board is up it is the order.
+    const ordered = await page.evaluate(() => {
+      const seen = [];
+      window.ModelBuild.onOrder(order => seen.push(order));
+      document.getElementById('bone').click();
+      return seen.map(o => ({ entry: o.entry?.id, w: o.size?.widthFt, d: o.size?.depthFt }));
+    });
+    expect(ordered.length, 'the press never reached the order seam').toBe(1);
+    expect(ordered[0], 'the order carried a different thing than was pressed')
+      .toEqual({ entry: 'detached-thickened', w: 16, d: 24 });
+  });
+
+test('with no dog to say it, a refusal goes on the page-s own line',
+  async ({ page }) => {
+    await openPage(page);
+    await openRoughGarage(page);
+
+    // NO SIZE PRESSED, which is the refusal the board asks for most. On RUFF
+    // Gruff says it on his screen; here the screen is not on the page at all.
+    const fired = await page.evaluate(() => {
+      let seen = 0;
+      window.ModelBuild.onOrder(() => { seen += 1; });
+      document.getElementById('bone').click();
+      return seen;
+    });
+    expect(fired, 'a garage with no size was ordered anyway').toBe(0);
+
+    // BOTH HALVES SPOKEN. The shout is what is wrong and the note is what to
+    // do about it, and a drafter reading one line needs both.
+    await expect(page.locator('#strip-message')).toContainText('HOW BIG');
+    await expect(page.locator('#strip-message')).toContainText('size off the shelf');
+  });
+
+test('the dog keeps his own bone, and his own voice, where he is on the board',
+  async ({ page }) => {
+    await openPage(page);
+    await h.openDriveThru(page);
+    await expect(page.locator('#dt-bone')).toBeVisible();
+    await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
+    await page.locator('#dt-tiles [data-build-entry="detached-thickened"]').click();
+
+    // RUFF IS UNTOUCHED BY THE FIX ABOVE, and that is the half worth guarding:
+    // the foot's press is covered by the sign here, and the refusal belongs on
+    // Gruff's screen rather than on the page's line.
+    const fired = await page.evaluate(() => {
+      let seen = 0;
+      window.ModelBuild.onOrder(() => { seen += 1; });
+      document.getElementById('dt-bone').click();
+      return seen;
+    });
+    expect(fired, 'a garage with no size was ordered anyway').toBe(0);
+    await expect(page.locator('[data-drivethru-line]')).toContainText('HOW BIG');
+    await expect(page.locator('#strip-message')).not.toContainText('HOW BIG');
+  });
