@@ -2285,6 +2285,11 @@
      reason this page drew no fixtures. -->
 <script src="./fixture-geometry.js"></script>
 <script src="./closets.js"></script>
+<!-- The fixture catalogue, AFTER closets.js because the closet's depth is
+     two of its numbers. Lifted out of MODEL.dc.html so this page can name
+     the same cabinet: it DREW fixtures long before it could place one, and
+     a kitchen is seven of them. See ORDER-tiers-of-assembly.md. -->
+<script src="./fixture-kinds.js"></script>
 <!-- Cut marks. cut-marks.js is the geometry; profile-manager.js is here for
      ONE reason and it is worth naming, because it is the first non-drawing
      dependency this page has taken: two of the four inputs a cut needs are not
@@ -9829,6 +9834,195 @@
     return best;
   };
 
+  // ── THE FIXTURE TOOL ─────────────────────────────────────────────────────
+  //
+  // WHY THIS PAGE DID NOT HAVE ONE, and it is not that nobody got to it. The
+  // page has DRAWN fixtures since fixture-geometry.js landed and carries them
+  // through save untouched, so a kitchen drawn on MODEL.dc.html opens here
+  // correctly and simply cannot be added to. That is a quiet gap: nothing
+  // looks broken, the drawing is right, and the tool key was already on the
+  // column -- enabled on the drafting board, arming `activeTool = 'fixture'`
+  // -- with no gesture reading it. Pressing it did nothing at all.
+  //
+  // FIT-OUT is what forced it. A kitchen is roughly seven fixtures and a
+  // cabinet is one, so a CABINET cannot be an assembly until a cabinet can be
+  // placed. See RD-DOCUMENTS/ORDER-tiers-of-assembly.md.
+  //
+  // NOTHING BELOW IS NEW MATHS. The old page's _fixturePlacement composed two
+  // private helpers (_distToLineSeg, _wallFrame); both are shared modules now,
+  // so this is `pointToSegment` and `wallFrame` called in order. The catalogue
+  // is fixture-kinds.js, which is the old page's array moved rather than
+  // retyped.
+  const FIXTURE_PICK_PX = 30;          // MODEL.dc.html:2200, the same grab zone
+  const FIXTURE_LAYER = 'A-FIXT';
+  const CASEWORK_LAYER = 'A-CASE';
+
+  // Which catalogue entry the tool is holding, and -- for the three kinds that
+  // take two clicks -- where the first one landed.
+  let fixtureKindId = 'cabinet';
+  let fixtureRunStart = null;          // { wallId, along, side }
+  let syncFixturePanel = () => {};
+
+  const fixtureKind = () => window.DraftFixtureKinds.kindFor(fixtureKindId);
+
+  // THE WALL UNDER THE PRESS, plus where along it and WHICH FACE.
+  //
+  // `side` is the half of the wall the cursor is on, measured across the
+  // wall's own frame rather than in world space -- so it stays correct for a
+  // wall drawn right-to-left, and for a `refLine` that puts the centreline off
+  // the middle. The old page compared against the frame's mid-offset for
+  // exactly that reason and this keeps the comparison rather than simplifying
+  // it to a sign test, which would be wrong for a left- or right-referenced
+  // wall.
+  const fixturePlacement = worldPt => {
+    const G = window.DraftGeometry2D;
+    const FG = window.DraftFixtureGeometry;
+    if (!G || !FG) return null;
+    const thresh = FIXTURE_PICK_PX / view.scale;
+    let best = null, bestD = thresh;
+    walls().forEach(wall => {
+      if (!wall.start || !wall.end) return;
+      const { d, t } = G.pointToSegment(worldPt, wall);
+      if (d < bestD) { bestD = d; best = { wall, t }; }
+    });
+    if (!best) return null;
+    const frame = FG.wallFrame(best.wall);
+    if (!frame) return null;
+    const relX = worldPt.x - best.wall.start.x;
+    const relZ = worldPt.z - best.wall.start.z;
+    const across = relX * frame.nx + relZ * frame.nz;
+    return {
+      wall: best.wall,
+      frame,
+      along: best.t * frame.len,
+      side: across >= (frame.startOff + frame.endOff) / 2 ? 1 : -1,
+    };
+  };
+
+  // ONE BUILDER, so a run and a single click cannot file two different record
+  // shapes -- the lesson placeOpening states one screen up, and the reason the
+  // brush's press goes through it rather than minting its own.
+  //
+  // THE HOST WALL'S LEVEL AND VIEW, for placeOpening's reason: a fixture sits
+  // against a wall and belongs wherever that wall is drawn. Filing it under
+  // whatever the drafter happens to have open would hide it from its own wall.
+  //
+  // `layer` is written here even though drawing-format.js can derive it from
+  // the kind, because this page has no serializer between the push and the
+  // file: a record that is only right after a reload is a file that is wrong
+  // until then.
+  const addFixture = (kind, wall, props) => {
+    const record = {
+      id: newDrawingItemId('fixture'),
+      wallId: wall.id,
+      levelId: wall.levelId,
+      view: wall.view || 'plan',
+      kind: kind.id,
+      layer: kind.casework ? CASEWORK_LAYER : FIXTURE_LAYER,
+      depth: kind.depthFt,
+      ...props,
+    };
+    if (!Array.isArray(drawing.fixtures)) drawing.fixtures = [];
+    drawing.fixtures.push(record);
+    undoStack.push({ kind: 'add-item', list: drawing.fixtures, item: record });
+    sayOnStrip(`${kind.label} placed on ${record.layer} — it rides the wall it sits against.`);
+    markDirty();
+    paint();
+    return record;
+  };
+
+  // A run is TWO presses along ONE FACE of ONE wall, and the pair sets the
+  // width. Moving to another wall or round to the other face does not fail --
+  // it RESTARTS, because a drafter who has changed wall has plainly changed
+  // their mind, and an error there would make them press twice to do what one
+  // press says.
+  const fixtureRunPress = (kind, placement) => {
+    const start = fixtureRunStart;
+    if (!start || start.wallId !== placement.wall.id || start.side !== placement.side) {
+      fixtureRunStart = { wallId: placement.wall.id, along: placement.along, side: placement.side };
+      sayOnStrip(start
+        ? `New ${start.wallId !== placement.wall.id ? 'wall' : 'face'} — the `
+          + `${kind.label.toLowerCase()} run restarted: press the other end.`
+        : `Press the other end of the ${kind.label.toLowerCase()} run along the wall.`);
+      paint();
+      return null;
+    }
+    const width = Math.abs(placement.along - start.along);
+    // THE CLOSET ASKS THE DOOR TABLE, not a number chosen here. closets.js
+    // picks from the DD/D ladder and answers nothing below a D18, so "too
+    // narrow" is its verdict rather than this page's guess at one.
+    if (kind.id === 'closet' && !window.DraftClosets.doorFor(width)) {
+      sayOnStrip('Too narrow for a closet — the smallest door is a D18: press the other end farther along.');
+      return null;
+    }
+    if (width < 0.5) {
+      sayOnStrip('Runs need at least 6" — press the other end farther along the wall.');
+      return null;
+    }
+    fixtureRunStart = null;
+    return addFixture(kind, placement.wall, {
+      offset: (placement.along + start.along) / 2, width, side: start.side,
+    });
+  };
+
+  // WHAT THIS DOES NOT DO YET, said rather than left to be discovered: the TUB
+  // takes two WALLS (back, then faucet end) and the kitchen L PRESET drops
+  // seven fixtures at once. Both are their own gesture on the old page and
+  // neither is ported here. They are refused BY NAME below, so pressing one
+  // says what is missing instead of placing the wrong thing or nothing.
+  const fixturePress = at => {
+    const kind = fixtureKind();
+    if (kind.preset === true || kind.id === 'tub') {
+      sayOnStrip(`${kind.label} is not on this page yet — it takes a gesture of its own.`);
+      return null;
+    }
+    const placement = fixturePlacement(at);
+    if (!placement) {
+      sayOnStrip('Press near a wall — fixtures and cabinets sit against the wall that carries them.');
+      return null;
+    }
+    if (kind.run) return fixtureRunPress(kind, placement);
+    // CLAMPED, NOT REFUSED, when the press lands near a corner. Null means the
+    // wall cannot carry the width at all, which is a different answer and gets
+    // a different sentence.
+    //
+    // THE FULL OPENING BEARING RESERVE, because that is what the old page does
+    // -- _clampOpeningToWall (:15085) hands geometry-2d.js `walls` and
+    // `thicknessFt` for a fixture exactly as it does for a window, so a
+    // single-click cabinet is held off a corner by whatever carries that end
+    // plus the header bearing. `thicknessFt` is NOT optional: the shared
+    // function throws without it rather than quietly reserving the free-post
+    // figure at every end.
+    //
+    // WHETHER A CABINET SHOULD RESERVE HEADER BEARING AT ALL is a fair
+    // question and it is NOT settled here -- a base cabinet really does run
+    // into the corner, and a window's header really does need wood to sit on.
+    // This is a PORT, so it matches. Two things worth knowing before anyone
+    // changes it: the old page is already inconsistent about it, because a
+    // cabinet RUN (below) never goes through this clamp and so may reach the
+    // corner; and changing it is a product decision, which is Movie's.
+    const G = window.DraftGeometry2D;
+    const clamped = G.clampOpeningToWall(placement.wall, placement.along, kind.widthFt, {
+      walls: walls(),
+      thicknessFt: openingThicknessFt(),
+    });
+    if (!clamped) {
+      sayOnStrip(`That wall is too short for the ${kind.label.toLowerCase()}.`);
+      return null;
+    }
+    return addFixture(kind, placement.wall, {
+      offset: clamped.offset, width: kind.widthFt, side: placement.side,
+    });
+  };
+
+  // A half-finished run belongs to the tool being put down, the way drawStart
+  // and beamStart do -- see setTool. Carrying it across would let a cabinet run
+  // started under FIXTURE finish under a later press.
+  toolListeners.push(next => {
+    if (next !== 'fixture') fixtureRunStart = null;
+    syncFixturePanel();
+  });
+
   const placeOpening = at => {
     const G = window.DraftGeometry2D;
     const best = wallForOpening(at);
@@ -11880,6 +12074,12 @@
     // nothing said so because the spec only looked at keys.
     syncSelectionPanel();
     syncAssembly();
+    // AND THE FIXTURE PANEL, for the reason stated three lines up -- which is
+    // the gap this very listener was written to close, and which the fixture
+    // panel promptly fell into: built before the board settles, its chips read
+    // TOY's answer and stayed dead on the drafting board. The keys obeyed the
+    // board and one more panel did not.
+    syncFixturePanel();
   });
 
   // ── SELECTION and OBJECT TYPE ─────────────────────────────────────────────
@@ -12085,6 +12285,82 @@
   let syncAssembly = () => {};
   const closeAssemblyDialog = () => { assemblyDialogOpen = false; syncAssembly(); };
 
+  // ── THE FIXTURE PANEL ────────────────────────────────────────────────────
+  //
+  // Sixteen catalogue entries under their own four headings, and the headings
+  // are DERIVED from the catalogue (DraftFixtureKinds.GROUPS) rather than
+  // listed here -- a kind added to fixture-kinds.js appears under its heading
+  // without a second place to edit, which is the whole reason the catalogue
+  // moved out of MODEL.dc.html.
+  //
+  // PICKING A KIND ARMS THE TOOL. A drafter who presses CABINET means to place
+  // a cabinet; making them press FIXTURE afterwards would be a second step
+  // that says nothing. This is the same reasoning as the build bar arming the
+  // outline trace at :3875 -- the choice IS the arming.
+  //
+  // THE HELP LINE IS THE CATALOGUE'S OWN `note`, not a sentence written here,
+  // so what the panel promises and what the tool does come from one string.
+  const buildFixturePanel = () => {
+    const slot = document.getElementById('tool-slot');
+    const K = window.DraftFixtureKinds;
+    if (!slot || !K) return;
+
+    const help = document.createElement('div');
+    help.className = 'sel-help';
+    help.dataset.fixtureHelp = '';
+
+    K.GROUPS.forEach(group => {
+      const box = document.createElement('div');
+      box.dataset.toolGroup = `fixture-${group.toLowerCase()}`;
+      const title = document.createElement('div');
+      title.dataset.toolGroupName = '';
+      title.textContent = group;
+      const row = document.createElement('div');
+      row.className = 'sel-row';
+      K.kindsInGroup(group).forEach(kind => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sel-chip';
+        btn.dataset.fixtureKind = kind.id;
+        btn.textContent = kind.label;
+        btn.title = kind.note;
+        btn.addEventListener('click', () => {
+          fixtureKindId = kind.id;
+          // A run half-made with one kind must not finish as another: the
+          // second press would take the first press's `along` and file a
+          // cabinet's width under a vanity. Same rule setTool applies to
+          // drawStart, for the same reason.
+          fixtureRunStart = null;
+          setTool('fixture');
+          syncFixturePanel();
+        });
+        row.append(btn);
+      });
+      box.append(title, row);
+      slot.append(box);
+    });
+    slot.append(help);
+
+    syncFixturePanel = () => {
+      // The board answers through the roster, never a `board === 'toy'`
+      // written here -- so this panel and the keypad cannot disagree about a
+      // board. FIXTURE is not a TOY tool, so on TOY every chip is dead.
+      const on = window.DraftToolRoster?.availableOn('fixture', board) !== false;
+      slot.querySelectorAll('[data-fixture-kind]').forEach(btn => {
+        btn.setAttribute('aria-pressed',
+          String(activeTool === 'fixture' && btn.dataset.fixtureKind === fixtureKindId));
+        btn.disabled = !on;
+      });
+      const kind = K.kindFor(fixtureKindId);
+      help.textContent = activeTool === 'fixture'
+        ? (fixtureRunStart
+          ? `Press the other end of the ${kind.label.toLowerCase()} run.`
+          : kind.note)
+        : '';
+    };
+    syncFixturePanel();
+  };
+
   const buildAssemblyPanel = () => {
     const slot = document.getElementById('tool-slot');
     if (!slot) return;
@@ -12249,6 +12525,7 @@
     syncAssembly();
   };
 
+  buildFixturePanel();
   buildAssemblyPanel();
   selectionWatchers.push(() => syncAssembly());
 
@@ -13164,6 +13441,7 @@
     if (activeTool === 'outline') { outlinePress(at); return; }
     if (activeTool === 'floor') { floorPress(at); return; }
     if (activeTool === 'fenestration') { placeOpening(at); return; }
+    if (activeTool === 'fixture') { fixturePress(at); return; }
     if (activeTool === 'cut') { cutPress(at); return; }
     if (activeTool === 'wall') {
       // §1: "either drag, or press again and drag -- both must work". The lift

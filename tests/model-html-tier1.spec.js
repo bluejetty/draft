@@ -246,6 +246,20 @@ test.describe('MODEL.html tier 1', () => {
       './shared-file-store.js', './wall-types.js', './formatters.js',
       './cut-view.js', './drawing-format.js', './render-2d.js',
       './fixture-geometry.js', './closets.js',
+      // fixture-kinds.js joined with the FIXTURE tool, and by this list's own
+      // rule it is the kind of entry it should grow by: it DELETES a
+      // duplicate. The catalogue -- sixteen kinds with their sizes, notes and
+      // the casework/run/preset flags -- was a literal inside MODEL.dc.html,
+      // which was fine while that was the only page that could place one.
+      // This page could DRAW a cabinet and not make one, so the array had to
+      // become something two pages could read rather than something this page
+      // restated.
+      //
+      // IT SITS AFTER closets.js BECAUSE IT READS IT. The closet's depth is
+      // the clear inside plus its own 2x4 wall, both Movie's numbers, held in
+      // closets.js -- so the catalogue names them rather than restating them,
+      // and proto/fixture-kinds-harness.js fails if it ever stops doing that.
+      './fixture-kinds.js',
       './cut-marks.js',
       // outline-master.js joined with the OUTLINE tool, and it is the kind of
       // entry the build-menu.js note calls the one this list should grow by:

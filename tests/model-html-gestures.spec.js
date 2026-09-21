@@ -418,7 +418,8 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
                       : el.dataset.assemblyName !== undefined ? 'assembly-name'
                         : el.dataset.levelLock !== undefined ? 'level-lock'
                           : el.dataset.levelLockBreak !== undefined ? 'level-lock-break'
-                            : el.tagName.toLowerCase());
+                            : el.dataset.fixtureKind !== undefined ? 'fixture-kind'
+                              : el.tagName.toLowerCase());
         return {
           buttons: [...document.querySelectorAll('button')].filter(outside)
             .map(b => b.id || b.textContent.trim()).sort(),
@@ -748,8 +749,26 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // They live beside ASSEMBLY rather than in the LEVELS panel: a lock
           // is made FROM assemblies, and the assemblies are what the drafter
           // has in his hand when he wants one.
+          //
+          // AND AN EIGHTH TIME, with the FIXTURE panel -- sixteen chips under
+          // four headings, one per catalogue entry. THIS ONE MOVES A ROW, and
+          // in the direction only the drafting brush has moved one before:
+          // "Place a fixture" was absent from MODEL.html because there was no
+          // gesture to place one. There is now, so the absence goes.
+          //
+          // The census caught it as `button`, which is precisely what that
+          // fallback is for -- "a context menu host or a file input smuggled
+          // into the slot arrives as 'BUTTON' or 'INPUT' and fails". A new
+          // control in the slot that nothing here names is exactly a control
+          // that grew without anyone noticing, so it is NAMED rather than the
+          // fallback being widened.
+          //
+          // THE HELP LINE UNDER THEM IS A DIV and so is not counted, which is
+          // the same reach this list has always had: it counts what can be
+          // pressed or typed into, not what can be read.
           toolKinds: ['assembly-fixed', 'assembly-loose', 'assembly-name',
             'assembly-start', 'assembly-ungroup',
+            'fixture-kind',
             'level-lock', 'level-lock-break',
             'sel-filter', 'sel-mode', 'tool-key'].sort(),
         });

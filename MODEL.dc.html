@@ -29,6 +29,10 @@
 <script src="./toy-constraints.js"></script>
 <script src="./toy-context.js"></script>
 <script src="./closets.js"></script>
+<!-- The fixture catalogue, AFTER closets.js because the closet's depth is
+     two of its numbers. This page used to hold the array itself; it moved
+     out so MODEL.html could have the same one. -->
+<script src="./fixture-kinds.js"></script>
 <!-- Board #315: the predesigned washroom and the second tier of grouping. -->
 <script src="./washroom.js"></script>
 <script src="./level-lock.js"></script>
@@ -2581,41 +2585,16 @@ const KITCHEN_FRIDGE_BAY_FT = 3;     // 36" refrigerator bay
 const KITCHEN_LANDING_FT = 1.25;     // 15" landing counter beside the range
 const KITCHEN_MIN_LONG_FT = 8;       // long leg: sink + DW + fridge bay + landings
 const KITCHEN_MIN_SHORT_FT = 5;      // short leg: range + a landing each side
-const FIXTURE_KINDS = [
-  { id: 'cabinet', label: 'CABINET', group: 'KITCHEN',  widthFt: 3,      depthFt: 2,      casework: true,  run: true,
-    note: 'Base cabinet run — two clicks along a wall set the run; 24" deep with a countertop line.' },
-  { id: 'sink',    label: 'SINK',    group: 'KITCHEN',  widthFt: 2.5,    depthFt: 2,      casework: false, run: false,
-    note: 'Kitchen sink — click it onto a wall (usually over a cabinet run).' },
-  { id: 'fridge',  label: 'FRIDGE',  group: 'KITCHEN',  widthFt: 3,      depthFt: 2.5,    casework: false, run: false,
-    note: 'Refrigerator box — click it onto a wall.' },
-  { id: 'stove',   label: 'STOVE',   group: 'KITCHEN',  widthFt: 2.5,    depthFt: 2.17,   casework: false, run: false,
-    note: 'Range with burners — click it onto a wall.' },
-  { id: 'dish',    label: 'DW',      group: 'KITCHEN',  widthFt: 2,      depthFt: 2,      casework: false, run: false,
-    note: '24" dishwasher — click it onto a wall, usually beside the sink.' },
-  { id: 'island',  label: 'ISLAND',  group: 'KITCHEN',  widthFt: 6,      depthFt: 3,      casework: false, run: false,
-    note: '36" x 72" island — click it onto a wall; it stands 42" clear of the counter and slides along the run.' },
-  { id: 'pantry',  label: 'PANTRY',  group: 'KITCHEN',  widthFt: 4,      depthFt: 4,      casework: false, run: false,
-    note: '48" x 48" corner walk-in pantry with a 45° angled door — click it into a corner.' },
-  { id: 'kitchenL', label: 'L PRESET', group: 'KITCHEN', widthFt: 4,     depthFt: 2,      casework: false, run: false, preset: true,
-    note: 'Corner-L kitchen — click the inside corner where two walls meet: cabinets, sink, DW, fridge, and stove drop in at the proven spots; every piece stays movable.' },
-  { id: 'tub',     label: 'TUB',     group: 'BATH',     widthFt: 5,      depthFt: 2.5,    casework: false, run: false,
-    note: 'Alcove tub — click the back wall, then the faucet-end wall; the tub fills the alcove.' },
-  { id: 'toilet',  label: 'TOILET',  group: 'BATH',     widthFt: 5 / 3,  depthFt: 7 / 3,  casework: false, run: false,
-    note: 'Toilet — tank against the wall, click it into place.' },
-  { id: 'shower',  label: 'SHOWER',  group: 'BATH',     widthFt: 3,      depthFt: 3,      casework: false, run: false,
-    note: '36" square shower — click it onto a wall.' },
-  { id: 'stall',   label: 'STALL',   group: 'BATH',     widthFt: 4,      depthFt: 8 / 3,  casework: false, run: false,
-    note: '48" x 32" shower stall — click it onto a wall.' },
-  { id: 'vanity',  label: 'VANITY',  group: 'BATH',     widthFt: 2.5,    depthFt: 1.75,   casework: true,  run: true,
-    note: 'Vanity run — two clicks along a wall set the run; 21" deep with a basin.' },
-  { id: 'washer',  label: 'WASHER',  group: 'LAUNDRY',  widthFt: 2.25,   depthFt: 2.25,   casework: false, run: false,
-    note: 'Washer box — click it onto a wall.' },
-  { id: 'dryer',   label: 'DRYER',   group: 'LAUNDRY',  widthFt: 2.25,   depthFt: 2.25,   casework: false, run: false,
-    note: 'Dryer box — click it onto a wall.' },
-  { id: 'closet',  label: 'CLOSET',  group: 'BEDROOM',  widthFt: 4,      depthFt: CLOSET_INSIDE_DEPTH_FT + CLOSET_WALL_FT, casework: false, run: true,
-    note: 'Closet — two clicks along a wall set the width; 2\'-1" inside with 2x4 closet walls, rod + shelf, and the door picked from the DD/D ladder.' },
-];
-const fixtureKindDef = id => FIXTURE_KINDS.find(kind => kind.id === id) || FIXTURE_KINDS[0];
+// THE CATALOGUE MOVED TO fixture-kinds.js (21 Sep). It sat here as a
+// literal from the day the fixture tool was written, which was fine while
+// this was the only page that could place one. MODEL.html is the page the
+// front door links to now and it had no fixture tool at all, so the array
+// had to become something two pages could read. Nothing about it changed in
+// the move -- same ids, same sizes, same notes, same order -- and
+// proto/fixture-kinds-harness.js holds it against drawing-format.js's own
+// id list so the two cannot drift apart unnoticed.
+const FIXTURE_KINDS = window.DraftFixtureKinds.FIXTURE_KINDS;
+const fixtureKindDef = window.DraftFixtureKinds.kindFor;
 // Room tags: ROOM TAGS finds each enclosed room in the PLAN walls and names
 // it from the fixtures inside — every bathroom is a WC (short, and it sounds
 // cool), numbered biggest-first; a closet marks a bedroom. Basement rooms

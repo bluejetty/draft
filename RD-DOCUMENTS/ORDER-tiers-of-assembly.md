@@ -426,3 +426,142 @@ the fork recorded above, still open. Naming the tier does not answer whether
 twelve kitchens follow one definition. Nor does it answer how a drafter ENTERS
 a nested assembly to edit the sink inside the cabinet; ArchiCAD's Suspend
 Groups is the proven answer and this app has nothing like it.
+
+
+---
+
+## THE FORK IS CLOSED, AND THE HARD QUESTION DISSOLVED — Movie, 21 Sep
+
+Three messages, and between them they settle both things this order had left
+open:
+
+> *"yes the fit out will be ASSEMBLIES placed together in a specific
+> arrangement"*
+>
+> *"we should allow the user to select a different KITCHEN FIT-OUT or break it
+> and rearrange the cabinets withint it (not longer a FIT-OUT at that point"*
+>
+> *"could resave as a 'special' FIT-OUT"*
+
+### 1. A FIT-OUT IS A DEFINITION
+
+*"select a different KITCHEN FIT-OUT"* only makes sense if there is a SET of
+them to select from. So a fit-out is a named layout the app owns — KITCHEN A,
+KITCHEN B — and what lands in the drawing is a placement of one. That closes
+the definition-against-bundle fork for this tier, and it closes it the way
+the earlier ruling already pointed: app-made is a definition, drafter-made is
+a bundle.
+
+### 2. YOU NEVER ENTER A FIT-OUT, AND THAT DELETES THE HARDEST PROBLEM
+
+This order has been carrying an unanswered question with real teeth: *how does
+a drafter get inside a nested assembly to edit the sink in the cabinet?*
+ArchiCAD answers it with Suspend Groups, this app has nothing like it, and
+building one is a substantial feature on its own.
+
+**Movie's answer removes the question instead of answering it.** There are
+exactly two things you may do to a placed fit-out:
+
+    SWAP    pick a different KITCHEN FIT-OUT -- the whole layout is replaced
+    BREAK   it stops being a FIT-OUT and becomes loose assemblies you arrange
+
+There is no third door, so **there is nothing to enter.** A fit-out is intact
+or it is gone.
+
+**THIS IS THE SAME MOVE AS THE NEIGHBOURHOOD RULING** — *"they can't draw a
+new house"* — and it is worth naming, because it is the second time the
+cheaper design has come from taking a capability away rather than adding an
+enforcement mechanism. There a placed house could not be edited because there
+was no wall tool to edit it with; here a fit-out cannot be edited in place
+because editing it is what breaking it means.
+
+### 3. AND IT DELETES A SECOND PROBLEM NOBODY HAD NAMED YET
+
+Every definition-with-instances design has to answer: **what happens when
+somebody edits one instance?** AutoCAD, ArchiCAD and every other tool carries
+machinery for it — the instance diverges from its definition, or it is
+"exploded", or the definition is redefined and everything else jumps.
+
+**Here the question cannot arise.** A placed fit-out can never differ from its
+definition, because the only edit is a break, and a broken one is no longer a
+fit-out. So:
+
+- there is no live link to maintain, and no rule for what a stale one does
+- a placement is just `(which fit-out, where, which way round)` — the same
+  shape as `siteRegistration`, which already exists and is already tested
+- swapping is genuinely cheap: change the id and re-derive the arrangement
+- twelve placed KITCHEN A fit-outs are identical by construction, not by a
+  synchronisation that has to be kept honest
+
+### 4. RESAVE CLOSES THE LOOP, AND IT IS THE NAME LOCK AGAIN
+
+*"could resave as a 'special' FIT-OUT"* — so the drafter who broke a kitchen
+and rearranged it can make their arrangement into a fit-out of their own. The
+full lifecycle:
+
+    place    a KITCHEN FIT-OUT from the app's set
+    swap     for a different one, any time, while it is still intact
+    break    -> loose ASSEMBLIES, no longer a FIT-OUT
+    arrange  the cabinets, freely, because they are just assemblies now
+    resave   as a new "special" FIT-OUT -- the drafter's own
+
+**And "special" is exactly the line this order already divides on.** An
+app-made fit-out carries a locked name (KITCHEN); a drafter's resaved one is
+theirs to name. That is the same rule as the assembly name lock, and the same
+rule as `dealt: true`, which is already a persisted field in saved drawings.
+**One discriminator, now serving three features** — nothing new to keep in
+step.
+
+### What is STILL not settled
+
+- **Where a drafter's resaved fit-out lives.** `dealt: true` says who made a
+  thing, but a definition has to be stored somewhere to be placed again, and
+  the drawing format has no library section. In this drawing only, or across
+  drawings? Across drawings is a storage question, not a drawing-format one.
+- **Whether a swap keeps the drafter's changes to size.** A kitchen fitted to
+  a 12 ft wall, swapped for a layout that wants 14 ft — refuse, stretch, or
+  place it and let it overhang?
+- **Whether BREAK is reversible** by anything other than undo.
+
+### And none of it can start yet — the blocker is BIGGER than Stage 1 says
+
+Stage 1 was written as "teach the member resolver the fixture type". Measured
+on 21 Sep, that is the *second* problem. A kitchen is roughly seven FIXTURES
+and a cabinet is one, and:
+
+                              MODEL.dc.html      MODEL.html  (LIVE -- the
+                              (old, unlinked)    logo links here)
+    draws fixtures            yes                yes
+    a tool to PLACE one       yes                NO TOOL AT ALL
+    slide one along its wall  yes (press-drag)   no
+    SELECT one                no                 no
+    groups exist              yes                yes
+    a group can HOLD one      no                 no
+
+**A fixture cannot be SELECTED on either page.** The old page's press on a
+fixture starts `_fixtureDrag` (:11100) -- a slide along its host wall -- and
+never puts it in `selection`. The new page has no fixture code path at all:
+`fixtureDrag`, `fixtureAt` and `'fixture'` as a tool return nothing.
+
+MODEL.html:7075 says so itself, and says it was deliberate:
+
+> *"The old page's chain also tests fenestrations, fixtures, surface openings,
+> dimensions and roofs. None of those five is in the OBJECT TYPE vocabulary
+> ... and none of them has a tool on this page yet. Selecting is not saving
+> -- the file keeps every one of them untouched."*
+
+So the ladder needs a fourth arm AND a fixture needs to be selectable AND, on
+the live page, placeable. **You cannot bundle what you cannot pick.**
+
+**AND THIS IS ALREADY ON THE BOOKS AS MOVIE'S DECISION.**
+`PARITY-model-html-vs-dc.md:320` lists the fixture tool among seven that are
+*"absent -- unreachable, measured"* and marks the row
+**"? Movie's call, not mine"**. FIT-OUT is the first feature that forces the
+question, so the answer decides where this order's work goes:
+
+    port the seven tools to MODEL.html   fit-outs are built where drafters are
+    build FIT-OUT on MODEL.dc.html       built on a page nothing links to
+    port only the FIXTURE tool           narrow, and unblocks exactly this
+
+Until that is answered, every ruling above describes something with nowhere to
+live.
