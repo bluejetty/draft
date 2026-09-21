@@ -9,9 +9,12 @@ and, explicitly:
 
 > *"don't do this now, reference it for later"*
 
-Status: **RECORDED, NOT INVESTIGATED — AND THE FIRST READING BELOW IS WRONG. See the correction at the foot.** Nothing below is a diagnosis. It is
-what was on screen and the three facts that were to hand, written down while
-they were cheap so the next person does not start from the screenshot.
+Status: **CLOSED — FIXED, AND FOUR OF THE FIVE READINGS BELOW ARE WRONG.**
+Read the foot first. The sections are kept in the order they were written so
+the dead ends stay visible, but only the last one is the answer; the four
+before it are a record of being confidently wrong in four different
+directions, twice about a garage that had nothing to do with it and once
+about a line that turned out to be invisible.
 
 ---
 
@@ -174,7 +177,7 @@ letting it run through the eave.
 
 ---
 
-## FOUND, 21 Sep — it is the FASCIA CREASE at `cut-view.js:1966`
+## “FOUND”, 21 Sep — the fascia crease at `cut-view.js:1966` (WRONG — see below)
 
 Movie marked the line green on a 2-storey elevation: a short VERTICAL at the
 end of the upper roof's fascia band. Not a horizontal, which is what the
@@ -219,3 +222,89 @@ specific and defensible, but it is a drafting convention and Movie's call, not
 this board's. **And he has already named the next one**: *"the lower garage
 roof is your next job"* — the same elevation shows it again on the garage
 roof below.
+
+
+---
+
+## CLOSED, 21 Sep — it is the SILHOUETTE'S END RISER, not the crease
+
+**The section above is wrong, and it was the fourth wrong answer in this
+board rather than the first right one.** Recording it as "FOUND" was the
+mistake: the crease at `:1966` was identified by a lineWidth tag as *a* line
+near the fascia and then promoted to *the* line without measuring where it
+sits. Measured afterwards, across four elevations of
+`proto/repro-2storey-garage.draft`:
+
+    every crease lands 0.000" from a fascia run's end
+
+Exactly at the end, under the outline's own riser, where it is invisible. The
+crease was never the extra line, and the "drawn TWICE at each end" puzzle at
+the foot of that section has a dull answer: **a rectangle's four plan corners
+project onto two u values in an elevation**, so the near and far corners of
+each end draw the same vertical twice, on top of each other.
+
+### What it actually was
+
+    E1  u 17.825  w1.5  e 17.252..17.777   2.10" inside band -18.00..18.00
+    E1  u 21.825  w1.5  e  8.102.. 8.627   2.10" inside band  -6.00..22.00
+    E2  u 21.750  w1.5  e 17.252..17.802   3.00" inside band -22.00..22.00
+    E3  u -17.850 w1.5  e 17.252..17.777   1.80" inside band -18.00..18.00
+    E4  u -47.725 w1.5  e  8.102.. 8.652   3.30" inside band -48.00..-20.00
+
+**`w1.5` is the roof SILHOUETTE's own width**, and the riser spans the fascia
+band almost exactly. `cut-view.js` grows each fascia run out to the eave's
+true end — `extendRunsToEaves`, whose header already explains that the
+silhouette is sampled and stops short of a roof's outer corner — but it did
+that **after** drawing the outline. So the band reached the roof's real
+corner while the outline's end riser still stood at the last sample, leaving a
+spare vertical a couple of inches inboard with the band running on past it.
+
+**Movie's three observations were all correct, including the one that read
+like a guess.** *"About 1.5 inches"* measured 1.8"–3.6": one sampling step,
+every time. *"On one side"*: one end of a run happens to land on a sample and
+the other does not. *"Usually always"*: **12 of 17 elevations** across the
+four repro drawings were carrying it.
+
+### And a second defect underneath it
+
+Fixing the order left two elevations still stranding a riser, which is what
+turned up the real surprise. E3 and E4 look back along their axis, so `u`
+DESCENDS as the silhouette is sampled, and a run came out of that loop with
+its ends reversed:
+
+    repro-bungalow-garage-roofs E4    runs [u0 22, u1 -47.708]
+
+Every test downstream reads those as an interval. An inverted run therefore
+overlapped no eave, grew by nothing, and was then discarded by
+`u1 - u0 > 0.5` before it could be banded at all. **The band still appeared**,
+because the face-edge pass draws it exactly and had nothing of the
+silhouette's to subtract — which is precisely why this hid: the only visible
+symptom was the stranded riser, and the silhouette's missing band showed up
+as nothing.
+
+### The fix, and what it does not touch
+
+The run ends are worked out **before** the outline is drawn, and the outline's
+risers use them; inverted runs are normalised. At a grown end the riser is
+exactly the fascia board — at a roof's outer corner the surface top IS the
+fascia top — so the outline runs out to the true edge and drops 5.5".
+
+**A gable end is untouched by construction.** `extendRunsToEaves` only grows a
+run against an EAVE edge, and a rake is not one, so a gable's outline stays
+exactly where it was. Nothing here decides a drafting convention, which is
+what the previous section wrongly thought was left to decide: this was a
+defect with a measurable right answer, not a choice about mitres.
+
+### Pinned
+
+`proto/fascia-end-harness.js` — no silhouette-weight vertical may stand within
+6" inside a fascia band's end. The threshold is not a round number picked for
+comfort: artifacts measured 1.8"–3.6", and the nearest LEGITIMATE vertical in
+the same band was 19.2" away and 7.35 ft tall (a roof-takeover edge where a
+garage roof dies into a house wall). Run against both broken states it exits
+1 — 12 failures with the fix reverted, 2 with only the inversion restored —
+so the one check pins both defects.
+
+**Still open, and it is Movie's own next item**: *"the lower garage roof is
+your next job"*. That elevation's garage roof should be looked at again now
+this is out of the way, in case what remains there is a different thing.
