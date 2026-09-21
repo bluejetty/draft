@@ -1552,6 +1552,41 @@ class Component extends DCLogic {
     }
   }
 
+  // THE PICKED SCALE IS A CEILING, NOT A COMMAND (Movie, 21 Sep: "needs more
+  // compact scale", and "on model.dc it would first try ... and then if it
+  // didn't fit it would try the next scale down and check to see if it fit and
+  // then maybe one more down").
+  //
+  // A HAND-PLACED VIEWPORT USED TO TAKE `activeScale` AND NOTHING ELSE, so a
+  // 66 ft house placed at the 1/4" working scale ran off an 11x17 sheet and
+  // stayed there -- `_setScale` writes `activeScale`, which is read HERE and
+  // nowhere else, so there was no way to bring it back short of deleting the
+  // viewport and placing it again.
+  //
+  // The composer has walked a ladder since it was written (`_autoScaleFor`,
+  // AUTO_SCALE_PREFS largest-first, first rung that fits). This is the same
+  // walk on the other path. The drafter's pick is honoured as the LARGEST
+  // scale they are willing to accept rather than as a fixed one: the walk
+  // starts there and steps down, so a plan that already fits is placed at
+  // exactly what they asked for and only an overflowing one moves.
+  //
+  // NOTHING FITS, NOTHING IS REFUSED. A drawing too big for the paper at every
+  // rung is placed at the smallest rung rather than not placed at all -- the
+  // sheet is the drafter's to arrange, and a viewport they can see and move
+  // beats a press that silently did nothing.
+  _placementPif(levelId) {
+    const start = this.state.activeScale;
+    const foot = this._viewFootprintFt({ kind: 'plan', levelId });
+    if (!foot) return SCALES[start].pif;
+    const region = this._composeRegionIn();
+    const fits = pif => foot.wFt * pif <= region.w
+      && foot.hFt * pif + COMPOSE_LABEL_IN <= region.h;
+    for (let i = start; i >= 0; i -= 1) {
+      if (fits(SCALES[i].pif)) return SCALES[i].pif;
+    }
+    return SCALES[0].pif;
+  }
+
   _placeViewport(ptIn) {
     const levelId = this.state.activeLevelId;
     if (!this._saved || levelId == null) {
@@ -1562,7 +1597,7 @@ class Component extends DCLogic {
       id: this.state.nextViewportId,
       kind: 'plan',
       levelId,
-      pif: SCALES[this.state.activeScale].pif,
+      pif: this._placementPif(levelId),
       xIn: ptIn.xIn,
       yIn: ptIn.yIn,
       sheet: this.state.activeSheet,
