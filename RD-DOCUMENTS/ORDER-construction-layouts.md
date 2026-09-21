@@ -12,7 +12,9 @@ and, narrowing it:
 > *"the dc was set up to bring the drawings already into the construction
 > layout area and we had the scales figured out mostly"*
 
-Status: **PLANNED, not started.** Nothing in this order has been written.
+Status: **STAGE 1 IN FLIGHT.** `plan-composition.js` exists and
+`LAYOUT.dc.html` draws its plan viewports through it. Stage 2 is untouched.
+Progress is logged at the foot of this document, under *Stage 1 as built*.
 
 ---
 
@@ -194,3 +196,44 @@ Stated so nobody reads this order as more settled than it is.
 - **How many sheets a real job has.** The page offers five and a `+ SHEET`;
   nobody has said what the working number is, and it decides whether sheet
   navigation is a list or something else.
+
+---
+
+## Stage 1 as built
+
+Logged as it lands, newest last. Movie's own running order for the stages,
+21 Sep: *"we still need the beams columns, and then the stairs and then
+washrooms those should be completed soon and then we can do the kitchen after
+those"*.
+
+| | stage | commit |
+|---|---|---|
+| ✔ | the module, and LAYOUT's plan viewports drawn through it | `87ca1f3` |
+| ✔ | beams and columns | `3100c3c` |
+| ✔ | the logo carries its own wordmark | `de64ff2` |
+| ✔ | a hand-placed viewport walks the scale ladder down until it fits | `c24efed` |
+| ✔ | stairs | `4863369` |
+| ✔ | washrooms — which turned out to be fixtures | `9c94a3c` |
+| | kitchen | |
+
+### Two things the work changed about this order's own assumptions
+
+**A STAIR IS NOT A STORED SHAPE.** It re-derives its risers from the storey
+heights every time it is drawn, so `stairCurrentLayout` takes the level
+readings as a second argument and a caller that cannot supply them cannot draw
+a stair at all. The sheet reads them off the saved JSON through the same pure
+functions MODEL.dc.html's own accessors wrap. Stage 1's acceptance test for
+that was arithmetic rather than pixels: the descent re-derived from the file
+matches the `riseFt` the model wrote onto each stair record digit for digit.
+
+**"WASHROOMS" WAS NOT A STAGE.** There is no washroom painter to port. The
+dealt WC is four walls and a group and nothing else — `proto/README-repro-
+washroom-bungalow.md` has the measurement — and those walls already drew. The
+gap the item was really naming was **fixtures**, which `layout-plan.js` had
+never built an env for, so the sheet was dropping every tub, toilet, basin,
+cabinet, island and closet in the drawing without a word. That is also most of
+what the KITCHEN item will want, since a kitchen is the same record.
+
+The lesson for the remaining stages is worth stating: **check what the thing IS
+before costing the port.** Two of the six items so far were not shaped the way
+their names suggested.
