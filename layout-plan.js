@@ -172,6 +172,11 @@ if (!window.DraftLayoutPlan) {
   // floor blues above -- a stair drawn violet on screen and some other colour
   // on the sheet is two opinions about one object.
   const STAIR_COLOR = '#5d4a8a';
+  // MODEL.dc.html:2518 and :15703. The fill is a translucent white so a
+  // fixture reads as a solid object over the floor tint without hiding the
+  // wall behind it.
+  const FIXTURE_COLOR = '#1d1f20';
+  const FIXTURE_FILL = 'rgba(255,255,255,0.65)';
   const DIMENSION_COLORS = Object.freeze({
     stroke: '#365e86',
     selected: '#5980a6',
@@ -209,6 +214,8 @@ if (!window.DraftLayoutPlan) {
     const paperColor = env.paperColor || '#ffffff';
     const fmt = window.DraftFormatters || {};
     const stairs = window.DraftStairGeometry || null;
+    const fixtures = window.DraftFixtureGeometry || null;
+    const closets = window.DraftClosets || null;
     const STANDARDS = (window.DraftCutView && window.DraftCutView.STANDARDS) || {};
     // The level's own elevation, which the stair painter measures its descent
     // from. Absent means zero, the way every other level-keyed lookup here
@@ -302,6 +309,42 @@ if (!window.DraftLayoutPlan) {
         formatInchesOnly: fmt.formatInchesOnly,
       } : null,
       stairs: of('stairs'),
+
+      // FIXTURES -- which is what a WASHROOM actually is on a plan.
+      //
+      // The dealt WC is four walls and a group; nothing about it is a fixture
+      // record (`_dealWashrooms` writes walls only). Its tub, toilet and basin
+      // are placed by the drafter as wall-hosted fixtures, and until now the
+      // sheet drew the four walls and left the room EMPTY -- a three-piece
+      // bathroom printed as a blank box. The same silence covered every
+      // kitchen, laundry and closet, because they are all the same record.
+      //
+      // Nothing is re-derived here. `fixtureGeometry` is the module both pages
+      // ask, and the numbers beside it (the closet's rod and shelf, the
+      // counter overhang, the ink) are read off their own modules rather than
+      // retyped -- MODEL.dc.html:15692 builds this same env from the same
+      // exports.
+      //
+      // IT IS HANDED THE LEVEL'S WALLS, NOT THE DRAWING'S. An alcove tub finds
+      // its far end by looking for a crossing wall, and a wall on another
+      // storey is not one. This also keeps the wall objects identical to the
+      // ones the composition looks the host up in, so a tub and its host agree
+      // about which wall they mean.
+      fixtureEnv: fixtures && closets ? {
+        fixtureGeometry: (fixture, wall) => fixtures.fixtureGeometry(walls, fixture, wall),
+        wallCross: (a, frame, b) => fixtures.wallCross(a, frame, b),
+        wallFrame: wall => fixtures.wallFrame(wall),
+        walls,
+        closetDoorFor: outsideWidthFt => closets.doorFor(outsideWidthFt),
+        CLOSET_CLOTHES_FT: closets.CLOTHES_FT,
+        CLOSET_ROD_FT: closets.RAIL_FT,
+        CLOSET_SHELF_FT: closets.SHELF_FT,
+        CLOSET_WALL_FT: closets.WALL_FT,
+        COUNTER_OVERHANG_FT: fixtures.COUNTER_OVERHANG_FT,
+        FIXTURE_COLOR,
+        fixtureFill: FIXTURE_FILL,
+      } : null,
+      fixtures: of('fixtures'),
 
       // BEAMS AND COLUMNS, which a foundation sheet is arguably FOR: a site
       // builder setting teleposts reads them off this drawing. The painters
