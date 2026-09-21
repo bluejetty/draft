@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NEIGHBOURHOOD — Rough Drafter</title>
+<title>NEIGHBORHOOD — Rough Drafter</title>
 <link rel="icon" type="image/svg+xml" href="../favicon.svg">
 <link rel="stylesheet" href="../vendor/fonts.css">
 
@@ -113,7 +113,7 @@
 <body>
 
 <div id="rail">
-  <div class="rail-head">Neighbourhood<small>Rough Drafter · place only</small></div>
+  <div class="rail-head">Neighborhood<small>Rough Drafter · place only</small></div>
   <div class="rail-sec">
     <button class="wide" id="import">Import .draft</button>
     <input id="file" type="file" accept=".draft,.json,.model,.plan,application/json" multiple hidden>
@@ -155,10 +155,14 @@
   //          that could.
   // `placed` where each one stands: which shelf entry, its x/z on the
   //          ground in feet, and its bearing. That record IS the whole
-  //          neighbourhood, and it is the same shape as MODEL.dc.html's own
+  //          neighborhood, and it is the same shape as MODEL.dc.html's own
   //          `siteRegistration` -- { x, z, angleRad } -- which was already a
   //          placement before anyone needed one.
-  const STORE_KEY = 'draft-neighbourhood-v1';
+  // Renamed from the Canadian spelling on 21 Sep, the day it was written.
+  // The old key is still READ so a neighborhood saved that morning opens
+  // that afternoon; it is never written again.
+  const STORE_KEY = 'draft-neighborhood-v1';
+  const STORE_KEY_WAS = 'draft-neighbourhood-v1';
   const state = {
     shelf: [],
     placed: [],
@@ -175,7 +179,7 @@
 
   // ── WHAT A HOUSE IS, READ OFF THE FILE AND NOTHING ELSE ──────────────────
 
-  // The storey to draw. A neighbourhood wants the ROOF -- looking down a real
+  // The storey to draw. A neighborhood wants the ROOF -- looking down a real
   // street you see roofs -- but `layout-plan.js` bails when a level has no
   // walls, and a ROOF level has none. (Same gate that keeps stair sections
   // off a construction sheet; fixing it serves both.) So: the level with the
@@ -208,7 +212,7 @@
 
   // ── THE TRANSFORMS ───────────────────────────────────────────────────────
 
-  // Ground feet → canvas pixels. One transform for the whole neighbourhood.
+  // Ground feet → canvas pixels. One transform for the whole neighborhood.
   const groundToS = pt => ({
     x: canvas.width / 2 + (pt.x - state.camX) * state.pxPerFt,
     y: canvas.height / 2 + (pt.z - state.camZ) * state.pxPerFt,
@@ -314,7 +318,7 @@
     // or not anyone could see it.
     //
     // CULL: a house whose circle misses the canvas is skipped outright. At
-    // any working zoom that is nearly all of a large neighbourhood.
+    // any working zoom that is nearly all of a large neighborhood.
     //
     // COARSE: a house drawn smaller than LOD_PX across cannot show a wall
     // anyway -- the whole building is a few pixels -- so it becomes one
@@ -355,7 +359,7 @@
         // document. The first version of this page did not, and four real
         // houses came out as blue smudges of dimension string -- at 1 px to
         // the foot a 44'-7 5/8" label is wider than the house it measures.
-        // A neighbourhood is buildings among buildings.
+        // A neighborhood is buildings among buildings.
         { padFt: 0.5 / 12, paperColor: '#f4f2ee', shell: true },
       );
     });
@@ -547,7 +551,7 @@
 
   // ── PERSISTENCE ──────────────────────────────────────────────────────────
   //
-  // The neighbourhood is placements plus the drawings they stand on. Kept in
+  // The neighborhood is placements plus the drawings they stand on. Kept in
   // localStorage so a reload does not lose the afternoon. It is deliberately
   // NOT the shared `model-drawing` bucket: this program must never be able to
   // write over the house somebody is drafting.
@@ -559,7 +563,7 @@
   // and the bearing to a whole degree, it is 19 -- FIVE TIMES smaller, and no
   // worse an answer to "where does this house stand".
   //
-  // That is what decides whether a large neighbourhood fits: 100,000 fat
+  // That is what decides whether a large neighborhood fits: 100,000 fat
   // placements is 9.35 MB and browsers stop a localStorage write at about
   // five. The same 100,000 lean is 1.81 MB and fits with room to spare.
   //
@@ -593,7 +597,10 @@
 
   const load = () => {
     let raw = null;
-    try { raw = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch { raw = null; }
+    try {
+      raw = JSON.parse(localStorage.getItem(STORE_KEY)
+        || localStorage.getItem(STORE_KEY_WAS) || 'null');
+    } catch { raw = null; }
     if (!raw || (raw.v !== 1 && raw.v !== 2)) return;
     state.shelf = (raw.shelf || []).map(entry => {
       const rebuilt = { ...entry };
@@ -601,7 +608,7 @@
       return rebuilt;
     }).filter(entry => entry.foot);
     // v1 wrote objects, v2 writes four numbers. Both read back the same, so a
-    // neighbourhood saved before the record was slimmed still opens.
+    // neighborhood saved before the record was slimmed still opens.
     state.placed = (raw.placed || []).map(spot => (Array.isArray(spot)
       ? { shelf: spot[0], x: spot[1], z: spot[2], angleRad: (spot[3] || 0) * Math.PI / 180 }
       : { shelf: spot.shelf, x: spot.x, z: spot.z, angleRad: spot.angleRad || 0 }))
@@ -612,7 +619,7 @@
     }
   };
 
-  // ── THE NEIGHBOURHOOD AS A FILE ──────────────────────────────────────────
+  // ── THE NEIGHBORHOOD AS A FILE ──────────────────────────────────────────
   //
   // localStorage is where the afternoon lives; a `.hood` is what you keep,
   // send, and back up. It is plain JSON, like `.draft`, for the same reason:
@@ -620,15 +627,15 @@
   // second program can be written against without asking permission.
   //
   // SHAPED FOR A TIER ABOVE IT, THOUGH NOTHING BUILDS ONE YET. Movie's
-  // ladder is NEIGHBOURHOOD / CITY / STATE, each placing the one below, and
+  // ladder is NEIGHBORHOOD / CITY / STATE, each placing the one below, and
   // the cheap half of that is decided here rather than later:
   //
-  //   `extentFt`   the ground this neighbourhood occupies, WRITTEN DOWN. A
+  //   `extentFt`   the ground this neighborhood occupies, WRITTEN DOWN. A
   //                CITY can frame it, cull it and draw it coarse without
   //                parsing a single house -- which is the whole reason a
   //                tiered thing stays fast. Derived on save, never edited.
   //   `placements` [design, x, z, degrees], the same four numbers a CITY
-  //                would use to place a neighbourhood. One record shape all
+  //                would use to place a neighborhood. One record shape all
   //                the way up.
   //   `designs`    the drawings, once each, however many times placed.
   //
@@ -636,7 +643,7 @@
   // does not exist. That is deliberate and it is the one thing in this file
   // built for later, because it costs nothing now and cannot be added to
   // files already in the wild.
-  const neighbourhoodExtent = () => {
+  const neighborhoodExtent = () => {
     if (!state.placed.length) return null;
     let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
     state.placed.forEach(spot => {
@@ -653,9 +660,9 @@
   };
 
   const hoodFile = () => ({
-    format: 'rough-drafter-neighbourhood',
+    format: 'rough-drafter-neighborhood',
     version: 1,
-    extentFt: neighbourhoodExtent(),
+    extentFt: neighborhoodExtent(),
     designs: state.shelf.map(entry => ({
       name: entry.name, levelId: entry.levelId, levelLabel: entry.levelLabel,
       drawing: entry.saved,
@@ -668,7 +675,7 @@
     const blob = new Blob([JSON.stringify(hoodFile())], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'neighbourhood.hood';
+    a.download = 'neighborhood.hood';
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   };
@@ -680,8 +687,8 @@
     if (!file) return;
     let raw = null;
     try { raw = JSON.parse(await file.text()); } catch { raw = null; }
-    if (!raw || raw.format !== 'rough-drafter-neighbourhood') {
-      alert(`${file.name} is not a neighbourhood file.`);
+    if (!raw || !/^rough-drafter-neighbou?rhood$/.test(String(raw.format || ''))) {
+      alert(`${file.name} is not a neighborhood file.`);
       return;
     }
     state.shelf = (raw.designs || []).map(design => {
@@ -697,7 +704,7 @@
       .filter(spot => state.shelf[spot.shelf]);
     state.armed = null; state.selected = null;
     // Frame what was opened, so a file lands in view rather than off it.
-    const ext = raw.extentFt || neighbourhoodExtent();
+    const ext = raw.extentFt || neighborhoodExtent();
     if (ext) {
       state.camX = (ext.minX + ext.maxX) / 2;
       state.camZ = (ext.minZ + ext.maxZ) / 2;
@@ -713,7 +720,7 @@
   load();
   renderShelf();
   redraw();
-  document.body.dataset.neighbourhoodReady = '1';
+  document.body.dataset.neighborhoodReady = '1';
 })();
 </script>
 </body>

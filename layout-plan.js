@@ -212,10 +212,10 @@ if (!window.DraftLayoutPlan) {
     // stairs, no beams or columns.
     //
     // It is not a style. It is what a plan MEANS at a different distance. A
-    // house on a neighbourhood at 1"=40' is a building among buildings, and
+    // house on a neighborhood at 1"=40' is a building among buildings, and
     // its dimension strings at that scale are a blue smudge that hides the
     // walls they measure -- measured by looking at four real houses placed on
-    // city/index.html, which is the caller this was added for.
+    // neighborhood/index.html, which is the caller this was added for.
     //
     // Every stage in plan-composition.js is already env-gated, so this only
     // has to decline to build an env rather than teach the composer a mode.

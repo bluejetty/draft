@@ -1,4 +1,4 @@
-# city/index.html — the neighbourhood program
+# neighborhood/index.html — the neighborhood program
 
 **Movie, 21 Sep 2026:**
 
@@ -34,7 +34,7 @@ as an argument:
     const toS = pt => ({ x: ..., y: ... })
 
 So **placing a house is function composition.** Rotate and offset the point,
-then hand it to the neighbourhood's own transform. No painter knows it
+then hand it to the neighborhood's own transform. No painter knows it
 happened, and not one line of shared drawing code changed for this program.
 
 **3. `drawPlan` TAKES ITS DRAWING AS AN ARGUMENT.**
@@ -55,7 +55,7 @@ the same trick pointed at many files instead of one.
   shift.
 - **REMOVE** a placement with Delete. The imported drawing stays on the shelf.
 - Pan with the right button or space-drag; zoom on the wheel.
-- The neighbourhood persists to `localStorage` — placements only, plus the
+- The neighborhood persists to `localStorage` — placements only, plus the
   drawings they refer to.
 
 ## What it deliberately does NOT do
@@ -74,7 +74,7 @@ it cannot be.
   construction sheet. So v1 draws the storey you pick, defaulting to the
   busiest one. Fixing the gate serves both boards at once.
 - **No streets, no lot lines, no north.** Import and place only, which is what
-  was asked for. A neighbourhood's own entities are the next thing.
+  was asked for. A neighborhood's own entities are the next thing.
 - **No printing.** `titleblock.js` is right there when it is wanted.
 
 ## The `.hood` file, and the one thing in here built for later
@@ -86,13 +86,13 @@ COUNTRY / WORLD"*, each a separate program placing the one below — and then:
 So this program stays the lowest rung. But **one half of that ladder is cheap
 today and impossible to retrofit**, and it is written into the file now:
 
-    format      "rough-drafter-neighbourhood"
+    format      "rough-drafter-neighborhood"
     extentFt    { minX, minZ, maxX, maxZ } -- the ground this occupies
     designs     each drawing ONCE, however many times it is placed
     placements  [design, x, z, degrees]
 
 **`extentFt` is written for a reader that does not exist.** Nothing here reads
-it back. A CITY placing this neighbourhood needs to frame it, cull it and draw
+it back. A CITY placing this neighborhood needs to frame it, cull it and draw
 it coarse *without parsing a single house* — that is exactly what made 100,000
 houses flat one rung down — and it can only do that if the extent is on the
 file. Adding it later would mean every `.hood` already in the wild lacking it.
@@ -105,11 +105,11 @@ rather than five.
 
 Honest boundaries rather than encouragement:
 
-- **NEIGHBOURHOOD → CITY is genuinely the same program.** A shelf of child
+- **NEIGHBORHOOD → CITY is genuinely the same program.** A shelf of child
   documents, a list of placements, a draw loop that composes transforms —
   nothing in this file says "house". Culling prunes whole subtrees: a
-  neighbourhood off-screen skips every house in it without being visited.
-- **Each rung needs its own coarse form.** A neighbourhood at city zoom is one
+  neighborhood off-screen skips every house in it without being visited.
+- **Each rung needs its own coarse form.** A neighborhood at city zoom is one
   shape, not a thousand houses. That is the level-of-detail already here,
   one rung up.
 - **Feet outlast the plane.** A city is ~10^5 ft across, a state ~10^6, a
@@ -143,7 +143,7 @@ have crawled forward in twenty-two-second jumps.
 **After (`redraw` skips what is off-canvas, and draws a house smaller than
 26 px as one filled rectangle):**
 
-        wide — the whole neighbourhood on screen, nothing to cull
+        wide — the whole neighborhood on screen, nothing to cull
         N=100      48.3 ms    0.15 MB
         N=2000     33.2       0.17
         N=20000    33.3       0.44        3515 shown
@@ -168,10 +168,10 @@ or not anyone could see it.
 **AND A PLACEMENT IS FOUR NUMBERS.** `{id, shelf, x, z, angleRad}` is 98
 bytes — a double like `-21.010416666666668` spends twenty characters on
 precision no ground has. `[shelf, x, z, degrees]`, rounded to 1/8" and a whole
-degree, is **19 bytes**. That is what decides whether a large neighbourhood
+degree, is **19 bytes**. That is what decides whether a large neighborhood
 fits at all: 100,000 fat placements is 9.35 MB and a browser refuses a
 localStorage write at about five; the same 100,000 lean is 1.81 MB. Measured,
 both ways, and the failing write is in the git history.
 
-`tests/city-neighbourhood.spec.js` asserts the stored shape for that reason —
+`tests/city-neighborhood.spec.js` asserts the stored shape for that reason —
 the record IS the performance claim.

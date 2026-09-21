@@ -1,4 +1,4 @@
-// city/index.html — the neighbourhood program (Movie, 21 Sep 2026).
+// neighborhood/index.html — the neighborhood program (Movie, 21 Sep 2026).
 //
 // A SEPARATE PROGRAM that reads the .draft files Rough Drafter writes and does
 // one thing with them: places them on the ground. It never edits a house; it
@@ -20,8 +20,8 @@ async function openCity(page) {
     sessionStorage.setItem('city-cleared', '1');
     localStorage.clear();
   });
-  await page.goto('/city/');
-  await page.waitForFunction(() => document.body.dataset.neighbourhoodReady === '1');
+  await page.goto('/neighborhood/');
+  await page.waitForFunction(() => document.body.dataset.neighborhoodReady === '1');
 }
 
 // Ink on the ground, counted dark so the grid's pale lines do not register.
@@ -70,7 +70,7 @@ test('each placement is its own house, drawn from the same shelf entry', async (
   const one = await groundInk(page);
   // THE SAME DRAWING, PLACED TWICE. It is not copied -- the second placement
   // references the same shelf entry -- so this is the claim that makes a large
-  // neighbourhood possible at all.
+  // neighborhood possible at all.
   await placeAt(page, 1, 0.65, 0.35);
   const two = await groundInk(page);
 
@@ -137,7 +137,7 @@ test('it draws the building, not the construction document', async ({ page }) =>
   expect(await groundInk(page)).toBeGreaterThan(100);
 });
 
-test('a neighbourhood survives a reload, and a placement stays four numbers', async ({ page }) => {
+test('a neighborhood survives a reload, and a placement stays four numbers', async ({ page }) => {
   await openCity(page);
   await page.setInputFiles('#file', paths);
   await placeAt(page, 0, 0.35, 0.4);
@@ -147,7 +147,7 @@ test('a neighbourhood survives a reload, and a placement stays four numbers', as
   // THE STORED SHAPE IS THE PERFORMANCE CLAIM, so it is asserted rather than
   // trusted: [shelf, x, z, degrees]. As an object it was 98 bytes and 100,000
   // houses would not fit in localStorage at all; as four numbers it is 19.
-  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('draft-neighbourhood-v1')));
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('draft-neighborhood-v1')));
   expect(stored.v).toBe(2);
   expect(stored.placed).toHaveLength(2);
   stored.placed.forEach(spot => {
@@ -157,7 +157,7 @@ test('a neighbourhood survives a reload, and a placement stays four numbers', as
   });
 
   await page.reload();
-  await page.waitForFunction(() => document.body.dataset.neighbourhoodReady === '1');
+  await page.waitForFunction(() => document.body.dataset.neighborhoodReady === '1');
   await expect(page.locator('#s-count')).toContainText('2 PLACED');
   await expect(page.locator('.card')).toHaveCount(3);
   expect(await groundInk(page)).toBeGreaterThan(100);
@@ -176,7 +176,7 @@ test('it offers no way to edit a house', async ({ page }) => {
   }
 });
 
-test('a neighbourhood saves to a file and opens again', async ({ page }) => {
+test('a neighborhood saves to a file and opens again', async ({ page }) => {
   await openCity(page);
   await page.setInputFiles('#file', paths);
   await placeAt(page, 0, 0.35, 0.4);
@@ -190,7 +190,7 @@ test('a neighbourhood saves to a file and opens again', async ({ page }) => {
   ]).then(([d]) => d);
   const saved = JSON.parse(require('fs').readFileSync(await download.path(), 'utf8'));
 
-  expect(saved.format).toBe('rough-drafter-neighbourhood');
+  expect(saved.format).toBe('rough-drafter-neighborhood');
   expect(saved.placements).toHaveLength(3);
   // THREE PLACEMENTS, THREE DESIGNS ON THE SHELF -- and the design placed
   // twice is stored ONCE. That is the claim the whole thing rests on, so it
@@ -200,7 +200,7 @@ test('a neighbourhood saves to a file and opens again', async ({ page }) => {
   saved.placements.forEach(spot => expect(spot).toHaveLength(4));
 
   // WRITTEN FOR A READER THAT DOES NOT EXIST YET: a CITY placing this
-  // neighbourhood must be able to frame and cull it without parsing a single
+  // neighborhood must be able to frame and cull it without parsing a single
   // house, so the ground it occupies is recorded rather than re-derived.
   expect(saved.extentFt).toBeTruthy();
   expect(saved.extentFt.maxX).toBeGreaterThan(saved.extentFt.minX);
@@ -209,8 +209,8 @@ test('a neighbourhood saves to a file and opens again', async ({ page }) => {
   // Open it into a fresh page: same houses, same ground.
   const fresh = await page.context().newPage();
   await fresh.addInitScript(() => localStorage.clear());
-  await fresh.goto('/city/');
-  await fresh.waitForFunction(() => document.body.dataset.neighbourhoodReady === '1');
+  await fresh.goto('/neighborhood/');
+  await fresh.waitForFunction(() => document.body.dataset.neighborhoodReady === '1');
   await fresh.setInputFiles('#hoodfile', await download.path());
   await fresh.waitForTimeout(400);
   await expect(fresh.locator('#s-count')).toContainText('3 PLACED');
