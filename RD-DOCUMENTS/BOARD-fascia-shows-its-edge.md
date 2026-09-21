@@ -170,3 +170,52 @@ next reader should start from that rather than from this candidate.
 If it IS this line, the fix is not to delete level datums — they are how a
 drafter reads heights — but to stop a datum rule short of the roof rather than
 letting it run through the eave.
+
+
+---
+
+## FOUND, 21 Sep — it is the FASCIA CREASE at `cut-view.js:1966`
+
+Movie marked the line green on a 2-storey elevation: a short VERTICAL at the
+end of the upper roof's fascia band. Not a horizontal, which is what the
+candidate above assumed, and not a datum.
+
+    // The fascia creases at every plan corner: where the roof edge
+    // changes direction (an outside corner, or a valley landing on a
+    // re-entrant one) a thin vertical seam crosses the 5.5" band.
+
+It draws `moveTo(X(u), Y(eaveTop))` to `Y(eaveTop - ROOF_FASCIA_IN/12)` — a
+vertical exactly the depth of the board, in INK at width 1.25.
+
+**AT A CORNER IN THE MIDDLE OF A RUN THAT IS RIGHT**: a fascia really does
+mitre where it turns, and the seam is visible. **At a corner that falls at the
+END of the visible run it reads as the board's END** — a 2x6 seen on edge,
+which is what Movie has been reporting since 20 Sep in exactly those words.
+
+### How it was found, after three wrong answers
+
+Three hypotheses were tested and killed, all mine:
+
+1. the two-pass subtraction doubling the band — 20 comparisons, 0 unmatched
+2. two fascia bands on one edge — 1-2 tops, 1-2 shadows, 0 doubled pairs
+3. the silhouette's closing riser at `:1637` — suppressed it, the verticals
+   stayed
+
+**The technique that worked** is worth keeping. Seven sites in this file set
+`lineWidth = 1.25`, so each was given a unique width — 1.210001, 1.220001, …
+— visually identical and individually identifiable in a recorded canvas tape.
+The probe then named the source outright instead of being narrowed by
+guesswork.
+
+Also measured, and not yet explained: **the crease is drawn TWICE at each
+end** — two identical segments at the same x. Harmless on screen (they
+overlap) but it says something is visiting the corner twice.
+
+### What is NOT decided
+
+Whether to suppress the crease, and on what rule. "Never draw creases" would
+lose the legitimate mitre in the middle of a run. "Not at a run's end" is
+specific and defensible, but it is a drafting convention and Movie's call, not
+this board's. **And he has already named the next one**: *"the lower garage
+roof is your next job"* — the same elevation shows it again on the garage
+roof below.
