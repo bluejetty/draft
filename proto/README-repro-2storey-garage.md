@@ -27,3 +27,9 @@ the first.
    window spans `x 6..10`, so the roof comes up through the middle of it.
    `auto-windows.js` has no idea roofs exist. See
    RD-DOCUMENTS/BOARD-a-roof-through-a-window.md.
+
+3. **The fascia on E3 BACK.** Movie, same evening: *"on the left side fascias
+   looks like you can soo the 2x6 fascia boards, but shouldn't see it"* —
+   recorded, not investigated, at his instruction. See
+   RD-DOCUMENTS/BOARD-fascia-shows-its-edge.md. It may be the same hidden-line
+   question the window board leaves open.
