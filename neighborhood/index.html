@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NEIGHBORHOOD — Rough Drafter</title>
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="stylesheet" href="../vendor/fonts.css">
+
+<!-- THE SHARED DRAWING ENGINE, LOADED FROM ONE FOLDER UP.
+     These files publish onto window.Draft* and read each other from there --
+     no require, no import, no path between them -- which is the only reason a
+     page down here can use them unchanged. Load order still matters: every
+     one of them reads the ones above it at call time, and layout-plan.js
+     destructures window.DraftWallTypes AT LOAD, so wall-types.js cannot move
+     below it. proto/load-order-harness.js is the file that knows this. -->
+<script src="../wall-types.js"></script>
+<script src="../level-assembly.js"></script>
+<script src="../render-2d.js"></script>
+<script src="../geometry-2d.js"></script>
+<script src="../layer-views.js"></script>
+<script src="../stair-geometry.js"></script>
+<script src="../closets.js"></script>
+<script src="../fixture-geometry.js"></script>
+<script src="../formatters.js"></script>
+<script src="../cut-view.js"></script>
+<script src="../plan-composition.js"></script>
+<script src="../layout-plan.js"></script>
+
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root {
+    --ink: #1d1f20;
+    --ink-quiet: rgba(29,31,32,0.45);
+    --rule: rgba(29,31,32,0.14);
+    --blue: #5980a6;
+    --ground: #f4f2ee;
+    --font-ui: 'Barlow Condensed', system-ui, sans-serif;
+  }
+  html, body { height: 100%; margin: 0; overflow: hidden; background: #fff; color: var(--ink); }
+  body { display: flex; font-family: 'Barlow', system-ui, sans-serif; }
+
+  #rail {
+    width: 214px; flex: none; display: flex; flex-direction: column;
+    border-right: 1px solid var(--rule); background: #fff;
+  }
+  .rail-head {
+    padding: 10px 12px 8px; border-bottom: 1px solid var(--rule);
+    font-family: var(--font-ui); font-size: 15px; font-weight: 600;
+    letter-spacing: 0.07em; text-transform: uppercase;
+  }
+  .rail-head small {
+    display: block; margin-top: 2px; font-size: 10px; font-weight: 500;
+    letter-spacing: 0.05em; color: var(--ink-quiet);
+  }
+  .rail-sec { padding: 9px 12px; border-bottom: 1px solid var(--rule); }
+  .rail-label {
+    font-family: var(--font-ui); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-quiet);
+    margin-bottom: 5px;
+  }
+  button {
+    font-family: var(--font-ui); font-size: 11px; font-weight: 600;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    border: 1px solid var(--rule); background: #fff; color: var(--ink);
+    padding: 6px 8px; cursor: pointer;
+  }
+  button:hover { border-color: var(--blue); color: var(--blue); }
+  button.wide { display: block; width: 100%; }
+  button.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+  #shelf { flex: 1; overflow-y: auto; }
+  .card {
+    display: flex; align-items: baseline; gap: 6px; width: 100%;
+    padding: 7px 12px; border: 0; border-bottom: 1px solid var(--rule);
+    background: #fff; text-align: left; cursor: pointer;
+  }
+  .card:hover { background: rgba(89,128,166,0.07); }
+  .card.armed { background: var(--blue); }
+  .card.armed .card-name, .card.armed .card-note { color: #fff; }
+  .card-name {
+    font-family: var(--font-ui); font-size: 12px; font-weight: 600;
+    letter-spacing: 0.04em; text-transform: uppercase;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .card-note {
+    margin-left: auto; font-family: var(--font-ui); font-size: 10px;
+    color: var(--ink-quiet); white-space: nowrap;
+  }
+  #help {
+    padding: 8px 12px; border-top: 1px solid var(--rule);
+    font-family: var(--font-ui); font-size: 10px; line-height: 1.45;
+    letter-spacing: 0.02em; color: var(--ink-quiet);
+  }
+  #stage { flex: 1; position: relative; min-width: 0; }
+  canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+  #status {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 26px;
+    display: flex; align-items: center; gap: 14px; padding: 0 12px;
+    border-top: 1px solid var(--rule); background: #fff;
+    font-family: var(--font-ui); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-quiet);
+  }
+  #status b { color: var(--blue); font-weight: 600; }
+  #drop {
+    position: absolute; inset: 0; display: none; place-items: center;
+    background: rgba(89,128,166,0.12); border: 2px dashed var(--blue);
+    font-family: var(--font-ui); font-size: 15px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--blue);
+  }
+  body.dragging #drop { display: grid; }
+</style>
+</head>
+<body>
+
+<div id="rail">
+  <div class="rail-head">Neighborhood<small>Rough Drafter · place only</small></div>
+  <div class="rail-sec">
+    <button class="wide" id="import">Import .draft</button>
+    <input id="file" type="file" accept=".draft,.json,.model,.plan,application/json" multiple hidden>
+    <div style="display:flex; gap:5px; margin-top:6px;">
+      <button style="flex:1;" id="save">Save .hood</button>
+      <button style="flex:1;" id="open">Open .hood</button>
+    </div>
+    <input id="hoodfile" type="file" accept=".hood,application/json" hidden>
+  </div>
+  <div class="rail-sec" style="border-bottom:0; padding-bottom:4px;">
+    <div class="rail-label">Drawings on the shelf</div>
+  </div>
+  <div id="shelf"></div>
+  <div id="help">
+    Pick a drawing, then click the ground to place it.<br>
+    Drag a house to move · <b>[</b> <b>]</b> rotate · shift = 1°<br>
+    Delete removes a placement · wheel zooms · right-drag pans
+  </div>
+</div>
+
+<div id="stage">
+  <canvas id="plan"></canvas>
+  <div id="drop">Drop .draft files</div>
+  <div id="status">
+    <span id="s-scale">—</span>
+    <span id="s-count">0 placed</span>
+    <span id="s-sel">—</span>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  // ── THE STATE, WHICH IS TWO LISTS AND A CAMERA ───────────────────────────
+  //
+  // `shelf`  the .draft files imported this session, parsed and untouched.
+  //          A drawing is never modified here -- this program has no tool
+  //          that could.
+  // `placed` where each one stands: which shelf entry, its x/z on the
+  //          ground in feet, and its bearing. That record IS the whole
+  //          neighborhood, and it is the same shape as MODEL.dc.html's own
+  //          `siteRegistration` -- { x, z, angleRad } -- which was already a
+  //          placement before anyone needed one.
+  // Renamed from the Canadian spelling on 21 Sep, the day it was written.
+  // The old key is still READ so a neighborhood saved that morning opens
+  // that afternoon; it is never written again.
+  const STORE_KEY = 'draft-neighborhood-v1';
+  const STORE_KEY_WAS = 'draft-neighbourhood-v1';
+  const state = {
+    shelf: [],
+    placed: [],
+    armed: null,          // shelf index waiting for a click to land it
+    selected: null,       // placed index under the cursor's last press
+    camX: 0, camZ: 0,     // ground point at the centre of the view, in feet
+    pxPerFt: 3,
+  };
+
+  const canvas = document.getElementById('plan');
+  const ctx = canvas.getContext('2d');
+  const shelfEl = document.getElementById('shelf');
+  const fileEl = document.getElementById('file');
+
+  // ── WHAT A HOUSE IS, READ OFF THE FILE AND NOTHING ELSE ──────────────────
+
+  // The storey to draw. A neighborhood wants the ROOF -- looking down a real
+  // street you see roofs -- but `layout-plan.js` bails when a level has no
+  // walls, and a ROOF level has none. (Same gate that keeps stair sections
+  // off a construction sheet; fixing it serves both.) So: the level with the
+  // most walls, which on every house is a floor you would recognise.
+  const bestLevel = saved => {
+    const count = new Map();
+    (Array.isArray(saved?.walls) ? saved.walls : [])
+      .filter(wall => (wall.view || 'plan') === 'plan')
+      .forEach(wall => count.set(wall.levelId, (count.get(wall.levelId) || 0) + 1));
+    let best = null, most = 0;
+    count.forEach((n, levelId) => { if (n > most) { most = n; best = levelId; } });
+    return best;
+  };
+
+  const levelName = (saved, levelId) =>
+    (Array.isArray(saved?.levels) ? saved.levels : [])
+      .find(level => level?.id === levelId)?.name || `LEVEL ${levelId}`;
+
+  // The house's own extent in feet, and its centre -- so a placement means
+  // "the middle of the house sits here" rather than "some arbitrary corner
+  // of its coordinate space does".
+  const footprint = entry => {
+    const b = window.DraftLayoutPlan.planBounds(entry.saved, entry.levelId);
+    if (!b) return null;
+    return {
+      cx: (b.minX + b.maxX) / 2, cz: (b.minZ + b.maxZ) / 2,
+      wFt: b.maxX - b.minX, hFt: b.maxZ - b.minZ,
+    };
+  };
+
+  // ── THE TRANSFORMS ───────────────────────────────────────────────────────
+
+  // Ground feet → canvas pixels. One transform for the whole neighborhood.
+  const groundToS = pt => ({
+    x: canvas.width / 2 + (pt.x - state.camX) * state.pxPerFt,
+    y: canvas.height / 2 + (pt.z - state.camZ) * state.pxPerFt,
+  });
+  const sToGround = (px, py) => ({
+    x: state.camX + (px - canvas.width / 2) / state.pxPerFt,
+    z: state.camZ + (py - canvas.height / 2) / state.pxPerFt,
+  });
+
+  // A PLACEMENT IS FUNCTION COMPOSITION, and that is the whole trick this
+  // program runs on. Every painter in the repo takes `toS` as an argument, so
+  // standing a house somewhere means wrapping that function: spin the point
+  // about the house's own centre, slide it to where the house stands, then
+  // hand it to the ground transform. No painter learns anything. Not one line
+  // of shared drawing code changed to make this work.
+  const placedToS = (entry, spot) => {
+    const foot = entry.foot;
+    const cos = Math.cos(spot.angleRad), sin = Math.sin(spot.angleRad);
+    return pt => {
+      const dx = pt.x - foot.cx, dz = pt.z - foot.cz;
+      return groundToS({
+        x: spot.x + dx * cos - dz * sin,
+        z: spot.z + dx * sin + dz * cos,
+      });
+    };
+  };
+
+  // ── DRAWING THE GROUND ───────────────────────────────────────────────────
+
+  // A grid in round feet, coarsened as you zoom out so the lines never crowd.
+  const gridStepFt = () => {
+    const wanted = 46 / state.pxPerFt;                    // ~46px between lines
+    return [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
+      .find(step => step >= wanted) || 1000;
+  };
+
+  const drawGround = () => {
+    ctx.fillStyle = '#f4f2ee';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const step = gridStepFt();
+    const tl = sToGround(0, 0), br = sToGround(canvas.width, canvas.height);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = Math.ceil(tl.x / step) * step; x <= br.x; x += step) {
+      const p = groundToS({ x, z: 0 });
+      ctx.moveTo(Math.round(p.x) + 0.5, 0);
+      ctx.lineTo(Math.round(p.x) + 0.5, canvas.height);
+    }
+    for (let z = Math.ceil(tl.z / step) * step; z <= br.z; z += step) {
+      const p = groundToS({ x: 0, z });
+      ctx.moveTo(0, Math.round(p.y) + 0.5);
+      ctx.lineTo(canvas.width, Math.round(p.y) + 0.5);
+    }
+    ctx.strokeStyle = 'rgba(29,31,32,0.07)';
+    ctx.stroke();
+  };
+
+  // The frame around a placed house: quiet normally, blue when it is the one
+  // under the cursor. It is drawn from the house's own footprint, spun with
+  // it, so it reads as the building's plot rather than a screen rectangle.
+  const drawFrame = (entry, spot, active, solid = false) => {
+    const foot = entry.foot;
+    const toS = placedToS(entry, spot);
+    const pad = 1;
+    const corners = [
+      { x: foot.cx - foot.wFt / 2 - pad, z: foot.cz - foot.hFt / 2 - pad },
+      { x: foot.cx + foot.wFt / 2 + pad, z: foot.cz - foot.hFt / 2 - pad },
+      { x: foot.cx + foot.wFt / 2 + pad, z: foot.cz + foot.hFt / 2 + pad },
+      { x: foot.cx - foot.wFt / 2 - pad, z: foot.cz + foot.hFt / 2 + pad },
+    ].map(toS);
+    ctx.save();
+    ctx.beginPath();
+    corners.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+    ctx.closePath();
+    if (solid) {
+      ctx.fillStyle = active ? 'rgba(89,128,166,0.55)' : 'rgba(29,31,32,0.42)';
+      ctx.fill();
+    } else {
+      ctx.setLineDash(active ? [] : [5, 4]);
+      ctx.lineWidth = active ? 1.5 : 1;
+      ctx.strokeStyle = active ? '#5980a6' : 'rgba(29,31,32,0.28)';
+      ctx.stroke();
+    }
+    ctx.restore();
+  };
+
+  const redraw = () => {
+    const dpr = window.devicePixelRatio || 1;
+    const box = canvas.getBoundingClientRect();
+    if (canvas.width !== Math.round(box.width * dpr) || canvas.height !== Math.round(box.height * dpr)) {
+      canvas.width = Math.round(box.width * dpr);
+      canvas.height = Math.round(box.height * dpr);
+    }
+    drawGround();
+
+    // ── WHAT NOT TO DRAW, which is most of it ──────────────────────────
+    //
+    // Measured before this existed: 0.217 ms per house per frame, so 2000
+    // houses took 464 ms and 100,000 would have taken twenty-two SECONDS.
+    // The data was never the problem -- 2000 placements cost 0.10 MB on top
+    // of the drawings, because `placed` references the shelf rather than
+    // copying it -- so every house on the ground was being painted whether
+    // or not anyone could see it.
+    //
+    // CULL: a house whose circle misses the canvas is skipped outright. At
+    // any working zoom that is nearly all of a large neighborhood.
+    //
+    // COARSE: a house drawn smaller than LOD_PX across cannot show a wall
+    // anyway -- the whole building is a few pixels -- so it becomes one
+    // filled rectangle. That is not a compromise at that size; it is what a
+    // building looks like from that far away, and it is the difference
+    // between zooming out and freezing.
+    const LOD_PX = 26;
+    const halfW = canvas.width / 2, halfH = canvas.height / 2;
+    let drawn = 0, coarse = 0;
+
+    state.placed.forEach((spot, index) => {
+      const entry = state.shelf[spot.shelf];
+      if (!entry || !entry.foot) return;
+      const foot = entry.foot;
+
+      // Rotation-proof: the circle round the footprint, which spinning cannot
+      // grow. Cheaper than a rotated box test and never wrong in the
+      // direction that matters (it may keep a house that is just off-screen,
+      // it can never drop one that is on it).
+      const radiusPx = (Math.hypot(foot.wFt, foot.hFt) / 2 + 1) * state.pxPerFt;
+      const at = groundToS({ x: spot.x, z: spot.z });
+      if (at.x + radiusPx < 0 || at.x - radiusPx > canvas.width
+        || at.y + radiusPx < 0 || at.y - radiusPx > canvas.height) return;
+
+      const acrossPx = Math.max(foot.wFt, foot.hFt) * state.pxPerFt;
+      if (acrossPx < LOD_PX) {
+        drawFrame(entry, spot, index === state.selected, true);
+        coarse += 1;
+        return;
+      }
+      drawn += 1;
+      drawFrame(entry, spot, index === state.selected);
+      // THE SHARED PAINTER, UNCHANGED AND UNAWARE. It is handed a composed
+      // transform and the drawing off the file, and it draws a house.
+      window.DraftLayoutPlan.drawPlan(
+        ctx, placedToS(entry, spot), entry.saved, entry.levelId,
+        // `shell` asks for the BUILDING rather than the construction
+        // document. The first version of this page did not, and four real
+        // houses came out as blue smudges of dimension string -- at 1 px to
+        // the foot a 44'-7 5/8" label is wider than the house it measures.
+        // A neighborhood is buildings among buildings.
+        { padFt: 0.5 / 12, paperColor: '#f4f2ee', shell: true },
+      );
+    });
+
+    const step = gridStepFt();
+    document.getElementById('s-scale').textContent =
+      `GRID ${step}'  ·  ${state.pxPerFt.toFixed(2)} PX/FT`;
+    document.getElementById('s-count').textContent = state.placed.length === drawn + coarse
+      ? `${state.placed.length} PLACED`
+      : `${state.placed.length} PLACED · ${drawn + coarse} SHOWN`;
+    const sel = state.selected != null ? state.placed[state.selected] : null;
+    const selEntry = sel && state.shelf[sel.shelf];
+    document.getElementById('s-sel').innerHTML = selEntry
+      ? `<b>${selEntry.name}</b> · ${Math.round(sel.angleRad * 180 / Math.PI)}°`
+      : (state.armed != null ? '<b>CLICK THE GROUND TO PLACE</b>' : '—');
+  };
+
+  // ── THE SHELF ────────────────────────────────────────────────────────────
+
+  const renderShelf = () => {
+    shelfEl.innerHTML = '';
+    if (!state.shelf.length) {
+      const empty = document.createElement('div');
+      empty.style.cssText = 'padding:10px 12px; font-family:var(--font-ui); font-size:11px; color:var(--ink-quiet); line-height:1.45;';
+      empty.textContent = 'Nothing imported yet. Import a .draft, or drop one on the ground.';
+      shelfEl.appendChild(empty);
+      return;
+    }
+    state.shelf.forEach((entry, index) => {
+      const card = document.createElement('button');
+      card.className = 'card' + (state.armed === index ? ' armed' : '');
+      card.innerHTML = `<span class="card-name">${entry.name}</span>`
+        + `<span class="card-note">${entry.levelLabel}</span>`;
+      card.onclick = () => {
+        state.armed = state.armed === index ? null : index;
+        state.selected = null;
+        renderShelf(); redraw();
+      };
+      shelfEl.appendChild(card);
+    });
+  };
+
+  // ── IMPORT ───────────────────────────────────────────────────────────────
+  //
+  // The file IS the interface. It is parsed and kept; nothing is normalised
+  // into a second shape, because a second shape is a second thing to keep in
+  // step with Rough Drafter.
+  const addFile = async file => {
+    let saved = null;
+    try { saved = JSON.parse(await file.text()); }
+    catch { alert(`${file.name} is not a drawing this can read.`); return; }
+    const levelId = bestLevel(saved);
+    if (levelId == null) { alert(`${file.name} has no plan walls to draw.`); return; }
+    const entry = {
+      name: file.name.replace(/\.(draft|json|model|plan)$/i, '').toUpperCase(),
+      saved, levelId, levelLabel: levelName(saved, levelId),
+    };
+    entry.foot = footprint(entry);
+    if (!entry.foot) { alert(`${file.name} has nothing to measure.`); return; }
+    state.shelf.push(entry);
+    state.armed = state.shelf.length - 1;
+    renderShelf(); redraw(); save();
+  };
+
+  document.getElementById('import').onclick = () => fileEl.click();
+  fileEl.onchange = async () => {
+    for (const file of fileEl.files) await addFile(file);
+    fileEl.value = '';
+  };
+
+  // Drag a file anywhere onto the ground.
+  let dragDepth = 0;
+  document.addEventListener('dragenter', e => {
+    e.preventDefault(); dragDepth += 1; document.body.classList.add('dragging');
+  });
+  document.addEventListener('dragleave', e => {
+    e.preventDefault(); dragDepth -= 1;
+    if (dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); }
+  });
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop', async e => {
+    e.preventDefault(); dragDepth = 0; document.body.classList.remove('dragging');
+    for (const file of e.dataTransfer.files) await addFile(file);
+  });
+
+  // ── POINTING ─────────────────────────────────────────────────────────────
+
+  const atPoint = (px, py) => {
+    // Topmost first, so the house drawn last is the one you grab.
+    for (let i = state.placed.length - 1; i >= 0; i -= 1) {
+      const spot = state.placed[i];
+      const entry = state.shelf[spot.shelf];
+      if (!entry || !entry.foot) continue;
+      const ground = sToGround(px, py);
+      // Into the house's own frame: undo the placement, then a plain box test.
+      const cos = Math.cos(-spot.angleRad), sin = Math.sin(-spot.angleRad);
+      const dx = ground.x - spot.x, dz = ground.z - spot.z;
+      const lx = dx * cos - dz * sin, lz = dx * sin + dz * cos;
+      if (Math.abs(lx) <= entry.foot.wFt / 2 + 1 && Math.abs(lz) <= entry.foot.hFt / 2 + 1) return i;
+    }
+    return null;
+  };
+
+  const canvasPoint = e => {
+    const box = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    return { px: (e.clientX - box.left) * dpr, py: (e.clientY - box.top) * dpr };
+  };
+
+  let drag = null;
+
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  canvas.addEventListener('pointerdown', e => {
+    const { px, py } = canvasPoint(e);
+    canvas.setPointerCapture(e.pointerId);
+
+    if (e.button === 2 || e.button === 1) {      // pan
+      drag = { kind: 'pan', px, py, camX: state.camX, camZ: state.camZ };
+      return;
+    }
+    if (state.armed != null) {                   // land the armed drawing
+      const ground = sToGround(px, py);
+      state.placed.push({ shelf: state.armed, x: ground.x, z: ground.z, angleRad: 0 });
+      state.selected = state.placed.length - 1;
+      state.armed = null;
+      renderShelf(); redraw(); save();
+      return;
+    }
+    const hit = atPoint(px, py);
+    state.selected = hit;
+    if (hit != null) {
+      const spot = state.placed[hit];
+      const ground = sToGround(px, py);
+      drag = { kind: 'move', index: hit, dx: spot.x - ground.x, dz: spot.z - ground.z };
+    }
+    redraw();
+  });
+
+  canvas.addEventListener('pointermove', e => {
+    if (!drag) return;
+    const { px, py } = canvasPoint(e);
+    if (drag.kind === 'pan') {
+      state.camX = drag.camX - (px - drag.px) / state.pxPerFt;
+      state.camZ = drag.camZ - (py - drag.py) / state.pxPerFt;
+    } else {
+      const ground = sToGround(px, py);
+      const spot = state.placed[drag.index];
+      spot.x = ground.x + drag.dx;
+      spot.z = ground.z + drag.dz;
+    }
+    redraw();
+  });
+
+  canvas.addEventListener('pointerup', e => {
+    if (drag && drag.kind === 'move') save();
+    drag = null;
+    canvas.releasePointerCapture(e.pointerId);
+  });
+
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const { px, py } = canvasPoint(e);
+    const before = sToGround(px, py);
+    const factor = Math.exp(-e.deltaY * 0.0014);
+    state.pxPerFt = Math.min(40, Math.max(0.25, state.pxPerFt * factor));
+    const after = sToGround(px, py);
+    state.camX += before.x - after.x;
+    state.camZ += before.z - after.z;
+    redraw();
+  }, { passive: false });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { state.armed = null; state.selected = null; renderShelf(); redraw(); return; }
+    if (state.selected == null) return;
+    const spot = state.placed[state.selected];
+    if (e.key === '[' || e.key === ']') {
+      const stepDeg = e.shiftKey ? 1 : 15;
+      spot.angleRad += (e.key === ']' ? 1 : -1) * stepDeg * Math.PI / 180;
+      redraw(); save();
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      state.placed.splice(state.selected, 1);
+      state.selected = null;
+      redraw(); save();
+    }
+  });
+
+  window.addEventListener('resize', redraw);
+
+  // ── PERSISTENCE ──────────────────────────────────────────────────────────
+  //
+  // The neighborhood is placements plus the drawings they stand on. Kept in
+  // localStorage so a reload does not lose the afternoon. It is deliberately
+  // NOT the shared `model-drawing` bucket: this program must never be able to
+  // write over the house somebody is drafting.
+  // A PLACEMENT IS FOUR NUMBERS, NOT AN OBJECT.
+  //
+  // Written as `{id, shelf, x, z, angleRad}` it is 98 bytes, because a double
+  // like -21.010416666666668 spends twenty characters on precision no ground
+  // has. Written as `[shelf, x, z, degrees]` with the feet rounded to 1/8"
+  // and the bearing to a whole degree, it is 19 -- FIVE TIMES smaller, and no
+  // worse an answer to "where does this house stand".
+  //
+  // That is what decides whether a large neighborhood fits: 100,000 fat
+  // placements is 9.35 MB and browsers stop a localStorage write at about
+  // five. The same 100,000 lean is 1.81 MB and fits with room to spare.
+  //
+  // The SHELF is not the cost and never was. Four drawings are 0.14 MB
+  // whether they are placed four times or forty thousand, because a
+  // placement references the shelf rather than copying it. Measured: 20,000
+  // houses of four designs stored in 1.16 MB total.
+  //
+  // `id` is dropped: it was the array index wearing a disguise.
+  const round2 = n => Math.round(n * 100) / 100;
+  const deg = rad => Math.round(rad * 180 / Math.PI);
+
+  const save = () => {
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        v: 2,
+        shelf: state.shelf.map(entry => ({
+          name: entry.name, levelId: entry.levelId, levelLabel: entry.levelLabel, saved: entry.saved,
+        })),
+        placed: state.placed.map(spot =>
+          [spot.shelf, round2(spot.x), round2(spot.z), deg(spot.angleRad)]),
+        cam: { x: round2(state.camX), z: round2(state.camZ), pxPerFt: state.pxPerFt },
+      }));
+    } catch (e) {
+      // A REFUSED WRITE IS SAID OUT LOUD. Silently losing an afternoon's
+      // placements because a quota filled is the worst of both worlds.
+      const status = document.getElementById('s-sel');
+      if (status) status.innerHTML = '<b>NOT SAVED — STORAGE FULL</b>';
+    }
+  };
+
+  const load = () => {
+    let raw = null;
+    try {
+      raw = JSON.parse(localStorage.getItem(STORE_KEY)
+        || localStorage.getItem(STORE_KEY_WAS) || 'null');
+    } catch { raw = null; }
+    if (!raw || (raw.v !== 1 && raw.v !== 2)) return;
+    state.shelf = (raw.shelf || []).map(entry => {
+      const rebuilt = { ...entry };
+      rebuilt.foot = footprint(rebuilt);
+      return rebuilt;
+    }).filter(entry => entry.foot);
+    // v1 wrote objects, v2 writes four numbers. Both read back the same, so a
+    // neighborhood saved before the record was slimmed still opens.
+    state.placed = (raw.placed || []).map(spot => (Array.isArray(spot)
+      ? { shelf: spot[0], x: spot[1], z: spot[2], angleRad: (spot[3] || 0) * Math.PI / 180 }
+      : { shelf: spot.shelf, x: spot.x, z: spot.z, angleRad: spot.angleRad || 0 }))
+      .filter(spot => state.shelf[spot.shelf]);
+    if (raw.cam) {
+      state.camX = raw.cam.x || 0; state.camZ = raw.cam.z || 0;
+      state.pxPerFt = raw.cam.pxPerFt || 3;
+    }
+  };
+
+  // ── THE NEIGHBORHOOD AS A FILE ──────────────────────────────────────────
+  //
+  // localStorage is where the afternoon lives; a `.hood` is what you keep,
+  // send, and back up. It is plain JSON, like `.draft`, for the same reason:
+  // the file is the interface, and a format a person can read is a format a
+  // second program can be written against without asking permission.
+  //
+  // SHAPED FOR A TIER ABOVE IT, THOUGH NOTHING BUILDS ONE YET. Movie's
+  // ladder is NEIGHBORHOOD / CITY / STATE, each placing the one below, and
+  // the cheap half of that is decided here rather than later:
+  //
+  //   `extentFt`   the ground this neighborhood occupies, WRITTEN DOWN. A
+  //                CITY can frame it, cull it and draw it coarse without
+  //                parsing a single house -- which is the whole reason a
+  //                tiered thing stays fast. Derived on save, never edited.
+  //   `placements` [design, x, z, degrees], the same four numbers a CITY
+  //                would use to place a neighborhood. One record shape all
+  //                the way up.
+  //   `designs`    the drawings, once each, however many times placed.
+  //
+  // Nothing here reads `extentFt` back -- it is written for a reader that
+  // does not exist. That is deliberate and it is the one thing in this file
+  // built for later, because it costs nothing now and cannot be added to
+  // files already in the wild.
+  const neighborhoodExtent = () => {
+    if (!state.placed.length) return null;
+    let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+    state.placed.forEach(spot => {
+      const entry = state.shelf[spot.shelf];
+      if (!entry || !entry.foot) return;
+      // The circle round the footprint, which rotation cannot grow.
+      const r = Math.hypot(entry.foot.wFt, entry.foot.hFt) / 2;
+      minX = Math.min(minX, spot.x - r); maxX = Math.max(maxX, spot.x + r);
+      minZ = Math.min(minZ, spot.z - r); maxZ = Math.max(maxZ, spot.z + r);
+    });
+    return Number.isFinite(minX)
+      ? { minX: round2(minX), minZ: round2(minZ), maxX: round2(maxX), maxZ: round2(maxZ) }
+      : null;
+  };
+
+  const hoodFile = () => ({
+    format: 'rough-drafter-neighborhood',
+    version: 1,
+    extentFt: neighborhoodExtent(),
+    designs: state.shelf.map(entry => ({
+      name: entry.name, levelId: entry.levelId, levelLabel: entry.levelLabel,
+      drawing: entry.saved,
+    })),
+    placements: state.placed.map(spot =>
+      [spot.shelf, round2(spot.x), round2(spot.z), deg(spot.angleRad)]),
+  });
+
+  document.getElementById('save').onclick = () => {
+    const blob = new Blob([JSON.stringify(hoodFile())], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'neighborhood.hood';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+
+  document.getElementById('open').onclick = () => document.getElementById('hoodfile').click();
+  document.getElementById('hoodfile').onchange = async e => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    let raw = null;
+    try { raw = JSON.parse(await file.text()); } catch { raw = null; }
+    if (!raw || !/^rough-drafter-neighbou?rhood$/.test(String(raw.format || ''))) {
+      alert(`${file.name} is not a neighborhood file.`);
+      return;
+    }
+    state.shelf = (raw.designs || []).map(design => {
+      const entry = {
+        name: design.name, levelId: design.levelId,
+        levelLabel: design.levelLabel, saved: design.drawing,
+      };
+      entry.foot = footprint(entry);
+      return entry;
+    }).filter(entry => entry.foot);
+    state.placed = (raw.placements || [])
+      .map(spot => ({ shelf: spot[0], x: spot[1], z: spot[2], angleRad: (spot[3] || 0) * Math.PI / 180 }))
+      .filter(spot => state.shelf[spot.shelf]);
+    state.armed = null; state.selected = null;
+    // Frame what was opened, so a file lands in view rather than off it.
+    const ext = raw.extentFt || neighborhoodExtent();
+    if (ext) {
+      state.camX = (ext.minX + ext.maxX) / 2;
+      state.camZ = (ext.minZ + ext.maxZ) / 2;
+      const box = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const spanX = Math.max(1, ext.maxX - ext.minX), spanZ = Math.max(1, ext.maxZ - ext.minZ);
+      state.pxPerFt = Math.min(6, Math.max(0.25, Math.min(
+        (box.width * dpr * 0.85) / spanX, (box.height * dpr * 0.85) / spanZ)));
+    }
+    renderShelf(); redraw(); save();
+  };
+
+  load();
+  renderShelf();
+  redraw();
+  document.body.dataset.neighborhoodReady = '1';
+})();
+</script>
+</body>
+</html>

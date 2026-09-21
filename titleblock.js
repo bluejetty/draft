@@ -27,7 +27,18 @@ if (!window.DraftTitleblock) {
       logoSrc: './assets/rough-drafter-logo.png',
       placement: 'right',
       cornerRadiusIn: 0,
-      logoOnly: false,
+      // LOGO ONLY, because the logo IS the wordmark (Movie, 21 Sep: "take off
+      // the ROUGH DRAFTER text in the logo area and increase the logo size (it
+      // has the ROUGH DRAFTER already on it)"). assets/rough-drafter-logo.png
+      // is a rolled blueprint with ROUGH DRAFTER set across it in letters
+      // taller than anything else in the cell, so the wordmark underneath was
+      // the company name printed twice, half an inch apart.
+      //
+      // THE FLAG WAS ALREADY HERE AND ALREADY DID BOTH HALVES -- the block
+      // that reads it says so: "A logoOnly style skips the wordmark -- its
+      // logo carries the name and fills ~75% of the cell instead." Dropping
+      // the text and growing the mark are one switch, not two changes.
+      logoOnly: true,
       arrowDivider: true,
     }),
     Object.freeze({

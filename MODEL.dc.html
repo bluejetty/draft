@@ -2378,6 +2378,32 @@ const GARAGE_MAN_DOOR_FT = (2 * 12 + 8) / 12;
 // serves as the exterior wall there — 2x6, ICF, the insulated basement
 // wall — never a hard-coded thickness.
 const STAIR_OPENING_FINISH_IN = 1;
+// THE ROUGH OPENING IS BIGGER THAN THE STAIR AT BOTH ENDS, and for opposite
+// reasons. Movie, 21 Sep, reading a stair section:
+//
+//   "the nosing of the stair shouldn't be part of the floor opening ... 1.5"
+//    of material if needed for stair backing and then 1/2" for the stair
+//    nosing"                                                    -- the TOP
+//   "at bottom it is opposite nosing goes over the opening min. 2""
+//   "could be more"
+//
+// TOP: the hole is cut 2" BEHIND the nosing, so the nosing and the backing
+// that carries it have somewhere to be. Cut the hole at the nosing -- which
+// is what this did until now, `u: 0` being both lines at once -- and the
+// backing has no floor to fasten to.
+//
+// BOTTOM: the floor's own edge OVERHANGS the hole by the same 2", so the
+// structural edge sits 2" further down the flight than the finished one.
+//
+// So the top and the bottom both push the hole OUT by 2" past the finished
+// line, one by pulling the header back and one by letting the floor reach
+// over. It is one number because it is the same build-up either way.
+//
+// A MINIMUM, NOT A FIGURE -- "could be more". Nothing here may round it
+// DOWN; a thicker nosing or a deeper backing only ever grows it.
+const STAIR_NOSING_BACKING_IN = 1.5;   // the stair backing behind the nosing
+const STAIR_NOSING_IN = 0.5;           // the nosing itself
+const STAIR_OPENING_NOSING_MIN_IN = STAIR_NOSING_BACKING_IN + STAIR_NOSING_IN;
 const DEFAULT_STAIR_HEADROOM_FT = (6 * 12 + 10) / 12;
 // BUILD HOUSE cuts each placed stair's opening itself: the stair is treated
 // as rough intent and gets a nudge first — at least this clear of any beam
@@ -8726,18 +8752,37 @@ class Component extends DCLogic {
     }
 
     // The two points that matter: the floor opening edge and the landing.
+    // THE HEADER IS NOT THE NOSING, and this section drew them as one line
+    // until Movie read it: "the nosing of the stair shouldn't be part of the
+    // floor opening". The nosing stays at u = 0, the cut sits
+    // STAIR_OPENING_NOSING_MIN_IN behind it, and the strip between them is
+    // the 1/2" nosing and the 1 1/2" of backing that carries it -- which is
+    // the floor the hole must NOT take away.
+    //
+    // Drawn as it is cut, so the section and _stairOpeningFootprint cannot
+    // tell a drafter two different things about the same edge.
+    const openU = -STAIR_OPENING_NOSING_MIN_IN / 12;
     ctx.strokeStyle = '#b04050';
     ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.moveTo(uToX(0), yOf(0)); ctx.lineTo(uToX(0), yOf(-floorFt));
+    ctx.moveTo(uToX(openU), yOf(0)); ctx.lineTo(uToX(openU), yOf(-floorFt));
     ctx.stroke();
     ctx.beginPath();
     ctx.moveTo(uToX(landU), yOf(-layout.riseFt)); ctx.lineTo(rect.x + rect.w, yOf(-layout.riseFt));
     ctx.stroke();
+    // The build-up itself, between the cut and the nosing: a thin tick at the
+    // floor line so the 2" reads as a thing rather than as slack.
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(uToX(openU), yOf(0)); ctx.lineTo(uToX(0), yOf(0));
+    ctx.stroke();
     ctx.fillStyle = '#b04050';
     ctx.font = noteFont;
     ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
-    ctx.fillText('EDGE OF STAIR OPENING', uToX(0) - 4, yOf(0) - 3);
+    ctx.fillText('EDGE OF STAIR OPENING', uToX(openU) - 4, yOf(0) - 3);
+    ctx.textAlign = 'left';
+    ctx.fillText(`${formatInchesOnly(STAIR_OPENING_NOSING_MIN_IN)} MIN NOSING + BACKING`,
+      uToX(0) + 4, yOf(0) - 3);
     ctx.textAlign = 'left';
     if (descent) ctx.fillText(`LANDS ON ${descent.landing.toUpperCase()}`, uToX(dev.runFt) + 8, yOf(-layout.riseFt) - 3);
 
@@ -8872,15 +8917,23 @@ class Component extends DCLogic {
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     ctx.fillText(`DN — ${layout.risers}R @ ${formatInchesOnly(layout.riserIn)}`, (x0 + x1) / 2, vMid - 3);
 
-    // Opening edge emphasised across the stair width at the top nosing.
+    // Opening edge emphasised across the stair width -- BEHIND the top nosing
+    // by STAIR_OPENING_NOSING_MIN_IN, the same place the section draws it and
+    // the same place _stairOpeningFootprint cuts it.
+    //
+    // THE TWO PANES MUST AGREE and `stair-view.spec.js` is what holds them to
+    // it: it measures the opening mark's x in each pane and allows 2 px
+    // between them. Moving the section's edge and leaving this one gave 4,
+    // which is how the disagreement was caught rather than shipped.
+    const xOpen = uToX(-STAIR_OPENING_NOSING_MIN_IN / 12);
     ctx.strokeStyle = '#b04050';
     ctx.lineWidth = 2.5;
     ctx.beginPath();
-    ctx.moveTo(x0, vMid - half - 6); ctx.lineTo(x0, vMid + half + 6);
+    ctx.moveTo(xOpen, vMid - half - 6); ctx.lineTo(xOpen, vMid + half + 6);
     ctx.stroke();
     ctx.fillStyle = '#b04050';
     ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
-    ctx.fillText('EDGE OF STAIR OPENING', x0 - 4, vMid - half - 8);
+    ctx.fillText('EDGE OF STAIR OPENING', xOpen - 4, vMid - half - 8);
     ctx.restore();
   }
 
@@ -16261,12 +16314,24 @@ class Component extends DCLogic {
     const runStep = STAIR_TREAD_RUN_IN / 12;
     const inchUp = ft => Math.ceil(ft * 12 - 0.0001) / 12;
     const w = stair.widthFt;
+    // THE HEADER SITS BEHIND THE NOSING, not on it. `u = 0` is the top nosing
+    // (drawing-format.js:598 -- "start is the upper-floor nosing"), and this
+    // function used to start the hole there, so the nosing line and the cut
+    // line were one line. They are not: the nosing needs 1/2" of itself and
+    // 1 1/2" of backing behind it, and all of that has to be INSIDE the hole
+    // rather than fastened to air.
+    //
+    // Only this end moves. The far end is set by headroom -- how far down the
+    // flight the walking line has to travel before a head clears the floor --
+    // and Movie confirmed it stays that way: "the opening above is effected
+    // by headroom as well on that end".
+    const noseFt = STAIR_OPENING_NOSING_MIN_IN / 12;
     let uv;
     if (!split || slots <= split.t1) {
       const capFt = split ? split.t1 * runStep : layout.runFt;
       const lenFt = Math.min(inchUp(slots * runStep), capFt);
       if (!(lenFt > 0)) return null;
-      uv = [{ u: 0, v: -w / 2 }, { u: lenFt, v: -w / 2 }, { u: lenFt, v: w / 2 }, { u: 0, v: w / 2 }];
+      uv = [{ u: -noseFt, v: -w / 2 }, { u: lenFt, v: -w / 2 }, { u: lenFt, v: w / 2 }, { u: -noseFt, v: w / 2 }];
     } else {
       const run1 = split.t1 * runStep;
       const run2 = split.t2 * runStep;
@@ -16279,20 +16344,20 @@ class Component extends DCLogic {
         const u2a = run1 + L / 2 - w / 2;
         const u2b = run1 + L / 2 + w / 2;
         uv = r2c <= 0
-          ? [{ u: 0, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: v1 },
-             { u: run1, v: v1 }, { u: run1, v: w / 2 }, { u: 0, v: w / 2 }]
-          : [{ u: 0, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: v1 },
+          ? [{ u: -noseFt, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: v1 },
+             { u: run1, v: v1 }, { u: run1, v: w / 2 }, { u: -noseFt, v: w / 2 }]
+          : [{ u: -noseFt, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: v1 },
              { u: u2b, v: v1 }, { u: u2b, v: v1 + r2c }, { u: u2a, v: v1 + r2c },
-             { u: u2a, v: v1 }, { u: run1, v: v1 }, { u: run1, v: w / 2 }, { u: 0, v: w / 2 }];
+             { u: u2a, v: v1 }, { u: run1, v: v1 }, { u: run1, v: w / 2 }, { u: -noseFt, v: w / 2 }];
       } else {
         const vTop = w + STAIR_U_GAP_IN / 12 + w / 2;
         const vLow = w / 2 + STAIR_U_GAP_IN / 12;
         uv = r2c <= 0
-          ? [{ u: 0, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: vTop },
-             { u: run1, v: vTop }, { u: run1, v: w / 2 }, { u: 0, v: w / 2 }]
-          : [{ u: 0, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: vTop },
+          ? [{ u: -noseFt, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: vTop },
+             { u: run1, v: vTop }, { u: run1, v: w / 2 }, { u: -noseFt, v: w / 2 }]
+          : [{ u: -noseFt, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: vTop },
              { u: run1 - r2c, v: vTop }, { u: run1 - r2c, v: vLow }, { u: run1, v: vLow },
-             { u: run1, v: w / 2 }, { u: 0, v: w / 2 }];
+             { u: run1, v: w / 2 }, { u: -noseFt, v: w / 2 }];
       }
     }
     const dedup = uv.filter((pt, index) => {

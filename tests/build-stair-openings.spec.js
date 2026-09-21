@@ -61,6 +61,11 @@ function bbox(points) {
 // treads -- reasoning it in tread steps is what made this look unrelated to
 // the foundation once already.
 const OPEN_LEN_FT = 124 / 12;
+// THE TOP OF THE HOLE SITS 2" BEHIND THE NOSING (Movie, 21 Sep): the nosing
+// needs 1/2" of itself and 1 1/2" of backing, and that material has to be
+// floor rather than air. Only the nosing end moves -- the far end is still
+// set by headroom -- so every expectation below gains NOSE_FT at minX alone.
+const NOSE_FT = 2 / 12;
 const FINISH_FT = 1 / 24; // half the 1" finish allowance per side
 const HALF_W = 1.5 + FINISH_FT;
 
@@ -88,7 +93,7 @@ test('BUILD HOUSE cuts the stair opening; a re-build keeps it', async ({ page })
   // A straight run cuts a rectangle: headroom length + finish on every side.
   expect(opening.points).toHaveLength(4);
   const box = bbox(opening.points);
-  expect(Math.abs(box.minX - (-5 - FINISH_FT))).toBeLessThan(0.02);
+  expect(Math.abs(box.minX - (-5 - FINISH_FT - NOSE_FT))).toBeLessThan(0.02);
   expect(Math.abs(box.maxX - (-5 + OPEN_LEN_FT + FINISH_FT))).toBeLessThan(0.02);
   expect(Math.abs(box.minZ + HALF_W)).toBeLessThan(0.02);
   expect(Math.abs(box.maxZ - HALF_W)).toBeLessThan(0.02);
@@ -264,7 +269,7 @@ test('an L stair cuts an L-shaped well over its landing and second run', async (
   expect(opening.points).toHaveLength(10);
   const box = bbox(opening.points);
   const run1 = 5, land = 3.125, run2Cut = 54 / 12;
-  expect(Math.abs(box.minX - (-4 - FINISH_FT))).toBeLessThan(0.02);
+  expect(Math.abs(box.minX - (-4 - FINISH_FT - NOSE_FT))).toBeLessThan(0.02);
   expect(Math.abs(box.maxX - (-4 + run1 + land + FINISH_FT))).toBeLessThan(0.02);
   expect(Math.abs(box.minZ - (-4 - HALF_W))).toBeLessThan(0.02);
   // The turn side reaches across the landing and down the second run.

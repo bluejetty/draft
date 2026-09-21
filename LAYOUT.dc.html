@@ -15,6 +15,22 @@
 <script src="./render-2d.js"></script>
 <script src="./geometry-2d.js"></script>
 <script src="./layer-views.js"></script>
+<!-- THE PLAN IS COMPOSED ONCE AND THIS PAGE IS ONE OF THE CALLERS. It carries
+     the draw order and the level/view filtering the Model Space uses, so a
+     construction sheet and the drafter's screen cannot disagree about what a
+     plan contains. layout-plan.js turns this page's saved JSON into the
+     entities it draws; the drawing itself is not this page's to own. -->
+<!-- The stair arithmetic the plan composition hands to render-2d's painter:
+     MODEL.dc.html's own helpers for it are two-line wrappers over this. -->
+<script src="./stair-geometry.js"></script>
+<!-- What a fixture IS on a plan. A washroom, a kitchen and a laundry are all
+     drawn as wall-hosted fixtures, so a construction sheet that cannot resolve
+     one draws an empty room where the three-piece WC should be. closets.js is
+     here because the closet is a fixture too and the painter reads its
+     numbers. -->
+<script src="./closets.js"></script>
+<script src="./fixture-geometry.js"></script>
+<script src="./plan-composition.js"></script>
 <script src="./layout-plan.js"></script>
 <script src="./formatters.js"></script>
 <script src="./cut-view.js"></script>
@@ -263,6 +279,15 @@ const scaleFamilyFor = view => (view && view.kind === 'site' ? 'site' : 'archite
 // someone back into this arithmetic. Feet per side.
 // (The caption below the frame is COMPOSE_LABEL_IN and is counted there —
 // do not add it again here.)
+//
+// AND `dimensions` STAYS ZERO FOR A PLAN ON PURPOSE, now that plans draw
+// theirs (21 Sep). An allowance is a guess standing in for a measurement, and
+// `_planBounds` measures: it takes the real extent of the strings in the
+// drawing, which was 4.5 ft on one side and 3 ft on the other of the first
+// house it met. A constant here would have to be the worst case for every
+// drawing, and would then be wrong -- too roomy -- for all the rest.
+// It is still the right hook for an ELEVATION, where dimensions are not drawn
+// yet and so cannot be measured, which is why it keeps its name and its zero.
 const VIEW_ALLOWANCE_FT = Object.freeze({
   dimensions: 0,   // strings standing off the object
   markers: 0,      // elevation / level markers hanging off the sides
@@ -463,10 +488,26 @@ class Component extends DCLogic {
       .map(level => ({ ...level, wallCount: counts.get(level.id) }));
   }
 
+  // WHAT THE VIEWPORT HAS TO HOLD, which is not the same question as where the
+  // walls are. This asked `wallBounds` until 21 Sep, and that was right only
+  // while walls were the only thing a plan viewport drew.
+  //
+  // TWO THINGS WERE FALLING OFF THE SHEET because of it. A plan's DIMENSION
+  // STRINGS stand 3 to 4.5 ft outside the walls they measure, so the viewport
+  // was clipping away the very numbers it exists to carry -- and on screen
+  // that is a pan, on paper it is gone. And a ROOF or SITE level holds no
+  // walls at all, so `wallBounds` returned null there and `_viewportRectIn`
+  // fell back to its 2-inch placeholder: a roof plan framed into a postage
+  // stamp. MODEL.html's `allPoints` names that second one in its own comment
+  // and it is the same gap, one page over.
+  //
+  // `planBounds` follows the Model Space's five collections and adds the
+  // dimensions; see the block above it in layout-plan.js for why the fifth
+  // one is the sheet's alone.
   _planBounds(levelId) {
     if (!this._planBoundsByLevel.has(levelId)) {
-      const walls = window.DraftLayoutPlan.planWalls(this._saved, levelId);
-      this._planBoundsByLevel.set(levelId, window.DraftLayoutPlan.wallBounds(walls));
+      this._planBoundsByLevel.set(levelId,
+        window.DraftLayoutPlan.planBounds(this._saved, levelId));
     }
     return this._planBoundsByLevel.get(levelId);
   }
@@ -1521,6 +1562,41 @@ class Component extends DCLogic {
     }
   }
 
+  // THE PICKED SCALE IS A CEILING, NOT A COMMAND (Movie, 21 Sep: "needs more
+  // compact scale", and "on model.dc it would first try ... and then if it
+  // didn't fit it would try the next scale down and check to see if it fit and
+  // then maybe one more down").
+  //
+  // A HAND-PLACED VIEWPORT USED TO TAKE `activeScale` AND NOTHING ELSE, so a
+  // 66 ft house placed at the 1/4" working scale ran off an 11x17 sheet and
+  // stayed there -- `_setScale` writes `activeScale`, which is read HERE and
+  // nowhere else, so there was no way to bring it back short of deleting the
+  // viewport and placing it again.
+  //
+  // The composer has walked a ladder since it was written (`_autoScaleFor`,
+  // AUTO_SCALE_PREFS largest-first, first rung that fits). This is the same
+  // walk on the other path. The drafter's pick is honoured as the LARGEST
+  // scale they are willing to accept rather than as a fixed one: the walk
+  // starts there and steps down, so a plan that already fits is placed at
+  // exactly what they asked for and only an overflowing one moves.
+  //
+  // NOTHING FITS, NOTHING IS REFUSED. A drawing too big for the paper at every
+  // rung is placed at the smallest rung rather than not placed at all -- the
+  // sheet is the drafter's to arrange, and a viewport they can see and move
+  // beats a press that silently did nothing.
+  _placementPif(levelId) {
+    const start = this.state.activeScale;
+    const foot = this._viewFootprintFt({ kind: 'plan', levelId });
+    if (!foot) return SCALES[start].pif;
+    const region = this._composeRegionIn();
+    const fits = pif => foot.wFt * pif <= region.w
+      && foot.hFt * pif + COMPOSE_LABEL_IN <= region.h;
+    for (let i = start; i >= 0; i -= 1) {
+      if (fits(SCALES[i].pif)) return SCALES[i].pif;
+    }
+    return SCALES[0].pif;
+  }
+
   _placeViewport(ptIn) {
     const levelId = this.state.activeLevelId;
     if (!this._saved || levelId == null) {
@@ -1531,7 +1607,7 @@ class Component extends DCLogic {
       id: this.state.nextViewportId,
       kind: 'plan',
       levelId,
-      pif: SCALES[this.state.activeScale].pif,
+      pif: this._placementPif(levelId),
       xIn: ptIn.xIn,
       yIn: ptIn.yIn,
       sheet: this.state.activeSheet,
