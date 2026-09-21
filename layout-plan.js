@@ -79,6 +79,58 @@ if (!window.DraftLayoutPlan) {
     return { minX, minZ, maxX, maxZ };
   }
 
+  // ── WHAT A PLAN CLAIMS ON PAPER ──────────────────────────────────────────
+  //
+  // `wallBounds` above answers "where are the walls", and for a long time that
+  // was also the answer to "how big is this viewport" -- which was right only
+  // while walls were the only thing a sheet drew. They are not any more.
+  //
+  // THE MODEL SPACE ALREADY HAD THE SHAPE OF THIS ANSWER and it is followed
+  // here rather than invented: MODEL.html's `allPoints` fits a plan over
+  // WALLS, LINES, FLOORS, and -- when it needs the whole level -- ROOFS and
+  // OUTLINES, with its own comment pointing at MODEL.dc.html:7269's thumbnail
+  // bounds as where the five came from. A ROOF or SITE level holds no walls at
+  // all, so a bounds over walls alone finds nothing there and frames the level
+  // off the side of the sheet.
+  //
+  // AND THEN THE ONE THING IT NEEDED. Neither page counts DIMENSIONS, and on
+  // screen that is correct -- a dimension string outside the fit is one pan
+  // away, and including them would re-zoom every drawing the drafter opens.
+  // A SHEET CANNOT PAN. What falls outside a viewport is not further away, it
+  // is gone, and on Movie's own drawing the strings stand 3 to 4.5 ft outside
+  // the walls they measure -- so the sheet was clipping off the very numbers
+  // it exists to carry. Measured rather than allowed for, because 4.5 ft is
+  // this drawing's answer and not every drawing's.
+  //
+  // WALLS STILL COUNT THEIR THICKNESS. A wall's record is its reference LINE,
+  // and the ink is half an assembly either side of it, which is the whole
+  // reason `wallBounds` exists and why this reuses it rather than reading
+  // start and end points like the other four collections.
+  //
+  // LEVEL-WIDE, NO VIEW FILTER, matching what `_planBounds` already asked
+  // `planWalls` for. A viewport sized over every view of a level is a superset
+  // of the one drawing it shows, and for a FRAME a superset is safe in the one
+  // direction that matters: it can be roomier than it needs, never tighter.
+  function planBounds(saved, levelId) {
+    const box = wallBounds(planWalls(saved, levelId));
+    let minX = box ? box.minX : Infinity, maxX = box ? box.maxX : -Infinity;
+    let minZ = box ? box.minZ : Infinity, maxZ = box ? box.maxZ : -Infinity;
+    const eat = pt => {
+      const x = num(pt?.x), z = num(pt?.z);
+      if (x === null || z === null) return;
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+    };
+    const onLevel = key => (Array.isArray(saved?.[key]) ? saved[key] : [])
+      .filter(item => item?.levelId === levelId);
+    onLevel('lines').forEach(item => { eat(item.start); eat(item.end); });
+    onLevel('dimensions').forEach(item => { eat(item.start); eat(item.end); });
+    ['floors', 'roofs', 'outlines'].forEach(key => onLevel(key)
+      .forEach(item => (Array.isArray(item.points) ? item.points : []).forEach(eat)));
+    if (minX > maxX) return null;
+    return { minX, minZ, maxX, maxZ };
+  }
+
   // ── THREE TWINS RETIRED HERE, and naming them is the point ───────────────
   //
   // This file used to carry its own `wallJoins` (68 lines), its own
@@ -225,6 +277,7 @@ if (!window.DraftLayoutPlan) {
     planWalls,
     planOpenings,
     wallBounds,
+    planBounds,
     drawPlan,
   });
 })();

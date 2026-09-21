@@ -52,12 +52,20 @@ Every number below is off the fixture.
     ridge elevation                 12.76 ft
 
     2ND FL level elevation           9.00 ft
-    DEFAULT_WINDOW sill 3.0          12.00 ft
-    DEFAULT_WINDOW head 6.5          15.50 ft
+    sillHeight 2.5, off the record   11.50 ft
+    headHeight 6.667, off the record 15.67 ft
 
-So the roof surface crosses the window **9 inches above its sill at the ridge**,
-and the roof falls only 0.67 ft over the 2 ft to each window edge — 12.09 ft
-against a 12.00 ft sill — so it clips the bottom of the window across the
+**Corrected 21 Sep.** The first version of this board read those two off
+`auto-windows.js`'s `DEFAULT_WINDOW` (sill 3.0, head 6.5) rather than off the
+drawing. The records carry their own — `sillHeight: 2.5`, `headHeight:
+6.667` — so the window is 11.50 to 15.67 ft, not 12.00 to 15.50. **The
+conclusion did not move and the margin got worse**, which is the only reason
+the error was survivable: the ridge clears the sill by 1.26 ft rather than
+0.75.
+
+So the roof surface crosses the window **15 inches above its sill at the
+ridge**, and it falls only 0.67 ft over the 2 ft to each window edge — 12.09 ft
+against an 11.50 ft sill — so it clips the bottom of the window across the
 **whole** 4 ft of it, not just at one corner. That is precisely the line Movie
 can see running through the glass.
 
@@ -83,12 +91,17 @@ it clears the roof, head unchanged, is the whole of it:
 
     ridge at                    12.76 ft
     sill needed, + clearance    ~12.9–13.1 ft  → 3.9–4.1 ft above the floor
-    head stays                  15.50 ft
-    resulting window            ~2.4 ft tall, against 3.5 ft
+    head stays                  15.67 ft
+    resulting window            ~2.6–2.8 ft tall, against 4.17 ft
 
 That is close to what `WC_WINDOW` already is — sill 4.5, 2.0 ft tall — so the
 app already has the vocabulary for a short high window and this is a third
 entry beside `DEFAULT_WINDOW` and `WC_WINDOW` rather than a new mechanism.
+
+**And the sill is a per-opening record, not only a catalogue default.** Every
+fenestration in this drawing carries its own `sillHeight` and `headHeight`, so
+a placer that wanted to raise one window has somewhere to write the answer
+without touching the catalogue.
 
 **What has to be decided before it is built:**
 

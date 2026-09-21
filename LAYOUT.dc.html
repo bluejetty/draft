@@ -269,6 +269,15 @@ const scaleFamilyFor = view => (view && view.kind === 'site' ? 'site' : 'archite
 // someone back into this arithmetic. Feet per side.
 // (The caption below the frame is COMPOSE_LABEL_IN and is counted there —
 // do not add it again here.)
+//
+// AND `dimensions` STAYS ZERO FOR A PLAN ON PURPOSE, now that plans draw
+// theirs (21 Sep). An allowance is a guess standing in for a measurement, and
+// `_planBounds` measures: it takes the real extent of the strings in the
+// drawing, which was 4.5 ft on one side and 3 ft on the other of the first
+// house it met. A constant here would have to be the worst case for every
+// drawing, and would then be wrong -- too roomy -- for all the rest.
+// It is still the right hook for an ELEVATION, where dimensions are not drawn
+// yet and so cannot be measured, which is why it keeps its name and its zero.
 const VIEW_ALLOWANCE_FT = Object.freeze({
   dimensions: 0,   // strings standing off the object
   markers: 0,      // elevation / level markers hanging off the sides
@@ -469,10 +478,26 @@ class Component extends DCLogic {
       .map(level => ({ ...level, wallCount: counts.get(level.id) }));
   }
 
+  // WHAT THE VIEWPORT HAS TO HOLD, which is not the same question as where the
+  // walls are. This asked `wallBounds` until 21 Sep, and that was right only
+  // while walls were the only thing a plan viewport drew.
+  //
+  // TWO THINGS WERE FALLING OFF THE SHEET because of it. A plan's DIMENSION
+  // STRINGS stand 3 to 4.5 ft outside the walls they measure, so the viewport
+  // was clipping away the very numbers it exists to carry -- and on screen
+  // that is a pan, on paper it is gone. And a ROOF or SITE level holds no
+  // walls at all, so `wallBounds` returned null there and `_viewportRectIn`
+  // fell back to its 2-inch placeholder: a roof plan framed into a postage
+  // stamp. MODEL.html's `allPoints` names that second one in its own comment
+  // and it is the same gap, one page over.
+  //
+  // `planBounds` follows the Model Space's five collections and adds the
+  // dimensions; see the block above it in layout-plan.js for why the fifth
+  // one is the sheet's alone.
   _planBounds(levelId) {
     if (!this._planBoundsByLevel.has(levelId)) {
-      const walls = window.DraftLayoutPlan.planWalls(this._saved, levelId);
-      this._planBoundsByLevel.set(levelId, window.DraftLayoutPlan.wallBounds(walls));
+      this._planBoundsByLevel.set(levelId,
+        window.DraftLayoutPlan.planBounds(this._saved, levelId));
     }
     return this._planBoundsByLevel.get(levelId);
   }
