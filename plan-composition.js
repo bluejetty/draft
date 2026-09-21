@@ -106,9 +106,15 @@ if (!window.DraftPlanComposition) {
     const dimensions = pick(env.dimensions).filter(dimension => shows(dimension.layer));
     const notes = pick(env.notes).filter(note => shows(note.layer));
 
-    floors.forEach(floor => render.drawFloor2D(ctx, toS, floor, {}, env.floorEnv));
-    shapes.forEach(shape => render.drawShape2D(ctx, toS, shape, {}, env.shapeEnv));
-    roofs.forEach(roof => render.drawRoof2D(ctx, toS, roof, {}, env.roofEnv));
+    // A STAGE WITH NO ENV IS SKIPPED, NOT GUESSED. These painters read their
+    // colours, their formatters and their host lookups straight off the env --
+    // `drawFloor2D` reaches for `env.colors.fill` with no guard at all -- so a
+    // caller that cannot honestly supply one would not draw a paler floor, it
+    // would throw in the middle of a sheet. A caller says what it can draw by
+    // supplying the env for it, and this is where that is honoured.
+    if (env.floorEnv) floors.forEach(floor => render.drawFloor2D(ctx, toS, floor, {}, env.floorEnv));
+    if (env.shapeEnv) shapes.forEach(shape => render.drawShape2D(ctx, toS, shape, {}, env.shapeEnv));
+    if (env.roofEnv) roofs.forEach(roof => render.drawRoof2D(ctx, toS, roof, {}, env.roofEnv));
 
     const joins = env.wallJoins ? env.wallJoins(walls) : null;
     walls.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv));
@@ -128,8 +134,12 @@ if (!window.DraftPlanComposition) {
     // DIMENSIONS AND NOTES GO LAST of what this module draws, over the
     // geometry they measure. The model's overlay puts its selection halos
     // above even these, which is an editor step and stays with the editor.
-    dimensions.forEach(dimension => render.drawDimension2D(ctx, toS, dimension, {}, env.dimensionEnv));
-    notes.forEach(note => render.drawNoteScreen2D(ctx, toS(note.anchor), toS(note.text), note, {}, env.noteEnv));
+    if (env.dimensionEnv) {
+      dimensions.forEach(dimension => render.drawDimension2D(ctx, toS, dimension, {}, env.dimensionEnv));
+    }
+    if (env.noteEnv) {
+      notes.forEach(note => render.drawNoteScreen2D(ctx, toS(note.anchor), toS(note.text), note, {}, env.noteEnv));
+    }
   };
 
   // ── OPENINGS, AND THE TWO THINGS WRITTEN BESIDE THEM ─────────────────────

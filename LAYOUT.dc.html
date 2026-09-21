@@ -15,6 +15,12 @@
 <script src="./render-2d.js"></script>
 <script src="./geometry-2d.js"></script>
 <script src="./layer-views.js"></script>
+<!-- THE PLAN IS COMPOSED ONCE AND THIS PAGE IS ONE OF THE CALLERS. It carries
+     the draw order and the level/view filtering the Model Space uses, so a
+     construction sheet and the drafter's screen cannot disagree about what a
+     plan contains. layout-plan.js turns this page's saved JSON into the
+     entities it draws; the drawing itself is not this page's to own. -->
+<script src="./plan-composition.js"></script>
 <script src="./layout-plan.js"></script>
 <script src="./formatters.js"></script>
 <script src="./cut-view.js"></script>

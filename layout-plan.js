@@ -63,69 +63,6 @@ if (!window.DraftLayoutPlan) {
         && num(opening.width) > 0);
   }
 
-  // Same shared-endpoint join index the Model Space builds: two non-collinear
-  // walls form a miter, collinear pairs are continuous, three entries with a
-  // collinear pair form a T, larger nodes suppress ambiguous cap lines.
-  function wallJoins(walls) {
-    const endpointGroups = new Map();
-    const add = (seg, pt, at) => {
-      if (!endpointGroups.has(pt)) endpointGroups.set(pt, []);
-      endpointGroups.get(pt).push({ seg, at });
-    };
-    walls.forEach(w => {
-      add(w, w.start, 'start');
-      add(w, w.end, 'end');
-    });
-    const joins = new Map();
-    const outward = entry => {
-      const vertex = entry.at === 'start' ? entry.seg.start : entry.seg.end;
-      const other = entry.at === 'start' ? entry.seg.end : entry.seg.start;
-      const dx = other.x - vertex.x, dz = other.z - vertex.z;
-      const len = Math.sqrt(dx * dx + dz * dz);
-      return len < 0.001 ? null : { x: dx / len, z: dz / len };
-    };
-    for (const [vertex, entries] of endpointGroups) {
-      if (entries.length === 2) {
-        const a = outward(entries[0]), b = outward(entries[1]);
-        if (a && b) {
-          if (Math.abs(a.x * b.z - a.z * b.x) > 0.001) {
-            joins.set(vertex, { type: 'miter', entries });
-          } else if (a.x * b.x + a.z * b.z < -0.995) {
-            joins.set(vertex, { type: 'continuation', entries });
-          }
-        }
-        continue;
-      }
-      if (entries.length === 3) {
-        let hostPair = null;
-        let strongestOpposition = -1;
-        for (let i = 0; i < entries.length; i++) {
-          for (let j = i + 1; j < entries.length; j++) {
-            const a = outward(entries[i]), b = outward(entries[j]);
-            if (!a || !b) continue;
-            const opposition = -(a.x * b.x + a.z * b.z);
-            if (opposition > strongestOpposition) {
-              strongestOpposition = opposition;
-              hostPair = [entries[i], entries[j]];
-            }
-          }
-        }
-        if (hostPair && strongestOpposition > 0.995) {
-          joins.set(vertex, {
-            type: 'tee',
-            host: hostPair,
-            stem: entries.find(entry => !hostPair.includes(entry)),
-          });
-        }
-        continue;
-      }
-      if (entries.length >= 4) {
-        joins.set(vertex, { type: 'multi', entries });
-      }
-    }
-    return joins;
-  }
-
   // Extents of the walls in model feet, outside faces included, so the
   // viewport centres on the drawn plan rather than on the reference lines.
   function wallBounds(walls) {
@@ -142,125 +79,144 @@ if (!window.DraftLayoutPlan) {
     return { minX, minZ, maxX, maxZ };
   }
 
-  // World-space footprint of an opening on its host wall — the Model Space's
-  // opening geometry with the gap pad as a plain model-feet argument.
-  function openingGeometry(opening, wall, padFt = 0.02) {
-    const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
-    const len = Math.hypot(dx, dz);
-    const width = Number(opening.width);
-    const JAMB_FT = 0.01;
-    if (!(width > 0) || len < width + JAMB_FT * 2) return null;
-    const half = width / 2;
-    const offset = Math.min(Math.max(Number(opening.offset), half + JAMB_FT), len - half - JAMB_FT);
-    const ux = dx / len, uz = dz / len;
-    const nx = -uz, nz = ux;
-    const def = WALL_TYPES.find(w => w.id === (wall.wallType || 'stud_2x6')) || WALL_TYPES[1];
-    const totalFt = def.totalIn / 12;
-    const refLine = wall.refLine || 'center';
-    const startOff = refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -totalFt / 2;
-    const endOff = startOff + totalFt;
-    const midOff = (startOff + endOff) / 2;
-    const at = (along, across) => ({
-      x: wall.start.x + ux * along + nx * across,
-      y: 0,
-      z: wall.start.z + uz * along + nz * across,
-    });
-    return {
-      wall,
-      center: at(offset, midOff),
-      corners: [
-        at(offset - half, startOff - padFt),
-        at(offset + half, startOff - padFt),
-        at(offset + half, endOff + padFt),
-        at(offset - half, endOff + padFt),
-      ],
-      jambs: [
-        [at(offset - half, startOff - padFt), at(offset - half, endOff + padFt)],
-        [at(offset + half, startOff - padFt), at(offset + half, endOff + padFt)],
-      ],
-      glazing: [at(offset - half, midOff), at(offset + half, midOff)],
-    };
-  }
+  // ── THREE TWINS RETIRED HERE, and naming them is the point ───────────────
+  //
+  // This file used to carry its own `wallJoins` (68 lines), its own
+  // `openingGeometry` (45) and its own `drawOpening2D` (90) -- a second copy
+  // of each, beside the shared ones in geometry-2d.js and render-2d.js that
+  // the Model Space draws with. Its own header called it out and then did it
+  // anyway: "the wall painter is the shared DraftRender2D one".
+  //
+  // WHAT THAT COST WAS NOT LINES, IT WAS AGREEMENT. A door on a construction
+  // sheet and the same door on the drafter's screen were drawn by two
+  // different painters and placed by two different clamps -- the shared
+  // `openingGeometry` clamps an opening against its NEIGHBOURING WALLS
+  // (`clampOpeningToWall` takes the whole wall list), this file's twin clamped
+  // it between two fixed jamb margins and knew nothing about neighbours. Two
+  // answers to "where does this window sit", and the sheet is the one that
+  // goes to site.
+  //
+  // WHAT THIS FILE KEEPS is the half that is genuinely its own: turning SAVED
+  // JSON into entities the painters can take -- interning shared corners so
+  // the identity-keyed join index works, resolving legacy wall types, and
+  // filtering to a level and a view. That is parsing, not drawing, and it has
+  // no twin anywhere.
 
-  // Paint one opening the way the plan does: paper-coloured gap, jamb caps,
-  // double-glazed panes with frame blocks for windows, leaf + quarter swing
-  // for doors. Garage doors stay a plain gap with jambs.
-  function drawOpening2D(ctx, toS, opening, geo, env = {}) {
-    const pts = geo.corners.map(toS);
-    ctx.save();
-    ctx.beginPath();
-    pts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
-    ctx.closePath();
-    ctx.fillStyle = env.paperColor || '#ffffff';
-    ctx.fill();
-    ctx.strokeStyle = '#1d1f20';
-    ctx.lineWidth = 1.5;
-    geo.jambs.forEach(([a, b]) => {
-      const sa = toS(a), sb = toS(b);
-      ctx.beginPath(); ctx.moveTo(sa.x, sa.y); ctx.lineTo(sb.x, sb.y); ctx.stroke();
-    });
-    const [gwa, gwb] = geo.glazing;
-    const glazeRun = Math.hypot(gwb.x - gwa.x, gwb.z - gwa.z) || 1;
-    const gux = (gwb.x - gwa.x) / glazeRun, guz = (gwb.z - gwa.z) / glazeRun;
-    const gnx = -guz, gnz = gux;
-    if (opening.type === 'window') {
-      ctx.lineWidth = 1.25;
-      [0.375 / 12, -0.375 / 12].forEach(off => {
-        const a = toS({ x: gwa.x + gnx * off, z: gwa.z + gnz * off });
-        const b = toS({ x: gwb.x + gnx * off, z: gwb.z + gnz * off });
-        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-      });
-      const halfDepth = Math.max(...geo.corners.map(corner =>
-        Math.abs((corner.x - geo.center.x) * gnx + (corner.z - geo.center.z) * gnz)));
-      const poke = halfDepth + 0.5 / 12;
-      const frameAlong = 2 / 12;
-      [[gwa, 1], [gwb, -1]].forEach(([end, sgn]) => {
-        const quad = [
-          { x: end.x + gnx * poke, z: end.z + gnz * poke },
-          { x: end.x - gnx * poke, z: end.z - gnz * poke },
-          { x: end.x + gux * sgn * frameAlong - gnx * poke, z: end.z + guz * sgn * frameAlong - gnz * poke },
-          { x: end.x + gux * sgn * frameAlong + gnx * poke, z: end.z + guz * sgn * frameAlong + gnz * poke },
-        ].map(toS);
-        ctx.beginPath();
-        ctx.moveTo(quad[0].x, quad[0].y); ctx.lineTo(quad[1].x, quad[1].y);
-        ctx.lineTo(quad[2].x, quad[2].y); ctx.lineTo(quad[3].x, quad[3].y);
-        ctx.closePath(); ctx.stroke();
-      });
-    }
-    if (opening.type === 'door' && !opening.garage) {
-      const hinge = toS(gwa);
-      const tip = toS({ x: gwa.x + gnx * glazeRun, z: gwa.z + gnz * glazeRun });
-      const latch = toS(gwb);
-      ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(hinge.x, hinge.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
-      const r = Math.hypot(tip.x - hinge.x, tip.y - hinge.y);
-      const a0 = Math.atan2(tip.y - hinge.y, tip.x - hinge.x);
-      const a1 = Math.atan2(latch.y - hinge.y, latch.x - hinge.x);
-      let sweep = a1 - a0;
-      while (sweep > Math.PI) sweep -= 2 * Math.PI;
-      while (sweep < -Math.PI) sweep += 2 * Math.PI;
-      ctx.lineWidth = 1.25;
-      ctx.beginPath(); ctx.arc(hinge.x, hinge.y, r, a0, a0 + sweep, sweep < 0); ctx.stroke();
-    }
-    ctx.restore();
-  }
+  // The opening clamp needs a wall's total thickness as a function, because
+  // the shared geometry asks per wall rather than being told once.
+  // THE MODEL SPACE'S OWN LOOK, carried rather than re-chosen: these are the
+  // literals MODEL.dc.html:17038 passes its floor painter and :8899 its
+  // dimension painter. A sheet that picked its own blues would be a second
+  // opinion about what a floor looks like, which is the whole disease this
+  // file is being cured of.
+  const FLOOR_COLORS = Object.freeze({
+    fill: 'rgba(89,128,166,0.16)',
+    fillPreview: 'rgba(89,128,166,0.12)',
+    stroke: '#47779a',
+    strokePreview: 'rgba(89,128,166,0.72)',
+    selected: '#5980a6',
+  });
+  const DIMENSION_COLORS = Object.freeze({
+    stroke: '#365e86',
+    selected: '#5980a6',
+    selectedHalo: 'rgba(89,128,166,0.35)',
+    preview: 'rgba(89,128,166,0.58)',
+    labelBack: 'rgba(255,255,255,0.92)',
+  });
 
-  // Paint one plan viewport: walls in the Model Space draw order (every fill
-  // beneath every boundary), then the openings carving their gaps. toS maps
-  // model feet to screen pixels; the caller centres it on the wall bounds.
+  const thicknessFt = wall =>
+    ((WALL_TYPES.find(type => type.id === (wall.wallType || 'stud_2x6')) || WALL_TYPES[1])
+      .totalIn / 12);
+
+  // Paint one plan viewport. The ORDER and the FILTERING are
+  // plan-composition.js's now, shared with the Model Space; this builds the
+  // env that composition draws through.
+  //
+  // `padFt` IS THE ZOOM FACT, not a geometry one, and it arrives from the
+  // caller for that reason: the wall boundary stroke is centred on the face,
+  // so an opening's gap has to reach a little past each face to interrupt it,
+  // and "a little" is a couple of SCREEN pixels. The sheet owns its camera.
   function drawPlan(ctx, toS, saved, levelId, env = {}) {
+    const composition = window.DraftPlanComposition;
+    const geo = window.DraftGeometry2D;
+    if (!composition || !geo) return false;
+
     const view = env.view || null;
     const walls = planWalls(saved, levelId, view);
     if (!walls.length) return false;
-    const joins = wallJoins(walls);
-    const wallEnv = { wallTypes: WALL_TYPES };
-    walls.forEach(w => window.DraftRender2D.drawWallSeg2D(ctx, toS, w, false, joins, 'fill', wallEnv));
-    walls.forEach(w => window.DraftRender2D.drawWallSeg2D(ctx, toS, w, false, joins, 'stroke', wallEnv));
-    planOpenings(saved, levelId, walls).forEach(opening => {
-      if (view !== null && (opening.view || 'plan') !== view) return;
-      const wall = walls.find(w => w.id === opening.wallId);
-      const geo = wall && openingGeometry(opening, wall, env.padFt);
-      if (geo) drawOpening2D(ctx, toS, opening, geo, env);
+
+    const of = key => (Array.isArray(saved?.[key]) ? saved[key] : []);
+    const openings = of('surfaceOpenings');
+    const surfaceOpeningsFor = (hostType, hostId) => openings.filter(opening =>
+      opening.hostType === hostType && opening.hostId === hostId
+      && Array.isArray(opening.points) && opening.points.length >= 3);
+    const paperColor = env.paperColor || '#ffffff';
+    const fmt = window.DraftFormatters || {};
+    const STANDARDS = (window.DraftCutView && window.DraftCutView.STANDARDS) || {};
+
+    composition.drawPlan(ctx, toS, {
+      levelId,
+      viewId: view,
+      // A SAVED VIEWPORT CARRYING NO VIEW MEANS EVERY VIEW ON THE LEVEL, which
+      // is this file's standing compatibility promise -- a layout composed
+      // before views existed must compose byte-for-byte as it did. Saying
+      // `hasLayerViews` only when a view was named is how that survives the
+      // move into the shared filter.
+      hasLayerViews: view !== null,
+      isPrinting: false,
+
+      walls,
+      fenestrations: of('fenestrations'),
+      floors: of('floors'),
+      roofs: of('roofs'),
+      shapes: of('shapes'),
+      lines: of('lines'),
+      dimensions: of('dimensions'),
+      notes: of('notes'),
+
+      wallJoins: geo.wallJoins,
+      lineControlPoint: geo.lineControlPoint,
+      openingGeometry: opening => {
+        const wall = walls.find(w => w.id === opening.wallId);
+        return wall && geo.openingGeometry(opening, wall,
+          { walls, thicknessFt, padFt: env.padFt || 0 });
+      },
+
+      // THE SHEET IS PAPER, so the opening gap is paper-coloured rather than
+      // the screen's #fafafa -- which the Model Space chose to match ITS clear
+      // colour. That one value is the whole of what this page has ever needed
+      // to say about the look of an opening, and it is why render-2d's painter
+      // takes colours at all.
+      openingEnv: { openingGapColor: paperColor },
+      wallEnv: { wallTypes: WALL_TYPES },
+      floorEnv: {
+        surfaceOpeningsFor,
+        offsetOutline: (pts, dist) => geo.offsetOutline(pts, dist),
+        formatInchesOnly: fmt.formatInchesOnly,
+        // Derived the way MODEL.dc.html:2279 derives it, off the two the cut
+        // view exports, rather than carried here as a third copy of a number.
+        garageSlabThicknessIn: STANDARDS.GARAGE_SLAB_THICKNESS_IN,
+        garageEdgeDepthIn: STANDARDS.GARAGE_EDGE_DEPTH_IN,
+        garageEdgeTaperRunIn: STANDARDS.GARAGE_EDGE_DEPTH_IN - STANDARDS.GARAGE_SLAB_THICKNESS_IN,
+        colors: FLOOR_COLORS,
+      },
+      roofEnv: {
+        isPrinting: false,
+        offsetOutline: (pts, dist) => geo.offsetOutline(pts, dist),
+        roofSkeleton: geo.roofSkeleton,
+        surfaceOpeningsFor,
+      },
+      // SHAPES ARE NOT DRAWN ON A SHEET YET and that is declared rather than
+      // silent: `drawShape2D` wants `areaLabel` and `outlineAreaSqFt`, which
+      // are the Model Space's arithmetic and have no shared home. A shape is
+      // a construction OUTLINE -- deliberately unlike a floor or a roof -- so
+      // a sheet missing one is missing a guide, not a building.
+      shapeEnv: null,
+      dimensionEnv: {
+        label: ft => fmt.formatArchitecturalInches(ft * 12),
+        colors: DIMENSION_COLORS,
+      },
+      noteEnv: { color: '#1d1f20', fillColor: paperColor },
     });
     return true;
   }
@@ -268,10 +224,7 @@ if (!window.DraftLayoutPlan) {
   window.DraftLayoutPlan = Object.freeze({
     planWalls,
     planOpenings,
-    wallJoins,
     wallBounds,
-    openingGeometry,
-    drawOpening2D,
     drawPlan,
   });
 })();
