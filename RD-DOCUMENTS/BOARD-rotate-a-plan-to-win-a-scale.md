@@ -10,8 +10,22 @@ and, on how exact it has to be:
 > *"it doesn't have to be perfect the user will always need to check it and
 > make sure everything is where they would like it positioned"*
 
-Status: **PROPOSED, NOT BUILT.** New ground — Movie confirms MODEL.dc.html had
-no rotation of any kind, so nothing is being ported here.
+Status: **CLOSED — NOT DOING IT FOR AUTO-PLACEMENT.** Movie, 21 Sep, after the
+measurement below:
+
+> *"you're right rotation for autoplace isn't necessary"*
+
+**And the measurement is why it is a comfortable no.** The ladder already picks
+**1/8" and it FITS** on the house that prompted the question. Rotation was
+buying a nicer scale, not rescuing a broken sheet — an enhancement, not a fix.
+The composer's job is to deal a workable hand that the drafter then checks, and
+it already does that.
+
+The board is kept rather than deleted for two reasons: the arithmetic is done,
+so anyone revisiting it starts from numbers rather than from scratch; and the
+NORTH ARROW COUPLING recorded below is a real constraint on board #289 whether
+or not rotation is ever built. New ground either way — Movie confirms
+MODEL.dc.html had no rotation of any kind, so nothing was being ported.
 
 ---
 
