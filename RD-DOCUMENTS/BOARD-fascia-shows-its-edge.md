@@ -110,3 +110,63 @@ candidates, in the order worth checking:
 **Still not investigated** — this is a corrected observation, not a diagnosis.
 What has changed is that the next person starts from a plain garage with no
 house rather than from a two-body occlusion that has nothing to do with it.
+
+
+---
+
+## MEASURED, 21 Sep — two hypotheses dead, three numbers, one candidate
+
+Fixture: `proto/repro-bungalow-garage-roofs.draft`, all four elevations,
+probed by recording every canvas segment with its ink and width and filtering
+to the DRAWING canvas (`#plan`) rather than the preview thumbnails.
+
+### Both of the obvious hypotheses are wrong, and both were mine
+
+**1. THE TWO-PASS SUBTRACTION IS NOT DOUBLING THE BAND.** An eave is banded by
+a silhouette pass and again by a face-edge pass, the second subtracting what
+the first drew, gated on `Math.abs(f.base + ROOF_FASCIA_IN/12 - eaveTop) <
+0.05` — a 0.6" tolerance. A disagreement wider than that would skip the
+subtraction and draw twice. **Measured: 20 comparisons across four
+elevations, zero unmatched.** The subtraction works.
+
+**2. THERE IS NO SECOND BAND AT ALL.** The band is deliberately two lines — a
+light top at `eaveTop` (`rgba(29,31,32,0.6)` w1) and a heavy shadow 5.5" under
+it (`#1d1f20` w2.25). Counting those signatures per elevation: **1–2 tops,
+1–2 shadows, zero doubled pairs.** Nothing draws an eave twice.
+
+### What IS near the fascia, exactly
+
+    2ND FL datum      9.1458 ft    +7.12" ABOVE the eave   faint, 926 px
+    eave top          8.5521 ft    the fascia top line            1512 px
+    wall-top datum    8.0938 ft    exactly -5.50"          faint, 926 px
+
+**THE FASCIA'S SHADOW LANDS EXACTLY ON A DATUM LINE.** `ROOF_FASCIA_IN` is
+5.5 and the wall-top datum is 5.50" under the eave to the hundredth — so the
+heavy shadow and a faint rule are drawn at the same y and read as one line.
+That coincidence is exact, not lucky: the eave top IS the wall top plus the
+fascia depth.
+
+**The candidate is the OTHER one**: the 9.1458 datum, 7.12" above the eave,
+drawn by `mark()` at `cut-view.js:1174` in `rgba(29,31,32,0.25)` at width
+0.75.
+
+### Why it would be "on one side", and "usually always"
+
+`cut-view.js:1185`, immediately under the painter: *"House level lines stop at
+the house face — a garage hangs off grade and never carries the house datums
+across its front."* The datum runs 926 px and stops; the fascia runs 1512.
+**So the faint line covers part of the eave and not the rest** — which is what
+one side looks like. And every drawing has level datums, which is what
+"usually always" looks like.
+
+### NOT CONFIRMED, and this is why the board is still open
+
+Movie's report says *"about 1.5 inches inwards"*, and this candidate is 7.12"
+above the eave. Those do not match. Either the estimate is loose — it was read
+off a zoomed screenshot — or **this is the wrong line and the real one has not
+been found yet.** He is sending a screenshot with the line highlighted; the
+next reader should start from that rather than from this candidate.
+
+If it IS this line, the fix is not to delete level datums — they are how a
+drafter reads heights — but to stop a datum rule short of the roof rather than
+letting it run through the eave.
