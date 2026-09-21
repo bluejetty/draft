@@ -158,3 +158,49 @@ The assembly work is untouched by this ruling and is the real pending change:
 - nesting, and a way to enter a nested assembly
 
 All of that is about ONE drawing and belongs here.
+
+---
+
+## AND IT READS OUR FILE — which changes something here
+
+**Movie, in the same breath as the ruling:**
+
+> *"that new program can upload the regular DRAFT file and just display them
+> and position them properly within that file"*
+
+**So `.draft` stops being an internal file and becomes a PUBLISHED INTERFACE.**
+A second program, written later and separately, will load a drawing this one
+wrote and draw it correctly without being this one. That is a contract, and
+`drawing-format.js` is where it lives.
+
+**THE PROOF THAT IT WORKS IS ALREADY IN THIS REPO, AND IT IS LAYOUT.dc.html.**
+That page draws a full house — walls, openings, floors, roofs, stairs,
+fixtures, dimensions, elevations, sections — off a saved `.draft` it did not
+create, and it does not load MODEL.dc.html at all. It needs exactly this:
+
+    shared-file-store.js   drawing-format.js    wall-types.js
+    level-assembly.js      render-2d.js         geometry-2d.js
+    layer-views.js         stair-geometry.js    closets.js
+    fixture-geometry.js    plan-composition.js  layout-plan.js
+    formatters.js          cut-view.js          titleblock.js
+
+**That list is the civil program's shopping list.** It is not a plan; it is a
+working page in this repo today. A neighbourhood program is LAYOUT's trick
+pointed at many files instead of one.
+
+### Which quietly raises the value of two jobs already on the books
+
+`ORDER-construction-layouts.md` carries two unfinished items whose whole
+purpose is to get painters OUT of MODEL.dc.html and into shared modules:
+
+- lift the room-tag painter, the last one MODEL.dc.html holds as local code
+- switch MODEL.dc.html itself to call `plan-composition.js`
+
+Before this, those were tidiness with one beneficiary. **Now every painter
+still trapped in MODEL.dc.html is a painter the civil program cannot have** —
+and `_drawStairWorkspace2D` and its 624 lines are the clearest case, since a
+stair section is exactly the sort of thing a second program would want and
+cannot reach.
+
+The extraction work already done has a second customer. That is worth knowing
+before anyone decides it was over-engineering.
