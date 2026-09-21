@@ -254,6 +254,42 @@ test('backing out of the save dialog is not an error, and writes nothing', async
   await expect(page.locator('[data-model-save]')).toHaveText('UNSAVED');
 });
 
+test('a download says where it went; a picked save does not', async ({ page }) => {
+  // THE BROWSER CHOSE THE FOLDER, so the drafter never saw it happen. "I just
+  // saved the file but have no clue where it is" is the complaint this
+  // answers, and it is the only case that can arise on a browser with no save
+  // dialog -- Firefox and Safari, where the picker does not exist.
+  await forceDownloadPath(page);
+  await openPage(page);
+  await makeDirty(page);
+
+  await expect(page.locator('#saved-where')).toBeHidden();
+  await page.locator('#file-save-as').click();
+  await page.locator('#save-as-name').fill('my-house.draft');
+  await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('[data-save-as-go]').click(),
+  ]);
+  await expect(page.locator('#saved-where')).toBeVisible();
+  await expect(page.locator('#saved-where')).toContainText('DOWNLOADS FOLDER');
+  // Named, because "a file" is not findable and this one is.
+  await expect(page.locator('#saved-where')).toContainText('my-house.draft');
+});
+
+test('a picked save says nothing -- the drafter chose the folder', async ({ page }) => {
+  await stubPicker(page);
+  await openPage(page);
+  await makeDirty(page);
+
+  await page.locator('#file-save-as').click();
+  await page.locator('#save-as-name').fill('my-house.draft');
+  await page.locator('[data-save-as-go]').click();
+  await expect(page.locator('[data-model-save]')).toHaveText('SAVED');
+  // Telling somebody where a file is when they just typed it there is noise,
+  // and naming the WRONG place -- the downloads folder -- would be worse.
+  await expect(page.locator('#saved-where')).toBeHidden();
+});
+
 test('NEW asks before it throws away an edit, and Cancel keeps the drawing',
   async ({ page }) => {
     await openPage(page);

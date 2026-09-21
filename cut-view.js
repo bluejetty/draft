@@ -1618,29 +1618,6 @@ if (!window.DraftCutView) {
     // Roof silhouette over the faces, with the fascia band along the eave.
     const drawnFascia = [];
     if (lit.length > 1) {
-      ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      let pen = null, prevLit = false;
-      silhouette.forEach(s => {
-        if (s.elev == null) {
-          if (pen) ctx.lineTo(X(pen.u), Y(pen.base));
-          pen = null; prevLit = false;
-          return;
-        }
-        if (pen && pen.base !== s.base) {
-          ctx.lineTo(X(pen.u), Y(pen.base));
-          pen = null;
-        }
-        // The riser down to the base closes the outline against open air. A
-        // roof taking over from another — a garage roof running on under the
-        // house's overhang — has no vertical edge, so it starts at its surface.
-        if (!pen && !prevLit) { ctx.moveTo(X(s.u), Y(s.base)); ctx.lineTo(X(s.u), Y(s.elev)); }
-        else if (!pen) ctx.moveTo(X(s.u), Y(s.elev));
-        else ctx.lineTo(X(s.u), Y(s.elev));
-        pen = s; prevLit = true;
-      });
-      if (pen) ctx.lineTo(X(pen.u), Y(pen.base));
-      ctx.stroke();
       // Fascia band per eave run — a run breaks where the roof drops out or
       // where a differently-based roof (the garage) takes over the front.
       // The fascia's lower edge carries the roof's shadow — the heaviest
@@ -1650,13 +1627,40 @@ if (!window.DraftCutView) {
       // is sampled and stops short of a roof's outer corner; the face edges
       // below know exactly where the eave ends. See extendRunsToEaves for the
       // measurement and for why this is not a filter.
+      //
+      // THE GROWING HAPPENS BEFORE THE OUTLINE IS DRAWN, and that is the whole
+      // of board #453. The ends are worked out up here so the SILHOUETTE can
+      // use them too: its end risers used to stand at the last sample, one
+      // sample short of the band they cap, leaving a spare vertical a couple
+      // of inches inside the roof's edge with the band running on past it.
+      // Movie, looking at a garage roof: *"there is usually always an extra
+      // line where the fascia is on one side about 1.5\" inwards that should
+      // NOT be showing"*. Measured across four elevations of
+      // repro-2storey-garage: 1.8", 2.1", 3.0", 3.3", 3.6" — one sampling
+      // step, every time, and on ONE end of a run because the other end
+      // happened to land on a sample.
       const runs = [];
       let run = null;
-      silhouette.forEach(s => {
+      silhouette.forEach((s, i) => {
         if (s.elev == null || (run && run.base !== s.base)) run = null;
         if (s.elev == null) return;
-        if (!run) { run = { base: s.base, u0: s.u, u1: s.u }; runs.push(run); }
-        else run.u1 = s.u;
+        if (!run) { run = { base: s.base, u0: s.u, u1: s.u, i0: i, i1: i }; runs.push(run); }
+        else { run.u1 = s.u; run.i1 = i; }
+      });
+      // AND THE WALK CAN RUN THE OTHER WAY. E3 and E4 look back along their
+      // axis, so u DESCENDS as the silhouette is sampled and a run comes out
+      // of that loop with its ends the wrong way round -- measured on
+      // repro-bungalow-garage-roofs E4: `u0 22, u1 -47.708`. Every test
+      // downstream reads them as an interval, so an inverted run overlapped
+      // no eave and grew by nothing, and `u1 - u0 > 0.5` then threw it away
+      // before it could be banded. The band still appeared because the
+      // face-edge pass draws it exactly and had nothing of the silhouette's
+      // to subtract -- which is why this hid for so long: the ARTIFACT was
+      // the stranded riser, and the silhouette's own band was simply absent.
+      runs.forEach(r => {
+        if (r.u0 <= r.u1) return;
+        const u = r.u0; r.u0 = r.u1; r.u1 = u;
+        const i = r.i0; r.i0 = r.i1; r.i1 = i;
       });
       // EVERY EAVE EDGE'S TRUE EXTENT, read off the same faces the pass below
       // reads, through the same test -- isEaveEdge is defined once for both,
@@ -1684,6 +1688,60 @@ if (!window.DraftCutView) {
         runs[index].u0 = grown.u0;
         runs[index].u1 = grown.u1;
       });
+
+      // WHERE A RUN'S END REALLY IS, by the sample that used to stand in for
+      // it. Only ends that MOVED are listed: a gable end grows by nothing,
+      // because a rake is not an eave and extendRunsToEaves never touches it,
+      // so the outline there is left exactly as it was.
+      //
+      // KEYED BY SAMPLE, NOT BY WHICH END IT IS, so the descending walk above
+      // needs no second case here -- a sample knows the u it was grown to
+      // whether it opened the run or closed it. A one-sample run is left out:
+      // both its risers sit on the same index, so there is no end to tell
+      // apart, and it is under the half-foot the banding asks for anyway.
+      const grownAt = new Map();
+      runs.forEach(r => {
+        if (r.i0 === r.i1) return;
+        if (Math.abs(r.u0 - silhouette[r.i0].u) > 1e-9) grownAt.set(r.i0, r.u0);
+        if (Math.abs(r.u1 - silhouette[r.i1].u) > 1e-9) grownAt.set(r.i1, r.u1);
+      });
+
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      let pen = null, penI = -1, prevLit = false;
+      // Closing the outline against open air. At a grown end the riser stands
+      // at the eave's true edge and is exactly the fascia board: at a roof's
+      // outer corner the surface top IS the fascia top, so the run out to it
+      // is the last of the slope and the drop from it is 5.5" of board.
+      const closePen = () => {
+        if (!pen) return;
+        const u1 = grownAt.has(penI) ? grownAt.get(penI) : pen.u;
+        if (u1 !== pen.u) ctx.lineTo(X(u1), Y(pen.base + fasciaFt));
+        ctx.lineTo(X(u1), Y(pen.base));
+        pen = null;
+      };
+      silhouette.forEach((s, i) => {
+        if (s.elev == null) {
+          closePen();
+          prevLit = false;
+          return;
+        }
+        if (pen && pen.base !== s.base) closePen();
+        // A roof taking over from another — a garage roof running on under
+        // the house's overhang — has no vertical edge, so it starts at its
+        // surface.
+        if (!pen && !prevLit) {
+          const u0 = grownAt.has(i) ? grownAt.get(i) : s.u;
+          ctx.moveTo(X(u0), Y(s.base));
+          if (u0 !== s.u) { ctx.lineTo(X(u0), Y(s.base + fasciaFt)); ctx.lineTo(X(s.u), Y(s.elev)); }
+          else ctx.lineTo(X(u0), Y(s.elev));
+        }
+        else if (!pen) ctx.moveTo(X(s.u), Y(s.elev));
+        else ctx.lineTo(X(s.u), Y(s.elev));
+        pen = s; penI = i; prevLit = true;
+      });
+      closePen();
+      ctx.stroke();
 
       runs.filter(r => r.u1 - r.u0 > 0.5).forEach(r => {
         drawnFascia.push(r);
