@@ -40,18 +40,36 @@ is drawn against the aspect ratio of the region, and on this house it is 43.5 ×
 73.5 against 14.85 × 10.00 — the drawing is portrait and the paper is
 landscape, which is the whole of it.
 
-## What it actually costs: the text, not the geometry
+## What it costs — and Movie cut the cost in half before it was built
 
-Rotating the drawing is one change to `toS` and is nearly free. **The work is
-keeping the lettering upright.**
+The first version of this board said the work was keeping the lettering
+upright: text is drawn at angles computed from the geometry it annotates, so
+rotating the world rotates it too, and the painters would need to know the
+sheet's rotation to decide which way each string reads — never upside down.
+That is real work and it is spread across every text path.
 
-Dimension text and room labels are drawn at angles computed from the geometry
-they annotate, so rotating the world rotates them with it and half the sheet
-comes out sideways or upside down. The drafting rule is that text reads from
-the bottom of the sheet or from the right edge, never upside down — so the
-painters have to know the sheet's rotation to decide which way each string
-sits. That lands in `render-2d.js`'s text paths (`drawDimension2D`, and room
-tags wherever they end up) and it is the scope of this board.
+**Movie, 21 Sep, removed it:**
+
+> *"when the viewport rotates the texts and dimensions should stay fixed where
+> they are does this make sense? make it easier?"*
+
+It makes sense and it makes it much easier. **The ANCHOR rotates; the GLYPHS
+do not.** A label's position has to travel with the drawing or it detaches
+from the thing it labels — but its baseline angle need not follow. Put the
+anchor point through the rotated transform, then draw the text unrotated.
+
+That deletes the expensive half. There is no per-string "which way does this
+read, do I flip it" decision left to make, because the answer is always the
+same one: `fillText` at angle zero. What remains is plumbing a rotation
+through `toS` and leaving the text calls alone.
+
+**ONE CONSEQUENCE, NAMED SO IT IS A CHOICE AND NOT A SURPRISE.** A dimension
+running along a rotated wall gets horizontal text rather than text following
+the line. That is UNIDIRECTIONAL dimensioning — every string reads one way —
+against the ALIGNED style where text follows its line. Both are real
+conventions; mechanical drafting is unidirectional as standard and
+architectural tends to aligned. At 90° it reads cleanly either way, and
+unidirectional is the one that falls out of this rule for free.
 
 ## Rulings attached to it
 

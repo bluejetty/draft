@@ -122,6 +122,40 @@ if (!window.DraftPlanComposition) {
 
     drawOpenings(ctx, toS, env, walls, shows);
 
+    // FIXTURES RIDE THEIR HOST WALL, so the painter is handed the wall as its
+    // own argument rather than looking it up. `_redrawOverlay` draws them
+    // immediately after the openings and before anything measured, which is
+    // the order kept here.
+    if (env.fixtureEnv) {
+      const wallById = new Map(walls.map(wall => [wall.id, wall]));
+      pick(env.fixtures).filter(fixture => shows(fixture.layer)).forEach(fixture => {
+        render.drawFixture2D(ctx, toS, fixture, {}, wallById.get(fixture.wallId), env.fixtureEnv);
+      });
+    }
+
+    // ELECTRIC IS ITS OWN SHEET'S WORTH OF MARKS and electric-symbols.js owns
+    // every one of them; this only decides WHICH devices and how big the mark
+    // is. The size is measured off the transform rather than assumed, so a
+    // symbol tracks zoom exactly -- two world points a known distance apart,
+    // which is the old page's own trick.
+    if (env.electricEnv && window.DraftElectricSymbols) {
+      const symbols = window.DraftElectricSymbols;
+      const devices = pick(env.electricDevices).filter(device => shows(device.layer));
+      if (devices.length && env.electricDeviceAt) {
+        const a = toS({ x: 0, y: 0, z: 0 });
+        const b = toS({ x: env.electricEnv.deviceFt || 0.5, y: 0, z: 0 });
+        const size = Math.max(3, Math.hypot(b.x - a.x, b.y - a.y));
+        devices.forEach(device => {
+          const placed = env.electricDeviceAt(device);
+          if (!placed) return;
+          const at = toS(placed.pt);
+          const paint = symbols[env.electricEnv.symbolFor?.(device.kind) || 'wallOutlet']
+            || symbols.wallOutlet;
+          symbols.drawDevice(ctx, (c, sz) => paint(c, sz), at.x, at.y, size, placed.rotation);
+        });
+      }
+    }
+
     // STAIRS AND CUT MARKS TAKE THEIR OWN ENV WHOLE, because both paint a
     // COLLECTION rather than one item -- render-2d resolves the list from the
     // env it is handed, so there is nothing here to filter.
@@ -137,6 +171,26 @@ if (!window.DraftPlanComposition) {
     if (env.dimensionEnv) {
       dimensions.forEach(dimension => render.drawDimension2D(ctx, toS, dimension, {}, env.dimensionEnv));
     }
+    // STRUCTURE GOES OVER THE DRAWING IT HOLDS UP. `_redrawOverlay` puts beams
+    // and columns after the room tags and before the stairs, which is late on
+    // purpose: a telepost is read against the floor it stands on, so it is
+    // drawn last of the things that are not text.
+    //
+    // THE PAINTERS ARE render-2d.js's AND HAVE BEEN ALL ALONG -- drawBeam2D
+    // and drawColumn2D, with a mutation suite on them in
+    // proto/render-2d-harness.js. MODEL.html calls them; MODEL.dc.html has a
+    // 134-line inline twin and never adopted them. Composing them here is how
+    // that twin stops being the only way the old page can draw structure.
+    //
+    // THE FOOTING IS THE CALLER'S ANSWER, not the painter's -- only a pile
+    // changes the drawn shape, a telepost being the default square.
+    if (env.structureEnv) {
+      pick(env.beams).forEach(beam => render.drawBeam2D(ctx, toS, beam, {}, env.structureEnv));
+      pick(env.columns).forEach(column => render.drawColumn2D(ctx, toS, column, {
+        footing: env.columnFooting ? env.columnFooting(column) : null,
+      }, env.structureEnv));
+    }
+
     if (env.noteEnv) {
       notes.forEach(note => render.drawNoteScreen2D(ctx, toS(note.anchor), toS(note.text), note, {}, env.noteEnv));
     }
