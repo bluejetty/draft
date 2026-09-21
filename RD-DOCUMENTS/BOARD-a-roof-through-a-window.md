@@ -109,10 +109,13 @@ without touching the catalogue.
    spacing; it would now need the roof surfaces standing in front of each
    face, sampled across the opening's width. That is a new input to a module
    that currently takes none, and it is the whole cost of this board.
-2. **Raise the sill, or slide the window sideways?** Sliding it clear of the
-   ridge keeps a full-height window, and on this house `x 6..10` could move
-   toward `x 12..16` where the roof has fallen away. Movie named the sill; the
-   slide is worth putting beside it because it costs no glass.
+2. ~~**Raise the sill, or slide the window sideways?**~~ **ANSWERED, 21 Sep**,
+   by `RULING-the-window-head-is-the-datum.md`: *"the top of the window should
+   be default located 7ft high ... if the window changes size the bottom
+   changes"*. The head is the datum and the sill is what moves, which is the
+   sill fix and not the slide. It also makes the resulting window TALLER than
+   this board estimated — a 7.0 ft head against a 13.0 ft sill is ~3.0 ft of
+   glass, not the 2.6–2.8 computed off the 6.667 head this drawing carries.
 3. **Which roofs count.** Only a roof in FRONT of the face on that elevation
    interferes. A roof behind it is hidden and irrelevant.
 
