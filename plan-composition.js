@@ -156,10 +156,14 @@ if (!window.DraftPlanComposition) {
       }
     }
 
-    // STAIRS AND CUT MARKS TAKE THEIR OWN ENV WHOLE, because both paint a
-    // COLLECTION rather than one item -- render-2d resolves the list from the
-    // env it is handed, so there is nothing here to filter.
-    if (env.stairEnv) render.drawStairs2D(ctx, toS, env.stairEnv);
+    // STAIRS PAINT A COLLECTION rather than one item -- render-2d resolves the
+    // list off the env it is handed -- so the env arrives WITHOUT its `stairs`
+    // and this puts the filtered ones in. The alternative was a caller
+    // filtering by level and view for itself, which is the one job this module
+    // exists to stop being written twice.
+    if (env.stairEnv) {
+      render.drawStairs2D(ctx, toS, { ...env.stairEnv, stairs: pick(env.stairs) });
+    }
     if (env.cutMarkEnv) render.drawCutMarks2D(ctx, toS, env.cutMarkEnv);
     if (env.outlineEnv) render.drawOutlines2D(ctx, toS, env.outlineEnv);
 

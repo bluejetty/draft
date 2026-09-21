@@ -168,6 +168,10 @@ if (!window.DraftLayoutPlan) {
     strokePreview: 'rgba(89,128,166,0.72)',
     selected: '#5980a6',
   });
+  // MODEL.dc.html:2462's own STAIR_COLOR, carried for the same reason as the
+  // floor blues above -- a stair drawn violet on screen and some other colour
+  // on the sheet is two opinions about one object.
+  const STAIR_COLOR = '#5d4a8a';
   const DIMENSION_COLORS = Object.freeze({
     stroke: '#365e86',
     selected: '#5980a6',
@@ -204,7 +208,34 @@ if (!window.DraftLayoutPlan) {
       && Array.isArray(opening.points) && opening.points.length >= 3);
     const paperColor = env.paperColor || '#ffffff';
     const fmt = window.DraftFormatters || {};
+    const stairs = window.DraftStairGeometry || null;
     const STANDARDS = (window.DraftCutView && window.DraftCutView.STANDARDS) || {};
+    // The level's own elevation, which the stair painter measures its descent
+    // from. Absent means zero, the way every other level-keyed lookup here
+    // treats a level it cannot find.
+    const levelElev = (Array.isArray(saved?.levels) ? saved.levels : [])
+      .find(level => level?.id === levelId)?.elev || 0;
+
+    // THE LEVEL READINGS A STAIR IS DERIVED FROM, which is the whole reason
+    // `stairCurrentLayout` takes a second argument: a stair does not store its
+    // risers, it re-derives them from the storey heights every time it is
+    // drawn, so a sheet that cannot read the heights cannot draw the stair.
+    // MODEL.dc.html gathers exactly these four off its component state
+    // (`_stairLevels`); here they come off the saved JSON through the same
+    // pure functions that page's accessors are wrappers over, so the two
+    // cannot count risers differently.
+    //
+    // `wallTopFtFor` reads the RAW saved walls, not `walls` above: it wants
+    // `topHeight` off every level's walls, and `planWalls` both filters to
+    // this level and drops that field on its way to the painter.
+    const LEVELS = window.DraftLevelAssembly;
+    const VIEWS = window.DraftLayerViews;
+    const stairLevels = stairs && LEVELS && VIEWS ? {
+      floors: VIEWS.floorLevels(saved?.levels),
+      assemblyFor: id => LEVELS.levelAssemblyFor(saved?.levelAssemblies, id),
+      floorFtFor: id => LEVELS.levelFloorFt(LEVELS.levelAssemblyFor(saved?.levelAssemblies, id)),
+      wallTopFtFor: (id, forView) => LEVELS.levelWallTopFt(of('walls'), id, forView),
+    } : null;
 
     composition.drawPlan(ctx, toS, {
       levelId,
@@ -252,6 +283,26 @@ if (!window.DraftLayoutPlan) {
         garageEdgeTaperRunIn: STANDARDS.GARAGE_EDGE_DEPTH_IN - STANDARDS.GARAGE_SLAB_THICKNESS_IN,
         colors: FLOOR_COLORS,
       },
+      // STAIRS. The painter is render-2d.js's drawStairs2D and the arithmetic
+      // is stair-geometry.js's -- MODEL.dc.html's own two helpers for this are
+      // two-line wrappers over `stairCurrentLayout` and `stairPlanParts`, so
+      // there is nothing here to port, only to hand over.
+      //
+      // THE LAYER ANSWERS YES because this page keeps no layer table. A sheet
+      // with no standards draws the drawing rather than nothing, which is the
+      // same rule the composition applies to every other collection.
+      stairEnv: stairLevels ? {
+        layer: { visible: true, printable: true },
+        isPrinting: false,
+        elev: levelElev,
+        stairColor: STAIR_COLOR,
+        treadRunIn: stairs.STAIR_TREAD_RUN_IN,
+        layoutFor: stair => stairs.stairCurrentLayout(stair, stairLevels),
+        partsFor: (stair, layout) => stairs.stairPlanParts(stair, layout),
+        formatInchesOnly: fmt.formatInchesOnly,
+      } : null,
+      stairs: of('stairs'),
+
       // BEAMS AND COLUMNS, which a foundation sheet is arguably FOR: a site
       // builder setting teleposts reads them off this drawing. The painters
       // are render-2d.js's own -- drawBeam2D and drawColumn2D, with a mutation
