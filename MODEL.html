@@ -2285,6 +2285,11 @@
      reason this page drew no fixtures. -->
 <script src="./fixture-geometry.js"></script>
 <script src="./closets.js"></script>
+<!-- The fixture catalogue, AFTER closets.js because the closet's depth is
+     two of its numbers. Lifted out of MODEL.dc.html so this page can name
+     the same cabinet: it DREW fixtures long before it could place one, and
+     a kitchen is seven of them. See ORDER-tiers-of-assembly.md. -->
+<script src="./fixture-kinds.js"></script>
 <!-- Cut marks. cut-marks.js is the geometry; profile-manager.js is here for
      ONE reason and it is worth naming, because it is the first non-drawing
      dependency this page has taken: two of the four inputs a cut needs are not
