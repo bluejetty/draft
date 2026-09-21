@@ -21624,42 +21624,30 @@ class Component extends DCLogic {
     return window.DraftRoomGrow.wcSuffix(kinds);
   }
 
+  // W1. The painting moved to render-2d.js as `drawRoomTag2D`; what stays here
+  // is the three page facts it cannot know -- the WC suffix read off this
+  // level's fixtures, which tags get an area (main floor only, and only when
+  // the drafter asked), and the hit list the editor keeps so a tag can be
+  // dragged or renamed.
+  //
+  // THE HIT LIST IS WHY THIS WAS LOCAL. The old version pushed onto
+  // `this._roomTagHits` as it drew, and a painter that writes to its page
+  // cannot be lent to a second one. The shared painter RETURNS the box it
+  // painted; this collects them. A construction sheet ignores the return.
   _drawRoomTags2D(ctx, toS) {
     const tags = this._activeRoomTags();
     this._roomTagHits = [];
     if (!tags.length) return;
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.fillStyle = ROOM_TAG_COLOR;
+    const env = {
+      color: ROOM_TAG_COLOR,
+      isPrinting: this._isPrinting,
+      suffixFor: tag => this._wcSuffixFor(tag),
+      areaFor: tag => (this.state.roomAreasOn && tag.levelId === MAIN_FLOOR_LEVEL_ID
+        && tag.areaSqFt > 0 ? this._areaLabel(tag.areaSqFt) : ''),
+    };
     tags.forEach(tag => {
-      const s = toS(tag.at);
-      const label = tag.name + this._wcSuffixFor(tag);
-      const area = this.state.roomAreasOn && tag.levelId === MAIN_FLOOR_LEVEL_ID && tag.areaSqFt > 0
-        ? this._areaLabel(tag.areaSqFt) : '';
-      ctx.font = '600 13px "Barlow Condensed", system-ui, sans-serif';
-      ctx.textBaseline = area ? 'bottom' : 'middle';
-      ctx.fillText(label, s.x, area ? s.y - 1 : s.y);
-      // Every tag is grabbable: press-drag moves it, a click renames it
-      // (board #198) — the hit rides the painted label like pad labels do.
-      this._roomTagHits.push({ tag, x: s.x, y: area ? s.y - 1 : s.y, w: ctx.measureText(label).width });
-      let subY = s.y + 1;
-      if (area) {
-        ctx.font = '500 10px "Barlow Condensed", system-ui, sans-serif';
-        ctx.textBaseline = 'top';
-        ctx.fillText(area, s.x, subY);
-        subY += 11;
-      }
-      if (tag.underMin && !this._isPrinting) {
-        // Quiet compliance feedback, screen only: the room fails the office's
-        // ROOM MINIMUMS table (COMPANY STANDARDS).
-        ctx.font = '600 9px "Barlow Condensed", system-ui, sans-serif';
-        ctx.textBaseline = 'top';
-        ctx.fillStyle = 'rgba(176,64,80,0.85)';
-        ctx.fillText('UNDER MIN', s.x, area ? subY : s.y + 8);
-        ctx.fillStyle = ROOM_TAG_COLOR;
-      }
+      this._roomTagHits.push(window.DraftRender2D.drawRoomTag2D(ctx, toS, tag, {}, env));
     });
-    ctx.restore();
   }
 
   _commitNoteFillOpacity() {
