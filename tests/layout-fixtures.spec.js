@@ -136,6 +136,62 @@ test('a washroom draws its three pieces on the sheet', async ({ page }) => {
   expect(withFixtures).toBeGreaterThan(without);  // and the fixtures are extra ink
 });
 
+// A closet is a fixture too -- a small room drawn from the host wall, with a
+// rod, a shelf, hanging clothes and a door off the DD/D ladder. It is the only
+// fixture that reads the four closet numbers and the door picker, and the
+// painter's env names them differently from the module that owns them
+// (CLOSET_ROD_FT against closets.js's RAIL_FT), so this is the one place where
+// the wiring is a RENAME.
+//
+// AND THIS SPEC DOES NOT PIN THAT RENAME -- said plainly, because a test whose
+// reach is assumed is worse than one whose reach is known. It was mutation-run
+// against three broken mappings (the rod handed the shelf's number, the
+// clothes zeroed, the door picker returning nothing) and SURVIVED all three:
+// every one of them still draws a closet, and "more ink than no closet" cannot
+// tell a right closet from a wrong one. What it does catch is the fixture
+// stage being gated off, which is the regression this file exists for.
+//
+// The five numbers were checked by eye instead, on a sheet at 1/4" = 1'-0":
+// side walls, clothes strokes, the rod, the dashed shelf, and a door labelled
+// D36 -- which is `closets.doorFor(4)` exactly. Pinning them by measurement
+// wants a scanning harness in proto/, beside the other engines, rather than an
+// ink threshold in here.
+function closetDrawing({ closet = true } = {}) {
+  const wall = (id, sx, sz, ex, ez) => ({
+    id, start: point(sx, sz), end: point(ex, ez), levelId: 1, view: 'plan',
+    wallType: 'stud_2x4', baseHeight: 0, topHeight: 8, refLine: 'center',
+  });
+  return {
+    version: 1,
+    levels: [{ id: 1, name: 'MAIN FL', elev: 0 }],
+    walls: [
+      wall('b1', 0, 0, 12, 0), wall('b2', 12, 0, 12, 10),
+      wall('b3', 12, 10, 0, 10), wall('b4', 0, 10, 0, 0),
+    ],
+    fenestrations: [],
+    fixtures: closet ? [{
+      id: 'c1', wallId: 'b1', levelId: 1, view: 'plan', kind: 'closet',
+      layer: 'A-FIXT', offset: 4, width: 4,
+      // 2'-1" inside behind a 2x4 closet wall, which is the catalogue's own
+      // depth for a closet rather than a number chosen here.
+      depth: 2 + 1 / 12 + 3.5 / 12, side: 1,
+    }] : [],
+  };
+}
+
+test('a closet draws its rod, shelf and door on the sheet', async ({ page }) => {
+  await openLayout(page, closetDrawing());
+  await placeViewport(page, 8, 5);
+  const withCloset = await inkAround(page, 8, 5, 2);
+
+  await openLayout(page, closetDrawing({ closet: false }));
+  await placeViewport(page, 8, 5);
+  const without = await inkAround(page, 8, 5, 2);
+
+  expect(without).toBeGreaterThan(50);
+  expect(withCloset).toBeGreaterThan(without);
+});
+
 // EACH PIECE ON ITS OWN, because "the room got busier" is not proof that all
 // three arrived. Dropping one fixture must cost ink, and the TUB is the one
 // worth naming: an alcove tub is the only fixture whose geometry needs the
