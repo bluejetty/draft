@@ -579,6 +579,70 @@ suite('drawColumn2D', 'centreOnly keeps the cross and drops the body', R => {
   expect('but the cross the drafter aligns to is still there', count(ctx, 'stroke') > 0, true);
 });
 
+// ── drawRoomTag2D ──
+// The painter MODEL.dc.html held locally until 21 Sep. What kept it there was
+// that it recorded its own hit boxes onto the page as it drew; it now RETURNS
+// them, so the first check below is really a check that a second caller could
+// exist at all.
+const SENTINEL_TAG = '#00cc88';
+const tagEnv = over => ({
+  color: SENTINEL_TAG,
+  isPrinting: false,
+  suffixFor: () => '',
+  areaFor: () => '',
+  ...over,
+});
+
+suite('drawRoomTag2D', 'a tag is its name, in the caller-s ink', R => {
+  const ctx = recordingCtx();
+  R.drawRoomTag2D(ctx, toS, { name: 'BED 2', at: { x: 0, z: 0 } }, {}, tagEnv());
+  expect('the name is painted', calls(ctx, 'fillText').map(a => a[0]).join('|'), 'BED 2');
+  expect('in the ink the caller passed, not a literal',
+    sets(ctx, 'fillStyle').includes(SENTINEL_TAG), true);
+});
+
+suite('drawRoomTag2D', 'it hands back the box it painted, for an editor to keep', R => {
+  const ctx = recordingCtx();
+  const hit = R.drawRoomTag2D(ctx, toS, { name: 'KITCHEN', at: { x: 1, z: 2 } }, {}, tagEnv());
+  // THE RETURN IS THE WHOLE REASON THIS PAINTER COULD MOVE. A painter that
+  // wrote its hits onto the page could not be lent to a sheet.
+  expect('a box comes back', !!hit && typeof hit.w === 'number', true);
+  expect('carrying the tag it was drawn for', hit.tag.name, 'KITCHEN');
+  expect('placed where the transform put it', hit.x, toS({ x: 1, z: 2 }).x);
+});
+
+suite('drawRoomTag2D', 'an area is drawn under the name when the caller supplies one', R => {
+  const bare = recordingCtx();
+  R.drawRoomTag2D(bare, toS, { name: 'DEN', at: { x: 0, z: 0 } }, {}, tagEnv());
+  const withArea = recordingCtx();
+  R.drawRoomTag2D(withArea, toS, { name: 'DEN', at: { x: 0, z: 0 } }, {},
+    tagEnv({ areaFor: () => '120 SQ FT' }));
+  // WHICH TAGS GET AN AREA IS THE CALLER-S POLICY, not this painter-s, so the
+  // env hands back a string or nothing and the painter draws what it is given.
+  expect('the name alone is one string', count(bare, 'fillText'), 1);
+  expect('the area is a second', calls(withArea, 'fillText').map(a => a[0]).join('|'),
+    'DEN|120 SQ FT');
+});
+
+suite('drawRoomTag2D', 'the WC suffix rides the name rather than being a second string', R => {
+  const ctx = recordingCtx();
+  R.drawRoomTag2D(ctx, toS, { name: 'WC', at: { x: 0, z: 0 } }, {},
+    tagEnv({ suffixFor: () => ' 3PC' }));
+  expect('one string, suffix included', calls(ctx, 'fillText').map(a => a[0]).join('|'), 'WC 3PC');
+});
+
+suite('drawRoomTag2D', 'UNDER MIN is desk furniture and never prints', R => {
+  const screen = recordingCtx();
+  R.drawRoomTag2D(screen, toS, { name: 'BED 3', at: { x: 0, z: 0 }, underMin: true }, {}, tagEnv());
+  const sheet = recordingCtx();
+  R.drawRoomTag2D(sheet, toS, { name: 'BED 3', at: { x: 0, z: 0 }, underMin: true }, {},
+    tagEnv({ isPrinting: true }));
+  // A compliance nag belongs to the drafter, not to the sheet that goes to site.
+  expect('the drafter is warned', calls(screen, 'fillText').map(a => a[0]).join('|'),
+    'BED 3|UNDER MIN');
+  expect('the sheet is not', calls(sheet, 'fillText').map(a => a[0]).join('|'), 'BED 3');
+});
+
 // ── drawShape2D ──
 const shapeEnv = over => ({
   shapeColor: '#3f8f7a', isPrinting: false,

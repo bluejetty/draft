@@ -501,6 +501,53 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+  // A ROOM TAG: its name, optionally the area under it, and a quiet UNDER MIN
+  // flag when the room fails the office's ROOM MINIMUMS table.
+  //
+  // THE PAINTER RETURNS ITS HIT BOX RATHER THAN RECORDING ONE. MODEL.dc.html's
+  // version pushed onto `this._roomTagHits` as it drew, which is what kept it
+  // local: a painter that writes to the page it is painting for cannot be
+  // handed to a second page. The label's box is a fact ABOUT the paint, so it
+  // comes back as a return value and the editor decides whether to remember
+  // it. A sheet throws it away.
+  //
+  // WHICH TAGS SHOW AN AREA IS THE CALLER'S POLICY, not this function's --
+  // MODEL.dc.html shows them on the main floor only, when the drafter has
+  // asked for areas at all. So `env.areaFor` returns a string or nothing, and
+  // this draws whatever it is given.
+  function drawRoomTag2D(ctx, toS, tag, options, env) {
+    const s = toS(tag.at);
+    const label = String(tag.name || '') + (env.suffixFor ? env.suffixFor(tag) : '');
+    const area = (env.areaFor && env.areaFor(tag)) || '';
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = env.color;
+    ctx.font = '600 13px "Barlow Condensed", system-ui, sans-serif';
+    ctx.textBaseline = area ? 'bottom' : 'middle';
+    const y = area ? s.y - 1 : s.y;
+    ctx.fillText(label, s.x, y);
+    const hit = { tag, x: s.x, y, w: ctx.measureText(label).width };
+    let subY = s.y + 1;
+    if (area) {
+      ctx.font = '500 10px "Barlow Condensed", system-ui, sans-serif';
+      ctx.textBaseline = 'top';
+      ctx.fillText(area, s.x, subY);
+      subY += 11;
+    }
+    // SCREEN ONLY. A compliance nag belongs to the drafter, not to the sheet
+    // that goes to site -- so it is suppressed when printing, exactly as it
+    // was on the page this came from.
+    if (tag.underMin && !env.isPrinting) {
+      ctx.font = '600 9px "Barlow Condensed", system-ui, sans-serif';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = 'rgba(176,64,80,0.85)';
+      ctx.fillText('UNDER MIN', s.x, area ? subY : s.y + 8);
+      ctx.fillStyle = env.color;
+    }
+    ctx.restore();
+    return hit;
+  }
+
   function drawFixture2D(ctx, toS, fixture, options, wall, env) {
     const geo = env.fixtureGeometry(fixture, wall);
     if (!geo) return;
@@ -1722,6 +1769,7 @@ if (!window.DraftRender2D) {
     drawRoof2D,
     drawShape2D,
     drawFixture2D,
+    drawRoomTag2D,
     drawUnderlays2D,
     drawGrid2D,
     drawOrigin2D,

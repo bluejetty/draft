@@ -13342,19 +13342,42 @@ class Component extends DCLogic {
   }
 
   // Grade-beam piles: the beam bears on drilled concrete piles, and BUILD
-  // HOUSE sets the two at the beam corners against the house — the shared
-  // attachment nodes carry the beam ends. The drafter copies/moves the rest
-  // along the beam; a thickened-edge slab needs none.
+  // HOUSE sets the ones the beam cannot do without. The drafter copies/moves
+  // the rest along the beam; a thickened-edge slab and a frost wall both bear
+  // on the ground themselves and need none.
+  //
+  // WHERE THEY GO DEPENDS ON WHETHER THERE IS A HOUSE, and until 21 Sep only
+  // one of the two cases was built. Movie, looking at a detached garage
+  // elevation: *"detached garage will also need piles too when it has GRADE
+  // BEAM selected"*. It was getting none — `garage.open !== true` returned
+  // early, and `open` means ATTACHED (MODEL.dc.html:11879, "an ATTACHED
+  // garage run stays open").
+  //
+  //   ATTACHED   the outline is an OPEN RUN and its two ends are the shared
+  //              attachment nodes against the house. Those carry the beam
+  //              ends, so those are the piles. Unchanged.
+  //   DETACHED   the outline is a CLOSED RING with no house to lean on, so
+  //              the beam runs the whole perimeter and every CORNER bears.
+  //              The first and last index mean nothing special here -- taking
+  //              them, as the attached rule does, would have put two piles on
+  //              one adjacent pair and left the other two corners in the air.
   _buildGaragePiles() {
     const levelId = 1;
     const elevation = this.state.levels.find(level => level.id === levelId)?.elev ?? 0;
     let builtAny = false;
     this._garageOutlines(levelId).forEach(garage => {
-      if (garage.open !== true) return;
       // Piles carry a hung beam. A thickened-edge slab and a frost wall
       // both bear on the ground themselves.
       if (this._garageFoundation(garage) !== 'gradebeam') return;
-      const ends = [garage.points[0], garage.points[garage.points.length - 1]];
+      const attached = garage.open === true;
+      // A closed ring may repeat its first point at the end; one pile per
+      // distinct corner either way, and the existing-column check below is a
+      // second net under that.
+      const ring = garage.points.filter((pt, i) => i === 0
+        || Math.hypot(pt.x - garage.points[0].x, pt.z - garage.points[0].z) > 0.01);
+      const ends = attached
+        ? [garage.points[0], garage.points[garage.points.length - 1]]
+        : ring;
       ends.forEach(end => {
         const exists = this._columns.some(column => column.levelId === levelId
           && column.view === 'foundation'
@@ -21624,42 +21647,30 @@ class Component extends DCLogic {
     return window.DraftRoomGrow.wcSuffix(kinds);
   }
 
+  // W1. The painting moved to render-2d.js as `drawRoomTag2D`; what stays here
+  // is the three page facts it cannot know -- the WC suffix read off this
+  // level's fixtures, which tags get an area (main floor only, and only when
+  // the drafter asked), and the hit list the editor keeps so a tag can be
+  // dragged or renamed.
+  //
+  // THE HIT LIST IS WHY THIS WAS LOCAL. The old version pushed onto
+  // `this._roomTagHits` as it drew, and a painter that writes to its page
+  // cannot be lent to a second one. The shared painter RETURNS the box it
+  // painted; this collects them. A construction sheet ignores the return.
   _drawRoomTags2D(ctx, toS) {
     const tags = this._activeRoomTags();
     this._roomTagHits = [];
     if (!tags.length) return;
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.fillStyle = ROOM_TAG_COLOR;
+    const env = {
+      color: ROOM_TAG_COLOR,
+      isPrinting: this._isPrinting,
+      suffixFor: tag => this._wcSuffixFor(tag),
+      areaFor: tag => (this.state.roomAreasOn && tag.levelId === MAIN_FLOOR_LEVEL_ID
+        && tag.areaSqFt > 0 ? this._areaLabel(tag.areaSqFt) : ''),
+    };
     tags.forEach(tag => {
-      const s = toS(tag.at);
-      const label = tag.name + this._wcSuffixFor(tag);
-      const area = this.state.roomAreasOn && tag.levelId === MAIN_FLOOR_LEVEL_ID && tag.areaSqFt > 0
-        ? this._areaLabel(tag.areaSqFt) : '';
-      ctx.font = '600 13px "Barlow Condensed", system-ui, sans-serif';
-      ctx.textBaseline = area ? 'bottom' : 'middle';
-      ctx.fillText(label, s.x, area ? s.y - 1 : s.y);
-      // Every tag is grabbable: press-drag moves it, a click renames it
-      // (board #198) — the hit rides the painted label like pad labels do.
-      this._roomTagHits.push({ tag, x: s.x, y: area ? s.y - 1 : s.y, w: ctx.measureText(label).width });
-      let subY = s.y + 1;
-      if (area) {
-        ctx.font = '500 10px "Barlow Condensed", system-ui, sans-serif';
-        ctx.textBaseline = 'top';
-        ctx.fillText(area, s.x, subY);
-        subY += 11;
-      }
-      if (tag.underMin && !this._isPrinting) {
-        // Quiet compliance feedback, screen only: the room fails the office's
-        // ROOM MINIMUMS table (COMPANY STANDARDS).
-        ctx.font = '600 9px "Barlow Condensed", system-ui, sans-serif';
-        ctx.textBaseline = 'top';
-        ctx.fillStyle = 'rgba(176,64,80,0.85)';
-        ctx.fillText('UNDER MIN', s.x, area ? subY : s.y + 8);
-        ctx.fillStyle = ROOM_TAG_COLOR;
-      }
+      this._roomTagHits.push(window.DraftRender2D.drawRoomTag2D(ctx, toS, tag, {}, env));
     });
-    ctx.restore();
   }
 
   _commitNoteFillOpacity() {

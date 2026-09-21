@@ -121,8 +121,47 @@ test('SAVE AS prefills the generated name, selects it, and lets it be typed over
     expect(await box.inputValue()).toMatch(/^\d{8}T\d{4}\.plan$/);
   });
 
-test('SAVE AS writes the store FIRST and downloads exactly those bytes',
+// ── THE TWO WAYS A DRAWING REACHES A DISK ────────────────────────────────
+//
+// SAVE AS opens the platform's own save dialog where it can -- so the drafter
+// picks the folder and can find the file again -- and falls back to a browser
+// download where it cannot. `showSaveFilePicker` is Chromium only, so BOTH
+// paths are real and both are exercised below.
+//
+// Playwright cannot operate a native dialog, and this runs on Chromium, so a
+// spec that does nothing lands in the picker and hangs. Each test says which
+// path it is testing rather than inheriting whatever the browser happens to
+// support.
+
+// Take the picker away: the page must still save, the old way.
+const forceDownloadPath = page => page.addInitScript(() => {
+  try { delete window.showSaveFilePicker; } catch { window.showSaveFilePicker = undefined; }
+});
+
+// Stand a fake picker in its place. It records what it was asked for and
+// captures whatever is written through the handle, so a test can check the
+// bytes landed without a real file dialog existing.
+const stubPicker = (page, { cancel = false } = {}) => page.addInitScript(cancelled => {
+  window.__picker = { calls: [], written: null };
+  window.showSaveFilePicker = async options => {
+    window.__picker.calls.push(options);
+    if (cancelled) {
+      const error = new Error('The user aborted a request.');
+      error.name = 'AbortError';
+      throw error;
+    }
+    return {
+      createWritable: async () => ({
+        write: async data => { window.__picker.written = data; },
+        close: async () => {},
+      }),
+    };
+  };
+}, cancel);
+
+test('SAVE AS writes the store FIRST and downloads exactly those bytes (no picker)',
   async ({ page }) => {
+    await forceDownloadPath(page);
     await openPage(page);
     await makeDirty(page);
 
@@ -144,6 +183,7 @@ test('SAVE AS writes the store FIRST and downloads exactly those bytes',
   });
 
 test('a refused store write hands out NO file', async ({ page }) => {
+  await forceDownloadPath(page);
   await openPage(page);
   await makeDirty(page);
 
@@ -166,6 +206,51 @@ test('a refused store write hands out NO file', async ({ page }) => {
     'the store must have been asked, or this proves nothing').toBe(1);
   expect(downloaded, 'a refused write must not hand over a file').toBe(false);
   // And the drafter is told, and still has the edit.
+  await expect(page.locator('[data-model-save]')).toHaveText('UNSAVED');
+});
+
+test('where the platform has a save dialog, SAVE AS writes through it', async ({ page }) => {
+  await stubPicker(page);
+  await openPage(page);
+  await makeDirty(page);
+
+  let downloaded = false;
+  page.on('download', () => { downloaded = true; });
+  await page.locator('#file-save-as').click();
+  await page.locator('#save-as-name').fill('my-house.draft');
+  await page.locator('[data-save-as-go]').click();
+  await expect(page.locator('[data-model-save]')).toHaveText('SAVED');
+
+  const picker = await page.evaluate(() => window.__picker);
+  // Asked once, with the name the drafter typed -- so the dialog opens on
+  // their filename rather than making them type it twice.
+  expect(picker.calls).toHaveLength(1);
+  expect(picker.calls[0].suggestedName).toBe('my-house.draft');
+  // THE BYTES WENT THROUGH THE HANDLE, which is the whole point: the file is
+  // where the drafter put it, not wherever the browser keeps downloads.
+  expect(picker.written).toBe(JSON.stringify(await h.savedDrawing(page)));
+  expect(downloaded, 'a picked file must not ALSO be downloaded').toBe(false);
+});
+
+test('backing out of the save dialog is not an error, and writes nothing', async ({ page }) => {
+  await stubPicker(page, { cancel: true });
+  await openPage(page);
+  await makeDirty(page);
+
+  let downloaded = false;
+  page.on('download', () => { downloaded = true; });
+  await page.locator('#file-save-as').click();
+  await page.locator('#save-as-name').fill('my-house.draft');
+  await page.locator('[data-save-as-go]').click();
+  await page.waitForTimeout(400);
+
+  // A CANCEL IS A NORMAL PRESS. The API reports it as an AbortError, and the
+  // drafter must not be shown a failure for changing their mind.
+  expect(downloaded, 'a cancelled dialog must not fall through to a download').toBe(false);
+  // The card stays up with the typed name intact, so Save can be pressed again.
+  await expect(page.locator('#save-as')).toBeVisible();
+  expect(await page.locator('#save-as-name').inputValue()).toBe('my-house.draft');
+  // And the edit is still unsaved, because nothing was saved.
   await expect(page.locator('[data-model-save]')).toHaveText('UNSAVED');
 });
 

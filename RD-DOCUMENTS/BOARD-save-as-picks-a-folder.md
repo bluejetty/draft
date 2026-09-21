@@ -5,8 +5,14 @@
 > *"also for later: when the user selects 'Save As' it should allow them to
 > select a folder to save in"*
 
-Status: **RECORDED, NOT BUILT**, at his instruction. The facts below were
-cheap to take while the page was open; none of it is a design.
+Status: **BUILT, 21 Sep** — after it bit him for real:
+
+> *"when i select SAVE AS - i need to be able to select the folder. I just
+> saved the file but have no clue where it is"*
+
+The facts below were taken while the page was open, a day before it was
+built, and every one of them held. The three open decisions are answered at
+the foot.
 
 ---
 
@@ -69,3 +75,49 @@ Two further constraints worth knowing before it is scoped:
    The fallback path is testable as it is now; the picker path would need the
    API stubbed, which is a test that proves the page CALLS it rather than that
    the file lands.
+
+
+---
+
+## Built, 21 Sep — and the three decisions, answered
+
+**1. THE CARD STAYS, ON BOTH BROWSERS.** It also carries the `.draft` / `.json`
+extension choice, and one flow is easier to reason about than two. The name
+typed into it is handed to the picker as `suggestedName`, so the platform
+dialog opens on the drafter's filename rather than making them type it twice.
+
+**2. THE HANDLE IS NOT REMEMBERED.** SAVE AS asks every time, which is what
+SAVE AS means. Remembering it is a different feature — a SAVE that overwrites
+in place — and it wants its own decision rather than arriving as a side effect
+of this one.
+
+**3. WHAT THE SPECS DRIVE — and this was the sharp end.** Playwright runs
+Chromium, which HAS `showSaveFilePicker`, so the two existing SAVE AS specs
+stopped passing the moment the picker was wired in: they sat in a native
+dialog nobody could press. Predicted by this board a day earlier and it
+happened exactly as written.
+
+Both paths are now named rather than inherited:
+
+    forceDownloadPath(page)   deletes the API, so the old download path runs
+    stubPicker(page)          a fake picker that records what it was asked
+                              and captures what was written through it
+
+Four specs in `model-file-row.spec.js`: the download path keeps its
+byte-for-byte assertion, a refused store write still hands over nothing, a
+picked save writes **through the handle** with the typed name and does NOT
+also download, and **a cancelled dialog writes nothing, shows no error, and
+leaves the card up with the typed name intact.**
+
+## The one thing that had to be got right, and nearly was not
+
+**THE PICKER IS OPENED FROM THE CLICK.** A save dialog is gated on a user
+gesture, and the gesture is spent by the first `await` that yields. The
+obvious place to call it is inside `downloadDrawing`, beside the code it
+replaces — and there it would **silently never open**, because `save()` has
+already awaited the serialization by then.
+
+So `pickSaveTarget` is called first, before the drawing is turned into bytes,
+and the handle is carried down through `save({ download, handle })`. This
+board named that trap the day before, which is the only reason it was not
+walked into.

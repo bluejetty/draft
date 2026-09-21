@@ -127,13 +127,36 @@ test('BUILD HOUSE sets 2 piles at the beam corners against the house — never d
   expect(rebuilt.columns).toHaveLength(2);
 });
 
-test('a detached garage gets no automatic piles', async ({ page }) => {
+// RULING OVERTURNED, 21 Sep 2026. This test read "a detached garage gets no
+// automatic piles", and its comment gave the reason: "a DETACHED garage
+// (grade beam) stands on its own — its supports are the drafter's call, so
+// BUILD HOUSE places none." That was a decision, not an oversight, and it is
+// recorded here rather than quietly deleted.
+//
+// Movie overturned it, looking at a detached garage elevation:
+//
+//     "detached garage will also need piles too when it has GRADE BEAM
+//      selected"
+//
+// A hung beam with nothing under it is not a drawing to hand anyone, whether
+// or not a house is attached to it. So BUILD HOUSE now places the piles the
+// beam cannot do without, in both cases — and the two cases place them
+// differently, which is the whole of the change:
+//
+//     ATTACHED   an OPEN RUN, whose two ends are the shared attachment nodes
+//                carrying the beam. Two piles. (Asserted above.)
+//     DETACHED   a CLOSED RING with nothing to lean on, so the beam runs the
+//                whole perimeter and every CORNER bears.
+//
+// The convention is unchanged: BUILD HOUSE sets the structural minimum and
+// the drafter copies the rest along the beam, which is what the COPY test
+// below exercises.
+test('a detached garage gets a pile at every corner of its grade beam', async ({ page }) => {
   await h.openModel(page);
-  // A DETACHED garage (grade beam) stands on its own — its supports are the
-  // drafter's call, so BUILD HOUSE places none.
   await h.selectTool(page, 'Outline');
   await page.locator('[data-mark-detached-garage]').click();
-  for (const [x, z] of [[-6, -5], [6, -5], [6, 5], [-6, 5]]) await h.clickWorld(page, x, z);
+  const corners = [[-6, -5], [6, -5], [6, 5], [-6, 5]];
+  for (const [x, z] of corners) await h.clickWorld(page, x, z);
   await page.keyboard.press('Enter');
   await page.locator('[data-detached-grade-beam]').click();
   await h.waitForSaved(page);
@@ -141,7 +164,19 @@ test('a detached garage gets no automatic piles', async ({ page }) => {
   await h.waitForSaved(page);
 
   const saved = await h.savedDrawing(page);
-  expect(saved.columns ?? []).toHaveLength(0);
+  expect(saved.columns).toHaveLength(4);
+  // One per corner, and no corner left in the air -- which is the failure the
+  // attached rule would have produced if it were reused here, since its first
+  // and last index are one adjacent PAIR on a ring.
+  corners.forEach(([x, z]) => {
+    expect(saved.columns.some(column =>
+      h.near(column.point.x, x, 0.05) && h.near(column.point.z, z, 0.05)),
+    `no pile at corner ${x},${z}`).toBe(true);
+  });
+
+  // A second BUILD HOUSE never doubles them, the same as the attached case.
+  await buildHouse(page);
+  expect((await h.savedDrawing(page)).columns).toHaveLength(4);
 });
 
 test('COPY captures a pile and drops repeats along the beam', async ({ page }) => {

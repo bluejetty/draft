@@ -14269,7 +14269,7 @@
   // Returns whether the write landed, because SAVE FIRST in the unsaved guard
   // has to know: a guard that offered to save, failed, and threw the drawing
   // away anyway would be worse than no guard at all.
-  const save = async ({ download = null } = {}) => {
+  const save = async ({ download = null, handle = null } = {}) => {
     if (!drawing) return false;
     // A READ-ONLY PAGE DOES NOT ASK. The store would refuse it anyway — that gate
     // is the authority and is tested on its own — but a page that fires a write
@@ -14284,7 +14284,7 @@
       // give them a copy of a drawing the shared store does not have, named
       // as though it were saved.
       const contents = await writeDrawing();
-      if (download) downloadDrawing(contents, download);
+      if (download) await downloadDrawing(contents, download, handle);
       // The note described a difference this save has just resolved.
       if (elsewhereNote) elsewhereNote.hidden = true;
       saveButton.disabled = false;
@@ -14334,7 +14334,25 @@
   const generatedFileName = () =>
     window.DraftDrawingFormat.drawingFileName(chosenExtension());
 
-  const downloadDrawing = (contents, name) => {
+  // TWO WAYS TO PUT A FILE ON A DISK, and both have to keep working.
+  //
+  // With a HANDLE the drafter already chose the folder in their own save
+  // dialog, so the file goes exactly where they put it and they can find it
+  // again. Without one this is a DOWNLOAD: the drafter names the file and the
+  // BROWSER picks the folder -- which is the half Movie could not live with,
+  // having saved a drawing and had "no clue where it is".
+  //
+  // The fallback is not a lesser path to be removed later. `showSaveFilePicker`
+  // is Chromium only -- Chrome, Edge, Brave, Opera -- and Firefox and Safari
+  // do not implement it, so a download is the only thing those browsers can
+  // do. Both paths ship; both stay tested.
+  const downloadDrawing = async (contents, name, handle = null) => {
+    if (handle) {
+      const writable = await handle.createWritable();
+      await writable.write(contents);
+      await writable.close();
+      return;
+    }
     const file = new File([contents], name, { type: 'application/json' });
     const url = URL.createObjectURL(file);
     const link = document.createElement('a');
@@ -14342,6 +14360,37 @@
     link.download = file.name;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
+  // THE PICKER IS OPENED FROM THE CLICK AND NOTHING MAY COME BEFORE IT.
+  // A save dialog is gated on a user gesture, and the gesture is spent by the
+  // first `await` that yields -- so this is called before the drawing is
+  // serialised, not after. Putting it where `downloadDrawing` sits would be
+  // the obvious place and the dialog would silently never open.
+  //
+  // Returns a handle, or null to mean "use the download path", and throws
+  // nothing: CANCEL IS A NORMAL PRESS, not a failure. The API reports a
+  // back-out as an AbortError exception, and a Save that treated that as an
+  // error would put a scary notice on screen for somebody who simply changed
+  // their mind -- so it comes back as the string 'cancelled' and the caller
+  // leaves the card alone.
+  const pickSaveTarget = async suggestedName => {
+    if (!window.showSaveFilePicker) return null;
+    try {
+      return await window.showSaveFilePicker({
+        suggestedName,
+        types: [{
+          description: 'Rough Drafter drawing',
+          accept: { 'application/json': ['.draft', '.json'] },
+        }],
+      });
+    } catch (error) {
+      if (error && error.name === 'AbortError') return 'cancelled';
+      // Anything else -- a blocked picker, a sandboxed frame -- is not worth
+      // stopping a save for. Fall through to the download the page has always
+      // done, which works everywhere.
+      return null;
+    }
   };
 
   // THE GUARD IS ONE FUNCTION WITH THREE WAYS OUT, and the caller's work
@@ -14471,8 +14520,14 @@
   if (saveAsBox) {
     saveAsBox.querySelector('[data-save-as-go]').addEventListener('click', async () => {
       const typed = saveAsName.value.trim() || generatedFileName();
+      // The picker first, because the gesture is spent by the first await.
+      const handle = await pickSaveTarget(typed);
+      // A cancelled dialog leaves the card up: the drafter's typed name is
+      // still there and they can press Save again or Cancel themselves.
+      // Closing it for them would read as "something went wrong".
+      if (handle === 'cancelled') return;
       closeSaveAs();
-      await save({ download: typed });
+      await save({ download: typed, handle });
     });
     saveAsBox.querySelector('[data-save-as-cancel]').addEventListener('click', closeSaveAs);
     saveAsName.addEventListener('keydown', event => {
