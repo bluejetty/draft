@@ -22,5 +22,8 @@ the first.
    *"something wrong with the gable/roof area, maybe due to the connection to
    the house"* and *"we should avoid locating a window where a roof will
    interfere with it"*. On this drawing the garage roof runs up into the house
-   wall and crosses a second-storey window. Both are open and neither is
-   diagnosed; see RD-DOCUMENTS/BOARD-garage-roof-meets-the-house.md.
+   wall and crosses a second-storey window. **Diagnosed**, and it is neither
+   the gable nor the connection: the garage ridge sits at `x = 8` and the
+   window spans `x 6..10`, so the roof comes up through the middle of it.
+   `auto-windows.js` has no idea roofs exist. See
+   RD-DOCUMENTS/BOARD-a-roof-through-a-window.md.
