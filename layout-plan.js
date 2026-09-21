@@ -206,6 +206,22 @@ if (!window.DraftLayoutPlan) {
     const walls = planWalls(saved, levelId, view);
     if (!walls.length) return false;
 
+    // THE BUILDING, OR THE CONSTRUCTION DOCUMENT. `env.shell` asks for the
+    // first: walls, floors, roofs and the holes in them, and nothing that
+    // exists to be READ -- no dimension strings, no notes, no fixtures, no
+    // stairs, no beams or columns.
+    //
+    // It is not a style. It is what a plan MEANS at a different distance. A
+    // house on a neighbourhood at 1"=40' is a building among buildings, and
+    // its dimension strings at that scale are a blue smudge that hides the
+    // walls they measure -- measured by looking at four real houses placed on
+    // city/index.html, which is the caller this was added for.
+    //
+    // Every stage in plan-composition.js is already env-gated, so this only
+    // has to decline to build an env rather than teach the composer a mode.
+    const shell = env.shell === true;
+    const unless = built => (shell ? null : built);
+
     const of = key => (Array.isArray(saved?.[key]) ? saved[key] : []);
     const openings = of('surfaceOpenings');
     const surfaceOpeningsFor = (hostType, hostId) => openings.filter(opening =>
@@ -298,7 +314,7 @@ if (!window.DraftLayoutPlan) {
       // THE LAYER ANSWERS YES because this page keeps no layer table. A sheet
       // with no standards draws the drawing rather than nothing, which is the
       // same rule the composition applies to every other collection.
-      stairEnv: stairLevels ? {
+      stairEnv: !shell && stairLevels ? {
         layer: { visible: true, printable: true },
         isPrinting: false,
         elev: levelElev,
@@ -330,7 +346,7 @@ if (!window.DraftLayoutPlan) {
       // storey is not one. This also keeps the wall objects identical to the
       // ones the composition looks the host up in, so a tub and its host agree
       // about which wall they mean.
-      fixtureEnv: fixtures && closets ? {
+      fixtureEnv: !shell && fixtures && closets ? {
         fixtureGeometry: (fixture, wall) => fixtures.fixtureGeometry(walls, fixture, wall),
         wallCross: (a, frame, b) => fixtures.wallCross(a, frame, b),
         wallFrame: wall => fixtures.wallFrame(wall),
@@ -355,12 +371,12 @@ if (!window.DraftLayoutPlan) {
       // columns the drawing's ink. MODEL.html reads them off its skin; this
       // page is white paper like MODEL.dc.html, so it takes that page's
       // literals.
-      structureEnv: {
+      structureEnv: unless({
         isPrinting: false,
         beamColor: '#7a4a21',
         columnColor: '#1d1f20',
         labelFont: "600 9px 'Barlow Condensed', system-ui, sans-serif",
-      },
+      }),
       beams: of('beams'),
       columns: of('columns'),
       // ONLY A PILE CHANGES THE DRAWN SHAPE; a telepost is the default square.
@@ -380,11 +396,11 @@ if (!window.DraftLayoutPlan) {
       // a construction OUTLINE -- deliberately unlike a floor or a roof -- so
       // a sheet missing one is missing a guide, not a building.
       shapeEnv: null,
-      dimensionEnv: {
+      dimensionEnv: unless({
         label: ft => fmt.formatArchitecturalInches(ft * 12),
         colors: DIMENSION_COLORS,
-      },
-      noteEnv: { color: '#1d1f20', fillColor: paperColor },
+      }),
+      noteEnv: unless({ color: '#1d1f20', fillColor: paperColor }),
     });
     return true;
   }
