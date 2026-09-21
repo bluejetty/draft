@@ -214,7 +214,8 @@ those"*.
 | ✔ | a hand-placed viewport walks the scale ladder down until it fits | `c24efed` |
 | ✔ | stairs | `4863369` |
 | ✔ | washrooms — which turned out to be fixtures | `9c94a3c` |
-| | kitchen | |
+| | kitchen — already drawn, being the same fixture record | `66fa5bf` |
+| | **STAIR SECTIONS — not on a sheet, see below** | |
 
 ### Two things the work changed about this order's own assumptions
 
@@ -237,3 +238,73 @@ what the KITCHEN item will want, since a kitchen is the same record.
 The lesson for the remaining stages is worth stating: **check what the thing IS
 before costing the port.** Two of the six items so far were not shaped the way
 their names suggested.
+
+---
+
+## STAIR SECTIONS — drawn in the model, and they cannot reach a sheet
+
+**Movie, 21 Sep**, with a screenshot of the STAIR layer view:
+
+> *"also you might already have this done: STAIR sections"*
+
+**Half done. The section exists and it is good** — his screenshot shows
+`SECTION — 14R @ 7 13/16" · TREADS FULL 2x12 · RISERS 3/4" PLY FACE @ 11"`,
+the raking section with every tread and riser, EDGE OF STAIR OPENING, LANDS ON
+THE MAIN FL SUBFLOOR, the plan below it, and the site note about adjusting
+risers down only. **It cannot get onto a construction sheet**, for three
+reasons, each measured.
+
+### 1. The section is GENERATED, not stored
+
+Nothing in a saved drawing is a stair section. Checked on
+`proto/repro-washroom-bungalow.draft`, which carries two stairs:
+
+    walls    plan/L3 8   plan/L5 8   foundation/L1 4
+    lines    foundation/L1 8
+    stairs   plan/L3 1   plan/L5 1
+    notes    (none)
+
+**No entity anywhere is on the `stair` view.** The STAIR set is a locked
+generated workspace, exactly like the cut view was before `cut-view.js` was
+extracted: MODEL.dc.html derives the whole drawing from the one stair record
+every time it paints.
+
+### 2. Its painter is local to MODEL.dc.html — 624 lines of it
+
+    _stairWorkspaceActive     8476   5 lines
+    _stairWorkspaceFrame      8522  75
+    _drawStairWorkspace2D     8566  31
+    _drawStairSectionPane     8597 170
+    _drawStairPlanPane        8767 343
+                                  ---
+                                   624
+
+None of it is a shared module. **This is the same shape of work `cut-view.js`
+already went through** and it is the honest cost of the item: an extraction,
+not a wiring job like beams, stairs-on-plan or fixtures were.
+
+### 3. Two gates would refuse it even once it were shared
+
+- `_composeDefaultSet` deals elevations, floor plans, the foundation, sections
+  and the basement. **There is no STAIR sheet in the set** and no UI to ask
+  for one.
+- `planSheet(levelId, view)` gates on `planWalls(...).length`, and `drawPlan`
+  bails with `if (!walls.length) return false`. **A stair view has no walls**
+  — its contents are `A-STR`, `A-FL-OPNG`, `STAIR SECTION`, `A-ANNO-NOTE`
+  (`layer-views.js:24`) — so a hand-placed STAIR viewport would draw nothing
+  even today. The walls gate is a reasonable rule for a floor plan and a wrong
+  one for every generated view.
+
+### What it would take
+
+1. Lift the 624 lines into `stair-section.js` the way `cut-view.js` was lifted,
+   reading the model through an env of plain accessors. `stair-geometry.js`
+   already owns the arithmetic, so what moves is the drafting.
+2. Give a viewport a `kind: 'stair'` beside `plan`, `elevation` and `section`.
+3. Replace the walls gate with "would this view put ink on the sheet", which
+   the generated views need and the floor plans keep satisfying.
+4. Deal a STAIR sheet per stair in `_composeDefaultSet`.
+
+**A stair section is a sheet a framer actually reads on site**, so this is not
+a nice-to-have — but it is a bigger item than the five before it, and it is
+recorded at its real size rather than folded into the running list.
