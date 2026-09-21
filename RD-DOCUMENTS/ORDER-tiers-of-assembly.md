@@ -70,21 +70,40 @@ already the GROUP. No saved drawing is rewritten, no button is renamed, and
 Stage 1's question ("what is a member?") is answered for the group case by
 what is already there.
 
-What is NEW is the definition tier, which has no word yet. Candidates, with
-the argument for each rather than a vote:
+### The words — Movie, 21 Sep
 
-    PART        ArchiCAD's own "Library Part", shortened. Movie's daily
-                vocabulary, short enough for a button, no collision.
-    UNIT        Already washroom.js's word for exactly this thing -- "THE
-                UNIT, IN FEET, ANCHORED AT ITS WET-WALL CORNER", "the unit
-                brings its own walls". BUT `UNITS` is the imperial/metric
-                toggle in the top bar, so the two collide where they are read.
-    COMPONENT   Unambiguous and BIM-standard. Long for a terse uppercase UI.
-    PRESET      Already in the UI as "L PRESET" -- but a preset reads as a
-                one-shot drop, and this is a living definition that instances
-                follow.
+> *"hmm we should also use GROUP and the user selected stuff and use ASSEMBLY
+> for KITCHEN and WC (Object Library/Block)"*
 
-**UNRESOLVED and it is Movie's word to pick.**
+    GROUP      what the drafter selects and bundles          = AutoCAD GROUP
+    ASSEMBLY   WC, KITCHEN, CABINET, SINK, STAIRS            = BLOCK /
+               a definition the app owns, placed as instances  Library Part
+
+**So `ASSEMBLY` MOVES UP A TIER** — it names the definition, not the bundle —
+and `GROUP` takes the meaning today's ASSEMBLY button has. That reads as a
+rename with migration behind it. It is much less than that, for two reasons.
+
+**1. THE CODE ALREADY SAYS GROUP. ONLY THE UI SAYS ASSEMBLY.** The record is
+`groups`, the array is `this._groups` (23 references), the lookups are
+`_groupForItem` and `_groupItems`, the state is `groupNameInput` and
+`groupDialogOpen`, and **the teardown button already reads UNGROUP** beside a
+create button reading ASSEMBLY. The rename does not introduce an
+inconsistency; it ENDS one that is in the UI today.
+
+**2. THE DISCRIMINATOR IS ALREADY IN SAVED DRAWINGS.** `dealt: true`
+(MODEL.dc.html:3503) is written onto a group the bone placed, and its own
+comment says what it means: *"THE BONE PLACED THIS, NOT THE DRAFTER."* That is
+exactly the line this whole design divides on — app-made against drafter-made
+— and it is already a persisted field. `proto/repro-washroom-bungalow.draft`
+carries `dealt: true` on both WASHROOM groups, so **Movie's own file already
+declares which of its bundles are assemblies and which would be groups.**
+
+**ONE WART, NAMED SO IT IS NOT A SURPRISE.** Existing drawings carry groups
+whose stored name defaults to `ASSEMBLY 1`, `ASSEMBLY 2` (MODEL.dc.html:6101).
+After the rename those read like the other tier. They are drafter-facing names
+on drafter-made bundles, and the standing rule is that a drawing nobody asked
+to have edited is not rewritten — so they stay as they are, and only the
+DEFAULT for new ones becomes `GROUP n`.
 
 ## The one-line shape
 
@@ -330,8 +349,8 @@ the first, but it is his call and it is not worth guessing.
 
 - **Whether "a seperate one for WC" meant KITCHEN.** Read that way throughout.
   The centre of the order depends on it.
-- **What the definition tier is CALLED** — PART, UNIT, COMPONENT, PRESET or
-  Movie's own word. The split itself is settled; the noun is not.
+- ~~**What the definition tier is CALLED.**~~ **ANSWERED, 21 Sep**: ASSEMBLY
+  is the definition, GROUP is the drafter's bundle.
 - **What a re-hosted sink keeps** — offset, centre, or world position.
 - **What a click on a nested assembly selects**, and how a drafter descends.
 - **Whether a copied fixture may re-host onto a different wall**, or is refused.
