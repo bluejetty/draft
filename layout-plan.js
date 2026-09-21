@@ -252,6 +252,28 @@ if (!window.DraftLayoutPlan) {
         garageEdgeTaperRunIn: STANDARDS.GARAGE_EDGE_DEPTH_IN - STANDARDS.GARAGE_SLAB_THICKNESS_IN,
         colors: FLOOR_COLORS,
       },
+      // BEAMS AND COLUMNS, which a foundation sheet is arguably FOR: a site
+      // builder setting teleposts reads them off this drawing. The painters
+      // are render-2d.js's own -- drawBeam2D and drawColumn2D, with a mutation
+      // suite already on them -- so this supplies colour and nothing else.
+      //
+      // THE MODEL SPACE'S INKS, carried rather than re-chosen: beams brown,
+      // columns the drawing's ink. MODEL.html reads them off its skin; this
+      // page is white paper like MODEL.dc.html, so it takes that page's
+      // literals.
+      structureEnv: {
+        isPrinting: false,
+        beamColor: '#7a4a21',
+        columnColor: '#1d1f20',
+        labelFont: "600 9px 'Barlow Condensed', system-ui, sans-serif",
+      },
+      beams: of('beams'),
+      columns: of('columns'),
+      // ONLY A PILE CHANGES THE DRAWN SHAPE; a telepost is the default square.
+      // The same rule MODEL.html:3266 applies, and it is the CALLER's answer
+      // rather than the painter's.
+      columnFooting: column => (/pile/i.test(String(column.footing || ''))
+        ? { pile: true, sizeIn: 6, label: column.footing } : null),
       roofEnv: {
         isPrinting: false,
         offsetOutline: (pts, dist) => geo.offsetOutline(pts, dist),
