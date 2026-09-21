@@ -364,3 +364,65 @@ the first, but it is his call and it is not worth guessing.
 - **Whether any spec pins the three member types.** `_itemForMember`'s
   three-way ladder is the kind of thing a test asserts by exhaustion, and
   Stage 1 adds a fourth arm to it.
+
+
+---
+
+## THE THIRD WORD: FIT-OUT — Movie, 21 Sep
+
+> *"a CABINET would be an ASSEMBLY.. an ASSEMBLY of ASSEMBLE should be given a
+> different name maybe. the KITCHEN is a higher level ASSEMBLY or ASSEMBLYs, do
+> you have a name idea"* — *"ok FIT-OUT lets do it"*
+
+    GROUP      what the drafter selects and bundles
+    ASSEMBLY   ONE INSTALLED THING -- a cabinet, a sink, a WC pan. It has a
+               model number.
+    FIT-OUT    A ROOM'S WORTH OF THEM -- a kitchen, a bathroom. It has a
+               LAYOUT.
+
+### The rule is what a thing IS, not how deep it nests
+
+The question arrived as *"an assembly of assemblies should be given a
+different name"*, and **that rule does not divide its own examples.** A sink
+sits inside a cabinet and both are assemblies — so a cabinet is already an
+assembly of assemblies, and by that rule it would need the new word too. But
+a cabinet is plainly an ASSEMBLY and a kitchen is plainly the other thing.
+
+So the line is drawn on KIND rather than on DEPTH: one installed thing against
+a room's worth of them. That survives nesting at any depth, which "contains
+assemblies" does not, and it is why a CABINET stays an ASSEMBLY no matter how
+many assemblies end up inside it.
+
+### SUITE was the better word and it is taken
+
+`SUITE` means exactly this in the trade — a bathroom suite is the WC, basin
+and bath together. It is ruled out on evidence: **`ENSUITE` is already in this
+app**, meaning a ROOM TYPE. `SUITE` for a bundle of fittings standing beside
+`ENSUITE` for the bathroom off a bedroom would be two close words meaning
+unrelated things.
+
+`KIT` was considered and dropped: every `KITCHEN` in the codebase contains the
+substring, which makes both reading and searching worse. `MODULE` is
+ArchiCAD's word and would be familiar, but it is abstract for a tool that
+otherwise says plain trade words.
+
+### The hyphen: FIT-OUT in the label, `fitout` in the file
+
+Not a compromise — the convention the codebase already follows:
+
+    GRADE BEAM              'gradebeam'
+    THICKENED-EDGE SLAB     'thickened'
+    FIT-OUT                 'fitout'
+
+`THICKENED-EDGE SLAB` is already a hyphenated uppercase label, so `FIT-OUT`
+reads as native there. And `GRADE BEAM -> 'gradebeam'` shows a stored value
+already dropping the punctuation its label carries. Identifiers take `fitOut`,
+a hyphen not being available to them.
+
+### One thing this does NOT settle
+
+Whether a FIT-OUT is a DEFINITION with instances or a BUNDLE of real items —
+the fork recorded above, still open. Naming the tier does not answer whether
+twelve kitchens follow one definition. Nor does it answer how a drafter ENTERS
+a nested assembly to edit the sink inside the cabinet; ArchiCAD's Suspend
+Groups is the proven answer and this app has nothing like it.
