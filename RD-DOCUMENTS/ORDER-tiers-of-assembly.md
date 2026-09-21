@@ -40,19 +40,65 @@ wrong at its centre and wants correcting before anything is built.
 
 ---
 
+## THE FORK IS SETTLED — Movie, 21 Sep
+
+`BOARD-xrefs-blocks-and-what-an-assembly-is.md` raised the one question that
+had to be answered before Stage 1: is an assembly AutoCAD's GROUP (a bundle of
+specific items) or its BLOCK (a definition with instances)? Movie answered it
+while working out the AutoCAD vocabulary:
+
+> *"ah ya my KITCH and BATHROOM would be BLOCK/Library Part and the GROUP
+> would be when the user selects and assembles them"*
+
+**It is BOTH, and which one depends on who made it.**
+
+    made by the APP      WC, KITCHEN, CABINET, SINK, STAIRS
+                         a DEFINITION with instances        = BLOCK
+    made by the DRAFTER  whatever they selected and bundled
+                         a bundle of real items             = GROUP
+
+**AND THIS IS THE SAME RULE HE ALREADY GAVE, SEEN FROM THE OTHER SIDE.** The
+name lock said: app-made names are locked, drafter-made names are theirs. The
+split says: app-made things are definitions, drafter-made things are bundles.
+**One line divides both** — who made it — so there is no second flag to keep in
+step with the first. A thing with a locked name is a definition; a thing you
+can rename is a bundle.
+
+**WHICH MEANS `ASSEMBLY` KEEPS ITS CURRENT MEANING AND NOTHING MIGRATES.**
+Today's assembly is already the drafter's own bundle of real items — it is
+already the GROUP. No saved drawing is rewritten, no button is renamed, and
+Stage 1's question ("what is a member?") is answered for the group case by
+what is already there.
+
+What is NEW is the definition tier, which has no word yet. Candidates, with
+the argument for each rather than a vote:
+
+    PART        ArchiCAD's own "Library Part", shortened. Movie's daily
+                vocabulary, short enough for a button, no collision.
+    UNIT        Already washroom.js's word for exactly this thing -- "THE
+                UNIT, IN FEET, ANCHORED AT ITS WET-WALL CORNER", "the unit
+                brings its own walls". BUT `UNITS` is the imperial/metric
+                toggle in the top bar, so the two collide where they are read.
+    COMPONENT   Unambiguous and BIM-standard. Long for a terse uppercase UI.
+    PRESET      Already in the UI as "L PRESET" -- but a preset reads as a
+                one-shot drop, and this is a living definition that instances
+                follow.
+
+**UNRESOLVED and it is Movie's word to pick.**
+
 ## The one-line shape
 
 **An assembly is a named, typed bundle that can contain other assemblies.**
 A sink is an assembly, inside a cabinet assembly, inside a kitchen assembly.
 A WC is an assembly of a type that knows it is a WC.
 
-Movie asked whether the upper tier needs a different word. **It does not**, and
-his own sentences are the argument: *"a Cabinet within the kitchen will also be
-an assembly"* and *"a sink ... will also be a assembly"*. One word is already
-being used for every tier. What distinguishes them is the TYPE, which he named
-in the same breath — so `type` carries the meaning a second noun would have
-carried, and the select / drag / copy / delete rules stay in one place instead
-of two.
+**SUPERSEDED IN PART, 21 Sep.** This section first argued that one word covers
+every tier and a second noun was unnecessary. The fork above overtakes it: a
+definition and a bundle are genuinely different things, not two sizes of one
+thing, so they get two words. What survives is the reason — `type` still
+carries what distinguishes a WC from a KITCHEN, and the select / drag / copy /
+delete rules still want one home. The split is between DEFINITION and BUNDLE,
+not between big assemblies and small ones.
 
 ---
 
@@ -284,6 +330,8 @@ the first, but it is his call and it is not worth guessing.
 
 - **Whether "a seperate one for WC" meant KITCHEN.** Read that way throughout.
   The centre of the order depends on it.
+- **What the definition tier is CALLED** — PART, UNIT, COMPONENT, PRESET or
+  Movie's own word. The split itself is settled; the noun is not.
 - **What a re-hosted sink keeps** — offset, centre, or world position.
 - **What a click on a nested assembly selects**, and how a drafter descends.
 - **Whether a copied fixture may re-host onto a different wall**, or is refused.
