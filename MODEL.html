@@ -668,6 +668,16 @@
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px; padding:5px 10px; }
   #elsewhere[hidden] { display:none; }
+  /* Borrows #elsewhere's chip wholesale -- same corner, same job: a quiet
+     line of fact that is not a dialog and does not need dismissing. The
+     filename wraps rather than stretching the chip off the screen. */
+  #saved-where { font-family: var(--font-ui); font-size:11px; letter-spacing:0.06em;
+    text-transform:uppercase; color: var(--ink-quiet);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border:1px solid var(--edge-panel); border-radius:6px; padding:5px 10px;
+    max-width:260px; text-align:right; }
+  #saved-where[hidden] { display:none; }
+  #saved-where b { color: var(--ink); font-weight:600; }
 
   /* RUNG 3's READ-ONLY BANNER. It names the holder because "somebody is
      editing this" is not something a drafter can act on, and it carries the one
@@ -1633,6 +1643,12 @@
     <button id="take-over" type="button" data-take-over>TAKE OVER</button>
   </div>
   <div id="elsewhere" data-changed-elsewhere hidden>changed elsewhere</div>
+  <!-- WHERE THE FILE WENT, and only when the page could not ask. A browser
+       with a save dialog lets the drafter CHOOSE the folder, so telling them
+       where it is would be telling them what they just typed. Without one the
+       browser picks, silently, and "I just saved the file but have no clue
+       where it is" is the whole of the complaint this answers. -->
+  <div id="saved-where" data-saved-where hidden></div>
 </div>
 
 <!-- THE SHELL. Two pull-out sidebars, each with a tab on its own edge, after
@@ -2424,6 +2440,7 @@
   const noticeBody = document.getElementById('notice-body');
   const saveButton = document.getElementById('save');
   const elsewhereNote = document.getElementById('elsewhere');
+  const savedWhereNote = document.getElementById('saved-where');
   const leaseBanner = document.getElementById('lease');
   const leaseMessage = leaseBanner && leaseBanner.querySelector('[data-lease-message]');
   const takeOverButton = document.getElementById('take-over');
@@ -14346,8 +14363,24 @@
   // is Chromium only -- Chrome, Edge, Brave, Opera -- and Firefox and Safari
   // do not implement it, so a download is the only thing those browsers can
   // do. Both paths ship; both stay tested.
+  // A DOWNLOAD IS NOT SILENT ANY MORE. Where the browser chose the folder the
+  // drafter never saw it happen, so the chip says so and names the file. It
+  // stays until the next save rather than timing out: somebody who looks back
+  // five minutes later is exactly who needs it.
+  const sayWhereItWent = name => {
+    if (!savedWhereNote) return;
+    savedWhereNote.innerHTML = `SAVED TO YOUR DOWNLOADS FOLDER<br><b></b>`;
+    // The filename goes in as TEXT, never as markup -- it is a drafter's
+    // typing and it reaches this line unsanitised.
+    savedWhereNote.querySelector('b').textContent = name;
+    savedWhereNote.hidden = false;
+  };
+
   const downloadDrawing = async (contents, name, handle = null) => {
     if (handle) {
+      // The drafter picked the folder themselves, so there is nothing to
+      // tell them; a stale chip from an earlier download would be a lie.
+      if (savedWhereNote) savedWhereNote.hidden = true;
       const writable = await handle.createWritable();
       await writable.write(contents);
       await writable.close();
@@ -14360,6 +14393,7 @@
     link.download = file.name;
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 0);
+    sayWhereItWent(file.name);
   };
 
   // THE PICKER IS OPENED FROM THE CLICK AND NOTHING MAY COME BEFORE IT.
