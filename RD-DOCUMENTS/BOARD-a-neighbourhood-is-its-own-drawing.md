@@ -7,7 +7,7 @@ name offered for them:
 > 'neighbourhood' or cityscape, where they can't draw a new house, they can
 > make the city streets, site plans and drop in the houses"*
 
-Status: **OPEN, and it supersedes the naming hunt rather than continuing it.**
+Status: **CLOSED — it is a different program. See the ruling at the foot.**
 
 ---
 
@@ -105,3 +105,56 @@ document smaller than it first sounds.
   and whether those are enough has not been measured.
 - **Whether `_autoScaleFor` actually walks the site ladder correctly**, given
   nothing has ever asked it to.
+
+---
+
+## CLOSED — it is a different program, 21 Sep
+
+**Movie:**
+
+> *"ya i think for XREF / Modules, we will need to make a completely new
+> program oriented to CIVIL ENGINEERING"*
+
+**Agreed, and the line it draws is a good one.** Referencing whole drawings
+into one another, placed many times, is civil and planning work: parcels,
+streets, grading, utilities, stationing, legal survey. Those are a different
+discipline with different conventions, and Rough Drafter is a tool for drawing
+ONE HOUSE. Bolting a second discipline onto it would cost the clarity that
+makes it worth using.
+
+So: **no XREF, no MODULE, no CUTOUT, no reference of any kind in this
+product.** The naming hunt is closed with no name chosen, which is the right
+outcome — four rounds of it were four rounds of trying to name something that
+did not belong here.
+
+### ONE THING DOES NOT GO WITH IT, and it would be easy to park by accident
+
+**A SINGLE-LOT SITE PLAN IS NOT CIVIL ENGINEERING. IT IS PART OF A PERMIT SET**
+— this house, on its lot, with setbacks, the driveway and north — and it is
+drawn by whoever drew the house. It is already half-built here:
+
+    layer-views.js:35     SITE is a whole-level drafting context
+    MODEL.dc.html:2828    siteRegistration {x, z, angleRad}, persisted + tested
+    LAYOUT.dc.html:266    SITE_SCALE_PREFS 1"=10'/20'/30'/40', with
+                          scaleFamilyFor switching on view.kind === 'site'
+    LAYOUT.dc.html:856    "Sheets 3 and 4 (SITE, ROOF) ... absent on purpose:
+                          no painter ... They are their own boards, not silent
+                          omissions."
+
+**That last line is the point.** The SITE sheet is already a named, deliberate
+gap in `ORDER-construction-layouts.md`, waiting on a painter. It stays in this
+product, and it is one house on one lot. What goes to the civil program is
+MANY lots — the neighbourhood, the cityscape, the street.
+
+The difference is not the drawing. It is how many buildings are in it.
+
+### What survives from this thread, and is still live
+
+The assembly work is untouched by this ruling and is the real pending change:
+
+- `GROUP` for the drafter's bundle, `ASSEMBLY` for the app's definition
+- the name lock, which is the same rule seen from the other side
+- fixtures as assembly members, and fixtures copyable
+- nesting, and a way to enter a nested assembly
+
+All of that is about ONE drawing and belongs here.
