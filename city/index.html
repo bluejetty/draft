@@ -117,6 +117,11 @@
   <div class="rail-sec">
     <button class="wide" id="import">Import .draft</button>
     <input id="file" type="file" accept=".draft,.json,.model,.plan,application/json" multiple hidden>
+    <div style="display:flex; gap:5px; margin-top:6px;">
+      <button style="flex:1;" id="save">Save .hood</button>
+      <button style="flex:1;" id="open">Open .hood</button>
+    </div>
+    <input id="hoodfile" type="file" accept=".hood,application/json" hidden>
   </div>
   <div class="rail-sec" style="border-bottom:0; padding-bottom:4px;">
     <div class="rail-label">Drawings on the shelf</div>
@@ -605,6 +610,104 @@
       state.camX = raw.cam.x || 0; state.camZ = raw.cam.z || 0;
       state.pxPerFt = raw.cam.pxPerFt || 3;
     }
+  };
+
+  // ── THE NEIGHBOURHOOD AS A FILE ──────────────────────────────────────────
+  //
+  // localStorage is where the afternoon lives; a `.hood` is what you keep,
+  // send, and back up. It is plain JSON, like `.draft`, for the same reason:
+  // the file is the interface, and a format a person can read is a format a
+  // second program can be written against without asking permission.
+  //
+  // SHAPED FOR A TIER ABOVE IT, THOUGH NOTHING BUILDS ONE YET. Movie's
+  // ladder is NEIGHBOURHOOD / CITY / STATE, each placing the one below, and
+  // the cheap half of that is decided here rather than later:
+  //
+  //   `extentFt`   the ground this neighbourhood occupies, WRITTEN DOWN. A
+  //                CITY can frame it, cull it and draw it coarse without
+  //                parsing a single house -- which is the whole reason a
+  //                tiered thing stays fast. Derived on save, never edited.
+  //   `placements` [design, x, z, degrees], the same four numbers a CITY
+  //                would use to place a neighbourhood. One record shape all
+  //                the way up.
+  //   `designs`    the drawings, once each, however many times placed.
+  //
+  // Nothing here reads `extentFt` back -- it is written for a reader that
+  // does not exist. That is deliberate and it is the one thing in this file
+  // built for later, because it costs nothing now and cannot be added to
+  // files already in the wild.
+  const neighbourhoodExtent = () => {
+    if (!state.placed.length) return null;
+    let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
+    state.placed.forEach(spot => {
+      const entry = state.shelf[spot.shelf];
+      if (!entry || !entry.foot) return;
+      // The circle round the footprint, which rotation cannot grow.
+      const r = Math.hypot(entry.foot.wFt, entry.foot.hFt) / 2;
+      minX = Math.min(minX, spot.x - r); maxX = Math.max(maxX, spot.x + r);
+      minZ = Math.min(minZ, spot.z - r); maxZ = Math.max(maxZ, spot.z + r);
+    });
+    return Number.isFinite(minX)
+      ? { minX: round2(minX), minZ: round2(minZ), maxX: round2(maxX), maxZ: round2(maxZ) }
+      : null;
+  };
+
+  const hoodFile = () => ({
+    format: 'rough-drafter-neighbourhood',
+    version: 1,
+    extentFt: neighbourhoodExtent(),
+    designs: state.shelf.map(entry => ({
+      name: entry.name, levelId: entry.levelId, levelLabel: entry.levelLabel,
+      drawing: entry.saved,
+    })),
+    placements: state.placed.map(spot =>
+      [spot.shelf, round2(spot.x), round2(spot.z), deg(spot.angleRad)]),
+  });
+
+  document.getElementById('save').onclick = () => {
+    const blob = new Blob([JSON.stringify(hoodFile())], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'neighbourhood.hood';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+
+  document.getElementById('open').onclick = () => document.getElementById('hoodfile').click();
+  document.getElementById('hoodfile').onchange = async e => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    let raw = null;
+    try { raw = JSON.parse(await file.text()); } catch { raw = null; }
+    if (!raw || raw.format !== 'rough-drafter-neighbourhood') {
+      alert(`${file.name} is not a neighbourhood file.`);
+      return;
+    }
+    state.shelf = (raw.designs || []).map(design => {
+      const entry = {
+        name: design.name, levelId: design.levelId,
+        levelLabel: design.levelLabel, saved: design.drawing,
+      };
+      entry.foot = footprint(entry);
+      return entry;
+    }).filter(entry => entry.foot);
+    state.placed = (raw.placements || [])
+      .map(spot => ({ shelf: spot[0], x: spot[1], z: spot[2], angleRad: (spot[3] || 0) * Math.PI / 180 }))
+      .filter(spot => state.shelf[spot.shelf]);
+    state.armed = null; state.selected = null;
+    // Frame what was opened, so a file lands in view rather than off it.
+    const ext = raw.extentFt || neighbourhoodExtent();
+    if (ext) {
+      state.camX = (ext.minX + ext.maxX) / 2;
+      state.camZ = (ext.minZ + ext.maxZ) / 2;
+      const box = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const spanX = Math.max(1, ext.maxX - ext.minX), spanZ = Math.max(1, ext.maxZ - ext.minZ);
+      state.pxPerFt = Math.min(6, Math.max(0.25, Math.min(
+        (box.width * dpr * 0.85) / spanX, (box.height * dpr * 0.85) / spanZ)));
+    }
+    renderShelf(); redraw(); save();
   };
 
   load();

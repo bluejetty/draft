@@ -175,3 +175,46 @@ test('it offers no way to edit a house', async ({ page }) => {
     expect(labels).not.toContain(tool);
   }
 });
+
+test('a neighbourhood saves to a file and opens again', async ({ page }) => {
+  await openCity(page);
+  await page.setInputFiles('#file', paths);
+  await placeAt(page, 0, 0.35, 0.4);
+  await placeAt(page, 1, 0.62, 0.4);
+  await placeAt(page, 0, 0.5, 0.62);          // the same design placed twice
+  const before = await groundInk(page);
+
+  const download = await Promise.all([
+    page.waitForEvent('download'),
+    page.locator('#save').click(),
+  ]).then(([d]) => d);
+  const saved = JSON.parse(require('fs').readFileSync(await download.path(), 'utf8'));
+
+  expect(saved.format).toBe('rough-drafter-neighbourhood');
+  expect(saved.placements).toHaveLength(3);
+  // THREE PLACEMENTS, THREE DESIGNS ON THE SHELF -- and the design placed
+  // twice is stored ONCE. That is the claim the whole thing rests on, so it
+  // is asserted on the file rather than inferred from the screen.
+  expect(saved.designs).toHaveLength(3);
+  expect(saved.placements.filter(p => p[0] === 0)).toHaveLength(2);
+  saved.placements.forEach(spot => expect(spot).toHaveLength(4));
+
+  // WRITTEN FOR A READER THAT DOES NOT EXIST YET: a CITY placing this
+  // neighbourhood must be able to frame and cull it without parsing a single
+  // house, so the ground it occupies is recorded rather than re-derived.
+  expect(saved.extentFt).toBeTruthy();
+  expect(saved.extentFt.maxX).toBeGreaterThan(saved.extentFt.minX);
+  expect(saved.extentFt.maxZ).toBeGreaterThan(saved.extentFt.minZ);
+
+  // Open it into a fresh page: same houses, same ground.
+  const fresh = await page.context().newPage();
+  await fresh.addInitScript(() => localStorage.clear());
+  await fresh.goto('/city/');
+  await fresh.waitForFunction(() => document.body.dataset.neighbourhoodReady === '1');
+  await fresh.setInputFiles('#hoodfile', await download.path());
+  await fresh.waitForTimeout(400);
+  await expect(fresh.locator('#s-count')).toContainText('3 PLACED');
+  await expect(fresh.locator('.card')).toHaveCount(3);
+  expect(before).toBeGreaterThan(100);
+  await fresh.close();
+});

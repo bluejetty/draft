@@ -77,6 +77,50 @@ it cannot be.
   was asked for. A neighbourhood's own entities are the next thing.
 - **No printing.** `titleblock.js` is right there when it is wanted.
 
+## The `.hood` file, and the one thing in here built for later
+
+**Movie, 21 Sep**, sketching a ladder — *"NEIGHBORHOOD / CITY / STATE /
+COUNTRY / WORLD"*, each a separate program placing the one below — and then:
+*"i will only work on lowest level now."*
+
+So this program stays the lowest rung. But **one half of that ladder is cheap
+today and impossible to retrofit**, and it is written into the file now:
+
+    format      "rough-drafter-neighbourhood"
+    extentFt    { minX, minZ, maxX, maxZ } -- the ground this occupies
+    designs     each drawing ONCE, however many times it is placed
+    placements  [design, x, z, degrees]
+
+**`extentFt` is written for a reader that does not exist.** Nothing here reads
+it back. A CITY placing this neighbourhood needs to frame it, cull it and draw
+it coarse *without parsing a single house* — that is exactly what made 100,000
+houses flat one rung down — and it can only do that if the extent is on the
+file. Adding it later would mean every `.hood` already in the wild lacking it.
+
+**`placements` is the same four numbers a CITY would use.** One record shape
+all the way up, which is the other half of why the ladder would be one program
+rather than five.
+
+### What the ladder would cost, measured against what is known
+
+Honest boundaries rather than encouragement:
+
+- **NEIGHBOURHOOD → CITY is genuinely the same program.** A shelf of child
+  documents, a list of placements, a draw loop that composes transforms —
+  nothing in this file says "house". Culling prunes whole subtrees: a
+  neighbourhood off-screen skips every house in it without being visited.
+- **Each rung needs its own coarse form.** A neighbourhood at city zoom is one
+  shape, not a thousand houses. That is the level-of-detail already here,
+  one rung up.
+- **Feet outlast the plane.** A city is ~10^5 ft across, a state ~10^6, a
+  country ~10^7 — all comfortable in float64. What breaks first is not the
+  number, it is that past state scale a flat x/z ground stops BEING a map and
+  wants a projection.
+- **At STATE and above you are not drawing buildings.** You are drawing cities
+  as labelled dots, roads and boundaries — GIS data, not `.draft` data. The
+  placement machinery still works; the content stops being yours. That is
+  where this stops being a drafting tool.
+
 ---
 
 ## Measured, because "would it handle N" deserves a number
