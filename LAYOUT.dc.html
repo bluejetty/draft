@@ -195,6 +195,34 @@
       background:#fff; border-top:1px solid rgba(29,31,32,0.16);">
       <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Viewport</div>
       <button data-layout-add-viewport onClick="{{ addViewport }}" style="display:block; width:100%; text-align:center; border:1px solid #5980a6; background:{{ addViewportBg }}; color:{{ addViewportColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:13px; letter-spacing:0.04em; text-transform:uppercase; padding:9px 12px; cursor:pointer;">{{ addViewportLabel }}</button>
+      <!-- DEAL SHEETS -- the composer already existed and nothing could ask
+           for it. _composeDefaultSet (:855) deals the whole set: two sheets of
+           elevations, a plan per floor top storey first, the foundation, the
+           sections, the basement -- skipping any sheet nothing would put ink
+           on, and picking each sheet's scale by walking the ladder down until
+           the views fit. It ran in exactly ONE circumstance: a saved layout
+           carrying `auto: true`, which the bone sets on a fresh build.
+
+           Movie, 21 Sep, on an empty sheet: *"the layouts aren't
+           autogenerating views, i thought you already did that"*. His drawing
+           carries no `layout` key at all, so `auto` read false, so the
+           composer never ran -- and there was no verb anywhere that would run
+           it. Once `auto` goes false, which any manual edit does, there was
+           no way back to a dealt set either.
+
+           SECOND, NOT FIRST, and off a button rather than on load. Dealing on
+           open would rewrite viewports on a drawing nobody asked to have
+           edited; and a drafter who has arranged sheets by hand must not lose
+           them to a page visit. The confirm below is the other half of that:
+           the composer REPLACES the hand, so it asks once when there is a
+           hand to replace. -->
+      <button data-layout-deal-sheets onClick="{{ dealSheets }}"
+        disabled="{{ dealDisabled }}"
+        style="display:block; width:100%; margin-top:6px; text-align:center;
+        border:1px solid rgba(29,31,32,0.28); background:{{ dealBg }};
+        color:{{ dealColor }}; font-family:'Barlow Condensed',system-ui,sans-serif;
+        font-weight:600; font-size:13px; letter-spacing:0.04em;
+        text-transform:uppercase; padding:9px 12px; cursor:{{ dealCursor }};">{{ dealLabel }}</button>
       <sc-if value="{{ hasViewportNote }}" hint-placeholder-val="{{ false }}">
         <div style="margin-top:8px; font-size:11px; line-height:1.4; color:rgba(29,31,32,0.55);">{{ viewportNote }}</div>
       </sc-if>
@@ -1748,6 +1776,29 @@ class Component extends DCLogic {
         bg: activeLevelId === level.id ? 'rgba(29,31,32,0.09)' : '#fff',
       })),
       addViewport: () => this.setState({ addingViewport: !addingViewport }, () => this._draw()),
+      // THE COMPOSER, ON DEMAND. It replaces every viewport on every sheet,
+      // so a drafter who has placed any by hand is asked first -- and is NOT
+      // asked when there is nothing of theirs to lose, because a confirm over
+      // an empty sheet is a dialog that only ever has one sensible answer.
+      dealSheets: () => {
+        if (!this._saved) return;
+        const byHand = this.state.viewports.length > 0 && this.state.auto !== true;
+        if (byHand && !window.confirm(
+          'Deal the standard sheet set?\n\nThis replaces the viewports you have '
+          + 'placed by hand. Undo takes it back.')) return;
+        this.setState({ addingViewport: false }, () => this._composeDefaultSet());
+      },
+      // Dead with no drawing, for viewportNote's reason: there is nothing to
+      // project. The note under it already says so, so the button does not
+      // repeat it.
+      dealDisabled: !this._saved,
+      dealBg: this._saved ? '#fff' : 'rgba(29,31,32,0.04)',
+      dealColor: this._saved ? '#1d1f20' : 'rgba(29,31,32,0.35)',
+      dealCursor: this._saved ? 'pointer' : 'default',
+      // IT SAYS WHICH IT WOULD DO. Dealing over a dealt set is a re-deal, and
+      // naming that is the difference between a button a drafter trusts and
+      // one they press twice to find out.
+      dealLabel: this.state.viewports.length ? 'Re-deal Sheets' : 'Deal Sheets',
       addViewportBg: addingViewport ? '#1d1f20' : '#5980a6',
       addViewportColor: '#f2f2f3',
       addViewportLabel: addingViewport ? 'CLICK THE SHEET…' : '+ Add Viewport',
