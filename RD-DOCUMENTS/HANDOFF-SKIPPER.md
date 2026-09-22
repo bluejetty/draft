@@ -29,7 +29,7 @@ and brought up to date the same evening by the session that did. Read
 - **Do not open a PR unless asked.** Movie asks when he wants one, or relays
   Gilligan's ruling that one should be opened.
 - `main` IS production — GitHub Pages serves it directly, no build step. A
-  merge is a deploy, and the person merging owns watching the four shards.
+  merge is a deploy, and the person merging owns watching the shards.
 - **Lane discipline** (Devin, 4 Sep): one agent per file, confirm the lane
   before pushing. `proto/` and `.github/workflows/test.yml` are Skipper's.
   `MODEL.html`, `MODEL.dc.html`, `geometry-2d.js` and the specs under `tests/`

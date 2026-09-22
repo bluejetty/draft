@@ -465,7 +465,7 @@ looked real and nothing said otherwise, and a warning scrolls past. Percentages
 resolve before the check (`--workers=50%` on a four-core box is the same mistake
 spelt differently). Sharding is untouched and remains the supported way to go
 parallel: a shard gets its own runner and therefore its own origin, and CI's
-`--shard=N/4` inherits `workers: 1` and never reaches the guard.
+`--shard=N/6` inherits `workers: 1` and never reaches the guard.
 
 **PR #359's body is wrong about this and has been corrected in a comment on the
 merged PR.** It describes its three suite failures as characterised repo flakes
