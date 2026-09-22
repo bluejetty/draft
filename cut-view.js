@@ -590,6 +590,65 @@ if (!window.DraftCutView) {
     };
   }
 
+  // ── THE MARGINS A SCREEN FIT LEAVES ──────────────────────────────────────
+  //
+  // Movie, 22 Sep, on an elevation with both rails open: *"when the side menus
+  // are open they cover the drawing in elevation, can we make the zoom for the
+  // elevations so the house is a little smaller and there is more white around
+  // the edges and sides so these menus when expanded don't cover it"*.
+  //
+  // THE CALLER SAYS HOW MUCH, because the caller is the only thing that knows
+  // what is on top of the canvas. The rails are `position:fixed` overlays --
+  // MODEL.html paints the full width underneath them -- and their widths are
+  // CSS, bounded there and measured there. A number typed into this painter
+  // would be a copy of that CSS, and the comment beside `max-width:277px`
+  // already records what a near-miss costs: "An estimate that is nearly right
+  // is a panel that nearly stays off the sheet."
+  //
+  // SO THE DEFAULTS ARE WHAT THIS FILE HAS ALWAYS USED, and a caller that
+  // measures its own furniture passes more. An external fit (LAYOUT's sheet
+  // viewports) still takes none: the paper decides there, not the screen.
+  const SCREEN_MARGINS = Object.freeze({ left: 64, right: 24, top: 30, bottom: 16 });
+  const screenMargins = (opts, w) => {
+    const want = (opts && opts.margins) || null;
+    const at = side => {
+      // `want == null` RATHER THAN A FALSY TEST: Number(null) is 0, so a
+      // caller handing over no measurement at all would otherwise read as one
+      // asking for nothing -- the same answer by luck of the floor below, and
+      // the wrong reason to be right.
+      const asked = want == null ? NaN : Number(want[side]);
+      // NEVER TIGHTER THAN THE DEFAULT, only wider. A caller measuring a
+      // collapsed rail should not be able to push the drawing out past the
+      // edge it has always been inset from.
+      return Number.isFinite(asked) ? Math.max(SCREEN_MARGINS[side], asked) : SCREEN_MARGINS[side];
+    };
+    // AND NEVER MORE THAN HALF THE CANVAS TO THE FURNITURE. MODEL.html's two
+    // rails ask for about 540px between them on this page's own CSS, which is
+    // white space on a wide screen and most of a narrow one -- honoured
+    // literally at 800px it would leave the drawing 260px to stand in, and at
+    // 600px a sliver. What the asker wants is not to be covered; what the
+    // drafter wants is to see the house, and past halfway the second wins.
+    //
+    // WHAT IS SCALED BACK IS THE EXTRA, proportionally and on both sides at
+    // once, so the drawing still sits toward whichever side has the room. The
+    // painter's own defaults are the floor and are never eaten into: they are
+    // the inset every elevation has always had, furniture or none.
+    const asked = { left: at('left'), right: at('right') };
+    const room = Math.max(0, Number(w) || 0) / 2;
+    const base = SCREEN_MARGINS.left + SCREEN_MARGINS.right;
+    const over = asked.left + asked.right - base;
+    // `Math.min(1, ...)` IS THE CAP AND ALSO THE "ONLY WHEN IT BITES" TEST:
+    // an ask that already fits leaves `over` no larger than `room - base`, so
+    // the ratio is at least 1 and nothing is scaled. Without it this would
+    // WIDEN a margin that fits, out to exactly half the canvas every time.
+    const k = over > 0 ? Math.min(1, Math.max(0, room - base) / over) : 1;
+    return {
+      left: SCREEN_MARGINS.left + (asked.left - SCREEN_MARGINS.left) * k,
+      right: SCREEN_MARGINS.right + (asked.right - SCREEN_MARGINS.right) * k,
+      top: at('top'), bottom: at('bottom'),
+    };
+  };
+
   function drawCutView(env, ctx, w, h, cut, opts) {
     const fit = externalFit(opts);
     ctx.fillStyle = (opts && opts.paperColor) || '#fafafa';
@@ -653,8 +712,9 @@ if (!window.DraftCutView) {
     const yTop = fit?.extents ? fit.extents.yTop : Math.max(stack.bearing + 4,
       ...roofSamples.filter(s => s.elev != null).map(s => s.elev + 2));
     const yBottom = fit?.extents ? fit.extents.yBottom : stack.foundation.footingBottom - 2;
-    const marginL = fit ? 0 : 64, marginR = fit ? 0 : 24,
-      marginT = fit ? 0 : 30, marginB = fit ? 0 : 16;
+    const mg = screenMargins(opts, w);
+    const marginL = fit ? 0 : mg.left, marginR = fit ? 0 : mg.right,
+      marginT = fit ? 0 : mg.top, marginB = fit ? 0 : mg.bottom;
     const pxPerFt = fit ? fit.pxPerFt : Math.max(2, Math.min(
       (w - marginL - marginR) / Math.max(uMax - uMin, 4),
       (h - marginT - marginB) / Math.max(yTop - yBottom, 8)));
@@ -1148,8 +1208,9 @@ if (!window.DraftCutView) {
     const yTop = fit?.extents ? fit.extents.yTop
       : Math.max(stack.bearing + 4, ...lit.map(s => s.elev + 2));
     const yBottom = fit?.extents ? fit.extents.yBottom : fdn.footingBottom - 2;
-    const marginL = fit ? 0 : 64, marginR = fit ? 0 : 24,
-      marginT = fit ? 0 : 30, marginB = fit ? 0 : 16;
+    const mg = screenMargins(opts, w);
+    const marginL = fit ? 0 : mg.left, marginR = fit ? 0 : mg.right,
+      marginT = fit ? 0 : mg.top, marginB = fit ? 0 : mg.bottom;
     const pxPerFt = fit ? fit.pxPerFt : Math.max(2, Math.min(
       (w - marginL - marginR) / Math.max(uMax - uMin, 4),
       (h - marginT - marginB) / Math.max(yTop - yBottom, 8)));
