@@ -315,3 +315,97 @@ own subject. With the fix reverted it passed. It now tests the vertical's TOP:
 inside the roof means covered, poking above the ridge means partly in open air
 and legitimately drawn. **A guard that excludes its subject is worse than
 none** -- it reports the fix is held when nothing is holding it.
+
+---
+
+## 1 (SETTLED, 22 Sep) — BOTH READINGS ABOVE WERE WRONG, AND IT WAS THE RIDGE
+
+Movie, asked which of the two readings to take: *"what do you think data or
+painter?"* Painter — but **not the painter change described above**, and the
+reasoning that got there is worth keeping because the board had talked itself
+into a much larger change than the defect needed.
+
+### THE DATA IS RIGHT, and it is Movie's own ruling written down
+
+`geometry-2d.js:602`, the straight-skeleton roof generator:
+
+```js
+const speeds = kinds.map(kind => (kind === 'gable' ? 0 : 1));
+```
+
+**`gable` is a GEOMETRY word here, not a trim word.** A gable edge has speed
+**0** — it does not move, and the roof plane ends vertically on it. An eave
+edge has speed **1** — it retreats inward and a plane slopes up off it.
+
+So "the data is wrong, that edge should be an EAVE" was never a relabelling.
+It would make the edge retreat and **put a hip on the house end** — the
+cottage Movie ruled against on 20 Sep:
+
+> *"when the main floor garage roof connects to the house that has 2 storey it
+> should be gabled on the house end (not cottage)"*
+
+`roof-69: edges ['gable','eave','eave','eave']` is that ruling, recorded
+correctly. **The first reading is struck.**
+
+### AND THE SECOND READING WAS A THEORY THE INK DID NOT SUPPORT
+
+"A gable edge buried against another body gets no rake treatment" is a rule
+with real reach, and it was proposed from geometry — `roof-68` does cover
+`z 22..40` at `x -6..22`, so `roof-69`'s gable edge at `z=38` is buried by two
+feet — without measuring which stroke was actually wrong. Measured on E1:
+
+```
+e  8.10208   w 1    solid   u  -6.. -4     soffit return, LEFT rake's low end
+e  8.10208   w 1    solid   u  20.. 22     soffit return, RIGHT rake's low end
+e 11.45208   w 1    solid   u   4..  6     soffit return off the RIDGE   <<<
+e 11.90208   w 1.5  solid   u   4.. 12     the ridge itself
+```
+
+**Only the third is wrong**, and burial has nothing to do with it. The two at
+`e 8.102` sit on the eave over genuinely open corners; they are what a soffit
+return is *for*, and the buried-gable rule would have deleted all three.
+
+### IT WAS THE SAME DEFECT AS THE RIDGE BAND, MISSED BY THE SAME FIX
+
+`rake` asked only `onGable`, and the flat top of a gable end lies on a gable
+plan edge as squarely as its sloped sides do. The 21 Sep fix added the slope
+test **to the fascia-band branch alone**, leaving the other reader of `rake` —
+the soffit return sixty lines below — still calling the ridge a rake.
+
+So the test belongs to the **word**, not to one painter of it:
+
+```js
+const rake = !eave && onGable(a, b) && Math.abs(eb - ea) > 0.05;
+```
+
+**A fix written on the branch instead of on the definition fixes the symptom
+you are looking at and leaves the others.** That is the lesson, and it cost a
+second sitting on the same three lines of ink.
+
+### NOT AT `ridge - 5.5"`, which nearly made the guard worthless
+
+The unguarded-line note said 5.5" — read off `ROOF_FASCIA_IN`, not measured.
+It is **5.40"**: `11.90208` against `11.45208`, because the face-edge pass
+puts the peak 0.1" above where the silhouette pass puts it. A guard written as
+an equality on the constant would have passed with the line still on the
+drawing. The check is a band one board deep, not a value.
+
+### Guarded
+
+`proto/fascia-end-harness.js`, 23 checks, and the new pair brackets the fix
+from both sides — mutation-run, each caught by its own check and neither by
+the other's:
+
+```
+rake forgets it must slope    ->  nothing returns a soffit off the ridge
+no rake returns any soffit    ->  each rake still returns its soffit at the eave
+```
+
+The second exists because the buried-gable rule *would* have passed the first
+completely. **Zero is as wrong as two**, the same rule this harness already
+states for the ridge line itself.
+
+And the first draft of the first check keyed on `w 1` **and** solid ink, which
+left it sifting a population of two — the legitimate returns at the eave — so
+the zone came out empty whatever the painter did at the ridge. The elevation
+is what does the work, so the elevation is the only filter.

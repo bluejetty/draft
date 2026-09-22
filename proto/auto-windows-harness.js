@@ -229,6 +229,122 @@ eq('a diagonal leaning south still reads front', A.faceOrientation({ x: 0.4, z: 
 }
 eq('no faces, no plan', A.garageDoorPlan({ faces: [] }), null);
 
+// ── THE ROOF UNDER A WINDOW ───────────────────────────────────────────
+//
+// Movie, 21 Sep: "the window should be about 4\" over the roof line", and
+// asked which of three ways it should move to get there: "keep top of window
+// at same spot and subtract size from bottom". So the head is fixed and the
+// sill rises, which makes this window shorter than its row rather than
+// higher-headed or moved along.
+//
+// A LONE FRONT FACE, because the deal's other rules are exercised forty-odd
+// times above and what is under test here is one window against one roof. A
+// 12 ft front takes exactly one (floor(12/10) = 1, under the FRONT_MIN of 2
+// only because the spacing runs out), so its offset is knowable and every
+// check below can name it.
+const roofFace = (roofFt, lengthFt = 12) =>
+  [{ id: 'F', wallId: 'w-F', levelId: 2, orientation: 'front', lengthFt, roofFt }];
+const level = profile => A.dealWindows({ faces: roofFace(profile), rooms: [] });
+const flat = h => [{ offsetFt: 0, heightFt: h }, { offsetFt: 12, heightFt: h }];
+
+{
+  // The baseline this whole block is measured against: no roof, no change.
+  const bare = A.dealWindows({ faces: roofFace(null), rooms: [] }).windows;
+  eq('with no roof profile at all the deal is unchanged', bare.length, 1);
+  eq('and its sill is the stock 3 ft', bare[0].sillFt, 3);
+
+  // A roof at 1 ft is far below a 3 ft sill: a sill only ever RISES.
+  const low = level(flat(1)).windows;
+  eq('a roof below the sill does not lower it', low[0].sillFt, 3);
+  check('and the window carries no roof note when it did not move',
+    low[0].roofFt === undefined, JSON.stringify(low[0].roofFt));
+
+  // 4 ft of roof + 4" = a 4.333 ft sill, and the head does not budge.
+  const lifted = level(flat(4)).windows;
+  eq('a roof above the sill lifts it to the roof plus 4 inches', lifted[0].sillFt, 4 + 4 / 12);
+  eq('and the head stays exactly where the stock put it', lifted[0].headFt, bare[0].headFt);
+  check('so the window is shorter than its row, not higher',
+    lifted[0].headFt - lifted[0].sillFt < bare[0].headFt - bare[0].sillFt,
+    `${(lifted[0].headFt - lifted[0].sillFt).toFixed(3)} vs ${(bare[0].headFt - bare[0].sillFt).toFixed(3)}`);
+  eq('and it did not slide along the wall to escape', lifted[0].offset, bare[0].offset);
+  check('and it says what it cleared', Math.abs(lifted[0].roofFt - 4) < 1e-9, lifted[0].roofFt);
+  check('and the deal reports the lift', level(flat(4)).report.some(r => /clears the roof/.test(r)),
+    level(flat(4)).report.join(' | '));
+}
+{
+  // THE PEAK UNDER THE WINDOW, NOT THE HEIGHT AT ITS CENTRE -- which is the
+  // case Movie was actually looking at. On repro-2storey-garage the garage
+  // ridge stands at x = 8 and the window spans x 6..10: the roof comes up
+  // through it OFF CENTRE, so a rule reading the middle would measure a foot
+  // of roof that is not the foot in the way.
+  const bare = A.dealWindows({ faces: roofFace(null), rooms: [] }).windows[0];
+  const c = bare.offset, half = bare.widthFt / 2;
+  // A ridge a quarter-width off centre, 4 ft up, with the centre at 1 ft --
+  // so reading the centre lifts NOTHING (1 ft is under the 3 ft stock sill)
+  // and reading the peak lifts to 4'-4". The two answers could not be
+  // further apart, which is the point of the numbers.
+  //
+  // 4 FT AND NOT 5, and the first draft of this check said 5 and threw. A
+  // 5 ft ridge under a 6'-6" head leaves 14" of glass, so the window is
+  // DROPPED -- correctly, by the rule two blocks down -- and there was no
+  // window left to read a sill off. The peak has to be high enough to move
+  // the sill and low enough to leave a window standing.
+  const ridge = [
+    { offsetFt: 0, heightFt: 1 },
+    { offsetFt: c, heightFt: 1 },
+    { offsetFt: c + half / 2, heightFt: 4 },
+    { offsetFt: c + half, heightFt: 1 },
+    { offsetFt: 12, heightFt: 1 },
+  ];
+  const win = level(ridge).windows[0];
+  eq('an off-centre ridge lifts the sill by its PEAK, not by the centre height',
+    win.sillFt, 4 + 4 / 12);
+}
+{
+  // NO GLASS LEFT IS NO WINDOW. The head is 6.5 ft; a roof at 6 ft leaves
+  // 2 inches under it, and the smallest unit the ladder deals is the 24" WC.
+  const gone = level(flat(6));
+  eq('a roof that leaves less than the smallest unit deals no window', gone.windows.length, 0);
+  check('and the deal says why, naming the roof height',
+    gone.report.some(r => /no window at/.test(r) && /6\.00/.test(r)),
+    gone.report.join(' | '));
+  // AND THE ROOM IS NOT MARKED SERVED BY A WINDOW THAT WAS DROPPED. `served`
+  // used to be added to as each claim window was dealt, which was true until
+  // a window could be dealt and then taken away again.
+  const claimed = A.dealWindows({
+    faces: roofFace(flat(6)),
+    rooms: [{ id: 'r1', base: 'BEDROOM 1', levelId: 2, frontage: [{ faceId: 'F', centreFt: 6 }] }],
+  });
+  eq('and no window reaches the drawing for the room that claimed it', claimed.windows.length, 0);
+  check('and the room is reported as getting nothing, not as served',
+    claimed.report.some(r => /^BEDROOM 1 r1:/.test(r)), claimed.report.join(' | '));
+}
+{
+  // A profile that stops short of the face end: the last sample carries on.
+  // Stated as a check because it is the one thing the contract asks callers
+  // for -- sample the WHOLE face -- and a caller who does not gets this.
+  const part = level([{ offsetFt: 0, heightFt: 4 }, { offsetFt: 1, heightFt: 4 }]).windows;
+  eq('a profile shorter than the face holds its end value outward', part[0].sillFt, 4 + 4 / 12);
+}
+
+// MUTATION-RUN BY HAND, 22 Sep, because this harness carries no engine and a
+// guard nobody has watched fail is worth nothing. Each was applied to
+// auto-windows.js alone and caught by the check whose name describes it:
+//
+//   the clearance is zero                 -> lifts it to the roof plus 4 inches
+//   reads the CENTRE, not the peak        -> lifts the sill by its PEAK
+//   a window with no glass is kept        -> deals no window
+//   the whole window is raised, head too  -> the head stays where the stock put it
+//   the sill follows the roof DOWN        -> a roof below the sill does not lower it
+//   dropped windows reach the drawing     -> no window reaches the drawing
+//   a room with frontage counts as served -> reported as getting nothing
+//
+// THE LAST TWO ARE SEPARATE ON PURPOSE. The "dropped windows reach the
+// drawing" mutation fails four checks at once, the served one among them, so
+// it proves that check is connected without proving it measures anything of
+// its own. The eager-`served` mutation fails it ALONE, which is what says the
+// bookkeeping is guarded rather than merely downstream of something guarded.
+
 console.log(`auto-windows harness: ${pass} checks passed, ${fails.length} failed`);
 fails.forEach(line => console.log('  FAIL ' + line));
 process.exitCode = fails.length ? 1 : 0;

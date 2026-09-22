@@ -2324,6 +2324,17 @@
      in the picture the drafter pressed. -->
 <script src="./bone-wallet.js"></script>
 <script src="./premade-plans.js"></script>
+<!-- NOT FOR THE DEALER, which this page does not run. auto-windows.js holds
+     two things besides dealWindows: the rule that a window clears the roof
+     under it by 4", and the sampling that says which roof is in front of a
+     wall and how high it stands above this level's floor. The designs above
+     deal windows from fixed lists -- upperOpenings is 8, 16, 24 across the
+     front -- and on the 2 STOREY + GARAGE the middle one lands on the garage
+     ridge to the foot, which is what Movie reported on 21 Sep.
+     Written again here instead, the two pages would disagree about which
+     roofs count or what the heights are measured from, and that is a right
+     window on one page and a wrong one on the other. -->
+<script src="./auto-windows.js"></script>
 <!-- Where an ordered garage stands. A traced loop says where it goes by
      being traced; an autobuilt one has to be told, and that is a rule about
      buildings rather than about this page. -->
@@ -10591,6 +10602,125 @@
     return { list: drawing.roofs, item: roof };
   };
 
+  // ── A WINDOW CLEARS THE ROOF UNDER IT ────────────────────────────────────
+  //
+  // Movie, 21 Sep: *"the window should be about 4\" over the roof line"*, and
+  // when asked which of three ways it should move: *"keep top of window at
+  // same spot and subtract size from bottom"*.
+  //
+  // THE WINDOW HE WAS LOOKING AT IS THE PREMADE PLAN'S, which is why this
+  // exists as well as the dealer's copy on MODEL.dc.html.
+  // BOARD-a-roof-through-a-window.md said the cause was auto-windows.js and
+  // it was wrong: his fixture carries eighteen windows and NONE with
+  // `auto: true`. They are premade-plans.js's `upperOpenings()` -- a fixed
+  // `8, 16, 24` across the front -- and on the front wall `(16,20)->(-16,20)`
+  // offset 8 is `x = 8`, the garage ridge to the foot.
+  //
+  // THE RULE ITSELF IS THE MODULE'S, both halves. Writing the arithmetic a
+  // second time here is how the two pages end up disagreeing about which
+  // roofs count, which side of a wall to sample, or what the heights are
+  // measured from -- and a disagreement in any of those is a right window on
+  // one page and a wrong one on the other. What is genuinely this page's is
+  // only what no pure module may reach for: the roof records, their bearing,
+  // and the surface height over a plan point.
+  //
+  // AFTER THE ROOFS, which is why it is called from down there rather than
+  // where the openings are placed. The clearance is a height; the heights
+  // come from the roofs; the roofs are raised well after the walls.
+  //
+  // AND ONLY THIS PRESS'S OWN OPENINGS. `raiseLoop` hands back the records it
+  // made, so the set is exact: nothing the drafter placed and nothing from an
+  // earlier press is touched.
+  const clearOpeningsOverRoofs = bodies => {
+    const AW = window.DraftAutoWindows;
+    const CV = window.DraftCutView;
+    const G = window.DraftGeometry2D;
+    if (!AW?.roofProfileAlong || !CV || !G) return { lifted: 0, dropped: 0 };
+    if (!(drawing.roofs || []).length) return { lifted: 0, dropped: 0 };
+    const env = cutEnv();
+    const stack = CV.sectionLevelStack(env);
+    if (!stack?.floors?.length) return { lifted: 0, dropped: 0 };
+    // The skeleton once per roof, not once per sample: a 40 ft wall asks a
+    // hundred and sixty times.
+    const roofs = drawing.roofs
+      .filter(roof => (roof.points || []).length >= 3)
+      .map(roof => ({
+        roof,
+        base: CV.roofBaseElev(roof, stack, env),
+        riseAt: ((faces) => (pt, r) => CV.sectionRoofHeightAt(pt, r, faces))(
+          G.roofFaces(roof, G.roofSkeleton(roof))),
+      }));
+    const wallById = new Map((drawing.walls || []).map(w => [w.id, w]));
+    // geometry-2d.js keeps two of these and exports neither, so this is the
+    // third copy rather than a reach into a module's private. Same crossing
+    // count MODEL.dc.html's _autoWindowFaces uses to point its normals out.
+    const inRing = (p, ring) => {
+      let hit = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const a = ring[j], b = ring[i];
+        if ((a.z > p.z) !== (b.z > p.z)
+          && p.x < a.x + (b.x - a.x) * (p.z - a.z) / (b.z - a.z)) hit = !hit;
+      }
+      return hit;
+    };
+    let lifted = 0;
+    const dropped = [];
+    bodies.filter(b => b && b.loop && b.body).forEach(({ loop, body }) => {
+      const ring = loop.map(p => ({ x: p.x, z: p.z }));
+      const windows = (body.openings || []).filter(o => o && o.type === 'window');
+      if (!windows.length) return;
+      const byWall = new Map();
+      windows.forEach(o => {
+        const list = byWall.get(o.wallId) || [];
+        list.push(o);
+        byWall.set(o.wallId, list);
+      });
+      byWall.forEach((list, wallId) => {
+        const wall = wallById.get(wallId);
+        if (!wall) return;
+        const floor = stack.floors.find(lvl => lvl.id === list[0].levelId);
+        if (!floor) return;
+        const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+        const lengthFt = Math.hypot(dx, dz);
+        if (!(lengthFt > 0.5)) return;
+        const u = { x: dx / lengthFt, z: dz / lengthFt };
+        // WHICH SIDE IS OUTSIDE, asked of the LOOP and not of the wall. A
+        // wall's centreline stands half its thickness inside the line it was
+        // raised on, so a short probe off the wall can still land inside the
+        // body; a foot clears any wall this app builds and is well short of
+        // the narrowest body it can raise.
+        let out = { x: -u.z, z: u.x };
+        const mid = { x: (wall.start.x + wall.end.x) / 2, z: (wall.start.z + wall.end.z) / 2 };
+        if (inRing({ x: mid.x + out.x, z: mid.z + out.z }, ring)) {
+          out = { x: -out.x, z: -out.z };
+        }
+        const profile = AW.roofProfileAlong({
+          start: wall.start, u, outward: out, lengthFt, roofs,
+          floorTopFt: floor.floorTop, wallTopFt: floor.wallTop,
+        });
+        if (!profile) return;
+        list.forEach(o => {
+          const cleared = AW.clearRoofUnder({
+            roofFt: profile, offsetFt: o.offset, widthFt: o.width,
+            sillFt: o.sillHeight, headFt: o.headHeight,
+          });
+          // NO GLASS LEFT IS NO WINDOW, and the record goes with it: a sill
+          // above its own head is not a short window, it is a hole in the
+          // drawing that reads as one.
+          if (!cleared) { dropped.push(o.id); return; }
+          if (!cleared.lifted) return;
+          o.sillHeight = cleared.sillFt;
+          lifted += 1;
+        });
+      });
+    });
+    if (dropped.length) {
+      const gone = new Set(dropped);
+      drawing.fenestrations = (drawing.fenestrations || []).filter(o => !gone.has(o.id));
+    }
+    return { lifted, dropped: dropped.length };
+  };
+
   // ── AUTO DIMS ────────────────────────────────────────────────────────────
   //
   // Exterior dimension strings on all four sides of a plan. Per side the
@@ -10918,6 +11048,24 @@
     if (built.length) {
       extra.push(...built);
       parts.push(built.length > 1 ? `${built.length} roofs` : 'roof');
+    }
+
+    // ── AND NOW THE ROOFS STAND, THE WINDOWS CAN CLEAR THEM ──────────────
+    //
+    // Each body with the loop it was raised on, because the loop is what says
+    // which side of a wall is outdoors. Read the comment on
+    // clearOpeningsOverRoofs for the rule and for why the board that
+    // diagnosed this named the wrong module.
+    const clearedWindows = clearOpeningsOverRoofs([
+      ...raised.map(body => ({ loop: plan.house, body })),
+      { loop: plan.garage, body: garageBody },
+      { loop: plan.overGarage, body: overGarageBody },
+    ]);
+    if (clearedWindows.lifted) {
+      parts.push(`${clearedWindows.lifted} window${clearedWindows.lifted === 1 ? '' : 's'} raised clear of a roof`);
+    }
+    if (clearedWindows.dropped) {
+      parts.push(`${clearedWindows.dropped} window${clearedWindows.dropped === 1 ? '' : 's'} dropped — a roof leaves no glass there`);
     }
 
     // ── AND THE DIMENSIONS, ON EVERY LEVEL THE PRESS TOUCHED ─────────────

@@ -330,6 +330,24 @@ test.describe('MODEL.html tier 1', () => {
       // here instead would have given one economy two sets of books.
       './bone-wallet.js',
       './premade-plans.js',
+      // AND NOT FOR THE DEALER, which this page does not run. auto-windows.js
+      // holds two things besides dealWindows: the rule that a window clears
+      // the roof under it by 4" -- Movie, 21 Sep -- and the sampling that says
+      // WHICH roof is in front of a wall and how high it stands above this
+      // level's floor.
+      //
+      // The designs above deal their windows from fixed lists, and on the
+      // 2 STOREY + GARAGE the middle one of `8, 16, 24` lands on the garage
+      // ridge to the foot. That is the window he reported, and the board that
+      // diagnosed it named this module as the CAUSE, which was wrong -- his
+      // fixture carries no `auto: true` window at all. The module is here as
+      // the FIX instead, and by this list's own rule it is the kind of entry
+      // to grow by: a rule that would otherwise have a second home.
+      //
+      // Written again in MODEL.html, the two pages would disagree about which
+      // roofs count or what the heights are measured from, and either is a
+      // right window on one page and a wrong one on the other.
+      './auto-windows.js',
       // AND WHERE AN ORDERED GARAGE STANDS. 40 lines, no dependency of its
       // own: a traced loop says where it goes by being traced, an autobuilt
       // one has to be told, and PROJECT will have to be told the same thing
