@@ -100,10 +100,83 @@ if (!window.DraftAutoWindows) {
     }
   };
 
+  // ── A WINDOW CLEARS THE ROOF UNDER IT ─────────────────────────────────
+  //
+  // Movie, 21 Sep, looking at E4 RIGHT: *"the window should be about 4\"
+  // over the roof line"*. On repro-2storey-garage the garage ridge stands at
+  // x = 8 and a window spans x 6..10, so the roof comes up through the middle
+  // of it -- because this module has never known roofs exist.
+  //
+  // WHICH WAY THE WINDOW MOVES WAS HIS CALL AND HE MADE IT: *"keep top of
+  // window at same spot and subtract size from bottom"*. Three ways to win
+  // four inches and they look different on an elevation --
+  //
+  //     RAISE the sill      keeps the size, takes the head up with it
+  //     SHORTEN from below  keeps the head, makes this one shorter   <- his
+  //     MOVE sideways       keeps size and head, breaks the row's spacing
+  //
+  // -- and a row of heads that no longer line up is worse on a drawing than
+  // one window that is short. So the head never moves and the sill rises.
+  //
+  // THE PROFILE IS THE CALLER'S, because this module is pure and roofs are
+  // geometry MODEL already holds. `face.roofFt` is the roof standing in front
+  // of a face, sampled ACROSS THE WHOLE FACE as heights above THIS LEVEL'S
+  // FLOOR -- the same datum sillFt and headFt use, or the arithmetic below is
+  // two rulers pretending to be one:
+  //
+  //     roofFt: [{ offsetFt, heightFt }, ...]
+  //
+  // Whole face, and zero where no roof stands there. A profile covering only
+  // part of a face would have to say what the rest means, and every answer to
+  // that is a second rule nobody asked for; sampling the lot says it in data.
+  const ROOF_CLEAR_FT = 4 / 12;
+
+  // THE FLOOR IS THE SHORTEST THING IN THE STOCK, not a number chosen here.
+  // Lift a sill far enough and the head is under it: what is left is not a
+  // short window, it is no window. The WC unit is 24" and is the smallest the
+  // ladder deals, so a window the dealer would not have dealt in the first
+  // place is one it will not leave behind either.
+  const MIN_GLASS_FT = Math.min(DEFAULT_WINDOW.headFt - DEFAULT_WINDOW.sillFt,
+    WC_WINDOW.headFt - WC_WINDOW.sillFt);
+
+  const roofTopOver = (profile, from, to) => {
+    if (!Array.isArray(profile) || !profile.length) return null;
+    const pts = profile.map(p => ({ o: num(p?.offsetFt), h: num(p?.heightFt) }))
+      .sort((a, b) => a.o - b.o);
+    // Between samples the roof is a straight line, which is what a roof plane
+    // is; outside them it is the end sample, which is only ever reached when
+    // a caller sampled less than the whole face.
+    const at = o => {
+      if (o <= pts[0].o) return pts[0].h;
+      if (o >= pts[pts.length - 1].o) return pts[pts.length - 1].h;
+      const i = pts.findIndex(p => p.o >= o);
+      const lo = pts[i - 1], hi = pts[i];
+      return hi.o === lo.o ? hi.h : lo.h + (hi.h - lo.h) * (o - lo.o) / (hi.o - lo.o);
+    };
+    // THE HIGHEST POINT UNDER THE WINDOW, not the height at its centre. A
+    // ridge crossing a window off-centre is exactly the case Movie was
+    // looking at, and the middle of that window is not where the roof peaks.
+    return pts.reduce((top, p) => (p.o > from && p.o < to ? Math.max(top, p.h) : top),
+      Math.max(at(from), at(to)));
+  };
+
+  // Null when there is no glass left, so the caller can say so rather than
+  // keep a window with its sill above its own head.
+  const liftOverRoof = (face, win) => {
+    const top = roofTopOver(face?.roofFt, win.offset - win.widthFt / 2,
+      win.offset + win.widthFt / 2);
+    if (top == null) return win;
+    const sillFt = top + ROOF_CLEAR_FT;
+    if (sillFt <= win.sillFt + 1e-9) return win;
+    if (win.headFt - sillFt < MIN_GLASS_FT) return null;
+    return { ...win, sillFt, roofFt: top };
+  };
+
   // ── The deal ──────────────────────────────────────────────────────────
   // opts: {
   //   faces: [{ id, wallId, levelId, orientation, lengthFt,
-  //             blocked?: bool, taken?: [{ centre, widthFt }] }],
+  //             blocked?: bool, taken?: [{ centre, widthFt }],
+  //             roofFt?: [{ offsetFt, heightFt }] }],
   //   rooms: [{ id, base, levelId, frontage: [{ faceId, centreFt }] }],
   // }
   // `blocked` marks a face the drafter has spoken for — a BONEYARD mark or
@@ -161,7 +234,15 @@ if (!window.DraftAutoWindows) {
         return Math.min(cap, Math.max(TUNABLES.SIDE_MIN, Math.floor(face.lengthFt / 12)));
       };
 
-      const served = new Set();
+      // SERVED IS READ OFF THE WINDOWS THAT SURVIVE, not added to as they
+      // are dealt. It used to be the latter, and the roof clearance broke it:
+      // a claim window can now be dealt and then dropped for having no glass
+      // left, which would have left its room marked served by a window that
+      // is not on the drawing -- and the report at the foot of this level is
+      // the one place that says a room got nothing.
+      const servedIds = () => new Set(windows
+        .filter(win => win.levelId === levelId && win.roomId != null)
+        .map(win => win.roomId));
       // Rooms first, so a claim's own frontage decides where its window
       // sits; then density fill takes whatever is left of the target.
       levelFaces.forEach(face => {
@@ -193,12 +274,37 @@ if (!window.DraftAutoWindows) {
             orientation: face.orientation, roomId: room.id, base: room.base,
             offset: centre, ...stock,
           });
-          served.add(room.id);
         });
 
         fill(face, target, taken, out, DEFAULT_WINDOW);
         out.sort((a, b) => a.offset - b.offset);
-        windows.push(...out);
+
+        // THE ROOF LAST, and on every window however it was dealt. A claim
+        // window and a density-fill one are made in two different places and
+        // neither is the right home for a rule that applies to both.
+        //
+        // AND AFTER SEATING, NOT BEFORE. The sill answers to the roof; the
+        // OFFSET answers to the room's frontage and the spacing rules, and
+        // letting a roof push a window sideways is the third option Movie did
+        // not pick. A window dropped here keeps its place in `taken` on
+        // purpose: the roof that emptied it is still standing there, so the
+        // gap is not somewhere another window should be dealt instead.
+        const kept = [];
+        out.forEach(win => {
+          const lifted = liftOverRoof(face, win);
+          if (!lifted) {
+            report.push(`${face.orientation} face ${face.id}: no window at ${win.offset.toFixed(1)}' — `
+              + `the roof stands ${(roofTopOver(face.roofFt, win.offset - win.widthFt / 2, win.offset + win.widthFt / 2)).toFixed(2)}' up `
+              + `and a head at ${win.headFt.toFixed(2)}' leaves less glass than the ${(MIN_GLASS_FT * 12).toFixed(0)}" minimum`);
+            return;
+          }
+          if (lifted !== win) {
+            report.push(`${face.orientation} face ${face.id}: the window at ${win.offset.toFixed(1)}' `
+              + `sits ${(lifted.sillFt - win.sillFt).toFixed(2)}' higher — its sill clears the roof below it by 4"`);
+          }
+          kept.push(lifted);
+        });
+        windows.push(...kept);
 
         if (out.length < target) {
           report.push(`${face.orientation} face ${face.id}: room for ${out.length} of ${target} — the 3'-0" spacing and 2'-0" corner clearances take the rest`);
@@ -206,6 +312,7 @@ if (!window.DraftAutoWindows) {
       });
 
       // Every room with an exterior face was owed a shot at one window.
+      const served = servedIds();
       levelRooms
         .filter(room => (room.frontage || []).length && !served.has(room.id))
         .forEach(room => {

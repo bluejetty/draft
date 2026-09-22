@@ -13769,6 +13769,78 @@ class Component extends DCLogic {
   // Everything the dealer places is the drafter's to move, resize or
   // delete — the bone only ever deals the first hand.
 
+  // ─── The roof standing in front of a wall ───────────────────────────────
+  //
+  // Movie, 21 Sep: *"the window should be about 4\" over the roof line"*.
+  // auto-windows.js does the clearing and says what shape it wants; this is
+  // the half that has to know what a roof is, which is why it lives here and
+  // not there. The module stays pure and node-loadable, the way build-house
+  // and room-grow do.
+  //
+  // NOT EVERY ROOF IS IN THE WAY, and getting this wrong deals no windows at
+  // all rather than deals them badly. Sample any exterior wall and the roof
+  // THIS WALL HOLDS UP is standing right there, because its overhang reaches
+  // two feet past the wall face -- and its eave is at the plate, above every
+  // window head on the storey. Counted, it would lift every sill above its
+  // own head and the dealer would drop the lot.
+  //
+  // So the test is what a roof BEARS ON. `roofBaseElev` already answers it --
+  // a garage roof carries its own plate over the main-floor line, everything
+  // else sits on the full wall stack -- and a roof bearing BELOW this wall's
+  // top is a lower body's roof in front of the window. One bearing AT the
+  // top is the roof over the drafter's head. That is the garage roof and the
+  // house roof exactly, on Movie's own drawing.
+  _autoWindowRoofProfile(face, levelId, ctx) {
+    if (!ctx || !ctx.roofs.length) return null;
+    const floor = ctx.stack.floors.find(lvl => lvl.id === levelId);
+    if (!floor) return null;
+    const lower = ctx.roofs.filter(entry => entry.base < floor.wallTop - 0.05);
+    if (!lower.length) return null;
+    // JUST OUTSIDE THE WALL, not on it. A roof edge that lands exactly on the
+    // wall face puts the sample on a polygon boundary, where inside/outside
+    // is a coin toss; a nudge into the overhang is both unambiguous and the
+    // side the window is looking at.
+    const out = { x: -face.inward.x, z: -face.inward.z };
+    // A quarter foot between samples: on a 4:12 roof that is an inch of
+    // height, which is small against the four the clearance is made of.
+    const step = 0.25;
+    const profile = [];
+    for (let o = 0; o <= face.lengthFt + 1e-9; o = Math.min(o + step, face.lengthFt)) {
+      const pt = {
+        x: face.start.x + face.u.x * o + out.x * 0.05,
+        z: face.start.z + face.u.z * o + out.z * 0.05,
+      };
+      let top = 0;
+      lower.forEach(entry => {
+        const rise = window.DraftCutView.sectionRoofHeightAt(pt, entry.roof, entry.faces);
+        if (!Number.isFinite(rise)) return;
+        top = Math.max(top, entry.base + rise - floor.floorTop);
+      });
+      profile.push({ offsetFt: o, heightFt: Math.max(0, top) });
+      if (o >= face.lengthFt) break;
+    }
+    return profile.some(p => p.heightFt > 0) ? profile : null;
+  }
+
+  // Built once per deal: the skeleton behind every roof's faces is the
+  // expensive part, and a 40 ft wall asks for it a hundred and sixty times.
+  _autoWindowRoofCtx() {
+    const CV = window.DraftCutView;
+    const geom = window.DraftGeometry2D;
+    if (!CV || !geom || !this._roofs.length) return null;
+    const env = this._cutViewEnv();
+    const stack = CV.sectionLevelStack(env);
+    if (!stack || !stack.floors.length) return null;
+    const roofs = this._roofs
+      .filter(roof => (roof.points || []).length >= 3)
+      .map(roof => ({
+        roof,
+        base: CV.roofBaseElev(roof, stack, env),
+        faces: geom.roofFaces(roof, geom.roofSkeleton(roof)),
+      }));
+    return { stack, roofs };
+  }
+
   // The exterior faces of one level: each generated PLAN wall that rides an
   // outline edge, with the orientation the E-marks would call it, whatever
   // already sits on it, and whether the drafter has claimed it outright.
@@ -13873,6 +13945,10 @@ class Component extends DCLogic {
     const declined = this._declinedAutoWindows || new Set();
     let placed = 0;
     const report = [];
+    // ONCE FOR THE WHOLE DEAL, not once per face: the straight skeleton
+    // behind a roof's face polygons is the costly part and a single 40 ft
+    // wall asks for it a hundred and sixty times.
+    const roofCtx = this._autoWindowRoofCtx();
     this._floorLevels().forEach(level => {
       // Clear our own previous hand FIRST, so last press's windows neither
       // block this one's faces nor count against its spacing.
@@ -13881,6 +13957,13 @@ class Component extends DCLogic {
         && (opening.view || 'plan') === 'plan'));
       const faces = this._autoWindowFaces(level.id);
       if (!faces.length) return;
+      // The roof each face is looking at, in the face's OWN offsets and the
+      // level floor's datum -- the same one sillFt and headFt are in, or the
+      // module would be comparing two rulers. Set before the strip below, so
+      // it rides through in `...rest` like any other plain field.
+      faces.forEach(face => {
+        face.roofFt = this._autoWindowRoofProfile(face, level.id, roofCtx);
+      });
       // BOARD #331, the drafter's call: "make the windows unrelated to the
       // bedrooms if you can". Severed HERE, at the page, rather than in the
       // module: dealWindows keeps its trapped-bedroom rescue intact and still
