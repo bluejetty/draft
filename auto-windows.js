@@ -160,16 +160,91 @@ if (!window.DraftAutoWindows) {
       Math.max(at(from), at(to)));
   };
 
+  // ONE WINDOW AGAINST ONE PROFILE, and exported, because the dealer is not
+  // the only thing that puts a window on a wall. premade-plans.js deals the
+  // 2 STOREY's upper openings from a fixed list -- `8, 16, 24` across the
+  // front -- and on the design with a garage that middle one lands on the
+  // ridge to the foot. That is the window Movie reported, and it never went
+  // near dealWindows. Two placers, one rule; the arithmetic lives here.
+  //
+  //   -> { sillFt, roofTopFt, lifted }   what the window should carry
+  //   -> null                            there is no glass left: no window
+  const clearRoofUnder = ({ roofFt, offsetFt, widthFt, sillFt, headFt }) => {
+    const top = roofTopOver(roofFt, offsetFt - widthFt / 2, offsetFt + widthFt / 2);
+    if (top == null) return { sillFt, roofTopFt: null, lifted: false };
+    const raised = top + ROOF_CLEAR_FT;
+    if (raised <= sillFt + 1e-9) return { sillFt, roofTopFt: top, lifted: false };
+    if (headFt - raised < MIN_GLASS_FT) return null;
+    return { sillFt: raised, roofTopFt: top, lifted: true };
+  };
+
   // Null when there is no glass left, so the caller can say so rather than
   // keep a window with its sill above its own head.
   const liftOverRoof = (face, win) => {
-    const top = roofTopOver(face?.roofFt, win.offset - win.widthFt / 2,
-      win.offset + win.widthFt / 2);
-    if (top == null) return win;
-    const sillFt = top + ROOF_CLEAR_FT;
-    if (sillFt <= win.sillFt + 1e-9) return win;
-    if (win.headFt - sillFt < MIN_GLASS_FT) return null;
-    return { ...win, sillFt, roofFt: top };
+    const cleared = clearRoofUnder({
+      roofFt: face?.roofFt, offsetFt: win.offset, widthFt: win.widthFt,
+      sillFt: win.sillFt, headFt: win.headFt,
+    });
+    if (!cleared) return null;
+    if (!cleared.lifted) return win;
+    return { ...win, sillFt: cleared.sillFt, roofFt: cleared.roofTopFt };
+  };
+
+  // ── AND THE PROFILE ITSELF, SAMPLED ONCE FOR BOTH PAGES ───────────────
+  //
+  // This was written in MODEL.dc.html first and would have been written again
+  // in MODEL.html, because the premade builder lives there and the dealer
+  // does not. Three things in it are easy to get subtly different the second
+  // time -- which roofs count, which side of the wall to sample, and what the
+  // heights are measured FROM -- and a difference in any of them is a wrong
+  // window on one page and a right one on the other.
+  //
+  // PURE, WITH THE ROOF HEIGHT INJECTED. `riseAt(pt, roof)` is cut-view's
+  // sectionRoofHeightAt, which no module may reach for; the caller hands it
+  // in along with each roof's bearing. So this file still loads under node
+  // with nothing but itself.
+  //
+  //   start    the face's first corner, in world feet
+  //   u        the unit vector along the face, in the offsets openings use
+  //   outward  the unit normal pointing AWAY from the building
+  //   roofs    [{ roof, base, riseAt }] -- base from roofBaseElev
+  //   floorTopFt / wallTopFt   this level's floor and plate
+  const ROOF_SAMPLE_FT = 0.25;
+  const roofProfileAlong = ({ start, u, outward, lengthFt, roofs,
+    floorTopFt, wallTopFt }) => {
+    if (!Array.isArray(roofs) || !roofs.length || !(lengthFt > 0)) return null;
+    // NOT EVERY ROOF IS IN THE WAY, and getting this wrong deals no windows
+    // at all rather than deals them badly. Sample any exterior wall and the
+    // roof THIS WALL HOLDS UP is standing right there, because its overhang
+    // reaches two feet past the wall face -- and its eave is at the plate,
+    // above every window head on the storey. Counted, it lifts every sill
+    // above its own head and every window is dropped.
+    //
+    // So the test is what a roof BEARS on: below this wall's top it is a
+    // lower body's roof standing in front of the window; at the top it is
+    // the roof over the drafter's head.
+    const lower = roofs.filter(entry => entry.base < wallTopFt - 0.05);
+    if (!lower.length) return null;
+    // JUST OUTSIDE THE WALL, not on it. A roof edge landing exactly on the
+    // wall face puts the sample on a polygon boundary, where inside/outside
+    // is a coin toss; a nudge into the overhang is unambiguous and is the
+    // side the window is looking at.
+    const profile = [];
+    for (let o = 0; o <= lengthFt + 1e-9; o = Math.min(o + ROOF_SAMPLE_FT, lengthFt)) {
+      const pt = {
+        x: start.x + u.x * o + outward.x * 0.05,
+        z: start.z + u.z * o + outward.z * 0.05,
+      };
+      let top = 0;
+      lower.forEach(entry => {
+        const rise = entry.riseAt(pt, entry.roof);
+        if (!Number.isFinite(rise)) return;
+        top = Math.max(top, entry.base + rise - floorTopFt);
+      });
+      profile.push({ offsetFt: o, heightFt: Math.max(0, top) });
+      if (o >= lengthFt) break;
+    }
+    return profile.some(p => p.heightFt > 0) ? profile : null;
   };
 
   // ── The deal ──────────────────────────────────────────────────────────
@@ -405,7 +480,12 @@ if (!window.DraftAutoWindows) {
 
   window.DraftAutoWindows = Object.freeze({
     DEFAULT_WINDOW, WC_WINDOW, TUNABLES, GARAGE, ORIENTATIONS,
+    ROOF_CLEAR_FT, MIN_GLASS_FT,
     faceOrientation, dealWindows, garageDoorPlan,
+    // The roof clearance, reachable on its own: dealWindows applies it to its
+    // own hand, and MODEL.html applies it to the premade plan's openings,
+    // which this module never sees.
+    clearRoofUnder, roofProfileAlong,
   });
 })();
 }

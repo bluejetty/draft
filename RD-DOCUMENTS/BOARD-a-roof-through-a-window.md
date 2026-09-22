@@ -213,3 +213,76 @@ twice: the head is the datum, the sill moves. **Open: where the arithmetic
 lives** — a post-pass in the page once the roofs exist and the elevations are
 known, or an argument handed into `premade-plans.js`. That is a decision with
 reach and it is his.
+
+---
+
+## FIXED, 22 Sep — on the path it was actually on
+
+Movie, asked where the arithmetic should live: *"pick one"*. It is a **post-
+pass on the page**, run once the roofs stand, and it calls the rule that
+already exists rather than writing it a second time.
+
+### Why not into `premade-plans.js`
+
+That module is pure and knows no elevations: plate heights come from
+`level-assembly.js` and floor heights from the level stack, neither of which
+it reads. Handing them in grows its signature by four numbers from two other
+modules, makes every caller supply them, and — worse — has it computing roof
+surface heights that `cut-view.js`'s `sectionRoofHeightAt` already computes.
+**A second answer to "how high is the roof here" is the thing this repo keeps
+getting burned by**, and it would be the third.
+
+### What the page does, and what it does not
+
+```
+MODEL.html:clearOpeningsOverRoofs   the roof records, their bearing, and the
+                                    surface height over a plan point
+auto-windows.js:roofProfileAlong    which roofs count, which side of the wall,
+                                    what the heights are measured FROM
+auto-windows.js:clearRoofUnder      the 4 inches, the peak under the window,
+                                    the head held, the no-glass drop
+```
+
+Only the first line is the page's, because only that reaches for things a
+pure module may not. **`auto-windows.js` is now loaded by MODEL.html** — not
+for the dealer, which that page does not run, but for those two rules. It is
+declared in `model-html-tier1.spec.js`'s script inventory with that reason.
+
+The pass runs on **this press's own openings only**. `raiseLoop` hands back
+the records it made, so the set is exact: nothing the drafter placed and
+nothing from an earlier press is touched.
+
+### Measured on both designs, and it answers them differently
+
+```
+2 STOREY + GARAGE        x = 8, dead on the garage ridge   sill 2.500 -> 3.948
+                         every other window                untouched
+
+2 STOREY + GARAGE + ROOM OVER
+                         x = 8, front wall                 untouched
+                         room's far wall, x = 8            sill 2.500 -> 2.598
+```
+
+**The second is the interesting one.** With a room over the garage the front
+window does not move, and that is correct: the room stands where the roof
+was, so `garageRoofLoop` starts at `z = 38` and the stub never reaches the
+house's front wall. What the stub DOES reach is the room's own far wall, and
+the window there moves by the 1.2 inches the stub stands in front of it.
+
+`3.615 ft` of roof under that first window, plus 4", is `3.948`. To the inch.
+
+### Guarded
+
+`tests/premade-window-over-roof.spec.js`, mutation-run three ways:
+
+```
+the pass is never called            -> 6 windows still at the design sill
+the sill is computed, never written -> the same
+every roof counts, the house's too  -> EVERY upper window vanishes
+```
+
+**The third is the one worth having**, and it fails differently from the other
+two. Counting the roof this wall holds up lifts every sill above its own head
+and the whole storey is dropped for having no glass — an empty second floor,
+shipped. That is the failure the bearing test exists to prevent and the reason
+it is written as `roofBaseElev < wallTop` rather than as a list of roof ids.

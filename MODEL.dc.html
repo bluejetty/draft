@@ -13777,49 +13777,29 @@ class Component extends DCLogic {
   // not there. The module stays pure and node-loadable, the way build-house
   // and room-grow do.
   //
-  // NOT EVERY ROOF IS IN THE WAY, and getting this wrong deals no windows at
-  // all rather than deals them badly. Sample any exterior wall and the roof
-  // THIS WALL HOLDS UP is standing right there, because its overhang reaches
-  // two feet past the wall face -- and its eave is at the plate, above every
-  // window head on the storey. Counted, it would lift every sill above its
-  // own head and the dealer would drop the lot.
+  // WHICH ROOFS COUNT, AND FROM WHAT, are the module's -- see
+  // roofProfileAlong. What is this page's is only the part no pure module may
+  // reach: the roof records, their bearing, and the surface height over a
+  // plan point, which is cut-view's sectionRoofHeightAt.
   //
-  // So the test is what a roof BEARS ON. `roofBaseElev` already answers it --
-  // a garage roof carries its own plate over the main-floor line, everything
-  // else sits on the full wall stack -- and a roof bearing BELOW this wall's
-  // top is a lower body's roof in front of the window. One bearing AT the
-  // top is the roof over the drafter's head. That is the garage roof and the
-  // house roof exactly, on Movie's own drawing.
+  // THE SAMPLING IS THE MODULE'S TOO, not this page's. MODEL.html needs
+  // the same profile for the premade plan's openings, and three things here
+  // are easy to get subtly different the second time they are written --
+  // which roofs count, which side of the wall to sample, and what the heights
+  // are measured from. This is the geometry-gathering half only.
   _autoWindowRoofProfile(face, levelId, ctx) {
-    if (!ctx || !ctx.roofs.length) return null;
+    if (!ctx) return null;
     const floor = ctx.stack.floors.find(lvl => lvl.id === levelId);
     if (!floor) return null;
-    const lower = ctx.roofs.filter(entry => entry.base < floor.wallTop - 0.05);
-    if (!lower.length) return null;
-    // JUST OUTSIDE THE WALL, not on it. A roof edge that lands exactly on the
-    // wall face puts the sample on a polygon boundary, where inside/outside
-    // is a coin toss; a nudge into the overhang is both unambiguous and the
-    // side the window is looking at.
-    const out = { x: -face.inward.x, z: -face.inward.z };
-    // A quarter foot between samples: on a 4:12 roof that is an inch of
-    // height, which is small against the four the clearance is made of.
-    const step = 0.25;
-    const profile = [];
-    for (let o = 0; o <= face.lengthFt + 1e-9; o = Math.min(o + step, face.lengthFt)) {
-      const pt = {
-        x: face.start.x + face.u.x * o + out.x * 0.05,
-        z: face.start.z + face.u.z * o + out.z * 0.05,
-      };
-      let top = 0;
-      lower.forEach(entry => {
-        const rise = window.DraftCutView.sectionRoofHeightAt(pt, entry.roof, entry.faces);
-        if (!Number.isFinite(rise)) return;
-        top = Math.max(top, entry.base + rise - floor.floorTop);
-      });
-      profile.push({ offsetFt: o, heightFt: Math.max(0, top) });
-      if (o >= face.lengthFt) break;
-    }
-    return profile.some(p => p.heightFt > 0) ? profile : null;
+    return window.DraftAutoWindows.roofProfileAlong({
+      start: face.start,
+      u: face.u,
+      outward: { x: -face.inward.x, z: -face.inward.z },
+      lengthFt: face.lengthFt,
+      roofs: ctx.roofs,
+      floorTopFt: floor.floorTop,
+      wallTopFt: floor.wallTop,
+    });
   }
 
   // Built once per deal: the skeleton behind every roof's faces is the
@@ -13836,7 +13816,11 @@ class Component extends DCLogic {
       .map(roof => ({
         roof,
         base: CV.roofBaseElev(roof, stack, env),
-        faces: geom.roofFaces(roof, geom.roofSkeleton(roof)),
+        // The module asks for the height; only this page knows how to answer
+        // it. Faces closed over so the skeleton is built once, not once per
+        // sample -- a 40 ft wall asks a hundred and sixty times.
+        riseAt: ((faces) => (pt, r) => CV.sectionRoofHeightAt(pt, r, faces))(
+          geom.roofFaces(roof, geom.roofSkeleton(roof))),
       }));
     return { stack, roofs };
   }
