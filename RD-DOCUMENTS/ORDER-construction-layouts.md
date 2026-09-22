@@ -171,6 +171,54 @@ redo all exist and all work. This is a port.
   `./LAYOUT.dc.html` today and moves with the file.
 - **The cut painter stays shared.** No second elevation renderer, ever.
 
+### AUTO-GENERATED SHEETS ARE NOT IN THIS ORDER, and that needed saying
+
+**Movie, 21 Sep**, looking at an empty sheet with a drawing loaded:
+
+> *"the layouts aren't autogenerating views, i thought you already did that"*
+
+**He was right that it does not happen, and the expectation was reasonable.**
+His original ask was *"set up the layouts area so they display the drawings as
+it was set up in model.dc"*, and *"display the drawings"* reads perfectly well
+as "the sheets come out ready". What Stage 1 built is narrower and every line
+of its own log says so: **"a HAND-PLACED viewport..."**. The work was about
+what a viewport DRAWS once placed -- walls, beams, columns, stairs, washroom
+fixtures, the kitchen, at a scale that walks the ladder down until the plan
+fits -- never about placing them for you.
+
+So it is written here as its own thing rather than left to be inferred from
+the absence of a row.
+
+**AND A PANEL BUG MADE IT LOOK BROKEN RATHER THAN MERELY ABSENT.** Measured at
+his window size -- a 188px column with about 660px of usable height:
+
+    + ADD VIEWPORT   top 980px
+    window                660px
+    panel hides           396px, overflow-y: auto
+
+The one button that MAKES something sat 320px below the fold, behind nine
+scale buttons and two more sections, in a column that scrolls with nothing on
+screen to say so. **An empty sheet plus no visible verb reads exactly like a
+page that should have filled itself in.** Fixed by pinning the VIEWPORT block
+to the foot of the panel -- sticky rather than hoisted, because the panel's
+order is the drafter's order (paper, orientation, sheet, scale, level, then
+place it) and moving the verb above the settings it depends on would trade one
+confusion for another. Pinned by `tests/layout-viewports.spec.js`, at a height
+the bug reproduces at: the project viewport is 900px tall and nothing shows at
+900.
+
+**WHAT AUTO-GENERATION WOULD NEED DECIDED**, none of it guessable:
+
+- **which views** -- the four elevations, a plan per level, ROOF, SITE,
+  sections? `LAYOUT.dc.html:856` already reasons about SITE and ROOF being
+  deliberate absences, so the set is not simply "everything".
+- **one view per sheet, or packed** -- and if packed, by what rule. The scale
+  ladder already walks DOWN until a plan fits one sheet; packing two would
+  make that a two-variable fit.
+- **when** -- on opening the page, or off a button. Doing it on open would
+  write viewports onto a drawing the drafter has not asked to have edited,
+  which the repo's standing rule is against.
+
 ### Not in this order
 
 - **REAL ESTATE LAYOUTS.** Movie has named it and MODEL.html already carries
