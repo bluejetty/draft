@@ -14,7 +14,15 @@
 require('./harness-args.js').noFlags();
 
 global.window = global.window || {};
+// GEOMETRY-2D FIRST, because auto-windows.js asks it for the window head --
+// Movie's 7'-0" -- rather than keeping a third copy of the number beside
+// geometry-2d's and drawing-format.js's. It is asked at call time, so this is
+// a real dependency of dealWindows and not of loading the file.
+require('../geometry-2d.js');
 require('../auto-windows.js');
+const G = window.DraftGeometry2D;
+// Movie's 7'-0", asked of the module that owns it rather than typed here.
+const STOCK_HEAD = G.DEFAULT_WINDOW_HEAD_FT;
 const A = window.DraftAutoWindows;
 
 let pass = 0;
@@ -97,8 +105,15 @@ eq('a diagonal leaning south still reads front', A.faceOrientation({ x: 0.4, z: 
   const { windows } = A.dealWindows({ faces: RECT(), rooms });
   const wc = windows.find(w => w.roomId === 41);
   eq('the WC window is the small unit', wc?.kind, 'wc');
-  check('and it is set high', (wc?.sillFt ?? 0) > A.DEFAULT_WINDOW.sillFt,
-    `sill=${wc?.sillFt}`);
+  // SET HIGH BY ARITHMETIC, not by being told to. The catalogue used to name
+  // the WC's 4'-6" sill; now both units hang from the same 7'-0" head, so the
+  // shorter one simply starts higher -- and ends up higher than it used to be.
+  // Compared against the DEFAULT's derived sill rather than a number typed
+  // here, so this reads the rule rather than a copy of its answer.
+  const defaultSill = STOCK_HEAD - A.DEFAULT_WINDOW.heightFt;
+  check('and it is set high', (wc?.sillFt ?? 0) > defaultSill,
+    `sill=${wc?.sillFt} against the default's ${defaultSill}`);
+  eq('and the two hang from one head', wc?.headFt, A.DEFAULT_WINDOW.heightFt + defaultSill);
   check('a WC unit is narrower than the default', (wc?.widthFt ?? 9) < A.DEFAULT_WINDOW.widthFt,
     `w=${wc?.widthFt}`);
 }
@@ -251,11 +266,16 @@ const flat = h => [{ offsetFt: 0, heightFt: h }, { offsetFt: 12, heightFt: h }];
   // The baseline this whole block is measured against: no roof, no change.
   const bare = A.dealWindows({ faces: roofFace(null), rooms: [] }).windows;
   eq('with no roof profile at all the deal is unchanged', bare.length, 1);
-  eq('and its sill is the stock 3 ft', bare[0].sillFt, 3);
+  // THE STOCK'S OWN SILL, derived: the 7'-0" head less the unit's height.
+  // Typed as 3 here until the head ruling, which is exactly the copy that
+  // would have to be found and re-typed every time the standard moves.
+  eq('and its sill is the stock unit hung from the head',
+    bare[0].sillFt, STOCK_HEAD - A.DEFAULT_WINDOW.heightFt);
 
-  // A roof at 1 ft is far below a 3 ft sill: a sill only ever RISES.
+  // A roof at 1 ft is far below that sill: a sill only ever RISES.
   const low = level(flat(1)).windows;
-  eq('a roof below the sill does not lower it', low[0].sillFt, 3);
+  eq('a roof below the sill does not lower it',
+    low[0].sillFt, STOCK_HEAD - A.DEFAULT_WINDOW.heightFt);
   check('and the window carries no roof note when it did not move',
     low[0].roofFt === undefined, JSON.stringify(low[0].roofFt));
 

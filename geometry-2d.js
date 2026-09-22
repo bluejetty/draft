@@ -1260,13 +1260,33 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
 
   // ── WHAT AN OPENING IS WHEN NOBODY HAS SAID ──────────────────────────────
   //
-  // A door is 3'-0" wide, a window 4'-0", a window sill sits 2'-6" off the
-  // floor, and both head out at 6'-8". Ordinary residential numbers, and none
-  // of them is a geometry fact -- they are here because they were in THREE
-  // PLACES and about to be in a fourth. MODEL.dc.html:2342-2345 held the
-  // originals; premade-plans.js wrote its own DOOR_HEAD_FT and WINDOW_SILL_FT
-  // for the bungalow; and MODEL.html was about to type a third set for its
-  // placing gesture.
+  // A door is 3'-0" wide and heads out at 6'-8"; a window is 4'-0" wide and
+  // HEADS OUT AT 7'-0". Ordinary residential numbers, and none of them is a
+  // geometry fact -- they are here because they were in THREE PLACES and
+  // about to be in a fourth. MODEL.dc.html:2342-2345 held the originals;
+  // premade-plans.js wrote its own DOOR_HEAD_FT and WINDOW_SILL_FT for the
+  // bungalow; and MODEL.html was about to type a third set for its placing
+  // gesture.
+  //
+  // THE WINDOW'S HEAD IS ITS OWN NUMBER NOW, and it used not to be -- both
+  // kinds headed out at 6'-8" and premade-plans.js still calls the shared one
+  // DOOR_HEAD_FT from when it answered for both. Movie, 21 Sep: *"on windows
+  // the top of the window should be default located 7ft high from the current
+  // level floor level (if the window changes size the bottom changes)"*, and
+  // on 22 Sep, asked whether that was only the default or the rule: *"7' is
+  // default window height, but use can change window height"*.
+  //
+  // SO THE HEAD IS THE DATUM AND THE SILL IS DERIVED. A window is described
+  // by its head and its HEIGHT; `sill = head - height`. Today it is described
+  // by sill and head with height falling out, which is the same three numbers
+  // related the other way round and gives a different answer the moment a
+  // window is resized. Heads line up across a wall and sills do not -- a row
+  // of windows of different heights reads as a row when their tops agree and
+  // as a mess when their bottoms do -- and it is how they are built: the
+  // header is set by the framing and the opening grows downward from it.
+  //
+  // A DOOR IS UNTOUCHED. It stands on the floor, so its head IS its height,
+  // and 6'-8" is the leaf the office orders.
   //
   // THE FAILURE THAT ENDS IS A QUIET ONE. Three copies of 6'-8" do not
   // disagree on the day they are written. They disagree the day someone raises
@@ -1283,6 +1303,22 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   const DEFAULT_WINDOW_WIDTH_FT = 4;
   const DEFAULT_WINDOW_SILL_FT = 2.5;
   const DEFAULT_OPENING_HEAD_FT = (6 * 12 + 8) / 12;
+  const DEFAULT_WINDOW_HEAD_FT = 7;
+  // THE HEIGHTS A WINDOW USED TO HEAD OUT AT, kept because a drawing made
+  // before the ruling still carries one and drawing-format.js moves it. Two
+  // of them: 6'-8" was the shared opening head this file has always named,
+  // and 6'-6" was auto-windows.js's own catalogue, which put a 42" window on
+  // a 3'-0" sill and a 24" one on a 4'-6" sill and headed both there.
+  //
+  // A HAND-SET HEAD IS NOT IN THIS LIST, which is the whole point of the
+  // list existing rather than the migration moving every window it sees.
+  // Movie asked for both -- "move to 7ft" and "use can change window
+  // height" -- and those are only both true if what moves is what nobody
+  // chose.
+  const SUPERSEDED_WINDOW_HEADS_FT = Object.freeze([
+    DEFAULT_OPENING_HEAD_FT,
+    6.5,
+  ]);
 
   // The width an opening of this type takes when the drafter has not typed
   // one. A door and a window are the only two kinds this app cuts into a
@@ -1483,6 +1519,8 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     DEFAULT_DOOR_WIDTH_FT,
     DEFAULT_WINDOW_WIDTH_FT,
     DEFAULT_WINDOW_SILL_FT,
+    DEFAULT_WINDOW_HEAD_FT,
+    SUPERSEDED_WINDOW_HEADS_FT,
     DEFAULT_OPENING_HEAD_FT,
     defaultOpeningWidthFt,
     OPENING_FREE_END_POST_IN,

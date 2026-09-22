@@ -4155,6 +4155,61 @@
   let lastPaintMs = 0;
   let lastRailMs = 0;
 
+  // ── HOW MUCH OF THE CANVAS THE RAILS ARE SITTING ON ──────────────────────
+  //
+  // Movie, 22 Sep, on an elevation with both rails open: *"when the side menus
+  // are open they cover the drawing in elevation, can we make the zoom for the
+  // elevations so the house is a little smaller and there is more white around
+  // the edges and sides so these menus when expanded don't cover it"*.
+  //
+  // MEASURED, NOT TYPED. Both rails are `position:fixed` overlays and this
+  // canvas is painted the full width underneath them, so what they cover is
+  // their own bounding boxes -- which are CSS, and which CHANGE: the right one
+  // is bounded at 277px but shrink-to-fit under that, and either can be
+  // collapsed to a seat. The comment beside that `max-width:277px` already
+  // records what guessing costs: "An estimate that is nearly right is a panel
+  // that nearly stays off the sheet."
+  //
+  // AGAINST THE CANVAS, not the window, because the canvas is what the painter
+  // measures its margins from and the two need not share an origin.
+  //
+  // ONLY THE SIDES. The rails run nearly the full height, so asking for their
+  // height as a top and bottom margin would leave the drawing nothing to grow
+  // into; the painter takes the greater of what it is handed and its own
+  // default, and its own defaults are what top and bottom keep.
+  const railMargins = () => {
+    const canvas = ctx && ctx.canvas;
+    const box = canvas && canvas.getBoundingClientRect
+      ? canvas.getBoundingClientRect() : null;
+    if (!box || !(box.width > 0)) return null;
+    let left = 0, right = 0;
+    ['#left-rail', '#right-rail'].forEach(sel => {
+      const rail = document.querySelector(sel);
+      if (!rail || rail.hidden) return;
+      const r = rail.getBoundingClientRect();
+      if (!(r.width > 0) || !(r.height > 0)) return;
+      // A rail overhanging the canvas' left edge eats from the left, one
+      // overhanging its right eats from the right; a rail that somehow sits
+      // clear of the canvas eats nothing.
+      if (r.right > box.left && r.left < box.left + box.width / 2) {
+        left = Math.max(left, r.right - box.left + 8);
+      } else if (r.left < box.right && r.right > box.left + box.width / 2) {
+        right = Math.max(right, box.right - r.left + 8);
+      }
+    });
+    return { left, right };
+  };
+
+  // The whole of what the painter reads from a rail, as one comparable value.
+  const railKey = mg => (mg ? `${mg.left},${mg.right}` : '');
+
+  // WHAT THE RAILS COVERED WHEN THE DRAWING ON SCREEN WAS PAINTED, or null if
+  // what is on screen is not a cut view -- a plan does not read them. The
+  // observer at the foot of this file compares against it, so "is this drawing
+  // out of date" is answered by what was actually used rather than by guessing
+  // at the order boot and layout happen in.
+  let paintedForRails = null;
+
   const paint = () => {
     const t0 = performance.now();
     ctx.save();
@@ -4169,8 +4224,12 @@
       // same one proto/elevation-harness.js mirrors offline.
       const cut = drawing ? activeCut() : null;
       if (cut) {
-        window.DraftCutView.drawCutView(cutEnv(), ctx, cssW, cssH, cut);
+        const rails = railMargins();
+        paintedForRails = railKey(rails);
+        window.DraftCutView.drawCutView(cutEnv(), ctx, cssW, cssH, cut,
+          { margins: rails });
       } else if (drawing) {
+        paintedForRails = null;
         paintGrid();
         // "Underlays sit beneath everything drawn: over the grid, under
         // geometry" -- MODEL.dc.html's own words at the same seam. A tracing
@@ -9695,8 +9754,27 @@
     door: window.DraftGeometry2D.DEFAULT_DOOR_WIDTH_FT,
     window: window.DraftGeometry2D.DEFAULT_WINDOW_WIDTH_FT,
   };
-  let openingSill = window.DraftGeometry2D.DEFAULT_WINDOW_SILL_FT;
-  let openingHead = window.DraftGeometry2D.DEFAULT_OPENING_HEAD_FT;
+  // ── A WINDOW HEADS AT 7'-0", A DOOR AT 6'-8" ────────────────────────────
+  //
+  // Movie, 21 Sep: *"on windows the top of the window should be default
+  // located 7ft high from the current level floor level (if the window changes
+  // size the bottom changes)"*.
+  //
+  // PER TYPE, exactly as the WIDTH already is above: one shared head meant a
+  // door drawn after a window inherited the window's, which was harmless while
+  // both defaulted to 6'-8" and stops being so now that they differ.
+  //
+  // AND THE SILL FOLLOWS THE HEAD. It is 2'-10" now, not 2'-6" -- the same
+  // 4'-2" window the app has always drawn, hung four inches higher. Derived
+  // rather than typed, so the size stays one number in geometry-2d.js.
+  const openingHeads = {
+    door: window.DraftGeometry2D.DEFAULT_OPENING_HEAD_FT,
+    window: window.DraftGeometry2D.DEFAULT_WINDOW_HEAD_FT,
+  };
+  const OPENING_WINDOW_HEIGHT_FT = window.DraftGeometry2D.DEFAULT_OPENING_HEAD_FT
+    - window.DraftGeometry2D.DEFAULT_WINDOW_SILL_FT;
+  let openingSill = Math.max(0,
+    window.DraftGeometry2D.DEFAULT_WINDOW_HEAD_FT - OPENING_WINDOW_HEIGHT_FT);
 
   const openingWidthFt = (type = fenestrationType) =>
     openingSizes[type === 'window' ? 'window' : 'door'];
@@ -9705,6 +9783,8 @@
   // on the floor -- which is the old page's rule at the point of writing the
   // record rather than a second number kept beside the first.
   const openingSillFt = (type = fenestrationType) => (type === 'door' ? 0 : openingSill);
+  const openingHeadFt = (type = fenestrationType) =>
+    openingHeads[type === 'window' ? 'window' : 'door'];
 
   const OPENING_TYPES = Object.freeze([['door', 'DOOR'], ['window', 'WINDOW']]);
 
@@ -9792,16 +9872,16 @@
     if (fenestrationType === 'window') {
       box.append(openingField('SILL', openingSill, feet => {
         if (feet < 0) return 'A sill cannot be below the floor.';
-        if (feet >= openingHead) {
+        if (feet >= openingHeadFt()) {
           return `A sill at ${F.formatArchitecturalInches(feet * 12)} is not `
-            + `below the head at ${F.formatArchitecturalInches(openingHead * 12)}.`;
+            + `below the head at ${F.formatArchitecturalInches(openingHeadFt() * 12)}.`;
         }
         openingSill = feet;
         return null;
       }));
     }
 
-    box.append(openingField('HEAD', openingHead, feet => {
+    box.append(openingField('HEAD', openingHeadFt(), feet => {
       // THE HEAD MUST STAND ABOVE THE SILL IT IS PAIRED WITH, and the pairing
       // is per type: a door's sill is zero whatever the window's is, so the
       // comparison asks openingSillFt rather than the stored window number.
@@ -9810,7 +9890,7 @@
         return `A head at ${F.formatArchitecturalInches(feet * 12)} is not `
           + `above the sill at ${F.formatArchitecturalInches(sill * 12)}.`;
       }
-      openingHead = feet;
+      openingHeads[fenestrationType === 'window' ? 'window' : 'door'] = feet;
       return null;
     }));
 
@@ -9822,7 +9902,7 @@
     note.dataset.openingNote = '';
     note.textContent = `${F.formatArchitecturalInches(openingWidthFt() * 12)} WIDE, `
       + `SILL ${F.formatArchitecturalInches(openingSillFt() * 12)}, `
-      + `HEAD ${F.formatArchitecturalInches(openingHead * 12)}`;
+      + `HEAD ${F.formatArchitecturalInches(openingHeadFt() * 12)}`;
     box.append(note);
     P.set('FENESTRATION', box);
     openingPanelUp = true;
@@ -10093,7 +10173,7 @@
       offset: clamped.offset,
       width,
       sillHeight: dusting ? Number(dusting.sillHeight) || 0 : openingSillFt(type),
-      headHeight: dusting ? Number(dusting.headHeight) || 0 : openingHead,
+      headHeight: dusting ? Number(dusting.headHeight) || 0 : openingHeadFt(type),
       // AN OVERHEAD DOOR STAYS ONE THROUGH THE BRUSH. `garage` is what makes
       // it one, and it is written only when the brush is carrying it -- a
       // `garage: false` on every hand-placed window would be a key the old
@@ -14278,6 +14358,46 @@
     }
   });
   window.addEventListener('resize', resize);
+
+  // ── AND A RAIL THAT CHANGES SHAPE IS A STALE DRAWING ──────────────────────
+  //
+  // The elevation painter is handed the rails' MEASURED boxes (railMargins,
+  // above), so what it draws is only right for the rails that were on screen
+  // when it ran. Boot is where that bites: the first paint happens before the
+  // shell has laid the rails out, so railMargins measured nothing and
+  // `?view=cut:E4&left=1&right=1` opened on an elevation drawn at full width
+  // with both panels sitting on it. Measured at 1366px: building 128..1277,
+  // under a left rail ending at 221 and a right one starting at 1040. Toggling
+  // a rail repainted it at 251..1009 -- clear of both -- which is what said the
+  // arithmetic was right and only its timing was wrong.
+  //
+  // AN OBSERVER RATHER THAN ONE MORE paint() AFTER BOOT, because the widths
+  // move for more reasons than opening and closing: the right rail is
+  // shrink-to-fit under its 277px bound, so switching panes inside it resizes
+  // it with nothing toggled at all. The rule this states is the general one --
+  // when the furniture over the canvas changes shape, what was painted under
+  // it is out of date.
+  if (window.ResizeObserver) {
+    // AGAINST THE PAINT, NOT AGAINST THE LAST FIRE. An observer fires once per
+    // element the moment it is attached, so a version of this that skipped its
+    // own first callback was betting that the rails are not laid out yet when
+    // it runs -- and if that bet ever lost, it would swallow the one fire that
+    // fixes the boot paint and bring the whole defect back. Comparing against
+    // what the drawing on screen was PAINTED for needs no such bet: a fire
+    // that agrees with it repaints nothing whenever it happens, and one that
+    // disagrees repaints however early it comes.
+    const railsChanged = new ResizeObserver(() => {
+      // Only a cut view reads the rails; a plan is painted the same at any
+      // rail width, so this has nothing to say about it.
+      if (!drawing || !activeCut()) return;
+      if (railKey(railMargins()) === paintedForRails) return;
+      paint();
+    });
+    ['#left-rail', '#right-rail'].forEach(sel => {
+      const rail = document.querySelector(sel);
+      if (rail) railsChanged.observe(rail);
+    });
+  }
 
   // ── boot ──────────────────────────────────────────────────────────────────
   // ── from a saved file to the drawing on this page ─────────────────────────

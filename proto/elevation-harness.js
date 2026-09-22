@@ -924,6 +924,129 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
     Math.abs(grown[0].base - (TOP - 5.5 / 12)) < 1e-9, `base ${grown[0].base}`);
 }
 
+
+// ── A CALLER THAT MEASURES ITS OWN FURNITURE GETS MORE WHITE ───────────────
+//
+// Movie, 22 Sep, on an elevation with both side menus open: *"when the side
+// menus are open they cover the drawing in elevation, can we make the zoom for
+// the elevations so the house is a little smaller and there is more white
+// around the edges and sides so these menus when expanded don-t cover it"*.
+//
+// MODEL.html measures its two rails and hands the painter what they cover.
+// THIS IS THE PAINTER-S HALF, and it is here rather than in a browser because
+// it is arithmetic. What only a browser can prove -- that the numbers handed
+// over are the rails- real boxes, and that a rail opening after the first
+// paint repaints -- is tests/elevation-clears-the-rails.spec.js.
+{
+  const CV = win.DraftCutView;
+  const cut = standardElevationCuts(env).find(c => c.id === 'E1');
+  const stack = CV.sectionLevelStack(env);
+  const dir = cut.dirVec;
+  const axis = { x: dir.z, z: -dir.x };
+  const W = 900;
+  const RULE_LEAD = 18;   // cut-view.js draws its datum tails from `marginL - 18`
+
+  // SCREEN MODE, which paintElevation() above cannot reach: it paints through
+  // an EXTERNAL FIT (pxPerFt + extents), and an external fit takes no margins
+  // at all -- on a LAYOUT sheet the paper decides, not the screen. A reading
+  // taken through that helper would report a dead margin and a working one
+  // alike.
+  //
+  // THE HOUSE AND THE REFERENCE RULES ARE MEASURED APART, because they answer
+  // different questions. The level marks and the two grade tails are drawn
+  // FROM the margin -- they follow it exactly -- so a span taken over all the
+  // ink would narrow on a margin the house ignored completely. What the
+  // drafter is covered by is the house. Told apart by shape rather than by
+  // ink: a reference rule is dead flat, and this drawing-s outline has both a
+  // left and a right vertical, so nothing of the house is lost by asking only
+  // its upright strokes where it begins and ends.
+  const span = opts => {
+    const { ctx, strokes } = recordingCtx();
+    const ok = CV.drawElevationView(env, ctx, W, 600, cut, stack, axis, () => {}, opts);
+    const upright = strokes.filter(s => {
+      const ys = s.pts.map(p => p.y);
+      return Math.max(...ys) - Math.min(...ys) > 0.5;
+    });
+    const xs = strokes.flatMap(s => s.pts.map(p => p.x));
+    const body = upright.flatMap(s => s.pts.map(p => p.x));
+    return {
+      ok, n: xs.length, uprights: upright.length,
+      inkLo: Math.min(...xs), inkHi: Math.max(...xs),
+      lo: Math.min(...body), hi: Math.max(...body),
+    };
+  };
+  const at = v => v.toFixed(1);
+
+  const plain = span(undefined);
+  check('the elevation paints in screen mode at all',
+    plain.ok && plain.n > 100 && plain.uprights > 4,
+    `ok ${plain.ok}, ${plain.n} points, ${plain.uprights} upright strokes`);
+
+  const WANT = 150;   // under the half-canvas cap below, which 900/2 puts at 450
+  const wide = span({ margins: { left: WANT, right: WANT } });
+  check('a caller asking for margin each side gets a narrower house',
+    wide.hi - wide.lo < (plain.hi - plain.lo) - 1,
+    `${at(wide.hi - wide.lo)}px of house against ${at(plain.hi - plain.lo)}px`);
+  check('and the house sits inside the margins it asked for',
+    wide.lo >= WANT - 1 && wide.hi <= W - WANT + 1,
+    `house ${at(wide.lo)}..${at(wide.hi)} in ${W}px with ${WANT}px asked each side`);
+  // EXACTLY THOSE MARGINS, read off the ink that marks them. The datum tails
+  // and the grade line are drawn FROM the margin -- `marginL - 18` and
+  // `w - marginR` -- so where they end IS where the margins are, and pinning
+  // them is the only way to tell a margin honoured from one merely cleared.
+  // A painter that answered every ask by insetting to half the canvas would
+  // satisfy every bound above and be wrong.
+  check('and those margins are the ones asked for, not more and not less',
+    Math.abs(wide.inkLo - (WANT - RULE_LEAD)) < 1 && Math.abs(wide.inkHi - (W - WANT)) < 1,
+    `the rules run ${at(wide.inkLo)}..${at(wide.inkHi)}, so the margins are `
+    + `${at(wide.inkLo + RULE_LEAD)} and ${at(W - wide.inkHi)} against ${WANT} asked`);
+
+  // AND WHAT IT MUST NOT DO, which is the half that keeps the rest honest. A
+  // shut rail covers nothing and MODEL.html hands that over as a zero rather
+  // than withholding it, so zero has to mean "the painter-s own default" and
+  // not "paint to the edge".
+  const zero = span({ margins: { left: 0, right: 0 } });
+  check('asking for LESS margin than the default changes nothing',
+    Math.abs(zero.lo - plain.lo) < 1e-9 && Math.abs(zero.hi - plain.hi) < 1e-9,
+    `${at(zero.lo)}..${at(zero.hi)} against ${at(plain.lo)}..${at(plain.hi)}`);
+  const none = span({ margins: null });
+  check('and neither does handing over no measurement at all',
+    Math.abs(none.lo - plain.lo) < 1e-9 && Math.abs(none.hi - plain.hi) < 1e-9,
+    `${at(none.lo)}..${at(none.hi)}`);
+
+  // ONE SIDE AT A TIME. Both sides asked together would read the same if the
+  // painter quietly halved the pair into a single symmetric inset, or zoomed
+  // out by their sum and centred; only an uneven ask can tell a margin from a
+  // zoom. One rail open and one shut is also the ordinary case on screen.
+  const leftOnly = span({ margins: { left: WANT } });
+  check('a margin asked on the left alone clears the left',
+    leftOnly.lo >= WANT - 1, `house begins at ${at(leftOnly.lo)}, ${WANT}px asked`);
+  check('and leaves the right margin exactly where it was',
+    Math.abs(leftOnly.inkHi - plain.inkHi) < 1,
+    `the datum tails end at ${at(leftOnly.inkHi)} against ${at(plain.inkHi)} -- `
+    + 'that end IS the right margin, so it moving would mean a left-hand ask ate both sides');
+  check('and the house moves toward the free side rather than shrinking about its middle',
+    leftOnly.hi > plain.hi + 1,
+    `house ends at ${at(leftOnly.hi)} against ${at(plain.hi)} with nothing asked`);
+
+  // AND HALF THE CANVAS IS THE DRAFTER-S, whatever is sitting on it. MODEL's
+  // two rails ask for about 540px between them; on a narrow window that is
+  // most of the canvas, and honoured literally it would answer "don-t cover
+  // the drawing" by leaving no drawing to cover.
+  const greedy = span({ margins: { left: 400, right: 400 } });
+  check('a pair of margins bigger than the canvas still leaves half of it',
+    greedy.hi - greedy.lo >= W / 2 - 1,
+    `${at(greedy.hi - greedy.lo)}px of house in ${W}px, 800px of margin asked`);
+  check('and that half is not taken out of one side only',
+    greedy.lo > 1 && W - greedy.hi > 1,
+    `house ${at(greedy.lo)}..${at(greedy.hi)} -- an ask scaled back on one side `
+    + 'alone would leave the other flush with the edge');
+
+  // (THE CAP IS A CEILING, NOT THE ANSWER -- that an ask which fits is
+  // honoured whole rather than rounded up to half the canvas is what the
+  // exact reading above pins, and it is the same arithmetic that does both.)
+}
+
 console.log(`elevation harness: ${passed} checks passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach(line => console.log(`  \u2718 ${line}`));
