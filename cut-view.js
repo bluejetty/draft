@@ -1208,30 +1208,75 @@ if (!window.DraftCutView) {
       }));
     const exposed = fdnGeoms.filter(g => g.topE > fdn.grade)
       .sort((a, b) => a.depth - b.depth);   // far first
-    const fdnHidden = g => exposed.some(o => o !== g
+    // ── A NEARER FACE HIDES THE PART IT COVERS, NOT ALL OR NOTHING ──────
+    //
+    // Movie, 22 Sep, on E4 of a 2 STOREY + GARAGE + ROOM OVER: *"the 2nd floor
+    // is lined up but foundation off kilter still"*.
+    //
+    // THE WALLS WERE ALREADY RIGHT. Measured on that build, the tie is the
+    // same on every level:
+    //
+    //     FOUNDATION  (16,19) -> (20,19)   body=garage
+    //     MAIN FL     (16,19) -> (20,19)   body=garage
+    //     2ND FL      (16,19) -> (20,19)
+    //
+    // What was off was the ELEVATION. Two exposed foundation tops overlapped
+    // for exactly one foot -- the tie's foot:
+    //
+    //     e -1.048   u -46.00..-19.00    the GARAGE's concrete, z 19..46
+    //     e -1.173   u -20.00.. 20.00    the HOUSE's concrete,  z -20..20
+    //
+    // 1.5" apart in height and stepping a foot apart in plan, so the drawing
+    // showed a step a foot from where the concrete actually steps.
+    //
+    // THE TEST DEMANDED TOTAL COVER: `o.lo <= g.lo && o.hi >= g.hi`. The
+    // garage's face covers one foot of the house's twenty-eight, so it hid
+    // none of it and the house's line ran on underneath. Subtracting the
+    // stretch instead is the same question asked per foot rather than per
+    // face, and a face a nearer one swallows whole now yields no runs at all
+    // -- which is the old all-or-nothing answer, kept as a special case of
+    // the general one rather than as a rule of its own.
+    const behindFdn = (g, o) => o !== g
       && o.depth > g.depth + 1e-6
-      && o.lo <= g.lo + 0.05 && o.hi >= g.hi - 0.05
       && o.topE >= g.topE - 1e-3
-      && Math.max(o.baseE, fdn.grade) <= Math.max(g.baseE, fdn.grade) + 1e-3);
-    const shownFdn = exposed.filter(g => !fdnHidden(g));
-    shownFdn.forEach(g => {
+      && Math.max(o.baseE, fdn.grade) <= Math.max(g.baseE, fdn.grade) + 1e-3;
+    const visibleRuns = g => exposed.reduce((runs, o) => (behindFdn(g, o)
+      ? runs.flatMap(r => {
+        if (o.hi <= r.lo + 0.05 || o.lo >= r.hi - 0.05) return [r];
+        const kept = [];
+        if (o.lo > r.lo + 0.05) kept.push({ lo: r.lo, hi: o.lo });
+        if (o.hi < r.hi - 0.05) kept.push({ lo: o.hi, hi: r.hi });
+        return kept;
+      })
+      : runs), [{ lo: g.lo, hi: g.hi }]).filter(r => r.hi - r.lo > 0.05);
+    const shownFdn = exposed
+      .map(g => ({ g, runs: visibleRuns(g) }))
+      .filter(entry => entry.runs.length);
+    shownFdn.forEach(({ g, runs }) => {
       const shownBase = Math.max(g.baseE, fdn.grade);
       ctx.fillStyle = '#e8e8ea';
-      ctx.fillRect(X(g.lo), Y(g.topE),
-        (g.hi - g.lo) * pxPerFt, (g.topE - shownBase) * pxPerFt);
+      runs.forEach(r => ctx.fillRect(X(r.lo), Y(g.topE),
+        (r.hi - r.lo) * pxPerFt, (g.topE - shownBase) * pxPerFt));
     });
     // Strokes after every fill, so a near face can't erase a far corner.
     ctx.lineWidth = 1;
     const strokedV = new Set();
-    shownFdn.forEach(g => {
+    shownFdn.forEach(({ g, runs }) => {
       const shownBase = Math.max(g.baseE, fdn.grade);
       ctx.strokeStyle = INK;
       ctx.beginPath();
-      ctx.moveTo(X(g.lo), Y(g.topE)); ctx.lineTo(X(g.hi), Y(g.topE));
-      ctx.moveTo(X(g.lo), Y(shownBase)); ctx.lineTo(X(g.hi), Y(shownBase));
+      runs.forEach(r => {
+        ctx.moveTo(X(r.lo), Y(g.topE)); ctx.lineTo(X(r.hi), Y(g.topE));
+        ctx.moveTo(X(r.lo), Y(shownBase)); ctx.lineTo(X(r.hi), Y(shownBase));
+      });
       ctx.stroke();
-      [g.lo, g.hi].forEach(u => {
-        const interior = shownFdn.some(o => o !== g
+      // THE RUN'S OWN ENDS, not the face's. Where a face disappears behind a
+      // nearer one, that end is where its concrete stops being visible, which
+      // is the corner the drafter sees -- and it is exactly the foot this fix
+      // is about. A face clear of everything has one run and this is what it
+      // always was.
+      runs.forEach(r => [r.lo, r.hi].forEach(u => {
+        const interior = shownFdn.some(({ g: o }) => o !== g
           && u > o.lo + 0.05 && u < o.hi - 0.05);
         const key = `${X(u)}|${interior}`;
         if (strokedV.has(key)) return;
@@ -1240,7 +1285,7 @@ if (!window.DraftCutView) {
         ctx.beginPath();
         ctx.moveTo(X(u), Y(g.topE)); ctx.lineTo(X(u), Y(shownBase));
         ctx.stroke();
-      });
+      }));
     });
 
     // Underground: outline-only loops, one per building mass, gaps preserved.
@@ -1901,12 +1946,64 @@ if (!window.DraftCutView) {
         const eaveTop = roofBaseElev(roof, stack, env) + ROOF_FASCIA_IN / 12;
         const pitch = roof.pitch || 4;
         const rpts = roof.points || [];
-        const gableSegs = rpts.flatMap((a, i) => (roof.edges?.[i] === 'gable'
-          ? [{ a, b: rpts[(i + 1) % rpts.length] }] : []));
+        // ── A GABLE END HAS A FRONT AND A BACK, AND ONLY ONE OF THEM ──────
+        //
+        // Movie, 21 Sep, on the garage roof in E1 FRONT: *"you shouldn't see
+        // the bottom of the top choard ... its a cottage roof nor a gable
+        // roof"*, and on 22 Sep, with the ridge fixed and the two sloping
+        // bands still there, marking them green: *"i can still see the
+        // 'lower' line of the top chord (except in the middle where the
+        // window is)"*.
+        //
+        // He is right, and the edges ARE rakes. roof-69's faces:
+        //
+        //     face 0   (-6,38) (4,38) (-6,48)
+        //     face 1   (4,38) (12,38) (22,48) (-6,48)
+        //     face 2   (12,38) (22,38) (22,48)
+        //
+        // `(-6,38)->(4,38)` and `(12,38)->(22,38)` lie flat in plan on the
+        // gable line and rise in elevation from eave to ridge: the sloping
+        // top edges of the gable end wall. A real rake is a board on edge and
+        // shows a top and a bottom, so banding them is right -- FROM THE SIDE
+        // THE GABLE FACES.
+        //
+        // E1 IS NOT THAT SIDE. Its cut sits at z = 48 with `dirVec {x:0,z:1}`,
+        // and `behindRoof` a thousand lines up settles the sign: it steps
+        // `pt + dir * 0.05` to reach the NEAR point, so +dir is toward the
+        // viewer and larger z is nearer. The gable end at z = 38 faces -z,
+        // away. What the drafter is looking at is the HIP in front of it --
+        // `(4,38)->(-6,48)` -- which projects onto exactly the same line,
+        // because both run between the same two points in elevation. A hip is
+        // where two planes meet: one line, no board.
+        //
+        // THE BOARD SAID THIS WAS "NEVER OCCLUSION" AND HAD THE DIRECTION
+        // BACKWARDS. It read larger z as farther, concluded the gable faced
+        // the viewer, and closed the question. The sign is not a thing to
+        // remember: `behindRoof` states it, in this file.
+        const gableSegs = rpts.flatMap((a, i) => {
+          if (roof.edges?.[i] !== 'gable') return [];
+          const b = rpts[(i + 1) % rpts.length];
+          const dx = b.x - a.x, dz = b.z - a.z;
+          const len = Math.hypot(dx, dz);
+          if (len < 0.01) return [];
+          // Outward is decided by the RING, not by its winding: a probe off
+          // the mid-point either lands inside the footprint or it does not.
+          let n = { x: -dz / len, z: dx / len };
+          const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+          if (pointInPolygon({ x: mid.x + n.x * 0.1, z: mid.z + n.z * 0.1 }, rpts)) {
+            n = { x: -n.x, z: -n.z };
+          }
+          return [{ a, b, toward: n.x * dir.x + n.z * dir.z }];
+        });
         // A rake LIES ALONG one gable edge; a ridge spanning gable-to-gable
         // (the dropped garage) touches two different ones and is no rake.
-        const onGable = (p, q) => gableSegs.some(s =>
-          distToSegment(p, s.a, s.b) < 0.1 && distToSegment(q, s.a, s.b) < 0.1);
+        //
+        // AND THE EDGE MUST FACE THIS ELEVATION. 0.01 rather than 0 so a
+        // gable running exactly along the line of sight -- its end seen edge
+        // on, where there is no face to show a board on either -- falls out
+        // rather than landing on the sign of a rounding error.
+        const onGable = (p, q) => gableSegs.some(s => s.toward > 0.01
+          && distToSegment(p, s.a, s.b) < 0.1 && distToSegment(q, s.a, s.b) < 0.1);
         roofFaces.forEach(face => {
           const poly = face.points;
           for (let i = 0; i < poly.length; i++) {

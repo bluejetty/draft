@@ -409,3 +409,164 @@ And the first draft of the first check keyed on `w 1` **and** solid ink, which
 left it sifting a population of two — the legitimate returns at the eave — so
 the zone came out empty whatever the painter did at the ridge. The elevation
 is what does the work, so the elevation is the only filter.
+
+---
+
+## 1 (CLOSED, 22 Sep) — A RAKE WEARS ITS BOARD ONLY WHERE ITS GABLE FACES
+
+Movie, with the ridge fixed and the two sloping bands still on the drawing,
+marking them green in GIMP:
+
+> *"i can still see the 'lower' line of the top chord (except in the middle
+> where the window is) the side lines are gone now so thats good"*
+
+The middle was the ridge, fixed that morning. The sides are the gable end's
+rakes, and **they are genuinely rakes** — `roof-69`'s faces say so:
+
+```
+face 0   (-6,38) (4,38) (-6,48)
+face 1   (4,38) (12,38) (22,48) (-6,48)
+face 2   (12,38) (22,38) (22,48)
+```
+
+`(-6,38)->(4,38)` and `(12,38)->(22,38)` lie flat in plan on the gable line
+and rise in elevation from eave to ridge: the sloping top edges of the gable
+end wall. A real rake is a board on edge and shows a top and a bottom.
+
+### But E1 is not the side that gable faces
+
+E1's cut sits at `z = 48` with `dirVec {x:0,z:1}`, and the sign is not a thing
+to remember — `behindRoof` states it in the same file:
+
+```js
+const near = { x: pt.x + dir.x * 0.05, z: pt.z + dir.z * 0.05 };
+```
+
+**+dir reaches the NEAR point, so larger z is nearer.** The gable end at
+`z = 38` faces `-z`, away. What the drafter sees is the HIP in front of it —
+`(4,38)->(-6,48)` — which projects onto exactly the same line, because both
+run between the same two points in elevation. A hip is where two planes meet:
+one line, no board.
+
+**THE BOARD ABOVE SAID THIS WAS "NEVER OCCLUSION" AND HAD THE DIRECTION
+BACKWARDS.** It read larger z as farther, concluded the gable faced the
+viewer, and closed the question — which is why the 22 Sep entry then went
+looking at the soffit return instead and called the buried-gable rule a theory
+the ink did not support. The ink was fine. The reading of the axis was not.
+
+### The rule
+
+A gable segment now carries which way it faces, and `onGable` asks:
+
+```js
+const onGable = (p, q) => gableSegs.some(s => s.toward > 0.01
+  && distToSegment(p, s.a, s.b) < 0.1 && distToSegment(q, s.a, s.b) < 0.1);
+```
+
+Outward is decided by the RING — a probe off the mid-point either lands inside
+the footprint or it does not — never by its winding.
+
+**The whole family goes together**, band and soffit return: the return lies in
+the same `z = 38` plane and is behind the same hip. That retires the check
+written this morning demanding the returns survive; it was right about the
+ridge fix, and the facing rule makes its subject invisible from E1, so it moved
+to E3 rather than being deleted.
+
+### Guarded, 26 checks, bracketed from both sides
+
+```
+the facing test is inverted     -> E3's band and return both vanish
+no facing test at all           -> E1's bands and returns come back
+the outward normal never flips  -> E3's band and return both vanish
+```
+
+E1 must show none of it and E3 must show it: without the second pair,
+`toward > 0.01` written backwards silences every rake in the drawing and every
+other check still passes.
+
+---
+
+## 4 (NEW, 22 Sep) — THE FOUNDATION STEPPED A FOOT FROM WHERE THE CONCRETE DOES
+
+Movie, on E4 of a 2 STOREY + GARAGE + ROOM OVER he had just built:
+
+> *"the 2nd floor is lined up but foundation off kilter still"*
+
+**The walls were already right**, which is why this turned out to be an ink
+problem and not a geometry one. Measured on that build, the tie is identical
+on every level — exactly what ruling (a) asked for and got:
+
+```
+FOUNDATION  (16,19) -> (20,19)   body=garage
+MAIN FL     (16,19) -> (20,19)   body=garage
+2ND FL      (16,19) -> (20,19)
+```
+
+### What was off was the elevation
+
+Two exposed foundation tops overlapped for exactly one foot — the tie's foot:
+
+```
+e -1.048   u -46.00..-19.00    the GARAGE's concrete, z 19..46
+e -1.173   u -20.00.. 20.00    the HOUSE's concrete,  z -20..20
+```
+
+1.5" apart in height and stepping a foot apart in plan, so the drawing put the
+step a foot from where the concrete actually steps.
+
+`cut-view.js`'s `fdnHidden` demanded **total** cover:
+
+```js
+&& o.lo <= g.lo + 0.05 && o.hi >= g.hi - 0.05
+```
+
+The garage's face covers one foot of the house's twenty-eight, so it hid none
+of it and the house's line ran on underneath. Subtracting the stretch instead
+asks the same question per foot rather than per face, and a face a nearer one
+swallows whole yields no runs at all — the old all-or-nothing answer kept as a
+special case of the general one.
+
+### "No two tops may overlap" is NOT the rule, and four elevations said so
+
+The harness asserted it first. A face standing **behind** a shorter one shows
+its top over the top of the one in front — a taller building seen past a lower
+one, and both lines belong on the drawing. **Ink alone cannot tell that from
+the defect**: in both cases two tops at different heights cover the same
+stretch, and what separates them is which is nearer, which the strokes do not
+carry.
+
+So the sweep was deleted rather than weakened, and the report is pinned
+exactly instead: on Movie's own drawing the two tops must **meet**, and meet
+**on the tie**. Meeting alone is not enough — hiding the garage's foot instead
+of the house's leaves them meeting perfectly and puts the step at z = 20,
+which is the same defect wearing the other shoe.
+
+### Measured and NOT fixed
+
+A far face that is **taller** than a nearer one still paints its **bottom**
+line over the stretch the nearer one covers —
+`repro-bungalow-garage-roofs` E3, `e -2.196 u -16..4` against
+`e -2.196 u -16..16`, twenty feet shared.
+
+Same question one axis over, and this fix does not reach it: `behindFdn` asks
+`o.topE >= g.topE`, so a nearer face that is SHORTER hides nothing, when what
+it should hide is everything below its own top. Answering that makes a face's
+visible region a POLYGON rather than a set of u-runs — a real change to that
+painter, and not what was reported.
+
+**It shows as nothing today**: both bottoms sit on the grade line, already
+stroked the full width at w2, so the spare ink lands on ink that belongs
+there. Which is why it has never been reported — and why it is written down
+rather than silently left. The day a face's base rises off grade it will show.
+
+### Guarded
+
+`proto/foundation-face-harness.js`, 3 checks, mutation-run:
+
+```
+back to all-or-nothing        -> they meet at -19.000 against -20.000   <- the report
+the subtraction keeps one end -> only one top on E4
+nearness read backwards       -> three tops on E4
+```
+
+The first reproduces Movie's foot exactly.
