@@ -250,6 +250,24 @@ if (!window.DraftDrawingFormat) {
   // Openings anchor to a host wall by id: type decides the CAD layer, offset
   // is the distance from the wall start to the opening centre along the wall.
   // Host-wall existence is the caller's check — walls restore after this runs.
+  // ── WHICH CASEMENT A WINDOW IS, AND THE VOCABULARY THAT SAYS SO ──────────
+  //
+  // Movie, 22 Sep: *"the first one SINGLE CASEMENT, this one DOUBLE
+  // CASEMENT"* -- one window with two panes, for the room over the garage.
+  //
+  // THE VOCABULARY LIVES HERE because this is what a stored record is allowed
+  // to say, and this module is the one gate every page reads through. The
+  // SIZES live in geometry-2d.js, which is where a placer asks what a window
+  // is; this module neither has them nor wants them. That split is the same
+  // one BUILD_TYPES keeps, and it is why the head at 7'-0" needed a harness
+  // while this does not need a second one: nothing is written twice, the
+  // sizes are simply a table geometry-2d keys BY this vocabulary.
+  //
+  // NOT ON A DOOR. A door has no casement, and a `casement: 'single'` on every
+  // door in every file would be a key that means nothing about the thing it
+  // is written on.
+  const CASEMENT_TYPES = Object.freeze(['single', 'double']);
+
   const fenestrations = (rawFenestrations, levelIds) => (Array.isArray(rawFenestrations) ? rawFenestrations : [])
     .map(opening => {
       const wallId = String(opening?.wallId || '').trim();
@@ -281,6 +299,14 @@ if (!window.DraftDrawingFormat) {
         sillHeight,
         headHeight,
         garage: opening?.garage === true,
+        // A WINDOW DRAWN BEFORE THIS EXISTED IS A SINGLE, which is what it
+        // has always been drawn as -- so the default is not a guess, it is
+        // the shape every existing record already describes. No migration and
+        // no version bump: the stored shape only GAINS an optional key, an
+        // older reader ignores it and still has a valid window, and a newer
+        // reader of an older file falls here.
+        casement: type === 'window'
+          ? oneOf(opening?.casement, CASEMENT_TYPES, 'single') : null,
         // Board #169: the bone's own windows carry their provenance so a
         // re-deal knows which are still its to replace. Old drawings have
         // no flag and validate unchanged as the drafter's.
@@ -1618,6 +1644,7 @@ if (!window.DraftDrawingFormat) {
     roofIntent,
     buildType,
     BUILD_TYPES,
+    CASEMENT_TYPES,
     garagePlan,
     GARAGE_PLANS,
     board,
