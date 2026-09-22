@@ -211,6 +211,8 @@ jobs:
 
   playwright:
     runs-on: ubuntu-latest
+    # SIX SHARDS. IT WAS FOUR, AND THE READING THAT CHANGED IT IS BELOW.
+    #
     # FOUR SHARDS, BECAUSE AN HOUR SERIAL HAD RUN OUT OF ROAD.
     #
     # The suite is serial by design -- workers: 1, fullyParallel: false -- so
@@ -248,6 +250,57 @@ jobs:
     # two thirds. Each shard re-pays checkout, npm ci and the browser install
     # (23s last measured), but they pay it in parallel: +30s to the wall clock,
     # not four times over.
+    #
+    # ── AND ON 22 SEP THAT TRADE BECAME WORTH IT. SIX. ────────────────────────
+    #
+    # The condition the paragraph above set was met, so the count has moved --
+    # and it is no longer a change in two places: the divisor is now derived
+    # from the matrix (see the run step). What met the condition, on CI's own
+    # boxes:
+    #
+    #   run 1209  main, #455 merged   shard 1 TIMED OUT at globalTimeout
+    #                                 368 passed, 23 DID NOT RUN
+    #   run 1211  #456 on the branch  33.6  21.0  18.7  25.7 min   (99 total)
+    #   run 1212  main, #456 merged   shard 1 over 35m again; 21.4  20.6  27.7
+    #
+    # Twice in one day, and the second time on a green PR whose own run had
+    # cleared the wall by 83 seconds. playwright.config.js sets globalTimeout to
+    # 35 minutes so an overrunning run REPORTS BY NAME instead of being killed
+    # grey by the runner -- Movie's ruling of 15 Sep. It is working exactly as
+    # written: run 1209's badge is red and legible. But a shard that routinely
+    # needs the whole 35 has no margin left to report anything WITH, and the
+    # config comment named this in advance: "Raising `timeout` or adding heavy
+    # specs eats that margin."
+    #
+    # NOT BY RAISING THE CEILING. That is the one fix the ruling rules out: the
+    # ceiling exists to bound how long a hung run takes to speak, so lifting it
+    # buys green by making the failure case slower. The work is what has to come
+    # down, and more shards is the only lever that brings it down without giving
+    # up `workers: 1`.
+    #
+    # AND THE CLUSTERING DIAGNOSIS ABOVE IS NOW WRONG, which matters more than
+    # the number. Run 1211 against the test counts in each shard:
+    #
+    #   shard 1   392 tests   33.6 min      5.15 s/test
+    #   shard 2   390 tests   21.0 min      3.23 s/test
+    #   shard 3   386 tests   18.7 min      2.91 s/test
+    #   shard 4   386 tests   25.7 min      4.00 s/test   <- holds
+    #                                                        undo-history-hardening
+    #                                                        AND controls
+    #
+    # The counts are balanced to within six tests, so Playwright's split is
+    # doing its job. And the two files the paragraph above blames are both on
+    # shard 4, which finishes EIGHT MINUTES BEFORE shard 1. Whatever makes
+    # shard 1 cost 1.8x per test is something else and has not been found; a
+    # reading that starts from undo-history-hardening starts in the wrong file.
+    # Left as a measured open question rather than a guess.
+    #
+    # WHAT SIX IS EXPECTED TO DO, and it is an expectation, not a measurement:
+    # 99 minutes over six shards is 16.5 ideal, and shard 1's 1.36x share of
+    # ideal puts the worst at about 22. That restores roughly the margin the
+    # config comment was written around. THE REAL NUMBER IS THE NEXT RUN OF
+    # THIS FILE -- if the worst shard comes back near 30 again, the answer is
+    # eight, or finding what shard 1 is actually doing.
     # 45, AND IT SITS ABOVE playwright.config.js's 35-MINUTE globalTimeout.
     # The two numbers are one mechanism and must not be edited apart.
     #
@@ -269,12 +322,12 @@ jobs:
     # limit, not cancel the shard".
     timeout-minutes: 45
     strategy:
-      # ALL FOUR RESULTS, ALWAYS. A failing shard must not cancel its siblings:
-      # three green and one red is a diagnosis, and one red and three cancelled
-      # is a mystery.
+        # EVERY SHARD'S RESULT, ALWAYS. A failing shard must not cancel its
+      # siblings: five green and one red is a diagnosis, and one red and five
+      # cancelled is a mystery.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -282,7 +335,21 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npx playwright test --shard=${{ matrix.shard }}/4
+      # THE DIVISOR IS THE MATRIX, not a second number beside it.
+      #
+      # `strategy.job-total` IS the length of the matrix above, so the two
+      # cannot disagree. Written as a literal they can, and one of the two ways
+      # they disagree is SILENT: leave the matrix at four while this says /6 and
+      # a third of the suite never runs, with four green badges saying it did.
+      # (The other way round is loud -- Playwright rejects --shard=5/4 -- which
+      # is exactly the asymmetry that makes the first one dangerous.)
+      #
+      # That is the same failure the harness job guards against above with "a
+      # loop that matches nothing passes", and it is worth the same care: this
+      # file's own history called changing the count "a one-character change in
+      # two places", which is a count of the places it can be got half-done.
+      # Now there is one.
+      - run: npx playwright test --shard=${{ matrix.shard }}/${{ strategy.job-total }}
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

@@ -64,7 +64,7 @@ if (!globalThis[ANNOUNCED]) {
 
 // AND THE SAME CLASS OF FAILURE, FROM THE OTHER DIRECTION: A RED THAT ISN'T
 // REAL. `workers: 1` below is not timidity, and the reasons are already
-// written down twice — test.yml:224 and README.md:48. Every spec shares one
+// written down twice — test.yml:226 and README.md:51. Every spec shares one
 // origin, so every spec shares one localStorage and one IndexedDB, and
 // helpers.openModel clears BOTH on the way into every test. Two workers on
 // one machine therefore delete each other's storage mid-test.
@@ -91,7 +91,7 @@ if (!globalThis[ANNOUNCED]) {
 //
 // SHARDING IS THE SUPPORTED WAY TO GO PARALLEL, and it is untouched: a shard
 // gets its own runner and therefore its own origin, which is the only way to
-// have both. CI's `--shard=N/4` inherits workers: 1 and never reaches this.
+// have both. CI's `--shard=N/6` inherits workers: 1 and never reaches this.
 const workerOverride = (() => {
   const argv = process.argv;
   for (let i = 2; i < argv.length; i += 1) {
@@ -124,12 +124,12 @@ if (workerOverride) {
     + 'comes back and swallows every click. On 9 Sep 2026 that cost a day and\n'
     + 'three boards, and the same suite passed 979/979 serially.\n'
     + '\n'
-    + 'See test.yml:224 and README.md:48.\n'
+    + 'See test.yml:226 and README.md:51.\n'
     + '\n'
     + 'To go parallel, shard instead — a shard gets its own runner and its own\n'
     + 'origin, which is the only way to have both:\n'
     + '\n'
-    + '    npx playwright test --shard=1/4\n');
+    + '    npx playwright test --shard=1/6\n');
 }
 
 module.exports = defineConfig({
@@ -149,7 +149,7 @@ module.exports = defineConfig({
   // (BOARD-test-budget.md, 6 Sep) and the finding was that the heaviest
   // MODEL.html specs pass with no margin rather than by a comfortable amount.
   // Two independent things then push them over: added latency on a slower
-  // machine, and contention when four shards share one box. Neither is the
+  // machine, and contention when the shards share one box. Neither is the
   // spec's fault and neither is fixable by looking at it harder.
   //
   // THE MEASUREMENT, one line changed and nothing else:
@@ -207,6 +207,16 @@ module.exports = defineConfig({
   // ends ten minutes inside the job cap. Raising `timeout` or adding heavy
   // specs eats that margin, so the two numbers are stated together and move
   // together.
+  //
+  // AND ON 22 SEP ADDING SPECS ATE IT, exactly as that sentence says. Shard 1
+  // of four hit this ceiling twice in one day -- once with 368 passed and 23
+  // never run -- after climbing 26.5m, 27m, 33.6m. THIS NUMBER WAS NOT THE ONE
+  // THAT MOVED: lifting it would have bought green by making a hung run take
+  // longer to speak, which is the property Movie ruled on and the whole reason
+  // it is here. The WORK came down instead -- test.yml went from four shards
+  // to six, and the arithmetic is written out there. 35 is left where it was
+  // measured, and it is still the thing that will say so next time the margin
+  // goes.
   globalTimeout: 35 * 60_000,
 
   use: {
