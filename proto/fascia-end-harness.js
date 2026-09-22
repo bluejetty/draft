@@ -124,6 +124,129 @@ drawings.forEach(file => {
 check('the drawings actually painted fascia bands to check',
   bandsSeen > 0, `${bandsSeen} bands found at lineWidth ${BAND_W}`);
 
+// ── TWO MORE OF MOVIE'S 21 SEP REPORTS, on his own drawing ────────────────
+//
+// Both are about the garage roof on E1 FRONT and both are pinned here rather
+// than in a spec, because what makes them checkable is a MEASUREMENT of the
+// ink rather than anything a page does.
+const MOVIE = path.join(ROOT, 'proto', 'repro-movie-garage-2storey.draft');
+if (!fs.existsSync(MOVIE)) {
+  failures.push('proto/repro-movie-garage-2storey.draft is missing');
+} else {
+  const saved = JSON.parse(fs.readFileSync(MOVIE, 'utf8'));
+  const env = H.buildEnv(win, saved);
+  const cut = H.standardElevationCuts(env).find(c => c.id === 'E1');
+  const view = H.paintElevation(win, env, cut, { pxPerFt: 40 });
+
+  // THE GARAGE ROOF IS THE LOW ONE, found by its band's base rather than by
+  // id -- an id would pin the fixture, and this is about the drawing's shape.
+  const garage = bandsOf(view).sort((a, b) => a.base - b.base)[0];
+  check('Movie\u2019s drawing still paints a low garage fascia band on E1',
+    Boolean(garage), 'no band found');
+
+  if (garage) {
+    // 1. THE ROOF IS NOT TRANSPARENT. The house's 2nd-floor rim band had its
+    //    vertical edges drawn straight through the garage roof, at the
+    //    garage's own exterior walls -- one overhang in from each roof edge.
+    //    Movie: "i could see the sidewalls through the roof", "transparent".
+    //
+    //    The wall positions are DERIVED from the roof and its overhang, not
+    //    typed in: a hardcoded u would pin this fixture's dimensions instead
+    //    of the rule.
+    const roof = (saved.roofs || []).slice()
+      .sort((a, b) => Math.min(...(a.points || []).map(p => p.z))
+        - Math.min(...(b.points || []).map(p => p.z))).pop();
+    const over = Number(roof.overhang) || 0;
+    const xs = (roof.points || []).map(p => p.x);
+    const walls = [Math.min(...xs) + over, Math.max(...xs) - over];
+    // BOUNDED ABOVE BY THE ROOF'S OWN RIDGE, because the roof can only hide
+    // what is inside it. Without that bound this caught the HOUSE's
+    // second-storey wall corner running up to the house eave at 17.252,
+    // which is legitimately visible above the garage roof.
+    const ridge = Math.max(...view.strokes.flatMap(st => st.pts.map(pt => pt.e))
+      .filter(e => e < garage.base + 6));
+    // AND THE TEST IS "REACHES INTO THE ROOF", NOT "LIES INSIDE IT". The
+    // first version demanded the vertical START above the eave, and was
+    // MUTATION-RUN AGAINST THE FIX REVERTED AND PASSED -- because the thing
+    // it exists to catch begins 0.3" BELOW the eave (the rim band spans
+    // 8.077..9.177 against an eave at 8.102), so its own precondition threw
+    // it out. A guard that excludes its subject is worse than none: it
+    // reports the fix is held when nothing is holding it.
+    //
+    // So: the TOP must be inside the roof. A vertical whose top pokes out
+    // above the ridge is partly in open air and belongs on the drawing; one
+    // whose top is under the ridge and above the eave is wholly covered.
+    const strays = [];
+    verticalsOf(view).forEach(v => {
+      if (Math.abs(v.w - 1.25) > 1e-9) return;              // wall / band ink
+      if (!walls.some(wu => Math.abs(v.u - wu) < 0.1)) return;
+      if (v.eHi <= garage.base + 0.02) return;              // entirely below the eave
+      if (v.eHi >= ridge - 0.02) return;                    // pokes out the top
+      strays.push(`u ${v.u.toFixed(2)} e ${v.eLo.toFixed(3)}..${v.eHi.toFixed(3)}`);
+    });
+    check('no rim-band edge is drawn through the garage roof at its side walls',
+      strays.length === 0,
+      `walls at u ${walls.map(n => n.toFixed(1)).join(', ')}; roof `
+      + `e ${garage.base.toFixed(3)}..${ridge.toFixed(3)}`
+      + `\n      ${strays.join('\n      ')}`);
+
+    // 2. A RIDGE IS ONE LINE. `onGable` passes for a ridge terminating on a
+    //    gable edge, so the flat top of the gable end wore a fascia board --
+    //    a light line and a heavy one 5.5" apart, level. Movie: "you
+    //    shouldn't see the bottom of the top choard in the front elevation".
+    //
+    //    Measured as: no LEVEL line may sit exactly one board below another
+    //    level line, above the garage eave. At the eave itself that pairing
+    //    is the fascia band and is correct, which is why the test starts
+    //    above it.
+    // AT THE RIDGE, AND ONLY THERE. The first version of this looked for any
+    // level line one board under another above the garage eave, and caught
+    // the HOUSE's own eave band -- which is what an eave band IS. Every eave
+    // wears one; a RIDGE must not. So the height is pinned to the ridge.
+    const bandAtRidge = [];
+    const levelRuns = [];
+    view.strokes.forEach(st => {
+      for (let i = 1; i < st.pts.length; i++) {
+        const a = st.pts[i - 1], b = st.pts[i];
+        if (b.move) continue;
+        if (Math.abs(a.e - b.e) > 0.004) continue;
+        if (Math.abs(a.u - b.u) < 0.5) continue;
+        levelRuns.push({ e: a.e, u0: Math.min(a.u, b.u), u1: Math.max(a.u, b.u), w: st.w, ink: st.ink });
+      }
+    });
+    // THE RAKE BAND, BY ITS OWN TWO INKS, and this precision is the point.
+    // The band is a 0.6-alpha w1 top over a solid w2.25 shadow; nothing else
+    // in the file draws that pair. Asking only "is any line one board under
+    // the ridge" was BROADER THAN THE FIX, and it caught something the fix
+    // does not address -- see the note at the foot of this block.
+    const atRidge = levelRuns.filter(r => Math.abs(r.e - ridge) < 0.02
+      && Math.abs(r.w - 1) < 1e-9 && String(r.ink).includes('0.6'));
+    atRidge.forEach(A => levelRuns.forEach(B => {
+      if (Math.abs(B.w - 2.25) > 1e-9) return;
+      if (Math.abs((A.e - FASCIA_FT) - B.e) > 0.02) return;   // B one board under A
+      const lo = Math.max(A.u0, B.u0), hi = Math.min(A.u1, B.u1);
+      if (hi - lo < 1) return;
+      bandAtRidge.push(`ridge e ${A.e.toFixed(3)} over e ${B.e.toFixed(3)}, `
+        + `u ${lo.toFixed(1)}..${hi.toFixed(1)}`);
+    }));
+    check('the ridge wears no RAKE FASCIA BAND',
+      bandAtRidge.length === 0, bandAtRidge.join('\n      '));
+    // AND THE RIDGE IS STILL DRAWN. Removing a band must not remove the line:
+    // a ridge is one line, and zero is as wrong as two.
+    check('the ridge is still drawn, as a single silhouette line',
+      levelRuns.some(r => Math.abs(r.e - ridge) < 0.02 && Math.abs(r.w - 1.5) < 1e-9),
+      `nothing at w 1.5 and e ${ridge.toFixed(3)}`);
+
+    // NOT FIXED AND NOT GUARDED, said here so the green above is not read as
+    // more than it is: a SOLID w1 line still runs level at `ridge - 5.5"`
+    // over `u 4..6` on this drawing. It is not the rake band -- different ink,
+    // different width -- it is the BOXED-RAKE SOFFIT return, a separate
+    // painter. It belongs to the larger question this fix leaves open:
+    // whether a gable edge BURIED against another body should get any rake
+    // treatment at all. See RD-DOCUMENTS/BOARD-three-from-the-elevations.md.
+  }
+}
+
 console.log(`fascia end harness: ${passed} checks passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach(line => console.log(`  ✘ ${line}`));

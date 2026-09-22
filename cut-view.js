@@ -1565,14 +1565,96 @@ if (!window.DraftCutView) {
     // Floor assembly bands: each floor's rim (joists + sheathing) is part of
     // the house face — white like the walls, no banding line, keeping the
     // vertical edges of every visible face corner through the band.
+    // IS THIS POINT BEHIND A ROOF? Lifted out of `hidden` so the rim-band
+    // pass below can ask it too -- `hidden` itself cannot move, because its
+    // OTHER half reads `rimBands`, which that pass is what builds.
+    //
+    // A ray is cast from just in front of the point to the far side of the
+    // drawing, and each roof's profile along it is reduced to a lo and a hi.
+    // "Just in front" is what stops a surface hiding itself.
+    const behindRoof = (pt, elev) => {
+      if (!facesByRoof || !facesByRoof.size) return false;
+      const depth = pt.x * dir.x + pt.z * dir.z;
+      const span = dHi - depth;
+      if (span < 0.1) return false;
+      const near = { x: pt.x + dir.x * 0.05, z: pt.z + dir.z * 0.05 };
+      const far = { x: pt.x + dir.x * span, z: pt.z + dir.z * span };
+      let covered = false;
+      facesByRoof.forEach((roofFaces, roof) => {
+        if (covered) return;
+        const base = roofBaseElev(roof, stack, env) + fasciaFt;
+        let lo = Infinity, hi = -Infinity;
+        geo().roofProfile(roof, roofFaces, near, far, dir).forEach(p => {
+          const e = base + p.rise;
+          if (e > hi) hi = e;
+          if (e < lo) lo = e;
+        });
+        if (hi === -Infinity) return;   // the ray misses this roof entirely
+        lo -= fasciaFt;
+        if (elev > lo + ROOF_COVER_EPS && elev < hi - ROOF_COVER_EPS) covered = true;
+      });
+      return covered;
+    };
+
+    // WHERE A POINT ON THE VIEW PLANE ACTUALLY IS. `u` is the distance along
+    // the cut's axis and `depth` the distance along its direction, and the two
+    // are perpendicular, so the world point is just the sum of the two
+    // components. The rim-band pass knows a `u` and a face depth and needs a
+    // point to cast a ray from.
+    const atUDepth = (u, depth) => ({
+      x: u * axis.x + depth * dir.x,
+      z: u * axis.z + depth * dir.z,
+    });
+
     const houseSpans = houseFaces.map(face => ({
       lo: Math.max(Math.min(face.u1, face.u2), uMin),
       hi: Math.min(Math.max(face.u1, face.u2), uMax),
       depth: face.depth,
       levelId: face.level.id,
     })).filter(span => span.hi - span.lo >= 0.5);
-    const edgeVisible = (u, depth) => !houseSpans.some(other =>
-      other.depth > depth + 1e-6 && other.lo < u - 0.05 && other.hi > u + 0.05);
+    // AND A ROOF IN FRONT HIDES IT TOO. This asked only whether a nearer WALL
+    // FACE covered the edge, never whether a roof did -- so a garage roof
+    // standing in front of the house at rim-band height left the band's
+    // vertical edges drawn straight over it, and the roof read as transparent.
+    // Movie, 21 Sep, on his own drawing: *"i could see the sidewalls through
+    // the roof"*, *"they are in line with the exterior wall"*, *"it looks like
+    // the roof can be seen through"*. Measured there: two verticals at the
+    // garage's own exterior walls, one overhang in from each roof edge,
+    // standing about 13" above the garage eave.
+    //
+    // THE FILE ALREADY SOLVED THE MIRROR CASE and says so a few lines down --
+    // "a roof behind the house at exactly that height would otherwise show
+    // through the joist band". That is roof BEHIND, band in front. This is
+    // roof in FRONT, band behind, and nothing covered it.
+    //
+    // ASKED AT THE BAND'S MIDDLE, and the limit is worth stating: a roof that
+    // covers only part of the band's height still takes the whole edge, and
+    // one that clears the middle leaves the whole edge. The alternative --
+    // clipping the edge to the uncovered part -- is a different and larger
+    // change, and no drawing to hand needs it.
+    // WHICH FACE'S DEPTH TO CAST A RUN END'S RAY FROM. A run is a contiguous
+    // stretch of face coverage and may be several faces at different depths,
+    // so an end takes the NEAREST face that reaches it -- the one a viewer
+    // would actually be looking at. Falling back to the nearest face overall
+    // keeps the ray in front of the house rather than behind it, which is the
+    // safe direction: a ray cast too far back finds a roof that is not really
+    // in front and would hide an edge that should show.
+    const runDepth = (spans, u) => {
+      let best = null;
+      spans.forEach(span => {
+        if (u < span.lo - 0.05 || u > span.hi + 0.05) return;
+        if (best == null || span.depth < best) best = span.depth;
+      });
+      if (best != null) return best;
+      return spans.reduce((d, s) => (d == null || s.depth < d ? s.depth : d), null) ?? 0;
+    };
+
+    const edgeVisible = (u, depth, elev = null) => {
+      if (houseSpans.some(other => other.depth > depth + 1e-6
+        && other.lo < u - 0.05 && other.hi > u + 0.05)) return false;
+      if (elev != null && behindRoof(atUDepth(u, depth), elev)) return false;
+      return true;
+    };
     // The rim bands are part of the opaque house face, so the roof pass reads
     // them alongside the walls: between one storey's plate and the next
     // storey's floor there is no wall face, and a roof behind the house at
@@ -1604,9 +1686,20 @@ if (!window.DraftCutView) {
       // in the facade keeps its corner line crossing the floor.
       const edges = new Set();
       runs.filter(run => run.hi - run.lo >= 0.5).forEach(run => {
-        edges.add(run.lo); edges.add(run.hi);
+        // A RUN'S OWN ENDS ARE THE BAND'S ENDS, so they are drawn without
+        // asking whether a nearer FACE covers them -- by construction nothing
+        // does; that is what makes them ends. But a ROOF in front is a
+        // different question, and it was not being asked here at all: on
+        // Movie's drawing the second of the two see-through verticals was a
+        // run end, which is why gating only the interior edges below removed
+        // one of the pair and left its twin.
+        const midE = (level.floorBottom + level.floorTop) / 2;
+        [run.lo, run.hi].forEach(u => {
+          if (!behindRoof(atUDepth(u, runDepth(spans, u)), midE)) edges.add(u);
+        });
         spans.forEach(span => [span.lo, span.hi].forEach(u => {
-          if (u > run.lo + 0.05 && u < run.hi - 0.05 && edgeVisible(u, span.depth)) edges.add(u);
+          if (u > run.lo + 0.05 && u < run.hi - 0.05
+            && edgeVisible(u, span.depth, midE)) edges.add(u);
         }));
       });
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
@@ -1800,28 +1893,8 @@ if (!window.DraftCutView) {
           && elev > band.bottom - ROOF_COVER_EPS && elev < band.top + ROOF_COVER_EPS);
       };
       const hidden = (pt, elev, u) => {
-        const depth = pt.x * dir.x + pt.z * dir.z;
         if (u != null && behindWall(pt, u, elev)) return true;
-        const span = dHi - depth;
-        if (span < 0.1) return false;
-        // From just in front of the point, so a surface never hides itself.
-        const near = { x: pt.x + dir.x * 0.05, z: pt.z + dir.z * 0.05 };
-        const far = { x: pt.x + dir.x * span, z: pt.z + dir.z * span };
-        let covered = false;
-        facesByRoof.forEach((roofFaces, roof) => {
-          if (covered) return;
-          const base = roofBaseElev(roof, stack, env) + fasciaFt;
-          let lo = Infinity, hi = -Infinity;
-          geo().roofProfile(roof, roofFaces, near, far, dir).forEach(p => {
-            const e = base + p.rise;
-            if (e > hi) hi = e;
-            if (e < lo) lo = e;
-          });
-          if (hi === -Infinity) return;   // the ray misses this roof entirely
-          lo -= fasciaFt;
-          if (elev > lo + ROOF_COVER_EPS && elev < hi - ROOF_COVER_EPS) covered = true;
-        });
-        return covered;
+        return behindRoof(pt, elev);
       };
       const seen = new Set();
       facesByRoof.forEach((roofFaces, roof) => {
@@ -1895,9 +1968,27 @@ if (!window.DraftCutView) {
                   ctx.lineTo(X(sp.u1), Y(eaveTop - ROOF_FASCIA_IN / 12));
                   ctx.stroke();
                 });
-              } else if (rake && Math.abs(r.u1 - r.u0) > 0.2) {
+              } else if (rake && Math.abs(r.u1 - r.u0) > 0.2
+                && Math.abs(r.e1 - r.e0) > 0.05) {
                 // A rake wears its fascia too: the sloped board along the
                 // gable edge, top line light, heavy shadow 5.5" under it.
+                //
+                // AND A RAKE SLOPES, WHICH IS WHY THE SECOND TEST IS THERE.
+                // `onGable` asks whether both ends of an edge lie on a gable
+                // plan edge, and a RIDGE that terminates at that edge passes
+                // -- so the flat top of a gable end was wearing a fascia
+                // board. Measured on proto/repro-movie-garage-2storey.draft,
+                // E1: three runs on roof-69's gable edge, `u -6..4` rising,
+                // `u 4..12` FLAT at 11.885, `u 12..22` falling, all three
+                // banded. The middle one is the ridge, and a ridge is where
+                // two planes meet: no board, one line.
+                //
+                // Movie, looking at exactly that: *"you shouldn't see the
+                // bottom of the top choard in the front elevation"*.
+                //
+                // 0.05 ft is the same slack the run filter above uses to
+                // decide a run has any extent at all, rather than a second
+                // tolerance invented here.
                 const drop = ROOF_FASCIA_IN / 12;
                 ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
                 ctx.beginPath();

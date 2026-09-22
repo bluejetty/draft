@@ -233,3 +233,57 @@ test('paper size and orientation persist onto the drawing', async ({ page }) => 
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
   await expect(page.getByText('8.5" × 11"')).toBeVisible();
 });
+
+// THE ONE BUTTON THAT MAKES SOMETHING MUST BE ON SCREEN.
+//
+// Movie, 21 Sep, looking at an empty sheet with a drawing loaded: *"the
+// layouts aren't autogenerating views, i thought you already did that"*. Two
+// things were true and only one of them was the feature. Measured at his
+// window size -- a 188px column with about 660px of usable height:
+//
+//     + ADD VIEWPORT   top 980px
+//     window                660px
+//     panel hides           396px, overflow-y:auto
+//
+// The verb sat 320px below the fold, behind nine scale buttons and two more
+// sections, in a column that scrolls with nothing on screen to say so. An
+// empty sheet and no visible verb reads exactly like a page that should have
+// filled itself in -- so the report was about the panel, not the painter.
+//
+// WHY THIS IS A SPEC AND NOT A LOOK. The panel's sections are CONDITIONAL:
+// PLAN LEVEL appears only when the drawing has levels and TITLEBLOCK only on
+// 11x17, so the column's height is a function of the drawing. A fourth
+// section, or a tenth scale, pushes the button back off the bottom -- and
+// nothing else in the suite would notice, because every other layout spec
+// clicks the button through a locator that does not care whether a drafter
+// could have found it.
+//
+// THE HEIGHT IS THE POINT, so it is set here rather than inherited. The
+// project viewport is 900px tall and the bug does not reproduce at 900.
+test('+ ADD VIEWPORT stays on screen on a short window', async ({ page }) => {
+  await page.setViewportSize({ width: 1518, height: 660 });
+  await openLayout(page, houseDrawing());
+
+  // The conditional sections must actually be present, or this checks a
+  // shorter panel than a drafter sees and passes for the wrong reason.
+  await expect(page.locator('[data-layout-level]').first()).toBeVisible();
+
+  const btn = page.locator('[data-layout-add-viewport]');
+  await expect(btn).toBeVisible();
+
+  const fits = await page.evaluate(() => {
+    const el = document.querySelector('[data-layout-add-viewport]');
+    const r = el.getBoundingClientRect();
+    return { top: Math.round(r.top), bottom: Math.round(r.bottom),
+      height: window.innerHeight };
+  });
+  expect(fits.top, `ADD VIEWPORT top ${fits.top} in a ${fits.height}px window`)
+    .toBeGreaterThanOrEqual(0);
+  expect(fits.bottom, `ADD VIEWPORT bottom ${fits.bottom} in a ${fits.height}px window`)
+    .toBeLessThanOrEqual(fits.height);
+
+  // AND IT STILL PLACES. Pinning a control that no longer works would pass
+  // every assertion above.
+  await btn.click();
+  await expect(btn).toContainText('CLICK THE SHEET');
+});

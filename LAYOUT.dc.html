@@ -167,8 +167,32 @@
       </div>
     </sc-if>
 
-    <!-- VIEWPORT -->
-    <div style="padding:12px 14px;">
+    <!-- VIEWPORT -- PINNED TO THE FOOT OF THE PANEL.
+         Movie, 21 Sep, on an empty sheet: "the layouts aren't autogenerating
+         views". Two things were true and only one of them was the feature.
+         Measured at his window size (188px column, 660px of usable height):
+
+             + ADD VIEWPORT   top 980px
+             window                660px
+             panel hides           396px, overflow-y:auto
+
+         The one button that MAKES something sat 320px below the fold, behind
+         nine scale buttons and two more sections, in a column that scrolls
+         with nothing on screen to say so. An empty sheet and no visible verb
+         reads exactly like a page that should have filled itself in.
+
+         STICKY RATHER THAN MOVED UP, and that is the choice worth stating.
+         The panel's order is the drafter's order -- paper, then orientation,
+         then sheet, then scale, then level, then place it -- so hoisting the
+         verb above the settings it depends on would trade one confusion for
+         another. Pinned, the order survives and the verb is always to hand.
+
+         `margin-top:auto` is what holds it at the foot when the panel is
+         SHORTER than its box; `position:sticky` is what holds it there when
+         the panel is taller and scrolls. Both cases happen -- the level and
+         titleblock sections appear only when the drawing has them. -->
+    <div style="padding:12px 14px; position:sticky; bottom:0; margin-top:auto;
+      background:#fff; border-top:1px solid rgba(29,31,32,0.16);">
       <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Viewport</div>
       <button data-layout-add-viewport onClick="{{ addViewport }}" style="display:block; width:100%; text-align:center; border:1px solid #5980a6; background:{{ addViewportBg }}; color:{{ addViewportColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:13px; letter-spacing:0.04em; text-transform:uppercase; padding:9px 12px; cursor:pointer;">{{ addViewportLabel }}</button>
       <sc-if value="{{ hasViewportNote }}" hint-placeholder-val="{{ false }}">
