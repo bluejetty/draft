@@ -822,8 +822,26 @@ check('the overhead door is a garage door at 7 ft; the man door is neither',
          return [`${oh.garage},${n(oh.headFt)},${man.garage},${n(man.headFt)}`,
            `true,${n(7)},false,${n(GEOM.DEFAULT_OPENING_HEAD_FT)}`]; });
 
-check('the window sits at the app-s own sill, not on the floor',
-  P => [n(onEdge(detached(P, 25, 25), 0).sillFt), n(GEOM.DEFAULT_WINDOW_SILL_FT)]);
+// A WINDOW HANGS FROM THE HEAD, AND IT IS 4'-2" OF GLASS. Movie's ruling of
+// 21 Sep put the head at 7'-0" and made the sill what falls out, so asking for
+// DEFAULT_WINDOW_SILL_FT here stopped being the question -- that constant is
+// now the SIZE's other half, not a position.
+//
+// THE SIZE IS WHAT THIS DESIGN OWNS, so the size is what is asked. It is the
+// same 4'-2" these windows have always been, which is the whole reason "move
+// to 7ft" moves them rather than reshaping them: a house rebuilt from the
+// drive-thru has to agree with the same house opened from a file, and
+// drawing-format.js migrates by keeping the size.
+check('the window hangs from the 7 ft head, not off the floor',
+  P => { const w = onEdge(detached(P, 25, 25), 0);
+         return [`${n(w.headFt)} sill ${n(w.sillFt)}`,
+           `${n(GEOM.DEFAULT_WINDOW_HEAD_FT)} sill `
+           + `${n(GEOM.DEFAULT_WINDOW_HEAD_FT - (GEOM.DEFAULT_OPENING_HEAD_FT - GEOM.DEFAULT_WINDOW_SILL_FT))}`]; });
+
+check('and it is the same 4 ft 2 in of glass it always was',
+  P => { const w = onEdge(detached(P, 25, 25), 0);
+         return [n(w.headFt - w.sillFt),
+           n(GEOM.DEFAULT_OPENING_HEAD_FT - GEOM.DEFAULT_WINDOW_SILL_FT)]; });
 
 // ── THE 2 STOREY'S ROOF, AND WHAT MUST STAY OUT OF IT ────────────────────
 //

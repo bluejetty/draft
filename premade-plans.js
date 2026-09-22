@@ -137,17 +137,39 @@ if (!window.DraftPremadePlans) {
   // defaults would put two head heights in one drawing.
   const G = window.DraftGeometry2D;
   const DOOR_HEAD_FT = G.DEFAULT_OPENING_HEAD_FT;
-  const WINDOW_SILL_FT = G.DEFAULT_WINDOW_SILL_FT;
+  const WINDOW_HEAD_FT = G.DEFAULT_WINDOW_HEAD_FT;
+  // ── THE DESIGN'S WINDOWS ARE 4'-2" TALL, AND THAT IS WHAT IS KEPT ───────
+  //
+  // Movie, 21 Sep: the head is the datum at 7'-0"; 22 Sep, asked whether the
+  // windows already drawn should follow: *"move to 7ft"*.
+  //
+  // So these move UP, and they keep their size -- a 2'-6" sill under a 6'-8"
+  // head is a 4'-2" window, and under a 7'-0" head it is the same window on a
+  // 2'-10" sill. A design whose windows changed SIZE because the standard
+  // moved would be a different design, and a house rebuilt from the drive-thru
+  // would then disagree with the same house opened from a file, which
+  // drawing-format.js migrates by keeping the size. Two answers to one
+  // ruling is the thing to avoid.
+  //
+  // DERIVED FROM WHAT IT WAS, not typed as 4.167: the old pair is still the
+  // authority on what size this design's windows are, and writing the number
+  // out here would be a third place to edit the day the office changes it.
+  const WINDOW_HEIGHT_FT = DOOR_HEAD_FT - G.DEFAULT_WINDOW_SILL_FT;
+  const WINDOW_SILL_FT = Math.max(0, WINDOW_HEAD_FT - WINDOW_HEIGHT_FT);
   // NOT a default: an overhead door heads at 7'-0" because that is the door,
-  // not because nobody said. It stays a number of this design's own.
+  // not because nobody said. It stays a number of this design's own -- and it
+  // is a coincidence that a window now heads there too, which is why this is
+  // still written separately rather than pointed at the window's.
   const GARAGE_DOOR_HEAD_FT = 7;
   const opening = (edge, offsetFt, widthFt, type, over = {}) => Object.freeze({
     edge,
     offsetFt,
     widthFt,
     type,
+    // A DOOR STANDS ON THE FLOOR, so its head IS its height and it keeps the
+    // 6'-8" leaf. Only the window moved.
     sillFt: type === 'door' ? 0 : WINDOW_SILL_FT,
-    headFt: DOOR_HEAD_FT,
+    headFt: type === 'door' ? DOOR_HEAD_FT : WINDOW_HEAD_FT,
     garage: false,
     ...over,
   });

@@ -9695,8 +9695,27 @@
     door: window.DraftGeometry2D.DEFAULT_DOOR_WIDTH_FT,
     window: window.DraftGeometry2D.DEFAULT_WINDOW_WIDTH_FT,
   };
-  let openingSill = window.DraftGeometry2D.DEFAULT_WINDOW_SILL_FT;
-  let openingHead = window.DraftGeometry2D.DEFAULT_OPENING_HEAD_FT;
+  // ── A WINDOW HEADS AT 7'-0", A DOOR AT 6'-8" ────────────────────────────
+  //
+  // Movie, 21 Sep: *"on windows the top of the window should be default
+  // located 7ft high from the current level floor level (if the window changes
+  // size the bottom changes)"*.
+  //
+  // PER TYPE, exactly as the WIDTH already is above: one shared head meant a
+  // door drawn after a window inherited the window's, which was harmless while
+  // both defaulted to 6'-8" and stops being so now that they differ.
+  //
+  // AND THE SILL FOLLOWS THE HEAD. It is 2'-10" now, not 2'-6" -- the same
+  // 4'-2" window the app has always drawn, hung four inches higher. Derived
+  // rather than typed, so the size stays one number in geometry-2d.js.
+  const openingHeads = {
+    door: window.DraftGeometry2D.DEFAULT_OPENING_HEAD_FT,
+    window: window.DraftGeometry2D.DEFAULT_WINDOW_HEAD_FT,
+  };
+  const OPENING_WINDOW_HEIGHT_FT = window.DraftGeometry2D.DEFAULT_OPENING_HEAD_FT
+    - window.DraftGeometry2D.DEFAULT_WINDOW_SILL_FT;
+  let openingSill = Math.max(0,
+    window.DraftGeometry2D.DEFAULT_WINDOW_HEAD_FT - OPENING_WINDOW_HEIGHT_FT);
 
   const openingWidthFt = (type = fenestrationType) =>
     openingSizes[type === 'window' ? 'window' : 'door'];
@@ -9705,6 +9724,8 @@
   // on the floor -- which is the old page's rule at the point of writing the
   // record rather than a second number kept beside the first.
   const openingSillFt = (type = fenestrationType) => (type === 'door' ? 0 : openingSill);
+  const openingHeadFt = (type = fenestrationType) =>
+    openingHeads[type === 'window' ? 'window' : 'door'];
 
   const OPENING_TYPES = Object.freeze([['door', 'DOOR'], ['window', 'WINDOW']]);
 
@@ -9792,16 +9813,16 @@
     if (fenestrationType === 'window') {
       box.append(openingField('SILL', openingSill, feet => {
         if (feet < 0) return 'A sill cannot be below the floor.';
-        if (feet >= openingHead) {
+        if (feet >= openingHeadFt()) {
           return `A sill at ${F.formatArchitecturalInches(feet * 12)} is not `
-            + `below the head at ${F.formatArchitecturalInches(openingHead * 12)}.`;
+            + `below the head at ${F.formatArchitecturalInches(openingHeadFt() * 12)}.`;
         }
         openingSill = feet;
         return null;
       }));
     }
 
-    box.append(openingField('HEAD', openingHead, feet => {
+    box.append(openingField('HEAD', openingHeadFt(), feet => {
       // THE HEAD MUST STAND ABOVE THE SILL IT IS PAIRED WITH, and the pairing
       // is per type: a door's sill is zero whatever the window's is, so the
       // comparison asks openingSillFt rather than the stored window number.
@@ -9810,7 +9831,7 @@
         return `A head at ${F.formatArchitecturalInches(feet * 12)} is not `
           + `above the sill at ${F.formatArchitecturalInches(sill * 12)}.`;
       }
-      openingHead = feet;
+      openingHeads[fenestrationType === 'window' ? 'window' : 'door'] = feet;
       return null;
     }));
 
@@ -9822,7 +9843,7 @@
     note.dataset.openingNote = '';
     note.textContent = `${F.formatArchitecturalInches(openingWidthFt() * 12)} WIDE, `
       + `SILL ${F.formatArchitecturalInches(openingSillFt() * 12)}, `
-      + `HEAD ${F.formatArchitecturalInches(openingHead * 12)}`;
+      + `HEAD ${F.formatArchitecturalInches(openingHeadFt() * 12)}`;
     box.append(note);
     P.set('FENESTRATION', box);
     openingPanelUp = true;
@@ -10093,7 +10114,7 @@
       offset: clamped.offset,
       width,
       sillHeight: dusting ? Number(dusting.sillHeight) || 0 : openingSillFt(type),
-      headHeight: dusting ? Number(dusting.headHeight) || 0 : openingHead,
+      headHeight: dusting ? Number(dusting.headHeight) || 0 : openingHeadFt(type),
       // AN OVERHEAD DOOR STAYS ONE THROUGH THE BRUSH. `garage` is what makes
       // it one, and it is written only when the brush is carrying it -- a
       // `garage: false` on every hand-placed window would be a key the old

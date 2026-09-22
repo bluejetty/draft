@@ -23,13 +23,25 @@ const BUCKET = 'model-drawing';
 const V = (x, z) => ({ x, y: 0, z });
 const MAIN_FL = 3;
 
-// geometry-2d.js's own four, copied by hand. Asking the page which number it
+// geometry-2d.js's own five, copied by hand. Asking the page which number it
 // used and then checking it used that number is a tautology; a copy means a
 // change has to be made twice and the failure names this file.
+//
+// AND IT DID, 22 Sep. Movie put the window head at 7'-0" -- *"on windows the
+// top of the window should be default located 7ft high from the current level
+// floor level (if the window changes size the bottom changes)"* -- and the
+// window's sill is what moved: the same 4'-2" of glass hung four inches
+// higher, so 2'-6" became 2'-10". This file went red naming itself, which is
+// what the copy is for.
+//
+// A DOOR AND A WINDOW NO LONGER SHARE A HEAD, so there are two now. A door
+// stands on the floor, so its head IS its height and 6'-8" is the leaf the
+// office orders.
 const DOOR_W = 3;
 const WINDOW_W = 4;
-const WINDOW_SILL = 2.5;
-const HEAD = (6 * 12 + 8) / 12;
+const DOOR_HEAD = (6 * 12 + 8) / 12;
+const WINDOW_HEAD = 7;
+const WINDOW_SILL = WINDOW_HEAD - (DOOR_HEAD - 2.5);   // the old 4'-2" of glass
 
 // A plain square house. The walls are 20 ft long, which is comfortably more
 // than any opening here plus its bearing at both ends — so a refusal in these
@@ -154,7 +166,7 @@ test('one press on a wall puts a door in it, and a reload keeps it',
     expect(cut.type).toBe('door');
     expect(cut.width).toBeCloseTo(DOOR_W, 3);
     expect(cut.sillHeight, 'a door sits on the floor').toBeCloseTo(0, 3);
-    expect(cut.headHeight).toBeCloseTo(HEAD, 3);
+    expect(cut.headHeight).toBeCloseTo(DOOR_HEAD, 3);
     expect(cut.layer).toBe('A-DOOR');
     expect(cut.auto, "the drafter's, not a dealt one").toBe(false);
     expect(cut.levelId, 'filed against the wall-s level').toBe(MAIN_FL);
@@ -181,6 +193,8 @@ test('a window is 4 ft with a sill, and goes on A-GLAZ', async ({ page }) => {
   expect(cut.type).toBe('window');
   expect(cut.width).toBeCloseTo(WINDOW_W, 3);
   expect(cut.sillHeight, 'a window sits off the floor').toBeCloseTo(WINDOW_SILL, 3);
+  expect(cut.headHeight, 'and heads at 7 ft, not the door-s 6 ft 8')
+    .toBeCloseTo(WINDOW_HEAD, 3);
   expect(cut.layer).toBe('A-GLAZ');
   // The control the three above need: a door and a window differ in every one
   // of these. Were the type ignored, each assertion would still look checked.

@@ -207,6 +207,46 @@ if (!window.DraftDrawingFormat) {
     }), env.drops).filter(Boolean);
   };
 
+  // ── A WINDOW HEADS OUT AT 7'-0" ──────────────────────────────────────────
+  //
+  // Movie, 21 Sep: *"on windows the top of the window should be default
+  // located 7ft high from the current level floor level (if the window changes
+  // size the bottom changes)"*, and on 22 Sep, asked whether windows already
+  // drawn should move: *"move to 7ft"*.
+  //
+  // SO THE HEAD MOVES AND THE WINDOW KEEPS ITS SIZE, which puts the sill
+  // wherever it lands. That is his rule the other way up: resizing moves the
+  // bottom, so moving the top moves the bottom with it.
+  //
+  // AND ONLY A HEAD NOBODY CHOSE. He asked for both "move to 7ft" and "use
+  // can change window height", and those are only both true if the migration
+  // leaves a hand-set head alone -- otherwise it drags an 8'-0" head he typed
+  // back to 7'-0" every time the file is opened. A window still sitting at
+  // one of the OLD DEFAULTS moves; anything else is his.
+  //
+  // IDEMPOTENT, so it can live in the reader. Run twice, the second pass
+  // finds every window at 7'-0" and matches nothing. That is why it needs no
+  // flag on the record to say it has run -- and it needs no VERSION bump
+  // either, because the stored SHAPE does not change: sillHeight and
+  // headHeight are still both written. A bump would refuse every existing
+  // file outright, since checkEnvelope reads an older version as 'invalid'
+  // and there is no upgrade path in this module.
+  //
+  // IT LIVES HERE BECAUSE THIS IS THE GATE EVERY READER GOES THROUGH --
+  // MODEL.dc.html, LAYOUT.dc.html and proto/elevation-harness.js all call
+  // fenestrations() -- so no page has to remember to apply it. The same
+  // reasoning as ROOF_FASCIA_IN below: this is the copy that wins.
+  //
+  // AND THE NUMBER IS A SECOND COPY ON PURPOSE. geometry-2d.js owns it for
+  // the PLACERS, and this module may not read it off `window` -- every table
+  // these rules consult is passed in or owned here, because a load-order
+  // dependency in the module every page loads first is the trap the module
+  // review gate counted thirteen times. So the two are checked against each
+  // other instead: proto/window-head-harness.js fails if they drift.
+  const WINDOW_HEAD_FT = 7;
+  const SUPERSEDED_WINDOW_HEADS_FT = Object.freeze([(6 * 12 + 8) / 12, 6.5]);
+  const WINDOW_HEAD_SLACK_FT = 1 / 24;   // half an inch: a stored head is a float
+
   // Openings anchor to a host wall by id: type decides the CAD layer, offset
   // is the distance from the wall start to the opening centre along the wall.
   // Host-wall existence is the caller's check — walls restore after this runs.
@@ -218,9 +258,17 @@ if (!window.DraftDrawingFormat) {
       const width = positive(opening?.width, null);
       const offset = num(opening?.offset);
       if (!wallId || openingLevelId == null || !type || width == null || offset === null || offset < 0) return null;
-      const sillHeight = Math.max(0, number(opening?.sillHeight, 0));
-      const headHeight = positive(opening?.headHeight, null);
-      if (headHeight == null || headHeight <= sillHeight) return null;
+      const storedSill = Math.max(0, number(opening?.sillHeight, 0));
+      const storedHead = positive(opening?.headHeight, null);
+      if (storedHead == null || storedHead <= storedSill) return null;
+      // THE SIZE IS WHAT SURVIVES, not the sill: a window moved to the new
+      // head is the same window, higher. A door never moves -- it stands on
+      // the floor, so its head IS its height.
+      const superseded = type === 'window' && SUPERSEDED_WINDOW_HEADS_FT
+        .some(old => Math.abs(storedHead - old) < WINDOW_HEAD_SLACK_FT);
+      const headHeight = superseded ? WINDOW_HEAD_FT : storedHead;
+      const sillHeight = superseded
+        ? Math.max(0, storedSill + (WINDOW_HEAD_FT - storedHead)) : storedSill;
       return {
         id: String(opening?.id || '').trim(),
         wallId,
@@ -1546,6 +1594,8 @@ if (!window.DraftDrawingFormat) {
     shapes,
     roofs,
     ROOF_FASCIA_IN,
+    WINDOW_HEAD_FT,
+    SUPERSEDED_WINDOW_HEADS_FT,
     roofHeelIn,
     walls,
     lines,

@@ -12,14 +12,38 @@ if (!window.DraftAutoWindows) {
   // ── The stock the dealer plays ────────────────────────────────────────
   // Sizes come from the #141 ladder; only these two exist this slice — the
   // drafter re-sizes by hand from the existing options.
+  // A SIZE, AND NO SILL. Movie, 21 Sep: *"on windows the top of the window
+  // should be default located 7ft high ... if the window changes size the
+  // bottom changes"*. So a catalogue entry names what it IS -- how wide and
+  // how tall -- and where it sits comes from the rule, not from the entry.
+  //
+  // THESE USED TO NAME A SILL AND A HEAD, with the height falling out. Same
+  // three numbers related the other way round, and it gives a different
+  // answer the moment a window is resized: resizing a sill-anchored window
+  // moves its head, and a row of heads that no longer line up is worse on an
+  // elevation than one window that is short.
   const DEFAULT_WINDOW = Object.freeze({
-    kind: 'default', widthFt: 30 / 12, sillFt: 3, headFt: 3 + 42 / 12,   // W 30x42
+    kind: 'default', widthFt: 30 / 12, heightFt: 42 / 12,   // W 30x42
   });
-  // A WC gets a small unit set HIGH: the point is daylight without a
-  // sightline, so it is the sill that changes, not just the size.
+  // A WC gets a small unit, and it ends up set HIGH without being told to:
+  // the point is daylight without a sightline, and a 24" window under a 7'-0"
+  // head sits on a 5'-0" sill by arithmetic. It used to say 4'-6" here.
   const WC_WINDOW = Object.freeze({
-    kind: 'wc', widthFt: 24 / 12, sillFt: 4.5, headFt: 4.5 + 24 / 12,    // W 24x24
+    kind: 'wc', widthFt: 24 / 12, heightFt: 24 / 12,        // W 24x24
   });
+
+  // THE HEAD IS GEOMETRY-2D'S, asked at CALL time rather than read once when
+  // this file loads. A module-level read would make the page's script order
+  // load-bearing for this one -- the trap drawing-format.js names at its head
+  // -- and there is no fallback on purpose: a missing dependency should be
+  // loud here, not a window silently dealt at zero.
+  const windowHeadFt = () => window.DraftGeometry2D.DEFAULT_WINDOW_HEAD_FT;
+
+  // A catalogue entry, seated: the head from the rule and the sill derived.
+  const seated = stock => {
+    const headFt = windowHeadFt();
+    return { ...stock, headFt, sillFt: Math.max(0, headFt - stock.heightFt) };
+  };
 
   const TUNABLES = Object.freeze({
     MIN_GAP_FT: 3,          // clear between opening EDGES — never crowd
@@ -92,7 +116,7 @@ if (!window.DraftAutoWindows) {
         out.push({
           faceId: face.id, wallId: face.wallId, levelId: face.levelId,
           orientation: face.orientation, roomId: null, base: null,
-          offset: centre, ...stock,
+          offset: centre, ...seated(stock),
         });
         placed = true;
       }
@@ -136,8 +160,7 @@ if (!window.DraftAutoWindows) {
   // short window, it is no window. The WC unit is 24" and is the smallest the
   // ladder deals, so a window the dealer would not have dealt in the first
   // place is one it will not leave behind either.
-  const MIN_GLASS_FT = Math.min(DEFAULT_WINDOW.headFt - DEFAULT_WINDOW.sillFt,
-    WC_WINDOW.headFt - WC_WINDOW.sillFt);
+  const MIN_GLASS_FT = Math.min(DEFAULT_WINDOW.heightFt, WC_WINDOW.heightFt);
 
   const roofTopOver = (profile, from, to) => {
     if (!Array.isArray(profile) || !profile.length) return null;
@@ -347,7 +370,7 @@ if (!window.DraftAutoWindows) {
           out.push({
             faceId: face.id, wallId: face.wallId, levelId: face.levelId,
             orientation: face.orientation, roomId: room.id, base: room.base,
-            offset: centre, ...stock,
+            offset: centre, ...seated(stock),
           });
         });
 
