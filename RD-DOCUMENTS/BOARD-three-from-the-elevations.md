@@ -116,3 +116,73 @@ SHAPE of problem -- *"a lock joins assemblies that must hold the same plan
 position on different storeys"* (`drawing-format.js:102`) -- but it locks
 GROUPS, and the garage junction is not a group. Whether that tier is the right
 home here is unexamined.
+
+
+---
+
+## 1 (CONTINUED) — MEASURED, 21 Sep: THE HIP IS WEARING A RAKE'S FASCIA
+
+**Movie marked it green in GIMP and named it in trade terms**, which is what
+turned this from a hunt into a measurement:
+
+> *"the front garage roof looks like you can see the top and bottom chords,
+> but you shouldn't see the bottom of the top choard in the front elevation
+> (its a cottage roof nor a gable roof)"*
+
+**The earlier probe missed it because it was looking level and this line
+SLOPES.** Both readings of "2 lines" offered on the board above were wrong:
+it is neither the 2 ft stub nor the horizontal band. Measured on his own file,
+E1 FRONT:
+
+    gap 5.40"   slope  0.335   u  -6.0 ..  4.0    fascia top & fascia shadow
+    gap 5.40"   slope -0.335   u  12.0 .. 22.0    fascia top & fascia shadow
+
+**0.335 is the roof pitch** (4/12 = 0.333), and 5.40" is the fascia band's own
+depth. So the garage roof's two SLOPING ends each carry a full fascia band --
+a top line and a bottom line, parallel, one board apart, running up the slope.
+That pair is exactly what Movie is reading as a top and a bottom chord.
+
+The garage roof's plan is a hip: a band from `u -6..22` with 10 ft of slope at
+each end and a flat ridge between them at `u 4..12`.
+
+### Why that is wrong, in his words made mechanical
+
+    A RAKE  (gable end)   IS a board on edge. It has a top and a bottom, and
+                          an elevation showing that face shows both.
+    A HIP   (cottage)     is where two roof PLANES meet. There is no board
+                          there at all, so there is one line and no second.
+
+`cut-view.js` already knows the distinction exists -- it carries an explicit
+*"A rake wears its fascia too: the sloped board along the..."* branch. **What
+has not been checked is what that branch tests**, and that is the next step:
+whether it asks "is this edge sloped" (which a hip also satisfies) or "is this
+edge a GABLE" (which only a rake does). The drawing's own record says
+`roof-69` carries `edges: ["gable","eave","eave","eave"]`, so the data to tell
+them apart is present and stored.
+
+**No fix is proposed here yet** and that is deliberate: three hypotheses about
+this band have already died on the neighbouring board, and a fourth guess is
+worth less than reading the branch.
+
+---
+
+## 4. SIDE WALLS SEEN THROUGH THE ROOF — reported, NOT reproduced
+
+> *"also i could see the sidewalls through the roof (also painted them green
+> so you can see them"*
+
+**Two probes found nothing on E1**, which is the elevation he is looking at:
+
+    wall ink ABOVE the roof's outer profile        E1: 0 segments
+    wall ink INSIDE the roof's shape (eave..top)   E1: 0 segments
+
+E2 and E4 report 151 ft of wall ink "inside the roof's shape", and **that is
+the probe being wrong rather than a defect**: on a side elevation the whole
+house body legitimately stands under its own roof, and the probe's region --
+max roof profile over ALL roofs, down to the lowest eave -- swallows it.
+
+So this one is **recorded and unreproduced**. The honest next step is his
+marked image rather than another probe: the screenshot to hand shows the roof
+OUTLINE painted green, and which marks are the side walls cannot be read off
+it with confidence. Guessing at the region is how the two probes above were
+built, and both answered a question nobody asked.
