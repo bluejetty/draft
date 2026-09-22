@@ -1901,12 +1901,64 @@ if (!window.DraftCutView) {
         const eaveTop = roofBaseElev(roof, stack, env) + ROOF_FASCIA_IN / 12;
         const pitch = roof.pitch || 4;
         const rpts = roof.points || [];
-        const gableSegs = rpts.flatMap((a, i) => (roof.edges?.[i] === 'gable'
-          ? [{ a, b: rpts[(i + 1) % rpts.length] }] : []));
+        // ── A GABLE END HAS A FRONT AND A BACK, AND ONLY ONE OF THEM ──────
+        //
+        // Movie, 21 Sep, on the garage roof in E1 FRONT: *"you shouldn't see
+        // the bottom of the top choard ... its a cottage roof nor a gable
+        // roof"*, and on 22 Sep, with the ridge fixed and the two sloping
+        // bands still there, marking them green: *"i can still see the
+        // 'lower' line of the top chord (except in the middle where the
+        // window is)"*.
+        //
+        // He is right, and the edges ARE rakes. roof-69's faces:
+        //
+        //     face 0   (-6,38) (4,38) (-6,48)
+        //     face 1   (4,38) (12,38) (22,48) (-6,48)
+        //     face 2   (12,38) (22,38) (22,48)
+        //
+        // `(-6,38)->(4,38)` and `(12,38)->(22,38)` lie flat in plan on the
+        // gable line and rise in elevation from eave to ridge: the sloping
+        // top edges of the gable end wall. A real rake is a board on edge and
+        // shows a top and a bottom, so banding them is right -- FROM THE SIDE
+        // THE GABLE FACES.
+        //
+        // E1 IS NOT THAT SIDE. Its cut sits at z = 48 with `dirVec {x:0,z:1}`,
+        // and `behindRoof` a thousand lines up settles the sign: it steps
+        // `pt + dir * 0.05` to reach the NEAR point, so +dir is toward the
+        // viewer and larger z is nearer. The gable end at z = 38 faces -z,
+        // away. What the drafter is looking at is the HIP in front of it --
+        // `(4,38)->(-6,48)` -- which projects onto exactly the same line,
+        // because both run between the same two points in elevation. A hip is
+        // where two planes meet: one line, no board.
+        //
+        // THE BOARD SAID THIS WAS "NEVER OCCLUSION" AND HAD THE DIRECTION
+        // BACKWARDS. It read larger z as farther, concluded the gable faced
+        // the viewer, and closed the question. The sign is not a thing to
+        // remember: `behindRoof` states it, in this file.
+        const gableSegs = rpts.flatMap((a, i) => {
+          if (roof.edges?.[i] !== 'gable') return [];
+          const b = rpts[(i + 1) % rpts.length];
+          const dx = b.x - a.x, dz = b.z - a.z;
+          const len = Math.hypot(dx, dz);
+          if (len < 0.01) return [];
+          // Outward is decided by the RING, not by its winding: a probe off
+          // the mid-point either lands inside the footprint or it does not.
+          let n = { x: -dz / len, z: dx / len };
+          const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+          if (pointInPolygon({ x: mid.x + n.x * 0.1, z: mid.z + n.z * 0.1 }, rpts)) {
+            n = { x: -n.x, z: -n.z };
+          }
+          return [{ a, b, toward: n.x * dir.x + n.z * dir.z }];
+        });
         // A rake LIES ALONG one gable edge; a ridge spanning gable-to-gable
         // (the dropped garage) touches two different ones and is no rake.
-        const onGable = (p, q) => gableSegs.some(s =>
-          distToSegment(p, s.a, s.b) < 0.1 && distToSegment(q, s.a, s.b) < 0.1);
+        //
+        // AND THE EDGE MUST FACE THIS ELEVATION. 0.01 rather than 0 so a
+        // gable running exactly along the line of sight -- its end seen edge
+        // on, where there is no face to show a board on either -- falls out
+        // rather than landing on the sign of a rounding error.
+        const onGable = (p, q) => gableSegs.some(s => s.toward > 0.01
+          && distToSegment(p, s.a, s.b) < 0.1 && distToSegment(q, s.a, s.b) < 0.1);
         roofFaces.forEach(face => {
           const poly = face.points;
           for (let i = 0; i < poly.length; i++) {

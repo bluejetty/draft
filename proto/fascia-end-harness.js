@@ -273,23 +273,77 @@ if (!fs.existsSync(MOVIE)) {
       `ridge e ${ridge.toFixed(5)}, roof u ${uLo.toFixed(1)}..${uHi.toFixed(1)}`
       + `\n      ${underRidge.join('\n      ')}`);
 
-    // AND THE TWO REAL RETURNS SURVIVE, which is the other half and the half
-    // a blunter fix would have taken with it. Each rake's LOW end sits on the
-    // eave over an open corner, and that corner is what a soffit return
-    // closes -- so there are two, one per rake, each the roof's own overhang
-    // long. Deleting them all would satisfy the check above completely.
+    // 4. AND NO RAKE TREATMENT AT ALL FROM THIS SIDE, because the gable end
+    //    this roof has faces AWAY from E1.
     //
-    // The same rule this file states for the ridge line one block up: zero is
-    // as wrong as two.
-    const returns = levelRuns.filter(r => overlapsRoof(r)
+    //    Movie, 22 Sep, with the ridge fixed and the two sloping bands still
+    //    there, marking them green: *"i can still see the 'lower' line of the
+    //    top chord (except in the middle where the window is)"*. The middle
+    //    was the ridge, already fixed; the sides are the gable end's rakes.
+    //
+    //    They ARE rakes and a rake IS a board -- but roof-69's gable lies at
+    //    z = 38 with its outward normal pointing -z, and E1's cut sits at
+    //    z = 48 looking back along -z, so that end is the far face. What the
+    //    drafter sees there is the HIP in front of it, which projects onto
+    //    exactly the same line. A hip is where two planes meet: one line.
+    //
+    //    SO THE WHOLE FAMILY GOES, band and soffit return together -- the
+    //    return lies in the same z = 38 plane and is behind the same hip.
+    //    THIS REPLACES A CHECK THAT DEMANDED THE OPPOSITE. Written this
+    //    morning against the ridge fix, "each rake still returns its soffit at
+    //    the eave" was the guard against deleting too much, and it was right
+    //    about that fix. The facing rule makes its subject invisible from
+    //    here, so it moves to the elevation that can see it rather than being
+    //    deleted -- see E3 below.
+    const slopingBand = [];
+    view.strokes.forEach(st => {
+      if (Math.abs(st.w - BAND_W) > 1e-9) return;
+      for (let i = 1; i < st.pts.length; i++) {
+        const a = st.pts[i - 1], b = st.pts[i];
+        if (b.move || Math.abs(a.e - b.e) < 0.02 || Math.abs(a.u - b.u) < 0.5) continue;
+        if (Math.max(a.u, b.u) < uLo - 0.1 || Math.min(a.u, b.u) > uHi + 0.1) continue;
+        slopingBand.push(`u ${a.u.toFixed(1)}..${b.u.toFixed(1)} e ${a.e.toFixed(2)}..${b.e.toFixed(2)}`);
+      }
+    });
+    check('the gable end faces away from E1, so it wears no rake band here',
+      slopingBand.length === 0, slopingBand.join('\n      '));
+
+    const eaveReturns = levelRuns.filter(r => overlapsRoof(r)
       && Math.abs(r.w - 1) < 1e-9 && !String(r.ink).includes('0.6')
       && Math.abs(r.e - garage.base) < 0.02
       && Math.abs((r.u1 - r.u0) - over) < 0.1);
-    check('and each rake still returns its soffit at the eave, where the corner IS open',
-      returns.length === 2 && returns.some(r => Math.abs(r.u0 - uLo) < 0.1)
-        && returns.some(r => Math.abs(r.u1 - uHi) < 0.1),
-      `${returns.length} return(s) of ${over}' at e ${garage.base.toFixed(3)}: `
-      + returns.map(r => `u ${r.u0.toFixed(1)}..${r.u1.toFixed(1)}`).join(', '));
+    check('and no soffit returns from it either, for the same reason',
+      eaveReturns.length === 0,
+      eaveReturns.map(r => `u ${r.u0.toFixed(1)}..${r.u1.toFixed(1)}`).join(', '));
+
+    // 5. AND THE PAINTER HAS NOT LOST RAKES, which is what a facing rule is
+    //    one bad line away from doing. E3 is the elevation roof-69's gable
+    //    DOES face, and there the board and its soffit return are both drawn,
+    //    on the sliver of gable the house does not hide.
+    //
+    //    ZERO IS AS WRONG AS TWO -- the same rule this file states for the
+    //    ridge line. Without this, `toward > 0.01` written as `toward < 0.01`
+    //    silences every rake in the drawing and checks 2-4 all still pass.
+    const backCut = H.standardElevationCuts(env).find(c => c.id === 'E3');
+    const back = H.paintElevation(win, env, backCut, { pxPerFt: 40 });
+    let bandPair = 0;
+    let backReturn = 0;
+    back.strokes.forEach(st => {
+      for (let i = 1; i < st.pts.length; i++) {
+        const a = st.pts[i - 1], b = st.pts[i];
+        if (b.move) continue;
+        const sloped = Math.abs(a.e - b.e) > 0.02 && Math.abs(a.u - b.u) > 0.5;
+        if (sloped && Math.abs(st.w - BAND_W) < 1e-9) bandPair += 1;
+        if (!sloped && Math.abs(a.e - b.e) < 0.005 && Math.abs(a.u - b.u) > 0.5
+          && Math.abs(st.w - 1) < 1e-9 && !String(st.ink).includes('0.6')
+          && Math.abs(a.e - garage.base) < 0.02
+          && Math.abs(Math.abs(b.u - a.u) - over) < 0.1) backReturn += 1;
+      }
+    });
+    check('but E3, which the gable DOES face, still draws its rake band',
+      bandPair > 0, `${bandPair} sloping band run(s) on E3`);
+    check('and that rake still returns its soffit at the eave',
+      backReturn > 0, `${backReturn} return(s) of ${over}' at e ${garage.base.toFixed(3)} on E3`);
   }
 }
 
