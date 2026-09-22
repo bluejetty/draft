@@ -118,3 +118,85 @@ below, and nothing in the thread says that.
 them undoes work he signed off a day earlier. The measurement is done and the
 attempt is proven to cascade into both roofs, so whichever he picks is now
 cheap to build.
+
+
+---
+
+## RULED (a), 22 Sep — all three levels at the tie
+
+**Movie, asked to choose between the three, answered `a`.** So the second floor
+takes the tie, and the 20 Sep ruling is reversed for the designs that have a
+room over the garage.
+
+### What changed, and it is three lines of arithmetic
+
+    overGarageLoop    five points become six: the proud four feet step back
+                      to the tie, the shared run stays on the house's front
+                      line. The same step garageLoop has always made.
+    overGarageOpenings  edges 2,3,4 become 3,4,5, and the right-hand window's
+                      offset gains half the tie -- that edge is a foot longer
+                      now, and centring on the old number would leave it six
+                      inches off.
+    houseRoomLoop     `backZ` becomes `DEPTH_FT / 2 - GARAGE_TIE_FT`, so the
+                      roof follows the room to the same corner.
+
+**THE ROOF CHANGE IS ONE ARGUMENT, not a new shape.** `houseWingLoop` already
+takes a `backZ`, and `houseGarageLoop` -- the BUNGALOW -- has passed the tie
+into it from the start. The room's roof is now that same call, one floor up.
+
+### The old objection dissolves rather than being overruled
+
+`houseRoomLoop` refused the tie because *"the tie is single storey, and taking
+it into this loop would put the two-storey roof over a body a floor lower."*
+That was right while nothing stood on the tie. **The room does now**, so the
+tie is two storeys where the roof covers it, and the storey test has nothing
+left to refuse. The rule that excluded it is the rule that now includes it --
+which is why the check for it flipped from `false` to `true` rather than being
+deleted.
+
+### AND THE 20 SEP RULING SURVIVES WHERE IT APPLIES
+
+`garageRoofLoop` is **untouched**. With a room, it starts at
+`houseFront + OVER_GARAGE_LENGTH_FT` -- z = 38, well clear of the tie at
+z = 19. With no room it starts at the house's front line and the tie stays
+behind it, exactly as Movie approved on 20 Sep.
+
+So the reversal is confined to designs with a storey over the garage, and a
+harness check now pins both halves:
+
+    the garage tie IS under the house roof            (room over)
+    a 2 STOREY with no room still leaves the tie out  (no room)
+
+**That second check is the one that keeps the old reasoning honest** rather
+than merely overruled: with nothing standing on the tie it is single storey,
+and the roof leaves it alone.
+
+### Verified on a built plan
+
+    the connector into the house's right wall (x 16 -> 20)
+      GARAGE (foundation + main floor)   z = 19
+      ROOM OVER (2nd floor)              z = 19
+      the same?                          YES
+
+### Three harness expectations were rewritten, and one was measuring wrong
+
+Two were the ruling itself and are rewritten as overturned, with both sides
+quoted. The third is worth naming on its own:
+
+**"Two thirds of the garage's length" was exact by luck.** It compared the
+room's bounding box (18, no tie) against the garage's (27, which HAS one) --
+two unlike measurements whose ratio happened to land on the round number
+Movie said. With both bodies consistent it is 19/27 = 0.704, or 18/26 = 0.692
+like for like. Neither is 2/3, and neither is wrong: the number was an
+artifact of the asymmetry the ruling has now removed. It is a tolerance around
+his actual word -- *"only 2/3"* -- rather than an equality that was never
+measuring what it claimed.
+
+**And "24 wide by 18 long" now measures from the house's front line**, because
+the bounding box reads 19 with the notch in it. Measuring the box would report
+a room a foot longer than it is over four feet of its twenty-four. The notch
+is checked separately, so "the room is 18 long" and "its corner reaches the
+tie" can fail apart.
+
+106/106 in the harness; 139 specs across the garage, premade, drive-thru,
+build-house and elevation suites.

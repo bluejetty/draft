@@ -425,14 +425,44 @@ check('the upper front carries more glass than the ground floor-s, because '
 // numbers: he gave a FRACTION and a LENGTH for the same edge, so they have to
 // agree, and that agreement is a stronger reading than either alone.
 
-check('the room over the garage is 24 wide by 18 long',
-  P => { const b = bbox(P.twoStorey({ garage: true, overGarage: true }).overGarage);
-         return [`${n(b.maxX - b.minX)}x${n(b.maxZ - b.minZ)}`, `${n(24)}x${n(18)}`]; });
+// MEASURED FROM THE HOUSE'S FRONT LINE, not across the bounding box, and the
+// change is what the tie forced. Movie's *"make it about 18ft long by 24 or 26
+// wide"* is the room's own length; the bounding box now reads 19 because the
+// proud four feet step back a foot onto the tie. Measuring the box would
+// report a room a foot longer than it is, over four feet of its twenty-four.
+//
+// THE NOTCH IS CHECKED ON ITS OWN BELOW rather than folded in here, so "the
+// room is 18 long" and "its corner reaches the tie" stay two facts that can
+// fail separately.
+check('the room over the garage is 24 wide by 18 long from the house-s front line',
+  P => { const plan = P.twoStorey({ garage: true, overGarage: true });
+         const b = bbox(plan.overGarage), house = bbox(plan.house);
+         return [`${n(b.maxX - b.minX)}x${n(b.maxZ - house.maxZ)}`, `${n(24)}x${n(18)}`]; });
 
-check('which is two thirds of the garage-s length, his other way of saying it',
+// AND THE NOTCH IS FOUR FEET WIDE, the garage's own proud stretch -- not the
+// whole back run, which is the half of the superseded ruling that was right.
+check('and the tie notch is the proud 4 ft only, not the whole back run',
+  P => { const plan = P.twoStorey({ garage: true, overGarage: true });
+         const house = bbox(plan.house);
+         const onTie = edges(plan.overGarage)
+           .filter(e => Math.abs(e.from.z - (house.maxZ - 1)) < 0.01
+             && Math.abs(e.to.z - (house.maxZ - 1)) < 0.01);
+         return [onTie.map(e => n(e.len)).join(','), n(4)]; });
+
+// AND THIS CHECK'S EXACTNESS WAS LUCK, which only showed when the two bodies
+// were made consistent. It compared the room's bounding box (18, with no tie)
+// against the garage's (27, which HAS one) and landed on 2/3 to the digit --
+// two unlike measurements whose ratio happened to be the round number Movie
+// said. Now that the room takes the tie too, like for like is 19/27 = 0.704,
+// or 18/26 = 0.692 measured from the house's front line. Neither is 2/3.
+//
+// So it is a tolerance around his word "only 2/3", which is what he actually
+// said, rather than an equality that was never measuring what it claimed.
+check('which is about two thirds of the garage-s length, his other way of saying it',
   P => { const plan = P.twoStorey({ garage: true, overGarage: true });
          const over = bbox(plan.overGarage), garage = bbox(plan.garage);
-         return [n((over.maxZ - over.minZ) / (garage.maxZ - garage.minZ)), n(2 / 3)]; });
+         const ratio = (over.maxZ - over.minZ) / (garage.maxZ - garage.minZ);
+         return [Math.abs(ratio - 2 / 3) < 0.05, true]; });
 
 check('it sits over the garage-s own width, so its walls land on the walls below',
   P => { const plan = P.twoStorey({ garage: true, overGarage: true });
@@ -446,10 +476,35 @@ check('and it stops short of the door end, leaving garage roof at main-floor lev
          const over = bbox(plan.overGarage), garage = bbox(plan.garage);
          return [garage.maxZ - over.maxZ > 6, true]; });
 
-check('it starts at the house-s front wall, not a foot past it on the tie',
+// A RULING OVERTURNED, 22 Sep. This check WAS the decision, and it read "it
+// starts at the house's front wall, not a foot past it on the tie".
+//
+// Movie: *"where the garage hooks into the house the foundation, main floor
+// and 2nd floor should connect all the same (1ft in from corner)"*, and, when
+// three consistent readings were put to him, **(a)** -- all three at the tie.
+// Measured on his own drawing beforehand: foundation and main floor connect at
+// z = 19, the second floor at z = 20, so the upper wall stood a foot in front
+// of the wall beneath it with nothing under it.
+//
+// THE ROOM'S BACK IS STILL THE HOUSE'S FRONT LINE over the stretch they share;
+// what reaches the tie is the PROUD four feet, exactly as the garage below
+// does it. So the test is the minimum z, which is now the tie.
+check('it reaches the tie, so its proud corner stands over the garage wall below',
   P => { const plan = P.twoStorey({ garage: true, overGarage: true });
          const house = bbox(plan.house), over = bbox(plan.overGarage);
-         return [n(over.minZ), n(house.maxZ)]; });
+         return [n(over.minZ), n(house.maxZ - 1)]; });
+
+// AND THE SHARED STRETCH DID NOT MOVE, which is the half of the old ruling
+// that was right: taking the WHOLE back run to the tie would bury twenty feet
+// of it inside the house. Measured where the room meets the house, clear of
+// the proud corner.
+check('and its back run still sits on the house-s front line, not a foot inside it',
+  P => { const plan = P.twoStorey({ garage: true, overGarage: true });
+         const house = bbox(plan.house);
+         const backRun = edges(plan.overGarage)
+           .filter(e => Math.abs(e.from.z - house.maxZ) < 0.01
+             && Math.abs(e.to.z - house.maxZ) < 0.01);
+         return [backRun.length > 0, true]; });
 
 // The wall against the house is interior: a window there looks into the hall.
 check('three windows, none of them on the wall against the house',
@@ -474,13 +529,19 @@ check('no edge of the room over the garage lies on the house for only part of it
 
 // AND IT IS SHARED AT ALL, which the check above does not say: a room floating
 // clear of the house has no partly-shared edge either, and would pass it.
-check('exactly one of its edges is shared with the house, and it is 20 ft of front wall',
+// TWO EDGES NOW, and the second one is the tie -- which is not a new kind of
+// thing but the pair MODEL.html's raiseLoop comment has always counted for the
+// GARAGE below: "the 20 ft along the house's front wall is the one in the
+// screenshot; the 1 ft TIE down the house's right wall is the same mistake a
+// foot long". The room having the tie gives it the same pair, and the skip
+// takes both whole.
+check('two of its edges are shared with the house: 20 ft of front wall and the 1 ft tie',
   P => { const plan = P.twoStorey({ garage: true, overGarage: true });
          const segs = GEOM.loopSegments(plan.house);
          const shared = edges(plan.overGarage)
-           .filter(e => GEOM.edgeOnLoop(e.from, e.to, segs));
-         return [`${shared.length},${shared.map(e => n(e.len)).join('')}`,
-           `1,${n(20)}`]; });
+           .filter(e => GEOM.edgeOnLoop(e.from, e.to, segs))
+           .map(e => n(e.len)).sort();
+         return [shared.join(','), [n(20), n(1)].sort().join(',')]; });
 
 // THE EDGE NUMBERS ARE THE LOOP'S, and splitting an edge renumbers everything
 // after it. Checked as a FIT rather than as a list of indices, because a list
@@ -812,18 +873,27 @@ check('the garage stub is NOT under the house roof -- it is a storey lower',
          return [covers(plan.houseRoof,
            { x: (box.minX + box.maxX) / 2, z: (box.minZ + box.maxZ) / 2 }), false]; });
 
-// THE TIE IS THE SUBTLE ONE, and it is why this loop starts on the house's
-// front line rather than where the garage's back wall is. The tie is a 4 ft x
-// 1 ft strip of GARAGE reaching back along the house's side wall (x 16..20,
-// z 19..20) -- single storey, like the rest of the garage. The bungalow's own
-// loop DOES take it, correctly, because there the garage shares the house's
-// plate. Taking it here would put the two-storey roof over a single-storey
-// body, and nothing else in this file would notice.
-check('nor is the garage tie, which is the corner this loop is drawn to miss',
+// THE TIE IS THE SUBTLE ONE, and its answer reversed on 22 Sep with Movie's
+// ruling (a) -- see overGarageLoop for the measurement.
+//
+// IT USED TO BE EXCLUDED, and the reason was sound at the time: the tie is a
+// 4 ft x 1 ft strip of GARAGE reaching back along the house's side wall
+// (x 16..20, z 19..20), single storey like the rest of the garage, so a
+// two-storey roof over it would be a roof over a body a floor lower.
+//
+// WHAT CHANGED IS THE BODY, NOT THE RULE. The room now reaches the tie, so
+// the tie is two storeys where this roof covers it, and the storey test has
+// nothing left to refuse. The rule that excluded it is the same rule that now
+// includes it.
+check('and the garage tie IS under it, because the room reaches the tie now',
   P => { const plan = P.twoStorey(ROOM_PLAN());
-         const houseRight = 16, tieZ = 19.5, intoTie = 18;
-         void houseRight;
-         return [covers(plan.houseRoof, { x: intoTie, z: tieZ }), false]; });
+         return [covers(plan.houseRoof, { x: 18, z: 19.5 }), true]; });
+
+// AND A 2 STOREY WITH NO ROOM STILL EXCLUDES IT, which is what keeps the old
+// reasoning honest rather than merely overruled: with nothing standing on the
+// tie it is single storey, and the roof leaves it alone exactly as before.
+check('but a 2 STOREY with no room over the garage still leaves the tie out',
+  P => [covers(P.twoStorey({ garage: true }).houseRoof, { x: 18, z: 19.5 }), false]);
 
 check('and the bungalow-s loop DOES take its tie, because that garage is level with it',
   P => [covers(P.bungalow({ garage: true }).houseRoof, { x: 18, z: 19.5 }), true]);

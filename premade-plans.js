@@ -343,10 +343,38 @@ if (!window.DraftPremadePlans) {
     const houseFront = DEPTH_FT / 2;
     const right = houseRight + GARAGE_PAST_FT;
     const left = right - GARAGE_WIDTH_FT;
-    // FROM THE HOUSE'S FRONT WALL, not from the tie. The tie is a one-foot
-    // strip of garage that reaches back along the house's side wall; a room
-    // starting there would hang a foot past the house's own front face.
+    // FROM THE TIE, which reverses what this file said here until 22 Sep.
+    //
+    // Movie: *"where the garage hooks into the house the foundation, main
+    // floor and 2nd floor should connect all the same (1ft in from corner)"*,
+    // and then, asked to choose between three consistent readings, **(a)**:
+    // all three levels at the tie. Measured on his own drawing before the
+    // change, the connector carrying the garage's proud four feet into the
+    // house's right wall:
+    //
+    //     FOUNDATION   (16, 19) -> (20, 19)     one foot in from the corner
+    //     MAIN FL      (16, 19) -> (20, 19)     the same
+    //     2ND FL       (16, 20) -> (20, 20)     ON the corner
+    //
+    // So the second-floor wall stood a foot in FRONT of the wall beneath it
+    // for that stretch, with nothing under it.
+    //
+    // WHAT THIS USED TO SAY, kept because somebody reasoned it out: *"FROM THE
+    // HOUSE'S FRONT WALL, not from the tie. The tie is a one-foot strip of
+    // garage that reaches back along the house's side wall; a room starting
+    // there would hang a foot past the house's own front face."* That is true
+    // of moving the WHOLE back run to the tie, which would put twenty feet of
+    // it inside the house. It is not true of the step garageLoop actually
+    // makes, where only the PROUD four feet go back and the shared stretch
+    // stays on the house's front line. The room takes that same step now.
+    //
+    // AND THE TIE IS TWO STOREYS HERE, which answers houseRoofLoop's old
+    // objection rather than ignoring it. It refused this because *"the tie is
+    // single storey"* -- true while nothing stood on it. With the room over
+    // it, it is not, so the two-storey roof covering it is right; houseRoomLoop
+    // now starts at the tie for exactly that reason.
     const back = houseFront;
+    const tieZ = houseFront - GARAGE_TIE_FT;
     const front = back + OVER_GARAGE_LENGTH_FT;
     // A CORNER AT THE HOUSE'S OWN, and it is the whole reason this loop has
     // five points instead of four.
@@ -366,8 +394,20 @@ if (!window.DraftPremadePlans) {
     // edge of its own, which edgeOnLoop then skips whole -- the same shape
     // garageLoop has carried from the start, and the reason IT has a vertex
     // at this exact point.
-    return [pt(left, back), pt(houseRight, back), pt(right, back),
-      pt(right, front), pt(left, front)];
+    //
+    // AND THE TIE IS A SECOND SHARED EDGE, for the same reason the split
+    // above exists: `(houseRight, back) -> (houseRight, tieZ)` lies ON the
+    // house's right wall, so edgeOnLoop drops it whole and the room raises no
+    // wall there. Two shared edges, not one -- which is exactly the pair
+    // MODEL.html's raiseLoop comment already counts for the garage below.
+    return [
+      pt(left, back),          // the shared back run, along the house's front
+      pt(houseRight, back),    // the house's own corner -- splits that run
+      pt(houseRight, tieZ),    // down the house's right wall: the 1 ft tie
+      pt(right, tieZ),         // the proud rear wall, over the garage's own
+      pt(right, front),        // the long right side
+      pt(left, front),         // the far end
+    ];
   };
 
   // Windows on three sides. NOT on either back edge -- the long one is
@@ -375,14 +415,22 @@ if (!window.DraftPremadePlans) {
   // hall; the 4 ft stub beside it is too short to take one clear of both
   // corners.
   //
-  // EDGES 2, 3 AND 4, not 1, 2 and 3: the corner above put an edge in front of
-  // them. These indices are the loop's, and the loop is the only thing that
-  // decides them -- which is why premade-plans-harness.js reads the edge each
-  // opening names and measures ITS length rather than trusting the number.
+  // EDGES 3, 4 AND 5 -- and they were 2, 3 and 4 until the tie went in, which
+  // is the second time this loop's vertices have moved these numbers. The
+  // corner split pushed them once; the tie's two points pushed them again.
+  // These indices are the loop's, and the loop is the only thing that decides
+  // them -- which is why premade-plans-harness.js reads the edge each opening
+  // names and measures ITS length rather than trusting the number.
+  //
+  // AND THE RIGHT SIDE GOT A FOOT LONGER WITH THE TIE, so its window is no
+  // longer centred by halving the room's length. That edge runs `tieZ` to
+  // `front` -- OVER_GARAGE_LENGTH plus the tie -- and keeping the old number
+  // would leave it six inches off centre, which is exactly the drift a
+  // hand-kept index produces.
   const overGarageOpenings = () => [
-    opening(2, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),
-    opening(3, GARAGE_WIDTH_FT / 2, 4, 'window'),
-    opening(4, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),
+    opening(3, (OVER_GARAGE_LENGTH_FT + GARAGE_TIE_FT) / 2, 4, 'window'),
+    opening(4, GARAGE_WIDTH_FT / 2, 4, 'window'),
+    opening(5, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),
   ];
 
   // ── WHAT THE GARAGE'S OWN ROOF COVERS ────────────────────────────────────
@@ -543,15 +591,22 @@ if (!window.DraftPremadePlans) {
   // own plate. Two bodies, same height, each wearing its own hip -- which is
   // the 1 STOREY's defect exactly, one floor up.
   //
-  // THE WING STARTS ON THE HOUSE'S FRONT LINE, not on the tie. overGarageLoop
-  // says why in its own words: "The tie is a one-foot strip of garage that
-  // reaches back along the house's side wall; a room starting there would hang
-  // a foot past the house's own front face." So the tie stays with the GARAGE,
-  // and that is not a detail -- the tie is single storey, and taking it into
-  // this loop would put the two-storey roof over a body a floor lower, which
-  // is the very thing houseRoofLoop's storey test exists to refuse.
+  // THE WING STARTS ON THE TIE, and this reverses what stood here until
+  // 22 Sep along with overGarageLoop -- read its comment for Movie's ruling
+  // and the measurement behind it.
+  //
+  // IT USED TO REFUSE THE TIE ON A STOREY ARGUMENT: *"the tie is single
+  // storey, and taking it into this loop would put the two-storey roof over a
+  // body a floor lower, which is the very thing houseRoofLoop's storey test
+  // exists to refuse."* That was right while nothing stood on the tie. The
+  // room does now, so the tie is two storeys where this roof covers it, and
+  // the storey test has nothing to refuse.
+  //
+  // AND IT IS ONE ARGUMENT, not a new shape: houseWingLoop already takes a
+  // `backZ`, and houseGarageLoop -- the BUNGALOW -- has passed the tie into
+  // it from the start. This is that same call, one floor up.
   const houseRoomLoop = () =>
-    houseWingLoop(DEPTH_FT / 2, DEPTH_FT / 2 + OVER_GARAGE_LENGTH_FT);
+    houseWingLoop(DEPTH_FT / 2 - GARAGE_TIE_FT, DEPTH_FT / 2 + OVER_GARAGE_LENGTH_FT);
 
   // ── WHICH LOOP THE HOUSE'S ROOF IS RAISED OVER ───────────────────────────
   //
