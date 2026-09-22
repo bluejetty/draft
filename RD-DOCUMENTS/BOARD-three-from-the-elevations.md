@@ -181,8 +181,50 @@ the probe being wrong rather than a defect**: on a side elevation the whole
 house body legitimately stands under its own roof, and the probe's region --
 max roof profile over ALL roofs, down to the lowest eave -- swallows it.
 
-So this one is **recorded and unreproduced**. The honest next step is his
-marked image rather than another probe: the screenshot to hand shows the roof
-OUTLINE painted green, and which marks are the side walls cannot be read off
-it with confidence. Guessing at the region is how the two probes above were
-built, and both answered a question nobody asked.
+### REPRODUCED AND DIAGNOSED, once Movie said where to look
+
+> *"there are 2 walls they are in line with the exterior wall, i covered them
+> in green they go up and down at the exterior wall"* -- *"it looks like the
+> roof can be seen through"* -- *"transparent"*
+
+**"In line with the exterior wall" was the missing word.** Both probes above
+searched the roof's interior; the lines are at the GARAGE'S OWN SIDE WALLS,
+one 2 ft overhang in from each roof edge. On his file, E1 FRONT:
+
+    u  -4.0   w 1.25   e -0.923 .. 8.102     below the eave -- CORRECT, the
+                                             garage's wall corner
+    u  -4.0   w 1.25   e  8.077 .. 9.177     ABOVE it -- the defect
+    u  20.0   w 1.25   e  8.077 .. 9.177     and its twin
+
+The garage eave sits at `e 8.102`, so **about 13" of vertical stands above the
+roof line at each exterior wall**, inside the roof. That is the transparency.
+
+`e 8.077 .. 9.177` is a FLOOR SANDWICH, not a wall: 1.1 ft between one
+storey's plate and the next storey's floor. So what shows through is the
+house's 2ND-FLOOR RIM BAND, and the vertical is one of the band's own edges.
+
+### The line that draws it, and the test it is missing
+
+`cut-view.js:1574`:
+
+    const edgeVisible = (u, depth) => !houseSpans.some(other =>
+      other.depth > depth + 1e-6 && other.lo < u - 0.05 && other.hi > u + 0.05);
+
+**It asks whether a nearer WALL FACE hides the edge. It never asks about
+roofs.** Three lines below it the file handles the opposite case and says so:
+
+> *"The rim bands are part of the opaque house face, so the roof pass reads
+> them alongside the walls ... a roof behind the house at exactly that height
+> would otherwise show through the joist band."*
+
+That is **roof behind, band in front** -- already solved. Movie's case is
+**roof in front, band behind**, and nothing covers it. A garage roof standing
+in front of the house at rim-band height leaves the band's edges drawn over
+it.
+
+**Why the two probes missed it.** The first took the maximum roof profile over
+ALL roofs at each `u`; the HOUSE roof is far higher than the garage's, so
+9.177 sat comfortably under it and nothing registered. The occluder is the
+GARAGE roof specifically, so the test has to be per-roof, which is the same
+distinction `edgeVisible` itself is missing. Both probes were wrong the same
+way the code is.
