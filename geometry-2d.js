@@ -1320,6 +1320,43 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     6.5,
   ]);
 
+  // ── A WINDOW IS A SINGLE OR A DOUBLE CASEMENT, AND EACH COMES A SIZE ────
+  //
+  // Movie, 22 Sep, on the windows over the garage: *"lets make it a different
+  // window TYPE in WINDOW PROPERTIES"*, *"it will be DOUBLE WINDOW"*, *"the
+  // first one SINGLE CASEMENT, this one DOUBLE CASEMENT"* -- at *"36\" height"*
+  // and *"66\" wide ... 1 window, with 2 window panes"*.
+  //
+  // A DEFAULT, NOT A RULE, and the distinction is his: *"no size should stay
+  // the same (they can change it) ... ya lets make that size default for that
+  // type"*. So a size here is what a window gets when it is PLACED as this
+  // type. Switching an EXISTING window between the two changes how many panes
+  // it wears and leaves every dimension alone -- which is the 7'-0" head
+  // ruling a second time: what moves is what nobody chose.
+  //
+  // THE SINGLE'S SIZE IS DERIVED, NOT TYPED. It is what this file's own
+  // defaults already made a window: 4'-0" wide, and 4'-2" tall because a 2'-6"
+  // sill under the 6'-8" head that windows and doors used to share is a 4'-2"
+  // window. Writing 4.167 here would be a third place to edit the day the
+  // office changes it, and the two would disagree silently.
+  const DEFAULT_WINDOW_HEIGHT_FT = DEFAULT_OPENING_HEAD_FT - DEFAULT_WINDOW_SILL_FT;
+  // THE KEYS ARE THE VOCABULARY, which is why this is a table and not a list
+  // beside one. drawing-format.js owns the vocabulary proper -- it validates
+  // what a stored record may say, and it may not read anything off `window` --
+  // so a second literal list here would be free to drift from it. Keyed like
+  // this the two cannot disagree about WHICH casements exist without
+  // proto/casement-harness.js going red, and there is no list to forget.
+  const CASEMENT_SIZES_FT = Object.freeze({
+    single: Object.freeze({
+      widthFt: DEFAULT_WINDOW_WIDTH_FT,
+      heightFt: DEFAULT_WINDOW_HEIGHT_FT,
+    }),
+    double: Object.freeze({ widthFt: 66 / 12, heightFt: 36 / 12 }),
+  });
+  // An unknown casement reads as a single rather than as nothing: this answers
+  // the PLACER, and a placer with no size places no window at all.
+  const casementSizeFt = kind => CASEMENT_SIZES_FT[kind] || CASEMENT_SIZES_FT.single;
+
   // The width an opening of this type takes when the drafter has not typed
   // one. A door and a window are the only two kinds this app cuts into a
   // wall, so anything that is not a window is a door -- the same fallback
@@ -1521,6 +1558,9 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     DEFAULT_WINDOW_SILL_FT,
     DEFAULT_WINDOW_HEAD_FT,
     SUPERSEDED_WINDOW_HEADS_FT,
+    DEFAULT_WINDOW_HEIGHT_FT,
+    CASEMENT_SIZES_FT,
+    casementSizeFt,
     DEFAULT_OPENING_HEAD_FT,
     defaultOpeningWidthFt,
     OPENING_FREE_END_POST_IN,

@@ -170,9 +170,32 @@ if (!window.DraftPremadePlans) {
     // 6'-8" leaf. Only the window moved.
     sillFt: type === 'door' ? 0 : WINDOW_SILL_FT,
     headFt: type === 'door' ? DOOR_HEAD_FT : WINDOW_HEAD_FT,
+    // EVERY WINDOW SAYS WHICH CASEMENT IT IS, rather than only the ones that
+    // are not the usual kind. A spec that left the key off for a single would
+    // make the page downstream decide what a missing key means, which is a
+    // second opinion about the default in a second file.
+    casement: type === 'window' ? 'single' : null,
     garage: false,
     ...over,
   });
+
+  // ── THE ROOM OVER THE GARAGE TAKES DOUBLE CASEMENTS ──────────────────────
+  //
+  // Movie, 22 Sep: *"for windows over the garage lets put windows at 36\"
+  // height can we also make it 66\" wide and put a seperation in the center"*,
+  // then *"1 window, with 2 window panes"* and *"it will be DOUBLE CASEMENT"*.
+  //
+  // READ, NOT TYPED. 5'-6" x 3'-0" is the type's own default in geometry-2d.js
+  // -- *"ya lets make that size default for that type"* -- so a design that
+  // wrote 5.5 and 3 here would be a copy, and the day the office changes what
+  // a double casement is, the drive-thru would keep dealing the old one.
+  const DOUBLE_CASEMENT = G.casementSizeFt('double');
+  // The head does not move: it is 7'-0" for every window in this design, so a
+  // shorter unit hangs its sill lower down rather than dropping its head.
+  const DOUBLE_CASEMENT_SILL_FT = Math.max(0, WINDOW_HEAD_FT - DOUBLE_CASEMENT.heightFt);
+  const doubleCasement = (edge, offsetFt) => opening(
+    edge, offsetFt, DOUBLE_CASEMENT.widthFt, 'window',
+    { casement: 'double', sillFt: DOUBLE_CASEMENT_SILL_FT });
 
   // THE HOUSE. Its loop is wound [back, right, front, left] from
   // houseLoop() -- edge 0 runs along the back wall, 1 up the right, 2 back
@@ -450,9 +473,9 @@ if (!window.DraftPremadePlans) {
   // would leave it six inches off centre, which is exactly the drift a
   // hand-kept index produces.
   const overGarageOpenings = () => [
-    opening(3, (OVER_GARAGE_LENGTH_FT + GARAGE_TIE_FT) / 2, 4, 'window'),
-    opening(4, GARAGE_WIDTH_FT / 2, 4, 'window'),
-    opening(5, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),
+    doubleCasement(3, (OVER_GARAGE_LENGTH_FT + GARAGE_TIE_FT) / 2),
+    doubleCasement(4, GARAGE_WIDTH_FT / 2),
+    doubleCasement(5, OVER_GARAGE_LENGTH_FT / 2),
   ];
 
   // ── WHAT THE GARAGE'S OWN ROOF COVERS ────────────────────────────────────

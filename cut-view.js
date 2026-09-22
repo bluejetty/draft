@@ -1661,8 +1661,39 @@ if (!window.DraftCutView) {
           // The unit's frame face inside the rough opening: a 2"-wide border
           // around the glazing.
           const inset = (2 / 12) * pxPerFt;
-          if (ow > inset * 3 && (top - bottom) * pxPerFt > inset * 3) {
-            ctx.strokeRect(ox + inset, Y(top) + inset, ow - inset * 2, (top - bottom) * pxPerFt - inset * 2);
+          const glassH = (top - bottom) * pxPerFt - inset * 2;
+          if (ow > inset * 3 && glassH > 0 && (top - bottom) * pxPerFt > inset * 3) {
+            ctx.strokeRect(ox + inset, Y(top) + inset, ow - inset * 2, glassH);
+            // A DOUBLE CASEMENT IS ONE WINDOW WITH TWO PANES -- Movie, 22 Sep:
+            // *"1 window, with 2 window panes"*. So what divides them is a
+            // MULLION inside the one frame, drawn at the same 2" as the frame
+            // it is part of. Two openings side by side would be a different
+            // building: two rough openings, two headers, and a stud between
+            // them, which is not what he asked for and not what gets ordered.
+            //
+            // ONLY WHEN THERE IS ROOM FOR IT. At a sheet scale where the unit
+            // is a few pixels wide a bar down its middle is a smear, and the
+            // same `inset * 3` test the frame already makes is the one that
+            // answers it -- the mullion needs a pane either side of it, so it
+            // needs the frame's width again.
+            //
+            // TWO LINES RATHER THAN A strokeRect, and the reason is that the
+            // harness can see them. proto/elevation-harness.js's recording
+            // context implements strokeRect as a NO-OP -- the frame border
+            // above is already invisible to it -- so a mullion drawn that way
+            // could not be measured offline, and a rule nothing can measure is
+            // the one that quietly stops being true. It is also how a mullion
+            // meets its frame: the bar runs between the two, it does not sit
+            // in the opening with its own cap top and bottom.
+            if (f.casement === 'double' && ow > inset * 5) {
+              const mx = ox + ow / 2;
+              ctx.beginPath();
+              ctx.moveTo(mx - inset / 2, Y(top) + inset);
+              ctx.lineTo(mx - inset / 2, Y(top) + inset + glassH);
+              ctx.moveTo(mx + inset / 2, Y(top) + inset);
+              ctx.lineTo(mx + inset / 2, Y(top) + inset + glassH);
+              ctx.stroke();
+            }
           }
         }
       });

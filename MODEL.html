@@ -9731,6 +9731,10 @@
   // DOOR FIRST, because the old page's state opens on 'door' (:2912) and a
   // drafter switching pages should not find the tool set to something else.
   let fenestrationType = 'door';
+  // WHICH CASEMENT THE NEXT WINDOW WILL BE. Movie, 22 Sep: *"the first one
+  // SINGLE CASEMENT, this one DOUBLE CASEMENT"*. A door has none, so this is
+  // read only while a window is the thing being placed.
+  let fenestrationCasement = 'single';
   let openingPanelUp = false;
 
   // ── WHAT THE NEXT OPENING WILL MEASURE ──────────────────────────────────
@@ -9787,6 +9791,11 @@
     openingHeads[type === 'window' ? 'window' : 'door'];
 
   const OPENING_TYPES = Object.freeze([['door', 'DOOR'], ['window', 'WINDOW']]);
+  // THE FACES ARE SHORT AND THE ROW SAYS CASEMENT, so the two read together as
+  // "CASEMENT: SINGLE | DOUBLE" in a rail that is 277px at its widest. The
+  // VOCABULARY behind them is drawing-format.js's -- these are only what the
+  // drafter sees.
+  const CASEMENT_CHIPS = Object.freeze([['single', 'SINGLE'], ['double', 'DOUBLE']]);
 
   // A TYPED DIMENSION, parsed by the app's own reader. formatters.js's
   // parseArchitecturalLength takes 3, 3', 3-6, 3'-6", 42" and the rest, and
@@ -9858,6 +9867,27 @@
       fenestrationType = id;
       showOpeningProps();
     }));
+
+    // ── PICKING A CASEMENT LOADS THE SIZE THAT TYPE COMES AT ───────────────
+    //
+    // Movie, 22 Sep: *"no size should stay the same (they can change it) ...
+    // ya lets make that size default for that type"*. So this is the moment
+    // the default applies -- on the way IN to placing one -- and the WIDTH and
+    // SILL fields below still type straight over it afterwards.
+    //
+    // THE SILL IS DERIVED FROM THE HEAD, never carried. A double casement is
+    // 3'-0" tall and heads at 7'-0" like every other window, so its sill is
+    // 4'-0" BECAUSE of those two and not as a third number. That is the 21 Sep
+    // ruling: the head is the datum and the bottom is what moves.
+    if (fenestrationType === 'window') {
+      box.append(propRow('CASEMENT', CASEMENT_CHIPS, fenestrationCasement, id => {
+        fenestrationCasement = id;
+        const size = window.DraftGeometry2D.casementSizeFt(id);
+        openingSizes.window = size.widthFt;
+        openingSill = Math.max(0, openingHeads.window - size.heightFt);
+        showOpeningProps();
+      }));
+    }
 
     // WIDTH IS PER TYPE, so the field edits the one the drafter is holding.
     box.append(openingField('WIDTH', openingWidthFt(), feet => {
@@ -10174,6 +10204,13 @@
       width,
       sillHeight: dusting ? Number(dusting.sillHeight) || 0 : openingSillFt(type),
       headHeight: dusting ? Number(dusting.headHeight) || 0 : openingHeadFt(type),
+      // A CASEMENT RIDES THE BRUSH, like the garage flag below it, and belongs
+      // to a window alone -- drawing-format.js writes null on a door, and a
+      // key that means nothing about the thing it is written on is worse than
+      // no key. A brush loaded before this existed carries none, and falls to
+      // whatever the tool is holding.
+      casement: type !== 'window' ? null
+        : ((dusting && dusting.casement) || fenestrationCasement),
       // AN OVERHEAD DOOR STAYS ONE THROUGH THE BRUSH. `garage` is what makes
       // it one, and it is written only when the brush is carrying it -- a
       // `garage: false` on every hand-placed window would be a key the old
@@ -10235,6 +10272,10 @@
         width: spec.widthFt,
         sillHeight: spec.sillFt,
         headHeight: spec.headFt,
+        // THE DESIGN SAYS WHICH CASEMENT, every time -- premade-plans.js puts
+        // 'single' on an ordinary window rather than leaving the key off, so
+        // there is nothing for this page to decide.
+        casement: spec.casement,
         garage: spec.garage === true,
         // NOT THE BONE'S. auto-windows.js re-deals what it dealt; a design's
         // own openings are the design's, and a re-deal leaves them alone.
@@ -11662,7 +11703,7 @@
     // overhead door an overhead door, and Movie's own example is dusting one.
     // `offset` and `wallId` are the two that must NEVER travel -- they are
     // where it is.
-    fenestration: ['type', 'layer', 'width', 'sillHeight', 'headHeight', 'garage'],
+    fenestration: ['type', 'layer', 'width', 'sillHeight', 'headHeight', 'garage', 'casement'],
     // NOT `structure`. Whether a floor is framed or a slab is read from the
     // layer set it lives on (layer-views.js's floorHomeView), so copying it
     // would make a floor's own two answers disagree -- and `points` is its
@@ -13033,6 +13074,25 @@
           ...(id === 'door' ? { sillHeight: 0 } : {}),
         }));
       }));
+
+    // ── AND SWITCHING ONE CHANGES ITS PANES, NOT ITS SIZE ──────────────────
+    //
+    // Movie, 22 Sep, asked whether picking DOUBLE CASEMENT should resize the
+    // window it is picked on: *"no size should stay the same (they can change
+    // it)"* -- and separately, for a window being placed, *"ya lets make that
+    // size default for that type"*. Both, and they are only both true if a
+    // size is a DEFAULT the type carries in rather than a rule it enforces
+    // afterwards. So the tool panel loads 5'-6" x 3'-0" when a double is
+    // picked to place; this row does not, because by here the drafter has a
+    // window on the drawing and its width may be one he typed.
+    //
+    // It is the 7'-0" head ruling a third time: what moves is what nobody
+    // chose, and nothing here was nobody's.
+    if (agreedOn(openings, typeOf) === 'window') {
+      box.append(propRow('CASEMENT', CASEMENT_CHIPS,
+        agreedOn(openings, o => (o.casement === 'double' ? 'double' : 'single')),
+        id => applyToOpenings(openings, () => ({ casement: id }))));
+    }
 
     box.append(propField('WIDTH', agreedOn(openings, o => Number(o.width) || 0),
       feet => {

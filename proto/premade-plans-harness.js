@@ -1275,19 +1275,19 @@ const MUTATIONS = [
       '    return [pt(left, tieZ), pt(right, tieZ), pt(right, front), pt(left, front)];')],
   // The loop keeps its corner; the WINDOWS forget the tie moved them along.
   ['the room-s windows keep the edge numbers they had before the tie',
-    s2 => s2.replace(`    opening(3, (OVER_GARAGE_LENGTH_FT + GARAGE_TIE_FT) / 2, 4, 'window'),
-    opening(4, GARAGE_WIDTH_FT / 2, 4, 'window'),
-    opening(5, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),`,
-    `    opening(2, (OVER_GARAGE_LENGTH_FT + GARAGE_TIE_FT) / 2, 4, 'window'),
-    opening(3, GARAGE_WIDTH_FT / 2, 4, 'window'),
-    opening(4, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),`)],
+    s2 => s2.replace(`    doubleCasement(3, (OVER_GARAGE_LENGTH_FT + GARAGE_TIE_FT) / 2),
+    doubleCasement(4, GARAGE_WIDTH_FT / 2),
+    doubleCasement(5, OVER_GARAGE_LENGTH_FT / 2),`,
+    `    doubleCasement(2, (OVER_GARAGE_LENGTH_FT + GARAGE_TIE_FT) / 2),
+    doubleCasement(3, GARAGE_WIDTH_FT / 2),
+    doubleCasement(4, OVER_GARAGE_LENGTH_FT / 2),`)],
   // AND THE TIE LENGTHENED THE WALL THAT WINDOW SITS IN. premade-plans.js
   // says what the old number would cost -- "six inches off centre" -- and
   // that is a measurement, so this is the mutant that takes it. The window
   // still FITS its wall, so the fit check above cannot see this one.
   ['the room-s right-side window is centred on the room, not on its lengthened wall',
-    s2 => s2.replace("    opening(3, (OVER_GARAGE_LENGTH_FT + GARAGE_TIE_FT) / 2, 4, 'window'),",
-      "    opening(3, OVER_GARAGE_LENGTH_FT / 2, 4, 'window'),")],
+    s2 => s2.replace("    doubleCasement(3, (OVER_GARAGE_LENGTH_FT + GARAGE_TIE_FT) / 2),",
+      "    doubleCasement(3, OVER_GARAGE_LENGTH_FT / 2),")],
   ['a 2 STOREY is bigger than the 1 STOREY beside it on the board',
     s2 => s2.replace('  const twoStorey = ({ garage = false, overGarage = false } = {}) => ({\n    house: houseLoop(),',
       '  const twoStorey = ({ garage = false, overGarage = false } = {}) => ({\n'
@@ -1326,8 +1326,8 @@ const MUTATIONS = [
     s2 => s2.replace('    const front = houseFront + GARAGE_DEPTH_FT;',
       '    const front = houseFront + GARAGE_DEPTH_FT - 4;')],
   ['the room over gets a window in the wall against the house',
-    s2 => s2.replace('    opening(3, (OVER_GARAGE_LENGTH_FT + GARAGE_TIE_FT) / 2, 4, ',
-      '    opening(0, (OVER_GARAGE_LENGTH_FT + GARAGE_TIE_FT) / 2, 4, ')],
+    s2 => s2.replace('    doubleCasement(3, (OVER_GARAGE_LENGTH_FT + GARAGE_TIE_FT) / 2),',
+      '    doubleCasement(0, (OVER_GARAGE_LENGTH_FT + GARAGE_TIE_FT) / 2),')],
   // ── FOUR ANCHORS THAT WERE POINTING AT THE WRONG FUNCTION ──────────────
   //
   // Found on 20 Sep the moment load() began refusing an anchor that matches
