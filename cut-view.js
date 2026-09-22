@@ -1932,7 +1932,28 @@ if (!window.DraftCutView) {
               else { run.u1 = u; run.e1 = elev; }
             }
             const eave = isEaveEdge(ea, eb, eaveTop);
-            const rake = !eave && onGable(a, b);
+            // AND A RAKE SLOPES, which is what makes it a rake and not the
+            // ridge the rake runs up to. `onGable` asks only whether both
+            // ends of an edge lie on a gable PLAN edge, and the flat top of
+            // a gable end lies on it as squarely as the sloped sides do.
+            //
+            // THIS TEST WAS WRITTEN ONCE ALREADY, 21 Sep, and in the wrong
+            // place: on the fascia-band branch alone, where it fixed the
+            // band Movie was looking at -- *"you shouldn't see the bottom of
+            // the top choard"* -- and left the other reader of `rake`, the
+            // soffit return sixty lines down, still calling the ridge a
+            // rake. Measured on proto/repro-movie-garage-2storey.draft, E1,
+            // with the band gone: a solid w1 line still ran level at
+            // `u 4..6, e 11.452`, one board under the ridge at 11.902 and
+            // exactly the 2 ft of overhang long. A soffit return closes the
+            // open corner under a rake's low end; a ridge has no such
+            // corner, and nothing to close it with.
+            //
+            // So the test belongs to the WORD, not to one painter of it.
+            // The run-level slope test on the band branch below stays: a run
+            // is a visible piece of an edge, not the edge, and that one is
+            // guarding run extent rather than answering "is this a rake".
+            const rake = !eave && onGable(a, b) && Math.abs(eb - ea) > 0.05;
             // A run of a single station paints nothing, and the corner it
             // stands on is not "shown" for the soffit return either — a rake
             // hidden behind the house all but its bottom point once hung its
