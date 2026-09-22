@@ -34,16 +34,15 @@
 // at different heights cover the same stretch, and what separates them is
 // which is nearer, which the strokes do not carry.
 //
-// SO THE SWEEP ASSERTS THE PART THAT IS INVARIANT: two faces at the SAME
-// height covering the same stretch. Same top, same base, one behind the other
-// -- the far one is hidden entirely, with nothing of it to see past. That is
-// the case the old all-or-nothing test did handle, and it stays true whatever
-// the buildings are.
+// SO THERE IS NO CROSS-FIXTURE SWEEP IN THIS FILE, and the note at its foot
+// records what was tried and why it went. Narrowing the rule to same-height
+// pairs left it catching only the grade bottoms, which is the limitation that
+// note names -- so what is left is a MEASUREMENT of the defect Movie
+// reported, on his own drawing: the two tops must MEET, and meet on the tie.
 //
-// The defect Movie reported is then pinned exactly, on his own drawing, by
-// the block at the foot of this file: the two tops must MEET, and meet on the
-// tie. A rule too weak to catch the bug plus a measurement that does beats
-// one rule that is wrong.
+// A measurement that catches the bug beats a rule that is either wrong or
+// vacuous, and saying so here keeps this header honest about how few checks
+// the file actually carries.
 //
 //   node proto/foundation-face-harness.js [file.draft ...]
 const fs = require('fs');
