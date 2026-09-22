@@ -171,23 +171,51 @@ redo all exist and all work. This is a port.
   `./LAYOUT.dc.html` today and moves with the file.
 - **The cut painter stays shared.** No second elevation renderer, ever.
 
-### AUTO-GENERATED SHEETS ARE NOT IN THIS ORDER, and that needed saying
+### AUTO-GENERATED SHEETS — AND THE FIRST VERSION OF THIS SECTION WAS WRONG
 
 **Movie, 21 Sep**, looking at an empty sheet with a drawing loaded:
 
 > *"the layouts aren't autogenerating views, i thought you already did that"*
 
-**He was right that it does not happen, and the expectation was reasonable.**
-His original ask was *"set up the layouts area so they display the drawings as
-it was set up in model.dc"*, and *"display the drawings"* reads perfectly well
-as "the sheets come out ready". What Stage 1 built is narrower and every line
-of its own log says so: **"a HAND-PLACED viewport..."**. The work was about
-what a viewport DRAWS once placed -- walls, beams, columns, stairs, washroom
-fixtures, the kitchen, at a scale that walks the ladder down until the plan
-fits -- never about placing them for you.
+**HE HAD ALREADY HAD IT BUILT, and I told him twice it never was.** This
+section first read *"auto-generation was never built"* and explained at length
+why the expectation was understandable but mistaken. That was false, and it
+went into a merged pull request body as well. The correction, stated plainly
+because the claim was stated plainly:
 
-So it is written here as its own thing rather than left to be inferred from
-the absence of a row.
+`LAYOUT.dc.html:855`, **`_composeDefaultSet`**, deals the whole set — two
+sheets of elevations (E1+E2, then E3+E4), a plan per floor with walls, top
+storey first, the foundation, every drawn section, the basement — skipping any
+sheet nothing would put ink on, and choosing each sheet's scale by walking the
+ladder down until its views fit. `tests/layout-compose.spec.js` had **nine**
+specs on it before this change, including the deal order and the empty-sheet
+rule.
+
+**WHAT WAS ACTUALLY MISSING WAS A VERB.** The composer had exactly one
+trigger, and the spec's own header names it: *"a successful BUILD HOUSE raises
+layout.auto, and LAYOUT answers the flag"*. So:
+
+    a fresh bone press            -> the set is dealt
+    any other drawing            -> nothing, ever
+    a set touched by hand        -> the flag comes off and never goes back on
+
+Movie's own file carries **no `layout` key at all**, so `auto` read false and
+the composer never ran. Nothing on the page would run it.
+
+So `DEAL SHEETS` / `RE-DEAL SHEETS` sits under `+ ADD VIEWPORT` and calls the
+composer that was already there. **Off a button rather than on load**: dealing
+on open would rewrite viewports on a drawing nobody asked to have edited, and
+a drafter who has arranged sheets by hand must not lose them to a page visit.
+It confirms before replacing a hand-placed set and does not confirm over an
+empty one, since a dialog with one sensible answer is friction rather than
+safety.
+
+**HOW THE WRONG CLAIM SURVIVED TWO TELLINGS.** I read the order's own Stage 1
+log — every line of which says *"a hand-placed viewport..."* — and treated the
+absence of a row as the absence of the feature. The log was describing what
+STAGE 1 built, not what the page can do; the composer predates it. Reading a
+progress log as an inventory is what made an absent row into an absent
+feature.
 
 **AND A PANEL BUG MADE IT LOOK BROKEN RATHER THAN MERELY ABSENT.** Measured at
 his window size -- a 188px column with about 660px of usable height:
@@ -207,17 +235,20 @@ confusion for another. Pinned by `tests/layout-viewports.spec.js`, at a height
 the bug reproduces at: the project viewport is 900px tall and nothing shows at
 900.
 
-**WHAT AUTO-GENERATION WOULD NEED DECIDED**, none of it guessable:
+**THE THREE QUESTIONS I PUT TO HIM WERE ALSO ALREADY ANSWERED**, in the
+composer, with reasons — which is the same mistake as the paragraph above and
+worth keeping visible:
 
-- **which views** -- the four elevations, a plan per level, ROOF, SITE,
-  sections? `LAYOUT.dc.html:856` already reasons about SITE and ROOF being
-  deliberate absences, so the set is not simply "everything".
-- **one view per sheet, or packed** -- and if packed, by what rule. The scale
-  ladder already walks DOWN until a plan fits one sheet; packing two would
-  make that a two-variable fit.
-- **when** -- on opening the page, or off a button. Doing it on open would
-  write viewports onto a drawing the drafter has not asked to have edited,
-  which the repo's standing rule is against.
+- **which views** — elevations paired two to a sheet, a plan per floor with
+  walls, the foundation, the drawn sections, the basement. SITE and ROOF are
+  out because they have no painter, and the floor-layout and electrical sheets
+  because the drawing format has no entities for them. `_composeDefaultSet`
+  says so at its own comment: *"They are their own boards, not silent
+  omissions."*
+- **one view per sheet, or packed** — one, except the elevations, which pair.
+  A single view centres on its sheet; a pair stacks and centres as a block.
+- **when** — this one genuinely was open, and it is the only thing that
+  changed: it was the bone's flag alone, and it is now also a button.
 
 ### Not in this order
 
