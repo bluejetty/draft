@@ -228,3 +228,90 @@ ALL roofs at each `u`; the HOUSE roof is far higher than the garage's, so
 GARAGE roof specifically, so the test has to be per-roof, which is the same
 distinction `edgeVisible` itself is missing. Both probes were wrong the same
 way the code is.
+
+
+---
+
+## FIXED, 21 Sep — two of them, and the third is narrowed to a question
+
+### The roof is no longer transparent
+
+`edgeVisible` now asks about roofs. The roof half of `hidden` is lifted out as
+`behindRoof(pt, elev)` so both passes share one definition -- `hidden` itself
+could not move, because its OTHER half reads `rimBands`, which is what the
+rim-band pass builds.
+
+**AND ONE OF THE TWO VERTICALS SURVIVED THAT FIRST FIX**, which is worth
+recording. Gating the interior edges removed `u -4` and left `u 20`. The
+reason: a run's own ENDS are added unconditionally --
+
+    edges.add(run.lo); edges.add(run.hi);
+
+-- and `u 20` was a run end, so it never reached `edgeVisible` at all. That is
+defensible for the wall test (by construction nothing nearer covers a band's
+end; that is what makes it an end) and wrong for the roof test, which was not
+being asked there at all. The ends are now gated on `behindRoof`, casting from
+the nearest face that reaches that `u`.
+
+### The ridge is one line again
+
+`onGable` asks whether both ends of an edge lie on a gable plan edge, and a
+RIDGE terminating at that edge passes. So the flat top of the gable end wore a
+fascia board. A rake SLOPES, by definition, so the branch now requires slope.
+
+Measured before: three runs banded on roof-69's gable edge -- `u -6..4`
+rising, `u 4..12` FLAT at 11.902, `u 12..22` falling. After: the flat one is a
+single `w 1.5` silhouette line and nothing else.
+
+### And the geometry that reframes the rest
+
+The probe settled what neither of us could see from a screenshot. E1's
+`dirVec` is `{x: 0, z: 1}`, so **larger z is farther**, and roof-69's gable
+edge sits at `z = 38` -- the NEAR edge, facing the viewer. `behindRoof` says
+`false` for all three runs and is right: nothing is showing through. **This
+was never an occlusion problem.**
+
+What remains is a classification one, and the saved file is explicit:
+
+    roof-69   points  x -6..22, z 38..48
+              edges   ["gable", "eave", "eave", "eave"]
+                        ^ z = 38, the edge AGAINST THE HOUSE
+
+Three eaves and one gable. The painter is doing exactly what the record says:
+banding a gable edge's rakes. **The two sloping bands are still drawn**, and
+on the rake the light top line coincides with the roof silhouette, so what
+Movie reads as a top and a bottom chord is the silhouette plus the shadow
+5.5" under it.
+
+### THE QUESTION THIS LEAVES, and it is Movie's
+
+His words were *"its a cottage roof nor a gable roof"*. Two readings, and they
+are different work:
+
+    THE DATA IS WRONG      that z=38 edge should be an EAVE, not a gable, and
+                           then the painter draws it right with no change at
+                           all. A tool or builder question.
+    THE RULE IS MISSING    a gable edge BURIED against another body is not an
+                           exposed rake -- no board, no soffit return -- and
+                           `roof-68` does cover z 22..40 at x -6..22, so this
+                           one is buried. A painter change with real reach.
+
+**The second would also take the last artifact**, which is recorded in
+`proto/fascia-end-harness.js` as explicitly unguarded: a solid `w 1` line
+still runs level at `ridge - 5.5"` over `u 4..6`. That is the BOXED-RAKE
+SOFFIT return, a separate painter from the band, and it goes with the rake
+treatment rather than with the band.
+
+### Guarded
+
+`proto/fascia-end-harness.js`, 21 checks. Both fixes are mutation-run:
+reverting the ridge fix and reverting the roof-occlusion fix each turn it red.
+
+**THE SECOND GUARD WAS WORTHLESS ON ITS FIRST WRITING** and only the mutation
+run found it. It required the stray vertical to START above the eave -- and
+the thing it exists to catch begins 0.3" BELOW it (the rim band spans
+8.077..9.177 against an eave at 8.102), so its own precondition threw out its
+own subject. With the fix reverted it passed. It now tests the vertical's TOP:
+inside the roof means covered, poking above the ridge means partly in open air
+and legitimately drawn. **A guard that excludes its subject is worse than
+none** -- it reports the fix is held when nothing is holding it.
