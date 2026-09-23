@@ -360,8 +360,13 @@ test('a family press sets the building method, one at a time, and it saves',
     await h.openModel(page);
     await openProjectPage(page);
 
-    // A fresh drawing has been through no build row, so nothing glows --
-    // lighting a button would be the card answering for the drafter.
+    // NOTHING GLOWS YET, AND THE CARD CLICK ABOVE DOES NOT CHANGE THAT.
+    // Since 23 Sep a card press chooses the TYPE (Movie: "AND CHOOSE it
+    // too") -- but only the type. A button lights when the type AND the
+    // garage plan match an entry, and the card says nothing about a garage,
+    // so the row stays dark until the drafter presses in it. That is the
+    // rule the row's own comment asks for: "a bare type lights nothing
+    // until somebody presses".
     await expect(page.locator('.family-button[aria-pressed="true"]')).toHaveCount(0);
 
     // THE BILEVEL FAMILY LIVES IN THE BILEVEL SECTION, so this press needs
@@ -372,7 +377,6 @@ test('a family press sets the building method, one at a time, and it saves',
     await page.locator('[data-family-entry="bilevel-garage"]').click();
     await expect(page.locator('[data-family-entry="bilevel-garage"]'))
       .toHaveAttribute('aria-pressed', 'true');
-    await selectType(page, 'bungalow');
 
     // IT REACHED THE FILE, not just the button. This page's save merges its
     // own keys onto the stored drawing, so a key it does not own is dropped
@@ -389,6 +393,17 @@ test('a family press sets the building method, one at a time, and it saves',
     // house is, so the build type only moves the sill on the wall that has a
     // stem to step down. Set here rather than in the fixture so the change
     // goes through the page's own control.
+    // BACK TO THE BUNGALOW SECTION WITHOUT CHOOSING IT, which is the whole
+    // point of the distinction the page draws: a card press switches a type
+    // it can switch, a URL visit only shows one. Crossing back by pressing
+    // the BUNGALOW card would land the type on `bungalow` here -- and then
+    // the press below could not move the sill, because the sill would
+    // already be the bungalow's. The controls beneath live in band 1; the
+    // TYPE has to still be bilevel when they are read.
+    await page.goto('/PROJECT.html?type=bungalow');
+    await expect(page.locator('[data-family-entry="bilevel-garage"]'))
+      .toHaveAttribute('aria-pressed', 'true');
+
     const foundation = page.locator('[data-detail-input="garageFoundationType"]');
     await foundation.selectOption('frostwall');
     await foundation.dispatchEvent('change');
