@@ -98,6 +98,67 @@ test('MODEL.html wears the count on the instruments row, left of STATUS READOUT'
     expect(where.leftOf, 'and it sits to the left of it').toBe(true);
   });
 
+// AND NEVER INSIDE THE PAGE ROW, which is the rule the corner anchor above
+// had to be narrowed to keep. Movie, 23 Sep, looking at the live PROJECT
+// page: "the 12 visits shouldn't be mixed into the views listings."
+//
+// The anchor was written when [data-project-corner-bl] was a lone link in the
+// bottom-left corner. The shared bars made it a chip in #page-row, so the
+// count mounted between PROJECT and MODEL and read as a seventh page. Nothing
+// caught it -- the spec below still passed, because it runs on MODEL.dc.html
+// where that link IS still a corner.
+//
+// This runs on the pages that wear the bars, and it is the check that would
+// have failed on the day the bars landed.
+//
+// WHAT IT ACTUALLY GATES, measured rather than assumed. Two mutations were
+// tried against it:
+//
+//   REMOVE counterSlot() FROM PROJECT  -> KILLED, by name. That is the real
+//   regression: the page stops offering the slot, homeOf() falls through to
+//   the corner link, and the corner link on a barred page is a page chip.
+//
+//   WIDEN THE CORNER ANCHOR BACK to every [data-project-corner-bl] -> SURVIVED,
+//   and that is not a hole. Once a page mounts the slot, homeOf() returns the
+//   NAMED home first and the corner branch is unreachable there. The narrowed
+//   condition is what protects a barred page that has NOT mounted a slot --
+//   together with the barredButHomeless guard, which stops the floating
+//   fallback printing over the bar. Said out loud because a reader who
+//   assumed this file gated the anchor itself would be wrong.
+for (const page_ of ['PROJECT.html', 'SPECS.html', 'MODEL.html']) {
+  test(`the count never lands in the page row (${page_})`, async ({ page, baseURL }) => {
+    await proxyApp(page, baseURL);
+    await page.route(`${GC_HOST}/**`, route => {
+      const url = new URL(route.request().url());
+      if (url.pathname.endsWith('.json')) {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ count: '12' }) });
+      }
+      return route.fulfill({ status: 200, contentType: 'image/gif', body: Buffer.from('R0lGODlhAQABAAAAACw=', 'base64') });
+    });
+    await page.goto(`https://draft.test/${page_}`);
+    await page.waitForTimeout(1200);
+    const where = await page.evaluate(() => {
+      const c = document.querySelector('[data-traffic-counter]');
+      const row = document.getElementById('page-row');
+      return {
+        mounted: !!c,
+        inPageRow: !!(c && row && row.contains(c)),
+        // The slot it SHOULD be in: fixed above the bar, no background of its
+        // own. Its absence is as much a failure as the wrong parent -- a count
+        // that quietly stopped mounting would pass an "is it in the row" check
+        // perfectly.
+        inSlot: !!(c && c.closest('#lower-left')),
+      };
+    });
+    expect(where.mounted, 'the count mounted at all -- this file is measuring '
+      + 'nothing if it did not').toBe(true);
+    expect(where.inPageRow, 'the count is wedged among the page links, which is '
+      + 'what Movie saw on the live site').toBe(false);
+    expect(where.inSlot, 'it belongs in the transparent slot above the bar, the '
+      + 'same one MODEL uses').toBe(true);
+  });
+}
+
 test('the count sits to the right of PROJECT where a strip has one', async ({ page, baseURL }) => {
   await proxyApp(page, baseURL);
   await page.route(`${GC_HOST}/**`, route => {

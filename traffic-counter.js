@@ -36,12 +36,40 @@
   // NAMED HOME MEANS INSIDE IT; the PROJECT corner means AFTER it. That is
   // not an inconsistency: the corner is a link the count stands beside, and
   // a named home is an empty slot that exists to be filled.
+  //
+  // THE PROJECT-CORNER FALLBACK STILL APPLIES -- BUT ONLY WHILE THE LINK IS
+  // STILL A CORNER. Movie, 23 Sep: "the 12 visits shouldn't be mixed into the
+  // views listings." The anchor was written when [data-project-corner-bl] was
+  // a lone link in the bottom-left; the shared bars made it a chip in the
+  // PAGE ROW, and the count landed between PROJECT and MODEL, reading as a
+  // seventh page. The rule two paragraphs up said so all along -- the count
+  // belongs on the instruments row, not on the row of page links.
+  //
+  // SO THE TEST IS WHERE THE LINK LIVES, not which page it is on. Deleting
+  // the fallback outright was the first attempt and it was too broad:
+  // MODEL.dc.html has no named home and its corner link IS a corner, so that
+  // page would have lost its count to the floating fallback. The condition
+  // keeps the old page exactly as it was and fixes the new ones, without
+  // either of them being named here.
   var homeOf = function () {
-    return document.querySelector('[data-visit-counter-home]')
-      || document.querySelector('[data-project-corner-bl]');
+    var named = document.querySelector('[data-visit-counter-home]');
+    if (named) return named;
+    var corner = document.querySelector('[data-project-corner-bl]');
+    return (corner && !corner.closest('#page-row')) ? corner : null;
+  };
+
+  // A PAGE WITH A BOTTOM BAR BUT NO NAMED HOME GETS NO COUNT. The floating
+  // corner below sits at bottom:8px, which is inside the bar -- so the
+  // alternative to this is a count printed over the page row. Those pages
+  // have a place for it (the readout slot in #lower-left) and can mount one
+  // the day they want it; until then the count stays in model space, which is
+  // what was asked for. The seven bar-less pages are untouched.
+  var barredButHomeless = function () {
+    return !homeOf() && !!document.getElementById('house-strip');
   };
 
   var mount = function (label) {
+    if (barredButHomeless()) return;
     var anchor = homeOf();
     var el = document.createElement('a');
     el.setAttribute('data-traffic-counter', '');
