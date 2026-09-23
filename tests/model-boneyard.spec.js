@@ -742,7 +742,27 @@ test('§5a: a hand-moved point FREEZES — the master moves out from under it',
 
     // THE MASTER REALLY MOVED, or the rest of this proves nothing: a drag that
     // silently failed would leave both copies untouched and read as a freeze.
-    expect(z, 'the master corner moved').toBeCloseTo(-12, 6);
+    //
+    // TOLERANCED LIKE A DRAG, which is what it measures -- and which its two
+    // siblings in this file already do (:638 and :681 both check "the master
+    // moved" at precision 1). This one asked for SIX, and that was the odd
+    // one out rather than a deliberate tightening: it is a precondition about
+    // whether a MOUSE landed, and a mouse carries integer pixels.
+    //
+    // It came due when the shared bar's box model was pinned and the top
+    // strip went 45px to the 44 its variable always named. fit() insets the
+    // view for the two dark bars, so the camera moved half a pixel and the
+    // drag landed at -12.00000051 instead of -12 -- off by one part in twenty
+    // million, over a threshold of 5e-7. dragMaster's own comment records the
+    // same thing happening before, when a drive-thru commit changed a bar's
+    // height: "not the propagation, the aim."
+    //
+    // THE PROPAGATION ASSERTIONS BELOW KEEP PRECISION 6, and that is the
+    // distinction. They compare saved values against each other or against
+    // fixture literals the drag never touched -- exact arithmetic, where six
+    // places is honest. Only the aim is loosened, and only to what its
+    // siblings already use.
+    expect(z, 'the master corner moved').toBeCloseTo(-12, 1);
 
     // FROZEN: exactly where the hand left it, both axes.
     expect(heldPt.z, 'the overridden point stayed where it was put')
