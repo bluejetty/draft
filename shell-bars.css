@@ -150,6 +150,46 @@
      to 46, and the pairwise chrome check went red on `right-rail overlaps
      hint` -- its sixth catch, and the second one this file has produced from
      one distance being written down twice. */
+  /* THE BAR'S OWN TYPE, and this file has to name it. It reaches for
+     var(--font-ui) twelve times and var(--font-mono) five, and defined
+     NEITHER -- so the faces came from whichever page the sheet happened to be
+     linked into. MODEL declares them; PROJECT and SPECS do not, so all
+     seventeen resolved to nothing and the chips inherited the page's body
+     font. Same 11px on all three, but Barlow Condensed is narrower than
+     Barlow, so the model page's bar read visibly smaller than the other two.
+     Movie saw it side by side: "the MODEL one has smaller text it looks like,
+     can we make them all match".
+  
+     IT WAS A KNOWN GAP AND IT WAS LEFT OPEN TOO LONG. The first cut of this
+     file kept the move byte-pure so MODEL could be proved unchanged, which
+     meant taking no :root declarations that MODEL already had -- and the note
+     at the time said to give the fonts a home "when PROJECT adopts". PROJECT
+     adopted, then SPECS, and nobody did. A shared stylesheet that depends on
+     the page to define its own type is not shared, it is half-shared, which
+     is the state that looks fine on the page it came from.
+  
+     The values are MODEL's, unchanged, so that page renders identically and
+     every page linking this sheet now gets the same faces without declaring
+     anything. */
+  /* AND THE BAR'S OWN BOX MODEL, for the fonts' reason one comment down: a
+     shared sheet that leaves this to the page is not shared. MODEL.html has
+     no global `* { box-sizing:border-box }` and PROJECT and SPECS do, so the
+     same bar measured 41px on one page and 40px on the others -- the 1px top
+     border counted inside the height or outside it depending on whose
+     stylesheet the sheet happened to be linked into. --house-h says 40, so
+     border-box is the intent and content-box was the accident.
+  
+     SCOPED TO THE SHELL, not declared globally, because a `*` rule from this
+     file would reach the whole drawing page and change boxes that have
+     nothing to do with the bars. */
+  #strip, #strip *, #house-strip, #house-strip *,
+  #lower-left, #lower-left *, #readout, #readout *,
+  #file-guard, #file-guard *, #save-as, #save-as * { box-sizing: border-box; }
+
+  :root {
+    --font-ui:   'Barlow Condensed', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: 'DM Mono', ui-monospace, Menlo, Consolas, monospace;
+  }
   :root { --strip-h: 44px;
     /* THE HOUSE STRIP, along the foot: BUNGALOW / BILEVEL / DETACHED GARAGE /
        BONE and the one DELETE. Named for the same reason --strip-h is: the
@@ -499,8 +539,18 @@
      for MODEL's you-are-here, and RUFF/ROUGH sitting in the same row would
      have taken it -- a switch wearing a page's border, inside the row that
      means "places you can go". */
+  /* AND THE SHEET ROW'S YOU-ARE-HERE TOO, which it went without until SPECS
+     took the bars. Both of the rules here named only #page-row spans, because
+     when they were written only MODEL and PROJECT could be the current page
+     and both of those live in the LEFT row. The first page to be current in
+     the RIGHT row got no box and no accent -- it was simply unstyled text
+     sitting between two chips. Movie saw it in a screenshot of the three bars
+     stacked: "looks like the box is missing around the last SPECIFICATIONS".
+
+     The asymmetry was invisible for as long as the sheet row held only links.
+     It is the shape of bug a shared row grows the day a new page joins it. */
   #page-row a, #page-row button, #page-row > span:not(.set),
-  #sheet-row a, #sheet-row button { font:inherit;
+  #sheet-row a, #sheet-row button, #sheet-row > span:not(.set) { font:inherit;
     letter-spacing:inherit; display:inline-flex; align-items:center;
     height:24px; padding:0 8px; text-transform:uppercase; text-decoration:none;
     border-radius:4px; border:1px solid var(--edge-panel);
@@ -511,7 +561,24 @@
     color: var(--accent); }
   /* HERE, not a link to here. A button that reloads the page you are on
      loses an unsaved corner to a stray thumb. */
-  #page-row [aria-current="page"] { color: var(--accent);
+  /* AND IT HAS TO OUT-SPECIFY THE CHIP RULE, which it did not. The chip
+     selector above is `#page-row > span:not(.set)` -- and :not() contributes
+     its argument's weight, so that scores (1,1,1) where a bare
+     `#page-row [aria-current]` scores (1,1,0). The chip rule won EVERY
+     property: the current page was drawn in ordinary ink with an ordinary
+     border and a POINTER cursor, on a chip that does nothing when pressed.
+  
+     So the whole rule below has been dead since the :not(.set) guard was
+     added, reading correctly and doing nothing -- the same shape as the
+     @media (max-width:1500px) block still sitting dead in MODEL.html. Found
+     while giving the sheet row its box; measured rather than reasoned about,
+     because this file has now taught that lesson twice.
+  
+     The `> span` matches the chip rule's shape and takes it past (1,1,1). */
+  #page-row > span[aria-current="page"]:not(.set),
+  #sheet-row > span[aria-current="page"]:not(.set),
+  #page-row [aria-current="page"],
+  #sheet-row [aria-current="page"] { color: var(--accent);
     border-color: var(--accent); cursor:default; }
   #page-row button:disabled, #page-row button:disabled:hover,
   #sheet-row button:disabled, #sheet-row button:disabled:hover {
