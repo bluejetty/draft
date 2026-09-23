@@ -146,16 +146,43 @@ without threading an argument through eleven call sites. A palette that stops
 at the stylesheet is the defect palette.js's own header warns about: 92% of
 MODEL's colour is set from JavaScript.
 
-### Three colours deliberately NOT converted
+### The drafting blue went to `accent`
+
+Movie, 23 Sep: *"yes finish it"*, and after seeing where the colour actually
+lives, *"i can work with that and make updates later"*.
+
+**All 26 uses did ONE job** — card titles, focus rings, hover washes, pressed
+buttons, the lit row, the table head: every one of them marks the thing you
+can click or the thing that is selected. A colour with one job has a role, and
+that role is `accent`.
+
+**It splits by WHAT THE THING IS, which is the rule the palette is built on.**
+Lines, rings and washes take `accent`; the small uppercase text — the 13px
+card title and the 9px lit tag — takes `accent-mark`, which exists for exactly
+that case. On RUFF night the mark is the amber and the accent is the red, so
+the titles read gold and only the interactive lines go red. **I had told Movie
+the titles would go red**, reading `accent` off the table and never checking
+whether small text had a role of its own. It does, and it has since 17 Sep.
+
+The washes keep their own alphas through `color-mix()` — 7/8/10/12/13/22% of
+the accent — because the page had a deliberate ladder there: a hover is
+fainter than a press.
+
+**What each skin now shows.** ROUGH is the point of the exercise: its accent
+IS the drafting blue, AA-lifted (`#6b91b6` night, `#365e86` day), so the page
+looks almost exactly as it did — except it is now the theme saying so rather
+than a literal. RUFF night is gold titles on red lines. RUFF day is the dark
+red (`#c0392b`) for both, and that is the one skin where the change is loud.
+
+### Two colours still NOT converted
 
 | literal | where | why it is still open |
 |---|---|---|
-| `#5980a6` ×13, `rgba(89,128,166,…)` ×13 | card titles, focus rings, hover washes, pressed buttons, the lit row, the table head | **Movie's call.** It is the drafting blue, and in PROJECT it does one job everywhere: mark the interactive or selected thing. That job's role is `accent`. But RUFF's accent is RED (`#fd0000` night, `#c0392b` day) and ROUGH's accent IS this blue, AA-lifted. So converting it makes PROJECT match MODEL — which is the ask — at the cost of blue card titles going red on the default skin. |
 | `#a06035` + `rgba(160,96,53,.08)` | the `.notice` left border and tint | No role for a warning. Reads at 3.32 on night, 4.45 on day — a 3px border, so it passes as a line either way, and the notice's TEXT is already `--ink-secondary`. |
 | `#557a46` | `#status` | No role for a success message. 3.36 on night, 4.41 on day: **under AA both ways, and it already was** before this pass. Transient text, so it is recorded rather than fixed. |
 
-None of the three is a regression — all three sat at the same contrast on the
-white page. What changed is that there is now somewhere for them to go.
+Neither is a regression — both sat at the same contrast on the white page.
+What changed is that there is now somewhere for them to go.
 
 ## THE SHELL IS A MECHANISM, NOT MODEL'S PANELS MOVED OVER
 
