@@ -19,10 +19,25 @@ async function setField(page, selector, value) {
 }
 
 test.describe('PROJECT page', () => {
-  test('the PROJECT button navigates to the project page and back', async ({ page }) => {
+  // THE WAY BACK IS THE PAGE ROW NOW, not the logo. This clicked `.home` --
+  // the Rough Drafter logo in PROJECT's own 52px header -- and that header
+  // went when the page took the shared bars (23 Sep): MODEL's bar carries no
+  // logo either, so a PROJECT that kept one would not have been "like these",
+  // which is what Movie asked for.
+  //
+  // AND THE NEW ROUTE IS THE BETTER TEST. The logo was a way back to MODEL
+  // and nothing else. The page row is the map of the whole job, rendered from
+  // one table for every page in the shop, so clicking MODEL here exercises
+  // the thing a drafter actually uses AND the chip-rendering that six pages
+  // now depend on. It also proves the chip is a LINK from here, where on
+  // MODEL it is the you-are-here span -- the one part of the row that differs
+  // per page.
+  test('the page row navigates to the project page and back', async ({ page }) => {
     await h.openModel(page);
     await openProjectPage(page);
-    await page.locator('.home').click();
+    await expect(page.locator('#page-row [data-page="project"]'))
+      .toHaveAttribute('aria-current', 'page');
+    await page.locator('#page-row a[data-page="model"]').click();
     await page.waitForURL(/MODEL\.html/);
   });
 
