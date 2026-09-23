@@ -79,6 +79,16 @@ check(`${SHEET} carries the bottom bar`, /#house-strip\s*\{/.test(sheet), true);
 // single rule survives is not a check that the instruments are here.
 const INSTRUMENTS = ['#strip-center', '#strip-length-box', '#strip-angle-box',
   '#frozen-length', '#frozen-angle', '#strip-len', '#strip-ang', '.chip'];
+// AND THE RAILS, which joined the sheet after the bars did. MODEL's own
+// heading for that block was already "THE SHELL"; they simply did not come
+// across the first time. Checked as a set for the instruments' reason -- the
+// sheet has several .rail-tab and aside rules, so asking whether any one of
+// them survives is a sighting rather than a check.
+const RAILS = ['.rail-tab', 'aside', '#left-rail', '#left-tab'];
+check(`${SHEET} carries the rail shell`,
+  RAILS.filter(sel => !new RegExp(
+    `${sel.replace(/[.#]/g, '\\$&')}(?![-\\w])[^{}]*\\{`).test(decomment(sheet))), []);
+
 check(`${SHEET} carries every instrument`,
   INSTRUMENTS.filter(sel => !new RegExp(
     `${sel.replace(/[.#]/g, '\\$&')}(?![-\\w])[^{}]*\\{`).test(decomment(sheet))), []);
