@@ -10,6 +10,12 @@ const h = require('./helpers');
 async function openProjectPage(page) {
   await page.locator('[data-project-open]').click();
   await page.waitForURL(/PROJECT\.html/);
+  // THE PROJECT INFO FIELDS LIVE IN A RAIL NOW, shut by default like MODEL's
+  // (23 Sep). A drafter arriving on the page presses PROJECT INFO to reach
+  // them, so a spec that wants them does the same -- asserting the field is
+  // visible without opening the tab is asserting the page works the way it
+  // used to.
+  await page.locator('#left-tab').click();
   await expect(page.locator('[data-project-name]')).toBeVisible();
 }
 

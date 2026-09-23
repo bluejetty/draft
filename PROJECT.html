@@ -114,6 +114,37 @@
     /* IDENTITY runs the width of the page now, so its fields need columns of
        their own or each input stretches to 1100px and reads as a banner. */
     .identity-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px 20px; align-items:start; }
+    /* ── THE PROJECT INFO RAIL'S TENANT ──────────────────────────────────
+       THE RAIL IS SHRINK-TO-FIT AND THAT IS DELIBERATE, so its width is the
+       TENANT'S business rather than the shell's. shell-bars.css says so in
+       its own words: "`aside` is position:fixed with no width, so it is
+       SHRINK-TO-FIT: as wide as its widest content's MAX-content, with
+       nothing stopping it" -- and it records the last time a new tenant
+       forgot: a boneyard card with a title and a + SHELF button on one line
+       took the rail from 277px to 343px and put it over the drawing.
+
+       THESE FIELDS CAME OUT OF A FULL-WIDTH CARD, where a four-column grid
+       was right. Dropped into a rail unchanged they measured 1,396px -- the
+       whole page -- because the grid's max-content is four columns wide and
+       nothing was stopping it. Same failure, new tenant, one commit after
+       moving the rail here.
+
+       320px IS THE TOOL RAIL'S ORDER OF SIZE, so the two edges of the app
+       read as the same furniture rather than as one panel and one page. */
+    /* AND OPAQUE, which is the tenant's call for the same reason the width
+       is: it depends on what is BEHIND the panel. On MODEL the rails float
+       over a canvas and --surface-panel's 50% is deliberate -- the drafter
+       keeps seeing the drawing under the tools. Here the panel lands on the
+       type cards, and Movie asked for exactly that ("when tabs are open it
+       will cover most of the 3 small sections") -- but half-opaque it showed
+       the bungalow's section through the LEGAL LAND DESCRIPTION. Covering
+       something is only useful if you can read what is on top. */
+    #left-rail { width:320px; background-color:var(--surface-page); }
+    #left-rail .identity-grid { grid-template-columns:1fr; gap:0; }
+    #left-rail .field-label:first-child { margin-top:0; }
+    #left-rail .drop-slot { margin-top:0; padding:18px 12px; }
+    /* The freeform description is a textarea sized for a card column. */
+    #left-rail textarea.field { min-height:64px; }
     .stack-card { margin-top:16px; }
 
     /* ── THE TYPE PICKER: 20 / 80 ──────────────────────────────────────
@@ -242,9 +273,30 @@
   <main>
     <div class="notice" id="no-drawing-notice">Browser storage is unavailable &mdash; showing the office defaults, read-only.</div>
 
-    <section class="card" aria-label="Project identity">
-      <div class="card-title">Identity</div>
-      <div class="card-body">
+  <!-- THE PROJECT INFO RAIL (Movie, 23 Sep): "a little tab on left for
+       PROJECT INFO" -- "the site information lot legal desctiption etc" --
+       and, once the cards below had grown, "the PROJECT INFO area with the
+       drop zone should be on the first tab top left".
+
+       IT LEAVES THE MAIN AREA, which is the point of moving it rather than
+       copying it. The identity fields were a full-width card above the type
+       picker, so the three sections and the big one started a screen down and
+       the page scrolled. Movie, looking at that: "i plan to make the main
+       area space more compact for the other ones so they don't have to
+       scroll." This is the first of that.
+
+       THE DROP ZONE LEADS IT, as it did in the card: it is a SITE fact -- the
+       survey, the photos, the neighbour's PDF -- so it belongs with the lot
+       and the legal description.
+
+       SHUT BY DEFAULT, like MODEL's rails, and for the same reason: closed
+       costs the drafter no room at all, and ?left=1 reopens it. -->
+  <script>
+    window.DraftShellBars.rail({
+      side: 'left',
+      label: 'PROJECT INFO',
+      title: 'The project: who it is for, where it is, and the site\u2019s own papers',
+      html: `
         <!-- THE DROP BOX LEADS THE TAB. Movie, 23 Sep: "there is a drop box
              for file and photos we should put that in the PROJECT INFO tab
              near top of that area". It is a SITE fact -- the survey, the
@@ -283,9 +335,9 @@
           <div class="field-label">Rooms &mdash; from the plan&#8217;s stamps</div>
           <div class="zone-note" data-room-counts>Counted when the bone builds &mdash; the room stamps are the latest word.</div>
         </div>
-      </div>
-        </div>
-    </section>
+      </div>`,
+    });
+  </script>
 
     <!-- ── THE THREE TYPES: SMALL ON THE LEFT, BIG ON THE RIGHT ──────────
          Movie, 23 Sep: "we will need the 3 types SMALL on the left in a

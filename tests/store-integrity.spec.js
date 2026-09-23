@@ -105,7 +105,10 @@ test('two tabs on one drawing: neither the sheet nor the model erases the other'
   // other two, so it gets the same treatment: it may write its six keys and
   // nothing else.
   const project = await context.newPage();
-  await project.goto('/PROJECT.html');
+  // ?left=1 OPENS THE RAIL ON LOAD, which is what putting its state in the
+  // URL was for -- cheaper here than a click, and it exercises the same path
+  // a shared link would take.
+  await project.goto('/PROJECT.html?left=1');
   await expect(project.locator('[data-project-name]')).toBeVisible();
 
   await page.bringToFront();

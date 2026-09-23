@@ -449,6 +449,13 @@ test('a method chosen elsewhere is not clobbered by an unrelated PROJECT save',
     }, h.STORAGE_BUCKET);
 
     // An edit on this page that has nothing to do with the method.
+    //
+    // THE FIELD IS IN THE PROJECT INFO RAIL NOW (23 Sep), shut by default, so
+    // the tab comes first. This file has its OWN openProjectPage -- the one
+    // that picks a bungalow and waits on the pitch input -- and it never
+    // touches the identity fields, so patching the OTHER file's helper did
+    // not reach this test. I assumed it did and the run said otherwise.
+    await page.locator('#left-tab').click();
     const name = page.locator('[data-project-name]');
     await name.fill('BONEYARD ROAD');
     await name.dispatchEvent('change');

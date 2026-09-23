@@ -87,6 +87,12 @@ const MUTANTS = [
     find: '<script src="./shell-bars.js"></script>',
     with: '<script src="./shell-bars.js" defer></script>' },
 
+  { file: 'shell-bars.css',
+    name: 'the rail shell goes missing -- the tabs and panels fall back to '
+      + 'unstyled boxes on every page that has them',
+    find: '  #left-rail {',
+    with: '  #left-rail-DELETED {' },
+
   { file: 'shell-bars.js',
     name: 'the page row loses a chip -- the map of the job with a town '
       + 'missing, which is the row\'s oldest rule broken',
