@@ -150,6 +150,46 @@
      to 46, and the pairwise chrome check went red on `right-rail overlaps
      hint` -- its sixth catch, and the second one this file has produced from
      one distance being written down twice. */
+  /* THE BAR'S OWN TYPE, and this file has to name it. It reaches for
+     var(--font-ui) twelve times and var(--font-mono) five, and defined
+     NEITHER -- so the faces came from whichever page the sheet happened to be
+     linked into. MODEL declares them; PROJECT and SPECS do not, so all
+     seventeen resolved to nothing and the chips inherited the page's body
+     font. Same 11px on all three, but Barlow Condensed is narrower than
+     Barlow, so the model page's bar read visibly smaller than the other two.
+     Movie saw it side by side: "the MODEL one has smaller text it looks like,
+     can we make them all match".
+  
+     IT WAS A KNOWN GAP AND IT WAS LEFT OPEN TOO LONG. The first cut of this
+     file kept the move byte-pure so MODEL could be proved unchanged, which
+     meant taking no :root declarations that MODEL already had -- and the note
+     at the time said to give the fonts a home "when PROJECT adopts". PROJECT
+     adopted, then SPECS, and nobody did. A shared stylesheet that depends on
+     the page to define its own type is not shared, it is half-shared, which
+     is the state that looks fine on the page it came from.
+  
+     The values are MODEL's, unchanged, so that page renders identically and
+     every page linking this sheet now gets the same faces without declaring
+     anything. */
+  /* AND THE BAR'S OWN BOX MODEL, for the fonts' reason one comment down: a
+     shared sheet that leaves this to the page is not shared. MODEL.html has
+     no global `* { box-sizing:border-box }` and PROJECT and SPECS do, so the
+     same bar measured 41px on one page and 40px on the others -- the 1px top
+     border counted inside the height or outside it depending on whose
+     stylesheet the sheet happened to be linked into. --house-h says 40, so
+     border-box is the intent and content-box was the accident.
+  
+     SCOPED TO THE SHELL, not declared globally, because a `*` rule from this
+     file would reach the whole drawing page and change boxes that have
+     nothing to do with the bars. */
+  #strip, #strip *, #house-strip, #house-strip *,
+  #lower-left, #lower-left *, #readout, #readout *,
+  #file-guard, #file-guard *, #save-as, #save-as * { box-sizing: border-box; }
+
+  :root {
+    --font-ui:   'Barlow Condensed', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: 'DM Mono', ui-monospace, Menlo, Consolas, monospace;
+  }
   :root { --strip-h: 44px;
     /* THE HOUSE STRIP, along the foot: BUNGALOW / BILEVEL / DETACHED GARAGE /
        BONE and the one DELETE. Named for the same reason --strip-h is: the
