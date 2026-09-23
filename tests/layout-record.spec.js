@@ -82,9 +82,20 @@ async function inkAround(page, xIn, yIn, radiusIn) {
 // And over the whole sheet, which is how a sheet is asked whether it drew
 // anything at all -- see the test at the foot of this file for why a point
 // probe cannot answer that for a plan.
-async function sheetInk(page) {
+//
+// `drawingOnly` LEAVES THE TITLEBLOCK OUT, and it is not a nicety: the band
+// prints the SHEET NUMERAL, so two sheets showing an identical picture still
+// differ by a handful of pixels. A check comparing whole sheets for sameness
+// is defeated by the digit -- which is how the broken-filter mutant in
+// proto/layout-record-spec-mutants.js escaped its own test and was caught by
+// another one instead. The band's height comes off the shared module rather
+// than a literal, so a page that stops loading DraftTitleblock says so here.
+async function sheetInk(page, { drawingOnly = false } = {}) {
   const m = await sheetMetrics(page);
-  return inkIn(page, m.panX, m.panY, PW * m.zoom, PH * m.zoom);
+  const bandIn = drawingOnly
+    ? await page.evaluate(() => window.DraftTitleblock?.BAND_H_IN ?? null) : 0;
+  expect(bandIn, 'the titleblock module is not loaded').not.toBeNull();
+  return inkIn(page, m.panX, m.panY, PW * m.zoom, (PH - bandIn) * m.zoom);
 }
 
 function inkIn(page, x, y, w, h) {
@@ -195,9 +206,11 @@ test('every sheet still carries its drawing, not just its titleblock', async ({ 
   await openWithRecord(page);
   const sheets = [...new Set(SAVED.viewports.map(v => v.sheet))].sort((a, b) => a - b);
   const loaded = [];
+  const drawn = [];
   for (const sheet of sheets) {
     await page.locator(`[data-layout-sheet="${sheet}"]`).click();
     loaded.push(await sheetInk(page));
+    drawn.push(await sheetInk(page, { drawingOnly: true }));
   }
 
   // The same sheet with nothing on it: the floor every one of them must clear.
@@ -221,9 +234,18 @@ test('every sheet still carries its drawing, not just its titleblock', async ({ 
   // AND THEY ARE NOT ALL THE SAME PICTURE. The ratio above cannot see a page
   // whose sheet filter stopped filtering: every viewport would draw on every
   // sheet, which puts the ink UP and reads as five healthy sheets. What it
-  // cannot fake is five different numbers -- so the exact equality is the
-  // check, not a spread, because only that failure makes them identical.
-  expect(new Set(loaded).size,
+  // cannot fake is five different numbers -- so the check is exact equality
+  // rather than a spread, because only that failure makes them identical.
+  //
+  // COUNTED OVER THE DRAWING AREA ALONE, and the first version was not. It
+  // weighed whole sheets and the mutant walked straight through it: the
+  // titleblock prints the SHEET NUMERAL, so five identical pictures still
+  // came back as five different numbers and the mutation was caught by a
+  // different test than the one aimed at it. Measured, 23 Sep -- whole
+  // sheets 21,059 / 21,099 / 14,459 / 23,002 / 21,141; drawing areas 16,937
+  // / 16,902 / 11,102 / 19,655 / 17,765. Still five, and now for the reason
+  // the assertion claims.
+  expect(new Set(drawn).size,
     'every sheet drew the same thing -- the sheet filter is not filtering')
-    .toBeGreaterThan(1);
+    .toBe(sheets.length);
 });
