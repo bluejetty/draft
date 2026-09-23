@@ -66,10 +66,20 @@ test('the door head hangs the head drop below the top plate', async ({ page }) =
 // refuses band 1's FOUNDATION, because a detached garage's foundation is its
 // own and is the whole subject of this band.
 test('band 3 ignores a foundation edit in band 1', async ({ page }) => {
-  await page.goto('/PROJECT.html?type=detached');
-  await expect(page.locator('#detached-canvas')).toBeVisible();
-  const shoot = async () =>
-    (await page.locator('#detached-canvas').screenshot()).toString('base64');
+  // OPENS ON THE BAND IT EDITS, not the one it measures. One type is on screen
+  // at a time now (Movie, 23 Sep), and the FDN WALL HT this test types into
+  // belongs to band 1. repaint() paints every canvas whether its section is
+  // shown or not, so band 3's pixels are still the honest answer.
+  await page.goto('/PROJECT.html?type=bungalow');
+  await page.waitForFunction(
+    () => document.querySelector('#detached-canvas')?.paintedSection != null,
+    null, { timeout: 10000 });
+  // READ THE CANVAS, NOT THE SCREEN -- the lesson band 2's spec already
+  // recorded. An element screenshot needs the element visible AND is taken of
+  // the page as scrolled, so it turns "did band 3 repaint?" into "did the page
+  // scroll?". toDataURL answers the same for a hidden canvas as a shown one.
+  const shoot = () =>
+    page.evaluate(() => document.querySelector('#detached-canvas').toDataURL());
   const before = await shoot();
   const edgeBefore = await read(page, 'edgeDepth');
 
