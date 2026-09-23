@@ -330,6 +330,24 @@ test.describe('MODEL.html tier 1', () => {
       // here instead would have given one economy two sets of books.
       './bone-wallet.js',
       './premade-plans.js',
+      // tour.js joined for the RISING REVEAL (board #283), and by this list's
+      // own rule it is the kind of entry to grow by: it stops a rule having a
+      // second home. What this page uses is revealClipY() with REVEAL_MS and
+      // REVEAL_HOLD_MS beside it -- the eased clip the mask climbs on. Its own
+      // comment is the argument: "one eased clip height, shared by the 2D mask
+      // today and the 3D clip plane later (same choreography, same timing)".
+      // Written again here, the elevation and the 3D view would each own a
+      // curve, and the day the 3D lands they would disagree about the timing
+      // of the same presentation.
+      //
+      // IT IS NOT QUITE FREE, and the honest note is that it is not the
+      // dependency-less kind build-menu.js is. tour.js reaches for
+      // window.DraftRoomGrow in its room-stamp naming -- guarded, so it
+      // degrades rather than throws -- and this page loads no room-grow.js.
+      // The reveal path touches none of that code; the cost is a module
+      // carrying more than this page asks of it, which is cheaper than a
+      // second copy of the choreography.
+      './tour.js',
       // AND NOT FOR THE DEALER, which this page does not run. auto-windows.js
       // holds two things besides dealWindows: the rule that a window clears
       // the roof under it by 4" -- Movie, 21 Sep -- and the sampling that says
