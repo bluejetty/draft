@@ -3198,11 +3198,22 @@
       // of choosing is what comes after: "press the BONE/HOUSE, that house
       // with those characteristics / dimensions should be built".
       //
-      // IT REUSES THE FAMILY PRESS RATHER THAN WRITING buildType ITSELF. A
-      // family entry carries a type AND a garage plan, and the two are set
-      // together or the row lights nothing -- syncFamilyRow asks for both.
-      // A card that assigned buildType alone would choose a house and leave
-      // the garage saying something else.
+      // A CARD CHOOSES THE TYPE AND NOTHING ELSE, and the first version of
+      // this got that wrong. It reused the family press, which calls
+      // applyGaragePlan -- so clicking BUNGALOW to look at it SAVED "No
+      // attached garage on this project", a decision the drafter never made.
+      // Five specs went red and they were right to.
+      //
+      // The family row's own comment already ruled it: "A press says two
+      // things: which TYPE this drawing is and what its GARAGE is. They are
+      // separate keys because they are separate facts -- a 2 STOREY stays a
+      // 2 STOREY when the garage comes off." The CARD is the section; the ROW
+      // is the house. So the card sets the type and leaves the garage alone.
+      //
+      // The row then lights nothing until the drafter presses in it, because
+      // syncFamilyRow wants a garage plan as well as a type -- which is the
+      // behaviour that comment already asked for: "a bare type lights nothing
+      // until somebody presses".
       //
       // NON-DESTRUCTIVE, and this is the part worth being careful about. If
       // the live type already belongs to the family clicked, the card changes
@@ -3229,7 +3240,10 @@
         if (!first) return;
         buildType = first.type;
         methodPressedHere = true;
-        applyGaragePlan(planForEntry(first));
+        syncFamilyRow();
+        // showType() repaints straight after this, so the drawing follows the
+        // new type without a second pass.
+        save(`Build type set to ${first.type}.`);
       };
 
       typeCards.forEach(card => {

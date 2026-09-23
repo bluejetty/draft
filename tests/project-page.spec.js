@@ -358,22 +358,16 @@ test('a typed 0 lands the sill on the house sill, stored off MAIN FL', async ({ 
 test('a family press sets the building method, one at a time, and it saves',
   async ({ page }) => {
     await h.openModel(page);
-    // NOT openProjectPage() HERE, and the reason is the claim below. That
-    // helper CLICKS a type card, and since 23 Sep a card click chooses the
-    // type as well as showing it (Movie: "AND CHOOSE it too") -- so it would
-    // light a button before the assertion that nothing is lit.
-    await page.locator('[data-project-open]').click();
-    await page.waitForURL(/PROJECT\.html/);
+    await openProjectPage(page);
 
-    // A fresh drawing has been through no build row, so nothing glows --
-    // lighting a button would be the card answering for the drafter. A URL
-    // visit only SHOWS a type; choosing is a press, so this still holds on
-    // the page as it opens, and that is now part of the claim.
+    // NOTHING GLOWS YET, AND THE CARD CLICK ABOVE DOES NOT CHANGE THAT.
+    // Since 23 Sep a card press chooses the TYPE (Movie: "AND CHOOSE it
+    // too") -- but only the type. A button lights when the type AND the
+    // garage plan match an entry, and the card says nothing about a garage,
+    // so the row stays dark until the drafter presses in it. That is the
+    // rule the row's own comment asks for: "a bare type lights nothing
+    // until somebody presses".
     await expect(page.locator('.family-button[aria-pressed="true"]')).toHaveCount(0);
-
-    // Now the drafter chooses, which is what the rest of this test is about.
-    await page.locator('.type-card[data-type="bungalow"]').click();
-    await expect(page.locator('[data-detail-input="pitch"]')).toBeVisible();
 
     // THE BILEVEL FAMILY LIVES IN THE BILEVEL SECTION, so this press needs
     // that section open. Crossing over and back is the point of the test as
