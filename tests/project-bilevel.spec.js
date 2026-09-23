@@ -31,8 +31,23 @@ const { test, expect } = require('@playwright/test');
 // visibility check: it is set by the same statement that draws, so it cannot
 // be true before the drawing exists. A visible canvas proves nothing -- it is
 // visible while blank.
+// ONE TYPE IS OPEN AT A TIME (Movie, 23 Sep). Which one a test needs depends
+// on what it TYPES INTO, not on what it measures: repaint() paints every
+// canvas whether or not its section is on screen, and shootCanvas reads
+// toDataURL, which a hidden canvas answers exactly as a shown one does. So a
+// cross-band test opens on the band it EDITS and still reads the other's
+// pixels -- and it now proves something it could not prove before, that the
+// two bands share their numbers across a type switch rather than merely
+// sharing a page.
+async function openProjectOn(page, type) {
+  await page.goto(`/PROJECT.html?type=${type}`);
+  await page.waitForFunction(
+    () => document.querySelector('#bilevel-canvas')?.paintedSection != null,
+    null, { timeout: 10000 });
+}
+
 async function openProject(page) {
-  await page.goto('/PROJECT.html');
+  await page.goto('/PROJECT.html?type=bilevel');
   await page.waitForFunction(
     () => document.querySelector('#bilevel-canvas')?.paintedSection != null,
     null, { timeout: 10000 });
@@ -78,9 +93,16 @@ test('band 2 is wired and draws without error', async ({ page }) => {
 // exact second bungalow, the single most likely mistake in this wiring --
 // still leaves two unequal images. It passed the mutation and proved nothing.
 test('band 2 ignores a foundation edit in band 1', async ({ page }) => {
-  await openProject(page);
+  await openProjectOn(page, 'bungalow');
   const shoot = () => shootCanvas(page, '#bilevel-canvas');
   const before = await shoot();
+  // BAND 1'S OWN BEFORE-IMAGE, and the comment above is the reason it has to
+  // exist. This line used to be missing and the check below compared band 1's
+  // canvas against BAND 2's snapshot -- two different drawings, never equal,
+  // so the guard that says "otherwise this asserts nothing about band 2" was
+  // itself asserting nothing. The trap this file spells out in prose, three
+  // lines under the prose.
+  const detailBefore = await shootCanvas(page, '#detail-canvas');
 
   const fdn = page.locator('#sched-house').getByLabel('FDN WALL HT');
   await expect(fdn).toBeVisible();
@@ -88,7 +110,7 @@ test('band 2 ignores a foundation edit in band 1', async ({ page }) => {
   await fdn.press('Enter');
 
   // Band 1 moved -- otherwise this asserts nothing about band 2.
-  await expect.poll(() => shootCanvas(page, '#detail-canvas')).not.toEqual(before);
+  await expect.poll(() => shootCanvas(page, '#detail-canvas')).not.toEqual(detailBefore);
   // Band 2 did not. Its pour is the office default for the type, 5'-0".
   expect(await shoot()).toEqual(before);
 });
@@ -103,7 +125,7 @@ test('band 2 ignores a foundation edit in band 1', async ({ page }) => {
 // band 2 looking perfectly correct while showing the previous roof. A test that
 // only checked band 2 was non-blank would pass on that forever.
 test('a pitch change in band 1 moves band 2 too', async ({ page }) => {
-  await openProject(page);
+  await openProjectOn(page, 'bungalow');
   const shoot = () => shootCanvas(page, '#bilevel-canvas');
 
   const before = await shoot();

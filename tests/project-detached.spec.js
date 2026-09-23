@@ -14,7 +14,7 @@ const read = (page, key) =>
 test('band 3 is wired and draws without error', async ({ page }) => {
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
-  await page.goto('/PROJECT.html');
+  await page.goto('/PROJECT.html?type=detached');
   await expect(page.locator('#detached-canvas')).toBeVisible();
   const shot = (await page.locator('#detached-canvas').screenshot()).toString('base64');
   // A page error here is the failure this file exists for. fillBilevel once
@@ -30,7 +30,7 @@ test('band 3 is wired and draws without error', async ({ page }) => {
 // through to the HOUSE's live values, so this schedule would have read a 3"
 // slab and the bungalow's 8'-1 1/8" precut.
 test('band 3 reads the DETACHED GARAGE row, not the house', async ({ page }) => {
-  await page.goto('/PROJECT.html');
+  await page.goto('/PROJECT.html?type=detached');
   await expect(page.locator('#detached-canvas')).toBeVisible();
 
   // 0'-4" and 0'-10", not 4" and 10": formatArchitecturalInches always emits
@@ -53,7 +53,7 @@ test('band 3 reads the DETACHED GARAGE row, not the house', async ({ page }) => 
 // drop is 7'-8 5/8" -- which is what lets a 7'-0" overhead door into this wall
 // at all, and was the reason the row needed its own wall height.
 test('the door head hangs the head drop below the top plate', async ({ page }) => {
-  await page.goto('/PROJECT.html');
+  await page.goto('/PROJECT.html?type=detached');
   await expect(page.locator('#detached-canvas')).toBeVisible();
   expect(await read(page, 'doorHead')).toBe(`7'-8 5/8"`);
 });
@@ -66,10 +66,20 @@ test('the door head hangs the head drop below the top plate', async ({ page }) =
 // refuses band 1's FOUNDATION, because a detached garage's foundation is its
 // own and is the whole subject of this band.
 test('band 3 ignores a foundation edit in band 1', async ({ page }) => {
-  await page.goto('/PROJECT.html');
-  await expect(page.locator('#detached-canvas')).toBeVisible();
-  const shoot = async () =>
-    (await page.locator('#detached-canvas').screenshot()).toString('base64');
+  // OPENS ON THE BAND IT EDITS, not the one it measures. One type is on screen
+  // at a time now (Movie, 23 Sep), and the FDN WALL HT this test types into
+  // belongs to band 1. repaint() paints every canvas whether its section is
+  // shown or not, so band 3's pixels are still the honest answer.
+  await page.goto('/PROJECT.html?type=bungalow');
+  await page.waitForFunction(
+    () => document.querySelector('#detached-canvas')?.paintedSection != null,
+    null, { timeout: 10000 });
+  // READ THE CANVAS, NOT THE SCREEN -- the lesson band 2's spec already
+  // recorded. An element screenshot needs the element visible AND is taken of
+  // the page as scrolled, so it turns "did band 3 repaint?" into "did the page
+  // scroll?". toDataURL answers the same for a hidden canvas as a shown one.
+  const shoot = () =>
+    page.evaluate(() => document.querySelector('#detached-canvas').toDataURL());
   const before = await shoot();
   const edgeBefore = await read(page, 'edgeDepth');
 
@@ -90,7 +100,7 @@ test('band 3 ignores a foundation edit in band 1', async ({ page }) => {
 // all three deserve their own line, so the de-collision pass has to run here
 // too rather than being a thing bands 1 and 2 happen to have.
 test('band 3 labels do not overlap each other', async ({ page }) => {
-  await page.goto('/PROJECT.html');
+  await page.goto('/PROJECT.html?type=detached');
   await expect(page.locator('#detached-canvas')).toBeVisible();
   await page.waitForTimeout(400);
 

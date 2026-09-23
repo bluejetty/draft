@@ -8,9 +8,14 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
+// ONE TYPE IS OPEN AT A TIME (Movie, 23 Sep). The page opens on the first
+// card, DETACHED GARAGE, and everything this file drives is in the bungalow's
+// schedule -- so it selects that card, the way a drafter would. Arriving
+// through MODEL's button carries no ?type=, which is why this is a click.
 async function openProjectPage(page) {
   await page.locator('[data-project-open]').click();
   await page.waitForURL(/PROJECT\.html/);
+  await page.locator('.type-card[data-type="bungalow"]').click();
   await expect(page.locator('[data-detail-input="pitch"]')).toBeVisible();
 }
 
@@ -92,9 +97,13 @@ test('GRADE BEAM replaces the foundation wall: 8" thick, 32" floor, no footing',
   await expect(page.locator('[data-sched-row="footingWidth"]')).toBeHidden();
   await expect(page.locator('[data-sched-row="footingDepth"]')).toBeHidden();
 
-  // And the space under the house is a crawl space now, not a basement.
-  await expect(page.locator('th[data-section-col="basementClg"]'))
-    .toHaveText('CRAWL CLG HT');
+  // THE CRAWL-SPACE WORDING HAS NO SURFACE ANY MORE. Movie, 17 Sep: on a
+  // grade beam "it will become a 'crawl space' rather than a 'basement'" --
+  // and the ONLY place that word ever appeared was the section table's
+  // column header, which he cut on 23 Sep. The rule is not wrong, it has
+  // nowhere left to be shown, so the assertion goes with the table rather
+  // than being pointed at something that does not say it. Recorded in
+  // SPEC-project-shell.md: it wants a home when GARAGE/HOUSE INFO lands.
 
   // The floor is a refusal, not a clamp: a typed 2'-0" leaves the cell where
   // it was and says why.

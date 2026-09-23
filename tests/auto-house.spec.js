@@ -126,6 +126,9 @@ test('a wider saved footing width recenters the footing rings', async ({ page })
   await expect(fdn.locator('.level-edge-edit[title^="Footing width"]')).toHaveCount(0);
   await page.locator('[data-project-open]').click();
   await page.waitForURL(/PROJECT\.html/);
+  // The footing width lives in the bungalow's schedule, and the page opens on
+  // DETACHED GARAGE now -- one type on screen at a time.
+  await page.locator('.type-card[data-type="bungalow"]').click();
   const width = page.locator('[data-detail-input="footingWidth"]');
   await width.fill('24');
   await width.dispatchEvent('change');

@@ -216,6 +216,120 @@ whoever commits the mutant.
 Neither is a regression — both sat at the same contrast on the white page.
 What changed is that there is now somewhere for them to go.
 
+## The main area: three small, one big
+
+Movie, 23 Sep: *"we will need the 3 types SMALL on the left in a columns and
+depending on which they click on, that one will show up large size to the
+right"*, at *"about 20% of the width and leave 80% for the full size
+section"*, and *"i need the modified bilevel and detached garage as their own
+little version and then click to big"*.
+
+**The rails float OVER this, they do not push it.** Movie, same day: *"when
+tabs are open it will cover most of the 3 small sections"*. That is why the
+main area is a plain two-column grid of its whole width rather than a
+three-column one holding gutters open for the rails — nothing here has to
+make room for them, and the small column is the part they are allowed to
+cover.
+
+**The miniature is the same drawing, not a picture of it.** Each small canvas
+is painted from the SAME builders and the SAME live values as the big one;
+`paintSections` fits whatever it is handed to the canvas it is given, so a
+300×220 thumbnail costs one more call and nothing else. MODEL's own note on
+thumbnails says why this matters: *"a miniature that can disagree with the
+plan it claims to show"* is the defect to avoid.
+
+**Repaint AFTER the swap, never before.** Every label on these sections is an
+absolutely-positioned element placed from a measured anchor, and a section
+that is `hidden` when it is painted measures zero — so its labels all stack
+in the top-left corner. Selecting a type therefore shows the section first and
+repaints second. A test watches for exactly this: it counts labels sitting on
+the wrap's own origin, and expects none.
+
+**The URL is the source of truth**, the same rule the rails follow. The
+opening state goes through the picker rather than around it, so the first
+paint is produced by the path every later click takes.
+
+### The page got a page wider, and that is temporary
+
+`main` went from 1180px to 1400px. The band inside a section is a fixed 600px
+drawing with a schedule column either side and a 1090px max-width; at 80% of
+1180 the stage offered 940 and the schedules answered by wrapping every label
+into a tower. **Those two schedule columns are the GARAGE INFO and HOUSE INFO
+content and they are moving into the rails** — once they do, the stage holds
+only the drawing and can be any width. The extra 220px is what keeps them
+readable until then, not a design decision.
+
+## What the cull cost, said out loud
+
+Movie, 23 Sep, on the ZONE HEIGHTS and SECTION TABLE cards: *"can we just
+delete all that i don't think we need it"*, confirmed against a screenshot he
+circled. The drop box moved to the top of PROJECT INFO.
+
+**Neither deletion cost data or a derive.** Grade is still typeable through
+`GRADE OFF FDN TOP`, the garage sill through `GARAGE SILL OFF FOUNDATION
+SILL`, and five definitions that lived inside the zone block — `houseSillFt`,
+`attachedOffsetFt`, `derivedAttachedOffsetFt`, `roofHeelIn`, `gradeOffsetFt`
+and their derives — were never the card. They are facts about the building
+that the card happened to show, and showing a number is not owning it. They
+stayed where the block stood, because every one is a const arrow reached first
+by the boot calls below it and hoisting them would be a second change riding
+along with a deletion.
+
+**It did cost four guards, and this is the list** so that nobody has to
+rediscover it:
+
+| gone | what it held |
+|---|---|
+| `tests/section-table.spec.js` | the table UI: cell edit, inheritance, the derived notes |
+| *zone heights edit both ways against the elevation datum and persist* | the local-elevation / off-MAIN-FL round trip |
+| *grade derives from the attached garage beam and drives the detached garage until overridden* | the grade derive **through the UI**, and the override |
+| *a zone height edit moves the garage in the drawing, not just in the box* | that a typed zone reaches the section |
+
+`proto/section-table-harness.js` (937 lines, 89 checks, 46 mutations) is
+untouched — it reads `project-page.js`, so it guards the NUMBERS and always
+did. What went is the UI half. **The grade derive is the real loss**: the rule
+still runs and nothing drives it end to end any more.
+
+### A fifth guard, and a behaviour that lost its only surface
+
+Found by CI on the branch, not by the sweep: `tests/wall-type-pickers.spec.js`
+asserted that `th[data-section-col="basementClg"]` reads **CRAWL CLG HT**.
+
+Movie, 17 Sep, on a grade beam: *"it will become a 'crawl space' rather than a
+'basement'"*. That word had exactly ONE surface — the section table's column
+header, through `columnLabel()` — and the table is gone. **The rule is not
+wrong; it has nowhere left to be shown.** So the assertion retires with the
+table rather than being pointed at something that does not say it, and the
+wording wants a home when GARAGE INFO / HOUSE INFO land.
+
+`columnLabel` went with it, along with four more functions the cut left
+stranded — `derivedText`, `cellNote`, `unitFormat`, `unitParse`, 71 lines in
+all. Every one had `fillTable` as its only caller. They were still in the file
+after the first pass because that pass removed the RENDERING and stopped;
+finding them meant asking which names still had a reader, not which block they
+sat in.
+
+### The sweep that missed three files
+
+Four specs were updated for "one type on screen at a time". The right number
+was seven, and CI found the other three. The sweep was scoped to
+`tests/project-*.spec.js` — five files — when the question was *which specs
+reach PROJECT.html*, which is fourteen. **A filename prefix is not a
+dependency.** `tests/wall-type-pickers.spec.js` even carried its own byte-for-
+byte copy of the `openProjectPage` helper that had already been fixed
+elsewhere.
+
+### And one datum that had to be converted, not swapped
+
+Three surviving tests read the garage sill off `[data-zone-offset]`, which
+measured from MAIN FL. The box that survived measures SILL TO SILL, one
+main-floor package lower — 12⅝" apart. Two of the three are DIFFERENCES
+between two readings, so the datum cancels and they are unchanged. The third
+puts the number into a sum, so it converts back explicitly. A silent swap
+would have put that deck out by exactly one floor package and still read
+green, which is this repo's oldest trap: a span measured correctly tells you
+its length and nothing about what it is.
+
 ## THE SHELL IS A MECHANISM, NOT MODEL'S PANELS MOVED OVER
 
 This is the constraint that decides the whole design, and it is Movie's:

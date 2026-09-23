@@ -19,9 +19,21 @@ const P = (() => {
   return api;
 })();
 
+// Switching the open type the way a drafter does -- the small card, not a
+// reload -- so a test that has to touch two bands crosses between them on the
+// page's own mechanism.
+const selectType = (page, type) =>
+  page.locator(`.type-card[data-type="${type}"]`).click();
+
+// ONE TYPE IS OPEN AT A TIME NOW. The PROJECT page opens on the first card
+// in Movie's order -- DETACHED GARAGE -- so a test that drives the bungalow's
+// detail has to select it, exactly as a drafter would. Arriving through
+// MODEL's button carries no ?type=, which is why this is a click and not a
+// query string: it is the same path a person takes.
 async function openProjectPage(page) {
   await page.locator('[data-project-open]').click();
   await page.waitForURL(/PROJECT\.html/);
+  await page.locator('.type-card[data-type="bungalow"]').click();
   await expect(page.locator('[data-detail-input="pitch"]')).toBeVisible();
 }
 
@@ -55,120 +67,6 @@ test('a build-default edit redraws the detail — the anchors move with the part
   // Garbage never sticks: the box snaps back to the stored number.
   await commitDetail(page, 'pitch', 'steep');
   await expect(page.locator('[data-detail-input="pitch"]')).toHaveValue('4');
-});
-
-test('zone heights edit both ways against the elevation datum and persist', async ({ page }) => {
-  await h.openModel(page);
-  // The drafter's usual reference: MAIN FL reads 100'-0". A fresh model has
-  // not saved a file yet, so build the envelope if needed.
-  await page.evaluate(async bucket => {
-    const file = await window.SharedFileStore.loadSharedFile(bucket);
-    const drawing = file ? JSON.parse(await file.text())
-      : { version: 1, levels: [{ id: 3, name: 'MAIN FL', elev: 0 }] };
-    drawing.elevationDatum = 100;
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(drawing)], file?.name || 'model-drawing.json',
-        { type: 'application/json' }), bucket);
-  }, h.STORAGE_BUCKET);
-  await page.goto('/PROJECT.html');
-
-  // Offset first: -2'-0" off MAIN FL reads locally as 98'-0".
-  const offset = page.locator('[data-zone-offset="attachedGarage"]');
-  await offset.fill(`-2'-0"`);
-  await offset.dispatchEvent('change');
-  await expect(page.locator('[data-zone-local="attachedGarage"]')).toHaveValue(`98'-0"`);
-
-  // Local the other way: 97'-6" works out to -2'-6" off MAIN FL.
-  const local = page.locator('[data-zone-local="attachedGarage"]');
-  await local.fill(`97'-6"`);
-  await local.dispatchEvent('change');
-  await expect(offset).toHaveValue(`-2'-6"`);
-
-  const saved = await h.savedDrawing(page);
-  expect(saved.zoneHeights.zones.attachedGarage.offsetFt).toBeCloseTo(-2.5, 5);
-  expect(saved.zoneHeights.zones.bilevel.offsetFt).toBe(0);
-
-  await page.reload();
-  await expect(page.locator('[data-zone-offset="attachedGarage"]')).toHaveValue(`-2'-6"`);
-  await expect(page.locator('[data-zone-local="attachedGarage"]')).toHaveValue(`97'-6"`);
-});
-
-test('grade derives from the attached garage beam and drives the detached garage until overridden', async ({ page }) => {
-  await h.openModel(page);
-  await page.evaluate(async bucket => {
-    const file = await window.SharedFileStore.loadSharedFile(bucket);
-    const drawing = file ? JSON.parse(await file.text())
-      : { version: 1, levels: [{ id: 3, name: 'MAIN FL', elev: 0 }] };
-    drawing.elevationDatum = 100;
-    await window.SharedFileStore.saveSharedFile(
-      new File([JSON.stringify(drawing)], file?.name || 'model-drawing.json',
-        { type: 'application/json' }), bucket);
-  }, h.STORAGE_BUCKET);
-  await page.goto('/PROJECT.html');
-
-  // GRADE IS NO LONGER A NUMBER OF ITS OWN. It used to default to a flat
-  // 1'-0" below the foundation top; an attached garage's beam has to sit 8"
-  // above grade, so the garage decides where grade is and the house takes
-  // it. Grade is 1'-2" below the garage's top of concrete, and the garage's
-  // sill plate is inline with the house's on the grade beam this fixture
-  // draws, so it comes out 1'-2" below the foundation top.
-  //
-  // IT WAS 3'-2" UNTIL 16 SEP, when the grade beam went inline -- the
-  // bungalow's garage used to drop 2'-0" and carry grade down with it.
-  // Movie, asked what that does to the house's height out of the ground:
-  // "grade should be 14\" below the lowest sill plate". Inline means the
-  // house's own sill IS the lowest, so the house sits 1'-2" out rather than
-  // 3'-2", and a FROST WALL still drops and still takes grade with it.
-  //
-  // 1'-2", not the 8" MINIMUM, and the two are different jobs. Movie: "if
-  // the house is higher out of the ground it is easier to regrade afterwards
-  // if there is space... move it to 1'-2" grade to top of concrete so they
-  // have 6" to slope around the perimeter". 8" is the line a drafter cannot
-  // type past; 1'-2" is where it is drawn; the 6" between them is the room
-  // the site has to fall away from the building.
-  //
-  // Two assertions, deliberately. The first pins the ARITHMETIC against the
-  // module's own constants, so moving either one fails here naming which.
-  // The second pins what the box actually READS, because a derive that
-  // computes correctly and renders wrong is still wrong. Asserting only the
-  // second would pass with 2'-8" hardcoded anywhere in the chain.
-  expect(-(P.GRADE_BELOW_CONCRETE_IN / 12)).toBeCloseTo(-14 / 12, 6);
-  // And the drawn depth must stay clear of the minimum, or the default would
-  // be a value the page itself refuses.
-  expect(P.GRADE_BELOW_CONCRETE_IN).toBeGreaterThan(P.GRADE_MIN_BELOW_CONCRETE_IN);
-  await expect(page.locator('[data-grade-offset]')).toHaveValue(`-1'-2"`);
-  // Local reads off the datum: MAIN FL 100'-0", the foundation top one
-  // main-floor assembly (11 7/8" + 3/4") below it, grade 1'-2" under that.
-  await expect(page.locator('[data-grade-local]')).toHaveValue(`97'-9 3/8"`);
-  // Detached garage derives until overridden: beam top 1'-2" above grade. It
-  // moved with grade -- which is the point: the attached garage sets grade,
-  // and the detached one is measured off grade, so a chain runs from the
-  // attached garage's floor all the way to the detached garage's beam.
-  //
-  // 1'-2", NOT the 8" this asserted until 5 Sep. Movie put every garage
-  // foundation at the house's own height out of the ground, so a detached beam
-  // tops out level with the house instead of 6" under it. This assertion is
-  // what caught the change -- it failed by exactly the 6".
-  const detachedLocal = page.locator('[data-zone-local="detachedGarage"]');
-  await expect(detachedLocal).toHaveValue(`98'-11 3/8"`);
-
-  // Dropping grade a foot drops the derived garage the same foot.
-  await page.locator('[data-grade-offset]').fill(`-2'-0"`);
-  await page.locator('[data-grade-offset]').dispatchEvent('change');
-  await expect(detachedLocal).toHaveValue(`98'-1 3/8"`);
-  await expect(page.locator('[data-grade-local]')).toHaveValue(`96'-11 3/8"`);
-
-  // An explicit garage height is an override — later grade edits leave it.
-  await detachedLocal.fill(`96'-0"`);
-  await detachedLocal.dispatchEvent('change');
-  await expect(page.locator('[data-zone-offset="detachedGarage"]')).toHaveValue(`-4'-0"`);
-  await page.locator('[data-grade-offset]').fill(`-1'-0"`);
-  await page.locator('[data-grade-offset]').dispatchEvent('change');
-  await expect(detachedLocal).toHaveValue(`96'-0"`);
-
-  const saved = await h.savedDrawing(page);
-  expect(saved.zoneHeights.gradeOffsetFt).toBeCloseTo(-1, 5);
-  expect(saved.zoneHeights.zones.detachedGarage.offsetFt).toBeCloseTo(-4, 5);
 });
 
 // THE POUR AND THE PLATE ARE TWO NUMBERS. Movie, 16 Sep, reading the label
@@ -297,7 +195,7 @@ test('the walls that were standing on the storey-s height come up with it',
           { type: 'application/json' }), bucket);
     }, { bucket: 'model-drawing', d: FIXTURE });
 
-    await page.goto('/PROJECT.html');
+    await page.goto('/PROJECT.html?type=bungalow');
     await expect(page.locator('[data-detail-input="pitch"]')).toBeVisible();
     await commitDetail(page, 'wallHeight-3', `9'-2"`);
     await expect(page.locator('#status')).toContainText('saved');
@@ -324,46 +222,6 @@ test('the walls that were standing on the storey-s height come up with it',
       .toEqual(FIXTURE.walls.map(w => `${w.id}:${w.start.x},${w.end.x}:${w.wallType}`));
     expect(after.levels).toEqual(FIXTURE.levels);
   });
-
-// A ZONE HEIGHT EDIT HAS TO REDRAW, and until 5 Sep it did not. Movie's whole
-// point about the attached garage: "it's 'quasi attached' only because it will
-// move up and down as the user enters new heights for it". The garage section
-// is built from attachedOffsetFt(), which reads the zone, so the number and
-// the drawing are the same fact -- but the zone rows' commit called only
-// fillZones(), while the GRADE LEVEL row beside them called fillZones() AND
-// repaint(). So the boxes updated, the file saved, and the garage stayed where
-// it was until something else happened to repaint.
-//
-// Measured on the grey label rather than the canvas: (PILE) rides the garage
-// section, so if the section moves the label moves with it. Asserting the
-// input's value would have passed the whole time -- the value was never the
-// broken half.
-test('a zone height edit moves the garage in the drawing, not just in the box', async ({ page }) => {
-  await h.openModel(page);
-  await openProjectPage(page);
-
-  // RELATIVE TO THE CANVAS, not to the page. The first version of this check
-  // measured the label's page Y and passed on a build where nothing redrew:
-  // showStatus() adds a line of text above the drawing, and that shifts every
-  // absolute Y by more than the tolerance all by itself. A check that a save
-  // message appeared, wearing the costume of a check that the garage moved.
-  const pileY = async () => {
-    const tag = await page.locator('.detail-tag', { hasText: '(PILE)' }).first().boundingBox();
-    const box = await page.locator('canvas').first().boundingBox();
-    return tag.y - box.y;
-  };
-  const before = await pileY();
-
-  // Four feet down: far more than the couple of pixels of travel the small
-  // section gives a foot, so a redraw is unmistakable and a stale drawing
-  // cannot pass by rounding.
-  const offset = page.locator('[data-zone-offset="attachedGarage"]');
-  await offset.fill(`-4'-0"`);
-  await offset.dispatchEvent('change');
-  await expect(page.locator('#status')).toContainText('saved');
-
-  expect(Math.abs(await pileY() - before)).toBeGreaterThan(2);
-});
 
 // THE GARAGE'S DROP BRANCHES ON THE BUILD TYPE, and until NEW-5 landed it
 // could not. Movie, 4 Sep: a BILEVEL puts the garage sill LEVEL with the
@@ -408,8 +266,14 @@ async function attachedOffsetWithType(page, type, foundation = 'frostwall') {
       new File([JSON.stringify(drawing)], file?.name || 'model-drawing.json',
         { type: 'application/json' }), bucket);
   }, [h.STORAGE_BUCKET, type, foundation]);
-  await page.goto('/PROJECT.html');
-  return page.locator('[data-zone-offset="attachedGarage"]').inputValue();
+  await page.goto('/PROJECT.html?type=bungalow');
+  // THE ZONE CARD IS GONE (Movie, 23 Sep) and this box is what is left. It
+  // reads SILL TO SILL -- against the house's foundation sill -- where the
+  // zone row read against MAIN FL, one main-floor package higher. Both
+  // assertions below are DIFFERENCES between two of these, so the datum
+  // cancels and they are unchanged; the one absolute expectation moved with
+  // the datum and says so.
+  return page.locator('[data-detail-input="garageOffset"]').inputValue();
 }
 
 const offsetFt = text => {
@@ -443,9 +307,10 @@ test('on a grade beam the garage sill is inline on either build type', async ({ 
   const bilevel = await attachedOffsetWithType(page, 'bilevel', 'gradebeam');
 
   expect(offsetFt(bungalow)).toBeCloseTo(offsetFt(bilevel), 5);
-  // And inline means the HOUSE SILL, not merely "the same as each other":
-  // one main-floor package below MAIN FL, which is where the house bears.
-  expect(offsetFt(bungalow)).toBeCloseTo(-(11.875 + 0.75) / 12, 5);
+  // And inline means the HOUSE SILL, not merely "the same as each other".
+  // Sill to sill that is ZERO -- which is the same claim the old MAIN-FL
+  // datum made as -(11.875 + 0.75)/12, said in the datum the box now uses.
+  expect(offsetFt(bungalow)).toBeCloseTo(0, 5);
 });
 
 // THE GARAGE'S TYPED NUMBER READS SILL TO SILL. Movie, 16 Sep: "lets make it
@@ -454,7 +319,7 @@ test('on a grade beam the garage sill is inline on either build type', async ({ 
 // foundation sill, and the two MAIN FL rows (sill and the floor row that
 // never held a floor) retired with the datum change.
 test('the garage sill reads off the foundation sill and the MAIN FL rows are gone', async ({ page }) => {
-  await page.goto('/PROJECT.html');
+  await page.goto('/PROJECT.html?type=bungalow');
   const rows = label => page.locator('#sched-garage .sched-row')
     .filter({ has: page.locator('.sched-name', { hasText: label }) });
   await expect(rows('Garage sill off foundation sill')).toHaveCount(1);
@@ -499,9 +364,15 @@ test('a family press sets the building method, one at a time, and it saves',
     // lighting a button would be the card answering for the drafter.
     await expect(page.locator('.family-button[aria-pressed="true"]')).toHaveCount(0);
 
+    // THE BILEVEL FAMILY LIVES IN THE BILEVEL SECTION, so this press needs
+    // that section open. Crossing over and back is the point of the test as
+    // much as the press is: "one at a time" is a claim about two bands, and
+    // it is now also a claim that the choice survives the switch between them.
+    await selectType(page, 'bilevel');
     await page.locator('[data-family-entry="bilevel-garage"]').click();
     await expect(page.locator('[data-family-entry="bilevel-garage"]'))
       .toHaveAttribute('aria-pressed', 'true');
+    await selectType(page, 'bungalow');
 
     // IT REACHED THE FILE, not just the button. This page's save merges its
     // own keys onto the stored drawing, so a key it does not own is dropped
@@ -521,12 +392,12 @@ test('a family press sets the building method, one at a time, and it saves',
     const foundation = page.locator('[data-detail-input="garageFoundationType"]');
     await foundation.selectOption('frostwall');
     await foundation.dispatchEvent('change');
-    const offset = await page.locator('[data-zone-offset="attachedGarage"]').inputValue();
+    const offset = await page.locator('[data-detail-input="garageOffset"]').inputValue();
 
     await page.locator('[data-family-entry="bungalow-garage"]').click();
     await expect(page.locator('[data-family-entry="bilevel-garage"]'))
       .toHaveAttribute('aria-pressed', 'false');
-    expect(await page.locator('[data-zone-offset="attachedGarage"]').inputValue(),
+    expect(await page.locator('[data-detail-input="garageOffset"]').inputValue(),
       'the garage sill did not follow the method change')
       .not.toBe(offset);
 

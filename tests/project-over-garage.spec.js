@@ -23,7 +23,7 @@ const OVER = LA.defaultLevelAssembly('overGarage');
 
 async function openProject(page) {
   await h.openModel(page);
-  await page.goto('/PROJECT.html');
+  await page.goto('/PROJECT.html?type=bungalow');
   await expect(page.locator('[data-detail-input="pitch"]')).toBeVisible();
 }
 
@@ -121,12 +121,20 @@ test('the press adds the 20" package and lands its deck on the 2nd floor', async
   // NULL MEANS DERIVED, so the stored zone cannot be read as zero -- the
   // garage sits below MAIN FL by default and treating that as flush is how
   // this check would "pass" two feet out. The page's own box says the number.
-  const offsetText = await page.locator('[data-zone-offset="attachedGarage"]').inputValue();
+  // THE ZONE CARD IS GONE (Movie, 23 Sep). The box that survived reads SILL
+  // TO SILL, against the house's foundation sill; this sum needs the offset
+  // from MAIN FL, which is one main-floor package higher. Converted below
+  // rather than swapped in place -- the two datums differ by 12 5/8" and a
+  // silent swap would put this deck out by exactly that and still read green.
+  const offsetText = await page.locator('[data-detail-input="garageOffset"]').inputValue();
   const [, sign, feet, inches] = offsetText.match(/(-?)(\d+)'-(\d+(?:\s\d+\/\d+)?)"/);
   const inchFt = inches.split(' ').reduce((sum, part) => sum
     + (part.includes('/') ? part.split('/')[0] / part.split('/')[1] : Number(part)), 0) / 12;
-  const sillFt = (sign === '-' ? -1 : 1) * (Number(feet) + inchFt);
+  const sillToSillFt = (sign === '-' ? -1 : 1) * (Number(feet) + inchFt);
   const house = LA.defaultLevelAssembly('floor');
+  // Back to the MAIN FL datum: the house's foundation sill is one main-floor
+  // package below MAIN FL, so that package is what separates the two.
+  const sillFt = sillToSillFt - (house.joistDepthIn + house.sheathingIn) / 12;
   const deckFt = table.mainWallHeightFt + sillFt + (OVER.joistDepthIn + OVER.sheathingIn) / 12;
   // The HOUSE row is `live` -- it reads the drawing's own assemblies rather
   // than a stored row, so the deck it has to meet comes from there.

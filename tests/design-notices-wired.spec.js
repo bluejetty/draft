@@ -21,7 +21,9 @@ const h = require('./helpers');
 // be built as drawn." That sentence is what this test drives.
 test('the garage door head notice appears only when the wall cannot clear a door',
   async ({ page }) => {
-    await page.goto('/PROJECT.html');
+    // The garage schedule this drives belongs to the bungalow section, and one
+    // type is on screen at a time now. A direct visit can just ask for it.
+    await page.goto('/PROJECT.html?type=bungalow');
     const notice = page.locator('#garage-door-head-notice');
     const wall = page.locator('#sched-garage .sched-row')
       .filter({ has: page.locator('.sched-name', { hasText: 'Garage wall height' }) })
