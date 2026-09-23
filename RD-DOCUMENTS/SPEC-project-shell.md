@@ -426,7 +426,21 @@ and supplies its own content. "Share the chrome" would put DRAFTING TOOLS on
 the PROJECT page; "share the shell and pass in what goes inside" is the one
 that works.
 
-## The open decision: copy or extract
+## The open decision: copy or extract — **ANSWERED, 23 Sep: extract**
+
+> *"i think extract to shared module sounds like a good idea whats your
+> opinion? we have time to do it now"* — Movie
+
+And the brief grew in the same conversation, from "PROJECT too" to SIX pages:
+Construction Layout, SPECS, and REAL ESTATE PLANS and ESTIMATES when they
+exist. **See `SPEC-shared-shell.md`**, which supersedes this section and
+carries the table of who wears what, the ruling that the instruments belong to
+every drawing page rather than to MODEL, and the ruling that the bar owns the
+BONE while the page owns what pressing it does.
+
+The record below is left as it stood when the question was still open.
+
+## The open decision, as it stood
 
 The bars and rails are inline in `MODEL.html` — the strip at `:1906`, the page
 row at `:1739`, the rails at `:1662` and `:1708`. Copying them into PROJECT is
