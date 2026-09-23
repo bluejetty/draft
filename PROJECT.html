@@ -5,6 +5,42 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <title>Draft — Project</title>
+  <!-- COLOUR BEFORE ANYTHING PAINTS. palette.js is a table with two
+       consumers -- toCSS() for the stylesheet and resolve() for the
+       painters -- so it has to be defined before the boot script below
+       applies it and before the section canvases pick their inks. -->
+  <script src="./palette.js"></script>
+  <script>
+    // THE SKIN IS ONE CHOICE ACROSS THE WHOLE APP, not one per page. MODEL
+    // stores the drafter's pick under `draft-skin` and reads ?theme=/?mode=
+    // as a per-visit override; this page reads the SAME key the SAME way, so
+    // walking from the model space to the project area does not change the
+    // lights. Defaults match MODEL's -- ruff, night.
+    //
+    // Synchronous, and in the head ON PURPOSE. The stylesheet below is
+    // written entirely in --role tokens, so between parse and boot the page
+    // would have no colour at all; applying here means the first frame the
+    // browser paints is already skinned. This page has no switcher strip yet,
+    // so it only READS the choice -- MODEL owns writing it.
+    (() => {
+      const P = window.DraftPalette;
+      const params = new URLSearchParams(location.search);
+      const stored = (() => {
+        try { return JSON.parse(localStorage.getItem('draft-skin') || 'null') || {}; }
+        catch { return {}; }
+      })();
+      const pick = (name, allowed, fallback) => {
+        const asked = params.get(name);
+        if (asked && allowed.includes(asked)) return asked;
+        if (asked) {
+          console.warn(`PROJECT: unknown ${name} "${asked}"; using ${fallback}. `
+            + `Known: ${allowed.join(', ')}`);
+        }
+        return allowed.includes(stored[name]) ? stored[name] : fallback;
+      };
+      P.apply(document, pick('theme', P.THEMES, 'ruff'), pick('mode', P.MODES, 'night'));
+    })();
+  </script>
   <script src="./shared-file-store.js"></script>
   <script src="./formatters.js"></script>
   <script src="./drawing-format.js"></script>
@@ -21,30 +57,30 @@
   <script src="orientation-guard.js"></script>
   <style>
     * { box-sizing:border-box; }
-    body { margin:0; min-height:100vh; background:#f5f5f4; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; }
-    .topbar { height:52px; display:flex; align-items:center; gap:14px; padding:0 20px; border-bottom:1px solid rgba(29,31,32,.16); background:#fff; }
+    body { margin:0; min-height:100vh; background:var(--surface-page); color:var(--ink-primary); font-family:'Barlow',system-ui,sans-serif; }
+    .topbar { height:52px; display:flex; align-items:center; gap:14px; padding:0 20px; border-bottom:1px solid var(--edge-panel); background:var(--surface-panel); }
     .home { display:block; }
     main { width:min(1180px, calc(100vw - 32px)); margin:30px auto 48px; }
-    .intro { max-width:720px; margin:7px 0 0; color:rgba(29,31,32,.63); font-size:14px; line-height:1.5; }
-    .notice { display:none; margin-top:18px; padding:10px 12px; border-left:3px solid #a06035; background:rgba(160,96,53,.08); color:rgba(29,31,32,.68); font-size:12px; line-height:1.45; }
+    .intro { max-width:720px; margin:7px 0 0; color:var(--ink-secondary); font-size:14px; line-height:1.5; }
+    .notice { display:none; margin-top:18px; padding:10px 12px; border-left:3px solid #a06035; background:rgba(160,96,53,.08); color:var(--ink-secondary); font-size:12px; line-height:1.45; }
     .notice.visible { display:block; }
     .columns { display:grid; grid-template-columns:300px minmax(0,1fr) 300px; gap:16px; align-items:start; margin-top:22px; }
-    .card { border:1px solid rgba(29,31,32,.17); background:#fff; }
-    .card-title { padding:9px 12px; border-bottom:1px solid rgba(29,31,32,.12); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:#5980a6; }
+    .card { border:1px solid var(--edge-panel); background:var(--surface-panel); }
+    .card-title { padding:9px 12px; border-bottom:1px solid var(--edge-panel); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--accent-mark); }
     .card-body { padding:12px; }
-    .field-label { margin-top:11px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:rgba(29,31,32,.55); }
+    .field-label { margin-top:11px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-secondary); }
     .field-label:first-child { margin-top:0; }
-    .field { width:100%; height:30px; margin-top:4px; border:1px solid rgba(29,31,32,.25); background:#fafafa; padding:5px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; outline:none; }
-    .field:hover, .field:focus { border-color:#5980a6; background:rgba(89,128,166,.07); }
+    .field { width:100%; height:30px; margin-top:4px; border:1px solid var(--edge-panel); background:var(--surface-chip); padding:5px 8px; color:var(--ink-primary); font-family:'Barlow',system-ui,sans-serif; font-size:12px; outline:none; }
+    .field:hover, .field:focus { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 7%, transparent); }
     textarea.field { height:auto; resize:vertical; line-height:1.45; }
     .legal-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:4px; }
     .legal-grid input { margin-top:0; }
     .detail-wrap { position:relative; margin:10px auto 4px; }
     .detail-wrap canvas { display:block; }
-    .detail-input { position:absolute; transform:translate(-50%,-50%); width:64px; height:22px; border:1px solid rgba(29,31,32,.3); background:#fff; color:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; outline:none; }
-    .detail-input:hover, .detail-input:focus { border-color:#5980a6; background:rgba(89,128,166,.08); }
-    .detail-chip { position:absolute; transform:translate(-50%,-50%); padding:2px 5px; background:rgba(245,245,244,.92); border:1px solid rgba(29,31,32,.14); color:rgba(29,31,32,.62); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; white-space:nowrap; }
-    .detail-tag { position:absolute; white-space:nowrap; background:rgba(245,245,244,.86); padding:0 2px; color:rgba(29,31,32,.65); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; pointer-events:none; }
+    .detail-input { position:absolute; transform:translate(-50%,-50%); width:64px; height:22px; border:1px solid var(--edge-panel); background:var(--surface-panel); color:var(--ink-primary); padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; outline:none; }
+    .detail-input:hover, .detail-input:focus { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 8%, transparent); }
+    .detail-chip { position:absolute; transform:translate(-50%,-50%); padding:2px 5px; background:color-mix(in srgb, var(--surface-page) 92%, transparent); border:1px solid var(--edge-panel); color:var(--ink-secondary); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; white-space:nowrap; }
+    .detail-tag { position:absolute; white-space:nowrap; background:color-mix(in srgb, var(--surface-page) 86%, transparent); padding:0 2px; color:var(--ink-secondary); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; white-space:nowrap; pointer-events:none; }
     /* IDENTITY runs the width of the page now, so its fields need columns of
        their own or each input stretches to 1100px and reads as a banner. */
     .identity-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:14px 20px; align-items:start; }
@@ -58,7 +94,7 @@
     .strip-wrap { position:relative; max-width:1090px; margin:14px auto 0; }
     .strip-wrap canvas { width:100%; height:auto; display:block; }
     .strip-tag { position:absolute; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px;
-      font-weight:600; letter-spacing:.06em; color:rgba(29,31,32,.62); white-space:nowrap; pointer-events:none; }
+      font-weight:600; letter-spacing:.06em; color:var(--ink-secondary); white-space:nowrap; pointer-events:none; }
     .band { display:grid; grid-template-columns:minmax(0,1fr) 600px minmax(0,1fr); max-width:1090px; margin:0 auto; gap:0 12px; align-items:start; justify-content:center; }
     /* EACH PIECE NAMES ITS OWN COLUMN, and that is the whole fix for a
        drawing that slid off to the left. Band 1's garage column is hidden
@@ -81,7 +117,7 @@
        rather than as the way in. */
     #sched-garage-add { align-self:start; padding-top:2px; }
     #sched-garage-add[hidden] { display:none; }
-    .sched-head { padding:0 4px 5px; color:rgba(29,31,32,.65); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; }
+    .sched-head { padding:0 4px 5px; color:var(--ink-secondary); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; }
     /* A VALUE BOX AND A DROPDOWN ARE NOT THE SAME WIDTH. 58px fits the
        longest measurement on the page, 8'-1 1/8" -- but a select also has to
        hold a WORD plus its arrow, and squeezing both into one track clipped
@@ -96,64 +132,64 @@
        OVER -- so the grey name column would just repeat the box. One cell,
        box over to the left. */
     .sched-row.wide, .sched-row.wide:has(select) { grid-template-columns:minmax(0,1fr); }
-    button.sched-value { width:100%; height:23px; border:1px solid #5980a6; background:#fff; color:#1d1f20; padding:2px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; text-align:center; cursor:pointer; }
-    button.sched-value:hover:not(:disabled) { background:rgba(89,128,166,.12); }
-    button.sched-value[aria-pressed="true"] { background:rgba(89,128,166,.22); box-shadow:0 0 0 1px #5980a6 inset; }
-    button.sched-value:disabled { cursor:default; border-color:rgba(29,31,32,.28); color:rgba(29,31,32,.45); }
-    .sched-row { display:grid; grid-template-columns:minmax(0,1fr) 58px; gap:7px; align-items:center; padding:3px 4px; border-bottom:1px solid rgba(29,31,32,.07); }
+    button.sched-value { width:100%; height:23px; border:1px solid var(--accent); background:var(--surface-panel); color:var(--ink-primary); padding:2px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; text-align:center; cursor:pointer; }
+    button.sched-value:hover:not(:disabled) { background:color-mix(in srgb, var(--accent) 12%, transparent); }
+    button.sched-value[aria-pressed="true"] { background:color-mix(in srgb, var(--accent) 22%, transparent); box-shadow:0 0 0 1px var(--accent) inset; }
+    button.sched-value:disabled { cursor:default; border-color:var(--edge-panel); color:var(--ink-quiet); }
+    .sched-row { display:grid; grid-template-columns:minmax(0,1fr) 58px; gap:7px; align-items:center; padding:3px 4px; border-bottom:1px solid color-mix(in srgb, var(--edge-panel) 50%, transparent); }
     .sched-row:last-child { border-bottom:0; }
     .sched-row[hidden] { display:none; }
-    .sched-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:rgba(29,31,32,.65); line-height:1.15; }
-    input.sched-value, select.sched-value { width:100%; height:23px; border:1px solid rgba(29,31,32,.28); background:#fafafa; color:#1d1f20; padding:2px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; }
-    input.sched-value:hover, input.sched-value:focus, select.sched-value:hover, select.sched-value:focus { border-color:#5980a6; background:rgba(89,128,166,.08); }
+    .sched-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-secondary); line-height:1.15; }
+    input.sched-value, select.sched-value { width:100%; height:23px; border:1px solid var(--edge-panel); background:var(--surface-chip); color:var(--ink-primary); padding:2px 5px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; }
+    input.sched-value:hover, input.sched-value:focus, select.sched-value:hover, select.sched-value:focus { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 8%, transparent); }
     /* A derived value is shown, never typed — greyed and unboxed so it reads
        as an answer rather than a field, the same convention the section
        table uses for a cell it inherited instead of being given. */
-    span.sched-value { display:block; height:23px; line-height:23px; text-align:center; color:rgba(29,31,32,.65); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; }
+    span.sched-value { display:block; height:23px; line-height:23px; text-align:center; color:var(--ink-secondary); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; }
     /* The numbers left the drawing, so the drawing lost the thing that said
        which part each one measured. Hover restores it in both directions. */
-    .sched-row.lit { background:rgba(89,128,166,.13); }
-    .detail-tag.lit { color:#5980a6; font-size:9px; }
-    .zone-row { display:grid; grid-template-columns:minmax(0,1fr) 84px 84px; gap:6px; align-items:center; padding:7px 0; border-bottom:1px solid rgba(29,31,32,.08); }
+    .sched-row.lit { background:color-mix(in srgb, var(--accent) 13%, transparent); }
+    .detail-tag.lit { color:var(--accent-mark); font-size:9px; }
+    .zone-row { display:grid; grid-template-columns:minmax(0,1fr) 84px 84px; gap:6px; align-items:center; padding:7px 0; border-bottom:1px solid color-mix(in srgb, var(--edge-panel) 50%, transparent); }
     .zone-row:last-child { border-bottom:0; }
     .zone-name { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.04em; }
-    .zone-name .reserved { display:block; color:rgba(29,31,32,.4); font-size:8px; letter-spacing:.06em; }
-    .zone-head { display:grid; grid-template-columns:minmax(0,1fr) 84px 84px; gap:6px; padding-bottom:4px; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
-    .zone-input { width:100%; height:26px; border:1px solid rgba(29,31,32,.28); background:#fafafa; color:#1d1f20; padding:3px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; outline:none; }
-    .zone-input:hover, .zone-input:focus { border-color:#5980a6; background:rgba(89,128,166,.08); }
-    .strip-caption { max-width:1090px; margin:6px auto 0; text-align:center; color:rgba(29,31,32,.55); font-size:12px; line-height:1.45; }
-    .zone-note { margin-top:9px; color:rgba(29,31,32,.5); font-size:11px; line-height:1.4; }
+    .zone-name .reserved { display:block; color:var(--ink-quiet); font-size:8px; letter-spacing:.06em; }
+    .zone-head { display:grid; grid-template-columns:minmax(0,1fr) 84px 84px; gap:6px; padding-bottom:4px; color:var(--ink-quiet); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+    .zone-input { width:100%; height:26px; border:1px solid var(--edge-panel); background:var(--surface-chip); color:var(--ink-primary); padding:3px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; outline:none; }
+    .zone-input:hover, .zone-input:focus { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 8%, transparent); }
+    .strip-caption { max-width:1090px; margin:6px auto 0; text-align:center; color:var(--ink-quiet); font-size:12px; line-height:1.45; }
+    .zone-note { margin-top:9px; color:var(--ink-quiet); font-size:11px; line-height:1.4; }
     /* THE FAMILY ROW. Movie, 15 Sep: "show all the buttons available. the one
        they have currently selection should glow." Worded buttons standing in
        for the cartoon sections he is drawing -- "i will make better buttons
        later" -- so the press, the state and the glow are built now and only
        the face of the button changes when the pictures arrive. */
     .family-row { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
-    .family-button { border:1px solid rgba(29,31,32,.28); background:#fafafa; color:#1d1f20; padding:7px 12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; }
-    .family-button:hover:not(:disabled) { border-color:#5980a6; background:rgba(89,128,166,.08); }
-    .family-button[aria-pressed="true"] { border-color:#5980a6; background:rgba(89,128,166,.22); box-shadow:0 0 0 1px #5980a6 inset; }
-    .family-button:disabled { cursor:default; color:rgba(29,31,32,.45); }
+    .family-button { border:1px solid var(--edge-panel); background:var(--surface-chip); color:var(--ink-primary); padding:7px 12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; }
+    .family-button:hover:not(:disabled) { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 8%, transparent); }
+    .family-button[aria-pressed="true"] { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 22%, transparent); box-shadow:0 0 0 1px var(--accent) inset; }
+    .family-button:disabled { cursor:default; color:var(--ink-quiet); }
     /* THE PRESS THAT SITS ON THE DRAWING. Movie, 15 Sep: "put it under the
        ATTIC SPACE ... inline with the garage ceiling line". Placed off the
        section's own ceiling anchor, so it cannot drift when the wall moves. */
-    .detail-button { position:absolute; border:1px solid #5980a6; background:#fff; color:#1d1f20; padding:3px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; white-space:nowrap; }
-    .detail-button:hover:not(:disabled) { background:rgba(89,128,166,.12); }
-    .detail-button[aria-pressed="true"] { background:rgba(89,128,166,.22); box-shadow:0 0 0 1px #5980a6 inset; }
-    .detail-button:disabled { cursor:default; border-color:rgba(29,31,32,.28); color:rgba(29,31,32,.45); }
+    .detail-button { position:absolute; border:1px solid var(--accent); background:var(--surface-panel); color:var(--ink-primary); padding:3px 7px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; white-space:nowrap; }
+    .detail-button:hover:not(:disabled) { background:color-mix(in srgb, var(--accent) 12%, transparent); }
+    .detail-button[aria-pressed="true"] { background:color-mix(in srgb, var(--accent) 22%, transparent); box-shadow:0 0 0 1px var(--accent) inset; }
+    .detail-button:disabled { cursor:default; border-color:var(--edge-panel); color:var(--ink-quiet); }
     .table-card { margin-top:16px; }
     .table-scroll { overflow-x:auto; }
     table.section-table { border-collapse:collapse; font-family:'Barlow Condensed',system-ui,sans-serif; }
-    .section-table th, .section-table td { border:1px solid rgba(29,31,32,.14); padding:0; }
-    .section-table thead th { padding:5px 6px; background:rgba(89,128,166,.07); color:rgba(29,31,32,.62); font-size:9px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; text-align:center; white-space:nowrap; }
-    .section-table th.row-head { min-width:132px; text-align:left; padding:6px 8px; background:#fff; font-size:11px; font-weight:600; letter-spacing:.05em; color:#1d1f20; }
+    .section-table th, .section-table td { border:1px solid var(--edge-panel); padding:0; }
+    .section-table thead th { padding:5px 6px; background:color-mix(in srgb, var(--accent) 7%, transparent); color:var(--ink-secondary); font-size:9px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; text-align:center; white-space:nowrap; }
+    .section-table th.row-head { min-width:132px; text-align:left; padding:6px 8px; background:var(--surface-panel); font-size:11px; font-weight:600; letter-spacing:.05em; color:var(--ink-primary); }
     .section-table td { width:78px; text-align:center; vertical-align:top; }
-    .section-table td.blank { background:repeating-linear-gradient(135deg, rgba(29,31,32,.05) 0 4px, transparent 4px 8px); }
-    .cell-input { width:100%; height:24px; border:0; background:transparent; color:#1d1f20; padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; outline:none; }
-    .cell-input:hover, .cell-input:focus { background:rgba(89,128,166,.1); }
-    .cell-input.inherited { color:rgba(29,31,32,.65); }
-    .cell-derived { display:block; padding:4px; color:rgba(29,31,32,.65); font-size:12px; font-weight:600; }
-    .cell-note { display:block; padding:0 3px 3px; color:rgba(29,31,32,.65); font-size:9px; letter-spacing:.03em; white-space:nowrap; }
-    .drop-slot { margin-top:16px; border:1.5px dashed rgba(29,31,32,.28); background:rgba(29,31,32,.02); padding:26px 16px; text-align:center; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
+    .section-table td.blank { background:repeating-linear-gradient(135deg, color-mix(in srgb, var(--ink-primary) 12%, transparent) 0 4px, transparent 4px 8px); }
+    .cell-input { width:100%; height:24px; border:0; background:transparent; color:var(--ink-primary); padding:2px 4px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; text-align:center; outline:none; }
+    .cell-input:hover, .cell-input:focus { background:color-mix(in srgb, var(--accent) 10%, transparent); }
+    .cell-input.inherited { color:var(--ink-secondary); }
+    .cell-derived { display:block; padding:4px; color:var(--ink-secondary); font-size:12px; font-weight:600; }
+    .cell-note { display:block; padding:0 3px 3px; color:var(--ink-secondary); font-size:9px; letter-spacing:.03em; white-space:nowrap; }
+    .drop-slot { margin-top:16px; border:1.5px dashed var(--edge-panel); background:color-mix(in srgb, var(--ink-primary) 4%, transparent); padding:26px 16px; text-align:center; color:var(--ink-quiet); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
     .drop-slot small { display:block; margin-top:5px; text-transform:none; letter-spacing:0; font-family:'Barlow',system-ui,sans-serif; font-weight:400; font-size:11px; }
     #status { margin-top:14px; min-height:16px; color:#557a46; font-size:12px; }
     @media (max-width:1180px) { .band, .band.band-eave { grid-template-columns:1fr; justify-items:center; } .sched { width:min(420px,100%); }

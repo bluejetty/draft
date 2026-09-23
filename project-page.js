@@ -2157,7 +2157,14 @@ if (!window.DraftProjectPage) {
     const X = x => (x - baseX) * scale + slack;
     const Y = y => h - (y - baseY) * scale;
     if (clear) ctx.clearRect(0, 0, w, h);
-    ctx.strokeStyle = '#1d1f20';
+    // THE SECTION IS DRAWN IN THE PAGE'S OWN INK. This was the literal
+    // #1d1f20 -- correct on a white page and invisible on a night one, which
+    // is the whole defect a palette exists to stop. `color` is inherited, and
+    // PROJECT's body sets it to var(--ink-primary), so the skin reaches the
+    // canvas with no argument to thread through eleven call sites. The
+    // literal stays as the fallback for a canvas painted before the tokens
+    // land, the same shape render-2d.js uses for its env colours.
+    ctx.strokeStyle = getComputedStyle(canvas).color || '#1d1f20';
     ctx.lineJoin = 'miter';
     section.parts.forEach(part => {
       ctx.lineWidth = part.weight || 1.5;
