@@ -43,7 +43,7 @@ Status: **SPECCED, NOT BUILT.** The palette half is the only part started.
 ```
 +-- top bar, without the instrument panel --------------------+
 | [PROJECT     |                          |   HOUSE          |
-|   INFO]      |     the SECTIONS         |   fields         |
+|   INFO]      |     the SECTIONS         |  [HOUSE INFO]    |
 | [GARAGE      |                          |                  |
 |   INFO]      |     (the MAIN AREA)      |                  |
 |  left rail,  |                          |   right rail,    |
@@ -67,6 +67,13 @@ marked `data-pane-tab` that swap the pane without shutting the rail. Pressing
 the tab that is already up shuts the rail, which is the gesture a drafter
 already has. PROJECT's left rail wants the same three behaviours with its own
 two names.
+
+**THE RIGHT RAIL IS `HOUSE INFO`**, carrying the building's own column — roof,
+2nd floor, main floor, foundation. Whether it grows a second tab is **open**:
+Movie, 23 Sep, *"on right HOUSE INFO tab … let me check if we will need other
+tabs"*. Built as one pane it must still be built on the two-pane mechanism the
+left rail uses, or adding the second one later means rebuilding the rail
+rather than naming a tab.
 
 **PROJECT INFO sits UPPER**, GARAGE INFO below it — Movie: *"tab on UPPER left
 for PROJECT"*, *"under PROJECT INFO tab, then a GARAGE INFO tab"*. That mirrors MODEL's right edge, where LEVELS / LAYERS is the upper
