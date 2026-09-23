@@ -3235,7 +3235,20 @@
         // section; it just does not pretend to choose.
         if (!familyId) return;
         const entries = familyEntries(familyId);
+        // ALREADY IN THIS FAMILY: showing it is not a change.
         if (entries.some(entry => entry.type === buildType)) return;
+        // AND A DRAWING THAT HAS NOT NAMED A HOUSE YET IS NOT CHOOSING ONE BY
+        // BEING LOOKED AT. This branch is the one that matters, and three
+        // specs found it: on a fresh drawing the card was setting `bungalow`,
+        // which IS "1 STOREY" -- so opening the page and clicking BUNGALOW to
+        // see it hid every 2ND FL row, because the drawing now claimed to be
+        // a single storey. Looking at a section must not demolish a floor.
+        //
+        // So the card switches a type it can switch: you are a bilevel and
+        // you press BUNGALOW, that is a choice and it lands on the family's
+        // first house. With nothing chosen yet there is nothing to switch
+        // FROM, and the row is where a house gets named.
+        if (buildType == null) return;
         const first = entries[0];
         if (!first) return;
         buildType = first.type;
