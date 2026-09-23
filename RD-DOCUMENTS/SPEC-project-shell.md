@@ -75,6 +75,22 @@ tabs"*. Built as one pane it must still be built on the two-pane mechanism the
 left rail uses, or adding the second one later means rebuilding the rail
 rather than naming a tab.
 
+**AND ALL THREE OPEN BY DEFAULT.** Movie, 23 Sep: *"when that page is opened
+make those tabs OPEN by DEFAULT (not collapsed)"*. MODEL's rails default SHUT
+— `railOpen` reads `params.get(param) === '1'`, so a bare URL has both closed
+and `?left=1&right=1` opens them.
+
+**THAT MAKES THE DEFAULT A PER-PAGE PARAMETER, not a constant in the chrome**,
+and it is the second argument for passing content in rather than copying
+MODEL's bars across. A page that opens on a drawing wants its rails out of the
+way; a page that IS a form wants them open, because with them shut there is
+nothing on screen but the sections. Same mechanism, opposite default, and the
+shell has to take it rather than know it.
+
+Keep the URL as the source of truth either way — a drafter who shuts a rail
+and reloads should find it shut. Default open means the absent parameter reads
+as open on this page, not that the parameter stops being read.
+
 **PROJECT INFO sits UPPER**, GARAGE INFO below it — Movie: *"tab on UPPER left
 for PROJECT"*, *"under PROJECT INFO tab, then a GARAGE INFO tab"*. That mirrors MODEL's right edge, where LEVELS / LAYERS is the upper
 tab and LAYOUT PREVIEWS the lower, so the two pages read the same way round
@@ -100,11 +116,46 @@ DETACHED GARAGE band joins it rather than staying separate. **The order comes
 from `BUILD_MENU` itself**, which is also the answer to the ordering Movie
 asked for on the same day — one list, both pages, nothing to drift.
 
-**The colour is a solved problem waiting to be used.** `palette.js` carries
-named roles across two themes and two modes. MODEL runs on it: 279 `var(--…)`
-uses against 85 stray literals. PROJECT has **54 hex literals and zero
-tokens**, in 143 lines of CSS. NIGHT/DAY and RUFF/ROUGH come free with the
-swap, because they are the palette's own axes.
+**The colour was a solved problem waiting to be used, AND IT IS NOW DONE.**
+`palette.js` carries named roles across two themes and two modes, and PROJECT
+now runs on it: the stylesheet is written in `var(--role)` throughout, the
+head applies the skin synchronously before the first frame, and NIGHT/DAY and
+RUFF/ROUGH come free because they are the palette's own axes.
+
+The first count published here — "54 hex literals" — **was wrong, and the way
+it was wrong is worth keeping**: the regex that produced it counted HTML
+entities. `&#8217;`, `&#8242;` and `&#8540;` all match `#[0-9a-f]{3,8}`, and
+eighteen of the fifty-four were curly apostrophes and fraction glyphs. The
+real figure was thirty-six literals in seven distinct colours. **A pattern
+that matches the thing you are looking for will also match anything shaped
+like it**; the count was never checked against a single one of the lines it
+claimed.
+
+**One choice across the app, not one per page.** The head reads the same
+`draft-skin` key and the same `?theme=`/`?mode=` overrides MODEL writes, so
+walking from the model space to the project area does not change the lights.
+This page only READS it — MODEL owns the switcher, and a second writer would
+be two sources for one fact.
+
+**And the section canvases needed the same treatment**, which the CSS pass
+alone would have missed: `project-page.js`'s `paintSection` set
+`ctx.strokeStyle = '#1d1f20'`, correct on a white page and **invisible on a
+night one**. It reads `getComputedStyle(canvas).color` now — `color` is
+inherited and body sets it to `--ink-primary`, so the skin reaches the canvas
+without threading an argument through eleven call sites. A palette that stops
+at the stylesheet is the defect palette.js's own header warns about: 92% of
+MODEL's colour is set from JavaScript.
+
+### Three colours deliberately NOT converted
+
+| literal | where | why it is still open |
+|---|---|---|
+| `#5980a6` ×13, `rgba(89,128,166,…)` ×13 | card titles, focus rings, hover washes, pressed buttons, the lit row, the table head | **Movie's call.** It is the drafting blue, and in PROJECT it does one job everywhere: mark the interactive or selected thing. That job's role is `accent`. But RUFF's accent is RED (`#fd0000` night, `#c0392b` day) and ROUGH's accent IS this blue, AA-lifted. So converting it makes PROJECT match MODEL — which is the ask — at the cost of blue card titles going red on the default skin. |
+| `#a06035` + `rgba(160,96,53,.08)` | the `.notice` left border and tint | No role for a warning. Reads at 3.32 on night, 4.45 on day — a 3px border, so it passes as a line either way, and the notice's TEXT is already `--ink-secondary`. |
+| `#557a46` | `#status` | No role for a success message. 3.36 on night, 4.41 on day: **under AA both ways, and it already was** before this pass. Transient text, so it is recorded rather than fixed. |
+
+None of the three is a regression — all three sat at the same contrast on the
+white page. What changed is that there is now somewhere for them to go.
 
 ## THE SHELL IS A MECHANISM, NOT MODEL'S PANELS MOVED OVER
 
