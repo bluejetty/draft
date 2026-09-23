@@ -19,6 +19,12 @@ const P = (() => {
   return api;
 })();
 
+// Switching the open type the way a drafter does -- the small card, not a
+// reload -- so a test that has to touch two bands crosses between them on the
+// page's own mechanism.
+const selectType = (page, type) =>
+  page.locator(`.type-card[data-type="${type}"]`).click();
+
 // ONE TYPE IS OPEN AT A TIME NOW. The PROJECT page opens on the first card
 // in Movie's order -- DETACHED GARAGE -- so a test that drives the bungalow's
 // detail has to select it, exactly as a drafter would. Arriving through
@@ -358,9 +364,15 @@ test('a family press sets the building method, one at a time, and it saves',
     // lighting a button would be the card answering for the drafter.
     await expect(page.locator('.family-button[aria-pressed="true"]')).toHaveCount(0);
 
+    // THE BILEVEL FAMILY LIVES IN THE BILEVEL SECTION, so this press needs
+    // that section open. Crossing over and back is the point of the test as
+    // much as the press is: "one at a time" is a claim about two bands, and
+    // it is now also a claim that the choice survives the switch between them.
+    await selectType(page, 'bilevel');
     await page.locator('[data-family-entry="bilevel-garage"]').click();
     await expect(page.locator('[data-family-entry="bilevel-garage"]'))
       .toHaveAttribute('aria-pressed', 'true');
+    await selectType(page, 'bungalow');
 
     // IT REACHED THE FILE, not just the button. This page's save merges its
     // own keys onto the stored drawing, so a key it does not own is dropped
