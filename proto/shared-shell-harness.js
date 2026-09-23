@@ -72,7 +72,16 @@ const sheet = fs.existsSync(path.join(ROOT, SHEET)) ? read(SHEET) : '';
 check(`${SHEET} exists`, sheet.length > 0, true);
 check(`${SHEET} carries the top bar`, /#strip\s*\{/.test(sheet), true);
 check(`${SHEET} carries the bottom bar`, /#house-strip\s*\{/.test(sheet), true);
-check(`${SHEET} carries the instruments`, /#strip-center\s*\{/.test(sheet), true);
+// THE INSTRUMENTS, AS A SET RATHER THAN A SIGHTING. The first version of
+// this asked only whether `#strip-center {` appeared anywhere, and
+// shared-shell-mutants.js killed it: the sheet has NINE #strip-center rules,
+// so renaming one still left eight for the regex to find. A check that any
+// single rule survives is not a check that the instruments are here.
+const INSTRUMENTS = ['#strip-center', '#strip-length-box', '#strip-angle-box',
+  '#frozen-length', '#frozen-angle', '#strip-len', '#strip-ang', '.chip'];
+check(`${SHEET} carries every instrument`,
+  INSTRUMENTS.filter(sel => !new RegExp(
+    `${sel.replace(/[.#]/g, '\\$&')}(?![-\\w])[^{}]*\\{`).test(decomment(sheet))), []);
 
 // A PAGE WITH THE BAR'S MARKUP MUST LINK THE BAR'S STYLESHEET. This is the
 // check that catches the next page -- someone copies the shell into SPECS and
@@ -100,8 +109,15 @@ check('no page re-styles what the shared sheet owns', copiers, []);
 // than a hypothetical: SPECS, SETTINGS and STANDARDS have ZERO palette roles
 // between them and do not load palette.js at all. Whichever gets the bars
 // first gets a bar with no colours unless it takes palette.js too.
+// MATCHED AS A SCRIPT TAG, NOT AS THE WORDS. The first version tested
+// /palette\.js/ against the whole page, and MODEL.html says "palette.js" in
+// TEN comments -- so the check passed on prose while the script tag was
+// commented out, which is exactly what the mutant did. The same trap this
+// file's own decomment() was written for, sprung one check later.
+const loadsPalette = f =>
+  /<script[^>]+src=["'][.\/]*palette\.js["']/.test(decomment(read(f)));
 check('every page linking the sheet also loads palette.js',
-  pages.filter(linksSheet).filter(f => !/palette\.js/.test(read(f))), []);
+  pages.filter(linksSheet).filter(f => !loadsPalette(f)), []);
 
 // THE FOUR LITERALS, HELD TO FOUR. The sheet's own head names them and says
 // why each is not a surface the skin owns; this is what makes that comment a

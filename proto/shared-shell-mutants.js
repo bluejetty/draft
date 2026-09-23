@@ -38,10 +38,17 @@ const MUTANTS = [
     with: '  #house-strip-DELETED { position:fixed;' },
 
   { file: 'shell-bars.css',
-    name: 'the instruments go missing -- the cut that was nearly made, when '
+    name: 'an instrument goes missing -- the cut that was nearly made, when '
       + 'they were thought to be MODEL\'s alone',
-    find: '  #strip-center { flex:0 0 auto;',
-    with: '  #strip-center-DELETED { flex:0 0 auto;' },
+    // AIMED AT #strip-length-box BECAUSE IT OCCURS ONCE. The first version of
+    // this mutant renamed one of NINE #strip-center rules and SURVIVED: the
+    // harness only asked whether the selector appeared anywhere, and eight
+    // copies were left to find it. Both ends were wrong -- the check was a
+    // sighting rather than a set, and the mutant did not represent the
+    // failure it was named after. The check is a set now; this is a selector
+    // whose removal is actually the claim going false.
+    find: '  #strip-length-box { display:flex;',
+    with: '  #strip-length-box-DELETED { display:flex;' },
 
   { file: 'MODEL.html',
     name: 'a page wears the bars but forgets the stylesheet -- the shape the '
