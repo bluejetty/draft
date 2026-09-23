@@ -5,6 +5,45 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <title>Draft — Specifications</title>
+  <!-- THE SKIN, AND THIS PAGE NEVER HAD IT. SPECS carried 56 colours typed
+       straight in and did not load palette.js at all, so it was a white page
+       with dark ink on every one of the four skins -- and nobody saw it,
+       because nothing on it sat next to something that DID follow the skin.
+       The shared bar is what made it visible: a bar that reads the skin on a
+       page that does not is the mismatch you notice first.
+
+       READ THE SAME KEY THE SAME WAY as MODEL and PROJECT. The skin is one
+       choice across the app; this is a third door to it, not a third
+       opinion. Synchronous and in the head on purpose -- the stylesheet
+       below is written in --role tokens now, so between parse and boot the
+       page would have no colour at all. -->
+  <link rel="stylesheet" href="./shell-bars.css" />
+  <script src="./palette.js"></script>
+  <script src="./shell-bars.js"></script>
+  <script>
+    (() => {
+      const P = window.DraftPalette;
+      const params = new URLSearchParams(location.search);
+      const stored = (() => {
+        try { return JSON.parse(localStorage.getItem('draft-skin') || 'null') || {}; }
+        catch { return {}; }
+      })();
+      const pick = (name, allowed, fallback) => {
+        const asked = params.get(name);
+        if (asked && allowed.includes(asked)) return asked;
+        if (asked) {
+          console.warn(`SPECS: unknown ${name} "${asked}"; using ${fallback}. `
+            + `Known: ${allowed.join(', ')}`);
+        }
+        return allowed.includes(stored[name]) ? stored[name] : fallback;
+      };
+      window.__specsSkin = {
+        theme: pick('theme', P.THEMES, 'ruff'),
+        mode: pick('mode', P.MODES, 'night'),
+      };
+      P.apply(document, window.__specsSkin.theme, window.__specsSkin.mode);
+    })();
+  </script>
   <script src="./shared-file-store.js"></script>
   <script src="./drawing-format.js"></script>
   <script src="./spec-master.js"></script>
@@ -16,58 +55,63 @@
   <script src="orientation-guard.js"></script>
   <style>
     * { box-sizing:border-box; }
-    body { margin:0; min-height:100vh; background:#f5f5f4; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; }
-    .topbar { height:52px; display:flex; align-items:center; gap:14px; padding:0 20px; border-bottom:1px solid rgba(29,31,32,.16); background:#fff; }
-    .brand { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:21px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
-    .slash { color:rgba(29,31,32,.32); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:18px; }
-    .section { color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:14px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; }
-    .back { margin-left:auto; color:rgba(29,31,32,.56); text-decoration:none; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; }
-    .back:hover { color:#5980a6; }
-    main { width:min(1560px, calc(100vw - 32px)); margin:24px auto 40px; }
+    body { margin:0; min-height:100vh; background:var(--surface-page); color:var(--ink-primary); font-family:'Barlow',system-ui,sans-serif; }
+    /* CLEARS BOTH FIXED BARS, named rather than added up: --strip-h and
+       --house-h are shell-bars.css's to change and this page follows. */
+    main { width:min(1560px, calc(100vw - 32px));
+      margin:calc(var(--strip-h) + 24px) auto calc(var(--house-h) + 40px); }
     h1 { margin:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:27px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
-    .intro { max-width:760px; margin:7px 0 0; color:rgba(29,31,32,.63); font-size:14px; line-height:1.5; }
-    .notice { display:none; margin-top:18px; padding:10px 12px; border-left:3px solid #a06035; background:rgba(160,96,53,.08); color:rgba(29,31,32,.68); font-size:12px; line-height:1.45; }
+    .intro { max-width:760px; margin:7px 0 0; color:var(--ink-secondary); font-size:14px; line-height:1.5; }
+    .notice { display:none; margin-top:18px; padding:10px 12px; border-left:3px solid #a06035; background:rgba(160,96,53,.08); color:var(--ink-secondary); font-size:12px; line-height:1.45; }
     .notice.visible { display:block; }
     .columns { display:grid; grid-template-columns:250px minmax(0,1fr) 300px; gap:16px; align-items:start; margin-top:20px; }
-    .card { border:1px solid rgba(29,31,32,.17); background:#fff; }
-    .card-title { padding:9px 12px; border-bottom:1px solid rgba(29,31,32,.12); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:#5980a6; display:flex; align-items:center; gap:8px; }
-    .card-title .count { margin-left:auto; color:rgba(29,31,32,.42); font-size:11px; }
+    .card { border:1px solid var(--edge-panel); background:var(--surface-panel); }
+    .card-title { padding:9px 12px; border-bottom:1px solid var(--edge-panel); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--accent-mark); display:flex; align-items:center; gap:8px; }
+    .card-title .count { margin-left:auto; color:var(--ink-quiet); font-size:11px; }
     .card-body { padding:12px; }
     .card-body.tight { padding:0; }
 
     /* ── The contents list ─────────────────────────────────────────────── */
     .toc { max-height:70vh; overflow:auto; }
-    .toc-div { padding:7px 12px 3px; color:rgba(29,31,32,.45); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; border-top:1px solid rgba(29,31,32,.08); }
+    .toc-div { padding:7px 12px 3px; color:var(--ink-quiet); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; border-top:1px solid var(--edge-panel); }
     .toc-div:first-child { border-top:0; }
-    .toc-row { display:flex; align-items:center; gap:7px; width:100%; padding:4px 12px; border:0; background:none; text-align:left; cursor:pointer; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.03em; color:#1d1f20; }
-    .toc-row:hover { background:rgba(89,128,166,.09); }
-    .toc-row[aria-current="true"] { background:rgba(89,128,166,.16); }
-    .toc-row .id { color:rgba(29,31,32,.42); min-width:30px; }
+    .toc-row { display:flex; align-items:center; gap:7px; width:100%; padding:4px 12px; border:0; background:none; text-align:left; cursor:pointer; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.03em; color:var(--ink-primary); }
+    .toc-row:hover { background:color-mix(in srgb, var(--accent-mark) 9%, transparent); }
+    .toc-row[aria-current="true"] { background:color-mix(in srgb, var(--accent-mark) 16%, transparent); }
+    .toc-row .id { color:var(--ink-quiet); min-width:30px; }
     .toc-row .name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .toc-row.off .name, .toc-row.off .id { color:rgba(29,31,32,.32); text-decoration:line-through; }
+    .toc-row.off .name, .toc-row.off .id { color:var(--ink-quiet); text-decoration:line-through; }
     .dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
     .dot.verify { background:#a06035; }
-    .dot.edited { background:#5980a6; }
+    .dot.edited { background:var(--accent-mark); }
     .dot.added { background:#557a46; }
 
     /* ── The editor ────────────────────────────────────────────────────── */
-    .field-label { margin-top:11px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:rgba(29,31,32,.55); }
+    .field-label { margin-top:11px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-quiet); }
     .field-label:first-child { margin-top:0; }
-    .field { width:100%; border:1px solid rgba(29,31,32,.25); background:#fafafa; padding:6px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; outline:none; }
-    .field:hover, .field:focus { border-color:#5980a6; background:rgba(89,128,166,.07); }
+    .field { width:100%; border:1px solid var(--edge-panel); background:var(--surface-chip); padding:6px 8px; color:var(--ink-primary); font-family:'Barlow',system-ui,sans-serif; font-size:12px; outline:none; }
+    .field:hover, .field:focus { border-color:var(--accent-mark); background:color-mix(in srgb, var(--accent-mark) 7%, transparent); }
     textarea.field { min-height:230px; resize:vertical; line-height:1.45; font-family:ui-monospace,'SFMono-Regular',Menlo,monospace; font-size:11px; }
-    .btn { height:26px; padding:0 10px; border:1px solid rgba(29,31,32,.25); background:#fff; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; }
-    .btn:hover { border-color:#5980a6; color:#5980a6; }
+    .btn { height:26px; padding:0 10px; border:1px solid var(--edge-panel); background:var(--surface-chip); color:var(--ink-primary); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; cursor:pointer; }
+    .btn:hover { border-color:var(--accent-mark); color:var(--accent-mark); }
     .btn[disabled] { opacity:.4; cursor:default; }
     .btn-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
-    .flag { margin-top:10px; padding:8px 10px; font-size:11px; line-height:1.45; border-left:3px solid #a06035; background:rgba(160,96,53,.08); color:rgba(29,31,32,.7); }
-    .flag.master { border-left-color:#5980a6; background:rgba(89,128,166,.08); }
-    .empty { color:rgba(29,31,32,.45); font-size:12px; line-height:1.5; }
+    .flag { margin-top:10px; padding:8px 10px; font-size:11px; line-height:1.45; border-left:3px solid #a06035; background:rgba(160,96,53,.08); color:var(--ink-secondary); }
+    .flag.master { border-left-color:var(--accent-mark); background:color-mix(in srgb, var(--accent-mark) 8%, transparent); }
+    .empty { color:var(--ink-quiet); font-size:12px; line-height:1.5; }
 
     /* ── The paper ─────────────────────────────────────────────────────── */
     /* 11 x 8.5 landscape at 96 dpi, the size the office spec pages are. */
     .sheets { display:flex; flex-direction:column; align-items:center; gap:14px; }
-    .sheet { position:relative; width:1056px; height:816px; background:#fff; border:1px solid rgba(29,31,32,.2); box-shadow:0 1px 3px rgba(0,0,0,.08); padding:36px 36px 30px; transform-origin:top center; }
+    .sheet { position:relative; width:1056px; height:816px; background:#fff;
+      /* AND ITS OWN INK. The background was always #fff and stayed literal
+         because the sheet is PAPER -- but the TEXT on it was inherited from
+         the body, and the body's colour is a role now. On a night skin that
+         made it near-white ink on white paper: the whole spec set invisible,
+         and a probe that only read BACKGROUNDS said everything was fine.
+         A screenshot caught it. Paper is dark ink on white, on all four
+         skins, because it is a drawing of a printed page. */
+      color:#1d1f20; border:1px solid rgba(29,31,32,.2); box-shadow:0 1px 3px rgba(0,0,0,.08); padding:36px 36px 30px; transform-origin:top center; }
     .sheet-head { display:flex; align-items:baseline; gap:10px; border-bottom:1.5px solid #1d1f20; padding-bottom:5px; margin-bottom:9px; }
     .sheet-head .title { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:16px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; }
     .sheet-head .job { margin-left:auto; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:rgba(29,31,32,.6); }
@@ -116,12 +160,12 @@
   </style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">Draft</div>
-    <div class="slash">/</div>
-    <div class="section">Specifications</div>
-    <a class="back" href="./MODEL.html" data-nav-model>&larr; Back to Model</a>
-  </header>
+  <!-- THE SHARED TOP BAR, replacing a header that said "Draft /
+       Specifications" and offered one link back. The page row in the bottom
+       bar is the whole map of the job now, so a single BACK TO MODEL is a
+       door where there is a corridor. No instruments: nothing is drawn here.
+       -->
+  <script>window.DraftShellBars.topBar();</script>
   <main>
     <h1>Specifications</h1>
     <p class="intro">The written half of the set. The office master is the same for every job &mdash; this page is where a job says what it does differently, and only the differences save with the drawing. Sections marked <strong>verify</strong> carry numbers that belong to a job rather than to the office, so they need an answer before the set goes out.</p>
@@ -154,6 +198,17 @@
     <div id="status" role="status"></div>
     <div id="measure" aria-hidden="true"></div>
   </main>
+  <!-- page:'specs' marks SPECIFICATIONS as where you are, off the one PAGES
+       table. It mounts above the page's own script for the reason PROJECT's
+       does: a bar that does not exist yet is a bar that script cannot find.
+       NO BONE -- this page builds nothing. -->
+  <!-- THE VISIT COUNT SITS ABOVE THE BAR, not in it (Movie, 23 Sep: "the
+       12 visits shouldn't be mixed into the views listings"). Its slot is
+       fixed 12px over the bar and paints no background, so the count reads
+       as a note on the sheet rather than a seventh page chip. The STATUS
+       READOUT tab is NOT mounted with it: this page has no counts. -->
+  <script>window.DraftShellBars.counterSlot();</script>
+  <script>window.DraftShellBars.bottomBar({ page: 'specs', bone: false });</script>
 
   <script>
     (async () => {
@@ -587,6 +642,17 @@
       try { await document.fonts.ready; } catch {}
       refresh();
       document.body.dataset.specsReady = '1';
+
+      // THE SKIN SWITCH IS THE BAR'S; WHAT TO REDRAW IS THIS PAGE'S -- and on
+      // this page that is nothing, which is worth saying rather than leaving
+      // the reader to wonder where the callback went. Everything here is CSS
+      // in --role tokens, so applying the palette IS the repaint. There is no
+      // canvas, and the sheets are paper: they do not follow the skin at all.
+      window.DraftShellBars.wireSkin({
+        theme: window.__specsSkin.theme,
+        mode: window.__specsSkin.mode,
+        onSkin: (skin, theme, mode) => { window.__specsSkin = { theme, mode }; },
+      });
     })();
   </script>
   <!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->

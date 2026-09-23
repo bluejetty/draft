@@ -495,6 +495,25 @@ if (!window.DraftShellBars) {
 
     readout: () => put(READOUT),
 
+    // THE COUNT'S SLOT WITHOUT THE READOUT, for pages that have a visit count
+    // to show and nothing to count on the drawing.
+    //
+    // Movie, 23 Sep: "i'd prefer just 1 row on bottom bar, and place the 12
+    // views above it (or could we make 1 upper row that has completely
+    // transparent background? that would work if possible)". It already is
+    // one: #lower-left is fixed at --readout-bottom, which is the bar's own
+    // height plus 12px, and it paints no background at all. So the answer to
+    // "if possible" is that the slot he was describing has been there since
+    // the readout moved to the foot -- this page just never mounted it.
+    //
+    // WHY NOT JUST CALL readout(). Because that brings the STATUS READOUT tab,
+    // and a tab that opens an empty panel is a dead control on a page with no
+    // counts. This is the same slot with only the tenant that has something
+    // to say.
+    counterSlot: () => put('<div id="lower-left" data-lower-left>\n'
+      + '  <span data-visit-counter-home></span>\n'
+      + '</div>'),
+
     // ---- the behaviour that is the BAR'S and not the page's ----------------
     //
     // ONLY TWO THINGS MOVED, and the ones that did not are worth naming so
