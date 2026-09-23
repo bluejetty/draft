@@ -3879,7 +3879,14 @@
     setRail('right', true);
     revealStart = performance.now() + window.DraftTour.REVEAL_HOLD_MS;
     revealActive = true;
-    goToView('E1');
+    // CUT_VIEW + the id, the way every other caller reaches a cut. The first
+    // draft of this passed the bare 'E1' and would have jumped to a view that
+    // does not resolve -- the exact fault the comment on cutForViewId already
+    // records against an earlier bug: "every `?view=cut:E1` resolved to null,
+    // fell through to the layer-view branch, and warned about a view the
+    // level does not have. Nothing caught it because nothing had asked for an
+    // elevation yet."
+    goToView(CUT_VIEW + 'E1');
   };
 
   const paintCuts = () => {
