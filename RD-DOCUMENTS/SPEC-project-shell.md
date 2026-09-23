@@ -174,6 +174,38 @@ looks almost exactly as it did — except it is now the theme saying so rather
 than a literal. RUFF night is gold titles on red lines. RUFF day is the dark
 red (`#c0392b`) for both, and that is the one skin where the change is loud.
 
+### The conversion has a guard: `proto/skinned-page-harness.js`
+
+A colour literal is the quietest regression this page can have. It looks
+perfect on whichever skin the author had open and wrong on the other three,
+and nobody sees it until Movie flips the lights. So the conversion is pinned:
+17 checks, 12 mutations, and CI picks the file up with no workflow edit
+because the engine list is derived from the `mutationMode()` call rather than
+listed.
+
+**Most of the file checks the INSTRUMENT, not the page.** A scanner that finds
+nothing reports the same "0 literals" as a page that has none, so ten checks
+feed it fixtures it must find and fixtures it must not, and five mutations
+break the scanner on purpose to watch those checks go red. Without that half
+the harness is the defect it exists to catch, one layer up.
+
+**The 54-vs-36 bug is frozen as a check.** One mutation drops the `(?<!&)`
+guard and the entity fixture goes red — the exact miscount this document
+published, now unable to happen twice.
+
+**And the table earned its keep on the first run.** The check for "reads the
+skin MODEL writes" was `includes('draft-skin')`, and it SURVIVED the mutation
+that changed the code to `'project-skin'` — because the comment four lines
+above still named the key. The check was reading the prose that describes the
+behaviour instead of the behaviour. It looked like a perfectly good check, and
+plain mode would have called it green forever. Every source-shape check reads
+decommented source now, the same way the colour scan does.
+
+**Nothing in it writes to the repo.** The subject is file text, so a mutation
+swaps the reader, not the file. A harness that edits tracked files to test
+them leaves them edited when it dies, and the first person to notice is
+whoever commits the mutant.
+
 ### Two colours still NOT converted
 
 | literal | where | why it is still open |
