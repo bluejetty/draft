@@ -3192,8 +3192,51 @@
         repaint();
       };
 
+      // ── AND CLICKING A CARD CHOOSES THE TYPE ────────────────────────────
+      // Movie, 23 Sep: "clicking on the small version of the section make the
+      // large area show that section, AND CHOOSE it too" -- because the point
+      // of choosing is what comes after: "press the BONE/HOUSE, that house
+      // with those characteristics / dimensions should be built".
+      //
+      // IT REUSES THE FAMILY PRESS RATHER THAN WRITING buildType ITSELF. A
+      // family entry carries a type AND a garage plan, and the two are set
+      // together or the row lights nothing -- syncFamilyRow asks for both.
+      // A card that assigned buildType alone would choose a house and leave
+      // the garage saying something else.
+      //
+      // NON-DESTRUCTIVE, and this is the part worth being careful about. If
+      // the live type already belongs to the family clicked, the card changes
+      // NOTHING -- it only shows the section. Otherwise a drafter on 2 STOREY
+      // + GARAGE who clicked BUNGALOW to look at it would be silently dropped
+      // back to 1 STOREY, which is software choosing for them.
+      const FAMILY_FOR_CARD = { bungalow: 'bungalow', bilevel: 'bilevel' };
+      const familyEntries = id => (window.DraftBuildMenu.BUILD_MENU
+        .find(family => family.id === id) || {}).entries || [];
+
+      const chooseType = pick => {
+        const familyId = FAMILY_FOR_CARD[pick];
+        // DETACHED GARAGE IS NOT WIRED HERE ON PURPOSE. build-menu.js says
+        // why, in its own words: "No `type`: a detached garage says nothing
+        // about what house it stands beside, and may stand beside none."
+        // There is no buildType to choose, so giving it one is the
+        // one-building-per-plan ruling arriving, which Movie parked on 23 Sep
+        // ("ok wait for later on that part"). The card still SHOWS the
+        // section; it just does not pretend to choose.
+        if (!familyId) return;
+        const entries = familyEntries(familyId);
+        if (entries.some(entry => entry.type === buildType)) return;
+        const first = entries[0];
+        if (!first) return;
+        buildType = first.type;
+        methodPressedHere = true;
+        applyGaragePlan(planForEntry(first));
+      };
+
       typeCards.forEach(card => {
-        card.addEventListener('click', () => showType(card.dataset.type, true));
+        card.addEventListener('click', () => {
+          chooseType(card.dataset.type);
+          showType(card.dataset.type, true);
+        });
       });
 
       // Built before the first repaint, because repaint() is what fills it.
