@@ -35,7 +35,104 @@ and brought up to date the same evening by the session that did. Read
   `MODEL.html`, `MODEL.dc.html`, `geometry-2d.js` and the specs under `tests/`
   for them are Gilligan's. A new file in the other's lane is fine; editing an
   existing one is not, without a word first.
+
+  **THERE ARE TWO LANE MAPS IN THIS REPO AND THEY DISAGREE.** Found 23 Sep.
+  `HANDOFF-GILLIGAN.md` carries a later one, agreed between the two agents on
+  5 Sep, which says of itself: *"ratified by nobody yet — Movie or Devin still
+  owe a word on it."* Nobody gave that word, and this file was never updated,
+  so both have been live for eighteen days:
+
+  ```
+                     this file (Devin, 4 Sep)   HANDOFF-GILLIGAN.md (5 Sep)
+  MODEL.dc.html      Gilligan's                 SKIPPER'S
+  geometry-2d.js     Gilligan's                 SHARED — announce first
+  cut-view.js        (unlisted)                 SHARED — announce first
+  drawing-format.js  (unlisted)                 SHARED — announce first
+  ```
+
+  Neither agent can settle this; it needs Movie or Devin. Until then, read
+  BOTH before touching any file in the table above, and take the stricter
+  reading. **The mechanism that actually worked was never the list** — the
+  5 Sep doc says so itself: *"announce-first is what actually protected us all
+  day, not the list."*
+
+  **AND MOVIE OVERRODE IT ON 22 SEP**, for that session: asked to confirm the
+  lane before pushing into `.github/workflows/test.yml`, he answered *"you
+  have both lanes"* and then *"all lanes"*. That is the most recent word from
+  the person who owns the project, it is why the work listed below reaches
+  deep into Gilligan's files, and it was said for one session rather than as a
+  standing change. Ask again rather than assuming it carries.
+
+  **AND IT IS DORMANT, NOT URGENT — Movie, 23 Sep:** *"i'm going to take it
+  slow for a bit and go one at a time so we won't need to worry about lanes
+  for a while."* One agent at a time is the condition under which none of the
+  above can bite: a lane map only decides who wins a collision, and there is
+  nothing to collide with. So this is recorded rather than escalated, and the
+  ratification is still owed whenever two agents next run together.
 - Repository scope is `bluejetty/draft` only.
+
+## State of main as of bb1d508 — 23 Sep
+
+Six PRs merged on 22 Sep, five of them reaching into Gilligan's lane under
+Movie's "all lanes" word above. Written for him, since he was not in the room
+for any of it.
+
+```
+#453  nine dead mutation anchors in premade-plans-harness.js -- they matched
+      nothing and had been reporting clean kills for it
+#454  a ridge is not a rake; a window clears the roof under it by 4"
+#455  a rake wears its board only where its gable faces; a nearer foundation
+      face hides the part it covers rather than all or nothing
+#456  THE WINDOW HEAD IS 7'-0", and windows already drawn move there;
+      elevations are drawn in the white the side menus leave them
+#457  six shards, and the divisor is derived from the matrix
+#458  a window is a SINGLE or a DOUBLE CASEMENT, and the double wears a
+      mullion
+```
+
+**What of that is yours to know about:**
+
+- **`geometry-2d.js` grew three exports** — `DEFAULT_WINDOW_HEAD_FT` (7),
+  `SUPERSEDED_WINDOW_HEADS_FT`, and `CASEMENT_SIZES_FT`, a table of window
+  sizes KEYED BY the vocabulary in `drawing-format.js`. Keyed rather than
+  listed on purpose: the two cannot disagree about which casements exist
+  without `proto/casement-harness.js` going red, and there is no second list
+  to forget. `RULING-the-window-head-is-the-datum.md` is now **BUILT**.
+- **`drawing-format.js` gained a persisted per-opening key, `casement`**
+  (`'single' | 'double'`, and `null` on a door). No version bump: the stored
+  shape only GAINS an optional key, and an older reader still has a valid
+  window. It also gained a MIGRATION — a window still sitting at an old
+  default head moves to 7'-0" on load, keeping its size, and a head somebody
+  typed is left alone.
+- **`MODEL.dc.html` was dropping that key on save, and it is fixed.** Its
+  `_serializeDrawing` builds each opening from a twelve-key literal with no
+  spread; the reader had started returning thirteen. A double casement drawn
+  on MODEL.html loaded here fine, painted fine, and came back a single the
+  first time anyone edited the drawing. Measured, not argued. Guarded now by
+  `proto/opening-round-trip-harness.js`, which compares the two lists and
+  goes red if the serializer is renamed rather than quietly checking nothing.
+  **`tests/persisted-format.spec.js` did not catch it and could not**: it
+  pins the TOP-LEVEL key set and says nothing about fields inside a record.
+  The same exposure exists for every other collection in that serializer and
+  is NOT guarded — one collection parsed exactly beat six parsed loosely.
+- **`cut-view.js` takes a `margins` option now.** MODEL.html measures its two
+  rails and passes what they cover, so an elevation is drawn in the white
+  they leave it. The painter's own defaults are a floor and an external fit
+  (LAYOUT's sheets) still takes none. MODEL.dc.html has no rails and needs
+  nothing.
+- **Two board headers were corrected** — `BOARD-a-roof-through-a-window.md`
+  and `BOARD-three-from-the-elevations.md` both said NOT FIXED while their
+  own bodies described the fix. Third instance of that shape this week.
+
+**Still open, both waiting on Movie:**
+
+- *"(one side would open)"* — the casement models the unit and its panes, not
+  which pane is operable. That wants a hinge-swing on the elevation and a
+  stored side.
+- The ordinary window's size. He said *"the window still too big"* on the
+  20th and has not given a number; `DEFAULT_WINDOW_WIDTH_FT` is 4'-0".
+
+---
 
 ## State of main as of a188813
 

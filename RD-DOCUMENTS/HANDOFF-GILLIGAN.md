@@ -32,6 +32,41 @@ why we kept the list after trying to redraw it by feature. But announce-first
 is what actually protected us all day, not the list, so the list is a
 convenience and the announcement is the mechanism.
 
+### STILL UNRATIFIED, EIGHTEEN DAYS ON — and the other map is still live
+
+Added 23 Sep by Skipper. The word this section asks for was never given, and
+`HANDOFF-SKIPPER.md` was never updated, so **both maps have been in force the
+whole time** and they disagree about three files:
+
+```
+                   HANDOFF-SKIPPER.md (Devin, 4 Sep)   this file (5 Sep)
+MODEL.dc.html      Gilligan's                          SKIPPER'S
+geometry-2d.js     Gilligan's                          SHARED — announce first
+cut-view.js        (unlisted)                          SHARED — announce first
+```
+
+Read both before touching any of them, and take the stricter reading. The
+paragraph above is right that the announcement is the mechanism and the list
+is only a convenience — which is why eighteen days of ambiguity cost nothing.
+
+**Movie gave a word on 22 Sep, for that session only**: asked to confirm the
+lane before pushing into `.github/workflows/test.yml`, he said *"you have both
+lanes"* and then *"all lanes"*. That is why five of the six PRs merged that day
+reach into files this section calls yours or shared. What changed in them is
+listed under "State of main as of bb1d508" in `HANDOFF-SKIPPER.md`. **Read that
+before your next round in `MODEL.dc.html`** — one of the items is a data-loss
+defect in its serializer, found and fixed on the 23rd, and the guard for it is
+a new harness rather than a spec.
+
+**AND THE LANE QUESTION IS DORMANT — Movie, 23 Sep:** *"i'm going to take it
+slow for a bit and go one at a time so we won't need to worry about lanes for
+a while."* A lane map only decides who wins a collision, and with one agent
+running there is nothing to collide with. The ratification is still owed
+whenever two of us next run together; until then the two maps can disagree
+harmlessly.
+
+---
+
 Branch `claude/gilligan-greeting-ls9w2n`, reset onto `main` under the same name
 after each merge. Prune the remote ref when Movie deletes the branch, or the
 stop hook reports the merge commit as unpushed.
