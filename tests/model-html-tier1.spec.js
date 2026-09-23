@@ -242,6 +242,29 @@ test.describe('MODEL.html tier 1', () => {
     // migration's whole claim is that this page is cheap, and a dependency
     // that arrives without anyone noticing is how that stops being true.
     expect(frameworks.scripts).toEqual([
+      // shell-bars.js leads the list, and its POSITION is the load-bearing
+      // part rather than its presence. The bars are written where the calling
+      // <script> stands, mid-parse, so the module has to be in hand before
+      // the body reaches its first mount. Every other entry here can sit at
+      // the foot of the page with the rest; this one cannot, and a well-meant
+      // tidy-up that moved it down with its neighbours would be a TypeError
+      // on a page that looks perfectly wired. proto/shared-shell-harness.js
+      // checks the ordering directly -- and separately checks the tag is not
+      // `defer`, because defer keeps it early in the TEXT while running it
+      // after the parse, which reads as correct here and still throws.
+      //
+      // BY THIS LIST'S OWN RULE IT IS THE KIND OF ENTRY TO GROW BY: it
+      // DELETES duplicates, and not two -- five. The top bar, the bottom bar,
+      // the instruments, the readout and the file dialogs were about to be
+      // copied onto PROJECT, Construction Layout, SPECS, and REAL ESTATE
+      // PLANS and ESTIMATES when they exist. 380 lines left this page for it.
+      //
+      // ITS HONEST COST: it reaches for window.DraftPalette inside wireSkin,
+      // which this page already loads on the next line, and it is the first
+      // module here that WRITES DOM rather than exporting data or geometry.
+      // That is a real change in what a dependency can do to this page, and
+      // it is said out loud rather than left for someone to discover.
+      './shell-bars.js',
       './palette.js', './layer-views.js', './geometry-2d.js',
       './shared-file-store.js', './wall-types.js', './formatters.js',
       './cut-view.js', './drawing-format.js', './render-2d.js',
