@@ -168,15 +168,17 @@ test('the sheet set opens on the sheets it was left on, and the page holds all o
     // -- a count of seven is also what a page that repointed them all at one
     // plan would report.
     //
-    // `view` IS EXPECTED TO BE GONE, and that is a pin rather than an
-    // oversight: the composer writes which drawing OF a level a plan viewport
-    // is, and format.layout drops it on load. It costs nothing today because
-    // the painter never reads it -- see proto/layout-record-harness.js, which
-    // holds the same line. A page that quietly starts carrying it fails here.
+    // `view` IS PART OF THE SEAT. It says which drawing OF a level a plan
+    // viewport is, and it was being dropped on load until 23 Sep -- which
+    // made the FOUNDATION sheet and the basement sheet two copies of one
+    // drawing. The fixture carries it on both its plan viewports, so a reader
+    // that goes back to throwing it away fails here.
     const seat = v => [v.id, v.kind, v.sheet, v.pif, v.xIn, v.yIn,
-      v.kind === 'plan' ? v.levelId : v.kind === 'section' ? v.cutId : v.elevId].join('/');
+      v.kind === 'plan' ? `${v.levelId}:${v.view || '-'}`
+        : v.kind === 'section' ? v.cutId : v.elevId].join('/');
     expect(after.viewports.slice(1).map(seat)).toEqual(SAVED.viewports.slice(1).map(seat));
-    expect(after.viewports.some(v => 'view' in v)).toBe(false);
+    expect(after.viewports.filter(v => v.kind === 'plan').map(v => v.view).sort())
+      .toEqual(['foundation', 'plan']);
     expect([after.paperKey, after.orientation, after.titleblock,
       after.northArrow, after.nextViewportId])
       .toEqual([SAVED.paperKey, SAVED.orientation, SAVED.titleblock,

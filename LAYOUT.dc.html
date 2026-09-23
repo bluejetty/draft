@@ -1372,6 +1372,17 @@ class Component extends DCLogic {
         window.DraftLayoutPlan.drawPlan(ctx, toS, this._saved, viewport.levelId, {
           padFt: 0.5 / 12,
           paperColor: '#ffffff',
+          // WHICH DRAWING OF THE LEVEL. Left out until 23 Sep, and that is
+          // what made the FOUNDATION sheet and the basement sheet the same
+          // picture: drawPlan reads `env.view` and takes an absent one to
+          // mean EVERY view on the level, so both sheets drew the concrete
+          // and the basement walls on top of each other -- which is the
+          // stacking board NEW-2 part 2 was opened to end. The composer had
+          // been dealing the two sheets correctly the whole time.
+          //
+          // `|| null` KEEPS THE OLD PROMISE: a viewport saved before views
+          // existed carries no view and still draws the whole level.
+          view: viewport.view || null,
         });
         ctx.restore();
       }
@@ -1415,8 +1426,28 @@ class Component extends DCLogic {
       return cut ? `SECTION ${cut.name}` : 'SECTION';
     }
     if (viewport.kind === 'elevation') return `ELEVATION ${viewport.elevId}`;
+    return this._planTitle(viewport);
+  }
+
+  // WHAT A PLAN SHEET IS CALLED, in one place because there are two readers:
+  // the caption under the drawing and the title in the company strip. They
+  // said `${level.name} PLAN` separately, and separately is how two answers
+  // to one question start.
+  //
+  // THE VIEW NAMES IT, NOT THE LEVEL, on a level that holds more than one
+  // drawing. Level 1 is NAMED FOUNDATION because that is the level; the two
+  // drawings of it are the concrete and the basement walls above it, and a
+  // permit set that calls both of them FOUNDATION PLAN is wrong twice over.
+  // A level that has no foundation view has only the one plan, so its own
+  // name is the right title and nothing changes for it.
+  _planTitle(viewport) {
     const level = this._levels.find(l => l.id === viewport.levelId);
-    return level ? `${level.name} PLAN` : 'PLAN';
+    if (!level) return 'PLAN';
+    if (viewport.view === 'foundation') return 'FOUNDATION PLAN';
+    const splits = (window.DraftLayerViews?.layerViewsForLevelId(level.id) || [])
+      .some(view => view.id === 'foundation');
+    if (splits && viewport.view === 'plan') return 'BASEMENT PLAN';
+    return `${level.name} PLAN`;
   }
 
   // The words the titleblock prints: project info rides the drawing, the
@@ -1470,10 +1501,12 @@ class Component extends DCLogic {
       const ids = [...new Set(sheetViewports.map(viewport => viewport.elevId))];
       return ids.length === 1 ? `ELEVATION ${ids[0]}` : `ELEVATIONS ${ids.join(' · ')}`;
     }
-    const levelIds = [...new Set(sheetViewports.map(viewport => viewport.levelId))];
-    if (levelIds.length > 1) return 'PLANS';
-    const level = this._levels.find(l => l.id === levelIds[0]);
-    return level ? `${level.name} PLAN` : '';
+    // BY DRAWING, NOT BY LEVEL. Two plan viewports of level 1 are the
+    // concrete and the basement walls -- two drawings, not one repeated --
+    // so a sheet holding both is PLANS, exactly as a sheet holding two
+    // levels is.
+    const titles = [...new Set(sheetViewports.map(viewport => this._planTitle(viewport)))];
+    return titles.length === 1 ? titles[0] : 'PLANS';
   }
 
   _onWheel(e) {

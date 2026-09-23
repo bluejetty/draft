@@ -104,27 +104,28 @@ check('the sheet keeps its paper, its strip and its arrow',
   [raw.layout.paperKey, raw.layout.orientation, raw.layout.titleblock,
     raw.layout.northArrow, raw.layout.auto, raw.layout.nextViewportId]);
 
-// ── AND THE ONE KEY THAT DOES NOT SURVIVE ───────────────────────────────
-// `view` -- which drawing OF a level a plan viewport is (board NEW-2 part 2,
-// so FOUNDATION and the basement plan are two sheets off level 1). The
-// composer writes it, the saved file carries it, and format.layout drops it
-// on the way back in.
+// ── AND NOTHING IS LEFT BEHIND ──────────────────────────────────────────
+// This check read "the plan viewport's `view` is the only key the reader
+// drops" until 23 Sep, and it was RIGHT: the composer wrote which drawing of
+// a level a plan viewport was (board NEW-2 part 2, so FOUNDATION and the
+// basement plan are two sheets off level 1), the saved file carried it, and
+// format.layout threw it away on the way back in.
 //
-// IT COSTS NOTHING TODAY, and that is measured, not assumed: LAYOUT's painter
-// calls drawPlan(ctx, toS, saved, viewport.levelId, ...) and never passes a
-// view, so the two level-1 sheets already draw the same thing whether the key
-// survived or not. The composer's own local `view` is what deals two sheets;
-// the copy on the viewport is inert.
+// IT TURNED OUT TO COST THE WHOLE FEATURE. Two other things were missing with
+// it -- LAYOUT never passed the view to its painter, and layout-plan.js's
+// planWalls filtered on the view and then dropped the field the shared
+// composer filters on a second time -- so both level-1 sheets drew the
+// concrete and the basement walls stacked on each other, which is the exact
+// failure the board was opened to end. Fixed in the same commit that found
+// it; the check now asks for the whole record rather than pinning the loss.
 //
-// SO IT IS PINNED RATHER THAN FIXED. The day the painter learns to honour it,
-// this line is what says format.layout has to carry it -- and a port that
-// quietly starts preserving it fails here too, because that would make the
-// two sheets differ under a drafter who never asked them to.
-const dropped = keys => keys.filter(k => k !== undefined);
-check('the plan viewport-s `view` is the only key the reader drops',
-  dropped([...new Set(raw.layout.viewports.flatMap(Object.keys))]
-    .filter(key => !opened.viewports.some(v => key in v))),
-  ['view']);
+// NOTHING IN THE REPO COULD HAVE SAID SO. layout-compose.spec.js asserts on
+// the record straight after composing and never reloads or looks at the ink,
+// and no other spec opens a sheet set it did not just write. That gap is what
+// this file was built for; it found the defect on its first honest reading.
+check('the reader leaves nothing behind',
+  [...new Set(raw.layout.viewports.flatMap(Object.keys))]
+    .filter(key => !opened.viewports.some(v => key in v)), []);
 
 // ── A REFERENCE THAT IS GONE TAKES ONLY ITS OWN SEAT ────────────────────
 // drawing-format.js's own comment: "A viewport whose kind is unknown or whose

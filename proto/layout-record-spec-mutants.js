@@ -18,7 +18,10 @@ const path = require('path');
 require('./harness-args.js').noFlags();
 
 const ROOT = path.resolve(__dirname, '..');
-const SPEC = 'tests/layout-record.spec.js';
+// TWO SPECS, because the board has two halves: whether a saved record opens
+// whole (layout-record) and whether the sheets draw what they say they draw
+// (layout-compose's two-sheets-off-one-level pair).
+const SPEC = 'tests/layout-record.spec.js tests/layout-compose.spec.js';
 
 const MUTANTS = [
   { file: 'LAYOUT.dc.html',
@@ -52,6 +55,27 @@ const MUTANTS = [
     find: '      if (this.state.auto) this._composeDefaultSet();',
     with: '      this._composeDefaultSet();',
     test: 'the sheet set opens on the sheets it was left on' },
+
+  // THE TWO BELOW GUARD THE 23 SEP FIX, and they are aimed at
+  // layout-compose.spec.js rather than this board's own spec: the defect was
+  // in what the sheets DREW, and the sheet set that shows it is a two-storey
+  // one whose level 1 carries both the concrete and the basement walls.
+  { file: 'LAYOUT.dc.html',
+    name: 'THE VIEW IS NOT PASSED TO THE PAINTER AGAIN: both level-1 sheets go '
+      + 'back to drawing the concrete and the basement walls stacked',
+    find: '          view: viewport.view || null,',
+    with: '          view: null,',
+    test: 'the two sheets are two different drawings' },
+
+  { file: 'layout-plan.js',
+    // THE HALF THAT MADE THE FIRST ATTEMPT WORSE than the defect: the view
+    // arrives, the filter runs, the field is dropped, and plan-composition's
+    // second pass reads every wall as 'plan' and empties the sheet.
+    name: 'planWalls DROPS THE WALL-S VIEW AGAIN, so the second filter throws '
+      + 'the whole FOUNDATION drawing away and the sheet comes up blank',
+    find: "          view: wall.view || 'plan',\n",
+    with: '',
+    test: 'the two sheets are two different drawings' },
 
   { file: 'LAYOUT.dc.html',
     // THE FIRST DRAFT OF THIS AIMED AT THE FIXTURE -- `"sheet":2` flipped to

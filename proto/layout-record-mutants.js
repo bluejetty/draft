@@ -77,10 +77,17 @@ const MUTANTS = [
       + '        : Math.round(num(viewport?.xIn) * 4) / 4;' },
 
   { file: 'drawing-format.js',
-    name: 'THE READER QUIETLY STARTS CARRYING `view`, so FOUNDATION and the '
-      + 'basement plan begin to differ on a drawing nobody touched',
-    find: '        return { ...base, levelId: viewportLevelId };',
-    with: '        return { ...base, levelId: viewportLevelId, view: viewport?.view };' },
+    // THE DEFECT THIS GATE ACTUALLY FOUND, put back. `view` says which
+    // drawing of a level a plan viewport is, and dropping it here made the
+    // FOUNDATION sheet and the basement sheet the same picture on every
+    // drawing that had been saved and reopened.
+    name: 'THE READER DROPS `view` AGAIN, so FOUNDATION and the basement plan '
+      + 'collapse back into two copies of one drawing',
+    find: `        const view = oneOf(viewport?.view, LINE_VIEWS, null);
+        return view
+          ? { ...base, levelId: viewportLevelId, view }
+          : { ...base, levelId: viewportLevelId };`,
+    with: '        return { ...base, levelId: viewportLevelId };' },
 
   { file: 'shell-bars.js',
     name: 'THE PORT RENAMES THE PAGE AND LEAVES THE BAR ALONE: a dead '
