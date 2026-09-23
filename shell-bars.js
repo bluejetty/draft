@@ -640,6 +640,56 @@ if (!window.DraftShellBars) {
       if (balance) balance.style.top = art.balanceTop;
     },
 
+    // A PULL-OUT RAIL: the tab, the panel, and the toggle between them.
+    //
+    // Movie asked for one on PROJECT -- "the PROJECT INFO area with the drop
+    // zone should be on the first tab top left" -- and the rail's STYLING
+    // already moved into shell-bars.css, so this is the markup and the one
+    // behaviour that goes with it.
+    //
+    // MODEL IS NOT POINTED AT THIS, deliberately. Its rails carry two sides,
+    // a pane switcher and two different collapse rules, and its setRail()
+    // ends in syncShell() and paint() -- a drawing page's business. Re-routing
+    // that would be a behaviour change to the page people draw on, dressed up
+    // as a refactor, and today has already shown what a 1px difference there
+    // costs. The two share a stylesheet now; converging the wiring is its own
+    // job with its own proof.
+    //
+    // THE STATE LIVES IN THE URL, which is MODEL's rule and worth keeping:
+    // what the drafter has open survives a reload and can be sent to someone
+    // else. ?left=1 means open, absent means shut.
+    //
+    // opts.side      'left' or 'right'.
+    // opts.label     the word down the tab.
+    // opts.title     the tab's tooltip.
+    // opts.html      what goes in the panel -- the page's own, always.
+    // opts.onToggle  optional; a page with something to repaint says so.
+    rail: (opts = {}) => {
+      const side = opts.side === 'right' ? 'right' : 'left';
+      const label = opts.label || 'INFO';
+      put(`<button class="rail-tab" id="${side}-tab" type="button"\n`
+        + `  aria-expanded="false" aria-controls="${side}-rail"\n`
+        + `  title="${opts.title || label}">${label}</button>\n`
+        + `<aside id="${side}-rail" hidden>${opts.html || ''}</aside>`);
+      const tab = document.getElementById(`${side}-tab`);
+      const panel = document.getElementById(`${side}-rail`);
+      const params = () => new URLSearchParams(location.search);
+      const show = open => {
+        panel.hidden = !open;
+        tab.setAttribute('aria-expanded', String(open));
+        const p = params();
+        if (open) p.set(side, '1'); else p.delete(side);
+        const q = p.toString();
+        history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+        if (opts.onToggle) opts.onToggle(open);
+      };
+      tab.addEventListener('click', () => show(panel.hidden));
+      // OPENS ON LOAD IF THE URL SAYS SO, which is what putting it in the URL
+      // was for. A link that says ?left=1 and opens shut is a link that lied.
+      if (params().get(side) === '1') show(true);
+      return show;
+    },
+
     // THE TAB IS THE ONLY THING THAT MOVES THE PANEL. Nothing else opens or
     // shuts it -- not a level change, not a save -- so the state on screen is
     // the drafter's own last decision and never a surprise mid-gesture.
