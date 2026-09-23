@@ -9,10 +9,19 @@ messages:
 > *"also where the garage hooks into the house the foundation, main floor and
 > 2nd floor should connect all the same (1ft in from corner)"*
 
-Status: **TWO MEASURED, ONE NOT STARTED.** No product code has been written
-against any of them. His own drawing is in the tree as
-`proto/repro-movie-garage-2storey.draft`, so every number below comes from
-the file he was looking at rather than from a repro that resembles it.
+Status: **ALL THREE FIXED** — two on 21 Sep (see "FIXED, 21 Sep" below) and
+the third on the 22nd in PR #455, guarded by
+`proto/foundation-face-harness.js`.
+
+**This line read "TWO MEASURED, ONE NOT STARTED. No product code has been
+written against any of them" until 23 Sep**, by which time all three were
+shipped and the body of this same file said so. A status line that outlives
+its work is the failure BOARDS.md's first entry is about; it cost nothing
+here only because nobody opened the file in between.
+
+His own drawing is in the tree as `proto/repro-movie-garage-2storey.draft`,
+so every number below comes from the file he was looking at rather than from
+a repro that resembles it.
 
 ---
 

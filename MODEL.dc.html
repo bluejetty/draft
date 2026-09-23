@@ -3276,6 +3276,21 @@ class Component extends DCLogic {
         width: opening.width,
         sillHeight: opening.sillHeight,
         headHeight: opening.headHeight,
+        // A WINDOW'S CASEMENT, AND IT HAS TO BE WRITTEN OR IT IS LOST.
+        //
+        // This object is built field by field with NO SPREAD, so any key the
+        // shared reader produces and this list omits survives being loaded and
+        // dies on the next save here. Measured 23 Sep: drawing-format.js
+        // returned thirteen fields and this wrote twelve, so a DOUBLE CASEMENT
+        // drawn on MODEL.html came back a single the first time anyone edited
+        // the drawing on this page -- silently, on a drawing that still opened
+        // fine. That is the same shape as the `layout` passthrough two hundred
+        // lines down, which survives only because two lines carry it on
+        // purpose.
+        //
+        // proto/opening-round-trip-harness.js now compares the two lists, so
+        // the next field added to the reader cannot go the same way.
+        casement: opening.casement || null,
         garage: opening.garage === true,
         auto: opening.auto === true,
       })),

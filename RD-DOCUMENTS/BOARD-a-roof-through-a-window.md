@@ -14,10 +14,20 @@ and then his own answer to it:
 
 > *"it could be a reduced height window in that location"*
 
-Status: **DIAGNOSED, NOT FIXED.** Fixture kept as
-`proto/repro-2storey-garage.draft` — his own drawing, saved off the site at
-19:32. Re-checked on `draft.bluejetty.ca` at 19:47 and it reproduces, so this
-is not the `roughdrafter.com` mirror lagging (`BOARDS.md:1003`).
+Status: **FIXED, 22 Sep, in PR #454** — see "FIXED, 22 Sep" at the foot of
+this file for what was built and where. Movie confirmed it on the live site
+the same day: *"roof fixed ! nice job"*.
+
+**This line read "DIAGNOSED, NOT FIXED" for a day after the fix shipped**,
+while the section at the foot of this same file described the fix in detail.
+A reader who stopped at the header would have gone hunting a defect that was
+already closed — which is the failure BOARDS.md's own first entry records
+("how a closed item reads as an open one: nobody lies, the note simply
+outlives the work") and the one I shipped in a harness header in #455. Third
+time; the status line is the thing to edit first, not last.
+
+Fixture kept as `proto/repro-2storey-garage.draft` — his own drawing, saved
+off the site at 19:32 on the 20th, when it still reproduced.
 
 ---
 
