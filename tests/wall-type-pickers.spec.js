@@ -8,9 +8,14 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
+// ONE TYPE IS OPEN AT A TIME (Movie, 23 Sep). The page opens on the first
+// card, DETACHED GARAGE, and everything this file drives is in the bungalow's
+// schedule -- so it selects that card, the way a drafter would. Arriving
+// through MODEL's button carries no ?type=, which is why this is a click.
 async function openProjectPage(page) {
   await page.locator('[data-project-open]').click();
   await page.waitForURL(/PROJECT\.html/);
+  await page.locator('.type-card[data-type="bungalow"]').click();
   await expect(page.locator('[data-detail-input="pitch"]')).toBeVisible();
 }
 
