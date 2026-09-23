@@ -1,0 +1,625 @@
+/* THE SHELL BARS -- the top bar, the bottom bar, the instruments and the
+ * status readout. Every page of the shop wears these.
+ *
+ * THE REPO'S FIRST SHARED STYLESHEET, and it exists because the bars were
+ * about to be copied. MODEL.html had the only set; PROJECT.html needed the
+ * same ones (Movie, 23 Sep: "i need the project area to have the top and
+ * bottom bars for sure like these (with the BONE/HOUSE)"), and then so did
+ * Construction Layout, SPECS, and REAL ESTATE PLANS and ESTIMATES once they
+ * exist. A second copy is how #325 happened and how .card came to mean two
+ * different things on PROJECT and SPECS. Movie asked the question that
+ * settles it -- "it will guarantee to be same style if i change one all will
+ * change right" -- which is true of shared markup ONLY IF THE STYLING MOVES
+ * TOO, so it did. This file is that guarantee.
+ *
+ * THE INSTRUMENTS ARE IN HERE, and that was a correction. They were left
+ * behind as MODEL's on the first cut, on the grounds that PROJECT does not
+ * draw. Then Movie: "put those top and bottom bars in the Construction
+ * layout (with the LENGTH, ANGLE and other instruments ... we may need to
+ * draw sometimes". So #strip-center is not one page's -- it is every DRAWING
+ * page's. A page that does not draw never mounts the markup, and a rule with
+ * nothing to match costs nothing. One file beats two and a rule about which
+ * pages link which.
+ *
+ * WHAT IS NOT HERE: the rails, the drive-thru sign and the build bar. Those
+ * are the drawing page's own furniture, and the sign is MODEL's way of
+ * CHOOSING a house -- PROJECT chooses from the cards on its own sheet.
+ *
+ * HOW THIS WAS PROVED SAFE. These rules were SCATTERED through 1,560 lines of
+ * MODEL.html's style block, interleaved with the drawing's, and moving a rule
+ * moves it in the cascade. That page already has same-specificity collisions
+ * that silently kill rules -- the @media (max-width:1500px) block below is
+ * two-thirds dead for exactly that reason, which is how I learned not to
+ * trust a reading of the source. So the acceptance instrument was the
+ * browser's own answer: getComputedStyle over EVERY property of all 1,704
+ * elements in these bars, across four skins and three widths, before and
+ * after. 765,324 values, zero differences, and the instrument was watched
+ * failing -- one pixel off --strip-h moves 5,636 of them.
+ *
+ * THE TWO-SPACE INDENT IS NOT A MISTAKE. These rules were inside a <style>
+ * block and are indented as they were, because the move had to be provable:
+ * proto/units-stack-mutants.js anchors on four of them by their exact text,
+ * leading spaces included, and a tidy-up would have made the diff a rewrite
+ * rather than a move. Reformat the day something else is already changing
+ * these lines.
+ *
+ * THE COLOURS ARE ROLES, for palette.js's reason -- four skins, and a bar
+ * that hardcoded its ink would be a white bar on a night page. This file does
+ * not define the role table; the pages load palette.js, which is what makes
+ * these names mean anything. A PAGE THAT LINKS THIS AND NOT palette.js GETS A
+ * BAR WITH NO COLOURS -- the trap waiting for SPECS, SETTINGS and STANDARDS,
+ * none of which has been converted.
+ *
+ * FOUR LITERALS SURVIVE, and they are named here rather than left for someone
+ * to find and assume were missed. None of them is a surface the skin owns:
+ *   rgba(255,64,51,0.75)  the lit bone's halo -- a LIGHT, not a colour, and
+ *                         ROUGH does not use it at all (its ON state is its
+ *                         own artwork, see the rule's own note).
+ *   #fff + rgba(29,31,32,0.55)   the wallet number and its shadow, printed
+ *                         ON the bone artwork. It tracks the art, which is
+ *                         the same art on every skin, not the page under it.
+ *   rgba(0,0,0,0.35)      the modal scrim. Black at 35% darkens whatever is
+ *                         behind it, which is the job on all four skins.
+ * If a fifth appears, it is probably a mistake.
+ */
+
+
+  /* THE COUNTERS READ AT THE FOOT OF THE SHEET (Movie, 15 Sep). They were
+     moved to the head when the controls were scattered across the sheet and
+     the foot belonged to the drive-thru sign; now every control lives in one
+     of the two dark bars, so the band the numbers want is the one just above
+     the bottom bar -- out of the drawing's centre, and beside nothing that
+     grows with a level name. The view counter reads in the same panel: the
+     level and the view are counts like the rest, not a separate instrument. */
+  /* SHUT BY DEFAULT, BEHIND ITS OWN WORD. Movie: "make it collapsed into only
+     TEXT that can be clicked to open this, similar to the DRAG TO PAN text on
+     the right side, but put this text on the left side: STATUS READOUT". The
+     panel is instrumentation -- twelve counts and six state fields -- and it
+     was standing open over the bottom-left of the sheet at all times to say
+     so. Collapsed it costs one line of the same quiet uppercase the hint uses
+     on the other end of the same edge, so the two ends of the foot read as a
+     pair: the hint tells you what the mouse does, the tab offers the numbers.
+     THE TEXT IS NEVER REMOVED, only hidden -- updateReadout keeps writing to
+     it shut, so the counts are already right the instant it opens, and the
+     many specs that read the page's own scale and wall count out of it keep
+     working whether the drafter has it open or not. */
+  #readout[hidden] { display:none; }
+  /* THE ROW CARRIES THE POSITION NOW, not the tab: the count stands to the
+     tab's left on the same line, and two separately fixed elements at one
+     inset would be a layout kept in step by hand. */
+  #lower-left { position:fixed; left:12px; bottom:var(--readout-bottom);
+    z-index:5; display:flex; align-items:baseline; gap:10px; }
+  #readout-tab { color: var(--ink-quiet);
+    font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
+    text-transform:uppercase; cursor:pointer;
+    border:none; background:none; padding:0; }
+  /* AN EMPTY SLOT TAKES NO ROOM, so the tab is where it has always been
+     until the count actually arrives. `gap` would otherwise pay for a child
+     that is not there. */
+  #lower-left > [data-visit-counter-home]:empty { display:none; }
+  #readout-tab:hover { color: var(--accent); }
+  /* OPEN, THE WORD GOES AND AN X TAKES OVER (Movie): the tab and the panel
+     are one control, so having both on screen at once said the same thing
+     twice. The X sits in the panel's own bottom-right, in the open area
+     under the second line rather than on a number. */
+  #readout-tab[aria-expanded="true"] { display:none; }
+  /* OVER THE ROW, not beside it. The panel opens on the same corner the row
+     stands in; one z above means it covers the count instead of sharing a
+     line with it, and the tab hides itself as it always did. */
+  #readout { display:flex; flex-direction:column; align-items:flex-end;
+    position:fixed; left:12px; bottom:var(--readout-bottom); z-index:6;
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    border:1px solid var(--edge-panel); border-radius:6px;
+    /* THE PANEL STAYS CLICK-THROUGH and only the X takes the pointer: open,
+       it covers a corner of the sheet, and a drafter who draws there should
+       reach the drawing, not a wall of numbers. */
+    padding:8px 11px; white-space:pre; pointer-events:none;
+    /* Instrument text: tabular figures so the counts do not jitter as they
+       change, and the mono face so a column of numbers reads as a column. */
+    font-family: var(--font-mono); font-size:12px;
+    font-variant-numeric:tabular-nums; letter-spacing:0.01em; }
+  #readout b { color: var(--accent); font-weight:600; }
+  #readout-text { align-self:flex-start; }
+  #readout-close { pointer-events:auto; margin-top:2px; padding:0 2px; border:none; background:none;
+    cursor:pointer; color: var(--ink-quiet);
+    font-family: var(--font-ui); font-size:14px; line-height:1; }
+  #readout-close:hover { color: var(--accent); }
+
+  /* THE INSTRUMENT STRIP — one bar across the HEAD of the page, the shape
+     MODEL.dc.html:1963 carries: the message at the left and the drafting
+     instruments holding the centre. PROJECT went to the page row at the
+     lower left and the switches to the mode corner at the upper left, both
+     by §7b; what is left here is only what the drafter READS.
+
+     A CHIP HAS THREE STATES AND THEY MEAN DIFFERENT THINGS, which is the
+     whole reason the old strip reads as an instrument panel rather than a
+     toolbar. `.lit` is engaged. The base state is an instrument that exists
+     and is down. `.dormant` is an instrument this page has NOT built — drawn
+     at a quarter of the ink, not clickable, and carrying a title that says
+     so. Dormant rather than absent because the old strip's spacing IS the
+     panel: six instruments flanking the cluster is what makes the ruler and
+     the T-square sit dead centre, and a bar that drops them re-centres
+     itself every time one is built.
+
+     It is the one place on this page that says what state the board is in,
+     so the readout sits below it rather than under it. */
+  /* ONE HOME FOR THE STRIP'S HEIGHT. It was 34px here and the hint's 46px
+     was 34 + 12 written out by hand, so the bottom band's size lived in two
+     literals that had to agree and nothing made them. They did not: the
+     sidebars' height was tuned to a hint at bottom:12px, the strip moved it
+     to 46, and the pairwise chrome check went red on `right-rail overlaps
+     hint` -- its sixth catch, and the second one this file has produced from
+     one distance being written down twice. */
+  :root { --strip-h: 44px;
+    /* THE HOUSE STRIP, along the foot: BUNGALOW / BILEVEL / DETACHED GARAGE /
+       BONE and the one DELETE. Named for the same reason --strip-h is: the
+       hint, the page row and both sidebars all stop above it, and that
+       distance was written out by hand three times the last time this file
+       had two bands. */
+    --house-h: 40px;
+    /* THE BAND THE SIDEBARS MUST STAY OUT OF at the foot: the house strip,
+       which now carries the page row inside it, and the counters panel that
+       sits just above it. */
+    --readout-bottom: calc(var(--house-h) + 12px);
+    /* THE TOP BAND IS ONE BAND NOW. Every control that was loose on the sheet
+       -- mode corner, file row, settings -- is a tenant of the strip, so the
+       only things still derived from its height are the two file notes and
+       the sidebars below them. */
+    --note-top: calc(var(--strip-h) + 8px); }
+  /* AT THE TOP OF THE SHEET NOW, not the foot (§7b). Movie: the drive-thru
+     sign rises from the bottom and covers the house row, so nothing the
+     drafter reads WHILE DRAWING may live down there. */
+  #strip { position:fixed; left:0; right:0; top:0; z-index:6; height:var(--strip-h);
+    display:flex; align-items:center; gap:8px; padding:0 12px;
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    border-bottom:1px solid var(--edge-panel);
+    font-family: var(--font-ui); font-size:12px; font-weight:600;
+    letter-spacing:0.04em; color: var(--ink-secondary);
+    user-select:none; }
+  #strip a, #strip button { font:inherit; letter-spacing:inherit; }
+  #strip .grow { flex:1; }
+  /* THE MESSAGE CAME OFF THE BAR (Movie, 18 Sep: "what is this text up in
+     here?" -- "if its a warning of som sort we should move it down just into
+     the model area below the top bar area").
+
+     IT WAS ALWAYS GOING TO END UP GARBLED THERE, and the rule that replaced
+     this one said so in as many words: "THE MESSAGE YIELDS. It shares the
+     left end with the settings stack and the mode corner now, and a message
+     long enough to push either of them off the bar would cost a control to
+     report a sentence." So it was given 16vw and an ellipsis -- and 16vw is
+     218px on a 1366 sheet, which cuts "Detached garages are not on this page
+     yet -- the house outline is." off at about a third. Yielding was the
+     right call for a control that had to be on that bar. Taking it off the
+     bar is the better one: nothing yields, and the sentence is read whole.
+
+     LINED UP WITH STATUS READOUT, in its type and at its inset (Movie: "move
+     it to the left make it look like lined up and same text and size and the
+     STATUS READOUT down below", then "STATUS READOUT same location leftwise
+     but at top of model area"). Same left:12px, same 12px UI face, same quiet
+     ink -- so the two ends of the sheet's left edge read as one voice, the
+     page telling you something at the top and offering you the numbers at
+     the bottom. --note-top is where this page already puts a line that sits
+     just under the bar; #elsewhere uses it on the right.
+
+     CLICK-THROUGH, for #readout's reason one line up the file: it lies over
+     the sheet, and a drafter drawing under it should reach the drawing. The
+     nowrap and the ellipsis stay as a backstop for a sentence longer than
+     any this page has, not as the working constraint they used to be. */
+  #strip-message { position:fixed; left:12px; top:var(--note-top); z-index:5;
+    font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
+    text-transform:uppercase; color: var(--ink-quiet); pointer-events:none;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    max-width:calc(100vw - 24px); }
+
+  /* THE SETTINGS STACK, first thing on the bar (Movie, 15 Sep): SETTINGS and
+     STANDARDS over each other and the unit toggle beside them -- MODEL.dc.html's
+     own corner (:430-443), including its ruling that units are ONE button
+     naming the unit in force, not two that fight for the same thumb. */
+  #settings-corner { display:flex; align-items:center; gap:6px; flex:0 0 auto; }
+  #settings-stack { display:flex; flex-direction:column; gap:1px; }
+  #settings-corner a, #settings-corner button {
+    font-family: var(--font-ui); font-size:9px; font-weight:600;
+    letter-spacing:0.05em; text-transform:uppercase; text-decoration:none;
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:56px; padding:2px 6px; cursor:pointer;
+    border:1px solid var(--edge-panel); border-radius:3px;
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    color: var(--ink-primary); }
+  #settings-corner a:hover, #settings-corner button:hover {
+    border-color: var(--accent); color: var(--accent); }
+  /* THE UNIT STACK borrows the settings stack's rows exactly -- same font,
+     same minimum, same 1px gap -- because the DC corner's fault was two 44px
+     targets on top of each other, and the cure is the row height that
+     already works two inches to the left, not a new shape.
+
+     THE MINIMUM IS 56px AND IT WAS 64px. Two more stacked pairs came up to
+     this bar on 17 Sep, and at 64 the bar overflowed 1280 by 10px --
+     PRINTSCREEN off the sheet at 1213..1290, caught by model-html-shell's
+     own guard, which is the second time that check has earned its keep.
+
+     MEASURED RATHER THAN NUDGED. The widest label on any of these rows is
+     DRAFTING at 35px of ink; with the 6px padding each side and the 1px
+     border that is 49px, so 56 clears it by 7px and 64 was carrying 15px of
+     slack that nothing asked for. Four columns at 8px each gives the bar 32px
+     back, which is 1280 with 22px to spare. Still well over the 44px touch
+     target the DC corner failed on.
+
+     ONE NUMBER FOR THE WHOLE FAMILY, so a fifth pair cannot arrive built to a
+     fifth width. Settings is unchanged by it: STANDARDS is wider than either
+     minimum, so that stack is sized by its own word. */
+  #units-corner { display:flex; align-items:center; flex:0 0 auto; }
+  #units-corner .stack { display:flex; flex-direction:column; gap:1px; }
+  #units-corner button {
+    font-family: var(--font-ui); font-size:9px; font-weight:600;
+    letter-spacing:0.05em; text-transform:uppercase;
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:56px; padding:2px 6px; cursor:pointer;
+    border:1px solid var(--edge-panel); border-radius:3px;
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    color: var(--ink-quiet); }
+  #units-corner button:hover { border-color: var(--accent); color: var(--accent); }
+  /* SHADED MEANS IN FORCE (Movie, 15 Sep). The same accent fill the mode
+     corner uses, so a drafter reads "this one is on" once and it is true
+     everywhere on the page. */
+  #units-corner button[aria-pressed="true"] { color: var(--accent-ink);
+    background-color: var(--accent); border-color: var(--accent); }
+
+  /* THE INSTRUMENTS SIT IN THE BAR, not on top of it. They were centred by
+     absolute position, which takes no room in the flow -- so the two grow
+     spacers either side of them shared the whole bar between the corners and
+     the instruments floated over whatever ended up in the middle. With
+     SETTINGS, STANDARDS and UNITS added to the left end that turned out to be
+     the mode corner: the TRIANGLE chip landed on DAY and ate the tap.
+     A flex child between the same two spacers is centred by the same
+     arithmetic and cannot overlap anything. */
+  #strip-center { flex:0 0 auto; height:var(--strip-h);
+    display:flex; align-items:center; gap:10px; padding:0 8px; }
+  /* TWO HALVES AND A LINE BETWEEN THEM (Movie, 16 Sep): the bar reads as
+     LENGTH on one side and ANGLE on the other, so the rule sits between the
+     two boxes and names the split. It is CENTRED ON THE SHEET rather than on
+     the cluster: the two halves are equal grid columns, so the middle column
+     lands on the cluster's centre line, and the cluster's centre line is the
+     window's -- which puts the rule on the same axis as the bone below. Flex
+     would have centred the CONTENT and the line would drift with whichever
+     side happens to be wider. */
+  .strip-half { display:flex; align-items:center; gap:10px; }
+  .strip-half-left { justify-content:flex-end; }
+  .strip-half-right { justify-content:flex-start; }
+  #strip-divide { width:1px; height:24px; flex:0 0 1px;
+    background: var(--edge-panel); }
+  /* CENTRED ON THE SHEET, not on what is left over. Two flex spacers centre
+     the cluster only when the two corners weigh the same, and they never do
+     -- the settings/units/mode stack is wide, the file row hides itself at
+     narrow widths -- so the kit sat right of middle. Movie: "put all the
+     instrument lights and textboxes centered".
+     FROM 1440 UP, and the number is a measurement, not a taste: at 1280 the
+     centred cluster's right edge already reaches NEW on an empty page, and a
+     drawing with a length in the box carries it over the whole file row --
+     absolute centring can slide a chip over a corner control, which is the
+     bug the note above records. 1440 is the narrowest sheet where the
+     cluster and both corners fit side by side. Below it the cluster goes
+     back to being a flex child between spacers, where it cannot overlap
+     anything -- the corners weigh nearly the same, so it sits within a
+     chip's width of centre rather than exactly on it. */
+  /* THE OVERLAY MUST NOT EAT CLICKS. An absolute cluster sits OVER the bar,
+     and its box is wider than its ink -- the 1fr tracks are empty space, and
+     a long live length widens the whole box symmetrically. That empty box
+     reaching NEW was seven specs' 180-second timeout: "#strip-center
+     intercepts pointer events". The box goes deaf; the tenants stay live. */
+  @media (min-width: 1440px) {
+    #strip-center { position:absolute; left:50%; transform:translateX(-50%);
+      display:grid; grid-template-columns:1fr auto 1fr; pointer-events:none; }
+    /* The halves' boxes equalise -- 1fr and 1fr -- so the quiet half is
+       wider than its chips too. Deaf boxes all the way down to the ink. */
+    #strip-center .strip-half { pointer-events:none; }
+    #strip-center .strip-half > *, #strip-divide { pointer-events:auto; }
+  }
+  /* WHEN THE BAR RUNS OUT OF SHEET, the things with nothing behind them go
+     first. At 1280 the tenants want 1422px, so the file row -- NEW, OPEN,
+     SAVE, SAVE AS -- was pushed off the right edge and could not be clicked
+     at all. A control that does nothing yet must never cost one that saves
+     the drawing, so the three not-built-yet chips and the LENGTH caption are
+     dropped on a narrow sheet and the instruments close up.
+
+     THE THRESHOLD CAME DOWN when RUFF/ROUGH and NIGHT/DAY went to the bottom
+     bar: that is ~150px the left corner no longer spends, and 1500 was still
+     charging for it -- so a 1366 laptop, which now has room to spare, lost
+     the brush and the rest of the not-built chips for nothing. Movie, 15
+     Sep: "the drafting brush and a bunch of other unused instrument lights
+     vanished can we put them back". */
+  @media (max-width: 1180px) {
+    #strip-center .chip.dormant { display:none; }
+  }
+  /* THE LABEL OUTLASTS THE WIDTH IT COSTS. Dropping the word LENGTH saved
+     ~48px and spent the thing the box was for: an unlabelled field next to
+     an unlabelled field is two boxes a drafter has to try. Movie, 15 Sep:
+     "there is a big blank spot where it should say LENGTH". The box gives up
+     the width instead -- 72px still holds 12'-11 1/2". */
+  @media (max-width: 1500px) {
+    #strip-center, .strip-half { gap:6px; }
+    #frozen-length { width:72px; }
+    #strip-len:not(:empty) { min-width:66px; }
+  }
+  /* AND THEY SIT AGAINST THE WORKING ONES. Movie: "snug them to the sides of
+     the working ones". A dormant chip spaced like an instrument reads as one
+     of the instruments; pulled tight to the live cluster it reads as what it
+     is -- the rest of the kit, not yet in hand. */
+  #strip-center .chip.dormant { margin-inline:-3px; padding:2px 2px; }
+  .chip { display:inline-flex; align-items:center; gap:3px; padding:2px 4px;
+    border:1px solid transparent; border-radius:4px; background:none;
+    color: var(--ink-secondary); cursor:pointer; }
+  .chip:hover { border-color: var(--edge-panel); }
+  .chip.lit { color: var(--accent); border-color: var(--accent); }
+  /* ARMED IS NOT LOADED, and the brush is the one instrument where the two
+     come apart: up and empty it takes every press and changes nothing, up and
+     loaded it repaints what it touches. One outline for "this is taking your
+     presses", the accent for "and here is what it will do with them". */
+  .chip.armed:not(.lit) { border-color: var(--ink-secondary); }
+  .chip.dormant { color: var(--ink-quiet); opacity:0.35; cursor:default; }
+  .chip.dormant:hover { border-color:transparent; }
+  #strip .num { font-family: var(--font-mono); font-size:12px;
+    font-variant-numeric:tabular-nums; color: var(--ink-primary); }
+  /* THE READ-OUTS RESERVE THEIR WIDTH ONLY WHEN THEY ARE READING. The
+     min-width is there so a number growing from 4' to 12'-11 1/2" does not
+     shove the instruments sideways mid-gesture -- but with nothing in hand
+     it was 118px of held-open nothing between the ruler and LENGTH, which is
+     what Movie saw: "why big gap?". Empty, they take no room; the moment
+     they have a number they take the same room as before, so the jitter the
+     min-width was written for still cannot happen. */
+  #strip-len:not(:empty) { min-width:74px; }
+  #strip-len { text-align:right; }
+  #strip-ang:not(:empty) { min-width:44px; }
+  #strip-ang { color: var(--ink-quiet); }
+  #strip-length-box { display:flex; align-items:center; gap:5px;
+    font-size:11px; color: var(--ink-quiet); }
+  #frozen-length { width:96px; text-align:right; padding:3px 6px;
+    font-family: var(--font-mono); font-size:12px;
+    background-color: var(--surface-chip); color: var(--ink-primary);
+    border:1px solid var(--edge-panel); border-radius:4px; outline:none; }
+  #frozen-length:disabled { color: var(--ink-quiet); opacity:0.5; }
+  #frozen-length:focus { border-color: var(--accent); }
+  /* THE WORD SITS AFTER ITS BOX, between the box and the protractor, where
+     Movie put it: the instrument and its number read as one thing with the
+     name in the middle naming both. It stays at every width -- the angle box
+     is narrow enough to be taken for a second length box, and the label is
+     what tells them apart. */
+  #strip-angle-box { display:flex; align-items:center; gap:5px;
+    font-size:11px; color: var(--ink-quiet); }
+  #frozen-angle { width:62px; text-align:right; padding:3px 6px;
+    font-family: var(--font-mono); font-size:12px;
+    background-color: var(--surface-chip); color: var(--ink-primary);
+    border:1px solid var(--edge-panel); border-radius:4px; outline:none; }
+  #frozen-angle:disabled { color: var(--ink-quiet); opacity:0.5; }
+  #frozen-angle:focus { border-color: var(--accent); }
+
+  /* THE MODE CORNER, upper-left (§7b): what the drawing IS -- board, finish,
+     day/night. It sat at the right-hand end of the foot strip; Movie moved it
+     to the corner the old LEVEL / VIEW / DRAW WALL / SAVE bar vacated. The
+     buttons and what they do are untouched: this is a position, not a
+     re-scope. */
+  #mode-corner { display:flex; align-items:center; gap:5px; flex:0 0 auto;
+    font-family: var(--font-ui); font-size:12px; font-weight:600;
+    letter-spacing:0.04em; }
+  /* `#house-strip .set` came off these three rules on 17 Sep: both switches
+     went back up to the mode corner and the bottom bar now carries no set at
+     all. A selector kept "in case" is a selector nobody can reason about. */
+  #mode-corner .set { display:flex; align-items:center;
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    border:1px solid var(--edge-panel); border-radius:4px; overflow:hidden; }
+  /* STACKED, and the stack is why the bar got NARROWER rather than wider
+     when the units gained a second button: TOY over DRAFTING is the width of
+     DRAFTING alone, where side by side it was both plus a divider. The bar
+     overflowed 1280 by 142px once already (PRINTSCREEN, 15 Sep); a
+     rearrangement that spent width would have walked back into it. */
+  #mode-corner .set.stack { flex-direction:column; align-items:stretch; }
+  #mode-corner button { font:inherit; letter-spacing:inherit;
+    padding:4px 7px; font-size:11px;
+    text-transform:uppercase; cursor:pointer; border:none; background:none;
+    color: var(--ink-quiet); }
+  #mode-corner .set.stack button { padding:2px 7px; font-size:9px; }
+  /* EVERY STACKED PAIR IS THE UNIT STACK'S TWIN. Movie, first for the board
+     switch -- "make the TOY / DRAFTING buttons same size as IMPERIAL / METRIC
+     ... and same shading" -- and on 17 Sep for the two that came back up:
+     "make them the same style as up top style". Stacked pairs standing side
+     by side on one bar, built to different shapes, read as different KINDS of
+     control -- so they borrow the unit rows outright: the 64px minimum, the
+     9px row, the 1px gap, the chip fill and the accent for the one in force.
+     The set's own frame goes with it, since the frame is what made a pair one
+     welded block rather than two buttons.
+
+     KEYED ON THE SHAPE, NOT ON WHICH SWITCH IT IS. This named
+     [data-board-switch] while the board switch was the only stack up here,
+     and the two arriving would each have had to be added to the selector by
+     hand -- a rule that has to be edited every time it should already apply
+     is the kind that goes stale silently. */
+  #mode-corner .set.stack { border:none; background:none;
+    gap:1px; overflow:visible; }
+  #mode-corner .set.stack button {
+    font-family: var(--font-ui); font-size:9px; font-weight:600;
+    letter-spacing:0.05em;
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:56px; padding:2px 6px;
+    border:1px solid var(--edge-panel); border-radius:3px;
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    color: var(--ink-quiet); }
+  #mode-corner .set.stack button:hover {
+    border-color: var(--accent); color: var(--accent); }
+  #mode-corner .set.stack button[aria-pressed="true"] {
+    color: var(--accent-ink); background-color: var(--accent);
+    border-color: var(--accent); }
+  #mode-corner button[aria-pressed="true"] { color: var(--accent-ink);
+    background-color: var(--accent); }
+
+  /* THE FILE ROW, upper-right (§1): what the FILE is -- NEW, OPEN, SAVE with
+     its three words, SAVE AS, and the extension the generated name takes.
+     The row from MODEL.dc.html:573-590 without its PROJECT button: Movie has
+     another place for that and it is the page row at the lower left. */
+  /* THE ROW IS ALWAYS THERE (Movie): it came up hidden until a drawing
+     loaded, so an origin with nothing stored showed a bar with no way to
+     start one -- NEW and OPEN, the two that need no drawing, were the ones
+     hidden hardest. The row stands from the first paint and the two WRITE
+     buttons are dead until there is something to write, which is the rule
+     the lease already uses below: a missing button reads as a broken page,
+     a dead one says the drafter is in the right place. */
+  #file-row { flex:0 0 auto; display:flex; align-items:center; gap:6px; }
+  #file-row[hidden] { display:none; }
+  #file-row button, #file-row select {
+    font-family: var(--font-ui); font-size:11px; font-weight:600;
+    letter-spacing:0.06em; text-transform:uppercase;
+    color: var(--ink-primary); cursor:pointer;
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border:1px solid var(--edge-panel); border-radius:5px; padding:5px 9px; }
+  #file-row button:hover, #file-row select:hover { border-color: var(--accent); }
+  #file-row select { padding:5px 6px; text-transform:none; }
+  #file-row button:disabled, #file-row button:disabled:hover {
+    color: var(--ink-quiet); border-color: var(--edge-panel); cursor:default; }
+  /* SAVE IS ALSO THE STATUS, and that is a decision rather than a shortcut.
+     §1 draws NEW · OPEN · SAVE · status · SAVE AS, and the .dc page has two
+     elements there because its SAVE is a download and its status describes a
+     different write. Here they are one write, so a separate word beside the
+     button would be a second reading of one fact -- the drift this page has
+     paid for twice -- and the three words SAVE / UNSAVED / SAVED are already
+     load-bearing in the specs. `data-save-status` is on the button that
+     carries them. */
+  #save:disabled { color: var(--ink-quiet); cursor:default; }
+  /* Unsaved edits. The accent is the page's one attention colour, so the
+     button stops being furniture the moment there is something to lose. */
+  #save.dirty { color: var(--accent); border-color: var(--accent); }
+
+  /* THE PAGE ROW, lower-left (§7b): where the drafter GOES. PROJECT stayed
+     where it was and gained five neighbours.
+
+     A BUTTON THAT GOES NOWHERE LOOKS LIKE IT GOES NOWHERE -- the dormant
+     chip's own treatment, quarter ink and no pointer, because a control that
+     lights and does nothing is a worse lie than one that is plainly down. */
+  #page-row, #sheet-row { flex:0 0 auto; display:flex; align-items:center; gap:4px;
+    font-family: var(--font-ui); font-size:11px; font-weight:600;
+    letter-spacing:0.06em; }
+  /* THE SWITCH SPANS ARE NOT PAGES. `#page-row span` is the chip treatment
+     for MODEL's you-are-here, and RUFF/ROUGH sitting in the same row would
+     have taken it -- a switch wearing a page's border, inside the row that
+     means "places you can go". */
+  #page-row a, #page-row button, #page-row > span:not(.set),
+  #sheet-row a, #sheet-row button { font:inherit;
+    letter-spacing:inherit; display:inline-flex; align-items:center;
+    height:24px; padding:0 8px; text-transform:uppercase; text-decoration:none;
+    border-radius:4px; border:1px solid var(--edge-panel);
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    color: var(--ink-primary); cursor:pointer; }
+  #page-row a:hover, #page-row button:hover,
+  #sheet-row a:hover, #sheet-row button:hover { border-color: var(--accent);
+    color: var(--accent); }
+  /* HERE, not a link to here. A button that reloads the page you are on
+     loses an unsaved corner to a stray thumb. */
+  #page-row [aria-current="page"] { color: var(--accent);
+    border-color: var(--accent); cursor:default; }
+  #page-row button:disabled, #page-row button:disabled:hover,
+  #sheet-row button:disabled, #sheet-row button:disabled:hover {
+    color: var(--ink-quiet); opacity:0.35; cursor:not-allowed;
+    border-color: var(--edge-panel); }
+  /* THE CHANGE NOTE USED TO STEP DOWN WHEN THE BANNER WAS UP -- 34px for the
+     banner's line, 68px to clear it -- and the column is where that goes: a
+     hidden child is `display:none`, which leaves the stack, so the two are
+     never in the same place and nobody has to measure the one to place the
+     other. */
+
+  /* THE HOUSE STRIP, along the foot (§7b): what the drafter PICKS. This is
+     the region the drive-thru sign rises into and covers, which is why
+     nothing read while drawing lives here -- and why DELETE, which does live
+     here, is unavailable while the sign is up.
+
+     THREE GROUPS ACROSS IT (Movie, 15 Sep): the two live places on the left,
+     the bone in the middle, the sheets that come off this model on the far
+     right. The middle is what the sign covers, and the bone is the only
+     press there for exactly that reason -- a control the sign hides is a
+     control the drafter cannot reach while ordering. */
+  #house-strip { position:fixed; left:0; right:0; bottom:0; z-index:6;
+    --foot-press-h:34px;
+    min-height:var(--house-h);
+    display:flex; align-items:center; gap:8px; padding:0 12px;
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    border-top:1px solid var(--edge-panel); }
+  #house-strip .grow { flex:1; }
+  /* THE ONE DELETE (§7a). Not per type, and not only for walls: it acts on
+     the selection, whatever is in it. It is on screen exactly while there is
+     something to delete -- and the iPad has no Delete key, so this button is
+     the only way to delete anything at all there. */
+  #delete { font-family: var(--font-ui); font-size:12px; font-weight:600;
+    letter-spacing:0.06em; text-transform:uppercase; cursor:pointer;
+    color: var(--ink-primary);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border:1px solid var(--edge-panel); border-radius:6px; padding:6px 14px; }
+  #delete:hover { color: var(--accent); border-color: var(--accent); }
+  #delete[hidden] { display:none; }
+
+  /* THE MIDDLE PRESS: the bone, the one press the sign covers. DELETE, COPY
+     and PASTE travel with it because they are verbs, not places.
+
+     THE BONE STANDS ON THE SHEET'S CENTRE LINE (Movie, 16 Sep), the same
+     axis the instrument rule at the top of the page stands on -- so it is
+     placed absolutely at 50% rather than centred by flex spacers, which
+     centre on what is LEFT OVER between two corners that never weigh the
+     same. The verbs line up to its right, clear of the bone's own box, so a
+     selection appearing cannot walk the bone off the axis. */
+  #dt-bar { position:absolute; left:50%; top:0; bottom:0;
+    display:flex; align-items:center; gap:8px;
+    padding-left:calc(var(--foot-press-h, 34px) * 0.53 + 8px); }
+  /* THE FOOT'S BONE is the same red bone that sits on the sign's post --
+     one artwork for one press, so the two bones cannot start looking like
+     two different verbs. Its own box is centred on the strip's 50% axis,
+     the same axis the instrument divider above it stands on. */
+  #bone { position:absolute; left:0; top:50%;
+    transform:translate(-50%, -50%); padding:0; border:none;
+    background:none; line-height:0; cursor:pointer; }
+  #bone img { display:block; height:var(--foot-press-h, 34px); width:auto; }
+  #bone:hover img { filter:brightness(1.12); }
+  /* THE BONE LIGHTS BEFORE THE BOARD RISES, which was the house button's job
+     until the house button came off the strip. One artwork, so the glow is a
+     filter rather than a second file -- and it is the same two seconds. */
+  #bone[data-lit] img { filter:brightness(1.3)
+    drop-shadow(0 0 7px rgba(255,64,51,0.75)); }
+  /* AND ROUGH'S GLOW IS DRAWN, NOT FILTERED. Its ON state is its own file --
+     the neon is painted into it, with a falloff and a white-hot core no
+     filter produces -- so the swap IS the light, and the rule above would
+     only wash it out. A red halo around a blue house would be a second light
+     source besides, and the two seconds before the board rises are exactly
+     when the press has the drafter's eye. */
+  html[data-theme="rough"] #bone[data-lit] img { filter:none; }
+  /* THE NUMBER RIDES ON THE PRESS (board #261, MODEL.dc.html:558), and WHERE
+     it rides is a fact about the ARTWORK rather than about the wallet --
+     which is why the offset lives in BONE_ART beside the two pictures and
+     not here. Movie, 19 Sep: "put the number on the bone under the bone in
+     the red area and put the number in the house centered in the middle of
+     the house outline", and then, on being shown why those are one rule:
+     "yes exactly the style is different but the bone and house are the same
+     button".
+
+     aria-hidden, and the title carries the wallet in words instead. A screen
+     reader reading "3" off a button called BONE says nothing useful; the
+     title says three bones, when the next one lands, and what a build costs. */
+  #bone-balance { position:absolute; left:0; right:0;
+    transform:translateY(-50%); text-align:center; pointer-events:none;
+    font-family: var(--font-ui); font-weight:700; color:#fff;
+    text-shadow:0 1px 2px rgba(29,31,32,0.55); letter-spacing:0.02em;
+    line-height:1; }
+  #bone-balance:empty { display:none; }
+  /* AN EMPTY WALLET GREYS OUT, and grey beats the lit glow: a bone glowing
+     with nothing to spend is a contradiction. The rule sits after
+     [data-lit] so it wins on the one press where both are true. */
+  #bone[data-broke] img { filter:grayscale(1) brightness(0.82); }
+  #bone .said {
+    position:absolute; width:1px; height:1px; margin:-1px; padding:0;
+    overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0; }
+  /* AND THE SAME SHELL AGAIN for the two file questions, for the same reason:
+     three kinds of modal would teach the drafter that they are three
+     different kinds of thing. They are one -- a question that must be
+     answered before the page does what was asked. */
+  #file-guard, #save-as { position:fixed; inset:0; z-index:7; display:flex;
+    align-items:center; justify-content:center; padding:24px;
+    background:rgba(0,0,0,0.35); }
+  #file-guard[hidden], #save-as[hidden] { display:none; }
+  #save-as-name { width:100%; box-sizing:border-box; margin:0 0 12px;
+    padding:7px 9px; border-radius:3px; border:1px solid var(--edge-panel);
+    background-color: var(--surface-chip); color: var(--ink-primary);
+    font-family: var(--font-mono); font-size:13px; }
+  #save-as-name:focus { border-color: var(--accent); outline:none; }

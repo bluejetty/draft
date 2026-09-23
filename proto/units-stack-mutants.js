@@ -26,8 +26,19 @@ const ROOT = require('path').resolve(__dirname, '..');
 const SPEC = 'tests/model-html-shell.spec.js';
 const MINE = 'a tap aimed at a stacked button lands on that button';
 
+// WHERE THE FOUR CSS MUTANTS POINT, and why it is not MODEL.html any more.
+// The bars' stylesheet came out of that page on 23 Sep so PROJECT.html could
+// wear the same one -- the rules are unchanged, they simply live in
+// shell-bars.css now. THIS GATE IS HOW THE MOVE WAS NOTICED: every one of
+// these anchors went dead the moment the text left the file, and
+// mutant-anchors-harness.js said so by name. That is the whole point of it,
+// and it is worth recording that it paid for itself here.
+//
+// The LAST mutant still names MODEL.html because it mutates the page's own
+// JavaScript, which did not move. The two files are not interchangeable and
+// the list should not be tidied into agreement.
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'shell-bars.css',
     name: 'DC\'s OWN BUG, back: the units grow a 44px hit box by padding out '
       + 'and pulling the margin back, and overlap',
     find: '  #units-corner button {\n'
@@ -41,7 +52,7 @@ const MUTANTS = [
       + '    display:inline-flex; align-items:center; justify-content:center;\n'
       + '    min-width:56px; padding:14px 6px; margin:-12px 0; cursor:pointer;' },
 
-  { file: 'MODEL.html',
+  { file: 'shell-bars.css',
     name: 'METRIC alone reaches up over IMPERIAL — the stylesheet still says '
       + 'flex-direction:column',
     find: '  #units-corner .stack { display:flex; flex-direction:column; gap:1px; }',
@@ -49,7 +60,7 @@ const MUTANTS = [
       + '  #units-corner button[data-units="metric"] {\n'
       + '    margin-top:-12px; position:relative; z-index:1; }' },
 
-  { file: 'MODEL.html',
+  { file: 'shell-bars.css',
     name: 'the OTHER stack overlaps: TOY and DRAFTING, which the units check '
       + 'alone would never have looked at',
     find: '  #mode-corner .set.stack button { padding:2px 7px; font-size:9px; }',
@@ -61,7 +72,7 @@ const MUTANTS = [
   // stays hit-testable -- the mutant survived, and it deserved to. A real
   // covering is another piece of chrome lying over the stack, which is the
   // #389 collision class and the reason the hitsSelf half exists at all.
-  { file: 'MODEL.html',
+  { file: 'shell-bars.css',
     name: 'SETTINGS lies over the unit stack: the boxes are perfect and every '
       + 'tap lands on the neighbouring corner',
     find: '  #settings-corner { display:flex; align-items:center; gap:6px; flex:0 0 auto; }',
