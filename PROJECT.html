@@ -3008,18 +3008,6 @@
         },
       };
 
-      // ── A GRADE BEAM HAS NO BASEMENT UNDER IT ───────────────────────────
-      // Movie, 17 Sep: "it will become a 'crawl space' rather than a
-      // 'basement'". BSMT CLG HT is the same arithmetic either way -- the
-      // pour, plus the plate, less the slab -- so the number stays and only
-      // the word changes. Read at paint time rather than stored, because the
-      // drafter can switch the dropdown back and a heading that remembered
-      // the old answer is worse than one that never had it.
-      //
-      // The column header is the only place the word appears; the schedule
-      // beside the drawing never named it.
-      const columnLabel = item => (item.id === 'basementClg' && houseIsGradeBeam()
-        ? 'CRAWL CLG HT' : item.label);
 
       // What a cell shows, and whether the number is its own or inherited.
       const cellValue = (rowId, field) => {
@@ -3047,66 +3035,7 @@
         } });
       };
 
-      const unitFormat = {
-        pitch: value => String(value),
-        ftin: value => ftIn(value),
-        in: value => inchesOnly(value),
-        stud: value => inchesOnly(projectPage.studInFromWallHeightFt(value)),
-      };
-      const unitParse = {
-        pitch: text => {
-          const value = Number(text);
-          return Number.isFinite(value) && value > 0 && value <= 24 ? value : null;
-        },
-        ftin: text => parseFtIn(text),
-        in: text => parseInches(text),
-        stud: text => {
-          const inches = parseInches(text);
-          return inches == null ? null : projectPage.wallHeightFtFromStud(inches);
-        },
-      };
 
-      // The read-only cells, and the small print under an editable one: a
-      // stud reads back the wall it makes, a foundation wall the height to
-      // the top of its sill (plus the wood fill where the type has one).
-      const derivedText = (rowId, itemId) => {
-        // What you stand under down there: the pour and everything framed on
-        // it, less the slab that buries the bottom of it.
-        if (itemId === 'basementClg') {
-          const fillItem = projectPage.SECTION_TABLE_ITEMS.find(entry => entry.id === 'woodFill');
-          const fillFt = fillItem.types.includes(rowId)
-            ? (cellValue(rowId, 'woodFillHeightFt').value || 0) : 0;
-          return fmt.formatArchitecturalInches(
-            cellValue(rowId, 'fdnWallHeightFt').value * 12 + attachmentIn()
-            + fillFt * 12 - cellValue(rowId, 'slabThicknessIn').value);
-        }
-        return inchesOnly(attachmentIn());
-      };
-      const cellNote = (rowId, item) => {
-        if (item.unit === 'stud') return ftIn(cellValue(rowId, item.field).value);
-        // Says which of the two a heel is. Without it the calculated number
-        // and a typed one look identical in the box, and nobody can tell
-        // whether the cell is still following the pitch or has stopped.
-        if (item.field === 'roofHeelIn') {
-          // TYPICAL, not CALCULATED. Movie, 5 Sep: "there is a calculation to
-          // find the heel ... to find the TYPICAL HEEL". The calculation is
-          // not a separate mode the cell is in -- it is how the typical heel
-          // is arrived at, and TYP is the word that goes on a drawing.
-          if (rowId === 'house' && roofHeelOverrideIn == null) return 'TYPICAL';
-          return `RAISED · ${inchesOnly(projectPage.ROOF_HEEL_MIN_IN)}\u2013${
-            inchesOnly(projectPage.ROOF_HEEL_MAX_IN)}`;
-        }
-        // A fill wall doesn't get to pick its height — the pour and the floor
-        // above already fixed it — so it reports the stud it wants cut to.
-        if (item.field === 'woodFillHeightFt') {
-          return `${inchesOnly(projectPage.studInFromWallHeightFt(
-            cellValue(rowId, item.field).value))} STUD`;
-        }
-        if (item.field !== 'fdnWallHeightFt') return '';
-        // The pour and its sill: the height the floor above bears on.
-        return `${ftIn(cellValue(rowId, 'fdnWallHeightFt').value
-          + attachmentFt())} TO SILL`;
-      };
 
 
       // ── WHAT THE ZONE CARD LEFT BEHIND ──────────────────────────────────

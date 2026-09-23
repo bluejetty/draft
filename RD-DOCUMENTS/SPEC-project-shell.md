@@ -290,6 +290,35 @@ untouched — it reads `project-page.js`, so it guards the NUMBERS and always
 did. What went is the UI half. **The grade derive is the real loss**: the rule
 still runs and nothing drives it end to end any more.
 
+### A fifth guard, and a behaviour that lost its only surface
+
+Found by CI on the branch, not by the sweep: `tests/wall-type-pickers.spec.js`
+asserted that `th[data-section-col="basementClg"]` reads **CRAWL CLG HT**.
+
+Movie, 17 Sep, on a grade beam: *"it will become a 'crawl space' rather than a
+'basement'"*. That word had exactly ONE surface — the section table's column
+header, through `columnLabel()` — and the table is gone. **The rule is not
+wrong; it has nowhere left to be shown.** So the assertion retires with the
+table rather than being pointed at something that does not say it, and the
+wording wants a home when GARAGE INFO / HOUSE INFO land.
+
+`columnLabel` went with it, along with four more functions the cut left
+stranded — `derivedText`, `cellNote`, `unitFormat`, `unitParse`, 71 lines in
+all. Every one had `fillTable` as its only caller. They were still in the file
+after the first pass because that pass removed the RENDERING and stopped;
+finding them meant asking which names still had a reader, not which block they
+sat in.
+
+### The sweep that missed three files
+
+Four specs were updated for "one type on screen at a time". The right number
+was seven, and CI found the other three. The sweep was scoped to
+`tests/project-*.spec.js` — five files — when the question was *which specs
+reach PROJECT.html*, which is fourteen. **A filename prefix is not a
+dependency.** `tests/wall-type-pickers.spec.js` even carried its own byte-for-
+byte copy of the `openProjectPage` helper that had already been fixed
+elsewhere.
+
 ### And one datum that had to be converted, not swapped
 
 Three surviving tests read the garage sill off `[data-zone-offset]`, which
