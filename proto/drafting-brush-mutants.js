@@ -19,8 +19,21 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const SPEC = 'tests/model-html-drafting-brush.spec.js';
 
+// WHERE TWO OF THESE POINT, and why it is not MODEL.html. The bar's MARKUP
+// left that page on 23 Sep for shell-bars.js, so PROJECT, Construction
+// Layout, SPECS and the two pages not built yet could mount the same one.
+// The chips are unchanged -- they simply live in the module now.
+//
+// THIS GATE FOUND BOTH, for the second time in a day: mutant-anchors-harness
+// named them the moment the text moved, exactly as it named four in
+// units-stack-mutants.js when the STYLESHEET moved. An anchored mutation
+// engine is only as good as something checking its anchors still land.
+//
+// The other nine still name MODEL.html because they mutate the page's own
+// JavaScript, which did not move. The list should not be tidied into
+// agreement.
 const MUTANTS = [
-  { file: 'MODEL.html',
+  { file: 'shell-bars.js',
     name: 'THE CHIP GOES BACK TO SLEEP: a control the page draws and cannot use',
     find: '    <button type="button" id="strip-brush" class="chip" data-mode-brush',
     with: '    <button type="button" id="strip-brush" class="chip dormant" disabled data-mode-brush',
@@ -124,7 +137,7 @@ const MUTANTS = [
     with: '    void brushUndoStep;',
     test: 'one Ctrl+Z puts a dusted wall back' },
 
-  { file: 'MODEL.html',
+  { file: 'shell-bars.js',
     name: 'THE FOOT TILE IS THE OLD SCALE TRIANGLE AGAIN',
     find: '        <rect x="1.5" y="1.5" width="13" height="13" rx="1"></rect>\n        <path d="M6.6 4.8 V11.2" stroke-width="1.2"></path>',
     with: '        <path d="M2 11 L8 4 L14 11 Z"></path>\n        <path d="M6.6 4.8 V11.2" stroke-width="1.2"></path>',

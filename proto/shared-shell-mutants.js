@@ -73,6 +73,30 @@ const MUTANTS = [
       + 'nothing and the bar paints in the browser\'s defaults',
     find: '<script src="./palette.js"></script>',
     with: '<!-- script src="./palette.js" -->' },
+
+  { file: 'MODEL.html',
+    name: 'the page mounts the bars with the MODULE NEVER LOADED -- the shape '
+      + 'a new page fails in when someone copies the mount calls across',
+    find: '<script src="./shell-bars.js"></script>',
+    with: '<!-- script src="./shell-bars.js" -->' },
+
+  { file: 'MODEL.html',
+    name: 'THE DEFER TRAP: the module tag is still earlier in the text than '
+      + 'every mount, so the ordering check sails through -- and the page '
+      + 'throws, because defer runs it after the parse the mounts happen in',
+    find: '<script src="./shell-bars.js"></script>',
+    with: '<script src="./shell-bars.js" defer></script>' },
+
+  { file: 'shell-bars.js',
+    name: 'the page row loses a chip -- the map of the job with a town '
+      + 'missing, which is the row\'s oldest rule broken',
+    // AIMED AT THE REAL `row`, NOT A SECOND ONE. The first draft appended
+    // `row: 'nowhere'` after the title -- which JavaScript honours, the later
+    // key winning, but which the harness reads straight past because its
+    // regex takes the FIRST row: it finds. The mutant would have been killed
+    // by nothing and reported as a hole in the check rather than in itself.
+    find: "id: 'specs', row: 'sheet'",
+    with: "id: 'specs', row: 'nowhere'" },
 ];
 
 // EVERY FILE THIS GATE MUTATES. The restore is `git checkout -- <file>`, so a

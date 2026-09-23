@@ -83,16 +83,46 @@ check(`${SHEET} carries every instrument`,
   INSTRUMENTS.filter(sel => !new RegExp(
     `${sel.replace(/[.#]/g, '\\$&')}(?![-\\w])[^{}]*\\{`).test(decomment(sheet))), []);
 
-// A PAGE WITH THE BAR'S MARKUP MUST LINK THE BAR'S STYLESHEET. This is the
-// check that catches the next page -- someone copies the shell into SPECS and
-// forgets the link, and the bar renders as unstyled buttons in a row.
-const wearsBars = f => /<div[^>]+id=["']strip["']/.test(read(f))
-  || /<div[^>]+id=["']house-strip["']/.test(read(f));
+// A PAGE WEARS THE BARS IF IT MOUNTS THEM, which is a change from what this
+// asked a commit ago -- it looked for `<div id="strip">` in the source, and
+// the markup left the source when shell-bars.js took it. THE POPULATION WENT
+// TO ZERO AND THIS FILE SAID SO, because of the emptiness guard at the top:
+// without it, every "no page does X" check below would have passed
+// triumphantly over nothing at all and the move would have looked clean.
+// That is the whole argument for the guard, and it came due immediately.
+const wearsBars = f => /DraftShellBars\.(?:topBar|bottomBar)\s*\(/.test(read(f));
 const linksSheet = f => new RegExp(`<link[^>]+href=["'][./]*${SHEET}["']`).test(read(f));
+const loadsModule = f => /<script[^>]+src=["'][.\/]*shell-bars\.js["']/.test(read(f));
 const barredPages = pages.filter(wearsBars);
-check('some page wears the bars', barredPages.length >= 1, true);
-check('every page with bar markup links the sheet',
+check('some page mounts the bars', barredPages.length >= 1, true);
+check('every page that mounts the bars links the sheet',
   barredPages.filter(f => !linksSheet(f)), []);
+check('every page that mounts the bars loads the module',
+  barredPages.filter(f => !loadsModule(f)), []);
+
+// AND THE MODULE ARRIVES BEFORE ITS OWN MOUNT CALL. The bars are written
+// where the calling <script> stands, mid-parse, so a module loaded at the
+// foot of the body with the others -- which is where every other module on
+// these pages lives, and therefore the obvious place to put it -- would be a
+// TypeError on a page that otherwise looks perfectly wired. The failure is
+// total and the cause is invisible, so it gets a check rather than a comment.
+const moduleFirst = f => {
+  const src = read(f);
+  const tag = src.search(/<script[^>]+src=["'][.\/]*shell-bars\.js["']/);
+  const mount = src.search(/DraftShellBars\.(?:topBar|bottomBar|readout|fileGuard|saveAs)\s*\(/);
+  return tag >= 0 && mount >= 0 && tag < mount;
+};
+check('the module loads before the first mount', barredPages.filter(f => !moduleFirst(f)), []);
+
+// AND IT IS NOT DEFERRED OR ASYNC, which the check above cannot see. A
+// `<script src="shell-bars.js" defer>` still sits EARLIER IN THE TEXT than
+// every mount call, so the ordering check passes -- and the page throws,
+// because defer means the module runs after parsing and the mounts run
+// during it. The hole was found by trying to write a mutant for the ordering
+// check and noticing the obvious one would sail through it.
+const deferred = f => /<script[^>]*src=["'][.\/]*shell-bars\.js["'][^>]*\s(?:defer|async)[\s>]/.test(read(f));
+check('the module is neither deferred nor async',
+  barredPages.filter(deferred), []);
 
 // AND NOBODY PASTES THE RULES BACK. The one that matters: a page may style
 // its own furniture however it likes, but the moment it writes a rule for a
@@ -118,6 +148,25 @@ const loadsPalette = f =>
   /<script[^>]+src=["'][.\/]*palette\.js["']/.test(decomment(read(f)));
 check('every page linking the sheet also loads palette.js',
   pages.filter(linksSheet).filter(f => !loadsPalette(f)), []);
+
+// THE MAP OF THE JOB IS ALL SIX TOWNS. The page row's oldest rule is that it
+// shows every page of the shop, built or not -- "a map with two towns missing
+// teaches the drafter a shape that is wrong" -- and now that the row is
+// rendered from a table instead of written out by hand, a page can go missing
+// from every bar in the shop with one edit.
+//
+// EACH ONE SITS IN A ROW THAT EXISTS. `row` decides which end of the bottom
+// bar a chip lands at, and a typo there does not throw: the filter simply
+// returns nothing and the chip is silently absent, which is this repo's
+// favourite kind of bug.
+const MODULE = fs.existsSync(path.join(ROOT, 'shell-bars.js'))
+  ? decomment(read('shell-bars.js')) : '';
+const declared = [...MODULE.matchAll(/id:\s*'([a-z-]+)',\s*row:\s*'([a-z]+)'/g)];
+check('the page table names all six pages',
+  declared.map(m => m[1]).sort(),
+  ['construction', 'estimates', 'model', 'project', 'real-estate', 'specs']);
+check('every page sits in a row that exists',
+  declared.filter(m => m[2] !== 'page' && m[2] !== 'sheet').map(m => `${m[1]}:${m[2]}`), []);
 
 // THE FOUR LITERALS, HELD TO FOUR. The sheet's own head names them and says
 // why each is not a surface the skin owns; this is what makes that comment a
