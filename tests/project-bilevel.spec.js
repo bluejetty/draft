@@ -32,7 +32,7 @@ const { test, expect } = require('@playwright/test');
 // be true before the drawing exists. A visible canvas proves nothing -- it is
 // visible while blank.
 async function openProject(page) {
-  await page.goto('/PROJECT.html');
+  await page.goto('/PROJECT.html?type=bilevel');
   await page.waitForFunction(
     () => document.querySelector('#bilevel-canvas')?.paintedSection != null,
     null, { timeout: 10000 });
