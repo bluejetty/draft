@@ -330,6 +330,87 @@ would have put that deck out by exactly one floor package and still read
 green, which is this repo's oldest trap: a span measured correctly tells you
 its length and nothing about what it is.
 
+## RULED 23 SEP: what the BONE does, and it is a presentation
+
+Movie: *"for both BONE versions i'd like it to go to the MODEL html, and go to
+the FRONT ELEVATIONS view, and 'GROW' the house from bottom to top"*, and
+*"make it a nice presentation where it is revealed to the user by the GROW"*.
+
+**Both** BONEs — MODEL's and the one PROJECT is getting — do the same thing.
+That is the point of putting one in PROJECT's bottom bar at all: the button
+means the same thing wherever it is pressed.
+
+**HALF OF IT IS ALREADY SUPPORTED.** MODEL reads `?view=` from the URL
+(`activeCut`, `activeViewId`) and resolves it through `cutForViewId`; the
+front elevation is **E1**, from its own seat list — `E1 · FRONT`, `E2 · LEFT`,
+`E3 · BACK`, `E4 · RIGHT`. So "go to MODEL and show the front elevation" is a
+navigation that works today and needs no new plumbing.
+
+**AND THE REVEAL IS NOT A NEW FEATURE — IT IS BOARD #283, ALREADY BUILT.**
+Movie: *"it was like that in the Model.dc version"*, and he is right. The old
+page carries it in full:
+
+> *The rising reveal (board #283): every bone press that grows the house jumps
+> to the E1 front elevation and the house climbs out of the ground under the
+> rising mask — not just the tour finale. BONE REVEAL in SETTINGS turns it off
+> for drafters who'd rather stay on the plan.*
+
+`_startBoneReveal()` finds the E1 cut, holds one beat (`REVEAL_HOLD_MS`) while
+both rails slide open around the stage, then climbs. It also stands the
+drawing tools down, so a stray click in E1 cannot keep placing plan geometry.
+The tour's own finale hands off to it: *"The house is ready — press the BONE
+and watch it grow."*
+
+**THE MATHS IS ALREADY IN A SHARED MODULE.** `tour.js` owns
+`revealClipY(elapsedMs, durationMs, y0, y1)` — *"one eased clip height, shared
+by the 2D and 3D"* — with `REVEAL_MS = 2500` and `REVEAL_HOLD_MS = 1000`. Only
+five references to the reveal state remain in the dc page, so the page-side
+wiring is small and the hard part is lifted already.
+
+**SO THIS IS AN UNRECORDED PARITY GAP**, not a design job. `MODEL.html` does
+not load `tour.js` at all (0 references against the dc page's 4), and
+`PARITY-model-html-vs-dc.md` does not mention the reveal. The work is: load
+the module, jump to E1 on the bone press, run the clip, honour BONE REVEAL.
+
+**AND THE 3D IS ALREADY ANTICIPATED.** Movie: *"in the future when i get the
+3D operational i'd like the 3D view to GROW"*. `revealClipY`'s own comment
+says it is shared by the 2D **and 3D** — so the easing that drives the
+elevation is the one the 3D view will use. Nothing here needs redesigning for
+it; the 3D view calls the same function when it exists.
+
+**THE REVEAL STILL SPLITS BY WHICH BONE:**
+
+- **MODEL's BONE** builds from the outline the drafter has drawn, so there IS
+  a house to grow. The animation is buildable now.
+- **PROJECT's BONE** has no outline — the drafter chose a type and typed its
+  numbers, and turning that into geometry is the premade-designs round that
+  `build-menu.js` already names: *"WHAT IS NOT HERE, deliberately: the
+  generator … the drafter is moving to a premade design per house type in
+  place of generated rooms."* Until that lands, PROJECT's BONE can do the
+  navigation and nothing more.
+
+**Bottom to top is not decoration.** It is the order a house is built in —
+footing, foundation, main floor, upper floor, roof — and the elevation is the
+one view that shows that order as a vertical stack. A reveal that grew
+left-to-right or faded in would be an animation; this one is the building
+going up.
+
+## RULED 23 SEP: one rail, not two
+
+Movie, revising the layout above: *"im thinking maybe the sidebars aren't
+needed for the house info, but the PROJECT INFO area with the drop zone should
+be on the first tab top left"*, and on HOUSE INFO and GARAGE INFO: *"looks
+pretty good right now where it is in the main area"*.
+
+So the rails come down to **ONE tab, upper left: PROJECT INFO**, holding the
+identity fields and the drop zone. No right rail, and the schedule columns
+stay flanking the section drawing where they already are.
+
+**That retires the interim width note above.** `main` went 1180 → 1400px to
+stop the schedules wrapping while they were on their way to the rails. They
+are not going to the rails, so 1400 is simply the page width now rather than
+a debt.
+
 ## THE SHELL IS A MECHANISM, NOT MODEL'S PANELS MOVED OVER
 
 This is the constraint that decides the whole design, and it is Movie's:

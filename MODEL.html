@@ -2324,6 +2324,12 @@
      in the picture the drafter pressed. -->
 <script src="./bone-wallet.js"></script>
 <script src="./premade-plans.js"></script>
+<!-- THE RISING REVEAL'S MATHS (board #283). tour.js owns revealClipY() --
+     "one eased clip height, shared by the 2D mask today and the 3D clip plane
+     later (same choreography, same timing)" -- plus REVEAL_MS and the held
+     beat before the climb. This page carried none of it: the reveal was an
+     unrecorded parity gap, built in MODEL.dc.html and never migrated. -->
+<script src="./tour.js"></script>
 <!-- NOT FOR THE DEALER, which this page does not run. auto-windows.js holds
      two things besides dealWindows: the rule that a window clears the roof
      under it by 4", and the sampling that says which roof is in front of a
@@ -3838,6 +3844,51 @@
   // one is a dead card.
   const allCuts = () => [...autoElevationCuts(), ...cuts()];
 
+  // ── THE RISING REVEAL (board #283) ────────────────────────────────────
+  // "Every bone press that grows the house jumps to the E1 front elevation
+  // and the house climbs out of the ground under the rising mask -- not just
+  // the tour finale. BONE REVEAL in SETTINGS turns it off for drafters who'd
+  // rather stay on the plan." MODEL.dc.html's words, and its behaviour.
+  //
+  // Movie, 23 Sep, asking for it on both BONEs: "go to the MODEL html, and go
+  // to the FRONT ELEVATIONS view, and 'GROW' the house from bottom to top",
+  // "make it a nice presentation where it is revealed to the user by the
+  // GROW". It already existed; this page never had it.
+  //
+  // TWO FIELDS AND NO TIMER. `revealStart` is in the future by the held beat,
+  // so the first frames compute a clip BELOW the canvas and paint a full
+  // curtain -- the pause falls out of the arithmetic instead of needing a
+  // setTimeout that could fire after the drafter has moved on.
+  let revealActive = false;
+  let revealStart = 0;
+
+  // The setting SETTINGS.html already writes (#bone-reveal), read the way
+  // this page reads every other one: through the active package, defaulting
+  // ON, so a drafter who has never opened SETTINGS still gets the show.
+  const boneRevealOn = () => window.DraftProfileManager
+    ?.getActive('settings')?.content?.model?.boneReveal !== false;
+
+  const startBoneReveal = () => {
+    if (!boneRevealOn()) return;
+    // No auto elevations means nothing to jump to -- the build still stands,
+    // it simply is not presented. The dc page refuses the same way.
+    if (!autoElevationCuts().some(cut => String(cut.id) === 'E1')) return;
+    // THE CURTAIN MOMENT: both rails slide open around the stage and the mask
+    // holds one beat -- get them ready -- before the house starts up.
+    setRail('left', true);
+    setRail('right', true);
+    revealStart = performance.now() + window.DraftTour.REVEAL_HOLD_MS;
+    revealActive = true;
+    // CUT_VIEW + the id, the way every other caller reaches a cut. The first
+    // draft of this passed the bare 'E1' and would have jumped to a view that
+    // does not resolve -- the exact fault the comment on cutForViewId already
+    // records against an earlier bug: "every `?view=cut:E1` resolved to null,
+    // fell through to the layer-view branch, and warned about a view the
+    // level does not have. Nothing caught it because nothing had asked for an
+    // elevation yet."
+    goToView(CUT_VIEW + 'E1');
+  };
+
   const paintCuts = () => {
     const R = window.DraftRender2D;
     const CM = window.DraftCutMarks;
@@ -4228,6 +4279,26 @@
         paintedForRails = railKey(rails);
         window.DraftCutView.drawCutView(cutEnv(), ctx, cssW, cssH, cut,
           { margins: rails });
+        // THE MASK CLIMBS BOTTOM TO TOP, dotted underground first, footing to
+        // ridge -- the order a house is actually built in, which is why the
+        // elevation is the view this plays on. Self-driving: each frame asks
+        // for the next until the clip has left the canvas.
+        //
+        // IT PAINTS IN THE SKIN, not a literal. The dc page filled '#fafafa',
+        // which is a WHITE curtain over a night drawing -- correct on the old
+        // page's white ground and wrong on all four of this one's skins. The
+        // curtain is the page's own ground, so it is surface-page.
+        if (revealActive) {
+          const elapsed = performance.now() - revealStart;
+          const clipY = window.DraftTour.revealClipY(
+            elapsed, window.DraftTour.REVEAL_MS, cssH + 10, -10);
+          ctx.save();
+          ctx.fillStyle = skin['surface-page'];
+          ctx.fillRect(0, 0, cssW, Math.max(0, clipY));
+          ctx.restore();
+          if (elapsed <= window.DraftTour.REVEAL_MS) requestAnimationFrame(paint);
+          else revealActive = false;
+        }
       } else if (drawing) {
         paintedForRails = null;
         paintGrid();
@@ -4939,6 +5010,11 @@
     // PAID ON DELIVERY, and this is the word the geometry side says when it
     // has actually raised the order -- not when the press happened.
     chargeForBuild();
+    // AND THE SAME WORD STARTS THE SHOW. Board #283 says "every bone press
+    // that grows the house", and this is the one place that means a house
+    // was actually grown -- a press that refused, or one the wallet turned
+    // away, never reaches here.
+    startBoneReveal();
     chosenEntryId = null;
     chosenSizeId = null;
     openFamilyId = null;
