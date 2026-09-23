@@ -549,6 +549,10 @@ if (!window.DraftShellBars) {
         const skin = window.DraftPalette.apply(document, theme, mode);
         S.markSwitch(themeButtons, 'theme', theme);
         S.markSwitch(modeButtons, 'skinMode', mode);
+        // THE BAR REPAINTS ITS OWN FURNITURE FIRST. The bone's picture is the
+        // bar's, so no page has to remember to ask -- which is exactly what
+        // PROJECT did not remember, and why it wore a red bone on ROUGH.
+        S.paintBone(theme);
         try {
           const keep = JSON.parse(localStorage.getItem(key) || '{}');
           localStorage.setItem(key, JSON.stringify({ ...keep, theme, mode }));
@@ -561,6 +565,60 @@ if (!window.DraftShellBars) {
       modeButtons.forEach(b => b.addEventListener('click',
         () => { mode = b.dataset.skinMode; apply(); }));
       return { apply, setTheme: t => { theme = t; }, setMode: m => { mode = m; } };
+    },
+
+    // THE BONE'S ARTWORK IS THE BAR'S; ITS PRESS IS THE PAGE'S. This split
+    // was not obvious until PROJECT wore the bar and the bone came up RED on
+    // a ROUGH skin -- the artwork swap lived in MODEL's paintBonePress, so
+    // the page that owned the table got the house and the page that did not
+    // got a red bone on a blue board. Movie's rule is the opposite: "yes
+    // exactly the style is different but the bone and house are the same
+    // button."
+    //
+    // So the TABLE lives here, once, and every page that mounts the bone gets
+    // the right picture without owning a copy. What a press DOES is still the
+    // page's, and still four different things.
+    BONE_ART: Object.freeze({
+      ruff: Object.freeze({ src: './assets/bone-red.png', lit: null,
+        label: 'BONE', balanceTop: '74%' }),
+      rough: Object.freeze({ src: './assets/house-blue-off.png',
+        lit: './assets/house-blue-on.png', label: 'HOUSE', balanceTop: '50%' }),
+    }),
+
+    // Paints every [data-bone-art] image for the theme in force. MODEL has
+    // TWO -- the foot bone and the drive-thru sign's copy -- and they are two
+    // BUTTONS with their own lit state, which is why the glow is read off the
+    // image's own button rather than from a page-wide flag.
+    paintBone: theme => {
+      const art = window.DraftShellBars.BONE_ART[theme];
+      if (!art) {
+        console.warn(`shell-bars: no bone artwork for theme "${theme}"; `
+          + 'leaving it as it is.');
+        return;
+      }
+      document.querySelectorAll('[data-bone-art]').forEach(img => {
+        const press = img.closest('button');
+        const wanted = (art.lit && press && press.hasAttribute('data-lit'))
+          ? art.lit : art.src;
+        // ONLY ON A CHANGE. Assigning the src it already has is a no-op in
+        // every browser this is tested in, but this runs on every NIGHT/DAY
+        // press and on both edges of the glow, and a needless assignment is a
+        // needless decode.
+        const next = new URL(wanted, location.href).href;
+        if (img.src !== next) img.src = next;
+        // THE SPOKEN NAME MOVES WITH THE PICTURE, and only where there is one
+        // to move: one image carries the press's only label, the other is
+        // decorative beside a visually hidden span, so an empty alt stays
+        // empty and a spoken one is rewritten.
+        if (img.alt) img.alt = `${art.label} — build it`;
+      });
+      document.querySelectorAll('#bone .said').forEach(el => {
+        el.textContent = art.label;
+      });
+      // The number follows the picture it is drawn on -- low in the red on
+      // the bone, in the middle of the outline on the house.
+      const balance = document.getElementById('bone-balance');
+      if (balance) balance.style.top = art.balanceTop;
     },
 
     // THE TAB IS THE ONLY THING THAT MOVES THE PANEL. Nothing else opens or
