@@ -9,7 +9,12 @@
        consumers -- toCSS() for the stylesheet and resolve() for the
        painters -- so it has to be defined before the boot script below
        applies it and before the section canvases pick their inks. -->
+  <!-- THE SHELL EVERY PAGE WEARS. The stylesheet first so the bars are
+       skinned on the first frame; the module before the body, because the
+       bars are written where their mount call stands, mid-parse. -->
+  <link rel="stylesheet" href="./shell-bars.css" />
   <script src="./palette.js"></script>
+  <script src="./shell-bars.js"></script>
   <script>
     // THE SKIN IS ONE CHOICE ACROSS THE WHOLE APP, not one per page. MODEL
     // stores the drafter's pick under `draft-skin` and reads ?theme=/?mode=
@@ -38,7 +43,17 @@
         }
         return allowed.includes(stored[name]) ? stored[name] : fallback;
       };
-      P.apply(document, pick('theme', P.THEMES, 'ruff'), pick('mode', P.MODES, 'night'));
+      // KEPT, NOT JUST APPLIED, because this page has the switcher now. The
+      // comment above used to end "this page has no switcher strip yet, so it
+      // only READS the choice -- MODEL owns writing it." That stopped being
+      // true the moment the mode corner arrived in the shared bar: RUFF/ROUGH
+      // and NIGHT/DAY are on this page and they write the same key. The skin
+      // is still ONE choice across the app; there are simply two doors to it.
+      window.__projectSkin = {
+        theme: pick('theme', P.THEMES, 'ruff'),
+        mode: pick('mode', P.MODES, 'night'),
+      };
+      P.apply(document, window.__projectSkin.theme, window.__projectSkin.mode);
     })();
   </script>
   <script src="./shared-file-store.js"></script>
@@ -58,8 +73,6 @@
   <style>
     * { box-sizing:border-box; }
     body { margin:0; min-height:100vh; background:var(--surface-page); color:var(--ink-primary); font-family:'Barlow',system-ui,sans-serif; }
-    .topbar { height:52px; display:flex; align-items:center; gap:14px; padding:0 20px; border-bottom:1px solid var(--edge-panel); background:var(--surface-panel); }
-    .home { display:block; }
     /* 1180 -> 1400 BECAUSE THE STAGE IS NOW 80% OF IT. The band inside a
        section is a fixed 600px drawing with a schedule column either side and
        a 1090px max-width; at 80% of 1180 the stage offered 940 and the
@@ -71,7 +84,13 @@
        side rails. Once they do, the stage holds only the drawing and can be
        any width at all. Widening the page is the cheap way to keep them
        readable until then -- not the design. */
-    main { width:min(1400px, calc(100vw - 32px)); margin:30px auto 48px; }
+    /* CLEARS BOTH FIXED BARS. The 30/48 were measured against a header that
+       scrolled away with the page; the bars do not scroll, so the margins are
+       now the bars' own heights plus the old breathing room. Named rather
+       than added up, because --strip-h and --house-h are shell-bars.css's to
+       change and this page should follow when they do. */
+    main { width:min(1400px, calc(100vw - 32px));
+      margin:calc(var(--strip-h) + 30px) auto calc(var(--house-h) + 48px); }
     .intro { max-width:720px; margin:7px 0 0; color:var(--ink-secondary); font-size:14px; line-height:1.5; }
     .notice { display:none; margin-top:18px; padding:10px 12px; border-left:3px solid #a06035; background:rgba(160,96,53,.08); color:var(--ink-secondary); font-size:12px; line-height:1.45; }
     .notice.visible { display:block; }
@@ -212,11 +231,14 @@
   </style>
 </head>
 <body>
-  <header class="topbar">
-    <a class="home" href="./MODEL.html" aria-label="Back to Model">
-      <img src="./assets/rough-drafter-logo.png" alt="Rough Drafter" style="height:38px; display:block;" />
-    </a>
-  </header>
+  <!-- THE TOP BAR, and it replaces a header that held nothing but the logo.
+       Movie, 23 Sep: "i need the project area to have the top and bottom bars
+       for sure like these (with the BONE/HOUSE) and don't need the
+       'instrument panel' with 'length' 'angle' etc. because we won't be
+       drawing anything here". So: no instruments, and the logo goes with the
+       header -- MODEL's bar carries none either, and the page row in the
+       bottom bar is how you walk between pages now. -->
+  <script>window.DraftShellBars.topBar();</script>
   <main>
     <div class="notice" id="no-drawing-notice">Browser storage is unavailable &mdash; showing the office defaults, read-only.</div>
 
@@ -368,6 +390,20 @@
 
     <div id="status" role="status"></div>
   </main>
+  <!-- THE BOTTOM BAR. page:'project' is what marks PROJECT as "you are here"
+       -- the chip becomes a span instead of a link, off the one PAGES table
+       in shell-bars.js.
+
+       IT MOUNTS HERE, not at the foot of the body, because the wiring below
+       reaches into it. The bar is position:fixed so where it sits in the DOM
+       costs nothing visually -- but a mount AFTER the page's own script is a
+       bar that does not exist yet when that script goes looking for the bone.
+
+       NO STATUS READOUT. #lower-left and its panel are mounted by pages that
+       have counts to put in them; this page has none, and a tab that opens an
+       empty panel is a dead control. It is one call away the day PROJECT has
+       something to count. -->
+  <script>window.DraftShellBars.bottomBar({ page: 'project' });</script>
 
   <script>
     (async () => {
@@ -3272,6 +3308,78 @@
       // The first paint goes through the picker, so the opening state is
       // produced by the same path every later click takes.
       showType(new URLSearchParams(location.search).get('type'), false);
+
+      // ---- THE SHARED BAR, WIRED TO WHAT THIS PAGE CAN HONESTLY DO --------
+      //
+      // THE SKIN SWITCH is the bar's; what to repaint is this page's. The
+      // sections are canvases and they take their ink from the inherited
+      // `color` (project-page.js), so a skin change has to redraw them -- a
+      // bar that only recoloured the CSS would leave every drawing painted in
+      // the old skin's ink.
+      // THE BONE WEARS THE THEME FROM THE FIRST FRAME. wireSkin repaints it on
+      // every press, but nothing has pressed anything yet on load -- and a
+      // page opened straight into ROUGH would show a red bone until the
+      // drafter touched a switch. This is the load-time call the press path
+      // makes for free afterwards.
+      window.DraftShellBars.paintBone(window.__projectSkin.theme);
+
+      window.DraftShellBars.wireSkin({
+        theme: window.__projectSkin.theme,
+        mode: window.__projectSkin.mode,
+        onSkin: (skin, theme, mode) => {
+          window.__projectSkin = { theme, mode };
+          repaint();
+        },
+      });
+
+      // THE FILE ROW: ONE BUTTON THIS PAGE CAN KEEP ITS PROMISE ABOUT.
+      //
+      // SAVE is real -- this page writes the same drawing file MODEL does,
+      // through the same store, and its own save() already carries the status
+      // word. The other four are NOT wired, and they are DISABLED rather than
+      // left live, which is this bar's own vocabulary: the page row has shown
+      // REAL ESTATE LAYOUT and ESTIMATES greyed since it was built, because
+      // "the row is the map of the job" and a map with a town missing teaches
+      // a shape that is wrong. A button that looks pressable and does nothing
+      // teaches a worse one.
+      //
+      // WHAT NEW / OPEN / SAVE AS / PRINTSCREEN SHOULD MEAN HERE is a
+      // question for Movie rather than a thing to guess at: they are all
+      // operations on the DRAWING, and this page is about the project that
+      // owns it. Greyed, they say "not here yet" honestly and cost nothing to
+      // turn on the day he says what they do.
+      const barSave = document.getElementById('save');
+      if (barSave) {
+        barSave.disabled = false;
+        barSave.addEventListener('click', () => save('Project saved.'));
+      }
+      ['file-new', 'file-open', 'file-save-as', 'file-ext', 'printscreen']
+        .forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.disabled = true;
+          el.title = el.textContent.trim() + ' — not on the project page yet';
+        });
+
+      // THE BONE. The bar owns the button; this page owns the verb -- and the
+      // verb is NOT BUILT YET, so it says so rather than doing nothing.
+      // Movie: "if they CHOOSE one and then adjust the info in it, and then
+      // press the BONE/HOUSE that house with those characteristics should be
+      // built." That needs premade designs for the bilevels, which
+      // premade-plans.js does not have: planFor() covers the five bungalow
+      // and two-storey entries and neither bilevel. Until it does, a press
+      // that silently built the wrong house would be worse than one that
+      // explains itself.
+      const bone = document.getElementById('bone');
+      if (bone) {
+        bone.addEventListener('click', () => {
+          const el = document.querySelector('#status');
+          if (el) el.textContent = buildType
+            ? 'Building from the project page is coming — the premade designs '
+              + 'do not cover the bilevels yet.'
+            : 'Choose a type first, then the bone builds it.';
+        });
+      }
     })();
   </script>
   <!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->

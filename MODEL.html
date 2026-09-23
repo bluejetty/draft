@@ -4330,12 +4330,13 @@
   // declared where the pictures are, and a third theme that ships a third
   // drawing says where its number goes in the same line it names its file.
   // 74% is MODEL.dc.html:558's own figure, carried rather than re-eyeballed.
-  const BONE_ART = Object.freeze({
-    ruff:  Object.freeze({ src: './assets/bone-red.png',       lit: null,
-      label: 'BONE', balanceTop: '74%' }),
-    rough: Object.freeze({ src: './assets/house-blue-off.png',
-      lit: './assets/house-blue-on.png', label: 'HOUSE', balanceTop: '50%' }),
-  });
+  // THE TABLE IS THE BAR'S NOW, and this page reads it rather than holding
+  // the second copy. It went out with shell-bars.js the moment PROJECT wore
+  // the bone and came up RED on a ROUGH skin: the artwork swap lived here, so
+  // the page that owned the table got the house and the page that did not got
+  // a red bone on a blue board. A table with two homes is how this repo's
+  // oldest bugs start.
+  const BONE_ART = window.DraftShellBars.BONE_ART;
   // AND THE BOARD IS THE SECOND LOGO. The note above says a theme is "mainly
   // through logos and colors" and that the press was the first to arrive;
   // this is the second, so it rides the same switch rather than growing a
