@@ -62,6 +62,13 @@ and brought up to date the same evening by the session that did. Read
   the person who owns the project, it is why the work listed below reaches
   deep into Gilligan's files, and it was said for one session rather than as a
   standing change. Ask again rather than assuming it carries.
+
+  **AND IT IS DORMANT, NOT URGENT — Movie, 23 Sep:** *"i'm going to take it
+  slow for a bit and go one at a time so we won't need to worry about lanes
+  for a while."* One agent at a time is the condition under which none of the
+  above can bite: a lane map only decides who wins a collision, and there is
+  nothing to collide with. So this is recorded rather than escalated, and the
+  ratification is still owed whenever two agents next run together.
 - Repository scope is `bluejetty/draft` only.
 
 ## State of main as of bb1d508 — 23 Sep

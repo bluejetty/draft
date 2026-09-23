@@ -58,6 +58,13 @@ before your next round in `MODEL.dc.html`** — one of the items is a data-loss
 defect in its serializer, found and fixed on the 23rd, and the guard for it is
 a new harness rather than a spec.
 
+**AND THE LANE QUESTION IS DORMANT — Movie, 23 Sep:** *"i'm going to take it
+slow for a bit and go one at a time so we won't need to worry about lanes for
+a while."* A lane map only decides who wins a collision, and with one agent
+running there is nothing to collide with. The ratification is still owed
+whenever two of us next run together; until then the two maps can disagree
+harmlessly.
+
 ---
 
 Branch `claude/gilligan-greeting-ls9w2n`, reset onto `main` under the same name
