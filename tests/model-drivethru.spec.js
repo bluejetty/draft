@@ -35,6 +35,27 @@ const REPRO = JSON.parse(fs.readFileSync(
 // MODEL.html, reached the way every other MODEL.html spec reaches it: through
 // openModel for its init scripts -- the seeded wallet, the parked features,
 // the coach already seen -- and then a navigation to the page under test.
+// THE SAME FIXTURE WITH NO BUILDING IN IT, for the checks that need an
+// ORDER to reach the seam. ONE BUILDING PER DRAFT FILE (Movie, 24 Sep) means
+// a press on a file that already holds a house does not build: it offers to
+// save and start clean, which is model-one-building.spec.js's subject. The
+// board, the tiles, the sign and every refusal above the cap behave the same
+// either way, so only the tests that watch onOrder fire take this one.
+//
+// THE OUTLINES ARE WHAT MAKE A FILE FULL -- building-bodies.js counts bodies,
+// and walls are not bodies -- so dropping them is the whole difference.
+const NO_BUILDING = { ...REPRO, outlines: [] };
+
+async function openWithNoBuilding(page) {
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, saved }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, saved: NO_BUILDING });
+  await page.goto('/MODEL.html?mode=night');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+}
+
 async function openPage(page) {
   await h.openModel(page, { webgl: false });
   // A DRAWING IN THE STORE, because MODEL.html reads the shared file and an
@@ -930,11 +951,26 @@ test('the bone with nothing chosen opens the house round, not the outline one',
     await expect(page.locator('[data-drivethru-line]')).not.toContainText('NOTHING TO BUILD');
   });
 
-test('with a house and a detached garage already standing, the bone does nothing',
+test('with a building already standing, the board still rises',
   async ({ page }) => {
-    // ONE HOUSE AND ONE DETACHED GARAGE IS THE CAP (Movie). With both up
-    // there is nothing the board could offer, and a board that rises with
-    // every tile spent wastes the press it just took.
+    // THIS TEST SAID THE OPPOSITE UNTIL 24 SEP, and the reversal is the rule
+    // rather than a change of mind about the board. It read "with a house and
+    // a detached garage already standing, the bone does nothing": the cap was
+    // one house AND one detached garage, both standing meant nothing was left
+    // to build EVER, and Movie's rule for the bone was "it will do nothing
+    // once both house and garage both made". A board rising over a spent
+    // project wasted the press it had just taken.
+    //
+    // ONE BUILDING PER DRAFT FILE gives "full" a different meaning: not
+    // "nothing left to build" but "this file has its building". The drafter
+    // can still have another in a file of its own, so the press is no longer
+    // spent -- it leads to the offer to save this drawing and start clean.
+    // A board that would not open would put that offer behind a dead button
+    // and give him no way to find out why.
+    //
+    // WHAT THE PRESS THEN DOES is model-one-building.spec.js's subject. What
+    // is checked here is only the board's half: it opens, and the bone stays
+    // live to be pressed again.
     await h.openModel(page, { webgl: false });
     const full = JSON.parse(JSON.stringify(REPRO));
     // The fixture's garage is ATTACHED, which is part of the house and does
@@ -949,11 +985,10 @@ test('with a house and a detached garage already standing, the bone does nothing
     await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 
     await page.locator('#bone').click();
-    await page.waitForTimeout(3000);
     await expect(page.locator('#drivethru'),
-      'the board rose on a project that has nothing left to build')
-      .toHaveAttribute('data-shut', '');
-    await expect(page.locator('#bone')).not.toHaveAttribute('data-lit', '');
+      'the board stayed shut, so the offer is behind a dead button')
+      .not.toHaveAttribute('data-shut', '');
+    await expect(page.locator('#build-families button').first()).toBeVisible();
   });
 
 // ── HOW BIG IS THE GARAGE ────────────────────────────────────────────────
@@ -992,7 +1027,7 @@ test('the detached garage is asked how big, and the house never is',
   });
 
 test('a stock size rides the order to the seam', async ({ page }) => {
-  await openPage(page);
+  await openWithNoBuilding(page);
   await openGarage(page);
   await page.locator('#size-stock [data-build-size="24x26"]').click();
   await expect(page.locator('[data-drivethru-line]')).toContainText("24' x 26'");
@@ -1011,7 +1046,7 @@ test('a stock size rides the order to the seam', async ({ page }) => {
 
 test('the fourth option is two fields, and they are checked before the bone',
   async ({ page }) => {
-    await openPage(page);
+    await openWithNoBuilding(page);
     await openGarage(page);
     await page.locator('#size-stock [data-build-size="custom"]').click();
     await expect(page.locator('#size-custom')).toBeVisible();
@@ -1108,7 +1143,7 @@ const openRoughGarage = async page => {
 
 test('with no bone on the board, the press that raised it closes the order',
   async ({ page }) => {
-    await openPage(page);
+    await openWithNoBuilding(page);
     await openRoughGarage(page);
     await page.locator('#size-stock [data-build-size="16x24"]').click();
 
