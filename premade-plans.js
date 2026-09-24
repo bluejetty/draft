@@ -72,14 +72,6 @@ if (!window.DraftPremadePlans) {
   // The connection, standardised at a foot. See above.
   const GARAGE_TIE_FT = 1;
 
-  // HOW FAR THE GARAGE ROOF LAPS THE HOUSE, measured from the house's front
-  // line. Movie, 24 Sep: "3ft total from the front house edge wall" -- one
-  // foot covering the tie wall that stands behind that line, and two more of
-  // gable rake past it. Kept as one number because he gave it as one: the
-  // two ft is not measured off the tie, it is measured off the same house
-  // line the whole lap is.
-  const GARAGE_ROOF_LAP_FT = 3;
-
   const pt = (x, z) => Object.freeze({ x, z });
 
   // Counter-clockwise by the shoelace sign this app uses, the same winding
@@ -519,28 +511,10 @@ if (!window.DraftPremadePlans) {
   // so it gets an eave and hips: a little triangle of roof tucked against the
   // house wall, which is the "cottage" end he is objecting to.
   //
-  // THE TIE WAS A FOUNDATION DETAIL AND THE ROOF WAS NOT A FOUNDATION -- so
-  // the roof's rear ran straight along the house's front line, and the one
-  // foot of tie behind it was left to the house's own eave to oversail.
-  //
-  // MOVIE REVERSED THAT ON 24 SEP, looking at the same E4: "where the garage
-  // connects to the house, the roof should also cover the extra ft plus 2
-  // more ft for EAVE OVERHANG (gable)" ... "the wall below will need the
-  // extra 1ft to get covered right? we will need additional short 2ft extra
-  // peice of gable that extends 2ft past the back exterior garage wall" ...
-  // and finally, with the number and the datum in one sentence: "3ft total
-  // from the front house edge wall".
-  //
-  // SO THE HOUSE'S EAVE WAS NOT COVERING IT. The tie wall stood in the
-  // elevation with nothing over it, which is what he saw. The roof now
-  // reaches back over the foot of tie AND carries two more as gable rake --
-  // GARAGE_ROOF_LAP_FT, one number, measured from the house's front line.
-  //
-  // THIS IS NOT THE JOG COMING BACK. His 20 Sep objection was to FOLLOWING
-  // the tie's step, which left a four-foot edge at z = 19 standing in open
-  // air and hipping into a cottage end. The rear edge here stays one straight
-  // line the garage's full width; it simply starts three feet further back.
-  // Edge 0 is still the house end, still flush, still gabled by index.
+  // THE TIE IS A FOUNDATION DETAIL AND THE ROOF IS NOT A FOUNDATION. So the
+  // roof's rear runs straight along the house's front line, and the one foot
+  // of tie behind it is simply not under this roof -- it sits under the
+  // house's own eave, which oversails it.
   //
   // MODEL.dc.html HAD ALREADY ANSWERED THIS, which is what Movie remembered.
   // Its OPEN garages store only their LEGS and close the footprint along the
@@ -557,15 +531,9 @@ if (!window.DraftPremadePlans) {
     // WHERE THIS ROOF STARTS. With a room over it, the room's front wall is
     // the stub's back one -- they meet on that line, which is what makes the
     // upper roof's edge and the lower roof's edge the same line rather than
-    // two lines a few inches apart. That case is untouched: the garage stub
-    // does not reach the house there, the ROOM does, so the lap below is not
-    // its question to answer.
-    //
-    // WITH NO ROOM the stub is what meets the house, and it now laps three
-    // feet over the house's front line rather than stopping on it.
-    const back = overGarage
-      ? houseFront + OVER_GARAGE_LENGTH_FT
-      : houseFront - GARAGE_ROOF_LAP_FT;
+    // two lines a few inches apart. With no room, it is the house's own front
+    // line: the tie is behind it and stays behind it.
+    const back = houseFront + (overGarage ? OVER_GARAGE_LENGTH_FT : 0);
     const front = houseFront + GARAGE_DEPTH_FT;
     // EDGE 0 IS THE HOUSE END in both, which is what makes one index serve
     // both designs -- see GARAGE_ROOF_HOUSE_END.
