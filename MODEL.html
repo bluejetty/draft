@@ -467,9 +467,29 @@
      put it in the middle, and never below the bar -- rather than leaving the
      two in tension. The height it needs for that is the width it took
      divided by its own aspect, which is why the width became a variable. */
+  /* AND THE SHEET COMES IN A TENTH, clear of the press below it. Movie, 24
+     Sep: "can you make the 'BLUEPRINT' backdrop about 90% that size so there
+     will be a little space between the 'BLUEPRINT' and the HOUSE BUTTON (and
+     put some padding in so it doesn't cover the HOUSE button (always leave a
+     few pixels gap at least but more prefered".
+
+     THE SCALE GOES ON THE WIDTH and nothing else moves: the frame takes its
+     height from the aspect and every tile is a percentage of the frame, so
+     one number brings the whole sheet in and its contents keep their
+     proportions.
+
+     AND THE GAP GOES FROM 12px TO 28px, which is the figure the headroom
+     above already reserves for this press -- so the space kept for the house
+     and the space left under the sheet are one number rather than two that
+     drift. Twelve pixels was "not covering it"; this is the clearance he
+     asked for. */
   html[data-theme="rough"] #drivethru { --dt-aspect:1.5;
+    --dt-sheet-scale:0.9;
     --dt-headroom:calc(var(--house-h) + 28px);
-    bottom:max(calc(var(--house-h) + 12px),
+    --dt-w:calc(min(860px, calc(100vw - 24px),
+      calc((100vh - var(--dt-headroom)) * var(--dt-aspect)))
+      * var(--dt-sheet-scale));
+    bottom:max(calc(var(--house-h) + 28px),
       calc(50vh - var(--dt-w) / var(--dt-aspect) / 2)); }
   html[data-theme="rough"] #dt-screen { display:none; }
   html[data-theme="rough"] #dt-bone { display:none; }
@@ -4223,6 +4243,22 @@
     const boneReady = Boolean(chosen())
       && (chosen().entry?.needsSize !== true || chosenSize() !== null);
     document.getElementById('dt-bone')?.toggleAttribute('data-ready', boneReady);
+    // AND THE FOOT PRESS ASKS TOO. This reached only the SIGN's bone, so the
+    // foot button never pulsed -- and on ROUGH there is no sign bone at all,
+    // which left the drafter with a chosen house, a board full of tiles and
+    // nothing on screen asking to be pressed. Movie, 24 Sep: "when the 'BONE'
+    // is pulse glowing the 'HOUSE' should be 'pulse glowing' but doesn't so
+    // user is confused if it doesn't do this".
+    //
+    // ONE ATTRIBUTE ON BOTH, because they are one question asked in two
+    // places -- his own rule for these two buttons, 19 Sep: "the style is
+    // different but the bone and house are the same button". What the pulse
+    // LOOKS like differs per theme and is settled in shell-bars.css, where
+    // the rest of this button's states already live.
+    // LOOKED UP RATHER THAN CLOSED OVER, like the line above it: `boneFoot`
+    // is declared 130 lines below this and would be in the temporal dead
+    // zone if anything ever calls this during setup rather than on a press.
+    document.getElementById('bone')?.toggleAttribute('data-ready', boneReady);
 
     // THE SIZE ROW BELONGS TO THE CHOSEN ENTRY, not to the open submenu:
     // it is the question that follows the press, so it stays up after the

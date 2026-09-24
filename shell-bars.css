@@ -681,8 +681,14 @@
   /* THE BONE LIGHTS BEFORE THE BOARD RISES, which was the house button's job
      until the house button came off the strip. One artwork, so the glow is a
      filter rather than a second file -- and it is the same two seconds. */
+  /* THE GLOW'S RED IS NAMED ONCE. shared-shell-harness.js allows each colour
+     literal in this file exactly ONE occurrence, so the pulse below cannot
+     repeat it -- and should not want to: the lit state and the ask are the
+     same light at different strengths, which is what one name says and three
+     copies would not. */
+  #bone { --bone-glow:rgba(255,64,51,0.75); }
   #bone[data-lit] img { filter:brightness(1.3)
-    drop-shadow(0 0 7px rgba(255,64,51,0.75)); }
+    drop-shadow(0 0 7px var(--bone-glow)); }
   /* AND ROUGH'S GLOW IS DRAWN, NOT FILTERED. Its ON state is its own file --
      the neon is painted into it, with a falloff and a white-hot core no
      filter produces -- so the swap IS the light, and the rule above would
@@ -690,6 +696,45 @@
      source besides, and the two seconds before the board rises are exactly
      when the press has the drafter's eye. */
   html[data-theme="rough"] #bone[data-lit] img { filter:none; }
+  /* AND IT ASKS FOR THE PRESS, not just states it. data-ready is MODEL's
+     "this order can be placed"; it reached only the SIGN's bone, so the foot
+     press never pulsed -- and on ROUGH there is no sign bone at all, which
+     left a chosen house, a full board and nothing on screen asking to be
+     pressed. Movie, 24 Sep: "when the 'BONE' is pulse glowing the 'HOUSE'
+     should be 'pulse glowing' but doesn't so user is confused if it doesn't
+     do this".
+     ONE ATTRIBUTE, TWO PICTURES -- his own rule for these buttons: "the
+     style is different but the bone and house are the same button". */
+  /* AND THE PULSE ADDS NO COLOUR AT ALL. It breathes on BLUR and BRIGHTNESS
+     at the lit state's own red, so the ask is plainly the same light turned
+     up rather than a second one. Caught by the harness, not by eye: the first
+     draft breathed between three alphas and put two more literals in a file
+     that is allowed one of each. */
+  @keyframes bone-foot-ask {
+    0%, 100% { filter:brightness(1.12) drop-shadow(0 0 4px var(--bone-glow)); }
+    50%      { filter:brightness(1.38) drop-shadow(0 0 13px var(--bone-glow)); }
+  }
+  #bone[data-ready]:not([data-broke]) img {
+    animation:bone-foot-ask 1.4s ease-in-out infinite; }
+  /* ROUGH PULSES THE PICTURE, NOT A FILTER, for the same reason its lit
+     state is a file rather than a glow: the neon is painted in, and a red
+     halo round a blue house would be a second light source. A breath of
+     scale reads on artwork that already carries its own light, and it is
+     the same 1.4s so the two themes ask at one rhythm. */
+  @keyframes bone-foot-ask-rough {
+    0%, 100% { transform:scale(1); }
+    50%      { transform:scale(1.07); }
+  }
+  html[data-theme="rough"] #bone[data-ready]:not([data-broke]) img {
+    animation:bone-foot-ask-rough 1.4s ease-in-out infinite;
+    transform-origin:50% 50%; }
+  /* AN EMPTY WALLET STILL WINS, which is why both rules above exclude it
+     rather than relying on order: a press pulsing for a build it cannot pay
+     for is the same contradiction the grey-out was written against. */
+  @media (prefers-reduced-motion: reduce) {
+    #bone[data-ready] img,
+    html[data-theme="rough"] #bone[data-ready] img { animation:none; }
+  }
   /* THE NUMBER RIDES ON THE PRESS (board #261, MODEL.dc.html:558), and WHERE
      it rides is a fact about the ARTWORK rather than about the wallet --
      which is why the offset lives in BONE_ART beside the two pictures and
