@@ -423,6 +423,31 @@ It now samples the canvas's own ground from a corner rather than assuming one,
 and compares a content hash for "different picture". A saturated count is its
 own named failure.
 
+**And it was not the only one.** CI found a second, `elevation-clears-the-rails`,
+which counts ink PER COLUMN to find where the house sits between the two rails.
+Its predicate was "any channel below 200" — near enough on a white elevation,
+and nonsense on a dark one: every pixel read as ink, every column cleared the
+floor, and it reported the house spanning 0 to full width. The message it
+printed was *"the house starts at 0 and the left rail ends at 221"* — the
+measurement blaming the rails for a threshold that had gone stale.
+
+Same fix, same shape: ink is what differs from the canvas's own ground, with the
+margin set to **50** because that is the old sensitivity restated — "below 200"
+on a `#fafafa` ground IS "more than 50 off the ground". It keeps the same things
+out on both skins, which is the test that it is the same rule rather than a new
+one: a wall face is 5 off the ground on paper and 18 on night, poche either way
+and ink in neither.
+
+It also reports `allLit`, asserted BEFORE the clearance checks, so a counter that
+has lost track of blank says so itself instead of letting the rails take the
+blame.
+
+**Why only these two.** The other specs in this family — `elevation-occlusion`,
+`auto-elevations`, `garage-roof-drop`, `detached-garage`, `fenestration-detail` —
+share the same `data[i] < 120` idiom and were untouched, because they read
+`[data-model-overlay]` on **MODEL.dc.html**, which is unskinned and still paints
+on paper. They inherit this problem the day that page goes.
+
 ### Performance, checked rather than assumed
 
 The ink table is hoisted out of the per-wall loop (`drawSectionWall` runs once

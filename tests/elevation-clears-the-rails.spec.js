@@ -55,6 +55,26 @@ const empty = () => ({
 // by those rules carries a handful of dark pixels; one through the house
 // carries hundreds. The floor sits well above the first and well below the
 // second.
+//
+// "DARK" WAS THE WORD, AND IT STOPPED BEING TRUE ON 24 SEP. This counted a
+// pixel as ink when any channel fell below 200 -- near enough on a white
+// elevation, and nonsense the moment cut-view.js started taking its inks from
+// the caller and MODEL began handing it the skin. On RUFF night the elevation's
+// ground is #1d1f20, so EVERY pixel on the canvas read as ink, every column
+// cleared the floor, and the house was reported as spanning 0 to full width.
+// CI said "the house starts at 0 and the left rail ends at 221", which is the
+// measurement saying the drawing was covered when it was drawn correctly.
+//
+// SO INK IS NOW WHAT DIFFERS FROM THE CANVAS'S OWN GROUND, sampled from the
+// top-left rather than assumed. The painter clears the whole canvas before it
+// draws, and that corner is outside every margin either painter uses.
+//
+// THE MARGIN OF 50 IS THE OLD SENSITIVITY, not a fresh guess. "below 200" on
+// a #fafafa ground is "more than 50 off the ground", so on paper this counts
+// exactly what it always counted -- and it keeps the same things out on the
+// night skin, which is the test that it is the same rule rather than a new
+// one: a wall face is 5 off the ground on paper (#fff on #fafafa) and 18 on
+// night (#2f3335 on #1d1f20), poche either way and ink in neither.
 const readPage = page => page.evaluate(() => {
   const c = document.querySelector('canvas');
   const box = c.getBoundingClientRect();
@@ -69,10 +89,12 @@ const readPage = page => page.evaluate(() => {
   const d = g.getImageData(0, 0, c.width, c.height).data;
   const dpr = c.width / box.width;
   const counts = new Array(c.width).fill(0);
+  const [gr, gg, gb] = [d[0], d[1], d[2]];
   for (let x = 0; x < c.width; x++) {
     for (let y = 0; y < c.height; y++) {
       const i = (y * c.width + x) * 4;
-      if (d[i] < 200 || d[i + 1] < 200 || d[i + 2] < 200) counts[x] += 1;
+      if (Math.abs(d[i] - gr) > 50 || Math.abs(d[i + 1] - gg) > 50
+        || Math.abs(d[i + 2] - gb) > 50) counts[x] += 1;
     }
   }
   const floor = 40 * dpr;
@@ -81,6 +103,13 @@ const readPage = page => page.evaluate(() => {
   return {
     canvas: { left: box.left, right: box.right, width: box.width },
     rails,
+    ground: `${gr},${gg},${gb}`,
+    // EVERY COLUMN LIT IS THE COUNTER FAILING, not a house that wide: the
+    // painter insets its margins on every skin, so a reading that says the
+    // drawing reaches both edges is a reading that no longer knows what blank
+    // looks like. Reported rather than inferred, because the assertions below
+    // would otherwise blame the rails for it -- which is what they did.
+    allLit: counts.every(n => n > floor),
     house: lo < 0 ? null
       : { left: box.left + lo / dpr, right: box.left + hi / dpr },
   };
@@ -123,6 +152,16 @@ test('an elevation is drawn clear of the rails, and full width when they are shu
   expect(leftRail.open, 'the left rail is open, or this measures nothing').toBe(true);
   expect(rightRail.open, 'the right rail is open, or this measures nothing').toBe(true);
   expect(open.house, 'the elevation drew a house at all').toBeTruthy();
+  // THE COUNTER BEFORE THE CLEARANCE. Every column lit means the reading has
+  // lost track of what blank looks like on this skin, and the clearance
+  // assertions below would then report a covered drawing whatever the painter
+  // did -- which is exactly how this file failed on 24 Sep, blaming the rails
+  // for a threshold that had gone stale. Named first so it cannot do that
+  // again quietly.
+  expect(open.allLit,
+    `every column reads as ink — the ground sampled as ${open.ground}, so this `
+    + 'is the counter failing rather than a house the full width of the canvas')
+    .toBe(false);
 
   // AND THE RAILS ARE ACTUALLY OVER THE CANVAS, which is what makes the rest
   // of this a test. A shell that had moved them off it would leave every
