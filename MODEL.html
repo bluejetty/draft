@@ -3865,8 +3865,17 @@
   // and they hang off whichever tile carries that id, family or entry. A tile
   // with no card falls back to its lettering, so build-menu.js can grow an
   // entry before the art for it exists and nothing disappears off the board.
+  //
+  // THE SECOND PAGE IS BEING DRAWN NOW. Movie's five were the families and the
+  // bare house types; the ENTRIES that add a garage had none and fell back to
+  // lettering, so an open submenu read as half finished -- a card, two words, a
+  // card. `bungalow-garage` is the first of them (24 Sep). The rest are
+  // twoStorey-garage, twoStorey-over, bilevel-garage and the three detached
+  // foundations; each is one line here the day its art lands, and until then
+  // the fallback keeps the tile on the board.
   const CARD_ART = Object.freeze({
     bungalow: './assets/house-bungalow.png',
+    'bungalow-garage': './assets/house-bungalow-garage.png',
     twoStorey: './assets/house-twoStorey.png',
     bilevel: './assets/house-bilevel.png',
     modifiedBilevel: './assets/house-modifiedBilevel.png',
