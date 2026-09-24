@@ -3101,27 +3101,60 @@
   // height as a top and bottom margin would leave the drawing nothing to grow
   // into; the painter takes the greater of what it is handed and its own
   // default, and its own defaults are what top and bottom keep.
+  // RESERVED WHETHER THE RAIL IS OPEN OR SHUT, which is a change from what
+  // this did until 24 Sep and Movie's own correction:
+  //
+  //   "when the collapsable menus on the side are closed can the screen scale
+  //    stay the same with the extra little white area. it looks nicer with
+  //    more space / smaller drawing" ... "so it would be this same size (not
+  //    change) when the sidemenus close"
+  //
+  // It measured the rails LIVE, so shutting one handed the elevation back its
+  // width and the house grew to fill it -- the drawing changing size because
+  // of a menu, which is the drafter's furniture rearranging his drawing.
+  // Reserving the space always means the toggle does nothing to the house and
+  // the room the rail was in becomes white paper.
+  //
+  // A SHUT RAIL IS STILL MEASURED, not guessed at. `display:none` reports a
+  // zero box, so the rail is un-hidden, measured and re-hidden inside one
+  // statement -- the browser paints between frames, never between two lines of
+  // JavaScript, so nothing flashes. That keeps the promise the old comment
+  // made ("MEASURED, NOT TYPED"), which matters more here than it looks: the
+  // right rail is shrink-to-fit under its 277px bound and the left one holds
+  // whatever tools the page has, so a typed constant would be wrong the first
+  // time either changed. The comment beside that `max-width` already records
+  // what guessing costs -- "An estimate that is nearly right is a panel that
+  // nearly stays off the sheet."
+  //
+  // AND IT ONLY EVER GROWS, per side, for the session. The right rail resizes
+  // when its pane changes, and a reservation that followed it down would move
+  // the house every time the drafter switched panes -- the same defect one
+  // step smaller. High-water mark: the drawing settles at the widest the rail
+  // has been and stays there.
+  const railReserve = { left: 0, right: 0 };
   const railMargins = () => {
     const canvas = ctx && ctx.canvas;
     const box = canvas && canvas.getBoundingClientRect
       ? canvas.getBoundingClientRect() : null;
     if (!box || !(box.width > 0)) return null;
-    let left = 0, right = 0;
     ['#left-rail', '#right-rail'].forEach(sel => {
       const rail = document.querySelector(sel);
-      if (!rail || rail.hidden) return;
+      if (!rail) return;
+      const wasHidden = rail.hidden;
+      if (wasHidden) rail.hidden = false;
       const r = rail.getBoundingClientRect();
+      if (wasHidden) rail.hidden = true;
       if (!(r.width > 0) || !(r.height > 0)) return;
       // A rail overhanging the canvas' left edge eats from the left, one
       // overhanging its right eats from the right; a rail that somehow sits
       // clear of the canvas eats nothing.
       if (r.right > box.left && r.left < box.left + box.width / 2) {
-        left = Math.max(left, r.right - box.left + 8);
+        railReserve.left = Math.max(railReserve.left, r.right - box.left + 8);
       } else if (r.left < box.right && r.right > box.left + box.width / 2) {
-        right = Math.max(right, box.right - r.left + 8);
+        railReserve.right = Math.max(railReserve.right, box.right - r.left + 8);
       }
     });
-    return { left, right };
+    return { left: railReserve.left, right: railReserve.right };
   };
 
   // The whole of what the painter reads from a rail, as one comparable value.
