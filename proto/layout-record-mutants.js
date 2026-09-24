@@ -31,13 +31,13 @@ const ROOT = path.resolve(__dirname, '..');
 const HARNESS = 'proto/layout-record-harness.js';
 
 const MUTANTS = [
-  { file: 'LAYOUT.dc.html',
+  { file: 'LAYOUT.html',
     name: 'THE CUT IDS ARE NOT PASSED: every section viewport falls off every '
       + 'saved sheet set, quietly, and the sheets just have less on them',
     find: 'const layout = saved?.layout ? format.layout(saved.layout, levelIds, cutIds) : null;',
     with: 'const layout = saved?.layout ? format.layout(saved.layout, levelIds) : null;' },
 
-  { file: 'LAYOUT.dc.html',
+  { file: 'LAYOUT.html',
     name: 'THE PAPER IS PATCHED UNCONDITIONALLY, so every drawing saved before '
       + 'the picker existed opens with a null sheet size',
     find: '    if (layout?.paperKey) patch.paperKey = layout.paperKey;',
@@ -90,10 +90,14 @@ const MUTANTS = [
     with: '        return { ...base, levelId: viewportLevelId };' },
 
   { file: 'shell-bars.js',
+    // INVERTED WHEN THE PORT LANDED, and the anchors harness is what said so:
+    // this used to point the bar AT the new name while the page was still the
+    // old one. Now the page is LAYOUT.html and the failure runs the other way
+    // -- a bar left pointing at the file the port deleted.
     name: 'THE PORT RENAMES THE PAGE AND LEAVES THE BAR ALONE: a dead '
       + 'CONSTRUCTION LAYOUT chip on all six pages of the shop',
-    find: "      href: './LAYOUT.dc.html',",
-    with: "      href: './LAYOUT.html'," },
+    find: "      href: './LAYOUT.html',",
+    with: "      href: './LAYOUT.dc.html'," },
 
   // THE THREE BELOW MUTATE THE FIXTURE, not the code. They are the guards on
   // the guard: this whole file is worthless if the record it opens is thin,

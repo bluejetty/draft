@@ -21,7 +21,7 @@ test('P5: viewport scale vs true paper inches', async ({ page, context }) => {
   console.log(`model reference-line footprint: ${refW.toFixed(4)} ft x ${refH.toFixed(4)} ft`);
 
   const layout = await context.newPage();
-  await layout.goto('/LAYOUT.dc.html');
+  await layout.goto('/LAYOUT.html');
   await layout.waitForFunction(() => document.body.dataset.layoutReady === '1');
   await layout.getByRole('button', { name: /1\/4" = 1'-0"/ }).click();
   await layout.getByRole('button', { name: /ADD VIEWPORT/i }).click();

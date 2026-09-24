@@ -65,7 +65,7 @@ async function openLayout(page, drawing) {
     indexedDB.deleteDatabase('pdf-img-mgr-shared');
     localStorage.clear();
   });
-  await page.goto('/LAYOUT.dc.html');
+  await page.goto('/LAYOUT.html');
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
   await page.evaluate(async ({ bucket, saved }) => {
     const file = new File([JSON.stringify(saved)], 'model-drawing.json', { type: 'application/json' });
@@ -230,7 +230,7 @@ test('BUILD HOUSE raises the flag, and LAYOUT answers it with the full set', asy
 
   // LAYOUT reads the flag and deals the set: plans for every built level,
   // and the four standard elevations.
-  await page.goto('/LAYOUT.dc.html');
+  await page.goto('/LAYOUT.html');
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
   await waitForCompose(page);
   const layout = await savedLayout(page);
@@ -516,7 +516,7 @@ test('with no drawing there is nothing to deal, and the button says so by being 
       indexedDB.deleteDatabase('pdf-img-mgr-shared');
       localStorage.clear();
     });
-    await page.goto('/LAYOUT.dc.html');
+    await page.goto('/LAYOUT.html');
     await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
     // The note beside it already explains why; the button does not repeat it.
     await expect(page.locator('[data-layout-deal-sheets]')).toBeDisabled();

@@ -10,7 +10,7 @@
 //     MODEL.html       8   fen 0   dims 1   marks 2   closets  1   fixtures 1
 //     layout-plan.js   0   fen 0   dims 0   marks 0   closets  0   fixtures 0
 //
-// The third row is the reason this exists. LAYOUT.dc.html draws a construction
+// The third row is the reason this exists. LAYOUT.html draws a construction
 // sheet through `layout-plan.js`, whose own header says what it is -- "the
 // wall painter is the shared DraftRender2D one" -- and walls are the whole of
 // it. So the sheet the page's own link calls "the sheet that goes to site"

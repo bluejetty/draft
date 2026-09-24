@@ -16,7 +16,7 @@ test('R1: LAYOUT writes a stale whole-drawing snapshot back over MODEL edits', a
   // A second tab on LAYOUT — it snapshots the drawing as it is now.
   const linesAtLayoutOpen = (before.lines || []).length;
   const layout = await context.newPage();
-  await layout.goto('/LAYOUT.dc.html');
+  await layout.goto('/LAYOUT.html');
   await layout.waitForFunction(() => document.body.dataset.layoutReady === '1');
 
   // Back in MODEL: draw more walls. These autosave.

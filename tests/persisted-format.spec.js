@@ -21,7 +21,7 @@
 //   3. THE `layout` ROUND TRIP -- the one that can cost a drafter real work,
 //      and the reason this file exists rather than a comment. LAYOUT does not
 //      have its own store: it merges a `layout` key INTO MODEL's drawing
-//      (LAYOUT.dc.html, `{ ...base, layout: this._layoutKey() }`) and writes it
+//      (LAYOUT.html, `{ ...base, layout: this._layoutKey() }`) and writes it
 //      back to the model-drawing bucket. MODEL's _serializeDrawing builds a
 //      fresh object from its own fields and does NOT spread what it loaded, so
 //      that key survives only because two lines deliberately carry it:
@@ -127,7 +127,7 @@ test.describe('the saved format', () => {
     const linesBefore = (saved.lines || []).length;
 
     // Stand in for LAYOUT: merge a layout key into the drawing exactly as
-    // LAYOUT.dc.html does, with one plan viewport that survives validation.
+    // LAYOUT.html does, with one plan viewport that survives validation.
     await page.evaluate(async ({ bucket, levelId }) => {
       const store = window.SharedFileStore;
       const at = await store.loadSharedFileAt(bucket);

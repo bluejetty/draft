@@ -14,7 +14,7 @@ const { test, expect } = require('@playwright/test');
 
 const WORK_PAGES = [
   '/MODEL.dc.html',
-  '/LAYOUT.dc.html',
+  '/LAYOUT.html',
   '/PROJECT.html',
   '/SPECS.html',
   '/STANDARDS.html',

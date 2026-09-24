@@ -2,8 +2,8 @@
 // built on top of it.
 //
 // Pulled out because THREE copies of this had grown: MODEL.dc.html's, an
-// identical pair in LAYOUT.dc.html, and a third in proto/elevation-harness.js
-// whose comment already admitted it "mirrors LAYOUT.dc.html's
+// identical pair in LAYOUT.html, and a third in proto/elevation-harness.js
+// whose comment already admitted it "mirrors LAYOUT.html's
 // normaliseLevelAssembly exactly". Three copies of a defaults table is three
 // chances for a drafter's 2x12 to mean 11.5" on one board and 11.875" on
 // another.
@@ -18,7 +18,7 @@
 // truth). Edit a wall height, save, and the stored rise is stale -- so the two
 // boards would have drawn the same drawing with different riser counts.
 //
-// Pure, and it reads nothing. Every caller reads it here -- LAYOUT.dc.html
+// Pure, and it reads nothing. Every caller reads it here -- LAYOUT.html
 // adopted it in c420e80 and holds no table of its own.
 if (!window.DraftLevelAssembly) {
 (() => {
@@ -288,7 +288,7 @@ if (!window.DraftLevelAssembly) {
   const levelFloorFt = assembly => (assembly.joistDepthIn + assembly.sheathingIn) / 12;
 
   // Bind the normaliser to a drawing's stored table. Every board that draws a
-  // level asks this question -- MODEL.dc.html, LAYOUT.dc.html and the harnesses
+  // level asks this question -- MODEL.dc.html, LAYOUT.html and the harnesses
   // each held their own one-liner for it, which is how the role-less callers in
   // #325 happened: the TABLE had one home, the LOOKUP had four.
   const levelAssemblyFor = (levelAssemblies, levelId) =>

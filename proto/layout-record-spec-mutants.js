@@ -24,14 +24,14 @@ const ROOT = path.resolve(__dirname, '..');
 const SPEC = 'tests/layout-record.spec.js tests/layout-compose.spec.js';
 
 const MUTANTS = [
-  { file: 'LAYOUT.dc.html',
+  { file: 'LAYOUT.html',
     name: 'THE SAVED SHEETS ARE NOT LOADED: the page opens the drawing and '
       + 'starts the sheet set over empty',
     find: '      viewports: layout ? layout.viewports : [],',
     with: '      viewports: [],',
     test: 'the sheet set opens on the sheets it was left on' },
 
-  { file: 'LAYOUT.dc.html',
+  { file: 'LAYOUT.html',
     // THE ONE THE NODE GATE CANNOT REACH. Every field of the record still
     // round-trips; the drawings simply are not where the record says.
     name: 'THE PAPER POSITION IS IGNORED WHEN DRAWING: the record round-trips '
@@ -40,7 +40,7 @@ const MUTANTS = [
     with: '    return { xIn: 1, yIn: viewport.yIn - hIn / 2, wIn, hIn };',
     test: 'the sheet set opens on the sheets it was left on' },
 
-  { file: 'LAYOUT.dc.html',
+  { file: 'LAYOUT.html',
     // AND THE OTHER ONE. Ink goes UP, not down, so a check that only asked
     // "did this sheet draw something" would call it healthy.
     name: 'THE SHEET FILTER STOPS FILTERING: all seven views draw on all five '
@@ -49,7 +49,7 @@ const MUTANTS = [
     with: '    return this.state.viewports;',
     test: 'every sheet still carries its drawing' },
 
-  { file: 'LAYOUT.dc.html',
+  { file: 'LAYOUT.html',
     name: 'A HAND-ARRANGED SET IS RE-DEALT ON LOAD, so a drafter-s arrangement '
       + 'is replaced by the composer-s every time the page is opened',
     find: '      if (this.state.auto) this._composeDefaultSet();',
@@ -60,7 +60,7 @@ const MUTANTS = [
   // layout-compose.spec.js rather than this board's own spec: the defect was
   // in what the sheets DREW, and the sheet set that shows it is a two-storey
   // one whose level 1 carries both the concrete and the basement walls.
-  { file: 'LAYOUT.dc.html',
+  { file: 'LAYOUT.html',
     name: 'THE VIEW IS NOT PASSED TO THE PAINTER AGAIN: both level-1 sheets go '
       + 'back to drawing the concrete and the basement walls stacked',
     find: '          view: viewport.view || null,',
@@ -77,7 +77,7 @@ const MUTANTS = [
     with: '',
     test: 'the two sheets are two different drawings' },
 
-  { file: 'LAYOUT.dc.html',
+  { file: 'LAYOUT.html',
     // THE FIRST DRAFT OF THIS AIMED AT THE FIXTURE -- `"sheet":2` flipped to
     // 1 -- and mutant-anchors-harness.js's rule refused it before it ran: the
     // fixture has TWO viewports on sheet 2, so `replace` would have moved one

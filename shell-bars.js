@@ -70,7 +70,7 @@ if (!window.DraftShellBars) {
       href: null,
       title: 'REAL ESTATE LAYOUT \u2014 the marketing floor plan, not built yet' }),
     Object.freeze({ id: 'construction', row: 'sheet', label: 'CONSTRUCTION LAYOUT',
-      href: './LAYOUT.dc.html',
+      href: './LAYOUT.html',
       title: 'The construction layout: the sheet that goes to site',
       here: 'The construction layout \u2014 you are here' }),
     Object.freeze({ id: 'specs', row: 'sheet', label: 'SPECIFICATIONS',

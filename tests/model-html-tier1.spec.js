@@ -221,7 +221,7 @@ test.describe('MODEL.html tier 1', () => {
     // level-assembly.js is here because the cheap alternative was WRONG rather
     // than merely worse. A stair's rise is the wall height below plus this
     // level's floor, and the table saying what a level is made of lived in
-    // three copies (MODEL.dc.html, LAYOUT.dc.html, proto/elevation-harness.js).
+    // three copies (MODEL.dc.html, LAYOUT.html, proto/elevation-harness.js).
     // Without it this page would have fallen back on each stair's STORED rise
     // -- which the bone treats as a fallback and re-derives on every paint
     // without ever writing back. Edit a wall height, save, and the two boards

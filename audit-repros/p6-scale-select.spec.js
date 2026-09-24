@@ -10,7 +10,7 @@ test('P6: VIEWPORT SCALE after placement', async ({ page, context }) => {
   await h.waitForSaved(page);
 
   const layout = await context.newPage();
-  await layout.goto('/LAYOUT.dc.html');
+  await layout.goto('/LAYOUT.html');
   await layout.waitForFunction(() => document.body.dataset.layoutReady === '1');
   await layout.getByRole('button', { name: /ADD VIEWPORT/i }).click();
   const box = await layout.locator('canvas').first().boundingBox();

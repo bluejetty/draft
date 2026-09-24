@@ -233,7 +233,7 @@ if (!window.DraftDrawingFormat) {
   // and there is no upgrade path in this module.
   //
   // IT LIVES HERE BECAUSE THIS IS THE GATE EVERY READER GOES THROUGH --
-  // MODEL.dc.html, LAYOUT.dc.html and proto/elevation-harness.js all call
+  // MODEL.dc.html, LAYOUT.html and proto/elevation-harness.js all call
   // fenestrations() -- so no page has to remember to apply it. The same
   // reasoning as ROOF_FASCIA_IN below: this is the copy that wins.
   //

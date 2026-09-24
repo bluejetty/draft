@@ -2116,7 +2116,7 @@
        walks back out to the main page. The current page wears the dark face. -->
   <div data-nav-cluster style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
     <a data-nav-model href="./MODEL.dc.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">MODEL</a>
-    <a data-nav-layout href="./LAYOUT.dc.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">LAYOUT</a>
+    <a data-nav-layout href="./LAYOUT.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">LAYOUT</a>
     <a data-nav-project href="./PROJECT.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">PROJECT</a>
     <a data-nav-specs href="./SPECS.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">SPECS</a>
     <a data-nav-home href="./index.html" title="Rough Drafter — back to the main page" style="display:inline-flex; align-items:center; height:20px; padding:0 2px; line-height:0;">
@@ -2246,7 +2246,7 @@ const POLAR_FX_RAY_PX  = 140;
 // a candidate, so a plan with forty nodes would otherwise get forty lines.
 const TRACKING_GUIDE_MAX = 6;
 // The level assembly -- wall height, floor joists, slab and footings -- lives
-// in level-assembly.js. Bound rather than copied: MODEL.dc.html, LAYOUT.dc.html
+// in level-assembly.js. Bound rather than copied: MODEL.dc.html, LAYOUT.html
 // and proto/elevation-harness.js had each grown their own copy of the same
 // defaults table, and stair-geometry.js needs a stair's rise to mean the same
 // thing on every board that draws it.
@@ -22959,7 +22959,7 @@ class Component extends DCLogic {
   // W1 STEP 3. This wrote out `(joistDepthIn + sheathingIn) / 12` itself, and
   // level-assembly.js has exported `levelFloorFt` -- the identical expression --
   // since the tables were collapsed. MODEL.html calls the export; this page did
-  // not, and neither does LAYOUT.dc.html or proto/elevation-harness.js. Four
+  // not, and neither does LAYOUT.html or proto/elevation-harness.js. Four
   // homes for one derivation.
   //
   // WHY THAT WAS WORSE THAN IT LOOKS. proto/level-role-harness.js mutation-tests

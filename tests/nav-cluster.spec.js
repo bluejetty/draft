@@ -5,7 +5,7 @@ const { openModel } = require('./helpers');
 
 const LINKS = [
   ['[data-nav-model]', 'MODEL.dc.html'],
-  ['[data-nav-layout]', 'LAYOUT.dc.html'],
+  ['[data-nav-layout]', 'LAYOUT.html'],
   ['[data-nav-project]', 'PROJECT.html'],
   ['[data-nav-home]', 'index.html'],
 ];
@@ -23,7 +23,7 @@ test('MODEL carries the nav cluster with MODEL wearing the dark face', async ({ 
 });
 
 test('LAYOUT carries the nav cluster with LAYOUT wearing the dark face', async ({ page }) => {
-  await page.goto('/LAYOUT.dc.html');
+  await page.goto('/LAYOUT.html');
 
   for (const [selector, target] of LINKS) {
     const link = page.locator(selector);
@@ -40,7 +40,7 @@ test('the cluster walks MODEL over to PROJECT and the logo back home', async ({ 
   await page.click('[data-nav-project]');
   await expect(page).toHaveURL(/PROJECT\.html/);
 
-  await page.goto('/LAYOUT.dc.html');
+  await page.goto('/LAYOUT.html');
   await page.click('[data-nav-home]');
   await expect(page).toHaveURL(/index\.html|\/$/);
 });
