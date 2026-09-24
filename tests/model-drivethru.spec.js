@@ -638,6 +638,62 @@ test('every tile is on the shelf and says its own name, card or no card',
     }
   });
 
+// THE FIRST SCREEN IS THREE BIG CARDS. Movie, 24 Sep: "increase the size of
+// these about 150% and add space between them", of the three family cards on
+// the board as it first rises.
+//
+// MEASURED AGAINST THE OPEN BOARD, not against a number. A fixed pixel
+// expectation would pass just as well on a rule that sized every card the same
+// -- which is the thing this is: the cards are big only while the shelf is
+// theirs alone, and drop back the moment a submenu opens and the second row
+// needs its half. So the check is the RATIO between the two states, which no
+// single size can satisfy.
+//
+// THE SAME 1440 THE SPILL HAPPENED AT, for the reason the test above says: the
+// cards are sized off the board, so a narrow window shrinks them out of
+// trouble and the check would pass on a board it never looked at.
+test('the first screen shows the families bigger, and still on the shelf',
+  async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openPage(page);
+    await h.openDriveThru(page);
+    const families = page.locator('#dt-tiles [data-build-family]');
+    await expect(families.first()).toBeVisible();
+    expect(await families.count(), 'the board went empty').toBe(3);
+
+    const shelf = await page.locator('#dt-tiles').boundingBox();
+    const cards = async () => {
+      const out = [];
+      for (let i = 0; i < 3; i += 1) out.push(await families.nth(i).boundingBox());
+      return out;
+    };
+    const big = await cards();
+
+    // ON THE SHELF, which is the whole cost of making them bigger.
+    for (const [i, box] of big.entries()) {
+      expect(box.y + box.height, `family ${i} hangs off the bottom of the shelf`)
+        .toBeLessThanOrEqual(shelf.y + shelf.height + 1);
+      expect(box.x, `family ${i} hangs off the left of the shelf`)
+        .toBeGreaterThanOrEqual(shelf.x - 1);
+      expect(box.x + box.width, `family ${i} hangs off the right of the shelf`)
+        .toBeLessThanOrEqual(shelf.x + shelf.width + 1);
+    }
+
+    // AND SPACE BETWEEN THEM, which was 4px and is the other half of the ask.
+    const gap = big[1].x - (big[0].x + big[0].width);
+    expect(gap, `${gap.toFixed(0)}px between the cards`).toBeGreaterThan(8);
+
+    // NOW OPEN ONE: the same three cards, smaller, because the submenu needs
+    // the other half of the shelf.
+    await page.locator('#dt-tiles [data-build-family="bungalow"]').click();
+    await expect(page.locator('#dt-tiles [data-build-entry]').first()).toBeVisible();
+    const small = await cards();
+    expect(small[0].height,
+      `${small[0].height.toFixed(0)}px with a submenu open against `
+      + `${big[0].height.toFixed(0)}px on the first screen -- the first screen `
+      + 'is not showing them any bigger').toBeLessThan(big[0].height * 0.8);
+  });
+
 test('the board is a picture with live cards on it, and nothing else takes a press',
   async ({ page }) => {
     // AN OVERLAY THAT SWALLOWS PRESSES HAS COST THIS PROJECT TWICE, and

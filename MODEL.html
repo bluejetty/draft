@@ -488,6 +488,23 @@
   #build-bar[hidden] { display:none; }
   #build-families, #build-entries { display:flex; gap:4px;
     justify-content:center; flex-wrap:wrap; }
+  /* THE FIRST SCREEN IS THREE BIG CARDS. Movie, 24 Sep: "increase the size of
+     these about 150% and add space between them" -- of the three family cards,
+     on the board as it first rises.
+     ONLY WHILE NOTHING IS OPEN, which is what makes the size affordable at
+     all. The ceiling below is two rows' arithmetic: a family and its open
+     submenu share the shelf, so 2h + gap must clear 294px and h <= 145. One
+     row has the whole shelf, so 180 -- 150% of the 120 that pair allows --
+     fits with room to spare, and the cards drop back to 120 the moment a
+     submenu opens and the second row needs its half.
+     `:has()` RATHER THAN A CLASS because the condition is already in the DOM:
+     #build-entries carries `hidden` exactly when no family is open, set in one
+     place (`entryRow.hidden = !open`). A class would be a second copy of that
+     fact for the two to disagree over. */
+  #build-bar:has(#build-entries[hidden]) #build-families {
+    gap:clamp(8px, calc(var(--dt-w) * 0.022), 24px); }
+  #build-bar:has(#build-entries[hidden]) #build-families button.card img {
+    height:clamp(66px, calc(var(--dt-w) * 0.1725), 180px); }
   #build-entries[hidden] { display:none; }
   /* The tiles are the board's own blueprint cards: paper, blue ink, a hard
      edge. They are not palette tokens because the board is one picture in
