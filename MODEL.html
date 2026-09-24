@@ -488,17 +488,14 @@
   #build-bar[hidden] { display:none; }
   #build-families, #build-entries { display:flex; gap:4px;
     justify-content:center; flex-wrap:wrap; }
-  /* THE FIRST SCREEN HAS THE SHELF TO ITSELF, so the three families may take
-     the taller cap there -- 180 against the 165 the open pair can afford.
-     Below the caps both states render the same size, which is what Movie
-     asked for on 24 Sep: the top row is 150% whether or not a submenu is
-     under it. `:has()` rather than a class because the condition is already
-     in the DOM -- #build-entries carries `hidden` exactly when no family is
-     open, set in one place. */
+  /* THE FIRST SCREEN KEEPS ITS WIDER GAP and nothing else. It used to take a
+     taller card as well; with one size everywhere that override is gone, and
+     what is left is the space between the three that Movie asked for when
+     they were alone on the shelf. `:has()` rather than a class because the
+     condition is already in the DOM -- #build-entries carries `hidden`
+     exactly when no family is open, set in one place. */
   #build-bar:has(#build-entries[hidden]) #build-families {
     gap:clamp(8px, calc(var(--dt-w) * 0.022), 24px); }
-  #build-bar:has(#build-entries[hidden]) #build-families button.card img {
-    height:clamp(66px, calc(var(--dt-w) * 0.1725), 180px); }
   /* THE BONE ASKS FOR THE PRESS once a complete order is on the board. The
      glow is the one the lit bone already wears; the pulse is what makes it a
      request rather than a state. Stilled for anyone who has asked for less
@@ -547,25 +544,28 @@
      leaves room for the label row the entries carry and is still a third
      bigger than the 86 it replaces -- Movie, 16 Sep, and still standing:
      "make the stuff in the drivethru menu bigger its hard to see". */
-  /* SQUARE, AND TWO SIZES (Movie, 24 Sep): "change all the boxes to square
-     new ones and increase sizes about 150% for top boxes and 110% bigger for
-     bottom ones". The art he is drawing is square at source; the cards were
-     163x179 because the first five were.
+  /* SQUARE, AND ONE SIZE FOR EVERY CARD (Movie, 24 Sep): "these should all be
+     the same size (a little bigger than the bottom ones) the top ones are a
+     bit too big and they would look better matching sizes i think".
 
-     THE PAIR STILL HAS TO CLEAR THE SHELF, which is what caps these. The
-     shelf is 44.1% of a board 1/1.29 as tall as it is wide -- 294px at the
-     860px cap -- and a family row and its open submenu share it. At 1.5u and
-     1.1u that is 2.6u + gap <= 294, so u <= 111: 165 on top, 121 underneath,
-     286 and a gap inside 294. The coefficients are the old 0.115 scaled the
-     same way, so the sizes track the board below the caps as they always
-     did. */
+     THAT SUPERSEDES THE 150/110 EARLIER THE SAME EVENING, which gave the
+     family row half again the entries', and it is the second time this pair
+     of numbers has moved -- both times after he looked at the board rather
+     than at a description of it. One rule now, so there is nowhere for a
+     second size to hide.
+
+     A LITTLE BIGGER THAN THE BOTTOM ROW WAS, which is what he asked for:
+     0.1265 of the board became 0.14, so the entries grow from 111px to 122
+     at his window and the families come down from 150 to meet them.
+
+     THE PAIR STILL HAS TO CLEAR THE SHELF. It is 44.1% of a board 1/1.29 as
+     tall as it is wide -- 294px at the 860px cap -- and a family row and its
+     open submenu share it: two rows at the 134 ceiling is 268 and a gap,
+     inside 294 with room. Equal rows make that arithmetic simpler than it
+     has been all evening. */
   #build-bar button.card img { display:block;
-    height:clamp(44px, calc(var(--dt-w) * 0.115), 120px);
+    height:clamp(48px, calc(var(--dt-w) * 0.14), 134px);
     width:auto; border:1px solid transparent; border-radius:2px; }
-  #build-families button.card img {
-    height:clamp(66px, calc(var(--dt-w) * 0.1725), 165px); }
-  #build-entries button.card img {
-    height:clamp(48px, calc(var(--dt-w) * 0.1265), 121px); }
   #build-bar button.card:hover img { border-color:#8f2a1d; }
   #build-bar button.card.open img, #build-bar button.card.chosen img {
     border-color:#8f2a1d; box-shadow:0 0 0 2px rgba(143,42,29,0.45); }

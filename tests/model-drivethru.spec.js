@@ -638,24 +638,26 @@ test('every tile is on the shelf and says its own name, card or no card',
     }
   });
 
-// THE CARDS ARE SQUARE, AND THE TOP ROW IS THE BIGGER ONE. Movie, 24 Sep:
-// "change all the boxes to square new ones and increase sizes about 150% for
-// top boxes and 110% bigger for bottom ones".
+// THE CARDS ARE SQUARE AND ALL ONE SIZE. Movie, 24 Sep, third and final word
+// on it: "these should all be the same size (a little bigger than the bottom
+// ones) the top ones are a bit too big and they would look better matching
+// sizes i think".
 //
-// THIS TEST ASKED THE OPPOSITE THIS MORNING. Its first version measured that
-// the families were bigger with the submenu SHUT than open -- true while the
-// two rows had to share a 120px ceiling, and superseded the moment he asked
-// for both rows big at once. The ratio it measures now is the one he named.
+// THIS TEST HAS ASKED THREE DIFFERENT THINGS IN A DAY, which is worth leaving
+// on the record rather than tidying away: first that the families were bigger
+// with the submenu SHUT than open (true while both rows shared one 120px
+// ceiling), then that the top row was half again the bottom, and now that they
+// match. Each was right when it was written and each was replaced after he
+// looked at the board. The check is equality now -- the one shape none of the
+// earlier rules would have satisfied.
 //
 // MEASURED AS A RELATIONSHIP, not as pixels. A card's height tracks the board
-// below its cap, so a fixed expectation would pin the test to one viewport;
-// what the instruction says is that one row is half again the other, and that
-// holds at every width until the caps bind.
+// below its cap, so a fixed expectation would pin the test to one viewport.
 //
 // THE SAME 1440 THE SPILL HAPPENED AT, for the reason the test above says: the
 // cards are sized off the board, so a narrow window shrinks them out of
 // trouble and the check would pass on a board it never looked at.
-test('the cards are square, the top row half again the bottom, and both on the shelf',
+test('the cards are square, every row the same size, and all of them on the shelf',
   async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await openPage(page);
@@ -682,10 +684,14 @@ test('the cards are square, the top row half again the bottom, and both on the s
     expect(Math.abs(bottom.width - bottom.height),
       `a bottom card is ${bottom.width}x${bottom.height}`).toBeLessThanOrEqual(1);
 
-    // 150 against 110 is a ratio of 1.36; the caps can only narrow it, never
-    // invert it, so the check is that the top row is meaningfully the bigger.
-    expect(top.height / bottom.height,
-      `top ${top.height} against bottom ${bottom.height}`).toBeGreaterThan(1.2);
+    // THE SAME SIZE, which is a change from what this asked an hour ago.
+    // Movie, 24 Sep, after looking at the board: "these should all be the
+    // same size ... the top ones are a bit too big and they would look better
+    // matching sizes i think". It measured a 1.5-to-1.1 ratio before that, and
+    // a 120px shared ceiling before THAT -- so the assertion is equality now,
+    // which is the one shape none of the three earlier rules would satisfy.
+    expect(Math.abs(top.height - bottom.height),
+      `top ${top.height} against bottom ${bottom.height}`).toBeLessThanOrEqual(1);
 
     // AND BOTH ROWS STILL CLEAR THE SHELF, which is what caps them. This is
     // the check the sizes were chosen against: 2.6 rows plus a gap inside
