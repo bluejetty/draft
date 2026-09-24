@@ -230,7 +230,10 @@ if (!window.DraftAutoWindows) {
   //   start    the face's first corner, in world feet
   //   u        the unit vector along the face, in the offsets openings use
   //   outward  the unit normal pointing AWAY from the building
-  //   roofs    [{ roof, base, riseAt }] -- base from roofBaseElev
+  //   roofs    [{ roof, base, riseAt }] -- `base` is the elevation `riseAt`
+  //            measures FROM, which is the eave line and not the bearing:
+  //            cut-view's roofEaveElev, never roofBaseElev. A fascia board
+  //            between the two is enough to put a sill inside a ridge.
   //   floorTopFt / wallTopFt   this level's floor and plate
   const ROOF_SAMPLE_FT = 0.25;
   const roofProfileAlong = ({ start, u, outward, lengthFt, roofs,

@@ -1086,6 +1086,63 @@ test('no tile on the board is wearing a card that does not load',
     expect(broken, 'a tile is wearing a card that 404s').toEqual([]);
   });
 
+// THE PRESS HAS TO ASK, and on ROUGH nothing did. data-ready -- MODEL's
+// "this order can be placed" -- reached only the SIGN's bone, and ROUGH has
+// no sign bone at all, so a drafter with a house chosen sat looking at a full
+// board with nothing on screen telling him what to press. Movie, 24 Sep:
+// "when the 'BONE' is pulse glowing the 'HOUSE' should be 'pulse glowing' but
+// doesn't so user is confused if it doesn't do this".
+//
+// ASKED OF THE COMPUTED ANIMATION, not of the attribute. The attribute only
+// says MODEL tried; the animation says the stylesheet answered -- and ROUGH
+// deliberately switches OFF the filter glow the foot press wears on RUFF
+// (its lit state is a painted file, not a filter), which is exactly how a
+// theme ends up silently unable to ask.
+for (const theme of ['ruff', 'rough']) {
+  test(`${theme}: the foot press pulses once the order can be placed`,
+    async ({ page }) => {
+      await openWithNoBuilding(page);
+      await page.goto(`/MODEL.html?mode=day&theme=${theme}`);
+      await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+
+      const anim = () => page.locator('#bone img')
+        .evaluate(el => getComputedStyle(el).animationName);
+      expect(await anim(), 'the press was asking before anything was chosen')
+        .toBe('none');
+
+      await h.openDriveThru(page);
+      await page.locator('#dt-tiles [data-build-family="bungalow"]').click();
+      await page.locator('#dt-tiles [data-build-entry="twoStorey-garage"]').click();
+      await page.waitForTimeout(400);
+
+      await expect(page.locator('#bone'),
+        'MODEL never told the foot press the order was ready')
+        .toHaveAttribute('data-ready', '');
+      expect(await anim(), `${theme} left the press silent -- nothing asks for it`)
+        .not.toBe('none');
+    });
+}
+
+// AND THE SHEET KEEPS OFF THE PRESS. Movie, 24 Sep: "make the 'BLUEPRINT'
+// backdrop about 90% that size so there will be a little space between the
+// 'BLUEPRINT' and the HOUSE BUTTON ... always leave a few pixels gap at least
+// but more prefered". Measured as a gap rather than as a width, because what
+// he asked for is the clearance; the 90% is how it was got.
+test('rough: the sheet leaves the house press clear', async ({ page }) => {
+  await openWithNoBuilding(page);
+  await page.goto('/MODEL.html?mode=day&theme=rough');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await h.openDriveThru(page);
+
+  const sheet = await page.locator('#dt-frame').boundingBox();
+  const press = await page.locator('#bone').boundingBox();
+  const gap = press.y - (sheet.y + sheet.height);
+  expect(gap, `the sheet is sitting ${Math.round(-gap)}px over the house press`)
+    .toBeGreaterThan(0);
+  expect(gap, 'the clearance is back to a few pixels, which is what he asked to fix')
+    .toBeGreaterThanOrEqual(20);
+});
+
 test('an unasked garage carries the default size to the seam', async ({ page }) => {
   await openWithNoBuilding(page);
   await openGarage(page);

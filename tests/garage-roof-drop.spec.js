@@ -9,6 +9,32 @@
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
+// ── WHAT COUNTS AS INK ON THE PAINTED SHEET ───────────────────────────────
+//
+// Three scans below read the overlay and ask, pixel by pixel, "is this a
+// line". They each carried their own copy of `< 120`, and on 24 Sep that
+// number stopped being true: roofs began FILLING, and the fascia's light
+// line moved off the page and onto a roof face. Measured on this fixture's
+// E1, the very same line:
+//
+//     ink(0.6) over the page  #fafafa   ->  117,119,119    dark by `< 120`
+//     ink(0.6) over a face    #ffffff   ->  119,121,121    NOT dark
+//
+// Two units of grey, and a check counting bands down the garage band lost
+// one -- while the line it was looking for was still there, still drawn,
+// still plainly visible. The threshold was sitting on top of a value the
+// painter produces, which is the one place a threshold must not be.
+//
+// SO IT IS SET BY THE GAP, not by a value. Everything this painter draws is
+// either a LINE or a SURFACE, and on the paper skin they do not come close:
+//
+//     lines      ink at full strength 29..32, at 0.6 up to 121
+//     surfaces   concrete #e8e8ea 232, the page #fafafa 250, a face #fff 255
+//
+// Anything in 122..231 separates the two. 170 is the middle of it, so no
+// weight the painter adds and no surface it fills can land on the line.
+const INK_MAX = 170;
+
 async function drawHouseOutline(page) {
   await h.selectTool(page, 'Outline');
   await h.clickWorld(page, -8, -6);
@@ -165,13 +191,14 @@ test('the front elevation shows the garage roof band low with house ink standing
   await page.waitForTimeout(400);
   await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E1');
 
-  const scan = await page.evaluate(() => {
+  const scan = await page.evaluate(inkMax => {
     const canvas = document.querySelector('[data-model-overlay]');
     const W = canvas.width, H = canvas.height;
     const { data } = canvas.getContext('2d').getImageData(0, 0, W, H);
     const dark = (x, y) => {
       const i = (y * W + x) * 4;
-      return data[i + 3] > 200 && data[i] < 120 && data[i + 1] < 120 && data[i + 2] < 120;
+      return data[i + 3] > 200
+        && data[i] < inkMax && data[i + 1] < inkMax && data[i + 2] < inkMax;
     };
     // Grade: the lowest row where a dark run crosses most of the sheet.
     let gradeY = 0;
@@ -194,7 +221,7 @@ test('the front elevation shows the garage roof band low with house ink standing
       rises.push(top == null ? null : gradeY - top);
     }
     return { gradeY, rises };
-  });
+  }, INK_MAX);
 
   // One building silhouette, two heights: the tall house plateau and the
   // low garage band beside it — each holding for a real run of columns.
@@ -221,13 +248,14 @@ test('the garage roof band butts the house without welding: one fascia, a bare r
   await page.waitForTimeout(400);
   await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E1');
 
-  const scan = await page.evaluate(() => {
+  const scan = await page.evaluate(inkMax => {
     const canvas = document.querySelector('[data-model-overlay]');
     const W = canvas.width, H = canvas.height;
     const { data } = canvas.getContext('2d').getImageData(0, 0, W, H);
     const dark = (x, y) => {
       const i = (y * W + x) * 4;
-      return data[i + 3] > 200 && data[i] < 120 && data[i + 1] < 120 && data[i + 2] < 120;
+      return data[i + 3] > 200
+        && data[i] < inkMax && data[i + 1] < inkMax && data[i + 2] < inkMax;
     };
     // Grade: the lowest row where a dark run crosses most of the sheet.
     let gradeY = 0;
@@ -269,7 +297,7 @@ test('the garage roof band butts the house without welding: one fascia, a bare r
       } else inBand = false;
     }
     return { bands, midX: mid.x, topY };
-  });
+  }, INK_MAX);
 
   expect(scan.bands).toBeTruthy();
   // From the ridge down to the plate the probe crosses: the ridge line,
@@ -295,13 +323,14 @@ test('the garage roof reaches the house wall it butts, under the house overhang'
   await page.waitForTimeout(400);
   await expect(page.locator('[data-model-title-detail]').last()).toHaveText('E1');
 
-  const scan = await page.evaluate(() => {
+  const scan = await page.evaluate(inkMax => {
     const canvas = document.querySelector('[data-model-overlay]');
     const W = canvas.width, H = canvas.height;
     const { data } = canvas.getContext('2d').getImageData(0, 0, W, H);
     const dark = (x, y) => {
       const i = (y * W + x) * 4;
-      return data[i + 3] > 200 && data[i] < 120 && data[i + 1] < 120 && data[i + 2] < 120;
+      return data[i + 3] > 200
+        && data[i] < inkMax && data[i + 1] < inkMax && data[i + 2] < inkMax;
     };
     let gradeY = 0;
     for (let y = 0; y < H; y++) {
@@ -343,7 +372,7 @@ test('the garage roof reaches the house wall it butts, under the house overhang'
     // house overhang tip in this fixture.
     const bandRightX = Math.max(...bandCols.map(c => c.x));
     return { overhangTipX, eaveLeftX, pxPerFt: (bandRightX - overhangTipX) / 12 };
-  });
+  }, INK_MAX);
 
   expect(scan).toBeTruthy();
   // The eave carries on past the overhang tip and lands on the wall face —

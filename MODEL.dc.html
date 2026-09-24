@@ -13830,7 +13830,10 @@ class Component extends DCLogic {
       .filter(roof => (roof.points || []).length >= 3)
       .map(roof => ({
         roof,
-        base: CV.roofBaseElev(roof, stack, env),
+        // THE EAVE, NOT THE BEARING -- `riseAt` measures from the eave
+        // line. See the same call in MODEL.html for what counting the
+        // fascia twice, or not at all, does to a window over a garage roof.
+        base: CV.roofEaveElev(roof, stack, env),
         // The module asks for the height; only this page knows how to answer
         // it. Faces closed over so the skeleton is built once, not once per
         // sample -- a 40 ft wall asks a hundred and sixty times.

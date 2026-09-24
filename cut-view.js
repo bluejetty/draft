@@ -506,6 +506,31 @@ if (!window.DraftCutView) {
     return stack.bearing;
   }
 
+  // ── AND THE ELEVATION THE ROOF SURFACE STARTS FROM, WHICH IS NOT THAT ──
+  //
+  // `roofBaseElev` is where the roof BEARS -- the bottom of the fascia, the
+  // soffit line. The sloping surface starts one fascia board higher, at the
+  // eave, and `roofFaceRise`/`sectionRoofHeightAt` are measured from there.
+  // So the elevation of a roof at a plan point is
+  //
+  //     roofEaveElev(roof, stack, env) + rise
+  //
+  // and this file spelled that `roofBaseElev(...) + ROOF_FASCIA_IN / 12` in
+  // seven places, under four different local names (`base`, `top`, `eaveTop`,
+  // and an inline sum).
+  //
+  // IT HAD ALSO ESCAPED THE FILE. MODEL hands auto-windows.js each roof's
+  // `base` for the window-over-roof clearance, and handed it `roofBaseElev`
+  // -- so the clearance was measured to a roof 5 1/2" lower than the one the
+  // painter draws. Movie's own drawing shows exactly that: the dealer lifted
+  // a second-floor sill 4" over the roof it was told about, and the garage
+  // ridge still came up an inch and a half INSIDE the window. Two callers on
+  // two pages were each assembling that sum themselves, which is two chances
+  // to leave a term out and no way to see that one of them had.
+  function roofEaveElev(roof, stack, env) {
+    return roofBaseElev(roof, stack, env) + ROOF_FASCIA_IN / 12;
+  }
+
   // Roof surface height over a plan point, from the roof's REAL face
   // polygons (geometry-2d builds them off the straight skeleton): locate the
   // containing face, evaluate its plane. The old rule — min over every eave
@@ -691,7 +716,7 @@ if (!window.DraftCutView) {
     let roofTop = null;
     env.roofs().forEach(roof => {
       if (!roof.points || roof.points.length < 3) return;
-      const base = roofBaseElev(roof, stack, env) + ROOF_FASCIA_IN / 12;
+      const base = roofEaveElev(roof, stack, env);
       geo().roofFaces(roof, geo().roofSkeleton(roof)).forEach(face => {
         face.points.forEach(pt => {
           const elev = base + geo().roofFaceRise(face, pt, roof.pitch || 4);
@@ -1290,6 +1315,23 @@ if (!window.DraftCutView) {
       facesByRoof = new Map(roofs
         .filter(roof => roof.points && roof.points.length >= 3)
         .map(roof => [roof, geo().roofFaces(roof, geo().roofSkeleton(roof))]));
+      // THE BEARING AND THE EAVE, ONCE PER ROOF RATHER THAN ONCE PER PROBE.
+      // `roofBaseElev` asks whether a roof belongs to a garage, and that walks
+      // the garage outlines -- while the loop below asks a quarter of a
+      // million times. It was already paying that, so hoisting it was only
+      // going to be tidy; measured on proto/cut-view-timing.js it HALVES an
+      // elevation:
+      //
+      //     rail repaint, all five seats   211.9 ms  ->  102.0 ms
+      //     E1 median                       56.6 ms  ->   28.4 ms
+      //
+      // which says the file's own note above -- "it is where an elevation's
+      // ~28 ms goes" -- was measuring this call as much as the sampling.
+      const bearingByRoof = new Map();
+      facesByRoof.forEach((roofFaces, roof) => bearingByRoof.set(roof, {
+        base: roofBaseElev(roof, stack, env),
+        eave: roofEaveElev(roof, stack, env),
+      }));
       // THE ROOF SILHOUETTE'S RESOLUTION, and the painter's whole cost. This
       // walks the cut, and at each spot walks the viewing depth, bisecting for
       // the tallest roof surface -- 240 x 40 x up to 24 iterations. Measured on
@@ -1316,8 +1358,8 @@ if (!window.DraftCutView) {
           facesByRoof.forEach((faces, roof) => {
             const rise = sectionRoofHeightAt({ x: px, z: pz }, roof, faces);
             if (rise == null) return;
-            const base = roofBaseElev(roof, stack, env);
-            const elev = base + ROOF_FASCIA_IN / 12 + rise;
+            const { base, eave } = bearingByRoof.get(roof);
+            const elev = eave + rise;
             if (tallest === null || elev > tallest.elev) tallest = { elev, base };
           });
           return tallest;
@@ -1702,7 +1744,7 @@ if (!window.DraftCutView) {
       const far = { x: pt.x + dir.x * span, z: pt.z + dir.z * span };
       let clipped = top;
       facesByRoof.forEach((roofFaces, roof) => {
-        const base = roofBaseElev(roof, stack, env) + fasciaFt;
+        const base = roofEaveElev(roof, stack, env);
         let lo = Infinity, hi = -Infinity;
         geo().roofProfile(roof, roofFaces, pt, far, dir).forEach(p => {
           const elev = base + p.rise;
@@ -1756,7 +1798,7 @@ if (!window.DraftCutView) {
       && other.floor <= geom.floor + 1e-3
       && geom.tops.every(s =>
         gableTopAt(other.worldAt(s.u), other.face.level.wallTop, other.wallDir) >= s.top - 1e-3));
-    faceGeoms.filter(geom => !faceHidden(geom)).forEach(geom => {
+    const paintFace = geom => {
       const { face, loU, hiU, floor, tops } = geom;
       const { wall, u1, u2, level } = face;
       const xa = X(loU), xb = X(hiU);
@@ -1844,7 +1886,128 @@ if (!window.DraftCutView) {
           }
         }
       });
-    });
+    };
+
+    // ── A ROOF IS A SURFACE, AND IT JOINS THE PAINTER'S SORT ─────────────
+    //
+    // Movie, on an elevation of his own drawing: *"the roofs look
+    // 'transparent'"*, and again over a marked-up screenshot: *"there are
+    // still arrached garage lines showing (looks like some things are
+    // 'tranparent')"*.
+    //
+    // THEY WERE. Every wall face here is FILLED before it is stroked and the
+    // faces run far-first, so a nearer wall hides a farther one by simply
+    // being painted over it. Roofs never joined that sort: the passes below
+    // STROKE roof edges and fill nothing, and occlusion BY a roof was
+    // hand-built one symptom at a time -- `roofClippedTop` lowers a wall's
+    // top into a roof's band, `behindRoof` drops a roof edge, the joist band
+    // asks the same question a third way. Each of those hides ONE thing.
+    // Nothing hid the rest, so on Movie's own E1 the house's right corner ran
+    // straight down through the garage's hip and the house's own hip end read
+    // as open sky.
+    //
+    // A ROOF FACE PROJECTS TO A POLYGON like any other surface: `u` off the
+    // cut's axis, elevation off `roofFaceRise`, which is LINEAR across a face
+    // -- so the plan corners are the whole outline and nothing is sampled.
+    // Filled at its depth in the same sort, it hides what stands behind it
+    // and is hidden by what stands in front, under no rule of its own.
+    //
+    // ITS DEPTH IS ITS NEAREST CORNER. A roof face slopes, so it has no one
+    // depth the way a wall does, and the sort wants a single key. The nearest
+    // corner is the safe end: the only part of a sheet that lands on a wall's
+    // paper is the part above that wall's plate, and a roof rises as it goes
+    // BACK, so a sheet whose near edge clears a wall clears it everywhere
+    // they meet. Keyed on the FAR corner instead, a garage roof would sit
+    // behind the house wall it laps.
+    //
+    // EDGE-ON FACES DROP OUT BY THEIR OWN AREA. A gable roof seen from its
+    // end throws both slopes onto one line -- every corner of a slope shares
+    // a `u` with the corner above it and an elevation with the corner beside
+    // it -- so there is no polygon to fill. The triangle between the rakes is
+    // the gable END WALL, which `gableTopAt` already climbs and the wall pass
+    // already fills, and that is the right answer rather than a gap: the
+    // sheet really is edge on there.
+    //
+    // THE FASCIA COMES WITH IT, AS A BOARD RATHER THAN A NUDGE. The sheet's
+    // own polygon stops at the eave LINE and the board hangs one fascia
+    // below it, so a wall behind showed through a stripe that deep along
+    // every eave -- the see-through, narrowed but not gone. Dropping the
+    // eave corners instead was tried first and is wrong for a hip: moving a
+    // corner down also swings the hip edge that leaves it, and the fill's
+    // sloping edge came away from the drawn one by about two feet at the
+    // eave. So the board is its own quad along each EAVE edge, decided by
+    // the same `isEaveEdge` the silhouette's runs are grown by -- one answer
+    // to what an eave is, for the pass that outlines the band and the pass
+    // that fills it.
+    const roofFills = [];
+    if (facesByRoof) {
+      facesByRoof.forEach((roofFaces, roof) => {
+        const base = roofBaseElev(roof, stack, env);
+        const eaveTop = roofEaveElev(roof, stack, env);
+        const pitch = roof.pitch || 4;
+        roofFaces.forEach(face => {
+          const poly = face.points || [];
+          if (poly.length < 3) return;
+          const pts = poly.map(pt => ({
+            x: X(pt.x * axis.x + pt.z * axis.z),
+            y: Y(eaveTop + geo().roofFaceRise(face, pt, pitch)),
+            d: pt.x * dir.x + pt.z * dir.z,
+          }));
+          // Twice the signed area, in PIXELS: the question is "does this face
+          // cover any paper", and a roof seen almost edge on at a rail
+          // thumbnail's scale covers none.
+          let area2 = 0;
+          for (let i = 0; i < pts.length; i++) {
+            const a = pts[i], b = pts[(i + 1) % pts.length];
+            area2 += a.x * b.y - b.x * a.y;
+          }
+          // NaN IS NOT A SMALL AREA, and it must not reach the sort: one
+          // NaN key scrambles the whole paint order, so a degenerate face
+          // would not merely go unfilled, it would put the walls down in the
+          // wrong order. `Math.abs(NaN) < 4` is false, so the area test lets
+          // it straight through.
+          if (!Number.isFinite(area2) || Math.abs(area2) < 4) return;
+          const parts = [pts];
+          for (let i = 0; i < poly.length; i++) {
+            const a = poly[i], b = poly[(i + 1) % poly.length];
+            const ea = eaveTop + geo().roofFaceRise(face, a, pitch);
+            const eb = eaveTop + geo().roofFaceRise(face, b, pitch);
+            if (!isEaveEdge(ea, eb, eaveTop)) continue;
+            const xa = X(a.x * axis.x + a.z * axis.z);
+            const xb = X(b.x * axis.x + b.z * axis.z);
+            if (Math.abs(xb - xa) < 1) continue;   // this eave runs away from us
+            parts.push([
+              { x: xa, y: Y(eaveTop) }, { x: xb, y: Y(eaveTop) },
+              { x: xb, y: Y(base) }, { x: xa, y: Y(base) },
+            ]);
+          }
+          const depth = Math.max(...pts.map(pt => pt.d));
+          if (!Number.isFinite(depth)) return;
+          roofFills.push({ depth, parts });
+        });
+      });
+    }
+    const paintRoof = ({ parts }) => {
+      ctx.fillStyle = C.face;
+      parts.forEach(part => {
+        ctx.beginPath();
+        ctx.moveTo(part[0].x, part[0].y);
+        for (let i = 1; i < part.length; i++) ctx.lineTo(part[i].x, part[i].y);
+        ctx.closePath();
+        ctx.fill();
+      });
+    };
+    // FAR FIRST, AND ON A TIE THE WALL GOES DOWN BEFORE THE ROOF. A sheet
+    // whose nearest corner lands exactly on a wall's depth is a sheet bearing
+    // on that wall's own plate, and it laps OVER the plate -- which is both
+    // how the roof is built and the only way round that cannot rub out a
+    // gable wall's climb. `sort` is stable, so listing the walls first is
+    // what states it.
+    [
+      ...faceGeoms.filter(geom => !faceHidden(geom))
+        .map(geom => ({ depth: geom.face.depth, go: () => paintFace(geom) })),
+      ...roofFills.map(fill => ({ depth: fill.depth, go: () => paintRoof(fill) })),
+    ].sort((a, b) => a.depth - b.depth).forEach(item => item.go());
 
     // Floor assembly bands: each floor's rim (joists + sheathing) is part of
     // the house face — white like the walls, no banding line, keeping the
@@ -1866,7 +2029,7 @@ if (!window.DraftCutView) {
       let covered = false;
       facesByRoof.forEach((roofFaces, roof) => {
         if (covered) return;
-        const base = roofBaseElev(roof, stack, env) + fasciaFt;
+        const base = roofEaveElev(roof, stack, env);
         let lo = Infinity, hi = -Infinity;
         geo().roofProfile(roof, roofFaces, near, far, dir).forEach(p => {
           const e = base + p.rise;
@@ -1992,8 +2155,8 @@ if (!window.DraftCutView) {
       ctx.stroke();
     });
 
-    // Roof silhouette over the faces, with the fascia band along the eave.
-    const drawnFascia = [];
+    // Roof silhouette over the faces. The fascia band along the eave is the
+    // face-edge pass's, below -- see the note where this pass used to draw it.
     if (lit.length > 1) {
       // Fascia band per eave run — a run breaks where the roof drops out or
       // where a differently-based roof (the garage) takes over the front.
@@ -2045,7 +2208,7 @@ if (!window.DraftCutView) {
       const eaveSpans = [];
       if (facesByRoof) {
         facesByRoof.forEach((roofFaces, roof) => {
-          const top = roofBaseElev(roof, stack, env) + ROOF_FASCIA_IN / 12;
+          const top = roofEaveElev(roof, stack, env);
           roofFaces.forEach(face => {
             const poly = face.points;
             for (let i = 0; i < poly.length; i++) {
@@ -2120,19 +2283,28 @@ if (!window.DraftCutView) {
       closePen();
       ctx.stroke();
 
-      runs.filter(r => r.u1 - r.u0 > 0.5).forEach(r => {
-        drawnFascia.push(r);
-        ctx.strokeStyle = ink(0.6); ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(X(r.u0), Y(r.base + ROOF_FASCIA_IN / 12));
-        ctx.lineTo(X(r.u1), Y(r.base + ROOF_FASCIA_IN / 12));
-        ctx.stroke();
-        ctx.strokeStyle = INK; ctx.lineWidth = 2.25;
-        ctx.beginPath();
-        ctx.moveTo(X(r.u0), Y(r.base));
-        ctx.lineTo(X(r.u1), Y(r.base));
-        ctx.stroke();
-      });
+      // AND THE BAND ITSELF IS NOT DRAWN HERE. It was, and it could not be
+      // hidden: this pass knows a run's u and its base and nothing about
+      // what stands in front of it, so the band went down over everything.
+      // On Movie's own E3 the attached garage sits BEHIND the house, and its
+      // eave was banded straight across twenty-two feet of two-storey wall --
+      // a pair of lines crossing the house at second-floor height with
+      // nothing there to cast them.
+      //
+      // `extendRunsToEaves` is why it reached that far, and is not the fault:
+      // a run stops a sample or two short of a roof's outer corner and the
+      // riser that caps it has to stand at the true end, which is the whole
+      // of board #453. Growing a run to the eave's true end is right for the
+      // OUTLINE. It is the band that had no business following it across a
+      // wall.
+      //
+      // SO THE FACE-EDGE PASS OWNS THE BAND, ALL OF IT. That pass already
+      // draws exactly this band from the real eave polygons -- same two
+      // lines, same inks, same 5.5" -- and it tests every station against
+      // `hidden`, which is the answer this pass cannot give. It used to
+      // subtract whatever was banded here and draw the leftovers; with
+      // nothing drawn here it simply draws the eave, hidden stretches left
+      // out. One band, one pass, one hidden test.
     }
 
     // Visible roof edges — eaves, rakes, ridges, hips and valleys — from the
@@ -2182,7 +2354,7 @@ if (!window.DraftCutView) {
       };
       const seen = new Set();
       facesByRoof.forEach((roofFaces, roof) => {
-        const eaveTop = roofBaseElev(roof, stack, env) + ROOF_FASCIA_IN / 12;
+        const eaveTop = roofEaveElev(roof, stack, env);
         const pitch = roof.pitch || 4;
         const rpts = roof.points || [];
         // ── A GABLE END HAS A FRONT AND A BACK, AND ONLY ONE OF THEM ──────
@@ -2299,21 +2471,11 @@ if (!window.DraftCutView) {
             drawn.forEach(r => {
               if (eave) {
                 // An eave wears the fascia band: the light top line and the
-                // heavy shadow along its bottom, same inks as the silhouette's.
-                // Stretches the silhouette pass already banded stay drawn
-                // once: subtract its runs at this elevation, keep the rest.
-                let spans = [{ u0: Math.min(r.u0, r.u1), u1: Math.max(r.u0, r.u1) }];
-                drawnFascia
-                  .filter(f => Math.abs(f.base + ROOF_FASCIA_IN / 12 - eaveTop) < 0.05)
-                  .forEach(f => {
-                    spans = spans.flatMap(sp => {
-                      if (f.u1 <= sp.u0 + 0.05 || f.u0 >= sp.u1 - 0.05) return [sp];
-                      const keep = [];
-                      if (f.u0 > sp.u0 + 0.05) keep.push({ u0: sp.u0, u1: f.u0 });
-                      if (f.u1 < sp.u1 - 0.05) keep.push({ u0: f.u1, u1: sp.u1 });
-                      return keep;
-                    });
-                  });
+                // heavy shadow along its bottom. THE WHOLE BAND IS DRAWN
+                // HERE -- this run is already a VISIBLE stretch of the eave,
+                // every station of it past `hidden`, which is why the band
+                // moved off the silhouette pass and onto this one.
+                const spans = [{ u0: Math.min(r.u0, r.u1), u1: Math.max(r.u0, r.u1) }];
                 spans.filter(sp => sp.u1 - sp.u0 > 0.2).forEach(sp => {
                   ctx.strokeStyle = ink(0.6); ctx.lineWidth = 1;
                   ctx.beginPath();
@@ -2514,6 +2676,7 @@ if (!window.DraftCutView) {
     sectionWallCrossings,
     cutViewExtents,
     roofBaseElev,
+    roofEaveElev,
     floorRuns,
     garageOfWall,
     garageOfRoof,
