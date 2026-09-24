@@ -3250,8 +3250,26 @@
       if (cut) {
         const rails = railMargins();
         paintedForRails = railKey(rails);
+        // IN THE SKIN, like everything else on this page. Movie, 24 Sep,
+        // looking at a white elevation over a night page: "would it be
+        // possible to make the background of the elevations black when in
+        // NIGHT mode? ... or should we reverse the lines to white? like on
+        // the PROJECT Sections?" The line above this one already cleared the
+        // canvas to skin['surface-page']; drawCutView then painted straight
+        // over it with its own #fafafa, because it was handed no colours and
+        // paper is what it assumes.
+        //
+        // THE PAINTER IS SHARED, so the skin is passed IN rather than known
+        // there: the Construction Layout draws these same elevations as
+        // viewports on a sheet that gets printed, and that one says nothing
+        // and keeps its paper. inksFromSkin is cut-view's own translation
+        // from palette roles to the eight things it draws.
+        //
+        // AND PRINTSCREEN IS ALREADY RIGHT because this reads the live
+        // `skin`: inDaylight swaps it to day for the length of the shoot, so
+        // a drafter working at night still hands a client a white drawing.
         window.DraftCutView.drawCutView(cutEnv(), ctx, cssW, cssH, cut,
-          { margins: rails });
+          { margins: rails, colors: window.DraftCutView.inksFromSkin(skin) });
         // THE MASK CLIMBS BOTTOM TO TOP, dotted underground first, footing to
         // ridge -- the order a house is actually built in, which is why the
         // elevation is the view this plays on. Self-driving: each frame asks
@@ -5926,8 +5944,11 @@
     // ~28 ms an elevation; at 40 it is one sample per two pixels and costs
     // ~7 ms. Four elevations: 112 ms against 30 ms, for a picture that
     // cannot differ at this size.
+    // THE SAME INKS AS THE FULL-SIZE VIEW. A thumbnail that kept paper while
+    // the sheet beside it went dark would be the rail disagreeing with the
+    // drawing it is a rail of.
     window.DraftCutView.drawCutView(env, c, screen.width, screen.height, spec.cut,
-      { coarseSilhouette: true });
+      { coarseSilhouette: true, colors: window.DraftCutView.inksFromSkin(skin) });
   };
 
   // ── PRINTSCREEN: three pages for a client ─────────────────────────────────
