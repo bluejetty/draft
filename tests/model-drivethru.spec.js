@@ -1031,6 +1031,61 @@ const openAskingWithNoBuilding = async page => {
 // AND THE DEFAULT IS WHAT AN UNASKED DRAFTER GETS. This is the new path and
 // the one a drafter actually walks: two presses, no third question, and a
 // garage on the sheet.
+// THE CARDS ARE THE BOARD'S WORDS AS MUCH AS THE LABELS ARE, and they can
+// disagree with them silently: a tile whose picture says one thing under a
+// label saying another throws nothing, breaks nothing, and reads as finished.
+// That is exactly what the bungalow ENTRY did -- it borrowed the FAMILY's
+// card, so the submenu opened BUNGALOW beneath its own label reading 1 STOREY
+// (Movie, 24 Sep: "the 2nd lvl down should say 1 STOREY - (not BUNGALOW)" and
+// "one on top should stay BUNGALOW").
+//
+// ONE ID IS TWO TILES, which is the whole reason it happened: `bungalow` is a
+// family AND its first entry, so one table could not hand them different
+// cards. Checked here rather than left to the eye, because the next family to
+// share a name with one of its entries fails the same way and just as quietly.
+test('the bungalow family and its 1 STOREY entry wear different cards',
+  async ({ page }) => {
+    await openPage(page);
+    await h.openDriveThru(page);
+    const src = sel => page.locator(`${sel} img`).getAttribute('src');
+
+    const family = await src('[data-build-family="bungalow"]');
+    await page.locator('#dt-tiles [data-build-family="bungalow"]').click();
+    const entry = await src('[data-build-entry="bungalow"]');
+
+    expect(family, 'the family tile stopped saying BUNGALOW')
+      .toContain('house-bungalow');
+    expect(entry, 'the entry tile is not the 1 STOREY card').toContain('1storey');
+    expect(entry, 'the entry borrowed the family-s card again').not.toBe(family);
+  });
+
+// AND EVERY CARD ON THE BOARD RESOLVES. A path with a typo -- the .jpg among
+// the .jpegs is one keystroke from it -- leaves a tile with no picture and no
+// error, which the fallback used to hide by printing the label instead. It no
+// longer does, because the tile has a card; it just has a blank one.
+test('no tile on the board is wearing a card that does not load',
+  async ({ page }) => {
+    await openPage(page);
+    await h.openDriveThru(page);
+    // WALKED OFF THE MODULE, not off a list written out here. The first draft
+    // of this named 'twoStorey' as a family and sat three minutes waiting for
+    // a tile that has never existed -- it is an ENTRY under bungalow. Asking
+    // build-menu.js means the sweep covers whatever the board actually has,
+    // including the families added after this was written.
+    const families = await page.evaluate(() =>
+      window.DraftBuildMenu.BUILD_MENU.map(f => f.id));
+    expect(families.length, 'the board has no families to sweep')
+      .toBeGreaterThan(0);
+    for (const family of families) {
+      await page.locator(`#dt-tiles [data-build-family="${family}"]`).click();
+      await page.waitForTimeout(250);
+    }
+    const broken = await page.evaluate(() => [...document.querySelectorAll('#dt-tiles img')]
+      .filter(img => img.complete && img.naturalWidth === 0)
+      .map(img => img.getAttribute('src')));
+    expect(broken, 'a tile is wearing a card that 404s').toEqual([]);
+  });
+
 test('an unasked garage carries the default size to the seam', async ({ page }) => {
   await openWithNoBuilding(page);
   await openGarage(page);
@@ -1231,7 +1286,10 @@ test('with no dog to say it, a refusal goes on the page-s own line',
 
 test('the dog keeps his own bone, and his own voice, where he is on the board',
   async ({ page }) => {
-    await openPage(page);
+    // ASKING, like its ROUGH twin above: what this measures is WHERE the
+    // refusal lands, so there has to be a refusal to land. With the size
+    // question withdrawn the default answers first and nothing is refused.
+    await openPageAsking(page);
     await h.openDriveThru(page);
     await expect(page.locator('#dt-bone')).toBeVisible();
     await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
