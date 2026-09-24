@@ -183,6 +183,16 @@ and nobody sees it until Movie flips the lights. So the conversion is pinned:
 because the engine list is derived from the `mutationMode()` call rather than
 listed.
 
+> **It is not this page's alone any more.** `LAYOUT.html` was converted on
+> 24 Sep and became the harness's second subject, taking it to 35 checks and
+> 22 mutations. The counts above are this page's own and are left as they
+> were; what the file covers is in
+> `ORDER-construction-layouts.md`, "Stage 3 as built". One thing there is
+> worth reading from here: LAYOUT is scanned as TWO REGIONS with separate
+> allowlists, because its canvas is allowed white paper and near-black ink
+> while its stylesheet is allowed neither — and a mutant aimed at `#1d1f20`
+> survived until that split existed.
+
 **Most of the file checks the INSTRUMENT, not the page.** A scanner that finds
 nothing reports the same "0 literals" as a page that has none, so ten checks
 feed it fixtures it must find and fixtures it must not, and five mutations
