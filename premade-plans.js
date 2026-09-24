@@ -565,6 +565,68 @@ if (!window.DraftPremadePlans) {
   // the same edges: `index >= legCount - 1` marks the house path.
   const GARAGE_ROOF_HOUSE_END = Object.freeze([0]);
 
+  // ── AND THE FOOT OF THE TIE GETS A ROOF OF ITS OWN ───────────────────────
+  //
+  // Movie, 24 Sep, on the E4 RIGHT of a 2 STOREY + GARAGE: *"where the garage
+  // connects to the house, the roof should also cover the extra ft plus 2
+  // more ft for EAVE OVERHANG (gable)"*, then the measurement -- *"3ft total
+  // from the front house edge wall"* -- and then the construction, in his own
+  // words: *"we will need additional short 2ft extra peice of gable that
+  // extends 2ft past the back exterior garage wall"*.
+  //
+  // WHAT IS BARE. garageRoofLoop stops on the house's front line, z = 20, and
+  // says why: the tie is a foundation detail and the roof is not a
+  // foundation. True of the SHEET -- but the tie is also four feet of real
+  // building, x 16..20 by z 19..20, standing beside the house's right wall
+  // with nothing over it. The house's own roof oversails two of those four
+  // feet (its eave reaches x = 18) and the other two are open sky. That is
+  // what he was looking at.
+  //
+  // A PIECE ADDED, NOT THE ROOF MOVED, and the difference cost a revert.
+  // Sliding garageRoofLoop's rear edge back three feet was tried (9df8cd0,
+  // reverted by 6853fb7) and grows the whole stub INTO the house: for
+  // x -4..16 that ground is the HOUSE's, and the elevation drew a rake fascia
+  // floating in the middle of the house's own roof. Movie had marked exactly
+  // that once before. His word was "additional".
+  //
+  // IT IS ONE PLANE, WHICH IS WHY IT CAN BE ITS OWN RECORD. The stub's right
+  // slope runs from the ridge at x = 8 down to its eave at x = 22; at x = 16
+  // it stands 2.000 ft above that eave. This rectangle, skeletonised alone,
+  // comes back as a SINGLE face reading 2.000 at x = 16 and 0.000 at x = 22 --
+  // the same plane, continued. Measured all three ways before it was written:
+  //
+  //     the stub today          face (8,20)@4.667 .. (22,48)@0.000
+  //     the rear edge notched   face (16,20)@7.333  -- the ridge jumps
+  //     this piece alone        face (16,17)@2.000 (22,17)@0.000  <- one face
+  //
+  // The notch is what a reader reaches for first and it does not survive the
+  // straight skeleton: a reflex corner at (16,20) between two gable edges
+  // throws the ridge a storey up. So: two records, one plane.
+  //
+  // EDGE BY EDGE, and each one is a different thing:
+  //   0  the tie's own rear wall, in open air        -> RAKE, 2 ft of it
+  //   1  the garage's right wall line                -> EAVE, and it lands on
+  //      the stub's eave exactly, so the fascia runs on unbroken
+  //   2  where it meets the stub                     -> flush, no board
+  //   3  the house's right wall                      -> flush, no board
+  const garageTieRoofLoop = () => {
+    const houseRight = WIDTH_FT / 2;
+    const houseFront = DEPTH_FT / 2;
+    const right = houseRight + GARAGE_PAST_FT;
+    const tieZ = houseFront - GARAGE_TIE_FT;
+    return [pt(houseRight, tieZ), pt(right, tieZ),
+      pt(right, houseFront), pt(houseRight, houseFront)];
+  };
+  // DECLARED BY INDEX, for GARAGE_ROOF_HOUSE_END's own reason: edge 2 runs
+  // x 16..20 along z = 20 and the house stops at x = 16, so not one inch of
+  // it lies on the house and the derivation answers no for the whole edge.
+  const GARAGE_TIE_ROOF_FLUSH = Object.freeze([2, 3]);
+  // AND THE ONE EDGE THAT IS A GABLE WITH A BOARD ON IT. The three feet
+  // Movie measured are ONE foot of tie plus the page's own overhang, not a
+  // typed 3: hand the page the tie's own rectangle and the rake comes out
+  // wherever roofOverhangFt is set.
+  const GARAGE_TIE_ROOF_RAKE = Object.freeze([0]);
+
   // ── ONE ROOF OVER BOTH BODIES ────────────────────────────────────────────
   //
   // Movie, 19 Sep, looking at a house and a garage each wearing their own
@@ -739,6 +801,22 @@ if (!window.DraftPremadePlans) {
     // flush -- no rake overhang -- because a roof that dies into a wall has
     // no eave there and no board to hang one on.
     garageRoofHouseEnd: garage ? GARAGE_ROOF_HOUSE_END : null,
+    // ── AND THE TIE'S OWN PIECE, ON THIS ENTRY ALONE ────────────────────
+    //
+    // WITH A ROOM OVER, THE TIE IS ALREADY COVERED. houseRoomLoop starts its
+    // wing at `DEPTH_FT / 2 - GARAGE_TIE_FT` -- on the tie -- so the house's
+    // roof runs over it, and a second sheet there would be a roof under a
+    // roof. Same for the BUNGALOW, whose houseGarageLoop has passed the tie
+    // into houseWingLoop from the start.
+    //
+    // THIS ENTRY IS THE ONE THAT LEAVES IT BARE, and that is not an oversight
+    // in the others: a 2 STOREY's garage is deliberately single storey, so
+    // its roof cannot be spliced into the house's and the house's roof is the
+    // plain 32 x 40. Four feet of tie fall between the two, which is the gap
+    // Movie found.
+    garageTieRoof: (garage && !overGarage) ? garageTieRoofLoop() : null,
+    garageTieRoofFlush: GARAGE_TIE_ROOF_FLUSH,
+    garageTieRoofRake: GARAGE_TIE_ROOF_RAKE,
     // THE ROOM OVER IS ITS OWN BODY, on its own level. It is not the garage
     // raised twice and not the upper storey stretched: level-assembly.js
     // gives the over-garage level its own role and a deeper joist, because a
@@ -782,6 +860,13 @@ if (!window.DraftPremadePlans) {
     // house's, which is worse than the two hips meeting badly that this
     // replaces: a roof under a roof.
     garageRoof: null,
+    // AND NO PIECE OVER THE TIE EITHER, for the same reason: houseGarageLoop
+    // starts its wing one foot back of the house's front line -- ON the tie --
+    // so the roof above already runs over it. Spelled out rather than left
+    // absent, because the page reads a LOOP and "absent" and "null" have to
+    // mean the same thing to it or the answer depends on which key a design
+    // happened to write.
+    garageTieRoof: null,
   });
 
   // WHAT THE BOARD CAN ACTUALLY BUILD, keyed by build-menu.js entry id. A
@@ -806,6 +891,7 @@ if (!window.DraftPremadePlans) {
     WIDTH_FT, DEPTH_FT, GARAGE_WIDTH_FT, GARAGE_DEPTH_FT,
     GARAGE_PAST_FT, GARAGE_TIE_FT, OVER_GARAGE_LENGTH_FT,
     OVERHEAD_DOOR_WIDTHS_FT, GARAGE_ROOF_HOUSE_END,
+    GARAGE_TIE_ROOF_FLUSH, GARAGE_TIE_ROOF_RAKE,
     MAN_DOOR_WIDTH_FT, GARAGE_WINDOW_WIDTH_FT, GARAGE_DOOR_HEAD_FT,
     bungalow, twoStorey, planFor, detachedGarageOpenings,
     entryIds: () => Object.keys(PLANS),

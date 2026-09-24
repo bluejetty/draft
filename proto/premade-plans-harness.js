@@ -1072,6 +1072,133 @@ check('the stub with a room over is untouched by all of this',
     .garageRoof.map(pt => [pt.x, pt.z])),
   JSON.stringify([[-4, 38], [20, 38], [20, 46], [-4, 46]])]);
 
+// ── THE SHORT GABLE OVER THE FOOT OF THE TIE ─────────────────────────────
+//
+// Movie, 24 Sep, on the E4 RIGHT of a 2 STOREY + GARAGE: *"where the garage
+// connects to the house, the roof should also cover the extra ft plus 2 more
+// ft for EAVE OVERHANG (gable)"*, *"3ft total from the front house edge
+// wall"*, *"we will need additional short 2ft extra peice of gable that
+// extends 2ft past the back exterior garage wall"*.
+//
+// A PIECE ADDED, NOT THE ROOF MOVED. Sliding the stub's rear edge back was
+// tried and reverted: for x -4..16 that ground is the house's, and the
+// elevation drew a rake fascia floating in the middle of the house's own
+// roof. So the stub keeps its flush cut and the tie gets a sheet of its own.
+//
+// THE ONE THAT WOULD HAVE CAUGHT THE OTHER WRONG ANSWER is the plane check
+// at the end. Notching the stub's rear edge instead -- the move a reader
+// reaches for first -- puts a reflex corner between two gable edges, and the
+// straight skeleton throws the ridge a storey up: measured, the notched
+// hexagon reads 7.333 ft of rise at x = 16 where the stub itself reads
+// 2.000. A check on the loop's corners alone would have passed on it.
+
+// The page's rule for this piece, replayed: `flush` is gable AND zero
+// overhang; `rake` is gable AND the overhang, which is the pair pulled apart.
+const tieKinds = plan => {
+  const ring = plan.garageTieRoof.map(pt => ({ x: pt.x, z: pt.z }));
+  const flush = new Set(plan.garageTieRoofFlush);
+  const rake = new Set(plan.garageTieRoofRake);
+  const pts = GEOM.offsetOutlineVariable(ring,
+    ring.map((_, i) => (flush.has(i) && !rake.has(i) ? 0 : 2)));
+  return {
+    pts,
+    kinds: ring.map((_, i) => (flush.has(i) || rake.has(i) ? 'gable' : 'eave')),
+  };
+};
+const twoStoreyGarage = P => P.twoStorey({ garage: true });
+
+check('the tie roof is raised over the tie itself, not over a typed rectangle',
+  P => { const plan = twoStoreyGarage(P);
+         const box = bbox(plan.garageTieRoof);
+         return [`${n(box.minX)},${n(box.maxX)},${n(box.minZ)},${n(box.maxZ)}`,
+           `${n(P.WIDTH_FT / 2)},${n(P.WIDTH_FT / 2 + P.GARAGE_PAST_FT)},`
+           + `${n(DEPTH_HALF - P.GARAGE_TIE_FT)},${n(DEPTH_HALF)}`]; });
+
+check('and it comes out three feet deep -- one of tie and two of rake',
+  P => { const plan = twoStoreyGarage(P);
+         const box = bbox(tieKinds(plan).pts);
+         return [n(DEPTH_HALF - box.minZ), n(P.GARAGE_TIE_FT + 2)]; });
+
+check('the rake is the page-s own overhang, not a 3 typed into the design',
+  P => { const plan = twoStoreyGarage(P);
+         const box = bbox(tieKinds(plan).pts);
+         const wall = DEPTH_HALF - P.GARAGE_TIE_FT;
+         return [n(wall - box.minZ), n(2)]; });
+
+check('one edge is a rake, one is an eave, and the two joints carry no board',
+  P => [tieKinds(twoStoreyGarage(P)).kinds.join(','), 'gable,eave,gable,gable']);
+
+// ITS EAVE LANDS ON THE STUB'S OWN, which is what lets the fascia run on
+// unbroken rather than stepping an inch at the join.
+check('the piece-s eave is the stub-s eave line, to the foot',
+  P => { const plan = twoStoreyGarage(P);
+         const piece = bbox(tieKinds(plan).pts);
+         const stub = GEOM.offsetOutlineVariable(
+           plan.garageRoof.map(pt => ({ x: pt.x, z: pt.z })),
+           plan.garageRoof.map((_, i) => (i === 0 ? 0 : 2)));
+         return [n(piece.maxX), n(bbox(stub).maxX)]; });
+
+// AND GEOMETRY CANNOT FIND THE RAKE, which is why the design names it: the
+// tie's rear wall runs beside the house, not on it.
+check('nothing about the house makes that edge a rake, so it is declared',
+  P => { const plan = twoStoreyGarage(P);
+         const ring = plan.garageTieRoof;
+         return [GEOM.edgeOnLoop(ring[0], ring[1], GEOM.loopSegments(plan.house)), false]; });
+
+check('the tie roof is wound like every other loop here',
+  P => [Math.sign(area2(twoStoreyGarage(P).garageTieRoof)),
+    Math.sign(area2(P.twoStorey({}).house))]);
+
+// ── AND WHO DOES NOT GET ONE ─────────────────────────────────────────────
+//
+// The BUNGALOW and the ROOM OVER both run the house's own roof over the tie
+// -- houseWingLoop takes `DEPTH_FT / 2 - GARAGE_TIE_FT` as its back -- so a
+// second sheet there would be a roof under a roof.
+check('the bungalow needs none: its house roof already covers the tie',
+  P => [P.planFor('bungalow-garage').garageTieRoof, null]);
+
+check('nor does the room over, for the same reason one floor up',
+  P => [P.twoStorey({ garage: true, overGarage: true }).garageTieRoof, null]);
+
+check('and a design with no garage has no tie to cover',
+  P => [P.twoStorey({}).garageTieRoof, null]);
+
+// ── ONE PLANE, WHICH IS THE WHOLE REASON IT CAN BE ITS OWN RECORD ────────
+//
+// The stub's right slope runs from its ridge down to its eave; at x = 16 it
+// stands 2.000 ft above that eave. This piece, skeletonised alone, has to be
+// a SINGLE face reading the same 2.000 there and 0.000 at the eave -- the
+// same plane, continued. Anything else is two roofs meeting at an angle, and
+// the elevation would draw the crease.
+const risesOf = loop => {
+  const roof = { points: loop.map(pt => ({ x: pt.x, z: pt.z })), pitch: 4,
+    edges: loop.map(() => 'eave') };
+  return roof;
+};
+check('the piece is ONE face -- not a little hip tucked against the house',
+  P => { const plan = twoStoreyGarage(P);
+         const { pts, kinds } = tieKinds(plan);
+         const roof = { points: pts, pitch: 4, edges: kinds };
+         return [GEOM.roofFaces(roof, GEOM.roofSkeleton(roof)).length, 1]; });
+
+check('and that face is the stub-s own slope, read at the house wall',
+  P => { const plan = twoStoreyGarage(P);
+         const { pts, kinds } = tieKinds(plan);
+         const piece = { points: pts, pitch: 4, edges: kinds };
+         const face = GEOM.roofFaces(piece, GEOM.roofSkeleton(piece))[0];
+         const at = face.points.find(pt => Math.abs(pt.x - P.WIDTH_FT / 2) < 0.01);
+         // The stub, asked the same question at the same x.
+         const stubRing = plan.garageRoof.map(pt => ({ x: pt.x, z: pt.z }));
+         const stubPts = GEOM.offsetOutlineVariable(stubRing,
+           stubRing.map((_, i) => (i === 0 ? 0 : 2)));
+         const stub = { points: stubPts, pitch: 4,
+           edges: stubPts.map((_, i) => (i === 0 ? 'gable' : 'eave')) };
+         const height = GEOM.roofFaces(stub, GEOM.roofSkeleton(stub))
+           .map(f => ({ f, rise: GEOM.roofFaceRise(f, { x: at.x, z: DEPTH_HALF + 4 }, 4) }))
+           .filter(({ f }) => f.points.some(pt => pt.x > P.WIDTH_FT / 2))
+           .reduce((best, e) => (best === null || e.rise < best ? e.rise : best), null);
+         return [n(GEOM.roofFaceRise(face, at, 4)), n(height)]; });
+
 // ── Mutations ──
 // ── THREE ANCHORS THE TIE MADE WORTH NAMING ONCE ─────────────────────────
 //

@@ -9813,8 +9813,24 @@
     if (kind !== 'thickened') {
       const topHeight = kind === 'frostwall' ? frostTop : beamTop;
       // A FROST WALL STANDS, A GRADE BEAM HANGS. The one number that says so.
+      //
+      // AND IT HUNG FOR A DETACHED GARAGE ONLY, which made an attached one's
+      // "grade beam" a frost wall wearing the wrong label: base 0 is concrete
+      // standing on a strip footing at the house's footing depth, which is
+      // the definition three lines above this one, of the OTHER kind.
+      // Measured on a fresh 2 STOREY + GARAGE before the fix -- four garage
+      // foundation walls, `base 0 top 8.125`, the house's own profile.
+      //
+      // Movie, 24 Sep: *"please make the DEFAULT attached garages GRADE BEAM
+      // and PILES (not frost wall)"*. The KIND was already right --
+      // garageFoundationOf answers `gradebeam` when nothing has said
+      // otherwise -- so what he was looking at was the kind being read and
+      // then built as the other thing. Attached or detached, a grade beam is
+      // GARAGE_BEAM_CONCRETE_IN of pour hanging off its own top: 32", which
+      // on an attached garage puts 14" of it above grade and 18" below, and
+      // nothing under it but the piles.
       const baseHeight = kind === 'frostwall' ? 0
-        : detached ? topHeight - S.GARAGE_BEAM_CONCRETE_IN / 12 : 0;
+        : topHeight - S.GARAGE_BEAM_CONCRETE_IN / 12;
       const beam = raiseLoop(loop, levelId, {
         viewId: 'foundation',
         wallType: 'concrete_8',
@@ -9901,7 +9917,7 @@
   // -- and it is edgeOnLoop here for the reason the garage's own walls use it:
   // one rule, one home.
   const raiseRoofOver = (loop, { garage = false, plateHeightFt = null,
-    sourceLevelId = null, against = null, flush = null } = {}) => {
+    sourceLevelId = null, against = null, flush = null, rake = null } = {}) => {
     const G = window.DraftGeometry2D;
     const ring = loop.map(pt => ({ x: pt.x, z: pt.z }));
     // ── THE EDGES AGAINST THE HOUSE ARE CUT FLUSH, NOT OVERHUNG ──────────
@@ -9942,14 +9958,33 @@
     // they are one fact: a roof that dies into a wall has no eave there and
     // no board to hang one on.
     const named = new Set(Array.isArray(flush) ? flush : []);
-    const flushAt = index => {
-      if (named.has(index)) return true;
+    // ── AND A GABLE THAT DIES INTO NOTHING, WHICH IS A RAKE ──────────────
+    //
+    // `flush` carries two facts as one -- gable, and no overhang -- and the
+    // note above is right about why: a roof that dies into a wall has no eave
+    // there and no board to hang one on. Every gable this page had ever built
+    // was that kind, so the two never needed separating.
+    //
+    // Movie, 24 Sep, asked for the first one that is not: *"we will need
+    // additional short 2ft extra peice of gable that extends 2ft past the
+    // back exterior garage wall"*. A gable end standing in open air, with the
+    // ordinary two feet of rake hanging off it -- which is `flush`'s two
+    // facts pulled apart, taking the first and not the second.
+    //
+    // SO IT IS ITS OWN LIST, and it WINS over a derivation: an edge the
+    // design calls a rake is one, whatever `against` happens to find under
+    // it. `flush` is still a union with derived, because that pair says the
+    // same thing; this one says the opposite of half of it.
+    const raked = new Set(Array.isArray(rake) ? rake : []);
+    const gableEdge = index => {
+      if (raked.has(index) || named.has(index)) return true;
       if (!sharedWith) return false;
       const a = ring[index], b = ring[(index + 1) % ring.length];
       return G.edgeOnLoop(a, b, sharedWith);
     };
-    const sharedEdge = flushAt;
-    const pts = (sharedWith || named.size)
+    const flushAt = index => !raked.has(index) && gableEdge(index);
+    const sharedEdge = gableEdge;
+    const pts = (sharedWith || named.size || raked.size)
       ? G.offsetOutlineVariable(ring,
         ring.map((_, index) => (flushAt(index) ? 0 : roofOverhangFt)))
       : G.offsetOutline(ring, roofOverhangFt);
@@ -10404,6 +10439,28 @@
           // the garage roof abuts the house along the two edges its walls
           // already skip. Either way it is the body the footprint stops at.
           against: plan.overGarage || plan.house,
+        }));
+      }
+      // ── AND THE FOOT OF THE TIE, WHICH THE STUB STOPS SHORT OF ─────────
+      //
+      // Movie, 24 Sep: *"we will need additional short 2ft extra peice of
+      // gable that extends 2ft past the back exterior garage wall"*.
+      // premade-plans.js works out what is bare and why only this entry has
+      // it; the page's whole job is that the piece bears where the stub
+      // bears, which is the same plate asked the same way.
+      //
+      // NULL ON EVERY OTHER DESIGN, and read as a LOOP rather than derived
+      // from "is there a tie" -- the contract garageRoof already keeps. The
+      // BUNGALOW's roof and the ROOM OVER's both run over the tie already;
+      // a design that stops needing this says so by handing null.
+      if (plan.garageTieRoof) {
+        madeRoofs.push(raiseRoofOver(plan.garageTieRoof, {
+          garage: true,
+          plateHeightFt: assemblyFor(levelId).wallHeightFt,
+          sourceLevelId: levelId,
+          flush: plan.garageTieRoofFlush,
+          rake: plan.garageTieRoofRake,
+          against: plan.house,
         }));
       }
       // ── THE ROOM'S OWN ROOF, WHEN THE DESIGN GIVES IT ONE ─────────────

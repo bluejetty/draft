@@ -2404,6 +2404,45 @@ if (!window.DraftCutView) {
           if (pointInPolygon({ x: mid.x + n.x * 0.1, z: mid.z + n.z * 0.1 }, rpts)) {
             n = { x: -n.x, z: -n.z };
           }
+          // ── A BOARD HANGS WHERE THE ROOF STOPS ────────────────────────
+          //
+          // And sometimes it does not stop. A short gable covering the foot
+          // of a garage tie is its own record, abutting the stub it hangs
+          // off along one edge -- and that edge is marked `gable` because
+          // this app's only way to say "no overhang here" is to say gable,
+          // which is also the only way it says "put a rake board on it".
+          // Two sheets meeting IN THE SAME PLANE then wore a board between
+          // them: measured on a fresh 2 STOREY + GARAGE, E1,
+          //
+          //     the stub's hip    (8.00,13.227) -> (22.00,8.552)
+          //     the piece's edge  (16.00,10.577) -> (22.00,8.552)   on it
+          //     a fascia shadow   (22.00,8.102) -> (16.00,10.102)   5 1/2" under
+          //
+          // -- a pair of parallel lines running down the middle of a roof
+          // with no gable under them, which is the artefact Movie marked in
+          // green once already and had reverted for.
+          //
+          // SO THE TEST IS WHETHER ANOTHER SHEET CARRIES ON. The edge's own
+          // face gives a PLANE, and a plane can be read past its polygon --
+          // so this roof's surface and every other roof's are both asked at
+          // ONE point, a hair outside the edge. Same point, so the pitch
+          // cancels and the tolerance only has to beat float noise; ask them
+          // at two points and the slack would have to cover the slope, which
+          // at the format's steepest pitch is a third of a foot.
+          const inward = { x: mid.x - n.x * 0.02, z: mid.z - n.z * 0.02 };
+          const own = roofFaces.find(face => pointInPolygon(inward, face.points));
+          if (own) {
+            const past = { x: mid.x + n.x * 0.02, z: mid.z + n.z * 0.02 };
+            const here = eaveTop + geo().roofFaceRise(own, past, pitch);
+            let carried = false;
+            facesByRoof.forEach((otherFaces, other) => {
+              if (carried || other === roof) return;
+              const rise = sectionRoofHeightAt(past, other, otherFaces);
+              if (rise == null) return;
+              if (Math.abs(roofEaveElev(other, stack, env) + rise - here) < 0.02) carried = true;
+            });
+            if (carried) return [];
+          }
           return [{ a, b, toward: n.x * dir.x + n.z * dir.z }];
         });
         // A rake LIES ALONG one gable edge; a ridge spanning gable-to-gable
