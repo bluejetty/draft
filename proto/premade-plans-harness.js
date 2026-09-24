@@ -581,21 +581,35 @@ check('and each window is centred on that edge, the tie-lengthened one included'
 // the roof's edge lengths to the garage's and found them equal, which said
 // the roof followed the footprint corner for corner -- jog and all. Movie
 // ruled that jog out of the roof the same day ("it should be gabled on the
-// house end (not cottage)"), so the roof is a rectangle on the house line
-// now and the garage keeps its six-cornered walls. The rule the check was
-// written for is unchanged: with no room over it, the garage roof reaches
-// all the way back to the house rather than stopping at a stub.
+// house end (not cottage)"), so the roof became a rectangle rather than a
+// six-cornered copy of the walls.
+//
+// AND ON 24 SEP HE MOVED THAT RECTANGLE. It stopped ON the house line, which
+// left the foot of tie behind it standing uncovered in the elevation -- "the
+// wall below will need the extra 1ft to get covered right?" -- with the
+// house's own eave evidently not oversailing it the way the file assumed. So
+// it now laps three feet PAST that line: "3ft total from the front house
+// edge wall", one foot over the tie and two of gable rake.
+//
+// THE JOG HAS NOT COME BACK. The rear edge is still one straight line the
+// garage's full width, still four corners, still gabled by index. It starts
+// three feet further back, which is a different thing from following the
+// step.
 
-check('a garage with nothing on it is roofed all the way back to the house',
+check('a garage with nothing on it is roofed three feet past the house line',
   P => { const plan = P.twoStorey({ garage: true });
          const roof = bbox(plan.garageRoof), garage = bbox(plan.garage);
          return [`${n(roof.minZ)},${n(roof.maxZ)},${n(roof.minX)},${n(roof.maxX)}`,
-           `${n(DEPTH_HALF)},${n(garage.maxZ)},${n(garage.minX)},${n(garage.maxX)}`]; });
+           `${n(DEPTH_HALF - 3)},${n(garage.maxZ)},${n(garage.minX)},${n(garage.maxX)}`]; });
 
-check('and it stops at the house line rather than following the tie behind it',
+// THE LAP IS MEASURED OFF THE HOUSE LINE, NOT OFF THE TIE, and the two ft of
+// rake is what makes the difference visible: a roof that merely reached the
+// tie would land at DEPTH_HALF - 1 and cover the wall with nothing to spare.
+check('and it clears the tie by the two feet of gable rake',
   P => { const plan = P.twoStorey({ garage: true });
-         return [`${n(bbox(plan.garageRoof).minZ)},${n(bbox(plan.garage).minZ)}`,
-           `${n(DEPTH_HALF)},${n(DEPTH_HALF - 1)}`]; });
+         const tieZ = bbox(plan.garage).minZ;
+         return [`${n(bbox(plan.garageRoof).minZ)},${n(tieZ)},${n(tieZ - bbox(plan.garageRoof).minZ)}`,
+           `${n(DEPTH_HALF - 3)},${n(DEPTH_HALF - 1)},${n(2)}`]; });
 
 // ── AND A BUNGALOW'S GARAGE HAS NO ROOF OF ITS OWN ──
 //
@@ -1027,15 +1041,16 @@ const flushKinds = (plan, against) => {
   return ring.map((_, i) => (ring.length === pts.length && flushAt(i) ? 'gable' : 'eave'));
 };
 
-check('the garage roof is cut on the house line, not on the tie',
+check('the garage roof laps three feet past the house line',
   P => { const plan = P.twoStorey({ garage: true });
-         return [n(Math.min(...plan.garageRoof.map(pt => pt.z))), n(DEPTH_HALF)]; });
+         return [n(Math.min(...plan.garageRoof.map(pt => pt.z))), n(DEPTH_HALF - 3)]; });
 
-check('so the tie is behind it and not under it',
+check('so the tie is under it, which is the foot Movie wanted covered',
   P => { const plan = P.twoStorey({ garage: true });
-         // The tie's own z -- one foot back of the house line -- must be
-         // outside the roof's footprint entirely.
-         return [plan.garageRoof.some(pt => pt.z < DEPTH_HALF), false]; });
+         // The tie's own z -- one foot back of the house line -- has to fall
+         // INSIDE the roof's footprint now. It stood uncovered before.
+         const roofBack = Math.min(...plan.garageRoof.map(pt => pt.z));
+         return [roofBack < DEPTH_HALF - 1, true]; });
 
 check('and the roof loop is four corners, the jog gone',
   P => [P.twoStorey({ garage: true }).garageRoof.length, 4]);
