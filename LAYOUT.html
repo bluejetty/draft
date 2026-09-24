@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<script src="./vendor/react-18.3.1.production.min.js"></script>
-<script src="./vendor/react-dom-18.3.1.production.min.js"></script>
-<script src="./support.js"></script>
+<!-- Self-hosted (see vendor/fonts.css): no third-party request on the
+     critical path of the page. -->
+<link rel="stylesheet" href="vendor/fonts.css" />
 <script src="./profile-manager.js"></script>
 <script src="./shared-file-store.js"></script>
 <script src="./drawing-format.js"></script>
@@ -35,252 +35,400 @@
 <script src="./formatters.js"></script>
 <script src="./cut-view.js"></script>
 <script src="./titleblock.js"></script>
+<!-- Landscape on every working screen (board #310): in portrait on a touch
+     device this covers the page until the tablet is turned. ENTRY is the one
+     screen that does not load it. -->
+<script src="./orientation-guard.js"></script>
+<style>
+  /* THE STYLES THIS PAGE USED TO WEAR INLINE. Every rule below was a `style=`
+     attribute in LAYOUT.dc.html -- 67 of them, carrying 140 colour literals
+     between them -- because a DC template has nowhere else to put them. They
+     are rules now, and the colours are still literals: turning them into
+     palette roles is its own commit, and a port that changed how the page
+     LOOKS at the same time as how it is built would leave nothing to compare
+     against. */
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { height:100%; margin:0; padding:0; overflow:hidden; background:#fff;
+    font-family:'Barlow', system-ui, sans-serif; color:#1d1f20; }
+  a { color:rgba(29,31,32,0.45); text-decoration:none;
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
+    font-size:12px; letter-spacing:0.08em; text-transform:uppercase; }
+  a:hover { color:#5980a6; }
+  [hidden] { display:none !important; }
+
+  /* ── TOP BAR ───────────────────────────────────────────────────────── */
+  #lay-top { height:44px; border-bottom:1px solid rgba(29,31,32,0.16);
+    display:flex; align-items:center; padding:0 18px; flex-shrink:0; background:#fff; }
+  #lay-top .lay-word { font-family:'Barlow Condensed', system-ui, sans-serif;
+    font-weight:600; font-size:20px; letter-spacing:0.06em; text-transform:uppercase;
+    color:#1d1f20; }
+  #lay-top a { margin-left:10px; }
+  #lay-top .lay-spacer { flex:1; }
+  #lay-profile { display:flex; flex-direction:column; gap:1px; margin-left:18px; }
+  .layout-profile-button { min-width:64px; border:1px solid rgba(29,31,32,0.2);
+    background:#fff; color:#1d1f20; padding:2px 6px;
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-size:9px;
+    font-weight:600; letter-spacing:0.05em; cursor:pointer; }
+  .layout-profile-button.lay-dark { border-color:#1d1f20; background:#1d1f20; color:#f2f2f3; }
+  @media (max-width:560px) {
+    .layout-profile-button { min-width:48px; padding:1px 4px; font-size:7px; }
+  }
+
+  /* ── THE PROFILE DIALOG ─────────────────────────────────────────────── */
+  #lay-scrim { position:fixed; inset:0; z-index:50; display:flex;
+    align-items:flex-start; justify-content:center; padding-top:78px;
+    background:rgba(29,31,32,0.18); }
+  #lay-dialog { width:min(400px, calc(100vw - 32px));
+    border:1px solid rgba(29,31,32,0.3); background:#fff;
+    box-shadow:0 16px 44px rgba(29,31,32,0.2); padding:18px; color:#1d1f20; }
+  #lay-dialog .lay-head { display:flex; align-items:flex-start; gap:14px; }
+  #lay-dialog .lay-head > div { flex:1; }
+  #lay-dialog-title { font-family:'Barlow Condensed', system-ui, sans-serif;
+    font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; }
+  #lay-dialog-description { margin-top:5px; font-size:12px; line-height:1.45;
+    color:rgba(29,31,32,0.62); }
+  #lay-keys-link { display:inline-block; margin-top:9px; color:#5980a6;
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-size:11px;
+    font-weight:600; letter-spacing:0.06em; text-transform:uppercase; }
+  #lay-dialog-close { border:none; background:transparent; color:rgba(29,31,32,0.48);
+    font-size:18px; line-height:1; cursor:pointer; }
+  .lay-field-label { margin-top:16px; font-family:'Barlow Condensed', system-ui, sans-serif;
+    font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase;
+    color:rgba(29,31,32,0.55); }
+  .lay-field { display:flex; align-items:center; margin-top:5px; }
+  #lay-file-name { min-width:0; flex:1; height:32px;
+    border:1px solid rgba(29,31,32,0.25); padding:5px 8px; color:#1d1f20;
+    font-family:'Barlow', system-ui, sans-serif; font-size:12px; outline:none; }
+  #lay-file-ext { margin-left:6px; color:rgba(29,31,32,0.55);
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-size:12px; white-space:nowrap; }
+  #lay-save { width:100%; height:34px; margin-top:10px; border:1px solid #5980a6;
+    background:#5980a6; color:#fff; font-family:'Barlow Condensed', system-ui, sans-serif;
+    font-size:12px; font-weight:600; letter-spacing:0.06em; cursor:pointer; }
+  #lay-import-box { margin-top:14px; border:1px dashed rgba(29,31,32,0.32);
+    background:#fafafa; padding:12px; text-align:center; }
+  #lay-import-box .lay-import-word { font-family:'Barlow Condensed', system-ui, sans-serif;
+    font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;
+    color:rgba(29,31,32,0.58); }
+  #lay-import { height:28px; margin-top:8px; border:1px solid rgba(29,31,32,0.25);
+    background:#fff; color:#1d1f20; padding:3px 12px;
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-size:11px;
+    font-weight:600; letter-spacing:0.06em; cursor:pointer; }
+  #lay-dialog-message { margin-top:10px; font-size:11px; line-height:1.4; color:#557a46; }
+  #lay-dialog-message.lay-bad { color:#b04050; }
+
+  /* ── BODY, PANEL, SECTIONS ──────────────────────────────────────────── */
+  #lay-body { display:flex; height:calc(100vh - 72px); }
+  #lay-panel { width:188px; border-right:1px solid rgba(29,31,32,0.16);
+    display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto;
+    background:#fff; color:#1d1f20; font-size:13px; }
+  .lay-section { padding:12px 14px; border-bottom:1px solid rgba(29,31,32,0.16); }
+  .lay-section-title { font-family:'Barlow Condensed', system-ui, sans-serif;
+    font-size:11px; letter-spacing:0.08em; text-transform:uppercase;
+    color:rgba(29,31,32,0.5); margin-bottom:8px; }
+
+  /* A PANEL BUTTON, and the three sizes of it the panel actually uses. `.on`
+     is the chosen one -- a class rather than a colour handed down from the
+     render, which is what the DC template did and what made every one of
+     these a style attribute. */
+  .lay-pick { display:block; width:100%; text-align:left;
+    border:1px solid rgba(29,31,32,0.16); background:#fff; color:#1d1f20;
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
+    letter-spacing:0.02em; text-transform:uppercase; padding:5px 10px;
+    cursor:pointer; margin-bottom:3px; font-size:11px; }
+  .lay-pick.on { background:rgba(29,31,32,0.09); }
+  .lay-pick.lay-paper { font-size:12px; letter-spacing:0.04em; padding:7px 12px; margin-bottom:4px; }
+  .lay-pick.lay-paper.on { border-color:#1d1f20; background:#1d1f20; color:#f2f2f3; }
+  #lay-add-sheet { display:block; width:100%; text-align:left;
+    border:1px dashed rgba(29,31,32,0.3); background:#fff; color:rgba(29,31,32,0.6);
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
+    font-size:11px; letter-spacing:0.02em; text-transform:uppercase;
+    padding:5px 10px; cursor:pointer; }
+  #lay-north { margin-top:6px; margin-bottom:0; }
+  #lay-north.on { border-color:#1d1f20; background:#1d1f20; color:#f2f2f3; }
+
+  /* ── ORIENTATION, A SEGMENTED PAIR ──────────────────────────────────── */
+  .lay-seg { display:inline-flex; overflow:hidden; border:1px solid rgba(29,31,32,0.16); }
+  .lay-seg button { padding:7px 10px; font-size:12px; font-weight:600;
+    font-family:'Barlow Condensed', system-ui, sans-serif; letter-spacing:0.04em;
+    border:none; background:#fff; color:#1d1f20; cursor:pointer; }
+  .lay-seg button:first-child { border-right:1px solid rgba(29,31,32,0.16); }
+  .lay-seg button.on { background:#1d1f20; color:#f2f2f3; }
+
+  /* ── THE VIEWPORT SECTION, PINNED TO THE FOOT OF THE PANEL ──────────── */
+  /* Movie, 21 Sep, on an empty sheet: "the layouts aren't autogenerating
+     views". Two things were true and only one of them was the feature.
+     Measured at his window size (188px column, 660px of usable height), the
+     one button that MAKES something sat 320px below the fold, behind nine
+     scale buttons and two more sections, in a column that scrolls with
+     nothing on screen to say so.
+
+     STICKY RATHER THAN MOVED UP, and that is the choice worth stating. The
+     panel's order is the drafter's order -- paper, then orientation, then
+     sheet, then scale, then level, then place it -- so hoisting the verb
+     above the settings it depends on would trade one confusion for another.
+     `margin-top:auto` holds it at the foot when the panel is SHORTER than its
+     box; `position:sticky` holds it there when the panel is taller and
+     scrolls. Both happen: the level and titleblock sections appear only when
+     the drawing has them. */
+  #lay-viewport-section { padding:12px 14px; position:sticky; bottom:0;
+    margin-top:auto; background:#fff; border-top:1px solid rgba(29,31,32,0.16); }
+  #lay-add-viewport { display:block; width:100%; text-align:center;
+    border:1px solid #5980a6; background:#5980a6; color:#f2f2f3;
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
+    font-size:13px; letter-spacing:0.04em; text-transform:uppercase;
+    padding:9px 12px; cursor:pointer; }
+  #lay-add-viewport.arming { background:#1d1f20; }
+  #lay-deal { display:block; width:100%; margin-top:6px; text-align:center;
+    border:1px solid rgba(29,31,32,0.28); background:#fff; color:#1d1f20;
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
+    font-size:13px; letter-spacing:0.04em; text-transform:uppercase;
+    padding:9px 12px; cursor:pointer; }
+  /* Dead with no drawing, for the note's reason: there is nothing to project.
+     The note below already says so, so the button does not repeat it. */
+  #lay-deal:disabled { background:rgba(29,31,32,0.04); color:rgba(29,31,32,0.35); cursor:default; }
+  #lay-viewport-note { margin-top:8px; font-size:11px; line-height:1.4; color:rgba(29,31,32,0.55); }
+
+  /* ── THE SHEET ──────────────────────────────────────────────────────── */
+  #lay-canvas-wrap { flex:1; position:relative; overflow:hidden; background:#c8c8c8; }
+  /* touch-action:none ONLY on the sheet (audit C2): a finger dragging a
+     viewport must not be taken by the browser as page scroll. The panels and
+     the scale list around it still scroll by touch. */
+  #lay-canvas { display:block; width:100%; height:100%; outline:none; touch-action:none; cursor:default; }
+  #lay-canvas.arming { cursor:crosshair; }
+  #lay-canvas.grabbing { cursor:grabbing; }
+
+  /* ── STATUS BAR ─────────────────────────────────────────────────────── */
+  #lay-status-bar { height:28px; border-top:1px solid rgba(29,31,32,0.16);
+    display:flex; align-items:center; padding:0 18px;
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-size:11px;
+    letter-spacing:0.06em; color:rgba(29,31,32,0.55); background:#fff;
+    flex-shrink:0; user-select:none; }
+  #lay-status-bar .lay-spacer { flex:1; }
+  /* A failed sheet save has to be visible. It used to be a console.warn: the
+     drafter kept placing viewports onto a sheet that was not being written
+     anywhere. Same readout the Model Space carries. */
+  [data-layout-status].lay-bad { color:#b04050; font-weight:600; }
+  /* UNDO / REDO. This page had no history at all: a viewport dragged off the
+     sheet, a titleblock swapped by mistake, a delete -- every one permanent,
+     on the one page in the app driven entirely by pointer. The hit area is
+     bigger than the arrow drawn in it because a fingertip needs somewhere to
+     land; the bar's own height caps the vertical dimension. */
+  [data-history-controls] { display:flex; align-items:center; margin-right:12px; }
+  .strip-history { display:inline-flex; align-items:center; justify-content:center;
+    min-width:44px; height:28px; padding:0; border:none; background:transparent;
+    color:rgba(29,31,32,0.62); cursor:pointer; transition:color 120ms ease; }
+  .strip-history:hover:not(:disabled) { color:#365e86; }
+  .strip-history:disabled { color:rgba(29,31,32,0.16); cursor:default; }
+  /* Bottom-right nav cluster. The current page wears the dark face. */
+  [data-nav-cluster] { display:flex; align-items:center; gap:4px; margin-left:18px; }
+  [data-nav-cluster] a { display:inline-flex; align-items:center; height:20px;
+    border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20;
+    padding:0 8px; font-size:10px; letter-spacing:0.06em; }
+  [data-nav-cluster] a.here { border-color:#1d1f20; background:#1d1f20; color:#f2f2f3; }
+  [data-nav-home] { border:none !important; background:transparent !important; padding:0 2px !important; line-height:0; }
+  [data-nav-home] img { height:24px; display:block; }
+</style>
 </head>
 <body>
-<x-dc>
-<helmet>
-  <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
-       critical path of the page. -->
-  <link rel="stylesheet" href="vendor/fonts.css" />
-  <!-- Landscape on every working screen (board #310): in portrait on a
-       touch device this covers the page until the tablet is turned. ENTRY
-       is the one screen that does not load it. -->
-  <script src="orientation-guard.js"></script>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; background: #fff; }
-    a { color: rgba(29,31,32,0.45); text-decoration: none; font-family: 'Barlow Condensed', system-ui, sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
-    a:hover { color: #5980a6; }
-    /* UNDO / REDO on the status bar. Same shape as the Model Space's strip
-       controls: the hit area is bigger than the arrow drawn in it, because
-       this page is driven entirely by pointer and a fingertip needs somewhere
-       to land. The bar's own height caps the vertical dimension. */
-    .strip-history { display:inline-flex; align-items:center; justify-content:center; min-width:44px; height:28px; padding:0; border:none; background:transparent; color:rgba(29,31,32,0.62); cursor:pointer; transition:color 120ms ease; }
-    .strip-history:hover:not(:disabled) { color:#365e86; }
-    .strip-history:disabled { color:rgba(29,31,32,0.16); cursor:default; }
-    @media (max-width:560px) {
-      .layout-profile-button { min-width:48px !important; padding:1px 4px !important; font-size:7px !important; }
-    }
-  </style>
-</helmet>
 
 <!-- TOP BAR -->
-<div style="height:44px; border-bottom:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; flex-shrink:0; background:#fff;">
-  <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:20px; letter-spacing:0.06em; text-transform:uppercase; color:#1d1f20;">LAYOUT</div>
-  <a href="./MODEL.dc.html" style="margin-left:10px;">MODEL</a>
-  <div style="flex:1;"></div>
-  <div style="display:flex; flex-direction:column; gap:1px; margin-left:18px;">
-    <button class="layout-profile-button" onClick="{{ openSettingsDialog }}" style="min-width:64px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">SETTINGS</button>
-    <button class="layout-profile-button" onClick="{{ openStandardsDialog }}" style="min-width:64px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:2px 6px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:0.05em; cursor:pointer;">STANDARDS</button>
+<div id="lay-top">
+  <div class="lay-word">LAYOUT</div>
+  <a href="./MODEL.dc.html">MODEL</a>
+  <div class="lay-spacer"></div>
+  <div id="lay-profile">
+    <button type="button" class="layout-profile-button lay-dark" data-open-settings>SETTINGS</button>
+    <button type="button" class="layout-profile-button" data-open-standards>STANDARDS</button>
   </div>
 </div>
 
-<sc-if value="{{ profileDialogOpen }}" hint-placeholder-val="{{ false }}">
-  <div style="position:fixed; inset:0; z-index:50; display:flex; align-items:flex-start; justify-content:center; padding-top:78px; background:rgba(29,31,32,0.18);">
-    <div role="dialog" aria-modal="true" aria-label="{{ profileDialogTitle }}" style="width:min(400px, calc(100vw - 32px)); border:1px solid rgba(29,31,32,0.3); background:#fff; box-shadow:0 16px 44px rgba(29,31,32,0.2); padding:18px; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20;">
-      <div style="display:flex; align-items:flex-start; gap:14px;">
-        <div style="flex:1;">
-          <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">{{ profileDialogTitle }}</div>
-          <div style="margin-top:5px; font-size:12px; line-height:1.45; color:rgba(29,31,32,0.62);">{{ profileDialogDescription }}</div>
-          <sc-if value="{{ showKeyboardSettingsLink }}" hint-placeholder-val="{{ false }}">
-            <a href="./SETTINGS.html" style="display:inline-block; margin-top:9px; color:#5980a6; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;">OPEN KEYBOARD &amp; LAYER SETTINGS →</a>
-          </sc-if>
-        </div>
-        <button onClick="{{ closeProfileDialog }}" aria-label="Close" style="border:none; background:transparent; color:rgba(29,31,32,0.48); font-size:18px; line-height:1; cursor:pointer;">×</button>
+<!-- THE PROFILE DIALOG: personal settings and company standards, saved to a
+     portable file or read back from one. -->
+<div id="lay-scrim" hidden>
+  <div id="lay-dialog" role="dialog" aria-modal="true" aria-label="Personal Settings">
+    <div class="lay-head">
+      <div>
+        <div id="lay-dialog-title">Personal Settings</div>
+        <div id="lay-dialog-description"></div>
+        <a id="lay-keys-link" href="./SETTINGS.html" hidden>OPEN KEYBOARD &amp; LAYER SETTINGS &rarr;</a>
       </div>
-      <div style="margin-top:16px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; color:rgba(29,31,32,0.55);">File name</div>
-      <div style="display:flex; align-items:center; margin-top:5px;">
-        <input value="{{ profileFileName }}" onInput="{{ onProfileFileNameInput }}" onKeyDown="{{ onProfileFileNameKey }}" aria-label="File name" style="min-width:0; flex:1; height:32px; border:1px solid rgba(29,31,32,0.25); padding:5px 8px; color:#1d1f20; font-family:'Barlow',system-ui,sans-serif; font-size:12px; outline:none;" />
-        <span style="margin-left:6px; color:rgba(29,31,32,0.55); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; white-space:nowrap;">{{ profileExtension }}</span>
-      </div>
-      <button onClick="{{ saveProfilePackage }}" style="width:100%; height:34px; margin-top:10px; border:1px solid #5980a6; background:#5980a6; color:#fff; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">SAVE {{ profileDialogTitle }}</button>
-      <div style="margin-top:14px; border:1px dashed rgba(29,31,32,0.32); background:#fafafa; padding:12px; text-align:center;">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:rgba(29,31,32,0.58);">Import an existing file</div>
-        <button onClick="{{ chooseProfileFile }}" style="height:28px; margin-top:8px; border:1px solid rgba(29,31,32,0.25); background:#fff; color:#1d1f20; padding:3px 12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; cursor:pointer;">IMPORT FILE</button>
-        <input data-profile-import type="file" accept="{{ profileAccept }}" onChange="{{ onProfileFilePicked }}" style="display:none;" />
-      </div>
-      <sc-if value="{{ hasProfileDialogMessage }}" hint-placeholder-val="{{ false }}">
-        <div style="margin-top:10px; color:{{ profileDialogMessageColor }}; font-size:11px; line-height:1.4;">{{ profileDialogMessage }}</div>
-      </sc-if>
+      <button type="button" id="lay-dialog-close" aria-label="Close">&times;</button>
     </div>
+    <div class="lay-field-label">File name</div>
+    <div class="lay-field">
+      <input id="lay-file-name" aria-label="File name" />
+      <span id="lay-file-ext"></span>
+    </div>
+    <button type="button" id="lay-save">SAVE</button>
+    <div id="lay-import-box">
+      <div class="lay-import-word">Import an existing file</div>
+      <button type="button" id="lay-import">IMPORT FILE</button>
+      <input data-profile-import type="file" style="display:none;" />
+    </div>
+    <div id="lay-dialog-message" hidden></div>
   </div>
-</sc-if>
+</div>
 
 <!-- BODY -->
-<div style="display:flex; height:calc(100vh - 72px);">
+<div id="lay-body">
 
   <!-- LEFT PANEL -->
-  <div style="width:188px; border-right:1px solid rgba(29,31,32,0.16); display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto; background:#fff; font-family:'Barlow',system-ui,sans-serif; color:#1d1f20; font-size:13px;">
+  <div id="lay-panel">
 
-    <!-- PAPER SIZE -->
-    <div style="padding:12px 14px; border-bottom:1px solid rgba(29,31,32,0.16);">
-      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Paper Size</div>
-      <sc-for list="{{ paperSizes }}" as="ps" hint-placeholder-count="2">
-        <button onClick="{{ ps.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid {{ ps.border }}; background:{{ ps.bg }}; color:{{ ps.color }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:12px; letter-spacing:0.04em; text-transform:uppercase; padding:7px 12px; cursor:pointer; margin-bottom:4px;">{{ ps.label }}</button>
-      </sc-for>
+    <div class="lay-section">
+      <div class="lay-section-title">Paper Size</div>
+      <div data-paper-sizes></div>
     </div>
 
-    <!-- ORIENTATION -->
-    <div style="padding:12px 14px; border-bottom:1px solid rgba(29,31,32,0.16);">
-      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Orientation</div>
-      <div style="display:inline-flex; overflow:hidden; border:1px solid rgba(29,31,32,0.16);">
-        <button onClick="{{ setLandscape }}" style="padding:7px 10px; font-size:12px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; letter-spacing:0.04em; border:none; background:{{ landscapeBg }}; color:{{ landscapeColor }}; cursor:pointer; border-right:1px solid rgba(29,31,32,0.16);">LAND</button>
-        <button onClick="{{ setPortrait }}"  style="padding:7px 10px; font-size:12px; font-weight:600; font-family:'Barlow Condensed',system-ui,sans-serif; letter-spacing:0.04em; border:none; background:{{ portraitBg }};  color:{{ portraitColor }};  cursor:pointer;">PORT</button>
+    <div class="lay-section">
+      <div class="lay-section-title">Orientation</div>
+      <div class="lay-seg">
+        <button type="button" data-orient="landscape">LAND</button>
+        <button type="button" data-orient="portrait">PORT</button>
       </div>
     </div>
 
-    <!-- SHEET -->
-    <div style="padding:12px 14px; border-bottom:1px solid rgba(29,31,32,0.16);">
-      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Sheet</div>
-      <sc-for list="{{ sheets }}" as="sh" hint-placeholder-count="2">
-        <button data-layout-sheet="{{ sh.id }}" onClick="{{ sh.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ sh.bg }}; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.02em; text-transform:uppercase; padding:5px 10px; cursor:pointer; margin-bottom:3px;">{{ sh.label }}</button>
-      </sc-for>
-      <button data-layout-add-sheet onClick="{{ addSheet }}" style="display:block; width:100%; text-align:left; border:1px dashed rgba(29,31,32,0.3); background:#fff; color:rgba(29,31,32,0.6); font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.02em; text-transform:uppercase; padding:5px 10px; cursor:pointer;">+ Sheet</button>
+    <div class="lay-section">
+      <div class="lay-section-title">Sheet</div>
+      <div data-sheet-list></div>
+      <button type="button" data-layout-add-sheet id="lay-add-sheet">+ Sheet</button>
     </div>
 
-    <!-- SCALE -->
-    <div style="padding:12px 14px; border-bottom:1px solid rgba(29,31,32,0.16);">
-      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Viewport Scale</div>
-      <sc-for list="{{ scales }}" as="sc" hint-placeholder-count="4">
-        <button onClick="{{ sc.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ sc.bg }}; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.02em; text-transform:uppercase; padding:5px 10px; cursor:pointer; margin-bottom:3px;">{{ sc.label }}</button>
-      </sc-for>
+    <div class="lay-section">
+      <div class="lay-section-title">Viewport Scale</div>
+      <div data-scale-list></div>
     </div>
 
-    <!-- PLAN LEVEL -->
-    <sc-if value="{{ hasLevels }}" hint-placeholder-val="{{ false }}">
-      <div style="padding:12px 14px; border-bottom:1px solid rgba(29,31,32,0.16);">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Plan Level</div>
-        <sc-for list="{{ planLevels }}" as="lv" hint-placeholder-count="4">
-          <button data-layout-level="{{ lv.id }}" onClick="{{ lv.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ lv.bg }}; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.02em; text-transform:uppercase; padding:5px 10px; cursor:pointer; margin-bottom:3px;">{{ lv.label }}</button>
-        </sc-for>
-      </div>
-    </sc-if>
+    <div class="lay-section" data-level-section hidden>
+      <div class="lay-section-title">Plan Level</div>
+      <div data-level-list></div>
+    </div>
 
-    <!-- TITLEBLOCK: one strip per company, an 11×17 feature -->
-    <sc-if value="{{ showTitleblocks }}" hint-placeholder-val="{{ false }}">
-      <div style="padding:12px 14px; border-bottom:1px solid rgba(29,31,32,0.16);">
-        <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Titleblock</div>
-        <sc-for list="{{ titleblocks }}" as="tb" hint-placeholder-count="2">
-          <button data-layout-titleblock="{{ tb.id }}" onClick="{{ tb.onSelect }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ tb.bg }}; color:#1d1f20; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.02em; text-transform:uppercase; padding:5px 10px; cursor:pointer; margin-bottom:3px;">{{ tb.label }}</button>
-        </sc-for>
-        <button data-layout-north onClick="{{ toggleNorthArrow }}" style="display:block; width:100%; text-align:left; border:1px solid rgba(29,31,32,0.16); background:{{ northArrowBg }}; color:{{ northArrowColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:11px; letter-spacing:0.02em; text-transform:uppercase; padding:5px 10px; cursor:pointer; margin-top:6px;">{{ northArrowLabel }}</button>
-      </div>
-    </sc-if>
+    <!-- TITLEBLOCK: one strip per company, an 11×17 feature. The picker AND
+         the arrow are painted in, not hidden: the letter sheet stands the
+         whole section down, and a control that is only invisible is still
+         there to be tabbed to. -->
+    <div class="lay-section" data-titleblock-section hidden>
+      <div class="lay-section-title">Titleblock</div>
+      <div data-titleblock-list></div>
+    </div>
 
-    <!-- VIEWPORT -- PINNED TO THE FOOT OF THE PANEL.
-         Movie, 21 Sep, on an empty sheet: "the layouts aren't autogenerating
-         views". Two things were true and only one of them was the feature.
-         Measured at his window size (188px column, 660px of usable height):
-
-             + ADD VIEWPORT   top 980px
-             window                660px
-             panel hides           396px, overflow-y:auto
-
-         The one button that MAKES something sat 320px below the fold, behind
-         nine scale buttons and two more sections, in a column that scrolls
-         with nothing on screen to say so. An empty sheet and no visible verb
-         reads exactly like a page that should have filled itself in.
-
-         STICKY RATHER THAN MOVED UP, and that is the choice worth stating.
-         The panel's order is the drafter's order -- paper, then orientation,
-         then sheet, then scale, then level, then place it -- so hoisting the
-         verb above the settings it depends on would trade one confusion for
-         another. Pinned, the order survives and the verb is always to hand.
-
-         `margin-top:auto` is what holds it at the foot when the panel is
-         SHORTER than its box; `position:sticky` is what holds it there when
-         the panel is taller and scrolls. Both cases happen -- the level and
-         titleblock sections appear only when the drawing has them. -->
-    <div style="padding:12px 14px; position:sticky; bottom:0; margin-top:auto;
-      background:#fff; border-top:1px solid rgba(29,31,32,0.16);">
-      <div style="font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.08em; text-transform:uppercase; color:rgba(29,31,32,0.5); margin-bottom:8px;">Viewport</div>
-      <button data-layout-add-viewport onClick="{{ addViewport }}" style="display:block; width:100%; text-align:center; border:1px solid #5980a6; background:{{ addViewportBg }}; color:{{ addViewportColor }}; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; font-size:13px; letter-spacing:0.04em; text-transform:uppercase; padding:9px 12px; cursor:pointer;">{{ addViewportLabel }}</button>
+    <div id="lay-viewport-section">
+      <div class="lay-section-title">Viewport</div>
+      <button type="button" data-layout-add-viewport id="lay-add-viewport">+ Add Viewport</button>
       <!-- DEAL SHEETS -- the composer already existed and nothing could ask
-           for it. _composeDefaultSet (:855) deals the whole set: two sheets of
+           for it. _composeDefaultSet deals the whole set: two sheets of
            elevations, a plan per floor top storey first, the foundation, the
            sections, the basement -- skipping any sheet nothing would put ink
            on, and picking each sheet's scale by walking the ladder down until
            the views fit. It ran in exactly ONE circumstance: a saved layout
            carrying `auto: true`, which the bone sets on a fresh build.
 
-           Movie, 21 Sep, on an empty sheet: *"the layouts aren't
-           autogenerating views, i thought you already did that"*. His drawing
-           carries no `layout` key at all, so `auto` read false, so the
-           composer never ran -- and there was no verb anywhere that would run
-           it. Once `auto` goes false, which any manual edit does, there was
-           no way back to a dealt set either.
+           Movie, 21 Sep, on an empty sheet: "the layouts aren't autogenerating
+           views, i thought you already did that". His drawing carries no
+           `layout` key at all, so `auto` read false, so the composer never ran
+           -- and there was no verb anywhere that would run it. Once `auto`
+           goes false, which any manual edit does, there was no way back to a
+           dealt set either.
 
            SECOND, NOT FIRST, and off a button rather than on load. Dealing on
            open would rewrite viewports on a drawing nobody asked to have
            edited; and a drafter who has arranged sheets by hand must not lose
-           them to a page visit. The confirm below is the other half of that:
-           the composer REPLACES the hand, so it asks once when there is a
-           hand to replace. -->
-      <button data-layout-deal-sheets onClick="{{ dealSheets }}"
-        disabled="{{ dealDisabled }}"
-        style="display:block; width:100%; margin-top:6px; text-align:center;
-        border:1px solid rgba(29,31,32,0.28); background:{{ dealBg }};
-        color:{{ dealColor }}; font-family:'Barlow Condensed',system-ui,sans-serif;
-        font-weight:600; font-size:13px; letter-spacing:0.04em;
-        text-transform:uppercase; padding:9px 12px; cursor:{{ dealCursor }};">{{ dealLabel }}</button>
-      <sc-if value="{{ hasViewportNote }}" hint-placeholder-val="{{ false }}">
-        <div style="margin-top:8px; font-size:11px; line-height:1.4; color:rgba(29,31,32,0.55);">{{ viewportNote }}</div>
-      </sc-if>
+           them to a page visit. The confirm in _dealSheets is the other half
+           of that: the composer REPLACES the hand, so it asks once when there
+           is a hand to replace. -->
+      <button type="button" data-layout-deal-sheets id="lay-deal">Deal Sheets</button>
+      <div id="lay-viewport-note" hidden></div>
     </div>
 
   </div>
 
-  <!-- CANVAS AREA -->
-  <div style="flex:1; position:relative; overflow:hidden; background:#c8c8c8;" data-layout-container>
-    <!-- touch-action:none ONLY on the sheet (audit C2): a finger dragging a
-         viewport must not be taken by the browser as page scroll. The panels
-         and the scale list around it still scroll by touch. -->
-    <canvas data-layout-canvas style="display:block; width:100%; height:100%; outline:none; cursor:{{ canvasCursor }}; touch-action:none;"></canvas>
+  <!-- THE SHEET -->
+  <div id="lay-canvas-wrap" data-layout-container>
+    <canvas id="lay-canvas" data-layout-canvas></canvas>
   </div>
 
 </div>
 
 <!-- STATUS BAR -->
-<div style="height:28px; border-top:1px solid rgba(29,31,32,0.16); display:flex; align-items:center; padding:0 18px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; letter-spacing:0.06em; color:rgba(29,31,32,0.55); background:#fff; flex-shrink:0; user-select:none;">
-  <!-- A failed sheet save has to be visible. It used to be a console.warn:
-       the drafter kept placing viewports onto a sheet that was not being
-       written anywhere. Same readout the Model Space carries. -->
-  <span data-layout-status style="{{ statusStyle }}">{{ statusLabel }}</span>
-  <div style="flex:1;"></div>
-  <!-- UNDO / REDO. This page had no history at all: a viewport dragged off
-       the sheet, a titleblock swapped by mistake, a delete — every one of
-       them permanent, on the one page in the app that is driven entirely by
-       pointer. Same two controls the Model Space strip carries. -->
-  <div data-history-controls style="display:flex; align-items:center; margin-right:12px;">
-    <button type="button" data-undo class="strip-history" onClick="{{ onUndoPress }}" disabled="{{ undoDisabled }}" title="{{ undoTitle }}" aria-label="{{ undoTitle }}">
+<div id="lay-status-bar">
+  <span data-layout-status>SAVED</span>
+  <div class="lay-spacer"></div>
+  <div data-history-controls>
+    <button type="button" data-undo class="strip-history" title="Nothing to undo yet" aria-label="Nothing to undo yet" disabled>
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M3 7 H9.5 A3.2 3.2 0 0 1 9.5 13.4 H6"></path>
         <path d="M5.6 4.4 L3 7 L5.6 9.6"></path>
       </svg>
     </button>
-    <button type="button" data-redo class="strip-history" onClick="{{ onRedoPress }}" disabled="{{ redoDisabled }}" title="{{ redoTitle }}" aria-label="{{ redoTitle }}">
+    <button type="button" data-redo class="strip-history" title="Nothing to redo" aria-label="Nothing to redo" disabled>
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path d="M13 7 H6.5 A3.2 3.2 0 0 0 6.5 13.4 H10"></path>
         <path d="M10.4 4.4 L13 7 L10.4 9.6"></path>
       </svg>
     </button>
   </div>
-  <span>{{ paperLabel }}  ·  {{ scaleLabel }}</span>
+  <span data-sheet-readout></span>
   <!-- Bottom-right nav cluster: MODEL · LAYOUT · PROJECT · SPECS, and the logo
-       walks back out to the main page. The current page wears the dark face. -->
-  <div data-nav-cluster style="display:flex; align-items:center; gap:4px; margin-left:18px;">
-    <a data-nav-model href="./MODEL.dc.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">MODEL</a>
-    <a data-nav-layout href="./LAYOUT.dc.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid #1d1f20; background:#1d1f20; color:#f2f2f3; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">LAYOUT</a>
-    <a data-nav-project href="./PROJECT.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">PROJECT</a>
-    <a data-nav-specs href="./SPECS.html" style="display:inline-flex; align-items:center; height:20px; border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20; padding:0 8px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:10px; font-weight:600; letter-spacing:0.06em; text-decoration:none;">SPECS</a>
-    <a data-nav-home href="./index.html" title="Rough Drafter — back to the main page" style="display:inline-flex; align-items:center; height:20px; padding:0 2px; line-height:0;">
-      <img src="./assets/rough-drafter-logo.png" alt="Rough Drafter home" style="height:24px; display:block;" />
+       walks back out to the main page. -->
+  <div data-nav-cluster>
+    <a data-nav-model href="./MODEL.dc.html">MODEL</a>
+    <a data-nav-layout class="here" href="./LAYOUT.html">LAYOUT</a>
+    <a data-nav-project href="./PROJECT.html">PROJECT</a>
+    <a data-nav-specs href="./SPECS.html">SPECS</a>
+    <a data-nav-home href="./index.html" title="Rough Drafter — back to the main page">
+      <img src="./assets/rough-drafter-logo.png" alt="Rough Drafter home" />
     </a>
   </div>
 </div>
 
-</x-dc>
-<script type="text/x-dc" data-dc-script data-props="{}">
+<script>
+// ── THE PAGE, OFF THE DC RUNTIME ────────────────────────────────────────
+//
+// This file was LAYOUT.dc.html: a React component behind two vendor bundles
+// and support.js, with its markup in an <x-dc> template of 89 `{{ }}`
+// bindings. Everything below the panel painter is the same code it was --
+// the geometry, the composer, the save queue, the history, the cut and plan
+// painters' callers -- because the port is of the PLUMBING and a port that
+// also rewrites the logic has nothing left to compare against.
+//
+// WHAT DCLogic ACTUALLY PROVIDED, in full: `state`, a `setState(patch, cb)`
+// that merges and then re-renders and then calls back, `componentDidMount`,
+// and `renderVals()` -- the flat object the template drew itself from. That
+// is the whole contract, and it is reproduced here in twenty lines.
+//
+// SYNCHRONOUS, WHERE REACT WAS BATCHED, and that is a deliberate difference
+// rather than an oversight. React replaced `this.state` immediately and ran
+// the callback after the commit, so code that reads `this.state` straight
+// after a setState already saw the patch -- this does the same. What it does
+// not do is coalesce two setStates into one paint. That costs a paint and
+// buys an ordering nobody has to reason about, on a page whose every paint
+// is a handful of DOM writes.
+class PageLogic {
+  constructor() {
+    this.state = {};
+    this.__painting = false;
+  }
+
+  setState(update, cb) {
+    const patch = typeof update === 'function' ? update(this.state) : update;
+    this.state = { ...this.state, ...patch };
+    this.__paint();
+    if (cb) cb();
+  }
+
+  // The guard is not for this page -- renderVals builds values and touches
+  // nothing -- it is so that a paint which one day sets state cannot spin.
+  __paint() {
+    if (this.__painting) return;
+    this.__painting = true;
+    try { this._paintPanel(); } finally { this.__painting = false; }
+  }
+
+  componentDidMount() {}
+  _paintPanel() {}
+}
+
 // Paper sizes in inches [width, height] in portrait orientation
 const PAPER_SIZES = {
   '11x17': { label: '11 × 17  (Ledger)', w: 11, h: 17 },
@@ -382,7 +530,7 @@ const ICF_FOOTING_WIDTH_IN = 24;
 
 const MODEL_STORAGE_BUCKET = 'model-drawing';
 
-class Component extends DCLogic {
+class Component extends PageLogic {
   state = {
     paperKey: '11x17',
     orientation: 'landscape',  // 'landscape' | 'portrait'
@@ -1372,6 +1520,17 @@ class Component extends DCLogic {
         window.DraftLayoutPlan.drawPlan(ctx, toS, this._saved, viewport.levelId, {
           padFt: 0.5 / 12,
           paperColor: '#ffffff',
+          // WHICH DRAWING OF THE LEVEL. Left out until 23 Sep, and that is
+          // what made the FOUNDATION sheet and the basement sheet the same
+          // picture: drawPlan reads `env.view` and takes an absent one to
+          // mean EVERY view on the level, so both sheets drew the concrete
+          // and the basement walls on top of each other -- which is the
+          // stacking board NEW-2 part 2 was opened to end. The composer had
+          // been dealing the two sheets correctly the whole time.
+          //
+          // `|| null` KEEPS THE OLD PROMISE: a viewport saved before views
+          // existed carries no view and still draws the whole level.
+          view: viewport.view || null,
         });
         ctx.restore();
       }
@@ -1415,8 +1574,28 @@ class Component extends DCLogic {
       return cut ? `SECTION ${cut.name}` : 'SECTION';
     }
     if (viewport.kind === 'elevation') return `ELEVATION ${viewport.elevId}`;
+    return this._planTitle(viewport);
+  }
+
+  // WHAT A PLAN SHEET IS CALLED, in one place because there are two readers:
+  // the caption under the drawing and the title in the company strip. They
+  // said `${level.name} PLAN` separately, and separately is how two answers
+  // to one question start.
+  //
+  // THE VIEW NAMES IT, NOT THE LEVEL, on a level that holds more than one
+  // drawing. Level 1 is NAMED FOUNDATION because that is the level; the two
+  // drawings of it are the concrete and the basement walls above it, and a
+  // permit set that calls both of them FOUNDATION PLAN is wrong twice over.
+  // A level that has no foundation view has only the one plan, so its own
+  // name is the right title and nothing changes for it.
+  _planTitle(viewport) {
     const level = this._levels.find(l => l.id === viewport.levelId);
-    return level ? `${level.name} PLAN` : 'PLAN';
+    if (!level) return 'PLAN';
+    if (viewport.view === 'foundation') return 'FOUNDATION PLAN';
+    const splits = (window.DraftLayerViews?.layerViewsForLevelId(level.id) || [])
+      .some(view => view.id === 'foundation');
+    if (splits && viewport.view === 'plan') return 'BASEMENT PLAN';
+    return `${level.name} PLAN`;
   }
 
   // The words the titleblock prints: project info rides the drawing, the
@@ -1470,10 +1649,12 @@ class Component extends DCLogic {
       const ids = [...new Set(sheetViewports.map(viewport => viewport.elevId))];
       return ids.length === 1 ? `ELEVATION ${ids[0]}` : `ELEVATIONS ${ids.join(' · ')}`;
     }
-    const levelIds = [...new Set(sheetViewports.map(viewport => viewport.levelId))];
-    if (levelIds.length > 1) return 'PLANS';
-    const level = this._levels.find(l => l.id === levelIds[0]);
-    return level ? `${level.name} PLAN` : '';
+    // BY DRAWING, NOT BY LEVEL. Two plan viewports of level 1 are the
+    // concrete and the basement walls -- two drawings, not one repeated --
+    // so a sheet holding both is PLANS, exactly as a sheet holding two
+    // levels is.
+    const titles = [...new Set(sheetViewports.map(viewport => this._planTitle(viewport)))];
+    return titles.length === 1 ? titles[0] : 'PLANS';
   }
 
   _onWheel(e) {
@@ -1718,139 +1899,229 @@ class Component extends DCLogic {
     });
   }
 
-  renderVals() {
-    const { paperKey, orientation, activeScale, addingViewport, activeLevelId } = this.state;
+  // ── THE PANEL, PAINTED ──────────────────────────────────────────────
+  // What `renderVals()` used to return. The DC template read a flat object of
+  // ~40 values and forty style attributes off it; this writes the same facts
+  // onto the same elements, and the chosen-ness that used to arrive as a
+  // colour (`bg: '#1d1f20'`) arrives as a class the stylesheet owns.
+  //
+  // REBUILT RATHER THAN DIFFED, for the five lists. A panel of at most twenty
+  // buttons is not worth a reconciler, and the page never paints during a
+  // drag -- _onMouseMove writes `this.state` directly and calls `_draw()`,
+  // exactly as it did under React, so a paint only follows a real change.
+  _paintPanel() {
+    const {
+      paperKey, orientation, activeScale, addingViewport, activeLevelId,
+    } = this.state;
     const paper = PAPER_SIZES[paperKey];
     const pw = orientation === 'landscape' ? paper.h : paper.w;
     const ph = orientation === 'landscape' ? paper.w : paper.h;
-    const on  = { bg: '#1d1f20', color: '#f2f2f3', border: '#1d1f20' };
-    const off = { bg: '#fff',    color: '#1d1f20', border: 'rgba(29,31,32,0.16)' };
-    const scOn  = 'rgba(29,31,32,0.09)';
-    const scOff = '#fff';
-    const profileDialog = this.state.profileDialog;
-    const profileDialogTitle = profileDialog === 'standards' ? 'Company Standards' : 'Personal Settings';
-    const profileDialogDescription = profileDialog === 'standards'
+
+    // One list of picks into one host. `key` is what the click hands back;
+    // `on` is the one wearing the chosen face.
+    const picks = (selector, items, onPick, extraClass = '') => {
+      const host = document.querySelector(selector);
+      if (!host) return;
+      host.textContent = '';
+      items.forEach(item => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = `lay-pick${extraClass ? ` ${extraClass}` : ''}${item.on ? ' on' : ''}`;
+        button.textContent = item.label;
+        if (item.data) Object.entries(item.data).forEach(([k, v]) => button.setAttribute(k, v));
+        button.addEventListener('click', () => onPick(item.key));
+        host.appendChild(button);
+      });
+    };
+
+    picks('[data-paper-sizes]',
+      Object.entries(PAPER_SIZES).map(([key, size]) =>
+        ({ key, label: size.label, on: paperKey === key })),
+      key => this._setPaper(key), 'lay-paper');
+
+    document.querySelectorAll('[data-orient]').forEach(button =>
+      button.classList.toggle('on', button.dataset.orient === orientation));
+
+    picks('[data-sheet-list]',
+      Array.from({ length: this._sheetCount() }, (_, i) => ({
+        key: i + 1,
+        label: `SHEET ${i + 1}`,
+        on: this.state.activeSheet === i + 1,
+        data: { 'data-layout-sheet': String(i + 1) },
+      })),
+      sheet => this._setActiveSheet(sheet));
+
+    picks('[data-scale-list]',
+      SCALES.map((scale, i) => ({ key: i, label: scale.label, on: activeScale === i })),
+      i => this._setScale(i));
+
+    const levels = this._levelsWithWalls?.() || [];
+    document.querySelector('[data-level-section]').hidden = !levels.length;
+    picks('[data-level-list]',
+      levels.map(level => ({
+        key: level.id,
+        label: level.name,
+        on: activeLevelId === level.id,
+        data: { 'data-layout-level': String(level.id) },
+      })),
+      id => this.setState({ activeLevelId: id }));
+
+    // The company strips are an 11×17 feature: the letter sheet stands the
+    // picker down and keeps the plain strip.
+    //
+    // EMPTIED, NOT HIDDEN, and a spec caught the difference. The DC template
+    // carried this section inside an `sc-if`, which REMOVES its contents --
+    // so on a letter sheet there was no picker in the document at all.
+    // layout-titleblock.spec.js asks for exactly that (`toHaveCount(0)`), and
+    // it is the right question: a control that is merely invisible is still
+    // in the tab order.
+    const showTitleblocks = paperKey === '11x17' && Boolean(window.DraftTitleblock);
+    document.querySelector('[data-titleblock-section]').hidden = !showTitleblocks;
+    picks('[data-titleblock-list]',
+      showTitleblocks ? (window.DraftTitleblock?.STYLES || []).map(style => ({
+        key: style.id,
+        label: style.label,
+        on: this.state.titleblock === style.id,
+        data: { 'data-layout-titleblock': style.id },
+      })) : [],
+      id => this._setTitleblock(id));
+
+    // The arrow rides with the picker, for the same reason. The template had
+    // it inside the same block.
+    if (showTitleblocks) {
+      const north = document.createElement('button');
+      north.type = 'button';
+      north.id = 'lay-north';
+      north.className = `lay-pick${this.state.northArrow ? ' on' : ''}`;
+      north.setAttribute('data-layout-north', '');
+      north.textContent = this.state.northArrow ? 'North Arrow · On' : 'North Arrow · Off';
+      north.addEventListener('click', () => this._toggleNorthArrow());
+      document.querySelector('[data-titleblock-list]').appendChild(north);
+    }
+
+    const addViewport = document.querySelector('[data-layout-add-viewport]');
+    addViewport.classList.toggle('arming', addingViewport);
+    addViewport.textContent = addingViewport ? 'CLICK THE SHEET…' : '+ Add Viewport';
+
+    const deal = document.querySelector('[data-layout-deal-sheets]');
+    deal.disabled = !this._saved;
+    // IT SAYS WHICH IT WOULD DO. Dealing over a dealt set is a re-deal, and
+    // naming that is the difference between a button a drafter trusts and one
+    // they press twice to find out.
+    deal.textContent = this.state.viewports.length ? 'Re-deal Sheets' : 'Deal Sheets';
+
+    const note = document.querySelector('#lay-viewport-note');
+    note.hidden = !(this._drawingChecked && !this._saved);
+    note.textContent = 'Draw a house in the MODEL space first — viewports project the saved drawing.';
+
+    const canvas = document.querySelector('[data-layout-canvas]');
+    canvas.classList.toggle('grabbing', Boolean(this._panning || this._draggingViewport));
+    canvas.classList.toggle('arming', Boolean(addingViewport) && !this._panning && !this._draggingViewport);
+
+    const status = document.querySelector('[data-layout-status]');
+    status.textContent = this.state.persistenceError
+      ? `${this.state.persistenceStatus} — ${this.state.persistenceError}`
+      : this.state.persistenceStatus;
+    status.classList.toggle('lay-bad', Boolean(this.state.persistenceError));
+
+    const undo = document.querySelector('[data-undo]');
+    const redo = document.querySelector('[data-redo]');
+    const title = (button, text) => {
+      button.title = text;
+      button.setAttribute('aria-label', text);
+    };
+    undo.disabled = !this.state.historyPast;
+    redo.disabled = !this.state.historyFuture;
+    title(undo, this.state.historyPast ? 'Undo the last sheet change' : 'Nothing to undo yet');
+    title(redo, this.state.historyFuture ? 'Redo the sheet change just undone' : 'Nothing to redo');
+
+    document.querySelector('[data-sheet-readout]').textContent =
+      `${pw}" × ${ph}"  ·  ${SCALES[activeScale].label}`;
+
+    this._paintProfileDialog();
+  }
+
+  _paintProfileDialog() {
+    const which = this.state.profileDialog;
+    document.querySelector('#lay-scrim').hidden = !which;
+    if (!which) return;
+    const title = which === 'standards' ? 'Company Standards' : 'Personal Settings';
+    document.querySelector('#lay-dialog').setAttribute('aria-label', title);
+    document.querySelector('#lay-dialog-title').textContent = title;
+    document.querySelector('#lay-dialog-description').textContent = which === 'standards'
       ? 'Save the current layout standards to share with an office, or import standards from a portable file.'
       : 'Save the current personal layout preferences, or import a saved setup from another browser or computer.';
-    return {
-      paperSizes: Object.entries(PAPER_SIZES).map(([k, v]) => ({
-        label: v.label,
-        onSelect: () => this._setPaper(k),
-        ...(paperKey === k ? on : off),
-      })),
-      setLandscape: () => this._setOrientation('landscape'),
-      setPortrait:  () => this._setOrientation('portrait'),
-      landscapeBg:    orientation === 'landscape' ? '#1d1f20' : '#fff',
-      landscapeColor: orientation === 'landscape' ? '#f2f2f3' : '#1d1f20',
-      portraitBg:     orientation === 'portrait'  ? '#1d1f20' : '#fff',
-      portraitColor:  orientation === 'portrait'  ? '#f2f2f3' : '#1d1f20',
-      scales: SCALES.map((s, i) => ({
-        label: s.label,
-        onSelect: () => this._setScale(i),
-        bg: activeScale === i ? scOn : scOff,
-      })),
-      showTitleblocks: paperKey === '11x17' && Boolean(window.DraftTitleblock),
-      titleblocks: (window.DraftTitleblock?.STYLES || []).map(style => ({
-        id: style.id,
-        label: style.label,
-        onSelect: () => this._setTitleblock(style.id),
-        bg: this.state.titleblock === style.id ? 'rgba(29,31,32,0.09)' : '#fff',
-      })),
-      toggleNorthArrow: () => this._toggleNorthArrow(),
-      northArrowBg: this.state.northArrow ? '#1d1f20' : '#fff',
-      northArrowColor: this.state.northArrow ? '#f2f2f3' : '#1d1f20',
-      northArrowLabel: this.state.northArrow ? 'North Arrow · On' : 'North Arrow · Off',
-      sheets: Array.from({ length: this._sheetCount() }, (_, i) => ({
-        id: String(i + 1),
-        label: `SHEET ${i + 1}`,
-        onSelect: () => this._setActiveSheet(i + 1),
-        bg: this.state.activeSheet === i + 1 ? 'rgba(29,31,32,0.09)' : '#fff',
-      })),
-      hasSheets: this._sheetCount() > 1 || this.state.activeSheet > 1,
-      addSheet: () => this._setActiveSheet(this._sheetCount() + 1),
-      hasLevels: this._levelsWithWalls?.().length > 0,
-      planLevels: (this._levelsWithWalls?.() || []).map(level => ({
-        id: String(level.id),
-        label: level.name,
-        onSelect: () => this.setState({ activeLevelId: level.id }),
-        bg: activeLevelId === level.id ? 'rgba(29,31,32,0.09)' : '#fff',
-      })),
-      addViewport: () => this.setState({ addingViewport: !addingViewport }, () => this._draw()),
-      // THE COMPOSER, ON DEMAND. It replaces every viewport on every sheet,
-      // so a drafter who has placed any by hand is asked first -- and is NOT
-      // asked when there is nothing of theirs to lose, because a confirm over
-      // an empty sheet is a dialog that only ever has one sensible answer.
-      dealSheets: () => {
-        if (!this._saved) return;
-        const byHand = this.state.viewports.length > 0 && this.state.auto !== true;
-        if (byHand && !window.confirm(
-          'Deal the standard sheet set?\n\nThis replaces the viewports you have '
-          + 'placed by hand. Undo takes it back.')) return;
-        this.setState({ addingViewport: false }, () => this._composeDefaultSet());
-      },
-      // Dead with no drawing, for viewportNote's reason: there is nothing to
-      // project. The note under it already says so, so the button does not
-      // repeat it.
-      dealDisabled: !this._saved,
-      dealBg: this._saved ? '#fff' : 'rgba(29,31,32,0.04)',
-      dealColor: this._saved ? '#1d1f20' : 'rgba(29,31,32,0.35)',
-      dealCursor: this._saved ? 'pointer' : 'default',
-      // IT SAYS WHICH IT WOULD DO. Dealing over a dealt set is a re-deal, and
-      // naming that is the difference between a button a drafter trusts and
-      // one they press twice to find out.
-      dealLabel: this.state.viewports.length ? 'Re-deal Sheets' : 'Deal Sheets',
-      addViewportBg: addingViewport ? '#1d1f20' : '#5980a6',
-      addViewportColor: '#f2f2f3',
-      addViewportLabel: addingViewport ? 'CLICK THE SHEET…' : '+ Add Viewport',
-      hasViewportNote: Boolean(this._drawingChecked && !this._saved),
-      viewportNote: 'Draw a house in the MODEL space first — viewports project the saved drawing.',
-      openSettingsDialog: () => this._openProfileDialog('settings'),
-      openStandardsDialog: () => this._openProfileDialog('standards'),
-      closeProfileDialog: () => this._closeProfileDialog(),
-      profileDialogOpen: Boolean(profileDialog),
-      profileDialogTitle,
-      profileDialogDescription,
-      showKeyboardSettingsLink: profileDialog === 'settings',
-      profileFileName: this.state.profileFileName,
-      profileExtension: `.draft.${profileDialog || 'settings'}`,
-      profileAccept: `application/json,.draft.${profileDialog || 'settings'}`,
-      onProfileFileNameInput: e => this.setState({ profileFileName: e.target.value }),
-      onProfileFileNameKey: e => {
-        if (e.key === 'Enter') { e.preventDefault(); this._saveProfilePackage(); }
-        if (e.key === 'Escape') { e.preventDefault(); this._closeProfileDialog(); }
-      },
-      saveProfilePackage: () => this._saveProfilePackage(),
-      chooseProfileFile: () => document.querySelector('[data-profile-import]')?.click(),
-      onProfileFilePicked: e => {
-        const file = e.target.files?.[0];
-        if (file) this._importProfilePackage(file);
-        e.target.value = '';
-      },
-      hasProfileDialogMessage: Boolean(this.state.profileDialogMessage),
-      profileDialogMessage: this.state.profileDialogMessage,
-      profileDialogMessageColor: this.state.profileDialogError ? '#b04050' : '#557a46',
-      paperLabel: `${pw}" × ${ph}"`,
-      scaleLabel: SCALES[activeScale].label,
-      // Straight through to the same methods, so a keyboard path added later
-      // has one implementation to bind to.
-      onUndoPress: () => this._undoLayout(),
-      onRedoPress: () => this._redoLayout(),
-      undoDisabled: !this.state.historyPast,
-      redoDisabled: !this.state.historyFuture,
-      undoTitle: this.state.historyPast
-        ? 'Undo the last sheet change' : 'Nothing to undo yet',
-      redoTitle: this.state.historyFuture
-        ? 'Redo the sheet change just undone' : 'Nothing to redo',
-      statusLabel: this.state.persistenceError
-        ? `${this.state.persistenceStatus} — ${this.state.persistenceError}`
-        : this.state.persistenceStatus,
-      statusStyle: this.state.persistenceError ? 'color:#b04050; font-weight:600;' : '',
-      canvasCursor: this._panning || this._draggingViewport ? 'grabbing' : (addingViewport ? 'crosshair' : 'default'),
-    };
+    document.querySelector('#lay-keys-link').hidden = which !== 'settings';
+    document.querySelector('#lay-save').textContent = `SAVE ${title}`;
+    const name = document.querySelector('#lay-file-name');
+    if (name.value !== this.state.profileFileName) name.value = this.state.profileFileName;
+    document.querySelector('#lay-file-ext').textContent = `.draft.${which}`;
+    document.querySelector('[data-profile-import]')
+      .setAttribute('accept', `application/json,.draft.${which}`);
+    const message = document.querySelector('#lay-dialog-message');
+    message.hidden = !this.state.profileDialogMessage;
+    message.textContent = this.state.profileDialogMessage;
+    message.classList.toggle('lay-bad', Boolean(this.state.profileDialogError));
+  }
+
+  // ── THE CONTROLS, WIRED ONCE ────────────────────────────────────────
+  // The template carried these as `onClick="{{ name }}"` against closures the
+  // render rebuilt every time. These elements never move, so they are bound
+  // once and read `this.state` when they fire.
+  _wirePanel() {
+    const on = (selector, event, handler) =>
+      document.querySelector(selector)?.addEventListener(event, handler);
+
+    on('[data-open-settings]', 'click', () => this._openProfileDialog('settings'));
+    on('[data-open-standards]', 'click', () => this._openProfileDialog('standards'));
+    document.querySelectorAll('[data-orient]').forEach(button =>
+      button.addEventListener('click', () => this._setOrientation(button.dataset.orient)));
+    on('[data-layout-add-sheet]', 'click', () => this._setActiveSheet(this._sheetCount() + 1));
+    on('[data-layout-add-viewport]', 'click', () => this.setState(
+      { addingViewport: !this.state.addingViewport }, () => this._draw()));
+    on('[data-layout-deal-sheets]', 'click', () => this._dealSheets());
+
+    on('#lay-dialog-close', 'click', () => this._closeProfileDialog());
+    on('#lay-save', 'click', () => this._saveProfilePackage());
+    on('#lay-import', 'click', () => document.querySelector('[data-profile-import]')?.click());
+    on('[data-profile-import]', 'change', e => {
+      const file = e.target.files?.[0];
+      if (file) this._importProfilePackage(file);
+      e.target.value = '';
+    });
+    on('#lay-file-name', 'input', e => this.setState({ profileFileName: e.target.value }));
+    on('#lay-file-name', 'keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); this._saveProfilePackage(); }
+      if (e.key === 'Escape') { e.preventDefault(); this._closeProfileDialog(); }
+    });
+    on('[data-undo]', 'click', () => this._undoLayout());
+    on('[data-redo]', 'click', () => this._redoLayout());
+  }
+
+  // THE COMPOSER, ON DEMAND. It replaces every viewport on every sheet, so a
+  // drafter who has placed any by hand is asked first -- and is NOT asked when
+  // there is nothing of theirs to lose, because a confirm over an empty sheet
+  // is a dialog that only ever has one sensible answer.
+  _dealSheets() {
+    if (!this._saved) return;
+    const byHand = this.state.viewports.length > 0 && this.state.auto !== true;
+    if (byHand && !window.confirm(
+      'Deal the standard sheet set?\n\nThis replaces the viewports you have '
+      + 'placed by hand. Undo takes it back.')) return;
+    this.setState({ addingViewport: false }, () => this._composeDefaultSet());
   }
 }
+
+// ── BOOT ────────────────────────────────────────────────────────────────
+// The order React used: the controls exist, the panel is painted from the
+// initial state, and only then does the page mount -- so componentDidMount
+// finds a canvas to size and a panel already showing what the state says.
+const page = new Component();
+page._wirePanel();
+page._paintPanel();
+page.componentDidMount();
 </script>
-  <!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->
-  <script src="./traffic-counter.js" defer></script>
+<!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->
+<script src="./traffic-counter.js" defer></script>
 </body>
 </html>

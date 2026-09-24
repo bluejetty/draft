@@ -59,7 +59,7 @@ function recordingCtx() {
   return { ctx, strokes, fills };
 }
 
-// Mirrors LAYOUT.dc.html's _cutViewEnv over a saved drawing's JSON.
+// Mirrors LAYOUT.html's _cutViewEnv over a saved drawing's JSON.
 const DEFAULT_WALL_TOP_FT = (8 * 12 + 1 + 1 / 8) / 12;
 const DEFAULT_FOOTING_WIDTH_IN = 20;
 const ICF_FOOTING_WIDTH_IN = 24;
@@ -110,7 +110,7 @@ function buildEnv(win, saved) {
   const masters = format.boneyardOutlines(saved.boneyardOutlines, new Set(shelves.map(s => s.id)));
   const assemblies = (saved.levelAssemblies && typeof saved.levelAssemblies === 'object') ? saved.levelAssemblies : {};
   // THE THIRD COPY IS GONE, and the comment it replaces was already untrue.
-  // This said it "mirrors LAYOUT.dc.html's normaliseLevelAssembly exactly".
+  // This said it "mirrors LAYOUT.html's normaliseLevelAssembly exactly".
   // It did not: LAYOUT's answered SIX fields, this one SEVEN (it carried
   // joistSpacingIn, LAYOUT did not), and MODEL.dc.html's answered EIGHT. Three
   // copies of one table that had each drifted a different way, with a comment

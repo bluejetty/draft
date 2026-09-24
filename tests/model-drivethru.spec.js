@@ -638,6 +638,65 @@ test('every tile is on the shelf and says its own name, card or no card',
     }
   });
 
+// THE CARDS ARE SQUARE, AND THE TOP ROW IS THE BIGGER ONE. Movie, 24 Sep:
+// "change all the boxes to square new ones and increase sizes about 150% for
+// top boxes and 110% bigger for bottom ones".
+//
+// THIS TEST ASKED THE OPPOSITE THIS MORNING. Its first version measured that
+// the families were bigger with the submenu SHUT than open -- true while the
+// two rows had to share a 120px ceiling, and superseded the moment he asked
+// for both rows big at once. The ratio it measures now is the one he named.
+//
+// MEASURED AS A RELATIONSHIP, not as pixels. A card's height tracks the board
+// below its cap, so a fixed expectation would pin the test to one viewport;
+// what the instruction says is that one row is half again the other, and that
+// holds at every width until the caps bind.
+//
+// THE SAME 1440 THE SPILL HAPPENED AT, for the reason the test above says: the
+// cards are sized off the board, so a narrow window shrinks them out of
+// trouble and the check would pass on a board it never looked at.
+test('the cards are square, the top row half again the bottom, and both on the shelf',
+  async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await openPage(page);
+    await h.openDriveThru(page);
+    const families = page.locator('#dt-tiles [data-build-family]');
+    await expect(families.first()).toBeVisible();
+    expect(await families.count(), 'the board went empty').toBe(3);
+
+    await page.locator('#dt-tiles [data-build-family="bungalow"]').click();
+    await expect(page.locator('#dt-tiles [data-build-entry]').first()).toBeVisible();
+
+    const shelf = await page.locator('#dt-tiles').boundingBox();
+    const art = async locator => {
+      const box = await locator.locator('img').boundingBox();
+      return box;
+    };
+    const top = await art(families.first());
+    const bottom = await art(page.locator('#dt-tiles [data-build-entry]').first());
+
+    // SQUARE, which is the ask a stretched card would fail while still being
+    // the right height.
+    expect(Math.abs(top.width - top.height),
+      `a top card is ${top.width}x${top.height}`).toBeLessThanOrEqual(1);
+    expect(Math.abs(bottom.width - bottom.height),
+      `a bottom card is ${bottom.width}x${bottom.height}`).toBeLessThanOrEqual(1);
+
+    // 150 against 110 is a ratio of 1.36; the caps can only narrow it, never
+    // invert it, so the check is that the top row is meaningfully the bigger.
+    expect(top.height / bottom.height,
+      `top ${top.height} against bottom ${bottom.height}`).toBeGreaterThan(1.2);
+
+    // AND BOTH ROWS STILL CLEAR THE SHELF, which is what caps them. This is
+    // the check the sizes were chosen against: 2.6 rows plus a gap inside
+    // 294px.
+    const entries = page.locator('#dt-tiles [data-build-entry]');
+    const last = await entries.nth(await entries.count() - 1).boundingBox();
+    expect(last.y + last.height,
+      'the submenu hangs off the bottom of the shelf')
+      .toBeLessThanOrEqual(shelf.y + shelf.height + 1);
+  });
+
 test('the board is a picture with live cards on it, and nothing else takes a press',
   async ({ page }) => {
     // AN OVERLAY THAT SWALLOWS PRESSES HAS COST THIS PROJECT TWICE, and
@@ -1000,7 +1059,15 @@ test('a size does not follow the drafter onto the next thing he picks',
     // PRESSING A DIFFERENT FOUNDATION IS A NEW QUESTION. Carrying the last
     // answer across would build a 16x24 for a drafter who never saw the
     // size asked on the tile he actually pressed.
-    await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
+    //
+    // STRAIGHT ONTO THE SECOND TILE, where this used to press the family
+    // again first. A choice shut the submenu until 24 Sep, so getting back to
+    // its siblings meant re-opening it; the submenu stays up now (Movie: "do
+    // not change the page"), so that press would TOGGLE IT SHUT and the tile
+    // this test reaches for would not be there. The flow it describes is the
+    // shorter one a drafter now takes.
+    await expect(page.locator('#dt-tiles [data-build-entry="detached-frostwall"]'))
+      .toBeVisible();
     await page.locator('#dt-tiles [data-build-entry="detached-frostwall"]').click();
     await expect(page.locator('[data-drivethru-line]')).toContainText('HOW BIG');
     await expect(page.locator('#size-stock [data-build-size="16x24"]'))

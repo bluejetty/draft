@@ -28,7 +28,7 @@ async function buildAndOpenLayout(page) {
   await h.climbTourToMain(page);
   await page.locator('[data-build-house]').click();
   await h.waitForSaved(page);
-  await page.goto('/LAYOUT.dc.html');
+  await page.goto('/LAYOUT.html');
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
 }
 

@@ -38,6 +38,17 @@ if (!window.DraftBuildMenu) {
   //     BILEVEL   BILEVEL / +GARAGE / MODIFIED BILEVEL (1.5 STOREY)
   //     DETACHED GARAGE   THICKENED EDGE / GRADE BEAM / FROST WALL
   //
+  // THE ORDER OF THE FAMILIES IS DETACHED GARAGE / BUNGALOW / BILEVEL since
+  // 24 Sep, which is Movie's and is the order PROJECT's type picker has shown
+  // since 22 Sep. The two were reading the same three buildings in two
+  // different orders, which is the smaller cousin of the duplication this
+  // file was lifted out to end.
+  //
+  // THE ARRAY'S ORDER IS THE ONLY PLACE IT IS SAID. Both drawing pages render
+  // straight off it, and the two specs that check the row's order derive their
+  // expectation from it rather than typing the words -- so this list is the
+  // one edit, and a hardcoded roster somewhere else would be the bug.
+  //
   // WHY A LIST OF HOUSES BEATS A CHAIN OF QUESTIONS. An earlier draft asked the
   // type, then the garage, then the storey over it. The drafter recognises the
   // building they are drawing; they should not have to answer three questions
@@ -53,6 +64,23 @@ if (!window.DraftBuildMenu) {
   // `foundation` belongs to the DETACHED entries alone and pre-answers the
   // prompt that _commitDetachedGarageOutline raises after the loop closes.
   const BUILD_MENU = Object.freeze([
+    Object.freeze({
+      id: 'detachedGarage',
+      label: 'DETACHED GARAGE',
+      title: 'DETACHED GARAGE — pick its foundation, then draw its own loop',
+      // No `type`: a detached garage says nothing about what house it stands
+      // beside, and may stand beside none.
+      // `needsSize` is the detached garage's second question (Movie, 15 Sep:
+      // "allow them to enter the size give them choices 16x24 24x26 25x25
+      // (or 4th option allow them to enter ___FT X ___FT)"). A house's size
+      // comes with its premade design; a garage is a box, so its size IS the
+      // design and nothing can be built without it.
+      entries: Object.freeze([
+        Object.freeze({ id: 'detached-thickened', label: 'THICKENED EDGE', foundation: 'thickened', needsSize: true }),
+        Object.freeze({ id: 'detached-gradebeam', label: 'GRADE BEAM', foundation: 'gradebeam', needsSize: true }),
+        Object.freeze({ id: 'detached-frostwall', label: 'FROST WALL', foundation: 'frostwall', needsSize: true }),
+      ]),
+    }),
     Object.freeze({
       id: 'bungalow',
       label: 'BUNGALOW',
@@ -81,25 +109,7 @@ if (!window.DraftBuildMenu) {
         // in the whole menu that makes a HALF-LEVEL.
         Object.freeze({ id: 'modifiedBilevel', label: 'MODIFIED BILEVEL', type: 'modifiedBilevel', garage: 'attached', overGarage: true }),
       ]),
-    }),
-    Object.freeze({
-      id: 'detachedGarage',
-      label: 'DETACHED GARAGE',
-      title: 'DETACHED GARAGE — pick its foundation, then draw its own loop',
-      // No `type`: a detached garage says nothing about what house it stands
-      // beside, and may stand beside none.
-      // `needsSize` is the detached garage's second question (Movie, 15 Sep:
-      // "allow them to enter the size give them choices 16x24 24x26 25x25
-      // (or 4th option allow them to enter ___FT X ___FT)"). A house's size
-      // comes with its premade design; a garage is a box, so its size IS the
-      // design and nothing can be built without it.
-      entries: Object.freeze([
-        Object.freeze({ id: 'detached-thickened', label: 'THICKENED EDGE', foundation: 'thickened', needsSize: true }),
-        Object.freeze({ id: 'detached-gradebeam', label: 'GRADE BEAM', foundation: 'gradebeam', needsSize: true }),
-        Object.freeze({ id: 'detached-frostwall', label: 'FROST WALL', foundation: 'frostwall', needsSize: true }),
-      ]),
-    }),
-  ]);
+    }),]);
 
   // ── HOW BIG THE GARAGE IS ────────────────────────────────────────────
   // Movie's three, in his order, plus the fourth that is not a size but a

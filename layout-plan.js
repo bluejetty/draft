@@ -47,6 +47,22 @@ if (!window.DraftLayoutPlan) {
           start,
           end,
           levelId,
+          // WHICH DRAWING OF THE LEVEL THIS WALL BELONGS TO, carried rather
+          // than dropped -- and dropping it was a silent hole for as long as
+          // the view argument existed.
+          //
+          // THE FILTER RUNS TWICE. This function narrows to the view, and
+          // then plan-composition's own `forLevel` narrows AGAIN on
+          // `item.view` because it is handed every other collection raw. With
+          // the field stripped here, the second pass read every wall as
+          // 'plan' and threw out the entire foundation drawing -- an empty
+          // sheet from a filter that had already done its job.
+          //
+          // It went unseen because no caller had ever passed a view: the
+          // sheet page drew whole levels, so the second filter never had
+          // anything to disagree with. The first caller to use the argument
+          // (LAYOUT's FOUNDATION sheet, 23 Sep) got a blank page.
+          view: wall.view || 'plan',
           wallType,
           refLine: ['left', 'right', 'center'].includes(wall.refLine) ? wall.refLine : 'left',
         };

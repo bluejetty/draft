@@ -45,7 +45,7 @@ async function openLayout(page) {
     indexedDB.deleteDatabase('pdf-img-mgr-shared');
     localStorage.clear();
   });
-  await page.goto('/LAYOUT.dc.html');
+  await page.goto('/LAYOUT.html');
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
   await page.evaluate(async ({ bucket, saved }) => {
     const file = new File([JSON.stringify(saved)], 'model-drawing.json', { type: 'application/json' });

@@ -22,7 +22,7 @@
 // drawing-format.js needs it too, for the MIGRATION: a window still sitting at
 // an old default head moves to 7'-0" on load, keeping its size. That has to
 // live in the reader because fenestrations() is the one gate every page goes
-// through -- MODEL.dc.html, LAYOUT.dc.html and proto/elevation-harness.js all
+// through -- MODEL.dc.html, LAYOUT.html and proto/elevation-harness.js all
 // call it -- so no page has to remember to apply it.
 //
 // AND THAT MODULE MAY NOT READ IT. Its own rule, stated at its head: "Every

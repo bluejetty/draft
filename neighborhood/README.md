@@ -42,7 +42,7 @@ happened, and not one line of shared drawing code changed for this program.
 global. **N houses is N calls.** The module was multi-drawing capable before
 anybody wanted a second drawing, because it never reached for one.
 
-**4. LAYOUT.dc.html HAD ALREADY PROVED IT.** That page draws a whole house off
+**4. LAYOUT.html HAD ALREADY PROVED IT.** That page draws a whole house off
 a `.draft` it did not create and never loads MODEL.dc.html. This program is
 the same trick pointed at many files instead of one.
 

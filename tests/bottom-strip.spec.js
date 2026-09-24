@@ -98,7 +98,7 @@ test('the Replit-era readouts are gone from both drawing pages', async ({ page }
   // The cut-view seat stays, empty until a section or elevation opens.
   await expect(page.locator('[data-model-title-detail]')).toHaveText('');
 
-  await page.goto('/LAYOUT.dc.html');
+  await page.goto('/LAYOUT.html');
   await expect(page.locator('[data-nav-cluster]')).toBeVisible();
   await expect(page.locator('[data-layout-sx]')).toHaveCount(0);
   await expect(page.locator('[data-layout-sy]')).toHaveCount(0);

@@ -54,7 +54,7 @@ test('R19b: LAYOUT says nothing at all when its write fails', async ({ page, con
   await h.waitForSaved(page);
 
   const layout = await context.newPage();
-  await layout.goto('/LAYOUT.dc.html');
+  await layout.goto('/LAYOUT.html');
   await layout.waitForFunction(() => document.body.dataset.layoutReady === '1');
   await layout.evaluate(() => {
     window.SharedFileStore.saveSharedFile = async () => { throw new Error('QuotaExceededError'); };

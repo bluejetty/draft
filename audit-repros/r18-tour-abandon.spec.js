@@ -53,7 +53,7 @@ test('R18c: leave to LAYOUT mid-tour and come back', async ({ page, context }) =
   await h.openModel(page);
   await startTour(page);
   const before = await tourOf(page);
-  await page.goto('/LAYOUT.dc.html');
+  await page.goto('/LAYOUT.html');
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
   await page.getByRole('button', { name: /8\.5 × 11/i }).click();
   await page.waitForFunction(() => Number(document.body.dataset.layoutSaveSeq || 0) > 0);

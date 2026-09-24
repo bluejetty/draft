@@ -154,8 +154,18 @@
        That is why this is a plain two-column grid of the whole main width
        and not a three-column one with gutters reserved for the rails: the
        rails float above, so nothing here has to make room for them. */
-    .type-layout { display:grid; grid-template-columns:20% minmax(0,1fr); gap:16px; align-items:start; margin-top:16px; }
+    .type-layout { display:grid; grid-template-columns:minmax(0,20%) minmax(0,1fr); gap:16px; align-items:start; margin-top:16px; }
     .type-picker { display:flex; flex-direction:column; gap:10px; }
+    /* EACH TYPE AND ITS OWN VARIATIONS, on one row. The thumbnail keeps the
+       larger half because it is the thing being recognised; the variations are
+       words and read fine narrow. */
+    /* THE VARIATIONS TAKE THE LARGER HALF, because they carry words and the
+       thumbnail is a shape -- a section reads at 110px, '2 STOREY + GARAGE +
+       ROOM OVER' does not. The 20% the picker gets is unchanged: widening it
+       to fit both at full size squeezed the card's schedules, which is the
+       opposite of compacting the panel. */
+    .type-row { display:grid; grid-template-columns:minmax(0,0.85fr) minmax(0,1.15fr); gap:6px; align-items:start; }
+    .family-col { display:flex; flex-direction:column; gap:4px; }
     .type-card { display:block; width:100%; padding:0; border:1px solid var(--edge-panel); background:var(--surface-panel); color:var(--ink-secondary); font:inherit; text-align:left; cursor:pointer; }
     .type-card:hover { border-color:var(--accent); }
     /* The selected card is marked TWICE -- the border and an inset ring --
@@ -239,8 +249,11 @@
        for the cartoon sections he is drawing -- "i will make better buttons
        later" -- so the press, the state and the glow are built now and only
        the face of the button changes when the pictures arrive. */
-    .family-row { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; }
     .family-button { border:1px solid var(--edge-panel); background:var(--surface-chip); color:var(--ink-primary); padding:7px 12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; cursor:pointer; }
+    /* Beside its type rather than across the card: smaller, left-aligned, and
+       allowed to wrap onto two lines -- 2 STOREY + GARAGE + ROOM OVER does not
+       fit a narrow column on one. */
+    .family-col .family-button { padding:5px 7px; font-size:10px; letter-spacing:.03em; text-align:left; line-height:1.2; }
     .family-button:hover:not(:disabled) { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 8%, transparent); }
     .family-button[aria-pressed="true"] { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 22%, transparent); box-shadow:0 0 0 1px var(--accent) inset; }
     .family-button:disabled { cursor:default; color:var(--ink-quiet); }
@@ -350,26 +363,43 @@
          same builders -- a miniature that could disagree with the drawing it
          stands for is worse than no miniature. -->
     <div class="type-layout">
+      <!-- A COLUMN OF TYPES AND A COLUMN OF THEIR VARIATIONS, row for row.
+           Movie, 24 Sep: "a column with the 3 sections and next column 3 rows
+           with the VARIATIONS of each of the TYPES".
+
+           The variations used to be a wrapping row across the top of the big
+           card -- one family at a time, and only for the type on show. Beside
+           their own type they are the whole menu at a glance, and the card
+           gets 41px of its height back, which is what he asked for: "i'd like
+           to try to compact the PROJECT panel". -->
       <div class="type-picker" role="tablist" aria-label="Build type">
-        <button class="type-card" role="tab" data-type="detached" aria-controls="stage-detached">
-          <canvas class="type-mini" width="300" height="220" aria-hidden="true"></canvas>
-          <span class="type-name">Detached garage</span>
-        </button>
-        <button class="type-card" role="tab" data-type="bungalow" aria-controls="stage-bungalow">
-          <canvas class="type-mini" width="300" height="220" aria-hidden="true"></canvas>
-          <span class="type-name">Bungalow</span>
-        </button>
-        <button class="type-card" role="tab" data-type="bilevel" aria-controls="stage-bilevel">
-          <canvas class="type-mini" width="300" height="220" aria-hidden="true"></canvas>
-          <span class="type-name">Bilevel</span>
-        </button>
+        <div class="type-row" role="presentation">
+          <button class="type-card" role="tab" data-type="detached" aria-controls="stage-detached">
+            <canvas class="type-mini" width="300" height="220" aria-hidden="true"></canvas>
+            <span class="type-name">Detached garage</span>
+          </button>
+          <div class="family-col" id="detached-family-row" aria-label="Detached garage foundations"></div>
+        </div>
+        <div class="type-row" role="presentation">
+          <button class="type-card" role="tab" data-type="bungalow" aria-controls="stage-bungalow">
+            <canvas class="type-mini" width="300" height="220" aria-hidden="true"></canvas>
+            <span class="type-name">Bungalow</span>
+          </button>
+          <div class="family-col" id="family-row" aria-label="Bungalow family"></div>
+        </div>
+        <div class="type-row" role="presentation">
+          <button class="type-card" role="tab" data-type="bilevel" aria-controls="stage-bilevel">
+            <canvas class="type-mini" width="300" height="220" aria-hidden="true"></canvas>
+            <span class="type-name">Bilevel</span>
+          </button>
+          <div class="family-col" id="bilevel-family-row" aria-label="Bilevel family"></div>
+        </div>
       </div>
       <div class="type-stage">
 
     <section id="stage-bungalow" data-stage="bungalow" class="card stack-card" aria-label="Bungalow wall section">
       <div class="card-title">Bungalows</div>
       <div class="card-body">
-        <div class="family-row" id="family-row" aria-label="Bungalow family"></div>
         <div class="band">
           <div class="sched" id="sched-garage"></div>
           <!-- THE DOOR IN, where the garage's own numbers would be. Movie,
@@ -402,7 +432,6 @@
     <section id="stage-bilevel" data-stage="bilevel" class="card stack-card" aria-label="Bilevel wall section">
       <div class="card-title">Bilevels</div>
       <div class="card-body">
-        <div class="family-row" id="bilevel-family-row" aria-label="Bilevel family"></div>
         <div class="band band-eave">
           <div class="sched" id="sched-bilevel-left"></div>
           <div class="detail-wrap" id="bilevel-wrap">
@@ -2184,6 +2213,35 @@
           familyButtons.push({ entry, button });
         });
       }
+      // AND THE DETACHED GARAGE'S THREE, which are FOUNDATIONS rather than
+      // houses -- thickened edge, grade beam, frost wall. Movie named them
+      // with the others on 24 Sep, so the column shows the whole menu the way
+      // the page row shows every page of the shop: a map with a town missing
+      // teaches a shape that is wrong.
+      //
+      // THEY DO NOT PRESS YET, and that is a fact about the page rather than
+      // a gap in this code. There is no chosen detached foundation to press
+      // INTO: the card draws all three side by side at one scale, cut at the
+      // back of the garage, because comparing them is what it is for. Making
+      // one of them the drawing's own would be new state and a new drawing,
+      // not a column of buttons. Dead and saying so beats absent.
+      const detachedFamilyRow = document.querySelector('#detached-family-row');
+      if (detachedFamilyRow) {
+        window.DraftBuildMenu.BUILD_MENU
+          .find(family => family.id === 'detachedGarage').entries
+          .forEach(entry => {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'family-button';
+            button.textContent = entry.label;
+            button.dataset.familyEntry = entry.id;
+            button.disabled = true;
+            button.title = 'The card draws all three at one scale — '
+              + 'a detached garage has no chosen foundation on this page yet.';
+            detachedFamilyRow.appendChild(button);
+          });
+      }
+
       syncFamilyRow = () => {
         familyButtons.forEach(({ entry, button }) => {
           const live = buildType === entry.type

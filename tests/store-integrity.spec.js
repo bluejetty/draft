@@ -68,7 +68,7 @@ test('two tabs on one drawing: neither the sheet nor the model erases the other'
 
   // A second tab opens the sheet. It snapshots the drawing as it stands.
   const layout = await context.newPage();
-  await layout.goto('/LAYOUT.dc.html');
+  await layout.goto('/LAYOUT.html');
   await layout.waitForFunction(() => document.body.dataset.layoutReady === '1');
 
   // ── the model edits while the sheet sits open ──────────────────────────
@@ -235,7 +235,7 @@ test('a failed write is visible on the sheet, and it recovers on the next good o
   await page.locator('[data-build-house]').click();
   await h.waitForSaved(page);
 
-  await page.goto('/LAYOUT.dc.html');
+  await page.goto('/LAYOUT.html');
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
 
   // Every write fails from here, the way a full quota does.

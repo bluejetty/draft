@@ -140,10 +140,29 @@ test('an elevation is drawn clear of the rails, and full width when they are shu
     `the house ends at ${open.house.right.toFixed(0)} and the right rail starts at `
     + `${rightRail.left.toFixed(0)}`).toBeLessThanOrEqual(rightRail.left);
 
-  // AND WITH THE RAILS SHUT IT USES THE PAGE. Without this the whole thing
-  // is satisfied by drawing every elevation small for ever, which is not what
-  // he asked for -- "a little smaller" was the price of the menus being open,
-  // not a new zoom.
+  // AND WITH THE RAILS SHUT IT DOES NOT MOVE. THIS ASSERTION USED TO SAY THE
+  // OPPOSITE, and the reversal is Movie's, on 24 Sep with the page in front
+  // of him:
+  //
+  //   "when the collapsable menus on the side are closed can the screen scale
+  //    stay the same with the extra little white area. it looks nicer with
+  //    more space / smaller drawing" ... "so it would be this same size (not
+  //    change) when the sidemenus close"
+  //
+  // WHAT IT SAID BEFORE, and why it is worth keeping the record rather than
+  // quietly swapping the line: it required the house to grow by at least 20px
+  // when the rails shut, on the reading that "a little smaller was the price
+  // of the menus being open, not a new zoom" -- and the note at the foot of
+  // this file names a mutation ("a fixed margin whatever the rails do") that
+  // this assertion was the only thing catching, and calls it the one worth
+  // having. That mutation is now the shipped behaviour. It is not that the
+  // reasoning was wrong; it is that he looked at both and preferred the
+  // steadier one.
+  //
+  // SO THE CHECK IS THE SAME SHAPE, AIMED THE OTHER WAY. "Same size" still
+  // needs the rails-shut reading, because without it the whole file is
+  // satisfied by an elevation that grows to fill the page the moment a menu
+  // closes -- the defect he is reporting.
   await page.locator('#left-tab').click();
   await page.locator('.rail-tab[data-pane-tab="levels"]').click();
   await page.waitForTimeout(400);
@@ -152,9 +171,13 @@ test('an elevation is drawn clear of the rails, and full width when they are shu
   expect(shut.house, 'the elevation still draws a house').toBeTruthy();
   const wasWide = open.house.right - open.house.left;
   const nowWide = shut.house.right - shut.house.left;
-  expect(nowWide,
+  expect(Math.abs(nowWide - wasWide),
     `${nowWide.toFixed(0)}px of house with the rails shut against `
-    + `${wasWide.toFixed(0)}px with them open`).toBeGreaterThan(wasWide + 20);
+    + `${wasWide.toFixed(0)}px with them open -- shutting a menu resized the `
+    + 'drawing').toBeLessThanOrEqual(1);
+  // AND IT IS STILL WHERE IT WAS, not the same width somewhere else.
+  expect(Math.abs(shut.house.left - open.house.left),
+    'the house slid sideways when the rails shut').toBeLessThanOrEqual(1);
 });
 
 // MUTATION-RUN, 22 Sep, three of them, each turning this file red and each on
@@ -166,9 +189,22 @@ test('an elevation is drawn clear of the rails, and full width when they are shu
 //   a fixed margin whatever the rails do -> 741px of house with them shut,
 //                                           741px with them open
 //
-// THE THIRD IS THE ONE WORTH HAVING. The first two are the defect itself, and
-// either would have been caught by looking at the page. The third passes every
-// clearance check in this file and is still wrong: it answers "don't cover the
-// drawing" by drawing every elevation small for ever, which is the opposite of
-// what he asked for -- "a little smaller" was the price of the menus being
-// open, not a new zoom. Without the rails-shut reading it would ship.
+// THE FIRST TWO STILL STAND and are still the defect itself: an elevation
+// drawn underneath the panels, which is what this file was opened for.
+//
+// THE THIRD IS NOW THE FEATURE. It read as the subtle one -- it passes every
+// clearance check here and was caught only by the rails-shut reading -- on the
+// grounds that "a little smaller was the price of the menus being open, not a
+// new zoom". Movie looked at both on 24 Sep and preferred the steady one:
+// "so it would be this same size (not change) when the sidemenus close". The
+// rails-shut reading is still the only thing measuring it; it now asks for
+// sameness rather than growth, and the mutation that breaks it is the reverse
+// -- railMargins going back to measuring only the rails that are open.
+//
+// MUTATION-RUN, 24 Sep, against the reversed assertion:
+//
+//   railMargins skips a shut rail  -> 758px of house with the rails open,
+//                                     1149px with them shut
+//
+// -- which is the reading from his screenshot: the same elevation, half as
+// big again, because a menu closed.

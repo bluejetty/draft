@@ -197,10 +197,40 @@
        distance was written out by hand three times the last time this file
        had two bands. */
     --house-h: 40px;
+    /* THE LANE THE BROWSER KEEPS FOR ITSELF. Movie, 24 Sep, with Firefox's
+       link preview sitting on top of the PROJECT chip: "see how that 'html'
+       address pops up and covers my menu, do you think we could solve this by
+       adding extra space at the bottom of the menu so when something pops up
+       like that it won't cover our text/links?"
+
+       That strip is the BROWSER'S, drawn over the page whenever a link is
+       hovered, and nothing here can hide it, move it or style it. What a page
+       can do is stay out of its way, which is what he proposed: the foot of
+       the bar is padding rather than content, so the strip lands on the bar's
+       own panel colour instead of on a nav chip.
+
+       24px IS THE STRIP'S OWN HEIGHT, measured off his screenshot at default
+       zoom -- it runs the bottom 23px of a 768px window. It is not exact
+       across browsers or UI font sizes and does not need to be: too small and
+       the strip clips a chip's descenders, too large and the bar wears a
+       slightly deeper hem, and the cost either way is cosmetic.
+
+       PADDING RATHER THAN A LIFT, which is the difference between his fix and
+       the obvious one. Moving the whole bar up with `bottom` leaves the lane
+       showing CANVAS, so the strip would sit over the drawing -- quieter than
+       a covered chip but still ink under a tooltip. Padding keeps the bar's
+       background across the full band. */
+    /* AND IT ANSWERS FOR A PHONE'S FURNITURE WITH THE SAME NUMBER.
+       env(safe-area-inset-bottom) is the band iOS keeps for the home
+       indicator and Safari's own toolbar -- 0 on a desktop, ~34px on a
+       recent iPhone -- so taking the greater of the two means one lane
+       serves both and neither is special-cased. An iPad in landscape, which
+       is what this app is drawn on, reports 0 and gets the 24. */
+    --browser-lane: max(24px, env(safe-area-inset-bottom, 0px));
     /* THE BAND THE SIDEBARS MUST STAY OUT OF at the foot: the house strip,
        which now carries the page row inside it, and the counters panel that
        sits just above it. */
-    --readout-bottom: calc(var(--house-h) + 12px);
+    --readout-bottom: calc(var(--house-h) + var(--browser-lane) + 12px);
     /* THE TOP BAND IS ONE BAND NOW. Every control that was loose on the sheet
        -- mode corner, file row, settings -- is a tenant of the strip, so the
        only things still derived from its height are the two file notes and
@@ -602,8 +632,11 @@
      control the drafter cannot reach while ordering. */
   #house-strip { position:fixed; left:0; right:0; bottom:0; z-index:6;
     --foot-press-h:34px;
-    min-height:var(--house-h);
-    display:flex; align-items:center; gap:8px; padding:0 12px;
+    /* The hem is the browser's lane; --house-h still names what the bar is,
+       so nothing that measures the bar has to know about the lane. */
+    min-height:calc(var(--house-h) + var(--browser-lane));
+    display:flex; align-items:center; gap:8px;
+    padding:0 12px var(--browser-lane);
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border-top:1px solid var(--edge-panel); }
   #house-strip .grow { flex:1; }
@@ -628,7 +661,12 @@
      centre on what is LEFT OVER between two corners that never weigh the
      same. The verbs line up to its right, clear of the bone's own box, so a
      selection appearing cannot walk the bone off the axis. */
-  #dt-bar { position:absolute; left:50%; top:0; bottom:0;
+  /* STOPS ABOVE THE LANE. `bottom:0` on an absolutely positioned child
+     resolves against the PADDING box, so the bar -- and the bone centred
+     in it -- sat over the browser's strip while every other tenant of the
+     row cleared it. Measured: the bone's foot was 15px off the floor
+     against the page row's 32. */
+  #dt-bar { position:absolute; left:50%; top:0; bottom:var(--browser-lane);
     display:flex; align-items:center; gap:8px;
     padding-left:calc(var(--foot-press-h, 34px) * 0.53 + 8px); }
   /* THE FOOT'S BONE is the same red bone that sits on the sign's post --

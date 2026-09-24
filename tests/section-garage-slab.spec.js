@@ -1,6 +1,6 @@
 // A section's garage rule, read off the drawn sheet.
 //
-// Board #346: LAYOUT.dc.html's env.edgeOnOutline is the one caller of the
+// Board #346: LAYOUT.html's env.edgeOnOutline is the one caller of the
 // point-to-segment copy that collapsed onto window.DraftGeometry2D. Nothing
 // exercised it -- breaking the shared export outright left every layout spec
 // green -- so the collapse was landing unobserved. This is that observable.
@@ -80,7 +80,7 @@ async function openLayout(page, saved) {
     indexedDB.deleteDatabase('pdf-img-mgr-shared');
     localStorage.clear();
   });
-  await page.goto('/LAYOUT.dc.html');
+  await page.goto('/LAYOUT.html');
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
   await page.evaluate(async ({ bucket, doc }) => {
     await window.SharedFileStore.saveSharedFile(

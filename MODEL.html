@@ -488,6 +488,32 @@
   #build-bar[hidden] { display:none; }
   #build-families, #build-entries { display:flex; gap:4px;
     justify-content:center; flex-wrap:wrap; }
+  /* THE FIRST SCREEN HAS THE SHELF TO ITSELF, so the three families may take
+     the taller cap there -- 180 against the 165 the open pair can afford.
+     Below the caps both states render the same size, which is what Movie
+     asked for on 24 Sep: the top row is 150% whether or not a submenu is
+     under it. `:has()` rather than a class because the condition is already
+     in the DOM -- #build-entries carries `hidden` exactly when no family is
+     open, set in one place. */
+  #build-bar:has(#build-entries[hidden]) #build-families {
+    gap:clamp(8px, calc(var(--dt-w) * 0.022), 24px); }
+  #build-bar:has(#build-entries[hidden]) #build-families button.card img {
+    height:clamp(66px, calc(var(--dt-w) * 0.1725), 180px); }
+  /* THE BONE ASKS FOR THE PRESS once a complete order is on the board. The
+     glow is the one the lit bone already wears; the pulse is what makes it a
+     request rather than a state. Stilled for anyone who has asked for less
+     motion -- the glow stays, so nothing is only announced by movement. */
+  @keyframes dt-bone-ask {
+    0%, 100% { filter:var(--bone-lift) brightness(1.15)
+      drop-shadow(0 0 4px rgba(255,64,51,0.55)); }
+    50%      { filter:var(--bone-lift) brightness(1.35)
+      drop-shadow(0 0 13px rgba(255,64,51,0.95)); }
+  }
+  #dt-bone[data-ready] img { animation:dt-bone-ask 1.4s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    #dt-bone[data-ready] img { animation:none;
+      filter:var(--bone-lift) brightness(1.3) drop-shadow(0 0 9px rgba(255,64,51,0.8)); }
+  }
   #build-entries[hidden] { display:none; }
   /* The tiles are the board's own blueprint cards: paper, blue ink, a hard
      edge. They are not palette tokens because the board is one picture in
@@ -521,9 +547,25 @@
      leaves room for the label row the entries carry and is still a third
      bigger than the 86 it replaces -- Movie, 16 Sep, and still standing:
      "make the stuff in the drivethru menu bigger its hard to see". */
+  /* SQUARE, AND TWO SIZES (Movie, 24 Sep): "change all the boxes to square
+     new ones and increase sizes about 150% for top boxes and 110% bigger for
+     bottom ones". The art he is drawing is square at source; the cards were
+     163x179 because the first five were.
+
+     THE PAIR STILL HAS TO CLEAR THE SHELF, which is what caps these. The
+     shelf is 44.1% of a board 1/1.29 as tall as it is wide -- 294px at the
+     860px cap -- and a family row and its open submenu share it. At 1.5u and
+     1.1u that is 2.6u + gap <= 294, so u <= 111: 165 on top, 121 underneath,
+     286 and a gap inside 294. The coefficients are the old 0.115 scaled the
+     same way, so the sizes track the board below the caps as they always
+     did. */
   #build-bar button.card img { display:block;
     height:clamp(44px, calc(var(--dt-w) * 0.115), 120px);
     width:auto; border:1px solid transparent; border-radius:2px; }
+  #build-families button.card img {
+    height:clamp(66px, calc(var(--dt-w) * 0.1725), 165px); }
+  #build-entries button.card img {
+    height:clamp(48px, calc(var(--dt-w) * 0.1265), 121px); }
   #build-bar button.card:hover img { border-color:#8f2a1d; }
   #build-bar button.card.open img, #build-bar button.card.chosen img {
     border-color:#8f2a1d; box-shadow:0 0 0 2px rgba(143,42,29,0.45); }
@@ -1906,7 +1948,32 @@
       const r = el.getBoundingClientRect();
       return Number.isFinite(r?.height) ? r.height : 0;
     };
-    const top = tall('strip'), bottom = tall('house-strip');
+    // THE HEM IS NOT THE BAR. The house strip carries --browser-lane as bottom
+    // padding so the browser's own link-preview strip lands on panel colour
+    // instead of on a nav chip -- and that band is the BROWSER'S, drawn over
+    // whatever is beneath it and only while a link is hovered. A drawing that
+    // dodged it would be permanently smaller to make room for a tooltip.
+    //
+    // MEASURED OFF THE ELEMENT, not read back from the custom property: the
+    // lane IS this padding, so taking the padding cannot drift from what is
+    // rendered the way a second lookup of the variable could.
+    //
+    // IT COST A SPEC TO LEARN. The lane made the strip 64px where it had been
+    // 40, and the line at the foot of this function offsets the drawing by
+    // half the DIFFERENCE between the two bars -- so the plan slid 10px up,
+    // model-html-select's wall came off the canvas centre, and a click 4px
+    // from it was suddenly 16px from it and outside the 12px grab zone. The
+    // comment there already said why it would be invisible until it wasn't:
+    // "Equal bars, no offset, which is why this was invisible while they
+    // matched."
+    const hemOf = id => {
+      const el = document.getElementById(id);
+      if (!el) return 0;
+      const pad = parseFloat(getComputedStyle(el).paddingBottom);
+      return Number.isFinite(pad) ? pad : 0;
+    };
+    const top = tall('strip');
+    const bottom = Math.max(tall('house-strip') - hemOf('house-strip'), 0);
     // A sheet that is nearly all bar is a broken layout, not a tight fit.
     // Refusing the inset there leaves the old framing rather than dividing
     // the drawing into a sliver -- visibly wrong beats invisibly tiny.
@@ -2896,7 +2963,7 @@
       // instead of reading level-assembly.js's export block, and the page
       // swallowed the TypeError into "painter failed". Counting a name is not
       // confirming an export. The two constants are inlined because they are
-      // not exported either — MODEL.dc.html, LAYOUT.dc.html and the elevation
+      // not exported either — MODEL.dc.html, LAYOUT.html and the elevation
       // harness each hold their own pair, and this is the fourth.
       footingWidthIn: levelId => {
         const stored = assemblyFor(levelId).footingWidthIn;
@@ -3101,27 +3168,60 @@
   // height as a top and bottom margin would leave the drawing nothing to grow
   // into; the painter takes the greater of what it is handed and its own
   // default, and its own defaults are what top and bottom keep.
+  // RESERVED WHETHER THE RAIL IS OPEN OR SHUT, which is a change from what
+  // this did until 24 Sep and Movie's own correction:
+  //
+  //   "when the collapsable menus on the side are closed can the screen scale
+  //    stay the same with the extra little white area. it looks nicer with
+  //    more space / smaller drawing" ... "so it would be this same size (not
+  //    change) when the sidemenus close"
+  //
+  // It measured the rails LIVE, so shutting one handed the elevation back its
+  // width and the house grew to fill it -- the drawing changing size because
+  // of a menu, which is the drafter's furniture rearranging his drawing.
+  // Reserving the space always means the toggle does nothing to the house and
+  // the room the rail was in becomes white paper.
+  //
+  // A SHUT RAIL IS STILL MEASURED, not guessed at. `display:none` reports a
+  // zero box, so the rail is un-hidden, measured and re-hidden inside one
+  // statement -- the browser paints between frames, never between two lines of
+  // JavaScript, so nothing flashes. That keeps the promise the old comment
+  // made ("MEASURED, NOT TYPED"), which matters more here than it looks: the
+  // right rail is shrink-to-fit under its 277px bound and the left one holds
+  // whatever tools the page has, so a typed constant would be wrong the first
+  // time either changed. The comment beside that `max-width` already records
+  // what guessing costs -- "An estimate that is nearly right is a panel that
+  // nearly stays off the sheet."
+  //
+  // AND IT ONLY EVER GROWS, per side, for the session. The right rail resizes
+  // when its pane changes, and a reservation that followed it down would move
+  // the house every time the drafter switched panes -- the same defect one
+  // step smaller. High-water mark: the drawing settles at the widest the rail
+  // has been and stays there.
+  const railReserve = { left: 0, right: 0 };
   const railMargins = () => {
     const canvas = ctx && ctx.canvas;
     const box = canvas && canvas.getBoundingClientRect
       ? canvas.getBoundingClientRect() : null;
     if (!box || !(box.width > 0)) return null;
-    let left = 0, right = 0;
     ['#left-rail', '#right-rail'].forEach(sel => {
       const rail = document.querySelector(sel);
-      if (!rail || rail.hidden) return;
+      if (!rail) return;
+      const wasHidden = rail.hidden;
+      if (wasHidden) rail.hidden = false;
       const r = rail.getBoundingClientRect();
+      if (wasHidden) rail.hidden = true;
       if (!(r.width > 0) || !(r.height > 0)) return;
       // A rail overhanging the canvas' left edge eats from the left, one
       // overhanging its right eats from the right; a rail that somehow sits
       // clear of the canvas eats nothing.
       if (r.right > box.left && r.left < box.left + box.width / 2) {
-        left = Math.max(left, r.right - box.left + 8);
+        railReserve.left = Math.max(railReserve.left, r.right - box.left + 8);
       } else if (r.left < box.right && r.right > box.left + box.width / 2) {
-        right = Math.max(right, box.right - r.left + 8);
+        railReserve.right = Math.max(railReserve.right, box.right - r.left + 8);
       }
     });
-    return { left, right };
+    return { left: railReserve.left, right: railReserve.right };
   };
 
   // The whole of what the painter reads from a rail, as one comparable value.
@@ -3790,10 +3890,24 @@
   // and they hang off whichever tile carries that id, family or entry. A tile
   // with no card falls back to its lettering, so build-menu.js can grow an
   // entry before the art for it exists and nothing disappears off the board.
+  //
+  // THE SECOND PAGE IS BEING DRAWN NOW. Movie's five were the families and the
+  // bare house types; the ENTRIES that add a garage had none and fell back to
+  // lettering, so an open submenu read as half finished -- a card, two words, a
+  // card. Both houses' second pages are fully drawn as of 24 Sep. What is
+  // still lettering: the three detached foundations, and a 1 STOREY of its own
+  // for the bungalow ENTRY -- which borrows the FAMILY's card, so that page
+  // opens BUNGALOW where its own label reads 1 STOREY. Each is one line here
+  // the day its art lands, and until then the fallback keeps the tile on the
+  // board.
   const CARD_ART = Object.freeze({
     bungalow: './assets/house-bungalow.png',
+    'bungalow-garage': './assets/house-bungalow-garage.png',
     twoStorey: './assets/house-twoStorey.png',
+    'twoStorey-garage': './assets/house-twoStorey-garage.png',
+    'twoStorey-over': './assets/house-twoStorey-over.png',
     bilevel: './assets/house-bilevel.png',
+    'bilevel-garage': './assets/house-bilevel-garage.png',
     modifiedBilevel: './assets/house-modifiedBilevel.png',
     detachedGarage: './assets/house-detachedGarage.png',
   });
@@ -3931,7 +4045,15 @@
     // different tile and never saw the size asked.
     if (entryId !== chosenEntryId) chosenSizeId = null;
     chosenEntryId = entryId;
-    openFamilyId = null;
+    // THE PAGE DOES NOT TURN UNDER THE PRESS. Movie, 24 Sep: "after they make
+    // their choice on this page, don't change the page. just light up their
+    // choice and make the bone glow and pulse the glow so they will click it".
+    //
+    // It used to shut the submenu here, so the board the drafter had just
+    // pressed folded back to the three families and the thing they chose was
+    // off screen -- the answer to "did that work?" being a different page.
+    // The submenu stays open, the chosen tile keeps the glow it already wears,
+    // and the bone starts asking for the press that finishes the order.
     const picked = chosen();
     // THE TYPE REACHES THE FILE; garage, overGarage and foundation do not.
     // build-menu.js says why in Movie's own words: a garage is an outline
@@ -3984,6 +4106,14 @@
       button.onclick = () => pressEntry(entry.id);
       return button;
     }) : []));
+
+    // AND THE BONE SAYS IT IS READY. Pulsing means "this order can be
+    // placed", not merely "something is chosen": a detached garage whose size
+    // is still open would be refused by the bone, and a button begging for a
+    // press that bounces is worse than a quiet one.
+    const boneReady = Boolean(chosen())
+      && (chosen().entry?.needsSize !== true || chosenSize() !== null);
+    document.getElementById('dt-bone')?.toggleAttribute('data-ready', boneReady);
 
     // THE SIZE ROW BELONGS TO THE CHOSEN ENTRY, not to the open submenu:
     // it is the question that follows the press, so it stays up after the

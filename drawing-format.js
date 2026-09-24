@@ -233,7 +233,7 @@ if (!window.DraftDrawingFormat) {
   // and there is no upgrade path in this module.
   //
   // IT LIVES HERE BECAUSE THIS IS THE GATE EVERY READER GOES THROUGH --
-  // MODEL.dc.html, LAYOUT.dc.html and proto/elevation-harness.js all call
+  // MODEL.dc.html, LAYOUT.html and proto/elevation-harness.js all call
   // fenestrations() -- so no page has to remember to apply it. The same
   // reasoning as ROOF_FASCIA_IN below: this is the copy that wins.
   //
@@ -1470,7 +1470,25 @@ if (!window.DraftDrawingFormat) {
         const viewportLevelId = levelId(viewport?.levelId, levelIds);
         if (viewportLevelId == null) return null;
         seen.add(id);
-        return { ...base, levelId: viewportLevelId };
+        // WHICH DRAWING OF THE LEVEL (board NEW-2 part 2). A level is not one
+        // drawing: FOUNDATION has the concrete and the basement walls above
+        // it, so the composer deals two sheets off level 1 and each names the
+        // view it shows.
+        //
+        // IT WAS DROPPED HERE UNTIL 23 SEP, which is why the two sheets came
+        // out identical -- the composer wrote the key, the saved file carried
+        // it, and this reader threw it away. proto/layout-record-harness.js
+        // found it: nothing else in the repo opened a sheet set it had not
+        // just composed, so no spec ever saw a viewport after a reload.
+        //
+        // AN ABSENT VIEW STAYS ABSENT rather than defaulting to 'plan'.
+        // layout-plan.js's standing promise is that a viewport carrying no
+        // view means EVERY view on the level, so a sheet set composed before
+        // views existed must keep drawing what it always drew.
+        const view = oneOf(viewport?.view, LINE_VIEWS, null);
+        return view
+          ? { ...base, levelId: viewportLevelId, view }
+          : { ...base, levelId: viewportLevelId };
       }
       if (kind === 'section') {
         const cutId = Number(viewport?.cutId);

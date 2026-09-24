@@ -24,7 +24,16 @@ test('strip starts as the four house types · BONE · DETACHED; ATTACHED waits f
   // BUNGALOW, BILEVEL, DETACHED GARAGE. then if they pick each will have
   // subcategories". The four types are one press inside; DETACHED GARAGE is
   // now a family of its own rather than the lamp beside them.
-  await expect(cluster.locator('[data-build-menu]')).toHaveText(['BUNGALOW', 'BILEVEL', 'DETACHED GARAGE']);
+  // READ OFF THE MODULE, not typed. This was a literal in the order
+  // build-menu.js happened to hold, and on 24 Sep Movie reordered it --
+  // DETACHED GARAGE first -- so a roster nobody had looked at since 6 Sep
+  // turned a working strip red. That file's comment says the array is the one
+  // place the order is said and "a hardcoded roster somewhere else would be
+  // the bug"; this was the fourth such roster found, and the last.
+  const families = await page.evaluate(
+    () => window.DraftBuildMenu.BUILD_MENU.map(family => family.label));
+  expect(families.length, 'the menu went empty').toBe(3);
+  await expect(cluster.locator('[data-build-menu]')).toHaveText(families);
   await expect(cluster.locator('[data-select-build]')).toHaveCount(0);
   await expect(cluster.locator('[data-build-house]')).toBeVisible();
   await expect(cluster.locator('[data-mark-detached-garage]')).toBeVisible();

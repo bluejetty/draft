@@ -6,7 +6,7 @@
 // of two vocabularies. Every caller was supposed to ask with a role.
 //
 // THREE DID NOT, AND NOTHING NOTICED FOR A DAY. MODEL.dc.html and PROJECT.html
-// were updated; MODEL.html, LAYOUT.dc.html and proto/elevation-harness.js kept
+// were updated; MODEL.html, LAYOUT.html and proto/elevation-harness.js kept
 // calling `normaliseLevelAssembly(assemblies[id])` with no second argument, so
 // on those three every level framed like a plain floor. Measured through the
 // real stair geometry rather than asserted:
@@ -58,7 +58,7 @@ const FILES = Object.freeze({
   stair:     'stair-geometry.js',
   modelDc:   'MODEL.dc.html',
   modelHtml: 'MODEL.html',
-  layout:    'LAYOUT.dc.html',
+  layout:    'LAYOUT.html',
   project:   'PROJECT.html',
   elevation: 'proto/elevation-harness.js',
   cutView:   'cut-view.js',
@@ -500,7 +500,7 @@ const MUTATIONS = [
   // check has to bite on the real file, not only on a sample.
   ['MODEL.html goes back to asking role-less', 'modelHtml',
     s => s.replace('.levelAssemblyFor(drawing?.levelAssemblies, id)', '.levelAssemblyFor(drawing?.levelAssemblies)')],
-  ['LAYOUT.dc.html goes back to asking role-less', 'layout',
+  ['LAYOUT.html goes back to asking role-less', 'layout',
     s => s.replace('normaliseLevelAssembly(assemblies[levelId], levelRole(levelId))', 'normaliseLevelAssembly(assemblies[levelId])')],
   ['the elevation harness goes back to measuring a plain-floor building', 'elevation',
     s => s.replace('normaliseLevelAssembly(\n    assemblies[id], win.DraftLevelAssembly.levelRole(id))', 'normaliseLevelAssembly(assemblies[id])')],

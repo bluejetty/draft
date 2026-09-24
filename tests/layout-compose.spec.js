@@ -65,7 +65,7 @@ async function openLayout(page, drawing) {
     indexedDB.deleteDatabase('pdf-img-mgr-shared');
     localStorage.clear();
   });
-  await page.goto('/LAYOUT.dc.html');
+  await page.goto('/LAYOUT.html');
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
   await page.evaluate(async ({ bucket, saved }) => {
     const file = new File([JSON.stringify(saved)], 'model-drawing.json', { type: 'application/json' });
@@ -230,7 +230,7 @@ test('BUILD HOUSE raises the flag, and LAYOUT answers it with the full set', asy
 
   // LAYOUT reads the flag and deals the set: plans for every built level,
   // and the four standard elevations.
-  await page.goto('/LAYOUT.dc.html');
+  await page.goto('/LAYOUT.html');
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
   await waitForCompose(page);
   const layout = await savedLayout(page);
@@ -313,6 +313,117 @@ test('FOUNDATION and the basement plan are two sheets off one level', async ({ p
   expect(onLevel1.map(v => v.view).sort()).toEqual(['foundation', 'plan']);
   expect(new Set(onLevel1.map(v => v.sheet)).size).toBe(2);
 });
+
+// AND THEY ARE TWO DIFFERENT DRAWINGS, which is a separate claim from two
+// different seats and the one that was false. The test above passed
+// throughout: the composer dealt the sheets correctly the whole time, and the
+// PAINTER drew every view on the level onto both of them -- the concrete and
+// the basement walls stacked on each other, twice, both titled FOUNDATION
+// PLAN. That is the stacking this board was opened to end.
+//
+// THREE THINGS WERE MISSING and every one of them was invisible from here:
+// LAYOUT never passed the viewport's view to drawPlan, layout-plan.js's
+// planWalls filtered on the view and then dropped the field plan-composition
+// filters on a second time, and format.layout threw the view away on load so
+// it would not have survived a reload anyway. Found by opening a saved sheet
+// set for the first time (proto/layout-record-harness.js) and then LOOKING at
+// the two sheets.
+//
+// ── IT ASKS WHERE THE WALLS ARE, and two earlier versions did not ──────
+// The first weighed each sheet's whole ink and asked for two different
+// numbers, and proto/layout-record-spec-mutants.js walked its own mutation
+// through it: with the view unpassed both sheets draw both rings, which IS
+// the defect -- but the CAPTION under each drawing still reads FOUNDATION
+// PLAN on one and BASEMENT PLAN on the other, because the title comes off the
+// record and the record was right all along. Two identical pictures with
+// different words under them weigh different amounts. Same trap as the sheet
+// numeral one file over, one layer down.
+//
+// The second probed the concrete wall itself and read the VIEWPORT FRAME:
+// VIEW_ALLOWANCE_FT is zero, so the frame is drawn flush with the outermost
+// geometry and sits exactly where the outer wall is, on every sheet. A probe
+// there answers the same on both whatever is drawn.
+//
+// SO IT MEASURES INSIDE THE VIEWPORT RECTANGLE, which excludes the caption
+// and the titleblock and leaves only the drawing, and it probes the basement
+// wall line -- set 4 ft in from the concrete, a clear inch apart on paper at
+// 1/4" -- where no frame can reach.
+function insetBasement() {
+  const d = twoStorey();
+  const wall = (id, sx, sz, ex, ez) => ({
+    id, start: point(sx, sz), end: point(ex, ez), levelId: 1, view: 'plan',
+    wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left',
+  });
+  // Level 1 keeps its 36 x 26 concrete; the basement walls stand 4 ft inside.
+  d.walls = d.walls.filter(w => !(w.levelId === 1 && w.view === 'plan'));
+  d.walls.push(wall(30, 4, 4, 32, 4), wall(31, 32, 4, 32, 22),
+    wall(32, 32, 22, 4, 22), wall(33, 4, 22, 4, 4));
+  return d;
+}
+
+// Both level-1 viewports frame the WHOLE level -- the plan bounds are the
+// concrete's 0..36 x 0..26 whichever view is shown -- so one paper mapping
+// serves both sheets and the rectangle is the bounds at the viewport's scale.
+const HOUSE = { wFt: 36, hFt: 26, cx: 18, cz: 13 };
+
+test('and the two sheets are two different drawings, not one drawn twice',
+  async ({ page }) => {
+    await openLayout(page, insetBasement());
+    await waitForCompose(page);
+    const layout = await savedLayout(page);
+    const on = view => layout.viewports.find(
+      v => v.kind === 'plan' && v.levelId === 1 && v.view === view);
+    const fdn = on('foundation');
+    const bsmt = on('plan');
+    expect(fdn && bsmt, 'the set no longer deals two sheets off level 1').toBeTruthy();
+
+    const show = async viewport =>
+      page.locator(`[data-layout-sheet="${viewport.sheet}"]`).click();
+    const drawingInk = async viewport => {
+      await show(viewport);
+      const m = await sheetMetrics(page);
+      const wIn = HOUSE.wFt * viewport.pif;
+      const hIn = HOUSE.hFt * viewport.pif;
+      return page.evaluate(({ x, y, w, h }) => {
+        const canvas = document.querySelector('[data-layout-canvas]');
+        const data = canvas.getContext('2d').getImageData(
+          Math.round(x), Math.round(y), Math.round(w), Math.round(h)).data;
+        let ink = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          if (data[i] < 240 || data[i + 1] < 240 || data[i + 2] < 240) ink += 1;
+        }
+        return ink;
+      }, {
+        x: m.panX + (viewport.xIn - wIn / 2) * m.zoom,
+        y: m.panY + (viewport.yIn - hIn / 2) * m.zoom,
+        w: wIn * m.zoom, h: hIn * m.zoom,
+      });
+    };
+    // A wall at model x sits at xIn + (x - cx) * pif on either sheet.
+    const atBasementWall = async viewport => {
+      await show(viewport);
+      return inkAround(page,
+        viewport.xIn + (4 - HOUSE.cx) * viewport.pif, viewport.yIn, 0.2);
+    };
+
+    const concrete = await drawingInk(fdn);
+    const basement = await drawingInk(bsmt);
+    // Both drew something. A fix that empties one sheet is not a fix, and that
+    // is the shape the first attempt took: passing the view through a filter
+    // that had already run left the FOUNDATION sheet blank.
+    expect(concrete, 'the FOUNDATION sheet drew nothing').toBeGreaterThan(200);
+    expect(basement, 'the basement sheet drew nothing').toBeGreaterThan(200);
+    // And they are not the same picture. Before the fix both sheets drew both
+    // rings and these two numbers were equal.
+    expect(concrete, 'both level-1 sheets drew the same thing').not.toBe(basement);
+    // Said plainly, where no frame and no caption can answer for the drawing:
+    // the basement's walls are on the basement sheet and nowhere else.
+    expect(await atBasementWall(bsmt), 'the basement sheet drew no walls')
+      .toBeGreaterThan(20);
+    expect(await atBasementWall(fdn),
+      'the FOUNDATION sheet is drawing the basement walls on top of the concrete')
+      .toBeLessThan(5);
+  });
 
 test('a bungalow deals the same order minus the 2ND FL sheet', async ({ page }) => {
   const d = twoStorey();
@@ -405,7 +516,7 @@ test('with no drawing there is nothing to deal, and the button says so by being 
       indexedDB.deleteDatabase('pdf-img-mgr-shared');
       localStorage.clear();
     });
-    await page.goto('/LAYOUT.dc.html');
+    await page.goto('/LAYOUT.html');
     await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
     // The note beside it already explains why; the button does not repeat it.
     await expect(page.locator('[data-layout-deal-sheets]')).toBeDisabled();
