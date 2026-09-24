@@ -11250,6 +11250,26 @@
       paintBonePress();
       paintSignBoard();
       paint();
+      // AND THE RAIL, which paint() does not touch. Its seats hold PIXELS
+      // painted in whatever skin was current when they were last drawn, so a
+      // switch left four night elevations sitting beside a white drawing --
+      // Movie, 24 Sep: "the 'day' sidebar elevations look like 'night'".
+      //
+      // IT ONLY BECAME VISIBLE WHEN THE PAINTER LEARNED ABOUT SKINS. Before
+      // the elevations took their inks from the caller, a thumbnail painted
+      // the same picture whatever the lights were doing, so a rail that was
+      // never repainted was a rail nobody could tell was stale. The bug is
+      // older than the symptom.
+      //
+      // THE PRECEDENT IS TEN LINES UP: inDaylight swaps the skin for a shoot
+      // and puts BOTH back in its finally, paint() and paintRailNow(). That
+      // path knew the rail follows the skin; this one, which is where the
+      // drafter actually changes it, did not.
+      //
+      // SYNCHRONOUS RATHER THAN THE SEAT-PER-FRAME REPAINT, for the reason
+      // paintRailNow exists at all: a skin switch is one press and wants
+      // finished pictures, not four frames of half-turned rail.
+      paintRailNow();
     },
   });
 

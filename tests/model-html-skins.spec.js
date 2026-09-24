@@ -257,6 +257,54 @@ test.describe('MODEL.html skins', () => {
       }
     });
 
+  // THE PREVIEW RAIL IS PAINTED, NOT STYLED, which is why it can go stale in
+  // a way no CSS check would catch. Each elevation seat holds PIXELS from
+  // whenever it was last drawn, so a skin switch that repaints the drawing
+  // and not the rail leaves four night elevations beside a white sheet --
+  // Movie, 24 Sep: "the 'day' sidebar elevations look like 'night'".
+  //
+  // IT WAS INVISIBLE UNTIL THE PAINTER LEARNED ABOUT SKINS. While an
+  // elevation drew the same picture whatever the lights were doing, a rail
+  // nobody repainted was a rail nobody could tell was stale. The miss is
+  // older than the symptom, which is the argument for pinning it in pixels
+  // rather than trusting the call to stay where it was put.
+  test('a skin switch repaints the preview rail, not just the drawing',
+    async ({ page }) => {
+      await houseOnOldPage(page);
+      await page.goto('/MODEL.html?mode=night&pane=previews&right=1');
+      await expect(page.locator('#readout')).toContainText('walls', { timeout: 15000 });
+      await page.waitForTimeout(2500);
+
+      // THE SEAT'S OWN GROUND, one pixel in from its corner -- the canvas the
+      // painter cleared, not the chrome around it. The chrome follows the skin
+      // through CSS either way, so only what is painted INTO the seat can say
+      // whether it was repainted.
+      const grounds = () => page.evaluate(() => [...document.querySelectorAll('canvas')]
+        .filter(c => c.width > 40 && c.width < 260 && c.height > 30 && c.height < 200)
+        .map(c => {
+          const d = c.getContext('2d').getImageData(2, 2, 1, 1).data;
+          return d[3] === 0 ? null : d[0] + d[1] + d[2];
+        })
+        .filter(v => v !== null));
+
+      const night = await grounds();
+      expect(night.length, 'no painted seats to read, so this proves nothing')
+        .toBeGreaterThan(0);
+      // Dark: the three channels of a night ground sum well under half of 765.
+      night.forEach(sum => expect(sum, 'a seat was not painted in night').toBeLessThan(300));
+
+      await page.locator('[data-skin-mode="day"]').click();
+      await page.waitForTimeout(2000);
+
+      const day = await grounds();
+      expect(day.length, 'the seats went missing across the switch')
+        .toBe(night.length);
+      // And light. Before the rail was repainted these came back unchanged at
+      // the night value, which is exactly what the drafter was looking at.
+      day.forEach(sum => expect(sum, 'a seat kept its night ground on day')
+        .toBeGreaterThan(600));
+    });
+
   test('the theme axis reaches the chrome, and only the brand moves', async ({ page }) => {
     await houseOnOldPage(page);
     const accentOf = async themeName => {
