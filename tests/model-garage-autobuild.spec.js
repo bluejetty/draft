@@ -47,11 +47,16 @@ async function openPage(page) {
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 
-const orderGarage = async (page, sizeId) => {
+// NO SIZE IS PRESSED ANY MORE. Movie, 24 Sep: "for DETACHED GARAGE lets make
+// DEFAULT size now 24X24 (don't offer a size for now)" ... "for the Drive Thru
+// Menu" ... "default size could be 24x26 if that size is done already". So the
+// board asks two questions instead of three, and every garage it builds is the
+// shelf's own 24x26 until the question comes back.
+const DEFAULT_GARAGE = { w: 24, d: 26 };
+const orderGarage = async page => {
   await h.openDriveThru(page);
   await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
   await page.locator('#dt-tiles [data-build-entry="detached-thickened"]').click();
-  await page.locator(`#size-stock [data-build-size="${sizeId}"]`).click();
   await page.locator('#dt-bone').click();
 };
 
@@ -98,7 +103,7 @@ test('an ordered garage arrives as a loop of the size that was ordered',
   async ({ page }) => {
     await openPage(page);
     const before = await state(page);
-    await orderGarage(page, '24x26');
+    await orderGarage(page);
     const after = await state(page);
 
     expect(after.garages.length - before.garages.length,
@@ -106,7 +111,7 @@ test('an ordered garage arrives as a loop of the size that was ordered',
     const built = after.garages[after.garages.length - 1];
     // WIDTH ACROSS THE DOOR WALL, depth back from it -- a 24x26 laid out
     // as a 26x24 is a different building.
-    expect({ w: built.w, d: built.d }).toEqual({ w: 24, d: 26 });
+    expect({ w: built.w, d: built.d }).toEqual(DEFAULT_GARAGE);
     expect(built.corners, 'a rectangle is four corners').toBe(4);
     // THE FOUR WALLS COME WITH IT. An outline on its own is a footprint
     // nobody can build off.
@@ -137,7 +142,7 @@ test('the walls are the project\'s walls, not defaults invented at the order',
     await page.goto('/MODEL.html?mode=night');
     await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
     const before = await state(page);
-    await orderGarage(page, '16x24');
+    await orderGarage(page);
     const after = await fileNow(page);
     const fresh = (after.walls || []).slice(before.walls);
 
@@ -161,7 +166,7 @@ test('it stands beside what is already built, not through it', async ({ page }) 
   // measured through the door that is left.
   await openPage(page);
   const before = await state(page);
-  await orderGarage(page, '16x24');
+  await orderGarage(page);
   const built = (await state(page)).garages.pop();
 
   expect(Number.isFinite(before.east),
@@ -174,7 +179,7 @@ test('it stands beside what is already built, not through it', async ({ page }) 
 test('the board gets out of the way once it has built the thing',
   async ({ page }) => {
     await openPage(page);
-    await orderGarage(page, '24x26');
+    await orderGarage(page);
     await expect(page.locator('#drivethru'),
       'the sign stayed up over the garage it just built')
       .toHaveAttribute('data-shut', '');
@@ -204,7 +209,7 @@ test('one press of undo takes the whole order back, and only it',
     const drawn = await state(page);
     expect(drawn.walls - before.walls, 'the hand-drawn wall never landed').toBe(1);
 
-    await orderGarage(page, '24x26');
+    await orderGarage(page);
     await page.keyboard.press('Control+z');   // the garage, whole
     await page.keyboard.press('Control+z');   // and then the drawn wall
     const after = await state(page);
@@ -233,7 +238,7 @@ test('a second detached garage never lands in the same file', async ({ page }) =
   // is what this measures: the second order offers a clean file, and saying
   // no to the offer leaves the first garage alone.
   await openPage(page);
-  await orderGarage(page, '16x24');
+  await orderGarage(page);
   const afterFirst = await state(page);
   expect(afterFirst.garages.filter(g => g.detached).length,
     'the first garage never landed').toBe(1);
@@ -241,7 +246,6 @@ test('a second detached garage never lands in the same file', async ({ page }) =
   await h.openDriveThru(page);
   await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
   await page.locator('#dt-tiles [data-build-entry="detached-thickened"]').click();
-  await page.locator('#size-stock [data-build-size="16x24"]').click();
   await page.locator('#dt-bone').click();
 
   await expect(page.locator('#file-guard'),
@@ -259,7 +263,7 @@ test('a second detached garage never lands in the same file', async ({ page }) =
 
 test('the garage is in the file, not only on the screen', async ({ page }) => {
   await openPage(page);
-  await orderGarage(page, '25x25');
+  await orderGarage(page);
   const built = await state(page);
 
   await page.reload();
@@ -270,6 +274,6 @@ test('the garage is in the file, not only on the screen', async ({ page }) => {
   expect({ walls: back.walls, garages: back.garages.length })
     .toEqual({ walls: built.walls, garages: built.garages.length });
   expect(back.garages.some(g => g.detached
-    && Math.round(g.w) === 25 && Math.round(g.d) === 25),
-  'the 25x25 did not come back off the file').toBe(true);
+    && Math.round(g.w) === DEFAULT_GARAGE.w && Math.round(g.d) === DEFAULT_GARAGE.d),
+  'the default garage did not come back off the file').toBe(true);
 });

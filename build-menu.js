@@ -127,6 +127,20 @@ if (!window.DraftBuildMenu) {
     Object.freeze({ id: '25x25', label: "25' x 25'", widthFt: 25, depthFt: 25 }),
   ]);
 
+  // AND ONE OF THEM IS THE DEFAULT, because the board stopped asking. Movie,
+  // 24 Sep: "for DETACHED GARAGE lets make DEFAULT size now 24X24 (don't
+  // offer a size for now)" ... "for the Drive Thru Menu" ... then, on being
+  // shown 24x24 was not one of the three: "default size could be 24x26 if
+  // that size is done already".
+  //
+  // SO THE DEFAULT IS ONE OF THE SHELF'S OWN, not a fourth size written out
+  // beside them. 24x24 would have been a number that existed nowhere else --
+  // never offered, never pressed, and the only garage anyone got. Naming a
+  // size the drafter can also choose keeps one list of what a stock garage
+  // is, and the day the question comes back the default is already on the
+  // board wearing its own label.
+  const GARAGE_DEFAULT_SIZE_ID = '24x26';
+
   // THE FOURTH OPTION HAS BOUNDS, and they are here rather than in the page
   // because a typed size is the one a drafter can get wrong. Below 8ft
   // nothing parks; above 60ft it is a shop, not a garage, and either is far
@@ -134,6 +148,10 @@ if (!window.DraftBuildMenu) {
   const GARAGE_SIZE_MIN_FT = 8;
   const GARAGE_SIZE_MAX_FT = 60;
   const garageSizeById = id => GARAGE_SIZES.find(size => size.id === id) || null;
+  // READ OFF THE SHELF RATHER THAN HELD BESIDE IT, so a default naming a size
+  // that has been renamed or dropped answers null and is caught, instead of
+  // quietly building a box no list agrees exists.
+  const garageDefaultSize = () => garageSizeById(GARAGE_DEFAULT_SIZE_ID);
   // A typed pair, checked and named, or null. Returning the same shape as a
   // stock size means the caller has one kind of thing to carry: whoever
   // builds the box never asks which of the four the drafter pressed.
@@ -164,6 +182,8 @@ if (!window.DraftBuildMenu) {
     BUILD_TYPE_BUTTONS,
     BUILD_MENU,
     GARAGE_SIZES,
+    GARAGE_DEFAULT_SIZE_ID,
+    garageDefaultSize,
     GARAGE_SIZE_MIN_FT,
     GARAGE_SIZE_MAX_FT,
     garageSizeById,

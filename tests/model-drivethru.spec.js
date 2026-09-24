@@ -1005,9 +1005,53 @@ const openGarage = async page => {
   await page.locator('#dt-tiles [data-build-entry="detached-thickened"]').click();
 };
 
+// THE BOARD STOPPED ASKING HOW BIG on 24 Sep -- Movie: "for DETACHED GARAGE
+// lets make DEFAULT size now 24X24 (don't offer a size for now)" ... "for the
+// Drive Thru Menu" ... "default size could be 24x26 if that size is done
+// already". Every garage it builds is now the shelf's own 24x26.
+//
+// THE QUESTION IS WITHDRAWN, NOT DELETED, and so are these checks. The row,
+// the three tiles, the typed fourth option and the refusal that guards an
+// empty one all still exist and all still work; ?sizes=ask puts them back in
+// front of the drafter so the five checks below go on measuring them. The day
+// the question returns, they say whether it still holds -- which is the whole
+// reason for not deleting them.
+const ASK_SIZES = '&sizes=ask';
+const openPageAsking = async page => {
+  await openPage(page);
+  await page.goto('/MODEL.html?mode=night' + ASK_SIZES);
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+};
+const openAskingWithNoBuilding = async page => {
+  await openWithNoBuilding(page);
+  await page.goto('/MODEL.html?mode=night' + ASK_SIZES);
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+};
+
+// AND THE DEFAULT IS WHAT AN UNASKED DRAFTER GETS. This is the new path and
+// the one a drafter actually walks: two presses, no third question, and a
+// garage on the sheet.
+test('an unasked garage carries the default size to the seam', async ({ page }) => {
+  await openWithNoBuilding(page);
+  await openGarage(page);
+  await expect(page.locator('#build-sizes'),
+    'the board asked how big when it was told not to').toBeHidden();
+
+  const ordered = await page.evaluate(() => {
+    const seen = [];
+    window.ModelBuild.onOrder(order => seen.push(order.size));
+    document.getElementById('dt-bone').click();
+    return seen;
+  });
+  expect(ordered.length, 'the order never reached the seam').toBe(1);
+  expect({ w: ordered[0]?.widthFt, d: ordered[0]?.depthFt },
+    'the default that rode the order is not the one build-menu.js names')
+    .toEqual({ w: 24, d: 26 });
+});
+
 test('the detached garage is asked how big, and the house never is',
   async ({ page }) => {
-    await openPage(page);
+    await openPageAsking(page);
     await openGarage(page);
 
     await expect(page.locator('#build-sizes')).toBeVisible();
@@ -1027,7 +1071,7 @@ test('the detached garage is asked how big, and the house never is',
   });
 
 test('a stock size rides the order to the seam', async ({ page }) => {
-  await openWithNoBuilding(page);
+  await openAskingWithNoBuilding(page);
   await openGarage(page);
   await page.locator('#size-stock [data-build-size="24x26"]').click();
   await expect(page.locator('[data-drivethru-line]')).toContainText("24' x 26'");
@@ -1046,7 +1090,7 @@ test('a stock size rides the order to the seam', async ({ page }) => {
 
 test('the fourth option is two fields, and they are checked before the bone',
   async ({ page }) => {
-    await openWithNoBuilding(page);
+    await openAskingWithNoBuilding(page);
     await openGarage(page);
     await page.locator('#size-stock [data-build-size="custom"]').click();
     await expect(page.locator('#size-custom')).toBeVisible();
@@ -1092,7 +1136,7 @@ test('the fourth option is two fields, and they are checked before the bone',
 
 test('a size does not follow the drafter onto the next thing he picks',
   async ({ page }) => {
-    await openPage(page);
+    await openPageAsking(page);
     await openGarage(page);
     await page.locator('#size-stock [data-build-size="16x24"]').click();
     await expect(page.locator('[data-drivethru-line]')).toContainText("16' x 24'");
@@ -1129,7 +1173,11 @@ test('a size does not follow the drafter onto the next thing he picks',
 // either alone leaves a press that still does nothing, or one that does
 // nothing and cannot say why.
 const openRoughGarage = async page => {
-  await page.goto('/MODEL.html?mode=night&theme=rough');
+  // ASKING, like the other size checks: every test through here presses the
+  // bone with the question OPEN and reads what answers -- a refusal on the
+  // page's own line, the foot bone closing the order. With the question
+  // withdrawn the default answers it first and there is nothing to read.
+  await page.goto('/MODEL.html?mode=night&theme=rough' + ASK_SIZES);
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   // THE DOG IS GONE, and both halves of him. This is the precondition rather
   // than a second test of the stylesheet: everything below is only meaningful

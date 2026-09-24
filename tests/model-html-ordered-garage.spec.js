@@ -51,11 +51,12 @@ async function open(page, view = 'foundation') {
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 
-async function orderGarage(page, entry, size = '25x25') {
+async function orderGarage(page, entry) {
   await h.openDriveThru(page);
   await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
   await page.locator(`#dt-tiles [data-build-entry="${entry}"]`).click();
-  await page.locator(`#size-stock [data-build-size="${size}"]`).click();
+  // THE BOARD NO LONGER ASKS HOW BIG (Movie, 24 Sep) -- every garage it
+  // builds is the shelf's own 24x26 until the question comes back.
   await page.locator('#dt-bone').click();
   await page.waitForTimeout(400);
   await page.keyboard.press('Escape');
@@ -182,7 +183,6 @@ test('one Ctrl+Z takes the garage and its concrete together',
     await h.openDriveThru(page);
     await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
     await page.locator('#dt-tiles [data-build-entry="detached-frostwall"]').click();
-    await page.locator('#size-stock [data-build-size="25x25"]').click();
     await page.locator('#dt-bone').click();
     await page.waitForTimeout(400);
     await page.keyboard.press('Escape');
@@ -286,13 +286,13 @@ test('and a way into it: an overhead door, a man door and a window',
     expect((saved.fenestrations || []).length, 'three openings').toBe(3);
 
     // THE OVERHEAD DOOR ON THE DOOR WALL, which is the one garage-site.js
-    // says faces the viewer. A 25 ft wall carries the 16, so this size gets
-    // the double — the 16x24 on the same board does not, and premade-plans.js
-    // has the ladder and the harness for that.
+    // says faces the viewer. The board's default 24 ft door wall carries the
+    // 16, so this garage gets the double -- the 16x24 still on the shelf does
+    // not, and premade-plans.js has the ladder and the harness for that.
     const overhead = openingOn(saved, frontWall(studs));
     expect(overhead.length, 'one door on the door wall').toBe(1);
     expect(overhead[0].type).toBe('door');
-    expect(overhead[0].width, '16 ft across a 25 ft wall').toBeCloseTo(16, 3);
+    expect(overhead[0].width, '16 ft across a 24 ft wall').toBeCloseTo(16, 3);
     expect(overhead[0].garage, 'and it is an overhead door').toBe(true);
     expect(overhead[0].headHeight, 'heading at 7 ft, not at the house-s 6-8')
       .toBeCloseTo(7, 3);
