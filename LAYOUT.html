@@ -154,9 +154,19 @@
   a:hover { color: var(--accent); }
   [hidden] { display:none !important; }
 
-  /* THE PROFILE PAIR, a row on the status bar rather than a stack on a top
-     bar this page no longer owns. Same two buttons, same dialog. */
-  #lay-profile { display:flex; gap:3px; margin-left:18px; }
+  /* THE PROFILE PAIR, wherever it is opened from. It rode the status bar for
+     one commit and came straight back off (Movie: "not needed here in that
+     location"), so what is left is the button face -- the dialog is still
+     the only door in the app to READING a profile package back in, and the
+     two openers now sit with the sheet's own controls at the foot of the
+     panel. */
+  #lay-profile { display:flex; gap:3px; margin-top:6px; }
+  #lay-profile .layout-profile-button { flex:1; min-width:0; text-align:center; }
+  /* The count reads as quietly as the rest of the strip. */
+  [data-visit-counter-home] { margin-left:14px; display:inline-flex;
+    align-items:center; color: var(--ink-quiet); }
+  [data-visit-counter-home] * { font-family:'Barlow Condensed', system-ui, sans-serif;
+    font-size:11px; letter-spacing:0.06em; }
   .layout-profile-button { min-width:64px; border:1px solid var(--edge-panel);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     color: var(--ink-primary); padding:2px 6px;
@@ -530,6 +540,16 @@
            is a hand to replace. -->
       <button type="button" data-layout-deal-sheets id="lay-deal">Deal Sheets</button>
       <div id="lay-viewport-note" hidden></div>
+      <!-- THE PROFILE PAIR, down here with the page's own verbs rather than
+           in the corner Movie cleared. They open a DIALOG that writes a
+           profile package to a file and reads one back -- not the same thing
+           as the bar's SETTINGS and STANDARDS links, which go to those pages,
+           and the only way left in the app to IMPORT one outside MODEL.dc.html
+           (neither settings page has a read path, only DOWNLOAD). -->
+      <div id="lay-profile">
+        <button type="button" class="layout-profile-button" data-open-settings>SETTINGS</button>
+        <button type="button" class="layout-profile-button" data-open-standards>STANDARDS</button>
+      </div>
     </div>
 
   </div>
@@ -544,16 +564,21 @@
 <!-- STATUS BAR -->
 <div id="lay-status-bar">
   <span data-layout-status>SAVED</span>
-  <!-- THE PROFILE PAIR, beside the save word rather than at the far right.
-       It began the swap on the right, where the nav cluster had been, and sat
-       directly above the page row's own chips -- two rows of small bordered
-       words, one of them lit, four pixels apart. Moving it to the other end
-       of the same strip is the cheapest possible separation: this is the
-       page's own furniture and the row below is the shop's. -->
-  <div id="lay-profile">
-    <button type="button" class="layout-profile-button" data-open-settings>SETTINGS</button>
-    <button type="button" class="layout-profile-button" data-open-standards>STANDARDS</button>
-  </div>
+  <!-- THE VIEW COUNTER, and this corner is where Movie put it. 24 Sep, on
+       this page: "there is a 'SAVE' SETTING' STANDARDS' button i think that
+       was taken from DC but not needed here in that location, we should put
+       the viewcounter in that location lower left bar 2nd row up(top row)".
+       The two profile buttons that stood here were the DC page's, and with
+       the shared bar's own settings corner four rows above them saying the
+       same two words they were the map drawn twice.
+
+       THE COUNTER WAS ALREADY LOADED AND MOUNTING NOTHING. traffic-counter.js
+       has been linked at the foot of this page all along, but it looks for
+       `[data-visit-counter-home]` and falls back to nothing rather than print
+       a count over the page row -- its own comment says so: "A PAGE WITH A
+       BOTTOM BAR BUT NO NAMED HOME GETS NO COUNT ... can mount one the day
+       they want it". This is that day; the slot is all it needed. -->
+  <span data-visit-counter-home></span>
   <div class="lay-spacer"></div>
   <div data-history-controls>
     <button type="button" data-undo class="strip-history" title="Nothing to undo yet" aria-label="Nothing to undo yet" disabled>

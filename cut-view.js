@@ -532,6 +532,137 @@ if (!window.DraftCutView) {
   // architectural scale: pxPerFt fixes the scale and extents fix the framing,
   // so the drawing lands on the sheet where the viewport says, not where the
   // screen-fit margins would centre it.
+  // ── WHAT THIS PAINTER DRAWS IN, AND WHO CHOOSES IT ───────────────────
+  //
+  // Movie, 24 Sep, looking at an elevation on a night page: "would it be
+  // possible to make the background of the elevations black when in NIGHT
+  // mode?" -- then, answering himself, "or should we reverse the lines to
+  // white? like on the PROJECT Sections?" The second, and the reason is
+  // measurable rather than a preference: the wall faces here are FILLED, so a
+  // black sky with black lines would keep the house and lose everything drawn
+  // beside it -- the roof outline (the roof is not filled), the grade line
+  // where it runs out past the building, the dashed footings below it.
+  //
+  // BUT THIS PAINTER IS SHARED, and that is the whole shape of the answer.
+  // The Construction Layout draws these same elevations as viewports on a
+  // sheet that gets PRINTED, and a printed sheet is white with near-black ink
+  // whatever the lights in the room are doing. So the painter does not know
+  // about skins: it takes its inks from whoever calls it, and the values
+  // below -- which are exactly the literals this file carried until now --
+  // are what it uses when nobody says otherwise. The sheet says nothing and
+  // gets paper; the model space hands it the skin.
+  //
+  // THREE OF THESE ARE `r,g,b` TRIPLES rather than colours, because the
+  // weights are what the drawing is made of: a truss chord is the same ink as
+  // a wall at a different strength, and a table of fourteen finished colours
+  // would let those drift apart. `line` is the only one spelled out, so that
+  // full strength can be a shade off the pure ink if a skin needs it to be.
+  const PAPER_INKS = Object.freeze({
+    ground:    '#fafafa',      // the page the drawing sits on
+    line:      '#1d1f20',      // the drawing's line at full strength
+    ink:       '29,31,32',     // and the rgb its quieter weights are mixed from
+    face:      '#fff',         // a blank surface seen flat: wall finish, rim, glass
+    faceShade: '#e8e8ea',      // concrete seen in ELEVATION, one step under a face
+    recess:    '#fafafa',      // an opening's face, a hair back from the wall's.
+                               // NOT `ground`: the sheet passes white paper, and
+                               // folding the two would sink every window into
+                               // its wall on exactly the drawing that gets built
+                               // from.
+    concrete:  '150,150,155',  // poured concrete seen in SECTION
+    assembly:  '89,128,166',   // the floor assembly band between storeys
+  });
+
+  // paperColor IS the ground, under the name the two callers already use. It
+  // stays rather than being folded into `colors` because it is one fact with
+  // one name, and two spellings of one fact is the drift this table exists to
+  // stop.
+  const inksFor = (opts) => {
+    const out = { ...PAPER_INKS, ...(opts && opts.colors) };
+    if (opts && opts.paperColor) out.ground = opts.paperColor;
+    return out;
+  };
+  const weight = (triple, a) => `rgba(${triple},${a})`;
+
+  // THE SKIN, TRANSLATED INTO THE EIGHT THINGS THIS PAINTER DRAWS.
+  //
+  // It lives here rather than in the model space because the MAPPING is the
+  // painter's own knowledge -- which palette role is a wall face and which is
+  // a concrete mass -- and because two callers need it: the sheet's cut view
+  // and the rail's thumbnails, which are the same picture at two sizes and
+  // must not be able to disagree.
+  //
+  // EVERY VALUE IS A ROLE. Nothing is invented, and that is the test this
+  // mapping had to pass: if a thing this painter draws has no role, the
+  // honest answer is to add one to palette.js where its contrast is measured
+  // against every skin, not to pick a grey here that looks right on the one
+  // skin I happen to have open.
+  //
+  // WHAT THE ROLES WERE CHOSEN FOR:
+  //   face      draw-wall. Its own note in palette.js reads "the wall body --
+  //             poche, not a signal. It is barely distinct from the page on
+  //             BOTH skins on purpose (1.30 night, 1.12 day)", which is
+  //             exactly what a wall face in elevation is -- and on day it
+  //             resolves to #ffffff over a #f2f2f3 page, the same hair of
+  //             difference #fff had over #fafafa here.
+  //   line      draw-wall-edge, "the line that actually carries the wall".
+  //             On DAY it is #1d1f20 -- this painter's own ink, unchanged --
+  //             so the day skin's elevation comes out as it always was.
+  //   faceShade surface-chip, which lands on #e4e4e6 on day against the
+  //             #e8e8ea concrete has been drawn in here since it was written.
+  //             On night it sits between the page and the wall face, so the
+  //             materials still read in order: sky, then concrete, then
+  //             finish.
+  //   assembly  draw-floor-edge, and this one needs no argument: it is
+  //             #5980a6 on all four skins, which is the literal this painter
+  //             already used for the floor band.
+  //   concrete  ink-quiet, the closest thing to the mid grey a section poche
+  //             wants, at the weights the painter already applies.
+  //
+  // THE LINE AND THE INK MUST AGREE, and they do by construction rather than
+  // by being kept in step: the triple is read back off the same role.
+  const tripleOf = (css) => {
+    const s = String(css).trim();
+    const fn = s.match(/^rgba?\(([^)]+)\)$/i);
+    if (fn) return fn[1].split(',').slice(0, 3).map(v => Math.round(parseFloat(v))).join(',');
+    let hex = s.replace('#', '');
+    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+    if (hex.length < 6) return '29,31,32';
+    return [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16)).join(',');
+  };
+
+  // ONE ENTRY, KEYED ON THE SKIN OBJECT ITSELF. MODEL calls this on every
+  // paint, and the work is three regex parses and an object build -- small,
+  // but it is NEW work on a path that already has a frame budget with no
+  // headroom (model-html-cut-views holds six section paints inside 16ms, and
+  // this landed one run of four exactly on the line).
+  //
+  // IDENTITY IS A SAFE KEY HERE BECAUSE DraftPalette.resolve FREEZES what it
+  // returns, so the same object can never come back meaning something else;
+  // a skin change hands over a different object and the cache misses, which
+  // is exactly when it should.
+  let lastSkin = null;
+  let lastInks = null;
+
+  function inksFromSkin(skin) {
+    if (!skin) return { ...PAPER_INKS };
+    if (skin === lastSkin) return lastInks;
+    lastSkin = skin;
+    // FROZEN, which is what makes the cache above safe rather than merely
+    // fast: the same object is handed to every caller, so one of them
+    // tweaking a key in place would recolour everybody else's next paint.
+    lastInks = Object.freeze({
+      ground:    skin['surface-page'],
+      line:      skin['draw-wall-edge'],
+      ink:       tripleOf(skin['draw-wall-edge']),
+      face:      skin['draw-wall'],
+      faceShade: skin['surface-chip'],
+      recess:    skin['surface-page'],
+      concrete:  tripleOf(skin['ink-quiet']),
+      assembly:  tripleOf(skin['draw-floor-edge']),
+    });
+    return lastInks;
+  }
+
   const externalFit = opts =>
     (opts && Number.isFinite(opts.pxPerFt) && opts.pxPerFt > 0 ? opts : null);
 
@@ -651,13 +782,15 @@ if (!window.DraftCutView) {
 
   function drawCutView(env, ctx, w, h, cut, opts) {
     const fit = externalFit(opts);
-    ctx.fillStyle = (opts && opts.paperColor) || '#fafafa';
+    const C = inksFor(opts);
+    const ink = a => weight(C.ink, a);
+    ctx.fillStyle = C.ground;
     ctx.fillRect(0, 0, w, h);
     const stack = sectionLevelStack(env);
     const axis = cutAxis(cut);
     const header = (label) => {
       if (fit) return;   // the sheet captions its viewports itself
-      ctx.fillStyle = 'rgba(29,31,32,0.55)';
+      ctx.fillStyle = ink(0.55);
       ctx.font = "600 10px 'Barlow Condensed', system-ui, sans-serif";
       ctx.textAlign = 'left'; ctx.textBaseline = 'top';
       ctx.fillText(label, 10, 8);
@@ -668,7 +801,7 @@ if (!window.DraftCutView) {
       // Standing outside the model looking at it: an elevation, not a section.
       if (drawElevationView(env, ctx, w, h, cut, stack, axis, header, opts)) return;
       header(cut.name);
-      ctx.fillStyle = 'rgba(29,31,32,0.55)';
+      ctx.fillStyle = ink(0.55);
       ctx.font = "600 13px 'Barlow Condensed', system-ui, sans-serif";
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('The cut line crosses no walls — draw it through the plan.', w / 2, h / 2);
@@ -723,17 +856,17 @@ if (!window.DraftCutView) {
     const X = u => x0 + (u - uMin) * pxPerFt;
     const Y = e => y0 + (yTop - e) * pxPerFt;
 
-    const INK = '#1d1f20';
+    const INK = C.line;
     header(`${cut.name} — GENERATED SECTION · ${env.ftIn(uMax - uMin)} CUT`);
 
     // Elevation marks down the left margin, on the level-card datum.
     const datum = env.elevationDatum();
     const mark = (elevFt, label) => {
-      ctx.strokeStyle = 'rgba(29,31,32,0.25)'; ctx.lineWidth = 0.75;
+      ctx.strokeStyle = ink(0.25); ctx.lineWidth = 0.75;
       ctx.beginPath();
       ctx.moveTo(marginL - 18, Y(elevFt)); ctx.lineTo(w - marginR, Y(elevFt));
       ctx.stroke();
-      ctx.fillStyle = 'rgba(29,31,32,0.6)';
+      ctx.fillStyle = ink(0.6);
       ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
       ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
       ctx.fillText(label ?? env.elevLabel(elevFt + datum), marginL - 22, Y(elevFt));
@@ -775,7 +908,7 @@ if (!window.DraftCutView) {
     fdnCrossings.forEach(c => {
       const top = fdn.wallBottom + c.wall.topHeight;
       const base = fdn.wallBottom + c.wall.baseHeight;
-      ctx.fillStyle = 'rgba(150,150,155,0.5)';
+      ctx.fillStyle = weight(C.concrete, 0.5);
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       const x = X(c.u - c.width / 2), wid = c.width * pxPerFt;
       ctx.fillRect(x, Y(top), wid, (top - base) * pxPerFt);
@@ -804,7 +937,7 @@ if (!window.DraftCutView) {
         : []);
     fdnSpans.forEach(fdnSpan => {
       if (fdnSpan.max - fdnSpan.min <= 1) return;
-      ctx.fillStyle = 'rgba(150,150,155,0.35)';
+      ctx.fillStyle = weight(C.concrete, 0.35);
       ctx.strokeStyle = INK; ctx.lineWidth = 1;
       const x = X(fdnSpan.min), wid = (fdnSpan.max - fdnSpan.min) * pxPerFt;
       ctx.fillRect(x, Y(fdn.slabTop), wid, (fdn.slabIn / 12) * pxPerFt);
@@ -820,7 +953,7 @@ if (!window.DraftCutView) {
       const us = fdnCrossings.filter(c => c.garage === garage).map(c => c.u);
       if (us.length < 2 || Math.max(...us) - Math.min(...us) <= 1) return;
       const top = frostWallTop(env, fdn, garage) - GARAGE_SLAB_THICKNESS_IN / 12;
-      ctx.fillStyle = 'rgba(150,150,155,0.35)';
+      ctx.fillStyle = weight(C.concrete, 0.35);
       ctx.strokeStyle = INK; ctx.lineWidth = 1;
       const x = X(Math.min(...us)), wid = (Math.max(...us) - Math.min(...us)) * pxPerFt;
       ctx.fillRect(x, Y(top), wid, (GARAGE_SLAB_THICKNESS_IN / 12) * pxPerFt);
@@ -851,18 +984,18 @@ if (!window.DraftCutView) {
         const plateTop = fdn.wallBottom
           + Math.max(...beamCrossings.map(c => c.wall.topHeight)) + GARAGE_BEAM_PLATE_IN / 12;
         const slabTop = plateTop + GARAGE_SLAB_THICKNESS_IN / 12;
-        ctx.fillStyle = 'rgba(150,150,155,0.35)';
+        ctx.fillStyle = weight(C.concrete, 0.35);
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
         ctx.fillRect(X(lo), Y(slabTop), (hi - lo) * pxPerFt, (GARAGE_SLAB_THICKNESS_IN / 12) * pxPerFt);
         ctx.strokeRect(X(lo), Y(slabTop), (hi - lo) * pxPerFt, (GARAGE_SLAB_THICKNESS_IN / 12) * pxPerFt);
-        ctx.strokeStyle = 'rgba(29,31,32,0.5)'; ctx.lineWidth = 1;
+        ctx.strokeStyle = ink(0.5); ctx.lineWidth = 1;
         ctx.setLineDash([4, 3]);
         ctx.beginPath();
         ctx.moveTo(X(lo), Y(plateTop - 0.5));
         ctx.lineTo(X(hi), Y(plateTop - 0.5));
         ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle = 'rgba(29,31,32,0.45)';
+        ctx.fillStyle = ink(0.45);
         for (let g = lo + 0.5; g < hi - 0.25; g += 0.75) {
           const j = (g * 7.3) % 1;   // deterministic jitter, no flicker on redraw
           ctx.beginPath();
@@ -890,13 +1023,13 @@ if (!window.DraftCutView) {
       const runs = levelRuns(level.id);
       (runs.length ? runs : fdnSpans).forEach(span => {
         if (span.max - span.min <= 0.5) return;
-        ctx.fillStyle = 'rgba(89,128,166,0.15)';
+        ctx.fillStyle = weight(C.assembly, 0.15);
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
         const x = X(span.min), wid = (span.max - span.min) * pxPerFt;
         const depth = (level.floorTop - level.floorBottom) * pxPerFt;
         ctx.fillRect(x, Y(level.floorTop), wid, depth);
         ctx.strokeRect(x, Y(level.floorTop), wid, depth);
-        ctx.fillStyle = 'rgba(29,31,32,0.55)';
+        ctx.fillStyle = ink(0.55);
         ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
         ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
         ctx.fillText(
@@ -904,7 +1037,7 @@ if (!window.DraftCutView) {
           x + 4, Y((level.floorTop + level.floorBottom) / 2));
       });
       crossings.filter(c => c.wall.levelId === level.id && (c.wall.view || 'plan') === 'plan')
-        .forEach(c => drawSectionWall(env, ctx, X, Y, pxPerFt, c, level));
+        .forEach(c => drawSectionWall(env, ctx, X, Y, pxPerFt, c, level, opts, C));
     });
 
     // Roof profile over everything: the sampled top chord plus fascia drops.
@@ -937,7 +1070,7 @@ if (!window.DraftCutView) {
       // across the joint. The truss's internal webs are the truss designer's
       // part and are deliberately never drawn.
       const chordFt = ROOF_CHORD_IN / 12;
-      ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
+      ctx.strokeStyle = ink(0.6); ctx.lineWidth = 1;
       ctx.beginPath();
       roofChords.forEach(chord => {
         ctx.moveTo(X(chord.u0), Y(chord.elev));
@@ -1022,8 +1155,20 @@ if (!window.DraftCutView) {
   // One crossed wall on the section: the stud rectangle for its level, with
   // any fenestration the cut happens to pass through read out of the wall —
   // doors clear to the head, windows hang from it to a default sill.
-  function drawSectionWall(env, ctx, X, Y, pxPerFt, crossing, level) {
-    const INK = '#1d1f20';
+  // `inks` IS THE HOISTED TABLE and the reason it is a ninth argument rather
+  // than a lookup. This runs ONCE PER WALL CROSSING, so deriving the table
+  // here spread eight keys into a fresh object for every wall in the section
+  // -- pure waste on the one path in this file that is already in a frame
+  // budget (model-html-seats holds an edit under one long task with four live
+  // elevations). drawCutView builds it once and hands it down.
+  //
+  // IT STILL DERIVES ITS OWN when called without one: this function is
+  // exported, and a caller reaching for it directly gets paper rather than a
+  // crash.
+  function drawSectionWall(env, ctx, X, Y, pxPerFt, crossing, level, opts, inks) {
+    const C = inks || inksFor(opts);
+    const ink = a => weight(C.ink, a);
+    const INK = C.line;
     const HEAD_FT = 6 + 10 / 12;          // default door / window head
     const SILL_FT = 3;                    // default window sill
     const { wall, u, width, alongWall } = crossing;
@@ -1032,7 +1177,7 @@ if (!window.DraftCutView) {
     const opening = env.fenestrations().find(f => f.wallId === wall.id
       && Math.abs(alongWall - f.offset) < f.width / 2);
     ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
-    ctx.fillStyle = 'rgba(29,31,32,0.12)';
+    ctx.fillStyle = ink(0.12);
     if (!opening) {
       ctx.fillRect(x, Y(top), wid, (top - bottom) * pxPerFt);
       ctx.strokeRect(x, Y(top), wid, (top - bottom) * pxPerFt);
@@ -1049,7 +1194,7 @@ if (!window.DraftCutView) {
       ctx.fillRect(x, Y(gapBottom), wid, (gapBottom - bottom) * pxPerFt);
       ctx.strokeRect(x, Y(gapBottom), wid, (gapBottom - bottom) * pxPerFt);
     }
-    ctx.fillStyle = '#fff'; ctx.lineWidth = 1;
+    ctx.fillStyle = C.face; ctx.lineWidth = 1;
     if (opening.type === 'window') {
       // The window unit in section: 2x6 frame members at head and sill
       // reaching 1/2" past each wall face, double glazing between them —
@@ -1068,7 +1213,7 @@ if (!window.DraftCutView) {
         ctx.beginPath(); ctx.moveTo(gx, Y(glassTop)); ctx.lineTo(gx, Y(glassBottom)); ctx.stroke();
       });
       const stop = (0.5 / 12) * pxPerFt;
-      ctx.fillStyle = 'rgba(29,31,32,0.35)';
+      ctx.fillStyle = ink(0.35);
       [u - 0.875 / 12, u, u + 0.875 / 12].forEach(su => {
         ctx.fillRect(X(su) - stop / 2, Y(glassBottom + 0.5 / 12), stop, stop);
         ctx.fillRect(X(su) - stop / 2, Y(glassTop), stop, stop);
@@ -1088,6 +1233,8 @@ if (!window.DraftCutView) {
   // into the cut's span, so the caller can fall back to the guidance text.
   function drawElevationView(env, ctx, w, h, cut, stack, axis, header, opts) {
     const fit = externalFit(opts);
+    const C = inksFor(opts);
+    const ink = a => weight(C.ink, a);
     const dir = cut.dirVec;
     const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
     const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
@@ -1219,7 +1366,7 @@ if (!window.DraftCutView) {
     const X = u => Math.round(x0 + (u - uMin) * pxPerFt - 0.5) + 0.5;
     const Y = e => Math.round(y0 + (yTop - e) * pxPerFt - 0.5) + 0.5;
 
-    const INK = '#1d1f20';
+    const INK = C.line;
     // WHAT MAKES A FACE EDGE AN EAVE: both ends sitting on the fascia top.
     // ONE HOME, because two passes ask it -- the band below grows its runs to
     // the eave's true ends, and the face-edge pass decides which edges wear a
@@ -1232,12 +1379,12 @@ if (!window.DraftCutView) {
 
     const datum = env.elevationDatum();
     const mark = (elevFt, uEnd) => {
-      ctx.strokeStyle = 'rgba(29,31,32,0.25)'; ctx.lineWidth = 0.75;
+      ctx.strokeStyle = ink(0.25); ctx.lineWidth = 0.75;
       ctx.beginPath();
       ctx.moveTo(marginL - 18, Y(elevFt));
       ctx.lineTo(uEnd == null ? w - marginR : X(uEnd), Y(elevFt));
       ctx.stroke();
-      ctx.fillStyle = 'rgba(29,31,32,0.6)';
+      ctx.fillStyle = ink(0.6);
       ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
       ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
       ctx.fillText(env.elevLabel(elevFt + datum), marginL - 22, Y(elevFt));
@@ -1257,7 +1404,7 @@ if (!window.DraftCutView) {
     // shows, dashed: down the extreme wall edge, out at the footing, across
     // the bottom and back up — one loop per building mass — plus dashed
     // creases at viewer-facing corners and the footing steps under them.
-    const CREASE = 'rgba(29,31,32,0.45)';
+    const CREASE = ink(0.45);
     const fdnGeoms = fdnFaces
       .filter(face => face.hi - face.lo >= 0.5)
       .map(face => ({
@@ -1315,7 +1462,7 @@ if (!window.DraftCutView) {
       .filter(entry => entry.runs.length);
     shownFdn.forEach(({ g, runs }) => {
       const shownBase = Math.max(g.baseE, fdn.grade);
-      ctx.fillStyle = '#e8e8ea';
+      ctx.fillStyle = C.faceShade;
       runs.forEach(r => ctx.fillRect(X(r.lo), Y(g.topE),
         (r.hi - r.lo) * pxPerFt, (g.topE - shownBase) * pxPerFt));
     });
@@ -1361,7 +1508,7 @@ if (!window.DraftCutView) {
         last.faces.push(g);
       } else runs.push({ lo: g.lo, hi: g.hi, faces: [g] });
     });
-    ctx.strokeStyle = 'rgba(29,31,32,0.5)'; ctx.lineWidth = 1;
+    ctx.strokeStyle = ink(0.5); ctx.lineWidth = 1;
     ctx.setLineDash([5, 4]);
     runs.forEach(run => {
       const edgeFace = u => run.faces.reduce((best, g) =>
@@ -1435,11 +1582,11 @@ if (!window.DraftCutView) {
         if (hi - lo < 0.5) return;
         const top = fdn.grade + GARAGE_SLAB_THICKNESS_IN / 12;
         const x = X(lo), wid = (hi - lo) * pxPerFt;
-        ctx.fillStyle = '#e8e8ea';
+        ctx.fillStyle = C.faceShade;
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
         ctx.fillRect(x, Y(top), wid, (top - fdn.grade) * pxPerFt);
         ctx.strokeRect(x, Y(top), wid, (top - fdn.grade) * pxPerFt);
-        ctx.strokeStyle = 'rgba(29,31,32,0.5)'; ctx.lineWidth = 1;
+        ctx.strokeStyle = ink(0.5); ctx.lineWidth = 1;
         ctx.setLineDash([5, 4]);
         ctx.strokeRect(x, Y(fdn.grade), wid,
           (GARAGE_EDGE_DEPTH_IN / 12 - (top - fdn.grade)) * pxPerFt);
@@ -1613,7 +1760,7 @@ if (!window.DraftCutView) {
       const { face, loU, hiU, floor, tops } = geom;
       const { wall, u1, u2, level } = face;
       const xa = X(loU), xb = X(hiU);
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = C.face;
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       ctx.beginPath();
       ctx.moveTo(xa, Y(floor));
@@ -1644,7 +1791,7 @@ if (!window.DraftCutView) {
         const sill = f.sillHeight > 0 ? f.sillHeight : SILL_FT;
         const top = Math.min(floor + head, level.wallTop);
         const bottom = f.type === 'door' ? floor : floor + sill;
-        ctx.fillStyle = '#fafafa';
+        ctx.fillStyle = C.recess;
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
         ctx.fillRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
         ctx.strokeRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
@@ -1809,7 +1956,7 @@ if (!window.DraftCutView) {
         else runs.push({ lo: span.lo, hi: span.hi });
       });
       const yTopPx = Y(level.floorTop) - 1, yBotPx = Y(level.floorBottom) + 1;
-      ctx.fillStyle = '#fff';
+      ctx.fillStyle = C.face;
       runs.forEach(run => {
         if (run.hi - run.lo < 0.5) return;
         ctx.fillRect(X(run.lo) - 1, yTopPx, (run.hi - run.lo) * pxPerFt + 2, yBotPx - yTopPx);
@@ -1975,7 +2122,7 @@ if (!window.DraftCutView) {
 
       runs.filter(r => r.u1 - r.u0 > 0.5).forEach(r => {
         drawnFascia.push(r);
-        ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
+        ctx.strokeStyle = ink(0.6); ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(X(r.u0), Y(r.base + ROOF_FASCIA_IN / 12));
         ctx.lineTo(X(r.u1), Y(r.base + ROOF_FASCIA_IN / 12));
@@ -2168,7 +2315,7 @@ if (!window.DraftCutView) {
                     });
                   });
                 spans.filter(sp => sp.u1 - sp.u0 > 0.2).forEach(sp => {
-                  ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
+                  ctx.strokeStyle = ink(0.6); ctx.lineWidth = 1;
                   ctx.beginPath();
                   ctx.moveTo(X(sp.u0), Y(eaveTop)); ctx.lineTo(X(sp.u1), Y(eaveTop));
                   ctx.stroke();
@@ -2200,7 +2347,7 @@ if (!window.DraftCutView) {
                 // decide a run has any extent at all, rather than a second
                 // tolerance invented here.
                 const drop = ROOF_FASCIA_IN / 12;
-                ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
+                ctx.strokeStyle = ink(0.6); ctx.lineWidth = 1;
                 ctx.beginPath();
                 ctx.moveTo(X(r.u0), Y(r.e0)); ctx.lineTo(X(r.u1), Y(r.e1));
                 ctx.stroke();
@@ -2262,7 +2409,7 @@ if (!window.DraftCutView) {
                     const dirIn = Math.sign(wallU - lo.u) || 1;
                     const retLen = Math.min(Math.abs(wallU - lo.u), 1.25);
                     const uEnd = lo.u + dirIn * retLen;
-                    ctx.strokeStyle = 'rgba(29,31,32,0.6)'; ctx.lineWidth = 1;
+                    ctx.strokeStyle = ink(0.6); ctx.lineWidth = 1;
                     ctx.beginPath();
                     ctx.moveTo(X(lo.u), Y(lo.e)); ctx.lineTo(X(uEnd), Y(lo.e));
                     ctx.stroke();
@@ -2377,6 +2524,10 @@ if (!window.DraftCutView) {
     drawCutView,
     drawSectionWall,
     drawElevationView,
+    // The ink table and the two ways to get one: paper by default, or the
+    // skin a page is wearing.
+    PAPER_INKS,
+    inksFromSkin,
   });
 })();
 }

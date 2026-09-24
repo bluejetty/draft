@@ -337,3 +337,131 @@ reading those six accessors on the old page and adding a column to the table in
 - I did not read the six absent accessors' implementations (§5).
 - Nothing here touches the 3D side. `_enterCutView` (`:10056`) is mostly camera
   work for a renderer `MODEL.html` does not have, and a 2D host does not need it.
+
+---
+
+## 7. The painter is skinned, 24 Sep — and it does not know it
+
+Movie, looking at an elevation on a night page: *"would it be possible to make
+the background of the elevations black when in NIGHT mode?"* Then, answering
+himself a minute later: *"or should we reverse the lines to white? like on the
+PROJECT Sections?"*
+
+The second, and the reason is measurable rather than a preference. `cut-view.js`
+FILLS its wall faces (`#fff` at :1616) and its foundations (`#e8e8ea`), so a
+black sky with black lines would have kept the house and lost everything drawn
+beside it: the roof outline, since the roof is not filled; the grade line where
+it runs out past the building; the dashed footings under it. Each of those is
+`INK` on sky.
+
+**Where the white came from.** `MODEL.html:3242` already cleared its canvas to
+`skin['surface-page']`. `drawCutView` then painted straight over that clear with
+`opts.paperColor || '#fafafa'`, because MODEL passed only `{ margins }`. The
+page was doing the right thing and the painter was undoing it.
+
+### The painter takes its inks from the caller
+
+This file is SHARED. The Construction Layout draws these same elevations as
+viewports on a sheet that gets **printed**, and that sheet is white with
+near-black ink whatever the lights in the room are doing. So the answer is not
+"make cut-view dark" — it is that cut-view does not know about skins at all. It
+carries a `PAPER_INKS` table of the exact literals it always had, uses it when
+nobody says otherwise, and `inksFromSkin(skin)` translates a palette into the
+same eight keys for callers that want one. The sheet says nothing; the model
+space hands over the skin. The same shape `render-2d.js` already had.
+
+Eight keys, three of them `r,g,b` triples rather than finished colours, because
+the WEIGHTS are what the drawing is made of — a truss chord is the same ink as a
+wall at a different strength, and fourteen finished colours could drift apart.
+
+### Three properties, each now a check
+
+| | |
+|---|---|
+| **Day is unchanged** | `draw-wall-edge` resolves to `#1d1f20` on day — this painter's own ink. A drafter with the lights on sees exactly what they saw. |
+| **The floor band needed no translation** | `draw-floor-edge` is `#5980a6` on all four skins, which is the literal the painter already used. |
+| **RUFF and ROUGH are pixel-identical** | The mapping reaches only for BASE roles, so the theme changes the chrome and not the drawing. Proven in pixels; kept as a check because a future mapping reaching for `--accent` would break it silently. |
+
+### Proved pure before anything changed value
+
+58 assignments over 14 literals became one table with identical defaults. The
+gate was a log of every instruction the painter issues — 80 cases over 8 repro
+houses, both painters, both call shapes, **60,724 operations, byte-identical**.
+Then one digit was changed in each of the four channels to watch it go red.
+
+### `proto/cut-view-inks-harness.js`, and the two faults it found in itself
+
+33 checks, 9 mutations. It does not read the file: a text scan would not have
+caught the original defect, because every literal in it was legitimate code and
+the fault was that nobody passed anything else. So it RUNS the painter and
+records what reaches the context. The check that matters most is *"on a night
+skin, not one paper value survives to the canvas"* — not "a literal exists" but
+"a literal reaches the canvas while the page is dark", which is what a drafter
+actually saw.
+
+Two faults it found in itself, both worth keeping:
+
+- **Twenty checks could not fail.** They resolved the mapping outside their own
+  bodies and closed over the result, so they were frozen at load.
+- **Every mutant was caught for the wrong reason.** The mutation helper read
+  `CV.inksFromSkin` from inside its own replacement, after `CV` had been
+  reassigned — infinite recursion, every check threw, and the table printed a
+  proud 9/9 with a perfectly uniform CAUGHT BY column. **That column is the only
+  reason it was noticed.** Nine different mutants cannot honestly all die to the
+  same check.
+
+### And a spec had been measuring nothing for weeks
+
+`model-html-cut-views`'s ink counter treated any pixel that was not a near-white
+grey as ink. That stopped being true the day MODEL.html got a night skin: in
+`mode=night` the PLAN saturated at 921,600 — every pixel on the canvas — and the
+"the section is not the plan still on screen" assertion passed **only because
+the section was still white**, so its count came out lower. Skinning the section
+makes both saturate, both read 921600, and it fails correctly.
+
+It now samples the canvas's own ground from a corner rather than assuming one,
+and compares a content hash for "different picture". A saturated count is its
+own named failure.
+
+**And it was not the only one.** CI found a second, `elevation-clears-the-rails`,
+which counts ink PER COLUMN to find where the house sits between the two rails.
+Its predicate was "any channel below 200" — near enough on a white elevation,
+and nonsense on a dark one: every pixel read as ink, every column cleared the
+floor, and it reported the house spanning 0 to full width. The message it
+printed was *"the house starts at 0 and the left rail ends at 221"* — the
+measurement blaming the rails for a threshold that had gone stale.
+
+Same fix, same shape: ink is what differs from the canvas's own ground, with the
+margin set to **50** because that is the old sensitivity restated — "below 200"
+on a `#fafafa` ground IS "more than 50 off the ground". It keeps the same things
+out on both skins, which is the test that it is the same rule rather than a new
+one: a wall face is 5 off the ground on paper and 18 on night, poche either way
+and ink in neither.
+
+It also reports `allLit`, asserted BEFORE the clearance checks, so a counter that
+has lost track of blank says so itself instead of letting the rails take the
+blame.
+
+**Why only these two.** The other specs in this family — `elevation-occlusion`,
+`auto-elevations`, `garage-roof-drop`, `detached-garage`, `fenestration-detail` —
+share the same `data[i] < 120` idiom and were untouched, because they read
+`[data-model-overlay]` on **MODEL.dc.html**, which is unskinned and still paints
+on paper. They inherit this problem the day that page goes.
+
+### Performance, checked rather than assumed
+
+The ink table is hoisted out of the per-wall loop (`drawSectionWall` runs once
+per crossing) and `inksFromSkin` is memoised on the frozen skin object, so no
+new work lands in the paint path. Offline over 300 paints, the painter is
+unchanged:
+
+| | this branch | main |
+|---|---|---|
+| section S1, median | 0.42 ms | 0.42 ms |
+| elevation E1, median | 55.30 ms | 54.83 ms |
+| rail total, all five seats | 215.9 ms | 213.2 ms |
+
+**One loose end named rather than papered over:** this file's own 2.5 ms frame
+budget sits on its threshold on the container this was built in. Measured back
+to back under the same load, **main fails it 2 runs in 6 and this branch 1 in
+5** — so it is the machine, not the change, and the budget is left alone.

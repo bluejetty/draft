@@ -42,17 +42,45 @@ async function houseWithCut(page) {
   }, BUCKET);
 }
 
-const ink = page => page.evaluate(() => {
+// WHAT IS ON THE CANVAS, measured two ways, and the pair is the point.
+//
+// THIS USED TO ASSUME THE PAGE WAS WHITE. It counted a pixel as ink unless it
+// was a near-white grey (`data[i] > 240`), which was true of the old drawing
+// and stopped being true the day MODEL.html got a night skin. In `mode=night`
+// the PLAN's ground is #1d1f20, so every one of its 921,600 pixels counted as
+// ink and the number saturated -- it had been measuring nothing on the plan
+// side for weeks.
+//
+// IT KEPT PASSING BECAUSE OF THE DEFECT IT NOW GUARDS. The section was still
+// painted on white paper while the page around it was dark, so ITS count came
+// out lower, the two numbers differed, and "the section is not the plan still
+// on screen" read green. Skin the section (24 Sep) and both saturate, both
+// read 921600, and the assertion fails -- correctly, because an ink count
+// against a hardcoded white was never evidence of anything here.
+//
+// So: `lit` is measured against the canvas's OWN clear colour, sampled from a
+// corner rather than assumed, and `signature` is a cheap hash of the pixels.
+// "It painted something" is the count's question; "it is a different picture"
+// is the hash's, and the hash does not care what colour anything is.
+const surface = page => page.evaluate(() => {
   const canvas = document.getElementById('plan');
   const ctx = canvas.getContext('2d');
   const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const near = (i, r, g, b) => Math.abs(data[i] - r) < 6
+    && Math.abs(data[i + 1] - g) < 6 && Math.abs(data[i + 2] - b) < 6;
+  // THE CORNER IS THE GROUND. Both painters clear the whole canvas before
+  // drawing anything, and the top-left is outside every margin either of
+  // them uses, so whatever is there is what "blank" means on this skin.
+  const [r, g, b] = [data[0], data[1], data[2]];
   let lit = 0;
+  let signature = 0;
   for (let i = 0; i < data.length; i += 4) {
-    // Anything that is not the page ground. The section and the plan both
-    // paint, so the count is compared BETWEEN views rather than against zero.
-    if (data[i + 3] > 0 && !(data[i] === data[i + 1] && data[i + 1] === data[i + 2] && data[i] > 240)) lit += 1;
+    if (data[i + 3] > 0 && !near(i, r, g, b)) lit += 1;
+    // Cheap order-sensitive hash over every channel. Not a checksum with any
+    // guarantees -- just enough that two different pictures do not collide.
+    signature = (signature * 31 + data[i] + data[i + 1] * 3 + data[i + 2] * 7) | 0;
   }
-  return lit;
+  return { lit, signature, total: data.length / 4, ground: `${r},${g},${b}` };
 });
 
 test('a cut is offered as a view, and picking it paints the section', async ({ page }) => {
@@ -68,7 +96,7 @@ test('a cut is offered as a view, and picking it paints the section', async ({ p
   expect(await h.modelCutOffered(page, 'S1'), 'the cut must be offered as a view')
     .toBe(true);
 
-  const plan = await ink(page);
+  const plan = await surface(page);
   await h.pickModelCut(page, 'S1');
   await page.waitForTimeout(300);
 
@@ -77,9 +105,17 @@ test('a cut is offered as a view, and picking it paints the section', async ({ p
   // "what am I looking at" was introduced.
   expect(page.url()).toContain('view=cut%3AS1');
 
-  const section = await ink(page);
-  expect(section, 'the section must paint something').toBeGreaterThan(0);
-  expect(section, 'and it must not be the plan still on screen').not.toBe(plan);
+  const section = await surface(page);
+  expect(section.lit, 'the section must paint something').toBeGreaterThan(0);
+  // A SATURATED COUNT IS THE FAILURE THIS FILE JUST HAD, named so it cannot
+  // come back quietly: if `lit` ever equals the canvas, the reading is not a
+  // measurement of the drawing, it is a measurement of the counter.
+  expect(section.lit, 'the section filled every pixel — the counter has lost '
+    + 'track of what blank looks like').toBeLessThan(section.total);
+  expect(plan.lit, 'the plan filled every pixel — same fault, other view')
+    .toBeLessThan(plan.total);
+  expect(section.signature, 'and it must not be the plan still on screen')
+    .not.toBe(plan.signature);
 
   // AND THE INSTRUMENT FOLLOWED IT. The readout is the only instrument on this
   // page, so a section it does not describe is a section drawn behind a stale
@@ -117,7 +153,7 @@ test('a section survives a reload, because the URL carries it', async ({ page })
   // same disagreement the select could show.
   await h.openModelRail(page);
   await expect(page.locator('.lv-layer[data-active]')).toHaveText('S1');
-  expect(await ink(page), 'the section paints on a cold load').toBeGreaterThan(0);
+  expect((await surface(page)).lit, 'the section paints on a cold load').toBeGreaterThan(0);
   // And it is a section: see the note in the first test — an elevation would
   // satisfy the ink check above just as well.
   await expect(page.locator('#readout')).toContainText('walls cut');
