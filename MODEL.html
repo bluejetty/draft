@@ -10026,7 +10026,13 @@
       .filter(roof => (roof.points || []).length >= 3)
       .map(roof => ({
         roof,
-        base: CV.roofBaseElev(roof, stack, env),
+        // THE EAVE, NOT THE BEARING. `riseAt` measures from the eave line,
+        // so this has to be the elevation the rise is measured from or the
+        // clearance is struck against a roof one fascia board lower than
+        // the one on the sheet. It was `roofBaseElev` and the window Movie
+        // marked sat an inch and a half inside the garage ridge because of
+        // it: 4" of clearance, less 5 1/2" of fascia nobody counted.
+        base: CV.roofEaveElev(roof, stack, env),
         riseAt: ((faces) => (pt, r) => CV.sectionRoofHeightAt(pt, r, faces))(
           G.roofFaces(roof, G.roofSkeleton(roof))),
       }));

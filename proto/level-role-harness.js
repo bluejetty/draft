@@ -60,14 +60,18 @@ const FILES = Object.freeze({
   modelHtml: 'MODEL.html',
   layout:    'LAYOUT.html',
   project:   'PROJECT.html',
-  elevation: 'proto/elevation-harness.js',
+  // THE OFFLINE PAINTER'S ENV, which is where the harnesses' own
+  // levelAssembly calls live. It was proto/elevation-harness.js until that
+  // file's plumbing was lifted into its own module so a spec could require it
+  // too; this check caught the move, which is what it is for.
+  harnessEnv: 'proto/harness-env.js',
   cutView:   'cut-view.js',
   projectPage: 'project-page.js',
 });
 // Files scanned for role-less calls: everyone except the module that DEFINES
 // the functions (its own internal calls are the definition, not a caller) and
 // stair-geometry.js, which never names them.
-const CALLERS = Object.freeze(['modelDc', 'modelHtml', 'layout', 'project', 'elevation']);
+const CALLERS = Object.freeze(['modelDc', 'modelHtml', 'layout', 'project', 'harnessEnv']);
 
 function load(mutation) {
   const src = {};
@@ -502,7 +506,7 @@ const MUTATIONS = [
     s => s.replace('.levelAssemblyFor(drawing?.levelAssemblies, id)', '.levelAssemblyFor(drawing?.levelAssemblies)')],
   ['LAYOUT.html goes back to asking role-less', 'layout',
     s => s.replace('normaliseLevelAssembly(assemblies[levelId], levelRole(levelId))', 'normaliseLevelAssembly(assemblies[levelId])')],
-  ['the elevation harness goes back to measuring a plain-floor building', 'elevation',
+  ['the offline painter-s env goes back to measuring a plain-floor building', 'harnessEnv',
     s => s.replace('normaliseLevelAssembly(\n    assemblies[id], win.DraftLevelAssembly.levelRole(id))', 'normaliseLevelAssembly(assemblies[id])')],
   // W1 step 3 moved MODEL.dc.html's inline lookup into level-assembly.js as
   // levelAssemblyFor, and this mutation stayed pointed at the old text -- so it

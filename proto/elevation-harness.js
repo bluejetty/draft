@@ -15,244 +15,20 @@
 // the same behaviour on the real overlay; this pins the geometry.
 const fs = require('fs');
 const path = require('path');
-const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
 
-function loadDraftModules() {
-  const win = {};
-  const sandbox = { window: win, console, Math, Number, String, Object, Array, JSON, Map, Set, isFinite, parseFloat, parseInt };
-  sandbox.globalThis = sandbox;
-  vm.createContext(sandbox);
-  for (const file of ['formatters.js', 'wall-types.js', 'geometry-2d.js', 'drawing-format.js', 'room-standards.js', 'level-assembly.js', 'cut-view.js']) {
-    const full = path.join(ROOT, file);
-    if (!fs.existsSync(full)) continue;
-    try { vm.runInContext(fs.readFileSync(full, 'utf8'), sandbox, { filename: file }); }
-    catch (err) { console.error(`[harness] ${file}: ${err.message}`); }
-  }
-  return win;
-}
-
-// A canvas 2d context that records instead of painting. Every path is kept
-// as its raw screen points plus the ink it was stroked with.
-function recordingCtx() {
-  const strokes = [];
-  const fills = [];
-  let cur = null;
-  const ctx = {
-    strokeStyle: '#000', fillStyle: '#000', lineWidth: 1, font: '', textAlign: '', textBaseline: '',
-    lineCap: 'butt', lineJoin: 'miter', globalAlpha: 1,
-    beginPath() { cur = []; },
-    moveTo(x, y) { (cur || (cur = [])).push({ x, y, move: true }); },
-    lineTo(x, y) { (cur || (cur = [])).push({ x, y }); },
-    closePath() { if (cur && cur.length) cur.push({ ...cur[0], close: true }); },
-    stroke() { if (cur && cur.length > 1) strokes.push({ pts: cur.slice(), ink: this.strokeStyle, w: this.lineWidth }); },
-    fill() { if (cur && cur.length > 1) fills.push({ pts: cur.slice(), ink: this.fillStyle }); },
-    fillRect(x, y, w, h) { fills.push({ rect: { x, y, w, h }, ink: this.fillStyle }); },
-    strokeRect() {}, clearRect() {}, rect() {},
-    save() {}, restore() {}, translate() {}, rotate() {}, scale() {},
-    setLineDash() {}, getLineDash() { return []; },
-    fillText() {}, strokeText() {}, measureText: () => ({ width: 0 }),
-    arc() {}, ellipse() {}, quadraticCurveTo() {}, bezierCurveTo() {}, clip() {},
-    createLinearGradient: () => ({ addColorStop() {} }),
-  };
-  return { ctx, strokes, fills };
-}
-
-// Mirrors LAYOUT.html's _cutViewEnv over a saved drawing's JSON.
-const DEFAULT_WALL_TOP_FT = (8 * 12 + 1 + 1 / 8) / 12;
-const DEFAULT_FOOTING_WIDTH_IN = 20;
-const ICF_FOOTING_WIDTH_IN = 24;
-
-function buildEnv(win, saved) {
-  const format = win.DraftDrawingFormat;
-  const levels = (saved.levels || []).map(l => ({ id: Number(l.id), name: l.name, elev: Number(l.elev) || 0 }));
-  const levelIds = new Set(levels.map(l => l.id));
-  const num = v => (Number.isFinite(Number(v)) ? Number(v) : null);
-  // srcId TRAVELS. This mapper used to return { x, z } and nothing else, so
-  // no point reaching the module through this env carried its BONEYARD
-  // source link -- and cut-view's body membership derives from exactly that.
-  // The effect was not a wrong answer but a silent "undecidable": every
-  // provenance check answered from the stored flag instead of the geometry
-  // it was written to test, and passed. A mirror that quietly drops a field
-  // the module reads is the audit rule wearing the harness's own hat.
-  const point = raw => {
-    const x = num(raw?.x), z = num(raw?.z);
-    if (x === null || z === null) return null;
-    return raw?.srcId ? { x, z, srcId: raw.srcId } : { x, z };
-  };
-  const walls = (saved.walls || []).map(wall => {
-    const start = point(wall?.start), end = point(wall?.end);
-    if (!start || !end || !levelIds.has(Number(wall?.levelId))) return null;
-    const topHeight = num(wall?.topHeight);
-    return {
-      id: String(wall?.id || ''), start, end,
-      levelId: Number(wall.levelId), view: wall?.view || 'plan',
-      ...(wall?.body === 'garage' ? { body: 'garage' } : {}),
-      wallType: wall?.wallType,
-      baseHeight: num(wall?.baseHeight) ?? 0,
-      topHeight: topHeight !== null && topHeight > 0 ? topHeight : DEFAULT_WALL_TOP_FT,
-    };
-  }).filter(Boolean);
-  const floors = (saved.floors || []).map(floor => {
-    const points = (floor?.points || []).map(point).filter(Boolean);
-    if (points.length < 3 || !levelIds.has(Number(floor?.levelId))) return null;
-    return {
-      id: String(floor?.id || ''),
-      points, levelId: Number(floor.levelId), view: floor?.view || 'floor',
-      garage: floor?.garage === true, thickenedEdge: floor?.thickenedEdge === true,
-    };
-  }).filter(Boolean);
-  const roofs = format.roofs(saved.roofs, levelIds);
-  const fenestrations = format.fenestrations(saved.fenestrations, levelIds);
-  const outlines = format.outlines(saved.outlines, levelIds);
-  const shelves = format.boneyardShelves(saved.boneyardShelves);
-  const masters = format.boneyardOutlines(saved.boneyardOutlines, new Set(shelves.map(s => s.id)));
-  const assemblies = (saved.levelAssemblies && typeof saved.levelAssemblies === 'object') ? saved.levelAssemblies : {};
-  // THE THIRD COPY IS GONE, and the comment it replaces was already untrue.
-  // This said it "mirrors LAYOUT.html's normaliseLevelAssembly exactly".
-  // It did not: LAYOUT's answered SIX fields, this one SEVEN (it carried
-  // joistSpacingIn, LAYOUT did not), and MODEL.dc.html's answered EIGHT. Three
-  // copies of one table that had each drifted a different way, with a comment
-  // asserting an equality that had stopped holding.
-  //
-  // level-assembly.js is the one copy now. Proved before deleting this one: a
-  // differential sliced the text below out of this file and raced it against
-  // the module over 8002 comparisons -- the contract being that the module
-  // RESTRICTED TO THIS HARNESS'S KEYS equals its answer, since the module is a
-  // superset. The single field it adds is joistType, which nothing here reads.
-  //
-  // THE ROLE ARRIVED LATER AND THIS LINE DID NOT FOLLOW IT. PR #323 made the
-  // module role-aware and updated MODEL.dc.html's caller; this one, LAYOUT's
-  // and MODEL.html's kept asking role-less, so ENTRY read 11 7/8" here where
-  // MODEL.dc.html read 9 1/4" and OVER GARAGE read 11 7/8" against 19 1/4".
-  // A harness measuring a building the live board does not draw is worse than
-  // no harness: it is green about the wrong world. proto/level-role-harness.js
-  // now holds every caller to the role vocabulary so this cannot drift again.
-  const levelAssembly = id => win.DraftLevelAssembly.normaliseLevelAssembly(
-    assemblies[id], win.DraftLevelAssembly.levelRole(id));
-  const floorLevels = levels
-    .filter(l => l.id > 0 && l.id !== 1 && l.id !== 7 && l.id !== 8)
-    .slice().reverse();
-  const levelWallTopFt = (levelId, view = 'plan') => {
-    const tops = walls.filter(w => w.levelId === levelId && w.view === view).map(w => w.topHeight);
-    return tops.length ? Math.max(...tops) : DEFAULT_WALL_TOP_FT;
-  };
-  // Board #346: one of four outboard copies of point-to-segment, collapsed onto
-  // the shared export. loadDraftModules already runs geometry-2d.js in this
-  // harness's sandbox, alongside the four other Draft modules `win` serves, so
-  // there was nothing to build — the work order's "if the harness can't load
-  // the export without scaffolding" did not apply.
-  //
-  // NO CALLER-LOCAL FALLBACK, deliberately. The export answers Infinity for a
-  // segment under 0.01ft where this copy answered distance-to-`a`, and the one
-  // caller (edgeOnOutline, below) was expected to need protecting. Measured, it
-  // does not: its `.some()` skips a zero-length edge and a neighbour sharing
-  // that point answers instead. The checks at the foot of this file hold both
-  // halves of that.
-  const distToSeg = (pt, a, b) =>
-    win.DraftGeometry2D.pointToSegment(pt, { start: a, end: b }).d;
-  const ftIn = feet => `${feet.toFixed(2)}'`;
-  return {
-    floorLevels: () => floorLevels,
-    levelAssembly,
-    // ASKS THE MODULE, and this file had the most to lose by not. Its own
-    // header says a check that cannot reach what it checks passes for the
-    // wrong reason -- and this line meant the elevation harness would have
-    // stayed green while the module's levelFloorFt broke, because it never
-    // called it. Skipper found it while moving MODEL's copy (W1 step 3).
-    levelFloorFt: id => win.DraftLevelAssembly.levelFloorFt(levelAssembly(id)),
-    levelWallTopFt,
-    footingWidthIn: id => {
-      const a = levelAssembly(id);
-      if (a.footingWidthIn) return a.footingWidthIn;
-      const icf = walls.some(w => w.levelId === id && w.view === 'foundation' && String(w.wallType || '').startsWith('icf'));
-      return icf ? ICF_FOOTING_WIDTH_IN : DEFAULT_FOOTING_WIDTH_IN;
-    },
-    walls: () => walls,
-    roofs: () => roofs,
-    floors: () => floors,
-    fenestrations: () => fenestrations,
-    garageOutlines: id => outlines.filter(o => o.levelId === id && o.garage && o.points.length >= 3),
-    garageFoundation: g => {
-      const mode = g?.foundation || masters.find(m => m.id === g?.masterId)?.foundation;
-      return mode === 'thickened' || mode === 'frostwall' ? mode : 'gradebeam';
-    },
-    buildType: () => null,
-    edgeOnOutline: (a, b, outline, eps = 0.1) => {
-      if (!outline) return false;
-      const count = outline.open ? outline.points.length - 1 : outline.points.length;
-      const onBoundary = pt => outline.points.some((p, i) => {
-        if (i >= count) return false;
-        const q = outline.points[(i + 1) % outline.points.length];
-        return distToSeg(pt, p, q) <= eps;
-      });
-      return onBoundary(a) && onBoundary(b) && onBoundary({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });
-    },
-    masterPointById: srcId => {
-      for (const m of masters) { const s = m.points.find(p => p.id === srcId); if (s) return s; }
-      return null;
-    },
-    gableCornerStyle: () => 'flat',
-    elevLabel: e => ftIn(e),
-    ftIn,
-    elevationDatum: () => 0,
-  };
-}
-
-const E_MARK_SIDES = {
-  E1: { side: 'S', sign: 1, dir: { x: 0, z: 1 } },
-  E2: { side: 'W', sign: -1, dir: { x: -1, z: 0 } },
-  E3: { side: 'N', sign: -1, dir: { x: 0, z: -1 } },
-  E4: { side: 'E', sign: 1, dir: { x: 1, z: 0 } },
+// THE PLUMBING MOVED OUT, whole, and comes back under the same names: see
+// proto/harness-env.js for why (a spec needs the env builder, and Playwright's
+// transpiler will not load a file whose exports end in a top-level `return`).
+const {
+  loadDraftModules, buildEnv, standardElevationCuts, paintElevation,
+  recordingCtx, E_MARK_SIDES,
+} = require('./harness-env.js');
+module.exports = {
+  loadDraftModules, buildEnv, standardElevationCuts, paintElevation,
+  recordingCtx, E_MARK_SIDES,
 };
-
-function standardElevationCuts(env) {
-  const walls = env.walls().filter(w => w.levelId > 0);
-  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-  walls.forEach(w => [w.start, w.end].forEach(p => {
-    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
-    minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z);
-  }));
-  const pad = 2, clear = 2;
-  const edge = { S: maxZ, N: minZ, E: maxX, W: minX };
-  const at = id => edge[E_MARK_SIDES[id].side] + E_MARK_SIDES[id].sign * clear;
-  return [
-    { id: 'E1', name: 'E1', elev: 0, levelId: null, startPt: { x: minX - pad, z: at('E1') }, endPt: { x: maxX + pad, z: at('E1') }, dirVec: E_MARK_SIDES.E1.dir },
-    { id: 'E2', name: 'E2', elev: 0, levelId: null, startPt: { x: at('E2'), z: minZ - pad }, endPt: { x: at('E2'), z: maxZ + pad }, dirVec: E_MARK_SIDES.E2.dir },
-    { id: 'E3', name: 'E3', elev: 0, levelId: null, startPt: { x: minX - pad, z: at('E3') }, endPt: { x: maxX + pad, z: at('E3') }, dirVec: E_MARK_SIDES.E3.dir },
-    { id: 'E4', name: 'E4', elev: 0, levelId: null, startPt: { x: at('E4'), z: minZ - pad }, endPt: { x: at('E4'), z: maxZ + pad }, dirVec: E_MARK_SIDES.E4.dir },
-  ];
-}
-
-// Paint one elevation and hand back every stroke in model space.
-function paintElevation(win, env, cut, { pxPerFt = 40 } = {}) {
-  const CV = win.DraftCutView;
-  const stack = CV.sectionLevelStack(env);
-  const extents = CV.cutViewExtents(env, cut);
-  const dir = cut.dirVec;
-  const axis = { x: dir.z, z: -dir.x };
-  const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
-  const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
-  const uMin = Math.min(uA, uB), uMax = Math.max(uA, uB);
-  const { yTop, yBottom } = extents;
-  const w = Math.ceil((uMax - uMin) * pxPerFt) + 40;
-  const h = Math.ceil((yTop - yBottom) * pxPerFt) + 40;
-  const x0 = ((w) - (uMax - uMin) * pxPerFt) / 2;
-  const y0 = ((h) - (yTop - yBottom) * pxPerFt) / 2;
-  const toU = X => (X - 0.5 - x0) / pxPerFt + uMin;
-  const toE = Y => yTop - (Y - 0.5 - y0) / pxPerFt;
-  const { ctx, strokes, fills } = recordingCtx();
-  const ok = CV.drawElevationView(env, ctx, w, h, cut, stack, axis, () => {},
-    { pxPerFt, extents });
-  const model = strokes.map(s => ({
-    ink: s.ink, w: s.w,
-    pts: s.pts.map(p => ({ u: toU(p.x), e: toE(p.y) })),
-  }));
-  return { ok, strokes: model, rawStrokes: strokes, fills, uMin, uMax, yTop, yBottom, pxPerFt, w, h, axis, dir };
-}
-
-module.exports = { loadDraftModules, buildEnv, standardElevationCuts, paintElevation, recordingCtx, E_MARK_SIDES };
 
 if (require.main !== module) return;
 
@@ -922,6 +698,175 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
   // from and what the subtraction downstream matches on.
   check('and a grown run keeps the base it was banded at',
     Math.abs(grown[0].base - (TOP - 5.5 / 12)) < 1e-9, `base ${grown[0].base}`);
+}
+
+
+// ── A ROOF IS A SURFACE, AND THE PAINTER-S ORDER IS WHAT HIDES THINGS ──────
+//
+// Movie, 24 Sep, on elevations of his own drawing: *"the roofs look
+// 'transparent'"*; over a marked-up screenshot, *"there are still arrached
+// garage lines showing (looks like some things are 'tranparent')"*; and then
+// the exact one: *"the 2nd floor ext wall on left side is seen withint the
+// roof it should stop once it hits the top of the roof (line)"*.
+//
+// THE PAINTER HID NOTHING BEHIND A ROOF BECAUSE ROOFS DID NOT PAINT. Wall
+// faces are filled opaque far-first, so a nearer wall hides a farther one by
+// being painted over it; the roof passes only ever STROKED edges. Occlusion
+// by a roof was therefore hand-built, one symptom at a time -- a wall top
+// pulled down into a roof's band, a roof edge dropped behind a wall, the
+// joist band asking the same question a third way -- and each of those hides
+// ONE thing. On the 2 STOREY + GARAGE the house's corner ran down through the
+// garage hip and the house's own hip end read as open sky.
+//
+// SO THE CHECKS ARE ABOUT PAINT ORDER, not about a rule. `modelFills` is the
+// fill list in the order it went down, in feet, and "is this hidden" is
+// "which fill is last over this spot" -- the same question the drafter's eye
+// asks. A check phrased as "the wall's top was clipped" would go green again
+// the day the clipping came back and the fill went away.
+{
+  const CV = win.DraftCutView;
+  const G = win.DraftGeometry2D;
+  const rFile = path.join(ROOT, 'proto', 'repro-2storey-garage.draft');
+  const rEnv = buildEnv(win, JSON.parse(fs.readFileSync(rFile, 'utf8')));
+  const rStack = CV.sectionLevelStack(rEnv);
+  const cuts = standardElevationCuts(rEnv);
+  const vFront = paintElevation(win, rEnv, cuts.find(c => c.id === 'E1'));
+  const vBack = paintElevation(win, rEnv, cuts.find(c => c.id === 'E3'));
+  const garageRoof = rEnv.roofs().find(roof => roof.garage === true);
+  const houseRoof = rEnv.roofs().find(roof => roof.garage !== true);
+
+  // THE FIXTURE-S REACH, ASSERTED BEFORE IT IS TRUSTED -- every check below
+  // indexes one of these two.
+  check('opaque roofs: the fixture has a garage roof and a house roof',
+    !!garageRoof && !!houseRoof,
+    `${rEnv.roofs().length} roofs, ${rEnv.roofs().filter(r => r.garage).length} on a garage`);
+
+  // Each roof face, as the painter throws it onto the paper: `u` off the
+  // cut's axis, elevation off the eave line plus the face's own rise.
+  const project = (view, roof) => {
+    const eaveTop = CV.roofEaveElev(roof, rStack, rEnv);
+    const pitch = roof.pitch || 4;
+    return G.roofFaces(roof, G.roofSkeleton(roof)).map(face => face.points.map(pt => ({
+      u: pt.x * view.axis.x + pt.z * view.axis.z,
+      e: eaveTop + G.roofFaceRise(face, pt, pitch),
+    })));
+  };
+  const twiceArea = poly => poly.reduce((sum, a, i) => {
+    const b = poly[(i + 1) % poly.length];
+    return sum + a.u * b.e - b.u * a.e;
+  }, 0);
+  // THE ONE FACE THE VIEWER CAN SEE ANY OF. A roof's other slopes are edge on
+  // from here -- every corner shares a `u` with the corner above it -- so they
+  // project to a line and fill nothing, which is the right answer and not a
+  // gap: what shows between the rakes of a gable seen end on is the gable END
+  // WALL, and the wall pass fills that.
+  const facingFace = (view, roof) => project(view, roof)
+    .reduce((best, poly) => (best === null || Math.abs(twiceArea(poly)) > Math.abs(twiceArea(best))
+      ? poly : best), null);
+  const inside = (poly, u, e) => {
+    let hit = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[j], b = poly[i];
+      if ((a.e > e) !== (b.e > e)
+        && u < a.u + (b.u - a.u) * (e - a.e) / (b.e - a.e)) hit = !hit;
+    }
+    return hit;
+  };
+  // Same corners, in any order and at either winding: the painter is free to
+  // walk a face whichever way the skeleton handed it over.
+  const sameShape = (drawn, want, tol = 0.02) => drawn.length === want.length
+    && want.every(w => drawn.some(d => Math.abs(d.u - w.u) < tol && Math.abs(d.e - w.e) < tol))
+    && drawn.every(d => want.some(w => Math.abs(d.u - w.u) < tol && Math.abs(d.e - w.e) < tol));
+  const fillOf = (view, poly) => view.modelFills.findIndex(f => sameShape(f.pts, poly));
+  const lastFillAt = (view, u, e) => {
+    let last = -1;
+    view.modelFills.forEach((f, i) => { if (inside(f.pts, u, e)) last = i; });
+    return last;
+  };
+
+  // THE DATUM THE WHOLE SHEET HANGS OFF, stated against the DRAWING rather
+  // than against its own arithmetic. `roofEaveElev` is where a rise of zero
+  // lands, which is the eave line -- so the lowest point the painter puts any
+  // of a roof's surface at IS that elevation, and a check that said
+  // "bearing plus a fascia board" would only be reading the function back to
+  // itself. MODEL hands this number to auto-windows.js for the
+  // window-over-roof clearance; handed the bearing instead, a sill came out
+  // 5 1/2" low and a garage ridge came up inside the glass.
+  const lowestDrawn = roof => Math.min(...project(vFront, roof).flat().map(p => p.e));
+  check('the eave elevation is the lowest the painter draws that roof',
+    Math.abs(lowestDrawn(garageRoof) - CV.roofEaveElev(garageRoof, rStack, rEnv)) < 1e-9,
+    `lowest ${lowestDrawn(garageRoof).toFixed(5)} against `
+    + `${CV.roofEaveElev(garageRoof, rStack, rEnv).toFixed(5)}`);
+  check('and it stands one fascia board over where the roof BEARS',
+    Math.abs(CV.roofEaveElev(garageRoof, rStack, rEnv)
+      - CV.roofBaseElev(garageRoof, rStack, rEnv)
+      - CV.STANDARDS.ROOF_FASCIA_IN / 12) < 1e-9,
+    `eave ${CV.roofEaveElev(garageRoof, rStack, rEnv).toFixed(5)}, `
+    + `bearing ${CV.roofBaseElev(garageRoof, rStack, rEnv).toFixed(5)}`);
+
+  const garageFace = facingFace(vFront, garageRoof);
+  const houseFace = facingFace(vFront, houseRoof);
+  const garageFill = fillOf(vFront, garageFace);
+  check('E1: the garage roof-s hip end is FILLED, not outlined over sky',
+    garageFill >= 0,
+    `${vFront.modelFills.length} fills, none matching `
+    + garageFace.map(p => `(${p.u.toFixed(2)},${p.e.toFixed(2)})`).join(' '));
+  check('E1: and so is the house roof-s',
+    fillOf(vFront, houseFace) >= 0,
+    houseFace.map(p => `(${p.u.toFixed(2)},${p.e.toFixed(2)})`).join(' '));
+
+  // A FOOT UNDER THE GARAGE RIDGE, WHERE THE HOUSE STANDS BEHIND IT. This is
+  // the spot Movie marked: the second-floor front wall carries on up past the
+  // garage roof, so the wall, one of its windows and the roof all land on
+  // this same scrap of paper, and the roof is the nearest of the three.
+  const ridge = garageFace.reduce((best, p) => (p.e > best.e ? p : best), garageFace[0]);
+  const probeU = ridge.u, probeE = ridge.e - 1;
+  const coveringBefore = vFront.modelFills
+    .filter((f, i) => i < garageFill && inside(f.pts, probeU, probeE)).length;
+  check('E1: a wall really does stand behind the garage ridge (or this proves nothing)',
+    coveringBefore > 0,
+    `${coveringBefore} earlier fills over (${probeU.toFixed(2)}, ${probeE.toFixed(2)})`);
+  check('E1: and the roof is the LAST thing painted there, so the wall is hidden',
+    lastFillAt(vFront, probeU, probeE) === garageFill,
+    `last fill ${lastFillAt(vFront, probeU, probeE)}, garage roof ${garageFill}`);
+
+  // THE FASCIA COMES WITH THE SHEET. The face's own polygon stops at the eave
+  // LINE and the board hangs 5 1/2" below it; unfilled, a wall behind showed
+  // through a stripe that deep along every eave -- the see-through narrowed,
+  // not gone. Probed past the house's corner so nothing but the roof can be
+  // the answer.
+  const eaveTop = CV.roofEaveElev(garageRoof, rStack, rEnv);
+  const past = Math.max(...garageFace.map(p => p.u)) - 2;
+  check('E1: the fascia band under the eave is filled too',
+    lastFillAt(vFront, past, eaveTop - (5.5 / 12) / 2) >= 0,
+    `nothing painted at (${past.toFixed(2)}, ${(eaveTop - 5.5 / 24).toFixed(3)})`);
+
+  // ── AND E3, WHERE THE GARAGE IS THE ONE BEHIND ──────────────────────────
+  //
+  // The band used to be drawn twice: once by the SILHOUETTE, which knows a
+  // run's `u` and its base and nothing about what stands in front of it, and
+  // once by the face-edge pass, which tests every station against `hidden`
+  // and then subtracted whatever the silhouette had drawn. On this fixture's
+  // BACK elevation the garage sits behind the house, its eave was grown to
+  // its true end by `extendRunsToEaves` -- correctly, for the outline -- and
+  // the silhouette then banded it straight across twenty-two feet of
+  // two-storey wall. So the band is the face-edge pass's now, all of it.
+  const houseWalls = rEnv.walls().filter(wall => (wall.view || 'plan') !== 'foundation');
+  const houseUs = houseWalls.flatMap(wall => [wall.start, wall.end])
+    .map(pt => pt.x * vBack.axis.x + pt.z * vBack.axis.z);
+  const garageUs = (garageRoof.points || [])
+    .map(pt => pt.x * vBack.axis.x + pt.z * vBack.axis.z);
+  const overlapLo = Math.max(Math.min(...houseUs), Math.min(...garageUs)) + 1;
+  const overlapHi = Math.min(Math.max(...houseUs), Math.max(...garageUs)) - 1;
+  check('E3: the house and the garage roof really do overlap on the paper',
+    overlapHi - overlapLo > 4, `${overlapLo.toFixed(2)}..${overlapHi.toFixed(2)}`);
+  const bandInk = inkIn(vBack, {
+    uLo: overlapLo, uHi: overlapHi,
+    eLo: eaveTop - 5.5 / 12 - 0.05, eHi: eaveTop + 0.05,
+    keep: seg => seg.w > 2,
+  });
+  check('E3: and no fascia band is drawn across the house standing in front of it',
+    bandInk < 0.5, `${bandInk.toFixed(2)} ft of heavy ink at the garage eave`);
 }
 
 
