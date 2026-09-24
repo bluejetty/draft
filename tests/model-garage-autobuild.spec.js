@@ -19,12 +19,30 @@ const BUCKET = 'model-drawing';
 const REPRO = JSON.parse(fs.readFileSync(
   path.join(__dirname, '..', 'proto', 'repro-garage-house.draft'), 'utf8'));
 
+// THE SAME PROJECT WITH ITS OUTLINES TAKEN OUT, and the reason is the rule
+// rather than convenience. ONE BUILDING PER DRAFT FILE (Movie, 24 Sep) means
+// a detached garage can no longer be ordered into a file that holds a house:
+// that press now opens the save-and-start-clean offer instead of building,
+// which is model-one-building.spec.js's subject and would stop every check
+// here before it began.
+//
+// THE WALLS STAY, and they are why this works rather than a detail. An
+// OUTLINE is what building-bodies.js counts as a body, so a file with walls
+// and no outline is not full and the garage builds straight away -- while
+// garage-site.js counts walls as well as outlines when it decides where to
+// stand, for its own stated reason: "a DRAFTING drawing has no bone at all,
+// and placing a garage through the middle of a hand-drawn house because it
+// carried no outline would be the whole bug". So the fixture keeps every
+// project setting and everything the placer has to stand clear of, and drops
+// only the thing that would now send the press somewhere else.
+const HOUSELESS = { ...REPRO, outlines: [] };
+
 async function openPage(page) {
   await h.openModel(page, { webgl: false });
   await page.evaluate(async ({ bucket, saved }) => {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, saved: REPRO });
+  }, { bucket: BUCKET, saved: HOUSELESS });
   await page.goto('/MODEL.html?mode=night');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
@@ -112,7 +130,7 @@ test('the walls are the project\'s walls, not defaults invented at the order',
     }, {
       bucket: BUCKET,
       saved: {
-        ...REPRO,
+        ...HOUSELESS,
         wallBaseHeight: 1, wallTopHeight: 11, wallRefLine: 'centre',
       },
     });
@@ -134,6 +152,13 @@ test('the walls are the project\'s walls, not defaults invented at the order',
   });
 
 test('it stands beside what is already built, not through it', async ({ page }) => {
+  // WHAT IT STANDS BESIDE IS NOW HAND-DRAWN WALLS, not a house, and that is
+  // the only shape this rule still has: one building per file means a garage
+  // and a house can never share one, so a garage ordered into an occupied
+  // file is always ordered into a DRAFTING drawing. garage-site.js was
+  // written for exactly that case and says so -- the hand-drawn house
+  // carrying no outline is the bug it names -- so this is the same rule
+  // measured through the door that is left.
   await openPage(page);
   const before = await state(page);
   await orderGarage(page, '16x24');
@@ -191,29 +216,44 @@ test('one press of undo takes the whole order back, and only it',
       .toEqual({ walls: before.walls, outlines: before.outlines });
   });
 
-test('a second detached garage cannot even be ordered', async ({ page }) => {
-  // THE CAP IS THE DOOR, not the counter. With the house standing and one
-  // detached garage built the project is full, and Movie's rule for the
-  // bone is "it will do nothing once both house and garage both made" --
-  // so the board never rises and there is no tile to spend twice. The
-  // "YOU'VE GOT ONE ALREADY" refusal at the order stays behind this as
-  // the deeper guard, for any future door that opens on a full project.
+test('a second detached garage never lands in the same file', async ({ page }) => {
+  // THE CAP HELD BY A SHUT DOOR ONCE. With a house standing and a garage
+  // built, the project was full, the board never rose, and Movie's rule for
+  // the bone was "it will do nothing once both house and garage both made".
+  //
+  // ONE BUILDING PER FILE TOOK THAT DOOR OFF ITS HINGES, deliberately: full
+  // now means "this file has its building", which the drafter can answer by
+  // starting another, so a board that would not open would leave him with a
+  // dead button and no way to be told why. The board rises, the tile is
+  // pressable, and the cap is kept at the ORDER -- which is the one place
+  // that knows which building he wants, and can therefore ask.
+  //
+  // SO THE PROPERTY IS UNCHANGED AND THE MECHANISM IS NOT. What must still
+  // be true is that two detached garages never end up in one file, and that
+  // is what this measures: the second order offers a clean file, and saying
+  // no to the offer leaves the first garage alone.
   await openPage(page);
   await orderGarage(page, '16x24');
   const afterFirst = await state(page);
-  // DETACHED ones only for the precondition: the fixture's attached garage
-  // rides the house outline onto every level, so `garages` starts at five.
   expect(afterFirst.garages.filter(g => g.detached).length,
     'the first garage never landed').toBe(1);
 
-  await page.locator('#bone').click();
-  await page.waitForTimeout(3000);   // past the sign's 2s rise-glow
-  await expect(page.locator('#drivethru'),
-    'the board rose over a full project')
-    .toHaveAttribute('data-shut', '');
+  await h.openDriveThru(page);
+  await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
+  await page.locator('#dt-tiles [data-build-entry="detached-thickened"]').click();
+  await page.locator('#size-stock [data-build-size="16x24"]').click();
+  await page.locator('#dt-bone').click();
+
+  await expect(page.locator('#file-guard'),
+    'the second order built on the spot instead of offering a clean file')
+    .toBeVisible();
+  await page.locator('[data-guard-cancel]').click();
+  await expect(page.locator('#file-guard')).toBeHidden();
+  await page.waitForTimeout(400);
+
   const afterSecond = await state(page);
   expect(afterSecond.garages.length,
-    'the cap of one detached garage was spent twice')
+    'the cap of one building was spent twice in one file')
     .toBe(afterFirst.garages.length);
 });
 

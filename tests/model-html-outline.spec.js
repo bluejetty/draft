@@ -636,7 +636,30 @@ test('pressing it twice does not build the house twice', async ({ page }) => {
   // house that is already up would otherwise lay a second wall along every
   // side -- four records exactly on top of four others, which looks like one
   // house until something is dragged.
-  await boneBuild(page);
+  //
+  // AND SINCE 24 SEP THE SECOND PRESS IS ANSWERED OUT LOUD, by a route worth
+  // naming because it is easy to miss: the choice card's BUILD tries
+  // fireBuild FIRST, which answers false here -- the traced loop is already
+  // built, so there is nothing to raise from it -- and then FALLS THROUGH to
+  // orderAtWindow(). What waits there is a premade bungalow about to be laid
+  // onto a file that already holds a house, which is precisely the case ONE
+  // BUILDING PER DRAFT FILE exists for, so the press is met by "save this
+  // drawing and start a clean one?".
+  //
+  // CANCEL IS WHAT KEEPS THIS TEST'S SUBJECT. The offer is a different thing
+  // from the silence that used to answer this press, but the property is the
+  // same one and still worth pinning: say no, and no second house is laid
+  // over the first.
+  await page.locator('#bone').click();
+  await expect(page.locator('#build-choice'),
+    'the second press did not offer the choice').toBeVisible();
+  await page.locator('[data-build-choice-build]').click();
+  await expect(page.locator('#file-guard'),
+    'the second press was answered by neither a build nor an offer')
+    .toBeVisible();
+  await page.locator('[data-guard-cancel]').click();
+  await expect(page.locator('#file-guard')).toBeHidden();
+  await page.waitForTimeout(200);
   await saveOnNewPage(page);
 
   expect(wallsOf(await savedFile(page)).length,

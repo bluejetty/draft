@@ -300,17 +300,31 @@ test('the attached garage does not spend the detached garage-s slot',
       'the detached garage is still on offer').toBeVisible();
   });
 
-test('a second press is refused rather than stacking a second house',
+test('a second press offers a clean file rather than stacking a second house',
   async ({ page }) => {
+    // THIS WAS A REFUSAL UNTIL 24 SEP and the sign said "YOU'VE GOT A HOUSE
+    // ALREADY". ONE BUILDING PER DRAFT FILE (Movie) keeps the cap and changes
+    // the answer: the build is still perfectly available, it just needs a file
+    // of its own, so the press is met by "save this drawing and start a clean
+    // one?" instead of being sent away.
+    //
+    // THE SUBJECT IS UNCHANGED, and it is the reason the check survives the
+    // rewrite rather than moving wholesale to model-one-building.spec.js: what
+    // must never happen is a second bungalow laid exactly on top of the first,
+    // which looks like one house until something is dragged. CANCEL is how
+    // that is asked here -- say no to the offer, and this file is untouched.
     await open(page);
     await order(page, 'bungalow', 'bungalow');
     await saveOnNewPage(page);
     const once = (await savedFile(page)).outlines.length;
 
     await order(page, 'bungalow', 'bungalow');
-    const sign = page.locator('[data-drivethru-line]');
-    await expect(sign, 'the board says so rather than building in silence')
-      .toContainText('ALREADY');
+    await expect(page.locator('#file-guard'),
+      'the second press neither built nor offered a clean file').toBeVisible();
+    await expect(page.locator('[data-file-guard-text]')).toContainText(/clean file/i);
+    await page.locator('[data-guard-cancel]').click();
+    await expect(page.locator('#file-guard')).toBeHidden();
+    await page.waitForTimeout(200);
 
     await saveOnNewPage(page);
     expect((await savedFile(page)).outlines.length,

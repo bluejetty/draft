@@ -83,7 +83,23 @@ test('THE SEAM: choosing a house draws nothing at all', async ({ page }) => {
   // page's phrase, and here the bone only says so. BOTH BONES: the one on
   // the sign's post is the easy place to quietly wire a generator in, which
   // is why it is asserted rather than assumed.
+  //
+  // AND SINCE 24 SEP THAT PRESS IS ANSWERED, WHICH IS WORTH BEING HONEST
+  // ABOUT. twoStorey-garage HAS a premade design, and the fixture already
+  // holds a house, so this press is exactly what ONE BUILDING PER DRAFT FILE
+  // is for: it offers to save this drawing and open a clean one.
+  //
+  // WHICH MEANS "NOTHING WAS DRAWN" HAS ALWAYS RESTED ON THE CAP HERE, not
+  // on the seam. Before the rule changed, the same press met "YOU'VE GOT A
+  // HOUSE ALREADY" and drew nothing for that reason; the count below was
+  // reading a refusal and reporting a seam. Declining the offer is the same
+  // sentence in the new grammar, and it is spelled out rather than left for
+  // the next reader to discover the way this change did.
   await page.locator('#dt-bone').click();
+  await expect(page.locator('#file-guard'),
+    'the press was met by neither a build nor an offer').toBeVisible();
+  await page.locator('[data-guard-cancel]').click();
+  await expect(page.locator('#file-guard')).toBeHidden();
   await page.waitForTimeout(300);
   expect(await wallCount(page), 'the sign\'s BONE drew geometry')
     .toBe(before);

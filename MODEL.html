@@ -4057,6 +4057,25 @@
     return BM.customGarageSize(sizeWidth.value, sizeDepth.value);
   };
 
+  // THE TYPE REACHES THE FILE; garage, overGarage and foundation do not.
+  // build-menu.js says why in Movie's own words: a garage is an outline
+  // carrying garage:true, so storing one would put a claim in the file that
+  // its own geometry could contradict.
+  //
+  // IT IS A FUNCTION BECAUSE IT HAS TWO CALLERS, and the second is easy to
+  // miss: the press stamps whichever drawing was open at the time, so a build
+  // that opens a CLEAN file has to stamp again or the new file carries no
+  // type at all. Nothing reads buildType during a build, which is exactly why
+  // that would have gone unnoticed -- the house would rise correctly into a
+  // file that had forgotten what it was.
+  const stampBuildType = () => {
+    const type = chosen()?.entry?.type ?? null;
+    if (drawing && type && drawing.buildType !== type) {
+      drawing.buildType = window.DraftDrawingFormat.buildType(type);
+      markDirty();
+    }
+  };
+
   const pressEntry = entryId => {
     // A NEW ENTRY IS A NEW QUESTION. Carrying the last garage's size onto
     // the next press would build a 16x24 for a drafter who pressed a
@@ -4073,15 +4092,7 @@
     // The submenu stays open, the chosen tile keeps the glow it already wears,
     // and the bone starts asking for the press that finishes the order.
     const picked = chosen();
-    // THE TYPE REACHES THE FILE; garage, overGarage and foundation do not.
-    // build-menu.js says why in Movie's own words: a garage is an outline
-    // carrying garage:true, so storing one would put a claim in the file that
-    // its own geometry could contradict.
-    const type = picked?.entry?.type ?? null;
-    if (drawing && type && drawing.buildType !== type) {
-      drawing.buildType = window.DraftDrawingFormat.buildType(type);
-      markDirty();
-    }
+    stampBuildType();
     buildChrome();
     syncBuildBar();
     paint();
@@ -4576,7 +4587,19 @@
     // press go to drivethru questions". fireBuild used to run here and
     // build on the spot; it now runs from the card's BUILD instead, so the
     // traced shape is still what gets built, one press later and named.
-    if (window.DraftBuildingBodies.isFull(drawing)) return;
+    //
+    // AND "ALWAYS" NOW MEANS ALWAYS. A gate stood on this line and returned
+    // in SILENCE when building-bodies said the file was full. That was right
+    // while full meant "there is nothing left to build, ever" -- Movie's rule
+    // for it was "it will do nothing once both house and garage both made".
+    //
+    // Under ONE BUILDING PER FILE it means something else: "this file has its
+    // building". The drafter can still have another, in a file of its own, so
+    // a gate here would make this the one press in the app that answers
+    // nothing at all -- he could never reach a tile, never reach the offer to
+    // save and start clean, and never be told why the bone had gone dead. The
+    // cap is enforced at the ORDER instead (:4746), which is the only place
+    // that knows WHICH building he wants and can therefore ask about it.
     signRefusal = {
       line: 'NOTHING TO BUILD YET.',
       note: 'Pick a type off the board and I\u2019ll build it.',
@@ -4684,6 +4707,8 @@
 
   // Returns whether the order was actually placed, so a caller that pressed
   // with the board down knows whether to expect a house or an explanation.
+  // FALSE NOW COVERS A THIRD OUTCOME: a press that opened the save dialog on
+  // its way to a clean file has placed no order yet, and may never place one.
   const orderAtWindow = () => {
     const picked = chosen();
     if (picked?.entry?.needsSize && !chosenSize()) {
@@ -4696,41 +4721,58 @@
       };
       return sayAtWindow();
     }
-    // AND ONE DETACHED GARAGE IS THE CAP (Movie's standing rule). Building
-    // a second would put two of a body the project may hold one of, and
-    // the tile is pressable because the board opens on a half-full
-    // project -- so the refusal belongs at the order, not at the tile.
-    if (picked?.entry?.needsSize
-        && window.DraftBuildingBodies.hasDetachedGarage(drawing)) {
-      signRefusal = {
-        line: 'YOU\u2019VE GOT ONE ALREADY.',
-        note: 'One house and one detached garage is the lot.',
-      };
-      return sayAtWindow();
-    }
-    // AND ONE HOUSE IS THE CAP, the same rule the garage above is held to and
-    // from the same module: building-bodies.js says what is standing, so
-    // PROJECT and this board cannot come to different answers. A second press
-    // on a project that already has a house would otherwise lay a second
-    // bungalow exactly on top of the first -- which looks like one house until
-    // something is dragged.
+    // THE WALLET GOES BEFORE THE CAP NOW, and the comment that stood below
+    // used to argue the exact opposite: while the cap was a REFUSAL, a
+    // drafter with no bones AND a house standing was better told about the
+    // house, the thing waiting could not fix.
     //
-    // ASKED ONLY OF A TILE THAT HAS A DESIGN. A 2 STOREY press still falls
-    // through to the trace handover, and refusing that because a house stands
-    // would stop a drafter drawing a second storey.
-    if (window.DraftPremadePlans?.planFor(picked?.entry?.id)
-        && window.DraftBuildingBodies.hasHouse(drawing)) {
-      signRefusal = {
-        line: 'YOU\u2019VE GOT A HOUSE ALREADY.',
-        note: 'One house and one detached garage is the lot.',
-      };
-      return sayAtWindow();
-    }
-    // AND THE LAST REFUSAL IS THE WALLET'S, after the caps rather than
-    // before them: a drafter with no bones AND a house already standing
-    // should be told about the house, which is the thing he can do nothing
-    // about by waiting.
+    // THE CAP BELOW IS NO LONGER A REFUSAL, so that reasoning inverts with
+    // it. It SWAPS THE DRAFTER'S FILE OUT -- asks, saves, blanks, builds --
+    // and doing all of that for a build the wallet was always going to turn
+    // away would clear his screen for nothing and then hand him the bone
+    // message he could have had with his drawing still up.
     if (!canAffordBuild()) { refuseForBones(); return sayAtWindow(); }
+    // AND ONE BUILDING IS THE FILE'S LOT -- a HOUSE or a DETACHED GARAGE,
+    // never both. Movie, 24 Sep: "rule should be 1 autobuilt BUILDING per
+    // DRAFT file (a BUILDING would be a HOUSE or a DETACHED GARAGE)". An
+    // ATTACHED garage is part of the house it hangs off and spends nothing,
+    // which is why one question does for both bodies; building-bodies.js
+    // holds all of that arithmetic, so PROJECT cannot come to a different
+    // answer about the same file.
+    //
+    // AND IT IS AN OFFER RATHER THAN A REFUSAL, which is the change here.
+    // Two "YOU'VE GOT ONE ALREADY" signs stood in these lines and sent the
+    // drafter away from a build that is perfectly available -- it just needs
+    // a file of its own. Movie: "if they press the button ask them if they
+    // would like to SAVE the current drawing and then proceed with a NEW
+    // CLEAN file for the new AUTOBUILD".
+    //
+    // ASKED ONLY OF A PRESS THAT WOULD ACTUALLY RAISE ONE. A garage tile
+    // qualifies -- it is past its size question by the time it gets here --
+    // and a house tile only if it HAS a design. A 2 STOREY press with no plan
+    // behind it falls through to the trace handover, and swapping the file
+    // out from under a shape the drafter is about to trace by hand would be
+    // the worst of the three outcomes. The old refusal was gated the same
+    // way, for the milder version of the same reason.
+    //
+    // AND TWO PRESSES REACH THIS, not one. The obvious caller is the bone at
+    // the window. The other is the CHOICE CARD'S BUILD, which runs fireBuild
+    // first and falls through to here when it answers false (:4204) -- a
+    // drafter whose traced loop is already built presses BUILD, there is
+    // nothing left to raise from his outline, and the premade design is what
+    // the order round is for. That second press lands on a file that by
+    // definition already holds the house he just built, so it is the one most
+    // likely to meet this offer. Worth naming because the fall-through is
+    // easy to miss: nothing at the card says it leads here.
+    const raisesABuilding = picked?.entry?.needsSize
+      || !!window.DraftPremadePlans?.planFor(picked?.entry?.id);
+    if (raisesABuilding && window.DraftBuildingBodies.hasBuilding(drawing)) {
+      buildInAFreshFile();
+      // FALSE BECAUSE NOTHING IS BUILT YET. The dialog is up and the order
+      // fires from its answer -- or never, if the drafter cancels -- so this
+      // press has placed none, which is what the caller is asking about.
+      return false;
+    }
     fireOrder();
     return true;
   };
@@ -10412,7 +10454,13 @@
   //
   // THE REFUSAL IS THE SIGN'S, not the strip's, because the sign is what the
   // drafter is looking at when he presses that bone -- the same place the
-  // garage's HOW BIG, THOUGH? and YOU'VE GOT ONE ALREADY land.
+  // garage's HOW BIG, THOUGH? and the wallet's OUT OF BONES land.
+  //
+  // THE ONE ANSWER THAT DOES NOT LAND THERE is the one building per file
+  // cap, and deliberately: it is no longer a refusal but an offer to save
+  // and open a clean one, so it needs the save dialog's three buttons rather
+  // than a line on a sign. A sign can only be read; that one has to be
+  // answered.
   //
   // AND IT IS DECIDED HERE RATHER THAN IN THE BONE'S HANDLER, where the other
   // refusals live. The seam's own rule is that what an order MEANS is the
@@ -11202,6 +11250,26 @@
       paintBonePress();
       paintSignBoard();
       paint();
+      // AND THE RAIL, which paint() does not touch. Its seats hold PIXELS
+      // painted in whatever skin was current when they were last drawn, so a
+      // switch left four night elevations sitting beside a white drawing --
+      // Movie, 24 Sep: "the 'day' sidebar elevations look like 'night'".
+      //
+      // IT ONLY BECAME VISIBLE WHEN THE PAINTER LEARNED ABOUT SKINS. Before
+      // the elevations took their inks from the caller, a thumbnail painted
+      // the same picture whatever the lights were doing, so a rail that was
+      // never repainted was a rail nobody could tell was stale. The bug is
+      // older than the symptom.
+      //
+      // THE PRECEDENT IS TEN LINES UP: inDaylight swaps the skin for a shoot
+      // and puts BOTH back in its finally, paint() and paintRailNow(). That
+      // path knew the rail follows the skin; this one, which is where the
+      // drafter actually changes it, did not.
+      //
+      // SYNCHRONOUS RATHER THAN THE SEAT-PER-FRAME REPAINT, for the reason
+      // paintRailNow exists at all: a skin switch is one press and wants
+      // finished pictures, not four frames of half-turned rail.
+      paintRailNow();
     },
   });
 
@@ -14151,15 +14219,27 @@
     paint();
   };
 
-  const guardUnsaved = (what, proceed) => {
-    if (!dirty) { proceed(); return; }
+  // SAVE / DON'T SAVE / CANCEL, asked about a question the CALLER supplies.
+  // Two things now need those three answers and they disagree about when to
+  // ask, so what they share is the dialog and not the condition.
+  //
+  // THE CALLER'S WORK STAYS IN A CALLBACK, which is the whole discipline of
+  // this thing: every answer including CANCEL returns from here immediately,
+  // so work written after the call would run on all three. It has to be
+  // handed over to run on two of them.
+  const askToSave = (question, proceed) => {
     guardProceed = proceed;
-    if (fileGuardText) {
-      fileGuardText.textContent =
-        `This drawing has unsaved edits. Save before ${what}?`;
-    }
+    if (fileGuardText) fileGuardText.textContent = question;
     if (fileGuard) fileGuard.hidden = false;
     paint();
+  };
+
+  // THE UNSAVED-EDITS GUARD IS ONE CALLER, and the only one that asks
+  // conditionally -- a clean drawing has nothing to lose, so it goes straight
+  // through without a dialog in the way.
+  const guardUnsaved = (what, proceed) => {
+    if (!dirty) { proceed(); return; }
+    askToSave(`This drawing has unsaved edits. Save before ${what}?`, proceed);
   };
 
   if (fileGuard) {
@@ -14230,6 +14310,39 @@
   const openDrawing = () => guardUnsaved('opening another', () => {
     if (fileInput) fileInput.click();
   });
+
+  // ── A BUILDING NEEDS A FILE OF ITS OWN ───────────────────────────────
+  //
+  // Movie, 24 Sep: "if they press the button ask them if they would like to
+  // SAVE the current drawing and then proceed with a NEW CLEAN file for the
+  // new AUTOBUILD". One building per file means a second cannot land beside
+  // the first, so the bone stops refusing and starts offering.
+  //
+  // IT ASKS WHETHER OR NOT THERE ARE EDITS, which is why it goes through
+  // askToSave rather than guardUnsaved. guardUnsaved's silence on a clean
+  // drawing is right for FILE > NEW, where the drafter asked for a new file
+  // and knows what he asked for. Here he pressed a BONE, and the drawing on
+  // screen is about to be replaced whether or not it has unsaved edits --
+  // going quietly would be the surprise.
+  //
+  // WHAT SURVIVES THE SWAP IS THE CHOICE, NOT THE FILE. chosenEntryId and
+  // chosenSizeId are page state that only orderServed() clears, so the entry
+  // picked at the window is still picked once the blank is adopted, and
+  // fireOrder -- which reads page state, never the drawing -- has something
+  // to build. drawing.buildType does NOT survive, hence the re-stamp.
+  //
+  // AND A FAILED SAVE BUILDS NOTHING. The guard's SAVE button returns early
+  // rather than closing when save() comes back false, so a refused lease or
+  // a stale revision leaves the drawing, the dialog and the message exactly
+  // where they are -- and this callback, which would have blanked it, never
+  // runs. adoptAndShow is checked for the same reason one layer down.
+  const buildInAFreshFile = () => askToSave(
+    'This build needs a clean file. Save the current drawing first?',
+    async () => {
+      if (!(await adoptAndShow(blankDrawingFile()))) return;
+      stampBuildType();
+      fireOrder();
+    });
 
   if (fileInput) {
     fileInput.addEventListener('change', async event => {
