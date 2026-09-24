@@ -4754,6 +4754,16 @@
     // out from under a shape the drafter is about to trace by hand would be
     // the worst of the three outcomes. The old refusal was gated the same
     // way, for the milder version of the same reason.
+    //
+    // AND TWO PRESSES REACH THIS, not one. The obvious caller is the bone at
+    // the window. The other is the CHOICE CARD'S BUILD, which runs fireBuild
+    // first and falls through to here when it answers false (:4204) -- a
+    // drafter whose traced loop is already built presses BUILD, there is
+    // nothing left to raise from his outline, and the premade design is what
+    // the order round is for. That second press lands on a file that by
+    // definition already holds the house he just built, so it is the one most
+    // likely to meet this offer. Worth naming because the fall-through is
+    // easy to miss: nothing at the card says it leads here.
     const raisesABuilding = picked?.entry?.needsSize
       || !!window.DraftPremadePlans?.planFor(picked?.entry?.id);
     if (raisesABuilding && window.DraftBuildingBodies.hasBuilding(drawing)) {
