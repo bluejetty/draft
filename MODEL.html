@@ -563,9 +563,22 @@
      open submenu share it: two rows at the 134 ceiling is 268 and a gap,
      inside 294 with room. Equal rows make that arithmetic simpler than it
      has been all evening. */
+  /* THE CARD IS A SQUARE BOX, and the picture fits inside it. `width:auto`
+     off a fixed height let the ART decide the tile's shape, so a card that
+     was not square made its own row uneven -- 1storey.png is 512x562 and
+     rendered 111x122 beside its 122x122 neighbours. The board's own rule is
+     square cards, one size a row, and it is checked in
+     model-drivethru.spec.js.
+     `contain` RATHER THAN `cover` because the alternative is cropping
+     somebody's drawing to fit a grid: a square card fills this box exactly
+     and is untouched, and a card that is not square pillarboxes instead of
+     losing its edges. A square export still looks better and is the thing to
+     ask for; this makes the board honest either way. */
   #build-bar button.card img { display:block;
     height:clamp(48px, calc(var(--dt-w) * 0.14), 134px);
-    width:auto; border:1px solid transparent; border-radius:2px; }
+    width:clamp(48px, calc(var(--dt-w) * 0.14), 134px);
+    object-fit:contain;
+    border:1px solid transparent; border-radius:2px; }
   #build-bar button.card:hover img { border-color:#8f2a1d; }
   #build-bar button.card.open img, #build-bar button.card.chosen img {
     border-color:#8f2a1d; box-shadow:0 0 0 2px rgba(143,42,29,0.45); }
@@ -3912,12 +3925,19 @@
   // THE SECOND PAGE IS BEING DRAWN NOW. Movie's five were the families and the
   // bare house types; the ENTRIES that add a garage had none and fell back to
   // lettering, so an open submenu read as half finished -- a card, two words, a
-  // card. Both houses' second pages are fully drawn as of 24 Sep. What is
-  // still lettering: the three detached foundations, and a 1 STOREY of its own
-  // for the bungalow ENTRY -- which borrows the FAMILY's card, so that page
-  // opens BUNGALOW where its own label reads 1 STOREY. Each is one line here
-  // the day its art lands, and until then the fallback keeps the tile on the
-  // board.
+  // card. Both houses' second pages are fully drawn as of 24 Sep, and the
+  // DETACHED GARAGE's followed the same day -- Movie, uploading three: "those
+  // 3 are to replace for DETACHED GARAGE 2nd level".
+  //
+  // WHAT IS STILL LETTERING is one tile: a 1 STOREY of its own for the
+  // bungalow ENTRY, which borrows the FAMILY's card, so that page opens
+  // BUNGALOW where its own label reads 1 STOREY. One line here the day its art
+  // lands, and until then the fallback keeps the tile on the board.
+  //
+  // THE EXTENSIONS ARE NOT UNIFORM and are written out rather than derived:
+  // two of the three are .jpeg and the thickened edge is .jpg, as uploaded. A
+  // rule that built these paths from the id would be one typo away from a
+  // silently lettered tile, which is exactly the failure the fallback hides.
   const CARD_ART = Object.freeze({
     bungalow: './assets/house-bungalow.png',
     'bungalow-garage': './assets/house-bungalow-garage.png',
@@ -3928,13 +3948,34 @@
     'bilevel-garage': './assets/house-bilevel-garage.png',
     modifiedBilevel: './assets/house-modifiedBilevel.png',
     detachedGarage: './assets/house-detachedGarage.png',
+    'detached-thickened': './assets/garagethickenedge.jpg',
+    'detached-gradebeam': './assets/garagegradebeam.jpeg',
+    'detached-frostwall': './assets/garagefrostwall.jpeg',
+  });
+
+  // WHAT AN ENTRY WEARS WHEN ITS ID IS ALSO A FAMILY'S. Checked first for a
+  // tile on the second level and ignored everywhere else, so the table stays
+  // the list of collisions rather than a second copy of the board.
+  const ENTRY_ART = Object.freeze({
+    bungalow: './assets/1storey.png',
   });
 
   // The card if there is one, the words if there is not. Either way the
   // label is the button's text, which is what every check reads and what a
   // screen reader says.
-  const dressTile = (button, id, label) => {
-    const art = CARD_ART[id];
+  const dressTile = (button, id, label, scope) => {
+    // ONE ID IS TWO TILES, and only here does that bite. `bungalow` is the
+    // FAMILY and also its first ENTRY, so a single table cannot hand them
+    // different cards -- which is why the submenu opened a card reading
+    // BUNGALOW under a label reading 1 STOREY. Movie, 24 Sep: "the 2nd lvl
+    // down should say 1 STOREY - (not BUNGALOW)", and "one on top should stay
+    // BUNGALOW".
+    //
+    // THE SCOPE IS ASKED FOR RATHER THAN GUESSED. Reading the id and hoping
+    // would work until the next family shares a name with one of its entries,
+    // and the tell would again be a card quietly disagreeing with the words
+    // under it -- which nothing fails on and nobody notices for weeks.
+    const art = (scope === 'entry' && ENTRY_ART[id]) || CARD_ART[id];
     if (!art) { button.textContent = label; return; }
     const card = document.createElement('img');
     card.src = art;
@@ -4048,11 +4089,50 @@
   const sizeWidth = document.getElementById('size-w');
   const sizeDepth = document.getElementById('size-d');
 
-  // THE SIZE THE ORDER WOULD CARRY, or null if the question is open. A
-  // typed pair that is blank or out of bounds is NOT a size -- the bone
+  // WHETHER THE BOARD ASKS HOW BIG. Movie, 24 Sep: "don't offer a size for
+  // now ... for the Drive Thru Menu", with 24x26 as the answer instead.
+  //
+  // A SWITCH RATHER THAN A DELETION, because "for now" is his word. The size
+  // row, the three stock tiles, the typed fourth option and the refusal that
+  // guards it are all left standing and all still correct -- they are simply
+  // not put to the drafter.
+  //
+  // AND ?sizes=ask TURNS IT BACK ON, which is not a test hook bolted to the
+  // side: five checks in model-drivethru.spec.js cover that question -- the
+  // row's contents, a stock size reaching the seam, the typed pair's bounds,
+  // a size not following the drafter onto his next press, and the foot bone
+  // closing the order. Withdrawing the question without this would have meant
+  // deleting all five and finding out the hard way, the day it came back,
+  // which of them still held. They now ask for it and go on measuring it.
+  //
+  // THE PAGE ALREADY VARIES THIS WAY -- ?mode, ?theme, ?level, ?view, ?board
+  // -- so a flag is the idiom here rather than an exception to it.
+  //
+  // needsSize STAYS TRUE ON THE ENTRIES, and that is deliberate: it is the
+  // data fact that a garage HAS a size, which is a different statement from
+  // whether the board asks for one. Several things read it -- among them the
+  // one-building cap, which uses it to tell a press that raises a building
+  // from one that hands over a trace -- and they all still want the true
+  // answer.
+  const ASKS_SIZE = new URLSearchParams(location.search).get('sizes') === 'ask';
+
+  // THE SIZE THE ORDER WOULD CARRY, or null if the entry has no size at all.
+  // A typed pair that is blank or out of bounds is NOT a size -- the bone
   // refuses rather than building a garage nobody asked for.
   const chosenSize = () => {
-    if (!chosen()?.entry?.needsSize || !chosenSizeId) return null;
+    if (!chosen()?.entry?.needsSize) return null;
+    // UNASKED IS NOT UNANSWERED -- BUT ASKED AND UNPRESSED STILL IS. When the
+    // board does not put the question (see ASKS_SIZE), "nothing pressed" is
+    // the normal case rather than an open one, and the default is what the
+    // order carries; a null there would put the bone back to refusing HOW
+    // BIG, THOUGH? for a question nobody was shown.
+    //
+    // WHEN IT DOES ASK, the same silence means the opposite and has to keep
+    // meaning it: the question is open, the bone refuses, and Gruff says so.
+    // Defaulting in both cases made the sign answer a question it had just
+    // asked -- "ONE 24' x 26' THICKENED EDGE. GOOD CHOICE." over an untouched
+    // size row -- which is what the two checks under ?sizes=ask caught.
+    if (!chosenSizeId) return ASKS_SIZE ? null : BM.garageDefaultSize();
     if (chosenSizeId !== 'custom') return BM.garageSizeById(chosenSizeId);
     return BM.customGarageSize(sizeWidth.value, sizeDepth.value);
   };
@@ -4130,7 +4210,7 @@
       const button = document.createElement('button');
       button.type = 'button';
       button.dataset.buildEntry = entry.id;
-      dressTile(button, entry.id, entry.label);
+      dressTile(button, entry.id, entry.label, 'entry');
       button.classList.toggle('chosen', entry.id === chosenEntryId);
       button.onclick = () => pressEntry(entry.id);
       return button;
@@ -4147,7 +4227,7 @@
     // THE SIZE ROW BELONGS TO THE CHOSEN ENTRY, not to the open submenu:
     // it is the question that follows the press, so it stays up after the
     // submenu shuts and the drafter can still see what he answered.
-    const asks = chosen()?.entry?.needsSize === true;
+    const asks = ASKS_SIZE && chosen()?.entry?.needsSize === true;
     sizeRow.hidden = !asks;
     if (asks) {
       sizeStock.replaceChildren(...BM.GARAGE_SIZES.map(size => {

@@ -61,7 +61,9 @@ const orderGarageOnAFullFile = async page => {
   await h.openDriveThru(page);
   await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
   await page.locator('#dt-tiles [data-build-entry="detached-thickened"]').click();
-  await page.locator('#size-stock [data-build-size="16x24"]').click();
+  // NO SIZE PRESSED, because the board no longer asks. Movie, 24 Sep: "don't
+  // offer a size for now ... for the Drive Thru Menu", with 24x26 standing in
+  // as the answer. The press that follows is the whole order.
   await page.locator('#dt-bone').click();
 };
 

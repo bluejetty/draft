@@ -104,16 +104,21 @@ test('U arms the outline, which has a letter and no key of its own',
 test('a letter typed into a field is a character, not a tool', async ({ page }) => {
   await open(page, base());
 
-  // THE SIZE FIELDS ON THE SIGN ARE THE LIVE CASE: a drafter typing a garage
-  // width is not arming the wall tool, and a page that armed one would also
-  // eat the character he meant to type.
-  await h.openDriveThru(page);
-  await page.locator('[data-build-family="detachedGarage"]').click();
-  await page.locator('[data-build-entry="detached-thickened"]').click();
-  await page.locator('#size-stock [data-build-size="custom"]').click();
-
-  const width = page.locator('#size-w');
-  await width.click();
+  // A DRAFTER NAMING A FILE IS THE LIVE CASE: the letters of a file name are
+  // not tool keys, and a page that armed one would also eat the character he
+  // meant to type. W is the wall tool and U arms the outline trace, so both
+  // presses below would be visible in the register if the field leaked.
+  //
+  // THIS USED TO RIDE THE GARAGE SIZE FIELDS, which were the obvious inline
+  // case until the board stopped asking how big (Movie, 24 Sep: "don't offer
+  // a size for now ... for the Drive Thru Menu"). They are still in the
+  // document and still work; they are simply not put to the drafter any more,
+  // so a test that pressed its way to them would be testing a route nobody
+  // can take. The remaining always-reachable text field is this one.
+  await page.locator('#file-save-as').click();
+  const name = page.locator('#save-as-name');
+  await expect(name).toBeVisible();
+  await name.click();
   await page.keyboard.press('W');
   await page.keyboard.press('U');
 
