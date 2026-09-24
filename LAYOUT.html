@@ -7,6 +7,55 @@
 <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
      critical path of the page. -->
 <link rel="stylesheet" href="vendor/fonts.css" />
+<!-- THE SHELL EVERY PAGE WEARS. The stylesheet first so the bars are skinned
+     on the first frame; the module below palette.js, because a bar with no
+     roles resolved is a bar with no colours -- and before the body, because
+     the bars are written where their mount call stands, mid-parse. -->
+<link rel="stylesheet" href="./shell-bars.css" />
+<!-- COLOUR BEFORE ANYTHING PAINTS, and FIRST, because every script below
+     this line may reach for a role. palette.js is a table with two consumers
+     -- toCSS() for the stylesheet and resolve() for the painters -- and this
+     page uses both: the block below is written entirely in --role tokens, and
+     _draw() clears the desk to the same table. -->
+<script src="./palette.js"></script>
+<script>
+  // THE SKIN IS ONE CHOICE ACROSS THE WHOLE APP, not one per page. MODEL
+  // stores the drafter's pick under `draft-skin` and reads ?theme=/?mode= as
+  // a per-visit override; this page reads the SAME key the SAME way, so
+  // walking from the model space to the construction layout does not change
+  // the lights. Defaults match MODEL's -- ruff, night.
+  //
+  // Synchronous, and in the head ON PURPOSE. Between parse and boot a page
+  // written in --role tokens has no colour at all; applying here means the
+  // first frame the browser paints is already skinned.
+  //
+  // IT ONLY READS THE CHOICE TODAY. The switcher lives in the shared top bar,
+  // which this page does not wear yet; when it does, that bar's onSkin
+  // callback repaints the sheet and this comment comes out.
+  (() => {
+    const P = window.DraftPalette;
+    const params = new URLSearchParams(location.search);
+    const stored = (() => {
+      try { return JSON.parse(localStorage.getItem('draft-skin') || 'null') || {}; }
+      catch { return {}; }
+    })();
+    const pick = (name, allowed, fallback) => {
+      const asked = params.get(name);
+      if (asked && allowed.includes(asked)) return asked;
+      if (asked) {
+        console.warn(`LAYOUT: unknown ${name} "${asked}"; using ${fallback}. `
+          + `Known: ${allowed.join(', ')}`);
+      }
+      return allowed.includes(stored[name]) ? stored[name] : fallback;
+    };
+    window.__layoutSkin = {
+      theme: pick('theme', P.THEMES, 'ruff'),
+      mode: pick('mode', P.MODES, 'night'),
+    };
+    P.apply(document, window.__layoutSkin.theme, window.__layoutSkin.mode);
+  })();
+</script>
+<script src="./shell-bars.js"></script>
 <script src="./profile-manager.js"></script>
 <script src="./shared-file-store.js"></script>
 <script src="./drawing-format.js"></script>
@@ -43,116 +92,223 @@
   /* THE STYLES THIS PAGE USED TO WEAR INLINE. Every rule below was a `style=`
      attribute in LAYOUT.dc.html -- 67 of them, carrying 140 colour literals
      between them -- because a DC template has nowhere else to put them. They
-     are rules now, and the colours are still literals: turning them into
-     palette roles is its own commit, and a port that changed how the page
-     LOOKS at the same time as how it is built would leave nothing to compare
-     against. */
+     became rules when the page was ported; the colours became palette roles
+     on 24 Sep, which is what lets this page answer to the same four skins as
+     the rest of the shop.
+
+     THE SHEET IS PAPER. THE ROOM AROUND IT IS CHROME. That sentence is the
+     whole conversion policy, and it is worth stating because it is why half
+     the literals on this page are still literals. A construction sheet is
+     white with near-black ink on every skin -- that is what the plotter
+     prints, and a sheet that changed colour with the lights would be lying
+     about the drawing. So the paper, its margin guide, its titleblock and the
+     frames drawn ON it keep their values, and they live in the canvas painter
+     with a note of their own. Everything the drafter looks THROUGH to reach
+     the sheet -- this panel, the bars, the dialog, the desk the paper lies on
+     -- takes a role. Nothing in this block paints on paper.
+
+     A DARK FACE IS NOT --ink-primary, and this is the trap the conversion was
+     walked into. `.lay-pick.lay-paper.on` read `background:#1d1f20;
+     color:#f2f2f3`, and the obvious reading of that pair is "ink, and the
+     page on top of it". It is neither. On the night skin --ink-primary is
+     #e7e5e2, so mapping the BACKGROUND to it would have made a chosen chip
+     near-white with near-white lettering -- the exact defect that left SPECS
+     a white page nobody could read. A selected face is --accent with
+     --accent-ink on it, which is the idiom #units-corner and #mode-corner
+     already use in the shared bar.
+
+     AND THE ACCENT IS NOT REDECLARED HERE. shell-bars.css gives `aside` the
+     mark colour (`--accent: var(--accent-mark)`) on Movie's 17 Sep rule about
+     small outlines and text in menu areas. That rule holds for LINES and
+     LETTERING, not for fills, and this panel is full of filled accent faces:
+     on RUFF night the mark is gold and --accent-ink is white, so a blanket
+     redeclaration would paint every chosen chip white-on-gold. The two
+     outline states below name --accent-mark themselves instead. */
   *, *::before, *::after { box-sizing: border-box; }
-  html, body { height:100%; margin:0; padding:0; overflow:hidden; background:#fff;
-    font-family:'Barlow', system-ui, sans-serif; color:#1d1f20; }
-  a { color:rgba(29,31,32,0.45); text-decoration:none;
+  /* THE PAGE IS A COLUMN BETWEEN TWO FIXED BARS. It used to be three boxes in
+     flow -- its own 44px top bar, a body at calc(100vh - 72px), a 28px status
+     bar -- and that arithmetic was written out by hand in one place and had to
+     agree with two heights typed in another.
+
+     The shared bars are position:fixed, so they are NOT flex items and take no
+     space in this column. The padding is what holds the column clear of them,
+     and every number in it is the bar's own token: --strip-h at the head,
+     --house-h plus --browser-lane at the foot. A bar that changes height moves
+     this page with it, which is the point of the tokens existing.
+
+     --browser-lane IS IN THE SUM, and leaving it out is the mistake worth
+     naming: it is the band Firefox draws its link preview over and iOS keeps
+     for the home indicator, and #house-strip reserves it as PADDING inside its
+     own box. A page that subtracted only --house-h would put its last 24px
+     under the bar's hem. */
+  html { height:100%; }
+  body { height:100vh; margin:0; overflow:hidden;
+    display:flex; flex-direction:column;
+    padding-top: var(--strip-h);
+    padding-bottom: calc(var(--house-h) + var(--browser-lane));
+    background-color: var(--surface-page); background-image: var(--surface-page-tex, none);
+    font-family:'Barlow', system-ui, sans-serif; color: var(--ink-primary); }
+  a { color: var(--ink-quiet); text-decoration:none;
     font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
     font-size:12px; letter-spacing:0.08em; text-transform:uppercase; }
-  a:hover { color:#5980a6; }
+  a:hover { color: var(--accent); }
   [hidden] { display:none !important; }
 
-  /* ── TOP BAR ───────────────────────────────────────────────────────── */
-  #lay-top { height:44px; border-bottom:1px solid rgba(29,31,32,0.16);
-    display:flex; align-items:center; padding:0 18px; flex-shrink:0; background:#fff; }
-  #lay-top .lay-word { font-family:'Barlow Condensed', system-ui, sans-serif;
-    font-weight:600; font-size:20px; letter-spacing:0.06em; text-transform:uppercase;
-    color:#1d1f20; }
-  #lay-top a { margin-left:10px; }
-  #lay-top .lay-spacer { flex:1; }
-  #lay-profile { display:flex; flex-direction:column; gap:1px; margin-left:18px; }
-  .layout-profile-button { min-width:64px; border:1px solid rgba(29,31,32,0.2);
-    background:#fff; color:#1d1f20; padding:2px 6px;
+  /* THE PROFILE PAIR, a row on the status bar rather than a stack on a top
+     bar this page no longer owns. Same two buttons, same dialog. */
+  #lay-profile { display:flex; gap:3px; margin-left:18px; }
+  .layout-profile-button { min-width:64px; border:1px solid var(--edge-panel);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    color: var(--ink-primary); padding:2px 6px;
     font-family:'Barlow Condensed', system-ui, sans-serif; font-size:9px;
     font-weight:600; letter-spacing:0.05em; cursor:pointer; }
-  .layout-profile-button.lay-dark { border-color:#1d1f20; background:#1d1f20; color:#f2f2f3; }
+  /* NEITHER WEARS THE ACCENT. SETTINGS carried a filled dark face on the old
+     top bar, where it was the only colour in the strip and read as "start
+     here". On the status bar it sits a few pixels above the page row, whose
+     lit chip is the accent and means THIS IS THE PAGE YOU ARE ON -- so a
+     second accent-filled chip in the same corner was saying that about a
+     dialog. Both are outlines; the hover is the mark, like every other line
+     and lettering on this page. */
+  .layout-profile-button:hover { border-color: var(--accent-mark); color: var(--accent-mark); }
   @media (max-width:560px) {
     .layout-profile-button { min-width:48px; padding:1px 4px; font-size:7px; }
   }
 
   /* ── THE PROFILE DIALOG ─────────────────────────────────────────────── */
+  /* THE SCRIM IS THE SHOP'S SCRIM. It was rgba(29,31,32,0.18) -- the page's
+     own ink at 18%, which is a visible veil over a white page and very nearly
+     nothing over a night one. shell-bars.css names rgba(0,0,0,0.35) as one of
+     the four literals that survive the palette on purpose: black at 35%
+     darkens whatever is behind it, which is the job on all four skins. Two
+     scrims on one page, one of them skin-blind, is the drift this whole
+     exercise is about, so this page uses that one. */
   #lay-scrim { position:fixed; inset:0; z-index:50; display:flex;
     align-items:flex-start; justify-content:center; padding-top:78px;
-    background:rgba(29,31,32,0.18); }
+    background:rgba(0,0,0,0.35); }
+  /* The card is .promote-card's shell (MODEL.html:865), down to the
+     translucent panel: a modal over a 35% scrim is already separated from
+     the page, so it does not also need to be opaque. */
   #lay-dialog { width:min(400px, calc(100vw - 32px));
-    border:1px solid rgba(29,31,32,0.3); background:#fff;
-    box-shadow:0 16px 44px rgba(29,31,32,0.2); padding:18px; color:#1d1f20; }
+    border:1px solid var(--edge-panel);
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    box-shadow:0 16px 44px rgba(0,0,0,0.35); padding:18px; color: var(--ink-primary); }
   #lay-dialog .lay-head { display:flex; align-items:flex-start; gap:14px; }
   #lay-dialog .lay-head > div { flex:1; }
   #lay-dialog-title { font-family:'Barlow Condensed', system-ui, sans-serif;
     font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; }
   #lay-dialog-description { margin-top:5px; font-size:12px; line-height:1.45;
-    color:rgba(29,31,32,0.62); }
-  #lay-keys-link { display:inline-block; margin-top:9px; color:#5980a6;
+    color: var(--ink-secondary); }
+  /* THE MARK, NOT THE ACCENT, and this one is measured rather than assumed:
+     11px uppercase in --accent over the dialog's panel is 4.28 on RUFF night,
+     under AA's 4.5, and the same text in --accent-mark is 9.32. It is also
+     exactly what Movie asked for on 17 Sep -- "the stuff outlines and text in
+     the menu areas". The rule for this page: LINES AND LETTERING take the
+     mark, FILLS take the accent, because --accent-ink is measured against the
+     accent and nothing else. On RUFF night that mark is gold and accent-ink
+     is white, so a filled face wearing it would be white on gold. */
+  #lay-keys-link { display:inline-block; margin-top:9px; color: var(--accent-mark);
     font-family:'Barlow Condensed', system-ui, sans-serif; font-size:11px;
     font-weight:600; letter-spacing:0.06em; text-transform:uppercase; }
-  #lay-dialog-close { border:none; background:transparent; color:rgba(29,31,32,0.48);
+  #lay-dialog-close { border:none; background:transparent; color: var(--ink-quiet);
     font-size:18px; line-height:1; cursor:pointer; }
   .lay-field-label { margin-top:16px; font-family:'Barlow Condensed', system-ui, sans-serif;
     font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase;
-    color:rgba(29,31,32,0.55); }
+    color: var(--ink-quiet); }
   .lay-field { display:flex; align-items:center; margin-top:5px; }
   #lay-file-name { min-width:0; flex:1; height:32px;
-    border:1px solid rgba(29,31,32,0.25); padding:5px 8px; color:#1d1f20;
+    border:1px solid var(--edge-panel);
+    background-color: var(--surface-chip); padding:5px 8px; color: var(--ink-primary);
     font-family:'Barlow', system-ui, sans-serif; font-size:12px; outline:none; }
-  #lay-file-ext { margin-left:6px; color:rgba(29,31,32,0.55);
+  #lay-file-name:focus { border-color: var(--accent-mark); }
+  #lay-file-ext { margin-left:6px; color: var(--ink-quiet);
     font-family:'Barlow Condensed', system-ui, sans-serif; font-size:12px; white-space:nowrap; }
-  #lay-save { width:100%; height:34px; margin-top:10px; border:1px solid #5980a6;
-    background:#5980a6; color:#fff; font-family:'Barlow Condensed', system-ui, sans-serif;
+  #lay-save { width:100%; height:34px; margin-top:10px; border:1px solid var(--accent);
+    background-color: var(--accent); color: var(--accent-ink);
+    font-family:'Barlow Condensed', system-ui, sans-serif;
     font-size:12px; font-weight:600; letter-spacing:0.06em; cursor:pointer; }
-  #lay-import-box { margin-top:14px; border:1px dashed rgba(29,31,32,0.32);
-    background:#fafafa; padding:12px; text-align:center; }
+  #lay-import-box { margin-top:14px; border:1px dashed var(--edge-panel);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    padding:12px; text-align:center; }
   #lay-import-box .lay-import-word { font-family:'Barlow Condensed', system-ui, sans-serif;
     font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;
-    color:rgba(29,31,32,0.58); }
-  #lay-import { height:28px; margin-top:8px; border:1px solid rgba(29,31,32,0.25);
-    background:#fff; color:#1d1f20; padding:3px 12px;
+    color: var(--ink-quiet); }
+  #lay-import { height:28px; margin-top:8px; border:1px solid var(--edge-panel);
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    color: var(--ink-primary); padding:3px 12px;
     font-family:'Barlow Condensed', system-ui, sans-serif; font-size:11px;
     font-weight:600; letter-spacing:0.06em; cursor:pointer; }
+  #lay-import:hover { border-color: var(--accent-mark); color: var(--accent-mark); }
+  /* THE TWO MESSAGE COLOURS STAY LITERAL, and they are the only ink in this
+     block that does. palette.js has no role for "it worked" or "it did not":
+     PROJECT.html keeps #557a46 on its own #status for exactly this reason and
+     MODEL.html keeps #b04050 on .sel-help, so a third spelling here would be
+     a new fact rather than a shared one. Both are on the allowlist in
+     proto/skinned-page-harness.js, which is where widening it has to be
+     argued for. */
   #lay-dialog-message { margin-top:10px; font-size:11px; line-height:1.4; color:#557a46; }
   #lay-dialog-message.lay-bad { color:#b04050; }
 
   /* ── BODY, PANEL, SECTIONS ──────────────────────────────────────────── */
-  #lay-body { display:flex; height:calc(100vh - 72px); }
-  #lay-panel { width:188px; border-right:1px solid rgba(29,31,32,0.16);
+  /* FLEX RATHER THAN A HEIGHT. calc(100vh - 72px) was the old page's own sum
+     of its two bars; the column above does that arithmetic now, so this just
+     takes what is left. min-height:0 is what lets it SHRINK -- a flex item's
+     default min-height is auto, so the panel's content would otherwise push
+     the sheet past the foot of the screen on a short window. */
+  #lay-body { display:flex; flex:1; min-height:0; }
+  #lay-panel { width:188px; border-right:1px solid var(--edge-panel);
     display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto;
-    background:#fff; color:#1d1f20; font-size:13px; }
-  .lay-section { padding:12px 14px; border-bottom:1px solid rgba(29,31,32,0.16); }
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    color: var(--ink-primary); font-size:13px; }
+  .lay-section { padding:12px 14px; border-bottom:1px solid var(--edge-panel); }
   .lay-section-title { font-family:'Barlow Condensed', system-ui, sans-serif;
     font-size:11px; letter-spacing:0.08em; text-transform:uppercase;
-    color:rgba(29,31,32,0.5); margin-bottom:8px; }
+    color: var(--ink-quiet); margin-bottom:8px; }
 
   /* A PANEL BUTTON, and the three sizes of it the panel actually uses. `.on`
      is the chosen one -- a class rather than a colour handed down from the
      render, which is what the DC template did and what made every one of
      these a style attribute. */
   .lay-pick { display:block; width:100%; text-align:left;
-    border:1px solid rgba(29,31,32,0.16); background:#fff; color:#1d1f20;
+    border:1px solid var(--edge-panel);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    color: var(--ink-primary);
     font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
     letter-spacing:0.02em; text-transform:uppercase; padding:5px 10px;
     cursor:pointer; margin-bottom:3px; font-size:11px; }
-  .lay-pick.on { background:rgba(29,31,32,0.09); }
+  /* CHOSEN IS AN OUTLINE, not the faint wash it used to be. The wash was
+     rgba(29,31,32,0.09) -- ink at 9% over white, which is a shade of grey and
+     not a colour the skins have. The .chip.lit idiom says the same thing in
+     one the four skins all define, and it is the mark rather than the accent
+     for Movie's reason: these are hairlines and 11px lettering inside a
+     menu. */
+  .lay-pick.on { border-color: var(--accent-mark); color: var(--accent-mark); }
   .lay-pick.lay-paper { font-size:12px; letter-spacing:0.04em; padding:7px 12px; margin-bottom:4px; }
-  .lay-pick.lay-paper.on { border-color:#1d1f20; background:#1d1f20; color:#f2f2f3; }
+  /* THE ONE FILLED FACE in the pick list: paper is the drafter's largest
+     decision on this page and it reads as a chip that is ON rather than one
+     that is merely outlined. --accent, NOT --accent-mark, because --accent-ink
+     is measured against the accent and nothing else. */
+  .lay-pick.lay-paper.on { border-color: var(--accent);
+    background-color: var(--accent); background-image:none; color: var(--accent-ink); }
   #lay-add-sheet { display:block; width:100%; text-align:left;
-    border:1px dashed rgba(29,31,32,0.3); background:#fff; color:rgba(29,31,32,0.6);
+    border:1px dashed var(--edge-panel); background:none; color: var(--ink-quiet);
     font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
     font-size:11px; letter-spacing:0.02em; text-transform:uppercase;
     padding:5px 10px; cursor:pointer; }
+  #lay-add-sheet:hover { border-color: var(--accent-mark); color: var(--accent-mark); }
   #lay-north { margin-top:6px; margin-bottom:0; }
-  #lay-north.on { border-color:#1d1f20; background:#1d1f20; color:#f2f2f3; }
+  #lay-north.on { border-color: var(--accent);
+    background-color: var(--accent); background-image:none; color: var(--accent-ink); }
 
   /* ── ORIENTATION, A SEGMENTED PAIR ──────────────────────────────────── */
-  .lay-seg { display:inline-flex; overflow:hidden; border:1px solid rgba(29,31,32,0.16); }
+  .lay-seg { display:inline-flex; overflow:hidden; border:1px solid var(--edge-panel); }
   .lay-seg button { padding:7px 10px; font-size:12px; font-weight:600;
     font-family:'Barlow Condensed', system-ui, sans-serif; letter-spacing:0.04em;
-    border:none; background:#fff; color:#1d1f20; cursor:pointer; }
-  .lay-seg button:first-child { border-right:1px solid rgba(29,31,32,0.16); }
-  .lay-seg button.on { background:#1d1f20; color:#f2f2f3; }
+    border:none;
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    color: var(--ink-primary); cursor:pointer; }
+  .lay-seg button:first-child { border-right:1px solid var(--edge-panel); }
+  .lay-seg button.on { background-color: var(--accent); background-image:none;
+    color: var(--accent-ink); }
 
   /* ── THE VIEWPORT SECTION, PINNED TO THE FOOT OF THE PANEL ──────────── */
   /* Movie, 21 Sep, on an empty sheet: "the layouts aren't autogenerating
@@ -170,26 +326,50 @@
      box; `position:sticky` holds it there when the panel is taller and
      scrolls. Both happen: the level and titleblock sections appear only when
      the drawing has them. */
+  /* AND ITS GROUND HAS TO BE OPAQUE, which the panel's own is not.
+     --surface-panel is rgba(20,22,23,0.50) on night and 60% on day, so a
+     sticky footer wearing it would have the scale buttons sliding visibly
+     underneath. --surface-chip is a flat hex on both modes. That is the whole
+     reason this one surface differs from the column it sits in. */
   #lay-viewport-section { padding:12px 14px; position:sticky; bottom:0;
-    margin-top:auto; background:#fff; border-top:1px solid rgba(29,31,32,0.16); }
+    margin-top:auto;
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border-top:1px solid var(--edge-panel); }
   #lay-add-viewport { display:block; width:100%; text-align:center;
-    border:1px solid #5980a6; background:#5980a6; color:#f2f2f3;
+    border:1px solid var(--accent);
+    background-color: var(--accent); color: var(--accent-ink);
     font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
     font-size:13px; letter-spacing:0.04em; text-transform:uppercase;
     padding:9px 12px; cursor:pointer; }
-  #lay-add-viewport.arming { background:#1d1f20; }
+  /* ARMED IS THE FACE TURNED INSIDE OUT. It was a swap to the page's near-
+     black, which on a night skin is the page itself -- the button would have
+     vanished at the moment it most needs to be seen. An outline where the
+     fill was says "this is taking your next press" on every skin. */
+  #lay-add-viewport.arming { background-color: var(--surface-chip);
+    background-image: var(--surface-chip-tex, none); color: var(--accent-mark); }
   #lay-deal { display:block; width:100%; margin-top:6px; text-align:center;
-    border:1px solid rgba(29,31,32,0.28); background:#fff; color:#1d1f20;
+    border:1px solid var(--edge-panel);
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    color: var(--ink-primary);
     font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
     font-size:13px; letter-spacing:0.04em; text-transform:uppercase;
     padding:9px 12px; cursor:pointer; }
   /* Dead with no drawing, for the note's reason: there is nothing to project.
      The note below already says so, so the button does not repeat it. */
-  #lay-deal:disabled { background:rgba(29,31,32,0.04); color:rgba(29,31,32,0.35); cursor:default; }
-  #lay-viewport-note { margin-top:8px; font-size:11px; line-height:1.4; color:rgba(29,31,32,0.55); }
+  #lay-deal:disabled { background:none; color: var(--ink-quiet);
+    border-color: var(--edge-panel); cursor:default; }
+  #lay-viewport-note { margin-top:8px; font-size:11px; line-height:1.4; color: var(--ink-quiet); }
 
   /* ── THE SHEET ──────────────────────────────────────────────────────── */
-  #lay-canvas-wrap { flex:1; position:relative; overflow:hidden; background:#c8c8c8; }
+  /* THE DESK, and the one surface in this block that the canvas paints too:
+     _draw() clears to the same role, because the wrap shows only in the
+     moment before the first frame and behind a canvas that has not been
+     sized yet. It was #c8c8c8 -- a mid grey chosen to set a white sheet off,
+     which is a job --surface-page does on three skins and nearly not at all
+     on day, where the page is #f2f2f3. The sheet's drop shadow is what holds
+     that edge, and it is drawn for this reason rather than for depth. */
+  #lay-canvas-wrap { flex:1; position:relative; overflow:hidden;
+    background-color: var(--surface-page); background-image: var(--surface-page-tex, none); }
   /* touch-action:none ONLY on the sheet (audit C2): a finger dragging a
      viewport must not be taken by the browser as page scroll. The panels and
      the scale list around it still scroll by touch. */
@@ -198,15 +378,22 @@
   #lay-canvas.grabbing { cursor:grabbing; }
 
   /* ── STATUS BAR ─────────────────────────────────────────────────────── */
-  #lay-status-bar { height:28px; border-top:1px solid rgba(29,31,32,0.16);
+  /* IN THE COLUMN, NOT FIXED, so it sits directly on top of the shared bottom
+     bar without either knowing the other's height. MODEL's readout solves the
+     same problem the other way -- position:fixed at --readout-bottom -- because
+     it FLOATS over the drawing and this does not: this is a full-width strip
+     the sheet has to end above, which is exactly what a flex sibling is. */
+  #lay-status-bar { height:28px; flex-shrink:0; border-top:1px solid var(--edge-panel);
     display:flex; align-items:center; padding:0 18px;
     font-family:'Barlow Condensed', system-ui, sans-serif; font-size:11px;
-    letter-spacing:0.06em; color:rgba(29,31,32,0.55); background:#fff;
+    letter-spacing:0.06em; color: var(--ink-quiet);
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     flex-shrink:0; user-select:none; }
   #lay-status-bar .lay-spacer { flex:1; }
   /* A failed sheet save has to be visible. It used to be a console.warn: the
      drafter kept placing viewports onto a sheet that was not being written
-     anywhere. Same readout the Model Space carries. */
+     anywhere. Same readout the Model Space carries, and the same failure red
+     as the dialog's -- see the note on #lay-dialog-message. */
   [data-layout-status].lay-bad { color:#b04050; font-weight:600; }
   /* UNDO / REDO. This page had no history at all: a viewport dragged off the
      sheet, a titleblock swapped by mistake, a delete -- every one permanent,
@@ -216,31 +403,35 @@
   [data-history-controls] { display:flex; align-items:center; margin-right:12px; }
   .strip-history { display:inline-flex; align-items:center; justify-content:center;
     min-width:44px; height:28px; padding:0; border:none; background:transparent;
-    color:rgba(29,31,32,0.62); cursor:pointer; transition:color 120ms ease; }
-  .strip-history:hover:not(:disabled) { color:#365e86; }
-  .strip-history:disabled { color:rgba(29,31,32,0.16); cursor:default; }
-  /* Bottom-right nav cluster. The current page wears the dark face. */
-  [data-nav-cluster] { display:flex; align-items:center; gap:4px; margin-left:18px; }
-  [data-nav-cluster] a { display:inline-flex; align-items:center; height:20px;
-    border:1px solid rgba(29,31,32,0.2); background:#fff; color:#1d1f20;
-    padding:0 8px; font-size:10px; letter-spacing:0.06em; }
-  [data-nav-cluster] a.here { border-color:#1d1f20; background:#1d1f20; color:#f2f2f3; }
-  [data-nav-home] { border:none !important; background:transparent !important; padding:0 2px !important; line-height:0; }
-  [data-nav-home] img { height:24px; display:block; }
+    color: var(--ink-secondary); cursor:pointer; transition:color 120ms ease; }
+  .strip-history:hover:not(:disabled) { color: var(--accent); }
+  /* Spent, not broken: the dormant idiom from the shared bar's chips rather
+     than a fourth grey. */
+  .strip-history:disabled { color: var(--ink-quiet); opacity:0.35; cursor:default; }
+  /* THE NAV CLUSTER'S RULES CAME OUT WITH IT. MODEL · LAYOUT · PROJECT ·
+     SPECS and the logo were this page's own copy of a row that shell-bars.js
+     now writes for every page, out of one table, with the current page marked
+     from the `page` it is mounted with. Two copies of the map of the job is
+     how one of them goes stale. */
 </style>
 </head>
 <body>
 
-<!-- TOP BAR -->
-<div id="lay-top">
-  <div class="lay-word">LAYOUT</div>
-  <a href="./MODEL.dc.html">MODEL</a>
-  <div class="lay-spacer"></div>
-  <div id="lay-profile">
-    <button type="button" class="layout-profile-button lay-dark" data-open-settings>SETTINGS</button>
-    <button type="button" class="layout-profile-button" data-open-standards>STANDARDS</button>
-  </div>
-</div>
+<!-- THE TOP BAR IS THE SHOP'S NOW. What stood here was this page's own: the
+     word LAYOUT, a link back to MODEL, and the two profile buttons. All three
+     had a better home -- the page row in the bottom bar is the map of the job
+     and already carries MODEL, and the bar's settings corner carries SETTINGS
+     and STANDARDS as links to their pages.
+
+     WITH THE INSTRUMENTS, on Movie's own instruction when the bars were being
+     split out: "put those top and bottom bars in the Construction layout
+     (with the LENGTH, ANGLE and other instruments ... we may need to draw
+     sometimes". shell-bars.css records the same ruling -- #strip-center is
+     not one page's, it is every DRAWING page's. Nothing on this page fills
+     them yet, so the chips stand DORMANT rather than live; see the stand-down
+     block at the foot of the page script, which says which controls are
+     honest here and which are not. -->
+<script>window.DraftShellBars.topBar({ instruments: true });</script>
 
 <!-- THE PROFILE DIALOG: personal settings and company standards, saved to a
      portable file or read back from one. -->
@@ -353,6 +544,16 @@
 <!-- STATUS BAR -->
 <div id="lay-status-bar">
   <span data-layout-status>SAVED</span>
+  <!-- THE PROFILE PAIR, beside the save word rather than at the far right.
+       It began the swap on the right, where the nav cluster had been, and sat
+       directly above the page row's own chips -- two rows of small bordered
+       words, one of them lit, four pixels apart. Moving it to the other end
+       of the same strip is the cheapest possible separation: this is the
+       page's own furniture and the row below is the shop's. -->
+  <div id="lay-profile">
+    <button type="button" class="layout-profile-button" data-open-settings>SETTINGS</button>
+    <button type="button" class="layout-profile-button" data-open-standards>STANDARDS</button>
+  </div>
   <div class="lay-spacer"></div>
   <div data-history-controls>
     <button type="button" data-undo class="strip-history" title="Nothing to undo yet" aria-label="Nothing to undo yet" disabled>
@@ -369,18 +570,23 @@
     </button>
   </div>
   <span data-sheet-readout></span>
-  <!-- Bottom-right nav cluster: MODEL · LAYOUT · PROJECT · SPECS, and the logo
-       walks back out to the main page. -->
-  <div data-nav-cluster>
-    <a data-nav-model href="./MODEL.dc.html">MODEL</a>
-    <a data-nav-layout class="here" href="./LAYOUT.html">LAYOUT</a>
-    <a data-nav-project href="./PROJECT.html">PROJECT</a>
-    <a data-nav-specs href="./SPECS.html">SPECS</a>
-    <a data-nav-home href="./index.html" title="Rough Drafter — back to the main page">
-      <img src="./assets/rough-drafter-logo.png" alt="Rough Drafter home" />
-    </a>
-  </div>
+  <!-- THE PROFILE PAIR RIDES HERE NOW, where the nav cluster used to. The
+       cluster itself is gone -- the bottom bar's page row is the same map
+       drawn once for every page, and two of them would be two things to keep
+       in step.
+
+       THE BUTTONS STAYED, and that was a decision rather than an oversight.
+       The bar's settings corner LINKS to SETTINGS.html and STANDARDS.html;
+       this page's buttons open a DIALOG that saves a profile package to a
+       file and reads one back. Those are not the same door. Traced before
+       anything was cut: profile-manager's parseFile has exactly two callers
+       in the repo, MODEL.dc.html and this page, and neither SETTINGS.html nor
+       STANDARDS.html has an import path at all -- both have a DOWNLOAD button
+       and nothing that reads a file. So dropping this dialog when the bar
+       arrived would have made importing a profile impossible everywhere in
+       the app that is not the old DC page. Movie, asked, kept it. -->
 </div>
+<script>window.DraftShellBars.bottomBar({ page: 'construction' });</script>
 
 <script>
 // ── THE PAGE, OFF THE DC RUNTIME ────────────────────────────────────────
@@ -1396,6 +1602,30 @@ class Component extends PageLogic {
     this.state.panY = (canvas.height - ph * zoom) / 2;
   }
 
+  // COLOUR ON THE CANVAS, READ FROM THE SAME TABLE THE STYLESHEET READS.
+  // DraftPalette.apply() writes data-theme / data-mode on the root, so the
+  // painter ASKS the document which skin is on rather than being told -- one
+  // source of truth, and a skin switched after boot needs nothing here but a
+  // repaint. Cached on the pair because _draw runs on every frame of a drag
+  // and resolve() rebuilds and freezes an object each call.
+  //
+  // ONLY THE DESK AND ITS LABEL COME FROM HERE, which is the sheet-is-paper
+  // rule from the style block's head stated once more where it is actually
+  // enforced: everything painted INSIDE the paper rectangle below is a
+  // literal on purpose, because a construction sheet is white with near-black
+  // ink on all four skins. The plotter does not have a night mode.
+  _skin() {
+    const root = document.documentElement;
+    const theme = root.getAttribute('data-theme') || 'ruff';
+    const mode = root.getAttribute('data-mode') || 'night';
+    const key = `${theme}/${mode}`;
+    if (this.__skinKey !== key) {
+      this.__skinKey = key;
+      this.__skin = window.DraftPalette.resolve(theme, mode);
+    }
+    return this.__skin;
+  }
+
   _draw() {
     const canvas = this._canvas;
     const ctx = this._ctx;
@@ -1407,15 +1637,31 @@ class Component extends PageLogic {
     const pxW = pw * zoom;
     const pxH = ph * zoom;
 
-    // Background
-    ctx.fillStyle = '#c8c8c8';
+    const skin = this._skin();
+
+    // THE DESK the paper lies on. It was #c8c8c8 -- a mid grey picked to set
+    // a white sheet off -- and it is the page's ground, which is what
+    // --surface-page names. On day that ground is #f2f2f3 and very nearly the
+    // paper's own white, so the shadow below stops being depth and becomes
+    // the sheet's edge; it is kept for that job.
+    ctx.fillStyle = skin['surface-page'];
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Paper shadow
+    // Paper shadow. A LIGHT, NOT A COLOUR: black at 22% darkens whatever is
+    // under it, which is the job on all four skins -- the same argument
+    // shell-bars.css makes for keeping its modal scrim a literal.
     ctx.shadowColor = 'rgba(0,0,0,0.22)';
     ctx.shadowBlur = 18;
     ctx.shadowOffsetX = 4;
     ctx.shadowOffsetY = 4;
+    // THE PAPER, and from here down every literal is deliberate. A sheet is
+    // white on all four skins because that is the sheet that gets printed,
+    // and the ink on it is near-black for the same reason. The temptation is
+    // --surface-page for the paper and --ink-primary for the ink, which reads
+    // beautifully and is wrong twice over: on night it would paint a
+    // near-black sheet and then letter it in near-white, so the drafter's
+    // screen would stop matching the plot -- and the one place that pairing
+    // was actually made, SPECS, shipped a page nobody could read.
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(panX, panY, pxW, pxH);
     ctx.shadowColor = 'transparent';
@@ -1469,8 +1715,11 @@ class Component extends PageLogic {
       ctx.fillText('TITLE BLOCK', tbBox.x + tbBox.w / 2, tbBox.y + tbBox.h / 2);
     }
 
-    // Paper size label (top-left outside paper)
-    ctx.fillStyle = 'rgba(29,31,32,0.4)';
+    // Paper size label (top-left OUTSIDE paper). Outside is the whole reason
+    // this one takes a role while the ink a few lines above does not: it is
+    // printed on the desk, so on a night skin the old ink-at-40% would have
+    // been dark grey on near-black.
+    ctx.fillStyle = skin['ink-quiet'];
     ctx.font = `600 11px 'Barlow Condensed', sans-serif`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
@@ -1553,6 +1802,11 @@ class Component extends PageLogic {
       }
     }
     // The frame is desk furniture, not ink: faint always, blue when selected.
+    // LITERAL, THOUGH, AND NOT THE ACCENT, because furniture or not it is
+    // drawn ON the white sheet. The accent is measured against the skin's own
+    // page: ROUGH's night blue is lifted to clear AA on black, which leaves
+    // it at about 2.4 on paper. The drafting blue reads on white on every
+    // skin, because the sheet under it is white on every skin.
     const selected = viewport.id === selectedViewportId;
     ctx.strokeStyle = selected ? '#5980a6' : 'rgba(29,31,32,0.18)';
     ctx.lineWidth = selected ? 1.5 : 0.75;
@@ -2120,6 +2374,130 @@ const page = new Component();
 page._wirePanel();
 page._paintPanel();
 page.componentDidMount();
+
+// ── THE SHARED BAR, WIRED TO WHAT THIS PAGE CAN HONESTLY DO ─────────────
+(() => {
+  const S = window.DraftShellBars;
+
+  // THE BONE WEARS THE THEME FROM THE FIRST FRAME. wireSkin repaints it on
+  // every press, but nothing has been pressed on load -- and a page opened
+  // straight into ROUGH would show a red bone until the drafter touched a
+  // switch. PROJECT learned this one the hard way.
+  S.paintBone(window.__layoutSkin.theme);
+
+  // THE SKIN SWITCH IS THE BAR'S; WHAT TO REPAINT IS THIS PAGE'S. The sheet
+  // is a canvas and _draw() reads its inks from DraftPalette.resolve() off
+  // the root's data-theme/data-mode, which wireSkin has already rewritten by
+  // the time onSkin runs -- so the repaint is one call and the painter needs
+  // to know nothing about switches. The comment in the head boot that said
+  // this page "only READS the choice" stopped being true here.
+  S.wireSkin({
+    theme: window.__layoutSkin.theme,
+    mode: window.__layoutSkin.mode,
+    onSkin: (skin, theme, mode) => {
+      window.__layoutSkin = { theme, mode };
+      page._draw();
+    },
+  });
+
+  // ── AND THE CONTROLS IT CANNOT ─────────────────────────────────────────
+  //
+  // DISABLED, NOT LEFT LIVE, which is this bar's own vocabulary: the page row
+  // has shown REAL ESTATE LAYOUT and ESTIMATES greyed since it was built,
+  // because "the row is the map of the job" and a map with a town missing
+  // teaches a shape that is wrong. A button that looks pressable and does
+  // nothing teaches a worse one. Each carries a title saying why, so the
+  // answer is one hover away rather than in this file.
+  const standDown = (id, why) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.disabled = true;
+    el.title = why;
+  };
+
+  // THE FILE ROW. All six are operations on the DRAWING, and this page does
+  // not own the drawing -- it arranges views OF it onto sheets, and it writes
+  // exactly one thing back: the layout record, on every change, through
+  // _persistLayout's queue. That is why SAVE is greyed on a page that saves
+  // constantly: there is no moment when a drafter here has unsaved work to
+  // press a button about, and the status word to the left says so.
+  //
+  // PRINTSCREEN IS THE ONE THAT WILL COME BACK. This is the page that makes
+  // printable sheets, so it is the page where that button most obviously
+  // belongs -- but printing a sheet is a feature with its own questions (which
+  // sheet, at what size, with the titleblock's fields filled from where), and
+  // wiring it under cover of a bar swap would be answering them by accident.
+  standDown('file-new', 'NEW — start a drawing in the MODEL space');
+  standDown('file-open', 'OPEN — open a drawing in the MODEL space');
+  standDown('save', 'SAVE — this page writes every change as you make it; '
+    + 'the word at the foot says where that stands');
+  standDown('file-save-as', 'SAVE AS — not on the construction layout yet');
+  standDown('file-ext', 'Not on the construction layout yet');
+  standDown('printscreen', 'PRINTSCREEN — printing a sheet is not wired yet');
+
+  // UNITS. Not "not yet": a construction sheet is scaled in ARCHITECTURAL
+  // scales -- 1/4" = 1'-0" and the eight either side of it -- and the whole
+  // scale ladder, the paper sizes and the paper-inch arithmetic are imperial
+  // all the way down. METRIC here would need a second ladder, not a
+  // conversion. IMPERIAL stays marked so the corner still reads true.
+  S.markSwitch(S.switchSet('data-units'), 'units', 'imperial');
+  document.querySelectorAll('[data-units-corner] button').forEach(b => {
+    b.disabled = true;
+    b.title = 'The construction sheet reads in architectural scales, which are '
+      + 'imperial — see the VIEWPORT SCALE list';
+  });
+
+  // TOY / DRAFTING is what the drawing is being made in, and nothing is being
+  // made here: this page arranges views of a drawing the MODEL space owns.
+  document.querySelectorAll('[data-mode-corner] button[data-board]').forEach(b => {
+    b.disabled = true;
+    b.title = 'TOY and DRAFTING are set where the house is drawn, in the MODEL space';
+  });
+
+  // THE INSTRUMENTS. Movie asked for them on this bar -- "we may need to draw
+  // sometimes" -- so they are mounted, and they are DORMANT because nothing on
+  // this page fills them yet. `.chip.dormant` is the bar's own word for it,
+  // already worn by MODEL's unbuilt tools: "the rest of the kit, not yet in
+  // hand". The LENGTH and ANGLE readouts need nothing done to them; they
+  // reserve width only when they are reading, so empty they cost no space.
+  //
+  // A CHIP IS NOT ALWAYS A BUTTON, which this got wrong first time and a spec
+  // caught: four of them are -- brush, ruler, tsquare, scale -- and the rest
+  // are SPANS. Setting .disabled on a span is silently ignored, so the page
+  // looked stood-down and three of its chips were still live elements. The
+  // class is what every chip gets; the property goes where it means something.
+  //
+  // AND THREE OF THEM SHIPPED DORMANT ALREADY -- compass, triangle, erasing
+  // shield, "not built on this page yet" in the bar's own markup. Their titles
+  // say something truer than anything this page could add, so they keep them.
+  document.querySelectorAll('#strip-center .chip').forEach(chip => {
+    const alreadyDown = chip.classList.contains('dormant');
+    chip.classList.add('dormant');
+    if ('disabled' in chip) chip.disabled = true;
+    if (!alreadyDown) chip.title = 'Drawing instruments live in the MODEL space';
+  });
+
+  // THE BONE. The bar owns the button; this page owns the verb, and the verb
+  // is PRINT -- board #20, not built. Until it is, a press that silently did
+  // nothing would be worse than one that says what it is waiting for.
+  //
+  // IT SAYS SO IN THE STATUS WORD AND THEN GETS OUT OF THE WAY. The word is
+  // painted from state.persistenceStatus on every _paintPanel, so the way back
+  // is a repaint rather than remembering what was there -- which also means a
+  // save landing during those four seconds wins, as it should.
+  const bone = document.getElementById('bone');
+  if (bone) {
+    let clearing = 0;
+    bone.addEventListener('click', () => {
+      const status = document.querySelector('[data-layout-status]');
+      if (!status) return;
+      status.classList.remove('lay-bad');
+      status.textContent = 'PRINTING A SHEET IS NOT WIRED YET';
+      window.clearTimeout(clearing);
+      clearing = window.setTimeout(() => page._paintPanel(), 4000);
+    });
+  }
+})();
 </script>
 <!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->
 <script src="./traffic-counter.js" defer></script>
