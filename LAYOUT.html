@@ -7,6 +7,11 @@
 <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
      critical path of the page. -->
 <link rel="stylesheet" href="vendor/fonts.css" />
+<!-- THE SHELL EVERY PAGE WEARS. The stylesheet first so the bars are skinned
+     on the first frame; the module below palette.js, because a bar with no
+     roles resolved is a bar with no colours -- and before the body, because
+     the bars are written where their mount call stands, mid-parse. -->
+<link rel="stylesheet" href="./shell-bars.css" />
 <!-- COLOUR BEFORE ANYTHING PAINTS, and FIRST, because every script below
      this line may reach for a role. palette.js is a table with two consumers
      -- toCSS() for the stylesheet and resolve() for the painters -- and this
@@ -50,6 +55,7 @@
     P.apply(document, window.__layoutSkin.theme, window.__layoutSkin.mode);
   })();
 </script>
+<script src="./shell-bars.js"></script>
 <script src="./profile-manager.js"></script>
 <script src="./shared-file-store.js"></script>
 <script src="./drawing-format.js"></script>
@@ -119,7 +125,27 @@
      redeclaration would paint every chosen chip white-on-gold. The two
      outline states below name --accent-mark themselves instead. */
   *, *::before, *::after { box-sizing: border-box; }
-  html, body { height:100%; margin:0; padding:0; overflow:hidden;
+  /* THE PAGE IS A COLUMN BETWEEN TWO FIXED BARS. It used to be three boxes in
+     flow -- its own 44px top bar, a body at calc(100vh - 72px), a 28px status
+     bar -- and that arithmetic was written out by hand in one place and had to
+     agree with two heights typed in another.
+
+     The shared bars are position:fixed, so they are NOT flex items and take no
+     space in this column. The padding is what holds the column clear of them,
+     and every number in it is the bar's own token: --strip-h at the head,
+     --house-h plus --browser-lane at the foot. A bar that changes height moves
+     this page with it, which is the point of the tokens existing.
+
+     --browser-lane IS IN THE SUM, and leaving it out is the mistake worth
+     naming: it is the band Firefox draws its link preview over and iOS keeps
+     for the home indicator, and #house-strip reserves it as PADDING inside its
+     own box. A page that subtracted only --house-h would put its last 24px
+     under the bar's hem. */
+  html { height:100%; }
+  body { height:100vh; margin:0; overflow:hidden;
+    display:flex; flex-direction:column;
+    padding-top: var(--strip-h);
+    padding-bottom: calc(var(--house-h) + var(--browser-lane));
     background-color: var(--surface-page); background-image: var(--surface-page-tex, none);
     font-family:'Barlow', system-ui, sans-serif; color: var(--ink-primary); }
   a { color: var(--ink-quiet); text-decoration:none;
@@ -128,25 +154,22 @@
   a:hover { color: var(--accent); }
   [hidden] { display:none !important; }
 
-  /* ── TOP BAR ───────────────────────────────────────────────────────── */
-  #lay-top { height:44px; border-bottom:1px solid var(--edge-panel);
-    display:flex; align-items:center; padding:0 18px; flex-shrink:0;
-    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none); }
-  #lay-top .lay-word { font-family:'Barlow Condensed', system-ui, sans-serif;
-    font-weight:600; font-size:20px; letter-spacing:0.06em; text-transform:uppercase;
-    color: var(--ink-primary); }
-  #lay-top a { margin-left:10px; }
-  #lay-top .lay-spacer { flex:1; }
-  #lay-profile { display:flex; flex-direction:column; gap:1px; margin-left:18px; }
+  /* THE PROFILE PAIR, a row on the status bar rather than a stack on a top
+     bar this page no longer owns. Same two buttons, same dialog. */
+  #lay-profile { display:flex; gap:3px; margin-left:18px; }
   .layout-profile-button { min-width:64px; border:1px solid var(--edge-panel);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     color: var(--ink-primary); padding:2px 6px;
     font-family:'Barlow Condensed', system-ui, sans-serif; font-size:9px;
     font-weight:600; letter-spacing:0.05em; cursor:pointer; }
-  /* SETTINGS wears the filled face and STANDARDS the outline, which is a
-     pairing rather than a state: nothing toggles this class. */
-  .layout-profile-button.lay-dark { border-color: var(--accent);
-    background-color: var(--accent); background-image:none; color: var(--accent-ink); }
+  /* NEITHER WEARS THE ACCENT. SETTINGS carried a filled dark face on the old
+     top bar, where it was the only colour in the strip and read as "start
+     here". On the status bar it sits a few pixels above the page row, whose
+     lit chip is the accent and means THIS IS THE PAGE YOU ARE ON -- so a
+     second accent-filled chip in the same corner was saying that about a
+     dialog. Both are outlines; the hover is the mark, like every other line
+     and lettering on this page. */
+  .layout-profile-button:hover { border-color: var(--accent-mark); color: var(--accent-mark); }
   @media (max-width:560px) {
     .layout-profile-button { min-width:48px; padding:1px 4px; font-size:7px; }
   }
@@ -226,7 +249,12 @@
   #lay-dialog-message.lay-bad { color:#b04050; }
 
   /* ── BODY, PANEL, SECTIONS ──────────────────────────────────────────── */
-  #lay-body { display:flex; height:calc(100vh - 72px); }
+  /* FLEX RATHER THAN A HEIGHT. calc(100vh - 72px) was the old page's own sum
+     of its two bars; the column above does that arithmetic now, so this just
+     takes what is left. min-height:0 is what lets it SHRINK -- a flex item's
+     default min-height is auto, so the panel's content would otherwise push
+     the sheet past the foot of the screen on a short window. */
+  #lay-body { display:flex; flex:1; min-height:0; }
   #lay-panel { width:188px; border-right:1px solid var(--edge-panel);
     display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
@@ -350,7 +378,12 @@
   #lay-canvas.grabbing { cursor:grabbing; }
 
   /* ── STATUS BAR ─────────────────────────────────────────────────────── */
-  #lay-status-bar { height:28px; border-top:1px solid var(--edge-panel);
+  /* IN THE COLUMN, NOT FIXED, so it sits directly on top of the shared bottom
+     bar without either knowing the other's height. MODEL's readout solves the
+     same problem the other way -- position:fixed at --readout-bottom -- because
+     it FLOATS over the drawing and this does not: this is a full-width strip
+     the sheet has to end above, which is exactly what a flex sibling is. */
+  #lay-status-bar { height:28px; flex-shrink:0; border-top:1px solid var(--edge-panel);
     display:flex; align-items:center; padding:0 18px;
     font-family:'Barlow Condensed', system-ui, sans-serif; font-size:11px;
     letter-spacing:0.06em; color: var(--ink-quiet);
@@ -375,31 +408,30 @@
   /* Spent, not broken: the dormant idiom from the shared bar's chips rather
      than a fourth grey. */
   .strip-history:disabled { color: var(--ink-quiet); opacity:0.35; cursor:default; }
-  /* Bottom-right nav cluster. The current page wears the accent face. */
-  [data-nav-cluster] { display:flex; align-items:center; gap:4px; margin-left:18px; }
-  [data-nav-cluster] a { display:inline-flex; align-items:center; height:20px;
-    border:1px solid var(--edge-panel);
-    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
-    color: var(--ink-primary);
-    padding:0 8px; font-size:10px; letter-spacing:0.06em; }
-  [data-nav-cluster] a.here { border-color: var(--accent);
-    background-color: var(--accent); background-image:none; color: var(--accent-ink); }
-  [data-nav-home] { border:none !important; background:transparent !important; padding:0 2px !important; line-height:0; }
-  [data-nav-home] img { height:24px; display:block; }
+  /* THE NAV CLUSTER'S RULES CAME OUT WITH IT. MODEL · LAYOUT · PROJECT ·
+     SPECS and the logo were this page's own copy of a row that shell-bars.js
+     now writes for every page, out of one table, with the current page marked
+     from the `page` it is mounted with. Two copies of the map of the job is
+     how one of them goes stale. */
 </style>
 </head>
 <body>
 
-<!-- TOP BAR -->
-<div id="lay-top">
-  <div class="lay-word">LAYOUT</div>
-  <a href="./MODEL.dc.html">MODEL</a>
-  <div class="lay-spacer"></div>
-  <div id="lay-profile">
-    <button type="button" class="layout-profile-button lay-dark" data-open-settings>SETTINGS</button>
-    <button type="button" class="layout-profile-button" data-open-standards>STANDARDS</button>
-  </div>
-</div>
+<!-- THE TOP BAR IS THE SHOP'S NOW. What stood here was this page's own: the
+     word LAYOUT, a link back to MODEL, and the two profile buttons. All three
+     had a better home -- the page row in the bottom bar is the map of the job
+     and already carries MODEL, and the bar's settings corner carries SETTINGS
+     and STANDARDS as links to their pages.
+
+     WITH THE INSTRUMENTS, on Movie's own instruction when the bars were being
+     split out: "put those top and bottom bars in the Construction layout
+     (with the LENGTH, ANGLE and other instruments ... we may need to draw
+     sometimes". shell-bars.css records the same ruling -- #strip-center is
+     not one page's, it is every DRAWING page's. Nothing on this page fills
+     them yet, so the chips stand DORMANT rather than live; see the stand-down
+     block at the foot of the page script, which says which controls are
+     honest here and which are not. -->
+<script>window.DraftShellBars.topBar({ instruments: true });</script>
 
 <!-- THE PROFILE DIALOG: personal settings and company standards, saved to a
      portable file or read back from one. -->
@@ -512,6 +544,16 @@
 <!-- STATUS BAR -->
 <div id="lay-status-bar">
   <span data-layout-status>SAVED</span>
+  <!-- THE PROFILE PAIR, beside the save word rather than at the far right.
+       It began the swap on the right, where the nav cluster had been, and sat
+       directly above the page row's own chips -- two rows of small bordered
+       words, one of them lit, four pixels apart. Moving it to the other end
+       of the same strip is the cheapest possible separation: this is the
+       page's own furniture and the row below is the shop's. -->
+  <div id="lay-profile">
+    <button type="button" class="layout-profile-button" data-open-settings>SETTINGS</button>
+    <button type="button" class="layout-profile-button" data-open-standards>STANDARDS</button>
+  </div>
   <div class="lay-spacer"></div>
   <div data-history-controls>
     <button type="button" data-undo class="strip-history" title="Nothing to undo yet" aria-label="Nothing to undo yet" disabled>
@@ -528,18 +570,23 @@
     </button>
   </div>
   <span data-sheet-readout></span>
-  <!-- Bottom-right nav cluster: MODEL · LAYOUT · PROJECT · SPECS, and the logo
-       walks back out to the main page. -->
-  <div data-nav-cluster>
-    <a data-nav-model href="./MODEL.dc.html">MODEL</a>
-    <a data-nav-layout class="here" href="./LAYOUT.html">LAYOUT</a>
-    <a data-nav-project href="./PROJECT.html">PROJECT</a>
-    <a data-nav-specs href="./SPECS.html">SPECS</a>
-    <a data-nav-home href="./index.html" title="Rough Drafter — back to the main page">
-      <img src="./assets/rough-drafter-logo.png" alt="Rough Drafter home" />
-    </a>
-  </div>
+  <!-- THE PROFILE PAIR RIDES HERE NOW, where the nav cluster used to. The
+       cluster itself is gone -- the bottom bar's page row is the same map
+       drawn once for every page, and two of them would be two things to keep
+       in step.
+
+       THE BUTTONS STAYED, and that was a decision rather than an oversight.
+       The bar's settings corner LINKS to SETTINGS.html and STANDARDS.html;
+       this page's buttons open a DIALOG that saves a profile package to a
+       file and reads one back. Those are not the same door. Traced before
+       anything was cut: profile-manager's parseFile has exactly two callers
+       in the repo, MODEL.dc.html and this page, and neither SETTINGS.html nor
+       STANDARDS.html has an import path at all -- both have a DOWNLOAD button
+       and nothing that reads a file. So dropping this dialog when the bar
+       arrived would have made importing a profile impossible everywhere in
+       the app that is not the old DC page. Movie, asked, kept it. -->
 </div>
+<script>window.DraftShellBars.bottomBar({ page: 'construction' });</script>
 
 <script>
 // ── THE PAGE, OFF THE DC RUNTIME ────────────────────────────────────────
@@ -2327,6 +2374,130 @@ const page = new Component();
 page._wirePanel();
 page._paintPanel();
 page.componentDidMount();
+
+// ── THE SHARED BAR, WIRED TO WHAT THIS PAGE CAN HONESTLY DO ─────────────
+(() => {
+  const S = window.DraftShellBars;
+
+  // THE BONE WEARS THE THEME FROM THE FIRST FRAME. wireSkin repaints it on
+  // every press, but nothing has been pressed on load -- and a page opened
+  // straight into ROUGH would show a red bone until the drafter touched a
+  // switch. PROJECT learned this one the hard way.
+  S.paintBone(window.__layoutSkin.theme);
+
+  // THE SKIN SWITCH IS THE BAR'S; WHAT TO REPAINT IS THIS PAGE'S. The sheet
+  // is a canvas and _draw() reads its inks from DraftPalette.resolve() off
+  // the root's data-theme/data-mode, which wireSkin has already rewritten by
+  // the time onSkin runs -- so the repaint is one call and the painter needs
+  // to know nothing about switches. The comment in the head boot that said
+  // this page "only READS the choice" stopped being true here.
+  S.wireSkin({
+    theme: window.__layoutSkin.theme,
+    mode: window.__layoutSkin.mode,
+    onSkin: (skin, theme, mode) => {
+      window.__layoutSkin = { theme, mode };
+      page._draw();
+    },
+  });
+
+  // ── AND THE CONTROLS IT CANNOT ─────────────────────────────────────────
+  //
+  // DISABLED, NOT LEFT LIVE, which is this bar's own vocabulary: the page row
+  // has shown REAL ESTATE LAYOUT and ESTIMATES greyed since it was built,
+  // because "the row is the map of the job" and a map with a town missing
+  // teaches a shape that is wrong. A button that looks pressable and does
+  // nothing teaches a worse one. Each carries a title saying why, so the
+  // answer is one hover away rather than in this file.
+  const standDown = (id, why) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.disabled = true;
+    el.title = why;
+  };
+
+  // THE FILE ROW. All six are operations on the DRAWING, and this page does
+  // not own the drawing -- it arranges views OF it onto sheets, and it writes
+  // exactly one thing back: the layout record, on every change, through
+  // _persistLayout's queue. That is why SAVE is greyed on a page that saves
+  // constantly: there is no moment when a drafter here has unsaved work to
+  // press a button about, and the status word to the left says so.
+  //
+  // PRINTSCREEN IS THE ONE THAT WILL COME BACK. This is the page that makes
+  // printable sheets, so it is the page where that button most obviously
+  // belongs -- but printing a sheet is a feature with its own questions (which
+  // sheet, at what size, with the titleblock's fields filled from where), and
+  // wiring it under cover of a bar swap would be answering them by accident.
+  standDown('file-new', 'NEW — start a drawing in the MODEL space');
+  standDown('file-open', 'OPEN — open a drawing in the MODEL space');
+  standDown('save', 'SAVE — this page writes every change as you make it; '
+    + 'the word at the foot says where that stands');
+  standDown('file-save-as', 'SAVE AS — not on the construction layout yet');
+  standDown('file-ext', 'Not on the construction layout yet');
+  standDown('printscreen', 'PRINTSCREEN — printing a sheet is not wired yet');
+
+  // UNITS. Not "not yet": a construction sheet is scaled in ARCHITECTURAL
+  // scales -- 1/4" = 1'-0" and the eight either side of it -- and the whole
+  // scale ladder, the paper sizes and the paper-inch arithmetic are imperial
+  // all the way down. METRIC here would need a second ladder, not a
+  // conversion. IMPERIAL stays marked so the corner still reads true.
+  S.markSwitch(S.switchSet('data-units'), 'units', 'imperial');
+  document.querySelectorAll('[data-units-corner] button').forEach(b => {
+    b.disabled = true;
+    b.title = 'The construction sheet reads in architectural scales, which are '
+      + 'imperial — see the VIEWPORT SCALE list';
+  });
+
+  // TOY / DRAFTING is what the drawing is being made in, and nothing is being
+  // made here: this page arranges views of a drawing the MODEL space owns.
+  document.querySelectorAll('[data-mode-corner] button[data-board]').forEach(b => {
+    b.disabled = true;
+    b.title = 'TOY and DRAFTING are set where the house is drawn, in the MODEL space';
+  });
+
+  // THE INSTRUMENTS. Movie asked for them on this bar -- "we may need to draw
+  // sometimes" -- so they are mounted, and they are DORMANT because nothing on
+  // this page fills them yet. `.chip.dormant` is the bar's own word for it,
+  // already worn by MODEL's unbuilt tools: "the rest of the kit, not yet in
+  // hand". The LENGTH and ANGLE readouts need nothing done to them; they
+  // reserve width only when they are reading, so empty they cost no space.
+  //
+  // A CHIP IS NOT ALWAYS A BUTTON, which this got wrong first time and a spec
+  // caught: four of them are -- brush, ruler, tsquare, scale -- and the rest
+  // are SPANS. Setting .disabled on a span is silently ignored, so the page
+  // looked stood-down and three of its chips were still live elements. The
+  // class is what every chip gets; the property goes where it means something.
+  //
+  // AND THREE OF THEM SHIPPED DORMANT ALREADY -- compass, triangle, erasing
+  // shield, "not built on this page yet" in the bar's own markup. Their titles
+  // say something truer than anything this page could add, so they keep them.
+  document.querySelectorAll('#strip-center .chip').forEach(chip => {
+    const alreadyDown = chip.classList.contains('dormant');
+    chip.classList.add('dormant');
+    if ('disabled' in chip) chip.disabled = true;
+    if (!alreadyDown) chip.title = 'Drawing instruments live in the MODEL space';
+  });
+
+  // THE BONE. The bar owns the button; this page owns the verb, and the verb
+  // is PRINT -- board #20, not built. Until it is, a press that silently did
+  // nothing would be worse than one that says what it is waiting for.
+  //
+  // IT SAYS SO IN THE STATUS WORD AND THEN GETS OUT OF THE WAY. The word is
+  // painted from state.persistenceStatus on every _paintPanel, so the way back
+  // is a repaint rather than remembering what was there -- which also means a
+  // save landing during those four seconds wins, as it should.
+  const bone = document.getElementById('bone');
+  if (bone) {
+    let clearing = 0;
+    bone.addEventListener('click', () => {
+      const status = document.querySelector('[data-layout-status]');
+      if (!status) return;
+      status.classList.remove('lay-bad');
+      status.textContent = 'PRINTING A SHEET IS NOT WIRED YET';
+      window.clearTimeout(clearing);
+      clearing = window.setTimeout(() => page._paintPanel(), 4000);
+    });
+  }
+})();
 </script>
 <!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->
 <script src="./traffic-counter.js" defer></script>

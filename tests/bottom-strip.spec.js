@@ -99,7 +99,12 @@ test('the Replit-era readouts are gone from both drawing pages', async ({ page }
   await expect(page.locator('[data-model-title-detail]')).toHaveText('');
 
   await page.goto('/LAYOUT.html');
-  await expect(page.locator('[data-nav-cluster]')).toBeVisible();
+  // THE PAGE IS UP, which is all this line is for -- the subject is the two
+  // readouts below it. It used to prove that with the nav cluster, which
+  // Construction Layout stopped carrying on 24 Sep when it took the shared
+  // bars; the bottom bar's page row is the same map drawn once for every
+  // page, so the chip for THIS page is the equivalent landmark.
+  await expect(page.locator('[data-page="construction"]')).toBeVisible();
   await expect(page.locator('[data-layout-sx]')).toHaveCount(0);
   await expect(page.locator('[data-layout-sy]')).toHaveCount(0);
 });
