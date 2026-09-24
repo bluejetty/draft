@@ -1923,7 +1923,32 @@
       const r = el.getBoundingClientRect();
       return Number.isFinite(r?.height) ? r.height : 0;
     };
-    const top = tall('strip'), bottom = tall('house-strip');
+    // THE HEM IS NOT THE BAR. The house strip carries --browser-lane as bottom
+    // padding so the browser's own link-preview strip lands on panel colour
+    // instead of on a nav chip -- and that band is the BROWSER'S, drawn over
+    // whatever is beneath it and only while a link is hovered. A drawing that
+    // dodged it would be permanently smaller to make room for a tooltip.
+    //
+    // MEASURED OFF THE ELEMENT, not read back from the custom property: the
+    // lane IS this padding, so taking the padding cannot drift from what is
+    // rendered the way a second lookup of the variable could.
+    //
+    // IT COST A SPEC TO LEARN. The lane made the strip 64px where it had been
+    // 40, and the line at the foot of this function offsets the drawing by
+    // half the DIFFERENCE between the two bars -- so the plan slid 10px up,
+    // model-html-select's wall came off the canvas centre, and a click 4px
+    // from it was suddenly 16px from it and outside the 12px grab zone. The
+    // comment there already said why it would be invisible until it wasn't:
+    // "Equal bars, no offset, which is why this was invisible while they
+    // matched."
+    const hemOf = id => {
+      const el = document.getElementById(id);
+      if (!el) return 0;
+      const pad = parseFloat(getComputedStyle(el).paddingBottom);
+      return Number.isFinite(pad) ? pad : 0;
+    };
+    const top = tall('strip');
+    const bottom = Math.max(tall('house-strip') - hemOf('house-strip'), 0);
     // A sheet that is nearly all bar is a broken layout, not a tight fit.
     // Refusing the inset there leaves the old framing rather than dividing
     // the drawing into a sliver -- visibly wrong beats invisibly tiny.

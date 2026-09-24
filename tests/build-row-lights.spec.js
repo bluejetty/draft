@@ -40,7 +40,16 @@ const TYPES = ['bungalow', 'twoStorey', 'bilevel', 'modifiedBilevel'];
 // The row is a MENU since 6 Sep: these three sit on it, and the types live one
 // press inside. So a type lamp can only be read with its family OPEN, which is
 // what the second argument to lamps() is for.
-const FAMILIES = ['bungalow', 'bilevel', 'detachedGarage'];
+// THE FAMILIES THE ROW OFFERS, READ OFF THE MODULE rather than typed here.
+// This was a literal in the module's own order, and on 24 Sep that order
+// changed -- Movie put DETACHED GARAGE first -- so a roster nobody had thought
+// about since it was written turned a working row red. build-menu.js's comment
+// says the array is the one place the order is said and "a hardcoded roster
+// somewhere else would be the bug"; this was that roster. Two other specs
+// already derive theirs (model-drivethru, model-html-topbar), which is why
+// they did not notice at all.
+const familiesOf = page => page.evaluate(
+  () => window.DraftBuildMenu.BUILD_MENU.map(family => family.id));
 const FAMILY_OF = { bungalow: 'bungalow', twoStorey: 'bungalow', bilevel: 'bilevel', modifiedBilevel: 'bilevel' };
 
 // Each lamp read as the pair that describes it: which art it wears (or, for
@@ -122,6 +131,8 @@ test.describe('The build row lamps', () => {
     await h.openModel(page, { webgl: false });
 
     // Closed, the row carries the three families and no type at all.
+    const FAMILIES = await familiesOf(page);
+    expect(FAMILIES.length, 'the menu went empty').toBe(3);
     let state = await lamps(page);
     expect(Object.keys(state.families)).toEqual(FAMILIES);
     expect(Object.keys(state.types)).toEqual([]);
