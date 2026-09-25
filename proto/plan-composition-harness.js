@@ -219,6 +219,60 @@ const CHECKS = [
       return [run(win, { stairs }).find(m => m.startsWith('stairs')), 'stairs[sA]'];
     },
   },
+  // ── THE RULES ONE `pick()` CANNOT CARRY ──────────────────────────────
+  //
+  // The module filters every collection through one `forLevel`, and four of
+  // them do not obey it. Each rule below is written down in MODEL.html beside
+  // the accessor that keeps it, each says it was copied from MODEL.dc.html
+  // rather than invented, and each was lost when the order was lifted.
+  //
+  // THESE ARE NOT HYPOTHETICAL. layout-plan.js supplies stairEnv, fixtureEnv
+  // and noteEnv, so all three run on the construction sheet.
+  {
+    label: 'a stair with no view of its own is HIDDEN on a level that has views',
+    fn: win => {
+      // MODEL.html: `stair.view === viewId`, with no `|| 'plan'` fallback,
+      // "copied deliberately rather than routed through onPlan()" -- and its
+      // comment names this exact consequence: "Reusing onPlan() here would
+      // have quietly REVEALED those stairs on this page only."
+      const stairs = [{ id: 'sNone', levelId: 3 }, { id: 'sPlan', levelId: 3, view: 'plan' }];
+      return [run(win, { stairs }).find(m => m.startsWith('stairs')), 'stairs[sPlan]'];
+    },
+  },
+  {
+    label: 'and is SHOWN on a level with no views, where the rule does not bind',
+    fn: win => {
+      const stairs = [{ id: 'sNone', levelId: 3 }];
+      return [run(win, { stairs, hasLayerViews: false }).find(m => m.startsWith('stairs')),
+        'stairs[sNone]'];
+    },
+  },
+  {
+    label: 'a STAIR note never lands on the plan',
+    fn: win => {
+      // The stair workspace is a separate surface with its own painter. The
+      // exclusion is applied on top of the view match because a level with NO
+      // layer views matches every note it holds, stair ones included.
+      const notes = [
+        { id: 'nPlan', levelId: 3, view: 'plan', layer: 'A-ANNO', anchor: {}, text: {} },
+        { id: 'nStair', levelId: 3, view: 'stair', layer: 'A-ANNO', anchor: {}, text: {} },
+      ];
+      return [run(win, { notes, hasLayerViews: false }).filter(m => m.startsWith('note')).join(' '),
+        'note#nPlan'];
+    },
+  },
+  {
+    label: 'a fixture rides its host wall-s visibility, and carries no view rule',
+    fn: win => {
+      // Two fixtures, both on this level: one on the wall being drawn, one on
+      // a wall that is not. The second must not draw, whatever its view says.
+      const fixtures = [
+        { id: 'xOn', levelId: 3, view: 'other', layer: 'A-FIXT', wallId: 'w1' },
+        { id: 'xOff', levelId: 3, view: 'plan', layer: 'A-FIXT', wallId: 'gone' },
+      ];
+      return [run(win, { fixtures }).filter(m => m.startsWith('fixture')).join(' '), 'fixture#xOn'];
+    },
+  },
   // ── THE LAYER TABLE ──────────────────────────────────────────────────
   {
     label: 'a layer switched off takes its entities with it',
@@ -295,16 +349,28 @@ const MUTATIONS = [
     s => s.replace('return list(items).filter(item => item.levelId === levelId && (!views || keep(item)));',
       'return list(items).filter(item => (!views || keep(item)));')],
   ['a null viewId stops meaning every view',
-    s => s.replace('!hasLayerViews || viewId === null || (item.view || \'plan\') === viewId;',
-      "!hasLayerViews || (item.view || 'plan') === viewId;")],
+    s => s.replace('(!strict && viewId === null)', 'false')],
   ['a whole-level context filters by view anyway',
-    s => s.replace('!hasLayerViews || viewId === null', 'viewId === null')],
+    s => s.replace('    !hasLayerViews || (!strict && viewId === null)',
+      '    (!strict && viewId === null)')],
   ['openings are filtered by their own level instead of their host wall',
     s => s.replace('.filter(opening => hostIds.has(opening.wallId) && shows(opening.layer));',
       '.filter(opening => opening.levelId === env.levelId && shows(opening.layer));')],
   ['the stair painter gets the whole collection',
-    s => s.replace('render.drawStairs2D(ctx, toS, { ...env.stairEnv, stairs: pick(env.stairs) });',
-      'render.drawStairs2D(ctx, toS, { ...env.stairEnv, stairs: env.stairs });')],
+    s => s.replace('stairs: pick(env.stairs, { strict: true })', 'stairs: env.stairs')],
+  ['stairs take the `|| \'plan\'` fallback like everything else',
+    s => s.replace("stairs: pick(env.stairs, { strict: true })", 'stairs: pick(env.stairs)')],
+  ['the strict filter stops binding at all',
+    s => s.replace("|| (strict ? item.view === viewId : (item.view || 'plan') === viewId);",
+      "|| (item.view || 'plan') === viewId;")],
+  ['a stair note lands on the plan again',
+    s => s.replace(".filter(note => note.view !== 'stair' && shows(note.layer));",
+      '.filter(note => shows(note.layer));')],
+  ['a fixture is filtered by view instead of by its host wall',
+    s => s.replace(`      list(env.fixtures)
+        .filter(fixture => fixture.levelId === levelId
+          && wallById.has(fixture.wallId) && shows(fixture.layer))`,
+    '      pick(env.fixtures).filter(fixture => shows(fixture.layer))')],
   ['a hidden layer draws anyway',
     s => s.replace('    if (!standard.visible) return false;', '')],
   ['a no-print layer prints',

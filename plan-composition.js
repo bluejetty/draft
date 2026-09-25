@@ -60,11 +60,29 @@ if (!window.DraftPlanComposition) {
   // `viewId` NULL MEANS EVERY VIEW, which is what the layout page's saved
   // viewports mean when they carry no view -- `layout-plan.js` documents that
   // compatibility and it has to survive the move.
-  const onView = (viewId, hasLayerViews) => item =>
-    !hasLayerViews || viewId === null || (item.view || 'plan') === viewId;
+  // ── AND `strict`, FOR THE COLLECTIONS THAT TAKE NO FALLBACK ─────────────
+  //
+  // `item.view || 'plan'` is the rule for walls, lines and floors: a record
+  // saved without a view is a plan record. It is NOT the rule for stairs, and
+  // MODEL.html says so beside its own accessor, having copied it from the
+  // page this order was lifted from:
+  //
+  //   "STAIRS FILTER STRICTLY ON view ... `stair.view === view` with NO
+  //    `|| 'plan'` fallback, unlike every wall, line and fixture beside it.
+  //    So a stair saved without a view is hidden on a level that has layer
+  //    views, and shown on one that has none. Reusing onPlan() here would
+  //    have quietly REVEALED those stairs on this page only."
+  //
+  // This module reused the equivalent, and did exactly that -- on the
+  // CONSTRUCTION SHEET, because layout-plan.js supplies `stairEnv`. Measured
+  // by proto/plan-composition-harness.js: two stairs on one level, one
+  // without a view, and the sheet drew both.
+  const onView = (viewId, hasLayerViews, strict = false) => item =>
+    !hasLayerViews || (!strict && viewId === null)
+    || (strict ? item.view === viewId : (item.view || 'plan') === viewId);
 
-  const forLevel = (items, levelId, viewId, hasLayerViews, { views = true } = {}) => {
-    const keep = onView(viewId, hasLayerViews);
+  const forLevel = (items, levelId, viewId, hasLayerViews, { views = true, strict = false } = {}) => {
+    const keep = onView(viewId, hasLayerViews, strict);
     return list(items).filter(item => item.levelId === levelId && (!views || keep(item)));
   };
 
@@ -104,7 +122,14 @@ if (!window.DraftPlanComposition) {
     const walls = pick(env.walls);
     const lines = pick(env.lines).filter(line => shows(line.layer));
     const dimensions = pick(env.dimensions).filter(dimension => shows(dimension.layer));
-    const notes = pick(env.notes).filter(note => shows(note.layer));
+    // A STAIR NOTE BELONGS TO THE STAIR WORKSPACE, which is a separate
+    // surface with its own painter -- and the exclusion sits ON TOP of the
+    // view match rather than inside it, because a level with NO layer views
+    // matches every note it holds, stair ones included. Both model pages
+    // apply it; this module did not, so stair notes were landing on plan
+    // viewports on the sheet.
+    const notes = pick(env.notes)
+      .filter(note => note.view !== 'stair' && shows(note.layer));
 
     // A STAGE WITH NO ENV IS SKIPPED, NOT GUESSED. These painters read their
     // colours, their formatters and their host lookups straight off the env --
@@ -126,11 +151,20 @@ if (!window.DraftPlanComposition) {
     // own argument rather than looking it up. `_redrawOverlay` draws them
     // immediately after the openings and before anything measured, which is
     // the order kept here.
+    // A FIXTURE INHERITS ITS WALL'S VISIBILITY and carries no view rule of
+    // its own -- level, plus "is the host wall on this drawing", which is the
+    // rule both model pages keep. Filtering it by view instead was wrong in
+    // BOTH directions at once, measured: a fixture on a drawn wall vanished
+    // because its own view said something else, and one on a wall that is not
+    // drawn appeared because its view happened to match.
     if (env.fixtureEnv) {
       const wallById = new Map(walls.map(wall => [wall.id, wall]));
-      pick(env.fixtures).filter(fixture => shows(fixture.layer)).forEach(fixture => {
-        render.drawFixture2D(ctx, toS, fixture, {}, wallById.get(fixture.wallId), env.fixtureEnv);
-      });
+      list(env.fixtures)
+        .filter(fixture => fixture.levelId === levelId
+          && wallById.has(fixture.wallId) && shows(fixture.layer))
+        .forEach(fixture => {
+          render.drawFixture2D(ctx, toS, fixture, {}, wallById.get(fixture.wallId), env.fixtureEnv);
+        });
     }
 
     // ELECTRIC IS ITS OWN SHEET'S WORTH OF MARKS and electric-symbols.js owns
@@ -162,7 +196,8 @@ if (!window.DraftPlanComposition) {
     // filtering by level and view for itself, which is the one job this module
     // exists to stop being written twice.
     if (env.stairEnv) {
-      render.drawStairs2D(ctx, toS, { ...env.stairEnv, stairs: pick(env.stairs) });
+      render.drawStairs2D(ctx, toS,
+        { ...env.stairEnv, stairs: pick(env.stairs, { strict: true }) });
     }
     if (env.cutMarkEnv) render.drawCutMarks2D(ctx, toS, env.cutMarkEnv);
     if (env.outlineEnv) render.drawOutlines2D(ctx, toS, env.outlineEnv);
