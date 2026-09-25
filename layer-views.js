@@ -20,7 +20,17 @@ if (!window.DraftLayerViews) {
   const FLOOR_LEVEL_VIEWS = Object.freeze([
     Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION', 'A-ANNO-NOTE'] }),
     Object.freeze({ id:'plan', label:'FLOOR PLAN (WALLS)', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-STR', 'PLAN DIMENSION', 'ROOM-IDS-AREA', 'A-ANNO-NOTE'] }),
-    Object.freeze({ id:'floor', label:'FLOOR LAYOUT (FLOOR)', contents:['S-BEAM', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION', 'A-ANNO-NOTE'] }),
+    // S-COL-FOOTING JOINS S-BEAM HERE (Movie, 25 Sep). A floor's beam was
+    // already on this view and what holds it up was on none: S-COL-FOOTING
+    // appeared only in the FOUNDATION set below, so a post on MAIN FL was a
+    // record in the file and on no sheet -- present always, drawn never.
+    //
+    // THE LAYER NAME IS THE FORMAT'S, not a claim about footings. A column
+    // record is written with `layer: 'S-COL-FOOTING'` unconditionally
+    // (drawing-format.js:657) whether it stands on a pad or on the beam
+    // below, so a floor view that wants to draw posts has to name that layer.
+    // Renaming it would be a format change for a word.
+    Object.freeze({ id:'floor', label:'FLOOR LAYOUT (FLOOR)', contents:['S-BEAM', 'S-COL-FOOTING', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION', 'A-ANNO-NOTE'] }),
     Object.freeze({ id:'stair', label:'STAIR', contents:['A-STR', 'A-FL-OPNG', 'STAIR SECTION', 'A-ANNO-NOTE'] }),
   ]);
   const LEVEL_LAYER_VIEWS = Object.freeze({
