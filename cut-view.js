@@ -1888,22 +1888,55 @@ if (!window.DraftCutView) {
       const leftF = edgeFace(run.lo), rightF = edgeFace(run.hi);
       // Bottom silhouette: the deepest concrete under each stretch of the
       // run — a footing under bearing walls, the beam base where it hangs.
+      // Asked over the FOOTING's extent, to match the stops below: a wall's
+      // concrete stops at g.lo, the footing under it does not.
       const bottomAt = u => Math.min(...run.faces
-        .filter(g => g.lo - 1e-6 <= u && u <= g.hi + 1e-6)
+        .filter(g => g.lo - g.projFt - 1e-6 <= u && u <= g.hi + g.projFt + 1e-6)
         .map(bottomOf));
-      const stops = [...new Set(run.faces.flatMap(g => [g.lo, g.hi]))]
+      // ── A FOOTING IS WIDER THAN THE WALL ON IT, AT BOTH ENDS ──────────
+      //
+      // Movie, 25 Sep, on E4 of a 2 STOREY + GARAGE + ROOM OVER: "the 6" X 8"
+      // side of footing on left side of the house foundation is also missing".
+      // Measured on the file he sent, the right step was drawn and the left
+      // was not:
+      //
+      //     u  20.50   e -9.70..-9.05    the 6" step, 8" deep
+      //     u -20.50   (nothing)
+      //
+      // THE PROJECTION BELONGED TO THE RUN, NOT TO THE FACE. These stops were
+      // each face's WALL extent, and only the run's two outer ends had
+      // `projFt` added -- once through `run.lo - leftF.projFt` and once
+      // through the `stops[s + 1] === run.hi` special case. An attached
+      // garage's grade beam OVERLAPS the house across GARAGE_TIE_FT, so the
+      // two merge into one run whose left end is the BEAM's (u -46, and a
+      // hung beam has no footing, correctly projFt 0). The house's own left
+      // end at u -20 is then interior to that run, and nothing spent its 6".
+      //
+      // The crease pass below could not cover it either: it fires only where
+      // a face ends strictly INSIDE a farther one, and the house's end sits
+      // exactly on the beam face's own edge rather than within it.
+      //
+      // SO THE STOPS ARE THE FOOTING'S extent rather than the wall's, and
+      // both ends of every face fall out of one rule. The two special cases
+      // go with it -- the run's ends are just the outermost stops now.
+      const footLo = g => g.lo - g.projFt;
+      const footHi = g => g.hi + g.projFt;
+      const startU = run.lo - leftF.projFt;
+      const endU = run.hi + rightF.projFt;
+      const stops = [...new Set([startU, endU,
+        ...run.faces.flatMap(g => [footLo(g), footHi(g)])])]
+        .filter(u => u >= startU - 1e-6 && u <= endU + 1e-6)
         .sort((a, b) => a - b);
       ctx.beginPath();
       ctx.moveTo(X(run.lo), Y(Math.min(leftF.topE, fdn.grade)));
       ctx.lineTo(X(run.lo), Y(leftF.baseE));
-      if (leftF.projFt > 0) ctx.lineTo(X(run.lo - leftF.projFt), Y(leftF.baseE));
-      ctx.lineTo(X(run.lo - leftF.projFt), Y(bottomOf(leftF)));
+      if (leftF.projFt > 0) ctx.lineTo(X(startU), Y(leftF.baseE));
+      ctx.lineTo(X(startU), Y(bottomOf(leftF)));
       let prevBottom = bottomOf(leftF);
       for (let s = 0; s < stops.length - 1; s++) {
         const b = bottomAt((stops[s] + stops[s + 1]) / 2);
-        const xe = stops[s + 1] === run.hi ? run.hi + rightF.projFt : stops[s + 1];
         if (b !== prevBottom) ctx.lineTo(X(stops[s]), Y(b));
-        ctx.lineTo(X(xe), Y(b));
+        ctx.lineTo(X(stops[s + 1]), Y(b));
         prevBottom = b;
       }
       if (prevBottom !== bottomOf(rightF)) {

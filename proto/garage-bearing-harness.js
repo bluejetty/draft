@@ -57,7 +57,7 @@ const vm = require('vm');
 const MUTATION_MODE = require('./harness-args.js').mutationMode();
 const ROOT = path.join(__dirname, '..');
 const SRC = path.join(ROOT, 'cut-view.js');
-const { buildEnv, recordingCtx } = require('./harness-env.js');
+const { buildEnv, recordingCtx, standardElevationCuts, paintElevation } = require('./harness-env.js');
 
 // cut-view.js is evaluated FROM SOURCE TEXT so a mutant can be applied to it.
 // Its dependencies are loaded the way harness-env does, into the same sandbox.
@@ -476,6 +476,62 @@ function run(win) {
       `${houseFdn.length} unmarked foundation walls`);
   }
 
+  // ── A FOOTING IS WIDER THAN THE WALL ON IT, AT BOTH ENDS ──────────────
+  //
+  // Movie, 25 Sep, on E4 of a 2 STOREY + GARAGE + ROOM OVER: "the 6" X 8"
+  // side of footing on left side of the house foundation is also missing".
+  //
+  // THE PROJECTION BELONGED TO THE RUN, NOT TO THE FACE. The buried
+  // silhouette's stops were each face's WALL extent, and only the run's two
+  // outer ends had projFt added. An attached garage's grade beam overlaps the
+  // house across GARAGE_TIE_FT, so the two merge into ONE run whose outer end
+  // is the BEAM's -- and a hung beam correctly has no footing -- leaving the
+  // house's own end interior, with its 6" never spent.
+  //
+  // THE FIXTURE CATCHES IT IN BOTH DIRECTIONS, which is why it is worth
+  // asking of every elevation rather than one. Measured before the fix:
+  //
+  //     E1  beam on the RIGHT  u 8..20    -8.50 -8.00  8.00  20.00
+  //     E3  beam on the LEFT   u -20..-8  -20.00 -8.00 8.00   8.50
+  //
+  // -- on E1 the house's RIGHT end lost its step and on E3 its LEFT end did.
+  // A check written for one side alone passes on the other's defect.
+  {
+    const projFt = Math.max(0, base.footingWidthIn(1) - 8) / 2 / 12;
+    check('the footing projects (footingWidthIn - wall) / 2 -- 6" on concrete_8',
+      near(projFt, 0.5), `${(projFt * 12).toFixed(2)}"`);
+    standardElevationCuts(base).forEach(cut => {
+      const painted = paintElevation(win, base, cut, { pxPerFt: 40 });
+      const axis = painted.axis;
+      const uOf = pt => pt.x * axis.x + pt.z * axis.z;
+      const bearing = base.walls().filter(w => (w.view || 'plan') === 'foundation'
+        && w.baseHeight <= 0.01);
+      const hung = base.walls().filter(w => (w.view || 'plan') === 'foundation'
+        && w.baseHeight > 0.01);
+      if (!bearing.length || !hung.length) return;
+      const us = bearing.flatMap(w => [uOf(w.start), uOf(w.end)]);
+      const lo = Math.min(...us), hi = Math.max(...us);
+      const hungUs = hung.flatMap(w => [uOf(w.start), uOf(w.end)]);
+      // Only where the hung beam actually reaches this house end does the
+      // merge happen; elsewhere the run's own end already carried the step.
+      const merged = Math.min(...hungUs) < lo + 0.05 || Math.max(...hungUs) > hi - 0.05;
+      if (!merged) return;
+      // Every below-grade vertical the painter laid down.
+      const verticals = [];
+      (painted.strokes || []).forEach(stroke => stroke.pts.forEach((pt, i) => {
+        if (i === 0 || pt.move) return;
+        const prev = stroke.pts[i - 1];
+        if (Math.abs(prev.u - pt.u) < 0.01 && Math.abs(prev.e - pt.e) > 0.05
+          && Math.min(prev.e, pt.e) < fdn.grade + 0.01) verticals.push(pt.u);
+      }));
+      const at = u => verticals.some(v => Math.abs(v - u) < 0.02);
+      check(`${cut.id}: the house footing steps out on BOTH sides of its wall`,
+        at(lo - projFt) && at(hi + projFt),
+        `wall ${ftIn(lo)}..${ftIn(hi)}; verticals at `
+        + [...new Set(verticals.map(v => v.toFixed(2)))].sort((a, b) => a - b).join(' '));
+    });
+  }
+
   // ── ONE RULE, NOT FIVE COPIES ─────────────────────────────────────────
   // The whole defect was five sites each holding their own version. These
   // read the SOURCES, because "the rule is shared" is a fact about the text
@@ -566,6 +622,12 @@ const MUTATIONS = [
       'return null;')],
   ['the marker is trusted without checking WHICH garage it lies on',
     s => s.replace('      if (found) return found;', '      if (others.length) return others[0];')],
+  ['the buried silhouette walks the WALL extent again, losing the inner step',
+    s => s.replace('...run.faces.flatMap(g => [footLo(g), footHi(g)])])]',
+      '...run.faces.flatMap(g => [g.lo, g.hi])])]')],
+  ['only the run\'s outer ends carry a footing projection',
+    s => s.replace('const footLo = g => g.lo - g.projFt;\n      const footHi = g => g.hi + g.projFt;',
+      'const footLo = g => g.lo;\n      const footHi = g => g.hi;')],
   ['the grade-beam slab goes back to the stored wall instead of the datum',
     s => s.replace('const slabTop = garage ? garageSlabTop(env, fdn, garage)\n          : fdn.wallBottom',
       'const slabTop = false ? 0\n          : fdn.wallBottom')],
