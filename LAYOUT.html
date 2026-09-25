@@ -987,6 +987,9 @@ class Component extends PageLogic {
     const roofs = format.roofs(saved.roofs, levelIds);
     const fenestrations = format.fenestrations(saved.fenestrations, levelIds);
     const outlines = format.outlines(saved.outlines, levelIds);
+    // Columns too: the elevation draws the piles under a grade beam.
+    const columns = format.columns
+      ? format.columns(saved.columns, levelIds, {}) : (saved.columns || []);
     const shelves = format.boneyardShelves(saved.boneyardShelves);
     const masters = format.boneyardOutlines(saved.boneyardOutlines, new Set(shelves.map(shelf => shelf.id)));
     const assemblies = saved.levelAssemblies && typeof saved.levelAssemblies === 'object'
@@ -1052,6 +1055,7 @@ class Component extends PageLogic {
       walls: () => walls,
       roofs: () => roofs,
       floors: () => floors,
+      columns: () => columns,
       fenestrations: () => fenestrations,
       garageOutlines: levelId => outlines.filter(outline =>
         outline.levelId === levelId && outline.garage && outline.points.length >= 3),

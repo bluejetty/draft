@@ -1971,6 +1971,58 @@ if (!window.DraftCutView) {
         });
       });
     });
+
+    // ── WHERE THE PILES ARE, DASHED ──────────────────────────────────────
+    //
+    // Movie, 25 Sep, of an E4 with ten of them under the garage beam: "we
+    // should should the dashed lines where the piles are located on this view
+    // too". Nothing drew columns on an elevation at all before this -- the
+    // env did not even serve them.
+    //
+    // WHERE, NOT HOW DEEP, and build-house.js's own footing table says why:
+    // "Depth comes from the soils report, so the PLAN marks diameter and
+    // centre only -- the schedule mark (P1/P2/P3) carries the length and the
+    // steel." A P2 is 15' long and a P3 is 20', so a shaft drawn to its tip
+    // would hang seven feet of empty ground under a two-storey elevation and
+    // push the building up the sheet to make room for it. It runs from the
+    // concrete it carries down to the bottom of the drawing and breaks there,
+    // which is how a pile is shown on an elevation -- and the schedule is
+    // where the length already lives.
+    //
+    // THE HEAD COMES FROM THE CONCRETE ABOVE IT, not from the pile: a column
+    // stores its point and its footing and has no idea what it holds up. The
+    // deepest buried face over that station is the grade beam's underside,
+    // which is exactly where a drilled pile starts.
+    const pileColumns = (env.columns ? env.columns() : [])
+      .filter(column => (column.view || 'plan') === 'foundation'
+        && String(column.footing || '').startsWith('pile')
+        && column.point);
+    pileColumns.forEach(column => {
+      const u = column.point.x * axis.x + column.point.z * axis.z;
+      if (u < uMin - 0.5 || u > uMax + 0.5) return;
+      const over = fdnGeoms.filter(g => g.lo - 0.5 <= u && u <= g.hi + 0.5);
+      if (!over.length) return;
+      // A PILE CARRIES HUNG CONCRETE, and that is what picks the head where
+      // two faces cover one station. At the corner where a garage's beam
+      // meets the house, the house's own wall stands on a strip footing at
+      // full depth and the beam hangs 5'-6" above it; taking the DEEPEST of
+      // the two started the shaft below the beam it is holding up, so the
+      // pile was drawn entirely under its own cap. A wall on a footing needs
+      // no pile, so a hung face answers first and the deepest only when
+      // nothing over the station hangs.
+      const hung = over.filter(g => !g.bearing);
+      const head = Math.min(...(hung.length ? hung : over).map(g => g.baseE));
+      if (head <= yBottom) return;   // nothing of it is in the drawing
+      const bh = window.DraftBuildHouse;
+      const sizeIn = (bh && bh.footingFor(column.footing).sizeIn) || 12;
+      const half = sizeIn / 24;
+      [u - half, u + half].forEach(edge => {
+        ctx.beginPath();
+        ctx.moveTo(X(edge), Y(head));
+        ctx.lineTo(X(edge), Y(yBottom));
+        ctx.stroke();
+      });
+    });
     ctx.setLineDash([]);
 
     // A thickened-edge detached slab has no foundation walls: its band is

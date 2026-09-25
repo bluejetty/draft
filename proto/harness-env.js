@@ -33,7 +33,8 @@ function loadDraftModules() {
   const sandbox = { window: win, console, Math, Number, String, Object, Array, JSON, Map, Set, isFinite, parseFloat, parseInt };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
-  for (const file of ['formatters.js', 'wall-types.js', 'geometry-2d.js', 'drawing-format.js', 'room-standards.js', 'level-assembly.js', 'cut-view.js']) {
+  for (const file of ['formatters.js', 'wall-types.js', 'geometry-2d.js', 'drawing-format.js',
+    'room-standards.js', 'level-assembly.js', 'build-house.js', 'cut-view.js']) {
     const full = path.join(ROOT, file);
     if (!fs.existsSync(full)) continue;
     try { vm.runInContext(fs.readFileSync(full, 'utf8'), sandbox, { filename: file }); }
@@ -115,6 +116,11 @@ function buildEnv(win, saved) {
   const roofs = format.roofs(saved.roofs, levelIds);
   const fenestrations = format.fenestrations(saved.fenestrations, levelIds);
   const outlines = format.outlines(saved.outlines, levelIds);
+  // COLUMNS TOO, since the elevation draws the piles under a grade beam.
+  // Read through the FORMAT rather than off `saved` raw, so a record this
+  // env serves is one the app would have loaded -- a pile whose mark the
+  // reader drops must be dropped here as well.
+  const columns = format.columns ? format.columns(saved.columns, levelIds, {}) : (saved.columns || []);
   const shelves = format.boneyardShelves(saved.boneyardShelves);
   const masters = format.boneyardOutlines(saved.boneyardOutlines, new Set(shelves.map(s => s.id)));
   const assemblies = (saved.levelAssemblies && typeof saved.levelAssemblies === 'object') ? saved.levelAssemblies : {};
@@ -181,6 +187,7 @@ function buildEnv(win, saved) {
     walls: () => walls,
     roofs: () => roofs,
     floors: () => floors,
+    columns: () => columns,
     fenestrations: () => fenestrations,
     garageOutlines: id => outlines.filter(o => o.levelId === id && o.garage && o.points.length >= 3),
     garageFoundation: g => {
