@@ -104,11 +104,20 @@ const savedFile = page => page.evaluate(async bucket => {
 // looking exactly like a page that had hung. BEAM is a build tool and build
 // tools are on DRAFTING (tool-roster.js:51). armDimension in
 // model-html-auto-dims.spec.js switches for the same reason.
+// IDEMPOTENT, unlike the press. Pressing the ARMED key returns to SELECT --
+// the register's rule, which helpers.armWall carries a note about -- so a
+// helper that always clicked would DISARM the tool for any caller that was
+// already holding it, and the panel would vanish. That is not a failure: the
+// next `click()` waits for a locator that is not there and the test times out
+// with "waiting for [data-auto-beam]" and nothing about why.
 async function armTool(page, id) {
   await page.locator('[data-board-switch] [data-board="drafting"]').click();
   await page.waitForTimeout(150);
-  await page.locator(`[data-tool-key="${id}"]`).click();
-  await page.waitForTimeout(150);
+  const key = page.locator(`[data-tool-key="${id}"]`);
+  if (await key.getAttribute('aria-pressed') !== 'true') {
+    await key.click();
+    await page.waitForTimeout(150);
+  }
 }
 const armBeamTool = page => armTool(page, 'beam');
 
@@ -394,6 +403,204 @@ test('a stair opening in the floor above pushes the beam off it', async ({ page 
   });
   expect(heldAt, 'the stair did not move the beam at all').toEqual([3.875]);
 });
+
+// ── THE FLOOR ABOVE IS WHAT A LEVEL CARRIES ───────────────────────────────
+//
+// Movie, 25 Sep: "i don't think we discussed the columns and beams that will
+// be needed on the main floor if there is a 2nd floor. usually a roof won't
+// need columns or beams (usually the exterior walls do the complete job)".
+//
+// Both halves of that are ONE rule, which is why neither is a special case: a
+// level earns its beam from the FLOOR it carries, and the top storey carries
+// a roof. floorCarriedBy is the only thing that decides, and it hands back
+// null up there.
+
+test('a house with a second floor gets a beam under it, not just under the first',
+  async ({ page }) => {
+    await open(page, empty({
+      outlines: [
+        { ...rect({ wide: 40, deep: 32 }), id: 'outline-main' },
+        { ...rect({ wide: 40, deep: 32 }), id: 'outline-upper', levelId: 5 },
+      ],
+    }));
+    await armBeamTool(page);
+    await autoBeamButton(page).click();          // standing on MAIN FL: FOUNDATION's beam
+    await h.pickModelLevel(page, 5);             // climb, and ask for the one under 2ND FL
+    await armBeamTool(page);
+    await autoBeamButton(page).click();
+    await saveNow(page);
+    const saved = await savedFile(page);
+
+    const on = (levelId, view) => (saved.beams || [])
+      .filter(beam => beam.levelId === levelId && beam.view === view);
+    expect(on(1, 'foundation').length, 'the foundation lost its beam').toBeGreaterThan(0);
+    expect(on(3, 'floor').length,
+      'a 2nd floor is standing on a forty-foot span with nothing under it')
+      .toBeGreaterThan(0);
+
+    // AND THE MAIN FLOOR'S POSTS STAND ON THE FOUNDATION'S. This is the whole
+    // of Movie's rule -- "it need to be over another column" -- and it is
+    // asserted on POSITION rather than on a flag, because no flag is stored:
+    // drawing-format.js's column validator has no `unsupported` field, so a
+    // check reading one would pass on a frame where nothing stacked at all.
+    const posts = (levelId, view) => (saved.columns || [])
+      .filter(column => column.levelId === levelId && column.view === view
+        && !String(column.footing || '').startsWith('pile'))
+      .map(column => Number(column.point.x.toFixed(4)))
+      .sort((a, b) => a - b);
+    expect(posts(3, 'floor').length, 'the main floor beam has nothing holding it')
+      .toBeGreaterThan(0);
+    expect(posts(3, 'floor'), 'the main floor posts do not stand on the foundation posts')
+      .toEqual(posts(1, 'foundation'));
+  });
+
+test('two bodies on one floor are two floors, and each is asked on its own span',
+  async ({ page }) => {
+    // THE BUG THIS IS FOR WAS REAL AND WAS FOUND BY MEASURING, not by review:
+    // a 2 STOREY WITH ROOM OVER GARAGE puts TWO loops on 2ND FL -- the house
+    // at 32 x 40 and the room over the garage at 24 x 19 -- and "last one
+    // wins" measured the room, whose short span is exactly 19 and so needs
+    // nothing, while the house's forty feet were never asked about. The main
+    // floor came back with no beam at all and nothing said so.
+    //
+    // The mutation gate found that this file could not catch it: every other
+    // fixture here puts ONE loop on the carried floor, so `.slice(-1)` is a
+    // no-op against them. The small body is LAST on purpose.
+    await open(page, empty({
+      outlines: [
+        { ...rect({ wide: 40, deep: 32 }), id: 'outline-main' },
+        { ...rect({ wide: 40, deep: 32 }), id: 'outline-upper', levelId: 5 },
+        // 24 x 19 -- a room over a garage. 19 is NOT over 19, so on its own
+        // it needs nothing, and a rule that stopped at it would report
+        // "no beam needed" for the whole floor.
+        { id: 'outline-over', levelId: 5,
+          points: [{ x: 24, y: 0, z: -9.5 }, { x: 48, y: 0, z: -9.5 },
+            { x: 48, y: 0, z: 9.5 }, { x: 24, y: 0, z: 9.5 }] },
+      ],
+    }));
+    await h.pickModelLevel(page, 5);
+    await armBeamTool(page);
+    await autoBeamButton(page).click();
+    await saveNow(page);
+    const saved = await savedFile(page);
+
+    const onMain = (saved.beams || []).filter(beam => beam.levelId === 3);
+    expect(onMain.length, 'the house was skipped because a smaller body came last')
+      .toBeGreaterThan(0);
+    // THE HOUSE'S OWN SPAN, not the room's: the beam runs the 40 ft body,
+    // between x = -20 and 20, and nothing of it is out over the room.
+    const xs = onMain.flatMap(beam => [beam.start.x, beam.end.x]);
+    expect(Math.min(...xs), 'the beam is not on the house').toBeCloseTo(-20, 4);
+    expect(Math.max(...xs), 'the beam ran out past the house').toBeCloseTo(20, 4);
+    // AND THE ROOM GOT NONE, for the right reason -- 19 is not over 19.
+    expect(xs.some(x => x > 20.001), 'the 19 ft room was given a beam it does not need')
+      .toBe(false);
+  });
+
+test('the posts land on the columns below, not on the even divisions',
+  async ({ page }) => {
+    // THE TEST ABOVE CANNOT TELL THE RULE FROM LUCK, and this one is here to
+    // say so. A 40 ft run divides evenly into four 10s with posts at -10, 0,
+    // 10 -- and on the premades the foundation's posts are at -10, 0, 10 too,
+    // because both floors are the same rectangle. Comparing them proves the
+    // two AGREE, not that the upper one was placed BY the lower. Code with
+    // supportsBelow deleted passes it.
+    //
+    // So the floor below is held at -9, 3 and 15: hand-placed columns, off
+    // every even division. supportsUnder does not filter on `auto`, so a
+    // drafter's own column is support like any other -- which is Movie's rule
+    // read literally, "it need to be over another column".
+    //
+    // GREEDY-FURTHEST WALKS THEM EXACTLY. From -20 the limit is -8 and the
+    // furthest support in reach is -9; from -9 the limit is 3 and 3 is
+    // reachable; from 3 the limit is 15 and 15 is reachable; from 15 the
+    // remaining 5 ft is under the limit. Even division would answer -10, 0,
+    // 10 and every one of those numbers is wrong here.
+    await open(page, empty({
+      outlines: [
+        { ...rect({ wide: 40, deep: 32 }), id: 'outline-main' },
+        { ...rect({ wide: 40, deep: 32 }), id: 'outline-upper', levelId: 5 },
+      ],
+      columns: [-9, 3, 15].map((x, index) => ({
+        id: 900 + index, point: { x, y: 0, z: 0 },
+        levelId: 1, view: 'foundation', footing: 'pad36',
+      })),
+    }));
+    await h.pickModelLevel(page, 5);
+    await armBeamTool(page);
+    await autoBeamButton(page).click();
+    await saveNow(page);
+    const saved = await savedFile(page);
+
+    const posts = (saved.columns || [])
+      .filter(column => column.levelId === 3 && column.view === 'floor')
+      .map(column => Number(column.point.x.toFixed(4)))
+      .sort((a, b) => a - b);
+    expect(posts, 'the main floor posts divided evenly instead of standing on '
+      + 'the columns below').toEqual([-9, 3, 15]);
+
+    // AND THE BEAM IS CUT WHERE THEY STAND. "a beam is one span between two
+    // supports", so an even four-span beam over posts at -9, 3, 15 would be
+    // four members whose ends miss every post.
+    const ends = (saved.beams || [])
+      .filter(beam => beam.levelId === 3)
+      .flatMap(beam => [beam.start.x, beam.end.x])
+      .map(x => Number(x.toFixed(4)));
+    expect([...new Set(ends)].sort((a, b) => a - b),
+      'the beam was divided somewhere other than where its posts are')
+      .toEqual([-20, -9, 3, 15, 20]);
+
+    // AND NONE OF THEM IS HANGING, because all three were in reach.
+    await expect(page.locator('[data-strip-message]'))
+      .not.toHaveText(/nothing under it/i);
+  });
+
+test('the top storey carries a roof, so it gets nothing', async ({ page }) => {
+  // "usually a roof won't need columns or beams (usually the exterior walls
+  // do the complete job)". Nothing in the code says `if roof`; floorCarriedBy
+  // returns null for the top storey because there is no floor above it, and
+  // the press says so rather than going quiet.
+  await open(page, empty({
+    outlines: [
+      { ...rect({ wide: 40, deep: 32 }), id: 'outline-main' },
+      { ...rect({ wide: 40, deep: 32 }), id: 'outline-upper', levelId: 5 },
+    ],
+  }));
+  await h.pickModelLevel(page, 5);
+  await armBeamTool(page);
+  await h.pickModelLevel(page, 7);   // ROOF
+  await armBeamTool(page);
+  await expect(autoBeamButton(page),
+    'the roof was offered a beam it does not need').toBeDisabled();
+});
+
+test('a post with nothing under it says so rather than standing quietly',
+  async ({ page }) => {
+    // The floor below is held only at its own perimeter -- no columns, no
+    // interior wall -- so the storey above has nowhere legal to land a post
+    // and the beam still has to be carried. midSpanBeams tags those; the page
+    // cannot STORE the tag (no such field in the format) so it says it.
+    //
+    // 2ND FL is offset from MAIN FL so its beam sits over open floor rather
+    // than over the foundation posts, which is the case that separates "these
+    // stack" from "these happen to coincide".
+    await open(page, empty({
+      outlines: [
+        { ...rect({ wide: 40, deep: 32 }), id: 'outline-main' },
+        { id: 'outline-upper', levelId: 5,
+          points: [{ x: -20, y: 0, z: 20 }, { x: 20, y: 0, z: 20 },
+            { x: 20, y: 0, z: 52 }, { x: -20, y: 0, z: 52 }] },
+      ],
+    }));
+    await armBeamTool(page);
+    await autoBeamButton(page).click();      // FOUNDATION, from MAIN FL
+    await h.pickModelLevel(page, 5);
+    await armBeamTool(page);
+    await autoBeamButton(page).click();      // MAIN FL, framing the offset 2ND FL
+    await expect(page.locator('[data-strip-message]'),
+      'a post standing on nothing was placed without a word')
+      .toHaveText(/nothing under it/i, { timeout: 4000 });
+  });
 
 test('no FOUNDATION level means the button is greyed, not a record filed nowhere',
   async ({ page }) => {

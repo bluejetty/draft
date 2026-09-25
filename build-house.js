@@ -150,7 +150,8 @@ if (!window.DraftBuildHouse) {
     return runs;
   };
 
-  const midSpanBeams = (points, { beamAtFt = 19, maxSpanFt = 12, holes = [], bearsAt = null } = {}) => {
+  const midSpanBeams = (points, { beamAtFt = 19, maxSpanFt = 12, holes = [], bearsAt = null,
+    supportsBelow = null, supportTolFt = 0.5 } = {}) => {
     const xs = points.map(pt => pt.x), zs = points.map(pt => pt.z);
     const box = { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
     const w = box.maxX - box.minX, d = box.maxZ - box.minZ;
@@ -353,19 +354,117 @@ if (!window.DraftBuildHouse) {
       return Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t)) < 1e-6;
     });
     const bears = typeof bearsAt === 'function' ? bearsAt : onOutline;
+    // ── WHAT A POST MAY STAND ON (Movie, 25 Sep) ─────────────────────────
+    //
+    // "the columns and beams are most often located over top of each other (
+    // this is always the case for a columns - it need to be over another
+    // column" ... "or over a solid wall" ... "(which acts as a column".
+    //
+    // EVEN DIVISION IS THE FALLBACK, NOT THE RULE -- and it was the only rule
+    // until now. On the ground floor it is the right one: the posts stand on
+    // their own pads and nothing underneath constrains where they go. A floor
+    // ABOVE is a different question, because its posts have to land on what is
+    // already holding the floor below, and two runs divided evenly stack only
+    // by COINCIDENCE.
+    //
+    // ON THE PREMADE twoStorey THEY DO COINCIDE, whose 2nd floor sits on the
+    // same rectangle as the main floor -- which is exactly why this cannot be
+    // left to luck. It would look right on every fixture in the repo and come
+    // apart on the first outline edit that made the two floors differ, with
+    // nothing to say so.
+    //
+    // `supportsBelow` IS A LIST OF WHAT IS THERE, points and segments mixed: a
+    // column below is a point, a solid wall below is a segment. The caller
+    // decides what counts as solid -- an opening's width is the page's
+    // business, not this file's -- and hands over only the stretches that do.
+    const along = pt => (axis === 'x' ? pt.x : pt.z);
+    const cross = pt => (axis === 'x' ? pt.z : pt.x);
+    // WHERE THE RUN IS HELD UP, as intervals of t. A wall running ALONG the
+    // beam holds the whole stretch it covers; one CROSSING it holds a single
+    // point; a column below holds a point. A wall parallel to the beam but a
+    // foot to one side holds nothing, which is the case the tolerance is for.
+    const heldSpansOn = c => {
+      const held = [];
+      (Array.isArray(supportsBelow) ? supportsBelow : []).forEach(item => {
+        if (item && item.start && item.end) {
+          const a0 = along(item.start), a1 = along(item.end);
+          const c0 = cross(item.start), c1 = cross(item.end);
+          if (Math.abs(c0 - c) <= supportTolFt && Math.abs(c1 - c) <= supportTolFt) {
+            held.push([Math.min(a0, a1), Math.max(a0, a1)]);
+          } else if ((c0 - c) * (c1 - c) <= 0 && Math.abs(c1 - c0) > 1e-9) {
+            const k = (c - c0) / (c1 - c0);
+            held.push([a0 + (a1 - a0) * k, a0 + (a1 - a0) * k]);
+          }
+        } else if (item && Math.abs(cross(item) - c) <= supportTolFt) {
+          held.push([along(item), along(item)]);
+        }
+      });
+      return held;
+    };
+    // GREEDY-FURTHEST: from the last division, the furthest support still
+    // within maxSpanFt. That is the FEWEST posts that keeps every span legal
+    // -- a nearer support would add a post the frame does not need, a further
+    // one would leave a span over the limit.
+    const divisionsFor = (r0, r1, c) => {
+      const len = r1 - r0;
+      const evenly = (from, to) => {
+        const spans = Math.max(1, Math.ceil((to - from) / maxSpanFt));
+        const cuts = [];
+        for (let s = 1; s < spans; s++) cuts.push({ t: from + ((to - from) * s) / spans, unsupported: true });
+        return cuts;
+      };
+      // No list means the old question: nothing below is being tracked, so
+      // divide evenly and claim nothing about what holds the posts up.
+      if (!Array.isArray(supportsBelow) || !supportsBelow.length) {
+        return evenly(r0, r1).map(cut => ({ t: cut.t, unsupported: false }));
+      }
+      const held = heldSpansOn(c);
+      const cuts = [];
+      let at = r0;
+      let guard = 0;
+      while (r1 - at > maxSpanFt + 1e-9 && guard++ < 500) {
+        const limit = at + maxSpanFt;
+        // The furthest point of any held interval that is reachable, clipped
+        // to the interval so a long wall is used at its far end rather than
+        // wherever it happens to start.
+        let best = null;
+        held.forEach(([h0, h1]) => {
+          const reach = Math.min(h1, limit);
+          if (reach <= at + 0.5 || h0 > limit + 1e-9) return;
+          if (best === null || reach > best) best = reach;
+        });
+        if (best === null) {
+          // NOTHING WITHIN REACH. The beam still has to be held up, so a post
+          // goes in at the limit and says out loud that it stands on nothing
+          // -- a silent one here is the drawing claiming support it has not
+          // got, which is the whole defect this rule exists to prevent.
+          cuts.push({ t: limit, unsupported: true });
+          at = limit;
+        } else {
+          cuts.push({ t: best, unsupported: false });
+          at = best;
+        }
+      }
+      return cuts;
+    };
+
     const beams = [];
     const columns = [];
     finalCuts.forEach(c => {
       clipLineToPolygon(points, axis, c).flatMap(trimRun).forEach(([r0, r1]) => {
-        const len = r1 - r0;
-        const spans = Math.max(1, Math.ceil(len / maxSpanFt));
         const at = t => (axis === 'x' ? { x: t, z: c } : { x: c, z: t });
         const withSrc = t => {
           const index = cornerIndexAt(t, c);
           return index == null ? at(t) : { ...at(t), srcIndex: index };
         };
-        for (let s = 0; s < spans; s++) {
-          beams.push({ start: withSrc(r0 + (len * s) / spans), end: withSrc(r0 + (len * (s + 1)) / spans) });
+        // ONE LIST OF DIVISIONS FOR BOTH. "a beam is one span between two
+        // supports", so a beam is cut where a post stands and nowhere else --
+        // and these used to be two separate loops over the same arithmetic,
+        // which was safe only while both were even.
+        const cuts = divisionsFor(r0, r1, c);
+        const stops = [r0, ...cuts.map(cut => cut.t), r1];
+        for (let s = 0; s + 1 < stops.length; s++) {
+          beams.push({ start: withSrc(stops[s]), end: withSrc(stops[s + 1]) });
         }
         // srcIndex still rides along wherever an end coincides with a master
         // point — that is what carries a beam through outline edits, and it is
@@ -375,11 +474,10 @@ if (!window.DraftBuildHouse) {
           .filter(end => !bears(at(end.t)));
         freeEnds.forEach(end => columns.push(end.index == null
           ? at(end.t) : { ...at(end.t), srcIndex: end.index }));
-        for (let s = 1; s < spans; s++) {
-          const t = r0 + (len * s) / spans;
-          if (freeEnds.some(end => Math.abs(end.t - t) < 0.5)) continue;
-          columns.push(at(t));
-        }
+        cuts.forEach(cut => {
+          if (freeEnds.some(end => Math.abs(end.t - cut.t) < 0.5)) return;
+          columns.push(cut.unsupported ? { ...at(cut.t), unsupported: true } : at(cut.t));
+        });
       });
     });
     return { beams, columns };

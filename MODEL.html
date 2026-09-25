@@ -5699,6 +5699,7 @@
     if (!asked || !views.some(view => view.id === asked)) params.delete('view');
     syncUrl();
     buildChrome();
+    refreshToolPropsOnLevel();
     paint();
   };
 
@@ -10443,17 +10444,35 @@
   // THE GARAGE IS SKIPPED. Its slab is not the floor this beam carries, and a
   // loop taken across both bodies would run a beam through the garage.
   // MODEL.dc.html picks the same way, `!outline.garage` (:4804).
-  const houseFootprint = () => {
-    const storey = lowestFloorLevel();
-    if (!storey) return null;
-    const list = (drawing?.outlines || []).filter(outline =>
-      Number(outline.levelId) === Number(storey.id)
-      && outline.garage !== true
-      && (outline.points || []).length >= 3);
-    // LAST ONE WINS, the rule roofSourceOutline takes and for its reason: the
-    // most recent loop is the one the drafter means.
-    return list.length
-      ? { outline: list[list.length - 1], storeyId: storey.id } : null;
+  // EVERY BODY ON A STOREY, not one of them. A level can hold more than one
+  // closed loop -- a 2 STOREY WITH ROOM OVER GARAGE puts the house's own upper
+  // floor AND the room over the garage on 2ND FL -- and each is a floor with
+  // its own clear span.
+  //
+  // "LAST ONE WINS" WAS WRONG HERE, and measurably: on twoStorey-over the
+  // outlines on 2ND FL are the house at 32 x 40 and the room over the garage
+  // at 24 x 19, in that order. Taking the last one measured the room, whose
+  // short span is exactly 19 and so needs nothing, and the house's forty feet
+  // were never asked about. The main floor came back with no beam at all and
+  // nothing said so.
+  const storeyBodies = (storeyLevel = null) => {
+    const storey = storeyLevel || lowestFloorLevel();
+    if (!storey) return [];
+    return (drawing?.outlines || [])
+      .filter(outline => Number(outline.levelId) === Number(storey.id)
+        && outline.garage !== true
+        && (outline.points || []).length >= 3)
+      .map(outline => ({ outline, storeyId: storey.id }));
+  };
+
+  // THE ONE-BODY QUESTION still has callers that want one answer -- AUTO PILES
+  // asks which loop the garage shares an edge with, and the panel asks whether
+  // there is anything to frame at all. Last one wins there, the rule
+  // roofSourceOutline takes and for its reason: the most recent loop is the
+  // one the drafter means.
+  const houseFootprint = (storeyLevel = null) => {
+    const list = storeyBodies(storeyLevel);
+    return list.length ? list[list.length - 1] : null;
   };
 
   // A STAIR OPENING IS A HOLE IN THE FLOOR THE BEAM CARRIES, so the beam
@@ -10502,26 +10521,113 @@
   // WHAT IT RETURNS IS UNDO-SHAPED, `{list, item}` pairs and `{list, items}`
   // groups, so both callers drop it straight into a 'built' step without
   // knowing that a beam and a column live in different arrays.
-  const placeAutoBeam = () => {
-    if (!drawing) return -1;
-    const found = houseFootprint();
-    // A LEVEL THE DRAWING ACTUALLY HAS, which is what levelPresent exists for:
-    // a beam filed against a FOUNDATION this drawing has not got would paint
-    // once and be gone on the next load.
-    if (!found || !levelPresent(FOUNDATION_LEVEL_ID)) return -1;
-    const { outline, storeyId } = found;
-    const points = outline.points.map(pt => ({ x: pt.x, z: pt.z }));
-    const plan = window.DraftBuildHouse.midSpanBeams(points, {
-      holes: stairHolesOn(points, storeyId),
+  // ── WHICH FLOOR A LEVEL CARRIES ──────────────────────────────────────────
+  //
+  // A LEVEL EARNS ITS BEAM FROM THE FLOOR ABOVE IT, which is the rule the
+  // stair-hole lookup already follows and the reason the roof excludes itself:
+  // Movie, 25 Sep, "usually a roof won't need columns or beams (usually the
+  // exterior walls do the complete job)". The top storey carries no floor, so
+  // it gets nothing without that ever being a special case.
+  //
+  // FOUNDATION carries the lowest storey; a storey carries the next one up.
+  // floorLevels is bottom-up and excludes FOUNDATION (it has no 'floor' view),
+  // so the two questions are one lookup with one branch.
+  const floorCarriedBy = levelId => {
+    const floors = window.DraftLayerViews.floorLevels(drawing?.levels || []);
+    if (Number(levelId) === FOUNDATION_LEVEL_ID) return floors[0] || null;
+    const at = floors.findIndex(level => Number(level.id) === Number(levelId));
+    return at < 0 ? null : (floors[at + 1] || null);
+  };
+
+  // ── WHAT IS ALREADY HOLDING THE FLOOR BELOW ──────────────────────────────
+  //
+  // Movie, 25 Sep: "this is always the case for a columns - it need to be over
+  // another column ... or over a solid wall ... (which acts as a column".
+  //
+  // COLUMNS AS POINTS, WALLS AS SEGMENTS, which is the shape midSpanBeams
+  // takes. Only what is BELOW the level being framed, and only what is really
+  // there: a wall with a door through it is not solid across the door, so the
+  // openings are cut out here rather than in build-house.js -- an opening's
+  // width is this page's business and the geometry file has no idea what a
+  // fenestration is.
+  //
+  // THE FOUNDATION HAS NOTHING BELOW IT and wants none: its posts stand on
+  // their own pads, which is why a null list means "divide evenly and claim
+  // nothing", exactly as before this rule existed.
+  const supportsUnder = levelId => {
+    const floors = window.DraftLayerViews.floorLevels(drawing?.levels || []);
+    const at = floors.findIndex(level => Number(level.id) === Number(levelId));
+    // The level under a storey is the storey below it, or FOUNDATION for the
+    // lowest. Under FOUNDATION there is only ground.
+    const belowId = Number(levelId) === FOUNDATION_LEVEL_ID ? null
+      : (at > 0 ? Number(floors[at - 1].id) : FOUNDATION_LEVEL_ID);
+    if (belowId == null || !levelPresent(belowId)) return null;
+    const out = [];
+    (drawing?.columns || [])
+      .filter(column => Number(column.levelId) === belowId && column.point)
+      .forEach(column => out.push({ x: column.point.x, z: column.point.z }));
+    // A BEAM BELOW IS NOT A SUPPORT, and leaving it out is the point. A post
+    // landing mid-span on the beam underneath loads that beam rather than
+    // carrying through to the ground -- which is the thing Movie's rule
+    // exists to stop. Only what stands: columns, and solid wall.
+    const openings = new Map();
+    (drawing?.fenestrations || []).forEach(opening => {
+      const key = String(opening.wallId);
+      if (!openings.has(key)) openings.set(key, []);
+      openings.get(key).push(opening);
     });
-    // THE FOUNDATION DRAWING, NAMED RATHER THAN INHERITED. wallHomeView hands
-    // back 'plan' whenever the drafter happens to be on BASEMENT (WALLS), and
-    // S-BEAM is in the FOUNDATION view's layer list and not that one
-    // (layer-views.js:32) -- so a beam filed by where he was standing would
-    // paint nowhere on half the presses, which is the silent loss this page
-    // keeps refusing. MODEL.dc.html names it too (:4833).
-    const levelId = FOUNDATION_LEVEL_ID;
-    const view = 'foundation';
+    (drawing?.walls || [])
+      .filter(wall => Number(wall.levelId) === belowId && wall.start && wall.end)
+      .forEach(wall => {
+        const holes = (openings.get(String(wall.id)) || [])
+          .map(opening => ({
+            from: Number(opening.offset) || 0,
+            to: (Number(opening.offset) || 0) + (Number(opening.width) || 0),
+          }))
+          .filter(hole => hole.to > hole.from)
+          .sort((a, b) => a.from - b.from);
+        const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+        if (!(len > 0.01)) return;
+        const at01 = t => ({
+          x: wall.start.x + (wall.end.x - wall.start.x) * (t / len),
+          z: wall.start.z + (wall.end.z - wall.start.z) * (t / len),
+        });
+        let from = 0;
+        holes.forEach(hole => {
+          if (hole.from - from > 0.01) out.push({ start: at01(from), end: at01(hole.from) });
+          from = Math.max(from, hole.to);
+        });
+        if (len - from > 0.01) out.push({ start: at01(from), end: at01(len) });
+      });
+    return out.length ? out : null;
+  };
+
+  const placeAutoBeam = ({ levelId = FOUNDATION_LEVEL_ID } = {}) => {
+    if (!drawing) return -1;
+    // A LEVEL THE DRAWING ACTUALLY HAS, which is what levelPresent exists for:
+    // a beam filed against a level this drawing has not got would paint once
+    // and be gone on the next load.
+    if (!levelPresent(levelId)) return -1;
+    // THE FLOOR THIS LEVEL CARRIES is the footprint the span rule measures --
+    // not the level's own. A main-floor beam is sized by the SECOND floor
+    // over it, and the two differ the moment the upper storey is smaller.
+    const carried = floorCarriedBy(levelId);
+    if (!carried) return -1;
+    // EVERY BODY ON THAT FLOOR, each measured on its own. A 2 STOREY WITH ROOM
+    // OVER GARAGE puts two loops on 2ND FL and they are two floors: the house
+    // at 32 x 40, which needs a beam, and the room over the garage at 24 x 19,
+    // which does not. One answer for the pair would be wrong whichever loop it
+    // came from.
+    const bodies = storeyBodies(carried);
+    if (!bodies.length) return -1;
+    // THE DRAWING THAT SHOWS STRUCTURE, NAMED RATHER THAN INHERITED.
+    // wallHomeView hands back 'plan' whenever the drafter happens to be on
+    // BASEMENT (WALLS) or a floor's walls plan, and S-BEAM is in the
+    // FOUNDATION and FLOOR views and in neither of those -- so a beam filed
+    // by where he was standing would paint nowhere on half the presses, which
+    // is the silent loss this page keeps refusing. MODEL.dc.html names the
+    // foundation one too (:4833).
+    const view = levelId === FOUNDATION_LEVEL_ID ? 'foundation' : 'floor';
 
     // RE-RUNNING REPLACES THIS LEVEL AND VIEW'S OWN AUTO STRUCTURE and nothing
     // else -- the rule placeAutoDims takes, for the reason Movie gave: "we
@@ -10573,47 +10679,70 @@
     // a house the bone built has no master until the drafter makes one, and a
     // beam claiming a link it has not got is worse than one admitting it has
     // none -- placeAutoDims' own note on dropped srcIds is about exactly this.
-    const linked = (source, srcIndex) => {
-      const pt = { x: source.x, y: 0, z: source.z };
-      const corner = Number.isInteger(srcIndex) ? outline.points[srcIndex] : null;
-      if (corner && corner.srcId) { pt.srcId = corner.srcId; relinkVertex(pt); }
-      return pt;
-    };
-
     const placed = [];
-    // HIGHEST-PLUS-ONE ONCE, THEN COUNT UP. newStructureId reads the list, so
-    // asking it again inside the loop would hand out the same id twice until
-    // the first push landed -- and the format dedupes on id, dropping every
-    // repeat after the first, silently.
+    // HIGHEST-PLUS-ONE ONCE, THEN COUNT UP, and hoisted OUT of the body loop
+    // for the same reason it was hoisted out of the record loop: newStructureId
+    // reads the list, so asking it again per body would restart the count and
+    // hand the second body the first body's ids. The format dedupes on id and
+    // drops every repeat after the first, silently.
     let beamId = newStructureId(drawing.beams);
-    plan.beams.forEach(beam => {
-      const record = {
-        id: beamId++,
-        start: linked(beam.start, beam.start.srcIndex),
-        end: linked(beam.end, beam.end.srcIndex),
-        levelId,
-        view,
-        // Named for the reason beamPress names it: the record this page writes
-        // and the record the reader rebuilds should be one object, not one
-        // filled in behind the page's back.
-        mode: 'flush',
-        auto: true,
-      };
-      drawing.beams.push(record);
-      placed.push({ list: drawing.beams, item: record });
-    });
     let columnId = newStructureId(drawing.columns);
-    plan.columns.forEach(column => {
-      const record = {
-        id: columnId++,
-        point: linked(column, column.srcIndex),
-        levelId,
-        view,
-        footing: 'pad36',
-        auto: true,
+    let beamCount = 0, columnCount = 0, unsupportedCount = 0;
+
+    bodies.forEach(({ outline, storeyId }) => {
+      const points = outline.points.map(pt => ({ x: pt.x, z: pt.z }));
+      const plan = window.DraftBuildHouse.midSpanBeams(points, {
+        holes: stairHolesOn(points, storeyId),
+        supportsBelow: supportsUnder(levelId),
+      });
+      // THE LINK IS THIS BODY'S OWN. `srcIndex` indexes the points THIS call
+      // was handed, so the closure has to be rebuilt per body -- one hoisted
+      // out of the loop would read the last body's corners for every beam.
+      const linked = (source, srcIndex) => {
+        const pt = { x: source.x, y: 0, z: source.z };
+        const corner = Number.isInteger(srcIndex) ? outline.points[srcIndex] : null;
+        if (corner && corner.srcId) { pt.srcId = corner.srcId; relinkVertex(pt); }
+        return pt;
       };
-      drawing.columns.push(record);
-      placed.push({ list: drawing.columns, item: record });
+      plan.beams.forEach(beam => {
+        const record = {
+          id: beamId++,
+          start: linked(beam.start, beam.start.srcIndex),
+          end: linked(beam.end, beam.end.srcIndex),
+          levelId,
+          view,
+          // Named for the reason beamPress names it: the record this page
+          // writes and the record the reader rebuilds should be one object,
+          // not one filled in behind the page's back.
+          mode: 'flush',
+          auto: true,
+        };
+        drawing.beams.push(record);
+        placed.push({ list: drawing.beams, item: record });
+      });
+      plan.columns.forEach(column => {
+        const record = {
+          id: columnId++,
+          point: linked(column, column.srcIndex),
+          levelId,
+          view,
+          footing: 'pad36',
+          auto: true,
+        };
+        drawing.columns.push(record);
+        placed.push({ list: drawing.columns, item: record });
+      });
+      beamCount += plan.beams.length;
+      columnCount += plan.columns.length;
+      // A POST THE GEOMETRY COULD NOT STAND ON ANYTHING is counted, not
+      // stored. midSpanBeams tags it `unsupported` because the beam still has
+      // to be held up somewhere and a silent post there is the drawing
+      // claiming support it has not got -- but drawing-format.js's column
+      // validator has no such field, so writing it would be a key the reader
+      // drops on the next load. That is the silent loss this page refuses
+      // everywhere else, so the fact goes to the DRAFTER instead, now, while
+      // he is looking at the press that made it.
+      unsupportedCount += plan.columns.filter(column => column.unsupported).length;
     });
 
     return {
@@ -10622,8 +10751,9 @@
         ...(sweptBeams.length ? [{ list: drawing.beams, items: sweptBeams }] : []),
         ...(sweptColumns.length ? [{ list: drawing.columns, items: sweptColumns }] : []),
       ],
-      beams: plan.beams.length,
-      columns: plan.columns.length,
+      beams: beamCount,
+      columns: columnCount,
+      unsupported: unsupportedCount,
       levelId,
     };
   };
@@ -10944,15 +11074,38 @@
     // FIXTURE WOULD HAVE CAUGHT IT: a premade press sweeps nothing on a fresh
     // drawing, so the wrong list is only ever reached by a re-press. The
     // groups come through carrying their own list instead.
+    // EVERY LEVEL THAT CARRIES A FLOOR, BOTTOM-UP, and the order is the rule
+    // rather than tidiness: a storey's posts have to land on what is already
+    // holding the floor below, so the level under it must be framed FIRST or
+    // supportsUnder reads an empty list and every post above divides evenly
+    // and claims nothing. Movie, 25 Sep: "i don't think we discussed the
+    // columns and beams that will be needed on the main floor if there is a
+    // 2nd floor".
+    //
+    // THE TOP STOREY EXCLUDES ITSELF, because floorCarriedBy hands back null
+    // for it -- it carries a roof, and "usually the exterior walls do the
+    // complete job". No branch here says so; the lookup does.
     const sweptStructure = [];
-    const beamed = placeAutoBeam();
-    if (beamed !== -1) {
-      extra.push(...beamed.placed);
-      sweptStructure.push(...beamed.restored);
-      if (beamed.beams) {
-        parts.push(`${beamed.beams} beam${beamed.beams === 1 ? '' : 's'}`
-          + ` and ${beamed.columns} column${beamed.columns === 1 ? '' : 's'}`);
-      }
+    const framedTally = { beams: 0, columns: 0, unsupported: 0 };
+    [FOUNDATION_LEVEL_ID, ...window.DraftLayerViews
+      .floorLevels(drawing?.levels || []).map(level => Number(level.id))]
+      .forEach(id => {
+        const beamed = placeAutoBeam({ levelId: id });
+        if (beamed === -1) return;
+        extra.push(...beamed.placed);
+        sweptStructure.push(...beamed.restored);
+        framedTally.beams += beamed.beams;
+        framedTally.columns += beamed.columns;
+        framedTally.unsupported += beamed.unsupported;
+      });
+    if (framedTally.beams) {
+      parts.push(`${framedTally.beams} beam${framedTally.beams === 1 ? '' : 's'}`
+        + ` and ${framedTally.columns} column${framedTally.columns === 1 ? '' : 's'}`
+        // SAID IN THE BUILD LINE, because a post standing on nothing is a fact
+        // about the house that was just raised and the drafter is reading this
+        // sentence anyway.
+        + (framedTally.unsupported
+          ? ` (${framedTally.unsupported} on nothing)` : ''));
     }
 
     undoStack.length = mark;
@@ -13269,13 +13422,43 @@
   // The armed-tool half of AUTO BEAM; the worker and the reasoning are up at
   // placeAutoBeam. Movie: "the AUTOBEAM/COLUMN should be available in the
   // build/ BEAM & COLUMN buttons".
+  // ── THE FLOOR THE DRAFTER IS LOOKING AT IS THE ONE HE MEANS ─────────────
+  //
+  // And its beam lives on the level BELOW it. Standing on MAIN FL asks for the
+  // beam that holds MAIN FL up, which is filed on FOUNDATION; standing on 2ND
+  // FL asks for the one under 2ND FL, filed on MAIN FL. On FOUNDATION there is
+  // no floor to look at, so it frames the storey above -- its own.
+  //
+  // THE FIRST VERSION HAD THIS THE OTHER WAY UP and the specs found it by
+  // HANGING rather than failing: standing on MAIN FL it framed the floor
+  // ABOVE, so on a drawing whose only outline is the main floor the button
+  // went disabled and every `click()` waited out its timeout. Six tests, no
+  // assertion message, just a run that never finished.
+  //
+  // It was also wrong for the drafter. AUTO BEAM on the main floor putting
+  // structure on the 2ND FL layer is a surprise; asking for the beam under
+  // the floor on screen is what the button looks like it does.
+  const framesFrom = levelId => {
+    const floors = window.DraftLayerViews.floorLevels(drawing?.levels || []);
+    const at = floors.findIndex(level => Number(level.id) === Number(levelId));
+    // Not a storey at all -- FOUNDATION, ROOF, SITE -- so it frames from where
+    // it stands and floorCarriedBy decides whether that means anything.
+    if (at < 0) return Number(levelId);
+    return at > 0 ? Number(floors[at - 1].id) : FOUNDATION_LEVEL_ID;
+  };
+
   const pressAutoBeam = () => {
-    const result = placeAutoBeam();
+    const levelId = framesFrom(activeLevelId());
+    const result = placeAutoBeam({ levelId });
     if (result === -1) {
-      sayOnStrip(houseFootprint()
-        ? 'AUTO BEAM files on FOUNDATION and this drawing has no FOUNDATION level.'
-        : 'AUTO BEAM needs a house outline on the lowest floor level — build '
-          + 'one with the bone, or trace one first.');
+      const carried = floorCarriedBy(levelId);
+      sayOnStrip(!levelPresent(levelId)
+        ? 'AUTO BEAM needs a level to file against.'
+        : !carried
+          ? 'AUTO BEAM frames the floor ABOVE — this level carries a roof, and '
+            + 'the exterior walls do that job.'
+          : 'AUTO BEAM needs an outline on ' + levelLabel(carried.id, carried.name)
+            + ' — that is the floor this level would carry.');
       return;
     }
     // NOTHING PLACED IS NOT NOTHING DONE, the reason AUTO DIMS pushes on
@@ -13297,11 +13480,19 @@
     const level = (drawing.levels || [])
       .find(entry => Number(entry.id) === result.levelId);
     const many = n => (n === 1 ? '' : 's');
+    // AND WHETHER THEY STAND ON ANYTHING. Movie's rule is that a column goes
+    // over another column or over a solid wall; where nothing was in reach the
+    // post still had to go in, and saying so is the difference between a frame
+    // he can trust and one he has to re-check by eye.
+    const hanging = result.unsupported
+      ? ` ${result.unsupported} of them ${result.unsupported === 1 ? 'has' : 'have'} `
+        + 'nothing under it — check what carries that load.'
+      : '';
     sayOnStrip(result.beams
       ? `AUTO BEAM placed ${result.beams} beam${many(result.beams)} and `
         + `${result.columns} column${many(result.columns)} on `
         + `${levelLabel(result.levelId, level && level.name)} — re-run after `
-        + 'outline edits to refresh them.'
+        + 'outline edits to refresh them.' + hanging
       : 'Every span is under 19′ — no mid-span beam needed.');
     buildChrome();
     paint();
@@ -13407,14 +13598,18 @@
     // missing prerequisite. A house under 19 ft gets the press and the
     // sentence, which is the same answer MODEL.dc.html's tour gives (:4364);
     // a button greyed on a bungalow would read as broken.
-    const found = houseFootprint();
-    const ready = !!found && levelPresent(FOUNDATION_LEVEL_ID);
+    const armedLevel = framesFrom(activeLevelId());
+    const carried = floorCarriedBy(armedLevel);
+    const found = carried ? houseFootprint(carried) : null;
+    const ready = !!found && levelPresent(armedLevel);
     btn.disabled = !ready;
-    btn.title = found
-      ? (ready
-        ? 'Place the mid-span beam and its teleposts on FOUNDATION.'
-        : 'This drawing has no FOUNDATION level to file the beam on.')
-      : 'No house outline yet — build one first.';
+    btn.title = !carried
+      ? 'This level carries a roof, not a floor — the exterior walls do that job.'
+      : found
+        ? `Frame ${levelLabel(carried.id, carried.name)} from below: the mid-span `
+          + 'beam and the posts that carry it.'
+        : `No outline on ${levelLabel(carried.id, carried.name)} yet — that is the `
+          + 'floor this level would carry.';
     btn.addEventListener('click', () => { pressAutoBeam(); showBeamProps(); });
     row.append(btn);
 
@@ -13457,6 +13652,27 @@
     box.append(row, note);
     P.set('BEAM & COLUMN', box);
     beamPanelUp = true;
+  };
+
+  // ── A PANEL BUILT ON ONE LEVEL IS STALE ON THE NEXT ─────────────────────
+  //
+  // showBeamProps reads the active level to decide which floor it would frame
+  // and whether it can, so its sentence and its greying belong to the level
+  // it was built on. goToLevel rebuilt the chrome and repainted and left the
+  // panel exactly as it was -- the button could sit disabled on a level where
+  // it would work, or offer to frame a floor the drafter had just left.
+  //
+  // It did not matter until AUTO BEAM: ROOF, FENESTRATION and DIMENSION all
+  // describe the NEXT thing placed rather than the level, so their panels read
+  // the same everywhere.
+  //
+  // ONLY WHEN A TOOL PANEL IS THE ONE ON SCREEN. A selection panel describes a
+  // thing, not a level, and rebuilding the tool's over the top of it would
+  // take away what the drafter is reading.
+  const refreshToolPropsOnLevel = () => {
+    if (roofPanelUp || openingPanelUp || dimensionPanelUp || beamPanelUp) {
+      showToolProps(activeTool);
+    }
   };
 
   const showToolProps = tool => {
