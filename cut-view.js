@@ -493,10 +493,50 @@ if (!window.DraftCutView) {
   // The garage outline a WALL lies on, or null. One home for the rule that
   // used to be copied twice. `cache` is a per-call object so the outline
   // lookup still happens once per level, exactly as the closures did.
+  // ── AND A FOUNDATION WALL SAYS SO ITSELF ───────────────────────────────
+  //
+  // Geometry alone cannot answer for a garage's grade beam, and every painter
+  // that asks about the FOUNDATION view was getting `null`.
+  //
+  // env.garageOutlines(levelId) filters outlines to that level exactly, and
+  // MODEL.html's raiseGarageConcrete builds the beam with `withOutline: false`
+  // -- so a garage has ONE outline, on MAIN FL, and none on FOUNDATION. The
+  // beam walls lie exactly ON that outline, but they are asked about against
+  // level 1's list, which is empty. Measured on a 2 STOREY + GARAGE + ROOM
+  // OVER saved from the app on 25 Sep: all four grade-beam walls resolved to
+  // `house`, and with them the frost-wall garage slab block (which filters on
+  // `c.garage`) never fired at all and the grade-beam slab always took its
+  // fallback arm.
+  //
+  // THE RECORD ALREADY KNEW. raiseGarageConcrete tags those walls
+  // `body: 'garage'` and drawing-format.js:507 persists it, so the answer was
+  // in the file the whole time and this function was re-deriving it from
+  // geometry that had been filtered away. The marker is authoritative and
+  // cannot produce a false positive, so it is asked only after the geometric
+  // answer comes back empty -- nothing that resolved before resolves
+  // differently now.
+  //
+  // WHY IT WENT UNSEEN: proto/repro-garage-house.draft was saved by an older
+  // builder that wrote a garage outline on EVERY level, level 1 included. The
+  // geometric path finds it there, so the harnesses reading that fixture were
+  // green on a shape the app has not produced for some time -- a check
+  // passing because the fixture has something the program no longer makes.
   function garageOfWall(wall, env, cache) {
     const list = cache[wall.levelId]
       || (cache[wall.levelId] = env.garageOutlines(wall.levelId));
-    return list.find(garage => env.edgeOnOutline(wall.start, wall.end, garage)) || null;
+    const hit = list.find(garage => env.edgeOnOutline(wall.start, wall.end, garage));
+    if (hit) return hit;
+    if (String(wall.body || '').trim() !== 'garage') return null;
+    // The wall says it is a garage's. Find WHICH by looking for the outline it
+    // lies on, on any storey -- a foundation beam is raised from the garage's
+    // own loop, so it sits on that boundary wherever the outline is filed.
+    const levels = (env.floorLevels() || []).map(level => level.id);
+    for (const levelId of levels) {
+      const others = cache[levelId] || (cache[levelId] = env.garageOutlines(levelId));
+      const found = others.find(garage => env.edgeOnOutline(wall.start, wall.end, garage));
+      if (found) return found;
+    }
+    return null;
   }
 
   // The garage outline a ROOF was generated from.

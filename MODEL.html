@@ -9792,7 +9792,102 @@
   // one.
   const GARAGE_PILE_SPACING_FT = 9;
   const GARAGE_PILE_FOOTING = 'pile12';
-  const GARAGE_PILE_MARK = 'P2';
+  // ── P2 OR P3: WHAT THE PILE IS CARRYING ────────────────────────────────
+  //
+  // Movie, 25 Sep: "pile P2 for a garage with only 1 floor, P3 req if a 2nd
+  // floor is over the garage".
+  //
+  // BOTH ARE 12" DIAMETER -- spec-master.js:202-203, P2 is 12" DIA x 15' LONG
+  // and P3 is 12" DIA x 20' LONG -- so the drawn symbol does not move and
+  // GARAGE_PILE_FOOTING stays pile12. What changes is the SCHEDULE MARK, and
+  // with it the load the row claims: 15.0 kPa against 30.0. A room over the
+  // garage is a storey of dead and live load arriving on the same four piles,
+  // and it is the LENGTH that answers it -- 20' of skin friction instead of
+  // 15'. Nothing about the plan symbol could have said so, which is exactly
+  // why the mark is a field rather than a drawing.
+  const GARAGE_PILE_MARK_ONE_STOREY = 'P2';
+  const GARAGE_PILE_MARK_ROOM_OVER = 'P3';
+
+  // ── AND THERE IS NO FLAG TO READ, SO THE QUESTION IS ASKED GEOMETRICALLY ─
+  //
+  // The premade's room over the garage gets its deck from
+  // `floorRecord(plan.overGarage, upperStorey.id, 'floor')` -- with no
+  // `{ garage: true }`, so it is not marked as the garage's own floor. A
+  // drafter who draws a floor over a garage by hand marks nothing either.
+  // Reading a flag would have answered P2 for both, and the premade is the
+  // case Movie was looking at.
+  //
+  // THE LEVEL IS THE ONE THE GARAGE'S STOREY CARRIES. lowestFloorLevel() is
+  // where garage walls stand; floorCarriedBy hands back the level above it,
+  // and null at the top of the stack -- a one-storey drawing has no level for
+  // a room to be on, which is the P2 case stated rather than assumed.
+  //
+  // ── HOW MUCH OF THE GARAGE IS BUILT OVER, NOT WHETHER ANYTHING TOUCHES ──
+  //
+  // TWO WRONG ANSWERS CAME BEFORE THIS ONE, and the second is the useful one.
+  //
+  // First this asked whether any vertex of either ring lay inside the other.
+  // An ATTACHED garage welds to the house along a shared edge, so its corners
+  // sit exactly ON the boundary of the floor above, and even-odd
+  // point-in-polygon is undefined on a boundary. Pulling the samples off the
+  // edge fixed that and did not fix the test.
+  //
+  // BECAUSE THE GARAGE REALLY DOES LAP THE HOUSE. Measured on the premades:
+  //
+  //     twoStorey-garage   house x -16..16  z -20..20
+  //                        garage x  -4..20  z  19..46
+  //
+  // The garage runs a foot INTO the house -- GARAGE_TIE_FT, the lap that
+  // makes the two buildings one -- so the house's own second floor overlaps
+  // the garage outline by a 1 ft x 20 ft strip whether or not anything is
+  // built over the garage. Any overlap test answers P3 for every attached
+  // garage in a two-storey house.
+  //
+  // SO THE QUESTION IS HOW MUCH, which is also the physical question: a pile
+  // is marked for the load standing on it, and a foot of lap is not a room.
+  // The share is estimated by sampling -- a grid over the garage, the samples
+  // that fall inside it, and how many of those are also under a floor on the
+  // level above. Measured on the same two designs:
+  //
+  //     twoStorey-garage    20 sq ft of 648    ~3%    the tie alone
+  //     twoStorey-over     456 sq ft of 648   ~70%    a room over
+  //
+  // A quarter is the line, with better than twenty points of margin either
+  // side of it. ANY floor on that level counts toward the share rather than
+  // each being asked alone, so a garage half covered by the house's floor and
+  // half by a bonus room reads as covered rather than as neither.
+  const ROOM_OVER_SHARE = 0.25;
+  const ROOM_OVER_GRID = 12;
+  const garagePileMark = loop => {
+    const storey = lowestFloorLevel();
+    const above = storey ? floorCarriedBy(storey.id) : null;
+    if (!above) return GARAGE_PILE_MARK_ONE_STOREY;
+    const floorsAbove = (drawing?.floors || []).filter(floor =>
+      Number(floor.levelId) === Number(above.id)
+      && (floor.view || 'plan') !== 'foundation'
+      && (floor.points || []).length >= 3);
+    if (!floorsAbove.length) return GARAGE_PILE_MARK_ONE_STOREY;
+    const xs = loop.map(pt => pt.x), zs = loop.map(pt => pt.z);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    const z0 = Math.min(...zs), z1 = Math.max(...zs);
+    let inGarage = 0, covered = 0;
+    for (let i = 0; i < ROOM_OVER_GRID; i += 1) {
+      for (let j = 0; j < ROOM_OVER_GRID; j += 1) {
+        // Cell CENTRES, so a sample never lands on the ring's own edge --
+        // which is the boundary case that started this.
+        const at = {
+          x: x0 + ((i + 0.5) / ROOM_OVER_GRID) * (x1 - x0),
+          z: z0 + ((j + 0.5) / ROOM_OVER_GRID) * (z1 - z0),
+        };
+        if (!pointInLoop(loop, at)) continue;
+        inGarage += 1;
+        if (floorsAbove.some(floor => pointInLoop(floor.points, at))) covered += 1;
+      }
+    }
+    if (!inGarage) return GARAGE_PILE_MARK_ONE_STOREY;
+    return covered / inGarage >= ROOM_OVER_SHARE
+      ? GARAGE_PILE_MARK_ROOM_OVER : GARAGE_PILE_MARK_ONE_STOREY;
+  };
   // HOW FAR BACK FROM THE HOUSE THE FIRST PILE STANDS. Movie, 25 Sep: "the
   // first one should not be at the foundation it should be 4-6 min or 5' max
   // (lets go 4'6 default) the first pile shouldn't effect the foundation/
@@ -9847,6 +9942,10 @@
       return G.edgeOnLoop(a, b, shared);
     };
     drawing.columns = drawing.columns || [];
+    // ONE ANSWER PER GARAGE, not one per pile: every pile under a beam
+    // carries the same storeys, and asking per pile would let a rounding
+    // difference put two marks under one building.
+    const mark = garagePileMark(ring);
     let pileId = newStructureId(drawing.columns);
     window.DraftBuildHouse.pilePoints(spine, {
       maxSpacingFt: GARAGE_PILE_SPACING_FT,
@@ -9864,12 +9963,12 @@
         levelId,
         view: 'foundation',
         footing: GARAGE_PILE_FOOTING,
-        // THE SCHEDULE'S OWN MARK, so the plan and SPECS say one thing.
-        // spec-master.js:202 is P2 -- 12" DIA x 15' LONG, 2-15M x 17'
-        // VERTICAL -- which is why the footing above is the 12" one: a record
-        // whose drawn diameter disagreed with its mark would be two answers
-        // to one question.
-        pileMark: GARAGE_PILE_MARK,
+        // THE SCHEDULE'S OWN MARK, so the plan and SPECS say one thing. P2
+        // and P3 are both 12" DIA (spec-master.js:202-203), which is why the
+        // footing above is the 12" one either way: a record whose drawn
+        // diameter disagreed with its mark would be two answers to one
+        // question. See garagePileMark for which of the two, and why.
+        pileMark: mark,
         auto: true,
       };
       drawing.columns.push(column);
@@ -14461,9 +14560,14 @@
       });
       markDirty();
     }
+    // THE MARKS ACTUALLY PLACED, not the one a constant used to name. Two
+    // garages on one drawing can differ -- a room over one and not the other
+    // -- and a line that claimed P2 for both would be the drawing's only
+    // statement of a load the schedule reads differently.
+    const marks = [...new Set(placed.map(p => p.item.pileMark))].sort();
     sayOnStrip(placed.length
       ? `AUTO PILES placed ${placed.length} pile${placed.length === 1 ? '' : 's'} `
-        + `on FOUNDATION, ${GARAGE_PILE_MARK} at ${GARAGE_PILE_SPACING_FT}′ `
+        + `on FOUNDATION, ${marks.join('/')} at ${GARAGE_PILE_SPACING_FT}′ `
         + 'or less — re-run after outline edits to refresh them.'
       : 'That grade beam is too small to pile — check the garage outline.');
     buildChrome();
@@ -14518,8 +14622,9 @@
     piles.disabled = !(garages.length && levelPresent(FOUNDATION_LEVEL_ID));
     piles.title = garages.length
       ? (levelPresent(FOUNDATION_LEVEL_ID)
-        ? `Pour ${GARAGE_PILE_MARK} piles under the grade beam, one per corner `
-          + `and every ${GARAGE_PILE_SPACING_FT}′ or less.`
+        ? `Pour piles under the grade beam, one per corner and every `
+          + `${GARAGE_PILE_SPACING_FT}′ or less — ${GARAGE_PILE_MARK_ONE_STOREY}, `
+          + `or ${GARAGE_PILE_MARK_ROOM_OVER} where a floor sits over the garage.`
         : 'This drawing has no FOUNDATION level to file the piles on.')
       : 'No garage on a grade beam — a frost wall carries its own footing.';
     piles.addEventListener('click', () => { pressAutoPiles(); showBeamProps(); });
