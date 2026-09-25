@@ -25,28 +25,36 @@ const ROOT = require('path').resolve(__dirname, '..');
 const MUTANTS = [
   { file: 'MODEL.html',
     name: 'THE DEFECT THIS FIXED: the bone builds a house and places no beam',
-    find: '    const beamed = placeAutoBeam();\n    if (beamed !== -1) {',
-    with: '    const beamed = -1;\n    if (beamed !== -1) {',
+    // RE-AIMED when the bone press learned to walk every carrying level
+    // bottom-up instead of framing the foundation alone. Same defect: the
+    // press builds a house and puts nothing under it.
+    find: '        const beamed = placeAutoBeam({ levelId: id });',
+    with: '        const beamed = -1;',
     test: 'a built house arrives with its mid-span beam and teleposts on FOUNDATION' },
   { file: 'MODEL.html',
     name: 'the beam is filed on the level the drafter is standing on',
-    find: "    const levelId = FOUNDATION_LEVEL_ID;\n    const view = 'foundation';",
-    with: "    const levelId = onActiveLevel().levelId;\n    const view = 'foundation';",
+    // RE-AIMED. `levelId` is the caller's now, so the equivalent defect is
+    // the level framing its OWN floor rather than the one above it -- which
+    // is what floorCarriedBy exists to answer.
+    // TWO LINES, because pressAutoBeam asks the same question one indent
+    // deeper and a four-space anchor matches INSIDE a six-space one.
+    find: '    const carried = floorCarriedBy(levelId);\n    if (!carried) return -1;',
+    with: '    const carried = { id: levelId, name: null };\n    if (!carried) return -1;',
     test: 'a built house arrives with its mid-span beam and teleposts on FOUNDATION' },
   { file: 'MODEL.html',
     name: 'the beam is filed on the layer set the drafter is standing on',
-    find: "    const levelId = FOUNDATION_LEVEL_ID;\n    const view = 'foundation';",
-    with: "    const levelId = FOUNDATION_LEVEL_ID;\n    const view = wallHomeView(onActiveLevel().viewId);",
+    find: "    const view = levelId === FOUNDATION_LEVEL_ID ? 'foundation' : 'floor';",
+    with: '    const view = wallHomeView(onActiveLevel().viewId);',
     test: 'a built house arrives with its mid-span beam and teleposts on FOUNDATION' },
   { file: 'MODEL.html',
     name: 'the beam is not marked generated, so nothing can ever sweep it',
-    find: "        mode: 'flush',\n        auto: true,",
-    with: "        mode: 'flush',",
+    find: "          mode: 'flush',\n          auto: true,",
+    with: "          mode: 'flush',",
     test: 'every record survives the reload' },
   { file: 'MODEL.html',
     name: 'the column is not marked generated',
-    find: "        footing: 'pad36',\n        auto: true,",
-    with: "        footing: 'pad36',",
+    find: "          footing: 'pad36',\n          auto: true,",
+    with: "          footing: 'pad36',",
     test: 'every record survives the reload' },
   { file: 'MODEL.html',
     name: 'the id never rises, so the format drops every beam after the first',
@@ -92,7 +100,7 @@ const MUTANTS = [
     test: 'the BEAM tool raises the panel, and its button is the second way in' },
   { file: 'MODEL.html',
     name: 'the button offers to file a beam against a level the drawing has not got',
-    find: '    const ready = !!found && levelPresent(FOUNDATION_LEVEL_ID);',
+    find: '    const ready = !!found && levelPresent(armedLevel);',
     with: '    const ready = !!found;',
     test: 'no FOUNDATION level means the button is greyed, not a record filed nowhere' },
   { file: 'MODEL.html',
