@@ -44,16 +44,7 @@ if (!window.DraftCutView) {
   // Attached-garage grade beam stack: concrete + 1.5" sill plate, hung with
   // the top of concrete 1'-0" above grade — level with the top of the house
   // foundation wall at the default grade.
-  // ── ONE PLATE, ONE NUMBER ───────────────────────────────────────────
-  //
-  // Movie, 25 Sep: *"1.5\" sill plate is under the main floor (which lines up
-  // with the garage sill plate) and under the sill plate is 8' height
-  // foundation on house side / 32\" grade beam under the sill plates on the
-  // garage side"* -- so the plate is not a garage detail, it is the band both
-  // foundations stop under. It was named for the garage because the garage
-  // was the only side that drew it.
-  const SILL_PLATE_IN = 1.5;
-  const GARAGE_BEAM_PLATE_IN = SILL_PLATE_IN;
+  const GARAGE_BEAM_PLATE_IN = 1.5;
   // The concrete half of that stack. It sat alone in MODEL.dc.html while its
   // own comment there described the pair -- 32" concrete + 1.5" sill plate =
   // 33.5" -- with the sill half already living here. Two halves of one
@@ -195,33 +186,7 @@ if (!window.DraftCutView) {
     });
     const lowest = stack[0];
     const foundationAssembly = env.levelAssembly(1);
-    // ── CONCRETE STOPS UNDER THE PLATE ──────────────────────────────────
-    //
-    // This was `lowest.floorBottom` -- the underside of the main floor -- so
-    // the tallest foundation wall's top was drawn hard against the joists
-    // with no band left for the sill plate the floor actually sits on. The
-    // comment on GRADE two hundred lines up says what this line was always
-    // meant to be: "this file's 'foundation top' IS the top of concrete".
-    //
-    // WHAT IT COST, measured on Movie's own 2 STOREY + GARAGE + ROOM OVER.
-    // The garage grade beam is built to `assemblyFor(1).wallHeightFt`, which
-    // is 8'-1.5\" -- eight feet AND the plate -- so it landed on this line
-    // while the house's 8'-0\" record sat 1.5\" under it. Each then took a
-    // plate of its own, and the garage sill finished 1.5\" ABOVE the house
-    // sill. Movie's rule: *"the garage sill CAN'T go higher than the house
-    // sill ... at this position it matches the house sill so this is the
-    // highest it can go"*.
-    //
-    // Main floor to garage floor read 11.100\" where his framing says
-    // 1'-0-5/8\" -- 11-7/8\" of joist plus 3/4\" of sheathing, which is what
-    // the drop becomes once the two sills share one band. The missing
-    // 1.5\" is the plate, counted once on the garage and not at all here.
-    //
-    // FIXING IT HERE ALONE MOVES NOTHING, and that is worth recording: the
-    // level is anchored on the TALLEST wall record, so lowering the garage
-    // to match the house lowers the anchor with it and both tops arrive back
-    // on this line. The garage's own datum in MODEL.html moves with this.
-    const wallTop = lowest.floorBottom - SILL_PLATE_IN / 12;
+    const wallTop = lowest.floorBottom;
     const wallBottom = wallTop - env.levelWallTopFt(1, 'foundation');
     // ── A ROOF BEARS ON THE WALLS THAT HOLD IT UP ────────────────────────
     //
@@ -2834,7 +2799,6 @@ if (!window.DraftCutView) {
     STANDARDS: Object.freeze({
       GARAGE_SLAB_THICKNESS_IN,
       GARAGE_SLAB_SLOPE_IN_PER_FT,
-      SILL_PLATE_IN,
       GARAGE_BEAM_PLATE_IN,
     GARAGE_BEAM_CONCRETE_IN,
       GRADE_BELOW_FOUNDATION_TOP_FT,
