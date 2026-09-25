@@ -652,6 +652,23 @@ if (!window.DraftDrawingFormat) {
         ...(!footing.startsWith('pile') && Number.isFinite(padIn) && padIn > 0
           ? { padIn } : {}),
         auto: column?.auto === true, // tour-placed; the stair re-derive may replace it
+        // THE SCHEDULE'S MARK, additive (Movie, 25 Sep): "place a P2 for
+        // garage as DEFAULT pile type". The marks are spec-master.js:200's
+        // CONCRETE PILE SCHEDULE -- P1 is the 10" pile, P2 and P3 the 12" --
+        // and they carry the DEPTH and REINFORCING, which the drawing has
+        // nowhere to put and no business owning. So the record names the row
+        // and the schedule says what the row means; an engineer who changes
+        // P2's size changes it in one place and every pile marked P2 follows.
+        //
+        // ON A PILE ONLY. A pad has no row in that schedule, so a mark on one
+        // would point at nothing -- the same reason padIn is dropped for a
+        // pile four lines up, in the other direction.
+        //
+        // ABSENT WHEN UNSET rather than null, so a drawing written before this
+        // field round-trips byte for byte instead of growing a key.
+        ...(footing.startsWith('pile')
+          && ['P1', 'P2', 'P3'].includes(String(column?.pileMark || '').trim())
+          ? { pileMark: String(column.pileMark).trim() } : {}),
         ...(pullSrcId && pullLevelId != null
           ? { pullSrcId, pullLevelId } : {}),
         layer: 'S-COL-FOOTING',

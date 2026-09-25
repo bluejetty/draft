@@ -9691,6 +9691,25 @@
   // building a second house roof (`roof.levelId === 7`).
   const FOUNDATION_LEVEL_ID = 1;
 
+  // ── WHAT A GARAGE'S GRADE BEAM STANDS ON ──────────────────────────────────
+  //
+  // Movie, 25 Sep: "i pile per corner and then 1 every 9ft or less ... (even
+  // them out if its less than 9ft", and "place a P2 for garage as DEFAULT
+  // pile type : P2 | 12" DIA x 15' LONG, 2-15M x 17' VERTICAL | 15.0".
+  //
+  // THE MARK AND THE DIAMETER ARE ONE ANSWER, not two. P2 is the 12" row of
+  // spec-master.js:202's CONCRETE PILE SCHEDULE, so the footing that gets
+  // DRAWN is the 12" one; a record whose diameter disagreed with its mark
+  // would put two numbers on one hole.
+  //
+  // NOT MODEL.dc.html's pile10. That page's default was the 10" pile and it
+  // placed two of them (:23740), which is a different rule with a different
+  // answer -- naming its constant here would look like a port and read as
+  // one.
+  const GARAGE_PILE_SPACING_FT = 9;
+  const GARAGE_PILE_FOOTING = 'pile12';
+  const GARAGE_PILE_MARK = 'P2';
+
   // The level a BUILDING starts on. floorLevels is bottom-up, so [0] is the
   // lowest storey -- MAIN FL on the standard stack, and MODEL.dc.html's own
   // choice for garage walls (`_floorLevels()[0]`). Never the active level: a
@@ -9857,6 +9876,75 @@
         body: 'garage',
       });
       made.walls.push(...beam.walls);
+
+      // ── AND THE PILES UNDER A GRADE BEAM ─────────────────────────────
+      //
+      // A GRADE BEAM HANGS, which is the sentence thirty lines up, and until
+      // now nothing was written under it to hang from: this page built the
+      // beam and the slab and left the garage standing on nothing at all.
+      // Movie's 24 Sep default -- "make the DEFAULT attached garages GRADE
+      // BEAM and PILES (not frost wall)" -- arrived half done, and only the
+      // half that is drawn was noticed.
+      //
+      // MODEL.dc.html DID NOT HAVE THIS EITHER, which is worth saying so the
+      // next reader does not go looking for the port. Its own BUILD HOUSE
+      // hint (:23740) says it placed "10"ø piles at the two beam corners
+      // against the house (COLUMN or COPY places the rest along the beam)" --
+      // two piles and a note telling the drafter to finish the job.
+      //
+      // Movie, 25 Sep: "i pile per corner and then 1 every 9ft or less" ...
+      // "(even them out if its less than 9ft". That rule CONTAINS the old
+      // page's two: the leg on the house carries no beam and so takes no
+      // piles along it, which leaves its two ends as the ends of the runs
+      // that remain. The special case falls out of the general one.
+      //
+      // THE CENTRELINE, NOT THE OUTLINE. "the pile should be located in the
+      // center of the wall" -- and an outline is a wall FACE: footingRings
+      // just below offsets from 0 and -(wallFt + projFt), so the concrete
+      // hangs inboard of the loop. Half the wall in is the middle of it, 4"
+      // on concrete_8.
+      if (kind === 'gradebeam') {
+        const G = window.DraftGeometry2D;
+        const WT = window.DraftWallTypes;
+        const wallFt = (WT.WALL_TYPES.find(t => t.id === 'concrete_8')?.totalIn || 8) / 12;
+        const spine = G.offsetOutline(
+          loop.map(pt => ({ x: pt.x, z: pt.z })), -wallFt / 2);
+        // THE SHARED EDGES ARE TESTED ON THE SOURCE LOOP, not on the inset
+        // one -- the same trap the footing rings carry a note about. The
+        // spine has been moved off the house, so asking whether IT lies on
+        // the house answers no for every leg, and the garage would get a
+        // row of piles buried in the house wall.
+        const shared = against ? G.loopSegments(against) : null;
+        const onHouse = index => {
+          if (!shared) return false;
+          const a = loop[index], b = loop[(index + 1) % loop.length];
+          return G.edgeOnLoop(a, b, shared);
+        };
+        drawing.columns = drawing.columns || [];
+        let pileId = newStructureId(drawing.columns);
+        window.DraftBuildHouse.pilePoints(spine, {
+          maxSpacingFt: GARAGE_PILE_SPACING_FT,
+          skipEdge: onHouse,
+        }).forEach(point => {
+          const column = {
+            id: pileId++,
+            point: { x: point.x, y: 0, z: point.z },
+            levelId,
+            view: 'foundation',
+            footing: GARAGE_PILE_FOOTING,
+            // THE SCHEDULE'S OWN MARK, so the plan and SPECS say one thing.
+            // spec-master.js:202 is P2 -- 12" DIA x 15' LONG, 2-15M x 17'
+            // VERTICAL -- which is why the footing above is the 12" one:
+            // a record whose drawn diameter disagreed with its mark would
+            // be two answers to one question.
+            pileMark: GARAGE_PILE_MARK,
+            auto: true,
+          };
+          drawing.columns.push(column);
+          made.items.push({ list: drawing.columns, item: column });
+          made.piles = (made.piles || 0) + 1;
+        });
+      }
     }
 
     // THE SLAB. Four inches, and it FALLS toward the door unless its edge is
@@ -10427,22 +10515,34 @@
     // will". `auto: true` is what separates a generated beam from one he drew,
     // and a hand-placed one must survive a rebuild.
     //
-    // EVERY auto COLUMN ON THIS VIEW, without MODEL.dc.html's pile exception
-    // (:4826 spares MOVE FLOOR's auto pile stubs, which belong to a pulled
-    // corner rather than to the stair layout). That gesture is not ported --
-    // `pullSrcId` appears nowhere in this file -- so there is nothing here to
-    // spare, and writing the guard anyway would be a claim about a case this
-    // page has not got. It belongs with MOVE FLOOR, when that lands.
+    // NOT THE PILES, and this is MODEL.dc.html's own exception arriving late
+    // (:4826 spares its auto pile stubs from the same sweep). The first
+    // version of this said there was nothing here to spare, because
+    // `pullSrcId` -- the only auto pile the OLD page makes -- appears nowhere
+    // in this file. True when it was written and false one commit later:
+    // AUTO PILES puts `auto: true` piles on FOUNDATION / foundation, the
+    // exact level and view this sweeps.
+    //
+    // MEASURED, NOT REASONED. A premade bungalow + garage came back with
+    // ELEVEN piles calculated and ZERO written: raiseGarageConcrete places
+    // them and placeAutoBeam runs afterwards in the same press and ate every
+    // one. No error, no message -- the garage simply stood on nothing again,
+    // which is the defect the piles were added to fix.
+    //
+    // A TELEPOST IS THIS FUNCTION'S, A PILE IS THE GARAGE'S. The footing says
+    // which, the way it does on the old page. Beams carry no footing, so the
+    // same predicate reads false for them and their sweep is untouched.
     const sweptBeams = [], sweptColumns = [];
     const isMine = item => item.auto === true
       && Number(item.levelId) === levelId && item.view === view;
+    const isPile = item => String(item.footing || '').startsWith('pile');
     drawing.beams = (drawing.beams || []).filter(beam => {
       if (!isMine(beam)) return true;
       sweptBeams.push(beam);
       return false;
     });
     drawing.columns = (drawing.columns || []).filter(column => {
-      if (!isMine(column)) return true;
+      if (!isMine(column) || isPile(column)) return true;
       sweptColumns.push(column);
       return false;
     });
@@ -10652,6 +10752,12 @@
       ? raiseGarageConcrete(plan.garage, garageBody.outline, { against: plan.house })
       : { walls: [], items: [] };
     extra.push(...garageConcrete.items);
+    // SAID OUT LOUD, because a garage that arrives on nothing and a garage
+    // that arrives on eleven piles look identical on the plan until you zoom
+    // in -- and the first of those is what this page shipped until now.
+    if (garageConcrete.piles) {
+      parts.push(`${garageConcrete.piles} pile${garageConcrete.piles === 1 ? '' : 's'}`);
+    }
 
     // ── AND THE ROOFS, ONE PER BODY THAT NEEDS ONE ───────────────────────
     //
