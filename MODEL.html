@@ -799,7 +799,16 @@
      slot used to carry is now the BOX's -- the divider belongs above the
      fold button, or a folded box would sit on the tools with no line between
      them. */
-  #props-box { margin-top:10px; padding-top:10px;
+  /* AND IT CANNOT WIDEN THE RAIL. #left-rail sets min-width and no max
+     (shell-bars.css:901), so the rail takes the width of its widest child --
+     which made a panel's longest line into a measurement of how much of the
+     PLAN the rail covers. A two-line note in the BEAM panel took the rail to
+     470px and swallowed the presses model-structure-place.spec.js uses to
+     draw a beam by hand: both its beam tests failed with `beams 0/0`, no page
+     error, nothing on screen to explain it.
+     The cap is the tool column's own width, so the box wraps inside the rail
+     the tools already established instead of setting a new one. */
+  #props-box { margin-top:10px; padding-top:10px; max-width:180px;
     border-top:1px solid var(--edge-panel); }
   #props-box[hidden] { display:none; }
   .props-fold { display:block; width:100%; padding:0 0 6px; border:0;
@@ -13210,11 +13219,22 @@
     btn.addEventListener('click', () => { pressAutoBeam(); showBeamProps(); });
     row.append(btn);
 
+    // SHORT, AND THE LENGTH IS LOAD-BEARING. #left-rail has a min-width and
+    // NO max-width (shell-bars.css:901), so the rail is as wide as its widest
+    // child -- and this note began as a two-line paragraph about the 19 ft
+    // rule and the 12 ft posts. Measured: the rail went from its tool-column
+    // width to 470px and covered the plan out to x = 476, where
+    // model-structure-place.spec.js clicks to draw a beam by hand. Both of
+    // its beam tests failed with `beams 0/0` and no page error, because the
+    // presses were landing on the rail.
+    //
+    // The cap below is what ENDS that, so this is no longer the only thing
+    // standing between a panel and the drawing -- but a panel is a place for
+    // a label, not a paragraph, and the long one is gone on its own merits.
     const note = document.createElement('div');
     note.className = 'props-title';
     note.dataset.beamNote = '';
-    note.textContent = 'FILES ON FOUNDATION. A SPAN OVER 19′ GETS ONE BEAM AT '
-      + 'MID-SPAN, WITH POSTS NO MORE THAN 12′ APART.';
+    note.textContent = 'FILES ON FOUNDATION';
 
     box.append(row, note);
     P.set('BEAM & COLUMN', box);
