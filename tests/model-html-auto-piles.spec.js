@@ -129,6 +129,71 @@ test('a built garage arrives on its piles, marked and on the foundation',
       .toBeGreaterThan(0);
   });
 
+// ── P2 OR P3, AND THE DIFFERENCE IS WHAT IS OVER THE GARAGE ─────────────
+//
+// Movie, 25 Sep: "pile P2 for a garage with only 1 floor, P3 req if a 2nd
+// floor is over the garage".
+//
+// THE DRAWN SYMBOL CANNOT SHOW IT. P2 and P3 are both 12" DIA
+// (spec-master.js:202-203) -- what differs is the LENGTH, 15' against 20', and
+// the load the row claims, 15.0 kPa against 30.0. So the mark is the only
+// place in the drawing where a room over the garage is stated, and these are
+// the only checks that can fail when it is stated wrong.
+//
+// TWO PREMADES, AND THE SECOND IS THE ONE THAT DISCRIMINATES. `twoStorey-over`
+// alone would pass for a rule that merely counted storeys in the drawing;
+// `twoStorey-garage` is a two-storey house whose second floor stops at the
+// house, so a rule reading "is there a 2ND FL" answers P3 there and Movie's
+// rule answers P2. Without it the wrong rule is green.
+test('a room over the garage takes P3, not P2', async ({ page }) => {
+  await open(page);
+  await h.openDriveThru(page);
+  await page.locator('[data-build-family="bungalow"]').click();
+  await page.locator('[data-build-entry="twoStorey-over"]').click();
+  await page.locator('#dt-bone').click();
+  await page.waitForTimeout(500);
+  await saveNow(page);
+  const saved = await savedFile(page);
+
+  const piles = pilesOf(saved);
+  expect(piles.length, 'the garage was built and left standing on nothing')
+    .toBeGreaterThan(0);
+  piles.forEach(pile => {
+    expect(pile.pileMark, 'a garage with a room over it is still marked for one storey')
+      .toBe('P3');
+    // The 12" hole is the same hole. A P3 drawn at pile10 would be a record
+    // disagreeing with its own schedule row.
+    expect(pile.footing, 'the drawn diameter disagrees with the mark')
+      .toBe('pile12');
+  });
+});
+
+test('a two storey whose upper floor stops at the house keeps P2',
+  async ({ page }) => {
+    await open(page);
+    await h.openDriveThru(page);
+    await page.locator('[data-build-family="bungalow"]').click();
+    await page.locator('[data-build-entry="twoStorey-garage"]').click();
+    await page.locator('#dt-bone').click();
+    await page.waitForTimeout(500);
+    await saveNow(page);
+    const saved = await savedFile(page);
+
+    const piles = pilesOf(saved);
+    expect(piles.length, 'the garage was built and left standing on nothing')
+      .toBeGreaterThan(0);
+    // THE DRAWING HAS A 2ND FL AND IT IS NOT OVER THE GARAGE, which is the
+    // whole distinction. A rule that asked "does this drawing have an upper
+    // storey" rather than "is one over THIS garage" reads P3 here.
+    const upper = (saved.floors || []).filter(floor => Number(floor.levelId) === 5);
+    expect(upper.length, 'the fixture lost its second floor, so this proves nothing')
+      .toBeGreaterThan(0);
+    piles.forEach(pile => {
+      expect(pile.pileMark, 'a garage with nothing over it was marked for a room')
+        .toBe('P2');
+    });
+  });
+
 test('the piles ride the beam centreline, not the outline', async ({ page }) => {
   // "the pile should be located in the center of the wall". An outline is a
   // wall FACE -- footingRings offsets from 0 and -(wallFt + projFt), so the
