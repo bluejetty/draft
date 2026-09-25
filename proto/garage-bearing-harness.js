@@ -194,6 +194,64 @@ function run(win) {
     near(CV.gradeFromBearing(fdn.wallTop), fdn.wallTop - PLATE - S.GRADE_BELOW_FOUNDATION_TOP_FT),
     ftIn(fdn.grade));
 
+  // ── EVERY GARAGE FLOOR LANDS 10" ABOVE GRADE, LESS ITS DROP ───────────
+  //
+  // SPEC-garage-foundations.md: "10" is not a compromise, it is the number
+  // that keeps the floor still ... Both floors land at grade + 10", so
+  // changing a detached garage's foundation moves the concrete and leaves the
+  // door where it was." This file held it in ONE of three places -- the frost
+  // wall -- while the grade beam drew grade + 19 1/2" (a slab standing on the
+  // wood plate) and the thickened edge grade + 4" (project-page.js took
+  // DETACHED_SLAB_ABOVE_GRADE_IN = 10 in board #296 and cut-view never did).
+  //
+  // ONE FORMULA FOR ALL SIX COMBINATIONS: floor = grade + 10" - drop. It is
+  // exact today, and it says out loud what is still open -- a DROPPED garage
+  // takes its floor below grade, because grade follows the HOUSE here while
+  // PROJECT.html derives it from the GARAGE. An attached frost-walled
+  // bungalow comes out with its floor 14" underground. That is pre-existing
+  // (it measured -14" before any of this) and is Movie's open question: if
+  // grade comes to follow the garage, the `- drop` term goes and these
+  // checks tighten to a bare 10".
+  {
+    const combos = [
+      ['DETACHED thickened', { ...attached, open: false, detached: true }, 'thickened', null],
+      ['DETACHED grade beam', { ...attached, open: false, detached: true }, 'gradebeam', null],
+      ['DETACHED frost wall', { ...attached, open: false, detached: true }, 'frostwall', null],
+      ['ATTACHED grade beam', attached, 'gradebeam', 'bungalow'],
+      ['ATTACHED frost wall, a split takes no drop', attached, 'frostwall', 'bilevel'],
+      ['ATTACHED frost wall, a bungalow drops', attached, 'frostwall', 'bungalow'],
+    ];
+    combos.forEach(([label, garage, mode, buildType]) => {
+      const e = { ...base, garageFoundation: () => mode, buildType: () => buildType };
+      const floor = CV.garageSlabTop(e, fdn, garage);
+      const isDet = garage.open !== true && garage.detached === true;
+      const drop = isDet ? 0 : CV.garageSillDropFt(buildType, mode);
+      const want = fdn.grade + S.GARAGE_SLAB_ABOVE_GRADE_IN / 12 - drop;
+      check(`floor: ${label}`, near(floor, want),
+        `${ftIn(floor - fdn.grade)} above grade, wanted ${ftIn(want - fdn.grade)}`);
+    });
+    // THE DOOR'S OWN RULE, stated as the spec states it: swapping a DETACHED
+    // garage's foundation must not move its floor. This is the whole reason
+    // the 10" exists, and it was false in two of three directions.
+    const det = { ...attached, open: false, detached: true };
+    const floorOf = mode => CV.garageSlabTop(
+      { ...base, garageFoundation: () => mode }, fdn, det);
+    check('changing a detached garage\'s foundation leaves the door where it was',
+      near(floorOf('thickened'), floorOf('gradebeam'))
+      && near(floorOf('gradebeam'), floorOf('frostwall')),
+      `thickened ${ftIn(floorOf('thickened'))} beam ${ftIn(floorOf('gradebeam'))} frost ${ftIn(floorOf('frostwall'))}`);
+    // And the cost the spec names for the thickened edge: 2" of edge buried
+    // rather than 4". At the 4" this file drew before, it was 8".
+    const thick = CV.garageSlabTop({ ...base, garageFoundation: () => 'thickened' }, fdn, det);
+    check('the thickened edge buries the 2" the spec says it costs',
+      near(S.GARAGE_EDGE_DEPTH_IN / 12 - (thick - fdn.grade), 2 / 12),
+      ftIn(S.GARAGE_EDGE_DEPTH_IN / 12 - (thick - fdn.grade)));
+    check("cut-view's 10\" is project-page's DETACHED_SLAB_ABOVE_GRADE_IN",
+      new RegExp(`DETACHED_SLAB_ABOVE_GRADE_IN = ${S.GARAGE_SLAB_ABOVE_GRADE_IN};`)
+        .test(fs.readFileSync(path.join(ROOT, 'project-page.js'), 'utf8')),
+      `cut-view says ${S.GARAGE_SLAB_ABOVE_GRADE_IN}`);
+  }
+
   // ── THE FOOT THE SECTION WAS MISSING ──────────────────────────────────
   check("the garage wall starts 1'-0 5/8\" below the deck a house wall starts on",
     near(mainLevel.floorTop - bearing, floorPackageFt),
@@ -333,15 +391,20 @@ function run(win) {
         `${ftIn(mainLevel.floorTop - deepestWall)} vs ${ftIn(floorPackageFt)}`);
 
       if (concrete.length) {
-        // The grade beam's slab is poured over the plate the walls bear on,
-        // so its top is one slab above the bearing. Reading it here catches
-        // the slab drifting back onto the STORED wall height, which on a
-        // file saved before this fix is the old, 1 1/2"-high datum.
-        const slabTop = bearing + S.GARAGE_SLAB_THICKNESS_IN / 12;
-        check('SECTION: the garage slab is poured on that same bearing',
+        // THE FLOOR AS DRAWN, not as computed. This check read
+        // `bearing + slab` when it was written -- it pinned the defect,
+        // because that is what the painter did: a concrete slab standing on
+        // the wood sill plate, grade + 19 1/2". It reads garageSlabTop now,
+        // which is the spec's grade + 10", and it still catches the slab
+        // drifting back onto the STORED wall height.
+        const slabTop = CV.garageSlabTop(base, fdn, attached);
+        check('SECTION: the garage floor is drawn where garageSlabTop puts it',
           concrete.some(r => near(world(r.y), slabTop, 0.01)),
           `expected a pour topping at ${ftIn(slabTop)}; saw `
           + concrete.map(r => ftIn(world(r.y))).join(' '));
+        check('SECTION: which is 10" above grade',
+          near(slabTop - fdn.grade, S.GARAGE_SLAB_ABOVE_GRADE_IN / 12),
+          ftIn(slabTop - fdn.grade));
       }
     }
   }
@@ -415,9 +478,25 @@ const MUTATIONS = [
   ['grade borrows the GARAGE plate, so the house defers to the garage',
     s => s.replace('const houseSillPlateFt = () => window.DraftLevelAssembly.SILL_PLATE_IN / 12;',
       'const houseSillPlateFt = () => 0;')],
+  // Anchored on the ASSIGNMENT, not on the whole ternary: the fallback arm
+  // beside it has already been rewritten once in this file's life and took
+  // this mutation's anchor with it ("MUTATION DID NOT APPLY", caught by the
+  // gate rather than scored as a kill). `const slabTop = garage ?` is unique
+  // and survives anything done to the arm after it.
+  ['the grade-beam slab stands on the plate again, 9 1/2" high',
+    s => s.replace('const slabTop = garage ? garageSlabTop(env, fdn, garage)',
+      'const slabTop = garage ? garageBearing(env, fdn, garage) + GARAGE_SLAB_THICKNESS_IN / 12')],
+  ['the thickened edge goes back to 4" proud of grade',
+    s => s.replace('const GARAGE_SLAB_ABOVE_GRADE_IN = 10;',
+      'const GARAGE_SLAB_ABOVE_GRADE_IN = 4;')],
+  ['the slab is not subtracted, so the floor IS the top of concrete',
+    s => s.replace('return top - GARAGE_SLAB_THICKNESS_IN / 12;\n  }', 'return top;\n  }')],
+  ['a thickened edge grows a sill plate it has no wall for',
+    s => s.replace("if (env.garageFoundation(garage) === 'thickened') return garageBearing(env, fdn, garage);\n    return garageBearing(env, fdn, garage) - GARAGE_BEAM_PLATE_IN / 12;",
+      'return garageBearing(env, fdn, garage) - GARAGE_BEAM_PLATE_IN / 12;')],
   ['the grade-beam slab goes back to the stored wall instead of the datum',
-    s => s.replace('const plateTop = garage ? garageBearing(env, fdn, garage)\n          : fdn.wallBottom',
-      'const plateTop = false ? 0\n          : fdn.wallBottom')],
+    s => s.replace('const slabTop = garage ? garageSlabTop(env, fdn, garage)\n          : fdn.wallBottom',
+      'const slabTop = false ? 0\n          : fdn.wallBottom')],
 ];
 
 console.log('\n' + 'mutation'.padEnd(72) + 'caught by');
