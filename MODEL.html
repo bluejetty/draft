@@ -10000,18 +10000,30 @@
     // lot and answers to grade; an attached one is set down from the house so
     // the two sills relate -- Movie, 4 Sep, "sill to sill".
     //
-    // AND THE RULE EXISTS TWICE IN THIS REPO, which is worth saying rather
-    // than quietly picking a winner. cut-view.js's frostWallTop DRAWS it and
-    // MODEL.dc.html's _garageFrostWallTopFt BUILDS it, and they differ by one
-    // clause: the builder honours a typed zone offset
-    // (zoneHeights.zones.attachedGarage.offsetFt) that the painter knows
-    // nothing about. This page has no typed offsets, so both readings agree
-    // here -- and reconciling them is a change to the OLD page's behaviour,
-    // which is not this rung's to make.
-    const frostTop = detached
-      ? grade + S.DETACHED_BEAM_ABOVE_GRADE_IN / 12
-      : houseTop - S.GARAGE_SILL_BELOW_HOUSE_FT;
-    const beamTop = detached ? grade + S.DETACHED_BEAM_ABOVE_GRADE_IN / 12 : houseTop;
+    // AND SILL TO SILL IS ONE PLATE BELOW WHAT THIS LINE USED TO SAY. Movie,
+    // 25 Sep: "the garage sill and house sill line up" ... "the concrete
+    // starts below the 1.5" sill". `houseTop` is the foundation wall's
+    // BEARING line -- pour PLUS plate (level-assembly.js's
+    // FOUNDATION_WALL_TOP_FT: "IT IS THE BEARING LINE, WHICH IS NOT THE
+    // CONCRETE'S OWN HEIGHT") -- so setting the garage's top of CONCRETE to
+    // it put the garage a plate proud of the house it is bolted to. Measured
+    // before the fix on a bungalow: house sill 8'-1 1/2", garage sill 8'-3",
+    // on both foundation kinds.
+    //
+    // THE RULE EXISTED TWICE AND HAD ALREADY DRIFTED, which is why it now
+    // lives in ONE place. cut-view.js's frostWallTop DRAWS the drop with a
+    // split clause -- level on a bilevel, Movie 4 Sep and again 25 Sep -- and
+    // this builder applied it unconditionally, so a frost-walled bilevel was
+    // BUILT 2 ft down and DRAWN level. garageSillDropFt is now exported and
+    // both callers ask it, so the two cannot disagree again.
+    //
+    // A GRADE BEAM TAKES NO DROP: grade is only 1'-2" under the house sill,
+    // so a dropped beam would sit below it. cut-view.js's garageSillDropFt
+    // carries that reasoning in full.
+    const drop = window.DraftCutView.garageSillDropFt(drawing?.buildType, kind);
+    const attachedTop = houseTop - drop - S.GARAGE_BEAM_PLATE_IN / 12;
+    const frostTop = detached ? grade + S.DETACHED_BEAM_ABOVE_GRADE_IN / 12 : attachedTop;
+    const beamTop = detached ? grade + S.DETACHED_BEAM_ABOVE_GRADE_IN / 12 : attachedTop;
 
     if (kind !== 'thickened') {
       const topHeight = kind === 'frostwall' ? frostTop : beamTop;
