@@ -308,12 +308,34 @@ test('the garage is not the house footprint', async ({ page }) => {
   await saveNow(page);
   const saved = await savedFile(page);
 
-  const zs = (saved.beams || []).flatMap(beam => [beam.start.z, beam.end.z]);
-  expect(zs.length, 'no beam was placed at all').toBeGreaterThan(0);
-  expect(Math.min(...zs), 'the beam ran out past the house and into the garage')
-    .toBeGreaterThanOrEqual(-16);
-  expect(Math.max(...zs), 'the beam ran out past the house and into the garage')
-    .toBeLessThanOrEqual(16);
+  // MEASURED ON BOTH AXES, AND THE FIRST VERSION WAS NOT. It read the z
+  // coordinates alone and the mutation gate walked straight past it: a 60 x 60
+  // garage is as wide as it is deep, so `w >= d` puts ITS long axis along x
+  // too and ITS cut line also lands at z = 0. Every z read 0 either way and
+  // the check passed while the beam ran the full 60 ft of the garage. The
+  // wrongness was entirely in x -- -30..30 where the house is -20..20 -- so
+  // the assertion was reading the quantity NEXT TO the one it meant.
+  //
+  // 40 x 32 puts the house's long axis along x as well, so the answer is
+  // exact: the cut is the centre line z = 0 and the run is clipped to the
+  // house at x = -20 .. 20. Pinned rather than bounded, because a bound is
+  // what let the last one through.
+  const ends = (saved.beams || []).flatMap(beam => [beam.start, beam.end]);
+  expect(ends.length, 'no beam was placed at all').toBeGreaterThan(0);
+  expect([...new Set(ends.map(pt => pt.z))],
+    'the beam is not on the house centre line').toEqual([0]);
+  expect(Math.min(...ends.map(pt => pt.x)),
+    'the beam ran out past the house and into the garage').toBe(-20);
+  expect(Math.max(...ends.map(pt => pt.x)),
+    'the beam ran out past the house and into the garage').toBe(20);
+
+  // AND THE POSTS WITH IT. A run clipped to the garage divides into garage-
+  // sized spans, so its teleposts stand outside the house even where the
+  // beam's own ends happen to look right.
+  (saved.columns || []).forEach(column => {
+    expect(Math.abs(column.point.x) <= 20 && Math.abs(column.point.z) <= 16,
+      'a telepost was planted outside the house').toBe(true);
+  });
 });
 
 test('a stair opening in the floor above pushes the beam off it', async ({ page }) => {
