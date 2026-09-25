@@ -1526,14 +1526,53 @@ if (!window.DraftCutView) {
       // is about. A face clear of everything has one run and this is what it
       // always was.
       runs.forEach(r => [r.lo, r.hi].forEach(u => {
-        const interior = shownFdn.some(({ g: o }) => o !== g
+        const over = shownFdn.filter(({ g: o }) => o !== g
           && u > o.lo + 0.05 && u < o.hi - 0.05);
+        const interior = over.length > 0;
+        // ── A CORNER SHOWS ONLY AS FAR DOWN AS ITS FACE DOES ───────────
+        //
+        // Movie, 24 Sep, marking a 2 STOREY + GARAGE + ROOM OVER on E3 BACK
+        // and again on E2 LEFT: "here are some small errors (with red
+        // highlight)", "another small spot (opposite where garage
+        // connects)". One light vertical crossing the floor line, the full
+        // depth of the exposed concrete, in the middle of a wall with
+        // nothing behind it to crease.
+        //
+        // IT IS THE GARAGE'S, SEEN THROUGH THE HOUSE. Its left corner is at
+        // x = -4, which on that elevation falls well inside the house's own
+        // span -- the house's concrete stands in front of it for the whole
+        // height. The run survives `behindFdn` on a technicality: the
+        // garage's concrete tops out THREE EIGHTHS OF AN INCH above the
+        // house's (8.125 against 8.09375, two different answers to "how tall
+        // is the foundation"), so `o.topE >= g.topE` fails and the face
+        // counts as unhidden. Three eighths of an inch of it really is
+        // visible; the other eleven inches are not.
+        //
+        // SO THE LINE IS CLIPPED TO WHAT SHOWS rather than the run being
+        // thrown away. Throwing it away would be the all-or-nothing answer
+        // the note above this pass was written against -- and it would be
+        // wrong here too, because the step is real and a drafter looking for
+        // it should find it. Drawn to the nearest COVERING face's top, the
+        // crease is three eighths of an inch long: the truth, at the size
+        // the truth is.
+        //
+        // THE 3/8" ITSELF IS NOT THIS PASS'S TO FIX. It is the build handing
+        // the garage's beam `assemblyFor(1).wallHeightFt` while the house's
+        // own walls took the generic default wall top, and reconciling those
+        // is a question about the junction, not about the drawing of it.
+        const hiddenTo = over.reduce((top, { g: o }) =>
+          (o.depth > g.depth + 1e-6 ? Math.max(top, o.topE) : top), shownBase);
+        const foot = Math.max(shownBase, Math.min(g.topE, hiddenTo));
+        // NOTHING LEFT MEANS NO CLAIM ON THIS u EITHER. The key is taken only
+        // by a corner that actually draws, so a face buried here cannot stop
+        // one that is not from drawing at the same spot.
+        if (g.topE - foot < 0.01) return;
         const key = `${X(u)}|${interior}`;
         if (strokedV.has(key)) return;
         strokedV.add(key);
         ctx.strokeStyle = interior ? CREASE : INK;
         ctx.beginPath();
-        ctx.moveTo(X(u), Y(g.topE)); ctx.lineTo(X(u), Y(shownBase));
+        ctx.moveTo(X(u), Y(g.topE)); ctx.lineTo(X(u), Y(foot));
         ctx.stroke();
       }));
     });
