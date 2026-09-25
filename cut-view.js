@@ -173,6 +173,33 @@ if (!window.DraftCutView) {
   // gravel — 4" field, 1'-0" deep perimeter edge, 45° taper from the edge
   // back up to the field.
   const GARAGE_EDGE_DEPTH_IN = 12;
+  // ── AND EVERY GARAGE FLOOR LANDS 10" ABOVE GRADE ────────────────────────
+  //
+  // SPEC-garage-foundations.md, from Movie's numbers on 5 Sep and confirmed by
+  // him again on 25 Sep: "10" is not a compromise, it is the number that keeps
+  // the floor still. A grade beam tops out at grade + 14" with its slab 4"
+  // under that, so its floor is grade + 10". A thickened edge IS its own top
+  // of concrete. Both floors land at grade + 10", so changing a detached
+  // garage's foundation moves the concrete and leaves the door where it was."
+  //
+  // THIS FILE HELD THAT INVARIANT IN ONE OF THREE PLACES. Measured on the
+  // section before the fix, all three drawing the same garage floor:
+  //
+  //     frost wall      grade + 10"     frostWallTop - slab. Right.
+  //     grade beam      grade + 19 1/2" the SILL PLATE top PLUS a slab --
+  //                                     a concrete slab standing on the wood
+  //                                     plate, and a 19 1/2" step off the
+  //                                     driveway into the garage
+  //     thickened edge  grade + 4"      the old number; project-page.js got
+  //                                     DETACHED_SLAB_ABOVE_GRADE_IN = 10 in
+  //                                     board #296 and this file never did
+  //
+  // So the door's own rule -- the one reason the 10" exists -- was false for
+  // two of the three foundations it exists to keep level, and true for the
+  // one nobody had touched. The three expressions are collapsed onto
+  // garageSlabTop below; this constant is what project-page.js already calls
+  // DETACHED_SLAB_ABOVE_GRADE_IN, pinned equal to it in the harness.
+  const GARAGE_SLAB_ABOVE_GRADE_IN = 10;
   const ROOF_FASCIA_IN = 5.5;
   // A truss chord in section: 3 1/2" measured ACROSS the member, so the
   // vertical drop under a sloped top chord grows with the pitch.
@@ -268,8 +295,27 @@ if (!window.DraftCutView) {
     // (wallTop - 1'-2"), so climbing 1'-2" back out of it just returned the
     // bearing line, and the plate then stood the garage 1 1/2" over the house.
     if (!isDetachedGarage(garage)) return fdn.wallTop - garageSillDropFt(envBuildType(env), mode);
-    if (mode === 'thickened') return fdn.grade + GARAGE_SLAB_THICKNESS_IN / 12;
+    // A thickened edge IS its own top of concrete, and its walls bear on it.
+    if (mode === 'thickened') return fdn.grade + GARAGE_SLAB_ABOVE_GRADE_IN / 12;
     return fdn.grade + (DETACHED_BEAM_ABOVE_GRADE_IN + GARAGE_BEAM_PLATE_IN) / 12;
+  }
+
+  // Top of a garage's CONCRETE, whatever it stands on: one sill plate below
+  // where its walls bear, except a thickened edge, which has no plate because
+  // it has no wall under the slab -- the slab is the foundation.
+  function garageConcreteTop(env, fdn, garage) {
+    if (env.garageFoundation(garage) === 'thickened') return garageBearing(env, fdn, garage);
+    return garageBearing(env, fdn, garage) - GARAGE_BEAM_PLATE_IN / 12;
+  }
+
+  // THE FINISHED GARAGE FLOOR -- what a stair lands on, what the door sits at,
+  // and the one number three painters were each deriving for themselves. See
+  // GARAGE_SLAB_ABOVE_GRADE_IN for what they each had.
+  function garageSlabTop(env, fdn, garage) {
+    const top = garageConcreteTop(env, fdn, garage);
+    // The monolithic pour's top IS the floor; there is no slab poured onto it.
+    if (env.garageFoundation(garage) === 'thickened') return top;
+    return top - GARAGE_SLAB_THICKNESS_IN / 12;
   }
 
   // Top of a frost-wall garage's CONCRETE, on the section's foundation datum
@@ -1146,7 +1192,7 @@ if (!window.DraftCutView) {
     frostGarages.forEach(garage => {
       const us = fdnCrossings.filter(c => c.garage === garage).map(c => c.u);
       if (us.length < 2 || Math.max(...us) - Math.min(...us) <= 1) return;
-      const top = frostWallTop(env, fdn, garage) - GARAGE_SLAB_THICKNESS_IN / 12;
+      const top = garageSlabTop(env, fdn, garage);
       ctx.fillStyle = weight(C.concrete, 0.35);
       ctx.strokeStyle = INK; ctx.lineWidth = 1;
       const x = X(Math.min(...us)), wid = (Math.max(...us) - Math.min(...us)) * pxPerFt;
@@ -1175,13 +1221,20 @@ if (!window.DraftCutView) {
         ? Math.min(uMax, Math.max(...outlineUs))
         : Math.max(...beamCrossings.map(c => c.u));
       if (hi - lo > 1) {
-        // ONE DATUM, so a file SAVED at the old beam height still draws its
-        // slab under the walls rather than 1 1/2" away from them. The stored
-        // wall is the fallback for a crossing whose body is unknown.
-        const plateTop = garage ? garageBearing(env, fdn, garage)
-          : fdn.wallBottom
-            + Math.max(...beamCrossings.map(c => c.wall.topHeight)) + GARAGE_BEAM_PLATE_IN / 12;
-        const slabTop = plateTop + GARAGE_SLAB_THICKNESS_IN / 12;
+        // ONE DATUM. The stored wall is the fallback for a crossing whose
+        // body is unknown, and it answers by the same rule -- the beam's top
+        // of concrete less the slab -- rather than a second arrangement.
+        const slabTop = garage ? garageSlabTop(env, fdn, garage)
+          : fdn.wallBottom + Math.max(...beamCrossings.map(c => c.wall.topHeight))
+            - GARAGE_SLAB_THICKNESS_IN / 12;
+        // THE GRAVEL HANGS OFF THE SLAB, NOT OFF THE PLATE. It was measured
+        // down from the sill plate top, which worked only while the slab was
+        // drawn a slab ABOVE that plate. With the floor at the spec's
+        // grade + 10" the plate is above the slab, so the "under-slab" line
+        // would have been struck at grade + 9 1/2" -- inside a slab spanning
+        // grade + 6" to grade + 10". Same detail, same offsets, hung off the
+        // one thing it describes the underside of.
+        const slabBottom = slabTop - GARAGE_SLAB_THICKNESS_IN / 12;
         ctx.fillStyle = weight(C.concrete, 0.35);
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
         ctx.fillRect(X(lo), Y(slabTop), (hi - lo) * pxPerFt, (GARAGE_SLAB_THICKNESS_IN / 12) * pxPerFt);
@@ -1189,15 +1242,15 @@ if (!window.DraftCutView) {
         ctx.strokeStyle = ink(0.5); ctx.lineWidth = 1;
         ctx.setLineDash([4, 3]);
         ctx.beginPath();
-        ctx.moveTo(X(lo), Y(plateTop - 0.5));
-        ctx.lineTo(X(hi), Y(plateTop - 0.5));
+        ctx.moveTo(X(lo), Y(slabBottom - 0.5));
+        ctx.lineTo(X(hi), Y(slabBottom - 0.5));
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.fillStyle = ink(0.45);
         for (let g = lo + 0.5; g < hi - 0.25; g += 0.75) {
           const j = (g * 7.3) % 1;   // deterministic jitter, no flicker on redraw
           ctx.beginPath();
-          ctx.arc(X(g + j * 0.3), Y(plateTop - 0.1 - j * 0.32), 1.1, 0, Math.PI * 2);
+          ctx.arc(X(g + j * 0.3), Y(slabBottom - 0.1 - j * 0.32), 1.1, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -1848,8 +1901,10 @@ if (!window.DraftCutView) {
     ctx.setLineDash([]);
 
     // A thickened-edge detached slab has no foundation walls: its band is
-    // the monolithic pour itself — the 4" face proud of grade, the 1'-0"
-    // perimeter edge buried and dashed.
+    // the monolithic pour itself — GARAGE_SLAB_ABOVE_GRADE_IN proud of grade,
+    // the 1'-0" perimeter edge buried and dashed. At the spec's 10" that
+    // leaves exactly the 2" of edge in the ground it names as the cost;
+    // at the 4" this drew before, it left 8".
     env.floors()
       .filter(floor => (floor.view || 'plan') === 'foundation'
         && floor.garage && floor.thickenedEdge && floor.points.length >= 3)
@@ -1858,7 +1913,7 @@ if (!window.DraftCutView) {
         const lo = Math.max(Math.min(...us), uMin);
         const hi = Math.min(Math.max(...us), uMax);
         if (hi - lo < 0.5) return;
-        const top = fdn.grade + GARAGE_SLAB_THICKNESS_IN / 12;
+        const top = fdn.grade + GARAGE_SLAB_ABOVE_GRADE_IN / 12;
         const x = X(lo), wid = (hi - lo) * pxPerFt;
         ctx.fillStyle = C.faceShade;
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
@@ -2994,6 +3049,7 @@ if (!window.DraftCutView) {
   window.DraftCutView = Object.freeze({
     STANDARDS: Object.freeze({
       GARAGE_SLAB_THICKNESS_IN,
+      GARAGE_SLAB_ABOVE_GRADE_IN,
       GARAGE_SLAB_SLOPE_IN_PER_FT,
       GARAGE_SLAB_AT_DOOR_IN,
       GARAGE_SLAB_FLAT_AT_FT,
@@ -3016,6 +3072,8 @@ if (!window.DraftCutView) {
     roofBaseElev,
     roofEaveElev,
     garageBearing,
+    garageConcreteTop,
+    garageSlabTop,
     gradeFromBearing,
     frostWallTop,
     garageSillDropFt,
