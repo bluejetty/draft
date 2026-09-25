@@ -240,12 +240,25 @@ test('every pile survives the reload, mark and all', async ({ page }) => {
   expect(kept.bogus, 'a mark with no row in the schedule was kept').toBe(0);
 });
 
-test('an attached garage takes no piles along the leg it shares with the house',
+test('an attached garage stands its first pile back from the house foundation',
   async ({ page }) => {
-    // There is no grade beam on that leg -- the house wall is there -- so
-    // there is nothing to hold up. Its two ENDS still carry one, because they
-    // are the ends of the runs that remain: MODEL.dc.html's "two piles at the
-    // beam corners against the house" arrived at by the general rule.
+    // There is no grade beam on the shared leg -- the house wall is there --
+    // so there is nothing to hold up along it.
+    //
+    // AND ITS TWO ENDS NO LONGER CARRY ONE EITHER, which is a rule change
+    // rather than a consequence. Until 25 Sep this test asserted exactly the
+    // opposite -- `onShared.length` was 2, "the beam corners against the house
+    // lost their piles" -- and that was MODEL.dc.html's answer arrived at by
+    // the general rule: its _buildGaragePiles takes the two attachment nodes
+    // (:13374), which ARE the house wall.
+    //
+    // Movie, 25 Sep, looking at a built garage: "the first one should not be
+    // at the foundation it should be 4-6 min or 5' max (lets go 4'6 default)
+    // the first pile shouldn't effect the foundation/ footing so therefore
+    // needs to be placed min 4'6 from the foundation wall". A pile is DRILLED,
+    // and drilling one hard against the house footing undermines the thing it
+    // stands beside. So the run starts 4'-6" along each leg that meets the
+    // house, and the old assertion is now the defect.
     //
     // House 0..20 in x; garage 20..44, so the garage's west leg (x = 20) lies
     // on the house's east wall.
@@ -264,13 +277,58 @@ test('an attached garage takes no piles along the leg it shares with the house',
 
     const piles = pilesOf(await savedFile(page));
     expect(piles.length, 'no pile was placed at all').toBeGreaterThan(0);
-    // The shared leg's centreline is at x = 20.333. Nothing may sit along it
-    // between its ends.
+    // The shared leg's centreline is at x = 20.333, and NOTHING may sit on it
+    // now -- not along it and not at its ends.
     const onShared = piles.filter(pile => Math.abs(pile.point.x - (20 + 1 / 3)) < 0.01);
-    const between = onShared.filter(pile => pile.point.z > 1 / 3 + 0.01
-      && pile.point.z < 24 - 1 / 3 - 0.01);
-    expect(between.length,
-      'piles were poured along the wall the house already carries').toBe(0);
-    expect(onShared.length, 'the beam corners against the house lost their piles')
-      .toBe(2);
+    expect(onShared.length,
+      'a pile was drilled against the house footing').toBe(0);
+    // THE MEASUREMENT, not just the absence: the nearest pile to the house
+    // stands exactly the standoff away. Checking only that nothing sits ON the
+    // line would pass for a pile an inch off it, which is the same hole in the
+    // same footing.
+    const nearest = Math.min(...piles.map(pile => pile.point.x)) - (20 + 1 / 3);
+    expect(nearest, 'the first pile is nearer the house than the standoff')
+      .toBeGreaterThan(4.5 - 0.01);
+    expect(nearest, 'the first pile was pushed past the 5 ft the rule allows')
+      .toBeLessThan(5 + 0.01);
+  });
+
+test('two piles that would land within 3 ft become one between them',
+  async ({ page }) => {
+    // Movie, 25 Sep: "there are situations where 2 corners are too close
+    // together (piles shouldn't be withing 3ft of each other) if the piles
+    // would be 3ft or closer, remove both piles and replace with 1 at the
+    // centerpoint between the 2 corners".
+    //
+    // A 2 FT NOTCH IN THE BACK WALL puts two corners 2 ft apart. The rule
+    // itself is build-house.js's and proto/auto-piles-harness.js pins the
+    // arithmetic; what only a page test reaches is whether MODEL.html passes
+    // the number at all -- a page that dropped `minGapFt` would have a green
+    // harness and two holes 2 ft apart on the drawing.
+    await open(page, empty({
+      outlines: [{
+        id: 'outline-garage', levelId: 3, garage: true, detached: true,
+        foundation: 'gradebeam',
+        points: [{ x: 0, y: 0, z: 0 }, { x: 24, y: 0, z: 0 },
+          { x: 24, y: 0, z: 24 }, { x: 12, y: 0, z: 24 },
+          { x: 12, y: 0, z: 22 }, { x: 0, y: 0, z: 22 }],
+      }],
+    }));
+    await armTool(page, 'column');
+    await button(page).click();
+    await saveNow(page);
+
+    const piles = pilesOf(await savedFile(page));
+    expect(piles.length, 'no pile was placed at all').toBeGreaterThan(0);
+    // THE RULE STATED AS THE CHECK: no two holes closer than 3 ft, anywhere.
+    let closest = Infinity;
+    for (let i = 0; i < piles.length; i++) {
+      for (let j = i + 1; j < piles.length; j++) {
+        closest = Math.min(closest, Math.hypot(
+          piles[i].point.x - piles[j].point.x,
+          piles[i].point.z - piles[j].point.z));
+      }
+    }
+    expect(closest, 'two piles were drilled within 3 ft of each other')
+      .toBeGreaterThan(3 - 0.01);
   });

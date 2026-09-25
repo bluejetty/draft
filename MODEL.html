@@ -9710,6 +9710,20 @@
   const GARAGE_PILE_SPACING_FT = 9;
   const GARAGE_PILE_FOOTING = 'pile12';
   const GARAGE_PILE_MARK = 'P2';
+  // HOW FAR BACK FROM THE HOUSE THE FIRST PILE STANDS. Movie, 25 Sep: "the
+  // first one should not be at the foundation it should be 4-6 min or 5' max
+  // (lets go 4'6 default) the first pile shouldn't effect the foundation/
+  // footing so therefore needs to be placed min 4'6 from the foundation wall".
+  //
+  // A BAND, AND THE DEFAULT IS ITS FLOOR: 4'-6" to 5'-0", placed at 4'-6". So
+  // the number only ever moves one way and an engineer raising it has 6" of
+  // room before it leaves what Movie named.
+  const GARAGE_PILE_STANDOFF_FT = 4.5;
+  // TWO PILES CLOSER THAN THIS ARE ONE PILE at the point between them --
+  // "piles shouldn't be withing 3ft of each other". Passed explicitly rather
+  // than left to pilePoints' default so the page states the number it means;
+  // build-house.js owns the rule and proto/auto-piles-harness.js pins it.
+  const GARAGE_PILE_MIN_GAP_FT = 3;
 
   // THE RULE ITSELF, with two callers: the bone press builds a garage and
   // pours its piles in one gesture, and the COLUMN panel's AUTO PILES pours
@@ -9754,6 +9768,12 @@
     window.DraftBuildHouse.pilePoints(spine, {
       maxSpacingFt: GARAGE_PILE_SPACING_FT,
       skipEdge: onHouse,
+      // THE STANDOFF RIDES ON `skipEdge`, which is why it is only ever the
+      // HOUSE it stands off from: a detached garage passes no `against`, so
+      // no edge is skipped, no end is a house end, and every corner keeps its
+      // pile. Nothing here has to ask whether the garage is attached.
+      standoffFt: GARAGE_PILE_STANDOFF_FT,
+      minGapFt: GARAGE_PILE_MIN_GAP_FT,
     }).forEach(point => {
       const column = {
         id: pileId++,

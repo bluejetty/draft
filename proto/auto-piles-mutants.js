@@ -21,6 +21,45 @@ const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
 const MUTANTS = [
+  // ── THE FIRST PILE STANDS BACK FROM THE HOUSE (25 Sep) ──────────────────
+  // Movie: "the first pile shouldn't effect the foundation/ footing so
+  // therefore needs to be placed min 4'6 from the foundation wall". Its
+  // failure mode is the same silence as the rest of this file: a pile drilled
+  // against the footing draws exactly like one standing clear of it.
+  { file: 'MODEL.html',
+    name: 'the page stops asking for the standoff, so the first pile is back '
+      + 'against the house footing',
+    find: '      standoffFt: GARAGE_PILE_STANDOFF_FT,',
+    with: '      standoffFt: 0,',
+    test: 'an attached garage stands its first pile back from the house foundation' },
+  { file: 'MODEL.html',
+    name: 'the standoff shrinks to something that clears nothing',
+    find: '  const GARAGE_PILE_STANDOFF_FT = 4.5;',
+    with: '  const GARAGE_PILE_STANDOFF_FT = 0.5;',
+    test: 'an attached garage stands its first pile back from the house foundation' },
+  { file: 'build-house.js',
+    name: 'the standoff is measured off the wrong end, so the pile stays on '
+      + 'the house and the far corner moves instead',
+    find: '      const head = skipped(before) ? standoff : 0;',
+    with: '      const head = skipped(after) ? standoff : 0;',
+    test: 'an attached garage stands its first pile back from the house foundation' },
+  { file: 'build-house.js',
+    name: 'every leg stands off, not just the ones meeting the house',
+    find: '      const head = skipped(before) ? standoff : 0;',
+    with: '      const head = standoff;',
+    test: 'the piles ride the beam centreline, not the outline' },
+  // ── TWO PILES TOO CLOSE TOGETHER ARE ONE PILE (25 Sep) ──────────────────
+  { file: 'MODEL.html',
+    name: 'the page stops asking for the gap, so two holes land 2 ft apart',
+    find: '      minGapFt: GARAGE_PILE_MIN_GAP_FT,',
+    with: '      minGapFt: 0,',
+    test: 'two piles that would land within 3 ft become one between them' },
+  { file: 'build-house.js',
+    name: 'the close pair is merged but the survivor keeps one corner instead '
+      + 'of standing between them',
+    find: '      pts.splice(best.i, 1, { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });',
+    with: '      pts.splice(best.i, 1, { x: a.x, z: a.z });',
+    test: 'two piles that would land within 3 ft become one between them' },
   { file: 'MODEL.html',
     name: 'THE DEFECT THIS FIXED: a grade-beam garage is built on nothing',
     find: "      if (kind === 'gradebeam') {",
@@ -75,7 +114,7 @@ const MUTANTS = [
     name: 'the leg on the house is piled, into concrete the house already carries',
     find: '      skipEdge: onHouse,',
     with: '      skipEdge: null,',
-    test: 'an attached garage takes no piles along the leg it shares with the house' },
+    test: 'an attached garage stands its first pile back from the house foundation' },
   { file: 'MODEL.html',
     name: 'the shared edge is tested on the moved spine, so no leg ever matches',
     // THE GUARD LINE COMES WITH IT. That `const a = ring[index]...` line is
@@ -87,7 +126,7 @@ const MUTANTS = [
       + '      const a = ring[index], b = ring[(index + 1) % ring.length];',
     with: '      if (!shared) return false;\n'
       + '      const a = spine[index], b = spine[(index + 1) % spine.length];',
-    test: 'an attached garage takes no piles along the leg it shares with the house' },
+    test: 'an attached garage stands its first pile back from the house foundation' },
   { file: 'build-house.js',
     name: 'no dedup, so every corner is piled twice (the one the harness caught)',
     find: '      if (out.some(pt => Math.hypot(pt.x - x, pt.z - z) < MERGE_FT)) return;',
@@ -95,8 +134,8 @@ const MUTANTS = [
     test: 'the piles ride the beam centreline, not the outline' },
   { file: 'build-house.js',
     name: 'the spacing packs instead of evening out: 9 ft and then a stub',
-    find: '      const spans = Math.max(1, Math.ceil(len / spacing));',
-    with: '      const spans = Math.max(1, Math.floor(len / spacing));',
+    find: '      const spans = Math.max(1, Math.ceil(usable / spacing));',
+    with: '      const spans = Math.max(1, Math.floor(usable / spacing));',
     test: 'the piles ride the beam centreline, not the outline' },
   { file: 'drawing-format.js',
     name: 'the reader drops the mark, so it is gone one reload later',
