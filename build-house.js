@@ -82,7 +82,8 @@ if (!window.DraftBuildHouse) {
   // the house" (:23740) arrived at by the general rule instead of written in
   // as a special case. The old page placed those two and left the rest to the
   // drafter; this places the run.
-  const pilePoints = (points, { maxSpacingFt = 9, skipEdge = null } = {}) => {
+  const pilePoints = (points, { maxSpacingFt = 9, skipEdge = null,
+    standoffFt = 0, minGapFt = 3 } = {}) => {
     const out = [];
     // ONE PILE PER PLACE. Adjacent runs share a corner and each would claim
     // it; two records at one point is two lines in the schedule and one hole
@@ -101,24 +102,104 @@ if (!window.DraftBuildHouse) {
       out.push(srcIndex == null ? { x, z } : { x, z, srcIndex });
     };
     const spacing = Number(maxSpacingFt) > 0 ? Number(maxSpacingFt) : 9;
+    const standoff = Number(standoffFt) > 0 ? Number(standoffFt) : 0;
+    const skipped = index => typeof skipEdge === 'function' && !!skipEdge(index);
     points.forEach((pt, index) => {
       const next = points[(index + 1) % points.length];
       const len = Math.hypot(next.x - pt.x, next.z - pt.z);
       // A degenerate edge is skipped for houseWallRuns' reason: it raises no
       // wall, so there is no beam over it to hold up.
       if (len < 0.01) return;
-      if (typeof skipEdge === 'function' && skipEdge(index)) return;
-      const spans = Math.max(1, Math.ceil(len / spacing));
+      if (skipped(index)) return;
+      // ── THE FIRST PILE STANDS BACK FROM THE HOUSE ────────────────────────
+      //
+      // Movie, 25 Sep: "the first one should not be at the foundation it
+      // should be 4-6 min or 5' max (lets go 4'6 default) the first pile
+      // shouldn't effect the foundation/ footing so therefore needs to be
+      // placed min 4'6 from the foundation wall".
+      //
+      // A pile is DRILLED, and drilling it hard against the house footing
+      // undermines the thing it is standing next to. So a leg that MEETS a
+      // skipped edge starts its run `standoff` back from that end, and the
+      // remaining length re-evens at the spacing -- the same rule as before,
+      // measured over what is left rather than over the whole leg.
+      //
+      // WHICH END IS THE HOUSE END IS THE NEIGHBOUR'S ANSWER, not this leg's:
+      // the shared edge itself is skipped, so the house shows up as the edge
+      // BEFORE or AFTER this one. A leg between two house edges stands off at
+      // both ends.
+      const before = (index - 1 + points.length) % points.length;
+      const after = (index + 1) % points.length;
+      const head = skipped(before) ? standoff : 0;
+      const tail = skipped(after) ? standoff : 0;
+      // A LEG TOO SHORT TO STAND A PILE OFF THE HOUSE GETS NONE, and the beam
+      // spans it. Placing one anyway would put it inside the very distance
+      // this rule exists to keep clear, which is worse than not placing it.
+      const usable = len - head - tail;
+      if (usable < 0.01) return;
+      const spans = Math.max(1, Math.ceil(usable / spacing));
       for (let s = 0; s <= spans; s++) {
-        const t = s / spans;
+        const t = (head + (usable * s) / spans) / len;
         // srcIndex RIDES ONLY ON A CORNER, and it is the corner's own index in
         // the ring the caller passed. An intermediate pile sits on no vertex,
         // so claiming one would link it to a point that does not move with it.
+        //
+        // AND A PILE THAT HAS BEEN STOOD OFF IS NO LONGER ON ITS CORNER, so it
+        // hands the link back: srcIndex makes the pile ride that vertex when
+        // the outline is dragged, and a pile 4'-6" down the leg riding the
+        // corner would slide along the beam every time the corner moved.
+        const onHead = s === 0 && head === 0;
+        const onTail = s === spans && tail === 0;
         add(pt.x + (next.x - pt.x) * t, pt.z + (next.z - pt.z) * t,
-          s === 0 ? index : (s === spans ? (index + 1) % points.length : undefined));
+          onHead ? index : (onTail ? after : undefined));
       }
     });
-    return out;
+    return mergeClose(out, Number(minGapFt) > 0 ? Number(minGapFt) : 0);
+  };
+
+  // ── TWO PILES TOO CLOSE TOGETHER ARE ONE PILE ────────────────────────────
+  //
+  // Movie, 25 Sep: "there are situations where 2 corners are too close
+  // together (piles shouldn't be withing 3ft of each other) if the piles would
+  // be 3ft or closer, remove both piles and replace with 1 at the centerpoint
+  // between the 2 corners".
+  //
+  // NOT THE SAME RULE AS THE 0.01 MERGE ABOVE, which answers "these are one
+  // place" -- two records for one hole. This one answers "these are two
+  // places too close to drill", and it MOVES the survivor: neither original
+  // position is kept, because the pair is replaced by the point between them.
+  //
+  // CLOSEST PAIR FIRST, and repeatedly, so the answer does not depend on the
+  // order the legs were walked. A single forward pass would merge whichever
+  // pair it met first and leave a tighter pair behind it untouched.
+  //
+  // THE MIDPOINT IS A STRAIGHT LINE BETWEEN THEM, which is on the beam for the
+  // case this exists for -- two corners at the ends of one short jog, whose
+  // midpoint lies on that jog. Two piles either side of a 90 degrees corner
+  // cannot reach this: each leg places one AT the corner and those two are
+  // already one point by position.
+  //
+  // THE MERGED PILE CARRIES NO srcIndex. It stands on neither corner now, so
+  // claiming either would link it to a vertex it no longer sits on -- the same
+  // reason an intermediate pile claims none.
+  const mergeClose = (list, minGapFt) => {
+    if (!(minGapFt > 0)) return list;
+    const pts = list.slice();
+    for (;;) {
+      let best = null;
+      for (let i = 0; i < pts.length; i++) {
+        for (let j = i + 1; j < pts.length; j++) {
+          const d = Math.hypot(pts[i].x - pts[j].x, pts[i].z - pts[j].z);
+          // "3ft OR CLOSER", so the bound is inclusive -- a pair exactly 3 ft
+          // apart is the case he named, not the first legal one.
+          if (d <= minGapFt + 1e-9 && (!best || d < best.d)) best = { i, j, d };
+        }
+      }
+      if (!best) return pts;
+      const a = pts[best.i], b = pts[best.j];
+      pts.splice(best.j, 1);
+      pts.splice(best.i, 1, { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });
+    }
   };
 
   // ── The tour's mid-span beam rule (board #230, answers confirmed) ──
