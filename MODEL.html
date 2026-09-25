@@ -10686,7 +10686,7 @@
     // drops every repeat after the first, silently.
     let beamId = newStructureId(drawing.beams);
     let columnId = newStructureId(drawing.columns);
-    let beamCount = 0, columnCount = 0;
+    let beamCount = 0, columnCount = 0, unsupportedCount = 0;
 
     bodies.forEach(({ outline, storeyId }) => {
       const points = outline.points.map(pt => ({ x: pt.x, z: pt.z }));
@@ -10733,6 +10733,15 @@
       });
       beamCount += plan.beams.length;
       columnCount += plan.columns.length;
+      // A POST THE GEOMETRY COULD NOT STAND ON ANYTHING is counted, not
+      // stored. midSpanBeams tags it `unsupported` because the beam still has
+      // to be held up somewhere and a silent post there is the drawing
+      // claiming support it has not got -- but drawing-format.js's column
+      // validator has no such field, so writing it would be a key the reader
+      // drops on the next load. That is the silent loss this page refuses
+      // everywhere else, so the fact goes to the DRAFTER instead, now, while
+      // he is looking at the press that made it.
+      unsupportedCount += plan.columns.filter(column => column.unsupported).length;
     });
 
     return {
@@ -10743,6 +10752,7 @@
       ],
       beams: beamCount,
       columns: columnCount,
+      unsupported: unsupportedCount,
       levelId,
     };
   };
@@ -11075,7 +11085,7 @@
     // for it -- it carries a roof, and "usually the exterior walls do the
     // complete job". No branch here says so; the lookup does.
     const sweptStructure = [];
-    const framedTally = { beams: 0, columns: 0 };
+    const framedTally = { beams: 0, columns: 0, unsupported: 0 };
     [FOUNDATION_LEVEL_ID, ...window.DraftLayerViews
       .floorLevels(drawing?.levels || []).map(level => Number(level.id))]
       .forEach(id => {
@@ -11085,10 +11095,16 @@
         sweptStructure.push(...beamed.restored);
         framedTally.beams += beamed.beams;
         framedTally.columns += beamed.columns;
+        framedTally.unsupported += beamed.unsupported;
       });
     if (framedTally.beams) {
       parts.push(`${framedTally.beams} beam${framedTally.beams === 1 ? '' : 's'}`
-        + ` and ${framedTally.columns} column${framedTally.columns === 1 ? '' : 's'}`);
+        + ` and ${framedTally.columns} column${framedTally.columns === 1 ? '' : 's'}`
+        // SAID IN THE BUILD LINE, because a post standing on nothing is a fact
+        // about the house that was just raised and the drafter is reading this
+        // sentence anyway.
+        + (framedTally.unsupported
+          ? ` (${framedTally.unsupported} on nothing)` : ''));
     }
 
     undoStack.length = mark;
@@ -13405,13 +13421,33 @@
   // The armed-tool half of AUTO BEAM; the worker and the reasoning are up at
   // placeAutoBeam. Movie: "the AUTOBEAM/COLUMN should be available in the
   // build/ BEAM & COLUMN buttons".
-  // THE LEVEL THE DRAFTER IS STANDING ON, which is AUTO DIMS' rule too --
-  // "where the strings go is where the drafter is standing". Standing on
-  // FOUNDATION he frames the main floor; standing on MAIN FL he frames the
-  // storey above it. On the top storey there is no floor above and the press
-  // says so rather than doing nothing.
+  // ── THE FLOOR THE DRAFTER IS LOOKING AT IS THE ONE HE MEANS ─────────────
+  //
+  // And its beam lives on the level BELOW it. Standing on MAIN FL asks for the
+  // beam that holds MAIN FL up, which is filed on FOUNDATION; standing on 2ND
+  // FL asks for the one under 2ND FL, filed on MAIN FL. On FOUNDATION there is
+  // no floor to look at, so it frames the storey above -- its own.
+  //
+  // THE FIRST VERSION HAD THIS THE OTHER WAY UP and the specs found it by
+  // HANGING rather than failing: standing on MAIN FL it framed the floor
+  // ABOVE, so on a drawing whose only outline is the main floor the button
+  // went disabled and every `click()` waited out its timeout. Six tests, no
+  // assertion message, just a run that never finished.
+  //
+  // It was also wrong for the drafter. AUTO BEAM on the main floor putting
+  // structure on the 2ND FL layer is a surprise; asking for the beam under
+  // the floor on screen is what the button looks like it does.
+  const framesFrom = levelId => {
+    const floors = window.DraftLayerViews.floorLevels(drawing?.levels || []);
+    const at = floors.findIndex(level => Number(level.id) === Number(levelId));
+    // Not a storey at all -- FOUNDATION, ROOF, SITE -- so it frames from where
+    // it stands and floorCarriedBy decides whether that means anything.
+    if (at < 0) return Number(levelId);
+    return at > 0 ? Number(floors[at - 1].id) : FOUNDATION_LEVEL_ID;
+  };
+
   const pressAutoBeam = () => {
-    const levelId = activeLevelId();
+    const levelId = framesFrom(activeLevelId());
     const result = placeAutoBeam({ levelId });
     if (result === -1) {
       const carried = floorCarriedBy(levelId);
@@ -13443,11 +13479,19 @@
     const level = (drawing.levels || [])
       .find(entry => Number(entry.id) === result.levelId);
     const many = n => (n === 1 ? '' : 's');
+    // AND WHETHER THEY STAND ON ANYTHING. Movie's rule is that a column goes
+    // over another column or over a solid wall; where nothing was in reach the
+    // post still had to go in, and saying so is the difference between a frame
+    // he can trust and one he has to re-check by eye.
+    const hanging = result.unsupported
+      ? ` ${result.unsupported} of them ${result.unsupported === 1 ? 'has' : 'have'} `
+        + 'nothing under it — check what carries that load.'
+      : '';
     sayOnStrip(result.beams
       ? `AUTO BEAM placed ${result.beams} beam${many(result.beams)} and `
         + `${result.columns} column${many(result.columns)} on `
         + `${levelLabel(result.levelId, level && level.name)} — re-run after `
-        + 'outline edits to refresh them.'
+        + 'outline edits to refresh them.' + hanging
       : 'Every span is under 19′ — no mid-span beam needed.');
     buildChrome();
     paint();
@@ -13553,7 +13597,7 @@
     // missing prerequisite. A house under 19 ft gets the press and the
     // sentence, which is the same answer MODEL.dc.html's tour gives (:4364);
     // a button greyed on a bungalow would read as broken.
-    const armedLevel = activeLevelId();
+    const armedLevel = framesFrom(activeLevelId());
     const carried = floorCarriedBy(armedLevel);
     const found = carried ? houseFootprint(carried) : null;
     const ready = !!found && levelPresent(armedLevel);
