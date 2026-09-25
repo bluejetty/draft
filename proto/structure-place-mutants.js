@@ -47,8 +47,13 @@ const MUTANTS = [
     test: 'undo takes back a placed column' },
   { file: 'MODEL.html',
     name: 'the footing is written off the format\'s list',
-    find: "      footing: 'pad36',",
-    with: "      footing: 'pad',",
+    // ANCHORED ON TWO LINES, because AUTO BEAM writes `footing: 'pad36'`
+    // too and the shorter anchor matched BOTH -- not as two identical lines
+    // but as a SUBSTRING: the auto record is indented eight, so the six-space
+    // anchor matched inside its leading whitespace. The harness refused it
+    // rather than mutating the wrong one, which is what that guard is for.
+    find: "      footing: 'pad36',\n    }));",
+    with: "      footing: 'pad',\n    }));",
     test: 'placing a column opens its properties' },
   { file: 'MODEL.html',
     name: 'a pile keeps a pad size the reader will drop',
@@ -57,8 +62,9 @@ const MUTANTS = [
     test: 'placing a column opens its properties' },
   { file: 'MODEL.html',
     name: 'the beam mode is not written, so the panel and the file disagree',
-    find: "      mode: 'flush',",
-    with: '',
+    // TWO LINES, for the reason the footing anchor above gives.
+    find: "      mode: 'flush',\n    });",
+    with: '    });',
     test: 'placing a beam shows its mode and its span' },
   { file: 'MODEL.html',
     name: 'the readout stops counting columns',

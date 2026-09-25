@@ -799,7 +799,16 @@
      slot used to carry is now the BOX's -- the divider belongs above the
      fold button, or a folded box would sit on the tools with no line between
      them. */
-  #props-box { margin-top:10px; padding-top:10px;
+  /* AND IT CANNOT WIDEN THE RAIL. #left-rail sets min-width and no max
+     (shell-bars.css:901), so the rail takes the width of its widest child --
+     which made a panel's longest line into a measurement of how much of the
+     PLAN the rail covers. A two-line note in the BEAM panel took the rail to
+     470px and swallowed the presses model-structure-place.spec.js uses to
+     draw a beam by hand: both its beam tests failed with `beams 0/0`, no page
+     error, nothing on screen to explain it.
+     The cap is the tool column's own width, so the box wraps inside the rail
+     the tools already established instead of setting a new one. */
+  #props-box { margin-top:10px; padding-top:10px; max-width:180px;
     border-top:1px solid var(--edge-panel); }
   #props-box[hidden] { display:none; }
   .props-fold { display:block; width:100%; padding:0 0 6px; border:0;
@@ -10279,6 +10288,232 @@
     return { placed: made, removed };
   };
 
+
+  // ── AUTO BEAM + COLUMNS ─────────────────────────────────────────────────
+  //
+  // Movie, 25 Sep: "ther AUTOBEAM placement was removed a house over 19 ft
+  // wide needs a beam and columns in the basement / foundation" ... "the DC
+  // version had it" ... "the AUTOBEAM/COLUMN should be available in the
+  // build/ BEAM & COLUMN buttons".
+  //
+  // NEVER WIRED, RATHER THAN REMOVED, and the difference is where to look.
+  // build-house.js:88 `midSpanBeams` came across whole and is exported;
+  // MODEL.dc.html calls it twice -- :4356 on the tour and :4828 when a stair
+  // re-derives the beam -- and MODEL.html calls it NOWHERE. The live page
+  // paints beams and columns it has no gesture to create.
+  //
+  // AND NINE GREEN SPECS SAID NOTHING. tests/beam-corner.spec.js covers this
+  // geometry through helpers.openModel, which navigates to /MODEL.dc.html
+  // (tests/helpers.js:154) -- so every auto-beam assertion in the suite is
+  // about the page the app cannot reach. A spec driving THIS page is part of
+  // the fix rather than a follow-up.
+  //
+  // THE FOUNDATION ONLY, FOR NOW. Movie's rule is wider -- "the columns and
+  // beams that will be needed on the main floor if there is a 2nd floor" --
+  // and an upper floor needs two things that are not here yet.
+  //
+  // ONE is his stacking rule: "the columns and beams are most often located
+  // over top of each other ( this is always the case for a columns - it need
+  // to be over another column ... or over a solid wall ... (which acts as a
+  // column". midSpanBeams cannot express it. It asks `bearsAt` at a run's two
+  // ENDS ONLY (build-house.js:290) and divides the interior evenly, with no
+  // reference to anything underneath -- so two identical runs stack by
+  // coincidence and drift apart the moment a footprint or a stair opening
+  // differs between the floors.
+  //
+  // THE OTHER is somewhere to draw the post: S-COL-FOOTING is in the
+  // FOUNDATION view's layer list and in no floor view's (layer-views.js:32
+  // against :23). A main-floor column filed today would be a record that
+  // paints nowhere -- on screen never, in the file always.
+  //
+  // AND THE ROOF EXCLUDES ITSELF, which is the same rule rather than a second
+  // one. Movie: "usually a roof won't need columns or beams (usually the
+  // exterior walls do the complete job ... not likely on the exterior ei
+  // overhanging roof over deck)". A level earns a beam from the FLOOR it
+  // carries, and the top storey carries no floor.
+
+  // WHERE THE HOUSE IS, NOT WHERE THE DRAFTER IS STANDING. The FOUNDATION
+  // carries no outline of its own -- raiseFoundationUnder is explicit that a
+  // second footprint for one building is what every count of outlines reads
+  // as two houses -- so the loop comes off the lowest floor level, which is
+  // where the bone puts it.
+  //
+  // THE GARAGE IS SKIPPED. Its slab is not the floor this beam carries, and a
+  // loop taken across both bodies would run a beam through the garage.
+  // MODEL.dc.html picks the same way, `!outline.garage` (:4804).
+  const houseFootprint = () => {
+    const storey = lowestFloorLevel();
+    if (!storey) return null;
+    const list = (drawing?.outlines || []).filter(outline =>
+      Number(outline.levelId) === Number(storey.id)
+      && outline.garage !== true
+      && (outline.points || []).length >= 3);
+    // LAST ONE WINS, the rule roofSourceOutline takes and for its reason: the
+    // most recent loop is the one the drafter means.
+    return list.length
+      ? { outline: list[list.length - 1], storeyId: storey.id } : null;
+  };
+
+  // A STAIR OPENING IS A HOLE IN THE FLOOR THE BEAM CARRIES, so the beam
+  // re-lands mid-span of the larger remaining strip instead of crossing it.
+  // Ported from MODEL.dc.html:4806 `_rederiveTourBeam`, INCLUDING WHICH LEVEL
+  // IT READS -- the stairs on the floor ABOVE, not the ones on the level the
+  // beam is filed against. That relationship is the whole rule: a level's
+  // beam serves the floor over it, which is also why the roof gets none.
+  //
+  // midSpanBeams wants intervals along the SHORT axis and picks that axis
+  // itself from the same points, so this asks the bounding box the same
+  // question rather than being told the answer.
+  const stairHolesOn = (points, levelId) => {
+    const xs = points.map(pt => pt.x), zs = points.map(pt => pt.z);
+    const axisIsX = (Math.max(...xs) - Math.min(...xs))
+      >= (Math.max(...zs) - Math.min(...zs));
+    return (drawing?.stairs || [])
+      .filter(stair => Number(stair.levelId) === Number(levelId)
+        && stair.start && stair.end)
+      .map(stair => {
+        const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
+        const len = Math.hypot(dx, dz) || 1;
+        const half = (stair.widthFt || 3) / 2;
+        const nx = -dz / len * half, nz = dx / len * half;
+        const coords = [
+          { x: stair.start.x + nx, z: stair.start.z + nz },
+          { x: stair.start.x - nx, z: stair.start.z - nz },
+          { x: stair.end.x + nx, z: stair.end.z + nz },
+          { x: stair.end.x - nx, z: stair.end.z - nz },
+        ].map(corner => (axisIsX ? corner.z : corner.x));
+        return { min: Math.min(...coords), max: Math.max(...coords) };
+      });
+  };
+
+  // THE WORKER, AND THE BUTTON IS NOT ITS ONLY CALLER -- the same split
+  // placeAutoDims takes, for the same reason: the bone press folds this into
+  // the ONE undo step that covers the whole build, and a worker that pushed
+  // its own would make a premade house cost two Ctrl+Z. Movie asked for both
+  // halves -- "we should just autoplace the beam once into the 'premade
+  // homes' and if i need to change them i will", then "maybe we should make a
+  // button for AUTO-BEAM COLUMN".
+  //
+  // -1 IS A REAL ANSWER, as it is there: no house outline, or no FOUNDATION
+  // to file against, is not a count of zero.
+  //
+  // WHAT IT RETURNS IS UNDO-SHAPED, `{list, item}` pairs and `{list, items}`
+  // groups, so both callers drop it straight into a 'built' step without
+  // knowing that a beam and a column live in different arrays.
+  const placeAutoBeam = () => {
+    if (!drawing) return -1;
+    const found = houseFootprint();
+    // A LEVEL THE DRAWING ACTUALLY HAS, which is what levelPresent exists for:
+    // a beam filed against a FOUNDATION this drawing has not got would paint
+    // once and be gone on the next load.
+    if (!found || !levelPresent(FOUNDATION_LEVEL_ID)) return -1;
+    const { outline, storeyId } = found;
+    const points = outline.points.map(pt => ({ x: pt.x, z: pt.z }));
+    const plan = window.DraftBuildHouse.midSpanBeams(points, {
+      holes: stairHolesOn(points, storeyId),
+    });
+    // THE FOUNDATION DRAWING, NAMED RATHER THAN INHERITED. wallHomeView hands
+    // back 'plan' whenever the drafter happens to be on BASEMENT (WALLS), and
+    // S-BEAM is in the FOUNDATION view's layer list and not that one
+    // (layer-views.js:32) -- so a beam filed by where he was standing would
+    // paint nowhere on half the presses, which is the silent loss this page
+    // keeps refusing. MODEL.dc.html names it too (:4833).
+    const levelId = FOUNDATION_LEVEL_ID;
+    const view = 'foundation';
+
+    // RE-RUNNING REPLACES THIS LEVEL AND VIEW'S OWN AUTO STRUCTURE and nothing
+    // else -- the rule placeAutoDims takes, for the reason Movie gave: "we
+    // should just autoplace the beam once ... and if i need to change them i
+    // will". `auto: true` is what separates a generated beam from one he drew,
+    // and a hand-placed one must survive a rebuild.
+    //
+    // EVERY auto COLUMN ON THIS VIEW, without MODEL.dc.html's pile exception
+    // (:4826 spares MOVE FLOOR's auto pile stubs, which belong to a pulled
+    // corner rather than to the stair layout). That gesture is not ported --
+    // `pullSrcId` appears nowhere in this file -- so there is nothing here to
+    // spare, and writing the guard anyway would be a claim about a case this
+    // page has not got. It belongs with MOVE FLOOR, when that lands.
+    const sweptBeams = [], sweptColumns = [];
+    const isMine = item => item.auto === true
+      && Number(item.levelId) === levelId && item.view === view;
+    drawing.beams = (drawing.beams || []).filter(beam => {
+      if (!isMine(beam)) return true;
+      sweptBeams.push(beam);
+      return false;
+    });
+    drawing.columns = (drawing.columns || []).filter(column => {
+      if (!isMine(column)) return true;
+      sweptColumns.push(column);
+      return false;
+    });
+
+    // THE LINK BACK TO THE OUTLINE is what carries a beam through an edit.
+    // midSpanBeams tags an end that landed on a corner with `srcIndex` into
+    // the points it was handed; that corner may itself ride a BONEYARD master
+    // through `srcId`, and propagateMaster already hunts beams and columns by
+    // it (RIDER 3 and RIDER 4, :7012). So the link is COPIED from the corner
+    // and the offset is measured by relinkVertex rather than here -- one
+    // arithmetic for the contract instead of a second one to drift from it.
+    //
+    // A corner with no srcId leaves a plain point, which is the honest record:
+    // a house the bone built has no master until the drafter makes one, and a
+    // beam claiming a link it has not got is worse than one admitting it has
+    // none -- placeAutoDims' own note on dropped srcIds is about exactly this.
+    const linked = (source, srcIndex) => {
+      const pt = { x: source.x, y: 0, z: source.z };
+      const corner = Number.isInteger(srcIndex) ? outline.points[srcIndex] : null;
+      if (corner && corner.srcId) { pt.srcId = corner.srcId; relinkVertex(pt); }
+      return pt;
+    };
+
+    const placed = [];
+    // HIGHEST-PLUS-ONE ONCE, THEN COUNT UP. newStructureId reads the list, so
+    // asking it again inside the loop would hand out the same id twice until
+    // the first push landed -- and the format dedupes on id, dropping every
+    // repeat after the first, silently.
+    let beamId = newStructureId(drawing.beams);
+    plan.beams.forEach(beam => {
+      const record = {
+        id: beamId++,
+        start: linked(beam.start, beam.start.srcIndex),
+        end: linked(beam.end, beam.end.srcIndex),
+        levelId,
+        view,
+        // Named for the reason beamPress names it: the record this page writes
+        // and the record the reader rebuilds should be one object, not one
+        // filled in behind the page's back.
+        mode: 'flush',
+        auto: true,
+      };
+      drawing.beams.push(record);
+      placed.push({ list: drawing.beams, item: record });
+    });
+    let columnId = newStructureId(drawing.columns);
+    plan.columns.forEach(column => {
+      const record = {
+        id: columnId++,
+        point: linked(column, column.srcIndex),
+        levelId,
+        view,
+        footing: 'pad36',
+        auto: true,
+      };
+      drawing.columns.push(record);
+      placed.push({ list: drawing.columns, item: record });
+    });
+
+    return {
+      placed,
+      restored: [
+        ...(sweptBeams.length ? [{ list: drawing.beams, items: sweptBeams }] : []),
+        ...(sweptColumns.length ? [{ list: drawing.columns, items: sweptColumns }] : []),
+      ],
+      beams: plan.beams.length,
+      columns: plan.columns.length,
+      levelId,
+    };
+  };
+
   const buildPremadePlan = order => {
     if (!drawing) return null;
     const plan = window.DraftPremadePlans.planFor(order?.entry?.id);
@@ -10568,6 +10803,38 @@
       parts.push(`${dimensioned.length} dims`);
     }
 
+    // AND THE MID-SPAN BEAM, which is where Movie asked for it first: "we
+    // should just autoplace the beam once into the 'premade homes' and if i
+    // need to change them i will". The BEAM panel's button is the second way
+    // in, for a house he traced himself or one he has since edited.
+    //
+    // AFTER THE FOUNDATION, not merely later in the file: placeAutoBeam
+    // refuses without a FOUNDATION level, and it reads the outline `raised`
+    // has just filed. Run before either, it would return -1 on every press
+    // and say nothing about why.
+    //
+    // ITS RECORDS JOIN `extra`, so ONE Ctrl+Z still takes the whole building.
+    // A beam with an undo step of its own would make a premade house cost two.
+    //
+    // ITS SWEEP DOES NOT JOIN `sweptDims`, and the first draft of this had it
+    // doing exactly that. `sweptDims` is restored as ONE group into
+    // drawing.dimensions, so a swept beam folded in there would be put back
+    // into the DIMENSION list on Ctrl+Z -- a beam the drawing cannot paint,
+    // sitting in a list the format validates as dimensions and drops. NO
+    // FIXTURE WOULD HAVE CAUGHT IT: a premade press sweeps nothing on a fresh
+    // drawing, so the wrong list is only ever reached by a re-press. The
+    // groups come through carrying their own list instead.
+    const sweptStructure = [];
+    const beamed = placeAutoBeam();
+    if (beamed !== -1) {
+      extra.push(...beamed.placed);
+      sweptStructure.push(...beamed.restored);
+      if (beamed.beams) {
+        parts.push(`${beamed.beams} beam${beamed.beams === 1 ? '' : 's'}`
+          + ` and ${beamed.columns} column${beamed.columns === 1 ? '' : 's'}`);
+      }
+    }
+
     undoStack.length = mark;
     undoStack.push({
       kind: 'built',
@@ -10586,8 +10853,9 @@
       // nothing on a fresh drawing, which is why an undo that forgot them
       // would look correct on every fixture and lose them on the one drawing
       // that had them.
-      restored: sweptDims.length
-        ? [{ list: drawing.dimensions, items: sweptDims }] : [],
+      restored: (sweptDims.length
+        ? [{ list: drawing.dimensions, items: sweptDims }] : [])
+        .concat(sweptStructure),
       // ONE PRESS IS STILL ONE UNDO, and the openings are part of that press.
       // Left out, Ctrl+Z would take the house and leave eleven windows and
       // doors hosted on walls that no longer exist -- records the loader drops
@@ -12876,13 +13144,115 @@
     dimensionPanelUp = true;
   };
 
+  // ── THE BEAM PANEL ───────────────────────────────────────────────────────
+  //
+  // The armed-tool half of AUTO BEAM; the worker and the reasoning are up at
+  // placeAutoBeam. Movie: "the AUTOBEAM/COLUMN should be available in the
+  // build/ BEAM & COLUMN buttons".
+  const pressAutoBeam = () => {
+    const result = placeAutoBeam();
+    if (result === -1) {
+      sayOnStrip(houseFootprint()
+        ? 'AUTO BEAM files on FOUNDATION and this drawing has no FOUNDATION level.'
+        : 'AUTO BEAM needs a house outline on the lowest floor level — build '
+          + 'one with the bone, or trace one first.');
+      return;
+    }
+    // NOTHING PLACED IS NOT NOTHING DONE, the reason AUTO DIMS pushes on
+    // either list: a re-run over a house that no longer needs a beam sweeps
+    // the old one, and an undo skipped because `placed` was empty would
+    // strand that sweep with no way back.
+    if (result.placed.length || result.restored.length) {
+      undoStack.push({
+        kind: 'built',
+        walls: [], outlines: [], list: null,
+        items: result.placed,
+        restored: result.restored,
+      });
+      markDirty();
+    }
+    // THE 19 FT ANSWER IS AN ANSWER, not a failure, and it is the one a
+    // bungalow gets. MODEL.dc.html says it in a tour popup (:4364); the strip
+    // is where this page says things.
+    const level = (drawing.levels || [])
+      .find(entry => Number(entry.id) === result.levelId);
+    const many = n => (n === 1 ? '' : 's');
+    sayOnStrip(result.beams
+      ? `AUTO BEAM placed ${result.beams} beam${many(result.beams)} and `
+        + `${result.columns} column${many(result.columns)} on `
+        + `${levelLabel(result.levelId, level && level.name)} — re-run after `
+        + 'outline edits to refresh them.'
+      : 'Every span is under 19′ — no mid-span beam needed.');
+    buildChrome();
+    paint();
+  };
+
+  let beamPanelUp = false;
+  const showBeamProps = () => {
+    const P = window.ModelProps;
+    if (!P) return;
+    const box = document.createElement('div');
+
+    const row = document.createElement('div');
+    row.className = 'chip-row';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sel-chip';
+    btn.dataset.autoBeam = '';
+    btn.textContent = 'AUTO BEAM + COLUMNS';
+    // DISABLED, NOT HIDDEN -- the rule the ROOF panel's own button takes: one
+    // that vanishes teaches the drafter that BEAM does nothing here, and one
+    // that is greyed says what is missing.
+    //
+    // AND NOT GREYED FOR "no beam needed", which is a RESULT rather than a
+    // missing prerequisite. A house under 19 ft gets the press and the
+    // sentence, which is the same answer MODEL.dc.html's tour gives (:4364);
+    // a button greyed on a bungalow would read as broken.
+    const found = houseFootprint();
+    const ready = !!found && levelPresent(FOUNDATION_LEVEL_ID);
+    btn.disabled = !ready;
+    btn.title = found
+      ? (ready
+        ? 'Place the mid-span beam and its teleposts on FOUNDATION.'
+        : 'This drawing has no FOUNDATION level to file the beam on.')
+      : 'No house outline yet — build one first.';
+    btn.addEventListener('click', () => { pressAutoBeam(); showBeamProps(); });
+    row.append(btn);
+
+    // SHORT, AND THE LENGTH IS LOAD-BEARING. #left-rail has a min-width and
+    // NO max-width (shell-bars.css:901), so the rail is as wide as its widest
+    // child -- and this note began as a two-line paragraph about the 19 ft
+    // rule and the 12 ft posts. Measured: the rail went from its tool-column
+    // width to 470px and covered the plan out to x = 476, where
+    // model-structure-place.spec.js clicks to draw a beam by hand. Both of
+    // its beam tests failed with `beams 0/0` and no page error, because the
+    // presses were landing on the rail.
+    //
+    // The cap below is what ENDS that, so this is no longer the only thing
+    // standing between a panel and the drawing -- but a panel is a place for
+    // a label, not a paragraph, and the long one is gone on its own merits.
+    const note = document.createElement('div');
+    note.className = 'props-title';
+    note.dataset.beamNote = '';
+    note.textContent = 'FILES ON FOUNDATION';
+
+    box.append(row, note);
+    P.set('BEAM & COLUMN', box);
+    beamPanelUp = true;
+  };
+
   const showToolProps = tool => {
     if (tool === 'roof') { showRoofProps(); return; }
     if (tool === 'fenestration') { showOpeningProps(); return; }
     if (tool === 'dimension') { showDimensionProps(); return; }
-    // Only clear what this panel put there. COLUMN and BEAM's rows belong to
-    // the selection, which a tool change does not touch, and clearing them
-    // here would blank a panel the drafter is reading.
+    // COLUMN AND BEAM SHARE ONE PANEL, because AUTO BEAM places both and a
+    // drafter reaching for either is reaching for the same button. Movie's
+    // own placement -- "the AUTOBEAM/COLUMN should be available in the build/
+    // BEAM & COLUMN buttons" -- rather than a tidy-up.
+    if (tool === 'beam' || tool === 'column') { showBeamProps(); return; }
+    // Only clear what this panel put there. A COLUMN's or a BEAM's own rows
+    // belong to the SELECTION, which a tool change does not touch, and
+    // clearing them here would blank a panel the drafter is reading.
     //
     // EACH PANEL CLEARS ITS OWN, and the two flags are not one flag: arming
     // ROOF from FENESTRATION has to take the opening rows down and put the
@@ -12892,6 +13262,7 @@
     if (roofPanelUp) { window.ModelProps.clear(); roofPanelUp = false; }
     if (openingPanelUp) { window.ModelProps.clear(); openingPanelUp = false; }
     if (dimensionPanelUp) { window.ModelProps.clear(); dimensionPanelUp = false; }
+    if (beamPanelUp) { window.ModelProps.clear(); beamPanelUp = false; }
   };
 
   toolListeners.push(tool => {
