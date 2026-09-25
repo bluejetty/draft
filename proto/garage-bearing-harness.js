@@ -409,6 +409,73 @@ function run(win) {
     }
   }
 
+  // ── A GARAGE'S GRADE BEAM BELONGS TO THE GARAGE ───────────────────────
+  //
+  // env.garageOutlines(levelId) filters to that level exactly, and the app's
+  // builder raises the beam with `withOutline: false` -- so a garage has ONE
+  // outline, on MAIN FL, and none on FOUNDATION. Every foundation wall came
+  // back `house`, and with it the frost-wall garage slab block (which filters
+  // on c.garage) never fired and the grade-beam slab always took its fallback.
+  //
+  // THE FIXTURE HID IT. proto/repro-garage-house.draft was saved by an older
+  // builder that wrote a garage outline on EVERY level, level 1 included, so
+  // the geometric path finds one there and these checks would pass on a shape
+  // the app no longer produces. So the check below STRIPS that outline: it
+  // asks the question the way today's files ask it.
+  {
+    const fdnWall = base.walls().find(w => (w.view || 'plan') === 'foundation'
+      && CV.garageOfWall(w, base, {}) !== null);
+    check('fixture: it has a garage foundation wall to ask about',
+      !!fdnWall, fdnWall ? `wall ${fdnWall.id}` : 'none');
+    if (fdnWall) {
+      // Today's shape: no garage outline on the wall's own level.
+      const noFdnOutline = {
+        ...base,
+        garageOutlines: id => (Number(id) === Number(fdnWall.levelId)
+          ? [] : base.garageOutlines(id)),
+      };
+      check('a foundation wall marked `body: garage` still finds its garage',
+        CV.garageOfWall({ ...fdnWall, body: 'garage' }, noFdnOutline, {}) !== null,
+        String(CV.garageOfWall({ ...fdnWall, body: 'garage' }, noFdnOutline, {})?.id));
+      // AND THE MARKER IS WHAT DID IT. Without this the check above passes on
+      // any fixture that still carries the old level-1 outline, which is the
+      // exact way this defect stayed invisible.
+      check('and without the marker it does not, so the marker is what answered',
+        CV.garageOfWall({ ...fdnWall, body: undefined }, noFdnOutline, {}) === null,
+        String(CV.garageOfWall({ ...fdnWall, body: undefined }, noFdnOutline, {})?.id));
+    }
+    // WHICH GARAGE, NOT JUST A GARAGE. With one garage in the fixture,
+    // "the first outline on that level" and "the one this wall lies on" are
+    // the same answer, so a lookup that never checked would score green --
+    // the mutation `the marker is trusted without checking WHICH garage`
+    // survived until this check existed. A decoy garage, filed FIRST and
+    // nowhere near the wall, is the whole difference.
+    if (fdnWall) {
+      const decoy = {
+        ...attached,
+        id: 'decoy-garage',
+        points: attached.points.map(pt => ({ x: pt.x + 500, z: pt.z + 500 })),
+      };
+      const twoGarages = {
+        ...base,
+        garageOutlines: id => (Number(id) === Number(fdnWall.levelId) ? []
+          : [decoy, ...base.garageOutlines(id)]),
+      };
+      const got = CV.garageOfWall({ ...fdnWall, body: 'garage' }, twoGarages, {});
+      check('the marker finds the garage the wall LIES ON, not the first one filed',
+        got !== null && got.id !== 'decoy-garage',
+        `resolved to ${got ? got.id : 'null'}`);
+    }
+    // A HOUSE WALL IS NEVER CLAIMED. The marker is only ever read after
+    // geometry comes back empty, so nothing that resolved before moves.
+    const houseFdn = base.walls().filter(w => (w.view || 'plan') === 'foundation'
+      && String(w.body || '').trim() !== 'garage');
+    check('an unmarked foundation wall is still nobody\'s garage',
+      houseFdn.every(w => CV.garageOfWall({ ...w, body: undefined },
+        { ...base, garageOutlines: () => [] }, {}) === null),
+      `${houseFdn.length} unmarked foundation walls`);
+  }
+
   // ── ONE RULE, NOT FIVE COPIES ─────────────────────────────────────────
   // The whole defect was five sites each holding their own version. These
   // read the SOURCES, because "the rule is shared" is a fact about the text
@@ -494,6 +561,11 @@ const MUTATIONS = [
   ['a thickened edge grows a sill plate it has no wall for',
     s => s.replace("if (env.garageFoundation(garage) === 'thickened') return garageBearing(env, fdn, garage);\n    return garageBearing(env, fdn, garage) - GARAGE_BEAM_PLATE_IN / 12;",
       'return garageBearing(env, fdn, garage) - GARAGE_BEAM_PLATE_IN / 12;')],
+  ['a foundation wall\'s `body: garage` marker is ignored again',
+    s => s.replace("if (String(wall.body || '').trim() !== 'garage') return null;",
+      'return null;')],
+  ['the marker is trusted without checking WHICH garage it lies on',
+    s => s.replace('      if (found) return found;', '      if (others.length) return others[0];')],
   ['the grade-beam slab goes back to the stored wall instead of the datum',
     s => s.replace('const slabTop = garage ? garageSlabTop(env, fdn, garage)\n          : fdn.wallBottom',
       'const slabTop = false ? 0\n          : fdn.wallBottom')],
