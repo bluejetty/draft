@@ -441,6 +441,28 @@ test.describe('MODEL.html tier 1', () => {
       // disagreeing about what a lock does. No dependency of its own; it is
       // arithmetic over ids and points.
       './level-lock.js', './stair-geometry.js',
+      // THE TWO AUTO STAIR MODULES ARRIVED TOGETHER, and this list caught them
+      // the same hour, which is what the exact form is for -- an earlier
+      // version of this comment says the palette and build-menu.js were caught
+      // the same way. They are here on purpose:
+      //
+      // auto-stair.js is the pure placement derivation, the same relationship
+      // build-house.js already has to AUTO BEAM: plain data in, one suggested
+      // stair out. MODEL.html could PAINT a stair and could not derive one,
+      // so the STAIR key armed a tool with no panel, no button and no press
+      // handler, and a two-storey house arrived with no way between its
+      // floors. stair-rules.js is the table auto-stair.js scores with.
+      //
+      // THE PAIR IS NOT SEPARABLE, which is why both land rather than one.
+      // auto-stair.js falls back on its own seeded constants when the rulebook
+      // is missing, so a page that took only the first would load clean,
+      // report every export, and place a silently DIFFERENT stair from every
+      // other page -- the worst of the three outcomes, because nothing fails.
+      //
+      // NEITHER RUNS ON THE CRITICAL PATH. Both define a frozen object and
+      // stop; the derivation runs on a press. So they cost two requests and no
+      // startup work, which is the bar this list actually guards.
+      './stair-rules.js', './auto-stair.js',
       // traffic-counter.js is the app's one deliberate off-site voice, and it
       // has been on every other page since it was written -- index, PROJECT,
       // SETTINGS, STANDARDS, SPECS, both DC pages. This page carried the SLOT
