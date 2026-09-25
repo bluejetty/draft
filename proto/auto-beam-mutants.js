@@ -130,7 +130,12 @@ const MUTANTS = [
       + '    const at = floors.findIndex(level => Number(level.id) === Number(levelId));\n'
       + '    return at < 0 ? null : (floors[at + 1] || null);',
     with: '    return (drawing?.levels || []).find(level => Number(level.id) === Number(levelId)) || null;',
-    test: 'the top storey carries a roof, so it gets nothing' },
+    // RE-AIMED. The roof test passed under this mutation for the WRONG reason:
+    // floorCarriedBy(ROOF) came back as ROOF itself, ROOF carries no outline,
+    // so the button was still greyed and the check still read green. What
+    // separates "the floor above" from "its own floor" is the two DIFFERING,
+    // which is the offset upper storey below.
+    test: 'a post with nothing under it says so rather than standing quietly' },
   { file: 'MODEL.html',
     name: 'only one body on a floor is framed, so a second house loop is missed',
     find: '    const bodies = storeyBodies(carried);',

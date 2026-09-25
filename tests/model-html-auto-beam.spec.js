@@ -454,6 +454,49 @@ test('a house with a second floor gets a beam under it, not just under the first
       .toEqual(posts(1, 'foundation'));
   });
 
+test('two bodies on one floor are two floors, and each is asked on its own span',
+  async ({ page }) => {
+    // THE BUG THIS IS FOR WAS REAL AND WAS FOUND BY MEASURING, not by review:
+    // a 2 STOREY WITH ROOM OVER GARAGE puts TWO loops on 2ND FL -- the house
+    // at 32 x 40 and the room over the garage at 24 x 19 -- and "last one
+    // wins" measured the room, whose short span is exactly 19 and so needs
+    // nothing, while the house's forty feet were never asked about. The main
+    // floor came back with no beam at all and nothing said so.
+    //
+    // The mutation gate found that this file could not catch it: every other
+    // fixture here puts ONE loop on the carried floor, so `.slice(-1)` is a
+    // no-op against them. The small body is LAST on purpose.
+    await open(page, empty({
+      outlines: [
+        { ...rect({ wide: 40, deep: 32 }), id: 'outline-main' },
+        { ...rect({ wide: 40, deep: 32 }), id: 'outline-upper', levelId: 5 },
+        // 24 x 19 -- a room over a garage. 19 is NOT over 19, so on its own
+        // it needs nothing, and a rule that stopped at it would report
+        // "no beam needed" for the whole floor.
+        { id: 'outline-over', levelId: 5,
+          points: [{ x: 24, y: 0, z: -9.5 }, { x: 48, y: 0, z: -9.5 },
+            { x: 48, y: 0, z: 9.5 }, { x: 24, y: 0, z: 9.5 }] },
+      ],
+    }));
+    await h.pickModelLevel(page, 5);
+    await armBeamTool(page);
+    await autoBeamButton(page).click();
+    await saveNow(page);
+    const saved = await savedFile(page);
+
+    const onMain = (saved.beams || []).filter(beam => beam.levelId === 3);
+    expect(onMain.length, 'the house was skipped because a smaller body came last')
+      .toBeGreaterThan(0);
+    // THE HOUSE'S OWN SPAN, not the room's: the beam runs the 40 ft body,
+    // between x = -20 and 20, and nothing of it is out over the room.
+    const xs = onMain.flatMap(beam => [beam.start.x, beam.end.x]);
+    expect(Math.min(...xs), 'the beam is not on the house').toBeCloseTo(-20, 4);
+    expect(Math.max(...xs), 'the beam ran out past the house').toBeCloseTo(20, 4);
+    // AND THE ROOM GOT NONE, for the right reason -- 19 is not over 19.
+    expect(xs.some(x => x > 20.001), 'the 19 ft room was given a beam it does not need')
+      .toBe(false);
+  });
+
 test('the posts land on the columns below, not on the even divisions',
   async ({ page }) => {
     // THE TEST ABOVE CANNOT TELL THE RULE FROM LUCK, and this one is here to
