@@ -625,6 +625,82 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+  // ── THE PAD UNDER A COLUMN, AND WHAT A DASHED RECTANGLE MEANS ────────────
+  //
+  // Movie, 25 Sep, on a built foundation showing its beam and three teleposts
+  // and nothing beneath them: "we have beam and columns, but no footing, we
+  // will need footings below the columns ... i think it had them already
+  // 36\"x36\"x8\"dp". MODEL.dc.html:8403 drew exactly this and it never came
+  // across.
+  //
+  // DASHED BECAUSE IT IS BURIED. Every other rectangle on the FOUNDATION plan
+  // is concrete you can see from above; a pad is under the slab, and the dash
+  // is the drawing saying so. Same reason the thickened-edge perimeter below
+  // is dashed (cut-view.js:1670) rather than a different weight of solid.
+  //
+  // THE GROUP IS RESOLVED BY THE CALLER, like drawColumn2D's footing: which
+  // pads pour together is build-house.js's rule, and a painter that clustered
+  // for itself would answer differently from the page that owns the answer.
+  function drawPadGroup2D(ctx, toS, group, options = {}, env) {
+    if (!group || !Number.isFinite(group.minX) || !Number.isFinite(group.minZ)) return;
+    const { label = '' } = options;
+    const a = toS({ x: group.minX, y: 0, z: group.minZ });
+    const b = toS({ x: group.maxX, y: 0, z: group.maxZ });
+    const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+    const w = Math.abs(b.x - a.x), h = Math.abs(b.y - a.y);
+    ctx.save();
+    ctx.strokeStyle = env.columnColor;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash([]);
+    if (label && !env.isPrinting) {
+      ctx.fillStyle = env.columnColor;
+      ctx.font = env.labelFont;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(label, x + w / 2, y + h + 3);
+    }
+    ctx.restore();
+  }
+
+  // ── WHAT IS OPEN IN THE FLOOR ABOVE ──────────────────────────────────────
+  //
+  // Movie, 25 Sep: "the stair, also on the foundation plan (on on floor plans
+  // where the floor has an opening above uses a line with short dashes and
+  // gaps with a med-lightweight pen draw where the openings in the floor ABOVE
+  // are located".
+  //
+  // SHORT DASHES AND A LIGHTER PEN, and the two together are the convention
+  // rather than either alone: the dash says "not on this level" and the weight
+  // says "above, not below". The pad rectangle above is dashed too but drawn
+  // at full weight, because a footing is a thing this plan is FOR; an opening
+  // overhead is context.
+  //
+  // SHORTER THAN THE PAD'S DASH ON PURPOSE. A 5/4 dash and a 3/3 dash at the
+  // same weight read as one line type at plan scale, and a drafter looking for
+  // the difference between "buried footing" and "hole overhead" would not find
+  // it.
+  function drawOpeningAbove2D(ctx, toS, points, options = {}, env) {
+    const pts = (points || []).filter(pt => Number.isFinite(pt?.x) && Number.isFinite(pt?.z));
+    if (pts.length < 3) return;
+    const { alpha = 0.75 } = options;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = env.openingAboveColor || env.columnColor;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    pts.forEach((pt, index) => {
+      const p = toS({ x: pt.x, y: 0, z: pt.z });
+      if (index === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+    });
+    ctx.closePath();
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   // A ROOM TAG: its name, optionally the area under it, and a quiet UNDER MIN
   // flag when the room fails the office's ROOM MINIMUMS table.
   //
@@ -1909,6 +1985,8 @@ if (!window.DraftRender2D) {
     drawCutPreview2D,
     drawBeam2D,
     drawColumn2D,
+    drawPadGroup2D,
+    drawOpeningAbove2D,
     drawOpening2D,
   });
 })();

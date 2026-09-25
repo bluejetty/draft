@@ -41,6 +41,53 @@ if (!window.DraftCutView) {
   // Two of the three copies can stop being copies now; that page's load order
   // is the only thing still holding the third.
   const GARAGE_SLAB_SLOPE_IN_PER_FT = 1 / 8;
+  // ── WHERE THE SLAB SITS, AND WHICH END THE NUMBER IS MEASURED AT ─────────
+  //
+  // Movie, 25 Sep: the curb is "approx. 8\" at garage door opening approx 4\"
+  // or higher (if further than 32ft to back of garage) at back of garage",
+  // and "past 32 ft the slab will continue at the slope of 1/8\" per foot" --
+  // then "flatten it after 64'".
+  //
+  // THE DOOR IS THE ANCHOR, and the 64 ft is what proves it. 8\" of curb at
+  // 1/8\" per foot reaches the top of concrete after exactly 64 ft, which is
+  // the number he gave for where it flattens. Anchored at the BACK instead,
+  // nothing lands on 64. His 8\"/4\" pair is one garage read at both ends: 32
+  // ft of depth is 4\" of fall, so the two descriptions are the same slab.
+  //
+  // AND IT SETTLES AN AMBIGUITY THE REPOSITORY HAD ALREADY ADMITTED.
+  // project-page.js:565 says the slope "had nothing to multiply ... so a
+  // sloped slab was drawn at whatever station its author happened to be
+  // thinking of, and nothing said which", and that file then anchors the BACK
+  // at 4\" (:1584) and lets the door fall away -- which agrees with this only
+  // at a 32 ft garage and drifts at every other depth.
+  //
+  // IT ALSO MAKES THE DOOR BUCK ARITHMETIC EXACT: a 12\" buck cut from the
+  // top of a 32\" grade beam leaves 20\", and the slab overlapping the bottom
+  // 4\" of it brings the opening back to the 24\" he calls the least
+  // acceptable depth. That only works if the slab at the door is 8\" down.
+  const GARAGE_SLAB_AT_DOOR_IN = 8;
+  // Where the slope reaches the top of concrete and the curb runs out: 64 ft.
+  // COMPOSED, never written as 64, so it follows if either number moves.
+  const GARAGE_SLAB_FLAT_AT_FT = GARAGE_SLAB_AT_DOOR_IN / GARAGE_SLAB_SLOPE_IN_PER_FT;
+  // How far the finished slab sits BELOW the top of concrete, this many feet
+  // in from the garage door. Positive is down.
+  //
+  // THE CAP IS A FLOOR AT ZERO, not a refusal. Movie: "use the CAP rule
+  // whenever the slope reaches top of concrete" and "flatten it after 64'
+  // your right they can deal with it, they shouldn't need slope at that
+  // point". So past the cap the slab is simply level with the concrete and
+  // stays there -- it never climbs above it, which is what an uncapped rate
+  // would do and what would put a garage floor over its own grade beam.
+  //
+  // A NEGATIVE DISTANCE IS THE DOOR. Nothing sits outside the garage, and
+  // clamping is the honest answer to a caller asking about a point that is
+  // not on the slab -- a silent negative curb would read as the slab rising
+  // out through the door.
+  const garageSlabBelowConcreteIn = (fromDoorFt = 0) => {
+    const d = Number(fromDoorFt) > 0 ? Number(fromDoorFt) : 0;
+    const fall = GARAGE_SLAB_AT_DOOR_IN - d * GARAGE_SLAB_SLOPE_IN_PER_FT;
+    return fall > 0 ? fall : 0;
+  };
   // Attached-garage grade beam stack: concrete + 1.5" sill plate, hung with
   // the top of concrete 1'-0" above grade — level with the top of the house
   // foundation wall at the default grade.
@@ -2799,6 +2846,8 @@ if (!window.DraftCutView) {
     STANDARDS: Object.freeze({
       GARAGE_SLAB_THICKNESS_IN,
       GARAGE_SLAB_SLOPE_IN_PER_FT,
+      GARAGE_SLAB_AT_DOOR_IN,
+      GARAGE_SLAB_FLAT_AT_FT,
       GARAGE_BEAM_PLATE_IN,
     GARAGE_BEAM_CONCRETE_IN,
       GRADE_BELOW_FOUNDATION_TOP_FT,
@@ -2809,6 +2858,7 @@ if (!window.DraftCutView) {
       ROOF_FASCIA_IN,
     }),
     roofHeelIn,
+    garageSlabBelowConcreteIn,
     cutAxis,
     sectionLevelStack,
     extendRunsToEaves,

@@ -2240,6 +2240,11 @@
     // to ctx.font is ignored silently, which is a default nobody chose.
     beamColor: skin['draw-beam'],
     columnColor: skin['draw-column'],
+    // THE HOLE WEARS THE STAIR'S COLOUR, because that is what cut it. On
+    // FOUNDATION there is no stair drawn to connect it to, so the ink is the
+    // only thing saying what the dashed rectangle overhead is -- and a
+    // structural grey there would read as one more piece of concrete.
+    openingAboveColor: skin['draw-stair'],
     labelFont: "600 9px 'Barlow Condensed', system-ui, sans-serif",
     // THE ROOF READS THE SKIN, and that is the whole point of the pair.
     // drawRoof2D used one brown for both skins -- #7a4a21, which is 6.64 on
@@ -2306,13 +2311,68 @@
   const paintStructure = () => {
     const R = window.DraftRender2D;
     const env = paintEnv();
+    const B = window.DraftBuildHouse;
+    const F = window.DraftFormatters;
     beams().forEach(beam => R.drawBeam2D(ctx, toS, beam, {}, env));
-    // The footing is the page's answer, not the painter's. Only a pile changes
-    // the drawn shape; a telepost is the square, which is the default.
+    // ── THE PADS GO DOWN FIRST, UNDER EVERYTHING THEY CARRY ─────────────────
+    //
+    // Movie, 25 Sep: "we have beam and columns, but no footing, we will need
+    // footings below the columns ... i think it had them already
+    // 36"x36"x8"dp". It did -- MODEL.dc.html:8403 -- and the table it read
+    // never came across, so this page had no size to draw and drew nothing.
+    //
+    // ON FOUNDATION ONLY, which is dc's rule and an architectural one: a pad
+    // is concrete in the ground, and the plan it belongs on is the one about
+    // the ground. Drawn on a floor plan it would read as something in the
+    // room.
+    //
+    // FIRST, so a telepost's cross sits ON its pad rather than under it. The
+    // painter draws in call order and these overlap by construction.
+    if (activeViewId() === 'foundation' && B) {
+      B.padGroups(columns()).forEach(group => R.drawPadGroup2D(ctx, toS, group, {
+        // ONE PAD KEEPS ITS TYPE, several pour as a measured rectangle -- dc's
+        // wording, because "TYP 36x36" is a schedule reference and a combined
+        // pour has no row to refer to.
+        label: group.columns.length === 1
+          ? B.footingFor(group.columns[0].footing).label
+          : `COMBINED ${F.formatInchesOnly((group.maxX - group.minX) * 12)}`
+            + `×${F.formatInchesOnly((group.maxZ - group.minZ) * 12)} PAD`,
+      }, env));
+    }
+    // THE FOOTING IS THE PAGE'S ANSWER, not the painter's -- but the page had
+    // no table to answer from, so it invented `sizeIn: 6` for every pile and
+    // handed the LABEL the raw id. A 12" pile and an 8" pile drew as the same
+    // circle marked "pile12". build-house.js owns the table now.
     columns().forEach(column => R.drawColumn2D(ctx, toS, column, {
-      footing: /pile/i.test(String(column.footing || ''))
-        ? { pile: true, sizeIn: 6, label: column.footing } : null,
+      footing: B ? B.footingFor(column.footing) : null,
     }, env));
+  };
+
+  // ── WHAT IS OPEN IN THE FLOOR ABOVE ────────────────────────────────────────
+  //
+  // Movie, 25 Sep: "the stair, also on the foundation plan (on on floor plans
+  // where the floor has an opening above uses a line with short dashes and
+  // gaps with a med-lightweight pen draw where the openings in the floor ABOVE
+  // are located".
+  //
+  // THE FLOOR ABOVE IS THE ONE THIS LEVEL CARRIES, which is floorCarriedBy --
+  // the same lookup the beam rule takes, and for the same reason. FOUNDATION
+  // carries the lowest storey, a storey carries the next one up, and the top
+  // storey carries a roof and so has nothing overhead to show.
+  //
+  // IT IS THE OPENINGS THAT ARE DRAWN, not the stairs. A stair is a thing on
+  // its own level; the HOLE is what this level needs to know about, because it
+  // is what the beam under it has to miss and what a drafter standing here
+  // would see daylight through.
+  const paintOpeningsAbove = () => {
+    const R = window.DraftRender2D;
+    const carried = floorCarriedBy(activeLevelId());
+    if (!carried) return;
+    const env = paintEnv();
+    (drawing?.surfaceOpenings || [])
+      .filter(opening => Number(opening.levelId) === Number(carried.id)
+        && opening.hostType === 'floor' && (opening.points || []).length >= 3)
+      .forEach(opening => R.drawOpeningAbove2D(ctx, toS, opening.points, {}, env));
   };
 
   const paintShapes = () => {
@@ -3365,6 +3425,11 @@
         // image that painted over the walls would be worse than none.
         paintUnderlays();
         paintFloors(); paintRoofs(); paintShapes(); paintStructure();
+        // AFTER THE STRUCTURE IT SITS OVER, before the walls. An opening above
+        // is context for what this level carries, so it reads over the pads
+        // and the beam -- which is the order a drafter looks in: the hole is
+        // why the beam lands where it does.
+        paintOpeningsAbove();
         paintOutlines();
         paintLines(); paintWalls();
         // Fixtures ride ON the walls, so they go after them and before the
