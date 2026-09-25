@@ -3119,6 +3119,10 @@
       walls: () => drawing?.walls || [],
       roofs: () => drawing?.roofs || [],
       floors: () => drawing?.floors || [],
+      // THE WHOLE DRAWING'S COLUMNS, by the same rule as the four above: the
+      // elevation draws the piles under a grade beam, and they are filed on
+      // FOUNDATION while the drafter may be looking at any level.
+      columns: () => drawing?.columns || [],
       fenestrations: () => drawing?.fenestrations || [],
       garageOutlines: levelId => (drawing?.outlines || [])
         .filter(outline => outline.levelId === levelId && outline.garage),

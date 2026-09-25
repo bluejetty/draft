@@ -57,7 +57,7 @@ const vm = require('vm');
 const MUTATION_MODE = require('./harness-args.js').mutationMode();
 const ROOT = path.join(__dirname, '..');
 const SRC = path.join(ROOT, 'cut-view.js');
-const { buildEnv, recordingCtx } = require('./harness-env.js');
+const { buildEnv, recordingCtx, standardElevationCuts, paintElevation } = require('./harness-env.js');
 
 // cut-view.js is evaluated FROM SOURCE TEXT so a mutant can be applied to it.
 // Its dependencies are loaded the way harness-env does, into the same sandbox.
@@ -76,7 +76,10 @@ function load(mutate) {
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
   for (const file of ['formatters.js', 'wall-types.js', 'geometry-2d.js',
-    'drawing-format.js', 'room-standards.js', 'level-assembly.js']) {
+    'drawing-format.js', 'room-standards.js', 'level-assembly.js',
+    // The elevation asks build-house for a pile's bore, so the sandbox this
+    // harness builds has to carry it as the page does.
+    'build-house.js']) {
     vm.runInContext(fs.readFileSync(path.join(ROOT, file), 'utf8'), sandbox, { filename: file });
   }
   vm.runInContext(src, sandbox, { filename: 'cut-view.js' });
@@ -476,6 +479,173 @@ function run(win) {
       `${houseFdn.length} unmarked foundation walls`);
   }
 
+  // ── A FOOTING IS WIDER THAN THE WALL ON IT, AT BOTH ENDS ──────────────
+  //
+  // Movie, 25 Sep, on E4 of a 2 STOREY + GARAGE + ROOM OVER: "the 6" X 8"
+  // side of footing on left side of the house foundation is also missing".
+  //
+  // THE PROJECTION BELONGED TO THE RUN, NOT TO THE FACE. The buried
+  // silhouette's stops were each face's WALL extent, and only the run's two
+  // outer ends had projFt added. An attached garage's grade beam overlaps the
+  // house across GARAGE_TIE_FT, so the two merge into ONE run whose outer end
+  // is the BEAM's -- and a hung beam correctly has no footing -- leaving the
+  // house's own end interior, with its 6" never spent.
+  //
+  // THE FIXTURE CATCHES IT IN BOTH DIRECTIONS, which is why it is worth
+  // asking of every elevation rather than one. Measured before the fix:
+  //
+  //     E1  beam on the RIGHT  u 8..20    -8.50 -8.00  8.00  20.00
+  //     E3  beam on the LEFT   u -20..-8  -20.00 -8.00 8.00   8.50
+  //
+  // -- on E1 the house's RIGHT end lost its step and on E3 its LEFT end did.
+  // A check written for one side alone passes on the other's defect.
+  {
+    const projFt = Math.max(0, base.footingWidthIn(1) - 8) / 2 / 12;
+    check('the footing projects (footingWidthIn - wall) / 2 -- 6" on concrete_8',
+      near(projFt, 0.5), `${(projFt * 12).toFixed(2)}"`);
+    standardElevationCuts(base).forEach(cut => {
+      const painted = paintElevation(win, base, cut, { pxPerFt: 40 });
+      const axis = painted.axis;
+      const uOf = pt => pt.x * axis.x + pt.z * axis.z;
+      const bearing = base.walls().filter(w => (w.view || 'plan') === 'foundation'
+        && w.baseHeight <= 0.01);
+      const hung = base.walls().filter(w => (w.view || 'plan') === 'foundation'
+        && w.baseHeight > 0.01);
+      if (!bearing.length || !hung.length) return;
+      const us = bearing.flatMap(w => [uOf(w.start), uOf(w.end)]);
+      const lo = Math.min(...us), hi = Math.max(...us);
+      const hungUs = hung.flatMap(w => [uOf(w.start), uOf(w.end)]);
+      // Only where the hung beam actually reaches this house end does the
+      // merge happen; elsewhere the run's own end already carried the step.
+      const merged = Math.min(...hungUs) < lo + 0.05 || Math.max(...hungUs) > hi - 0.05;
+      if (!merged) return;
+      // Every below-grade vertical the painter laid down.
+      const verticals = [];
+      (painted.strokes || []).forEach(stroke => stroke.pts.forEach((pt, i) => {
+        if (i === 0 || pt.move) return;
+        const prev = stroke.pts[i - 1];
+        if (Math.abs(prev.u - pt.u) < 0.01 && Math.abs(prev.e - pt.e) > 0.05
+          && Math.min(prev.e, pt.e) < fdn.grade + 0.01) verticals.push(pt.u);
+      }));
+      const at = u => verticals.some(v => Math.abs(v - u) < 0.02);
+      check(`${cut.id}: the house footing steps out on BOTH sides of its wall`,
+        at(lo - projFt) && at(hi + projFt),
+        `wall ${ftIn(lo)}..${ftIn(hi)}; verticals at `
+        + [...new Set(verticals.map(v => v.toFixed(2)))].sort((a, b) => a - b).join(' '));
+    });
+  }
+
+  // ── AND THE PILES UNDER IT, DASHED ────────────────────────────────────
+  //
+  // Movie, 25 Sep: "we should should the dashed lines where the piles are
+  // located on this view too". Nothing drew columns on an elevation before
+  // this -- the env did not even serve them, which is why the first check is
+  // that the fixture's piles reach the painter at all.
+  {
+    const piles = (base.columns ? base.columns() : []).filter(column =>
+      (column.view || 'plan') === 'foundation'
+      && String(column.footing || '').startsWith('pile'));
+    check('fixture: its piles reach the painter through the env',
+      piles.length > 0, `${piles.length} piles`);
+    if (piles.length) {
+      const bh = win.DraftBuildHouse;
+      check('the env serves build-house, so a shaft can be drawn at its real bore',
+        !!(bh && typeof bh.footingFor === 'function'), bh ? 'loaded' : 'missing');
+      standardElevationCuts(base).forEach(cut => {
+        const painted = paintElevation(win, base, cut, { pxPerFt: 40 });
+        const axis = painted.axis;
+        // The elevation of the concrete a pile at this station carries: the
+        // deepest foundation wall whose span covers it.
+        const fdnGeomsAt = u => {
+          const bases = base.walls()
+            .filter(w => (w.view || 'plan') === 'foundation')
+            .map(w => ({
+              lo: Math.min(w.start.x * axis.x + w.start.z * axis.z,
+                w.end.x * axis.x + w.end.z * axis.z),
+              hi: Math.max(w.start.x * axis.x + w.start.z * axis.z,
+                w.end.x * axis.x + w.end.z * axis.z),
+              base: w.baseHeight,
+              baseE: fdn.wallBottom + w.baseHeight,
+            }))
+            .filter(g => g.hi - g.lo > 0.01 && g.lo - 0.5 <= u && u <= g.hi + 0.5);
+          if (!bases.length) return null;
+          // Same rule the painter uses: a pile carries HUNG concrete, so a
+          // beam over the station answers before a bearing wall beside it.
+          const hung = bases.filter(g => g.base > 0.01);
+          return Math.min(...(hung.length ? hung : bases).map(g => g.baseE));
+        };
+        const deep = [];
+        (painted.strokes || []).forEach(stroke => stroke.pts.forEach((pt, i) => {
+          if (i === 0 || pt.move) return;
+          const prev = stroke.pts[i - 1];
+          if (Math.abs(prev.u - pt.u) < 0.01
+            && Math.min(prev.e, pt.e) < fdn.footingBottom - 0.01) {
+            deep.push({ u: pt.u, top: Math.max(prev.e, pt.e) });
+          }
+        }));
+        const wanted = [];
+        piles.forEach(column => {
+          const u = column.point.x * axis.x + column.point.z * axis.z;
+          if (u < painted.uMin - 0.5 || u > painted.uMax + 0.5) return;
+          const half = bh.footingFor(column.footing).sizeIn / 24;
+          wanted.push([u - half, u + half]);
+        });
+        if (!wanted.length) return;
+        // BOTH SIDES OF EVERY SHAFT. A centreline alone would pass a check
+        // asking only that something was drawn near the station, and a pile
+        // is a bore with a diameter the schedule names.
+        // BY PROXIMITY, NEVER BY KEY. Both axes are pixel-snapped -- X() and
+        // Y() each round to a pixel centre -- so a shaft the model puts at
+        // u 7.583 is drawn at 7.57, and a lookup keyed on the rounded string
+        // misses it entirely. That is not the code being wrong; it is the
+        // check comparing a RENDER against model feet without allowing for
+        // the render's own resolution.
+        const at = u => deep.some(v => Math.abs(v.u - u) < 0.05);
+        const topAt = u => {
+          const hits = deep.filter(v => Math.abs(v.u - u) < 0.05);
+          return hits.length ? Math.max(...hits.map(v => v.top)) : undefined;
+        };
+        const missing = wanted.filter(([a, b]) => !(at(a) && at(b)));
+        check(`${cut.id}: every pile in view is drawn as a shaft, both sides`,
+          missing.length === 0,
+          `${wanted.length} in view, ${missing.length} missing`);
+        // AND IT STARTS UNDER THE BEAM, not at grade. A drilled pile begins
+        // where the concrete it carries ends; hung off the grade line instead
+        // it would draw a shaft through the beam it is holding up, and every
+        // check above still passes -- that mutation survived until this one
+        // existed.
+        if (!missing.length) {
+          const wrong = wanted.filter(([a, b]) => [a, b].some(edge => {
+            const top = topAt(edge);
+            if (top === undefined) return true;
+            const over = fdnGeomsAt(edge);
+            // ONE PIXEL OF SLACK, because this compares a RENDERED elevation
+            // against model feet. Y() snaps every line to a pixel centre --
+            // `Math.round(...) + 0.5`, which at 40 px/ft is 0.025 ft a step --
+            // so the drawn top reads 0.017 ft off a head it is sitting exactly
+            // on. A tolerance tighter than the render's own resolution fails
+            // on correct code, which is what 0.02 did.
+            return over === null || Math.abs(top - over) > 1 / painted.pxPerFt;
+          }));
+          check(`${cut.id}: and each shaft starts at the underside of its beam`,
+            wrong.length === 0,
+            wrong.length ? `${wrong.length} of ${wanted.length} start elsewhere`
+              : `all ${wanted.length} under the concrete they carry`);
+        }
+      });
+      // IT BREAKS AT THE DRAWING'S BOTTOM rather than running to its tip. A
+      // P2 is 15' long; drawn to the tip it would hang seven feet of empty
+      // ground under the building and push it up the sheet.
+      const cut = standardElevationCuts(base)[0];
+      const painted = paintElevation(win, base, cut, { pxPerFt: 40 });
+      const lowest = Math.min(...(painted.strokes || [])
+        .flatMap(stroke => stroke.pts.map(pt => pt.e)));
+      check('the shaft breaks at the drawing, it does not reach the pile tip',
+        lowest >= painted.yBottom - 0.01,
+        `lowest ink ${ftIn(lowest)}, drawing floor ${ftIn(painted.yBottom)}`);
+    }
+  }
+
   // ── ONE RULE, NOT FIVE COPIES ─────────────────────────────────────────
   // The whole defect was five sites each holding their own version. These
   // read the SOURCES, because "the rule is shared" is a fact about the text
@@ -566,6 +736,26 @@ const MUTATIONS = [
       'return null;')],
   ['the marker is trusted without checking WHICH garage it lies on',
     s => s.replace('      if (found) return found;', '      if (others.length) return others[0];')],
+  ['the buried silhouette walks the WALL extent again, losing the inner step',
+    s => s.replace('...run.faces.flatMap(g => [footLo(g), footHi(g)])])]',
+      '...run.faces.flatMap(g => [g.lo, g.hi])])]')],
+  ['only the run\'s outer ends carry a footing projection',
+    s => s.replace('const footLo = g => g.lo - g.projFt;\n      const footHi = g => g.hi + g.projFt;',
+      'const footLo = g => g.lo;\n      const footHi = g => g.hi;')],
+  ['the elevation stops drawing piles',
+    s => s.replace("        && String(column.footing || '').startsWith('pile')\n        && column.point);",
+      '        && false);')],
+  ['a pile is drawn as a centreline, with no bore',
+    s => s.replace('      const half = sizeIn / 24;', '      const half = 0;')],
+  ['the shaft hangs off grade instead of the concrete it carries',
+    s => s.replace('      const head = Math.min(...(hung.length ? hung : over).map(g => g.baseE));',
+      '      const head = fdn.grade;')],
+  // The defect the check above was written for, and which it found in the
+  // code rather than in a mutant: at the corner where a garage beam meets the
+  // house, taking the DEEPEST face starts the shaft under the house footing,
+  // 5'-6" below the beam the pile actually carries.
+  ['a pile takes the deepest concrete over it, not the beam it carries',
+    s => s.replace('      const hung = over.filter(g => !g.bearing);', '      const hung = [];')],
   ['the grade-beam slab goes back to the stored wall instead of the datum',
     s => s.replace('const slabTop = garage ? garageSlabTop(env, fdn, garage)\n          : fdn.wallBottom',
       'const slabTop = false ? 0\n          : fdn.wallBottom')],
