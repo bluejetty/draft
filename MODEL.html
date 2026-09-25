@@ -5699,6 +5699,7 @@
     if (!asked || !views.some(view => view.id === asked)) params.delete('view');
     syncUrl();
     buildChrome();
+    refreshToolPropsOnLevel();
     paint();
   };
 
@@ -13651,6 +13652,27 @@
     box.append(row, note);
     P.set('BEAM & COLUMN', box);
     beamPanelUp = true;
+  };
+
+  // ── A PANEL BUILT ON ONE LEVEL IS STALE ON THE NEXT ─────────────────────
+  //
+  // showBeamProps reads the active level to decide which floor it would frame
+  // and whether it can, so its sentence and its greying belong to the level
+  // it was built on. goToLevel rebuilt the chrome and repainted and left the
+  // panel exactly as it was -- the button could sit disabled on a level where
+  // it would work, or offer to frame a floor the drafter had just left.
+  //
+  // It did not matter until AUTO BEAM: ROOF, FENESTRATION and DIMENSION all
+  // describe the NEXT thing placed rather than the level, so their panels read
+  // the same everywhere.
+  //
+  // ONLY WHEN A TOOL PANEL IS THE ONE ON SCREEN. A selection panel describes a
+  // thing, not a level, and rebuilding the tool's over the top of it would
+  // take away what the drafter is reading.
+  const refreshToolPropsOnLevel = () => {
+    if (roofPanelUp || openingPanelUp || dimensionPanelUp || beamPanelUp) {
+      showToolProps(activeTool);
+    }
   };
 
   const showToolProps = tool => {

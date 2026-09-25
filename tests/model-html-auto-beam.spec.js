@@ -104,11 +104,20 @@ const savedFile = page => page.evaluate(async bucket => {
 // looking exactly like a page that had hung. BEAM is a build tool and build
 // tools are on DRAFTING (tool-roster.js:51). armDimension in
 // model-html-auto-dims.spec.js switches for the same reason.
+// IDEMPOTENT, unlike the press. Pressing the ARMED key returns to SELECT --
+// the register's rule, which helpers.armWall carries a note about -- so a
+// helper that always clicked would DISARM the tool for any caller that was
+// already holding it, and the panel would vanish. That is not a failure: the
+// next `click()` waits for a locator that is not there and the test times out
+// with "waiting for [data-auto-beam]" and nothing about why.
 async function armTool(page, id) {
   await page.locator('[data-board-switch] [data-board="drafting"]').click();
   await page.waitForTimeout(150);
-  await page.locator(`[data-tool-key="${id}"]`).click();
-  await page.waitForTimeout(150);
+  const key = page.locator(`[data-tool-key="${id}"]`);
+  if (await key.getAttribute('aria-pressed') !== 'true') {
+    await key.click();
+    await page.waitForTimeout(150);
+  }
 }
 const armBeamTool = page => armTool(page, 'beam');
 
@@ -394,6 +403,103 @@ test('a stair opening in the floor above pushes the beam off it', async ({ page 
   });
   expect(heldAt, 'the stair did not move the beam at all').toEqual([3.875]);
 });
+
+// ── THE FLOOR ABOVE IS WHAT A LEVEL CARRIES ───────────────────────────────
+//
+// Movie, 25 Sep: "i don't think we discussed the columns and beams that will
+// be needed on the main floor if there is a 2nd floor. usually a roof won't
+// need columns or beams (usually the exterior walls do the complete job)".
+//
+// Both halves of that are ONE rule, which is why neither is a special case: a
+// level earns its beam from the FLOOR it carries, and the top storey carries
+// a roof. floorCarriedBy is the only thing that decides, and it hands back
+// null up there.
+
+test('a house with a second floor gets a beam under it, not just under the first',
+  async ({ page }) => {
+    await open(page, empty({
+      outlines: [
+        { ...rect({ wide: 40, deep: 32 }), id: 'outline-main' },
+        { ...rect({ wide: 40, deep: 32 }), id: 'outline-upper', levelId: 5 },
+      ],
+    }));
+    await armBeamTool(page);
+    await autoBeamButton(page).click();          // standing on MAIN FL: FOUNDATION's beam
+    await h.pickModelLevel(page, 5);             // climb, and ask for the one under 2ND FL
+    await armBeamTool(page);
+    await autoBeamButton(page).click();
+    await saveNow(page);
+    const saved = await savedFile(page);
+
+    const on = (levelId, view) => (saved.beams || [])
+      .filter(beam => beam.levelId === levelId && beam.view === view);
+    expect(on(1, 'foundation').length, 'the foundation lost its beam').toBeGreaterThan(0);
+    expect(on(3, 'floor').length,
+      'a 2nd floor is standing on a forty-foot span with nothing under it')
+      .toBeGreaterThan(0);
+
+    // AND THE MAIN FLOOR'S POSTS STAND ON THE FOUNDATION'S. This is the whole
+    // of Movie's rule -- "it need to be over another column" -- and it is
+    // asserted on POSITION rather than on a flag, because no flag is stored:
+    // drawing-format.js's column validator has no `unsupported` field, so a
+    // check reading one would pass on a frame where nothing stacked at all.
+    const posts = (levelId, view) => (saved.columns || [])
+      .filter(column => column.levelId === levelId && column.view === view
+        && !String(column.footing || '').startsWith('pile'))
+      .map(column => Number(column.point.x.toFixed(4)))
+      .sort((a, b) => a - b);
+    expect(posts(3, 'floor').length, 'the main floor beam has nothing holding it')
+      .toBeGreaterThan(0);
+    expect(posts(3, 'floor'), 'the main floor posts do not stand on the foundation posts')
+      .toEqual(posts(1, 'foundation'));
+  });
+
+test('the top storey carries a roof, so it gets nothing', async ({ page }) => {
+  // "usually a roof won't need columns or beams (usually the exterior walls
+  // do the complete job)". Nothing in the code says `if roof`; floorCarriedBy
+  // returns null for the top storey because there is no floor above it, and
+  // the press says so rather than going quiet.
+  await open(page, empty({
+    outlines: [
+      { ...rect({ wide: 40, deep: 32 }), id: 'outline-main' },
+      { ...rect({ wide: 40, deep: 32 }), id: 'outline-upper', levelId: 5 },
+    ],
+  }));
+  await h.pickModelLevel(page, 5);
+  await armBeamTool(page);
+  await h.pickModelLevel(page, 7);   // ROOF
+  await armBeamTool(page);
+  await expect(autoBeamButton(page),
+    'the roof was offered a beam it does not need').toBeDisabled();
+});
+
+test('a post with nothing under it says so rather than standing quietly',
+  async ({ page }) => {
+    // The floor below is held only at its own perimeter -- no columns, no
+    // interior wall -- so the storey above has nowhere legal to land a post
+    // and the beam still has to be carried. midSpanBeams tags those; the page
+    // cannot STORE the tag (no such field in the format) so it says it.
+    //
+    // 2ND FL is offset from MAIN FL so its beam sits over open floor rather
+    // than over the foundation posts, which is the case that separates "these
+    // stack" from "these happen to coincide".
+    await open(page, empty({
+      outlines: [
+        { ...rect({ wide: 40, deep: 32 }), id: 'outline-main' },
+        { id: 'outline-upper', levelId: 5,
+          points: [{ x: -20, y: 0, z: 20 }, { x: 20, y: 0, z: 20 },
+            { x: 20, y: 0, z: 52 }, { x: -20, y: 0, z: 52 }] },
+      ],
+    }));
+    await armBeamTool(page);
+    await autoBeamButton(page).click();      // FOUNDATION, from MAIN FL
+    await h.pickModelLevel(page, 5);
+    await armBeamTool(page);
+    await autoBeamButton(page).click();      // MAIN FL, framing the offset 2ND FL
+    await expect(page.locator('[data-strip-message]'),
+      'a post standing on nothing was placed without a word')
+      .toHaveText(/nothing under it/i, { timeout: 4000 });
+  });
 
 test('no FOUNDATION level means the button is greyed, not a record filed nowhere',
   async ({ page }) => {
