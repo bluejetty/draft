@@ -9797,7 +9797,20 @@
     const S = window.DraftCutView.STANDARDS;
     const kind = garageFoundationOf(garage);
     const detached = garage?.detached === true;
-    const houseTop = assemblyFor(levelId).wallHeightFt;
+    // THE TOP OF CONCRETE, NOT THE TOP OF THE ASSEMBLY.
+    // `assemblyFor(levelId).wallHeightFt` is 8'-1.5" -- eight feet of
+    // concrete AND the sill plate on top of it -- and every garage top below
+    // was measured off it as though it were the concrete. So the grade beam
+    // was poured up into the plate's own band and then given a plate of its
+    // own: 1.5" of sill, counted twice, and the garage sill finished that
+    // much above the house's. cut-view's sectionLevelStack moves with this;
+    // neither change does anything alone, because the foundation level is
+    // anchored on its tallest wall record.
+    //
+    // IT IS THE SAME DATUM THE FROST WALL USES, which is how one fix lands
+    // both: GARAGE_SILL_BELOW_HOUSE_FT is 2'-0" SILL TO SILL, and measured
+    // off the assembly top it was delivering 1'-10-1/2".
+    const houseTop = assemblyFor(levelId).wallHeightFt - S.SILL_PLATE_IN / 12;
     const grade = houseTop - S.GRADE_BELOW_FOUNDATION_TOP_FT;
 
     // THE TOP OF THE CONCRETE, per kind. A detached garage sits on its own
