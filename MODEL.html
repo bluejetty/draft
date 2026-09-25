@@ -184,12 +184,19 @@
     display:flex; flex-direction:column; align-items:flex-end; gap:8px;
     pointer-events:none; }
 
-  /* THE DRAFTER'S OWN CLOCK, first in the column (Movie, 20 Sep: "in the
-     upper right under the top banner ... put in there the current time and
-     date of where the person is (timezonewise)"). That spot was the only
-     empty one at the head of the sheet: the file row is above it and both
-     file notes are below, and on a page with nothing wrong with the file
-     nothing at all was there.
+  /* THE DRAFTER'S OWN CLOCK. It was asked for in the upper right (Movie, 20
+     Sep: "in the upper right under the top banner ... put in there the
+     current time and date of where the person is (timezonewise)") and stood
+     there until 25 Sep, when he moved it and the visit count together: "move
+     the '# VISITS' and the DATE/TIME down below PROJECT / MODEL / REAL ESTATE
+     / BONE / CONSTRUCTION / SPECTS / etc. on the lowest row (where it will be
+     covered with http:/addressess (won't matter if these 2 items are covered
+     from time to time".
+
+     SO IT IS A TENANT OF THE BAR'S FOOT LANE NOW and carries no position of
+     its own -- shell-bars.css's #foot-lane places it, on the same row as the
+     count it was always meant to rhyme with. What is left here is what the
+     line is MADE of, which did not change.
 
      THE COUNTER'S TYPE, which is what was asked for -- Barlow Condensed at
      10px with the visit count's weight and tracking, so the page's two
@@ -205,10 +212,10 @@
   #clock { font-family: var(--font-ui); font-size:10px; font-weight:600;
     letter-spacing:0.06em; text-transform:uppercase; color: var(--ink-quiet);
     font-variant-numeric:tabular-nums; white-space:nowrap; }
-  /* AN EMPTY SLOT TAKES NO ROOM -- the visit counter's slot keeps the same
-     rule at the foot. The clock is empty until it is written and stays empty
-     if it never is, and the column's gap must not pay for a line that is not
-     there. */
+  /* AN EMPTY SLOT TAKES NO ROOM -- the visit counter's slot beside it keeps
+     the same rule for the same reason. The clock is empty until it is written
+     and stays empty if it never is, and the lane must not hold a line that is
+     not there. */
   #clock:empty { display:none; }
 
   /* RUNG 2's QUIET NOTE. A page holding an unsaved edit re-reads nothing when
@@ -954,17 +961,17 @@
      a name rather than a gap measured in pixels. -->
 <script>window.DraftShellBars.readout();</script>
 
-<!-- THE UPPER-RIGHT COLUMN, under the file row: the clock the drafter reads
-     and the two things the page has to say about the FILE, stacked in the
-     order they are wanted. The clock is always there; the other two are the
-     exception, so they arrive beneath it rather than pushing it off.
+<!-- THE UPPER-RIGHT COLUMN, under the file row: what the page has to say
+     about the FILE. The clock stood at the head of it until 25 Sep and is at
+     the foot of the sheet now (see #clock in the stylesheet above), which
+     leaves a column of exceptions -- every tenant here is hidden on a page
+     with nothing wrong with its file, so the corner is usually empty.
 
      THE ORDER IS THE STACK. `hidden` is `display:none` here, so a column of
      three with two hidden is one line at the top and no gap paid for the
      other two -- which is what replaced the three hand-measured `top` values
      the stylesheet note above describes. -->
 <div id="upper-right" data-upper-right>
-  <div id="clock" data-local-clock></div>
   <div id="lease" data-lease-banner hidden>
     <span data-lease-message></span>
     <button id="take-over" type="button" data-take-over>TAKE OVER</button>
@@ -5593,15 +5600,22 @@
     cutBtn.addEventListener('click', event => { event.stopPropagation(); armCut(); });
     section('Sections', cutBtn);
     if (!stored.length) {
-      // THIS SAID "This page has no cut tool -- sections are cut in LAYOUT",
-      // which was true when it was written and is not any more. An empty state
-      // is the one piece of text a drafter reads when nothing else is on
-      // screen, so it names the gesture rather than an absence.
+      // THIS NAMED THE GESTURE -- "No sections yet. Press + CUT, then the two
+      // ends of the line and the side to look from" -- on the reasoning that
+      // an empty state is the one text a drafter reads when nothing else is on
+      // screen. Movie, 25 Sep, reading it in the panel: "there is a line with
+      // a lone sentence in the LEVELS / LAYERS tab" ... "just say 'NO
+      // SECTIONS'".
+      //
+      // THE GESTURE IS ALREADY ON THE BUTTON BESIDE IT. + CUT carries the
+      // whole instruction in its own title, four lines above, so the sentence
+      // was the same help written twice -- and the second copy was the one
+      // wrapping to three lines inside a panel that is already taking the
+      // drawing's width.
       const none = document.createElement('div');
       none.className = 'lv-empty';
       none.dataset.noSections = '';
-      none.textContent = 'No sections yet. Press + CUT, then the two ends of the '
-        + 'line and the side to look from.';
+      none.textContent = 'NO SECTIONS';
       levelsPanel.append(none);
     }
     stored.forEach(cut => {
@@ -16871,8 +16885,9 @@
   boot();
 })();
 </script>
-<!-- THE CLOCK IN THE UPPER-RIGHT COLUMN (Movie, 20 Sep). Inline, and that is
-     a decision rather than laziness: model-html-tier1.spec.js keeps an EXACT
+<!-- THE CLOCK IN THE BAR'S FOOT LANE (Movie, 20 Sep for the clock, 25 Sep
+     for the row). Inline, and that is a decision rather than laziness:
+     model-html-tier1.spec.js keeps an EXACT
      list of the scripts this page may fetch, because the whole claim of the
      migration is that MODEL.html is cheap. The cost of a module is the
      request, and this is twenty lines that speak to nothing -- no store, no
@@ -16904,8 +16919,19 @@
 (function () {
   'use strict';
 
-  var el = document.getElementById('clock');
-  if (!el) return;
+  // IT MOUNTS ITSELF, because the row it stands in is the BAR'S and the bar
+  // is written by shell-bars.js. There is no #clock in this page's markup to
+  // find any more: the lane arrives with bottomBar() mid-parse, far above
+  // this script, and the slot in it is the one place the reading is allowed
+  // to be. No slot, no clock -- which is the same answer this line has always
+  // given when the element it wanted was not there, and the right one: a
+  // reading loose on the sheet is a reading over the drawing.
+  var slot = document.querySelector('[data-foot-note]');
+  if (!slot) return;
+  var el = document.createElement('div');
+  el.id = 'clock';
+  el.setAttribute('data-local-clock', '');
+  slot.appendChild(el);
 
   var day, clock;
   try {

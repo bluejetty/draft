@@ -84,19 +84,17 @@
      many specs that read the page's own scale and wall count out of it keep
      working whether the drafter has it open or not. */
   #readout[hidden] { display:none; }
-  /* THE ROW CARRIES THE POSITION NOW, not the tab: the count stands to the
-     tab's left on the same line, and two separately fixed elements at one
-     inset would be a layout kept in step by hand. */
+  /* THE ROW CARRIES THE POSITION, not the tab. It held two tenants when that
+     was written -- the count stood to the tab's left on the same line -- and
+     the count went down a row on 25 Sep; the row keeps the rule because the
+     alternative is a fixed inset written on the tab itself, which is where it
+     was before and where it should not go back to. */
   #lower-left { position:fixed; left:12px; bottom:var(--readout-bottom);
     z-index:5; display:flex; align-items:baseline; gap:10px; }
   #readout-tab { color: var(--ink-quiet);
     font-family: var(--font-ui); font-size:12px; letter-spacing:0.04em;
     text-transform:uppercase; cursor:pointer;
     border:none; background:none; padding:0; }
-  /* AN EMPTY SLOT TAKES NO ROOM, so the tab is where it has always been
-     until the count actually arrives. `gap` would otherwise pay for a child
-     that is not there. */
-  #lower-left > [data-visit-counter-home]:empty { display:none; }
   #readout-tab:hover { color: var(--accent); }
   /* OPEN, THE WORD GOES AND AN X TAKES OVER (Movie): the tab and the panel
      are one control, so having both on screen at once said the same thing
@@ -235,7 +233,34 @@
        -- mode corner, file row, settings -- is a tenant of the strip, so the
        only things still derived from its height are the two file notes and
        the sidebars below them. */
-    --note-top: calc(var(--strip-h) + 8px); }
+    --note-top: calc(var(--strip-h) + 8px);
+    /* HOW WIDE A SIDE RAIL IS -- every one of them, and any added later.
+       Movie, 25 Sep, with both open: "make the right side expandable menu
+       areas the exact same width as the one on the left (and maintain that
+       for others that might be added".
+
+       ONE NUMBER IS THE WHOLE OF "THE SAME", which is why this is a token on
+       :root rather than a width written on each rail. Both were
+       `position:fixed` with no width -- SHRINK-TO-FIT -- so each measured
+       whatever its own widest child happened to want that day: 193px on the
+       left for the tool grid, 195 here and 233 with a house loaded on the
+       right, and the pair drifting apart again the next time either gained a
+       control. A rail added tomorrow inherits this and is the same width
+       without anybody measuring anything.
+
+       195px IS THE WIDER OF THE TWO GRIDS, not a taste: the seats in LAYOUT
+       PREVIEWS are `repeat(2, 84px)` with a 6px gap = 174, the tool keys are
+       `repeat(4, 40px)` with 4px gaps = 172, and 174 + 10px padding either
+       side + the 1px edge is 195. Taking the LARGER means nothing inside
+       either rail has to yield a pixel -- the seat grid fits exactly, the
+       tool grid keeps 2px of slack -- so this is a width change with no
+       layout change underneath it.
+
+       AND IT IS A CEILING AS WELL AS A FLOOR, which is what the right rail
+       used `max-width:277px` for: past this width a level name ellipsises,
+       which is a label the drafter can still read the start of, against a
+       panel eating the drawing, which he cannot draw on. */
+    --rail-w: 195px; }
   /* AT THE TOP OF THE SHEET NOW, not the foot (§7b). Movie: the drive-thru
      sign rises from the bottom and covers the house row, so nothing the
      drafter reads WHILE DRAWING may live down there. */
@@ -640,6 +665,31 @@
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     border-top:1px solid var(--edge-panel); }
   #house-strip .grow { flex:1; }
+  /* THE LOWEST ROW, standing in the hem (Movie, 25 Sep). shell-bars.js's
+     FOOTLANE comment has the request and why the lane is the row he meant;
+     this is only where it stands.
+
+     `bottom:0` REACHES THE HEM BECAUSE THE HEM IS PADDING. An absolutely
+     positioned child resolves its offsets against the PADDING box, so this
+     lands ON the lane while every flex child of the same bar clears it --
+     the fact #dt-bar's comment below records from the other side.
+
+     `margin-left:auto` ON THE NOTE, NOT `justify-content:space-between`. The
+     count's slot is `display:none` while the count has not arrived, and a
+     lane laid out by space-between with one child left would have swung the
+     clock over to the left edge every time the counter host was slow, blocked
+     or offline -- which is most of the time, by design.
+
+     AND NO HEIGHT OF ITS OWN BEYOND THE LANE'S: `top` is left alone so a
+     reading that grows a pixel taller than 24 leans up into the bar rather
+     than down under the sheet. */
+  #foot-lane { position:absolute; left:12px; right:12px; bottom:0;
+    height:var(--browser-lane); display:flex; align-items:center; }
+  #foot-lane > [data-foot-note] { margin-left:auto; }
+  /* AN EMPTY SLOT TAKES NO ROOM -- the rule #lower-left kept while the count
+     lived there, and for the same reason: a slot the count never arrives in
+     must not be a gap holding the lane open. */
+  #foot-lane > :empty { display:none; }
   /* THE ONE DELETE (§7a). Not per type, and not only for walls: it acts on
      the selection, whatever is in it. It is on screen exactly while there is
      something to delete -- and the iPad has no Delete key, so this button is
@@ -673,7 +723,21 @@
      one artwork for one press, so the two bones cannot start looking like
      two different verbs. Its own box is centred on the strip's 50% axis,
      the same axis the instrument divider above it stands on. */
-  #bone { position:absolute; left:0; top:50%;
+  /* AND ON THE STRIP'S OWN MIDDLE VERTICALLY, not #dt-bar's. Movie, 25 Sep,
+     looking at the foot in both skins: "move the bone / house both down so
+     they are centered/ top/bott in the menu at the bottom".
+     WHAT HE WAS SEEING, measured at 1366x668: the bar stands 64px tall and
+     the press sat at y=608..642 inside it -- 4px of air above, 26px below --
+     because #dt-bar stops above the browser lane and 50% of a 40px lane is
+     not the middle of a 64px bar. The lane is the bar's own hem, painted in
+     the bar's own panel colour, so to the eye it is bar; the one thing on the
+     row big enough to show it was riding high was the 34px press.
+     `+ lane/2` AND NOT `bottom:0` ON #dt-bar, which would have been the
+     one-token version: DELETE, COPY and PASTE ride in that same box and they
+     line up with the page row across the bar, which is an alignment the verbs
+     should keep. Only the press moves, because only the press is tall enough
+     for the difference to read. */
+  #bone { position:absolute; left:0; top:calc(50% + var(--browser-lane) / 2);
     transform:translate(-50%, -50%); padding:0; border:none;
     background:none; line-height:0; cursor:pointer; }
   #bone img { display:block; height:var(--foot-press-h, 34px); width:auto; }
@@ -895,19 +959,33 @@
        again. The collapsed cap below is a max-height still, and being smaller
        it wins. */
     bottom:var(--bottom-band); z-index:5; overflow-y:auto;
+    /* BORDER-BOX, AND THE PAGE DOES NOT GET A VOTE. --rail-w is one number
+       for every rail on every page, and :176 above records that MODEL has no
+       global `* { box-sizing:border-box }` while PROJECT and SPECS do -- so
+       without this line the same token would mean 195px on one page and
+       195 + 20 + 1 on another, which is the opposite of what it was written
+       for. Named here for the same reason #file-guard names it at :187. */
+    box-sizing:border-box; width:var(--rail-w);
     overscroll-behavior:contain; padding:10px;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none); }
   aside[hidden] { display:none; }
-  #left-rail { left:28px; border-right:1px solid var(--edge-panel); min-width:120px; }
-  /* THE PANEL IS BOUNDED, and this is the rule that keeps it off the sheet.
-     `aside` is position:fixed with no width, so it is SHRINK-TO-FIT: as wide
-     as its widest content's MAX-content, with nothing stopping it. That was
-     survivable while the LEVELS panel held level cards; the boneyard's card
-     put a title AND a + SHELF button on one line and took the rail from 277px
-     to 343px, which moved its left edge to x=909 and put it over the drawing.
-     model-html-draw-delete caught it: a tap aimed at world (4,-3) reached the
-     right sidebar instead of the canvas. I shipped that in the boneyard commit
-     because the run covered the boneyard cascade and not that spec.
+  /* `min-width:120px` CAME OFF BOTH ENDS OF THE SAME CHANGE. It was the floor
+     under a shrink-to-fit panel -- the rail could not collapse to the width of
+     its narrowest section when a pane held only a line of text -- and a rail
+     with a width has no shrink to put a floor under. */
+  #left-rail { left:28px; border-right:1px solid var(--edge-panel); }
+  /* THE PANEL IS BOUNDED, and --rail-w is the rule that keeps it off the
+     sheet. It used to be `max-width:277px` here, and the history is worth
+     keeping because it is the reason the bound is a bound and not a trim.
+     `aside` was position:fixed with no width, so it was SHRINK-TO-FIT: as
+     wide as its widest content's MAX-content, with nothing stopping it. That
+     was survivable while the LEVELS panel held level cards; the boneyard's
+     card put a title AND a + SHELF button on one line and took the rail from
+     277px to 343px, which moved its left edge to x=909 and put it over the
+     drawing. model-html-draw-delete caught it: a tap aimed at world (4,-3)
+     reached the right sidebar instead of the canvas. I shipped that in the
+     boneyard commit because the run covered the boneyard cascade and not that
+     spec.
      WHY A BOUND RATHER THAN A SHAVE. The card was not uniquely guilty --
      measured, FOUNDATION's card wanted exactly the same 343px -- so trimming
      the boneyard's label would have handed the width to the next card and the
@@ -915,18 +993,18 @@
      instrument strip got when PRINTSCREEN overflowed it at 1280: bound the
      furniture and let its contents yield, rather than trim whichever tenant
      happens to be longest this week.
-     277px IS MEASURED, NOT ESTIMATED, and the difference mattered. I first
-     bounded this at 288 -- the seat grid's own width, worked out from two 82px
-     seats and their gaps -- and model-change-broadcast still failed: at 288 the
-     rail's left edge sits at x=964, and a tap aimed at world (6,-2) lands at
-     967, three pixels inside it. 277 is what the rail measures on main, where
-     that tap clears by eight. An estimate that is nearly right is a panel that
-     nearly stays off the sheet.
-     Past this width a level name ellipsises -- a label the drafter can still
-     read the start of, against a panel eating the drawing, which he cannot
-     draw on. */
-  #right-rail { right:28px; border-left:1px solid var(--edge-panel);
-    max-width:277px; }
+     THE OLD 277 WAS MEASURED, NOT ESTIMATED, and the difference mattered. I
+     first bounded this at 288 -- the seat grid's own width, worked out from
+     two 82px seats and their gaps -- and model-change-broadcast still failed:
+     at 288 the rail's left edge sits at x=964, and a tap aimed at world (6,-2)
+     lands at 967, three pixels inside it. 277 was what the rail measured on
+     main, where that tap clears by eight. An estimate that is nearly right is
+     a panel that nearly stays off the sheet.
+     195 IS 82px NARROWER THAN THAT AND SO CANNOT REOPEN IT: every tap those
+     two specs aim at the canvas clears this rail by more than it ever cleared
+     277. What the narrower bound costs is ellipsis on the longest level names,
+     which the paragraph beside --rail-w already rules on. */
+  #right-rail { right:28px; border-left:1px solid var(--edge-panel); }
   /* THE RIGHT PANEL COLLAPSES TO A SEAT, NOT TO NOTHING (Devin, 12 Sep).
      MODEL.dc.html's rail comment (:1766) says the open LEVELS panel covers
      only the outer column and "the inner column always keeps its seat, so

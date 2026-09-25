@@ -202,12 +202,12 @@
        table. It mounts above the page's own script for the reason PROJECT's
        does: a bar that does not exist yet is a bar that script cannot find.
        NO BONE -- this page builds nothing. -->
-  <!-- THE VISIT COUNT SITS ABOVE THE BAR, not in it (Movie, 23 Sep: "the
-       12 visits shouldn't be mixed into the views listings"). Its slot is
-       fixed 12px over the bar and paints no background, so the count reads
-       as a note on the sheet rather than a seventh page chip. The STATUS
-       READOUT tab is NOT mounted with it: this page has no counts. -->
-  <script>window.DraftShellBars.counterSlot();</script>
+  <!-- THE VISIT COUNT COMES WITH THE BAR NOW, in its lowest row (Movie, 25
+       Sep). It used to need a call of its own here -- counterSlot() -- which
+       mounted an otherwise empty #lower-left twelve pixels above the bar, on
+       his older ruling that "the 12 visits shouldn't be mixed into the views
+       listings". It still is not among the views: it is a row below them, in
+       the hem the bar keeps clear of a browser's link preview. -->
   <script>window.DraftShellBars.bottomBar({ page: 'specs', bone: false });</script>
 
   <script>

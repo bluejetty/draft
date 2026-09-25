@@ -1,9 +1,19 @@
-// THE CLOCK IN THE UPPER-RIGHT CORNER of MODEL.html.
+// THE CLOCK IN THE BAR'S LOWEST ROW on MODEL.html.
 //
-// Movie, 20 Sep: "in the same style of text in the upper right under the top
-// banner (in model space currently there isn't anything in that spot) - can
-// you put in there the current time and date of where the person is
-// (timezonewise)".
+// Movie, 20 Sep, asking for it: "in the same style of text in the upper right
+// under the top banner (in model space currently there isn't anything in that
+// spot) - can you put in there the current time and date of where the person
+// is (timezonewise)".
+//
+// Movie, 25 Sep, moving it: "move the '# VISITS' and the DATE/TIME down below
+// PROJECT / MODEL / REAL ESTATE / BONE / CONSTRUCTION / SPECTS / etc. on the
+// lowest row (where it will be covered with http:/addressess (won't matter if
+// these 2 items are covered from time to time".
+//
+// SO THE PLACEMENT CHECK FOLLOWED IT rather than being deleted. What it
+// guards did not change with the corner: the reading is ON the page where he
+// put it, it holds the same inset every other tenant of that row holds, and a
+// press over it reaches what is underneath. Only the row is different.
 //
 // WHAT IS WORTH TESTING HERE IS NOT THAT A LINE OF TEXT APPEARED. A clock that
 // renders beautifully and reads the server's zone, or the author's, or a time
@@ -13,7 +23,7 @@
 //   IT IS THE VIEWER'S ZONE      two browsers a day apart read a day apart
 //   IT IS THE REAL TIME          the reading agrees with the clock outside
 //   IT MOVES, ON THE MINUTE      :30 to :50 changes nothing; the minute does
-//   IT IS OUT OF THE WAY         a press over it reaches the drawing
+//   IT IS OUT OF THE WAY         it stands in the bar's hem, not on the sheet
 //
 // The ticking one is asserted with Playwright's clock rather than by waiting a
 // minute -- a test that sleeps 60s to watch a digit change is a minute added
@@ -58,7 +68,7 @@ async function openSheet(page) {
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 
-test('the clock stands in the upper right, under the bar and clear of the sheet',
+test('the clock stands in the foot bar\'s lowest row, right of the page links',
   async ({ page }) => {
     await openSheet(page);
 
@@ -74,27 +84,45 @@ test('the clock stands in the upper right, under the bar and clear of the sheet'
       const c = box(document.getElementById('clock'));
       return {
         clock: c,
-        strip: box(document.getElementById('strip')),
+        strip: box(document.getElementById('house-strip')),
+        row: box(document.getElementById('page-row')),
+        height: window.innerHeight,
         width: window.innerWidth,
-        // WHAT A PRESS OVER IT LANDS ON. The upper-right column is
-        // click-through except for TAKE OVER, so a drafter drawing under the
-        // clock reaches the drawing -- and that is exactly what a stray
-        // `pointer-events` would quietly take away.
-        under: (document.elementFromPoint((c.left + c.right) / 2,
-          (c.top + c.bottom) / 2) || {}).id,
+        // THE ROW IS THE BAR'S, so the reading has to be INSIDE the bar and
+        // not floating over it: the whole point of the hem is that a browser's
+        // link preview lands on the bar's own panel colour. An element merely
+        // positioned there would look identical and paint over the drawing the
+        // moment the bar moved.
+        inBar: document.getElementById('house-strip')
+          .contains(document.getElementById('clock')),
+        // WHAT A PRESS OVER IT LANDS ON. It is a reading, not a control, so a
+        // press has to reach the bar it stands in rather than be swallowed by
+        // a stray hit box over the sheet. ANSWERED AS "is it the bar or
+        // something inside the bar", not as an id: the lane is the bar's own
+        // hem and takes the hit itself, which is the bar -- while a stray
+        // fixed box over the drawing would be neither.
+        under: (() => {
+          const el = document.elementFromPoint((c.left + c.right) / 2,
+            (c.top + c.bottom) / 2);
+          const bar = document.getElementById('house-strip');
+          if (!el) return 'nothing';
+          return (el === bar || bar.contains(el)) ? 'house-strip' : (el.id || el.tagName);
+        })(),
       };
     });
 
-    expect(where.clock.top, 'the clock is below the top bar, not on it')
-      .toBeGreaterThanOrEqual(where.strip.bottom);
-    expect(where.clock.top - where.strip.bottom,
-      'and just below it -- the inset every note under this bar keeps')
+    expect(where.inBar, 'the clock is a tenant of the bottom bar').toBe(true);
+    expect(where.clock.top, 'the clock is BELOW the row of page links, not on it')
+      .toBeGreaterThanOrEqual(where.row.bottom);
+    expect(where.strip.bottom - where.clock.bottom,
+      'and stands in the hem at the foot of the bar, not under the sheet')
       .toBeLessThan(12);
     expect(where.clock.left, 'the clock is in the right half of the sheet')
       .toBeGreaterThan(where.width / 2);
     expect(where.width - where.clock.right,
-      'and holds the 12px inset the corner holds').toBeLessThanOrEqual(13);
-    expect(where.under, 'a press over the clock reaches the drawing').toBe('plan');
+      'and holds the 12px inset the bar holds').toBeLessThanOrEqual(13);
+    expect(where.under, 'a press over the clock reaches the bar it stands in')
+      .toBe('house-strip');
   });
 
 // ── IT IS THE VIEWER'S CLOCK, WHICH IS THE WHOLE REQUEST ──
