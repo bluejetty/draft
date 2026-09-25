@@ -819,6 +819,187 @@ const roofFaceRise = (face, p, pitch) => {
   return Math.abs((p.x - face.eave.a.x) * ez - (p.z - face.eave.a.z) * ex) / len * (pitch || 4) / 12;
 };
 
+// The rise of a roof's surface above its own eave line at a point, or null
+// when the point is off the roof. cut-view's `sectionRoofHeightAt` is this
+// same predicate over these same faces and should collapse into it; it is
+// left alone here because this change is Movie's extra line and nothing else.
+const roofRiseAt = (roof, p, faces) => {
+  const list = faces || roofFaces(roof, roofSkeleton(roof));
+  for (const face of list) {
+    const poly = face.points;
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const pi = poly[i], pj = poly[j];
+      if ((pi.z > p.z) !== (pj.z > p.z)
+        && p.x < (pj.x - pi.x) * (p.z - pi.z) / (pj.z - pi.z) + pi.x) inside = !inside;
+    }
+    if (inside) return roofFaceRise(face, p, roof.pitch || 4);
+  }
+  return null;
+};
+
+// ── WHERE TWO SHEETS MEET IN ONE PLANE THERE IS NO LINE ──────────────────
+//
+// Movie, 24 Sep, on the 2 STOREY once the tie piece was built: *"your updated
+// roof has an extra line in it, that should be all one connected roof"* --
+// two shots marked in the same place, the E4 elevation and the ROOF PLAN.
+//
+// The elevation's half was answered in cut-view by `carriedOn`, which asks
+// the other roofs for their height at a station and drops the edge where one
+// agrees. THE PLAN CANNOT ASK THAT QUESTION THE SAME WAY: cut-view holds a
+// wall stack and can turn a roof into an absolute elevation, and the plan
+// painter holds roof records and nothing else. So the comparison here is
+// `plateHeightFt` plus the face's own rise, which is the whole of a roof's
+// height and is carried on the record -- no stack, no env, no page.
+//
+// MEASURED on proto/repro-tie-gable.draft, which is a real drive-thru build:
+// the garage roof strokes its rear edge `(-6,20)->(22,20)` and the tie piece
+// strokes `(22,20)->(16,20)`, so both draw z=20 across x 16..22. Each is the
+// same 4/12 plane falling to the shared x=22 eave -- 0.667 ft of rise at
+// x=20 on both of them, 2.0 ft at x=16. That stretch is INTERIOR to the one
+// sheet they make and carries no line. x -6..16 is still real boundary, with
+// the house roof beneath it on a different plate, and keeps its line.
+//
+// A DIFFERENT PLATE IS A DIFFERENT SHEET, and that is the whole guard against
+// welding the garage to the house: #32 put the garage roof over the house on
+// purpose, so the two overlap across twenty-two feet of z=20 and agree
+// nowhere in height. The house roof's `plateHeightFt` is null (it rides its
+// own stack) and the garage's is 8.09375, which parts them before any
+// geometry runs.
+//
+// PER EDGE, IN EDGE PARAMETER, because a weld is usually PART of an edge --
+// six feet of the garage's twenty-eight. Returned as the welded stretches
+// rather than the drawn ones: welded is the fact about the building, and
+// inverting it is the painter's business.
+const ROOF_WELD_NUDGE_FT = 0.05;   // off the edge, into the neighbour's face
+const ROOF_WELD_TOL_FT = 0.01;     // ~1/8"; two sheets agree or they do not
+
+const roofWeldSpans = (roof, others) => {
+  const ring = ((roof && roof.points) || []).map(pt => ({ x: pt.x, z: pt.z }));
+  const none = ring.map(() => []);
+  if (ring.length < 3) return none;
+  const plateOf = r => (Number.isFinite(Number(r && r.plateHeightFt))
+    ? Number(r.plateHeightFt) : null);
+  const myPlate = plateOf(roof);
+  const samePlate = plate => (plate === null || myPlate === null
+    ? plate === myPlate : Math.abs(plate - myPlate) < 1e-6);
+  const myPitch = roof.pitch || 4;
+  const mates = (others || []).filter(other => other && other !== roof
+    && ((other.points || []).length >= 3)
+    && samePlate(plateOf(other))
+    // The pitch is the CHEAP half of this test and not the deciding one: two
+    // planes off one eave line at different pitches are parted by their
+    // heights anywhere but at the eave, and at the eave the valley guard
+    // parts them. It is here to spare a skeleton and its faces for a roof
+    // that cannot match. The PLATE is the deciding half -- see below.
+    && Math.abs((other.pitch || 4) - myPitch) < 1e-6)
+    .map(other => ({
+      roof: other,
+      faces: roofFaces(other, roofSkeleton(other)),
+      plate: plateOf(other) || 0,
+    }));
+  if (!mates.length) return none;
+  const mine = roofFaces(roof, roofSkeleton(roof));
+  const myBase = myPlate || 0;
+  const inRing = p => {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const pi = ring[i], pj = ring[j];
+      if ((pi.z > p.z) !== (pj.z > p.z)
+        && p.x < (pj.x - pi.x) * (p.z - pi.z) / (pj.z - pi.z) + pi.x) inside = !inside;
+    }
+    return inside;
+  };
+  return ring.map((a, index) => {
+    const b = ring[(index + 1) % ring.length];
+    const dx = b.x - a.x, dz = b.z - a.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-6) return [];
+    // WHICH WAY IS OUT. The ring's winding is not promised -- a design may be
+    // drawn either way round and offsetOutline preserves whatever it got --
+    // so the normal is chosen by stepping off the midpoint and asking the
+    // ring itself, exactly as cut-view's `outwardOf` does.
+    let nx = -dz / len, nz = dx / len;
+    if (inRing({ x: (a.x + b.x) / 2 + nx * ROOF_WELD_NUDGE_FT,
+      z: (a.z + b.z) / 2 + nz * ROOF_WELD_NUDGE_FT })) { nx = -nx; nz = -nz; }
+    // THE ANSWER ONLY CHANGES WHERE A NEIGHBOUR'S BOUNDARY CROSSES. Sampling
+    // at a fixed step would be a coarse probe, and this file has been bitten
+    // by one: five stations once agreed on a roof that a dense grid then put
+    // five feet out. Between two consecutive crossings the classification is
+    // constant, so the exact breakpoints are cheaper AND right, and the test
+    // runs at the midpoint of each interval where no endpoint can be a
+    // coin toss on a neighbour's boundary.
+    const ts = [0, 1];
+    mates.forEach(({ roof: other }) => {
+      const q = other.points;
+      for (let i = 0; i < q.length; i++) {
+        const p1 = q[i], p2 = q[(i + 1) % q.length];
+        const ex = p2.x - p1.x, ez = p2.z - p1.z;
+        const den = dx * ez - dz * ex;
+        if (Math.abs(den) < 1e-9) {
+          // Parallel. It breaks this edge only where it lies ALONG it, and
+          // then at its own two ends.
+          [p1, p2].forEach(p => {
+            if (Math.abs((p.x - a.x) * dz - (p.z - a.z) * dx) > 1e-6 * len) return;
+            const t = ((p.x - a.x) * dx + (p.z - a.z) * dz) / (len * len);
+            if (t > 1e-9 && t < 1 - 1e-9) ts.push(t);
+          });
+          continue;
+        }
+        const t = ((p1.x - a.x) * ez - (p1.z - a.z) * ex) / den;
+        const s = ((p1.x - a.x) * dz - (p1.z - a.z) * dx) / den;
+        if (t > 1e-9 && t < 1 - 1e-9 && s > -1e-9 && s < 1 + 1e-9) ts.push(t);
+      }
+    });
+    const cuts = [...new Set(ts.map(t => Math.round(t * 1e9) / 1e9))].sort((p, q) => p - q);
+    const welds = [];
+    for (let k = 0; k + 1 < cuts.length; k++) {
+      const t = (cuts[k] + cuts[k + 1]) / 2;
+      const on = { x: a.x + dx * t, z: a.z + dz * t };
+      const out = { x: on.x + nx * ROOF_WELD_NUDGE_FT, z: on.z + nz * ROOF_WELD_NUDGE_FT };
+      const inn = { x: on.x - nx * ROOF_WELD_NUDGE_FT, z: on.z - nz * ROOF_WELD_NUDGE_FT };
+      // MY OWN PLANE, CARRIED PAST MY EDGE. `roofFaceRise` measures from the
+      // eave's INFINITE line, so the face that owns this edge answers for a
+      // point just outside it too -- which is the sheet's height where the
+      // neighbour has to meet it. Comparing at the edge itself instead would
+      // stand both probes on a boundary and let winding decide the answer.
+      const face = mine.find(f => roofRiseAt({ points: f.points, pitch: myPitch },
+        inn, [f]) !== null);
+      if (!face) continue;
+      const myElev = myBase + roofFaceRise(face, out, myPitch);
+      // ── A CARRIED-ON SHEET, NOT A MIRRORED ONE ──────────────────────
+      //
+      // Height alone says yes to a VALLEY, and that took a mutation table to
+      // see. `roofFaceRise` measures the ABSOLUTE distance from the eave
+      // line, so my plane carried past my own eave turns back UPWARD at the
+      // same rate a neighbour on the far side rises: two sheds falling into
+      // a shared low line agree exactly, at every probe distance, and the
+      // valley between them would be welded away. Probing twice does not
+      // part them -- the mirror is exact.
+      //
+      // WHICH SIDE OF THE EAVE, then. A sheet that really carries mine on
+      // lies on the SAME side of my face's eave line as my own roof does:
+      // the tie piece and the garage stub both fall to x=22 from x<22. Two
+      // roofs meeting AT an eave are a valley and keep their line.
+      const sideOf = pt => (pt.x - face.eave.a.x) * (face.eave.b.z - face.eave.a.z)
+        - (pt.z - face.eave.a.z) * (face.eave.b.x - face.eave.a.x);
+      if (sideOf(inn) * sideOf(out) <= 1e-12) continue;
+      const welded = mates.some(mate => {
+        const rise = roofRiseAt(mate.roof, out, mate.faces);
+        return rise !== null && Math.abs(mate.plate + rise - myElev) < ROOF_WELD_TOL_FT;
+      });
+      if (!welded) continue;
+      // COALESCE. The cuts include every neighbour's crossing, welded or not
+      // -- the house's own wall line splits the garage's welded run at x=18
+      // on the repro -- and two touching welds are one weld.
+      const last = welds[welds.length - 1];
+      if (last && Math.abs(last[1] - cuts[k]) < 1e-9) last[1] = cuts[k + 1];
+      else welds.push([cuts[k], cuts[k + 1]]);
+    }
+    return welds;
+  });
+};
+
 // Exact section profile: the cut segment clipped to each face, crossing
 // points lifted by that face's plane. Returns u-sorted breakpoints only —
 // straight lines between them at any cut angle.
@@ -1543,6 +1724,8 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     mergeVertex,
     roofFaces,
     roofFaceRise,
+    roofRiseAt,
+    roofWeldSpans,
     roofProfile,
     profileEnvelope,
     wallJoins,

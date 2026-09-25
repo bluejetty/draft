@@ -1591,6 +1591,219 @@ suite('drawRoof2D', 'a reference colour still overrides the skin entirely', R =>
     all.some(v => v.includes('00ff88') || v.includes('ff00cc')), false);
 });
 
+// ── TWO SHEETS IN ONE PLANE SHOW NO LINE BETWEEN THEM ────────────────────
+//
+// Movie, 24 Sep, on the roof plan once the tie piece was built: *"your
+// updated roof has an extra line in it, that should be all one connected
+// roof"*. geometry-2d's `roofWeldSpans` decides WHICH stretches are interior
+// to the combined sheet -- proto/geometry-2d-weld-harness.js measures that
+// against a real build -- and these ask only what the painter does with the
+// answer, which is a different question and the one this file owns.
+//
+// THE PATH, NOT THE STROKE COUNT. The checks above this point count `stroke`
+// calls, which is the right instrument for "is there a second line". It is
+// the wrong one here: a weld does not add or remove a stroke, it takes a bite
+// out of a path, and a painter that dropped the bite in the wrong place would
+// keep the count exactly. So these read moveTo/lineTo.
+// ONLY WHAT WAS STROKED. The first cut of this read every moveTo/lineTo on
+// the tape, which is the painter's own lesson back again: the FILL path is
+// built first and carries the whole closed footprint, so a welded edge still
+// appeared in it and the check that the weld was left undrawn passed on a
+// path nobody strokes. Segments are grouped by beginPath and a group counts
+// only if a `stroke` consumed it.
+const strokedSegs = ctx => {
+  const groups = [];
+  let cur = null, pen = null, first = null;
+  ctx.tape.forEach(e => {
+    if (e.op === 'beginPath') { cur = { segs: [], stroked: false }; groups.push(cur); pen = null; first = null; return; }
+    if (!cur) return;
+    if (e.op === 'moveTo') { pen = { x: e.args[0], y: e.args[1] }; first = pen; return; }
+    if (e.op === 'lineTo') {
+      const to = { x: e.args[0], y: e.args[1] };
+      if (pen) cur.segs.push(`${pen.x},${pen.y}->${to.x},${to.y}`);
+      pen = to;
+      return;
+    }
+    if (e.op === 'closePath' && pen && first) { cur.segs.push(`${pen.x},${pen.y}->${first.x},${first.y}`); pen = first; return; }
+    if (e.op === 'stroke') cur.stroked = true;
+  });
+  return groups.filter(g => g.stroked).flatMap(g => g.segs);
+};
+const weldEnv = welds => roofEnv({ roofWelds: () => welds });
+
+suite('drawRoof2D', 'with nothing welded the painter draws exactly what it always drew', R => {
+  const bare = recordingCtx();
+  R.drawRoof2D(bare, toS, ROOF, {}, roofEnv());
+  const empty = recordingCtx();
+  R.drawRoof2D(empty, toS, ROOF, {}, weldEnv([[], [], [], []]));
+  expect('an all-empty answer changes no call at all',
+    JSON.stringify(empty.tape), JSON.stringify(bare.tape));
+  const absent = recordingCtx();
+  R.drawRoof2D(absent, toS, ROOF, {}, roofEnv({ roofWelds: () => null }));
+  expect('and neither does a page that cannot answer',
+    JSON.stringify(absent.tape), JSON.stringify(bare.tape));
+});
+
+suite('drawRoof2D', 'a welded stretch is the one piece of the outline not drawn', R => {
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, ROOF, {}, weldEnv([[[0.25, 0.75]], [], [], []]));
+  const segs = strokedSegs(ctx);
+  expect('the near end of edge 0 is drawn', segs.includes('400,300->450,300'), true);
+  expect('the far end of edge 0 is drawn', segs.includes('550,300->600,300'), true);
+  expect('the welded middle is not', segs.some(s => s === '450,300->550,300'), false);
+  expect('and no stroke crosses it',
+    segs.some(s => /^4[0-4]\d?,300->5[5-9]\d?,300$/.test(s)), false);
+});
+
+suite('drawRoof2D', 'a wholly welded edge leaves the outline open, and the rest closed', R => {
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, ROOF, {}, weldEnv([[[0, 1]], [], [], []]));
+  const segs = strokedSegs(ctx);
+  expect('nothing runs along the welded edge',
+    segs.some(s => s.startsWith('400,300->') && s.endsWith(',300')), false);
+  expect('the other three edges still run', ['600,300->600,440',
+    '600,440->400,440', '400,440->400,300'].every(s => segs.includes(s)), true);
+});
+
+suite('drawRoof2D', 'two edges that survive a weld stay ONE sub-path at their corner', R => {
+  // A corner drawn as two sub-paths opens a notch the width of the pen. The
+  // painter carries the pen forward when the next span starts where the last
+  // one stopped, so a weld on edge 0 must not break the corner at edge 1/2.
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, ROOF, {}, weldEnv([[[0.25, 0.75]], [], [], []]));
+  const after = ctx.tape.map((e, i) => ({ e, i }))
+    .filter(({ e }) => e.op === 'moveTo' && e.args[0] === 600 && e.args[1] === 440);
+  expect('no pen lift at the corner the weld does not touch', after.length, 0);
+});
+
+suite('drawRoof2D', 'the fill is the whole sheet, welded or not', R => {
+  const bare = recordingCtx();
+  R.drawRoof2D(bare, toS, ROOF, {}, roofEnv());
+  const cut = recordingCtx();
+  R.drawRoof2D(cut, toS, ROOF, {}, weldEnv([[[0.25, 0.75]], [], [], []]));
+  expect('still filled even-odd', calls(cut, 'fill')[0][0], 'evenodd');
+  // The fill runs off the path built BEFORE the stroke is rebuilt, so the
+  // calls up to and including `fill` have to be untouched -- a weld that ate
+  // into the wash would leave a notch in the roof itself.
+  const upTo = ctx => JSON.stringify(ctx.tape.slice(0, ctx.tape.findIndex(e => e.op === 'fill') + 1));
+  expect('off a path the weld never touched', upTo(cut), upTo(bare));
+});
+
+suite('drawRoof2D', 'a background reference is another drawing, and welds to nothing', R => {
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, ROOF, { referenceColor: '#888' }, weldEnv([[[0, 1]], [], [], []]));
+  expect('the ghost keeps its whole outline',
+    strokedSegs(ctx).includes('400,300->600,300'), true);
+});
+
+suite('drawRoof2D', 'welds arriving overlapped or out of order still draw each piece once', R => {
+  const ctx = recordingCtx();
+  // The last one runs BACKWARDS, which is the case that used to put the pen
+  // behind itself and draw the weld it was told to leave out.
+  R.drawRoof2D(ctx, toS, ROOF, {}, weldEnv([[[0.6, 0.8], [0.7, 0.25]], [], [], []]));
+  // SORTED, because the ORDER is not this check's business: the walk starts
+  // after a gap rather than at corner zero, so which surviving piece comes
+  // first is a consequence of where the weld is. What is asked here is that
+  // the union is one bite and each piece is drawn ONCE.
+  const segs = strokedSegs(ctx).filter(s => /^\d+,300->\d+,300$/.test(s)).sort();
+  expect('the union is one bite, drawn around once',
+    segs.join(' | '), '400,300->450,300 | 560,300->600,300');
+});
+
+suite('drawRoof2D', 'a run that wraps past corner zero stays ONE sub-path', R => {
+  // THE NOTCH THIS WOULD OTHERWISE LEAVE is not hypothetical: the garage
+  // stub's weld sits at the FAR end of its first edge, so what is left runs
+  // all the way round THROUGH the ring's first point -- and a walk that
+  // began at corner zero would break it there, butt against butt, right on
+  // the roof's own outside corner. Welding the far half of edge 0 here makes
+  // the same shape: three whole edges plus the near half, one continuous run.
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, ROOF, {}, weldEnv([[[0.5, 1]], [], [], []]));
+  const strokePaths = [];
+  let cur = null;
+  ctx.tape.forEach(e => {
+    if (e.op === 'beginPath') { cur = { lifts: 0, stroked: false }; strokePaths.push(cur); return; }
+    if (!cur) return;
+    if (e.op === 'moveTo') cur.lifts += 1;
+    if (e.op === 'stroke') cur.stroked = true;
+  });
+  const outline = strokePaths.filter(p => p.stroked)[0];
+  expect('the surviving outline lifts the pen exactly once -- at its start',
+    outline && outline.lifts, 1);
+  // And it really is the whole of what is left, not a shortened run.
+  expect('four pieces of edge, end to end', strokedSegs(ctx).filter(s =>
+    ['400,300->500,300', '600,300->600,440', '600,440->400,440', '400,440->400,300']
+      .includes(s)).length, 4);
+});
+
+// ── AND A GABLE'S WALL LINE COMES IN BY ITS OWN EDGE'S OVERHANG ──────────
+//
+// `overhang` is one number for the whole roof and was the whole truth until a
+// roof carried a FLUSH gable and a RAKED one at once. The tie piece is the
+// first: measured, a 6 x 3 footprint pulled in two feet on every side is
+// 2 x -1 -- signed area +36 -> -4, an inside-out ring -- and the plan drew
+// that fold as a 2 x 1 box of lines that are not anything in the building.
+const VARI = {
+  ...ROOF,
+  // RECT, with edge 0 raked two feet and edges 2 and 3 flush against
+  // something. The env's offsetOutline here is a corner-wise shrink, so the
+  // variable one is given the same shape of answer per edge.
+  edges: ['gable', 'eave', 'gable', 'gable'],
+  overhang: 2,
+  edgeOverhang: [2, 2, 0, 0],
+};
+// A SPY, NOT A FAKE WITH COORDINATES. The first cut of this check invented an
+// offsetOutlineVariable and then asserted where its output landed, which put
+// the check's own arithmetic on trial beside the painter's -- and the
+// arithmetic lost: the expectation named a point the fake never produces. The
+// painter's job here is to ASK for the per-edge offset and then draw a line
+// only for the edges that have one. That is what is measured.
+const variEnv = seen => roofEnv({
+  offsetOutline: (pts, by) => { if (seen) seen.push(`uniform ${by}`); return pts; },
+  offsetOutlineVariable: (pts, dists) => {
+    if (seen) seen.push(`variable ${dists.join(',')}`);
+    // Each corner pushed to a coordinate that names its own index, so a line
+    // drawn between two of them says WHICH ring edge it came from and owes
+    // nothing to how an offset is really computed.
+    return pts.map((p, i) => ({ x: i, z: 0 }));
+  },
+});
+
+suite('drawRoof2D', 'a flush gable draws no wall line; a raked one draws its own', R => {
+  const seen = [];
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, VARI, {}, variEnv(seen));
+  expect('the painter asks for the per-edge offset, by each edge-s own overhang',
+    seen.join(' | '), 'variable -2,-2,0,0');
+  // Corner i sits at x = i, so ring edge 0 is the segment 0 -> 1.
+  const at = i => `${400 + i * 10},300`;
+  const wall = strokedSegs(ctx).filter(s => s === `${at(0)}->${at(1)}`);
+  expect('the raked gable draws its wall line', wall.length, 1);
+  expect('and neither flush gable draws one',
+    strokedSegs(ctx).some(s => s === `${at(2)}->${at(3)}` || s === `${at(3)}->${at(0)}`), false);
+});
+
+suite('drawRoof2D', 'an edgeOverhang that does not match the ring is not trusted', R => {
+  const short = recordingCtx();
+  R.drawRoof2D(short, toS, { ...VARI, edgeOverhang: [2, 2] }, {}, variEnv());
+  const uniform = recordingCtx();
+  R.drawRoof2D(uniform, toS, { ...VARI, edgeOverhang: undefined }, {}, variEnv());
+  // Both must have taken the UNIFORM call -- the point of the check is that a
+  // malformed array is not merely clamped, it is not believed at all.
+  expect('a short array falls back to the one number the roof has always had',
+    JSON.stringify(strokedSegs(short)), JSON.stringify(strokedSegs(uniform)));
+});
+
+suite('drawRoof2D', 'an old file with no per-edge array takes the ORIGINAL uniform call', R => {
+  const seen = [];
+  const env = roofEnv({
+    offsetOutline: (pts, by) => { seen.push(['uniform', by]); return pts.map(p => ({ x: p.x - by, z: p.z - by })); },
+    offsetOutlineVariable: (pts, d) => { seen.push(['variable', d.join(',')]); return pts; },
+  });
+  R.drawRoof2D(recordingCtx(), toS, { ...ROOF, edges: ['gable', 'eave', 'eave', 'eave'] }, {}, env);
+  expect('offsetOutline, by the roof s overhang', JSON.stringify(seen), '[["uniform",-1]]');
+});
+
 suite('drawRoof2D', 'an opening in a roof is a hole, dotted like the roof itself', R => {
   const hole = [{ x: 5, z: 5 }, { x: 9, z: 5 }, { x: 9, z: 9 }, { x: 5, z: 9 }];
   const ctx = recordingCtx();
