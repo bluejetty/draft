@@ -1341,6 +1341,24 @@
      sits here rather than earlier or later for any load-order reason. -->
 <script src="./level-lock.js"></script>
 <script src="./stair-geometry.js"></script>
+<!-- AUTO STAIR (board #260). auto-stair.js is the pure placement derivation:
+     plain data in (outline, beam lines, room stamps, the layout numbers) and
+     one suggested stair out, born legal -- its well already inside the
+     interior ring and already clear of the beams. stair-rules.js is the
+     rulebook it scores with; auto-stair.js falls back on its own seeded
+     constants if the table is missing, so the pair loads together rather than
+     letting a page place a silently different stair.
+
+     NEITHER WAS LOADED HERE UNTIL NOW. The page could paint a stair it was
+     given and could not derive one, which is why the STAIR button had no
+     panel and no press handler.
+
+     ORDER IS FREE for the geometry dependency: auto-stair.js resolves
+     window.DraftGeometry2D at CALL time, not at load -- it was captured at
+     load until 2 Sep, which let a page list this first, report every export,
+     and then throw from a call site naming a different file. -->
+<script src="./stair-rules.js"></script>
+<script src="./auto-stair.js"></script>
 
 <script>
 (() => {
@@ -10778,6 +10796,733 @@
     };
   };
 
+  // ── AUTO STAIR (board #260) ───────────────────────────────────────────────
+  //
+  // Movie, 25 Sep: "maybe give them stairs too". A house with two floors and
+  // no stair between them is the same omission the main-floor beam was: the
+  // drawing asserts a storey nobody can reach.
+  //
+  // THE DERIVATION IS NOT HERE. auto-stair.js scores every candidate straight
+  // run, folded L and U switchback against the interior ring, the carrying
+  // beams and the room stamps, and hands back ONE born-legal suggestion -- its
+  // well already inside the ring and already clear of the beams. This layer
+  // only feeds it real geometry, commits the winner, and owns everything
+  // stateful: the level heights the rise comes from, the opening cut, the
+  // stacking, the undo records.
+  //
+  // A SUGGESTION, NOT A SILENT COMMIT, and that is dc's own rule kept: a hand
+  // placement never carries `auto`, a re-run replaces only auto-tagged stairs,
+  // and DELETING one is "no thanks" -- nothing re-suggests it.
+  const STAIR_LAYER = 'A-STR';
+  const DEFAULT_STAIR_WIDTH_FT = 3;      // 36" between stringers
+  const STAIR_BEAM_CLEAR_IN = 2;         // well edge off a carrying beam's centreline (#246)
+  const STAIR_OPENING_FINISH_IN = 1;     // finish allowance, half of it on each side of the well
+  // THE ROUGH OPENING IS BIGGER THAN THE STAIR AT BOTH ENDS, for opposite
+  // reasons. Movie, 21 Sep, reading a stair section: "the nosing of the stair
+  // shouldn't be part of the floor opening ... 1.5" of material if needed for
+  // stair backing and then 1/2" for the stair nosing", and "at bottom it is
+  // opposite nosing goes over the opening min. 2"" -- "could be more".
+  //
+  // So the top pulls the header BACK behind the nosing and the bottom lets the
+  // floor REACH OVER, and both push the hole out past the finished line by the
+  // same build-up. A MINIMUM, never a figure: nothing may round it down.
+  const STAIR_NOSING_BACKING_IN = 1.5;
+  const STAIR_NOSING_IN = 0.5;
+  const STAIR_OPENING_NOSING_MIN_IN = STAIR_NOSING_BACKING_IN + STAIR_NOSING_IN;
+  const DEFAULT_STAIR_HEADROOM_FT = (6 * 12 + 10) / 12;
+  // HEADROOM IS A SETTING, NOT A CONSTANT, and it is the number that decides
+  // how far down the flight the hole has to reach. It is page state rather
+  // than drawing data for the same reason layer standards are: nothing in
+  // drawing-format.js holds it, so writing it onto the drawing would be a key
+  // the reader drops on the next load -- the silent loss this page refuses
+  // everywhere else. A drawing reopened elsewhere gets that page's headroom,
+  // which is the honest answer while the format has no field for it.
+  let stairHeadroomFt = DEFAULT_STAIR_HEADROOM_FT;
+  // The stair's own two settings, page state for the same reason: the WIDTH a
+  // new flight is placed at, and which side the handrail bar goes on walking
+  // down. Both ride on each stair record once placed -- drawing-format.js
+  // validates `widthFt` and `rail` -- so the page state is the DEFAULT for the
+  // next placement, never the truth about one already drawn.
+  let stairWidthFt = DEFAULT_STAIR_WIDTH_FT;
+  let stairRailSide = 'left';
+
+  // The house outline on one level: the LAST non-garage loop, which is
+  // storeyBodies' own rule and its reason -- "the most recent loop is the one
+  // the drafter means". Reused rather than re-filtered so the garage skip and
+  // the three-point minimum have exactly one definition on this page.
+  const houseOutlineOn = levelId => {
+    const level = (drawing?.levels || []).find(item => Number(item.id) === Number(levelId));
+    const bodies = level ? storeyBodies(level) : [];
+    return bodies.length ? bodies[bodies.length - 1].outline : null;
+  };
+
+  // The floor levels bottom-up. stairLevels() already builds exactly this list
+  // for the painter -- levels carrying a 'floor' view, reversed -- so asking it
+  // again here keeps ONE answer to "which levels are floors", the way
+  // assemblyFor is this page's one level-assembly lookup.
+  const stairFloorLevels = () => stairLevels().floors;
+
+  // The level's name for a message about it. levelName() answers for the
+  // ACTIVE level and takes no argument -- and AUTO STAIR reports on levels the
+  // drafter is not standing on, so it needs the label by id. Same derivation,
+  // through the same levelLabel, so the two never read differently.
+  const namedLevel = levelId => {
+    const level = (drawing?.levels || [])
+      .find(entry => Number(entry.id) === Number(levelId));
+    return level ? levelLabel(level.id, level.name) : `level ${levelId}`;
+  };
+
+  // Even-odd point-in-polygon. NOT in geometry-2d.js: cut-view.js keeps a
+  // private copy (:385) and MODEL.dc.html another (:18402), so this is the
+  // third. Left local rather than hoisted into the module in this change --
+  // moving it is a three-caller refactor with its own harness, and doing it
+  // inside a port would put a behaviour question inside a parity question.
+  const pointInLoop = (points, at) => {
+    let inside = false;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+      const a = points[i], b = points[j];
+      const crosses = ((a.z > at.z) !== (b.z > at.z))
+        && (at.x < (b.x - a.x) * (at.z - a.z) / ((b.z - a.z) || Number.EPSILON) + a.x);
+      if (crosses) inside = !inside;
+    }
+    return inside;
+  };
+
+  // ONE WALL ASSEMBLY OF SETBACK off the exterior, never a hard-coded
+  // thickness: the interior ring insets the outline by the THICKEST wall
+  // actually standing along it, and the lowest floor's descent adds the
+  // insulation wall lining the foundation to the foundation wall itself --
+  // that stair passes both, so both count.
+  const stairOpeningSetbackFt = levelId => {
+    const WT = window.DraftWallTypes;
+    const outline = houseOutlineOn(levelId);
+    const floors = stairFloorLevels();
+    const lowest = floors.length > 0 && Number(floors[0].id) === Number(levelId);
+    const totalIn = id => (WT.WALL_TYPES.find(type => type.id === id) || {}).totalIn || 0;
+    const thickest = (walls, fallbackIn) => walls.reduce((most, wall) =>
+      Math.max(most, totalIn(wall.wallType || 'stud_2x6')), fallbackIn);
+    // EXTERIOR MEANS STANDING ON THE OUTLINE, and that test is geometry-2d's
+    // edgeOnLoop -- the same one the garage walls and the auto-pile skip use.
+    //
+    // SEGMENTS, NOT POINTS, and the module says why in its own comment: a
+    // points-only version would quietly straighten every arc edge. Built ONCE
+    // rather than inside the filter, which would rebuild the whole ring per
+    // wall.
+    const ring = outline
+      ? window.DraftGeometry2D.loopSegments(outline.points) : null;
+    const onOutline = wall => !!ring
+      && window.DraftGeometry2D.edgeOnLoop(wall.start, wall.end, ring);
+    const planIn = thickest((drawing?.walls || []).filter(wall =>
+      Number(wall.levelId) === Number(levelId)
+      && (wall.view || 'plan') === 'plan' && onOutline(wall)), totalIn('stud_2x6'));
+    if (!lowest) return planIn / 12;
+    const fdnIn = thickest((drawing?.walls || []).filter(wall => wall.view === 'foundation'),
+      totalIn('concrete_8'));
+    return Math.max(planIn, fdnIn + totalIn('insulation_6')) / 12;
+  };
+
+  // THE BEAMS CARRYING THIS LEVEL'S FLOOR -- the ones a well must keep clear
+  // of, because a beam crossing an open well is a beam over the drafter's head
+  // on the way down.
+  //
+  // THE SECOND CLAUSE IS THE WHOLE POINT, and dc learned it the hard way on
+  // 7 Sep: every beam BUILD HOUSE generates is filed at FOUNDATION in the
+  // foundation view, so a lookup that read only the level's OWN floor view
+  // returned [] against the app's own beams -- the nudge took its empty-list
+  // exit and the legality check reported the beam half clear unconditionally.
+  // Both were inert on every automatically built house.
+  const stairFloorBeams = levelId => {
+    const floors = stairFloorLevels();
+    const lowestId = floors.length ? Number(floors[0].id) : null;
+    return (drawing?.beams || []).filter(beam =>
+      (Number(beam.levelId) === Number(levelId) && beam.view === 'floor')
+      || (Number(levelId) === lowestId
+        && Number(beam.levelId) === FOUNDATION_LEVEL_ID && beam.view === 'foundation'));
+  };
+
+  // Closest approach between a beam's centreline and the well boundary -- zero
+  // when the beam reaches into the well at all.
+  const stairBeamGapFt = (beam, poly) => {
+    const G = window.DraftGeometry2D;
+    let gap = Infinity;
+    for (let index = 0; index < poly.length; index++) {
+      const edge = { start: poly[index], end: poly[(index + 1) % poly.length] };
+      if (G.segmentIntersection(beam, edge)) return 0;
+      gap = Math.min(gap,
+        G.pointToSegment(beam.start, edge).d,
+        G.pointToSegment(beam.end, edge).d,
+        G.pointToSegment(edge.start, beam).d,
+        G.pointToSegment(edge.end, beam).d);
+    }
+    if (pointInLoop(poly, beam.start) || pointInLoop(poly, beam.end)) return 0;
+    return gap;
+  };
+
+  // THE WELL IN WORLD SPACE. Its LENGTH is not the stair's: it spends tread
+  // slots down the walking line until the drop reaches headroom plus the floor
+  // assembly, so a deep floor or a tall drafter opens a longer hole. A flat
+  // landing spends one slot, winders their tread count, and the covered parts
+  // -- first run, landing, the used stretch of the second run -- union into one
+  // well carrying half the finish allowance on every side.
+  //
+  // THE HEADER SITS BEHIND THE NOSING, not on it. `u = 0` is the top nosing,
+  // so starting the hole there would make the nosing line and the cut line one
+  // line -- and the backing would have no floor to fasten to. Only this end
+  // moves: the far end is set by headroom, and Movie confirmed it stays that
+  // way, "the opening above is effected by headroom as well on that end".
+  const stairOpeningFootprint = (stair, headroomFt = stairHeadroomFt) => {
+    const SG = window.DraftStairGeometry;
+    const levels = stairLevels();
+    const layout = SG.stairCurrentLayout(stair, levels);
+    const split = SG.stairShapeSplit(stair, layout);
+    const clearIn = headroomFt * 12
+      + window.DraftLevelAssembly.levelFloorFt(assemblyFor(stair.levelId)) * 12;
+    const slots = clearIn / layout.riserIn;
+    const runStep = SG.STAIR_TREAD_RUN_IN / 12;
+    const inchUp = ft => Math.ceil(ft * 12 - 0.0001) / 12;
+    const w = stair.widthFt;
+    const noseFt = STAIR_OPENING_NOSING_MIN_IN / 12;
+    let uv;
+    if (!split || slots <= split.t1) {
+      const capFt = split ? split.t1 * runStep : layout.runFt;
+      const lenFt = Math.min(inchUp(slots * runStep), capFt);
+      if (!(lenFt > 0)) return null;
+      uv = [{ u: -noseFt, v: -w / 2 }, { u: lenFt, v: -w / 2 },
+            { u: lenFt, v: w / 2 }, { u: -noseFt, v: w / 2 }];
+    } else {
+      const run1 = split.t1 * runStep;
+      const run2 = split.t2 * runStep;
+      const L = split.landFt;
+      const landSlots = split.winders || 1;
+      const past = Math.max(0, slots - split.t1 - landSlots);
+      const r2c = Math.min(inchUp(past * runStep), run2);
+      if (split.shape === 'L') {
+        const v1 = -w / 2 + L;
+        const u2a = run1 + L / 2 - w / 2;
+        const u2b = run1 + L / 2 + w / 2;
+        uv = r2c <= 0
+          ? [{ u: -noseFt, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: v1 },
+             { u: run1, v: v1 }, { u: run1, v: w / 2 }, { u: -noseFt, v: w / 2 }]
+          : [{ u: -noseFt, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: v1 },
+             { u: u2b, v: v1 }, { u: u2b, v: v1 + r2c }, { u: u2a, v: v1 + r2c },
+             { u: u2a, v: v1 }, { u: run1, v: v1 }, { u: run1, v: w / 2 }, { u: -noseFt, v: w / 2 }];
+      } else {
+        const vTop = w + SG.STAIR_U_GAP_IN / 12 + w / 2;
+        const vLow = w / 2 + SG.STAIR_U_GAP_IN / 12;
+        uv = r2c <= 0
+          ? [{ u: -noseFt, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: vTop },
+             { u: run1, v: vTop }, { u: run1, v: w / 2 }, { u: -noseFt, v: w / 2 }]
+          : [{ u: -noseFt, v: -w / 2 }, { u: run1 + L, v: -w / 2 }, { u: run1 + L, v: vTop },
+             { u: run1 - r2c, v: vTop }, { u: run1 - r2c, v: vLow }, { u: run1, v: vLow },
+             { u: run1, v: w / 2 }, { u: -noseFt, v: w / 2 }];
+      }
+    }
+    const dedup = uv.filter((pt, index) => {
+      const prev = uv[(index + uv.length - 1) % uv.length];
+      return Math.hypot(pt.u - prev.u, pt.v - prev.v) > 0.001;
+    });
+    if (dedup.length < 3) return null;
+    const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const d = { x: dx / len, z: dz / len };
+    const s = split && split.turn === 'left' ? -1 : 1;
+    const perp = { x: -d.z * s, z: d.x * s };
+    const ring = window.DraftGeometry2D.offsetOutline(
+      dedup.map(pt => ({ x: pt.u, z: pt.v })), STAIR_OPENING_FINISH_IN / 24);
+    return ring.map(pt => ({
+      x: stair.start.x + d.x * pt.x + perp.x * pt.z,
+      z: stair.start.z + d.z * pt.x + perp.z * pt.z,
+    }));
+  };
+
+
+  const stairShift = (stair, dx, dz) => {
+    stair.start.x += dx; stair.start.z += dz;
+    stair.end.x += dx; stair.end.z += dz;
+  };
+
+  // Push the well back inside the interior ring, worst corner first. Six steps
+  // because one push can expose another corner on a different edge.
+  const stairNudgeInsideWalls = stair => {
+    const G = window.DraftGeometry2D;
+    const outline = houseOutlineOn(stair.levelId);
+    if (!outline || outline.points.length < 3) return false;
+    const ring = G.offsetOutline(
+      outline.points.map(pt => ({ x: pt.x, z: pt.z })),
+      -stairOpeningSetbackFt(stair.levelId));
+    let moved = false;
+    for (let step = 0; step < 6; step++) {
+      const poly = stairOpeningFootprint(stair);
+      if (!poly) break;
+      let worst = null;
+      poly.forEach(pt => {
+        if (pointInLoop(ring, pt)) return;
+        let best = null;
+        ring.forEach((rp, index) => {
+          const seg = { start: rp, end: ring[(index + 1) % ring.length] };
+          const { d } = G.pointToSegment(pt, seg);
+          if (!best || d < best.d) best = { d, seg };
+        });
+        if (best && (!worst || best.d > worst.d)) worst = best;
+      });
+      if (!worst) break;
+      const ex = worst.seg.end.x - worst.seg.start.x, ez = worst.seg.end.z - worst.seg.start.z;
+      const el = Math.hypot(ex, ez) || 1;
+      let n = { x: -ez / el, z: ex / el };
+      const mid = {
+        x: (worst.seg.start.x + worst.seg.end.x) / 2,
+        z: (worst.seg.start.z + worst.seg.end.z) / 2,
+      };
+      if (!pointInLoop(ring, { x: mid.x + n.x * 0.05, z: mid.z + n.z * 0.05 })) n = { x: -n.x, z: -n.z };
+      stairShift(stair, n.x * (worst.d + 0.002), n.z * (worst.d + 0.002));
+      moved = true;
+    }
+    return moved;
+  };
+
+  // Push the well off any beam it comes within the clearance of, taking
+  // whichever side of the beam is the shorter move.
+  const stairNudgeOffBeams = stair => {
+    const beams = stairFloorBeams(stair.levelId);
+    if (!beams.length) return false;
+    const clearFt = STAIR_BEAM_CLEAR_IN / 12;
+    let moved = false;
+    for (let step = 0; step < 4; step++) {
+      const poly = stairOpeningFootprint(stair);
+      if (!poly) break;
+      const beam = beams.find(item => stairBeamGapFt(item, poly) < clearFt - 0.0001);
+      if (!beam) break;
+      const bx = beam.end.x - beam.start.x, bz = beam.end.z - beam.start.z;
+      const bl = Math.hypot(bx, bz) || 1;
+      const n = { x: -bz / bl, z: bx / bl };
+      const base = beam.start.x * n.x + beam.start.z * n.z;
+      const projs = poly.map(pt => pt.x * n.x + pt.z * n.z);
+      const pushPlus = (base + clearFt) - Math.min(...projs);
+      const pushMinus = Math.max(...projs) - (base - clearFt);
+      const t = pushPlus <= pushMinus ? pushPlus + 0.002 : -(pushMinus + 0.002);
+      stairShift(stair, n.x * t, n.z * t);
+      moved = true;
+    }
+    return moved;
+  };
+
+  // ALTERNATING, BECAUSE ONE FIX OPENS THE OTHER RULE: sliding off a beam can
+  // push a corner through the wall and back. Four passes, then it stops --
+  // a stair that cannot satisfy both is refused rather than shuffled forever.
+  // Returns the total move in INCHES, which is what the drafter is told.
+  const stairAutoFit = stair => {
+    const from = { x: stair.start.x, z: stair.start.z };
+    for (let pass = 0; pass < 4; pass++) {
+      let moved = stairNudgeInsideWalls(stair);
+      moved = stairNudgeOffBeams(stair) || moved;
+      if (!moved) break;
+    }
+    return Math.hypot(stair.start.x - from.x, stair.start.z - from.z) * 12;
+  };
+
+  // BORN LEGAL, VERIFIED: every well corner inside the interior ring and the
+  // well clear of the carrying beams -- the exact two rules stairAutoFit
+  // nudges for, checked WITHOUT nudging. Asked only of the stacked candidate,
+  // which nothing scored: suggestStair's own winner is already legal by
+  // construction.
+  const stairPlacementLegal = stair => {
+    const outline = houseOutlineOn(stair.levelId);
+    if (!outline || outline.points.length < 3) return false;
+    const poly = stairOpeningFootprint(stair);
+    if (!poly || poly.length < 3) return false;
+    const ring = window.DraftGeometry2D.offsetOutline(
+      outline.points.map(pt => ({ x: pt.x, z: pt.z })),
+      -stairOpeningSetbackFt(stair.levelId));
+    if (!poly.every(pt => pointInLoop(ring, pt))) return false;
+    const clearFt = STAIR_BEAM_CLEAR_IN / 12;
+    return stairFloorBeams(stair.levelId)
+      .every(beam => stairBeamGapFt(beam, poly) >= clearFt - 1e-4);
+  };
+
+  // Rule B's trigger: the well runs beside an exterior wall.
+  const stairWallAdjacent = stair => {
+    const G = window.DraftGeometry2D;
+    const outline = houseOutlineOn(stair.levelId);
+    if (!outline || outline.points.length < 3) return false;
+    const poly = stairOpeningFootprint(stair);
+    if (!poly) return false;
+    const ring = G.offsetOutline(
+      outline.points.map(pt => ({ x: pt.x, z: pt.z })),
+      -stairOpeningSetbackFt(stair.levelId));
+    const edge = Math.min(...poly.map(pt => {
+      let best = Infinity;
+      for (let i = 0; i < ring.length; i++) {
+        best = Math.min(best,
+          G.pointToSegment(pt, { start: ring[i], end: ring[(i + 1) % ring.length] }).d);
+      }
+      return best;
+    }));
+    return edge < 1;
+  };
+
+  // The rule-derived suggestion for one level, UNCOMMITTED. The beam edges are
+  // the ones the well must clear, the stamps weight the circulation core, and
+  // `lowerStair` is a soft pull toward the run below -- passed only on the
+  // fallback path, where the strict stack could not hold its headroom.
+  const autoStairSuggestion = (levelId, lowerStair = null) => {
+    const AS = window.DraftAutoStair;
+    const SG = window.DraftStairGeometry;
+    if (!AS) return null;
+    const outline = houseOutlineOn(levelId);
+    if (!outline || outline.points.length < 3) return null;
+    const descent = SG.stairDescent(levelId, stairLevels());
+    if (!descent || !(descent.riseFt > 0)) return null;
+    const layout = SG.stairLayout(descent.riseFt);
+    const floors = stairFloorLevels();
+    const lowest = floors.length > 0 && Number(floors[0].id) === Number(levelId);
+    const beams = stairFloorBeams(levelId).map(beam => ({
+      start: { x: beam.start.x, z: beam.start.z },
+      end: { x: beam.end.x, z: beam.end.z },
+    }));
+    const stamps = (drawing?.roomTags || [])
+      .filter(tag => Number(tag.levelId) === Number(levelId) && tag.stamped === true && tag.base)
+      .map(tag => ({ name: tag.base, x: tag.at.x, z: tag.at.z }));
+    const res = AS.suggestStair({
+      points: outline.points.map(pt => ({ x: pt.x, z: pt.z })),
+      insetFt: stairOpeningSetbackFt(levelId),
+      beams,
+      stamps,
+      runFt: layout.runFt,
+      treads: layout.treads,
+      widthFt: stairWidthFt,
+      landFt: SG.stairLandFt(stairWidthFt),
+      finishIn: STAIR_OPENING_FINISH_IN,
+      gapIn: STAIR_BEAM_CLEAR_IN,
+      runStepFt: SG.STAIR_TREAD_RUN_IN / 12,
+      softInterior: lowest,   // rule B: basement stairs prefer interior, softly
+      lowerStair,
+    });
+    return { ...res, layout, descent };
+  };
+
+  // Commit one suggestion as an ordinary stair record -- the same shape a hand
+  // placement writes, plus the auto tag and the entry L's split.
+  //
+  // THE ID IS AN INTEGER AND IS HANDED IN, which is not cosmetic. Walls,
+  // outlines, floors and openings take `newDrawingItemId` -- the `kind-7`
+  // string -- but drawing-format.js's stair validator reads
+  // `Number.isInteger(Number(stair.id))`, so a stair carrying `stair-7` is
+  // NaN to it and the record is dropped on the next load. That is the exact
+  // failure newStructureId's own comment was written for: "saves a file that
+  // reads correctly, and loses it on the next load with no error at either
+  // end". It comes in from the caller because one press places a flight on
+  // every descending floor, and a counter re-read per level would hand the
+  // same number out twice -- which the format dedupes by dropping every
+  // record after the first, equally silently.
+  //
+  // `risers` AND `treadRunIn` ARE SET HERE AND ARE NOT IN THE dc ORIGINAL.
+  // MODEL.dc.html's _buildAutoStair omits both while its HAND placement sets
+  // `risers: layout.risers` (:3383) -- and drawing-format.js defaults a
+  // missing `risers` to 1, so an auto stair saved and reloaded came back
+  // claiming ONE riser. It never showed: stairCurrentLayout re-derives the
+  // layout from the level heights on every paint, and design-notices.js
+  // computes its riser counts from `riseFt` rather than the stored field. But
+  // tests/stairs.spec.js:44 asserts stair.risers, so the field is contract,
+  // and a record whose own numbers disagree with each other is the kind of
+  // thing that is true until something finally reads it.
+  const buildAutoStair = (levelId, sug, widthFt, id) => {
+    const SG = window.DraftStairGeometry;
+    return {
+      id,
+      start: { x: sug.stair.start.x, y: 0, z: sug.stair.start.z },
+      end: stairEndPoint(sug.stair, sug.layout),
+      levelId,
+      view: 'plan',
+      widthFt,
+      riseFt: sug.layout.riseFt,
+      risers: sug.layout.risers,
+      treadRunIn: SG.STAIR_TREAD_RUN_IN,
+      rail: stairRailSide,
+      shape: sug.stair.shape,
+      turn: sug.stair.turn,
+      winders: 0,
+      auto: true,
+      ...(Number.isInteger(sug.stair.splitTreads) && sug.stair.splitTreads > 0
+        ? { splitTreads: sug.stair.splitTreads } : {}),
+    };
+  };
+
+  // `end` IS THE END OF THE FIRST LEG, not of the whole flight -- a turned
+  // stair stores its top run and derives the rest. drawing-format.js:598 says
+  // start is the upper-floor nosing; the direction is start -> end, downhill.
+  const stairEndPoint = (shape, layout) => {
+    const SG = window.DraftStairGeometry;
+    const dx = shape.end.x - shape.start.x, dz = shape.end.z - shape.start.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const firstLen = shape.shape === 'straight' ? layout.runFt
+      : (shape.splitTreads || Math.max(1, Math.floor((layout.treads - 1) / 2)))
+        * SG.STAIR_TREAD_RUN_IN / 12;
+    return {
+      x: shape.start.x + (dx / len) * firstLen,
+      y: 0,
+      z: shape.start.z + (dz / len) * firstLen,
+    };
+  };
+
+
+  // STAIRS STACK: the upper run goes directly over the one below so the
+  // headroom holds. Over an entry L the frame FLIPS -- the upper stair's LONG
+  // top leg rides over the long leg below, the landing overlays the landing,
+  // and the short 2-3 step leg lands at the entry floor -- so the turn
+  // reverses and splitTreads becomes the long top leg. Built UNCOMMITTED; the
+  // caller pushes it only once stairPlacementLegal says the well still fits.
+  const buildStackedStair = (below, levelId, layout, widthFt, id) => {
+    const SG = window.DraftStairGeometry;
+    const runStep = SG.STAIR_TREAD_RUN_IN / 12;
+    const dxb = below.end.x - below.start.x, dzb = below.end.z - below.start.z;
+    const lb = Math.hypot(dxb, dzb) || 1;
+    const d = { x: dxb / lb, z: dzb / lb };
+    const belowLayout = SG.stairCurrentLayout(below, stairLevels());
+    const belowSplit = SG.stairShapeSplit(below, belowLayout);
+    const make = (start, dir, firstLen, extra) => ({
+      id,
+      start: { x: start.x, y: 0, z: start.z },
+      end: { x: start.x + dir.x * firstLen, y: 0, z: start.z + dir.z * firstLen },
+      levelId,
+      view: 'plan',
+      widthFt,
+      riseFt: layout.riseFt,
+      risers: layout.risers,
+      treadRunIn: SG.STAIR_TREAD_RUN_IN,
+      rail: below.rail,
+      shape: below.shape || 'straight',
+      turn: below.turn || 'right',
+      winders: below.winders || 0,
+      auto: true,
+      ...extra,
+    });
+    if (belowSplit && Number.isInteger(below.splitTreads) && below.splitTreads > 0) {
+      const tShort = belowSplit.t1;
+      const s = belowSplit.turn === 'right' ? 1 : -1;
+      const perp = { x: -d.z * s, z: d.x * s };
+      const L = belowSplit.landFt;
+      const run1b = belowSplit.t1 * runStep;
+      const landingCentre = {
+        x: below.start.x + d.x * (run1b + L / 2) + perp.x * (-below.widthFt / 2 + L / 2),
+        z: below.start.z + d.z * (run1b + L / 2) + perp.z * (-below.widthFt / 2 + L / 2),
+      };
+      const t1u = Math.max(1, layout.treads - 1 - tShort);
+      const du = { x: -perp.x, z: -perp.z };
+      const su = -s;
+      const perpU = { x: -du.z * su, z: du.x * su };
+      const Lu = SG.stairLandFt(widthFt);
+      const run1u = t1u * runStep;
+      const start = {
+        x: landingCentre.x - du.x * (run1u + Lu / 2) - perpU.x * (-widthFt / 2 + Lu / 2),
+        z: landingCentre.z - du.z * (run1u + Lu / 2) - perpU.z * (-widthFt / 2 + Lu / 2),
+      };
+      return make(start, du, run1u, {
+        turn: su > 0 ? 'right' : 'left',
+        winders: 0,
+        splitTreads: t1u,
+      });
+    }
+    const firstLen = belowSplit
+      ? Math.max(1, Math.floor((layout.treads - 1) / 2)) * runStep
+      : layout.runFt;
+    return make({ x: below.start.x, z: below.start.z }, d, firstLen, {});
+  };
+
+  // SUGGEST FOR ONE LEVEL: stack over the run below first, and fall back to
+  // the level's own best candidate with a message when the stack cannot be
+  // made legal. Returns { stair, note } -- a null stair with a note when
+  // nothing fits, and null outright when the level needs no stair at all.
+  //
+  // A LEVEL THAT ALREADY HAS ONE IS LEFT ALONE. Re-running must not stack a
+  // second flight on the first, and a hand-placed stair is the drafter's
+  // answer to this question already.
+  const suggestStairForLevel = (levelId, id) => {
+    const SG = window.DraftStairGeometry;
+    const floors = stairFloorLevels();
+    const idx = floors.findIndex(level => Number(level.id) === Number(levelId));
+    if (idx < 0) return null;
+    const descent = SG.stairDescent(levelId, stairLevels());
+    if (!descent || !(descent.riseFt > 0)) return null;
+    const planStairs = (drawing?.stairs || [])
+      .filter(stair => (stair.view || 'plan') === 'plan');
+    if (planStairs.some(stair => Number(stair.levelId) === Number(levelId))) return null;
+    const layout = SG.stairLayout(descent.riseFt);
+    const below = idx > 0
+      ? planStairs.find(stair => Number(stair.levelId) === Number(floors[idx - 1].id))
+      : null;
+    // RULE B: a basement descent running beside an exterior wall widens every
+    // stacked flight above it to 3'-6", so the basement run keeps its true
+    // 3'-0" clear past the thicker foundation wall.
+    const lowestStair = floors.length
+      ? planStairs.find(stair => Number(stair.levelId) === Number(floors[0].id))
+      : null;
+    const widen = lowestStair ? stairWallAdjacent(lowestStair) : false;
+    const widthFt = idx > 0 && widen ? Math.max(3.5, stairWidthFt) : stairWidthFt;
+    let stackNote = '';
+    if (below) {
+      const stacked = buildStackedStair(below, levelId, layout, widthFt, id);
+      if (stairPlacementLegal(stacked)) {
+        return {
+          stair: stacked,
+          note: `${namedLevel(levelId)}: ${layout.risers} risers stacked over the run below`
+            + ' — headroom holds.',
+        };
+      }
+      stackNote = ' (could not stack over the run below — headroom needs checking)';
+    }
+    // The strict stack did not hold, so fall back to a free placement -- but
+    // let the flight below still PULL on it. Its run midpoint stands in for
+    // the well centre, near enough for a proximity bonus.
+    const sug = autoStairSuggestion(levelId, below ? {
+      wellCentre: {
+        x: (below.start.x + below.end.x) / 2,
+        z: (below.start.z + below.end.z) / 2,
+      },
+    } : null);
+    if (!sug) return null;
+    if (!sug.stair) {
+      return {
+        stair: null,
+        note: `${namedLevel(levelId)}: no legal stair position — straight `
+          + `${sug.report?.straight || 'blocked'}; L ${sug.report?.L || 'blocked'};`
+          + ` U ${sug.report?.U || 'blocked'}.`,
+      };
+    }
+    const stair = buildAutoStair(levelId, sug, widthFt, id);
+    const how = sug.stair.splitTreads
+      ? `entry L — landing at the front wall, ${sug.stair.splitTreads} steps down from the entry`
+      : sug.stair.shape === 'straight'
+        ? `straight run${stairFloorBeams(levelId).length ? ' along the beam edge' : ''}`
+        : sug.stair.shape === 'L' ? 'folded L at the corner nearest the core' : 'U switchback';
+    return { stair, note: `${namedLevel(levelId)}: ${layout.risers} risers · ${how}${stackNote}.` };
+  };
+
+
+  // THE HOLE THE STAIR DESCENDS THROUGH. A stair is rough intent: it gets a
+  // NUDGE first -- clear of every beam carrying the floor, one real wall
+  // assembly inside the exterior -- and then the well is cut from the floor it
+  // lands inside.
+  //
+  // A REFUSAL IS REPORTED, NOT SWALLOWED. Nobody is watching a single stair
+  // during a build, so a hole that silently did not get cut is the drafter
+  // handed a house with a stair and no opening and nothing saying why. It
+  // rides back as data on the result the caller already reads -- the same
+  // choice the unsupported-column count made.
+  //
+  // CENTRE-ONLY, and that is the manual path's rule too rather than a
+  // shortcut here: an opening is charged to the floor its centre lands in.
+  // The whole-footprint question is a real one -- this opening's LENGTH comes
+  // from headroom, not from the stair, so a stair that fits can still open a
+  // hole that overhangs -- and it is reported rather than refused.
+  const buildStairOpenings = () => {
+    const G = window.DraftGeometry2D;
+    const result = { cut: 0, nudges: [], refused: [], placed: [] };
+    if (!Array.isArray(drawing.surfaceOpenings)) drawing.surfaceOpenings = [];
+    (drawing?.stairs || [])
+      .filter(stair => (stair.view || 'plan') === 'plan')
+      .forEach(stair => {
+        if (drawing.surfaceOpenings.some(opening => opening.stairId === stair.id)) return;
+        const descent = window.DraftStairGeometry.stairDescent(stair.levelId, stairLevels());
+        if (!descent || !(descent.riseFt > 0)) return;
+        const nudgedIn = stairAutoFit(stair);
+        const points = stairOpeningFootprint(stair);
+        if (!points || points.length < 3) return;
+        const candidates = (drawing?.floors || []).filter(floor =>
+          Number(floor.levelId) === Number(stair.levelId)
+          && floor.structure !== 'slab' && (floor.points || []).length >= 3);
+        const floor = candidates.find(item => G.ringInsideRing(points, item.points));
+        if (!floor) {
+          const centre = points.reduce((sum, pt) => ({
+            x: sum.x + pt.x / points.length,
+            z: sum.z + pt.z / points.length,
+          }), { x: 0, z: 0 });
+          result.refused.push(candidates.some(item => pointInLoop(item.points, centre))
+            ? `${namedLevel(stair.levelId)}: the opening runs off the floor`
+            : `${namedLevel(stair.levelId)}: no floor to cut it from`);
+          return;
+        }
+        // PLAIN POINTS, NOT POOLED. poolVertex is keyed to the 'house' body,
+        // so pooling here would let an opening corner MERGE with a wall corner
+        // and drag one when the other moves -- which is the exact thing
+        // MODEL.dc.html's separate 'opening' body exists to prevent. And the
+        // loader pools WALLS only, so an opening written with plain points is
+        // what a reload produces anyway: pooling on the press and not on the
+        // reload would be the two paths disagreeing.
+        const opening = {
+          id: newDrawingItemId('opening'),
+          hostType: 'floor',
+          hostId: floor.id,
+          points: points.map(pt => ({ x: pt.x, z: pt.z })),
+          levelId: stair.levelId,
+          stairId: stair.id,
+        };
+        drawing.surfaceOpenings.push(opening);
+        result.placed.push({ list: drawing.surfaceOpenings, item: opening });
+        result.cut += 1;
+        if (nudgedIn > 0.05) {
+          result.nudges.push(window.DraftFormatters.formatInchesOnly(nudgedIn));
+        }
+      });
+    return result;
+  };
+
+  // EVERY DESCENDING FLOOR WITHOUT A STAIR, BOTTOM-UP -- and the order is the
+  // rule rather than tidiness, the same way it is for the beams: an upper
+  // flight stacks on the one below it, so the floor under it has to be placed
+  // FIRST or the stack has nothing to sit over and every storey is placed
+  // free.
+  //
+  // WHAT IT RETURNS IS UNDO-SHAPED, `{list, item}` pairs, so the bone press
+  // folds the stairs AND their openings into the ONE step that covers the
+  // whole build. A stair with an undo step of its own would make a premade
+  // house cost two Ctrl+Z.
+  //
+  // -1 IS A REAL ANSWER: no floor levels at all is not a count of zero.
+  const placeAutoStairs = () => {
+    if (!drawing || !window.DraftAutoStair) return -1;
+    const floors = stairFloorLevels();
+    if (!floors.length) return -1;
+    if (!Array.isArray(drawing.stairs)) drawing.stairs = [];
+    let stairId = newStructureId(drawing.stairs);
+    const placed = [];
+    const notes = [];
+    floors.forEach(level => {
+      const res = suggestStairForLevel(level.id, stairId);
+      if (!res) return;
+      notes.push(res.note);
+      if (!res.stair) return;
+      drawing.stairs.push(res.stair);
+      placed.push({ list: drawing.stairs, item: res.stair });
+      stairId += 1;
+    });
+    // THE HOLES COME AFTER EVERY RUN IS DOWN, not per level inside the loop:
+    // an upper flight stacks on the POSITION of the one below it, so every run
+    // has to be placed before any of them is measured for a hole.
+    //
+    // AND THAT IS NOT A FULL ANSWER, which is worth saying plainly rather than
+    // leaving the paragraph above to imply it is. stairAutoFit MOVES a stair
+    // to clear a beam or a wall, and it moves each one on its own -- so a
+    // lower flight nudged here can still slide out from under an upper flight
+    // that was stacked on where it used to be. Deferring the cut stops the
+    // interleaving, not the drift.
+    //
+    // Every premade measures clean today, and the stacking check in
+    // tests/model-html-auto-stair.spec.js is what says so -- it compares the
+    // two runs' POSITIONS rather than trusting that they were placed that way,
+    // so it fails the day a nudge breaks one. The honest fix, carrying the
+    // delta up the stack or refusing a nudge that breaks it, is not written on
+    // the strength of a case nobody has hit.
+    const cut = buildStairOpenings();
+    return {
+      placed: [...placed, ...cut.placed],
+      stairs: placed.length,
+      openings: cut.cut,
+      nudges: cut.nudges,
+      refused: cut.refused,
+      notes,
+    };
+  };
+
   const buildPremadePlan = order => {
     if (!drawing) return null;
     const plan = window.DraftPremadePlans.planFor(order?.entry?.id);
@@ -11126,6 +11871,53 @@
         // sentence anyway.
         + (framedTally.unsupported
           ? ` (${framedTally.unsupported} on nothing)` : ''));
+    }
+
+    // ── AND THE STAIRS BETWEEN THE FLOORS ──────────────────────────────────
+    //
+    // Movie: "make sure all the 'pre-made' houses get the beams, columns and
+    // piles and i will check them out. maybe give them stairs too". A house
+    // with two floors and nothing between them asserts a storey nobody can
+    // reach.
+    //
+    // AFTER THE BEAMS, AND THE ORDER IS A DECISION rather than a line's
+    // position. Both placers want to run second:
+    //
+    //   stairNudgeOffBeams reads the beams the well must keep clear of. With
+    //   none placed yet it takes its empty-list exit -- the exact defect
+    //   MODEL.dc.html carried until 7 Sep, where the nudge AND the check that
+    //   verifies it were both inert on every automatically built house.
+    //
+    //   placeAutoBeam reads stairHolesOn, so a beam laid before the stairs
+    //   divides evenly instead of re-landing beside the hole.
+    //
+    // BEAMS FIRST WINS because the stair MOVES to clear the beam, and that is
+    // the safety-critical direction: a beam crossing an open well is a beam
+    // over the drafter's head on the way down. What is given up is only that
+    // the beam is placed by even division rather than beside the hole -- a
+    // placement question, not a legality one -- and a second AUTO BEAM press
+    // fixes it, because placeAutoBeam sweeps and replaces its own.
+    //
+    // NOT A SECOND BEAM PASS HERE. Re-deriving the beams after the stairs
+    // would move them out from under the well the nudge had just aligned to,
+    // and the two would chase each other with no fixed point.
+    const staired = placeAutoStairs();
+    if (staired !== -1) {
+      extra.push(...staired.placed);
+      if (staired.stairs) {
+        parts.push(`${staired.stairs} stair${staired.stairs === 1 ? '' : 's'}`
+          + (staired.openings
+            ? ` through ${staired.openings} opening`
+              + `${staired.openings === 1 ? '' : 's'}` : ''));
+      }
+      // A REFUSED OPENING IS SAID OUT LOUD. Nobody is watching a single stair
+      // during a build, so a hole that silently did not get cut is a drafter
+      // handed a house with a stair and no opening and nothing saying why --
+      // the same reasoning as the unsupported-column count above.
+      if (staired.refused.length) {
+        parts.push(`${staired.refused.length} stair opening`
+          + `${staired.refused.length === 1 ? '' : 's'} NOT cut`);
+      }
     }
 
     undoStack.length = mark;
@@ -13674,6 +14466,109 @@
     beamPanelUp = true;
   };
 
+
+  // THE BUTTON IS NOT THE ONLY CALLER, the same split AUTO BEAM and AUTO DIMS
+  // take: the bone press folds the stairs into the ONE undo step that covers
+  // the whole build, so the worker owns no undo of its own.
+  const pressAutoStairs = () => {
+    const result = placeAutoStairs();
+    if (result === -1) {
+      sayOnStrip(window.DraftAutoStair
+        ? 'AUTO STAIR needs a level that carries a floor.'
+        : 'AUTO STAIR cannot run: auto-stair.js did not load.');
+      return;
+    }
+    if (result.placed.length) {
+      undoStack.push({
+        kind: 'built',
+        walls: [], outlines: [], list: null,
+        items: result.placed,
+        restored: [],
+      });
+      markDirty();
+    }
+    // WHAT IT DID, LEVEL BY LEVEL, because a stair is a decision rather than a
+    // count -- the riser number, the shape it folded to and whether it stacked
+    // are the three things a drafter checks first. The notes carry all three,
+    // and a level that got nothing says why rather than going quiet.
+    const said = [];
+    if (result.stairs) {
+      said.push(`AUTO STAIR placed ${result.stairs} `
+        + `flight${result.stairs === 1 ? '' : 's'}`
+        + (result.openings
+          ? ` and cut ${result.openings} opening${result.openings === 1 ? '' : 's'}`
+          : ''));
+    }
+    // A NUDGE IS REPORTED BECAUSE THE STAIR MOVED. The drafter asked for a
+    // placement and got one somewhere else -- inches off a beam, or back
+    // inside the wall -- and a silent shift is the drawing disagreeing with
+    // the press that made it.
+    if (result.nudges.length) said.push(`nudged ${result.nudges.join(', ')} clear`);
+    if (result.refused.length) {
+      said.push(`${result.refused.length} opening`
+        + `${result.refused.length === 1 ? '' : 's'} NOT cut — ${result.refused.join('; ')}`);
+    }
+    sayOnStrip(said.length
+      ? `${said.join(' · ')}. ${result.notes.join(' ')}`.trim()
+      : (result.notes.length
+        ? result.notes.join(' ')
+        : 'Every floor already has its stair — delete one to have it suggested again.'));
+    buildChrome();
+    paint();
+  };
+
+  let stairPanelUp = false;
+  const showStairProps = () => {
+    const P = window.ModelProps;
+    if (!P) return;
+    const box = document.createElement('div');
+
+    const row = document.createElement('div');
+    row.className = 'chip-row';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'sel-chip';
+    btn.dataset.autoStair = '';
+    btn.textContent = 'AUTO STAIR';
+    // GREYED FOR A MISSING PREREQUISITE ONLY, which is the rule the BEAM
+    // panel's button states: a button greyed on a house that simply already
+    // has its stairs reads as broken. "Every floor already has one" is a
+    // RESULT, so it gets the press and the sentence.
+    //
+    // THE PREREQUISITE IS AN OUTLINE ON SOME DESCENDING FLOOR. Without one
+    // there is no ring to place inside and no rise to count, and the press
+    // would be a no-op the drafter cannot see the reason for.
+    const floors = stairFloorLevels();
+    const placeable = floors.filter(level => {
+      const descent = window.DraftStairGeometry.stairDescent(level.id, stairLevels());
+      return !!houseOutlineOn(level.id) && !!descent && descent.riseFt > 0;
+    });
+    const ready = !!window.DraftAutoStair && placeable.length > 0;
+    btn.disabled = !ready;
+    btn.title = !window.DraftAutoStair
+      ? 'auto-stair.js did not load — check the script order in the page head.'
+      : placeable.length
+        ? `Suggest a flight on ${placeable.map(level => levelLabel(level.id, level.name)).join(', ')}`
+          + ' — bottom-up, each one stacked over the run below, and cut its opening.'
+        : 'No floor with an outline to descend from yet — draw one and press again.';
+    btn.addEventListener('click', () => { pressAutoStairs(); showStairProps(); });
+    row.append(btn);
+
+    // SHORT, AND THE LENGTH IS LOAD-BEARING -- see the BEAM panel's note. The
+    // rail is as wide as its widest child, and a paragraph here covered the
+    // plan out to x = 476 and swallowed the presses meant for the canvas.
+    const note = document.createElement('div');
+    note.className = 'props-title';
+    note.dataset.stairNote = '';
+    note.textContent = ready
+      ? `${stairWidthFt * 12}" WIDE · ${stairRailSide.toUpperCase()} BAR`
+      : 'NEEDS AN OUTLINE';
+
+    box.append(row, note);
+    P.set('STAIR', box);
+    stairPanelUp = true;
+  };
+
   // ── A PANEL BUILT ON ONE LEVEL IS STALE ON THE NEXT ─────────────────────
   //
   // showBeamProps reads the active level to decide which floor it would frame
@@ -13690,7 +14585,7 @@
   // thing, not a level, and rebuilding the tool's over the top of it would
   // take away what the drafter is reading.
   const refreshToolPropsOnLevel = () => {
-    if (roofPanelUp || openingPanelUp || dimensionPanelUp || beamPanelUp) {
+    if (roofPanelUp || openingPanelUp || dimensionPanelUp || beamPanelUp || stairPanelUp) {
       showToolProps(activeTool);
     }
   };
@@ -13704,6 +14599,7 @@
     // own placement -- "the AUTOBEAM/COLUMN should be available in the build/
     // BEAM & COLUMN buttons" -- rather than a tidy-up.
     if (tool === 'beam' || tool === 'column') { showBeamProps(); return; }
+    if (tool === 'stair') { showStairProps(); return; }
     // Only clear what this panel put there. A COLUMN's or a BEAM's own rows
     // belong to the SELECTION, which a tool change does not touch, and
     // clearing them here would blank a panel the drafter is reading.
@@ -13717,6 +14613,7 @@
     if (openingPanelUp) { window.ModelProps.clear(); openingPanelUp = false; }
     if (dimensionPanelUp) { window.ModelProps.clear(); dimensionPanelUp = false; }
     if (beamPanelUp) { window.ModelProps.clear(); beamPanelUp = false; }
+    if (stairPanelUp) { window.ModelProps.clear(); stairPanelUp = false; }
   };
 
   toolListeners.push(tool => {
@@ -13925,6 +14822,14 @@
     if (activeTool === 'floor') { floorPress(at); return; }
     if (activeTool === 'fenestration') { placeOpening(at); return; }
     if (activeTool === 'fixture') { fixturePress(at); return; }
+    // STAIR HAS NO HAND PLACEMENT YET, and a tool that swallows a press in
+    // silence is worse than one that refuses it: the drafter reads the click
+    // as landing and the stair as failing to draw. Movie's own ordering --
+    // "AUTO STAIR in the STAIR properties panel, THEN a placement system".
+    if (activeTool === 'stair') {
+      sayOnStrip('STAIR places through AUTO STAIR for now — hand placement is next.');
+      return;
+    }
     if (activeTool === 'cut') { cutPress(at); return; }
     if (activeTool === 'wall') {
       // §1: "either drag, or press again and drag -- both must work". The lift
