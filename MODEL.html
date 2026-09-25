@@ -11034,10 +11034,81 @@
   // storeyBodies' own rule and its reason -- "the most recent loop is the one
   // the drafter means". Reused rather than re-filtered so the garage skip and
   // the three-point minimum have exactly one definition on this page.
+  // ── WHICH BODY A STAIRCASE BELONGS IN ──────────────────────────────────
+  //
+  // Movie, 25 Sep: "the ATTACHED garage won't need a staircase to the 2nd
+  // floor (unless the user wants it special - don't need it as default)" ...
+  // "the DETACHED needs one because it doesn't have a house with stairs in
+  // it".
+  //
+  // MEASURED ON HIS OWN 2 STOREY + GARAGE + ROOM OVER, built 25 Sep: the
+  // stair from MAIN FL to 2ND FL was laid out inside the room over the
+  // garage, and its opening cut through that room's floor.
+  //
+  //     stair lvl 3   x  -1.7  z  -5.4    in the house
+  //     stair lvl 5   x   2.7  z  30.6    in the GARAGE
+  //
+  // THE LOOKUP TOOK THE LAST BODY. storeyBodies keeps every outline that is
+  // not flagged `garage`, and raiseGarage files the room over the garage as
+  // an ordinary outline -- so 2ND FL carries two, and `bodies.length - 1`
+  // picked the newer, smaller one:
+  //
+  //     outline-15   x -16..16  z -20..20   1280 sq ft   the house's 2nd floor
+  //     outline-37   x  -4..20  z  19..38    436 sq ft   the room over the garage
+  //
+  // LAST-ONE-WINS IS RIGHT FOR ITS OTHER CALLERS and stays theirs: AUTO PILES
+  // asks which loop a garage shares an edge with and the panel asks whether
+  // there is anything to frame, and for both "the most recent loop is the one
+  // the drafter means" (houseFootprint's own note). A staircase is a different
+  // question -- not which loop was drawn last, but which one is the HOUSE --
+  // so it gets its own, and houseFootprint is left alone.
+  //
+  // A ROOM OVER THE GARAGE IS THE GARAGE'S ROOM. It is asked geometrically
+  // because there is no flag to read: the deck raiseGarage builds carries no
+  // `garage: true`, exactly as its floor record does not. A body more than
+  // half over a garage outline is that garage's; of whatever is left, the
+  // largest is the house.
+  const OVER_GARAGE_BODY_SHARE = 0.5;
+  const bodyOverGarage = (outline, levelId) => {
+    const garages = [];
+    (drawing?.levels || []).forEach(level => {
+      (drawing?.outlines || []).forEach(other => {
+        if (other.garage === true && (other.points || []).length >= 3
+          && Number(other.levelId) === Number(level.id)) garages.push(other);
+      });
+    });
+    if (!garages.length) return false;
+    const pts = outline.points;
+    const xs = pts.map(pt => pt.x), zs = pts.map(pt => pt.z);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    const z0 = Math.min(...zs), z1 = Math.max(...zs);
+    const N = 12;
+    let inBody = 0, over = 0;
+    for (let i = 0; i < N; i += 1) {
+      for (let j = 0; j < N; j += 1) {
+        const at = { x: x0 + ((i + 0.5) / N) * (x1 - x0), z: z0 + ((j + 0.5) / N) * (z1 - z0) };
+        if (!pointInLoop(pts, at)) continue;
+        inBody += 1;
+        if (garages.some(g => pointInLoop(g.points, at))) over += 1;
+      }
+    }
+    return inBody > 0 && over / inBody > OVER_GARAGE_BODY_SHARE;
+  };
   const houseOutlineOn = levelId => {
     const level = (drawing?.levels || []).find(item => Number(item.id) === Number(levelId));
     const bodies = level ? storeyBodies(level) : [];
-    return bodies.length ? bodies[bodies.length - 1].outline : null;
+    if (!bodies.length) return null;
+    const ownArea = outline => Math.abs(outline.points.reduce((sum, pt, i) => {
+      const next = outline.points[(i + 1) % outline.points.length];
+      return sum + (pt.x * next.z - next.x * pt.z);
+    }, 0) / 2);
+    const house = bodies.filter(body => !bodyOverGarage(body.outline, levelId));
+    // Nothing left means every body on this storey sits over the garage --
+    // a detached garage with a room over it, which is exactly the case Movie
+    // says DOES want a stair. Fall back to last-one-wins rather than refuse.
+    const pool = house.length ? house : bodies;
+    return pool.reduce((best, body) =>
+      ownArea(body.outline) > ownArea(best.outline) ? body : best).outline;
   };
 
   // The floor levels bottom-up. stairLevels() already builds exactly this list

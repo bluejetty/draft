@@ -168,6 +168,78 @@ test('a built two-storey arrives with stacked flights and cut openings',
 // stair carrying `stair-7` is NaN to it and the record is DROPPED on the next
 // load with no error at either end. Caught before it shipped; pinned so it
 // cannot come back.
+// ── A STAIRCASE BELONGS IN THE HOUSE, NOT OVER THE GARAGE ───────────────
+//
+// Movie, 25 Sep: "the ATTACHED garage won't need a staircase to the 2nd floor
+// (unless the user wants it special - don't need it as default)" ... "the
+// DETACHED needs one because it doesn't have a house with stairs in it".
+//
+// MEASURED ON HIS OWN BUILD before the fix -- the flight from MAIN FL to
+// 2ND FL laid out inside the room over the garage, with its opening cut
+// through that room's floor:
+//
+//     stair lvl 3   x  -1.7  z  -5.4    in the house
+//     stair lvl 5   x   2.7  z  30.6    in the GARAGE
+//
+// `storeyBodies` keeps every outline not flagged `garage`, and raiseGarage
+// files the room over the garage as an ordinary one -- so 2ND FL carries two
+// and `houseOutlineOn` took the LAST. That is the right rule for AUTO PILES
+// and the framing panel, whose own note says "the most recent loop is the one
+// the drafter means"; it is the wrong question for a stair.
+//
+// THE OPENING IS CHECKED TOO, not just the run. The hole is what makes the
+// room unusable, and it is cut from the stair's own footprint -- so a check
+// on the run alone would pass a fix that moved the flight and left the hole.
+test('the stair to the second floor lands in the house, not over the garage',
+  async ({ page }) => {
+    await open(page);
+    await order(page, 'bungalow', 'twoStorey-over');
+    await saveNow(page);
+    const saved = await savedFile(page);
+
+    const inLoop = (pts, at) => {
+      let inside = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const a = pts[i], b = pts[j];
+        if (((a.z > at.z) !== (b.z > at.z))
+          && (at.x < (b.x - a.x) * (at.z - a.z) / ((b.z - a.z) || Number.EPSILON) + a.x)) {
+          inside = !inside;
+        }
+      }
+      return inside;
+    };
+    const garages = (saved.outlines || []).filter(o => o.garage === true
+      && (o.points || []).length >= 3);
+    // THE FIXTURE'S REACH: without a garage in the drawing this proves
+    // nothing, and `twoStorey-over` is the only premade that builds a room
+    // over one.
+    expect(garages.length, 'the build lost its garage, so this proves nothing')
+      .toBeGreaterThan(0);
+
+    const upper = (saved.stairs || []).find(stair =>
+      stair.auto === true && Number(stair.levelId) === SECOND_FL);
+    expect(upper, 'no flight was placed on the second floor').toBeTruthy();
+    const mid = {
+      x: (upper.start.x + upper.end.x) / 2,
+      z: (upper.start.z + upper.end.z) / 2,
+    };
+    expect(garages.some(g => inLoop(g.points, mid)),
+      `the flight to the second floor was laid out over the garage, at `
+      + `x ${mid.x.toFixed(1)} z ${mid.z.toFixed(1)}`).toBe(false);
+
+    const holes = (saved.surfaceOpenings || []).filter(o =>
+      Number(o.levelId) === SECOND_FL && (o.points || []).length >= 3);
+    holes.forEach(hole => {
+      const c = hole.points.reduce((sum, pt) => ({
+        x: sum.x + pt.x / hole.points.length,
+        z: sum.z + pt.z / hole.points.length,
+      }), { x: 0, z: 0 });
+      expect(garages.some(g => inLoop(g.points, c)),
+        `a stair opening was cut through the room over the garage, at `
+        + `x ${c.x.toFixed(1)} z ${c.z.toFixed(1)}`).toBe(false);
+    });
+  });
+
 test('every placed stair survives the reload with its id and riser count',
   async ({ page }) => {
   await open(page);
