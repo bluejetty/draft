@@ -9710,6 +9710,70 @@
   const GARAGE_PILE_FOOTING = 'pile12';
   const GARAGE_PILE_MARK = 'P2';
 
+  // THE RULE ITSELF, with two callers: the bone press builds a garage and
+  // pours its piles in one gesture, and the COLUMN panel's AUTO PILES pours
+  // them under a garage already drawn. Movie asked for both -- "when a garage
+  // is created from 'OUTLINE' this should be used to add the piles when grade
+  // beam is selected", and "we should also add that into the COLUMN command".
+  //
+  // IT WRITES THE RECORDS AND PUSHES NO UNDO STEP, the same split
+  // placeAutoDims and placeAutoBeam take: the bone press folds these into the
+  // ONE step that covers the whole building, and a worker with a step of its
+  // own would make a premade house cost two Ctrl+Z.
+  //
+  // THE CENTRELINE, NOT THE OUTLINE. "the pile should be located in the
+  // center of the wall" -- and an outline is a wall FACE: footingRings
+  // offsets from 0 and -(wallFt + projFt), so the concrete hangs inboard of
+  // the loop. Half the wall in is the middle of it, 4" on concrete_8.
+  const placeGaragePiles = (loop, { against = null } = {}) => {
+    const levelId = FOUNDATION_LEVEL_ID;
+    const placed = [];
+    if (!levelPresent(levelId)) return { placed };
+    const G = window.DraftGeometry2D;
+    const WT = window.DraftWallTypes;
+    const wallFt = (WT.WALL_TYPES.find(t => t.id === 'concrete_8')?.totalIn || 8) / 12;
+    const ring = loop.map(pt => ({ x: pt.x, z: pt.z }));
+    const spine = G.offsetOutline(ring, -wallFt / 2);
+    // An offset that collapses the loop is not a beam to pile under, the same
+    // refusal buildRoofFromFootprint makes for the same reason.
+    if (!Array.isArray(spine) || spine.length < 3) return { placed };
+    // THE SHARED EDGES ARE TESTED ON THE SOURCE LOOP, not on the inset one --
+    // the same trap the footing rings carry a note about. The spine has been
+    // moved off the house, so asking whether IT lies on the house answers no
+    // for every leg, and the garage would get a row of piles buried in the
+    // house wall.
+    const shared = against ? G.loopSegments(against) : null;
+    const onHouse = index => {
+      if (!shared) return false;
+      const a = ring[index], b = ring[(index + 1) % ring.length];
+      return G.edgeOnLoop(a, b, shared);
+    };
+    drawing.columns = drawing.columns || [];
+    let pileId = newStructureId(drawing.columns);
+    window.DraftBuildHouse.pilePoints(spine, {
+      maxSpacingFt: GARAGE_PILE_SPACING_FT,
+      skipEdge: onHouse,
+    }).forEach(point => {
+      const column = {
+        id: pileId++,
+        point: { x: point.x, y: 0, z: point.z },
+        levelId,
+        view: 'foundation',
+        footing: GARAGE_PILE_FOOTING,
+        // THE SCHEDULE'S OWN MARK, so the plan and SPECS say one thing.
+        // spec-master.js:202 is P2 -- 12" DIA x 15' LONG, 2-15M x 17'
+        // VERTICAL -- which is why the footing above is the 12" one: a record
+        // whose drawn diameter disagreed with its mark would be two answers
+        // to one question.
+        pileMark: GARAGE_PILE_MARK,
+        auto: true,
+      };
+      drawing.columns.push(column);
+      placed.push({ list: drawing.columns, item: column });
+    });
+    return { placed };
+  };
+
   // The level a BUILDING starts on. floorLevels is bottom-up, so [0] is the
   // lowest storey -- MAIN FL on the standard stack, and MODEL.dc.html's own
   // choice for garage walls (`_floorLevels()[0]`). Never the active level: a
@@ -9886,64 +9950,14 @@
       // BEAM and PILES (not frost wall)" -- arrived half done, and only the
       // half that is drawn was noticed.
       //
-      // MODEL.dc.html DID NOT HAVE THIS EITHER, which is worth saying so the
-      // next reader does not go looking for the port. Its own BUILD HOUSE
-      // hint (:23740) says it placed "10"ø piles at the two beam corners
-      // against the house (COLUMN or COPY places the rest along the beam)" --
-      // two piles and a note telling the drafter to finish the job.
-      //
-      // Movie, 25 Sep: "i pile per corner and then 1 every 9ft or less" ...
-      // "(even them out if its less than 9ft". That rule CONTAINS the old
-      // page's two: the leg on the house carries no beam and so takes no
-      // piles along it, which leaves its two ends as the ends of the runs
-      // that remain. The special case falls out of the general one.
-      //
-      // THE CENTRELINE, NOT THE OUTLINE. "the pile should be located in the
-      // center of the wall" -- and an outline is a wall FACE: footingRings
-      // just below offsets from 0 and -(wallFt + projFt), so the concrete
-      // hangs inboard of the loop. Half the wall in is the middle of it, 4"
-      // on concrete_8.
+      // THE WORKER IS SHARED WITH THE BUTTON. placeGaragePiles is the whole
+      // rule and this is one of its two callers; the other is AUTO PILES in
+      // the COLUMN panel, for a garage already drawn. A second copy here
+      // would be a second answer the moment either moved.
       if (kind === 'gradebeam') {
-        const G = window.DraftGeometry2D;
-        const WT = window.DraftWallTypes;
-        const wallFt = (WT.WALL_TYPES.find(t => t.id === 'concrete_8')?.totalIn || 8) / 12;
-        const spine = G.offsetOutline(
-          loop.map(pt => ({ x: pt.x, z: pt.z })), -wallFt / 2);
-        // THE SHARED EDGES ARE TESTED ON THE SOURCE LOOP, not on the inset
-        // one -- the same trap the footing rings carry a note about. The
-        // spine has been moved off the house, so asking whether IT lies on
-        // the house answers no for every leg, and the garage would get a
-        // row of piles buried in the house wall.
-        const shared = against ? G.loopSegments(against) : null;
-        const onHouse = index => {
-          if (!shared) return false;
-          const a = loop[index], b = loop[(index + 1) % loop.length];
-          return G.edgeOnLoop(a, b, shared);
-        };
-        drawing.columns = drawing.columns || [];
-        let pileId = newStructureId(drawing.columns);
-        window.DraftBuildHouse.pilePoints(spine, {
-          maxSpacingFt: GARAGE_PILE_SPACING_FT,
-          skipEdge: onHouse,
-        }).forEach(point => {
-          const column = {
-            id: pileId++,
-            point: { x: point.x, y: 0, z: point.z },
-            levelId,
-            view: 'foundation',
-            footing: GARAGE_PILE_FOOTING,
-            // THE SCHEDULE'S OWN MARK, so the plan and SPECS say one thing.
-            // spec-master.js:202 is P2 -- 12" DIA x 15' LONG, 2-15M x 17'
-            // VERTICAL -- which is why the footing above is the 12" one:
-            // a record whose drawn diameter disagreed with its mark would
-            // be two answers to one question.
-            pileMark: GARAGE_PILE_MARK,
-            auto: true,
-          };
-          drawing.columns.push(column);
-          made.items.push({ list: drawing.columns, item: column });
-          made.piles = (made.piles || 0) + 1;
-        });
+        const piled = placeGaragePiles(loop, { against });
+        made.items.push(...piled.placed);
+        made.piles = piled.placed.length;
       }
     }
 
@@ -13293,6 +13307,85 @@
     paint();
   };
 
+  // ── AUTO PILES, the panel's other button ────────────────────────────────
+  //
+  // Movie, 25 Sep: "we should also add that into the COLUMN command". The
+  // bone press pours a garage's piles as it builds it; this is the same
+  // worker for a garage already on the sheet -- traced by hand, or built
+  // before this landed and still standing on nothing.
+  //
+  // THE GARAGES A PILE CAN GO UNDER are the ones whose foundation is a GRADE
+  // BEAM. A frost wall stands on a strip footing and a thickened edge is its
+  // own, so neither wants piles -- writing them would draw concrete that is
+  // not there, which is the rule raiseGarageConcrete's footing rings already
+  // follow in the other direction.
+  const gradeBeamGarages = () => {
+    const storey = lowestFloorLevel();
+    if (!storey) return [];
+    return (drawing?.outlines || []).filter(outline =>
+      Number(outline.levelId) === Number(storey.id)
+      && outline.garage === true
+      && (outline.points || []).length >= 3
+      && garageFoundationOf(outline) === 'gradebeam');
+  };
+
+  const pressAutoPiles = () => {
+    if (!drawing) return;
+    const garages = gradeBeamGarages();
+    if (!garages.length) {
+      sayOnStrip('AUTO PILES needs a garage on a GRADE BEAM — a frost wall '
+        + 'stands on its own footing and a thickened edge is its own.');
+      return;
+    }
+    if (!levelPresent(FOUNDATION_LEVEL_ID)) {
+      sayOnStrip('AUTO PILES files on FOUNDATION and this drawing has no '
+        + 'FOUNDATION level.');
+      return;
+    }
+    // RE-RUNNING REPLACES THE GENERATED PILES AND NOTHING ELSE, the rule AUTO
+    // BEAM and AUTO DIMS both take. A pile the drafter placed or moved is his,
+    // and so is a telepost -- which is why this asks for a PILE footing and
+    // not merely for `auto`, the same discriminator that keeps AUTO BEAM's
+    // sweep off these.
+    const swept = [];
+    drawing.columns = (drawing.columns || []).filter(column => {
+      const mine = column.auto === true
+        && Number(column.levelId) === FOUNDATION_LEVEL_ID
+        && column.view === 'foundation'
+        && String(column.footing || '').startsWith('pile');
+      if (mine) swept.push(column);
+      return !mine;
+    });
+    // THE HOUSE IS WHAT THE SHARED EDGE IS TESTED AGAINST, so an attached
+    // garage takes no piles along the leg it shares -- there is no beam
+    // there. A detached one has no house to share with and gets the whole
+    // loop, which is the difference Movie flagged: "i don't think we had a
+    // grade beam for the DETACHED at that point, but it could opertate in a
+    // similar way".
+    const house = houseFootprint();
+    const against = house ? house.outline.points : null;
+    const placed = [];
+    garages.forEach(garage => {
+      placed.push(...placeGaragePiles(garage.points, { against }).placed);
+    });
+    if (placed.length || swept.length) {
+      undoStack.push({
+        kind: 'built',
+        walls: [], outlines: [], list: null,
+        items: placed,
+        restored: swept.length ? [{ list: drawing.columns, items: swept }] : [],
+      });
+      markDirty();
+    }
+    sayOnStrip(placed.length
+      ? `AUTO PILES placed ${placed.length} pile${placed.length === 1 ? '' : 's'} `
+        + `on FOUNDATION, ${GARAGE_PILE_MARK} at ${GARAGE_PILE_SPACING_FT}′ `
+        + 'or less — re-run after outline edits to refresh them.'
+      : 'That grade beam is too small to pile — check the garage outline.');
+    buildChrome();
+    paint();
+  };
+
   let beamPanelUp = false;
   const showBeamProps = () => {
     const P = window.ModelProps;
@@ -13324,6 +13417,25 @@
       : 'No house outline yet — build one first.';
     btn.addEventListener('click', () => { pressAutoBeam(); showBeamProps(); });
     row.append(btn);
+
+    // AND THE PILES, in the same row because they answer the same question --
+    // what holds this level up. Movie put AUTO PILES "into the COLUMN
+    // command", which is this panel: COLUMN and BEAM share it.
+    const piles = document.createElement('button');
+    piles.type = 'button';
+    piles.className = 'sel-chip';
+    piles.dataset.autoPiles = '';
+    piles.textContent = 'AUTO PILES';
+    const garages = gradeBeamGarages();
+    piles.disabled = !(garages.length && levelPresent(FOUNDATION_LEVEL_ID));
+    piles.title = garages.length
+      ? (levelPresent(FOUNDATION_LEVEL_ID)
+        ? `Pour ${GARAGE_PILE_MARK} piles under the grade beam, one per corner `
+          + `and every ${GARAGE_PILE_SPACING_FT}′ or less.`
+        : 'This drawing has no FOUNDATION level to file the piles on.')
+      : 'No garage on a grade beam — a frost wall carries its own footing.';
+    piles.addEventListener('click', () => { pressAutoPiles(); showBeamProps(); });
+    row.append(piles);
 
     // SHORT, AND THE LENGTH IS LOAD-BEARING. #left-rail has a min-width and
     // NO max-width (shell-bars.css:901), so the rail is as wide as its widest
