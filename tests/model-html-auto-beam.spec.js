@@ -122,7 +122,15 @@ test('a built house arrives with its mid-span beam and teleposts on FOUNDATION',
     const saved = await savedFile(page);
 
     const beams = (saved.beams || []).filter(beam => beam.auto === true);
-    const columns = (saved.columns || []).filter(column => column.auto === true);
+    // A TELEPOST IS AN AUTO COLUMN THAT IS NOT A PILE, and this read `auto`
+    // alone until AUTO PILES landed. The garage's piles carry `auto: true` on
+    // the same level and the same view, so the old filter swept eleven of
+    // them in and then asserted each one stood on a beam end -- which none of
+    // them does. The FOOTING is the discriminator, exactly as it is in
+    // placeAutoBeam's sweep and pressAutoPiles': same question, same answer.
+    const isPile = column => String(column.footing || '').startsWith('pile');
+    const columns = (saved.columns || [])
+      .filter(column => column.auto === true && !isPile(column));
     expect(beams.length, 'the bone built a house and left it with no beam under it')
       .toBeGreaterThan(0);
     expect(columns.length, 'a beam arrived with nothing holding it up')

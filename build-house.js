@@ -56,6 +56,71 @@ if (!window.DraftBuildHouse) {
     ];
   };
 
+
+  // ── AUTO PILES: one per corner, then evened out at 9 ft or less ──────────
+  //
+  // Movie, 25 Sep: "i pile per corner and then 1 every 9ft or less" ... "(even
+  // them out if its less than 9ft".
+  //
+  // EVENED, NOT PACKED, and that parenthesis is the whole rule. A 12 ft leg is
+  // TWO SPANS OF 6, never 9 and then 3: the spacing is a maximum and the piles
+  // under one run carry equal shares of it. Same arithmetic midSpanBeams uses
+  // for its teleposts, at a different number and walked around a loop instead
+  // of along one line.
+  //
+  // THE CALLER HANDS IN THE CENTRELINE, not the outline. An outline is a wall
+  // FACE -- footingRings above offsets from 0 and -(wallFt + projFt), so the
+  // wall hangs inboard of it -- and Movie's rule is "the pile should be
+  // located in the center of the wall". Insetting in here would mean this
+  // function had to know a wall thickness and which side the wall is on, both
+  // of which are the page's business and neither of which is pile spacing.
+  //
+  // skipEdge ANSWERS FOR AN EDGE INDEX, so an attached garage's leg against
+  // the house takes no piles: there is no grade beam along it to carry. Its
+  // two ENDS still get one, because they are the ends of the runs that remain
+  // -- which is MODEL.dc.html's "10"ø piles at the two beam corners against
+  // the house" (:23740) arrived at by the general rule instead of written in
+  // as a special case. The old page placed those two and left the rest to the
+  // drafter; this places the run.
+  const pilePoints = (points, { maxSpacingFt = 9, skipEdge = null } = {}) => {
+    const out = [];
+    // ONE PILE PER PLACE. Adjacent runs share a corner and each would claim
+    // it; two records at one point is two lines in the schedule and one hole
+    // in the ground. By POSITION rather than by index, because the corner is
+    // shared by where it is and not by what it is numbered.
+    //
+    // AND "THE SAME PLACE" IS THE SAME SLACK THE EDGE TEST USES, which an
+    // exact key got wrong. A mid-wall insert leaves a degenerate edge; this
+    // skips the EDGE, but its two endpoints survive as separate corners, and
+    // on the harness's 0.001 ft stub they came back as two piles 1/64" apart
+    // -- both in the schedule, one hole on site. Anything under the length
+    // that makes an edge worth walking is one place.
+    const MERGE_FT = 0.01;
+    const add = (x, z, srcIndex) => {
+      if (out.some(pt => Math.hypot(pt.x - x, pt.z - z) < MERGE_FT)) return;
+      out.push(srcIndex == null ? { x, z } : { x, z, srcIndex });
+    };
+    const spacing = Number(maxSpacingFt) > 0 ? Number(maxSpacingFt) : 9;
+    points.forEach((pt, index) => {
+      const next = points[(index + 1) % points.length];
+      const len = Math.hypot(next.x - pt.x, next.z - pt.z);
+      // A degenerate edge is skipped for houseWallRuns' reason: it raises no
+      // wall, so there is no beam over it to hold up.
+      if (len < 0.01) return;
+      if (typeof skipEdge === 'function' && skipEdge(index)) return;
+      const spans = Math.max(1, Math.ceil(len / spacing));
+      for (let s = 0; s <= spans; s++) {
+        const t = s / spans;
+        // srcIndex RIDES ONLY ON A CORNER, and it is the corner's own index in
+        // the ring the caller passed. An intermediate pile sits on no vertex,
+        // so claiming one would link it to a point that does not move with it.
+        add(pt.x + (next.x - pt.x) * t, pt.z + (next.z - pt.z) * t,
+          s === 0 ? index : (s === spans ? (index + 1) % points.length : undefined));
+      }
+    });
+    return out;
+  };
+
   // ── The tour's mid-span beam rule (board #230, answers confirmed) ──
   // Joists span the SHORT way, so a house whose short span exceeds beamAtFt
   // gets ONE beam along the LONG axis at mid-span (two at third points past
@@ -324,6 +389,7 @@ if (!window.DraftBuildHouse) {
     outlineInteriorRef,
     houseWallRuns,
     footingRings,
+    pilePoints,
     midSpanBeams,
   });
 })();
