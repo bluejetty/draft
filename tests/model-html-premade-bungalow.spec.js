@@ -1134,6 +1134,11 @@ const cutStack = page => page.evaluate(async bucket => {
     // The two bases, and the height of one storey read off the SAME stack --
     // so the comparison below quotes no arithmetic of its own.
     garageBase: garage.length ? base(garage[0]) : null,
+    // EVERY GARAGE ROOF'S BEARING, not just the first. A 2 STOREY + GARAGE
+    // carries TWO of them since 24 Sep -- the stub and the short gable over
+    // the foot of the tie -- and a check that read `garage[0]` would say
+    // nothing at all about the second one.
+    garageBases: garage.map(base),
     houseBase: house.length ? base(house[0]) : null,
     oneStorey: stack.floors.length > 1
       ? stack.floors[1].wallTop - stack.floors[0].wallTop : 0,
@@ -1178,10 +1183,21 @@ test('the garage roof bears on the garage-s own walls, under either house', asyn
   await saveOnNewPage(page);
   const m = await cutStack(page);
 
-  expect(m.garageRoofs, 'the garage got a roof of its own').toBe(1);
+  // TWO OF THEM SINCE 24 SEP, and the second is the point of the change that
+  // added it: the stub stops on the house's front line, so the foot of the
+  // tie -- four feet of garage standing beside the house's right wall -- had
+  // nothing over it. Movie: "we will need additional short 2ft extra peice of
+  // gable that extends 2ft past the back exterior garage wall".
+  expect(m.garageRoofs, 'the garage got its roofs').toBe(2);
   expect(m.houseRoofs, 'and the house one').toBe(1);
-  expect(m.garageBase, 'the garage roof left its own walls')
-    .toBeCloseTo(m.mainWallTop, 4);
+  // AND EVERY ONE OF THEM BEARS ON THE GARAGE'S OWN WALLS, which is what the
+  // check was always about and is now asked of both sheets rather than of
+  // whichever happened to be stored first. A piece bearing anywhere else
+  // would be a roof floating over the tie at the wrong height.
+  m.garageBases.forEach((bearing, index) => {
+    expect(bearing, `garage roof ${index} left its own walls`)
+      .toBeCloseTo(m.mainWallTop, 4);
+  });
 });
 
 // ── ONE ROOF OVER BOTH, WHEN THEY STAND AT THE SAME HEIGHT ────────────────
@@ -1229,13 +1245,17 @@ test('a 2 STOREY-s garage roof bears one storey below the house-s', async ({ pag
   const m = await cutStack(page);
 
   expect(m.storeys, 'the fixture has two storeys to tell apart').toBe(2);
-  expect(m.garageRoofs).toBe(1);
+  expect(m.garageRoofs).toBe(2);   // the stub and the tie's short gable
   expect(m.houseRoofs).toBe(1);
   // EXACTLY ONE STOREY, and the storey is measured off the same stack that
-  // placed the roofs -- not a number typed into this file.
-  expect(m.houseBase - m.garageBase,
-    'the garage roof did not drop a storey below the house-s')
-    .toBeCloseTo(m.oneStorey, 4);
+  // placed the roofs -- not a number typed into this file. Asked of BOTH
+  // garage sheets: the tie's piece is part of the same single-storey garage
+  // and has to drop with it.
+  m.garageBases.forEach((bearing, index) => {
+    expect(m.houseBase - bearing,
+      `garage roof ${index} did not drop a storey below the house-s`)
+      .toBeCloseTo(m.oneStorey, 4);
+  });
   // AND IT IS A DROP, not a coincidence of two zeroes.
   expect(m.oneStorey, 'a storey has height, so the check above says something')
     .toBeGreaterThan(6);
@@ -1249,17 +1269,100 @@ test('the garage roof takes its plate from the storey it stands on', async ({ pa
   await saveOnNewPage(page);
   const m = await cutStack(page);
 
-  expect(m.plates.length, 'there is a garage roof to read a plate off').toBe(1);
+  expect(m.plates.length, 'there are garage roofs to read plates off').toBe(2);
   // A REAL NUMBER FIRST: drawing-format.js reads a stored null as a plate of
   // ZERO, which bears the garage roof on the slab instead of on its walls --
   // a roof at ground level, which looks like a missing roof. Asked before the
   // comparison so a missing plate reports itself rather than throwing inside
   // toBeCloseTo.
-  expect(Number.isFinite(m.plates[0]), 'the garage roof carries no plate at all')
-    .toBe(true);
-  expect(m.plates[0], 'the plate is the main floor-s own wall height')
-    .toBeCloseTo(m.mainWallHeight, 4);
+  //
+  // AND ASKED OF EACH SHEET. The tie's short gable is raised by a second call
+  // that passes its own `plateHeightFt`, so "the stub has a plate" says
+  // nothing about it -- and a piece with no plate is the one that lands on
+  // the slab.
+  m.plates.forEach((plate, index) => {
+    expect(Number.isFinite(plate), `garage roof ${index} carries no plate at all`)
+      .toBe(true);
+    expect(plate, `garage roof ${index}'s plate is the main floor-s own wall height`)
+      .toBeCloseTo(m.mainWallHeight, 4);
+  });
 });
+
+// ── AN ATTACHED GARAGE'S GRADE BEAM HANGS, IT DOES NOT STAND ─────────────
+//
+// Movie, 24 Sep: *"please make the DEFAULT attached garages GRADE BEAM and
+// PILES (not frost wall)"*.
+//
+// THE KIND WAS ALREADY RIGHT and that is what made this invisible.
+// garageFoundationOf answers `gradebeam` when nothing has said otherwise, so
+// every reader of the KIND agreed -- the section drew a hung beam on piles,
+// the PROJECT page labelled it GRADE BEAM. What disagreed was the thing that
+// BUILT it: MODEL.html's raiseGarageConcrete conditioned the hang on
+// `detached`, so an attached garage got base 0 -- concrete standing on a
+// strip footing at the house's footing depth, which is that file's own
+// definition of the OTHER kind. Measured before the fix: four garage
+// foundation walls at `base 0 top 8.125`, the house's own profile.
+//
+// MODEL.dc.html HAD IT RIGHT ALL ALONG, and tests/garage.spec.js:376 has
+// asserted the 32" hang on that page since long before this one existed. The
+// port dropped a clause; nothing on THIS page was watching, which is why the
+// check belongs here and not there.
+//
+// NO FOOTINGS EITHER, which is the other half of the same sentence: a grade
+// beam bears on drilled piles over a void form and has no spread footing
+// under it. Movie, 4 Sep: "why does your garage have a footing?"
+test('the attached garage hangs a 32" grade beam, with no footing under it',
+  async ({ page }) => {
+    await open(page);
+    await order(page, 'bungalow', 'twoStorey-garage');
+    await saveOnNewPage(page);
+    const saved = await savedFile(page);
+
+    const fdn = (saved.walls || []).filter(w => w.view === 'foundation');
+    // WHOSE CONCRETE IS WHOSE, asked as "is this wall inside the house's own
+    // footprint". The first cut of this read "out past the house's right
+    // wall" and put the garage's LEFT leg -- at x = -4, well inside that --
+    // among the house's, which reported the garage's hang as a house wall
+    // that had stopped standing. Read off the plan rather than typed.
+    const plan = await planned(page);
+    const inHouse = pt => Math.abs(pt.x) <= plan.width / 2 + 0.01
+      && Math.abs(pt.z) <= plan.depth / 2 + 0.01;
+    const house = fdn.filter(w => inHouse(w.start) && inHouse(w.end));
+    const garage = fdn.filter(w => !house.includes(w));
+    expect(garage.length, 'the garage poured its own concrete').toBeGreaterThan(0);
+    expect(house.length, 'and the house its own, to tell them apart')
+      .toBeGreaterThan(0);
+
+    // THE HOUSE STANDS. Stated first so "the garage hangs" is a difference
+    // between two readings rather than a number this file believes on its own.
+    house.forEach(w => {
+      expect(w.baseHeight, 'the house foundation stands on its footing')
+        .toBeCloseTo(0, 3);
+    });
+
+    const S = await page.evaluate(() => window.DraftCutView.STANDARDS);
+    garage.forEach(w => {
+      expect(w.baseHeight, 'a garage grade beam standing on a footing is a frost wall')
+        .toBeGreaterThan(1);
+      expect(w.topHeight - w.baseHeight,
+        'the pour is the standard-s own 32", not a number typed here')
+        .toBeCloseTo(S.GARAGE_BEAM_CONCRETE_IN / 12, 3);
+    });
+
+    // AND NOTHING UNDER IT. The house keeps its rings; the garage gets none,
+    // so a footing line out past the house's wall is a beam that has stopped
+    // being a beam.
+    const footings = (saved.lines || []).filter(l => l.layer === 'S-FOOTING');
+    expect(footings.length, 'the house keeps its own footing rings')
+      .toBeGreaterThan(0);
+    // A foot of slack so the house's own rings -- which stand off its walls
+    // by the footing projection -- are not read as the garage's.
+    const outside = pt => Math.abs(pt.x) > plan.width / 2 + 1
+      || Math.abs(pt.z) > plan.depth / 2 + 1;
+    const underGarage = footings.filter(l => outside(l.start) && outside(l.end));
+    expect(underGarage.length, 'a grade beam bears on piles, not on a footing')
+      .toBe(0);
+  });
 
 test('a roof that dies into the house is cut flush there, not overhung', async ({ page }) => {
   // A ROOF MEETING A WALL HAS NO EAVE THERE and no board to hang one on --
