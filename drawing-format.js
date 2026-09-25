@@ -592,6 +592,24 @@ if (!window.DraftDrawingFormat) {
         edges: points.map((_, index) =>
           (Array.isArray(roof?.edges) && roof.edges[index] === 'gable' ? 'gable' : 'eave')),
         overhang: Math.min(6, Math.max(0, number(roof?.overhang, 2))),
+        // PER EDGE, WHEN THE WRITER KNEW. `overhang` is one number for the
+        // whole roof and was the whole truth until a roof carried a flush
+        // gable and a raked one at once; `raiseRoofOver` works the array out
+        // to cut the footprint and now keeps it. Dropped unless it matches
+        // the ring exactly -- a short or long array would be read positionally
+        // against the wrong edges, and an absent one simply means "uniform",
+        // which every file written before today means.
+        //
+        // AND A BAD ENTRY FALLS BACK TO THE ROOF'S OWN OVERHANG, not to
+        // zero. Zero is not a neutral default here -- it is the word FLUSH,
+        // and a flush edge draws no gable wall line at all, so a single
+        // unreadable number would silently delete a line from the drawing.
+        // Falling back to the one figure the roof has always carried leaves
+        // that edge drawn exactly as it was before this field existed.
+        ...(Array.isArray(roof?.edgeOverhang) && roof.edgeOverhang.length === points.length
+          ? { edgeOverhang: roof.edgeOverhang.map(value =>
+            Math.min(6, Math.max(0, number(value, number(roof?.overhang, 2))))) }
+          : {}),
         pitch: Math.min(24, Math.max(0, number(roof?.pitch, 4))),
         fascia: ROOF_FASCIA_IN,
         garage: roof?.garage === true,

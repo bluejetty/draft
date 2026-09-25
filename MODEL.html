@@ -2192,7 +2192,8 @@
   // exception at a time is how you end up believing you have finished.
   //
   //   drawWallSeg2D  wallTypes
-  //   drawRoof2D     isPrinting offsetOutline roofSkeleton surfaceOpeningsFor
+  //   drawRoof2D     isPrinting offsetOutline offsetOutlineVariable roofSkeleton
+  //                  roofWelds surfaceOpeningsFor
   //                  colors.roof colors.roofGuide
   //   drawShape2D    isPrinting areaLabel outlineAreaSqFt flooringTypes
   //                  shapeColor
@@ -2232,7 +2233,13 @@
     // This page never prints. When it does, this stops being a constant.
     isPrinting: false,
     offsetOutline: window.DraftGeometry2D.offsetOutline,
+    offsetOutlineVariable: window.DraftGeometry2D.offsetOutlineVariable,
     roofSkeleton: window.DraftGeometry2D.roofSkeleton,
+    // TWO SHEETS IN ONE PLANE SHOW NO LINE BETWEEN THEM -- the plan's half of
+    // what cut-view's `carriedOn` answers on the elevations. Handed the whole
+    // roof list because a weld is a fact about a PAIR, and `roofs()` is what
+    // this page draws.
+    roofWelds: roof => window.DraftGeometry2D.roofWeldSpans(roof, roofs()),
     // MODEL.dc.html also consults layer visibility and print flags here; this
     // page has neither yet, so an opening is shown whenever it is real.
     surfaceOpeningsFor: (hostType, hostId) => (drawing?.surfaceOpenings || [])
@@ -9984,9 +9991,14 @@
     };
     const flushAt = index => !raked.has(index) && gableEdge(index);
     const sharedEdge = gableEdge;
+    // THE DISTANCE EACH EDGE WAS PUSHED OUT, kept rather than recomputed --
+    // it is the only place that knows, and the plan painter needs it to draw
+    // a gable's wall line. Every roof before the tie piece had one distance
+    // all the way round, so `overhang` alone was the whole truth; a roof with
+    // both kinds of gable at once makes it a lie. See drawRoof2D.
+    const edgeOverhang = ring.map((_, index) => (flushAt(index) ? 0 : roofOverhangFt));
     const pts = (sharedWith || named.size || raked.size)
-      ? G.offsetOutlineVariable(ring,
-        ring.map((_, index) => (flushAt(index) ? 0 : roofOverhangFt)))
+      ? G.offsetOutlineVariable(ring, edgeOverhang)
       : G.offsetOutline(ring, roofOverhangFt);
     // An offset that collapses the loop is not a roof, and the record would be
     // dropped on load anyway -- present on screen, gone after a reload.
@@ -10007,6 +10019,10 @@
       sourceShapeId: null,
       edges: pts.map((_, index) => (gableAt(index) ? 'gable' : 'eave')),
       overhang: roofOverhangFt,
+      // Indexed like `edges`, and under the SAME guard: an offset that changed
+      // the edge count has made the per-edge answer meaningless, and a wrong
+      // array is worse than none because the painter would trust it.
+      ...(ring.length === pts.length ? { edgeOverhang } : {}),
       pitch: roofPitch,
       fascia: ROOF_FASCIA_IN,
       garage,

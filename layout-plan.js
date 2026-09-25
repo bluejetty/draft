@@ -403,7 +403,13 @@ if (!window.DraftLayoutPlan) {
       roofEnv: {
         isPrinting: false,
         offsetOutline: (pts, dist) => geo.offsetOutline(pts, dist),
+        offsetOutlineVariable: (pts, dists) => geo.offsetOutlineVariable(pts, dists),
         roofSkeleton: geo.roofSkeleton,
+        // WELDED AGAINST WHAT THIS SHEET ACTUALLY DRAWS. plan-composition
+        // picks roofs with `{ views: false }` -- a roof is never view-filtered
+        // -- so `of('roofs')` is exactly the set that reaches the painter, and
+        // a roof cannot be welded to one that is not on the drawing.
+        roofWelds: roof => geo.roofWeldSpans(roof, of('roofs')),
         surfaceOpeningsFor,
       },
       // SHAPES ARE NOT DRAWN ON A SHEET YET and that is declared rather than

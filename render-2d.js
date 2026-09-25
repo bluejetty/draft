@@ -284,6 +284,30 @@ if (!window.DraftRender2D) {
     return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
   }
 
+  // The complement of a set of welded stretches along one edge, in edge
+  // parameter: what is LEFT to stroke. Overlaps and an unsorted list are both
+  // survivable -- geometry hands these over merged, but a painter that quietly
+  // drew an edge twice because two welds touched would be a bug no screenshot
+  // would show.
+  function drawnSpans(welds) {
+    if (!Array.isArray(welds) || !welds.length) return [[0, 1]];
+    const spans = [];
+    let at = 0;
+    // ENDS PUT IN ORDER FIRST. Sorting by `from` and walking is only sound if
+    // each weld runs forwards; handed [0.9, 0.2] the walk treats 0.2 as the
+    // end, sets the pen back behind itself and DRAWS the welded stretch --
+    // the seam returns, and drawn twice over at that. geometry hands these
+    // over in order, so this is about what the helper PROMISES, which the
+    // comment above already claimed and the code did not keep.
+    welds.map(([from, to]) => (to >= from ? [from, to] : [to, from]))
+      .sort((p, q) => p[0] - q[0]).forEach(([from, to]) => {
+        if (from - at > 1e-9) spans.push([at, from]);
+        if (to > at) at = to;
+      });
+    if (1 - at > 1e-9) spans.push([at, 1]);
+    return spans;
+  }
+
   function drawRoof2D(ctx, toS, roof, options = {}, env) {
     const pts = roof.points.map(pt => toS(pt));
     if (pts.length < 3) return;
@@ -308,24 +332,124 @@ if (!window.DraftRender2D) {
     if (!referenceColor) { ctx.fillStyle = atAlpha(roofColor, 0.07); ctx.fill('evenodd'); }
     ctx.strokeStyle = referenceColor || roofColor;
     ctx.lineWidth = referenceColor ? 1.25 : (options.selected ? 3.5 : 2);
-    ctx.stroke();
+    // ── AND THE FOOTPRINT STROKES ONLY WHERE IT IS REALLY AN EDGE ──────
+    //
+    // Movie, 24 Sep: *"your updated roof has an extra line in it, that should
+    // be all one connected roof"*. Two roofs meeting in one plane make one
+    // sheet, and the line the plan drew between them was the garage's rear
+    // edge and the tie piece's, stroked over each other along z=20.
+    //
+    // `roofWeldSpans` says which stretches of which edges are interior to the
+    // combined sheet; the painter's business is only to leave them out. A
+    // page that cannot answer -- it has no other roofs to compare against --
+    // omits the key and gets the single closed stroke it always got, which is
+    // why the unwelded case below is the ORIGINAL call and not a rebuild of
+    // it: nothing that was right is allowed to change shape on the way past.
+    const welds = (env.roofWelds && !referenceColor) ? env.roofWelds(roof) : null;
+    const welded = Array.isArray(welds) && welds.length === pts.length
+      && welds.some(list => Array.isArray(list) && list.length);
+    if (!welded) {
+      ctx.stroke();
+    } else {
+      // The holes keep their whole outline -- an opening is a hole in this
+      // sheet, never a weld to another one -- and the footprint comes apart.
+      ctx.beginPath();
+      holes.forEach(hole => {
+        hole.forEach((pt, index) => (index ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)));
+        ctx.closePath();
+      });
+      // WALKED AS ONE POLYLINE, not an edge at a time. Two full edges meeting
+      // at a corner have to stay one sub-path or the join opens a notch the
+      // width of the pen; carrying the pen forward when the next span starts
+      // where the last one stopped keeps every corner mitred exactly as
+      // closePath used to.
+      const runs = [];
+      for (let index = 0; index < pts.length; index++) {
+        const a = pts[index], b = pts[(index + 1) % pts.length];
+        drawnSpans(welds[index]).forEach(([t0, t1]) => runs.push({
+          from: { x: a.x + (b.x - a.x) * t0, y: a.y + (b.y - a.y) * t0 },
+          to: { x: a.x + (b.x - a.x) * t1, y: a.y + (b.y - a.y) * t1 },
+        }));
+      }
+      // ── STARTED AFTER A GAP, NOT AT CORNER ZERO ──────────────────────
+      //
+      // A run that wraps past the ring's first point is ONE run, and walking
+      // from index 0 cuts it in half there: two sub-paths meeting butt to
+      // butt, which at a 2 px pen is a notch in the corner. It is not a
+      // corner case either -- the garage stub's weld sits at the FAR end of
+      // its first edge, so the run wraps all the way round through exactly
+      // that point and the notch lands on the roof's own outside corner.
+      // Rotating to begin where the outline is already broken makes every
+      // join the pen carries through a real one.
+      const joined = (p, q) => Math.abs(p.x - q.x) < 0.01 && Math.abs(p.y - q.y) < 0.01;
+      const start = runs.findIndex((run, i) =>
+        !joined(runs[(i + runs.length - 1) % runs.length].to, run.from));
+      let pen = null;
+      for (let i = 0; i < runs.length; i++) {
+        const run = runs[(Math.max(start, 0) + i) % runs.length];
+        if (!pen || !joined(pen, run.from)) ctx.moveTo(run.from.x, run.from.y);
+        ctx.lineTo(run.to.x, run.to.y);
+        pen = run.to;
+      }
+      ctx.stroke();
+    }
     ctx.lineWidth = referenceColor ? 1.25 : 2;
     // Gable edges read as a double line: the footprint edge is the rake
     // (overhang included) and the inner stroke is the exterior face of the
     // gable wall — the footprint pulled back in by the overhang, which lands
     // on the building outline the roof grew from.
+    //
+    // ── BY THE EDGE'S OWN OVERHANG, NOT THE ROOF'S ───────────────────────
+    //
+    // `overhang` is one number for the whole roof, and until the tie piece
+    // every roof this page built deserved that: a gable was always FLUSH --
+    // gable AND no overhang, one fact -- so the ring came in by the same
+    // distance all the way round. The tie piece is the first with both kinds
+    // at once, two flush gables into the house and garage and one RAKE
+    // standing in open air, and offsetting it uniformly is not merely
+    // imprecise, it INVERTS: a 6 x 3 footprint pulled in two feet on every
+    // side is 2 x -1, measured signed area +36 -> -4, and the plan drew that
+    // fold as a 2 x 1 box scribbled across the junction. Three lines that are
+    // not anything in the building.
+    //
+    // So the inset is per edge, from the array `raiseRoofOver` already builds
+    // and now keeps. Measured: the tie's rake line lands (16,19)->(20,19),
+    // which IS the garage's rear wall `(16,19)->(20,19)`, and its two flush
+    // gables take zero and draw no second line at all -- correct, because a
+    // flush gable's footprint edge already IS the wall face.
     const overhangFt = Number(roof.overhang) || 0;
-    const hasGable = (roof.edges || []).some(kind => kind === 'gable');
-    const wallRing = hasGable && overhangFt > 0
-      ? env.offsetOutline(roof.points.map(pt => ({ x: pt.x, z: pt.z })), -overhangFt).map(pt => toS(pt))
+    // ONE TEST, ASKED ONCE. Validating the array and choosing the offset call
+    // were two separate conditions for about ten minutes, and a SHORT array
+    // then satisfied the branch while failing the validation: the painter
+    // took the per-edge call and handed it the uniform fallback. Measured on
+    // a two-entry array against a four-corner roof -- the wall ring came back
+    // offset the wrong way. One name, used twice, cannot drift.
+    const perEdge = (Array.isArray(roof.edgeOverhang)
+      && roof.edgeOverhang.length === pts.length && env.offsetOutlineVariable)
+      ? roof.edgeOverhang.map(value => Math.max(0, Number(value) || 0))
       : null;
+    const insets = perEdge || pts.map(() => overhangFt);
+    const hasGable = (roof.edges || []).some(kind => kind === 'gable');
+    const world = roof.points.map(pt => ({ x: pt.x, z: pt.z }));
+    // An older file has no per-edge array, and it takes the ORIGINAL uniform
+    // call -- same reason as the stroke above: what was right stays untouched.
+    const wallRing = !hasGable || !insets.some(value => value > 0) ? null
+      : (perEdge
+        ? env.offsetOutlineVariable(world, perEdge.map(value => -value))
+        : env.offsetOutline(world, -overhangFt)).map(pt => toS(pt));
     const count = pts.length;
     for (let index = 0; index < count; index++) {
       const a = pts[index], b = pts[(index + 1) % count];
       const isGable = roof.edges[index] === 'gable';
       const dx = b.x - a.x, dy = b.y - a.y;
       const len = Math.hypot(dx, dy) || 1;
-      if (isGable && wallRing) {
+      // A FLUSH GABLE HAS NO SECOND LINE. Its footprint edge already IS the
+      // wall face -- nothing hangs past it -- so the inset ring lands back on
+      // the edge just drawn and the stroke is a duplicate. Measured on the
+      // garage stub: its rear gable took (-4,20)->(20,20), on top of the
+      // footprint it shares, where the uniform offset used to put it two feet
+      // into the house at z=22 and poke a 2 ft stub past the house's corner.
+      if (isGable && wallRing && insets[index] > 0) {
         const wa = wallRing[index], wb = wallRing[(index + 1) % count];
         ctx.beginPath();
         ctx.moveTo(wa.x, wa.y); ctx.lineTo(wb.x, wb.y);
