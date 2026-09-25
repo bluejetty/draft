@@ -106,6 +106,14 @@ const savedFile = page => page.evaluate(async bucket => {
 async function paintedOn(page, level, view) {
   await page.goto(`/MODEL.html?left=1&right=1&level=${level}&view=${view}`);
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  // ONE FRAME, NOT EVERY FRAME SINCE THE LOAD. The spy ACCUMULATES, and the
+  // page paints at least twice before this line -- once at boot and again as
+  // the level settles. Counting without clearing gave exactly 2x on every
+  // check: 6 pad calls for 3 teleposts, 2 opening calls for 1 hole. The ratio
+  // is what identified it as the instrument rather than the app, since a page
+  // really drawing each pad twice would not land on a clean multiple of the
+  // frame count for two unrelated painters at once.
+  await page.evaluate(() => { window.__paintCalls = {}; });
   await page.keyboard.press('0');
   await page.waitForTimeout(400);
   const state = await page.evaluate(() => window.__spyState);
