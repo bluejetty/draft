@@ -454,6 +454,64 @@ test('a house with a second floor gets a beam under it, not just under the first
       .toEqual(posts(1, 'foundation'));
   });
 
+test('the posts land on the columns below, not on the even divisions',
+  async ({ page }) => {
+    // THE TEST ABOVE CANNOT TELL THE RULE FROM LUCK, and this one is here to
+    // say so. A 40 ft run divides evenly into four 10s with posts at -10, 0,
+    // 10 -- and on the premades the foundation's posts are at -10, 0, 10 too,
+    // because both floors are the same rectangle. Comparing them proves the
+    // two AGREE, not that the upper one was placed BY the lower. Code with
+    // supportsBelow deleted passes it.
+    //
+    // So the floor below is held at -9, 3 and 15: hand-placed columns, off
+    // every even division. supportsUnder does not filter on `auto`, so a
+    // drafter's own column is support like any other -- which is Movie's rule
+    // read literally, "it need to be over another column".
+    //
+    // GREEDY-FURTHEST WALKS THEM EXACTLY. From -20 the limit is -8 and the
+    // furthest support in reach is -9; from -9 the limit is 3 and 3 is
+    // reachable; from 3 the limit is 15 and 15 is reachable; from 15 the
+    // remaining 5 ft is under the limit. Even division would answer -10, 0,
+    // 10 and every one of those numbers is wrong here.
+    await open(page, empty({
+      outlines: [
+        { ...rect({ wide: 40, deep: 32 }), id: 'outline-main' },
+        { ...rect({ wide: 40, deep: 32 }), id: 'outline-upper', levelId: 5 },
+      ],
+      columns: [-9, 3, 15].map((x, index) => ({
+        id: 900 + index, point: { x, y: 0, z: 0 },
+        levelId: 1, view: 'foundation', footing: 'pad36',
+      })),
+    }));
+    await h.pickModelLevel(page, 5);
+    await armBeamTool(page);
+    await autoBeamButton(page).click();
+    await saveNow(page);
+    const saved = await savedFile(page);
+
+    const posts = (saved.columns || [])
+      .filter(column => column.levelId === 3 && column.view === 'floor')
+      .map(column => Number(column.point.x.toFixed(4)))
+      .sort((a, b) => a - b);
+    expect(posts, 'the main floor posts divided evenly instead of standing on '
+      + 'the columns below').toEqual([-9, 3, 15]);
+
+    // AND THE BEAM IS CUT WHERE THEY STAND. "a beam is one span between two
+    // supports", so an even four-span beam over posts at -9, 3, 15 would be
+    // four members whose ends miss every post.
+    const ends = (saved.beams || [])
+      .filter(beam => beam.levelId === 3)
+      .flatMap(beam => [beam.start.x, beam.end.x])
+      .map(x => Number(x.toFixed(4)));
+    expect([...new Set(ends)].sort((a, b) => a - b),
+      'the beam was divided somewhere other than where its posts are')
+      .toEqual([-20, -9, 3, 15, 20]);
+
+    // AND NONE OF THEM IS HANGING, because all three were in reach.
+    await expect(page.locator('[data-strip-message]'))
+      .not.toHaveText(/nothing under it/i);
+  });
+
 test('the top storey carries a roof, so it gets nothing', async ({ page }) => {
   // "usually a roof won't need columns or beams (usually the exterior walls
   // do the complete job)". Nothing in the code says `if roof`; floorCarriedBy
