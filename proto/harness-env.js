@@ -254,9 +254,28 @@ function paintElevation(win, env, cut, { pxPerFt = 40 } = {}) {
   const { ctx, strokes, fills } = recordingCtx();
   const ok = CV.drawElevationView(env, ctx, w, h, cut, stack, axis, () => {},
     { pxPerFt, extents });
+  // ── THE PEN-UP MARKERS COME WITH IT ──────────────────────────────────
+  //
+  // This mapping used to keep only `u` and `e`, which QUIETLY BROKE every
+  // reader downstream: elevation-harness.js's `segmentsOf` opens with
+  // `if (b.move) continue;` to skip the jump between two sub-paths of one
+  // stroke, and with the flag dropped that line could never fire. So a
+  // `moveTo` was read as a `lineTo` and every such jump came back as a
+  // SEGMENT -- ink the painter never laid down.
+  //
+  // Measured on a 2 STOREY + GARAGE + ROOM OVER, E3: the foundation's top
+  // line and its grade line are one stroke of two sub-paths, and the walkers
+  // reported a diagonal running between them, (4.00,-1.048) -> (-16.00,
+  // -2.198), a line that does not exist on the sheet. Chasing it cost a
+  // reading of a defect Movie had reported.
+  //
+  // THE HARNESS IS AN INSTRUMENT AND THIS WAS THE INSTRUMENT LYING. Nothing
+  // went red for it: `inkIn` counted a little ink in the wrong place,
+  // `hasLine` could match a segment that was never drawn, and both look
+  // exactly like passing.
   const model = strokes.map(s => ({
     ink: s.ink, w: s.w,
-    pts: s.pts.map(p => ({ u: toU(p.x), e: toE(p.y) })),
+    pts: s.pts.map(p => ({ u: toU(p.x), e: toE(p.y), move: !!p.move, close: !!p.close })),
   }));
   // THE FILLS IN MODEL SPACE TOO, AND IN PAINT ORDER. Occlusion in an
   // elevation is not a rule the painter applies, it is the ORDER the opaque

@@ -131,6 +131,91 @@ if (!fs.existsSync(MOVIE)) {
   }
 }
 
+// ── A CREASE SHOWS ONLY AS FAR DOWN AS ITS FACE DOES ─────────────────────
+//
+// Movie, 24 Sep, marking the same drawing on E3 BACK and again on E2 LEFT:
+// "here are some small errors (with red highlight)", "another small spot
+// (opposite where garage connects)". One light vertical crossing the floor
+// line, the full depth of the exposed concrete, standing in the middle of a
+// wall with nothing behind it to crease.
+//
+// IT IS THE GARAGE'S CORNER, SEEN THROUGH THE HOUSE. On E3 the garage stands
+// behind the house and its left corner falls well inside the house's own
+// span, so the house's concrete is in front of it for the whole height. The
+// run survives `behindFdn` on a technicality -- the garage's concrete tops
+// out ABOVE the house's, so `o.topE >= g.topE` fails and the face counts as
+// unhidden. The step is real. Everything below it is not.
+//
+// SO THE LINE IS CLIPPED TO WHAT SHOWS rather than the run being thrown away.
+// Throwing it away is the all-or-nothing answer this file's own header was
+// written against, and it would be wrong here too: a drafter looking for that
+// step should find it.
+//
+// MEASURED, both ways, on this fixture:
+//
+//     E2 u 19    before 1.150 ft    after 0.125 ft
+//     E3 u  4    before 1.150 ft    after 0.125 ft
+//     E2 u 20, E3 u -16, E1 u -4, E4 u -19    1.150 ft, unchanged
+//
+// The last row is the half that keeps the first honest: a fix that simply
+// stopped drawing creases would pass one line of this and fail the other.
+const creases = view => {
+  const out = [];
+  view.strokes.forEach(s => {
+    if (!String(s.ink).includes('0.45')) return;
+    for (let i = 1; i < s.pts.length; i++) {
+      const a = s.pts[i - 1], b = s.pts[i];
+      if (b.move) continue;
+      if (Math.abs(a.u - b.u) > 0.01) continue;
+      out.push({ u: a.u, hi: Math.max(a.e, b.e), lo: Math.min(a.e, b.e) });
+    }
+  });
+  return out;
+};
+
+if (fs.existsSync(MOVIE)) {
+  const saved = JSON.parse(fs.readFileSync(MOVIE, 'utf8'));
+  const env = H.buildEnv(win, saved);
+  ['E2', 'E3'].forEach(id => {
+    const cut = H.standardElevationCuts(env).find(c => c.id === id);
+    const view = H.paintElevation(win, env, cut, { pxPerFt: 40 });
+    const runs = levelRuns(view);
+    const grade = runs.filter(r => Math.abs(r.w - GRADE_W) < 1e-9)
+      .map(r => r.e).sort((a, b) => a - b)[0];
+    // THE TWO TOPS, read the way the check above reads them, so the step this
+    // crease is allowed to be long is the drawing's own number and not one
+    // typed here.
+    const tops = [...new Set(runs.filter(r => Math.abs(r.w - FACE_W) < 1e-9
+      && r.e > grade + 0.5 && r.e < 0.5).map(r => r.e.toFixed(4)))]
+      .map(Number).sort((a, b) => b - a);
+    check(`${id}: the drawing paints two exposed foundation tops`,
+      tops.length === 2, `${tops.length}: ${tops.join(', ')}`);
+    const marks = creases(view);
+    check(`${id}: and it creases somewhere`, marks.length > 0, `${marks.length} creases`);
+    if (tops.length !== 2 || !marks.length) return;
+    const step = tops[0] - tops[1];
+    const exposed = tops[0] - grade;
+    check(`${id}: the step between the two tops is smaller than the concrete is deep`,
+      step > 0.001 && step < exposed / 2,
+      `step ${step.toFixed(4)} against ${exposed.toFixed(4)} of exposed face`);
+    // THE BURIED CORNER: the one standing where the other face covers it. It
+    // may be as long as the step and no longer.
+    const buriedMark = marks.filter(m => m.hi - m.lo < exposed - 0.01);
+    check(`${id}: a corner the nearer concrete covers is cut to the step`,
+      buriedMark.length === 1
+      && Math.abs((buriedMark[0].hi - buriedMark[0].lo) - step) < 0.005,
+      marks.map(m => `u ${m.u.toFixed(2)} ${(m.hi - m.lo).toFixed(3)}ft`).join('  ')
+      + ` -- step ${step.toFixed(4)}`);
+    // AND THE OTHER HALF: a real corner still runs the concrete's full depth.
+    // Without this, "stop drawing creases" passes the check above.
+    const openMark = marks.filter(m => m.hi - m.lo >= exposed - 0.01);
+    check(`${id}: and a corner with nothing in front of it still runs full depth`,
+      openMark.length >= 1,
+      marks.map(m => `u ${m.u.toFixed(2)} ${(m.hi - m.lo).toFixed(3)}ft`).join('  ')
+      + ` -- exposed ${exposed.toFixed(4)}`);
+  });
+}
+
 // ── MEASURED AND NOT FIXED, said here so the green above is not read as more
 // than it is ─────────────────────────────────────────────────────────────
 //

@@ -1526,14 +1526,53 @@ if (!window.DraftCutView) {
       // is about. A face clear of everything has one run and this is what it
       // always was.
       runs.forEach(r => [r.lo, r.hi].forEach(u => {
-        const interior = shownFdn.some(({ g: o }) => o !== g
+        const over = shownFdn.filter(({ g: o }) => o !== g
           && u > o.lo + 0.05 && u < o.hi - 0.05);
+        const interior = over.length > 0;
+        // ── A CORNER SHOWS ONLY AS FAR DOWN AS ITS FACE DOES ───────────
+        //
+        // Movie, 24 Sep, marking a 2 STOREY + GARAGE + ROOM OVER on E3 BACK
+        // and again on E2 LEFT: "here are some small errors (with red
+        // highlight)", "another small spot (opposite where garage
+        // connects)". One light vertical crossing the floor line, the full
+        // depth of the exposed concrete, in the middle of a wall with
+        // nothing behind it to crease.
+        //
+        // IT IS THE GARAGE'S, SEEN THROUGH THE HOUSE. Its left corner is at
+        // x = -4, which on that elevation falls well inside the house's own
+        // span -- the house's concrete stands in front of it for the whole
+        // height. The run survives `behindFdn` on a technicality: the
+        // garage's concrete tops out THREE EIGHTHS OF AN INCH above the
+        // house's (8.125 against 8.09375, two different answers to "how tall
+        // is the foundation"), so `o.topE >= g.topE` fails and the face
+        // counts as unhidden. Three eighths of an inch of it really is
+        // visible; the other eleven inches are not.
+        //
+        // SO THE LINE IS CLIPPED TO WHAT SHOWS rather than the run being
+        // thrown away. Throwing it away would be the all-or-nothing answer
+        // the note above this pass was written against -- and it would be
+        // wrong here too, because the step is real and a drafter looking for
+        // it should find it. Drawn to the nearest COVERING face's top, the
+        // crease is three eighths of an inch long: the truth, at the size
+        // the truth is.
+        //
+        // THE 3/8" ITSELF IS NOT THIS PASS'S TO FIX. It is the build handing
+        // the garage's beam `assemblyFor(1).wallHeightFt` while the house's
+        // own walls took the generic default wall top, and reconciling those
+        // is a question about the junction, not about the drawing of it.
+        const hiddenTo = over.reduce((top, { g: o }) =>
+          (o.depth > g.depth + 1e-6 ? Math.max(top, o.topE) : top), shownBase);
+        const foot = Math.max(shownBase, Math.min(g.topE, hiddenTo));
+        // NOTHING LEFT MEANS NO CLAIM ON THIS u EITHER. The key is taken only
+        // by a corner that actually draws, so a face buried here cannot stop
+        // one that is not from drawing at the same spot.
+        if (g.topE - foot < 0.01) return;
         const key = `${X(u)}|${interior}`;
         if (strokedV.has(key)) return;
         strokedV.add(key);
         ctx.strokeStyle = interior ? CREASE : INK;
         ctx.beginPath();
-        ctx.moveTo(X(u), Y(g.topE)); ctx.lineTo(X(u), Y(shownBase));
+        ctx.moveTo(X(u), Y(g.topE)); ctx.lineTo(X(u), Y(foot));
         ctx.stroke();
       }));
     });
@@ -2352,6 +2391,53 @@ if (!window.DraftCutView) {
         if (u != null && behindWall(pt, u, elev)) return true;
         return behindRoof(pt, elev);
       };
+      // ── WHERE A SHEET CARRIES ON, THERE IS NO EDGE AND NO BOARD ───────
+      //
+      // Movie, 25 Sep, on the short gable over the garage tie: *"your updated
+      // roof has an extra line in it, that should be all one connected
+      // roof"*, marking the join in the elevation and again in the roof plan.
+      //
+      // HE IS RIGHT, AND HALF OF THIS WAS ALREADY DONE. The piece and the
+      // stub meet IN THE SAME PLANE -- one is the other continued -- and the
+      // fascia board that edge used to wear came off a day earlier for
+      // exactly this reason. The LINE stayed. On E1 it happened to lie on the
+      // stub's own hip and could not be seen; on E4 it projects to a vertical
+      // and is the extra line he marked.
+      //
+      // SO THE TEST MOVES UP HERE AND IS ASKED PER STATION. An edge is not a
+      // thing that is shared or not -- the stub's gable at the house line is
+      // shared for the four feet the piece covers and free for the other
+      // twenty-two, and only the shared four may go.
+      //
+      // BOTH ROOFS ARE READ AT ONE POINT, through this roof's own face PLANE
+      // (which can be evaluated past its polygon) against the other's
+      // surface. Same point, so the pitch cancels and the tolerance only has
+      // to beat float noise; asked at two points it would have to cover the
+      // slope, which at the format's steepest pitch is a third of a foot.
+      const carriedOn = (roof, at, elev) => {
+        let on = false;
+        facesByRoof.forEach((otherFaces, other) => {
+          if (on || other === roof) return;
+          const rise = sectionRoofHeightAt(at, other, otherFaces);
+          if (rise == null) return;
+          if (Math.abs(roofEaveElev(other, stack, env) + rise - elev) < 0.02) on = true;
+        });
+        return on;
+      };
+      // OUTWARD FROM THIS ROOF'S OWN FOOTPRINT, so a probe lands on the sheet
+      // next door and never back on this one. An edge INTERIOR to a roof -- a
+      // hip, a ridge, a valley between its own faces -- has this roof on both
+      // sides, and `carriedOn` skips this roof, so it answers no whichever way
+      // the normal ends up pointing.
+      const outwardOf = (a, b, rpts) => {
+        const dx = b.x - a.x, dz = b.z - a.z;
+        const len = Math.hypot(dx, dz);
+        if (len < 0.01) return null;
+        const n = { x: -dz / len, z: dx / len };
+        const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+        return pointInPolygon({ x: mid.x + n.x * 0.05, z: mid.z + n.z * 0.05 }, rpts)
+          ? { x: -n.x, z: -n.z } : n;
+      };
       const seen = new Set();
       facesByRoof.forEach((roofFaces, roof) => {
         const eaveTop = roofEaveElev(roof, stack, env);
@@ -2433,15 +2519,7 @@ if (!window.DraftCutView) {
           const own = roofFaces.find(face => pointInPolygon(inward, face.points));
           if (own) {
             const past = { x: mid.x + n.x * 0.02, z: mid.z + n.z * 0.02 };
-            const here = eaveTop + geo().roofFaceRise(own, past, pitch);
-            let carried = false;
-            facesByRoof.forEach((otherFaces, other) => {
-              if (carried || other === roof) return;
-              const rise = sectionRoofHeightAt(past, other, otherFaces);
-              if (rise == null) return;
-              if (Math.abs(roofEaveElev(other, stack, env) + rise - here) < 0.02) carried = true;
-            });
-            if (carried) return [];
+            if (carriedOn(roof, past, eaveTop + geo().roofFaceRise(own, past, pitch))) return [];
           }
           return [{ a, b, toward: n.x * dir.x + n.z * dir.z }];
         });
@@ -2467,6 +2545,9 @@ if (!window.DraftCutView) {
             const ub = b.x * axis.x + b.z * axis.z;
             if (Math.abs(ub - ua) < 0.05 && Math.abs(eb - ea) < 0.05) continue; // end-on: a point
             const samples = Math.min(48, Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 1.5)));
+            // The probe direction for this edge, worked out once: the same
+            // station cannot need two of them.
+            const outward = outwardOf(a, b, rpts);
             const runs = [];
             let run = null;
             for (let s = 0; s <= samples; s++) {
@@ -2475,6 +2556,25 @@ if (!window.DraftCutView) {
               const u = ua + (ub - ua) * t;
               const elev = ea + (eb - ea) * t;
               if (u < uMin - 0.01 || u > uMax + 0.01 || hidden(pt, elev, u)) { run = null; continue; }
+              // NO LINE WHERE THE SHEET DOES NOT STOP. Probed just past the
+              // edge, on this face's own plane, so the two sheets are
+              // compared where they would meet rather than where either ends.
+              //
+              // AND TAKEN A HAIR INSIDE THE EDGE, which is not fussiness. An
+              // edge's ENDPOINTS are corners, and at a corner the probe lands
+              // exactly on the neighbouring roof's own boundary, where
+              // inside-or-out is a coin toss. Measured on the tie's piece,
+              // E4: its 3 ft edge against the house gets three stations, the
+              // one at the shared corner read as "carried on", and a foot and
+              // a half of a line that should be there went with it. Touching
+              // at a corner is not being continued.
+              const tp = Math.min(Math.max(t, 0.02), 0.98);
+              const past = {
+                x: a.x + (b.x - a.x) * tp + (outward ? outward.x * 0.05 : 0),
+                z: a.z + (b.z - a.z) * tp + (outward ? outward.z * 0.05 : 0),
+              };
+              if (outward && carriedOn(roof, past,
+                eaveTop + geo().roofFaceRise(face, past, pitch))) { run = null; continue; }
               if (!run) { run = { u0: u, e0: elev, u1: u, e1: elev }; runs.push(run); }
               else { run.u1 = u; run.e1 = elev; }
             }
