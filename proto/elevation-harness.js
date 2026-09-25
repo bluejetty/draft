@@ -870,6 +870,111 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
 }
 
 
+// ── WHERE A SHEET CARRIES ON, NO LINE AND NO BOARD ────────────────────────
+//
+// Movie, 25 Sep, on the short gable that covers the garage tie: *"your
+// updated roof has an extra line in it, that should be all one connected
+// roof"*.
+//
+// THE PIECE AND THE STUB ARE ONE PLANE. The piece is the stub's right slope
+// continued over the tie, and it is its own RECORD only because the straight
+// skeleton cannot take the notch -- measured on a dense grid, a single
+// notched loop reads 7.167 ft of rise where the stub reads 2.167, a five-foot
+// error, whatever its edges are declared as. So the shape is right and the
+// SEAM is the price, and the painter has to know not to draw it.
+//
+// HALF OF THIS WAS DONE A DAY EARLIER. That edge is marked `gable` because
+// gable is this app's only way to say "no overhang" -- and also its only way
+// to say "put a rake board on it" -- so it wore a board, and the board came
+// off. The LINE stayed: on E1 it lay on the stub's own hip and could not be
+// seen, on E4 it projects to a vertical and is what he marked.
+//
+// ASKED PER STATION, NOT PER EDGE, which is the whole of it. The stub's gable
+// at the house line is shared for the four feet the piece covers and free for
+// the other twenty-two; only the shared four may go.
+{
+  const CV = win.DraftCutView;
+  const GEO = win.DraftGeometry2D;
+  const tFile = path.join(ROOT, 'proto', 'repro-tie-gable.draft');
+  if (!fs.existsSync(tFile)) {
+    failures.push('proto/repro-tie-gable.draft is missing');
+  } else {
+    const tEnv = buildEnv(win, JSON.parse(fs.readFileSync(tFile, 'utf8')));
+    const tStack = CV.sectionLevelStack(tEnv);
+    const view = paintElevation(win, tEnv, standardElevationCuts(tEnv).find(c => c.id === 'E4'));
+    const tie = tEnv.roofs().find(roof => (roof.points || [])
+      .some(pt => Math.abs(pt.z - 17) < 0.01));
+    const stub = tEnv.roofs().find(roof => roof.garage === true && roof !== tie);
+    check('tie fixture: the build raised both the stub and the tie-s piece',
+      !!tie && !!stub,
+      `${tEnv.roofs().length} roofs, ${tEnv.roofs().filter(r => r.garage).length} on the garage`);
+    if (tie && stub) {
+      // THE SEAM, IN THIS ELEVATION'S OWN TERMS. E4 looks along +x, so u = -z
+      // and the join at z = 20 reads u = -20. The piece's plane there stands
+      // its own rise above its eave; between the two is the line Movie
+      // marked.
+      const eave = CV.roofEaveElev(tie, tStack, tEnv);
+      const top = Math.max(...GEO.roofFaces(tie, GEO.roofSkeleton(tie))
+        .flatMap(f => f.points.map(pt => eave + GEO.roofFaceRise(f, pt, tie.pitch || 4))));
+      // THE ROOF EDGE'S OWN WEIGHT, for WALL_FACE_W's reason one pass over:
+      // the question is whether the SEAM is drawn, and a seam is a roof edge.
+      // Asked of every stroke instead, this counts the house's own right-hand
+      // corner -- 1.35 ft of it at exactly this u -- which is a wall line
+      // with every right to be there AND which the piece's own fill paints
+      // over anyway. Strokes are not ink; this file has been caught by that
+      // twice now.
+      const ROOF_EDGE_W = 1.5;
+      const along = (uWant, eLo, eHi) => {
+        let feet = 0;
+        view.strokes.forEach(st => {
+          if (Math.abs(st.w - ROOF_EDGE_W) > 1e-9) return;
+          for (let i = 1; i < st.pts.length; i++) {
+            const a = st.pts[i - 1], b = st.pts[i];
+            if (b.move) continue;
+            if (Math.abs(a.u - uWant) > 0.05 || Math.abs(b.u - uWant) > 0.05) continue;
+            const lo = Math.max(Math.min(a.e, b.e), eLo);
+            const hi = Math.min(Math.max(a.e, b.e), eHi);
+            if (hi > lo) feet += hi - lo;
+          }
+        });
+        return feet;
+      };
+      check('the piece stands proud of its own eave, so the seam has somewhere to be',
+        top - eave > 1, `${(top - eave).toFixed(3)} ft of rise`);
+      check('E4: no line runs down the join between the two sheets',
+        along(-20, eave + 0.05, top - 0.05) < 0.1,
+        `${along(-20, eave + 0.05, top - 0.05).toFixed(3)} ft of ink on the seam`);
+      // AND THE OTHER HALF. Above the piece the stub's gable end is a real
+      // edge with open air past it, and it has to stay: a painter that
+      // stopped drawing this edge altogether would pass the check above.
+      const ridge = Math.max(...GEO.roofFaces(stub, GEO.roofSkeleton(stub))
+        .flatMap(f => f.points.map(pt =>
+          CV.roofEaveElev(stub, tStack, tEnv) + GEO.roofFaceRise(f, pt, stub.pitch || 4))));
+      check('and above it the stub-s own gable end is still drawn',
+        along(-20, top + 0.4, ridge - 0.05) > 1,
+        `${along(-20, top + 0.4, ridge - 0.05).toFixed(3)} ft between ${top.toFixed(2)} and ${ridge.toFixed(2)}`);
+      // AND THE PIECE'S OWN EDGE AGAINST THE HOUSE KEEPS ITS FULL LENGTH.
+      // The probe that finds the seam lands on the neighbour's BOUNDARY at a
+      // shared corner, where inside-or-out is a coin toss; read there it ate
+      // a station and with it a foot and a half of this line.
+      const tieZ = Math.min(...(tie.points || []).map(pt => pt.z));
+      const houseEnd = view.strokes.reduce((feet, st) => {
+        if (Math.abs(st.w - ROOF_EDGE_W) > 1e-9) return feet;
+        for (let i = 1; i < st.pts.length; i++) {
+          const a = st.pts[i - 1], b = st.pts[i];
+          if (b.move) continue;
+          if (Math.abs(a.e - top) > 0.05 || Math.abs(b.e - top) > 0.05) continue;
+          feet += Math.abs(b.u - a.u);
+        }
+        return feet;
+      }, 0);
+      check('E4: and the piece-s edge against the house runs its whole length',
+        Math.abs(houseEnd - (20 - tieZ)) < 0.2,
+        `${houseEnd.toFixed(2)} ft drawn at e ${top.toFixed(3)}, the piece is ${(20 - tieZ).toFixed(2)} ft deep`);
+    }
+  }
+}
+
 // ── A CALLER THAT MEASURES ITS OWN FURNITURE GETS MORE WHITE ───────────────
 //
 // Movie, 22 Sep, on an elevation with both side menus open: *"when the side
