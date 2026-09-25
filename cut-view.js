@@ -118,6 +118,34 @@ if (!window.DraftCutView) {
   // GRADE_MIN_BELOW_CONCRETE_IN -- because one is the line a drafter cannot
   // type past and this is where the drawing puts it.
   const GRADE_BELOW_FOUNDATION_TOP_FT = 14 / 12;
+  // ── AND IT IS MEASURED FROM THE CONCRETE, WHICH IS NOT fdn.wallTop ──────
+  //
+  // The comment above has always said "top of concrete", and this file has
+  // always subtracted it from fdn.wallTop -- which level-assembly.js says in
+  // capitals is NOT that: FOUNDATION_WALL_TOP_FT "IS THE BEARING LINE, WHICH
+  // IS NOT THE CONCRETE'S OWN HEIGHT ... pour + plate". So grade sat one sill
+  // plate high and the house stood 1'-0 1/2" out of the ground instead of the
+  // 1'-2" Movie specified on 4 Sep: "let's move it to 1'-2" grade to top of
+  // concrete so they have 6" to slope around the perimeter."
+  //
+  // IT SHOWED UP AT THE GARAGE, not at the house. SPEC-garage-foundations.md
+  // has every garage foundation topping out 1'-2" above grade -- board #296,
+  // and the reason all three floors land at grade + 10" whichever one is
+  // chosen. With grade a plate high, an attached grade beam came out at
+  // 1'-0 1/2" and that invariant was quietly false. Movie, 25 Sep: "the
+  // garage grade beam should be locked at the grade height".
+  //
+  // THE HOUSE'S PLATE, NOT THE GARAGE'S. GARAGE_BEAM_PLATE_IN is also 1 1/2"
+  // and using it here would read as the garage setting the house's grade.
+  // They are the same number for different reasons, and that coincidence is
+  // what let one plate go missing in four places at once, so this asks the
+  // module that owns the foundation's makeup.
+  const houseSillPlateFt = () => window.DraftLevelAssembly.SILL_PLATE_IN / 12;
+  // Grade from the house's BEARING line -- exported, because MODEL.html holds
+  // `wallTop` rather than a foundation record and was computing this itself.
+  function gradeFromBearing(wallTop) {
+    return wallTop - houseSillPlateFt() - GRADE_BELOW_FOUNDATION_TOP_FT;
+  }
   // 1'-2", MOVED WITH GRADE. This number exists to put the beam's top of
   // concrete LEVEL with the top of the house foundation wall -- the comment
   // above says so -- and it does that only while it equals
@@ -150,14 +178,108 @@ if (!window.DraftCutView) {
   // vertical drop under a sloped top chord grows with the pitch.
   const ROOF_CHORD_IN = 3.5;
 
-  // Top of a frost-wall garage's concrete, on the section's foundation
-  // datum. See GARAGE_SILL_BELOW_HOUSE_FT for the rule.
+  // ── HOW FAR AN ATTACHED GARAGE SITS BELOW THE HOUSE SILL ────────────────
+  //
+  // Movie gave this twice and the two agree. 4 Sep: a frost wall is set SILL
+  // TO SILL against the house -- level on a bilevel or modified bilevel,
+  // GARAGE_SILL_BELOW_HOUSE_FT lower otherwise. 25 Sep: "for typ of house the
+  // default height of the garage sill will be different ... for bilevels it
+  // should be level as default position", and a bungalow "will often be
+  // dropped from house position by 2-4 ft".
+  //
+  // BUT A GRADE BEAM CANNOT TAKE THAT DROP, and that is arithmetic rather
+  // than preference. Grade is GRADE_BELOW_FOUNDATION_TOP_FT (1'-2") under the
+  // house sill. Drop a garage the full GARAGE_SILL_BELOW_HOUSE_FT and its top
+  // of concrete lands 11 1/2" BELOW GRADE -- the slab it carries would be a
+  // foot underground and the beam would have no face out of the ground at
+  // all. A frost wall can be dropped because it runs to footing depth anyway
+  // and the site backfills against it; a beam hanging off grade cannot.
+  //
+  // So the drop is asked of the FOUNDATION and not of the build type alone,
+  // and a grade beam answers zero -- which is also exactly what Movie was
+  // looking at on 25 Sep when he said "the garage sill and house sill line
+  // up". Dropping a grade-beam garage means dropping the SITE with it, which
+  // is board #44's phantom-house grade datum and is not this change.
+  // ── `open` MEANS THE OUTLINE IS OPEN, NOT THAT THE GARAGE IS ────────────
+  //
+  // An ATTACHED garage's loop is left open along the wall it welds to the
+  // house with -- harness-env's edgeOnOutline walks `points.length - 1` edges
+  // for exactly that reason -- so `garage.open === true` reads "attached",
+  // not "carport". It is the single most mis-readable field in this file:
+  // written out as a bare `garage.open === true` in garageBearing it looks
+  // like a building type, and a branch added under it for "the attached case"
+  // is dead code, because the attached case already left through that line.
+  //
+  // So the predicate is named, once, and both callers ask it. A garage is
+  // DETACHED when its loop closes AND it says it is detached; everything else
+  // is attached and meets the house sill to sill.
+  const isDetachedGarage = garage => garage.open !== true && garage.detached === true;
+
+  // TAKES THE TYPE, NOT AN ENV, so the page that BUILDS the garage can ask
+  // the same question the painter does. MODEL.html's raiseGarageConcrete held
+  // its own copy of this rule and the copy had already drifted -- it applied
+  // the drop unconditionally, with no split clause at all, so a frost-walled
+  // bilevel was BUILT 2 ft down and DRAWN level. Exporting the rule is the
+  // only version of this that cannot drift again.
+  function garageSillDropFt(buildType, mode) {
+    if (mode !== 'frostwall') return 0;
+    return ['bilevel', 'modifiedBilevel'].includes(buildType) ? 0 : GARAGE_SILL_BELOW_HOUSE_FT;
+  }
+  const envBuildType = env => (env && env.buildType ? env.buildType() : null);
+
+  // ── WHERE AN ATTACHED GARAGE'S WALLS BEAR: THE TOP OF ITS SILL PLATE ────
+  //
+  // Movie, 25 Sep, looking at a built attached garage: "wait- the garage
+  // bears at the house sill height" ... "the garage sill and house sill line
+  // up" ... "the concrete starts below the 1.5" sill".
+  //
+  // THE DATUM IS THE HOUSE SILL, NOT GRADE -- and both attached paths in this
+  // file already SAID so while neither DID it:
+  //
+  //   frostWallTop    "set SILL TO SILL against the house ... sill to sill
+  //                    and NOT concrete to concrete" -- then returned the
+  //                    garage's CONCRETE top set to the house's SILL top, and
+  //                    the caller added the plate on top of that.
+  //   the grade beam  GARAGE_BEAM_ABOVE_GRADE_FT exists "to put the beam's
+  //                    top of concrete LEVEL with the top of the house
+  //                    foundation wall" -- but fdn.wallTop IS THE BEARING
+  //                    LINE (level-assembly.js, FOUNDATION_WALL_TOP_FT: "pour
+  //                    + plate"), so grade + 1'-2" puts the beam's concrete on
+  //                    the house's PLATE TOP rather than on its concrete.
+  //
+  // ONE DEFECT, ONE PLATE THICKNESS, WRITTEN TWICE -- and a third time in
+  // MODEL.html's raiseGarageConcrete, which BUILDS what this file DRAWS off
+  // the same `houseTop`. That is why nothing caught it: every site was wrong
+  // by the same 1 1/2", so the drawing stayed self-consistent at the wrong
+  // height. Measured on the bungalow before the fix: house sill 8'-1 1/2",
+  // attached garage sill 8'-3" on BOTH foundation types -- the garage
+  // standing exactly GARAGE_BEAM_PLATE_IN proud of the house it is bolted to.
+  //
+  // SO THE SILL TOP IS THE NUMBER, and the concrete is derived from it by
+  // subtracting the plate -- the direction Movie gave ("the concrete starts
+  // BELOW the 1.5" sill"), and the only direction that cannot drift: what
+  // every garage wall stands on is now computed rather than inferred.
+  function garageBearing(env, fdn, garage) {
+    const mode = env.garageFoundation(garage);
+    if (mode === 'frostwall') return frostWallTop(env, fdn, garage) + GARAGE_BEAM_PLATE_IN / 12;
+    // ATTACHED: sill to sill with the house, less this foundation's drop.
+    // Replaces `fdn.grade + GARAGE_BEAM_ABOVE_GRADE_FT + plate`, which reached
+    // the same place by the wrong road -- grade is DERIVED from fdn.wallTop
+    // (wallTop - 1'-2"), so climbing 1'-2" back out of it just returned the
+    // bearing line, and the plate then stood the garage 1 1/2" over the house.
+    if (!isDetachedGarage(garage)) return fdn.wallTop - garageSillDropFt(envBuildType(env), mode);
+    if (mode === 'thickened') return fdn.grade + GARAGE_SLAB_THICKNESS_IN / 12;
+    return fdn.grade + (DETACHED_BEAM_ABOVE_GRADE_IN + GARAGE_BEAM_PLATE_IN) / 12;
+  }
+
+  // Top of a frost-wall garage's CONCRETE, on the section's foundation datum
+  // -- one sill plate below where its walls bear. See garageBearing.
   function frostWallTop(env, fdn, garage) {
-    if (garage.open !== true && garage.detached === true) {
+    if (isDetachedGarage(garage)) {
       return fdn.grade + DETACHED_BEAM_ABOVE_GRADE_IN / 12;
     }
-    const split = (env.buildType ? ['bilevel', 'modifiedBilevel'].includes(env.buildType()) : false);
-    return fdn.wallTop - (split ? 0 : GARAGE_SILL_BELOW_HOUSE_FT);
+    return fdn.wallTop - garageSillDropFt(envBuildType(env), 'frostwall')
+      - GARAGE_BEAM_PLATE_IN / 12;
   }
 
   // ── THE FASCIA IS BANDED ONCE, OVER THE EAVE'S TRUE LENGTH ───────────────
@@ -273,7 +395,7 @@ if (!window.DraftCutView) {
       bearing: bearer.wallTop,
       foundation: {
         wallTop, wallBottom,
-        grade: wallTop - GRADE_BELOW_FOUNDATION_TOP_FT,
+        grade: gradeFromBearing(wallTop),
         slabTop: wallBottom + foundationAssembly.slabThicknessIn / 12,
         slabIn: foundationAssembly.slabThicknessIn,
         footingBottom: wallBottom - foundationAssembly.footingDepthIn / 12,
@@ -1053,8 +1175,12 @@ if (!window.DraftCutView) {
         ? Math.min(uMax, Math.max(...outlineUs))
         : Math.max(...beamCrossings.map(c => c.u));
       if (hi - lo > 1) {
-        const plateTop = fdn.wallBottom
-          + Math.max(...beamCrossings.map(c => c.wall.topHeight)) + GARAGE_BEAM_PLATE_IN / 12;
+        // ONE DATUM, so a file SAVED at the old beam height still draws its
+        // slab under the walls rather than 1 1/2" away from them. The stored
+        // wall is the fallback for a crossing whose body is unknown.
+        const plateTop = garage ? garageBearing(env, fdn, garage)
+          : fdn.wallBottom
+            + Math.max(...beamCrossings.map(c => c.wall.topHeight)) + GARAGE_BEAM_PLATE_IN / 12;
         const slabTop = plateTop + GARAGE_SLAB_THICKNESS_IN / 12;
         ctx.fillStyle = weight(C.concrete, 0.35);
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
@@ -1109,7 +1235,7 @@ if (!window.DraftCutView) {
           x + 4, Y((level.floorTop + level.floorBottom) / 2));
       });
       crossings.filter(c => c.wall.levelId === level.id && (c.wall.view || 'plan') === 'plan')
-        .forEach(c => drawSectionWall(env, ctx, X, Y, pxPerFt, c, level, opts, C));
+        .forEach(c => drawSectionWall(env, ctx, X, Y, pxPerFt, c, level, opts, C, fdn));
     });
 
     // Roof profile over everything: the sampled top chord plus fascia drops.
@@ -1237,7 +1363,7 @@ if (!window.DraftCutView) {
   // IT STILL DERIVES ITS OWN when called without one: this function is
   // exported, and a caller reaching for it directly gets paper rather than a
   // crash.
-  function drawSectionWall(env, ctx, X, Y, pxPerFt, crossing, level, opts, inks) {
+  function drawSectionWall(env, ctx, X, Y, pxPerFt, crossing, level, opts, inks, fdn) {
     const C = inks || inksFor(opts);
     const ink = a => weight(C.ink, a);
     const INK = C.line;
@@ -1245,7 +1371,31 @@ if (!window.DraftCutView) {
     const SILL_FT = 3;                    // default window sill
     const { wall, u, width, alongWall } = crossing;
     const x = X(u - width / 2), wid = width * pxPerFt;
-    const bottom = level.floorTop, top = level.wallTop;
+    // ── A GARAGE HAS NO FLOOR TO STAND ON ───────────────────────────────
+    //
+    // Movie, 25 Sep, on the section: "we need extra 1'-0 5/8" of wall added
+    // to the bottom of the garage wall to meet the top of the sill plate
+    // (main floor joists + sheathing height". That is DEFAULT_FLOOR_THICKNESS
+    // exactly -- 11 7/8" TJI + 3/4" sheathing -- and it is the measure of
+    // what this line was missing.
+    //
+    // sectionWallCrossings has put `garage` on every crossing since audit C5
+    // and this painter never read it, so a garage wall stood on level.floorTop
+    // like a house wall: the top of the MAIN FLOOR DECK. A house wall belongs
+    // there. A garage has no joists and no deck under it -- its wall runs down
+    // past where that floor would be and lands on the sill plate on its own
+    // foundation, one whole floor package lower.
+    //
+    // THE ELEVATION ALREADY KNEW (drawElevationView's garageBase), which is
+    // why the two views of the same garage disagreed by a foot -- and why the
+    // PROJECT page, which draws sections, is where Movie saw it.
+    //
+    // The wall TOP does not move: the extra height is added at the BOTTOM, so
+    // the garage plate still lines up with the storey it shares.
+    const bottom = crossing.garage && fdn
+      ? garageBearing(env, fdn, crossing.garage)
+      : level.floorTop;
+    const top = level.wallTop;
     const opening = env.fenestrations().find(f => f.wallId === wall.id
       && Math.abs(alongWall - f.offset) < f.width / 2);
     ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
@@ -1724,13 +1874,12 @@ if (!window.DraftCutView) {
     // Wall faces, far to near, each with the openings it hosts. A garage
     // face stands on its own bearing — the beam plate or the slab — so its
     // face and its doors run down to that, not to the house floor.
-    const garageBase = garage => env.garageFoundation(garage) === 'frostwall'
-      ? frostWallTop(env, fdn, garage) + GARAGE_BEAM_PLATE_IN / 12
-      : garage.open === true
-        ? fdn.grade + GARAGE_BEAM_ABOVE_GRADE_FT + GARAGE_BEAM_PLATE_IN / 12
-        : env.garageFoundation(garage) === 'thickened'
-          ? fdn.grade + GARAGE_SLAB_THICKNESS_IN / 12
-          : fdn.grade + (DETACHED_BEAM_ABOVE_GRADE_IN + GARAGE_BEAM_PLATE_IN) / 12;
+    // Hoisted to garageBearing so the SECTION can stand its garage walls on
+    // the same line this elevation does. It could not before: drawSectionWall
+    // never asked which body a wall belonged to, and every garage wall in
+    // section stood on level.floorTop -- the main floor DECK, one whole floor
+    // package above the sill it actually bears on.
+    const garageBase = garage => garageBearing(env, fdn, garage);
     const HEAD_FT = 6 + 10 / 12, SILL_FT = 3;
     // A gable-end wall climbs to the roof: where a roof bearing on this
     // wall's plate runs a GABLE edge just past the face, the top of the
@@ -2866,6 +3015,10 @@ if (!window.DraftCutView) {
     cutViewExtents,
     roofBaseElev,
     roofEaveElev,
+    garageBearing,
+    gradeFromBearing,
+    frostWallTop,
+    garageSillDropFt,
     floorRuns,
     garageOfWall,
     garageOfRoof,
