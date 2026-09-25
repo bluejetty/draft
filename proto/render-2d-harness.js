@@ -579,6 +579,118 @@ suite('drawColumn2D', 'centreOnly keeps the cross and drops the body', R => {
   expect('but the cross the drafter aligns to is still there', count(ctx, 'stroke') > 0, true);
 });
 
+// ── drawPadGroup2D and drawOpeningAbove2D ──
+//
+// Two dashed rectangles that land on the SAME plan, which is the whole reason
+// they are checked together: a pad is buried concrete and an opening is a hole
+// overhead, and at one weight and one dash a drafter cannot tell them apart.
+// Every check below is written so a painter that drew the OTHER one's line
+// type fails it.
+//
+// Movie, 25 Sep: "we have beam and columns, but no footing, we will need
+// footings below the columns", and "uses a line with short dashes and gaps
+// with a med-lightweight pen draw where the openings in the floor ABOVE are
+// located".
+// ITS OWN SENTINEL rather than borrowing SENTINEL_TAG from the suite below.
+// Borrowing worked -- suite callbacks run after the whole file evaluates, so
+// the later const was initialised by the time they read it -- and working by
+// luck is the thing this file spends its comments warning about. A reader
+// moving either section would break it with no warning at all.
+const SENTINEL_ABOVE = '#00cc88';
+const PAD_GROUP = { minX: -1.5, maxX: 1.5, minZ: -1.5, maxZ: 1.5, columns: [{ id: 1 }] };
+const HOLE = [{ x: 0, z: 0 }, { x: 4, z: 0 }, { x: 4, z: 9 }, { x: 0, z: 9 }];
+
+suite('drawPadGroup2D', 'a pad is a dashed rectangle in the column ink', R => {
+  const ctx = recordingCtx();
+  R.drawPadGroup2D(ctx, toS, PAD_GROUP, {}, structEnv());
+  expect('a rectangle is stroked', count(ctx, 'strokeRect') > 0, true);
+  expect('in the caller-s column ink',
+    sets(ctx, 'strokeStyle').includes(SENTINEL_COLUMN), true);
+  // DASHED BECAUSE IT IS BURIED, and at the pad's own 5/4 -- not the hole's
+  // 3/3. A painter that used the opening's dash would pass a bare "is it
+  // dashed" check and draw the wrong thing.
+  expect('dashed at the pad-s own length',
+    JSON.stringify(calls(ctx, 'setLineDash')[0]), '[[5,4]]');
+  expect('and the dash is put back, so the next painter starts clean',
+    JSON.stringify(calls(ctx, 'setLineDash').at(-1)), '[[]]');
+});
+
+suite('drawPadGroup2D', 'it wears the label the caller resolved', R => {
+  const ctx = recordingCtx();
+  R.drawPadGroup2D(ctx, toS, PAD_GROUP, { label: 'TYP 36×36 PAD' }, structEnv());
+  expect('the label is written', calls(ctx, 'fillText')[0][0], 'TYP 36×36 PAD');
+  // NO LABEL IS NOT A DEFAULT LABEL. Which schedule row a group refers to is
+  // the page's answer -- a combined pour has no row at all -- so a painter
+  // that invented one would put a reference on concrete that has none.
+  const bare = recordingCtx();
+  R.drawPadGroup2D(bare, toS, PAD_GROUP, {}, structEnv());
+  expect('and nothing is written without one', count(bare, 'fillText'), 0);
+});
+
+suite('drawPadGroup2D', 'a printing pass keeps the pad and drops the label', R => {
+  const ctx = recordingCtx();
+  R.drawPadGroup2D(ctx, toS, PAD_GROUP, { label: 'TYP 36×36 PAD' },
+    structEnv({ isPrinting: true }));
+  expect('the rectangle survives', count(ctx, 'strokeRect') > 0, true);
+  expect('but nothing is written', count(ctx, 'fillText'), 0);
+});
+
+suite('drawPadGroup2D', 'a group with no bounds is not a pad', R => {
+  const ctx = recordingCtx();
+  R.drawPadGroup2D(ctx, toS, { columns: [] }, {}, structEnv());
+  expect('nothing is painted', painted(ctx), false);
+  R.drawPadGroup2D(ctx, toS, null, {}, structEnv());
+  expect('and neither is nothing', painted(ctx), false);
+});
+
+suite('drawOpeningAbove2D', 'a hole overhead is a short-dashed closed ring', R => {
+  const ctx = recordingCtx();
+  R.drawOpeningAbove2D(ctx, toS, HOLE, {}, structEnv({ openingAboveColor: SENTINEL_ABOVE }));
+  // SHORTER THAN THE PAD'S, which is the distinction this pair exists to keep.
+  expect('dashed at the opening-s own length',
+    JSON.stringify(calls(ctx, 'setLineDash')[0]), '[[3,3]]');
+  expect('and it closes, because a hole is a ring', count(ctx, 'closePath') > 0, true);
+  expect('in the ink the caller named',
+    sets(ctx, 'strokeStyle').includes(SENTINEL_ABOVE), true);
+});
+
+suite('drawOpeningAbove2D', 'it is lighter than the structure it lies over', R => {
+  const ctx = recordingCtx();
+  R.drawOpeningAbove2D(ctx, toS, HOLE, {}, structEnv({ openingAboveColor: SENTINEL_ABOVE }));
+  const pad = recordingCtx();
+  R.drawPadGroup2D(pad, toS, PAD_GROUP, {}, structEnv());
+  // THE MED-LIGHTWEIGHT PEN Movie asked for, measured against the pad rather
+  // than against a number: "lighter" is a relationship, and a check on the
+  // absolute width would pass the day both got heavier together.
+  expect('a thinner pen than the pad-s',
+    sets(ctx, 'lineWidth').some(w => w < Math.max(...sets(pad, 'lineWidth'))), true);
+  expect('and faded, so it reads as context',
+    sets(ctx, 'globalAlpha').some(a => a < 1), true);
+});
+
+suite('drawOpeningAbove2D', 'it falls back to the column ink when given none', R => {
+  // The page names the stair's colour; a caller that does not gets the
+  // structural ink rather than nothing, because an unpainted hole is worse
+  // than one in the wrong colour.
+  const ctx = recordingCtx();
+  R.drawOpeningAbove2D(ctx, toS, HOLE, {}, structEnv());
+  expect('stroked in the column ink',
+    sets(ctx, 'strokeStyle').includes(SENTINEL_COLUMN), true);
+});
+
+suite('drawOpeningAbove2D', 'fewer than three corners is not an opening', R => {
+  const ctx = recordingCtx();
+  R.drawOpeningAbove2D(ctx, toS, [{ x: 0, z: 0 }, { x: 1, z: 1 }], {}, structEnv());
+  expect('two points enclose nothing', painted(ctx), false);
+  R.drawOpeningAbove2D(ctx, toS, [], {}, structEnv());
+  expect('and neither does an empty list', painted(ctx), false);
+  // A corner that is not numbers is dropped rather than drawn to NaN, which
+  // canvas accepts silently and paints as a gap in the ring.
+  R.drawOpeningAbove2D(ctx, toS,
+    [{ x: 0, z: 0 }, { x: NaN, z: 0 }, { x: 1, z: 1 }], {}, structEnv());
+  expect('a NaN corner leaves too few to enclose anything', painted(ctx), false);
+});
+
 // ── drawRoomTag2D ──
 // The painter MODEL.dc.html held locally until 21 Sep. What kept it there was
 // that it recorded its own hit boxes onto the page as it drew; it now RETURNS
