@@ -2468,12 +2468,58 @@ if (!window.DraftCutView) {
       z: u * axis.z + depth * dir.z,
     });
 
-    const houseSpans = houseFaces.map(face => ({
+    const spanOf = face => ({
       lo: Math.max(Math.min(face.u1, face.u2), uMin),
       hi: Math.min(Math.max(face.u1, face.u2), uMax),
       depth: face.depth,
       levelId: face.level.id,
-    })).filter(span => span.hi - span.lo >= 0.5);
+    });
+    const houseSpans = houseFaces.map(spanOf).filter(span => span.hi - span.lo >= 0.5);
+    // ── AND A GARAGE IN FRONT IS SOMETHING NEARER ──────────────────────
+    //
+    // Movie, 25 Sep, marking the band in red on E1 and E4 of his own build:
+    // "the main floor looks like it over 'overlayed' overtop of the attached
+    // garage walls/door etc".
+    //
+    // houseFaces drops every garage face -- it was built for houseHi, where
+    // dropping them is the point ("a garage hangs off grade and never carries
+    // the house datums across its front") -- and houseSpans then inherited
+    // that blindness. So the rim band, and the edges through it, asked "is a
+    // nearer face covering this?" of a list the garage had been removed from,
+    // and the answer was always no.
+    //
+    // Measured on E1 of his file. The garage's front wall is the NEAREST face
+    // in the drawing and the house's rim band is filled straight over it:
+    //
+    //     seq 56  u  -4.0..20.0  e -1.05..8.10   the garage's face
+    //     seq 61  u -16.0..16.0  e -1.07..0.03   the house's rim band, after
+    //
+    // -- twelve feet of the garage's wall and the head of its door, papered
+    // over with the house's floor package.
+    //
+    // THE OCCLUSION QUESTION IS NOT THE DATUM QUESTION. A datum line is the
+    // house's to carry or not; a rim band is a surface, and a surface is
+    // hidden by whatever stands in front of it, whichever body that is. So
+    // the bands are still BUILT from the house's faces -- a garage's floor
+    // package is its own and sits at its own height -- while what HIDES them
+    // is asked of every face on the drawing.
+    const allSpans = faces.map(spanOf).filter(span => span.hi - span.lo >= 0.5);
+    // The stretches of [lo, hi] that no nearer face covers. Returned as a
+    // list because a face can be interrupted in the middle -- a garage
+    // standing off a house's centre leaves a band either side of it.
+    const uncovered = (lo, hi, depth) => {
+      let parts = [{ lo, hi }];
+      allSpans.filter(other => other.depth > depth + 1e-6).forEach(other => {
+        const next = [];
+        parts.forEach(part => {
+          if (other.hi <= part.lo + 1e-6 || other.lo >= part.hi - 1e-6) { next.push(part); return; }
+          if (other.lo > part.lo + 1e-6) next.push({ lo: part.lo, hi: other.lo });
+          if (other.hi < part.hi - 1e-6) next.push({ lo: other.hi, hi: part.hi });
+        });
+        parts = next;
+      });
+      return parts.filter(part => part.hi - part.lo >= 0.5);
+    };
     // AND A ROOF IN FRONT HIDES IT TOO. This asked only whether a nearer WALL
     // FACE covered the edge, never whether a roof did -- so a garage roof
     // standing in front of the house at rim-band height left the band's
@@ -2512,7 +2558,9 @@ if (!window.DraftCutView) {
     };
 
     const edgeVisible = (u, depth, elev = null) => {
-      if (houseSpans.some(other => other.depth > depth + 1e-6
+      // Asked of EVERY face, not just the house's: a garage standing in front
+      // hides an edge exactly as another wing would.
+      if (allSpans.some(other => other.depth > depth + 1e-6
         && other.lo < u - 0.05 && other.hi > u + 0.05)) return false;
       if (elev != null && behindRoof(atUDepth(u, depth), elev)) return false;
       return true;
@@ -2537,11 +2585,20 @@ if (!window.DraftCutView) {
       ctx.fillStyle = C.face;
       runs.forEach(run => {
         if (run.hi - run.lo < 0.5) return;
-        ctx.fillRect(X(run.lo) - 1, yTopPx, (run.hi - run.lo) * pxPerFt + 2, yBotPx - yTopPx);
         const depth = Math.max(...spans
           .filter(span => span.hi > run.lo && span.lo < run.hi)
           .map(span => span.depth));
-        rimBands.push({ lo: run.lo, hi: run.hi, bottom: level.floorBottom, top: level.floorTop, depth });
+        // ONLY WHERE NOTHING NEARER STANDS. The band is the house's floor
+        // package seen flat, and a garage in front of it is a wall, not a
+        // window. What is pushed to rimBands is what was PAINTED, so the roof
+        // pass downstream reads the same surface the sheet shows.
+        uncovered(run.lo, run.hi, depth).forEach(part => {
+          ctx.fillRect(X(part.lo) - 1, yTopPx, (part.hi - part.lo) * pxPerFt + 2, yBotPx - yTopPx);
+          rimBands.push({
+            lo: part.lo, hi: part.hi,
+            bottom: level.floorBottom, top: level.floorTop, depth,
+          });
+        });
       });
       // Vertical edges through the band: the run boundaries plus any face
       // corner inside a run that isn't hidden behind a nearer face — a jog

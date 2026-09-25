@@ -646,6 +646,75 @@ function run(win) {
     }
   }
 
+  // ── A RIM BAND IS HIDDEN BY WHATEVER STANDS IN FRONT OF IT ────────────
+  //
+  // Movie, 25 Sep, marking it in red on E1 and E4 of his own build: "the main
+  // floor looks like it over 'overlayed' overtop of the attached garage
+  // walls/door etc".
+  //
+  // houseFaces drops every garage face -- it was built for houseHi, where
+  // dropping them IS the point -- and houseSpans inherited that blindness, so
+  // the rim band asked "is a nearer face covering this?" of a list the garage
+  // had been removed from. Measured on E1 of his file, the garage's front wall
+  // being the nearest face in the drawing:
+  //
+  //     seq 56  u  -4.0..20.0  e -1.05..8.10   the garage's face
+  //     seq 61  u -16.0..16.0  e -1.07..0.03   the house's rim band, after
+  //
+  // THE INVARIANT, not the instance: no painted rim band may overlap a face
+  // nearer than the one it belongs to. Asked of every elevation, because
+  // which side the garage lands on changes with the view.
+  {
+    let reached = 0;
+    standardElevationCuts(base).forEach(cut => {
+      const painted = paintElevation(win, base, cut, { pxPerFt: 40 });
+      const axis = painted.axis;
+      const faceSpans = base.walls()
+        .filter(w => (w.view || 'plan') === 'plan' && Number(w.levelId) > 0)
+        .map(w => ({
+          lo: Math.min(w.start.x * axis.x + w.start.z * axis.z,
+            w.end.x * axis.x + w.end.z * axis.z),
+          hi: Math.max(w.start.x * axis.x + w.start.z * axis.z,
+            w.end.x * axis.x + w.end.z * axis.z),
+          depth: ((w.start.x * cut.dirVec.x + w.start.z * cut.dirVec.z)
+            + (w.end.x * cut.dirVec.x + w.end.z * cut.dirVec.z)) / 2,
+          garage: CV.garageOfWall(w, base, {}) !== null,
+        }))
+        .filter(span => span.hi - span.lo >= 0.5);
+      // A rim band is the floor package seen flat: a face-ink fill whose
+      // height is a level's floorTop..floorBottom.
+      const levels = stack.floors;
+      const bands = (painted.modelFills || []).map(f => f.pts || []).filter(pts => pts.length)
+        .map(pts => ({
+          lo: Math.min(...pts.map(p => p.u)), hi: Math.max(...pts.map(p => p.u)),
+          e0: Math.min(...pts.map(p => p.e)), e1: Math.max(...pts.map(p => p.e)),
+        }))
+        .filter(f => levels.some(l => Math.abs(f.e1 - l.floorTop) < 0.06
+          && Math.abs(f.e0 - l.floorBottom) < 0.06));
+      if (!bands.length) return;
+      // Each band belongs to the deepest house face under it; anything NEARER
+      // than that, garage included, should have clipped it.
+      bands.forEach(band => {
+        const under = faceSpans.filter(sp => sp.hi > band.lo + 0.05 && sp.lo < band.hi - 0.05);
+        if (!under.length) return;
+        const own = Math.max(...under.map(sp => sp.depth));
+        const infront = faceSpans.filter(sp => sp.depth > own + 1e-6
+          && sp.hi > band.lo + 0.05 && sp.lo < band.hi - 0.05);
+        if (faceSpans.some(sp => sp.garage && sp.depth > own + 1e-6)) reached += 1;
+        check(`${cut.id}: the rim band at ${ftIn(band.e1)} is not painted over a nearer face`,
+          infront.length === 0,
+          infront.length
+            ? `band u ${band.lo.toFixed(1)}..${band.hi.toFixed(1)} is covered by `
+              + infront.map(sp => `${sp.garage ? 'garage' : 'house'} u ${sp.lo.toFixed(1)}..${sp.hi.toFixed(1)}`).join(', ')
+            : `u ${band.lo.toFixed(1)}..${band.hi.toFixed(1)} clear`);
+      });
+    });
+    // WITHOUT A GARAGE IN FRONT OF A BAND SOMEWHERE, the checks above are a
+    // filter over an empty list and pass whatever the painter does.
+    check('fixture: some elevation stands the garage in front of a rim band',
+      reached > 0, `${reached} band(s) with a nearer garage face`);
+  }
+
   // ── ONE RULE, NOT FIVE COPIES ─────────────────────────────────────────
   // The whole defect was five sites each holding their own version. These
   // read the SOURCES, because "the rule is shared" is a fact about the text
@@ -756,6 +825,12 @@ const MUTATIONS = [
   // 5'-6" below the beam the pile actually carries.
   ['a pile takes the deepest concrete over it, not the beam it carries',
     s => s.replace('      const hung = over.filter(g => !g.bearing);', '      const hung = [];')],
+  ['the rim band stops asking what stands in front of it',
+    s => s.replace('        uncovered(run.lo, run.hi, depth).forEach(part => {',
+      '        [{ lo: run.lo, hi: run.hi }].forEach(part => {')],
+  ['the occlusion test goes back to house faces only, blind to the garage',
+    s => s.replace('    const allSpans = faces.map(spanOf).filter(span => span.hi - span.lo >= 0.5);',
+      '    const allSpans = houseSpans;')],
   ['the grade-beam slab goes back to the stored wall instead of the datum',
     s => s.replace('const slabTop = garage ? garageSlabTop(env, fdn, garage)\n          : fdn.wallBottom',
       'const slabTop = false ? 0\n          : fdn.wallBottom')],
