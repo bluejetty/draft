@@ -564,12 +564,114 @@ if (!window.DraftBuildHouse) {
     return { beams, columns };
   };
 
+  // ── WHAT A COLUMN STANDS ON ───────────────────────────────────────────────
+  //
+  // Movie, 25 Sep, looking at a built foundation: "we have beam and columns,
+  // but no footing, we will need footings below the columns, please check the
+  // model.DC version i think it had them already 36"x36"x8"dp". It did --
+  // MODEL.dc.html:2460 COLUMN_FOOTINGS -- and this is that table, unchanged
+  // in its numbers.
+  //
+  // THERE WAS NO TABLE ON THIS SIDE AT ALL, which is why the pads never drew.
+  // MODEL.html carries id+label pairs for the picker and nothing else, so it
+  // hands render-2d.js `footing: null` for every pad and the painter draws the
+  // 3" telepost alone. The same gap makes every PILE draw at 6": the page
+  // passes a hard-coded `sizeIn: 6` because it has no size to look up, so a
+  // 12" pile and an 8" pile are the same circle.
+  //
+  // `note` IS THE SCHEDULE ROW, `label` IS THE PLAN. A drawing says TYP 36x36
+  // PAD beside the square and the schedule carries the reinforcement; putting
+  // the long form on the plan would bury the drawing in text.
+  const COLUMN_FOOTINGS = Object.freeze([
+    Object.freeze({ id: 'pad36', label: 'TYP 36×36 PAD', sizeIn: 36,
+      note: '36"×36"×8" DP PAD — 3-15M @ 10" O.C. E/W' }),
+    Object.freeze({ id: 'pad42', label: 'MED 42×42 PAD', sizeIn: 42,
+      note: '42"×42"×10" DP PAD — 4-15M @ 9" O.C. E/W' }),
+    // Drilled piles carry a garage grade beam. Depth comes from the soils
+    // report, so the PLAN marks diameter and centre only -- the schedule mark
+    // (P1/P2/P3) carries the length and the steel.
+    Object.freeze({ id: 'pile8', label: '8"ø PILE', sizeIn: 8, pile: true,
+      note: '8"ø CONC PILE — DEPTH PER SOILS REPORT' }),
+    Object.freeze({ id: 'pile10', label: '10"ø PILE', sizeIn: 10, pile: true,
+      note: '10"ø CONC PILE — DEPTH PER SOILS REPORT' }),
+    Object.freeze({ id: 'pile12', label: '12"ø PILE', sizeIn: 12, pile: true,
+      note: '12"ø CONC PILE — DEPTH PER SOILS REPORT' }),
+  ]);
+
+  // FIRST ROW IS THE FALLBACK, which is dc's rule and matters for the same
+  // reason its validator's does: an id the table has never heard of is a pad,
+  // not a crash and not a missing footing.
+  const footingFor = id =>
+    COLUMN_FOOTINGS.find(footing => footing.id === id) || COLUMN_FOOTINGS[0];
+
+  // A pad column may carry its own size typed on the plan; without one it
+  // takes the picked footing's standard. A PILE has no such override -- its
+  // size IS its diameter and the id says which.
+  const padSizeIn = column => {
+    const footing = footingFor(column?.footing);
+    const custom = Number(column?.padIn);
+    return !footing.pile && Number.isFinite(custom) && custom > 0
+      ? custom : footing.sizeIn;
+  };
+
+  // PADS THAT TOUCH POUR AS ONE FOOTING, and the gap is why this is union-find
+  // rather than a pairwise sweep: three pads in a row where only the
+  // neighbours touch are still ONE pour, and a pairwise pass would emit two
+  // overlapping rectangles for the same concrete.
+  //
+  // The default gap is dc's PAD_JOIN_GAP_FT -- 6", close enough that forming
+  // two separate pads is more work than pouring the rectangle between them.
+  const padGroups = (columns, { joinGapFt = 0.5 } = {}) => {
+    const pads = (columns || []).filter(column => !footingFor(column?.footing).pile
+      && column?.point && Number.isFinite(column.point.x) && Number.isFinite(column.point.z));
+    const rects = pads.map(column => {
+      const half = padSizeIn(column) / 24;
+      return {
+        minX: column.point.x - half, maxX: column.point.x + half,
+        minZ: column.point.z - half, maxZ: column.point.z + half,
+      };
+    });
+    const parent = pads.map((_, index) => index);
+    const find = index => (parent[index] === index ? index : (parent[index] = find(parent[index])));
+    const gap = Number(joinGapFt) >= 0 ? Number(joinGapFt) : 0;
+    for (let i = 0; i < pads.length; i++) {
+      for (let j = i + 1; j < pads.length; j++) {
+        const a = rects[i], b = rects[j];
+        if (a.minX <= b.maxX + gap && b.minX <= a.maxX + gap
+          && a.minZ <= b.maxZ + gap && b.minZ <= a.maxZ + gap) {
+          parent[find(i)] = find(j);
+        }
+      }
+    }
+    const groups = new Map();
+    pads.forEach((column, index) => {
+      const root = find(index);
+      if (!groups.has(root)) {
+        groups.set(root, {
+          columns: [], minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity,
+        });
+      }
+      const group = groups.get(root);
+      group.columns.push(column);
+      const rect = rects[index];
+      group.minX = Math.min(group.minX, rect.minX);
+      group.maxX = Math.max(group.maxX, rect.maxX);
+      group.minZ = Math.min(group.minZ, rect.minZ);
+      group.maxZ = Math.max(group.maxZ, rect.maxZ);
+    });
+    return [...groups.values()];
+  };
+
   window.DraftBuildHouse = Object.freeze({
     outlineInteriorRef,
     houseWallRuns,
     footingRings,
     pilePoints,
     midSpanBeams,
+    COLUMN_FOOTINGS,
+    footingFor,
+    padSizeIn,
+    padGroups,
   });
 })();
 }
