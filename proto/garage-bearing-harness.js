@@ -171,6 +171,29 @@ function run(win) {
     bearing - PLATE > fdn.grade + 0.5,
     `${ftIn(bearing - PLATE - fdn.grade)} of concrete above grade`);
 
+  // ── EVERY GARAGE FOUNDATION TOPS OUT 1'-2" ABOVE GRADE ────────────────
+  //
+  // Board #296 and SPEC-garage-foundations.md, from Movie 5 Sep: the 1'-2"
+  // is "for the grade beam or frost wall". He re-confirmed the guideline on
+  // 25 Sep. It was NOT true before this: grade was measured down from
+  // fdn.wallTop, the BEARING line, so every foundation stood 1'-0 1/2" out of
+  // the ground and the spec's own invariant was quietly false. These pin it
+  // at the relationship rather than at a literal -- a check against 14 passes
+  // with the number hardcoded in the formula.
+  check("the HOUSE's top of concrete is GRADE_BELOW_FOUNDATION_TOP_FT above grade",
+    near(houseConcrete - fdn.grade, S.GRADE_BELOW_FOUNDATION_TOP_FT),
+    ftIn(houseConcrete - fdn.grade));
+  check("the attached grade beam's top of concrete lands there too",
+    near(bearing - PLATE - fdn.grade, S.GARAGE_BEAM_ABOVE_GRADE_FT),
+    ftIn(bearing - PLATE - fdn.grade));
+  check('and so does a detached one, off its own grade',
+    near(CV.garageBearing(base, fdn, { ...attached, open: false, detached: true })
+      - PLATE - fdn.grade, S.DETACHED_BEAM_ABOVE_GRADE_IN / 12),
+    ftIn(CV.garageBearing(base, fdn, { ...attached, open: false, detached: true }) - PLATE - fdn.grade));
+  check('grade is a plate below what fdn.wallTop would have given',
+    near(CV.gradeFromBearing(fdn.wallTop), fdn.wallTop - PLATE - S.GRADE_BELOW_FOUNDATION_TOP_FT),
+    ftIn(fdn.grade));
+
   // ── THE FOOT THE SECTION WAS MISSING ──────────────────────────────────
   check("the garage wall starts 1'-0 5/8\" below the deck a house wall starts on",
     near(mainLevel.floorTop - bearing, floorPackageFt),
@@ -359,9 +382,16 @@ if (!MUTATION_MODE) {
 const MUTATIONS = [
   ['frostWallTop stops subtracting the plate (the original defect)',
     s => s.replace("- GARAGE_BEAM_PLATE_IN / 12;\n  }", ";\n  }")],
-  ['the attached branch goes back to climbing out of grade',
+  // THE ORIGINAL DEFECT, SPELLED AS IT WOULD APPEAR NOW. It used to read
+  // `fdn.grade + GARAGE_BEAM_ABOVE_GRADE_FT + GARAGE_BEAM_PLATE_IN / 12`, and
+  // that is no longer a mutation at all: with grade corrected, grade + 1'-2"
+  // + plate IS fdn.wallTop, so the expression became right. The two errors
+  // were cancelling -- the garage climbed a plate too far out of a grade that
+  // sat a plate too high -- which is precisely why no drawing ever disagreed
+  // with itself and nothing caught either one. Aimed at the plate instead.
+  ['the attached garage stands a sill plate proud of the house again',
     s => s.replace('if (!isDetachedGarage(garage)) return fdn.wallTop - garageSillDropFt(envBuildType(env), mode);',
-      'if (!isDetachedGarage(garage)) return fdn.grade + GARAGE_BEAM_ABOVE_GRADE_FT + GARAGE_BEAM_PLATE_IN / 12;')],
+      'if (!isDetachedGarage(garage)) return fdn.wallTop + GARAGE_BEAM_PLATE_IN / 12;')],
   ['a grade beam takes the drop too, and ends up under the ground',
     s => s.replace("if (mode !== 'frostwall') return 0;", "if (mode === 'nonesuch') return 0;")],
   ['a frost wall stops dropping at all',
@@ -379,6 +409,12 @@ const MUTATIONS = [
   ['the section caller stops handing the painter its foundation',
     s => s.replace('drawSectionWall(env, ctx, X, Y, pxPerFt, c, level, opts, C, fdn)',
       'drawSectionWall(env, ctx, X, Y, pxPerFt, c, level, opts, C)')],
+  ['grade goes back to measuring from the bearing line, a plate high',
+    s => s.replace('return wallTop - houseSillPlateFt() - GRADE_BELOW_FOUNDATION_TOP_FT;',
+      'return wallTop - GRADE_BELOW_FOUNDATION_TOP_FT;')],
+  ['grade borrows the GARAGE plate, so the house defers to the garage',
+    s => s.replace('const houseSillPlateFt = () => window.DraftLevelAssembly.SILL_PLATE_IN / 12;',
+      'const houseSillPlateFt = () => 0;')],
   ['the grade-beam slab goes back to the stored wall instead of the datum',
     s => s.replace('const plateTop = garage ? garageBearing(env, fdn, garage)\n          : fdn.wallBottom',
       'const plateTop = false ? 0\n          : fdn.wallBottom')],

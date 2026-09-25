@@ -9994,7 +9994,11 @@
     const kind = garageFoundationOf(garage);
     const detached = garage?.detached === true;
     const houseTop = assemblyFor(levelId).wallHeightFt;
-    const grade = houseTop - S.GRADE_BELOW_FOUNDATION_TOP_FT;
+    // ASKS cut-view rather than repeating the subtraction: grade is measured
+    // from the top of CONCRETE and `houseTop` is the bearing line, one sill
+    // plate above it. Spelled out here, this line read 1 1/2" high -- the
+    // same missing plate as the garage tops above, one link further down.
+    const grade = window.DraftCutView.gradeFromBearing(houseTop);
 
     // THE TOP OF THE CONCRETE, per kind. A detached garage sits on its own
     // lot and answers to grade; an attached one is set down from the house so

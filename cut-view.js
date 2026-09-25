@@ -118,6 +118,34 @@ if (!window.DraftCutView) {
   // GRADE_MIN_BELOW_CONCRETE_IN -- because one is the line a drafter cannot
   // type past and this is where the drawing puts it.
   const GRADE_BELOW_FOUNDATION_TOP_FT = 14 / 12;
+  // ── AND IT IS MEASURED FROM THE CONCRETE, WHICH IS NOT fdn.wallTop ──────
+  //
+  // The comment above has always said "top of concrete", and this file has
+  // always subtracted it from fdn.wallTop -- which level-assembly.js says in
+  // capitals is NOT that: FOUNDATION_WALL_TOP_FT "IS THE BEARING LINE, WHICH
+  // IS NOT THE CONCRETE'S OWN HEIGHT ... pour + plate". So grade sat one sill
+  // plate high and the house stood 1'-0 1/2" out of the ground instead of the
+  // 1'-2" Movie specified on 4 Sep: "let's move it to 1'-2" grade to top of
+  // concrete so they have 6" to slope around the perimeter."
+  //
+  // IT SHOWED UP AT THE GARAGE, not at the house. SPEC-garage-foundations.md
+  // has every garage foundation topping out 1'-2" above grade -- board #296,
+  // and the reason all three floors land at grade + 10" whichever one is
+  // chosen. With grade a plate high, an attached grade beam came out at
+  // 1'-0 1/2" and that invariant was quietly false. Movie, 25 Sep: "the
+  // garage grade beam should be locked at the grade height".
+  //
+  // THE HOUSE'S PLATE, NOT THE GARAGE'S. GARAGE_BEAM_PLATE_IN is also 1 1/2"
+  // and using it here would read as the garage setting the house's grade.
+  // They are the same number for different reasons, and that coincidence is
+  // what let one plate go missing in four places at once, so this asks the
+  // module that owns the foundation's makeup.
+  const houseSillPlateFt = () => window.DraftLevelAssembly.SILL_PLATE_IN / 12;
+  // Grade from the house's BEARING line -- exported, because MODEL.html holds
+  // `wallTop` rather than a foundation record and was computing this itself.
+  function gradeFromBearing(wallTop) {
+    return wallTop - houseSillPlateFt() - GRADE_BELOW_FOUNDATION_TOP_FT;
+  }
   // 1'-2", MOVED WITH GRADE. This number exists to put the beam's top of
   // concrete LEVEL with the top of the house foundation wall -- the comment
   // above says so -- and it does that only while it equals
@@ -367,7 +395,7 @@ if (!window.DraftCutView) {
       bearing: bearer.wallTop,
       foundation: {
         wallTop, wallBottom,
-        grade: wallTop - GRADE_BELOW_FOUNDATION_TOP_FT,
+        grade: gradeFromBearing(wallTop),
         slabTop: wallBottom + foundationAssembly.slabThicknessIn / 12,
         slabIn: foundationAssembly.slabThicknessIn,
         footingBottom: wallBottom - foundationAssembly.footingDepthIn / 12,
@@ -2988,6 +3016,7 @@ if (!window.DraftCutView) {
     roofBaseElev,
     roofEaveElev,
     garageBearing,
+    gradeFromBearing,
     frostWallTop,
     garageSillDropFt,
     floorRuns,
