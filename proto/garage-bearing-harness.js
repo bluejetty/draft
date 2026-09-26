@@ -745,6 +745,106 @@ function run(win) {
       reached > 0, `${reached} band(s) with a nearer garage face`);
   }
 
+  // ── AND NO PAPER BETWEEN THE CONCRETE AND WHAT STANDS ON IT ───────────
+  //
+  // Movie, 25 Sep, on E4 of a 2 STOREY + GARAGE + ROOM OVER: "looks like the
+  // side connection is fixed but there is a new gap looks like at sill
+  // location" ... "sill attachment 1.5"".
+  //
+  // THE GAP IS THIS FILE'S OWN FIX SEEN FROM ABOVE. The mutant at the foot of
+  // this harness -- "the foundation base forgets the sill plate, as it did
+  // before 97a82c9" -- pins the concrete topping out one plate BELOW the
+  // bearing line, which is where concrete really tops out. Nothing then
+  // painted that plate, so the wall above it started 1 1/2" clear of the
+  // concrete below it and the building's own corner lines broke across the
+  // slot. Measured on this fixture, E4:
+  //
+  //     the rim band's bottom        -1.0521      what bears
+  //     a garage face's floor        -1.0521      what bears
+  //     every exposed concrete top   -1.1771      what it bears ON
+  //
+  // ASKED AS INK AND NOT AS GEOMETRY, on purpose. The heights above were
+  // already right and already checked; what was wrong was that nothing was
+  // PAINTED between them, and only the tape can see an absence. Three probes
+  // down one vertical -- inside the concrete, inside the strip, inside the
+  // wall -- and the claim is that the strip belongs to the wall: same ink as
+  // the wall, different ink from the concrete below.
+  //
+  // THE DIFFERENT-INK HALF IS WHAT KEEPS IT HONEST. Without it, "draw the
+  // concrete 1 1/2" taller" passes -- and that is the other wrong answer,
+  // the one that puts the top-of-concrete line back where 97a82c9 took it
+  // from.
+  //
+  // AND THE WALL'S INK COMES FROM THE RIM BAND, not from the wall directly
+  // over the strip. Two drafts went that way and both broke on the same
+  // thing: a GARAGE DOOR is drawn from the garage floor up, so it starts
+  // exactly at the bearing line the "wall" probe sits above. Four of
+  // eighteen faces read the door's fill as the wall's; sampling across the
+  // face and voting fixed those and then broke on E3, where the visible
+  // stretch of one garage wall is ENTIRELY behind its door and every vote
+  // said door.
+  //
+  // THE RIM BAND CANNOT BE BEHIND AN OPENING. It is the floor package seen
+  // flat -- the block above this one is built on exactly that -- and the
+  // painter's note says it is painted "white like the walls", which is the
+  // same C.face this strip must use. So the band is where the wall's ink is
+  // read from, once per elevation, and the strip is compared against it.
+  {
+    let reached = 0;
+    const fillAt = (painted, u, e) => {
+      let found = null;
+      (painted.modelFills || []).forEach(f => {
+        const us = f.pts.map(p => p.u), es = f.pts.map(p => p.e);
+        if (u > Math.min(...us) + 1e-6 && u < Math.max(...us) - 1e-6
+          && e > Math.min(...es) + 1e-6 && e < Math.max(...es) - 1e-6) found = f;
+      });
+      return found;   // LAST wins: modelFills is in paint order
+    };
+    standardElevationCuts(base).forEach(cut => {
+      const painted = paintElevation(win, base, cut, { pxPerFt: 40 });
+      const axis = painted.axis;
+      const uOf = pt => pt.x * axis.x + pt.z * axis.z;
+      const band = (painted.modelFills || []).find(f => stack.floors.some(l =>
+        Math.abs(Math.max(...f.pts.map(p => p.e)) - l.floorTop) < 0.06
+        && Math.abs(Math.min(...f.pts.map(p => p.e)) - l.floorBottom) < 0.06));
+      if (!band) return;                              // no framed floor in view
+      const wallInk = band.ink;
+      base.walls().filter(w => (w.view || 'plan') === 'foundation').forEach(w => {
+        const lo = Math.min(uOf(w.start), uOf(w.end));
+        const hi = Math.max(uOf(w.start), uOf(w.end));
+        if (hi - lo < 0.5) return;                    // edge-on to this view
+        const garage = CV.garageOfWall(w, base, {});
+        const conc = fdn.wallBottom + w.topHeight;    // top of THIS concrete
+        const bear = garage ? CV.garageBearing(base, fdn, garage) : fdn.wallTop;
+        if (bear - conc < 0.01) return;               // nothing bears a plate here
+        if (conc - fdn.grade < 0.4) return;           // no exposed face to stand on
+        const N = 9;
+        const seen = [];
+        for (let i = 1; i < N; i += 1) {
+          const u = lo + (hi - lo) * i / N;
+          const below = fillAt(painted, u, conc - 0.3);
+          // THE CONCRETE MUST BE SHOWING or this vertical says nothing: where
+          // a nearer face covers it there is no strip to paint.
+          if (!below || below.ink === wallInk) continue;
+          seen.push({ u, below, strip: fillAt(painted, u, (conc + bear) / 2) });
+        }
+        if (!seen.length) return;
+        reached += 1;
+        const bad = seen.filter(s => !s.strip || s.strip.ink !== wallInk);
+        check(`${cut.id}: the ${garage ? 'garage' : 'house'} sill plate over ${ftIn(conc)} is painted, and as WALL`,
+          bad.length === 0,
+          bad.length
+            ? `${bad.length}/${seen.length} probes: ${bad.slice(0, 2).map(s => `u ${s.u.toFixed(1)} ${s.strip ? s.strip.ink : 'BARE'}`).join(', ')}`
+              + ` -- wall ${wallInk}, concrete ${seen[0].below.ink}`
+            : `${seen.length} probes ${wallInk} over ${seen[0].below.ink}`);
+      });
+    });
+    // WITH NO EXPOSED FACE ANYWHERE the loop above is a filter over an empty
+    // list, which passes whatever the painter does.
+    check('fixture: some elevation shows concrete with a wall standing on it',
+      reached > 0, `${reached} exposed face(s) probed`);
+  }
+
   // ── ONE RULE, NOT FIVE COPIES ─────────────────────────────────────────
   // The whole defect was five sites each holding their own version. These
   // read the SOURCES, because "the rule is shared" is a fact about the text
@@ -883,6 +983,15 @@ const MUTATIONS = [
   ['the foundation base forgets the sill plate, as it did before 97a82c9',
     s => s.replace("const wallBottom = wallTop - houseSillPlateFt()\n      - env.levelWallTopFt(1, 'foundation');",
       "const wallBottom = wallTop - env.levelWallTopFt(1, 'foundation');")],
+  // THE OTHER HALF OF THAT ONE. Taking the plate off the base put the top of
+  // concrete where concrete really tops out; these two are what say the
+  // 1 1/2" it opened up is now painted, and painted as WALL.
+  ['the sill plate goes unpainted, and the wall floats a plate off the concrete',
+    s => s.replace('      return rise > 0.01 && rise < PLATE_CAP_FT ? rise : 0;',
+      '      return 0;')],
+  ['the strip is painted as concrete -- the top-of-concrete line moves back up',
+    s => s.replace('      if (!plate) return;\n      ctx.fillStyle = C.face;',
+      '      if (!plate) return;\n      ctx.fillStyle = C.faceShade;')],
 ];
 
 console.log('\n' + 'mutation'.padEnd(72) + 'caught by');

@@ -1674,6 +1674,11 @@ if (!window.DraftCutView) {
           top: wall.topHeight, base: wall.baseHeight,
           wallIn: type ? type.totalIn : 8,
           bearing: wall.baseHeight <= 0.01,   // on a strip footing, not hung
+          // WHOSE CONCRETE IT IS, for the sill plate on top of it: the house
+          // bears on SILL_PLATE_IN, a garage on GARAGE_BEAM_PLATE_IN, and
+          // the note at houseSillPlateFt is emphatic that those are the same
+          // number for different reasons and must not be swapped.
+          garage: garageFor(wall),
         });
         return;
       }
@@ -1890,11 +1895,66 @@ if (!window.DraftCutView) {
     const shownFdn = exposed
       .map(g => ({ g, runs: visibleRuns(g) }))
       .filter(entry => entry.runs.length);
+    // ── AND THE SILL PLATE ON TOP OF IT IS WALL, NOT CONCRETE ───────────
+    //
+    // Movie, 25 Sep, on E4 of a 2 STOREY + GARAGE + ROOM OVER: "looks like
+    // the side connection is fixed but there is a new gap looks like at sill
+    // location" ... "sill attachment 1.5"".
+    //
+    // THE SIDE CONNECTION IS THE FIX THAT OPENED THIS. 97a82c9 took the plate
+    // off the foundation base so the concrete tops out where the concrete
+    // really tops out -- one plate BELOW the bearing line -- and that is what
+    // stepped the garage's top of concrete clear of the house's floor
+    // package. But nothing in this painter draws the plate, and the wall
+    // above it starts at the bearing:
+    //
+    //     the rim band's bottom        fdn.wallTop          -1.0521
+    //     a garage wall face's floor   garageBearing(...)   -1.0521
+    //     every exposed concrete top   ...less one plate    -1.1771
+    //
+    // -- so the 1 1/2" between them was paper. On the NIGHT skin it reads as
+    // ground and nobody saw it; on DAY it is a white slot with the building's
+    // own corner lines broken across it.
+    //
+    // IT BELONGS TO THE WALL. The plate is wood, the siding runs down over it
+    // to the top of concrete, and `garageConcreteTop`'s own comment already
+    // states the relation from the other end: "one sill plate below where its
+    // walls bear". So this fills the strip in the WALL's ink, and the grey
+    // stops where the concrete stops.
+    //
+    // FILLED HERE RATHER THAN AT THE BAND because this pass is the one that
+    // knows what is VISIBLE: `visibleRuns` has already cut each face against
+    // whatever stands nearer, and the plate is exactly as wide as the
+    // concrete under it. Doing it at the rim band instead would have needed
+    // that clip written a second time -- and would still have left the garage
+    // faces, which carry no band at all, wearing the gap.
+    //
+    // WHAT BEARS ON THIS PIECE, not a plate thickness quoted here: a stepped
+    // foundation, a walkout, a garage dropped for a bilevel all move the two
+    // ends independently, and the strip is the distance between them. The cap
+    // is what keeps a genuine STEP from being painted as a plate -- a step is
+    // feet, a plate is inches -- and it also closes the wider slot an older
+    // drawing shows, where the house's foundation walls were stored at the
+    // generic 8'-0" wall default while the garage's took the foundation
+    // assembly's 8'-1 1/2" (the note at the corner pass below has the rest of
+    // that: "reconciling those is a question about the junction").
+    const PLATE_CAP_FT = 0.5;
+    const plateTopOf = g => (g.garage
+      ? garageBearing(env, fdn, g.garage) : fdn.wallTop);
+    const plateOf = g => {
+      const rise = plateTopOf(g) - g.topE;
+      return rise > 0.01 && rise < PLATE_CAP_FT ? rise : 0;
+    };
     shownFdn.forEach(({ g, runs }) => {
       const shownBase = Math.max(g.baseE, fdn.grade);
       ctx.fillStyle = C.faceShade;
       runs.forEach(r => ctx.fillRect(X(r.lo), Y(g.topE),
         (r.hi - r.lo) * pxPerFt, (g.topE - shownBase) * pxPerFt));
+      const plate = plateOf(g);
+      if (!plate) return;
+      ctx.fillStyle = C.face;
+      runs.forEach(r => ctx.fillRect(X(r.lo), Y(g.topE + plate),
+        (r.hi - r.lo) * pxPerFt, plate * pxPerFt));
     });
     // Strokes after every fill, so a near face can't erase a far corner.
     ctx.lineWidth = 1;
@@ -1960,7 +2020,21 @@ if (!window.DraftCutView) {
         strokedV.add(key);
         ctx.strokeStyle = interior ? CREASE : INK;
         ctx.beginPath();
-        ctx.moveTo(X(u), Y(g.topE)); ctx.lineTo(X(u), Y(foot));
+        // UP THROUGH THE PLATE AT AN OUTLINE CORNER, so the building's edge is
+        // one line from the wall above to the footing below. The plate filled
+        // a few lines up is part of THIS face -- same width, same two ends --
+        // and a corner that stopped at the concrete left the outline broken
+        // by exactly the 1 1/2" Movie could see.
+        //
+        // NOT AT A BURIED ONE. A crease is concrete seen against concrete and
+        // its length is decided by what covers it, which `foot` above is the
+        // whole argument about; carrying it up into the plate would state a
+        // step in the plates that the plates do not have -- both stacks bear
+        // the house's floor, so their TOPS meet even where their concrete
+        // steps. The wall and the rim band draw their own corner above the
+        // bearing line, and this is where the two meet.
+        ctx.moveTo(X(u), Y(g.topE + (interior ? 0 : plateOf(g))));
+        ctx.lineTo(X(u), Y(foot));
         ctx.stroke();
       }));
     });
