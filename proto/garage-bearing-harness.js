@@ -1155,9 +1155,20 @@ const MUTATIONS = [
   ['the sill plate goes unpainted, and the wall floats a plate off the concrete',
     s => s.replace('      return rise > 0.01 && rise < PLATE_CAP_FT ? rise : 0;',
       '      return 0;')],
+  // RE-AIMED. This anchored on `if (!plate) return;` + the fillStyle under it,
+  // and ea3bc01 -- a COMMENT-ONLY commit -- put twenty lines of note between
+  // the two. Not one stroke moved and the anchor died anyway: a mutation
+  // anchor is TEXT, so "no ink changed" says nothing about whether the gate
+  // still has something to bite. CI caught it, my own sweep did not, because
+  // I re-ran the harnesses PLAIN and only `--mutate` sees a dead anchor.
+  //
+  // AIMED AT THE CODE, NOT AT A BOUNDARY A COMMENT CAN LAND ON. The fillStyle
+  // alone appears four times in the file; paired with the fillRect it serves,
+  // it appears once, and the two lines are adjacent code with nothing between
+  // them for a note to slide into.
   ['the strip is painted as concrete -- the top-of-concrete line moves back up',
-    s => s.replace('      if (!plate) return;\n      ctx.fillStyle = C.face;',
-      '      if (!plate) return;\n      ctx.fillStyle = C.faceShade;')],
+    s => s.replace('      ctx.fillStyle = C.face;\n      runs.forEach(r => ctx.fillRect(X(r.lo), Y(g.topE + plate),',
+      '      ctx.fillStyle = C.faceShade;\n      runs.forEach(r => ctx.fillRect(X(r.lo), Y(g.topE + plate),')],
   // THE BURIED SILHOUETTE GOES BACK TO SWALLOWING WHAT HANGS OVER IT. The
   // guard is the whole pass: with it always continuing, no stretch is
   // collected and the drawing is exactly what Movie marked in green.
