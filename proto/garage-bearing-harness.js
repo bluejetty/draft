@@ -579,6 +579,7 @@ function run(win) {
       piles.length > 0, `${piles.length} piles`);
     if (piles.length) {
       const bh = win.DraftBuildHouse;
+      let hiddenSeen = 0;
       check('the env serves build-house, so a shaft can be drawn at its real bore',
         !!(bh && typeof bh.footingFor === 'function'), bh ? 'loaded' : 'missing');
       standardElevationCuts(base).forEach(cut => {
@@ -613,14 +614,50 @@ function run(win) {
             deep.push({ u: pt.u, top: Math.max(prev.e, pt.e) });
           }
         }));
+        // ── AND A PILE BEHIND THE FOUNDATION WALL IS NOT DRAWN ────────
+        //
+        // Movie, 26 Sep, on E2 of a 2 STOREY + GARAGE + ROOM OVER: "on
+        // inside the far side pile shouldn't show because its 'behind' the
+        // foundation wall". So "every pile in view" is no longer the whole
+        // claim -- the view now has two kinds of pile in it, and BOTH halves
+        // are asserted below. Without the second, "stop drawing piles" would
+        // pass the first by having nothing left to be missing.
+        //
+        // THE PARTITION IS COMPUTED FROM THE RECORDS, not read back off the
+        // ink: a bearing foundation wall (on a strip footing, not hung)
+        // strictly over the pile's station and nearer than it along the
+        // viewing axis. A hung beam beside a pile is not in front of it --
+        // they share a perimeter -- and a wall's own END is beside a pile,
+        // not over it, which is why both tests are strict.
+        const dirVec = cut.dirVec;
+        const fdnFaces = base.walls()
+          .filter(w => (w.view || 'plan') === 'foundation')
+          .map(w => ({
+            lo: Math.min(w.start.x * axis.x + w.start.z * axis.z,
+              w.end.x * axis.x + w.end.z * axis.z),
+            hi: Math.max(w.start.x * axis.x + w.start.z * axis.z,
+              w.end.x * axis.x + w.end.z * axis.z),
+            depth: ((w.start.x * dirVec.x + w.start.z * dirVec.z)
+              + (w.end.x * dirVec.x + w.end.z * dirVec.z)) / 2,
+            bearing: w.baseHeight <= 0.01,
+          }))
+          .filter(g => g.hi - g.lo > 0.01);
+        const buried = (u, depth) => fdnFaces.some(g => g.bearing
+          && g.depth > depth + 1 && u > g.lo + 0.05 && u < g.hi - 0.05);
+
         const wanted = [];
+        const hiddenWanted = [];
         piles.forEach(column => {
           const u = column.point.x * axis.x + column.point.z * axis.z;
           if (u < painted.uMin - 0.5 || u > painted.uMax + 0.5) return;
           const half = bh.footingFor(column.footing).sizeIn / 24;
-          wanted.push([u - half, u + half]);
+          const depth = column.point.x * dirVec.x + column.point.z * dirVec.z;
+          (buried(u, depth) ? hiddenWanted : wanted).push([u - half, u + half]);
         });
-        if (!wanted.length) return;
+        if (hiddenWanted.length) {
+          hiddenSeen += hiddenWanted.length;
+        }
+        if (!wanted.length && !hiddenWanted.length) return;
         // BOTH SIDES OF EVERY SHAFT. A centreline alone would pass a check
         // asking only that something was drawn near the station, and a pile
         // is a bore with a diameter the schedule names.
@@ -636,9 +673,13 @@ function run(win) {
           return hits.length ? Math.max(...hits.map(v => v.top)) : undefined;
         };
         const missing = wanted.filter(([a, b]) => !(at(a) && at(b)));
-        check(`${cut.id}: every pile in view is drawn as a shaft, both sides`,
+        check(`${cut.id}: every pile the wall does not cover is drawn, both sides`,
           missing.length === 0,
-          `${wanted.length} in view, ${missing.length} missing`);
+          `${wanted.length} clear of the wall, ${missing.length} missing`);
+        const shown = hiddenWanted.filter(([a, b]) => at(a) || at(b));
+        check(`${cut.id}: and no pile behind the foundation wall is drawn`,
+          shown.length === 0,
+          `${hiddenWanted.length} behind the wall, ${shown.length} drawn through it`);
         // AND IT STARTS UNDER THE BEAM, not at grade. A drilled pile begins
         // where the concrete it carries ends; hung off the grade line instead
         // it would draw a shaft through the beam it is holding up, and every
@@ -663,6 +704,13 @@ function run(win) {
               : `all ${wanted.length} under the concrete they carry`);
         }
       });
+      // WITHOUT A PILE THE WALL ACTUALLY COVERS, the second claim above is a
+      // filter over an empty list on every elevation and passes whatever the
+      // painter does. On this fixture E2 is the one that reaches it: the
+      // garage sits inside the house's footprint, so from that side its two
+      // piles stand behind the house's foundation.
+      check('fixture: some elevation stands the foundation wall in front of a pile',
+        hiddenSeen > 0, `${hiddenSeen} pile(s) behind a wall`);
       // IT BREAKS AT THE DRAWING'S BOTTOM rather than running to its tip. A
       // P2 is 15' long; drawn to the tip it would hang seven feet of empty
       // ground under the building and push it up the sheet.
@@ -1009,6 +1057,55 @@ function run(win) {
     });
     check('fixture: some elevation shows bearing concrete with a footing under it',
       reached > 0, `${reached} elevation(s) probed`);
+
+    // ── AND ITS SIDE DOES NOT RISE ABOVE THE FOOTING ──────────────────
+    //
+    // Movie, 26 Sep, marking it in green on E4 and again on E2: "the footing
+    // line looks like the 8" side of footing extends all the way up but
+    // should stop after 8"".
+    //
+    // The buried outline's riser at a stop climbed to the NEXT BOTTOM,
+    // whatever stood between. Where a house footing gives way to a garage's
+    // hung beam that is six feet of line up the side of an eight-inch
+    // footing, through ground holding nothing. Measured on this fixture, E1,
+    // with the cap off and on:
+    //
+    //     u 8.50   e -9.952..-3.827   6.13 ft
+    //     u 8.50   e -9.952..-9.302   0.65 ft
+    //
+    // ASKED AS A CEILING, NOT A LENGTH. "No taller than 8 inches" would be
+    // false the moment two footings at different depths meet -- the step
+    // between them is a real riser off the deeper one's underside and it is
+    // as tall as the difference. What is never true is a footing's side
+    // reaching ABOVE the footing: fdn.wallBottom is the top of the pour and
+    // the underside of nothing, so ink from the excavation floor has no
+    // business crossing it.
+    let sides = 0;
+    standardElevationCuts(base).forEach(cut => {
+      const painted = paintElevation(win, base, cut, { pxPerFt: 40 });
+      const tall = [];
+      painted.strokes.forEach(st => {
+        for (let k = 1; k < st.pts.length; k += 1) {
+          const a = st.pts[k - 1], b = st.pts[k];
+          if (b.move || b.close) continue;
+          if (Math.abs(a.u - b.u) > 0.01) continue;
+          const lo = Math.min(a.e, b.e), hi = Math.max(a.e, b.e);
+          // FROM THE EXCAVATION FLOOR, which is what makes it a footing's
+          // side. A pile shaft runs on past it to the sheet's own bottom and
+          // is not this claim's business.
+          if (Math.abs(lo - fdn.footingBottom) > 0.05) continue;
+          if (hi - lo < 0.01) continue;
+          sides += 1;
+          if (hi > fdn.wallBottom + 0.05) {
+            tall.push(`u ${a.u.toFixed(2)} rises to ${ftIn(hi)}`);
+          }
+        }
+      });
+      check(`${cut.id}: no footing side rises above the top of the footing at ${ftIn(fdn.wallBottom)}`,
+        tall.length === 0, tall.join(', '));
+    });
+    check('fixture: some elevation draws a footing side at all',
+      sides > 0, `${sides} side(s) off the excavation floor`);
   }
 
   // ── ONE RULE, NOT FIVE COPIES ─────────────────────────────────────────
@@ -1187,6 +1284,15 @@ const MUTATIONS = [
   ['a garage wall lines its own base, bracketing the plate into a slot',
     s => s.replace('      if (!face.garage) ctx.lineTo(xa, Y(floor));',
       '      if (true) ctx.lineTo(xa, Y(floor));')],
+  // AND THE TWO 26 SEP READINGS OFF THE BURIED WORK. The first puts the
+  // riser back to the full height of the step; the second draws every pile
+  // again, including the ones the house's foundation stands in front of.
+  ['a footing-s side climbs to the next bottom instead of stopping at the footing',
+    s => s.replace('const top = sideTopAt(stops[s] + (b < prevBottom ? 0.01 : -0.01));',
+      'const top = null;')],
+  ['a pile behind the foundation wall is drawn through it',
+    s => s.replace('const infront = fdnGeoms.some(g => g.bearing && g.depth > pileDepth + 1',
+      'const infront = false && fdnGeoms.some(g => g.bearing && g.depth > pileDepth + 1')],
 ];
 
 console.log('\n' + 'mutation'.padEnd(72) + 'caught by');
