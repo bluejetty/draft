@@ -1790,14 +1790,45 @@ if (!window.DraftCutView) {
     const yTop = fit?.extents ? fit.extents.yTop
       : Math.max(stack.bearing + 2, ...lit.map(s => s.elev)) + SKY_ABOVE_ROOF_FT;
     const yBottom = fit?.extents ? fit.extents.yBottom : fdn.footingBottom - 2;
+    // ── THE PILES' ROOM IS BELOW THE FRAME, NOT INSIDE IT ────────────────
+    //
+    // Movie, 26 Sep, on a two-storey with a garage: "see how the footing
+    // bottom line is just under the dashboard line where the tint starts --
+    // could we make the house just a little smaller so that the bottom of the
+    // footing doesnt cross over the 'tint' line of the lower bar ... so there
+    // is a little space, BUT ALLOW THE PILES TO EXTEND PAST THAT TINT LINE."
+    //
+    // THE TWO FEET UNDER THE FOOTING ARE THE SHAFTS', and that is what the
+    // last clause is naming. A pile is drawn from the underside of what it
+    // carries down to `yBottom` and stops there -- it has no bottom of its
+    // own on an elevation, because the drawing is not saying how deep it
+    // goes. Measured on screen at 1366x700, twoStorey-garage E1: footing
+    // bottom at y 655, shafts running on to y 682, which is 2 ft at that
+    // scale exactly. So the extent's last two feet are not air to be kept
+    // clear; they are ink that is allowed to run off under the furniture.
+    //
+    // SO THE FIT IS MEASURED TO THE FOOTING and the shafts overflow. Sizing
+    // the padded figure into the margins instead reserves those two feet
+    // TWICE -- once as extent and once as the bar the caller is now asking
+    // this to keep off -- and the house shrinks about 10% to pay for room
+    // Movie has just said the piles may use. Measured both ways at 1366x700:
+    // fitting yBottom puts the footing 42px clear of the bar, fitting the
+    // footing puts it 16px clear, which is SCREEN_MARGINS.bottom -- the
+    // drawing's own inset, which is the "little space" and is the same white
+    // it would keep against a bare canvas edge.
+    //
+    // AN EXTERNAL FIT IS UNTOUCHED. LAYOUT hands its own extents and its own
+    // pxPerFt: the paper decides there, and a viewport that asked for a
+    // figure this then overran would be a drawing off the edge of a sheet.
+    const yFit = fit?.extents ? fit.extents.yBottom : fdn.footingBottom;
     const mg = screenMargins(opts, w);
     const marginL = fit ? 0 : mg.left, marginR = fit ? 0 : mg.right,
       marginT = fit ? 0 : mg.top, marginB = fit ? 0 : mg.bottom;
     const pxPerFt = fit ? fit.pxPerFt : Math.max(2, Math.min(
       (w - marginL - marginR) / Math.max(uMax - uMin, 4),
-      (h - marginT - marginB) / Math.max(yTop - yBottom, 8)));
+      (h - marginT - marginB) / Math.max(yTop - yFit, 8)));
     const x0 = marginL + ((w - marginL - marginR) - (uMax - uMin) * pxPerFt) / 2;
-    const y0 = marginT + ((h - marginT - marginB) - (yTop - yBottom) * pxPerFt) / 2;
+    const y0 = marginT + ((h - marginT - marginB) - (yTop - yFit) * pxPerFt) / 2;
     const X = u => Math.round(x0 + (u - uMin) * pxPerFt - 0.5) + 0.5;
     const Y = e => Math.round(y0 + (yTop - e) * pxPerFt - 0.5) + 0.5;
 

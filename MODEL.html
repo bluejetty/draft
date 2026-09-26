@@ -3336,8 +3336,37 @@
   // the house every time the drafter switched panes -- the same defect one
   // step smaller. High-water mark: the drawing settles at the widest the rail
   // has been and stays there.
+  // ── AND THE FOOT BAR IS FURNITURE TOO ─────────────────────────────────────
+  //
+  // Movie, 26 Sep: "see how the footing bottom line is just under the
+  // dashboard line where the tint starts - could we make the house just a
+  // little smaller so that the bottom of the footing doesnt cross over the
+  // 'tint' line of the lower bar ... but allow the piles to extend past that
+  // tint line", and then, twice: "rather than moving the house up, make it
+  // smaller scale slightly so it fits and gets smaller too" ... "the position
+  // is nice centered basically how it is just need it smaller".
+  //
+  // #house-strip IS `position:fixed; bottom:0` OVER THE CANVAS, exactly like
+  // the rails, and exactly like them it was covering a drawing painted the
+  // full height underneath it. Measured at 1366x700, twoStorey-garage E1: the
+  // bar's top edge -- the tint line he is pointing at -- at y 636, the
+  // footing's dashed bottom at y 655, nineteen pixels INSIDE the bar.
+  //
+  // WHICH IS WHY THIS IS A MARGIN AND NOT A NUDGE. Reserving the bar makes
+  // the painter's own height fit shorter, and pxPerFt is the smaller of what
+  // the width allows and what the height allows -- so the house scales down
+  // to fit rather than sliding up out of the way, which is the correction he
+  // made himself while looking at it. The 2 ft of pile room below the footing
+  // is the painter's to let overflow; the note at `yFit` in cut-view.js has
+  // that half.
+  //
+  // MEASURED LIVE, NOT A HIGH-WATER MARK. A rail is reserved whether it is
+  // open or shut because a drafter toggles those and a drawing that resized
+  // with them would be furniture rearranging the sheet. The bar has no
+  // toggle: it is always there, the same height, so what it covers now is
+  // what it covers.
   const railReserve = { left: 0, right: 0 };
-  const railMargins = () => {
+  const furnitureMargins = () => {
     const canvas = ctx && ctx.canvas;
     const box = canvas && canvas.getBoundingClientRect
       ? canvas.getBoundingClientRect() : null;
@@ -3359,11 +3388,21 @@
         railReserve.right = Math.max(railReserve.right, box.right - r.left + 8);
       }
     });
-    return { left: railReserve.left, right: railReserve.right };
+    // WHAT THE BAR COVERS OF THE CANVAS, which on a page whose canvas runs to
+    // the window's foot is the bar's own height and on one that stops short
+    // of it is less -- or nothing. No clearance is added: the painter keeps
+    // its own inset from whatever its bottom edge turns out to be, which is
+    // the "little space" and is the same white it holds against a bare canvas.
+    const strip = document.querySelector('#house-strip');
+    const sr = strip && !strip.hidden ? strip.getBoundingClientRect() : null;
+    const bottom = sr && sr.height > 0
+      ? Math.max(0, Math.min(box.bottom, sr.bottom) - Math.max(box.top, sr.top)) : 0;
+    return { left: railReserve.left, right: railReserve.right, bottom };
   };
 
-  // The whole of what the painter reads from a rail, as one comparable value.
-  const railKey = mg => (mg ? `${mg.left},${mg.right}` : '');
+  // The whole of what the painter reads from the furniture, as one comparable
+  // value.
+  const railKey = mg => (mg ? `${mg.left},${mg.right},${mg.bottom}` : '');
 
   // WHAT THE RAILS COVERED WHEN THE DRAWING ON SCREEN WAS PAINTED, or null if
   // what is on screen is not a cut view -- a plan does not read them. The
@@ -3386,7 +3425,7 @@
       // same one proto/elevation-harness.js mirrors offline.
       const cut = drawing ? activeCut() : null;
       if (cut) {
-        const rails = railMargins();
+        const rails = furnitureMargins();
         paintedForRails = railKey(rails);
         // IN THE SKIN, like everything else on this page. Movie, 24 Sep,
         // looking at a white elevation over a night page: "would it be
@@ -15796,10 +15835,11 @@
 
   // ── AND A RAIL THAT CHANGES SHAPE IS A STALE DRAWING ──────────────────────
   //
-  // The elevation painter is handed the rails' MEASURED boxes (railMargins,
-  // above), so what it draws is only right for the rails that were on screen
-  // when it ran. Boot is where that bites: the first paint happens before the
-  // shell has laid the rails out, so railMargins measured nothing and
+  // The elevation painter is handed the furniture's MEASURED boxes
+  // (furnitureMargins, above), so what it draws is only right for the
+  // furniture that was on screen when it ran. Boot is where that bites: the
+  // first paint happens before the shell has laid the rails out, so it
+  // measured nothing and
   // `?view=cut:E4&left=1&right=1` opened on an elevation drawn at full width
   // with both panels sitting on it. Measured at 1366px: building 128..1277,
   // under a left rail ending at 221 and a right one starting at 1040. Toggling
@@ -15825,10 +15865,14 @@
       // Only a cut view reads the rails; a plan is painted the same at any
       // rail width, so this has nothing to say about it.
       if (!drawing || !activeCut()) return;
-      if (railKey(railMargins()) === paintedForRails) return;
+      if (railKey(furnitureMargins()) === paintedForRails) return;
       paint();
     });
-    ['#left-rail', '#right-rail'].forEach(sel => {
+    // AND THE FOOT BAR WITH THEM. It is the same claim on the canvas and the
+    // same staleness: the bar is laid out after the first paint too, and its
+    // height moves with `env(safe-area-inset-bottom)` -- which is zero on a
+    // desktop and not on the iPad this page is drawn on.
+    ['#left-rail', '#right-rail', '#house-strip'].forEach(sel => {
       const rail = document.querySelector(sel);
       if (rail) railsChanged.observe(rail);
     });
