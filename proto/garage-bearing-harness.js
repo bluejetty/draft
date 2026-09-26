@@ -916,6 +916,68 @@ function run(win) {
       reached > 0, `${reached} beam face(s) probed`);
   }
 
+  // ── A FOOTING IS NOT FLAT ON ONE SIDE ─────────────────────────────────
+  //
+  // Movie, 25 Sep: "the left footing doesn't stick out 6" x 8" deep", and
+  // again on 26 Sep, on a later build: "the dashed footings were sometimes
+  // flat on one side".
+  //
+  // "SOMETIMES" AND "ONE SIDE" ARE THE DIAGNOSIS. The buried outline spends
+  // a face's projection only at the RUN's two outer ends. An attached grade
+  // beam hangs (no footing, projFt 0, correctly) and laps the house by
+  // GARAGE_TIE_FT, so the two merge into one run whose outer end on the
+  // garage side is the BEAM's -- and the house's own footing end, now
+  // interior to that run, got nothing. Measured on this fixture before the
+  // fix: E1 had the shoulder at u -8.50..-8.00 and nothing at 8.00..8.50;
+  // E3 had it at 8.00..8.50 and nothing at -8.50..-8.00. One side, and
+  // whichever side the garage is on.
+  //
+  // THE OUTERMOST ENDS ARE THE CLAIM, not every end. A footing that runs
+  // into another wall's concrete does not stop there and has no shoulder to
+  // draw -- the interior ends at u +/-4 on this fixture's E2 and E4 are
+  // exactly that, and drawing a step there would be the opposite defect.
+  // The outermost two ends of the bearing concrete are free by definition,
+  // so they are where "both sides" can be asserted without re-deriving the
+  // painter's carry-through test here.
+  {
+    const proj = Math.max(0, fdn.footingWidthIn - 8) / 2 / 12;
+    let reached = 0;
+    standardElevationCuts(base).forEach(cut => {
+      const painted = paintElevation(win, base, cut, { pxPerFt: 40 });
+      const axis = painted.axis;
+      const uOf = pt => pt.x * axis.x + pt.z * axis.z;
+      const faces = base.walls()
+        .filter(w => (w.view || 'plan') === 'foundation' && w.baseHeight <= 0.01)
+        .map(w => ({ lo: Math.min(uOf(w.start), uOf(w.end)), hi: Math.max(uOf(w.start), uOf(w.end)) }))
+        .filter(f => f.hi - f.lo >= 0.5);
+      if (!faces.length || proj < 0.01) return;
+      const lo = Math.min(...faces.map(f => f.lo));
+      const hi = Math.max(...faces.map(f => f.hi));
+      // The footing's TOP is the bearing wall's base, which is the foundation
+      // datum itself -- the shoulder is the 6" of it that sticks out past the
+      // wall face before the 8" drop to the footing's underside.
+      const flat = [];
+      painted.strokes.forEach(s => {
+        for (let k = 1; k < s.pts.length; k += 1) {
+          const a = s.pts[k - 1], b = s.pts[k];
+          if (b.move || b.close) continue;
+          if (Math.abs(a.e - b.e) > 0.01 || Math.abs(a.e - fdn.wallBottom) > 0.05) continue;
+          flat.push({ lo: Math.min(a.u, b.u), hi: Math.max(a.u, b.u) });
+        }
+      });
+      const spans = (x, y) => flat.some(s => s.lo <= x + 0.03 && s.hi >= y - 0.03);
+      reached += 1;
+      const left = spans(lo - proj, lo), right = spans(hi, hi + proj);
+      check(`${cut.id}: the footing steps out ${(proj * 12).toFixed(0)}" at BOTH ends of the concrete`,
+        left && right,
+        `left ${left ? 'yes' : 'NO'} at ${(lo - proj).toFixed(2)}..${lo.toFixed(2)}, `
+        + `right ${right ? 'yes' : 'NO'} at ${hi.toFixed(2)}..${(hi + proj).toFixed(2)}`
+        + ` -- drawn ${flat.map(s => `${s.lo.toFixed(2)}..${s.hi.toFixed(2)}`).join(', ') || 'nothing'}`);
+    });
+    check('fixture: some elevation shows bearing concrete with a footing under it',
+      reached > 0, `${reached} elevation(s) probed`);
+  }
+
   // ── ONE RULE, NOT FIVE COPIES ─────────────────────────────────────────
   // The whole defect was five sites each holding their own version. These
   // read the SOURCES, because "the rule is shared" is a fact about the text
@@ -1069,6 +1131,12 @@ const MUTATIONS = [
   ['a hung beam loses its underside where the house footing runs deeper',
     s => s.replace('          if (bottomAt((a + b) / 2) > mine - 1e-6) continue;',
       '          if (bottomAt((a + b) / 2) < Infinity) continue;')],
+  // AND THE FOOTING GOES FLAT ON THE SIDE THE GARAGE IS ON. The shoulder is
+  // then spent only at the run's two outer ends, which is where it was
+  // before -- and on that side the outer end belongs to the beam.
+  ['a footing end interior to a merged run spends no shoulder',
+    s => s.replace('        if (g.projFt <= 0) return;',
+      '        if (g.projFt <= 0 || true) return;')],
 ];
 
 console.log('\n' + 'mutation'.padEnd(72) + 'caught by');

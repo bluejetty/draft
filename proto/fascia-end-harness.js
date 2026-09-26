@@ -90,6 +90,28 @@ const drawings = files.length ? files : [
   // eave is banded in two pieces. The seam check below is about that, and
   // no other fixture here has it.
   'repro-tie-gable.draft',
+  // ── AND THE ONE THE PAGE BUILT ITSELF ─────────────────────────────────
+  //
+  // Every other .draft here was saved before the attached garage's default
+  // moved to a GRADE BEAM ON PILES (Movie, 24 Sep: "please make the DEFAULT
+  // attached garages GRADE BEAM and PILES (not frost wall)"), so all of them
+  // carry frost walls -- `base 0`, a strip footing, a profile the office no
+  // longer builds. Three defects reported on 25-26 Sep lived in exactly the
+  // arrangement none of them had.
+  //
+  // SO THIS ONE WAS NOT WRITTEN, IT WAS CAPTURED. Drive-thru, bungalow
+  // family, `twoStorey-garage`, press the bone, SAVE, and read the store
+  // back -- so every number in it is MODEL.html's own. It came out at
+  // `garage base 5.3333 top 8`, which is raiseGarageConcrete's arithmetic to
+  // the digit (8.125 bearing, less the 1 1/2" plate, less 32" of pour), and
+  // that agreement is worth more than the file: it says the builder and this
+  // harness are reading the same design.
+  //
+  // (To remake it: seed the store with an empty drawing FIRST. openModel
+  // clears the store once per session, and a build with nothing to save into
+  // leaves #save disabled reading UNSAVED -- which looks exactly like a
+  // build that did not happen.)
+  'repro-2storey-garage-beam.draft',
 ].map(name => path.join(ROOT, 'proto', name));
 
 const win = H.loadDraftModules();

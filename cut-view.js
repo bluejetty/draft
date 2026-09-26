@@ -2188,6 +2188,59 @@ if (!window.DraftCutView) {
         });
         ctx.stroke();
       });
+      // ── AND A FOOTING ENDS WITH A SHOULDER WHEREVER IT ENDS ───────────
+      //
+      // Movie, 25 Sep: "the left footing doesn't stick out 6" x 8" deep", and
+      // again on 26 Sep, on a later build: "the dashed footings were
+      // sometimes flat on one side".
+      //
+      // "SOMETIMES" AND "ONE SIDE" ARE THE WHOLE DIAGNOSIS. The shoulder is
+      // drawn by the loop above, and only ever at the run's two OUTER ends --
+      // `leftF.projFt > 0` on the way in, `rightF.projFt > 0` on the way out.
+      // An attached grade beam HANGS (projFt 0, correctly: there is no
+      // footing under it) and it OVERLAPS the house by GARAGE_TIE_FT, so the
+      // two merge into one run whose outer end on that side is the BEAM's.
+      // The house's own footing end is then interior to the run and nothing
+      // spends its 6". Measured on repro-2storey-garage-beam, which the page
+      // built from the drive-thru rather than being written by hand:
+      //
+      //     E1   e -9.1729  u -16.50..-16.00     drawn, the run's left end
+      //          u 16.00..16.50                  NOTHING -- the beam's end
+      //     E4   e -9.1729  u  20.00.. 20.50     drawn, the run's right end
+      //          u -20.50..-20.00                NOTHING
+      //
+      // -- which is "one side", and it is whichever side the garage is on.
+      //
+      // THE HORIZONTAL IS ALL THAT IS MISSING. The vertical at the footing's
+      // outer edge is already there: the silhouette steps up at that u from
+      // the footing's bottom to whatever is shallower next door, and that
+      // riser passes straight through the 8". What it does not do is turn the
+      // 6" at the top, so the footing reads as running on under the beam
+      // instead of stopping and stepping in.
+      //
+      // NOT WHERE CONCRETE CARRIES THROUGH. Another face whose own base
+      // reaches at least this deep across the same stretch means the footing
+      // does not end here at all -- an L-shaped house, a wall meeting a wall
+      // -- and there is no shoulder to draw. The two coincident faces of one
+      // wall line (a front and a back at the same u) do NOT trip it: their
+      // walls stop at the same u, so neither spans the other's 6".
+      const shoulders = new Set();
+      run.faces.forEach(g => {
+        if (g.projFt <= 0) return;
+        [[g.lo, footLo(g)], [g.hi, footHi(g)]].forEach(([at, out]) => {
+          const lo = Math.min(at, out), hi = Math.max(at, out);
+          if (lo <= startU + 1e-6 || hi >= endU - 1e-6) return;
+          if (run.faces.some(o => o !== g && o.baseE <= g.baseE + 1e-6
+            && o.lo <= lo + 1e-6 && o.hi >= hi - 1e-6)) return;
+          const key = `${g.baseE.toFixed(4)}|${lo.toFixed(4)}|${hi.toFixed(4)}`;
+          if (shoulders.has(key)) return;
+          shoulders.add(key);
+          ctx.beginPath();
+          ctx.moveTo(X(lo), Y(g.baseE));
+          ctx.lineTo(X(hi), Y(g.baseE));
+          ctx.stroke();
+        });
+      });
       // Viewer-facing corner creases: where a nearer buried face ends inside
       // a farther one, the corner runs down the wall — and its footing turns
       // a little further over with its own short crease.
