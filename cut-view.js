@@ -2527,7 +2527,37 @@ if (!window.DraftCutView) {
       tops.slice(1).forEach(s => ctx.lineTo(X(s.u), Y(s.top)));
       ctx.moveTo(xb, Y(Math.min(tops[tops.length - 1].top, level.wallTop)));
       ctx.lineTo(xb, Y(floor));
-      ctx.lineTo(xa, Y(floor));
+      // ── AND A GARAGE WALL DOES NOT LINE ITS OWN BASE ─────────────────
+      //
+      // Movie, 26 Sep, on E1 and E4 of a 2 STOREY + GARAGE + ROOM OVER,
+      // after the sill plate was painted: "there is still a gap where the
+      // garage sill plate should be (i think its the sill plate location)".
+      //
+      // THE PLATE IS PAINTED. It is OUTLINED, which is a different thing.
+      // Read off the tape at the garage on that build's E4:
+      //
+      //     fill   seq 8   u -46..-19   e -1.1729..-1.0479   the plate, C.face
+      //     stroke seq 12  u -46..-19   e -1.1729            top of concrete, w1
+      //     stroke seq 56  u -46..-19   e -1.0479            THIS LINE, w1.25
+      //
+      // -- two horizontals 1 1/2" apart with white between them, the lower
+      // one lighter than the upper. Filled or not, a strip bracketed by two
+      // lines reads as a slot, and at 1.25 against the concrete's 1 the
+      // bracket is heavier than the thing it brackets.
+      //
+      // THE RIM BAND ALREADY HAS THIS RULE and says why: it is "part of the
+      // house face -- white like the walls, no banding line". A garage wall
+      // is the same case one storey down. What is under it is the sill plate
+      // and then concrete; the siding runs over both to the top of the pour,
+      // and the top-of-concrete line already terminates the wall. There is
+      // one line there on a real building, and the concrete draws it.
+      //
+      // THE HOUSE KEEPS ITS LINE. A house face's floor is a STOREY line --
+      // the main floor across the facade, with the band's white directly
+      // under it and no concrete for a foot -- and it is the line a drafter
+      // expects at a floor level. The two cases differ in what the face
+      // stands on, which is exactly what `face.garage` records.
+      if (!face.garage) ctx.lineTo(xa, Y(floor));
       ctx.stroke();
       const wallLen = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
       if (wallLen < 1e-6) return;
