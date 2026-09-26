@@ -830,6 +830,39 @@ function run(win) {
         }
         if (!seen.length) return;
         reached += 1;
+        // ── AND IT IS NOT OUTLINED, WHICH IS A DIFFERENT THING ──────────
+        //
+        // Movie, 26 Sep, after the fill above was in: "there is still a gap
+        // where the garage sill plate should be (i think its the sill plate
+        // location)". Read off that build's E4 at the garage:
+        //
+        //     fill   u -46..-19  e -1.1729..-1.0479   the plate, C.face
+        //     stroke u -46..-19  e -1.1729            top of concrete, w1
+        //     stroke u -46..-19  e -1.0479            the wall's base, w1.25
+        //
+        // Filled or not, a strip bracketed by two lines reads as a slot --
+        // and at 1.25 against the concrete's 1 the bracket was heavier than
+        // the thing it bracketed. The rim band has had this rule from the
+        // start ("white like the walls, no banding line"); a garage wall
+        // face closed its outline along its own base and did not.
+        //
+        // BOTH HALVES OR NEITHER. Without the second check, "stroke nothing
+        // down there" passes -- and the top of the pour is a real line that
+        // has to stay.
+        const lineAt = e => painted.strokes.some(s => {
+          for (let k = 1; k < s.pts.length; k += 1) {
+            const a = s.pts[k - 1], b = s.pts[k];
+            if (b.move || b.close) continue;
+            if (Math.abs(a.e - b.e) > 0.01 || Math.abs(a.e - e) > 0.04) continue;
+            if (Math.max(a.u, b.u) < lo + 0.05 || Math.min(a.u, b.u) > hi - 0.05) continue;
+            return true;
+          }
+          return false;
+        });
+        check(`${cut.id}: the ${garage ? 'garage' : 'house'} sill plate over ${ftIn(conc)} carries no line across its top`,
+          !lineAt(bear), `probed ${ftIn(bear)} over u ${lo.toFixed(2)}..${hi.toFixed(2)}`);
+        check(`${cut.id}: and the top of the pour at ${ftIn(conc)} still draws one`,
+          lineAt(conc), `probed ${ftIn(conc)} over u ${lo.toFixed(2)}..${hi.toFixed(2)}`);
         const bad = seen.filter(s => !s.strip || s.strip.ink !== wallInk);
         check(`${cut.id}: the ${garage ? 'garage' : 'house'} sill plate over ${ftIn(conc)} is painted, and as WALL`,
           bad.length === 0,
@@ -1122,9 +1155,20 @@ const MUTATIONS = [
   ['the sill plate goes unpainted, and the wall floats a plate off the concrete',
     s => s.replace('      return rise > 0.01 && rise < PLATE_CAP_FT ? rise : 0;',
       '      return 0;')],
+  // RE-AIMED. This anchored on `if (!plate) return;` + the fillStyle under it,
+  // and ea3bc01 -- a COMMENT-ONLY commit -- put twenty lines of note between
+  // the two. Not one stroke moved and the anchor died anyway: a mutation
+  // anchor is TEXT, so "no ink changed" says nothing about whether the gate
+  // still has something to bite. CI caught it, my own sweep did not, because
+  // I re-ran the harnesses PLAIN and only `--mutate` sees a dead anchor.
+  //
+  // AIMED AT THE CODE, NOT AT A BOUNDARY A COMMENT CAN LAND ON. The fillStyle
+  // alone appears four times in the file; paired with the fillRect it serves,
+  // it appears once, and the two lines are adjacent code with nothing between
+  // them for a note to slide into.
   ['the strip is painted as concrete -- the top-of-concrete line moves back up',
-    s => s.replace('      if (!plate) return;\n      ctx.fillStyle = C.face;',
-      '      if (!plate) return;\n      ctx.fillStyle = C.faceShade;')],
+    s => s.replace('      ctx.fillStyle = C.face;\n      runs.forEach(r => ctx.fillRect(X(r.lo), Y(g.topE + plate),',
+      '      ctx.fillStyle = C.faceShade;\n      runs.forEach(r => ctx.fillRect(X(r.lo), Y(g.topE + plate),')],
   // THE BURIED SILHOUETTE GOES BACK TO SWALLOWING WHAT HANGS OVER IT. The
   // guard is the whole pass: with it always continuing, no stretch is
   // collected and the drawing is exactly what Movie marked in green.
@@ -1137,6 +1181,12 @@ const MUTATIONS = [
   ['a footing end interior to a merged run spends no shoulder',
     s => s.replace('        if (g.projFt <= 0) return;',
       '        if (g.projFt <= 0 || true) return;')],
+  // AND THE GARAGE WALL CLOSES ITS OUTLINE ALONG ITS OWN BASE AGAIN, which
+  // brackets the sill plate between two horizontals and reads as the slot
+  // Movie reported after the plate was already being filled.
+  ['a garage wall lines its own base, bracketing the plate into a slot',
+    s => s.replace('      if (!face.garage) ctx.lineTo(xa, Y(floor));',
+      '      if (true) ctx.lineTo(xa, Y(floor));')],
 ];
 
 console.log('\n' + 'mutation'.padEnd(72) + 'caught by');
