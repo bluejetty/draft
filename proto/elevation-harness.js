@@ -1168,6 +1168,7 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
     const { ctx, strokes } = recordingCtx();
     const ok = CV.drawElevationView(pEnv, ctx, W, H, pCut, pStack, pAxis, () => {}, opts);
     let flat = -Infinity, any = -Infinity, top = Infinity;
+    let widest = 0, gradeY = null;
     strokes.forEach(s => {
       for (let k = 1; k < s.pts.length; k += 1) {
         const a = s.pts[k - 1], b = s.pts[k];
@@ -1180,10 +1181,15 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
         // stay in from the thing that may leave without naming an elevation.
         if (Math.abs(a.y - b.y) < 0.6 && Math.abs(a.x - b.x) > 2) {
           flat = Math.max(flat, a.y);
+          // AND THE LONGEST OF THEM IS THE GRADE LINE, which runs past both
+          // ends of the building and is drawn in one piece. Two flats whose
+          // elevations the model knows are what turn pixels into feet here,
+          // so nothing below has to re-derive the painter's own fit.
+          if (Math.abs(a.x - b.x) > widest) { widest = Math.abs(a.x - b.x); gradeY = a.y; }
         }
       }
     });
-    return { ok, flat, any, top };
+    return { ok, flat, any, top, gradeY };
   };
   const at = v => v.toFixed(1);
   const plain = deep(undefined);
@@ -1193,18 +1199,27 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
 
   const BAR = 64;   // #house-strip at 1366x700 is 64px of it, measured
   const bar = deep({ margins: { bottom: BAR } });
-  // SCREEN_MARGINS.bottom is the drawing's own inset from whatever edge it
-  // has, and an ask ADDS to it -- the same composition the sides use, and the
-  // reason the gap Movie gets is that inset rather than a number typed here.
-  const INSET = 16;
+  // AN INCH OF GROUND, NOT A PIXEL COUNT. "make it look like the footing is
+  // just about resting on one inch of dirt and then the tint starts" -- so
+  // what is asserted is the DEPTH, read back through the drawing's own scale,
+  // and it is the same inch whatever size the window is. A bottom ask is the
+  // one side the painter's own inset does not add to, for the reason written
+  // at `screenMargins`: nothing is drawn below the drawing, so that inset is
+  // pure white and the furniture's edge is the frame.
+  const INCH = 1 / 12;
   check('a bottom ask keeps the footing out of the strip it named',
-    bar.flat <= H - BAR - 1,
+    bar.flat < H - BAR,
     `footing at ${at(bar.flat)} in ${H}px with ${BAR}px asked -- the strip `
     + `begins at ${H - BAR}`);
-  check('and holds it the painter-s own inset clear of it, not flush',
-    Math.abs((H - BAR - bar.flat) - INSET) <= 1.5,
-    `${at(H - BAR - bar.flat)}px of white above the strip against ${INSET} `
-    + 'the painter insets from any edge');
+  // THE SCALE IS READ OFF THE DRAWING rather than recomputed here: grade and
+  // the footing's underside are both flats the model can name, so the pixels
+  // between them say what a foot is worth on this fit and an inch follows.
+  const pFdn = pStack.foundation;
+  const ft = (bar.flat - bar.gradeY) / (pFdn.grade - pFdn.footingBottom);
+  check('and stands it on an inch of ground, not the painter-s own inset',
+    Math.abs((H - BAR - bar.flat) - INCH * ft) < 1.2,
+    `${at(H - BAR - bar.flat)}px of ground above the strip, and an inch is `
+    + `${at(INCH * ft)}px at ${at(ft)}px/ft`);
   check('and lets the pile shafts run on past it',
     bar.any > H - BAR + 1,
     `deepest ink ${at(bar.any)} against a strip beginning at ${H - BAR}`);

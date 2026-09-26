@@ -366,10 +366,16 @@ test('the footing clears the foot bar, and the piles run under it', async ({ pag
     .toBeGreaterThan(read.barTop);
   // AND SNUG, not merely clear. A drawing that answered this by shrinking to
   // a postage stamp clears the bar by a mile and is not what was asked for.
+  //
+  // AN INCH OF GROUND is what the number is: Movie, on the first cut of this
+  // sitting 16px off the bar, "make it look like the footing is just about
+  // resting on one inch of dirt and then the tint starts". At the scale this
+  // build lands at in a 1366x700 window that is between one and two pixels;
+  // the arithmetic behind it, in feet, is proto/elevation-harness.js's.
   expect(read.barTop - read.footing,
-    `${(read.barTop - read.footing).toFixed(0)}px of white between the footing `
-    + 'and the bar — the painter insets 16px from any edge it has')
-    .toBeLessThanOrEqual(24);
+    `${(read.barTop - read.footing).toFixed(0)}px between the footing and the `
+    + 'bar — an inch of ground at this scale is one to two')
+    .toBeLessThanOrEqual(5);
 });
 
 // MUTATION-RUN, 22 Sep, three of them, each turning this file red and each on

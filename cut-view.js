@@ -224,6 +224,14 @@ if (!window.DraftCutView) {
   // "little smaller" he asked for, arrived at by asking for more paper rather
   // than by picking a zoom.
   const SKY_ABOVE_ROOF_FT = 10;
+  // AND WHAT THE FOOTING SITS ON AT THE BOTTOM OF THE SHEET. Movie, 26 Sep:
+  // "make it look like the footing is just about resting on one inch of dirt
+  // and then the tint starts". Not a margin -- it is part of the drawing's
+  // extent, so it is an inch of GROUND at whatever scale the elevation lands
+  // at rather than a pixel count that means a different depth on every screen.
+  // The two feet BELOW it are the pile shafts' run-off and are allowed out of
+  // the frame; see the note at `yFit`.
+  const GROUND_UNDER_FOOTING_FT = 1 / 12;
   const ROOF_FASCIA_IN = 5.5;
   // A truss chord in section: 3 1/2" measured ACROSS the member, so the
   // vertical drop under a sloped top chord grows with the pitch.
@@ -1126,8 +1134,31 @@ if (!window.DraftCutView) {
       // THE HALF-CANVAS CAP BELOW IS WHAT KEEPS THIS HONEST on a narrow
       // screen -- it scales back the EXTRA over these defaults, so the sum
       // can ask for more without being able to take more.
-      return Number.isFinite(asked) && asked > 0
-        ? SCREEN_MARGINS[side] + asked : SCREEN_MARGINS[side];
+      if (!(Number.isFinite(asked) && asked > 0)) return SCREEN_MARGINS[side];
+      // EXCEPT AT THE BOTTOM, WHERE THE FURNITURE'S EDGE IS THE FRAME.
+      //
+      // Movie, 26 Sep, looking at the first cut of this with the foot bar
+      // reserved and the drawing sitting SCREEN_MARGINS.bottom above it:
+      // "could be even closer to the 'tint line (less gap) maybe move it to
+      // 75% closer (25% gap size)", and then what he actually wanted: "make
+      // it look like the footing is just about resting on one inch of dirt
+      // and then the tint starts".
+      //
+      // THE SUM IS RIGHT ON THE SIDES FOR A REASON THE BOTTOM HAS NOT GOT.
+      // `SCREEN_MARGINS.left` is not white space -- the level marks are drawn
+      // OUTSIDE the drawing in it, right-aligned at `marginL - 22` -- so a
+      // rail's box and the marks' gutter are two different claims on the same
+      // strip and they compose. The right mirrors it for the datum tails, and
+      // the top holds the sheet's header. NOTHING IS DRAWN BELOW THE DRAWING.
+      // The bottom default is pure inset from a bare canvas edge, and against
+      // furniture the drafter wants the sheet tucked under it rather than
+      // floating an unrelated 16px off it.
+      //
+      // AND THE CLEARANCE ITSELF IS NOT A PIXEL COUNT. It is an inch of
+      // ground under the footing, spent in `yFit` where the extent is decided,
+      // so it stays an inch at any window size or scale instead of being three
+      // and a half inches on a laptop and half of one on a sheet.
+      return side === 'bottom' ? asked : SCREEN_MARGINS[side] + asked;
     };
     // AND NEVER MORE THAN HALF THE CANVAS TO THE FURNITURE. MODEL.html's two
     // rails ask for about 540px between them on this page's own CSS, which is
@@ -1812,15 +1843,21 @@ if (!window.DraftCutView) {
     // TWICE -- once as extent and once as the bar the caller is now asking
     // this to keep off -- and the house shrinks about 10% to pay for room
     // Movie has just said the piles may use. Measured both ways at 1366x700:
-    // fitting yBottom puts the footing 42px clear of the bar, fitting the
-    // footing puts it 16px clear, which is SCREEN_MARGINS.bottom -- the
-    // drawing's own inset, which is the "little space" and is the same white
-    // it would keep against a bare canvas edge.
+    // fitting yBottom puts the footing 42px clear of the bar; fitting the
+    // footing and an inch of ground under it puts it against the bar, which is
+    // what he asked for -- "make it look like the footing is just about
+    // resting on one inch of dirt and then the tint starts".
+    //
+    // SO THE INCH IS EXTENT, NOT MARGIN, and that is the whole of why it is
+    // here. A pixel clearance in `screenMargins` would be three and a half
+    // inches of ground on a laptop and half an inch on a large screen; an inch
+    // of GROUND is an inch at every size, which is the thing he described.
     //
     // AN EXTERNAL FIT IS UNTOUCHED. LAYOUT hands its own extents and its own
     // pxPerFt: the paper decides there, and a viewport that asked for a
     // figure this then overran would be a drawing off the edge of a sheet.
-    const yFit = fit?.extents ? fit.extents.yBottom : fdn.footingBottom;
+    const yFit = fit?.extents ? fit.extents.yBottom
+      : fdn.footingBottom - GROUND_UNDER_FOOTING_FT;
     const mg = screenMargins(opts, w);
     const marginL = fit ? 0 : mg.left, marginR = fit ? 0 : mg.right,
       marginT = fit ? 0 : mg.top, marginB = fit ? 0 : mg.bottom;
