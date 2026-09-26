@@ -83,7 +83,22 @@ async function bodyScan(page) {
         if (dark(x, y)) { right += 1; run += 1; if (run > rightRun) rightRun = run; } else run = 0;
       }
     }
-    return { gradeY, wallL, wallR, eaveY, inside, right, rightRun, W };
+    // INK INSIDE, BY ROW. `inside` alone cannot say WHOSE ink it is, and
+    // after 97a82c9 there is one line in there that belongs to the house:
+    // the top of its own foundation wall, 14" above grade, which used to sit
+    // exactly on the rim band's bottom edge and be covered by its fill.
+    // A row spanning the whole field is a datum line like that one; a garage
+    // roof showing through is a slope, a fascia and two rakes, and cannot be
+    // one full-width row.
+    const insideRows = [];
+    for (let y = eaveY + 6; y < gradeY - 4; y++) {
+      let n = 0;
+      for (let x = wallL + 6; x <= wallR - 6; x++) if (dark(x, y)) n += 1;
+      if (n) insideRows.push({ y, n });
+    }
+    const fieldW = (wallR - 6) - (wallL + 6) + 1;
+    return { gradeY, wallL, wallR, eaveY, inside, right, rightRun, W,
+      insideRows, fieldW };
   });
 }
 
@@ -97,9 +112,33 @@ test.describe('An attached garage hides behind the house it is attached to', () 
     // storey's worth of paper between the eave and grade.
     expect(scan.wallR - scan.wallL).toBeGreaterThan(120);
     expect(scan.gradeY - scan.eaveY).toBeGreaterThan(120);
-    // And nothing inside it. The garage eave, its fascia and its rakes
-    // used to run across this field, out of one wall and into the other.
-    expect(scan.inside).toBe(0);
+    // And no GARAGE inside it. The garage eave, its fascia and its rakes used
+    // to run across this field, out of one wall and into the other.
+    //
+    // THIS SAID `inside === 0` UNTIL 97a82c9, and the change that broke it is
+    // a correction rather than a regression -- so the claim is narrowed to
+    // what it was always about instead of the threshold being loosened.
+    //
+    // WHAT ARRIVED. The foundation's base was being derived by subtracting
+    // the POUR from the BEARING line, one sill plate short, so every
+    // foundation face drew a plate too tall and topped out exactly at the rim
+    // band's bottom edge -- covered by its fill, invisible. Corrected, the
+    // house's own top of concrete stands where it belongs, 14" above grade,
+    // and is a line on the sheet. Measured here: one row, y=474 against a
+    // grade of 490, spanning all 158px of the field.
+    //
+    // A GARAGE ROOF CANNOT BE THAT. It comes in as a slope, a fascia and two
+    // rakes -- ink that climbs, and never one row edge to edge. So the test
+    // is that nothing inside this field is anything BUT a full-width
+    // horizontal, which refuses everything it refused before and admits the
+    // one line the house is entitled to.
+    const partial = scan.insideRows.filter(row => row.n < scan.fieldW - 2);
+    expect(partial.map(r => `y=${r.y} (${r.n}px)`),
+      'ink inside the house body that is not a full-width datum line -- a '
+      + 'garage eave, fascia or rake showing through').toEqual([]);
+    expect(scan.insideRows.length,
+      `${scan.insideRows.length} full-width lines inside the house body; the `
+      + 'foundation top is the only one it is entitled to').toBeLessThanOrEqual(1);
     // Nor is it hiding off the sides: from here the garage is behind the
     // house end to end, so the sheet carries the house and nothing else.
     expect(scan.right).toBe(0);
