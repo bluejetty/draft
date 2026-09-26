@@ -212,8 +212,37 @@ test.describe('Generated section view', () => {
       }
       return { grayCount, midCount, graySpan: grayBottom - grayTop, H };
     });
-    // Concrete shows: the two hung beams plus the slab poured over them.
-    expect(scan.grayCount).toBeGreaterThan(300);
+    // ── CONCRETE SHOWS: the two hung beams plus the slab poured over them.
+    //
+    // 255 WHERE THIS ONCE COUNTED OVER 300, and the drop is the instrument
+    // rather than the drawing. The garage floor is measured down from the top of
+    // the concrete now (Movie, 26 Sep: *"it shouldn't be measured to 'grade' it
+    // should be measured from top of concrete"*), so it FALLS toward the door --
+    // 1/8" per foot, which over this 8 ft garage is one inch. A diagonal that
+    // shallow anti-aliases into a partly-covered row along its whole length, and
+    // a partly-covered 0.35 fill over the page lands at ~232 -- outside the
+    // 185..218 window this census calls concrete. The `gray` predicate then
+    // wants twelve device rows of concrete ABOVE a pixel, so losing the top row
+    // walks the qualifying region down one and the count comes off the span.
+    //
+    // MEASURED RATHER THAN GUESSED, by building this same drawing three ways:
+    //
+    //     level floor, buck cut      over 300   (what this asserted)
+    //     sloped floor, no buck      280
+    //     sloped floor, buck cut     255        (what it draws)
+    //
+    // -- so the slope costs ~20 and the buck ~25, and NEITHER is missing
+    // concrete: the slab fills the void the buck takes out of the beam, which is
+    // Movie's *"the slab will always 'pour over the 1ft door buck and fil in the
+    // extra space"*. The area is the same; the colour at the overlap and the
+    // edges is not.
+    //
+    // THE FALL ITSELF IS NOT ASSERTED HERE. This is the smoke test that the
+    // browser draws the section at all; the rate, the buck's depth and what the
+    // door stands on are measured exactly, in feet, in
+    // proto/garage-bearing-harness.js. A pixel census is the wrong instrument
+    // for one inch over eight feet and would be recalibrated by every skin.
+    expect(scan.grayCount).toBeGreaterThan(200);
     // Hung, not grade-to-footing: all the concrete lives in a shallow band.
     expect(scan.graySpan).toBeLessThan(scan.H * 0.3);
     // Under-slab dashes + gravel dots put mid-tone ink under the slab.
