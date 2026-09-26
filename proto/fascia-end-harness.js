@@ -444,6 +444,183 @@ if (!fs.existsSync(MOVIE)) {
   }
 }
 
+// ── AND A WALL'S CORNER DOES NOT START UNDER A SHEET ─────────────────────
+//
+// Movie, 26 Sep, on a 2 STOREY + GARAGE: "found another very small problem
+// where the garage connects to the house again at the gable ... a grey line
+// goes down (that shouldn't show) ... the grey line covers the black line
+// (black ext house wall line should show)".
+//
+// IT IS ONE STROKE HALF PAINTED OVER. The house's front corner runs from the
+// second floor line to the plate; the garage roof's tie piece laps three feet
+// onto that wall and is filled AFTER it, which is right -- the sheet stands in
+// front. What is not right is that the corner's stroke sits exactly ON the
+// sheet's own edge, so the fill claims whatever fraction of that pixel it
+// covers and leaves the rest. Read off the canvas in DAY mode, one column:
+//
+//     e 13.05 .. 11.00   ink 29     the corner
+//     e 10.83 ..  9.30   ink 199    the same stroke, a ghost of it
+//
+// 29 is the ink and 255 the paper. Half a line is the one answer that is
+// never right: in front of the sheet it is ink, behind it is nothing.
+//
+// SO THE CLAIM IS ABOUT SHEETS, COMPUTED HERE FROM THE MODEL. Every roof face
+// projects to a polygon -- `u` off the cut's axis, elevation off
+// `roofFaceRise`, which is linear across a face, so the plan corners are the
+// whole outline -- and no outline vertical may BEGIN strictly inside one.
+//
+// NOT "no ink inside a sheet", which is a different and false claim: a rake,
+// a ridge and a valley all live inside their own roof's polygon. It is where
+// a stroke STARTS that says it was cut off by something, and a start under a
+// sheet is a start the sheet was going to paint over.
+//
+// AND ONLY A SHEET THE PAINTER PUTS DOWN LATER, which is where the depth
+// comes from. A polygon computed here carries no answer to "is this in front
+// of that wall" -- on E3 the garage's roof spans u -22..6 and the house's
+// corner at u -16 stands INSIDE it while the whole garage is twenty feet
+// BEHIND the house, and a check that could not tell those apart called it a
+// defect. The painter has already answered it: surfaces go down far first, so
+// a fill with a HIGHER sequence number is one that stands in front. Matching
+// the tape's fills back to the model's sheets is what keeps this a claim
+// about roofs while letting the sort say which roofs.
+//
+// AND THE SECOND CLAIM IS WHAT KEEPS THE FIRST HONEST, because deleting every
+// corner satisfies it: some corner must begin ON a sheet's boundary -- lifted
+// to it rather than removed -- and be a real line once it does.
+{
+  const inSheet = (pt, poly, margin) => {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[i], b = poly[j];
+      if ((a.e > pt.e) !== (b.e > pt.e)
+        && pt.u < (b.u - a.u) * (pt.e - a.e) / (b.e - a.e) + a.u) inside = !inside;
+    }
+    if (!inside) return false;
+    return edgeGap(pt, poly) >= margin;
+  };
+  const edgeGap = (pt, poly) => {
+    let best = Infinity;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[i], b = poly[j];
+      const du = b.u - a.u, de = b.e - a.e, L2 = du * du + de * de;
+      if (!L2) continue;
+      const t = Math.max(0, Math.min(1, ((pt.u - a.u) * du + (pt.e - a.e) * de) / L2));
+      best = Math.min(best, Math.hypot(pt.u - (a.u + du * t), pt.e - (a.e + de * t)));
+    }
+    return best;
+  };
+  let started = 0;
+  drawings.forEach(file => {
+    if (!fs.existsSync(file)) return;
+    const label = path.basename(file);
+    const env = H.buildEnv(win, JSON.parse(fs.readFileSync(file, 'utf8')));
+    const CV = win.DraftCutView;
+    const geo = win.DraftGeometry2D;
+    const stack = CV.sectionLevelStack(env);
+    const grade = stack.foundation.grade;
+    H.standardElevationCuts(env).forEach(cut => {
+      const view = H.paintElevation(win, env, cut, { pxPerFt: 40 });
+      const axis = view.axis;
+      const sheets = [];
+      env.roofs().forEach(roof => {
+        if (!roof.points || roof.points.length < 3) return;
+        const eave = CV.roofEaveElev(roof, stack, env);
+        const pitch = roof.pitch || 4;
+        geo.roofFaces(roof, geo.roofSkeleton(roof)).forEach(face => {
+          const poly = (face.points || []).map(pt => ({
+            u: pt.x * axis.x + pt.z * axis.z,
+            e: eave + geo.roofFaceRise(face, pt, pitch),
+          }));
+          if (poly.length >= 3) sheets.push(poly);
+        });
+      });
+      if (!sheets.length) return;
+      // THE TAPE'S FILLS, MATCHED BACK TO THOSE SHEETS. A roof face is filled
+      // as its own projected polygon, so the two agree corner for corner; the
+      // fascia boards and the wall fills that come through here do not.
+      const near = (a, b) => Math.abs(a.u - b.u) < 0.05 && Math.abs(a.e - b.e) < 0.05;
+      const roofFills = view.modelFills.filter(f => f.pts.length >= 3 && f.pts.length <= 5
+        && sheets.some(poly => poly.length === f.pts.length
+          && f.pts.every(pt => poly.some(q => near(pt, q)))));
+      const bad = [];
+      view.strokes.forEach(st => {
+        if (String(st.ink) !== '#1d1f20') return;
+        for (let k = 1; k < st.pts.length; k += 1) {
+          const a = st.pts[k - 1], b = st.pts[k];
+          if (b.move || b.close) continue;
+          if (Math.abs(a.u - b.u) > 0.005) continue;         // not a vertical
+          const lo = Math.min(a.e, b.e), hi = Math.max(a.e, b.e);
+          if (hi - lo < 0.2 || lo < grade) continue;          // stub, or buried
+          // THE FOOT, A HAIR UP. Exactly on it is the endpoint, which sits on
+          // whatever boundary cut it; a hair up is inside the line.
+          const foot = { u: a.u, e: lo + 0.05 };
+          roofFills.forEach(fill => {
+            if (fill.seq < st.seq) return;      // behind this stroke, not over it
+            if (inSheet(foot, fill.pts, 0.05)) {
+              bad.push(`u ${a.u.toFixed(2)} e ${lo.toFixed(3)}..${hi.toFixed(3)}`
+                + ` under fill ${fill.seq}`);
+            }
+          });
+          started += 1;
+        }
+      });
+      check(`${label} ${cut.id}: no wall corner begins under a roof sheet`,
+        bad.length === 0, bad.length ? bad.join(', ') : `${started} vertical(s) probed`);
+    });
+  });
+  check('fixture: some corner was probed at all', started > 0,
+    `${started} outline vertical(s) above grade`);
+  // ── LIFTED, NOT DELETED ────────────────────────────────────────────────
+  //
+  // The claim above is satisfied by a painter that draws no corners at all,
+  // and a first cut of this file tried to close that with "some corner
+  // begins ON a sheet" -- which passed with the corner deleted, because a
+  // gable wall's own corner stands on its own roof edge in every fixture
+  // here. A count cannot tell those apart. THE ONE MOVIE REPORTED CAN.
+  //
+  // repro-2storey-garage-beam, E1. The house is 32 ft wide, so its right
+  // corner is u 16; the tie's sheet covers it from the second floor line at
+  // 9.152 up to 10.577, which is that sheet's own far edge (x = 16 is the
+  // house's wall, and premade-plans's note measures the piece standing
+  // 2.000 ft above its eave there). So:
+  //
+  //     before   u 16.00   e  9.152 .. 17.252    a foot and a half of ghost
+  //     after    u 16.00   e 10.577 .. 17.252    the same corner, lifted
+  //
+  // The head is read off the stack rather than typed, so a change to the
+  // storey heights moves the check with the drawing.
+  {
+    const file = drawings.find(f => path.basename(f) === 'repro-2storey-garage-beam.draft');
+    const env = file && fs.existsSync(file)
+      ? H.buildEnv(win, JSON.parse(fs.readFileSync(file, 'utf8'))) : null;
+    const cut = env && H.standardElevationCuts(env).find(c => c.id === 'E1');
+    const head = env && win.DraftCutView.sectionLevelStack(env).bearing;
+    const view = cut && H.paintElevation(win, env, cut, { pxPerFt: 40 });
+    const runs = [];
+    if (view) {
+      view.strokes.forEach(st => {
+        if (String(st.ink) !== '#1d1f20') return;
+        for (let k = 1; k < st.pts.length; k += 1) {
+          const a = st.pts[k - 1], b = st.pts[k];
+          if (b.move || b.close) continue;
+          if (Math.abs(a.u - b.u) > 0.005 || Math.abs(a.u - 16) > 0.02) continue;
+          const lo = Math.min(a.e, b.e), hi = Math.max(a.e, b.e);
+          if (hi - lo > 0.2) runs.push({ lo, hi });
+        }
+      });
+    }
+    const corner = runs.find(r => Math.abs(r.hi - head) < 0.05);
+    check('repro-2storey-garage-beam E1: the corner over the tie is still DRAWN',
+      !!corner, corner ? `u 16.00 e ${corner.lo.toFixed(3)}..${corner.hi.toFixed(3)}`
+        : `nothing reaching the head at ${head == null ? '?' : head.toFixed(3)}`
+          + ` -- ${runs.length} run(s) at u 16`);
+    check('and begins at the sheet that covers it, not at the floor below it',
+      !!corner && Math.abs(corner.lo - 10.577) < 0.05,
+      corner ? `foot at ${corner.lo.toFixed(3)} against 10.577 the sheet's edge`
+        : 'no corner');
+  }
+}
+
 console.log(`fascia end harness: ${passed} checks passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach(line => console.log(`  ✘ ${line}`));

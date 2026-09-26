@@ -2758,6 +2758,63 @@ if (!window.DraftCutView) {
       });
       return clipped;
     };
+    // ── AND THE SAME QUESTION AT THE OTHER END OF THE WALL ────────────────
+    //
+    // Movie, 26 Sep, on a 2 STOREY + GARAGE: "found another very small problem
+    // where the garage connects to the house again at the gable ... a grey
+    // line goes down (that shouldn't show) ... the grey line covers the black
+    // line (black ext house wall line should show)".
+    //
+    // IT IS ONE LINE HALF PAINTED OVER. Read off the canvas in DAY mode at the
+    // house's front-right corner, twoStorey-garage E4, one pixel column:
+    //
+    //     e 13.05 .. 11.00   x621 = 29     the corner, in ink
+    //     e 10.83 ..  9.30   x621 = 199    the same stroke, a ghost of it
+    //     e  9.21 ..  8.70   x621 = 255    and then nothing at all
+    //
+    // 29 is the ink and 255 the paper, so 199 is a 1px stroke with most of it
+    // painted back out. THE FILLS ALREADY HIDE WHAT IS BEHIND THEM -- the tie
+    // roof's sheet is keyed on its nearest corner and goes down after the
+    // house's wall, which is right -- but a stroke sitting ON the fill's own
+    // edge is covered by whatever fraction of that pixel the fill claims. Half
+    // a line is the one answer that is never correct: the corner is either in
+    // front of the sheet, in which case it is ink, or behind it, in which case
+    // it is nothing.
+    //
+    // BEHIND IT. The tie's piece runs x 16..22 by z 17..20 (premade-plans's
+    // garageTieRoofLoop) and the house's right wall IS x = 16, so every inch
+    // of that sheet stands between the viewer and this corner. The line Movie
+    // wants back above it is the same stroke, where no sheet covers it.
+    //
+    // SO THIS IS roofClippedTop's OTHER END: that one drops a wall's TOP to
+    // the floor of a band that swallows it, and this one lifts a wall's END
+    // VERTICAL off its floor to the CEILING of a band that covers the foot.
+    // Same ray, same bands, same fascia allowance -- the two tests differ only
+    // in which end of the wall is asked about.
+    const roofClippedFoot = (pt, depth, floor, top) => {
+      if (!facesByRoof || !facesByRoof.size) return floor;
+      const span = dHi - depth;
+      if (span < 0.1) return floor;
+      const far = { x: pt.x + dir.x * span, z: pt.z + dir.z * span };
+      let lifted = floor;
+      facesByRoof.forEach((roofFaces, roof) => {
+        const base = roofEaveElev(roof, stack, env);
+        let lo = Infinity, hi = -Infinity;
+        geo().roofProfile(roof, roofFaces, pt, far, dir).forEach(p => {
+          const elev = base + p.rise;
+          if (elev > hi) hi = elev;
+          if (elev < lo) lo = elev;
+        });
+        if (hi === -Infinity) return;   // the ray misses this roof entirely
+        lo -= fasciaFt;
+        if (floor >= lo - ROOF_COVER_EPS && floor < hi - ROOF_COVER_EPS) {
+          lifted = Math.max(lifted, hi);
+        }
+      });
+      // NEVER PAST THE TOP: a wall covered to its head draws no vertical at
+      // all, and a foot above its own head would draw one upside down.
+      return Math.min(lifted, top);
+    };
     const faceGeoms = faces.map(face => {
       const { wall, u1, u2, level } = face;
       const loU = Math.max(Math.min(u1, u2), uMin);
@@ -2800,7 +2857,7 @@ if (!window.DraftCutView) {
       && geom.tops.every(s =>
         gableTopAt(other.worldAt(s.u), other.face.level.wallTop, other.wallDir) >= s.top - 1e-3));
     const paintFace = geom => {
-      const { face, loU, hiU, floor, tops } = geom;
+      const { face, loU, hiU, floor, tops, worldAt } = geom;
       const { wall, u1, u2, level } = face;
       const xa = X(loU), xb = X(hiU);
       ctx.fillStyle = C.face;
@@ -2813,13 +2870,35 @@ if (!window.DraftCutView) {
       ctx.fill();
       // The wall finish runs into the soffit triangle: end verticals stop
       // at the plate, only the top profile follows the roof underside.
+      //
+      // AND THEY START ABOVE A SHEET THAT COVERS THEIR FOOT, which is the
+      // 26 Sep reading; the note at `roofClippedFoot` has it and why the
+      // fill's own edge cannot be left to do the job.
+      //
+      // A HAIR INSIDE THE END, not on it. An end vertical stands on the face's
+      // own corner, and a ray cast from a corner lands on the neighbouring
+      // sheet's boundary where inside-or-out is a coin toss -- the same reason
+      // the roof-edge pass probes at `tp` rather than at `t`, written there in
+      // full. Two hundredths of a foot is a quarter of an inch and cannot
+      // reach past anything.
+      const nudge = Math.min(0.02, (hiU - loU) / 4);
+      const footAt = (u, top) => (worldAt
+        ? roofClippedFoot(worldAt(u), face.depth, floor, top) : floor);
+      const topL = Math.min(tops[0].top, level.wallTop);
+      const topR = Math.min(tops[tops.length - 1].top, level.wallTop);
+      const footL = footAt(loU + nudge, topL);
+      const footR = footAt(hiU - nudge, topR);
       ctx.beginPath();
-      ctx.moveTo(xa, Y(floor));
-      ctx.lineTo(xa, Y(Math.min(tops[0].top, level.wallTop)));
+      if (topL - footL > 0.01) {
+        ctx.moveTo(xa, Y(footL));
+        ctx.lineTo(xa, Y(topL));
+      }
       ctx.moveTo(X(tops[0].u), Y(tops[0].top));
       tops.slice(1).forEach(s => ctx.lineTo(X(s.u), Y(s.top)));
-      ctx.moveTo(xb, Y(Math.min(tops[tops.length - 1].top, level.wallTop)));
-      ctx.lineTo(xb, Y(floor));
+      if (topR - footR > 0.01) {
+        ctx.moveTo(xb, Y(topR));
+        ctx.lineTo(xb, Y(footR));
+      }
       // ── AND A GARAGE WALL DOES NOT LINE ITS OWN BASE ─────────────────
       //
       // Movie, 26 Sep, on E1 and E4 of a 2 STOREY + GARAGE + ROOM OVER,
