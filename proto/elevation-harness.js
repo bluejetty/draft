@@ -953,6 +953,32 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
       check('and above it the stub-s own gable end is still drawn',
         along(-20, top + 0.4, ridge - 0.05) > 1,
         `${along(-20, top + 0.4, ridge - 0.05).toFixed(3)} ft between ${top.toFixed(2)} and ${ridge.toFixed(2)}`);
+      // ── AND IT REACHES THE PIECE, not the nearest sampling station ─────
+      //
+      // Movie, 26 Sep, on the corner above the tie once the ghost under it
+      // was gone: "this little 'wall not fully dark' spot still has light
+      // area".
+      //
+      // THE 0.4 ABOVE IS WHERE IT WAS HIDING. That bound was picked to clear
+      // the seam and it happened to clear this too: the gable end stopped at
+      // e 10.902 with the piece's own top at 10.577, four inches short,
+      // because the run ended at the last STATION that showed rather than at
+      // the boundary. The edge runs x 8..22, its ten stations are 1.4 ft
+      // apart, and the piece takes over at x = 16 -- between two of them.
+      //
+      // WHICH LEFT THE WALL'S CORNER HALF PAINTED. The house's corner stands
+      // at exactly this u; the garage's roof fill goes down after it and
+      // takes half the stroke's pixel; and this edge is what puts it back.
+      // Over those four inches nothing did, so the corner read grey there
+      // and black above -- one line in two weights.
+      //
+      // A TENTH OF A FOOT, which is a station's width divided by fourteen: it
+      // can only be met by a run that ends where the sheets actually meet.
+      check('and it reaches the piece it dies into, not the nearest station',
+        along(-20, top + 0.1, ridge - 0.05) > ridge - top - 0.25,
+        `${along(-20, top + 0.1, ridge - 0.05).toFixed(3)} ft drawn of `
+        + `${(ridge - top).toFixed(3)} ft between the piece at ${top.toFixed(3)} `
+        + `and the ridge at ${ridge.toFixed(3)}`);
       // AND THE PIECE'S OWN EDGE AGAINST THE HOUSE KEEPS ITS FULL LENGTH.
       // The probe that finds the seam lands on the neighbour's BOUNDARY at a
       // shared corner, where inside-or-out is a coin toss; read there it ate
@@ -1197,6 +1223,62 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
   // on these elevations.
   check('fixture: some wall line does follow a roof', sloped > 0,
     `${sloped} non-level, non-plumb segment(s)`);
+}
+
+// ── AND NO EDGE SHORTER THAN THE BOARD IT IS PART OF ─────────────────────
+//
+// Refining a run's ends to the real boundary gave a run that covers a single
+// station a real extent, where before it had none and was dropped for it.
+// Eleven appeared across proto/ at 0.05..0.08 ft -- an inch of ink at a
+// corner, saying nothing -- so the painter's minimum moved from "spans more
+// than one station" to a LENGTH.
+//
+// HALF A FASCIA, which is the drawing's own shortest edge and not a number
+// typed into either file. Counted here as well as there: the shortest roof
+// edge any fixture draws is the depth of the board itself, wherever an eave
+// is cut off square, and nothing real comes in under half of it.
+{
+  const CV = win.DraftCutView;
+  const fasciaFt = CV.STANDARDS.ROOF_FASCIA_IN / 12;
+  const ROOF_EDGE_W = 1.5;
+  let shortest = Infinity, counted = 0;
+  const bad = [];
+  fs.readdirSync(path.join(ROOT, 'proto')).filter(n => n.endsWith('.draft')).forEach(name => {
+    const dEnv = buildEnv(win, JSON.parse(
+      fs.readFileSync(path.join(ROOT, 'proto', name), 'utf8')));
+    standardElevationCuts(dEnv).forEach(cut => {
+      paintElevation(win, dEnv, cut, { pxPerFt: 400 }).strokes.forEach(st => {
+        // ONE SEGMENT, which is what a roof-edge run is: the pass strokes
+        // each visible stretch as a lone moveTo/lineTo. The same weight is
+        // used elsewhere for SAMPLED polylines -- eight thousand two-inch
+        // steps across proto/ -- and those are one line, not eight thousand.
+        if (Math.abs(st.w - ROOF_EDGE_W) > 1e-9 || st.pts.length !== 2) return;
+        for (let k = 1; k < st.pts.length; k += 1) {
+          const a = st.pts[k - 1], b = st.pts[k];
+          if (b.move || b.close) continue;
+          const len = Math.hypot(a.u - b.u, a.e - b.e);
+          counted += 1;
+          if (len < shortest) shortest = len;
+          if (len < fasciaFt / 2) {
+            bad.push(`${name} ${cut.id} (${a.u.toFixed(2)},${a.e.toFixed(3)})->`
+              + `(${b.u.toFixed(2)},${b.e.toFixed(3)}) -- ${(len * 12).toFixed(2)}"`);
+          }
+        }
+      });
+    });
+  });
+  check('no roof edge is drawn shorter than half a fascia',
+    bad.length === 0,
+    bad.length ? bad.slice(0, 4).join(', ') + (bad.length > 4 ? ` (+${bad.length - 4})` : '')
+      : `${counted} edge(s), shortest ${(shortest * 12).toFixed(2)}" against `
+        + `${(fasciaFt * 6).toFixed(2)}" allowed`);
+  // A PAINTER THAT DREW NO EDGES AT ALL would pass the bound above, and the
+  // shortest one is reported so the margin over the floor stays visible: it
+  // sat at 0.05..0.08 ft before the runs were refined and the floor raised.
+  check('fixture: there are roof edges to measure',
+    counted > 100,
+    `${counted} edge(s), shortest ${(shortest * 12).toFixed(2)}" against `
+      + `${(fasciaFt * 6).toFixed(2)}" allowed`);
 }
 
 // ── AND THE BOTTOM, WHERE ONE THING IS ALLOWED OUT ───────────────────────
