@@ -54,15 +54,26 @@ const MUTANTS = [
     with: '    return bodies[bodies.length - 1].outline;',
     test: 'the stair to the second floor lands in the house, not over the garage' },
   { file: 'MODEL.html',
+    // AIMED AT THE TWO-BODY FIXTURE, not at twoStorey-over. It survived
+    // against that one for a reason worth keeping: the house there is both
+    // the biggest body on the storey and the only one that is not over the
+    // garage, so dropping the filter changes nothing and the mutant moves no
+    // coordinate. The fixture this now names puts a 720 sq ft room over the
+    // garage against a 480 sq ft house, so the filter is the only thing
+    // keeping the stair out of it.
     name: 'a room entirely over the garage is still counted as the house',
     find: '    return inBody > 0 && over / inBody > OVER_GARAGE_BODY_SHARE;',
     with: '    return false;',
-    test: 'the stair to the second floor lands in the house, not over the garage' },
+    test: 'the stair takes the biggest house body, not the first one filed' },
   { file: 'MODEL.html',
+    // SAME REASON, OTHER COINCIDENCE. It was aimed at the built two-storey,
+    // where the house is the only body on the storey -- pool[0] and the
+    // largest are the same outline, so there was nothing to tell apart. The
+    // fixture files a 192 sq ft body BEFORE the 480 sq ft one it belongs in.
     name: 'the biggest body loses to the first one filed',
     find: '    return pool.reduce((best, body) =>\n      ownArea(body.outline) > ownArea(best.outline) ? body : best).outline;',
     with: '    return pool[0].outline;',
-    test: 'a built two-storey arrives with stacked flights and cut openings' },
+    test: 'the stair takes the biggest house body, not the first one filed' },
 
   { file: 'MODEL.html',
     name: 'the runs are placed and the floor is never opened',
