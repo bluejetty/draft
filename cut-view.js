@@ -2929,7 +2929,30 @@ if (!window.DraftCutView) {
       // under it and no concrete for a foot -- and it is the line a drafter
       // expects at a floor level. The two cases differ in what the face
       // stands on, which is exactly what `face.garage` records.
-      if (!face.garage) ctx.lineTo(xa, Y(floor));
+      //
+      // AND IT STARTS WHERE IT STARTS, rather than wherever the pen was left.
+      //
+      // Movie, 26 Sep: "here is a really weird one - look at the line near 2nd
+      // floor (elevation line it gets warped)". This line used to inherit the
+      // pen from the right-hand vertical, which ended at `(xb, floor)` and so
+      // handed it the right start for free. `roofClippedFoot` broke that: the
+      // vertical now ends at `footR` where a sheet covers the corner's foot,
+      // and on a fresh twoStorey-garage E1 the storey line came out as
+      //
+      //     (16.00, 10.577) -> (-16.00, 9.152)   w1.25, slope 1:22.5
+      //
+      // -- thirty-two feet of second-floor line leaning a foot and a half
+      // across the front of the house. The same inheritance fails the other
+      // way too: with the vertical skipped entirely the pen sits at the end of
+      // the top profile and the line falls out of the eaves.
+      //
+      // A SUB-PATH THAT NAMES BOTH ITS ENDS cannot be broken by what is drawn
+      // before it, which is the whole of the fix and the reason it is written
+      // as two calls rather than one.
+      if (!face.garage) {
+        ctx.moveTo(xb, Y(floor));
+        ctx.lineTo(xa, Y(floor));
+      }
       ctx.stroke();
       const wallLen = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
       if (wallLen < 1e-6) return;
