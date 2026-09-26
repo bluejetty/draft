@@ -53,7 +53,7 @@ test('a page load reports a hit and wears the public count', async ({ page, base
 // other pages -- serve the app under a stand-in domain and answer for the
 // counter host -- and the page the feature was actually for was the one page
 // not asked the question.
-test('MODEL.html wears the count on the instruments row, left of STATUS READOUT',
+test('MODEL.html wears the count on the bar\'s lowest row, beside the clock',
   async ({ page, baseURL }) => {
     await proxyApp(page, baseURL);
     const hits = [];
@@ -193,6 +193,61 @@ for (const page_ of ['PROJECT.html', 'SPECS.html', 'MODEL.html']) {
       .toBe(true);
   });
 }
+
+// CONSTRUCTION LAYOUT NAMES ITS OWN HOME, AND NOW IT HAS TWO TO CHOOSE FROM.
+//
+// Movie put the count on that page's own strip (23 Sep: "the viewcounter in
+// that location lower left bar 2nd row up(top row)"), so LAYOUT.html carries
+// a [data-visit-counter-home] in its markup at :581. The shared bar's foot
+// lane brought a second one in on 25 Sep, mounted by bottomBar() at :614.
+//
+// WHICH ONE WINS IS PARSE ORDER, and that is the module's designed rule --
+// traffic-counter.js takes the FIRST named home in the document, which is how
+// a page overrides the bar's default. LAYOUT's own markup is parsed before it
+// calls bottomBar(), so his placement stands.
+//
+// AND THAT IS EXACTLY WHY THIS IS HERE. A rule that holds by parse order
+// holds until somebody moves a script tag, and nothing in the suite said so:
+// the loop above asserts the count lands in #foot-lane, which is the wrong
+// answer for this page by design, so it does not cover LAYOUT and cannot.
+// This is the line that fails the day the two script tags trade places.
+test('Construction Layout keeps the count on its own strip, not in the bar',
+  async ({ page, baseURL }) => {
+    await proxyApp(page, baseURL);
+    await page.route(`${GC_HOST}/**`, route => {
+      const url = new URL(route.request().url());
+      if (url.pathname.endsWith('.json')) {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ count: '9' }) });
+      }
+      return route.fulfill({ status: 200, contentType: 'image/gif', body: Buffer.from('R0lGODlhAQABAAAAACw=', 'base64') });
+    });
+    await page.goto('https://draft.test/LAYOUT.html');
+    const counter = page.locator('[data-traffic-counter]');
+    await expect(counter).toHaveText('9 VISITS');
+
+    const where = await page.evaluate(() => {
+      const el = document.querySelector('[data-traffic-counter]');
+      const homes = [...document.querySelectorAll('[data-visit-counter-home]')];
+      return {
+        homes: homes.length,
+        // THE PAGE'S OWN, which is the one that is NOT the bar's.
+        landedInPageHome: !!el && !el.closest('#foot-lane')
+          && homes.some(h => h.contains(el)),
+        // AND IT IS THE FIRST OF THEM, said separately so a failure names the
+        // cause rather than the symptom.
+        landedInFirst: !!el && !!homes[0] && homes[0].contains(el),
+        inFootLane: !!el && !!el.closest('#foot-lane'),
+      };
+    });
+    expect(where.homes, 'this page declares its own home beside the bar\'s')
+      .toBe(2);
+    expect(where.landedInFirst, 'the count takes the FIRST home in the document')
+      .toBe(true);
+    expect(where.inFootLane, 'so it is not in the bar\'s lowest row here')
+      .toBe(false);
+    expect(where.landedInPageHome, 'it is on the strip Movie put it on')
+      .toBe(true);
+  });
 
 test('the count sits to the right of PROJECT where a strip has one', async ({ page, baseURL }) => {
   await proxyApp(page, baseURL);
