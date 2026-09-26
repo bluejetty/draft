@@ -426,7 +426,53 @@ if (!window.DraftCutView) {
     const lowest = stack[0];
     const foundationAssembly = env.levelAssembly(1);
     const wallTop = lowest.floorBottom;
-    const wallBottom = wallTop - env.levelWallTopFt(1, 'foundation');
+    // ── THE PLATE COMES OFF BEFORE THE POUR DOES ─────────────────────────
+    //
+    // Movie, 25 Sep, on E4 of a 1 STOREY + GARAGE: "the 'main floor' is still
+    // on top of the garage in the elevation" ... "to me it looks like the
+    // edge of the main floor line that is showing through".
+    //
+    // WHAT HE WAS LOOKING AT WAS THE GARAGE'S OWN TOP OF CONCRETE, standing
+    // exactly where the house's floor package ends -- both at -1.0521 on that
+    // build, equal to four decimals -- so the two surfaces met with no step
+    // and read as one main-floor band running the width of the sheet.
+    //
+    // `wallTop` IS THE BEARING LINE: it is the lowest floor's underside, which
+    // is the top of the sill plate, and gradeFromBearing below is named for
+    // taking it. `levelWallTopFt` is NOT the same kind of number -- it reads
+    // the foundation WALLS, and the builder writes those at the POUR, 8'-0".
+    // level-assembly.js says the difference in capitals: FOUNDATION_WALL_TOP_FT
+    // "IS THE BEARING LINE, WHICH IS NOT THE CONCRETE'S OWN HEIGHT ... pour +
+    // plate", 8'-1 1/2" against 8'-0" (Movie, 7 Sep: "default is 8\" conc wall
+    // with 1.5\"").
+    //
+    // SUBTRACTING THE POUR FROM THE BEARING LINE LEFT THE BASE ONE PLATE
+    // HIGH, and every face measured from it drew a plate too tall -- topping
+    // out at the bearing line instead of at the concrete. On the house that
+    // is invisible: the rim band sits directly on it. On the garage there is
+    // nothing above it, so the line shows.
+    //
+    // THE CHAIN CLOSES ONCE THE PLATE COMES OFF FIRST. Measured on his build,
+    // before and after:
+    //
+    //     wallTop (bearing)        -1.0521
+    //       less plate  1 1/2"     -1.1771   top of concrete
+    //       less pour   8'-0"      -9.1771   bottom of concrete  (was -9.0521)
+    //
+    //     every foundation face's top   -1.0521  ->  -1.1771
+    //     grade + GARAGE_BEAM_ABOVE_GRADE_FT    =   -1.1771
+    //     the house out of the ground   15 1/2"  ->  14"
+    //
+    // -- which is the rule the builder already follows and the painter was
+    // drawing 1 1/2" away from. The garage's concrete now tops out a plate
+    // BELOW the house's floor bottom, so the junction carries a step instead
+    // of a line that reads as the main floor carrying over the garage.
+    //
+    // THE FOOTINGS MOVE WITH IT, because footingBottom is measured from this
+    // base. That is the correction, not a side effect: the wall is a plate
+    // taller than the painter had it, so its underside is a plate deeper.
+    const wallBottom = wallTop - houseSillPlateFt()
+      - env.levelWallTopFt(1, 'foundation');
     // ── A ROOF BEARS ON THE WALLS THAT HOLD IT UP ────────────────────────
     //
     // `bearing` was the top of the TOPMOST FLOOR LEVEL IN THE STACK, and the
