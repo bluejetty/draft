@@ -85,10 +85,38 @@ const drawings = files.length ? files : [
   'repro-bungalow-garage-roofs.draft',
   'repro-garage-house.draft',
   'repro-L-house.draft',
+  // THE ONE WITH A SHEET CARRIED ON BY A SECOND POLYGON: the tie's gable
+  // stub laps the house past the garage roof's own corner, so one straight
+  // eave is banded in two pieces. The seam check below is about that, and
+  // no other fixture here has it.
+  'repro-tie-gable.draft',
+  // ── AND THE ONE THE PAGE BUILT ITSELF ─────────────────────────────────
+  //
+  // Every other .draft here was saved before the attached garage's default
+  // moved to a GRADE BEAM ON PILES (Movie, 24 Sep: "please make the DEFAULT
+  // attached garages GRADE BEAM and PILES (not frost wall)"), so all of them
+  // carry frost walls -- `base 0`, a strip footing, a profile the office no
+  // longer builds. Three defects reported on 25-26 Sep lived in exactly the
+  // arrangement none of them had.
+  //
+  // SO THIS ONE WAS NOT WRITTEN, IT WAS CAPTURED. Drive-thru, bungalow
+  // family, `twoStorey-garage`, press the bone, SAVE, and read the store
+  // back -- so every number in it is MODEL.html's own. It came out at
+  // `garage base 5.3333 top 8`, which is raiseGarageConcrete's arithmetic to
+  // the digit (8.125 bearing, less the 1 1/2" plate, less 32" of pour), and
+  // that agreement is worth more than the file: it says the builder and this
+  // harness are reading the same design.
+  //
+  // (To remake it: seed the store with an empty drawing FIRST. openModel
+  // clears the store once per session, and a build with nothing to save into
+  // leaves #save disabled reading UNSAVED -- which looks exactly like a
+  // build that did not happen.)
+  'repro-2storey-garage-beam.draft',
 ].map(name => path.join(ROOT, 'proto', name));
 
 const win = H.loadDraftModules();
 let bandsSeen = 0;
+let seamsSeen = 0;
 
 drawings.forEach(file => {
   const label = path.basename(file);
@@ -115,6 +143,71 @@ drawings.forEach(file => {
     });
     check(`${label} ${cut.id}: no outline riser stranded inside a fascia band`,
       strays.length === 0, strays.join('\n      '));
+
+    // ── AND NOTHING CROSSES THE BAND WHERE THE EAVE CARRIES ON ──────────
+    //
+    // Movie, 25 Sep, on E4 of a 2 STOREY + GARAGE, twice: "the exterior
+    // front house line is showing through in the roof and at main floor
+    // level", then "the line still visible through the roof on the 2 storey
+    // with garage".
+    //
+    // IT IS NOT A WALL LINE, which is why it took two reports to place. Read
+    // off the tape at the house's front wall line, u -20 on repro-tie-gable
+    // E4, before the fix:
+    //
+    //     the garage band   u -48.00..-20.00   e 8.10..8.55
+    //     the stub's band   u -20.00..-17.00   e 8.10..8.55
+    //     a riser           u -20.00           e 8.10..8.55
+    //     the same riser again
+    //
+    // One straight eave, banded in two pieces because two roof POLYGONS
+    // carry it, and each polygon creased its own end. Drawn twice, at 1.25
+    // against the band's own 1, so it reads heavier than the board it
+    // crosses -- and it lands exactly on the house's front wall line, which
+    // is what made it look like the wall showing through.
+    //
+    // AND "TWO BANDS AT ONE HEIGHT THAT TOUCH" IS NOT THE RULE. That was the
+    // first draft and two fixtures refused it, correctly:
+    //
+    //   bungalow-garage-roofs E3   u -18.00   house eave at depth 22 ending
+    //                                         where the garage's begins at
+    //                                         depth -17 -- two boards, a real
+    //                                         corner between them
+    //   L-house E1                 u -22.18   ONE roof's own eave turning the
+    //                                         L, twice (both wings' bands)
+    //
+    // In elevation a turned eave and a carried-on one land on the same u at
+    // the same height, and what separates them -- whether the two boards are
+    // COLLINEAR IN PLAN -- is not in the ink. A harness that re-derived it
+    // would be a mirror of the fix rather than a check on it.
+    //
+    // SO THIS IS A MEASUREMENT OF THE DEFECT MOVIE REPORTED, on the drawing
+    // that has it, which is the shape foundation-face-harness settled on for
+    // the same reason. The fixture's low eave is ONE board carried by two
+    // polygons; the claim is that it wears no crease between its ends, and
+    // the half below -- its own two ends still creasing -- is what stops
+    // "draw no creases" from passing.
+    if (label === 'repro-tie-gable.draft') {
+      const low = bands.filter(b => Math.abs(b.base - bands
+        .reduce((m, x) => Math.min(m, x.base), Infinity)) < 0.02);
+      if (low.length > 1) {
+        const u0 = Math.min(...low.map(b => b.u0));
+        const u1 = Math.max(...low.map(b => b.u1));
+        const onBand = v => Math.abs(v.eLo - low[0].base) < 0.05
+          && Math.abs(v.eHi - (low[0].base + FASCIA_FT)) < 0.05;
+        const inner = verticals.filter(v => onBand(v)
+          && v.u > u0 + 0.05 && v.u < u1 - 0.05);
+        const ends = verticals.filter(v => onBand(v)
+          && (Math.abs(v.u - u0) < 0.05 || Math.abs(v.u - u1) < 0.05));
+        seamsSeen += 1;
+        check(`${label} ${cut.id}: the eave banded in two pieces wears no crease between its ends`,
+          inner.length === 0,
+          `band ${u0.toFixed(2)}..${u1.toFixed(2)} at ${low[0].base.toFixed(3)}: `
+          + inner.map(v => `u ${v.u.toFixed(2)}`).join(', '));
+        check(`${label} ${cut.id}: and that band's own two ends still crease`,
+          ends.length > 0, `${ends.length} crease(s) at ${u0.toFixed(2)} / ${u1.toFixed(2)}`);
+      }
+    }
   });
 });
 
@@ -123,6 +216,10 @@ drawings.forEach(file => {
 // vacuously true and the harness is green having looked at nothing.
 check('the drawings actually painted fascia bands to check',
   bandsSeen > 0, `${bandsSeen} bands found at lineWidth ${BAND_W}`);
+// AND THE SEAM CHECK IS A FILTER OVER A LIST TOO. With no drawing whose eave
+// is banded in two pieces, every one of those assertions is vacuous.
+check('and the two-piece eave was actually reached',
+  seamsSeen > 0, `${seamsSeen} elevation(s) with the low eave banded in two`);
 
 // ── TWO MORE OF MOVIE'S 21 SEP REPORTS, on his own drawing ────────────────
 //

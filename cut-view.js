@@ -1674,6 +1674,11 @@ if (!window.DraftCutView) {
           top: wall.topHeight, base: wall.baseHeight,
           wallIn: type ? type.totalIn : 8,
           bearing: wall.baseHeight <= 0.01,   // on a strip footing, not hung
+          // WHOSE CONCRETE IT IS, for the sill plate on top of it: the house
+          // bears on SILL_PLATE_IN, a garage on GARAGE_BEAM_PLATE_IN, and
+          // the note at houseSillPlateFt is emphatic that those are the same
+          // number for different reasons and must not be swapped.
+          garage: garageFor(wall),
         });
         return;
       }
@@ -1890,11 +1895,66 @@ if (!window.DraftCutView) {
     const shownFdn = exposed
       .map(g => ({ g, runs: visibleRuns(g) }))
       .filter(entry => entry.runs.length);
+    // ── AND THE SILL PLATE ON TOP OF IT IS WALL, NOT CONCRETE ───────────
+    //
+    // Movie, 25 Sep, on E4 of a 2 STOREY + GARAGE + ROOM OVER: "looks like
+    // the side connection is fixed but there is a new gap looks like at sill
+    // location" ... "sill attachment 1.5"".
+    //
+    // THE SIDE CONNECTION IS THE FIX THAT OPENED THIS. 97a82c9 took the plate
+    // off the foundation base so the concrete tops out where the concrete
+    // really tops out -- one plate BELOW the bearing line -- and that is what
+    // stepped the garage's top of concrete clear of the house's floor
+    // package. But nothing in this painter draws the plate, and the wall
+    // above it starts at the bearing:
+    //
+    //     the rim band's bottom        fdn.wallTop          -1.0521
+    //     a garage wall face's floor   garageBearing(...)   -1.0521
+    //     every exposed concrete top   ...less one plate    -1.1771
+    //
+    // -- so the 1 1/2" between them was paper. On the NIGHT skin it reads as
+    // ground and nobody saw it; on DAY it is a white slot with the building's
+    // own corner lines broken across it.
+    //
+    // IT BELONGS TO THE WALL. The plate is wood, the siding runs down over it
+    // to the top of concrete, and `garageConcreteTop`'s own comment already
+    // states the relation from the other end: "one sill plate below where its
+    // walls bear". So this fills the strip in the WALL's ink, and the grey
+    // stops where the concrete stops.
+    //
+    // FILLED HERE RATHER THAN AT THE BAND because this pass is the one that
+    // knows what is VISIBLE: `visibleRuns` has already cut each face against
+    // whatever stands nearer, and the plate is exactly as wide as the
+    // concrete under it. Doing it at the rim band instead would have needed
+    // that clip written a second time -- and would still have left the garage
+    // faces, which carry no band at all, wearing the gap.
+    //
+    // WHAT BEARS ON THIS PIECE, not a plate thickness quoted here: a stepped
+    // foundation, a walkout, a garage dropped for a bilevel all move the two
+    // ends independently, and the strip is the distance between them. The cap
+    // is what keeps a genuine STEP from being painted as a plate -- a step is
+    // feet, a plate is inches -- and it also closes the wider slot an older
+    // drawing shows, where the house's foundation walls were stored at the
+    // generic 8'-0" wall default while the garage's took the foundation
+    // assembly's 8'-1 1/2" (the note at the corner pass below has the rest of
+    // that: "reconciling those is a question about the junction").
+    const PLATE_CAP_FT = 0.5;
+    const plateTopOf = g => (g.garage
+      ? garageBearing(env, fdn, g.garage) : fdn.wallTop);
+    const plateOf = g => {
+      const rise = plateTopOf(g) - g.topE;
+      return rise > 0.01 && rise < PLATE_CAP_FT ? rise : 0;
+    };
     shownFdn.forEach(({ g, runs }) => {
       const shownBase = Math.max(g.baseE, fdn.grade);
       ctx.fillStyle = C.faceShade;
       runs.forEach(r => ctx.fillRect(X(r.lo), Y(g.topE),
         (r.hi - r.lo) * pxPerFt, (g.topE - shownBase) * pxPerFt));
+      const plate = plateOf(g);
+      if (!plate) return;
+      ctx.fillStyle = C.face;
+      runs.forEach(r => ctx.fillRect(X(r.lo), Y(g.topE + plate),
+        (r.hi - r.lo) * pxPerFt, plate * pxPerFt));
     });
     // Strokes after every fill, so a near face can't erase a far corner.
     ctx.lineWidth = 1;
@@ -1960,7 +2020,21 @@ if (!window.DraftCutView) {
         strokedV.add(key);
         ctx.strokeStyle = interior ? CREASE : INK;
         ctx.beginPath();
-        ctx.moveTo(X(u), Y(g.topE)); ctx.lineTo(X(u), Y(foot));
+        // UP THROUGH THE PLATE AT AN OUTLINE CORNER, so the building's edge is
+        // one line from the wall above to the footing below. The plate filled
+        // a few lines up is part of THIS face -- same width, same two ends --
+        // and a corner that stopped at the concrete left the outline broken
+        // by exactly the 1 1/2" Movie could see.
+        //
+        // NOT AT A BURIED ONE. A crease is concrete seen against concrete and
+        // its length is decided by what covers it, which `foot` above is the
+        // whole argument about; carrying it up into the plate would state a
+        // step in the plates that the plates do not have -- both stacks bear
+        // the house's floor, so their TOPS meet even where their concrete
+        // steps. The wall and the rim band draw their own corner above the
+        // bearing line, and this is where the two meet.
+        ctx.moveTo(X(u), Y(g.topE + (interior ? 0 : plateOf(g))));
+        ctx.lineTo(X(u), Y(foot));
         ctx.stroke();
       }));
     });
@@ -2046,6 +2120,127 @@ if (!window.DraftCutView) {
       }
       ctx.lineTo(X(run.hi), Y(Math.min(rightF.topE, fdn.grade)));
       ctx.stroke();
+      // ── A PIECE THE SILHOUETTE SWALLOWS STILL HAS A BOTTOM ────────────
+      //
+      // Movie, 25 Sep, marking it in green on E1 of a 2 STOREY + GARAGE: "i
+      // noticed the bottom of the dashed line for the grade beam is missing
+      // where it crosses the house".
+      //
+      // `bottomAt` IS A SILHOUETTE: the DEEPEST concrete under each stretch,
+      // which is the right answer for the loop above -- that outline is the
+      // edge of the excavation and nothing shows below it. It is the wrong
+      // answer for the beam. Measured on repro-tie-gable, E1:
+      //
+      //     the garage's grade beam   u  -4.00..20.00   base -3.8438
+      //     the house's footing       u -16.50..16.50   base -9.9479
+      //
+      //     drawn:  -9.9479 from -16.50 to 16.50, then -3.8229 to 20.00
+      //
+      // -- so the beam's underside appears for the 3 1/2 ft it hangs clear of
+      // the house and vanishes for the twenty it hangs over. A hung beam
+      // OVERLAPS the house by GARAGE_TIE_FT by construction, so this is every
+      // attached grade beam on the office default, on every elevation that
+      // sees it. E2 loses 1 1/2 ft of it, E4 the same, E1 twenty.
+      //
+      // UNDERGROUND THERE IS NO OCCLUSION. Everything below grade is dashed
+      // outline because the drawing is showing an arrangement, not a view --
+      // the house's footing does not hide the beam over it any more than the
+      // beam hides the footing. So where the silhouette is deeper than a
+      // face's own base, that face's base is still an edge of concrete and
+      // still belongs on the sheet.
+      //
+      // ONLY WHERE THE SILHOUETTE IS NOT ALREADY IT. `bottomAt` is a minimum
+      // over the faces covering u and g is one of them, so it is either g's
+      // own bottom -- already drawn, skip -- or deeper, which is the stretch
+      // this pass is for. Over the same `stops`, so a step lands on the same
+      // u the outline steps at and the two cannot disagree.
+      // AND MERGED BY ELEVATION BEFORE ANYTHING IS STROKED. Two faces of one
+      // mass project to the same run at the same depth of concrete -- a
+      // garage's front beam and its back beam both land here -- and they
+      // rarely span the SAME stretch, so an exact-match dedupe let the
+      // overlap through twice. Measured: E1 drew u -4.00..16.50 and then
+      // u 16.00..16.50 again, half a foot of dashes at double weight.
+      const byElev = new Map();
+      run.faces.forEach(g => {
+        const mine = bottomOf(g);
+        const lo = footLo(g), hi = footHi(g);
+        const key = mine.toFixed(4);
+        const into = byElev.get(key) || byElev.set(key, { e: mine, segs: [] }).get(key);
+        for (let s = 0; s < stops.length - 1; s++) {
+          const a = Math.max(stops[s], lo), b = Math.min(stops[s + 1], hi);
+          if (b - a < 0.05) continue;
+          if (bottomAt((a + b) / 2) > mine - 1e-6) continue;
+          into.segs.push({ lo: a, hi: b });
+        }
+      });
+      byElev.forEach(({ e, segs }) => {
+        const merged = [];
+        segs.sort((a, b) => a.lo - b.lo).forEach(seg => {
+          const last = merged[merged.length - 1];
+          if (last && seg.lo <= last.hi + 1e-6) last.hi = Math.max(last.hi, seg.hi);
+          else merged.push({ lo: seg.lo, hi: seg.hi });
+        });
+        if (!merged.length) return;
+        ctx.beginPath();
+        merged.forEach(seg => {
+          ctx.moveTo(X(seg.lo), Y(e));
+          ctx.lineTo(X(seg.hi), Y(e));
+        });
+        ctx.stroke();
+      });
+      // ── AND A FOOTING ENDS WITH A SHOULDER WHEREVER IT ENDS ───────────
+      //
+      // Movie, 25 Sep: "the left footing doesn't stick out 6" x 8" deep", and
+      // again on 26 Sep, on a later build: "the dashed footings were
+      // sometimes flat on one side".
+      //
+      // "SOMETIMES" AND "ONE SIDE" ARE THE WHOLE DIAGNOSIS. The shoulder is
+      // drawn by the loop above, and only ever at the run's two OUTER ends --
+      // `leftF.projFt > 0` on the way in, `rightF.projFt > 0` on the way out.
+      // An attached grade beam HANGS (projFt 0, correctly: there is no
+      // footing under it) and it OVERLAPS the house by GARAGE_TIE_FT, so the
+      // two merge into one run whose outer end on that side is the BEAM's.
+      // The house's own footing end is then interior to the run and nothing
+      // spends its 6". Measured on repro-2storey-garage-beam, which the page
+      // built from the drive-thru rather than being written by hand:
+      //
+      //     E1   e -9.1729  u -16.50..-16.00     drawn, the run's left end
+      //          u 16.00..16.50                  NOTHING -- the beam's end
+      //     E4   e -9.1729  u  20.00.. 20.50     drawn, the run's right end
+      //          u -20.50..-20.00                NOTHING
+      //
+      // -- which is "one side", and it is whichever side the garage is on.
+      //
+      // THE HORIZONTAL IS ALL THAT IS MISSING. The vertical at the footing's
+      // outer edge is already there: the silhouette steps up at that u from
+      // the footing's bottom to whatever is shallower next door, and that
+      // riser passes straight through the 8". What it does not do is turn the
+      // 6" at the top, so the footing reads as running on under the beam
+      // instead of stopping and stepping in.
+      //
+      // NOT WHERE CONCRETE CARRIES THROUGH. Another face whose own base
+      // reaches at least this deep across the same stretch means the footing
+      // does not end here at all -- an L-shaped house, a wall meeting a wall
+      // -- and there is no shoulder to draw. The two coincident faces of one
+      // wall line (a front and a back at the same u) do NOT trip it: their
+      // walls stop at the same u, so neither spans the other's 6".
+      const shoulders = new Set();
+      run.faces.forEach(g => {
+        if (g.projFt <= 0) return;
+        [[g.lo, footLo(g)], [g.hi, footHi(g)]].forEach(([at, out]) => {
+          const lo = Math.min(at, out), hi = Math.max(at, out);
+          if (lo <= startU + 1e-6 || hi >= endU - 1e-6) return;
+          if (run.faces.some(o => o !== g && o.baseE <= g.baseE + 1e-6
+            && o.lo <= lo + 1e-6 && o.hi >= hi - 1e-6)) return;
+          const key = `${g.baseE.toFixed(4)}|${lo.toFixed(4)}|${hi.toFixed(4)}`;
+          if (shoulders.has(key)) return;
+          shoulders.add(key);
+          ctx.beginPath();
+          ctx.moveTo(X(lo), Y(g.baseE));
+          ctx.lineTo(X(hi), Y(g.baseE));
+          ctx.stroke();
+        });
+      });
       // Viewer-facing corner creases: where a nearer buried face ends inside
       // a farther one, the corner runs down the wall — and its footing turns
       // a little further over with its own short crease.
@@ -3329,6 +3524,72 @@ if (!window.DraftCutView) {
           if (l1 < 0.05 || l2 < 0.05 || Math.abs(cross) < 0.02 * l1 * l2) return;
           const u = pt.x * axis.x + pt.z * axis.z;
           if (u < uMin - 0.01 || u > uMax + 0.01 || hidden(pt, eaveTop, u)) return;
+          // ── AND NOT WHERE THE EAVE SIMPLY CARRIES ON ────────────────
+          //
+          // Movie, 25 Sep, on E4 of a 2 STOREY + GARAGE, twice: "the
+          // exterior front house line is showing through in the roof and at
+          // main floor level", then "the line still visible through the roof
+          // on the 2 storey with garage".
+          //
+          // IT IS NOT A WALL LINE. Read off the tape at the house's front
+          // wall line, u -20 on repro-tie-gable E4:
+          //
+          //     seq 57/58   the garage band   u -48.00..-20.00   e 8.10..8.55
+          //     seq 64/65   the stub's band   u -20.00..-17.00   e 8.10..8.55
+          //     seq 60      a riser           u -20.00           e 8.10..8.55
+          //     seq 68      the same riser again
+          //
+          // -- one straight eave, banded in two pieces because it is carried
+          // by two roof POLYGONS, and each polygon creased its own end. Drawn
+          // twice, at 1.25 against the band's own 1, so it reads heavier than
+          // the band it crosses and lands exactly on the house's front wall
+          // line, which is what made it look like the wall showing through.
+          //
+          // THE FILE ALREADY KNOWS THIS SENTENCE. `carriedOn` was written for
+          // the roof EDGE pass, for the same defect one component over --
+          // Movie, on the short gable over the garage tie: "your updated roof
+          // has an extra line in it, that should be all one connected roof".
+          // A corner is a corner of the POLYGON; whether it is a corner of
+          // the BUILDING is a question about the sheet next door, and this
+          // asks the same helper rather than growing a second answer.
+          //
+          // PROBED ALONG THE BOARD, PAST THE CORNER -- not across it, and not
+          // at the corner itself. `carriedOn(roof, pt, ...)` answers no here:
+          // pt is on the neighbour's own boundary, where inside-or-out is a
+          // coin toss, and the edge pass's note says exactly that ("Touching
+          // at a corner is not being continued") and clamps its stations away
+          // from the ends for it. The question a CREASE asks has a direction
+          // the edge pass's has not: does a sheet next door carry this same
+          // board straight on through? So each of the two edges is followed
+          // PAST pt -- outside this polygon by construction, since the
+          // polygon turns there -- and the neighbour is asked at that point.
+          //
+          // AND A HAIR INWARD WITH IT, which the measurement forced. The two
+          // sheets share the eave LINE, so a probe that only steps along it
+          // lands on the neighbour's boundary too and answers the same coin
+          // toss. Measured on repro-tie-gable E4: the shared corner is
+          // (22.00, 20.00), the garage roof runs z 20..48 and the stub
+          // z 17..20, both out to x 22 -- and the along-only probe
+          // (22.00, 19.90) sits exactly on the stub's own edge.
+          //
+          // The nudge is 1/4", against 1 3/4" along, because it climbs the
+          // slope: `carriedOn` matches surfaces to 0.02 ft, and at the
+          // format's steepest pitch 1/4" inward gains well under that while
+          // a whole inch would not.
+          const inwardOf = (a, b) => {
+            const n = outwardOf(a, b, rpts);
+            return n ? { x: -n.x * 0.02, z: -n.z * 0.02 } : { x: 0, z: 0 };
+          };
+          const stepPast = (dir, len, a, b) => {
+            const inw = inwardOf(a, b);
+            return { x: pt.x + dir.x / len * 0.15 + inw.x,
+              z: pt.z + dir.z / len * 0.15 + inw.z };
+          };
+          const past = [
+            stepPast(d1, l1, prev, pt),
+            stepPast({ x: -d2.x, z: -d2.z }, l2, pt, next),
+          ];
+          if (past.some(p => carriedOn(roof, p, eaveTop))) return;
           ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
           ctx.beginPath();
           ctx.moveTo(X(u), Y(eaveTop));
