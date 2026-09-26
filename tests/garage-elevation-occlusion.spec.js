@@ -105,6 +105,101 @@ test.describe('An attached garage hides behind the house it is attached to', () 
     expect(scan.right).toBe(0);
   });
 
+  // ── A VERTICAL THAT IS MOSTLY THERE HAS TO BE ALL THERE ──────────────
+  //
+  // Movie, 25 Sep, on E1 of a 1 STOREY + GARAGE: "the missing line near
+  // middle" ... "garage wall left side bottom".
+  //
+  // WHAT WAS MISSING WAS HALF OF A CLIP. The house's rim band is the floor
+  // package seen flat, and it learned to stop where a garage stands in front
+  // of it -- the fill did. The vertical EDGES that close the band did not:
+  // they went on being drawn at the run's own ends, which by then were behind
+  // the garage. Measured on that build, the house's faces run u -20..20 and
+  // the garage's -46..-19, so the band was painted from -19 and its closing
+  // edge drawn at -20, a foot inside the garage wall and invisible there.
+  //
+  // SO THE GARAGE'S LEFT EDGE CAME DOWN FROM THE ROOF, STOPPED AT THE BAND,
+  // AND PICKED UP AGAIN BELOW IT -- a gap exactly the floor package deep, in
+  // a line that is continuous everywhere else on the sheet.
+  //
+  // THAT SHAPE IS WHAT THIS MEASURES, rather than the band's coordinates. A
+  // column carrying ink over most of the drop from eave to grade is a line
+  // the drawing means to be there; a line the drawing means to be there must
+  // not have a hole in it. Stated that way the check needs no model-to-pixel
+  // transform and no knowledge of where the band sits -- and it fails on the
+  // defect for the same reason a drafter's eye does.
+  test('no wall line stops at the floor band and starts again below it',
+    async ({ page }) => {
+      // THE PREMADE, NOT THE HAND-DRAWN SHAPE ABOVE. buildHouseWithGarage
+      // hangs the garage off the house's east wall so the two ABUT at u=8;
+      // the band's run therefore ends exactly where the garage begins and
+      // nothing clips it, which is the one arrangement this defect cannot
+      // occur in. 1 STOREY + GARAGE is the build Movie was looking at, and
+      // its garage LAPS the house -- u -46..-19 against -20..20 -- which is
+      // what makes the band's painted end differ from its run's end.
+      await h.openModel(page, { webgl: false });
+      await h.openDriveThru(page);
+      await page.locator('[data-build-family="bungalow"]').click();
+      await page.locator('[data-build-entry="bungalow-garage"]').click();
+      await page.locator('#dt-bone').click();
+      await page.waitForTimeout(600);
+      await h.waitForSaved(page);
+      await showElevation(page, 'E1');
+
+      const worst = await page.evaluate(() => {
+        const canvas = document.querySelector('[data-model-overlay]');
+        const W = canvas.width, H = canvas.height;
+        const { data } = canvas.getContext('2d').getImageData(0, 0, W, H);
+        const dark = (x, y) => {
+          const i = (y * W + x) * 4;
+          return data[i + 3] > 150 && data[i] < 120 && data[i + 1] < 120 && data[i + 2] < 120;
+        };
+        // Grade is the longest dark run on the sheet; the eave is the top of
+        // the tallest column. Both found on the paper, as bodyScan does.
+        let gradeY = 0, gradeLen = 0;
+        for (let y = 18; y < H; y++) {
+          let run = 0, best = 0;
+          for (let x = 0; x < W; x++) { if (dark(x, y)) { run += 1; if (run > best) best = run; } else run = 0; }
+          if (best > gradeLen) { gradeLen = best; gradeY = y; }
+        }
+        let eaveY = gradeY;
+        for (let x = 0; x < W; x++) {
+          for (let y = 18; y < gradeY; y++) {
+            if (dark(x, y)) { if (y < eaveY) eaveY = y; break; }
+          }
+        }
+        const drop = gradeY - eaveY;
+        let worstGap = 0, worstX = -1, worstAt = -1;
+        for (let x = 0; x < W; x++) {
+          let ink = 0, gap = 0, biggest = 0, biggestAt = -1, seen = false;
+          for (let y = eaveY; y <= gradeY; y++) {
+            if (dark(x, y)) {
+              ink += 1;
+              if (seen && gap > biggest) { biggest = gap; biggestAt = y - gap; }
+              gap = 0; seen = true;
+            } else if (seen) gap += 1;
+          }
+          // A LINE THE DRAWING MEANS TO BE THERE: two thirds of the drop.
+          // Below that it is a door jamb, a window edge or a band's own end,
+          // none of which claims to reach grade.
+          if (ink < drop * 0.66) continue;
+          if (biggest > worstGap) { worstGap = biggest; worstX = x; worstAt = biggestAt; }
+        }
+        return { worstGap, worstX, worstAt, drop, gradeY, eaveY };
+      });
+
+      // FOUR PIXELS OF SLACK, for the antialiasing where a 1.25px stroke
+      // crosses a fill edge -- not for a missing segment. The gap this was
+      // written for is the floor package, which on this sheet is an order of
+      // magnitude more than that.
+      expect(worst.drop, 'the scan found no house to measure').toBeGreaterThan(40);
+      expect(worst.worstGap,
+        `a wall line at x=${worst.worstX} runs from the eave to grade but breaks `
+        + `for ${worst.worstGap}px at y=${worst.worstAt} -- the floor band's own `
+        + 'edge, drawn behind the garage instead of where the band stops')
+        .toBeLessThan(4);
+    });
+
   test('E1 still draws the garage where it projects past the house', async ({ page }) => {
     await buildHouseWithGarage(page);
     await showElevation(page, 'E1');
