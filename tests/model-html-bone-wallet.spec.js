@@ -165,6 +165,11 @@ test.describe('MODEL.html bone wallet', () => {
 
   // THE VISIT COUNTER'S SLOT. Movie, 19 Sep: "i need the viewcounter lets put
   // it on lower left (2nd row from bottom to the left of 'STATUS READOUT'".
+  // Movie, 25 Sep, moving it one row further down: "move the '# VISITS' and
+  // the DATE/TIME down below PROJECT / MODEL / REAL ESTATE / BONE /
+  // CONSTRUCTION / SPECTS / etc. on the lowest row (where it will be covered
+  // with http:/addressess (won't matter if these 2 items are covered from
+  // time to time".
   //
   // THE COUNT ITSELF NEVER MOUNTS HERE and cannot be made to: traffic-counter
   // .js returns before doing anything on localhost, 127.0.0.1 and file:, so
@@ -172,10 +177,21 @@ test.describe('MODEL.html bone wallet', () => {
   // the slot is what is tested, with a probe standing in for the count — and
   // that is also why the slot is a named element rather than a gap measured
   // in pixels.
-  test('the visit counter stands to the left of STATUS READOUT, on its row',
+  //
+  // ONE ASSERTION TURNED OVER WITH THE MOVE, and it is worth naming rather
+  // than quietly swapping. This used to require STATUS READOUT to shift RIGHT
+  // when the count arrived, because the two shared a row and the row was a
+  // flex line. They no longer share anything: the count is a row below, in the
+  // bar's own hem. So the claim is the opposite one — the tab must NOT move —
+  // and it is the better of the two, because a count that shoves a control
+  // sideways on arrival is the defect either arrangement can have.
+  test('the visit counter stands below STATUS READOUT, in the bar\'s lowest row',
     async ({ page }) => {
       await open(page, 5);
       const slot = page.locator('[data-visit-counter-home]');
+      // EXACTLY ONE. traffic-counter.js takes the FIRST named home in the
+      // document, so a page carrying two has a placement decided by parse
+      // order rather than by anything anybody wrote down.
       await expect(slot).toHaveCount(1);
 
       const bare = await page.locator('#readout-tab').boundingBox();
@@ -188,14 +204,17 @@ test.describe('MODEL.html bone wallet', () => {
       });
       const probe = await page.locator('#zz-count-probe').boundingBox();
       const tab = await page.locator('#readout-tab').boundingBox();
+      const bar = await page.locator('#house-strip').boundingBox();
 
-      expect(probe.x + probe.width,
-        'the count must end before STATUS READOUT begins')
-        .toBeLessThanOrEqual(tab.x + 1);
-      expect(Math.abs((probe.y + probe.height / 2) - (tab.y + tab.height / 2)),
-        'and it must be ON that row, not above or below it')
-        .toBeLessThan(10);
-      expect(tab.x, 'the tab moves right to make room, and only then')
-        .toBeGreaterThan(bare.x);
+      expect(probe.y, 'the count sits BELOW STATUS READOUT, not beside it')
+        .toBeGreaterThanOrEqual(tab.y + tab.height);
+      expect(probe.y, 'and inside the bar, which is what the hem is for')
+        .toBeGreaterThanOrEqual(bar.y);
+      expect(probe.y + probe.height,
+        'and does not hang out under the bar').toBeLessThanOrEqual(bar.y + bar.height + 1);
+      expect(probe.x, 'at the left end of that row, the same inset the bar keeps')
+        .toBeLessThanOrEqual(bar.x + 13);
+      expect(tab.x, 'and STATUS READOUT does not move to make room for it')
+        .toBe(bare.x);
     });
 });
