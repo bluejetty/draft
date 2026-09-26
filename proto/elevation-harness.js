@@ -1133,6 +1133,108 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
   // exact reading above pins, and it is the same arithmetic that does both.)
 }
 
+// ── AND THE BOTTOM, WHERE ONE THING IS ALLOWED OUT ───────────────────────
+//
+// Movie, 26 Sep, on a two-storey with a garage: "see how the footing bottom
+// line is just under the dashboard line where the tint starts - could we make
+// the house just a little smaller so that the bottom of the footing doesnt
+// cross over the 'tint' line of the lower bar ... keep them about 3-5 pixels
+// above that line so there is a little space, BUT ALLOW THE PILES TO EXTEND
+// PAST THAT TINT LINE." Then, correcting the first attempt he imagined:
+// "rather than moving the house up, make it smaller scale slightly so it fits
+// and gets smaller too" ... "the position is nice centered basically how it is
+// just need it smaller".
+//
+// SO THE BOTTOM MARGIN IS NOT THE OTHER TWO WITH THE AXIS TURNED. A left ask
+// must hold EVERYTHING off that strip of canvas -- that is what the gutter
+// reading above pins. A bottom ask must hold the FOOTING off it and let the
+// pile shafts through, because a pile has no bottom of its own on an
+// elevation: it is drawn from the underside of what it carries down to
+// `yBottom` and stops there, saying nothing about how deep it goes. The two
+// feet below the footing in the extent are that run-off, not air.
+//
+// A FIXTURE WITH PILES, which the L-house above has not got: an attached
+// garage on a grade beam is the whole of what puts a shaft on an elevation.
+{
+  const CV = win.DraftCutView;
+  const pFile = path.join(ROOT, 'proto', 'repro-2storey-garage-beam.draft');
+  const pEnv = buildEnv(win, JSON.parse(fs.readFileSync(pFile, 'utf8')));
+  const pCut = standardElevationCuts(pEnv).find(c => c.id === 'E1');
+  const pStack = CV.sectionLevelStack(pEnv);
+  const pDir = pCut.dirVec;
+  const pAxis = { x: pDir.z, z: -pDir.x };
+  const W = 900, H = 600;
+  const deep = opts => {
+    const { ctx, strokes } = recordingCtx();
+    const ok = CV.drawElevationView(pEnv, ctx, W, H, pCut, pStack, pAxis, () => {}, opts);
+    let flat = -Infinity, any = -Infinity, top = Infinity;
+    let widest = 0, gradeY = null;
+    strokes.forEach(s => {
+      for (let k = 1; k < s.pts.length; k += 1) {
+        const a = s.pts[k - 1], b = s.pts[k];
+        if (b.move || b.close) continue;
+        any = Math.max(any, a.y, b.y);
+        top = Math.min(top, a.y, b.y);
+        // FLAT AND LONG. The deepest HORIZONTAL run is the footing's dashed
+        // underside -- nothing else on an elevation is drawn level below it,
+        // and the shafts are verticals -- so this tells the thing that must
+        // stay in from the thing that may leave without naming an elevation.
+        if (Math.abs(a.y - b.y) < 0.6 && Math.abs(a.x - b.x) > 2) {
+          flat = Math.max(flat, a.y);
+          // AND THE LONGEST OF THEM IS THE GRADE LINE, which runs past both
+          // ends of the building and is drawn in one piece. Two flats whose
+          // elevations the model knows are what turn pixels into feet here,
+          // so nothing below has to re-derive the painter's own fit.
+          if (Math.abs(a.x - b.x) > widest) { widest = Math.abs(a.x - b.x); gradeY = a.y; }
+        }
+      }
+    });
+    return { ok, flat, any, top, gradeY };
+  };
+  const at = v => v.toFixed(1);
+  const plain = deep(undefined);
+  check('the pile fixture paints, with shafts below its deepest footing',
+    plain.ok && Number.isFinite(plain.flat) && plain.any > plain.flat + 2,
+    `footing ${at(plain.flat)}, deepest ink ${at(plain.any)}`);
+
+  const BAR = 64;   // #house-strip at 1366x700 is 64px of it, measured
+  const bar = deep({ margins: { bottom: BAR } });
+  // AN INCH OF GROUND, NOT A PIXEL COUNT. "make it look like the footing is
+  // just about resting on one inch of dirt and then the tint starts" -- so
+  // what is asserted is the DEPTH, read back through the drawing's own scale,
+  // and it is the same inch whatever size the window is. A bottom ask is the
+  // one side the painter's own inset does not add to, for the reason written
+  // at `screenMargins`: nothing is drawn below the drawing, so that inset is
+  // pure white and the furniture's edge is the frame.
+  const INCH = 1 / 12;
+  check('a bottom ask keeps the footing out of the strip it named',
+    bar.flat < H - BAR,
+    `footing at ${at(bar.flat)} in ${H}px with ${BAR}px asked -- the strip `
+    + `begins at ${H - BAR}`);
+  // THE SCALE IS READ OFF THE DRAWING rather than recomputed here: grade and
+  // the footing's underside are both flats the model can name, so the pixels
+  // between them say what a foot is worth on this fit and an inch follows.
+  const pFdn = pStack.foundation;
+  const ft = (bar.flat - bar.gradeY) / (pFdn.grade - pFdn.footingBottom);
+  check('and stands it on an inch of ground, not the painter-s own inset',
+    Math.abs((H - BAR - bar.flat) - INCH * ft) < 1.2,
+    `${at(H - BAR - bar.flat)}px of ground above the strip, and an inch is `
+    + `${at(INCH * ft)}px at ${at(ft)}px/ft`);
+  check('and lets the pile shafts run on past it',
+    bar.any > H - BAR + 1,
+    `deepest ink ${at(bar.any)} against a strip beginning at ${H - BAR}`);
+  // SMALLER, NOT SHIFTED. The correction Movie made himself: an elevation
+  // that answered this by sliding up would clear the strip and be the same
+  // drawing, which is not what he asked for twice.
+  check('and the house is SMALLER for it rather than merely moved up',
+    (bar.flat - bar.top) < (plain.flat - plain.top) - 4,
+    `${at(bar.flat - bar.top)}px tall against ${at(plain.flat - plain.top)}px `
+    + 'with nothing asked');
+  check('and a bottom ask of zero changes nothing',
+    Math.abs(deep({ margins: { bottom: 0 } }).flat - plain.flat) < 1e-9,
+    `${at(deep({ margins: { bottom: 0 } }).flat)} against ${at(plain.flat)}`);
+}
+
 console.log(`elevation harness: ${passed} checks passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach(line => console.log(`  \u2718 ${line}`));

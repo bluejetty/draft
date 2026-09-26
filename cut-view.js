@@ -224,6 +224,14 @@ if (!window.DraftCutView) {
   // "little smaller" he asked for, arrived at by asking for more paper rather
   // than by picking a zoom.
   const SKY_ABOVE_ROOF_FT = 10;
+  // AND WHAT THE FOOTING SITS ON AT THE BOTTOM OF THE SHEET. Movie, 26 Sep:
+  // "make it look like the footing is just about resting on one inch of dirt
+  // and then the tint starts". Not a margin -- it is part of the drawing's
+  // extent, so it is an inch of GROUND at whatever scale the elevation lands
+  // at rather than a pixel count that means a different depth on every screen.
+  // The two feet BELOW it are the pile shafts' run-off and are allowed out of
+  // the frame; see the note at `yFit`.
+  const GROUND_UNDER_FOOTING_FT = 1 / 12;
   const ROOF_FASCIA_IN = 5.5;
   // A truss chord in section: 3 1/2" measured ACROSS the member, so the
   // vertical drop under a sloped top chord grows with the pitch.
@@ -1126,8 +1134,31 @@ if (!window.DraftCutView) {
       // THE HALF-CANVAS CAP BELOW IS WHAT KEEPS THIS HONEST on a narrow
       // screen -- it scales back the EXTRA over these defaults, so the sum
       // can ask for more without being able to take more.
-      return Number.isFinite(asked) && asked > 0
-        ? SCREEN_MARGINS[side] + asked : SCREEN_MARGINS[side];
+      if (!(Number.isFinite(asked) && asked > 0)) return SCREEN_MARGINS[side];
+      // EXCEPT AT THE BOTTOM, WHERE THE FURNITURE'S EDGE IS THE FRAME.
+      //
+      // Movie, 26 Sep, looking at the first cut of this with the foot bar
+      // reserved and the drawing sitting SCREEN_MARGINS.bottom above it:
+      // "could be even closer to the 'tint line (less gap) maybe move it to
+      // 75% closer (25% gap size)", and then what he actually wanted: "make
+      // it look like the footing is just about resting on one inch of dirt
+      // and then the tint starts".
+      //
+      // THE SUM IS RIGHT ON THE SIDES FOR A REASON THE BOTTOM HAS NOT GOT.
+      // `SCREEN_MARGINS.left` is not white space -- the level marks are drawn
+      // OUTSIDE the drawing in it, right-aligned at `marginL - 22` -- so a
+      // rail's box and the marks' gutter are two different claims on the same
+      // strip and they compose. The right mirrors it for the datum tails, and
+      // the top holds the sheet's header. NOTHING IS DRAWN BELOW THE DRAWING.
+      // The bottom default is pure inset from a bare canvas edge, and against
+      // furniture the drafter wants the sheet tucked under it rather than
+      // floating an unrelated 16px off it.
+      //
+      // AND THE CLEARANCE ITSELF IS NOT A PIXEL COUNT. It is an inch of
+      // ground under the footing, spent in `yFit` where the extent is decided,
+      // so it stays an inch at any window size or scale instead of being three
+      // and a half inches on a laptop and half of one on a sheet.
+      return side === 'bottom' ? asked : SCREEN_MARGINS[side] + asked;
     };
     // AND NEVER MORE THAN HALF THE CANVAS TO THE FURNITURE. MODEL.html's two
     // rails ask for about 540px between them on this page's own CSS, which is
@@ -1790,14 +1821,51 @@ if (!window.DraftCutView) {
     const yTop = fit?.extents ? fit.extents.yTop
       : Math.max(stack.bearing + 2, ...lit.map(s => s.elev)) + SKY_ABOVE_ROOF_FT;
     const yBottom = fit?.extents ? fit.extents.yBottom : fdn.footingBottom - 2;
+    // ── THE PILES' ROOM IS BELOW THE FRAME, NOT INSIDE IT ────────────────
+    //
+    // Movie, 26 Sep, on a two-storey with a garage: "see how the footing
+    // bottom line is just under the dashboard line where the tint starts --
+    // could we make the house just a little smaller so that the bottom of the
+    // footing doesnt cross over the 'tint' line of the lower bar ... so there
+    // is a little space, BUT ALLOW THE PILES TO EXTEND PAST THAT TINT LINE."
+    //
+    // THE TWO FEET UNDER THE FOOTING ARE THE SHAFTS', and that is what the
+    // last clause is naming. A pile is drawn from the underside of what it
+    // carries down to `yBottom` and stops there -- it has no bottom of its
+    // own on an elevation, because the drawing is not saying how deep it
+    // goes. Measured on screen at 1366x700, twoStorey-garage E1: footing
+    // bottom at y 655, shafts running on to y 682, which is 2 ft at that
+    // scale exactly. So the extent's last two feet are not air to be kept
+    // clear; they are ink that is allowed to run off under the furniture.
+    //
+    // SO THE FIT IS MEASURED TO THE FOOTING and the shafts overflow. Sizing
+    // the padded figure into the margins instead reserves those two feet
+    // TWICE -- once as extent and once as the bar the caller is now asking
+    // this to keep off -- and the house shrinks about 10% to pay for room
+    // Movie has just said the piles may use. Measured both ways at 1366x700:
+    // fitting yBottom puts the footing 42px clear of the bar; fitting the
+    // footing and an inch of ground under it puts it against the bar, which is
+    // what he asked for -- "make it look like the footing is just about
+    // resting on one inch of dirt and then the tint starts".
+    //
+    // SO THE INCH IS EXTENT, NOT MARGIN, and that is the whole of why it is
+    // here. A pixel clearance in `screenMargins` would be three and a half
+    // inches of ground on a laptop and half an inch on a large screen; an inch
+    // of GROUND is an inch at every size, which is the thing he described.
+    //
+    // AN EXTERNAL FIT IS UNTOUCHED. LAYOUT hands its own extents and its own
+    // pxPerFt: the paper decides there, and a viewport that asked for a
+    // figure this then overran would be a drawing off the edge of a sheet.
+    const yFit = fit?.extents ? fit.extents.yBottom
+      : fdn.footingBottom - GROUND_UNDER_FOOTING_FT;
     const mg = screenMargins(opts, w);
     const marginL = fit ? 0 : mg.left, marginR = fit ? 0 : mg.right,
       marginT = fit ? 0 : mg.top, marginB = fit ? 0 : mg.bottom;
     const pxPerFt = fit ? fit.pxPerFt : Math.max(2, Math.min(
       (w - marginL - marginR) / Math.max(uMax - uMin, 4),
-      (h - marginT - marginB) / Math.max(yTop - yBottom, 8)));
+      (h - marginT - marginB) / Math.max(yTop - yFit, 8)));
     const x0 = marginL + ((w - marginL - marginR) - (uMax - uMin) * pxPerFt) / 2;
-    const y0 = marginT + ((h - marginT - marginB) - (yTop - yBottom) * pxPerFt) / 2;
+    const y0 = marginT + ((h - marginT - marginB) - (yTop - yFit) * pxPerFt) / 2;
     const X = u => Math.round(x0 + (u - uMin) * pxPerFt - 0.5) + 0.5;
     const Y = e => Math.round(y0 + (yTop - e) * pxPerFt - 0.5) + 0.5;
 
@@ -2221,12 +2289,53 @@ if (!window.DraftCutView) {
       // attached grade beam on the office default, on every elevation that
       // sees it. E2 loses 1 1/2 ft of it, E4 the same, E1 twenty.
       //
-      // UNDERGROUND THERE IS NO OCCLUSION. Everything below grade is dashed
-      // outline because the drawing is showing an arrangement, not a view --
-      // the house's footing does not hide the beam over it any more than the
-      // beam hides the footing. So where the silhouette is deeper than a
-      // face's own base, that face's base is still an edge of concrete and
-      // still belongs on the sheet.
+      // A SILHOUETTE IS NOT AN OCCLUSION. `bottomAt` is deeper here because
+      // the house's FOOTING is deeper, and a footing eight inches tall at
+      // e -9.82 hides nothing at e -3.84; the beam's underside is an edge of
+      // concrete crossing empty ground and belongs on the sheet. So where
+      // the silhouette is deeper than a face's own base, that base is drawn.
+      //
+      // EXCEPT BEHIND A BEARING WALL, which Movie ruled on twice on 26 Sep --
+      // on E3 BACK, "the grade beam line extends over the house foundation
+      // (which is in front of the grade beam) ... the grade beam dashed line
+      // bottom shouldn't show", and again on E2 LEFT, "the bottom dashed line
+      // of the grade beam is extending into where the house foundation should
+      // be in front". Measured on repro-2storey-garage-beam:
+      //
+      //     E3  the garage's beam  u -20.00.. 4.00  depth -46  base -3.8438
+      //         the house's wall   u -16.00..16.00  depth  20  base -9.1771
+      //         drawn: -3.8229 from -20.00 to 4.00, twenty feet of it
+      //                behind twenty feet of house
+      //     E2  the beam u 19.00..46.00 depth -20, the house u -20..20
+      //         depth 16 -- the foot of GARAGE_TIE_FT overlap, drawn
+      //
+      // THE SAME RULE THE PILES GOT, in the same words: a piece of concrete
+      // standing between the viewer and the thing is what the drawing shows
+      // there. `o.depth > g.depth + 1` keeps a face from being read as
+      // standing in front of itself.
+      //
+      // AND ONLY WHERE ITS CONCRETE IS AT THIS ELEVATION -- which is the
+      // whole of the rest of it, and is why this does NOT need the piles'
+      // `bearing` test. That one exists because a pile runs to the bottom of
+      // the sheet, so the question can only be asked about the wall; here the
+      // thing being hidden is a single elevation and the concrete in front
+      // either reaches it or does not. A garage's own near beam is then no
+      // threat to its own far one: they hang at the SAME elevation, merge
+      // into one entry in `byElev` before anything is stroked, and the near
+      // one draws the very stretch the far one would have. Measured with the
+      // test removed, across every fixture and elevation in proto/: not one
+      // stroke moves. A hung face that reaches DEEPER than the beam and
+      // stands in front of it should hide it, and this lets it.
+      //
+      // CLIPPED, NOT DROPPED. The piles ask a yes/no question about one
+      // station and can afford the 0.05 slack that keeps a pile at a wall's
+      // own end from reading as behind it. A bottom is a RANGE, so the wall's
+      // exact edges cut it: a stretch that only touches the wall's end loses
+      // nothing, and one that runs under it loses exactly that much. Which
+      // also means the covering wall's ends do not have to be `stops` -- they
+      // are not, `stops` being the FOOTING extents, so the house's own edge
+      // at u -16.00 is a stop on E3 only by the accident of a garage face
+      // ending there.
       //
       // ONLY WHERE THE SILHOUETTE IS NOT ALREADY IT. `bottomAt` is a minimum
       // over the faces covering u and g is one of them, so it is either g's
@@ -2239,17 +2348,27 @@ if (!window.DraftCutView) {
       // rarely span the SAME stretch, so an exact-match dedupe let the
       // overlap through twice. Measured: E1 drew u -4.00..16.50 and then
       // u 16.00..16.50 again, half a foot of dashes at double weight.
+      const clipOut = (parts, iv) => parts.flatMap(p => {
+        if (iv.hi <= p.lo + 1e-6 || iv.lo >= p.hi - 1e-6) return [p];
+        const kept = [];
+        if (iv.lo > p.lo) kept.push({ lo: p.lo, hi: iv.lo });
+        if (iv.hi < p.hi) kept.push({ lo: iv.hi, hi: p.hi });
+        return kept;
+      });
       const byElev = new Map();
       run.faces.forEach(g => {
         const mine = bottomOf(g);
         const lo = footLo(g), hi = footHi(g);
         const key = mine.toFixed(4);
+        const walls = run.faces.filter(o => o.depth > g.depth + 1
+          && bottomOf(o) <= mine + 1e-6 && o.topE > mine + 1e-6);
         const into = byElev.get(key) || byElev.set(key, { e: mine, segs: [] }).get(key);
         for (let s = 0; s < stops.length - 1; s++) {
           const a = Math.max(stops[s], lo), b = Math.min(stops[s + 1], hi);
           if (b - a < 0.05) continue;
           if (bottomAt((a + b) / 2) > mine - 1e-6) continue;
-          into.segs.push({ lo: a, hi: b });
+          walls.reduce(clipOut, [{ lo: a, hi: b }])
+            .forEach(p => { if (p.hi - p.lo >= 0.05) into.segs.push(p); });
         }
       });
       byElev.forEach(({ e, segs }) => {
@@ -2317,6 +2436,47 @@ if (!window.DraftCutView) {
           ctx.beginPath();
           ctx.moveTo(X(lo), Y(g.baseE));
           ctx.lineTo(X(hi), Y(g.baseE));
+          ctx.stroke();
+          // ── AND THE WALL ABOVE THE SHOULDER ─────────────────────────
+          //
+          // Movie, 26 Sep, marking it in green on E1: "the footing is
+          // correct, but the line of the ext of foundation wall going up to
+          // grade level is missing".
+          //
+          // IT WAS NEVER DRAWN; THE RISER WAS STANDING IN FOR IT. Before the
+          // cap above, the silhouette climbed the full step at the FOOTING's
+          // outer edge -- six feet at u 16.50 -- and read as the foundation's
+          // edge going up. Capping it to the footing's own 8" was right and
+          // left the wall's real face, a foot further in, bare. Measured on
+          // repro-2storey-garage-beam E1:
+          //
+          //     u -16.00   -9.173..-2.323   the run's own left end, drawn
+          //     u  16.00   NOTHING          interior to the merged run
+          //
+          // THE OUTLINE ONLY WALKS THE RUN'S TWO OUTER ENDS, which is the
+          // same reason the shoulder above was missing: where a hung beam
+          // laps the house, the house's own end is interior and no pass owned
+          // it. This is the vertical that goes with that horizontal.
+          //
+          // TO GRADE, THROUGH WHATEVER IS IN FRONT. Underground there is no
+          // occlusion -- the drawing shows an arrangement, not a view, which
+          // is why a beam's underside is drawn over the house's footing -- so
+          // the face runs from the footing's top to grade even where the
+          // beam laps it.
+          //
+          // UNLESS THE CREASE PASS HAS IT. That pass draws exactly this
+          // vertical where a FARTHER face contains the end; asked the same
+          // way here, the two cannot both take the same u. On E2 the garage
+          // is behind and the crease owns u 20; on E1 it is in front and
+          // nothing did.
+          const creased = run.faces.some(o => o !== g
+            && o.depth < g.depth - 1e-6 && at > o.lo + 0.05 && at < o.hi - 0.05);
+          if (creased) return;
+          const top = Math.min(g.topE, fdn.grade);
+          if (top - g.baseE < 0.01) return;
+          ctx.beginPath();
+          ctx.moveTo(X(at), Y(g.baseE));
+          ctx.lineTo(X(at), Y(top));
           ctx.stroke();
         });
       });

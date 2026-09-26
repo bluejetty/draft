@@ -257,6 +257,127 @@ test('an elevation is drawn clear of the rails, and full width when they are shu
     'the house slid sideways when the rails shut').toBeLessThanOrEqual(1);
 });
 
+// ── AND THE FOOT BAR IS THE SAME CLAIM, WITH ONE THING LET THROUGH ────────
+//
+// Movie, 26 Sep: "see how the footing bottom line is just under the dashboard
+// line where the tint starts - could we make the house just a little smaller
+// so that the bottom of the footing doesnt cross over the 'tint' line of the
+// lower bar ... keep them about 3-5 pixels above that line so there is a
+// little space, BUT ALLOW THE PILES TO EXTEND PAST THAT TINT LINE." And then,
+// correcting the fix he could see coming: "rather than moving the house up,
+// make it smaller scale slightly so it fits and gets smaller too" ... "the
+// position is nice centered basically how it is just need it smaller".
+//
+// #house-strip IS `position:fixed; bottom:0` OVER A CANVAS THAT RUNS TO THE
+// WINDOW'S FOOT -- the same shape as the rails, and covering the drawing the
+// same way. Measured at 1366x700 before the fix, twoStorey-garage E1: the
+// bar's top edge at y 636, the footing's dashed bottom at y 655.
+//
+// THE ARITHMETIC IS proto/elevation-harness.js'S. What only a browser can
+// prove is what is here: that the box handed over is the BAR'S OWN, measured
+// from the page rather than typed, and that a drawing painted before the
+// shell laid the bar out is repainted once it has.
+test('the footing clears the foot bar, and the piles run under it', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 700 });
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, f }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f: empty() });
+  await page.goto('/MODEL.html');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+
+  // A GARAGE, because the piles are the half of this that is allowed out and
+  // an attached garage on a grade beam is the only thing that puts a shaft on
+  // an elevation at all.
+  await h.openDriveThru(page);
+  await page.locator('[data-build-family="bungalow"]').click();
+  await page.locator('[data-build-entry="twoStorey-garage"]').click();
+  await page.locator('#dt-bone').click();
+  await page.waitForTimeout(400);
+  await expect(page.locator('#save')).toBeEnabled({ timeout: 4000 });
+  await page.locator('#save').click();
+  await expect(page.locator('#save')).toHaveText('SAVED', { timeout: 6000 });
+
+  await page.goto('/MODEL.html?view=cut%3AE1&right=1&left=1');
+  await expect(page.locator('#readout')).toContainText('elevation E1', { timeout: 10000 });
+  await page.waitForTimeout(800);
+
+  const read = await page.evaluate(() => {
+    const c = document.querySelector('canvas');
+    const box = c.getBoundingClientRect();
+    const strip = document.querySelector('#house-strip');
+    const sr = strip ? strip.getBoundingClientRect() : null;
+    const g = c.getContext('2d');
+    const d = g.getImageData(0, 0, c.width, c.height).data;
+    const dpr = c.width / box.width;
+    const [gr, gg, gb] = [d[0], d[1], d[2]];
+    const rows = new Array(c.height).fill(0);
+    for (let y = 0; y < c.height; y++) {
+      for (let x = 0; x < c.width; x++) {
+        const i = (y * c.width + x) * 4;
+        if (Math.abs(d[i] - gr) > 50 || Math.abs(d[i + 1] - gg) > 50
+          || Math.abs(d[i + 2] - gb) > 50) rows[y] += 1;
+      }
+    }
+    // TOLD APART BY SHAPE, not by elevation. The footing's underside is a long
+    // dashed HORIZONTAL -- 205px of it on this build -- and the shafts are
+    // verticals four to eight pixels wide. A row floor of 60 separates them
+    // with two orders of magnitude to spare and needs no datum to do it.
+    let footing = -1, deepest = -1;
+    rows.forEach((n, y) => {
+      if (n > 60 * dpr) footing = y;
+      if (n > 0) deepest = y;
+    });
+    return {
+      ground: `${gr},${gg},${gb}`,
+      canvasTop: box.top, canvasBottom: box.bottom,
+      barTop: sr && sr.height > 0 ? sr.top : null,
+      footing: footing < 0 ? null : box.top + footing / dpr,
+      deepest: deepest < 0 ? null : box.top + deepest / dpr,
+      allLit: rows.every(n => n > 0),
+    };
+  });
+
+  // THE READING BEFORE THE CLAIM, the habit the rails half of this file
+  // learned the hard way: a counter that has lost track of what blank looks
+  // like would satisfy or fail everything below for its own reasons.
+  expect(read.allLit,
+    `every row reads as ink — the ground sampled as ${read.ground}`).toBe(false);
+  expect(read.footing, 'the elevation drew a footing line at all').toBeTruthy();
+  // AND THE BAR IS ACTUALLY OVER THE CANVAS. A shell that had moved it off
+  // would leave the clearance below true for free.
+  expect(read.barTop, 'the foot bar is on the page').toBeTruthy();
+  expect(read.barTop, 'the foot bar overlaps the canvas')
+    .toBeLessThan(read.canvasBottom - 10);
+  expect(read.barTop, 'and does not cover the whole of it')
+    .toBeGreaterThan(read.canvasTop + 100);
+
+  // THE TWO CLAIMS. Either alone is met by a painter that has given up:
+  // draw nothing below the bar and the first passes, draw everything through
+  // it and the second does.
+  expect(read.footing,
+    `the footing's underside is drawn at ${read.footing.toFixed(0)} and the `
+    + `bar's tint begins at ${read.barTop.toFixed(0)}`)
+    .toBeLessThan(read.barTop);
+  expect(read.deepest,
+    `the deepest ink is at ${read.deepest.toFixed(0)}, above the bar at `
+    + `${read.barTop.toFixed(0)} — the pile shafts stop short of it`)
+    .toBeGreaterThan(read.barTop);
+  // AND SNUG, not merely clear. A drawing that answered this by shrinking to
+  // a postage stamp clears the bar by a mile and is not what was asked for.
+  //
+  // AN INCH OF GROUND is what the number is: Movie, on the first cut of this
+  // sitting 16px off the bar, "make it look like the footing is just about
+  // resting on one inch of dirt and then the tint starts". At the scale this
+  // build lands at in a 1366x700 window that is between one and two pixels;
+  // the arithmetic behind it, in feet, is proto/elevation-harness.js's.
+  expect(read.barTop - read.footing,
+    `${(read.barTop - read.footing).toFixed(0)}px between the footing and the `
+    + 'bar — an inch of ground at this scale is one to two')
+    .toBeLessThanOrEqual(5);
+});
+
 // MUTATION-RUN, 22 Sep, three of them, each turning this file red and each on
 // a different line of it:
 //
