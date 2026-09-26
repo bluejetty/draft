@@ -2221,12 +2221,53 @@ if (!window.DraftCutView) {
       // attached grade beam on the office default, on every elevation that
       // sees it. E2 loses 1 1/2 ft of it, E4 the same, E1 twenty.
       //
-      // UNDERGROUND THERE IS NO OCCLUSION. Everything below grade is dashed
-      // outline because the drawing is showing an arrangement, not a view --
-      // the house's footing does not hide the beam over it any more than the
-      // beam hides the footing. So where the silhouette is deeper than a
-      // face's own base, that face's base is still an edge of concrete and
-      // still belongs on the sheet.
+      // A SILHOUETTE IS NOT AN OCCLUSION. `bottomAt` is deeper here because
+      // the house's FOOTING is deeper, and a footing eight inches tall at
+      // e -9.82 hides nothing at e -3.84; the beam's underside is an edge of
+      // concrete crossing empty ground and belongs on the sheet. So where
+      // the silhouette is deeper than a face's own base, that base is drawn.
+      //
+      // EXCEPT BEHIND A BEARING WALL, which Movie ruled on twice on 26 Sep --
+      // on E3 BACK, "the grade beam line extends over the house foundation
+      // (which is in front of the grade beam) ... the grade beam dashed line
+      // bottom shouldn't show", and again on E2 LEFT, "the bottom dashed line
+      // of the grade beam is extending into where the house foundation should
+      // be in front". Measured on repro-2storey-garage-beam:
+      //
+      //     E3  the garage's beam  u -20.00.. 4.00  depth -46  base -3.8438
+      //         the house's wall   u -16.00..16.00  depth  20  base -9.1771
+      //         drawn: -3.8229 from -20.00 to 4.00, twenty feet of it
+      //                behind twenty feet of house
+      //     E2  the beam u 19.00..46.00 depth -20, the house u -20..20
+      //         depth 16 -- the foot of GARAGE_TIE_FT overlap, drawn
+      //
+      // THE SAME RULE THE PILES GOT, in the same words: a piece of concrete
+      // standing between the viewer and the thing is what the drawing shows
+      // there. `o.depth > g.depth + 1` keeps a face from being read as
+      // standing in front of itself.
+      //
+      // AND ONLY WHERE ITS CONCRETE IS AT THIS ELEVATION -- which is the
+      // whole of the rest of it, and is why this does NOT need the piles'
+      // `bearing` test. That one exists because a pile runs to the bottom of
+      // the sheet, so the question can only be asked about the wall; here the
+      // thing being hidden is a single elevation and the concrete in front
+      // either reaches it or does not. A garage's own near beam is then no
+      // threat to its own far one: they hang at the SAME elevation, merge
+      // into one entry in `byElev` before anything is stroked, and the near
+      // one draws the very stretch the far one would have. Measured with the
+      // test removed, across every fixture and elevation in proto/: not one
+      // stroke moves. A hung face that reaches DEEPER than the beam and
+      // stands in front of it should hide it, and this lets it.
+      //
+      // CLIPPED, NOT DROPPED. The piles ask a yes/no question about one
+      // station and can afford the 0.05 slack that keeps a pile at a wall's
+      // own end from reading as behind it. A bottom is a RANGE, so the wall's
+      // exact edges cut it: a stretch that only touches the wall's end loses
+      // nothing, and one that runs under it loses exactly that much. Which
+      // also means the covering wall's ends do not have to be `stops` -- they
+      // are not, `stops` being the FOOTING extents, so the house's own edge
+      // at u -16.00 is a stop on E3 only by the accident of a garage face
+      // ending there.
       //
       // ONLY WHERE THE SILHOUETTE IS NOT ALREADY IT. `bottomAt` is a minimum
       // over the faces covering u and g is one of them, so it is either g's
@@ -2239,17 +2280,27 @@ if (!window.DraftCutView) {
       // rarely span the SAME stretch, so an exact-match dedupe let the
       // overlap through twice. Measured: E1 drew u -4.00..16.50 and then
       // u 16.00..16.50 again, half a foot of dashes at double weight.
+      const clipOut = (parts, iv) => parts.flatMap(p => {
+        if (iv.hi <= p.lo + 1e-6 || iv.lo >= p.hi - 1e-6) return [p];
+        const kept = [];
+        if (iv.lo > p.lo) kept.push({ lo: p.lo, hi: iv.lo });
+        if (iv.hi < p.hi) kept.push({ lo: iv.hi, hi: p.hi });
+        return kept;
+      });
       const byElev = new Map();
       run.faces.forEach(g => {
         const mine = bottomOf(g);
         const lo = footLo(g), hi = footHi(g);
         const key = mine.toFixed(4);
+        const walls = run.faces.filter(o => o.depth > g.depth + 1
+          && bottomOf(o) <= mine + 1e-6 && o.topE > mine + 1e-6);
         const into = byElev.get(key) || byElev.set(key, { e: mine, segs: [] }).get(key);
         for (let s = 0; s < stops.length - 1; s++) {
           const a = Math.max(stops[s], lo), b = Math.min(stops[s + 1], hi);
           if (b - a < 0.05) continue;
           if (bottomAt((a + b) / 2) > mine - 1e-6) continue;
-          into.segs.push({ lo: a, hi: b });
+          walls.reduce(clipOut, [{ lo: a, hi: b }])
+            .forEach(p => { if (p.hi - p.lo >= 0.05) into.segs.push(p); });
         }
       });
       byElev.forEach(({ e, segs }) => {
