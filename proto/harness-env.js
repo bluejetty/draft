@@ -61,6 +61,14 @@ function recordingCtx() {
   const strokes = [];
   const fills = [];
   const texts = [];
+  // ── PAINT ORDER IS THE ONLY THING THAT ANSWERS "IS THIS VISIBLE" ──────
+  //
+  // An elevation has no occlusion rule; it has an ORDER -- far first, each
+  // opaque surface covering what it stands in front of. So "does this line
+  // show on the sheet" is not a question about geometry, it is "was any
+  // later fill laid over it", and the two lists here are separate, which
+  // made that unaskable. One counter across both is the whole fix.
+  let seq = 0;
   let cur = null;
   const ctx = {
     strokeStyle: '#000', fillStyle: '#000', lineWidth: 1, font: '', textAlign: '', textBaseline: '',
@@ -69,9 +77,9 @@ function recordingCtx() {
     moveTo(x, y) { (cur || (cur = [])).push({ x, y, move: true }); },
     lineTo(x, y) { (cur || (cur = [])).push({ x, y }); },
     closePath() { if (cur && cur.length) cur.push({ ...cur[0], close: true }); },
-    stroke() { if (cur && cur.length > 1) strokes.push({ pts: cur.slice(), ink: this.strokeStyle, w: this.lineWidth }); },
-    fill() { if (cur && cur.length > 1) fills.push({ pts: cur.slice(), ink: this.fillStyle }); },
-    fillRect(x, y, w, h) { fills.push({ rect: { x, y, w, h }, ink: this.fillStyle }); },
+    stroke() { if (cur && cur.length > 1) strokes.push({ seq: seq++, pts: cur.slice(), ink: this.strokeStyle, w: this.lineWidth }); },
+    fill() { if (cur && cur.length > 1) fills.push({ seq: seq++, pts: cur.slice(), ink: this.fillStyle }); },
+    fillRect(x, y, w, h) { fills.push({ seq: seq++, rect: { x, y, w, h }, ink: this.fillStyle }); },
     strokeRect() {}, clearRect() {}, rect() {},
     save() {}, restore() {}, translate() {}, rotate() {}, scale() {},
     setLineDash() {}, getLineDash() { return []; },
@@ -298,7 +306,7 @@ function paintElevation(win, env, cut, { pxPerFt = 40 } = {}) {
   // `hasLine` could match a segment that was never drawn, and both look
   // exactly like passing.
   const model = strokes.map(s => ({
-    ink: s.ink, w: s.w,
+    seq: s.seq, ink: s.ink, w: s.w,
     pts: s.pts.map(p => ({ u: toU(p.x), e: toE(p.y), move: !!p.move, close: !!p.close })),
   }));
   // THE FILLS IN MODEL SPACE TOO, AND IN PAINT ORDER. Occlusion in an
@@ -309,7 +317,7 @@ function paintElevation(win, env, cut, { pxPerFt = 40 } = {}) {
   // callers reading ink; this is the same list with the screen mapped back
   // to feet, which is the language every check in this file is written in.
   const modelFills = fills.map(f => ({
-    ink: f.ink,
+    seq: f.seq, ink: f.ink,
     // A `closePath` pushes a copy of the first point, which is a fact about
     // the PATH and not about the shape. Left in, a filled triangle comes back
     // with four corners and no check can ask "is this the roof face" by the
