@@ -1011,7 +1011,7 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
   // left and a right vertical, so nothing of the house is lost by asking only
   // its upright strokes where it begins and ends.
   const span = opts => {
-    const { ctx, strokes } = recordingCtx();
+    const { ctx, strokes, texts } = recordingCtx();
     const ok = CV.drawElevationView(env, ctx, W, 600, cut, stack, axis, () => {}, opts);
     const upright = strokes.filter(s => {
       const ys = s.pts.map(p => p.y);
@@ -1019,10 +1019,17 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
     });
     const xs = strokes.flatMap(s => s.pts.map(p => p.x));
     const body = upright.flatMap(s => s.pts.map(p => p.x));
+    // THE LEVEL MARKS' OWN READINGS, which is the one thing here that is not a
+    // stroke. They are right-aligned, so `x` is the RIGHT edge of the number
+    // and the label runs leftward from it; the header at the top-left is
+    // left-aligned and is not one of these.
+    const marks = texts.filter(t => t.align === 'right');
     return {
       ok, n: xs.length, uprights: upright.length,
       inkLo: Math.min(...xs), inkHi: Math.max(...xs),
       lo: Math.min(...body), hi: Math.max(...body),
+      marks: marks.length,
+      markX: marks.length ? Math.min(...marks.map(t => t.x)) : null,
     };
   };
   const at = v => v.toFixed(1);
@@ -1046,10 +1053,39 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
   // them is the only way to tell a margin honoured from one merely cleared.
   // A painter that answered every ask by insetting to half the canvas would
   // satisfy every bound above and be wrong.
-  check('and those margins are the ones asked for, not more and not less',
-    Math.abs(wide.inkLo - (WANT - RULE_LEAD)) < 1 && Math.abs(wide.inkHi - (W - WANT)) < 1,
-    `the rules run ${at(wide.inkLo)}..${at(wide.inkHi)}, so the margins are `
-    + `${at(wide.inkLo + RULE_LEAD)} and ${at(W - wide.inkHi)} against ${WANT} asked`);
+  //
+  // AN ASK MOVES THE RULES BY EXACTLY WHAT IT ASKED FOR, and that phrasing --
+  // rather than "the rules land at WANT" -- is the whole of the 25 Sep fix.
+  // The painter's own left margin is not white space: the level marks live in
+  // it, right-aligned at `marginL - 22`, OUTSIDE the drawing. A max() spent
+  // that gutter twice, so a rail asking for 150 got a drawing starting at 150
+  // and numbers printed back out at 94, under the panel. Movie, looking at it:
+  // "of the left the elevation numbers, can you bring those to the right so
+  // they aren't covered by the side menu when it is open". The two numbers
+  // compose; they do not compete -- so the ask is measured as a SHIFT off the
+  // no-ask reading, which is a claim no constant in this file can drift from.
+  check('an ask moves the reference rules by exactly what it asked for',
+    Math.abs((wide.inkLo - plain.inkLo) - WANT) < 1
+      && Math.abs((plain.inkHi - wide.inkHi) - WANT) < 1,
+    `the rules run ${at(wide.inkLo)}..${at(wide.inkHi)} against `
+    + `${at(plain.inkLo)}..${at(plain.inkHi)} with nothing asked, so the ask `
+    + `moved them ${at(wide.inkLo - plain.inkLo)} and ${at(plain.inkHi - wide.inkHi)} `
+    + `against ${WANT} asked`);
+  // AND THE NUMBERS THEMSELVES CLEAR IT, which is what he was actually looking
+  // at. The rules are 18px of tail; the readings hang further out still, so a
+  // gutter that fits the tail and not the label would satisfy the line above
+  // and print the numbers on the menu anyway.
+  //
+  // 40px IS A LABEL'S WORTH, measured in a browser rather than guessed at:
+  // -12'-11 3/4" sets 34.1px wide in Barlow Condensed at 9px, GRADE 20.6, and
+  // the anchor sits 22px in from the drawing. measureText answers 0 offline,
+  // which is why the number is written here instead of asked for.
+  const LABEL_ROOM = 40;
+  check('and the elevation numbers keep a gutter of their own inside it',
+    wide.marks > 3 && wide.markX - WANT >= LABEL_ROOM,
+    `${wide.marks} readings, the leftmost anchored at ${at(wide.markX)} with `
+    + `${WANT}px asked -- ${at(wide.markX - WANT)}px of gutter against `
+    + `${LABEL_ROOM} a label needs`);
 
   // AND WHAT IT MUST NOT DO, which is the half that keeps the rest honest. A
   // shut rail covers nothing and MODEL.html hands that over as a zero rather

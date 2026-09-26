@@ -100,7 +100,29 @@ const readPage = page => page.evaluate(() => {
   const floor = 40 * dpr;
   let lo = -1, hi = -1;
   counts.forEach((n, x) => { if (n > floor) { if (lo < 0) lo = x; hi = x; } });
+  // AND WHAT IS PAINTED UNDER THE LEFT RAIL, at ANY density. The house is
+  // measured by column density above because the datum rules run edge to edge
+  // and would swamp a bounding box; the ELEVATION NUMBERS are the opposite
+  // problem -- nine-pixel type, a few dozen dark pixels each, invisible to a
+  // floor of 40. Movie, 25 Sep: "of the left the elevation numbers, can you
+  // bring those to the right so they aren't covered by the side menu when it
+  // is open". So this counts every ink pixel in the rail's own columns.
+  //
+  // BELOW THE HEADER ROW. `E4 — GENERATED ELEVATION` is drawn at (10, 8) and
+  // is meant to be there -- it is the sheet's title, not part of the drawing,
+  // and it sits above the rail's top edge anyway. Everything from y=30 down
+  // in those columns is drawing that has escaped its margin.
+  const railRight = rails[0] && rails[0].open ? rails[0].right : 0;
+  let underRail = 0;
+  for (let x = 0; x < Math.min(c.width, Math.round((railRight - box.left) * dpr)); x++) {
+    for (let y = Math.round(30 * dpr); y < c.height; y++) {
+      const i = (y * c.width + x) * 4;
+      if (Math.abs(d[i] - gr) > 50 || Math.abs(d[i + 1] - gg) > 50
+        || Math.abs(d[i + 2] - gb) > 50) underRail += 1;
+    }
+  }
   return {
+    underRail,
     canvas: { left: box.left, right: box.right, width: box.width },
     rails,
     ground: `${gr},${gg},${gb}`,
@@ -178,6 +200,22 @@ test('an elevation is drawn clear of the rails, and full width when they are shu
   expect(open.house.right,
     `the house ends at ${open.house.right.toFixed(0)} and the right rail starts at `
     + `${rightRail.left.toFixed(0)}`).toBeLessThanOrEqual(rightRail.left);
+
+  // AND NEITHER DO THE NUMBERS DOWN ITS LEFT-HAND SIDE. The two assertions
+  // above were both true on 25 Sep while the level readings were printed over
+  // the tool palette: the level marks hang OUTSIDE the drawing on that side,
+  // right-aligned at `marginL - 22`, so they were drawn from the margin the
+  // rail had asked for rather than inside it. Nine-pixel type is far under
+  // the density floor the house is found with, so nothing above could see it.
+  //
+  // ZERO, NOT A THRESHOLD. The painter insets its whole drawing past the rail
+  // now; what is left in those columns is the page's own ground, and any ink
+  // at all there is something that escaped. Reported with a count so a
+  // failure says how much rather than merely that.
+  expect(open.underRail,
+    `${open.underRail} ink pixels are painted in the ${leftRail.right.toFixed(0)}px `
+    + 'the left rail covers — the elevation numbers are drawn under the menu')
+    .toBe(0);
 
   // AND WITH THE RAILS SHUT IT DOES NOT MOVE. THIS ASSERTION USED TO SAY THE
   // OPPOSITE, and the reversal is Movie's, on 24 Sep with the page in front

@@ -386,7 +386,14 @@ test('every control is a tenant of a bar, and the counters sit above the foot',
     expect(where.footOrder[0]).toBe('page-row');
     expect(where.footOrder.indexOf('dt-bar'))
       .toBeGreaterThan(where.footOrder.indexOf('page-row'));
-    expect(where.footOrder[where.footOrder.length - 1]).toBe('sheet-row');
+    // THE SHEETS CLOSE THE ROW, and the row is no longer the whole bar: the
+    // foot lane came in under it on 25 Sep (Movie: the count and the clock go
+    // "on the lowest row"). It is absolutely positioned in the bar's hem, so
+    // it is not IN this row at all -- but it is a child of the same bar, and
+    // this list is the bar's children. Named rather than sliced off, because
+    // "what is last" was the assertion and it has to keep meaning something.
+    expect(where.footOrder[where.footOrder.length - 1]).toBe('foot-lane');
+    expect(where.footOrder[where.footOrder.length - 2]).toBe('sheet-row');
     expect(where.footOrder, 'the house menu is on the sign now, not in the bar')
       .not.toContain('build-bar');
 
@@ -824,53 +831,79 @@ test('the file row and the build bar cannot overlap at any width', async ({ page
   expect(geom.saveOwner, 'something is sitting on the SAVE button').toBe('save');
 });
 
-test('the right panel stays inside its bound, and keeps every control it holds',
+test('every side rail is one width, and keeps every control it holds',
   async ({ page }) => {
-    // THE SAME GAP AS THE TOP BAR'S, one tier over. `aside` is position:fixed
-    // with no width, so it is SHRINK-TO-FIT -- as wide as its widest content
+    // THE SAME GAP AS THE TOP BAR'S, one tier over. `aside` WAS position:fixed
+    // with no width, so it was SHRINK-TO-FIT -- as wide as its widest content
     // wants, with nothing stopping it. The boneyard's card put a title AND a
     // + SHELF button on one line and took the rail from 277px to 343px; its
     // left edge moved to x=909, over the drawing, and a tap aimed at world
     // (4,-3) in model-html-draw-delete reached the panel instead of the canvas.
     //
-    // TWO ASSERTIONS, BECAUSE THE FIX HAS TWO WAYS TO GO WRONG. A max-width
-    // stops the panel eating the sheet; it can just as easily CLIP a control
-    // instead, which trades a bug you can see for one you cannot. So: the rail
-    // is within its bound, AND every control inside it is still inside its box.
+    // THE BOUND IS A WIDTH NOW, AND IT IS EVERY RAIL'S. Movie, 25 Sep: "make
+    // the right side expandable menu areas the exact same width as the one on
+    // the left (and maintain that for others that might be added". Shrink-to-
+    // fit is what let the two drift apart in the first place -- 193 on the
+    // left for the tool grid against 233 on the right with a house loaded --
+    // so one token on :root answers both his ask and the old bound at once.
+    //
+    // WHICH IS WHY THIS MEASURES BOTH RAILS AND NOT A NUMBER. The claim is
+    // "the same", and a spec that pinned 195 would go green on the day the
+    // right rail kept the token and the left one stopped reading it.
+    //
+    // THREE ASSERTIONS, BECAUSE THE FIX HAS THREE WAYS TO GO WRONG. A width
+    // stops a panel eating the sheet; it can just as easily CLIP a control
+    // instead, which trades a bug you can see for one you cannot; and it can
+    // be honoured by one rail and not the other. So: the rails agree, they are
+    // inside the old measured bound, AND every control is still in its box.
     //
     // OPENED FIRST: shut shows nothing at all now (Movie, 16 Sep), so the
     // width worth measuring is the open panel's.
     await openShell(page);
     await page.locator('#right-tab').click();
+    await page.locator('#left-tab').click();
     await page.waitForTimeout(200);
     const verdict = await page.evaluate(() => {
-      const rail = document.getElementById('right-rail');
-      if (!rail) return { missing: true };
-      const box = rail.getBoundingClientRect();
-      const controls = [...rail.querySelectorAll('button, a, input, select')]
-        .filter(el => el.offsetParent !== null);
-      const escaped = controls.map(el => {
-        const r = el.getBoundingClientRect();
-        return { name: el.id || el.className || el.textContent.trim().slice(0, 18),
-          right: Math.round(r.right), bottom: Math.round(r.bottom) };
-      }).filter(c => c.right > Math.round(box.right) + 1);
-      return { w: Math.round(box.width), right: Math.round(box.right),
-        controls: controls.length, escaped: escaped.slice(0, 6) };
+      const read = id => {
+        const rail = document.getElementById(id);
+        if (!rail || rail.hidden) return null;
+        const box = rail.getBoundingClientRect();
+        const controls = [...rail.querySelectorAll('button, a, input, select')]
+          .filter(el => el.offsetParent !== null);
+        const escaped = controls.map(el => {
+          const r = el.getBoundingClientRect();
+          return { rail: id,
+            name: el.id || el.className || el.textContent.trim().slice(0, 18),
+            right: Math.round(r.right), bottom: Math.round(r.bottom) };
+        }).filter(c => c.right > Math.round(box.right) + 1);
+        return { w: Math.round(box.width), controls: controls.length, escaped };
+      };
+      return { left: read('left-rail'), right: read('right-rail'),
+        token: getComputedStyle(document.documentElement)
+          .getPropertyValue('--rail-w').trim() };
     });
-    expect(verdict.missing, 'there is a right rail to measure').toBeFalsy();
-    expect(verdict.controls, 'and it holds controls worth protecting')
+    expect(verdict.right, 'there is a right rail to measure').toBeTruthy();
+    expect(verdict.left, 'there is a left rail to measure').toBeTruthy();
+    expect(verdict.right.controls, 'and it holds controls worth protecting')
       .toBeGreaterThan(0);
-    // 277px is the bound MODEL.html sets, and it is MEASURED -- the width the
-    // rail has on main, where every tap in the suite clears it. An earlier
+    // THE ASK ITSELF, and the reason both rails are opened above.
+    expect(verdict.left.w,
+      `the left rail is ${verdict.left.w}px and the right ${verdict.right.w}px`)
+      .toBe(verdict.right.w);
+    expect(`${verdict.left.w}px`, 'and both are the width --rail-w names')
+      .toBe(verdict.token);
+    // 277px WAS the bound MODEL.html set, and it is MEASURED -- the width the
+    // rail had on main, where every tap in the suite clears it. An earlier
     // estimate of 288 left the edge three pixels over a tap in
-    // model-change-broadcast, which is the whole reason this number is not
-    // worked out from the seat grid.
-    expect(verdict.w, `the right panel is ${verdict.w}px wide; bounded at 277`)
-      .toBeLessThanOrEqual(277);
-    // NOT CLIPPED INTO UNREACHABILITY. A control whose box ends past the
+    // model-change-broadcast, which is the whole reason that number was not
+    // worked out from the seat grid. The shared width is well inside it; this
+    // line is what says a future --rail-w cannot walk back out over the sheet.
+    expect(verdict.right.w, `the rails are ${verdict.right.w}px wide; the `
+      + 'measured ceiling a tap clears is 277').toBeLessThanOrEqual(277);
+    // NOT CLIPPED INTO UNREACHABILITY. A control whose box ends past its
     // panel's own right edge is a control the drafter cannot press.
-    expect(verdict.escaped,
-      'every control in the right panel is inside it, not clipped past its edge')
+    expect([...verdict.left.escaped, ...verdict.right.escaped].slice(0, 6),
+      'every control in a rail is inside it, not clipped past its edge')
       .toEqual([]);
   });
 

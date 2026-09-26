@@ -102,8 +102,12 @@ if (!window.DraftShellBars) {
   const rowOf = (which, current) => PAGES.filter(p => p.row === which)
     .map(p => chip(p, current)).join('\n');
 
+  // THE COUNT USED TO STAND HERE, to the left of STATUS READOUT (Movie, 19
+  // Sep: "lets put it on lower left (2nd row from bottom to the left of
+  // 'STATUS READOUT'"). It went down one row on 25 Sep -- see FOOTLANE -- so
+  // this row is the readout tab alone again, which is what it was before the
+  // count had anywhere to live.
   const READOUT = `<div id="lower-left" data-lower-left>
-  <span data-visit-counter-home></span>
   <button id="readout-tab" type="button" data-readout-tab
     aria-expanded="false" aria-controls="readout"
     title="The page's own counts: what is drawn on this level, and what the drawing holds">STATUS READOUT</button>
@@ -436,7 +440,41 @@ if (!window.DraftShellBars) {
     title="Paste the copy here, on whatever level or shelf is showing">PASTE</button>
   </div>
   <div class="grow"></div>`;
-  const BOTTAIL = `</div>`;
+  // THE LOWEST ROW (Movie, 25 Sep): "move the '# VISITS' and the DATE/TIME
+  // down below PROJECT / MODEL / REAL ESTATE / BONE / CONSTRUCTION / SPECTS /
+  // etc. on the lowest row (where it will be covered with http:/addressess
+  // (won't matter if these 2 items are covered from time to time".
+  //
+  // THE ROW HE IS ASKING FOR ALREADY EXISTED AS EMPTY SPACE. --browser-lane
+  // is the 24px hem at the foot of this bar, held clear so a browser's link
+  // preview lands on the bar's own panel colour instead of on a nav chip --
+  // and with nothing in it the bar reads as one row of chips with a band of
+  // dead paint under it. His two quiet readings are exactly what a lane like
+  // that is for: a count and a clock are the only things on the page a
+  // drafter can afford to have covered for as long as his pointer sits on a
+  // link, which is the licence the parenthesis gives.
+  //
+  // ABSOLUTE, BECAUSE THE LANE IS PADDING. #house-strip is a flex row and the
+  // lane is its padding-bottom, so a flex child cannot reach it; `bottom:0`
+  // on an absolutely positioned child resolves against the PADDING box, which
+  // puts this exactly on the lane. #dt-bar's comment in shell-bars.css
+  // records the same fact from the other side -- it is the reason that one
+  // says `bottom:var(--browser-lane)` rather than `bottom:0`.
+  //
+  // TWO NAMED SLOTS AND NO PAGE NAMES. The count's home moved here out of
+  // #lower-left, so every page carrying this bar gets it in the lane without
+  // the module learning which page it is on; the note beside it is for
+  // whatever a page has to say quietly at the foot, and MODEL fills it with
+  // the clock. A page that wants the count somewhere else still gets its way,
+  // because traffic-counter.js takes the FIRST [data-visit-counter-home] in
+  // the document and a page's own markup is parsed before it calls this --
+  // which is how Construction Layout keeps the count on its own strip.
+  const FOOTLANE = `  <div id="foot-lane" data-foot-lane>
+    <span data-visit-counter-home></span>
+    <span data-foot-note></span>
+  </div>`;
+  const BOTTAIL = FOOTLANE + `
+</div>`;
   const FILEGUARD = `<div id="file-guard" data-file-guard hidden>
   <div class="promote-card">
     <p data-file-guard-text>This drawing has unsaved edits.</p>
@@ -495,24 +533,13 @@ if (!window.DraftShellBars) {
 
     readout: () => put(READOUT),
 
-    // THE COUNT'S SLOT WITHOUT THE READOUT, for pages that have a visit count
-    // to show and nothing to count on the drawing.
-    //
-    // Movie, 23 Sep: "i'd prefer just 1 row on bottom bar, and place the 12
-    // views above it (or could we make 1 upper row that has completely
-    // transparent background? that would work if possible)". It already is
-    // one: #lower-left is fixed at --readout-bottom, which is the bar's own
-    // height plus 12px, and it paints no background at all. So the answer to
-    // "if possible" is that the slot he was describing has been there since
-    // the readout moved to the foot -- this page just never mounted it.
-    //
-    // WHY NOT JUST CALL readout(). Because that brings the STATUS READOUT tab,
-    // and a tab that opens an empty panel is a dead control on a page with no
-    // counts. This is the same slot with only the tenant that has something
-    // to say.
-    counterSlot: () => put('<div id="lower-left" data-lower-left>\n'
-      + '  <span data-visit-counter-home></span>\n'
-      + '</div>'),
+    // counterSlot() CAME OFF HERE on 25 Sep. It existed to give a page with
+    // no counts the count's home without the STATUS READOUT tab beside it --
+    // an #lower-left holding one span -- and the span moved into the bar's own
+    // foot lane, so the function was an empty row mounted by two pages for a
+    // tenant that is no longer in it. Both callers dropped the line with it;
+    // bottomBar() now brings the home along, which is one fewer thing a new
+    // page has to know to remember.
 
     // ---- the behaviour that is the BAR'S and not the page's ----------------
     //

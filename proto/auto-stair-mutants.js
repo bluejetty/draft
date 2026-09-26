@@ -29,6 +29,41 @@ const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
 
 const MUTANTS = [
+  // ── A STAIRCASE BELONGS IN THE HOUSE ──────────────────────────────────
+  // Movie, 25 Sep: "the ATTACHED garage won't need a staircase to the 2nd
+  // floor". Measured on his own build, the flight from MAIN FL to 2ND FL was
+  // laid out inside the room over the garage -- storeyBodies keeps that room
+  // (raiseGarage files it with no `garage` flag) and the lookup took the LAST
+  // body rather than the house.
+  { file: 'MODEL.html',
+    // THE DEFECT MOVIE REPORTED, restored exactly: the last body filed on the
+    // storey wins. That is what houseOutlineOn did before 25 Sep, and it is
+    // why his flight to 2ND FL laid out at x 2.7 z 30.6, inside the room over
+    // the garage.
+    //
+    // THIS READ `const pool = bodies` AND IT SURVIVED -- which is why the
+    // wording above is now the code below rather than a claim about it.
+    // Dropping the house filter leaves the `reduce` standing, and the reduce
+    // takes the LARGEST body, which on twoStorey-over is the house either
+    // way: the mutant changed no output, so the spec had nothing to catch and
+    // the gate scored it a kill. A mutant whose name says "last" has to take
+    // the last one, or the green it earns is for a defect nobody restored.
+    name: 'the stair takes the last body on the storey, not the house',
+    find: '    return pool.reduce((best, body) =>\n'
+      + '      ownArea(body.outline) > ownArea(best.outline) ? body : best).outline;',
+    with: '    return bodies[bodies.length - 1].outline;',
+    test: 'the stair to the second floor lands in the house, not over the garage' },
+  { file: 'MODEL.html',
+    name: 'a room entirely over the garage is still counted as the house',
+    find: '    return inBody > 0 && over / inBody > OVER_GARAGE_BODY_SHARE;',
+    with: '    return false;',
+    test: 'the stair to the second floor lands in the house, not over the garage' },
+  { file: 'MODEL.html',
+    name: 'the biggest body loses to the first one filed',
+    find: '    return pool.reduce((best, body) =>\n      ownArea(body.outline) > ownArea(best.outline) ? body : best).outline;',
+    with: '    return pool[0].outline;',
+    test: 'a built two-storey arrives with stacked flights and cut openings' },
+
   { file: 'MODEL.html',
     name: 'the runs are placed and the floor is never opened',
     find: '    const cut = buildStairOpenings();',

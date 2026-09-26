@@ -44,10 +44,23 @@ function loadDraftModules() {
 }
 
 // A canvas 2d context that records instead of painting. Every path is kept
-// as its raw screen points plus the ink it was stroked with.
+// as its raw screen points plus the ink it was stroked with, and every piece
+// of TEXT as its anchor and alignment.
+//
+// TEXT IS RECORDED BECAUSE THE READINGS ARE PLACED, not just printed. The
+// elevation's level marks are right-aligned at `marginL - 22` -- they hang
+// OUTSIDE the drawing, in the left margin -- so where they land is a claim
+// about the margin and nothing about the strokes can see it. This threw its
+// arguments away until 25 Sep, which is why nothing offline noticed the
+// numbers being drawn under an open side menu.
+//
+// measureText STILL ANSWERS ZERO, because there is no font engine here and a
+// made-up width would be worse than none: a check that needs to know how wide
+// a label is has to say so and use its own number.
 function recordingCtx() {
   const strokes = [];
   const fills = [];
+  const texts = [];
   let cur = null;
   const ctx = {
     strokeStyle: '#000', fillStyle: '#000', lineWidth: 1, font: '', textAlign: '', textBaseline: '',
@@ -62,11 +75,15 @@ function recordingCtx() {
     strokeRect() {}, clearRect() {}, rect() {},
     save() {}, restore() {}, translate() {}, rotate() {}, scale() {},
     setLineDash() {}, getLineDash() { return []; },
-    fillText() {}, strokeText() {}, measureText: () => ({ width: 0 }),
+    fillText(text, x, y) {
+      texts.push({ text: String(text), x, y, align: this.textAlign,
+        baseline: this.textBaseline, ink: this.fillStyle, font: this.font });
+    },
+    strokeText() {}, measureText: () => ({ width: 0 }),
     arc() {}, ellipse() {}, quadraticCurveTo() {}, bezierCurveTo() {}, clip() {},
     createLinearGradient: () => ({ addColorStop() {} }),
   };
-  return { ctx, strokes, fills };
+  return { ctx, strokes, fills, texts };
 }
 
 // Mirrors LAYOUT.html's _cutViewEnv over a saved drawing's JSON.

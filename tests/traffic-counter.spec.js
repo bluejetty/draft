@@ -53,7 +53,7 @@ test('a page load reports a hit and wears the public count', async ({ page, base
 // other pages -- serve the app under a stand-in domain and answer for the
 // counter host -- and the page the feature was actually for was the one page
 // not asked the question.
-test('MODEL.html wears the count on the instruments row, left of STATUS READOUT',
+test('MODEL.html wears the count on the bar\'s lowest row, beside the clock',
   async ({ page, baseURL }) => {
     await proxyApp(page, baseURL);
     const hits = [];
@@ -77,25 +77,40 @@ test('MODEL.html wears the count on the instruments row, left of STATUS READOUT'
     // INSIDE THE NAMED HOME, not after the PROJECT corner. The two are
     // different rules in the module -- a named home means append, the corner
     // means insert after -- and this page has both, so landing in the wrong
-    // one would put the count on the row of page links a floor below.
+    // one would put the count on the row of page links.
+    //
+    // THE HOME MOVED DOWN A ROW ON 25 SEP. It stood beside STATUS READOUT
+    // until then (Movie, 19 Sep: "2nd row from bottom to the left of 'STATUS
+    // READOUT'") and he moved it into the bar's own hem with the clock: "move
+    // the '# VISITS' and the DATE/TIME down below PROJECT / MODEL / REAL
+    // ESTATE / BONE / CONSTRUCTION / SPECTS / etc. on the lowest row". So the
+    // row it must be on is the foot lane's, the clock is what it shares that
+    // row with, and STATUS READOUT is now something it is BELOW.
     const where = await page.evaluate(() => {
       const el = document.querySelector('[data-traffic-counter]');
       const home = document.querySelector('[data-visit-counter-home]');
       const readout = document.querySelector('[data-readout-tab]');
+      const clock = document.getElementById('clock');
       return {
         inHome: !!home && home.contains(el),
-        row: !!readout && readout.parentElement === home.parentElement,
-        // LEFT OF IT IN PIXELS, which is what Movie actually asked for --
-        // DOM order and screen order are the same here only because nothing
-        // in this row is reversed, and that is a fact worth asserting rather
-        // than assuming.
-        leftOf: el.getBoundingClientRect().right
-          <= readout.getBoundingClientRect().left + 0.5,
+        row: !!home && home.parentElement
+          && home.parentElement.id === 'foot-lane',
+        belowReadout: !!readout && el.getBoundingClientRect().top
+          >= readout.getBoundingClientRect().bottom,
+        // AT THE LEFT END OF THAT ROW, with the clock at the other. DOM order
+        // and screen order are the same here only because nothing in this row
+        // is reversed, and that is a fact worth asserting rather than
+        // assuming -- the lane places the clock with `margin-left:auto`, which
+        // is exactly the kind of rule that can be dropped without a trace.
+        leftOf: !!clock && el.getBoundingClientRect().right
+          <= clock.getBoundingClientRect().left + 0.5,
       };
     });
     expect(where.inHome, 'it goes in the slot the page named').toBe(true);
-    expect(where.row, 'which is the row STATUS READOUT is on').toBe(true);
-    expect(where.leftOf, 'and it sits to the left of it').toBe(true);
+    expect(where.row, 'which is the lowest row of the bottom bar').toBe(true);
+    expect(where.belowReadout, 'below STATUS READOUT, not beside it').toBe(true);
+    expect(where.leftOf, 'and it sits at that row\'s left end, the clock at its right')
+      .toBe(true);
   });
 
 // AND NEVER INSIDE THE PAGE ROW, which is the rule the corner anchor above
@@ -111,12 +126,22 @@ test('MODEL.html wears the count on the instruments row, left of STATUS READOUT'
 // This runs on the pages that wear the bars, and it is the check that would
 // have failed on the day the bars landed.
 //
+// AND THE SLOT MOVED DOWN A ROW ON 25 SEP, which is Movie's again: "move the
+// '# VISITS' and the DATE/TIME down below PROJECT / MODEL / REAL ESTATE /
+// BONE / CONSTRUCTION / SPECTS / etc. on the lowest row". The home is now
+// #foot-lane, the hem inside the bar that is kept clear of a browser's link
+// preview -- still not among the views, one row under them. The rule this
+// file gates is unchanged by that: the count is not a page chip.
+//
 // WHAT IT ACTUALLY GATES, measured rather than assumed. Two mutations were
 // tried against it:
 //
 //   REMOVE counterSlot() FROM PROJECT  -> KILLED, by name. That is the real
 //   regression: the page stops offering the slot, homeOf() falls through to
 //   the corner link, and the corner link on a barred page is a page chip.
+//   counterSlot() itself is gone now -- bottomBar() carries the home -- so
+//   the same mutation today is DROP FOOTLANE FROM BOTTAIL, which kills this
+//   by the identical route on all three pages at once rather than one.
 //
 //   WIDEN THE CORNER ANCHOR BACK to every [data-project-corner-bl] -> SURVIVED,
 //   and that is not a hole. Once a page mounts the slot, homeOf() returns the
@@ -143,21 +168,86 @@ for (const page_ of ['PROJECT.html', 'SPECS.html', 'MODEL.html']) {
       return {
         mounted: !!c,
         inPageRow: !!(c && row && row.contains(c)),
-        // The slot it SHOULD be in: fixed above the bar, no background of its
-        // own. Its absence is as much a failure as the wrong parent -- a count
-        // that quietly stopped mounting would pass an "is it in the row" check
-        // perfectly.
-        inSlot: !!(c && c.closest('#lower-left')),
+        // The slot it SHOULD be in: the bar's own lowest row, under the page
+        // links. Its absence is as much a failure as the wrong parent -- a
+        // count that quietly stopped mounting would pass an "is it in the
+        // row" check perfectly.
+        inSlot: !!(c && c.closest('#foot-lane')),
+        // AND BELOW THE LINKS, not merely elsewhere. #foot-lane is a child of
+        // the same bar #page-row is in, so "not in the page row" is no longer
+        // much of a claim on its own -- this is the one that says which row.
+        belowLinks: (() => {
+          const row = document.getElementById('page-row');
+          return !!(c && row
+            && c.getBoundingClientRect().top >= row.getBoundingClientRect().bottom);
+        })(),
       };
     });
     expect(where.mounted, 'the count mounted at all -- this file is measuring '
       + 'nothing if it did not').toBe(true);
     expect(where.inPageRow, 'the count is wedged among the page links, which is '
       + 'what Movie saw on the live site').toBe(false);
-    expect(where.inSlot, 'it belongs in the transparent slot above the bar, the '
-      + 'same one MODEL uses').toBe(true);
+    expect(where.inSlot, 'it belongs in the bar\'s own lowest row, the same one '
+      + 'MODEL uses').toBe(true);
+    expect(where.belowLinks, 'and BELOW the page links rather than beside them')
+      .toBe(true);
   });
 }
+
+// CONSTRUCTION LAYOUT NAMES ITS OWN HOME, AND NOW IT HAS TWO TO CHOOSE FROM.
+//
+// Movie put the count on that page's own strip (23 Sep: "the viewcounter in
+// that location lower left bar 2nd row up(top row)"), so LAYOUT.html carries
+// a [data-visit-counter-home] in its markup at :581. The shared bar's foot
+// lane brought a second one in on 25 Sep, mounted by bottomBar() at :614.
+//
+// WHICH ONE WINS IS PARSE ORDER, and that is the module's designed rule --
+// traffic-counter.js takes the FIRST named home in the document, which is how
+// a page overrides the bar's default. LAYOUT's own markup is parsed before it
+// calls bottomBar(), so his placement stands.
+//
+// AND THAT IS EXACTLY WHY THIS IS HERE. A rule that holds by parse order
+// holds until somebody moves a script tag, and nothing in the suite said so:
+// the loop above asserts the count lands in #foot-lane, which is the wrong
+// answer for this page by design, so it does not cover LAYOUT and cannot.
+// This is the line that fails the day the two script tags trade places.
+test('Construction Layout keeps the count on its own strip, not in the bar',
+  async ({ page, baseURL }) => {
+    await proxyApp(page, baseURL);
+    await page.route(`${GC_HOST}/**`, route => {
+      const url = new URL(route.request().url());
+      if (url.pathname.endsWith('.json')) {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ count: '9' }) });
+      }
+      return route.fulfill({ status: 200, contentType: 'image/gif', body: Buffer.from('R0lGODlhAQABAAAAACw=', 'base64') });
+    });
+    await page.goto('https://draft.test/LAYOUT.html');
+    const counter = page.locator('[data-traffic-counter]');
+    await expect(counter).toHaveText('9 VISITS');
+
+    const where = await page.evaluate(() => {
+      const el = document.querySelector('[data-traffic-counter]');
+      const homes = [...document.querySelectorAll('[data-visit-counter-home]')];
+      return {
+        homes: homes.length,
+        // THE PAGE'S OWN, which is the one that is NOT the bar's.
+        landedInPageHome: !!el && !el.closest('#foot-lane')
+          && homes.some(h => h.contains(el)),
+        // AND IT IS THE FIRST OF THEM, said separately so a failure names the
+        // cause rather than the symptom.
+        landedInFirst: !!el && !!homes[0] && homes[0].contains(el),
+        inFootLane: !!el && !!el.closest('#foot-lane'),
+      };
+    });
+    expect(where.homes, 'this page declares its own home beside the bar\'s')
+      .toBe(2);
+    expect(where.landedInFirst, 'the count takes the FIRST home in the document')
+      .toBe(true);
+    expect(where.inFootLane, 'so it is not in the bar\'s lowest row here')
+      .toBe(false);
+    expect(where.landedInPageHome, 'it is on the strip Movie put it on')
+      .toBe(true);
+  });
 
 test('the count sits to the right of PROJECT where a strip has one', async ({ page, baseURL }) => {
   await proxyApp(page, baseURL);
