@@ -383,6 +383,11 @@ if (!window.DraftCutView) {
   // a width. A garage with no overhead door has no fall to measure and no
   // buck to show: its slab is level with the pour and a man door sits on it.
   const GARAGE_DOOR_BUCK_IN = 12;
+  // WHAT AN EXTERIOR DOOR STANDS ON. Movie, 26 Sep: "we should put the
+  // exterior 'mandoor's thresholds at 1/2" (to avoid the bottom line not
+  // showing ...) and usually there is one on exterior doors". An overhead
+  // door takes none -- it seals to the slab.
+  const DOOR_THRESHOLD_IN = 0.5;
   // The overhead door's wall, as an origin and a unit normal, or null.
   function garageDoorDatum(env, garage) {
     const byId = new Map(env.walls().map(w => [w.id, w]));
@@ -2102,7 +2107,8 @@ if (!window.DraftCutView) {
         const half = Math.abs(perFt) * f.width / 2;
         if (half < 0.05) return;       // this door is edge on to this view
         const uc = p1.u + perFt * f.offset;
-        bucks.push({ lo: uc - half, hi: uc + half, depth: (p1.d + p2.d) / 2, open });
+        bucks.push({ id: f.id, lo: uc - half, hi: uc + half,
+          depth: (p1.d + p2.d) / 2, open });
       });
     });
     // THE FACE'S OWN, and a foot of slack on depth for the same reason the
@@ -3100,7 +3106,39 @@ if (!window.DraftCutView) {
         const head = f.headHeight > 0 ? f.headHeight : HEAD_FT;
         const sill = f.sillHeight > 0 ? f.sillHeight : SILL_FT;
         const top = Math.min(floor + head, level.wallTop);
-        const bottom = f.type === 'door' ? floor : floor + sill;
+        // ── A DOOR STANDS ON WHAT IS ACTUALLY UNDER IT ──────────────────
+        //
+        // Movie, 26 Sep, on the elevation once the bucks were drawn: "why is
+        // there an extra line in door buck? looks like top of sill plate
+        // location (marked red arrows) and we should put the exterior
+        // 'mandoor's thresholds at 1/2" (to avoid the bottom line not showing
+        // like marked in green) and usually there is one on exterior doors".
+        //
+        // TWO THINGS, AND BOTH ARE THIS ONE EXPRESSION. It read `floor` for
+        // every door: the wall's own floor, which for a garage wall is the
+        // top of its sill plate.
+        //
+        // THE EXTRA LINE IS THE WALL'S FILL, ENDING. Over a buck the concrete
+        // is notched away and the door stopped at the plate, so between the
+        // two -- nine and a half inches on a drive-thru twoStorey-garage --
+        // the wall's own fill edge stood against bare ground with nothing
+        // drawn on it. `C.face` and the page's ground are not the same white,
+        // so the seam reads as a line at exactly the height Movie named.
+        // A DOOR IN A BUCK GOES DOWN TO THE SLAB: the buck is formed so the
+        // door can, and the slab poured over it is what the door closes onto.
+        //
+        // AND AN EXTERIOR DOOR STANDS ON A THRESHOLD, which is the other
+        // half: with the bottom AT the floor its line lands exactly on the
+        // wall's own base line and there is nothing to see. Half an inch is
+        // the detail as well as the fix -- an exterior door has a sill under
+        // it. An OVERHEAD door does not: it seals to the slab, which is why
+        // `f.garage` takes none.
+        const buck = f.type === 'door' && face.garage
+          ? bucks.find(b => b.id === f.id) : null;
+        const stands = buck
+          ? garageConcreteTop(env, fdn, face.garage) - buck.open : floor;
+        const bottom = f.type !== 'door' ? floor + sill
+          : stands + (f.garage ? 0 : DOOR_THRESHOLD_IN / 12);
         ctx.fillStyle = C.recess;
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
         ctx.fillRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
@@ -4243,6 +4281,7 @@ if (!window.DraftCutView) {
       GARAGE_SLAB_AT_DOOR_IN,
       GARAGE_SLAB_FLAT_AT_FT,
       GARAGE_DOOR_BUCK_IN,
+      DOOR_THRESHOLD_IN,
       GARAGE_BEAM_PLATE_IN,
     GARAGE_BEAM_CONCRETE_IN,
       GRADE_BELOW_FOUNDATION_TOP_FT,

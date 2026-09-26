@@ -866,10 +866,36 @@ function run(win) {
         const bear = garage ? CV.garageBearing(base, fdn, garage) : fdn.wallTop;
         if (bear - conc < 0.01) return;               // nothing bears a plate here
         if (conc - fdn.grade < 0.4) return;           // no exposed face to stand on
+        // ── AND NOT ACROSS A DOOR, where there is no plate to paint ─────
+        //
+        // A door buck is notched out of the top of the beam and the door
+        // stands in it, so over its width the plate band carries the DOOR,
+        // not the wall's finish. Eight stations walked blindly across a
+        // garage's front wall put two of them inside a 16 ft overhead door
+        // and read the recess.
+        //
+        // TAKEN FROM THE MODEL, not from what is painted there: asking the
+        // drawing "is the concrete missing here" would let a painter that
+        // wrongly removed it skip its own defect.
+        const doors = base.fenestrations()
+          .filter(f => (f.type || f.kind) === 'door')
+          .map(f => {
+            const dw = base.walls().find(x => x.id === f.wallId);
+            if (!dw || !garage || CV.garageOfWall(dw, base, {}) !== garage) return null;
+            const len = Math.hypot(dw.end.x - dw.start.x, dw.end.z - dw.start.z);
+            if (!(len > 1e-6)) return null;
+            const a = uOf(dw.start), b = uOf(dw.end);
+            const perFt = (b - a) / len;
+            const uc = a + perFt * f.offset;
+            const half = Math.abs(perFt) * f.width / 2;
+            return half > 0.05 ? { lo: uc - half, hi: uc + half } : null;
+          }).filter(Boolean);
+        const inDoor = u => doors.some(d => u > d.lo - 0.05 && u < d.hi + 0.05);
         const N = 9;
         const seen = [];
         for (let i = 1; i < N; i += 1) {
           const u = lo + (hi - lo) * i / N;
+          if (inDoor(u)) continue;
           const below = fillAt(painted, u, conc - 0.3);
           // THE CONCRETE MUST BE SHOWING or this vertical says nothing: where
           // a nearer face covers it there is no strip to paint.
@@ -1256,6 +1282,93 @@ function run(win) {
     // inches" are the same claim and a constant would pass everything above.
     check('fixture: and one of them is not the overhead door',
       shallower > 0, `${shallower} of ${notched} further in`);
+  }
+
+  // ── AND A DOOR STANDS ON WHAT IS UNDER IT ─────────────────────────────
+  //
+  // Movie, 26 Sep, once the bucks were drawn: "why is there an extra line in
+  // door buck? looks like top of sill plate location ... and we should put
+  // the exterior 'mandoor's thresholds at 1/2" (to avoid the bottom line not
+  // showing ...) and usually there is one on exterior doors".
+  //
+  // TWO CLAIMS, ONE PER HALF. A door in a buck reaches DOWN to the slab --
+  // the buck is formed so it can, and stopping at the wall's floor left the
+  // wall fill's own edge showing across the opening at plate height, which is
+  // the line he named. And an exterior door stands half an inch PROUD of what
+  // it stands on, so its bottom line clears the line under it; an overhead
+  // door takes none, because it seals to the slab.
+  {
+    const S3 = CV.STANDARDS;
+    let doors = 0, thresholds = 0, inBucks = 0;
+    [['repro-garage-house', base],
+      ['repro-2storey-garage-beam', buildEnv(win, JSON.parse(fs.readFileSync(
+        path.join(ROOT, 'proto', 'repro-2storey-garage-beam.draft'), 'utf8')))],
+    ].forEach(([fixture, env]) => {
+      const eStack = CV.sectionLevelStack(env);
+      const eFdn = eStack.foundation;
+      const byId = new Map(env.walls().map(w => [w.id, w]));
+      standardElevationCuts(env).forEach(cut2 => {
+        const view = paintElevation(win, env, cut2, { pxPerFt: 400 });
+        const axis = view.axis;
+        env.fenestrations().forEach(f => {
+          if ((f.type || f.kind) !== 'door') return;
+          const wall = byId.get(f.wallId);
+          if (!wall) return;
+          const garage = CV.garageOfWall(wall, env, {});
+          const level = eStack.floors.find(l => l.id === wall.levelId);
+          if (!level) return;
+          const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+          if (!(len > 1e-6)) return;
+          const uA = wall.start.x * axis.x + wall.start.z * axis.z;
+          const uB = wall.end.x * axis.x + wall.end.z * axis.z;
+          const perFt = (uB - uA) / len;
+          const half = Math.abs(perFt) * f.width / 2;
+          if (half < 0.25) return;                    // edge on to this view
+          const uc = uA + perFt * f.offset;
+          // THE OPENING, found by its span: the painter fills a door's recess
+          // as a rectangle exactly the door's width.
+          const box = view.modelFills.find(fl => fl.pts.length === 4
+            && Math.abs(Math.min(...fl.pts.map(q => q.u)) - (uc - half)) < 0.05
+            && Math.abs(Math.max(...fl.pts.map(q => q.u)) - (uc + half)) < 0.05
+            && Math.max(...fl.pts.map(q => q.e))
+              - Math.min(...fl.pts.map(q => q.e)) > 3);
+          if (!box) return;                           // hidden on this view
+          const drawn = Math.min(...box.pts.map(q => q.e));
+          // WHAT IT STANDS ON, from the model. A garage door stands on the
+          // slab that filled its buck, which is the top of concrete less the
+          // slab's fall there; everything else stands on its own floor.
+          let stands = garage ? CV.garageConcreteTop(env, eFdn, garage) : level.floorTop;
+          if (garage) {
+            const t = f.offset / len;
+            const pt = { x: wall.start.x + (wall.end.x - wall.start.x) * t,
+              z: wall.start.z + (wall.end.z - wall.start.z) * t };
+            stands -= CV.garageDoorOpeningFt(env, garage, pt);
+            inBucks += 1;
+          }
+          const sill = f.garage === true ? 0 : S3.DOOR_THRESHOLD_IN / 12;
+          if (sill) thresholds += 1;
+          doors += 1;
+          check(`${fixture} ${cut2.id} ${f.id}: stands on ${f.garage === true
+            ? 'the slab' : 'a half-inch threshold'}`,
+            Math.abs(drawn - (stands + sill)) < 0.005,
+            `bottom ${drawn.toFixed(4)} against ${(stands + sill).toFixed(4)}`
+            + ` -- ${(stands).toFixed(4)} plus ${(sill * 12).toFixed(2)}"`);
+          // AND ITS BOTTOM LINE IS CLEAR OF THE LINE UNDER IT, which is the
+          // whole point of the threshold: at the floor exactly, the door's
+          // own outline lands on the wall's base line and there is nothing to
+          // see.
+          if (!sill) return;
+          check(`${fixture} ${cut2.id} ${f.id}: and its bottom line clears the floor`,
+            drawn > stands + 0.02,
+            `${((drawn - stands) * 12).toFixed(3)}" of threshold`);
+        });
+      });
+    });
+    check('fixture: some door was measured', doors > 0, `${doors} door(s)`);
+    check('fixture: and one of them stands in a buck', inBucks > 0,
+      `${inBucks} in a garage`);
+    check('fixture: and one of them has a threshold', thresholds > 0,
+      `${thresholds} with a sill`);
   }
 
   // ── A FOOTING IS NOT FLAT ON ONE SIDE ─────────────────────────────────
@@ -1677,6 +1790,21 @@ const MUTATIONS = [
   ['the sill plate is painted across the door opening',
     s => s.replace('      runs.forEach(r => notched(r, bs).filter(p => !p.drop)',
       '      runs.forEach(r => notched(r, bs).filter(p => true)')],
+  // AND THE THREE WAYS A DOOR STOPS STANDING ON WHAT IS UNDER IT. The first
+  // is the 26 Sep defect itself -- a door in a buck stopping at the wall's
+  // floor, which leaves the wall fill's own edge showing across the opening
+  // at plate height. The second takes the threshold away, so the door's
+  // bottom line lands on the wall's base line and disappears. The third gives
+  // the overhead door one, which it must not have: it seals to the slab.
+  ['a door in a buck stops at the plate instead of reaching the slab',
+    s => s.replace("        const buck = f.type === 'door' && face.garage",
+      "        const buck = false && f.type === 'door' && face.garage")],
+  ['an exterior door stands flush on the floor, with no threshold under it',
+    s => s.replace('          : stands + (f.garage ? 0 : DOOR_THRESHOLD_IN / 12);',
+      '          : stands;')],
+  ['the overhead door is given a threshold it does not have',
+    s => s.replace('          : stands + (f.garage ? 0 : DOOR_THRESHOLD_IN / 12);',
+      '          : stands + DOOR_THRESHOLD_IN / 12;')],
   ['a wall hides the beam from below its own footing',
     s => s.replace('          && bottomOf(o) <= mine + 1e-6 && o.topE > mine + 1e-6);',
       '          && bottomOf(o) >= mine + 1e-6 && o.topE > mine + 1e-6);')],
