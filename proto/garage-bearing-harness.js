@@ -1106,6 +1106,61 @@ function run(win) {
     });
     check('fixture: some elevation draws a footing side at all',
       sides > 0, `${sides} side(s) off the excavation floor`);
+
+    // ── AND THE WALL ABOVE THAT SHOULDER IS DRAWN TOO ─────────────────
+    //
+    // Movie, 26 Sep, marking it in green on E1: "the footing is correct, but
+    // the line of the ext of foundation wall going up to grade level is
+    // missing".
+    //
+    // IT WAS NEVER DRAWN; THE RISER WAS STANDING IN FOR IT. Before the cap
+    // above, the silhouette climbed the whole step at the FOOTING's outer
+    // edge and read as the foundation's edge going up. Capping it to the
+    // footing's own 8" was right and left the wall's real face, a foot
+    // further in, bare:
+    //
+    //     u -16.00   -9.173..-2.323   the run's own left end, drawn
+    //     u  16.00   NOTHING          interior to the merged run
+    //
+    // WHERE THE CONCRETE CARRIES THROUGH THERE IS NO FACE, which is the same
+    // partition the shoulder uses and is not a gap: on this fixture the
+    // house's foundation is three runs meeting at u +/-4, and two walls
+    // meeting have no exposed end between them. The claim is about the ends
+    // that ARE exposed.
+    let faces = 0;
+    standardElevationCuts(base).forEach(cut => {
+      const painted = paintElevation(win, base, cut, { pxPerFt: 40 });
+      const axis = painted.axis;
+      const uOf = pt => pt.x * axis.x + pt.z * axis.z;
+      const walls = base.walls()
+        .filter(w => (w.view || 'plan') === 'foundation' && w.baseHeight <= 0.01)
+        .map(w => ({ lo: Math.min(uOf(w.start), uOf(w.end)), hi: Math.max(uOf(w.start), uOf(w.end)) }))
+        .filter(g => g.hi - g.lo >= 0.5);
+      const bare = [];
+      walls.forEach(g => [g.lo, g.hi].forEach(u => {
+        // EXPOSED means no other bearing wall carries the concrete through
+        // this station -- a wall meeting a wall has no end to draw.
+        if (walls.some(o => o !== g && u > o.lo + 0.05 && u < o.hi - 0.05)) return;
+        if (u <= painted.uMin + 0.1 || u >= painted.uMax - 0.1) return;
+        faces += 1;
+        const drawn = painted.strokes.some(st => {
+          for (let k = 1; k < st.pts.length; k += 1) {
+            const a = st.pts[k - 1], b = st.pts[k];
+            if (b.move || b.close) continue;
+            if (Math.abs(a.u - b.u) > 0.01 || Math.abs(a.u - u) > 0.06) continue;
+            const lo = Math.min(a.e, b.e), hi = Math.max(a.e, b.e);
+            if (lo < fdn.wallBottom - 0.1 || hi > fdn.grade + 0.1) continue;
+            if (hi - lo > 0.5) return true;
+          }
+          return false;
+        });
+        if (!drawn) bare.push(`u ${u.toFixed(2)}`);
+      }));
+      check(`${cut.id}: every exposed foundation wall end draws its face to grade`,
+        bare.length === 0, bare.join(', '));
+    });
+    check('fixture: some elevation has an exposed foundation wall end',
+      faces > 0, `${faces} end(s) probed`);
   }
 
   // ── ONE RULE, NOT FIVE COPIES ─────────────────────────────────────────
@@ -1308,6 +1363,9 @@ const MUTATIONS = [
   ['a footing-s side climbs to the next bottom instead of stopping at the footing',
     s => s.replace('const top = sideTopAt(stops[s] + (b < prevBottom ? 0.01 : -0.01));',
       'const top = null;')],
+  ['an exposed foundation wall end loses its face above the shoulder',
+    s => s.replace('          const top = Math.min(g.topE, fdn.grade);',
+      '          const top = g.baseE;')],
   ['a pile behind the foundation wall is drawn through it',
     s => s.replace('const infront = fdnGeoms.some(g => g.bearing && g.depth > pileDepth + 1',
       'const infront = false && fdnGeoms.some(g => g.bearing && g.depth > pileDepth + 1')],

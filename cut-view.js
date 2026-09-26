@@ -2318,6 +2318,47 @@ if (!window.DraftCutView) {
           ctx.moveTo(X(lo), Y(g.baseE));
           ctx.lineTo(X(hi), Y(g.baseE));
           ctx.stroke();
+          // ── AND THE WALL ABOVE THE SHOULDER ─────────────────────────
+          //
+          // Movie, 26 Sep, marking it in green on E1: "the footing is
+          // correct, but the line of the ext of foundation wall going up to
+          // grade level is missing".
+          //
+          // IT WAS NEVER DRAWN; THE RISER WAS STANDING IN FOR IT. Before the
+          // cap above, the silhouette climbed the full step at the FOOTING's
+          // outer edge -- six feet at u 16.50 -- and read as the foundation's
+          // edge going up. Capping it to the footing's own 8" was right and
+          // left the wall's real face, a foot further in, bare. Measured on
+          // repro-2storey-garage-beam E1:
+          //
+          //     u -16.00   -9.173..-2.323   the run's own left end, drawn
+          //     u  16.00   NOTHING          interior to the merged run
+          //
+          // THE OUTLINE ONLY WALKS THE RUN'S TWO OUTER ENDS, which is the
+          // same reason the shoulder above was missing: where a hung beam
+          // laps the house, the house's own end is interior and no pass owned
+          // it. This is the vertical that goes with that horizontal.
+          //
+          // TO GRADE, THROUGH WHATEVER IS IN FRONT. Underground there is no
+          // occlusion -- the drawing shows an arrangement, not a view, which
+          // is why a beam's underside is drawn over the house's footing -- so
+          // the face runs from the footing's top to grade even where the
+          // beam laps it.
+          //
+          // UNLESS THE CREASE PASS HAS IT. That pass draws exactly this
+          // vertical where a FARTHER face contains the end; asked the same
+          // way here, the two cannot both take the same u. On E2 the garage
+          // is behind and the crease owns u 20; on E1 it is in front and
+          // nothing did.
+          const creased = run.faces.some(o => o !== g
+            && o.depth < g.depth - 1e-6 && at > o.lo + 0.05 && at < o.hi - 0.05);
+          if (creased) return;
+          const top = Math.min(g.topE, fdn.grade);
+          if (top - g.baseE < 0.01) return;
+          ctx.beginPath();
+          ctx.moveTo(X(at), Y(g.baseE));
+          ctx.lineTo(X(at), Y(top));
+          ctx.stroke();
         });
       });
       // Viewer-facing corner creases: where a nearer buried face ends inside
