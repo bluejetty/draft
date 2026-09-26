@@ -2635,6 +2635,11 @@ if (!window.DraftCutView) {
       });
       const yTopPx = Y(level.floorTop) - 1, yBotPx = Y(level.floorBottom) + 1;
       ctx.fillStyle = C.face;
+      // WHAT WAS ACTUALLY PAINTED, kept for the edge pass below. The run is
+      // the house's own extent; the PARTS are what survived the clip against
+      // whatever stands in front, and the two are different the moment a
+      // garage laps the house.
+      const paintedOf = new Map();
       runs.forEach(run => {
         if (run.hi - run.lo < 0.5) return;
         const depth = Math.max(...spans
@@ -2644,7 +2649,9 @@ if (!window.DraftCutView) {
         // package seen flat, and a garage in front of it is a wall, not a
         // window. What is pushed to rimBands is what was PAINTED, so the roof
         // pass downstream reads the same surface the sheet shows.
-        uncovered(run.lo, run.hi, depth).forEach(part => {
+        const parts = uncovered(run.lo, run.hi, depth);
+        paintedOf.set(run, parts);
+        parts.forEach(part => {
           ctx.fillRect(X(part.lo) - 1, yTopPx, (part.hi - part.lo) * pxPerFt + 2, yBotPx - yTopPx);
           rimBands.push({
             lo: part.lo, hi: part.hi,
@@ -2664,9 +2671,30 @@ if (!window.DraftCutView) {
         // Movie's drawing the second of the two see-through verticals was a
         // run end, which is why gating only the interior edges below removed
         // one of the pair and left its twin.
+        //
+        // ── AND THE BAND'S ENDS ARE THE PAINTED PARTS', NOT THE RUN'S ─────
+        //
+        // Movie, 25 Sep, on E1 of his 1 STOREY + GARAGE: "the missing line
+        // near middle".
+        //
+        // THIS IS THE OTHER HALF OF THE CLIP. The fill learned to stop where
+        // a garage stands in front of the band; the edges did not, and went
+        // on being drawn at the run's own ends -- which by then were UNDER
+        // the garage. Measured on that build: the house's faces run u -20..20
+        // and the garage's -46..-19, so the band is painted from -19 and its
+        // closing edge was drawn at -20, a foot inside the garage wall and
+        // invisible behind it. The band simply ran into the garage with
+        // nothing terminating it.
+        //
+        // A RUN WITH NOTHING IN FRONT OF IT IS UNCHANGED: uncovered() hands
+        // back the whole span, so its parts' ends ARE the run's ends and the
+        // same two lines are drawn as before. Only a clipped run moves, and
+        // it moves to where the ink actually stops.
         const midE = (level.floorBottom + level.floorTop) / 2;
-        [run.lo, run.hi].forEach(u => {
-          if (!behindRoof(atUDepth(u, runDepth(spans, u)), midE)) edges.add(u);
+        (paintedOf.get(run) || []).forEach(part => {
+          [part.lo, part.hi].forEach(u => {
+            if (!behindRoof(atUDepth(u, runDepth(spans, u)), midE)) edges.add(u);
+          });
         });
         spans.forEach(span => [span.lo, span.hi].forEach(u => {
           if (u > run.lo + 0.05 && u < run.hi - 0.05

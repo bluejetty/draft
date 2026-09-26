@@ -46,24 +46,29 @@ const empty = (extra = {}) => ({
   ...extra,
 });
 
+// `cx`/`cz` DEFAULT TO THE ORIGIN, so every caller written before them is
+// unchanged. They exist because a storey with TWO bodies on it cannot be
+// built out of rectangles that all stand in the same place, and two bodies is
+// the only shape that can tell houseOutlineOn's three rules apart.
 const rect = ({ id = 'outline-x', levelId = MAIN_FL, wide = 40, deep = 32,
-  garage = false } = {}) => ({
+  cx = 0, cz = 0, garage = false } = {}) => ({
   id, levelId, garage,
   points: [
-    { x: -wide / 2, y: 0, z: -deep / 2 },
-    { x: wide / 2, y: 0, z: -deep / 2 },
-    { x: wide / 2, y: 0, z: deep / 2 },
-    { x: -wide / 2, y: 0, z: deep / 2 },
+    { x: cx - wide / 2, y: 0, z: cz - deep / 2 },
+    { x: cx + wide / 2, y: 0, z: cz - deep / 2 },
+    { x: cx + wide / 2, y: 0, z: cz + deep / 2 },
+    { x: cx - wide / 2, y: 0, z: cz + deep / 2 },
   ],
 });
 
 // A FLOOR FOR THE HOLE TO BE CUT FROM. `structure: 'floor'` rather than 'slab'
 // is the discriminator buildStairOpenings filters on -- a slab is poured, not
 // framed, and nothing cuts a stairwell out of one.
-const floorOn = ({ id = 'floor-x', levelId = MAIN_FL, wide = 40, deep = 32 } = {}) => ({
+const floorOn = ({ id = 'floor-x', levelId = MAIN_FL, wide = 40, deep = 32,
+  cx = 0, cz = 0 } = {}) => ({
   id, levelId, view: 'plan', structure: 'floor', garage: false,
   slopeInPerFt: 0, thickness: 0.9583333333333334, thickenedEdge: false,
-  points: rect({ wide, deep }).points,
+  points: rect({ wide, deep, cx, cz }).points,
 });
 
 async function open(page, file = empty()) {
@@ -238,6 +243,94 @@ test('the stair to the second floor lands in the house, not over the garage',
         `a stair opening was cut through the room over the garage, at `
         + `x ${c.x.toFixed(1)} z ${c.z.toFixed(1)}`).toBe(false);
     });
+  });
+
+// ── AND IT LANDS IN THE BIGGEST HOUSE BODY, NOT THE FIRST ONE FILED ────────
+//
+// THE TEST ABOVE CANNOT SAY THIS, and a mutation run is what proved it. On
+// twoStorey-over the house is BOTH the biggest body on the storey AND the
+// first one filed, so the three rules houseOutlineOn composes -- drop the
+// bodies over the garage, then take the largest of what is left -- all give
+// the same answer there. Two of the three mutants written for that change
+// survived: `bodyOverGarage` made to return false, and the reduce replaced by
+// `pool[0]`. Neither changed a coordinate, so nothing could catch them.
+//
+// SO THIS IS THE DRAWING THAT TELLS THEM APART, and every number in it is
+// chosen to break one of those coincidences:
+//
+//   over-garage   30 x 24 at x +25   720 sq ft   FILED FIRST, and the BIGGEST
+//   house-small   16 x 12 at x -30   192 sq ft   filed before the big one
+//   house-big     24 x 20 at x  -5   480 sq ft   the one the stair belongs in
+//
+// The garage itself stands under the first of them on MAIN FL, so the body
+// above it is genuinely over a garage rather than merely named that way.
+//
+//   correct                       -> house-big   (largest after the filter)
+//   bodyOverGarage returns false  -> over-garage (720 beats 480)
+//   pool[0] instead of the reduce -> house-small (filed first of the two)
+//
+// Three rules, three different answers, one press. THE ASSERTIONS NAME ALL
+// THREE BODIES rather than only refusing the garage: "not over the garage"
+// would pass a stair dropped in the wrong house body, which is exactly the
+// mutant that survived.
+test('the stair takes the biggest house body, not the first one filed',
+  async ({ page }) => {
+    const GARAGE = { wide: 30, deep: 24, cx: 25 };
+    const SMALL = { wide: 16, deep: 12, cx: -30 };
+    const BIG = { wide: 24, deep: 20, cx: -5 };
+    await open(page, empty({
+      outlines: [
+        // MAIN FL: the garage, and the body the lower flight descends in.
+        { ...rect({ id: 'garage', levelId: MAIN_FL, ...GARAGE }), garage: true },
+        rect({ id: 'lower-big', levelId: MAIN_FL, ...BIG }),
+        // 2ND FL, IN THIS ORDER. The order is the fixture: it is what makes
+        // "first filed" a different answer from "largest".
+        rect({ id: 'over-garage', levelId: SECOND_FL, ...GARAGE }),
+        rect({ id: 'house-small', levelId: SECOND_FL, ...SMALL }),
+        rect({ id: 'house-big', levelId: SECOND_FL, ...BIG }),
+      ],
+      floors: [
+        floorOn({ id: 'floor-main', levelId: MAIN_FL, ...BIG }),
+        floorOn({ id: 'floor-2nd', levelId: SECOND_FL, ...BIG }),
+      ],
+    }));
+    await armStair(page);
+    await expect(autoStairButton(page)).toBeEnabled();
+    await autoStairButton(page).click();
+    await page.waitForTimeout(400);
+    await saveNow(page);
+    const saved = await savedFile(page);
+
+    const byId = new Map((saved.outlines || []).map(o => [o.id, o]));
+    const inLoop = (pts, at) => {
+      let inside = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const a = pts[i], b = pts[j];
+        if (((a.z > at.z) !== (b.z > at.z))
+          && (at.x < (b.x - a.x) * (at.z - a.z) / ((b.z - a.z) || Number.EPSILON) + a.x)) {
+          inside = !inside;
+        }
+      }
+      return inside;
+    };
+
+    const upper = (saved.stairs || []).find(stair =>
+      stair.auto === true && Number(stair.levelId) === SECOND_FL);
+    expect(upper, 'no flight was placed on the second floor').toBeTruthy();
+    const mid = {
+      x: (upper.start.x + upper.end.x) / 2,
+      z: (upper.start.z + upper.end.z) / 2,
+    };
+    const where = `x ${mid.x.toFixed(1)} z ${mid.z.toFixed(1)}`;
+
+    expect(inLoop(byId.get('over-garage').points, mid),
+      `the flight was laid out in the room over the garage, at ${where} -- the `
+      + 'over-garage filter is not being applied').toBe(false);
+    expect(inLoop(byId.get('house-small').points, mid),
+      `the flight was laid out in the SMALL house body, at ${where} -- the `
+      + 'storey is being answered by what was filed first, not by area').toBe(false);
+    expect(inLoop(byId.get('house-big').points, mid),
+      `the flight is in none of the three bodies, at ${where}`).toBe(true);
   });
 
 test('every placed stair survives the reload with its id and riser count',
