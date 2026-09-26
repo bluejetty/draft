@@ -383,6 +383,11 @@ if (!window.DraftCutView) {
   // a width. A garage with no overhead door has no fall to measure and no
   // buck to show: its slab is level with the pour and a man door sits on it.
   const GARAGE_DOOR_BUCK_IN = 12;
+  // WHAT AN EXTERIOR DOOR STANDS ON. Movie, 26 Sep: "we should put the
+  // exterior 'mandoor's thresholds at 1/2" (to avoid the bottom line not
+  // showing ...) and usually there is one on exterior doors". An overhead
+  // door takes none -- it seals to the slab.
+  const DOOR_THRESHOLD_IN = 0.5;
   // The overhead door's wall, as an origin and a unit normal, or null.
   function garageDoorDatum(env, garage) {
     const byId = new Map(env.walls().map(w => [w.id, w]));
@@ -2102,7 +2107,8 @@ if (!window.DraftCutView) {
         const half = Math.abs(perFt) * f.width / 2;
         if (half < 0.05) return;       // this door is edge on to this view
         const uc = p1.u + perFt * f.offset;
-        bucks.push({ lo: uc - half, hi: uc + half, depth: (p1.d + p2.d) / 2, open });
+        bucks.push({ id: f.id, lo: uc - half, hi: uc + half,
+          depth: (p1.d + p2.d) / 2, open });
       });
     });
     // THE FACE'S OWN, and a foot of slack on depth for the same reason the
@@ -3100,7 +3106,39 @@ if (!window.DraftCutView) {
         const head = f.headHeight > 0 ? f.headHeight : HEAD_FT;
         const sill = f.sillHeight > 0 ? f.sillHeight : SILL_FT;
         const top = Math.min(floor + head, level.wallTop);
-        const bottom = f.type === 'door' ? floor : floor + sill;
+        // ── A DOOR STANDS ON WHAT IS ACTUALLY UNDER IT ──────────────────
+        //
+        // Movie, 26 Sep, on the elevation once the bucks were drawn: "why is
+        // there an extra line in door buck? looks like top of sill plate
+        // location (marked red arrows) and we should put the exterior
+        // 'mandoor's thresholds at 1/2" (to avoid the bottom line not showing
+        // like marked in green) and usually there is one on exterior doors".
+        //
+        // TWO THINGS, AND BOTH ARE THIS ONE EXPRESSION. It read `floor` for
+        // every door: the wall's own floor, which for a garage wall is the
+        // top of its sill plate.
+        //
+        // THE EXTRA LINE IS THE WALL'S FILL, ENDING. Over a buck the concrete
+        // is notched away and the door stopped at the plate, so between the
+        // two -- nine and a half inches on a drive-thru twoStorey-garage --
+        // the wall's own fill edge stood against bare ground with nothing
+        // drawn on it. `C.face` and the page's ground are not the same white,
+        // so the seam reads as a line at exactly the height Movie named.
+        // A DOOR IN A BUCK GOES DOWN TO THE SLAB: the buck is formed so the
+        // door can, and the slab poured over it is what the door closes onto.
+        //
+        // AND AN EXTERIOR DOOR STANDS ON A THRESHOLD, which is the other
+        // half: with the bottom AT the floor its line lands exactly on the
+        // wall's own base line and there is nothing to see. Half an inch is
+        // the detail as well as the fix -- an exterior door has a sill under
+        // it. An OVERHEAD door does not: it seals to the slab, which is why
+        // `f.garage` takes none.
+        const buck = f.type === 'door' && face.garage
+          ? bucks.find(b => b.id === f.id) : null;
+        const stands = buck
+          ? garageConcreteTop(env, fdn, face.garage) - buck.open : floor;
+        const bottom = f.type !== 'door' ? floor + sill
+          : stands + (f.garage ? 0 : DOOR_THRESHOLD_IN / 12);
         ctx.fillStyle = C.recess;
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
         ctx.fillRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
@@ -3862,36 +3900,82 @@ if (!window.DraftCutView) {
             // The probe direction for this edge, worked out once: the same
             // station cannot need two of them.
             const outward = outwardOf(a, b, rpts);
-            const runs = [];
-            let run = null;
-            for (let s = 0; s <= samples; s++) {
-              const t = s / samples;
+            // WHETHER THIS EDGE SHOWS AT `t`, as one question, so the walk
+            // below and the refinement after it cannot answer it differently.
+            //
+            // NO LINE WHERE THE SHEET DOES NOT STOP. Probed just past the
+            // edge, on this face's own plane, so the two sheets are compared
+            // where they would meet rather than where either ends.
+            //
+            // AND TAKEN A HAIR INSIDE THE EDGE, which is not fussiness. An
+            // edge's ENDPOINTS are corners, and at a corner the probe lands
+            // exactly on the neighbouring roof's own boundary, where
+            // inside-or-out is a coin toss. Measured on the tie's piece, E4:
+            // its 3 ft edge against the house gets three stations, the one at
+            // the shared corner read as "carried on", and a foot and a half of
+            // a line that should be there went with it. Touching at a corner
+            // is not being continued.
+            const showsAt = t => {
               const pt = { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
               const u = ua + (ub - ua) * t;
               const elev = ea + (eb - ea) * t;
-              if (u < uMin - 0.01 || u > uMax + 0.01 || hidden(pt, elev, u)) { run = null; continue; }
-              // NO LINE WHERE THE SHEET DOES NOT STOP. Probed just past the
-              // edge, on this face's own plane, so the two sheets are
-              // compared where they would meet rather than where either ends.
-              //
-              // AND TAKEN A HAIR INSIDE THE EDGE, which is not fussiness. An
-              // edge's ENDPOINTS are corners, and at a corner the probe lands
-              // exactly on the neighbouring roof's own boundary, where
-              // inside-or-out is a coin toss. Measured on the tie's piece,
-              // E4: its 3 ft edge against the house gets three stations, the
-              // one at the shared corner read as "carried on", and a foot and
-              // a half of a line that should be there went with it. Touching
-              // at a corner is not being continued.
+              if (u < uMin - 0.01 || u > uMax + 0.01 || hidden(pt, elev, u)) return false;
               const tp = Math.min(Math.max(t, 0.02), 0.98);
               const past = {
                 x: a.x + (b.x - a.x) * tp + (outward ? outward.x * 0.05 : 0),
                 z: a.z + (b.z - a.z) * tp + (outward ? outward.z * 0.05 : 0),
               };
-              if (outward && carriedOn(roof, past,
-                eaveTop + geo().roofFaceRise(face, past, pitch))) { run = null; continue; }
-              if (!run) { run = { u0: u, e0: elev, u1: u, e1: elev }; runs.push(run); }
-              else { run.u1 = u; run.e1 = elev; }
+              return !(outward && carriedOn(roof, past,
+                eaveTop + geo().roofFaceRise(face, past, pitch)));
+            };
+            // ── AND A RUN ENDS AT THE EDGE, NOT AT THE LAST STATION ───────
+            //
+            // Movie, 26 Sep, on the corner above the tie: "this little 'wall
+            // not fully dark' spot still has light area".
+            //
+            // THE RUN WAS STOPPING A STATION SHORT. Where a garage roof dies
+            // into the house, its gable-end edge is carried on by the tie's
+            // sheet for the part the tie covers and shows for the rest -- and
+            // the boundary between them is wherever the tie starts, which is
+            // nothing to do with where the stations fall. Measured on E4 of a
+            // twoStorey-garage: the edge runs x 8..22, ten stations 1.4 ft
+            // apart, the tie takes over at x = 16, and the last station that
+            // showed was x = 15. So the line stopped at e 10.902 with the
+            // tie's own top at 10.577, leaving FOUR INCHES where the wall
+            // corner underneath is half painted over by the roof's fill and
+            // nothing draws it back.
+            //
+            // BISECTED, because the station spacing is a sampling choice and
+            // the boundary is not. Twelve halvings of a 14 ft edge land inside
+            // a twentieth of an inch, and they are spent only at a boundary --
+            // an edge wholly shown or wholly hidden pays nothing.
+            const edgeBetween = (tShown, tHidden) => {
+              let lo = tShown, hi = tHidden;
+              for (let i = 0; i < 12; i += 1) {
+                const mid = (lo + hi) / 2;
+                if (showsAt(mid)) lo = mid; else hi = mid;
+              }
+              return lo;
+            };
+            const stations = [];
+            for (let s = 0; s <= samples; s += 1) {
+              const t = s / samples;
+              stations.push({ t, shown: showsAt(t) });
             }
+            const atT = t => ({ u: ua + (ub - ua) * t, e: ea + (eb - ea) * t });
+            const runs = [];
+            let run = null;
+            stations.forEach((st, i) => {
+              if (!st.shown) { run = null; return; }
+              const prev = stations[i - 1], next = stations[i + 1];
+              if (!run) {
+                const p = atT(prev ? edgeBetween(st.t, prev.t) : st.t);
+                run = { u0: p.u, e0: p.e, u1: p.u, e1: p.e };
+                runs.push(run);
+              }
+              const q = atT(next && !next.shown ? edgeBetween(st.t, next.t) : st.t);
+              run.u1 = q.u; run.e1 = q.e;
+            });
             const eave = isEaveEdge(ea, eb, eaveTop);
             // AND A RAKE SLOPES, which is what makes it a rake and not the
             // ridge the rake runs up to. `onGable` asks only whether both
@@ -3915,12 +3999,26 @@ if (!window.DraftCutView) {
             // is a visible piece of an edge, not the edge, and that one is
             // guarding run extent rather than answering "is this a rake".
             const rake = !eave && onGable(a, b) && Math.abs(eb - ea) > 0.05;
-            // A run of a single station paints nothing, and the corner it
+            // A run too short to be an edge paints nothing, and the corner it
             // stands on is not "shown" for the soffit return either — a rake
             // hidden behind the house all but its bottom point once hung its
             // soffit line off that one surviving station.
+            //
+            // MEASURED AS A LENGTH, AND AGAINST THE DRAWING'S OWN SHORTEST
+            // EDGE. This used to read "more than 0.05 on either axis", which
+            // was a way of saying "spanned more than one station" back when a
+            // run's ends WERE stations. Now that they are refined to the real
+            // boundary, a run that covers a single station has a real extent
+            // and eleven of them appeared across proto/ at 0.05..0.08 ft --
+            // an inch of ink at a corner, saying nothing.
+            //
+            // HALF A FASCIA. Counted over every fixture, the shortest edge
+            // this painter draws is 0.4500 ft, which is ROOF_FASCIA_IN: the
+            // depth of the board, drawn wherever an eave is cut off square.
+            // So half of it is below anything real by a factor of two and
+            // above every sliver by three, and it moves if the board does.
             const drawn = runs.filter(r =>
-              Math.abs(r.u1 - r.u0) > 0.05 || Math.abs(r.e1 - r.e0) > 0.05);
+              Math.hypot(r.u1 - r.u0, r.e1 - r.e0) > fasciaFt / 2);
             drawn.forEach(r => {
               if (eave) {
                 // An eave wears the fascia band: the light top line and the
@@ -4183,6 +4281,7 @@ if (!window.DraftCutView) {
       GARAGE_SLAB_AT_DOOR_IN,
       GARAGE_SLAB_FLAT_AT_FT,
       GARAGE_DOOR_BUCK_IN,
+      DOOR_THRESHOLD_IN,
       GARAGE_BEAM_PLATE_IN,
     GARAGE_BEAM_CONCRETE_IN,
       GRADE_BELOW_FOUNDATION_TOP_FT,
