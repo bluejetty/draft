@@ -73,6 +73,29 @@ const check = (name, condition, detail) => {
 // The alternative was a height threshold to tell tops from bottoms, which
 // would have been a guess about how far above grade a face's base can sit and
 // would have quietly stopped working the first time a grade beam hung.
+// ── A BUCK'S SILL IS NOT A TOP OF CONCRETE ───────────────────────────────
+//
+// A door buck is a notch cut out of the top of the beam, so the face's stroke
+// now carries its sill as another level run at face weight, inside the band
+// this file reads tops from -- and on repro-movie-garage-2storey E3 that made
+// "two exposed foundation tops" read three: -1.1729, -1.2979 and -1.5479, the
+// last being the man door's.
+//
+// THE TOP OF A FACE IS THE HIGHEST RUN ITS OWN STROKE DRAWS. One face paints
+// its top, its base and now its door sills in a single beginPath/stroke pair
+// -- which is the same fact the note at `levelRuns` already turns on -- so
+// asking each stroke for its highest run names the top of concrete and
+// nothing else. A notch can only go DOWN from it.
+const topRuns = (runs, grade, faceW) => {
+  const best = new Map();
+  runs.filter(r => Math.abs(r.w - faceW) < 1e-9 && r.e > grade + 0.5 && r.e < 0.5)
+    .forEach(r => {
+      const had = best.get(r.stroke);
+      if (!had || r.e > had.e + 1e-9) best.set(r.stroke, r);
+    });
+  return [...best.values()];
+};
+
 const levelRuns = view => {
   const out = [];
   view.strokes.forEach((s, stroke) => {
@@ -110,10 +133,8 @@ if (!fs.existsSync(MOVIE)) {
   const runs = levelRuns(view);
   const grade = runs.filter(r => Math.abs(r.w - GRADE_W) < 1e-9)
     .map(r => r.e).sort((a, b) => a - b)[0];
-  // The two TOPS: the highest distinct elevation band of exposed face ink.
-  const tops = runs.filter(r => Math.abs(r.w - FACE_W) < 1e-9
-    && r.e > grade + 0.5 && r.e < 0.5)
-    .sort((a, b) => a.u0 - b.u0);
+  // The two TOPS: the highest run each exposed face's own stroke draws.
+  const tops = topRuns(runs, grade, FACE_W).sort((a, b) => a.u0 - b.u0);
   check('Movie’s drawing paints two exposed foundation tops on E4',
     tops.length === 2, `${tops.length} found`);
   if (tops.length === 2) {
@@ -185,8 +206,7 @@ if (fs.existsSync(MOVIE)) {
     // THE TWO TOPS, read the way the check above reads them, so the step this
     // crease is allowed to be long is the drawing's own number and not one
     // typed here.
-    const tops = [...new Set(runs.filter(r => Math.abs(r.w - FACE_W) < 1e-9
-      && r.e > grade + 0.5 && r.e < 0.5).map(r => r.e.toFixed(4)))]
+    const tops = [...new Set(topRuns(runs, grade, FACE_W).map(r => r.e.toFixed(4)))]
       .map(Number).sort((a, b) => b - a);
     check(`${id}: the drawing paints two exposed foundation tops`,
       tops.length === 2, `${tops.length}: ${tops.join(', ')}`);

@@ -350,6 +350,62 @@ if (!window.DraftCutView) {
     return top - GARAGE_SLAB_THICKNESS_IN / 12;
   }
 
+  // ── A DOOR BUCK IS ALWAYS A FOOT; WHAT SHOWS OF IT IS NOT ───────────────
+  //
+  // Movie, 26 Sep, settling it: "could we make the man door or a 2ndry garage
+  // door (at back of garage - high point) to adjust the buck based on the slab
+  // ... the slab will always pour over the 1ft door buck and fill in the extra
+  // space". And earlier, on the overhead door: "the 1ft door buck - and 8"
+  // garage door drops. (and 4" slab filling the 4" gap between door and door
+  // buck - completing 24" height grade beam ... the door buck will appear on
+  // the elevations as a 8" opening in the top of the concrete".
+  //
+  // SO THE VOID IS A CONSTANT AND THE FILL IS NOT. Twelve inches is formed out
+  // of the top of the beam at every door, which leaves 20" of concrete under
+  // it whatever else changes; the slab is then poured over the buck and fills
+  // whatever depth is left. WHAT A DRAFTER SEES in the top of the concrete is
+  // the part the slab did not fill, which is exactly the slab's own fall at
+  // that door -- 8" at the overhead door, less further in, nothing at all past
+  // GARAGE_SLAB_FLAT_AT_FT where the slab has climbed level with the pour.
+  //
+  // WHICH IS WHY THIS IS NOT A SECOND NUMBER PER DOOR KIND. Movie's other
+  // figure -- "make it 10" - 4" slab (6")" for a man door -- is this rule at a
+  // particular station and not a constant of its own: a 6" opening is where
+  // the slab has risen two inches, 16 ft in. Measured on a drive-thru
+  // twoStorey-garage, whose garage is 27 ft deep:
+  //
+  //     the overhead door      0.00 ft in   8"      slab fills 4" of the buck
+  //     the man door at back  27.00 ft in   4 5/8"  slab fills 7 3/8"
+  //
+  // THE DATUM IS THE OVERHEAD DOOR'S OWN WALL, because that is what the slab
+  // falls to. The model already says which door that is -- `garage: true` on
+  // the fenestration, set by the builder -- so nothing here has to guess from
+  // a width. A garage with no overhead door has no fall to measure and no
+  // buck to show: its slab is level with the pour and a man door sits on it.
+  const GARAGE_DOOR_BUCK_IN = 12;
+  // The overhead door's wall, as an origin and a unit normal, or null.
+  function garageDoorDatum(env, garage) {
+    const byId = new Map(env.walls().map(w => [w.id, w]));
+    const overhead = env.fenestrations().find(f => f.garage === true
+      && (f.type || f.kind) === 'door'
+      && garageOfWall(byId.get(f.wallId), env, {}) === garage);
+    const wall = overhead && byId.get(overhead.wallId);
+    if (!wall) return null;
+    const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+    const len = Math.hypot(dx, dz);
+    if (!(len > 1e-6)) return null;
+    return { at: wall.start, nx: -dz / len, nz: dx / len };
+  }
+  // How deep the buck shows in the top of the concrete at this plan point, in
+  // FEET. Zero where the slab has caught up with the pour.
+  function garageDoorOpeningFt(env, garage, pt) {
+    const datum = garageDoorDatum(env, garage);
+    if (!datum || !pt) return 0;
+    const into = Math.abs((pt.x - datum.at.x) * datum.nx
+      + (pt.z - datum.at.z) * datum.nz);
+    return garageSlabBelowConcreteIn(into) / 12;
+  }
+
   // Top of a frost-wall garage's CONCRETE, on the section's foundation datum
   // -- one sill plate below where its walls bear. See garageBearing.
   function frostWallTop(env, fdn, garage) {
@@ -2013,11 +2069,72 @@ if (!window.DraftCutView) {
       const rise = plateTopOf(g) - g.topE;
       return rise > 0.01 && rise < PLATE_CAP_FT ? rise : 0;
     };
+    // ── AND A DOOR IS A NOTCH OUT OF THE TOP OF IT ──────────────────────
+    //
+    // Movie, 25 Sep: "i guess the door buck will appear on the elevations as a
+    // 8" opening in the top of the concrete". The note at GARAGE_DOOR_BUCK_IN
+    // has the rule -- a foot of buck at every door, the slab poured over it,
+    // and what shows is the part the slab did not fill.
+    //
+    // MATCHED BY GEOMETRY, not by wall id. A door is a fenestration on a MAIN
+    // FLOOR wall and the concrete under it is a FOUNDATION wall: two records
+    // at one place, with no reference between them. What they do share is
+    // where they stand, so a buck belongs to the face at the same depth whose
+    // span it falls in -- the same question `visibleRuns` above answers for
+    // faces, asked of a door.
+    const bucks = [];
+    env.walls().forEach(wall => {
+      if ((wall.view || 'plan') === 'foundation') return;
+      const garage = garageFor(wall);
+      if (!garage) return;
+      const p1 = proj(wall.start), p2 = proj(wall.end);
+      const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+      if (!(len > 1e-6)) return;
+      const perFt = (p2.u - p1.u) / len;
+      env.fenestrations().forEach(f => {
+        if (f.wallId !== wall.id || (f.type || f.kind) !== 'door') return;
+        const t = f.offset / len;
+        const open = garageDoorOpeningFt(env, garage, {
+          x: wall.start.x + (wall.end.x - wall.start.x) * t,
+          z: wall.start.z + (wall.end.z - wall.start.z) * t,
+        });
+        if (open <= 0.01) return;      // the slab has filled the whole buck
+        const half = Math.abs(perFt) * f.width / 2;
+        if (half < 0.05) return;       // this door is edge on to this view
+        const uc = p1.u + perFt * f.offset;
+        bucks.push({ lo: uc - half, hi: uc + half, depth: (p1.d + p2.d) / 2, open });
+      });
+    });
+    // THE FACE'S OWN, and a foot of slack on depth for the same reason the
+    // pile rule carries one: a wall's concrete and the wall on it are two
+    // records that agree to within their own thickness, not to the inch.
+    const bucksOf = g => bucks.filter(b => Math.abs(b.depth - g.depth) < 1);
+    // A run, cut at every jamb that falls inside it, each piece carrying how
+    // far the concrete is notched there. A run with no door comes back as
+    // itself with a drop of zero, which is what every face had before.
+    const notched = (r, bs) => {
+      const cuts = [r.lo, r.hi];
+      bs.forEach(b => [b.lo, b.hi].forEach(u => {
+        if (u > r.lo + 1e-6 && u < r.hi - 1e-6) cuts.push(u);
+      }));
+      cuts.sort((a, b) => a - b);
+      const out = [];
+      for (let i = 0; i < cuts.length - 1; i += 1) {
+        const lo = cuts[i], hi = cuts[i + 1];
+        if (hi - lo < 0.01) continue;
+        const mid = (lo + hi) / 2;
+        const over = bs.filter(b => mid > b.lo && mid < b.hi);
+        out.push({ lo, hi, drop: over.length ? Math.max(...over.map(b => b.open)) : 0 });
+      }
+      return out;
+    };
     shownFdn.forEach(({ g, runs }) => {
       const shownBase = Math.max(g.baseE, fdn.grade);
+      const bs = bucksOf(g);
       ctx.fillStyle = C.faceShade;
-      runs.forEach(r => ctx.fillRect(X(r.lo), Y(g.topE),
-        (r.hi - r.lo) * pxPerFt, (g.topE - shownBase) * pxPerFt));
+      runs.forEach(r => notched(r, bs).forEach(p => ctx.fillRect(
+        X(p.lo), Y(g.topE - p.drop),
+        (p.hi - p.lo) * pxPerFt, (g.topE - p.drop - shownBase) * pxPerFt)));
       const plate = plateOf(g);
       if (!plate) return;
       // ── THE PLATE WEARS THE WALL'S FINISH, NOT ONE OF ITS OWN ────────
@@ -2039,19 +2156,37 @@ if (!window.DraftCutView) {
       // meaning "the default one" -- and a garage in a different siding would
       // grow a 1 1/2" band of the house's at its foot. Said here rather than
       // left to be noticed, because it would look like a skin bug.
+      // NOT ACROSS A DOOR. The plate is what the wall above bears on, and over
+      // a buck there is no concrete for it to sit on and no wall over it --
+      // there is a door.
       ctx.fillStyle = C.face;
-      runs.forEach(r => ctx.fillRect(X(r.lo), Y(g.topE + plate),
-        (r.hi - r.lo) * pxPerFt, plate * pxPerFt));
+      runs.forEach(r => notched(r, bs).filter(p => !p.drop)
+        .forEach(p => ctx.fillRect(X(p.lo), Y(g.topE + plate),
+          (p.hi - p.lo) * pxPerFt, plate * pxPerFt)));
     });
     // Strokes after every fill, so a near face can't erase a far corner.
     ctx.lineWidth = 1;
     const strokedV = new Set();
     shownFdn.forEach(({ g, runs }) => {
       const shownBase = Math.max(g.baseE, fdn.grade);
+      const bs = bucksOf(g);
       ctx.strokeStyle = INK;
       ctx.beginPath();
       runs.forEach(r => {
-        ctx.moveTo(X(r.lo), Y(g.topE)); ctx.lineTo(X(r.hi), Y(g.topE));
+        // THE TOP FOLLOWS THE NOTCHES and the jambs close them: down at one
+        // side of a door, along its sill, back up at the other. The BASE runs
+        // straight through -- a buck is cut out of the top of the beam and the
+        // 20" under it is continuous concrete.
+        const parts = notched(r, bs);
+        parts.forEach((p, i) => {
+          ctx.moveTo(X(p.lo), Y(g.topE - p.drop));
+          ctx.lineTo(X(p.hi), Y(g.topE - p.drop));
+          const next = parts[i + 1];
+          if (next && Math.abs(next.drop - p.drop) > 0.005) {
+            ctx.moveTo(X(p.hi), Y(g.topE - p.drop));
+            ctx.lineTo(X(p.hi), Y(g.topE - next.drop));
+          }
+        });
         ctx.moveTo(X(r.lo), Y(shownBase)); ctx.lineTo(X(r.hi), Y(shownBase));
       });
       ctx.stroke();
@@ -4047,6 +4182,7 @@ if (!window.DraftCutView) {
       GARAGE_SLAB_SLOPE_IN_PER_FT,
       GARAGE_SLAB_AT_DOOR_IN,
       GARAGE_SLAB_FLAT_AT_FT,
+      GARAGE_DOOR_BUCK_IN,
       GARAGE_BEAM_PLATE_IN,
     GARAGE_BEAM_CONCRETE_IN,
       GRADE_BELOW_FOUNDATION_TOP_FT,
@@ -4058,6 +4194,7 @@ if (!window.DraftCutView) {
     }),
     roofHeelIn,
     garageSlabBelowConcreteIn,
+    garageDoorOpeningFt,
     cutAxis,
     sectionLevelStack,
     extendRunsToEaves,
