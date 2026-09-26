@@ -1952,6 +1952,25 @@ if (!window.DraftCutView) {
         (r.hi - r.lo) * pxPerFt, (g.topE - shownBase) * pxPerFt));
       const plate = plateOf(g);
       if (!plate) return;
+      // ── THE PLATE WEARS THE WALL'S FINISH, NOT ONE OF ITS OWN ────────
+      //
+      // Movie, 26 Sep: "make the sill plate match the 'finish' of main floor
+      // (like how it does it on the house) ... we will be adding EXTERIOR
+      // FINISH MATERIALS - the walls and sill should match the default
+      // EXTERIOR FINISH".
+      //
+      // `C.face` IS THAT, TODAY, and it is the same constant paintFace and
+      // the rim band use -- which is the whole reason the three read as one
+      // surface. The plate is not a material a drafter picks; it is 1 1/2" of
+      // wood with the siding run down over it, so whatever the wall above is
+      // clad in, this is clad in.
+      //
+      // WHEN EXTERIOR FINISH MATERIALS LANDS this line has to follow the
+      // WALL, not the palette: the moment a finish can differ per body or per
+      // face, `C.face` stops meaning "this wall's cladding" and starts
+      // meaning "the default one" -- and a garage in a different siding would
+      // grow a 1 1/2" band of the house's at its foot. Said here rather than
+      // left to be noticed, because it would look like a skin bug.
       ctx.fillStyle = C.face;
       runs.forEach(r => ctx.fillRect(X(r.lo), Y(g.topE + plate),
         (r.hi - r.lo) * pxPerFt, plate * pxPerFt));
