@@ -3471,6 +3471,72 @@ if (!window.DraftCutView) {
           if (l1 < 0.05 || l2 < 0.05 || Math.abs(cross) < 0.02 * l1 * l2) return;
           const u = pt.x * axis.x + pt.z * axis.z;
           if (u < uMin - 0.01 || u > uMax + 0.01 || hidden(pt, eaveTop, u)) return;
+          // ── AND NOT WHERE THE EAVE SIMPLY CARRIES ON ────────────────
+          //
+          // Movie, 25 Sep, on E4 of a 2 STOREY + GARAGE, twice: "the
+          // exterior front house line is showing through in the roof and at
+          // main floor level", then "the line still visible through the roof
+          // on the 2 storey with garage".
+          //
+          // IT IS NOT A WALL LINE. Read off the tape at the house's front
+          // wall line, u -20 on repro-tie-gable E4:
+          //
+          //     seq 57/58   the garage band   u -48.00..-20.00   e 8.10..8.55
+          //     seq 64/65   the stub's band   u -20.00..-17.00   e 8.10..8.55
+          //     seq 60      a riser           u -20.00           e 8.10..8.55
+          //     seq 68      the same riser again
+          //
+          // -- one straight eave, banded in two pieces because it is carried
+          // by two roof POLYGONS, and each polygon creased its own end. Drawn
+          // twice, at 1.25 against the band's own 1, so it reads heavier than
+          // the band it crosses and lands exactly on the house's front wall
+          // line, which is what made it look like the wall showing through.
+          //
+          // THE FILE ALREADY KNOWS THIS SENTENCE. `carriedOn` was written for
+          // the roof EDGE pass, for the same defect one component over --
+          // Movie, on the short gable over the garage tie: "your updated roof
+          // has an extra line in it, that should be all one connected roof".
+          // A corner is a corner of the POLYGON; whether it is a corner of
+          // the BUILDING is a question about the sheet next door, and this
+          // asks the same helper rather than growing a second answer.
+          //
+          // PROBED ALONG THE BOARD, PAST THE CORNER -- not across it, and not
+          // at the corner itself. `carriedOn(roof, pt, ...)` answers no here:
+          // pt is on the neighbour's own boundary, where inside-or-out is a
+          // coin toss, and the edge pass's note says exactly that ("Touching
+          // at a corner is not being continued") and clamps its stations away
+          // from the ends for it. The question a CREASE asks has a direction
+          // the edge pass's has not: does a sheet next door carry this same
+          // board straight on through? So each of the two edges is followed
+          // PAST pt -- outside this polygon by construction, since the
+          // polygon turns there -- and the neighbour is asked at that point.
+          //
+          // AND A HAIR INWARD WITH IT, which the measurement forced. The two
+          // sheets share the eave LINE, so a probe that only steps along it
+          // lands on the neighbour's boundary too and answers the same coin
+          // toss. Measured on repro-tie-gable E4: the shared corner is
+          // (22.00, 20.00), the garage roof runs z 20..48 and the stub
+          // z 17..20, both out to x 22 -- and the along-only probe
+          // (22.00, 19.90) sits exactly on the stub's own edge.
+          //
+          // The nudge is 1/4", against 1 3/4" along, because it climbs the
+          // slope: `carriedOn` matches surfaces to 0.02 ft, and at the
+          // format's steepest pitch 1/4" inward gains well under that while
+          // a whole inch would not.
+          const inwardOf = (a, b) => {
+            const n = outwardOf(a, b, rpts);
+            return n ? { x: -n.x * 0.02, z: -n.z * 0.02 } : { x: 0, z: 0 };
+          };
+          const stepPast = (dir, len, a, b) => {
+            const inw = inwardOf(a, b);
+            return { x: pt.x + dir.x / len * 0.15 + inw.x,
+              z: pt.z + dir.z / len * 0.15 + inw.z };
+          };
+          const past = [
+            stepPast(d1, l1, prev, pt),
+            stepPast({ x: -d2.x, z: -d2.z }, l2, pt, next),
+          ];
+          if (past.some(p => carriedOn(roof, p, eaveTop))) return;
           ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
           ctx.beginPath();
           ctx.moveTo(X(u), Y(eaveTop));
