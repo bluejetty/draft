@@ -1142,8 +1142,26 @@ if (!MUTATION_MODE) {
 // away. A mutation nothing catches is a rule this harness only appears to
 // hold.
 const MUTATIONS = [
+  // ── RE-AIMED: IT WAS NAMED FOR ONE FUNCTION AND MUTATING ANOTHER ────
+  //
+  // Its anchor was `- GARAGE_BEAM_PLATE_IN / 12;\n  }`, which occurs TWICE in
+  // cut-view.js -- at :332 inside garageConcreteTop and at :352 inside
+  // frostWallTop -- and String.replace takes the first. So a mutation called
+  // "frostWallTop stops subtracting the plate" has been taking the plate off
+  // garageConcreteTop for as long as it has existed, and scoring a clean
+  // kill for it. Both are real defects and both are caught, which is exactly
+  // why nothing ever said so: the table read 30/30 either way.
+  //
+  // Found by proto/mutant-anchors-harness.js once it learned to read the
+  // tables the ENGINES carry -- the half of that file written on 26 Sep. It
+  // is the first thing that has ever looked at these anchors.
+  //
+  // AIMED AT THE WHOLE RETURN, so it can only be frostWallTop's: the drop
+  // and the plate are one expression there and the two lines occur nowhere
+  // else together.
   ['frostWallTop stops subtracting the plate (the original defect)',
-    s => s.replace("- GARAGE_BEAM_PLATE_IN / 12;\n  }", ";\n  }")],
+    s => s.replace("    return fdn.wallTop - garageSillDropFt(envBuildType(env), 'frostwall')\n      - GARAGE_BEAM_PLATE_IN / 12;",
+      "    return fdn.wallTop - garageSillDropFt(envBuildType(env), 'frostwall');")],
   // THE ORIGINAL DEFECT, SPELLED AS IT WOULD APPEAR NOW. It used to read
   // `fdn.grade + GARAGE_BEAM_ABOVE_GRADE_FT + GARAGE_BEAM_PLATE_IN / 12`, and
   // that is no longer a mutation at all: with grade corrected, grade + 1'-2"

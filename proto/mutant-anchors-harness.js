@@ -73,8 +73,8 @@ let checked = 0;
 // reports NO TABLE. Measured: that is exactly what it did to toy-bone and
 // toy-roof on the first run of this harness, which is a fitting way for a
 // checker of dead checks to fail.
-const mutantsTable = src => {
-  const start = src.indexOf('const MUTANTS = [');
+const tableAfter = (src, decl) => {
+  const start = src.indexOf(decl);
   if (start < 0) return null;
   const open = src.indexOf('[', start);
   let i = open, depth = 0, inStr = null, esc = false;
@@ -112,7 +112,7 @@ const read = p => fs.readFileSync(path.join(ROOT, p), 'utf8');
 
 for (const name of files) {
   const src = fs.readFileSync(path.join(__dirname, name), 'utf8');
-  const table = mutantsTable(src);
+  const table = tableAfter(src, 'const MUTANTS = [');
   if (!table) { failures.push(`${name}: no 'const MUTANTS = [...]' table found`); continue; }
 
   let mutants;
@@ -161,13 +161,212 @@ for (const name of files) {
   });
 }
 
+// ── AND THE TABLES THE ENGINES CARRY, WHICH THIS NEVER LOOKED AT ────────
+//
+// WHY THIS HALF EXISTS. On 26 Sep a COMMENT-ONLY commit -- not one stroke
+// changed across ten fixtures and forty elevations -- put twenty lines of note
+// between `if (!plate) return;` and the `ctx.fillStyle` under it, which is
+// what garage-bearing-harness's "the strip is painted as concrete" mutant
+// anchored on. CI:
+//
+//     !!! MUTATION DID NOT APPLY: mutation matched nothing
+//     29/30 mutations caught · 1 mutation(s) never applied
+//
+// A MUTATION ANCHOR IS TEXT. "No ink changed" says nothing about whether the
+// gate still has something to bite, so a stroke diff passes it and so does a
+// plain harness run. Only `--mutate` sees it, and CI is the first thing that
+// runs that -- which is the expensive gate being the first to notice, exactly
+// what the half above was written to prevent. It could not: `files` globs
+// *-mutants.js, so the twenty-two ENGINES and their tables had never been
+// anchor-checked at all.
+//
+// THE ENTRIES ARE A DIFFERENT SHAPE, which is why it is a second pass rather
+// than another glob. A *-mutants.js row is a plain object, {name, find, with};
+// an engine's row is a PAIR, ['label', s => s.replace('find', 'with')]. There
+// is no `find` key to read.
+//
+// SO LIVENESS IS ASKED BY APPLICATION, not by parsing: run the row's own
+// function over the subject and see whether anything moved. That is the same
+// question the runner asks ("mutation matched nothing -- it would prove
+// nothing") and it needs no opinion about how the row is written -- chained
+// replaces, a regex find, a helper: if the text comes back identical the
+// anchor is dead, whatever its shape.
+//
+// AMBIGUITY STILL NEEDS THE LITERAL, and that is best-effort: the find string
+// is pulled out of the function's own source. Where it cannot be parsed the
+// check is SKIPPED AND SAID SO rather than passed -- the reason "exactly once"
+// matters is in the note above, and a silent skip would be the same lie this
+// file refuses.
+const engineFiles = fs.readdirSync(__dirname)
+  .filter(n => n.endsWith('-harness.js') && n !== path.basename(__filename))
+  .filter(n => fs.readFileSync(path.join(__dirname, n), 'utf8').includes('const MUTATIONS = ['))
+  .sort();
+
+// An engine names its subject `SRC`, reached either from __dirname or from a
+// ROOT it defined itself. Two spellings, one meaning.
+const engineSubject = src => {
+  const m = src.match(/const SRC = path\.join\(__dirname, '\.\.', '([\w.\-/]+)'\)/)
+    || src.match(/const SRC = path\.join\(ROOT, '([\w.\-/]+)'\)/);
+  return m ? m[1] : null;
+};
+
+// Every string literal handed to a .replace() in the row's source. Quotes and
+// escapes are JS's own, so each is evaluated rather than unescaped by hand.
+// ── AND A MUTATION MAY MEAN EVERY COPY, ON PURPOSE ──────────────────────
+//
+// "Exactly once" is the right rule for `.replace(string, ...)` because that
+// call rewrites THE FIRST MATCH ONLY -- the note above this pass has the
+// reasoning. It is the WRONG rule for a rule that genuinely lives twice.
+//
+// project-page.js carries the roof's heel arithmetic in two places, the
+// house's section and the detached garage's, byte for byte the same three
+// lines. Aiming a mutation at one copy leaves the other ungated and picks
+// which by counting lines; aiming it at BOTH is what "break this rule and
+// see that something notices" actually means there.
+//
+// `.split(find).join(with)` says that, and says it in the code rather than
+// in a comment: it rewrites every occurrence, so "takes the first" does not
+// apply and more than one match is the intent. The find is still read, and
+// still has to occur AT ALL -- a dead anchor is a dead anchor either way.
+const REPLACE_LIT = /\.replace\(\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)\s*,/g;
+const SPLIT_LIT = /\.split\(\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)\s*\)\s*\.join\(/g;
+//
+// AND NOT A .replace() THAT BUILDS THE FIND ITSELF. premade-plans writes its
+// anchors with `-s` where an apostrophe goes and restores it in place:
+//
+//     s.replace('pt(houseRight, tieZ),  // down the house-s right wall'
+//       .replace('-s', "'s"), 'pt(houseRight, houseFront),')
+//
+// -- so the INNER call's first argument is `-s`, which occurs twelve times in
+// premade-plans.js, four of them in comments. Read naively this harness
+// reported a twelve-match ambiguity on an anchor that is not an anchor, which
+// is the checker crying wolf about its own parsing.
+//
+// THE RECEIVER TELLS THEM APART. A mutation's replace is applied to the
+// SOURCE -- `s.replace(`, or another replace's result, `).replace(` -- and a
+// string-building one is applied to a LITERAL, so the character before the
+// dot is a quote. One look back over the whitespace separates them.
+const buildsItsOwnFind = (src, dot) => {
+  let i = dot - 1;
+  while (i >= 0 && /\s/.test(src[i])) i -= 1;
+  return i >= 0 && (src[i] === "'" || src[i] === '"' || src[i] === '`');
+};
+const findsIn = fnSrc => {
+  const out = [];
+  [[REPLACE_LIT, true], [SPLIT_LIT, false]].forEach(([re, once]) => {
+    let m;
+    re.lastIndex = 0;
+    while ((m = re.exec(fnSrc)) !== null) {
+      if (buildsItsOwnFind(fnSrc, m.index)) continue;
+      try {
+        // eslint-disable-next-line no-new-func
+        const lit = new Function(`return ${m[1]};`)();
+        if (typeof lit === 'string' && lit) out.push({ find: lit, once });
+      } catch { /* unparseable: the caller reports the gap */ }
+    }
+  });
+  return out;
+};
+
+let engineChecked = 0;
+const uncovered = [];
+
+for (const name of engineFiles) {
+  const src = fs.readFileSync(path.join(__dirname, name), 'utf8');
+  const table = tableAfter(src, 'const MUTATIONS = [');
+  if (!table) { failures.push(`${name}: 'const MUTATIONS = [' found but its table could not be sliced`); continue; }
+
+  const subject = engineSubject(src);
+  if (!subject) {
+    // NOT A FAILURE, AND NOT SILENT. Three engines mutate a LIST of subjects
+    // rather than one file; applying a row needs to know which, and guessing
+    // would be the ambiguity this file refuses. Named here so the coverage
+    // this harness reports is the coverage it has.
+    uncovered.push(`${name}: no single 'const SRC = path.join(...)' subject`);
+    continue;
+  }
+
+  let rows;
+  try {
+    // eslint-disable-next-line no-new-func
+    rows = new Function(`return ${table};`)();
+  } catch (err) {
+    failures.push(`${name}: its MUTATIONS table could not be read (${err.message})`);
+    continue;
+  }
+  if (!Array.isArray(rows) || !rows.length) {
+    failures.push(`${name}: MUTATIONS read as empty -- a table with no rows passes every check`);
+    continue;
+  }
+
+  let text;
+  try { text = read(subject); }
+  catch { failures.push(`${name}: subject ${subject} does not exist`); continue; }
+
+  rows.forEach((row, index) => {
+    const label = `${name} [${index}] ${(Array.isArray(row) && row[0]) || '(unnamed)'}`;
+    const fn = Array.isArray(row) ? row[1] : null;
+    if (typeof fn !== 'function') { failures.push(`${label}: row carries no mutate function`); return; }
+
+    engineChecked += 1;
+    let after;
+    try { after = fn(text); }
+    catch (err) {
+      // ── A ROW THAT CLOSES OVER ITS FILE IS THIS CHECKER'S LIMIT ──────
+      //
+      // Several of premade-plans' rows build their find from a const declared
+      // beside the table (ROOM_RETURN, GARAGE_TIE_DECL). The table's SOURCE is
+      // evaluated here, not the module, so those names are not in scope and
+      // applying the row throws. That says nothing about the row: inside its
+      // own harness it has its closure and works.
+      //
+      // NOT COVERED, THEN, AND SAID SO. Calling it a failure would be this
+      // file crying wolf about its own blind spot, and passing it silently
+      // would be the lie it exists to refuse.
+      if (err instanceof ReferenceError) {
+        uncovered.push(`${label}: closes over a const beside its table (${err.message}) -- cannot be applied standalone`);
+        return;
+      }
+      failures.push(`${label}: mutating threw (${err.message})`);
+      return;
+    }
+    if (typeof after !== 'string') { failures.push(`${label}: mutate returned ${typeof after}, not source`); return; }
+    if (after === text) {
+      failures.push(`${label}: ANCHOR DEAD -- applying it to ${subject} changes nothing`);
+      return;
+    }
+
+    const finds = findsIn(String(fn));
+    if (!finds.length) {
+      uncovered.push(`${label}: live, but its find string could not be read for the exactly-once check`);
+      return;
+    }
+    // DEDUPED: a row that chains two replaces on the same anchor would say it
+    // twice, and one anchor is one finding.
+    const seenFind = new Set();
+    finds.forEach(({ find, once }) => {
+      if (seenFind.has(find)) return;
+      seenFind.add(find);
+      const hits = text.split(find).length - 1;
+      if (once && hits > 1) {
+        failures.push(`${label}: ANCHOR AMBIGUOUS -- ${hits} matches in ${subject}; replace() takes the first`);
+      }
+    });
+  });
+}
+
 // A run that checked nothing is the failure this file exists to refuse, so it
 // is stated rather than passing quietly on an empty list.
 if (!checked) {
   failures.push('no anchors were checked at all -- the tables were found but held nothing');
 }
+if (!engineChecked) {
+  failures.push('no ENGINE anchors were checked -- the 22 tables carrying them went unread');
+}
 
 failures.forEach(f => console.log(`  FAIL  ${f}`));
-console.log(`\nmutant anchors: ${checked} checked across ${files.length} files, `
-  + `${failures.length} failed`);
+uncovered.forEach(u => console.log(`  ----  ${u}`));
+console.log(`\nmutant anchors: ${checked} checked across ${files.length} mutant files, `
+  + `${engineChecked} across ${engineFiles.length} engines, `
+  + `${uncovered.length} not covered, ${failures.length} failed`);
 process.exit(failures.length ? 1 : 0);

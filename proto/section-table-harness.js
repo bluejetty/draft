@@ -779,8 +779,12 @@ const MUTATIONS = [
   // does not apply proves nothing while still reading as a line in the table.
   // `label: 'BILEVEL'` cannot hit MODIFIED BILEVEL: the prefix is inside the
   // quotes, so the two labels share no substring at that boundary.
+  // BOTH GARAGE ROWS. attachedGarage and detachedGarage each carry the
+  // field; a replace() took the attached one and left its neighbour -- which
+  // is the very shape of the defect this table already records one entry
+  // below ("AND THE DETACHED ROW HAD THE SAME HOLE").
   ['the garage falls back to the house wall again',
-    s => s.replace('      mainWallHeightFt: GARAGE_WALL_FT,\n', '')],
+    s => s.split('      mainWallHeightFt: GARAGE_WALL_FT,\n').join('')],
   ['the head drop forgets the rough-opening plate',
     s => s.replace('const OPENING_HEAD_DROP_IN = 16.5;', 'const OPENING_HEAD_DROP_IN = 15;')],
   ['the garage wall drops to the house precut',
@@ -788,8 +792,15 @@ const MUTATIONS = [
       'const GARAGE_WALL_FT = wallHeightFtFromStud(STUD_LENGTHS_IN[0]);')],
   ['the bilevel zone row goes live before the feature does',
     s => s.replace("label: 'BILEVEL', reserved: true", "label: 'BILEVEL', reserved: false")],
+  // THE HOUSE'S SECTION AND THE DETACHED GARAGE'S carry these three roof
+  // lines byte for byte the same -- heel lift, eave, rise -- so a replace()
+  // gated the house and left the garage. Nothing nearby tells the two apart
+  // in CODE (only the comment block above the house's), and picking one by
+  // counting lines is how an anchor drifts. Breaking the rule in both places
+  // is what the names say anyway.
   ['the roof rises at pitch per foot instead of pitch per twelve',
-    s => s.replace('(roof.overhangFt + x) * (roof.pitch / 12);', '(roof.overhangFt + x) * roof.pitch;')],
+    s => s.split('(roof.overhangFt + x) * (roof.pitch / 12);')
+      .join('(roof.overhangFt + x) * roof.pitch;')],
   ['the foundation forgets the floor it carries',
     s => s.replace('const fdnTop = -mainDepthFt;', 'const fdnTop = 0;')],
   // RE-POINTED AT THE DELEGATE. The sum itself moved to drawing-format.js, so
@@ -817,12 +828,13 @@ const MUTATIONS = [
     s => s.replace('line(roofStartX, plateY + riseAt(roofStartX) - chordDropFt,\n      0, plateY + riseAt(0) - chordDropFt, 1);\n    line(heelWebX, plateY + riseAt(heelWebX) - chordDropFt,\n      cut, plateY + riseAt(cut) - chordDropFt, 1);',
       'line(roofStartX, plateY + riseAt(roofStartX) - chordDropFt,\n      cut, plateY + riseAt(cut) - chordDropFt, 1);')],
   ['a raised heel is ignored and the roof stays on the plate',
-    s => s.replace('const heelLiftFt = roof.heelIn == null ? 0', 'const heelLiftFt = true ? 0')],
+    s => s.split('const heelLiftFt = roof.heelIn == null ? 0')
+      .join('const heelLiftFt = true ? 0')],
   // The plausible misreading of "raise the heel": deepen the board instead of
   // lifting the roof. It puts the top chord in the right place and leaves the
   // soffit sitting on the plate, so only a check that watches the EAVE sees it.
   ['a raised heel fattens the fascia instead of lifting the roof',
-    s => s.replace('const eaveY = plateY + heelLiftFt;', 'const eaveY = plateY;')],
+    s => s.split('const eaveY = plateY + heelLiftFt;').join('const eaveY = plateY;')],
   ['the ceiling drops back to something a big overhang can derive past',
     s => s.replace('const ROOF_HEEL_MAX_IN = 20 * 12;', 'const ROOF_HEEL_MAX_IN = 48;')],
   ['the floor is "corrected" to the real-world 3 1/2" minimum',
@@ -879,9 +891,10 @@ const MUTATIONS = [
       '  const garageSlabFallIn = () => 3;')],
   ['the detached slab stops being the datum',
     s => s.replace("    line(0, 0, CUT_DEPTH_FT, 0, 2);", "    line(0, 0.25, CUT_DEPTH_FT, 0.25, 2);")],
+  // TWICE IN THE DETACHED DETAILS, once per foundation kind.
   ['the detached grade line drifts off the constant',
-    s => s.replace('    const gradeY = -DETACHED_SLAB_ABOVE_GRADE_IN / 12;',
-      '    const gradeY = -8 / 12;')],
+    s => s.split('    const gradeY = -DETACHED_SLAB_ABOVE_GRADE_IN / 12;')
+      .join('    const gradeY = -8 / 12;')],
   ['the thickened edge is poured to the field depth -- no thickening at all',
     s => s.replace('    const edgeBot = -edgeFt;', '    const edgeBot = -slabFt;')],
   ['the taper is cut at something other than 45 degrees',

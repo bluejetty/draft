@@ -391,8 +391,14 @@ const MUTATIONS = [
   ['a zero-length segment divides by zero',
     s => s.replace('dz = seg.end.z - seg.start.z;\n    const len = Math.hypot(dx, dz) || 1;',
       'dz = seg.end.z - seg.start.z;\n    const len = Math.hypot(dx, dz);')],
+  // EVERY COPY, ON PURPOSE. geometry-2d.js averages the two ends' y in
+  // lineControlPoint and again in pointOnLineSeg, the same expression both
+  // times. A `.replace()` rewrites the first only, so this was gating the
+  // control point and leaving the point-on-segment free; split/join breaks
+  // the rule wherever it lives, which is what the name claims.
   ['a missing y poisons the average instead of defaulting to 0',
-    s => s.replace('y: ((seg.start.y || 0) + (seg.end.y || 0)) / 2,', 'y: (seg.start.y + seg.end.y) / 2,')],
+    s => s.split('y: ((seg.start.y || 0) + (seg.end.y || 0)) / 2,')
+      .join('y: (seg.start.y + seg.end.y) / 2,')],
 ];
 
 if (MUTATION_MODE) {
