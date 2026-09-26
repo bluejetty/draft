@@ -825,9 +825,15 @@ const MUTATIONS = [
   // 5'-6" below the beam the pile actually carries.
   ['a pile takes the deepest concrete over it, not the beam it carries',
     s => s.replace('      const hung = over.filter(g => !g.bearing);', '      const hung = [];')],
+  // RE-AIMED 26 Sep. This pointed at `uncovered(...).forEach(part => {`, which
+  // stopped existing when the edge pass learned to read the painted parts too
+  // -- the call and the walk are two statements now, with the list kept
+  // between them. The claim is unchanged and the mutant is STRONGER for the
+  // move: replacing the list at its source takes the clip away from the fill
+  // AND from the edges that close it, which is the whole of "stops asking".
   ['the rim band stops asking what stands in front of it',
-    s => s.replace('        uncovered(run.lo, run.hi, depth).forEach(part => {',
-      '        [{ lo: run.lo, hi: run.hi }].forEach(part => {')],
+    s => s.replace('        const parts = uncovered(run.lo, run.hi, depth);',
+      '        const parts = [{ lo: run.lo, hi: run.hi }];')],
   ['the occlusion test goes back to house faces only, blind to the garage',
     s => s.replace('    const allSpans = faces.map(spanOf).filter(span => span.hi - span.lo >= 0.5);',
       '    const allSpans = houseSpans;')],
