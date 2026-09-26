@@ -1456,9 +1456,14 @@ const MUTATIONS = [
   // AND THE GARAGE WALL CLOSES ITS OUTLINE ALONG ITS OWN BASE AGAIN, which
   // brackets the sill plate between two horizontals and reads as the slot
   // Movie reported after the plate was already being filled.
+  // RE-AIMED, 26 Sep. The base line grew a `moveTo` of its own -- the storey
+  // line had been inheriting the pen from the end vertical, which
+  // `roofClippedFoot` then moved -- and the old anchor, which named the whole
+  // one-line statement, stopped matching. proto/mutant-anchors-harness.js said
+  // so on the same run that made the change; CI never saw it.
   ['a garage wall lines its own base, bracketing the plate into a slot',
-    s => s.replace('      if (!face.garage) ctx.lineTo(xa, Y(floor));',
-      '      if (true) ctx.lineTo(xa, Y(floor));')],
+    s => s.replace('      if (!face.garage) {\n        ctx.moveTo(xb, Y(floor));',
+      '      if (true) {\n        ctx.moveTo(xb, Y(floor));')],
   // AND THE TWO 26 SEP READINGS OFF THE BURIED WORK. The first puts the
   // riser back to the full height of the step; the second draws every pile
   // again, including the ones the house's foundation stands in front of.

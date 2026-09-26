@@ -1133,6 +1133,72 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
   // exact reading above pins, and it is the same arithmetic that does both.)
 }
 
+// ── A WALL'S OUTLINE RUNS LONG ONLY WHEN IT IS LEVEL OR PLUMB ────────────
+//
+// Movie, 26 Sep: "here is a really weird one - look at the line near 2nd floor
+// (elevation line it gets warped)".
+//
+// THE STOREY LINE WAS LEANING. Measured on a twoStorey-garage captured from
+// the drive-thru, E1:
+//
+//     (16.00, 10.577) -> (-16.00, 9.152)   w1.25, slope 1:22.5
+//
+// -- thirty-two feet of second-floor line dropping a foot and a half across
+// the front of the house. It came in with `roofClippedFoot`, which lifts a
+// wall's end vertical off its floor where a roof sheet covers it: the base
+// line after it had no `moveTo` of its own and took whatever the pen was left
+// at, which until then was always `(xb, floor)`. Any pass that moves an
+// endpoint of that path can do it again.
+//
+// SO THE CLAIM IS ABOUT THE PATH, not about that line. A wall face outlines
+// three things: its two ends, which are PLUMB; its floor, which is LEVEL; and
+// its top, which follows the roof over it. THE TOP IS SAMPLED -- `tops` walks
+// the roof underside in steps of half a foot -- so every sloping piece of a
+// wall outline is at most that long, and anything longer that is neither
+// level nor plumb is a line that has lost an endpoint.
+//
+// A FOOT IS THE THRESHOLD, twice the sampling step, so a change to that step
+// has to double before this stops meaning what it says.
+//
+// NOT A SLOPE FLOOR, which was tried first and is unsound: a roof line
+// projects SHALLOWER than its pitch wherever the wall runs oblique to the
+// slope -- measured at 0.300 for a 4/12 on repro-garage-house's gable ends --
+// so there is no angle a legitimate line cannot reach.
+{
+  const LONG_FT = 1;
+  let probed = 0, sloped = 0;
+  fs.readdirSync(path.join(ROOT, 'proto')).filter(n => n.endsWith('.draft')).forEach(name => {
+    const dEnv = buildEnv(win, JSON.parse(
+      fs.readFileSync(path.join(ROOT, 'proto', name), 'utf8')));
+    standardElevationCuts(dEnv).forEach(cut => {
+      const view = paintElevation(win, dEnv, cut, { pxPerFt: 40 });
+      const bad = [];
+      view.strokes.forEach(st => {
+        if (Math.abs(st.w - WALL_FACE_W) > 1e-9) return;
+        for (let k = 1; k < st.pts.length; k += 1) {
+          const a = st.pts[k - 1], b = st.pts[k];
+          if (b.move || b.close) continue;
+          const de = Math.abs(a.e - b.e), du = Math.abs(a.u - b.u);
+          if (de < 1e-6 || du < 1e-6) continue;        // level, or plumb
+          sloped += 1;
+          probed += 1;
+          if (du <= LONG_FT) continue;
+          bad.push(`(${a.u.toFixed(2)},${a.e.toFixed(3)})->`
+            + `(${b.u.toFixed(2)},${b.e.toFixed(3)}) -- ${du.toFixed(2)} ft of it`);
+        }
+      });
+      check(`${name} ${cut.id}: no wall line runs long without being level or plumb`,
+        bad.length === 0,
+        bad.length ? bad.join(', ') : `${sloped} sloping segment(s) so far, none over ${LONG_FT} ft`);
+    });
+  });
+  // A PAINTER THAT DREW NO SLOPING WALL LINE AT ALL would satisfy every check
+  // above, and a gable wall climbing into its own roof is the commonest thing
+  // on these elevations.
+  check('fixture: some wall line does follow a roof', sloped > 0,
+    `${sloped} non-level, non-plumb segment(s)`);
+}
+
 // ── AND THE BOTTOM, WHERE ONE THING IS ALLOWED OUT ───────────────────────
 //
 // Movie, 26 Sep, on a two-storey with a garage: "see how the footing bottom
