@@ -2120,6 +2120,74 @@ if (!window.DraftCutView) {
       }
       ctx.lineTo(X(run.hi), Y(Math.min(rightF.topE, fdn.grade)));
       ctx.stroke();
+      // ── A PIECE THE SILHOUETTE SWALLOWS STILL HAS A BOTTOM ────────────
+      //
+      // Movie, 25 Sep, marking it in green on E1 of a 2 STOREY + GARAGE: "i
+      // noticed the bottom of the dashed line for the grade beam is missing
+      // where it crosses the house".
+      //
+      // `bottomAt` IS A SILHOUETTE: the DEEPEST concrete under each stretch,
+      // which is the right answer for the loop above -- that outline is the
+      // edge of the excavation and nothing shows below it. It is the wrong
+      // answer for the beam. Measured on repro-tie-gable, E1:
+      //
+      //     the garage's grade beam   u  -4.00..20.00   base -3.8438
+      //     the house's footing       u -16.50..16.50   base -9.9479
+      //
+      //     drawn:  -9.9479 from -16.50 to 16.50, then -3.8229 to 20.00
+      //
+      // -- so the beam's underside appears for the 3 1/2 ft it hangs clear of
+      // the house and vanishes for the twenty it hangs over. A hung beam
+      // OVERLAPS the house by GARAGE_TIE_FT by construction, so this is every
+      // attached grade beam on the office default, on every elevation that
+      // sees it. E2 loses 1 1/2 ft of it, E4 the same, E1 twenty.
+      //
+      // UNDERGROUND THERE IS NO OCCLUSION. Everything below grade is dashed
+      // outline because the drawing is showing an arrangement, not a view --
+      // the house's footing does not hide the beam over it any more than the
+      // beam hides the footing. So where the silhouette is deeper than a
+      // face's own base, that face's base is still an edge of concrete and
+      // still belongs on the sheet.
+      //
+      // ONLY WHERE THE SILHOUETTE IS NOT ALREADY IT. `bottomAt` is a minimum
+      // over the faces covering u and g is one of them, so it is either g's
+      // own bottom -- already drawn, skip -- or deeper, which is the stretch
+      // this pass is for. Over the same `stops`, so a step lands on the same
+      // u the outline steps at and the two cannot disagree.
+      // AND MERGED BY ELEVATION BEFORE ANYTHING IS STROKED. Two faces of one
+      // mass project to the same run at the same depth of concrete -- a
+      // garage's front beam and its back beam both land here -- and they
+      // rarely span the SAME stretch, so an exact-match dedupe let the
+      // overlap through twice. Measured: E1 drew u -4.00..16.50 and then
+      // u 16.00..16.50 again, half a foot of dashes at double weight.
+      const byElev = new Map();
+      run.faces.forEach(g => {
+        const mine = bottomOf(g);
+        const lo = footLo(g), hi = footHi(g);
+        const key = mine.toFixed(4);
+        const into = byElev.get(key) || byElev.set(key, { e: mine, segs: [] }).get(key);
+        for (let s = 0; s < stops.length - 1; s++) {
+          const a = Math.max(stops[s], lo), b = Math.min(stops[s + 1], hi);
+          if (b - a < 0.05) continue;
+          if (bottomAt((a + b) / 2) > mine - 1e-6) continue;
+          into.segs.push({ lo: a, hi: b });
+        }
+      });
+      byElev.forEach(({ e, segs }) => {
+        const merged = [];
+        segs.sort((a, b) => a.lo - b.lo).forEach(seg => {
+          const last = merged[merged.length - 1];
+          if (last && seg.lo <= last.hi + 1e-6) last.hi = Math.max(last.hi, seg.hi);
+          else merged.push({ lo: seg.lo, hi: seg.hi });
+        });
+        if (!merged.length) return;
+        ctx.beginPath();
+        merged.forEach(seg => {
+          ctx.moveTo(X(seg.lo), Y(e));
+          ctx.lineTo(X(seg.hi), Y(e));
+        });
+        ctx.stroke();
+      });
       // Viewer-facing corner creases: where a nearer buried face ends inside
       // a farther one, the corner runs down the wall — and its footing turns
       // a little further over with its own short crease.

@@ -845,6 +845,77 @@ function run(win) {
       reached > 0, `${reached} exposed face(s) probed`);
   }
 
+  // ── A HUNG BEAM'S UNDERSIDE RUNS ITS WHOLE LENGTH ─────────────────────
+  //
+  // Movie, 25 Sep, marking it in green on E1 of a 2 STOREY + GARAGE: "i
+  // noticed the bottom of the dashed line for the grade beam is missing
+  // where it crosses the house".
+  //
+  // THE BURIED OUTLINE IS A SILHOUETTE. It asks for the DEEPEST concrete
+  // under each stretch, which is right for the excavation's edge and wrong
+  // for a beam hanging over a footing: the house's footing is deeper, so the
+  // minimum is the footing's bottom and the beam's own underside is never
+  // drawn. Measured on this fixture before the fix -- and it is every
+  // elevation, because an attached beam laps the house by GARAGE_TIE_FT:
+  //
+  //     E1  missing u  8.00..8.50     E2  missing u -4.00..4.00
+  //     E3  missing u -8.50..-8.00    E4  missing u -4.00..4.00
+  //
+  // ASKED AS COVERAGE, not as a count of strokes. The line may arrive in one
+  // piece or in two -- part from the silhouette where the beam hangs clear,
+  // part from the pass that fills in what the silhouette swallowed -- and
+  // what Movie is looking at is whether the beam's underside is THERE from
+  // end to end. Merging the horizontals at that elevation and asking whether
+  // one of them spans the beam is that question and not a re-statement of
+  // how the painter happens to split it.
+  {
+    let reached = 0;
+    standardElevationCuts(base).forEach(cut => {
+      const painted = paintElevation(win, base, cut, { pxPerFt: 40 });
+      const axis = painted.axis;
+      const uOf = pt => pt.x * axis.x + pt.z * axis.z;
+      base.walls()
+        .filter(w => (w.view || 'plan') === 'foundation' && w.baseHeight > 0.01)
+        .forEach(w => {
+          const lo = Math.min(uOf(w.start), uOf(w.end));
+          const hi = Math.max(uOf(w.start), uOf(w.end));
+          if (hi - lo < 0.5) return;                  // edge-on to this view
+          const e = fdn.wallBottom + w.baseHeight;
+          if (e > fdn.grade - 0.05) return;           // not underground
+          const segs = [];
+          painted.strokes.forEach(s => {
+            for (let k = 1; k < s.pts.length; k += 1) {
+              const a = s.pts[k - 1], b = s.pts[k];
+              if (b.move || b.close) continue;
+              // THE TAPE IS A HALF-PIXEL OFF the model number by construction
+              // (paintElevation maps screen centres back), which at 40px/ft
+              // is 0.0125 ft; 0.04 clears that without reaching the next
+              // thing anything is drawn at.
+              if (Math.abs(a.e - b.e) > 0.01 || Math.abs(a.e - e) > 0.04) continue;
+              segs.push({ lo: Math.min(a.u, b.u), hi: Math.max(a.u, b.u) });
+            }
+          });
+          const merged = [];
+          segs.sort((x, y) => x.lo - y.lo).forEach(sg => {
+            const last = merged[merged.length - 1];
+            if (last && sg.lo <= last.hi + 0.02) last.hi = Math.max(last.hi, sg.hi);
+            else merged.push({ lo: sg.lo, hi: sg.hi });
+          });
+          reached += 1;
+          check(`${cut.id}: the hung beam's underside at ${ftIn(e)} runs its whole ${(hi - lo).toFixed(1)} ft`,
+            merged.some(m => m.lo <= lo + 0.02 && m.hi >= hi - 0.02),
+            merged.length
+              ? `drawn ${merged.map(m => `${m.lo.toFixed(2)}..${m.hi.toFixed(2)}`).join(', ')}`
+                + ` -- beam ${lo.toFixed(2)}..${hi.toFixed(2)}`
+              : `nothing drawn at ${ftIn(e)}`);
+        });
+    });
+    // WITHOUT A HUNG BEAM the loop above is a filter over an empty list and
+    // passes whatever the painter does.
+    check('fixture: the garage hangs a grade beam below grade',
+      reached > 0, `${reached} beam face(s) probed`);
+  }
+
   // ── ONE RULE, NOT FIVE COPIES ─────────────────────────────────────────
   // The whole defect was five sites each holding their own version. These
   // read the SOURCES, because "the rule is shared" is a fact about the text
@@ -992,6 +1063,12 @@ const MUTATIONS = [
   ['the strip is painted as concrete -- the top-of-concrete line moves back up',
     s => s.replace('      if (!plate) return;\n      ctx.fillStyle = C.face;',
       '      if (!plate) return;\n      ctx.fillStyle = C.faceShade;')],
+  // THE BURIED SILHOUETTE GOES BACK TO SWALLOWING WHAT HANGS OVER IT. The
+  // guard is the whole pass: with it always continuing, no stretch is
+  // collected and the drawing is exactly what Movie marked in green.
+  ['a hung beam loses its underside where the house footing runs deeper',
+    s => s.replace('          if (bottomAt((a + b) / 2) > mine - 1e-6) continue;',
+      '          if (bottomAt((a + b) / 2) < Infinity) continue;')],
 ];
 
 console.log('\n' + 'mutation'.padEnd(72) + 'caught by');
