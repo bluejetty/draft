@@ -492,12 +492,35 @@ test.describe('Generated section view', () => {
       }
       // Census each side of the gap below grade, the gap above grade, and
       // the garage band pixels.
+      //
+      // ONE ROW OF GUARD UNDER THE GRADE LINE, NOT TWO, and the reason is
+      // arithmetic rather than taste. A thickened edge is 1'-0" deep off a
+      // slab whose top stands 10" over grade, so its underside sits TWO
+      // INCHES below grade -- which is what the comment on that test means by
+      // "barely". At this viewport the section draws about 13px to the foot,
+      // so two inches is two pixels, and a two-pixel guard swallows the whole
+      // feature: the census read zero and the test failed on a drawing that
+      // was right.
+      //
+      // IT WAS ALWAYS ONE PIXEL FROM THAT. The reading was 3px on 25 Sep and
+      // the elevations then took 8ft of sky (Movie: "add about 8 ft of extra
+      // space above the roof ... the house will end up looking smaller"),
+      // which scaled the section by 0.81 and took the third pixel. No
+      // viewport fixes this -- the feature is two inches, not two pixels of
+      // some scale -- so the guard is what has to be right.
+      //
+      // ONE ROW IS ENOUGH BECAUSE gradeY IS ALREADY THE LINE'S LOWEST ROW: it
+      // is found as the lowest row carrying a dark run across most of the
+      // sheet. The row below it is the line's antialiased fringe at worst, and
+      // the census would report it unmistakably if it were being counted --
+      // the grade line runs the full width, so a row of it right of the gap
+      // is some 700 pixels against the 94 the buried edge actually draws.
       let houseDeepest = gradeY, garageDeepest = gradeY;
       let garageBuried = 0, garageFace = 0, gapFaint = 0;
       for (let y = 24; y < H; y++) {
         for (let x = Math.floor(W * 0.1); x < W; x++) {
           const i = at(x, y);
-          if (y > gradeY + 2 && inked(i)) {
+          if (y > gradeY + 1 && inked(i)) {
             if (x <= gapLo) houseDeepest = Math.max(houseDeepest, y);
             if (x >= gapHi) {
               garageDeepest = Math.max(garageDeepest, y);

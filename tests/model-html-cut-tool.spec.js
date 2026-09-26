@@ -244,16 +244,30 @@ test('undo takes the cut back out, record and rail together', async ({ page }) =
     + 'the drafter took back cannot').toHaveLength(0);
 });
 
-test('the empty state names the gesture, and the row appears once one is cut',
+test('the empty state says NO SECTIONS, and the row appears once one is cut',
   async ({ page }) => {
     await newPageOnSavedHouse(page);
     await h.openModelRail(page);
 
     // The bone's own house carries no sections, so the empty line is what a
-    // drafter meets first. It used to say this page had no cut tool.
+    // drafter meets first.
+    //
+    // IT NAMED THE GESTURE UNTIL 25 SEP -- "No sections yet. Press + CUT,
+    // then the two ends of the line and the side to look from" -- and this
+    // asserted the "+ CUT" in it. Movie, reading it in the panel: "there is a
+    // line with a lone sentence in the LEVELS / LAYERS tab" ... "just say 'NO
+    // SECTIONS'". The gesture is on the button beside it: + CUT carries the
+    // whole instruction in its own title, which is why the sentence was the
+    // same help twice and the copy that went was the one wrapping to three
+    // lines of a panel the drawing is sharing.
+    //
+    // THE CLAIM IS STILL THE SAME SHAPE. What this line has always been for
+    // is that the empty state is CURRENT: it named a page with no cut tool
+    // once, long after the cut tool arrived. So it pins the words the panel
+    // is meant to say and refuses the two it has said before.
     const empty = page.locator('[data-no-sections]');
     if (await empty.count()) {
-      await expect(empty).toContainText('+ CUT');
+      await expect(empty).toHaveText('NO SECTIONS');
       await expect(empty).not.toContainText('no cut tool');
     }
 
