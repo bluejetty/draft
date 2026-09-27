@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<title>Rough Drafter &mdash; Real Estate Layout</title>
+<title>Rough Drafter &mdash; Ext. Finish</title>
 <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
      critical path of the page. -->
 <link rel="stylesheet" href="vendor/fonts.css" />
@@ -62,23 +62,15 @@
   }
   main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
-  /* ── THE TABS ──────────────────────────────────────────────────────────
-     Movie, 27 Sep: the one-page real-estate sheet "will be a tab within the
-     REAL ESTATE LAYOUT area - the main area we will allow them to change the
-     exterior finishes". So: two tabs, and FINISHES is the one you land on. */
-  .tabs {
-    display: flex; gap: 6px; padding: 8px 12px 0 12px;
-    border-bottom: 1px solid var(--edge-panel); flex: none;
-  }
-  .tab {
-    appearance: none; border: 1px solid var(--edge-panel); border-bottom: none;
-    background: var(--surface-panel); color: var(--ink-quiet);
-    font: inherit; font-size: 12px; font-weight: 600; letter-spacing: .08em;
-    text-transform: uppercase; padding: 7px 14px; cursor: pointer;
-    border-radius: 3px 3px 0 0;
-  }
-  .tab[aria-selected="true"] { background: var(--surface-chip); color: var(--accent-mark); }
-  .tab:disabled { cursor: default; color: var(--ink-quiet); opacity: .55; }
+  /* THE TAB STRIP CAME OFF (27 Sep). This page carried two tabs, FINISHES
+     and LAYOUT, because Movie had said the real-estate sheet "will be a tab
+     within the REAL ESTATE LAYOUT area". Later the same day he split them:
+     "i should change the name of this from REAL ESTATE PLAN ... insert tab ->
+     'EXT. FINISH' and make this area that name", and "the REAL ESTATE PLAN
+     area will be similar to the CONSTRUCTION layout ... can you add that tab
+     as a new page". So the sheet became REALESTATEPLAN.html and this page is
+     one workspace again -- a tab strip with one tab in it is a control that
+     cannot be used. */
 
   .stage { flex: 1; display: flex; min-height: 0; }
   .stage[hidden] { display: none; }
@@ -171,15 +163,9 @@
        says it forgot. -->
   <script>window.DraftShellBars.topBar({ instruments: true });</script>
   <main>
-    <div class="tabs" role="tablist" aria-label="Real estate layout">
-      <button class="tab" role="tab" id="tab-finishes" aria-selected="true"
-        aria-controls="stage-finishes">Finishes</button>
-      <button class="tab" role="tab" id="tab-sheet" aria-selected="false"
-        aria-controls="stage-sheet">Layout</button>
-    </div>
 
     <!-- ── THE MAIN AREA: ELEVATIONS, AND THE FINISHES ON THEM ──────────── -->
-    <div class="stage" id="stage-finishes" role="tabpanel" aria-labelledby="tab-finishes">
+    <div class="stage" id="stage-finishes">
       <div class="rail left">
         <p class="rail-title">Elevations</p>
         <div id="elev-list"></div>
@@ -222,30 +208,18 @@
       </div>
     </div>
 
-    <!-- ── THE LAYOUT TAB: ONE LANDSCAPE LETTER SHEET ───────────────────────
-         Movie, 27 Sep: "the LAYOUT tab with real estate layout will have a
-         default 8.5 x 11 size Landscape sheet", carrying "the MAIN FL, 2nd FL
-         (maybe basement (optional)) and will have main front 3D View (once
-         available)" -- and "i will need to adjust what is shown and how it is
-         shown in this layout view".
-
-         THE SHEET IS HERE AND ITS SEATS ARE NOT. What goes in them is the
-         thing he has said he wants to adjust, so the paper is drawn at the
-         size he named and the seats wait for him rather than being guessed
-         at. 8.5x11 and landscape are both already in LAYOUT's own tables. -->
-    <div class="stage" id="stage-sheet" role="tabpanel" aria-labelledby="tab-sheet" hidden>
-      <div class="sheet-wrap"><canvas id="sheet" width="900" height="560"></canvas></div>
     </div>
 
     <div id="status" role="status"></div>
   </main>
 
-  <!-- page:'real-estate' marks this chip "you are here", off the one PAGES
+  <!-- page:'ext-finish' marks this chip "you are here", off the one PAGES
        table. Mounted BELOW the page's own markup and ABOVE its script, for the
        reason PROJECT's and SPECS' are: a bar that does not exist yet is a bar
-       that script cannot find. NO BONE yet -- the bar's note says REAL ESTATE
-       prints, and there is nothing to print until the sheet has its seats. -->
-  <script>window.DraftShellBars.bottomBar({ page: 'real-estate', bone: false });</script>
+       that script cannot find. NO BONE: this page changes what the house WEARS
+       and prints nothing of its own -- the sheet that prints is REAL ESTATE
+       PLAN, one chip along. -->
+  <script>window.DraftShellBars.bottomBar({ page: 'ext-finish', bone: false });</script>
 
   <script>
     (async () => {
@@ -256,20 +230,6 @@
       const statusEl = document.getElementById('status');
       const say = text => { statusEl.textContent = text; };
 
-      // ── THE TABS ──────────────────────────────────────────────────────
-      const tabs = [
-        { btn: document.getElementById('tab-finishes'), pane: document.getElementById('stage-finishes') },
-        { btn: document.getElementById('tab-sheet'), pane: document.getElementById('stage-sheet') },
-      ];
-      const showTab = which => {
-        tabs.forEach((tab, i) => {
-          tab.btn.setAttribute('aria-selected', String(i === which));
-          tab.pane.hidden = i !== which;
-        });
-        if (which === 1) paintSheet();
-        else paintElevation();
-      };
-      tabs.forEach((tab, i) => tab.btn.addEventListener('click', () => showTab(i)));
 
       // ── THE DRAWING ───────────────────────────────────────────────────
       // READ THE SAME BUCKET MODEL WRITES. This page does not build a house;
@@ -566,36 +526,6 @@
           : 'Nothing there — click a wall face.');
       });
 
-      // ── THE LANDSCAPE LETTER SHEET ────────────────────────────────────
-      // 8.5 x 11 LANDSCAPE, which is 11 wide by 8.5 high. Drawn as paper with
-      // its margin, and nothing in it: what goes in the seats is the thing
-      // Movie has said he wants to adjust.
-      const SHEET_IN = { w: 11, h: 8.5 };
-      const paintSheet = () => {
-        const cv = document.getElementById('sheet');
-        fitCanvas(cv);
-        const ctx = cv.getContext('2d');
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.clearRect(0, 0, cv.width, cv.height);
-        const pad = 18;
-        const pxPerIn = Math.min((cv.width - pad * 2) / SHEET_IN.w,
-          (cv.height - pad * 2) / SHEET_IN.h);
-        const w = SHEET_IN.w * pxPerIn, h = SHEET_IN.h * pxPerIn;
-        const x = (cv.width - w) / 2, y = (cv.height - h) / 2;
-        ctx.fillStyle = window.__reSkin['surface-chip'];
-        ctx.fillRect(x, y, w, h);
-        ctx.strokeStyle = window.__reSkin['edge-panel'];
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x + 0.5, y + 0.5, w, h);
-        ctx.setLineDash([4, 4]);
-        ctx.strokeRect(x + 0.5 * pxPerIn, y + 0.5 * pxPerIn,
-          w - pxPerIn, h - pxPerIn);
-        ctx.setLineDash([]);
-        ctx.fillStyle = window.__reSkin['ink-quiet'];
-        ctx.font = '600 12px "Barlow Condensed", system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('8.5 × 11 LANDSCAPE — seats to be set',
-          x + w / 2, y + h / 2);
       };
 
       // ── BOOT ──────────────────────────────────────────────────────────
@@ -633,15 +563,12 @@
       say(cuts.length ? 'Click a wall on the elevation to clad it.'
         : 'This drawing has no walls to clad yet.');
 
-      window.addEventListener('resize', () => {
-        paintElevation();
-        if (!document.getElementById('stage-sheet').hidden) paintSheet();
-      });
+      window.addEventListener('resize', () => { paintElevation(); });
 
       window.DraftShellBars.wireSkin({
         theme: window.__reTheme.theme,
         mode: window.__reTheme.mode,
-        onSkin: skin => { window.__reSkin = skin; paintElevation(); paintSheet(); },
+        onSkin: skin => { window.__reSkin = skin; paintElevation(); },
       });
     })();
   </script>

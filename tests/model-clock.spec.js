@@ -262,7 +262,8 @@ test('the clock turns over with the minute and not with the second',
 // mountClock" is not the thing that was wrong -- what was wrong is that a page
 // carrying this bar could come up without the reading, and only a page can
 // answer that. The list is every page that calls bottomBar().
-for (const page of ['MODEL', 'PROJECT', 'REALESTATE', 'SPECS', 'LAYOUT']) {
+for (const page of ['MODEL', 'PROJECT', 'EXTFINISH', 'REALESTATEPLAN',
+  'SPECS', 'LAYOUT']) {
   test(`${page} carries the bar, so it carries the clock`, async ({ browser, baseURL }) => {
     const context = await browser.newContext({
       baseURL, viewport: VIEW, timezoneId: 'UTC', locale: 'en-GB',

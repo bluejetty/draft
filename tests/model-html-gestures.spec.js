@@ -691,7 +691,7 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // "properties is associated with the OBJECTS, the house
           // Construction Details is more appropriate name for the PROJECT
           // information". RD-DOCUMENTS/DEFINITIONS.md carries it.
-          anchors: ['PROJECT', 'REAL ESTATE LAYOUT',
+          anchors: ['PROJECT', 'EXT. FINISH', 'REAL ESTATE PLAN',
             'CONSTRUCTION LAYOUT', 'SPECIFICATIONS',
             'SETTINGS', 'STANDARDS',
             'CLICK HERE TO GO OVER THE CONSTRUCTION DETAILS / SECTIONS FOR YOUR PROJECT',

@@ -172,9 +172,14 @@ check('every page linking the sheet also loads palette.js',
 const MODULE = fs.existsSync(path.join(ROOT, 'shell-bars.js'))
   ? decomment(read('shell-bars.js')) : '';
 const declared = [...MODULE.matchAll(/id:\s*'([a-z-]+)',\s*row:\s*'([a-z]+)'/g)];
-check('the page table names all six pages',
+// SEVEN NOW, since EXT. FINISH split off REAL ESTATE PLAN on 27 Sep (Movie:
+// "insert tab -> 'EXT. FINISH' and make this area that name"). The count is in
+// the name of the check on purpose: a chip added without a line here is a chip
+// nothing in the repo has agreed to.
+check('the page table names all seven pages',
   declared.map(m => m[1]).sort(),
-  ['construction', 'estimates', 'model', 'project', 'real-estate', 'specs']);
+  ['construction', 'estimates', 'ext-finish', 'model', 'project', 'real-estate',
+    'specs']);
 check('every page sits in a row that exists',
   declared.filter(m => m[2] !== 'page' && m[2] !== 'sheet').map(m => `${m[1]}:${m[2]}`), []);
 
