@@ -859,6 +859,41 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
         return at !== null && pt.e <= at && pt.e >= at - FASCIA_FT;
       }))
       .map(pt => ({ seq: st.seq, u: pt.u, e: pt.e })));
+    // ── THE CLADDING REACHES THE BOTTOM OF THE SILL PLATE ─────────────
+    //
+    // Movie, 27 Sep, looking at the Real Estate elevations: *"the top area
+    // where they should start the finishing should be the bottom of the sill
+    // plate"*, and again *"the main floor bottom line will just move to the
+    // bottom of sill plate"*. He could SEE the defect: a band of bare white
+    // under the stone, where the rim and the plate were.
+    //
+    // WHICH IS ALSO THE SECOND HALF OF BOARD #56. cut-view's foundation pass
+    // carries a note saying that when exterior finishes land, the plate has to
+    // follow the WALL rather than the palette -- or a garage in different
+    // siding grows a band of the house's at its foot. It follows it by being
+    // INSIDE the cladding now: the finish starts underneath the plate, so the
+    // plate wears whatever the wall above it wears, for free.
+    //
+    // MEASURED, not asserted from the same arithmetic the painter uses: the
+    // lowest hatch stroke on the sheet against floorBottom less a sill plate.
+    {
+      const plate = win.DraftLevelAssembly.SILL_PLATE_IN / 12;
+      const lowest = CV.sectionLevelStack(cEnv).floors[0];
+      const sill = lowest.floorBottom - plate;
+      const lows = hatch.flatMap(st => st.pts.map(pt => pt.e));
+      const low = lows.length ? Math.min(...lows) : Infinity;
+      check('the cladding runs down to the bottom of the sill plate',
+        Number.isFinite(low) && Math.abs(low - sill) < 0.05,
+        `lowest hatch ${low.toFixed(4)} against a sill at ${sill.toFixed(4)} `
+        + `(floorBottom ${lowest.floorBottom.toFixed(4)} less a ${(plate * 12)}" plate)`);
+      // AND IT IS BELOW THE FLOOR, which is the part a drafter sees. Measured
+      // against the wall's own foot rather than a constant, so the check still
+      // means something on a house with a different floor package.
+      check('and therefore BELOW the floor it used to start at, by the rim and the plate',
+        low < lowest.floorTop - 0.5,
+        `${low.toFixed(4)} against a floor top of ${lowest.floorTop.toFixed(4)}`);
+    }
+
     // ── AND THE CLAIM IS ABOUT THE ROOF, NOT ABOUT WHAT IS BEHIND IT ──
     //
     // "No hatch shows in any rake" is too strong and was measured so: a rake
