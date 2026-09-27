@@ -1733,6 +1733,56 @@ function run(win) {
     // stay two different claims for the door bottoms checked below.
     check('fixture: and one of them is not the overhead door',
       shallower > 0, `${shallower} of ${doorsSeen} further in`);
+
+    // ── AND NONE OF IT SHOWS THROUGH THE HOUSE ────────────────────────────
+    //
+    // Movie, 26 Sep, on the BACK elevation: *"the garage door buck is showing
+    // on the HOUSE FOUNDATION at the back"*, and his own diagnosis -- *"its
+    // like the house is transparent or the door buck lines are going in front
+    // of the house"*.
+    //
+    // The garage's foundation is stored 1 1/2" taller than the house's (8'-1
+    // 1/2" against 8'-0"), so a test that asked "does the near face top out at
+    // least as high" said no and hid nothing: the garage's top of concrete,
+    // and the buck notched out of it, ran twenty feet across the back of a
+    // house standing 26 ft in front. A wall does not stop at its concrete --
+    // the sill plate on it is opaque -- so cover is measured to the top of the
+    // PLATE now.
+    //
+    // READ AS A LENGTH, which is what makes it one claim rather than two: a
+    // corner with nothing in front of it runs the concrete's full depth, and a
+    // corner that is cut short is one standing where something covers it,
+    // which is a corner that should not be drawn at all.
+    // proto/foundation-face-harness.js has the same reading in detail; this is
+    // the copy a mutation can kill.
+    {
+      const shown = buildEnv(win, JSON.parse(fs.readFileSync(
+        path.join(ROOT, 'proto', 'repro-movie-garage-2storey.draft'), 'utf8')));
+      let corners = 0, cut = [];
+      ['E2', 'E3'].forEach(id => {
+        const cut0 = standardElevationCuts(shown).find(c => c.id === id);
+        if (!cut0) return;
+        const view = paintElevation(win, shown, cut0, { pxPerFt: 40 });
+        const eF = CV.sectionLevelStack(shown).foundation;
+        const top = eF.wallTop - S.GARAGE_BEAM_PLATE_IN / 12;
+        const full = top - eF.grade;
+        view.strokes.forEach(st => {
+          for (let i = 1; i < st.pts.length; i += 1) {
+            const a = st.pts[i - 1], b = st.pts[i];
+            if (b.move || Math.abs(a.u - b.u) > 0.01) continue;
+            const hi = Math.max(a.e, b.e), lo = Math.min(a.e, b.e);
+            if (lo < eF.grade - 0.01 || hi > top + 0.3 || hi <= eF.grade + 0.01) continue;
+            corners += 1;
+            if (hi - lo < full - 0.01) cut.push(`${id} u ${a.u.toFixed(2)} ${(hi - lo).toFixed(3)}ft`);
+          }
+        });
+      });
+      check('fixture: the back elevations draw foundation corners at all',
+        corners > 0, `${corners} corners`);
+      check('no foundation corner is cut short by what stands in front of it',
+        cut.length === 0,
+        cut.length ? cut.join('  ') : `all ${corners} run the concrete's full depth`);
+    }
   }
 
   // ── AND A DOOR STANDS ON WHAT IS UNDER IT ─────────────────────────────
@@ -2347,6 +2397,15 @@ const MUTATIONS = [
       + '        ctx.lineTo(x + wid, Y(garageConcreteTop(env, fdn, c.garage)));',
       '        ctx.moveTo(x, Y(top));\n'
       + '        ctx.lineTo(x + wid, Y(top));')],
+  // ── AND WHAT HIDES A FACE BEHIND IT ─────────────────────────────────
+  //
+  // Movie, 26 Sep: *"its like the house is transparent or the door buck lines
+  // are going in front of the house"*. A wall does not stop at its concrete,
+  // and asking only the concrete let the garage's foundation -- 26 ft behind
+  // -- paint its top line and its buck across the back of the house.
+  ['a face hides what is behind it only up to its concrete, not its plate',
+    s => s.replace('      && o.topE + plateOf(o) >= g.topE - 1e-3',
+      '      && o.topE >= g.topE - 1e-3')],
   ['one garage filed on two storeys is two garages again',
     s => s.replace('  const sameGarageBody = (a, b) => !!a && !!b && (a === b',
       '  const sameGarageBody = (a, b) => !!a && !!b && (a === b && false')],

@@ -2311,9 +2311,46 @@ if (!window.DraftCutView) {
     // face, and a face a nearer one swallows whole now yields no runs at all
     // -- which is the old all-or-nothing answer, kept as a special case of
     // the general one rather than as a rule of its own.
+    // ── AND WHAT HIDES SOMETHING IS THE WALL, NOT JUST ITS CONCRETE ──
+    //
+    // Movie, 26 Sep, on the BACK elevation: *"the garage door buck is showing
+    // on the HOUSE FOUNDATION at the back"*, and then the diagnosis himself --
+    // *"its like the house is transparent or the door buck lines are going in
+    // front of the house"*. Which is what it was.
+    //
+    // `o.topE >= g.topE` ASKED THE CONCRETE. On repro-tie-gable E3 the house's
+    // foundation tops out at -1.3017 and the garage's at -1.1767, so the house
+    // -- standing a clear 26 ft in FRONT of the garage's front wall -- topped
+    // out an inch and a half LOWER and hid none of it. The garage's own top of
+    // concrete then ran twenty feet across the back of the house:
+    //
+    //     e -1.1729   u -16.00..4.00    the GARAGE's front wall, behind
+    //     e -1.2979   u -16.00..16.00   the HOUSE's own, in front
+    //
+    // -- two parallel lines an inch and a half apart, and the buck notched out
+    // of the first for good measure. It shows because the OUTLINE pass runs
+    // after every fill on the sheet, so a far face's line goes down on top of
+    // the near face that covered its fill.
+    //
+    // THE INCH AND A HALF IS THE STORED HEIGHTS, which this file already knows
+    // about: "the house's foundation walls were stored at the generic 8'-0"
+    // while the garage's took the foundation assembly's 8'-1 1/2"", and
+    // reconciling those is the open question about the junction. This does not
+    // wait on it. A wall does not stop at its concrete -- the sill plate on top
+    // is opaque too, and the pass below fills exactly that strip -- so the
+    // height a face hides things up to is the top of its PLATE. The house's
+    // reaches the bearing line, which is above the garage's concrete, and that
+    // is true whatever the two are stored at.
+    const PLATE_CAP_FT = 0.5;
+    const plateTopOf = g => (g.garage
+      ? garageBearing(env, fdn, g.garage) : fdn.wallTop);
+    const plateOf = g => {
+      const rise = plateTopOf(g) - g.topE;
+      return rise > 0.01 && rise < PLATE_CAP_FT ? rise : 0;
+    };
     const behindFdn = (g, o) => o !== g
       && o.depth > g.depth + 1e-6
-      && o.topE >= g.topE - 1e-3
+      && o.topE + plateOf(o) >= g.topE - 1e-3
       && Math.max(o.baseE, fdn.grade) <= Math.max(g.baseE, fdn.grade) + 1e-3;
     const visibleRuns = g => exposed.reduce((runs, o) => (behindFdn(g, o)
       ? runs.flatMap(r => {
@@ -2370,13 +2407,6 @@ if (!window.DraftCutView) {
     // generic 8'-0" wall default while the garage's took the foundation
     // assembly's 8'-1 1/2" (the note at the corner pass below has the rest of
     // that: "reconciling those is a question about the junction").
-    const PLATE_CAP_FT = 0.5;
-    const plateTopOf = g => (g.garage
-      ? garageBearing(env, fdn, g.garage) : fdn.wallTop);
-    const plateOf = g => {
-      const rise = plateTopOf(g) - g.topE;
-      return rise > 0.01 && rise < PLATE_CAP_FT ? rise : 0;
-    };
     // ── AND A DOOR IS A NOTCH OUT OF THE TOP OF IT ──────────────────────
     //
     // Movie, 25 Sep: "i guess the door buck will appear on the elevations as a
@@ -2546,11 +2576,16 @@ if (!window.DraftCutView) {
         //
         // SO THE LINE IS CLIPPED TO WHAT SHOWS rather than the run being
         // thrown away. Throwing it away would be the all-or-nothing answer
-        // the note above this pass was written against -- and it would be
-        // wrong here too, because the step is real and a drafter looking for
-        // it should find it. Drawn to the nearest COVERING face's top, the
-        // crease is three eighths of an inch long: the truth, at the size
-        // the truth is.
+        // the note above this pass was written against.
+        //
+        // AND ON THIS FIXTURE THERE IS NOTHING LEFT TO CLIP, since 26 Sep.
+        // `behindFdn` measures cover to the top of the near face's PLATE now,
+        // not to the top of its concrete, so a face whose step is hidden
+        // behind a sill plate yields no runs and never reaches this pass --
+        // the reading this note called a technicality, answered where it
+        // arose. What is left here is the real case: a far face that genuinely
+        // stands proud of what is in front of it, clipped to the part that
+        // shows rather than drawn whole or dropped.
         //
         // THE 3/8" ITSELF IS NOT THIS PASS'S TO FIX. It is the build handing
         // the garage's beam `assemblyFor(1).wallHeightFt` while the house's
