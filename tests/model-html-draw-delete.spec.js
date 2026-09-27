@@ -83,7 +83,12 @@ const scaleOf = async page => {
   expect(hit, 'the readout publishes the scale').toBeTruthy();
   return Number(hit[1]);
 };
-const tapAt = async (page, x, z) => {
+// PLACING A POINT IS TWO PRESSES NOW, on every point after the first — see
+// h.placePoint and model-point-confirm.spec.js. `close: true` sends the pair
+// instead of the single press, and keeps every guard above it: a closing press
+// that lands under the view rail is exactly as invisible as an opening one,
+// and used to surface three tests later as "reading 'start' of undefined".
+const tapAt = async (page, x, z, { close = false } = {}) => {
   const box = await page.locator('#plan').boundingBox();
   const scale = await scaleOf(page);
   const cx = box.width / 2 + x * scale;
@@ -125,9 +130,14 @@ const tapAt = async (page, x, z) => {
   expect(hit,
     `world (${x}, ${z}) is covered by page chrome — the tap reached ${hit}, not the canvas`)
     .toBe('canvas#plan');
+  if (close) { await h.placePoint(page, box.x + cx, box.y + cy); return; }
   await page.mouse.click(box.x + cx, box.y + cy);
   await page.waitForTimeout(60);
 };
+
+// The press that CLOSES a wall, named so the call sites read as the gesture
+// rather than as an option flag.
+const closeAt = (page, x, z) => tapAt(page, x, z, { close: true });
 
 // WHERE A TAP MEANT FOR w-a HAS TO LAND, now that openings are selectable.
 //
@@ -172,7 +182,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
 
       await h.armWall(page);
       await tapAt(page, -4, 3);
-      await tapAt(page, 4, 3);
+      await closeAt(page, 4, 3);
       expect(await wallsShown(page)).toEqual({ shown: 3, total: 3 });
 
       await page.locator('[data-model-save]').click();
@@ -205,7 +215,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
       await h.armWall(page);
       // Start on the shared corner of w-a and w-b.
       await tapAt(page, 0, 0);
-      await tapAt(page, 0, 3);
+      await closeAt(page, 0, 3);
       await page.locator('[data-model-save]').click();
       await expect(page.locator('[data-model-save]')).toHaveText(/saved/i, { timeout: 6000 });
 
@@ -229,7 +239,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
       await openNewPage(page);
       await h.armWall(page);
       await tapAt(page, 0, 0);                       // start ON w-a/w-b's shared corner
-      await tapAt(page, 0, 3);
+      await closeAt(page, 0, 3);
       await h.disarmWall(page);  // the wall stays selected
 
       // THIS IS WHAT THE COORDINATE CHECK COULD NOT SEE. cornerSnap already
@@ -267,7 +277,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
     await openNewPage(page);
     await h.armWall(page);
     await tapAt(page, -4, 3);
-    await tapAt(page, 4, 3);
+    await closeAt(page, 4, 3);
     await page.locator('[data-model-save]').click();
     await expect(page.locator('[data-model-save]')).toHaveText(/saved/i, { timeout: 6000 });
 
@@ -285,7 +295,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
     await expect(readout(page)).toContainText('FOUNDATION', { timeout: 6000 });
     await h.armWall(page);
     await tapAt(page, -4, 3);
-    await tapAt(page, 4, 3);
+    await closeAt(page, 4, 3);
     await page.locator('[data-model-save]').click();
     await expect(page.locator('[data-model-save]')).toHaveText(/saved/i, { timeout: 6000 });
 
@@ -327,7 +337,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
       await openNewPage(page);
       await h.armWall(page);
       await tapAt(page, -4, 3);
-      await tapAt(page, 4, 3);
+      await closeAt(page, 4, 3);
       expect(await wallsShown(page)).toEqual({ shown: 3, total: 3 });
 
       await page.keyboard.press('Escape');           // leave draw mode
@@ -392,7 +402,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
       // right, the drawing right, the mitre silently gone.
       await h.armWall(page);
       await tapAt(page, 8, 0);                       // onto w-b's restored free end
-      await tapAt(page, 8, 3);
+      await closeAt(page, 8, 3);
       await h.disarmWall(page);  // new wall selected
 
       const box = await page.locator('#plan').boundingBox();
@@ -427,7 +437,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
       await openNewPage(page);
       await h.armWall(page);
       await tapAt(page, -4, 3);                       // a wall is pending
-      await tapAt(page, 4, 3);                        // committed, chain live, wall selected
+      await closeAt(page, 4, 3);                        // committed, chain live, wall selected
       await expect(page.locator('[data-delete]')).toBeVisible();
 
       await page.keyboard.press('Escape');
@@ -440,10 +450,13 @@ test.describe('MODEL.html draw + delete a wall', () => {
       await expect(page.locator('[data-delete]'), 'the selection went').toBeHidden();
       expect(await h.wallArmed(page), 'the tool stayed').toBe(true);
 
-      // And the chain really is broken: the next two taps make ONE wall, not a
-      // wall joined to the abandoned one.
+      // And the chain really is broken: the next run makes ONE wall, not a wall
+      // joined to the abandoned one. A SECOND run under the same arm, which is
+      // why it needs naming: the tool survives Escape, so this opens a fresh
+      // wall rather than carrying on the old one — and its closing press is a
+      // pair like any other.
       await tapAt(page, -4, -3);
-      await tapAt(page, 4, -3);
+      await closeAt(page, 4, -3);
       expect(await wallsShown(page)).toEqual({ shown: 4, total: 4 });
     });
 
@@ -453,7 +466,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
       await openNewPage(page);
       await h.armWall(page);
       await tapAt(page, -4, 3);
-      await tapAt(page, 4, 3);
+      await closeAt(page, 4, 3);
       // DISARM DELIBERATELY. The gesture CHAINS after a commit — the next wall
       // starts where the last one ended — so one Escape clears only the
       // pending start and leaves the mode armed. A tap then draws instead of
