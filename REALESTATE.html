@@ -156,14 +156,20 @@
 </style>
 </head>
 <body>
-  <!-- NO INSTRUMENTS. Movie, 27 Sep: "the top instrument panel maybe we can
-       use it but will probably need to change it for this one". The strip the
-       bar mounts is LENGTH and ANGLE -- a wall-drawing instrument -- and
-       nothing on this page draws a wall. The finish controls are the page's
-       own, in the rail, which is the seam the module states: the bar owns the
-       furniture, the page owns what the furniture does. Switching the strip on
-       is one word here when he has seen it. -->
-  <script>window.DraftShellBars.topBar();</script>
+  <!-- THE INSTRUMENTS ARE HERE, AND ASLEEP. Movie, 27 Sep, having seen the
+       page: "we should also bring the 'length' and 'angle' textboxes into the
+       top center bar.. we may need some of the instruments to be active too so
+       bring them all but leave them inactive for now".
+
+       MOUNTED BUT NOT WIRED, which is the seam the module already states: the
+       bar owns the FURNITURE and the page owns what the furniture DOES. The
+       strip arrives with its chips dormant and its two boxes disabled, and
+       nothing here tells them otherwise -- so they stand in the right place,
+       at the right size, in the right order, and do nothing until there is
+       something for them to do. A row of controls in their final positions is
+       worth more than a gap: it says the page is not finished yet, where a gap
+       says it forgot. -->
+  <script>window.DraftShellBars.topBar({ instruments: true });</script>
   <main>
     <div class="tabs" role="tablist" aria-label="Real estate layout">
       <button class="tab" role="tab" id="tab-finishes" aria-selected="true"
