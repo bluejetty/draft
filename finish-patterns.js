@@ -295,47 +295,103 @@ if (!window.DraftFinishPatterns) {
     // Fieldstone: rubble laid to no line at all, which is what "odd shapes"
     // means and what separates it from the ashlar above.
     //
-    // PACKED LIKE THE COBBLES, BUT ANGULAR. Movie, 27 Sep: *"can you make the
-    // FIELDSTONE look more like the ROUNDSTONE but with more abnormally
-    // shaped not as rounded"*, *"(showing the mortar joints like in
-    // roundstone)"*. So it is the same laying -- discrete stones nested
-    // together with mortar showing between them -- and the difference is the
-    // OUTLINE: a river cobble is worn smooth, a fieldstone is broken, so its
-    // edges are straight runs meeting at corners.
+    // TESSELLATE, THEN SHRINK. Movie, 27 Sep: *"make all the fieldstones
+    // individual shapes and try to reduce the mortar space between them, fit
+    // the shapes together"*. Those two asks pull against each other in any
+    // obvious drawing -- scatter the stones and they do not fit; tile them and
+    // they are not individual, which is the two versions this has already
+    // been. A lattice gives the FIT for nothing, because displaced corners
+    // stay a perfect tessellation however far they move. Insetting each cell
+    // toward its own middle then opens the joint, by exactly the mortar and no
+    // more, and leaves every stone a closed shape of its own.
     //
-    // WHICH IS WHY IT IS NOT A LATTICE. It was drawn as one -- crazy paving,
-    // every corner shared -- and that is a wall with no mortar in it at all.
-    // Movie asked for the joints back.
+    // THE MORTAR IS THE ROW'S OWN JOINT, so a drafter who wants it tighter
+    // sets the number rather than waiting on a new material -- the same
+    // promise every other parameter here makes.
     //
-    // FEWER CORNERS AND A HARDER WOBBLE is the whole of what makes it read as
-    // broken rather than worn: five or six sides at half again the cobble's
-    // variation, so no two edges of one stone are the same length.
+    // FOUR TO EIGHT SIDES. Each edge of the lattice carries a midpoint, pushed
+    // off the straight by its own hash, on a coin decided by the EDGE rather
+    // than by either stone -- so the two stones sharing it agree, and the fit
+    // survives. That is what makes a slab angular instead of merely
+    // quadrilateral.
     field: (ctx, box, finish) => {
       const size = paramOf(finish, 'stoneIn', 12) / 12 * box.pxPerFt;
-      if (size < MIN_SPACING_PX * 1.6) return;
-      ctx.beginPath();
-      let row = 0;
-      for (let y = box.yBottom - size * 0.45; y > box.yTop; y -= size * 0.84, row += 1) {
-        const stagger = size * 0.5 * jitter(row, 11);
-        for (let x = box.x0 + stagger; x < box.x1 + size; x += size * 0.9) {
-          const cell = Math.round(x);
-          const rx = size * (0.27 + 0.26 * jitter(row, cell));
-          const ry = size * (0.25 + 0.24 * jitter(cell, row + 5));
-          const cx = x + size * 0.28 * (jitter(cell + 2, row) - 0.5);
-          const cy = y + size * 0.22 * (jitter(row + 3, cell) - 0.5);
-          if (cx + rx < box.x0 || cx - rx > box.x1) continue;
-          if (rx < 1.5 || ry < 1.5) continue;
-          // FIVE OR SIX SIDES, chosen by the stone's own hash, so the wall
-          // carries both and neither reads as a repeated shape.
-          const corners = jitter(cell, row + 9) > 0.5 ? 5 : 6;
-          const twist = jitter(row + 4, cell) * Math.PI;
-          for (let i = 0; i <= corners; i += 1) {
-            const ang = twist + (i % corners) / corners * Math.PI * 2;
-            const wob = 0.52 + 0.92 * jitter(cell + i * 7, row + i);
-            const px = cx + Math.cos(ang) * rx * wob;
-            const py = cy + Math.sin(ang) * ry * wob;
-            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-          }
+      if (size < MIN_SPACING_PX * 2) return;
+      const mortar = Math.max(0.6,
+        paramOf(finish, 'jointIn', 1) / 12 * box.pxPerFt / 2);
+      const cols = Math.ceil((box.x1 - box.x0) / size) + 1;
+      const rows = Math.ceil((box.yBottom - box.yTop) / size) + 1;
+      const corner = (i, j) => ({
+        x: box.x0 + (i - 1) * size + size * 0.5 * (jitter(i, j) - 0.5),
+        y: box.yTop + (j - 1) * size + size * 0.5 * (jitter(j, i + 31) - 0.5),
+      });
+      // The midpoint of one lattice edge, or null where that edge runs
+      // straight. Keyed on the EDGE, so both stones using it get the same
+      // answer and the joint between them stays the same width.
+      const midOf = (i, j, horizontal) => {
+        const key = horizontal ? jitter(i * 2 + 1, j * 3) : jitter(i * 3, j * 2 + 1);
+        if (key < 0.45) return null;
+        const a0 = corner(i, j);
+        const b0 = horizontal ? corner(i + 1, j) : corner(i, j + 1);
+        const dx = b0.x - a0.x, dy = b0.y - a0.y;
+        const off = (horizontal ? jitter(j, i + 7) : jitter(i, j + 7)) - 0.5;
+        return { x: (a0.x + b0.x) / 2 - dy * off * 0.45,
+          y: (a0.y + b0.y) / 2 + dx * off * 0.45 };
+      };
+      // ── AND A MASON PICKS THE STONE THAT FILLS THE HOLE ───────────────
+      //
+      // Movie, 27 Sep: *"a bricklayer would be choosing a shape to fill the
+      // gaps as much as possible"*. A lattice on its own lays one size, which
+      // is a net rather than a wall -- so a cell sometimes swallows the one
+      // beside it or below it and goes down as a single bigger slab, the way
+      // a big stone spans where two would have gone. The joints it ate simply
+      // are not drawn, and the fit is untouched: the outside of two cells is
+      // still a ring of shared lattice points.
+      const eaten = new Set();
+      const ctxBegin = () => ctx.beginPath();
+      ctxBegin();
+      for (let j = 0; j <= rows; j += 1) {
+        for (let i = 0; i <= cols; i += 1) {
+          if (eaten.has(`${i},${j}`)) continue;
+          const wide = i < cols && !eaten.has(`${i + 1},${j}`)
+            && jitter(i + 13, j + 5) > 0.74;
+          const tall = !wide && j < rows && !eaten.has(`${i},${j + 1}`)
+            && jitter(i + 5, j + 13) > 0.78;
+          if (wide) eaten.add(`${i + 1},${j}`);
+          if (tall) eaten.add(`${i},${j + 1}`);
+          const ring = (wide ? [
+            corner(i, j), midOf(i, j, true), corner(i + 1, j),
+            midOf(i + 1, j, true), corner(i + 2, j),
+            midOf(i + 2, j, false), corner(i + 2, j + 1),
+            midOf(i + 1, j + 1, true), corner(i + 1, j + 1),
+            midOf(i, j + 1, true), corner(i, j + 1), midOf(i, j, false),
+          ] : tall ? [
+            corner(i, j), midOf(i, j, true), corner(i + 1, j),
+            midOf(i + 1, j, false), corner(i + 1, j + 1),
+            midOf(i + 1, j + 1, false), corner(i + 1, j + 2),
+            midOf(i, j + 2, true), corner(i, j + 2),
+            midOf(i, j + 1, false), corner(i, j + 1), midOf(i, j, false),
+          ] : [
+            corner(i, j), midOf(i, j, true), corner(i + 1, j),
+            midOf(i + 1, j, false), corner(i + 1, j + 1),
+            midOf(i, j + 1, true), corner(i, j + 1), midOf(i, j, false),
+          ]).filter(Boolean);
+          if (ring.length < 4) continue;
+          // Inset toward the stone's own middle by half the joint, which is
+          // what turns one tessellation into a wall of separate stones.
+          const cx = ring.reduce((sum, pt) => sum + pt.x, 0) / ring.length;
+          const cy = ring.reduce((sum, pt) => sum + pt.y, 0) / ring.length;
+          const laid = ring.map(pt => {
+            const dx = cx - pt.x, dy = cy - pt.y;
+            const len = Math.hypot(dx, dy) || 1;
+            if (len <= mortar * 1.5) return null;
+            return { x: pt.x + dx / len * mortar, y: pt.y + dy / len * mortar };
+          });
+          if (laid.some(pt => !pt)) continue;
+          if (Math.max(...laid.map(pt => pt.x)) < box.x0
+            || Math.min(...laid.map(pt => pt.x)) > box.x1) continue;
+          laid.forEach((pt, k) => (k ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)));
+          ctx.lineTo(laid[0].x, laid[0].y);
         }
       }
       ctx.stroke();

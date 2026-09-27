@@ -391,6 +391,43 @@ function run(win) {
     `longest side over shortest, median ${midOf(spread).toFixed(2)} across `
     + `${spread.length} stones`);
 
+  // AND A MASON'S WALL CARRIES SEVERAL SHAPES AND SEVERAL SIZES. Movie:
+  // *"a bricklayer would be choosing a shape to fill the gaps as much as
+  // possible"*. One repeated outline at one repeated size is a NET, however
+  // well it fits -- which is what a bare lattice draws and what these two
+  // checks exist to keep it from going back to.
+  const ringsOf = id => {
+    const out = [];
+    draw(by(id)).filter(st => st.alpha > 0.5).forEach(st => {
+      let run = [];
+      const close = () => { if (run.length > 3) out.push(run); run = []; };
+      st.pts.forEach(pt => { if (pt.move) { close(); run = [pt]; } else run.push(pt); });
+      close();
+    });
+    return out;
+  };
+  const fieldRings = ringsOf('fieldstone');
+  check('a fieldstone wall carries several SHAPES, not one outline repeated',
+    new Set(fieldRings.map(r => r.length)).size > 2,
+    `${new Set(fieldRings.map(r => r.length)).size} distinct corner counts `
+    + `over ${fieldRings.length} stones`);
+  // AREA, because that is what "spans two gaps with one stone" means: a mason
+  // reaching for the big slab where two small ones would have gone.
+  const areaOf = ring => Math.abs(ring.reduce((sum, pt, i) => {
+    const q = ring[(i + 1) % ring.length];
+    return sum + pt.x * q.y - q.x * pt.y;
+  }, 0) / 2);
+  const areas = fieldRings.map(areaOf).filter(a => a > 1).sort((a, b) => a - b);
+  const bigOverSmall = areas.length
+    ? areas[Math.floor(areas.length * 0.9)] / areas[Math.floor(areas.length * 0.1)] : 1;
+  // MEASURED, like the irregularity above. With the merges on, the stone at
+  // the ninetieth percentile is 3.04 times the one at the tenth; with both of
+  // them off it is 1.76, which is all the lattice's own displacement gives.
+  // 2.4 sits between with room either side.
+  check('and several SIZES, because a mason spans two gaps with one stone',
+    areas.length > 20 && bigOverSmall > 2.4,
+    `the big ones are ${bigOverSmall.toFixed(2)}x the small ones`);
+
   // ── RELIEF: THE STONE STANDS PROUD OF ITS JOINT ───────────────────────
   // Movie: "can we give these texture where the stone stuck out past the
   // mortor". Outlined flat, the same pattern reads as a tile floor stood on
@@ -495,12 +532,14 @@ const MUTATIONS = [
   ['ashlar is ruled to one course height, so it is brick drawn at stone size',
     s => sub(s, '        high: row => high * (0.6 + 1.1 * jitter(row, 5)),',
       '        high: () => high,')],
-  ['fieldstone is worn smooth, so it stops telling itself from a cobble',
-    s => sub(s, '          const corners = jitter(cell, row + 9) > 0.5 ? 5 : 6;',
-      '          const corners = 10;')],
-  ['a fieldstone stops being irregular, so every stone is the same shape',
-    s => sub(s, '            const wob = 0.52 + 0.92 * jitter(cell + i * 7, row + i);',
-      '            const wob = 1;')],
+  ['the mortar closes up, so the stones share corners and the wall has no joints',
+    s => sub(s, '            return { x: pt.x + dx / len * mortar, y: pt.y + dy / len * mortar };',
+      '            return { x: pt.x, y: pt.y };')],
+  ['a fieldstone loses its broken edges, so every stone is a plain quad',
+    s => sub(s, '        if (key < 0.45) return null;', '        return null;')],
+  ['the stones stop merging, so a mason lays one size everywhere',
+    s => sub(sub(s, '            && jitter(i + 13, j + 5) > 0.74;', '            && false;'),
+      '            && jitter(i + 5, j + 13) > 0.78;', '            && false;')],
   ['ledgestone breaks every ten inches again, and the streaks come back',
     s => sub(s, '        wide: (row, col) => course * (5 + 10 * jitter(row + 1, col + 3)),',
       '        wide: () => course * 3.5,')],

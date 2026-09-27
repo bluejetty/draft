@@ -219,7 +219,13 @@ if (!window.DraftWallTypes) {
       cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),
       params: Object.freeze([
         { key: 'stoneIn', label: 'Stone', in: 12 },
-        { key: 'jointIn', label: 'Joint', in: 1 },
+        // HALF AN INCH, Movie 27 Sep: *"a bricklayer would be choosing a
+        // shape to fill the gaps as much as possible and leave about 1/2\"
+        // mortor if possible"*. A mason fitting rubble picks the stone that
+        // fills the hole; the mortar is what is left over, not a bed the
+        // stones are spaced out on. Tighter than every other stone here for
+        // that reason -- the coursed ones are laid to a line and take theirs.
+        { key: 'jointIn', label: 'Joint', in: 0.5 },
       ]) },
     // ── AND A WAINSCOT IS CAPPED, WHICH IS `cap` ───────────────────────
     //
