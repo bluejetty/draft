@@ -2041,6 +2041,25 @@
     };
     const top = tall('strip');
     const bottom = Math.max(tall('house-strip') - hemOf('house-strip'), 0);
+    // ── AND NOT THE SIDE TABS, WHICH WAS TRIED AND MEASURED ────────────
+    //
+    // Movie, 27 Sep, asked for the marks to clear "the top bottom and
+    // sidemenus". The bars are insetted here and the three rail tabs are not,
+    // which looks like the same omission -- so an inset for them was written,
+    // and then taken out again because nothing could tell the difference.
+    //
+    // MEASURED, on repro-garage-house at 1280x720: the mark ring spans x 230
+    // to 1050 while DRAFTING TOOLS ends at 26 and LEVELS / LAYERS begins at
+    // 1254. Two hundred pixels of clearance on each side, against a tab
+    // twenty-six wide. The vertical is the tight one -- 45px clear at the top
+    // and 21 at the bottom -- because the fit is HEIGHT-bound, and the 0.86
+    // margin therefore leaves the width enormous slack. A wide house is
+    // width-bound instead, and 7% of the sheet is still ninety pixels a side.
+    //
+    // SO THE TABS ARE ALREADY CLEARED BY THE MARGIN, and an inset for them is
+    // a change no check can see. What Movie was actually looking at is the
+    // other half of this: the marks were off the frame entirely, which fit()
+    // fixes by measuring them.
     // A sheet that is nearly all bar is a broken layout, not a tight fit.
     // Refusing the inset there leaves the old framing rather than dividing
     // the drawing into a sliver -- visibly wrong beats invisibly tiny.
@@ -2051,8 +2070,32 @@
   const fit = (wide = false) => {
     const pts = allPoints(wide);
     if (!pts.length) { view.cx = 0; view.cz = 0; view.scale = 6; return; }
+    // ── THE ELEVATION MARKS ARE PART OF WHAT IS ON THE SHEET ───────────
+    //
+    // Movie, 27 Sep: *"can you adjust the 'default' opening window of model
+    // space to zoom to a position so that the E1 - E4 lines have extra space
+    // to the top bottom and sidemenus"*.
+    //
+    // `allPoints` measures walls, lines and floors, so a fit framed the HOUSE
+    // and the ring of E marks standing off it fell outside -- which is what he
+    // is looking at. The ring is drawn on every plan by default, so it is part
+    // of the picture whether or not it is part of the building.
+    //
+    // NOT IN allPoints, THOUGH, and the scoping is the same ruling that keeps
+    // roofs and outlines out of it: `allPoints(wide)` also feeds the rail
+    // seats, and a thumbnail 82px across wants the HOUSE, not the house shrunk
+    // to make room for four bubbles. The marks are folded in here, where the
+    // main view is what is being framed, and the two callers that borrow fit()
+    // to make a picture say so already.
+    const framed = pts.slice();
+    if (!thumbTarget && !shootingPaper) {
+      autoElevationCuts().forEach(cut => {
+        if (cut.startPt) framed.push(cut.startPt);
+        if (cut.endPt) framed.push(cut.endPt);
+      });
+    }
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    pts.forEach(p => {
+    framed.forEach(p => {
       if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
       if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
     });
