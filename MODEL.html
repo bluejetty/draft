@@ -8397,11 +8397,6 @@
     // BEAM finish under COLUMN.
     drawStart = null;
     beamStart = null;
-    // The pending point is the same kind of thing as the anchor above it and
-    // goes the same way, for the reason that note already gives: carrying a
-    // half-finished gesture across a tool change is how one tool commits into
-    // the next tool's first tap.
-    dropPending();
     canvas.style.cursor = next === RESTING_TOOL ? '' : 'crosshair';
     // The instrument strip is a third reader of the same fact, added by #398
     // against the boolean this replaced. It reads the register now like
@@ -8835,13 +8830,7 @@
     return true;
   };
 
-  // `ev` IS THE PRESS THAT CAUSED THIS, and it is optional on purpose: the
-  // two call sites are a mouse pointerdown and a touch pointerup, and the
-  // typed-length commits below reach commitWall directly rather than through
-  // here. A caller with no event gets the old behaviour, which is the correct
-  // answer for every one of them -- a typed length is as deliberate as a
-  // gesture gets.
-  const drawPress = (at, ev) => {
+  const drawPress = at => {
     if (!drawStart) {
       // Resume before refusing: a press on the open end is the drafter
       // carrying on, which is the one case the refusal must not catch.
@@ -8859,61 +8848,7 @@
       drawStart = drawPoint(at); stripRefresh(); paint(); return;
     }
     clearNotice();
-    // `let`, because a confirming press replaces it with the point it is
-    // confirming -- see the note below.
-    let end = drawPoint(at);
-    // ── THE SECOND PRESS, AND WHETHER IT IS THE FIRST OF TWO ────────────────
-    //
-    // MOUSE ONLY, asked of the event rather than of a setting: the touch path
-    // reaches here from the LIFT, where a press-drag-lift has already said
-    // everything it means to say.
-    if (ev && ev.pointerType === 'mouse') {
-      // AT THE PRESS'S OWN COORDINATES, not the cursor's. They are the same
-      // point in every real gesture -- a browser sends a move before a press --
-      // and asking the press is the honest one: it is the press that is or is
-      // not in the same place.
-      const confirming = pendingLiveAt(ev.clientX, ev.clientY);
-      if (!confirming) {
-        // NOT A CONFIRMATION, SO IT IS A PRE-POSITION -- including the press
-        // that came too late or landed somewhere else. Treating either as a
-        // refusal would leave the drafter pressing a third time to get
-        // anywhere; treating both as a fresh pre-position means the gesture is
-        // always "press, press" from wherever the drafter actually is.
-        dropPending();
-        pendingEnd = { pt: end, at: performance.now(), sx: ev.clientX, sy: ev.clientY };
-        // THE WINDOW CLOSES ITSELF, rather than being noticed on the next
-        // press. Left to be discovered lazily, the band would stand frozen on
-        // a point that is no longer live -- the page showing a wall it will
-        // not build, which is the one thing this band must never do.
-        // THE TIMER SHOWS, IT DOES NOT DECIDE. pendingLiveAt has already
-        // stopped counting the point by the time this runs; all this does is
-        // make the screen agree -- the band un-freezes and the word comes off
-        // the strip at the moment the window shuts, instead of hanging there
-        // until the drafter happens to move. Left to DECIDE (clearing the
-        // point itself) it would be a second authority, and the mutation that
-        // deletes the clock comparison above would survive behind it.
-        pendingTimer = setTimeout(() => {
-          pendingTimer = null;
-          clearNotice();
-          stripRefresh();
-          paint();
-        }, CONFIRM_MS);
-        sayOnStrip('press again to place this point');
-        stripRefresh();
-        paint();
-        return;
-      }
-      // THE POINT THAT WAS CONFIRMED, NOT THE PRESS THAT CONFIRMED IT, and
-      // this is the whole meaning of the slop. The two presses are up to six
-      // pixels apart by design -- that is the forgiveness that makes the
-      // gesture usable -- and six pixels is three and a half inches at the
-      // opening zoom and a great deal more zoomed in. Building at the second
-      // press would mean the drafter aimed, saw the line freeze exactly where
-      // they wanted it, pressed to accept THAT, and got a wall somewhere else.
-      // The first press is the aim; the second is only the word yes.
-      end = pendingEnd.pt;
-      dropPending();
-    }
+    const end = drawPoint(at);
     // A wall of no length is not a wall — the format drops anything under
     // 1e-6 on load, so committing one would write a record that vanishes on
     // the next open. Treat the second tap as a correction, not a commit.
@@ -12777,80 +12712,6 @@
   // neither, and the readouts go blank rather than holding a stale number --
   // a length that stays on screen after the gesture ends is the one thing a
   // drafter should never be able to misread.
-  // ── A POINT PRE-POSITIONED, WAITING TO BE CONFIRMED ──────────────────────
-  //
-  // Movie, 27 Sep: *"1 click will pre-position the point and and second click
-  // in same location within 1 second will confirm it, if they do something
-  // else it won't be placed"*, and the ruling that shapes it: **not the first
-  // point, all the other points after it**, and **PC only**.
-  //
-  // WHY THAT SPLIT IS RIGHT AND NOT MERELY WHAT WAS ASKED FOR. The first press
-  // of a run is deliberate -- the drafter armed a tool and is starting
-  // something out of nothing. The presses after it come fast, one after
-  // another down a run, and a stray one drops a wall through the middle of a
-  // room. The protection goes where the accidents are, and the tax is not
-  // charged where they do not happen: a four-wall room costs six presses
-  // rather than ten.
-  //
-  // TOUCH KEEPS PRESS-DRAG-LIFT. §1 already gave a tap two meanings there --
-  // set the start, close the run -- and a third is how a gesture becomes a
-  // guess. A finger is also not the pointer that mis-clicks; a hand that
-  // slips on glass slips by inches, which the slop below would not forgive
-  // anyway.
-  let pendingEnd = null;   // { pt, at, sx, sy } -- the point awaiting its second press
-  let pendingTimer = null;
-  // THE WINDOW IS MOVIE'S OWN SECOND. Named rather than spelt into the
-  // comparison, because a drafter asking for it longer is asking about THIS
-  // number and should not have to read a conditional to find it.
-  const CONFIRM_MS = 1000;
-  // AND THE SLOP IS WHAT MAKES THE GESTURE SURVIVABLE. "Same location" read
-  // strictly means the same device pixel, and no hand on a mouse hits the same
-  // pixel twice -- so a strict reading would fail more often than it worked,
-  // and the drafter would learn the gesture as unreliable rather than as
-  // careful. Six pixels is under the 30px corner grab and well under anything
-  // a drafter would call a different place.
-  const CONFIRM_SLOP_PX = 6;
-
-  // ONE PLACE PUTS IT DOWN, because there are six ways to lose it -- the
-  // window expiring, the cursor leaving, a press elsewhere, Escape, a tool
-  // change, and the run itself ending -- and a pending point left behind by
-  // any one of them is a live trigger under the cursor: the drafter starts a
-  // new wall somewhere else and their first press lands on a stale
-  // confirmation.
-  // ── IS THE PRE-POSITIONED POINT STILL LIVE? ─────────────────────────────
-  //
-  // ONE RULE, ASKED, rather than several mechanisms that each act when their
-  // own condition trips. The first draft had three: the press compared the
-  // clock, the press compared the distance, AND a timer cleared the point,
-  // AND a pointermove cleared it. Four ways to the same answer, and mutation
-  // proved what that costs -- deleting the clock comparison, widening the
-  // distance to the whole sheet, and stopping Escape from clearing the point
-  // ALL survived a suite that checks each of those behaviours, because
-  // whichever mechanism was left still delivered the right answer. A claim two
-  // mechanisms both satisfy is a claim no check can hold.
-  //
-  // So the two conditions live HERE and nothing else decides. The window and
-  // the slop are asked at the moment someone needs the answer, and a pending
-  // point that has gone stale simply stops counting rather than being chased
-  // down by whoever notices first.
-  const pendingLiveAt = (x, y) => !!pendingEnd
-    && (performance.now() - pendingEnd.at) <= CONFIRM_MS
-    && Math.hypot(x - pendingEnd.sx, y - pendingEnd.sy) <= CONFIRM_SLOP_PX;
-  const dropPending = () => {
-    if (pendingTimer) { clearTimeout(pendingTimer); pendingTimer = null; }
-    if (!pendingEnd) return false;
-    pendingEnd = null;
-    // AND THE WORD GOES WITH IT. "press again to place this point" is a notice
-    // ABOUT the pending point, and stripRefresh deliberately lets a notice
-    // outlive a refresh -- correctly, for a refusal, which has to survive the
-    // routine message that would otherwise erase it microseconds later. But a
-    // notice that outlives the thing it describes is the page saying press
-    // again over a gesture that has been put down. Escape caught this: it
-    // cleared the point and left the sentence on the strip.
-    clearNotice();
-    return true;
-  };
-
   const runInHand = () => {
     if (!cursorWorld) return null;
     // drawPoint, NOT squareTo, AND THAT IS A BUG FIX RATHER THAN A TIDY-UP.
@@ -12861,28 +12722,7 @@
     // not the cursor measured separately -- two readings of one distance
     // drift, and the drafter believes the one he can see." This has been
     // wrong on the TOY board since §1 landed.
-    // THE PENDING POINT IS THE FAR END WHILE THERE IS ONE, and that is the
-    // whole of what the drafter SEES of this gesture: the band stops following
-    // the cursor and stands still on the point that is waiting. Press again
-    // and it becomes a wall; move away and it resumes following. There is no
-    // second marker to invent, because the band already draws exactly the wall
-    // that the confirming press will build -- which is why this gesture cost
-    // one line here rather than a painter of its own.
-    if (drawStart && activeTool === 'wall') {
-      // A PENDING POINT IS THE FAR END, FULL STOP, and it does not get asked
-      // a second time whether it is still live. The pointermove above already
-      // puts it down the moment it stops counting, so a pendingEnd that
-      // EXISTS is one the next press would confirm -- and the band's whole job
-      // is to show the wall that press will build.
-      //
-      // A LIVENESS TEST HERE WAS TRIED AND REMOVED, because no check could
-      // hold it: the pending point and the cursor are never more than the slop
-      // apart, so "frozen on the point" and "following the cursor" are the
-      // same picture to within six pixels. Mutation is what said so -- deleting
-      // it survived the whole suite. A guard nothing can measure is not a
-      // guard, it is a second opinion about a question already settled above.
-      return { from: drawStart, to: pendingEnd ? pendingEnd.pt : drawPoint(cursorWorld) };
-    }
+    if (drawStart && activeTool === 'wall') return { from: drawStart, to: drawPoint(cursorWorld) };
     if (rulerFrom) return { from: rulerFrom, to: cursorWorld };
     return null;
   };
@@ -15621,7 +15461,7 @@
       // wall would end at the moment the finger arrived rather than where it
       // left. The lift below closes every touch run.
       if (wallPress.touch && drawStart) { paint(); return; }
-      drawPress(at, e);
+      drawPress(at);
       return;
     }
     // A WINDOW MODE TAKES THE PRESS BEFORE THE PAN, and before the corner and
@@ -15883,21 +15723,6 @@
       // blank when it is not, exactly as the old strip behaves.
       cursorWorld = at;
       pointerScreen = { x: e.clientX, y: e.clientY, type: e.pointerType };
-      // MOVING AWAY IS THE MOST ORDINARY "SOMETHING ELSE" THERE IS, and the
-      // one Movie's sentence is really about: *"if they do something else it
-      // won't be placed"*. A drafter who pre-positions a point and then takes
-      // the cursor off to look at the other end of the wall has changed their
-      // mind about it, and it must not come back to life because their hand
-      // wandered back over the spot. A first version let it -- it asked the
-      // predicate at press time and nowhere else, so away-and-back confirmed
-      // -- and the check for this named the sentence it broke.
-      //
-      // THE RULE IS pendingLiveAt's AND THE ACTING IS HERE, which is the split
-      // that keeps one authority. This branch does not carry a second copy of
-      // the window or the slop; it asks, and puts the point down when the
-      // answer is no. Widen the slop in the predicate and this stops dropping
-      // too, which is what makes the slop checkable.
-      if (pendingEnd && !pendingLiveAt(e.clientX, e.clientY)) dropPending();
       stripRefresh();
       const corner = cornerAt(at);
       canvas.classList.toggle('over-corner', !!corner);
@@ -16092,13 +15917,7 @@
     const travelled = Math.hypot(e.clientX - press.x, e.clientY - press.y) >= DRAG_ARM_PX;
     if (press.opened ? !travelled : !press.touch) return;
     const rect = canvas.getBoundingClientRect();
-    // THE EVENT GOES WITH IT, exactly as the press does. This is the TOUCH
-    // path and it must not get the confirm -- but "must not" has to be a rule
-    // the code states and a check can break, not an argument this call site
-    // happens to omit. Left out, `ev.pointerType === 'mouse'` was unreachable
-    // dead code: mutation deleting it survived every check, because the only
-    // caller that could have failed the test never called with an event.
-    drawPress(toWorld(e.clientX - rect.left, e.clientY - rect.top), e);
+    drawPress(toWorld(e.clientX - rect.left, e.clientY - rect.top));
   });
   canvas.addEventListener('pointerup', endDrag);
   canvas.addEventListener('pointercancel', endDrag);
@@ -16139,10 +15958,6 @@
       // press that a drafter meant for his selection.
       if (brushLoad) { brushDrop(); return; }
       drawStart = null;
-      // THE PENDING POINT GOES DOWN WITH THE RUN IT BELONGS TO. It is a
-      // half-taken gesture like the pending anchor beside it, and Escape is
-      // where this page puts those down.
-      dropPending();
       // AND THE UNFINISHED BONE GOES WITH IT. The refusal below says "finish
       // or cancel the run you started", so a cancel has to exist -- a message
       // naming a way out that the page does not offer is worse than no

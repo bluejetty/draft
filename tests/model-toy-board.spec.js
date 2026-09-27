@@ -412,13 +412,6 @@ async function drawnWall(page, from, to) {
   await h.armWall(page);
   await page.mouse.click(...at(...from));
   await page.waitForTimeout(60);
-  // TWICE ON THE SECOND POINT. A point after the first is PRE-POSITIONED by
-  // one press and placed by a second in the same spot -- Movie's own gesture,
-  // see model-point-confirm.spec.js. The pair is one aim as far as this helper
-  // is concerned; what it measures is the wall that comes out of them, and the
-  // wall is the same wall it always was.
-  await page.mouse.click(...at(...to));
-  await page.waitForTimeout(60);
   await page.mouse.click(...at(...to));
   await page.waitForTimeout(120);
   await page.locator('#save').click();
