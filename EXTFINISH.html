@@ -466,30 +466,54 @@
       // THE FOURTH COPY IS GONE rather than corrected. MODEL places its marks
       // off cut-marks, LAYOUT and the harness env keep their own, and this
       // page making a fourth was the fourth chance to drift.
+      // ── THE FOUR ELEVATIONS, FROM THE ONE PLACE THAT OWNS THEM ────────
+      //
+      // Movie, 27 Sep: *"i rotated the main floor plan and then went into the
+      // EXT FINISH area and the ELEVATIONS weren't switched E1 showed a side
+      // view instead of front. E2 was back view and also a line is cutting
+      // through in a wierd angle ... looks like something to do with the
+      // attached garage"*.
+      //
+      // THIS PAGE HAD ITS OWN COPY OF THE CUT BUILDER, and the copy predated
+      // the turn. cut-marks grew `planTurn` when the house-rotate button
+      // landed -- E1 keeps its own wall, so after a quarter turn its mark
+      // stands on the west rather than the south -- and MODEL was taught to
+      // pass it. This page was not: it seated each cut from E_MARK_SIDES
+      // directly, chose the cut's axis from a hardcoded `id === 'E1' || id
+      // === 'E3'`, and asked eMarkDir for a direction with no turn in it.
+      // Three places for the same omission, so a turned plan came here and
+      // E1 drew whatever wall now happened to face south.
+      //
+      // AND THE WEIRD DIAGONAL IS THE SAME FAULT, not a second one. Looking
+      // at the house from a direction the geometry has moved out from under,
+      // the garage's roof projects across the main wall as a long shallow
+      // line -- a real edge, drawn from an impossible viewpoint.
+      //
+      // SO THE COPY IS GONE. cut-marks.autoElevationCuts is what MODEL calls,
+      // it takes the turn, and it seats the ring off the dimension strings
+      // rather than at a flat twelve feet -- which is the other thing this
+      // page was quietly doing differently from the page a drafter had just
+      // come from. The fourth copy of E_MARK_SIDES was deleted from here on
+      // 27 Sep for exactly this reason; this is the builder that went with it.
       const MARKS = window.DraftCutMarks;
-      const E_SIDES = MARKS.E_MARK_SIDES;
-      const E_CLEAR_FT = 12;
       const standardCuts = () => {
-        const walls = (env?.walls() || []).filter(wall => wall.levelId > 0);
+        const walls = (drawing?.walls || []).filter(wall => wall.levelId > 0);
         if (!walls.length) return [];
-        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-        walls.forEach(wall => [wall.start, wall.end].forEach(pt => {
-          minX = Math.min(minX, pt.x); maxX = Math.max(maxX, pt.x);
-          minZ = Math.min(minZ, pt.z); maxZ = Math.max(maxZ, pt.z);
-        }));
-        if (maxX - minX < 1 || maxZ - minZ < 1) return [];
-        const pad = 2;
-        const edge = { S: maxZ, N: minZ, E: maxX, W: minX };
-        const at = id => edge[E_SIDES[id].side] + E_SIDES[id].sign * E_CLEAR_FT;
-        const acrossX = id => ({
-          startPt: { x: minX - pad, z: at(id) }, endPt: { x: maxX + pad, z: at(id) } });
-        const acrossZ = id => ({
-          startPt: { x: at(id), z: minZ - pad }, endPt: { x: at(id), z: maxZ + pad } });
-        return ['E1', 'E2', 'E3', 'E4'].map(id => ({
-          id, name: id, elev: 0, levelId: null,
-          ...((id === 'E1' || id === 'E3') ? acrossX(id) : acrossZ(id)),
-          dirVec: MARKS.eMarkDir(id),
-        }));
+        return MARKS.autoElevationCuts({
+          walls,
+          dimensions: drawing?.dimensions || [],
+          elevationMarkOffsets: drawing?.elevationMarkOffsets || {},
+          // TRUE, NOT THE DRAFTER'S SETTING, and that is a difference from
+          // MODEL worth naming. `autoElevations` says whether the MARKS are
+          // drawn on the plan; this page is not a plan and draws no marks --
+          // the four views ARE its subject, and a drafter who turned the plan
+          // marks off has not asked for the cladding page to go blank.
+          autoElevations: true,
+          // HOW FAR ROUND THE HOUSE HAS BEEN TURNED. It rides in the file --
+          // serializeDrawing spreads it -- and this page keeps it through its
+          // own load, so the only thing that was ever missing was asking.
+          planTurn: drawing?.planTurn || 0,
+        });
       };
 
       // ── THE RAILS ─────────────────────────────────────────────────────
