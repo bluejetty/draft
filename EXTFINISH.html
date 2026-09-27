@@ -56,10 +56,27 @@
   :root { --sheet-edge: 1px solid var(--edge-panel); }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
+  /* THE BARS ARE FIXED AND THIS COLUMN HOLDS ITSELF CLEAR OF THEM. Both bars
+     are positioned out of flow, so they take no space here -- and without this
+     padding the top of the page sits under the instrument rule and the bottom
+     under the page row. Construction Layout carries the same two lines with
+     the same note; this page went in without them, and the foot of the right
+     rail was the price: "Add band" rendered under the bar, visible and
+     unpressable. Found by a Playwright click that kept being intercepted by
+     the SPECIFICATIONS chip on top of it.
+
+     EVERY NUMBER IS THE BAR'S OWN TOKEN, so a bar that changes height moves
+     this page with it -- --strip-h at the head, --house-h plus --browser-lane
+     at the foot. --browser-lane is in the sum on purpose: it is the band a
+     browser draws its link preview over and iOS keeps for the home indicator,
+     and #house-strip reserves it as padding INSIDE its own box, so a page
+     subtracting only --house-h puts its last 24px under the bar's hem. */
   body {
     margin: 0; background: var(--surface-page); color: var(--ink-primary);
     font-family: 'Barlow Condensed', system-ui, sans-serif;
     display: flex; flex-direction: column; overflow: hidden;
+    padding-top: var(--strip-h);
+    padding-bottom: calc(var(--house-h) + var(--browser-lane));
   }
   main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
@@ -142,6 +159,46 @@
     font: inherit; cursor: pointer; padding: 0 2px;
   }
   .band .drop:hover { color: var(--accent-mark); }
+  /* A BAND IS A THING YOU OPEN, not just a thing you delete. Everything
+     Movie asked for on 27 Sep -- the anchor, the 1 ft nudges, the side
+     insets, the corner wrap, the ledge switch -- is an adjustment to a band
+     that is already laid, so the chip had to become a door. */
+  .band .what { cursor: pointer; }
+  .band[data-open="true"] { border-color: var(--accent-mark); }
+  .band[data-open="true"] .what { color: var(--accent-mark); }
+  .band-edit {
+    border: 1px solid var(--accent-mark); border-top: none;
+    padding: 7px 6px; display: flex; flex-direction: column; gap: 7px;
+    margin-top: -4px;
+  }
+  /* THE NUDGE ROW: minus, the reading, plus. The reading is a TEXT SPAN and
+     not a number input -- Movie, 27 Sep: "make it 1ft changes default and
+     then later when he get the 'L' 'R' commands and the lengthbox we can
+     allow them to use specific length other than 1ft". A box you can type in
+     would be promising the thing he said comes later. */
+  .nudge { display: flex; align-items: center; gap: 4px; }
+  .nudge button {
+    appearance: none; border: 1px solid var(--edge-panel); background: var(--surface-chip);
+    color: var(--ink-primary); font: inherit; font-size: 12px; line-height: 1;
+    width: 22px; height: 22px; cursor: pointer; flex: none; padding: 0;
+  }
+  .nudge button:hover:not(:disabled) { border-color: var(--accent-mark); color: var(--accent-mark); }
+  .nudge button:disabled { cursor: default; opacity: .35; }
+  .nudge .read {
+    flex: 1; min-width: 0; text-align: center; font-size: 12px;
+    font-family: 'DM Mono', ui-monospace, monospace; color: var(--ink-primary);
+  }
+  .tick { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+  .tick input { accent-color: var(--accent-mark); flex: none; }
+  /* AND `hidden` HAS TO BE SAID AGAIN FOR ANYTHING GIVEN A display. The UA
+     sheet's [hidden]{display:none} is one attribute selector, so a class rule
+     setting display:flex outranks it and the attribute silently does nothing
+     -- the element carries hidden="" and stands there in full view. Measured:
+     the gable's "Top" row and the ledge switch both stayed on screen with the
+     attribute set, and Playwright reported them visible while the DOM showed
+     them hidden. .stage[hidden] two hundred lines up is the same guard for the
+     same reason. */
+  .prop[hidden], .tick[hidden], .band-edit[hidden] { display: none; }
   #status {
     flex: none; padding: 5px 12px; font-size: 11px; letter-spacing: .05em;
     color: var(--ink-quiet); min-height: 22px;
@@ -167,20 +224,142 @@
 
     <!-- ── THE MAIN AREA: ELEVATIONS, AND THE FINISHES ON THEM ──────────── -->
     <div class="stage" id="stage-finishes">
+      <!-- LEFT IS WHERE YOU ARE LOOKING, RIGHT IS WHAT YOU ARE CHANGING.
+           Movie, 27 Sep: "on the EXT FINISHES - lets put all the elevations
+           views on left (as they are) and put the editing stuff for walls and
+           roofs on the right right menu area".
+
+           WHICH MOVED THE ROOF AREA ACROSS the same day it was built -- it
+           went in on the left because that is where the ROOF CORNERS
+           placeholder had been standing, and he had said then "might change
+           it later". The split he has landed on is the one a drafter reads
+           without being told: one rail chooses the VIEW, the other edits what
+           is in it. -->
       <div class="rail left">
         <p class="rail-title">Elevations</p>
         <div id="elev-list"></div>
+      </div>
+      <div class="sheet-wrap"><canvas id="elev" width="900" height="560"></canvas></div>
+      <div class="rail right">
+        <p class="rail-title">Wall finish</p>
+        <p class="empty" id="pick-note">Click a wall on the elevation.</p>
+        <div id="wall-props" hidden>
+          <div class="prop">
+            <label for="base-finish">Whole wall</label>
+            <select id="base-finish"></select>
+          </div>
+          <div class="prop" style="margin-top:8px">
+            <label for="base-color">Colour</label>
+            <input type="color" id="base-color" value="#ffffff">
+            <p class="empty">Stored for the 3D window, drawn by nothing yet.</p>
+          </div>
+          <p class="rail-title" style="margin-top:12px">Bands</p>
+          <div class="band-list" id="band-list"></div>
+          <!-- ── ADJUSTING A BAND THAT IS ALREADY LAID ────────────────────
+               Movie, 27 Sep: "for the BANDS (not full wall) can we allow them
+               to start at the top or bottom and allow the user move the bottom
+               or top up by 1' and also on the sides by 1ft", then "for
+               materials that reach the edge of the wall lets add a choice to
+               'ADD CORNER WRAP' and make it default 2ft", and "lets add a
+               choice button on the menu that allows them to TURN OFF the
+               ledge".
+
+               EVERY ONE OF THESE COULD ALREADY BE STORED AND DRAWN. The
+               record has carried `anchor`, `toTop`, `startFt`, `endFt`,
+               `wrapFt` and `noSillLedge` since they were asked for, and the
+               painter reads all six -- the rail was the half that had not
+               caught up, so a drafter could hold none of it. -->
+          <div class="band-edit" id="band-edit" hidden>
+            <div class="prop">
+              <label for="band-anchor">Measured from</label>
+              <select id="band-anchor"></select>
+            </div>
+            <div class="prop">
+              <label id="lab-low" for="nudge-low-up">Bottom</label>
+              <div class="nudge" id="nudge-low">
+                <button type="button" data-nudge="low" data-by="-1"
+                  title="Down one foot">&minus;</button>
+                <span class="read" id="read-low"></span>
+                <button type="button" id="nudge-low-up" data-nudge="low" data-by="1"
+                  title="Up one foot">+</button>
+              </div>
+            </div>
+            <div class="prop" id="prop-high">
+              <label id="lab-high" for="nudge-high-up">Top</label>
+              <div class="nudge" id="nudge-high">
+                <button type="button" data-nudge="high" data-by="-1"
+                  title="Down one foot">&minus;</button>
+                <span class="read" id="read-high"></span>
+                <button type="button" id="nudge-high-up" data-nudge="high" data-by="1"
+                  title="Up one foot">+</button>
+              </div>
+            </div>
+            <label class="tick"><input type="checkbox" id="band-totop">
+              Fill to the top</label>
+            <div class="prop">
+              <label for="nudge-start-up">Inset, start of wall</label>
+              <div class="nudge">
+                <button type="button" data-nudge="start" data-by="-1"
+                  title="A foot less">&minus;</button>
+                <span class="read" id="read-start"></span>
+                <button type="button" id="nudge-start-up" data-nudge="start" data-by="1"
+                  title="A foot more">+</button>
+              </div>
+            </div>
+            <div class="prop">
+              <label for="nudge-end-up">Inset, end of wall</label>
+              <div class="nudge">
+                <button type="button" data-nudge="end" data-by="-1"
+                  title="A foot less">&minus;</button>
+                <span class="read" id="read-end"></span>
+                <button type="button" id="nudge-end-up" data-nudge="end" data-by="1"
+                  title="A foot more">+</button>
+              </div>
+            </div>
+            <label class="tick"><input type="checkbox" id="band-wrap">
+              Add corner wrap</label>
+            <div class="prop" id="prop-wrap" hidden>
+              <div class="nudge">
+                <button type="button" data-nudge="wrap" data-by="-1"
+                  title="A foot less">&minus;</button>
+                <span class="read" id="read-wrap"></span>
+                <button type="button" data-nudge="wrap" data-by="1"
+                  title="A foot more">+</button>
+              </div>
+            </div>
+            <label class="tick" id="tick-ledge"><input type="checkbox" id="band-ledge">
+              Sill ledge under windows</label>
+            <p class="empty" id="band-note"></p>
+          </div>
+          <div class="prop" style="margin-top:6px">
+            <label for="band-finish">Add a band</label>
+            <select id="band-finish"></select>
+          </div>
+          <div class="row" style="margin-top:4px">
+            <div class="prop">
+              <label for="band-low">From (ft)</label>
+              <input type="number" id="band-low" value="0" step="0.25" min="0">
+            </div>
+            <div class="prop">
+              <label for="band-high">To (ft)</label>
+              <input type="number" id="band-high" value="3" step="0.25" min="0">
+            </div>
+          </div>
+          <button class="btn" id="band-add" style="margin-top:6px; width:100%">Add band</button>
+        </div>
         <!-- ── THE ROOF AREA ──────────────────────────────────
              Movie, 27 Sep: "we should make a special ROOF area with the roof
              corners in there and the ROOFING TYPE", and on where it goes:
              "over where the ROOF CORNERS are for now (might change it later)
              in the 'EXT FINISH' tab".
 
-             SO IT IS WHERE THE PLACEHOLDER WAS, and the placeholder said what
-             it was waiting for: "which scale these are set at -- per roof, or
-             one for the house". He answered that days ago -- "allow them to
-             change each iduvidually, don't worry about changing all" -- so the
-             list is of ROOFS and a pick is one roof.
+             IT WENT IN WHERE THE PLACEHOLDER WAS, on the left, and moved
+             here the same day -- see the note on the left rail. The
+             placeholder had said what it was waiting for: "which scale these
+             are set at -- per roof, or one for the house". He answered that
+             days ago -- "allow them to change each iduvidually, don't worry
+             about changing all" -- so the list is of ROOFS and a pick is one
+             roof.
 
              THE CORNER FALLS BACK TO THE OFFICE and says so in the option
              itself, because "follows the office" and "set to what the office
@@ -199,39 +378,6 @@
             <select id="gable-corner"></select>
           </div>
           <p class="empty" id="roof-weight"></p>
-        </div>
-      </div>
-      <div class="sheet-wrap"><canvas id="elev" width="900" height="560"></canvas></div>
-      <div class="rail right">
-        <p class="rail-title">Wall finish</p>
-        <p class="empty" id="pick-note">Click a wall on the elevation.</p>
-        <div id="wall-props" hidden>
-          <div class="prop">
-            <label for="base-finish">Whole wall</label>
-            <select id="base-finish"></select>
-          </div>
-          <div class="prop" style="margin-top:8px">
-            <label for="base-color">Colour</label>
-            <input type="color" id="base-color" value="#ffffff">
-            <p class="empty">Stored for the 3D window, drawn by nothing yet.</p>
-          </div>
-          <p class="rail-title" style="margin-top:12px">Bands</p>
-          <div class="band-list" id="band-list"></div>
-          <div class="prop" style="margin-top:6px">
-            <label for="band-finish">Add a band</label>
-            <select id="band-finish"></select>
-          </div>
-          <div class="row" style="margin-top:4px">
-            <div class="prop">
-              <label for="band-low">From (ft)</label>
-              <input type="number" id="band-low" value="0" step="0.25" min="0">
-            </div>
-            <div class="prop">
-              <label for="band-high">To (ft)</label>
-              <input type="number" id="band-high" value="3" step="0.25" min="0">
-            </div>
-          </div>
-          <button class="btn" id="band-add" style="margin-top:6px; width:100%">Add band</button>
         </div>
       </div>
     </div>
@@ -454,6 +600,26 @@
       document.getElementById('gable-corner').addEventListener('change', event =>
         writeRoof({ gableCorner: event.target.value || null }));
 
+      // ── THE BAND BEING ADJUSTED ────────────────────────────────
+      //
+      // AN INDEX AND NOT A REFERENCE, because writeWall runs the list back
+      // through the normaliser and hands back new objects. The index is also
+      // the band's PAINT ORDER, which is the one thing about a band that
+      // cannot be read off it -- so it is what the chip shows a drafter.
+      let bandPicked = null;
+      // THE THREE LINES A BAND CAN BE MEASURED FROM, in a drafter's words
+      // rather than the record's. Movie: "can we allow them to start at the
+      // top or bottom", and "sometimes the foundation might have finishing too
+      // so we should allow that bottom 'sill' line the location for starting a
+      // bottom band for foundation".
+      const ANCHOR_LABELS = { sill: 'Bottom of sill plate', plate: 'Top plate',
+        head: 'Roof head' };
+      document.getElementById('band-anchor').innerHTML = WT.FINISH_ANCHORS
+        .map(id => `<option value="${id}">${ANCHOR_LABELS[id] || id}</option>`).join('');
+
+      const STEP = WT.FINISH_NUDGE_FT;
+      const ft = value => `${Number(value).toFixed(Number.isInteger(value) ? 0 : 2)}\u2032`;
+
       const paintProps = () => {
         const wall = storedWall();
         document.getElementById('wall-props').hidden = !wall;
@@ -462,20 +628,151 @@
         document.getElementById('base-finish').value = wall.finish || WT.DEFAULT_FINISH_ID;
         document.getElementById('base-color').value = wall.finishColor || '#ffffff';
         const bands = Array.isArray(wall.finishBands) ? wall.finishBands : [];
+        // A DROPPED BAND TAKES THE SELECTION WITH IT rather than leaving it
+        // pointing at whatever slid into that index.
+        if (bandPicked !== null && bandPicked >= bands.length) bandPicked = null;
         const list = document.getElementById('band-list');
         list.innerHTML = bands.length ? bands.map((band, i) => {
           const label = WT.finishById(band.finishId).label;
-          return `<div class="band"><span class="what">${label}</span>
-            <span style="color:var(--ink-quiet)">${band.lowFt}&ndash;${band.highFt}&prime;</span>
+          const span = band.toTop ? `${band.lowFt}&prime;&ndash;top`
+            : `${band.lowFt}&ndash;${band.highFt}&prime;`;
+          return `<div class="band" data-open="${i === bandPicked}">
+            <span class="what" data-open-band="${i}"
+              title="Adjust this band">${label}</span>
+            <span style="color:var(--ink-quiet)">${span}</span>
             <button class="drop" data-drop="${i}" title="Remove this band">&times;</button></div>`;
         }).join('') : '<p class="empty">No bands &mdash; the whole wall is one finish.</p>';
         list.querySelectorAll('[data-drop]').forEach(btn =>
           btn.addEventListener('click', () => {
             const next = bands.slice();
             next.splice(Number(btn.dataset.drop), 1);
+            if (bandPicked === Number(btn.dataset.drop)) bandPicked = null;
             writeWall(next.length ? { finishBands: next } : { finishBands: null });
           }));
+        list.querySelectorAll('[data-open-band]').forEach(el =>
+          el.addEventListener('click', () => {
+            const i = Number(el.dataset.openBand);
+            bandPicked = bandPicked === i ? null : i;
+            paintProps();
+          }));
+        paintBandEdit(bands);
       };
+
+      // ── WHAT ONE BAND'S CONTROLS READ ──────────────────────────
+      const paintBandEdit = bands => {
+        const box = document.getElementById('band-edit');
+        const band = bandPicked === null ? null : bands[bandPicked];
+        box.hidden = !band;
+        if (!band) return;
+        const anchor = band.anchor || WT.DEFAULT_FINISH_ANCHOR;
+        document.getElementById('band-anchor').value = anchor;
+        // THE EDGES ARE NAMED FOR THE LINE THEY ARE MEASURED FROM. Above a
+        // plate anchor, "bottom" at -2 means two feet BELOW the plate, and a
+        // label that just said "Bottom: -2" would leave the drafter working
+        // out the sign. Movie asked for exactly this case -- "allow them to
+        // move either the upper 'BOTTOM line' to below the bottom of the SILL,
+        // or the lower foundation finish allow it to go above".
+        const relative = value => (value === 0 ? `at the ${ANCHOR_LABELS[anchor].toLowerCase()}`
+          : `${ft(Math.abs(value))} ${value > 0 ? 'above' : 'below'}`);
+        document.getElementById('read-low').textContent = relative(band.lowFt);
+        document.getElementById('band-totop').checked = band.toTop === true;
+        document.getElementById('prop-high').hidden = band.toTop === true;
+        if (!band.toTop) {
+          document.getElementById('read-high').textContent = relative(band.highFt);
+        }
+        document.getElementById('read-start').textContent = ft(band.startFt || 0);
+        document.getElementById('read-end').textContent = ft(band.endFt || 0);
+        document.getElementById('band-wrap').checked = !!band.wrapFt;
+        document.getElementById('prop-wrap').hidden = !band.wrapFt;
+        if (band.wrapFt) document.getElementById('read-wrap').textContent = ft(band.wrapFt);
+        // THE LEDGE SWITCH IS ONLY THERE WHERE THERE IS A LEDGE. Movie's gate
+        // is "the types that are over 1\"", so on siding the control would be
+        // a switch for a thing the drawing never does -- which teaches the
+        // rule wrong. Off the table, not off a literal.
+        const finish = WT.finishById(band.finishId);
+        const ledges = finish.thicknessIn > 1 && !!finish.cap;
+        document.getElementById('tick-ledge').hidden = !ledges;
+        document.getElementById('band-ledge').checked = !band.noSillLedge;
+        document.getElementById('band-note').textContent = band.toTop
+          ? 'Filled to the head \u2014 a gable takes the whole triangle.'
+          : (ledges ? '' : `${finish.label} is under an inch, so it takes no sill ledge.`);
+      };
+
+      // ── CHANGING ONE BAND ─────────────────────────────────
+      //
+      // THE LIST IS REPLACED, NOT MUTATED IN PLACE, so paint order is kept
+      // exactly: a band being adjusted must not move to the end of the list
+      // and start winning arguments it was losing.
+      const patchBand = patch => {
+        const wall = storedWall();
+        if (!wall || bandPicked === null) return;
+        const bands = (Array.isArray(wall.finishBands) ? wall.finishBands : []).slice();
+        const band = bands[bandPicked];
+        if (!band) return;
+        const next = { ...band };
+        Object.entries(patch).forEach(([key, value]) => {
+          if (value === null) delete next[key];
+          else next[key] = value;
+        });
+        // A NUDGE MUST NEVER DELETE THE BAND IT IS ADJUSTING. The normaliser
+        // drops a band whose top is at or below its bottom -- correctly, since
+        // that band claims no wall -- but a drafter pressing MINUS one time too
+        // many would watch the band he is working on vanish with no word said.
+        // So the refusal happens HERE, where it can be explained.
+        if (!next.toTop && !(Number(next.highFt) > Number(next.lowFt))) {
+          say('That would put the top at or below the bottom \u2014 the band would have no wall.');
+          return;
+        }
+        bands[bandPicked] = next;
+        writeWall({ finishBands: bands });
+      };
+
+      document.getElementById('band-anchor').addEventListener('change', event =>
+        // THE DEFAULT IS STORED AS NOTHING, the record's rule everywhere else
+        // on this page.
+        patchBand({ anchor: event.target.value === WT.DEFAULT_FINISH_ANCHOR
+          ? null : event.target.value }));
+
+      document.getElementById('band-totop').addEventListener('change', event => {
+        if (event.target.checked) { patchBand({ toTop: true, highFt: null }); return; }
+        // COMING BACK DOWN NEEDS A TOP AGAIN, and the one it had is gone --
+        // `toTop` and `highFt` cannot both be stored. Three feet of wall above
+        // the bottom is a band you can see and then nudge, which is better
+        // than a band of nothing.
+        const wall = storedWall();
+        const band = (wall?.finishBands || [])[bandPicked];
+        patchBand({ toTop: null, highFt: (Number(band?.lowFt) || 0) + 3 });
+      });
+
+      document.getElementById('band-wrap').addEventListener('change', event =>
+        // TWO FEET IS HIS DEFAULT: "make it default 2ft but they can change it
+        // (1ft, 4ft etc)".
+        patchBand({ wrapFt: event.target.checked ? 2 : null }));
+
+      document.getElementById('band-ledge').addEventListener('change', event =>
+        // STORED AS THE REFUSAL: the tick is "show it", which is the default,
+        // so only the UNticked state is written down.
+        patchBand({ noSillLedge: event.target.checked ? null : true }));
+
+      // THE NUDGES. One handler for all five, because they differ only in
+      // which key they move and what a negative means there.
+      document.querySelectorAll('[data-nudge]').forEach(btn =>
+        btn.addEventListener('click', () => {
+          const wall = storedWall();
+          const band = (wall?.finishBands || [])[bandPicked];
+          if (!band) return;
+          const by = Number(btn.dataset.by) * STEP;
+          const which = btn.dataset.nudge;
+          if (which === 'low') { patchBand({ lowFt: (Number(band.lowFt) || 0) + by }); return; }
+          if (which === 'high') { patchBand({ highFt: (Number(band.highFt) || 0) + by }); return; }
+          // THE INSETS AND THE WRAP ARE DISTANCES, not positions: below zero
+          // is not "the other way", it is nothing. Clamped, and a clamp to
+          // zero on an inset means the band runs to the corner again, so the
+          // key comes off rather than being stored as a zero.
+          const key = { start: 'startFt', end: 'endFt', wrap: 'wrapFt' }[which];
+          const now = Math.max(0, (Number(band[key]) || 0) + by);
+          patchBand({ [key]: now > 0 ? now : null });
+        }));
 
       // ── ONE WRITE PATH ────────────────────────────────────────────────
       // Every edit in the rail comes through here: patch the stored wall,

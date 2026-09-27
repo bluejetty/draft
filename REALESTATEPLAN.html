@@ -68,10 +68,27 @@
   :root { --sheet-edge: 1px solid var(--edge-panel); }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
+  /* THE BARS ARE FIXED AND THIS COLUMN HOLDS ITSELF CLEAR OF THEM. Both bars
+     are positioned out of flow, so they take no space here -- and without this
+     padding the top of the page sits under the instrument rule and the bottom
+     under the page row. Construction Layout carries the same two lines with
+     the same note; this page went in without them, and the foot of the right
+     rail was the price: "Add band" rendered under the bar, visible and
+     unpressable. Found by a Playwright click that kept being intercepted by
+     the SPECIFICATIONS chip on top of it.
+
+     EVERY NUMBER IS THE BAR'S OWN TOKEN, so a bar that changes height moves
+     this page with it -- --strip-h at the head, --house-h plus --browser-lane
+     at the foot. --browser-lane is in the sum on purpose: it is the band a
+     browser draws its link preview over and iOS keeps for the home indicator,
+     and #house-strip reserves it as padding INSIDE its own box, so a page
+     subtracting only --house-h puts its last 24px under the bar's hem. */
   body {
     margin: 0; background: var(--surface-page); color: var(--ink-primary);
     font-family: 'Barlow Condensed', system-ui, sans-serif;
     display: flex; flex-direction: column; overflow: hidden;
+    padding-top: var(--strip-h);
+    padding-bottom: calc(var(--house-h) + var(--browser-lane));
   }
   main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
   .stage { flex: 1; display: flex; min-height: 0; }
