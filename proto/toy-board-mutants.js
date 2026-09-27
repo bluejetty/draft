@@ -60,7 +60,7 @@ const MUTANTS = [
     test: 'round-trips' },
   { file: 'MODEL.html',
     name: 'a typed length in TOY promotes without asking',
-    find: "    if (board === 'toy' && !drawing?.boardPromptSeen) {\n      askToPromote(() => commitTypedLength());\n      return;\n    }",
+    find: "    if (board === 'toy' && !toyCouldMakeLength(feet) && !drawing?.boardPromptSeen) {\n      askToPromote(() => commitTypedLength());\n      return;\n    }",
     with: '',
     test: 'asks before it promotes' },
   { file: 'MODEL.html',
@@ -89,8 +89,11 @@ const MUTANTS = [
     // (:7959). This mutation is the LENGTH one -- its test says so -- and
     // replace() taking the first match is the only reason it has been
     // landing there. The askToPromote call names which.
-    find: "    if (board === 'toy' && !drawing?.boardPromptSeen) {\n      askToPromote(() => commitTypedLength());",
-    with: "    if (!drawing?.boardPromptSeen) {\n      askToPromote(() => commitTypedLength());",
+    //
+    // RE-ANCHORED 27 SEP, when the gate learned to read the VALUE as well as
+    // the board: a whole foot is TOY's own length and no longer promotes.
+    find: "    if (board === 'toy' && !toyCouldMakeLength(feet) && !drawing?.boardPromptSeen) {\n      askToPromote(() => commitTypedLength());",
+    with: "    if (!toyCouldMakeLength(feet) && !drawing?.boardPromptSeen) {\n      askToPromote(() => commitTypedLength());",
     test: 'in DRAFTING a typed length just commits' },
   { file: 'MODEL.html',
     name: 'TOY stops squaring when the T-square is down',
