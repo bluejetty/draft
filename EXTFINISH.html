@@ -270,11 +270,20 @@
                choice button on the menu that allows them to TURN OFF the
                ledge".
 
-               EVERY ONE OF THESE COULD ALREADY BE STORED AND DRAWN. The
-               record has carried `anchor`, `toTop`, `startFt`, `endFt`,
-               `wrapFt` and `noSillLedge` since they were asked for, and the
-               painter reads all six -- the rail was the half that had not
-               caught up, so a drafter could hold none of it. -->
+               THE RECORD HAS CARRIED ALL SIX since they were asked for --
+               `anchor`, `toTop`, `startFt`, `endFt`, `wrapFt` and
+               `noSillLedge` -- and the rail was the half that had not caught
+               up, so a drafter could hold none of it.
+
+               AND THIS NOTE SAID THE PAINTER READ ALL SIX, WHICH WAS FALSE.
+               `wrapFt` appeared NOWHERE in cut-view.js: the checkbox below
+               stored a two and the drawing did not change, under a comment
+               asserting that it worked. A dead control is bad; a dead control
+               with a note vouching for it is how the next person stops
+               looking. The painter reads all six now -- the wrap turns the
+               corner and runs onto the neighbouring wall, which is where it
+               was always going to show -- and elevation-harness measures the
+               return rather than taking this sentence's word for it. -->
           <div class="band-edit" id="band-edit" hidden>
             <div class="prop">
               <label for="band-anchor">Measured from</label>

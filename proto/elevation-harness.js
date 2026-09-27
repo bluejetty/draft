@@ -1372,6 +1372,234 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
   }
 }
 
+// ── THE BAND THAT TURNS THE CORNER ────────────────────────────────────────
+//
+// Movie asked for the wrap and the rail has offered it since the band
+// controls landed -- a checkbox that stores `wrapFt: 2` and a readout beside
+// it. THE PAINTER HAD NEVER READ THE FIELD: `wrapFt` appeared nowhere in
+// cut-view.js, so the toggle stored a number and the drawing did not change.
+// EXTFINISH's own note claimed the opposite in writing -- "the painter reads
+// all six" -- which is the worst kind of dead control, the page asserting
+// that it works.
+//
+// IT SHOWS ON THE NEIGHBOUR, and that is why this check has to be built the
+// way it is. A band that wraps belongs to wall A; what a drafter sees is A's
+// stone standing two feet along wall B. So the band goes on the wall at one
+// END of the face under test, and the measurement is taken on the face that
+// does NOT own it.
+//
+// ONE WALL CLAD, NOT ALL OF THEM, or every face would carry the material for
+// its own reasons and a wrap would be indistinguishable from a base coat.
+{
+  const wFile = path.join(ROOT, 'proto', 'repro-garage-house.draft');
+  const wSaved = JSON.parse(fs.readFileSync(wFile, 'utf8'));
+  const wEnv0 = buildEnv(win, wSaved);
+  const wMain = wEnv0.floorLevels()[0].id;
+  const houseWalls = wSaved.walls.filter(wall =>
+    Number(wall.levelId) === Number(wMain) && !wall.body
+    && (wall.view || 'plan') === 'plan');
+
+  // A CORNER THE E1 CUT CAN SEE, and getting this wrong is how the check
+  // first came back empty. E1 is the FRONT -- the SOUTH face -- so of the two
+  // walls running east-west it draws the one at the GREATER z, and the other
+  // is the back wall E3 shows. The band went on the back wall's corner and
+  // the measurement was taken on the front, which is a perfectly correct
+  // painter drawing nothing where nobody put anything.
+  //
+  // PICKED BY ASKING THE GEOMETRY, not by naming a wall id, so the check
+  // survives the fixture being redrawn -- and by asking the CUT's own
+  // direction rather than hardcoding "south", so it survives E1 being
+  // re-seated.
+  const cutFor = env => standardElevationCuts(env).find(c => c.id === 'E1');
+  const e1Dir = cutFor(wEnv0).dirVec;
+  const towardViewer = wall =>
+    ((wall.start.x + wall.end.x) / 2) * e1Dir.x
+    + ((wall.start.z + wall.end.z) / 2) * e1Dir.z;
+  const acrossFront = houseWalls
+    .filter(wall =>
+      Math.abs(wall.end.x - wall.start.x) > Math.abs(wall.end.z - wall.start.z))
+    .sort((a, b) => towardViewer(b) - towardViewer(a));
+  const pick = acrossFront.map(front => {
+    const meets = houseWalls.find(other => other !== front
+      && [other.start, other.end].some(p =>
+        [front.start, front.end].some(q =>
+          Math.abs(p.x - q.x) < 1e-6 && Math.abs(p.z - q.z) < 1e-6)));
+    return meets ? { front, meets } : null;
+  }).find(Boolean);
+
+  check('wrap fixture: a front wall with a wall meeting it at a corner',
+    !!pick, `${acrossFront.length} walls across the front of `
+    + `${houseWalls.length} house walls on level ${wMain}`);
+
+  if (pick) {
+    const boxesFor = saved => {
+      const env = buildEnv(win, saved);
+      const seen = [];
+      const FP = win.DraftFinishPatterns;
+      const real = FP.drawFinish;
+      win.DraftFinishPatterns = { ...FP,
+        drawFinish: (ctx, box, finish, inks) => {
+          seen.push({ id: finish && finish.id, x0: box.x0, x1: box.x1,
+            yTop: box.yTop, yBottom: box.yBottom, pxPerFt: box.pxPerFt });
+          return real(ctx, box, finish, inks);
+        } };
+      paintElevation(win, env, cutFor(env), { pxPerFt: 40, finishes: true });
+      win.DraftFinishPatterns = FP;
+      return seen;
+    };
+
+    // THE CONTROL, and it is not a formality: ledgestone must be absent from
+    // this elevation BEFORE the wrap is switched on, or "it appears" would be
+    // a claim about something that was always there.
+    const WRAP_FT = 2;
+    const withWrap = JSON.parse(JSON.stringify(wSaved));
+    const noWrap = JSON.parse(JSON.stringify(wSaved));
+    const sideId = pick.meets.id;
+    const bandOf = wrap => ({ finishId: 'ledgestone', anchor: 'sill',
+      lowFt: 0, highFt: 3, ...(wrap ? { wrapFt: WRAP_FT } : {}) });
+    withWrap.walls.filter(w => w.id === sideId)
+      .forEach(w => { w.finishBands = [bandOf(true)]; });
+    noWrap.walls.filter(w => w.id === sideId)
+      .forEach(w => { w.finishBands = [bandOf(false)]; });
+
+    const before = boxesFor(noWrap).filter(b => b.id === 'ledgestone');
+    const after = boxesFor(withWrap).filter(b => b.id === 'ledgestone');
+
+    check('with the wrap off, the side wall\'s band does not reach this elevation',
+      before.length === 0, `${before.length} ledgestone boxes with no wrap`);
+    check('and switching the wrap on carries it round the corner',
+      after.length > 0, `${after.length} ledgestone boxes with wrapFt ${WRAP_FT}`);
+
+    if (after.length) {
+      // TWO FEET OF WALL, MEASURED IN THE BOX THE PAINTER USED. The front
+      // wall is square to this cut, so a foot of wall is a foot of elevation
+      // and the box should be WRAP_FT wide -- and asking the box rather than
+      // recomputing the projection is what keeps this a measurement.
+      const widest = after.sort((a, b) => (b.x1 - b.x0) - (a.x1 - a.x0))[0];
+      const ftWide = (widest.x1 - widest.x0) / widest.pxPerFt;
+      check('and it runs the width it was asked for, no further',
+        Math.abs(ftWide - WRAP_FT) < 0.05,
+        `${ftWide.toFixed(4)} ft of return against ${WRAP_FT} asked for`);
+
+      // AND A BIGGER NUMBER REACHES FURTHER, which is what makes the field a
+      // measurement rather than a flag. Without this, a painter that drew a
+      // fixed two feet for any positive wrapFt passes everything above.
+      const wider = JSON.parse(JSON.stringify(wSaved));
+      wider.walls.filter(w => w.id === sideId).forEach(w => {
+        w.finishBands = [{ finishId: 'ledgestone', anchor: 'sill',
+          lowFt: 0, highFt: 3, wrapFt: WRAP_FT * 2 }];
+      });
+      const doubled = boxesFor(wider).filter(b => b.id === 'ledgestone')
+        .sort((a, b) => (b.x1 - b.x0) - (a.x1 - a.x0))[0];
+      const doubledFt = doubled ? (doubled.x1 - doubled.x0) / doubled.pxPerFt : 0;
+      check('and doubling the wrap doubles the return',
+        Math.abs(doubledFt - WRAP_FT * 2) < 0.05,
+        `${doubledFt.toFixed(4)} ft against ${WRAP_FT * 2} asked for`);
+
+      // ── AND IT IS AT THE RIGHT CORNER ──────────────────────────────────
+      //
+      // EVERY CHECK ABOVE MEASURES A WIDTH, so a painter that put the return
+      // at the WRONG END of the face passes all of them -- the stripe is the
+      // same two feet wide whichever corner it is nailed to. Mutation said
+      // so: swapping the end the wrap starts from survived 186 green.
+      //
+      // TWO CORNERS, TWO MATERIALS, compared against each other rather than
+      // against a computed x. Each side wall gets a different band, so the
+      // page has to put them at OPPOSITE ends; a painter reading the wrong
+      // end would stack both at the same one, and they would overlap.
+      const bothEnds = JSON.parse(JSON.stringify(wSaved));
+      const otherSide = houseWalls.find(wall => wall !== pick.meets
+        && wall !== pick.front
+        && [wall.start, wall.end].some(p => [pick.front.start, pick.front.end]
+          .some(q => Math.abs(p.x - q.x) < 1e-6 && Math.abs(p.z - q.z) < 1e-6)));
+      check('wrap fixture: the front wall has a wall at its OTHER corner too',
+        !!otherSide, otherSide ? otherSide.id : 'none found');
+      if (otherSide) {
+        bothEnds.walls.filter(w => w.id === sideId).forEach(w => {
+          w.finishBands = [bandOf(true)];
+        });
+        bothEnds.walls.filter(w => w.id === otherSide.id).forEach(w => {
+          w.finishBands = [{ finishId: 'shake', anchor: 'sill',
+            lowFt: 0, highFt: 3, wrapFt: WRAP_FT }];
+        });
+        const drawn = boxesFor(bothEnds);
+        const a = drawn.filter(b => b.id === 'ledgestone')
+          .sort((p, q) => (q.x1 - q.x0) - (p.x1 - p.x0))[0];
+        const b = drawn.filter(b => b.id === 'shake')
+          .sort((p, q) => (q.x1 - q.x0) - (p.x1 - p.x0))[0];
+        check('both corners return, each in its own material',
+          !!a && !!b, `ledgestone ${!!a}, shake ${!!b}`);
+        if (a && b) {
+          check('and they stand at OPPOSITE ends, not stacked at one',
+            a.x1 <= b.x0 + 0.5 || b.x1 <= a.x0 + 0.5,
+            `ledgestone ${a.x0.toFixed(1)}..${a.x1.toFixed(1)}, `
+            + `shake ${b.x0.toFixed(1)}..${b.x1.toFixed(1)}`);
+        }
+      }
+
+      // ── A BAND THAT TOUCHES NOTHING WRAPS ONTO NOTHING ─────────────────
+      //
+      // The corner test was doing no work this fixture could see, because the
+      // only clad wall WAS at a corner -- so deleting it left 186 green. A
+      // wall that shares no point with this face is the case it exists for.
+      const faraway = houseWalls.find(wall => wall !== pick.front
+        && ![wall.start, wall.end].some(p => [pick.front.start, pick.front.end]
+          .some(q => Math.abs(p.x - q.x) < 1e-6 && Math.abs(p.z - q.z) < 1e-6)));
+      check('wrap fixture: and a wall that shares no corner with it',
+        !!faraway, faraway ? faraway.id : 'every wall touches the front wall');
+      if (faraway) {
+        const stranger = JSON.parse(JSON.stringify(wSaved));
+        stranger.walls.filter(w => w.id === faraway.id).forEach(w => {
+          w.finishBands = [bandOf(true)];
+        });
+        check('a band on a wall that meets no corner of this face does not '
+          + 'wrap onto it',
+          boxesFor(stranger).filter(x => x.id === 'ledgestone').length === 0,
+          `${boxesFor(stranger).filter(x => x.id === 'ledgestone').length} `
+          + `ledgestone boxes from ${faraway.id}`);
+      }
+
+      // ── AND TWO FEET OF WALL IS TWO FEET OF WALL, NOT OF PAPER ─────────
+      //
+      // u is a PROJECTION, so a wall at an angle to the cut draws shorter
+      // than it is -- and a wrap measured across the paper would put more
+      // stone on an angled wall than on a square one, from the same number.
+      // The fixture's walls are all square to their cuts, so the mutation
+      // that drops the foreshortening was invisible: 186 green with it gone.
+      //
+      // THE FAR END IS MOVED, NOT THE CORNER THE WRAP IS AT, so the same
+      // return is being measured on a face that is now foreshortened and
+      // nothing else about the gesture has changed.
+      const angled = JSON.parse(JSON.stringify(wSaved));
+      const shared = [pick.front.start, pick.front.end].find(p =>
+        [pick.meets.start, pick.meets.end].some(q =>
+          Math.abs(p.x - q.x) < 1e-6 && Math.abs(p.z - q.z) < 1e-6));
+      angled.walls.filter(w => w.id === pick.front.id).forEach(w => {
+        ['start', 'end'].forEach(key => {
+          if (Math.abs(w[key].x - shared.x) > 1e-6 || Math.abs(w[key].z - shared.z) > 1e-6) {
+            w[key] = { ...w[key], z: w[key].z - 10 };
+          }
+        });
+      });
+      angled.walls.filter(w => w.id === sideId).forEach(w => {
+        w.finishBands = [bandOf(true)];
+      });
+      const slanted = boxesFor(angled).filter(x => x.id === 'ledgestone')
+        .sort((p, q) => (q.x1 - q.x0) - (p.x1 - p.x0))[0];
+      check('wrap fixture: the angled face still paints its return',
+        !!slanted, slanted ? 'painted' : 'nothing drawn on the angled wall');
+      if (slanted) {
+        const slantFt = (slanted.x1 - slanted.x0) / slanted.pxPerFt;
+        check('a return on an ANGLED wall is foreshortened, like everything '
+          + 'else on that face',
+          slantFt < WRAP_FT - 0.1,
+          `${slantFt.toFixed(4)} ft of paper for ${WRAP_FT} ft of wall `
+          + '(square would be exactly 2)');
+      }
+    }
+  }
+}
+
   // THE DATUM THE WHOLE SHEET HANGS OFF, stated against the DRAWING rather
   // than against its own arithmetic. `roofEaveElev` is where a rise of zero
   // lands, which is the eave line -- so the lowest point the painter puts any
