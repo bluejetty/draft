@@ -3431,6 +3431,85 @@ if (!window.DraftCutView) {
       return { sill, plate: level.wallTop, head, foot: floor };
     };
 
+    // ── WHAT WRAPS ONTO THIS FACE ─────────────────────────────────────
+    //
+    // A band carrying `wrapFt` turns the corner and runs that far along
+    // whatever wall it meets. The RECORD lives on the wall the band is on;
+    // the DRAWING happens on the wall next door -- so this is asked from the
+    // neighbour's side, which is why the feature was easy to miss. Painting
+    // the face that owns the band, there is nothing to draw.
+    //
+    // A SHARED POINT IS A CORNER, and that is the drawing's own definition
+    // rather than a tolerance invented here: MODEL pools the vertex where two
+    // walls meet, so a corner is ONE OBJECT and its coordinates are equal to
+    // the bit. The comparison still carries a lattice-sized epsilon, because a
+    // wall may arrive from a FILE rather than from the pool -- an imported
+    // drawing, a hand-edited record, a plan turned a quarter -- and two walls
+    // a millionth of a foot apart are a corner to every eye and every builder.
+    //
+    // SAME LEVEL AND SAME LAYER SET. A second-storey wall standing over this
+    // one shares no corner with it in the building, only in plan; and a
+    // foundation wall is concrete, which nothing wraps onto.
+    const WRAP_TOL_FT = 1e-6;
+    const sameCorner = (a, b) => !!a && !!b
+      && Math.abs(Number(a.x) - Number(b.x)) < WRAP_TOL_FT
+      && Math.abs(Number(a.z) - Number(b.z)) < WRAP_TOL_FT;
+
+    const wrapsOnto = face => {
+      const wall = face && face.wall;
+      if (!wall || !wall.start || !wall.end) return [];
+      // THE FORESHORTENING, once per face. A wall square to the cut draws its
+      // whole length; one at an angle draws less, and the wrap has to shrink
+      // with it or two feet of stone would cover more elevation than two feet
+      // of the wall it is standing on.
+      const runFt = Math.hypot(Number(wall.end.x) - Number(wall.start.x),
+        Number(wall.end.z) - Number(wall.start.z));
+      const duPerFt = runFt > WRAP_TOL_FT
+        ? Math.abs(face.u2 - face.u1) / runFt : 0;
+      if (!(duPerFt > 0)) return [];
+      const out = [];
+      (env.walls() || []).forEach(other => {
+        if (other === wall) return;
+        if (Number(other.levelId) !== Number(wall.levelId)) return;
+        if ((other.view || 'plan') !== (wall.view || 'plan')) return;
+        // AND THE SAME BUILDING. A garage is a separate body with its own
+        // cladding -- Movie clads it from its own row in the rail -- and it
+        // does not even meet the house flush: there is a foot of standoff
+        // where a garage wall runs up to a house corner, which is a rule with
+        // its own checks. Stone turning off the house and onto the garage
+        // would be a return across a joint that is not a corner.
+        //
+        // FOUND BY A CHECK RATHER THAN BY READING. The angled-wall
+        // measurement came back at exactly two feet when the geometry said
+        // 1.70, because the widest return on the sheet belonged to a GARAGE
+        // face -- square to the cut, so undistorted -- that the house's band
+        // had no business reaching.
+        if (String(other.body || '') !== String(wall.body || '')) return;
+        const bands = Array.isArray(other.finishBands) ? other.finishBands : [];
+        if (!bands.length) return;
+        // WHICH END OF THIS FACE THE CORNER IS AT, and `inward` is the way the
+        // wrap runs from it -- towards the face's other end, whichever way
+        // round u happens to increase on this wall.
+        const atStart = sameCorner(other.start, wall.start)
+          || sameCorner(other.end, wall.start);
+        const atEnd = sameCorner(other.start, wall.end)
+          || sameCorner(other.end, wall.end);
+        if (!atStart && !atEnd) return;
+        const fromU = atStart ? face.u1 : face.u2;
+        const inward = Math.sign((atStart ? face.u2 : face.u1) - fromU) || 1;
+        // NO `wrapFt > 0` TEST HERE, and that is one authority rather than
+        // two. A band with no wrap has a reach of zero, so the run it asks
+        // for is a zero-width stripe and the painter's own minimum turns it
+        // away -- which is the same answer this guard gave, arrived at by the
+        // measurement instead of beside it. Mutation proved the cost:
+        // deleting the guard changed nothing any check could see, because the
+        // reach had already decided.
+        bands.forEach(band => out.push({ band, fromU, inward,
+          reachU: (Number(band.wrapFt) || 0) * duPerFt }));
+      });
+      return out;
+    };
+
     // ── THE CLADDING ON ONE FACE ──────────────────────────────────────
     //
     // A BASE OVER THE WHOLE FACE, THEN THE BANDS OVER THAT, in the order they
@@ -3465,18 +3544,21 @@ if (!window.DraftCutView) {
       FP.drawFinish(ctx, boxAt(lines.sill, lines.head),
         finishById(wall.finish || DEFAULT_FINISH_ID), C);
       const bands = Array.isArray(wall.finishBands) ? wall.finishBands : [];
-      bands.forEach(band => {
+      // ── ONE PAINTER FOR A RUN OF BAND MATERIAL ───────────────────────
+      //
+      // Between two screen x's, whatever decided them. A band's own run
+      // decides them from its side insets; a WRAP decides them from a corner
+      // and a reach. Both are the same stripe of material with the same water
+      // table on top, so they are the same code -- and that is the point: the
+      // wrap was the one thing on this face the painter had never drawn, and a
+      // second copy of the stripe would have been a second place for the
+      // ledge, the fill order and the cap height to drift.
+      const paintBandRun = (band, x0, x1) => {
         const span = bandRange(band, lines);
         if (!span) return;
         const lo = span.lo;
         const hi = Math.min(lines.head, span.hi);
         if (hi - lo < 0.02) return;
-        // AND HOW FAR ALONG THE WALL, which is the side insets: a band need
-        // not run corner to corner. `bandSpan` measures them from each END.
-        const along = bandSpan(band, Math.min(loU, hiU), Math.max(loU, hiU));
-        if (!along) return;
-        const bx0 = X(along.lo), bx1 = X(along.hi);
-        const x0 = Math.min(bx0, bx1), x1 = Math.max(bx0, bx1);
         if (x1 - x0 < 1) return;
         // THE FACE FILL AGAIN, under this band only. Without it the base
         // finish's lines read through the band on top of it.
@@ -3507,6 +3589,55 @@ if (!window.DraftCutView) {
         ctx.moveTo(x0, capY + 1); ctx.lineTo(x1, capY + 1);
         ctx.stroke();
         ctx.restore();
+      };
+
+      bands.forEach(band => {
+        // HOW FAR ALONG THE WALL, which is the side insets: a band need not
+        // run corner to corner. `bandSpan` measures them from each END.
+        const along = bandSpan(band, Math.min(loU, hiU), Math.max(loU, hiU));
+        if (!along) return;
+        const bx0 = X(along.lo), bx1 = X(along.hi);
+        paintBandRun(band, Math.min(bx0, bx1), Math.max(bx0, bx1));
+      });
+
+      // ── AND THE NEIGHBOUR'S MATERIAL ROUND THE CORNER ─────────────────
+      //
+      // Movie asked for the wrap and the rail has offered it since the band
+      // controls landed -- a checkbox that stores `wrapFt: 2` and a readout
+      // beside it. THE PAINTER HAD NEVER READ THE FIELD. `wrapFt` appeared
+      // nowhere in this file, so the toggle stored a number and the drawing
+      // did not change; and EXTFINISH's own note claimed the opposite in
+      // writing ("the painter reads all six"), which is the worst version of
+      // a dead control -- the page asserting that it works.
+      //
+      // IT SHOWS ON THE NEIGHBOUR, WHICH IS WHY IT WAS EASY TO MISS. A band
+      // that wraps belongs to wall A; what a drafter sees is A's stone
+      // standing two feet along wall B, on B's OWN elevation. Painting A's
+      // face -- where the record lives -- there is nothing to draw. So this
+      // pass runs the other way round: it asks what wraps ONTO this face.
+      //
+      // MEASURED ALONG THE WALL, NOT ACROSS THE PAPER. u is a projection, so
+      // a wall at an angle to the cut is foreshortened and two feet of stone
+      // covers less than two feet of elevation. The reach is scaled by the
+      // face's own compression, which is the same factor everything else on
+      // it is already drawn at.
+      //
+      // OVER THIS FACE'S OWN BANDS, last, and that is the architecture rather
+      // than a paint-order convenience: the stone turns the corner and stops,
+      // so at the corner it is the stone a drafter sees, whatever B is clad
+      // in underneath.
+      //
+      // AND IT TAKES THIS FACE'S LINES, not the neighbour's. The material is
+      // being carried onto THIS wall and its courses have to line up with
+      // this wall's -- a band anchored to a sill that is not this face's
+      // would step at the corner, which is the one thing a return must not do.
+      wrapsOnto(face).forEach(({ band, reachU, fromU, inward }) => {
+        const toU = fromU + inward * reachU;
+        const lo = Math.max(Math.min(fromU, toU), Math.min(loU, hiU));
+        const hi = Math.min(Math.max(fromU, toU), Math.max(loU, hiU));
+        if (hi - lo <= 0) return;
+        const wx0 = X(lo), wx1 = X(hi);
+        paintBandRun(band, Math.min(wx0, wx1), Math.max(wx0, wx1));
       });
       // ── AND A LEDGE UNDER EVERY WINDOW THE MASONRY REACHES ────────
       //
