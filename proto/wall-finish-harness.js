@@ -256,7 +256,7 @@ function run(win) {
   // ── AND IT ALL SURVIVES A ROUND TRIP ──────────────────────────────────
   // The record is only worth anything if it comes back. Normalise, stringify,
   // parse, normalise again: what a save and an open do to it.
-  const rich = one({ finish: 'siding_v', finishColor: '#eeeeee',
+  const rich = one({ finish: 'siding_h', finishColor: '#eeeeee',
     finishBands: [STONE, { ...SHAKE, color: '#8b5a2b' }] });
   const reopened = FORMAT.walls([JSON.parse(JSON.stringify(rich))], LEVELS, env)[0];
   check('a wall with a base, a colour and two bands survives save and open unchanged',

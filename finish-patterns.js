@@ -115,33 +115,43 @@ if (!window.DraftFinishPatterns) {
     // Stucco. THE QUIET GROUND -- see the note at the top.
     none: () => {},
 
-    // Vertical boards, one line per joint. Courses run off the wall's LEFT
-    // end, which is where a sider starts, so the odd board lands at the far
-    // corner the way it does on site.
+    // LAP SIDING, RUNNING ACROSS -- one line per course. Courses run off the
+    // wall's FOOT, which is where a sider starts, so the odd course lands at
+    // the top the way it does on site.
+    //
+    // ROTATED 90 DEGREES ON 27 SEP with the row that carries it: Movie had
+    // vertical and horizontal siding the wrong way round and said so --
+    // *"switch the h and the v"*, *"and change the style to the opposite
+    // directions"*. This pattern used to stand its lines up.
     lines: (ctx, box, finish) => {
       const step = paramOf(finish, 'exposureIn', 4) / 12 * box.pxPerFt;
       if (step < MIN_SPACING_PX) return;
       ctx.beginPath();
-      for (let x = box.x0 + step; x < box.x1; x += step) {
-        ctx.moveTo(x, box.yTop);
-        ctx.lineTo(x, box.yBottom);
+      for (let y = box.yBottom - step; y > box.yTop; y -= step) {
+        lineAcross(ctx, box.x0, box.x1, y);
       }
       ctx.stroke();
     },
 
-    // Board and batten, laid HORIZONTAL -- Movie's own call for it. A wide
-    // board with a narrow batten over each joint, which draws as a PAIR of
-    // close lines at a wide interval rather than as evenly spaced singles.
-    // That pairing is the whole of what tells it from the row above.
+    // BOARD AND BATTEN, STANDING UP, which is what board and batten IS: wide
+    // boards set vertical with a narrow batten covering each joint. It draws
+    // as a PAIR of close lines at a wide interval rather than as evenly
+    // spaced singles, and that pairing is the whole of what tells it from the
+    // lap siding above.
+    //
+    // ALSO ROTATED ON 27 SEP, and for the same correction -- it used to lay
+    // its boards flat.
     batten: (ctx, box, finish) => {
       const board = paramOf(finish, 'boardIn', 12) / 12 * box.pxPerFt;
       const batten = paramOf(finish, 'battenIn', 2) / 12 * box.pxPerFt;
       if (board < MIN_SPACING_PX) return;
       ctx.beginPath();
-      for (let y = box.yBottom - board; y > box.yTop; y -= board) {
-        lineAcross(ctx, box.x0, box.x1, y);
-        if (batten >= 1.5 && y + batten < box.yBottom) {
-          lineAcross(ctx, box.x0, box.x1, y + batten);
+      for (let x = box.x0 + board; x < box.x1; x += board) {
+        ctx.moveTo(x, box.yTop);
+        ctx.lineTo(x, box.yBottom);
+        if (batten >= 1.5 && x + batten < box.x1) {
+          ctx.moveTo(x + batten, box.yTop);
+          ctx.lineTo(x + batten, box.yBottom);
         }
       }
       ctx.stroke();
@@ -166,7 +176,11 @@ if (!window.DraftFinishPatterns) {
       let row = 0;
       for (let y = box.yBottom - step; y > box.yTop - step; y -= step, row += 1) {
         if (y > box.yTop) lineAcross(ctx, box.x0, box.x1, y);
-        const wide = step * (1.4 + 0.8 * jitter(row, 3));
+        // NARROWER BY THIRTY PER CENT, Movie 27 Sep: *"can you strech reduce
+        // the cedar shake widthwise maybe 70% so the vert lines of shake are
+        // closer together about 30%"*. Was 1.4 to 2.2 of the exposure; a
+        // shake read too wide against the courses it laps.
+        const wide = step * (0.98 + 0.56 * jitter(row, 3));
         if (wide < MIN_SPACING_PX * 2) continue;
         const stub = Math.min(step * 0.62, y - box.yTop);
         if (stub < 1) continue;
@@ -223,7 +237,10 @@ if (!window.DraftFinishPatterns) {
         // one unit is a BRICK wall drawn at stone size; what makes ashlar
         // ashlar is squared stones of MANY sizes fitted to courses.
         high: row => high * (0.6 + 1.1 * jitter(row, 5)),
-        wide: (row, col) => long * (0.4 + 1.3 * jitter(row + 2, col + 1)),
+        // NARROWER BY A FIFTH, Movie 27 Sep: *"strech the width of the
+        // Ashlar about 80% (reduce by 20% width"*. Was 0.4 to 1.7 of the
+        // nominal; the long blocks read too long against their courses.
+        wide: (row, col) => long * (0.32 + 1.04 * jitter(row + 2, col + 1)),
         stone: (x0, x1, top, bottom, row, col) => {
           edge(x0, x1, top, bottom);
           // TWO SMALL ONES WHERE A BIG ONE WOULD GO. The photograph does it
@@ -278,37 +295,47 @@ if (!window.DraftFinishPatterns) {
     // Fieldstone: rubble laid to no line at all, which is what "odd shapes"
     // means and what separates it from the ashlar above.
     //
-    // A JITTERED LATTICE, because the photograph is CRAZY PAVING. Real
-    // fieldstone is big angular slabs FITTED tight -- every stone's edge is
-    // its neighbour's edge, every corner is shared, and the mortar is a thin
-    // line between them. The first version scattered separate blobs with gaps
-    // around them, which is not a wall; it is gravel drawn large.
+    // PACKED LIKE THE COBBLES, BUT ANGULAR. Movie, 27 Sep: *"can you make the
+    // FIELDSTONE look more like the ROUNDSTONE but with more abnormally
+    // shaped not as rounded"*, *"(showing the mortar joints like in
+    // roundstone)"*. So it is the same laying -- discrete stones nested
+    // together with mortar showing between them -- and the difference is the
+    // OUTLINE: a river cobble is worn smooth, a fieldstone is broken, so its
+    // edges are straight runs meeting at corners.
     //
-    // A LATTICE IS THE WHOLE TRICK. Displace the corners of a grid and the
-    // cells stay a perfect tessellation however far they move, so the stones
-    // fit exactly while no two edges share an angle. Each cell draws only the
-    // edge to its right and the edge below, so every joint is drawn once.
+    // WHICH IS WHY IT IS NOT A LATTICE. It was drawn as one -- crazy paving,
+    // every corner shared -- and that is a wall with no mortar in it at all.
+    // Movie asked for the joints back.
     //
-    // AND IT STARTS A CELL OUTSIDE THE BOX on each side, or the stones at the
-    // wall's edge are half-stones cut to a ruled line. The caller's clip is
-    // what cuts them, which is what a mason does at a corner.
+    // FEWER CORNERS AND A HARDER WOBBLE is the whole of what makes it read as
+    // broken rather than worn: five or six sides at half again the cobble's
+    // variation, so no two edges of one stone are the same length.
     field: (ctx, box, finish) => {
       const size = paramOf(finish, 'stoneIn', 12) / 12 * box.pxPerFt;
-      if (size < MIN_SPACING_PX * 2) return;
-      const cols = Math.ceil((box.x1 - box.x0) / size) + 1;
-      const rows = Math.ceil((box.yBottom - box.yTop) / size) + 1;
-      const corner = (i, j) => ({
-        x: box.x0 + (i - 1) * size + size * 0.55 * (jitter(i, j) - 0.5),
-        y: box.yTop + (j - 1) * size + size * 0.55 * (jitter(j, i + 31) - 0.5),
-      });
+      if (size < MIN_SPACING_PX * 1.6) return;
       ctx.beginPath();
-      for (let j = 0; j <= rows; j += 1) {
-        for (let i = 0; i <= cols; i += 1) {
-          const here = corner(i, j);
-          const right = corner(i + 1, j);
-          const below = corner(i, j + 1);
-          ctx.moveTo(here.x, here.y); ctx.lineTo(right.x, right.y);
-          ctx.moveTo(here.x, here.y); ctx.lineTo(below.x, below.y);
+      let row = 0;
+      for (let y = box.yBottom - size * 0.45; y > box.yTop; y -= size * 0.84, row += 1) {
+        const stagger = size * 0.5 * jitter(row, 11);
+        for (let x = box.x0 + stagger; x < box.x1 + size; x += size * 0.9) {
+          const cell = Math.round(x);
+          const rx = size * (0.27 + 0.26 * jitter(row, cell));
+          const ry = size * (0.25 + 0.24 * jitter(cell, row + 5));
+          const cx = x + size * 0.28 * (jitter(cell + 2, row) - 0.5);
+          const cy = y + size * 0.22 * (jitter(row + 3, cell) - 0.5);
+          if (cx + rx < box.x0 || cx - rx > box.x1) continue;
+          if (rx < 1.5 || ry < 1.5) continue;
+          // FIVE OR SIX SIDES, chosen by the stone's own hash, so the wall
+          // carries both and neither reads as a repeated shape.
+          const corners = jitter(cell, row + 9) > 0.5 ? 5 : 6;
+          const twist = jitter(row + 4, cell) * Math.PI;
+          for (let i = 0; i <= corners; i += 1) {
+            const ang = twist + (i % corners) / corners * Math.PI * 2;
+            const wob = 0.52 + 0.92 * jitter(cell + i * 7, row + i);
+            const px = cx + Math.cos(ang) * rx * wob;
+            const py = cy + Math.sin(ang) * ry * wob;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          }
         }
       }
       ctx.stroke();

@@ -54,7 +54,7 @@ function run(win) {
   // ── THE FIXTURE'S OWN REACH, asserted before anything filters it ──────
   check('the table has rows at all', F.length > 0, `${F.length}`);
   check('and it carries the four Movie dictated',
-    ['stucco', 'siding_v', 'siding_h_bb', 'shake'].every(id => F.some(f => f.id === id)),
+    ['stucco', 'siding_v_bb', 'siding_h', 'shake'].every(id => F.some(f => f.id === id)),
     F.map(f => f.id).join(' '));
 
   const ids = F.map(f => f.id);
@@ -233,10 +233,35 @@ function run(win) {
   check('every patterned finish names the axis it runs along',
     patterned.every(f => f.axis === 'vertical' || f.axis === 'horizontal'),
     patterned.map(f => `${f.id}:${f.axis}`).join(' '));
-  check('V. Siding runs vertical and B&B runs horizontal -- Movie\'s own words for them',
-    T.finishById('siding_v').axis === 'vertical'
-    && T.finishById('siding_h_bb').axis === 'horizontal',
-    `${T.finishById('siding_v').axis} / ${T.finishById('siding_h_bb').axis}`);
+  // ── AND THE TWO SIDINGS ARE THE RIGHT WAY UP ──────────────────────────
+  //
+  // This check used to assert the opposite, on Movie's own 26 Sep word that
+  // *"Board and Batten is Horizontal siding"*, recorded rather than corrected
+  // because the drafter naming a finish owns what it means. He corrected it
+  // himself on the 27th -- *"i made a mistake ... i got them mixed up 90
+  // degrees"* -- and the correction puts the trade back the right way up:
+  // board and batten is boards STANDING UP with a batten over each joint, and
+  // lap siding is what runs across.
+  check('V. Siding is the BATTENED one and it stands up',
+    T.finishById('siding_v_bb').axis === 'vertical'
+    && T.finishById('siding_v_bb').pattern === 'batten',
+    `${T.finishById('siding_v_bb').axis} / ${T.finishById('siding_v_bb').pattern}`);
+  check('and H. Siding is the plain lap, running across',
+    T.finishById('siding_h').axis === 'horizontal'
+    && T.finishById('siding_h').pattern === 'lines',
+    `${T.finishById('siding_h').axis} / ${T.finishById('siding_h').pattern}`);
+  // A WALL CLAD BEFORE THE SWAP KEEPS THE ORIENTATION IT WAS GIVEN. An id
+  // that no longer exists is DROPPED by the record, so without the map a
+  // sided wall would come back stucco with nothing saying why.
+  // OPTIONAL, so a finishById that answers NOTHING fails this check rather
+  // than throwing through it. A harness that crashes on a mutant reports the
+  // mutation as never applied, which reads exactly like a mutation that
+  // proves nothing -- and this one proves plenty.
+  check('and the retired ids still answer, mapped by the orientation he chose',
+    T.finishById('siding_v')?.id === 'siding_v_bb'
+    && T.finishById('siding_h_bb')?.id === 'siding_h',
+    `siding_v -> ${T.finishById('siding_v')?.id ?? 'nothing'}, `
+    + `siding_h_bb -> ${T.finishById('siding_h_bb')?.id ?? 'nothing'}`);
   check('and each pattern is distinct, so two rows cannot draw as one',
     new Set(patterned.map(f => f.pattern)).size === patterned.length,
     patterned.map(f => f.pattern).join(' '));
@@ -260,6 +285,7 @@ const MUTATIONS = [
       "const DEFAULT_FINISH_ID = 'brick';")],
   ['an unknown finish id answers nothing, so an old drawing cannot draw its walls',
     s => s.replace("  const finishById = id => EXTERIOR_FINISHES.find(f => f.id === id)\n"
+      + "    || EXTERIOR_FINISHES.find(f => f.id === LEGACY_FINISH_IDS[id])\n"
       + "    || EXTERIOR_FINISHES.find(f => f.id === DEFAULT_FINISH_ID);",
       '  const finishById = id => EXTERIOR_FINISHES.find(f => f.id === id) || null;')],
   ['the fallback swallows a KNOWN id too, so every wall draws as stucco',
@@ -279,8 +305,8 @@ const MUTATIONS = [
     s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true, masonry: true,",
       "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      relief: true, masonry: true,")],
   ['a flat finish claims a thickness, so a drawing moves that should not have',
-    s => s.replace("{ id: 'siding_v', label: 'V. Siding', pattern: 'lines', axis: 'vertical', thicknessIn: 0,",
-      "{ id: 'siding_v', label: 'V. Siding', pattern: 'lines', axis: 'vertical', thicknessIn: 4,")],
+    s => s.replace("{ id: 'siding_h', label: 'H. Siding', pattern: 'lines', axis: 'horizontal', thicknessIn: 0,",
+      "{ id: 'siding_h', label: 'H. Siding', pattern: 'lines', axis: 'horizontal', thicknessIn: 4,")],
   ['a veneer stone goes flat, so it hangs on the wall with no thickness at all',
     s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true, masonry: true,",
       "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 0, relief: true, masonry: true,")],
@@ -297,8 +323,8 @@ const MUTATIONS = [
     s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true,",
       "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2,")],
   ['siding claims relief, so a shadow is drawn for a depth that is not there',
-    s => s.replace("{ id: 'siding_v', label: 'V. Siding', pattern: 'lines', axis: 'vertical', thicknessIn: 0,",
-      "{ id: 'siding_v', label: 'V. Siding', pattern: 'lines', axis: 'vertical', thicknessIn: 0, relief: true,")],
+    s => s.replace("{ id: 'siding_h', label: 'H. Siding', pattern: 'lines', axis: 'horizontal', thicknessIn: 0,",
+      "{ id: 'siding_h', label: 'H. Siding', pattern: 'lines', axis: 'horizontal', thicknessIn: 0, relief: true,")],
   ['the cap stops overhanging, so it sheds nothing and throws no shadow',
     s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true, masonry: true,\n"
       + '      cap: Object.freeze({ projectIn: 1',
@@ -320,9 +346,14 @@ const MUTATIONS = [
   ['brick is stored NOMINAL, so editing the joint silently changes the brick',
     s => s.replace("{ key: 'brickHighIn', label: 'Brick high', in: 2.25 },",
       "{ key: 'brickHighIn', label: 'Brick high', in: 2.6667 },")],
-  ['B&B is filed as vertical, against Movie-s own word for it',
-    s => s.replace("{ id: 'siding_h_bb', label: 'H. Siding (B&B)', pattern: 'batten', axis: 'horizontal',",
-      "{ id: 'siding_h_bb', label: 'H. Siding (B&B)', pattern: 'batten', axis: 'vertical',")],
+  ['B&B is laid flat again, which is the mistake Movie caught himself',
+    s => s.replace("{ id: 'siding_v_bb', label: 'V. Siding (B&B)', pattern: 'batten', axis: 'vertical',",
+      "{ id: 'siding_v_bb', label: 'V. Siding (B&B)', pattern: 'batten', axis: 'horizontal',")],
+  ['the retired siding ids stop answering, so a wall clad before the swap goes stucco',
+    s => s.replace("    || EXTERIOR_FINISHES.find(f => f.id === LEGACY_FINISH_IDS[id])\n", '')],
+  ['a retired id maps to the WRONG one, so a sided wall turns ninety degrees',
+    s => s.replace("    siding_v: 'siding_v_bb',\n    siding_h_bb: 'siding_h',",
+      "    siding_v: 'siding_h',\n    siding_h_bb: 'siding_v_bb',")],
   ['a patterned finish forgets which way it runs, leaving the painter to guess',
     s => s.replace("{ id: 'shake', label: 'Cedar Shake', pattern: 'shake', axis: 'horizontal',",
       "{ id: 'shake', label: 'Cedar Shake', pattern: 'shake',")],

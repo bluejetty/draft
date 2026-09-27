@@ -450,8 +450,9 @@ if (!window.DraftDrawingFormat) {
   // produces by DRAGGING, so a malformed one is a gesture that went wrong
   // rather than a file somebody hand-edited -- and the safe answer to a
   // gesture that went wrong is nothing, not a guess at what was meant.
-  const finishBand = (raw, ids) => {
-    const id = ids.includes(raw?.finishId) ? raw.finishId : null;
+  const finishBand = (raw, ids, legacy = {}) => {
+    const asked = legacy[raw?.finishId] || raw?.finishId;
+    const id = ids.includes(asked) ? asked : null;
     const lo = Number(raw?.lowFt);
     const hi = Number(raw?.highFt);
     if (!id || !Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo || lo < 0) return null;
@@ -464,11 +465,16 @@ if (!window.DraftDrawingFormat) {
   // wall-types.js. Sorting here would quietly move the decision from what the
   // drafter did last to which band happened to be lower, and leave no gesture
   // at all that produces the other result.
-  const finishOf = (wall, ids) => {
-    const base = ids.includes(wall?.finish) ? wall.finish : null;
+  // AND A RETIRED ID IS MAPPED, NOT DROPPED. `legacy` is the same shape the
+  // wall types use two hundred lines up and it is here for the same reason:
+  // on 27 Sep the two siding rows swapped places, and without this every wall
+  // clad before that came back STUCCO with nothing anywhere saying why.
+  const finishOf = (wall, ids, legacy = {}) => {
+    const asked = legacy[wall?.finish] || wall?.finish;
+    const base = ids.includes(asked) ? asked : null;
     const color = finishColour(wall?.finishColor);
     const bands = (Array.isArray(wall?.finishBands) ? wall.finishBands : [])
-      .map(band => finishBand(band, ids)).filter(Boolean);
+      .map(band => finishBand(band, ids, legacy)).filter(Boolean);
     return {
       ...(base ? { finish: base } : {}),
       ...(color ? { finishColor: color } : {}),
@@ -572,7 +578,7 @@ if (!window.DraftDrawingFormat) {
         ...(wall?.auto === true ? { auto: true } : {}),
         // A BASE FINISH, A COLOUR AND ANY BANDS -- all three conditional, so a
         // wall nobody has clad reads out exactly as it read in.
-        ...finishOf(wall, env.finishIds || []),
+        ...finishOf(wall, env.finishIds || [], env.legacyFinishes || {}),
       };
     }), env.drops).filter(Boolean);
   };

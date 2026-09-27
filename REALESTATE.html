@@ -393,6 +393,7 @@
           wallTypes: WT.WALL_TYPES,
           legacyWallTypes: WT.LEGACY_WALL_TYPES,
           finishIds: WT.EXTERIOR_FINISHES.map(f => f.id),
+          legacyFinishes: WT.LEGACY_FINISH_IDS,
           defaultWallTopFt: 8,
         });
         env = null;
@@ -616,6 +617,7 @@
           // else -- the same trap MODEL's loader note describes, pointing the
           // other way.
           finishIds: WT.EXTERIOR_FINISHES.map(f => f.id),
+          legacyFinishes: WT.LEGACY_FINISH_IDS,
           defaultWallTopFt: 8,
         }),
       };

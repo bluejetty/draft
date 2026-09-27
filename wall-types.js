@@ -103,25 +103,36 @@ if (!window.DraftWallTypes) {
     // information than before.
     { id: 'stucco', label: 'Stucco', pattern: 'none', thicknessIn: 0,
       params: Object.freeze([]) },
-    // Boards standing up, one line per joint. Courses run off a wall END,
-    // because that is where a sider starts, and the odd board lands at the
-    // far corner the way it does on site.
-    { id: 'siding_v', label: 'V. Siding', pattern: 'lines', axis: 'vertical', thicknessIn: 0,
-      params: Object.freeze([{ key: 'exposureIn', label: 'Exposure', in: 4 }]) },
-    // BOARD AND BATTEN, LAID HORIZONTAL, and that is Movie's own call --
-    // asked whether he meant the usual vertical, he answered *"Board and
-    // Batten is Horizontal siding"*. Recorded rather than corrected: the
-    // drafter naming the finish is the one who owns what it means here.
+    // ── VERTICAL SIDING IS BOARD AND BATTEN ────────────────────────────
     //
-    // TWO WIDTHS, NOT ONE EXPOSURE, which is what separates it from the row
-    // above: a wide board with a narrow batten over each joint draws as a
-    // pair of close lines at a wide interval, not as evenly spaced singles.
-    { id: 'siding_h_bb', label: 'H. Siding (B&B)', pattern: 'batten', axis: 'horizontal',
+    // Movie, 27 Sep: *"i made a mistake in my Vertical Siding / Horizontal
+    // siding (i got them mixed up 90 degrees)"*, *"switch the h and the v"*,
+    // *"and change the style to the opposite directions"*.
+    //
+    // AND THE CORRECTION PUTS THE TRADE BACK THE RIGHT WAY UP. He had called
+    // board and batten horizontal on 26 Sep and it was recorded as his --
+    // "the drafter naming the finish is the one who owns what it means here"
+    // -- which was the right instinct about WHOSE call it is and the wrong
+    // answer to keep. B&B is boards standing UP with a narrow batten over
+    // each joint; lap siding is what runs across. So vertical siding IS the
+    // battened one, and horizontal siding is the plain lap.
+    //
+    // TWO WIDTHS, NOT ONE EXPOSURE, which is what separates this row from the
+    // one below: a wide board with a narrow batten over each joint draws as a
+    // PAIR of close lines at a wide interval, not as evenly spaced singles.
+    { id: 'siding_v_bb', label: 'V. Siding (B&B)', pattern: 'batten', axis: 'vertical',
       thicknessIn: 0,
       params: Object.freeze([
         { key: 'boardIn', label: 'Board', in: 12 },
         { key: 'battenIn', label: 'Batten', in: 2 },
       ]) },
+    // Lap siding: courses running across, one line per joint. Movie: *"make
+    // default 4\" but allow them to change it (then we don't need multiple
+    // types)"* -- so his 6" and 8" are this row with one field edited.
+    // Courses run off the wall's FOOT, because that is where a sider starts,
+    // and the odd course lands at the top the way it does on site.
+    { id: 'siding_h', label: 'H. Siding', pattern: 'lines', axis: 'horizontal', thicknessIn: 0,
+      params: Object.freeze([{ key: 'exposureIn', label: 'Exposure', in: 4 }]) },
     // Movie: *"also CEDAR SHAKE - which is used for details sparingly for
     // some styles"*. SPARINGLY IS THE POINT, and it is why this row exists
     // rather than being folded into the siding above: shakes turn up in a
@@ -309,8 +320,21 @@ if (!window.DraftWallTypes) {
   // terminates on a trim board.
   const MASONRY_FINISH_IDS = Object.freeze(
     EXTERIOR_FINISHES.filter(f => f.masonry === true).map(f => f.id));
+  // ── AND THE TWO SIDINGS CHANGED NAMES WHEN THEY CHANGED PLACES ────────
+  //
+  // Movie clad walls with these before the 27 Sep correction, and an id that
+  // no longer exists is DROPPED by drawing-format.js -- so without this a
+  // wall he had sided would come back stucco with nothing anywhere saying
+  // why. Mapped by ORIENTATION, which is what he actually chose and what he
+  // actually saw: a wall picked as vertical stays vertical, and gets the
+  // battens it should have had.
+  const LEGACY_FINISH_IDS = Object.freeze({
+    siding_v: 'siding_v_bb',
+    siding_h_bb: 'siding_h',
+  });
   const DEFAULT_FINISH_ID = 'stucco';
   const finishById = id => EXTERIOR_FINISHES.find(f => f.id === id)
+    || EXTERIOR_FINISHES.find(f => f.id === LEGACY_FINISH_IDS[id])
     || EXTERIOR_FINISHES.find(f => f.id === DEFAULT_FINISH_ID);
 
   // ── WHAT A WALL WEARS, AND WHERE ──────────────────────────────────────
@@ -385,6 +409,7 @@ if (!window.DraftWallTypes) {
     EXTERIOR_WALL_TYPE_IDS,
     EXTERIOR_FINISHES,
     MASONRY_FINISH_IDS,
+    LEGACY_FINISH_IDS,
     DEFAULT_FINISH_ID,
     finishById,
     finishAtFt,

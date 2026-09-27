@@ -162,15 +162,39 @@ function run(win) {
 
   // ── WHICH WAY IT RUNS ─────────────────────────────────────────────────
   const vertical = seg => Math.abs(seg.b.y - seg.a.y) > Math.abs(seg.b.x - seg.a.x);
+  // THE LONGEST RUN, not "every run over two feet". That threshold outgrew
+  // the stones the day ashlar's blocks were narrowed to five inches: it
+  // matched nothing, and a filter that matches nothing passes whatever the
+  // code does. What is true of every coursed material at any size is that its
+  // LONGEST line is the course.
   const longRun = (id, wantVertical) => {
-    const segs = segments(draw(by(id)))
-      .filter(s => Math.hypot(s.b.x - s.a.x, s.b.y - s.a.y) > BOX.pxPerFt * 2);
-    return segs.length > 0 && segs.every(s => vertical(s) === wantVertical);
+    const segs = segments(draw(by(id)));
+    if (!segs.length) return false;
+    const longest = segs.reduce((best, s) =>
+      (Math.hypot(s.b.x - s.a.x, s.b.y - s.a.y)
+        > Math.hypot(best.b.x - best.a.x, best.b.y - best.a.y) ? s : best));
+    return vertical(longest) === wantVertical;
   };
-  check('V. Siding runs its long lines VERTICAL -- boards standing up',
-    longRun('siding_v', true), 'every run over 2 ft is vertical');
-  check('and B&B runs them horizontal, which is Movie-s own word for it',
-    longRun('siding_h_bb', false), 'every run over 2 ft is horizontal');
+  // BOTH OF THESE USED TO ASSERT THE OPPOSITE, on Movie's 26 Sep word for
+  // them, and he caught it himself on the 27th: *"i got them mixed up 90
+  // degrees"*. Board and batten is boards STANDING UP with a batten over each
+  // joint; lap siding is what runs across.
+  check('V. Siding (B&B) stands its boards UP, battens and all',
+    longRun('siding_v_bb', true), 'every run over 2 ft is vertical');
+  check('and H. Siding laps ACROSS, which is what lap siding is',
+    longRun('siding_h', false), 'every run over 2 ft is horizontal');
+  // AND THE PAIRING IS WHAT TELLS THEM APART, not merely the direction: a
+  // batten sits a couple of inches off its board, so B&B draws close PAIRS at
+  // a wide interval where lap siding draws evenly spaced singles.
+  check('and B&B draws its lines in PAIRS, where lap siding draws singles',
+    (() => {
+      const xs = [...new Set(segments(draw(by('siding_v_bb'))).filter(vertical)
+        .map(s => Math.round(s.a.x * 100) / 100))].sort((a, b) => a - b);
+      const gaps = xs.slice(1).map((x, i) => x - xs[i]);
+      const tight = 2 / 12 * PX_PER_FT;
+      return gaps.length > 4 && gaps.some(g => Math.abs(g - tight) < 0.4)
+        && gaps.some(g => g > tight * 3);
+    })(), 'a 2" batten gap alternating with a 12" board');
   check('and so do the coursed ones -- a course is a horizontal by definition',
     ['shake', 'ledgestone', 'ashlar', 'brick'].every(id => longRun(id, false)),
     'shake ledgestone ashlar brick');
@@ -183,9 +207,9 @@ function run(win) {
     const f = by(id);
     return { ...f, params: f.params.map(p => (p.key === key ? { ...p, in: value } : p)) };
   };
-  const at4 = segments(draw(withParam('siding_v', 'exposureIn', 4))).length;
-  const at8 = segments(draw(withParam('siding_v', 'exposureIn', 8))).length;
-  check('doubling V. Siding-s exposure halves the boards on the wall',
+  const at4 = segments(draw(withParam('siding_h', 'exposureIn', 4))).length;
+  const at8 = segments(draw(withParam('siding_h', 'exposureIn', 8))).length;
+  check('doubling H. Siding-s exposure halves the courses on the wall',
     at4 > 0 && Math.abs(at8 * 2 - at4) <= 2, `4": ${at4}   8": ${at8}`);
   const brick4 = segments(draw(withParam('brick', 'brickHighIn', 2.25))).length;
   const brick8 = segments(draw(withParam('brick', 'brickHighIn', 8))).length;
@@ -283,30 +307,89 @@ function run(win) {
       return g.length > 3 && new Set(g.map(v => Math.round(v * 2) / 2)).size > 2;
     })(), 'more than two distinct course heights');
 
-  // ── AND FIELDSTONE FITS, WHICH IS WHAT MAKES IT A WALL ────────────────
+  // ── AND FIELDSTONE SHOWS ITS MORTAR ──────────────────────────────────
   //
-  // Real rubble is big angular slabs FITTED tight: every stone's edge is its
-  // neighbour's edge, every corner is shared, and the mortar is a thin line
-  // between them. Drawn as separate shapes with gaps around them it is not a
-  // wall -- it is gravel drawn large, which is exactly what the first version
-  // was. Movie's reference photograph is what said so.
+  // THIS CHECK USED TO ASSERT THE OPPOSITE. Fieldstone was drawn as a
+  // displaced lattice -- crazy paving, every corner shared -- and this said
+  // so, proudly: 159 of 186 corners carrying three edges. Movie asked for the
+  // joints back: *"make the FIELDSTONE look more like the ROUNDSTONE but with
+  // more abnormally shaped not as rounded"*, *"(showing the mortar joints
+  // like in roundstone)"*. A wall with every corner shared has no mortar in
+  // it at all, which is what a lattice means and what he could see.
   //
-  // MEASURED AS SHARED CORNERS, because that is what a tessellation IS. In a
-  // displaced lattice every interior corner carries four edges; in a field of
-  // floating shapes it carries the two its own outline gives it.
-  const fieldCorners = (() => {
+  // SO THE MEASURE IS THE SAME AND THE ANSWER IS INVERTED: discrete stones,
+  // nested but not joined, each carrying only the two edges its own outline
+  // gives it.
+  const cornerLoad = id => {
     const at = new Map();
-    segments(draw(by('fieldstone'))).filter(seg => seg.alpha > 0.5)
+    segments(draw(by(id))).filter(seg => seg.alpha > 0.5)
       .forEach(seg => [seg.a, seg.b].forEach(pt => {
         const k = `${Math.round(pt.x * 20)},${Math.round(pt.y * 20)}`;
         at.set(k, (at.get(k) || 0) + 1);
       }));
     return [...at.values()];
-  })();
-  const shared = fieldCorners.filter(n => n >= 3).length;
-  check('fieldstone TESSELLATES -- every stone-s edge is its neighbour-s edge',
-    fieldCorners.length > 20 && shared > fieldCorners.length * 0.5,
-    `${shared} of ${fieldCorners.length} corners carry three edges or more`);
+  };
+  const fieldCorners = cornerLoad('fieldstone');
+  const joined = fieldCorners.filter(n => n >= 3).length;
+  check('fieldstone shows its mortar -- its stones do NOT share their corners',
+    fieldCorners.length > 20 && joined < fieldCorners.length * 0.1,
+    `${joined} of ${fieldCorners.length} corners carry three edges or more`);
+  // AND A FIELDSTONE IS BROKEN, NOT WORN, which is the only thing separating
+  // it from the cobbles now that both are laid the same way: a river stone is
+  // rubbed smooth and takes eight sides, a broken one takes five or six and
+  // its edges are straight runs meeting at corners.
+  const sidesOf = id => {
+    const strokes = draw(by(id)).filter(st => st.alpha > 0.5);
+    const runs = [];
+    strokes.forEach(st => {
+      let n = 0;
+      st.pts.forEach(pt => {
+        if (pt.move) { if (n > 2) runs.push(n); n = 1; } else n += 1;
+      });
+      if (n > 2) runs.push(n);
+    });
+    return runs;
+  };
+  const fieldSides = sidesOf('fieldstone');
+  const roundSides = sidesOf('roundstone');
+  const midOf = list => (list.length
+    ? list.slice().sort((a, b) => a - b)[Math.floor(list.length / 2)] : 0);
+  check('and a fieldstone is BROKEN, not worn -- fewer sides than a cobble',
+    fieldSides.length > 10 && roundSides.length > 10
+      && midOf(fieldSides) < midOf(roundSides),
+    `${midOf(fieldSides)} sides against the cobble-s ${midOf(roundSides)}`);
+
+  // AND NO TWO SIDES OF ONE STONE ARE THE SAME LENGTH, which is what "odd
+  // shapes" means and the only part of it a side-count cannot say: five equal
+  // sides is a PENTAGON, drawn over and over, and it reads as a tiled motif
+  // rather than as rubble. The measure is the spread within one outline.
+  const sideSpread = id => {
+    const out = [];
+    draw(by(id)).filter(st => st.alpha > 0.5).forEach(st => {
+      let run = [];
+      const close = () => {
+        if (run.length > 2) {
+          const lens = run.slice(1).map((pt, i) =>
+            Math.hypot(pt.x - run[i].x, pt.y - run[i].y)).filter(n => n > 0.2);
+          if (lens.length > 2) out.push(Math.max(...lens) / Math.min(...lens));
+        }
+        run = [];
+      };
+      st.pts.forEach(pt => { if (pt.move) { close(); run = [pt]; } else run.push(pt); });
+      close();
+    });
+    return out;
+  };
+  // THE NUMBER IS MEASURED, NOT GUESSED. As drawn the median stone's longest
+  // side is 1.64 times its shortest; made regular -- every vertex at its full
+  // radius -- it falls to 1.21, which is what an ellipse's own squash leaves
+  // behind. 1.4 sits between them with room on both sides. The first draft of
+  // this check asked for 1.8 and was simply wrong about its own drawing.
+  const spread = sideSpread('fieldstone');
+  check('and no two sides of one fieldstone are the same length',
+    spread.length > 10 && midOf(spread) > 1.4,
+    `longest side over shortest, median ${midOf(spread).toFixed(2)} across `
+    + `${spread.length} stones`);
 
   // ── RELIEF: THE STONE STANDS PROUD OF ITS JOINT ───────────────────────
   // Movie: "can we give these texture where the stone stuck out past the
@@ -321,8 +404,8 @@ function run(win) {
     reliefPasses('brick').alphas.length === 2,
     reliefPasses('brick').alphas.join(' / '));
   check('and a flat one draws a single pass, having no depth to throw a shadow',
-    reliefPasses('siding_v').alphas.length === 1,
-    reliefPasses('siding_v').alphas.join(' / '));
+    reliefPasses('siding_h').alphas.length === 1,
+    reliefPasses('siding_h').alphas.join(' / '));
   check('the shadow is the FAINTER of the two, or it is not a shadow',
     (() => { const a = reliefPasses('brick').alphas; return Math.min(...a) < Math.max(...a); })(),
     reliefPasses('brick').alphas.join(' / '));
@@ -379,14 +462,21 @@ const MUTATIONS = [
   ['the jitter goes random, so a wall shimmers as the window resizes',
     s => sub(s, '    const n = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;',
       '    const n = Math.random() * 43758.5453;')],
-  ['V. Siding is laid horizontal, against the one thing its name says',
-    s => sub(s, `      for (let x = box.x0 + step; x < box.x1; x += step) {
-        ctx.moveTo(x, box.yTop);
-        ctx.lineTo(x, box.yBottom);
-      }`, `      for (let y = box.yTop + step; y < box.yBottom; y += step) {
-        ctx.moveTo(box.x0, y);
-        ctx.lineTo(box.x1, y);
+  ['lap siding is stood on end, which is the ninety degrees Movie caught',
+    s => sub(s, `      for (let y = box.yBottom - step; y > box.yTop; y -= step) {
+        lineAcross(ctx, box.x0, box.x1, y);
+      }`, `      for (let x = box.x0 + step; x < box.x1; x += step) {
+        ctx.moveTo(x, box.yTop); ctx.lineTo(x, box.yBottom);
       }`)],
+  ['board and batten is laid flat, the same ninety degrees the other way',
+    s => sub(s, `      for (let x = box.x0 + board; x < box.x1; x += board) {
+        ctx.moveTo(x, box.yTop);
+        ctx.lineTo(x, box.yBottom);`, `      for (let x = box.yTop + board; x < box.yBottom; x += board) {
+        ctx.moveTo(box.x0, x);
+        ctx.lineTo(box.x1, x);`)],
+  ['the batten loses its board, so B&B draws singles like lap siding',
+    s => sub(s, '        if (batten >= 1.5 && x + batten < box.x1) {',
+      '        if (false) {')],
   ['a pattern hardcodes its spacing, so the table-s parameters stop meaning anything',
     s => sub(s, "      const step = paramOf(finish, 'exposureIn', 4) / 12 * box.pxPerFt;",
       '      const step = 4 / 12 * box.pxPerFt;')],
@@ -405,10 +495,12 @@ const MUTATIONS = [
   ['ashlar is ruled to one course height, so it is brick drawn at stone size',
     s => sub(s, '        high: row => high * (0.6 + 1.1 * jitter(row, 5)),',
       '        high: () => high,')],
-  ['fieldstone stops tessellating, so the stones float instead of fitting',
-    s => sub(s, '          ctx.moveTo(here.x, here.y); ctx.lineTo(right.x, right.y);',
-      '          ctx.moveTo(here.x, here.y);\n'
-      + '          ctx.lineTo(right.x - size * 0.2, right.y - size * 0.2);')],
+  ['fieldstone is worn smooth, so it stops telling itself from a cobble',
+    s => sub(s, '          const corners = jitter(cell, row + 9) > 0.5 ? 5 : 6;',
+      '          const corners = 10;')],
+  ['a fieldstone stops being irregular, so every stone is the same shape',
+    s => sub(s, '            const wob = 0.52 + 0.92 * jitter(cell + i * 7, row + i);',
+      '            const wob = 1;')],
   ['ledgestone breaks every ten inches again, and the streaks come back',
     s => sub(s, '        wide: (row, col) => course * (5 + 10 * jitter(row + 1, col + 3)),',
       '        wide: () => course * 3.5,')],
