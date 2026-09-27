@@ -92,22 +92,32 @@ function run(win) {
   check('every row carries a thickness field, so masonry is a row not a migration',
     F.every(f => Number.isFinite(f.thicknessIn)),
     F.map(f => `${f.id}=${f.thicknessIn}`).join(' '));
-  const flat = F.filter(f => !T.MASONRY_FINISH_IDS.includes(f.id));
+  // ── THICKNESS AND MASONRY ARE TWO QUESTIONS, ASKED SEPARATELY ────────
+  //
+  // They were one for a while -- masonry was READ OFF `thicknessIn > 0` -- and
+  // it held only while every thick finish happened to be stone or brick. Cedar
+  // shake taking its 1" butt broke it: the derivation swept a shake into
+  // masonry and these checks started demanding a mortar joint and a stone
+  // water table of it. So thickness is asked of the row and masonry is
+  // declared on it.
+  const thick = F.filter(f => f.thicknessIn > 0);
+  const flat = F.filter(f => f.thicknessIn === 0);
   const masonry = F.filter(f => T.MASONRY_FINISH_IDS.includes(f.id));
-  check('fixture: the table holds both kinds, so neither claim below is vacuous',
-    flat.length > 0 && masonry.length > 0, `${flat.length} flat, ${masonry.length} masonry`);
-  check('a finish that hangs on the wall has no thickness at all',
-    flat.every(f => f.thicknessIn === 0),
-    flat.map(f => `${f.id}=${f.thicknessIn}`).join(' '));
-  check('and one that stands off it has a real one',
+  check('fixture: the table holds thick rows and flat ones, so neither claim is vacuous',
+    thick.length > 0 && flat.length > 0, `${thick.length} thick, ${flat.length} flat`);
+  check('fixture: and a row that is thick WITHOUT being masonry, which is the case that broke the old derivation',
+    thick.some(f => !T.MASONRY_FINISH_IDS.includes(f.id)),
+    thick.filter(f => !T.MASONRY_FINISH_IDS.includes(f.id)).map(f => f.id).join(' ') || 'none');
+  check('every masonry finish stands off the wall',
     masonry.every(f => f.thicknessIn > 0),
     masonry.map(f => `${f.id}=${f.thicknessIn}`).join(' '));
-  // DERIVED, NOT LISTED. A hand-written list of masonry ids drifts the first
-  // time a row's thickness changes and says nothing the rows do not.
-  check('the masonry list is read off the thicknesses rather than typed beside them',
-    T.MASONRY_FINISH_IDS.length === F.filter(f => f.thicknessIn > 0).length
-    && F.filter(f => f.thicknessIn > 0).every(f => T.MASONRY_FINISH_IDS.includes(f.id)),
-    T.MASONRY_FINISH_IDS.join(' '));
+  check('the masonry list is declared on the rows, not inferred from their thickness',
+    T.MASONRY_FINISH_IDS.length === F.filter(f => f.masonry === true).length
+    && T.MASONRY_FINISH_IDS.length < thick.length,
+    `${T.MASONRY_FINISH_IDS.length} masonry of ${thick.length} thick`);
+  check('and the finishes are offered as ONE list, with no second grouping beside it',
+    !T.SPECIAL_FINISH_IDS && !T.STANDOFF_FINISH_IDS,
+    Object.keys(T).filter(k => /_FINISH_IDS$/.test(k)).join(' '));
 
   // ── WHAT STANDS OFF THE WALL STANDS PROUD OF ITS JOINT ───────────────
   //
@@ -119,7 +129,13 @@ function run(win) {
   check('every masonry finish stands proud of its joint',
     masonry.every(f => f.relief === true),
     masonry.map(f => `${f.id}:${!!f.relief}`).join(' '));
-  check('and no flat one does, having no joint to stand out of',
+  // RELIEF FOLLOWS THICKNESS, NOT MASONRY. A shake is not masonry and still
+  // throws a shadow at every course, because it is thick at the butt. What
+  // cannot throw one is a finish with no depth to throw it from.
+  check('everything that stands off the wall takes relief',
+    thick.every(f => f.relief === true),
+    thick.map(f => `${f.id}:${!!f.relief}`).join(' '));
+  check('and nothing flat does, having no depth to throw a shadow from',
     flat.every(f => !f.relief),
     flat.map(f => `${f.id}:${!!f.relief}`).join(' '));
   check('every masonry finish leaves its joint width open, since the shadow is measured against it',
@@ -145,8 +161,10 @@ function run(win) {
   check('and its nose is kerfed, so the water drops clear instead of tracking back',
     masonry.every(f => f.cap && f.cap.drip === true),
     masonry.map(f => `${f.id}:${f.cap && f.cap.drip}`).join(' '));
-  check('a flat finish takes no cap, having no band to terminate',
-    flat.every(f => !f.cap), flat.map(f => `${f.id}:${!!f.cap}`).join(' '));
+  check('and a finish that is not masonry takes none, capped or thick or neither',
+    F.filter(f => !T.MASONRY_FINISH_IDS.includes(f.id)).every(f => !f.cap),
+    F.filter(f => !T.MASONRY_FINISH_IDS.includes(f.id))
+      .map(f => `${f.id}:${!!f.cap}`).join(' '));
 
   // ── BRICK COURSES ON THE UNIT PLUS THE JOINT, AND NOTHING ELSE ───────
   //
@@ -258,21 +276,17 @@ const MUTATIONS = [
     s => s.replace("{ key: 'exposureIn', label: 'Exposure', in: 4 }",
       "{ key: 'exposureIn', label: 'Exposure', in: 0 }")],
   ['a row loses its thickness field, so masonry becomes a migration',
-    s => s.replace("{ id: 'shake', label: 'Cedar Shake', pattern: 'shake', axis: 'horizontal',\n      thicknessIn: 0,",
-      "{ id: 'shake', label: 'Cedar Shake', pattern: 'shake', axis: 'horizontal',")],
+    s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true, masonry: true,",
+      "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      relief: true, masonry: true,")],
   ['a flat finish claims a thickness, so a drawing moves that should not have',
     s => s.replace("{ id: 'siding_v', label: 'V. Siding', pattern: 'lines', axis: 'vertical', thicknessIn: 0,",
       "{ id: 'siding_v', label: 'V. Siding', pattern: 'lines', axis: 'vertical', thicknessIn: 4,")],
   ['a veneer stone goes flat, so it hangs on the wall with no thickness at all',
-    s => s.replace("      thicknessIn: 2, relief: true,\n"
-      + "      cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),\n"
-      + "      params: Object.freeze([\n        { key: 'courseIn', label: 'Course', in: 3 },",
-      "      thicknessIn: 0, relief: true,\n"
-      + "      cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),\n"
-      + "      params: Object.freeze([\n        { key: 'courseIn', label: 'Course', in: 3 },")],
-  ['the masonry list is typed out instead of read off the thicknesses',
+    s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true, masonry: true,",
+      "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 0, relief: true, masonry: true,")],
+  ['the masonry list is typed out instead of read off the rows',
     s => s.replace("  const MASONRY_FINISH_IDS = Object.freeze(\n"
-      + "    EXTERIOR_FINISHES.filter(f => f.thicknessIn > 0).map(f => f.id));",
+      + "    EXTERIOR_FINISHES.filter(f => f.masonry === true).map(f => f.id));",
       "  const MASONRY_FINISH_IDS = Object.freeze(['ledgestone', 'ashlar']);")],
   // ANCHORED ON A ROW, not on the line it shares with four others. All five
   // masonry rows carry the same relief and the same cap, so a bare line
@@ -283,22 +297,22 @@ const MUTATIONS = [
     s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true,",
       "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2,")],
   ['siding claims relief, so a shadow is drawn for a depth that is not there',
-    s => s.replace("{ id: 'shake', label: 'Cedar Shake', pattern: 'shake', axis: 'horizontal',\n      thicknessIn: 0,",
-      "{ id: 'shake', label: 'Cedar Shake', pattern: 'shake', axis: 'horizontal',\n      thicknessIn: 0, relief: true,")],
+    s => s.replace("{ id: 'siding_v', label: 'V. Siding', pattern: 'lines', axis: 'vertical', thicknessIn: 0,",
+      "{ id: 'siding_v', label: 'V. Siding', pattern: 'lines', axis: 'vertical', thicknessIn: 0, relief: true,")],
   ['the cap stops overhanging, so it sheds nothing and throws no shadow',
-    s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true,\n"
+    s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true, masonry: true,\n"
       + '      cap: Object.freeze({ projectIn: 1',
-      "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true,\n"
+      "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true, masonry: true,\n"
       + '      cap: Object.freeze({ projectIn: 0')],
   ['the cap loses its drip, so the water tracks back along it to the wall',
-    s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true,\n"
+    s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true, masonry: true,\n"
       + '      cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),',
-      "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true,\n"
+      "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true, masonry: true,\n"
       + '      cap: Object.freeze({ projectIn: 1, highIn: 2 }),')],
   ['the cap becomes a line with no course height',
-    s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true,\n"
+    s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true, masonry: true,\n"
       + '      cap: Object.freeze({ projectIn: 1, highIn: 2,',
-      "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true,\n"
+      "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true, masonry: true,\n"
       + '      cap: Object.freeze({ projectIn: 1, highIn: 0,')],
   ['masonry loses its joint, so the relief has nothing to be measured against',
     s => s.replace("        { key: 'jointIn', label: 'Joint', in: 1 },\n      ]) },\n"

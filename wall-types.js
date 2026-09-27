@@ -131,8 +131,15 @@ if (!window.DraftWallTypes) {
     // STAGGERED, which is what tells it from lap siding at a glance: the
     // courses are the same idea but the joints between shakes wander, and a
     // ruled grid would read as panelling instead.
+    // A SHAKE HAS A BUTT, which is Movie asking *"can we give the cedar ... a
+    // texture with 1\" thickness?"*. A shake is split, not sawn: it is thick
+    // at the bottom and thin at the top, each course laps the one below, and
+    // the line a drafter draws at every course IS the shadow off that butt.
+    // So it stands off the wall like masonry does and takes relief like
+    // masonry does -- and is not masonry, which is the distinction the two
+    // lists below are about.
     { id: 'shake', label: 'Cedar Shake', pattern: 'shake', axis: 'horizontal',
-      thicknessIn: 0,
+      thicknessIn: 1, relief: true,
       params: Object.freeze([{ key: 'exposureIn', label: 'Exposure', in: 7 }]) },
     // ── THE STONES, WHICH ARE FOUR PATTERNS AND NOT ONE MATERIAL ────────
     //
@@ -172,14 +179,14 @@ if (!window.DraftWallTypes) {
     // falls on the BOTTOM and the RIGHT of each unit. Written as a flag so
     // the four stones and the brick cannot each answer it differently.
     { id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',
-      thicknessIn: 2, relief: true,
+      thicknessIn: 2, relief: true, masonry: true,
       cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),
       params: Object.freeze([
         { key: 'courseIn', label: 'Course', in: 3 },
         { key: 'jointIn', label: 'Joint', in: 1 },
       ]) },
     { id: 'ashlar', label: 'Ashlar', pattern: 'ashlar', axis: 'horizontal',
-      thicknessIn: 2, relief: true,
+      thicknessIn: 2, relief: true, masonry: true,
       cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),
       params: Object.freeze([
         { key: 'stoneHighIn', label: 'Stone high', in: 8 },
@@ -187,7 +194,7 @@ if (!window.DraftWallTypes) {
         { key: 'jointIn', label: 'Joint', in: 1 },
       ]) },
     { id: 'roundstone', label: 'Roundstone', pattern: 'round', axis: 'horizontal',
-      thicknessIn: 2, relief: true,
+      thicknessIn: 2, relief: true, masonry: true,
       cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),
       params: Object.freeze([
         { key: 'stoneIn', label: 'Stone', in: 8 },
@@ -197,7 +204,7 @@ if (!window.DraftWallTypes) {
     // shapes" means and what separates it from the ashlar above. The one
     // number is a nominal size for the painter to scatter around.
     { id: 'fieldstone', label: 'Fieldstone', pattern: 'field', axis: 'horizontal',
-      thicknessIn: 2, relief: true,
+      thicknessIn: 2, relief: true, masonry: true,
       cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),
       params: Object.freeze([
         { key: 'stoneIn', label: 'Stone', in: 12 },
@@ -275,7 +282,7 @@ if (!window.DraftWallTypes) {
     // rest are bonds of the same unit rather than materials of their own, so
     // when they are wanted they are a field beside these and not new rows.
     { id: 'brick', label: 'Brick', pattern: 'brick', axis: 'horizontal',
-      thicknessIn: 4.625, relief: true,
+      thicknessIn: 4.625, relief: true, masonry: true,
       cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),
       params: Object.freeze([
         { key: 'brickLongIn', label: 'Brick long', in: 7.625 },
@@ -283,12 +290,25 @@ if (!window.DraftWallTypes) {
         { key: 'jointIn', label: 'Joint', in: 0.375 },
       ]) },
   ]);
-  // The finishes that stand their own width off the sheathing. Nothing draws
-  // them yet -- a non-zero thickness needs the ledge and the face offset
-  // designed first -- so this list is what the painters must refuse until
-  // that lands, and what the checks measure "nothing moved" against.
+  // ── ONE LIST, AND MASONRY IS A PROPERTY ON A ROW ──────────────────────
+  //
+  // There was briefly a second list here, splitting the "special" finishes --
+  // the ones with a thickness -- from the plain ones. Movie called it off the
+  // moment he saw it: *"don't seperate the finishes"*. So a drafter is offered
+  // ONE list, and what varies between its rows is what the rows say, not which
+  // group they were filed under.
+  //
+  // MASONRY STAYS, BECAUSE IT IS NOT A GROUPING. It answers a detailing
+  // question a painter has to ask -- does this have mortar joints to stand
+  // proud of, and does a band of it need a capped, kerfed water table where it
+  // stops -- and it is DECLARED on the row rather than inferred from
+  // thickness. Inferred, it broke: it was read off `thicknessIn > 0` while
+  // every thick finish happened to be stone or brick, and the moment cedar
+  // shake took its 1" butt the checks began asking a shake for a mortar joint
+  // and a stone ledge. A shake stands off the wall and is not masonry; it
+  // terminates on a trim board.
   const MASONRY_FINISH_IDS = Object.freeze(
-    EXTERIOR_FINISHES.filter(f => f.thicknessIn > 0).map(f => f.id));
+    EXTERIOR_FINISHES.filter(f => f.masonry === true).map(f => f.id));
   const DEFAULT_FINISH_ID = 'stucco';
   const finishById = id => EXTERIOR_FINISHES.find(f => f.id === id)
     || EXTERIOR_FINISHES.find(f => f.id === DEFAULT_FINISH_ID);
