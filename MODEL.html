@@ -3568,10 +3568,85 @@
         // page (MODEL.dc.html:6956, immediately before the committed lines):
         // it is the one point the drafter must always be able to find.
         paintOrigin();
-        // THE HALF-DRAWN WALL'S ANCHOR. Without it the first tap of a
-        // two-tap gesture has no visible effect at all, which is
-        // indistinguishable from the tap not registering.
+        // ── THE WALL IN HAND ────────────────────────────────────────────
+        //
+        // Movie, 27 Sep: *"after the first point for wall is made a dotted
+        // line should show the line position as the user moves the cursor so
+        // the user can see where it will go when he pressed the button"*.
+        //
+        // THE ANCHOR RING WAS ALL THERE WAS, and it earned its own note:
+        // without it the first tap of a two-tap gesture has no visible effect
+        // at all, which is indistinguishable from the tap not registering. The
+        // ring says A PRESS LANDED. It does not say WHERE THE WALL WILL GO,
+        // which is a different question and the one Movie is asking -- he had
+        // a live length by the cursor and no line to hang it on.
+        //
+        // wallEnv's own note has been waiting for this since the env was
+        // written: *"this page's wall gesture commits on the second tap and
+        // paints no ghost between them, so `preview` is the constant false ...
+        // wiring a rubber-band preview up later must not be the moment someone
+        // discovers the key was missing"*. It isn't. The keys were there.
+        //
+        // THE GHOST IS THE WALL, NOT A LINE WHERE THE WALL WILL BE. It goes
+        // through drawWallSeg2D like every committed wall, so it carries the
+        // assembly's real WIDTH and sits on the real SIDE of the drawn line --
+        // and it takes those from wallShape, which is the same function the
+        // commit takes them from. A bare centreline would have been three
+        // lines of code and would have lied about the one thing a drafter
+        // aiming a 12" ICF at a corner needs to see.
+        //
+        // AND THE DASH IS ON TOP OF IT, which is Movie's word answered
+        // literally and for the reason the ruler's line is dashed: it is the
+        // only mark on the sheet that is not in the drawing yet, and the dash
+        // is how a drafter knows that without being told. At a normal zoom a
+        // 6" wall is four pixels wide and the ghost alone -- 0.45 alpha, thin
+        // pale edges -- reads as a smudge over the grid, which is the
+        // complaint rather than the fix.
+        //
+        // THE FAR END IS runInHand's, NOT THE CURSOR'S, and that is the whole
+        // reason this band can be trusted. drawPoint is what squares to the
+        // T-square, lands on the whole foot under TOY and catches an open end;
+        // the raw cursor does none of it. §1 already had to settle this for
+        // the length readout -- *"the same number commitWall will receive, not
+        // the cursor measured separately -- two readings of one distance
+        // drift, and the drafter believes the one he can see"* -- and a band
+        // drawn to the cursor while the wall commits a foot away is that
+        // failure in its worst form: the drafter aims by the line.
         if (drawStart) {
+          const run = runInHand();
+          const R = window.DraftRender2D;
+          // THE TOOL, ASKED HERE AND NOT ONLY IN runInHand. setTool clears
+          // drawStart on every tool change, so this cannot fire today -- but
+          // runInHand falls through to the RULER's run when the wall's does not
+          // match, and a stale drawStart would put a WALL ghost along a ruler
+          // measure. One clause against a whole class of surprise, and it
+          // states out loud whose mark this is.
+          if (activeTool === 'wall' && run && R
+            && Math.hypot(run.to.x - run.from.x, run.to.z - run.from.z) > 0.001) {
+            const ghost = { start: run.from, end: run.to, ...wallShape(brushOptions('wall')) };
+            // JOINS NULL, WHICH GIVES CAPPED ENDS, and capped is the honest
+            // preview: the wall is not joined to anything yet. Mitring it
+            // would need the ghost in wallJoins alongside the real walls,
+            // which classifies on vertex identity -- so the ghost would
+            // reshape a REAL wall's corner mid-gesture and unshape it again
+            // if the drafter pressed escape.
+            R.drawWallSeg2D(ctx, toS, ghost, true, null, 'both', wallEnv());
+            const a = toS(run.from), b = toS(run.to);
+            ctx.save();
+            // THE WALL'S OWN EDGE INK, not the accent. wallEnv's note settles
+            // the tone: *"A preview wall is the same wall a moment earlier, so
+            // committed-looking is the honest placeholder; loud would be
+            // wrong."* The dash carries the "not yet"; the colour carries the
+            // "this is a wall".
+            ctx.strokeStyle = skin['draw-wall-edge'];
+            ctx.setLineDash([6, 4]);
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+            ctx.restore();
+          }
           const p = toS(drawStart);
           ctx.save();
           ctx.strokeStyle = skin['accent'];
@@ -7521,6 +7596,30 @@
   // walls take the active one instead. The two agreed only because its one
   // caller passed the active level in -- a split waiting for the first caller
   // that did not, which is this rung.
+  // ── WHAT A WALL WILL LOOK LIKE, ASKED ONCE ───────────────────────────────
+  //
+  // The two properties that decide an assembly's WIDTH and which SIDE of the
+  // drawn line it fills. Split out of commitWall for the rubber band, which
+  // has to paint the wall the next press will build -- same type, same side --
+  // and the only way to keep that true is for the resolution to be ONE
+  // function. Two that agree today is the shape of every drift in this file:
+  // the ghost would keep filling left after the drafter set the default to
+  // centre, and the wall would land half an assembly off the line he aimed at.
+  //
+  // 'center', not 'centre', and the fold lives here rather than at the commit
+  // for the reason the note below already gives -- a record written with the
+  // British spelling reaches the file unvalidated. Now the PREVIEW reads the
+  // folded value too, so a stored 'centre' cannot draw a ghost on one side of
+  // the line and a wall on the other.
+  const wallShape = ({ refLine, view: onView, wallType } = {}) => {
+    const viewId = onView ?? onActiveLevel().viewId;
+    return {
+      wallType: wallType || contextWallType(viewId),
+      refLine: (raw => (raw === 'centre' ? 'center' : raw))(
+        refLine || wallSetting('wallRefLine', 'left')),
+    };
+  };
+
   const commitWall = (startPt, endPt,
     { bone = true, refLine, levelId: onLevel, view: onView, wallType,
       baseHeight, topHeight, body } = {}) => {
@@ -7528,13 +7627,14 @@
     const levelId = onLevel ?? active.levelId;
     const viewId = onView ?? active.viewId;
     const homeView = wallHomeView(viewId);
+    const shape = wallShape({ refLine, view: viewId, wallType });
     const wall = {
       id: newDrawingItemId('wall'),
       start: poolVertex(startPt, levelId, homeView),
       end: poolVertex(endPt, levelId, homeView),
       levelId,
       view: homeView,
-      wallType: wallType || contextWallType(viewId),
+      wallType: shape.wallType,
       // A BUILT WALL KNOWS ITS OWN HEIGHTS. The drafter's stored defaults are
       // right for a wall he DRAWS and meaningless for a grade beam, which is
       // a band of concrete hanging off grade -- its base and top are derived
@@ -7545,8 +7645,8 @@
       // spelling on LOAD, but this page has no serializer — a record written
       // with 'centre' reaches the file unvalidated and only the next load
       // repairs it, moving the wall half an assembly thickness in between.
-      refLine: (raw => (raw === 'centre' ? 'center' : raw))(
-        refLine || wallSetting('wallRefLine', 'left')),
+      // The fold now lives in wallShape above, where the PREVIEW reads it too.
+      refLine: shape.refLine,
     };
     // WHOSE WALL IT IS. building-bodies.js and the section painters tell a
     // garage's concrete from the house's by `body`, and a grade beam filed as
@@ -8735,10 +8835,17 @@
       // Resume before refusing: a press on the open end is the drafter
       // carrying on, which is the one case the refusal must not catch.
       const open = toyOpenEnd(at);
-      if (open) { clearNotice(); drawStart = open; paint(); return; }
+      // stripRefresh BESIDE THE PAINT, on both openings. Without it the strip
+      // still read "wall — first point" with a first point already down, and
+      // the length box and angle box -- which stripRefresh is what enables --
+      // stayed dead until the pointer happened to move. A mouse always moves,
+      // so this was invisible on a PC and wrong on a tablet, where a tap sets
+      // the anchor and nothing moves afterwards. Found by a check asserting
+      // the strip SAID second point rather than that drawStart was set.
+      if (open) { clearNotice(); drawStart = open; stripRefresh(); paint(); return; }
       if (toyRunRefused(drawPoint(at))) return;
       clearNotice();
-      drawStart = drawPoint(at); paint(); return;
+      drawStart = drawPoint(at); stripRefresh(); paint(); return;
     }
     clearNotice();
     const end = drawPoint(at);
@@ -12620,6 +12727,38 @@
     return null;
   };
 
+  // ── WHEN THE SHEET HAS TO FOLLOW THE CURSOR ──────────────────────────────
+  //
+  // A HALF-FINISHED GESTURE, ANY OF THEM. Five tools draw a mark that reads
+  // the cursor -- the wall's band, the cut's line and arrow, the floor's and
+  // the outline's trace, the ruler's measure -- and until now NONE of them
+  // tracked it. They were painted, correctly, inside paint(), and paint() is
+  // not what runs on a pointermove: the hover branch repaints only when the
+  // hovered CORNER changes, which is a deliberate rule with its own note and a
+  // real reason -- *"a pointermove fires on every pixel and this branch is the
+  // page's hot path"*. So all five previews were frozen at whatever the last
+  // unrelated repaint had left, and Movie found the one where that shows
+  // worst: a live length beside the cursor with no line under it, because the
+  // label is DOM and syncDrawLength DOES run on every move.
+  //
+  // SO THE HOT-PATH RULE STANDS AND GAINS AN EXCEPTION, rather than being
+  // dropped. A repaint per move while a gesture is in hand is what a drag
+  // already costs here -- the pan does it, the corner drag does it, the
+  // opening slide does it -- and a wall in hand is the same kind of moment.
+  // What the rule protects is the OTHER case, a drafter sweeping the sheet
+  // hunting for a handle, and that is untouched: no gesture in hand, no
+  // repaint.
+  //
+  // NAMED ONCE, FOR ALL FIVE, because it is the same gate. `drawStart &&
+  // activeTool === 'wall'` would be the same amount of code and would leave
+  // the other four frozen -- which is how this survived four tools that had a
+  // band before the wall did.
+  const previewTracksCursor = () => (activeTool === 'wall' && !!drawStart)
+    || (activeTool === 'cut' && !!cutStart)
+    || (activeTool === 'floor' && floorCorners.length > 0)
+    || (activeTool === 'outline' && outlineCorners.length > 0)
+    || (rulerOn && !!rulerFrom);
+
   // THE LENGTH ON THE DRAWING, beside the one on the strip. Both read
   // runInHand, so both read what commitWall will receive -- §1 asks for the
   // on-screen number and the committed number to be ASSERTED EQUAL, and the
@@ -15552,6 +15691,10 @@
       // Entering a corner, leaving it, and crossing straight from one to its
       // neighbour are all the same test, which is why it is one line.
       if (corner !== hoverCorner) { hoverCorner = corner; paint(); }
+      // AND THE ONE EXCEPTION TO THE RULE ABOVE -- see previewTracksCursor.
+      // `else`, so a move that crossed a corner boundary paints ONCE: the
+      // branch above has already done it.
+      else if (previewTracksCursor()) paint();
       return;
     }
     dragging.moved = Math.max(dragging.moved,
