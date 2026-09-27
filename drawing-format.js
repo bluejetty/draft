@@ -686,7 +686,25 @@ if (!window.DraftDrawingFormat) {
   const ROOF_FASCIA_IN = 5.5;
   const roofHeelIn = (fasciaIn, overhangFt, pitch) => fasciaIn + overhangFt * pitch;
 
-  const roofs = (rawRoofs, levelIds) => (Array.isArray(rawRoofs) ? rawRoofs : [])
+  // ── WHAT A ROOF WEARS, AND HOW ITS GABLE ENDS ──────────────────────────
+  //
+  // Movie, 27 Sep: *"we should make a special ROOF area with the roof corners
+  // in there and the ROOFING TYPE"*, and on the corners: *"allow them to change
+  // each iduvidually, don't worry about changing all"*.
+  //
+  // BOTH ARE CONDITIONAL KEYS, which is this normaliser's standing rule: a
+  // record holds departures from the default and nothing else. A roof with no
+  // `roofing` is asphalt because asphalt is the default, and a roof with no
+  // `gableCorner` follows the office standard -- and that second one is the
+  // whole of what "individually" means, so it has to stay distinguishable from
+  // a roof set to the same style the office happens to say today.
+  //
+  // `env` CARRIES THE VOCABULARIES rather than this file importing them, the
+  // way the wall normaliser takes its finish ids: drawing-format knows record
+  // SHAPES and roof-types.js and profile-manager.js own the words. A caller
+  // that passes neither gets a roof with neither key, which is the same trap
+  // the finish page fell into -- so every call site names them.
+  const roofs = (rawRoofs, levelIds, env = {}) => (Array.isArray(rawRoofs) ? rawRoofs : [])
     .map(roof => {
       const roofLevelId = levelId(roof?.levelId, levelIds);
       const points = (Array.isArray(roof?.points) ? roof.points : []).map(point).filter(Boolean);
@@ -725,6 +743,10 @@ if (!window.DraftDrawingFormat) {
         // read as a plate height of ZERO bears a garage roof at the main
         // floor line instead of on its wall stack.
         plateHeightFt: num(roof?.plateHeightFt),
+        ...(Array.isArray(env.roofingIds) && env.roofingIds.includes(roof?.roofing)
+          ? { roofing: roof.roofing } : {}),
+        ...(Array.isArray(env.cornerStyles) && env.cornerStyles.includes(roof?.gableCorner)
+          ? { gableCorner: roof.gableCorner } : {}),
         layer: 'A-ROOF',
       };
     }).filter(Boolean);

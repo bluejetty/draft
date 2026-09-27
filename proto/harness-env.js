@@ -161,7 +161,13 @@ function buildEnv(win, saved) {
       garage: floor?.garage === true, thickenedEdge: floor?.thickenedEdge === true,
     };
   }).filter(Boolean);
-  const roofs = format.roofs(saved.roofs, levelIds);
+  // Same two lists cut-view-env hands over, for the same reason: a mirror
+  // that drops a field the module reads makes every check about that field
+  // answer from an empty record and pass.
+  const roofs = format.roofs(saved.roofs, levelIds, {
+    roofingIds: win.DraftRoofTypes ? win.DraftRoofTypes.ROOFING_TYPES.map(r => r.id) : null,
+    cornerStyles: win.DraftProfileManager ? win.DraftProfileManager.GABLE_CORNER_STYLES : null,
+  });
   const fenestrations = format.fenestrations(saved.fenestrations, levelIds);
   const outlines = format.outlines(saved.outlines, levelIds);
   // COLUMNS TOO, since the elevation draws the piles under a grade beam.

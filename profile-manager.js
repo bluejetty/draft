@@ -442,6 +442,15 @@ if (!window.DraftProfileManager) {
   const keyBindingLabel = value => normaliseKeyBinding(value).replace('Escape', 'Esc');
 
   window.DraftProfileManager = {
+    // EXPORTED ON 27 SEP, when a second place needed the words. The four names
+    // have been in this file since the corner styles were added and were read
+    // only by normaliseStructureStandards, so STANDARDS.html could offer them
+    // and nothing else could. Movie: *"we should make a special ROOF area with
+    // the roof corners in there"*, and *"allow them to change each
+    // iduvidually"* -- which is a second rail offering the same four, plus the
+    // record normaliser refusing a fifth. Exported rather than copied: two
+    // lists of office standards is two office standards.
+    GABLE_CORNER_STYLES,
     defaultName,
     createPackage,
     download,

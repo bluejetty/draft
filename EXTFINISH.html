@@ -25,6 +25,7 @@
 <script src="./shared-file-store.js"></script>
 <script src="./drawing-format.js"></script>
 <script src="./wall-types.js"></script>
+<script src="./roof-types.js"></script>
 <script src="./level-assembly.js"></script>
 <script src="./geometry-2d.js"></script>
 <script src="./build-house.js"></script>
@@ -169,9 +170,36 @@
       <div class="rail left">
         <p class="rail-title">Elevations</p>
         <div id="elev-list"></div>
-        <p class="rail-title">Roof corners</p>
-        <p class="empty" id="corner-note">Waiting on which scale these are set at
-          &mdash; per roof, or one for the house.</p>
+        <!-- ── THE ROOF AREA ──────────────────────────────────
+             Movie, 27 Sep: "we should make a special ROOF area with the roof
+             corners in there and the ROOFING TYPE", and on where it goes:
+             "over where the ROOF CORNERS are for now (might change it later)
+             in the 'EXT FINISH' tab".
+
+             SO IT IS WHERE THE PLACEHOLDER WAS, and the placeholder said what
+             it was waiting for: "which scale these are set at -- per roof, or
+             one for the house". He answered that days ago -- "allow them to
+             change each iduvidually, don't worry about changing all" -- so the
+             list is of ROOFS and a pick is one roof.
+
+             THE CORNER FALLS BACK TO THE OFFICE and says so in the option
+             itself, because "follows the office" and "set to what the office
+             currently says" are different records: the first moves when
+             STANDARDS moves, the second does not, and a picker that showed
+             them as the same word would make the difference unreachable. -->
+        <p class="rail-title">Roof</p>
+        <div id="roof-list"></div>
+        <div id="roof-props" hidden>
+          <div class="prop" style="margin-top:6px">
+            <label for="roofing">Roofing type</label>
+            <select id="roofing"></select>
+          </div>
+          <div class="prop" style="margin-top:6px">
+            <label for="gable-corner">Gable corner</label>
+            <select id="gable-corner"></select>
+          </div>
+          <p class="empty" id="roof-weight"></p>
+        </div>
       </div>
       <div class="sheet-wrap"><canvas id="elev" width="900" height="560"></canvas></div>
       <div class="rail right">
@@ -225,6 +253,8 @@
     (async () => {
       const FORMAT = window.DraftDrawingFormat;
       const WT = window.DraftWallTypes;
+      const RT = window.DraftRoofTypes;
+      const PROFILES = window.DraftProfileManager;
       const CV = window.DraftCutView;
       const BUCKET = 'model-drawing';
       const statusEl = document.getElementById('status');
@@ -319,6 +349,111 @@
       // save writes, not the painter's copy of it.
       const storedWall = () => (drawing?.walls || []).find(w => String(w.id) === picked);
 
+      // ── THE ROOF AREA ──────────────────────────────────────
+      //
+      // PICKED FROM A LIST AND NOT OFF THE DRAWING, which is a deliberate
+      // difference from the walls beside it. A wall is picked by clicking the
+      // face you want to clad, because a face is a thing you can see and aim
+      // at on an elevation. A roof seen from the front is mostly a line, and
+      // on a hip it is a line shared by two planes -- so a click would be a
+      // guess between two answers where a list is two named buttons.
+      let roofPicked = null;
+      const roofList = document.getElementById('roof-list');
+      const storedRoof = () => (drawing?.roofs || []).find(r => String(r.id) === roofPicked);
+      // A ROOF HAS NO NAME, so one is made from what a drafter can see: the
+      // level it stands on and whether it is the garage's. Numbered from 1 in
+      // the drawing's own order, so the same roof is the same button twice.
+      const roofLabel = (roof, i) => {
+        const level = levels.find(l => l.id === roof.levelId);
+        return `ROOF ${i + 1}${roof.garage ? ' \u00b7 GARAGE' : ''}`
+          + (level && level.name ? ` \u00b7 ${level.name}` : '');
+      };
+      const paintRoofList = () => {
+        const roofs = Array.isArray(drawing?.roofs) ? drawing.roofs : [];
+        roofList.innerHTML = roofs.map((roof, i) =>
+          `<button class="elev-btn" data-roof="${roof.id}"
+            aria-pressed="${String(roof.id) === roofPicked}">${roofLabel(roof, i)}</button>`).join('')
+          || '<p class="empty">No roofs in this drawing yet.</p>';
+        roofList.querySelectorAll('[data-roof]').forEach(btn =>
+          btn.addEventListener('click', () => {
+            roofPicked = btn.dataset.roof;
+            paintRoofList();
+            paintRoofProps();
+          }));
+      };
+
+      // THE OFFICE'S ANSWER, which is what an unset roof follows. Read once at
+      // boot rather than per paint: STANDARDS is another page, so it cannot
+      // change under this one while a drafter is looking at it.
+      // READ THE WAY EVERY OTHER PAGE READS IT, through the normaliser on
+      // DraftStructureStandards, off the active standards package. The first
+      // draft of this line invented `getActive().structure.gableCorner`, which
+      // is not a shape this module has -- getActive takes a KIND and answers a
+      // package -- so it threw on every load and the catch quietly answered
+      // "flat". A fallback that hides a wrong path shows a drafter the office
+      // standard of an office that does not exist.
+      const officeCorner = window.DraftStructureStandards.normaliseStructureStandards(
+        PROFILES.getActive('standards')?.content?.model?.structureStandards).gableCorner;
+      const CORNER_LABELS = { flat: 'Flat', return: 'Return',
+        porkchop: 'Porkchop', boxed: 'Boxed' };
+      const cornerLabel = id => CORNER_LABELS[id] || id;
+      document.getElementById('roofing').innerHTML = RT.ROOFING_TYPES
+        .map(r => `<option value="${r.id}">${r.label}</option>`).join('');
+      // THE FIFTH OPTION IS THE ABSENCE, and it has to be reachable or
+      // per-roof control has no off switch: "follows the office" and "set to
+      // whatever the office happens to say today" are different records, and
+      // only the first moves when STANDARDS moves.
+      document.getElementById('gable-corner').innerHTML =
+        `<option value="">Office \u2014 ${cornerLabel(officeCorner)}</option>`
+        + PROFILES.GABLE_CORNER_STYLES
+          .map(id => `<option value="${id}">${cornerLabel(id)}</option>`).join('');
+
+      const paintRoofProps = () => {
+        const roof = storedRoof();
+        document.getElementById('roof-props').hidden = !roof;
+        if (!roof) return;
+        const roofing = RT.roofingById(roof.roofing);
+        document.getElementById('roofing').value = roofing.id;
+        document.getElementById('gable-corner').value = roof.gableCorner || '';
+        // THE WEIGHT, SAID OUT LOUD where the choice is made. It is the one
+        // number on that table with a consequence -- a tile roof is four times
+        // an asphalt one, which is a truss somebody designs rather than buys
+        // -- and a rail that knew it and did not say it would be keeping a
+        // secret from the person choosing.
+        document.getElementById('roof-weight').textContent =
+          `${roofing.weightPsf} psf`
+          + (RT.HEAVY_ROOFING_IDS.includes(roofing.id)
+            ? ' \u2014 heavy; the framing wants checking.' : '.');
+      };
+
+      const writeRoof = patch => {
+        const roof = storedRoof();
+        if (!roof) return;
+        Object.entries(patch).forEach(([key, value]) => {
+          if (value === null) delete roof[key];
+          else roof[key] = value;
+        });
+        // THROUGH THE NORMALISER, WITH BOTH VOCABULARIES. Without them the two
+        // keys are dropped on the way past and the rail appears to do nothing
+        // -- the trap this page already fell into once with the wall finishes,
+        // and the reason roof-types-harness carries a check for it.
+        drawing.roofs = FORMAT.roofs(drawing.roofs, new Set(levels.map(l => l.id)), {
+          roofingIds: RT.ROOFING_TYPES.map(r => r.id),
+          cornerStyles: PROFILES.GABLE_CORNER_STYLES,
+        });
+        env = null;
+        rebuild();
+        save();
+      };
+
+      document.getElementById('roofing').addEventListener('change', event =>
+        // THE DEFAULT IS STORED AS NOTHING, so a roof wearing asphalt carries
+        // no key -- the record rule this whole file keeps.
+        writeRoof({ roofing: event.target.value === RT.DEFAULT_ROOFING_ID
+          ? null : event.target.value }));
+      document.getElementById('gable-corner').addEventListener('change', event =>
+        writeRoof({ gableCorner: event.target.value || null }));
+
       const paintProps = () => {
         const wall = storedWall();
         document.getElementById('wall-props').hidden = !wall;
@@ -393,7 +528,7 @@
       // RE-READ, MERGE, WRITE GUARDED BY THE REVISION, the way PROJECT does:
       // a drafter with the Model Space open in another tab must not have their
       // house flattened by this page writing its own snapshot over it. Only
-      // `walls` goes back, because walls are all this page touches.
+      // `walls` and `roofs` go back, which is all this page touches.
       let queue = Promise.resolve();
       const save = () => {
         queue = queue.catch(() => {}).then(async (tries = 3) => {
@@ -405,7 +540,11 @@
             try { base = JSON.parse(await at.file.text()); } catch { base = null; }
           }
           if (!base || typeof base !== 'object') base = drawing;
-          const merged = { ...base, walls: drawing.walls };
+          // ROOFS GO BACK TOO, since 27 Sep. This wrote `walls` alone for as
+          // long as walls were all the page touched; the ROOF area edits the
+          // roofs, and a merge that left them out would show the change on
+          // screen and lose it on reload.
+          const merged = { ...base, walls: drawing.walls, roofs: drawing.roofs };
           const file = new File([JSON.stringify(merged)], 'drawing.json',
             { type: 'application/json' });
           try { await store.saveSharedFile(file, BUCKET, { ifRev: at.rev }); }
@@ -526,8 +665,6 @@
           : 'Nothing there — click a wall face.');
       });
 
-      };
-
       // ── BOOT ──────────────────────────────────────────────────────────
       const rebuild = () => {
         env = window.DraftCutViewEnv.buildCutViewEnv(drawing, levels);
@@ -535,12 +672,15 @@
         if (!cuts.some(cut => cut.id === currentElev)) currentElev = cuts[0]?.id || 'E1';
         paintElevList();
         paintElevation();
+        paintRoofList();
+        paintRoofProps();
       };
 
       const raw = await load();
       if (!raw) {
         say('No drawing in browser storage — draw a house in the Model Space first.');
         paintElevList();
+        paintRoofList();
         return;
       }
       levels = FORMAT.levels(raw.levels);

@@ -39,6 +39,51 @@ const pages = fs.readdirSync(ROOT).filter(f => f.endsWith('.html')).sort();
 // sweep of nothing at all.
 check('the scan finds pages at all', pages.length >= 5, true);
 
+// ── AND EVERY INLINE SCRIPT ON THEM PARSES ────────────────────────────────
+//
+// A PAGE WHOSE SCRIPT DOES NOT PARSE IS A BLANK PAGE, and nothing in this repo
+// said so. Measured, 27 Sep: EXTFINISH.html was committed and pushed carrying a
+// stray `};` left behind when a tab was removed from it. Every check in this
+// file passed -- they read MARKUP, and the markup was perfect. The bars were
+// mounted, the stylesheet linked, the module loaded in the right order, and
+// the page would have come up dead with a SyntaxError in the console.
+//
+// `new Function` AND NOT A RUN. This asks the one question a static file can
+// answer about a script -- is it syntactically a program -- without a DOM, a
+// store, or a network. Everything a page DOES is Playwright's to check; that
+// it is a program at all is cheap enough to ask here, on every page, offline.
+//
+// MODULES ARE SKIPPED, since `type="module"` legalises import and export and
+// `new Function` does not. No page in this repo uses one today, which is why
+// this is a filter rather than a second parser.
+const INLINE = /<script(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/g;
+const badScripts = [];
+pages.forEach(file => {
+  const html = read(file);
+  let match;
+  INLINE.lastIndex = 0;
+  let n = 0;
+  while ((match = INLINE.exec(html)) !== null) {
+    n += 1;
+    if (/type\s*=\s*["']?module/i.test(match[1])) continue;
+    if (/type\s*=\s*["'][^"']*["']/i.test(match[1])
+      && !/type\s*=\s*["'](text\/javascript|application\/javascript)["']/i.test(match[1])) continue;
+    try { new Function(match[2]); }
+    catch (error) { badScripts.push(`${file} script #${n}: ${error.message}`); }
+  }
+});
+check('every inline script on every page parses', badScripts, []);
+// THE COMPANION AGAIN. "No page has a broken script" is true of a scan that
+// found no scripts, and this file has been bitten by exactly that shape once
+// already -- see the note above the page glob.
+const inlineCount = pages.reduce((n, file) => {
+  INLINE.lastIndex = 0;
+  let m; let k = 0;
+  while ((m = INLINE.exec(read(file))) !== null) k += 1;
+  return n + k;
+}, 0);
+check('and the scan actually found scripts to parse', inlineCount >= 10, true);
+
 // Strip comments before reading any page's CSS. This repo's comments QUOTE
 // selectors constantly -- "`#house-strip .set` came off these three rules" is
 // a real line in MODEL.html -- and a checker that counted those would fail on
