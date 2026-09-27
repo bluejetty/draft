@@ -1220,6 +1220,70 @@ if (!window.DraftCutView) {
     return { x: dir.z, z: -dir.x };
   }
 
+  // ── THE WALL FACES AN ELEVATION SHOWS, AND HOW FAR OFF EACH ONE IS ────
+  //
+  // LIFTED OUT OF drawElevationView on 27 Sep, unchanged, because a second
+  // caller arrived: the Real Estate Layout lets a drafter CLICK a wall on an
+  // elevation to clad it, and a click has to land on the same face the paint
+  // landed on. Computing that on the page would be a second answer to "which
+  // wall is at this spot", and the first one to drift would be the one nobody
+  // was measuring -- which is the reason `cutAxis` above says "ONE HOME,
+  // because this had four".
+  //
+  // FAR FIRST, which is the painter's contract and now the picker's too. An
+  // elevation is occlusion by paint ORDER: each opaque surface covers what
+  // stands behind it, so the LAST face drawn at a spot is the one a drafter
+  // sees and the one a click means. A picker walks this list backwards.
+  //
+  // FOUNDATION WALLS COME BACK SEPARATELY. They are not faces to be clad --
+  // they are concrete, and what a drafter sees of them is whatever stands
+  // above grade -- but the painter needs them in the same pass, so they are
+  // returned rather than re-derived.
+  function elevationFaces(env, cut, stack, axis) {
+    const dir = cut.dirVec;
+    const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
+    const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
+    const uMin = Math.min(uA, uB), uMax = Math.max(uA, uB);
+    const proj = pt => ({ u: pt.x * axis.x + pt.z * axis.z, d: pt.x * dir.x + pt.z * dir.z });
+    const levelById = {};
+    stack.floors.forEach(level => { levelById[level.id] = level; });
+    // A plan wall lying on a garage outline belongs to that garage: it
+    // stands on the garage's beam plate or slab, off the house floor stack.
+    const garagesByLevel = {};
+    const garageFor = wall => garageOfWall(wall, env, garagesByLevel);
+    const faces = [];
+    const fdnFaces = [];
+    env.walls().forEach(wall => {
+      const p1 = proj(wall.start), p2 = proj(wall.end);
+      if (Math.max(p1.u, p2.u) < uMin || Math.min(p1.u, p2.u) > uMax) return;
+      if ((wall.view || 'plan') === 'foundation') {
+        const type = WALL_TYPES.find(w => w.id === wall.wallType);
+        fdnFaces.push({
+          lo: Math.max(Math.min(p1.u, p2.u), uMin),
+          hi: Math.min(Math.max(p1.u, p2.u), uMax),
+          depth: (p1.d + p2.d) / 2,
+          top: wall.topHeight, base: wall.baseHeight,
+          wallIn: type ? type.totalIn : 8,
+          bearing: wall.baseHeight <= 0.01,   // on a strip footing, not hung
+          // WHOSE CONCRETE IT IS, for the sill plate on top of it: the house
+          // bears on SILL_PLATE_IN, a garage on GARAGE_BEAM_PLATE_IN, and
+          // the note at houseSillPlateFt is emphatic that those are the same
+          // number for different reasons and must not be swapped.
+          garage: garageFor(wall),
+        });
+        return;
+      }
+      const level = levelById[wall.levelId];
+      if (!level || Math.abs(p2.u - p1.u) < 0.5) return;
+      faces.push({
+        wall, u1: p1.u, u2: p2.u, depth: (p1.d + p2.d) / 2, level,
+        garage: garageFor(wall),
+      });
+    });
+    faces.sort((a, b) => a.depth - b.depth);   // viewer sits on +dir: far first
+    return { faces, fdnFaces, garageFor, proj, uMin, uMax };
+  }
+
   function cutViewExtents(env, cut) {
     const stack = sectionLevelStack(env);
     if (!stack) return null;
@@ -2049,43 +2113,8 @@ if (!window.DraftCutView) {
     const uMin = Math.min(uA, uB), uMax = Math.max(uA, uB);
     const proj = pt => ({ u: pt.x * axis.x + pt.z * axis.z, d: pt.x * dir.x + pt.z * dir.z });
 
-    const levelById = {};
-    stack.floors.forEach(level => { levelById[level.id] = level; });
-    // A plan wall lying on a garage outline belongs to that garage: it
-    // stands on the garage's beam plate or slab, off the house floor stack.
-    const garagesByLevel = {};
-    const garageFor = wall => garageOfWall(wall, env, garagesByLevel);
-    const faces = [];
-    const fdnFaces = [];
-    env.walls().forEach(wall => {
-      const p1 = proj(wall.start), p2 = proj(wall.end);
-      if (Math.max(p1.u, p2.u) < uMin || Math.min(p1.u, p2.u) > uMax) return;
-      if ((wall.view || 'plan') === 'foundation') {
-        const type = WALL_TYPES.find(w => w.id === wall.wallType);
-        fdnFaces.push({
-          lo: Math.max(Math.min(p1.u, p2.u), uMin),
-          hi: Math.min(Math.max(p1.u, p2.u), uMax),
-          depth: (p1.d + p2.d) / 2,
-          top: wall.topHeight, base: wall.baseHeight,
-          wallIn: type ? type.totalIn : 8,
-          bearing: wall.baseHeight <= 0.01,   // on a strip footing, not hung
-          // WHOSE CONCRETE IT IS, for the sill plate on top of it: the house
-          // bears on SILL_PLATE_IN, a garage on GARAGE_BEAM_PLATE_IN, and
-          // the note at houseSillPlateFt is emphatic that those are the same
-          // number for different reasons and must not be swapped.
-          garage: garageFor(wall),
-        });
-        return;
-      }
-      const level = levelById[wall.levelId];
-      if (!level || Math.abs(p2.u - p1.u) < 0.5) return;
-      faces.push({
-        wall, u1: p1.u, u2: p2.u, depth: (p1.d + p2.d) / 2, level,
-        garage: garageFor(wall),
-      });
-    });
+    const { faces, fdnFaces, garageFor } = elevationFaces(env, cut, stack, axis);
     if (!faces.length) return false;
-    faces.sort((a, b) => a.depth - b.depth);   // viewer sits on +dir: far first
 
     // Roof silhouette: at each spot along the cut, the tallest roof surface
     // anywhere along the viewing depth — the ridge/hip outline from outside.
@@ -4689,6 +4718,7 @@ if (!window.DraftCutView) {
     extendRunsToEaves,
     sectionWallCrossings,
     cutViewExtents,
+    elevationFaces,
     roofBaseElev,
     roofEaveElev,
     garageBearing,
