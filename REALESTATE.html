@@ -29,6 +29,7 @@
 <script src="./geometry-2d.js"></script>
 <script src="./build-house.js"></script>
 <script src="./formatters.js"></script>
+<script src="./finish-patterns.js"></script>
 <script src="./cut-view.js"></script>
 <script src="./cut-view-env.js"></script>
 <script src="./orientation-guard.js"></script>
@@ -499,7 +500,7 @@
         frame = { uMin, uMax, yTop, yBottom, pxPerFt, x0, y0, cut, axis };
         const colors = CV.inksFromSkin(window.__reSkin);
         CV.drawCutView(env, ctx, canvas.width, canvas.height, cut,
-          { pxPerFt, extents, colors });
+          { pxPerFt, extents, colors, finishes: true });
         if (picked) paintPickMark(ctx);
       };
 

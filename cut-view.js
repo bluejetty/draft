@@ -26,7 +26,8 @@
 if (!window.DraftCutView) {
 (() => {
   const geo = () => window.DraftGeometry2D;
-  const { WALL_TYPES } = window.DraftWallTypes;
+  const { WALL_TYPES, DEFAULT_FINISH_ID, finishById, bandIsCapped }
+    = window.DraftWallTypes;
   const { formatInchesOnly } = window.DraftFormatters;
 
   // Physical drafting standards, shared with the Model Space via STANDARDS.
@@ -3381,6 +3382,81 @@ if (!window.DraftCutView) {
       && other.floor <= geom.floor + 1e-3
       && geom.tops.every(s =>
         gableTopAt(other.worldAt(s.u), other.face.level.wallTop, other.wallDir) >= s.top - 1e-3));
+    // ── THE CLADDING ON ONE FACE ──────────────────────────────────────
+    //
+    // A BASE OVER THE WHOLE FACE, THEN THE BANDS OVER THAT, in the order they
+    // were laid -- which is what makes "last band wins" true of the drawing
+    // and not merely of the rule that reads the record. Each band repaints the
+    // face fill under itself first, so a ledgestone wainscot on a brick wall
+    // shows ledgestone rather than both at once.
+    //
+    // MEASURED FROM THE FOOT OF THE FACE. `lowFt: 0` is where the cladding
+    // starts, which on a finished elevation is the top of the concrete -- so
+    // "the bottom 3 ft" is 0 to 3 whatever the foundation under it is.
+    const paintFaceFinish = geom => {
+      const { face, loU, hiU, floor, tops } = geom;
+      const wall = face.wall;
+      const xa = X(loU), xb = X(hiU);
+      if (xb - xa < 2) return;
+      const head = Math.max(...tops.map(s => s.top));
+      if (head - floor < 0.05) return;
+      const FP = window.DraftFinishPatterns;
+      if (!FP) return;
+      const boxAt = (lo, hi) => ({
+        x0: Math.min(xa, xb), x1: Math.max(xa, xb),
+        yTop: Y(hi), yBottom: Y(lo), pxPerFt,
+      });
+      ctx.save();
+      ctx.clip();
+      FP.drawFinish(ctx, boxAt(floor, head),
+        finishById(wall.finish || DEFAULT_FINISH_ID), C);
+      const bands = Array.isArray(wall.finishBands) ? wall.finishBands : [];
+      bands.forEach(band => {
+        const lo = floor + band.lowFt;
+        const hi = Math.min(head, floor + band.highFt);
+        if (hi - lo < 0.02) return;
+        // THE FACE FILL AGAIN, under this band only. Without it the base
+        // finish's lines read through the band on top of it.
+        ctx.fillStyle = C.face;
+        ctx.fillRect(Math.min(xa, xb), Y(hi), Math.abs(xb - xa), (hi - lo) * pxPerFt);
+        FP.drawFinish(ctx, boxAt(lo, hi), finishById(band.finishId), C);
+        // ── AND THE WATER TABLE WHERE IT STOPS SHORT ──────────────────
+        //
+        // Movie: *"we should put a ledge at the top of the stone that
+        // overhangs the top of the stone"*, *"(if its not at top of wall)"*.
+        // The question is the BAND's, not the material's -- the same stone is
+        // capped in one place and bare in another on one drawing -- so the
+        // table's own bandIsCapped answers it.
+        //
+        // WHAT SHOWS ON AN ELEVATION IS THE SHADOW UNDER THE NOSE. The kerf
+        // is a section detail; here the cap is a course with a line top and
+        // bottom and a dark line beneath, which is what reads the whole thing
+        // at a glance.
+        const finish = finishById(band.finishId);
+        if (!bandIsCapped(band, head - floor) || !finish.cap) return;
+        const capHigh = finish.cap.highIn / 12;
+        const capY = Y(hi), capPx = capHigh * pxPerFt;
+        if (capPx < 1.5) return;
+        ctx.fillStyle = C.face;
+        ctx.fillRect(Math.min(xa, xb), capY - capPx, Math.abs(xb - xa), capPx);
+        ctx.strokeStyle = INK; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(Math.min(xa, xb), capY - capPx);
+        ctx.lineTo(Math.max(xa, xb), capY - capPx);
+        ctx.moveTo(Math.min(xa, xb), capY);
+        ctx.lineTo(Math.max(xa, xb), capY);
+        ctx.stroke();
+        ctx.save();
+        ctx.globalAlpha = 0.35; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.min(xa, xb), capY + 1);
+        ctx.lineTo(Math.max(xa, xb), capY + 1);
+        ctx.stroke();
+        ctx.restore();
+      });
+      ctx.restore();
+    };
+
     const paintFace = geom => {
       const { face, loU, hiU, floor, tops, worldAt } = geom;
       const { wall, u1, u2, level } = face;
@@ -3393,6 +3469,19 @@ if (!window.DraftCutView) {
       ctx.lineTo(xb, Y(floor));
       ctx.closePath();
       ctx.fill();
+      // ── AND WHAT THE WALL IS CLAD IN GOES ONTO THAT FILL ──────────────
+      //
+      // CLIPPED TO THE FACE'S OWN POLYGON, which is still the current path --
+      // so the hatch follows the roof underside into the gable without the
+      // pattern knowing anything about roofs, and a face standing behind
+      // another is covered by that one's fill in the ordinary way. Occlusion
+      // here is paint ORDER, the same as everywhere else on an elevation.
+      //
+      // OFF UNLESS ASKED. Movie's finishes are the Real Estate Layout's
+      // subject; the construction elevations are line work, and a hatch on
+      // them would be a change to every sheet in the set that nobody ordered.
+      // One opt, so turning them on for MODEL later is one word.
+      if (opts && opts.finishes) paintFaceFinish(geom);
       // The wall finish runs into the soffit triangle: end verticals stop
       // at the plate, only the top profile follows the roof underside.
       //
