@@ -419,6 +419,63 @@ if (!window.DraftDrawingFormat) {
   // `levelIds` is a SET throughout this module -- levelId() calls .has() on it.
   // Passing an array silently throws at the first item rather than returning
   // nothing, which is at least loud.
+  // ── WHAT A WALL WEARS, AND WHETHER THE RECORD OF IT IS WELL FORMED ────
+  //
+  // Movie, 26 Sep: *"i'd like to make it easy to for instance choose the bottom
+  // 3 ft of a certain wall for LEDGESTONE"*. So a wall carries a BASE finish
+  // over its whole height and BANDS laid over that base between two heights.
+  // What this module owns is whether the stored record is well formed;
+  // wall-types.js owns what it MEANS at a height.
+  //
+  // THE VOCABULARY ARRIVES IN `env`, like the wall types do, for the reason
+  // spelled out above: nothing here reads `window.DraftWallTypes`.
+  //
+  // CONDITIONAL KEYS, NEVER INVENTED -- the same rule `body` and `auto` follow
+  // twenty lines down, and here it is load bearing. Every drawing in existence
+  // predates these fields. A normaliser that wrote `finish: 'stucco'` onto all
+  // of them would turn opening an old file into a migration: every wall
+  // rewritten on the next save, and no way afterwards to tell a drafter's
+  // stucco from a default one.
+  const HEX = /^#[0-9a-f]{6}$/i;
+  // ONE SPELLING OF A COLOUR. #rrggbb is what <input type="color"> hands back,
+  // and folding the case is what stops #AABBCC and #aabbcc counting as two
+  // materials in a legend. Anything else is dropped rather than repaired: a
+  // colour is stored today and drawn by nothing -- Movie, 27 Sep, *"we don't
+  // have 3d Window yet so COLOR won't show anywhere yet"* -- and a field with
+  // no renderer to disagree with is the cheapest possible place to be strict.
+  const finishColour = raw => (HEX.test(String(raw ?? '')) ? String(raw).toLowerCase() : null);
+  // A BAND IS DROPPED, NOT REPAIRED. Each refusal below is a band that claims
+  // no wall (a top at or below its bottom) or claims wall that is not there (a
+  // bottom below the wall's own). A band is the one record here a drafter
+  // produces by DRAGGING, so a malformed one is a gesture that went wrong
+  // rather than a file somebody hand-edited -- and the safe answer to a
+  // gesture that went wrong is nothing, not a guess at what was meant.
+  const finishBand = (raw, ids) => {
+    const id = ids.includes(raw?.finishId) ? raw.finishId : null;
+    const lo = Number(raw?.lowFt);
+    const hi = Number(raw?.highFt);
+    if (!id || !Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo || lo < 0) return null;
+    const bandColor = finishColour(raw?.color);
+    return { finishId: id, lowFt: lo, highFt: hi,
+      ...(bandColor ? { color: bandColor } : {}) };
+  };
+  // NOT SORTED. The list is kept in the order the bands were laid, because
+  // that order IS the answer where two of them overlap -- see finishAtFt in
+  // wall-types.js. Sorting here would quietly move the decision from what the
+  // drafter did last to which band happened to be lower, and leave no gesture
+  // at all that produces the other result.
+  const finishOf = (wall, ids) => {
+    const base = ids.includes(wall?.finish) ? wall.finish : null;
+    const color = finishColour(wall?.finishColor);
+    const bands = (Array.isArray(wall?.finishBands) ? wall.finishBands : [])
+      .map(band => finishBand(band, ids)).filter(Boolean);
+    return {
+      ...(base ? { finish: base } : {}),
+      ...(color ? { finishColor: color } : {}),
+      ...(bands.length ? { finishBands: bands } : {}),
+    };
+  };
+
   const segmentCore = (raw, levelIds) => {
     const start = point(raw?.start);
     const end = point(raw?.end);
@@ -513,6 +570,9 @@ if (!window.DraftDrawingFormat) {
         // #275: grown interior walls stay auto until the drafter touches them
         // -- regeneration replaces only still-tagged walls.
         ...(wall?.auto === true ? { auto: true } : {}),
+        // A BASE FINISH, A COLOUR AND ANY BANDS -- all three conditional, so a
+        // wall nobody has clad reads out exactly as it read in.
+        ...finishOf(wall, env.finishIds || []),
       };
     }), env.drops).filter(Boolean);
   };

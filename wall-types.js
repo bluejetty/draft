@@ -313,6 +313,71 @@ if (!window.DraftWallTypes) {
   const finishById = id => EXTERIOR_FINISHES.find(f => f.id === id)
     || EXTERIOR_FINISHES.find(f => f.id === DEFAULT_FINISH_ID);
 
+  // ── WHAT A WALL WEARS, AND WHERE ──────────────────────────────────────
+  //
+  // A wall is not ONE finish. Movie, 26 Sep: *"i'd like to make it easy to for
+  // instance choose the bottom 3 ft of a certain wall for LEDGESTONE"* -- so a
+  // wall carries a BASE finish that covers it whole, and BANDS laid over that
+  // base between two heights. Stone to 3 ft with stucco above is one band on a
+  // default wall, which is the case this has to make cheap.
+  //
+  // A BAND IS A HEIGHT RANGE, NOT A RECTANGLE, and the difference is that a
+  // range follows the wall. Stored as a rectangle in elevation space it would
+  // be measured off whichever elevation the drafter happened to be looking at,
+  // and moving the wall, or reading it on the other elevation, would leave the
+  // stone behind. A range belongs to the wall, so both elevations agree and a
+  // wall that moves takes its stone with it.
+  //
+  // MEASURED FROM THE BOTTOM OF THE WALL -- `lowFt: 0` is where the cladding
+  // starts, which on a finished elevation is the top of the concrete. "The
+  // bottom 3 ft" is then literally 0 to 3 and needs no arithmetic, and the
+  // same band reads the same on a wall standing on a frost wall as on one
+  // standing on a grade beam.
+  //
+  // LAST BAND WINS, which is paint order and not a rule to remember. A drafter
+  // who puts stone up to 3 ft and then shake from 2 to 6 gets shake over the
+  // top foot of the stone, the same as if they had drawn it that way, rather
+  // than an error about an overlap they can see perfectly well.
+  //
+  // HALF OPEN, [low, high), so two bands stacked at the same number do not
+  // fight over it: 0-3 and 3-6 meet at 3 with the upper one owning the line.
+  const finishAtFt = (wall, ft) => {
+    const bands = Array.isArray(wall?.finishBands) ? wall.finishBands : [];
+    for (let i = bands.length - 1; i >= 0; i -= 1) {
+      const band = bands[i];
+      if (ft >= band.lowFt && ft < band.highFt) {
+        return Object.freeze({ id: band.finishId, band,
+          color: band.color || wall?.finishColor || null });
+      }
+    }
+    return Object.freeze({ id: wall?.finish || DEFAULT_FINISH_ID, band: null,
+      color: wall?.finishColor || null });
+  };
+
+  // EVERY FINISH ON A WALL, base first and bands in the order they were laid.
+  // What a legend needs, and what a painter needs to know whether to set up a
+  // pattern at all.
+  const finishesOnWall = wall => Object.freeze([
+    wall?.finish || DEFAULT_FINISH_ID,
+    ...(Array.isArray(wall?.finishBands) ? wall.finishBands.map(b => b.finishId) : []),
+  ].filter((id, i, all) => all.indexOf(id) === i));
+
+  // ── AND WHETHER THE BAND IS CAPPED ────────────────────────────────────
+  //
+  // Movie gave the test himself, in the same breath as the ledge: *"(if its not
+  // at top of wall)"*, *"at top of the wall won't need a legde"*. A water table
+  // is the TERMINATION of a wainscot, so stone carried to the soffit has
+  // nothing to terminate and takes none -- and that is a fact about the BAND,
+  // not about the material, which is why `cap` on the row is a default and
+  // this is the question a painter actually asks.
+  //
+  // THE BASE FINISH IS NEVER CAPPED, because it has no top to stop short at:
+  // it runs the whole wall by definition. Only a band can end in mid air.
+  const bandIsCapped = (band, wallHighFt) => {
+    if (!band || !finishById(band.finishId)?.cap) return false;
+    return Number.isFinite(wallHighFt) && band.highFt < wallHighFt - 1e-6;
+  };
+
   window.DraftWallTypes = Object.freeze({
     WALL_TYPES,
     LEGACY_WALL_TYPES,
@@ -322,6 +387,9 @@ if (!window.DraftWallTypes) {
     MASONRY_FINISH_IDS,
     DEFAULT_FINISH_ID,
     finishById,
+    finishAtFt,
+    finishesOnWall,
+    bandIsCapped,
   });
 })();
 }
