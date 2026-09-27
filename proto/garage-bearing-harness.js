@@ -1800,7 +1800,7 @@ function run(win) {
   // door takes none, because it seals to the slab.
   {
     const S3 = CV.STANDARDS;
-    let doors = 0, thresholds = 0, inBucks = 0;
+    let doors = 0, thresholds = 0, inBucks = 0, hidden = 0;
     [['repro-garage-house', base],
       ['repro-2storey-garage-beam', buildEnv(win, JSON.parse(fs.readFileSync(
         path.join(ROOT, 'proto', 'repro-2storey-garage-beam.draft'), 'utf8')))],
@@ -1844,11 +1844,50 @@ function run(win) {
             const pt = { x: wall.start.x + (wall.end.x - wall.start.x) * t,
               z: wall.start.z + (wall.end.z - wall.start.z) * t };
             stands -= CV.garageDoorOpeningFt(env, garage, pt);
-            inBucks += 1;
           }
           const sill = f.garage === true ? 0 : S3.DOOR_THRESHOLD_IN / 12;
-          if (sill) thresholds += 1;
+          // ── UNLESS SOMETHING STANDS IN FRONT OF IT ────────────────────
+          //
+          // Movie, 26 Sep, circling the back of a 2 STOREY + GARAGE: *"the
+          // garage door buck is showing on the HOUSE FOUNDATION at the back"*
+          // ... *"its like the house is transparent or the door buck lines are
+          // going in front of the house"*.
+          //
+          // A door in a buck hangs below its own wall, and that strip belongs
+          // to the FOUNDATION, which this painter lays down before any wall
+          // face. So a far door's dip landed on a near house's concrete that
+          // had been painted twenty passes earlier and could not cover it.
+          // Clipped to its own floor there now, and this is the half of the
+          // claim that says so -- asked of the MODEL, because asking the
+          // drawing "is the dip missing here" would let a painter that drew no
+          // dips at all agree with itself.
+          const dir = view.dir;
+          const midDepth = w => ((w.start.x + w.end.x) / 2) * dir.x
+            + ((w.start.z + w.end.z) / 2) * dir.z;
+          const myDepth = midDepth(wall);
+          const infront = env.walls().some(o => (o.view || 'plan') === 'foundation'
+            && midDepth(o) > myDepth + 1
+            && Math.min(o.start.x * axis.x + o.start.z * axis.z,
+              o.end.x * axis.x + o.end.z * axis.z) < uc + half - 0.05
+            && Math.max(o.start.x * axis.x + o.start.z * axis.z,
+              o.end.x * axis.x + o.end.z * axis.z) > uc - half + 0.05);
+          const ownFloor = garage ? CV.garageBearing(env, eFdn, garage) : level.floorTop;
+          // ONLY A DOOR THAT DIPS IS AT RISK. A door standing ON its floor, or
+          // proud of it on a threshold, is covered by the nearer face painted
+          // after it -- the order working as intended. It is what hangs BELOW
+          // the wall that has nothing coming later, so that is the only case
+          // the clip touches and the only one asked about here.
+          const dips = (stands + sill) < ownFloor - 1e-6;
           doors += 1;
+          if (infront && dips) {
+            hidden += 1;
+            check(`${fixture} ${cut2.id} ${f.id}: stops at its own wall, behind what is in front`,
+              Math.abs(drawn - ownFloor) < 0.005,
+              `bottom ${drawn.toFixed(4)} against its floor ${ownFloor.toFixed(4)}`);
+            return;
+          }
+          if (sill) thresholds += 1;
+          if (garage) inBucks += 1;
           check(`${fixture} ${cut2.id} ${f.id}: stands on ${f.garage === true
             ? 'the slab' : 'a half-inch threshold'}`,
             Math.abs(drawn - (stands + sill)) < 0.005,
@@ -1868,6 +1907,11 @@ function run(win) {
     check('fixture: some door was measured', doors > 0, `${doors} door(s)`);
     check('fixture: and one of them stands in a buck', inBucks > 0,
       `${inBucks} in a garage`);
+    // AND ONE OF THEM IS BEHIND SOMETHING, so the branch above is not vacuous:
+    // without a door on a face another body stands in front of, "clip every
+    // dip" and "clip none" draw the same sheet.
+    check('fixture: and one of them has a body in front of it',
+      hidden > 0, `${hidden} door(s) behind something`);
     check('fixture: and one of them has a threshold', thresholds > 0,
       `${thresholds} with a sill`);
   }
@@ -2406,6 +2450,16 @@ const MUTATIONS = [
   ['a face hides what is behind it only up to its concrete, not its plate',
     s => s.replace('      && o.topE + plateOf(o) >= g.topE - 1e-3',
       '      && o.topE >= g.topE - 1e-3')],
+  // AND THE DOOR'S OWN HALF OF IT: the dip is what hangs below the wall, into
+  // a band the foundation pass painted first, so it is the part that has to
+  // ask. Clipping every door, or none, is the same sheet without a body in
+  // front of one -- which the fixture claim beside these asserts there is.
+  ['a door reaches below its wall even with a house standing in front of it',
+    s => s.replace('        const bottom = infront ? floor : reaches;',
+      '        const bottom = reaches;')],
+  ['every door is cut off at its wall, buck or no buck',
+    s => s.replace('        const bottom = infront ? floor : reaches;',
+      '        const bottom = dips ? floor : reaches;')],
   ['one garage filed on two storeys is two garages again',
     s => s.replace('  const sameGarageBody = (a, b) => !!a && !!b && (a === b',
       '  const sameGarageBody = (a, b) => !!a && !!b && (a === b && false')],

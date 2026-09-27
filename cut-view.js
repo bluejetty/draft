@@ -3492,8 +3492,42 @@ if (!window.DraftCutView) {
           ? bucks.find(b => b.id === f.id) : null;
         const stands = buck
           ? garageConcreteTop(env, fdn, face.garage) - buck.open : floor;
-        const bottom = f.type !== 'door' ? floor + sill
+        const reaches = f.type !== 'door' ? floor + sill
           : stands + (f.garage ? 0 : DOOR_THRESHOLD_IN / 12);
+        // ── AND IT REACHES BELOW ITS OWN WALL ONLY WHERE NOTHING IS IN
+        //    FRONT OF IT ───────────────────────────────────────────────
+        //
+        // Movie, 26 Sep, circling the back of a 2 STOREY + GARAGE: *"the garage
+        // door buck is showing on the HOUSE FOUNDATION at the back"*, and the
+        // diagnosis with it -- *"its like the house is transparent or the door
+        // buck lines are going in front of the house"*.
+        //
+        // A DOOR IN A BUCK HANGS BELOW ITS WALL. Since the expression above, a
+        // garage door stands on the slab, which is 9 1/2" under the floor its
+        // own face stands on. On the garage's own elevation that is the point:
+        // you look into the buck. On the BACK it is nine and a half inches of
+        // door hanging below the wall it belongs to.
+        //
+        // AND THAT STRIP IS THE FOUNDATION'S, ALREADY PAINTED. Occlusion on an
+        // elevation is not a rule, it is the ORDER -- far first, each opaque
+        // surface covering what it stands in front of -- and this painter lays
+        // every foundation down before any wall face. So a far door dipping
+        // below its wall lands on top of a near house's concrete, which was
+        // painted twenty passes earlier and cannot cover it. Measured on
+        // repro-movie-garage-2storey E3 at u -6:
+        //
+        //     seq  8  the HOUSE's concrete    e -2.3433..-1.3017
+        //     seq  9  the HOUSE's sill plate  e -1.3017..-1.0517
+        //     seq 24  the GARAGE's door       e -1.8433..5.9483   <- over both
+        //
+        // ONLY THE DIP IS ASKED, and that is what keeps this from being a
+        // second occlusion rule: everything at or above the face's own floor
+        // is covered by the nearer face painted after it, which is the order
+        // working as intended. What hangs below it has nothing coming later.
+        const dips = reaches < floor - 1e-6;
+        const infront = dips && exposed.some(o => o.depth > face.depth + 1
+          && o.lo < uc + half - 0.05 && o.hi > uc - half + 0.05);
+        const bottom = infront ? floor : reaches;
         ctx.fillStyle = C.recess;
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
         ctx.fillRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
