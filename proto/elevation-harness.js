@@ -1254,6 +1254,124 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
       + 'in slate and corrugated');
   }
 
+// ── WHERE THE MAIN FLOOR'S CLADDING STARTS ────────────────────────────────
+//
+// Movie, 27 Sep: *"make the main floor textures start at bottom of sill
+// plate"*, and before it *"the top area where they should start the finishing
+// should be the bottom of the sill plate"*.
+//
+// NOTHING MEASURED IT. cut-view's faceLines says the line in a comment and
+// computes it in one expression, and the comment has been right since it was
+// written -- but a rule stated only in prose is a rule that moves the first
+// time someone edits the expression under it. This is the measurement.
+//
+// AND IT IS ASKED OF THE PAINTER, not of the arithmetic. drawFinish is
+// intercepted and its BOX recorded, so the claim is about the rectangle the
+// cladding was actually painted into. Recomputing floorBottom minus a plate
+// here and comparing it to the same sum inside the painter would be this
+// harness checking its own subtraction.
+//
+// THE TWO FACTS TOGETHER ARE THE CLAIM, and either alone passes on a broken
+// drawing. That the base starts at the sill LINE is one -- a band anchored to
+// 'sill' at lowFt 0 shares the base's bottom edge, which pins the base to the
+// same line a drafter names in the rail. That the sill line is a PLATE BELOW
+// THE BEARING LINE is the other, and it is what makes the line the bottom of
+// the sill plate rather than the top of it. A painter that clad from the top
+// of the plate would leave an inch and a half of bare wall above the
+// concrete, all the way round the house, and it would read as a drawing
+// artefact rather than as a missing plate.
+{
+  const fFile = path.join(ROOT, 'proto', 'repro-garage-house.draft');
+  const fSaved = JSON.parse(fs.readFileSync(fFile, 'utf8'));
+  const probeEnv = buildEnv(win, fSaved);
+  const mainId = probeEnv.floorLevels()[0].id;
+
+  // BRICK ON THE MAIN FLOOR AND A ONE-FOOT BAND ON THE SILL. The band is the
+  // ruler: it is anchored to the line under test, so its own bottom edge IS
+  // that line, and no number in this file has to agree with a number in the
+  // painter for the comparison to mean something.
+  // THE HOUSE'S OWN WALLS, AND THIS IS THE CHECK BEING WRONG ONCE. The
+  // fixture's garage stands on MAIN FL too, so "every wall on the main floor"
+  // clad the garage as well -- and a garage face takes its sill from its OWN
+  // slab (`floor - plateFt`), by a different branch of the same expression. The
+  // first brick box painted was a garage face, so the mutation that moves the
+  // HOUSE's sill line a plate up changed nothing this check could see and
+  // survived. Measured, not reasoned: 180 checks passed with the plate
+  // deleted.
+  const clad = JSON.parse(JSON.stringify(fSaved));
+  const houseOnMain = wall => Number(wall.levelId) === Number(mainId) && !wall.body;
+  clad.walls.filter(houseOnMain).forEach(wall => {
+    wall.finish = 'brick';
+    wall.finishBands = [{ finishId: 'ledgestone', anchor: 'sill', lowFt: 0, highFt: 1 }];
+  });
+  const cladEnv = buildEnv(win, clad);
+  const cladStack = win.DraftCutView.sectionLevelStack(cladEnv);
+
+  const boxes = [];
+  const FP = win.DraftFinishPatterns;
+  const realDraw = FP.drawFinish;
+  win.DraftFinishPatterns = { ...FP,
+    drawFinish: (ctx, box, finish, inks) => {
+      boxes.push({ id: finish && finish.id, yTop: box.yTop, yBottom: box.yBottom,
+        pxPerFt: box.pxPerFt });
+      return realDraw(ctx, box, finish, inks);
+    } };
+  paintElevation(win, cladEnv,
+    standardElevationCuts(cladEnv).find(c => c.id === 'E1'), { pxPerFt: 40, finishes: true });
+  win.DraftFinishPatterns = FP;
+
+  // THE LOWEST BOX OF EACH, not the first painted. Paint order is faces in
+  // whatever order they come, and the question is about the house's foot -- so
+  // the box that reaches furthest DOWN is the one to read. On this fixture
+  // every house face shares one sill, so lowest and first agree; picking the
+  // lowest says which one is meant when they do not.
+  const lowest = id => boxes.filter(b => b.id === id)
+    .sort((a, b) => b.yBottom - a.yBottom)[0];
+  const base = lowest('brick');
+  const onSill = lowest('ledgestone');
+
+  // THE FIXTURE'S REACH, ASSERTED BEFORE IT IS TRUSTED -- the same rule the
+  // garage block above states. Every comparison below reads two boxes, and a
+  // comparison of two undefineds is a check that cannot fail.
+  check('cladding fixture: the house has walls on the main floor that are not '
+    + 'the garage\'s', clad.walls.filter(houseOnMain).length > 0,
+    `${clad.walls.filter(houseOnMain).length} house walls on level ${mainId}`);
+  check('cladding fixture: the main floor painted its base finish',
+    !!base, `${boxes.length} finish boxes: ${boxes.map(b => b.id).join(', ')}`);
+  check('cladding fixture: and the sill band beside it', !!onSill,
+    `${boxes.map(b => b.id).join(', ')}`);
+
+  if (base && onSill) {
+    check('the base finish starts on the SILL LINE, not at the wall\'s foot',
+      Math.abs(base.yBottom - onSill.yBottom) < 0.01,
+      `base bottom ${base.yBottom.toFixed(2)}px, sill band bottom ${onSill.yBottom.toFixed(2)}px`);
+    // A foot is a foot: the ruler is the right length, so the band really is
+    // anchored where it says and is not some other span that happens to end
+    // in the same place.
+    check('and the one-foot band really is a foot tall',
+      Math.abs((onSill.yBottom - onSill.yTop) / onSill.pxPerFt - 1) < 1e-6,
+      `${((onSill.yBottom - onSill.yTop) / onSill.pxPerFt).toFixed(4)} ft`);
+
+    // AND THE SILL LINE IS A PLATE BELOW THE BEARING LINE. floorBottom is
+    // where the joists bear, which is the TOP of the sill plate; the cladding
+    // starts a plate lower, on the concrete. Measured as the distance from the
+    // main floor's TOP -- a line this harness can name without re-deriving the
+    // plate -- so the 1 1/2" is the whole of what is being asserted.
+    const main = cladStack.floors[0];
+    const plateFt = win.DraftLevelAssembly.SILL_PLATE_IN / 12;
+    const cladHeightFt = (base.yBottom - base.yTop) / base.pxPerFt;
+    const headToFloorTop = cladHeightFt - (main.floorTop - (main.floorBottom - plateFt));
+    check('and the sill line is a PLATE BELOW the bearing line, so it is the '
+      + 'BOTTOM of the sill plate',
+      Math.abs(headToFloorTop - (main.wallTop - main.floorTop)) < 0.02,
+      `cladding is ${cladHeightFt.toFixed(4)} ft tall; floorTop to wallTop is `
+      + `${(main.wallTop - main.floorTop).toFixed(4)} ft, and floorTop down to the `
+      + `sill is ${(main.floorTop - (main.floorBottom - plateFt)).toFixed(4)} ft `
+      + `(a ${(plateFt * 12).toFixed(1)}\" plate under a `
+      + `${((main.floorTop - main.floorBottom) * 12).toFixed(3)}\" floor)`);
+  }
+}
+
   // THE DATUM THE WHOLE SHEET HANGS OFF, stated against the DRAWING rather
   // than against its own arithmetic. `roofEaveElev` is where a rise of zero
   // lands, which is the eave line -- so the lowest point the painter puts any
