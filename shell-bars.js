@@ -354,6 +354,33 @@ if (!window.DraftShellBars) {
         <path d="M9.7 4.8 L10.6 7.1" stroke-width="1.1"></path>
       </svg>
     </button>
+    <!-- ── TURN THE HOUSE A QUARTER ──────────────────────────────────────
+         Movie, 27 Sep: "can we add a HOUSE ROTATE function (maybe in
+         instruments panel top on the right side. make a little monopoly style
+         house with a rotation around around the outside of it. Make it rotate
+         the actual model space so the E1 E2 etc all rotate. make the rotations
+         90degrees don't allow in between", and on why: "this will allow them
+         to rotate a house 90 degress depending on length of house so it fits
+         on the layout pages nicer".
+
+         ONE BUTTON, NOT TWO. Four presses is back where you started, so a
+         second button turning the other way saves at most one press and costs
+         a permanent second control on a strip that is already full. If he
+         wants the other way round it is one line.
+
+         DRAWN IN PATHS like every other chip here: a gable and a box, which
+         is the monopoly house, and three quarters of a ring with a head on it
+         going clockwise -- the way the press turns. An arrow that went the
+         other way would be a control lying about itself. -->
+    <button type="button" id="strip-rotate" class="chip" data-mode-rotate
+      title="TURN THE HOUSE — a quarter turn clockwise; the elevations turn with it and E1 stays the front">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+        <path d="M4.6 9.2 L8 6.3 L11.4 9.2"></path>
+        <path d="M5.8 9.2 V12.3 H10.2 V9.2"></path>
+        <path d="M2.7 7.6 A6.3 6.3 0 0 1 13.3 7.6" stroke-width="1"></path>
+        <path d="M11.9 6.2 L13.5 7.8 L11.9 9" stroke-width="1"></path>
+      </svg>
+    </button>
     <span class="chip dormant" data-mode-shield title="ERASING SHIELD — not built on this page yet">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
         <rect x="2.5" y="3.5" width="11" height="9" rx="1"></rect>

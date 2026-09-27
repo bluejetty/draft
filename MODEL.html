@@ -1266,6 +1266,7 @@
      alternative was office defaults, which would have shown four elevation
      marks to a drafter who had switched them off. -->
 <script src="./cut-marks.js"></script>
+<script src="./plan-rotate.js"></script>
 <script src="./outline-master.js"></script>
 <!-- The house types the build bar offers. Lifted out of MODEL.dc.html so both
      pages read one list (build-menu.js says why). -->
@@ -2946,6 +2947,12 @@
           dimensions: drawing?.dimensions || [],
           elevationMarkOffsets: drawing?.elevationMarkOffsets || {},
           autoElevations: structureStandards().autoElevations,
+          // HOW FAR ROUND THE HOUSE HAS BEEN TURNED. Movie, 27 Sep: "the
+          // front view E1 will stay as the same view but the house and the
+          // E1-E4 lines will rotate" -- so the marks walk a seat along with
+          // the geometry and E1 keeps its own wall. The cache above is keyed
+          // on the model epoch, which a rotation bumps through markDirty.
+          planTurn: drawing?.planTurn || 0,
         }),
       };
     }
@@ -3757,6 +3764,26 @@
     // panels do. Three numbers, one attribute, one write a frame.
     canvas.setAttribute('data-view',
       `${view.cx.toFixed(6)} ${view.cz.toFixed(6)} ${view.scale.toFixed(6)}`);
+    // ── AND THE FOUR ELEVATION MARKS THIS FRAME IS DRAWING ──────────────
+    //
+    // Published for the reason data-view above it is, and the note there
+    // already argues it: a second copy of the arithmetic is how the page and
+    // its checks drift apart. Measured, 27 Sep: model-house-rotate.spec.js
+    // asked DraftCutMarks for the marks ITSELF, with the saved drawing's own
+    // turn -- so a mutant that stopped this page passing the turn through left
+    // the spec computing the right answer while the page drew the wrong one,
+    // and it survived. A check that re-derives what it is checking is a check
+    // of its own arithmetic.
+    //
+    // FOUR LINES OF NUMBERS, written once a frame beside the camera. `id`, the
+    // two ends, and which way it looks -- everything a reader needs to say
+    // which wall an elevation is on and which way round it is.
+    canvas.setAttribute('data-e-marks', JSON.stringify(autoElevationCuts().map(cut => ({
+      id: cut.id,
+      a: [Number(cut.startPt.x.toFixed(4)), Number(cut.startPt.z.toFixed(4))],
+      b: [Number(cut.endPt.x.toFixed(4)), Number(cut.endPt.z.toFixed(4))],
+      d: [cut.dirVec.x, cut.dirVec.z],
+    }))));
     // AFTER the canvas timing and BEFORE the readout. After, because `paint`
     // in the readout means the main canvas and folding six thumbnails into it
     // would make one frame an edit read like a slow one. Before, because the
@@ -12526,6 +12553,7 @@
   const rulerChip = strip.querySelector('[data-mode-ruler]');
   const tsquareChip = strip.querySelector('[data-mode-tsquare]');
   const scaleChip = strip.querySelector('[data-mode-scale]');
+  const rotateChip = strip.querySelector('[data-mode-rotate]');
   const brushChip = strip.querySelector('[data-mode-brush]');
   const brushLoadOut = strip.querySelector('[data-brush-load]');
   const lengthBox = document.getElementById('frozen-length');
@@ -12719,6 +12747,45 @@
     stripRefresh();
     paint();
   });
+
+  // ── TURN THE HOUSE A QUARTER ──────────────────────────────────────────────
+  //
+  // Movie, 27 Sep: *"make it rotate the actual model space so the E1 E2 etc
+  // all rotate. make the rotations 90degrees don't allow in between"*, and the
+  // clarification that settles what it means: *"the front view E1 will stay as
+  // the same view but the house and the E1-E4 lines will rotate"*.
+  //
+  // THE ARITHMETIC IS NOT HERE. plan-rotate.js turns every record that carries
+  // a plan coordinate and counts the turn; cut-marks walks each elevation a
+  // seat along so E1 keeps its own wall. Both are checked offline, where a
+  // record type nobody remembered to turn fails a walk of the drawing rather
+  // than waiting to be noticed on a screenshot.
+  //
+  // A NEW RECORD, NOT AN EDIT IN PLACE, which is the module's own bargain --
+  // so the assignment is what makes it real, and everything downstream reads
+  // `drawing` through a function rather than holding the array it was handed.
+  //
+  // AND IT RE-FITS. The house is a different shape on the paper afterwards --
+  // that is the whole point of the press, "depending on length of house so it
+  // fits on the layout pages nicer" -- so leaving the camera where it was
+  // would put a house that now runs the other way half off the sheet.
+  if (rotateChip) {
+    rotateChip.addEventListener('click', () => {
+      if (!drawing) return;
+      const ROT = window.DraftPlanRotate;
+      if (!ROT) { sayOnStrip('Rotation is not loaded on this page.'); return; }
+      drawing = ROT.rotateDrawing(drawing, 1);
+      // markDirty FIRST, because it bumps the model epoch and the elevation
+      // marks are cached on it -- fit() asks for those marks, and asking
+      // before the bump would frame the house against the ring it had in its
+      // old orientation.
+      markDirty();
+      fit();
+      buildChrome();
+      paint();
+      sayOnStrip(`Turned a quarter \u2014 ${(drawing.planTurn || 0) * 90}\u00b0 from where it was drawn.`);
+    });
+  }
 
   // ── THE DRAFTING BRUSH ────────────────────────────────────────────────────
   //
