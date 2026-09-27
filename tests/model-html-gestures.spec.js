@@ -598,7 +598,14 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'copy', 'paste',
             'delete', 'save', 'take-over',
             'file-new', 'file-open', 'file-save-as',
-            'REAL ESTATE LAYOUT', 'ESTIMATES',
+            // REAL ESTATE LAYOUT LEFT THIS ROW FOR `anchors` ON 27 SEP, when
+            // the page arrived: an unbuilt chip is a disabled BUTTON and a
+            // built one is a LINK, which is the row's own rule working rather
+            // than a control appearing from nowhere. ESTIMATES stays, still
+            // unbuilt. And no absence row moves -- a door to another page
+            // makes no entity here, which is why PROJECT and the other four
+            // have always sat in `anchors` without touching the table.
+            'ESTIMATES',
             // UNITS IS TWO BUTTONS NOW, not one naming the unit in force
             // (Movie, 15 Sep). They carry no id, so the census sees them by
             // their faces. Neither authors an entity: they change how a
@@ -684,7 +691,8 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // "properties is associated with the OBJECTS, the house
           // Construction Details is more appropriate name for the PROJECT
           // information". RD-DOCUMENTS/DEFINITIONS.md carries it.
-          anchors: ['PROJECT', 'CONSTRUCTION LAYOUT', 'SPECIFICATIONS',
+          anchors: ['PROJECT', 'REAL ESTATE LAYOUT',
+            'CONSTRUCTION LAYOUT', 'SPECIFICATIONS',
             'SETTINGS', 'STANDARDS',
             'CLICK HERE TO GO OVER THE CONSTRUCTION DETAILS / SECTIONS FOR YOUR PROJECT',
           ].sort(),
