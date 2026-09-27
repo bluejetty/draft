@@ -27,6 +27,7 @@ if (!window.DraftCutView) {
 (() => {
   const geo = () => window.DraftGeometry2D;
   let warnedNoPatterns = false;
+  let warnedNoRoofPatterns = false;
   const { WALL_TYPES, DEFAULT_FINISH_ID, finishById, bandIsCapped,
     bandRange, bandSpan } = window.DraftWallTypes;
   const { formatInchesOnly } = window.DraftFormatters;
@@ -3951,10 +3952,28 @@ if (!window.DraftCutView) {
               { x: hi.x, y: hi.y + drop }, { x: lo.x, y: lo.y + drop }]);
             const depthEdge = Math.max(...pts.map(pt => pt.d));
             if (!Number.isFinite(depthEdge)) return;
+            // NO HATCH ON THIS ONE. What is drawn here is the roof's own
+            // THICKNESS seen edge on -- the sheathing and fascia, a band a
+            // fascia deep -- and a band of shingles a fascia deep is a smudge
+            // that says nothing. The surface this belongs to is being seen
+            // from the side; its covering is not visible at all.
             roofFills.push({ depth: depthEdge, parts });
             return;
           }
           parts.push(pts);
+          // THE EAVE IS WHAT THE COURSES RUN PARALLEL TO, so the hatch needs
+          // one -- and this loop is already finding them for the eave board.
+          // The FIRST visible one is taken: a face has one eave in the ordinary
+          // case, and where a hip gives two they are parallel, so either
+          // answers the same frame.
+          //
+          // WHICH WAS MEASURED RATHER THAN ASSUMED. A mutant taking the LAST
+          // one instead survives every check, over both repros and all four
+          // elevations -- not a gap in the reading but an inert mutation:
+          // every face with area on either house has exactly one visible eave,
+          // so first and last are the same edge. `if (!eave)` is kept because
+          // a stable rule beats an arbitrary one the day a face has two.
+          let eave = null;
           for (let i = 0; i < poly.length; i++) {
             const a = poly[i], b = poly[(i + 1) % poly.length];
             const ea = eaveTop + geo().roofFaceRise(face, a, pitch);
@@ -3963,18 +3982,33 @@ if (!window.DraftCutView) {
             const xa = X(a.x * axis.x + a.z * axis.z);
             const xb = X(b.x * axis.x + b.z * axis.z);
             if (Math.abs(xb - xa) < 1) continue;   // this eave runs away from us
+            if (!eave) eave = [{ x: xa, y: Y(eaveTop) }, { x: xb, y: Y(eaveTop) }];
             parts.push([
               { x: xa, y: Y(eaveTop) }, { x: xb, y: Y(eaveTop) },
               { x: xb, y: Y(base) }, { x: xa, y: Y(base) },
             ]);
           }
+          // AND NO FALLBACK WHERE NO EAVE IS FOUND. One was written -- the two
+          // lowest corners on the paper standing in for an eave, for a hip
+          // face whose own eave runs away from the viewer -- and it was taken
+          // out again because nothing can reach it. The two tests are very
+          // nearly complementary: an eave rejected for running away
+          // (|xb - xa| < 1) belongs to a face seen almost edge on, and such a
+          // face has already gone down the `area2 < 4` branch above. Measured
+          // over both repros and all four elevations, including the L-house's
+          // hip: every face with area found an eave, four of four and two of
+          // two, and deleting the fallback changed no drawing.
+          //
+          // A BRANCH NOTHING REACHES IS A BRANCH NOTHING CHECKS, which is this
+          // session's recurring slip. If such a face ever does come through,
+          // it draws plain -- which is what it did before any of this existed.
           const depth = Math.max(...pts.map(pt => pt.d));
           if (!Number.isFinite(depth)) return;
-          roofFills.push({ depth, parts });
+          roofFills.push({ depth, parts, roof, eave });
         });
       });
     }
-    const paintRoof = ({ parts }) => {
+    const paintRoof = ({ parts, roof, eave }) => {
       ctx.fillStyle = C.face;
       parts.forEach(part => {
         ctx.beginPath();
@@ -3983,6 +4017,37 @@ if (!window.DraftCutView) {
         ctx.closePath();
         ctx.fill();
       });
+      // ── AND WHAT THE ROOF IS COVERED IN GOES ONTO THAT FILL ─────────
+      //
+      // ASKED FOR WITH THE WALL FINISHES, off the same `opts.finishes`: a
+      // sheet showing what a house is clad in and not what it is roofed in is
+      // half an elevation, and the two are one decision a drafter makes.
+      //
+      // CLIPPED TO THE FACE ITSELF, which is `parts[0]` -- the eave boards
+      // after it are the roof's edge seen from below and carry no shingles.
+      // And the frame deliberately overhangs a triangular face at the ridge
+      // (see frameFor), so the clip is what stops it.
+      if (!opts || !opts.finishes || !eave || !roof) return;
+      const RP = window.DraftRoofPatterns;
+      const RT = window.DraftRoofTypes;
+      if (!RP || !RT) {
+        if (!warnedNoRoofPatterns) {
+          warnedNoRoofPatterns = true;
+          console.warn('cut-view: finishes were asked for, but roof-patterns.js '
+            + 'or roof-types.js is not loaded -- every roof will draw plain.');
+        }
+        return;
+      }
+      const frame = RP.frameFor(parts[0], eave[0], eave[1], pxPerFt);
+      if (!frame) return;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(parts[0][0].x, parts[0][0].y);
+      for (let i = 1; i < parts[0].length; i++) ctx.lineTo(parts[0][i].x, parts[0][i].y);
+      ctx.closePath();
+      ctx.clip();
+      RP.drawRoofing(ctx, frame, RT.roofingById(roof.roofing), { hatch: INK });
+      ctx.restore();
     };
     // FAR FIRST, AND ON A TIE THE WALL GOES DOWN BEFORE THE ROOF. A sheet
     // whose nearest corner lands exactly on a wall's depth is a sheet bearing
