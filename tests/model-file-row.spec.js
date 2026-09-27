@@ -43,8 +43,9 @@ async function makeDirty(page) {
   await h.armWall(page);
   await page.mouse.click(...at(-6, -6));
   await page.waitForTimeout(50);
-  await page.mouse.click(...at(6, -6));
-  await page.waitForTimeout(80);
+  // A PAIR ON THE CLOSING POINT -- see h.placePoint and
+  // model-point-confirm.spec.js.
+  await h.placePoint(page, ...at(6, -6));
   // THE KEY TOGGLES and stays armed after a wall commits, so leaving it on
   // would turn the next click in the test into a second wall.
   await h.disarmWall(page);

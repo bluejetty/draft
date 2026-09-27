@@ -130,8 +130,11 @@ async function mouseClickClick(page, from, to) {
   await page.mouse.click(...at(...from));
   await page.mouse.move(...at(...to), { steps: 10 });
   await page.waitForTimeout(60);
-  await page.mouse.click(...at(...to));
-  await page.waitForTimeout(120);
+  // THE CLOSING PRESS IS A PAIR. A point after the first is pre-positioned by
+  // one press and placed by a second in the same spot -- Movie's gesture, see
+  // model-point-confirm.spec.js. Through h.placePoint rather than spelt out,
+  // so the window and the slop live in ONE place across the suite.
+  await h.placePoint(page, ...at(...to));
 }
 
 // A FINGER, AND IT HAS TO BE SYNTHETIC. page.mouse reports pointerType

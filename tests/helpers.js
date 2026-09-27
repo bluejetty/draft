@@ -623,6 +623,39 @@ async function disarmWall(page) {
   await expect(wallKey(page)).toHaveAttribute('aria-pressed', 'false');
 }
 
+// ── PLACING A POINT ON MODEL.html IS TWO PRESSES ───────────────────────────
+//
+// Movie, 27 Sep: *"1 click will pre-position the point and and second click in
+// same location within 1 second will confirm it, if they do something else it
+// won't be placed"*, and the ruling that shapes it: NOT the first point of a
+// run, all the other points after it, and PC only.
+//
+// SO THE CLOSING PRESS OF A WALL IS A PAIR, and every check that drew one with
+// a single click went red the day the gesture changed. Sixteen files, fifty-
+// five checks, and the same two lines in each — which is exactly the shape of
+// thing that belongs in one place. A file that spells the pair out itself is a
+// second copy of Movie's rule, free to disagree with the page when the window
+// or the slop moves.
+//
+// THE FIRST PRESS OF A RUN IS NOT THIS. It is one click and stays one click;
+// callers open a run the way they always did. Only the point that CLOSES a
+// wall comes through here.
+//
+// CLIENT COORDINATES, because every caller already has them: the specs aim
+// through their own camera (planFrame, a readout scale, a bounding box) and
+// they all end up with a pixel. Taking world feet here would need a second
+// copy of whichever camera the caller is using.
+async function placePoint(page, x, y) {
+  await page.mouse.move(x, y);
+  await page.mouse.click(x, y);
+  // WELL INSIDE THE PAGE'S OWN SECOND, and not by much less: a pair sent with
+  // no gap at all would pass on a page whose window was a millisecond wide,
+  // and a pair sent slowly would start failing the day someone shortened it.
+  await page.waitForTimeout(40);
+  await page.mouse.click(x, y);
+  await page.waitForTimeout(60);
+}
+
 module.exports = {
   undesignedTile,
   HALF_HEIGHT_FT,
@@ -640,6 +673,7 @@ module.exports = {
   openToolRail,
   armWall,
   disarmWall,
+  placePoint,
   wallArmed,
   waitForModelReady,
   suppressEntryCoach,
