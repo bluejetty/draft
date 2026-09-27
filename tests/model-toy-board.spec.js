@@ -194,6 +194,21 @@ const wallCount = page => page.evaluate(() => Number(
 // failing. The first version of this helper guessed three selectors that do not
 // exist and fell back to `input` first; the run hung past its 600s timeout and
 // produced no output at all, which is the least useful way a check can fail.
+// ── THE TWO LENGTHS THESE TESTS ARE ABOUT ───────────────────────────────────
+//
+// Movie, 27 Sep: *"allow a TOY MODE user to stay in toy mode if they enter an
+// exact foot length"*, and on what sent him looking: *"i tried this and it made
+// me switch because it considered it a 'precise' length"*.
+//
+// EVERY PROMOTION TEST IN THIS FILE USED 8', WHICH IS NOW THE WRONG LENGTH TO
+// ASK WITH. They were written when the gate looked only at whether anything
+// had been typed, so a whole foot was as good a trigger as any -- and the day
+// the gate learned to read the VALUE, eight feet stopped being a promotion at
+// all. Named rather than fixed inline, because the distinction IS the subject:
+// PRECISE is a length TOY cannot hold, ON_THE_FOOT is the only length it can.
+const PRECISE = "8' 6\"";
+const ON_THE_FOOT = "8'";
+
 async function typeLength(page, text) {
   const box = page.locator('[data-frozen-length]');
   await expect(box, 'the length box must be live before a length can be typed')
@@ -203,12 +218,27 @@ async function typeLength(page, text) {
   await page.waitForTimeout(150);
 }
 
+// THE ANGLE BOX, WITH THE LENGTH BOX FILLED FIRST. commitTypedAngle reads both
+// — the bearing it is given and whatever the length box holds — so a helper
+// that set only the angle would be driving half the gesture and measuring the
+// other half by accident.
+async function typeAngle(page, deg, length) {
+  const len = page.locator('[data-frozen-length]');
+  await expect(len, 'the boxes must be live before either can be typed')
+    .toBeEnabled({ timeout: 4000 });
+  await len.fill(length);
+  const box = page.locator('[data-frozen-angle]');
+  await box.fill(String(deg));
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(150);
+}
+
 test('typing a length in TOY asks before it promotes', async ({ page }) => {
   await open(page, base({ board: 'toy' }));
   await startARun(page);
   const before = await wallCount(page);
 
-  await typeLength(page, "8'");
+  await typeLength(page, PRECISE);
   await expect(page.locator('[data-promote]'), 'the confirm is up').toBeVisible();
   await expect(page.locator('[data-promote-text]')).toHaveText(
     'Entering an exact length switches this drawing to DRAFTING.');
@@ -223,7 +253,7 @@ test('Stay in TOY changes nothing at all — wall, board, or flag',
     await startARun(page);
     const before = await wallCount(page);
 
-    await typeLength(page, "8'");
+    await typeLength(page, PRECISE);
     await page.locator('[data-promote-stay]').click();
     await page.waitForTimeout(80);
 
@@ -234,7 +264,7 @@ test('Stay in TOY changes nothing at all — wall, board, or flag',
     // AND NO FLAG, which is the half most easily dropped: a refusal that
     // recorded itself would be a change, and the next typed length would
     // promote silently on the strength of a "no".
-    await typeLength(page, "8'");
+    await typeLength(page, PRECISE);
     await expect(page.locator('[data-promote]'), 'it asks again').toBeVisible();
   });
 
@@ -244,7 +274,7 @@ test('Continue promotes and commits, and does not ask twice',
     await startARun(page);
     const before = await wallCount(page);
 
-    await typeLength(page, "8'");
+    await typeLength(page, PRECISE);
     await page.locator('[data-promote-go]').click();
     await page.waitForTimeout(150);
 
@@ -256,7 +286,7 @@ test('Continue promotes and commits, and does not ask twice',
     await page.locator('[data-board="toy"]').click();
     await page.waitForTimeout(80);
     await startARun(page);
-    await typeLength(page, "6'");
+    await typeLength(page, "6' 6\"");
     await expect(page.locator('[data-promote]'),
       'asked once per drawing, then remembered').toBeHidden();
   });
@@ -265,7 +295,10 @@ test('a drawing that already answered is never asked', async ({ page }) => {
   await open(page, base({ board: 'toy', boardPromptSeen: true }));
   await startARun(page);
   const before = await wallCount(page);
-  await typeLength(page, "8'");
+  // ON_THE_FOOT would pass here for the WRONG REASON -- it never asks now
+  // whatever the flag says -- so this one has to be a length that would
+  // otherwise raise the question.
+  await typeLength(page, PRECISE);
   await expect(page.locator('[data-promote]')).toBeHidden();
   expect(await wallCount(page)).toBe(before + 1);
 });
@@ -274,9 +307,95 @@ test('in DRAFTING a typed length just commits', async ({ page }) => {
   await open(page, base({ board: 'drafting' }));
   await startARun(page);
   const before = await wallCount(page);
-  await typeLength(page, "8'");
+  // PRECISE again, for the reason above: a whole foot would pass on a page
+  // that never promotes anything, which is not what this names.
+  await typeLength(page, PRECISE);
   await expect(page.locator('[data-promote]')).toBeHidden();
   expect(await wallCount(page)).toBe(before + 1);
+});
+
+// ── A WHOLE FOOT IS TOY'S OWN LENGTH, NOT A PRECISE ONE ─────────────────────
+//
+// Movie, 27 Sep: *"allow the use while in 'TOY MODE' to enter a 'L' or 'R'
+// value - if it is to the nearest foot accept it and don't change to DRAFTING
+// MODE (i tried this and it made me switch because it considered it a
+// 'precise' length)"*.
+//
+// THE GATE NEVER LOOKED AT THE VALUE -- it asked the board and the flag and
+// nothing else -- so a drafter typing a number TOY produces natively was told
+// he was leaving TOY to do it. Every test above had to move off 8' for this
+// one to exist, which is itself the measure of how completely the old rule
+// ignored what was typed.
+
+test('a whole foot in TOY commits without asking, and stays in TOY',
+  async ({ page }) => {
+    await open(page, base({ board: 'toy' }));
+    await startARun(page);
+    const before = await wallCount(page);
+
+    await typeLength(page, ON_THE_FOOT);
+
+    await expect(page.locator('[data-promote]'),
+      'a length TOY itself would make is not a promotion').toBeHidden();
+    // THE WALL IS THE CHECK, not the absent dialog. A page that refused the
+    // length outright would also show no dialog, and would be a worse answer
+    // than the one being replaced.
+    expect(await wallCount(page), 'and the wall was built').toBe(before + 1);
+    expect(await boardOf(page), 'still TOY').toBe('toy');
+    // AND THE FLAG IS UNTOUCHED, so the next PRECISE length still asks. A
+    // whole foot that quietly recorded an answer would spend the drafter's
+    // one question on something that was never a question.
+    await startARun(page);
+    await typeLength(page, PRECISE);
+    await expect(page.locator('[data-promote]'),
+      'a precise length still asks — the whole foot answered nothing')
+      .toBeVisible();
+  });
+
+test('a typed axis bearing with a whole foot stays in TOY too',
+  async ({ page }) => {
+    await open(page, base({ board: 'toy' }));
+    await startARun(page);
+    const before = await wallCount(page);
+
+    // TOY SQUARES EVERY RUN TO AN AXIS, so a typed 90 is a wall TOY would have
+    // drawn. Typed with a whole foot beside it, both numbers are TOY's and
+    // there is nothing to promote.
+    await typeAngle(page, '90', ON_THE_FOOT);
+    await expect(page.locator('[data-promote]')).toBeHidden();
+    expect(await wallCount(page), 'the wall was built').toBe(before + 1);
+    expect(await boardOf(page), 'still TOY').toBe('toy');
+  });
+
+test('an axis bearing with a PRECISE length still asks — both numbers count',
+  async ({ page }) => {
+    await open(page, base({ board: 'toy' }));
+    await startARun(page);
+    const before = await wallCount(page);
+
+    // THE HALF THAT IS EASY TO GET WRONG. The angle commit reads BOTH boxes,
+    // so gating on the bearing alone would let 12'-6" through wearing an axis
+    // — a precise wall admitted because the direction was tidy.
+    await typeAngle(page, '90', PRECISE);
+    await expect(page.locator('[data-promote]'),
+      'a precise length is precise whatever bearing it is typed with')
+      .toBeVisible();
+    expect(await wallCount(page), 'nothing committed while it asks').toBe(before);
+    expect(await boardOf(page), 'and nothing promoted').toBe('toy');
+  });
+
+test('an off-axis bearing still asks, whole foot or not', async ({ page }) => {
+  await open(page, base({ board: 'toy' }));
+  await startARun(page);
+
+  // AND THE OTHER HALF. 37 degrees is not a wall TOY can hold at any length,
+  // so a whole foot does not rescue it — which is what stops the fix above
+  // from having quietly become "TOY accepts typed values".
+  await typeAngle(page, '37', ON_THE_FOOT);
+  await expect(page.locator('[data-promote]'),
+    'an angle TOY cannot square to is a promotion whatever its length')
+    .toBeVisible();
+  expect(await boardOf(page), 'nothing promoted').toBe('toy');
 });
 
 // ── §1: four directions, whole feet, and no leaking into DRAFTING ───────────

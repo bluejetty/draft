@@ -13197,6 +13197,41 @@
   // being asked because they keep trying to do the thing TOY does not allow,
   // and the alternative -- silently promoting them later on the strength of a
   // refusal -- is worse. FLAGGED for Movie rather than settled by me.
+  // ── WHAT TOY ITSELF WOULD HAVE MADE ──────────────────────────────────────
+  //
+  // Movie, 27 Sep: *"allow the use while in 'TOY MODE' to enter a 'L' or 'R'
+  // value - if it is to the nearest foot accept it and don't change to
+  // DRAFTING MODE (i tried this and it made me switch because it considered
+  // it a 'precise' length)"*, and again, plainly: *"allow a TOY MODE user to
+  // stay in toy mode if they enter an exact foot length"*.
+  //
+  // THE GATE NEVER LOOKED AT THE VALUE. It asked whether the board was TOY and
+  // whether the drafter had been asked before, and nothing whatever about what
+  // had been typed -- so a flat 12 raised the same "this switches your drawing
+  // to DRAFTING" question that 12'-6" does, and a drafter doing a thing TOY
+  // does natively was told he was leaving TOY to do it.
+  //
+  // AND THIS IS NOT AN EXCEPTION TO TOY'S LAW, IT IS A BETTER READING OF IT.
+  // The rule was written down as "entering an EXACT length promotes", and the
+  // first gate read "exact" as "typed". TOY's own law is that everything lands
+  // on the whole foot -- which is WHY the promotion exists. A typed 12 lands
+  // there. That is not a precision TOY cannot hold; it is the only precision
+  // TOY has. The note below still stands on its own terms: TOY keeps one law
+  // with no exceptions, and this is the law rather than a hole in it.
+  //
+  // ASKED OF toy-constraints, NOT OF A MODULUS WRITTEN HERE. quantiseFeet is
+  // the same function the drag arm rounds with, so "on the foot" means one
+  // thing on this page and cannot quietly come to mean two.
+  const toyCouldMakeLength = feet => {
+    const Q = window.DraftToyConstraints;
+    return !!Q && Math.abs(Q.quantiseFeet(feet) - feet) < 1e-9;
+  };
+  // AND THE SAME QUESTION ABOUT A BEARING, because TOY squares every run to an
+  // axis: a typed 0 or 90 is a wall TOY would have drawn, and 37 is not. The
+  // protractor reads -180..180, and every multiple of 90 in that range is an
+  // axis, which is the whole of the test.
+  const toyCouldMakeAngle = deg => Math.abs(deg % 90) < 1e-9;
+
   const promote = document.getElementById('promote');
   let pendingPromotion = null;
 
@@ -13227,7 +13262,7 @@
     // continuation rather than captured here, so what commits is what the box
     // says when the drafter answers -- and if the gesture has moved on, the
     // guards above run again on the way through.
-    if (board === 'toy' && !drawing?.boardPromptSeen) {
+    if (board === 'toy' && !toyCouldMakeLength(feet) && !drawing?.boardPromptSeen) {
       askToPromote(() => commitTypedLength());
       return;
     }
@@ -13267,10 +13302,6 @@
       return;
     }
     if (!drawStart || !cursorWorld) return;
-    if (board === 'toy' && !drawing?.boardPromptSeen) {
-      askToPromote(() => commitTypedAngle());
-      return;
-    }
     const aim = squareTo(drawStart, cursorWorld);
     const rad = deg * Math.PI / 180;
     let ux = Math.cos(rad), uz = -Math.sin(rad);
@@ -13281,6 +13312,21 @@
     const feet = typed.ok && typed.inches > 0 ? typed.inches / 12
       : Math.hypot(aim.x - drawStart.x, aim.z - drawStart.z);
     if (!(feet > 1e-6)) { stripMessage.textContent = 'point away from the start first'; return; }
+    // ASKED HERE RATHER THAN AT THE TOP, because this commit uses TWO typed
+    // numbers and both have to be TOY's for it to stay on TOY. The bearing is
+    // the drafter's, and the LENGTH box is read a few lines above -- so a
+    // typed 90 with 12'-6" in the length box is a precise wall wearing an axis,
+    // and gating on the bearing alone would have let it through.
+    //
+    // NOTHING HAS BEEN MUTATED ABOVE, which is what makes moving it down safe:
+    // everything between the old seat and here computes and writes nothing, so
+    // the guard still runs before anything happens, which is what its own note
+    // asks for.
+    if (board === 'toy' && !(toyCouldMakeAngle(deg) && toyCouldMakeLength(feet))
+      && !drawing?.boardPromptSeen) {
+      askToPromote(() => commitTypedAngle());
+      return;
+    }
     const end = { x: drawStart.x + ux * feet, y: 0, z: drawStart.z + uz * feet };
     const wall = commitWall(drawStart, end, brushOptions('wall'));
     drawStart = wall.end;
@@ -16811,6 +16857,63 @@
     nextLevelId: 9,
     nextDrawingItemId: 1,
   })], 'new-drawing.json', { type: 'application/json' });
+
+  // ── LEAVING THE PAGE IS LEAVING THE DRAWING ──────────────────────────────
+  //
+  // Movie, 27 Sep: *"something weird is happening the PREVIOUSLY created plan
+  // is popping back up when i move from MODEL area into the EXT FINISH area
+  // it switches to the PREVIOUS house at that point"*.
+  //
+  // IT IS NOT THE OLD PLAN COMING BACK. IT IS THE NEW ONE NEVER LEAVING.
+  // This page holds the drawing in memory and writes it to the shared store on
+  // SAVE; every other page in the app READS that store. So a drafter who
+  // builds a house, does not save, and presses EXT. FINISH is shown the last
+  // house that WAS saved. And because a fresh MODEL loads from the same store,
+  // coming back does not bring the new one home either -- which makes this a
+  // good deal worse than the display fault it looks like from the outside.
+  // The work is gone, and nothing said so.
+  //
+  // THE GUARD ALREADY EXISTED AND HAD EXACTLY TWO CALLERS. NEW and OPEN both
+  // ask before they throw a dirty drawing away. Leaving the page throws the
+  // same drawing away and asked nothing -- so this is one more caller, not one
+  // more mechanism, and the drafter gets the same three answers in the same
+  // dialog they already know.
+  //
+  // THE ROW'S OWN MARKUP DOES THE FILTERING, which is why there is no list of
+  // destinations here. shell-bars renders the page you are ON as a <span> and
+  // one that is not built yet as a disabled <button>; only a page you can
+  // actually reach is an <a href>. So the selector IS the test, and a row that
+  // grows a new destination tomorrow is guarded the day it appears rather than
+  // the day somebody remembers to add it here.
+  //
+  // CAPTURE, so this runs before any handler the bar installs on its own
+  // chips -- a guard that fires after the thing it guards has already begun is
+  // not a guard.
+  //
+  // AND A MODIFIED PRESS IS NOT A DEPARTURE. Ctrl-, Cmd-, Shift- and
+  // middle-click open the destination somewhere else and leave this page
+  // exactly where it is, with the drawing still in it. Guarding those would
+  // ask the drafter to save something they are not leaving.
+  document.addEventListener('click', event => {
+    if (event.defaultPrevented) return;
+    if (event.button !== 0 || event.metaKey || event.ctrlKey
+      || event.shiftKey || event.altKey) return;
+    const link = event.target && event.target.closest
+      && event.target.closest('a[data-page][href]');
+    if (!link) return;
+    // NO `dirty` TEST HERE. guardUnsaved's first line already is one -- a
+    // clean drawing has nothing to lose, so it calls straight through without
+    // a dialog -- and a copy of that rule in this handler is a second
+    // authority on one question. Mutation proved the cost: deleting a `&&
+    // !dirty` from here survived the check that a clean drawing walks straight
+    // through, because the guard let it through anyway. So the handler asks
+    // about the LINK, the guard asks about the DRAWING, and neither has an
+    // opinion about the other's half.
+    event.preventDefault();
+    const where = (link.textContent || 'another page').trim();
+    const href = link.href;
+    guardUnsaved(`leaving for ${where}`, () => { window.location.href = href; });
+  }, true);
 
   const newDrawing = () => guardUnsaved('starting a new one',
     async () => { await adoptAndShow(blankDrawingFile()); });
