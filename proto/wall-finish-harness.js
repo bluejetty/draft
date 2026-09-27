@@ -71,6 +71,7 @@ function run(win) {
   const env = {
     wallTypes: T.WALL_TYPES,
     finishIds: T.EXTERIOR_FINISHES.map(f => f.id),
+    legacyFinishes: T.LEGACY_FINISH_IDS,
     defaultWallTopFt: 8,
   };
   const SEG = { id: 'w1', levelId: 1, start: { x: 0, z: 0 }, end: { x: 10, z: 0 } };
@@ -103,6 +104,34 @@ function run(win) {
   check('a base finish that is NOT in the table is dropped, so the wall reads default',
     !('finish' in one({ finish: 'terracotta_rainscreen' })),
     JSON.stringify(one({ finish: 'terracotta_rainscreen' }).finish ?? null));
+
+  // ── AND A RETIRED ID IS MAPPED, NOT DROPPED ───────────────────────────
+  //
+  // The two siding rows swapped places on 27 Sep, when Movie found he had
+  // named them ninety degrees out. He had already clad walls with the old
+  // ids, and an id that is not in the table is DROPPED by the rule above --
+  // so without the map a sided wall comes back STUCCO, silently, which is
+  // the one failure shape a drafter cannot diagnose from the drawing.
+  //
+  // MAPPED BY ORIENTATION, which is what he chose and what he saw: a wall
+  // picked as vertical stays vertical and gains the battens it should have
+  // had all along.
+  check('a wall clad before the sidings swapped keeps the orientation it was given',
+    one({ finish: 'siding_v' }).finish === 'siding_v_bb',
+    JSON.stringify(one({ finish: 'siding_v' }).finish ?? null));
+  check('and the horizontal one likewise, rather than going quietly stucco',
+    one({ finish: 'siding_h_bb' }).finish === 'siding_h',
+    JSON.stringify(one({ finish: 'siding_h_bb' }).finish ?? null));
+  check('and a retired id inside a BAND is mapped too, or a wainscot vanishes',
+    one({ finishBands: [{ finishId: 'siding_v', lowFt: 0, highFt: 3 }] })
+      .finishBands?.[0]?.finishId === 'siding_v_bb',
+    JSON.stringify(one({ finishBands: [{ finishId: 'siding_v', lowFt: 0, highFt: 3 }] })
+      .finishBands ?? null));
+  // AND AN ID THAT WAS NEVER OURS IS STILL DROPPED. The map is a rename, not
+  // a licence to keep anything a file happens to carry.
+  check('while an id that never existed is still dropped',
+    !('finish' in one({ finish: 'siding_diagonal' })),
+    JSON.stringify(one({ finish: 'siding_diagonal' }).finish ?? null));
 
   // ── COLOUR: STORED, AND DRAWN BY NOTHING YET ──────────────────────────
   // Movie, 27 Sep: *"the color should only show in the 3d window"*, then *"we
@@ -292,8 +321,8 @@ const MUTATIONS = [
       "      finish: base || 'stucco',")],
   ['an unknown finish id is kept, so a file carries a name nothing can draw',
     s => sub(s, 'drawing-format.js',
-      "    const base = ids.includes(wall?.finish) ? wall.finish : null;",
-      '    const base = wall?.finish || null;')],
+      '    const base = ids.includes(asked) ? asked : null;',
+      '    const base = asked || null;')],
   ['a colour is stored however it was typed, so two spellings are two colours',
     s => sub(s, 'drawing-format.js',
       '(HEX.test(String(raw ?? \'\')) ? String(raw).toLowerCase() : null)',
@@ -310,11 +339,11 @@ const MUTATIONS = [
       '|| hi <= lo || lo < 0) return null;', ') return null;')],
   ['a band naming an unknown finish is kept',
     s => sub(s, 'drawing-format.js',
-      '    const id = ids.includes(raw?.finishId) ? raw.finishId : null;',
-      '    const id = raw?.finishId || null;')],
+      '    const id = ids.includes(asked) ? asked : null;',
+      '    const id = asked || null;')],
   ['one bad band takes the good ones down with it',
     s => sub(s, 'drawing-format.js',
-      '      .map(band => finishBand(band, ids)).filter(Boolean);',
+      '      .map(band => finishBand(band, ids, legacy)).filter(Boolean);',
       '      .map(band => finishBand(band, ids));\n'
       + '    if (bands.some(band => !band)) bands.length = 0;')],
   ['an empty band list is written anyway, so a wall carries a key meaning nothing',
@@ -323,12 +352,19 @@ const MUTATIONS = [
       '      finishBands: bands,')],
   ['the bands are sorted by height, so what the drafter did last stops deciding',
     s => sub(s, 'drawing-format.js',
-      '      .map(band => finishBand(band, ids)).filter(Boolean);',
+      '      .map(band => finishBand(band, ids, legacy)).filter(Boolean);',
       '      .map(band => finishBand(band, ids)).filter(Boolean)\n'
       + '      .sort((a, b) => a.lowFt - b.lowFt);')],
   ['a band loses its own colour, so a two-tone wall is one colour',
     s => sub(s, 'drawing-format.js',
       "      ...(bandColor ? { color: bandColor } : {}) };", '    };')],
+
+  ['a retired finish id is dropped instead of mapped, so a sided wall goes stucco',
+    s => sub(s, 'drawing-format.js', '    const asked = legacy[wall?.finish] || wall?.finish;',
+      '    const asked = wall?.finish;')],
+  ['and a retired id inside a BAND is dropped, so a wainscot disappears',
+    s => sub(s, 'drawing-format.js', '    const asked = legacy[raw?.finishId] || raw?.finishId;',
+      '    const asked = raw?.finishId;')],
 
   // ── THE RESOLUTION ──────────────────────────────────────────────────
   ['the bands are read low to high, so the FIRST laid wins instead of the last',

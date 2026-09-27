@@ -130,7 +130,14 @@ test('the foot bar: PROJECT and MODEL left, the bone in the middle, the sheets r
 
     // AND THE PAGES THAT ARE NOT BUILT ARE STILL DOWN. Moving a chip between
     // groups must not have quietly lit it.
-    await expect(page.locator('#page-row [data-page="real-estate"]')).toBeDisabled();
+    //
+    // REAL ESTATE LAYOUT CAME OFF THIS LIST ON 27 SEP, when the page arrived.
+    // The claim was never "these two chips are grey" -- it is that a chip is
+    // lit by a page EXISTING and by nothing else, least of all by being moved
+    // between rows. So it is asserted the other way now: the built one is a
+    // link to its page, and ESTIMATES, which is still unbuilt, is still down.
+    await expect(page.locator('#page-row [data-page="real-estate"]'))
+      .toHaveAttribute('href', './REALESTATE.html');
     await expect(page.locator('#sheet-row [data-page="estimates"]')).toBeDisabled();
   });
 
