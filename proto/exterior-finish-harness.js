@@ -103,8 +103,6 @@ function run(win) {
   const thick = F.filter(f => f.thicknessIn > 0);
   const flat = F.filter(f => f.thicknessIn === 0);
   const masonry = F.filter(f => T.MASONRY_FINISH_IDS.includes(f.id));
-  check('fixture: the table holds thick rows and flat ones, so neither claim is vacuous',
-    thick.length > 0 && flat.length > 0, `${thick.length} thick, ${flat.length} flat`);
   check('fixture: and a row that is thick WITHOUT being masonry, which is the case that broke the old derivation',
     thick.some(f => !T.MASONRY_FINISH_IDS.includes(f.id)),
     thick.filter(f => !T.MASONRY_FINISH_IDS.includes(f.id)).map(f => f.id).join(' ') || 'none');
@@ -129,15 +127,72 @@ function run(win) {
   check('every masonry finish stands proud of its joint',
     masonry.every(f => f.relief === true),
     masonry.map(f => `${f.id}:${!!f.relief}`).join(' '));
-  // RELIEF FOLLOWS THICKNESS, NOT MASONRY. A shake is not masonry and still
-  // throws a shadow at every course, because it is thick at the butt. What
-  // cannot throw one is a finish with no depth to throw it from.
-  check('everything that stands off the wall takes relief',
-    thick.every(f => f.relief === true),
-    thick.map(f => `${f.id}:${!!f.relief}`).join(' '));
-  check('and nothing flat does, having no depth to throw a shadow from',
-    flat.every(f => !f.relief),
-    flat.map(f => `${f.id}:${!!f.relief}`).join(' '));
+  // ── RELIEF FOLLOWS THE JOINT, NOT THE THICKNESS ──────────────────────
+  //
+  // This said "relief follows THICKNESS" until 27 Sep, and it was true while
+  // the only rows with any were stone, brick and the shake. Movie then gave
+  // the thin finishes a real half inch -- *"for the thin wall types like
+  // siding and stucco - lets give them 1/2\" thickness if they are applied on
+  // the 'outside' of the wall"* -- and half an inch of stucco throws no
+  // shadow, because there is nothing for it to throw one ONTO.
+  //
+  // SO THE TEST IS THE JOINT. Relief is a unit standing proud of the gap
+  // beside it: stone out of its mortar, a shake's butt over the course it
+  // laps. Stucco is a continuous coat with no gap anywhere in it, and lap
+  // siding's shadow IS the course line the pattern already draws, not a second
+  // pass offset behind it. Thickness is a fact about the WALL -- how far the
+  // material stands off the sheathing, which is what 3D and the coplanar
+  // question need; relief is a fact about the DRAWING.
+  const jointed = F.filter(f => T.MASONRY_FINISH_IDS.includes(f.id) || f.id === 'shake');
+  const unjointed = F.filter(f => !T.MASONRY_FINISH_IDS.includes(f.id) && f.id !== 'shake');
+  check('fixture: the table holds jointed rows and unjointed ones, so neither claim is vacuous',
+    jointed.length > 0 && unjointed.length > 0,
+    `${jointed.length} jointed, ${unjointed.length} not`);
+  check('everything with a joint to stand out of takes relief',
+    jointed.every(f => f.relief === true),
+    jointed.map(f => `${f.id}:${!!f.relief}`).join(' '));
+  check('and nothing without one does, having nothing to throw a shadow onto',
+    unjointed.every(f => !f.relief),
+    unjointed.map(f => `${f.id}:${!!f.relief}`).join(' '));
+  // AND EVERY ROW STANDS OFF THE WALL NOW, which is the other half of his
+  // correction: no finish shares a plane with the sheathing on its own
+  // account, so FINISH_STANDOFF_FT guards a case the table no longer has.
+  check('and every finish stands off the wall by something, even the thin ones',
+    F.every(f => f.thicknessIn >= 0.5),
+    F.map(f => `${f.id}:${f.thicknessIn}`).join(' '));
+  // ── AND A ROW THAT TAKES A SILL LEDGE IS A ROW OVER AN INCH THICK ───
+  //
+  // Movie, 27 Sep: *"for the types that are over 1\" under windows we should put
+  // a ledge (topledge over the brick) below the window if the brick goes into
+  // the window area"*.
+  //
+  // THE PAINTER ASKS TWO QUESTIONS AND THE TABLE MAKES THEM ONE. cut-view
+  // gates the ledge on `thicknessIn > 1 && cap`, and over this table those are
+  // the same set -- every capped row is 2" or thicker, every row at an inch or
+  // under is uncapped. Which means the thickness half of that gate cannot be
+  // measured from a drawing: break it and nothing changes, because `cap` still
+  // answers. Hand-tested and it SURVIVED, on repro-L-house over four
+  // elevations.
+  //
+  // SO THE CLAIM MOVES HERE, where it is a fact about the TABLE and a mutant
+  // can reach it. Stated both ways round, because either direction failing is
+  // his rule broken: a thin row that grew a cap would take ledges it should
+  // not, and a thick row without one would refuse a ledge it owes. The
+  // painter's thickness test is then a guard whose equivalence is proved
+  // rather than assumed -- which is what makes it safe to leave in for the day
+  // a 1" capped row is added.
+  const capped = F.filter(f => !!f.cap);
+  const uncapped = F.filter(f => !f.cap);
+  check('fixture: the table holds capped rows and uncapped ones',
+    capped.length > 0 && uncapped.length > 0,
+    `${capped.length} capped, ${uncapped.length} not`);
+  check('every row that carries a cap is over an inch thick, which is his sill-ledge rule',
+    capped.every(f => f.thicknessIn > 1),
+    capped.map(f => `${f.id}:${f.thicknessIn}"`).join(' '));
+  check('and nothing at an inch or under carries one, so the two gates are one question',
+    uncapped.every(f => f.thicknessIn <= 1),
+    uncapped.map(f => `${f.id}:${f.thicknessIn}"`).join(' '));
+
   check('every masonry finish leaves its joint width open, since the shadow is measured against it',
     masonry.every(f => f.params.some(p => p.key === 'jointIn' && p.in > 0)),
     masonry.map(f => `${f.id}:${(f.params.find(p => p.key === 'jointIn') || {}).in}`).join(' '));
@@ -293,8 +348,8 @@ const MUTATIONS = [
       '  const finishById = () => EXTERIOR_FINISHES.find(f => f.id === id)'.replace('id)', 'DEFAULT_FINISH_ID)')
       + ' || (() => EXTERIOR_FINISHES.find(f => f.id === DEFAULT_FINISH_ID))()')],
   ['stucco grows a pattern, so the ground the others read against is hatched too',
-    s => s.replace("{ id: 'stucco', label: 'Stucco', pattern: 'none', thicknessIn: 0,",
-      "{ id: 'stucco', label: 'Stucco', pattern: 'lines', thicknessIn: 0,")],
+    s => s.replace("{ id: 'stucco', label: 'Stucco', pattern: 'none', thicknessIn: 0.5,",
+      "{ id: 'stucco', label: 'Stucco', pattern: 'lines', thicknessIn: 0.5,")],
   ['a patterned finish hardcodes its spacing, so 6\" and 8\" need rows of their own again',
     s => s.replace("      params: Object.freeze([{ key: 'exposureIn', label: 'Exposure', in: 4 }]) },",
       '      params: Object.freeze([]) },')],
@@ -304,9 +359,18 @@ const MUTATIONS = [
   ['a row loses its thickness field, so masonry becomes a migration',
     s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true, masonry: true,",
       "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      relief: true, masonry: true,")],
-  ['a flat finish claims a thickness, so a drawing moves that should not have',
-    s => s.replace("{ id: 'siding_h', label: 'H. Siding', pattern: 'lines', axis: 'horizontal', thicknessIn: 0,",
-      "{ id: 'siding_h', label: 'H. Siding', pattern: 'lines', axis: 'horizontal', thicknessIn: 4,")],
+  ['a one-inch row grows a cap, so shake would take a sill ledge under every window',
+    s => s.replace("{ id: 'shake', label: 'Cedar Shake', pattern: 'shake', axis: 'horizontal',\n      thicknessIn: 1, relief: true,",
+      "{ id: 'shake', label: 'Cedar Shake', pattern: 'shake', axis: 'horizontal',\n      thicknessIn: 1, relief: true,\n      cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),")],
+  ['a capped row thins to an inch, so the painter-s two gates stop agreeing',
+    s => s.replace("    { id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true, masonry: true,",
+      "    { id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 1, relief: true, masonry: true,")],
+  ['a thin finish goes back to nothing, so it shares the sheathing-s own plane',
+    s => s.replace("{ id: 'siding_h', label: 'H. Siding', pattern: 'lines', axis: 'horizontal', thicknessIn: 0.5,",
+      "{ id: 'siding_h', label: 'H. Siding', pattern: 'lines', axis: 'horizontal', thicknessIn: 0,")],
+  ['and stucco does, which is the row Movie corrected himself about',
+    s => s.replace("{ id: 'stucco', label: 'Stucco', pattern: 'none', thicknessIn: 0.5,",
+      "{ id: 'stucco', label: 'Stucco', pattern: 'none', thicknessIn: 0,")],
   ['a veneer stone goes flat, so it hangs on the wall with no thickness at all',
     s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true, masonry: true,",
       "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 0, relief: true, masonry: true,")],
@@ -322,9 +386,9 @@ const MUTATIONS = [
   ['stone stops standing proud, so it outlines flat and reads as tile',
     s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true,",
       "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2,")],
-  ['siding claims relief, so a shadow is drawn for a depth that is not there',
-    s => s.replace("{ id: 'siding_h', label: 'H. Siding', pattern: 'lines', axis: 'horizontal', thicknessIn: 0,",
-      "{ id: 'siding_h', label: 'H. Siding', pattern: 'lines', axis: 'horizontal', thicknessIn: 0, relief: true,")],
+  ['siding claims relief, so a shadow is drawn for a joint that is not there',
+    s => s.replace("{ id: 'siding_h', label: 'H. Siding', pattern: 'lines', axis: 'horizontal', thicknessIn: 0.5,",
+      "{ id: 'siding_h', label: 'H. Siding', pattern: 'lines', axis: 'horizontal', thicknessIn: 0.5, relief: true,")],
   ['the cap stops overhanging, so it sheds nothing and throws no shadow',
     s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true, masonry: true,\n"
       + '      cap: Object.freeze({ projectIn: 1',

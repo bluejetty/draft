@@ -101,7 +101,17 @@ if (!window.DraftWallTypes) {
     // its neighbour, and stucco is the quiet background the others read
     // against -- hatch everything and an elevation is noise carrying no more
     // information than before.
-    { id: 'stucco', label: 'Stucco', pattern: 'none', thicknessIn: 0,
+    //
+    // BLANK IS NOT THICKNESS-LESS, and that is Movie's 27 Sep correction to
+    // his own 26 Sep ruling (*"the stucco doesn't need thickess"*): *"for the
+    // thin wall types like siding and stucco - lets give them 1/2\" thickness
+    // if they are applied on the 'outside' of the wall (not a full wall
+    // finish)"*. A coat of stucco on a wall IS half an inch of material
+    // standing off the sheathing, whatever it is drawn as -- and giving it
+    // that half inch is what stops it sharing a plane with the wall behind it,
+    // which is the coplanar trouble he named an hour earlier. The physical
+    // answer, rather than a fudge factor.
+    { id: 'stucco', label: 'Stucco', pattern: 'none', thicknessIn: 0.5,
       params: Object.freeze([]) },
     // ── VERTICAL SIDING IS BOARD AND BATTEN ────────────────────────────
     //
@@ -121,7 +131,7 @@ if (!window.DraftWallTypes) {
     // one below: a wide board with a narrow batten over each joint draws as a
     // PAIR of close lines at a wide interval, not as evenly spaced singles.
     { id: 'siding_v_bb', label: 'V. Siding (B&B)', pattern: 'batten', axis: 'vertical',
-      thicknessIn: 0,
+      thicknessIn: 0.5,
       params: Object.freeze([
         { key: 'boardIn', label: 'Board', in: 12 },
         { key: 'battenIn', label: 'Batten', in: 2 },
@@ -131,7 +141,7 @@ if (!window.DraftWallTypes) {
     // types)"* -- so his 6" and 8" are this row with one field edited.
     // Courses run off the wall's FOOT, because that is where a sider starts,
     // and the odd course lands at the top the way it does on site.
-    { id: 'siding_h', label: 'H. Siding', pattern: 'lines', axis: 'horizontal', thicknessIn: 0,
+    { id: 'siding_h', label: 'H. Siding', pattern: 'lines', axis: 'horizontal', thicknessIn: 0.5,
       params: Object.freeze([{ key: 'exposureIn', label: 'Exposure', in: 4 }]) },
     // Movie: *"also CEDAR SHAKE - which is used for details sparingly for
     // some styles"*. SPARINGLY IS THE POINT, and it is why this row exists
@@ -436,6 +446,12 @@ if (!window.DraftWallTypes) {
   // and an occlusion test that asked `>=` let a face through on it. A standoff
   // does not fix that; it makes the two surfaces DECIDABLE, which is the most
   // any drawing can do about a junction whose numbers disagree.
+  // AND NOTHING NEEDS IT TODAY, which is the better outcome: the thin
+  // finishes carry a real half inch now, so no row in the table stands at
+  // zero and nothing shares a plane with the sheathing on its own account.
+  // Kept because it is the documented answer to a question that will be asked
+  // again the moment a finish with no thickness is added, and because the 3D
+  // window will want a minimum it did not have to invent.
   const FINISH_STANDOFF_FT = 0.01;
 
   // WHERE A BAND SITS, in the face's own elevation feet. `lines` is what the

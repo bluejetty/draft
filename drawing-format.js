@@ -481,6 +481,16 @@ if (!window.DraftDrawingFormat) {
     const startFt = inset('startFt');
     const endFt = inset('endFt');
     const wrapFt = inset('wrapFt');
+    // AND THE REFUSED LEDGE. Masonry carried up into a window gets a sill
+    // ledge drawn under the opening, and Movie asked on 27 Sep for a button
+    // that turns it off. It is stored as the REFUSAL rather than as a
+    // permission -- `noSillLedge`, present only when set -- because the ledge
+    // is what the drawing does by default, and the rule this whole normaliser
+    // keeps is that a record holds departures from the default and nothing
+    // else. `=== true` for the same reason `toTop` is: a flag that is a
+    // gesture's yes-or-no has exactly one true value, so a stray string
+    // cannot silently turn a detail off.
+    const noSillLedge = raw?.noSillLedge === true;
     return { finishId: id,
       ...(anchor ? { anchor } : {}),
       lowFt: lo,
@@ -488,6 +498,7 @@ if (!window.DraftDrawingFormat) {
       ...(startFt ? { startFt } : {}),
       ...(endFt ? { endFt } : {}),
       ...(wrapFt ? { wrapFt } : {}),
+      ...(noSillLedge ? { noSillLedge: true } : {}),
       ...(bandColor ? { color: bandColor } : {}) };
   };
   // NOT SORTED. The list is kept in the order the bands were laid, because

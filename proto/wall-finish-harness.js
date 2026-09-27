@@ -330,6 +330,35 @@ function run(win) {
   check('and the nudge is a foot, which is the step the buttons move',
     T.FINISH_NUDGE_FT === 1, `${T.FINISH_NUDGE_FT} ft`);
 
+  // ── AND THE LEDGE THE DRAFTER REFUSED ───────────────────────────
+  //
+  // *"for the types that are over 1\" under windows we should put a ledge
+  // (topledge over the brick) below the window if the brick goes into the
+  // window area"*, and then *"lets add a choice button on the menu that allows
+  // them to TURN OFF the ledge if they choose not to show it"*.
+  //
+  // THE REFUSAL IS WHAT IS STORED, not the permission. A band with nothing to
+  // say about ledges gets them, so the common case carries no key -- the same
+  // shape as the wrap two checks up, and for the same reason.
+  const noLedge = one({ finishBands: [{ finishId: 'brick', lowFt: 0, highFt: 3,
+    noSillLedge: true }] }).finishBands[0];
+  check('a band whose ledge is turned off says so',
+    noLedge.noSillLedge === true, JSON.stringify(noLedge.noSillLedge ?? null));
+  check('and a band that says nothing about ledges carries no key about them',
+    !('noSillLedge' in one({ finishBands: [{ finishId: 'brick', lowFt: 0, highFt: 3 }] })
+      .finishBands[0]),
+    Object.keys(one({ finishBands: [{ finishId: 'brick', lowFt: 0, highFt: 3 }] })
+      .finishBands[0]).join(','));
+  // A BUTTON HAS ONE TRUE VALUE. Anything else reaching this field is a file
+  // that was hand-edited or a widget wired up wrong, and the answer to either
+  // is the default -- a detail nobody asked to lose should not go missing
+  // because a string happened to be truthy.
+  check('and only a real yes turns it off, not any truthy thing that lands there',
+    !('noSillLedge' in one({ finishBands: [{ finishId: 'brick', lowFt: 0, highFt: 3,
+      noSillLedge: 'off' }] }).finishBands[0]),
+    JSON.stringify(one({ finishBands: [{ finishId: 'brick', lowFt: 0, highFt: 3,
+      noSillLedge: 'off' }] }).finishBands[0].noSillLedge ?? null));
+
   // ── WHICH COLOUR COMES BACK ───────────────────────────────────────────
   const twoTone = one({ finishColor: '#eeeeee',
     finishBands: [{ ...BAND, color: '#8b5a2b' }] });
@@ -514,6 +543,12 @@ const MUTATIONS = [
   ['the corner wrap is dropped, so a material stops dead at the corner',
     s => sub(s, 'drawing-format.js', "    const wrapFt = inset('wrapFt');",
       '    const wrapFt = null;')],
+  ['the turned-off ledge is dropped, so the button on the menu does nothing',
+    s => sub(s, 'drawing-format.js', "    const noSillLedge = raw?.noSillLedge === true;",
+      '    const noSillLedge = false;')],
+  ['any truthy thing turns the ledge off, so a hand-edited file loses a detail',
+    s => sub(s, 'drawing-format.js', "    const noSillLedge = raw?.noSillLedge === true;",
+      '    const noSillLedge = !!raw?.noSillLedge;')],
 
   // ── THE CAP ─────────────────────────────────────────────────────────
   ['every band is capped, so stone carried to the soffit grows a ledge under it',

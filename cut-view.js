@@ -3507,7 +3507,88 @@ if (!window.DraftCutView) {
         ctx.stroke();
         ctx.restore();
       });
+      // ── AND A LEDGE UNDER EVERY WINDOW THE MASONRY REACHES ────────
+      //
+      // Movie, 27 Sep, with a photograph of his own drawing: *"for the types
+      // that are over 1\" under windows we should put a ledge (topledge over
+      // the brick) below the window if the brick goes into the window area"*.
+      //
+      // IT IS THE WATER TABLE AGAIN, under an opening instead of at a band's
+      // top, and for the same reason: masonry carried up to a window leaves an
+      // open horizontal joint facing the weather, and the sill oversails it so
+      // the water drips clear. So it reuses the row's own `cap` rather than
+      // inventing a second ledge with its own numbers.
+      //
+      // OVER AN INCH, which is his gate and which sorts the table exactly:
+      // the stones at 2\" and brick at 4 5/8\" take one, the shake at 1\" and
+      // the thin finishes at a half do not. A sill is a masonry detail and
+      // these are the masonry rows.
+      //
+      // AND IT CAN BE TURNED OFF: *"lets add a choice button on the menu that
+      // allows them to TURN OFF the ledge if they choose not to show it"*.
+      // Stored as the REFUSAL -- `noSillLedge` on the band -- because showing
+      // it is the default, and the record's rule is that only a departure from
+      // the default is written down.
+      paintSillLedges(geom, lines, bands);
       ctx.restore();
+    };
+
+    // THE HORN IS THE CAP'S OWN PROJECTION, each side, which is what a sill
+    // does: it runs past the opening it serves so the water leaves the jamb
+    // as well as the head.
+    const paintSillLedges = (geom, lines, bands) => {
+      const { face, loU, hiU } = geom;
+      const wall = face.wall;
+      const span = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+      if (!(span > 0.01)) return;
+      // WINDOWS ONLY. A door has a threshold, not a sill: the masonry runs
+      // past its jambs to the ground and there is no horizontal joint under it
+      // for a ledge to cover. Written before any check asked -- the first
+      // draft of this filtered on the wall alone, so the garage's overhead
+      // door grew a stone sill two feet off the slab.
+      const openings = env.fenestrations()
+        .filter(f => f.wallId === wall.id && f.type === 'window');
+      if (!openings.length) return;
+      bands.forEach(band => {
+        if (band.noSillLedge) return;
+        const finish = finishById(band.finishId);
+        if (!(finish.thicknessIn > 1) || !finish.cap) return;
+        const range = bandRange(band, lines);
+        if (!range) return;
+        const hi = Math.min(lines.head, range.hi);
+        openings.forEach(open => {
+          const sillE = face.level.floorTop
+            + (open.sillHeight > 0 ? open.sillHeight : SILL_FT);
+          // THE BRICK HAS TO REACH IT. Below the band there is no masonry to
+          // terminate, and above its top the wall is something else.
+          if (!(sillE >= range.lo && sillE < hi)) return;
+          const horn = finish.cap.projectIn / 12;
+          const at = t => loU + (hiU - loU) * t;
+          const a0 = at(Math.max(0, (open.offset - open.width / 2) / span));
+          const a1 = at(Math.min(1, (open.offset + open.width / 2) / span));
+          const px0 = Math.min(X(a0), X(a1)) - horn * pxPerFt;
+          const px1 = Math.max(X(a0), X(a1)) + horn * pxPerFt;
+          const high = (finish.cap.highIn / 12) * pxPerFt;
+          if (px1 - px0 < 2 || high < 1.5) return;
+          const y = Y(sillE);
+          ctx.fillStyle = C.face;
+          ctx.fillRect(px0, y - high, px1 - px0, high);
+          ctx.strokeStyle = INK; ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(px0, y - high); ctx.lineTo(px1, y - high);
+          ctx.moveTo(px0, y); ctx.lineTo(px1, y);
+          ctx.moveTo(px0, y - high); ctx.lineTo(px0, y);
+          ctx.moveTo(px1, y - high); ctx.lineTo(px1, y);
+          ctx.stroke();
+          // The shadow under the nose, which is what reads the detail.
+          ctx.save();
+          ctx.globalAlpha = 0.35; ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(px0, y + 1); ctx.lineTo(px1, y + 1);
+          ctx.stroke();
+          ctx.restore();
+        });
+      });
     };
 
     const paintFace = geom => {

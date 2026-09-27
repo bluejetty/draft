@@ -926,6 +926,160 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
       `${rakeFilled.length} of ${edgeOn.length} edge-on planes fill their rake`);
   }
 
+  // ── AND A SILL LEDGE UNDER EVERY WINDOW THE MASONRY REACHES ────────
+  //
+  // Movie, 27 Sep, with a photograph of his own drawing: *"for the types that
+  // are over 1\" under windows we should put a ledge (topledge over the brick)
+  // below the window if the brick goes into the window area"*, then *"lets add
+  // a choice button on the menu that allows them to TURN OFF the ledge"*.
+  //
+  // MEASURED BY ITS GEOMETRY, not by "did anything appear". A ledge is a rect
+  // sitting ON the window's sill line, the cap's own height, and WIDER than
+  // the opening by the cap's projection at each jamb -- that last is the whole
+  // point of a sill, which runs past the jambs so water leaves them too. Asked
+  // any looser ("is there a fill near the sill") the wall's own face fill
+  // answers yes and the check proves nothing, which is exactly how the gable
+  // rake probe above passed four times against an unfixed painter.
+  {
+    const clad = JSON.parse(fs.readFileSync(
+      path.join(ROOT, 'proto', 'repro-L-house.draft'), 'utf8'));
+    const CAP_HIGH = 2 / 12, HORN = 1 / 12;      // brick's cap, from the table
+    // TO THE TOP, so the band is never CAPPED: a water table is the same rect
+    // shape at a band's own top, and a probe that cannot tell the two apart is
+    // a probe that would call a water table a sill ledge.
+    // A WINDOW WITH NO SILL HEIGHT AT ALL, added to the fixture on purpose.
+    // The painter defaults a missing sill to SILL_FT, the same three feet the
+    // OPENING is drawn at a dozen lines further down -- so a ledge that used
+    // its own number would float away from the window it belongs to. Nothing
+    // in either repro carries such a record, so that branch was unreachable
+    // and a mutant putting a foot and a half back SURVIVED, hand-tested.
+    clad.fenestrations.push({ id: 'fenestration-nosill', wallId: 'wall-14',
+      levelId: 3, view: 'plan', type: 'window', layer: 'A-GLAZ',
+    // AT THE CURRENT HEAD, not the retired 6'-6": a superseded head is
+    // MIGRATED by drawing-format, and the migration carries the sill up with
+    // it -- 6'-6" becomes 7'-0" and a sill of nothing becomes a sill of six
+    // inches. Which is how the first version of this record still failed to
+    // reach the branch it was written for.
+      offset: 33, width: 3.5, sillHeight: 0, headHeight: 7, garage: false });
+    const laid = extra => {
+      const copy = JSON.parse(JSON.stringify(clad));
+      copy.walls.forEach(w => {
+        if ((w.view || 'plan') === 'plan') {
+          w.finishBands = [{ finishId: 'brick', anchor: 'sill', lowFt: 0, toTop: true,
+            ...extra }];
+        }
+      });
+      const cEnv = buildEnv(win, copy);
+      const cut = standardElevationCuts(cEnv).find(c => c.id === 'E1');
+      return { env: cEnv, view: paintElevation(win, cEnv, cut, { pxPerFt: 30, finishes: true }) };
+    };
+    // Every window this elevation can see, at the elevation its sill sits at
+    // and the width it opens -- read off the RECORD, so the check knows what
+    // it is looking for before it looks.
+    const wanted = (cEnv, view) => {
+      const stack = CV.sectionLevelStack(cEnv);
+      return cEnv.fenestrations().filter(f => f.type === 'window').map(f => {
+        const level = stack.floors.find(fl => fl.id === f.levelId);
+        const wall = cEnv.walls().find(w => w.id === f.wallId);
+        if (!level || !wall) return null;
+        const span = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+        const uA = wall.start.x * view.axis.x + wall.start.z * view.axis.z;
+        const uB = wall.end.x * view.axis.x + wall.end.z * view.axis.z;
+        // THE THREE IS A LITERAL ON PURPOSE. Read off cut-view's own SILL_FT
+        // this line would agree with the painter whatever the painter said,
+        // which is a mirror and not a check.
+        return { e: level.floorTop + (f.sillHeight > 0 ? f.sillHeight : 3),
+          width: f.width,
+          u: (uA + uB) / 2 + (uB - uA) * ((f.offset / span) - 0.5) };
+      }).filter(Boolean);
+    };
+    // A rect ON that sill line, the cap's height, and overhanging BOTH jambs.
+    const ledgeFor = (view, want) => view.modelFills.find(f => {
+      if (f.pts.length !== 4) return false;
+      const es = f.pts.map(pt => pt.e), us = f.pts.map(pt => pt.u);
+      const lo = Math.min(...es), hi = Math.max(...es);
+      if (Math.abs(lo - want.e) > 0.05) return false;
+      if (Math.abs((hi - lo) - CAP_HIGH) > 0.02) return false;
+      const wide = Math.max(...us) - Math.min(...us);
+      return Math.abs(wide - (want.width + 2 * HORN)) < 0.05;
+    });
+
+    const on = laid({});
+    const want = wanted(on.env, on.view);
+    check('sill ledge: the fixture has windows this elevation could grow one under',
+      want.length > 0, `${want.length} windows on the clad walls`);
+    const drawn = want.filter(w => ledgeFor(on.view, w));
+    check('brick carried past a window gets a ledge on its sill, overhanging both jambs',
+      drawn.length > 0 && drawn.length === want.length,
+      `${drawn.length} of ${want.length} windows, each wanting a `
+      + `${(CAP_HIGH * 12).toFixed(0)}" rect ${(HORN * 24).toFixed(0)}" wider than its opening`);
+
+    // THE BUTTON. Same house, same band, one key added.
+    const off = laid({ noSillLedge: true });
+    check('and the band that turns the ledge off has none of them drawn',
+      wanted(off.env, off.view).every(w => !ledgeFor(off.view, w)),
+      `${wanted(off.env, off.view).filter(w => ledgeFor(off.view, w)).length} ledges survived`);
+
+    // OVER AN INCH IS THE GATE, which is his: a sill is a masonry detail, and
+    // half-inch siding has no joint to cover. Asked of the DRAWING rather than
+    // of the table, because the table agreeing with itself is not the claim.
+    const thin = laid({ finishId: 'siding_h' });
+    check('and half-inch siding grows none -- the ledge is for what is over an inch',
+      wanted(thin.env, thin.view).every(w => !ledgeFor(thin.view, w)),
+      `${wanted(thin.env, thin.view).filter(w => ledgeFor(thin.view, w)).length} ledges on siding`);
+
+    // AND THE BRICK HAS TO REACH THE WINDOW. A wainscot stopping below the
+    // sills terminates on its own water table, not on a ledge under a window
+    // it never got to -- *"if the brick goes into the window area"*.
+    const low = laid({ toTop: undefined, highFt: 1 });
+    check('and a wainscot stopping below the sills grows no ledge under them',
+      wanted(low.env, low.view).every(w => !ledgeFor(low.view, w)),
+      `${wanted(low.env, low.view).filter(w => ledgeFor(low.view, w)).length} ledges `
+      + 'under windows the brick never reached');
+
+    // AND NOT UNDER A DOOR. A door has a threshold: the masonry runs past its
+    // jambs to the ground, with no horizontal joint under it to cover. The
+    // first draft of the painter filtered on the WALL alone and defaulted a
+    // missing sill to a foot and a half, so every door grew a stone sill
+    // floating across its opening.
+    //
+    // ON THE GARAGE HOUSE, because the L-house has no door in it at all --
+    // which this block asserted the wrong way round first and went red for,
+    // reporting "0 doors" instead of passing over a claim it could not make.
+    {
+      const g = JSON.parse(fs.readFileSync(
+        path.join(ROOT, 'proto', 'repro-garage-house.draft'), 'utf8'));
+      g.walls.forEach(w => {
+        if ((w.view || 'plan') === 'plan') {
+          w.finishBands = [{ finishId: 'brick', anchor: 'sill', lowFt: 0, toTop: true }];
+        }
+      });
+      const gEnv = buildEnv(win, g);
+      const doors = gEnv.fenestrations().filter(f => f.type === 'door');
+      check('sill ledge: the garage house has doors to get this wrong on',
+        doors.length > 0, `${doors.length} doors`);
+      const gStack = CV.sectionLevelStack(gEnv);
+      const sheets = standardElevationCuts(gEnv)
+        .map(cut => paintElevation(win, gEnv, cut, { pxPerFt: 30, finishes: true }));
+      // EVERY HEIGHT A DEFAULT COULD HAVE PUT ONE AT: the threshold itself, the
+      // foot and a half the first draft hardcoded, and the three feet SILL_FT
+      // holds now. A door's record says sillHeight 0, so any of the three is a
+      // ledge the drawing invented.
+      const wrong = sheets.flatMap(view => doors.flatMap(d => {
+        const level = gStack.floors.find(fl => fl.id === d.levelId);
+        if (!level) return [];
+        return [0, 1.5, 3]
+          .filter(at => ledgeFor(view, { e: level.floorTop + at, width: d.width }))
+          .map(at => `${d.id}@${at}`);
+      }));
+      check('and no door grows a sill ledge, at a threshold or at any defaulted sill',
+        wrong.length === 0,
+        wrong.length ? wrong.join(' ')
+          : `${doors.length} doors over ${sheets.length} elevations, each asked at `
+            + 'the slab, 1\'-6" and 3\'-0"');
+    }
+  }
+
   // THE DATUM THE WHOLE SHEET HANGS OFF, stated against the DRAWING rather
   // than against its own arithmetic. `roofEaveElev` is where a rise of zero
   // lands, which is the eave line -- so the lowest point the painter puts any
