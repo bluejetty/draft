@@ -314,6 +314,11 @@ test.describe('MODEL.html — the wall in hand', () => {
       await page.mouse.move(ax, ay);
       await page.mouse.click(ax, ay);
       await page.mouse.move(ex, ey);
+      // TWICE, because a second point is CONFIRMED rather than merely clicked
+      // now -- see model-point-confirm.spec.js. The two presses are the same
+      // press as far as this check is concerned; what it is measuring is the
+      // wall that comes out of them.
+      await page.mouse.click(ex, ey);
       await page.mouse.click(ex, ey);
       await page.keyboard.press('Escape');
       await page.waitForTimeout(60);
