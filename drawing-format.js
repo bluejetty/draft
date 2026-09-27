@@ -450,14 +450,44 @@ if (!window.DraftDrawingFormat) {
   // produces by DRAGGING, so a malformed one is a gesture that went wrong
   // rather than a file somebody hand-edited -- and the safe answer to a
   // gesture that went wrong is nothing, not a guess at what was meant.
-  const finishBand = (raw, ids, legacy = {}) => {
+  const finishBand = (raw, ids, legacy = {}, anchors = []) => {
     const asked = legacy[raw?.finishId] || raw?.finishId;
     const id = ids.includes(asked) ? asked : null;
+    if (!id) return null;
+    // ANCHORED TO A NAMED LINE, and an unknown name falls back to the default
+    // rather than dropping the band: the anchor says where a band is MEASURED
+    // FROM, so a band with a name this build does not know is still a band --
+    // it lands in the default place instead of vanishing.
+    const anchor = anchors.includes(raw?.anchor) ? raw.anchor : null;
+    const toTop = raw?.toTop === true;
     const lo = Number(raw?.lowFt);
     const hi = Number(raw?.highFt);
-    if (!id || !Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo || lo < 0) return null;
+    if (!Number.isFinite(lo)) return null;
+    // NEGATIVE IS MEANINGFUL NOW, and this used to refuse it. Every band was
+    // measured from a wall's foot, where below the foot was below the wall;
+    // measured from a NAMED LINE, a negative is how a band crosses it -- sill
+    // less two feet is cladding carried down over the concrete, which is the
+    // thing Movie asked for on 27 Sep. What is still refused is a band that
+    // claims no wall: a top at or below its own bottom.
+    if (!toTop && (!Number.isFinite(hi) || hi <= lo)) return null;
     const bandColor = finishColour(raw?.color);
-    return { finishId: id, lowFt: lo, highFt: hi,
+    // THE SIDE INSETS AND THE CORNER WRAP, all conditional: a band that runs
+    // the full width of its wall and turns no corner carries none of them, so
+    // the common case stays the three keys it was.
+    const inset = key => {
+      const n = Number(raw?.[key]);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
+    const startFt = inset('startFt');
+    const endFt = inset('endFt');
+    const wrapFt = inset('wrapFt');
+    return { finishId: id,
+      ...(anchor ? { anchor } : {}),
+      lowFt: lo,
+      ...(toTop ? { toTop: true } : { highFt: hi }),
+      ...(startFt ? { startFt } : {}),
+      ...(endFt ? { endFt } : {}),
+      ...(wrapFt ? { wrapFt } : {}),
       ...(bandColor ? { color: bandColor } : {}) };
   };
   // NOT SORTED. The list is kept in the order the bands were laid, because
@@ -469,12 +499,12 @@ if (!window.DraftDrawingFormat) {
   // wall types use two hundred lines up and it is here for the same reason:
   // on 27 Sep the two siding rows swapped places, and without this every wall
   // clad before that came back STUCCO with nothing anywhere saying why.
-  const finishOf = (wall, ids, legacy = {}) => {
+  const finishOf = (wall, ids, legacy = {}, anchors = []) => {
     const asked = legacy[wall?.finish] || wall?.finish;
     const base = ids.includes(asked) ? asked : null;
     const color = finishColour(wall?.finishColor);
     const bands = (Array.isArray(wall?.finishBands) ? wall.finishBands : [])
-      .map(band => finishBand(band, ids, legacy)).filter(Boolean);
+      .map(band => finishBand(band, ids, legacy, anchors)).filter(Boolean);
     return {
       ...(base ? { finish: base } : {}),
       ...(color ? { finishColor: color } : {}),
@@ -578,7 +608,8 @@ if (!window.DraftDrawingFormat) {
         ...(wall?.auto === true ? { auto: true } : {}),
         // A BASE FINISH, A COLOUR AND ANY BANDS -- all three conditional, so a
         // wall nobody has clad reads out exactly as it read in.
-        ...finishOf(wall, env.finishIds || [], env.legacyFinishes || {}),
+        ...finishOf(wall, env.finishIds || [], env.legacyFinishes || {},
+          env.finishAnchors || []),
       };
     }), env.drops).filter(Boolean);
   };
