@@ -15969,6 +15969,16 @@
       walls: F.walls(parsed.walls, levelIds, {
         wallTypes: WT.WALL_TYPES,
         legacyWallTypes: WT.LEGACY_WALL_TYPES,
+        // THE FINISH VOCABULARY, for the same reason the layer set is passed
+        // to F.lines below and with the same trap. This page does not PAINT
+        // exterior finishes -- they are the Real Estate Layout's business --
+        // so leaving this off would read perfectly here and still be a bug:
+        // the normaliser drops a finish it cannot recognise, the Write Tier
+        // re-emits what it loaded, and a drafter who opened their drawing in
+        // the Model Space and saved would find the stone stripped off every
+        // wall of it with nothing anywhere saying so.
+        finishIds: WT.EXTERIOR_FINISHES.map(finish => finish.id),
+        legacyFinishes: WT.LEGACY_FINISH_IDS,
         defaultWallTopFt: 8,
         drops: refusedItems.walls,
       }),

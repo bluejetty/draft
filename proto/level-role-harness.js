@@ -58,7 +58,15 @@ const FILES = Object.freeze({
   stair:     'stair-geometry.js',
   modelDc:   'MODEL.dc.html',
   modelHtml: 'MODEL.html',
-  layout:    'LAYOUT.html',
+  // THE SHARED PAINTER'S ENV. This was LAYOUT.html until 27 Sep, when the
+  // whole of that page's _cutViewEnv -- including its levelAssembly call --
+  // was lifted into cut-view-env.js so the Real Estate Layout could draw
+  // elevations without a third hand copy. THIS CHECK CAUGHT THE MOVE: LAYOUT
+  // contributed no calls any more and the emptiness guard below went red,
+  // which is the same catch the harnessEnv note records. LAYOUT is not in
+  // CALLERS because it no longer names any of these functions at all -- the
+  // module it delegates to does, and that is the file to guard.
+  cutViewEnv: 'cut-view-env.js',
   project:   'PROJECT.html',
   // THE OFFLINE PAINTER'S ENV, which is where the harnesses' own
   // levelAssembly calls live. It was proto/elevation-harness.js until that
@@ -71,7 +79,7 @@ const FILES = Object.freeze({
 // Files scanned for role-less calls: everyone except the module that DEFINES
 // the functions (its own internal calls are the definition, not a caller) and
 // stair-geometry.js, which never names them.
-const CALLERS = Object.freeze(['modelDc', 'modelHtml', 'layout', 'project', 'harnessEnv']);
+const CALLERS = Object.freeze(['modelDc', 'modelHtml', 'cutViewEnv', 'project', 'harnessEnv']);
 
 function load(mutation) {
   const src = {};
@@ -504,7 +512,7 @@ const MUTATIONS = [
   // check has to bite on the real file, not only on a sample.
   ['MODEL.html goes back to asking role-less', 'modelHtml',
     s => s.replace('.levelAssemblyFor(drawing?.levelAssemblies, id)', '.levelAssemblyFor(drawing?.levelAssemblies)')],
-  ['LAYOUT.html goes back to asking role-less', 'layout',
+  ['the shared cut-view env goes back to asking role-less', 'cutViewEnv',
     s => s.replace('normaliseLevelAssembly(assemblies[levelId], levelRole(levelId))', 'normaliseLevelAssembly(assemblies[levelId])')],
   ['the offline painter-s env goes back to measuring a plain-floor building', 'harnessEnv',
     s => s.replace('normaliseLevelAssembly(\n    assemblies[id], win.DraftLevelAssembly.levelRole(id))', 'normaliseLevelAssembly(assemblies[id])')],

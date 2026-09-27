@@ -66,9 +66,15 @@ if (!window.DraftShellBars) {
       href: './MODEL.html',
       title: 'The model: where the house is drawn',
       here: 'The model \u2014 you are here' }),
+    // BUILT, 27 Sep, so the chip is a door rather than a grey seat. It was
+    // DOWN from the day this table was written -- the row's oldest rule is
+    // that it is the map of the job and a map with two towns missing teaches
+    // a shape that is wrong -- and this is the other half of that promise
+    // being kept: the page arrived and the row cost one line.
     Object.freeze({ id: 'real-estate', row: 'page', label: 'REAL ESTATE LAYOUT',
-      href: null,
-      title: 'REAL ESTATE LAYOUT \u2014 the marketing floor plan, not built yet' }),
+      href: './REALESTATE.html',
+      title: 'REAL ESTATE LAYOUT \u2014 the elevations, and the finishes on them',
+      here: 'The real estate layout \u2014 you are here' }),
     Object.freeze({ id: 'construction', row: 'sheet', label: 'CONSTRUCTION LAYOUT',
       href: './LAYOUT.html',
       title: 'The construction layout: the sheet that goes to site',

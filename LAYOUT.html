@@ -83,6 +83,7 @@
 <script src="./layout-plan.js"></script>
 <script src="./formatters.js"></script>
 <script src="./cut-view.js"></script>
+<script src="./cut-view-env.js"></script>
 <script src="./titleblock.js"></script>
 <!-- Landscape on every working screen (board #310): in portrait on a touch
      device this covers the page until the tablet is turned. ENTRY is the one
@@ -752,12 +753,12 @@ const E_MARK_CLEAR_FT = 2;
 // 8002 comparisons against this file's own text before it was deleted, with
 // seven mutations to show the check could fail. So this adopts a superset: the
 // two added fields are ones nothing on this page's path reads.
-const {
-  defaultLevelAssembly, normaliseLevelAssembly, levelRole, levelFloorFt,
-  DEFAULT_WALL_TOP_FT,
-} = window.DraftLevelAssembly;
-const DEFAULT_FOOTING_WIDTH_IN = 20;
-const ICF_FOOTING_WIDTH_IN = 24;
+// AND THEN THEY ALL MOVED AGAIN, on 27 Sep. The env this page built with them
+// is cut-view-env.js now, and these six went with it -- the last reader of
+// every one was inside that block. The note above is kept because it is the
+// reason the module exists: two hand copies that had already drifted, held
+// together by luck, is what a shared module is FOR.
+
 
 const MODEL_STORAGE_BUCKET = 'model-drawing';
 
@@ -946,150 +947,15 @@ class Component extends PageLogic {
   // ─── The saved drawing as the cut painter's world ────────────────────────
   // The Model Space hands cut-view.js its live state; this page has only the
   // saved JSON, so the same environment contract is rebuilt from the file.
+  // ── THE PAINTER'S ENV, NOW A SHARED MODULE ──────────────────────────────
+  // Every line of this used to stand here. It came out on 27 Sep when the Real
+  // Estate Layout became the third page to need it -- cut-view-env.js carries
+  // the whole contract and its own note on why. What stays here is the CACHE,
+  // because the identity of the object matters to the painter (see the module)
+  // and this page's own invalidation is what knows when the drawing moved.
   _cutViewEnv() {
     if (this._cutEnv) return this._cutEnv;
-    const saved = this._saved;
-    if (!saved) return null;
-    const format = window.DraftDrawingFormat;
-    const levelIds = new Set(this._levels.map(level => level.id));
-    const num = value => (Number.isFinite(Number(value)) ? Number(value) : null);
-    const point = raw => {
-      const x = num(raw?.x), z = num(raw?.z);
-      return x === null || z === null ? null : { x, z };
-    };
-    const walls = (Array.isArray(saved.walls) ? saved.walls : []).map(wall => {
-      const start = point(wall?.start), end = point(wall?.end);
-      if (!start || !end || !levelIds.has(Number(wall?.levelId))) return null;
-      const topHeight = num(wall?.topHeight);
-      return {
-        id: String(wall?.id || ''),
-        start,
-        end,
-        levelId: Number(wall.levelId),
-        view: wall?.view || 'plan',
-        ...(wall?.body === 'garage' ? { body: 'garage' } : {}),
-        wallType: wall?.wallType,
-        baseHeight: num(wall?.baseHeight) ?? 0,
-        topHeight: topHeight !== null && topHeight > 0 ? topHeight : DEFAULT_WALL_TOP_FT,
-      };
-    }).filter(Boolean);
-    const floors = (Array.isArray(saved.floors) ? saved.floors : []).map(floor => {
-      const points = (Array.isArray(floor?.points) ? floor.points : []).map(point).filter(Boolean);
-      if (points.length < 3 || !levelIds.has(Number(floor?.levelId))) return null;
-      return {
-        points,
-        levelId: Number(floor.levelId),
-        view: floor?.view || 'floor',
-        garage: floor?.garage === true,
-        thickenedEdge: floor?.thickenedEdge === true,
-      };
-    }).filter(Boolean);
-    const roofs = format.roofs(saved.roofs, levelIds);
-    const fenestrations = format.fenestrations(saved.fenestrations, levelIds);
-    const outlines = format.outlines(saved.outlines, levelIds);
-    // Columns too: the elevation draws the piles under a grade beam.
-    const columns = format.columns
-      ? format.columns(saved.columns, levelIds, {}) : (saved.columns || []);
-    const shelves = format.boneyardShelves(saved.boneyardShelves);
-    const masters = format.boneyardOutlines(saved.boneyardOutlines, new Set(shelves.map(shelf => shelf.id)));
-    const assemblies = saved.levelAssemblies && typeof saved.levelAssemblies === 'object'
-      ? saved.levelAssemblies : {};
-    // Role-aware since PR #323: OVER GARAGE spans clear on a 19 1/4" joist
-    // and ENTRY frames on 2x10s. Reading these levels as plain floors drew
-    // this board's sections and elevations off MODEL.dc.html's.
-    const levelAssembly = levelId => normaliseLevelAssembly(assemblies[levelId], levelRole(levelId));
-    // SITE and ROOF are whole-level contexts and the FOUNDATION bears no floor
-    // of its own — the floor-bearing stack is every other level, lowest first.
-    const floorLevels = this._levels
-      .filter(level => level.id > 0 && level.id !== 1 && level.id !== 7 && level.id !== 8)
-      .slice()
-      .reverse();
-    const levelWallTopFt = (levelId, view = 'plan') => {
-      const tops = walls
-        .filter(wall => wall.levelId === levelId && wall.view === view)
-        .map(wall => wall.topHeight);
-      return tops.length ? Math.max(...tops) : DEFAULT_WALL_TOP_FT;
-    };
-    // Board #346: the last outboard copy of point-to-segment, collapsed onto the
-    // shared export. geometry-2d.js is already loaded here (line 16), and this
-    // page's env feeds cut-view.js's garageOfWall through edgeOnOutline below —
-    // the same contract proto/elevation-harness.js serves, whose identical copy
-    // collapsed in PR #353.
-    //
-    // NO CALLER-LOCAL FALLBACK. The export refuses a segment under 0.01ft
-    // (Infinity) where this copy answered distance-to-`a`, and the one caller
-    // was measured rather than assumed: edgeOnOutline's onBoundary is a
-    // `.some()` across every edge, and a zero-length edge sits exactly on a
-    // point its two neighbours already reach, so the Infinity is skipped and a
-    // neighbour answers the same number. Checked against a clean square, a
-    // duplicated corner, an edge ending on the duplicate, three identical
-    // points, and a point only the zero-length edge could match: no flip in any
-    // of them. It differs in one shape only — an outline whose edges are ALL
-    // degenerate — and there `false` is the better answer, because something
-    // that is one point has no boundary for an edge to lie along.
-    const distToSeg = (pt, a, b) =>
-      window.DraftGeometry2D.pointToSegment(pt, { start: a, end: b }).d;
-    const standards = window.DraftStructureStandards.normaliseStructureStandards(
-      window.DraftProfileManager?.getActive('standards')?.content?.model?.structureStandards);
-    const datum = format.number(saved.elevationDatum, 0) === 100 ? 100 : 0;
-    const units = saved.units === 'metric' ? 'metric' : 'imperial';
-    const ftIn = feet => window.DraftFormatters.formatArchitecturalInches(feet * 12);
-    this._cutEnv = {
-      floorLevels: () => floorLevels,
-      levelAssembly,
-      // ASKS THE MODULE. This spelt the arithmetic out until 7 Sep -- one of
-      // four hand copies of `(joistDepthIn + sheathingIn) / 12`, which is
-      // exactly what level-assembly.js's own comment warned the inlined form
-      // would invite: "reading it at the call site invites someone to forget
-      // the sheathing". Three call sites inlined it anyway.
-      levelFloorFt: levelId => levelFloorFt(levelAssembly(levelId)),
-      levelWallTopFt,
-      footingWidthIn: levelId => {
-        const assembly = levelAssembly(levelId);
-        if (assembly.footingWidthIn) return assembly.footingWidthIn;
-        const icf = walls.some(wall => wall.levelId === levelId
-          && wall.view === 'foundation'
-          && String(wall.wallType || '').startsWith('icf'));
-        return icf ? ICF_FOOTING_WIDTH_IN : DEFAULT_FOOTING_WIDTH_IN;
-      },
-      walls: () => walls,
-      roofs: () => roofs,
-      floors: () => floors,
-      columns: () => columns,
-      fenestrations: () => fenestrations,
-      garageOutlines: levelId => outlines.filter(outline =>
-        outline.levelId === levelId && outline.garage && outline.points.length >= 3),
-      garageFoundation: garage => {
-        const mode = garage?.foundation
-          || masters.find(master => master.id === garage?.masterId)?.foundation;
-        return mode === 'thickened' ? 'thickened' : 'gradebeam';
-      },
-      edgeOnOutline: (a, b, outline, eps = 0.1) => {
-        if (!outline) return false;
-        const count = outline.open ? outline.points.length - 1 : outline.points.length;
-        const onBoundary = pt => outline.points.some((p, index) => {
-          if (index >= count) return false;
-          const q = outline.points[(index + 1) % outline.points.length];
-          return distToSeg(pt, p, q) <= eps;
-        });
-        return onBoundary(a) && onBoundary(b)
-          && onBoundary({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });
-      },
-      masterPointById: srcId => {
-        for (const master of masters) {
-          const src = master.points.find(p => p.id === srcId);
-          if (src) return src;
-        }
-        return null;
-      },
-      gableCornerStyle: () => standards.gableCorner,
-      elevLabel: elev => {
-        const sign = elev > 0 && !datum ? '+' : '';
-        return sign + (units === 'imperial' ? ftIn(elev) : (elev * 0.3048).toFixed(3) + ' m');
-      },
-      ftIn,
-      elevationDatum: () => datum,
-    };
+    this._cutEnv = window.DraftCutViewEnv.buildCutViewEnv(this._saved, this._levels);
     return this._cutEnv;
   }
 

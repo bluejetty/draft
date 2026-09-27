@@ -26,7 +26,9 @@
 if (!window.DraftCutView) {
 (() => {
   const geo = () => window.DraftGeometry2D;
-  const { WALL_TYPES } = window.DraftWallTypes;
+  let warnedNoPatterns = false;
+  const { WALL_TYPES, DEFAULT_FINISH_ID, finishById, bandIsCapped }
+    = window.DraftWallTypes;
   const { formatInchesOnly } = window.DraftFormatters;
 
   // Physical drafting standards, shared with the Model Space via STANDARDS.
@@ -1220,6 +1222,70 @@ if (!window.DraftCutView) {
     return { x: dir.z, z: -dir.x };
   }
 
+  // ── THE WALL FACES AN ELEVATION SHOWS, AND HOW FAR OFF EACH ONE IS ────
+  //
+  // LIFTED OUT OF drawElevationView on 27 Sep, unchanged, because a second
+  // caller arrived: the Real Estate Layout lets a drafter CLICK a wall on an
+  // elevation to clad it, and a click has to land on the same face the paint
+  // landed on. Computing that on the page would be a second answer to "which
+  // wall is at this spot", and the first one to drift would be the one nobody
+  // was measuring -- which is the reason `cutAxis` above says "ONE HOME,
+  // because this had four".
+  //
+  // FAR FIRST, which is the painter's contract and now the picker's too. An
+  // elevation is occlusion by paint ORDER: each opaque surface covers what
+  // stands behind it, so the LAST face drawn at a spot is the one a drafter
+  // sees and the one a click means. A picker walks this list backwards.
+  //
+  // FOUNDATION WALLS COME BACK SEPARATELY. They are not faces to be clad --
+  // they are concrete, and what a drafter sees of them is whatever stands
+  // above grade -- but the painter needs them in the same pass, so they are
+  // returned rather than re-derived.
+  function elevationFaces(env, cut, stack, axis) {
+    const dir = cut.dirVec;
+    const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
+    const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
+    const uMin = Math.min(uA, uB), uMax = Math.max(uA, uB);
+    const proj = pt => ({ u: pt.x * axis.x + pt.z * axis.z, d: pt.x * dir.x + pt.z * dir.z });
+    const levelById = {};
+    stack.floors.forEach(level => { levelById[level.id] = level; });
+    // A plan wall lying on a garage outline belongs to that garage: it
+    // stands on the garage's beam plate or slab, off the house floor stack.
+    const garagesByLevel = {};
+    const garageFor = wall => garageOfWall(wall, env, garagesByLevel);
+    const faces = [];
+    const fdnFaces = [];
+    env.walls().forEach(wall => {
+      const p1 = proj(wall.start), p2 = proj(wall.end);
+      if (Math.max(p1.u, p2.u) < uMin || Math.min(p1.u, p2.u) > uMax) return;
+      if ((wall.view || 'plan') === 'foundation') {
+        const type = WALL_TYPES.find(w => w.id === wall.wallType);
+        fdnFaces.push({
+          lo: Math.max(Math.min(p1.u, p2.u), uMin),
+          hi: Math.min(Math.max(p1.u, p2.u), uMax),
+          depth: (p1.d + p2.d) / 2,
+          top: wall.topHeight, base: wall.baseHeight,
+          wallIn: type ? type.totalIn : 8,
+          bearing: wall.baseHeight <= 0.01,   // on a strip footing, not hung
+          // WHOSE CONCRETE IT IS, for the sill plate on top of it: the house
+          // bears on SILL_PLATE_IN, a garage on GARAGE_BEAM_PLATE_IN, and
+          // the note at houseSillPlateFt is emphatic that those are the same
+          // number for different reasons and must not be swapped.
+          garage: garageFor(wall),
+        });
+        return;
+      }
+      const level = levelById[wall.levelId];
+      if (!level || Math.abs(p2.u - p1.u) < 0.5) return;
+      faces.push({
+        wall, u1: p1.u, u2: p2.u, depth: (p1.d + p2.d) / 2, level,
+        garage: garageFor(wall),
+      });
+    });
+    faces.sort((a, b) => a.depth - b.depth);   // viewer sits on +dir: far first
+    return { faces, fdnFaces, garageFor, proj, uMin, uMax };
+  }
+
   function cutViewExtents(env, cut) {
     const stack = sectionLevelStack(env);
     if (!stack) return null;
@@ -2049,43 +2115,8 @@ if (!window.DraftCutView) {
     const uMin = Math.min(uA, uB), uMax = Math.max(uA, uB);
     const proj = pt => ({ u: pt.x * axis.x + pt.z * axis.z, d: pt.x * dir.x + pt.z * dir.z });
 
-    const levelById = {};
-    stack.floors.forEach(level => { levelById[level.id] = level; });
-    // A plan wall lying on a garage outline belongs to that garage: it
-    // stands on the garage's beam plate or slab, off the house floor stack.
-    const garagesByLevel = {};
-    const garageFor = wall => garageOfWall(wall, env, garagesByLevel);
-    const faces = [];
-    const fdnFaces = [];
-    env.walls().forEach(wall => {
-      const p1 = proj(wall.start), p2 = proj(wall.end);
-      if (Math.max(p1.u, p2.u) < uMin || Math.min(p1.u, p2.u) > uMax) return;
-      if ((wall.view || 'plan') === 'foundation') {
-        const type = WALL_TYPES.find(w => w.id === wall.wallType);
-        fdnFaces.push({
-          lo: Math.max(Math.min(p1.u, p2.u), uMin),
-          hi: Math.min(Math.max(p1.u, p2.u), uMax),
-          depth: (p1.d + p2.d) / 2,
-          top: wall.topHeight, base: wall.baseHeight,
-          wallIn: type ? type.totalIn : 8,
-          bearing: wall.baseHeight <= 0.01,   // on a strip footing, not hung
-          // WHOSE CONCRETE IT IS, for the sill plate on top of it: the house
-          // bears on SILL_PLATE_IN, a garage on GARAGE_BEAM_PLATE_IN, and
-          // the note at houseSillPlateFt is emphatic that those are the same
-          // number for different reasons and must not be swapped.
-          garage: garageFor(wall),
-        });
-        return;
-      }
-      const level = levelById[wall.levelId];
-      if (!level || Math.abs(p2.u - p1.u) < 0.5) return;
-      faces.push({
-        wall, u1: p1.u, u2: p2.u, depth: (p1.d + p2.d) / 2, level,
-        garage: garageFor(wall),
-      });
-    });
+    const { faces, fdnFaces, garageFor } = elevationFaces(env, cut, stack, axis);
     if (!faces.length) return false;
-    faces.sort((a, b) => a.depth - b.depth);   // viewer sits on +dir: far first
 
     // Roof silhouette: at each spot along the cut, the tallest roof surface
     // anywhere along the viewing depth — the ridge/hip outline from outside.
@@ -3352,6 +3383,92 @@ if (!window.DraftCutView) {
       && other.floor <= geom.floor + 1e-3
       && geom.tops.every(s =>
         gableTopAt(other.worldAt(s.u), other.face.level.wallTop, other.wallDir) >= s.top - 1e-3));
+    // ── THE CLADDING ON ONE FACE ──────────────────────────────────────
+    //
+    // A BASE OVER THE WHOLE FACE, THEN THE BANDS OVER THAT, in the order they
+    // were laid -- which is what makes "last band wins" true of the drawing
+    // and not merely of the rule that reads the record. Each band repaints the
+    // face fill under itself first, so a ledgestone wainscot on a brick wall
+    // shows ledgestone rather than both at once.
+    //
+    // MEASURED FROM THE FOOT OF THE FACE. `lowFt: 0` is where the cladding
+    // starts, which on a finished elevation is the top of the concrete -- so
+    // "the bottom 3 ft" is 0 to 3 whatever the foundation under it is.
+    const paintFaceFinish = geom => {
+      const { face, loU, hiU, floor, tops } = geom;
+      const wall = face.wall;
+      const xa = X(loU), xb = X(hiU);
+      if (xb - xa < 2) return;
+      const head = Math.max(...tops.map(s => s.top));
+      if (head - floor < 0.05) return;
+      // AND IT SAYS SO WHEN IT CANNOT. A caller that asked for finishes and
+      // did not load the module gets an elevation that is silently, correctly
+      // plain -- indistinguishable from one whose walls are all stucco. That
+      // cost an afternoon once; once is enough.
+      const FP = window.DraftFinishPatterns;
+      if (!FP) {
+        if (!warnedNoPatterns) {
+          warnedNoPatterns = true;
+          console.warn('cut-view: finishes were asked for, but finish-patterns.js '
+            + 'is not loaded -- every wall will draw plain.');
+        }
+        return;
+      }
+      const boxAt = (lo, hi) => ({
+        x0: Math.min(xa, xb), x1: Math.max(xa, xb),
+        yTop: Y(hi), yBottom: Y(lo), pxPerFt,
+      });
+      ctx.save();
+      ctx.clip();
+      FP.drawFinish(ctx, boxAt(floor, head),
+        finishById(wall.finish || DEFAULT_FINISH_ID), C);
+      const bands = Array.isArray(wall.finishBands) ? wall.finishBands : [];
+      bands.forEach(band => {
+        const lo = floor + band.lowFt;
+        const hi = Math.min(head, floor + band.highFt);
+        if (hi - lo < 0.02) return;
+        // THE FACE FILL AGAIN, under this band only. Without it the base
+        // finish's lines read through the band on top of it.
+        ctx.fillStyle = C.face;
+        ctx.fillRect(Math.min(xa, xb), Y(hi), Math.abs(xb - xa), (hi - lo) * pxPerFt);
+        FP.drawFinish(ctx, boxAt(lo, hi), finishById(band.finishId), C);
+        // ── AND THE WATER TABLE WHERE IT STOPS SHORT ──────────────────
+        //
+        // Movie: *"we should put a ledge at the top of the stone that
+        // overhangs the top of the stone"*, *"(if its not at top of wall)"*.
+        // The question is the BAND's, not the material's -- the same stone is
+        // capped in one place and bare in another on one drawing -- so the
+        // table's own bandIsCapped answers it.
+        //
+        // WHAT SHOWS ON AN ELEVATION IS THE SHADOW UNDER THE NOSE. The kerf
+        // is a section detail; here the cap is a course with a line top and
+        // bottom and a dark line beneath, which is what reads the whole thing
+        // at a glance.
+        const finish = finishById(band.finishId);
+        if (!bandIsCapped(band, head - floor) || !finish.cap) return;
+        const capHigh = finish.cap.highIn / 12;
+        const capY = Y(hi), capPx = capHigh * pxPerFt;
+        if (capPx < 1.5) return;
+        ctx.fillStyle = C.face;
+        ctx.fillRect(Math.min(xa, xb), capY - capPx, Math.abs(xb - xa), capPx);
+        ctx.strokeStyle = INK; ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(Math.min(xa, xb), capY - capPx);
+        ctx.lineTo(Math.max(xa, xb), capY - capPx);
+        ctx.moveTo(Math.min(xa, xb), capY);
+        ctx.lineTo(Math.max(xa, xb), capY);
+        ctx.stroke();
+        ctx.save();
+        ctx.globalAlpha = 0.35; ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.min(xa, xb), capY + 1);
+        ctx.lineTo(Math.max(xa, xb), capY + 1);
+        ctx.stroke();
+        ctx.restore();
+      });
+      ctx.restore();
+    };
+
     const paintFace = geom => {
       const { face, loU, hiU, floor, tops, worldAt } = geom;
       const { wall, u1, u2, level } = face;
@@ -3364,6 +3481,19 @@ if (!window.DraftCutView) {
       ctx.lineTo(xb, Y(floor));
       ctx.closePath();
       ctx.fill();
+      // ── AND WHAT THE WALL IS CLAD IN GOES ONTO THAT FILL ──────────────
+      //
+      // CLIPPED TO THE FACE'S OWN POLYGON, which is still the current path --
+      // so the hatch follows the roof underside into the gable without the
+      // pattern knowing anything about roofs, and a face standing behind
+      // another is covered by that one's fill in the ordinary way. Occlusion
+      // here is paint ORDER, the same as everywhere else on an elevation.
+      //
+      // OFF UNLESS ASKED. Movie's finishes are the Real Estate Layout's
+      // subject; the construction elevations are line work, and a hatch on
+      // them would be a change to every sheet in the set that nobody ordered.
+      // One opt, so turning them on for MODEL later is one word.
+      if (opts && opts.finishes) paintFaceFinish(geom);
       // The wall finish runs into the soffit triangle: end verticals stop
       // at the plate, only the top profile follows the roof underside.
       //
@@ -3661,8 +3791,48 @@ if (!window.DraftCutView) {
           // would not merely go unfilled, it would put the walls down in the
           // wrong order. `Math.abs(NaN) < 4` is false, so the area test lets
           // it straight through.
-          if (!Number.isFinite(area2) || Math.abs(area2) < 4) return;
-          const parts = [pts];
+          if (!Number.isFinite(area2)) return;
+          const parts = [];
+          // ── A GABLE END SEEN SQUARE ON IS A LINE, AND STILL OPAQUE ────
+          //
+          // Movie, 27 Sep, on the Real Estate elevations: "it looks like the
+          // finishes are coming through the gable of lower roof". They were.
+          //
+          // A ROOF PLANE WHOSE RIDGE RUNS AWAY FROM THE VIEWER PROJECTS TO A
+          // LINE. Both slopes of that gable came through here with `area2`
+          // of exactly ZERO, were dropped as covering no paper, and left the
+          // rake with nothing filled behind it -- so the wall beyond showed
+          // through. Invisible until the day a wall had a hatch on it,
+          // because a white wall behind a white roof is a white rake.
+          //
+          // WHAT IS REALLY THERE IS THE ROOF'S OWN THICKNESS, seen edge on:
+          // the sheathing and the fascia under it, a band following the slope
+          // from eave to ridge. That band is the two lines a drafter sees as
+          // the rake, and it is as opaque as any other surface on the sheet.
+          // Swept down from the projected line by the fascia, it is exactly
+          // the strip between them.
+          //
+          // THE ORDER WAS NEVER THE PROBLEM. Measured on repro-garage-house's
+          // E2: the roof's own depth is -8 and the walls it laps are -8 too,
+          // and the tie rule twenty lines down already puts the wall first and
+          // the roof over it. There was simply nothing to put over it.
+          //
+          // AND THE SAME TEST STILL SPARES A THUMBNAIL, which is what the old
+          // one was for: at a rail seat's 2 px/ft this band is nine tenths of
+          // a pixel, so a roof seen almost edge on still costs nothing there.
+          if (Math.abs(area2) < 4) {
+            const ends = pts.slice().sort((p1, p2) => p1.x - p2.x || p1.y - p2.y);
+            const lo = ends[0], hi = ends[ends.length - 1];
+            if (hi.x - lo.x < 1) return;   // truly edge on: no paper either way
+            const drop = fasciaFt * pxPerFt;
+            parts.push([{ x: lo.x, y: lo.y }, { x: hi.x, y: hi.y },
+              { x: hi.x, y: hi.y + drop }, { x: lo.x, y: lo.y + drop }]);
+            const depthEdge = Math.max(...pts.map(pt => pt.d));
+            if (!Number.isFinite(depthEdge)) return;
+            roofFills.push({ depth: depthEdge, parts });
+            return;
+          }
+          parts.push(pts);
           for (let i = 0; i < poly.length; i++) {
             const a = poly[i], b = poly[(i + 1) % poly.length];
             const ea = eaveTop + geo().roofFaceRise(face, a, pitch);
@@ -4689,6 +4859,7 @@ if (!window.DraftCutView) {
     extendRunsToEaves,
     sectionWallCrossings,
     cutViewExtents,
+    elevationFaces,
     roofBaseElev,
     roofEaveElev,
     garageBearing,

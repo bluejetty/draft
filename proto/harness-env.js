@@ -33,8 +33,14 @@ function loadDraftModules() {
   const sandbox = { window: win, console, Math, Number, String, Object, Array, JSON, Map, Set, isFinite, parseFloat, parseInt };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
+  // finish-patterns.js BEFORE cut-view.js is not required -- the painter looks
+  // it up at paint time -- but it has to be in this list at all, and it was
+  // not: an elevation asked for `finishes: true` without it drew nothing and
+  // said nothing, which is how a probe came back reporting zero hatch strokes
+  // on a house whose every wall was clad.
   for (const file of ['formatters.js', 'wall-types.js', 'geometry-2d.js', 'drawing-format.js',
-    'room-standards.js', 'level-assembly.js', 'build-house.js', 'cut-view.js']) {
+    'room-standards.js', 'level-assembly.js', 'build-house.js', 'finish-patterns.js',
+    'cut-view.js']) {
     const full = path.join(ROOT, file);
     if (!fs.existsSync(full)) continue;
     try { vm.runInContext(fs.readFileSync(full, 'utf8'), sandbox, { filename: file }); }
@@ -127,6 +133,23 @@ function buildEnv(win, saved) {
       wallType: wall?.wallType,
       baseHeight: num(wall?.baseHeight) ?? 0,
       topHeight: topHeight !== null && topHeight > 0 ? topHeight : DEFAULT_WALL_TOP_FT,
+      // ── WHAT THE WALL WEARS ───────────────────────────────────────────
+      //
+      // WITHOUT THESE THREE LINES NO ENGINE HERE CAN SEE A FINISH AT ALL.
+      // This mapper kept the keys the painter had always read, so a fixture
+      // with stone on it arrived stripped and the elevation drew plain --
+      // silently, and identically to a correct result, which is the worst
+      // shape a fixture can fail in. Found on 27 Sep by a probe that reported
+      // ZERO hatch strokes on a house whose every wall had been clad.
+      //
+      // LAYOUT.html's copy of this env had the same hole, and cut-view-env.js
+      // carries the same three lines for the same reason. That is three hand
+      // copies of one contract needing one fix three times, which is the
+      // argument the module extraction was already making.
+      ...(wall?.finish ? { finish: wall.finish } : {}),
+      ...(wall?.finishColor ? { finishColor: wall.finishColor } : {}),
+      ...(Array.isArray(wall?.finishBands) && wall.finishBands.length
+        ? { finishBands: wall.finishBands } : {}),
     };
   }).filter(Boolean);
   const floors = (saved.floors || []).map(floor => {
@@ -267,7 +290,10 @@ function standardElevationCuts(env) {
 }
 
 // Paint one elevation and hand back every stroke in model space.
-function paintElevation(win, env, cut, { pxPerFt = 40 } = {}) {
+// `opts` beyond pxPerFt goes straight through to the painter -- `finishes`
+// is what the cladding engines need, and a painter option no caller could
+// reach is a painter option no engine could ever measure.
+function paintElevation(win, env, cut, { pxPerFt = 40, ...opts } = {}) {
   const CV = win.DraftCutView;
   const stack = CV.sectionLevelStack(env);
   const extents = CV.cutViewExtents(env, cut);
@@ -285,7 +311,7 @@ function paintElevation(win, env, cut, { pxPerFt = 40 } = {}) {
   const toE = Y => yTop - (Y - 0.5 - y0) / pxPerFt;
   const { ctx, strokes, fills } = recordingCtx();
   const ok = CV.drawElevationView(env, ctx, w, h, cut, stack, axis, () => {},
-    { pxPerFt, extents });
+    { pxPerFt, extents, ...opts });
   // ── THE PEN-UP MARKERS COME WITH IT ──────────────────────────────────
   //
   // This mapping used to keep only `u` and `e`, which QUIETLY BROKE every

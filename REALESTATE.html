@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<title>Rough Drafter &mdash; Real Estate Layout</title>
+<!-- Self-hosted (see vendor/fonts.css): no third-party request on the
+     critical path of the page. -->
+<link rel="stylesheet" href="vendor/fonts.css" />
+<!-- THE SHELL EVERY PAGE WEARS. Movie, 27 Sep: "make sure you bring in the
+     bottom and top bars". The stylesheet first so the bars are skinned on the
+     first frame; the module below palette.js, because a bar with no roles
+     resolved is a bar with no colours. -->
+<link rel="stylesheet" href="./shell-bars.css" />
+<script src="./palette.js"></script>
+<!-- THE SHELL'S OWN MODULE, and then everything the elevation painter asks
+     for. ALL IN THE HEAD, because the bars are written where their mount call
+     stands, mid-parse -- a module loaded after the body is a module that call
+     cannot find. cut-view.js names five: DraftGeometry2D, DraftLevelAssembly,
+     DraftWallTypes, DraftFormatters, and DraftBuildHouse for a pile's footing
+     size. cut-view-env.js adds the profile manager, for the office standards. -->
+<script src="./shell-bars.js"></script>
+<script src="./profile-manager.js"></script>
+<script src="./shared-file-store.js"></script>
+<script src="./drawing-format.js"></script>
+<script src="./wall-types.js"></script>
+<script src="./level-assembly.js"></script>
+<script src="./geometry-2d.js"></script>
+<script src="./build-house.js"></script>
+<script src="./formatters.js"></script>
+<script src="./finish-patterns.js"></script>
+<script src="./cut-view.js"></script>
+<script src="./cut-view-env.js"></script>
+<script src="./orientation-guard.js"></script>
+<script>
+  // THE SKIN IS ONE CHOICE ACROSS THE WHOLE APP. Read the same `draft-skin`
+  // key MODEL writes, the same way LAYOUT does, so walking here from the
+  // model space does not change the lights. Synchronous and in the head: a
+  // page written in --role tokens has no colour at all between parse and boot.
+  (() => {
+    const P = window.DraftPalette;
+    const params = new URLSearchParams(location.search);
+    const stored = (() => {
+      try { return JSON.parse(localStorage.getItem('draft-skin') || 'null') || {}; }
+      catch { return {}; }
+    })();
+    const theme = params.get('theme') || stored.theme || 'ruff';
+    const mode = params.get('mode') || stored.skinMode || 'night';
+    window.__reSkin = P.apply(document, theme, mode);   // role -> colour
+    window.__reTheme = { theme, mode };
+  })();
+</script>
+<style>
+  :root { --sheet-edge: 1px solid var(--edge-panel); }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--surface-page); color: var(--ink-primary);
+    font-family: 'Barlow Condensed', system-ui, sans-serif;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+  /* ── THE TABS ──────────────────────────────────────────────────────────
+     Movie, 27 Sep: the one-page real-estate sheet "will be a tab within the
+     REAL ESTATE LAYOUT area - the main area we will allow them to change the
+     exterior finishes". So: two tabs, and FINISHES is the one you land on. */
+  .tabs {
+    display: flex; gap: 6px; padding: 8px 12px 0 12px;
+    border-bottom: 1px solid var(--edge-panel); flex: none;
+  }
+  .tab {
+    appearance: none; border: 1px solid var(--edge-panel); border-bottom: none;
+    background: var(--surface-panel); color: var(--ink-quiet);
+    font: inherit; font-size: 12px; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; padding: 7px 14px; cursor: pointer;
+    border-radius: 3px 3px 0 0;
+  }
+  .tab[aria-selected="true"] { background: var(--surface-chip); color: var(--accent-mark); }
+  .tab:disabled { cursor: default; color: var(--ink-quiet); opacity: .55; }
+
+  .stage { flex: 1; display: flex; min-height: 0; }
+  .stage[hidden] { display: none; }
+
+  /* ── THE ELEVATION RAIL, THE SHEET, AND THE FINISH RAIL ───────────────
+     Every side rail is one width, left and right alike (board #48). */
+  .rail {
+    flex: none; width: 188px; padding: 10px; overflow-y: auto;
+    background: var(--surface-panel); display: flex; flex-direction: column; gap: 10px;
+  }
+  .rail.right { border-left: var(--sheet-edge); }
+  .rail.left { border-right: var(--sheet-edge); }
+  .rail-title {
+    font-size: 11px; font-weight: 600; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--accent-mark); margin: 2px 0 0 0;
+  }
+  .elev-btn {
+    display: block; width: 100%; text-align: left; appearance: none;
+    border: 1px solid var(--edge-panel); background: var(--surface-chip);
+    color: var(--ink-primary); font: inherit; font-size: 12px; letter-spacing: .06em;
+    text-transform: uppercase; padding: 8px 10px; cursor: pointer; margin-bottom: 5px;
+  }
+  .elev-btn[aria-pressed="true"] { border-color: var(--accent-mark); color: var(--accent-mark); }
+  .elev-btn .mark { color: var(--ink-quiet); font-size: 10px; margin-left: 6px; }
+
+  .sheet-wrap {
+    flex: 1; min-width: 0; display: flex; align-items: center;
+    justify-content: center; padding: 10px; overflow: hidden;
+  }
+  canvas#elev, canvas#sheet {
+    background: var(--surface-chip); border: var(--sheet-edge);
+    width: 100%; height: 100%; display: block;
+  }
+  canvas#elev { cursor: crosshair; }
+
+  .prop { display: flex; flex-direction: column; gap: 4px; }
+  .prop label {
+    font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--ink-quiet);
+  }
+  .prop select, .prop input[type="text"], .prop input[type="number"] {
+    appearance: none; background: var(--surface-chip); color: var(--ink-primary);
+    border: 1px solid var(--edge-panel); font: inherit; font-size: 12px;
+    padding: 5px 6px; width: 100%;
+  }
+  .prop input[type="color"] {
+    appearance: none; background: var(--surface-chip); border: 1px solid var(--edge-panel);
+    width: 100%; height: 26px; padding: 2px; cursor: pointer;
+  }
+  .row { display: flex; gap: 6px; }
+  .row > * { flex: 1; min-width: 0; }
+  .btn {
+    appearance: none; border: 1px solid var(--edge-panel); background: var(--surface-chip);
+    color: var(--ink-primary); font: inherit; font-size: 11px; letter-spacing: .07em;
+    text-transform: uppercase; padding: 6px 8px; cursor: pointer;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--accent-mark); color: var(--accent-mark); }
+  .btn:disabled { cursor: default; color: var(--ink-quiet); opacity: .5; }
+  .empty { font-size: 11px; color: var(--ink-quiet); line-height: 1.45; margin: 0; }
+  .band-list { display: flex; flex-direction: column; gap: 4px; }
+  .band {
+    display: flex; align-items: center; gap: 5px; font-size: 11px;
+    border: 1px solid var(--edge-panel); padding: 4px 5px; background: var(--surface-chip);
+  }
+  .band .what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .band .drop {
+    appearance: none; border: none; background: none; color: var(--ink-quiet);
+    font: inherit; cursor: pointer; padding: 0 2px;
+  }
+  .band .drop:hover { color: var(--accent-mark); }
+  #status {
+    flex: none; padding: 5px 12px; font-size: 11px; letter-spacing: .05em;
+    color: var(--ink-quiet); min-height: 22px;
+  }
+</style>
+</head>
+<body>
+  <!-- NO INSTRUMENTS. Movie, 27 Sep: "the top instrument panel maybe we can
+       use it but will probably need to change it for this one". The strip the
+       bar mounts is LENGTH and ANGLE -- a wall-drawing instrument -- and
+       nothing on this page draws a wall. The finish controls are the page's
+       own, in the rail, which is the seam the module states: the bar owns the
+       furniture, the page owns what the furniture does. Switching the strip on
+       is one word here when he has seen it. -->
+  <script>window.DraftShellBars.topBar();</script>
+  <main>
+    <div class="tabs" role="tablist" aria-label="Real estate layout">
+      <button class="tab" role="tab" id="tab-finishes" aria-selected="true"
+        aria-controls="stage-finishes">Finishes</button>
+      <button class="tab" role="tab" id="tab-sheet" aria-selected="false"
+        aria-controls="stage-sheet">Layout</button>
+    </div>
+
+    <!-- ── THE MAIN AREA: ELEVATIONS, AND THE FINISHES ON THEM ──────────── -->
+    <div class="stage" id="stage-finishes" role="tabpanel" aria-labelledby="tab-finishes">
+      <div class="rail left">
+        <p class="rail-title">Elevations</p>
+        <div id="elev-list"></div>
+        <p class="rail-title">Roof corners</p>
+        <p class="empty" id="corner-note">Waiting on which scale these are set at
+          &mdash; per roof, or one for the house.</p>
+      </div>
+      <div class="sheet-wrap"><canvas id="elev" width="900" height="560"></canvas></div>
+      <div class="rail right">
+        <p class="rail-title">Wall finish</p>
+        <p class="empty" id="pick-note">Click a wall on the elevation.</p>
+        <div id="wall-props" hidden>
+          <div class="prop">
+            <label for="base-finish">Whole wall</label>
+            <select id="base-finish"></select>
+          </div>
+          <div class="prop" style="margin-top:8px">
+            <label for="base-color">Colour</label>
+            <input type="color" id="base-color" value="#ffffff">
+            <p class="empty">Stored for the 3D window, drawn by nothing yet.</p>
+          </div>
+          <p class="rail-title" style="margin-top:12px">Bands</p>
+          <div class="band-list" id="band-list"></div>
+          <div class="prop" style="margin-top:6px">
+            <label for="band-finish">Add a band</label>
+            <select id="band-finish"></select>
+          </div>
+          <div class="row" style="margin-top:4px">
+            <div class="prop">
+              <label for="band-low">From (ft)</label>
+              <input type="number" id="band-low" value="0" step="0.25" min="0">
+            </div>
+            <div class="prop">
+              <label for="band-high">To (ft)</label>
+              <input type="number" id="band-high" value="3" step="0.25" min="0">
+            </div>
+          </div>
+          <button class="btn" id="band-add" style="margin-top:6px; width:100%">Add band</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── THE LAYOUT TAB: ONE LANDSCAPE LETTER SHEET ───────────────────────
+         Movie, 27 Sep: "the LAYOUT tab with real estate layout will have a
+         default 8.5 x 11 size Landscape sheet", carrying "the MAIN FL, 2nd FL
+         (maybe basement (optional)) and will have main front 3D View (once
+         available)" -- and "i will need to adjust what is shown and how it is
+         shown in this layout view".
+
+         THE SHEET IS HERE AND ITS SEATS ARE NOT. What goes in them is the
+         thing he has said he wants to adjust, so the paper is drawn at the
+         size he named and the seats wait for him rather than being guessed
+         at. 8.5x11 and landscape are both already in LAYOUT's own tables. -->
+    <div class="stage" id="stage-sheet" role="tabpanel" aria-labelledby="tab-sheet" hidden>
+      <div class="sheet-wrap"><canvas id="sheet" width="900" height="560"></canvas></div>
+    </div>
+
+    <div id="status" role="status"></div>
+  </main>
+
+  <!-- page:'real-estate' marks this chip "you are here", off the one PAGES
+       table. Mounted BELOW the page's own markup and ABOVE its script, for the
+       reason PROJECT's and SPECS' are: a bar that does not exist yet is a bar
+       that script cannot find. NO BONE yet -- the bar's note says REAL ESTATE
+       prints, and there is nothing to print until the sheet has its seats. -->
+  <script>window.DraftShellBars.bottomBar({ page: 'real-estate', bone: false });</script>
+
+  <script>
+    (async () => {
+      const FORMAT = window.DraftDrawingFormat;
+      const WT = window.DraftWallTypes;
+      const CV = window.DraftCutView;
+      const BUCKET = 'model-drawing';
+      const statusEl = document.getElementById('status');
+      const say = text => { statusEl.textContent = text; };
+
+      // ── THE TABS ──────────────────────────────────────────────────────
+      const tabs = [
+        { btn: document.getElementById('tab-finishes'), pane: document.getElementById('stage-finishes') },
+        { btn: document.getElementById('tab-sheet'), pane: document.getElementById('stage-sheet') },
+      ];
+      const showTab = which => {
+        tabs.forEach((tab, i) => {
+          tab.btn.setAttribute('aria-selected', String(i === which));
+          tab.pane.hidden = i !== which;
+        });
+        if (which === 1) paintSheet();
+        else paintElevation();
+      };
+      tabs.forEach((tab, i) => tab.btn.addEventListener('click', () => showTab(i)));
+
+      // ── THE DRAWING ───────────────────────────────────────────────────
+      // READ THE SAME BUCKET MODEL WRITES. This page does not build a house;
+      // it clads the one that is there. A drawing that will not parse is said
+      // so plainly rather than drawn empty.
+      let drawing = null, levels = [], env = null, cuts = [];
+      const load = async () => {
+        const store = window.SharedFileStore;
+        if (!store) return null;
+        let file = null;
+        try { file = await store.loadSharedFile(BUCKET); } catch { file = null; }
+        if (!file) return null;
+        let parsed = null;
+        try { parsed = JSON.parse(await file.text()); } catch { return null; }
+        const envelope = FORMAT.checkEnvelope(parsed);
+        return envelope.ok ? parsed : null;
+      };
+
+      // ── WHAT A BAND IS MEASURED FROM ──────────────────────────────────
+      // The bottom of the wall's own cladding: `lowFt: 0` is where the siding
+      // starts, which on a finished elevation is the top of the concrete. So
+      // a wall's bands are offsets from `baseHeight` plus the level it stands
+      // on, and "the bottom 3 ft" is 0 to 3 whatever the foundation under it.
+      const wallFootFt = face => face.level.floorTop + (face.wall.baseHeight || 0);
+      const wallHeadFt = face => face.level.floorTop + (face.wall.topHeight || 8);
+
+      const ELEV_NAMES = { E1: 'FRONT', E2: 'LEFT', E3: 'BACK', E4: 'RIGHT' };
+      let picked = null;   // { wallId }
+      let currentElev = 'E1';
+
+      // ── THE FOUR ELEVATIONS, STOOD THE WAY THE MODEL'S E MARKS STAND THEM
+      // Lifted from LAYOUT's _standardElevationCuts, which is the same four:
+      // just outside the plan's walls, looking back at it.
+      const E_SIDES = {
+        E1: { side: 'S', sign: 1, dir: { x: 0, z: -1 } },
+        E2: { side: 'W', sign: -1, dir: { x: 1, z: 0 } },
+        E3: { side: 'N', sign: -1, dir: { x: 0, z: 1 } },
+        E4: { side: 'E', sign: 1, dir: { x: -1, z: 0 } },
+      };
+      const E_CLEAR_FT = 12;
+      const standardCuts = () => {
+        const walls = (env?.walls() || []).filter(wall => wall.levelId > 0);
+        if (!walls.length) return [];
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        walls.forEach(wall => [wall.start, wall.end].forEach(pt => {
+          minX = Math.min(minX, pt.x); maxX = Math.max(maxX, pt.x);
+          minZ = Math.min(minZ, pt.z); maxZ = Math.max(maxZ, pt.z);
+        }));
+        if (maxX - minX < 1 || maxZ - minZ < 1) return [];
+        const pad = 2;
+        const edge = { S: maxZ, N: minZ, E: maxX, W: minX };
+        const at = id => edge[E_SIDES[id].side] + E_SIDES[id].sign * E_CLEAR_FT;
+        const acrossX = id => ({
+          startPt: { x: minX - pad, z: at(id) }, endPt: { x: maxX + pad, z: at(id) } });
+        const acrossZ = id => ({
+          startPt: { x: at(id), z: minZ - pad }, endPt: { x: at(id), z: maxZ + pad } });
+        return ['E1', 'E2', 'E3', 'E4'].map(id => ({
+          id, name: id, elev: 0, levelId: null,
+          ...((id === 'E1' || id === 'E3') ? acrossX(id) : acrossZ(id)),
+          dirVec: E_SIDES[id].dir,
+        }));
+      };
+
+      // ── THE RAILS ─────────────────────────────────────────────────────
+      const finishOptions = () => WT.EXTERIOR_FINISHES
+        .map(f => `<option value="${f.id}">${f.label}</option>`).join('');
+      document.getElementById('base-finish').innerHTML = finishOptions();
+      document.getElementById('band-finish').innerHTML = finishOptions();
+
+      const elevList = document.getElementById('elev-list');
+      const paintElevList = () => {
+        elevList.innerHTML = cuts.map(cut => `<button class="elev-btn" data-elev="${cut.id}"
+          aria-pressed="${cut.id === currentElev}">${cut.id}<span class="mark">${
+          ELEV_NAMES[cut.id] || ''}</span></button>`).join('')
+          || '<p class="empty">No walls in this drawing yet.</p>';
+        elevList.querySelectorAll('[data-elev]').forEach(btn =>
+          btn.addEventListener('click', () => {
+            currentElev = btn.dataset.elev;
+            picked = null;
+            paintElevList();
+            paintElevation();
+            paintProps();
+          }));
+      };
+
+      // The wall a pick landed on, as it sits in the drawing -- the object the
+      // save writes, not the painter's copy of it.
+      const storedWall = () => (drawing?.walls || []).find(w => String(w.id) === picked);
+
+      const paintProps = () => {
+        const wall = storedWall();
+        document.getElementById('wall-props').hidden = !wall;
+        document.getElementById('pick-note').hidden = !!wall;
+        if (!wall) return;
+        document.getElementById('base-finish').value = wall.finish || WT.DEFAULT_FINISH_ID;
+        document.getElementById('base-color').value = wall.finishColor || '#ffffff';
+        const bands = Array.isArray(wall.finishBands) ? wall.finishBands : [];
+        const list = document.getElementById('band-list');
+        list.innerHTML = bands.length ? bands.map((band, i) => {
+          const label = WT.finishById(band.finishId).label;
+          return `<div class="band"><span class="what">${label}</span>
+            <span style="color:var(--ink-quiet)">${band.lowFt}&ndash;${band.highFt}&prime;</span>
+            <button class="drop" data-drop="${i}" title="Remove this band">&times;</button></div>`;
+        }).join('') : '<p class="empty">No bands &mdash; the whole wall is one finish.</p>';
+        list.querySelectorAll('[data-drop]').forEach(btn =>
+          btn.addEventListener('click', () => {
+            const next = bands.slice();
+            next.splice(Number(btn.dataset.drop), 1);
+            writeWall(next.length ? { finishBands: next } : { finishBands: null });
+          }));
+      };
+
+      // ── ONE WRITE PATH ────────────────────────────────────────────────
+      // Every edit in the rail comes through here: patch the stored wall,
+      // re-normalise so a bad band is refused at the door rather than at the
+      // painter, then repaint and save. `null` in a patch REMOVES the key --
+      // the record's own rule is conditional keys, never invented, and a wall
+      // with no bands must not carry an empty list.
+      const writeWall = patch => {
+        const wall = storedWall();
+        if (!wall) return;
+        Object.entries(patch).forEach(([key, value]) => {
+          if (value === null) delete wall[key];
+          else wall[key] = value;
+        });
+        drawing.walls = FORMAT.walls(drawing.walls, new Set(levels.map(l => l.id)), {
+          wallTypes: WT.WALL_TYPES,
+          legacyWallTypes: WT.LEGACY_WALL_TYPES,
+          finishIds: WT.EXTERIOR_FINISHES.map(f => f.id),
+          legacyFinishes: WT.LEGACY_FINISH_IDS,
+          defaultWallTopFt: 8,
+        });
+        env = null;
+        rebuild();
+        paintProps();
+        save();
+      };
+
+      document.getElementById('base-finish').addEventListener('change', event =>
+        writeWall({ finish: event.target.value === WT.DEFAULT_FINISH_ID
+          ? null : event.target.value }));
+      document.getElementById('base-color').addEventListener('change', event =>
+        writeWall({ finishColor: event.target.value }));
+      document.getElementById('band-add').addEventListener('click', () => {
+        const wall = storedWall();
+        if (!wall) return;
+        const bands = (Array.isArray(wall.finishBands) ? wall.finishBands : []).slice();
+        // APPENDED, NOT INSERTED IN ORDER. The list is paint order: the band
+        // just added is the one on top where it overlaps an older one, which
+        // is what a drafter laying stone over shake means by doing it second.
+        bands.push({
+          finishId: document.getElementById('band-finish').value,
+          lowFt: Number(document.getElementById('band-low').value),
+          highFt: Number(document.getElementById('band-high').value),
+        });
+        writeWall({ finishBands: bands });
+      });
+
+      // ── SAVING ────────────────────────────────────────────────────────
+      // RE-READ, MERGE, WRITE GUARDED BY THE REVISION, the way PROJECT does:
+      // a drafter with the Model Space open in another tab must not have their
+      // house flattened by this page writing its own snapshot over it. Only
+      // `walls` goes back, because walls are all this page touches.
+      let queue = Promise.resolve();
+      const save = () => {
+        queue = queue.catch(() => {}).then(async (tries = 3) => {
+          const store = window.SharedFileStore;
+          if (!store) return;
+          const at = await store.loadSharedFileAt(BUCKET);
+          let base = null;
+          if (at.file) {
+            try { base = JSON.parse(await at.file.text()); } catch { base = null; }
+          }
+          if (!base || typeof base !== 'object') base = drawing;
+          const merged = { ...base, walls: drawing.walls };
+          const file = new File([JSON.stringify(merged)], 'drawing.json',
+            { type: 'application/json' });
+          try { await store.saveSharedFile(file, BUCKET, { ifRev: at.rev }); }
+          catch (error) {
+            if (error?.stale && tries > 0) return save();
+            throw error;
+          }
+          say('Saved with the drawing.');
+        }).catch(error => {
+          console.warn('Unable to save the finishes:', error);
+          say('Could not save — is browser storage available?');
+        });
+      };
+
+      // ── THE ELEVATION, AND WHAT A CLICK ON IT MEANS ───────────────────
+      // The painter is handed the canvas and draws what MODEL draws. The pick
+      // asks cut-view for the SAME face list the paint used -- elevationFaces,
+      // lifted out of the painter for exactly this -- so a click cannot land
+      // on a wall the drafter is not looking at.
+      const canvas = document.getElementById('elev');
+      let frame = null;    // the mapping the last paint used, for the inverse
+      // SIZED TO ITS ROOM, in CSS pixels, before anything measures it. The
+      // pick inverts the frame this paint used, so the backing store and the
+      // box on screen have to be the same number or every click is off by the
+      // ratio between them.
+      const fitCanvas = cv => {
+        const box = cv.parentElement.getBoundingClientRect();
+        const w = Math.max(320, Math.floor(box.width));
+        const h = Math.max(240, Math.floor(box.height));
+        if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+      };
+
+      const paintElevation = () => {
+        fitCanvas(canvas);
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const cut = cuts.find(c => c.id === currentElev);
+        if (!env || !cut) {
+          frame = null;
+          return;
+        }
+        const extents = CV.cutViewExtents(env, cut);
+        if (!extents) { frame = null; return; }
+        const axis = CV.cutAxis(cut);
+        const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
+        const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
+        const uMin = Math.min(uA, uB), uMax = Math.max(uA, uB);
+        const { yTop, yBottom } = extents;
+        // OUR OWN FIT, so the inverse below is exact rather than a guess at
+        // what the painter chose. With `pxPerFt` and `extents` handed in, the
+        // painter's margins are zero and its frame is arithmetic on these five
+        // numbers -- see the note at externalFit.
+        const pad = 14;
+        const pxPerFt = Math.max(2, Math.min(
+          (canvas.width - pad * 2) / Math.max(uMax - uMin, 4),
+          (canvas.height - pad * 2) / Math.max(yTop - yBottom, 8)));
+        const x0 = (canvas.width - (uMax - uMin) * pxPerFt) / 2;
+        const y0 = (canvas.height - (yTop - yBottom) * pxPerFt) / 2;
+        frame = { uMin, uMax, yTop, yBottom, pxPerFt, x0, y0, cut, axis };
+        const colors = CV.inksFromSkin(window.__reSkin);
+        CV.drawCutView(env, ctx, canvas.width, canvas.height, cut,
+          { pxPerFt, extents, colors, finishes: true });
+        if (picked) paintPickMark(ctx);
+      };
+
+      const faceAt = (px, py) => {
+        if (!frame || !env) return null;
+        const u = frame.uMin + (px - frame.x0) / frame.pxPerFt;
+        const e = frame.yTop - (py - frame.y0) / frame.pxPerFt;
+        const stack = CV.sectionLevelStack(env);
+        if (!stack) return null;
+        const { faces } = CV.elevationFaces(env, frame.cut, stack, frame.axis);
+        // NEAREST FIRST, which is the painter's order reversed. An elevation
+        // is occlusion by paint ORDER -- each face covers what stands behind
+        // it -- so the LAST one painted at a spot is the one a drafter sees,
+        // and the one a click means.
+        for (let i = faces.length - 1; i >= 0; i -= 1) {
+          const face = faces[i];
+          const lo = Math.min(face.u1, face.u2), hi = Math.max(face.u1, face.u2);
+          if (u < lo || u > hi) continue;
+          if (e < wallFootFt(face) || e > wallHeadFt(face)) continue;
+          return face;
+        }
+        return null;
+      };
+
+      const paintPickMark = ctx => {
+        const stack = CV.sectionLevelStack(env);
+        if (!stack || !frame) return;
+        const { faces } = CV.elevationFaces(env, frame.cut, stack, frame.axis);
+        const face = faces.find(f => String(f.wall.id) === picked);
+        if (!face) return;
+        const X = u => frame.x0 + (u - frame.uMin) * frame.pxPerFt;
+        const Y = el => frame.y0 + (frame.yTop - el) * frame.pxPerFt;
+        const lo = Math.min(face.u1, face.u2), hi = Math.max(face.u1, face.u2);
+        ctx.save();
+        ctx.strokeStyle = window.__reSkin['accent-mark'];
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeRect(X(lo), Y(wallHeadFt(face)),
+          (hi - lo) * frame.pxPerFt,
+          (wallHeadFt(face) - wallFootFt(face)) * frame.pxPerFt);
+        ctx.restore();
+      };
+
+      canvas.addEventListener('click', event => {
+        const box = canvas.getBoundingClientRect();
+        const face = faceAt(
+          (event.clientX - box.left) * canvas.width / box.width,
+          (event.clientY - box.top) * canvas.height / box.height);
+        picked = face ? String(face.wall.id) : null;
+        paintElevation();
+        paintProps();
+        say(face
+          ? `${WT.WALL_TYPES.find(t => t.id === face.wall.wallType)?.label || 'Wall'}`
+            + `, ${(Math.abs(face.u2 - face.u1)).toFixed(1)} ft on ${currentElev}`
+          : 'Nothing there — click a wall face.');
+      });
+
+      // ── THE LANDSCAPE LETTER SHEET ────────────────────────────────────
+      // 8.5 x 11 LANDSCAPE, which is 11 wide by 8.5 high. Drawn as paper with
+      // its margin, and nothing in it: what goes in the seats is the thing
+      // Movie has said he wants to adjust.
+      const SHEET_IN = { w: 11, h: 8.5 };
+      const paintSheet = () => {
+        const cv = document.getElementById('sheet');
+        fitCanvas(cv);
+        const ctx = cv.getContext('2d');
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        const pad = 18;
+        const pxPerIn = Math.min((cv.width - pad * 2) / SHEET_IN.w,
+          (cv.height - pad * 2) / SHEET_IN.h);
+        const w = SHEET_IN.w * pxPerIn, h = SHEET_IN.h * pxPerIn;
+        const x = (cv.width - w) / 2, y = (cv.height - h) / 2;
+        ctx.fillStyle = window.__reSkin['surface-chip'];
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = window.__reSkin['edge-panel'];
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(x + 0.5 * pxPerIn, y + 0.5 * pxPerIn,
+          w - pxPerIn, h - pxPerIn);
+        ctx.setLineDash([]);
+        ctx.fillStyle = window.__reSkin['ink-quiet'];
+        ctx.font = '600 12px "Barlow Condensed", system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('8.5 × 11 LANDSCAPE — seats to be set',
+          x + w / 2, y + h / 2);
+      };
+
+      // ── BOOT ──────────────────────────────────────────────────────────
+      const rebuild = () => {
+        env = window.DraftCutViewEnv.buildCutViewEnv(drawing, levels);
+        cuts = standardCuts();
+        if (!cuts.some(cut => cut.id === currentElev)) currentElev = cuts[0]?.id || 'E1';
+        paintElevList();
+        paintElevation();
+      };
+
+      const raw = await load();
+      if (!raw) {
+        say('No drawing in browser storage — draw a house in the Model Space first.');
+        paintElevList();
+        return;
+      }
+      levels = FORMAT.levels(raw.levels);
+      drawing = {
+        ...raw,
+        walls: FORMAT.walls(raw.walls, new Set(levels.map(l => l.id)), {
+          wallTypes: WT.WALL_TYPES,
+          legacyWallTypes: WT.LEGACY_WALL_TYPES,
+          // WITHOUT THIS THE PAGE IS BLANK OF ITS OWN SUBJECT. The normaliser
+          // drops a finish it cannot recognise, and this page draws nothing
+          // else -- the same trap MODEL's loader note describes, pointing the
+          // other way.
+          finishIds: WT.EXTERIOR_FINISHES.map(f => f.id),
+          legacyFinishes: WT.LEGACY_FINISH_IDS,
+          defaultWallTopFt: 8,
+        }),
+      };
+      rebuild();
+      say(cuts.length ? 'Click a wall on the elevation to clad it.'
+        : 'This drawing has no walls to clad yet.');
+
+      window.addEventListener('resize', () => {
+        paintElevation();
+        if (!document.getElementById('stage-sheet').hidden) paintSheet();
+      });
+
+      window.DraftShellBars.wireSkin({
+        theme: window.__reTheme.theme,
+        mode: window.__reTheme.mode,
+        onSkin: skin => { window.__reSkin = skin; paintElevation(); paintSheet(); },
+      });
+    })();
+  </script>
+  <script src="./traffic-counter.js" defer></script>
+</body>
+</html>
