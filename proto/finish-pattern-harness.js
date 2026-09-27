@@ -143,11 +143,20 @@ function run(win) {
   // hangs over it, and that is the material behaving correctly -- rubble does
   // not stop at a tidy line, and the clip is what cuts it. What this catches
   // is the other thing: a loop whose bound is wrong and walks off the wall.
-  const SLACK = BOX.pxPerFt;   // one foot: a unit may straddle its own edge
-  const stray = F.flatMap(f => segments(draw(f)).flatMap(s => [s.a, s.b])
-    .filter(pt => pt.x < BOX.x0 - SLACK || pt.x > BOX.x1 + SLACK
-      || pt.y < BOX.yTop - SLACK || pt.y > BOX.yBottom + SLACK)
-    .map(() => f.id));
+  // ONE OF THE PATTERN'S OWN UNITS, which is what "straddling its edge" means
+  // for a material whose unit is a foot across. Fieldstone is a LATTICE: it
+  // has to lay a cell outside the box on each side or the stones at the wall's
+  // end are half-stones cut to a ruled line, which is the one thing rubble
+  // never looks like. A flat foot of slack said that was a runaway.
+  const unitOf = finish => Math.max(6, ...(finish.params || []).map(p => p.in))
+    / 12 * BOX.pxPerFt * 1.5;   // a cell outside, plus half its own jitter
+  const stray = F.flatMap(f => {
+    const slack = unitOf(f);
+    return segments(draw(f)).flatMap(seg => [seg.a, seg.b])
+      .filter(pt => pt.x < BOX.x0 - slack || pt.x > BOX.x1 + slack
+        || pt.y < BOX.yTop - slack || pt.y > BOX.yBottom + slack)
+      .map(() => f.id);
+  });
   check('no pattern draws outside the box it was given',
     stray.length === 0, [...new Set(stray)].join(' ') || 'none');
 
@@ -257,12 +266,47 @@ function run(win) {
       const m = a2.length ? a2[Math.floor(a2.length / 2)] : 0;
       return a2.length > 8 && m < (8 / 12 * PX_PER_FT) * 4;
     })(), 'so the two cannot be drawn to the same proportion');
-  check('and ashlar-s ARE all one height, because ashlar is squared and coursed',
+  // AND SO DO ASHLAR'S, which is the correction Movie's own reference photo
+  // forced (assets/textures/Ashlar.png, 27 Sep). This check used to assert the
+  // opposite -- "one gap, repeated" -- and the pattern obliged with a uniform
+  // running bond. That is a BRICK wall drawn at stone size. What the
+  // photograph shows is RANDOM COURSED: a big block beside two small ones,
+  // squared and fitted to courses of several different heights.
+  //
+  // SO WHAT SEPARATES THE TWO IS NOT REGULARITY, IT IS PROPORTION -- the pair
+  // of run-length checks above, which is where the distinction now lives:
+  // ledgestone laid long and thin, ashlar blocky.
+  check('and ashlar-s courses vary too -- one repeated unit is brick at stone size',
     (() => {
       const ys = courseLines(by('ashlar'));
       const g = ys.slice(1).map((y, i) => y - ys[i]).filter(v => v > 0.5);
-      return g.length > 3 && new Set(g.map(v => Math.round(v * 2) / 2)).size === 1;
-    })(), 'one gap, repeated');
+      return g.length > 3 && new Set(g.map(v => Math.round(v * 2) / 2)).size > 2;
+    })(), 'more than two distinct course heights');
+
+  // ── AND FIELDSTONE FITS, WHICH IS WHAT MAKES IT A WALL ────────────────
+  //
+  // Real rubble is big angular slabs FITTED tight: every stone's edge is its
+  // neighbour's edge, every corner is shared, and the mortar is a thin line
+  // between them. Drawn as separate shapes with gaps around them it is not a
+  // wall -- it is gravel drawn large, which is exactly what the first version
+  // was. Movie's reference photograph is what said so.
+  //
+  // MEASURED AS SHARED CORNERS, because that is what a tessellation IS. In a
+  // displaced lattice every interior corner carries four edges; in a field of
+  // floating shapes it carries the two its own outline gives it.
+  const fieldCorners = (() => {
+    const at = new Map();
+    segments(draw(by('fieldstone'))).filter(seg => seg.alpha > 0.5)
+      .forEach(seg => [seg.a, seg.b].forEach(pt => {
+        const k = `${Math.round(pt.x * 20)},${Math.round(pt.y * 20)}`;
+        at.set(k, (at.get(k) || 0) + 1);
+      }));
+    return [...at.values()];
+  })();
+  const shared = fieldCorners.filter(n => n >= 3).length;
+  check('fieldstone TESSELLATES -- every stone-s edge is its neighbour-s edge',
+    fieldCorners.length > 20 && shared > fieldCorners.length * 0.5,
+    `${shared} of ${fieldCorners.length} corners carry three edges or more`);
 
   // ── RELIEF: THE STONE STANDS PROUD OF ITS JOINT ───────────────────────
   // Movie: "can we give these texture where the stone stuck out past the
@@ -353,27 +397,21 @@ const MUTATIONS = [
     s => sub(s, '        const stub = Math.min(step * 0.62, y - box.yTop);',
       '        const stub = step;')],
   ['ashlar-s joints go to stubs, so blocks stop being blocks',
-    s => sub(s, `          ctx.moveTo(x, y);
-          ctx.lineTo(x, Math.max(box.yTop, y - high));
-        }
-      }
-      ctx.stroke();
-    },
-
-    // Roundstone`, `          ctx.moveTo(x, y);
-          ctx.lineTo(x, Math.max(box.yTop, y - high * 0.2));
-        }
-      }
-      ctx.stroke();
-    },
-
-    // Roundstone`)],
+    s => sub(s, '    if (x1 < box.x1) { ctx.moveTo(x1, top); ctx.lineTo(x1, bottom); }',
+      '    if (x1 < box.x1) { ctx.moveTo(x1, top); ctx.lineTo(x1, top + (bottom - top) * 0.2); }')],
   ['ledgestone is ruled to one course height, so it reads as tile',
-    s => sub(s, '        const high = course * (0.7 + 0.7 * jitter(row, 5));',
-      '        const high = course;')],
+    s => sub(s, '        high: row => course * (0.7 + 0.8 * jitter(row, 5)),',
+      '        high: () => course,')],
+  ['ashlar is ruled to one course height, so it is brick drawn at stone size',
+    s => sub(s, '        high: row => high * (0.6 + 1.1 * jitter(row, 5)),',
+      '        high: () => high,')],
+  ['fieldstone stops tessellating, so the stones float instead of fitting',
+    s => sub(s, '          ctx.moveTo(here.x, here.y); ctx.lineTo(right.x, right.y);',
+      '          ctx.moveTo(here.x, here.y);\n'
+      + '          ctx.lineTo(right.x - size * 0.2, right.y - size * 0.2);')],
   ['ledgestone breaks every ten inches again, and the streaks come back',
-    s => sub(s, '        const long = course * (7 + 5 * jitter(row, 6));',
-      '        const long = course * 3.5;')],
+    s => sub(s, '        wide: (row, col) => course * (5 + 10 * jitter(row + 1, col + 3)),',
+      '        wide: () => course * 3.5,')],
   ['nothing takes relief, so stone outlines flat and reads as tile stood on end',
     s => sub(s, '    if (finish.relief) {', '    if (false) {')],
   ['the shadow is drawn LAST, so it lies over the unit it should sit behind',

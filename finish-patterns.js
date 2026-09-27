@@ -51,6 +51,52 @@ if (!window.DraftFinishPatterns) {
   // four stones and the brick cannot each answer it differently.
   const SHADE_SIDES = Object.freeze({ bottom: true, right: true });
 
+  // ── WALKING A WALL IN COURSES AND STONES ──────────────────────────────
+  //
+  // The stone patterns share a shape and differ only in their numbers: a
+  // course of some height, laid with stones of some width, both hashed off
+  // the cell so the wall is irregular and still the SAME wall every repaint.
+  // Written once because the alternative is three loops that drift apart.
+  //
+  // THE COURSE AND THE STONE BOTH VARY, and that is the correction Movie's
+  // own reference photographs forced (assets/textures, 27 Sep). The first
+  // version of these laid a uniform grid, which is what a MANUFACTURED unit
+  // looks like -- and of the five masonry rows only brick is manufactured.
+  // Real ashlar puts a big block beside two small ones; real ledgestone runs
+  // a long thin piece past three short ones. A ruled grid reads as tile.
+  //
+  // EACH STONE DRAWS ITS TOP AND ITS RIGHT, and nothing else. The bottom is
+  // the course below's top and the left is the last stone's right, so every
+  // joint is drawn once -- twice over and a wall at any real scale is a
+  // solid block of ink.
+  const layStones = (ctx, box, spec) => {
+    let y = box.yBottom;
+    for (let row = 0; y > box.yTop && row < 400; row += 1) {
+      const high = spec.high(row);
+      if (!(high >= 1)) break;
+      const top = Math.max(y - high, box.yTop);
+      // A COURSE STARTS PART WAY INTO A STONE, so the end of the wall does
+      // not read as a ruled edge of whole units -- which is the tell that
+      // separates a drawn wall from a tiled one.
+      let x = box.x0 - spec.wide(row, -1) * jitter(row, 9);
+      for (let col = 0; x < box.x1 && col < 400; col += 1) {
+        const wide = spec.wide(row, col);
+        if (!(wide >= 1)) break;
+        const x0 = Math.max(x, box.x0);
+        const x1 = Math.min(x + wide, box.x1);
+        if (x1 > x0) spec.stone(x0, x1, top, y, row, col);
+        x += wide;
+      }
+      y = top;
+    }
+  };
+
+  // The top edge and the right edge of one stone, clipped to the wall.
+  const stoneEdges = (ctx, box) => (x0, x1, top, bottom) => {
+    if (top > box.yTop) { ctx.moveTo(x0, top); ctx.lineTo(x1, top); }
+    if (x1 < box.x1) { ctx.moveTo(x1, top); ctx.lineTo(x1, bottom); }
+  };
+
   // Everything below draws into a box already clipped to the wall face, in
   // PIXELS, with `up` the direction of increasing elevation on screen (-1:
   // screen y grows downward). A pattern never strokes the box's own edge --
@@ -140,54 +186,55 @@ if (!window.DraftFinishPatterns) {
     stacked: (ctx, box, finish) => {
       const course = paramOf(finish, 'courseIn', 3) / 12 * box.pxPerFt;
       if (course < MIN_SPACING_PX) return;
+      const edge = stoneEdges(ctx, box);
       ctx.beginPath();
-      let row = 0;
-      // THE COURSES CARRY IT, AND THEY ARE NOT ALL ONE HEIGHT. Stacked stone
-      // is sorted thin, not milled: courses run maybe two thirds to one and a
-      // half of nominal, and an exactly ruled set of them reads as tile. The
-      // variation is hashed per course, so the same wall stacks the same way
-      // every repaint.
-      for (let y = box.yBottom; y > box.yTop; row += 1) {
-        const high = course * (0.7 + 0.7 * jitter(row, 5));
-        const next = y - high;
-        if (y < box.yBottom) lineAcross(ctx, box.x0, box.x1, y);
-        // AND THE PIECES ARE LONG, WHICH IS WHY THE JOINTS ARE SPARSE. The
-        // first version broke every 10 inches and hashed the offset per ROW,
-        // which lined the breaks up into diagonal streaks across the wall --
-        // the eye joins near-regular marks faster than it reads the courses
-        // they sit in. Two feet apart and hashed per COLUMN as well, there is
-        // nothing left to join.
-        const long = course * (7 + 5 * jitter(row, 6));
-        if (long >= MIN_SPACING_PX * 2) {
-          for (let x = box.x0 + long * jitter(row, 1); x < box.x1; x += long) {
-            const at = x + long * 0.6 * (jitter(Math.round(x), row) - 0.5);
-            if (at <= box.x0 || at >= box.x1) continue;
-            ctx.moveTo(at, y);
-            ctx.lineTo(at, Math.max(box.yTop, next));
+      layStones(ctx, box, {
+        // SORTED THIN, NOT MILLED. Stacked stone runs roughly two thirds to
+        // one and a half of nominal, and a ruled set of courses reads as tile.
+        high: row => course * (0.7 + 0.8 * jitter(row, 5)),
+        // AND LAID LONG, which is the other half of what makes it ledgestone.
+        // The photograph runs pieces the better part of a metre beside short
+        // ones; five to fifteen courses long covers both.
+        wide: (row, col) => course * (5 + 10 * jitter(row + 1, col + 3)),
+        stone: (x0, x1, top, bottom, row, col) => {
+          edge(x0, x1, top, bottom);
+          // AND A SHORT PIECE IS SOMETIMES TWO, STACKED. The photograph is
+          // full of them -- two thin slabs filling the height one thicker
+          // one takes beside it -- and it is most of what stops the courses
+          // reading as ruled lines with breaks in.
+          if (bottom - top > MIN_SPACING_PX * 2 && jitter(col + 7, row) > 0.62) {
+            const mid = (top + bottom) / 2;
+            ctx.moveTo(x0, mid); ctx.lineTo(x1, mid);
           }
-        }
-        y = next;
-      }
+        },
+      });
       ctx.stroke();
     },
 
-    // Ashlar: SQUARED, COURSED blocks -- a real grid, laid in a running bond,
-    // which is exactly the thing the ledgestone above is not.
     ashlar: (ctx, box, finish) => {
       const high = paramOf(finish, 'stoneHighIn', 8) / 12 * box.pxPerFt;
       const long = paramOf(finish, 'stoneLongIn', 16) / 12 * box.pxPerFt;
       if (high < MIN_SPACING_PX || long < MIN_SPACING_PX) return;
+      const edge = stoneEdges(ctx, box);
       ctx.beginPath();
-      let row = 0;
-      for (let y = box.yBottom; y > box.yTop; y -= high, row += 1) {
-        if (y < box.yBottom) lineAcross(ctx, box.x0, box.x1, y);
-        const offset = (row % 2) * long / 2;
-        for (let x = box.x0 + offset; x < box.x1; x += long) {
-          if (x <= box.x0) continue;
-          ctx.moveTo(x, y);
-          ctx.lineTo(x, Math.max(box.yTop, y - high));
-        }
-      }
+      layStones(ctx, box, {
+        // RANDOM COURSED, which is what the trade calls the photograph and
+        // what the first version of this was not. A uniform running bond of
+        // one unit is a BRICK wall drawn at stone size; what makes ashlar
+        // ashlar is squared stones of MANY sizes fitted to courses.
+        high: row => high * (0.6 + 1.1 * jitter(row, 5)),
+        wide: (row, col) => long * (0.4 + 1.3 * jitter(row + 2, col + 1)),
+        stone: (x0, x1, top, bottom, row, col) => {
+          edge(x0, x1, top, bottom);
+          // TWO SMALL ONES WHERE A BIG ONE WOULD GO. The photograph does it
+          // constantly, and it is the difference between a wall that was
+          // FITTED and a grid that was ruled.
+          if (bottom - top > MIN_SPACING_PX * 2.5 && jitter(col + 4, row + 6) > 0.58) {
+            const mid = (top + bottom) / 2;
+            ctx.moveTo(x0, mid); ctx.lineTo(x1, mid);
+          }
+        },
+      });
       ctx.stroke();
     },
 
@@ -197,42 +244,71 @@ if (!window.DraftFinishPatterns) {
     round: (ctx, box, finish) => {
       const size = paramOf(finish, 'stoneIn', 8) / 12 * box.pxPerFt;
       if (size < MIN_SPACING_PX * 1.6) return;
-      const r = size / 2;
       ctx.beginPath();
       let row = 0;
-      for (let y = box.yBottom - r; y > box.yTop + r * 0.4; y -= size, row += 1) {
-        const offset = (row % 2) * r;
-        for (let x = box.x0 + r + offset; x < box.x1 - r * 0.4; x += size) {
-          const rr = r * (0.72 + 0.24 * jitter(row, Math.floor(x)));
-          ctx.moveTo(x + rr, y);
-          ctx.arc(x, y, rr, 0, Math.PI * 2);
+      // A COBBLE IS NOT A CIRCLE AND THEY ARE NOT ALL ONE SIZE. The
+      // photograph packs big rounded lumps against small ones filling the
+      // gaps, each wider than it is tall or the other way about. Drawn as
+      // one repeated circle it read as a bag of marbles.
+      for (let y = box.yBottom - size * 0.45; y > box.yTop; y -= size * 0.82, row += 1) {
+        const stagger = size * 0.5 * jitter(row, 11);
+        for (let x = box.x0 + stagger; x < box.x1 + size; x += size * 0.88) {
+          const cell = Math.round(x);
+          const rx = size * (0.26 + 0.28 * jitter(row, cell));
+          const ry = size * (0.26 + 0.24 * jitter(cell, row + 5));
+          const cx = x + size * 0.3 * (jitter(cell + 2, row) - 0.5);
+          const cy = y + size * 0.22 * (jitter(row + 3, cell) - 0.5);
+          if (cx + rx < box.x0 || cx - rx > box.x1) continue;
+          if (rx < 1 || ry < 1) continue;
+          // A ROUNDED LUMP, not an ellipse: eight corners pushed in and out
+          // by their own hash, which is what a river stone's outline is.
+          const corners = 8;
+          for (let i = 0; i <= corners; i += 1) {
+            const ang = (i / corners) * Math.PI * 2;
+            const wob = 0.84 + 0.3 * jitter(cell + i, row);
+            const px = cx + Math.cos(ang) * rx * wob;
+            const py = cy + Math.sin(ang) * ry * wob;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+          }
         }
       }
       ctx.stroke();
     },
 
     // Fieldstone: rubble laid to no line at all, which is what "odd shapes"
-    // means. A scattered polygon per stone, its corners hashed off its own
-    // cell so the wall is irregular and still the same wall every repaint.
+    // means and what separates it from the ashlar above.
+    //
+    // A JITTERED LATTICE, because the photograph is CRAZY PAVING. Real
+    // fieldstone is big angular slabs FITTED tight -- every stone's edge is
+    // its neighbour's edge, every corner is shared, and the mortar is a thin
+    // line between them. The first version scattered separate blobs with gaps
+    // around them, which is not a wall; it is gravel drawn large.
+    //
+    // A LATTICE IS THE WHOLE TRICK. Displace the corners of a grid and the
+    // cells stay a perfect tessellation however far they move, so the stones
+    // fit exactly while no two edges share an angle. Each cell draws only the
+    // edge to its right and the edge below, so every joint is drawn once.
+    //
+    // AND IT STARTS A CELL OUTSIDE THE BOX on each side, or the stones at the
+    // wall's edge are half-stones cut to a ruled line. The caller's clip is
+    // what cuts them, which is what a mason does at a corner.
     field: (ctx, box, finish) => {
       const size = paramOf(finish, 'stoneIn', 12) / 12 * box.pxPerFt;
       if (size < MIN_SPACING_PX * 2) return;
+      const cols = Math.ceil((box.x1 - box.x0) / size) + 1;
+      const rows = Math.ceil((box.yBottom - box.yTop) / size) + 1;
+      const corner = (i, j) => ({
+        x: box.x0 + (i - 1) * size + size * 0.55 * (jitter(i, j) - 0.5),
+        y: box.yTop + (j - 1) * size + size * 0.55 * (jitter(j, i + 31) - 0.5),
+      });
       ctx.beginPath();
-      let row = 0;
-      for (let y = box.yBottom - size / 2; y > box.yTop; y -= size * 0.82, row += 1) {
-        const offset = size * jitter(row, 2);
-        for (let x = box.x0 + offset; x < box.x1; x += size * 0.95) {
-          const cell = Math.floor(x);
-          const rx = size * (0.3 + 0.16 * jitter(row, cell));
-          const ry = size * (0.24 + 0.14 * jitter(cell, row));
-          const corners = 6;
-          for (let i = 0; i <= corners; i += 1) {
-            const a = (i / corners) * Math.PI * 2;
-            const wob = 0.72 + 0.4 * jitter(cell + i, row);
-            const px = x + Math.cos(a) * rx * wob;
-            const py = y + Math.sin(a) * ry * wob;
-            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-          }
+      for (let j = 0; j <= rows; j += 1) {
+        for (let i = 0; i <= cols; i += 1) {
+          const here = corner(i, j);
+          const right = corner(i + 1, j);
+          const below = corner(i, j + 1);
+          ctx.moveTo(here.x, here.y); ctx.lineTo(right.x, right.y);
+          ctx.moveTo(here.x, here.y); ctx.lineTo(below.x, below.y);
         }
       }
       ctx.stroke();
