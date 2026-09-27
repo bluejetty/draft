@@ -40,6 +40,18 @@ function loadDraftModules() {
   // on a house whose every wall was clad.
   for (const file of ['formatters.js', 'wall-types.js', 'geometry-2d.js', 'drawing-format.js',
     'room-standards.js', 'level-assembly.js', 'build-house.js', 'finish-patterns.js',
+    // THE ROOF'S TWO, beside the wall's one. cut-view reaches for both off
+    // `window` when finishes are asked for, and without them here every roof
+    // in every offline check draws plain -- which is the shape of the bug that
+    // made the first gable-rake probe pass against an unfixed painter: a
+    // mirror that quietly drops a module the painter reads turns every claim
+    // about it into a claim about an empty drawing.
+    'roof-types.js', 'roof-patterns.js',
+    // AND THE ONE TABLE SAYING WHICH WAY EACH STANDARD ELEVATION IS SEEN
+    // FROM. This env builds its own cuts and so does every page; what makes
+    // that safe is that they can all be checked against cut-marks, and a
+    // check that cannot load it cannot make the comparison.
+    'cut-marks.js',
     'cut-view.js']) {
     const full = path.join(ROOT, file);
     if (!fs.existsSync(full)) continue;
@@ -76,6 +88,22 @@ function recordingCtx() {
   // made that unaskable. One counter across both is the whole fix.
   let seq = 0;
   let cur = null;
+  // ── AND THE CLIP IS RECORDED, BECAUSE IT IS PART OF THE DRAWING ───────
+  //
+  // This was `clip() {}` -- a no-op -- and that made a whole class of defect
+  // invisible here. A hatch frame is a face's bounding PARALLELOGRAM and
+  // overhangs a triangular roof at the ridge on purpose, so what keeps it on
+  // the roof is the clip and nothing else. With the clip unrecorded, a
+  // painter that had stopped clipping laid down exactly the same strokes as
+  // one that still did, and the mutant removing it survived.
+  //
+  // THE PATH, NOT THE INTERSECTION. Honouring a clip properly means clipping
+  // every stroke against it, which is a polygon library this file has no
+  // business carrying. What a check actually needs is "was this drawn under a
+  // clip, and was the clip the right shape" -- so each stroke is stamped with
+  // the path that was in force, and the reader decides what that means.
+  let clipPath = null;
+  const clipStack = [];
   const ctx = {
     strokeStyle: '#000', fillStyle: '#000', lineWidth: 1, font: '', textAlign: '', textBaseline: '',
     lineCap: 'butt', lineJoin: 'miter', globalAlpha: 1,
@@ -83,18 +111,21 @@ function recordingCtx() {
     moveTo(x, y) { (cur || (cur = [])).push({ x, y, move: true }); },
     lineTo(x, y) { (cur || (cur = [])).push({ x, y }); },
     closePath() { if (cur && cur.length) cur.push({ ...cur[0], close: true }); },
-    stroke() { if (cur && cur.length > 1) strokes.push({ seq: seq++, pts: cur.slice(), ink: this.strokeStyle, w: this.lineWidth }); },
+    stroke() { if (cur && cur.length > 1) strokes.push({ seq: seq++, pts: cur.slice(), ink: this.strokeStyle, w: this.lineWidth, clip: clipPath }); },
     fill() { if (cur && cur.length > 1) fills.push({ seq: seq++, pts: cur.slice(), ink: this.fillStyle }); },
     fillRect(x, y, w, h) { fills.push({ seq: seq++, rect: { x, y, w, h }, ink: this.fillStyle }); },
     strokeRect() {}, clearRect() {}, rect() {},
-    save() {}, restore() {}, translate() {}, rotate() {}, scale() {},
+    save() { clipStack.push(clipPath); },
+    restore() { if (clipStack.length) clipPath = clipStack.pop(); },
+    translate() {}, rotate() {}, scale() {},
     setLineDash() {}, getLineDash() { return []; },
     fillText(text, x, y) {
       texts.push({ text: String(text), x, y, align: this.textAlign,
         baseline: this.textBaseline, ink: this.fillStyle, font: this.font });
     },
     strokeText() {}, measureText: () => ({ width: 0 }),
-    arc() {}, ellipse() {}, quadraticCurveTo() {}, bezierCurveTo() {}, clip() {},
+    arc() {}, ellipse() {}, quadraticCurveTo() {}, bezierCurveTo() {},
+    clip() { clipPath = cur && cur.length > 2 ? cur.slice() : clipPath; },
     createLinearGradient: () => ({ addColorStop() {} }),
   };
   return { ctx, strokes, fills, texts };
@@ -340,6 +371,11 @@ function paintElevation(win, env, cut, { pxPerFt = 40, ...opts } = {}) {
   const model = strokes.map(s => ({
     seq: s.seq, ink: s.ink, w: s.w,
     pts: s.pts.map(p => ({ u: toU(p.x), e: toE(p.y), move: !!p.move, close: !!p.close })),
+    // THE closePath COPY COMES OFF, the same way modelFills drops it and for
+    // the same reason: it is a fact about the PATH, not about the shape. Left
+    // in, a clipped triangle comes back with four corners and no check can ask
+    // "is this clip the roof face" by the corners it has.
+    clip: s.clip ? s.clip.filter(p => !p.close).map(p => ({ u: toU(p.x), e: toE(p.y) })) : null,
   }));
   // THE FILLS IN MODEL SPACE TOO, AND IN PAINT ORDER. Occlusion in an
   // elevation is not a rule the painter applies, it is the ORDER the opaque

@@ -34,6 +34,27 @@ if (!window.DraftCutMarks) {
     E4: { side: 'E', axis: 'x', sign: 1 },
   });
 
+  // ── AND WHICH WAY THAT ELEVATION IS SEEN FROM ─────────────────────────
+  //
+  // DERIVED, NOT LISTED. The table above already says everything: E1 steps off
+  // the SOUTH edge in +z, so the south face is what E1 shows and +z is the
+  // direction it is seen from. A second list of four vectors beside it is a
+  // second list to get wrong -- which is not hypothetical. On 27 Sep
+  // EXTFINISH.html carried its own copy with all four NEGATED, so the page
+  // labelled the back of the house FRONT and Movie said so: *"the E3 is
+  // showing the FRONT - E1 should be front -- the other E2, E3, E4 are also in
+  // wrong positions"*. Nothing went red: a flipped elevation is a perfectly
+  // good drawing of the wrong wall.
+  //
+  // IT POINTS OUTWARD, from the house toward the viewer -- the outward normal
+  // of the face being looked at, which is the sign convention cut-view reads
+  // and the one LAYOUT has always passed it.
+  const eMarkDir = id => {
+    const side = E_MARK_SIDES[id];
+    if (!side) return null;
+    return side.axis === 'z' ? { x: 0, z: side.sign } : { x: side.sign, z: 0 };
+  };
+
   // The house's bounding box in plan, or null when there is not enough of a
   // house to ring. levelId > 0 excludes the boneyard, whose walls are off to
   // one side and would stretch the box across the whole sheet.
@@ -188,6 +209,7 @@ if (!window.DraftCutMarks) {
     CUT_BUBBLE_PUSH_FT,
     E_MARK_CLEAR_FT,
     E_MARK_SIDES,
+    eMarkDir,
   });
 })();
 }

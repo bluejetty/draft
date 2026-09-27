@@ -1080,6 +1080,180 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
     }
   }
 
+  // ── EVERY STANDARD ELEVATION LOOKS AT THE HOUSE ──────────────────
+  //
+  // Movie, 27 Sep, on EXT. FINISH: *"the E3 is showing the FRONT - E1 should
+  // be front -- the other E2, E3, E4 are also in wrong positions"*. The page
+  // carried its own copy of the four view directions and every one of them was
+  // NEGATED, so each elevation drew the opposite wall. Nothing in the repo
+  // said so, because a flipped elevation is a perfectly good drawing -- of the
+  // wrong wall.
+  //
+  // THE INVARIANT IS THE ONE THING ALL THE COPIES MUST AGREE ON: a cut's
+  // `dirVec` is the OUTWARD normal of the face it shows, so it points from the
+  // house toward the viewer. Stated as a dot product against the house's own
+  // centre, which is true of the right answer at any orientation and false of
+  // a negated one -- rather than as four vectors written down again, which
+  // would just be a fifth copy.
+  {
+    const walls = env.walls().filter(w => w.levelId > 0);
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    walls.forEach(w => [w.start, w.end].forEach(pt => {
+      minX = Math.min(minX, pt.x); maxX = Math.max(maxX, pt.x);
+      minZ = Math.min(minZ, pt.z); maxZ = Math.max(maxZ, pt.z);
+    }));
+    const box = { x: (minX + maxX) / 2, z: (minZ + maxZ) / 2 };
+    const cuts = standardElevationCuts(env);
+    const outward = cut => {
+      const mid = { x: (cut.startPt.x + cut.endPt.x) / 2,
+        z: (cut.startPt.z + cut.endPt.z) / 2 };
+      return cut.dirVec.x * (mid.x - box.x) + cut.dirVec.z * (mid.z - box.z);
+    };
+    check('fixture: the four standard elevations are there to be asked about',
+      cuts.length === 4, cuts.map(c => c.id).join(' '));
+    check('each one is seen from its own side of the house, not from the far side',
+      cuts.every(cut => outward(cut) > 0),
+      cuts.map(cut => `${cut.id}:${outward(cut) > 0 ? 'out' : 'IN'}`).join(' '));
+    // AND THE SHARED TABLE SAYS THE SAME, which is what EXT. FINISH reads now
+    // instead of its own. cut-marks.js derives the vector from the side and
+    // sign it already stores, so this asks whether that derivation agrees with
+    // the cuts the drawing is actually painted from.
+    const MARKS = win.DraftCutMarks;
+    check('and cut-marks derives the same four directions the cuts carry',
+      !!MARKS && cuts.every(cut => {
+        const d = MARKS.eMarkDir(cut.id);
+        return d && d.x === cut.dirVec.x && d.z === cut.dirVec.z;
+      }),
+      MARKS ? cuts.map(cut => `${cut.id}:${JSON.stringify(MARKS.eMarkDir(cut.id))}`).join(' ')
+        : 'cut-marks.js is not loaded in the harness env');
+  }
+
+  // ── AND WHAT THE ROOF IS COVERED IN REACHES THE SHEET ───────────
+  //
+  // Movie, 27 Sep: *"we should make a special ROOF area with the roof corners
+  // in there and the ROOFING TYPE"*. roof-types names the ten and
+  // roof-patterns draws the seven pictures they share, both proved offline --
+  // what neither can answer is whether the ELEVATION asks either of them.
+  //
+  // MEASURED AS THE DIFFERENCE BETWEEN TWO SHEETS, one asked for finishes and
+  // one not, on a house whose roofs are named. Asked any looser -- "is there
+  // ink on the roof" -- the roof's own outline answers yes and the check
+  // proves nothing, which is exactly how the gable-rake probe passed four
+  // times against a painter that drew no hatch at all.
+  {
+    const roofed = JSON.parse(fs.readFileSync(
+      path.join(ROOT, 'proto', 'repro-garage-house.draft'), 'utf8'));
+    // TWO MATERIALS, because one is a claim about a constant. If both roofs
+    // came back with the same number of strokes the painter could be drawing
+    // either one for both, or a default for each.
+    roofed.roofs.forEach((roof, i) => { roof.roofing = i === 0 ? 'slate' : 'corrugated'; });
+    const rEnv = buildEnv(win, roofed);
+    check('fixture: the roofs carry a roofing the format kept',
+      rEnv.roofs().filter(r => r.roofing).length === roofed.roofs.length,
+      rEnv.roofs().map(r => r.roofing || 'none').join(' '));
+    const rCut = standardElevationCuts(rEnv).find(c => c.id === 'E1');
+    const bare = paintElevation(win, rEnv, rCut, { pxPerFt: 26 });
+    const hatched = paintElevation(win, rEnv, rCut, { pxPerFt: 26, finishes: true });
+    check('asking for finishes puts more ink on the sheet than not asking',
+      hatched.strokes.length > bare.strokes.length,
+      `${hatched.strokes.length} against ${bare.strokes.length}`);
+
+    // AND IT LANDS ON THE ROOF, not somewhere else that happens to be new.
+    // Every point of the new ink is measured against the roof planes' own
+    // projected outlines -- a hatch outside all of them is a hatch on the
+    // wall, or on the sky.
+    const key = st => JSON.stringify(st.pts.map(pt =>
+      [Math.round(pt.u * 100), Math.round(pt.e * 100), !!pt.move]));
+    const before = new Set(bare.strokes.map(key));
+    const added = hatched.strokes.filter(st => !before.has(key(st)));
+    check('and the new ink is a hatch, not one stroke of something',
+      added.length > 4, `${added.length} strokes`);
+    const planes = rEnv.roofs().flatMap(roof => {
+      const eaveTop = CV.roofEaveElev(roof, CV.sectionLevelStack(rEnv), rEnv);
+      const pitch = roof.pitch || 4;
+      return G.roofFaces(roof, G.roofSkeleton(roof)).map(face => face.points.map(pt => ({
+        u: pt.x * hatched.axis.x + pt.z * hatched.axis.z,
+        e: eaveTop + G.roofFaceRise(face, pt, pitch),
+      })));
+    }).filter(poly => poly.length >= 3);
+    // THE PLANE ITSELF, NOT ITS BOUNDING BOX. This was a box first, and the
+    // mutant that removes the clip SURVIVED it: the hatch frame is the face's
+    // bounding PARALLELOGRAM and deliberately overhangs a triangular face at
+    // the ridge, so an unclipped hatch spills into the corners above the two
+    // sloping edges -- which are inside the box and outside the roof. A gable
+    // is a triangle; a check that cannot tell a triangle from its box cannot
+    // see the one place this can go wrong.
+    const near = (poly, u, e, pad) => poly.some((a, i) => {
+      const b = poly[(i + 1) % poly.length];
+      const vx = b.u - a.u, vy = b.e - a.e;
+      const len2 = vx * vx + vy * vy;
+      const t = len2 > 0
+        ? Math.max(0, Math.min(1, ((u - a.u) * vx + (e - a.e) * vy) / len2)) : 0;
+      return Math.hypot(u - (a.u + vx * t), e - (a.e + vy * t)) <= pad;
+    });
+    const within = (poly, u, e, pad) => inside(poly, u, e) || near(poly, u, e, pad);
+
+    // ── WHAT KEEPS THE HATCH ON THE ROOF IS THE CLIP ──────────────────
+    //
+    // And the claim has to be stated as the clip, because the frame a pattern
+    // is drawn in is the face's bounding PARALLELOGRAM and overhangs a
+    // triangular roof at the ridge ON PURPOSE -- a frame cut to the triangle
+    // would stop the courses short of it. So the strokes themselves DO run
+    // past the roof's two sloping edges, and a check reading only the strokes
+    // reads that as a defect. Measured: 176 "strays" on a correct painter.
+    //
+    // THE RECORDER NOW REMEMBERS THE CLIP for exactly this. Asked without it
+    // the mutant that stops clipping lays down identical strokes and survives,
+    // which it did.
+    const clipped = added.filter(st => Array.isArray(st.clip) && st.clip.length > 2);
+    check('every bit of the hatch is laid under a clip, which is what holds it on the roof',
+      clipped.length === added.length,
+      `${clipped.length} of ${added.length} strokes clipped`);
+    // BY SHAPE, NOT BY "SITS INSIDE ONE". Asked the loose way, a clip set to
+    // an EAVE BOARD passes: the board hangs a fascia below the eave, which is
+    // five and a half inches -- under any tolerance loose enough to allow for
+    // rounding. Measured, and that mutant survived. A face has its own corners
+    // and a clip matching them is that face or nothing.
+    const clipIsAPlane = clipped.every(st =>
+      planes.some(poly => sameShape(st.clip, poly, 0.05)));
+    check('and the clip is the roof plane itself, corner for corner',
+      clipped.length > 0 && clipIsAPlane,
+      `${clipped.length} clips against ${planes.length} planes`);
+    // AND THE INK IS ON THE RIGHT ROOF. The clip proves it cannot escape its
+    // face; this proves the face it was given is one of the roof's, so a hatch
+    // clipped to a WALL would still be caught.
+    const frameStray = added.flatMap(st => st.pts).filter(pt =>
+      !planes.some(poly => {
+        const us = poly.map(q => q.u), es = poly.map(q => q.e);
+        return pt.u >= Math.min(...us) - 0.5 && pt.u <= Math.max(...us) + 0.5
+          && pt.e >= Math.min(...es) - 0.5 && pt.e <= Math.max(...es) + 0.5;
+      }));
+    check('and none of it is laid outside the roofs altogether, on a wall or in the sky',
+      frameStray.length === 0,
+      frameStray.length ? `${frameStray.length} strays, first at `
+        + `${frameStray[0].u.toFixed(2)},${frameStray[0].e.toFixed(2)}` : 'all on the roofs');
+
+    // AND A ROOF WEARING SOMETHING ELSE IS DRAWN DIFFERENTLY. The claim the
+    // whole table rests on: ten materials that all drew the same would be one
+    // material with ten labels.
+    const swapped = JSON.parse(JSON.stringify(roofed));
+    swapped.roofs.forEach(roof => { roof.roofing = 'pfm_vertical'; });
+    const sEnv = buildEnv(win, swapped);
+    const other = paintElevation(win, sEnv,
+      standardElevationCuts(sEnv).find(c => c.id === 'E1'), { pxPerFt: 26, finishes: true });
+    // COUNTED IN POINTS AND NOT IN STROKES, which is this check being wrong
+    // once: a pattern builds ONE path per face and strokes it once, so slate,
+    // corrugated and standing seam all come back as the same number of
+    // strokes -- 59 against 59 -- and a claim that ten materials draw
+    // differently passed on a measurement that could not have seen otherwise.
+    // The lines are the points.
+    const ink = view => view.strokes.reduce((n, st) => n + st.pts.length, 0);
+    check('and a house roofed in something else is a different drawing',
+      ink(other) !== ink(hatched),
+      `${ink(other)} points in standing seam against ${ink(hatched)} `
+      + 'in slate and corrugated');
+  }
+
   // THE DATUM THE WHOLE SHEET HANGS OFF, stated against the DRAWING rather
   // than against its own arithmetic. `roofEaveElev` is where a rise of zero
   // lands, which is the eave line -- so the lowest point the painter puts any

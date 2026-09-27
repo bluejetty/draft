@@ -31,6 +31,12 @@
 <script src="./build-house.js"></script>
 <script src="./formatters.js"></script>
 <script src="./finish-patterns.js"></script>
+<!-- THE ROOF'S HATCHES, beside the wall's. cut-view reaches for both off
+     `window` when finishes are asked for and warns rather than throwing when
+     either is missing -- which is a page that draws every roof plain with one
+     line in the console and nothing on the sheet saying why. -->
+<script src="./roof-patterns.js"></script>
+<script src="./cut-marks.js"></script>
 <script src="./cut-view.js"></script>
 <script src="./cut-view-env.js"></script>
 <script src="./orientation-guard.js"></script>
@@ -439,12 +445,20 @@
       // ── THE FOUR ELEVATIONS, STOOD THE WAY THE MODEL'S E MARKS STAND THEM
       // Lifted from LAYOUT's _standardElevationCuts, which is the same four:
       // just outside the plan's walls, looking back at it.
-      const E_SIDES = {
-        E1: { side: 'S', sign: 1, dir: { x: 0, z: -1 } },
-        E2: { side: 'W', sign: -1, dir: { x: 1, z: 0 } },
-        E3: { side: 'N', sign: -1, dir: { x: 0, z: 1 } },
-        E4: { side: 'E', sign: 1, dir: { x: -1, z: 0 } },
-      };
+      // ── WHERE THE FOUR STANDARD ELEVATIONS STAND ──────────────────
+      //
+      // OFF cut-marks.js, WHICH IS THE ONE TABLE. This page carried its own
+      // copy of it and every direction in that copy was NEGATED, so E1 drew
+      // the back of the house and E3 drew the front. Movie, 27 Sep: "the E3 is
+      // showing the FRONT - E1 should be front -- the other E2, E3, E4 are
+      // also in wrong positions". Nothing went red, because a flipped
+      // elevation is a perfectly good drawing of the wrong wall.
+      //
+      // THE FOURTH COPY IS GONE rather than corrected. MODEL places its marks
+      // off cut-marks, LAYOUT and the harness env keep their own, and this
+      // page making a fourth was the fourth chance to drift.
+      const MARKS = window.DraftCutMarks;
+      const E_SIDES = MARKS.E_MARK_SIDES;
       const E_CLEAR_FT = 12;
       const standardCuts = () => {
         const walls = (env?.walls() || []).filter(wall => wall.levelId > 0);
@@ -465,7 +479,7 @@
         return ['E1', 'E2', 'E3', 'E4'].map(id => ({
           id, name: id, elev: 0, levelId: null,
           ...((id === 'E1' || id === 'E3') ? acrossX(id) : acrossZ(id)),
-          dirVec: E_SIDES[id].dir,
+          dirVec: MARKS.eMarkDir(id),
         }));
       };
 
