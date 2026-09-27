@@ -26,6 +26,7 @@
 if (!window.DraftCutView) {
 (() => {
   const geo = () => window.DraftGeometry2D;
+  let warnedNoPatterns = false;
   const { WALL_TYPES, DEFAULT_FINISH_ID, finishById, bandIsCapped }
     = window.DraftWallTypes;
   const { formatInchesOnly } = window.DraftFormatters;
@@ -3400,8 +3401,19 @@ if (!window.DraftCutView) {
       if (xb - xa < 2) return;
       const head = Math.max(...tops.map(s => s.top));
       if (head - floor < 0.05) return;
+      // AND IT SAYS SO WHEN IT CANNOT. A caller that asked for finishes and
+      // did not load the module gets an elevation that is silently, correctly
+      // plain -- indistinguishable from one whose walls are all stucco. That
+      // cost an afternoon once; once is enough.
       const FP = window.DraftFinishPatterns;
-      if (!FP) return;
+      if (!FP) {
+        if (!warnedNoPatterns) {
+          warnedNoPatterns = true;
+          console.warn('cut-view: finishes were asked for, but finish-patterns.js '
+            + 'is not loaded -- every wall will draw plain.');
+        }
+        return;
+      }
       const boxAt = (lo, hi) => ({
         x0: Math.min(xa, xb), x1: Math.max(xa, xb),
         yTop: Y(hi), yBottom: Y(lo), pxPerFt,
@@ -3779,8 +3791,48 @@ if (!window.DraftCutView) {
           // would not merely go unfilled, it would put the walls down in the
           // wrong order. `Math.abs(NaN) < 4` is false, so the area test lets
           // it straight through.
-          if (!Number.isFinite(area2) || Math.abs(area2) < 4) return;
-          const parts = [pts];
+          if (!Number.isFinite(area2)) return;
+          const parts = [];
+          // ── A GABLE END SEEN SQUARE ON IS A LINE, AND STILL OPAQUE ────
+          //
+          // Movie, 27 Sep, on the Real Estate elevations: "it looks like the
+          // finishes are coming through the gable of lower roof". They were.
+          //
+          // A ROOF PLANE WHOSE RIDGE RUNS AWAY FROM THE VIEWER PROJECTS TO A
+          // LINE. Both slopes of that gable came through here with `area2`
+          // of exactly ZERO, were dropped as covering no paper, and left the
+          // rake with nothing filled behind it -- so the wall beyond showed
+          // through. Invisible until the day a wall had a hatch on it,
+          // because a white wall behind a white roof is a white rake.
+          //
+          // WHAT IS REALLY THERE IS THE ROOF'S OWN THICKNESS, seen edge on:
+          // the sheathing and the fascia under it, a band following the slope
+          // from eave to ridge. That band is the two lines a drafter sees as
+          // the rake, and it is as opaque as any other surface on the sheet.
+          // Swept down from the projected line by the fascia, it is exactly
+          // the strip between them.
+          //
+          // THE ORDER WAS NEVER THE PROBLEM. Measured on repro-garage-house's
+          // E2: the roof's own depth is -8 and the walls it laps are -8 too,
+          // and the tie rule twenty lines down already puts the wall first and
+          // the roof over it. There was simply nothing to put over it.
+          //
+          // AND THE SAME TEST STILL SPARES A THUMBNAIL, which is what the old
+          // one was for: at a rail seat's 2 px/ft this band is nine tenths of
+          // a pixel, so a roof seen almost edge on still costs nothing there.
+          if (Math.abs(area2) < 4) {
+            const ends = pts.slice().sort((p1, p2) => p1.x - p2.x || p1.y - p2.y);
+            const lo = ends[0], hi = ends[ends.length - 1];
+            if (hi.x - lo.x < 1) return;   // truly edge on: no paper either way
+            const drop = fasciaFt * pxPerFt;
+            parts.push([{ x: lo.x, y: lo.y }, { x: hi.x, y: hi.y },
+              { x: hi.x, y: hi.y + drop }, { x: lo.x, y: lo.y + drop }]);
+            const depthEdge = Math.max(...pts.map(pt => pt.d));
+            if (!Number.isFinite(depthEdge)) return;
+            roofFills.push({ depth: depthEdge, parts });
+            return;
+          }
+          parts.push(pts);
           for (let i = 0; i < poly.length; i++) {
             const a = poly[i], b = poly[(i + 1) % poly.length];
             const ea = eaveTop + geo().roofFaceRise(face, a, pitch);

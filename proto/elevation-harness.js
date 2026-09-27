@@ -760,6 +760,16 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
   // project to a line and fill nothing, which is the right answer and not a
   // gap: what shows between the rakes of a gable seen end on is the gable END
   // WALL, and the wall pass fills that.
+  //
+  // AND THE RAKE ITSELF IS NOT THE GABLE WALL, which is the half of this that
+  // was wrong until 27 Sep. The SURFACE fills nothing, correctly. Its EDGE is
+  // another matter: the roof has a thickness, and seen end on that thickness
+  // is the strip between the two lines a drafter reads as the rake. That
+  // strip was left unfilled with the rest of the face, so the wall behind it
+  // showed through -- invisible for as long as everything on the sheet was
+  // white, and plain the moment a wall carried a hatch. Movie: "it looks like
+  // the finishes are coming through the gable of lower roof". The check below
+  // is the one that would have said so.
   const facingFace = (view, roof) => project(view, roof)
     .reduce((best, poly) => (best === null || Math.abs(twiceArea(poly)) > Math.abs(twiceArea(best))
       ? poly : best), null);
@@ -783,6 +793,103 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
     view.modelFills.forEach((f, i) => { if (inside(f.pts, u, e)) last = i; });
     return last;
   };
+
+  // ── A GABLE SEEN SQUARE ON STILL COVERS WHAT IS BEHIND IT ───────────
+  //
+  // ASKED WITH THE FINISHES ON, because that is the drawing the defect
+  // appears in: a white wall behind a white roof is a white rake, and nothing
+  // on any sheet ever looked wrong.
+  //
+  // MEASURED AS PAINT ORDER, which is the only thing that answers "is this
+  // visible" on an elevation. A hatch stroke lying in a rake must have a FILL
+  // over it, or the wall is showing through the roof.
+  {
+    // repro-garage-house, NOT this block's own fixture: it is the one whose
+    // lower gable is seen square on from E2 with a two-storey wall standing
+    // behind it, which is the geometry the defect needs. Movie's screenshot
+    // was of this house.
+    const clad = JSON.parse(fs.readFileSync(
+      path.join(ROOT, 'proto', 'repro-garage-house.draft'), 'utf8'));
+    clad.walls.forEach(w => { if ((w.view || 'plan') === 'plan') w.finish = 'brick'; });
+    const cEnv = buildEnv(win, clad);
+    const cCut = standardElevationCuts(cEnv).find(c => c.id === 'E2');
+    const plain = paintElevation(win, cEnv, cCut, { pxPerFt: 26 });
+    const hatched = paintElevation(win, cEnv, cCut, { pxPerFt: 26, finishes: true });
+    // THE FIXTURE'S OWN REACH FIRST. A house with no hatch on it passes every
+    // line below while proving nothing, and that is exactly how the first
+    // version of this probe came back green: proto/harness-env.js was dropping
+    // `finish` off every wall before the painter ever saw it, so the elevation
+    // drew plain and the probe reported zero hatch strokes on a clad house.
+    const key = st => JSON.stringify(st.pts.map(pt =>
+      [Math.round(pt.u * 100), Math.round(pt.e * 100), !!pt.move]));
+    const before = new Set(plain.strokes.map(key));
+    const hatch = hatched.strokes.filter(st => !before.has(key(st)));
+    check('gable rake: asking for finishes actually puts a hatch on the wall',
+      hatch.length > 0, `${hatch.length} hatch strokes over ${plain.strokes.length} plain`);
+    // The roof planes this cut sees EDGE ON -- the ones that fill no surface.
+    const edgeOn = cEnv.roofs().flatMap(roof => {
+      const eaveTop = CV.roofEaveElev(roof, CV.sectionLevelStack(cEnv), cEnv);
+      const pitch = roof.pitch || 4;
+      return G.roofFaces(roof, G.roofSkeleton(roof)).map(face => face.points.map(pt => ({
+        u: pt.x * hatched.axis.x + pt.z * hatched.axis.z,
+        e: eaveTop + G.roofFaceRise(face, pt, pitch),
+      })));
+    }).filter(poly => poly.length >= 3 && Math.abs(twiceArea(poly)) < 1e-6);
+    check('gable rake: and this elevation has a roof plane it sees edge on',
+      edgeOn.length > 0, `${edgeOn.length} roof planes project to a line on E2`);
+    // A stroke is IN a rake when it falls on the projected line, within the
+    // fascia's own depth below it -- which is the band the fix fills.
+    const FASCIA_FT = 5.5 / 12;
+    // EVERY POINT, NOT ONE. A hatch is a SINGLE path carrying the whole face
+    // -- fifteen hundred points of brick -- so sampling its midpoint asks
+    // about one brick in one place, which is how the first version of this
+    // check passed against the unfixed painter. Measured: it found nothing in
+    // any rake at all and then reported that nothing as clean.
+    const bandAt = (poly, u) => {
+      const us = poly.map(p => p.u);
+      if (u < Math.min(...us) || u > Math.max(...us)) return null;
+      const lo = poly.reduce((a, b) => (a.u <= b.u ? a : b));
+      const hi = poly.reduce((a, b) => (a.u >= b.u ? a : b));
+      if (hi.u - lo.u < 0.05) return null;
+      return lo.e + (hi.e - lo.e) * (u - lo.u) / (hi.u - lo.u);
+    };
+    const inRake = hatch.flatMap(st => st.pts
+      .filter(pt => edgeOn.some(poly => {
+        const at = bandAt(poly, pt.u);
+        return at !== null && pt.e <= at && pt.e >= at - FASCIA_FT;
+      }))
+      .map(pt => ({ seq: st.seq, u: pt.u, e: pt.e })));
+    // ── AND THE CLAIM IS ABOUT THE ROOF, NOT ABOUT WHAT IS BEHIND IT ──
+    //
+    // "No hatch shows in any rake" is too strong and was measured so: a rake
+    // whose roof stands BEHIND the wall is one the wall is right to cover,
+    // and 76 of 338 points in the first reading were exactly that -- the
+    // garage's own gable, seen through the house from E2, where the wall
+    // winning is the drawing being correct.
+    //
+    // WHAT IS ALWAYS TRUE is that an edge-on plane covering any paper at all
+    // PUTS SOMETHING DOWN. Before the fix it put down nothing -- `area2` of
+    // zero, dropped, no fill anywhere -- so there was never anything for the
+    // sort to place, whichever side of the wall it belonged on. That is the
+    // defect, stated without reaching past it.
+    // BY SHAPE, NOT BY "IS SOMETHING THERE". Asked the loose way this passes
+    // against the unfixed painter too, because the WALL's own fill covers
+    // that spot -- which is the whole complaint. The band has four corners and
+    // a fill matching them is the roof's or nobody's.
+    const rakeFilled = edgeOn.filter(poly => {
+      const lo = poly.reduce((p, q) => (p.u <= q.u ? p : q));
+      const hi = poly.reduce((p, q) => (p.u >= q.u ? p : q));
+      if (hi.u - lo.u < 0.05) return true;       // no paper: nothing to fill
+      const band = [
+        { u: lo.u, e: lo.e }, { u: hi.u, e: hi.e },
+        { u: hi.u, e: hi.e - FASCIA_FT }, { u: lo.u, e: lo.e - FASCIA_FT },
+      ];
+      return hatched.modelFills.some(f => sameShape(f.pts, band, 0.02));
+    });
+    check('every gable rake seen edge on puts a fill down, or the wall shows through it',
+      rakeFilled.length === edgeOn.length,
+      `${rakeFilled.length} of ${edgeOn.length} edge-on planes fill their rake`);
+  }
 
   // THE DATUM THE WHOLE SHEET HANGS OFF, stated against the DRAWING rather
   // than against its own arithmetic. `roofEaveElev` is where a rise of zero
