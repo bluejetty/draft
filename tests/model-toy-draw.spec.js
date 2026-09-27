@@ -1288,13 +1288,26 @@ test('§4 — a click near a corner breaks at the first mark IN, never at the co
     //
     // fit() scales to the drawn bounds, so a smaller house fits at a larger
     // scale and the corner's grip shrinks in FEET. No view state is touched
-    // and at() stays true. A five-foot house still left the corner owning
-    // 0.484 ft, hence this one.
+    // and at() stays true. A ten-foot house left the corner owning 0.484 ft,
+    // hence the five-foot one this used to draw.
+    //
+    // AND THREE FEET SINCE 27 SEP, because fit() began framing the ELEVATION
+    // MARKS as well as the house (Movie: "zoom to a position so that the E1 -
+    // E4 lines have extra space"). The ring stands two feet off every side, so
+    // on a house this small it nearly doubles what is framed: the five-foot
+    // one dropped from about 109 px/ft to 60.8, the corner grew back to 0.494
+    // ft, and the precondition below said so rather than the test failing
+    // somewhere further down. Three feet puts it back over 75 px/ft.
+    //
+    // THE PRECONDITION IS WHY THIS WAS ONE EDIT AND NOT AN AFTERNOON. It
+    // states the scale the rest of the test needs instead of assuming it, so a
+    // change to the default zoom fails here, with the number, rather than as a
+    // press that mysteriously grabs the wrong thing.
     await open(page, base({
       board: 'toy',
       walls: [
-        ['n', V(-2.5, -2.5), V(2.5, -2.5)], ['e', V(2.5, -2.5), V(2.5, 2.5)],
-        ['s', V(2.5, 2.5), V(-2.5, 2.5)], ['w', V(-2.5, 2.5), V(-2.5, -2.5)],
+        ['n', V(-1.5, -1.5), V(1.5, -1.5)], ['e', V(1.5, -1.5), V(1.5, 1.5)],
+        ['s', V(1.5, 1.5), V(-1.5, 1.5)], ['w', V(-1.5, 1.5), V(-1.5, -1.5)],
       ].map(([id, start, end]) => ({ id, start, end, levelId: 3, view: 'plan',
         wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left' })),
     }));
@@ -1308,7 +1321,7 @@ test('§4 — a click near a corner breaks at the first mark IN, never at the co
     // drops to zero -- the only window in which the clamp does anything.
     const offset = grabFt + (0.49 - grabFt) / 2;
     const { at } = await frame(page);
-    await selectThen(page, at, [-2.5 + offset, -2.5]);
+    await selectThen(page, at, [-1.5 + offset, -1.5]);
     await expect(boneChoice(page),
       `at ${offset.toFixed(3)} ft from the corner the press grabs the BODY`)
       .toBeVisible();
@@ -1317,11 +1330,11 @@ test('§4 — a click near a corner breaks at the first mark IN, never at the co
     await saveIt(page);
 
     const walls = await wallsNamed(page);
-    const run = walls.filter(w => w.s[1] === -2.5 && w.e[1] === -2.5);
+    const run = walls.filter(w => w.s[1] === -1.5 && w.e[1] === -1.5);
     expect(run.length, 'the wall was broken').toBe(2);
     const xs = run.flatMap(w => [w.s[0], w.e[0]]).sort((a, b) => a - b);
-    expect(xs, 'broken one foot IN, not on the corner at -2.5')
-      .toEqual([-2.5, -1.5, -1.5, 2.5]);
+    expect(xs, 'broken one foot IN, not on the corner at -1.5')
+      .toEqual([-1.5, -0.5, -0.5, 1.5]);
     // AND NO NULL HALF, the failure the clamp exists to prevent.
     for (const w of walls) {
       expect(Math.hypot(w.e[0] - w.s[0], w.e[1] - w.s[1]),
