@@ -92,9 +92,99 @@ function run(win) {
   check('every row carries a thickness field, so masonry is a row not a migration',
     F.every(f => Number.isFinite(f.thicknessIn)),
     F.map(f => `${f.id}=${f.thicknessIn}`).join(' '));
-  check('and every one of them is zero, so nothing in any drawing moved',
-    F.every(f => f.thicknessIn === 0),
-    F.filter(f => f.thicknessIn !== 0).map(f => f.id).join(' ') || 'all zero');
+  const flat = F.filter(f => !T.MASONRY_FINISH_IDS.includes(f.id));
+  const masonry = F.filter(f => T.MASONRY_FINISH_IDS.includes(f.id));
+  check('fixture: the table holds both kinds, so neither claim below is vacuous',
+    flat.length > 0 && masonry.length > 0, `${flat.length} flat, ${masonry.length} masonry`);
+  check('a finish that hangs on the wall has no thickness at all',
+    flat.every(f => f.thicknessIn === 0),
+    flat.map(f => `${f.id}=${f.thicknessIn}`).join(' '));
+  check('and one that stands off it has a real one',
+    masonry.every(f => f.thicknessIn > 0),
+    masonry.map(f => `${f.id}=${f.thicknessIn}`).join(' '));
+  // DERIVED, NOT LISTED. A hand-written list of masonry ids drifts the first
+  // time a row's thickness changes and says nothing the rows do not.
+  check('the masonry list is read off the thicknesses rather than typed beside them',
+    T.MASONRY_FINISH_IDS.length === F.filter(f => f.thicknessIn > 0).length
+    && F.filter(f => f.thicknessIn > 0).every(f => T.MASONRY_FINISH_IDS.includes(f.id)),
+    T.MASONRY_FINISH_IDS.join(' '));
+
+  // ── WHAT STANDS OFF THE WALL STANDS PROUD OF ITS JOINT ───────────────
+  //
+  // Movie: *"can we give these texture where the stone stuck out past the
+  // mortor"*. Relief is what makes stone read as stone rather than as tile:
+  // the unit is forward, the mortar is behind it, and the unit throws a
+  // shadow. A flat finish has no joint to stand out of, so claiming relief
+  // there would be a shadow drawn for a depth that is not there.
+  check('every masonry finish stands proud of its joint',
+    masonry.every(f => f.relief === true),
+    masonry.map(f => `${f.id}:${!!f.relief}`).join(' '));
+  check('and no flat one does, having no joint to stand out of',
+    flat.every(f => !f.relief),
+    flat.map(f => `${f.id}:${!!f.relief}`).join(' '));
+  check('every masonry finish leaves its joint width open, since the shadow is measured against it',
+    masonry.every(f => f.params.some(p => p.key === 'jointIn' && p.in > 0)),
+    masonry.map(f => `${f.id}:${(f.params.find(p => p.key === 'jointIn') || {}).in}`).join(' '));
+
+  // ── AND A WAINSCOT IS CAPPED ─────────────────────────────────────────
+  //
+  // *"we should put a ledge at the top of the stone that overhangs the top of
+  // the stone"*, then *"drip edge"*. A cap that does not OVERHANG sheds
+  // nothing and throws no shadow, and one without a drip sends the water back
+  // along its own underside to the wall it was put there to protect. Both are
+  // the detail failing quietly rather than loudly, which is why they are
+  // checked rather than left to the row.
+  check('every masonry finish carries a cap for where its band stops short',
+    masonry.every(f => f.cap), masonry.map(f => `${f.id}:${!!f.cap}`).join(' '));
+  check('and the cap actually overhangs, or it sheds nothing and casts no shadow',
+    masonry.every(f => f.cap && f.cap.projectIn > 0),
+    masonry.map(f => `${f.id}:${f.cap && f.cap.projectIn}`).join(' '));
+  check('and it is a course with a height, not a line',
+    masonry.every(f => f.cap && f.cap.highIn > 0),
+    masonry.map(f => `${f.id}:${f.cap && f.cap.highIn}`).join(' '));
+  check('and its nose is kerfed, so the water drops clear instead of tracking back',
+    masonry.every(f => f.cap && f.cap.drip === true),
+    masonry.map(f => `${f.id}:${f.cap && f.cap.drip}`).join(' '));
+  check('a flat finish takes no cap, having no band to terminate',
+    flat.every(f => !f.cap), flat.map(f => `${f.id}:${!!f.cap}`).join(' '));
+
+  // ── BRICK COURSES ON THE UNIT PLUS THE JOINT, AND NOTHING ELSE ───────
+  //
+  // Movie asked whether 8x2 was standard. The length is; the height is not,
+  // and the trap is the published nominal: modular brick prints as 2 2/3"
+  // high, which is where "three courses to eight inches" comes from, while
+  // 2 1/4" of brick and a 3/8" joint is 2 5/8" and three of those are 7 7/8".
+  // A drawing that stores the nominal and lets a drafter edit the joint would
+  // silently be claiming one and drawing the other, an eighth out per course
+  // and two inches by the top of a storey. So the UNIT and the JOINT are both
+  // stored and the coursing is their sum -- set the joint to 7/16 and the
+  // courses land on 8" because the arithmetic says so, not because a table
+  // was rounded.
+  const brick = T.finishById('brick');
+  const at = k => (brick.params.find(p => p.key === k) || {}).in;
+  check('brick stores its unit and its joint separately, so coursing is their sum',
+    Number.isFinite(at('brickHighIn')) && Number.isFinite(at('jointIn')),
+    `${at('brickHighIn')} + ${at('jointIn')}`);
+  check('and the stored unit is the ACTUAL brick, not the nominal one',
+    at('brickHighIn') < 8 / 3 && at('brickLongIn') < 8,
+    `${at('brickLongIn')}" x ${at('brickHighIn')}" against nominal 8" x ${(8 / 3).toFixed(3)}"`);
+  // AND THE ROUNDING IS NAMED RATHER THAN INHERITED. Three courses of what
+  // this table stores come to 7 7/8", not 8". The joint that would land them
+  // on 8" is 8/3 - 2 1/4 = 5/12", which is not a size anybody lays -- so
+  // "three courses to eight inches" is a rule of thumb and there is no joint
+  // that makes it exact. What a drawing owes is the arithmetic it actually
+  // stores, and this is the check that it is not quietly claiming the other.
+  check('three courses come to what the unit and joint say, not to the printed 8\"',
+    Math.abs((at('brickHighIn') + at('jointIn')) * 3
+      - (at('brickHighIn') + at('jointIn')) * 3) < 1e-9
+    && Math.abs((at('brickHighIn') + at('jointIn')) * 3 - 8) > 0.05,
+    `${((at('brickHighIn') + at('jointIn')) * 3).toFixed(3)}" at a ${at('jointIn')}" joint`);
+  check('and no standard joint makes it exact, which is why the nominal is not stored',
+    Math.abs((at('brickHighIn') + 0.375) * 3 - 8) > 0.05
+    && Math.abs((at('brickHighIn') + 0.4375) * 3 - 8) > 0.05,
+    `3/8 -> ${((at('brickHighIn') + 0.375) * 3).toFixed(3)}"`
+    + `   7/16 -> ${((at('brickHighIn') + 0.4375) * 3).toFixed(3)}"`
+    + `   exact would need ${(8 / 3 - at('brickHighIn')).toFixed(4)}"`);
 
   // ── THE SPACING IS A PARAMETER, WHICH IS THE WHOLE DESIGN ────────────
   //
@@ -173,6 +263,49 @@ const MUTATIONS = [
   ['a flat finish claims a thickness, so a drawing moves that should not have',
     s => s.replace("{ id: 'siding_v', label: 'V. Siding', pattern: 'lines', axis: 'vertical', thicknessIn: 0,",
       "{ id: 'siding_v', label: 'V. Siding', pattern: 'lines', axis: 'vertical', thicknessIn: 4,")],
+  ['a veneer stone goes flat, so it hangs on the wall with no thickness at all',
+    s => s.replace("      thicknessIn: 2, relief: true,\n"
+      + "      cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),\n"
+      + "      params: Object.freeze([\n        { key: 'courseIn', label: 'Course', in: 3 },",
+      "      thicknessIn: 0, relief: true,\n"
+      + "      cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),\n"
+      + "      params: Object.freeze([\n        { key: 'courseIn', label: 'Course', in: 3 },")],
+  ['the masonry list is typed out instead of read off the thicknesses',
+    s => s.replace("  const MASONRY_FINISH_IDS = Object.freeze(\n"
+      + "    EXTERIOR_FINISHES.filter(f => f.thicknessIn > 0).map(f => f.id));",
+      "  const MASONRY_FINISH_IDS = Object.freeze(['ledgestone', 'ashlar']);")],
+  // ANCHORED ON A ROW, not on the line it shares with four others. All five
+  // masonry rows carry the same relief and the same cap, so a bare line
+  // matches five times and `replace` takes the first -- the mutant still dies,
+  // but on whichever row happened to come first rather than the one its label
+  // names. mutant-anchors-harness.js is what said so.
+  ['stone stops standing proud, so it outlines flat and reads as tile',
+    s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true,",
+      "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2,")],
+  ['siding claims relief, so a shadow is drawn for a depth that is not there',
+    s => s.replace("{ id: 'shake', label: 'Cedar Shake', pattern: 'shake', axis: 'horizontal',\n      thicknessIn: 0,",
+      "{ id: 'shake', label: 'Cedar Shake', pattern: 'shake', axis: 'horizontal',\n      thicknessIn: 0, relief: true,")],
+  ['the cap stops overhanging, so it sheds nothing and throws no shadow',
+    s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true,\n"
+      + '      cap: Object.freeze({ projectIn: 1',
+      "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true,\n"
+      + '      cap: Object.freeze({ projectIn: 0')],
+  ['the cap loses its drip, so the water tracks back along it to the wall',
+    s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true,\n"
+      + '      cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),',
+      "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true,\n"
+      + '      cap: Object.freeze({ projectIn: 1, highIn: 2 }),')],
+  ['the cap becomes a line with no course height',
+    s => s.replace("{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true,\n"
+      + '      cap: Object.freeze({ projectIn: 1, highIn: 2,',
+      "{ id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',\n      thicknessIn: 2, relief: true,\n"
+      + '      cap: Object.freeze({ projectIn: 1, highIn: 0,')],
+  ['masonry loses its joint, so the relief has nothing to be measured against',
+    s => s.replace("        { key: 'jointIn', label: 'Joint', in: 1 },\n      ]) },\n"
+      + "    { id: 'ashlar',", '      ]) },\n    { id: \'ashlar\',')],
+  ['brick is stored NOMINAL, so editing the joint silently changes the brick',
+    s => s.replace("{ key: 'brickHighIn', label: 'Brick high', in: 2.25 },",
+      "{ key: 'brickHighIn', label: 'Brick high', in: 2.6667 },")],
   ['B&B is filed as vertical, against Movie-s own word for it',
     s => s.replace("{ id: 'siding_h_bb', label: 'H. Siding (B&B)', pattern: 'batten', axis: 'horizontal',",
       "{ id: 'siding_h_bb', label: 'H. Siding (B&B)', pattern: 'batten', axis: 'vertical',")],

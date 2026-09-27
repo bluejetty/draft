@@ -134,7 +134,161 @@ if (!window.DraftWallTypes) {
     { id: 'shake', label: 'Cedar Shake', pattern: 'shake', axis: 'horizontal',
       thicknessIn: 0,
       params: Object.freeze([{ key: 'exposureIn', label: 'Exposure', in: 7 }]) },
+    // ── THE STONES, WHICH ARE FOUR PATTERNS AND NOT ONE MATERIAL ────────
+    //
+    // Movie, 26 Sep: *"1 LEDGESTONE (stacked stone)  2. ASHLAR (rectangle
+    // stone)  3. ROUNDSTONE  4. FIELDSTONE (odd shapes)"* -- his own glosses,
+    // kept because they are what tells them apart on a sheet. Stacked thin
+    // courses, squared coursed blocks, cobbles, and random rubble read
+    // nothing like each other, so one STONE row with a "style" field would be
+    // four painters hiding behind one id.
+    //
+    // THEY ARE THE FIRST ROWS WITH A THICKNESS, and it is not yet drawable.
+    // See the note above: a face offset is masonry's own piece of work.
+    //
+    // VENEER, NOT FULL BED, and Movie settled it when asked which: *"we will
+    // use vaneer stone but make the stone about 2\" thick and mortar 1\""*. The
+    // difference is not decoration -- a full bed is 4" of stone on a 1" air
+    // space and wants a LEDGE under it to carry the weight, which would put
+    // this in the foundation as well as the elevation. A veneer hangs on the
+    // wall, so what is left is two inches of face offset and no ledge at all.
+    //
+    // AND THE JOINT IS A PARAMETER, not a constant, because it is what the
+    // relief below is measured against: a one inch mortar joint with the
+    // stone standing two inches proud of the sheathing is a deep shadow, and
+    // a drafter who wants it tighter changes the number rather than the row.
+    //
+    // ── AND THEY STAND PROUD OF THE JOINT, WHICH IS `relief` ────────────
+    //
+    // Movie: *"can we give these texture where the stone stuck out past the
+    // mortor"*. That is the thing that makes stone read as stone: the unit
+    // sits forward and the mortar is recessed behind it, so on an elevation
+    // each stone throws a SHADOW rather than merely being outlined. Outline
+    // it flat and the same pattern reads as a tile floor stood on end.
+    //
+    // ONE FLAG, NOT A DRAWING. `relief: true` says the units are proud of
+    // their joints; which sides go dark is the painter's, and it takes the
+    // convention every set uses -- light from the upper left, so the shadow
+    // falls on the BOTTOM and the RIGHT of each unit. Written as a flag so
+    // the four stones and the brick cannot each answer it differently.
+    { id: 'ledgestone', label: 'Ledgestone', pattern: 'stacked', axis: 'horizontal',
+      thicknessIn: 2, relief: true,
+      cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),
+      params: Object.freeze([
+        { key: 'courseIn', label: 'Course', in: 3 },
+        { key: 'jointIn', label: 'Joint', in: 1 },
+      ]) },
+    { id: 'ashlar', label: 'Ashlar', pattern: 'ashlar', axis: 'horizontal',
+      thicknessIn: 2, relief: true,
+      cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),
+      params: Object.freeze([
+        { key: 'stoneHighIn', label: 'Stone high', in: 8 },
+        { key: 'stoneLongIn', label: 'Stone long', in: 16 },
+        { key: 'jointIn', label: 'Joint', in: 1 },
+      ]) },
+    { id: 'roundstone', label: 'Roundstone', pattern: 'round', axis: 'horizontal',
+      thicknessIn: 2, relief: true,
+      cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),
+      params: Object.freeze([
+        { key: 'stoneIn', label: 'Stone', in: 8 },
+        { key: 'jointIn', label: 'Joint', in: 1 },
+      ]) },
+    // NO COURSE AND NO GRID: rubble laid to no line, which is what "odd
+    // shapes" means and what separates it from the ashlar above. The one
+    // number is a nominal size for the painter to scatter around.
+    { id: 'fieldstone', label: 'Fieldstone', pattern: 'field', axis: 'horizontal',
+      thicknessIn: 2, relief: true,
+      cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),
+      params: Object.freeze([
+        { key: 'stoneIn', label: 'Stone', in: 12 },
+        { key: 'jointIn', label: 'Joint', in: 1 },
+      ]) },
+    // ── AND A WAINSCOT IS CAPPED, WHICH IS `cap` ───────────────────────
+    //
+    // Movie: *"we should put a ledge at the top of the stone that overhangs
+    // the top of the stone"*. That is the WATER TABLE, and it is not trim: a
+    // band of stone stopped partway up a wall is an open horizontal joint
+    // facing the weather, and the cap oversails it so the water drips clear
+    // of the face instead of running down behind it.
+    //
+    // IT OVERHANGS, so on an elevation the wall steps OUT at the cap and back
+    // IN above -- which puts a shadow under the cap's nose, and that shadow
+    // is the line that reads the whole detail at a glance. Projection is
+    // measured past the STONE's face, not the sheathing, because the stone is
+    // what it has to shed water clear of.
+    //
+    // ONLY WHERE THE BAND STOPS SHORT -- Movie's own qualifier, given in the
+    // same breath: *"(if its not at top of wall)"*, *"at top of the wall
+    // won't need a legde"*. A cap is the TERMINATION of a wainscot; stone
+    // carried to the underside of the soffit has nothing to terminate and
+    // takes none. That is the painter's test, not a field here, because it is
+    // a fact about the BAND rather than about the material -- the same stone
+    // is capped in one place and bare in another on one drawing.
+    //
+    // AND THE NOSE IS KERFED: Movie, naming it, *"drip edge"*. A projecting
+    // cap without one is worse than no cap at all -- water follows the
+    // underside back to the wall by surface tension and runs down the face it
+    // was put there to protect. The groove breaks that path and the drop
+    // falls clear.
+    //
+    // IT IS A SECTION DETAIL THAT ELEVATIONS INHERIT. What a drafter sees on
+    // an elevation is the shadow under the nose, which the projection already
+    // gives; the kerf itself shows where the cap is CUT. Carried as a flag
+    // rather than a dimension because a drip is present or absent -- an eighth
+    // of an inch of groove in one office and three sixteenths in the next
+    // makes no difference to either drawing.
+    //
+    // THE NUMBERS ARE MINE, NOT MOVIE'S -- 1" of nose past a 2" stone and a
+    // 2" course -- and they are defaults on a row, so a drafter who wants a
+    // heavier cap sets two fields rather than waiting on a new material.
+
+    // ── BRICK, WHICH IS THE ONE MASONRY THAT COMES IN A SIZE ───────────
+    //
+    // A stone is whatever the mason pulled off the pallet, which is why the
+    // four above are drawn from a nominal size and scattered. A brick is a
+    // MANUFACTURED unit: every one the same, laid to a bond, and its coursing
+    // is arithmetic rather than character.
+    //
+    // MODULAR, WHICH IS NOT 8 BY 2. Movie asked: *"BRICK standard 8\"x 2\"? -
+    // is this standard brick size?"* The length is right and the height is
+    // not. A North American modular brick is 7 5/8" by 2 1/4" ACTUAL, laid
+    // with a 3/8" joint: 8" long nominal, and 2 5/8" per COURSE.
+    //
+    // 2 5/8", NOT THE 2 2/3" THE TABLES PRINT, and the difference is worth
+    // the line it takes. Modular brick is published as 4 x 2 2/3 x 8 nominal,
+    // and 2 2/3 is where "three courses to eight inches" comes from -- but
+    // 2 1/4 of brick plus a 3/8 joint is 2 5/8, and three of those come to
+    // 7 7/8.
+    //
+    // AND NO STANDARD JOINT CLOSES THE GAP. The joint that would land three
+    // courses on 8" is 8/3 - 2 1/4 = 5/12", which nobody lays; 7/16 overshoots
+    // to 8 1/16. So "three to eight" is a rule of thumb with no exact joint
+    // behind it, and a drawing that believed it would be an eighth out per
+    // course and two inches by the top of a storey.
+    //
+    // SO THE UNIT AND THE JOINT ARE BOTH STORED and the coursing is their
+    // sum, whatever that comes to. Storing the nominal instead would mean a
+    // drafter editing the joint silently changed the brick.
+    //
+    // RUNNING BOND, the half-lap every other course, because it is what a
+    // house is laid in unless somebody says otherwise. Stack, soldier and the
+    // rest are bonds of the same unit rather than materials of their own, so
+    // when they are wanted they are a field beside these and not new rows.
+    { id: 'brick', label: 'Brick', pattern: 'brick', axis: 'horizontal',
+      thicknessIn: 4.625, relief: true,
+      cap: Object.freeze({ projectIn: 1, highIn: 2, drip: true }),
+      params: Object.freeze([
+        { key: 'brickLongIn', label: 'Brick long', in: 7.625 },
+        { key: 'brickHighIn', label: 'Brick high', in: 2.25 },
+        { key: 'jointIn', label: 'Joint', in: 0.375 },
+      ]) },
   ]);
+  // The finishes that stand their own width off the sheathing. Nothing draws
+  // them yet -- a non-zero thickness needs the ledge and the face offset
+  // designed first -- so this list is what the painters must refuse until
+  // that lands, and what the checks measure "nothing moved" against.
+  const MASONRY_FINISH_IDS = Object.freeze(
+    EXTERIOR_FINISHES.filter(f => f.thicknessIn > 0).map(f => f.id));
   const DEFAULT_FINISH_ID = 'stucco';
   const finishById = id => EXTERIOR_FINISHES.find(f => f.id === id)
     || EXTERIOR_FINISHES.find(f => f.id === DEFAULT_FINISH_ID);
@@ -145,6 +299,7 @@ if (!window.DraftWallTypes) {
     FOUNDATION_WALL_TYPE_IDS,
     EXTERIOR_WALL_TYPE_IDS,
     EXTERIOR_FINISHES,
+    MASONRY_FINISH_IDS,
     DEFAULT_FINISH_ID,
     finishById,
   });
