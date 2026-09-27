@@ -95,7 +95,11 @@ const MUTANTS = [
     test: 'refuses a new one' },
   { file: 'MODEL.html',
     name: 'Escape stops cancelling, so the refusal names a way out that is gone',
-    find: '      if (pendingBone) {\n        pendingBone = null;\n        sayOnStrip(\'run cancelled\');\n      }',
+    // RE-ANCHORED 27 SEP. Escape and the right mouse button now share one
+    // list of half-finished gestures (cancelGestures), and the bone's cancel
+    // moved into it with the rest -- so breaking it here breaks it for both
+    // callers, which is what the shared list is for.
+    find: '    if (pendingBone) { pendingBone = null; sayOnStrip(\'run cancelled\'); }',
     with: '',
     test: 'Escape cancels' },
   { file: 'MODEL.html',

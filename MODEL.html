@@ -15401,7 +15401,71 @@
     const moved = verdict.delta || 0;
     return axis === 'x' ? { dx: 0, dz: moved } : { dx: moved, dz: 0 };
   };
+  // ── EVERY HALF-FINISHED GESTURE, PUT DOWN ────────────────────────────
+  //
+  // Movie, 27 Sep: *"do we have control over anything that happens when the
+  // right mouse button is clicked, could we make it do more things i don't
+  // think i've used the right click yet"*. He had not used it because it had
+  // nothing to use: this page had no contextmenu handler at all, so the right
+  // button PLACED A WALL POINT -- pointerdown never asked which button -- and
+  // opened the browser's own menu over the drawing at the same time.
+  //
+  // THE OLD PAGE ALREADY RULED WHAT IT SHOULD DO. MODEL.dc.html:11320's
+  // _onRightClick cancels the window selection, the extend, the wall, the
+  // line, the floor, the outline and the cut, and clears NO selection. That
+  // is the verb this page gets.
+  //
+  // AND WRITING IT DOWN FOUND THAT ESCAPE HAD BEEN LYING. Escape's own note
+  // says it "puts down every other half-taken gesture on this page", and it
+  // clears three of them -- the wall's anchor, the ruler's measure and the
+  // unfinished bone. The CUT's first press, the BEAM's anchor, the FLOOR's
+  // trace and the OUTLINE's trace all survived it, because the only thing
+  // that ever cleared those was a TOOL CHANGE (the toolListener at :9018). So
+  // a drafter four corners into a floor pressed Escape, saw nothing happen,
+  // and pressed it again.
+  //
+  // ONE LIST, TWO CALLERS, which is what makes the claim checkable: Escape
+  // and the right button cannot come to different opinions about what a
+  // half-finished gesture is.
+  //
+  // LIVE DRAGS ARE NOT IN IT. bandDrag, moveDrag and wallPress are pointer
+  // captures that end on their own pointerup; dropping one from under the
+  // capture would leave the browser holding a pointer this page had
+  // forgotten about. A gesture here is one that PERSISTS BETWEEN PRESSES.
+  const cancelGestures = () => {
+    const had = !!(drawStart || rulerFrom || pendingBone || cutStart || beamStart
+      || outlineCorners.length || floorCorners.length);
+    drawStart = null;
+    rulerFrom = null;
+    beamStart = null;
+    cutStart = null;
+    cutEnd = null;
+    outlineCorners = [];
+    floorCorners = [];
+    outlineFamily = null;
+    if (pendingBone) { pendingBone = null; sayOnStrip('run cancelled'); }
+    return had;
+  };
+
+  // THE RIGHT BUTTON PUTS THE GESTURE DOWN, and takes the browser's menu with
+  // it. preventDefault unconditionally -- a menu over the sheet is wrong even
+  // when there is nothing to cancel -- but the repaint only when something
+  // actually changed, because a full canvas redraw for a press that did
+  // nothing is the cost the hover branch's note is about.
+  canvas.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    if (!cancelGestures()) return;
+    stripRefresh();
+    paint();
+  });
+
   canvas.addEventListener('pointerdown', e => {
+    // THE LEFT BUTTON DRAWS. Nothing asked which button until now, so a
+    // right-click placed a wall point on its way to opening a menu, and a
+    // middle-click did whatever the left one would have. The contextmenu
+    // handler above is the right button's verb; this is what stops it having
+    // a second one.
+    if (e.button !== 0) return;
     const rect = canvas.getBoundingClientRect();
     const at = toWorld(e.clientX - rect.left, e.clientY - rect.top);
     // THE RULER TAKES THE PRESS BEFORE ANYTHING ELSE, because it is the one
@@ -15957,27 +16021,25 @@
       // empty brush is not an in-progress gesture, so it does not eat the
       // press that a drafter meant for his selection.
       if (brushLoad) { brushDrop(); return; }
-      drawStart = null;
-      // AND THE UNFINISHED BONE GOES WITH IT. The refusal below says "finish
-      // or cancel the run you started", so a cancel has to exist -- a message
-      // naming a way out that the page does not offer is worse than no
-      // message. Escape already puts down every other half-taken gesture on
-      // this page (the pending wall start, a half-taken measure), so the
-      // unfinished run goes down the same way rather than by a key of its own.
+      // THROUGH THE SHARED LIST, which is what turned this line from a claim
+      // into a fact. It used to be `drawStart = null` plus the ruler and the
+      // bone, under a note promising every half-taken gesture on the page --
+      // and the cut, the beam, the floor and the outline were not in it.
+      //
+      // AND THE UNFINISHED BONE GOES WITH IT. The refusal elsewhere says
+      // "finish or cancel the run you started", so a cancel has to exist -- a
+      // message naming a way out that the page does not offer is worse than no
+      // message. It is in cancelGestures with the rest of them, so the right
+      // button cancels it too, which is the same sentence said twice by one
+      // piece of code rather than two.
+      cancelGestures();
       if (boneChoiceFor) { closeBoneChoice(); return; }
-      if (pendingBone) {
-        pendingBone = null;
-        sayOnStrip('run cancelled');
-      }
       // ESC WITH NOTHING SELECTED RELEASES THE FILTER, which is the release
       // the filter help line promises in writing (:22418-22419). With
       // something selected Esc clears the selection first, so a drafter never
       // loses both in one press.
       if (!selection.length && selectFilter !== 'all') setSelectFilter('all');
       setSelection([]);
-      // A half-taken measure is an in-progress gesture like any other, so it
-      // goes down with them. The ruler itself stays up, the way the tool does.
-      rulerFrom = null;
       stripRefresh();
       paint();
       return;
