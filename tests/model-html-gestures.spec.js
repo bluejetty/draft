@@ -655,6 +655,13 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // one object's properties onto another" -- and the direction is
             // the opposite of everything above it.
             'strip-ruler', 'strip-tsquare', 'strip-scale', 'strip-brush',
+            // AND THE SECOND CONTROL THE OLD PAGE DOES NOT HAVE, for the same
+            // reason the brush is the first: MODEL.dc.html cannot turn a
+            // house at all. Movie, 27 Sep: "can we add a HOUSE ROTATE
+            // function ... this will allow them to rotate a house 90 degress
+            // depending on length of house so it fits on the layout pages
+            // nicer". The table gains a row rather than losing an absence.
+            'strip-rotate',
             // THE READOUT IS A WORD UNTIL IT IS ASKED FOR (Movie, 15 Sep), so
             // the counts that used to sit open at the foot are behind two
             // presses now: `readout-tab` shows them and `readout-close` puts

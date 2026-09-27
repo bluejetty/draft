@@ -92,7 +92,20 @@ const saved = async page => {
 };
 
 const wallOf = (file, id) => file.walls.find(w => w.id === id);
-const r = n => { const v = Number(Number(n).toFixed(6)); return v === 0 ? 0 : v; };
+// FOUR DECIMALS, NOT SIX. Every value this rounder is asked about is a landing
+// point off a PIXEL drag, so it carries the error of a screen coordinate turned
+// back into feet -- about a ten-millionth at the scales this page runs at. Six
+// decimals exposes that whenever the value lands on the rounding boundary, and
+// one did: on 27 Sep the model space began framing the elevation marks as well
+// as the house, the default scale moved with it, and a drag that had been
+// landing on exactly -2 came back as -2.0000005, which toFixed(6) renders
+// -2.000001.
+//
+// A TEN-THOUSANDTH OF A FOOT is a eight-hundredth of an inch, against an app
+// that snaps in sixteenths and a claim that is about whether the sibling MOVED
+// -- not about its seventh decimal. Every expectation in this file is a whole
+// number of feet, so nothing here needs the precision that was costing it.
+const r = n => { const v = Number(Number(n).toFixed(4)); return v === 0 ? 0 : v; };
 
 // WHERE A WORLD POINT LANDS — asked of the page, not assumed.
 //

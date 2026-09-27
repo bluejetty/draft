@@ -49,10 +49,32 @@ if (!window.DraftCutMarks) {
   // IT POINTS OUTWARD, from the house toward the viewer -- the outward normal
   // of the face being looked at, which is the sign convention cut-view reads
   // and the one LAYOUT has always passed it.
-  const eMarkDir = id => {
-    const side = E_MARK_SIDES[id];
-    if (!side) return null;
-    return side.axis === 'z' ? { x: 0, z: side.sign } : { x: side.sign, z: 0 };
+  // ── AND WHICH SEAT IT TAKES ONCE THE HOUSE HAS BEEN TURNED ────────────
+  //
+  // Movie, 27 Sep: *"the front view E1 will stay as the same view but the
+  // house and the E1-E4 lines will rotate"*.
+  //
+  // SO THE ELEVATIONS WALK ROUND WITH THE HOUSE. E1 is the front and stays the
+  // front -- what changes is which SIDE of the plan the front wall is lying
+  // on. Turn the house a quarter clockwise and the wall that faced south now
+  // faces west, so E1's mark leaves the south seat and takes the west one.
+  //
+  // WHICH IS AN INDEX SHIFT AND NOTHING MORE, because the table above is
+  // already written in rotation order: south, west, north, east reads
+  // clockwise on a plan with x running right and z running down. That is why
+  // plan-rotate.js turns the geometry the same way -- the two were chosen to
+  // agree so that this stays one line.
+  const E_ORDER = Object.freeze(['E1', 'E2', 'E3', 'E4']);
+  const eMarkSeat = (id, turn = 0) => {
+    const i = E_ORDER.indexOf(id);
+    if (i < 0) return null;
+    const n = ((((Number(turn) || 0) % 4) + 4) % 4);
+    return E_MARK_SIDES[E_ORDER[(i + n) % 4]];
+  };
+  const eMarkDir = (id, turn = 0) => {
+    const seat = eMarkSeat(id, turn);
+    if (!seat) return null;
+    return seat.axis === 'z' ? { x: 0, z: seat.sign } : { x: seat.sign, z: 0 };
   };
 
   // The house's bounding box in plan, or null when there is not enough of a
@@ -106,7 +128,8 @@ if (!window.DraftCutMarks) {
   // The four standard elevation marks, or none. They are generated rather than
   // stored, so they cannot be edited away -- dragging one changes its
   // clearance, which is what elevationMarkOffsets holds.
-  const autoElevationCuts = ({ walls, dimensions, elevationMarkOffsets, autoElevations }) => {
+  const autoElevationCuts = ({ walls, dimensions, elevationMarkOffsets, autoElevations,
+    planTurn = 0 }) => {
     if (!autoElevations) return [];
     const box = planWallExtents(walls);
     if (!box) return [];
@@ -146,22 +169,28 @@ if (!window.DraftCutMarks) {
     // the clearance it is already standing at -- so symmetry is the default
     // here and never a cage.
     const at = id => {
-      const { side, sign } = E_MARK_SIDES[id];
+      const { side, sign } = eMarkSeat(id, planTurn);
       const stored = (elevationMarkOffsets || {})[id];
       return Number.isFinite(stored)
         ? edge[side] + sign * stored
         : boxEdge[side] + sign * ringClear;
     };
-    return [
-      { id: 'E1', name: 'E1', auto: true, elev: 0, levelId: null,
-        startPt: { x: minX - pad, z: at('E1') }, endPt: { x: maxX + pad, z: at('E1') }, dirVec: { x: 0, z: 1 } },
-      { id: 'E2', name: 'E2', auto: true, elev: 0, levelId: null,
-        startPt: { x: at('E2'), z: minZ - pad }, endPt: { x: at('E2'), z: maxZ + pad }, dirVec: { x: -1, z: 0 } },
-      { id: 'E3', name: 'E3', auto: true, elev: 0, levelId: null,
-        startPt: { x: minX - pad, z: at('E3') }, endPt: { x: maxX + pad, z: at('E3') }, dirVec: { x: 0, z: -1 } },
-      { id: 'E4', name: 'E4', auto: true, elev: 0, levelId: null,
-        startPt: { x: at('E4'), z: minZ - pad }, endPt: { x: at('E4'), z: maxZ + pad }, dirVec: { x: 1, z: 0 } },
-    ];
+    // ONE SHAPE FOR ALL FOUR, rather than four lines with the answers written
+    // out. The four used to be spelled out because they never moved; once a
+    // turn can move them, spelling them out is four places for the shift to be
+    // forgotten in. A mark on a z SIDE runs across x and is seen along z; on
+    // an x side it is the other way about.
+    return E_ORDER.map(id => {
+      const seat = eMarkSeat(id, planTurn);
+      const along = at(id);
+      const acrossX = seat.axis === 'z';
+      return {
+        id, name: id, auto: true, elev: 0, levelId: null,
+        startPt: acrossX ? { x: minX - pad, z: along } : { x: along, z: minZ - pad },
+        endPt: acrossX ? { x: maxX + pad, z: along } : { x: along, z: maxZ + pad },
+        dirVec: eMarkDir(id, planTurn),
+      };
+    });
   };
 
   // A hand-placed cut draws as an INFINITE line: however short the drafter
@@ -209,6 +238,8 @@ if (!window.DraftCutMarks) {
     CUT_BUBBLE_PUSH_FT,
     E_MARK_CLEAR_FT,
     E_MARK_SIDES,
+    E_ORDER,
+    eMarkSeat,
     eMarkDir,
   });
 })();

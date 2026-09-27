@@ -1266,6 +1266,7 @@
      alternative was office defaults, which would have shown four elevation
      marks to a drafter who had switched them off. -->
 <script src="./cut-marks.js"></script>
+<script src="./plan-rotate.js"></script>
 <script src="./outline-master.js"></script>
 <!-- The house types the build bar offers. Lifted out of MODEL.dc.html so both
      pages read one list (build-menu.js says why). -->
@@ -2041,6 +2042,25 @@
     };
     const top = tall('strip');
     const bottom = Math.max(tall('house-strip') - hemOf('house-strip'), 0);
+    // ── AND NOT THE SIDE TABS, WHICH WAS TRIED AND MEASURED ────────────
+    //
+    // Movie, 27 Sep, asked for the marks to clear "the top bottom and
+    // sidemenus". The bars are insetted here and the three rail tabs are not,
+    // which looks like the same omission -- so an inset for them was written,
+    // and then taken out again because nothing could tell the difference.
+    //
+    // MEASURED, on repro-garage-house at 1280x720: the mark ring spans x 230
+    // to 1050 while DRAFTING TOOLS ends at 26 and LEVELS / LAYERS begins at
+    // 1254. Two hundred pixels of clearance on each side, against a tab
+    // twenty-six wide. The vertical is the tight one -- 45px clear at the top
+    // and 21 at the bottom -- because the fit is HEIGHT-bound, and the 0.86
+    // margin therefore leaves the width enormous slack. A wide house is
+    // width-bound instead, and 7% of the sheet is still ninety pixels a side.
+    //
+    // SO THE TABS ARE ALREADY CLEARED BY THE MARGIN, and an inset for them is
+    // a change no check can see. What Movie was actually looking at is the
+    // other half of this: the marks were off the frame entirely, which fit()
+    // fixes by measuring them.
     // A sheet that is nearly all bar is a broken layout, not a tight fit.
     // Refusing the inset there leaves the old framing rather than dividing
     // the drawing into a sliver -- visibly wrong beats invisibly tiny.
@@ -2051,8 +2071,32 @@
   const fit = (wide = false) => {
     const pts = allPoints(wide);
     if (!pts.length) { view.cx = 0; view.cz = 0; view.scale = 6; return; }
+    // ── THE ELEVATION MARKS ARE PART OF WHAT IS ON THE SHEET ───────────
+    //
+    // Movie, 27 Sep: *"can you adjust the 'default' opening window of model
+    // space to zoom to a position so that the E1 - E4 lines have extra space
+    // to the top bottom and sidemenus"*.
+    //
+    // `allPoints` measures walls, lines and floors, so a fit framed the HOUSE
+    // and the ring of E marks standing off it fell outside -- which is what he
+    // is looking at. The ring is drawn on every plan by default, so it is part
+    // of the picture whether or not it is part of the building.
+    //
+    // NOT IN allPoints, THOUGH, and the scoping is the same ruling that keeps
+    // roofs and outlines out of it: `allPoints(wide)` also feeds the rail
+    // seats, and a thumbnail 82px across wants the HOUSE, not the house shrunk
+    // to make room for four bubbles. The marks are folded in here, where the
+    // main view is what is being framed, and the two callers that borrow fit()
+    // to make a picture say so already.
+    const framed = pts.slice();
+    if (!thumbTarget && !shootingPaper) {
+      autoElevationCuts().forEach(cut => {
+        if (cut.startPt) framed.push(cut.startPt);
+        if (cut.endPt) framed.push(cut.endPt);
+      });
+    }
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    pts.forEach(p => {
+    framed.forEach(p => {
       if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
       if (p.z < minZ) minZ = p.z; if (p.z > maxZ) maxZ = p.z;
     });
@@ -2903,6 +2947,12 @@
           dimensions: drawing?.dimensions || [],
           elevationMarkOffsets: drawing?.elevationMarkOffsets || {},
           autoElevations: structureStandards().autoElevations,
+          // HOW FAR ROUND THE HOUSE HAS BEEN TURNED. Movie, 27 Sep: "the
+          // front view E1 will stay as the same view but the house and the
+          // E1-E4 lines will rotate" -- so the marks walk a seat along with
+          // the geometry and E1 keeps its own wall. The cache above is keyed
+          // on the model epoch, which a rotation bumps through markDirty.
+          planTurn: drawing?.planTurn || 0,
         }),
       };
     }
@@ -3714,6 +3764,26 @@
     // panels do. Three numbers, one attribute, one write a frame.
     canvas.setAttribute('data-view',
       `${view.cx.toFixed(6)} ${view.cz.toFixed(6)} ${view.scale.toFixed(6)}`);
+    // ── AND THE FOUR ELEVATION MARKS THIS FRAME IS DRAWING ──────────────
+    //
+    // Published for the reason data-view above it is, and the note there
+    // already argues it: a second copy of the arithmetic is how the page and
+    // its checks drift apart. Measured, 27 Sep: model-house-rotate.spec.js
+    // asked DraftCutMarks for the marks ITSELF, with the saved drawing's own
+    // turn -- so a mutant that stopped this page passing the turn through left
+    // the spec computing the right answer while the page drew the wrong one,
+    // and it survived. A check that re-derives what it is checking is a check
+    // of its own arithmetic.
+    //
+    // FOUR LINES OF NUMBERS, written once a frame beside the camera. `id`, the
+    // two ends, and which way it looks -- everything a reader needs to say
+    // which wall an elevation is on and which way round it is.
+    canvas.setAttribute('data-e-marks', JSON.stringify(autoElevationCuts().map(cut => ({
+      id: cut.id,
+      a: [Number(cut.startPt.x.toFixed(4)), Number(cut.startPt.z.toFixed(4))],
+      b: [Number(cut.endPt.x.toFixed(4)), Number(cut.endPt.z.toFixed(4))],
+      d: [cut.dirVec.x, cut.dirVec.z],
+    }))));
     // AFTER the canvas timing and BEFORE the readout. After, because `paint`
     // in the readout means the main canvas and folding six thumbnails into it
     // would make one frame an edit read like a slow one. Before, because the
@@ -12483,6 +12553,7 @@
   const rulerChip = strip.querySelector('[data-mode-ruler]');
   const tsquareChip = strip.querySelector('[data-mode-tsquare]');
   const scaleChip = strip.querySelector('[data-mode-scale]');
+  const rotateChip = strip.querySelector('[data-mode-rotate]');
   const brushChip = strip.querySelector('[data-mode-brush]');
   const brushLoadOut = strip.querySelector('[data-brush-load]');
   const lengthBox = document.getElementById('frozen-length');
@@ -12676,6 +12747,45 @@
     stripRefresh();
     paint();
   });
+
+  // ── TURN THE HOUSE A QUARTER ──────────────────────────────────────────────
+  //
+  // Movie, 27 Sep: *"make it rotate the actual model space so the E1 E2 etc
+  // all rotate. make the rotations 90degrees don't allow in between"*, and the
+  // clarification that settles what it means: *"the front view E1 will stay as
+  // the same view but the house and the E1-E4 lines will rotate"*.
+  //
+  // THE ARITHMETIC IS NOT HERE. plan-rotate.js turns every record that carries
+  // a plan coordinate and counts the turn; cut-marks walks each elevation a
+  // seat along so E1 keeps its own wall. Both are checked offline, where a
+  // record type nobody remembered to turn fails a walk of the drawing rather
+  // than waiting to be noticed on a screenshot.
+  //
+  // A NEW RECORD, NOT AN EDIT IN PLACE, which is the module's own bargain --
+  // so the assignment is what makes it real, and everything downstream reads
+  // `drawing` through a function rather than holding the array it was handed.
+  //
+  // AND IT RE-FITS. The house is a different shape on the paper afterwards --
+  // that is the whole point of the press, "depending on length of house so it
+  // fits on the layout pages nicer" -- so leaving the camera where it was
+  // would put a house that now runs the other way half off the sheet.
+  if (rotateChip) {
+    rotateChip.addEventListener('click', () => {
+      if (!drawing) return;
+      const ROT = window.DraftPlanRotate;
+      if (!ROT) { sayOnStrip('Rotation is not loaded on this page.'); return; }
+      drawing = ROT.rotateDrawing(drawing, 1);
+      // markDirty FIRST, because it bumps the model epoch and the elevation
+      // marks are cached on it -- fit() asks for those marks, and asking
+      // before the bump would frame the house against the ring it had in its
+      // old orientation.
+      markDirty();
+      fit();
+      buildChrome();
+      paint();
+      sayOnStrip(`Turned a quarter \u2014 ${(drawing.planTurn || 0) * 90}\u00b0 from where it was drawn.`);
+    });
+  }
 
   // ── THE DRAFTING BRUSH ────────────────────────────────────────────────────
   //

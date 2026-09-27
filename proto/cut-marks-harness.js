@@ -451,9 +451,16 @@ const MUTATIONS = [
   ['the marks are measured off the walls, ignoring the dimension strings',
     s => s.replace('const edge = eMarkDimEdges(walls, dimensions);',
       'const edge = { N: box.minZ, S: box.maxZ, W: box.minX, E: box.maxX };')],
-  ['E1 looks away from the house',
-    s => s.replace("endPt: { x: maxX + pad, z: at('E1') }, dirVec: { x: 0, z: 1 }",
-      "endPt: { x: maxX + pad, z: at('E1') }, dirVec: { x: 0, z: -1 }")],
+  // RE-ANCHORED, 27 Sep. This used to name E1's own line, back when the four
+  // cuts were spelled out one per line with their directions written in. They
+  // are one `E_ORDER.map` now, because a turned house moves each elevation a
+  // seat along and four spelled-out lines is four places to forget the shift
+  // -- so the way to make an elevation look the wrong way is to negate the
+  // direction for all of them. mutant-anchors-harness is what said the old
+  // anchor had gone dead; nothing else would have.
+  ['every elevation looks away from the house instead of at it',
+    s => s.replace('        dirVec: eMarkDir(id, planTurn),',
+      '        dirVec: (d => ({ x: -d.x, z: -d.z }))(eMarkDir(id, planTurn)),')],
   // ANCHORED ON THE LINE BELOW IT, because `const pad = 2;` appears twice --
   // once here for the along-line overrun and once in eMarkDimEdges for the
   // corner brush -- and a bare string replace takes the first, which is the
