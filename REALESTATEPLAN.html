@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<title>Rough Drafter &mdash; Real Estate Plan</title>
+<!-- Self-hosted (see vendor/fonts.css): no third-party request on the
+     critical path of the page. -->
+<link rel="stylesheet" href="vendor/fonts.css" />
+<link rel="stylesheet" href="./shell-bars.css" />
+<script src="./palette.js"></script>
+<!-- WHAT A PLAN NEEDS, AND NOT WHAT A CONSTRUCTION SHEET NEEDS.
+     Movie, 27 Sep: "the REAL ESTATE PLAN area will be similar to the
+     CONSTRUCTION layout but we will present the drawings in a different way.
+     can you add that tab as a new page similar to construction layout and we
+     can modify it to creat our REAL ESTATE PLAN".
+
+     SIMILAR, THROUGH THE SAME MODULES rather than by copying the page. The
+     drawing half of Construction Layout is already lifted out -- layout-plan.js
+     composes a level into a box and plan-composition.js is the order it draws
+     in -- so this page is the same painter under a different sheet, which is
+     exactly the shape "we can modify it" wants. A clone of LAYOUT.html would
+     have been eighteen hundred lines that drift apart from the day they are
+     written.
+
+     AND FEWER MODULES, because a listing plan is not a construction document.
+     layer-views, auto-dims, the electrical symbols and the section tables are
+     things a sheet carries to be BUILT from. What a buyer reads is the shape of
+     the rooms -- so the shell walls, the openings, the stairs and the fixtures
+     are here, and the rest is deliberately absent rather than loaded and
+     switched off. ALL IN THE HEAD: the bars are written where their mount call
+     stands, mid-parse, so a module loaded after the body is one that call
+     cannot find. -->
+<script src="./shell-bars.js"></script>
+<script src="./profile-manager.js"></script>
+<script src="./shared-file-store.js"></script>
+<script src="./drawing-format.js"></script>
+<script src="./wall-types.js"></script>
+<script src="./level-assembly.js"></script>
+<script src="./render-2d.js"></script>
+<script src="./geometry-2d.js"></script>
+<script src="./stair-geometry.js"></script>
+<script src="./closets.js"></script>
+<script src="./fixture-geometry.js"></script>
+<script src="./plan-composition.js"></script>
+<script src="./layout-plan.js"></script>
+<script src="./formatters.js"></script>
+<script src="./orientation-guard.js"></script>
+<script>
+  // THE SKIN IS ONE CHOICE ACROSS THE WHOLE APP, read off the same
+  // `draft-skin` key MODEL writes. Synchronous and in the head: a page written
+  // in --role tokens has no colour at all between parse and boot.
+  (() => {
+    const P = window.DraftPalette;
+    const params = new URLSearchParams(location.search);
+    const stored = (() => {
+      try { return JSON.parse(localStorage.getItem('draft-skin') || 'null') || {}; }
+      catch { return {}; }
+    })();
+    const theme = params.get('theme') || stored.theme || 'ruff';
+    const mode = params.get('mode') || stored.skinMode || 'night';
+    window.__rpSkin = P.apply(document, theme, mode);   // role -> colour
+    window.__rpTheme = { theme, mode };
+  })();
+</script>
+<style>
+  :root { --sheet-edge: 1px solid var(--edge-panel); }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--surface-page); color: var(--ink-primary);
+    font-family: 'Barlow Condensed', system-ui, sans-serif;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .stage { flex: 1; display: flex; min-height: 0; }
+
+  /* ONE RAIL WIDTH, LEFT AND RIGHT ALIKE (board #48). */
+  .rail {
+    flex: none; width: 188px; padding: 10px; overflow-y: auto;
+    background: var(--surface-panel); display: flex; flex-direction: column; gap: 10px;
+  }
+  .rail.left { border-right: var(--sheet-edge); }
+  .rail-title {
+    font-size: 11px; font-weight: 600; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--accent-mark); margin: 2px 0 0 0;
+  }
+  .seat {
+    display: flex; align-items: center; gap: 6px; font-size: 12px;
+    border: 1px solid var(--edge-panel); background: var(--surface-chip);
+    padding: 5px 6px; letter-spacing: .05em;
+  }
+  .seat .what { flex: 1; min-width: 0; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .seat input[type="checkbox"] { accent-color: var(--accent-mark); }
+  .seat[data-empty="true"] .what { color: var(--ink-quiet); }
+  .prop { display: flex; flex-direction: column; gap: 4px; }
+  .prop label {
+    font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--ink-quiet);
+  }
+  .prop select {
+    appearance: none; background: var(--surface-chip); color: var(--ink-primary);
+    border: 1px solid var(--edge-panel); font: inherit; font-size: 12px;
+    padding: 5px 6px; width: 100%;
+  }
+  .empty { font-size: 11px; color: var(--ink-quiet); line-height: 1.45; margin: 0; }
+
+  /* THE DESK, AND THE PAPER ON IT. The sheet is white in every skin: it is
+     paper, and paper that changed colour with the lights would be lying about
+     what comes out of the printer. Construction Layout's own note says the
+     same thing about the same rectangle. */
+  .sheet-wrap {
+    flex: 1; min-width: 0; display: flex; align-items: center;
+    justify-content: center; padding: 14px; overflow: hidden;
+  }
+  canvas#sheet {
+    background: var(--surface-chip); border: var(--sheet-edge);
+    width: 100%; height: 100%; display: block;
+  }
+  #status {
+    flex: none; padding: 5px 12px; font-size: 11px; letter-spacing: .05em;
+    color: var(--ink-quiet); min-height: 22px;
+  }
+</style>
+</head>
+<body>
+  <!-- THE INSTRUMENTS ARE HERE AND ASLEEP, as on EXT. FINISH: the bar owns the
+       furniture, the page owns what the furniture does, and nothing on a sheet
+       is drawn by length and angle yet. -->
+  <script>window.DraftShellBars.topBar({ instruments: true });</script>
+  <main>
+    <div class="stage">
+      <div class="rail left">
+        <p class="rail-title">On the sheet</p>
+        <!-- THE SEATS HE NAMED, 27 Sep: "it will need the floor plans but i
+             will need to adjust what is shown and how it is shown in this
+             layout view, so will have the MAIN FL, 2nd FL (maybe basement
+             (optional) and will have main front 3D View (once available)".
+
+             SO THE SEATS ARE A LIST AND NOT A LAYOUT. Each one is a level of
+             the drawing that is actually there, with a tick that says whether
+             it prints -- the basement's is the "optional" he asked for, and it
+             starts OFF for the same reason he wrote the word. The 3D seat is
+             held open and says so: nothing can draw it yet. -->
+        <div id="seat-list"></div>
+        <p class="rail-title">Sheet</p>
+        <div class="prop">
+          <label for="paper">Paper</label>
+          <select id="paper"></select>
+        </div>
+        <p class="empty" id="note"></p>
+      </div>
+      <div class="sheet-wrap"><canvas id="sheet" width="1000" height="640"></canvas></div>
+    </div>
+    <div id="status" role="status"></div>
+  </main>
+
+  <!-- page:'real-estate' marks this chip "you are here". NO BONE yet: the bone
+       prints, and what this sheet prints is the thing Movie has said he wants
+       to arrange before it goes anywhere. -->
+  <script>window.DraftShellBars.bottomBar({ page: 'real-estate', bone: false });</script>
+
+  <script>
+    (async () => {
+      const FORMAT = window.DraftDrawingFormat;
+      const WT = window.DraftWallTypes;
+      const LP = window.DraftLayoutPlan;
+      const BUCKET = 'model-drawing';
+      const statusEl = document.getElementById('status');
+      const say = text => { statusEl.textContent = text; };
+
+      // ── THE PAPER ─────────────────────────────────────────────────────
+      // 8.5 x 11 LANDSCAPE IS THE DEFAULT, which is Movie's: "the LAYOUT tabe
+      // with real estate layout will have a default 8.5 x 11 size Landscape
+      // sheet". Landscape means 11 wide by 8.5 high, and it is FIRST in the
+      // list so it is what the page opens on.
+      const PAPERS = [
+        { id: 'letter-land', label: 'Letter 11 × 8.5', w: 11, h: 8.5 },
+        { id: 'letter-port', label: 'Letter 8.5 × 11', w: 8.5, h: 11 },
+        { id: 'tabloid-land', label: 'Tabloid 17 × 11', w: 17, h: 11 },
+      ];
+      let paper = PAPERS[0];
+      const MARGIN_IN = 0.5;
+
+      // ── WHAT IS ON IT ─────────────────────────────────────────────────
+      // A seat is a LEVEL plus whether it prints. Kept in the order the
+      // drawing's own levels are in, so the sheet reads bottom-up the way the
+      // house is stacked -- and the 3D view sits at the end as a seat with no
+      // level behind it, which is why it carries `kind` rather than an id.
+      let seats = [];
+
+      const load = async () => {
+        const store = window.SharedFileStore;
+        if (!store) return null;
+        let file = null;
+        try { file = await store.loadSharedFile(BUCKET); } catch { file = null; }
+        if (!file) return null;
+        let parsed = null;
+        try { parsed = JSON.parse(await file.text()); } catch { return null; }
+        const envelope = FORMAT.checkEnvelope(parsed);
+        return envelope.ok ? parsed : null;
+      };
+
+      let drawing = null, levels = [];
+
+      // A LEVEL EARNS A SEAT BY HAVING WALLS ON IT. layout-plan's own
+      // auto-layout works the same way, and for the same reason Movie gave on
+      // 21 Sep about empty sheets: a seat holding a level nothing is drawn on
+      // is a rectangle that teaches the drafter the plan is missing.
+      const planned = levelId => LP.planWalls(drawing, levelId, 'plan').length > 0;
+
+      // WHICH LEVEL IS THE BASEMENT: the lowest one that carries plan walls
+      // and sits below the first floor. Read off the drawing rather than off a
+      // name, because a level called anything at all can be the one under the
+      // house -- and `optional` is the only thing this page does differently
+      // with it, so getting it wrong costs a tick and not a drawing.
+      const buildSeats = () => {
+        const withWalls = levels.filter(level => planned(level.id))
+          .sort((a, b) => (a.elev || 0) - (b.elev || 0));
+        const lowest = withWalls[0];
+        seats = withWalls.map(level => ({
+          kind: 'plan',
+          id: level.id,
+          label: level.name || `LEVEL ${level.id}`,
+          // THE BASEMENT IS OPTIONAL AND OFF, which is the word he used:
+          // "(maybe basement (optional)". Everything else prints.
+          optional: withWalls.length > 1 && level === lowest && (level.elev || 0) < 0,
+          on: !(withWalls.length > 1 && level === lowest && (level.elev || 0) < 0),
+        }));
+        // THE 3D SEAT, HELD OPEN. "will have main front 3D View (once
+        // available)" -- so it is on the sheet as a reserved rectangle with its
+        // own label, not as a silence. It cannot be ticked on, because there is
+        // nothing to tick on yet.
+        seats.push({ kind: 'view3d', id: null, label: 'FRONT 3D VIEW',
+          waiting: true, on: true });
+      };
+
+      const paintSeats = () => {
+        const host = document.getElementById('seat-list');
+        host.innerHTML = '';
+        if (!seats.length) {
+          const p = document.createElement('p');
+          p.className = 'empty';
+          p.textContent = 'No plans in this drawing yet.';
+          host.appendChild(p);
+          return;
+        }
+        seats.forEach((seat, i) => {
+          const row = document.createElement('div');
+          row.className = 'seat';
+          if (seat.waiting) row.dataset.empty = 'true';
+          const box = document.createElement('input');
+          box.type = 'checkbox';
+          box.checked = !!seat.on;
+          box.disabled = !!seat.waiting;
+          box.id = `seat-${i}`;
+          box.addEventListener('change', () => {
+            seats[i].on = box.checked;
+            paintSheet();
+            say(`${seat.label} ${box.checked ? 'on' : 'off'} the sheet.`);
+          });
+          const label = document.createElement('label');
+          label.className = 'what';
+          label.htmlFor = box.id;
+          label.textContent = seat.waiting ? `${seat.label} — waiting on 3D` : seat.label;
+          row.appendChild(box);
+          row.appendChild(label);
+          host.appendChild(row);
+        });
+      };
+
+      // ── THE SHEET ─────────────────────────────────────────────────────
+      const fitCanvas = canvas => {
+        const box = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        const w = Math.max(320, Math.round(box.width * dpr));
+        const h = Math.max(240, Math.round(box.height * dpr));
+        if (canvas.width !== w) canvas.width = w;
+        if (canvas.height !== h) canvas.height = h;
+      };
+
+      // THE SEATS ARE LAID IN A ROW OF EQUAL BOXES, which is the plainest
+      // arrangement that is honestly an arrangement -- and the one Movie said
+      // he would change: "i will need to adjust what is shown and how it is
+      // shown in this layout view". So the boxes are computed from a count
+      // rather than written down, and moving to a different presentation is a
+      // change to this function and to nothing else.
+      const boxesFor = (n, x, y, w, h) => {
+        if (n <= 0) return [];
+        const gap = Math.min(w, h) * 0.03;
+        const cols = n <= 2 ? n : Math.ceil(n / 2);
+        const rows = Math.ceil(n / cols);
+        const bw = (w - gap * (cols - 1)) / cols;
+        const bh = (h - gap * (rows - 1)) / rows;
+        const out = [];
+        for (let i = 0; i < n; i += 1) {
+          const c = i % cols, r = Math.floor(i / cols);
+          out.push({ x: x + c * (bw + gap), y: y + r * (bh + gap), w: bw, h: bh });
+        }
+        return out;
+      };
+
+      // ONE PLAN INTO ONE BOX, at whatever scale makes it fit. A listing plan
+      // is not drawn to a named scale -- nobody measures off it -- so the fit
+      // is the box's and the scale bar a construction sheet carries is absent
+      // on purpose rather than forgotten.
+      const drawSeat = (ctx, seat, box) => {
+        const skin = window.__rpSkin;
+        ctx.save();
+        ctx.strokeStyle = skin['edge-panel'];
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.strokeRect(box.x + 0.5, box.y + 0.5, box.w, box.h);
+        ctx.setLineDash([]);
+        ctx.fillStyle = skin['ink-quiet'];
+        ctx.font = '600 11px "Barlow Condensed", system-ui, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(seat.label.toUpperCase(), box.x + 4, box.y + box.h - 5);
+
+        if (seat.kind !== 'plan') {
+          ctx.fillStyle = skin['ink-quiet'];
+          ctx.textAlign = 'center';
+          ctx.fillText('3D VIEW — once available', box.x + box.w / 2, box.y + box.h / 2);
+          ctx.restore();
+          return;
+        }
+
+        const walls = LP.planWalls(drawing, seat.id, 'plan');
+        const bounds = LP.wallBounds(walls);
+        if (!bounds) { ctx.restore(); return; }
+        const pad = 14;
+        const spanX = Math.max(1, bounds.maxX - bounds.minX);
+        const spanZ = Math.max(1, bounds.maxZ - bounds.minZ);
+        const scale = Math.min((box.w - pad * 2) / spanX, (box.h - pad * 2 - 14) / spanZ);
+        const ox = box.x + (box.w - spanX * scale) / 2 - bounds.minX * scale;
+        const oy = box.y + (box.h - 14 - spanZ * scale) / 2 - bounds.minZ * scale;
+        const toS = pt => ({ x: ox + pt.x * scale, y: oy + pt.z * scale });
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(box.x, box.y, box.w, box.h);
+        ctx.clip();
+        // THE SAME PLAN CONSTRUCTION LAYOUT DRAWS, which is where Movie asked
+        // this page to start: "similar to the CONSTRUCTION layout but we will
+        // present the drawings in a different way".
+        //
+        // AND NOT `shell: true`, though a listing plan wants no dimension
+        // strings over it. That flag is all-or-nothing in layout-plan -- it
+        // drops the stairs, the fixtures and the structure with the dimensions
+        // and the notes -- and a real-estate plan is the one plan that most
+        // wants the fixtures, because a buyer reads rooms by what is in them.
+        // Splitting it into a finer gate is a change to a module LAYOUT and
+        // the neighborhood page both draw through, so it waits on him saying
+        // which of the two halves he wants gone.
+        LP.drawPlan(ctx, toS, drawing, seat.id, {
+          view: 'plan',
+          paperColor: '#ffffff',
+        });
+        ctx.restore();
+        ctx.restore();
+      };
+
+      const paintSheet = () => {
+        const cv = document.getElementById('sheet');
+        fitCanvas(cv);
+        const ctx = cv.getContext('2d');
+        const skin = window.__rpSkin;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, cv.width, cv.height);
+
+        const pad = 20;
+        const pxPerIn = Math.min((cv.width - pad * 2) / paper.w,
+          (cv.height - pad * 2) / paper.h);
+        const w = paper.w * pxPerIn, h = paper.h * pxPerIn;
+        const x = Math.round((cv.width - w) / 2), y = Math.round((cv.height - h) / 2);
+
+        // THE PAPER IS WHITE IN EVERY SKIN. It is paper.
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(x, y, w, h);
+        ctx.strokeStyle = skin['edge-panel'];
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 0.5, y + 0.5, w, h);
+
+        const m = MARGIN_IN * pxPerIn;
+        const inner = { x: x + m, y: y + m, w: w - m * 2, h: h - m * 2 };
+        ctx.save();
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = skin['edge-panel'];
+        ctx.strokeRect(inner.x + 0.5, inner.y + 0.5, inner.w, inner.h);
+        ctx.restore();
+
+        if (!drawing) {
+          ctx.fillStyle = skin['ink-quiet'];
+          ctx.font = '600 12px "Barlow Condensed", system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('No drawing in browser storage — draw a house in the Model Space first.',
+            x + w / 2, y + h / 2);
+          return;
+        }
+
+        const showing = seats.filter(seat => seat.on);
+        if (!showing.length) {
+          ctx.fillStyle = skin['ink-quiet'];
+          ctx.font = '600 12px "Barlow Condensed", system-ui, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('Nothing ticked — pick what goes on the sheet.',
+            x + w / 2, y + h / 2);
+          return;
+        }
+        boxesFor(showing.length, inner.x, inner.y, inner.w, inner.h)
+          .forEach((box, i) => drawSeat(ctx, showing[i], box));
+      };
+
+      // ── BOOT ──────────────────────────────────────────────────────────
+      const paperSel = document.getElementById('paper');
+      PAPERS.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.label;
+        paperSel.appendChild(opt);
+      });
+      paperSel.value = paper.id;
+      paperSel.addEventListener('change', () => {
+        paper = PAPERS.find(p => p.id === paperSel.value) || PAPERS[0];
+        paintSheet();
+        say(`${paper.label}.`);
+      });
+
+      document.getElementById('note').textContent =
+        'Drawn the way Construction Layout draws a plan, for now \u2014 say how you '
+        + 'want it presented and this is the page it changes on.';
+
+      const raw = await load();
+      if (!raw) {
+        say('No drawing in browser storage — draw a house in the Model Space first.');
+        paintSeats();
+        paintSheet();
+      } else {
+        levels = FORMAT.levels(raw.levels);
+        drawing = {
+          ...raw,
+          walls: FORMAT.walls(raw.walls, new Set(levels.map(l => l.id)), {
+            wallTypes: WT.WALL_TYPES,
+            legacyWallTypes: WT.LEGACY_WALL_TYPES,
+            finishIds: WT.EXTERIOR_FINISHES.map(f => f.id),
+            legacyFinishes: WT.LEGACY_FINISH_IDS,
+            finishAnchors: WT.FINISH_ANCHORS,
+            defaultWallTopFt: 8,
+          }),
+        };
+        buildSeats();
+        paintSeats();
+        paintSheet();
+        say(seats.length > 1
+          ? 'Tick what goes on the sheet.'
+          : 'This drawing has no plans to lay out yet.');
+      }
+
+      window.addEventListener('resize', () => paintSheet());
+
+      window.DraftShellBars.wireSkin({
+        theme: window.__rpTheme.theme,
+        mode: window.__rpTheme.mode,
+        onSkin: skin => { window.__rpSkin = skin; paintSheet(); },
+      });
+    })();
+  </script>
+  <script src="./traffic-counter.js" defer></script>
+</body>
+</html>

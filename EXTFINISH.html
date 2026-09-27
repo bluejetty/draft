@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
-<title>Rough Drafter &mdash; Real Estate Layout</title>
+<title>Rough Drafter &mdash; Ext. Finish</title>
 <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
      critical path of the page. -->
 <link rel="stylesheet" href="vendor/fonts.css" />
@@ -25,6 +25,7 @@
 <script src="./shared-file-store.js"></script>
 <script src="./drawing-format.js"></script>
 <script src="./wall-types.js"></script>
+<script src="./roof-types.js"></script>
 <script src="./level-assembly.js"></script>
 <script src="./geometry-2d.js"></script>
 <script src="./build-house.js"></script>
@@ -62,23 +63,15 @@
   }
   main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 
-  /* ── THE TABS ──────────────────────────────────────────────────────────
-     Movie, 27 Sep: the one-page real-estate sheet "will be a tab within the
-     REAL ESTATE LAYOUT area - the main area we will allow them to change the
-     exterior finishes". So: two tabs, and FINISHES is the one you land on. */
-  .tabs {
-    display: flex; gap: 6px; padding: 8px 12px 0 12px;
-    border-bottom: 1px solid var(--edge-panel); flex: none;
-  }
-  .tab {
-    appearance: none; border: 1px solid var(--edge-panel); border-bottom: none;
-    background: var(--surface-panel); color: var(--ink-quiet);
-    font: inherit; font-size: 12px; font-weight: 600; letter-spacing: .08em;
-    text-transform: uppercase; padding: 7px 14px; cursor: pointer;
-    border-radius: 3px 3px 0 0;
-  }
-  .tab[aria-selected="true"] { background: var(--surface-chip); color: var(--accent-mark); }
-  .tab:disabled { cursor: default; color: var(--ink-quiet); opacity: .55; }
+  /* THE TAB STRIP CAME OFF (27 Sep). This page carried two tabs, FINISHES
+     and LAYOUT, because Movie had said the real-estate sheet "will be a tab
+     within the REAL ESTATE LAYOUT area". Later the same day he split them:
+     "i should change the name of this from REAL ESTATE PLAN ... insert tab ->
+     'EXT. FINISH' and make this area that name", and "the REAL ESTATE PLAN
+     area will be similar to the CONSTRUCTION layout ... can you add that tab
+     as a new page". So the sheet became REALESTATEPLAN.html and this page is
+     one workspace again -- a tab strip with one tab in it is a control that
+     cannot be used. */
 
   .stage { flex: 1; display: flex; min-height: 0; }
   .stage[hidden] { display: none; }
@@ -156,30 +149,57 @@
 </style>
 </head>
 <body>
-  <!-- NO INSTRUMENTS. Movie, 27 Sep: "the top instrument panel maybe we can
-       use it but will probably need to change it for this one". The strip the
-       bar mounts is LENGTH and ANGLE -- a wall-drawing instrument -- and
-       nothing on this page draws a wall. The finish controls are the page's
-       own, in the rail, which is the seam the module states: the bar owns the
-       furniture, the page owns what the furniture does. Switching the strip on
-       is one word here when he has seen it. -->
-  <script>window.DraftShellBars.topBar();</script>
+  <!-- THE INSTRUMENTS ARE HERE, AND ASLEEP. Movie, 27 Sep, having seen the
+       page: "we should also bring the 'length' and 'angle' textboxes into the
+       top center bar.. we may need some of the instruments to be active too so
+       bring them all but leave them inactive for now".
+
+       MOUNTED BUT NOT WIRED, which is the seam the module already states: the
+       bar owns the FURNITURE and the page owns what the furniture DOES. The
+       strip arrives with its chips dormant and its two boxes disabled, and
+       nothing here tells them otherwise -- so they stand in the right place,
+       at the right size, in the right order, and do nothing until there is
+       something for them to do. A row of controls in their final positions is
+       worth more than a gap: it says the page is not finished yet, where a gap
+       says it forgot. -->
+  <script>window.DraftShellBars.topBar({ instruments: true });</script>
   <main>
-    <div class="tabs" role="tablist" aria-label="Real estate layout">
-      <button class="tab" role="tab" id="tab-finishes" aria-selected="true"
-        aria-controls="stage-finishes">Finishes</button>
-      <button class="tab" role="tab" id="tab-sheet" aria-selected="false"
-        aria-controls="stage-sheet">Layout</button>
-    </div>
 
     <!-- ── THE MAIN AREA: ELEVATIONS, AND THE FINISHES ON THEM ──────────── -->
-    <div class="stage" id="stage-finishes" role="tabpanel" aria-labelledby="tab-finishes">
+    <div class="stage" id="stage-finishes">
       <div class="rail left">
         <p class="rail-title">Elevations</p>
         <div id="elev-list"></div>
-        <p class="rail-title">Roof corners</p>
-        <p class="empty" id="corner-note">Waiting on which scale these are set at
-          &mdash; per roof, or one for the house.</p>
+        <!-- ── THE ROOF AREA ──────────────────────────────────
+             Movie, 27 Sep: "we should make a special ROOF area with the roof
+             corners in there and the ROOFING TYPE", and on where it goes:
+             "over where the ROOF CORNERS are for now (might change it later)
+             in the 'EXT FINISH' tab".
+
+             SO IT IS WHERE THE PLACEHOLDER WAS, and the placeholder said what
+             it was waiting for: "which scale these are set at -- per roof, or
+             one for the house". He answered that days ago -- "allow them to
+             change each iduvidually, don't worry about changing all" -- so the
+             list is of ROOFS and a pick is one roof.
+
+             THE CORNER FALLS BACK TO THE OFFICE and says so in the option
+             itself, because "follows the office" and "set to what the office
+             currently says" are different records: the first moves when
+             STANDARDS moves, the second does not, and a picker that showed
+             them as the same word would make the difference unreachable. -->
+        <p class="rail-title">Roof</p>
+        <div id="roof-list"></div>
+        <div id="roof-props" hidden>
+          <div class="prop" style="margin-top:6px">
+            <label for="roofing">Roofing type</label>
+            <select id="roofing"></select>
+          </div>
+          <div class="prop" style="margin-top:6px">
+            <label for="gable-corner">Gable corner</label>
+            <select id="gable-corner"></select>
+          </div>
+          <p class="empty" id="roof-weight"></p>
+        </div>
       </div>
       <div class="sheet-wrap"><canvas id="elev" width="900" height="560"></canvas></div>
       <div class="rail right">
@@ -216,54 +236,30 @@
       </div>
     </div>
 
-    <!-- ── THE LAYOUT TAB: ONE LANDSCAPE LETTER SHEET ───────────────────────
-         Movie, 27 Sep: "the LAYOUT tab with real estate layout will have a
-         default 8.5 x 11 size Landscape sheet", carrying "the MAIN FL, 2nd FL
-         (maybe basement (optional)) and will have main front 3D View (once
-         available)" -- and "i will need to adjust what is shown and how it is
-         shown in this layout view".
-
-         THE SHEET IS HERE AND ITS SEATS ARE NOT. What goes in them is the
-         thing he has said he wants to adjust, so the paper is drawn at the
-         size he named and the seats wait for him rather than being guessed
-         at. 8.5x11 and landscape are both already in LAYOUT's own tables. -->
-    <div class="stage" id="stage-sheet" role="tabpanel" aria-labelledby="tab-sheet" hidden>
-      <div class="sheet-wrap"><canvas id="sheet" width="900" height="560"></canvas></div>
     </div>
 
     <div id="status" role="status"></div>
   </main>
 
-  <!-- page:'real-estate' marks this chip "you are here", off the one PAGES
+  <!-- page:'ext-finish' marks this chip "you are here", off the one PAGES
        table. Mounted BELOW the page's own markup and ABOVE its script, for the
        reason PROJECT's and SPECS' are: a bar that does not exist yet is a bar
-       that script cannot find. NO BONE yet -- the bar's note says REAL ESTATE
-       prints, and there is nothing to print until the sheet has its seats. -->
-  <script>window.DraftShellBars.bottomBar({ page: 'real-estate', bone: false });</script>
+       that script cannot find. NO BONE: this page changes what the house WEARS
+       and prints nothing of its own -- the sheet that prints is REAL ESTATE
+       PLAN, one chip along. -->
+  <script>window.DraftShellBars.bottomBar({ page: 'ext-finish', bone: false });</script>
 
   <script>
     (async () => {
       const FORMAT = window.DraftDrawingFormat;
       const WT = window.DraftWallTypes;
+      const RT = window.DraftRoofTypes;
+      const PROFILES = window.DraftProfileManager;
       const CV = window.DraftCutView;
       const BUCKET = 'model-drawing';
       const statusEl = document.getElementById('status');
       const say = text => { statusEl.textContent = text; };
 
-      // ── THE TABS ──────────────────────────────────────────────────────
-      const tabs = [
-        { btn: document.getElementById('tab-finishes'), pane: document.getElementById('stage-finishes') },
-        { btn: document.getElementById('tab-sheet'), pane: document.getElementById('stage-sheet') },
-      ];
-      const showTab = which => {
-        tabs.forEach((tab, i) => {
-          tab.btn.setAttribute('aria-selected', String(i === which));
-          tab.pane.hidden = i !== which;
-        });
-        if (which === 1) paintSheet();
-        else paintElevation();
-      };
-      tabs.forEach((tab, i) => tab.btn.addEventListener('click', () => showTab(i)));
 
       // ── THE DRAWING ───────────────────────────────────────────────────
       // READ THE SAME BUCKET MODEL WRITES. This page does not build a house;
@@ -353,6 +349,111 @@
       // save writes, not the painter's copy of it.
       const storedWall = () => (drawing?.walls || []).find(w => String(w.id) === picked);
 
+      // ── THE ROOF AREA ──────────────────────────────────────
+      //
+      // PICKED FROM A LIST AND NOT OFF THE DRAWING, which is a deliberate
+      // difference from the walls beside it. A wall is picked by clicking the
+      // face you want to clad, because a face is a thing you can see and aim
+      // at on an elevation. A roof seen from the front is mostly a line, and
+      // on a hip it is a line shared by two planes -- so a click would be a
+      // guess between two answers where a list is two named buttons.
+      let roofPicked = null;
+      const roofList = document.getElementById('roof-list');
+      const storedRoof = () => (drawing?.roofs || []).find(r => String(r.id) === roofPicked);
+      // A ROOF HAS NO NAME, so one is made from what a drafter can see: the
+      // level it stands on and whether it is the garage's. Numbered from 1 in
+      // the drawing's own order, so the same roof is the same button twice.
+      const roofLabel = (roof, i) => {
+        const level = levels.find(l => l.id === roof.levelId);
+        return `ROOF ${i + 1}${roof.garage ? ' \u00b7 GARAGE' : ''}`
+          + (level && level.name ? ` \u00b7 ${level.name}` : '');
+      };
+      const paintRoofList = () => {
+        const roofs = Array.isArray(drawing?.roofs) ? drawing.roofs : [];
+        roofList.innerHTML = roofs.map((roof, i) =>
+          `<button class="elev-btn" data-roof="${roof.id}"
+            aria-pressed="${String(roof.id) === roofPicked}">${roofLabel(roof, i)}</button>`).join('')
+          || '<p class="empty">No roofs in this drawing yet.</p>';
+        roofList.querySelectorAll('[data-roof]').forEach(btn =>
+          btn.addEventListener('click', () => {
+            roofPicked = btn.dataset.roof;
+            paintRoofList();
+            paintRoofProps();
+          }));
+      };
+
+      // THE OFFICE'S ANSWER, which is what an unset roof follows. Read once at
+      // boot rather than per paint: STANDARDS is another page, so it cannot
+      // change under this one while a drafter is looking at it.
+      // READ THE WAY EVERY OTHER PAGE READS IT, through the normaliser on
+      // DraftStructureStandards, off the active standards package. The first
+      // draft of this line invented `getActive().structure.gableCorner`, which
+      // is not a shape this module has -- getActive takes a KIND and answers a
+      // package -- so it threw on every load and the catch quietly answered
+      // "flat". A fallback that hides a wrong path shows a drafter the office
+      // standard of an office that does not exist.
+      const officeCorner = window.DraftStructureStandards.normaliseStructureStandards(
+        PROFILES.getActive('standards')?.content?.model?.structureStandards).gableCorner;
+      const CORNER_LABELS = { flat: 'Flat', return: 'Return',
+        porkchop: 'Porkchop', boxed: 'Boxed' };
+      const cornerLabel = id => CORNER_LABELS[id] || id;
+      document.getElementById('roofing').innerHTML = RT.ROOFING_TYPES
+        .map(r => `<option value="${r.id}">${r.label}</option>`).join('');
+      // THE FIFTH OPTION IS THE ABSENCE, and it has to be reachable or
+      // per-roof control has no off switch: "follows the office" and "set to
+      // whatever the office happens to say today" are different records, and
+      // only the first moves when STANDARDS moves.
+      document.getElementById('gable-corner').innerHTML =
+        `<option value="">Office \u2014 ${cornerLabel(officeCorner)}</option>`
+        + PROFILES.GABLE_CORNER_STYLES
+          .map(id => `<option value="${id}">${cornerLabel(id)}</option>`).join('');
+
+      const paintRoofProps = () => {
+        const roof = storedRoof();
+        document.getElementById('roof-props').hidden = !roof;
+        if (!roof) return;
+        const roofing = RT.roofingById(roof.roofing);
+        document.getElementById('roofing').value = roofing.id;
+        document.getElementById('gable-corner').value = roof.gableCorner || '';
+        // THE WEIGHT, SAID OUT LOUD where the choice is made. It is the one
+        // number on that table with a consequence -- a tile roof is four times
+        // an asphalt one, which is a truss somebody designs rather than buys
+        // -- and a rail that knew it and did not say it would be keeping a
+        // secret from the person choosing.
+        document.getElementById('roof-weight').textContent =
+          `${roofing.weightPsf} psf`
+          + (RT.HEAVY_ROOFING_IDS.includes(roofing.id)
+            ? ' \u2014 heavy; the framing wants checking.' : '.');
+      };
+
+      const writeRoof = patch => {
+        const roof = storedRoof();
+        if (!roof) return;
+        Object.entries(patch).forEach(([key, value]) => {
+          if (value === null) delete roof[key];
+          else roof[key] = value;
+        });
+        // THROUGH THE NORMALISER, WITH BOTH VOCABULARIES. Without them the two
+        // keys are dropped on the way past and the rail appears to do nothing
+        // -- the trap this page already fell into once with the wall finishes,
+        // and the reason roof-types-harness carries a check for it.
+        drawing.roofs = FORMAT.roofs(drawing.roofs, new Set(levels.map(l => l.id)), {
+          roofingIds: RT.ROOFING_TYPES.map(r => r.id),
+          cornerStyles: PROFILES.GABLE_CORNER_STYLES,
+        });
+        env = null;
+        rebuild();
+        save();
+      };
+
+      document.getElementById('roofing').addEventListener('change', event =>
+        // THE DEFAULT IS STORED AS NOTHING, so a roof wearing asphalt carries
+        // no key -- the record rule this whole file keeps.
+        writeRoof({ roofing: event.target.value === RT.DEFAULT_ROOFING_ID
+          ? null : event.target.value }));
+      document.getElementById('gable-corner').addEventListener('change', event =>
+        writeRoof({ gableCorner: event.target.value || null }));
+
       const paintProps = () => {
         const wall = storedWall();
         document.getElementById('wall-props').hidden = !wall;
@@ -394,6 +495,7 @@
           legacyWallTypes: WT.LEGACY_WALL_TYPES,
           finishIds: WT.EXTERIOR_FINISHES.map(f => f.id),
           legacyFinishes: WT.LEGACY_FINISH_IDS,
+          finishAnchors: WT.FINISH_ANCHORS,
           defaultWallTopFt: 8,
         });
         env = null;
@@ -426,7 +528,7 @@
       // RE-READ, MERGE, WRITE GUARDED BY THE REVISION, the way PROJECT does:
       // a drafter with the Model Space open in another tab must not have their
       // house flattened by this page writing its own snapshot over it. Only
-      // `walls` goes back, because walls are all this page touches.
+      // `walls` and `roofs` go back, which is all this page touches.
       let queue = Promise.resolve();
       const save = () => {
         queue = queue.catch(() => {}).then(async (tries = 3) => {
@@ -438,7 +540,11 @@
             try { base = JSON.parse(await at.file.text()); } catch { base = null; }
           }
           if (!base || typeof base !== 'object') base = drawing;
-          const merged = { ...base, walls: drawing.walls };
+          // ROOFS GO BACK TOO, since 27 Sep. This wrote `walls` alone for as
+          // long as walls were all the page touched; the ROOF area edits the
+          // roofs, and a merge that left them out would show the change on
+          // screen and lose it on reload.
+          const merged = { ...base, walls: drawing.walls, roofs: drawing.roofs };
           const file = new File([JSON.stringify(merged)], 'drawing.json',
             { type: 'application/json' });
           try { await store.saveSharedFile(file, BUCKET, { ifRev: at.rev }); }
@@ -559,38 +665,6 @@
           : 'Nothing there — click a wall face.');
       });
 
-      // ── THE LANDSCAPE LETTER SHEET ────────────────────────────────────
-      // 8.5 x 11 LANDSCAPE, which is 11 wide by 8.5 high. Drawn as paper with
-      // its margin, and nothing in it: what goes in the seats is the thing
-      // Movie has said he wants to adjust.
-      const SHEET_IN = { w: 11, h: 8.5 };
-      const paintSheet = () => {
-        const cv = document.getElementById('sheet');
-        fitCanvas(cv);
-        const ctx = cv.getContext('2d');
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.clearRect(0, 0, cv.width, cv.height);
-        const pad = 18;
-        const pxPerIn = Math.min((cv.width - pad * 2) / SHEET_IN.w,
-          (cv.height - pad * 2) / SHEET_IN.h);
-        const w = SHEET_IN.w * pxPerIn, h = SHEET_IN.h * pxPerIn;
-        const x = (cv.width - w) / 2, y = (cv.height - h) / 2;
-        ctx.fillStyle = window.__reSkin['surface-chip'];
-        ctx.fillRect(x, y, w, h);
-        ctx.strokeStyle = window.__reSkin['edge-panel'];
-        ctx.lineWidth = 1;
-        ctx.strokeRect(x + 0.5, y + 0.5, w, h);
-        ctx.setLineDash([4, 4]);
-        ctx.strokeRect(x + 0.5 * pxPerIn, y + 0.5 * pxPerIn,
-          w - pxPerIn, h - pxPerIn);
-        ctx.setLineDash([]);
-        ctx.fillStyle = window.__reSkin['ink-quiet'];
-        ctx.font = '600 12px "Barlow Condensed", system-ui, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('8.5 × 11 LANDSCAPE — seats to be set',
-          x + w / 2, y + h / 2);
-      };
-
       // ── BOOT ──────────────────────────────────────────────────────────
       const rebuild = () => {
         env = window.DraftCutViewEnv.buildCutViewEnv(drawing, levels);
@@ -598,12 +672,15 @@
         if (!cuts.some(cut => cut.id === currentElev)) currentElev = cuts[0]?.id || 'E1';
         paintElevList();
         paintElevation();
+        paintRoofList();
+        paintRoofProps();
       };
 
       const raw = await load();
       if (!raw) {
         say('No drawing in browser storage — draw a house in the Model Space first.');
         paintElevList();
+        paintRoofList();
         return;
       }
       levels = FORMAT.levels(raw.levels);
@@ -618,6 +695,7 @@
           // other way.
           finishIds: WT.EXTERIOR_FINISHES.map(f => f.id),
           legacyFinishes: WT.LEGACY_FINISH_IDS,
+          finishAnchors: WT.FINISH_ANCHORS,
           defaultWallTopFt: 8,
         }),
       };
@@ -625,15 +703,12 @@
       say(cuts.length ? 'Click a wall on the elevation to clad it.'
         : 'This drawing has no walls to clad yet.');
 
-      window.addEventListener('resize', () => {
-        paintElevation();
-        if (!document.getElementById('stage-sheet').hidden) paintSheet();
-      });
+      window.addEventListener('resize', () => { paintElevation(); });
 
       window.DraftShellBars.wireSkin({
         theme: window.__reTheme.theme,
         mode: window.__reTheme.mode,
-        onSkin: skin => { window.__reSkin = skin; paintElevation(); paintSheet(); },
+        onSkin: skin => { window.__reSkin = skin; paintElevation(); },
       });
     })();
   </script>

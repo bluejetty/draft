@@ -78,7 +78,16 @@ if (!window.DraftCutViewEnv) {
         thickenedEdge: floor?.thickenedEdge === true,
       };
     }).filter(Boolean);
-    const roofs = format.roofs(saved.roofs, levelIds);
+    // THE ROOF'S OWN WORDS COME WITH IT. Without these two lists the
+    // normaliser drops `roofing` and `gableCorner`, and a page whose subject
+    // IS the roofing draws every roof in asphalt with nothing anywhere saying
+    // why -- which is exactly how the finish page came up blank on 27 Sep.
+    const roofTypes = window.DraftRoofTypes || null;
+    const profiles = window.DraftProfileManager || null;
+    const roofs = format.roofs(saved.roofs, levelIds, {
+      roofingIds: roofTypes ? roofTypes.ROOFING_TYPES.map(r => r.id) : null,
+      cornerStyles: profiles ? profiles.GABLE_CORNER_STYLES : null,
+    });
     const fenestrations = format.fenestrations(saved.fenestrations, levelIds);
     const outlines = format.outlines(saved.outlines, levelIds);
     // Columns too: the elevation draws the piles under a grade beam.

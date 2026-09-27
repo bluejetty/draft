@@ -450,14 +450,55 @@ if (!window.DraftDrawingFormat) {
   // produces by DRAGGING, so a malformed one is a gesture that went wrong
   // rather than a file somebody hand-edited -- and the safe answer to a
   // gesture that went wrong is nothing, not a guess at what was meant.
-  const finishBand = (raw, ids, legacy = {}) => {
+  const finishBand = (raw, ids, legacy = {}, anchors = []) => {
     const asked = legacy[raw?.finishId] || raw?.finishId;
     const id = ids.includes(asked) ? asked : null;
+    if (!id) return null;
+    // ANCHORED TO A NAMED LINE, and an unknown name falls back to the default
+    // rather than dropping the band: the anchor says where a band is MEASURED
+    // FROM, so a band with a name this build does not know is still a band --
+    // it lands in the default place instead of vanishing.
+    const anchor = anchors.includes(raw?.anchor) ? raw.anchor : null;
+    const toTop = raw?.toTop === true;
     const lo = Number(raw?.lowFt);
     const hi = Number(raw?.highFt);
-    if (!id || !Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo || lo < 0) return null;
+    if (!Number.isFinite(lo)) return null;
+    // NEGATIVE IS MEANINGFUL NOW, and this used to refuse it. Every band was
+    // measured from a wall's foot, where below the foot was below the wall;
+    // measured from a NAMED LINE, a negative is how a band crosses it -- sill
+    // less two feet is cladding carried down over the concrete, which is the
+    // thing Movie asked for on 27 Sep. What is still refused is a band that
+    // claims no wall: a top at or below its own bottom.
+    if (!toTop && (!Number.isFinite(hi) || hi <= lo)) return null;
     const bandColor = finishColour(raw?.color);
-    return { finishId: id, lowFt: lo, highFt: hi,
+    // THE SIDE INSETS AND THE CORNER WRAP, all conditional: a band that runs
+    // the full width of its wall and turns no corner carries none of them, so
+    // the common case stays the three keys it was.
+    const inset = key => {
+      const n = Number(raw?.[key]);
+      return Number.isFinite(n) && n > 0 ? n : null;
+    };
+    const startFt = inset('startFt');
+    const endFt = inset('endFt');
+    const wrapFt = inset('wrapFt');
+    // AND THE REFUSED LEDGE. Masonry carried up into a window gets a sill
+    // ledge drawn under the opening, and Movie asked on 27 Sep for a button
+    // that turns it off. It is stored as the REFUSAL rather than as a
+    // permission -- `noSillLedge`, present only when set -- because the ledge
+    // is what the drawing does by default, and the rule this whole normaliser
+    // keeps is that a record holds departures from the default and nothing
+    // else. `=== true` for the same reason `toTop` is: a flag that is a
+    // gesture's yes-or-no has exactly one true value, so a stray string
+    // cannot silently turn a detail off.
+    const noSillLedge = raw?.noSillLedge === true;
+    return { finishId: id,
+      ...(anchor ? { anchor } : {}),
+      lowFt: lo,
+      ...(toTop ? { toTop: true } : { highFt: hi }),
+      ...(startFt ? { startFt } : {}),
+      ...(endFt ? { endFt } : {}),
+      ...(wrapFt ? { wrapFt } : {}),
+      ...(noSillLedge ? { noSillLedge: true } : {}),
       ...(bandColor ? { color: bandColor } : {}) };
   };
   // NOT SORTED. The list is kept in the order the bands were laid, because
@@ -469,12 +510,12 @@ if (!window.DraftDrawingFormat) {
   // wall types use two hundred lines up and it is here for the same reason:
   // on 27 Sep the two siding rows swapped places, and without this every wall
   // clad before that came back STUCCO with nothing anywhere saying why.
-  const finishOf = (wall, ids, legacy = {}) => {
+  const finishOf = (wall, ids, legacy = {}, anchors = []) => {
     const asked = legacy[wall?.finish] || wall?.finish;
     const base = ids.includes(asked) ? asked : null;
     const color = finishColour(wall?.finishColor);
     const bands = (Array.isArray(wall?.finishBands) ? wall.finishBands : [])
-      .map(band => finishBand(band, ids, legacy)).filter(Boolean);
+      .map(band => finishBand(band, ids, legacy, anchors)).filter(Boolean);
     return {
       ...(base ? { finish: base } : {}),
       ...(color ? { finishColor: color } : {}),
@@ -578,7 +619,8 @@ if (!window.DraftDrawingFormat) {
         ...(wall?.auto === true ? { auto: true } : {}),
         // A BASE FINISH, A COLOUR AND ANY BANDS -- all three conditional, so a
         // wall nobody has clad reads out exactly as it read in.
-        ...finishOf(wall, env.finishIds || [], env.legacyFinishes || {}),
+        ...finishOf(wall, env.finishIds || [], env.legacyFinishes || {},
+          env.finishAnchors || []),
       };
     }), env.drops).filter(Boolean);
   };
@@ -644,7 +686,25 @@ if (!window.DraftDrawingFormat) {
   const ROOF_FASCIA_IN = 5.5;
   const roofHeelIn = (fasciaIn, overhangFt, pitch) => fasciaIn + overhangFt * pitch;
 
-  const roofs = (rawRoofs, levelIds) => (Array.isArray(rawRoofs) ? rawRoofs : [])
+  // ── WHAT A ROOF WEARS, AND HOW ITS GABLE ENDS ──────────────────────────
+  //
+  // Movie, 27 Sep: *"we should make a special ROOF area with the roof corners
+  // in there and the ROOFING TYPE"*, and on the corners: *"allow them to change
+  // each iduvidually, don't worry about changing all"*.
+  //
+  // BOTH ARE CONDITIONAL KEYS, which is this normaliser's standing rule: a
+  // record holds departures from the default and nothing else. A roof with no
+  // `roofing` is asphalt because asphalt is the default, and a roof with no
+  // `gableCorner` follows the office standard -- and that second one is the
+  // whole of what "individually" means, so it has to stay distinguishable from
+  // a roof set to the same style the office happens to say today.
+  //
+  // `env` CARRIES THE VOCABULARIES rather than this file importing them, the
+  // way the wall normaliser takes its finish ids: drawing-format knows record
+  // SHAPES and roof-types.js and profile-manager.js own the words. A caller
+  // that passes neither gets a roof with neither key, which is the same trap
+  // the finish page fell into -- so every call site names them.
+  const roofs = (rawRoofs, levelIds, env = {}) => (Array.isArray(rawRoofs) ? rawRoofs : [])
     .map(roof => {
       const roofLevelId = levelId(roof?.levelId, levelIds);
       const points = (Array.isArray(roof?.points) ? roof.points : []).map(point).filter(Boolean);
@@ -683,6 +743,10 @@ if (!window.DraftDrawingFormat) {
         // read as a plate height of ZERO bears a garage roof at the main
         // floor line instead of on its wall stack.
         plateHeightFt: num(roof?.plateHeightFt),
+        ...(Array.isArray(env.roofingIds) && env.roofingIds.includes(roof?.roofing)
+          ? { roofing: roof.roofing } : {}),
+        ...(Array.isArray(env.cornerStyles) && env.cornerStyles.includes(roof?.gableCorner)
+          ? { gableCorner: roof.gableCorner } : {}),
         layer: 'A-ROOF',
       };
     }).filter(Boolean);

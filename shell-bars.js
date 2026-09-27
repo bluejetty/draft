@@ -53,10 +53,12 @@ if (!window.DraftShellBars) {
   // towns missing teaches the drafter a shape that is wrong." Each says what
   // it will be when it is built.
   //
-  // `row` is which end of the bottom bar it sits at. REAL ESTATE LAYOUT stays
-  // LEFT with MODEL (Movie, 15 Sep) because it is a drawing OF the model
+  // `row` is which end of the bottom bar it sits at. The real-estate pages stay
+  // LEFT with MODEL (Movie, 15 Sep) because they are drawings OF the model
   // rather than a sheet off it -- the marketing plan, not a set the site
-  // builds from.
+  // builds from. Which held when there was one of them and holds for both: on
+  // 27 Sep it split into EXT. FINISH, where the house is clad, and REAL ESTATE
+  // PLAN, where the plans are laid out for a listing.
   const PAGES = Object.freeze([
     Object.freeze({ id: 'project', row: 'page', label: 'PROJECT',
       href: './PROJECT.html', extra: ' data-project-corner-bl',
@@ -71,10 +73,29 @@ if (!window.DraftShellBars) {
     // that it is the map of the job and a map with two towns missing teaches
     // a shape that is wrong -- and this is the other half of that promise
     // being kept: the page arrived and the row cost one line.
-    Object.freeze({ id: 'real-estate', row: 'page', label: 'REAL ESTATE LAYOUT',
-      href: './REALESTATE.html',
-      title: 'REAL ESTATE LAYOUT \u2014 the elevations, and the finishes on them',
-      here: 'The real estate layout \u2014 you are here' }),
+    //
+    // AND IT BECAME TWO TOWNS THE SAME DAY. The page that arrived carried the
+    // elevations, the finishes on them, and a tab holding a blank real-estate
+    // sheet. Movie, looking at it: *"i should change the name of this from
+    // REAL ESTATE PLAN - make another area on the bottom left menes between
+    // 'MODEL' right here and 'REAL ESTATE PLAN' insert tab -> 'EXT. FINISH'
+    // and make this area that name"*, then *"the REAL ESTATE PLAN area will be
+    // similar to the CONSTRUCTION layout but we will present the drawings in a
+    // different way"*.
+    //
+    // WHICH IS TWO JOBS AND NOT ONE. Cladding a house is a thing you DO to the
+    // model; a real-estate plan is a SHEET the model prints onto, and its
+    // neighbour in that trade is Construction Layout rather than the elevation
+    // workspace. So the chip split in two and the order is his: EXT. FINISH
+    // between MODEL and REAL ESTATE PLAN.
+    Object.freeze({ id: 'ext-finish', row: 'page', label: 'EXT. FINISH',
+      href: './EXTFINISH.html',
+      title: 'EXT. FINISH \u2014 the elevations, and the finishes on them',
+      here: 'The exterior finishes \u2014 you are here' }),
+    Object.freeze({ id: 'real-estate', row: 'page', label: 'REAL ESTATE PLAN',
+      href: './REALESTATEPLAN.html',
+      title: 'REAL ESTATE PLAN \u2014 the plans laid out the way a listing shows them',
+      here: 'The real estate plan \u2014 you are here' }),
     Object.freeze({ id: 'construction', row: 'sheet', label: 'CONSTRUCTION LAYOUT',
       href: './LAYOUT.html',
       title: 'The construction layout: the sheet that goes to site',
@@ -387,12 +408,12 @@ if (!window.DraftShellBars) {
   const BOTHEAD = `<div id="house-strip" data-house-strip>
 <!-- THE PAGE ROW (§7b), now a TENANT OF THE BOTTOM BAR rather than a bar of
      its own (Movie, 15 Sep: "move the PROJECT, MODEL, LAYOUT, SPECS etc down
-     to the darker bar"). Same six pages in the order Movie listed them. Four
-     exist. REAL ESTATE LAYOUT and ESTIMATES do not, and they are DOWN rather
-     than absent for the same reason a dormant chip is on the strip: the row
-     is the map of the job, and a map with two towns missing teaches the
-     drafter a shape that is wrong. Each says what it will be when it is
-     built.
+     to the darker bar"). The pages in the order Movie listed them -- seven
+     now, since EXT. FINISH and REAL ESTATE PLAN split on 27 Sep. SIX EXIST.
+     ESTIMATES does not, and it is DOWN rather than absent for the same reason
+     a dormant chip is on the strip: the row is the map of the job, and a map
+     with a town missing teaches the drafter a shape that is wrong. It says
+     what it will be when it is built.
 
      INSIDE the strip, not floating above it, because two fixed bars stacked
      a few pixels apart is the arrangement that put the build bar on SAVE. A
@@ -481,6 +502,79 @@ if (!window.DraftShellBars) {
   </div>`;
   const BOTTAIL = FOOTLANE + `
 </div>`;
+
+  // ── THE CLOCK IS THE BAR'S, NOT THE DRAWING PAGE'S ────────────────
+  //
+  // Movie, 20 Sep, asking for it: *"can you put in there the current time and
+  // date of where the person is (timezonewise)"*. It was written into
+  // MODEL.html, which was the only page that had a corner for it then. On
+  // 27 Sep, on the new Real Estate page: *"i just noticed the date time doesn't
+  // show on the bottom right on this page"*.
+  //
+  // WHICH IS THE SOCKET-WITHOUT-THE-LAMP FAILURE AGAIN, and this file already
+  // carries the note recording the first one: `[data-visit-counter-home]` went
+  // into the lane with the CSS to hide it while empty, and MODEL -- the page
+  // the whole change was for -- never loaded the module that fills it. A slot
+  // every page gets and one page fills is a slot that is empty on every page
+  // somebody adds later, and nothing goes red for it, because an empty slot is
+  // `display:none` by design.
+  //
+  // SO IT MOUNTS ITSELF FROM HERE. FOOTLANE's own comment argues for exactly
+  // this and stopped one tenant short: *"TWO NAMED SLOTS AND NO PAGE NAMES"*,
+  // and then named MODEL as the page that fills the note. The clock is the
+  // same on every page carrying this bar, so it belongs beside the skin switch
+  // in the list of things that are the BAR'S and not the page's.
+  //
+  // A PAGE CAN STILL HAVE THE SLOT FOR SOMETHING ELSE: this fills
+  // [data-foot-note] only if nothing is in it, so a page that writes its own
+  // quiet reading at the foot keeps it.
+  //
+  // TO THE MINUTE, NOT THE SECOND -- drawing-format.js ruled on this for the
+  // save name, and a seconds field in the corner of a page somebody draws on
+  // all day is motion where the drawing should be the only thing moving.
+  const mountClock = () => {
+    const slot = document.querySelector('[data-foot-note]');
+    if (!slot || slot.firstChild) return;
+    const el = document.createElement('div');
+    el.id = 'clock';
+    el.setAttribute('data-local-clock', '');
+    slot.appendChild(el);
+
+    let day, clock;
+    try {
+      day = new Intl.DateTimeFormat(undefined,
+        { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+      clock = new Intl.DateTimeFormat(undefined,
+        { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
+    } catch (error) {
+      // FAIL SILENT, the visit counter's bargain at the other end of the lane.
+      // A browser that cannot format a date leaves the slot empty, `:empty`
+      // takes it out of the row, and the page is otherwise whole.
+      return;
+    }
+
+    const write = () => {
+      const now = new Date();
+      el.textContent = day.format(now) + ' \u00b7 ' + clock.format(now);
+    };
+    // THE TICK IS AIMED AT THE MINUTE, not set to 60 seconds from now. A timer
+    // counting sixty from whenever it last ran drifts later every hour and
+    // eventually turns over half a minute after the minute does; this re-reads
+    // the clock every tick, so it also writes the right time on the first tick
+    // after a laptop wakes from lunch rather than counting on from its doze.
+    // 250ms INSIDE the new minute rather than on its edge: a timer firing a
+    // hair early would rewrite the minute that is ending and show it twice.
+    const tick = () => {
+      write();
+      setTimeout(tick, 60000 - (Date.now() % 60000) + 250);
+    };
+    tick();
+    // A BACKGROUND TAB'S TIMERS ARE THROTTLED, so the first thing a returning
+    // drafter would read is however stale the throttle left it.
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) write();
+    });
+  };
   const FILEGUARD = `<div id="file-guard" data-file-guard hidden>
   <div class="promote-card">
     <p data-file-guard-text>This drawing has unsaved edits.</p>
@@ -531,11 +625,16 @@ if (!window.DraftShellBars) {
     //             visibly wrong rather than quietly.
     // opts.bone   false mounts the bottom bar WITHOUT the bone and its
     //             drive-thru press. ESTIMATES may want this.
-    bottomBar: (opts = {}) => put(BOTHEAD + '\n'
-      + '<div id="page-row" data-page-row>\n' + rowOf('page', opts.page) + '\n</div>\n'
-      + (opts.bone === false ? '  <div class="grow"></div>\n' : BOTMIDDLE + '\n')
-      + '  <div id="sheet-row" data-sheet-row>\n' + rowOf('sheet', opts.page) + '\n  </div>\n'
-      + BOTTAIL),
+    bottomBar: (opts = {}) => {
+      put(BOTHEAD + '\n'
+        + '<div id="page-row" data-page-row>\n' + rowOf('page', opts.page) + '\n</div>\n'
+        + (opts.bone === false ? '  <div class="grow"></div>\n' : BOTMIDDLE + '\n')
+        + '  <div id="sheet-row" data-sheet-row>\n' + rowOf('sheet', opts.page) + '\n  </div>\n'
+        + BOTTAIL);
+      // AFTER the markup, because the slot it fills arrives with it. `put`
+      // inserts mid-parse, so the lane is in the document by the next line.
+      mountClock();
+    },
 
     readout: () => put(READOUT),
 

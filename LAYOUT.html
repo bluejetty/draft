@@ -2298,9 +2298,10 @@ page.componentDidMount();
   // ── AND THE CONTROLS IT CANNOT ─────────────────────────────────────────
   //
   // DISABLED, NOT LEFT LIVE, which is this bar's own vocabulary: the page row
-  // has shown REAL ESTATE LAYOUT and ESTIMATES greyed since it was built,
-  // because "the row is the map of the job" and a map with a town missing
-  // teaches a shape that is wrong. A button that looks pressable and does
+  // keeps a chip greyed for every page not built yet -- ESTIMATES now, and
+  // REAL ESTATE LAYOUT until the day it arrived -- because "the row is the map
+  // of the job" and a map with a town missing teaches a shape that is
+  // wrong. A button that looks pressable and does
   // nothing teaches a worse one. Each carries a title saying why, so the
   // answer is one hover away rather than in this file.
   const standDown = (id, why) => {

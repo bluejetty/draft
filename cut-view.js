@@ -27,8 +27,8 @@ if (!window.DraftCutView) {
 (() => {
   const geo = () => window.DraftGeometry2D;
   let warnedNoPatterns = false;
-  const { WALL_TYPES, DEFAULT_FINISH_ID, finishById, bandIsCapped }
-    = window.DraftWallTypes;
+  const { WALL_TYPES, DEFAULT_FINISH_ID, finishById, bandIsCapped,
+    bandRange, bandSpan } = window.DraftWallTypes;
   const { formatInchesOnly } = window.DraftFormatters;
 
   // Physical drafting standards, shared with the Model Space via STANDARDS.
@@ -3394,17 +3394,56 @@ if (!window.DraftCutView) {
     // MEASURED FROM THE FOOT OF THE FACE. `lowFt: 0` is where the cladding
     // starts, which on a finished elevation is the top of the concrete -- so
     // "the bottom 3 ft" is 0 to 3 whatever the foundation under it is.
+    // ── THE THREE LINES A FACE'S FINISHES ARE MEASURED FROM ───────────
+    //
+    // wall-types.js says a band is anchored to a line a drafter NAMES; this is
+    // where those names get their numbers, per face, because only the painter
+    // knows them.
+    //
+    //   SILL   where this storey's cladding starts. On the storey that bears
+    //          on concrete that is the BOTTOM OF THE SILL PLATE -- Movie,
+    //          27 Sep: *"the top area where they should start the finishing
+    //          should be the bottom of the sill plate"* -- which is the top of
+    //          the concrete, a plate below the floor structure. On a storey
+    //          above, there is no sill plate and the cladding runs down over
+    //          the rim, so it is that floor's own underside.
+    //   PLATE  the top of the wall, which is the bottom of a gable triangle.
+    //   HEAD   the top of the face, whatever is there: a ridge, a rake, or
+    //          simply the plate again on a wall with no gable over it.
+    //
+    // AND THE SILL IS WHAT PUTS THE FINISH ON THE PLATE. The note at the
+    // foundation's plate pass says this line has to follow the WALL when
+    // exterior finishes land, or a garage in different siding grows a band of
+    // the house's at its foot. It follows it here: the plate is inside the
+    // face's own cladding now, because the cladding starts underneath it.
+    const faceLines = geom => {
+      const { face, floor, tops } = geom;
+      const level = face.level;
+      const head = Math.max(...tops.map(t => t.top));
+      const plateFt = face.garage ? GARAGE_BEAM_PLATE_IN / 12 : houseSillPlateFt();
+      // A GARAGE STANDS ON ITS OWN CONCRETE, so its cladding starts a plate
+      // below its own floor wherever that floor is; a house storey does only
+      // when it is the one on the foundation.
+      const bearsOnConcrete = face.garage || level.id === stack.floors[0].id;
+      const sill = face.garage ? floor - plateFt
+        : (bearsOnConcrete ? level.floorBottom - plateFt : level.floorBottom);
+      return { sill, plate: level.wallTop, head, foot: floor };
+    };
+
+    // ── THE CLADDING ON ONE FACE ──────────────────────────────────────
+    //
+    // A BASE OVER THE WHOLE FACE, THEN THE BANDS OVER THAT, in the order they
+    // were laid -- which is what makes "last band wins" true of the drawing
+    // and not merely of the rule that reads the record. Each band repaints the
+    // face fill under itself first, so a ledgestone wainscot on a brick wall
+    // shows ledgestone rather than both at once.
     const paintFaceFinish = geom => {
-      const { face, loU, hiU, floor, tops } = geom;
+      const { face, loU, hiU, tops } = geom;
       const wall = face.wall;
       const xa = X(loU), xb = X(hiU);
       if (xb - xa < 2) return;
-      const head = Math.max(...tops.map(s => s.top));
-      if (head - floor < 0.05) return;
-      // AND IT SAYS SO WHEN IT CANNOT. A caller that asked for finishes and
-      // did not load the module gets an elevation that is silently, correctly
-      // plain -- indistinguishable from one whose walls are all stucco. That
-      // cost an afternoon once; once is enough.
+      const lines = faceLines(geom);
+      if (lines.head - lines.sill < 0.05) return;
       const FP = window.DraftFinishPatterns;
       if (!FP) {
         if (!warnedNoPatterns) {
@@ -3414,59 +3453,142 @@ if (!window.DraftCutView) {
         }
         return;
       }
-      const boxAt = (lo, hi) => ({
-        x0: Math.min(xa, xb), x1: Math.max(xa, xb),
-        yTop: Y(hi), yBottom: Y(lo), pxPerFt,
+      const boxAt = (lo, hi, x0 = Math.min(xa, xb), x1 = Math.max(xa, xb)) => ({
+        x0, x1, yTop: Y(hi), yBottom: Y(lo), pxPerFt,
       });
       ctx.save();
       ctx.clip();
-      FP.drawFinish(ctx, boxAt(floor, head),
+      // THE BASE RUNS FROM THE SILL, not from the wall's foot -- which is the
+      // whole of what puts the cladding down over the plate and closes the
+      // band of bare white a drafter could see under the stone.
+      FP.drawFinish(ctx, boxAt(lines.sill, lines.head),
         finishById(wall.finish || DEFAULT_FINISH_ID), C);
       const bands = Array.isArray(wall.finishBands) ? wall.finishBands : [];
       bands.forEach(band => {
-        const lo = floor + band.lowFt;
-        const hi = Math.min(head, floor + band.highFt);
+        const span = bandRange(band, lines);
+        if (!span) return;
+        const lo = span.lo;
+        const hi = Math.min(lines.head, span.hi);
         if (hi - lo < 0.02) return;
+        // AND HOW FAR ALONG THE WALL, which is the side insets: a band need
+        // not run corner to corner. `bandSpan` measures them from each END.
+        const along = bandSpan(band, Math.min(loU, hiU), Math.max(loU, hiU));
+        if (!along) return;
+        const bx0 = X(along.lo), bx1 = X(along.hi);
+        const x0 = Math.min(bx0, bx1), x1 = Math.max(bx0, bx1);
+        if (x1 - x0 < 1) return;
         // THE FACE FILL AGAIN, under this band only. Without it the base
         // finish's lines read through the band on top of it.
         ctx.fillStyle = C.face;
-        ctx.fillRect(Math.min(xa, xb), Y(hi), Math.abs(xb - xa), (hi - lo) * pxPerFt);
-        FP.drawFinish(ctx, boxAt(lo, hi), finishById(band.finishId), C);
+        ctx.fillRect(x0, Y(hi), x1 - x0, (hi - lo) * pxPerFt);
+        FP.drawFinish(ctx, boxAt(lo, hi, x0, x1), finishById(band.finishId), C);
         // ── AND THE WATER TABLE WHERE IT STOPS SHORT ──────────────────
         //
         // Movie: *"we should put a ledge at the top of the stone that
         // overhangs the top of the stone"*, *"(if its not at top of wall)"*.
-        // The question is the BAND's, not the material's -- the same stone is
-        // capped in one place and bare in another on one drawing -- so the
-        // table's own bandIsCapped answers it.
-        //
-        // WHAT SHOWS ON AN ELEVATION IS THE SHADOW UNDER THE NOSE. The kerf
-        // is a section detail; here the cap is a course with a line top and
-        // bottom and a dark line beneath, which is what reads the whole thing
-        // at a glance.
+        // The question is the BAND's, not the material's, so the table's own
+        // bandIsCapped answers it against the face's head.
         const finish = finishById(band.finishId);
-        if (!bandIsCapped(band, head - floor) || !finish.cap) return;
+        if (!bandIsCapped(band, lines) || !finish.cap) return;
         const capHigh = finish.cap.highIn / 12;
         const capY = Y(hi), capPx = capHigh * pxPerFt;
         if (capPx < 1.5) return;
         ctx.fillStyle = C.face;
-        ctx.fillRect(Math.min(xa, xb), capY - capPx, Math.abs(xb - xa), capPx);
+        ctx.fillRect(x0, capY - capPx, x1 - x0, capPx);
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(Math.min(xa, xb), capY - capPx);
-        ctx.lineTo(Math.max(xa, xb), capY - capPx);
-        ctx.moveTo(Math.min(xa, xb), capY);
-        ctx.lineTo(Math.max(xa, xb), capY);
+        ctx.moveTo(x0, capY - capPx); ctx.lineTo(x1, capY - capPx);
+        ctx.moveTo(x0, capY); ctx.lineTo(x1, capY);
         ctx.stroke();
         ctx.save();
         ctx.globalAlpha = 0.35; ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(Math.min(xa, xb), capY + 1);
-        ctx.lineTo(Math.max(xa, xb), capY + 1);
+        ctx.moveTo(x0, capY + 1); ctx.lineTo(x1, capY + 1);
         ctx.stroke();
         ctx.restore();
       });
+      // ── AND A LEDGE UNDER EVERY WINDOW THE MASONRY REACHES ────────
+      //
+      // Movie, 27 Sep, with a photograph of his own drawing: *"for the types
+      // that are over 1\" under windows we should put a ledge (topledge over
+      // the brick) below the window if the brick goes into the window area"*.
+      //
+      // IT IS THE WATER TABLE AGAIN, under an opening instead of at a band's
+      // top, and for the same reason: masonry carried up to a window leaves an
+      // open horizontal joint facing the weather, and the sill oversails it so
+      // the water drips clear. So it reuses the row's own `cap` rather than
+      // inventing a second ledge with its own numbers.
+      //
+      // OVER AN INCH, which is his gate and which sorts the table exactly:
+      // the stones at 2\" and brick at 4 5/8\" take one, the shake at 1\" and
+      // the thin finishes at a half do not. A sill is a masonry detail and
+      // these are the masonry rows.
+      //
+      // AND IT CAN BE TURNED OFF: *"lets add a choice button on the menu that
+      // allows them to TURN OFF the ledge if they choose not to show it"*.
+      // Stored as the REFUSAL -- `noSillLedge` on the band -- because showing
+      // it is the default, and the record's rule is that only a departure from
+      // the default is written down.
+      paintSillLedges(geom, lines, bands);
       ctx.restore();
+    };
+
+    // THE HORN IS THE CAP'S OWN PROJECTION, each side, which is what a sill
+    // does: it runs past the opening it serves so the water leaves the jamb
+    // as well as the head.
+    const paintSillLedges = (geom, lines, bands) => {
+      const { face, loU, hiU } = geom;
+      const wall = face.wall;
+      const span = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+      if (!(span > 0.01)) return;
+      // WINDOWS ONLY. A door has a threshold, not a sill: the masonry runs
+      // past its jambs to the ground and there is no horizontal joint under it
+      // for a ledge to cover. Written before any check asked -- the first
+      // draft of this filtered on the wall alone, so the garage's overhead
+      // door grew a stone sill two feet off the slab.
+      const openings = env.fenestrations()
+        .filter(f => f.wallId === wall.id && f.type === 'window');
+      if (!openings.length) return;
+      bands.forEach(band => {
+        if (band.noSillLedge) return;
+        const finish = finishById(band.finishId);
+        if (!(finish.thicknessIn > 1) || !finish.cap) return;
+        const range = bandRange(band, lines);
+        if (!range) return;
+        const hi = Math.min(lines.head, range.hi);
+        openings.forEach(open => {
+          const sillE = face.level.floorTop
+            + (open.sillHeight > 0 ? open.sillHeight : SILL_FT);
+          // THE BRICK HAS TO REACH IT. Below the band there is no masonry to
+          // terminate, and above its top the wall is something else.
+          if (!(sillE >= range.lo && sillE < hi)) return;
+          const horn = finish.cap.projectIn / 12;
+          const at = t => loU + (hiU - loU) * t;
+          const a0 = at(Math.max(0, (open.offset - open.width / 2) / span));
+          const a1 = at(Math.min(1, (open.offset + open.width / 2) / span));
+          const px0 = Math.min(X(a0), X(a1)) - horn * pxPerFt;
+          const px1 = Math.max(X(a0), X(a1)) + horn * pxPerFt;
+          const high = (finish.cap.highIn / 12) * pxPerFt;
+          if (px1 - px0 < 2 || high < 1.5) return;
+          const y = Y(sillE);
+          ctx.fillStyle = C.face;
+          ctx.fillRect(px0, y - high, px1 - px0, high);
+          ctx.strokeStyle = INK; ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(px0, y - high); ctx.lineTo(px1, y - high);
+          ctx.moveTo(px0, y); ctx.lineTo(px1, y);
+          ctx.moveTo(px0, y - high); ctx.lineTo(px0, y);
+          ctx.moveTo(px1, y - high); ctx.lineTo(px1, y);
+          ctx.stroke();
+          // The shadow under the nose, which is what reads the detail.
+          ctx.save();
+          ctx.globalAlpha = 0.35; ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(px0, y + 1); ctx.lineTo(px1, y + 1);
+          ctx.stroke();
+          ctx.restore();
+        });
+      });
     };
 
     const paintFace = geom => {

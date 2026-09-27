@@ -101,7 +101,17 @@ if (!window.DraftWallTypes) {
     // its neighbour, and stucco is the quiet background the others read
     // against -- hatch everything and an elevation is noise carrying no more
     // information than before.
-    { id: 'stucco', label: 'Stucco', pattern: 'none', thicknessIn: 0,
+    //
+    // BLANK IS NOT THICKNESS-LESS, and that is Movie's 27 Sep correction to
+    // his own 26 Sep ruling (*"the stucco doesn't need thickess"*): *"for the
+    // thin wall types like siding and stucco - lets give them 1/2\" thickness
+    // if they are applied on the 'outside' of the wall (not a full wall
+    // finish)"*. A coat of stucco on a wall IS half an inch of material
+    // standing off the sheathing, whatever it is drawn as -- and giving it
+    // that half inch is what stops it sharing a plane with the wall behind it,
+    // which is the coplanar trouble he named an hour earlier. The physical
+    // answer, rather than a fudge factor.
+    { id: 'stucco', label: 'Stucco', pattern: 'none', thicknessIn: 0.5,
       params: Object.freeze([]) },
     // ── VERTICAL SIDING IS BOARD AND BATTEN ────────────────────────────
     //
@@ -121,7 +131,7 @@ if (!window.DraftWallTypes) {
     // one below: a wide board with a narrow batten over each joint draws as a
     // PAIR of close lines at a wide interval, not as evenly spaced singles.
     { id: 'siding_v_bb', label: 'V. Siding (B&B)', pattern: 'batten', axis: 'vertical',
-      thicknessIn: 0,
+      thicknessIn: 0.5,
       params: Object.freeze([
         { key: 'boardIn', label: 'Board', in: 12 },
         { key: 'battenIn', label: 'Batten', in: 2 },
@@ -131,7 +141,7 @@ if (!window.DraftWallTypes) {
     // types)"* -- so his 6" and 8" are this row with one field edited.
     // Courses run off the wall's FOOT, because that is where a sider starts,
     // and the odd course lands at the top the way it does on site.
-    { id: 'siding_h', label: 'H. Siding', pattern: 'lines', axis: 'horizontal', thicknessIn: 0,
+    { id: 'siding_h', label: 'H. Siding', pattern: 'lines', axis: 'horizontal', thicknessIn: 0.5,
       params: Object.freeze([{ key: 'exposureIn', label: 'Exposure', in: 4 }]) },
     // Movie: *"also CEDAR SHAKE - which is used for details sparingly for
     // some styles"*. SPARINGLY IS THE POINT, and it is why this row exists
@@ -348,34 +358,146 @@ if (!window.DraftWallTypes) {
   // A wall is not ONE finish. Movie, 26 Sep: *"i'd like to make it easy to for
   // instance choose the bottom 3 ft of a certain wall for LEDGESTONE"* -- so a
   // wall carries a BASE finish that covers it whole, and BANDS laid over that
-  // base between two heights. Stone to 3 ft with stucco above is one band on a
-  // default wall, which is the case this has to make cheap.
+  // base. Stone to 3 ft with stucco above is one band on a default wall, which
+  // is the case this has to make cheap.
   //
+  // ── AND A BAND IS ANCHORED TO A NAMED LINE ───────────────────────────
+  //
+  // Not to "the bottom of the wall", which is what this was and what four
+  // separate asks on 27 Sep turned out to be one idea about:
+  //
+  //   *"the top area where they should start the finishing should be the
+  //    bottom of the sill plate"*
+  //   *"sometimes the foundation might have finishing too so we should allow
+  //    that bottom 'sill' line the location for starting a bottom band"*
+  //   *"allow them to move either the upper BOTTOM line to below the bottom of
+  //    the SILL, or the lower foundation finish allow it to go above, but make
+  //    that bottom of sill the starting point as default position for both"*
+  //   *"if there is a gable area allow the full triangle to be filled and then
+  //    they can adjust how far up or down the finish is"*
+  //
+  // THREE LINES, ONE RULE. Each is a place a drafter names rather than a
+  // number he measures, each is a DEFAULT position rather than a boundary, and
+  // a band may sit on either side of its own:
+  //
+  //   SILL   the bottom of the sill plate -- where cladding starts. A wall's
+  //          finish runs UP from it and a foundation's runs DOWN from it, and
+  //          either may cross it.
+  //   PLATE  the top of the wall, which is the bottom of a gable triangle.
+  //   HEAD   the top of the face, whatever is there -- a ridge, a rake. It is
+  //          what makes "fill the gable" a CHOICE rather than a number a
+  //          drafter has to guess and re-guess as the roof changes.
+  //
+  // SO THE OFFSETS MAY BE NEGATIVE, and that is the whole of how a band
+  // crosses its line: `sill` with a low of -2 is cladding carried two feet
+  // down over the concrete. The old record refused a negative and was right to
+  // while every band measured from a wall's foot; it is wrong now.
+  const FINISH_ANCHORS = Object.freeze(['sill', 'plate', 'head']);
+  const DEFAULT_FINISH_ANCHOR = 'sill';
+
+  // THE STEP IS THE UI'S, THE NUMBER IS THE RECORD'S. Movie: *"make it 1ft
+  // changes default and then later when he get the L R commands and the
+  // lengthbox we can allow them to use specific length other than 1ft"*. So
+  // the nudges move a foot at a time and the field holds real feet -- a typed
+  // 2'-6" lands in the same field the buttons move, and needs no migration.
+  const FINISH_NUDGE_FT = 1;
+
+  // ── AND NOTHING SITS EXACTLY ON THE WALL'S OWN PLANE ──────────────────
+  //
+  // Movie, 27 Sep, out of his own practice: *"if these exteriors 'touch' the
+  // actual wall, on autocad it would cause problems for renderings and wall
+  // drawing, should we offset the new finishes by maybe 0.01ft off the actual
+  // wall (that's what i did in archicad to solve this problem)"*.
+  //
+  // TWO COPLANAR SURFACES ARE AN AMBIGUITY, and every renderer resolves it
+  // differently and none of them resolves it stably: the z-buffer has no
+  // answer for two faces at one depth, so the picture flickers between them as
+  // the camera moves. An exporter has the same trouble in two dimensions --
+  // the wall's edge and the finish's edge land on one another and the file
+  // carries a doubled line that a drafter then has to hunt for.
+  //
+  // AN EIGHTH OF AN INCH, which is what 0.01 ft is, and the point is that it
+  // is TOO SMALL TO BE A DIMENSION and too big to be a rounding error. Nobody
+  // measures it and no float loses it.
+  //
+  // IT IS NOT A THICKNESS, which is why it is not in the table. `thicknessIn`
+  // says what a material IS -- stone is two inches, stucco is nothing, and
+  // Movie was explicit that stucco has none. This is a fact about DRAWING
+  // rather than about building, so a flat finish keeps its honest zero and
+  // still never shares a plane with the sheathing behind it.
+  //
+  // DECLARED HERE AND USED WHEN THERE IS GEOMETRY TO USE IT ON. The 2D hatch
+  // is painted rather than built, so nothing can z-fight with it today; the
+  // number is here so that the 3D window and any exporter find it already
+  // named and already reasoned about, instead of each inventing its own.
+  // AND HE PREDICTED WHERE IT WILL BITE: *"similar to the garage connection
+  // ... we might run into similar issues i predict"*. He is right, and the
+  // precedent is this repo's own. Every defect at the garage-to-house junction
+  // has been the same shape -- two surfaces at one place and no rule saying
+  // which is in front. Board #30's one-foot standoff where a garage wall meets
+  // a house corner, #35's garage showing THROUGH the house, #52 and #53's wall
+  // line at the abutting band, and on 27 Sep the gable rake: a roof plane
+  // projecting to a line, filling nothing, invisible for as long as the wall
+  // behind it was the same white.
+  //
+  // MEASURED ON repro-garage-house, the sharpest example: the garage's
+  // concrete tops out THREE EIGHTHS OF AN INCH above the house's -- 8.125
+  // against 8.09375, two different answers to "how tall is the foundation" --
+  // and an occlusion test that asked `>=` let a face through on it. A standoff
+  // does not fix that; it makes the two surfaces DECIDABLE, which is the most
+  // any drawing can do about a junction whose numbers disagree.
+  // AND NOTHING NEEDS IT TODAY, which is the better outcome: the thin
+  // finishes carry a real half inch now, so no row in the table stands at
+  // zero and nothing shares a plane with the sheathing on its own account.
+  // Kept because it is the documented answer to a question that will be asked
+  // again the moment a finish with no thickness is added, and because the 3D
+  // window will want a minimum it did not have to invent.
+  const FINISH_STANDOFF_FT = 0.01;
+
+  // WHERE A BAND SITS, in the face's own elevation feet. `lines` is what the
+  // painter knows and the record does not: the three named heights for THIS
+  // face. A band with `toTop` runs to the head whatever the head turns out to
+  // be, which is what fills a gable.
+  const bandRange = (band, lines) => {
+    if (!band || !lines) return null;
+    const at = lines[band.anchor || DEFAULT_FINISH_ANCHOR];
+    if (!Number.isFinite(at)) return null;
+    const lo = at + (Number(band.lowFt) || 0);
+    const hi = band.toTop ? lines.head : at + (Number(band.highFt) || 0);
+    if (!Number.isFinite(hi) || hi <= lo) return null;
+    return { lo, hi };
+  };
+
+  // AND HOW FAR ALONG THE WALL IT RUNS. Movie: *"allow the user move the
+  // bottom or top up by 1' and also on the sides by 1ft"*. Insets from each
+  // END of the wall, so a band need not run its full width -- measured from
+  // the ends rather than as a start and a length, because that is what a
+  // drafter adjusts: he pulls the stone back from a corner.
+  const bandSpan = (band, loU, hiU) => {
+    const a = loU + Math.max(0, Number(band?.startFt) || 0);
+    const b = hiU - Math.max(0, Number(band?.endFt) || 0);
+    return b > a ? { lo: a, hi: b } : null;
+  };
+
   // A BAND IS A HEIGHT RANGE, NOT A RECTANGLE, and the difference is that a
   // range follows the wall. Stored as a rectangle in elevation space it would
   // be measured off whichever elevation the drafter happened to be looking at,
   // and moving the wall, or reading it on the other elevation, would leave the
-  // stone behind. A range belongs to the wall, so both elevations agree and a
-  // wall that moves takes its stone with it.
-  //
-  // MEASURED FROM THE BOTTOM OF THE WALL -- `lowFt: 0` is where the cladding
-  // starts, which on a finished elevation is the top of the concrete. "The
-  // bottom 3 ft" is then literally 0 to 3 and needs no arithmetic, and the
-  // same band reads the same on a wall standing on a frost wall as on one
-  // standing on a grade beam.
+  // stone behind.
   //
   // LAST BAND WINS, which is paint order and not a rule to remember. A drafter
   // who puts stone up to 3 ft and then shake from 2 to 6 gets shake over the
   // top foot of the stone, the same as if they had drawn it that way, rather
   // than an error about an overlap they can see perfectly well.
   //
-  // HALF OPEN, [low, high), so two bands stacked at the same number do not
-  // fight over it: 0-3 and 3-6 meet at 3 with the upper one owning the line.
-  const finishAtFt = (wall, ft) => {
+  // HALF OPEN, [lo, hi), so two bands stacked at the same height do not fight
+  // over it: the upper one owns the line.
+  const finishAtFt = (wall, elev, lines) => {
     const bands = Array.isArray(wall?.finishBands) ? wall.finishBands : [];
     for (let i = bands.length - 1; i >= 0; i -= 1) {
       const band = bands[i];
-      if (ft >= band.lowFt && ft < band.highFt) {
+      const span = bandRange(band, lines);
+      if (span && elev >= span.lo && elev < span.hi) {
         return Object.freeze({ id: band.finishId, band,
           color: band.color || wall?.finishColor || null });
       }
@@ -403,9 +525,10 @@ if (!window.DraftWallTypes) {
   //
   // THE BASE FINISH IS NEVER CAPPED, because it has no top to stop short at:
   // it runs the whole wall by definition. Only a band can end in mid air.
-  const bandIsCapped = (band, wallHighFt) => {
+  const bandIsCapped = (band, lines) => {
     if (!band || !finishById(band.finishId)?.cap) return false;
-    return Number.isFinite(wallHighFt) && band.highFt < wallHighFt - 1e-6;
+    const span = bandRange(band, lines);
+    return !!span && Number.isFinite(lines?.head) && span.hi < lines.head - 1e-6;
   };
 
   window.DraftWallTypes = Object.freeze({
@@ -418,6 +541,12 @@ if (!window.DraftWallTypes) {
     LEGACY_FINISH_IDS,
     DEFAULT_FINISH_ID,
     finishById,
+    FINISH_ANCHORS,
+    DEFAULT_FINISH_ANCHOR,
+    FINISH_NUDGE_FT,
+    FINISH_STANDOFF_FT,
+    bandRange,
+    bandSpan,
     finishAtFt,
     finishesOnWall,
     bandIsCapped,

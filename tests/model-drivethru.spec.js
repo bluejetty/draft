@@ -89,7 +89,12 @@ test('the foot bar: PROJECT and MODEL left, the bone in the middle, the sheets r
       // AND RUFF/ROUGH WENT BACK UP (Movie, 17 Sep). It came down here on
       // 15 Sep and spent two days at the end of this group; the bottom bar is
       // pages and sheets again, with no switch on it at either end.
-      .toEqual(['PROJECT', 'MODEL', 'REAL ESTATE LAYOUT']);
+      // AND IT BECAME FOUR ON 27 SEP. The page that arrived as REAL ESTATE
+      // LAYOUT split in two the same day -- Movie: "insert tab -> 'EXT. FINISH'
+      // and make this area that name", and "the REAL ESTATE PLAN area will be
+      // similar to the CONSTRUCTION layout". His order, which is the order
+      // here: the finishes come before the sheet that shows them off.
+      .toEqual(['PROJECT', 'MODEL', 'EXT. FINISH', 'REAL ESTATE PLAN']);
 
     expect(await page.locator('#sheet-row > *').evaluateAll(els => els.map(
       el => (el.textContent || '').trim().replace(/\s+/g, ' '))),
@@ -136,8 +141,10 @@ test('the foot bar: PROJECT and MODEL left, the bone in the middle, the sheets r
     // lit by a page EXISTING and by nothing else, least of all by being moved
     // between rows. So it is asserted the other way now: the built one is a
     // link to its page, and ESTIMATES, which is still unbuilt, is still down.
+    await expect(page.locator('#page-row [data-page="ext-finish"]'))
+      .toHaveAttribute('href', './EXTFINISH.html');
     await expect(page.locator('#page-row [data-page="real-estate"]'))
-      .toHaveAttribute('href', './REALESTATE.html');
+      .toHaveAttribute('href', './REALESTATEPLAN.html');
     await expect(page.locator('#sheet-row [data-page="estimates"]')).toBeDisabled();
   });
 

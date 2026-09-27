@@ -245,3 +245,64 @@ test('the clock turns over with the minute and not with the second',
       await context.close();
     }
   });
+
+// ── AND ON EVERY PAGE CARRYING THE BAR, NOT JUST THIS ONE ──
+//
+// Movie, 27 Sep, on the new Real Estate page: "i just noticed the date time
+// doesn't show on the bottom right on this page", then "REAL ESTATE PAGE needs
+// time /date".
+//
+// IT COULD NOT, and nothing above would ever have said so: the reading was
+// twenty lines inline in MODEL.html while the lane it stands in is written by
+// shell-bars.js, so every page added after 20 Sep got the slot and none of
+// them got the clock. An empty slot is `display:none` by design, so the gap
+// looked exactly like a page that had nothing to say.
+//
+// SO THE CLAIM IS ABOUT THE BAR. Asked per page, because "the module has a
+// mountClock" is not the thing that was wrong -- what was wrong is that a page
+// carrying this bar could come up without the reading, and only a page can
+// answer that. The list is every page that calls bottomBar().
+for (const page of ['MODEL', 'PROJECT', 'EXTFINISH', 'REALESTATEPLAN',
+  'SPECS', 'LAYOUT']) {
+  test(`${page} carries the bar, so it carries the clock`, async ({ browser, baseURL }) => {
+    const context = await browser.newContext({
+      baseURL, viewport: VIEW, timezoneId: 'UTC', locale: 'en-GB',
+    });
+    try {
+      const tab = await context.newPage();
+      await h.suppressEntryCoach(tab);
+      await tab.goto(`/${page}.html`);
+      const clock = tab.locator('#clock');
+      await expect(clock, 'the reading is on the page').toBeVisible();
+      await expect(clock).not.toBeEmpty();
+
+      // IN THE LANE AND AT THE RIGHT, which is where he looks for it: "the
+      // bottom right on this page".
+      const where = await tab.evaluate(() => {
+        const r = document.getElementById('clock').getBoundingClientRect();
+        const bar = document.querySelector('[data-foot-lane]');
+        const lane = bar.getBoundingClientRect();
+        return { right: r.right, left: r.left, width: window.innerWidth,
+          inLane: bar.contains(document.getElementById('clock')),
+          laneTop: lane.top, clockTop: r.top,
+          // THE COUNT'S HOME IS LEFT OF IT: "viewcount on left if possible
+          // too". The count itself is silent on localhost by design, so what
+          // is asserted is the SLOT's side of the lane -- which is the part
+          // the bar decides and the part that could be wrong.
+          countLeft: bar.querySelector('[data-visit-counter-home]')
+            ? bar.querySelector('[data-visit-counter-home]').compareDocumentPosition(
+              document.getElementById('clock')) & Node.DOCUMENT_POSITION_FOLLOWING
+            : 0 };
+      });
+      expect(where.inLane, 'the clock is a tenant of the bar\'s foot lane').toBe(true);
+      expect(where.left, 'and reads in the right half of the sheet')
+        .toBeGreaterThan(where.width / 2);
+      expect(where.width - where.right, 'holding the 12px inset the lane holds')
+        .toBeLessThanOrEqual(13);
+      expect(where.countLeft, 'with the visit count\'s home to its left')
+        .toBeGreaterThan(0);
+    } finally {
+      await context.close();
+    }
+  });
+}

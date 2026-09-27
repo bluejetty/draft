@@ -15979,6 +15979,7 @@
         // wall of it with nothing anywhere saying so.
         finishIds: WT.EXTERIOR_FINISHES.map(finish => finish.id),
         legacyFinishes: WT.LEGACY_FINISH_IDS,
+        finishAnchors: WT.FINISH_ANCHORS,
         defaultWallTopFt: 8,
         drops: refusedItems.walls,
       }),
@@ -16939,90 +16940,19 @@
   boot();
 })();
 </script>
-<!-- THE CLOCK IN THE BAR'S FOOT LANE (Movie, 20 Sep for the clock, 25 Sep
-     for the row). Inline, and that is a decision rather than laziness:
-     model-html-tier1.spec.js keeps an EXACT
-     list of the scripts this page may fetch, because the whole claim of the
-     migration is that MODEL.html is cheap. The cost of a module is the
-     request, and this is twenty lines that speak to nothing -- no store, no
-     drawing, no canvas, no network -- so a file would buy a round trip and
-     nothing else. The day a second page wants a clock is the day it earns
-     one.
+<!-- THE CLOCK MOVED INTO THE BAR (27 Sep). It was mounted from here, into
+     shell-bars.js's foot lane, for as long as MODEL was the only page with a
+     corner to put it in -- and the comment that stood here said so: "the day a
+     second page wants a clock is the day it earns a module".
 
-     EVERYTHING COMES FROM THE BROWSER, which is the whole of "where the
-     person is": `undefined` for the locale means the one they set, and no
-     `timeZone` option at all means the zone their machine is in. Berlin reads
-     its own 15:42 and Halifax reads 3:42 PM ADT, in each case because the
-     page never decided -- it never asks where they are and never sends it
-     anywhere. The zone is NAMED in the line for the same reason the date is:
-     a drafter working across a time difference is reading this to know which
-     clock the reading belongs to.
-
-     TO THE MINUTE, NOT THE SECOND. drawing-format.js already ruled on this
-     for the save name -- "two saves inside one minute are the same drafting
-     minute" -- and a seconds field in the corner of a page somebody draws on
-     all day is motion where the drawing should be the only thing moving.
-
-     THE TICK IS AIMED AT THE MINUTE, not set to 60 seconds from now. A timer
-     that counts sixty from whenever it last ran drifts a little later every
-     hour and eventually changes the reading half a minute after the minute
-     does; this one re-reads the clock every tick, so it also writes the right
-     time on the first tick after a laptop wakes from lunch rather than
-     counting on from where it dozed off. -->
-<script>
-(function () {
-  'use strict';
-
-  // IT MOUNTS ITSELF, because the row it stands in is the BAR'S and the bar
-  // is written by shell-bars.js. There is no #clock in this page's markup to
-  // find any more: the lane arrives with bottomBar() mid-parse, far above
-  // this script, and the slot in it is the one place the reading is allowed
-  // to be. No slot, no clock -- which is the same answer this line has always
-  // given when the element it wanted was not there, and the right one: a
-  // reading loose on the sheet is a reading over the drawing.
-  var slot = document.querySelector('[data-foot-note]');
-  if (!slot) return;
-  var el = document.createElement('div');
-  el.id = 'clock';
-  el.setAttribute('data-local-clock', '');
-  slot.appendChild(el);
-
-  var day, clock;
-  try {
-    day = new Intl.DateTimeFormat(undefined,
-      { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
-    clock = new Intl.DateTimeFormat(undefined,
-      { hour: 'numeric', minute: '2-digit', timeZoneName: 'short' });
-  } catch (error) {
-    // FAIL SILENT, the visit counter's bargain at the other end of the sheet.
-    // A browser that cannot format a date leaves the slot empty, `:empty`
-    // takes the line out of the column, and the page is otherwise whole --
-    // nothing here is waiting on the time.
-    return;
-  }
-
-  var write = function () {
-    var now = new Date();
-    el.textContent = day.format(now) + ' \u00b7 ' + clock.format(now);
-  };
-
-  var tick = function () {
-    write();
-    // 250ms INSIDE the new minute rather than on its edge: a timer that fires
-    // a hair early would rewrite the minute that is ending and show it twice.
-    setTimeout(tick, 60000 - (Date.now() % 60000) + 250);
-  };
-
-  tick();
-
-  // A BACKGROUND TAB'S TIMERS ARE THROTTLED, so the first thing a returning
-  // drafter would read is however stale the throttle left it. Same write, at
-  // the moment they look.
-  document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) write();
-  });
-})();
-</script>
+     THAT DAY CAME AND THE ANSWER WAS NOT A MODULE. Movie, on the new Real
+     Estate page: "i just noticed the date time doesn't show on the bottom
+     right on this page" -- which it could not, because the reading lived in
+     this file and the lane it stands in lives in shell-bars.js. So it went
+     into shell-bars.js itself rather than into a file of its own, and buys the
+     round trip the old note was protecting: every page carrying the bottom bar
+     already fetches that module, so the script list model-html-tier1.spec.js
+     pins is unchanged. See mountClock() there. -->
 
 <!-- Visit counter: async, fail-silent, silent on localhost (see
      traffic-counter.js).
