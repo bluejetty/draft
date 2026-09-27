@@ -577,11 +577,17 @@ function run(win) {
         withDoor.some(c => doorOf(c).garage === true),
         withDoor.map(c => `${doorOf(c).id}${doorOf(c).garage ? ' (overhead)' : ''}`).join(' '));
 
-      const { ctx, fills } = recordingCtx();
+      const { ctx, fills, strokes } = recordingCtx();
       CV.drawCutView(base, ctx, w, h, cut, { pxPerFt: PX, extents });
       const rects = fills.filter(f => f.rect).map(f => ({ ink: f.ink, r: f.rect }));
       const cTop = CV.garageConcreteTop(base, fdn, attached);
       const buckFt = S.GARAGE_DOOR_BUCK_IN / 12;
+      // WHAT THE CUT FACE IS DRAWN AT, and it cannot be read off this tape:
+      // recordingCtx makes `strokeRect` a no-op on purpose, and the pour's
+      // outline is a strokeRect. So the weight is named from the painter --
+      // 1.25, the same figure drawSectionWall and the concrete pass both use --
+      // and "lighter" is asserted on the two things the tape DOES carry.
+      const CUT_WEIGHT = 1.25;
 
       // ── THE BUCK: A FOOT OFF THE TOP OF THE BEAM AT EVERY DOOR ─────────
       const beamAt = (c) => rects
@@ -601,6 +607,48 @@ function run(win) {
           check(`buck: ${c.wall.id} has no door over it and keeps its full top`,
             near(top, cTop, 0.01), `${ftIn(top)} vs ${ftIn(cTop)}`);
         }
+      });
+
+      // ── AND THE TOP THE BUCK CAME OUT OF, DRAWN LIGHT ──────────────────
+      //
+      // Movie, 26 Sep: *"maybe also show the top of the grade beam in the
+      // background with not as dark lines (for reference)"*. The pocket is only
+      // as long as the door, so past either jamb the beam runs on full height
+      // and the cut looks PAST the void at it.
+      //
+      // READ AS A HORIZONTAL AT THE POUR'S TOP, spanning the beam and no wider,
+      // and asserted LIGHTER than the pour's own outline -- a beyond line drawn
+      // at the cut's own weight would put a second top of concrete on the sheet
+      // at equal authority, which is the thing that makes it wrong rather than
+      // merely plain.
+      const flat = strokes.filter(t => t.pts.length === 2
+        && Math.abs(t.pts[0].y - t.pts[1].y) < 0.5);
+      withDoor.forEach(c => {
+        const hit = flat.find(t => Math.abs(toE(t.pts[0].y) - cTop) < 0.01
+          && Math.abs(Math.min(toU(t.pts[0].x), toU(t.pts[1].x)) - (c.u - c.width / 2)) < 0.02
+          && Math.abs(Math.max(toU(t.pts[0].x), toU(t.pts[1].x)) - (c.u + c.width / 2)) < 0.02);
+        check(`beyond: ${c.wall.id} shows the beam's full top behind ${doorOf(c).id}, ${where}`,
+          !!hit, hit ? ftIn(toE(hit.pts[0].y)) : `no line at ${ftIn(cTop)} across the beam`);
+        if (hit) {
+          // THINNER THAN THE CUT, and struck in a TRANSLUCENT ink rather than
+          // the solid one the cut face carries. Both, because either alone is
+          // satisfied by a line that still reads as another top of concrete:
+          // a thin solid line, or a fat pale one.
+          const alpha = Number((/,\s*([0-9.]+)\)$/.exec(hit.ink) || [])[1]);
+          check(`beyond: and it is drawn lighter than the cut face at ${c.wall.id}`,
+            hit.w < CUT_WEIGHT - 1e-9 && Number.isFinite(alpha) && alpha < 0.5,
+            `w ${hit.w} (cut ${CUT_WEIGHT})  ink ${hit.ink}`);
+        }
+      });
+      // AND NOWHERE ELSE: a beam with no door over it draws its top ONCE, as
+      // the cut face, so a second line there would be the reference standing in
+      // for something that is not behind anything.
+      fdnC.filter(c => !doorOver(c)).forEach(c => {
+        const over = flat.filter(t => Math.abs(toE(t.pts[0].y) - cTop) < 0.01
+          && Math.min(toU(t.pts[0].x), toU(t.pts[1].x)) > c.u - c.width / 2 - 0.02
+          && Math.max(toU(t.pts[0].x), toU(t.pts[1].x)) < c.u + c.width / 2 + 0.02);
+        check(`beyond: no reference line at ${c.wall.id}, which has no buck, ${where}`,
+          over.length === 0, `${over.length} lines at the pour's top across it`);
       });
 
       // ── THE FLOOR FALLS TOWARD THE DOOR, AND FILLS THE VOID ────────────
@@ -1488,7 +1536,7 @@ function run(win) {
         && near(fallAt(S2.GARAGE_SLAB_FLAT_AT_FT + 20), 0, 1e-9),
       `${fallAt(S2.GARAGE_SLAB_FLAT_AT_FT)}" at ${S2.GARAGE_SLAB_FLAT_AT_FT} ft`);
 
-    let notched = 0, shallower = 0;
+    let doorsSeen = 0, shallower = 0, platesSeen = 0;
     const FACE_W = 1;
     [['repro-garage-house', base],
       ['repro-2storey-garage-beam', buildEnv(win, JSON.parse(fs.readFileSync(
@@ -1566,49 +1614,175 @@ function run(win) {
             list.push({ e: a.e, lo: Math.min(a.u, b.u), hi: Math.max(a.u, b.u) });
           }
         });
+        // ── THE CONCRETE'S TOP DOES NOT STEP AT A DOOR ──────────────────
+        //
+        // Movie, 26 Sep: *"on the elevations don't show the line where the
+        // pour and grade beam [meet] - just show them all as concrete. in the
+        // sections you can show that line."*
+        //
+        // THIS BLOCK USED TO ASSERT THE STEP. Board #45's first half drew the
+        // buck here as an opening in the top of the concrete and these checks
+        // measured its depth against the slab's fall. Seeing it drawn he
+        // called it off: the slab is poured into the buck and fills it, so
+        // from outside there is one concrete face and no joint to draw. The
+        // claim inverts -- a run below its own stroke's top, above grade, is
+        // now a defect wherever it appears.
+        //
+        // THE SAME READING EITHER WAY, which is why it inverts cleanly rather
+        // than being deleted: a face paints its top, its base and anything in
+        // between in ONE stroke, so a run below that stroke's highest and
+        // above grade IS a step in the top of the concrete and nothing else.
         byStroke.forEach(runs => {
           const top = Math.max(...runs.map(r => r.e));
-          runs.filter(r => r.e < top - 0.005).forEach(sill => {
-            notched += 1;
-            const cut = top - sill.e;
-            const door = want.find(d => Math.abs(d.lo - sill.lo) < 0.05
-              && Math.abs(d.hi - sill.hi) < 0.05);
-            check(`${fixture} ${cut.toFixed(3)}ft notch at u `
-              + `${sill.lo.toFixed(2)}..${sill.hi.toFixed(2)} on ${cut0.id} is a door`,
-              !!door, door ? door.id
-                : `no garage door spans it -- doors here: ${want.map(d =>
-                  `${d.lo.toFixed(2)}..${d.hi.toFixed(2)}`).join(', ') || '(none)'}`);
-            if (!door) return;
-            if (!door.overhead) shallower += 1;
-            check(`${fixture} ${cut0.id} ${door.id}: notched the slab-s fall`,
-              Math.abs(cut - door.open) < 0.005,
-              `${(cut * 12).toFixed(2)}" against ${(door.open * 12).toFixed(2)}" of fall`);
-            // AND NO PLATE ACROSS IT. The sill plate is what the wall above
-            // bears on; over a buck there is no concrete under it and no wall
-            // over it, there is a door. Read off the FILLS, because that is
-            // what the plate is -- a strip of C.face the width of the pour.
-            const over = painted.modelFills.filter(f => {
-              const lo = Math.min(...f.pts.map(q => q.u));
-              const hi = Math.max(...f.pts.map(q => q.u));
-              const bot = Math.min(...f.pts.map(q => q.e));
-              const t = Math.max(...f.pts.map(q => q.e));
-              return bot > top - 0.01 && t < top + 0.6
-                && lo < sill.hi - 0.1 && hi > sill.lo + 0.1;
-            });
-            check(`${fixture} ${cut0.id} ${door.id}: and no sill plate crosses it`,
-              over.length === 0,
-              over.length ? `${over.length} fill(s) in the plate band over the door`
-                : `plate band above ${top.toFixed(4)} is clear across the opening`);
+          runs.filter(r => r.e < top - 0.005).forEach(step => {
+            const door = want.find(d => Math.abs(d.lo - step.lo) < 0.05
+              && Math.abs(d.hi - step.hi) < 0.05);
+            check(`${fixture} ${cut0.id}: the concrete's top does not step at u `
+              + `${step.lo.toFixed(2)}..${step.hi.toFixed(2)}`,
+              false, `${((top - step.e) * 12).toFixed(2)}" below this face's top`
+                + `${door ? ` -- ${door.id}'s buck, which now fills flush` : ''}`);
           });
+        });
+        // ── AND THE PLATE STILL STOPS AT EVERY DOOR ─────────────────────
+        //
+        // That rule did not change with the step and must not be carried off
+        // by it: the sill plate is what the wall above bears on, and over a
+        // door there is no wall over it however the concrete under it is
+        // drawn.
+        //
+        // FOUND BY WHAT IT IS, NOT BY WHOSE FACE IT SITS ON. Pairing a door
+        // with its face needs `visibleRuns`' answer -- which of several bodies
+        // is nearest over this span -- and a second copy of that here got it
+        // wrong four ways on the first run: it matched the garage's man door
+        // to the HOUSE's face on an elevation the door is not even drawn on,
+        // and read the foundation wall's own openings as doors with plates
+        // over them.
+        //
+        // A PLATE IS A STRIP ONE PLATE THICK. Nothing else on an elevation is
+        // 1 1/2" tall -- a wall face is feet -- so the fills can be sieved for
+        // it directly, with no face to pair and no depth to recover. Then the
+        // claim is flat: no such strip overlaps a garage door's span, on any
+        // face, on any elevation.
+        const plateFt = S.GARAGE_BEAM_PLATE_IN / 12;
+        const plates = painted.modelFills.map(f => ({
+          lo: Math.min(...f.pts.map(q => q.u)), hi: Math.max(...f.pts.map(q => q.u)),
+          bot: Math.min(...f.pts.map(q => q.e)), top: Math.max(...f.pts.map(q => q.e)),
+        })).filter(f => Math.abs((f.top - f.bot) - plateFt) < 0.01 && f.hi - f.lo > 0.1);
+        platesSeen += plates.length;
+        // ── AND ONLY WHERE THE PAINTER DREW THE DOOR ────────────────────
+        //
+        // A plate strip over a door's SPAN is not a plate over the DOOR: on an
+        // elevation where the garage stands behind the house, the house's own
+        // face and its plate run across that span and are perfectly right to.
+        // Asserted without this, the rule failed four ways on faces the door
+        // is not drawn on at all.
+        //
+        // THE OPENING IS THE PAINTER'S OWN ANSWER to which face is nearest
+        // there -- it only paints a recess where the door is the visible thing
+        // -- so a door with one on this view has nothing in front of it, and
+        // any plate crossing its span would have to be its own face's.
+        // Recognised by its span and its height: a fill exactly as wide as the
+        // rough opening and taller than a man, which nothing else on an
+        // elevation is.
+        // THE TAPE KEEPS WHAT WAS PAINTED OVER. An elevation has no occlusion
+        // RULE, it has an ORDER -- far first, each opaque surface covering
+        // what it stands in front of -- so a fill in the list is not a fill on
+        // the sheet. On repro-2storey-garage-beam E3 the house stands in front
+        // of the garage's front wall, and the garage's door opening is in the
+        // tape, painted and then buried. Read as drawn, it made the house's
+        // own plate look like a plate over that door.
+        const boxOf = f => ({
+          lo: Math.min(...f.pts.map(q => q.u)), hi: Math.max(...f.pts.map(q => q.u)),
+          bot: Math.min(...f.pts.map(q => q.e)), top: Math.max(...f.pts.map(q => q.e)),
+        });
+        const buried = (f) => {
+          const b = boxOf(f);
+          const u = (b.lo + b.hi) / 2, e = (b.bot + b.top) / 2;
+          return painted.modelFills.some(o => {
+            if (o.seq <= f.seq) return false;
+            const q = boxOf(o);
+            return u > q.lo + 1e-6 && u < q.hi - 1e-6
+              && e > q.bot + 1e-6 && e < q.top - 1e-6;
+          });
+        };
+        want.forEach(door => {
+          const opening = painted.modelFills.find(f => {
+            const b = boxOf(f);
+            return Math.abs(b.lo - door.lo) < 0.05 && Math.abs(b.hi - door.hi) < 0.05
+              && b.top - b.bot > 3 && !buried(f);
+          });
+          if (!opening) return;                  // not drawn on this elevation
+          doorsSeen += 1;
+          if (!door.overhead) shallower += 1;
+          const over = plates.filter(f => f.lo < door.hi - 0.1 && f.hi > door.lo + 0.1);
+          check(`${fixture} ${cut0.id} ${door.id}: no sill plate crosses the door`,
+            over.length === 0,
+            over.length ? `${over.length} plate strip(s) over u `
+              + `${door.lo.toFixed(2)}..${door.hi.toFixed(2)}`
+              : `${plates.length} plate strip(s) on this view, none across it`);
         });
       });
     });
-    check('fixture: some garage door notches its beam', notched > 0,
-      `${notched} door(s) drawn`);
-    // WITHOUT A DOOR FURTHER IN than the overhead one, "the fall" and "8
-    // inches" are the same claim and a constant would pass everything above.
+    // THE SWEEP ABOVE IS TWO NEGATIVE CLAIMS AND A FILTER, so without these it
+    // passes a painter that draws no garage doors at all.
+    check('fixture: sill plates are drawn on these elevations at all',
+      platesSeen > 0, `${platesSeen} strip(s) one plate thick`);
+    check('fixture: and garage doors are drawn, so the rule is not vacuous',
+      doorsSeen > 0, `${doorsSeen} garage door opening(s) painted`);
+    // AND ONE FURTHER IN than the overhead door, so "the fall" and "8 inches"
+    // stay two different claims for the door bottoms checked below.
     check('fixture: and one of them is not the overhead door',
-      shallower > 0, `${shallower} of ${notched} further in`);
+      shallower > 0, `${shallower} of ${doorsSeen} further in`);
+
+    // ── AND NONE OF IT SHOWS THROUGH THE HOUSE ────────────────────────────
+    //
+    // Movie, 26 Sep, on the BACK elevation: *"the garage door buck is showing
+    // on the HOUSE FOUNDATION at the back"*, and his own diagnosis -- *"its
+    // like the house is transparent or the door buck lines are going in front
+    // of the house"*.
+    //
+    // The garage's foundation is stored 1 1/2" taller than the house's (8'-1
+    // 1/2" against 8'-0"), so a test that asked "does the near face top out at
+    // least as high" said no and hid nothing: the garage's top of concrete,
+    // and the buck notched out of it, ran twenty feet across the back of a
+    // house standing 26 ft in front. A wall does not stop at its concrete --
+    // the sill plate on it is opaque -- so cover is measured to the top of the
+    // PLATE now.
+    //
+    // READ AS A LENGTH, which is what makes it one claim rather than two: a
+    // corner with nothing in front of it runs the concrete's full depth, and a
+    // corner that is cut short is one standing where something covers it,
+    // which is a corner that should not be drawn at all.
+    // proto/foundation-face-harness.js has the same reading in detail; this is
+    // the copy a mutation can kill.
+    {
+      const shown = buildEnv(win, JSON.parse(fs.readFileSync(
+        path.join(ROOT, 'proto', 'repro-movie-garage-2storey.draft'), 'utf8')));
+      let corners = 0, cut = [];
+      ['E2', 'E3'].forEach(id => {
+        const cut0 = standardElevationCuts(shown).find(c => c.id === id);
+        if (!cut0) return;
+        const view = paintElevation(win, shown, cut0, { pxPerFt: 40 });
+        const eF = CV.sectionLevelStack(shown).foundation;
+        const top = eF.wallTop - S.GARAGE_BEAM_PLATE_IN / 12;
+        const full = top - eF.grade;
+        view.strokes.forEach(st => {
+          for (let i = 1; i < st.pts.length; i += 1) {
+            const a = st.pts[i - 1], b = st.pts[i];
+            if (b.move || Math.abs(a.u - b.u) > 0.01) continue;
+            const hi = Math.max(a.e, b.e), lo = Math.min(a.e, b.e);
+            if (lo < eF.grade - 0.01 || hi > top + 0.3 || hi <= eF.grade + 0.01) continue;
+            corners += 1;
+            if (hi - lo < full - 0.01) cut.push(`${id} u ${a.u.toFixed(2)} ${(hi - lo).toFixed(3)}ft`);
+          }
+        });
+      });
+      check('fixture: the back elevations draw foundation corners at all',
+        corners > 0, `${corners} corners`);
+      check('no foundation corner is cut short by what stands in front of it',
+        cut.length === 0,
+        cut.length ? cut.join('  ') : `all ${corners} run the concrete's full depth`);
+    }
   }
 
   // ── AND A DOOR STANDS ON WHAT IS UNDER IT ─────────────────────────────
@@ -1626,7 +1800,7 @@ function run(win) {
   // door takes none, because it seals to the slab.
   {
     const S3 = CV.STANDARDS;
-    let doors = 0, thresholds = 0, inBucks = 0;
+    let doors = 0, thresholds = 0, inBucks = 0, hidden = 0;
     [['repro-garage-house', base],
       ['repro-2storey-garage-beam', buildEnv(win, JSON.parse(fs.readFileSync(
         path.join(ROOT, 'proto', 'repro-2storey-garage-beam.draft'), 'utf8')))],
@@ -1670,11 +1844,50 @@ function run(win) {
             const pt = { x: wall.start.x + (wall.end.x - wall.start.x) * t,
               z: wall.start.z + (wall.end.z - wall.start.z) * t };
             stands -= CV.garageDoorOpeningFt(env, garage, pt);
-            inBucks += 1;
           }
           const sill = f.garage === true ? 0 : S3.DOOR_THRESHOLD_IN / 12;
-          if (sill) thresholds += 1;
+          // ── UNLESS SOMETHING STANDS IN FRONT OF IT ────────────────────
+          //
+          // Movie, 26 Sep, circling the back of a 2 STOREY + GARAGE: *"the
+          // garage door buck is showing on the HOUSE FOUNDATION at the back"*
+          // ... *"its like the house is transparent or the door buck lines are
+          // going in front of the house"*.
+          //
+          // A door in a buck hangs below its own wall, and that strip belongs
+          // to the FOUNDATION, which this painter lays down before any wall
+          // face. So a far door's dip landed on a near house's concrete that
+          // had been painted twenty passes earlier and could not cover it.
+          // Clipped to its own floor there now, and this is the half of the
+          // claim that says so -- asked of the MODEL, because asking the
+          // drawing "is the dip missing here" would let a painter that drew no
+          // dips at all agree with itself.
+          const dir = view.dir;
+          const midDepth = w => ((w.start.x + w.end.x) / 2) * dir.x
+            + ((w.start.z + w.end.z) / 2) * dir.z;
+          const myDepth = midDepth(wall);
+          const infront = env.walls().some(o => (o.view || 'plan') === 'foundation'
+            && midDepth(o) > myDepth + 1
+            && Math.min(o.start.x * axis.x + o.start.z * axis.z,
+              o.end.x * axis.x + o.end.z * axis.z) < uc + half - 0.05
+            && Math.max(o.start.x * axis.x + o.start.z * axis.z,
+              o.end.x * axis.x + o.end.z * axis.z) > uc - half + 0.05);
+          const ownFloor = garage ? CV.garageBearing(env, eFdn, garage) : level.floorTop;
+          // ONLY A DOOR THAT DIPS IS AT RISK. A door standing ON its floor, or
+          // proud of it on a threshold, is covered by the nearer face painted
+          // after it -- the order working as intended. It is what hangs BELOW
+          // the wall that has nothing coming later, so that is the only case
+          // the clip touches and the only one asked about here.
+          const dips = (stands + sill) < ownFloor - 1e-6;
           doors += 1;
+          if (infront && dips) {
+            hidden += 1;
+            check(`${fixture} ${cut2.id} ${f.id}: stops at its own wall, behind what is in front`,
+              Math.abs(drawn - ownFloor) < 0.005,
+              `bottom ${drawn.toFixed(4)} against its floor ${ownFloor.toFixed(4)}`);
+            return;
+          }
+          if (sill) thresholds += 1;
+          if (garage) inBucks += 1;
           check(`${fixture} ${cut2.id} ${f.id}: stands on ${f.garage === true
             ? 'the slab' : 'a half-inch threshold'}`,
             Math.abs(drawn - (stands + sill)) < 0.005,
@@ -1694,6 +1907,11 @@ function run(win) {
     check('fixture: some door was measured', doors > 0, `${doors} door(s)`);
     check('fixture: and one of them stands in a buck', inBucks > 0,
       `${inBucks} in a garage`);
+    // AND ONE OF THEM IS BEHIND SOMETHING, so the branch above is not vacuous:
+    // without a door on a face another body stands in front of, "clip every
+    // dip" and "clip none" draw the same sheet.
+    check('fixture: and one of them has a body in front of it',
+      hidden > 0, `${hidden} door(s) behind something`);
     check('fixture: and one of them has a threshold', thresholds > 0,
       `${thresholds} with a sill`);
   }
@@ -2105,6 +2323,25 @@ const MUTATIONS = [
   // there. The third takes the fall from the wrong end, so the back of the
   // garage is notched deepest. The fourth paints the plate across the opening,
   // which puts 1 1/2" of wall finish over a door.
+  // ── AND THE STEP THAT CAME BACK OUT OF THE ELEVATION ────────────────
+  //
+  // Movie, 26 Sep: *"on the elevations don't show the line where the pour and
+  // grade beam [meet] - just show them all as concrete"*. Board #45's first
+  // half drew it; this is the two halves of undrawing it, so neither the
+  // outline nor the fill can put the step back on its own.
+  ['the concrete-s top steps down at a door on the elevation again',
+    s => s.replace('        ctx.moveTo(X(r.lo), Y(g.topE)); ctx.lineTo(X(r.hi), Y(g.topE));',
+      '        notched(r, bs).forEach(q => { ctx.moveTo(X(q.lo), Y(g.topE - q.drop));'
+      + ' ctx.lineTo(X(q.hi), Y(g.topE - q.drop)); });')],
+  //
+  // THERE IS NO MATCHING MUTANT FOR THE FILL, and that is a measurement rather
+  // than an omission. A door's own recess is painted over its rough opening
+  // down to where the door stands, which is exactly the strip a stepped fill
+  // would leave empty -- measured on repro-2storey-garage-beam E1, the recess
+  // runs u 0.00..16.00, e -1.8433..5.9483 while the concrete's top is -1.1729.
+  // So no drawing can tell a flat fill from a stepped one, and a mutation table
+  // is not the place to assert a difference nothing can see. The fill is flat
+  // because the outline is; the outline is what a drafter reads.
   ['no door notches the top of the beam at all',
     s => s.replace('        if (open <= 0.01) return;      // the slab has filled the whole buck',
       '        if (true) return;      // the slab has filled the whole buck')],
@@ -2186,6 +2423,43 @@ const MUTATIONS = [
   ['a garage with no overhead door loses its slab and sits flush with the pour',
     s => s.replace('    if (!garageDoorDatum(env, garage)) return garageSlabTop(env, fdn, garage);',
       '')],
+  // AND THE REFERENCE LINE: missing, drawn on every beam whether or not a buck
+  // was taken out of it, struck at the cut's own weight so it reads as a second
+  // top of concrete, and put at the notched top where it says nothing.
+  ['the beam-s full top is not shown behind the buck at all',
+    s => s.replace('      if (buck != null) {\n'
+      + '        ctx.strokeStyle = ink(0.35); ctx.lineWidth = 1;',
+      '      if (false) {\n'
+      + '        ctx.strokeStyle = ink(0.35); ctx.lineWidth = 1;')],
+  ['the reference line is struck at the cut-s own weight',
+    s => s.replace('        ctx.strokeStyle = ink(0.35); ctx.lineWidth = 1;\n'
+      + '        ctx.beginPath();',
+      '        ctx.strokeStyle = INK; ctx.lineWidth = 1.25;\n'
+      + '        ctx.beginPath();')],
+  ['the reference line is drawn at the notched top, where it says nothing',
+    s => s.replace('        ctx.moveTo(x, Y(garageConcreteTop(env, fdn, c.garage)));\n'
+      + '        ctx.lineTo(x + wid, Y(garageConcreteTop(env, fdn, c.garage)));',
+      '        ctx.moveTo(x, Y(top));\n'
+      + '        ctx.lineTo(x + wid, Y(top));')],
+  // ── AND WHAT HIDES A FACE BEHIND IT ─────────────────────────────────
+  //
+  // Movie, 26 Sep: *"its like the house is transparent or the door buck lines
+  // are going in front of the house"*. A wall does not stop at its concrete,
+  // and asking only the concrete let the garage's foundation -- 26 ft behind
+  // -- paint its top line and its buck across the back of the house.
+  ['a face hides what is behind it only up to its concrete, not its plate',
+    s => s.replace('      && o.topE + plateOf(o) >= g.topE - 1e-3',
+      '      && o.topE >= g.topE - 1e-3')],
+  // AND THE DOOR'S OWN HALF OF IT: the dip is what hangs below the wall, into
+  // a band the foundation pass painted first, so it is the part that has to
+  // ask. Clipping every door, or none, is the same sheet without a body in
+  // front of one -- which the fixture claim beside these asserts there is.
+  ['a door reaches below its wall even with a house standing in front of it',
+    s => s.replace('        const bottom = infront ? floor : reaches;',
+      '        const bottom = reaches;')],
+  ['every door is cut off at its wall, buck or no buck',
+    s => s.replace('        const bottom = infront ? floor : reaches;',
+      '        const bottom = dips ? floor : reaches;')],
   ['one garage filed on two storeys is two garages again',
     s => s.replace('  const sameGarageBody = (a, b) => !!a && !!b && (a === b',
       '  const sameGarageBody = (a, b) => !!a && !!b && (a === b && false')],

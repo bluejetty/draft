@@ -152,47 +152,39 @@ if (!fs.existsSync(MOVIE)) {
   }
 }
 
-// ── A CREASE SHOWS ONLY AS FAR DOWN AS ITS FACE DOES ─────────────────────
+// ── NOTHING OF A BURIED FACE SHOWS AT THE BACK ───────────────────────────
 //
-// Movie, 24 Sep, marking the same drawing on E3 BACK and again on E2 LEFT:
-// "here are some small errors (with red highlight)", "another small spot
-// (opposite where garage connects)". One light vertical crossing the floor
-// line, the full depth of the exposed concrete, standing in the middle of a
-// wall with nothing behind it to crease.
+// Movie, 24 Sep, marking this drawing on E3 BACK and again on E2 LEFT: "here
+// are some small errors (with red highlight)", "another small spot (opposite
+// where garage connects)". One light vertical crossing the floor line, the
+// full depth of the exposed concrete, standing in the middle of a wall with
+// nothing behind it to crease.
 //
 // IT IS THE GARAGE'S CORNER, SEEN THROUGH THE HOUSE. On E3 the garage stands
 // behind the house and its left corner falls well inside the house's own
-// span, so the house's concrete is in front of it for the whole height. The
-// run survives `behindFdn` on a technicality -- the garage's concrete tops
-// out ABOVE the house's, so `o.topE >= g.topE` fails and the face counts as
-// unhidden. The step is real. Everything below it is not.
+// span. The run survived `behindFdn` on a technicality -- the garage's
+// concrete tops out ABOVE the house's, so `o.topE >= g.topE` failed and the
+// face counted as unhidden.
 //
-// SO THE LINE IS CLIPPED TO WHAT SHOWS rather than the run being thrown away.
-// Throwing it away is the all-or-nothing answer this file's own header was
-// written against, and it would be wrong here too: a drafter looking for that
-// step should find it.
+// THE FIRST ROUND CLIPPED THE CORNER TO THE STEP and stopped there, calling
+// the step real and worth finding. It left the face's own TOP LINE running
+// the full width behind the house, and on 26 Sep Movie circled twenty feet
+// of it: "the garage door buck is showing on the HOUSE FOUNDATION at the
+// back" ... "its like the house is transparent or the door buck lines are
+// going in front of the house".
 //
-// MEASURED, both ways, on this fixture:
+// SO THE STEP IS NOT VISIBLE EITHER, and that is the correction. A house does
+// not stop at its concrete -- the sill plate on it is opaque, cut-view fills
+// exactly that strip, and it reaches the bearing line ABOVE the garage's
+// concrete. Everything of that face is behind a wall.
 //
-//     E2 u 19    before 1.150 ft    after 0.125 ft
-//     E3 u  4    before 1.150 ft    after 0.125 ft
-//     E2 u 20, E3 u -16, E1 u -4, E4 u -19    1.150 ft, unchanged
+// MEASURED on this fixture, E3, after:
 //
-// The last row is the half that keeps the first honest: a fix that simply
-// stopped drawing creases would pass one line of this and fail the other.
-const creases = view => {
-  const out = [];
-  view.strokes.forEach(s => {
-    if (!String(s.ink).includes('0.45')) return;
-    for (let i = 1; i < s.pts.length; i++) {
-      const a = s.pts[i - 1], b = s.pts[i];
-      if (b.move) continue;
-      if (Math.abs(a.u - b.u) > 0.01) continue;
-      out.push({ u: a.u, hi: Math.max(a.e, b.e), lo: Math.min(a.e, b.e) });
-    }
-  });
-  return out;
-};
+//     u -20, -16, 16    1.275 ft, full depth, nothing in front of them
+//     u 4               gone -- it was 0.125 ft of a step behind the house
+//
+// The pair below is two-sided for the reason the old pair was: "stop drawing
+// corners" passes the first of them and fails the second.
 
 if (fs.existsSync(MOVIE)) {
   const saved = JSON.parse(fs.readFileSync(MOVIE, 'utf8'));
@@ -210,29 +202,52 @@ if (fs.existsSync(MOVIE)) {
       .map(Number).sort((a, b) => b - a);
     check(`${id}: the drawing paints two exposed foundation tops`,
       tops.length === 2, `${tops.length}: ${tops.join(', ')}`);
-    const marks = creases(view);
-    check(`${id}: and it creases somewhere`, marks.length > 0, `${marks.length} creases`);
-    if (tops.length !== 2 || !marks.length) return;
+    if (tops.length !== 2) return;
     const step = tops[0] - tops[1];
     const exposed = tops[0] - grade;
     check(`${id}: the step between the two tops is smaller than the concrete is deep`,
       step > 0.001 && step < exposed / 2,
       `step ${step.toFixed(4)} against ${exposed.toFixed(4)} of exposed face`);
-    // THE BURIED CORNER: the one standing where the other face covers it. It
-    // may be as long as the step and no longer.
-    const buriedMark = marks.filter(m => m.hi - m.lo < exposed - 0.01);
-    check(`${id}: a corner the nearer concrete covers is cut to the step`,
-      buriedMark.length === 1
-      && Math.abs((buriedMark[0].hi - buriedMark[0].lo) - step) < 0.005,
-      marks.map(m => `u ${m.u.toFixed(2)} ${(m.hi - m.lo).toFixed(3)}ft`).join('  ')
-      + ` -- step ${step.toFixed(4)}`);
-    // AND THE OTHER HALF: a real corner still runs the concrete's full depth.
-    // Without this, "stop drawing creases" passes the check above.
-    const openMark = marks.filter(m => m.hi - m.lo >= exposed - 0.01);
-    check(`${id}: and a corner with nothing in front of it still runs full depth`,
-      openMark.length >= 1,
-      marks.map(m => `u ${m.u.toFixed(2)} ${(m.hi - m.lo).toFixed(3)}ft`).join('  ')
-      + ` -- exposed ${exposed.toFixed(4)}`);
+    // ── AND NOTHING OF A BURIED FACE IS DRAWN AT ALL ──────────────────────
+    //
+    // THIS PAIR USED TO ASSERT THE OPPOSITE, and the reason it inverted is
+    // Movie, 26 Sep, on the BACK elevation: *"the garage door buck is showing
+    // on the HOUSE FOUNDATION at the back"*, then *"its like the house is
+    // transparent or the door buck lines are going in front of the house"*.
+    //
+    // The round that wrote these checks found the same root cause and stopped
+    // one step short of it: the garage's concrete tops out above the house's,
+    // so `o.topE >= g.topE` failed and the garage counted as unhidden. It
+    // clipped the CORNER to the step -- "the truth, at the size the truth is"
+    // -- and left the face's own top line running the full width behind the
+    // house, which is what he circled twenty feet of.
+    //
+    // THE STEP IS NOT VISIBLE, and that is the correction. The house does not
+    // stop at its concrete: the sill plate on it is opaque, this painter fills
+    // exactly that strip, and it reaches the bearing line ABOVE the garage's
+    // concrete. So the step is behind a wall, and a mark for it is a mark for
+    // something a drafter standing at the back cannot see.
+    //
+    // TWO-SIDED, for the reason the old pair was: "stop drawing corners"
+    // passes the first of these and fails the second.
+    const verticals = [];
+    view.strokes.forEach(st => {
+      for (let i = 1; i < st.pts.length; i += 1) {
+        const a = st.pts[i - 1], b = st.pts[i];
+        if (b.move) continue;
+        if (Math.abs(a.u - b.u) > 0.01) continue;
+        const hi = Math.max(a.e, b.e), lo = Math.min(a.e, b.e);
+        if (lo < grade - 0.01 || hi > tops[0] + 0.3 || hi <= grade + 0.01) continue;
+        verticals.push({ u: a.u, hi, lo, len: hi - lo });
+      }
+    });
+    check(`${id}: the foundation still draws its corners`,
+      verticals.length > 0, `${verticals.length} in the band`);
+    const short = verticals.filter(m => m.len < exposed - 0.01);
+    check(`${id}: and none of them is cut short by something standing in front`,
+      short.length === 0,
+      short.length ? short.map(m => `u ${m.u.toFixed(2)} ${(m.len).toFixed(3)}ft`).join('  ')
+        + ` -- a full corner is ${exposed.toFixed(3)}ft` : `all ${verticals.length} run full depth`);
   });
 }
 
@@ -244,10 +259,11 @@ if (fs.existsSync(MOVIE)) {
 // repro-bungalow-garage-roofs E3: `e -2.196 u -16.00..4.00` and
 // `e -2.196 u -16.00..16.00`, twenty feet shared.
 //
-// It is the same partial-occlusion question one axis over, and the fix above
-// does not reach it: `behindFdn` asks `o.topE >= g.topE`, so a nearer face
-// that is SHORTER hides nothing at all -- when what it should hide is
-// everything below its own top. Answering that properly makes a face's
+// It is the same partial-occlusion question one axis over, and neither fix
+// above reaches it: `behindFdn` asks whether the near face plus its plate
+// reaches the far face's top, so a nearer face that is SHORTER than that
+// hides nothing at all -- when what it should hide is everything below its
+// own top. The plate closed the inch-and-a-half case, not the general one. Answering that properly makes a face's
 // visible region a POLYGON rather than a set of u-runs, which is a real
 // change to that painter and not what Movie reported.
 //

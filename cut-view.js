@@ -1552,6 +1552,28 @@ if (!window.DraftCutView) {
       const x = X(c.u - c.width / 2), wid = c.width * pxPerFt;
       ctx.fillRect(x, Y(top), wid, (top - base) * pxPerFt);
       ctx.strokeRect(x, Y(top), wid, (top - base) * pxPerFt);
+      // ── AND THE TOP THE BUCK CAME OUT OF, DRAWN LIGHT ────────────────
+      //
+      // Movie, 26 Sep: *"maybe also show the top of the grade beam in the
+      // background with not as dark lines (for reference)"*.
+      //
+      // IT IS A BEYOND LINE. The pocket is only as long as the door: past
+      // either jamb the beam runs on at its full height, so what the cut
+      // exposes at a buck is a view PAST the void to the concrete behind it.
+      // Without it the beam simply reads as a shorter beam, and a drafter has
+      // nothing on the sheet to measure the foot of buck against.
+      //
+      // LIGHT, AND FOR THE REASON A BEYOND LINE ALWAYS IS: this edge is not
+      // ON the cut. The same ink weight as the pour's own outline would put a
+      // second top of concrete on the drawing at equal authority.
+      if (buck != null) {
+        ctx.strokeStyle = ink(0.35); ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, Y(garageConcreteTop(env, fdn, c.garage)));
+        ctx.lineTo(x + wid, Y(garageConcreteTop(env, fdn, c.garage)));
+        ctx.stroke();
+        ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
+      }
       if (c.wall.baseHeight <= 0.01) {
         const fw = fdn.footingWidthIn / 12;
         const fx = X(c.u - fw / 2), fwid = fw * pxPerFt;
@@ -2289,9 +2311,46 @@ if (!window.DraftCutView) {
     // face, and a face a nearer one swallows whole now yields no runs at all
     // -- which is the old all-or-nothing answer, kept as a special case of
     // the general one rather than as a rule of its own.
+    // ── AND WHAT HIDES SOMETHING IS THE WALL, NOT JUST ITS CONCRETE ──
+    //
+    // Movie, 26 Sep, on the BACK elevation: *"the garage door buck is showing
+    // on the HOUSE FOUNDATION at the back"*, and then the diagnosis himself --
+    // *"its like the house is transparent or the door buck lines are going in
+    // front of the house"*. Which is what it was.
+    //
+    // `o.topE >= g.topE` ASKED THE CONCRETE. On repro-tie-gable E3 the house's
+    // foundation tops out at -1.3017 and the garage's at -1.1767, so the house
+    // -- standing a clear 26 ft in FRONT of the garage's front wall -- topped
+    // out an inch and a half LOWER and hid none of it. The garage's own top of
+    // concrete then ran twenty feet across the back of the house:
+    //
+    //     e -1.1729   u -16.00..4.00    the GARAGE's front wall, behind
+    //     e -1.2979   u -16.00..16.00   the HOUSE's own, in front
+    //
+    // -- two parallel lines an inch and a half apart, and the buck notched out
+    // of the first for good measure. It shows because the OUTLINE pass runs
+    // after every fill on the sheet, so a far face's line goes down on top of
+    // the near face that covered its fill.
+    //
+    // THE INCH AND A HALF IS THE STORED HEIGHTS, which this file already knows
+    // about: "the house's foundation walls were stored at the generic 8'-0"
+    // while the garage's took the foundation assembly's 8'-1 1/2"", and
+    // reconciling those is the open question about the junction. This does not
+    // wait on it. A wall does not stop at its concrete -- the sill plate on top
+    // is opaque too, and the pass below fills exactly that strip -- so the
+    // height a face hides things up to is the top of its PLATE. The house's
+    // reaches the bearing line, which is above the garage's concrete, and that
+    // is true whatever the two are stored at.
+    const PLATE_CAP_FT = 0.5;
+    const plateTopOf = g => (g.garage
+      ? garageBearing(env, fdn, g.garage) : fdn.wallTop);
+    const plateOf = g => {
+      const rise = plateTopOf(g) - g.topE;
+      return rise > 0.01 && rise < PLATE_CAP_FT ? rise : 0;
+    };
     const behindFdn = (g, o) => o !== g
       && o.depth > g.depth + 1e-6
-      && o.topE >= g.topE - 1e-3
+      && o.topE + plateOf(o) >= g.topE - 1e-3
       && Math.max(o.baseE, fdn.grade) <= Math.max(g.baseE, fdn.grade) + 1e-3;
     const visibleRuns = g => exposed.reduce((runs, o) => (behindFdn(g, o)
       ? runs.flatMap(r => {
@@ -2348,13 +2407,6 @@ if (!window.DraftCutView) {
     // generic 8'-0" wall default while the garage's took the foundation
     // assembly's 8'-1 1/2" (the note at the corner pass below has the rest of
     // that: "reconciling those is a question about the junction").
-    const PLATE_CAP_FT = 0.5;
-    const plateTopOf = g => (g.garage
-      ? garageBearing(env, fdn, g.garage) : fdn.wallTop);
-    const plateOf = g => {
-      const rise = plateTopOf(g) - g.topE;
-      return rise > 0.01 && rise < PLATE_CAP_FT ? rise : 0;
-    };
     // ── AND A DOOR IS A NOTCH OUT OF THE TOP OF IT ──────────────────────
     //
     // Movie, 25 Sep: "i guess the door buck will appear on the elevations as a
@@ -2414,10 +2466,34 @@ if (!window.DraftCutView) {
     shownFdn.forEach(({ g, runs }) => {
       const shownBase = Math.max(g.baseE, fdn.grade);
       const bs = bucksOf(g);
+      // ── THE POUR AND THE BEAM ARE ONE CONCRETE FACE FROM OUTSIDE ─────
+      //
+      // Movie, 26 Sep: *"on the elevations don't show the line where the pour
+      // and grade beam [meet] - just show them all as concrete. in the
+      // sections you can show that line."*
+      //
+      // THE NOTCH SHIPPED FIRST AND THIS REPLACES IT. Board #45's first half
+      // drew the buck here as an opening in the top of the concrete -- his own
+      // description of it before either of us had seen one -- and seeing it he
+      // called it: the slab is poured INTO the buck and fills it, so what an
+      // elevation looks at is one continuous concrete face. A step in it is a
+      // joint this drawing has no business claiming. The SECTION still shows
+      // it, and should: that is the view where the two pours are cut.
+      //
+      // WHAT STILL VARIES IS THE DOOR, and he said so in the same breath:
+      // *"it will be 8" alot of the times but not for doors further back"*.
+      // The door's own bottom is the fall -- 8" at the overhead door, 4 5/8"
+      // at 27 ft in -- and it keeps it. Only the concrete runs flat.
+      //
+      // THE FILL FOLLOWS THE OUTLINE RATHER THAN THE OTHER WAY ROUND. Only the
+      // outline is readable here: a door's recess is painted over its rough
+      // opening down to where the door stands, which is exactly the strip a
+      // stepped fill would leave empty -- so whether this fill steps or not is
+      // invisible on any elevation. It is flat because the line is flat, and
+      // the harness carries a note where its mutant would be.
       ctx.fillStyle = C.faceShade;
-      runs.forEach(r => notched(r, bs).forEach(p => ctx.fillRect(
-        X(p.lo), Y(g.topE - p.drop),
-        (p.hi - p.lo) * pxPerFt, (g.topE - p.drop - shownBase) * pxPerFt)));
+      runs.forEach(r => ctx.fillRect(X(r.lo), Y(g.topE),
+        (r.hi - r.lo) * pxPerFt, (g.topE - shownBase) * pxPerFt));
       const plate = plateOf(g);
       if (!plate) return;
       // ── THE PLATE WEARS THE WALL'S FINISH, NOT ONE OF ITS OWN ────────
@@ -2442,6 +2518,11 @@ if (!window.DraftCutView) {
       // NOT ACROSS A DOOR. The plate is what the wall above bears on, and over
       // a buck there is no concrete for it to sit on and no wall over it --
       // there is a door.
+      //
+      // WHICH IS THE ONE THING IN THIS PAINTER STILL READING THE BUCKS. The
+      // concrete's top stopped stepping at them (above), but that was never
+      // this rule: the plate is about the WALL, and there is still no wall
+      // over a door however the concrete under it is drawn.
       ctx.fillStyle = C.face;
       runs.forEach(r => notched(r, bs).filter(p => !p.drop)
         .forEach(p => ctx.fillRect(X(p.lo), Y(g.topE + plate),
@@ -2456,20 +2537,12 @@ if (!window.DraftCutView) {
       ctx.strokeStyle = INK;
       ctx.beginPath();
       runs.forEach(r => {
-        // THE TOP FOLLOWS THE NOTCHES and the jambs close them: down at one
-        // side of a door, along its sill, back up at the other. The BASE runs
-        // straight through -- a buck is cut out of the top of the beam and the
-        // 20" under it is continuous concrete.
-        const parts = notched(r, bs);
-        parts.forEach((p, i) => {
-          ctx.moveTo(X(p.lo), Y(g.topE - p.drop));
-          ctx.lineTo(X(p.hi), Y(g.topE - p.drop));
-          const next = parts[i + 1];
-          if (next && Math.abs(next.drop - p.drop) > 0.005) {
-            ctx.moveTo(X(p.hi), Y(g.topE - p.drop));
-            ctx.lineTo(X(p.hi), Y(g.topE - next.drop));
-          }
-        });
+        // TOP AND BASE BOTH STRAIGHT THROUGH. The top followed the notches
+        // until 26 Sep -- down at one jamb, along the sill, back up at the
+        // other -- which is the step the note at the fill above records him
+        // calling off. The base never stepped: a buck is cut out of the TOP of
+        // the beam and the 20" under it is continuous concrete either way.
+        ctx.moveTo(X(r.lo), Y(g.topE)); ctx.lineTo(X(r.hi), Y(g.topE));
         ctx.moveTo(X(r.lo), Y(shownBase)); ctx.lineTo(X(r.hi), Y(shownBase));
       });
       ctx.stroke();
@@ -2503,11 +2576,16 @@ if (!window.DraftCutView) {
         //
         // SO THE LINE IS CLIPPED TO WHAT SHOWS rather than the run being
         // thrown away. Throwing it away would be the all-or-nothing answer
-        // the note above this pass was written against -- and it would be
-        // wrong here too, because the step is real and a drafter looking for
-        // it should find it. Drawn to the nearest COVERING face's top, the
-        // crease is three eighths of an inch long: the truth, at the size
-        // the truth is.
+        // the note above this pass was written against.
+        //
+        // AND ON THIS FIXTURE THERE IS NOTHING LEFT TO CLIP, since 26 Sep.
+        // `behindFdn` measures cover to the top of the near face's PLATE now,
+        // not to the top of its concrete, so a face whose step is hidden
+        // behind a sill plate yields no runs and never reaches this pass --
+        // the reading this note called a technicality, answered where it
+        // arose. What is left here is the real case: a far face that genuinely
+        // stands proud of what is in front of it, clipped to the part that
+        // shows rather than drawn whole or dropped.
         //
         // THE 3/8" ITSELF IS NOT THIS PASS'S TO FIX. It is the build handing
         // the garage's beam `assemblyFor(1).wallHeightFt` while the house's
@@ -3414,8 +3492,42 @@ if (!window.DraftCutView) {
           ? bucks.find(b => b.id === f.id) : null;
         const stands = buck
           ? garageConcreteTop(env, fdn, face.garage) - buck.open : floor;
-        const bottom = f.type !== 'door' ? floor + sill
+        const reaches = f.type !== 'door' ? floor + sill
           : stands + (f.garage ? 0 : DOOR_THRESHOLD_IN / 12);
+        // ── AND IT REACHES BELOW ITS OWN WALL ONLY WHERE NOTHING IS IN
+        //    FRONT OF IT ───────────────────────────────────────────────
+        //
+        // Movie, 26 Sep, circling the back of a 2 STOREY + GARAGE: *"the garage
+        // door buck is showing on the HOUSE FOUNDATION at the back"*, and the
+        // diagnosis with it -- *"its like the house is transparent or the door
+        // buck lines are going in front of the house"*.
+        //
+        // A DOOR IN A BUCK HANGS BELOW ITS WALL. Since the expression above, a
+        // garage door stands on the slab, which is 9 1/2" under the floor its
+        // own face stands on. On the garage's own elevation that is the point:
+        // you look into the buck. On the BACK it is nine and a half inches of
+        // door hanging below the wall it belongs to.
+        //
+        // AND THAT STRIP IS THE FOUNDATION'S, ALREADY PAINTED. Occlusion on an
+        // elevation is not a rule, it is the ORDER -- far first, each opaque
+        // surface covering what it stands in front of -- and this painter lays
+        // every foundation down before any wall face. So a far door dipping
+        // below its wall lands on top of a near house's concrete, which was
+        // painted twenty passes earlier and cannot cover it. Measured on
+        // repro-movie-garage-2storey E3 at u -6:
+        //
+        //     seq  8  the HOUSE's concrete    e -2.3433..-1.3017
+        //     seq  9  the HOUSE's sill plate  e -1.3017..-1.0517
+        //     seq 24  the GARAGE's door       e -1.8433..5.9483   <- over both
+        //
+        // ONLY THE DIP IS ASKED, and that is what keeps this from being a
+        // second occlusion rule: everything at or above the face's own floor
+        // is covered by the nearer face painted after it, which is the order
+        // working as intended. What hangs below it has nothing coming later.
+        const dips = reaches < floor - 1e-6;
+        const infront = dips && exposed.some(o => o.depth > face.depth + 1
+          && o.lo < uc + half - 0.05 && o.hi > uc - half + 0.05);
+        const bottom = infront ? floor : reaches;
         ctx.fillStyle = C.recess;
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
         ctx.fillRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
