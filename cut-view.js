@@ -1327,6 +1327,20 @@ if (!window.DraftCutView) {
       if ((wall.view || 'plan') === 'foundation') {
         const type = WALL_TYPES.find(w => w.id === wall.wallType);
         fdnFaces.push({
+          // ── THE WALL RECORD COMES WITH IT ─────────────────────────────
+          //
+          // Movie, 28 Sep: *"we also need the FOUNDATION to be clickable -
+          // sometimes someone may want finish added to the side of foundation
+          // too"*, and why: *"sometimes it will be needed on the side of a
+          // house that has a walkout for instance"*.
+          //
+          // A FOUNDATION WALL IS A WALL, and it has always been one -- same
+          // record, same `finish` and `finishBands` keys, differing only in
+          // `view: 'foundation'`. What stopped a finish reaching it was this
+          // list: it carried the GEOMETRY and dropped the record, so nothing
+          // downstream could ask what the concrete wears or say what it
+          // should. `faces` above has carried its `wall` from the start.
+          wall,
           lo: Math.max(Math.min(p1.u, p2.u), uMin),
           hi: Math.min(Math.max(p1.u, p2.u), uMax),
           depth: (p1.d + p2.d) / 2,
@@ -2591,6 +2605,56 @@ if (!window.DraftCutView) {
       ctx.fillStyle = C.faceShade;
       runs.forEach(r => ctx.fillRect(X(r.lo), Y(g.topE),
         (r.hi - r.lo) * pxPerFt, (g.topE - shownBase) * pxPerFt));
+      // ── AND WHAT THE CONCRETE IS CLAD IN GOES ONTO THAT FILL ─────────
+      //
+      // Movie, 28 Sep: *"we also need the FOUNDATION to be clickable -
+      // sometimes someone may want finish added to the side of foundation
+      // too"*, and the case that makes it ordinary rather than exotic:
+      // *"sometimes it will be needed on the side of a house that has a
+      // walkout for instance"*.
+      //
+      // FROM GRADE TO THE TOP OF THE POUR, which is the whole of what is
+      // there to clad -- `shownBase` is already `max(baseE, grade)` and
+      // `topE` is the concrete's own top. That top is the BOTTOM OF THE SILL
+      // PLATE, the same line the wall's cladding above now runs down to, so
+      // the two finishes meet on one line with nothing between them. Movie
+      // asked it as a question and it is worth writing down: *"goes to top of
+      // concrete/ bot of sill plate right?"* -- one line, two names.
+      //
+      // BARE CONCRETE UNLESS ASKED, and that is deliberate. Every wall above
+      // has a DEFAULT finish; a foundation does not, because concrete is what
+      // a foundation looks like and defaulting one would repaint the exposed
+      // concrete of every drawing in existence. `wall.finish` set is the
+      // drafter having chosen.
+      //
+      // CLIPPED TO THE RUNS, NOT TO THE FACE. `runs` is what `visibleRuns`
+      // left after cutting this face against everything nearer, so the
+      // cladding stops exactly where the grey under it stops -- one answer to
+      // "what of this concrete can be seen", not a second one drawn here.
+      if (opts && opts.finishes && g.wall && g.wall.finish
+        && g.topE - shownBase > 0.02) {
+        const FP = window.DraftFinishPatterns;
+        if (!FP) {
+          if (!warnedNoPatterns) {
+            warnedNoPatterns = true;
+            console.warn('cut-view: finishes were asked for, but finish-patterns.js '
+              + 'is not loaded -- every wall will draw plain.');
+          }
+        } else {
+          const finish = finishById(g.wall.finish);
+          runs.forEach(r => {
+            const x0 = X(r.lo), x1 = X(r.hi);
+            if (x1 - x0 < 2) return;
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(x0, Y(g.topE), x1 - x0, (g.topE - shownBase) * pxPerFt);
+            ctx.clip();
+            FP.drawFinish(ctx, { x0, x1, yTop: Y(g.topE), yBottom: Y(shownBase), pxPerFt },
+              finish, C);
+            ctx.restore();
+          });
+        }
+      }
       const plate = plateOf(g);
       if (!plate) return;
       // ── THE PLATE WEARS THE WALL'S FINISH, NOT ONE OF ITS OWN ────────
