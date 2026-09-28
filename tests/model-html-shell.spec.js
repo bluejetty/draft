@@ -73,7 +73,14 @@ const hiddenPct = page => page.evaluate(() => {
   // THE TOP ROW IS GONE and its two tenants are inside the strip now (Movie,
   // 15 Sep: everything into the two dark bars), so the strip's box is the
   // whole of the top band. The page row is likewise inside the house strip.
-  const boxes = ['left-tab', 'left-rail', 'right-tab', 'right-rail',
+  // AND #finish-tab, THE LEFT EDGE'S SECOND (Movie, 27 Sep). Added at the
+  // same time as the tab, because this list is HARDCODED: it measures the
+  // ids somebody remembered to put in it, so a new piece of chrome is
+  // invisible here until it is named. That is worth saying out loud -- the
+  // pairwise clash check is what the right edge's own note leans on to say
+  // a tab growing into its neighbour "fails a run rather than reaching a
+  // drafter", and that promise is only kept for chrome this list knows.
+  const boxes = ['left-tab', 'finish-tab', 'left-rail', 'right-tab', 'right-rail',
     'strip', 'house-strip', 'readout']
     .map(id => document.getElementById(id))
     .filter(el => el && !el.hidden)
@@ -767,7 +774,14 @@ test('NO PIECE OF CHROME COVERS ANY OTHER, shut or open', async ({ page }) => {
   // list rather than being trusted. The column and its children are all here;
   // a container is not a collision, so the pairs inside it are skipped and
   // what is left is the column against every other piece of chrome.
-  const ids = ['left-tab', 'left-rail', 'right-tab', 'previews-tab', 'right-rail',
+  // AND #finish-tab, THE LEFT EDGE'S SECOND (Movie, 27 Sep). Added at the
+  // same time as the tab, because this list is HARDCODED: it measures the
+  // ids somebody remembered to put in it, so a new piece of chrome is
+  // invisible here until it is named. That is worth saying out loud -- the
+  // pairwise clash check is what the right edge's own note leans on to say
+  // a tab growing into its neighbour "fails a run rather than reaching a
+  // drafter", and that promise is only kept for chrome this list knows.
+  const ids = ['left-tab', 'finish-tab', 'left-rail', 'right-tab', 'previews-tab', 'right-rail',
     'readout', 'readout-tab', 'hint', 'upper-right', 'clock', 'elsewhere',
     'strip', 'file-row', 'mode-corner',
     'settings-corner', 'page-row', 'house-strip'];
