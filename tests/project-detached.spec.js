@@ -149,9 +149,16 @@ test('pressing a foundation redraws the section and renames its depth row',
 
     const before = await shoot(page);
     expect(await read(page, 'fdnDepth')).toBe(`1'-0"`);
+    // NOTHING IS LIT UNTIL SOMEBODY PRESSES, which is the house families'
+    // rule and now these three as well -- the drawing opens on a thickened
+    // edge because that is the office default, and a lit button would say a
+    // choice had been made. tests/project-page.spec.js asks the page as a
+    // whole; this asks it of the press that follows.
+    await expect(press(page, 'THICKENED EDGE')).toHaveAttribute('aria-pressed', 'false');
 
     await press(page, 'GRADE BEAM').click();
     await page.waitForTimeout(300);
+    await expect(press(page, 'GRADE BEAM')).toHaveAttribute('aria-pressed', 'true');
 
     // THE DEPTH IS THE BEAM'S OWN, not the edge's. A page that stored the
     // typed cell and left it alone would still read 1'-0" here, which is the

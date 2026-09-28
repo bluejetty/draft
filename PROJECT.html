@@ -2601,9 +2601,17 @@
             && garagePlan != null && planForEntry(entry) === garagePlan;
           button.setAttribute('aria-pressed', live ? 'true' : 'false');
         });
+        // THE STORED CHOICE, NOT THE DEFAULTED ONE, and that is the same rule
+        // the house families keep three lines up: they read `garagePlan !=
+        // null` so a bare type lights nothing until somebody presses. The
+        // drawing opens on a thickened edge because that is the office
+        // default, and nobody pressed it -- lighting the button anyway would
+        // say a choice had been made. tests/project-page.spec.js asks for
+        // this outright: no family button is lit on a page nobody has touched.
+        const chosen = sectionTable.rows.detachedGarage?.garageFoundation;
         detachedFamilyButtons.forEach(({ entry, button }) => {
           button.setAttribute('aria-pressed',
-            detachedFoundation() === entry.foundation ? 'true' : 'false');
+            chosen != null && chosen === entry.foundation ? 'true' : 'false');
         });
       };
       syncFamilyRow();
