@@ -265,6 +265,26 @@ test.describe('MODEL.html tier 1', () => {
       // That is a real change in what a dependency can do to this page, and
       // it is said out loud rather than left for someone to discover.
       './shell-bars.js',
+      // THE LANDSCAPE GUARD (board #310), and by this list's own rule it is
+      // the kind of entry to grow by: it DELETES a divergence rather than
+      // adding a capability. The ruling names five pages -- "MODEL, LAYOUT,
+      // PROJECT, STANDARDS and SETTINGS always present landscape on a tablet
+      // ... Never the portrait arrangement, not even briefly" -- and four of
+      // them carried it over the port. MODEL.dc.html has it at :130. This
+      // page had it nowhere, so an iPad turned portrait gave exactly the
+      // arrangement the ruling forbids, on the page a drafter spends most of
+      // their time on.
+      //
+      // ITS POSITION IS LOAD-BEARING, like shell-bars.js above it: the guard
+      // has to be in hand before the body paints, or the portrait layout is
+      // shown and then covered -- which is the "not even briefly" the ruling
+      // rules out. Every other page loads it in the head for that reason.
+      //
+      // ITS HONEST COST: one more module, and it WRITES DOM -- the second
+      // here that does. It is inert behind `(pointer: coarse)`, so a desktop
+      // pays the parse and nothing else, and tests/model-portrait-guard.spec.js
+      // holds it to that: a tall desktop window must never see it.
+      './orientation-guard.js',
       './palette.js', './layer-views.js', './geometry-2d.js',
       './shared-file-store.js', './wall-types.js',
       // THE THREE THAT MAKE A FINISH DRAW, and by this list's own rule they

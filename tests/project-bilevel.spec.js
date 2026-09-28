@@ -131,7 +131,12 @@ test('a pitch change in band 1 moves band 2 too', async ({ page }) => {
   const before = await shoot();
   // Scoped to the house schedule: PITCH :12 also labels a cell in every row
   // of the section table, so an unscoped lookup finds six of them.
-  const pitch = page.locator('#sched-house').getByLabel('PITCH :12');
+  // SCOPED TO #sched-roof, WHICH IS WHERE THE HOUSE'S ROOF NOW LIVES. Movie
+  // moved the roof group to the left column on 27 Sep ("move the ROOF stuff
+  // over top of the ATTACHED GARAGE"); the scoping itself still matters for
+  // the reason the line above gives -- the section table carries pitch cells
+  // of its own and an unscoped lookup finds six.
+  const pitch = page.locator('#sched-roof').getByLabel('PITCH :12');
   await expect(pitch).toBeVisible();
   const was = await pitch.inputValue();
 

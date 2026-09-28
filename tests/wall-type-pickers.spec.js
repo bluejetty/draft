@@ -122,27 +122,51 @@ test('GRADE BEAM replaces the foundation wall: 8" thick, 32" floor, no footing',
   expect(saved.levelAssemblies['1'].wallType).toBe('icf_13');
 });
 
-test('a floor defaults to SAME AS HOUSE and only a deliberate pick stores its own', async ({ page }) => {
+test('a floor shows the type in force, and only a deliberate pick stores one', async ({ page }) => {
+  // Movie, 27 Sep: "the SAME AS HOUSE - doesn't apply, make the DEFAULT 2x6
+  // SPF take off the SAME AS HOUSE options". These rows ARE the house, so the
+  // blank asked a floor to be the same as itself -- and it was the default
+  // answer on both storeys.
+  //
+  // WHAT IT WAS PROTECTING IS STILL PROTECTED, and that is the half worth
+  // checking. The blank stored null so an untouched floor followed the
+  // drawing's own type; if removing it had made the page WRITE the displayed
+  // value, every drawing would gain two fake overrides just by being opened,
+  // and the next shared-type change would silently miss both. So this asks
+  // for the display AND for the file, and the file must still be empty.
   await h.openModel(page);
   await openProjectPage(page);
 
-  // Both floors inherit the shared type: no stored override, blank pick.
   const main = page.locator('[data-detail-input="wallType-3"]');
   const second = page.locator('[data-detail-input="wallType-5"]');
-  await expect(main).toHaveValue('');
-  await expect(second).toHaveValue('');
+
+  // THE BLANK IS GONE FROM THE LIST, not merely unselected -- a blank still
+  // offered is a blank a drafter can pick, and this row would be back.
+  expect(await main.locator('option').evaluateAll(o => o.map(x => x.value)))
+    .toEqual(['stud_2x4', 'stud_2x6', 'icf', 'icf_13']);
+
+  // Both floors read the type actually in force, which on a drawing nobody
+  // has changed is the 2x6 default.
+  await expect(main).toHaveValue('stud_2x6');
+  await expect(second).toHaveValue('stud_2x6');
 
   // The 1% case: the second floor splits off to 2×4 while MAIN FL keeps
-  // riding the house's shared answer.
+  // riding the house's shared answer -- still unstored, still displayed.
   await second.selectOption('stud_2x4');
   await expect(page.locator('#status')).toContainText('saved');
   await page.reload();
-  await expect(page.locator('[data-detail-input="wallType-3"]')).toHaveValue('');
+  await expect(page.locator('[data-detail-input="wallType-3"]')).toHaveValue('stud_2x6');
   await expect(page.locator('[data-detail-input="wallType-5"]')).toHaveValue('stud_2x4');
 
+  // AND THE FILE IS THE HALF THAT MATTERS. Level 5 carries the pick, so the
+  // drawing has certainly been written by now -- which is what makes level 3's
+  // absence a FACT rather than an artifact of nothing having been saved yet.
+  // Asking the same thing before any save would have passed against a page
+  // that writes both, because there would have been no file to look in.
   const saved = await h.savedDrawing(page);
   expect(saved.levelAssemblies['5'].wallType).toBe('stud_2x4');
-  expect(saved.levelAssemblies['3']?.wallType ?? null).toBe(null);
+  expect(saved.levelAssemblies['3']?.wallType ?? null,
+    'MAIN FL was only ever displayed, never picked').toBe(null);
 });
 
 test('BUILD HOUSE frames each level from the chosen wall types', async ({ page }) => {
