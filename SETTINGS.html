@@ -50,7 +50,14 @@
   <script src="orientation-guard.js"></script>
   <style>
     * { box-sizing:border-box; }
-    body { margin:0; min-height:100vh; background:var(--surface-page); color:var(--ink-primary); font-family:'Barlow',system-ui,sans-serif; }
+    /* NO min-height, for SPECS.html's reason -- see the block over its own
+       body rule. It was NOT costing this page a scroll bar: the top bar here
+       is in normal flow, so main's top margin has the bar to sit under and
+       never collapses through body, and what scrolls is the list itself.
+       The line is dropped anyway because it is the trap, not the fault: the
+       day this page takes the shared fixed bars, that margin has nothing left
+       to sit under and the phantom comes with it. */
+    body { margin:0; background:var(--surface-page); color:var(--ink-primary); font-family:'Barlow',system-ui,sans-serif; }
     .topbar { height:52px; display:flex; align-items:center; gap:14px; padding:0 20px; border-bottom:1px solid var(--edge-panel); background:var(--surface-panel); }
     .brand { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:21px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
     .slash { color:var(--ink-quiet); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:18px; }

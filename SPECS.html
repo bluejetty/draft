@@ -55,7 +55,29 @@
   <script src="orientation-guard.js"></script>
   <style>
     * { box-sizing:border-box; }
-    body { margin:0; min-height:100vh; background:var(--surface-page); color:var(--ink-primary); font-family:'Barlow',system-ui,sans-serif; }
+    /* ── NO min-height HERE, AND THAT IS THE SCROLL BAR ──────────────────
+       The same fault PROJECT.html lost in 236633c, on the same line, for the
+       same reason -- and this page is where it still was.
+
+       `main` carries the fixed strip's clearance as a TOP MARGIN, and that
+       margin COLLAPSES THROUGH BODY: the top bar is fixed, so it is out of
+       flow and main's margin is adjacent to body's own top edge, and body has
+       neither padding nor border to stop it. Body's box therefore starts
+       --strip-h + 24px down the page while still claiming a full viewport of
+       height, so the page is always exactly that much taller than the window
+       -- every window size, however little is on it.
+
+       MEASURED, by growing the window to the page's own height and asking
+       again: 3094 -> 3162 -> 3230 -> 3298, sixty-eight more every round and
+       never settling. Sixty-eight is --strip-h + 24 to the pixel; it is not
+       content, it is the margin, asserted as height.
+
+       AND IT BOUGHT NOTHING. No rule anywhere gives `html` a background, so
+       body's propagates to the root canvas and paints the full viewport
+       whatever body's height is.
+
+       tests/no-phantom-scroll.spec.js is the measurement, kept. */
+    body { margin:0; background:var(--surface-page); color:var(--ink-primary); font-family:'Barlow',system-ui,sans-serif; }
     /* CLEARS BOTH FIXED BARS, named rather than added up: --strip-h and
        --house-h are shell-bars.css's to change and this page follows. */
     main { width:min(1560px, calc(100vw - 32px));
