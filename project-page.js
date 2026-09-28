@@ -1484,19 +1484,26 @@ if (!window.DraftProjectPage) {
     anchors.grade = { x: -1.15, y: gradeY - 0.3 };
 
     // THE WALL. Its own, unlike the attached garage's.
-    const plateStackFt = PLATE_STACK_IN / 12;
+    //
+    // NO PLATE LINE UNDER THE TOP OF IT, and none under the room's wall
+    // either. Movie marked both off the drawing on 28 Sep. The plate stack is
+    // still what the door head is dropped from -- it is a fact about the
+    // wall, not a line this view needs, and at this scale it read as a
+    // second wall top a few pixels under the first.
     const plateY = wallBaseY + g.wallHeightFt;
     rect(0, wallBaseY, wallFt, g.wallHeightFt, 1.5);
-    line(0, plateY - plateStackFt, wallFt, plateY - plateStackFt, 1);  // under the plates
     anchors.wallHeight = { x: wallFt + 0.55, y: wallBaseY + g.wallHeightFt / 2 };
-    anchors.plates = { x: wallFt + 0.55, y: plateY - plateStackFt / 2 };
 
     // THE OVERHEAD DOOR HEAD, dropped OPENING_HEAD_DROP_IN off the top of the
-    // wall -- two top plates, the lintel and the rough-opening plate. Drawn as
-    // the line a drafter dimensions to, not as the lintel itself: which member
-    // sits there is SPEC-lintels.md's business and depends on the span.
+    // wall -- two top plates, the lintel and the rough-opening plate. Which
+    // member sits there is SPEC-lintels.md's business and depends on the span.
+    //
+    // THE NUMBER STAYS, THE DASHED LINE GOES. Movie marked it off with the
+    // plate line: it reached out past the wall face into the space the grey
+    // labels stand in, and the head is already dimensioned in the schedule
+    // beside the drawing. The elevation is unchanged -- the label still hangs
+    // at it -- so nothing about where the door head IS has moved.
     const headY = plateY - OPENING_HEAD_DROP_IN / 12;
-    parts.push({ kind: 'dashed', x1: 0, y1: headY, x2: wallFt + 1.2, y2: headY });
     anchors.doorHead = { x: wallFt + 1.5, y: headY };
 
     // ── THE ROOM ABOVE ──────────────────────────────────────────────────
@@ -1522,8 +1529,6 @@ if (!window.DraftProjectPage) {
       const overStudFt = (g.overWallIn ?? values.wallThicknessIn) / 12;
       if (overWallFt > 0) {
         rect(0, deck, overStudFt, overWallFt, 1.5);
-        line(0, deck + overWallFt - plateStackFt,
-          overStudFt, deck + overWallFt - plateStackFt, 1);
         anchors.overWallHeight = { x: overStudFt + 0.55, y: deck + overWallFt / 2 };
       }
       roofBase = deck + overWallFt;

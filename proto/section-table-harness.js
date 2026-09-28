@@ -634,11 +634,17 @@ check('the house and the detached garage draw the SAME truss', P => {
 
 // The door head, composed rather than pinned -- it follows the wall and the
 // head drop, so it stays right when either moves.
-check('the overhead door head hangs OPENING_HEAD_DROP_IN under the top plate', P => {
-  const out = detached(P);
-  const head = out.parts.find(part => part.kind === 'dashed');
-  return [head.y1, P.GARAGE_WALL_FT - P.OPENING_HEAD_DROP_IN / 12];
-});
+// READ OFF THE ANCHOR, NOT A DASHED LINE. The line is gone -- Movie marked it
+// off the drawing on 28 Sep, along with the plate line, because it reached out
+// past the wall face into the grey label column and the schedule beside the
+// drawing already carries the number. The ELEVATION is what this check is
+// about and it has not moved: the label still hangs at it.
+check('the overhead door head hangs OPENING_HEAD_DROP_IN under the top plate', P =>
+  [detached(P).anchors.doorHead.y, P.GARAGE_WALL_FT - P.OPENING_HEAD_DROP_IN / 12]);
+// AND NOTHING IS DRAWN THERE ANY MORE, which is the other half: an elevation
+// that is right on a line nobody asked for is the state this came from.
+check('and draws no dashed line across the wall for it', P =>
+  [detached(P).parts.some(part => part.kind === 'dashed'), false]);
 check('a 7\'-0" overhead door clears that head on the detached garage wall', P =>
   [P.GARAGE_WALL_FT * 12 - P.OPENING_HEAD_DROP_IN >= 84, true]);
 // It is a separate builder, and this is the check that says so: the attached
