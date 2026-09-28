@@ -391,7 +391,7 @@ test('a family press sets the building method, one at a time, and it saves',
     // IT REACHED THE FILE, not just the button. This page's save merges its
     // own keys onto the stored drawing, so a key it does not own is dropped
     // silently -- exactly what happened to buildType before this landed.
-    await expect.poll(async () => (await h.savedDrawing(page)).buildType,
+    await expect.poll(async () => (await h.savedDrawing(page))?.buildType,
       { message: 'the chosen method never reached the drawing' })
       .toBe('bilevel');
 
@@ -427,7 +427,7 @@ test('a family press sets the building method, one at a time, and it saves',
       .not.toBe(offset);
 
     // Survives the reload, which is the whole claim of "project data".
-    await expect.poll(async () => (await h.savedDrawing(page)).buildType)
+    await expect.poll(async () => (await h.savedDrawing(page))?.buildType)
       .toBe('bungalow');
     await page.reload();
     await expect(page.locator('[data-family-entry="bungalow-garage"]'))
