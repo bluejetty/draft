@@ -25,8 +25,18 @@ test('the garage door head notice appears only when the wall cannot clear a door
     // type is on screen at a time now. A direct visit can just ask for it.
     await page.goto('/PROJECT.html?type=bungalow');
     const notice = page.locator('#garage-door-head-notice');
-    const wall = page.locator('#sched-garage .sched-row')
-      .filter({ has: page.locator('.sched-name', { hasText: 'Garage wall height' }) })
+    // FOUND BY ITS KEY, NOT ITS LABEL. This read `hasText: 'Garage wall
+    // height'` and went red in CI when the schedule was paired two to a line
+    // on 27 Sep: a row now drops the word its own head carries, and the head
+    // here says ATTACHED GARAGE, so the label became 'Wall height'.
+    //
+    // NOT REPOINTED AT THE NEW WORDS, because the row's identity is its key
+    // and `schedRow` has been writing it to data-sched-row all along. A label
+    // is what a drafter reads and is free to change; matching on one made a
+    // check about a NOTICE fail for a change to a NOUN. `hasText` is also a
+    // substring match, so the new label would have matched 'Room over wall
+    // height' too the moment a garage carries a storey.
+    const wall = page.locator('#sched-garage [data-sched-row="garageWallHeight"]')
       .locator('.sched-value');
     await expect(wall).toHaveCount(1);
 
