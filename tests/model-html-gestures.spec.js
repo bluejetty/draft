@@ -613,17 +613,6 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'IMPERIAL', 'METRIC',
             // The previews tab, the second of the right edge's two.
             'previews-tab',
-            // AND A SEVENTH TIME, with EXT. FINISH -- the second of the LEFT
-            // edge's two (Movie, 27 Sep: "what about adding a tab on left
-            // that is EXT FINISH and we put it in there"). It swaps which
-            // pane the left rail shows, exactly as `previews-tab` does on
-            // the right, and the pane it opens turns the elevation's
-            // MATERIALS on. A material is a property of a wall that already
-            // exists; nothing here raises a wall, a roof or a point, so no
-            // absence row moves -- the same reading that has kept
-            // `left-tab`, `right-tab` and `previews-tab` out of the table
-            // since each arrived.
-            'finish-tab',
             'dt-close', 'dt-bone',
             // PRINTSCREEN PRINTS THE SCREEN, and that is the whole of it: a
             // three-page presentation made from pictures the page has
