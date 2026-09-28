@@ -84,7 +84,13 @@ function load(mutate) {
     // block at the foot of run() paints with -- without them cut-view warns
     // once and draws every wall and every roof plain, which is a fixture that
     // cannot show the defect it is there for.
-    'finish-patterns.js', 'roof-types.js', 'roof-patterns.js']) {
+    'finish-patterns.js', 'roof-types.js', 'roof-patterns.js',
+    // AND THE WINDOW TAG'S FORMATTER. cut-view guards on DraftFenLabels and
+    // draws no size tag without it, SILENTLY -- which is how the same tag hid
+    // on MODEL.html, in harness-env's sandbox and in the offline renderer
+    // before it hid here. Four mirrors, one missing script, and every one of
+    // them reported a clean sheet for a feature that never drew.
+    'fen-labels.js']) {
     vm.runInContext(fs.readFileSync(path.join(ROOT, file), 'utf8'), sandbox, { filename: file });
   }
   vm.runInContext(src, sandbox, { filename: 'cut-view.js' });
@@ -2634,6 +2640,73 @@ function run(win) {
         : `${ledge.length} box(es) on ${concreteOf(clad).length} run(s)`);
   });
 
+  // ── AND A WINDOW SAYS ITS SIZE IN THE MIDDLE OF THE GLASS ─────────────
+  //
+  // Movie, 28 Sep: *"on the elevations i'd like the window marked in middle
+  // center of the window"*, with the format settled the same afternoon --
+  // *"36 X 42 width by height in inches"*, *"(don't need the letter for the
+  // window)"*, *"i want it to match the actual size of the window"*.
+  //
+  // THE RECORD'S SIZE, NOT THE DRAWN ONE, and that is the whole of the second
+  // check. `top` in the painter is clamped to the wall plate: a window whose
+  // head would poke through its own top plate is DRAWN short, and a framer
+  // ordering off the drawn height would order the wrong window. So the fixture
+  // below raises one head deliberately past the plate, where the two numbers
+  // differ by eleven inches and only one of them is right.
+  {
+    // ON MOVIE'S OWN DRAWING, because repro-garage-house has no window in it
+    // at all -- its four openings are every one a door. The fixture-reach
+    // check below said so on the first run, which is what it is for.
+    const tagSaved = JSON.parse(JSON.stringify(
+      JSON.parse(fs.readFileSync(path.join(ROOT, 'proto', 'repro-movie-bands.draft'), 'utf8'))));
+    const wins = (tagSaved.fenestrations || []).filter(f => f.type === 'window');
+    // A HEAD THROUGH THE PLATE, on one window only, so the pair can be told
+    // apart in the same paint.
+    const tall = wins[0];
+    if (tall) { tall.sillHeight = 2; tall.headHeight = 9; }
+    check('window tag fixture: the drawing has windows, and one with its head '
+      + 'above the plate', wins.length > 0 && !!tall,
+      `${wins.length} window(s)`);
+
+    const tagEnv = buildEnv(win, tagSaved);
+    const seen = [];
+    standardElevationCuts(tagEnv).forEach(cut => {
+      const view = paintElevation(win, tagEnv, cut, { pxPerFt: 40 });
+      view.texts.filter(t => /^\d+ X \d+$/.test(t.text)).forEach(t => {
+        // ── STILL SHOWING, OR PAINTED OVER ──────────────────────────────
+        //
+        // A window on a far wall has its tag drawn by that wall's own pass and
+        // must be covered by whatever stands in front. Asked of the ORDER,
+        // which is the only thing occlusion is on an elevation -- and it took
+        // stamping texts with the same seq counter the strokes and fills have
+        // always carried, because until 28 Sep a word's place in the paint
+        // order was unaskable.
+        const buried = view.modelFills.some(f => f.seq > t.seq
+          && Math.min(...f.pts.map(pt => pt.u)) <= t.u
+          && Math.max(...f.pts.map(pt => pt.u)) >= t.u
+          && Math.min(...f.pts.map(pt => pt.e)) <= t.e
+          && Math.max(...f.pts.map(pt => pt.e)) >= t.e);
+        seen.push({ cut: cut.id, text: t.text, u: t.u, e: t.e, buried });
+      });
+    });
+
+    const shown = seen.filter(t => !t.buried);
+    check('a window on an elevation is tagged with its size',
+      shown.length > 0, `${shown.length} showing of ${seen.length} painted`);
+    // THE RAISED WINDOW: 9'-0" head less a 2'-0" sill is 7'-0" = 84", and the
+    // plate would have cut it to 73". If 73 ever appears the label has started
+    // reading the drawing instead of the record.
+    check('and the size is the WINDOW, not the height the plate cut it to',
+      seen.some(t => t.text.endsWith(' X 84')) && !seen.some(t => / X 7[0-9]$/.test(t.text)
+        && !t.text.endsWith(' X 84')),
+      [...new Set(seen.map(t => t.text))].join(', ') || 'none');
+    // AND IT IS COVERED WHERE THE WINDOW IS. A tag floating over a nearer
+    // wall is worse than no tag: it names a window that cannot be seen.
+    check('window tag fixture: some tag IS buried, so the order is being asked',
+      seen.some(t => t.buried),
+      `${seen.filter(t => t.buried).length} buried of ${seen.length}`);
+  }
+
   return missed;
 }
 
@@ -3032,6 +3105,18 @@ const MUTATIONS = [
     `      ...wallItems.filter(item => !item.band),
       ...roofFills.map(fill => ({ depth: fill.depth, go: () => paintRoof(fill) })),
       ...wallItems.filter(item => item.band),`)],
+  // ── AND THE WINDOW SIZE TAG ON AN ELEVATION ─────────────────────────
+  ['a window on an elevation carries no size tag at all',
+    src => src.replace("        if (f.type === 'window' && window.DraftFenLabels) {",
+      "        if (false && f.type === 'window' && window.DraftFenLabels) {")],
+  // THE DRAWN HEIGHT INSTEAD OF THE RECORD'S. `top` is clamped to the wall
+  // plate, so a window whose head would poke through its own plate is DRAWN
+  // short -- and a framer ordering off that number orders the wrong window.
+  // Eleven inches on the fixture, and the only reason it is visible at all is
+  // that the fixture raises one head on purpose.
+  ['the elevation tag reads the height the plate cut it to, not the window',
+    src => src.replace('            type: \'window\', widthFt: f.width, heightFt: head - sill });',
+      '            type: \'window\', widthFt: f.width, heightFt: top - bottom });')],
   // ── AND THE FINISH ON THE EXPOSED CONCRETE ──────────────────────────
   ['the foundation is never clad, whatever the drafter picked',
     src => src.replace("      if (opts && opts.finishes && g.wall && g.wall.finish",

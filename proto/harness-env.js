@@ -52,6 +52,12 @@ function loadDraftModules() {
     // that safe is that they can all be checked against cut-marks, and a
     // check that cannot load it cannot make the comparison.
     'cut-marks.js',
+    // AND THE WINDOW TAG'S FORMATTER, for the same reason the roof's two are
+    // here. cut-view guards on DraftFenLabels and draws no size tag without
+    // it -- silently -- so a mirror that leaves it out reports a clean sheet
+    // for a tag that never drew. That is not hypothetical: the plan tag hid
+    // behind exactly this guard on MODEL.html, through four screenshots.
+    'fen-labels.js',
     'cut-view.js']) {
     const full = path.join(ROOT, file);
     if (!fs.existsSync(full)) continue;
@@ -119,8 +125,16 @@ function recordingCtx() {
     restore() { if (clipStack.length) clipPath = clipStack.pop(); },
     translate() {}, rotate() {}, scale() {},
     setLineDash() {}, getLineDash() { return []; },
+    // ── AND A WORD TAKES THE SAME COUNTER ────────────────────────────
+    //
+    // The note above says it outright -- "One counter across both is the whole
+    // fix" -- and then stamped the strokes and the fills and left the TEXTS
+    // out. So "is this word still showing, or did a nearer wall paint over
+    // it" was unaskable, which is exactly the question a window size tag on
+    // an elevation raises: the tag of a window 18 ft further back is drawn by
+    // its own face's pass and has to be covered by whatever stands in front.
     fillText(text, x, y) {
-      texts.push({ text: String(text), x, y, align: this.textAlign,
+      texts.push({ seq: seq++, text: String(text), x, y, align: this.textAlign,
         baseline: this.textBaseline, ink: this.fillStyle, font: this.font });
     },
     strokeText() {}, measureText: () => ({ width: 0 }),
@@ -346,7 +360,7 @@ function paintElevation(win, env, cut, { pxPerFt = 40, ...opts } = {}) {
   const y0 = ((h) - (yTop - yBottom) * pxPerFt) / 2;
   const toU = X => (X - 0.5 - x0) / pxPerFt + uMin;
   const toE = Y => yTop - (Y - 0.5 - y0) / pxPerFt;
-  const { ctx, strokes, fills } = recordingCtx();
+  const { ctx, strokes, fills, texts } = recordingCtx();
   const ok = CV.drawElevationView(env, ctx, w, h, cut, stack, axis, () => {},
     { pxPerFt, extents, ...opts });
   // ── THE PEN-UP MARKERS COME WITH IT ──────────────────────────────────
@@ -397,7 +411,24 @@ function paintElevation(win, env, cut, { pxPerFt = 40, ...opts } = {}) {
         { u: toU(f.rect.x), e: toE(f.rect.y + f.rect.h) }]
       : f.pts.filter(p => !p.close).map(p => ({ u: toU(p.x), e: toE(p.y) })),
   }));
-  return { ok, strokes: model, rawStrokes: strokes, fills, modelFills, uMin, uMax, yTop, yBottom, pxPerFt, w, h, axis, dir };
+  // ── AND THE WRITING ON IT ────────────────────────────────────────────
+  //
+  // recordingCtx has collected `texts` since it was written and this function
+  // dropped them on the floor, so NOTHING offline could see a word an
+  // elevation prints -- not a level datum, not an elevation's own title, and
+  // not the window size tags added on 28 Sep. A probe for those came back 0
+  // against a painter that was drawing them correctly, which is the mirror
+  // lying rather than the painter failing.
+  //
+  // IN MODEL SPACE, like the strokes and the fills beside them, so a check can
+  // say WHERE a word is and not only that it exists.
+  const modelTexts = texts.map(t => ({
+    seq: t.seq, text: t.text, u: toU(t.x), e: toE(t.y),
+    align: t.align, baseline: t.baseline, ink: t.ink, font: t.font,
+  }));
+  return { ok, strokes: model, rawStrokes: strokes, fills, modelFills,
+    texts: modelTexts, rawTexts: texts,
+    uMin, uMax, yTop, yBottom, pxPerFt, w, h, axis, dir };
 }
 
 module.exports = { loadDraftModules, buildEnv, standardElevationCuts, paintElevation, recordingCtx, E_MARK_SIDES };
