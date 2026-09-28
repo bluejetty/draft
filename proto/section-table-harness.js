@@ -536,12 +536,146 @@ check('the taper runs 45 degrees -- its run equals its drop', P => {
     && part.y1 !== part.y2 && part.x1 !== part.x2 && part.y1 < 0);
   return [Math.abs(taper.x2 - taper.x1) - Math.abs(taper.y2 - taper.y1) < 1e-9, true];
 });
+// ── THE OTHER TWO FOUNDATIONS ─────────────────────────────────────────────
+// A grade beam and a frost wall stand their concrete PROUD of the floor and
+// the wall bears on THAT, which is the one thing that makes them a different
+// drawing rather than the thickened edge with a deeper edge. Asserted as the
+// wall's own bottom against the concrete top, both read off the drawing, so a
+// wall left sitting on the slab fails here however deep the concrete is.
+const DETACHED_ON = (P, foundation) => P.buildDetachedGarageSection({
+  ...DETACHED(P),
+  garage: { ...DETACHED(P).garage, foundation },
+});
+check('a grade beam stands its concrete proud and the wall bears on it', P => {
+  const out = DETACHED_ON(P, 'gradebeam');
+  const concTop = -P.DETACHED_SLAB_ABOVE_GRADE_IN / 12
+    + P.GRADE_BELOW_CONCRETE_IN / 12;
+  const wall = rects(out).find(r => near(r.h, P.GARAGE_WALL_FT));
+  return [wall ? near(wall.y, concTop) : 'no wall rect on the beam', true];
+});
+// AND THE FLOOR DOES NOT MOVE WITH IT. The reason the page can switch
+// foundation without moving the door and the apron: DETACHED_SLAB_ABOVE_GRADE_IN
+// puts both floors at the same height above grade.
+check('the floor is at the same height on a beam as on a thickened edge', P => {
+  const top = out => out.parts.filter(part => part.kind === 'line'
+    && near(part.y1, 0) && near(part.y2, 0) && part.x2 > part.x1).length;
+  return [[top(detached(P)) > 0, top(DETACHED_ON(P, 'gradebeam')) > 0].join(), 'true,true'];
+});
+// ── THE STOREY OVER IT ────────────────────────────────────────────────────
+// Movie, 28 Sep. The roof stands on the ROOM's plate once there is a room, and
+// that is the whole of what the press changes about the roof: keying it to the
+// garage plate is what left band 1's ROOM OVER roofs sitting on the garage.
+const DETACHED_ROOM = P => P.buildDetachedGarageSection({
+  ...DETACHED(P),
+  garage: {
+    ...DETACHED(P).garage,
+    foundation: 'gradebeam',
+    roomOver: true,
+    overJoistIn: 19.25,
+    overSheathingIn: 0.75,
+    overWallHeightFt: 8 + 1.125 / 12,
+    overWallIn: 5.5,
+  },
+});
+check('a storey over the detached garage lifts its roof by the whole storey', P => {
+  const highest = out => Math.max(...out.parts.flatMap(part => part.kind === 'rect'
+    ? [part.y, part.y + part.h]
+    : part.kind === 'break' ? [part.y1, part.y2] : [part.y1, part.y2]));
+  const lift = highest(DETACHED_ROOM(P)) - highest(DETACHED_ON(P, 'gradebeam'));
+  const storey = (19.25 + 0.75) / 12 + 8 + 1.125 / 12;
+  return [Math.abs(lift - storey) < 1e-6, true];
+});
+
+// ── THE TRUSS IS THE HOUSE'S ─────────────────────────────────────────────
+// Movie, 28 Sep: "the roof truss doesn't show properly. can you check how the
+// BUNGALOW roof truss is drawn showing all the 3.5" top/side/bottom roof
+// chords". It drew a top chord's two faces and nothing else. Asserted as the
+// MEMBERS rather than as a line count, because a count passes on two lines
+// that happen to be somewhere.
+check('the detached truss has a side chord at the wall face, not a bare corner', P => {
+  const base = P.GARAGE_WALL_FT;
+  const web = P.ROOF_CHORD_IN / 12;
+  const verticals = detached(P).parts.filter(part => part.kind === 'line'
+    && near(part.x1, part.x2) && part.y2 > part.y1 && part.y1 >= base - 1e-9);
+  const outer = verticals.some(part => near(part.x1, 0));
+  const inner = verticals.some(part => near(part.x1, web) && near(part.y1, base + web));
+  return [[outer, inner].join(), 'true,true'];
+});
+// THE BOTTOM CHORD, whose underside is the ceiling plane -- the face the
+// finish attaches to -- so the member sits ABOVE it rather than straddling
+// it, and the top line starts at the side chord's inside face.
+check('the detached truss has a bottom chord over its ceiling', P => {
+  const base = P.GARAGE_WALL_FT;
+  const chord = P.ROOF_CHORD_IN / 12;
+  const flat = detached(P).parts.filter(part => part.kind === 'line'
+    && near(part.y1, part.y2) && near(part.x2, CUT));
+  const ceiling = flat.some(part => near(part.y1, base) && near(part.x1, 0));
+  const top = flat.some(part => near(part.y1, base + chord) && near(part.x1, chord));
+  return [[ceiling, top].join(), 'true,true'];
+});
+// ONE TRUSS, NOT TWO THAT AGREE. The joint is a settled ruling (17 Sep), and
+// the way it stays settled is that both sections ask the same code for it.
+// Compared as the shape each draws above its own plate, so the two can stand
+// at different heights and still have to be the same truss.
+check('the house and the detached garage draw the SAME truss', P => {
+  // Both fixtures carry the same roof (4:12, 2'-0", a 5 1/2" fascia, no
+  // typed heel), so with each measured off ITS OWN plate the two sets of
+  // members are equal or one of them is not this truss. That equality is the
+  // whole point of the extraction: a second copy is settled until somebody
+  // edits one of them.
+  const shape = (out, base) => out.parts
+    .filter(part => part.kind === 'line' && Math.min(part.y1, part.y2) >= base - 1e-9)
+    .map(part => [part.x1, part.y1 - base, part.x2, part.y2 - base, part.weight]
+      .map(n => Math.round(n * 1e6) / 1e6).join(','))
+    .sort().join(' | ');
+  const housePlate = (97.125 / 12) * 2 + (9.25 + 0.75) / 12;
+  return [shape(detached(P), P.GARAGE_WALL_FT), shape(section(P), housePlate)];
+});
+
 // The door head, composed rather than pinned -- it follows the wall and the
 // head drop, so it stays right when either moves.
-check('the overhead door head hangs OPENING_HEAD_DROP_IN under the top plate', P => {
-  const out = detached(P);
-  const head = out.parts.find(part => part.kind === 'dashed');
-  return [head.y1, P.GARAGE_WALL_FT - P.OPENING_HEAD_DROP_IN / 12];
+// READ OFF THE ANCHOR, NOT A DASHED LINE. The line is gone -- Movie marked it
+// off the drawing on 28 Sep, along with the plate line, because it reached out
+// past the wall face into the grey label column and the schedule beside the
+// drawing already carries the number. The ELEVATION is what this check is
+// about and it has not moved: the label still hangs at it.
+check('the overhead door head hangs OPENING_HEAD_DROP_IN under the top plate', P =>
+  [detached(P).anchors.doorHead.y, P.GARAGE_WALL_FT - P.OPENING_HEAD_DROP_IN / 12]);
+// AND NOTHING IS DRAWN THERE ANY MORE, which is the other half: an elevation
+// that is right on a line nobody asked for is the state this came from.
+check('and draws no dashed line across the wall for it', P =>
+  [detached(P).parts.some(part => part.kind === 'dashed'), false]);
+// ── THE BOTTOM SILL PLATE ─────────────────────────────────────
+// Movie, 28 Sep: "we should show the 1.5" bottom plates at the bottom of the
+// wall... the 3.5"x1.5" stud at the bottom where it meets the slab", and then
+// what it is called: "i mean botton SILL plate". At the BOTTOM, which is the
+// correction -- the line he first marked off was under the TOP plate, and the
+// answer was to move it down rather than delete it.
+//
+// A MEMBER, NOT A LINE, because that is how the house draws its sill: 1 1/2"
+// of wood as wide as the wall, bearing on the slab.
+const detachedSill = P => rects(detached(P))
+  .filter(r => near(r.h, P.SILL_PLATE_IN / 12));
+check('the wall bears on a sill plate where it meets the slab', P => {
+  const sills = detachedSill(P);
+  if (sills.length !== 1) return [`${sills.length} sill-plate bands`, 'exactly one'];
+  return [near(sills[0].y, 0) && near(sills[0].x, 0), true];
+});
+// AS WIDE AS THE WALL, not a written 3 1/2". A plate is a 2x of the wall's
+// own width laid flat, so a number here would draw a 2x4 plate under a 2x6
+// wall the moment the type changed -- which is the page's default.
+check('the sill plate is as wide as the wall it is under', P => {
+  const sills = detachedSill(P);
+  return [sills.length === 1 ? near(sills[0].w, DETACHED(P).wallThicknessIn / 12)
+    : `${sills.length} sill-plate bands`, true];
+});
+// THE HOUSE'S OWN SILL, drawn by the same helper, so the two cannot drift into
+// two thicknesses of the same member. The house's is found by the check above
+// at "the garage offset is the SILL TOP".
+check('and it is the same member the house sits on', P => {
+  const house = rects(section(P)).filter(r => near(r.h, P.SILL_PLATE_IN / 12));
+  const sills = detachedSill(P);
+  return [house.length && sills.length ? near(house[0].h, sills[0].h) : 'no sill', true];
 });
 check('a 7\'-0" overhead door clears that head on the detached garage wall', P =>
   [P.GARAGE_WALL_FT * 12 - P.OPENING_HEAD_DROP_IN >= 84, true]);
@@ -818,23 +952,50 @@ const MUTATIONS = [
   // as a failure here.
   ['the mod bilevel loses its default (falls back to the house)',
     s => s.replace('    modifiedBilevel: SPLIT_BASE,\n', '')],
+  // ── THE TRUSS MUTANTS NOW READ roofTruss ─────────────────────────────
+  // The heel joint moved out of buildWallSection on 28 Sep so the detached
+  // garage could draw the same members instead of its own two lines, and
+  // these three quote it by text. Same mutations, same checks catching them:
+  // only the name of the base the truss stands on changed, plateY to
+  // roofBase, because the helper is now also called with a room's plate.
+  //
   // The 17 Sep heel piece drawn the way Movie refused it ("no its not a
   // line"): the inside face goes, leaving one vertical where the member was.
   ['the heel piece thins back to a single line at the wall face',
-    s => s.replace('line(heelWebX, plateY + ROOF_CHORD_IN / 12,\n      heelWebX, plateY + riseAt(heelWebX) - chordDropFt, 1);', '')],
+    s => s.replace('line(heelWebX, roofBase + ROOF_CHORD_IN / 12,\n      heelWebX, roofBase + riseAt(heelWebX) - chordDropFt, 1);', '')],
   // The joint sealed shut: one underside line across the heel's 3 1/2"
   // instead of the two pieces that leave it open into the top chord.
   ['the top chord underside closes across the heel joint',
-    s => s.replace('line(roofStartX, plateY + riseAt(roofStartX) - chordDropFt,\n      0, plateY + riseAt(0) - chordDropFt, 1);\n    line(heelWebX, plateY + riseAt(heelWebX) - chordDropFt,\n      cut, plateY + riseAt(cut) - chordDropFt, 1);',
-      'line(roofStartX, plateY + riseAt(roofStartX) - chordDropFt,\n      cut, plateY + riseAt(cut) - chordDropFt, 1);')],
+    s => s.replace('line(roofStartX, roofBase + riseAt(roofStartX) - chordDropFt,\n      0, roofBase + riseAt(0) - chordDropFt, 1);\n    line(heelWebX, roofBase + riseAt(heelWebX) - chordDropFt,\n      cut, roofBase + riseAt(cut) - chordDropFt, 1);',
+      'line(roofStartX, roofBase + riseAt(roofStartX) - chordDropFt,\n      cut, roofBase + riseAt(cut) - chordDropFt, 1);')],
   ['a raised heel is ignored and the roof stays on the plate',
     s => s.split('const heelLiftFt = roof.heelIn == null ? 0')
       .join('const heelLiftFt = true ? 0')],
   // The plausible misreading of "raise the heel": deepen the board instead of
   // lifting the roof. It puts the top chord in the right place and leaves the
   // soffit sitting on the plate, so only a check that watches the EAVE sees it.
+  // THE TWO MEMBERS THE DETACHED SECTION WAS MISSING until the truss became
+  // shared, so the gate can tell the difference between having them and
+  // having had them once.
+  // Movie's correction, undone: the plate drawn at the TOP of the wall again,
+  // which is the line he marked off before saying where it belonged.
+  ['the bottom sill plate goes back to the top of the wall',
+    s => s.replace("    attachment(rect, line, 'sill', 0, wallBaseY, wallFt);",
+      "    attachment(rect, line, 'sill', 0, plateY - sillFt, wallFt);")],
+  // The plausible misreading of "3.5\"x1.5\" stud": write the 3 1/2" down.
+  ['the sill plate is written 3 1/2" wide instead of following the wall',
+    s => s.replace("    attachment(rect, line, 'sill', 0, wallBaseY, wallFt);",
+      "    attachment(rect, line, 'sill', 0, wallBaseY, 3.5 / 12);")],
+  // Back to a line across the wall, which is what it was before he named it.
+  ['the sill plate is a line across the wall rather than a member',
+    s => s.replace("    attachment(rect, line, 'sill', 0, wallBaseY, wallFt);",
+      '    line(0, wallBaseY + sillFt, wallFt, wallBaseY + sillFt, 1);')],
+  ['the truss loses its bottom chord, and the ceiling is a bare line again',
+    s => s.replace('    if (ceiling) {', '    if (false) {')],
+  ['the side chord loses its outside face at the wall',
+    s => s.replace('    line(0, roofBase, 0, roofBase + riseAt(0) - chordDropFt, 1);\n', '')],
   ['a raised heel fattens the fascia instead of lifting the roof',
-    s => s.split('const eaveY = plateY + heelLiftFt;').join('const eaveY = plateY;')],
+    s => s.split('const eaveY = roofBase + heelLiftFt;').join('const eaveY = roofBase;')],
   ['the ceiling drops back to something a big overhang can derive past',
     s => s.replace('const ROOF_HEEL_MAX_IN = 20 * 12;', 'const ROOF_HEEL_MAX_IN = 48;')],
   ['the floor is "corrected" to the real-world 3 1/2" minimum',
@@ -898,7 +1059,26 @@ const MUTATIONS = [
   ['the thickened edge is poured to the field depth -- no thickening at all',
     s => s.replace('    const edgeBot = -edgeFt;', '    const edgeBot = -slabFt;')],
   ['the taper is cut at something other than 45 degrees',
-    s => s.replace('    const taperRun = edgeFt - slabFt;', '    const taperRun = (edgeFt - slabFt) * 2;')],
+    s => s.replace('    const taperRun = Math.max(0, edgeFt - slabFt);',
+      '    const taperRun = Math.max(0, edgeFt - slabFt) * 2;')],
+  // ── THE OTHER TWO FOUNDATIONS, NOW THAT THE SECTION DRAWS THEM ──────────
+  // Until 28 Sep this builder drew a thickened edge and nothing else, so
+  // every mutant above is a thickened-edge mutant. These two are the facts
+  // the other foundations add: the concrete stands PROUD of the floor and the
+  // wall bears on it, and the storey over the garage is what the roof stands
+  // on once it exists.
+  ['the wall on a grade beam bears on the floor instead of the concrete',
+    s => s.replace('      wallBaseY = concTop;', '      wallBaseY = 0;')],
+  // ANCHORED ON THE LINE ABOVE IT TOO. buildGarageSection carries the same
+  // assignment at the same indent for the attached garage's storey, so the
+  // bare line matches twice and replace() takes the first -- a mutation of
+  // the wrong builder, reported against this one.
+  ['the roof ignores the storey and stays on the garage plate',
+    s => s.replace(
+      '      anchors.overWallHeight = { x: overStudFt + 0.55, y: deck + overWallFt / 2 };\n'
+      + '      }\n      roofBase = deck + overWallFt;',
+      '      anchors.overWallHeight = { x: overStudFt + 0.55, y: deck + overWallFt / 2 };\n'
+      + '      }\n      roofBase = plateY;')],
   ['the foundation row loses a foundation',
     s => s.replace("    detachedGarage: Object.freeze(['thickened', 'gradebeam', 'frostwall']),",
       "    detachedGarage: Object.freeze(['thickened', 'gradebeam']),")],

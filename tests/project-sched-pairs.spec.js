@@ -217,3 +217,100 @@ test.describe('PROJECT — the bungalow schedule pairs', () => {
       .toBeGreaterThan(fill.height - 20);
   });
 });
+
+// ── AND BAND 3, WHICH WAS PAIRED ON 28 SEP ────────────────────────────────
+//
+// Movie: *"make the arrangement like the BUNGALOW - 2 columns per"*. The same
+// auto-fit rule, so the same trap: the 128px floor falls back to ONE column
+// the moment a column is narrower than 264, and nothing looks wrong when it
+// does -- falling back is what auto-fit is for. That is why the bungalow's
+// own note records the afternoon a 140px floor paired at 1366 and quietly
+// stopped at 1280, and why this file runs at the config's 1280. Band 3 buys
+// its width the same way band 1 did, by cutting its canvas to 360, so the
+// same pair of checks holds it: the columns pair, and the drawing did not pay
+// for it.
+test.describe('PROJECT — the detached schedule pairs', () => {
+  const openDetached = async page => {
+    await page.goto('/PROJECT.html?type=detached');
+    await page.waitForSelector('#sched-detached-right .sched-row', { state: 'visible', timeout: 10000 });
+  };
+
+  test('both columns put two rows on a line', async ({ page }) => {
+    await openDetached(page);
+    for (const id of ['sched-detached-left', 'sched-detached-right']) {
+      const { rows, lines: n } = await lines(page, id);
+      expect(rows, id).toBeGreaterThan(2);
+      // rows === lines exactly is what a column that fell back to single reads.
+      expect(n, id).toBeLessThan(rows);
+    }
+  });
+
+  test('no row name is clipped and no head shares its line', async ({ page }) => {
+    await openDetached(page);
+    const bad = await page.evaluate(() => {
+      const clipped = [];
+      const straddles = [];
+      for (const id of ['sched-detached-left', 'sched-detached-right']) {
+        const host = document.getElementById(id);
+        const tops = new Map();
+        for (const el of host.querySelectorAll('.sched-head, .sched-row')) {
+          if (el.hidden) continue;
+          const top = Math.round(el.getBoundingClientRect().top);
+          (tops.get(top) || tops.set(top, []).get(top)).push(el);
+          const name = el.querySelector && el.querySelector('.sched-name');
+          if (!name) continue;
+          const width = name.getBoundingClientRect().width;
+          if (name.scrollWidth > Math.ceil(width) + 1) {
+            clipped.push(`${name.textContent} needs ${name.scrollWidth} in ${Math.round(width)}`);
+          }
+        }
+        for (const [, group] of tops) {
+          if (group.some(el => el.classList.contains('sched-head')) && group.length > 1) {
+            straddles.push(group.map(el => el.textContent.slice(0, 20)).join(' + '));
+          }
+        }
+      }
+      return { clipped, straddles };
+    });
+    expect(bad.clipped).toEqual([]);
+    expect(bad.straddles).toEqual([]);
+  });
+
+  // THE CONTRACT THE PAIRING IS BUILT AROUND, asked of band 3 as well:
+  // project-bilevel indexes children[0]/children[1] and project-page filters
+  // on .sched-name, so a row that grew a third cell would break them for a
+  // layout change.
+  test('a detached row still holds exactly a name and a value', async ({ page }) => {
+    await openDetached(page);
+    const wrong = await page.evaluate(() => [...document.querySelectorAll(
+      '#sched-detached-left .sched-row, #sched-detached-right .sched-row')]
+      .filter(r => !r.hidden && !r.classList.contains('wide'))
+      .filter(r => r.children.length !== 2)
+      .map(r => `${r.dataset.schedRow}: ${r.children.length}`));
+    expect(wrong).toEqual([]);
+  });
+
+  test('the narrower canvas did not shrink the detached drawing', async ({ page }) => {
+    await openDetached(page);
+    const fill = await page.evaluate(() => {
+      const c = document.getElementById('detached-canvas');
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      const bg = [d[0], d[1], d[2]];
+      let minY = c.height, maxY = -1;
+      for (let y = 0; y < c.height; y += 1) {
+        for (let x = 0; x < c.width; x += 1) {
+          const i = (y * c.width + x) * 4;
+          if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1])
+            + Math.abs(d[i + 2] - bg[2]) <= 24) continue;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+          break;
+        }
+      }
+      return { height: c.height, width: c.width, minY, maxY };
+    });
+    expect(fill.width, 'the canvas is the narrower one').toBe(360);
+    expect(fill.minY, 'the drawing reaches the top of its canvas').toBeLessThan(20);
+    expect(fill.maxY, 'and the bottom').toBeGreaterThan(fill.height - 20);
+  });
+});
