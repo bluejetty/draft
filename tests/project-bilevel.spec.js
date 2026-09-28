@@ -328,9 +328,11 @@ test('a number typed on one split type does not move the other', async ({ page }
 // POUR, FILL WALL, SLAB, GRADE BEAM and OVER GAR FL down the left, and the
 // whole house stack down the right.
 //
-// WHAT IS LEFT IS THE TWO ANNOTATIONS, and they are the reason this is not
-// simply "no tags": ATTIC SPACE names a CAVITY, which no schedule row does,
-// so it earns its place by the rule the rest failed.
+// AND NOT ONE WORD IS LEFT. The two ATTIC SPACE annotations survived the
+// first pass, because a cavity is not a schedule row -- then Movie, the same
+// day: "delete all the text on the section drawings". So this is stricter
+// than band 3's version of the same check: no tag at all, not merely no tag
+// that repeats a row.
 test('the section carries no word its schedule already prints', async ({ page }) => {
   await openProject(page);
   await page.waitForTimeout(300);
@@ -342,7 +344,7 @@ test('the section carries no word its schedule already prints', async ({ page })
     [...document.querySelectorAll('#sched-bilevel-left .sched-name, #sched-bilevel-right .sched-name')]
       .map(n => n.textContent.trim()));
   expect(tags.filter(t => names.includes(t))).toEqual([]);
-  expect(tags).toEqual(['ATTIC SPACE']);
+  expect(tags).toEqual([]);
 });
 
 // A ROW THAT SAYS "BELOW" MUST NOT SHOW A NEGATIVE. The two cancel: "grade

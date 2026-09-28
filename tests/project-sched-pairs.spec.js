@@ -383,33 +383,32 @@ test.describe('PROJECT — the split schedule pairs', () => {
     expect(wrong).toEqual([]);
   });
 
-  // THE DRAWINGS DID NOT PAY FOR IT. This section's ink spans about 190px of
-  // the 600 it had, because a split is a tall building seen through a 7 ft cut
-  // and HEIGHT sets the scale. Both canvases still reach top and bottom.
-  test('the narrower canvases did not shrink the split drawings', async ({ page }) => {
+  // THE DRAWING DID NOT PAY FOR IT. Its ink spanned about 190px of the 600 it
+  // had, because a split is a tall building seen through a 7 ft cut and HEIGHT
+  // sets the scale. 380 now holds the section AND the far eave beside it --
+  // one canvas since Movie asked for the two brought tight together -- and it
+  // still reaches top and bottom.
+  test('the narrower canvas did not shrink the split drawing', async ({ page }) => {
     await openSplit(page);
-    const fill = await page.evaluate(() => ['bilevel-canvas', 'bilevel-eave-canvas']
-      .map(id => {
-        const c = document.getElementById(id);
-        const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
-        const bg = [d[0], d[1], d[2]];
-        let minY = c.height; let maxY = -1;
-        for (let y = 0; y < c.height; y += 1) {
-          for (let x = 0; x < c.width; x += 1) {
-            const i = (y * c.width + x) * 4;
-            if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1])
-              + Math.abs(d[i + 2] - bg[2]) <= 24) continue;
-            if (y < minY) minY = y;
-            if (y > maxY) maxY = y;
-            break;
-          }
+    const fill = await page.evaluate(() => {
+      const c = document.getElementById('bilevel-canvas');
+      const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+      const bg = [d[0], d[1], d[2]];
+      let minY = c.height; let maxY = -1;
+      for (let y = 0; y < c.height; y += 1) {
+        for (let x = 0; x < c.width; x += 1) {
+          const i = (y * c.width + x) * 4;
+          if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1])
+            + Math.abs(d[i + 2] - bg[2]) <= 24) continue;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+          break;
         }
-        return { id, height: c.height, width: c.width, minY, maxY };
-      }));
-    expect(fill.map(f => f.width)).toEqual([280, 130]);
-    for (const f of fill) {
-      expect(f.minY, `${f.id} reaches the top of its canvas`).toBeLessThan(20);
-      expect(f.maxY, `${f.id} reaches the bottom`).toBeGreaterThan(f.height - 20);
-    }
+      }
+      return { height: c.height, width: c.width, minY, maxY };
+    });
+    expect(fill.width, 'the canvas is the narrower one').toBe(380);
+    expect(fill.minY, 'the drawing reaches the top of its canvas').toBeLessThan(20);
+    expect(fill.maxY, 'and the bottom').toBeGreaterThan(fill.height - 20);
   });
 });

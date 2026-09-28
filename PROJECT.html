@@ -400,32 +400,28 @@
        hold a WORD plus its arrow, and squeezing both into one track clipped
        GRADE BEAM to "GRADE" and SILL PLATE to "SILL PL". A clipped label on
        a control that changes the drawing is worse than a wide column. */
-    /* The split's band carries a second drawing: 3 ft at the edge of the
-       house, where the eave is, beside the 7 ft interior cut. */
-    .band.band-eave { grid-template-columns:minmax(0,1fr) 600px 210px minmax(0,1fr); max-width:1300px; }
     /* AND BAND 2 IS PAIRED TOO, which is the arrangement Movie asked band 3
        for by name on 28 Sep -- "make the arrangement like the BUNGALOW - 2
        columns per" -- and then moved straight on to this band. The section
        paid for it here as it did there: at 600 + 210 the two side columns
        were 90px each, one 128px track and no pair.
 
-       THE DRAWINGS PAY ALMOST NOTHING, for the reason band 3's own note
-       gives. This section's ink spans 190px of its 600 today; HEIGHT sets
-       the scale, because a split is a tall building seen through a 7 ft cut.
-       280 is still wider than the ink at any column height the schedule
-       reaches, so the drawing is the same size it was and the columns gain
-       200px each.
+       THE DRAWING PAYS ALMOST NOTHING, for the reason band 3's own note
+       gives. Its ink spanned 190px of the 600 it had; HEIGHT sets the scale,
+       because a split is a tall building seen through a 7 ft cut. 380 holds
+       the section and the far eave beside it at any column height the
+       schedule reaches, and the columns still gain 200px each.
 
        AND A LOWER FLOOR FOR THE TRACK, 118 rather than 128, which is the one
-       number here that is not band 3's. This band is the only one that pays
-       for TWO drawings out of one row, so its side columns are the narrowest
-       on the page -- and what the floor is protecting is a dropdown's label.
+       number here that is not band 3's. This band's drawing is the widest on
+       the page -- the split, its garage and the far eave in one canvas -- so
+       its side columns are the narrowest -- and what the floor is protecting is a dropdown's label.
        Band 3's is FDN TYPE with THICKENED EDGE in it; band 2's longest is
        FROST WALL, which is shorter, and a paired select row sizes its name to
        the name and gives the select the rest. The 10px is what keeps the pair
        alive at 1280, where band 3's note says this check belongs. */
-    #stage-bilevel .band.band-eave {
-      grid-template-columns:minmax(0,1fr) 280px 130px minmax(0,1fr); }
+    #stage-bilevel .band {
+      grid-template-columns:minmax(0,1fr) 380px minmax(0,1fr); }
     #sched-bilevel-left, #sched-bilevel-right {
       grid-template-columns:repeat(auto-fit, minmax(118px, 1fr)); }
     #stage-bilevel .band { align-items:center; }
@@ -479,7 +475,7 @@
     .drop-slot { margin-top:16px; border:1.5px dashed var(--edge-panel); background:color-mix(in srgb, var(--ink-primary) 4%, transparent); padding:26px 16px; text-align:center; color:var(--ink-quiet); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
     .drop-slot small { display:block; margin-top:5px; text-transform:none; letter-spacing:0; font-family:'Barlow',system-ui,sans-serif; font-weight:400; font-size:11px; }
     #status { margin-top:14px; min-height:16px; color:#557a46; font-size:12px; }
-    @media (max-width:1180px) { .band, .band.band-eave { grid-template-columns:1fr; justify-items:center; } .sched { width:min(420px,100%); }
+    @media (max-width:1180px) { .band { grid-template-columns:1fr; justify-items:center; } .sched { width:min(420px,100%); }
       /* One track, so the assignments above would spill into implicit
          columns nobody can see. Stacked, order is the source order again. */
       #sched-left, #detail-wrap, #sched-house { grid-column:1; } }
@@ -659,13 +655,18 @@
 
     <section id="stage-bilevel" data-stage="bilevel" class="card stack-card" aria-label="Bilevel wall section">
       <div class="card-body">
-        <div class="band band-eave">
+        <div class="band">
           <div class="sched" id="sched-bilevel-left"></div>
+          <!-- ONE CANVAS, NOT TWO. Movie, 28 Sep: "flip the one on the right
+               snd bring it tight up to the one on the left". Two canvases
+               cannot be brought tight together: each centres its own drawing
+               in its own box, so closing the CSS gap to nothing still leaves
+               the slack either drawing has inside itself. Painted into one
+               canvas the far eave lands where buildFarEaveSection puts it,
+               FAR_EAVE_GAP_FT past the cut, which is the idiom band 1 and
+               band 3 already use for their own far eaves. -->
           <div class="detail-wrap" id="bilevel-wrap">
-            <canvas id="bilevel-canvas" width="280" height="500" aria-label="Bilevel section — the split, its garage, and the storey over it"></canvas>
-          </div>
-          <div class="detail-wrap" id="bilevel-eave-wrap">
-            <canvas id="bilevel-eave-canvas" width="130" height="500" aria-label="Bilevel eave — three feet at the edge of the house"></canvas>
+            <canvas id="bilevel-canvas" width="380" height="500" aria-label="Bilevel section — the split, its garage, the storey over it, and the eave at the far edge"></canvas>
           </div>
           <div class="sched" id="sched-bilevel-right"></div>
         </div>
@@ -1218,7 +1219,6 @@
       // garage joins, so the overhang is not in that view at all -- rather
       // than draw an eave the section could not see, the edge of the house
       // gets its own narrow slice.
-      const bilevelEaveCanvas = document.querySelector('#bilevel-eave-canvas');
       const detachedCanvas = document.querySelector('#detached-canvas');
       const detailWrap = document.querySelector('#detail-wrap');
       const wrap = document.querySelector('#detail-wrap');
@@ -1981,15 +1981,15 @@
         ftin: { show: ft => ftIn(ft), parse: text => parseFtIn(text) },
         in: { show: inches => inchesOnly(inches), parse: text => parseInches(text) },
       };
-      // ONE PER SPACE. A stepped ceiling makes two rooms under one attic, and
-      // labelling each side of the step printed the words twice over a single
-      // cavity -- Movie: "the ATTIC SPACE TEXT is doubled remove the doubled
-      // text THAT IS ATTIC SPACE". The garage's is a separate space, and only
-      // exists at all when nothing is built over the garage.
-      const BILEVEL_ANNOTATIONS = [
-        { key: 'attic', text: 'ATTIC SPACE' },
-        { key: 'garageCavity', text: 'ATTIC SPACE' },
-      ];
+      // NOT ONE WORD ON THE SECTION. Movie, 28 Sep: "delete all the text on
+      // the section drawings". ATTIC SPACE over the house and over the garage
+      // were the last two left after the grey row names went, and they were
+      // the pair he had asked for on 16 Sep ("all the blue above is attic
+      // space") -- so this is him changing his mind about them, not the #524
+      // rule reaching further. They are kept as a named, empty list rather
+      // than deleted outright: the anchors are still emitted by the builder,
+      // and the next person to want a word in a cavity needs only the text.
+      const BILEVEL_ANNOTATIONS = [];
       const bilevelSched = schedBand({
         bandKey: 'bilevel', bandName: 'Bilevel', rows: bilevelRows,
         hosts: { left: '#sched-bilevel-left', right: '#sched-bilevel-right' },
@@ -3762,30 +3762,28 @@
             projectPage.buildWallSection({ ...bilevelValues(),
               footingFlushLeft: !bilevelGarage ? null
                 : garageFoundation() === 'frostwall' ? 'merge' : 'end' }),
-          ]);
-          fillBilevel(bilevelCanvas.paintedSection);
-        }
-        if (bilevelEaveCanvas) {
-          // The same values, cut narrow at the edge of the house and with the
-          // overhang back on: one set of numbers seen twice, so the eave panel
-          // cannot drift from the section beside it. No stair and no garage --
-          // neither is at this end of the building.
-          //
-          // AND IT IS MIRRORED, which is the flip Movie asked for on 28 Sep:
-          // "can flip that extra section". Drawn the same way round as the
-          // section beside it, the panel read as a second building standing
-          // behind the first; mirrored, the two face each other and the pair
-          // reads as one house cut at both edges -- which is the idiom band 1
-          // and band 3 already use for their own far eaves. buildFarEaveSection
-          // is that mirror, and reusing it rather than flipping here keeps the
-          // break line's jog and the footing's taper the right way round.
-          bilevelEaveCanvas.paintedSection = projectPage.paintSections(bilevelEaveCanvas, [
+            // THE FAR EDGE OF THE HOUSE, back from beyond the break: the
+            // slice's second eave, mirrored from the same numbers. Movie,
+            // 28 Sep: "flip the one on the right snd bring it tight up to the
+            // one on the left". It was a second canvas beside this one and
+            // drawn the same way round, so the pair read as two buildings
+            // standing in a row with a stripe of air between them that no CSS
+            // gap could close -- each canvas centres its own drawing, so the
+            // slack was inside the boxes and not between them.
+            //
+            // IN THE SAME CALL IS WHAT MAKES IT TIGHT, and it is the idiom
+            // band 1 and band 3 already use: buildFarEaveSection mirrors the
+            // section and lands it FAR_EAVE_GAP_FT past the cut, in the same
+            // feet, at the same scale, on the same y origin. No stair and no
+            // garage -- neither is at this end of the building -- and the
+            // overhang comes back on, because this is the one end of a split
+            // where there is an eave to draw.
             projectPage.buildFarEaveSection({
               ...bilevelValues(),
-              cutDepthFt: BILEVEL_EAVE_CUT_FT,
               farEaveCutFt: BILEVEL_EAVE_CUT_FT,
             }),
           ]);
+          fillBilevel(bilevelCanvas.paintedSection);
         }
         if (detachedCanvas) {
           detachedCanvas.paintedSection = projectPage.paintSections(detachedCanvas, [
@@ -4188,6 +4186,8 @@
             projectPage.buildWallSection({ ...bilevelValues(),
               footingFlushLeft: !garage ? null
                 : garageFoundation() === 'frostwall' ? 'merge' : 'end' }),
+            projectPage.buildFarEaveSection({
+              ...bilevelValues(), farEaveCutFt: BILEVEL_EAVE_CUT_FT }),
           ];
         }
         return [
