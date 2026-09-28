@@ -970,17 +970,36 @@ if (!window.DraftProjectPage) {
     // roof stays one plane.
     if (stepped) {
       const ext = stepLevel.extentFt;
+      // ONE CHORD THAT TURNS, NOT THREE THAT MEET. Movie, 28 Sep, over a
+      // drawing where the drop was a single line between two chords: "they
+      // should be 3.5\" chords at the drop the 3.5\" chord should turn and go
+      // down th main floor ceiling and then continue horizontal at 3.5\"
+      // chord (as it is already)".
+      //
+      // So the member is drawn as one band of ROOF_CHORD_IN following the
+      // ceiling: along the balcony, down the drop, along the main area. Its
+      // room face is the ceiling itself -- flat, down the drop, flat again --
+      // and its back is that face offset 3 1/2" AWAY FROM THE ROOM the whole
+      // way, which is what turns the corner rather than stopping at it.
+      //
+      // The back turns at ext - chordFt, not at ext: offsetting the vertical
+      // face leftward and the two horizontal faces upward puts both corners of
+      // the back on that line. Ending the upper chord at ext and starting the
+      // lower one there -- which is what was drawn before -- left a 3 1/2"
+      // square of nothing at each corner and read as three separate members
+      // that happened to touch.
+      const turnX = ext - chordFt;
+      // The room face: the ceiling plane, the drop, and the ceiling plane
+      // again. All one weight, because it is all one surface -- the drop was
+      // heavier when it doubled as the balcony's inner wall, and that wall
+      // went on 28 Sep.
       line(0, plateY, ext, plateY, 1);
-      line(heelWebX, plateY + chordFt, ext, plateY + chordFt, 1);
-      // THE DROP RUNS UP THROUGH THE CHORD IT CARRIES. Movie, 28 Sep: "the
-      // roof chords at the drop was missing a line". The wall stopped at the
-      // ceiling plane, which left the upper bottom chord's end open -- two
-      // horizontals finishing in mid-air with nothing across them, while
-      // every other end of that member on the drawing is closed. The chord
-      // bears on this wall, so the wall's own face is what closes it.
-      line(ext, lowerPlate, ext, plateY + chordFt, 1.5);        // the drop
+      line(ext, lowerPlate, ext, plateY, 1);                    // the drop
       line(ext, lowerPlate, cut, lowerPlate, 1);
-      line(ext, lowerPlate + chordFt, cut, lowerPlate + chordFt, 1);
+      // And its back, the same three runs offset by the chord.
+      line(heelWebX, plateY + chordFt, turnX, plateY + chordFt, 1);
+      line(turnX, lowerPlate + chordFt, turnX, plateY + chordFt, 1);
+      line(turnX, lowerPlate + chordFt, cut, lowerPlate + chordFt, 1);
       anchors.ceilingDrop = { x: ext + 0.6, y: (lowerPlate + plateY) / 2 };
     }
     // BETWEEN THE PITCH AND THE HEEL, by construction. Movie, 4 Sep: "put

@@ -64,24 +64,24 @@ const sections = page => page.evaluate(([values, farCut]) => {
     decks: section.parts
       .filter(p => p.kind === 'rect' && p.weight === 1 && p.h > 0.4)
       .map(p => ({
-        top: Math.round((p.y + p.h) * 1000) / 1000,
-        depth: Math.round(p.h * 1000) / 1000,
+        top: Math.round((p.y + p.h) * 1e6) / 1e6,
+        depth: Math.round(p.h * 1e6) / 1e6,
       })),
     verticals: section.parts
       .filter(p => p.kind === 'line' && Math.abs(p.x1 - p.x2) < 1e-6)
       .map(p => ({
-        x: Math.round(p.x1 * 1000) / 1000,
-        lo: Math.round(Math.min(p.y1, p.y2) * 1000) / 1000,
-        hi: Math.round(Math.max(p.y1, p.y2) * 1000) / 1000,
+        x: Math.round(p.x1 * 1e6) / 1e6,
+        lo: Math.round(Math.min(p.y1, p.y2) * 1e6) / 1e6,
+        hi: Math.round(Math.max(p.y1, p.y2) * 1e6) / 1e6,
       })),
     horizontals: section.parts
       .filter(p => p.kind === 'line' && Math.abs(p.y1 - p.y2) < 1e-6)
       .map(p => ({
-        y: Math.round(p.y1 * 1000) / 1000,
-        x1: Math.round(Math.min(p.x1, p.x2) * 1000) / 1000,
-        x2: Math.round(Math.max(p.x1, p.x2) * 1000) / 1000,
+        y: Math.round(p.y1 * 1e6) / 1e6,
+        x1: Math.round(Math.min(p.x1, p.x2) * 1e6) / 1e6,
+        x2: Math.round(Math.max(p.x1, p.x2) * 1e6) / 1e6,
       })),
-    minX: Math.round(section.extents.minX * 1000) / 1000,
+    minX: Math.round(section.extents.minX * 1e6) / 1e6,
   });
   return {
     near: strip(P.buildWallSection(values)),
@@ -139,32 +139,58 @@ test('the wall runs unbroken past a floor that is not shown', async ({ page }) =
 
 // ── THE CEILING DROP ──────────────────────────────────────────────────────
 //
-// One wall at the balcony's inner end, and it spans exactly the drop: from
-// the main area's ceiling up through the chord that bears on it.
+// The bottom chord is ONE member that turns. Movie, 28 Sep, over a drawing
+// where the drop was a single line between two chords: "they should be 3.5"
+// chords at the drop the 3.5" chord should turn and go down th main floor
+// ceiling and then continue horizontal at 3.5" chord (as it is already)".
 //
-// Below the drop there is nothing to draw -- the balcony's edge looks out
-// over the open main area -- and that stretch is what Movie struck out in
-// red. Above it, the wall used to stop at the ceiling plane, leaving the
-// upper bottom chord's end open: two horizontals finishing in mid-air with
-// nothing across them, while every other end of that member is closed.
-test('the drop is one wall, from the lower ceiling up through the chord',
+// So this asks for the band and not for the lines: a room face that is the
+// ceiling, the drop and the ceiling again, and a back that is that face
+// offset by the chord the whole way -- including round both corners, which is
+// what was missing. Ending the upper chord at the drop and starting the lower
+// one there left a 3 1/2" square of nothing at each corner.
+test('the bottom chord turns down the drop at its own thickness',
   async ({ page }) => {
     await open(page);
     const { near } = await sections(page);
     const ext = SPLIT.floors[2].extentFt;
-    const drop = near.verticals.filter(v => Math.abs(v.x - ext) < 1e-6);
-    expect(drop.length).toBe(1);
 
-    // The two ceilings it runs between, read off the drawing rather than
-    // recomputed: the lower one starts at the drop, the upper one ends there.
+    // The room face of the drop, between the two ceiling planes.
+    const face = near.verticals.filter(v => Math.abs(v.x - ext) < 1e-6);
+    expect(face.length).toBe(1);
     const lower = near.horizontals.find(h => Math.abs(h.x1 - ext) < 1e-6);
-    const chordTop = near.horizontals
-      .filter(h => Math.abs(h.x2 - ext) < 1e-6)
-      .reduce((top, h) => (top == null || h.y > top.y ? h : top), null);
+    const upper = near.horizontals.find(h => Math.abs(h.x2 - ext) < 1e-6);
     expect(lower).toBeTruthy();
-    expect(chordTop).toBeTruthy();
-    expect(drop[0].lo).toBeCloseTo(lower.y, 3);
-    expect(drop[0].hi).toBeCloseTo(chordTop.y, 3);
+    expect(upper).toBeTruthy();
+    expect(face[0].lo).toBeCloseTo(lower.y, 3);
+    expect(face[0].hi).toBeCloseTo(upper.y, 3);
+
+    // THE CHORD, read as a thickness rather than as a number typed here: the
+    // two ceiling planes and their backs give it, and the turn has to match.
+    const chordFt = near.horizontals
+      .filter(h => Math.abs(h.x2 - ext) < 1e-6 || Math.abs(h.x1 - ext) < 1e-6)
+      .map(plane => Math.min(...near.horizontals
+        .filter(h => h.y > plane.y).map(h => h.y - plane.y)));
+    expect(chordFt[0]).toBeCloseTo(chordFt[1], 4);
+    const chord = chordFt[0];
+    expect(chord).toBeGreaterThan(0.2);
+
+    // The back of the turn: one vertical, a chord in from the face, running
+    // corner to corner of the offset.
+    // A THOUSANDTH OF A FOOT is the tolerance on anything DERIVED here: the
+    // chord above is a difference of two drawn heights, so it carries their
+    // rounding, while ext is a number this file typed.
+    const back = near.verticals.filter(v => Math.abs(v.x - (ext - chord)) < 1e-3);
+    expect(back.length).toBe(1);
+    expect(back[0].lo).toBeCloseTo(lower.y + chord, 3);
+    expect(back[0].hi).toBeCloseTo(upper.y + chord, 3);
+
+    // AND THE TWO HORIZONTAL BACKS STOP AND START ON IT, which is the corner
+    // that was empty: an upper back ending at ext leaves the turn hanging.
+    const upperBack = near.horizontals.find(h => Math.abs(h.y - (upper.y + chord)) < 1e-3);
+    const lowerBack = near.horizontals.find(h => Math.abs(h.y - (lower.y + chord)) < 1e-3);
+    expect(upperBack.x2).toBeCloseTo(ext - chord, 3);
+    expect(lowerBack.x1).toBeCloseTo(ext - chord, 3);
   });
 
 // ── THE NEAR EAVE ─────────────────────────────────────────────────────────
