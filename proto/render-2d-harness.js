@@ -552,6 +552,69 @@ suite('drawBeam2D', 'a beam with no ends is not a beam', R => {
   expect('nothing is painted', painted(ctx), false);
 });
 
+// A beam label runs WITH the beam. bluejetty, 27 Sep: "the BEAMS should be
+// marked PARALLEL with the beam (i noticed it marked crossing through the
+// beam / that's no good)". Flat text at the midpoint lies straight across a
+// north-south beam and buries it. Three things have to hold, and each one is
+// checked on its own below, because a painter can get any two right and still
+// draw an unreadable tag.
+const NS_SPAN = { id: 3, start: { x: 0, z: 0 }, end: { x: 0, z: 10 }, mode: 'flush' };
+const RL_SPAN = { id: 4, start: { x: 10, z: 0 }, end: { x: 0, z: 0 }, mode: 'flush' };
+
+suite('drawBeam2D', 'the label turns to the beam it names', R => {
+  const ctx = recordingCtx();
+  R.drawBeam2D(ctx, toS, NS_SPAN, {}, structEnv());
+  const turns = calls(ctx, 'rotate');
+  expect('the text is rotated at all', turns.length, 1);
+  // toS sends +z down the screen, so a north-south beam is a vertical line:
+  // +90deg, flipped to -90deg so it reads up the sheet rather than down it.
+  expect('to the beam angle, flipped to read left-to-right',
+    turns[0][0].toFixed(4), (-Math.PI / 2).toFixed(4));
+  expect('about the beam midpoint',
+    JSON.stringify(calls(ctx, 'translate')[0]), '[400,350]');
+});
+
+suite('drawBeam2D', 'a beam drawn right-to-left is not written upside down', R => {
+  const ctx = recordingCtx();
+  R.drawBeam2D(ctx, toS, RL_SPAN, {}, structEnv());
+  const angle = calls(ctx, 'rotate')[0][0];
+  // Raw atan2 for this span is PI: rotate to that and FLUSH BEAM is drawn
+  // mirrored. Every readable angle lies in [-90deg, +90deg).
+  expect('the rotation is in the readable half turn',
+    angle >= -Math.PI / 2 - 1e-9 && angle < Math.PI / 2, true);
+  expect('and it is flat, not upside down', Math.abs(angle) < 1e-9, true);
+});
+
+suite('drawBeam2D', 'the label sits BESIDE the beam, not on it', R => {
+  const ctx = recordingCtx();
+  R.drawBeam2D(ctx, toS, NS_SPAN, {}, structEnv());
+  const [text, x, y] = calls(ctx, 'fillText')[0];
+  expect('it still says which kind it is', text, 'FLUSH BEAM');
+  expect('centred across the span, in the rotated frame', x, 0);
+  expect('and clear of the line it names', y < 0, true);
+});
+
+suite('labelAlongLine2D', 'the helper the window tags will share', R => {
+  const ctx = recordingCtx();
+  // offset 0 is the dimension-string case: the text sits ON the line, with a
+  // plate behind it so the line does not run through the glyphs.
+  R.labelAlongLine2D(ctx, { x: 0, y: 0 }, { x: 100, y: 0 }, "12'-0\"",
+    { font: '600 11px sans-serif', color: '#123456', background: '#ffffff', offset: 0 });
+  expect('the caller font is applied', sets(ctx, 'font').includes('600 11px sans-serif'), true);
+  expect('a plate is drawn behind it', count(ctx, 'fillRect'), 1);
+  expect('the text is written last, in the caller colour',
+    sets(ctx, 'fillStyle').pop(), '#123456');
+  expect('on the line, not beside it', calls(ctx, 'fillText')[0][2], -0);
+  expect('and the transform is put back', count(ctx, 'restore'), 1);
+});
+
+suite('labelAlongLine2D', 'an empty label paints nothing at all', R => {
+  const ctx = recordingCtx();
+  R.labelAlongLine2D(ctx, { x: 0, y: 0 }, { x: 100, y: 50 }, '', { color: '#123456' });
+  expect('nothing is painted', painted(ctx), false);
+  expect('and the transform was never touched', count(ctx, 'rotate'), 0);
+});
+
 suite('drawColumn2D', 'a telepost is a square with a centre cross', R => {
   const ctx = recordingCtx();
   R.drawColumn2D(ctx, toS, { id: 1, point: { x: 0, z: 0 } }, {}, structEnv());
@@ -2830,6 +2893,16 @@ function coverage() {
     'ctx.setLineDash([]);');
   const dropBeamEnvColour = src => src.replace(
     /ctx\.strokeStyle = env\.beamColor;/, "ctx.strokeStyle = '#7a4a21';");
+  // The three rules of labelAlongLine2D, deleted one at a time: flat text,
+  // upside-down text, and text lying on the line it names.
+  const labelNotTurned = src => src.replace(
+    'ctx.rotate(textAngle);\n    if (background) {',
+    'if (background) {');
+  const labelNotFlipped = src => src.replace(
+    'while (textAngle >= Math.PI / 2) textAngle -= Math.PI;\n    while (textAngle < -Math.PI / 2) textAngle += Math.PI;',
+    '');
+  const labelNotOffset = src => src.replace(
+    "ctx.fillText(text, 0, -offset);", 'ctx.fillText(text, 0, 0);');
   const columnShapeIgnored = src => src.replace(
     'if (pile) ctx.arc(c.x, c.y, half, 0, Math.PI * 2);\n      else ctx.rect(c.x - half, c.y - half, half * 2, half * 2);',
     'ctx.rect(c.x - half, c.y - half, half * 2, half * 2);');
@@ -2851,6 +2924,9 @@ function coverage() {
     ['drawWallSeg2D dots take the body colour', wallDotsTakeTheFill],
     ['drawBeam2D dropped and flush draw the same', beamModeIgnored],
     ['drawBeam2D back on the old page brown', dropBeamEnvColour],
+    ['labelAlongLine2D rotation (labels flat across the line again)', labelNotTurned],
+    ['labelAlongLine2D read-direction flip (labels upside down)', labelNotFlipped],
+    ['labelAlongLine2D perpendicular offset (label on the line)', labelNotOffset],
     ['drawColumn2D pile and telepost draw the same', columnShapeIgnored],
     ['drawColumn2D back on the old page ink', dropColumnEnvColour],
   ];

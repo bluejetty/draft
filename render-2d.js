@@ -284,6 +284,58 @@ if (!window.DraftRender2D) {
     return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
   }
 
+  // ─── A label that runs ALONG a line ──────────────────────────────────────
+  // A tag on a linear thing -- a beam, a window in plan, a window in
+  // elevation -- reads with the thing, not across it. Written flat at the
+  // midpoint, a label on a north-south beam lies straight across the beam and
+  // buries the very line it names; that is what bluejetty saw ("marked
+  // crossing through the beam / that's no good").
+  //
+  // Three rules, and the second is the one that is easy to forget:
+  //
+  //  1. ROTATE to the line's own angle, so the text is parallel with it.
+  //  2. FLIP the angle into [-90deg, +90deg) so the text still reads
+  //     left-to-right. Rotating to the raw angle draws a beam running right
+  //     to left upside down, which is worse than flat.
+  //  3. OFFSET perpendicular, so the text sits BESIDE the line rather than on
+  //     it. In the flipped frame cos(angle) >= 0, so local -y always carries
+  //     up the screen: one sign puts every label on the same side of its
+  //     line, which is what makes a plan full of them read as a set.
+  //
+  // The caller gives ctx a/b in SCREEN space -- this helper does no
+  // projecting, because the two things that use it (a beam's span, a window's
+  // wall run) already have their ends projected for the line they just drew,
+  // and re-projecting would be a second chance to disagree with it.
+  function labelAlongLine2D(ctx, a, b, text, options = {}) {
+    if (!text) return;
+    const {
+      font = null,        // left alone when null: the caller's ctx font stands
+      color = null,
+      offset = 5,         // px perpendicular; 0 sits the text on the line
+      background = null,  // a colour draws a plate behind the text
+      pad = 3,
+      baseline = offset === 0 ? 'middle' : 'bottom',
+    } = options;
+    const angle = Math.atan2(b.y - a.y, b.x - a.x);
+    let textAngle = angle;
+    while (textAngle >= Math.PI / 2) textAngle -= Math.PI;
+    while (textAngle < -Math.PI / 2) textAngle += Math.PI;
+    ctx.save();
+    if (font) ctx.font = font;
+    ctx.translate((a.x + b.x) / 2, (a.y + b.y) / 2);
+    ctx.rotate(textAngle);
+    if (background) {
+      const width = ctx.measureText(text).width;
+      ctx.fillStyle = background;
+      ctx.fillRect(-width / 2 - pad, -offset - 8, width + pad * 2, 15);
+    }
+    if (color) ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = baseline;
+    ctx.fillText(text, 0, -offset);
+    ctx.restore();
+  }
+
   // The complement of a set of welded stretches along one edge, in edge
   // parameter: what is LEFT to stroke. Overlaps and an unsorted list are both
   // survivable -- geometry hands these over merged, but a painter that quietly
@@ -571,12 +623,10 @@ if (!window.DraftRender2D) {
     ctx.stroke();
     ctx.setLineDash([]);
     if (!preview && !env.isPrinting) {
-      ctx.fillStyle = env.beamColor;
-      ctx.font = env.labelFont;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'bottom';
-      ctx.fillText(beam.mode === 'dropped' ? 'DROPPED BEAM' : 'FLUSH BEAM',
-        (a.x + b.x) / 2, (a.y + b.y) / 2 - 5);
+      // ALONG the beam, not across it. See labelAlongLine2D.
+      labelAlongLine2D(ctx, a, b,
+        beam.mode === 'dropped' ? 'DROPPED BEAM' : 'FLUSH BEAM',
+        { font: env.labelFont, color: env.beamColor, offset: 5 });
     }
     ctx.restore();
   }
@@ -1186,16 +1236,10 @@ if (!window.DraftRender2D) {
       ctx.lineTo(wb.x - wux * 8 + wpx * 4, wb.y - wuy * 8 + wpy * 4);
       ctx.stroke();
       if (!env.isPrinting || std.printable) {
-        const a = walk[0], b = walk[1];
-        ctx.font = font;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-        ctx.save();
-        ctx.translate((a.x + b.x) / 2, (a.y + b.y) / 2);
-        let angle = Math.atan2(b.y - a.y, b.x - a.x);
-        if (angle > Math.PI / 2 || angle < -Math.PI / 2) angle += Math.PI;
-        ctx.rotate(angle);
-        ctx.fillText(`DN — ${layout.risers}R @ ${env.formatInchesOnly(layout.riserIn)}`, 0, -3);
-        ctx.restore();
+        // The walk line is a line with a label on it, same as a beam.
+        labelAlongLine2D(ctx, walk[0], walk[1],
+          `DN — ${layout.risers}R @ ${env.formatInchesOnly(layout.riserIn)}`,
+          { font, offset: 3 });
       }
       ctx.restore();
     });
@@ -1397,23 +1441,13 @@ if (!window.DraftRender2D) {
     const angle = Math.atan2(db.y - da.y, db.x - da.x);
     arrow(da, angle);
     arrow(db, angle + Math.PI);
-    const midX = (da.x + db.x) / 2;
-    const midY = (da.y + db.y) / 2;
     // Aligned text: the label runs along the dimension line, normalized so it
-    // reads from the bottom or the right edge of the sheet, never the left.
-    let textAngle = angle;
-    while (textAngle >= Math.PI / 2) textAngle -= Math.PI;
-    while (textAngle < -Math.PI / 2) textAngle += Math.PI;
-    ctx.font = "600 11px 'Barlow Condensed', system-ui, sans-serif";
-    const textWidth = ctx.measureText(label).width;
-    ctx.translate(midX, midY);
-    ctx.rotate(textAngle);
-    ctx.fillStyle = env.colors.labelBack;
-    ctx.fillRect(-textWidth / 2 - 3, -8, textWidth + 6, 15);
-    ctx.fillStyle = color;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, 0, 0);
+    // reads from the bottom or the right edge of the sheet, never the left --
+    // the same rule the beam tags follow, so it is the helper's job now.
+    labelAlongLine2D(ctx, da, db, label, {
+      font: "600 11px 'Barlow Condensed', system-ui, sans-serif",
+      color, background: env.colors.labelBack, offset: 0,
+    });
     ctx.restore();
   }
 
@@ -1979,6 +2013,7 @@ if (!window.DraftRender2D) {
     drawDimension2D,
     drawOutlines2D,
     strokeSegPath2D,
+    labelAlongLine2D,
     drawNoteScreen2D,
     drawStairNotes2D,
     drawCutMarks2D,
