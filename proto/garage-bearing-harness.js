@@ -2315,6 +2315,217 @@ function run(win) {
     }
   }
 
+  // ── AND AN EXTERIOR DOOR KEEPS SIX INCHES OF ITS WALL BARE ────────────
+  //
+  // Movie, 28 Sep, straight after the stone reached the sill: *"we should put
+  // a 6" 'threshold' just blank spot where they can install pfm drip edge
+  // under the door to the edge of the DECK - which i will be adding to in
+  // front of the higher up exterior doors"*, then *"I will be adding DECK and
+  // COVERED deck later"*. Asked which doors, he said *"House exterior doors
+  // only"*; asked how it ends, *"Down from the door, with a line"*.
+  //
+  // ON THE FIXTURE THAT HAS ONE. repro-garage-house's four doors are all on
+  // garage walls, so the block above cannot see this at all -- it would have
+  // reported a clean sheet for a feature that never drew. This fixture has a
+  // house door on the main floor and a garage door and man door beside it,
+  // which is the whole claim in one drawing: one gets the strip, the others
+  // do not.
+  //
+  // EACH DOOR IS FOUND BY ITS OWN PAINTED BOX rather than by re-deriving
+  // where its bottom is. A garage door in a buck stands on the slab and a
+  // house door on a half-inch threshold; both are already worked out by the
+  // painter, and the recess fill is that answer drawn. So the probe reads the
+  // box and asks what is 6" under it, which is the same question for both.
+  {
+    const MARK = '#ff00ff';
+    const bareFt = 6 / 12;
+    const tSaved = JSON.parse(fs.readFileSync(path.join(ROOT, 'proto',
+      'repro-2storey-garage-beam.draft'), 'utf8'));
+    const tMainId = Number(buildEnv(win, tSaved).floorLevels()[0].id);
+    const tClad = JSON.parse(JSON.stringify(tSaved));
+    tClad.walls.forEach(w => {
+      if (w.body || Number(w.levelId) !== tMainId) return;
+      w.finish = 'ledgestone';
+    });
+    const tEnv = buildEnv(win, tClad);
+    const wallsById = new Map(tEnv.walls().map(w => [w.id, w]));
+    const doors = tEnv.fenestrations().filter(f => f.type === 'door');
+    const houseDoors = doors.filter(f => {
+      const w = wallsById.get(f.wallId);
+      return w && !w.body;
+    });
+    check('threshold fixture: it has a house exterior door AND garage doors',
+      houseDoors.length > 0 && doors.length > houseDoors.length,
+      `${houseDoors.length} house of ${doors.length} doors`);
+
+    const seen = [];
+    standardElevationCuts(tEnv).forEach(cut => {
+      // THE SAME MARKER AS THE BLOCK ABOVE, and one paint rather than two:
+      // the strip's place in the order is read off the very sheet its
+      // geometry is read off, so the two can never be about different paints.
+      const FP2 = win.DraftFinishPatterns;
+      const realDraw2 = FP2.drawFinish;
+      win.DraftFinishPatterns = { ...FP2,
+        drawFinish: (ctx, box, finish, inks) => {
+          const ink = ctx.strokeStyle, lw = ctx.lineWidth;
+          ctx.strokeStyle = MARK; ctx.lineWidth = 0.01;
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(1, 0); ctx.stroke();
+          ctx.strokeStyle = ink; ctx.lineWidth = lw;
+          return realDraw2(ctx, box, finish, inks);
+        } };
+      const view = paintElevation(win, tEnv, cut, { pxPerFt: 40, finishes: true });
+      win.DraftFinishPatterns = FP2;
+      const axis = view.axis;
+      const uOf = pt => pt.x * axis.x + pt.z * axis.z;
+      doors.forEach(f => {
+        const w = wallsById.get(f.wallId);
+        if (!w) return;
+        const uA = uOf(w.start), uB = uOf(w.end);
+        const len = Math.hypot(w.end.x - w.start.x, w.end.z - w.start.z);
+        if (len < 1e-6) return;
+        const uc = uA + ((uB - uA) / len) * f.offset;
+        const half = Math.abs((uB - uA) / len) * f.width / 2;
+        const lo = uc - half, hi = uc + half;
+        // SEEN EDGE ON, a door is a line and has no box; skip it rather than
+        // assert about a strip nobody could see.
+        if (hi - lo < 0.5) return;
+        if (lo < view.uMin + 0.05 || hi > view.uMax - 0.05) return;
+        // ITS OWN PAINTED BOX: the tallest 4-point fill standing on this u
+        // range. A door's recess is the only thing that shape at that width.
+        const box = view.modelFills.filter(fill => fill.pts.length === 4
+          && near(Math.min(...fill.pts.map(pt => pt.u)), lo, 0.12)
+          && near(Math.max(...fill.pts.map(pt => pt.u)), hi, 0.12))
+          .sort((a, b) => (Math.max(...b.pts.map(pt => pt.e)) - Math.min(...b.pts.map(pt => pt.e)))
+            - (Math.max(...a.pts.map(pt => pt.e)) - Math.min(...a.pts.map(pt => pt.e))))[0];
+        if (!box) return;
+        const foot = Math.min(...box.pts.map(pt => pt.e));
+        const lineAt = e => view.strokes.some(st => {
+          for (let k = 1; k < st.pts.length; k += 1) {
+            const a = st.pts[k - 1], b = st.pts[k];
+            if (b.move || b.close) continue;
+            if (Math.abs(a.e - b.e) > 0.01 || Math.abs(a.e - e) > 0.03) continue;
+            if (Math.abs(a.u - b.u) < (hi - lo) * 0.8) continue;
+            if (Math.min(a.u, b.u) < lo - 0.12 || Math.max(a.u, b.u) > hi + 0.12) continue;
+            return true;
+          }
+          return false;
+        });
+        const bare = view.modelFills.find(fill => fill.pts.length === 4
+          && fill.ink === '#fff'
+          && near(Math.min(...fill.pts.map(pt => pt.u)), lo, 0.12)
+          && near(Math.max(...fill.pts.map(pt => pt.u)), hi, 0.12)
+          && near(Math.max(...fill.pts.map(pt => pt.e)), foot, 0.03)
+          && near(Math.min(...fill.pts.map(pt => pt.e)), foot - bareFt, 0.03));
+        // ── THE CLADDING THAT COVERS THIS DOOR'S OWN WALL ───────────────
+        //
+        // NOT THE LAST ONE ON THE SHEET, which is this check being wrong
+        // first time out and saying so: a door on a FAR face is painted
+        // before a nearer face's cladding as a matter of course, and asked
+        // against the sheet's last drawFinish both house doors here came back
+        // "under the cladding" on a drawing where they are not. A marker
+        // carries the clip that was in force, so the ones that could cover
+        // this strip are the ones whose clip contains it.
+        const mid = foot - bareFt / 2;
+        //
+        // AND ONLY ITS OWN FACE'S, which `st.seq < box.seq` is: paintFace
+        // clads the wall and THEN draws the openings in it, so a marker
+        // before this door's box is this door's wall being clad. Without
+        // that, E3 -- where this door is round the back and a nearer wall's
+        // stone is painted straight over it -- reported the strip "under the
+        // cladding", which it is, and which is the drawing being right.
+        const covering = view.strokes.filter(st => st.ink === MARK && st.clip
+          && st.seq < box.seq
+          && Math.min(...st.clip.map(pt => pt.u)) < uc
+          && Math.max(...st.clip.map(pt => pt.u)) > uc
+          && Math.min(...st.clip.map(pt => pt.e)) < mid
+          && Math.max(...st.clip.map(pt => pt.e)) > mid)
+          .reduce((m, st) => Math.max(m, st.seq), -1);
+        // ── IS THIS DOOR EVEN ON THE SHEET ─────────────────────────────
+        //
+        // On E3 this house door is round the back and a nearer wall's stone
+        // is painted flat over it, box and all. Its strip is under cladding
+        // there and that is the drawing being RIGHT, so the claim below is
+        // only made where the door can be seen. Asked without this, the
+        // check called the back of the house a defect.
+        //
+        // ASKED AS "IS THE STRIP THE LAST THING PAINTED THERE", which is the
+        // only form that works. One nearer FILL containing the whole strip
+        // was the first try and it missed: on E3 what covers this door is a
+        // nearer wall's rim band AND its face, two fills meeting on the
+        // storey line, and neither contains the strip by itself.
+        const midU = uc, midE = foot - bareFt / 2;
+        const over0 = view.modelFills.filter(fill =>
+          Math.min(...fill.pts.map(pt => pt.u)) <= midU
+          && Math.max(...fill.pts.map(pt => pt.u)) >= midU
+          && Math.min(...fill.pts.map(pt => pt.e)) <= midE
+          && Math.max(...fill.pts.map(pt => pt.e)) >= midE)
+          .reduce((m, fill) => Math.max(m, fill.seq), -1);
+        const covered = !bare || bare.seq !== over0;
+        // ── AND IS ANY INK LAID INSIDE THE STRIP AFTER IT ───────────────
+        //
+        // THE DIRECT QUESTION, replacing a seq comparison that could not ask
+        // it. "The strip's fill is later than the cladding's marker" needed
+        // to know which drawFinish was this door's own FACE, and every proxy
+        // for that was wrong somewhere: before the box missed a pass added
+        // after it, and the sheet's last marker condemned every far wall.
+        // Whether a blank spot is blank is not a question about order at
+        // all -- it is whether anything is drawn in it.
+        //
+        // THE CLOSING LINE IS NOT INK IN IT: it sits ON the bottom edge, and
+        // the probe asks about segment midpoints strictly inside.
+        const bareBot = foot - bareFt;
+        const inStrip = st => {
+          for (let k = 1; k < st.pts.length; k += 1) {
+            const a = st.pts[k - 1], b = st.pts[k];
+            if (b.move || b.close) continue;
+            const mu = (a.u + b.u) / 2, me = (a.e + b.e) / 2;
+            if (me < bareBot + 0.02 || me > foot - 0.02) continue;
+            if (mu < lo + 0.02 || mu > hi - 0.02) continue;
+            return true;
+          }
+          return false;
+        };
+        seen.push({ cut: cut.id, id: f.id, house: !wallsById.get(f.wallId).body,
+          foot, line: lineAt(bareBot), bare: !!bare, covered, covering,
+          over: bare ? view.strokes.filter(st => st.seq > bare.seq && inStrip(st)).length : 0 });
+      });
+    });
+
+    check('threshold fixture: both a house door and a garage door were painted '
+      + 'with a box to measure', seen.some(d => d.house) && seen.some(d => !d.house),
+      seen.map(d => `${d.cut}/${d.id}${d.house ? '' : ' (garage)'}`).join(', ') || 'none');
+
+    const houseSeen = seen.filter(d => d.house);
+    const missingBare = houseSeen.filter(d => !d.bare)
+      .map(d => `${d.cut}/${d.id} foot ${ftIn(d.foot)}`);
+    check('an exterior HOUSE door keeps 6" of bare wall under it',
+      missingBare.length === 0 && houseSeen.length > 0,
+      missingBare.length ? missingBare.join(', ') : `${houseSeen.length} door view(s)`);
+    const missingLine = houseSeen.filter(d => !d.line)
+      .map(d => `${d.cut}/${d.id} probed ${ftIn(d.foot - bareFt)}`);
+    check('and it is closed by a line, not left open', missingLine.length === 0,
+      missingLine.join(', '));
+    // ── AND IT IS LAID OVER THE CLADDING, NOT UNDER IT ─────────────────
+    //
+    // A blank spot that the stone is painted on top of is not a blank spot.
+    // Read as a seq, the same way the rim band is above: the strip has to go
+    // down after every drawFinish on the sheet it belongs to.
+    const clad = houseSeen.filter(d => d.covering >= 0 && !d.covered);
+    check('threshold fixture: the strip really is cut into CLADDING, on a door '
+      + 'the sheet actually shows',
+      clad.length > 0, `${clad.length} of ${houseSeen.length} door view(s)`);
+    const painted = clad.filter(d => !d.bare || d.over > 0)
+      .map(d => `${d.cut}/${d.id} ${d.bare ? `${d.over} stroke(s) in it` : 'no strip'}`);
+    check('and the strip is BARE -- nothing is drawn inside it after it',
+      painted.length === 0, painted.join(', '));
+
+    const garageSeen = seen.filter(d => !d.house);
+    const extra = garageSeen.filter(d => d.bare || d.line)
+      .map(d => `${d.cut}/${d.id} foot ${ftIn(d.foot)}`);
+    check('and a GARAGE door gets none -- it stands on a slab with no deck '
+      + 'coming to it', extra.length === 0, extra.join(', '));
+  }
+
   return missed;
 }
 
@@ -2713,6 +2924,43 @@ const MUTATIONS = [
     `      ...wallItems.filter(item => !item.band),
       ...roofFills.map(fill => ({ depth: fill.depth, go: () => paintRoof(fill) })),
       ...wallItems.filter(item => item.band),`)],
+  // ── AND THE BARE STRIP UNDER AN EXTERIOR DOOR ───────────────────────
+  ['an exterior door is clad straight past its threshold, with no bare strip',
+    src => src.replace("        if (opts && opts.finishes && f.type === 'door' && !face.garage && !f.garage) {",
+      "        if (false && opts && opts.finishes && f.type === 'door' && !face.garage && !f.garage) {")],
+  ['a GARAGE door gets the strip too, on a slab with no deck coming to it',
+    src => src.replace("        if (opts && opts.finishes && f.type === 'door' && !face.garage && !f.garage) {",
+      "        if (opts && opts.finishes && f.type === 'door') {")],
+  // HUNG OFF THE WALL'S FLOOR AGAIN rather than off the door's own bottom.
+  // On a house door that is half an inch, which is the threshold -- small,
+  // and it is the whole difference between a strip that follows a door up a
+  // storey and one that only happens to be right on the main floor.
+  ['the bare strip hangs off the floor, not off the door bottom',
+    src => src.replace('          const bare = reaches - DOOR_SILL_BARE_IN / 12;',
+      '          const bare = floor - DOOR_SILL_BARE_IN / 12;')
+      .replace('            ctx.fillRect(bx0, Y(reaches), bx1 - bx0, (reaches - bare) * pxPerFt);',
+        '            ctx.fillRect(bx0, Y(floor), bx1 - bx0, (floor - bare) * pxPerFt);')],
+  ['the strip is a foot, not the six inches he asked for',
+    src => src.replace('  const DOOR_SILL_BARE_IN = 6;', '  const DOOR_SILL_BARE_IN = 12;')],
+  ['the strip is left open at the bottom, with no line under it',
+    src => src.replace(`            ctx.beginPath();
+            ctx.moveTo(bx0, Y(bare));
+            ctx.lineTo(bx1, Y(bare));
+            ctx.stroke();`, '            ctx.beginPath();')],
+  // AND THE CLADDING GOES BACK OVER IT. A blank spot the stone is painted on
+  // top of is not a blank spot, and paintFace is where that order lives: it
+  // clads the wall and then draws the openings in it. One more call at the
+  // end is the whole defect.
+  ['the cladding is laid back over the bare strip',
+    src => src.replace(`      });
+    };
+
+    // ── A ROOF IS A SURFACE, AND IT JOINS THE PAINTER'S SORT ─────────────`,
+    `      });
+      if (opts && opts.finishes) paintFaceFinish(geom);
+    };
+
+    // ── A ROOF IS A SURFACE, AND IT JOINS THE PAINTER'S SORT ─────────────`)],
   ['the rim bands are painted before every wall, so the storey below keeps its head line',
     src => src.replace(`      ...wallItems,
       ...roofFills.map(fill => ({ depth: fill.depth, go: () => paintRoof(fill) })),`,

@@ -498,6 +498,27 @@ if (!window.DraftCutView) {
   // showing ...) and usually there is one on exterior doors". An overhead
   // door takes none -- it seals to the slab.
   const DOOR_THRESHOLD_IN = 0.5;
+  // ── AND THE BARE STRIP UNDER AN EXTERIOR DOOR ─────────────────────────
+  //
+  // Movie, 28 Sep, having just got the stone to run under his front door:
+  // *"we should put a 6\" 'threshold' just blank spot where they can install
+  // pfm drip edge under the door to the edge of the DECK - which i will be
+  // adding to in front of the higher up exterior doors"*, and *"I will be
+  // adding DECK and COVERED deck later"*.
+  //
+  // SO IT IS SIX INCHES OF NOTHING, hung off the door's own bottom, with a
+  // line under it: prefinished metal goes there and the deck lands on it.
+  // The cladding is painted first and this is laid back over it, which is
+  // the same way the band under a water table is done a few hundred lines
+  // down -- paint it, then take it away where something else belongs.
+  const DOOR_SILL_BARE_IN = 6;
+  // WHAT THE TRIM ADDS EACH SIDE, AND THERE IS NO TRIM YET. He asked for the
+  // strip to run *"the full with of DOOR + TRIM (if trim is added)"*, so the
+  // width is one expression rather than a number written twice: nothing
+  // today, and whatever the trim is the day it lands. Anything else that has
+  // to follow a door's trim asks HERE instead of carrying its own copy --
+  // two copies of a width is two widths, eventually.
+  const doorTrimFt = fen => (Number(fen && fen.trimWidth) > 0 ? Number(fen.trimWidth) : 0);
   // The overhead door's wall, as an origin and a unit normal POINTING INTO THE
   // GARAGE, or null.
   //
@@ -4007,6 +4028,37 @@ if (!window.DraftCutView) {
         const infront = dips && exposed.some(o => o.depth > face.depth + 1
           && o.lo < uc + half - 0.05 && o.hi > uc - half + 0.05);
         const bottom = infront ? floor : reaches;
+        // ── AND AN EXTERIOR DOOR KEEPS ITS SIX INCHES BARE ─────────────
+        //
+        // See DOOR_SILL_BARE_IN. HUNG OFF `reaches`, which is the door's own
+        // bottom -- the half-inch threshold on a house door -- so the strip
+        // follows the door up a storey without being told where the floor is.
+        // On the main floor that puts it across the top of the rim band,
+        // which is exactly where the stone had just started reaching.
+        //
+        // HOUSE DOORS ONLY, which is his answer asked: *"House exterior doors
+        // only"*. A garage's man door and its overhead door stand on a slab
+        // with no rim band under them and no deck coming to them.
+        //
+        // OFF THE SAME SWITCH AS THE CLADDING. The strip is a hole IN the
+        // cladding; on a construction elevation there is no cladding for it
+        // to be a hole in, and those sheets are line work nobody asked to
+        // change. Say the word and it goes on both.
+        if (opts && opts.finishes && f.type === 'door' && !face.garage && !f.garage) {
+          const trimHalf = half + Math.abs(du) * doorTrimFt(f);
+          const bx0 = X(Math.max(uc - trimHalf, uMin));
+          const bx1 = X(Math.min(uc + trimHalf, uMax));
+          const bare = reaches - DOOR_SILL_BARE_IN / 12;
+          if (bx1 - bx0 > 0) {
+            ctx.fillStyle = C.face;
+            ctx.fillRect(bx0, Y(reaches), bx1 - bx0, (reaches - bare) * pxPerFt);
+            ctx.strokeStyle = INK; ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(bx0, Y(bare));
+            ctx.lineTo(bx1, Y(bare));
+            ctx.stroke();
+          }
+        }
         ctx.fillStyle = C.recess;
         ctx.strokeStyle = INK; ctx.lineWidth = 1;
         ctx.fillRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
