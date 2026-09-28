@@ -1445,11 +1445,22 @@
         const entryPkgFt = (entry.joistDepthIn + entry.sheathingIn) / 12;
         return {
           floors: [
-            bilevelLevel(ENTRY_LEVEL_ID, 'ENTRY', split.woodFillHeightFt - entryPkgFt),
-            bilevelLevel(3, 'MAIN FL', split.mainWallHeightFt, {
+            // WHICH HALF OF THE DRAWING EACH DECK IS SEEN ON. Movie, 28 Sep,
+            // over a section with every level banded on both halves: "the
+            // main floor should only show on the right and entry and 2nd
+            // floor above garage only on the left".
+            //
+            // The cut runs down the stairwell, which is the whole reason it
+            // is cut 7 ft in rather than the bungalow's 4: the entry landing
+            // and the balcony over the garage are what you face, and the main
+            // floor is beyond the stair, so it shows on the far edge drawn
+            // back from past the break. See buildWallSection's deckAt.
+            { ...bilevelLevel(ENTRY_LEVEL_ID, 'ENTRY',
+              split.woodFillHeightFt - entryPkgFt), deckAt: 'near' },
+            { ...bilevelLevel(3, 'MAIN FL', split.mainWallHeightFt, {
               joistDepthIn: split.mainJoistDepthIn,
               sheathingIn: split.mainSheathingIn,
-            }),
+            }), deckAt: 'far' },
             // THE LOWER SECOND FLOOR, and the one level on any section this
             // page draws that does NOT stand on the level below it. Movie,
             // 16 Sep: "the main floor area doesn't have a 2nd floor over it
@@ -1478,6 +1489,7 @@
               // AND IT STOPS. Past the balcony the main area is open to its
               // own ceiling, which is the step Movie drew on the section.
               extentFt: split.upperExtentFt,
+              deckAt: 'near',
             }] : []),
           ],
           // MAIN FL is the datum on every drawing, and here it is not floors[0]
@@ -1504,8 +1516,15 @@
           // for a stair to land on.
           cutDepthFt: BILEVEL_CUT_FT,
           stairs: true,
-          // Movie, 16 Sep: "we probably won't see any eaves on this one".
-          eaves: false,
+          // AND THE EAVE IS BACK ON. Movie, 16 Sep, before the garage was
+          // drawn: "we probably won't see any eaves on this one" -- the slice
+          // was cut at the wall the garage shares, so there was nothing to
+          // see. There is now: the garage's own roof is a storey lower, and
+          // the house's gable hangs over it in plain view. Movie, 28 Sep:
+          // "the left eave on the house is cut off can you add that back
+          // one". The far edge has always drawn its eave; this is the near
+          // one, so the two ends of the slice finally match.
+          eaves: true,
         };
       };
 
