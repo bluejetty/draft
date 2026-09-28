@@ -901,7 +901,14 @@
     writing-mode:vertical-rl; text-transform:uppercase; }
   .rail-tab:hover { color: var(--accent); border-color: var(--accent); }
   .rail-tab[hidden] { display:none; }
-  #left-tab { left:0; border-left:none; border-radius:0 4px 4px 0; }
+  /* THE LEFT EDGE CARRIES TWO NOW, capped and stacked exactly as the right
+     edge is: 32vh each, the second starting a tab plus 8px down. #left-tab
+     kept .rail-tab's 52vh while it was alone, which would have run it into
+     its new neighbour on a short window -- the same overlap the right edge's
+     note was written about. */
+  #left-tab, #finish-tab { left:0; border-left:none; border-radius:0 4px 4px 0;
+    max-height:32vh; }
+  #finish-tab { top: calc(var(--rail-top) + 32vh + 8px); }
   /* The right tabs read bottom-to-top so both edges' tabs run outward from
      the edge they hang on. */
   #right-tab, #previews-tab { right:0; border-right:none;
