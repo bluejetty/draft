@@ -105,22 +105,41 @@ test('band 3 ignores a foundation edit in band 1', async ({ page }) => {
   expect(await shoot(page)).toBe(before);
 });
 
-// LABELS THAT LAND ON EACH OTHER SAY NOTHING. The same invariant band 1 and 2
-// carry: a thickened edge, a slab and a floor-over-grade are inches apart and
-// all three deserve their own line, so the de-collision pass has to run here
-// too rather than being a thing bands 1 and 2 happen to have.
-test('band 3 labels do not overlap each other', async ({ page }) => {
-  await page.goto('/PROJECT.html?type=detached');
-  await expect(page.locator('#detached-canvas')).toBeVisible();
-  await page.waitForTimeout(400);
-
-  const boxes = await page.locator('#detached-wrap .detail-tag').evaluateAll(nodes =>
+// THE DRAWING SAYS NOTHING THE SCHEDULE ALREADY SAYS. Movie, 28 Sep, marked
+// seven grey words off this section in orange -- FASCIA, OVERHANG, DOOR HEAD,
+// WALL HT down the right, SLAB, TOP CONC. OVER GRADE and the foundation's own
+// name down the left -- and every one of them was the name of the row printed
+// an inch away. "remove the extra text from the section".
+const tagBoxes = page =>
+  page.locator('#detached-wrap .detail-tag').evaluateAll(nodes =>
     nodes.filter(n => n.style.display !== 'none' && n.textContent.trim())
       .map(n => {
         const r = n.getBoundingClientRect();
         return { text: n.textContent.trim(), top: r.top, bottom: r.bottom, left: r.left, right: r.right };
       }));
-  expect(boxes.length).toBeGreaterThan(3);
+
+test('the section carries none of the schedule\'s own words', async ({ page }) => {
+  await page.goto('/PROJECT.html?type=detached');
+  await expect(page.locator('#detached-canvas')).toBeVisible();
+  await page.waitForTimeout(400);
+
+  expect((await tagBoxes(page)).map(b => b.text)).toEqual([]);
+});
+
+// LABELS THAT LAND ON EACH OTHER SAY NOTHING. The same invariant band 1 and 2
+// carry, and band 3 still needs it: the storey above keeps two tags, because
+// ROOM WALL HT and the garage's own WALL HT would otherwise be one word twice
+// on a drawing with no heads to tell them apart.
+test('band 3 labels do not overlap each other', async ({ page }) => {
+  await page.goto('/PROJECT.html?type=detached');
+  await expect(page.locator('#detached-canvas')).toBeVisible();
+  await press(page, 'GRADE BEAM').click();
+  await page.waitForTimeout(300);
+  await page.locator('[data-detached-value="roomOver"]').click();
+  await page.waitForTimeout(400);
+
+  const boxes = await tagBoxes(page);
+  expect(boxes.length).toBeGreaterThan(1);
 
   for (let i = 0; i < boxes.length; i++) {
     for (let j = i + 1; j < boxes.length; j++) {

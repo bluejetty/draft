@@ -1421,6 +1421,10 @@ if (!window.DraftProjectPage) {
   const buildDetachedGarageSection = values => {
     const g = values.garage;
     const roof = values.roof;
+    // HOW MUCH OF THE BUILDING THIS SLICE CARRIES. CUT_DEPTH_FT for the slice
+    // itself; the far edge beyond the break asks for its own, shorter run --
+    // see buildDetachedFarEaveSection.
+    const cut = values.cutDepthFt ?? CUT_DEPTH_FT;
     const parts = [];
     const anchors = {};
     const line = (x1, y1, x2, y2, weight = 1.5) => parts.push({ kind: 'line', x1, y1, x2, y2, weight });
@@ -1458,13 +1462,25 @@ if (!window.DraftProjectPage) {
       const fieldBot = -slabFt;
       const edgeBot = -edgeFt;
       const taperRun = Math.max(0, edgeFt - slabFt);
-      line(0, 0, CUT_DEPTH_FT, 0, 2);                       // slab top, LEVEL
+      // CLAMPED TO THE CUT, all three of them. The slice is 4 ft deep and a
+      // 1'-0" edge with its taper is 1'-8" of that, so nothing here ever ran
+      // long -- until the far edge asked for the same detail in 2 ft. Past
+      // the cut the taper would draw backwards and the field underside would
+      // run the wrong way, which reads as a drafting error rather than as a
+      // slice that is simply shorter than the detail it carries.
+      const taperSlope = taperRun > 0 ? (fieldBot - edgeBot) / taperRun : 0;
+      const taperEnd = Math.min(edgeFt + taperRun, cut);
+      line(0, 0, cut, 0, 2);                                // slab top, LEVEL
       line(0, 0, 0, edgeBot, 2);                            // outer face of the edge
-      line(0, edgeBot, edgeFt, edgeBot, 2);                 // underside of the edge
-      line(edgeFt, edgeBot, edgeFt + taperRun, fieldBot, 1.5);  // the 45 taper
-      line(edgeFt + taperRun, fieldBot, CUT_DEPTH_FT, fieldBot, 1.5); // field underside
+      line(0, edgeBot, Math.min(edgeFt, cut), edgeBot, 2);  // underside of the edge
+      // AT ITS OWN SLOPE, WHATEVER IT IS CUT SHORT AT. Clamping the END POINT
+      // to the slice and leaving the drop alone would draw every taper at 45
+      // degrees by construction -- including one whose run had gone wrong,
+      // which is the one thing this line exists to show.
+      line(edgeFt, edgeBot, taperEnd, edgeBot + (taperEnd - edgeFt) * taperSlope, 1.5);
+      if (taperEnd < cut) line(taperEnd, fieldBot, cut, fieldBot, 1.5); // field underside
       anchors.fdnDepth = { x: edgeFt * 0.45, y: edgeBot / 2 };
-      anchors.slabThickness = { x: CUT_DEPTH_FT * 0.78, y: fieldBot / 2 };
+      anchors.slabThickness = { x: cut * 0.78, y: fieldBot / 2 };
       lowestY = edgeBot;
     } else {
       // GRADE BEAM AND FROST WALL both stand their concrete PROUD of the slab,
@@ -1474,7 +1490,7 @@ if (!window.DraftProjectPage) {
       const concTop = gradeY + GRADE_BELOW_CONCRETE_IN / 12;
       const widthFt = (foundation === 'frostwall' ? 8 : 12) / 12;
       const bottom = concTop - fdnFt;
-      line(widthFt, 0, CUT_DEPTH_FT, 0, 2);                 // slab top, inside the concrete
+      line(widthFt, 0, cut, 0, 2);                          // slab top, inside the concrete
       line(0, concTop, widthFt, concTop, 2);                // top of concrete
       line(0, concTop, 0, bottom, 2);
       line(widthFt, concTop, widthFt, bottom, 2);
@@ -1483,10 +1499,10 @@ if (!window.DraftProjectPage) {
       // footing depth, which varies per drawing". Here the depth is a cell the
       // drafter types, so the wall ends where they said it ends.
       line(0, bottom, widthFt, bottom, 2);
-      line(widthFt, -slabFt, CUT_DEPTH_FT, -slabFt, 1.5);   // slab underside, on fill
+      line(widthFt, -slabFt, cut, -slabFt, 1.5);            // slab underside, on fill
       line(widthFt, 0, widthFt, -slabFt, 1);                // slab against the concrete
       anchors.fdnDepth = { x: widthFt * 0.5, y: (concTop + bottom) / 2 };
-      anchors.slabThickness = { x: CUT_DEPTH_FT * 0.78, y: -slabFt / 2 };
+      anchors.slabThickness = { x: cut * 0.78, y: -slabFt / 2 };
       wallBaseY = concTop;
       lowestY = bottom;
     }
@@ -1567,10 +1583,10 @@ if (!window.DraftProjectPage) {
     if (g.roomOver) {
       const joistFt = g.overJoistIn / 12;
       const deckFt = joistFt + g.overSheathingIn / 12;
-      line(0, plateY, CUT_DEPTH_FT, plateY, 2);               // joist underside = ceiling
-      line(0, plateY + joistFt, CUT_DEPTH_FT, plateY + joistFt, 1);
-      line(0, plateY + deckFt, CUT_DEPTH_FT, plateY + deckFt, 2);
-      anchors.overFloor = { x: CUT_DEPTH_FT * 0.42, y: plateY + joistFt / 2 };
+      line(0, plateY, cut, plateY, 2);                        // joist underside = ceiling
+      line(0, plateY + joistFt, cut, plateY + joistFt, 1);
+      line(0, plateY + deckFt, cut, plateY + deckFt, 2);
+      anchors.overFloor = { x: cut * 0.42, y: plateY + joistFt / 2 };
       const deck = plateY + deckFt;
       const overWallFt = g.overWallHeightFt ?? 0;
       const overStudFt = (g.overWallIn ?? values.wallThicknessIn) / 12;
@@ -1596,23 +1612,47 @@ if (!window.DraftProjectPage) {
     // roofBase, NOT the garage plate: with a storey over the garage the truss
     // sits on the ROOM's plate, and keying it to the garage's is exactly how
     // band 1's ROOM OVER roofs went wrong.
-    const truss = roofTruss({ roofBase, cut: CUT_DEPTH_FT, roof });
+    const truss = roofTruss({ roofBase, cut, roof });
     parts.push(...truss.parts);
     Object.assign(anchors, truss.anchors);
 
-    const topY = roofBase + truss.riseAt(CUT_DEPTH_FT);
-    parts.push({ kind: 'break', x: CUT_DEPTH_FT, y1: lowestY - 0.3, y2: topY + 0.3 });
+    const topY = roofBase + truss.riseAt(cut);
+    parts.push({ kind: 'break', x: cut, y1: lowestY - 0.3, y2: topY + 0.3 });
 
     return {
       parts,
       anchors,
       extents: {
         minX: -roof.overhangFt - 1.4,
-        maxX: CUT_DEPTH_FT + 0.4,
+        maxX: cut + 0.4,
         minY: lowestY - 1.0,
         maxY: topY + 0.9,
       },
     };
+  };
+
+  // THE GARAGE'S OTHER EAVE, AND IT IS THE HOUSE'S OWN TRICK. Movie, 28 Sep:
+  // "move the ROOF over to the LEFT and update it to similar to BUNGALOW
+  // roof". The house has been drawn as a SLICE of a wider house since 16 Sep
+  // -- near eave, one break line, then the far edge back from beyond it with
+  // its own eave on -- and the detached garage was the one building on the
+  // page whose roof simply stopped at the break, climbing off the top right
+  // corner with nothing to come back to. Its roof now reads the way the
+  // bungalow's does, and the building sits under the middle of it rather than
+  // at its high end.
+  //
+  // IT IS THE SAME BUILDER FLIPPED, not a second hand-drawn eave, so the two
+  // edges can never drift into disagreeing about the roof, the foundation or
+  // the storey above -- the same reason buildFarEaveSection is a mirror.
+  const buildDetachedFarEaveSection = values => {
+    const cut = values.cutDepthFt ?? CUT_DEPTH_FT;
+    // NO LABELS COME BACK WITH IT. Movie marked every grey tag off this
+    // drawing on the same day, so there is nothing left for `keep` to carry
+    // and the schedule beside the section is where the numbers read.
+    return mirrorSection(buildDetachedGarageSection({
+      ...values,
+      cutDepthFt: FAR_EAVE_CUT_FT,
+    }), cut + FAR_EAVE_GAP_FT + FAR_EAVE_CUT_FT, []);
   };
 
   const buildGarageSection = values => {
@@ -2482,6 +2522,7 @@ if (!window.DraftProjectPage) {
     buildFarEaveSection,
     buildGarageSection,
     buildDetachedGarageSection,
+    buildDetachedFarEaveSection,
     detachedConcreteAboveGradeIn,
     detachedFoundationDepthFt,
     buildDetachedFoundationDetail,

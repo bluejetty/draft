@@ -1857,16 +1857,18 @@
             return setDetachedFoundation(value);
           } },
         { side: 'left', key: 'fdnDepth', name: () => DETACHED_FDN_NAME[detachedFoundation()],
-          get: () => detachedFdnFt(), field: 'fdnWallHeightFt', unit: 'ftin' },
+          get: () => detachedFdnFt(), field: 'fdnWallHeightFt', unit: 'ftin',
+          anchor: false },
         { side: 'left', key: 'slabThickness', name: 'SLAB',
           get: v => v.garage.slabIn, field: 'slabThicknessIn', unit: 'in',
-          show: v => v.garage.slabIn / 12 },
+          show: v => v.garage.slabIn / 12, anchor: false },
         // HIS OWN WORDS FOR IT, 28 Sep, written over the old FLOOR OVER GRADE:
         // "TOP CONC. OVER GRADE". On two of the three foundations the floor is
         // not what stands over grade -- the concrete is, with the slab poured
         // down inside it -- so the old name was only ever right about the
         // thickened edge.
         { side: 'left', key: 'slabAboveGrade', name: 'TOP CONC. OVER GRADE',
+          anchor: false,
           get: () => projectPage
             .detachedConcreteAboveGradeIn(detachedFoundation()) / 12 },
         // THE ORDER IS BAND 1'S -- roof block, then the room-over press, then
@@ -1874,13 +1876,15 @@
         // reads.
         { side: 'right', head: 'ROOF' },
         { side: 'right', key: 'fascia', name: 'FASCIA',
-          get: v => v.roof.fasciaIn / 12 },
+          get: v => v.roof.fasciaIn / 12, anchor: false },
         { side: 'right', key: 'overhang', name: 'OVERHANG',
-          get: v => v.roof.overhangFt },
+          get: v => v.roof.overhangFt, anchor: false },
         { side: 'right', head: 'GARAGE' },
         { side: 'right', key: 'wallHeight', name: 'WALL HT',
-          get: v => v.garage.wallHeightFt, field: 'mainWallHeightFt', unit: 'ftin' },
+          get: v => v.garage.wallHeightFt, field: 'mainWallHeightFt', unit: 'ftin',
+          anchor: false },
         { side: 'right', key: 'doorHead', name: 'DOOR HEAD',
+          anchor: false,
           get: v => v.garage.wallHeightFt - projectPage.OPENING_HEAD_DROP_IN / 12 },
         // THE DOOR ONTO THE STOREY, shaped like band 1's + ROOM OVER: the
         // label IS the box, so the row is wide and carries no grey name.
@@ -2083,7 +2087,13 @@
           } else {
             el.textContent = text;
           }
-          const at = has && anchors[row.key];
+          // `anchor: false`, band 1's flag, and here it means something a
+          // little different: the part IS on the drawing, but its name is
+          // already printed in the schedule an inch to the right. Movie,
+          // 28 Sep, marked every one of these off the drawing in orange --
+          // "remove the extra text from the section". A tag that repeats the
+          // row beside it is not an annotation, it is the same word twice.
+          const at = has && row.anchor !== false && anchors[row.key];
           tag.style.display = at ? '' : 'none';
           if (!at) return;
           // THE DRAWING MAY NEED A LONGER NAME THAN THE SCHEDULE DOES. Under
@@ -3604,6 +3614,9 @@
         if (detachedCanvas) {
           detachedCanvas.paintedSection = projectPage.paintSections(detachedCanvas, [
             projectPage.buildDetachedGarageSection(detachedValues()),
+            // The far edge of the wider garage, back from beyond the break:
+            // the slice's second eave, mirrored from the same numbers.
+            projectPage.buildDetachedFarEaveSection(detachedValues()),
           ]);
           fillDetached(detachedCanvas.paintedSection);
         }
@@ -3987,7 +4000,10 @@
       // would be a picture of the drawing as it was when the page opened.
       const miniSections = type => {
         if (type === 'detached') {
-          return [projectPage.buildDetachedGarageSection(detachedValues())];
+          return [
+            projectPage.buildDetachedGarageSection(detachedValues()),
+            projectPage.buildDetachedFarEaveSection(detachedValues()),
+          ];
         }
         if (type === 'bilevel') {
           return [
