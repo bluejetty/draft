@@ -372,3 +372,24 @@ test('no schedule row states a direction and then contradicts it', async ({ page
     .map(({ name, value }) => `${name} = ${value}`));
   expect(bad).toEqual([]);
 });
+
+// AND NOTHING UNDER THE CARD. Movie, 28 Sep, quoting the whole paragraph back:
+// "also delete all the text on the bottom". It was a zone-note explaining the
+// split -- the fill wall, the lower second floor, the disputed entry wall --
+// and every number in it is now a labelled row in the schedule beside the
+// drawing, which is where a drafter reads. Band 3 lost its own prose the same
+// day for the same reason; this is the check that keeps band 2's gone.
+test('nothing is printed under the split card', async ({ page }) => {
+  await openProject(page);
+  await expect(page.locator('#stage-bilevel .zone-note')).toHaveCount(0);
+  const trailing = await page.evaluate(() => {
+    const band = document.querySelector('#stage-bilevel .band');
+    const out = [];
+    for (let el = band.nextElementSibling; el; el = el.nextElementSibling) {
+      const text = el.textContent.trim();
+      if (text) out.push(text.slice(0, 40));
+    }
+    return out;
+  });
+  expect(trailing).toEqual([]);
+});
