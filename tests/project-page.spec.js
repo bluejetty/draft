@@ -322,12 +322,22 @@ test('the garage sill reads off the foundation sill and the MAIN FL rows are gon
   await page.goto('/PROJECT.html?type=bungalow');
   const rows = label => page.locator('#sched-garage .sched-row')
     .filter({ has: page.locator('.sched-name', { hasText: label }) });
-  await expect(rows('Garage sill off foundation sill')).toHaveCount(1);
-  await expect(rows('Garage sill off main fl')).toHaveCount(0);
-  await expect(rows('Garage floor off main fl')).toHaveCount(0);
+  // THE NAMES LOST THEIR "GARAGE", and all three had to move with it. The
+  // column was paired two to a line on 27 Sep and a row now drops the word
+  // its own head carries -- the head here reads ATTACHED GARAGE.
+  //
+  // THE TWO ZERO-COUNT LINES ARE WHY THIS IS NOT A FIND-AND-REPLACE. Left as
+  // 'Garage sill off main fl' they would still have passed, and for the
+  // wrong reason: nothing is named "Garage" anything any more, so they would
+  // read 0 whether or not the retired row had come back. A check that cannot
+  // fail is worse than no check, so they are stated in the names the page
+  // actually uses now.
+  await expect(rows('Sill off foundation sill')).toHaveCount(1);
+  await expect(rows('Sill off main fl')).toHaveCount(0);
+  await expect(rows('Floor off main fl')).toHaveCount(0);
 
   // NOT BLANK: the number is the drafter's, so the box has to show it.
-  const box = rows('Garage sill off foundation sill').locator('.sched-value');
+  const box = rows('Sill off foundation sill').locator('.sched-value');
   expect((await box.inputValue()).trim()).not.toBe('');
 });
 

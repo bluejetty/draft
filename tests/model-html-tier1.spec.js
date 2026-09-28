@@ -266,7 +266,25 @@ test.describe('MODEL.html tier 1', () => {
       // it is said out loud rather than left for someone to discover.
       './shell-bars.js',
       './palette.js', './layer-views.js', './geometry-2d.js',
-      './shared-file-store.js', './wall-types.js', './formatters.js',
+      './shared-file-store.js', './wall-types.js',
+      // THE THREE THAT MAKE A FINISH DRAW, and by this list's own rule they
+      // are the kind of entry to grow by: they DELETE a silence rather than
+      // adding a capability. cut-view's paintFaceFinish has looked for
+      // DraftFinishPatterns and paintRoof for DraftRoofPatterns on EVERY
+      // elevation since the finishes landed, and each warns to the console
+      // and draws plain when they are missing -- so this page has been taking
+      // that warning on every elevation it paints, and its elevations were
+      // never a different drawing, only the same one with the materials
+      // switched off. roof-types.js comes with them because the roof painter
+      // reads `roofingById` to know what it is drawing.
+      //
+      // THEIR HONEST COST: three more modules on a page whose whole claim is
+      // that it is cheap. They are pure pattern tables and draw nothing until
+      // asked -- `opts.finishes`, which MODEL only passes while the EXT.
+      // FINISH pane is open -- so a drafter doing construction elevations
+      // pays the parse and nothing else.
+      './roof-types.js', './finish-patterns.js', './roof-patterns.js',
+      './formatters.js',
       './cut-view.js', './drawing-format.js', './render-2d.js',
       './fixture-geometry.js', './closets.js',
       // fixture-kinds.js joined with the FIXTURE tool, and by this list's own

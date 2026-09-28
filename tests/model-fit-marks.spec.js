@@ -59,7 +59,11 @@ const chromeRects = page => page.evaluate(() => {
     return (r.width > 0 && r.height > 0)
       ? { left: r.left, right: r.right, top: r.top, bottom: r.bottom } : null;
   };
-  return ['strip', 'house-strip', 'left-tab', 'right-tab', 'previews-tab']
+  // finish-tab joins the left edge on 27 Sep, and it is named here for the
+  // same reason the others are: this list is what "clear of the chrome"
+  // MEANS, so a tab missing from it is a tab the marks are allowed to hide
+  // behind.
+  return ['strip', 'house-strip', 'left-tab', 'finish-tab', 'right-tab', 'previews-tab']
     .map(id => ({ id, r: box(id) })).filter(entry => entry.r);
 });
 

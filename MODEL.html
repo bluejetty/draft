@@ -992,8 +992,27 @@
      seven land -- the slot exists so a tool is not built against a canvas that
      is about to lose its edge. -->
 
-<button id="left-tab" class="rail-tab" type="button" data-left-tab hidden>DRAFTING TOOLS</button>
+<!-- TWO TABS ON THE LEFT EDGE NOW, the same arrangement the right has had
+     since 15 Sep and for the reason Movie gave on 27 Sep: "what about adding
+     a tab on left that is EXT FINISH and we put it in there".
+
+     THE PANE MACHINERY WAS ALREADY SIDE-AGNOSTIC in everything but its
+     wiring: `syncShell` walked every `.rail-tab[data-pane-tab]` on the page
+     and then read the RIGHT rail's open state for all of them. One variable
+     per side, not a second mechanism.
+
+     WHY A TAB AND NOT THE PROPERTIES BOX, which was my answer first and is
+     the wrong one: the band editor is the largest panel this page would
+     carry, and cramming it under a six-row tool column is what the fold was
+     already straining against. A tab also says the true thing -- you are
+     either drawing geometry or choosing materials, and the elevation is the
+     same picture either way. -->
+<button id="left-tab" class="rail-tab" type="button" data-left-tab
+  data-pane-tab="tools" data-pane-side="left" hidden>DRAFTING TOOLS</button>
+<button id="finish-tab" class="rail-tab" type="button"
+  data-pane-tab="finish" data-pane-side="left" hidden>EXT. FINISH</button>
 <aside id="left-rail" data-left-rail hidden>
+  <div data-pane="tools">
   <div id="tool-slot" data-tool-slot></div>
   <!-- PROPERTIES SITS UNDER THE TOOLS. Movie, 19 Sep: "we should designate an
        area on the model page for the PROPERTIES box (which will change
@@ -1017,6 +1036,17 @@
     <button class="props-fold" type="button" data-props-fold
       aria-expanded="true">PROPERTIES</button>
     <div id="props-slot" data-props-slot hidden></div>
+  </div>
+  </div>
+  <!-- ── EXT. FINISH ──────────────────────────────────────────────────────
+       The page it replaces stays up until this one carries the same work
+       (Movie, 27 Sep: "leave EXTFINISH up until we get the new stuff
+       sorted"), so this pane fills in slices. What it already does is the
+       half that was never MODEL's to refuse: the elevation under it paints
+       what the house is CLAD in, because cut-view has been asking for that
+       on every elevation all along and MODEL was the caller not answering. -->
+  <div data-pane="finish" id="finish-pane">
+    <p class="finish-note" data-finish-note>Click a wall on the elevation.</p>
   </div>
 </aside>
 
@@ -1240,6 +1270,15 @@
 <script src="./geometry-2d.js"></script>
 <script src="./shared-file-store.js"></script>
 <script src="./wall-types.js"></script>
+<!-- WHAT MAKES A FINISH DRAW. cut-view has asked for these on every elevation
+     since the finishes landed -- `paintFaceFinish` looks for
+     DraftFinishPatterns and `paintRoof` for DraftRoofPatterns, and each warns
+     to the console and draws plain when it is missing. MODEL has been taking
+     that warning on every elevation it paints. roof-types.js comes with them:
+     the roof painter reads `roofingById` to know what it is drawing. -->
+<script src="./roof-types.js"></script>
+<script src="./finish-patterns.js"></script>
+<script src="./roof-patterns.js"></script>
 <script src="./formatters.js"></script>
 <script src="./cut-view.js"></script>
 <script src="./drawing-format.js"></script>
@@ -3496,7 +3535,8 @@
         // `skin`: inDaylight swaps it to day for the length of the shoot, so
         // a drafter working at night still hands a client a white drawing.
         window.DraftCutView.drawCutView(cutEnv(), ctx, cssW, cssH, cut,
-          { margins: rails, colors: window.DraftCutView.inksFromSkin(skin) });
+          { margins: rails, colors: window.DraftCutView.inksFromSkin(skin),
+            finishes: finishesShowing() });
         // THE MASK CLIMBS BOTTOM TO TOP, dotted underground first, footing to
         // ridge -- the order a house is actually built in, which is why the
         // elevation is the view this plays on. Self-driving: each frame asks
@@ -4115,16 +4155,40 @@
   // on its own, so every check written against `?right=1` keeps its meaning
   // -- the pane is a second, independent fact, not a repacking of the first.
   const PANES = ['levels', 'previews'];
-  const paneShowing = () =>
-    PANES.includes(params.get('pane')) ? params.get('pane') : 'levels';
-  const setPane = pane => {
+  // AND THE LEFT EDGE HAS TWO NOW (Movie, 27 Sep: "what about adding a tab on
+  // left that is EXT FINISH and we put it in there"). The machinery below was
+  // already side-agnostic in everything but its wiring -- `syncShell` walked
+  // every tab on the page and then read the RIGHT rail's open state for all of
+  // them -- so this is one table, not a second mechanism.
+  //
+  // ITS OWN PARAM, for the reason `pane` has one: it is what the drafter is
+  // looking at, it survives a reload, and `left` still says OPEN or SHUT on
+  // its own, so every check written against `?left=1` keeps its meaning.
+  const LEFT_PANES = ['tools', 'finish'];
+  const SIDES = {
+    right: { param: 'pane', panes: PANES, first: 'levels' },
+    left: { param: 'lpane', panes: LEFT_PANES, first: 'tools' },
+  };
+  const paneOn = side => {
+    const { param, panes, first } = SIDES[side];
+    return panes.includes(params.get(param)) ? params.get(param) : first;
+  };
+  const paneShowing = () => paneOn('right');
+  // FINISHES FOLLOW THE PANE, not a setting and not always-on. cut-view's own
+  // note says why they were off: "the construction elevations are line work,
+  // and a hatch on them would be a change to every sheet in the set that
+  // nobody ordered". Both readings are right, and the pane is what tells them
+  // apart -- open EXT. FINISH and you are looking at materials, shut it and
+  // you are back to the drawing the set prints.
+  const finishesShowing = () => railOpen('left') && paneOn('left') === 'finish';
+  const setPane = (pane, side = 'right') => {
     // Pressing the tab that is already up SHUTS the rail, which is what the
     // one tab did and the gesture a drafter already has. Pressing the other
     // swaps panes and leaves it open -- shutting on a swap would make the
     // second tab cost two presses to use.
-    if (pane === paneShowing() && railOpen('right')) { setRail('right', false); return; }
-    params.set('pane', pane);
-    if (!railOpen('right')) { setRail('right', true); return; }
+    if (pane === paneOn(side) && railOpen(side)) { setRail(side, false); return; }
+    params.set(SIDES[side].param, pane);
+    if (!railOpen(side)) { setRail(side, true); return; }
     syncUrl();
     syncShell();
     paint();
@@ -4134,9 +4198,15 @@
     const leftOpen = railOpen('left');
     const leftPanel = document.getElementById('left-rail');
     leftPanel.hidden = !leftOpen;
-    const leftTab = document.getElementById('left-tab');
-    leftTab.hidden = false;
-    leftTab.setAttribute('aria-expanded', String(leftOpen));
+    // THE LEFT RAIL SHOWS ONE PANE AT A TIME TOO. Its tabs are marked up and
+    // lit by the shared loop below, which is why the two explicit lines that
+    // used to set #left-tab here are gone rather than kept beside it: a tab
+    // whose state was written twice is a tab that can disagree with itself.
+    const leftPane = paneOn('left');
+    leftPanel.dataset.paneShowing = leftPane;
+    leftPanel.querySelectorAll(':scope > [data-pane]').forEach(el => {
+      el.hidden = el.dataset.pane !== leftPane;
+    });
 
     const rightOpen = railOpen('right');
     const rightPanel = document.getElementById('right-rail');
@@ -4150,17 +4220,22 @@
       el.hidden = el.dataset.pane !== pane;
     });
     [...document.querySelectorAll('.rail-tab[data-pane-tab]')].forEach(tab => {
+      const side = tab.dataset.paneSide === 'left' ? 'left' : 'right';
+      const open = side === 'left' ? leftOpen : rightOpen;
+      const showing = side === 'left' ? leftPane : pane;
       tab.hidden = false;
       tab.setAttribute('aria-expanded',
-        String(rightOpen && tab.dataset.paneTab === pane));
-      tab.setAttribute('aria-selected', String(tab.dataset.paneTab === pane));
+        String(open && tab.dataset.paneTab === showing));
+      tab.setAttribute('aria-selected', String(tab.dataset.paneTab === showing));
     });
   };
 
-  document.getElementById('left-tab')
-    .addEventListener('click', () => setRail('left', !railOpen('left')));
+  // #left-tab's own listener is GONE, not kept beside this one: it now carries
+  // data-pane-tab, so the loop below would have bound it a second time and the
+  // two would have fought -- one toggling the rail, the other swapping panes.
   [...document.querySelectorAll('.rail-tab[data-pane-tab]')].forEach(tab => {
-    tab.addEventListener('click', () => setPane(tab.dataset.paneTab));
+    tab.addEventListener('click', () =>
+      setPane(tab.dataset.paneTab, tab.dataset.paneSide === 'left' ? 'left' : 'right'));
   });
 
   // ── the build bar, and the seam behind it ─────────────────────────────────
