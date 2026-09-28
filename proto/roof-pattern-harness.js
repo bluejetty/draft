@@ -443,7 +443,7 @@ function run(win) {
   // ── THE FRAME IS READ OFF THE FACE ────────────────────────────────────
   const POLY = [{ x: 0, y: 400 }, { x: 400, y: 400 }, { x: 200, y: 200 }];
   const gable = P.frameFor(POLY, POLY[0], POLY[1], PX);
-  check('a face and its eave give a frame that spans the eave',
+  check('a face and its eave give a frame that spans the face',
     gable && Math.abs(gable.wide - 400) < 0.5, gable ? `${gable.wide.toFixed(0)}px` : 'nothing');
   check('and one that reaches the ridge',
     gable && Math.abs(gable.high - 200) < 0.5, gable ? `${gable.high.toFixed(0)}px` : 'nothing');
@@ -454,6 +454,55 @@ function run(win) {
   check('up points into the face however the eave is handed over',
     gable && flipped && gable.uy < 0 && flipped.uy < 0,
     `${gable?.uy.toFixed(2)} / ${flipped?.uy.toFixed(2)}`);
+  // ── A FACE WIDER THAN ITS OWN EAVE ───────────────────────────────────
+  //
+  // Movie, 28 Sep: *"the ASPHALT shingles they don't fill in the full roof
+  // area"*. They did not. `high` has always been the POLYGON's reach -- the
+  // loop in frameFor walks every corner and takes the furthest -- but `wide`
+  // was the EAVE SEGMENT's own length, so a face running past the ends of the
+  // eave it was built from got a frame too narrow for it and the courses
+  // stopped with bare roof beside them.
+  //
+  // MEASURED on repro-movie-bands, an 8-point L over a house and its garage
+  // wing, across all four elevations: EIGHT of twenty-two faces had a frame
+  // narrower than their own face, by 460-480px each, and several began at a
+  // NEGATIVE offset -- so the bare strip could be at either end.
+  //
+  // EVERY FIXTURE ABOVE IS BLIND TO IT, and that is why this one is here.
+  // POLY is a triangle whose eave IS its full width, so eave and face measure
+  // the same and the check passes whichever the code took. The old assertion
+  // even said so out loud -- "a frame that spans the EAVE" -- and was true of
+  // a fault that left a quarter of some roofs bare. This is the same shape as
+  // the FLAT frame further up, where 300px of slope over an 18.75px course is
+  // exactly 16 courses and no part course is ever left: a fixture that cannot
+  // separate two rules will report the wrong one as proved.
+  //
+  // So: an eave along the BOTTOM of a face that overhangs it at both ends.
+  const WIDE_FACE = [
+    { x: -100, y: 400 }, { x: 500, y: 400 },   // the face's true extent
+    { x: 500, y: 300 }, { x: 200, y: 200 }, { x: -100, y: 300 },
+  ];
+  const EAVE_A = { x: 0, y: 400 }, EAVE_B = { x: 400, y: 400 };  // 400 of 600
+  const widePoly = P.frameFor(WIDE_FACE, EAVE_A, EAVE_B, PX);
+  check('a face wider than its eave gets a frame as wide as the FACE',
+    widePoly && Math.abs(widePoly.wide - 600) < 0.5,
+    widePoly ? `${widePoly.wide.toFixed(0)}px against a 400px eave and a 600px face`
+      : 'nothing');
+  // AND THE ORIGIN MOVES WITH IT, or the width is spent in the wrong place:
+  // the frame would be long enough and still start 100px inside the face,
+  // leaving the same bare strip at one end and overhanging at the other.
+  check('and starts where the face starts, not where the eave does',
+    widePoly && Math.abs(widePoly.ox - (-100)) < 0.5 && Math.abs(widePoly.oy - 400) < 0.5,
+    widePoly ? `origin ${widePoly.ox.toFixed(0)},${widePoly.oy.toFixed(0)} (face starts at -100,400)`
+      : 'nothing');
+  // AND SLIDING THE ORIGIN LEAVES THE HEIGHT ALONE. It moves along `ax`, and
+  // a shift along the eave axis changes no perpendicular distance -- but that
+  // is an argument, and the reason to check it is that it would be silently
+  // wrong if `high` were ever measured from `ox, oy` instead of from eaveA.
+  check('and reaching the ridge is undisturbed by that shift',
+    widePoly && Math.abs(widePoly.high - 200) < 0.5,
+    widePoly ? `${widePoly.high.toFixed(0)}px` : 'nothing');
+
   // ── AND THE TWO REFUSALS ARE TWO REFUSALS ────────────────────────────
   //
   // GUARDED TWICE IS GUARDED ONCE, which is how both of these survived first
@@ -557,6 +606,20 @@ const MUTATIONS = [
     s => sub(s, F, '          rake(ctx, frame, s, c.from, c.top);\n        }\n      }\n      ctx.stroke();\n    },\n\n    // BARREL TILE',
       '          rake(ctx, frame, s, 0, frame.high);\n        }\n      }\n      ctx.stroke();\n    },\n\n    // BARREL TILE')],
 
+  // ── AND THE HATCH REACHING THE ENDS OF THE FACE ─────────────────────
+  ['the frame is only as wide as the eave, so a face wider than it goes bare',
+    s => sub(s, F, '    let lo = Infinity, hi = -Infinity;\n'
+      + '    for (const p of poly) {\n'
+      + '      const s = (p.x - eaveA.x) * ax + (p.y - eaveA.y) * ay;\n'
+      + '      if (s < lo) lo = s;\n'
+      + '      if (s > hi) hi = s;\n'
+      + '    }\n'
+      + '    const wide = hi - lo;',
+      '    const lo = 0;\n    const wide = eaveLen;')],
+  ['the frame is wide enough and starts at the eave, so it is spent off one end',
+    s => sub(s, F, 'return { ox: eaveA.x + ax * lo, oy: eaveA.y + ay * lo,',
+      'return { ox: eaveA.x, oy: eaveA.y,')],
+
   // ── AND THE HATCH REACHING THE RIDGE ────────────────────────────────
   ['the courses stop at the last whole one, so a strip under the ridge is bare',
     s => sub(s, F, '    for (let t = step, row = 0; t - step < frame.high; t += step, row += 1) {',
@@ -586,8 +649,19 @@ const MUTATIONS = [
       '  const at = (frame, s, t) => ({ x: frame.ox + s, y: frame.oy - t });')],
   ['the frame-s up axis is assumed rather than read off the face',
     s => sub(s, F, '    if (far < 0) { ux = -ux; uy = -uy; }', '')],
+  // NAMED `eaveLen`, AND THE RENAME IS THE POINT. This mutation used to read
+  // `if (!(wide > 0.5))`, which was the EAVE's guard when `wide` was the
+  // eave's own length. Measuring `wide` off the face renamed that guard to
+  // `eaveLen` and then introduced a NEW guard spelled exactly the way the old
+  // one had been -- so the anchor went on applying cleanly while testing a
+  // different line, and mutant-anchors saw nothing wrong because the text it
+  // looks for was still there. An anchor can die by rename, which that harness
+  // catches; it can also survive a rename into a different meaning, which it
+  // cannot. The mutation surviving is what said so: 28/29 with this one
+  // reporting *** NOTHING ***, because the eaveLen guard it no longer touched
+  // was still refusing the case.
   ['an eave of no length gives a frame anyway, dividing by zero',
-    s => sub(s, F, '    if (!(wide > 0.5)) return null;', '')],
+    s => sub(s, F, '    if (!(eaveLen > 0.5)) return null;', '')],
   ['the frame stops at the eave, so a roof with no height hatches anyway',
     s => sub(s, F, '    if (!(high > 0.5)) return null;', '')],
 ];

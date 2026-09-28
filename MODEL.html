@@ -16486,6 +16486,25 @@
 
   const boot = async () => {
     resize();
+    // ── ANOTHER PAGE CAN ASK FOR A BLANK ONE, AND THE ASK IS SPENT FIRST ──
+    //
+    // Movie, 28 Sep, on the EXT. FINISH page: *"when i press NEW can you take
+    // me back to MODEL page from the EXT FINISH page and open a new blank
+    // plan"*. That page clads a drawing it does not own and has none of its
+    // own to blank, so NEW there is this page's NEW reached by a link.
+    //
+    // SPENT BEFORE THE FIRST `await`, not beside the branch that reads it.
+    // Beside the branch it is spent after the store read, and everything in
+    // that window -- a refresh, a slow IndexedDB, the read failing and
+    // returning early -- leaves the flag in the bar to blank the drafter's
+    // work a second time. tests/ext-finish-new.spec.js caught it as a URL
+    // still carrying `new=1` after the page had landed.
+    const wantsBlank = new URLSearchParams(location.search).get('new') === '1';
+    if (wantsBlank) {
+      const spent = new URL(location.href);
+      spent.searchParams.delete('new');
+      history.replaceState(null, '', spent.pathname + spent.search + spent.hash);
+    }
     let file = null;
     try {
       // loadSharedFileAt, not loadSharedFile: the file AND the revision it was
@@ -16514,6 +16533,24 @@
     // THE SAME BLANK THE NEW BUTTON GIVES, through the same function, because
     // "what an empty drawing is" is one answer. adoptAndShow marks it UNSAVED
     // on arrival, which is true: the store has never seen it.
+    // ── AND THE BLANK THE ASK ABOVE IS FOR ──────────────────────────────
+    //
+    // THE SAME BRANCH AS "NOTHING STORED", deliberately: the comment below
+    // already says why the blank comes through one function, and a second
+    // path to it here would be a second answer to the same question.
+    //
+    // AFTER THE STORE READ, so `storeRev` is real -- a drafter who presses
+    // SAVE on this blank is writing over what is there, and that write needs
+    // the revision it is replacing, not nothing.
+    //
+    // NO GUARD, AND THAT IS NOT AN OVERSIGHT. `newDrawing` asks guardUnsaved
+    // first, which is right when a drawing is on the screen with edits in it.
+    // Nothing is on the screen yet here -- boot has not adopted anything --
+    // so there is nothing to lose and nothing to ask about.
+    if (wantsBlank) {
+      await adoptAndShow(blankDrawingFile());
+      return;
+    }
     if (!file) {
       await adoptAndShow(blankDrawingFile());
       return;

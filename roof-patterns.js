@@ -308,9 +308,9 @@ if (!window.DraftRoofPatterns) {
   // and a frame cut to the triangle would stop them short of it.
   const frameFor = (poly, eaveA, eaveB, pxPerFt) => {
     const ex = eaveB.x - eaveA.x, ey = eaveB.y - eaveA.y;
-    const wide = Math.hypot(ex, ey);
-    if (!(wide > 0.5)) return null;
-    const ax = ex / wide, ay = ey / wide;
+    const eaveLen = Math.hypot(ex, ey);
+    if (!(eaveLen > 0.5)) return null;
+    const ax = ex / eaveLen, ay = ey / eaveLen;
     // UP IS PERPENDICULAR TO THE EAVE, turned toward the rest of the face.
     // Both perpendiculars are perpendicular; the one that points at the roof
     // is the one the far corners are on, so the sign is read off the face
@@ -324,7 +324,48 @@ if (!window.DraftRoofPatterns) {
     if (far < 0) { ux = -ux; uy = -uy; }
     const high = Math.abs(far);
     if (!(high > 0.5)) return null;
-    return { ox: eaveA.x, oy: eaveA.y, ax, ay, ux, uy, wide, high, pxPerFt };
+    // ── AND WIDE COMES OFF THE FACE TOO, NOT OFF THE EAVE ────────────────
+    //
+    // `high` has always been the POLYGON's reach -- the loop above walks every
+    // corner and takes the furthest. `wide` was the EAVE SEGMENT's own length,
+    // and on any face that runs past the ends of the eave it was built from
+    // the frame came out too narrow: the courses stopped and bare roof was
+    // left beside them.
+    //
+    // MEASURED on repro-movie-bands (an 8-point L over a house and its garage
+    // wing), across all four elevations: EIGHT of twenty-two faces had a frame
+    // narrower than their own face, each by 460-480px --
+    //
+    //     frame.wide   face extent along the eave   short
+    //         480.0          960.0                  480.0
+    //         160.0          620.0                  460.0
+    //        1560.0         2020.0                  460.0
+    //         720.0         1200.0                  480.0
+    //
+    // -- and several started at a NEGATIVE offset, so the bare strip could be
+    // at either end rather than only past the far one.
+    //
+    // THE ORIGIN MOVES WITH IT. Sliding `ox, oy` along the eave axis to where
+    // the face actually starts is what makes the width mean anything; it does
+    // not disturb `high`, because a shift along `ax` leaves every perpendicular
+    // distance unchanged. #513 fixed this same fault on the perpendicular axis
+    // at the ridge; this is the along-the-eave half of it.
+    // AND NO SECOND WIDTH GUARD AFTER THIS, though the first draft had one.
+    // It read `if (!(wide > 0.5)) return null;`, which looks defensive and is
+    // actually the trap the harness names: GUARDED TWICE IS GUARDED ONCE. The
+    // eave is always an EDGE of the face, so a face whose extent along it is
+    // sub-pixel has a sub-pixel eave too and `eaveLen` has already refused it.
+    // With both in place, deleting either left the other refusing, and the
+    // mutation for it survived reporting nothing at all.
+    let lo = Infinity, hi = -Infinity;
+    for (const p of poly) {
+      const s = (p.x - eaveA.x) * ax + (p.y - eaveA.y) * ay;
+      if (s < lo) lo = s;
+      if (s > hi) hi = s;
+    }
+    const wide = hi - lo;
+    return { ox: eaveA.x + ax * lo, oy: eaveA.y + ay * lo,
+      ax, ay, ux, uy, wide, high, pxPerFt };
   };
 
   window.DraftRoofPatterns = Object.freeze({

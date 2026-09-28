@@ -1070,6 +1070,34 @@
 
       window.addEventListener('resize', () => { paintElevation(); });
 
+      // ── NEW GOES HOME AND STARTS A BLANK ONE ──────────────────────────
+      //
+      // Movie, 28 Sep: *"when i press NEW can you take me back to MODEL page
+      // from the EXT FINISH page and open a new blank plan"*.
+      //
+      // THIS PAGE HAS NO DRAWING TO BLANK. It clads one it does not own -- it
+      // re-reads, merges and writes `walls` and `roofs` back on every edit,
+      // the way LAYOUT does -- which is also why there is nothing unsaved
+      // here to guard, and why the word at the foot reads "Saved with the
+      // drawing" rather than offering a button.
+      //
+      // SO IT ASKS RATHER THAN ANSWERS. This page could blank the shared
+      // store itself and navigate, and then there would be TWO answers to
+      // what a blank drawing is, drifting apart the first time MODEL's
+      // changes. `?new=1` hands the question to the page that owns it.
+      const fileNew = document.getElementById('file-new');
+      if (fileNew) {
+        fileNew.title = 'NEW — start an empty drawing in the MODEL space';
+        fileNew.addEventListener('click', async () => {
+          // THE LAST EDIT MAY STILL BE IN THE QUEUE. Every change here starts
+          // a write, and a write is a promise; navigating out from under one
+          // loses whatever it was carrying. Draining first costs nothing when
+          // the queue is already empty, which is the usual case.
+          try { await queue; } catch { /* the queue says so itself */ }
+          window.location.href = './MODEL.html?new=1';
+        });
+      }
+
       window.DraftShellBars.wireSkin({
         theme: window.__reTheme.theme,
         mode: window.__reTheme.mode,
