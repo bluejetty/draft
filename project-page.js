@@ -46,14 +46,6 @@ if (!window.DraftProjectPage) {
   // round off. Anybody reading 1.5 * 3 and wondering why not two now has the
   // answer without having to ask a framer.
   const PLATE_STACK_IN = 1.5 * 3;
-  // ONE OF THE THREE. A plate is a 2x of the wall's own width laid flat, so
-  // it is 1 1/2" thick whatever the wall is framed in -- Movie, 28 Sep, asking
-  // for it on the detached garage: "we should show the 1.5" bottom plates at
-  // the bottom of the wall... the 3.5"x1.5" stud at the bottom where it meets
-  // the slab". Derived from the stack rather than written again, because a
-  // second 1.5 here is a number that agrees with that one until somebody
-  // changes it.
-  const WALL_PLATE_IN = PLATE_STACK_IN / 3;
   const STUD_LENGTHS_IN = Object.freeze([92.625, 104.625, 116.625]);
   // Which precut a build type starts on. Movie, 4 Sep: "8'1-1/8" is default
   // wall height for bungalow, for bilevel we are going with 9'-1 1/8" ceiling
@@ -1493,12 +1485,17 @@ if (!window.DraftProjectPage) {
 
     // THE WALL. Its own, unlike the attached garage's.
     //
-    // THE BOTTOM PLATE, AND NOT THE TOP ONE. Movie marked the line under the
-    // top plate off the drawing on 28 Sep and then said where it belonged:
-    // "move that top orange line down and show the 3.5"x1.5" stud at the
-    // bottom where it meets the slab". So the wall gets one line across it,
-    // WALL_PLATE_IN above its base -- the top of the plate the studs stand
-    // on, bearing on the slab.
+    // THE BOTTOM SILL PLATE, AND NOT THE TOP PLATE. Movie marked the line
+    // under the top plate off the drawing on 28 Sep, then said where it
+    // belonged -- "move that top orange line down and show the 3.5"x1.5"
+    // stud at the bottom where it meets the slab" -- and then named it: "i
+    // mean botton SILL plate".
+    //
+    // SO IT IS THE HOUSE'S OWN SILL, drawn by the same `attachment` helper
+    // the house and the attached garage use, "shared by the house and the
+    // garage so the two can never drift into drawing the same detail
+    // differently". A member, not a line: 1 1/2" of wood the width of the
+    // wall, bearing on the slab with the studs standing on it.
     //
     // AS WIDE AS THE WALL, not a written 3 1/2". A plate is a 2x of the
     // wall's own width laid flat, so it is 3 1/2" on the 2x4 wall Movie
@@ -1506,10 +1503,11 @@ if (!window.DraftProjectPage) {
     // would draw a 2x4 plate under a 2x6 wall the moment the type changed.
     // The plate stack at the TOP is still what the door head is dropped
     // from -- a fact about the wall rather than a line this view needs.
-    const plateFt = WALL_PLATE_IN / 12;
+    const sillFt = sillPlateIn() / 12;
     const plateY = wallBaseY + g.wallHeightFt;
     rect(0, wallBaseY, wallFt, g.wallHeightFt, 1.5);
-    line(0, wallBaseY + plateFt, wallFt, wallBaseY + plateFt, 1);
+    attachment(rect, line, 'sill', 0, wallBaseY, wallFt);
+    anchors.sill = { x: wallFt + 0.55, y: wallBaseY + sillFt / 2 };
     anchors.wallHeight = { x: wallFt + 0.55, y: wallBaseY + g.wallHeightFt / 2 };
 
     // THE OVERHEAD DOOR HEAD, dropped OPENING_HEAD_DROP_IN off the top of the
@@ -1546,10 +1544,11 @@ if (!window.DraftProjectPage) {
       const overWallFt = g.overWallHeightFt ?? 0;
       const overStudFt = (g.overWallIn ?? values.wallThicknessIn) / 12;
       if (overWallFt > 0) {
-        // The room's wall gets its bottom plate too -- it bears on the deck
-        // rather than on a slab, and it is the same member either way.
+        // The room's wall gets its plate too. On a deck it is a bottom plate
+        // rather than a sill -- nothing is anchored to concrete up here --
+        // but it is the same 1 1/2" member and it draws the same.
         rect(0, deck, overStudFt, overWallFt, 1.5);
-        line(0, deck + plateFt, overStudFt, deck + plateFt, 1);
+        rect(0, deck, overStudFt, sillFt, 1.5);
         anchors.overWallHeight = { x: overStudFt + 0.55, y: deck + overWallFt / 2 };
       }
       roofBase = deck + overWallFt;
@@ -2444,7 +2443,6 @@ if (!window.DraftProjectPage) {
     STUD_LENGTHS_IN,
     HALF_STUD_IN,
     PLATE_STACK_IN,
-    WALL_PLATE_IN,
     get SILL_PLATE_IN() { return sillPlateIn(); },
     wallHeightFtFromStud,
     studInFromWallHeightFt,

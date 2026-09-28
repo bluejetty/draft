@@ -645,32 +645,38 @@ check('the overhead door head hangs OPENING_HEAD_DROP_IN under the top plate', P
 // that is right on a line nobody asked for is the state this came from.
 check('and draws no dashed line across the wall for it', P =>
   [detached(P).parts.some(part => part.kind === 'dashed'), false]);
-// ── THE BOTTOM PLATE ──────────────────────────────────────────────────────
+// ── THE BOTTOM SILL PLATE ─────────────────────────────────────
 // Movie, 28 Sep: "we should show the 1.5" bottom plates at the bottom of the
-// wall... the 3.5"x1.5" stud at the bottom where it meets the slab". At the
-// BOTTOM, which is the correction -- the line he first marked off was under
-// the TOP plate, and the answer was to move it down rather than delete it.
-check('the wall shows its bottom plate where it meets the slab', P => {
-  const plate = detached(P).parts.find(part => part.kind === 'line'
-    && near(part.y1, part.y2) && near(part.y1, P.WALL_PLATE_IN / 12)
-    && near(part.x1, 0));
-  return [plate != null, true];
+// wall... the 3.5"x1.5" stud at the bottom where it meets the slab", and then
+// what it is called: "i mean botton SILL plate". At the BOTTOM, which is the
+// correction -- the line he first marked off was under the TOP plate, and the
+// answer was to move it down rather than delete it.
+//
+// A MEMBER, NOT A LINE, because that is how the house draws its sill: 1 1/2"
+// of wood as wide as the wall, bearing on the slab.
+const detachedSill = P => rects(detached(P))
+  .filter(r => near(r.h, P.SILL_PLATE_IN / 12));
+check('the wall bears on a sill plate where it meets the slab', P => {
+  const sills = detachedSill(P);
+  if (sills.length !== 1) return [`${sills.length} sill-plate bands`, 'exactly one'];
+  return [near(sills[0].y, 0) && near(sills[0].x, 0), true];
 });
 // AS WIDE AS THE WALL, not a written 3 1/2". A plate is a 2x of the wall's
 // own width laid flat, so a number here would draw a 2x4 plate under a 2x6
 // wall the moment the type changed -- which is the page's default.
-check('the plate is as wide as the wall it is under', P => {
-  const wallIn = DETACHED(P).wallThicknessIn;
-  const plate = detached(P).parts.find(part => part.kind === 'line'
-    && near(part.y1, part.y2) && near(part.y1, P.WALL_PLATE_IN / 12)
-    && near(part.x1, 0));
-  return [plate ? near(plate.x2, wallIn / 12) : 'no bottom plate', true];
+check('the sill plate is as wide as the wall it is under', P => {
+  const sills = detachedSill(P);
+  return [sills.length === 1 ? near(sills[0].w, DETACHED(P).wallThicknessIn / 12)
+    : `${sills.length} sill-plate bands`, true];
 });
-// ONE PLATE, NOT THREE. PLATE_STACK_IN is two top plates and a bottom one,
-// and the member drawn here is a single 1 1/2" plate -- so it is derived
-// from the stack rather than written again.
-check('a plate is a third of the stack', P =>
-  [P.WALL_PLATE_IN * 3, P.PLATE_STACK_IN]);
+// THE HOUSE'S OWN SILL, drawn by the same helper, so the two cannot drift into
+// two thicknesses of the same member. The house's is found by the check above
+// at "the garage offset is the SILL TOP".
+check('and it is the same member the house sits on', P => {
+  const house = rects(section(P)).filter(r => near(r.h, P.SILL_PLATE_IN / 12));
+  const sills = detachedSill(P);
+  return [house.length && sills.length ? near(house[0].h, sills[0].h) : 'no sill', true];
+});
 check('a 7\'-0" overhead door clears that head on the detached garage wall', P =>
   [P.GARAGE_WALL_FT * 12 - P.OPENING_HEAD_DROP_IN >= 84, true]);
 // It is a separate builder, and this is the check that says so: the attached
@@ -973,13 +979,17 @@ const MUTATIONS = [
   // having had them once.
   // Movie's correction, undone: the plate drawn at the TOP of the wall again,
   // which is the line he marked off before saying where it belonged.
-  ['the bottom plate goes back to the top of the wall',
-    s => s.replace('    line(0, wallBaseY + plateFt, wallFt, wallBaseY + plateFt, 1);',
-      '    line(0, plateY - plateFt, wallFt, plateY - plateFt, 1);')],
+  ['the bottom sill plate goes back to the top of the wall',
+    s => s.replace("    attachment(rect, line, 'sill', 0, wallBaseY, wallFt);",
+      "    attachment(rect, line, 'sill', 0, plateY - sillFt, wallFt);")],
   // The plausible misreading of "3.5\"x1.5\" stud": write the 3 1/2" down.
-  ['the plate is written 3 1/2" wide instead of following the wall',
-    s => s.replace('    line(0, wallBaseY + plateFt, wallFt, wallBaseY + plateFt, 1);',
-      '    line(0, wallBaseY + plateFt, 3.5 / 12, wallBaseY + plateFt, 1);')],
+  ['the sill plate is written 3 1/2" wide instead of following the wall',
+    s => s.replace("    attachment(rect, line, 'sill', 0, wallBaseY, wallFt);",
+      "    attachment(rect, line, 'sill', 0, wallBaseY, 3.5 / 12);")],
+  // Back to a line across the wall, which is what it was before he named it.
+  ['the sill plate is a line across the wall rather than a member',
+    s => s.replace("    attachment(rect, line, 'sill', 0, wallBaseY, wallFt);",
+      '    line(0, wallBaseY + sillFt, wallFt, wallBaseY + sillFt, 1);')],
   ['the truss loses its bottom chord, and the ceiling is a bare line again',
     s => s.replace('    if (ceiling) {', '    if (false) {')],
   ['the side chord loses its outside face at the wall',
