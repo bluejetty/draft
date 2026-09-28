@@ -1354,6 +1354,22 @@ if (!window.DraftProjectPage) {
       };
     });
 
+  // WHAT A DETACHED FOUNDATION IS, WHEN NOBODY HAS TYPED A DEPTH. One cell --
+  // fdnWallHeightFt -- carries the depth of all three, because all three are
+  // the one thing under this building and only one of them is ever built. So
+  // the default has to follow the choice rather than sit in
+  // SECTION_TABLE_DEFAULTS, where it can only be one number:
+  //   thickened  the edge IS the foundation, 1'-0" of concrete
+  //   gradebeam  the same 32" beam the attached garage takes
+  //   frostwall  the drafter's own, because frost depth is a site fact --
+  //              the page hands it the house's pour, which is what "8" wall
+  //              to the house footing depth" has always meant here.
+  const detachedFoundationDepthFt = (kind, houseFootingDepthFt) => {
+    if (kind === 'gradebeam') return GARAGE_GRADE_BEAM_IN / 12;
+    if (kind === 'frostwall') return houseFootingDepthFt ?? GARAGE_GRADE_BEAM_IN / 12;
+    return GARAGE_EDGE_DEPTH_IN / 12;
+  };
+
   const buildDetachedGarageSection = values => {
     const g = values.garage;
     const roof = values.roof;
@@ -1364,24 +1380,68 @@ if (!window.DraftProjectPage) {
 
     const wallFt = values.wallThicknessIn / 12;
     const slabFt = g.slabIn / 12;
-    const edgeFt = GARAGE_EDGE_DEPTH_IN / 12;
     const gradeY = -DETACHED_SLAB_ABOVE_GRADE_IN / 12;
+    // THREE FOUNDATIONS, ONE BUILDING. Until 28 Sep this builder drew a
+    // thickened edge and only a thickened edge, and the other two lived in a
+    // comparison strip under the card -- three pictures of foundations beside
+    // a drawing that was always the first one. Movie, 28 Sep, asked for the
+    // three to be the choice instead, so the choice is what the section now
+    // draws and the strip is gone.
+    const foundation = g.foundation || 'thickened';
+    const fdnFt = g.fdnWallHeightFt
+      ?? detachedFoundationDepthFt(foundation, g.houseFootingDepthFt);
 
-    // THE THICKENED EDGE, and it is the foundation -- there is no wall under
-    // this building. One monolithic pour: a 4" field slab that deepens to
-    // 1'-0" at the perimeter, the two joined by a 45 degree taper. At 45 the
-    // taper's run equals its drop, so it is (edge - field) long in plan and
-    // needs no angle of its own.
-    const fieldBot = -slabFt;
-    const edgeBot = -edgeFt;
-    const taperRun = edgeFt - slabFt;
-    line(0, 0, CUT_DEPTH_FT, 0, 2);                       // slab top, LEVEL
-    line(0, 0, 0, edgeBot, 2);                            // outer face of the edge
-    line(0, edgeBot, edgeFt, edgeBot, 2);                 // underside of the edge
-    line(edgeFt, edgeBot, edgeFt + taperRun, fieldBot, 1.5);  // the 45 taper
-    line(edgeFt + taperRun, fieldBot, CUT_DEPTH_FT, fieldBot, 1.5); // field underside
-    anchors.edgeDepth = { x: edgeFt * 0.45, y: (edgeBot + 0) / 2 };
-    anchors.slabThickness = { x: CUT_DEPTH_FT * 0.78, y: fieldBot / 2 };
+    // WHERE THE WOOD STARTS, and it is not the floor on two of the three. A
+    // grade beam and a frost wall stand GRADE_BELOW_CONCRETE_IN above grade
+    // with the slab GARAGE_SLAB_BELOW_CONCRETE_IN under that top, so their
+    // concrete shows above the floor and the wall bears on concrete. A
+    // thickened edge has nothing above its slab, so the wall bears on the
+    // floor itself.
+    let wallBaseY = 0;
+    let lowestY;
+
+    if (foundation === 'thickened') {
+      // ONE POUR, and it is the foundation -- there is no wall under this
+      // building. A 4" field slab that deepens to fdnFt at the perimeter, the
+      // two joined by a 45 degree taper. At 45 the taper's run equals its
+      // drop, so it is (edge - field) long in plan and needs no angle of its
+      // own.
+      const edgeFt = fdnFt;
+      const fieldBot = -slabFt;
+      const edgeBot = -edgeFt;
+      const taperRun = Math.max(0, edgeFt - slabFt);
+      line(0, 0, CUT_DEPTH_FT, 0, 2);                       // slab top, LEVEL
+      line(0, 0, 0, edgeBot, 2);                            // outer face of the edge
+      line(0, edgeBot, edgeFt, edgeBot, 2);                 // underside of the edge
+      line(edgeFt, edgeBot, edgeFt + taperRun, fieldBot, 1.5);  // the 45 taper
+      line(edgeFt + taperRun, fieldBot, CUT_DEPTH_FT, fieldBot, 1.5); // field underside
+      anchors.fdnDepth = { x: edgeFt * 0.45, y: edgeBot / 2 };
+      anchors.slabThickness = { x: CUT_DEPTH_FT * 0.78, y: fieldBot / 2 };
+      lowestY = edgeBot;
+    } else {
+      // GRADE BEAM AND FROST WALL both stand their concrete PROUD of the slab,
+      // and the slab is poured INSIDE them on fill rather than bearing on
+      // them -- the same detail the comparison strip drew, now at the
+      // building's own scale.
+      const concTop = gradeY + GRADE_BELOW_CONCRETE_IN / 12;
+      const widthFt = (foundation === 'frostwall' ? 8 : 12) / 12;
+      const bottom = concTop - fdnFt;
+      line(widthFt, 0, CUT_DEPTH_FT, 0, 2);                 // slab top, inside the concrete
+      line(0, concTop, widthFt, concTop, 2);                // top of concrete
+      line(0, concTop, 0, bottom, 2);
+      line(widthFt, concTop, widthFt, bottom, 2);
+      // A BOTTOM ON BOTH, unlike the strip. That row drew a frost wall running
+      // off the page because it had no depth to draw -- "it runs to the HOUSE's
+      // footing depth, which varies per drawing". Here the depth is a cell the
+      // drafter types, so the wall ends where they said it ends.
+      line(0, bottom, widthFt, bottom, 2);
+      line(widthFt, -slabFt, CUT_DEPTH_FT, -slabFt, 1.5);   // slab underside, on fill
+      line(widthFt, 0, widthFt, -slabFt, 1);                // slab against the concrete
+      anchors.fdnDepth = { x: widthFt * 0.5, y: (concTop + bottom) / 2 };
+      anchors.slabThickness = { x: CUT_DEPTH_FT * 0.78, y: -slabFt / 2 };
+      wallBaseY = concTop;
+      lowestY = bottom;
+    }
     anchors.slabAboveGrade = { x: -0.9, y: gradeY / 2 };
 
     // GRADE, on the outside only. It stops at the building face for the same
@@ -1392,10 +1452,10 @@ if (!window.DraftProjectPage) {
 
     // THE WALL. Its own, unlike the attached garage's.
     const plateStackFt = PLATE_STACK_IN / 12;
-    const plateY = g.wallHeightFt;
-    rect(0, 0, wallFt, plateY, 1.5);
+    const plateY = wallBaseY + g.wallHeightFt;
+    rect(0, wallBaseY, wallFt, g.wallHeightFt, 1.5);
     line(0, plateY - plateStackFt, wallFt, plateY - plateStackFt, 1);  // under the plates
-    anchors.wallHeight = { x: wallFt + 0.55, y: plateY / 2 };
+    anchors.wallHeight = { x: wallFt + 0.55, y: wallBaseY + g.wallHeightFt / 2 };
     anchors.plates = { x: wallFt + 0.55, y: plateY - plateStackFt / 2 };
 
     // THE OVERHEAD DOOR HEAD, dropped OPENING_HEAD_DROP_IN off the top of the
@@ -1406,26 +1466,56 @@ if (!window.DraftProjectPage) {
     parts.push({ kind: 'dashed', x1: 0, y1: headY, x2: wallFt + 1.2, y2: headY });
     anchors.doorHead = { x: wallFt + 1.5, y: headY };
 
+    // ── THE ROOM ABOVE ──────────────────────────────────────────────────
+    // Movie, 28 Sep: "on the FROST WALL and GRADE BEAM we need to offer the
+    // +ADD ROOM ABOVE". Same three lines the attached garage's storey draws
+    // -- joist underside (which is the ceiling), top of joists, top of
+    // sheathing -- then the room's own wall, and the roof stands on THAT
+    // rather than on the garage plate.
+    //
+    // WHY NOT ON A THICKENED EDGE: a floating slab carries a garage. It is
+    // not asked to carry a storey of house, which is the same reason
+    // GARAGE_FOUNDATIONS refuses an attached garage a thickened edge.
+    let roofBase = plateY;
+    if (g.roomOver) {
+      const joistFt = g.overJoistIn / 12;
+      const deckFt = joistFt + g.overSheathingIn / 12;
+      line(0, plateY, CUT_DEPTH_FT, plateY, 2);               // joist underside = ceiling
+      line(0, plateY + joistFt, CUT_DEPTH_FT, plateY + joistFt, 1);
+      line(0, plateY + deckFt, CUT_DEPTH_FT, plateY + deckFt, 2);
+      anchors.overFloor = { x: CUT_DEPTH_FT * 0.42, y: plateY + joistFt / 2 };
+      const deck = plateY + deckFt;
+      const overWallFt = g.overWallHeightFt ?? 0;
+      const overStudFt = (g.overWallIn ?? values.wallThicknessIn) / 12;
+      if (overWallFt > 0) {
+        rect(0, deck, overStudFt, overWallFt, 1.5);
+        line(0, deck + overWallFt - plateStackFt,
+          overStudFt, deck + overWallFt - plateStackFt, 1);
+        anchors.overWallHeight = { x: overStudFt + 0.55, y: deck + overWallFt / 2 };
+      }
+      roofBase = deck + overWallFt;
+    }
+
     // THE ROOF, by the same rules as the house: the heel is fascia plus the
     // rise gained across the overhang, and a typed heel lifts the whole roof
     // rigidly rather than fattening the fascia.
     const fasciaFt = roof.fasciaIn / 12;
     const heelLiftFt = roof.heelIn == null ? 0
       : (roof.heelIn - roofHeelIn(roof.fasciaIn, roof.overhangFt, roof.pitch)) / 12;
-    const eaveY = plateY + heelLiftFt;
-    if (heelLiftFt > 0) line(0, plateY, 0, eaveY, 2);
+    const eaveY = roofBase + heelLiftFt;
+    if (heelLiftFt > 0) line(0, roofBase, 0, eaveY, 2);
     const riseAt = x => heelLiftFt + fasciaFt + (roof.overhangFt + x) * (roof.pitch / 12);
     rect(-roof.overhangFt - 0.1, eaveY, 0.1, fasciaFt, 1.5);
     line(-roof.overhangFt, eaveY, 0, eaveY, 1);
     const chordDropFt = (ROOF_CHORD_IN / 12) * Math.hypot(1, roof.pitch / 12);
-    line(-roof.overhangFt, eaveY + fasciaFt, CUT_DEPTH_FT, plateY + riseAt(CUT_DEPTH_FT), 2);
+    line(-roof.overhangFt, eaveY + fasciaFt, CUT_DEPTH_FT, roofBase + riseAt(CUT_DEPTH_FT), 2);
     line(-roof.overhangFt, eaveY + fasciaFt - chordDropFt,
-      CUT_DEPTH_FT, plateY + riseAt(CUT_DEPTH_FT) - chordDropFt, 1);
+      CUT_DEPTH_FT, roofBase + riseAt(CUT_DEPTH_FT) - chordDropFt, 1);
     anchors.overhang = { x: -roof.overhangFt / 2, y: eaveY - 0.55 };
     anchors.fascia = { x: -roof.overhangFt - 0.55, y: eaveY + fasciaFt / 2 };
 
-    const topY = plateY + riseAt(CUT_DEPTH_FT);
-    parts.push({ kind: 'break', x: CUT_DEPTH_FT, y1: edgeBot - 0.3, y2: topY + 0.3 });
+    const topY = roofBase + riseAt(CUT_DEPTH_FT);
+    parts.push({ kind: 'break', x: CUT_DEPTH_FT, y1: lowestY - 0.3, y2: topY + 0.3 });
 
     return {
       parts,
@@ -1433,7 +1523,7 @@ if (!window.DraftProjectPage) {
       extents: {
         minX: -roof.overhangFt - 1.4,
         maxX: CUT_DEPTH_FT + 0.4,
-        minY: edgeBot - 1.0,
+        minY: lowestY - 1.0,
         maxY: topY + 0.9,
       },
     };
@@ -2306,6 +2396,7 @@ if (!window.DraftProjectPage) {
     buildFarEaveSection,
     buildGarageSection,
     buildDetachedGarageSection,
+    detachedFoundationDepthFt,
     buildDetachedFoundationDetail,
     buildDetachedFoundationRow,
     paintSections,
