@@ -30,7 +30,12 @@ async function openProject(page) {
 test('the first card is BUNGALOWS and its family buttons carry the menu', async ({ page }) => {
   await openProject(page);
 
-  await expect(page.locator('.card-title', { hasText: 'Bungalows' })).toBeVisible();
+  // THE STAGE ITSELF, NOT ITS TITLE. The card carried a "Bungalows" heading
+  // until Movie had it taken off on 27 Sep to give the drawing the height --
+  // and a check pinned to a LABEL breaks on a wording change that means
+  // nothing, exactly as design-notices-wired did. The stage's id is what says
+  // which card is on show.
+  await expect(page.locator('#stage-bungalow')).toBeVisible();
   // The intro Movie struck is gone, title and all.
   await expect(page.locator('body')).not.toContainText('first 4 ft, cut inward');
 

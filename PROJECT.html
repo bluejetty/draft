@@ -72,7 +72,28 @@
   <script src="orientation-guard.js"></script>
   <style>
     * { box-sizing:border-box; }
-    body { margin:0; min-height:100vh; background:var(--surface-page); color:var(--ink-primary); font-family:'Barlow',system-ui,sans-serif; }
+    /* ── NO min-height HERE, AND THAT IS THE SCROLL BAR ──────────────────
+       Movie, 27 Sep, having asked for the card title off: "then we don't need
+       the SCROLL BAR on the right anymore do we". The title was not what put
+       it there -- removing it moved the document height by ZERO -- and the
+       real cause was worth finding, because it did not depend on the content
+       at all.
+
+       `main` carries the fixed strip's clearance as a TOP MARGIN, and that
+       margin COLLAPSES THROUGH BODY: body has neither padding nor border to
+       stop it, so body's own box starts --strip-h + 30px down the page while
+       still claiming a full viewport of height. The page was therefore always
+       exactly that much taller than the window -- every window size, every
+       build type, however little was on it.
+
+       Measured at 1366x625 before the change: html 699 against a 625 viewport,
+       while the stage it was supposed to be making room for used 575 and had
+       50px to spare. Nothing was overflowing; the height was asserted wrong.
+
+       AND IT BOUGHT NOTHING. No rule anywhere gives `html` a background, so
+       body's propagates to the root canvas and paints the full viewport
+       whatever body's height is. */
+    body { margin:0; background:var(--surface-page); color:var(--ink-primary); font-family:'Barlow',system-ui,sans-serif; }
     /* 1180 -> 1400 BECAUSE THE STAGE IS NOW 80% OF IT. The band inside a
        section is a fixed 600px drawing with a schedule column either side and
        a 1090px max-width; at 80% of 1180 the stage offered 940 and the
@@ -154,7 +175,11 @@
        That is why this is a plain two-column grid of the whole main width
        and not a three-column one with gutters reserved for the rails: the
        rails float above, so nothing here has to make room for them. */
-    .type-layout { display:grid; grid-template-columns:minmax(0,20%) minmax(0,1fr); gap:16px; align-items:start; margin-top:16px; }
+    /* CENTRED, NOT TOP-ALIGNED. Movie, 27 Sep: "can you make the 3 small
+       sections centered UP/DOWN compared to the big section". The stage is
+       the taller of the two columns and so still sets the row's height --
+       centring moves the picker only, which is what he asked for. */
+    .type-layout { display:grid; grid-template-columns:minmax(0,20%) minmax(0,1fr); gap:16px; align-items:center; margin-top:16px; }
     .type-picker { display:flex; flex-direction:column; gap:10px; }
     /* EACH TYPE AND ITS OWN VARIATIONS, on one row. The thumbnail keeps the
        larger half because it is the thing being recognised; the variations are
@@ -483,7 +508,6 @@
       <div class="type-stage">
 
     <section id="stage-bungalow" data-stage="bungalow" class="card stack-card" aria-label="Bungalow wall section">
-      <div class="card-title">Bungalows</div>
       <div class="card-body">
         <div class="band">
           <div class="sched" id="sched-garage"></div>
@@ -515,7 +539,6 @@
     </section>
 
     <section id="stage-bilevel" data-stage="bilevel" class="card stack-card" aria-label="Bilevel wall section">
-      <div class="card-title">Bilevels</div>
       <div class="card-body">
         <div class="band band-eave">
           <div class="sched" id="sched-bilevel-left"></div>
@@ -532,7 +555,6 @@
     </section>
 
     <section id="stage-detached" data-stage="detached" class="card stack-card" aria-label="Detached garage wall section">
-      <div class="card-title">Detached garage &mdash; thickened-edge slab, the office default</div>
       <div class="card-body">
         <div class="band">
           <div class="sched" id="sched-detached-left"></div>
@@ -1814,22 +1836,36 @@
         });
         // THE RARE SPLIT. Movie, 16 Sep: the floors "are usually the same but
         // the odd time they might be different 1% of the time" — so each
-        // floor's row DEFAULTS to the house's shared exterior type and only a
-        // deliberate pick here stores its own. SAME AS HOUSE stores null, not
-        // a copy of today's shared value: a copy would freeze the 99% case
-        // into a fake override the next shared-type change silently misses.
+        // floor's row still STORES nothing until somebody picks, and a level
+        // left alone goes on following the drawing's own type. A copy written
+        // on load would freeze the 99% case into a fake override that the next
+        // shared-type change silently misses, which is why `set` is the only
+        // thing here that writes.
+        //
+        // ── BUT NOT UNDER THAT NAME ────────────────────────────────────────
+        //
+        // Movie, 27 Sep: "the SAME AS HOUSE - doesn't apply, make the DEFAULT
+        // 2x6 SPF take off the SAME AS HOUSE options". He is right and the
+        // label was the giveaway: these rows ARE the house. "Same as house" on
+        // MAIN FL WALL TYPE asks a floor of the house to be the same as
+        // itself, and it sat there as the default answer on both storeys.
+        //
+        // SO THE BLANK IS GONE AND THE BOX SHOWS THE TYPE IN FORCE. `get`
+        // answers with floorWallType -- the override when there is one, the
+        // drawing's own activeWallType when there is not -- rather than a
+        // hardcoded 2x6. On a drawing nobody has changed that IS 2x6 (804:
+        // activeWallType falls back to 'stud_2x6'), which is the default he
+        // asked for; on a drawing built in ICF it reads ICF instead of
+        // claiming a stud wall. A fixed literal would have been right once and
+        // then quietly wrong.
         addInput(`wallType-${level.id}`, `${level.name} WALL TYPE`, {
           name: `wallType-${level.id}`,
           levelId: level.id,
           kind: 'choice',
-          choices: () => [{ id: '', label: 'SAME AS HOUSE' },
-            ...EXTERIOR_CHOICES.map(id => ({ id, label: WALL_TYPE_VIEW[id].label }))],
-          get: () => {
-            const override = assembly(level.id).wallType;
-            return EXTERIOR_CHOICES.includes(override) ? override : '';
-          },
+          choices: () => EXTERIOR_CHOICES.map(
+            id => ({ id, label: WALL_TYPE_VIEW[id].label })),
+          get: () => floorWallType(level.id),
           set: value => {
-            if (value === '') { setAssembly(level.id, 'wallType', null); return true; }
             if (!EXTERIOR_CHOICES.includes(value)) return false;
             setAssembly(level.id, 'wallType', value);
             return true;
@@ -2933,7 +2969,54 @@
         else delete doorHeadNoticeEl.dataset.noticeKind;
       };
 
+      // ── THE SECTION IS AS TALL AS THE TALLER SCHEDULE COLUMN ───────────
+      //
+      // Movie, 27 Sep: "can we reduce the section size so height matches the
+      // house text info column", and asked which column: "match the taller of
+      // the two columns". The house's is the taller today (413px against the
+      // garage's 205) but the garage's is the one that grows when a garage is
+      // added, so taking the max is the rule that cannot be wrong either way.
+      //
+      // THE HEIGHT IS THE SCALE. cut-view's sectionView takes the SMALLER of
+      // the two fits and these drawings fill their height every time, so
+      // 500 -> 413 is the "reduce the section size" he asked for and not just
+      // a shorter box round the same picture.
+      //
+      // ── WHY THIS NEEDS TWO PASSES, AND WHY THAT TERMINATES ─────────────
+      //
+      // The columns are not their final height until repaint has finished:
+      // the controlEls loop hides a row per part this build does not have,
+      // and a 1 STOREY sheds the whole garage column. So sizing from them at
+      // the TOP of a repaint reads the state the LAST repaint settled, which
+      // is right on every pass but the first.
+      //
+      // The end of repaint therefore measures again and asks for ONE more
+      // pass if the answer moved. It converges because the second pass hides
+      // exactly the rows the first did -- same drawing, same controls, only a
+      // different scale -- so its own end-check finds nothing to change. The
+      // guard makes that structural rather than hopeful: a repaint asked for
+      // from here cannot ask for another.
+      //
+      // NOT align-items:stretch, WHICH WOULD MAKE THIS A LOOP. The band
+      // centres its items, so a column's height is its rows' and nothing
+      // else's -- it does not follow the row's height, so it cannot follow
+      // the canvas. With stretch the two would chase each other forever.
+      const SECTION_MIN_H = 300;   // below this the drawing stops being readable
+      const schedFitHeight = () => Math.max(SECTION_MIN_H,
+        ...[houseSched, garageSched]
+          .filter(el => el && !el.hidden)
+          .map(el => Math.round(el.getBoundingClientRect().height))
+          .filter(h => h > 0));
+      let refitting = false;
+      const fitSectionToScheds = () => {
+        const want = schedFitHeight();
+        if (canvas.height === want) return false;
+        canvas.height = want;
+        return true;
+      };
+
       const repaint = () => {
+        fitSectionToScheds();
         fillDoorHeadNotice();
         // Built first, painted second: the two sections have to agree on a
         // scale and a y origin BEFORE either is drawn, or the garage's offset
@@ -3201,6 +3284,16 @@
         houseSched.querySelectorAll('[data-sched-head-level]').forEach(head => {
           head.hidden = !levelDrawn(Number(head.dataset.schedHeadLevel));
         });
+        // The columns have settled now, so ask once whether the section was
+        // drawn at the right height -- and if it was not, draw it again at the
+        // right one. Everything placed against the old scale (the margin
+        // labels below, the grade word) is placed again by that pass, so this
+        // returns before them rather than leaving them behind.
+        if (!refitting && fitSectionToScheds()) {
+          refitting = true;
+          try { repaint(); } finally { refitting = false; }
+          return;
+        }
         spreadTags(detailWrap);
         paintTypeMinis();
       };
