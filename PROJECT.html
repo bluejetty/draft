@@ -1360,10 +1360,16 @@
         };
       };
       const bilevelRowId = () => bilevelEntry().type;
-      const bilevelLevel = (id, name, wallHeightFt) => {
+      // THE FALLBACK IS THE OFFICE DEFAULT, NOT THE LIVE DRAWING, which is
+      // this band's whole contract: it paints the defaults for a type this
+      // drawing may not be. So a package cell the split's row does not carry
+      // comes from assemblyDefaults -- the role's own answer -- and never from
+      // the level card a drafter edited for a bungalow.
+      const bilevelLevel = (id, name, wallHeightFt, over = {}) => {
         const base = assemblyDefaults(id);
         return { id, name, wallHeightFt,
-          joistDepthIn: base.joistDepthIn, sheathingIn: base.sheathingIn };
+          joistDepthIn: over.joistDepthIn ?? base.joistDepthIn,
+          sheathingIn: over.sheathingIn ?? base.sheathingIn };
       };
       // THE ROW, NOT THE DEFAULTS. Movie, 16 Sep: "we need the text on the
       // sides to have all the proper infor and also be editable like the
@@ -1373,6 +1379,16 @@
       // the drawing are one value seen three ways. Untyped cells still fall
       // back to the office default, which is what the card showed before.
       const splitCell = field => cellValue(bilevelRowId(), field).value;
+      // THE ROW'S OWN ANSWER, OR THE ONE IT FALLS BACK TO -- and the fallback
+      // is named by the caller rather than found by cellValue. Some of this
+      // card's cells have no office default (a roof pitch, a foundation
+      // attachment) and cellValue would hand them the LIVE drawing's, which
+      // is band 1's number and not this band's to show. Written this way each
+      // row says out loud what it borrows until somebody types.
+      const splitOr = (field, fallback) => {
+        const stored = sectionTable.rows[bilevelRowId()]?.[field];
+        return stored == null ? fallback : stored;
+      };
       const BILEVEL_CUT_FT = 7;
       const BILEVEL_EAVE_CUT_FT = 3;
       const bilevelValues = () => {
@@ -1380,6 +1396,16 @@
           fdnWallHeightFt: splitCell('fdnWallHeightFt'),
           woodFillHeightFt: splitCell('woodFillHeightFt'),
           mainWallHeightFt: splitCell('mainWallHeightFt'),
+          mainJoistDepthIn: splitOr('mainJoistDepthIn', null),
+          mainSheathingIn: splitOr('mainSheathingIn', null),
+          slabThicknessIn: splitOr('slabThicknessIn', null),
+          footingWidthIn: splitOr('footingWidthIn', null),
+          footingDepthIn: splitOr('footingDepthIn', null),
+          attachment: splitOr('foundationAttachment', attachmentChoice()),
+          attachmentIn: splitOr('foundationAttachmentIn', attachmentIn()),
+          roofPitch: splitOr('roofPitch', roofPitch),
+          roofOverhangFt: splitOr('roofOverhangFt', roofOverhang),
+          roofHeelIn: splitOr('roofHeelIn', roofHeelIn()),
           upperWallHeightFt: splitCell('upperWallHeightFt'),
           upperDeckAboveEntryFt: splitCell('upperDeckAboveEntryFt'),
           upperJoistDepthIn: splitCell('upperJoistDepthIn'),
@@ -1409,7 +1435,10 @@
         return {
           floors: [
             bilevelLevel(ENTRY_LEVEL_ID, 'ENTRY', split.woodFillHeightFt - entryPkgFt),
-            bilevelLevel(3, 'MAIN FL', split.mainWallHeightFt),
+            bilevelLevel(3, 'MAIN FL', split.mainWallHeightFt, {
+              joistDepthIn: split.mainJoistDepthIn,
+              sheathingIn: split.mainSheathingIn,
+            }),
             // THE LOWER SECOND FLOOR, and the one level on any section this
             // page draws that does NOT stand on the level below it. Movie,
             // 16 Sep: "the main floor area doesn't have a 2nd floor over it
@@ -1447,15 +1476,15 @@
             wallHeightFt: split.fdnWallHeightFt,
             woodFillHeightFt: split.woodFillHeightFt,
             thicknessIn: fdnThicknessIn(),
-            slabIn: fdnBase.slabThicknessIn,
-            footingWidthIn: fdnIsIcf() ? 24 : 20,
-            footingDepthIn: fdnBase.footingDepthIn,
+            slabIn: split.slabThicknessIn ?? fdnBase.slabThicknessIn,
+            footingWidthIn: split.footingWidthIn ?? (fdnIsIcf() ? 24 : 20),
+            footingDepthIn: split.footingDepthIn ?? fdnBase.footingDepthIn,
             gradeOffsetFt: gradeOffsetFt(),
-            attachment: attachmentChoice(),
-            attachmentIn: attachmentIn(),
+            attachment: split.attachment,
+            attachmentIn: split.attachmentIn,
           },
-          roof: { pitch: roofPitch, overhangFt: roofOverhang,
-            fasciaIn: ROOF_FASCIA_IN, heelIn: roofHeelIn() },
+          roof: { pitch: split.roofPitch, overhangFt: split.roofOverhangFt,
+            fasciaIn: ROOF_FASCIA_IN, heelIn: split.roofHeelIn },
           wallThicknessIn: WALL_TYPE_VIEW[activeWallType].totalIn,
           // TEN FEET IN, NOT FOUR. Movie, 16 Sep: "move the cut line over on
           // the house to 10ft rather than 4 and show a stair dropping down".
@@ -1655,7 +1684,7 @@
             }
             const value = document.createElement(
               row.press ? 'button' : row.choices ? 'select'
-                : typedRow(row) ? 'input' : 'span');
+                : (typedRow(row) && !row.readText) ? 'input' : 'span');
             value.className = 'sched-value';
             value.dataset[`${bandKey}Value`] = row.key;
             if (row.choices) {
@@ -1764,6 +1793,17 @@
               tag.style.display = 'none';
               return;
             }
+            // A ROW WHOSE ANSWER IS A WORD, not a measurement -- the wall type
+            // in force, the foundation this drawing is built on. It shows the
+            // answer rather than asking for it, which is band 3's ruling on a
+            // type with nowhere of its own to store one: the box shows the
+            // type IN FORCE instead of offering a choice that cannot be kept.
+            if (row.readText) {
+              node.hidden = !shown;
+              el.textContent = shown ? row.readText() : '';
+              tag.style.display = 'none';
+              return;
+            }
             const ft = row.get(v);
             const has = shown && Number.isFinite(ft);
             node.hidden = !has;
@@ -1780,6 +1820,12 @@
             // half-typed number becomes the previous one.
             if (typedRow(row)) {
               if (document.activeElement !== el) el.value = text;
+              // A BOX THIS BUILD DERIVES IS GREYED, NOT HIDDEN. On a MODIFIED
+              // BILEVEL the garage wall is whatever puts the balcony's deck on
+              // its line, so a number typed there would be a third answer
+              // disagreeing with the two that make it -- but taking the row
+              // away would also take away the number the drafter came to read.
+              el.disabled = readOnly || Boolean(row.locked && row.locked());
             } else {
               el.textContent = text;
             }
@@ -1845,25 +1891,107 @@
       // place only if it says something the schedule beside it does not -- so
       // the split's own two annotations (ATTIC SPACE, over the house and over
       // the garage) are the only words left on the section.
+      // BAND 1 PRINTS THESE IN BARE INCHES, and a span on this card would
+      // print them in feet: the derived-row formatter is feet-and-inches for
+      // everything, which draws a 5 1/2" fascia as 0'-5 1/2". These are the
+      // rows whose answer IS an inch measurement and is not typed, so they go
+      // through the same formatter the typed inch boxes use and the two cards
+      // read alike.
+      const inchWord = inches => (Number.isFinite(inches) ? inchesOnly(inches) : '');
       const bilevelRows = [
-        { side: 'left', head: 'FOUNDATION' },
-        { side: 'left', key: 'fdnHeight', name: 'POUR', anchor: false,
-          get: v => v.foundation.wallHeightFt, field: 'fdnWallHeightFt', unit: 'ftin' },
-        { side: 'left', key: 'woodFill', name: 'FILL WALL', anchor: false,
-          get: v => v.foundation.woodFillHeightFt, field: 'woodFillHeightFt', unit: 'ftin' },
-        { side: 'left', key: 'slab', name: 'SLAB', anchor: false,
-          get: v => v.foundation.slabIn / 12 },
-        // THE GARAGE, on the left because the garage is drawn on the left.
-        // Movie, 16 Sep: "on the left side add the garage grade beam and area
-        // over the garage for midified bilevel". These read and write the
-        // ATTACHED GARAGE row -- the same one the bungalow card's garage
-        // schedule uses -- so the garage says one thing on both cards.
+        // ── THE LEFT COLUMN IS THE BUNGALOW'S LEFT COLUMN ──────────────────
+        // Movie, 28 Sep: "make the side entry text boxes as similar to the
+        // BUNGALOW as possible (i will just need to change some stuff but it
+        // will be very close to the same)". So the blocks, their order, their
+        // row names and the control each row carries are band 1's, read off
+        // the bungalow card: ROOF then ATTACHED GARAGE down the left, the
+        // storeys top-down then FOUNDATION down the right.
         //
-        // AND THE WHOLE BLOCK LEAVES ON A PLAIN BILEVEL, which is the type
-        // with no garage at all.
-        { side: 'left', head: 'GARAGE', key: 'garageHead',
+        // WHAT IS THE SPLIT'S OWN goes where band 1 puts its nearest
+        // equivalent rather than in a block of its own: FILL WALL beside the
+        // pour it stands on, ENTRY as the storey under MAIN FL, and the
+        // balcony's three (OVER ENTRY, BALCONY DEPTH, CEILING DROP) under the
+        // 2ND FL head with the four every storey answers.
+        { side: 'left', head: 'ROOF' },
+        // TYPED, AND STILL BORROWED UNTIL SOMEBODY TYPES. The band's standing
+        // rule is that the roof is the OFFICE's rather than the type's -- "a
+        // bilevel drawn with a different pitch than the bungalow beside it
+        // would be comparing two drawings, not two types" -- and these cells
+        // keep it: untyped, each falls back to band 1's roof, so the two bands
+        // still move together. A typed one is this type's own, which is what a
+        // box on the card means.
+        { side: 'left', key: 'roofPitch', name: 'Roof pitch : 12', anchor: false,
+          get: () => splitOr('roofPitch', roofPitch), unit: 'pitch', typed: true,
+          put: value => (writeCell(bilevelRowId(), 'roofPitch', value),
+            'Bilevel roof pitch saved.') },
+        { side: 'left', key: 'roofFascia', name: 'Fascia depth',
+          readText: () => inchWord(ROOF_FASCIA_IN) },
+        { side: 'left', key: 'roofOverhang', name: 'Overhang', anchor: false,
+          get: () => splitOr('roofOverhangFt', roofOverhang),
+          unit: 'ftin', typed: true,
+          put: value => (writeCell(bilevelRowId(), 'roofOverhangFt', value),
+            'Bilevel overhang saved.') },
+        { side: 'left', key: 'roofHeel', name: 'Roof heel', anchor: false,
+          get: v => v.roof.heelIn / 12, unit: 'ftin', typed: true,
+          put: value => (writeCell(bilevelRowId(), 'roofHeelIn', value * 12),
+            'Bilevel roof heel saved.') },
+        // ── THE ATTACHED GARAGE, WHICH IS BAND 1'S OWN ROW ────────────────
+        // Every cell here reads and writes the ATTACHED GARAGE row of the
+        // section table -- the same row the bungalow card's garage schedule
+        // asks. That is the reuse Movie asked for: the garage says one thing
+        // on both cards, and a number typed on either lands in one place.
+        //
+        // NO "+ ADD ROOM OVER" PRESS. On the bungalow the storey over the
+        // garage is a press, because a 2 STOREY + GARAGE can have one or not.
+        // On a split the storey over the garage is the TYPE -- MODIFIED
+        // BILEVEL is the entry that carries it -- so the press is the family
+        // button, and a second control that said the same thing could
+        // disagree with it.
+        { side: 'left', head: 'ATTACHED GARAGE', key: 'garageHead',
           shown: () => bilevelBuild().garage },
-        { side: 'left', key: 'garageFdnType', name: 'FDN TYPE',
+        { side: 'left', key: 'garagePitch', name: 'roof pitch : 12', anchor: false,
+          shown: () => bilevelBuild().garage,
+          get: () => cellValue('attachedGarage', 'roofPitch').value,
+          unit: 'pitch', typed: true,
+          put: value => (writeCell('attachedGarage', 'roofPitch', value),
+            'Garage roof pitch saved.') },
+        { side: 'left', key: 'garageFascia', name: 'fascia depth',
+          shown: () => bilevelBuild().garage,
+          readText: () => inchWord(ROOF_FASCIA_IN) },
+        { side: 'left', key: 'garageOverhang', name: 'overhang', anchor: false,
+          shown: () => bilevelBuild().garage,
+          get: () => cellValue('attachedGarage', 'roofOverhangFt').value,
+          unit: 'ftin', typed: true,
+          put: value => (writeCell('attachedGarage', 'roofOverhangFt', value),
+            'Garage overhang saved.') },
+        { side: 'left', key: 'garageHeel', name: 'roof heel', anchor: false,
+          shown: () => bilevelBuild().garage,
+          get: () => garageHeelIn() / 12, unit: 'ftin', typed: true,
+          put: value => (writeCell('attachedGarage', 'roofHeelIn', value * 12),
+            'Garage roof heel saved.') },
+        // DERIVED ON A MODIFIED BILEVEL, and greyed rather than taken away:
+        // that wall is whatever puts the deck over the garage on the balcony's
+        // own line. Without the balcony it is the drafter's number, which is
+        // where band 1 asks for it too.
+        { side: 'left', key: 'garageWall', name: 'wall height', anchor: false,
+          shown: () => bilevelBuild().garage,
+          locked: () => bilevelBuild().roomOver,
+          get: () => bilevelGarageValues().garage.wallHeightFt,
+          unit: 'ftin', typed: true,
+          put: value => (writeCell('attachedGarage', 'mainWallHeightFt', value),
+            'Garage wall height saved.') },
+        { side: 'left', key: 'garageSill', name: 'Sill plate',
+          shown: () => bilevelBuild().garage,
+          readText: () => inchWord(attachmentIn()) },
+        // CLAMPED, WHICH IS WHY IT IS READ AND NOT ASKED. Movie, 16 Sep: the
+        // garage sill "will NEVER be above the house sill plate, it will be
+        // either inline or below, not like how you drew it EVER". The one
+        // place on the page a drafter's number is overruled, so a box here
+        // would take an answer the drawing then ignores.
+        { side: 'left', key: 'garageOffset', name: 'sill off foundation sill',
+          anchor: false, shown: () => bilevelBuild().garage,
+          get: () => bilevelGarageValues().garage.sillOffsetFt },
+        { side: 'left', key: 'garageFdnType', name: 'FDN type:',
           shown: () => bilevelBuild().garage,
           choices: () => projectPage.GARAGE_FOUNDATIONS.attachedGarage
             .map(id => ({ id, label: projectPage.GARAGE_FOUNDATION_LABEL[id] })),
@@ -1875,30 +2003,29 @@
             return `Split's garage on a ${
               projectPage.GARAGE_FOUNDATION_LABEL[value].toLowerCase()}.`;
           } },
+        { side: 'left', key: 'garageSlab', name: 'slab thickness', anchor: false,
+          shown: () => bilevelBuild().garage,
+          get: () => cellValue('attachedGarage', 'slabThicknessIn').value,
+          unit: 'in', typed: true,
+          put: value => (writeCell('attachedGarage', 'slabThicknessIn', value),
+            'Garage slab thickness saved.') },
         // THE DEPTH ROW IS NAMED AFTER WHAT IS THERE, band 3's rule: one cell,
-        // two foundations, and "GRADE BEAM" over a frost wall would be a label
-        // lying about the concrete beside it.
+        // two foundations, and "grade beam height" over a frost wall would be
+        // a label lying about the concrete beside it.
         { side: 'left', key: 'garageFdnHeight', anchor: false,
-          name: () => (garageFoundation() === 'frostwall' ? 'FROST WALL HT' : 'GRADE BEAM'),
+          name: () => (garageFoundation() === 'frostwall'
+            ? 'frost wall height' : 'grade beam height'),
           shown: () => bilevelBuild().garage,
           get: () => cellValue('attachedGarage', 'fdnWallHeightFt').value,
           unit: 'ftin', typed: true,
           put: value => (writeCell('attachedGarage', 'fdnWallHeightFt', value),
             "Split garage's foundation height saved.") },
-        // DERIVED, AND THAT IS THE POINT OF IT. On a MODIFIED BILEVEL this
-        // wall is whatever puts the deck over the garage on the balcony's own
-        // line, so a typed number here would be a third answer disagreeing
-        // with the two that make it. Without the storey it is the garage row's
-        // own wall height, which is where a drafter types it.
-        { side: 'left', key: 'garageWall', name: 'GAR WALL', anchor: false,
-          shown: () => bilevelBuild().garage,
-          get: () => bilevelGarageValues().garage.wallHeightFt },
-        // ── THE STOREY OVER THE GARAGE, and it is band 3's ROOM ABOVE block:
-        // the package is the overGarage LEVEL's own, read and written where it
-        // is read rather than retyped here. That is the one thing this card
-        // shares with the attached garage's storey, because it is one level of
-        // the drawing and the sidebar's level card edits the same object.
-        { side: 'left', head: 'OVER GARAGE', key: 'overGarageHead',
+        // ── AND THE STOREY ON IT, which is band 1's ROOM OVER block. Its two
+        // numbers are the overGarage LEVEL's own -- read and written where
+        // they are read rather than retyped here, the rule band 1 and band 3
+        // both keep, because a 20" written here would be a number that agrees
+        // with the assembly until the assembly moves.
+        { side: 'left', head: 'ROOM OVER GARAGE', key: 'overGarageHead',
           shown: () => bilevelBuild().roomOver },
         { side: 'left', key: 'overGarageSheathing', name: 'SHEATHING',
           shown: () => bilevelBuild().roomOver, unit: 'in', typed: true,
@@ -1912,52 +2039,54 @@
           get: () => assembly(OVER_GARAGE_LEVEL_ID).joistDepthIn,
           put: value => (setAssembly(OVER_GARAGE_LEVEL_ID, 'joistDepthIn', value) !== false
             && 'Over the garage: joist depth saved.') },
-        { side: 'right', head: 'ENTRY' },
-        { side: 'right', key: 'floor-2', name: 'ENTRY FL', anchor: false,
-          get: v => pkgFt(v.floors[0]) },
-        // The disputed one. See RD-DOCUMENTS/SPEC-bilevel-section.md — derived
-        // at 3'-4 3/4", drawn 5'-1 1/8" on Movie's PDF, unreconciled. It is on
-        // the schedule precisely so the disagreement is visible on the page
-        // rather than only in a document nobody has open.
-        { side: 'right', key: 'wallHeight-2', name: 'ENTRY WALL', anchor: false,
-          get: v => v.floors[0].wallHeightFt },
-        { side: 'right', head: 'MAIN FL' },
-        { side: 'right', key: 'floor-3', name: 'MAIN FL JST', anchor: false,
-          get: v => pkgFt(v.floors[1]) },
-        { side: 'right', key: 'wallHeight-3', name: 'WALL HT', tagName: 'MAIN FL WALL',
-          anchor: false,
-          get: v => v.floors[1].wallHeightFt, field: 'mainWallHeightFt', unit: 'ftin' },
-        // ── THE LOWER SECOND FLOOR, which only the MODIFIED BILEVEL has ────
+
+        // ── THE RIGHT COLUMN IS THE BUNGALOW'S HOUSE COLUMN ───────────────
+        // Storeys top-down, then FOUNDATION, and every storey answers the same
+        // four in the same order: WALL HEIGHT, WALL TYPE, SHEATHING, JOIST
+        // DEPTH. The split's own rows sit inside those blocks rather than in
+        // blocks of their own.
+        //
+        // WALL TYPE IS A WORD, NOT A CHOICE, and that is the one place this
+        // column falls short of band 1's. The split's section-table row has no
+        // cell for a wall type -- drawing-format.js gives one only to the
+        // storey over a garage -- so a dropdown here would take an answer with
+        // nowhere to keep it. It shows the type IN FORCE instead, which is
+        // band 3's own ruling on the same problem.
         { side: 'right', head: '2ND FL', key: 'upperHead',
           shown: () => bilevelBuild().upper },
+        { side: 'right', key: 'wallHeight-5', name: 'wall height',
+          tagName: '2ND FL WALL', anchor: false, shown: () => bilevelBuild().upper,
+          get: v => v.floors[2] && v.floors[2].wallHeightFt,
+          field: 'upperWallHeightFt', unit: 'ftin' },
+        { side: 'right', key: 'upperWallType', name: 'WALL TYPE',
+          shown: () => bilevelBuild().upper,
+          readText: () => WALL_TYPE_VIEW[activeWallType].label },
+        { side: 'right', key: 'upperSheathing', name: 'SHEATHING',
+          shown: () => bilevelBuild().upper,
+          readText: () => inchWord(assemblyDefaults(5).sheathingIn) },
         // THE BALCONY'S OWN JOISTS, 11 7/8" and not the garage's 19 1/4":
         // "the balcony floor can be 11 7/8\"tji but over the garage default
         // 19.25\" (plus 3/4\"". One level, two depths -- the deck over the
         // garage is drawn from level-assembly.js's overGarage role next door.
-        { side: 'right', key: 'floor-5', name: 'JOISTS', tagName: '2ND FL JOISTS',
-          anchor: false, shown: () => bilevelBuild().upper,
+        { side: 'right', key: 'floor-5', name: 'joist depth',
+          tagName: '2ND FL JOISTS', anchor: false, shown: () => bilevelBuild().upper,
           get: v => v.floors[2] && v.floors[2].joistDepthIn,
           field: 'upperJoistDepthIn', unit: 'in' },
-        // THE ONE THAT SETS THE HEIGHT. Not a wall: this floor stands over the
-        // entry and the garage, so what a drafter reads off the section is
-        // deck to deck -- Movie's "about 9 ft above the entry floor".
-        { side: 'right', key: 'upperDeck', name: 'OVER ENTRY',
+        // THE ONE THAT SETS THE HEIGHT, and the split's own: this floor stands
+        // over the ENTRY and the garage, not on MAIN FL, so nothing in the
+        // main stack gives its elevation. Movie: "about 9 ft above the entry
+        // floor".
+        { side: 'right', key: 'upperDeck', name: 'over entry floor',
           anchor: false, shown: () => bilevelBuild().upper,
           get: v => v.floors[2] && v.floors[2].deckAboveFt,
           field: 'upperDeckAboveEntryFt', unit: 'ftin' },
-        { side: 'right', key: 'wallHeight-5', name: 'WALL HT', tagName: '2ND FL WALL',
-          anchor: false, shown: () => bilevelBuild().upper,
-          get: v => v.floors[2] && v.floors[2].wallHeightFt,
-          field: 'upperWallHeightFt', unit: 'ftin' },
-        { side: 'right', key: 'floor-5-extent', name: 'BALCONY DEPTH',
+        { side: 'right', key: 'floor-5-extent', name: 'balcony depth',
           anchor: false, shown: () => bilevelBuild().upper,
           get: v => v.floors[2] && v.floors[2].extentFt,
           field: 'upperExtentFt', unit: 'ftin' },
-        // DERIVED, and it measures the step between two plate heights the card
-        // already lets you type. Movie, 16 Sep: "we will need the ceiling drop
-        // in the dimensions somewhere on the side". Typing it here would be a
-        // third number that disagrees with the two that make it.
-        { side: 'right', key: 'ceilingDrop', name: 'CEILING DROP', anchor: false,
+        // DERIVED: the step between two plate heights this card already lets
+        // you type, so a box would be a third number that disagrees with them.
+        { side: 'right', key: 'ceilingDrop', name: 'ceiling drop', anchor: false,
           shown: () => bilevelBuild().upper,
           get: v => {
             const upper = v.floors[2];
@@ -1968,6 +2097,72 @@
             const upperPlate = entryDeck + upper.deckAboveFt + upper.wallHeightFt;
             return upperPlate - main.wallHeightFt;
           } },
+        { side: 'right', head: 'MAIN FL' },
+        { side: 'right', key: 'wallHeight-3', name: 'wall height',
+          tagName: 'MAIN FL WALL', anchor: false,
+          get: v => v.floors[1].wallHeightFt, field: 'mainWallHeightFt', unit: 'ftin' },
+        { side: 'right', key: 'mainWallType', name: 'WALL TYPE',
+          readText: () => WALL_TYPE_VIEW[activeWallType].label },
+        { side: 'right', key: 'mainSheathing', name: 'SHEATHING', anchor: false,
+          get: v => v.floors[1].sheathingIn, field: 'mainSheathingIn', unit: 'in' },
+        { side: 'right', key: 'floor-3', name: 'joist depth',
+          tagName: 'MAIN FL JST', anchor: false,
+          get: v => v.floors[1].joistDepthIn, field: 'mainJoistDepthIn', unit: 'in' },
+        // ── THE ENTRY, the storey under MAIN FL, which is where band 1 would
+        // have the next one down. Both its numbers are derived: the package is
+        // the 2x10 and ply Movie named, and the wall is the fill wall less
+        // that package -- see RD-DOCUMENTS/SPEC-bilevel-section.md, where the
+        // 3'-4 3/4" here and the 5'-1 1/8" on his PDF are still unreconciled.
+        { side: 'right', head: 'ENTRY' },
+        { side: 'right', key: 'wallHeight-2', name: 'wall height',
+          tagName: 'ENTRY WALL', anchor: false,
+          get: v => v.floors[0].wallHeightFt },
+        { side: 'right', key: 'floor-2', name: 'floor package',
+          tagName: 'ENTRY FL', anchor: false, get: v => pkgFt(v.floors[0]) },
+        { side: 'right', head: 'FOUNDATION' },
+        { side: 'right', key: 'attachment', name: 'Attachment',
+          choices: () => projectPage.FOUNDATION_ATTACHMENTS
+            .map(id => ({ id, label: projectPage.ATTACHMENT_LABEL[id] })),
+          read: () => splitOr('foundationAttachment', attachmentChoice()),
+          write: value => {
+            if (!projectPage.FOUNDATION_ATTACHMENTS.includes(value)) return false;
+            writeCell(bilevelRowId(), 'foundationAttachment', value);
+            return `Split held down with a ${
+              projectPage.ATTACHMENT_LABEL[value].toLowerCase()}.`;
+          } },
+        // NEXT TO THE TYPE, band 1's and band 3's reason exactly: a sill and a
+        // ladder are both 1 1/2" stock by default and both can be something
+        // else, so one box serves either choice.
+        { side: 'right', key: 'attachmentHeight', name: 'Height', anchor: false,
+          get: () => splitOr('foundationAttachmentIn', attachmentIn()),
+          field: 'foundationAttachmentIn', unit: 'in' },
+        // THE HOUSE FOUNDATION IS A WORD HERE for the reason WALL TYPE is:
+        // the split's row has no cell for it, and this band may not write the
+        // live drawing's own.
+        { side: 'right', key: 'fdnType', name: 'FDN type:',
+          readText: () => (houseIsGradeBeam() ? 'GRADE BEAM'
+            : WALL_TYPE_VIEW[fdnWallType()]?.label ?? 'CONCRETE') },
+        { side: 'right', key: 'fdnThickness', name: 'Thickness',
+          readText: () => inchWord(fdnThicknessIn()) },
+        { side: 'right', key: 'fdnHeight', name: 'FDN height', anchor: false,
+          get: v => v.foundation.wallHeightFt, field: 'fdnWallHeightFt', unit: 'ftin' },
+        // THE SPLIT'S OWN, BESIDE THE POUR IT STANDS ON. A short pour with a
+        // wood fill wall on it reaches the same bearing line the bungalow
+        // reaches with one tall pour, so this is the row band 1 has no
+        // equivalent for and it belongs next to the one it completes.
+        { side: 'right', key: 'woodFill', name: 'Fill wall', anchor: false,
+          get: v => v.foundation.woodFillHeightFt,
+          field: 'woodFillHeightFt', unit: 'ftin' },
+        { side: 'right', key: 'slab', name: 'Slab thickness', anchor: false,
+          get: v => v.foundation.slabIn, field: 'slabThicknessIn', unit: 'in' },
+        { side: 'right', key: 'footingWidth', name: 'Footing width', anchor: false,
+          get: v => v.foundation.footingWidthIn,
+          field: 'footingWidthIn', unit: 'in' },
+        { side: 'right', key: 'footingDepth', name: 'Footing depth', anchor: false,
+          get: v => v.foundation.footingDepthIn,
+          field: 'footingDepthIn', unit: 'in' },
+        { side: 'right', key: 'gradeOffset', name: 'Grade off FDN top',
+          anchor: false, get: v => v.foundation.gradeOffsetFt },
       ];
       const pkgFt = level => (level.joistDepthIn + level.sheathingIn) / 12;
       // A CELL IS TYPED IN ONE UNIT AND DRAWN IN ANOTHER on these cards: wall
@@ -1980,6 +2175,15 @@
       const BILEVEL_UNIT = {
         ftin: { show: ft => ftIn(ft), parse: text => parseFtIn(text) },
         in: { show: inches => inchesOnly(inches), parse: text => parseInches(text) },
+        // A PITCH IS NEITHER: it is a rise over a twelve, so it is typed and
+        // shown as the plain number band 1's own pitch box uses.
+        pitch: {
+          show: rise => String(rise),
+          parse: text => {
+            const rise = Number(String(text).trim());
+            return Number.isFinite(rise) && rise > 0 && rise <= 24 ? rise : null;
+          },
+        },
       };
       // NOT ONE WORD ON THE SECTION. Movie, 28 Sep: "delete all the text on
       // the section drawings". ATTIC SPACE over the house and over the garage

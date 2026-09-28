@@ -234,9 +234,13 @@ test('band 2 schedule reads the split stack', async ({ page }) => {
 
   // The entry package is the 2x10 and ply Movie named, deliberately NOT the
   // main floor's I-joist — sharing that field would draw it 2 5/8" too deep and
-  // look entirely plausible.
+  // look entirely plausible. ENTRY is still read as a whole package, because
+  // neither half of it is a cell anybody can type; MAIN FL asks for its joist
+  // and its sheathing separately, the way the bungalow's storeys do, so the
+  // two together are the same 1'-0 5/8".
   expect(rows['floor-2']).toBe(String.raw`0'-10"`);
-  expect(rows['floor-3']).toBe(String.raw`1'-0 5/8"`);
+  expect(rows['floor-3']).toBe(String.raw`11 7/8"`);
+  expect(rows['mainSheathing']).toBe(String.raw`3/4"`);
 
   // THE DISPUTED ONE, pinned to the derivation rather than left loose: fill
   // wall less the entry package. Movie's PDF says 5'-1 1/8" and is not
