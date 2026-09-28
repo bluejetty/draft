@@ -3092,22 +3092,64 @@
       // else's -- it does not follow the row's height, so it cannot follow
       // the canvas. With stretch the two would chase each other forever.
       const SECTION_MIN_H = 300;   // below this the drawing stops being readable
-      // THE LEFT COLUMN IS THE WHOLE STACK, not the garage block inside it.
-      // Once the house's roof moved over, #sched-left carries the roof, the
-      // gap and the garage together -- measuring #sched-garage alone would
-      // have answered with a part of the column and sized the drawing to it.
-      const leftCol = document.querySelector('#sched-left');
-      const schedFitHeight = () => Math.max(SECTION_MIN_H,
-        ...[houseSched, leftCol || garageSched]
-          .filter(el => el && !el.hidden)
+      // THE HEIGHT THE CANVASES ARE BORN AT, and the answer when there are no
+      // columns to measure -- the stacked layout below 1180px, where the
+      // schedules sit above and below the drawing rather than beside it and
+      // matching their height would mean a drawing as tall as a whole column.
+      const SECTION_STACKED_H = 500;
+
+      // EVERY BAND, NOT JUST THE BUNGALOW'S. The rule is the same on all three
+      // sections -- the drawing is as tall as the tallest column standing
+      // beside it -- so it is read off the markup rather than written out
+      // three times: a band's columns are its children that hold no canvas,
+      // and its canvases are the ones it does hold. The bilevel's eave panel
+      // is a second canvas in that band and takes the same height, which is
+      // what keeps the two halves of that band level with each other.
+      const bandFits = [...document.querySelectorAll('.type-stage .band')]
+        .map(band => ({
+          band,
+          canvases: [...band.querySelectorAll('canvas')],
+          cols: [...band.children].filter(el => !el.querySelector('canvas')),
+        }))
+        .filter(fit => fit.canvases.length && fit.cols.length);
+
+      // STACKED IS READ OFF THE LAYOUT, not off a copy of the media query's
+      // 1180. Under it the band collapses to a single track, so counting the
+      // tracks asks the question the CSS already answered and cannot drift
+      // from it the way a second literal would.
+      const bandStacked = band =>
+        getComputedStyle(band).gridTemplateColumns.split(/\s+/)
+          .filter(Boolean).length < 2;
+      const bandFitHeight = fit => {
+        if (bandStacked(fit.band)) return SECTION_STACKED_H;
+        const heights = fit.cols
+          .filter(el => !el.hidden && el.getClientRects().length)
           .map(el => Math.round(el.getBoundingClientRect().height))
-          .filter(h => h > 0));
+          .filter(h => h > 0);
+        // A band whose columns are all gone measures nothing, and sizing a
+        // drawing to nothing would hide it. It keeps the height it was born
+        // with instead.
+        return heights.length ? Math.max(SECTION_MIN_H, ...heights)
+          : SECTION_STACKED_H;
+      };
       let refitting = false;
       const fitSectionToScheds = () => {
-        const want = schedFitHeight();
-        if (canvas.height === want) return false;
-        canvas.height = want;
-        return true;
+        let moved = false;
+        bandFits.forEach(fit => {
+          // A SECTION THAT IS NOT ON SHOW MEASURES ZERO, and every column in
+          // it with it -- so a hidden band would size its drawing to the
+          // minimum and be waiting there, wrong, for the type to be picked.
+          // showType repaints after the swap, so the band is measured while
+          // it has a size.
+          if (!fit.band.getClientRects().length) return;
+          const want = bandFitHeight(fit);
+          fit.canvases.forEach(c => {
+            if (c.height === want) return;
+            c.height = want;
+            moved = true;
+          });
+        });
+        return moved;
       };
 
       const repaint = () => {
@@ -3736,6 +3778,49 @@
       // The first paint goes through the picker, so the opening state is
       // produced by the same path every later click takes.
       showType(new URLSearchParams(location.search).get('type'), false);
+
+      // ── AND THE FIT HAS TO SURVIVE THE WINDOW MOVING ────────────────────
+      //
+      // Movie, 28 Sep, on a 2 STOREY + GARAGE whose drawing ran off the
+      // bottom of the page while the columns beside it ended halfway up:
+      // "we should reduce the height of the section to match the tallest text
+      // columns here". The rule above was already doing that -- but only at
+      // repaint, and NOTHING REPAINTS ON A RESIZE.
+      //
+      // So the height was right for the window the page was opened in and
+      // stale in every window after it. Opening at 1100px and widening to
+      // 1366 measured 559px of drawing against 317 and 321 of column: the
+      // columns pair two rows to a line as they get room, halving their
+      // height, and the drawing stayed at the height the narrow window had
+      // asked for. That is the screenshot exactly, and it is why the page
+      // scrolled and the bottom bar cut the footing off.
+      //
+      // RE-FIT, THEN REPAINT ONLY IF THE FIT MOVED. Every label on these
+      // sections is placed from an anchor measured at the last scale, so a
+      // canvas resized without a repaint keeps its old labels -- and a
+      // repaint on every resize event would redraw three bands for a window
+      // dragged one pixel.
+      //
+      // IT CANNOT CHASE ITSELF. The columns are laid out beside the drawing,
+      // not stretched to it (align-items is start or center on every band),
+      // so their height is their rows' and never follows the canvas back --
+      // the resize this makes settles on the next call with nothing to change.
+      const refitSections = () => { if (fitSectionToScheds()) repaint(); };
+      // THE COLUMNS THEMSELVES, not just the window: a row hidden by a garage
+      // coming off, or a webfont arriving late, moves a column's height with
+      // the window untouched. ResizeObserver hands that over without polling.
+      if (window.ResizeObserver) {
+        const watchCols = new ResizeObserver(refitSections);
+        // border-box, because the question is how tall the column STANDS in
+        // the row -- its padding is part of that, and the content box would
+        // miss a change that only moved the padding.
+        bandFits.forEach(fit => fit.cols.forEach(
+          col => watchCols.observe(col, { box: 'border-box' })));
+      }
+      // AND THE WINDOW, for the one move the columns do not report: crossing
+      // 1180px stacks the band without necessarily changing any column's
+      // height, and stacked is the one state that does not follow them.
+      addEventListener('resize', refitSections);
 
       // ---- THE SHARED BAR, WIRED TO WHAT THIS PAGE CAN HONESTLY DO --------
       //
