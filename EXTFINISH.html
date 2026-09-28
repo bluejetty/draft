@@ -444,8 +444,29 @@
       // starts, which on a finished elevation is the top of the concrete. So
       // a wall's bands are offsets from `baseHeight` plus the level it stands
       // on, and "the bottom 3 ft" is 0 to 3 whatever the foundation under it.
-      const wallFootFt = face => face.level.floorTop + (face.wall.baseHeight || 0);
-      const wallHeadFt = face => face.level.floorTop + (face.wall.topHeight || 8);
+      // ── THE BOX ROUND A FACE READS THE PAINTER'S OWN LINES ──────────────
+      //
+      // THESE WERE THIS PAGE'S OWN ARITHMETIC, and they disagreed with the
+      // paint at both ends. The foot was `floorTop + baseHeight` -- the
+      // FINISHED FLOOR -- while cut-view clads from the bottom of the sill
+      // plate. Measured on repro-garage-house, E1:
+      //
+      //     MAIN FL   box 0.0000   paint -1.1771   out by 1'-2 1/8"
+      //     2ND FL    box 9.1458   paint  8.0938   out by 1'-0 5/8"
+      //
+      // Movie reported this as the FINISHES being wrong, twice, with
+      // screenshots -- and every measurement of the finishes came back
+      // correct, because they were. The box was the thing lying, and a
+      // drafter has no way to tell a wrong box from wrong paint.
+      //
+      // THE HEAD CHANGED TOO, though it measured identical on all six faces
+      // of the fixture. `floorTop + topHeight` is the WALL's top; the painter
+      // clads to `level.wallTop`, the LEVEL's plate. They agree whenever a
+      // wall is as tall as its storey, which is every wall here -- and a
+      // number that agrees today by coincidence is the same trap as the foot,
+      // one fixture away from being found.
+      const wallFootFt = (face, stack) => CV.faceSillFt(env, face, stack);
+      const wallHeadFt = face => face.level.wallTop;
 
       const ELEV_NAMES = { E1: 'FRONT', E2: 'LEFT', E3: 'BACK', E4: 'RIGHT' };
       let picked = null;   // { wallId }
@@ -970,7 +991,7 @@
           const face = faces[i];
           const lo = Math.min(face.u1, face.u2), hi = Math.max(face.u1, face.u2);
           if (u < lo || u > hi) continue;
-          if (e < wallFootFt(face) || e > wallHeadFt(face)) continue;
+          if (e < wallFootFt(face, stack) || e > wallHeadFt(face)) continue;
           return face;
         }
         return null;
@@ -991,7 +1012,7 @@
         ctx.setLineDash([6, 4]);
         ctx.strokeRect(X(lo), Y(wallHeadFt(face)),
           (hi - lo) * frame.pxPerFt,
-          (wallHeadFt(face) - wallFootFt(face)) * frame.pxPerFt);
+          (wallHeadFt(face) - wallFootFt(face, stack)) * frame.pxPerFt);
         ctx.restore();
       };
 

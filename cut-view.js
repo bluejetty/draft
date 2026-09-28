@@ -343,6 +343,50 @@ if (!window.DraftCutView) {
     return garageBearing(env, fdn, garage) - GARAGE_BEAM_PLATE_IN / 12;
   }
 
+  // ── WHERE A FACE'S CLADDING STARTS ──────────────────────────────────────
+  //
+  // EXPORTED, BECAUSE THE PAINTER IS NOT THE ONLY THING THAT ASKS. EXT.
+  // FINISH draws a dashed box round the face you pick, and it had its own
+  // arithmetic for the bottom of that box: `level.floorTop + baseHeight`,
+  // which is the FINISHED FLOOR -- a whole floor package above where the
+  // cladding actually starts.
+  //
+  // MEASURED ON repro-garage-house, both storeys, E1:
+  //
+  //     MAIN FL   box 0.0000   paint -1.1771   out by 1'-2 1/8"
+  //     2ND FL    box 9.1458   paint  8.0938   out by 1'-0 5/8"
+  //
+  // So the page drew the stucco in the right place and then drew a line
+  // saying it had not. Movie read the line and reported the paint -- twice,
+  // with screenshots -- and every measurement I made of the PAINT came back
+  // correct, which is exactly how a wrong second mechanism hides.
+  //
+  // A claim two mechanisms both satisfy is a claim no check can hold. There
+  // is one mechanism now, and `faceLines` below reads it too rather than
+  // keeping a copy that agrees today.
+  //
+  //   SILL   where this storey's cladding starts. On the storey that bears
+  //          on concrete that is the BOTTOM OF THE SILL PLATE -- Movie,
+  //          27 Sep: *"the main floor and garage should go down to the
+  //          bottom of sill plate and 2nd floor should go to main fl ceiling
+  //          line"*. On a storey above there is no sill plate and the
+  //          cladding runs down over the rim, so it is that floor's own
+  //          underside -- which IS the ceiling line of the storey below.
+  //
+  // A GARAGE STANDS ON ITS OWN CONCRETE, so its cladding starts a plate below
+  // its own floor wherever that floor is; a house storey does only when it is
+  // the one on the foundation.
+  function faceSillFt(env, face, stack) {
+    const level = face.level;
+    if (!face.garage) {
+      return level.id === stack.floors[0].id
+        ? level.floorBottom - houseSillPlateFt()
+        : level.floorBottom;
+    }
+    return garageBearing(env, stack.foundation, face.garage)
+      - GARAGE_BEAM_PLATE_IN / 12;
+  }
+
   // THE FINISHED GARAGE FLOOR AS ONE LEVEL -- what a stair lands on, what a
   // door schedule quotes, and the one number three painters were each deriving
   // for themselves. See GARAGE_SLAB_ABOVE_GRADE_IN for what they each had.
@@ -3417,18 +3461,20 @@ if (!window.DraftCutView) {
     // exterior finishes land, or a garage in different siding grows a band of
     // the house's at its foot. It follows it here: the plate is inside the
     // face's own cladding now, because the cladding starts underneath it.
+    // THE SILL MOVED OUT to module scope as faceSillFt, so the page that
+    // draws a box round a face reads the same line the painter clads to. The
+    // garage branch there recomputes `floor` from garageBearing rather than
+    // taking geom's -- the same call geom's own `garageBase` makes, with the
+    // same env and the same stack.foundation, so this is the number it always
+    // was and not a second opinion about it.
     const faceLines = geom => {
       const { face, floor, tops } = geom;
-      const level = face.level;
-      const head = Math.max(...tops.map(t => t.top));
-      const plateFt = face.garage ? GARAGE_BEAM_PLATE_IN / 12 : houseSillPlateFt();
-      // A GARAGE STANDS ON ITS OWN CONCRETE, so its cladding starts a plate
-      // below its own floor wherever that floor is; a house storey does only
-      // when it is the one on the foundation.
-      const bearsOnConcrete = face.garage || level.id === stack.floors[0].id;
-      const sill = face.garage ? floor - plateFt
-        : (bearsOnConcrete ? level.floorBottom - plateFt : level.floorBottom);
-      return { sill, plate: level.wallTop, head, foot: floor };
+      return {
+        sill: faceSillFt(env, face, stack),
+        plate: face.level.wallTop,
+        head: Math.max(...tops.map(t => t.top)),
+        foot: floor,
+      };
     };
 
     // ── WHAT WRAPS ONTO THIS FACE ─────────────────────────────────────
@@ -5178,6 +5224,7 @@ if (!window.DraftCutView) {
     sectionWallCrossings,
     cutViewExtents,
     elevationFaces,
+    faceSillFt,
     roofBaseElev,
     roofEaveElev,
     garageBearing,

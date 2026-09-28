@@ -1372,6 +1372,95 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
   }
 }
 
+// ── AND THE STOREY ABOVE STOPS AT THE CEILING BELOW ───────────────────────
+//
+// Movie, 27 Sep: *"the main floor and garage should go down to the bottom of
+// sill plate and 2nd floor should go to main fl ceiling line"*. The block
+// above pins the first half. THIS EXISTS BECAUSE MUTATION FOUND NOTHING
+// PINNING THE SECOND: making faceSillFt deduct a sill plate from EVERY floor
+// -- so the upper storey clads from 1 1/2" below the ceiling it sits on --
+// left all 193 checks green, and left the EXT. FINISH pick-box spec green
+// too, because the box follows the same function and moved with it.
+//
+// TWO STOREYS IN ONE PAINT, IN DIFFERENT MATERIALS, which is what makes the
+// answer attributable: with one finish there is no telling an upper box from
+// a lower one, and "the lowest box" is the main floor by construction.
+//
+// ANCHORED ON A LINE THIS FILE HAS ALREADY PROVED rather than on a number it
+// computes. The main floor's cladding bottom is checked above to be
+// floorBottom less a plate; everything here is measured as a PIXEL DIFFERENCE
+// from that box, so the only new arithmetic is a subtraction.
+{
+  const uFile = path.join(ROOT, 'proto', 'repro-garage-house.draft');
+  const uSaved = JSON.parse(fs.readFileSync(uFile, 'utf8'));
+  // OFF env.floorLevels(), NOT OFF THE WALLS' OWN levelIds, and that is this
+  // check being wrong once: `levelId > 0 && !wall.body` still admits the
+  // FOUNDATION, whose walls are a view rather than a body. Sorted ascending
+  // it handed back level 1 as "main", so the main floor was clad in the
+  // UPPER material and the harness reported three boxes and no brick. The
+  // env already names the framed floors, bottom first; asking it is the same
+  // fix the block above made for the same reason.
+  const uLevels = buildEnv(win, uSaved).floorLevels();
+  const levelIds = uLevels.map(l => Number(l.id));
+
+  // THE FIXTURE MUST HAVE TWO STOREYS, asserted before it is trusted: on a
+  // bungalow this whole block would compare a box against nothing and pass.
+  check('two-storey fixture: the house has walls on a second framed level',
+    levelIds.length > 1, `framed levels: ${levelIds.join(', ')}`);
+
+  if (levelIds.length > 1) {
+    const [mainId, upperId] = levelIds;
+    const two = JSON.parse(JSON.stringify(uSaved));
+    two.walls.forEach(w => {
+      if (w.body || Number(w.levelId) <= 0) return;
+      if (Number(w.levelId) === mainId) w.finish = 'brick';
+      if (Number(w.levelId) === upperId) w.finish = 'ledgestone';
+    });
+    const twoEnv = buildEnv(win, two);
+    const twoStack = win.DraftCutView.sectionLevelStack(twoEnv);
+
+    const seen = [];
+    const FP = win.DraftFinishPatterns;
+    const realDraw = FP.drawFinish;
+    win.DraftFinishPatterns = { ...FP,
+      drawFinish: (ctx, box, finish, inks) => {
+        seen.push({ id: finish && finish.id, yBottom: box.yBottom, pxPerFt: box.pxPerFt });
+        return realDraw(ctx, box, finish, inks);
+      } };
+    paintElevation(win, twoEnv,
+      standardElevationCuts(twoEnv).find(c => c.id === 'E1'), { pxPerFt: 40, finishes: true });
+    win.DraftFinishPatterns = FP;
+
+    const lowest = id => seen.filter(b => b.id === id)
+      .sort((a, b) => b.yBottom - a.yBottom)[0];
+    const low = lowest('brick');
+    const high = lowest('ledgestone');
+    check('two-storey fixture: both storeys painted, in their own materials',
+      !!low && !!high, `${seen.length} boxes: ${[...new Set(seen.map(b => b.id))].join(', ')}`);
+
+    if (low && high) {
+      const mainLevel = twoStack.floors.find(f => Number(f.id) === mainId);
+      const plateFt = win.DraftLevelAssembly.SILL_PLATE_IN / 12;
+      // The proved anchor, then one subtraction. y grows DOWNWARD, so the
+      // upper box's smaller yBottom is the higher elevation.
+      const mainSillFt = mainLevel.floorBottom - plateFt;
+      const upperSillFt = mainSillFt + (low.yBottom - high.yBottom) / low.pxPerFt;
+      check('the storey above clads from the CEILING BELOW, with no plate '
+        + 'deducted from it',
+        Math.abs(upperSillFt - mainLevel.wallTop) < 0.01,
+        `upper cladding starts at ${upperSillFt.toFixed(4)} ft; the main floor's `
+        + `wall top is ${mainLevel.wallTop.toFixed(4)} ft `
+        + `(a plate would put it ${(mainLevel.wallTop - plateFt).toFixed(4)})`);
+
+      // AND THE TWO ARE NOT THE SAME LINE, or the check above is comparing a
+      // number to itself through a fixture where every storey starts together.
+      check('two-storey fixture: the storeys start at different heights',
+        Math.abs(low.yBottom - high.yBottom) > 1,
+        `main ${low.yBottom.toFixed(2)}px, upper ${high.yBottom.toFixed(2)}px`);
+    }
+  }
+}
+
 // ── THE BAND THAT TURNS THE CORNER ────────────────────────────────────────
 //
 // Movie asked for the wrap and the rail has offered it since the band
