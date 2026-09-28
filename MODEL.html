@@ -43,6 +43,23 @@
      the foot, because the page MOUNTS them mid-body and a module that
      arrives after its own mount call is not a module, it is a crash. -->
 <script src="./shell-bars.js"></script>
+<!-- LANDSCAPE ON EVERY WORKING SCREEN (board #310): in portrait on a touch
+     device this covers the page until the tablet is turned. ENTRY is the one
+     screen that does not load it.
+
+     THIS PAGE LOST IT IN THE PORT. The ruling names five pages -- "MODEL,
+     LAYOUT, PROJECT, STANDARDS and SETTINGS always present landscape on a
+     tablet ... Never the portrait arrangement, not even briefly" -- and four
+     of them carried it over. MODEL.dc.html has it at :130; MODEL.html had it
+     nowhere, so an iPad turned portrait on the page a drafter spends most of
+     their time was getting exactly the arrangement the ruling forbids.
+
+     AND NOTHING COULD HAVE CAUGHT IT. The guard's own gate is
+     `(pointer: coarse)`, and every spec in this repo ran at desktop width
+     with a fine pointer -- a suite that never sets a coarse pointer cannot
+     see a missing coarse-pointer guard. tests/model-portrait-guard.spec.js
+     is the first that does. -->
+<script src="./orientation-guard.js"></script>
 <style>
   :root {
     color-scheme: dark;
