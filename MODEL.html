@@ -1297,6 +1297,14 @@
      a house raised here and a house raised there cannot disagree about which
      side of the traced line the wall body sits on. -->
 <script src="./build-house.js"></script>
+<!-- THE WINDOW TAG'S FORMATTER. fen-labels.js was loaded by MODEL.dc.html and
+     by the Construction Layout, and never by this page -- which is why the
+     size tag drew nothing here and threw nothing either: paintWindowSizes
+     guards on DraftFenLabels and returned quietly on every window in the
+     drawing. A guard that hides a missing script is a guard that hides the
+     feature, so the instrument that found it counts fillText calls rather
+     than trusting the picture. -->
+<script src="./fen-labels.js"></script>
 <!-- AUTO DIMS: the exterior dimension strings. Extracted pure out of the old
      page -- plain data in, segments out, no THREE and no DOM -- and this page
      is its second caller. The computation is not ported anywhere: both pages
@@ -2630,6 +2638,116 @@
     // simply never drawn.
     openingsOn(shown).forEach(({ opening, geometry }) =>
       R.drawOpening2D(ctx, toS, opening, { geometry }, openingEnv()));
+    paintWindowSizes(ctx, toS, shown);
+  };
+
+  // ── AND EACH WINDOW SAYS ITS SIZE ──────────────────────────────────────
+  //
+  // Movie, 28 Sep: *"make the windows on the floor plans and on the elevations
+  // size : \"36 X 42\" width by height in inches"*, *"mark the window on ext
+  // side of window paralel with the window"*, and *"(don't need the letter for
+  // the window)"*.
+  //
+  // THIS PAGE DREW NO TAG AT ALL. fen-labels.js has formatted one since board
+  // #141 and plan-composition.js places one, but that module paints the
+  // CONSTRUCTION LAYOUT sheets and this page has never called it -- so the tag
+  // existed in the codebase and on no screen a drafter opens.
+  //
+  // THE HELPER IS render-2d's, NOT A SECOND COPY. labelAlongLine2D turns the
+  // text to the line, flips it out of the upside-down half turn and holds it
+  // clear -- three rules with three mutations already on them, written for the
+  // BEAMS on 27 Sep and noted there as "the helper the window tags will share".
+  // This is that share.
+  //
+  // ctx AND toS ARE HANDED IN, not closed over. They are locals of the paint
+  // pass -- `const R = window.DraftRender2D` is declared inside each one too --
+  // and a helper written at this level that reaches for them compiles, runs,
+  // throws on the first window and draws nothing. It did exactly that once.
+  const WINDOW_TAG_GAP_FT = 0.55;
+  const paintWindowSizes = (ctx, toS, shown) => {
+    const R = window.DraftRender2D;
+    const FL = window.DraftFenLabels;
+    const BH = window.DraftBuildHouse;
+    if (!FL || !BH || !R || !R.labelAlongLine2D) return;
+    const outlines = new Map();
+    const outlineOf = id => {
+      if (!outlines.has(id)) outlines.set(id, houseOutlineOn(id));
+      return outlines.get(id);
+    };
+    ctx.save();
+    ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+    openingsOn(shown).forEach(({ opening, geometry }) => {
+      if (opening.type !== 'window' || !geometry || !geometry.glazing) return;
+      const label = FL.fenLabelForOpening(opening, { exteriorWall: true });
+      if (!label) return;
+      const out = exteriorNormalAt(outlineOf(opening.levelId), geometry.center);
+      if (!out) return;
+      // ALONG THE GLASS, which is the line the drafter is reading. The label
+      // runs the window's own width so it cannot be mistaken for the one next
+      // door, and it is stepped off the wall by the assembly's own half
+      // thickness -- the corners say how far that is, not a guess.
+      const [ga, gb] = geometry.glazing;
+      const run = Math.hypot(gb.x - ga.x, gb.z - ga.z) || 1;
+      const ux = (gb.x - ga.x) / run, uz = (gb.z - ga.z) / run;
+      const half = Math.max(...geometry.corners.map(corner =>
+        Math.abs((corner.x - geometry.center.x) * out.x
+          + (corner.z - geometry.center.z) * out.z)));
+      const gap = half + WINDOW_TAG_GAP_FT;
+      const cxw = geometry.center.x + out.x * gap;
+      const czw = geometry.center.z + out.z * gap;
+      // OFFSET 0, ON A LINE ALREADY MOVED OUTSIDE. labelAlongLine2D's own
+      // offset is perpendicular in the ROTATED frame, and its read-direction
+      // flip makes a->b and b->a the same angle -- so which side it lands on
+      // cannot be chosen by handing it the line backwards. The side is decided
+      // here, where the outline knows which way is out, and the helper is left
+      // to do the one thing only it does.
+      R.labelAlongLine2D(ctx,
+        toS({ x: cxw - ux * run / 2, z: czw - uz * run / 2 }),
+        toS({ x: cxw + ux * run / 2, z: czw + uz * run / 2 }),
+        label, { offset: 0, color: skin['ink-quiet'] || skin['draw-wall-edge'] });
+    });
+    ctx.restore();
+  };
+
+  // ── WHICH WAY IS OUT ───────────────────────────────────────────────────
+  //
+  // OFF THE OUTLINE'S OWN WINDING, through build-house.js's
+  // outlineInteriorRef -- the function the wall builder already uses to decide
+  // which side of a traced line the body lands on. A centroid would be a
+  // second answer to the same question and would get an L-shaped house wrong
+  // at the inside corner; a point-in-polygon test would be a third copy of a
+  // primitive this codebase keeps only in its harnesses.
+  //
+  // THE EDGE, NOT THE WALL. A wall record's start and end run whichever way it
+  // was drawn, and the ring's direction is what the interior ref is about -- so
+  // the normal is taken from the outline segment the window stands on.
+  //
+  // AN OUTLINE IS `{ points }`, NOT AN ARRAY. houseOutlineOn hands back the
+  // body's outline object, and a bare `Array.isArray` guard here rejected
+  // every window in the drawing -- silently, because the guard returns null
+  // and the caller skips. Both shapes are taken, so a caller holding either
+  // is right.
+  const exteriorNormalAt = (outline, at) => {
+    const pts = Array.isArray(outline) ? outline
+      : (outline && Array.isArray(outline.points) ? outline.points : null);
+    if (!pts || pts.length < 3 || !at) return null;
+    let best = null, bestD = Infinity;
+    pts.forEach((p, i) => {
+      const q = pts[(i + 1) % pts.length];
+      const dx = q.x - p.x, dz = q.z - p.z;
+      const len2 = dx * dx + dz * dz;
+      if (len2 < 1e-9) return;
+      const t = Math.max(0, Math.min(1,
+        ((at.x - p.x) * dx + (at.z - p.z) * dz) / len2));
+      const d = Math.hypot(at.x - (p.x + dx * t), at.z - (p.z + dz * t));
+      if (d < bestD) { bestD = d; best = { dx, dz, len: Math.sqrt(len2) }; }
+    });
+    if (!best) return null;
+    const ux = best.dx / best.len, uz = best.dz / best.len;
+    // Interior to the LEFT of a positively wound ring; out is the other way.
+    const inside = window.DraftBuildHouse.outlineInteriorRef(pts) === 'left'
+      ? { x: -uz, z: ux } : { x: uz, z: -ux };
+    return { x: -inside.x, z: -inside.z };
   };
 
   // ── WHAT AN OPENING NEEDS TO KNOW ABOUT ITS WALL ────────────────────────
