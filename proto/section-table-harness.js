@@ -536,6 +536,56 @@ check('the taper runs 45 degrees -- its run equals its drop', P => {
     && part.y1 !== part.y2 && part.x1 !== part.x2 && part.y1 < 0);
   return [Math.abs(taper.x2 - taper.x1) - Math.abs(taper.y2 - taper.y1) < 1e-9, true];
 });
+// ── THE OTHER TWO FOUNDATIONS ─────────────────────────────────────────────
+// A grade beam and a frost wall stand their concrete PROUD of the floor and
+// the wall bears on THAT, which is the one thing that makes them a different
+// drawing rather than the thickened edge with a deeper edge. Asserted as the
+// wall's own bottom against the concrete top, both read off the drawing, so a
+// wall left sitting on the slab fails here however deep the concrete is.
+const DETACHED_ON = (P, foundation) => P.buildDetachedGarageSection({
+  ...DETACHED(P),
+  garage: { ...DETACHED(P).garage, foundation },
+});
+check('a grade beam stands its concrete proud and the wall bears on it', P => {
+  const out = DETACHED_ON(P, 'gradebeam');
+  const concTop = -P.DETACHED_SLAB_ABOVE_GRADE_IN / 12
+    + P.GRADE_BELOW_CONCRETE_IN / 12;
+  const wall = rects(out).find(r => near(r.h, P.GARAGE_WALL_FT));
+  return [wall ? near(wall.y, concTop) : 'no wall rect on the beam', true];
+});
+// AND THE FLOOR DOES NOT MOVE WITH IT. The reason the page can switch
+// foundation without moving the door and the apron: DETACHED_SLAB_ABOVE_GRADE_IN
+// puts both floors at the same height above grade.
+check('the floor is at the same height on a beam as on a thickened edge', P => {
+  const top = out => out.parts.filter(part => part.kind === 'line'
+    && near(part.y1, 0) && near(part.y2, 0) && part.x2 > part.x1).length;
+  return [[top(detached(P)) > 0, top(DETACHED_ON(P, 'gradebeam')) > 0].join(), 'true,true'];
+});
+// ── THE STOREY OVER IT ────────────────────────────────────────────────────
+// Movie, 28 Sep. The roof stands on the ROOM's plate once there is a room, and
+// that is the whole of what the press changes about the roof: keying it to the
+// garage plate is what left band 1's ROOM OVER roofs sitting on the garage.
+const DETACHED_ROOM = P => P.buildDetachedGarageSection({
+  ...DETACHED(P),
+  garage: {
+    ...DETACHED(P).garage,
+    foundation: 'gradebeam',
+    roomOver: true,
+    overJoistIn: 19.25,
+    overSheathingIn: 0.75,
+    overWallHeightFt: 8 + 1.125 / 12,
+    overWallIn: 5.5,
+  },
+});
+check('a storey over the detached garage lifts its roof by the whole storey', P => {
+  const highest = out => Math.max(...out.parts.flatMap(part => part.kind === 'rect'
+    ? [part.y, part.y + part.h]
+    : part.kind === 'break' ? [part.y1, part.y2] : [part.y1, part.y2]));
+  const lift = highest(DETACHED_ROOM(P)) - highest(DETACHED_ON(P, 'gradebeam'));
+  const storey = (19.25 + 0.75) / 12 + 8 + 1.125 / 12;
+  return [Math.abs(lift - storey) < 1e-6, true];
+});
+
 // The door head, composed rather than pinned -- it follows the wall and the
 // head drop, so it stays right when either moves.
 check('the overhead door head hangs OPENING_HEAD_DROP_IN under the top plate', P => {
@@ -898,7 +948,26 @@ const MUTATIONS = [
   ['the thickened edge is poured to the field depth -- no thickening at all',
     s => s.replace('    const edgeBot = -edgeFt;', '    const edgeBot = -slabFt;')],
   ['the taper is cut at something other than 45 degrees',
-    s => s.replace('    const taperRun = edgeFt - slabFt;', '    const taperRun = (edgeFt - slabFt) * 2;')],
+    s => s.replace('    const taperRun = Math.max(0, edgeFt - slabFt);',
+      '    const taperRun = Math.max(0, edgeFt - slabFt) * 2;')],
+  // ── THE OTHER TWO FOUNDATIONS, NOW THAT THE SECTION DRAWS THEM ──────────
+  // Until 28 Sep this builder drew a thickened edge and nothing else, so
+  // every mutant above is a thickened-edge mutant. These two are the facts
+  // the other foundations add: the concrete stands PROUD of the floor and the
+  // wall bears on it, and the storey over the garage is what the roof stands
+  // on once it exists.
+  ['the wall on a grade beam bears on the floor instead of the concrete',
+    s => s.replace('      wallBaseY = concTop;', '      wallBaseY = 0;')],
+  // ANCHORED ON THE LINE ABOVE IT TOO. buildGarageSection carries the same
+  // assignment at the same indent for the attached garage's storey, so the
+  // bare line matches twice and replace() takes the first -- a mutation of
+  // the wrong builder, reported against this one.
+  ['the roof ignores the storey and stays on the garage plate',
+    s => s.replace(
+      '      anchors.overWallHeight = { x: overStudFt + 0.55, y: deck + overWallFt / 2 };\n'
+      + '      }\n      roofBase = deck + overWallFt;',
+      '      anchors.overWallHeight = { x: overStudFt + 0.55, y: deck + overWallFt / 2 };\n'
+      + '      }\n      roofBase = plateY;')],
   ['the foundation row loses a foundation',
     s => s.replace("    detachedGarage: Object.freeze(['thickened', 'gradebeam', 'frostwall']),",
       "    detachedGarage: Object.freeze(['thickened', 'gradebeam']),")],
