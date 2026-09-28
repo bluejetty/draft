@@ -3866,7 +3866,7 @@ if (!window.DraftCutView) {
         ctx.moveTo(xb, Y(topR));
         ctx.lineTo(xb, Y(footR));
       }
-      // ── AND A GARAGE WALL DOES NOT LINE ITS OWN BASE ─────────────────
+      // ── AND NO WALL FACE LINES ITS OWN BASE ──────────────────────────
       //
       // Movie, 26 Sep, on E1 and E4 of a 2 STOREY + GARAGE + ROOM OVER,
       // after the sill plate was painted: "there is still a gap where the
@@ -3891,35 +3891,43 @@ if (!window.DraftCutView) {
       // and the top-of-concrete line already terminates the wall. There is
       // one line there on a real building, and the concrete draws it.
       //
-      // THE HOUSE KEEPS ITS LINE. A house face's floor is a STOREY line --
-      // the main floor across the facade, with the band's white directly
-      // under it and no concrete for a foot -- and it is the line a drafter
-      // expects at a floor level. The two cases differ in what the face
-      // stands on, which is exactly what `face.garage` records.
+      // ── AND THE HOUSE DOES NOT KEEP ONE EITHER, WHICH IS NEW ─────────
       //
-      // AND IT STARTS WHERE IT STARTS, rather than wherever the pen was left.
+      // This branch used to read `if (!face.garage)`, under a paragraph
+      // headed THE HOUSE KEEPS ITS LINE: a house face's floor was called a
+      // STOREY line, "the line a drafter expects at a floor level". IT WAS
+      // NEVER ON THE SHEET. The rim-band fill was painted after every face
+      // and bleeds 1px above floorTop, so it covered this 2px line along its
+      // whole length -- for as long as both have existed. Two rules, one
+      // strip, and the one that ran second won without either saying so.
       //
-      // Movie, 26 Sep: "here is a really weird one - look at the line near 2nd
-      // floor (elevation line it gets warped)". This line used to inherit the
-      // pen from the right-hand vertical, which ended at `(xb, floor)` and so
-      // handed it the right start for free. `roofClippedFoot` broke that: the
-      // vertical now ends at `footR` where a sheet covers the corner's foot,
-      // and on a fresh twoStorey-garage E1 the storey line came out as
+      // IT SURFACED THE MOMENT THE BAND WENT INTO THE DEPTH-SORTED PASS (see
+      // the rim-band note there, and the cladding it was covering). Measured
+      // on repro-garage-house E2 the instant the order changed: two full
+      // width horizontals inside the house body where there had been none,
+      // at e 0.023 and e 9.148 -- MAIN FL and 2ND FL, drawn right across the
+      // facade. garage-elevation-occlusion.spec.js counted them.
       //
-      //     (16.00, 10.577) -> (-16.00, 9.152)   w1.25, slope 1:22.5
+      // MOVIE SAW BOTH DRAWINGS AND CHOSE, 28 Sep: *"we don't want to show
+      // those horizontal lines on the house, only off to the side of the
+      // house (for the user to visualize where the floors are located"*, and
+      // *"on the side of the house is sufficient"*. The faint level datums
+      // that run past the house each way are that, and they already exist.
       //
-      // -- thirty-two feet of second-floor line leaning a foot and a half
-      // across the front of the house. The same inheritance fails the other
-      // way too: with the vertical skipped entirely the pen sits at the end of
-      // the top profile and the line falls out of the eaves.
+      // SO THE TWO CASES ARE ONE CASE and the condition goes with the line:
+      // no wall face closes its outline along its own foot, house or garage.
+      // What terminates a wall at the bottom is what it stands on -- the top
+      // of the pour under a garage, the band's own white under a house.
       //
-      // A SUB-PATH THAT NAMES BOTH ITS ENDS cannot be broken by what is drawn
-      // before it, which is the whole of the fix and the reason it is written
-      // as two calls rather than one.
-      if (!face.garage) {
-        ctx.moveTo(xb, Y(floor));
-        ctx.lineTo(xa, Y(floor));
-      }
+      // WHAT WENT WITH IT. The removed sub-path carried a note, "AND IT
+      // STARTS WHERE IT STARTS": it named both its ends rather than
+      // inheriting the pen from the right-hand vertical, because
+      // `roofClippedFoot` had moved that vertical's end to `footR` and the
+      // storey line came out of a fresh twoStorey-garage E1 as (16.00,
+      // 10.577) -> (-16.00, 9.152), leaning a foot and a half across the
+      // front of the house. Kept here because the lesson outlives the line:
+      // a sub-path that inherits the pen is a sub-path another change can
+      // bend without touching it.
       ctx.stroke();
       const wallLen = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
       if (wallLen < 1e-6) return;
@@ -4267,62 +4275,6 @@ if (!window.DraftCutView) {
       RP.drawRoofing(ctx, frame, RT.roofingById(roof.roofing), { hatch: INK });
       ctx.restore();
     };
-    // FAR FIRST, AND ON A TIE THE WALL GOES DOWN BEFORE THE ROOF. A sheet
-    // whose nearest corner lands exactly on a wall's depth is a sheet bearing
-    // on that wall's own plate, and it laps OVER the plate -- which is both
-    // how the roof is built and the only way round that cannot rub out a
-    // gable wall's climb. `sort` is stable, so listing the walls first is
-    // what states it.
-    [
-      ...faceGeoms.filter(geom => !faceHidden(geom))
-        .map(geom => ({ depth: geom.face.depth, go: () => paintFace(geom) })),
-      ...roofFills.map(fill => ({ depth: fill.depth, go: () => paintRoof(fill) })),
-    ].sort((a, b) => a.depth - b.depth).forEach(item => item.go());
-
-    // Floor assembly bands: each floor's rim (joists + sheathing) is part of
-    // the house face — white like the walls, no banding line, keeping the
-    // vertical edges of every visible face corner through the band.
-    // IS THIS POINT BEHIND A ROOF? Lifted out of `hidden` so the rim-band
-    // pass below can ask it too -- `hidden` itself cannot move, because its
-    // OTHER half reads `rimBands`, which that pass is what builds.
-    //
-    // A ray is cast from just in front of the point to the far side of the
-    // drawing, and each roof's profile along it is reduced to a lo and a hi.
-    // "Just in front" is what stops a surface hiding itself.
-    const behindRoof = (pt, elev) => {
-      if (!facesByRoof || !facesByRoof.size) return false;
-      const depth = pt.x * dir.x + pt.z * dir.z;
-      const span = dHi - depth;
-      if (span < 0.1) return false;
-      const near = { x: pt.x + dir.x * 0.05, z: pt.z + dir.z * 0.05 };
-      const far = { x: pt.x + dir.x * span, z: pt.z + dir.z * span };
-      let covered = false;
-      facesByRoof.forEach((roofFaces, roof) => {
-        if (covered) return;
-        const base = roofEaveElev(roof, stack, env);
-        let lo = Infinity, hi = -Infinity;
-        geo().roofProfile(roof, roofFaces, near, far, dir).forEach(p => {
-          const e = base + p.rise;
-          if (e > hi) hi = e;
-          if (e < lo) lo = e;
-        });
-        if (hi === -Infinity) return;   // the ray misses this roof entirely
-        lo -= fasciaFt;
-        if (elev > lo + ROOF_COVER_EPS && elev < hi - ROOF_COVER_EPS) covered = true;
-      });
-      return covered;
-    };
-
-    // WHERE A POINT ON THE VIEW PLANE ACTUALLY IS. `u` is the distance along
-    // the cut's axis and `depth` the distance along its direction, and the two
-    // are perpendicular, so the world point is just the sum of the two
-    // components. The rim-band pass knows a `u` and a face depth and needs a
-    // point to cast a ray from.
-    const atUDepth = (u, depth) => ({
-      x: u * axis.x + depth * dir.x,
-      z: u * axis.z + depth * dir.z,
-    });
-
     const spanOf = face => ({
       lo: Math.max(Math.min(face.u1, face.u2), uMin),
       hi: Math.min(Math.max(face.u1, face.u2), uMax),
@@ -4375,6 +4327,184 @@ if (!window.DraftCutView) {
       });
       return parts.filter(part => part.hi - part.lo >= 0.5);
     };
+
+    // ── FLOOR ASSEMBLY BANDS, AND THEY GO DOWN WITH THEIR OWN FACE ──────
+    //
+    // Each floor's rim (joists + sheathing) is part of the house face --
+    // white like the walls, no banding line, keeping the vertical edges of
+    // every visible face corner through the band. The bands are also read
+    // back by the roof pass below, alongside the walls: between one storey's
+    // plate and the next storey's floor there is no wall face, and a roof
+    // behind the house at exactly that height would otherwise show through
+    // the joist band.
+    //
+    // ── AND THE FACE'S OWN CLADDING RUNS DOWN OVER THEM ─────────────────
+    //
+    // Movie, 28 Sep, marking the strip under his front door in orange: *"the
+    // stone should continue under the door"*. It runs from the sill, over
+    // the plate and the rim -- and this fill used to be laid down AFTER
+    // every face, so it put C.face back over the bottom of its own wall's
+    // stone. Read off his E1 with the clip already fixed:
+    //
+    //     seq 45  u -16.0..16.0  e -2.173..3.827   the roundstone
+    //     seq 90  u -16.0.. -4.0 e -1.073..0.027   the band, over it
+    //
+    // -- 1'-0 5/8" of stone painted and then papered over, the whole of the
+    // rim, leaving only the 1 1/2" plate strip showing under the door.
+    //
+    // SO THE BAND JOINS THE DEPTH-SORTED PASS BELOW, at its own depth and
+    // just ahead of the walls that STAND ON IT -- see the note there for why
+    // the storey below has to go down first. A surface is hidden by whatever
+    // is in front of it, and its own wall's cladding is one of those things;
+    // paint ORDER is how this painter says that everywhere else. It also
+    // puts the band in order against the ROOFS for the first time -- painted
+    // last, it went over a garage roof standing in front of it, because
+    // `uncovered` asks about faces and a roof is not one, and it washed out
+    // the top of a garage's own corner line for the same reason.
+    //
+    // WHAT IS PAINTED IS WORKED OUT HERE AND THE EDGE PASS READS IT BACK.
+    // The run is the house's own extent; the PARTS are what survived the
+    // clip against whatever stands in front, and the two are different the
+    // moment a garage laps the house.
+    const rimBands = [];
+    const bandLevels = [];
+    stack.floors.forEach(level => {
+      const spans = houseSpans.filter(span => span.levelId === level.id);
+      if (!spans.length) return;
+      // Contiguous runs of face coverage — a level with two separate wings
+      // wears two rim bands, not one across the gap between them.
+      const runs = [];
+      spans.slice().sort((a, b) => a.lo - b.lo).forEach(span => {
+        const last = runs[runs.length - 1];
+        if (last && span.lo <= last.hi + 0.5) last.hi = Math.max(last.hi, span.hi);
+        else runs.push({ lo: span.lo, hi: span.hi });
+      });
+      const paintedOf = new Map();
+      const bandFills = [];
+      runs.forEach(run => {
+        if (run.hi - run.lo < 0.5) return;
+        const depth = Math.max(...spans
+          .filter(span => span.hi > run.lo && span.lo < run.hi)
+          .map(span => span.depth));
+        // ONLY WHERE NOTHING NEARER STANDS. The band is the house's floor
+        // package seen flat, and a garage in front of it is a wall, not a
+        // window. What is pushed to rimBands is what was PAINTED, so the roof
+        // pass downstream reads the same surface the sheet shows.
+        const parts = uncovered(run.lo, run.hi, depth);
+        paintedOf.set(run, parts);
+        parts.forEach(part => {
+          bandFills.push({ part, depth });
+          rimBands.push({
+            lo: part.lo, hi: part.hi,
+            bottom: level.floorBottom, top: level.floorTop, depth,
+          });
+        });
+      });
+      bandLevels.push({ level, spans, runs, paintedOf, bandFills });
+    });
+    const paintRimBand = (level, part) => {
+      const yTopPx = Y(level.floorTop) - 1, yBotPx = Y(level.floorBottom) + 1;
+      ctx.fillStyle = C.face;
+      ctx.fillRect(X(part.lo) - 1, yTopPx, (part.hi - part.lo) * pxPerFt + 2, yBotPx - yTopPx);
+    };
+
+    // FAR FIRST, AND ON A TIE THE WALL GOES DOWN BEFORE THE ROOF. A sheet
+    // whose nearest corner lands exactly on a wall's depth is a sheet bearing
+    // on that wall's own plate, and it laps OVER the plate -- which is both
+    // how the roof is built and the only way round that cannot rub out a
+    // gable wall's climb. `sort` is stable, so listing the walls first is
+    // what states it.
+    //
+    // ── AND THE RIM BANDS GO IN WITH THE STOREY THEY BELONG TO ─────────
+    //
+    // A band is a floor package: its own storey's joists and sheathing, seen
+    // flat. So the walls go down BOTTOM STOREY FIRST and each storey's band
+    // goes down just ahead of the walls standing on it. The two edges of that
+    // strip are what the order is for, and they are different edges:
+    //
+    //   ITS OWN WALL'S FOOT is below the band, so the band goes FIRST and the
+    //   wall's cladding then runs down over it to the top of the concrete --
+    //   the whole of *"the stone should continue under the door"*.
+    //
+    //   THE WALL BELOW'S HEAD is above that wall's top plate and under this
+    //   band, so the band goes AFTER it and rubs the line out. A storey line
+    //   across the facade is not wanted: Movie, 28 Sep, shown both drawings,
+    //   *"we don't want to show those horizontal lines on the house, only off
+    //   to the side of the house (for the user to visualize where the floors
+    //   are located"*. The faint level datums running past the house are what
+    //   does that job, and they are drawn first and left alone.
+    //
+    // ONE PASS DOES BOTH BECAUSE THE BAND SITS BETWEEN THEM. Painted after
+    // every face, as it was until 28 Sep, it rubbed out both edges AND the
+    // cladding with them; painted before every face it rubs out neither.
+    // Interleaved, each edge gets the answer it needs.
+    //
+    // A FACE ON NO LISTED STOREY keeps its place after them -- `sort` is
+    // stable, so these groups only ever decide a TIE, and a tie is exactly
+    // where the band-against-its-own-wall question lives.
+    const wallItems = [];
+    const onLevel = new Set();
+    stack.floors.forEach(level => {
+      bandLevels.filter(bl => bl.level.id === level.id).forEach(bl => {
+        // MARKED, so the two ways of getting this wrong can each be written
+        // as one edit -- see the mutations in garage-bearing-harness.js.
+        bl.bandFills.forEach(f => wallItems.push({ depth: f.depth, band: true,
+          go: () => paintRimBand(bl.level, f.part) }));
+      });
+      faceGeoms.filter(geom => !faceHidden(geom) && geom.face.level.id === level.id)
+        .forEach(geom => {
+          onLevel.add(geom);
+          wallItems.push({ depth: geom.face.depth, go: () => paintFace(geom) });
+        });
+    });
+    faceGeoms.filter(geom => !faceHidden(geom) && !onLevel.has(geom))
+      .forEach(geom => wallItems.push({ depth: geom.face.depth, go: () => paintFace(geom) }));
+    [
+      ...wallItems,
+      ...roofFills.map(fill => ({ depth: fill.depth, go: () => paintRoof(fill) })),
+    ].sort((a, b) => a.depth - b.depth).forEach(item => item.go());
+
+    // IS THIS POINT BEHIND A ROOF? Lifted out of `hidden` so the rim-band
+    // edge pass below can ask it too -- `hidden` itself cannot move, because
+    // its OTHER half reads `rimBands`, and the edges are drawn before it.
+    //
+    // A ray is cast from just in front of the point to the far side of the
+    // drawing, and each roof's profile along it is reduced to a lo and a hi.
+    // "Just in front" is what stops a surface hiding itself.
+    const behindRoof = (pt, elev) => {
+      if (!facesByRoof || !facesByRoof.size) return false;
+      const depth = pt.x * dir.x + pt.z * dir.z;
+      const span = dHi - depth;
+      if (span < 0.1) return false;
+      const near = { x: pt.x + dir.x * 0.05, z: pt.z + dir.z * 0.05 };
+      const far = { x: pt.x + dir.x * span, z: pt.z + dir.z * span };
+      let covered = false;
+      facesByRoof.forEach((roofFaces, roof) => {
+        if (covered) return;
+        const base = roofEaveElev(roof, stack, env);
+        let lo = Infinity, hi = -Infinity;
+        geo().roofProfile(roof, roofFaces, near, far, dir).forEach(p => {
+          const e = base + p.rise;
+          if (e > hi) hi = e;
+          if (e < lo) lo = e;
+        });
+        if (hi === -Infinity) return;   // the ray misses this roof entirely
+        lo -= fasciaFt;
+        if (elev > lo + ROOF_COVER_EPS && elev < hi - ROOF_COVER_EPS) covered = true;
+      });
+      return covered;
+    };
+
+    // WHERE A POINT ON THE VIEW PLANE ACTUALLY IS. `u` is the distance along
+    // the cut's axis and `depth` the distance along its direction, and the two
+    // are perpendicular, so the world point is just the sum of the two
+    // components. The rim-band pass knows a `u` and a face depth and needs a
+    // point to cast a ray from.
+    const atUDepth = (u, depth) => ({
+      x: u * axis.x + depth * dir.x,
+      z: u * axis.z + depth * dir.z,
+    });
+
     // AND A ROOF IN FRONT HIDES IT TOO. This asked only whether a nearer WALL
     // FACE covered the edge, never whether a roof did -- so a garage roof
     // standing in front of the house at rim-band height left the band's
@@ -4420,48 +4550,10 @@ if (!window.DraftCutView) {
       if (elev != null && behindRoof(atUDepth(u, depth), elev)) return false;
       return true;
     };
-    // The rim bands are part of the opaque house face, so the roof pass reads
-    // them alongside the walls: between one storey's plate and the next
-    // storey's floor there is no wall face, and a roof behind the house at
-    // exactly that height would otherwise show through the joist band.
-    const rimBands = [];
-    stack.floors.forEach(level => {
-      const spans = houseSpans.filter(span => span.levelId === level.id);
-      if (!spans.length) return;
-      // Contiguous runs of face coverage — a level with two separate wings
-      // wears two rim bands, not one across the gap between them.
-      const runs = [];
-      spans.slice().sort((a, b) => a.lo - b.lo).forEach(span => {
-        const last = runs[runs.length - 1];
-        if (last && span.lo <= last.hi + 0.5) last.hi = Math.max(last.hi, span.hi);
-        else runs.push({ lo: span.lo, hi: span.hi });
-      });
+    // The band's vertical edges, drawn after every face and roof: a corner
+    // line crossing the floor package is a corner whatever is clad over it.
+    bandLevels.forEach(({ level, spans, runs, paintedOf }) => {
       const yTopPx = Y(level.floorTop) - 1, yBotPx = Y(level.floorBottom) + 1;
-      ctx.fillStyle = C.face;
-      // WHAT WAS ACTUALLY PAINTED, kept for the edge pass below. The run is
-      // the house's own extent; the PARTS are what survived the clip against
-      // whatever stands in front, and the two are different the moment a
-      // garage laps the house.
-      const paintedOf = new Map();
-      runs.forEach(run => {
-        if (run.hi - run.lo < 0.5) return;
-        const depth = Math.max(...spans
-          .filter(span => span.hi > run.lo && span.lo < run.hi)
-          .map(span => span.depth));
-        // ONLY WHERE NOTHING NEARER STANDS. The band is the house's floor
-        // package seen flat, and a garage in front of it is a wall, not a
-        // window. What is pushed to rimBands is what was PAINTED, so the roof
-        // pass downstream reads the same surface the sheet shows.
-        const parts = uncovered(run.lo, run.hi, depth);
-        paintedOf.set(run, parts);
-        parts.forEach(part => {
-          ctx.fillRect(X(part.lo) - 1, yTopPx, (part.hi - part.lo) * pxPerFt + 2, yBotPx - yTopPx);
-          rimBands.push({
-            lo: part.lo, hi: part.hi,
-            bottom: level.floorBottom, top: level.floorTop, depth,
-          });
-        });
-      });
       // Vertical edges through the band: the run boundaries plus any face
       // corner inside a run that isn't hidden behind a nearer face — a jog
       // in the facade keeps its corner line crossing the floor.
