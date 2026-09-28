@@ -70,6 +70,41 @@ if (!window.DraftRoofPatterns) {
 
   const upFt = (frame, inches) => inches / 12 * frame.pxPerFt;
 
+  // ── THE COURSES, EAVE TO RIDGE, AND THE CUT ONE AT THE TOP ────────────
+  //
+  // A ROOF IS SET OUT FROM THE EAVE, so the course lines land on multiples of
+  // the exposure and the LAST one is cut by the ridge. `for (t = step; t <
+  // frame.high; t += step)` drops that cut course altogether -- and with it
+  // every joint belonging to it, because a joint hangs BELOW its own course
+  // line. What was left under the ridge was a bare strip anywhere from nothing
+  // to a full course wide, depending on nothing but whether the rafter length
+  // happened to divide by the exposure. Worst exactly where it looks most
+  // deliberate: divide evenly and a whole course of joints goes missing.
+  //
+  // MEASURED on repro-2storey-garage-beam's E2 in cedar shake, 14.94 px/ft:
+  // the garage plane is 70px up the slope on a 12.45px course and the topmost
+  // joint reached 62.3 -- 7.7px, 62% of a course, bare. The house plane, 90px,
+  // left 2.8px. Both read as a blank band under the ridge.
+  //
+  // SO THE WALK RUNS ONE COURSE PAST THE RIDGE and says, for each course:
+  // where its line goes (`line`, and NULL for the cut one, whose line is the
+  // roof's own edge and is drawn by the outline, not by a hatch), and the band
+  // of slope its joints may have (`from` up to `top`). `from` is held at the
+  // course below, so a cut course's joints show exactly the slope that is
+  // actually exposed rather than running down through the course under it.
+  //
+  // `lead` is how far a joint hangs below its course -- the whole exposure for
+  // a shake or a slate, part of it for an asphalt slit or a tile roll.
+  const coursesTo = (frame, step, lead) => {
+    const out = [];
+    for (let t = step, row = 0; t - step < frame.high; t += step, row += 1) {
+      const top = Math.min(t, frame.high);
+      out.push({ row, line: t < frame.high ? t : null,
+        top, from: Math.max(t - step, top - lead) });
+    }
+    return out;
+  };
+
   // ── THE SEVEN PICTURES ────────────────────────────────────────────────
   const PATTERNS = {
     // ASPHALT. Courses, and a slit at every tab -- and the slits STAGGER half
@@ -84,13 +119,12 @@ if (!window.DraftRoofPatterns) {
       const tab = upFt(frame, paramOf(roofing, 'tabIn', 12));
       if (step < MIN_SPACING_PX) return;
       ctx.beginPath();
-      let row = 0;
-      for (let t = step; t < frame.high; t += step, row += 1) {
-        course(ctx, frame, t);
+      for (const c of coursesTo(frame, step, step * 0.55)) {
+        if (c.line !== null) course(ctx, frame, c.line);
         if (tab < MIN_SPACING_PX) continue;
-        const shift = (row % 2) * tab / 2;
+        const shift = (c.row % 2) * tab / 2;
         for (let s = shift; s < frame.wide; s += tab) {
-          rake(ctx, frame, s, t - step * 0.55, t);
+          rake(ctx, frame, s, c.from, c.top);
         }
       }
       ctx.stroke();
@@ -127,6 +161,12 @@ if (!window.DraftRoofPatterns) {
     // is a small unit laid in a broken bond. Drawn the same way, a metal roof
     // reads as slate at four times the weight, which is the reading that
     // matters on a sheet somebody frames a house from.
+    //
+    // AND IT IS THE ONE COURSED PATTERN THAT DOES NOT NEED `coursesTo`. Its
+    // joints run the WHOLE SLOPE rather than hanging below a course line, so
+    // the part course at the ridge is already ruled both ways; the only thing
+    // missing there is a course line, and at the ridge that line is the
+    // roof's own edge.
     panel: (ctx, frame, roofing) => {
       const step = upFt(frame, paramOf(roofing, 'exposureIn', 15));
       const wide = upFt(frame, paramOf(roofing, 'widthIn', 24));
@@ -154,17 +194,16 @@ if (!window.DraftRoofPatterns) {
       if (step < MIN_SPACING_PX) return;
       const nominal = step * 0.9;
       ctx.beginPath();
-      let row = 0;
-      for (let t = step; t < frame.high; t += step, row += 1) {
-        course(ctx, frame, t);
+      for (const c of coursesTo(frame, step, step)) {
+        if (c.line !== null) course(ctx, frame, c.line);
         if (nominal < MIN_SPACING_PX) continue;
         let s = 0, i = 0;
         while (s < frame.wide) {
-          s += nominal * (0.55 + jitter(row, i) * 0.9);
+          s += nominal * (0.55 + jitter(c.row, i) * 0.9);
           i += 1;
           if (s >= frame.wide) break;
           // Down from its own course, never across the one below it.
-          rake(ctx, frame, s, t - step, t);
+          rake(ctx, frame, s, c.from, c.top);
         }
       }
       ctx.stroke();
@@ -180,11 +219,11 @@ if (!window.DraftRoofPatterns) {
       const cover = upFt(frame, paramOf(roofing, 'coverIn', 13));
       if (step < MIN_SPACING_PX) return;
       ctx.beginPath();
-      for (let t = step; t < frame.high; t += step) {
-        course(ctx, frame, t);
+      for (const c of coursesTo(frame, step, step * 0.45)) {
+        if (c.line !== null) course(ctx, frame, c.line);
         if (cover < MIN_SPACING_PX) continue;
         for (let s = cover / 2; s < frame.wide; s += cover) {
-          rake(ctx, frame, s, t - step * 0.45, t);
+          rake(ctx, frame, s, c.from, c.top);
         }
       }
       ctx.stroke();
@@ -199,14 +238,13 @@ if (!window.DraftRoofPatterns) {
       const wide = upFt(frame, paramOf(roofing, 'widthIn', 12));
       if (step < MIN_SPACING_PX) return;
       ctx.beginPath();
-      let row = 0;
-      for (let t = step; t < frame.high; t += step, row += 1) {
-        course(ctx, frame, t);
+      for (const c of coursesTo(frame, step, step)) {
+        if (c.line !== null) course(ctx, frame, c.line);
         if (wide < MIN_SPACING_PX) continue;
-        const shift = (row % 2) * wide / 2;
+        const shift = (c.row % 2) * wide / 2;
         for (let s = shift; s < frame.wide; s += wide) {
           if (s <= 0) continue;
-          rake(ctx, frame, s, t - step, t);
+          rake(ctx, frame, s, c.from, c.top);
         }
       }
       ctx.stroke();

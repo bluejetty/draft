@@ -310,6 +310,87 @@ function run(win) {
     JSON.stringify(draw('cedar_shake').segs) === JSON.stringify(shake.segs),
     `${shake.segs.length} segments, identical`);
 
+  // ── AND THE HATCH REACHES THE RIDGE ───────────────────────────────────
+  //
+  // Skipper, 28 Sep: *"the roof hatch stops short"*. It did, and at the RIDGE
+  // rather than the eave -- a bare band under the ridge line on
+  // repro-2storey-garage-beam's E2, 7.7px of a 12.45px cedar shake course on
+  // the garage plane.
+  //
+  // THE OLD LOOP RAN `t < frame.high`, so the courses stopped at the last
+  // whole multiple of the exposure and the cut course at the ridge was never
+  // reached. Its line was no loss -- the ridge is the roof's own edge and the
+  // outline draws it -- but every JOINT belonging to it went with it, because
+  // a joint hangs below its course. What the drafter saw was a strip of blank
+  // roof under the ridge.
+  //
+  // AND `FLAT` CANNOT SEE IT, which is why this fixture is here. 300px of
+  // slope over a 18.75px asphalt course is exactly 16 courses, so every check
+  // above is measured on the one height where nothing is left over -- and
+  // that is the WORST case, not the safe one: divide evenly and a whole
+  // course of joints disappears. Two frames, one dividing and one not.
+  const RAGGED = { ...FLAT, high: 287 };     // no whole number of courses fits
+  const COURSED = ['asphalt', 'cedar_shake', 'wood_shingle', 'composite_shake',
+    'terracotta', 'concrete_tile', 'slate', 'metal_shingle'];
+  // How far up the slope the topmost JOINT reaches -- a course line is not
+  // the question, because the missing thing was the joints.
+  const jointTop = (id, frame) => {
+    const rk = rakes(solidOf(draw(id, frame).segs), frame);
+    if (!rk.length) return null;
+    return Math.max(...rk.flatMap(seg =>
+      [inFrame(frame, seg.a).t, inFrame(frame, seg.b).t]));
+  };
+  for (const [name, frame] of [['a rafter that divides evenly', FLAT],
+    ['and one that leaves a part course', RAGGED]]) {
+    const short = COURSED.map(id => [id, jointTop(id, frame)])
+      .filter(([, top]) => top === null || frame.high - top > 0.5);
+    check(`${name}: every coursed roofing hatches right up to the ridge`,
+      short.length === 0,
+      short.map(([id, top]) => `${id} stops ${top === null ? 'dead'
+        : `${(frame.high - top).toFixed(1)}px short`}`).join(', ')
+        || `${COURSED.length} of ${COURSED.length} reach ${frame.high}px`);
+  }
+  // AND THE CUT COURSE IS NOT DRAWN AS A WHOLE ONE. Its joints show only the
+  // slope actually exposed -- from the course below it to the ridge -- or a
+  // shake at the top would hang down through the course under it and the
+  // broken bond would close up into a grid at the ridge.
+  const overrun = COURSED.flatMap(id => rakes(solidOf(draw(id, RAGGED).segs), RAGGED)
+    .map(seg => [inFrame(RAGGED, seg.a).t, inFrame(RAGGED, seg.b).t])
+    .filter(([a, b]) => Math.max(a, b) > RAGGED.high + 0.01
+      || Math.min(a, b) < -0.01)
+    .map(([a, b]) => `${id} ${Math.min(a, b).toFixed(1)}..${Math.max(a, b).toFixed(1)}`));
+  check('and no joint runs off the roof to get there',
+    overrun.length === 0, overrun.slice(0, 3).join(', ')
+      || `every joint inside 0..${RAGGED.high}`);
+  // AND THE CUT COURSE'S JOINTS STOP AT THE COURSE BELOW IT, which is the
+  // half of this that "reaches the ridge" cannot see: a joint that starts a
+  // whole exposure below the RIDGE rather than below its own course line
+  // hangs down through the course under it, and at the top of a shake roof
+  // the broken bond closes into a grid. Stated for every pattern at once as
+  // the rule it already follows lower down -- a joint crosses no course line.
+  // The metal panel is out: its joints run the whole slope on purpose, which
+  // is what makes it a module rather than a small unit.
+  const crossing = COURSED.filter(id => id !== 'metal_shingle').flatMap(id => {
+    const segs = solidOf(draw(id, RAGGED).segs);
+    const lines = courses(segs, RAGGED).map(seg => inFrame(RAGGED, seg.a).t);
+    return rakes(segs, RAGGED)
+      .map(seg => [inFrame(RAGGED, seg.a).t, inFrame(RAGGED, seg.b).t])
+      .filter(([a, b]) => lines.some(t =>
+        t > Math.min(a, b) + 0.01 && t < Math.max(a, b) - 0.01))
+      .map(([a, b]) => `${id} ${Math.min(a, b).toFixed(1)}..${Math.max(a, b).toFixed(1)}`);
+  });
+  check('and the cut course-s joints stop at the course below, crossing no line',
+    crossing.length === 0, crossing.slice(0, 3).join(', ')
+      || 'no joint crosses a course on any of the seven');
+
+  // AND NOTHING IS LAID ON THE RIDGE ITSELF. A course line at `high` would
+  // double the outline's own edge -- thicker at the ridge than anywhere else
+  // on the drawing, which is a line a drafter reads as meaning something.
+  const onRidge = COURSED.filter(id => courses(solidOf(draw(id, RAGGED).segs), RAGGED)
+    .some(seg => Math.abs(inFrame(RAGGED, seg.a).t - RAGGED.high) < 0.01));
+  check('and no course line is laid on the ridge, which the outline already draws',
+    onRidge.length === 0, onRidge.join(' ') || 'none of the eight');
+
   // ── RELIEF FOLLOWS THE SLOPE, NOT THE SCREEN ──────────────────────────
   //
   // A lapped butt throws its shadow BELOW its own course, and on a roof "below"
@@ -438,7 +519,7 @@ const MUTATIONS = [
       + '      ctx.stroke();\n    },\n\n    // PRESSED METAL SHINGLE')],
 
   ['slate is laid in line, so it is drawn as a pressed metal panel',
-    s => sub(s, F, '        const shift = (row % 2) * wide / 2;\n'
+    s => sub(s, F, '        const shift = (c.row % 2) * wide / 2;\n'
       + '        for (let s = shift; s < frame.wide; s += wide) {\n'
       + '          if (s <= 0) continue;',
       '        const shift = 0;\n'
@@ -449,23 +530,23 @@ const MUTATIONS = [
       '        for (let s = wide / 2; s < frame.wide; s += wide) rake(ctx, frame, s);\n'
       + '        for (let s = wide; s < frame.wide; s += wide * 2) rake(ctx, frame, s, 0, frame.high / 2);')],
   ['asphalt stops staggering, so a shingle roof reads as a grid',
-    s => sub(s, F, '        const shift = (row % 2) * tab / 2;', '        const shift = 0;')],
+    s => sub(s, F, '        const shift = (c.row % 2) * tab / 2;', '        const shift = 0;')],
   ['the asphalt slit runs the whole course, so the tabs close into rectangles',
-    s => sub(s, F, '          rake(ctx, frame, s, t - step * 0.55, t);',
-      '          rake(ctx, frame, s, t - step, t);')],
+    s => sub(s, F, "      for (const c of coursesTo(frame, step, step * 0.55)) {",
+      '      for (const c of coursesTo(frame, step, step)) {')],
 
   ['the tile-s roll runs the whole slope, so terracotta is drawn as corrugated steel',
-    s => sub(s, F, '          rake(ctx, frame, s, t - step * 0.45, t);',
-      '          rake(ctx, frame, s);')],
+    s => sub(s, F, '        for (let s = cover / 2; s < frame.wide; s += cover) {\n'
+      + '          rake(ctx, frame, s, c.from, c.top);',
+      '        for (let s = cover / 2; s < frame.wide; s += cover) {\n'
+      + '          rake(ctx, frame, s);')],
   ['the tile loses its courses, so a pan tile roof has no rows',
-    s => sub(s, F, '      for (let t = step; t < frame.high; t += step) {\n'
-      + '        course(ctx, frame, t);\n'
+    s => sub(s, F, '        if (c.line !== null) course(ctx, frame, c.line);\n'
       + "        if (cover < MIN_SPACING_PX) continue;",
-      '      for (let t = step; t < frame.high; t += step) {\n'
-      + "        if (cover < MIN_SPACING_PX) continue;")],
+      "        if (cover < MIN_SPACING_PX) continue;")],
 
   ['the shake stops wandering, so a split shake is drawn as a sawn one',
-    s => sub(s, F, '          s += nominal * (0.55 + jitter(row, i) * 0.9);',
+    s => sub(s, F, '          s += nominal * (0.55 + jitter(c.row, i) * 0.9);',
       '          s += nominal;')],
   ['the shake-s wander is random, so the roof shimmers on every repaint',
     s => sub(s, F, '  const jitter = (a, b) => {\n'
@@ -473,8 +554,19 @@ const MUTATIONS = [
       + '    return n - Math.floor(n);\n  };',
       '  const jitter = () => Math.random();')],
   ['the shake-s joint runs past its own course, closing the shakes into rectangles',
-    s => sub(s, F, '          rake(ctx, frame, s, t - step, t);\n        }\n      }\n      ctx.stroke();\n    },\n\n    // BARREL TILE',
+    s => sub(s, F, '          rake(ctx, frame, s, c.from, c.top);\n        }\n      }\n      ctx.stroke();\n    },\n\n    // BARREL TILE',
       '          rake(ctx, frame, s, 0, frame.high);\n        }\n      }\n      ctx.stroke();\n    },\n\n    // BARREL TILE')],
+
+  // ── AND THE HATCH REACHING THE RIDGE ────────────────────────────────
+  ['the courses stop at the last whole one, so a strip under the ridge is bare',
+    s => sub(s, F, '    for (let t = step, row = 0; t - step < frame.high; t += step, row += 1) {',
+      '    for (let t = step, row = 0; t < frame.high; t += step, row += 1) {')],
+  ['the cut course is drawn as a whole one, so its joints hang through the course below',
+    s => sub(s, F, '        top, from: Math.max(t - step, top - lead) });',
+      '        top, from: top - lead });')],
+  ['a course line is laid on the ridge, doubling the outline-s own edge',
+    s => sub(s, F, '      out.push({ row, line: t < frame.high ? t : null,',
+      '      out.push({ row, line: top,')],
 
   ['the relief pass is dropped, so a lapped butt throws no shadow',
     s => sub(s, F, '    if (roofing.relief) {', '    if (false) {')],
