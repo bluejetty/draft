@@ -3770,12 +3770,20 @@
           // overhang back on: one set of numbers seen twice, so the eave panel
           // cannot drift from the section beside it. No stair and no garage --
           // neither is at this end of the building.
+          //
+          // AND IT IS MIRRORED, which is the flip Movie asked for on 28 Sep:
+          // "can flip that extra section". Drawn the same way round as the
+          // section beside it, the panel read as a second building standing
+          // behind the first; mirrored, the two face each other and the pair
+          // reads as one house cut at both edges -- which is the idiom band 1
+          // and band 3 already use for their own far eaves. buildFarEaveSection
+          // is that mirror, and reusing it rather than flipping here keeps the
+          // break line's jog and the footing's taper the right way round.
           bilevelEaveCanvas.paintedSection = projectPage.paintSections(bilevelEaveCanvas, [
-            projectPage.buildWallSection({
+            projectPage.buildFarEaveSection({
               ...bilevelValues(),
               cutDepthFt: BILEVEL_EAVE_CUT_FT,
-              stairs: false,
-              eaves: true,
+              farEaveCutFt: BILEVEL_EAVE_CUT_FT,
             }),
           ]);
         }

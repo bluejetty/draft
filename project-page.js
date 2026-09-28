@@ -1210,18 +1210,26 @@ if (!window.DraftProjectPage) {
       maxY: section.extents.maxY,
     },
   });
+  //
+  // HOW MUCH WALL THE FAR EDGE CARRIES IS THE CALLER'S, since 28 Sep. Band 1
+  // draws its far eave beside the main slice in one canvas, where 2 ft is all
+  // there is room for; the split's band gives it a CANVAS OF ITS OWN and Movie
+  // asked that one for 3 ft ("3 ft at the edge of the house"). One number
+  // written in here served the first case and silently overruled the second,
+  // so the constant is the default rather than the answer.
   const buildFarEaveSection = values => {
     const cut = values.cutDepthFt ?? CUT_DEPTH_FT;
+    const farCut = values.farEaveCutFt ?? FAR_EAVE_CUT_FT;
     // The eave's own labels ride to the far edge: when the garage stands at
     // the near face there is no eave there at all, and this is the one place
     // on the drawing an OVERHANG or FASCIA label has something to point at.
     return mirrorSection(buildWallSection({
       ...values,
-      cutDepthFt: FAR_EAVE_CUT_FT,
+      cutDepthFt: farCut,
       stairs: false,
       eaves: true,
       footingFlushLeft: null,
-    }), cut + FAR_EAVE_GAP_FT + FAR_EAVE_CUT_FT, ['overhang', 'fascia']);
+    }), cut + FAR_EAVE_GAP_FT + farCut, ['overhang', 'fascia']);
   };
 
   // ── The attached garage, quasi-attached ─────────────────────────────────
