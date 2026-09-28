@@ -586,6 +586,102 @@ check('a storey over the detached garage lifts its roof by the whole storey', P 
   return [Math.abs(lift - storey) < 1e-6, true];
 });
 
+// ── THE FROST WALL'S OWN DEPTH, AND ITS FOOTING ──────────────────────────
+// Movie, 28 Sep: "the frost wall should be 5ft deep default with a 20\" wide by
+// 8\" DP footing". It read the HOUSE's number until then -- and the caller was
+// handing it the house POUR, not its footing depth, so the row could print a
+// storey of basement wall as a frost depth. A detached garage has no house to
+// measure from; that is the whole reason it has its own builder.
+check('a detached frost wall is 5 ft deep, and it is this building\'s number', P =>
+  [P.detachedFoundationDepthFt('frostwall'), P.GARAGE_FROST_WALL_IN / 12]);
+// AND NOTHING IS PASSED IN ANY MORE. Asserted by calling it the way a caller
+// with a house handy used to: an argument must not move the answer.
+check('the frost wall default cannot be moved by an argument', P =>
+  [P.detachedFoundationDepthFt('frostwall', 9), P.GARAGE_FROST_WALL_IN / 12]);
+// THE PAD, drawn as a member under the pour the way buildWallSection draws
+// the house's strip footing -- so a 5'-0" wall reaches 5'-8" of concrete.
+const footingOf = (P, out) => rects(out).find(r =>
+  near(r.w, P.GARAGE_FROST_FOOTING_WIDTH_IN / 12)
+  && near(r.h, P.GARAGE_FROST_FOOTING_DEPTH_IN / 12));
+check('the frost wall stands on a 20 x 8 footing, centred on the concrete', P => {
+  const foot = footingOf(P, DETACHED_ON(P, 'frostwall'));
+  const wallFt = 8 / 12;
+  return [foot ? near(foot.x + foot.w / 2, wallFt / 2) : 'no footing under the frost wall', true];
+});
+// AND ONLY THE FROST WALL. A grade beam spans between piles and bears on
+// them, so a strip footing under it would be a second bearing system drawn
+// under the first.
+check('a grade beam gets no strip footing', P =>
+  [footingOf(P, DETACHED_ON(P, 'gradebeam')) == null, true]);
+// AND THE DRAWING MAKES ROOM FOR IT. The canvas and the break line are both
+// measured off `lowestY`, so a pad drawn below a lowestY that still says
+// "the wall" is a member hanging off the bottom of the view with the break
+// line stopping short of it. Asserted on the EXTENTS and the BREAK rather
+// than on the parts, because the parts are what would be clipped.
+check('the canvas and the break line both reach below the footing', P => {
+  const out = DETACHED_ON(P, 'frostwall');
+  const foot = footingOf(P, out);
+  const brk = out.parts.find(part => part.kind === 'break');
+  return [[out.extents.minY < foot.y, brk.y1 < foot.y].join(), 'true,true'];
+});
+
+// ── THE OUTSIDE FACE DOES NOT BREAK ──────────────────────────────────────
+// Movie, 28 Sep: "for the 2 story the exterior line is missing at where the
+// OWJ is sitting". The garage wall's face stopped at its plate and the room's
+// started at the deck, so the building had a 20" hole in the one line on a
+// section that can never break. Asserted as continuity over the whole face
+// rather than as "a line exists at the band", because the fact is that there
+// is no gap anywhere in it.
+check('the outside face runs unbroken from the foundation to the room above', P => {
+  const out = DETACHED_ROOM(P);
+  const spans = out.parts.flatMap(part => {
+    if (part.kind === 'rect' && near(part.x, 0)) return [[part.y, part.y + part.h]];
+    if (part.kind === 'line' && near(part.x1, 0) && near(part.x2, 0)) {
+      return [[Math.min(part.y1, part.y2), Math.max(part.y1, part.y2)]];
+    }
+    return [];
+  }).sort((a, b) => a[0] - b[0]);
+  let reach = spans[0][1];
+  for (const [lo, hi] of spans.slice(1)) {
+    if (lo > reach + 1e-9) return [`the face breaks at ${reach}`, true];
+    reach = Math.max(reach, hi);
+  }
+  // AND IT REACHES THE ROOM'S PLATE, so a face that simply stopped short --
+  // no gap, no room either -- cannot pass on continuity alone.
+  const concTop = -P.DETACHED_SLAB_ABOVE_GRADE_IN / 12 + P.GRADE_BELOW_CONCRETE_IN / 12;
+  const plate = concTop + P.GARAGE_WALL_FT + (19.25 + 0.75) / 12 + 8 + 1.125 / 12;
+  return [reach >= plate - 1e-9, true];
+});
+
+// ── THE OTHER EAVE, AND IT IS THE BUNGALOW'S ─────────────────────────────
+// Movie, 28 Sep: "move the ROOF over to the LEFT and update it to similar to
+// BUNGALOW roof". The house has been a SLICE of a wider house since 16 Sep --
+// near eave, one break line, then the far edge back from beyond it with its
+// own eave on -- and this was the one building whose roof simply stopped at
+// the break. Asserted off the fascia BOARD rather than off a line count,
+// because the board is the thing an eave has and a cut does not.
+const detachedFar = P => P.buildDetachedFarEaveSection(DETACHED(P));
+const fasciaBoard = out => rects(out).find(r => near(r.w, 0.1));
+const breakAt = out => out.parts.find(part => part.kind === 'break');
+check('the detached roof has a second eave, out past the break', P =>
+  [fasciaBoard(detachedFar(P)).x > breakAt(detached(P)).x, true]);
+// AND THE TWO EAVES ARE ONE ROOF. Mirrored from the same builder on the same
+// numbers, so the day the heel or the fascia moves, both ends move together.
+check('both eaves sit at the same height', P =>
+  [near(fasciaBoard(detachedFar(P)).y, fasciaBoard(detached(P)).y), true]);
+// THE FAR EDGE IS A SHORT RUN OF WALL, not a second copy of the slice. Drawn
+// at the slice's own depth it would reach back past the break and redraw the
+// foundation the slice has already drawn. Asserted as an inequality against
+// the slice rather than as 2 ft, so the constant can move.
+check('the far edge carries less of the building than the slice does', P => {
+  const run = out => {
+    const tops = out.parts.filter(part => part.kind === 'line'
+      && near(part.y1, 0) && near(part.y2, 0));
+    return Math.max(...tops.map(part => Math.abs(part.x2 - part.x1)));
+  };
+  return [run(detachedFar(P)) < run(detached(P)), true];
+});
+
 // ── THE TRUSS IS THE HOUSE'S ─────────────────────────────────────────────
 // Movie, 28 Sep: "the roof truss doesn't show properly. can you check how the
 // BUNGALOW roof truss is drawn showing all the 3.5" top/side/bottom roof
@@ -1121,11 +1217,32 @@ const MUTATIONS = [
     s => s.replace('  const garageSlabFallIn = (depthFt = GARAGE_DEPTH_FT) => depthFt * GARAGE_SLAB_SLOPE_IN_PER_FT;',
       '  const garageSlabFallIn = () => 3;')],
   ['the detached slab stops being the datum',
-    s => s.replace("    line(0, 0, CUT_DEPTH_FT, 0, 2);", "    line(0, 0.25, CUT_DEPTH_FT, 0.25, 2);")],
+    s => s.replace("    line(0, 0, cut, 0, 2);", "    line(0, 0.25, cut, 0.25, 2);")],
   // TWICE IN THE DETACHED DETAILS, once per foundation kind.
   ['the detached grade line drifts off the constant',
     s => s.split('    const gradeY = -DETACHED_SLAB_ABOVE_GRADE_IN / 12;')
       .join('    const gradeY = -8 / 12;')],
+  // ── THE FROST WALL AND THE FLOOR BAND, 28 Sep ───────────────────────────
+  ['the frost wall goes back to borrowing the house\'s number',
+    s => s.replace("    if (kind === 'frostwall') return GARAGE_FROST_WALL_IN / 12;",
+      "    if (kind === 'frostwall') return GARAGE_GRADE_BEAM_IN / 12;")],
+  ['the frost wall loses its footing',
+    s => s.replace('      if (foundation === \'frostwall\') {', '      if (false) {')],
+  ['the footing goes under the grade beam too',
+    s => s.replace('      if (foundation === \'frostwall\') {', '      if (true) {')],
+  ['the section stops measuring at the wall, so the footing falls off the canvas',
+    s => s.replace('        lowestY = bottom - footD;', '')],
+  ['the outside face breaks at the floor band again',
+    s => s.replace('      line(0, plateY, 0, plateY + deckFt, 1.5);              // exterior face', '')],
+  // ── THE FAR EAVE, 28 Sep ────────────────────────────────────────────────
+  ['the garage roof stops at the break again -- the far edge lands on the slice',
+    s => s.replace('    }), cut + FAR_EAVE_GAP_FT + FAR_EAVE_CUT_FT, []);',
+      '    }), 0, []);')],
+  ['the far edge comes back as a second whole slice, not a short run of wall',
+    s => s.replace(`      cutDepthFt: FAR_EAVE_CUT_FT,
+    }), cut + FAR_EAVE_GAP_FT + FAR_EAVE_CUT_FT, []);`,
+    `      cutDepthFt: CUT_DEPTH_FT,
+    }), cut + FAR_EAVE_GAP_FT + FAR_EAVE_CUT_FT, []);`)],
   ['the thickened edge is poured to the field depth -- no thickening at all',
     s => s.replace('    const edgeBot = -edgeFt;', '    const edgeBot = -slabFt;')],
   ['the taper is cut at something other than 45 degrees',
