@@ -47,6 +47,47 @@ test('the first card is BUNGALOWS and its family buttons carry the menu', async 
     .toHaveText('2 STOREY + GARAGE + ROOM OVER');
 });
 
+// ── AND THE COLUMN PAIRS A HOUSE WITH ITS OWN GARAGE ──────────────────────
+//
+// Movie, 28 Sep, with a mockup: "i figured out how to save us more space on
+// the left menu area (BUNGALOW SECTION)". [1 STOREY][+ GARAGE] over
+// [2 STOREY][+ GARAGE], and the room-over across the bottom -- five buttons in
+// three lines against a miniature taller than they were.
+//
+// GEOMETRY, NOT CLASS NAMES. Which line a button lands on is the whole ask, so
+// this reads the boxes: the two of a pair share a top and the wide one does
+// not share its line with anybody. A check on the CSS class would pass on a
+// grid that had stopped pairing.
+test('the bungalow column pairs each house with its own garage', async ({ page }) => {
+  await openProject(page);
+  const lines = await page.evaluate(() => {
+    const rows = new Map();
+    for (const el of document.querySelectorAll('#family-row .family-button')) {
+      const top = Math.round(el.getBoundingClientRect().top);
+      (rows.get(top) || rows.set(top, []).get(top)).push(el.textContent.trim());
+    }
+    return [...rows.entries()].sort((a, b) => a[0] - b[0]).map(([, names]) => names);
+  });
+  expect(lines).toEqual([
+    ['1 STOREY', '+ GARAGE'],
+    ['2 STOREY', '+ GARAGE'],
+    ['2 STOREY + GARAGE + ROOM OVER'],
+  ]);
+});
+
+// AND THE OTHER TWO COLUMNS DO NOT. Movie's mockup leaves them alone, and the
+// reason is in the names: BILEVEL + GARAGE shortens to "+ GARAGE" the same way,
+// but a detached garage's three share no stem at all, so a rule that paired
+// every column would save a line and cost the reading.
+test('the bilevel and detached columns keep one button to a line', async ({ page }) => {
+  await openProject(page);
+  for (const id of ['bilevel-family-row', 'detached-family-row']) {
+    const tops = await page.evaluate(sel => [...document.querySelectorAll(
+      `#${sel} .family-button`)].map(el => Math.round(el.getBoundingClientRect().top)), id);
+    expect(new Set(tops).size, id).toBe(tops.length);
+  }
+});
+
 test('the pressed family button glows and the one before it does not', async ({ page }) => {
   await openProject(page);
 

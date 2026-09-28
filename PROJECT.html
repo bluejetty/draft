@@ -191,6 +191,13 @@
        opposite of compacting the panel. */
     .type-row { display:grid; grid-template-columns:minmax(0,0.85fr) minmax(0,1.15fr); gap:6px; align-items:start; }
     .family-col { display:flex; flex-direction:column; gap:4px; }
+    /* THE BUNGALOW'S COLUMN PAIRS, and only it. Movie's 28 Sep mockup puts
+       each house beside its own + GARAGE and leaves the bilevel column and
+       the detached garage's three as they are -- three names that share no
+       stem, so pairing them would save a line and cost the reading. */
+    #family-row { display:grid; grid-template-columns:repeat(2, minmax(0,1fr));
+      gap:4px; align-content:start; }
+    #family-row > .family-button.wide { grid-column:1 / -1; }
     .type-card { display:block; width:100%; padding:0; border:1px solid var(--edge-panel); background:var(--surface-panel); color:var(--ink-secondary); font:inherit; text-align:left; cursor:pointer; }
     .type-card:hover { border-color:var(--accent); }
     /* The selected card is marked TWICE -- the border and an inset ring --
@@ -3090,11 +3097,49 @@
         .find(family => family.id === 'bungalow').entries;
       const planForEntry = entry => (!entry.garage ? 'none'
         : entry.overGarage ? 'attachedRoomOver' : 'attached');
-      const familyButtons = BUNGALOW_FAMILY.map(entry => {
+      // ── TWO TO A LINE, AND THE PAIR IS A HOUSE AND ITS GARAGE ──────────
+      // Movie, 28 Sep: "i figured out how to save us more space on the left
+      // menu area (BUNGALOW SECTION)", with a mockup -- [1 STOREY][+ GARAGE]
+      // over [2 STOREY][+ GARAGE], and 2 STOREY + GARAGE + ROOM OVER across
+      // the bottom. Five buttons in three lines instead of five, against a
+      // miniature that is taller than they were.
+      //
+      // THE PAIR IS FOUND, NOT LISTED. An entry pairs when the one before it
+      // is the SAME TYPE WITHOUT A GARAGE -- it is that house with a garage on
+      // it, which is exactly what the mockup puts side by side. So the layout
+      // comes off the menu's own shape and a sixth entry lands in the right
+      // place without a second list here saying where.
+      //
+      // AND THE LABEL LOSES THE HALF ITS NEIGHBOUR ALREADY SAYS, which is the
+      // whole saving: "1 STOREY + GARAGE" beside "1 STOREY" prints the storey
+      // twice. The short label is cut from the entry's OWN label at the plus,
+      // not written out here, so it cannot drift from the words build-menu.js
+      // uses -- and build-menu.js is left alone, because MODEL.html's
+      // drive-thru renders off the same list and that menu has room for the
+      // full name.
+      // BOTH SIDES ARE ALLOWED TO BE MISSING, because this is asked of the
+      // entry BEFORE the first and the one AFTER the last as well as of every
+      // pair in between.
+      const pairsWithPrevious = (entry, previous) => Boolean(
+        entry && previous && entry.garage && !previous.garage
+        && previous.type === entry.type);
+      const shortLabel = entry => {
+        const plus = entry.label.indexOf('+');
+        return plus === -1 ? entry.label : entry.label.slice(plus).trim();
+      };
+      const familyButtons = BUNGALOW_FAMILY.map((entry, i) => {
+        const paired = pairsWithPrevious(entry, BUNGALOW_FAMILY[i - 1]);
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'family-button';
-        button.textContent = entry.label;
+        // A BUTTON THAT SHARES ITS LINE IS NOT WIDE, and one that does not
+        // spans both tracks. The grid is the column's job, the same rule the
+        // paired schedules keep: the button says whether it shares, the CSS
+        // says what sharing looks like.
+        if (!paired && !pairsWithPrevious(BUNGALOW_FAMILY[i + 1], entry)) {
+          button.classList.add('wide');
+        }
+        button.textContent = paired ? shortLabel(entry) : entry.label;
         button.dataset.familyEntry = entry.id;
         button.disabled = readOnly;
         button.addEventListener('click', () => {
