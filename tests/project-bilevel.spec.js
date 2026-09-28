@@ -215,65 +215,135 @@ test('band 2 schedule reads the split stack', async ({ page }) => {
   // became editable on 16 Sep ("be editable like the above BUNGALOW area"),
   // and an input reports textContent '' -- which read as the schedule having
   // lost its numbers when the numbers were sitting in the boxes.
+  //
+  // READ BY KEY, NOT BY NAME, since 28 Sep. The column groups its rows under
+  // heads now, so MAIN FL and 2ND FL each carry a row called WALL HT and the
+  // head is what tells them apart -- keying on the printed word would have
+  // one silently overwrite the other.
   const rows = await page.evaluate(() => Object.fromEntries(
     [...document.querySelectorAll('#sched-bilevel-left .sched-row, #sched-bilevel-right .sched-row')]
       .filter(r => !r.hidden)
-      .map(r => [r.children[0].textContent,
+      .map(r => [r.dataset.schedRow,
         r.children[1].value ?? r.children[1].textContent])));
 
   // Office defaults for the type, pinned: these are the numbers that make a
   // split a split, and all three are frozen in SECTION_TABLE_DEFAULTS.
-  expect(rows['POUR']).toBe(String.raw`5'-0"`);
-  expect(rows['FILL WALL']).toBe(String.raw`4'-2 3/4"`);
-  expect(rows['MAIN FL WALL']).toBe(String.raw`9'-1 1/8"`);
+  expect(rows['fdnHeight']).toBe(String.raw`5'-0"`);
+  expect(rows['woodFill']).toBe(String.raw`4'-2 3/4"`);
+  expect(rows['wallHeight-3']).toBe(String.raw`9'-1 1/8"`);
 
   // The entry package is the 2x10 and ply Movie named, deliberately NOT the
   // main floor's I-joist — sharing that field would draw it 2 5/8" too deep and
   // look entirely plausible.
-  expect(rows['ENTRY FL']).toBe(String.raw`0'-10"`);
-  expect(rows['MAIN FL JST']).toBe(String.raw`1'-0 5/8"`);
+  expect(rows['floor-2']).toBe(String.raw`0'-10"`);
+  expect(rows['floor-3']).toBe(String.raw`1'-0 5/8"`);
 
   // THE DISPUTED ONE, pinned to the derivation rather than left loose: fill
   // wall less the entry package. Movie's PDF says 5'-1 1/8" and is not
   // reconciled (RD-DOCUMENTS/SPEC-bilevel-section.md). If that settles his way
   // this test SHOULD fail — the number changing is the point of settling it,
   // and a test that shrugged would let the schedule and the spec drift apart.
-  expect(rows['ENTRY WALL']).toBe(String.raw`3'-4 3/4"`);
+  expect(rows['wallHeight-2']).toBe(String.raw`3'-4 3/4"`);
 });
 
-// LABELS MUST NOT LAND ON EACH OTHER. Five tags stacked at the roof, three at
-// the sill, three at the footing: each placed correctly at the height of the
-// part it names, and together unreadable. Every other test in this repo passed
-// throughout -- a canvas does not care that the words over it are illegible,
-// and neither does a screenshot comparison.
+// ── THE THREE TYPES DRAW THREE DRAWINGS ───────────────────────────────────
 //
-// Band 2 only, now: band 1's word columns are gone (Movie, 17 Sep -- the
-// schedule names every number), so the stack this guarded no longer exists
-// there. Band 2 keeps its margin labels and exercises the tighter stack:
-// POUR and FILL WALL are 6 3/4" apart in the drawing.
-for (const [label, host] of [['band 2', '#bilevel-wrap']]) {
-  test(`${label} labels do not overlap each other`, async ({ page }) => {
-    await openProject(page);
-    await expect(page.locator(`${host} .detail-tag`).first()).toBeAttached();
-    const boxes = await page.evaluate(sel => [...document.querySelectorAll(`${sel} .detail-tag`)]
-      .filter(t => t.style.display !== 'none' && t.textContent.trim())
-      .map(t => { const r = t.getBoundingClientRect();
-        return { text: t.textContent, x: Math.round(r.left), top: r.top, bottom: r.bottom }; }), host);
+// Movie, 28 Sep, on this card: "it doesn't change when i press the different
+// types for 1 thing". BILEVEL, BILEVEL + GARAGE and MODIFIED BILEVEL all
+// painted the modified one, because the section-table row this band reads was
+// a constant in the page rather than a reading of the press.
+//
+// PIXELS AND ROWS BOTH, because either alone passes a plausible half-fix: a
+// canvas that changes while the schedule still offers the garage's rows is a
+// drawing disagreeing with the numbers beside it, and rows that come and go
+// over an unchanged picture is the original defect wearing a hat.
+const pressType = (page, entry) =>
+  page.locator(`#bilevel-family-row button[data-family-entry="${entry}"]`);
 
-    expect(boxes.length).toBeGreaterThan(3);
-    const collisions = [];
-    for (let i = 0; i < boxes.length; i += 1) {
-      for (let j = i + 1; j < boxes.length; j += 1) {
-        const a = boxes[i]; const b = boxes[j];
-        // Same column and vertically overlapping. Different columns are free to
-        // share a height -- that is the whole point of having two.
-        if (Math.abs(a.x - b.x) > 4) continue;
-        if (a.top < b.bottom && b.top < a.bottom) collisions.push(`${a.text} / ${b.text}`);
-      }
-    }
-    expect(collisions).toEqual([]);
-  });
-}
+test('each bilevel type draws its own section', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', e => errors.push(String(e)));
+  await openProject(page);
+
+  await pressType(page, 'modifiedBilevel').click();
+  await page.waitForTimeout(300);
+  const modified = await shootCanvas(page, '#bilevel-canvas');
+  // The modified bilevel is the only entry in the whole build menu that makes
+  // a half-level, so it is the only one with a garage AND a storey on it.
+  await expect(page.locator('[data-sched-row="garageFdnType"]')).toBeVisible();
+  await expect(page.locator('[data-sched-row="overGarageFloor"]')).toBeVisible();
+  await expect(page.locator('[data-sched-row="floor-5-extent"]')).toBeVisible();
+
+  await pressType(page, 'bilevel-garage').click();
+  await page.waitForTimeout(300);
+  const withGarage = await shootCanvas(page, '#bilevel-canvas');
+  expect(withGarage).not.toBe(modified);
+  // The garage stays, the storey over it and the balcony go.
+  await expect(page.locator('[data-sched-row="garageFdnType"]')).toBeVisible();
+  await expect(page.locator('[data-sched-row="overGarageFloor"]')).toBeHidden();
+  await expect(page.locator('[data-sched-row="floor-5-extent"]')).toBeHidden();
+
+  await pressType(page, 'bilevel').click();
+  await page.waitForTimeout(300);
+  const plain = await shootCanvas(page, '#bilevel-canvas');
+  expect(plain).not.toBe(withGarage);
+  expect(plain).not.toBe(modified);
+  // A plain BILEVEL is an entry and a main floor: no garage block at all.
+  await expect(page.locator('[data-sched-row="garageFdnType"]')).toBeHidden();
+  await expect(page.locator('[data-sched-row="garageWall"]')).toBeHidden();
+  await expect(page.locator('[data-sched-head="garageHead"]')).toBeHidden();
+
+  // AND THE PRESS IS THE ONE THE BUTTON LIGHTS. The row the band reads and
+  // the button that glows are one answer; two readings of the same press is
+  // how the card came to disagree with its own picker in the first place.
+  await expect(pressType(page, 'bilevel')).toHaveAttribute('aria-pressed', 'true');
+  await expect(pressType(page, 'modifiedBilevel')).toHaveAttribute('aria-pressed', 'false');
+  expect(errors).toEqual([]);
+});
+
+// THE ROWS THE SPLIT TYPES IN ARE ITS OWN ROW OF THE SECTION TABLE. BILEVEL
+// and MODIFIED BILEVEL are two rows in drawing-format.js and always were; the
+// band read only the second, so a number typed on the card went to the
+// modified row whichever type was showing.
+test('a number typed on one split type does not move the other', async ({ page }) => {
+  await openProject(page);
+  await pressType(page, 'bilevel').click();
+  await page.waitForTimeout(300);
+
+  const pour = page.locator('[data-bilevel-value="fdnHeight"]');
+  await pour.fill(`6'-0"`);
+  await pour.blur();
+  await page.waitForTimeout(300);
+  await expect(pour).toHaveValue(`6'-0"`);
+
+  await pressType(page, 'modifiedBilevel').click();
+  await page.waitForTimeout(300);
+  await expect(pour).toHaveValue(`5'-0"`);
+});
+
+// THE SECTION CARRIES NONE OF THE SCHEDULE'S OWN WORDS. Band 3 settled this
+// on 28 Sep, when Movie marked seven grey labels off the detached garage in
+// orange -- "remove the extra text from the section" -- and every one of them
+// was the name of a schedule row an inch away. Band 2's were the same kind:
+// POUR, FILL WALL, SLAB, GRADE BEAM and OVER GAR FL down the left, and the
+// whole house stack down the right.
+//
+// WHAT IS LEFT IS THE TWO ANNOTATIONS, and they are the reason this is not
+// simply "no tags": ATTIC SPACE names a CAVITY, which no schedule row does,
+// so it earns its place by the rule the rest failed.
+test('the section carries no word its schedule already prints', async ({ page }) => {
+  await openProject(page);
+  await page.waitForTimeout(300);
+  const tags = await page.evaluate(() =>
+    [...document.querySelectorAll('#bilevel-wrap .detail-tag')]
+      .filter(t => t.style.display !== 'none' && t.textContent.trim())
+      .map(t => t.textContent.trim()));
+  const names = await page.evaluate(() =>
+    [...document.querySelectorAll('#sched-bilevel-left .sched-name, #sched-bilevel-right .sched-name')]
+      .map(n => n.textContent.trim()));
+  expect(tags.filter(t => names.includes(t))).toEqual([]);
+  expect(tags).toEqual(['ATTIC SPACE']);
+});
 
 // A ROW THAT SAYS "BELOW" MUST NOT SHOW A NEGATIVE. The two cancel: "grade
 // below foundation top: -3'-2"" states that grade is 3'-2" ABOVE the concrete,

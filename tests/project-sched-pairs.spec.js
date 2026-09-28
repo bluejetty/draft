@@ -318,3 +318,98 @@ test.describe('PROJECT — the detached schedule pairs', () => {
     expect(fill.maxY, 'and the bottom').toBeGreaterThan(fill.height - 20);
   });
 });
+
+// ── AND BAND 2, THE SPLIT ─────────────────────────────────────────────────
+//
+// Movie's next message after band 3's, 28 Sep, was about this card, and the
+// arrangement he asked for is the same one. Band 2 is the tightest of the
+// three because it pays for TWO drawings out of one row -- the 7 ft interior
+// cut and the 3 ft eave panel beside it -- so its side columns were 90px, one
+// track and no pair. The canvases went to 280 and 130 and the track floor to
+// 118; see the rule in PROJECT.html for why this band's floor is not 128.
+test.describe('PROJECT — the split schedule pairs', () => {
+  const openSplit = async page => {
+    await page.goto('/PROJECT.html?type=bilevel');
+    await page.waitForSelector('#sched-bilevel-right .sched-row', { state: 'visible', timeout: 10000 });
+  };
+
+  test('both columns put two rows on a line', async ({ page }) => {
+    await openSplit(page);
+    for (const id of ['sched-bilevel-left', 'sched-bilevel-right']) {
+      const { rows, lines: n } = await lines(page, id);
+      expect(rows, id).toBeGreaterThan(2);
+      expect(n, id).toBeLessThan(rows);
+    }
+  });
+
+  test('no split row name is clipped and no head shares its line', async ({ page }) => {
+    await openSplit(page);
+    const bad = await page.evaluate(() => {
+      const clipped = [];
+      const straddles = [];
+      for (const id of ['sched-bilevel-left', 'sched-bilevel-right']) {
+        const host = document.getElementById(id);
+        const tops = new Map();
+        for (const el of host.querySelectorAll('.sched-head, .sched-row')) {
+          if (el.hidden) continue;
+          const top = Math.round(el.getBoundingClientRect().top);
+          (tops.get(top) || tops.set(top, []).get(top)).push(el);
+          const name = el.querySelector && el.querySelector('.sched-name');
+          if (!name) continue;
+          const width = name.getBoundingClientRect().width;
+          if (name.scrollWidth > Math.ceil(width) + 1) {
+            clipped.push(`${name.textContent} needs ${name.scrollWidth} in ${Math.round(width)}`);
+          }
+        }
+        for (const [, group] of tops) {
+          if (group.some(el => el.classList.contains('sched-head')) && group.length > 1) {
+            straddles.push(group.map(el => el.textContent.slice(0, 20)).join(' + '));
+          }
+        }
+      }
+      return { clipped, straddles };
+    });
+    expect(bad.clipped).toEqual([]);
+    expect(bad.straddles).toEqual([]);
+  });
+
+  test('a split row still holds exactly a name and a value', async ({ page }) => {
+    await openSplit(page);
+    const wrong = await page.evaluate(() => [...document.querySelectorAll(
+      '#sched-bilevel-left .sched-row, #sched-bilevel-right .sched-row')]
+      .filter(r => !r.hidden && !r.classList.contains('wide'))
+      .filter(r => r.children.length !== 2)
+      .map(r => `${r.dataset.schedRow}: ${r.children.length}`));
+    expect(wrong).toEqual([]);
+  });
+
+  // THE DRAWINGS DID NOT PAY FOR IT. This section's ink spans about 190px of
+  // the 600 it had, because a split is a tall building seen through a 7 ft cut
+  // and HEIGHT sets the scale. Both canvases still reach top and bottom.
+  test('the narrower canvases did not shrink the split drawings', async ({ page }) => {
+    await openSplit(page);
+    const fill = await page.evaluate(() => ['bilevel-canvas', 'bilevel-eave-canvas']
+      .map(id => {
+        const c = document.getElementById(id);
+        const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+        const bg = [d[0], d[1], d[2]];
+        let minY = c.height; let maxY = -1;
+        for (let y = 0; y < c.height; y += 1) {
+          for (let x = 0; x < c.width; x += 1) {
+            const i = (y * c.width + x) * 4;
+            if (Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1])
+              + Math.abs(d[i + 2] - bg[2]) <= 24) continue;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+            break;
+          }
+        }
+        return { id, height: c.height, width: c.width, minY, maxY };
+      }));
+    expect(fill.map(f => f.width)).toEqual([280, 130]);
+    for (const f of fill) {
+      expect(f.minY, `${f.id} reaches the top of its canvas`).toBeLessThan(20);
+      expect(f.maxY, `${f.id} reaches the bottom`).toBeGreaterThan(f.height - 20);
+    }
+  });
+});
