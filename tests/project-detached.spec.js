@@ -236,10 +236,15 @@ test('the storey above carries the bungalow\'s four rows and its own head',
     for (const key of keys) {
       await expect(page.locator(`[data-sched-row="${key}"]`)).toBeVisible();
     }
-    // The office storey: an 8' precut wall, 19 1/4" joists and 3/4" sheathing.
+    // The office storey: an 8' precut wall, 3/4" sheathing, and 19 1/4" of
+    // OPEN WEB JOIST -- Movie, 28 Sep: "the floor joists will need to be
+    // 19.25" thick OWJ". A garage has no interior walls to land on, so this
+    // deck clear-spans, and the row is named after the member doing it.
     expect(await read(page, 'overWallHeight')).toBe(`8'-1 1/8"`);
     expect(await read(page, 'overSheathing')).toBe(`3/4"`);
     expect(await read(page, 'overFloor')).toBe(`19 1/4"`);
+    await expect(page.locator('[data-sched-row="overFloor"] .sched-name'))
+      .toHaveText('OWJ');
 
     // AND EACH OF THE FOUR REACHES THE DRAWING. Two of them are typed into
     // the DETACHED GARAGE row and two into the overGarage level -- which is

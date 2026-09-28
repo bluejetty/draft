@@ -761,8 +761,13 @@
       const ENTRY_LEVEL_ID = 2;
       const OVER_GARAGE_LEVEL_ID = 4;
       const {
-        normaliseLevelAssembly, defaultLevelAssembly, levelRole,
+        normaliseLevelAssembly, defaultLevelAssembly, levelRole, JOIST_TYPES,
       } = window.DraftLevelAssembly;
+      // What a level's joists are CALLED, for a row that names the member
+      // rather than just measuring it. The table is the module's, so a row
+      // reading this cannot drift from the FLOOR JOISTS box in MODEL.
+      const joistLabel = levelId => JOIST_TYPES.find(
+        type => type.id === assembly(levelId).joistType)?.label ?? 'JST';
       // THE FOUNDATION POUR STAYS THIS PAGE'S OWN, and the module says why:
       // MODEL.dc.html has always drawn a foundation wall at the house's
       // 8'-1 1/8" while this page poured 8'-0", and BOTH WERE WRONG. Movie
@@ -1802,7 +1807,10 @@
       // A row's name is a string, except the depth row's, which follows the
       // foundation -- so every reader asks through here rather than some
       // asking the string directly and going stale on the one row that moves.
-      const nameOfRow = row => (typeof row.name === 'function' ? row.name() : row.name);
+      const resolveName = name => (typeof name === 'function' ? name() : name);
+      const nameOfRow = row => resolveName(row.name);
+      // The name the DRAWING uses, where it differs from the schedule's.
+      const tagOfRow = row => resolveName(row.tagName) ?? nameOfRow(row);
       // A ROW THE DRAFTER TYPES IN. `field` names a cell of the DETACHED
       // GARAGE row and is the common case; `typed` is the row that writes
       // somewhere else -- the storey's floor package, which lives on the
@@ -1919,8 +1927,16 @@
           put: value => (value <= 3
             && setAssembly(OVER_GARAGE_LEVEL_ID, 'sheathingIn', value) !== false
             && 'Room above sheathing saved.') },
-        { side: 'right', key: 'overFloor', name: 'JST',
-          tagName: 'ROOM FL JST', roomOverOnly: true, unit: 'in', typed: true,
+        // NAMED AFTER THE MEMBER IT MEASURES. Movie, 28 Sep: "the floor
+        // joists will need to be 19.25\" thick OWJ". The depth was already
+        // the office 19 1/4" -- a garage has no interior walls to land on, so
+        // this deck clear-spans -- and the row now says what is doing the
+        // spanning. Read off the level rather than written here, so it stays
+        // true if the joist type is ever changed.
+        { side: 'right', key: 'overFloor',
+          name: () => joistLabel(OVER_GARAGE_LEVEL_ID),
+          tagName: () => `ROOM FL ${joistLabel(OVER_GARAGE_LEVEL_ID)}`,
+          roomOverOnly: true, unit: 'in', typed: true,
           get: v => v.garage.overJoistIn,
           put: value => (setAssembly(OVER_GARAGE_LEVEL_ID, 'joistDepthIn', value) !== false
             && 'Room above joist depth saved.') },
@@ -2075,7 +2091,7 @@
           // whose wall it is. On the drawing there is no head, and the
           // garage's own WALL HT is already labelled a few inches below it,
           // so the tag says which storey it means.
-          tag.textContent = row.tagName ?? nameOfRow(row);
+          tag.textContent = tagOfRow(row);
           tag.style.left = row.side === 'left'
             ? `${Math.max(2, left - GREY_COL)}px` : `${right + GREY_GAP}px`;
           tag.style.top = `${at.y}px`;
