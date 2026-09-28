@@ -1503,11 +1503,22 @@ if (!window.DraftProjectPage) {
     // would draw a 2x4 plate under a 2x6 wall the moment the type changed.
     // The plate stack at the TOP is still what the door head is dropped
     // from -- a fact about the wall rather than a line this view needs.
+    //
+    // AND IT IS THE ONE THE SCHEDULE ASKS FOR. Movie, 28 Sep, put ATTACHMENT
+    // and HEIGHT at the head of this band's FOUNDATION block, so the member
+    // drawn here is whichever hold-down that row names at whatever height it
+    // was given -- the same two questions the house's block asks, answered on
+    // the DETACHED GARAGE row rather than borrowed from the house.
+    const attachFt = (g.attachmentIn ?? sillPlateIn()) / 12;
+    // The room above's own bottom plate keeps the office 1 1/2" -- it stands
+    // on a deck, not on concrete, so the foundation's hold-down height is not
+    // its business.
     const sillFt = sillPlateIn() / 12;
     const plateY = wallBaseY + g.wallHeightFt;
     rect(0, wallBaseY, wallFt, g.wallHeightFt, 1.5);
-    attachment(rect, line, 'sill', 0, wallBaseY, wallFt);
-    anchors.sill = { x: wallFt + 0.55, y: wallBaseY + sillFt / 2 };
+    attachment(rect, line, g.attachment || 'sill', 0, wallBaseY, wallFt,
+      attachFt * 12);
+    anchors.sill = { x: wallFt + 0.55, y: wallBaseY + attachFt / 2 };
     anchors.wallHeight = { x: wallFt + 0.55, y: wallBaseY + g.wallHeightFt / 2 };
 
     // THE OVERHEAD DOOR HEAD, dropped OPENING_HEAD_DROP_IN off the top of the

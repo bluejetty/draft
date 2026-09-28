@@ -1535,6 +1535,13 @@ if (!window.DraftDrawingFormat) {
     // OVER on a 2 STOREY already rewrites the garage wall so the decks line
     // up, which would drag this with it if they shared a cell.
     'overWallHeightFt',
+    // HOW TALL THE HOLD-DOWN IS, beside `foundationAttachment` below. Movie,
+    // 4 Sep, gave the house one -- "ATTACHMENT HEIGHT 1.5\" default (and allow
+    // them to change it)" -- and on 28 Sep asked for the same pair on the
+    // detached garage's FOUNDATION block. A sill and a ladder are both 1 1/2"
+    // stock by default and either can be something else, so the height is one
+    // cell serving whichever is chosen. Null means the office 1 1/2".
+    'foundationAttachmentIn',
   ]);
   // Not every per-type value is a measurement. A garage's foundation is a
   // CHOICE between two things it can be, and `positive()` would quietly turn

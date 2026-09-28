@@ -226,7 +226,8 @@ test.describe('PROJECT — the bungalow schedule pairs', () => {
 // does -- falling back is what auto-fit is for. That is why the bungalow's
 // own note records the afternoon a 140px floor paired at 1366 and quietly
 // stopped at 1280, and why this file runs at the config's 1280. Band 3 buys
-// its width the same way band 1 did, by cutting its canvas to 360, so the
+// its width the same way band 1 did, by cutting its canvas (360, then 300
+// once the FOUNDATION block grew its dropdowns), so the
 // same pair of checks holds it: the columns pair, and the drawing did not pay
 // for it.
 test.describe('PROJECT — the detached schedule pairs', () => {
@@ -309,7 +310,10 @@ test.describe('PROJECT — the detached schedule pairs', () => {
       }
       return { height: c.height, width: c.width, minY, maxY };
     });
-    expect(fill.width, 'the canvas is the narrower one').toBe(360);
+    // 300 SINCE THE FOUNDATION BLOCK GREW ITS DROPDOWNS. At 360 the column's
+    // half left FDN TYPE's select 83px and drew "THICKENED EDG"; the reason
+    // the number moved is written at the rule in PROJECT.html.
+    expect(fill.width, 'the canvas is the narrower one').toBe(300);
     expect(fill.minY, 'the drawing reaches the top of its canvas').toBeLessThan(20);
     expect(fill.maxY, 'and the bottom').toBeGreaterThan(fill.height - 20);
   });
