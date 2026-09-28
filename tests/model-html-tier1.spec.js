@@ -287,23 +287,20 @@ test.describe('MODEL.html tier 1', () => {
       './orientation-guard.js',
       './palette.js', './layer-views.js', './geometry-2d.js',
       './shared-file-store.js', './wall-types.js',
-      // THE THREE THAT MAKE A FINISH DRAW, and by this list's own rule they
-      // are the kind of entry to grow by: they DELETE a silence rather than
-      // adding a capability. cut-view's paintFaceFinish has looked for
-      // DraftFinishPatterns and paintRoof for DraftRoofPatterns on EVERY
-      // elevation since the finishes landed, and each warns to the console
-      // and draws plain when they are missing -- so this page has been taking
-      // that warning on every elevation it paints, and its elevations were
-      // never a different drawing, only the same one with the materials
-      // switched off. roof-types.js comes with them because the roof painter
-      // reads `roofingById` to know what it is drawing.
+      // NO PATTERN MODULES HERE, AND THE REASON IS WORTH KEEPING. They were
+      // added with the EXT. FINISH pane on 27 Sep under the claim that they
+      // "delete a silence" -- that cut-view's paintFaceFinish and paintRoof
+      // warn to the console on every elevation when DraftFinishPatterns and
+      // DraftRoofPatterns are missing, and that MODEL had been taking that
+      // warning all along.
       //
-      // THEIR HONEST COST: three more modules on a page whose whole claim is
-      // that it is cheap. They are pure pattern tables and draw nothing until
-      // asked -- `opts.finishes`, which MODEL only passes while the EXT.
-      // FINISH pane is open -- so a drafter doing construction elevations
-      // pays the parse and nothing else.
-      './roof-types.js', './finish-patterns.js', './roof-patterns.js',
+      // THAT CLAIM WAS FALSE. Both warnings sit behind `opts.finishes`
+      // (cut-view.js:3796 and :4207), and MODEL has never passed it except
+      // while that pane was open. A page that does not ask for finishes does
+      // not warn about them -- it draws line work, which is what a
+      // construction elevation is. So with the pane gone the modules buy
+      // nothing, and three pattern tables parsed on every load of the
+      // biggest page in the repo is a cost with no reading behind it.
       './formatters.js',
       './cut-view.js', './drawing-format.js', './render-2d.js',
       './fixture-geometry.js', './closets.js',
