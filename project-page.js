@@ -1397,6 +1397,21 @@ if (!window.DraftProjectPage) {
   //   frostwall  the drafter's own, because frost depth is a site fact --
   //              the page hands it the house's pour, which is what "8" wall
   //              to the house footing depth" has always meant here.
+  // HOW FAR THE CONCRETE STANDS OVER GRADE, which is NOT how far the floor
+  // does on two of the three. Movie, 28 Sep: "measure grade from TOP OF
+  // CONCRETE". A grade beam and a frost wall top out GRADE_BELOW_CONCRETE_IN
+  // -- 1'-2" -- above grade with the slab GARAGE_SLAB_BELOW_CONCRETE_IN under
+  // that, so their floor is at grade + 10" and their CONCRETE is at grade +
+  // 1'-2". A thickened edge has nothing above its slab, so on that one the
+  // two are the same number and it is DETACHED_SLAB_ABOVE_GRADE_IN.
+  //
+  // The schedule's TOP CONC. OVER GRADE row reads this rather than the slab
+  // constant, which is what it read while it was called FLOOR OVER GRADE --
+  // a row that was right about the thickened edge and four inches shy of the
+  // other two.
+  const detachedConcreteAboveGradeIn = kind =>
+    (kind === 'thickened' ? DETACHED_SLAB_ABOVE_GRADE_IN : GRADE_BELOW_CONCRETE_IN);
+
   const detachedFoundationDepthFt = (kind, houseFootingDepthFt) => {
     if (kind === 'gradebeam') return GARAGE_GRADE_BEAM_IN / 12;
     if (kind === 'frostwall') return houseFootingDepthFt ?? GARAGE_GRADE_BEAM_IN / 12;
@@ -1475,7 +1490,12 @@ if (!window.DraftProjectPage) {
       wallBaseY = concTop;
       lowestY = bottom;
     }
-    anchors.slabAboveGrade = { x: -0.9, y: gradeY / 2 };
+    // AND THE DIMENSION HANGS BETWEEN GRADE AND THE CONCRETE IT MEASURES.
+    // wallBaseY is the top of the concrete on a beam and a frost wall, and 0
+    // -- the slab top, which IS the top of the pour -- on a thickened edge,
+    // so one expression covers all three and cannot disagree with
+    // detachedConcreteAboveGradeIn above.
+    anchors.slabAboveGrade = { x: -0.9, y: (gradeY + wallBaseY) / 2 };
 
     // GRADE, on the outside only. It stops at the building face for the same
     // reason buildGarageSection draws none at all: soil ticks carried under a
@@ -2462,6 +2482,7 @@ if (!window.DraftProjectPage) {
     buildFarEaveSection,
     buildGarageSection,
     buildDetachedGarageSection,
+    detachedConcreteAboveGradeIn,
     detachedFoundationDepthFt,
     buildDetachedFoundationDetail,
     buildDetachedFoundationRow,

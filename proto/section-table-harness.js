@@ -677,6 +677,28 @@ check('and it is the same member the house sits on', P => {
   const sills = detachedSill(P);
   return [house.length && sills.length ? near(house[0].h, sills[0].h) : 'no sill', true];
 });
+// GRADE IS MEASURED FROM THE TOP OF CONCRETE. Movie, 28 Sep, in those words,
+// on the row he had just renamed TOP CONC. OVER GRADE. On a thickened edge
+// the slab IS the top of the pour, so it is the 10" that keeps the floor at
+// the same height as a beam's; on the other two the concrete stands 1'-2"
+// proud and the slab sits 4" down inside it. The row read the slab constant
+// for all three, which was right about one of them.
+check('the top of concrete over grade follows the foundation', P =>
+  [P.GARAGE_FOUNDATIONS.detachedGarage
+    .map(kind => P.detachedConcreteAboveGradeIn(kind)).join(),
+  [P.DETACHED_SLAB_ABOVE_GRADE_IN, P.GRADE_BELOW_CONCRETE_IN,
+    P.GRADE_BELOW_CONCRETE_IN].join()]);
+// AND THE DRAWING AGREES WITH THE NUMBER. The dimension hangs between grade
+// and the face it names, so its height off grade is what the row says -- a
+// tag parked halfway to the floor would put the word "top of concrete" beside
+// a slab on two of the three.
+check('the grade dimension spans grade to the top of concrete, on all three', P =>
+  [P.GARAGE_FOUNDATIONS.detachedGarage.map(kind => {
+    const out = DETACHED_ON(P, kind);
+    const gradeY = -P.DETACHED_SLAB_ABOVE_GRADE_IN / 12;
+    const concTop = gradeY + P.detachedConcreteAboveGradeIn(kind) / 12;
+    return near(out.anchors.slabAboveGrade.y, (gradeY + concTop) / 2);
+  }).join(), 'true,true,true']);
 // AND WHICH MEMBER IT IS, AND HOW TALL, IS THE SCHEDULE'S TO SAY. Movie's
 // 28 Sep mockup heads this band's FOUNDATION block with ATTACHMENT and
 // HEIGHT, so the builder takes both off the DETACHED GARAGE row instead of
@@ -1025,6 +1047,13 @@ const MUTATIONS = [
   // draw a perfectly good detail; what they lose is the connection between
   // the ATTACHMENT / HEIGHT pair Movie asked for on 28 Sep and the member
   // under the wall.
+  ['the grade dimension goes back to measuring the floor, not the concrete',
+    s => s.replace(
+      'const detachedConcreteAboveGradeIn = kind =>\n    (kind === \'thickened\' ? DETACHED_SLAB_ABOVE_GRADE_IN : GRADE_BELOW_CONCRETE_IN);',
+      'const detachedConcreteAboveGradeIn = () => DETACHED_SLAB_ABOVE_GRADE_IN;')],
+  ['the grade dimension is parked halfway to the floor again',
+    s => s.replace('anchors.slabAboveGrade = { x: -0.9, y: (gradeY + wallBaseY) / 2 };',
+      'anchors.slabAboveGrade = { x: -0.9, y: gradeY / 2 };')],
   ['the attachment is hard-coded back to a sill plate',
     s => s.replace("attachment(rect, line, g.attachment || 'sill',",
       "attachment(rect, line, 'sill',")],

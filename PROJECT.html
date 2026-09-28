@@ -1837,7 +1837,8 @@
         // down inside it -- so the old name was only ever right about the
         // thickened edge.
         { side: 'left', key: 'slabAboveGrade', name: 'TOP CONC. OVER GRADE',
-          get: () => projectPage.DETACHED_SLAB_ABOVE_GRADE_IN / 12 },
+          get: () => projectPage
+            .detachedConcreteAboveGradeIn(detachedFoundation()) / 12 },
         // THE ORDER IS BAND 1'S -- roof block, then the room-over press, then
         // the wall -- top of the building down, the way the drawing beside it
         // reads.
