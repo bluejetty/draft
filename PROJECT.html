@@ -209,6 +209,91 @@
        rather than as the way in. */
     #sched-garage-add { align-self:start; padding-top:2px; }
     #sched-garage-add[hidden] { display:none; }
+    /* ── TWO TO A LINE, AND THE SECTION PAID FOR IT ──────────────────────
+       Movie, 27 Sep: "i found a way to make the text entry not as long by
+       doubling the info per row" -- the house column ran 21 rows and 713px,
+       taller than the drawing beside it and off the bottom of a 768px
+       screen. Asked where the width would come from, he answered: "what
+       about making the section slightly smaller".
+
+       THE PAPER WAS MOSTLY EMPTY, and measuring said so. Across the five
+       bungalow variations the drawing's ink spans 241-456px of the 600px
+       canvas while filling the HEIGHT every time (12-487 of 500).
+       sectionView takes the SMALLER of the two fits, so height was setting
+       the scale throughout and the spare width was doing nothing. Cutting
+       the canvas to 360 costs four of the five variations not one pixel of
+       drawing; only 1 STOREY + GARAGE, which genuinely needs 456, comes
+       down -- the "slightly smaller" Movie asked for, and only where the
+       section is actually that wide.
+
+       NOT BY CUTTING THE GRADE LINE, which was the first idea and would
+       not have worked: a `grade` part carries only its elevation and is
+       drawn across whatever the drawing turns out to be wide, so it can
+       never make the drawing wider. The ink reaching past the walls is the
+       ROOF OVERHANG -- 2'-0" of real building each side. */
+    #stage-bungalow .band { grid-template-columns:minmax(0,1fr) 360px minmax(0,1fr); }
+
+    /* THE PAIRING IS THE COLUMN'S JOB, NOT THE ROW'S, and that is a
+       constraint rather than a preference. A .sched-row promises exactly
+       two children -- the name, then the value -- and three checks index
+       them positionally (project-bilevel reads children[0]/children[1]
+       twice, project-page filters on .sched-name). Merging two rows into
+       one would have put four cells behind a promise of two and broken all
+       three for a layout change. So the row is untouched and the COLUMN
+       lays two of them to a line.
+
+       auto-fit RATHER THAN A FLAT 2, so a column too narrow to pair stays
+       single of its own accord: the stacked layout under 1180px needs that,
+       and so do the bilevel and detached bands (90px and 201px today) until
+       they get this treatment too.
+
+       128px IS THE FLOOR, AND IT WAS 140 FOR AN AFTERNOON. 140 pairs on the
+       1366px screen this was built against and falls back to one column at
+       1280 -- by four pixels. Nothing looked wrong at either width, because
+       falling back is what auto-fit is FOR; the column just quietly stopped
+       being the thing Movie asked for on any screen narrower than his own.
+       The check now runs at 1280 for that reason. */
+    #sched-house, #sched-garage { display:grid; align-content:start;
+      grid-template-columns:repeat(auto-fit, minmax(128px, 1fr)); gap:0 8px; }
+    /* A HEAD RULES BOTH HALVES, and taking a whole line is what stops a
+       pair straddling two groups -- 2ND FL's last row never shares a line
+       with MAIN FL's first. A `wide` row is already a control that is its
+       own label, so it spans for the same reason it always did. */
+    /* A PAIRED SELECT ROW SIZES ITS NAME TO THE NAME, and this is the one
+       place the halved width actually broke something rather than just
+       looking tight. The shared rule gives a select a fixed 104px so GRADE
+       BEAM is not clipped to "GRADE" -- but inside a 155px half that leaves
+       36px for the name, and ATTACHMENT is a single word that cannot wrap.
+       It was drawn as "ATTACHME": text silently lost, which every check on
+       this page would have called fine.
+
+       So here the name takes what it needs and the SELECT takes the rest.
+       The 10px is what makes the rest enough -- SAME AS HOUSE is the longest
+       option on the page and wants ~84px with its arrow, which is what is
+       left of a half once ATTACHMENT has had its 55. */
+    /* ALL THREE COLUMNS CENTRED ON EACH OTHER. Movie, 27 Sep, on seeing the
+       paired schedule: "this looks good could we center UP / DOWN all 3
+       columns". Halving the house column left it sitting high against a
+       500px drawing while the garage column hung low -- three stacks
+       starting and finishing in three different places.
+
+       THIS OVERRULES THE GARAGE COLUMN'S BOTTOM ALIGNMENT, which was
+       deliberate and is worth saying out loud rather than just deleting:
+       that column read bottom-up like its own drawing, footing last and
+       deepest. The reading earned its keep when the column stood 352px
+       against a 713px neighbour; at 205px against 420px it only reads as
+       the odd one out. The rule itself is left in place for the bands that
+       have not been paired yet. */
+    #stage-bungalow .band { align-items:center; }
+    #stage-bungalow .sched, #stage-bungalow #sched-garage,
+    #stage-bungalow #sched-garage-add { align-self:center; }
+    #sched-house > .sched-row:has(select),
+    #sched-garage > .sched-row:has(select) {
+      grid-template-columns:max-content minmax(0,1fr); }
+    #sched-house select.sched-value,
+    #sched-garage select.sched-value { font-size:10px; padding:2px 3px; }
+    #sched-house > .sched-head, #sched-garage > .sched-head,
+    #sched-house > .sched-row.wide, #sched-garage > .sched-row.wide { grid-column:1 / -1; }
     .sched-head { padding:0 4px 5px; color:var(--ink-secondary); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; }
     /* A VALUE BOX AND A DROPDOWN ARE NOT THE SAME WIDTH. 58px fits the
        longest measurement on the page, 8'-1 1/8" -- but a select also has to
@@ -413,7 +498,7 @@
                exactly when this has to show. -->
           <div class="sched" id="sched-garage-add" hidden></div>
           <div class="detail-wrap" id="detail-wrap">
-            <canvas id="detail-canvas" width="600" height="500" aria-label="Live section — house and attached garage"></canvas>
+            <canvas id="detail-canvas" width="360" height="500" aria-label="Live section — house and attached garage"></canvas>
           </div>
           <div class="sched" id="sched-house"></div>
         </div>
@@ -1922,10 +2007,39 @@
       // It also fixes a doubling nobody could see at 8px: the tag template is
       // `${level.name} FL JST` and the levels are named MAIN FL and 2ND FL,
       // so the section has been drawing "MAIN FL FL JST" all along.
+      // THE HEAD ALREADY SAID IT. Paired two to a line (Movie, 27 Sep), a row
+      // has half the width it had -- and "2ND FL WALL HEIGHT" spent a third
+      // of that repeating the heading printed directly above its own group.
+      // So a row name drops the word its head carries: the head says WHERE,
+      // the row says WHAT.
+      //
+      // DRIVEN OFF THE SAME STRING THE HEAD USES, not a list of prefixes to
+      // strip. insertHead prints `level.name`, so a level renamed in MODEL
+      // renames its head too -- and a hardcoded '2ND FL' would then strip
+      // nothing and put the duplication back without saying a word.
+      const dropHeadWord = (name, head) => {
+        const text = String(name || '');
+        const word = String(head || '').trim();
+        if (!word) return text;
+        return text.replace(
+          new RegExp('^' + word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+', 'i'), '');
+      };
+
       const FULL_NAME = {
         pitch: 'Roof pitch : 12',
-        overhang: 'Roof overhang',
-        fdnHeight: 'Foundation wall height',
+        // ONE WORD FOR ONE PART. Movie, 27 Sep: "on ATTACHED GARAGE we
+        // say EAVE OVERHANG on HOUSE we say ROOF OVERHANG - lets just say
+        // OVERHANG on both". Two names for the same number, in two columns
+        // read side by side. The tag the DRAWING uses is untouched: a word
+        // beside a line on a section has its own job.
+        overhang: 'Overhang',
+        // FOUNDATION IS ABBREVIATED, NOT STRIPPED, and the difference
+        // matters for one row: its word is not always in front. "Grade off
+        // foundation top" carries it in the MIDDLE, and a row reading "grade
+        // off top" would have lost the thing the offset is measured from.
+        // FDN is this page's own short form -- the FDN TYPE: row has spelled
+        // it that way since Movie named it twice on 17 Sep.
+        fdnHeight: 'FDN height',
         // "BELOW" AND A MINUS SIGN CANCEL. This row read "Grade below
         // foundation top: -3'-2"", which says grade is 3'-2" ABOVE the
         // concrete -- the opposite of both the drawing and the stored number.
@@ -1937,24 +2051,34 @@
         // Renamed rather than re-signed: flipping the number to a positive
         // "below" would have to flip the parser, the zone rows' convention and
         // whatever is already stored in people's drawings, to fix a word.
-        grade: 'Grade off foundation top',
+        grade: 'Grade off FDN top',
         slab: 'Slab thickness',
         footingWidth: 'Footing width',
         footingDepth: 'Footing depth',
         fascia: 'Fascia depth',
         heel: 'Roof heel',
-        fdnThickness: 'Foundation thickness',
-        attachmentHeight: 'Attachment height',
+        fdnThickness: 'Thickness',
+        attachmentHeight: 'Height',
         // NOT "FDN WALL TYPE". Movie, 17 Sep, naming it twice: "FDN TYPE:",
         // then "not FDN WALL TYPE". The row beneath it is FOUNDATION
         // THICKNESS, which is the wall's number -- so "wall" here was the
         // word that made two adjacent rows sound like the same subject when
         // one is a TYPE and the other a dimension. The same words now name
         // the garage's own dropdown, so the two columns ask one question.
+        attachment: 'Attachment',
         fdnWallType: 'FDN type:',
       };
-      const fullName = control => FULL_NAME[control.key]
-        || control.tag.replace('FL JST', 'joist depth').replace('WALL HT', 'wall height');
+      // STRIPPED BEFORE THE SHORT FORMS ARE SPELT OUT, and the order is the
+      // whole of it: the tag is "2ND FL JST", and expanding that first leaves
+      // "2ND joist depth" -- which no longer begins with the head, so the
+      // strip quietly matches nothing and the level's name is back in the
+      // row. Caught by measuring the rendered names rather than by reading
+      // this, which is why the measurement exists.
+      const fullName = control => dropHeadWord(
+        FULL_NAME[control.key] || control.tag,
+        (floorLevels.find(l => Number(l.id) === Number(control.levelId)) || {}).name)
+        .replace(/^(FL )?JST$/i, 'joist depth')
+        .replace(/^WALL HT$/i, 'wall height');
 
       // WHAT THE DRAWING CALLS A PART, which is not what the schedule calls
       // it. Movie struck words off the section by hand: FLOOR OFF MAIN FL
@@ -1992,8 +2116,8 @@
         return typeof t === 'function' ? t() : t;
       };
 
-      const nameOf = control =>
-        typeof control.name === 'function' ? control.name() : control.name;
+      const nameOf = control => dropHeadWord(
+        typeof control.name === 'function' ? control.name() : control.name, 'Garage');
 
       const schedRow = (host, key, name, valueEl) => {
         const row = document.createElement('div');
@@ -2413,7 +2537,7 @@
       // is not the same set -- so it gains the row the house already had.
       addGarage('garageFascia', 'Garage fascia depth',
         () => inchesOnly(ROOF_FASCIA_IN), () => false, undefined, true);
-      garageCell('garageOverhang', 'Garage eave overhang', 'roofOverhangFt', ftIn,
+      garageCell('garageOverhang', 'Garage overhang', 'roofOverhangFt', ftIn,
         text => { const v = parseFtIn(text); return v != null && v <= 6 ? v : null; }, true);
       // SAME RULE AS THE HOUSE, and same band. Movie, 5 Sep: "garage roof
       // should act the same yes". Calculated by default from fascia + rise,
