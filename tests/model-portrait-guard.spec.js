@@ -27,6 +27,7 @@
 // desktop window would be a worse bug than the one being fixed, and a check
 // that only proved "portrait is blocked" would pass on exactly that.
 const { test, expect } = require('@playwright/test');
+const { GUARDED_PATHS, rosterProblems } = require('./landscape-guard-pages.js');
 
 const PORTRAIT = { width: 820, height: 1180 };   // iPad, held upright
 const LANDSCAPE = { width: 1180, height: 820 };  // the same slab, turned
@@ -83,19 +84,25 @@ test.describe('MODEL.html — landscape on a tablet', () => {
     await page.close();
   });
 
-  test('every page the ruling names loads the guard', async ({ page }) => {
-    // THE ABSENCE ITSELF, asked of all five rather than of the one that was
-    // missing. MODEL.html is the page this suite exists for, but the fault was
-    // a port dropping a script tag — and the next port can drop another. This
-    // reads the ruling's own list.
-    const PAGES = ['/MODEL.html', '/LAYOUT.html', '/PROJECT.html',
-      '/STANDARDS.html', '/SETTINGS.html'];
+  test('every page that owes a guard loads it', async ({ page }) => {
+    // THE ABSENCE ITSELF, asked of the whole roster rather than of the one
+    // page that was missing. MODEL.html is the page this suite exists for,
+    // but the fault was a port dropping a script tag — and the next port can
+    // drop another.
+    //
+    // THE LIST THAT STOOD HERE WAS THE SECOND HAND-KEPT ONE, and it disagreed
+    // with the first. It named five pages while this file's own header names
+    // six, omitting SPECS.html from the array and MODEL.dc.html from both —
+    // two mechanisms, one claim, neither of them complete. The roster is read
+    // off the disk now and orientation-lock.spec.js reads the same one, so
+    // there is nothing left for the two to disagree about.
+    expect(rosterProblems()).toEqual([]);
     const missing = [];
-    for (const path of PAGES) {
+    for (const path of GUARDED_PATHS) {
       await page.goto(path);
       const has = await page.evaluate(() => !!window.DraftOrientationGuard);
       if (!has) missing.push(path);
     }
-    expect(missing, 'board #310 names these five pages').toEqual([]);
+    expect(missing, 'every working screen owes board #310 a landscape guard').toEqual([]);
   });
 });

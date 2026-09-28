@@ -11,15 +11,24 @@
 // desktop user dragging a window tall must never see it, which is the failure
 // mode a naive aspect-ratio check would have.
 const { test, expect } = require('@playwright/test');
+const { GUARDED_PATHS, rosterProblems } = require('./landscape-guard-pages.js');
 
-const WORK_PAGES = [
-  '/MODEL.dc.html',
-  '/LAYOUT.html',
-  '/PROJECT.html',
-  '/SPECS.html',
-  '/STANDARDS.html',
-  '/SETTINGS.html',
-];
+// THE ROSTER IS READ OFF THE DISK, not typed here. The list that used to
+// stand in this spot walked /MODEL.dc.html three times and never loaded
+// /MODEL.html, so the suite whose whole job is "every working screen shows
+// the panel" was asking the page the app had been ported away from -- and
+// the missing guard on the new one shipped past it. See the header of
+// landscape-guard-pages.js for why the EXEMPTIONS are named rather than the
+// covered pages.
+const WORK_PAGES = GUARDED_PATHS;
+
+// THE COMPANION THE SWEEP NEEDS. Every check below is of the shape "no page
+// does X", which is triumphantly true of an empty roster: a rename or a move
+// into a subdirectory would print a clean pass over nothing at all.
+test('the roster is sound before anything is swept', () => {
+  expect(rosterProblems()).toEqual([]);
+  expect(WORK_PAGES).toContain('/MODEL.html');
+});
 
 const guard = page => page.locator('[data-orientation-guard]');
 

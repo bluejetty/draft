@@ -71,7 +71,7 @@ test('the pressed family button glows and the one before it does not', async ({ 
   // surviving, when what happened is that it was never written. Both
   // presses are the same note ('Attached garage, no storey over it'), so
   // #status cannot tell the second save from the first; the store can.
-  await expect.poll(async () => (await h.savedDrawing(page)).buildType)
+  await expect.poll(async () => (await h.savedDrawing(page))?.buildType)
     .toBe('twoStorey');
 
   await page.reload();
@@ -109,7 +109,7 @@ test('the press adds the 20" package and lands its deck on the 2nd floor', async
 
   // The button lights on the press and the file is written after it, so the
   // read below has to wait for the store rather than for the paint.
-  await expect.poll(async () => (await h.savedDrawing(page)).garagePlan)
+  await expect.poll(async () => (await h.savedDrawing(page))?.garagePlan)
     .toBe('attachedRoomOver');
   const saved = await h.savedDrawing(page);
   expect(saved.garagePlan).toBe('attachedRoomOver');
