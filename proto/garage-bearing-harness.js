@@ -2526,6 +2526,114 @@ function run(win) {
       + 'coming to it', extra.length === 0, extra.join(', '));
   }
 
+  // ── AND THE EXPOSED CONCRETE CAN BE CLAD ──────────────────────────────
+  //
+  // Movie, 28 Sep: *"we also need the FOUNDATION to be clickable - sometimes
+  // someone may want finish added to the side of foundation too"*, and the
+  // case that makes it ordinary: *"sometimes it will be needed on the side of
+  // a house that has a walkout for instance"*.
+  //
+  // ONE LINE, TWO NAMES. He asked *"goes to top of concrete/ bot of sill plate
+  // right?"* -- yes, and they are the same height. The wall's cladding above
+  // runs DOWN to it and the foundation's runs UP to it, so the pair meet with
+  // nothing between them, which is what lets him say *"if i want to DROP the
+  // main floor finish i can add a bit to the TOP of the FOUNDATION finish"*.
+  //
+  // MEASURED AGAINST THE GREY IT COVERS, not against grade re-derived here.
+  // The concrete's own fill already answers "what of this pour can be seen" --
+  // `visibleRuns` cut it against everything standing nearer -- so asserting
+  // the cladding lands on exactly those rectangles asks the real question
+  // once. Re-deriving the extent would be a second answer to it, and the two
+  // would agree until the day they did not.
+  //
+  // ── ON TWO DRAWINGS, BECAUSE ONE OF THEM CANNOT SHOW THE CLIP ───────
+  //
+  // repro-garage-house's foundation faces each show whole: nothing stands in
+  // front of them, so `visibleRuns` hands back the face's own extent and
+  // "clipped to what shows" and "the whole face" are the same rectangle. The
+  // mutation that clads the whole face passed on it, and would have gone on
+  // passing. On repro-2storey-garage-beam E1 the garage stands in front of
+  // 800px of the house's pour -- run 100..580 of a face 100..1380 -- so the
+  // two answers differ and the claim can be made.
+  [['repro-garage-house', SAVED],
+    ['repro-2storey-garage-beam', JSON.parse(fs.readFileSync(path.join(ROOT,
+      'proto', 'repro-2storey-garage-beam.draft'), 'utf8'))]].forEach(([name, fixture]) => {
+    const bareSaved = JSON.parse(JSON.stringify(fixture));
+    const cladSaved = JSON.parse(JSON.stringify(fixture));
+    const fdnOf = d => d.walls.filter(w => (w.view || 'plan') === 'foundation');
+    fdnOf(cladSaved).forEach(w => { w.finish = 'ledgestone'; });
+    check(`${name}: the drawing has foundation walls to clad`,
+      fdnOf(cladSaved).length > 0, `${fdnOf(cladSaved).length} wall(s)`);
+
+    const paint = saved => {
+      const env = buildEnv(win, saved);
+      const boxes = [];
+      const FP = win.DraftFinishPatterns;
+      const realDraw = FP.drawFinish;
+      win.DraftFinishPatterns = { ...FP,
+        drawFinish: (ctx, box, finish, inks) => {
+          boxes.push({ id: finish && finish.id, x0: box.x0, x1: box.x1,
+            yTop: box.yTop, yBottom: box.yBottom });
+          return realDraw(ctx, box, finish, inks);
+        } };
+      const view = paintElevation(win, env,
+        standardElevationCuts(env).find(c => c.id === 'E1'),
+        { pxPerFt: 40, finishes: true });
+      win.DraftFinishPatterns = FP;
+      return { view, boxes };
+    };
+
+    const bare = paint(bareSaved);
+    const clad = paint(cladSaved);
+    // THE GREY IS IN THE DEFAULT SKIN'S OWN WORDS. C.faceShade is what an
+    // elevation paints exposed concrete in, and these run with no skin
+    // passed, so it is the literal at the top of cut-view.js.
+    const concreteOf = view => view.view.fills
+      .filter(f => f.rect && f.ink === '#e8e8ea').map(f => f.rect);
+    check(`${name}: E1 shows some exposed concrete to clad`,
+      concreteOf(clad).length > 0, `${concreteOf(clad).length} exposed run(s)`);
+
+    // ── ASKED BY WHERE IT LANDS, NOT BY WHAT IT IS ────────────────────
+    //
+    // "No LEDGESTONE on the bare drawing" was the first form of this and it
+    // was blind in exactly the direction that matters: the defect worth
+    // catching is a foundation falling back to the DEFAULT finish, and the
+    // default is stucco, so a mutation dropping the `g.wall.finish` test
+    // would have painted every exposed pour in the drawing and passed. What
+    // is being claimed is about the CONCRETE, so the probe is too.
+    const near = (a, b) => Math.abs(a - b) < 1.5;
+    const onConcrete = view => {
+      const runs = concreteOf(view);
+      return view.boxes.filter(b => runs.some(r =>
+        near(r.x, Math.min(b.x0, b.x1))
+        && near(r.x + r.w, Math.max(b.x0, b.x1))
+        && near(r.y, b.yTop)
+        && near(r.y + r.h, b.yBottom)));
+    };
+    check(`${name}: bare concrete stays bare -- a foundation carries no `
+      + 'DEFAULT finish',
+      onConcrete(bare).length === 0,
+      onConcrete(bare).map(b => b.id).join(', ')
+        || `${bare.boxes.length} box(es) painted, none on concrete`);
+    const clads = onConcrete(clad);
+    check(`${name}: and a foundation wall given a finish wears it`,
+      clads.length > 0 && clads.every(b => b.id === 'ledgestone'),
+      `${clads.length} box(es): ${[...new Set(clads.map(b => b.id))].join(', ') || 'none'}`);
+
+    // GRADE TO THE TOP OF THE POUR, AND NO WIDER THAN WHAT SHOWS. Every
+    // ledgestone box must be one of those, not merely near one: a box
+    // reaching below grade, above the pour, or across a stretch a nearer
+    // wall covers matches no painted rectangle at all.
+    const ledge = clad.boxes.filter(b => b.id === 'ledgestone');
+    const astray = ledge.filter(b => !clads.includes(b))
+      .map(b => `x ${b.x0.toFixed(1)}..${b.x1.toFixed(1)} y ${b.yTop.toFixed(1)}..${b.yBottom.toFixed(1)}`);
+    check(`${name}: and it covers exactly the concrete that shows -- grade `
+      + 'to the top of the pour, clipped to what nothing nearer hides',
+      astray.length === 0 && ledge.length > 0,
+      astray.length ? astray.join('; ')
+        : `${ledge.length} box(es) on ${concreteOf(clad).length} run(s)`);
+  });
+
   return missed;
 }
 
@@ -2924,6 +3032,33 @@ const MUTATIONS = [
     `      ...wallItems.filter(item => !item.band),
       ...roofFills.map(fill => ({ depth: fill.depth, go: () => paintRoof(fill) })),
       ...wallItems.filter(item => item.band),`)],
+  // ── AND THE FINISH ON THE EXPOSED CONCRETE ──────────────────────────
+  ['the foundation is never clad, whatever the drafter picked',
+    src => src.replace("      if (opts && opts.finishes && g.wall && g.wall.finish",
+      "      if (false && opts && opts.finishes && g.wall && g.wall.finish")],
+  // CONCRETE FALLS BACK TO THE DEFAULT FINISH, which is the one that would
+  // repaint the exposed pour of every drawing in existence: finishById(undefined)
+  // hands back stucco rather than nothing. This is why the bare check is asked
+  // by WHERE a box lands and not by which material it is -- looking for
+  // ledgestone, it slept straight through.
+  ['bare concrete falls back to the default finish instead of staying concrete',
+    src => src.replace("      if (opts && opts.finishes && g.wall && g.wall.finish\n        && g.topE - shownBase > 0.02) {",
+      "      if (opts && opts.finishes && g.wall\n        && g.topE - shownBase > 0.02) {")],
+  ['the cladding runs down the buried concrete, below grade',
+    src => src.replace(`            ctx.rect(x0, Y(g.topE), x1 - x0, (g.topE - shownBase) * pxPerFt);
+            ctx.clip();
+            FP.drawFinish(ctx, { x0, x1, yTop: Y(g.topE), yBottom: Y(shownBase), pxPerFt },`,
+    `            ctx.rect(x0, Y(g.topE), x1 - x0, (g.topE - g.baseE) * pxPerFt);
+            ctx.clip();
+            FP.drawFinish(ctx, { x0, x1, yTop: Y(g.topE), yBottom: Y(g.baseE), pxPerFt },`)],
+  // AND IT IGNORES WHAT STANDS IN FRONT, clad across the whole face rather
+  // than the runs `visibleRuns` left -- so a garage's concrete gets the
+  // house's stone painted over it.
+  ['the cladding covers the whole face, not just the part that shows',
+    src => src.replace(`          runs.forEach(r => {
+            const x0 = X(r.lo), x1 = X(r.hi);`,
+    `          [{ lo: g.lo, hi: g.hi }].forEach(r => {
+            const x0 = X(r.lo), x1 = X(r.hi);`)],
   // ── AND THE BARE STRIP UNDER AN EXTERIOR DOOR ───────────────────────
   ['an exterior door is clad straight past its threshold, with no bare strip',
     src => src.replace("        if (opts && opts.finishes && f.type === 'door' && !face.garage && !f.garage) {",
