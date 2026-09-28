@@ -46,6 +46,14 @@ if (!window.DraftProjectPage) {
   // round off. Anybody reading 1.5 * 3 and wondering why not two now has the
   // answer without having to ask a framer.
   const PLATE_STACK_IN = 1.5 * 3;
+  // ONE OF THE THREE. A plate is a 2x of the wall's own width laid flat, so
+  // it is 1 1/2" thick whatever the wall is framed in -- Movie, 28 Sep, asking
+  // for it on the detached garage: "we should show the 1.5" bottom plates at
+  // the bottom of the wall... the 3.5"x1.5" stud at the bottom where it meets
+  // the slab". Derived from the stack rather than written again, because a
+  // second 1.5 here is a number that agrees with that one until somebody
+  // changes it.
+  const WALL_PLATE_IN = PLATE_STACK_IN / 3;
   const STUD_LENGTHS_IN = Object.freeze([92.625, 104.625, 116.625]);
   // Which precut a build type starts on. Movie, 4 Sep: "8'1-1/8" is default
   // wall height for bungalow, for bilevel we are going with 9'-1 1/8" ceiling
@@ -1485,13 +1493,23 @@ if (!window.DraftProjectPage) {
 
     // THE WALL. Its own, unlike the attached garage's.
     //
-    // NO PLATE LINE UNDER THE TOP OF IT, and none under the room's wall
-    // either. Movie marked both off the drawing on 28 Sep. The plate stack is
-    // still what the door head is dropped from -- it is a fact about the
-    // wall, not a line this view needs, and at this scale it read as a
-    // second wall top a few pixels under the first.
+    // THE BOTTOM PLATE, AND NOT THE TOP ONE. Movie marked the line under the
+    // top plate off the drawing on 28 Sep and then said where it belonged:
+    // "move that top orange line down and show the 3.5"x1.5" stud at the
+    // bottom where it meets the slab". So the wall gets one line across it,
+    // WALL_PLATE_IN above its base -- the top of the plate the studs stand
+    // on, bearing on the slab.
+    //
+    // AS WIDE AS THE WALL, not a written 3 1/2". A plate is a 2x of the
+    // wall's own width laid flat, so it is 3 1/2" on the 2x4 wall Movie
+    // named and 5 1/2" on the 2x6 the page defaults to; writing the number
+    // would draw a 2x4 plate under a 2x6 wall the moment the type changed.
+    // The plate stack at the TOP is still what the door head is dropped
+    // from -- a fact about the wall rather than a line this view needs.
+    const plateFt = WALL_PLATE_IN / 12;
     const plateY = wallBaseY + g.wallHeightFt;
     rect(0, wallBaseY, wallFt, g.wallHeightFt, 1.5);
+    line(0, wallBaseY + plateFt, wallFt, wallBaseY + plateFt, 1);
     anchors.wallHeight = { x: wallFt + 0.55, y: wallBaseY + g.wallHeightFt / 2 };
 
     // THE OVERHEAD DOOR HEAD, dropped OPENING_HEAD_DROP_IN off the top of the
@@ -1528,7 +1546,10 @@ if (!window.DraftProjectPage) {
       const overWallFt = g.overWallHeightFt ?? 0;
       const overStudFt = (g.overWallIn ?? values.wallThicknessIn) / 12;
       if (overWallFt > 0) {
+        // The room's wall gets its bottom plate too -- it bears on the deck
+        // rather than on a slab, and it is the same member either way.
         rect(0, deck, overStudFt, overWallFt, 1.5);
+        line(0, deck + plateFt, overStudFt, deck + plateFt, 1);
         anchors.overWallHeight = { x: overStudFt + 0.55, y: deck + overWallFt / 2 };
       }
       roofBase = deck + overWallFt;
@@ -2423,6 +2444,7 @@ if (!window.DraftProjectPage) {
     STUD_LENGTHS_IN,
     HALF_STUD_IN,
     PLATE_STACK_IN,
+    WALL_PLATE_IN,
     get SILL_PLATE_IN() { return sillPlateIn(); },
     wallHeightFtFromStud,
     studInFromWallHeightFt,

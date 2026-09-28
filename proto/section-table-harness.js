@@ -645,6 +645,32 @@ check('the overhead door head hangs OPENING_HEAD_DROP_IN under the top plate', P
 // that is right on a line nobody asked for is the state this came from.
 check('and draws no dashed line across the wall for it', P =>
   [detached(P).parts.some(part => part.kind === 'dashed'), false]);
+// ── THE BOTTOM PLATE ──────────────────────────────────────────────────────
+// Movie, 28 Sep: "we should show the 1.5" bottom plates at the bottom of the
+// wall... the 3.5"x1.5" stud at the bottom where it meets the slab". At the
+// BOTTOM, which is the correction -- the line he first marked off was under
+// the TOP plate, and the answer was to move it down rather than delete it.
+check('the wall shows its bottom plate where it meets the slab', P => {
+  const plate = detached(P).parts.find(part => part.kind === 'line'
+    && near(part.y1, part.y2) && near(part.y1, P.WALL_PLATE_IN / 12)
+    && near(part.x1, 0));
+  return [plate != null, true];
+});
+// AS WIDE AS THE WALL, not a written 3 1/2". A plate is a 2x of the wall's
+// own width laid flat, so a number here would draw a 2x4 plate under a 2x6
+// wall the moment the type changed -- which is the page's default.
+check('the plate is as wide as the wall it is under', P => {
+  const wallIn = DETACHED(P).wallThicknessIn;
+  const plate = detached(P).parts.find(part => part.kind === 'line'
+    && near(part.y1, part.y2) && near(part.y1, P.WALL_PLATE_IN / 12)
+    && near(part.x1, 0));
+  return [plate ? near(plate.x2, wallIn / 12) : 'no bottom plate', true];
+});
+// ONE PLATE, NOT THREE. PLATE_STACK_IN is two top plates and a bottom one,
+// and the member drawn here is a single 1 1/2" plate -- so it is derived
+// from the stack rather than written again.
+check('a plate is a third of the stack', P =>
+  [P.WALL_PLATE_IN * 3, P.PLATE_STACK_IN]);
 check('a 7\'-0" overhead door clears that head on the detached garage wall', P =>
   [P.GARAGE_WALL_FT * 12 - P.OPENING_HEAD_DROP_IN >= 84, true]);
 // It is a separate builder, and this is the check that says so: the attached
@@ -945,6 +971,15 @@ const MUTATIONS = [
   // THE TWO MEMBERS THE DETACHED SECTION WAS MISSING until the truss became
   // shared, so the gate can tell the difference between having them and
   // having had them once.
+  // Movie's correction, undone: the plate drawn at the TOP of the wall again,
+  // which is the line he marked off before saying where it belonged.
+  ['the bottom plate goes back to the top of the wall',
+    s => s.replace('    line(0, wallBaseY + plateFt, wallFt, wallBaseY + plateFt, 1);',
+      '    line(0, plateY - plateFt, wallFt, plateY - plateFt, 1);')],
+  // The plausible misreading of "3.5\"x1.5\" stud": write the 3 1/2" down.
+  ['the plate is written 3 1/2" wide instead of following the wall',
+    s => s.replace('    line(0, wallBaseY + plateFt, wallFt, wallBaseY + plateFt, 1);',
+      '    line(0, wallBaseY + plateFt, 3.5 / 12, wallBaseY + plateFt, 1);')],
   ['the truss loses its bottom chord, and the ceiling is a bare line again',
     s => s.replace('    if (ceiling) {', '    if (false) {')],
   ['the side chord loses its outside face at the wall',
