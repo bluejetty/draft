@@ -94,8 +94,15 @@ test('GRADE BEAM replaces the foundation wall: 8" thick, 32" floor, no footing',
   // No footing under it -- it hangs off piles -- so the two footing rows go
   // with the part, the same rule that hides any row the drawing has nothing
   // to point at.
-  await expect(page.locator('[data-sched-row="footingWidth"]')).toBeHidden();
-  await expect(page.locator('[data-sched-row="footingDepth"]')).toBeHidden();
+  //
+  // ASKED OF THE HOUSE'S OWN SCHEDULE, because a row key names a ROW OF THE
+  // SECTION TABLE and not a place on the page: every band that asks the same
+  // row carries the same key, which is the point of them -- a footing width
+  // typed on either card lands in one cell. The split band grew a FOUNDATION
+  // block on 28 Sep and this locator, page-wide, went from one match to two.
+  const house = page.locator('#sched-house');
+  await expect(house.locator('[data-sched-row="footingWidth"]')).toBeHidden();
+  await expect(house.locator('[data-sched-row="footingDepth"]')).toBeHidden();
 
   // THE CRAWL-SPACE WORDING HAS NO SURFACE ANY MORE. Movie, 17 Sep: on a
   // grade beam "it will become a 'crawl space' rather than a 'basement'" --

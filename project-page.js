@@ -834,11 +834,34 @@ if (!window.DraftProjectPage) {
     const deckRuns = span => (well && well.x0 < span
       ? [[0, Math.min(well.x0, span)]]
       : [[0, span]]).filter(([a, b]) => b - a > 0.01);
+    // WHICH FACE OF THE CUT A DECK IS SEEN ON. Movie, 28 Sep, marking the
+    // split's floors blue and red across both halves of the drawing: "the
+    // main floor should only show on the right and entry and 2nd floor above
+    // garage only on the left".
+    //
+    // That is the split itself rather than a preference. The cut runs down
+    // the stairwell: standing at it you are looking at the entry landing and
+    // the balcony over the garage, and the main floor is BEYOND the stair --
+    // so it belongs to the far edge that is drawn back from past the break,
+    // and the two half-storeys belong to the near slice. Drawn on both, the
+    // section said every level runs the full depth of the house, which is the
+    // one thing a split's section exists to deny.
+    //
+    // A level with no `deckAt` is on both, which is every level of every
+    // other type: nothing here changes a bungalow or a garage.
+    const farEdge = values.farEdge === true;
+    const deckShown = level => level.deckAt == null
+      || (level.deckAt === 'far') === farEdge;
     // AND THE ROOF SITS ON THE TALLEST, not on the last one drawn. With the
     // stack no longer strictly climbing, `y` after the loop is whatever the
     // final level happened to be, which on a split is the balcony rather than
     // the top of the building.
     let plateTop = null;
+    // Found before the climb rather than after it: the loop asks whether the
+    // level it is drawing is the one that steps, so that level can leave its
+    // inner end to the drop.
+    const stepLevel = floors.find(level =>
+      level.extentFt != null && level.extentFt < cut);
     floors.forEach((level, index) => {
       const depthFt = (level.joistDepthIn + level.sheathingIn) / 12;
       // `over` names the deck this level's own wall stands off, and
@@ -857,24 +880,43 @@ if (!window.DraftProjectPage) {
       // opening would swallow it: a floor at the bottom of the well has
       // nothing above it to come through. Every framed deck here is passed
       // through, so all of them are cut the same way.
-      deckRuns(span).forEach(([x0, x1]) => {
-        rect(x0, y - depthFt, x1 - x0, depthFt, 1);              // floor band
-        line(x0, y, x1, y, 1.5);                                 // sheathing top
-        // The trimmed end at the well -- the header the joists hang off, and
-        // the edge that says the opening is deliberate rather than a floor
-        // that ran out of drawing.
-        if (x1 < span) line(x1, y, x1, y - depthFt, 1.5);
-      });
-      anchors[`floor-${level.id}`] = { x: span * 0.62, y: y - depthFt / 2 };
-      anchors[`sheathing-${level.id}`] = { x: span * 0.4, y: y - (level.sheathingIn / 12) / 2 };
       // A floor with its own wall type draws at its own width; the shared
       // wallThicknessIn is the answer for every level that never split.
       const levelWallFt = (level.wallIn ?? wallIn) / 12;
+      if (deckShown(level)) {
+        deckRuns(span).forEach(([x0, x1]) => {
+          rect(x0, y - depthFt, x1 - x0, depthFt, 1);            // floor band
+          line(x0, y, x1, y, 1.5);                               // sheathing top
+          // The trimmed end at the well -- the header the joists hang off,
+          // and the edge that says the opening is deliberate rather than a
+          // floor that ran out of drawing.
+          if (x1 < span) line(x1, y, x1, y - depthFt, 1.5);
+        });
+      } else {
+        // THE WALL DOES NOT STOP WHERE THE FLOOR IS NOT SHOWN. The band's own
+        // edges were carrying the exterior and interior faces across the
+        // depth of the floor package, so hiding the band opened a hole in a
+        // wall that is cut through whatever is or is not framing behind it.
+        line(0, y - depthFt, 0, y, 2);                           // exterior face
+        line(levelWallFt, y - depthFt, levelWallFt, y, 1.5);     // interior face
+      }
+      anchors[`floor-${level.id}`] = { x: span * 0.62, y: y - depthFt / 2 };
+      anchors[`sheathing-${level.id}`] = { x: span * 0.4, y: y - (level.sheathingIn / 12) / 2 };
       line(0, y, 0, y + level.wallHeightFt, 2);                  // exterior face
       line(levelWallFt, y, levelWallFt, y + level.wallHeightFt, 1.5); // interior face
       // The inner end of a level that stops short: the framing the balcony
       // ends against, and the wall the ceiling drops down.
-      if (span < cut) line(span, y, span, y + level.wallHeightFt, 1.5);
+      //
+      // ONLY WHERE THERE IS SOMETHING TO END AGAINST. Movie, 28 Sep, striking
+      // this line out in red below the ceiling drop: the balcony's edge looks
+      // out over the open main area, so a wall drawn from its deck up to the
+      // lower ceiling is framing that is not there. What IS there is the drop
+      // itself, from one ceiling to the other, and the stepped block below
+      // draws that -- so the level that steps hands its inner end over to it
+      // rather than drawing a full-height wall the drop then doubles.
+      if (span < cut && level !== stepLevel) {
+        line(span, y, span, y + level.wallHeightFt, 1.5);
+      }
       anchors[`wallHeight-${level.id}`] = { x: levelWallFt + 0.9, y: y + level.wallHeightFt / 2 };
       if (index === 0) anchors.wallType = { x: -0.35, y: y + level.wallHeightFt * 0.24 };
       deckY.set(level.id, y);
@@ -891,12 +933,18 @@ if (!window.DraftProjectPage) {
     // THE CEILING STEPS HERE AND ONLY HERE, so the bottom chord is asked for
     // separately below: on a split the balcony's ceiling is a storey higher
     // than the main area's and the wall between them is the drop.
-    const stepLevel = floors.find(level =>
-      level.extentFt != null && level.extentFt < cut);
     const lowerPlate = stepLevel == null ? null
       : Math.max(...floors.filter(level => level !== stepLevel)
         .map(level => deckY.get(level.id) + level.wallHeightFt));
     const stepped = Boolean(stepLevel && lowerPlate != null && lowerPlate < plateY);
+    // A level can stop short without the ceiling dropping -- nothing on the
+    // page does today, but if one did there would be no drop to hand its
+    // inner end to, so it draws its own after all.
+    if (stepLevel && !stepped) {
+      const stepY = deckY.get(stepLevel.id);
+      line(stepLevel.extentFt, stepY,
+        stepLevel.extentFt, stepY + stepLevel.wallHeightFt, 1.5);
+    }
     const truss = roofTruss({
       roofBase: plateY, cut, roof, eaves: values.eaves !== false, ceiling: !stepped,
     });
@@ -924,7 +972,13 @@ if (!window.DraftProjectPage) {
       const ext = stepLevel.extentFt;
       line(0, plateY, ext, plateY, 1);
       line(heelWebX, plateY + chordFt, ext, plateY + chordFt, 1);
-      line(ext, lowerPlate, ext, plateY, 1.5);                  // the drop
+      // THE DROP RUNS UP THROUGH THE CHORD IT CARRIES. Movie, 28 Sep: "the
+      // roof chords at the drop was missing a line". The wall stopped at the
+      // ceiling plane, which left the upper bottom chord's end open -- two
+      // horizontals finishing in mid-air with nothing across them, while
+      // every other end of that member on the drawing is closed. The chord
+      // bears on this wall, so the wall's own face is what closes it.
+      line(ext, lowerPlate, ext, plateY + chordFt, 1.5);        // the drop
       line(ext, lowerPlate, cut, lowerPlate, 1);
       line(ext, lowerPlate + chordFt, cut, lowerPlate + chordFt, 1);
       anchors.ceilingDrop = { x: ext + 0.6, y: (lowerPlate + plateY) / 2 };
@@ -1210,18 +1264,29 @@ if (!window.DraftProjectPage) {
       maxY: section.extents.maxY,
     },
   });
+  //
+  // HOW MUCH WALL THE FAR EDGE CARRIES IS THE CALLER'S, since 28 Sep. Band 1
+  // draws its far eave beside the main slice in one canvas, where 2 ft is all
+  // there is room for; the split's band gives it a CANVAS OF ITS OWN and Movie
+  // asked that one for 3 ft ("3 ft at the edge of the house"). One number
+  // written in here served the first case and silently overruled the second,
+  // so the constant is the default rather than the answer.
   const buildFarEaveSection = values => {
     const cut = values.cutDepthFt ?? CUT_DEPTH_FT;
+    const farCut = values.farEaveCutFt ?? FAR_EAVE_CUT_FT;
     // The eave's own labels ride to the far edge: when the garage stands at
     // the near face there is no eave there at all, and this is the one place
     // on the drawing an OVERHANG or FASCIA label has something to point at.
     return mirrorSection(buildWallSection({
       ...values,
-      cutDepthFt: FAR_EAVE_CUT_FT,
+      cutDepthFt: farCut,
       stairs: false,
       eaves: true,
       footingFlushLeft: null,
-    }), cut + FAR_EAVE_GAP_FT + FAR_EAVE_CUT_FT, ['overhang', 'fascia']);
+      // This is the far edge, so the levels that are only seen from there
+      // draw their decks here and the near slice's do not.
+      farEdge: true,
+    }), cut + FAR_EAVE_GAP_FT + farCut, ['overhang', 'fascia']);
   };
 
   // ── The attached garage, quasi-attached ─────────────────────────────────

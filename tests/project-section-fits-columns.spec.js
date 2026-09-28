@@ -26,9 +26,8 @@
 //
 // ── AND IT ASKS ALL THREE BANDS ────────────────────────────────────────────
 //
-// The rule was wired to one canvas, #detail-canvas, while bilevel-canvas,
-// bilevel-eave-canvas and detached-canvas stayed at the 500 they were born
-// at. Asking every band by the same arithmetic is what stops the next band
+// The rule was wired to one canvas, #detail-canvas, while bilevel-canvas and
+// detached-canvas stayed at the 500 they were born at. Asking every band by the same arithmetic is what stops the next band
 // added from being the fourth one nobody wired up.
 const { test, expect } = require('@playwright/test');
 
