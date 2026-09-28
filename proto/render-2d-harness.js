@@ -2906,8 +2906,14 @@ function coverage() {
   const columnShapeIgnored = src => src.replace(
     'if (pile) ctx.arc(c.x, c.y, half, 0, Math.PI * 2);\n      else ctx.rect(c.x - half, c.y - half, half * 2, half * 2);',
     'ctx.rect(c.x - half, c.y - half, half * 2, half * 2);');
+  // EVERY COPY, and the `g` is the point. `ctx.strokeStyle = env.columnColor;`
+  // occurs TWICE in render-2d.js -- once in drawColumn2D and once in the group
+  // outline below it -- so a first-match replace gated the one this label names
+  // only by line order, and left the other saying nothing. Both lines are the
+  // same rule (the column ink comes off the skin, not a literal), so both move.
+  // mutant-anchors-harness.js found this the day it learned to read this table.
   const dropColumnEnvColour = src => src.replace(
-    /ctx\.strokeStyle = env\.columnColor;/, "ctx.strokeStyle = '#1d1f20';");
+    /ctx\.strokeStyle = env\.columnColor;/g, "ctx.strokeStyle = '#1d1f20';");
 
   const BRANCH_MUTATIONS = [
     ['strokeSegPath2D bulge branch', dropBulge],

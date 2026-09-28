@@ -433,12 +433,17 @@ function run(win) {
   return missed;
 }
 
-// EXACTLY ONCE, AND THIS ENGINE CHECKS ITS OWN. mutant-anchors-harness.js
-// finds a mutant file's subject by reading a single `const SRC`, so an engine
-// that mutates TWO files is one it can only report as uncovered (board #57). It
-// matters because `String.replace` takes the FIRST match: an anchor that occurs
-// twice mutates a line its label does not name, the mutant still dies, and it
-// dies on the wrong claim. So every mutation below goes through here.
+// EXACTLY ONCE, AND THIS ENGINE CHECKS ITS OWN. It matters because
+// `String.replace` takes the FIRST match: an anchor that occurs twice mutates a
+// line its label does not name, the mutant still dies, and it dies on the wrong
+// claim. So every mutation below goes through here.
+//
+// AND THAT IS NOW THE CHECK mutant-anchors-harness.js MAKES TOO. It used to
+// find a subject by reading a single `const SRC`, so an engine mutating TWO
+// files could only be reported as uncovered (board #57); it now hands the row a
+// map that reads on demand and runs it, which runs THIS guard -- so a dead or
+// doubled anchor here is caught by a node run on every push rather than by the
+// Playwright sweep under --mutate.
 const sub = (src, file, find, repl) => {
   const hits = src[file].split(find).length - 1;
   if (hits !== 1) {
