@@ -2664,7 +2664,30 @@
   // and a helper written at this level that reaches for them compiles, runs,
   // throws on the first window and draws nothing. It did exactly that once.
   const WINDOW_TAG_GAP_FT = 0.55;
+  // The click target is a little larger than the ink, which is the usual
+  // allowance for a 9px label: the tag is a CONTROL now, and a control you
+  // have to hit exactly is a control that feels broken.
+  const TAG_HIT_PAD = 5;
+  const TAG_HIT_HALF_H = 8;
+  const windowTagHits = [];
   const paintWindowSizes = (ctx, toS, shown) => {
+    // ── THE SHEET'S OWN TAGS, AND NOT THE THUMBNAILS' ────────────────────
+    //
+    // This painter also fills the rail's six little level canvases, and they
+    // paint AFTER the sheet. Recorded blind, their tags overwrote the hit
+    // list with coordinates from a canvas an inch across -- so every tag on
+    // the drawing quietly stopped answering a press, while still being
+    // painted perfectly. Nothing threw, and the picture was right.
+    //
+    // The test is the canvas the presses actually arrive on, not a flag a
+    // caller passes: a caller that forgot the flag would bring the fault
+    // straight back.
+    const live = ctx.canvas === canvas;
+    // CLEARED AHEAD OF THE GUARDS, not after them. Every `return` below is a
+    // paint that drew no tags at all, and a list left standing would keep the
+    // LAST paint's tags clickable over a drawing that no longer shows them --
+    // a press landing on a window that is not on screen.
+    if (live) windowTagHits.length = 0;
     const R = window.DraftRender2D;
     const FL = window.DraftFenLabels;
     const BH = window.DraftBuildHouse;
@@ -2701,12 +2724,175 @@
       // cannot be chosen by handing it the line backwards. The side is decided
       // here, where the outline knows which way is out, and the helper is left
       // to do the one thing only it does.
-      R.labelAlongLine2D(ctx,
+      const placed = R.labelAlongLine2D(ctx,
         toS({ x: cxw - ux * run / 2, z: czw - uz * run / 2 }),
         toS({ x: cxw + ux * run / 2, z: czw + uz * run / 2 }),
         label, { offset: 0, color: skin['ink-quiet'] || skin['draw-wall-edge'] });
+      // WHERE IT LANDED, FROM THE PAINTER'S OWN MOUTH. The tag takes a press
+      // now, and a hit test that worked the placement out a second time would
+      // be a second copy of it -- right today and wrong the first morning the
+      // tag moves. The helper hands back what it already computed.
+      //
+      // MEASURED HERE RATHER THAN IN THE HELPER: a width costs a measureText
+      // per label, and of this page's labels only these take a click.
+      if (live && placed) {
+        windowTagHits.push({
+          opening, label, cx: placed.cx, cy: placed.cy, angle: placed.angle,
+          halfW: ctx.measureText(label).width / 2 + TAG_HIT_PAD,
+          halfH: TAG_HIT_HALF_H,
+        });
+      }
     });
     ctx.restore();
+  };
+
+  // ── WHICH TAG IS UNDER THE POINTER ─────────────────────────────────────
+  //
+  // IN CSS PIXELS, the same space the press arrives in. toS and toWorld are
+  // inverses in that space and the context carries the devicePixelRatio
+  // transform, so a press compares to a placement with nothing scaled between
+  // them. A ratio applied here would put every tag's target off by a factor of
+  // two on the machines where it is hardest to notice.
+  //
+  // THE BOX IS ROTATED, BECAUSE THE TAG IS. A tag on a north wall and one on
+  // an east wall are the same label turned ninety degrees, and an
+  // axis-aligned box round the second would claim a patch of sheet it never
+  // covered. The press is turned into the tag's own frame and tested there.
+  //
+  // LAST FIRST. Two windows close together can overlap tags, and the one
+  // painted last is the one the drafter sees on top -- occlusion on this
+  // sheet is paint order, so the pick runs the list backwards to agree with
+  // the picture.
+  const windowTagAt = (sx, sy) => {
+    for (let i = windowTagHits.length - 1; i >= 0; i -= 1) {
+      const hit = windowTagHits[i];
+      const dx = sx - hit.cx, dy = sy - hit.cy;
+      const cos = Math.cos(-hit.angle), sin = Math.sin(-hit.angle);
+      if (Math.abs(dx * cos - dy * sin) <= hit.halfW
+        && Math.abs(dx * sin + dy * cos) <= hit.halfH) return hit;
+    }
+    return null;
+  };
+
+  // ── AND THE TAG IS WHERE YOU CHANGE IT ─────────────────────────────────
+  //
+  // Movie, 28 Sep: *"yes i want to change the window tags when you click on
+  // them and that will also change the actual window soze"*. The label stopped
+  // being a caption the moment it could be typed into.
+  let windowTagEditor = null;
+  const closeWindowTagEditor = () => {
+    // NULLED BEFORE THE REMOVE, because removing a focused input fires blur
+    // synchronously and blur closes the editor: cleared first, the re-entry
+    // finds nothing to do instead of reaching through a half-removed node.
+    const box = windowTagEditor;
+    windowTagEditor = null;
+    if (box) box.remove();
+  };
+  const editWindowSize = hit => {
+    closeWindowTagEditor();
+    const rect = canvas.getBoundingClientRect();
+    const box = document.createElement('input');
+    box.type = 'text';
+    box.dataset.windowSizeEntry = String(hit.opening.id);
+    box.value = hit.label;
+    Object.assign(box.style, {
+      position: 'fixed', left: `${rect.left + hit.cx - 36}px`,
+      top: `${rect.top + hit.cy - 11}px`, width: '72px', zIndex: '60',
+      font: "600 12px 'Barlow Condensed', system-ui, sans-serif",
+      textAlign: 'center',
+    });
+    document.body.append(box);
+    windowTagEditor = box;
+    box.focus();
+    // SELECTED, so the first keystroke replaces the size rather than
+    // appending to it. A drafter who clicks a tag means to state a new size,
+    // not to edit the old one a character at a time.
+    box.select();
+    box.addEventListener('keydown', event => {
+      // THE PAGE'S OWN SHORTCUTS MUST NOT FIRE while a size is being typed:
+      // this canvas binds single letters to tools, so an unguarded `d` in a
+      // box would arm a tool behind the drafter's back.
+      event.stopPropagation();
+      if (event.key === 'Enter') {
+        const opening = hit.opening, typed = box.value;
+        closeWindowTagEditor();
+        commitWindowSize(opening, typed);
+      }
+      if (event.key === 'Escape') closeWindowTagEditor();
+    });
+    box.addEventListener('blur', closeWindowTagEditor);
+    // A ZOOM MOVES EVERY TAG, so an open box stops describing the window it
+    // was opened on: left standing it sits over a DIFFERENT window and still
+    // writes to the first -- the drafter aims at one window and resizes
+    // another, which nothing afterwards could explain. Nothing typed is lost,
+    // because nothing is committed until Enter.
+    //
+    // ON THE WINDOW, NOT THE CANVAS. The box sits ON the tag, so a wheel
+    // aimed at the tag is delivered to the BOX and never reaches the sheet
+    // underneath -- a listener on the canvas looks right and never fires.
+    // `once` takes it off again, and closing twice is already harmless.
+    window.addEventListener('wheel', closeWindowTagEditor,
+      { capture: true, once: true });
+  };
+
+  // WIDTH ABOUT THE CENTRE, HEIGHT DOWN FROM THE HEAD. Movie, 28 Sep: *"center
+  // dimension line stays in same place enlarge outward from that point"*, and
+  // for the height the head stays put while the sill drops.
+  //
+  // THE CENTRE COSTS NO CODE, which is worth saying out loud: `offset` IS the
+  // centre -- clampOpeningToWall reserves width/2 either side of it -- so a
+  // width change that leaves offset alone is already a change about the
+  // centre line. Moving anything to "keep it centred" would move it off.
+  //
+  // THE HEAD IS THE DATUM for the same reason the placers are head-anchored:
+  // heads line up across a wall and sills do not, so height is spent
+  // downwards.
+  const commitWindowSize = (opening, text) => {
+    const FL = window.DraftFenLabels;
+    const G = window.DraftGeometry2D;
+    if (!FL || !G) return;
+    const size = FL.parseWindowSize(text);
+    // REFUSE, DO NOT GUESS -- the numberField above keeps the same rule. A
+    // size that cannot be read must never become a size nobody typed: this is
+    // a drawing someone builds from.
+    if (!size) {
+      sayOnStrip(`${String(text).trim() || 'That'} is not a size — type it as 36 X 42, in inches.`);
+      return;
+    }
+    const host = walls().find(wall => String(wall.id) === String(opening.wallId));
+    if (!host) return;
+    // THE WALL'S OWN REFUSAL, not a second guess at one. clampOpeningToWall
+    // returns null when the run cannot carry the width with the bearing each
+    // end needs -- and what each end needs depends on what stands there, which
+    // is knowledge this file has no business holding a copy of.
+    const fits = G.clampOpeningToWall(host, opening.offset, size.widthFt,
+      { walls: walls(), thicknessFt: openingThicknessFt() });
+    if (!fits) {
+      sayOnStrip(`${Math.round(size.widthFt * 12)}" is wider than this wall can carry.`);
+      return;
+    }
+    const head = Number(opening.headHeight) || 0;
+    const sill = head - size.heightFt;
+    if (!(sill >= 0)) {
+      sayOnStrip(`${Math.round(size.heightFt * 12)}" tall would put the sill through the floor.`);
+      return;
+    }
+    // ONE TYPED SIZE, ONE UNDO, carrying the two numbers a resize moves. The
+    // record is mutated in place for the reason 'move-opening' gives in the
+    // applier: every other reader holds this opening by reference, and
+    // restoring a copy would detach them all.
+    //
+    // PUSHED ONLY IF SOMETHING ACTUALLY CHANGES, the same rule the slide
+    // keeps -- a drafter who retypes the size a window already is should not
+    // spend a Ctrl+Z on a step that does nothing visible.
+    if (opening.width !== size.widthFt || opening.sillHeight !== sill) {
+      undoStack.push({ kind: 'size-opening', opening,
+        wasWidth: opening.width, wasSill: opening.sillHeight });
+    }
+    opening.width = size.widthFt;
+    opening.sillHeight = sill;
+    markDirty();
+    paint();
   };
 
   // ── WHICH WAY IS OUT ───────────────────────────────────────────────────
@@ -15673,6 +15859,25 @@
       canvas.setPointerCapture(e.pointerId);
       return;
     }
+    // ── A WINDOW'S SIZE TAG TAKES THE PRESS ──────────────────────────────
+    //
+    // BEFORE THE CORNER AND THE BODY, and it costs them nothing: the tag is
+    // painted OUTSIDE the wall, stepped off by the assembly's own half
+    // thickness plus a gap, so the patch it claims is sheet that no corner,
+    // opening or wall body occupies. It is also the last ink laid over that
+    // patch, and on this sheet what is on top is what was painted last -- so
+    // taking the press first is the pick agreeing with the picture.
+    const sizeTag = windowTagAt(e.clientX - rect.left, e.clientY - rect.top);
+    if (sizeTag) {
+      // THE PRESS IS CLAIMED, and this line is the whole feature. A press on
+      // a canvas moves focus by default, and that default lands AFTER the
+      // handler -- so the box was created, focused, and then blurred out of
+      // existence by the same press that asked for it. It appeared and left
+      // within one frame, which reads exactly like a click that did nothing.
+      e.preventDefault();
+      editWindowSize(sizeTag);
+      return;
+    }
     // VERTEX BEFORE BODY — the old page's own precedence (_findVertexHit at
     // MODEL.dc.html:16791, then _findLineHit at :16799). A press near a corner
     // is a corner press even though it is also on the wall.
@@ -16212,6 +16417,12 @@
         // rather than restoring a copy -- a copy would detach the opening
         // every other reader already holds by reference.
         step.opening.offset = step.was;
+      } else if (step.kind === 'size-opening') {
+        // A typed size moves two numbers, and both go back together: undoing
+        // the width alone would leave the window the height it was retyped to
+        // and read as a half-finished undo.
+        step.opening.width = step.wasWidth;
+        step.opening.sillHeight = step.wasSill;
       } else if (step.kind === 'edge-tag') {
         // The roof's own edges array is mutated in place, so undo puts the one
         // word back rather than restoring a copy of the roof -- a copy would

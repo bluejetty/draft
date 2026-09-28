@@ -70,6 +70,32 @@ if (!window.DraftFenLabels) {
     });
   };
 
+  // THE LABEL READ BACK. Movie, 28 Sep: *"i want to change the window tags
+  // when you click on them and that will also change the actual window
+  // soze"*. The tag became a control, so the format needs a reader as well as
+  // a writer -- and it lives HERE, beside `fenLabel`, because a parser
+  // anywhere else is a second copy of the format that drifts the day the
+  // format moves. It moved once already: the window dropped its letter on the
+  // day it was asked for.
+  //
+  // WHAT IT TAKES: two numbers in INCHES, width first, separated by anything
+  // that is not a digit -- `36 X 42`, `36x42`, `36 42`, `36-42`. That is
+  // wider than what fenLabel WRITES on purpose: a drafter retyping a tag is
+  // not copying a format, and refusing `36x42` for want of spaces would teach
+  // nothing except that the box is fussy.
+  //
+  // WHAT IT REFUSES, by returning null rather than a guess: one number (is a
+  // lone 36 a width or a square?), three or more, zero, negative, and
+  // anything with no digits at all. A size that cannot be read must not
+  // silently become a size that was not typed -- this is a drawing.
+  const parseWindowSize = text => {
+    const nums = String(text ?? '').match(/\d+(?:\.\d+)?/g);
+    if (!nums || nums.length !== 2) return null;
+    const widthIn = Number(nums[0]), heightIn = Number(nums[1]);
+    if (!(widthIn > 0) || !(heightIn > 0)) return null;
+    return { widthFt: widthIn / 12, heightFt: heightIn / 12 };
+  };
+
   // The preferred stock ladder — which sizes the office actually orders.
   // Door families are widths in inches; garage and window entries are the
   // label bodies themselves (HxW feet / WxH inches). Seeds are the boss's
@@ -107,6 +133,7 @@ if (!window.DraftFenLabels) {
   window.DraftFenLabels = Object.freeze({
     fenLabel,
     fenLabelForOpening,
+    parseWindowSize,
     DEFAULT_FEN_STANDARDS,
     stockListFromText,
     normaliseFenStandards,
