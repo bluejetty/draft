@@ -221,7 +221,25 @@
        600px canvas) and the house schedule into track 2, on top of it. So
        the three tracks are assigned rather than counted, and an empty garage
        column stays an empty column with the section centred beside it. */
-    #sched-garage, #sched-garage-add { grid-column:1; }
+    /* ── COLUMN 1 IS ONE ITEM WITH TWO BLOCKS STACKED IN IT ──────────────
+       The house's roof on top, the garage under it -- Movie, 27 Sep: "move
+       the ROOF stuff over top of the ATTACHED GARAGE", and then "put the roof
+       stuff over the + GARAGE button", which is the same place when there is
+       no garage to show.
+
+       A WRAPPER RATHER THAN TWO GRID ROWS, and the first attempt was the two
+       rows. It put the roof in row 1 and the garage in row 2 and looked right
+       with a garage -- but #detail-wrap and #sched-house span both rows, so
+       their extra height is handed to the rows to share, and on a house with
+       NO garage the + ADD ATTACHED GARAGE door floated 122px below the roof
+       instead of the 34 it was given. A wrapper makes the gap the gap. */
+    #sched-left { grid-column:1; display:flex; flex-direction:column; }
+    /* AND A CLEAR GAP BETWEEN THEM. Movie: "leave several extra lines between
+       the ROOF stuff and the ATTACHED GARAGE stuff to make sure it is clear
+       they are seperate". They are two buildings' worth of numbers in one
+       column -- the house's roof and the garage -- and a .sched-head on its
+       own is a small grey word that does not carry that on sight. */
+    #stage-bungalow #sched-garage, #stage-bungalow #sched-garage-add { margin-top:34px; }
     #detail-wrap { grid-column:2; }
     #sched-house { grid-column:3; }
     .sched { align-self:start; padding-top:2px; }
@@ -233,7 +251,12 @@
        and a press pinned to the bottom of an empty column reads as a footnote
        rather than as the way in. */
     #sched-garage-add { align-self:start; padding-top:2px; }
-    #sched-garage-add[hidden] { display:none; }
+    /* HIDDEN HAS TO BE SAID OUT LOUD HERE. `display:grid` above is a more
+       specific rule than the browser's own [hidden] { display:none }, so the
+       garage column went on occupying its place in the stack while hidden --
+       its rows individually hidden, its own margin still spent. It read as
+       88px between the roof block and the + GARAGE door where 34 was set. */
+    #sched-garage-add[hidden], #sched-garage[hidden] { display:none; }
     /* ── TWO TO A LINE, AND THE SECTION PAID FOR IT ──────────────────────
        Movie, 27 Sep: "i found a way to make the text entry not as long by
        doubling the info per row" -- the house column ran 21 rows and 713px,
@@ -278,7 +301,7 @@
        falling back is what auto-fit is FOR; the column just quietly stopped
        being the thing Movie asked for on any screen narrower than his own.
        The check now runs at 1280 for that reason. */
-    #sched-house, #sched-garage { display:grid; align-content:start;
+    #sched-house, #sched-garage, #sched-roof { display:grid; align-content:start;
       grid-template-columns:repeat(auto-fit, minmax(128px, 1fr)); gap:0 8px; }
     /* A HEAD RULES BOTH HALVES, and taking a whole line is what stops a
        pair straddling two groups -- 2ND FL's last row never shares a line
@@ -312,13 +335,24 @@
     #stage-bungalow .band { align-items:center; }
     #stage-bungalow .sched, #stage-bungalow #sched-garage,
     #stage-bungalow #sched-garage-add { align-self:center; }
+    /* EXCEPT INSIDE THE LEFT STACK, WHERE align-self CHANGED AXIS UNDER IT.
+       The rule above centres each column against the drawing -- a MAIN-axis
+       word while these were grid items of .band. Wrapped in a flex COLUMN
+       they became cross-axis, so `center` stopped meaning "level with the
+       drawing" and started meaning "only as wide as your own text": the
+       garage block shrank below the 128px auto-fit floor, its rows fell back
+       to one per line, and the column went from 205px to 409. The stack is
+       what centres now; its blocks fill it. */
+    #stage-bungalow #sched-left > .sched { align-self:stretch; }
     #sched-house > .sched-row:has(select),
+    #sched-roof > .sched-row:has(select),
     #sched-garage > .sched-row:has(select) {
       grid-template-columns:max-content minmax(0,1fr); }
-    #sched-house select.sched-value,
+    #sched-house select.sched-value, #sched-roof select.sched-value,
     #sched-garage select.sched-value { font-size:10px; padding:2px 3px; }
-    #sched-house > .sched-head, #sched-garage > .sched-head,
-    #sched-house > .sched-row.wide, #sched-garage > .sched-row.wide { grid-column:1 / -1; }
+    #sched-house > .sched-head, #sched-garage > .sched-head, #sched-roof > .sched-head,
+    #sched-house > .sched-row.wide, #sched-garage > .sched-row.wide,
+    #sched-roof > .sched-row.wide { grid-column:1 / -1; }
     .sched-head { padding:0 4px 5px; color:var(--ink-secondary); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:9px; font-weight:600; letter-spacing:.09em; text-transform:uppercase; }
     /* A VALUE BOX AND A DROPDOWN ARE NOT THE SAME WIDTH. 58px fits the
        longest measurement on the page, 8'-1 1/8" -- but a select also has to
@@ -380,7 +414,7 @@
     @media (max-width:1180px) { .band, .band.band-eave { grid-template-columns:1fr; justify-items:center; } .sched { width:min(420px,100%); }
       /* One track, so the assignments above would spill into implicit
          columns nobody can see. Stacked, order is the source order again. */
-      #sched-garage, #sched-garage-add, #detail-wrap, #sched-house { grid-column:1; } }
+      #sched-left, #detail-wrap, #sched-house { grid-column:1; } }
     @media (max-width:980px) { .identity-grid { grid-template-columns:1fr 1fr; } }
   </style>
 </head>
@@ -510,7 +544,23 @@
     <section id="stage-bungalow" data-stage="bungalow" class="card stack-card" aria-label="Bungalow wall section">
       <div class="card-body">
         <div class="band">
-          <div class="sched" id="sched-garage"></div>
+          <!-- THE HOUSE'S ROOF, ON THE LEFT, ABOVE THE GARAGE. Movie, 27 Sep:
+               "to even out the space better lets take out the word (HOUSE)
+               and also move the ROOF stuff over top of the ATTACHED GARAGE".
+               The right column carried HOUSE / ROOF / 2ND FL / MAIN FL /
+               FOUNDATION against the garage's one group, so one side ran off
+               the bottom while the other had room to spare.
+
+               ITS OWN ELEMENT RATHER THAN THE TOP OF #sched-garage, and that
+               is the whole reason this is markup and not three lines of
+               appendChild: the garage column is HIDDEN outright when there is
+               no garage, and the + ADD ATTACHED GARAGE door stands in its
+               place. Roof rows living inside it would take a 1 STOREY's roof
+               numbers off the page along with the garage that never existed.
+               The house always has a roof, so its block never hides. -->
+          <div id="sched-left">
+            <div class="sched" id="sched-roof"></div>
+            <div class="sched" id="sched-garage"></div>
           <!-- THE DOOR IN, where the garage's own numbers would be. Movie,
                17 Sep: "on the house (with no garage) we should add a BOX on
                the left side that has + ADD ATTACHED GARAGE". The garage
@@ -520,7 +570,8 @@
                thing it adds will draw. Its own element rather than a row
                inside #sched-garage, because that whole column is hidden
                exactly when this has to show. -->
-          <div class="sched" id="sched-garage-add" hidden></div>
+            <div class="sched" id="sched-garage-add" hidden></div>
+          </div>
           <div class="detail-wrap" id="detail-wrap">
             <canvas id="detail-canvas" width="360" height="500" aria-label="Live section — house and attached garage"></canvas>
           </div>
@@ -2032,6 +2083,7 @@
       const GREY_GAP = 5;
       const houseSched = document.querySelector('#sched-house');
       const garageSched = document.querySelector('#sched-garage');
+      const roofSched = document.querySelector('#sched-roof');
       // One drawing, so one wrap: every part label -- house or garage --
       // is positioned over the same canvas.
       const garageWrap = wrap;
@@ -2220,7 +2272,12 @@
       };
 
       schedHead(garageSched, 'Attached garage');
-      schedHead(houseSched, 'House');
+      // NO 'HOUSE' HEAD. Movie, 27 Sep: "lets take out the word (HOUSE)".
+      // With the roof block moved out from under it, what is left in that
+      // column is ROOF / 2ND FL / MAIN FL / FOUNDATION -- four groups that
+      // are all the house, on the side of the drawing the house is drawn on.
+      // A word ruling all four said nothing the page did not already show,
+      // and it cost a line at the top of the taller column.
 
       // ── THE WAY IN, FROM THE EMPTY COLUMN ───────────────────────────────
       // Movie, 17 Sep: "on the house (with no garage) we should add a BOX on
@@ -2476,6 +2533,39 @@
       [...floorLevels].reverse().forEach(level =>
         insertHead(`wallHeight-${level.id}`, level.name, level.id));
       insertHead('attachment', 'Foundation');
+
+      // ── AND THE ROOF GROUP CROSSES TO THE LEFT COLUMN ──────────────────
+      //
+      // Movie, 27 Sep: "move the ROOF stuff over top of the ATTACHED GARAGE".
+      // The right column ran HOUSE / ROOF / 2ND FL / MAIN FL / FOUNDATION
+      // against the garage's single group, so one side spilled off the bottom
+      // of the card while the other had room to spare.
+      //
+      // BUILT WHERE IT WAS AND MOVED AFTERWARDS, rather than addressed to the
+      // new column in the first place: every roof control is registered
+      // through the same addInput as the rest of the house, insertHead finds
+      // its row with a houseSched query, and the repaint's controlEls walk
+      // does not care which element a row ended up in. Building it in place
+      // and moving the finished group keeps all of that untouched -- the
+      // alternative was a second host threaded through four functions to move
+      // four rows.
+      //
+      // THE GROUP IS "THE HEAD AND EVERYTHING UNTIL THE NEXT HEAD", not a
+      // list of keys. A named list would be four more names to keep in step
+      // with the roof's controls, and would silently leave a fifth behind on
+      // the day one is added.
+      const moveGroupTo = (host, head) => {
+        if (!host || !head) return;
+        let node = head.nextElementSibling;
+        host.appendChild(head);
+        while (node && !node.classList.contains('sched-head')) {
+          const next = node.nextElementSibling;
+          host.appendChild(node);
+          node = next;
+        }
+      };
+      moveGroupTo(roofSched, [...houseSched.querySelectorAll('.sched-head')]
+        .find(h => h.textContent === 'Roof'));
 
       // ── The attached garage's own numbers ────────────────────────────────
       //
@@ -3002,8 +3092,13 @@
       // else's -- it does not follow the row's height, so it cannot follow
       // the canvas. With stretch the two would chase each other forever.
       const SECTION_MIN_H = 300;   // below this the drawing stops being readable
+      // THE LEFT COLUMN IS THE WHOLE STACK, not the garage block inside it.
+      // Once the house's roof moved over, #sched-left carries the roof, the
+      // gap and the garage together -- measuring #sched-garage alone would
+      // have answered with a part of the column and sized the drawing to it.
+      const leftCol = document.querySelector('#sched-left');
       const schedFitHeight = () => Math.max(SECTION_MIN_H,
-        ...[houseSched, garageSched]
+        ...[houseSched, leftCol || garageSched]
           .filter(el => el && !el.hidden)
           .map(el => Math.round(el.getBoundingClientRect().height))
           .filter(h => h > 0));
