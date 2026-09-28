@@ -220,6 +220,22 @@ if (!window.DraftProjectPage) {
   // table's own TO SILL note adds to every row, so writing 33.5 here would
   // count the sill twice and read 2'-11" to bearing instead of 2'-9 1/2".
   const GARAGE_GRADE_BEAM_IN = 32;
+  // A FROST WALL GOES DOWN TO FROST, AND THAT IS THIS BUILDING'S NUMBER.
+  // Movie, 28 Sep: "the frost wall should be 5ft deep default with a 20" wide
+  // by 8" DP footing". It read the HOUSE's number until now -- a detached
+  // garage has no house to measure from, which is the whole reason it has its
+  // own builder, and a default typed on another building is exactly the kind
+  // of borrowing band 3 exists to stop.
+  //
+  // A DEFAULT, like the beam above it: the cell is typeable and the drafter
+  // types over it the day the soils report says otherwise.
+  const GARAGE_FROST_WALL_IN = 60;
+  // AND THE WALL STANDS ON A FOOTING, the house's own convention: the pour is
+  // the WALL and the footing is extra under it, the way buildWallSection
+  // hangs its strip footing off fdnBot rather than inside it. So a 5'-0"
+  // frost wall reaches 5'-8" of concrete to the bottom of the pad.
+  const GARAGE_FROST_FOOTING_WIDTH_IN = 20;
+  const GARAGE_FROST_FOOTING_DEPTH_IN = 8;
   // AND THE HOUSE CAN HAVE ONE NOW. Movie, 17 Sep: "the grade beam is 8"",
   // and the height "make min. 32"". Same member as the garage's, so the same
   // minimum -- but stated separately rather than shared, because the garage's
@@ -1412,9 +1428,15 @@ if (!window.DraftProjectPage) {
   const detachedConcreteAboveGradeIn = kind =>
     (kind === 'thickened' ? DETACHED_SLAB_ABOVE_GRADE_IN : GRADE_BELOW_CONCRETE_IN);
 
-  const detachedFoundationDepthFt = (kind, houseFootingDepthFt) => {
+  // EACH FOUNDATION'S OWN DEFAULT, AND ALL THREE ARE THIS BUILDING'S. The
+  // frost wall took the house's footing depth as an argument until 28 Sep,
+  // which made the one number a drafter sees before typing anything depend on
+  // a building that need not exist -- and the caller was handing it the house
+  // POUR, not its footing depth, so the row could read a storey of basement
+  // wall as a frost depth. It takes no arguments now.
+  const detachedFoundationDepthFt = kind => {
     if (kind === 'gradebeam') return GARAGE_GRADE_BEAM_IN / 12;
-    if (kind === 'frostwall') return houseFootingDepthFt ?? GARAGE_GRADE_BEAM_IN / 12;
+    if (kind === 'frostwall') return GARAGE_FROST_WALL_IN / 12;
     return GARAGE_EDGE_DEPTH_IN / 12;
   };
 
@@ -1441,7 +1463,7 @@ if (!window.DraftProjectPage) {
     // draws and the strip is gone.
     const foundation = g.foundation || 'thickened';
     const fdnFt = g.fdnWallHeightFt
-      ?? detachedFoundationDepthFt(foundation, g.houseFootingDepthFt);
+      ?? detachedFoundationDepthFt(foundation);
 
     // WHERE THE WOOD STARTS, and it is not the floor on two of the three. A
     // grade beam and a frost wall stand GRADE_BELOW_CONCRETE_IN above grade
@@ -1505,6 +1527,21 @@ if (!window.DraftProjectPage) {
       anchors.slabThickness = { x: cut * 0.78, y: -slabFt / 2 };
       wallBaseY = concTop;
       lowestY = bottom;
+      // AND THE FROST WALL STANDS ON A PAD. Movie, 28 Sep: "a 20" wide by 8"
+      // DP footing". Centred on the wall, so it projects 6" each side of the
+      // 8" concrete -- the house's own strip footing at the garage's size, and
+      // drawn the way buildWallSection draws that one, as a member under the
+      // pour rather than as the bottom of it.
+      //
+      // ONLY THE FROST WALL. A grade beam is a beam: it spans between piles
+      // and bears on them, so a strip footing under it would be a second
+      // bearing system drawn under the first.
+      if (foundation === 'frostwall') {
+        const footW = GARAGE_FROST_FOOTING_WIDTH_IN / 12;
+        const footD = GARAGE_FROST_FOOTING_DEPTH_IN / 12;
+        rect(widthFt / 2 - footW / 2, bottom - footD, footW, footD, 1.5);
+        lowestY = bottom - footD;
+      }
     }
     // AND THE DIMENSION HANGS BETWEEN GRADE AND THE CONCRETE IT MEASURES.
     // wallBaseY is the top of the concrete on a beam and a frost wall, and 0
@@ -1586,6 +1623,14 @@ if (!window.DraftProjectPage) {
       line(0, plateY, cut, plateY, 2);                        // joist underside = ceiling
       line(0, plateY + joistFt, cut, plateY + joistFt, 1);
       line(0, plateY + deckFt, cut, plateY + deckFt, 2);
+      // THE OUTSIDE FACE RUNS THROUGH THE FLOOR BAND. Movie, 28 Sep: "for the
+      // 2 story the exterior line is missing at where the OWJ is sitting".
+      // The garage wall's face stopped at its plate and the room's started at
+      // the deck, so the building had a 20" hole in the one line on a section
+      // that can never break. Band 1 never had it because its floor band is a
+      // RECT and that face is the rect's own left edge; here the band is three
+      // horizontals, so the face has to be drawn.
+      line(0, plateY, 0, plateY + deckFt, 1.5);              // exterior face
       anchors.overFloor = { x: cut * 0.42, y: plateY + joistFt / 2 };
       const deck = plateY + deckFt;
       const overWallFt = g.overWallHeightFt ?? 0;
@@ -2491,6 +2536,9 @@ if (!window.DraftProjectPage) {
     GARAGE_DEPTH_FT,
     garageSlabFallIn,
     GARAGE_EDGE_DEPTH_IN,
+    GARAGE_FROST_WALL_IN,
+    GARAGE_FROST_FOOTING_WIDTH_IN,
+    GARAGE_FROST_FOOTING_DEPTH_IN,
     GARAGE_GRADE_BEAM_IN,
     HOUSE_GRADE_BEAM_MIN_IN,
     PILE_DIAMETER_IN,

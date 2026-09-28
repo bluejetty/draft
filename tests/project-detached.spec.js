@@ -151,6 +151,32 @@ test('band 3 labels do not overlap each other', async ({ page }) => {
   }
 });
 
+// THE FROST WALL'S DEPTH IS THIS BUILDING'S. Movie, 28 Sep: "the frost wall
+// should be 5ft deep default with a 20" wide by 8" DP footing". It read the
+// HOUSE's number until then -- and the caller handed it the house POUR, not
+// its footing depth, so typing a basement height in band 1 moved band 3's
+// frost wall. Band 3's contract is that its numbers come from the DETACHED
+// GARAGE row, so this is the same line the tests above hold.
+test('the frost wall defaults to 5 ft, and the section grows to hold it',
+  async ({ page }) => {
+    await page.goto('/PROJECT.html?type=detached');
+    await expect(page.locator('#detached-canvas')).toBeVisible();
+
+    const beam = await (async () => {
+      await press(page, 'GRADE BEAM').click();
+      await page.waitForTimeout(300);
+      return read(page, 'fdnDepth');
+    })();
+    expect(beam).toBe(`2'-8"`);
+
+    await press(page, 'FROST WALL').click();
+    await page.waitForTimeout(300);
+    expect(await read(page, 'fdnDepth')).toBe(`5'-0"`);
+    // And the drawing answered rather than the cell alone -- a 5 ft wall on a
+    // footing is a different picture from a 32" beam.
+    expect(await shoot(page)).not.toBe(null);
+  });
+
 // ── THE FOUNDATION IS A CHOICE NOW, AND THE SECTION IS WHAT ANSWERS ────────
 //
 // Until 28 Sep the three foundations were a comparison strip under the card

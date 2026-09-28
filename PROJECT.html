@@ -1711,7 +1711,7 @@
       // SECTION_TABLE_DEFAULTS can only hold the thickened edge's 1'-0" and
       // would hand a grade beam that number the moment nobody had typed one.
       const detachedFdnFt = () => sectionTable.rows.detachedGarage?.fdnWallHeightFt
-        ?? projectPage.detachedFoundationDepthFt(detachedFoundation(), housePourFt());
+        ?? projectPage.detachedFoundationDepthFt(detachedFoundation());
       // HOW THE FRAMING IS HELD DOWN HERE, and it is this band's own answer.
       // Movie's 28 Sep mockup heads the FOUNDATION block with ATTACHMENT and
       // HEIGHT, the same pair band 1 asks -- but band 3's contract is that
