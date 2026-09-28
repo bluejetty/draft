@@ -306,8 +306,14 @@ if (!window.DraftRender2D) {
   // projecting, because the two things that use it (a beam's span, a window's
   // wall run) already have their ends projected for the line they just drew,
   // and re-projecting would be a second chance to disagree with it.
+  // RETURNS WHERE IT PUT THE TEXT -- `{ cx, cy, angle }` in the ctx's own
+  // coordinates, or null when it drew nothing. A tag that can be CLICKED needs
+  // a hit box, and the placement is already worked out in here; handing it
+  // back keeps one answer in one home. A caller that wants a box measures its
+  // own string, because measuring costs a `measureText` per label and most
+  // callers here never take a click.
   function labelAlongLine2D(ctx, a, b, text, options = {}) {
-    if (!text) return;
+    if (!text) return null;
     const {
       font = null,        // left alone when null: the caller's ctx font stands
       color = null,
@@ -320,9 +326,10 @@ if (!window.DraftRender2D) {
     let textAngle = angle;
     while (textAngle >= Math.PI / 2) textAngle -= Math.PI;
     while (textAngle < -Math.PI / 2) textAngle += Math.PI;
+    const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
     ctx.save();
     if (font) ctx.font = font;
-    ctx.translate((a.x + b.x) / 2, (a.y + b.y) / 2);
+    ctx.translate(cx, cy);
     ctx.rotate(textAngle);
     if (background) {
       const width = ctx.measureText(text).width;
@@ -334,6 +341,7 @@ if (!window.DraftRender2D) {
     ctx.textBaseline = baseline;
     ctx.fillText(text, 0, -offset);
     ctx.restore();
+    return { cx, cy, angle: textAngle };
   }
 
   // The complement of a set of welded stretches along one edge, in edge
