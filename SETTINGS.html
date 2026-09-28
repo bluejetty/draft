@@ -109,7 +109,16 @@
     .advanced-note { max-width:560px; color:var(--ink-secondary); font-size:12px; line-height:1.45; margin:10px 0 12px; }
     .snap-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; font-size:13px; }
     .snap-row label { width:130px; }
-    .snap-row input { width:64px; border:1px solid var(--edge-panel); background:var(--surface-chip); padding:5px 8px; border-radius:2px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; }
+    /* THE VALUE NEEDS A COLOUR OF ITS OWN. An input does not inherit the
+       page's `color`: it starts at the browser's own `fieldtext`, which is
+       black. That was invisible here -- this row set --surface-chip as the
+       ground and said nothing about the ink, so on night the drafter's name,
+       phone and every increment read black on #2a2d2e. Nothing was wrong with
+       the value; it simply could not be seen.
+       PROJECT.html and STANDARDS.html both name --ink-primary on their inputs
+       for this reason; this is the same line, and the palette moves all three
+       together. */
+    .snap-row input { width:64px; border:1px solid var(--edge-panel); background:var(--surface-chip); color:var(--ink-primary); padding:5px 8px; border-radius:2px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; }
     .snap-row input:focus { border-color:var(--accent-mark); outline:2px solid color-mix(in srgb, var(--accent-mark) 18%, transparent); outline-offset:1px; }
     .snap-row .px { color:var(--ink-secondary); font-size:11px; }
     .snap-default { color:var(--ink-quiet); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; }

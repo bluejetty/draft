@@ -141,10 +141,22 @@
        change and this page should follow when they do. */
     main { width:min(1400px, calc(100vw - 32px));
       margin:calc(var(--strip-h) + 30px) auto calc(var(--house-h) + 48px); }
+    /* WHERE THE RAIL ENDS, and WHERE MAIN BEGINS -- the two numbers the rule
+       under .columns needs, each written where it can be checked.
+       The edge is the rail's own two: shell-bars.css stands the panel at
+       left:28px and the tenant rule below sets its width to 320px. Named so
+       that changing the width in one place moves this with it, rather than
+       leaving a 348 nobody can trace.
+       Main's left is the `margin:auto` above, solved: the box is centred in
+       the viewport, so its left edge is half of what is left over, and the
+       16px floor is the same 32px gutter its width subtracts. */
+    :root { --project-rail-edge: 348px;
+      --project-main-left: max(16px, calc((100vw - 1400px) / 2)); }
     .intro { max-width:720px; margin:7px 0 0; color:var(--ink-secondary); font-size:14px; line-height:1.5; }
     .notice { display:none; margin-top:18px; padding:10px 12px; border-left:3px solid #a06035; background:rgba(160,96,53,.08); color:var(--ink-secondary); font-size:12px; line-height:1.45; }
     .notice.visible { display:block; }
     .columns { display:grid; grid-template-columns:300px minmax(0,1fr) 300px; gap:16px; align-items:start; margin-top:22px; }
+
     .card { border:1px solid var(--edge-panel); background:var(--surface-panel); }
     .card-title { padding:9px 12px; border-bottom:1px solid var(--edge-panel); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--accent-mark); }
     .card-body { padding:12px; }
@@ -209,6 +221,27 @@
        the taller of the two columns and so still sets the row's height --
        centring moves the picker only, which is what he asked for. */
     .type-layout { display:grid; grid-template-columns:minmax(0,20%) minmax(0,1fr); gap:16px; align-items:center; margin-top:16px; }
+    /* THE SECOND COLUMN CLEARS THE RAIL, and only the second.
+       Movie asked for the panel to lie over the type cards ("when tabs are
+       open it will cover most of the 3 small sections"), so the PICKER still
+       goes under it -- that part is not a bug and nothing here changes it.
+       What was a bug is where the panel STOPPED. It is 320px standing at
+       left:28, so its right edge is at 348 whatever the screen is, while this
+       grid sits inside a CENTRED main and moves with it. At 1366 main starts
+       at 16, the picker's 20% is 267 and ends at 283, and the remaining 49px
+       of panel lands on the FOUNDATION card: ATTACHMENT, HEIGHT, FDN TYPE and
+       SLAB sliced down their left side, their selects unclickable, under a
+       panel about the lot.
+       So the picker is grown to reach the panel's edge and the card is pushed
+       out from under it. The growth costs nothing to look at, because it
+       happens BEHIND the panel, and max() means a screen wide enough that
+       main already starts clear of 348 keeps its 20% and does not move at all
+       -- at 1920 the panel's edge falls inside the picker and this is a
+       no-op. Only while the rail is out: shut, the selector does not match. */
+    :root[data-project-rail-open] .type-layout {
+      grid-template-columns:
+        minmax(0, max(20%, calc(var(--project-rail-edge) - var(--project-main-left))))
+        minmax(0,1fr); }
     .type-picker { display:flex; flex-direction:column; gap:10px; }
     /* EACH TYPE AND ITS OWN VARIATIONS, on one row. The thumbnail keeps the
        larger half because it is the thing being recognised; the variations are
@@ -597,6 +630,21 @@
           <div class="zone-note" data-room-counts>Counted when the bone builds &mdash; the room stamps are the latest word.</div>
         </div>
       </div>`,
+      // THE PANEL IS FIXED AND THE PAGE IS NOT, so an open rail lands ON TOP
+      // of whatever the page has under it. Movie accepted that for the three
+      // type cards ("when tabs are open it will cover most of the 3 small
+      // sections") -- but the rail is 320px standing at left:28, and the
+      // cards' first column is 300px inside a `main` that is centred, so at
+      // 1366 the panel's right edge falls 16px INTO the second column. That
+      // is not the three small sections; it is the foundation card's labels
+      // and its selects, sliced down their left side and unclickable.
+      //
+      // So the page moves over while the rail is out. See the `main` rule in
+      // the style block for the arithmetic; this only has to say WHICH state
+      // the page is in, and it is told on load as well as on every press
+      // because rail() calls onToggle for ?left=1 too.
+      onToggle: open => document.documentElement
+        .toggleAttribute('data-project-rail-open', open),
     });
   </script>
 

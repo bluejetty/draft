@@ -2011,9 +2011,9 @@ class Component extends PageLogic {
     this.state.paperKey = key;
     this._fitPaper();
     this._draw();
-    this.setState({ paperKey: key, auto: false }, () => {
+    this.setState({ paperKey: key }, () => {
       this._rememberActiveProfile('settings');
-      this._persistLayout();
+      this._refitSheets();
     });
   }
 
@@ -2021,10 +2021,42 @@ class Component extends PageLogic {
     this.state.orientation = o;
     this._fitPaper();
     this._draw();
-    this.setState({ orientation: o, auto: false }, () => {
+    this.setState({ orientation: o }, () => {
       this._rememberActiveProfile('settings');
-      this._persistLayout();
+      this._refitSheets();
     });
+  }
+
+  // CHANGING THE PAPER IS NOT A MANUAL EDIT, and calling it one put viewports
+  // off the sheet. Both setters above used to clear `auto`, which is the flag
+  // that says the viewports are still the composer's dealt hand rather than
+  // something a drafter placed. Clearing it there did two wrong things at
+  // once: it froze coordinates that were measured against the OLD paper, and
+  // it told the next page load not to compose either.
+  //
+  // WHAT IT LOOKED LIKE: deal the standard set on 11x17 landscape and the two
+  // elevations on sheet 1 are centred at x=7.925" -- the middle of a 14.85"
+  // region. Press PORT and the region becomes 8.85" wide, centre 4.925", but
+  // the viewports keep 7.925". Both elevations end up three inches right of
+  // where they belong, over the titleblock strip and off the edge of the
+  // paper. On 8.5x11 they leave the sheet entirely.
+  //
+  // SO THE HAND IS RE-DEALT TO THE NEW PAPER and a hand-placed sheet is left
+  // exactly where the drafter put it. Moving someone's own viewports because
+  // they changed the paper is the same disease facing the other way, and they
+  // have the frames on screen to drag; the composer's hand has nobody.
+  //
+  // The active sheet is kept because the composer always deals the same set in
+  // the same order -- only the coordinates depend on the paper -- so sending
+  // the drafter back to sheet 1 for pressing PORT would be a surprise and not
+  // a correction.
+  _refitSheets() {
+    if (this.state.auto !== true) { this._persistLayout(); return; }
+    const sheet = this.state.activeSheet;
+    this._composeDefaultSet();
+    if (this.state.activeSheet !== sheet && sheet <= this._sheetCount()) {
+      this.setState({ activeSheet: sheet }, () => this._draw());
+    }
   }
 
   _setScale(idx) {
