@@ -10,8 +10,19 @@ file exists to make the state legible at a glance.
 **Update it in the same PR as the change it describes.** A status here that is
 a week stale is worse than no file, because someone will trust it.
 
-Taken from the repository on 2 Sep 2026. Regenerate the counts rather than
-editing them by hand.
+Taken from the repository on 2 Sep 2026, and last edited on 13 Sep. **Read
+every count below as a 2 Sep snapshot**, not as today: the pages and modules
+have moved since, and the notes say where.
+
+"Regenerate the counts rather than editing them by hand" is what this line
+used to say on its own, and there has never been anything to regenerate them
+with — no script produces this file. That is worth knowing before trusting a
+number here, and it is why the drift below went unnoticed: the instruction
+that was supposed to prevent it could not be followed.
+
+Not everything here is derivable anyway. The page lists and the counts are;
+`MOVES` vs `PORTABLE` is a judgement somebody made about each module, and a
+generator would have to be told those rather than working them out.
 
 ---
 
@@ -332,9 +343,26 @@ they travel; 22 have not, not 17.**
 
 ### Two modules nobody's criterion reaches
 
-- **`orientation-guard.js` — 6 pages, the most-shared module in the repo.** No
-  harness. It has `tests/orientation-lock.spec.js`, which is why this has never
-  hurt. Not MODEL-only, so outside the gate; nothing else gates it either.
+- **`orientation-guard.js` — 6 pages on 2 Sep, 9 today.** The three that
+  joined are `MODEL.html` (16 Sep) and `EXTFINISH.html` and
+  `REALESTATEPLAN.html` (both 27 Sep). No harness. Not MODEL-only, so outside
+  the gate; nothing else gates it either.
+
+  **AND IT DID HURT.** This bullet used to end "it has
+  `tests/orientation-lock.spec.js`, which is why this has never hurt", which
+  was true the day it was written and false three days later. That spec walked
+  `/MODEL.dc.html` three times and never once loaded `/MODEL.html`, so when the
+  app was ported on 16 Sep the guard was dropped from the new page and the
+  suite written to catch exactly that swept past it. It shipped, and a drafter
+  turning an iPad portrait on the page they spend all day in got the
+  arrangement board #310 forbids.
+
+  Fixed in two halves: #512 gave `MODEL.html` the guard and added a check that
+  asks for a coarse pointer, which nothing in the suite had ever done; #518
+  replaced both hand-kept page rosters with one read off the disk, so a page
+  added tomorrow is covered without anyone remembering. The lesson is the one
+  this section is about — a module nobody's criterion reaches is not safe
+  because a spec names it, only because the spec names *the right pages*.
 - **`starter-shape.js` — MODEL-only, and not in the gate's seventeen**, because
   it was written after the gate was defined. It has `proto/starter-shape-harness.js`
   (661 checks), so it is covered — but the gate's list is a snapshot, and a
