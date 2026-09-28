@@ -677,6 +677,58 @@ check('and it is the same member the house sits on', P => {
   const sills = detachedSill(P);
   return [house.length && sills.length ? near(house[0].h, sills[0].h) : 'no sill', true];
 });
+// GRADE IS MEASURED FROM THE TOP OF CONCRETE. Movie, 28 Sep, in those words,
+// on the row he had just renamed TOP CONC. OVER GRADE. On a thickened edge
+// the slab IS the top of the pour, so it is the 10" that keeps the floor at
+// the same height as a beam's; on the other two the concrete stands 1'-2"
+// proud and the slab sits 4" down inside it. The row read the slab constant
+// for all three, which was right about one of them.
+check('the top of concrete over grade follows the foundation', P =>
+  [P.GARAGE_FOUNDATIONS.detachedGarage
+    .map(kind => P.detachedConcreteAboveGradeIn(kind)).join(),
+  [P.DETACHED_SLAB_ABOVE_GRADE_IN, P.GRADE_BELOW_CONCRETE_IN,
+    P.GRADE_BELOW_CONCRETE_IN].join()]);
+// AND THE DRAWING AGREES WITH THE NUMBER. The dimension hangs between grade
+// and the face it names, so its height off grade is what the row says -- a
+// tag parked halfway to the floor would put the word "top of concrete" beside
+// a slab on two of the three.
+check('the grade dimension spans grade to the top of concrete, on all three', P =>
+  [P.GARAGE_FOUNDATIONS.detachedGarage.map(kind => {
+    const out = DETACHED_ON(P, kind);
+    const gradeY = -P.DETACHED_SLAB_ABOVE_GRADE_IN / 12;
+    const concTop = gradeY + P.detachedConcreteAboveGradeIn(kind) / 12;
+    return near(out.anchors.slabAboveGrade.y, (gradeY + concTop) / 2);
+  }).join(), 'true,true,true']);
+// AND WHICH MEMBER IT IS, AND HOW TALL, IS THE SCHEDULE'S TO SAY. Movie's
+// 28 Sep mockup heads this band's FOUNDATION block with ATTACHMENT and
+// HEIGHT, so the builder takes both off the DETACHED GARAGE row instead of
+// writing 'sill' and 1 1/2" into the drawing. Hard-coding either would draw a
+// detail that disagrees with the two boxes beside it and never says so.
+const DETACHED_HELD = (P, attachment, attachmentIn) => P.buildDetachedGarageSection({
+  ...DETACHED(P),
+  garage: { ...DETACHED(P).garage, attachment, attachmentIn },
+});
+check('a typed attachment height is the height the plate is drawn', P => {
+  const wallFt = DETACHED(P).wallThicknessIn / 12;
+  // The plate is the full-width band bearing on the slab -- the wall rect
+  // starts there too, which is why width alone is not enough to name it.
+  const bands = rects(DETACHED_HELD(P, 'sill', 3))
+    .filter(r => near(r.y, 0) && near(r.x, 0) && near(r.w, wallFt) && r.h < 1);
+  return [bands.length === 1 ? near(bands[0].h, 3 / 12)
+    : `${bands.length} bands on the slab`, true];
+});
+// A LADDER IS TWO MEMBERS AT THE WALL FACES, not one band across it -- the
+// same shape the house draws, because it is the same helper. Read by SHAPE
+// rather than against the member sizes: what this check is for is that the
+// ROW reached the drawing at all, and a 2x6 on edge is the helper's business.
+check('choosing a PT ladder draws the ladder, not a sill plate', P => {
+  const wallFt = DETACHED(P).wallThicknessIn / 12;
+  // Narrow, and hanging below the top of the concrete -- which is what makes
+  // a ladder a ladder and a plate a plate.
+  const ladder = rects(DETACHED_HELD(P, 'ladder', P.SILL_PLATE_IN))
+    .filter(r => r.w < wallFt / 2 && r.y < 0);
+  return [[ladder.length, detachedSill(P).length].join(), '2,1'];
+});
 check('a 7\'-0" overhead door clears that head on the detached garage wall', P =>
   [P.GARAGE_WALL_FT * 12 - P.OPENING_HEAD_DROP_IN >= 84, true]);
 // It is a separate builder, and this is the check that says so: the attached
@@ -980,16 +1032,34 @@ const MUTATIONS = [
   // Movie's correction, undone: the plate drawn at the TOP of the wall again,
   // which is the line he marked off before saying where it belonged.
   ['the bottom sill plate goes back to the top of the wall',
-    s => s.replace("    attachment(rect, line, 'sill', 0, wallBaseY, wallFt);",
-      "    attachment(rect, line, 'sill', 0, plateY - sillFt, wallFt);")],
+    s => s.replace('0, wallBaseY, wallFt,\n      attachFt * 12);',
+      '0, plateY - sillFt, wallFt,\n      attachFt * 12);')],
   // The plausible misreading of "3.5\"x1.5\" stud": write the 3 1/2" down.
   ['the sill plate is written 3 1/2" wide instead of following the wall',
-    s => s.replace("    attachment(rect, line, 'sill', 0, wallBaseY, wallFt);",
-      "    attachment(rect, line, 'sill', 0, wallBaseY, 3.5 / 12);")],
+    s => s.replace('0, wallBaseY, wallFt,\n      attachFt * 12);',
+      '0, wallBaseY, 3.5 / 12,\n      attachFt * 12);')],
   // Back to a line across the wall, which is what it was before he named it.
   ['the sill plate is a line across the wall rather than a member',
-    s => s.replace("    attachment(rect, line, 'sill', 0, wallBaseY, wallFt);",
-      '    line(0, wallBaseY + sillFt, wallFt, wallBaseY + sillFt, 1);')],
+    s => s.replace(
+      "    attachment(rect, line, g.attachment || 'sill', 0, wallBaseY, wallFt,\n      attachFt * 12);",
+      '    line(0, wallBaseY + attachFt, wallFt, wallBaseY + attachFt, 1);')],
+  // AND THE TWO BOXES ABOVE IT GO BACK TO BEING DECORATION. Both of these
+  // draw a perfectly good detail; what they lose is the connection between
+  // the ATTACHMENT / HEIGHT pair Movie asked for on 28 Sep and the member
+  // under the wall.
+  ['the grade dimension goes back to measuring the floor, not the concrete',
+    s => s.replace(
+      'const detachedConcreteAboveGradeIn = kind =>\n    (kind === \'thickened\' ? DETACHED_SLAB_ABOVE_GRADE_IN : GRADE_BELOW_CONCRETE_IN);',
+      'const detachedConcreteAboveGradeIn = () => DETACHED_SLAB_ABOVE_GRADE_IN;')],
+  ['the grade dimension is parked halfway to the floor again',
+    s => s.replace('anchors.slabAboveGrade = { x: -0.9, y: (gradeY + wallBaseY) / 2 };',
+      'anchors.slabAboveGrade = { x: -0.9, y: gradeY / 2 };')],
+  ['the attachment is hard-coded back to a sill plate',
+    s => s.replace("attachment(rect, line, g.attachment || 'sill',",
+      "attachment(rect, line, 'sill',")],
+  ['the attachment height is hard-coded back to the office 1 1/2"',
+    s => s.replace('const attachFt = (g.attachmentIn ?? sillPlateIn()) / 12;',
+      'const attachFt = sillPlateIn() / 12;')],
   ['the truss loses its bottom chord, and the ceiling is a bare line again',
     s => s.replace('    if (ceiling) {', '    if (false) {')],
   ['the side chord loses its outside face at the wall',

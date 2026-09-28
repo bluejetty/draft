@@ -210,6 +210,72 @@ test('the room above is offered on a beam and a frost wall, never on a slab',
     await expect(wall).toBeHidden();
   });
 
+// THE STOREY GETS THE BUNGALOW'S FOUR QUESTIONS. Movie, 28 Sep: "we wll also
+// need to add a 2nd floor to it too - it will be very similar to bungalow 2nd
+// floor". Band 1 asks WALL HT, WALL TYPE, SHEATHING and JST of a storey, so
+// this block asks the same four -- and the head goes with them, which is the
+// half band 1 got wrong first: when 2ND FL's rows went off a bungalow, the
+// word 2ND FL stayed printed over the gap.
+test('the storey above carries the bungalow\'s four rows and its own head',
+  async ({ page }) => {
+    await page.goto('/PROJECT.html?type=detached');
+    await expect(page.locator('#detached-canvas')).toBeVisible();
+    const keys = ['overWallHeight', 'overWallType', 'overSheathing', 'overFloor'];
+    const head = page.locator('[data-sched-head="roomAboveHead"]');
+
+    await press(page, 'GRADE BEAM').click();
+    await page.waitForTimeout(300);
+    await expect(head).toBeHidden();
+    for (const key of keys) {
+      await expect(page.locator(`[data-sched-row="${key}"]`)).toBeHidden();
+    }
+
+    await page.locator('[data-detached-value="roomOver"]').click();
+    await page.waitForTimeout(300);
+    await expect(head).toBeVisible();
+    for (const key of keys) {
+      await expect(page.locator(`[data-sched-row="${key}"]`)).toBeVisible();
+    }
+    // The office storey: an 8' precut wall, 3/4" sheathing, and 19 1/4" of
+    // OPEN WEB JOIST -- Movie, 28 Sep: "the floor joists will need to be
+    // 19.25" thick OWJ". A garage has no interior walls to land on, so this
+    // deck clear-spans, and the row is named after the member doing it.
+    expect(await read(page, 'overWallHeight')).toBe(`8'-1 1/8"`);
+    expect(await read(page, 'overSheathing')).toBe(`3/4"`);
+    expect(await read(page, 'overFloor')).toBe(`19 1/4"`);
+    await expect(page.locator('[data-sched-row="overFloor"] .sched-name'))
+      .toHaveText('OWJ');
+
+    // AND EACH OF THE FOUR REACHES THE DRAWING. Two of them are typed into
+    // the DETACHED GARAGE row and two into the overGarage level -- which is
+    // where they were always READ from -- so a box wired to neither would
+    // still look right and change nothing.
+    const joists = page.locator('[data-detached-value="overFloor"]');
+    let before = await shoot(page);
+    await joists.fill(String.raw`11 7/8"`);
+    await joists.press('Enter');
+    await page.waitForTimeout(300);
+    expect(await read(page, 'overFloor')).toBe(`11 7/8"`);
+    expect(await shoot(page), 'the joists').not.toBe(before);
+
+    before = await shoot(page);
+    await page.selectOption('[data-detached-value="overWallType"]', 'stud_2x4');
+    await page.waitForTimeout(300);
+    expect(await shoot(page), 'the wall type').not.toBe(before);
+
+    // AND THE WHOLE BLOCK GOES BACK ON A FLOATING SLAB. Movie, 28 Sep:
+    // "those 2nd floor ones NOT for THickened egde, only for the other 2".
+    // The press already refused it; these four rows and their head are new
+    // and have to refuse it too, or the schedule keeps asking about a storey
+    // the drawing no longer has.
+    await press(page, 'THICKENED EDGE').click();
+    await page.waitForTimeout(300);
+    await expect(head).toBeHidden();
+    for (const key of keys) {
+      await expect(page.locator(`[data-sched-row="${key}"]`)).toBeHidden();
+    }
+  });
+
 // A TYPED CELL IS A STORED CELL. The rows were read-only spans until today;
 // the whole ask was to make them boxes, so one round trip through one of them
 // is the check that they are wired to the DETACHED GARAGE row and not just

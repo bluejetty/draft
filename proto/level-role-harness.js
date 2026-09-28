@@ -467,12 +467,38 @@ check('a stocked one survives', ({ LA }) => {
   return [LA.normaliseLevelAssembly({ joistType: other.id }).joistType, other.id];
 });
 // The fallback must not be silent about WHICH default it picked: a role that
-// changed the joist type would have to change it here too, and today none does.
+// changes the joist type has to be one the box can name, and as of 28 Sep one
+// role does change it.
 check('the joist type is one the FLOOR JOISTS box can label', ({ LA }) => {
   const stocked = new Set(LA.JOIST_TYPES.map(type => type.id));
   const bad = LA.LEVEL_ROLES.filter(role => !stocked.has(LA.defaultLevelAssembly(role).joistType));
   return [bad.join(','), ''];
 });
+// OVER GARAGE IS THE ROLE THAT CHANGES IT. Movie, 28 Sep: "the floor joists
+// will need to be 19.25" thick OWJ". The depth already said so and the TYPE
+// still said TJI, so the one level that cannot take a TJI was the one labelled
+// TJI -- and the reason is the role's own note: a garage has no interior walls
+// to land on, so this deck clear-spans. Asserted as a PAIR with the house's,
+// because "overGarage is owj" passes just as well on a table where every role
+// is owj, which would be the house framed in open web joists.
+check('the deck over a garage is an open web joist, and a house floor is not',
+  ({ LA }) => {
+    const over = LA.defaultLevelAssembly('overGarage').joistType;
+    const floor = LA.defaultLevelAssembly('floor').joistType;
+    // The second half is not decoration. "overGarage is owj" passes just as
+    // well on a table where EVERY role is owj, which would be the house
+    // framed in open web joists -- so the pair is what pins it, and neither
+    // half names the house's own type, which is DEFAULT_JOIST_TYPE's to say.
+    return [[over === 'owj', over !== floor].join(), 'true,true'];
+  });
+// AND ITS DEPTH IS STILL ITS OWN, which is what makes the type a label rather
+// than a rule: JOIST_TYPES carries a null depth for OWJ ("entered by hand
+// since open-web joists come in many depths"), so the 19 1/4" is the office
+// answer beside it and not something the type supplies.
+check('and the open web joist keeps the role\'s own depth', ({ LA }) =>
+  [[LA.defaultLevelAssembly('overGarage').joistDepthIn,
+    LA.JOIST_TYPES.find(type => type.id === 'owj').depthIn].join(),
+  [19.25, null].join()]);
 check('a stored spacing beats the default', ({ LA }) =>
   [LA.normaliseLevelAssembly({ joistSpacingIn: 24 }).joistSpacingIn, 24]);
 check('a spacing of zero falls back rather than framing at no spacing', ({ LA }) =>
@@ -499,6 +525,11 @@ console.log(`level role harness: ${CHECKS.length - baseline.length}/${CHECKS.len
 // wrong number rather than an error. The first three ARE what was on main this
 // morning, put back one file at a time.
 const MUTATIONS = [
+  ['the deck over a garage goes back to the house joist type', 'module',
+    s => s.replace("      joistDepthIn: OVER_GARAGE_JOIST_IN, joistType: 'owj' }),",
+      '      joistDepthIn: OVER_GARAGE_JOIST_IN }),')],
+  ['every role is framed in open web joists, the house included', 'module',
+    s => s.replace("const DEFAULT_JOIST_TYPE = 'tji';", "const DEFAULT_JOIST_TYPE = 'owj';")],
   // RETARGETED, for the second time and for the same reason as the note below:
   // MODEL.html stopped hand-rolling the lookup and now calls the module's
   // levelAssemblyFor, so this mutation was aimed at text that no longer exists

@@ -214,7 +214,20 @@ if (!window.DraftLevelAssembly) {
     // looking close enough to the right answer to survive.
     foundation: Object.freeze({ wallHeightFt: FOUNDATION_WALL_TOP_FT }),
     entry: Object.freeze({ joistDepthIn: ENTRY_JOIST_IN }),
-    overGarage: Object.freeze({ joistDepthIn: OVER_GARAGE_JOIST_IN }),
+    // AND IT IS AN OPEN WEB JOIST, not a deep TJI. Movie, 28 Sep: "the floor
+    // joists will need to be 19.25\" thick OWJ". The depth was already
+    // right and the TYPE was still the house's default, so the one level on
+    // the drawing that cannot take a TJI was the one labelled TJI. The
+    // reason is the paragraph above OVER_GARAGE_JOIST_IN: a garage has no
+    // interior walls to land on, and clear-spanning a double bay is what an
+    // open web joist is for.
+    //
+    // ITS DEPTH IS STILL STORED, which is why this is a default and not a
+    // rule. JOIST_TYPES carries a null depth for OWJ -- "entered by hand
+    // since open-web joists come in many depths" -- so the 19 1/4" beside it
+    // is the office answer a drafter may type past.
+    overGarage: Object.freeze({
+      joistDepthIn: OVER_GARAGE_JOIST_IN, joistType: 'owj' }),
   });
 
   // Per-level wall + floor assembly: the WALL HEIGHT and FLOOR JOISTS boxes

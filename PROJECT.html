@@ -319,7 +319,20 @@
        its ink spans about 130px of the 600 and HEIGHT sets the scale
        throughout. Cutting to the bungalow's 360 costs the drawing nothing and
        buys each column 353px -- two tracks with room to spare. */
-    #stage-detached .band { grid-template-columns:minmax(0,1fr) 360px minmax(0,1fr); }
+    /* AND 300 RATHER THAN 360 ONCE THE BLOCK GREW ITS DROPDOWNS. Movie's
+       28 Sep FOUNDATION block puts ATTACHMENT and FDN TYPE in this column,
+       and FDN TYPE's longest option is THICKENED EDGE -- at 360 the column's
+       half left the select 83px and drew "THICKENED EDG". Clipping the label
+       on a control that changes the drawing is the failure the shared select
+       rule above exists to prevent, and it is worse than a narrower drawing.
+       The 60px buys the select 113px, which fits it with room over.
+
+       THE DRAWING PAYS NOTHING, for the reason the 360 note already gives:
+       this section is 4 ft of cut and a 2 ft overhang against a wall and a
+       roof, so its ink spans about 130px and HEIGHT sets the scale. The pair
+       of checks in tests/project-sched-pairs.spec.js holds both halves --
+       the columns pair, and the drawing still reaches top and bottom. */
+    #stage-detached .band { grid-template-columns:minmax(0,1fr) 300px minmax(0,1fr); }
     /* A HEAD RULES BOTH HALVES, and taking a whole line is what stops a
        pair straddling two groups -- 2ND FL's last row never shares a line
        with MAIN FL's first. A `wide` row is already a control that is its
@@ -632,7 +645,7 @@
         <div class="band">
           <div class="sched" id="sched-detached-left"></div>
           <div class="detail-wrap" id="detached-wrap">
-            <canvas id="detached-canvas" width="360" height="500" aria-label="Detached garage section — its foundation, wall and roof"></canvas>
+            <canvas id="detached-canvas" width="300" height="500" aria-label="Detached garage section — its foundation, wall and roof"></canvas>
           </div>
           <div class="sched" id="sched-detached-right"></div>
         </div>
@@ -748,8 +761,13 @@
       const ENTRY_LEVEL_ID = 2;
       const OVER_GARAGE_LEVEL_ID = 4;
       const {
-        normaliseLevelAssembly, defaultLevelAssembly, levelRole,
+        normaliseLevelAssembly, defaultLevelAssembly, levelRole, JOIST_TYPES,
       } = window.DraftLevelAssembly;
+      // What a level's joists are CALLED, for a row that names the member
+      // rather than just measuring it. The table is the module's, so a row
+      // reading this cannot drift from the FLOOR JOISTS box in MODEL.
+      const joistLabel = levelId => JOIST_TYPES.find(
+        type => type.id === assembly(levelId).joistType)?.label ?? 'JST';
       // THE FOUNDATION POUR STAYS THIS PAGE'S OWN, and the module says why:
       // MODEL.dc.html has always drawn a foundation wall at the house's
       // 8'-1 1/8" while this page poured 8'-0", and BOTH WERE WRONG. Movie
@@ -1694,15 +1712,65 @@
       // would hand a grade beam that number the moment nobody had typed one.
       const detachedFdnFt = () => sectionTable.rows.detachedGarage?.fdnWallHeightFt
         ?? projectPage.detachedFoundationDepthFt(detachedFoundation(), housePourFt());
+      // HOW THE FRAMING IS HELD DOWN HERE, and it is this band's own answer.
+      // Movie's 28 Sep mockup heads the FOUNDATION block with ATTACHMENT and
+      // HEIGHT, the same pair band 1 asks -- but band 3's contract is that
+      // its numbers come from the DETACHED GARAGE row and not from the house
+      // (tests/project-detached.spec.js exists to hold that line), so the
+      // answer is stored on the row beside the foundation and the depth.
+      // drawing-format.js already declared `foundationAttachment` as a
+      // section-table choice; this is the first row to use it.
+      const detachedAttachment = () =>
+        sectionTable.rows.detachedGarage?.foundationAttachment || 'sill';
+      const detachedAttachmentIn = () =>
+        sectionTable.rows.detachedGarage?.foundationAttachmentIn
+        ?? projectPage.SILL_PLATE_IN;
+      // ONE PLACE THAT CHANGES THE FOUNDATION, because there are now two
+      // controls that do it -- the family buttons down the left and the FDN
+      // TYPE dropdown in the schedule. The depth cell is cleared on the way
+      // through, and that is the whole reason this is not a one-liner: one
+      // cell carries the depth of all three, so leaving a typed 1'-0" behind
+      // would hand the grade beam the thickened edge's depth and draw a beam
+      // eight inches too shallow that nobody typed. Clearing it puts the new
+      // foundation on its OWN default. Returns the line to save under, so a
+      // caller does not have to know how the change is worded.
+      const setDetachedFoundation = kind => {
+        writeCell('detachedGarage', 'garageFoundation', kind);
+        writeCell('detachedGarage', 'fdnWallHeightFt', null);
+        // A THICKENED EDGE CANNOT CARRY THE STOREY, so the press that put one
+        // there goes with it rather than being drawn on a floating slab.
+        if (kind === 'thickened') writeCell('detachedGarage', 'overGarage', null);
+        syncFamilyRow();
+        return `Detached garage on a ${
+          projectPage.GARAGE_FOUNDATION_LABEL[kind].toLowerCase()}.`;
+      };
       const detachedOverWallFt = () =>
         sectionTable.rows.detachedGarage?.overWallHeightFt
         ?? projectPage.wallHeightFtFromStud(projectPage.STUD_LENGTHS_IN[0]);
+      // WHAT THE STOREY ABOVE IS FRAMED IN, stored only once somebody picks.
+      // The attached garage's room over keeps its answer the same way, on its
+      // own row's overWallType cell -- and the reason a null is not filled in
+      // on load is the one that rule was written for: a copy of today's
+      // shared type freezes the 99% case into a fake override that the next
+      // shared-type change silently misses.
+      //
+      // NO "SAME AS HOUSE" IN THE PICKER, which is band 1's 27 Sep ruling on
+      // its own storey rows -- "the SAME AS HOUSE - doesn't apply, make the
+      // DEFAULT 2x6 SPF take off the SAME AS HOUSE options". So the box shows
+      // the type IN FORCE: the override when there is one, the drawing's own
+      // type when there is not.
+      const detachedOverWallType = () => {
+        const stored = sectionTable.rows.detachedGarage?.overWallType;
+        return EXTERIOR_CHOICES.includes(stored) ? stored : null;
+      };
       const detachedValues = () => {
         const over = assembly(OVER_GARAGE_LEVEL_ID);
         return {
           wallThicknessIn: WALL_TYPE_VIEW[activeWallType].totalIn,
           garage: {
             foundation: detachedFoundation(),
+            attachment: detachedAttachment(),
+            attachmentIn: detachedAttachmentIn(),
             fdnWallHeightFt: detachedFdnFt(),
             slabIn: cellValue('detachedGarage', 'slabThicknessIn').value,
             wallHeightFt: cellValue('detachedGarage', 'mainWallHeightFt').value,
@@ -1714,7 +1782,8 @@
             overJoistIn: over.joistDepthIn,
             overSheathingIn: over.sheathingIn,
             overWallHeightFt: detachedOverWallFt(),
-            overWallIn: WALL_TYPE_VIEW[activeWallType].totalIn,
+            overWallIn: WALL_TYPE_VIEW[
+              detachedOverWallType() ?? activeWallType].totalIn,
           },
           // HEEL null, NOT roofHeelIn(). A typed heel is this drawing's house
           // roof; a detached garage is a separate building and takes the
@@ -1738,16 +1807,68 @@
       // A row's name is a string, except the depth row's, which follows the
       // foundation -- so every reader asks through here rather than some
       // asking the string directly and going stale on the one row that moves.
-      const nameOfRow = row => (typeof row.name === 'function' ? row.name() : row.name);
+      const resolveName = name => (typeof name === 'function' ? name() : name);
+      const nameOfRow = row => resolveName(row.name);
+      // The name the DRAWING uses, where it differs from the schedule's.
+      const tagOfRow = row => resolveName(row.tagName) ?? nameOfRow(row);
+      // A ROW THE DRAFTER TYPES IN. `field` names a cell of the DETACHED
+      // GARAGE row and is the common case; `typed` is the row that writes
+      // somewhere else -- the storey's floor package, which lives on the
+      // overGarage assembly and is read from there.
+      const typedRow = row => Boolean(row.field || row.typed);
+      // THE BLOCK IS BAND 1'S FOUNDATION BLOCK, ROW FOR ROW. Movie drew it on
+      // 28 Sep: a FOUNDATION head, then ATTACHMENT and its HEIGHT, then FDN
+      // TYPE and the depth of whichever type that is, then SLAB and how far
+      // the concrete stands over grade. The column pairs two rows to a line,
+      // so the order below IS the arrangement in his drawing.
+      //
+      // THE THREE FOUNDATIONS ARE NOW ASKED TWICE, and on purpose: the
+      // buttons down the left of the page and this dropdown are one answer
+      // with two controls, so either one moves both. The buttons are how the
+      // rest of the page names a build; the dropdown is where a drafter
+      // reading the schedule expects the question -- which is exactly what he
+      // asked for ("for foundation type we also need FROST WALL and GRADE
+      // BEAM as options").
       const detachedRows = [
         { side: 'left', head: 'FOUNDATION' },
-        { side: 'left', key: 'slabAboveGrade', name: 'FLOOR OVER GRADE',
-          get: () => projectPage.DETACHED_SLAB_ABOVE_GRADE_IN / 12 },
+        { side: 'left', key: 'attachment', name: 'ATTACHMENT',
+          choices: () => projectPage.FOUNDATION_ATTACHMENTS
+            .map(id => ({ id, label: projectPage.ATTACHMENT_LABEL[id] })),
+          read: () => detachedAttachment(),
+          write: value => {
+            if (!projectPage.FOUNDATION_ATTACHMENTS.includes(value)) return false;
+            writeCell('detachedGarage', 'foundationAttachment', value);
+            return `Detached garage held down with a ${
+              projectPage.ATTACHMENT_LABEL[value].toLowerCase()}.`;
+          } },
+        // NEXT TO THE TYPE, band 1's reason exactly: a sill and a ladder are
+        // both 1 1/2" stock by default and both can be something else, so one
+        // box serves either choice.
+        { side: 'left', key: 'attachmentHeight', name: 'HEIGHT',
+          get: () => detachedAttachmentIn(),
+          field: 'foundationAttachmentIn', unit: 'in' },
+        { side: 'left', key: 'fdnType', name: 'FDN TYPE',
+          choices: () => projectPage.GARAGE_FOUNDATIONS.detachedGarage
+            .map(id => ({ id, label: projectPage.GARAGE_FOUNDATION_LABEL[id] })),
+          read: () => detachedFoundation(),
+          write: value => {
+            if (!projectPage.GARAGE_FOUNDATIONS.detachedGarage.includes(value)) return false;
+            if (value === detachedFoundation()) return false;
+            return setDetachedFoundation(value);
+          } },
         { side: 'left', key: 'fdnDepth', name: () => DETACHED_FDN_NAME[detachedFoundation()],
           get: () => detachedFdnFt(), field: 'fdnWallHeightFt', unit: 'ftin' },
         { side: 'left', key: 'slabThickness', name: 'SLAB',
           get: v => v.garage.slabIn, field: 'slabThicknessIn', unit: 'in',
           show: v => v.garage.slabIn / 12 },
+        // HIS OWN WORDS FOR IT, 28 Sep, written over the old FLOOR OVER GRADE:
+        // "TOP CONC. OVER GRADE". On two of the three foundations the floor is
+        // not what stands over grade -- the concrete is, with the slab poured
+        // down inside it -- so the old name was only ever right about the
+        // thickened edge.
+        { side: 'left', key: 'slabAboveGrade', name: 'TOP CONC. OVER GRADE',
+          get: () => projectPage
+            .detachedConcreteAboveGradeIn(detachedFoundation()) / 12 },
         // THE ORDER IS BAND 1'S -- roof block, then the room-over press, then
         // the wall -- top of the building down, the way the drawing beside it
         // reads.
@@ -1766,12 +1887,59 @@
         { side: 'right', key: 'roomOver', name: 'Storey over the detached garage',
           wide: true, press: true, shown: () => detachedFoundation() !== 'thickened',
           text: () => (detachedRoomOver() ? 'ROOM ABOVE ✓' : '+ ADD ROOM ABOVE') },
-        { side: 'right', key: 'overFloor', name: 'OVER GAR FL',
-          roomOverOnly: true,
-          get: v => (v.garage.overJoistIn + v.garage.overSheathingIn) / 12 },
-        { side: 'right', key: 'overWallHeight', name: 'ROOM WALL HT',
-          roomOverOnly: true,
+        // ── THE STOREY ABOVE, AND IT IS THE BUNGALOW'S 2ND FL BLOCK ────────
+        // Movie, 28 Sep: "we wll also need to add a 2nd floor to it too - it
+        // will be very similar to bungalow 2nd floor". Band 1 asks four
+        // questions of a storey -- WALL HT, WALL TYPE, SHEATHING, JST, in
+        // that order -- so this block asks the same four in the same order,
+        // and the head goes with the rows when the room does.
+        //
+        // THE OLD "OVER GAR FL" ROW IS NOW JST. It printed joists plus
+        // sheathing as one derived number and hung on the joist band in the
+        // drawing; with both halves typeable a total beside them would be a
+        // third number, so the row keeps the anchor and names the member
+        // actually under it.
+        { side: 'right', head: 'ROOM ABOVE', key: 'roomAboveHead',
+          roomOverOnly: true },
+        { side: 'right', key: 'overWallHeight', name: 'WALL HT',
+          tagName: 'ROOM WALL HT', roomOverOnly: true,
           get: v => v.garage.overWallHeightFt, field: 'overWallHeightFt', unit: 'ftin' },
+        { side: 'right', key: 'overWallType', name: 'WALL TYPE',
+          roomOverOnly: true,
+          choices: () => EXTERIOR_CHOICES.map(
+            id => ({ id, label: WALL_TYPE_VIEW[id].label })),
+          read: () => detachedOverWallType() ?? activeWallType,
+          write: value => {
+            if (!EXTERIOR_CHOICES.includes(value)) return false;
+            writeCell('detachedGarage', 'overWallType', value);
+            return `Room above framed in ${WALL_TYPE_VIEW[value].label}.`;
+          } },
+        // THE PACKAGE IS THE overGarage LEVEL'S OWN, WRITTEN WHERE IT IS
+        // READ. These two have always been read off that assembly rather
+        // than off the detached row -- "a 20\" written here would be a number
+        // that agrees with the assembly until the assembly moves" -- so the
+        // boxes write the assembly too. That is the one thing on this card
+        // shared with the attached garage's storey, because it is one level
+        // of the drawing and the sidebar's level card edits the same object.
+        { side: 'right', key: 'overSheathing', name: 'SHEATHING',
+          roomOverOnly: true, unit: 'in', typed: true,
+          get: v => v.garage.overSheathingIn,
+          put: value => (value <= 3
+            && setAssembly(OVER_GARAGE_LEVEL_ID, 'sheathingIn', value) !== false
+            && 'Room above sheathing saved.') },
+        // NAMED AFTER THE MEMBER IT MEASURES. Movie, 28 Sep: "the floor
+        // joists will need to be 19.25\" thick OWJ". The depth was already
+        // the office 19 1/4" -- a garage has no interior walls to land on, so
+        // this deck clear-spans -- and the row now says what is doing the
+        // spanning. Read off the level rather than written here, so it stays
+        // true if the joist type is ever changed.
+        { side: 'right', key: 'overFloor',
+          name: () => joistLabel(OVER_GARAGE_LEVEL_ID),
+          tagName: () => `ROOM FL ${joistLabel(OVER_GARAGE_LEVEL_ID)}`,
+          roomOverOnly: true, unit: 'in', typed: true,
+          get: v => v.garage.overJoistIn,
+          put: value => (setAssembly(OVER_GARAGE_LEVEL_ID, 'joistDepthIn', value) !== false
+            && 'Room above joist depth saved.') },
       ];
       const detachedEls = new Map();
       const buildDetachedSched = () => {
@@ -1787,13 +1955,42 @@
             head.className = 'sched-head';
             head.textContent = row.head;
             hosts[row.side].appendChild(head);
+            // A HEAD WHOSE ROWS CAN LEAVE HAS TO LEAVE WITH THEM -- band 1's
+            // lesson, in its own words: when 2ND FL's four rows went off a
+            // bungalow, the word 2ND FL stayed printed over the gap where
+            // they had been. A head with no key is permanent and needs none.
+            if (row.key) {
+              head.dataset.schedHead = row.key;
+              detachedEls.set(row.key, { row, el: head, node: head });
+            }
             return;
           }
           const value = document.createElement(
-            row.press ? 'button' : row.field ? 'input' : 'span');
+            row.press ? 'button' : row.choices ? 'select'
+              : typedRow(row) ? 'input' : 'span');
           value.className = 'sched-value';
           value.dataset.detachedValue = row.key;
-          if (row.press) {
+          if (row.choices) {
+            // A CHOICE IS AN INPUT WHOSE VALUES ARE A LIST -- band 1's words
+            // for the same branch, and the same shape: fill the options once,
+            // write on change, and let the repaint put the stored answer back
+            // in the box. `write` returns the line to save under, or false
+            // when the answer was not one this row offers.
+            row.choices().forEach(({ id, label }) => {
+              const option = document.createElement('option');
+              option.value = id;
+              option.textContent = label;
+              value.appendChild(option);
+            });
+            value.setAttribute('aria-label', `Detached ${nameOfRow(row)}`);
+            value.disabled = readOnly;
+            value.addEventListener('change', () => {
+              if (readOnly) return;
+              const saved = row.write(value.value);
+              if (saved) save(saved);
+              repaint();
+            });
+          } else if (row.press) {
             value.type = 'button';
             value.disabled = readOnly;
             value.addEventListener('click', () => {
@@ -1803,7 +2000,7 @@
               save(`Room above the detached garage ${detachedRoomOver() ? 'added' : 'removed'}.`);
               repaint();
             });
-          } else if (row.field) {
+          } else if (typedRow(row)) {
             value.setAttribute('aria-label', `Detached ${nameOfRow(row)}`);
             value.disabled = readOnly;
             value.addEventListener('keydown',
@@ -1813,10 +2010,13 @@
               // A REJECTED EDIT SNAPS BACK rather than storing a null, the
               // same rule band 2 keeps: null here means "follow the office
               // default", so a typo would read as a decision to stop
-              // overriding.
+              // overriding. A `put` row refuses the same way: it answers
+              // false and the repaint puts the stored number back.
               if (parsed != null && parsed > 0) {
-                writeCell('detachedGarage', row.field, parsed);
-                save(`Detached ${nameOfRow(row)} saved.`);
+                const saved = row.put ? row.put(parsed)
+                  : (writeCell('detachedGarage', row.field, parsed),
+                    `Detached ${nameOfRow(row)} saved.`);
+                if (saved) save(saved);
               }
               repaint();
             });
@@ -1844,10 +2044,23 @@
           // takes the room's two rows away with the press that made them.
           const shown = (!row.shown || row.shown())
             && (!row.roomOverOnly || detachedRoomOver());
+          // A HEAD IS NOT A ROW, so nothing above reaches it -- it has no
+          // value, no tag and no name cell, only the word and whether the
+          // rows it heads are there.
+          if (row.head) { node.hidden = !shown; return; }
           if (row.press) {
             node.hidden = !shown;
             el.textContent = row.text();
             el.setAttribute('aria-pressed', detachedRoomOver() ? 'true' : 'false');
+            tag.style.display = 'none';
+            return;
+          }
+          if (row.choices) {
+            node.hidden = !shown;
+            // THE BOX BEING USED IS LEFT ALONE, the same rule the typed cells
+            // keep below: repaint runs on every change, and rewriting an open
+            // dropdown is how a half-made choice becomes the previous one.
+            if (document.activeElement !== el) el.value = row.read();
             tag.style.display = 'none';
             return;
           }
@@ -1859,13 +2072,13 @@
           const nameEl = node.querySelector('.sched-name');
           if (nameEl) nameEl.textContent = nameOfRow(row);
           const text = has
-            ? (row.field ? DETACHED_UNIT[row.unit].show(ft)
+            ? (typedRow(row) ? DETACHED_UNIT[row.unit].show(ft)
               : fmt.formatArchitecturalInches(ft * 12))
             : '';
           // THE BOX BEING TYPED IN IS LEFT ALONE -- repaint runs on every
           // change event, and rewriting the field the cursor is in is how a
           // half-typed number becomes the previous one.
-          if (row.field) {
+          if (typedRow(row)) {
             if (document.activeElement !== el) el.value = text;
           } else {
             el.textContent = text;
@@ -1873,7 +2086,12 @@
           const at = has && anchors[row.key];
           tag.style.display = at ? '' : 'none';
           if (!at) return;
-          tag.textContent = nameOfRow(row);
+          // THE DRAWING MAY NEED A LONGER NAME THAN THE SCHEDULE DOES. Under
+          // the ROOM ABOVE head, WALL HT is unambiguous -- the head says
+          // whose wall it is. On the drawing there is no head, and the
+          // garage's own WALL HT is already labelled a few inches below it,
+          // so the tag says which storey it means.
+          tag.textContent = tagOfRow(row);
           tag.style.left = row.side === 'left'
             ? `${Math.max(2, left - GREY_COL)}px` : `${right + GREY_GAP}px`;
           tag.style.top = `${at.y}px`;
@@ -2578,16 +2796,7 @@
             button.disabled = readOnly;
             button.addEventListener('click', () => {
               if (readOnly || detachedFoundation() === entry.foundation) return;
-              writeCell('detachedGarage', 'garageFoundation', entry.foundation);
-              writeCell('detachedGarage', 'fdnWallHeightFt', null);
-              // A THICKENED EDGE CANNOT CARRY THE STOREY, so the press that
-              // put one there goes with it rather than being drawn on a
-              // floating slab.
-              if (entry.foundation === 'thickened') {
-                writeCell('detachedGarage', 'overGarage', null);
-              }
-              save(`Detached garage on a ${entry.label.toLowerCase()}.`);
-              syncFamilyRow();
+              save(setDetachedFoundation(entry.foundation));
               repaint();
             });
             detachedFamilyRow.appendChild(button);
