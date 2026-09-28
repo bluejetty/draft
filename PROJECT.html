@@ -191,13 +191,17 @@
        opposite of compacting the panel. */
     .type-row { display:grid; grid-template-columns:minmax(0,0.85fr) minmax(0,1.15fr); gap:6px; align-items:start; }
     .family-col { display:flex; flex-direction:column; gap:4px; }
-    /* THE BUNGALOW'S COLUMN PAIRS, and only it. Movie's 28 Sep mockup puts
-       each house beside its own + GARAGE and leaves the bilevel column and
-       the detached garage's three as they are -- three names that share no
-       stem, so pairing them would save a line and cost the reading. */
-    #family-row { display:grid; grid-template-columns:repeat(2, minmax(0,1fr));
+    /* THE COLUMNS PAIR. Movie's 28 Sep mockups: each house beside its own
+       + GARAGE, each bilevel beside its own, and the detached garage's two
+       deep foundations each beside a + ROOM OVER. What takes a whole line is
+       what has no partner -- the room-over house, the modified bilevel, and
+       the thickened edge, which cannot carry a storey at all. */
+    #family-row, #bilevel-family-row, #detached-family-row {
+      display:grid; grid-template-columns:repeat(2, minmax(0,1fr));
       gap:4px; align-content:start; }
-    #family-row > .family-button.wide { grid-column:1 / -1; }
+    #family-row > .family-button.wide,
+    #bilevel-family-row > .family-button.wide,
+    #detached-family-row > .family-button.wide { grid-column:1 / -1; }
     .type-card { display:block; width:100%; padding:0; border:1px solid var(--edge-panel); background:var(--surface-panel); color:var(--ink-secondary); font:inherit; text-align:left; cursor:pointer; }
     .type-card:hover { border-color:var(--accent); }
     /* The selected card is marked TWICE -- the border and an inset ring --
@@ -3127,8 +3131,12 @@
         const plus = entry.label.indexOf('+');
         return plus === -1 ? entry.label : entry.label.slice(plus).trim();
       };
-      const familyButtons = BUNGALOW_FAMILY.map((entry, i) => {
-        const paired = pairsWithPrevious(entry, BUNGALOW_FAMILY[i - 1]);
+      // ONE BUILDER FOR BOTH HOUSE COLUMNS. Movie asked for the bungalow's
+      // pairing and then, in the next breath, "we can do that for BILEVEL /
+      // + GARAGE too" -- so the second column is the same call with the other
+      // family rather than a copy of this loop that has to be kept in step.
+      const buildFamilyColumn = (host, entries) => entries.map((entry, i) => {
+        const paired = pairsWithPrevious(entry, entries[i - 1]);
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'family-button';
@@ -3136,7 +3144,7 @@
         // spans both tracks. The grid is the column's job, the same rule the
         // paired schedules keep: the button says whether it shares, the CSS
         // says what sharing looks like.
-        if (!paired && !pairsWithPrevious(BUNGALOW_FAMILY[i + 1], entry)) {
+        if (!paired && !pairsWithPrevious(entries[i + 1], entry)) {
           button.classList.add('wide');
         }
         button.textContent = paired ? shortLabel(entry) : entry.label;
@@ -3148,9 +3156,10 @@
           methodPressedHere = true;
           applyGaragePlan(planForEntry(entry));
         });
-        familyRow.appendChild(button);
+        host.appendChild(button);
         return { entry, button };
       });
+      const familyButtons = buildFamilyColumn(familyRow, BUNGALOW_FAMILY);
       // WHICH ONE GLOWS. The drawing's own state decides, not the last press:
       // a method chosen in the drive-thru and a garage plan from an earlier
       // session both have to light the right button when the page opens.
@@ -3165,22 +3174,7 @@
       const BILEVEL_FAMILY = window.DraftBuildMenu.BUILD_MENU
         .find(family => family.id === 'bilevel').entries;
       if (bilevelFamilyRow) {
-        BILEVEL_FAMILY.forEach(entry => {
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.className = 'family-button';
-          button.textContent = entry.label;
-          button.dataset.familyEntry = entry.id;
-          button.disabled = readOnly;
-          button.addEventListener('click', () => {
-            if (readOnly) return;
-            buildType = entry.type;
-            methodPressedHere = true;
-            applyGaragePlan(planForEntry(entry));
-          });
-          bilevelFamilyRow.appendChild(button);
-          familyButtons.push({ entry, button });
-        });
+        familyButtons.push(...buildFamilyColumn(bilevelFamilyRow, BILEVEL_FAMILY));
       }
       // AND THE DETACHED GARAGE'S THREE, which are FOUNDATIONS rather than
       // houses -- thickened edge, grade beam, frost wall. Movie named them
@@ -3202,6 +3196,7 @@
       // -- and a drafter who had typed a depth for the old one gets to type
       // one for the new one, which is the honest ask.
       const detachedFamilyButtons = [];
+      const detachedRoomButtons = [];
       const detachedFamilyRow = document.querySelector('#detached-family-row');
       if (detachedFamilyRow) {
         window.DraftBuildMenu.BUILD_MENU
@@ -3210,6 +3205,7 @@
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'family-button';
+            if (entry.foundation === 'thickened') button.classList.add('wide');
             button.textContent = entry.label;
             button.dataset.familyEntry = entry.id;
             button.disabled = readOnly;
@@ -3220,6 +3216,55 @@
             });
             detachedFamilyRow.appendChild(button);
             detachedFamilyButtons.push({ entry, button });
+            // ── AND THE STOREY BESIDE THE FOUNDATION THAT CAN CARRY IT ────
+            // Movie's 28 Sep mockup, drawn with the bungalow's pairing:
+            // THICKENED EDGE across the top, then GRADE BEAM and FROST WALL
+            // each with a + ROOM OVER beside it. The slab gets none, which is
+            // the rule already in force -- a thickened edge carries a garage,
+            // not a storey of house, the same reason GARAGE_FOUNDATIONS
+            // refuses an attached garage a floating slab.
+            //
+            // A SECOND CONTROL ON ONE ANSWER, which is what this column
+            // already is: the foundation buttons and the schedule's FDN TYPE
+            // dropdown are one answer with two controls, and these are the
+            // same arrangement for the press that sits in the schedule under
+            // ROOM ABOVE. Either moves both.
+            //
+            // AND IT NAMES ITS OWN FOUNDATION, so pressing + ROOM OVER beside
+            // FROST WALL on a drawing built on a beam does both things at
+            // once: it is the row the drafter pointed at, not a toggle that
+            // silently applies to whatever is current.
+            if (entry.foundation === 'thickened') return;
+            const roomButton = document.createElement('button');
+            roomButton.type = 'button';
+            roomButton.className = 'family-button';
+            roomButton.textContent = '+ ROOM OVER';
+            roomButton.dataset.familyRoomOver = entry.foundation;
+            roomButton.disabled = readOnly;
+            roomButton.addEventListener('click', () => {
+              if (readOnly) return;
+              const here = detachedFoundation() === entry.foundation;
+              // ON THIS FOUNDATION IT TOGGLES; on another it brings the
+              // foundation with it. Pressing the button under FROST WALL has
+              // to be able to say "a frost wall, with a room over it" in one
+              // press, or the column asks for two.
+              const line = here ? null : setDetachedFoundation(entry.foundation);
+              const wanted = here && detachedRoomOver() ? 'none' : 'room';
+              writeCell('detachedGarage', 'overGarage', wanted);
+              // AND SYNC AFTER THE WRITE, not before it. setDetachedFoundation
+              // ends by syncing -- it is the foundation's own press -- so the
+              // pass it runs here sees the room-over cell as it was a line
+              // ago, and the button that had just been pressed came back
+              // unlit. The second call is what this press actually changed.
+              syncFamilyRow();
+              save(line
+                ? `${line.replace(/\.$/, '')}, with a room above.`
+                : `Room above the detached garage ${
+                  wanted === 'room' ? 'added' : 'removed'}.`);
+              repaint();
+            });
+            detachedFamilyRow.appendChild(roomButton);
+            detachedRoomButtons.push({ entry, button: roomButton });
           });
       }
 
@@ -3240,6 +3285,14 @@
         detachedFamilyButtons.forEach(({ entry, button }) => {
           button.setAttribute('aria-pressed',
             chosen != null && chosen === entry.foundation ? 'true' : 'false');
+        });
+        // AND THE STOREY BESIDE IT LIGHTS ON BOTH HALVES OF ITS OWN CLAIM.
+        // "+ ROOM OVER" next to FROST WALL means A FROST WALL WITH A ROOM ON
+        // IT, so it glows only when the drawing is both -- a room standing on
+        // a grade beam must not light the frost wall's button.
+        detachedRoomButtons.forEach(({ entry, button }) => {
+          button.setAttribute('aria-pressed',
+            chosen === entry.foundation && detachedRoomOver() ? 'true' : 'false');
         });
       };
       syncFamilyRow();

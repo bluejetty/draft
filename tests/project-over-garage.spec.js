@@ -47,45 +47,78 @@ test('the first card is BUNGALOWS and its family buttons carry the menu', async 
     .toHaveText('2 STOREY + GARAGE + ROOM OVER');
 });
 
-// ── AND THE COLUMN PAIRS A HOUSE WITH ITS OWN GARAGE ──────────────────────
+// ── AND EVERY COLUMN PAIRS WHAT BELONGS SIDE BY SIDE ──────────────────────
 //
 // Movie, 28 Sep, with a mockup: "i figured out how to save us more space on
-// the left menu area (BUNGALOW SECTION)". [1 STOREY][+ GARAGE] over
-// [2 STOREY][+ GARAGE], and the room-over across the bottom -- five buttons in
-// three lines against a miniature taller than they were.
+// the left menu area (BUNGALOW SECTION)" -- then, seeing it, "we can do that
+// for BILEVEL / + GARAGE too", and a second mockup putting a + ROOM OVER
+// beside the detached garage's two deep foundations.
+//
+// WHAT TAKES A WHOLE LINE IS WHAT HAS NO PARTNER: the room-over house, the
+// modified bilevel, and the thickened edge, which cannot carry a storey at
+// all. So this is not "three columns of pairs" -- it is the shape of each
+// menu, and the widths are where that shape shows.
 //
 // GEOMETRY, NOT CLASS NAMES. Which line a button lands on is the whole ask, so
-// this reads the boxes: the two of a pair share a top and the wide one does
-// not share its line with anybody. A check on the CSS class would pass on a
-// grid that had stopped pairing.
-test('the bungalow column pairs each house with its own garage', async ({ page }) => {
+// this reads the boxes: a check on the CSS class would pass on a grid that had
+// stopped pairing.
+const columnLines = (page, id) => page.evaluate(sel => {
+  const rows = new Map();
+  for (const el of document.querySelectorAll(`#${sel} .family-button`)) {
+    const top = Math.round(el.getBoundingClientRect().top);
+    (rows.get(top) || rows.set(top, []).get(top)).push(el.textContent.trim());
+  }
+  return [...rows.entries()].sort((a, b) => a[0] - b[0]).map(([, names]) => names);
+}, id);
+
+test('each column pairs a build with the thing that is added to it', async ({ page }) => {
   await openProject(page);
-  const lines = await page.evaluate(() => {
-    const rows = new Map();
-    for (const el of document.querySelectorAll('#family-row .family-button')) {
-      const top = Math.round(el.getBoundingClientRect().top);
-      (rows.get(top) || rows.set(top, []).get(top)).push(el.textContent.trim());
-    }
-    return [...rows.entries()].sort((a, b) => a[0] - b[0]).map(([, names]) => names);
-  });
-  expect(lines).toEqual([
+
+  expect(await columnLines(page, 'family-row')).toEqual([
     ['1 STOREY', '+ GARAGE'],
     ['2 STOREY', '+ GARAGE'],
     ['2 STOREY + GARAGE + ROOM OVER'],
   ]);
+  expect(await columnLines(page, 'bilevel-family-row')).toEqual([
+    ['BILEVEL', '+ GARAGE'],
+    ['MODIFIED BILEVEL'],
+  ]);
+  // THE SLAB HAS NO PARTNER, and that is the rule rather than the mockup: a
+  // thickened edge carries a garage, not a storey of house.
+  expect(await columnLines(page, 'detached-family-row')).toEqual([
+    ['THICKENED EDGE'],
+    ['GRADE BEAM', '+ ROOM OVER'],
+    ['FROST WALL', '+ ROOM OVER'],
+  ]);
 });
 
-// AND THE OTHER TWO COLUMNS DO NOT. Movie's mockup leaves them alone, and the
-// reason is in the names: BILEVEL + GARAGE shortens to "+ GARAGE" the same way,
-// but a detached garage's three share no stem at all, so a rule that paired
-// every column would save a line and cost the reading.
-test('the bilevel and detached columns keep one button to a line', async ({ page }) => {
+// ONE ANSWER, TWO CONTROLS -- the rule this column already keeps for the
+// foundation itself, now for the storey on it. The press beside FROST WALL
+// says "a frost wall WITH a room over it", so it has to be able to say both
+// halves in one press, and it must not glow for a room standing on a beam.
+test('the room-over press names its own foundation', async ({ page }) => {
   await openProject(page);
-  for (const id of ['bilevel-family-row', 'detached-family-row']) {
-    const tops = await page.evaluate(sel => [...document.querySelectorAll(
-      `#${sel} .family-button`)].map(el => Math.round(el.getBoundingClientRect().top)), id);
-    expect(new Set(tops).size, id).toBe(tops.length);
-  }
+  const roomOn = f => page.locator(`[data-family-room-over="${f}"]`);
+  const roomRow = page.locator('[data-sched-row="roomOver"]');
+
+  await page.goto('/PROJECT.html?type=detached');
+  await expect(page.locator('#detached-canvas')).toBeVisible();
+  await expect(roomOn('frostwall')).toHaveAttribute('aria-pressed', 'false');
+
+  await roomOn('frostwall').click();
+  await page.waitForTimeout(400);
+  // Both halves in one press: the foundation moved and the storey went on.
+  await expect(page.locator('[data-family-entry="detached-frostwall"]'))
+    .toHaveAttribute('aria-pressed', 'true');
+  await expect(roomOn('frostwall')).toHaveAttribute('aria-pressed', 'true');
+  await expect(roomOn('gradebeam')).toHaveAttribute('aria-pressed', 'false');
+  // And the schedule's own press is the same answer seen twice.
+  await expect(roomRow.locator('.sched-value')).toHaveAttribute('aria-pressed', 'true');
+
+  await roomOn('frostwall').click();
+  await page.waitForTimeout(400);
+  await expect(roomOn('frostwall')).toHaveAttribute('aria-pressed', 'false');
+  await expect(roomRow.locator('.sched-value')).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('the pressed family button glows and the one before it does not', async ({ page }) => {
