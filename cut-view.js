@@ -3583,6 +3583,47 @@ if (!window.DraftCutView) {
         x0, x1, yTop: Y(hi), yBottom: Y(lo), pxPerFt,
       });
       ctx.save();
+      // ── CLIPPED TO THE SILL, NOT TO THE FLOOR ────────────────────────
+      //
+      // Movie, 28 Sep, marking the strip under his front door in orange: *"the
+      // stone should continue under the door"*, and before that *"the exterior
+      // finish doesn't go down to the SILL"* with the number to go with it --
+      // *"on typical house (this one) the band should be -1'-2 1/8\" below the
+      // 0-0 main floor level"*.
+      //
+      // THE PAINTER WAS ALREADY RIGHT AND THE CLIP THREW IT AWAY. The base
+      // below runs from `lines.sill`, which is exactly -1'-2 1/8" on his
+      // house -- joists 11 7/8", sheathing 3/4", sill plate 1 1/2", to the
+      // inch. What `ctx.clip()` took here was the CURRENT PATH, and the
+      // current path is paintFace's own polygon, whose bottom is the storey
+      // line at 0. Everything between the two was cut off. Read off the clips
+      // recorded while painting his E1:
+      //
+      //     clip  0.0021 .. 8.1021    the MAIN FL face
+      //     clip  9.1521 .. 17.2521   the 2ND FL face
+      //     base drawn from -1.177083 and from 8.102083
+      //
+      // -- 1'-2 1/8" of cladding removed on the main floor and 1'-0 5/8" on
+      // the storey above, which is the same face's floor package with no plate
+      // under it. The comment below has claimed since the finishes landed that
+      // the base "runs from the sill ... which is the whole of what puts the
+      // cladding down over the plate and closes the band of bare white a
+      // drafter could see under the stone". It did run from the sill. Two
+      // mechanisms, one claim, and the second one won silently.
+      //
+      // I MEASURED THE BOX THREE TIMES AND NEVER THE CLIP, and told him twice
+      // the paint was correct while he was looking straight at the gap.
+      //
+      // THE OUTLINE STAYS ON THE FLOOR LINE. Only this clip moves: a house
+      // face's floor is a STOREY line, the one a drafter expects at a floor
+      // level, and the wall's drawn edge belongs there. What the siding does
+      // is run over the rim band and the plate to the top of the concrete,
+      // which is what the sill is.
+      ctx.beginPath();
+      ctx.moveTo(xa, Y(lines.sill));
+      tops.forEach(s => ctx.lineTo(X(s.u), Y(s.top)));
+      ctx.lineTo(xb, Y(lines.sill));
+      ctx.closePath();
       ctx.clip();
       // THE BASE RUNS FROM THE SILL, not from the wall's foot -- which is the
       // whole of what puts the cladding down over the plate and closes the
