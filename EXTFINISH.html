@@ -259,6 +259,9 @@
             <input type="color" id="base-color" value="#ffffff">
             <p class="empty">Stored for the 3D window, drawn by nothing yet.</p>
           </div>
+          <p class="empty" id="fdn-note" hidden>The exposed concrete wears one
+            finish, grade to the top of the pour. Bands are not drawn on it.</p>
+          <div id="band-area">
           <p class="rail-title" style="margin-top:12px">Bands</p>
           <div class="band-list" id="band-list"></div>
           <!-- ── ADJUSTING A BAND THAT IS ALREADY LAID ────────────────────
@@ -361,6 +364,7 @@
             </div>
           </div>
           <button class="btn" id="band-add" style="margin-top:6px; width:100%">Add band</button>
+          </div>
         </div>
         <!-- ── THE ROOF AREA ──────────────────────────────────
              Movie, 27 Sep: "we should make a special ROOF area with the roof
@@ -693,6 +697,23 @@
         document.getElementById('wall-props').hidden = !wall;
         document.getElementById('pick-note').hidden = !!wall;
         if (!wall) return;
+        // ── CONCRETE TAKES ONE FINISH, NOT BANDS -- YET ─────────────────
+        //
+        // The painter clads the exposed pour from grade to the top of it, in
+        // the wall's `finish`, and reads no bands there. So the BANDS block
+        // is taken off a foundation rather than left standing: a control that
+        // stores a value the drawing never shows is worse than no control,
+        // and this file has the scar to prove it -- see the note by the
+        // corner-wrap tick, where `wrapFt` was stored for days under a
+        // comment vouching that the painter read it.
+        //
+        // WHAT IT NEEDS NEXT is Movie's *"if i want to DROP the main floor
+        // finish i can add a bit to the TOP of the FOUNDATION finish"* -- one
+        // height above the pour, not a band list. That is the control to
+        // build here, and it is not built.
+        const onFoundation = (wall.view || 'plan') === 'foundation';
+        document.getElementById('band-area').hidden = onFoundation;
+        document.getElementById('fdn-note').hidden = !onFoundation;
         document.getElementById('base-finish').value = wall.finish || WT.DEFAULT_FINISH_ID;
         document.getElementById('base-color').value = wall.finishColor || '#ffffff';
         const bands = Array.isArray(wall.finishBands) ? wall.finishBands : [];
@@ -976,23 +997,61 @@
         if (picked) paintPickMark(ctx);
       };
 
+      // ── WHAT CAN BE CLICKED, WALLS AND CONCRETE ALIKE ─────────────────
+      //
+      // Movie, 28 Sep: *"we also need the FOUNDATION to be clickable -
+      // sometimes someone may want finish added to the side of foundation
+      // too"*, and *"sometimes it will be needed on the side of a house that
+      // has a walkout for instance"*.
+      //
+      // ONE SHAPE FOR BOTH, which is what keeps the pick, the marker and the
+      // readout from each growing a branch. A wall face carries `u1/u2` and a
+      // level; a foundation face carries `lo/hi` and heights off the pour.
+      // Reduced to ends, a foot and a head, they are the same thing to
+      // everything downstream -- and the wall RECORD is common to both
+      // already, which is what the rail reads.
+      //
+      // THE CONCRETE'S FOOT IS GRADE, NOT ITS BASE. What is buried is not on
+      // the sheet, so it is not clickable either: a click lands on what the
+      // drafter can see, which is the same rule the painter draws by.
+      const pickables = stack => {
+        const out = [];
+        const { faces, fdnFaces } = CV.elevationFaces(env, frame.cut, stack, frame.axis);
+        faces.forEach(face => out.push({
+          wall: face.wall, depth: face.depth,
+          lo: Math.min(face.u1, face.u2), hi: Math.max(face.u1, face.u2),
+          foot: wallFootFt(face, stack), head: wallHeadFt(face),
+        }));
+        const fdn = stack.foundation;
+        if (fdn) {
+          fdnFaces.forEach(face => {
+            if (!face.wall) return;
+            const head = fdn.wallBottom + face.top;
+            const foot = Math.max(fdn.wallBottom + face.base, fdn.grade);
+            if (head - foot < 0.02 || face.hi - face.lo < 0.5) return;
+            out.push({ wall: face.wall, depth: face.depth,
+              lo: face.lo, hi: face.hi, foot, head });
+          });
+        }
+        return out.sort((a, b) => a.depth - b.depth);
+      };
+
       const faceAt = (px, py) => {
         if (!frame || !env) return null;
         const u = frame.uMin + (px - frame.x0) / frame.pxPerFt;
         const e = frame.yTop - (py - frame.y0) / frame.pxPerFt;
         const stack = CV.sectionLevelStack(env);
         if (!stack) return null;
-        const { faces } = CV.elevationFaces(env, frame.cut, stack, frame.axis);
+        const list = pickables(stack);
         // NEAREST FIRST, which is the painter's order reversed. An elevation
         // is occlusion by paint ORDER -- each face covers what stands behind
         // it -- so the LAST one painted at a spot is the one a drafter sees,
         // and the one a click means.
-        for (let i = faces.length - 1; i >= 0; i -= 1) {
-          const face = faces[i];
-          const lo = Math.min(face.u1, face.u2), hi = Math.max(face.u1, face.u2);
-          if (u < lo || u > hi) continue;
-          if (e < wallFootFt(face, stack) || e > wallHeadFt(face)) continue;
-          return face;
+        for (let i = list.length - 1; i >= 0; i -= 1) {
+          const g = list[i];
+          if (u < g.lo || u > g.hi) continue;
+          if (e < g.foot || e > g.head) continue;
+          return g;
         }
         return null;
       };
@@ -1000,19 +1059,16 @@
       const paintPickMark = ctx => {
         const stack = CV.sectionLevelStack(env);
         if (!stack || !frame) return;
-        const { faces } = CV.elevationFaces(env, frame.cut, stack, frame.axis);
-        const face = faces.find(f => String(f.wall.id) === picked);
-        if (!face) return;
+        const g = pickables(stack).find(f => String(f.wall.id) === picked);
+        if (!g) return;
         const X = u => frame.x0 + (u - frame.uMin) * frame.pxPerFt;
         const Y = el => frame.y0 + (frame.yTop - el) * frame.pxPerFt;
-        const lo = Math.min(face.u1, face.u2), hi = Math.max(face.u1, face.u2);
         ctx.save();
         ctx.strokeStyle = window.__reSkin['accent-mark'];
         ctx.lineWidth = 2;
         ctx.setLineDash([6, 4]);
-        ctx.strokeRect(X(lo), Y(wallHeadFt(face)),
-          (hi - lo) * frame.pxPerFt,
-          (wallHeadFt(face) - wallFootFt(face, stack)) * frame.pxPerFt);
+        ctx.strokeRect(X(g.lo), Y(g.head),
+          (g.hi - g.lo) * frame.pxPerFt, (g.head - g.foot) * frame.pxPerFt);
         ctx.restore();
       };
 
@@ -1024,10 +1080,17 @@
         picked = face ? String(face.wall.id) : null;
         paintElevation();
         paintProps();
+        // THE CONCRETE SAYS WHAT IT IS. A foundation wall's type label is
+        // the pour's, not a stud wall's, and a drafter who has just clicked
+        // below grade should be told he is on the foundation rather than
+        // left to infer it from a name he half recognises.
+        const onFdn = face && (face.wall.view || 'plan') === 'foundation';
         say(face
-          ? `${WT.WALL_TYPES.find(t => t.id === face.wall.wallType)?.label || 'Wall'}`
-            + `, ${(Math.abs(face.u2 - face.u1)).toFixed(1)} ft on ${currentElev}`
-          : 'Nothing there — click a wall face.');
+          ? `${onFdn ? 'Foundation' : ''}`
+            + `${WT.WALL_TYPES.find(t => t.id === face.wall.wallType)?.label || 'Wall'}`
+              .replace(/^/, onFdn ? ' ' : '')
+            + `, ${(face.hi - face.lo).toFixed(1)} ft on ${currentElev}`
+          : 'Nothing there — click a wall face or the exposed concrete.');
       });
 
       // ── BOOT ──────────────────────────────────────────────────────────
