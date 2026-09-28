@@ -262,6 +262,18 @@ test('the storey above carries the bungalow\'s four rows and its own head',
     await page.selectOption('[data-detached-value="overWallType"]', 'stud_2x4');
     await page.waitForTimeout(300);
     expect(await shoot(page), 'the wall type').not.toBe(before);
+
+    // AND THE WHOLE BLOCK GOES BACK ON A FLOATING SLAB. Movie, 28 Sep:
+    // "those 2nd floor ones NOT for THickened egde, only for the other 2".
+    // The press already refused it; these four rows and their head are new
+    // and have to refuse it too, or the schedule keeps asking about a storey
+    // the drawing no longer has.
+    await press(page, 'THICKENED EDGE').click();
+    await page.waitForTimeout(300);
+    await expect(head).toBeHidden();
+    for (const key of keys) {
+      await expect(page.locator(`[data-sched-row="${key}"]`)).toBeHidden();
+    }
   });
 
 // A TYPED CELL IS A STORED CELL. The rows were read-only spans until today;
