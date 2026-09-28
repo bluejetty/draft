@@ -94,6 +94,35 @@
        body's propagates to the root canvas and paints the full viewport
        whatever body's height is. */
     body { margin:0; background:var(--surface-page); color:var(--ink-primary); font-family:'Barlow',system-ui,sans-serif; }
+    /* ── THE OPEN DROPDOWN IS THE BROWSER'S, AND IT WAS WHITE ────────────
+       Movie, 28 Sep, with the FDN TYPE list open on NIGHT: "the menu should
+       be darker grey or the text should be darker (if background in this
+       selection menu remains white)". The CLOSED control was skinned and
+       looked right; the LIST that drops out of it is a platform widget, and
+       nothing had ever given it a colour. So it came up OS-white with the
+       page's own pale --ink-primary written on it, and the two options the
+       drafter had not chosen were nearly invisible -- the one that WAS chosen
+       read fine, because the browser fills that row itself.
+
+       ONE PROPERTY, AND ONLY ONE, which took three tries to believe. The
+       BACKGROUND is ours: naming --surface-chip makes the list the colour of
+       the box it drops out of, in both skins, and the text already inherits
+       --ink-primary from the control, which is what that surface is paired
+       with everywhere else on the page.
+
+       THE TEXT COLOUR STAYS THE BROWSER'S ON THE CHOSEN ROW, and writing one
+       is the trap. `option:checked` does not reach the popup here -- neither
+       the fill nor the text -- so a colour named on `option` lands on the
+       chosen row too, over the browser's own selection fill, and unreads the
+       one line that had always been legible. Leaving it alone costs nothing:
+       the browser paints that row's fill and its text together and the pair
+       agrees by construction.
+
+       NO color-scheme EITHER, and that was measured rather than assumed.
+       Adding it turned the selection fill from solid blue to a pale blue
+       meant to carry dark text -- with our pale ink still on it. The list
+       needs a colour, not a mode. */
+    select option { background-color:var(--surface-chip); }
     /* 1180 -> 1400 BECAUSE THE STAGE IS NOW 80% OF IT. The band inside a
        section is a fixed 600px drawing with a schedule column either side and
        a 1090px max-width; at 80% of 1180 the stage offered 940 and the
