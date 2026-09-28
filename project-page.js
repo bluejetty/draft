@@ -657,6 +657,108 @@ if (!window.DraftProjectPage) {
     line(x, topFt, x + wallFt, topFt, 1.5);
   };
 
+  // ─── THE TRUSS AT THE EAVE ────────────────────────────────────────────────
+  // ONE DRAWING IN THREE SECTIONS RATHER THAN THREE THAT AGREE. The heel joint
+  // below is a SETTLED RULING (Movie, 17 Sep 2026: "BEAUTIFUL you finally got
+  // it !! lock that in !!"), and it was settled in buildWallSection alone --
+  // the detached garage drew two lines for a top chord and no side or bottom
+  // chord at all, which Movie caught on 28 Sep: "the roof truss doesn't show
+  // properly... check how the BUNGALOW roof truss is drawn showing all the
+  // 3.5" top/side/bottom roof chords".
+  //
+  // So the members moved HERE and every section calls it. A second copy of a
+  // settled joint is a joint that is settled until somebody edits one of them.
+  //
+  // WHAT IT DRAWS, top to bottom:
+  //   fascia board and soffit, when the eave is in this view
+  //   the TOP chord, two faces, the offset PERPENDICULAR to the slope -- a
+  //     chord is 3 1/2" thick measured across itself, not vertically, so the
+  //     vertical drop between the lines grows with the pitch. At 4:12 that is
+  //     3.55" of vertical for 3 1/2" of chord; a flat 3 1/2" would draw a
+  //     chord that gets thinner as the roof gets steeper.
+  //   the SIDE chord at the wall exterior, outside face on the wall face and
+  //     inside face 3 1/2" in, connecting the bottom chord to the top chord.
+  //     The top chord's underside stays OPEN across those 3 1/2" so the side
+  //     chord runs straight into it -- no line across the joint.
+  //   the BOTTOM chord, whose UNDERSIDE is the ceiling plane, because that is
+  //     the face the finish attaches to -- so the member sits above the
+  //     ceiling, not straddling it.
+  // Chords only: the truss's internal webs are the truss designer's part and
+  // are deliberately never drawn.
+  //
+  // `ceiling: false` is for a section that draws its own bottom chord because
+  // the ceiling STEPS -- on a split the balcony's is a storey higher than the
+  // main area's. The rest of the truss is unchanged there; only the ceiling
+  // breaks, because the roof does not.
+  const roofTruss = ({ roofBase, cut, roof, eaves = true, ceiling = true }) => {
+    const parts = [];
+    const anchors = {};
+    const line = (x1, y1, x2, y2, weight = 1.5) => parts.push({ kind: 'line', x1, y1, x2, y2, weight });
+    const rect = (x, y, w, h, weight = 1.5) => parts.push({ kind: 'rect', x, y, w, h, weight });
+    const fasciaFt = roof.fasciaIn / 12;
+    // A RAISED HEEL LIFTS THE ROOF; IT DOES NOT FATTEN THE FASCIA. By default
+    // the fascia's bottom is level with the top of the top plate (Movie,
+    // 5 Sep) and the heel comes out at fascia + rise. Type a bigger heel and
+    // the whole roof -- chords, fascia, soffit -- rises by the difference,
+    // which is what a raised-heel truss actually does: the soffit line goes
+    // up and the extra room over the plate is what the insulation goes in.
+    // A RIGID LIFT. Movie, 5 Sep: "when heel is raised or lowered the fascia
+    // will raise or lower and peak at the same up down rate" -- one
+    // translation applied to the whole roof, so nothing about its shape
+    // changes. The ceiling does not come with it: it is set by the wall
+    // height, so the attic gains exactly the lift.
+    // The fascia stays a 2x6, because it is a board.
+    const heelLiftFt = roof.heelIn == null ? 0
+      : (roof.heelIn - roofHeelIn(roof.fasciaIn, roof.overhangFt, roof.pitch)) / 12;
+    const eaveY = roofBase + heelLiftFt;
+    // WHAT THE LIFT COSTS, DRAWN. Movie, 5 Sep: "the fascia will lift up and
+    // down they will need extra or less sheathing on the wall". The exterior
+    // face stops at the top plate, so a raised heel opened a gap between the
+    // plate and the soffit with nothing in it -- the section showed the roof
+    // higher and said nothing about the wall that now has to reach it. Same
+    // weight as the face below it, because it is the same face.
+    if (heelLiftFt > 0) line(0, roofBase, 0, eaveY, 2);
+    const riseAt = x => heelLiftFt + fasciaFt + (roof.overhangFt + x) * (roof.pitch / 12);
+    // NOTHING TO SEE OUTSIDE. Movie, 16 Sep: "we probably won't see any eaves
+    // on this one" -- the split is cut at the wall the garage shares, so the
+    // overhang is not in this view. The roof keeps its slope and height; the
+    // section simply starts at the wall face.
+    const roofStartX = eaves ? -roof.overhangFt : 0;
+    if (eaves) {
+      rect(-roof.overhangFt - 0.1, eaveY, 0.1, fasciaFt, 1.5);  // fascia board
+      line(-roof.overhangFt, eaveY, 0, eaveY, 1);               // soffit
+      anchors.overhang = { x: -roof.overhangFt / 2, y: eaveY - 0.55 };
+      anchors.fascia = { x: -roof.overhangFt - 0.55, y: eaveY + fasciaFt / 2 };
+    }
+    const chordFt = ROOF_CHORD_IN / 12;
+    const chordDropFt = chordFt * Math.hypot(1, roof.pitch / 12);
+    const heelWebX = ROOF_CHORD_IN / 12;
+    line(roofStartX, roofBase + riseAt(roofStartX), cut, roofBase + riseAt(cut), 2);
+    line(roofStartX, roofBase + riseAt(roofStartX) - chordDropFt,
+      0, roofBase + riseAt(0) - chordDropFt, 1);
+    line(heelWebX, roofBase + riseAt(heelWebX) - chordDropFt,
+      cut, roofBase + riseAt(cut) - chordDropFt, 1);
+    line(0, roofBase, 0, roofBase + riseAt(0) - chordDropFt, 1);
+    line(heelWebX, roofBase + ROOF_CHORD_IN / 12,
+      heelWebX, roofBase + riseAt(heelWebX) - chordDropFt, 1);
+    anchors.pitch = { x: cut * 0.45, y: roofBase + riseAt(cut * 0.45) + 0.55 };
+    // Movie, 4 Sep: the heel reads UNDER the overhang and OVER the 2nd floor
+    // wall. Since a label now keeps only its height, the heel sitting at its
+    // own mid-height put it above the fascia and overhang -- above the things
+    // it is measured from. Dropped below the plate, it falls into the order
+    // the eye works down: pitch, fascia, overhang, heel, then the wall.
+    // Labels keep only their height, so their order down the page IS the
+    // reading order -- and it has to match the schedule beside it. Movie
+    // wants PITCH / HEEL / FASCIA / OVERHANG, so the heel sits between the
+    // pitch above it and the fascia below.
+    anchors.heel = { x: 0.45, y: eaveY + fasciaFt / 2 + 0.8 };
+    if (ceiling) {
+      line(0, roofBase, cut, roofBase, 1);
+      line(heelWebX, roofBase + chordFt, cut, roofBase + chordFt, 1);
+    }
+    return { parts, anchors, riseAt, chordFt, chordDropFt, heelWebX, eaveY, fasciaFt, heelLiftFt };
+  };
+
   const buildWallSection = values => {
     const floors = values.floors; // bottom-up: [{id, name, wallHeightFt, joistDepthIn, sheathingIn}]
     const fdn = values.foundation; // {wallHeightFt, thicknessIn, slabIn, footingWidthIn, footingDepthIn}
@@ -767,84 +869,24 @@ if (!window.DraftProjectPage) {
     });
     const plateY = plateTop;
 
-    // Roof: fascia bottom rides level with the top plate at the overhang's
-    // end; the surface climbs inward at pitch:12, so the heel at the wall
-    // face is fascia depth plus the rise gained across the overhang — the
-    // same rule the roof tool documents.
-    const fasciaFt = roof.fasciaIn / 12;
-    // A RAISED HEEL LIFTS THE ROOF; IT DOES NOT FATTEN THE FASCIA. By default
-    // the fascia's bottom is level with the top of the top plate (Movie,
-    // 5 Sep) and the heel comes out at fascia + rise. Type a bigger heel and
-    // the whole roof -- chords, fascia, soffit -- rises by the difference,
-    // which is what a raised-heel truss actually does: the soffit line goes
-    // up and the extra room over the plate is what the insulation goes in.
-    // A RIGID LIFT. Movie, 5 Sep: "when heel is raised or lowered the fascia
-    // will raise or lower and peak at the same up down rate" -- one
-    // translation applied to the whole roof, so nothing about its shape
-    // changes. The ceiling does not come with it: it is set by the wall
-    // height, so the attic gains exactly the lift.
-    // The fascia stays a 2x6, because it is a board.
-    const heelLiftFt = roof.heelIn == null ? 0
-      : (roof.heelIn - roofHeelIn(roof.fasciaIn, roof.overhangFt, roof.pitch)) / 12;
-    const eaveY = plateY + heelLiftFt;
-    // WHAT THE LIFT COSTS, DRAWN. Movie, 5 Sep: "the fascia will lift up and
-    // down they will need extra or less sheathing on the wall". The exterior
-    // face stops at the top plate, so a raised heel opened a gap between the
-    // plate and the soffit with nothing in it -- the section showed the roof
-    // higher and said nothing about the wall that now has to reach it. Same
-    // weight as the face below it, because it is the same face.
-    if (heelLiftFt > 0) line(0, plateY, 0, eaveY, 2);
-    const riseAt = x => heelLiftFt + fasciaFt + (roof.overhangFt + x) * (roof.pitch / 12);
-    // NOTHING TO SEE OUTSIDE. Movie, 16 Sep: "we probably won't see any eaves
-    // on this one" -- the split is cut at the wall the garage shares, so the
-    // overhang is not in this view. The roof keeps its slope and height; the
-    // section simply starts at the wall face.
-    const eaves = values.eaves !== false;
-    const roofStartX = eaves ? -roof.overhangFt : 0;
-    if (eaves) {
-      rect(-roof.overhangFt - 0.1, eaveY, 0.1, fasciaFt, 1.5);  // fascia board
-      line(-roof.overhangFt, eaveY, 0, eaveY, 1);               // soffit
-      anchors.overhang = { x: -roof.overhangFt / 2, y: eaveY - 0.55 };
-      anchors.fascia = { x: -roof.overhangFt - 0.55, y: eaveY + fasciaFt / 2 };
-    }
-    // TWO LINES, NOT ONE. The offset is PERPENDICULAR to the slope -- a chord
-    // is 3 1/2" thick measured across itself, not measured vertically -- so
-    // the vertical drop between the two lines grows with the pitch. At 4:12
-    // that is 3.55" of vertical for 3 1/2" of chord; at 12:12 it would be
-    // 4.95". Dropping both lines by a flat 3 1/2" would draw a chord that
-    // gets thinner as the roof gets steeper.
-    const chordDropFt = (ROOF_CHORD_IN / 12)
-      * Math.hypot(1, roof.pitch / 12);
-    line(roofStartX, plateY + riseAt(roofStartX), cut, plateY + riseAt(cut), 2);
-    // THE HEEL SIDE CHORD -- SETTLED RULING (Movie, 17 Sep 2026: "BEAUTIFUL
-    // you finally got it !! lock that in !!"). Do not redraw this joint.
-    // A 3 1/2" chord PIECE stands at the wall exterior connecting the bottom
-    // chord to the top chord -- outside face on the wall face, inside face
-    // 3 1/2" in, and the bottom chord's upper line stops against it. The top
-    // chord's underside stays OPEN across those 3 1/2" so the side chord
-    // connects straight into the top chord -- no line across the joint. It
-    // is a truss member, so it draws at chord weight, not wall weight.
-    // Chords only: the truss's internal webs are the truss designer's part
-    // and are deliberately never drawn.
-    const heelWebX = ROOF_CHORD_IN / 12;
-    line(roofStartX, plateY + riseAt(roofStartX) - chordDropFt,
-      0, plateY + riseAt(0) - chordDropFt, 1);
-    line(heelWebX, plateY + riseAt(heelWebX) - chordDropFt,
-      cut, plateY + riseAt(cut) - chordDropFt, 1);
-    line(0, plateY, 0, plateY + riseAt(0) - chordDropFt, 1);
-    line(heelWebX, plateY + ROOF_CHORD_IN / 12,
-      heelWebX, plateY + riseAt(heelWebX) - chordDropFt, 1);
-    anchors.pitch = { x: cut * 0.45, y: plateY + riseAt(cut * 0.45) + 0.55 };
-    // Movie, 4 Sep: the heel reads UNDER the overhang and OVER the 2nd floor
-    // wall. Since a label now keeps only its height, the heel sitting at its
-    // own mid-height put it above the fascia and overhang -- above the things
-    // it is measured from. Dropped below the plate, it falls into the order
-    // the eye works down: pitch, fascia, overhang, heel, then the wall.
-    // Labels keep only their height, so their order down the page IS the
-    // reading order -- and it has to match the schedule beside it. Movie
-    // wants PITCH / HEEL / FASCIA / OVERHANG, so the heel sits between the
-    // pitch above it and the fascia below.
-    anchors.heel = { x: 0.45, y: eaveY + fasciaFt / 2 + 0.8 };
+    // THE ROOF, AND THE TRUSS AT ITS EAVE. Both are roofTruss's, which is
+    // where the heel joint's settled ruling now lives so the detached
+    // garage's section draws the same members rather than its own two lines.
+    // THE CEILING STEPS HERE AND ONLY HERE, so the bottom chord is asked for
+    // separately below: on a split the balcony's ceiling is a storey higher
+    // than the main area's and the wall between them is the drop.
+    const stepLevel = floors.find(level =>
+      level.extentFt != null && level.extentFt < cut);
+    const lowerPlate = stepLevel == null ? null
+      : Math.max(...floors.filter(level => level !== stepLevel)
+        .map(level => deckY.get(level.id) + level.wallHeightFt));
+    const stepped = Boolean(stepLevel && lowerPlate != null && lowerPlate < plateY);
+    const truss = roofTruss({
+      roofBase: plateY, cut, roof, eaves: values.eaves !== false, ceiling: !stepped,
+    });
+    parts.push(...truss.parts);
+    Object.assign(anchors, truss.anchors);
+    const { riseAt, chordFt, chordDropFt, heelWebX, eaveY, fasciaFt } = truss;
 
     // The ceiling, and the truss over it. Movie, 4 Sep: first "you can add a
     // roof area, just some separation line that says attic space maybe", then
@@ -862,13 +904,7 @@ if (!window.DraftProjectPage) {
     // asked for it dimensioned. Both ceilings carry their bottom chord; the
     // attic runs over the pair, which is why only the ceiling breaks and the
     // roof stays one plane.
-    const chordFt = ROOF_CHORD_IN / 12;
-    const stepLevel = floors.find(level =>
-      level.extentFt != null && level.extentFt < cut);
-    const lowerPlate = stepLevel == null ? null
-      : Math.max(...floors.filter(level => level !== stepLevel)
-        .map(level => deckY.get(level.id) + level.wallHeightFt));
-    if (stepLevel && lowerPlate != null && lowerPlate < plateY) {
+    if (stepped) {
       const ext = stepLevel.extentFt;
       line(0, plateY, ext, plateY, 1);
       line(heelWebX, plateY + chordFt, ext, plateY + chordFt, 1);
@@ -876,9 +912,6 @@ if (!window.DraftProjectPage) {
       line(ext, lowerPlate, cut, lowerPlate, 1);
       line(ext, lowerPlate + chordFt, cut, lowerPlate + chordFt, 1);
       anchors.ceilingDrop = { x: ext + 0.6, y: (lowerPlate + plateY) / 2 };
-    } else {
-      line(0, plateY, cut, plateY, 1);
-      line(heelWebX, plateY + chordFt, cut, plateY + chordFt, 1);
     }
     // BETWEEN THE PITCH AND THE HEEL, by construction. Movie, 4 Sep: "put
     // attic space under pitch over heel". Placed as the midpoint of the two
@@ -898,7 +931,7 @@ if (!window.DraftProjectPage) {
     //
     // It sits over the LOWER ceiling, which is the taller half of the cavity
     // and the half a reader is least sure about.
-    if (stepLevel && lowerPlate != null && lowerPlate < plateY) {
+    if (stepped) {
       const lowerMidX = (stepLevel.extentFt + cut) / 2;
       anchors.attic = {
         x: lowerMidX,
@@ -1496,25 +1529,22 @@ if (!window.DraftProjectPage) {
       roofBase = deck + overWallFt;
     }
 
-    // THE ROOF, by the same rules as the house: the heel is fascia plus the
-    // rise gained across the overhang, and a typed heel lifts the whole roof
-    // rigidly rather than fattening the fascia.
-    const fasciaFt = roof.fasciaIn / 12;
-    const heelLiftFt = roof.heelIn == null ? 0
-      : (roof.heelIn - roofHeelIn(roof.fasciaIn, roof.overhangFt, roof.pitch)) / 12;
-    const eaveY = roofBase + heelLiftFt;
-    if (heelLiftFt > 0) line(0, roofBase, 0, eaveY, 2);
-    const riseAt = x => heelLiftFt + fasciaFt + (roof.overhangFt + x) * (roof.pitch / 12);
-    rect(-roof.overhangFt - 0.1, eaveY, 0.1, fasciaFt, 1.5);
-    line(-roof.overhangFt, eaveY, 0, eaveY, 1);
-    const chordDropFt = (ROOF_CHORD_IN / 12) * Math.hypot(1, roof.pitch / 12);
-    line(-roof.overhangFt, eaveY + fasciaFt, CUT_DEPTH_FT, roofBase + riseAt(CUT_DEPTH_FT), 2);
-    line(-roof.overhangFt, eaveY + fasciaFt - chordDropFt,
-      CUT_DEPTH_FT, roofBase + riseAt(CUT_DEPTH_FT) - chordDropFt, 1);
-    anchors.overhang = { x: -roof.overhangFt / 2, y: eaveY - 0.55 };
-    anchors.fascia = { x: -roof.overhangFt - 0.55, y: eaveY + fasciaFt / 2 };
+    // THE ROOF, AND IT IS THE HOUSE'S TRUSS. This builder drew a top chord's
+    // two faces and nothing else -- no side chord at the heel, no bottom
+    // chord, and a top face that started at the fascia's TOP rather than
+    // running the eave through. Movie, 28 Sep: "the roof truss doesn't show
+    // properly. can you check how the BUNGALOW roof truss is drawn showing
+    // all the 3.5" top/side/bottom roof chords". It is the same truss on the
+    // same kind of eave, so it is now the same code -- see roofTruss.
+    //
+    // roofBase, NOT the garage plate: with a storey over the garage the truss
+    // sits on the ROOM's plate, and keying it to the garage's is exactly how
+    // band 1's ROOM OVER roofs went wrong.
+    const truss = roofTruss({ roofBase, cut: CUT_DEPTH_FT, roof });
+    parts.push(...truss.parts);
+    Object.assign(anchors, truss.anchors);
 
-    const topY = roofBase + riseAt(CUT_DEPTH_FT);
+    const topY = roofBase + truss.riseAt(CUT_DEPTH_FT);
     parts.push({ kind: 'break', x: CUT_DEPTH_FT, y1: lowestY - 0.3, y2: topY + 0.3 });
 
     return {

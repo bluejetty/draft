@@ -586,6 +586,52 @@ check('a storey over the detached garage lifts its roof by the whole storey', P 
   return [Math.abs(lift - storey) < 1e-6, true];
 });
 
+// ── THE TRUSS IS THE HOUSE'S ─────────────────────────────────────────────
+// Movie, 28 Sep: "the roof truss doesn't show properly. can you check how the
+// BUNGALOW roof truss is drawn showing all the 3.5" top/side/bottom roof
+// chords". It drew a top chord's two faces and nothing else. Asserted as the
+// MEMBERS rather than as a line count, because a count passes on two lines
+// that happen to be somewhere.
+check('the detached truss has a side chord at the wall face, not a bare corner', P => {
+  const base = P.GARAGE_WALL_FT;
+  const web = P.ROOF_CHORD_IN / 12;
+  const verticals = detached(P).parts.filter(part => part.kind === 'line'
+    && near(part.x1, part.x2) && part.y2 > part.y1 && part.y1 >= base - 1e-9);
+  const outer = verticals.some(part => near(part.x1, 0));
+  const inner = verticals.some(part => near(part.x1, web) && near(part.y1, base + web));
+  return [[outer, inner].join(), 'true,true'];
+});
+// THE BOTTOM CHORD, whose underside is the ceiling plane -- the face the
+// finish attaches to -- so the member sits ABOVE it rather than straddling
+// it, and the top line starts at the side chord's inside face.
+check('the detached truss has a bottom chord over its ceiling', P => {
+  const base = P.GARAGE_WALL_FT;
+  const chord = P.ROOF_CHORD_IN / 12;
+  const flat = detached(P).parts.filter(part => part.kind === 'line'
+    && near(part.y1, part.y2) && near(part.x2, CUT));
+  const ceiling = flat.some(part => near(part.y1, base) && near(part.x1, 0));
+  const top = flat.some(part => near(part.y1, base + chord) && near(part.x1, chord));
+  return [[ceiling, top].join(), 'true,true'];
+});
+// ONE TRUSS, NOT TWO THAT AGREE. The joint is a settled ruling (17 Sep), and
+// the way it stays settled is that both sections ask the same code for it.
+// Compared as the shape each draws above its own plate, so the two can stand
+// at different heights and still have to be the same truss.
+check('the house and the detached garage draw the SAME truss', P => {
+  // Both fixtures carry the same roof (4:12, 2'-0", a 5 1/2" fascia, no
+  // typed heel), so with each measured off ITS OWN plate the two sets of
+  // members are equal or one of them is not this truss. That equality is the
+  // whole point of the extraction: a second copy is settled until somebody
+  // edits one of them.
+  const shape = (out, base) => out.parts
+    .filter(part => part.kind === 'line' && Math.min(part.y1, part.y2) >= base - 1e-9)
+    .map(part => [part.x1, part.y1 - base, part.x2, part.y2 - base, part.weight]
+      .map(n => Math.round(n * 1e6) / 1e6).join(','))
+    .sort().join(' | ');
+  const housePlate = (97.125 / 12) * 2 + (9.25 + 0.75) / 12;
+  return [shape(detached(P), P.GARAGE_WALL_FT), shape(section(P), housePlate)];
+});
+
 // The door head, composed rather than pinned -- it follows the wall and the
 // head drop, so it stays right when either moves.
 check('the overhead door head hangs OPENING_HEAD_DROP_IN under the top plate', P => {
@@ -868,23 +914,37 @@ const MUTATIONS = [
   // as a failure here.
   ['the mod bilevel loses its default (falls back to the house)',
     s => s.replace('    modifiedBilevel: SPLIT_BASE,\n', '')],
+  // ── THE TRUSS MUTANTS NOW READ roofTruss ─────────────────────────────
+  // The heel joint moved out of buildWallSection on 28 Sep so the detached
+  // garage could draw the same members instead of its own two lines, and
+  // these three quote it by text. Same mutations, same checks catching them:
+  // only the name of the base the truss stands on changed, plateY to
+  // roofBase, because the helper is now also called with a room's plate.
+  //
   // The 17 Sep heel piece drawn the way Movie refused it ("no its not a
   // line"): the inside face goes, leaving one vertical where the member was.
   ['the heel piece thins back to a single line at the wall face',
-    s => s.replace('line(heelWebX, plateY + ROOF_CHORD_IN / 12,\n      heelWebX, plateY + riseAt(heelWebX) - chordDropFt, 1);', '')],
+    s => s.replace('line(heelWebX, roofBase + ROOF_CHORD_IN / 12,\n      heelWebX, roofBase + riseAt(heelWebX) - chordDropFt, 1);', '')],
   // The joint sealed shut: one underside line across the heel's 3 1/2"
   // instead of the two pieces that leave it open into the top chord.
   ['the top chord underside closes across the heel joint',
-    s => s.replace('line(roofStartX, plateY + riseAt(roofStartX) - chordDropFt,\n      0, plateY + riseAt(0) - chordDropFt, 1);\n    line(heelWebX, plateY + riseAt(heelWebX) - chordDropFt,\n      cut, plateY + riseAt(cut) - chordDropFt, 1);',
-      'line(roofStartX, plateY + riseAt(roofStartX) - chordDropFt,\n      cut, plateY + riseAt(cut) - chordDropFt, 1);')],
+    s => s.replace('line(roofStartX, roofBase + riseAt(roofStartX) - chordDropFt,\n      0, roofBase + riseAt(0) - chordDropFt, 1);\n    line(heelWebX, roofBase + riseAt(heelWebX) - chordDropFt,\n      cut, roofBase + riseAt(cut) - chordDropFt, 1);',
+      'line(roofStartX, roofBase + riseAt(roofStartX) - chordDropFt,\n      cut, roofBase + riseAt(cut) - chordDropFt, 1);')],
   ['a raised heel is ignored and the roof stays on the plate',
     s => s.split('const heelLiftFt = roof.heelIn == null ? 0')
       .join('const heelLiftFt = true ? 0')],
   // The plausible misreading of "raise the heel": deepen the board instead of
   // lifting the roof. It puts the top chord in the right place and leaves the
   // soffit sitting on the plate, so only a check that watches the EAVE sees it.
+  // THE TWO MEMBERS THE DETACHED SECTION WAS MISSING until the truss became
+  // shared, so the gate can tell the difference between having them and
+  // having had them once.
+  ['the truss loses its bottom chord, and the ceiling is a bare line again',
+    s => s.replace('    if (ceiling) {', '    if (false) {')],
+  ['the side chord loses its outside face at the wall',
+    s => s.replace('    line(0, roofBase, 0, roofBase + riseAt(0) - chordDropFt, 1);\n', '')],
   ['a raised heel fattens the fascia instead of lifting the roof',
-    s => s.split('const eaveY = plateY + heelLiftFt;').join('const eaveY = plateY;')],
+    s => s.split('const eaveY = roofBase + heelLiftFt;').join('const eaveY = roofBase;')],
   ['the ceiling drops back to something a big overhang can derive past',
     s => s.replace('const ROOF_HEEL_MAX_IN = 20 * 12;', 'const ROOF_HEEL_MAX_IN = 48;')],
   ['the floor is "corrected" to the real-world 3 1/2" minimum',
