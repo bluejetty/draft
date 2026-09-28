@@ -6,7 +6,15 @@
 //   ED36    exterior / man doors  — inches, width only
 //   D32     interior swing doors  — inches, width only
 //   DD72    double doors          — inches, width only
-//   W 24x36 windows               — INCHES, WIDTH x HEIGHT
+//   36 X 42 windows               — INCHES, WIDTH X HEIGHT, and NO letter
+//
+// THE WINDOW LOST ITS LETTER ON 28 SEP. Movie: *"make the windows on the floor
+// plans and on the elevations size : \"36 X 42\" width by height in inches"*,
+// then *"i want it to match the actual size of the window"* and *"(don't need
+// the letter for the window)"*. A door's label is a NAME out of a ladder --
+// ED36 is a family and a width -- and a window's is a SIZE, which is what a
+// framer measures and orders. The doors keep their ladder; the window reads
+// as the dimension it is.
 // Plain data in, label out: no state, no DOM. Future schedules and
 // auto-fenestration (#169) pick from the stock ladder; this slice only
 // stores and displays it.
@@ -20,7 +28,11 @@ if (!window.DraftFenLabels) {
     if (!Number.isFinite(widthFt) || widthFt <= 0) return '';
     if (type === 'window') {
       if (!Number.isFinite(heightFt) || heightFt <= 0) return '';
-      return `W ${roundInches(widthFt)}x${roundInches(heightFt)}`;
+      // WIDTH BY HEIGHT, off the opening's own numbers: "match the actual size
+      // of the window". Nothing is snapped to the stock ladder here -- a
+      // drafter who typed 37 gets 37, and the ladder is what he picks FROM,
+      // not what the sheet claims he built.
+      return `${roundInches(widthFt)} X ${roundInches(heightFt)}`;
     }
     if (type !== 'door') return '';
     if (garage) {

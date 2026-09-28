@@ -373,6 +373,31 @@ test.describe('MODEL.html tier 1', () => {
       // refuse it: the cost of a script is the request, and the alternative to
       // paying it is a twin of the half that IS called.
       './build-house.js',
+      // fen-labels.js is the words on a window or a door -- `36 X 42` for a
+      // window, `ED36` for an exterior door -- and it is the DELETES-A-
+      // DIVERGENCE kind this list should grow by rather than a new capability.
+      // MODEL.dc.html has loaded it since board #398, and so do the
+      // Construction Layout, STANDARDS and EXT. FINISH. This page was the one
+      // place that drew fenestration and formatted nothing, so the alternative
+      // to the request was a second copy of the format living here -- and the
+      // format had already moved once (the window tag dropped its letter the
+      // day it was asked for), which is the drift this deletes: the plan and
+      // the elevation would have labelled the same window differently.
+      //
+      // ITS HONEST COST: one more request, and this page calls ONE of the
+      // five things it exports -- fenLabel. The other four are the stock
+      // tables SETTINGS edits and STANDARDS prints, carried along unused.
+      // That is the same trade build-house.js is admitted on above: the cost
+      // of a script is the request, not the surface. It reaches for no
+      // globals and writes no DOM, unlike shell-bars.js and the orientation
+      // guard above.
+      //
+      // AND IT IS WHY THIS EXACT LIST EARNS ITS KEEP AGAIN. The tag drew
+      // nothing here and threw nothing either: the painter guards on
+      // window.DraftFenLabels, so a missing script read as a drawing with no
+      // windows worth labelling. A guard that hides a missing module hides
+      // the feature, and an inventory is what notices the module is missing.
+      './fen-labels.js',
       // auto-dims.js is the exterior dimension strings, and it is the SECOND
       // kind of entry this list welcomes rather than the first: it was already
       // extracted pure out of the old page and had exactly one caller, so this

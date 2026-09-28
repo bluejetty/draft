@@ -4129,6 +4129,45 @@ if (!window.DraftCutView) {
         ctx.strokeRect(ox, Y(top), ow, (top - bottom) * pxPerFt);
         const clipped = uc - half < uMin - 1e-6 || uc + half > uMax + 1e-6;
         if (clipped) return;
+        // ── AND A WINDOW SAYS ITS SIZE, IN THE MIDDLE OF THE GLASS ──────
+        //
+        // Movie, 28 Sep: *"on the elevations i'd like the window marked in
+        // middle center of the window"*, with the size itself settled on the
+        // plan the same afternoon -- *"36 X 42 width by height in inches"*,
+        // *"(don't need the letter for the window)"*, *"i want it to match the
+        // actual size of the window"*.
+        //
+        // THE RECORD'S SIZE, NOT THE DRAWN ONE. `top` above is clamped to the
+        // wall plate -- a window that would poke through its own top plate is
+        // drawn short -- and `bottom` moves for what stands in front. Neither
+        // is what a framer orders. The label is `f.width` by the resolved head
+        // less the resolved sill, which is the opening as the record has it,
+        // and the same pair of defaults the drawing itself used a few lines
+        // up rather than a second copy of them.
+        //
+        // HORIZONTAL, unlike the plan tag. On a plan the wall runs any which
+        // way and the tag turns with it; an elevation's glass is always
+        // upright, so there is nothing to turn to.
+        if (f.type === 'window' && window.DraftFenLabels) {
+          const sizeLabel = window.DraftFenLabels.fenLabel({
+            type: 'window', widthFt: f.width, heightFt: head - sill });
+          if (sizeLabel) {
+            ctx.save();
+            ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+            ctx.fillStyle = INK;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            // OFF THE SHEET IF IT WILL NOT FIT. A tag wider than the glass it
+            // names, or taller than it, is not a smaller tag -- it is ink
+            // across the neighbouring wall. Better absent than wrong.
+            const wide = ctx.measureText(sizeLabel).width;
+            const tall = (top - bottom) * pxPerFt;
+            if (wide + 4 <= ow && tall >= 11) {
+              ctx.fillText(sizeLabel, ox + ow / 2, (Y(top) + Y(bottom)) / 2);
+            }
+            ctx.restore();
+          }
+        }
         if (f.type === 'door' && !f.garage) {
           // Flat slab door face with a round knob at handle height on the
           // latch side.

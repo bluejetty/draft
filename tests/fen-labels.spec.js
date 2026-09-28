@@ -40,8 +40,15 @@ test('the formatter encodes every quirk in the ladder', async ({ page }) => {
       dd72: door(6, { double: true }),
       dd60: door(5, { double: true }),
       dd48: door(4, { double: true, exterior: true }),
-      // Windows: INCHES, WIDTH x HEIGHT.
+      // Windows: INCHES, WIDTH X HEIGHT, and NO letter. Movie, 28 Sep:
+      // "(don't need the letter for the window)" and "i want it to match the
+      // actual size of the window". A door's label is a NAME out of a ladder;
+      // a window's is the SIZE a framer orders.
       w2436: fen.fenLabel({ type: 'window', widthFt: 2, heightFt: 3 }),
+      // AND IT IS NOT SNAPPED TO THE STOCK LADDER. 37 x 49 is off every rung
+      // of it, and the sheet must say what was drawn rather than what could
+      // have been ordered.
+      wOddSize: fen.fenLabel({ type: 'window', widthFt: 37 / 12, heightFt: 49 / 12 }),
       // Derivation from a real opening record: the BUILD HOUSE overhead
       // (16' x 7' head, garage flag) and man door (2'-8", exterior wall).
       autoOverhead: fen.fenLabelForOpening(
@@ -66,11 +73,12 @@ test('the formatter encodes every quirk in the ladder', async ({ page }) => {
   expect(labels.dd72).toBe('DD72');
   expect(labels.dd60).toBe('DD60');
   expect(labels.dd48).toBe('DD48');
-  expect(labels.w2436).toBe('W 24x36');
+  expect(labels.w2436).toBe('24 X 36');
+  expect(labels.wOddSize).toBe('37 X 49');
   expect(labels.autoOverhead).toBe('G 7x16');
   expect(labels.autoMan).toBe('ED32');
   expect(labels.looseWallDoor).toBe('D36');
-  expect(labels.window).toBe('W 24x36');
+  expect(labels.window).toBe('24 X 36');
   // Labels ship dark: nothing changes until the office opts in.
   expect(labels.defaults.showLabels).toBe(false);
   expect(labels.defaults.stock.d).toEqual(['36', '32', '30', '24', '18']);
