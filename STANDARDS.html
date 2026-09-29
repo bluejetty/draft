@@ -307,7 +307,13 @@
             <div class="group-head"><span>Default</span><span>Used for</span><span>Layer name</span><span>Visible</span><span>Print</span><span></span></div>
             ${group.layers.map(layer => {
               const current = layerStandards[layer.id];
-              const hasVisibility = layer.id === 'draft' || layer.id === 'no-draft';
+              // THE TABLE SAYS WHICH LAYERS GET THE TICK, not this renderer.
+              // It read `layer.id === 'draft' || layer.id === 'no-draft'`, so
+              // adding a switchable layer meant editing a condition on this
+              // page -- and a layer added to profile-manager.js without that
+              // edit got a blank cell and no way to say so. The five A-DIMS-*
+              // layers arrive carrying `visibility: true` and need no line here.
+              const hasVisibility = layer.visibility === true;
               const visibleCell = hasVisibility
                 ? `<span class="layer-visible"><input type="checkbox" data-layer-visible="${layer.id}" ${current.visible ? 'checked' : ''} aria-label="Show ${layer.name} in Model Space"> Visible</span>`
                 : '<span class="layer-visible blank"></span>';
