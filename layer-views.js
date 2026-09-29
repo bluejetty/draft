@@ -16,17 +16,23 @@
 // the table states the intent, and a view whose layers carry nothing simply
 // deals no sheet rather than a blank one.
 //
-// AND `layersFor` HAS NO CALLERS. Checked 29 Sep, across every page and
-// module: this table's `contents` is read by nothing. The export exists, the
-// lists are maintained, and no painter has ever asked one of them what to
-// draw. What actually gates a layer today is plan-composition.js's
-// `layerShows`, which reads the PROFILE's visible/printable flags — one
-// answer for the whole drawing, not one per view.
+// `layersFor` IS WIRED, and this is what reads it. Until the composer took
+// it, this table's `contents` was read by nothing: the export existed, the
+// lists were maintained, and no painter had ever asked one of them what to
+// draw. A layer was gated by the PROFILE alone — one answer for the whole
+// drawing, not one per view.
 //
-// That is why the A-DIMS-* lists below change nothing on screen yet. They are
-// the spec for the day `layersFor` is wired into the composer, which is what
-// would let a REAL ESTATE PLAN default its dimensions off while a
-// CONSTRUCTION LAYOUT defaults them on — the same drawing, two layer sets.
+// Now `layout-plan.js` hands the composed sheet `viewLayers: layersFor(...)`
+// and plan-composition.js's `layerShows` asks membership first. So the lists
+// below are load-bearing on both sheet pages, and a layer removed from one of
+// them stops being drawn on that view.
+//
+// TWO THINGS THE WIRING DELIBERATELY DOES NOT DO. A record that names NO
+// layer is never gated — the format writes the key for eight kinds and omits
+// it entirely otherwise, so membership cannot be asked of the rest. And
+// MODEL.html is not wired: the Model Space is where a drafter is EDITING, and
+// a layer hidden there is one they cannot click.
+//
 // Naming the retired PLAN / FLOOR / FOUNDATION / E-POWER DIMENSION ids here
 // would have left the table lying about layers that no longer exist.
 if (!window.DraftLayerViews) {

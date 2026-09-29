@@ -86,15 +86,43 @@ if (!window.DraftPlanComposition) {
     return list(items).filter(item => item.levelId === levelId && (!views || keep(item)));
   };
 
-  // A LAYER ANSWERS TWICE: is it on, and does it print. The second only binds
-  // when something is actually printing, and a caller that supplies no
-  // standards gets everything -- a sheet with no layer table should draw the
-  // drawing, not nothing.
-  const layerShows = env => layerId => {
-    const standard = env.layerStandard ? env.layerStandard(layerId) : null;
-    if (!standard) return true;
-    if (!standard.visible) return false;
-    return !env.isPrinting || standard.printable !== false;
+  // A LAYER ANSWERS THREE TIMES: is it ON THIS DRAWING, is it on, and does it
+  // print. The second only binds when something is actually printing, and a
+  // caller that supplies no standards gets everything -- a sheet with no
+  // layer table should draw the drawing, not nothing.
+  //
+  // ── AND THE FIRST IS `viewLayers`, WHICH IS PER-VIEW AND NOT PER-SHEET ──
+  //
+  // `layer-views.js` has carried a `contents` list for every view since it was
+  // written and, until this, nothing read one -- its own header said so: "AND
+  // `layersFor` HAS NO CALLERS ... The export exists, the lists are
+  // maintained, and no painter has ever asked one of them what to draw." What
+  // gated a layer was the PROFILE alone, one answer for the whole drawing, so
+  // a FOUNDATION plan and an ELECTRIC plan of the same level could not differ
+  // by a single layer without the drafter re-ticking the table between them.
+  //
+  // THE LIST IS THE CALLER'S, not this module's, for the same reason every
+  // painter's env is: a page that cannot honestly say which view it is
+  // composing supplies none, and gates nothing.
+  //
+  // AN UNTAGGED ENTITY ALWAYS DRAWS, and that is the load-bearing half. The
+  // format writes a `layer` key for eight kinds of record and no more, and it
+  // writes NO KEY rather than a null when there is nothing to say
+  // (drawing-format.js:233). Gating on membership alone would therefore hide
+  // every floor, wall and line in every drawing ever saved -- they are not
+  // absent from the view, they were never asked. Only a record that NAMES a
+  // layer can be told the view does not carry it.
+  const layerShows = env => {
+    const carried = Array.isArray(env.viewLayers) && env.viewLayers.length
+      ? new Set(env.viewLayers)
+      : null;
+    return layerId => {
+      if (carried && layerId != null && layerId !== '' && !carried.has(layerId)) return false;
+      const standard = env.layerStandard ? env.layerStandard(layerId) : null;
+      if (!standard) return true;
+      if (!standard.visible) return false;
+      return !env.isPrinting || standard.printable !== false;
+    };
   };
 
   // ── THE ORDER ────────────────────────────────────────────────────────────

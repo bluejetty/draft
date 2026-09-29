@@ -22,12 +22,12 @@ const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
-const MUTATE = process.argv.slice(2).includes('--mutate');
-const ARGS = process.argv.slice(2).filter(a => a !== '--mutate');
-if (ARGS.length) {
-  console.error(`layout-plan-harness: takes no arguments (got ${ARGS.join(' ')})`);
-  process.exit(2);
-}
+// THROUGH harness-args, NOT ITS OWN ARGV, and the reason is CI rather than
+// tidiness: the engine list the workflow runs is derived by grepping for a
+// call INTO that file, so a harness parsing its own flags owns a mutation
+// table nothing but a person at a keyboard ever runs. This one had a real
+// table and nine rows CI could not see.
+const MUTATE = require('./harness-args.js').mutationMode();
 
 // Everything layout-plan needs to draw, in load order. The four under test
 // are named separately so a case can drop one by name.
@@ -82,12 +82,12 @@ const SAVED = JSON.parse(fs.readFileSync(
   path.join(ROOT, 'proto', 'repro-movie-bands.draft'), 'utf8'));
 const toS = p => ({ x: (p.x || 0) * 10 + 400, y: (p.z || 0) * 10 + 300 });
 
-function draw(win, levelId) {
+function draw(win, levelId, { saved = SAVED, env = {} } = {}) {
   const ctx = recorder();
   const LP = win.DraftLayoutPlan;
   if (!LP) return { ok: false, texts: [], why: 'DraftLayoutPlan never defined' };
   try {
-    LP.drawPlan(ctx, toS, SAVED, levelId, {});
+    LP.drawPlan(ctx, toS, saved, levelId, env);
     return { ok: true, texts: ctx.texts };
   } catch (err) { return { ok: false, texts: ctx.texts, why: err.message }; }
 }
@@ -150,6 +150,68 @@ function run(label) {
     brokenCut.warnings.some(w => /cut-view\.js/.test(w)),
     brokenCut.warnings.join(' / ') || '(silent)');
 
+  // ── THE VIEW'S OWN LAYER LIST, WHICH THIS FILE IS THE ONLY SOURCE OF ──
+  //
+  // plan-composition.js gates on `viewLayers`; nothing composes one but
+  // here. The harness beside it proves the gate works when handed a list --
+  // this proves a list is handed over at all, and that it is the list for
+  // the view being drawn rather than some other view's.
+  //
+  // TWO DIMENSIONS ON THE SAME DRAWING, differing only in their layer:
+  // level 3's FLOOR PLAN carries A-DIMS-INT and does NOT carry A-DIMS-COLS,
+  // so the interior string prints and the column string does not. Lengths
+  // are odd on purpose -- a round one collides with the fixture's own
+  // auto-dims and the check would read another string's text as this one's.
+  const tagged = {
+    ...SAVED,
+    dimensions: [
+      ...(SAVED.dimensions || []),
+      { id: 90001, levelId: MAIN, view: 'plan', layer: 'A-DIMS-INT',
+        start: { x: 0, y: 0, z: 40 }, end: { x: 17.25, y: 0, z: 40 } },
+      { id: 90002, levelId: MAIN, view: 'plan', layer: 'A-DIMS-COLS',
+        start: { x: 0, y: 0, z: 44 }, end: { x: 19.75, y: 0, z: 44 } },
+    ],
+  };
+  const INT = /17'/, COLS = /19'/;
+  const onPlan = draw(full.win, MAIN, { saved: tagged, env: { view: 'plan' } });
+  check('a layer the view carries is drawn on that view',
+    onPlan.texts.some(t => INT.test(t)),
+    `texts: ${onPlan.texts.join(' | ') || '(none)'}`);
+  check('a layer the view does NOT carry is left off the sheet',
+    !onPlan.texts.some(t => COLS.test(t)),
+    'the column string printed on a view whose contents do not list it');
+
+  // AND THE SAME STRING ON THE FLOOR LAYOUT OF THE SAME LEVEL, which does
+  // carry A-DIMS-COLS. Without this the check above would pass just as well
+  // on a list fetched for the level's default view -- 'plan' IS the default
+  // for a floor level, so only a second, non-default view can tell the two
+  // apart. The floor view needs walls of its own to compose at all.
+  const onFloorView = {
+    ...tagged,
+    walls: [
+      ...(SAVED.walls || []),
+      ...(SAVED.walls || []).filter(w => w.levelId === MAIN)
+        .map((w, i) => ({ ...w, id: 90100 + i, view: 'floor' })),
+    ],
+    dimensions: [
+      ...tagged.dimensions,
+      { id: 90003, levelId: MAIN, view: 'floor', layer: 'A-DIMS-COLS',
+        start: { x: 0, y: 0, z: 48 }, end: { x: 19.75, y: 0, z: 48 } },
+    ],
+  };
+  const floorSheet = draw(full.win, MAIN, { saved: onFloorView, env: { view: 'floor' } });
+  check('the list is the drawn view-s, not the level-s default view-s',
+    floorSheet.texts.some(t => COLS.test(t)),
+    `texts: ${floorSheet.texts.join(' | ') || '(none)'}`);
+
+  // A VIEWPORT THAT NAMES NO VIEW IS EVERY VIEW, and gating it against the
+  // level's default view would silently change every layout saved before
+  // views existed.
+  const noView = draw(full.win, MAIN, { saved: tagged });
+  check('a viewport with no view of its own gates nothing',
+    noView.texts.some(t => INT.test(t)) && noView.texts.some(t => COLS.test(t)),
+    `texts: ${noView.texts.join(' | ') || '(none)'}`);
+
   // ── ONCE, NOT PER PAINT ───────────────────────────────────────────────
   const repeat = loadWith(['layer-views.js']);
   draw(repeat.win, MAIN); draw(repeat.win, MAIN); draw(repeat.win, MAIN);
@@ -182,6 +244,15 @@ const MUTATIONS = [
       '!warnedNoLayerViews && stairs && LEVELS')],
   ['cut-view warning loses the filename',
     'layout-plan.js', c => c.replace('cut-view.js is not loaded', 'a module is not loaded')],
+  ['the view-s layer list is never handed to the composer',
+    'layout-plan.js', c => c.replace(
+      'viewLayers: view !== null && VIEWS ? VIEWS.layersFor(levelId, view) : null,', '')],
+  ['a viewport naming no view is gated by the level-s default view',
+    'layout-plan.js', c => c.replace('viewLayers: view !== null && VIEWS ?',
+      'viewLayers: VIEWS ?')],
+  ['the list comes from the level-s default view rather than the one being drawn',
+    'layout-plan.js', c => c.replace('VIEWS.layersFor(levelId, view)',
+      'VIEWS.layersFor(levelId, VIEWS.defaultLayerViewId(levelId))')],
   ['the warning repeats on every paint',
     'layout-plan.js', c => c.replace('warnedNoLayerViews = true;', 'warnedNoLayerViews = false;')],
 ];
