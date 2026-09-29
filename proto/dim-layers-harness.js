@@ -28,12 +28,14 @@ const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
-const MUTATE = process.argv.slice(2).includes('--mutate');
-const ARGS = process.argv.slice(2).filter(a => a !== '--mutate');
-if (ARGS.length) {
-  console.error(`dim-layers-harness: takes no arguments (got ${ARGS.join(' ')})`);
-  process.exit(2);
-}
+// THROUGH THE SHARED GUARD, AND THAT IS WHAT PUTS IT IN CI. This hand-parsed
+// `--mutate` until it was checked: .github/workflows/test.yml builds its
+// engine list by grepping every harness for the literal call form
+// `harness-args.js').mutationMode()`, so a file that parses the flag itself
+// is not an engine as far as CI is concerned. The table ran here and nowhere
+// else -- 13 mutations that could rot green forever, which is the same shape
+// as everything this harness was written to catch, one layer out.
+const MUTATE = require('./harness-args.js').mutationMode();
 
 // auto-dims.js needs nothing; the rest of the chain needs geometry and the
 // format. layout-plan.js is last because it reads the others off `window`.
