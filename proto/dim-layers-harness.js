@@ -213,10 +213,22 @@ function run() {
     ok(`${layer} survives a round trip through the format`,
       back && back.layer === layer, back ? String(back.layer) : 'dropped');
   });
-  ok('a layer the format does not know becomes null, not itself',
-    through('A-DIMS-NOPE')?.layer === null, String(through('A-DIMS-NOPE')?.layer));
-  ok('a dimension written before layers existed stays null',
-    through(undefined)?.layer === null, String(through(undefined)?.layer));
+  // THE KEY'S ABSENCE, NOT ITS VALUE, and that distinction cost a red shard.
+  // These read `=== null` until write-tier.spec.js caught what that meant on
+  // the way OUT: a null is still a key, the old page writes no such key, and
+  // that spec compares the two pages' saves byte for byte. Asking "is it
+  // null" cannot tell a key that is absent from one that is present and
+  // empty, so it passed against the build that broke the round trip.
+  const wrote = layer => {
+    const back = through(layer);
+    return back ? Object.prototype.hasOwnProperty.call(back, 'layer') : null;
+  };
+  ok('a layer the format does not know is not written at all',
+    wrote('A-DIMS-NOPE') === false, String(through('A-DIMS-NOPE')?.layer));
+  ok('a dimension written before layers existed gains no layer key',
+    wrote(undefined) === false, String(through(undefined)?.layer));
+  ok('a real layer IS written, so the check above is reading the key',
+    wrote('A-DIMS-OVR') === true);
 
   // ── THE THREE LISTS AGREE ─────────────────────────────────────────────────
   // Devin, 29 Sep, asked for exactly this: "a harness check per entity type so

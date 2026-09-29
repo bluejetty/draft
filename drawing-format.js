@@ -230,13 +230,27 @@ if (!window.DraftDrawingFormat) {
       if (!Number.isInteger(id) || seen.has(id) || !start || !end || dimensionLevelId == null || !view) return null;
       if (Math.hypot(end.x - start.x, end.z - start.z) < 0.001) return null;
       seen.add(id);
-      // null, not a default: every dimension drawn before this key existed
-      // has no layer, and layerShows treats an unknown layer as "always
-      // draws". Inventing one here would hide old dimensions the first time
-      // a drafter unticked a box he had never seen. Readers normalise,
-      // writers never invent.
+      // NO KEY AT ALL when there is no layer, which is not the same as null
+      // and the difference is a failing test. Emitting `layer: null` gave
+      // every untagged dimension a key the old page does not write, and
+      // write-tier.spec.js compares MODEL.html's save against the save
+      // MODEL.dc.html produced -- key for key, on the same drawing. 28 nulls
+      // appeared in that diff. The contract it protects is that opening a
+      // drawing in the new page and saving it changes NOTHING, and a key
+      // nobody asked for is a change.
+      //
+      // So this follows the rule stated at the top of this file and used
+      // three functions up in finishOf: readers normalise, writers never
+      // invent. A dimension with a real layer carries it; one without gains
+      // nothing. layerShows reads a missing layer exactly as it read null --
+      // no standard, so it draws -- which is why the behaviour is identical
+      // and only the saved bytes differ.
       const layer = oneOf(dimension?.layer, DIMENSION_LAYERS, null);
-      return { id, start, end, levelId: dimensionLevelId, view, layer, auto: dimension?.auto === true };
+      return {
+        id, start, end, levelId: dimensionLevelId, view,
+        ...(layer ? { layer } : {}),
+        auto: dimension?.auto === true,
+      };
     }), env.drops).filter(Boolean);
   };
 
