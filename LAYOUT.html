@@ -60,6 +60,11 @@
 <script src="./shared-file-store.js"></script>
 <script src="./drawing-format.js"></script>
 <script src="./wall-types.js"></script>
+<!-- THE ROOF'S OWN WORDS. cut-view-env.js reads DraftRoofTypes to keep a
+     saved `roofing` through the normaliser; without this tag every stored
+     roofing choice is dropped on load and the roof comes back as asphalt,
+     silently. #533's warning says so out loud -- this is the tag it asks for. -->
+<script src="./roof-types.js"></script>
 <script src="./level-assembly.js"></script>
 <script src="./render-2d.js"></script>
 <script src="./geometry-2d.js"></script>
