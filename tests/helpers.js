@@ -339,6 +339,16 @@ async function selectTool(page, name) {
     await page.keyboard.press('u');
     return;
   }
+  // THE TAB THE KEY IS ON, first. The left rail is DRAFTING and BUILD since
+  // 29 Sep, so a name that resolves to a build key is inside a pane that may
+  // not be up -- and a button inside a hidden pane is not clickable. The id
+  // is the name lower-cased for every tool in the roster; anything this table
+  // does not know leaves the rail where it is, which is what a caller naming
+  // something other than a tool key wants.
+  const pane = TOOL_PANE[String(name).toLowerCase()];
+  if (pane && !(await page.locator('#left-rail').isHidden())) {
+    await showLeftPane(page, pane);
+  }
   await page.getByRole('button', { name: new RegExp(`\\b${name}\\b`, 'i') }).first().click();
 }
 

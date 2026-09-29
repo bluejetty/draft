@@ -304,6 +304,8 @@ test('arming DIMENSION offers AUTO DIMS, and putting it down takes it away',
     // canvas and concluding the page is broken.
     await expect(page.locator('[data-dimension-note]')).toContainText('NOT BUILT YET');
 
+    // WALL IS A BUILD KEY and this file works from DRAFTING for DIMENSION.
+    await h.showLeftPane(page, 'build');
     await page.locator('[data-tool-key="wall"]').click();
     await page.waitForTimeout(150);
     await expect(page.locator('[data-auto-dims]'),
