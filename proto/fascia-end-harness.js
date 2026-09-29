@@ -166,6 +166,54 @@ const MUTATIONS = [
   // every stroke of every elevation of all seven fixtures, both mutants are
   // identical to the unbent painter.
   //
+  // ── AND A FIXTURE WAS TRIED FOR THEM, 29 Sep, WHEN THE SIXTH ROW IN
+  // foundation-face's TABLE STOPPED BEING A PARAGRAPH THE SAME WAY ────────
+  //
+  // Re-run over ALL SIXTEEN .draft fixtures in proto/, not the six here,
+  // both mutants still hash identical on every one. What the sweep added is
+  // WHY, which the paragraph above could only assert:
+  //
+  // THE SLOPE TEST. A level edge that is not an eave and lies on a gable
+  // plan edge exists on seven of the sixteen and nowhere else -- one
+  // apiece, and every one of them with ZERO SHOWN RUNS:
+  //
+  //     repro-movie-garage-2storey  u -4..-12  e 11.885  drawn 0
+  //     repro-movie-bands           u -4..-12  e 11.885  drawn 0
+  //     repro-2storey-over-beam     u -4..-12  e 11.885  drawn 0
+  //     repro-movie-2storey-garage  u  11..3   e 11.885  drawn 0
+  //     repro-2storey-garage-beam   u  20..17  e 10.552  drawn 0
+  //     repro-movie-3roof-garage    u  20..17  e 10.552  drawn 0
+  //     repro-tie-gable             u  20..17  e 10.552  drawn 0
+  //
+  // THAT ZERO IS STRUCTURAL, NOT LUCK. The edge is level exactly where two
+  // roofs of equal height meet over a gable plan edge -- that meeting is
+  // what makes it level -- and the near sheet covers it for its whole
+  // length. With no shown run the band branch never opens, and the soffit
+  // return sixty lines down asks `drawn.length` before anything else.
+  //
+  // IT IS REACHABLE, THOUGH, AND THAT IS WORTH MORE THAN "BELT AND BRACES".
+  // Stretching roof-69's gable edge on repro-movie-garage-2storey out past
+  // the house it meets gave `drawn 1` and put the soffit return one test
+  // from drawing: it fell at `shown=false`, because the return is struck at
+  // the edge's LOW end and on a level edge that end is whichever the
+  // polygon happens to name first -- here the buried one. Stretched the
+  // other way the low end DID stand clear and failed `inRange` instead,
+  // being past the elevation's own extents with no wall out there.
+  //
+  // So what the fixture needs is not a roof edge but a MASSING: a wing whose
+  // ridge meets a taller roof and then carries on past it, body and all, so
+  // the level stretch has a shown run at the end the return is struck from.
+  // None of the sixteen is that building and none of them is a few numbers
+  // away from being it, which is why this is still a paragraph. The bar is
+  // the one Devin set and the row above cleared: the mutant has to change
+  // the tape on a fixture, or it is not a row.
+  //
+  // `s.toward` IS NARROWER STILL. Widening it calls 110 edges rakes against
+  // 38, and a gable facing away from the cut is behind the building by
+  // construction -- there is no station of it to show and so nothing to hang
+  // a board on, whatever the massing. The inverted form is the direction
+  // that does change the drawing, and it is the row below.
+  //
   // So the two lines are belt-and-braces on this fixture set, and the
   // honest record of that is this paragraph rather than a row that can only
   // ever print SURVIVED. The one direction that DOES change the drawing is
