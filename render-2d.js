@@ -1452,8 +1452,39 @@ if (!window.DraftRender2D) {
     // Aligned text: the label runs along the dimension line, normalized so it
     // reads from the bottom or the right edge of the sheet, never the left --
     // the same rule the beam tags follow, so it is the helper's job now.
+    // ── A FIGURE TOO BIG FOR ITS OWN RUN ─────────────────────────────────
+    //
+    // Movie, 29 Sep: "the wall thicknesses can be displayed with text side
+    // 1/2 of the wall to wall normal dimensions (3.5" / 5.5")".
+    //
+    // MEASURED, NOT CLASSIFIED. The rule is not "is this a wall thickness":
+    // this painter has no idea what a dimension measures, and A-DIMS-INT is
+    // not the only layer that can hand it a tight run. It is "does the figure
+    // fit between its own arrowheads". A 5 1/2" run at plan scale is a few
+    // pixels wide, and an 11px label laid across it sprawls over the
+    // dimensions either side -- which is how a stack of wall faces turns to
+    // mush, and why he asked.
+    //
+    // HALVED ONCE, NOT SHRUNK TO FIT. Half is the size he asked for and it
+    // stays readable. A figure scaled down until it fitted a hairline run
+    // would be legible to nobody, and would hide the crowding rather than
+    // ease it. A run too tight even for half still PRINTS: an overflowing
+    // figure tells a drafter to change his scale, a missing one tells him
+    // nothing and looks deliberate.
+    //
+    // 6px IS ELEVEN HALVED AND ROUNDED TO A WHOLE PIXEL. 5.5 is what the
+    // arithmetic gives and what browsers hint unevenly; half a pixel is not
+    // worth a figure that renders differently on two machines.
+    //
+    // THE ARROWHEADS OWN THE ENDS. `arrow` draws at size 5 from each end, so
+    // the room a figure actually has is the run less both of them.
+    const FULL_FONT = "600 11px 'Barlow Condensed', system-ui, sans-serif";
+    const HALF_FONT = "600 6px 'Barlow Condensed', system-ui, sans-serif";
+    ctx.font = FULL_FONT;
+    const room = length - 12;
+    const labelFont = ctx.measureText(label).width > room ? HALF_FONT : FULL_FONT;
     labelAlongLine2D(ctx, da, db, label, {
-      font: "600 11px 'Barlow Condensed', system-ui, sans-serif",
+      font: labelFont,
       color, background: env.colors.labelBack, offset: 0,
     });
     ctx.restore();
