@@ -1623,6 +1623,32 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   // fully interrupt it, and "a little" is a couple of SCREEN pixels. The
   // caller owns the camera, so the caller converts. Zero is the honest value
   // for anything not painting to a canvas.
+  // ── WHERE A WALL'S TWO FACES SIT, RELATIVE TO ITS STORED LINE ───────────
+  //
+  // A wall record keeps ONE line plus a `refLine` saying what that line IS:
+  // the wall's left face, its centre, or its right face (left and right read
+  // along start -> end). Anything that needs a FACE -- an opening's jambs, a
+  // dimension run to a wall face -- has to resolve it the same way, or the
+  // two disagree by up to a whole wall thickness.
+  //
+  // EXTRACTED because a second caller arrived (auto-dims, stringing interior
+  // wall faces) and the alternative was a second copy of a three-line
+  // calculation whose failure mode is silent: a plan whose dimensions land
+  // half a wall off the jambs drawn beside them.
+  //
+  // THE DEFAULT IS 'center', AND IT IS NOT THE ONLY ONE IN THE REPO.
+  // drawing-format.js:663 normalises a missing refLine to 'left'. On a wall
+  // that came through the format the difference cannot bite -- the format
+  // always writes the key -- but on a raw wall it can, and "half a wall
+  // thickness, no error" is the exact failure that file's own comment
+  // records having shipped once. Said here so the next reader knows there are
+  // two defaults and which one this is.
+  const wallFaceOffsets = (wall, totalFt) => {
+    const refLine = (wall && wall.refLine) || 'center';
+    const startOff = refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -totalFt / 2;
+    return { startOff, endOff: startOff + totalFt };
+  };
+
   const openingGeometry = (opening, wall, opts = {}) => {
     if (!wall || !opening) return null;
     const { walls, thicknessFt, padFt = 0, faceReferenced = true } = opts;
@@ -1634,9 +1660,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     const ux = dx / len, uz = dz / len;
     const nx = -uz, nz = ux;
     const totalFt = thicknessFt(wall);
-    const refLine = wall.refLine || 'center';
-    const startOff = refLine === 'left' ? 0 : refLine === 'right' ? -totalFt : -totalFt / 2;
-    const endOff = startOff + totalFt;
+    const { startOff, endOff } = wallFaceOffsets(wall, totalFt);
     const midOff = (startOff + endOff) / 2;
     const half = opening.width / 2;
     const at = (along, across) => ({
@@ -1755,6 +1779,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     openingEndReserveFt,
     clampOpeningToWall,
     openingGeometry,
+    wallFaceOffsets,
     cutPerpendiculars,
     cutSide,
     cutDirVec,

@@ -56,7 +56,15 @@ if (!window.DraftAutoDims) {
     EXTERIOR: 'A-DIMS-EXT',      // the overhang string and the outline jogs
     FENESTRATION: 'A-DIMS-FENS', // window and door centres
     COLUMNS: 'A-DIMS-COLS',      // where the posts and the beam line sit
+    INTERIOR: 'A-DIMS-INT',      // wall faces, and partitions meeting this side
   });
+
+  // How near an exterior wall a partition must reach to be dimensioned from
+  // it. Movie, 29 Sep: "interior walls within 4 ft of an exterior wall on
+  // each side". A wall stranded in the middle of the house has no exterior
+  // face to be measured from, and putting it on all four strings would give
+  // four figures for one wall and clutter every side of the sheet.
+  const PARTITION_REACH_FT = 4;
 
   // How far off the columns their strings sit. Movie, 29 Sep: "about 1ft from
   // the cols".
@@ -127,6 +135,12 @@ if (!window.DraftAutoDims) {
   function computeAutoDimStrings({
     walls, outlines, roofs, openings, offsetOutline,
     firstOffset, jogMergeFt, stringSpacingFt,
+    // BOTH OR NEITHER, and the interior string is skipped without them. A
+    // wall's FACES are where it is measured to, and a face is the stored line
+    // offset by a thickness the caller owns the table for -- this module has
+    // never known a wall type. Guessing a thickness here would print a figure
+    // that is wrong by a wall and says nothing about it.
+    thicknessFt, faceOffsets,
   }) {
     const toCorner = point => ({ x: point.x, z: point.z, srcId: point.srcId || null });
     // Which side each edge of a closed loop faces, and the coordinates its
@@ -256,6 +270,47 @@ if (!window.DraftAutoDims) {
     // furthest footprint edge in its way, so a house side with an attached
     // garage beyond it strings outside the garage instead of across it, and
     // stacks sharing that corridor continue each other instead of colliding.
+    // ── THE WALL FACES A SIDE'S INTERIOR STRING LANDS ON ─────────────────
+    //
+    // Perpendicular to the string (so it has a position along it), within
+    // this group's footprint, and reaching within PARTITION_REACH_FT of the
+    // side being measured. Both faces of each, because a wall's thickness is
+    // a figure the framer needs and the drafter cannot get from a centreline.
+    //
+    // WITHOUT thicknessFt AND faceOffsets THIS RETURNS NOTHING, rather than
+    // falling back to the stored line. A centreline dressed up as a face is
+    // a dimension that lands half a wall from the wall it names, and prints
+    // as confidently as a right one.
+    const interiorFaces = (group, along, across, sideFace) => {
+      if (!thicknessFt || !faceOffsets) return [];
+      const box = group.bbox;
+      const coords = [];
+      walls.forEach(wall => {
+        if (!wall || !wall.start || !wall.end) return;
+        const midX = (wall.start.x + wall.end.x) / 2;
+        const midZ = (wall.start.z + wall.end.z) / 2;
+        if (midX < box.minX - 0.5 || midX > box.maxX + 0.5) return;
+        if (midZ < box.minZ - 0.5 || midZ > box.maxZ + 0.5) return;
+        const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+        const len = Math.hypot(dx, dz);
+        if (len < 0.01) return;
+        const u = { x: dx / len, z: dz / len };
+        // Runs across the string, so it crosses it and has a coordinate ON
+        // it. A wall parallel to the string is the one being measured FROM.
+        if (Math.abs(u[across]) < 0.9) return;
+        // And it has to REACH this side: the nearer of its two ends decides.
+        const reach = Math.min(
+          Math.abs(wall.start[across] - sideFace),
+          Math.abs(wall.end[across] - sideFace));
+        if (reach > PARTITION_REACH_FT) return;
+        const normal = { x: -u.z, z: u.x };
+        const offsets = faceOffsets(wall, thicknessFt(wall));
+        coords.push(wall.start[along] + normal[along] * offsets.startOff);
+        coords.push(wall.start[along] + normal[along] * offsets.endOff);
+      });
+      return uniqSorted(coords);
+    };
+
     const outward = { N: -1, S: 1, W: -1, E: 1 };
     const entries = [];
     sized.forEach((group, groupIndex) => {
@@ -286,6 +341,13 @@ if (!window.DraftAutoDims) {
         if (!sideClear(side)) return;
         const cornerCoords = side === 'N' || side === 'S' ? xs : zs;
         const lo = cornerCoords[0], hi = cornerCoords[cornerCoords.length - 1];
+        // A side's string measures positions ALONG one axis and sits ACROSS
+        // the other; `sideFace` is the face of the footprint this side IS,
+        // which is what a partition has to reach to earn a place on it.
+        const along = side === 'N' || side === 'S' ? 'x' : 'z';
+        const across = side === 'N' || side === 'S' ? 'z' : 'x';
+        const sideFace = side === 'N' ? minZ : side === 'S' ? maxZ
+          : side === 'W' ? minX : maxX;
         const strings = [];
         if (group.roof) {
           // Roof stack: the closest string runs roof edge → the wall corners
@@ -302,6 +364,31 @@ if (!window.DraftAutoDims) {
             .filter(value => value > lo + 0.01 && value < hi - 0.01);
           if (centres.length) {
             strings.push({ coords: uniqSorted([lo, ...centres, hi]), layer: DIM_LAYERS.FENESTRATION });
+          }
+          // ── THE INTERIOR STRING, SECOND OUT ────────────────────────────
+          //
+          // Movie, 29 Sep: "on the outside perimter of the floor plans on the
+          // inner dimension should be A-DIMS-FENS and will be 1'6" from the
+          // house default, next dimension at 3' from house A-DIMS-INT -- this
+          // will be a line of dimensions that measures both sides of the
+          // exterior and interior walls within 4 ft of an exterior wall on
+          // each side".
+          //
+          // ONE RULE, NO CLASSIFICATION. This wants "the exterior walls'
+          // faces, plus nearby partitions", and nothing in the drawing says
+          // which walls are exterior -- A-WALL-EXT and A-WALL-INT are in the
+          // standards table and no code has ever put a wall on either. It
+          // needs no such flag: a wall perpendicular to this string that
+          // reaches within 4 ft of this side picks up the two exterior walls
+          // for free (they run the full depth, so they reach every side) and
+          // the partitions by his own rule.
+          //
+          // PERPENDICULAR, because only those have a position ALONG the
+          // string. The wall this string is measuring across runs parallel to
+          // it and lends no coordinate -- it is the thing being measured FROM.
+          const faceCoords = interiorFaces(group, along, across, sideFace);
+          if (faceCoords.length >= 2) {
+            strings.push({ coords: faceCoords, layer: DIM_LAYERS.INTERIOR });
           }
           const jogCoords = group.facing
             ? uniqSorted(mergeJogs([lo, hi, ...group.facing[side]]))

@@ -88,11 +88,17 @@ const L_HOUSE = [{ x: 0, z: 0 }, { x: 36, z: 0 }, { x: 36, z: 40 },
   { x: 20, z: 40 }, { x: 20, z: 66 }, { x: 0, z: 66 }];
 const NORTH_WALL = { start: { x: 0, z: 0 }, end: { x: 36, z: 0 } };
 
-function strings(win, { points = HOUSE, openings = [], roofs = [] } = {}) {
+// SIX INCHES, so a face sits a clean quarter foot off the stored line and
+// every figure below is readable by eye: a 36 ft house reads 0.5, 35.5, 0.5.
+const WALL_FT = 0.5;
+function strings(win, { points = HOUSE, openings = [], roofs = [],
+  extraWalls = [], faces = true } = {}) {
   const AD = win.DraftAutoDims;
   const G = win.DraftGeometry2D;
   return AD.computeAutoDimStrings({
-    walls: wallsAround(points),
+    thicknessFt: faces ? (() => WALL_FT) : undefined,
+    faceOffsets: faces ? G.wallFaceOffsets : undefined,
+    walls: [...wallsAround(points), ...extraWalls],
     outlines: [{ points, garage: false }],
     roofs,
     openings,
@@ -140,14 +146,14 @@ function run() {
 
   // ── EVERY STRING IS TAGGED, AND ONLY WITH IDS THAT EXIST ──────────────────
   const known = new Set(Object.values(AD.DIM_LAYERS));
-  // FOUR NOW: OVR, EXT and FENS on the perimeter, COLS beside the beams. INT
-  // is still absent because nothing emits it -- and this count is what says
-  // so out loud, rather than the object quietly growing a constant for a
-  // string that is never pushed.
-  ok('DIM_LAYERS names the four kinds auto-dims emits', known.size === 4,
+  // ALL FIVE NOW. This read three, then four, and went red each time a kind
+  // arrived -- which is the count doing its job rather than being a nuisance:
+  // a constant added for a string nobody pushes is exactly what it is here to
+  // refuse.
+  ok('DIM_LAYERS names all five kinds auto-dims emits', known.size === 5,
     [...known].join(','));
-  ok('and A-DIMS-INT is not among them, because nothing emits it yet',
-    !known.has('A-DIMS-INT'));
+  ['A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-FENS', 'A-DIMS-COLS', 'A-DIMS-INT']
+    .forEach(id => ok(`${id} is one of them`, known.has(id)));
   const untagged = withWindow.filter(s => !s.layer);
   ok('no segment leaves auto-dims without a layer', untagged.length === 0,
     `${untagged.length} untagged`);
@@ -205,6 +211,71 @@ function run() {
     `${countBy(roofed, AD.DIM_LAYERS.FENESTRATION)}`);
   ok('every roofed segment is tagged too',
     roofed.every(s => known.has(s.layer)));
+
+  // ── THE INTERIOR STRING ───────────────────────────────────────────────
+  //
+  // Both faces of every wall that CROSSES this side's string and reaches it.
+  // On the bare 36 x 66 house the only such walls are the two exterior ones,
+  // so the north string reads: half a foot of wall, the clear span, half a
+  // foot of wall.
+  const intOn = segs => segs.filter(s => s.layer === AD.DIM_LAYERS.INTERIOR);
+  const northRun = segs => uniqOf(intOn(segs)
+    .filter(s => Math.abs(s.start.z - s.end.z) < 0.01 && s.start.z < 0)
+    .flatMap(s => [s.start.x, s.end.x]));
+
+  const bare = northRun(plain);
+  ok('the interior string reaches the faces of both exterior walls',
+    bare.length === 4, bare.map(v => v.toFixed(2)).join(' '));
+  const bareRuns = bare.slice(1).map((v, i) => v - bare[i]);
+  ok('so it reads wall, clear span, wall', bareRuns.length === 3
+    && Math.abs(bareRuns[0] - WALL_FT) < 0.02
+    && Math.abs(bareRuns[1] - (36 - WALL_FT)) < 0.02
+    && Math.abs(bareRuns[2] - WALL_FT) < 0.02,
+    bareRuns.map(v => v.toFixed(2)).join(' '));
+
+  // A PARTITION EARNS ITS PLACE BY REACHING THE SIDE. One touching the north
+  // wall lands on the north string; one down at the south end does not.
+  const nearNorth = { start: { x: 12, z: 0 }, end: { x: 12, z: 20 } };
+  const nearSouth = { start: { x: 24, z: 50 }, end: { x: 24, z: 66 } };
+  const withBoth = strings(win, { extraWalls: [nearNorth, nearSouth] });
+  const northWith = northRun(withBoth);
+  ok('a partition meeting the north wall lands on the north string',
+    northWith.some(v => Math.abs(v - 11.75) < 0.02)
+    && northWith.some(v => Math.abs(v - 12.25) < 0.02),
+    northWith.map(v => v.toFixed(2)).join(' '));
+  ok('and a partition down at the south end does not',
+    !northWith.some(v => Math.abs(v - 24) < 0.5),
+    northWith.map(v => v.toFixed(2)).join(' '));
+  ok('both its faces land, so the wall thickness is a figure on the sheet',
+    northWith.length === 6, `${northWith.length} coordinates`);
+
+  // ── AT THE BOUNDARY, BOTH SIDES OF IT ──────────────────────────────────
+  //
+  // Devin, 29 Sep: "'reaches within 4 ft of this side' makes INT's output
+  // depend on a tolerance rather than on a stored fact, so two walls a hair
+  // over 4 ft apart will silently drop a partition -- worth a harness case
+  // sitting right on the boundary, both sides of it."
+  //
+  // Right: the two cases above stand at reach 0 and reach 50, which prove
+  // the rule exists and say nothing about WHERE it cuts. A rule that fired
+  // at 40 ft, or at one inch, passes both of them. These two are a tenth of
+  // a foot either side of the line, so only a cut at 4 ft passes both.
+  const atReach = z0 => ({ start: { x: 8, z: z0 }, end: { x: 8, z: 20 } });
+  const inAt = northRun(strings(win, { extraWalls: [atReach(3.9)] }));
+  const outAt = northRun(strings(win, { extraWalls: [atReach(4.1)] }));
+  ok('a partition reaching 3.9 ft from the side is on the string',
+    inAt.some(v => Math.abs(v - 7.75) < 0.02) && inAt.some(v => Math.abs(v - 8.25) < 0.02),
+    inAt.map(v => v.toFixed(2)).join(' '));
+  ok('and one reaching 4.1 ft from it is not',
+    !outAt.some(v => Math.abs(v - 8) < 0.5),
+    outAt.map(v => v.toFixed(2)).join(' '));
+
+  // WITHOUT THE THICKNESS TABLE THERE IS NO STRING, rather than a centreline
+  // pretending to be a face.
+  ok('no thickness table means no interior string at all',
+    intOn(strings(win, { faces: false })).length === 0);
+  ok('and the other four kinds still come through without it',
+    strings(win, { faces: false }).length > 0);
 
   // ── THE COLUMN STACK ──────────────────────────────────────────────────
   //
@@ -526,6 +597,34 @@ const MUTATIONS = [
       'strings.push({ coords: jogCoords, layer: null })')],
   ['the segment is built without carrying the layer',
     'auto-dims.js', c => c.replace('            layer: string.layer,\n', '')],
+  // THE TOLERANCE ITSELF. Devin's point in mutation form: if the 4 ft can
+  // move to 40 and no check goes red, the two boundary cases above are
+  // decoration. This is what makes them load-bearing.
+  ['the partition reach widens from 4 ft to 40',
+    'auto-dims.js', c => c.replace(
+      'const PARTITION_REACH_FT = 4;', 'const PARTITION_REACH_FT = 40;')],
+  ['the partition reach narrows to an inch',
+    'auto-dims.js', c => c.replace(
+      'const PARTITION_REACH_FT = 4;', 'const PARTITION_REACH_FT = 0.08;')],
+  ['the interior string measures centrelines instead of faces',
+    'auto-dims.js', c => c.replace(
+      'const offsets = faceOffsets(wall, thicknessFt(wall));',
+      'const offsets = { startOff: 0, endOff: 0 };')],
+  ['only one face of each wall is strung',
+    'auto-dims.js', c => c.replace(
+      "        coords.push(wall.start[along] + normal[along] * offsets.endOff);\n", '')],
+  ['every partition lands on every side, however far away',
+    'auto-dims.js', c => c.replace(
+      'if (reach > PARTITION_REACH_FT) return;', '')],
+  ['walls parallel to the string join it too',
+    'auto-dims.js', c => c.replace(
+      "        if (Math.abs(u[across]) < 0.9) return;\n", '')],
+  ['the interior string is never emitted',
+    'auto-dims.js', c => c.replace(
+      'if (faceCoords.length >= 2) {', 'if (false) {')],
+  ['a missing thickness table falls back to the stored line',
+    'auto-dims.js', c => c.replace(
+      'if (!thicknessFt || !faceOffsets) return [];', '')],
   ['the along string measures from the beam ends, not the house edge',
     'auto-dims.js', c => c.replace(
       'emit(along, [edge[along][0], ...inner, edge[along][1]], fixed + side * clearFt);',

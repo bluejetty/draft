@@ -11126,6 +11126,14 @@
       firstOffset: autoDimFirstOffsetFt(),
       jogMergeFt: AD.JOG_MERGE_FT,
       stringSpacingFt: AD.STRING_SPACING_FT,
+      // THE INTERIOR STRING'S TWO INPUTS, and it draws nothing without them.
+      // A wall's FACES are what that string measures to, and a face is the
+      // stored line offset by a thickness this module has never known -- the
+      // wall-type table lives on this page. `openingThicknessFt` is the same
+      // resolver the fenestration geometry uses, so a dimension lands on the
+      // face a jamb was drawn against rather than near it.
+      thicknessFt: openingThicknessFt(),
+      faceOffsets: G.wallFaceOffsets,
     });
     // ── AND THE COLUMN STACK, ON THE TWO SHEETS THAT FRAME ───────────────
     //
