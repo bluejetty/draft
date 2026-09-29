@@ -406,10 +406,52 @@
           return;
         }
 
-        const walls = LP.planWalls(drawing, seat.id, 'plan');
-        const bounds = LP.wallBounds(walls);
+        // FRAMED OVER WHAT IS DRAWN, NOT OVER THE WALLS. This asked
+        // `wallBounds` until now, and every dimension string on the sheet paid
+        // for it: the strings stand 3 to 4.5 ft OUTSIDE the walls they measure,
+        // the box below clips to its own rectangle, and what falls outside a
+        // clip on paper is not one pan away -- it is gone. On Movie's own
+        // drawing that silently cut nineteen of them, including both overalls,
+        // off the top and bottom of every plan.
+        //
+        // `planBounds` is the answer layout-plan.js already wrote for exactly
+        // this, and LAYOUT.html and the neighborhood page have both read it
+        // since 21 Sep: walls with their thickness, plus lines, floors, roofs,
+        // outlines AND dimensions, measured rather than allowed for. This page
+        // was the last caller left on the old one.
+        //
+        // NOT A PAD BUMP, which is the tempting one-liner and is wrong twice:
+        // a constant would have to be the worst case for every drawing and
+        // would then be too roomy for all the rest, and it would shrink the
+        // plan on drawings whose strings already fit. LAYOUT.html's
+        // VIEW_ALLOWANCE_FT carries that argument in full and keeps its
+        // `dimensions: 0` for the same reason.
+        const bounds = LP.planBounds(drawing, seat.id);
         if (!bounds) { ctx.restore(); return; }
-        const pad = 14;
+        // AND THE HALF OF IT NO BOUNDS IN MODEL FEET CAN REACH. `planBounds`
+        // frames the dimension RECORDS, which is everything it can honestly
+        // do, and it is still not where the string is drawn:
+        // render-2d.js's drawDimension2D stands its line off the two recorded
+        // points by a CONSTANT NINETEEN SCREEN PIXELS and centres the label on
+        // that line. A screen-space stand-off does not shrink with the scale,
+        // so no amount of fitting in feet accounts for it -- it is the same
+        // 19px on a cottage and on a whole subdivision, and it is why the top
+        // row of strings was still cut after the bounds were fixed.
+        //
+        // So it is reserved where it lives, in PIXELS, on top of the pad.
+        // 19 is the painter's own offset and 7 is half an 11px label plus its
+        // backing box. If either number in render-2d.js ever moves, the strings
+        // start clipping again -- which is precisely what
+        // realestateplan-strings.spec.js measures, so the drift fails a test
+        // rather than reaching a sheet.
+        const STANDOFF_PX = 19;
+        const LABEL_HALF_PX = 7;
+        // ONLY WHERE THERE ARE STRINGS TO CLEAR. A plan with no dimensions on
+        // it would otherwise be drawn 26px smaller in every direction to leave
+        // room for nothing.
+        const dimensioned = (Array.isArray(drawing.dimensions) ? drawing.dimensions : [])
+          .some(dimension => dimension && dimension.levelId === seat.id);
+        const pad = 14 + (dimensioned ? STANDOFF_PX + LABEL_HALF_PX : 0);
         const spanX = Math.max(1, bounds.maxX - bounds.minX);
         const spanZ = Math.max(1, bounds.maxZ - bounds.minZ);
         const scale = Math.min((box.w - pad * 2) / spanX, (box.h - pad * 2 - 14) / spanZ);
