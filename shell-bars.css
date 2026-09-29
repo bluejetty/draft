@@ -545,6 +545,30 @@
   #mode-corner button[aria-pressed="true"] { color: var(--accent-ink);
     background-color: var(--accent); }
 
+  /* AND WHAT A STACK LOOKS LIKE WHEN THE PAGE CANNOT WORK IT.
+     shell-bars.js greys every bar verb a page does not wire, and these two
+     pairs were the ones where greying did not SHOW: their resting colour is
+     already --ink-quiet, so a disabled METRIC was pixel-for-pixel a live one
+     and the only thing the drafter lost was the hover he had no reason to
+     try. The page row's own dead chip is the bar's existing word for this --
+     `opacity:0.35; cursor:not-allowed` a hundred lines down -- so it is that
+     word, not a new one.
+     THE ONE IN FORCE KEEPS ITS FILL. IMPERIAL stays shaded on a page that
+     cannot switch units, because shaded means "this is what you are reading"
+     and that is still true -- it is the CHOICE that is gone, not the fact.
+     Fading it to 0.35 with the rest would have greyed out the answer along
+     with the question. It loses the hover and the pointer, which is the part
+     that was lying. */
+  #units-corner button:disabled[aria-pressed="false"],
+  #units-corner button:disabled[aria-pressed="false"]:hover,
+  #mode-corner .set.stack button:disabled[aria-pressed="false"],
+  #mode-corner .set.stack button:disabled[aria-pressed="false"]:hover {
+    color: var(--ink-quiet); opacity:0.35; cursor:not-allowed;
+    border-color: var(--edge-panel); }
+  #units-corner button:disabled[aria-pressed="true"],
+  #mode-corner .set.stack button:disabled[aria-pressed="true"] {
+    cursor:not-allowed; opacity:0.72; }
+
   /* THE FILE ROW, upper-right (§1): what the FILE is -- NEW, OPEN, SAVE with
      its three words, SAVE AS, and the extension the generated name takes.
      The row from MODEL.dc.html:573-590 without its PROJECT button: Movie has
