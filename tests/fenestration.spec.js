@@ -158,7 +158,21 @@ test('the opening centre is a snap point for dimensions', async ({ page }) => {
   const centreEnd = [dimension.start, dimension.end]
     .find(pt => Math.abs(pt.x - 2) < 0.05 && Math.abs(pt.z) < 0.5);
   expect(centreEnd).toBeTruthy();
-  expect(dimension.view).toBe('plan'); // saves with the PLAN DIMENSION layer
+  expect(dimension.view).toBe('plan');
+  // AND IT CARRIES NO LAYER, which is the point rather than an omission. The
+  // A-DIMS-* layers are written by auto-dims.js, which knows what each string
+  // it generates MEASURES. A drafter drawing a dimension by hand has told the
+  // page nothing of the kind, and layerShows reads a missing layer as "draws"
+  // -- so the one string someone placed deliberately cannot be switched off by
+  // a tick they never set.
+  //
+  // UNDEFINED, NOT NULL, and the difference is which half of the round trip
+  // this reads. `savedDrawing` returns the file as WRITTEN, and
+  // drawing-format.js's standing rule is "readers normalise, writers never
+  // invent" -- so the key is simply absent here. It becomes null on the way
+  // back in, which is the half proto/dim-layers-harness.js holds.
+  expect(dimension.layer).toBeUndefined();
+  expect(dimension.auto).not.toBe(true);
 });
 
 test('deleting a selected opening or its host wall removes the opening', async ({ page }) => {

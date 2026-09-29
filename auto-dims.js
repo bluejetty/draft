@@ -7,7 +7,7 @@ if (!window.DraftAutoDims) {
   // Computes the auto-dimension string stacks for one level/view. Returns
   // null when nothing on the plan is big enough to string (the caller keeps
   // existing dims in that case), else an array of segments:
-  //   { start: {x, z}, end: {x, z}, srcStartId, srcEndId }
+  //   { start: {x, z}, end: {x, z}, layer, srcStartId, srcEndId }
   // with srcIds naming the nearest master-linked corner for each end (null
   // when the group has no linked corners).
   // ── THE TUNING, WHERE THE THING IT TUNES LIVES ──────────────────────────
@@ -25,6 +25,37 @@ if (!window.DraftAutoDims) {
   const STRING_SPACING_FT = 1.5;
   // Corners closer than this string as one coordinate.
   const JOG_MERGE_FT = 2 / 12;
+
+  // ── WHICH LAYER EACH STRING LANDS ON ────────────────────────────────────
+  //
+  // Movie, 29 Sep: "with those i should be able to control them all on off
+  // nicely". A dimension nobody can switch off is one this module decides for
+  // every sheet that will ever show it -- and a REAL ESTATE PLAN wants the
+  // footprint WITHOUT the wall runs, where a CONSTRUCTION LAYOUT wants both.
+  // One drawing, two audiences, and until now one answer.
+  //
+  // THE LAYER IS DECIDED HERE, AT THE PUSH, because this is the only place
+  // that knows what a string MEASURES. By the time a string leaves this
+  // function all five kinds are the same shape -- two points and a distance --
+  // so anything downstream would have to read the geometry back and infer the
+  // intent from it. That inference is exactly the bug: an opening-centre
+  // string on a house with one window has two coordinates, and so does the
+  // overall. The emitter does not guess; it names what it just built.
+  //
+  // These ids are the drawing format's vocabulary, spelled the same in
+  // profile-manager.js (the standards table, which carries their name and
+  // print flag) and layer-views.js (which of them a given view starts with).
+  // Spelled once here so this file holds one copy rather than five literals.
+  //
+  // A-DIMS-INT and A-DIMS-COLS are in that table and ABSENT FROM THIS OBJECT
+  // on purpose: nothing in this module measures an interior wall or locates a
+  // column yet, and a constant for a string that is never pushed would read
+  // like coverage this file does not have.
+  const DIM_LAYERS = Object.freeze({
+    OVERALL: 'A-DIMS-OVR',       // the footprint: eave to eave, corner to corner
+    EXTERIOR: 'A-DIMS-EXT',      // the overhang string and the outline jogs
+    FENESTRATION: 'A-DIMS-FENS', // window and door centres
+  });
 
   // The grid the dimension labels print on: formatArchitecturalInches rounds
   // to the sixteenth, so 1/16" is 1/192 of a foot.
@@ -241,17 +272,21 @@ if (!window.DraftAutoDims) {
           // and the overall runs eave to eave across the whole footprint.
           const wallCoords = uniqSorted(mergeJogs(group.wallFacing[side]))
             .filter(value => value > lo + 0.01 && value < hi - 0.01);
-          if (wallCoords.length) strings.push(uniqSorted([lo, ...wallCoords, hi]));
-          strings.push([lo, hi]);
+          if (wallCoords.length) {
+            strings.push({ coords: uniqSorted([lo, ...wallCoords, hi]), layer: DIM_LAYERS.EXTERIOR });
+          }
+          strings.push({ coords: [lo, hi], layer: DIM_LAYERS.OVERALL });
         } else {
           const centres = uniqSorted(openingsFor[groupIndex][side])
             .filter(value => value > lo + 0.01 && value < hi - 0.01);
-          if (centres.length) strings.push(uniqSorted([lo, ...centres, hi]));
+          if (centres.length) {
+            strings.push({ coords: uniqSorted([lo, ...centres, hi]), layer: DIM_LAYERS.FENESTRATION });
+          }
           const jogCoords = group.facing
             ? uniqSorted(mergeJogs([lo, hi, ...group.facing[side]]))
             : cornerCoords;
-          if (jogCoords.length > 2) strings.push(jogCoords);
-          strings.push([lo, hi]);
+          if (jogCoords.length > 2) strings.push({ coords: jogCoords, layer: DIM_LAYERS.EXTERIOR });
+          strings.push({ coords: [lo, hi], layer: DIM_LAYERS.OVERALL });
         }
         const own = side === 'N' ? minZ : side === 'S' ? maxZ : side === 'W' ? minX : maxX;
         entries.push({ group, side, lo, hi, strings, own, edge: own, base: 0 });
@@ -311,12 +346,12 @@ if (!window.DraftAutoDims) {
         return best ? best.srcId : null;
       };
       const horizontal = entry.side === 'N' || entry.side === 'S';
-      entry.strings.forEach((rawCoords, stringIndex) => {
+      entry.strings.forEach((string, stringIndex) => {
         const fixed = entry.edge + outward[entry.side]
           * (firstOffset + (entry.base + stringIndex) * stringSpacingFt);
         // Quantised once, here — every partial and the overall on this side
         // are differences of the same rounded coordinates, so they add up.
-        const coords = printableCoords(rawCoords);
+        const coords = printableCoords(string.coords);
         for (let i = 0; i < coords.length - 1; i++) {
           const a = coords[i], b = coords[i + 1];
           // The rendered dim line offsets to the right of the start→end
@@ -328,6 +363,7 @@ if (!window.DraftAutoDims) {
           const end = horizontal ? { x: q, z: fixed } : { x: fixed, z: q };
           segments.push({
             start, end,
+            layer: string.layer,
             srcStartId: nearestSrcId(start),
             srcEndId: nearestSrcId(end),
           });
@@ -338,7 +374,7 @@ if (!window.DraftAutoDims) {
   }
 
   window.DraftAutoDims = Object.freeze({
-    computeAutoDimStrings, STRING_SPACING_FT, JOG_MERGE_FT,
+    computeAutoDimStrings, STRING_SPACING_FT, JOG_MERGE_FT, DIM_LAYERS,
   });
 })();
 }

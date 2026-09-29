@@ -10,9 +10,25 @@ const ALL_LAYER_IDS = [
   'draft', 'no-draft', 'SHAPE',
   'A-WALL-EXT', 'A-WALL-INT', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-DOOR', 'A-GLAZ', 'A-ROOF',
   'A-FL-OPNG', 'A-ROOF-OPNG', 'A-STR', 'A-STR-DECK', 'A-FIXT', 'A-CASE', 'A-ANNO-NOTE',
-  'PLAN DIMENSION', 'ROOM-IDS-AREA',
-  'S-BEAM', 'S-SLAB', 'FLOOR DIMENSION', 'S-FDN', 'S-COL-FOOTING', 'S-FOOTING', 'FOUNDATION DIMENSION',
-  'E-POWER', 'E-POWER DIMENSION',
+  'ROOM-IDS-AREA',
+  // The dimension layers say WHAT A STRING MEASURES, and they replaced the
+  // four that said which drawing it sat on (PLAN / FLOOR / FOUNDATION /
+  // E-POWER DIMENSION). That axis already existed in layer-views.js; what a
+  // drafter had no way to say was "keep the overall size, drop the wall runs"
+  // -- which is what a REAL ESTATE PLAN needs and a CONSTRUCTION LAYOUT does
+  // not.
+  'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-COLS',
+  'S-BEAM', 'S-SLAB', 'S-FDN', 'S-COL-FOOTING', 'S-FOOTING',
+  'E-POWER',
+];
+
+// Only these offer a Visible tick. Everything else renders a blank cell, and
+// that is the difference this list exists to pin: `visibility: true` in
+// profile-manager.js is what STANDARDS.html reads, so a layer added without it
+// gets no switch and nothing says so.
+const SWITCHABLE_LAYER_IDS = [
+  'draft', 'no-draft',
+  'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-COLS',
 ];
 
 async function openStandards(page) {
@@ -23,7 +39,7 @@ async function openStandards(page) {
     localStorage.clear();
   });
   await page.goto('/STANDARDS.html');
-  await expect(page.locator('#groups .group')).toHaveCount(6);
+  await expect(page.locator('#groups .group')).toHaveCount(7);
 }
 
 async function drawLine(page, x1, z1, x2, z2) {
@@ -50,6 +66,36 @@ test('the standards page lists every command layer with its default print rule',
   await expect(page.locator('[data-layer-print="no-draft"]')).not.toBeChecked();
   await expect(page.locator('[data-layer-print="draft"]')).toBeChecked();
   await expect(page.locator('[data-layer-print="A-WALL-EXT"]')).toBeChecked();
+
+  // THE FOUR RETIRED ONES ARE GONE, asserted rather than assumed. Dropping
+  // them from ALL_LAYER_IDS only stops the list looking for them; it does not
+  // say they left.
+  for (const gone of ['PLAN DIMENSION', 'FLOOR DIMENSION',
+    'FOUNDATION DIMENSION', 'E-POWER DIMENSION']) {
+    await expect(page.locator(`[data-layer-name="${gone}"]`)).toHaveCount(0);
+  }
+});
+
+test('the dimension layers can be switched off, and the walls cannot', async ({ page }) => {
+  await openStandards(page);
+
+  // BOTH DIRECTIONS. Asserting only that the five have a tick would pass
+  // against a page that gave every layer one -- and that is a real way to
+  // build it, so the control is the half that makes the claim mean anything.
+  for (const layerId of SWITCHABLE_LAYER_IDS) {
+    await expect(page.locator(`[data-layer-visible="${layerId}"]`)).toBeVisible();
+  }
+  for (const layerId of ['A-WALL-EXT', 'A-DOOR', 'S-BEAM', 'ROOM-IDS-AREA']) {
+    await expect(page.locator(`[data-layer-visible="${layerId}"]`)).toHaveCount(0);
+  }
+
+  // And the tick does something: it is checked by default and unticking it
+  // reports the layer hidden by its own name.
+  const overall = page.locator('[data-layer-visible="A-DIMS-OVR"]');
+  await expect(overall).toBeChecked();
+  await overall.uncheck();
+  await expect(page.locator('#status')).toContainText('A-DIMS-OVR');
+  await expect(page.locator('#status')).toContainText('hidden');
 });
 
 test('renaming a layer in the standards shows in the Model Space layer views', async ({ page }) => {

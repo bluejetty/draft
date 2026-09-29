@@ -3107,8 +3107,9 @@ const MUTATIONS = [
       ...wallItems.filter(item => item.band),`)],
   // ── AND THE WINDOW SIZE TAG ON AN ELEVATION ─────────────────────────
   ['a window on an elevation carries no size tag at all',
-    src => src.replace("        if (f.type === 'window' && window.DraftFenLabels) {",
-      "        if (false && f.type === 'window' && window.DraftFenLabels) {")],
+    src => src.replace(
+      "        if (f.type === 'window' && window.DraftFenLabels && showFenTags) {",
+      "        if (false && window.DraftFenLabels && showFenTags) {")],
   // THE DRAWN HEIGHT INSTEAD OF THE RECORD'S. `top` is clamped to the wall
   // plate, so a window whose head would poke through its own plate is DRAWN
   // short -- and a framer ordering off that number orders the wrong window.

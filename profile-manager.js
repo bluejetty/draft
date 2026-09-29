@@ -278,8 +278,8 @@ if (!window.DraftProfileManager) {
     Object.freeze({
       group: 'Generic linework',
       layers: Object.freeze([
-        Object.freeze({ id: 'draft', name: 'DRAFT', use: 'Default layer for the Line and Node / Arc tools.', printable: true }),
-        Object.freeze({ id: 'no-draft', name: 'NO-DRAFT', use: 'Construction / reference linework; drawing spaces only.', printable: false }),
+        Object.freeze({ id: 'draft', name: 'DRAFT', use: 'Default layer for the Line and Node / Arc tools.', printable: true, visibility: true }),
+        Object.freeze({ id: 'no-draft', name: 'NO-DRAFT', use: 'Construction / reference linework; drawing spaces only.', printable: false, visibility: true }),
         Object.freeze({ id: 'SHAPE', name: 'SHAPE', use: 'Closed construction outlines (Shape tool — drawn or captured); source geometry for ROOF and FLOOR.', printable: false }),
         Object.freeze({ id: 'OUTLINE', name: 'OUTLINE', use: 'Building outline reference geometry (Outline tool); bright, never-printing guide with its master in the BONEYARD.', printable: false }),
       ]),
@@ -299,8 +299,40 @@ if (!window.DraftProfileManager) {
         Object.freeze({ id: 'A-STR-DECK', name: 'A-STR-DECK', use: 'Exterior / deck stairs with their handrails and guardrails.', printable: true }),
         Object.freeze({ id: 'A-FIXT', name: 'A-FIXT', use: 'Plumbing fixtures and appliances — tub, toilet, sink, fridge, stove, washer/dryer (Fixture tool).', printable: true }),
         Object.freeze({ id: 'A-CASE', name: 'A-CASE', use: 'Casework — base cabinets, vanities, and their countertops (Fixture tool).', printable: true }),
-        Object.freeze({ id: 'PLAN DIMENSION', name: 'PLAN DIMENSION', use: 'Dimension strings placed in PLAN.', printable: true }),
         Object.freeze({ id: 'ROOM-IDS-AREA', name: 'ROOM-IDS-AREA', use: 'Room tags and areas.', printable: true }),
+      ]),
+    }),
+    // ── DIMENSIONS, BY WHAT THEY MEASURE ────────────────────────────────
+    //
+    // Movie, 29 Sep: "the user can turn on and off the dimensions by using
+    // LAYERs" ... "with those i should be able to control them all on off
+    // nicely".
+    //
+    // THESE REPLACE PLAN / FLOOR / FOUNDATION / E-POWER DIMENSION, which
+    // scoped a dimension by WHICH DRAWING it sat on. That axis already
+    // exists and is not this one: layer-views.js gives every view its own
+    // layer set, so a FLOOR LAYOUT was already free to show or hide "the
+    // floor's dimensions" as a block. What no axis gave was control INSIDE
+    // a drawing -- keep the footprint, drop the wall runs -- which is the
+    // one a REAL ESTATE PLAN needs and a CONSTRUCTION LAYOUT does not.
+    //
+    // Nothing was tagged with the old four (every dimension in a drawing
+    // today carries layer: null), so retiring them loses no drafting. What
+    // it can lose is a renamed or unprinted setting stored against those
+    // ids in a saved profile -- on layers that drew nothing either way.
+    //
+    // THE GROUP IS ITS OWN because these span views: OVR, EXT and FENS are
+    // emitted on the walls plan and the electrical sheet, INT on the floor
+    // layout, COLS on the floor and the foundation. Filing them under any
+    // one drawing's heading would say the opposite.
+    Object.freeze({
+      group: 'Dimensions',
+      layers: Object.freeze([
+        Object.freeze({ id: 'A-DIMS-OVR', name: 'A-DIMS-OVR', use: 'Overall size — the footprint corner to corner, eave to eave. The one string a listing plan keeps.', printable: true, visibility: true }),
+        Object.freeze({ id: 'A-DIMS-EXT', name: 'A-DIMS-EXT', use: 'Exterior detail — the overhang string and the outline jogs.', printable: true, visibility: true }),
+        Object.freeze({ id: 'A-DIMS-INT', name: 'A-DIMS-INT', use: 'Interior — wall faces and items inside the footprint (stair hole, partitions near an exterior wall).', printable: true, visibility: true }),
+        Object.freeze({ id: 'A-DIMS-FENS', name: 'A-DIMS-FENS', use: 'Window and door centres.', printable: true, visibility: true }),
+        Object.freeze({ id: 'A-DIMS-COLS', name: 'A-DIMS-COLS', use: 'Column and beam locations, measured in both directions on FLOOR and FOUNDATION.', printable: true, visibility: true }),
       ]),
     }),
     Object.freeze({
@@ -308,11 +340,9 @@ if (!window.DraftProfileManager) {
       layers: Object.freeze([
         Object.freeze({ id: 'S-BEAM', name: 'S-BEAM', use: 'Beams.', printable: true }),
         Object.freeze({ id: 'S-SLAB', name: 'S-SLAB', use: 'Slabs.', printable: true }),
-        Object.freeze({ id: 'FLOOR DIMENSION', name: 'FLOOR DIMENSION', use: 'Dimension strings placed in FLOOR.', printable: true }),
         Object.freeze({ id: 'S-FDN', name: 'S-FDN', use: 'Foundation / frost walls and grade beams (Wall tool in FOUNDATION).', printable: true }),
         Object.freeze({ id: 'S-COL-FOOTING', name: 'S-COL-FOOTING', use: 'Columns and their pad footings.', printable: true }),
         Object.freeze({ id: 'S-FOOTING', name: 'S-FOOTING', use: 'Strip footing linework generated by BUILD HOUSE, centered on the foundation wall.', printable: true }),
-        Object.freeze({ id: 'FOUNDATION DIMENSION', name: 'FOUNDATION DIMENSION', use: 'Dimension strings placed in FOUNDATION.', printable: true }),
       ]),
     }),
     Object.freeze({
@@ -326,7 +356,6 @@ if (!window.DraftProfileManager) {
       group: 'Electrical — ELECTRIC',
       layers: Object.freeze([
         Object.freeze({ id: 'E-POWER', name: 'E-POWER', use: 'Electric linework (Line tool in ELECTRIC).', printable: true }),
-        Object.freeze({ id: 'E-POWER DIMENSION', name: 'E-POWER DIMENSION', use: 'Dimension strings placed in ELECTRIC.', printable: true }),
       ]),
     }),
     Object.freeze({

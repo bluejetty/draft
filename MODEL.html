@@ -11150,12 +11150,20 @@
       // claimed a link it does not have would be worse than one that admits
       // it has none. Re-run after an edit, which is what the old page's own
       // message tells a drafter to do.
+      // THE LAYER IS KEPT WHERE THE srcIds ARE DROPPED, and the difference is
+      // that this one is not a link to something this page does not have --
+      // it is the module's own answer to "what does this string measure",
+      // decided at the push in auto-dims.js where the kind was still known.
+      // Nothing downstream can re-derive it: by here every kind is two points
+      // and a distance. Dropping it would leave the drafter with five kinds
+      // of dimension and one switch, which is what this change is undoing.
       const dimension = {
         id: newDimensionId(),
         start: { x: segment.start.x, y: 0, z: segment.start.z },
         end: { x: segment.end.x, y: 0, z: segment.end.z },
         levelId,
         view,
+        layer: segment.layer,
         auto: true,
       };
       drawing.dimensions.push(dimension);

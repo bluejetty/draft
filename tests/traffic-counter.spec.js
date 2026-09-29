@@ -150,7 +150,16 @@ test('MODEL.html wears the count on the bar\'s lowest row, beside the clock',
 //   together with the barredButHomeless guard, which stops the floating
 //   fallback printing over the bar. Said out loud because a reader who
 //   assumed this file gated the anchor itself would be wrong.
-for (const page_ of ['PROJECT.html', 'SPECS.html', 'MODEL.html']) {
+//
+// AND IT COVERS CONSTRUCTION LAYOUT NOW. That page named a home of its own on
+// 24 Sep, back when the bar had no lane and the alternative here was no count
+// at all; it kept it after the lane landed because traffic-counter.js takes
+// the FIRST named home in the document. Movie, 29 Sep: "make sure the VISIT
+// counter is on every page in bottom left" -- the slot is gone from
+// LAYOUT.html, so this page answers the same rule as the rest and the test
+// below that guarded the exception is now the one that guards its removal.
+for (const page_ of ['PROJECT.html', 'SPECS.html', 'MODEL.html',
+  'LAYOUT.html', 'EXTFINISH.html', 'REALESTATEPLAN.html']) {
   test(`the count never lands in the page row (${page_})`, async ({ page, baseURL }) => {
     await proxyApp(page, baseURL);
     await page.route(`${GC_HOST}/**`, route => {
@@ -194,24 +203,26 @@ for (const page_ of ['PROJECT.html', 'SPECS.html', 'MODEL.html']) {
   });
 }
 
-// CONSTRUCTION LAYOUT NAMES ITS OWN HOME, AND NOW IT HAS TWO TO CHOOSE FROM.
+// CONSTRUCTION LAYOUT NAMED ITS OWN HOME, AND DOES NOT ANY MORE.
 //
-// Movie put the count on that page's own strip (23 Sep: "the viewcounter in
-// that location lower left bar 2nd row up(top row)"), so LAYOUT.html carries
-// a [data-visit-counter-home] in its markup at :581. The shared bar's foot
-// lane brought a second one in on 25 Sep, mounted by bottomBar() at :614.
+// Movie put the count on that page's own strip on 24 Sep ("the viewcounter in
+// that location lower left bar 2nd row up(top row)") because the shared bar
+// had no lane then and the alternative on this page was no count at all. The
+// lane arrived on 25 Sep and gave every barred page a home; LAYOUT kept its
+// own only because traffic-counter.js takes the FIRST named home in the
+// document and this page's markup is parsed before it calls bottomBar().
 //
-// WHICH ONE WINS IS PARSE ORDER, and that is the module's designed rule --
-// traffic-counter.js takes the FIRST named home in the document, which is how
-// a page overrides the bar's default. LAYOUT's own markup is parsed before it
-// calls bottomBar(), so his placement stands.
+// WHICH LEFT ONE PAGE READING ITS COUNT A ROW HIGHER THAN THE OTHER FIVE,
+// beside SAVED. Movie, 29 Sep, with the six pages side by side: "make sure
+// the VISIT counter is on every page in bottom left". The slot is deleted, so
+// the module falls through to the bar's.
 //
-// AND THAT IS EXACTLY WHY THIS IS HERE. A rule that holds by parse order
-// holds until somebody moves a script tag, and nothing in the suite said so:
-// the loop above asserts the count lands in #foot-lane, which is the wrong
-// answer for this page by design, so it does not cover LAYOUT and cannot.
-// This is the line that fails the day the two script tags trade places.
-test('Construction Layout keeps the count on its own strip, not in the bar',
+// THIS TEST IS STILL THE LINE THAT FAILS THE DAY THE TWO SCRIPT TAGS TRADE
+// PLACES -- it has only changed which way round the answer is. It asserts the
+// page declares exactly ONE home, so re-adding a page-level slot fails here
+// by name rather than silently moving the count back up a row: the loop above
+// would catch the position, but not the cause.
+test('Construction Layout reads its count in the bar, like every other page',
   async ({ page, baseURL }) => {
     await proxyApp(page, baseURL);
     await page.route(`${GC_HOST}/**`, route => {
@@ -228,25 +239,21 @@ test('Construction Layout keeps the count on its own strip, not in the bar',
     const where = await page.evaluate(() => {
       const el = document.querySelector('[data-traffic-counter]');
       const homes = [...document.querySelectorAll('[data-visit-counter-home]')];
+      const strip = document.getElementById('lay-status-bar');
       return {
         homes: homes.length,
-        // THE PAGE'S OWN, which is the one that is NOT the bar's.
-        landedInPageHome: !!el && !el.closest('#foot-lane')
-          && homes.some(h => h.contains(el)),
-        // AND IT IS THE FIRST OF THEM, said separately so a failure names the
-        // cause rather than the symptom.
-        landedInFirst: !!el && !!homes[0] && homes[0].contains(el),
         inFootLane: !!el && !!el.closest('#foot-lane'),
+        // AND NOT ON THE PAGE'S OWN STRIP, said separately so a failure names
+        // where it went rather than only that it is not where it belongs.
+        onPageStrip: !!el && !!strip && strip.contains(el),
       };
     });
-    expect(where.homes, 'this page declares its own home beside the bar\'s')
-      .toBe(2);
-    expect(where.landedInFirst, 'the count takes the FIRST home in the document')
-      .toBe(true);
-    expect(where.inFootLane, 'so it is not in the bar\'s lowest row here')
+    expect(where.homes, 'this page declares no home of its own -- the bar\'s '
+      + 'foot lane is the only one').toBe(1);
+    expect(where.inFootLane, 'so the count reads in the bar\'s lowest row, '
+      + 'bottom left, the same row the other five pages use').toBe(true);
+    expect(where.onPageStrip, 'and not up beside SAVED on the page\'s own strip')
       .toBe(false);
-    expect(where.landedInPageHome, 'it is on the strip Movie put it on')
-      .toBe(true);
   });
 
 test('the count sits to the right of PROJECT where a strip has one', async ({ page, baseURL }) => {

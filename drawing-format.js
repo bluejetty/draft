@@ -191,6 +191,33 @@ if (!window.DraftDrawingFormat) {
     return mapped;
   };
 
+  // ── A DIMENSION CARRIES THE LAYER OF WHAT IT MEASURES ───────────────────
+  //
+  // auto-dims.js decides this at the push, where it still knows whether a
+  // string is the overall, the jogs, or the opening centres. Nothing
+  // downstream can re-derive it -- by then every kind is two points and a
+  // distance -- so unlike a door (always A-DOOR) or a beam (always S-BEAM),
+  // this one has to be STORED. That is why it is read here rather than
+  // assigned like the eleven layers above it.
+  //
+  // THE LIST IS THIS FILE'S OWN, not env.knownLayerIds, and that is the whole
+  // point. `lines` takes the known set from its caller, and exactly one page
+  // passes one (MODEL.html:16700) -- so a drawing opened in LAYOUT or
+  // REALESTATEPLAN has its line layers fall to 'draft' already. A dimension
+  // going the same way would strip the tag on precisely the pages this
+  // feature exists for: the REAL ESTATE PLAN that wants the footprint and
+  // none of the wall runs would quietly get all of them back, and look like
+  // it was working. Five fixed ids need no page to supply them.
+  //
+  // MUST MATCH profile-manager.js's DEFAULT_LAYER_STANDARDS. A dimension
+  // tagged with an id the standards table does not carry would have no
+  // visibility to read and would always draw -- unswitchable, which is the
+  // bug this whole layer set was added to fix. The auto-dims harness holds
+  // the two lists against each other so a rename in one fails a check.
+  const DIMENSION_LAYERS = Object.freeze([
+    'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-COLS',
+  ]);
+
   const dimensions = (rawDimensions, levelIds, env = {}) => {
     const seen = new Set();
     const raw = Array.isArray(rawDimensions) ? rawDimensions : [];
@@ -203,7 +230,27 @@ if (!window.DraftDrawingFormat) {
       if (!Number.isInteger(id) || seen.has(id) || !start || !end || dimensionLevelId == null || !view) return null;
       if (Math.hypot(end.x - start.x, end.z - start.z) < 0.001) return null;
       seen.add(id);
-      return { id, start, end, levelId: dimensionLevelId, view, auto: dimension?.auto === true };
+      // NO KEY AT ALL when there is no layer, which is not the same as null
+      // and the difference is a failing test. Emitting `layer: null` gave
+      // every untagged dimension a key the old page does not write, and
+      // write-tier.spec.js compares MODEL.html's save against the save
+      // MODEL.dc.html produced -- key for key, on the same drawing. 28 nulls
+      // appeared in that diff. The contract it protects is that opening a
+      // drawing in the new page and saving it changes NOTHING, and a key
+      // nobody asked for is a change.
+      //
+      // So this follows the rule stated at the top of this file and used
+      // three functions up in finishOf: readers normalise, writers never
+      // invent. A dimension with a real layer carries it; one without gains
+      // nothing. layerShows reads a missing layer exactly as it read null --
+      // no standard, so it draws -- which is why the behaviour is identical
+      // and only the saved bytes differ.
+      const layer = oneOf(dimension?.layer, DIMENSION_LAYERS, null);
+      return {
+        id, start, end, levelId: dimensionLevelId, view,
+        ...(layer ? { layer } : {}),
+        auto: dimension?.auto === true,
+      };
     }), env.drops).filter(Boolean);
   };
 

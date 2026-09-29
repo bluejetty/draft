@@ -21,6 +21,7 @@ if (!window.DraftLayoutPlan) {
   // cut-view.js keeps the same shape for its pattern modules.
   let warnedNoStandards = false;
   let warnedNoLayerViews = false;
+  let warnedNoLayerStandards = false;
 
   const num = value => (Number.isFinite(Number(value)) ? Number(value) : null);
 
@@ -307,9 +308,50 @@ if (!window.DraftLayoutPlan) {
       wallTopFtFor: (id, forView) => LEVELS.levelWallTopFt(of('walls'), id, forView),
     } : null;
 
+    // ── THE GATE GETS ITS HANDLE ────────────────────────────────────────
+    //
+    // plan-composition.js has asked every entity `layerShows(layer)` since it
+    // was written, and that function opens with:
+    //
+    //     const standard = env.layerStandard ? env.layerStandard(layerId) : null;
+    //     if (!standard) return true;
+    //
+    // Nobody has ever passed `layerStandard`. Checked across every page and
+    // module on 29 Sep: STANDARDS.html WRITES visible/printable into the saved
+    // profile, and no painter has ever READ them back. So every tick a drafter
+    // has set on that page since it shipped has changed nothing on any sheet.
+    // A gate fitted and no handle -- and it fails the safe way, which is why
+    // it went unnoticed: the drawing looks right, it just cannot be edited.
+    //
+    // This is the handle. It belongs in this file because both sheet pages
+    // paint through it -- LAYOUT.html and REALESTATEPLAN.html each load
+    // profile-manager.js before this one -- so one wiring serves both rather
+    // than each page growing its own copy of the same lookup.
+    //
+    // MODEL.html is deliberately NOT wired: it paints its own plan rather than
+    // calling this composer (board items 38-40), and the Model Space is where
+    // a drafter is EDITING. A dimension hidden there is one they cannot click.
+    const profiles = window.DraftProfileManager;
+    const layerApi = window.DraftLayerStandards;
+    if (!warnedNoLayerStandards && !(profiles && layerApi)) {
+      warnedNoLayerStandards = true;
+      console.warn('layout-plan: '
+        + (!profiles ? 'profile-manager.js' : 'layer standards')
+        + ' is not loaded, so every layer draws regardless of its Visible tick '
+        + '-- STANDARDS can be set and this sheet will ignore it.');
+    }
+    const layerTable = profiles && layerApi
+      ? layerApi.normaliseLayerStandards(
+        profiles.getActive('standards')?.content?.model?.layerStandards)
+      : null;
+
     composition.drawPlan(ctx, toS, {
       levelId,
       viewId: view,
+      // null for a layer the table does not carry, which layerShows reads as
+      // "draws" -- an untagged dimension from before this key existed, and a
+      // profile that predates a layer being added, both keep drawing.
+      layerStandard: layerTable ? (id => layerTable[id] || null) : null,
       // A SAVED VIEWPORT CARRYING NO VIEW MEANS EVERY VIEW ON THE LEVEL, which
       // is this file's standing compatibility promise -- a layout composed
       // before views existed must compose byte-for-byte as it did. Saying

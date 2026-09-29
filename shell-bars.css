@@ -714,6 +714,38 @@
      lived there, and for the same reason: a slot the count never arrives in
      must not be a gap holding the lane open. */
   #foot-lane > :empty { display:none; }
+
+  /* THE CLOCK'S TYPE, AND IT BELONGS HERE. Movie, 29 Sep, with the six pages
+     side by side: *"see over in bottom right corner the TIME - text is
+     different in most of them its bigger, can you make them all look the same
+     as the MODEL.html"*.
+
+     THE SOCKET-WITHOUT-THE-LAMP FAILURE ONE LAYER UP. shell-bars.js mounts
+     the clock into [data-foot-note] on every page carrying this bar -- its
+     own comment says why: *"the clock is the same on every page carrying this
+     bar"* -- but the rule that makes it a clock and not a paragraph stayed in
+     MODEL.html's stylesheet, where it was written the day MODEL was the only
+     page with a corner for it. So five pages mounted a bare <div> and got the
+     page's body type: 16px, mixed case, proportional figures, three times the
+     size of the visit count it shares the lane with.
+
+     THE SAME DECLARATIONS MODEL ALREADY HAD, and the reasoning is MODEL's, in
+     its own stylesheet beside the rule: the counter's type so the lane's two
+     ambient readings are one voice, --ink-quiet because a literal that is ink
+     for a white page is invisible on the night skin, and tabular figures so a
+     clock does not twitch sideways when the minute turns. Both --font-ui
+     (:root, above) and --ink-quiet (palette.js, which every one of these
+     pages loads) resolve here.
+
+     MODEL KEEPS ITS COPY. The declarations are identical, so the cascade
+     lands on the same paint either way, and this thread was asked not to
+     touch that page. */
+  #clock { font-family: var(--font-ui); font-size:10px; font-weight:600;
+    letter-spacing:0.06em; text-transform:uppercase; color: var(--ink-quiet);
+    font-variant-numeric:tabular-nums; white-space:nowrap; }
+  /* AN EMPTY SLOT TAKES NO ROOM -- the visit counter's slot beside it keeps
+     the same rule for the same reason. */
+  #clock:empty { display:none; }
   /* THE ONE DELETE (§7a). Not per type, and not only for walls: it acts on
      the selection, whatever is in it. It is on screen exactly while there is
      something to delete -- and the iPad has no Delete key, so this button is

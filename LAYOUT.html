@@ -172,11 +172,6 @@
      panel. */
   #lay-profile { display:flex; gap:3px; margin-top:6px; }
   #lay-profile .layout-profile-button { flex:1; min-width:0; text-align:center; }
-  /* The count reads as quietly as the rest of the strip. */
-  [data-visit-counter-home] { margin-left:14px; display:inline-flex;
-    align-items:center; color: var(--ink-quiet); }
-  [data-visit-counter-home] * { font-family:'Barlow Condensed', system-ui, sans-serif;
-    font-size:11px; letter-spacing:0.06em; }
   .layout-profile-button { min-width:64px; border:1px solid var(--edge-panel);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     color: var(--ink-primary); padding:2px 6px;
@@ -574,21 +569,22 @@
 <!-- STATUS BAR -->
 <div id="lay-status-bar">
   <span data-layout-status>SAVED</span>
-  <!-- THE VIEW COUNTER, and this corner is where Movie put it. 24 Sep, on
-       this page: "there is a 'SAVE' SETTING' STANDARDS' button i think that
-       was taken from DC but not needed here in that location, we should put
-       the viewcounter in that location lower left bar 2nd row up(top row)".
-       The two profile buttons that stood here were the DC page's, and with
-       the shared bar's own settings corner four rows above them saying the
-       same two words they were the map drawn twice.
+  <!-- THE VIEW COUNTER IS NOT ON THIS STRIP ANY MORE, and the slot it stood
+       in is gone rather than emptied. 24 Sep, this page had the only home for
+       it: "we should put the viewcounter in that location lower left bar 2nd
+       row up(top row)" -- the shared bar had no lane of its own yet, and the
+       alternative was no count at all here. The 25 Sep lane gave every page
+       one ("move the '# VISITS' and the DATE/TIME down below PROJECT / MODEL
+       / REAL ESTATE ... on the lowest row"), and this page kept its own
+       because traffic-counter.js takes the FIRST [data-visit-counter-home] in
+       the document and this one is parsed first.
 
-       THE COUNTER WAS ALREADY LOADED AND MOUNTING NOTHING. traffic-counter.js
-       has been linked at the foot of this page all along, but it looks for
-       `[data-visit-counter-home]` and falls back to nothing rather than print
-       a count over the page row -- its own comment says so: "A PAGE WITH A
-       BOTTOM BAR BUT NO NAMED HOME GETS NO COUNT ... can mount one the day
-       they want it". This is that day; the slot is all it needed. -->
-  <span data-visit-counter-home></span>
+       WHICH LEFT CONSTRUCTION LAYOUT AS THE ONE PAGE READING IT A ROW HIGHER
+       than the other five, beside SAVED. Movie, 29 Sep: "make sure the VISIT
+       counter is on every page in bottom left". Deleting the slot is the
+       whole change -- with no named home the module falls through to the
+       bar's [data-visit-counter-home], which is where the other five pages
+       already wear it. -->
   <div class="lay-spacer"></div>
   <div data-history-controls>
     <button type="button" data-undo class="strip-history" title="Nothing to undo yet" aria-label="Nothing to undo yet" disabled>
