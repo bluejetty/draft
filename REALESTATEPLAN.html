@@ -25,11 +25,39 @@
      written.
 
      AND FEWER MODULES, because a listing plan is not a construction document.
-     layer-views, auto-dims, the electrical symbols and the section tables are
-     things a sheet carries to be BUILT from. What a buyer reads is the shape of
-     the rooms -- so the shell walls, the openings, the stairs and the fixtures
+     auto-dims, the electrical symbols and the section tables are things a
+     sheet carries to be BUILT from. What a buyer reads is the shape of the
+     rooms -- so the shell walls, the openings, the stairs and the fixtures
      are here, and the rest is deliberately absent rather than loaded and
-     switched off. ALL IN THE HEAD: the bars are written where their mount call
+     switched off.
+
+     LAYER-VIEWS AND CUT-VIEW ARE NOT PART OF THAT ECONOMY, and this ledger
+     used to say otherwise -- it listed layer-views among the things dropped
+     and in the same breath promised the stairs. Both cannot be true, and the
+     page shipped the second sentence while the script list kept the first:
+
+       layout-plan builds its stair stage only as
+       `stairs && LEVELS && VIEWS ? {...} : null`, and VIEWS is
+       DraftLayerViews. Absent, the whole stage is null and every stair on
+       every level is silently not drawn. Nothing throws.
+
+       layout-plan reads its slab standards as
+       `(window.DraftCutView && window.DraftCutView.STANDARDS) || {}`. Absent,
+       every standard is `undefined` -- which reaches the garage slab note as
+       a blank thickness and the thickened edge as geometry computed from two
+       undefineds. Nothing throws there either.
+
+     THE INTENT WAS NEVER IN DOUBT. The drawPlan call below refuses `shell:
+     true` precisely BECAUSE it "drops the stairs, the fixtures and the
+     structure" -- so this page took deliberate care to keep its stairs and
+     then lost them through the back door of a missing script tag. Devin's
+     audit, 28 Sep, found both and reproduced both; no test had ever opened
+     this page.
+
+     THE LESSON THIS LEDGER OWES ITS NEXT READER: a module dropped from a page
+     is only dropped if nothing the page still loads ASKS for it. Both of
+     these were asked for by layout-plan.js, which this page has loaded all
+     along. ALL IN THE HEAD: the bars are written where their mount call
      stands, mid-parse, so a module loaded after the body is one that call
      cannot find. -->
 <script src="./shell-bars.js"></script>
@@ -38,6 +66,7 @@
 <script src="./drawing-format.js"></script>
 <script src="./wall-types.js"></script>
 <script src="./level-assembly.js"></script>
+<script src="./layer-views.js"></script>
 <script src="./render-2d.js"></script>
 <script src="./geometry-2d.js"></script>
 <script src="./stair-geometry.js"></script>
@@ -46,6 +75,13 @@
 <script src="./plan-composition.js"></script>
 <script src="./layout-plan.js"></script>
 <script src="./formatters.js"></script>
+<!-- AFTER formatters.js, and the order is the whole of it: cut-view.js
+     destructures window.DraftFormatters AT LOAD, so placed before it the
+     tag is present, the module throws, DraftCutView is never defined, and
+     the page carries on and draws a plan. That is the same defect this
+     script was added to fix, one layer down -- a script tag is not a
+     dependency met until the thing it needs is already in hand. -->
+<script src="./cut-view.js"></script>
 <script src="./orientation-guard.js"></script>
 <script>
   // THE SKIN IS ONE CHOICE ACROSS THE WHOLE APP, read off the same
