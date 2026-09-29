@@ -9,6 +9,19 @@ if (!window.DraftLayoutPlan) {
 (() => {
   const { WALL_TYPES, LEGACY_WALL_TYPES } = window.DraftWallTypes;
 
+  // ── SAID ONCE, AND SAID BY NAME ────────────────────────────────────────
+  //
+  // Both fallbacks below are the shape that cost this repo three defects on
+  // 28 Sep: an absent module becomes an empty object or a null stage, the
+  // sheet paints, drawPlan returns true, and nothing anywhere says a word.
+  // The page looks finished and is missing a storey's worth of stairs.
+  //
+  // ONCE PER PAGE, NOT PER PAINT. These sit in a draw that runs on every
+  // repaint, and sixty identical lines a second is a warning nobody reads.
+  // cut-view.js keeps the same shape for its pattern modules.
+  let warnedNoStandards = false;
+  let warnedNoLayerViews = false;
+
   const num = value => (Number.isFinite(Number(value)) ? Number(value) : null);
 
   // Walls of one level as the PLAN context shows them: the level's own plan
@@ -249,6 +262,16 @@ if (!window.DraftLayoutPlan) {
     const fixtures = window.DraftFixtureGeometry || null;
     const closets = window.DraftClosets || null;
     const STANDARDS = (window.DraftCutView && window.DraftCutView.STANDARDS) || {};
+    if (!warnedNoStandards && !Object.keys(STANDARDS).length) {
+      warnedNoStandards = true;
+      // "OR THREW ON LOAD" IS NOT HEDGING. cut-view.js destructures
+      // DraftFormatters at load, so a page that lists it BEFORE formatters.js
+      // has the tag and no module -- indistinguishable from here, and the
+      // exact fault REALESTATEPLAN shipped with.
+      console.warn('layout-plan: cut-view.js is not loaded, or threw on load, so '
+        + 'every drawing standard reads undefined -- the garage slab note prints '
+        + 'with no thickness and its thickened edge is sized from nothing.');
+    }
     // The level's own elevation, which the stair painter measures its descent
     // from. Absent means zero, the way every other level-keyed lookup here
     // treats a level it cannot find.
@@ -269,6 +292,14 @@ if (!window.DraftLayoutPlan) {
     // this level and drops that field on its way to the painter.
     const LEVELS = window.DraftLevelAssembly;
     const VIEWS = window.DraftLayerViews;
+    // GATED ON THE STAGE HAVING WANTED TO RUN. A drawing with no stairs, or a
+    // page with no level assembly, is not missing anything -- warning there
+    // would be noise, and noise is how a real warning gets ignored.
+    if (!warnedNoLayerViews && stairs && LEVELS && !VIEWS) {
+      warnedNoLayerViews = true;
+      console.warn('layout-plan: layer-views.js is not loaded, so the stair stage '
+        + 'is skipped entirely -- no stair on any level will be drawn.');
+    }
     const stairLevels = stairs && LEVELS && VIEWS ? {
       floors: VIEWS.floorLevels(saved?.levels),
       assemblyFor: id => LEVELS.levelAssemblyFor(saved?.levelAssemblies, id),
