@@ -637,15 +637,180 @@ if (!window.DraftShellBars) {
     at.insertAdjacentHTML('beforebegin', markup);
   };
 
+  // ── THE VERBS A PAGE DOES NOT HANDLE, SAID OUT LOUD ───────────────────
+  //
+  // THE SEAM AT THE TOP OF THIS FILE HAD ONE SIDE MISSING. "The bar owns the
+  // FURNITURE; the page owns what the furniture DOES" is true, and the file
+  // row, PRINTSCREEN, the units pair, TOY/DRAFTING and the instrument chips
+  // are all furniture -- so six pages mount them and ONE page does anything
+  // with most of them. On the other five they looked exactly as live as they
+  // do on MODEL: full ink, a hover border, a pointer cursor, and nothing at
+  // the end of the press.
+  //
+  // Movie, 28 Sep, on what the fix is: *"a page that doesn't handle a button
+  // shows it disabled, with a note saying why, instead of looking live and
+  // doing nothing."*
+  //
+  // WHICH TWO PAGES HAD ALREADY WORKED OUT FOR THEMSELVES, and that is the
+  // reason this belongs here rather than on a page. PROJECT greyed four file
+  // buttons and Construction Layout greyed six plus the units and the board,
+  // each with its own copy of the loop, its own wording, and its own idea of
+  // which controls counted -- and between them they still left METRIC dead on
+  // PROJECT, the board dead on four pages, and five instrument chips dead on
+  // EXT. FINISH and REAL ESTATE PLAN. Two copies of a rule is how the third
+  // page gets none. The good sentences those two wrote are kept below, as the
+  // per-page entries; what is gone is the two loops.
+  //
+  // IT IS A DECLARATION, NOT A DETECTION. There is no way to ask a button
+  // whether anybody is listening to it, and a bar that guessed would be wrong
+  // in the dangerous direction -- greying a control that works. So a page is
+  // taken at its word: IMPLEMENTS names the verbs it wires, everything else on
+  // its bar stands down, and a page that names nothing gets a bar of honest
+  // grey. THAT IS THE RIGHT DEFAULT FOR A PAGE NOBODY HAS WRITTEN YET, which
+  // is the same argument the page row makes for keeping ESTIMATES greyed: a
+  // new page arrives saying "not here yet" about everything and turns verbs on
+  // as it earns them, rather than arriving with a row of lies.
+  //
+  // NOT UNIT CONVERSION. Greying METRIC is not a decision about metres; it is
+  // the page admitting it has none. The day a page reads in metres it adds
+  // 'units' to its line here and the button comes back.
+  const VERBS = Object.freeze({
+    'file-new': Object.freeze({ sel: '#file-new' }),
+    'file-open': Object.freeze({ sel: '#file-open' }),
+    save: Object.freeze({ sel: '#save' }),
+    'file-save-as': Object.freeze({ sel: '#file-save-as' }),
+    'file-ext': Object.freeze({ sel: '#file-ext' }),
+    printscreen: Object.freeze({ sel: '#printscreen' }),
+    units: Object.freeze({ sel: '#units-corner button[data-units]' }),
+    board: Object.freeze({ sel: '[data-mode-corner] button[data-board]' }),
+
+    // THE INSTRUMENTS STAND DOWN BY CLASS AS WELL AS BY PROPERTY, and the
+    // reasons are Construction Layout's, which found both of them the hard
+    // way. A CHIP IS NOT ALWAYS A BUTTON -- brush, ruler, T-square, scale and
+    // TURN THE HOUSE are, and compass, triangle and the erasing shield are
+    // SPANS, where setting .disabled is silently ignored. So `.dormant` is
+    // what every chip gets and the property goes where it means something.
+    // AND THREE OF THEM SHIP DORMANT ALREADY, with "not built on this page
+    // yet" in the markup above: their titles say something truer than this
+    // could, so they keep them.
+    instruments: Object.freeze({
+      sel: '#strip-center .chip',
+      down: (el, why) => {
+        const already = el.classList.contains('dormant');
+        el.classList.add('dormant');
+        if ('disabled' in el) el.disabled = true;
+        if (!already) el.title = why;
+      },
+    }),
+  });
+
+  // WHAT EACH PAGE WIRES, and every entry here is a line somebody can check
+  // against the page: MODEL's file row at its own newDrawing/openDrawing/
+  // openSaveAs, PROJECT's SAVE at its save('Project saved.'), EXT. FINISH's
+  // NEW at the `?new=1` hand-off it makes to MODEL. A page missing from this
+  // table gets everything greyed, which is the right answer for one that has
+  // not said otherwise.
+  const IMPLEMENTS = Object.freeze({
+    model: Object.freeze(['file-new', 'file-open', 'save', 'file-save-as',
+      'file-ext', 'printscreen', 'units', 'board', 'instruments']),
+    project: Object.freeze(['save']),
+    'ext-finish': Object.freeze(['file-new']),
+    construction: Object.freeze([]),
+    specs: Object.freeze([]),
+    'real-estate': Object.freeze([]),
+  });
+
+  // THE NOTE THE BUTTON CARRIES. `default` says where the verb DOES live, so
+  // the answer is one hover away rather than in this file; a page with a
+  // better reason than "not here" overrides it by id, and the three overrides
+  // below are the sentences PROJECT and Construction Layout had already
+  // written for their own copies.
+  const WHY = Object.freeze({
+    'file-new': Object.freeze({
+      default: 'NEW — start an empty drawing in the MODEL space' }),
+    'file-open': Object.freeze({
+      default: 'OPEN — open a drawing in the MODEL space' }),
+    save: Object.freeze({
+      default: 'SAVE — nothing on this page is held back unsaved',
+      // Not "not yet": this page writes the layout record on every change,
+      // through _persistLayout's queue, so there is no moment when a drafter
+      // here has unsaved work to press a button about.
+      construction: 'SAVE — this page writes every change as you make it; '
+        + 'the word at the foot says where that stands',
+      // The same shape: the finishes are merged back into the drawing as they
+      // are set, which is why the word at the foot reads "Saved with the
+      // drawing" rather than offering a button.
+      'ext-finish': 'SAVE — the finishes are written into the drawing as '
+        + 'you set them; the word at the foot says where that stands' }),
+    'file-save-as': Object.freeze({
+      default: 'SAVE AS — a copy under a name you pick is saved in the '
+        + 'MODEL space' }),
+    'file-ext': Object.freeze({
+      default: 'The saved copy is named, and its extension picked, in the '
+        + 'MODEL space' }),
+    printscreen: Object.freeze({
+      default: 'PRINTSCREEN — the pages to show a client are made in the '
+        + 'MODEL space',
+      // THE ONE THAT WILL COME BACK. This is the page that makes printable
+      // sheets, so it is the page where the button most obviously belongs --
+      // but which sheet, at what size, with the titleblock filled from where,
+      // are questions, and wiring it under cover of a bar change would be
+      // answering them by accident.
+      construction: 'PRINTSCREEN — printing a sheet is not wired yet' }),
+    units: Object.freeze({
+      default: 'IMPERIAL and METRIC are set where the house is drawn, in the '
+        + 'MODEL space',
+      // Not "not yet" either: a construction sheet is scaled in ARCHITECTURAL
+      // scales, imperial all the way down, so METRIC here would need a second
+      // scale ladder rather than a conversion.
+      construction: 'The construction sheet reads in architectural scales, '
+        + 'which are imperial — see the VIEWPORT SCALE list' }),
+    board: Object.freeze({
+      default: 'TOY and DRAFTING are set where the house is drawn, in the '
+        + 'MODEL space' }),
+    instruments: Object.freeze({
+      default: 'Drawing instruments live in the MODEL space' }),
+  });
+
+  // BOTH HALVES OF THE BAR, AND EITHER ORDER. MODEL mounts the bottom bar
+  // first and the top bar 90 lines later; the other five do it the other way
+  // round. So the page's name is remembered as it arrives and the greying runs
+  // on whichever call completes the pair -- a stand-down keyed off one of them
+  // alone would have skipped the whole top bar on MODEL or on everyone else.
+  //
+  // MID-PARSE, BEFORE THE PAGE WIRES ANYTHING, which is safe in the one
+  // direction that matters: this only ever DISABLES, and only verbs the page
+  // has not claimed, so a page turning its own button on afterwards -- as
+  // PROJECT does with SAVE, which ships disabled in the markup -- still wins.
+  let mountedTop = false;
+  let mountedPage;
+  const standDown = () => {
+    if (!mountedTop || !mountedPage) return;
+    const wired = IMPLEMENTS[mountedPage] || [];
+    Object.entries(VERBS).forEach(([verb, def]) => {
+      if (wired.includes(verb)) return;
+      const why = WHY[verb][mountedPage] || WHY[verb].default;
+      document.querySelectorAll(def.sel).forEach(el => {
+        if (def.down) { def.down(el, why); return; }
+        el.disabled = true;
+        el.title = why;
+      });
+    });
+  };
+
   window.DraftShellBars = Object.freeze({
     PAGES,
 
     // opts.instruments  mount #strip-center (LENGTH, ANGLE, the chips).
     //                   Drawing pages only; defaults OFF, so a page that does
     //                   not draw gets the right bar by saying nothing.
-    topBar: (opts = {}) => put(TOPHEAD + '\n'
-      + (opts.instruments ? INSTRUMENTS + '\n' : '')
-      + TOPTAIL),
+    topBar: (opts = {}) => {
+      put(TOPHEAD + '\n'
+        + (opts.instruments ? INSTRUMENTS + '\n' : '')
+        + TOPTAIL);
+      mountedTop = true;
+      standDown();
+    },
 
     // opts.page   which chip reads "you are here". A page that passes nothing
     //             gets a row of links and no current mark, which is wrong but
@@ -661,6 +826,13 @@ if (!window.DraftShellBars) {
       // AFTER the markup, because the slot it fills arrives with it. `put`
       // inserts mid-parse, so the lane is in the document by the next line.
       mountClock();
+      // THE PAGE'S NAME ARRIVES HERE AND NOWHERE ELSE, which is why the
+      // greying is keyed off the pair rather than off the top bar alone -- see
+      // standDown above. It is `opts.page` unchanged: the chip that reads "you
+      // are here" and the verbs this page can keep a promise about are the same
+      // question asked twice.
+      mountedPage = opts.page;
+      standDown();
     },
 
     readout: () => put(READOUT),

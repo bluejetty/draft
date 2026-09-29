@@ -4802,31 +4802,22 @@
       //
       // SAVE is real -- this page writes the same drawing file MODEL does,
       // through the same store, and its own save() already carries the status
-      // word. The other four are NOT wired, and they are DISABLED rather than
-      // left live, which is this bar's own vocabulary: the page row has kept a
-      // chip greyed for every page not built yet -- ESTIMATES now, and REAL
-      // ESTATE LAYOUT until the day it arrived -- because "the row is the map
-      // of the job" and a map with a town missing teaches a shape that is
-      // wrong. A button that looks pressable and does nothing
-      // teaches a worse one.
+      // word. It ships DISABLED in the bar's markup, so turning it on is this
+      // page claiming it.
       //
-      // WHAT NEW / OPEN / SAVE AS / PRINTSCREEN SHOULD MEAN HERE is a
-      // question for Movie rather than a thing to guess at: they are all
-      // operations on the DRAWING, and this page is about the project that
-      // owns it. Greyed, they say "not here yet" honestly and cost nothing to
-      // turn on the day he says what they do.
+      // THE OTHER FIVE WERE GREYED FROM HERE and are greyed from the bar now:
+      // `project: ['save']` in shell-bars.js says this page wires SAVE and
+      // nothing else on that bar, so NEW, OPEN, SAVE AS, the extension picker
+      // and PRINTSCREEN stand down with a note saying where each verb does
+      // live. The loop that used to stand here said "not on the project page
+      // yet" about those five and left METRIC and TOY/DRAFTING looking live,
+      // which is the reason the rule moved somewhere it could cover a whole
+      // bar rather than the part one page happened to think of.
       const barSave = document.getElementById('save');
       if (barSave) {
         barSave.disabled = false;
         barSave.addEventListener('click', () => save('Project saved.'));
       }
-      ['file-new', 'file-open', 'file-save-as', 'file-ext', 'printscreen']
-        .forEach(id => {
-          const el = document.getElementById(id);
-          if (!el) return;
-          el.disabled = true;
-          el.title = el.textContent.trim() + ' — not on the project page yet';
-        });
 
       // THE BONE. The bar owns the button; this page owns the verb -- and the
       // verb is NOT BUILT YET, so it says so rather than doing nothing.

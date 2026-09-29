@@ -2331,83 +2331,28 @@ page.componentDidMount();
     },
   });
 
-  // ── AND THE CONTROLS IT CANNOT ─────────────────────────────────────────
+  // ── AND THE CONTROLS IT CANNOT ───────────────────────────
   //
-  // DISABLED, NOT LEFT LIVE, which is this bar's own vocabulary: the page row
-  // keeps a chip greyed for every page not built yet -- ESTIMATES now, and
-  // REAL ESTATE LAYOUT until the day it arrived -- because "the row is the map
-  // of the job" and a map with a town missing teaches a shape that is
-  // wrong. A button that looks pressable and does
-  // nothing teaches a worse one. Each carries a title saying why, so the
-  // answer is one hover away rather than in this file.
-  const standDown = (id, why) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.disabled = true;
-    el.title = why;
-  };
-
-  // THE FILE ROW. All six are operations on the DRAWING, and this page does
-  // not own the drawing -- it arranges views OF it onto sheets, and it writes
-  // exactly one thing back: the layout record, on every change, through
-  // _persistLayout's queue. That is why SAVE is greyed on a page that saves
-  // constantly: there is no moment when a drafter here has unsaved work to
-  // press a button about, and the status word to the left says so.
+  // GREYED FROM THE BAR NOW, not from here. This page had its own standDown()
+  // and twenty lines of it: the six file-row controls, the units pair, the
+  // board pair and every instrument chip, each with the sentence explaining
+  // why. The sentences were right and they are all still in use -- they moved
+  // into shell-bars.js as the notes the bar puts on those buttons, and the
+  // reasons that are this page's alone (SAVE, because the layout record is
+  // written on every change; PRINTSCREEN, because it is this page's verb and
+  // not yet wired; METRIC, because an architectural scale ladder is imperial
+  // all the way down) are its per-page entries there.
   //
-  // PRINTSCREEN IS THE ONE THAT WILL COME BACK. This is the page that makes
-  // printable sheets, so it is the page where that button most obviously
-  // belongs -- but printing a sheet is a feature with its own questions (which
-  // sheet, at what size, with the titleblock's fields filled from where), and
-  // wiring it under cover of a bar swap would be answering them by accident.
-  standDown('file-new', 'NEW — start a drawing in the MODEL space');
-  standDown('file-open', 'OPEN — open a drawing in the MODEL space');
-  standDown('save', 'SAVE — this page writes every change as you make it; '
-    + 'the word at the foot says where that stands');
-  standDown('file-save-as', 'SAVE AS — not on the construction layout yet');
-  standDown('file-ext', 'Not on the construction layout yet');
-  standDown('printscreen', 'PRINTSCREEN — printing a sheet is not wired yet');
-
-  // UNITS. Not "not yet": a construction sheet is scaled in ARCHITECTURAL
-  // scales -- 1/4" = 1'-0" and the eight either side of it -- and the whole
-  // scale ladder, the paper sizes and the paper-inch arithmetic are imperial
-  // all the way down. METRIC here would need a second ladder, not a
-  // conversion. IMPERIAL stays marked so the corner still reads true.
+  // WHAT WAS WRONG WAS THAT IT WAS HERE. `construction: []` in that file says
+  // this page wires nothing on the top bar, and the same table greys the same
+  // controls on PROJECT, SPECS, EXT. FINISH and REAL ESTATE PLAN, which each
+  // mounted the identical bar and each greyed a different subset of it -- or
+  // none. Two pages solving this separately is how the other four got missed.
+  //
+  // IMPERIAL STAYS MARKED so the corner still reads true about what is in
+  // force, which is a statement about this drawing rather than about the
+  // button, and is the one line of it that stayed.
   S.markSwitch(S.switchSet('data-units'), 'units', 'imperial');
-  document.querySelectorAll('[data-units-corner] button').forEach(b => {
-    b.disabled = true;
-    b.title = 'The construction sheet reads in architectural scales, which are '
-      + 'imperial — see the VIEWPORT SCALE list';
-  });
-
-  // TOY / DRAFTING is what the drawing is being made in, and nothing is being
-  // made here: this page arranges views of a drawing the MODEL space owns.
-  document.querySelectorAll('[data-mode-corner] button[data-board]').forEach(b => {
-    b.disabled = true;
-    b.title = 'TOY and DRAFTING are set where the house is drawn, in the MODEL space';
-  });
-
-  // THE INSTRUMENTS. Movie asked for them on this bar -- "we may need to draw
-  // sometimes" -- so they are mounted, and they are DORMANT because nothing on
-  // this page fills them yet. `.chip.dormant` is the bar's own word for it,
-  // already worn by MODEL's unbuilt tools: "the rest of the kit, not yet in
-  // hand". The LENGTH and ANGLE readouts need nothing done to them; they
-  // reserve width only when they are reading, so empty they cost no space.
-  //
-  // A CHIP IS NOT ALWAYS A BUTTON, which this got wrong first time and a spec
-  // caught: four of them are -- brush, ruler, tsquare, scale -- and the rest
-  // are SPANS. Setting .disabled on a span is silently ignored, so the page
-  // looked stood-down and three of its chips were still live elements. The
-  // class is what every chip gets; the property goes where it means something.
-  //
-  // AND THREE OF THEM SHIPPED DORMANT ALREADY -- compass, triangle, erasing
-  // shield, "not built on this page yet" in the bar's own markup. Their titles
-  // say something truer than anything this page could add, so they keep them.
-  document.querySelectorAll('#strip-center .chip').forEach(chip => {
-    const alreadyDown = chip.classList.contains('dormant');
-    chip.classList.add('dormant');
-    if ('disabled' in chip) chip.disabled = true;
-    if (!alreadyDown) chip.title = 'Drawing instruments live in the MODEL space';
-  });
 
   // THE BONE. The bar owns the button; this page owns the verb, and the verb
   // is PRINT -- board #20, not built. Until it is, a press that silently did

@@ -1108,34 +1108,18 @@
         paintRoofProps();
       };
 
-      const raw = await load();
-      if (!raw) {
-        say('No drawing in browser storage — draw a house in the Model Space first.');
-        paintElevList();
-        paintRoofList();
-        return;
-      }
-      levels = FORMAT.levels(raw.levels);
-      drawing = {
-        ...raw,
-        walls: FORMAT.walls(raw.walls, new Set(levels.map(l => l.id)), {
-          wallTypes: WT.WALL_TYPES,
-          legacyWallTypes: WT.LEGACY_WALL_TYPES,
-          // WITHOUT THIS THE PAGE IS BLANK OF ITS OWN SUBJECT. The normaliser
-          // drops a finish it cannot recognise, and this page draws nothing
-          // else -- the same trap MODEL's loader note describes, pointing the
-          // other way.
-          finishIds: WT.EXTERIOR_FINISHES.map(f => f.id),
-          legacyFinishes: WT.LEGACY_FINISH_IDS,
-          finishAnchors: WT.FINISH_ANCHORS,
-          defaultWallTopFt: 8,
-        }),
-      };
-      rebuild();
-      say(cuts.length ? 'Click a wall on the elevation to clad it.'
-        : 'This drawing has no walls to clad yet.');
-
-      window.addEventListener('resize', () => { paintElevation(); });
+      // ── AND IT IS WIRED BEFORE THE DRAWING IS READ ───────────────
+      //
+      // IT USED TO STAND BELOW `const raw = await load()`, AFTER THE EARLY
+      // RETURN -- so on a browser with no drawing in storage this page said
+      // "draw a house in the Model Space first", returned, and left NEW
+      // looking exactly as pressable as it does here and doing nothing. That
+      // is the one state where the button is the drafter's way out, and it
+      // is the state it was never wired in.
+      //
+      // NOTHING IN THE HANDLER NEEDS THE DRAWING: it drains `queue`, declared
+      // 200 lines up, and navigates. So it goes above the read, and the page
+      // keeps its promise whether or not there is anything on it.
 
       // ── NEW GOES HOME AND STARTS A BLANK ONE ──────────────────────────
       //
@@ -1164,6 +1148,35 @@
           window.location.href = './MODEL.html?new=1';
         });
       }
+
+      const raw = await load();
+      if (!raw) {
+        say('No drawing in browser storage — draw a house in the Model Space first.');
+        paintElevList();
+        paintRoofList();
+        return;
+      }
+      levels = FORMAT.levels(raw.levels);
+      drawing = {
+        ...raw,
+        walls: FORMAT.walls(raw.walls, new Set(levels.map(l => l.id)), {
+          wallTypes: WT.WALL_TYPES,
+          legacyWallTypes: WT.LEGACY_WALL_TYPES,
+          // WITHOUT THIS THE PAGE IS BLANK OF ITS OWN SUBJECT. The normaliser
+          // drops a finish it cannot recognise, and this page draws nothing
+          // else -- the same trap MODEL's loader note describes, pointing the
+          // other way.
+          finishIds: WT.EXTERIOR_FINISHES.map(f => f.id),
+          legacyFinishes: WT.LEGACY_FINISH_IDS,
+          finishAnchors: WT.FINISH_ANCHORS,
+          defaultWallTopFt: 8,
+        }),
+      };
+      rebuild();
+      say(cuts.length ? 'Click a wall on the elevation to clad it.'
+        : 'This drawing has no walls to clad yet.');
+
+      window.addEventListener('resize', () => { paintElevation(); });
 
       window.DraftShellBars.wireSkin({
         theme: window.__reTheme.theme,
