@@ -957,7 +957,23 @@
     writing-mode:vertical-rl; text-transform:uppercase; }
   .rail-tab:hover { color: var(--accent); border-color: var(--accent); }
   .rail-tab[hidden] { display:none; }
-  #left-tab { left:0; border-left:none; border-radius:0 4px 4px 0; }
+  /* THE LEFT EDGE CARRIES THREE (Movie, 29 Sep). Same sequence rule the right
+     edge's two use: each tab starts where the last one's CAP ends, so the
+     stack is derived from one number rather than eyeballed at the window
+     height I happened to open.
+
+     18vh, NOT THE 32vh THE RIGHT PAIR USE, and the arithmetic is written down
+     because three tabs is where this stops being obvious. The last tab's foot
+     is at most `--rail-top + 3*cap + 16`, and it has to clear the bottom band.
+     At the three heights that are actually tested -- 700 (the elevation spec),
+     768 (the commonest laptop) and 900 (the config default) -- 18vh leaves
+     70px, 102px and 162px of clearance. 22vh passes at 768 and 900 and FAILS
+     at 700 by 14px, which is exactly the kind of "works where I looked"
+     spacing the right edge's own note warns about. */
+  #left-tab, #build-tab, #props-tab { left:0; border-left:none;
+    border-radius:0 4px 4px 0; max-height:18vh; }
+  #build-tab { top: calc(var(--rail-top) + 18vh + 8px); }
+  #props-tab { top: calc(var(--rail-top) + 2 * (18vh + 8px)); }
   /* The right tabs read bottom-to-top so both edges' tabs run outward from
      the edge they hang on. */
   #right-tab, #previews-tab { right:0; border-right:none;
@@ -972,6 +988,15 @@
      panel is showing without the drafter opening both to find out. */
   .rail-tab[aria-selected="true"] { color: var(--accent);
     border-color: var(--accent); }
+  /* A TAB WITH SOMETHING BEHIND IT, when you are not looking at it. Arming a
+     tool fills PROPERTIES whatever tab is up, and the page will not jump the
+     drafter onto it -- its own rule, that a tool arming must not yank a panel
+     under him. So the tab has to say so instead. A DOT, not the accent
+     colour: `aria-selected` already owns that, and a tab that is both
+     selected and full would otherwise have one appearance for two facts. */
+  .rail-tab[data-has-props]:not([aria-selected="true"])::after {
+    content:''; position:absolute; inset-inline-end:2px; inset-block-start:4px;
+    width:5px; height:5px; border-radius:50%; background: var(--accent); }
   /* A panel is pinned to its own edge and is as tall as it needs to be, for
      the same reason as the tab: full height costs drawing area that a panel
      holding three rows of seats is not using. */
@@ -1029,7 +1054,21 @@
      under a shrink-to-fit panel -- the rail could not collapse to the width of
      its narrowest section when a pane held only a line of text -- and a rail
      with a width has no shrink to put a floor under. */
-  #left-rail { left:28px; border-right:1px solid var(--edge-panel); }
+  /* AS TALL AS WHAT IS IN IT, ONCE THE COLUMN CAME APART. `aside` above pins
+     a rail top AND bottom, which was right while the left one held a single
+     691px column -- it was always taller than the box. Split across three
+     tabs the tallest pane is about 350px, so a pinned bottom leaves 180px of
+     empty panel under nine tool keys. Movie, looking at the mock: the rail
+     "probably wants to shrink to its content".
+     THE PIN BECOMES A CEILING, not nothing. `bottom:auto` alone would let a
+     tall properties panel run down over the foot bar; `max-height` keeps the
+     exact same floor the pin gave and lets anything shorter stop early. The
+     scroll in `aside` still catches whatever exceeds it.
+     LEFT ONLY. The right rail holds one bounded panel that is meant to fill
+     its height, and its seats are measured against that box by three specs. */
+  #left-rail { left:28px; border-right:1px solid var(--edge-panel);
+    bottom:auto;
+    max-height: calc(100vh - var(--rail-top) - var(--bottom-band)); }
   /* THE PANEL IS BOUNDED, and --rail-w is the rule that keeps it off the
      sheet. It used to be `max-width:277px` here, and the history is worth
      keeping because it is the reason the bound is a bound and not a trim.

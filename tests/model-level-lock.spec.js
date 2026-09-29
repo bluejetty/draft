@@ -77,7 +77,7 @@ async function open(page, file, { left = false } = {}) {
       new File([JSON.stringify(f)], 'drawing.json',
         { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, f: file });
-  await page.goto(left ? '/MODEL.html?left=1' : '/MODEL.html');
+  await page.goto(left ? '/MODEL.html?left=1&lpane=drafting' : '/MODEL.html');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   if (left) await expect(page.locator('[data-assembly-start]')).toBeVisible();
 }

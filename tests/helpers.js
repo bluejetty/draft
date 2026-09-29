@@ -611,8 +611,55 @@ async function wallArmed(page) {
 // IDEMPOTENT, unlike the press. Pressing the armed key returns to SELECT --
 // the register's rule -- so a helper that always clicked would disarm the
 // tool for any caller that was already holding it.
+// ── WHICH TAB A KEY IS ON, since the left rail became three (29 Sep) ──────
+//
+// The seventeen keys used to be one column, so "open the rail" was the whole
+// of getting at any of them. DRAW / EDIT is on DRAFTING and BUILD is on its
+// own tab now, so a spec that opens the rail and clicks WALL is clicking
+// something inside a hidden pane.
+//
+// A TABLE HERE, mirroring BLOCK_PANE in MODEL.html rather than importing it:
+// the page's table is the page's business and this one is the tests' record
+// of what they expect it to say. They are meant to agree, and
+// model-html-left-tabs.spec.js is what fails when they stop.
+const TOOL_PANE = Object.freeze({
+  select: 'drafting', extend: 'drafting', copy: 'drafting', trim: 'drafting',
+  node: 'drafting', line: 'drafting', shape: 'drafting',
+  dimension: 'drafting', annotation: 'drafting',
+  wall: 'build', fenestration: 'build', floor: 'build', roof: 'build',
+  column: 'build', beam: 'build', stair: 'build', fixture: 'build',
+});
+
+const LEFT_TAB = Object.freeze({
+  drafting: '#left-tab', build: '#build-tab', properties: '#props-tab',
+});
+
+// BRINGS A TAB UP WITHOUT TOGGLING IT OFF. Pressing the tab that is already
+// showing SHUTS the rail -- that is the page's gesture and it is right -- so
+// a helper that clicked unconditionally would close the rail exactly when it
+// was already where the caller wanted it.
+async function showLeftPane(page, pane) {
+  const tab = page.locator(LEFT_TAB[pane] || LEFT_TAB.drafting);
+  const open = !(await page.locator('#left-rail').isHidden());
+  const up = await tab.getAttribute('aria-selected') === 'true';
+  if (open && up) return;
+  await tab.click();
+  await expect(page.locator('#left-rail')).toBeVisible();
+}
+
+async function armFromRail(page, id) {
+  await showLeftPane(page, TOOL_PANE[id] || 'drafting');
+  const key = page.locator(`[data-tool-key="${id}"]`);
+  await key.click();
+  await expect(key).toHaveAttribute('aria-pressed', 'true');
+}
+
 async function armWall(page) {
   if (await wallArmed(page)) return;
+  // THROUGH THE PANE, because WALL is a BUILD key and the rail may be sitting
+  // on DRAFTING. Every caller of this helper got that for free rather than
+  // each one learning where the key went.
+  await showLeftPane(page, 'build');
   await wallKey(page).click();
   await expect(wallKey(page)).toHaveAttribute('aria-pressed', 'true');
 }
@@ -638,6 +685,9 @@ module.exports = {
   pickModelCut,
   modelCutOffered,
   openToolRail,
+  showLeftPane,
+  armFromRail,
+  TOOL_PANE,
   armWall,
   disarmWall,
   wallArmed,

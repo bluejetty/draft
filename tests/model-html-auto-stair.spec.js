@@ -81,7 +81,7 @@ async function open(page, file = empty()) {
   // ?left=1 FOR THE TOOL COLUMN AND ?right=1 FOR THE PROPERTIES SLOT: both
   // ship collapsed, and the key is the only way to arm a tool with no legacy
   // button.
-  await page.goto('/MODEL.html?left=1&right=1');
+  await page.goto('/MODEL.html?left=1&lpane=build&right=1');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 

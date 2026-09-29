@@ -31,7 +31,11 @@ async function houseOnLivePage(page) {
   // is the page's default and it is right -- the canvas is the point -- but a
   // panel inside a shut drawer is not clickable, so every panel spec on this
   // page opens it the same way (model-tool-select.spec.js:122).
-  await page.goto('/MODEL.html?left=1');
+  // AND `lpane=build`, since 29 Sep. The fixture palettes moved onto the
+  // BUILD tab with the FIXTURE key they place from, so `?left=1` alone now
+  // opens the rail on DRAFTING and every chip this file drives is behind a
+  // tab that is not up.
+  await page.goto('/MODEL.html?left=1&lpane=build');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   // THE DRAFTING BOARD, EXPLICITLY. The page opens on TOY, whose tool list is
   // select/wall/outline -- so the FIXTURE key and every chip in its panel are

@@ -652,9 +652,26 @@
   #build-bar button.open, #build-bar button.chosen {
     color:#8f2a1d; border-color:#8f2a1d; box-shadow:inset 0 0 0 1px #8f2a1d; }
 
-  #tool-slot:empty::after { content:'TOOLS'; display:block; padding:6px 2px;
+  /* THE PLACEHOLDER MOVED DOWN ONE LEVEL when the column became three panes.
+     `#tool-slot:empty` can never match again -- the slot always holds its
+     three pane divs -- so the rule would have gone on passing every check
+     while saying nothing, which is the failure this file keeps finding. It
+     is the panes that can be empty now, and only the two that hold keys: an
+     empty tool pane means the roster did not load. */
+  [data-left-pane="drafting"]:empty::after,
+  [data-left-pane="build"]:empty::after { content:'TOOLS'; display:block;
+    padding:6px 2px; font-family: var(--font-ui); font-size:9px;
+    letter-spacing:0.1em; color: var(--ink-quiet); opacity:0.5; }
+  /* AND PROPERTIES SAYS WHY IT IS BLANK. With nothing selected the box is
+     hidden, so before this the tab opened onto an empty panel that looked
+     broken rather than idle -- the same thing the LEVELS panel's "NO
+     SECTIONS" line was written for. `:empty` cannot do this one: `#props-box`
+     is still a child while it is hidden, so the line is toggled in script
+     beside the box it stands in for. */
+  [data-props-empty] { display:block; padding:6px 2px;
     font-family: var(--font-ui); font-size:9px; letter-spacing:0.1em;
     color: var(--ink-quiet); opacity:0.5; }
+  [data-props-empty][hidden] { display:none; }
   [data-tool-group] + [data-tool-group] { margin-top:10px; }
   [data-tool-group-name] { font-family: var(--font-ui); font-size:9px;
     font-weight:600; letter-spacing:0.1em; text-transform:uppercase;
@@ -1009,31 +1026,75 @@
      seven land -- the slot exists so a tool is not built against a canvas that
      is about to lose its edge. -->
 
-<button id="left-tab" class="rail-tab" type="button" data-left-tab hidden>DRAFTING TOOLS</button>
+<!-- THREE TABS ON THE LEFT EDGE (Movie, 29 Sep): "i'd like to spit it into
+     multiple tabs actually ... DRAFTING , BUILD , PROPERTIES".
+
+     WHAT WAS WRONG WITH ONE. Everything the left rail holds was stacked in a
+     single column: seventeen tool keys, the selection modes, the object-type
+     filter, four fixture palettes and the assembly verbs. Measured on a
+     1366x768 laptop -- the commonest panel there is -- that column is 691px
+     inside a 532px rail, so the bottom 179px was below a fold nothing marked.
+     VANITY was cut in half and LAUNDRY, BEDROOM and ASSEMBLY were not on the
+     screen at all.
+
+     AND IT COULD NOT BE MOVED OUT OF. The rail is pinned `--rail-top` below
+     the strip and `--bottom-band` above the foot, so its height is always
+     `100vh - 236px`: fitting 691px needs a 927px-tall window, and even
+     shoving it against the strip leaves it 35px short at 768. The column had
+     to come apart; no amount of repositioning would have done it.
+
+     THE TOOLS WERE NOT THE PROBLEM, which is worth writing down because it is
+     the obvious guess and it is wrong: all seventeen keys together are 248px
+     and always fitted. The other 368px was four things that are not tools
+     sharing their column.
+
+     EACH BLOCK SITS WITH THE TOOLS IT IS FOR, which is Movie's own division:
+     SELECTION, OBJECT TYPE and ASSEMBLY all modify what Select does, so they
+     are DRAFTING; the fixture palettes are what the FIXTURE tool places, so
+     they are BUILD; and PROPERTIES is left holding what it says -- the
+     properties of the item in hand.
+
+     `#left-tab` IS THE DRAFTING TAB rather than a fourth element beside it.
+     Every spec that opens the left rail drives `#left-tab`, and a new id
+     would have left those either broken or pointing at a tab that no longer
+     opens anything. -->
+<button id="left-tab" class="rail-tab" type="button" data-left-tab
+  data-left-pane-tab="drafting" hidden>DRAFTING</button>
+<button id="build-tab" class="rail-tab" type="button"
+  data-left-pane-tab="build" hidden>BUILD</button>
+<button id="props-tab" class="rail-tab" type="button"
+  data-left-pane-tab="properties" hidden>PROPERTIES</button>
 <aside id="left-rail" data-left-rail hidden>
-  <div id="tool-slot" data-tool-slot></div>
-  <!-- PROPERTIES SITS UNDER THE TOOLS. Movie, 19 Sep: "we should designate an
-       area on the model page for the PROPERTIES box (which will change
-       depending on what you are using) i'm thinking add a collapsable box on
-       the left side under the DRAFTING TOOLS". It was in the RIGHT rail under
-       LEVELS / LAYERS until then, which put the thing you change a wall with
-       on the far side of the sheet from the thing you draw a wall with.
+  <div id="tool-slot" data-tool-slot>
+    <div data-left-pane="drafting"></div>
+    <div data-left-pane="build"></div>
+    <!-- PROPERTIES WAS A FOLD UNDER THE TOOLS. Movie, 19 Sep: "we should
+         designate an area on the model page for the PROPERTIES box (which
+         will change depending on what you are using) i'm thinking add a
+         collapsable box on the left side under the DRAFTING TOOLS". It was in
+         the RIGHT rail under LEVELS / LAYERS before that, which put the thing
+         you change a wall with on the far side of the sheet from the thing
+         you draw a wall with.
 
-       IT FOLDS ON ITS OWN, and that is the point of the box rather than a
-       flourish: the tool column above it is six rows tall, so folding the
-       properties away has to be possible WITHOUT shutting the rail that holds
-       the keys. The fold is in the URL beside `left` and `right`, for the
-       reason those are: it is what the drafter is looking at, and it survives
-       a reload.
+         THE FOLD STAYS, even though a tab of its own is what made the fold
+         necessary in the first place -- the box no longer has a tool column
+         above it to get out from under. It is kept because a drafter who has
+         set it folded has said something about how he works, and the state is
+         in the URL where a reload and a shared link both honour it. Taking
+         the control away would answer a question nobody asked.
 
-       THE TITLE STAYS INSIDE THE SLOT, not on the fold button. The button
-       says PROPERTIES always; the slot says WALL, ROOF, COLUMN -- whatever is
-       in hand. Putting the changing word on the button would have made the
-       fold's own label move under the drafter's cursor. -->
-  <div id="props-box" data-props-box hidden>
-    <button class="props-fold" type="button" data-props-fold
-      aria-expanded="true">PROPERTIES</button>
-    <div id="props-slot" data-props-slot hidden></div>
+         THE TITLE STAYS INSIDE THE SLOT, not on the fold button. The button
+         says PROPERTIES always; the slot says WALL, ROOF, COLUMN -- whatever
+         is in hand. Putting the changing word on the button would have made
+         the fold's own label move under the drafter's cursor. -->
+    <div data-left-pane="properties">
+      <div id="props-box" data-props-box hidden>
+        <button class="props-fold" type="button" data-props-fold
+          aria-expanded="true">PROPERTIES</button>
+        <div id="props-slot" data-props-slot hidden></div>
+      </div>
+      <div data-props-empty>NOTHING SELECTED</div>
+    </div>
   </div>
 </aside>
 
@@ -4451,13 +4512,111 @@
     paint();
   };
 
+  // ── AND THE SAME TWO FACTS ON THE LEFT ──────────────────────────────────
+  //
+  // `left` still says OPEN or SHUT by itself and `lpane` says WHICH, exactly
+  // as `right` and `pane` divide the work -- so every check written against
+  // `?left=1` keeps the meaning it had before the column came apart.
+  //
+  // DRAFTING IS THE DEFAULT because it is where a drafter starts: Select is
+  // the resting tool, and its keys are on that tab. An unknown or hand-typed
+  // value falls back to it rather than to a blank rail.
+  const LEFT_PANES = ['drafting', 'build'];
+  const leftPane = id => document.querySelector(`[data-left-pane="${id}"]`);
+
+  // ── PROPERTIES IS NOT THE THIRD OF THREE ────────────────────────────────
+  //
+  // Movie, 29 Sep: "i'd like to be able to have the properties tab open while
+  // either of the other ones are open, but the other 2 don't need to open at
+  // the same time".
+  //
+  // WHICH SETTLES SOMETHING THREE TAKING TURNS COULD NOT. Every panel opens on
+  // PROPERTIES -- also his ruling -- and a tool's own controls are among them,
+  // so with three tabs taking turns, arming FENESTRATION put DOOR / WINDOW one
+  // press away from the key that raised it, every single time. Standing
+  // PROPERTIES open BESIDE the tool tab puts those controls back under the key
+  // without moving them out of the box they belong in.
+  //
+  // SO THERE ARE TWO FACTS HERE, NOT ONE: which TOOL tab is up, and whether
+  // PROPERTIES is standing with it. DRAFTING and BUILD take turns because
+  // their keys are what the rail is for, and 691px of them in one column is
+  // what put this page over a 768 fold. PROPERTIES is what you are working ON,
+  // and its box already hides itself when there is nothing in hand.
+  //
+  // DEFAULT OPEN, and `lprops=0` is the only value that means anything -- the
+  // same absent-means-open spelling the fold below uses, for the same reason:
+  // a drafter who has just pressed a wall wants to see what he pressed.
+  const propsShowing = () => params.get('lprops') !== '0';
+  const setPropsPane = show => {
+    if (show) params.delete('lprops'); else params.set('lprops', '0');
+    // OPENING PROPERTIES OPENS THE RAIL, because a pane nobody can see is not
+    // open in any sense a drafter would recognise. Shutting it does NOT shut
+    // the rail: the tool tab beside it is still doing its job.
+    if (show && !railOpen('left')) { setRail('left', true); return; }
+    syncUrl();
+    syncShell();
+    paint();
+  };
+
+  // WHICH TAB EACH BLOCK LIVES ON, AS A TABLE. Movie, 29 Sep: "i may want to
+  // move the properties back in to DRAFT and BUILD depending on what they are
+  // properties for". This is that, and it is a table precisely so the answer
+  // can change without four builders and six `ModelProps.set` call sites
+  // having to agree about it -- moving a block is an edit here, not a hunt.
+  //
+  // THE DIVISION IS WHAT THE BLOCK IS FOR, not what it looks like. SELECTION
+  // and OBJECT TYPE modify what Select grabs and ASSEMBLY acts on what Select
+  // got, so all three are DRAFTING; the fixture palettes are the catalogue the
+  // FIXTURE tool places from, so they are BUILD.
+  const BLOCK_PANE = Object.freeze({
+    draw: 'drafting',
+    selection: 'drafting',
+    assembly: 'drafting',
+    build: 'build',
+    fixtures: 'build',
+  });
+  const paneForBlock = id => BLOCK_PANE[id] || 'properties';
+
+
+  const leftPaneShowing = () =>
+    LEFT_PANES.includes(params.get('lpane')) ? params.get('lpane') : 'drafting';
+  const setLeftPane = pane => {
+    // PROPERTIES IS NOT ONE OF THE TURNS. It has its own flag and its own
+    // toggle, so a press on its tab must never be read as "which tool tab",
+    // which would otherwise swap DRAFTING out from under the drafter.
+    if (pane === 'properties') { setPropsPane(!propsShowing()); return; }
+    // Pressing the tool tab that is already up SHUTS the rail, and pressing
+    // the other swaps without shutting. Identical to the right edge, and
+    // deliberately so: one gesture for both edges is one thing to learn.
+    if (pane === leftPaneShowing() && railOpen('left')) { setRail('left', false); return; }
+    params.set('lpane', pane);
+    if (!railOpen('left')) { setRail('left', true); return; }
+    syncUrl();
+    syncShell();
+    paint();
+  };
+
   const syncShell = () => {
     const leftOpen = railOpen('left');
     const leftPanel = document.getElementById('left-rail');
     leftPanel.hidden = !leftOpen;
-    const leftTab = document.getElementById('left-tab');
-    leftTab.hidden = false;
-    leftTab.setAttribute('aria-expanded', String(leftOpen));
+    const lpane = leftPaneShowing();
+    const propsUp = propsShowing();
+    leftPanel.dataset.leftPaneShowing = lpane;
+    // THE TOOL PANES TAKE TURNS; PROPERTIES ANSWERS TO ITS OWN FLAG. One walk
+    // over all three rather than two, so there is a single place that decides
+    // what is on the rail and no chance of a pane nobody hid.
+    leftPanel.querySelectorAll('[data-left-pane]').forEach(el => {
+      el.hidden = el.dataset.leftPane === 'properties'
+        ? !propsUp : el.dataset.leftPane !== lpane;
+    });
+    [...document.querySelectorAll('.rail-tab[data-left-pane-tab]')].forEach(tab => {
+      tab.hidden = false;
+      const up = tab.dataset.leftPaneTab === 'properties'
+        ? propsUp : tab.dataset.leftPaneTab === lpane;
+      tab.setAttribute('aria-expanded', String(leftOpen && up));
+      tab.setAttribute('aria-selected', String(up));
+    });
 
     const rightOpen = railOpen('right');
     const rightPanel = document.getElementById('right-rail');
@@ -4478,8 +4637,14 @@
     });
   };
 
-  document.getElementById('left-tab')
-    .addEventListener('click', () => setRail('left', !railOpen('left')));
+  // `#left-tab` IS A PANE TAB NOW, not the rail's on/off switch, so it goes
+  // through the same listener as the other two rather than keeping a
+  // `setRail` of its own. Pressing it with DRAFTING already up still shuts
+  // the rail -- `setLeftPane` does that -- so the gesture every existing spec
+  // drives is unchanged; what moved is which function decides it.
+  [...document.querySelectorAll('.rail-tab[data-left-pane-tab]')].forEach(tab => {
+    tab.addEventListener('click', () => setLeftPane(tab.dataset.leftPaneTab));
+  });
   [...document.querySelectorAll('.rail-tab[data-pane-tab]')].forEach(tab => {
     tab.addEventListener('click', () => setPane(tab.dataset.paneTab));
   });
@@ -5612,6 +5777,34 @@
   });
   syncPropsFold();
 
+  // THE TAB SAYS THERE IS SOMETHING BEHIND IT, and it does NOT jump the
+  // drafter onto that tab. This page already ruled on the difference, six
+  // lines up: "a tool arming should not yank a panel open under a drafter who
+  // closed it". Switching the pane under his cursor is the same trespass one
+  // tab over -- he armed a tool, he did not ask to stop looking at the keys.
+  // A lit tab tells him and leaves the move to him.
+  // THE TAB SAYS THERE IS SOMETHING BEHIND IT, and it does NOT jump the
+  // drafter onto that tab. This page already ruled on the difference, six
+  // lines up: "a tool arming should not yank a panel open under a drafter who
+  // closed it". Switching the pane under his cursor is the same trespass one
+  // tab over -- he armed a tool, he did not ask to stop looking at the keys.
+  // A lit tab tells him and leaves the move to him.
+  //
+  // WHICH MATTERS MORE HERE THAN IT LOOKS. Movie, 29 Sep, asked for every
+  // panel on PROPERTIES -- a tool's own controls included -- so arming
+  // FENESTRATION from the BUILD tab puts DOOR / WINDOW one tab away. The dot
+  // is the whole of what tells him it is there, and without it the panel he
+  // needs next is somewhere he has no reason to look.
+  const markPropsTab = () => {
+    const tab = document.getElementById('props-tab');
+    if (tab) tab.toggleAttribute('data-has-props', !propsBox.hidden);
+    // THE TWO ARE ONE FACT, so they are set in one place: the line stands in
+    // for the box, and a state where both showed -- or neither -- would be
+    // the panel lying about whether anything is selected.
+    const empty = document.querySelector('[data-props-empty]');
+    if (empty) empty.hidden = !propsBox.hidden;
+  };
+
   window.ModelProps = Object.freeze({
     slot: () => propsSlot,
     clear: () => {
@@ -5621,6 +5814,7 @@
       // heading and a fold arrow under the tools with nothing behind them --
       // a control that does nothing, which is the same lie a stale panel is.
       propsBox.hidden = true;
+      markPropsTab();
     },
     set: (title, node) => {
       propsSlot.replaceChildren();
@@ -5633,8 +5827,14 @@
       if (node) propsSlot.append(node);
       propsSlot.hidden = !(title || node);
       propsBox.hidden = propsSlot.hidden;
+      markPropsTab();
     },
   });
+  // ONCE AT BOOT, because both the dot and the NOTHING SELECTED line are
+  // derived from the box and nothing has touched the box yet. Without this
+  // the line is absent on a fresh load -- the one state a drafter is
+  // guaranteed to see -- and only appears after the first select and clear.
+  markPropsTab();
 
   // THE LEVEL AND VIEW PICKERS ARE GONE (§7). They were the chrome bar's two
   // SELECTs and the panel's cards were the second way to do the same two
@@ -13903,7 +14103,7 @@
     const slot = document.getElementById('tool-slot');
     if (!roster || !slot) return;
     const resolved = roster.bindings();
-    slot.replaceChildren(...roster.GROUPS.map(group => {
+    roster.GROUPS.forEach(group => {
       const box = document.createElement('div');
       box.dataset.toolGroup = group.id;
       const name = document.createElement('div');
@@ -13937,8 +14137,21 @@
         return btn;
       }));
       box.append(name, keys);
-      return box;
-    }));
+      // EACH GROUP ONTO ITS OWN TAB, and PREPENDED rather than appended: the
+      // DRAFTING pane also carries SELECTION, OBJECT TYPE and ASSEMBLY, and
+      // the keys belong above the blocks that modify what they do.
+      //
+      // REPLACING ITS OWN BOX, not the pane's children. The note below is
+      // about exactly this: `replaceChildren` on a shared parent is what wiped
+      // the selection and assembly panels the first time, and a pane is a
+      // shared parent again. Swapping the group's own element leaves whatever
+      // else lives on that tab alone, so a second call is harmless instead of
+      // destructive.
+      const pane = leftPane(paneForBlock(group.id));
+      if (!pane) return;
+      const standing = pane.querySelector(`[data-tool-group="${group.id}"]`);
+      if (standing) standing.replaceWith(box); else pane.prepend(box);
+    });
     refreshToolAvailability();
   };
 
@@ -14139,7 +14352,12 @@
     filterHelpEl.className = 'sel-help';
     filterHelpEl.dataset.filterHelp = '';
 
-    slot.append(
+    // ONTO THE DRAFTING TAB, from the table -- these two modify what Select
+    // grabs, so they belong beside the key that arms it. The `slot` lookups
+    // below still read the whole rail on purpose: the panes are inside it, so
+    // a chip stays findable wherever the table happens to put its section.
+    const home = leftPane(paneForBlock('selection')) || slot;
+    home.append(
       section('SELECTION',
         MODES.map(m => chip('selMode', m, setSelectionMode)), modeHelp),
       section('OBJECT TYPE',
@@ -14290,6 +14508,10 @@
     help.className = 'sel-help';
     help.dataset.fixtureHelp = '';
 
+    // ONTO THE BUILD TAB, from the table: these palettes are the catalogue
+    // the FIXTURE tool places from, and FIXTURE is a BUILD key.
+    const home = leftPane(paneForBlock('fixtures')) || slot;
+
     K.GROUPS.forEach(group => {
       const box = document.createElement('div');
       box.dataset.toolGroup = `fixture-${group.toLowerCase()}`;
@@ -14318,9 +14540,9 @@
         row.append(btn);
       });
       box.append(title, row);
-      slot.append(box);
+      home.append(box);
     });
-    slot.append(help);
+    home.append(help);
 
     syncFixturePanel = () => {
       // The board answers through the roster, never a `board === 'toy'`
@@ -14454,7 +14676,9 @@
     actRow.className = 'sel-row';
     actRow.append(unBtn, lockBtn, breakBtn);
     box.append(title, asmBtn, actRow, help, dialog);
-    slot.append(box);
+    // ONTO THE DRAFTING TAB, from the table: these verbs act on what Select
+    // got hold of, so they sit with the key that got it.
+    (leftPane(paneForBlock('assembly')) || slot).append(box);
 
     syncAssembly = () => {
       const n = selection.length;

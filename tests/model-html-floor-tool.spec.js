@@ -87,7 +87,7 @@ async function open(page, { level = MAIN_FL, view = 'floor', file = base({}) } =
   }, { bucket: BUCKET, f: file });
   // ?left=1 for the tool column: FLOOR has no legacy button on this page, so
   // the key in the rail is the only way to arm it.
-  await page.goto(`/MODEL.html?level=${level}&view=${view}&left=1`);
+  await page.goto(`/MODEL.html?level=${level}&view=${view}&left=1&lpane=build`);
   await expect(readout(page)).toContainText('floors', { timeout: 10000 });
   await expect(page.locator('[data-tool-key="floor"]')).toBeVisible();
 }

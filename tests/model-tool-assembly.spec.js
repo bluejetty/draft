@@ -62,7 +62,7 @@ async function open(page) {
       new File([JSON.stringify(file)], 'drawing.json',
         { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, file: FIXTURE });
-  await page.goto('/MODEL.html?left=1');
+  await page.goto('/MODEL.html?left=1&lpane=drafting');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await expect(page.locator('[data-assembly-start]')).toBeVisible();
 }
