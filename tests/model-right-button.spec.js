@@ -64,7 +64,7 @@ async function open(page) {
       new File([JSON.stringify(f)], 'drawing.json',
         { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, f: base() });
-  await page.goto(`/MODEL.html?level=${MAIN_FL}&view=plan&left=1`);
+  await page.goto(`/MODEL.html?level=${MAIN_FL}&view=plan&left=1&lpane=build`);
   await expect(readout(page)).toContainText('walls', { timeout: 10000 });
   return h.planFrame(page);
 }
@@ -214,7 +214,7 @@ test.describe('MODEL.html — the right mouse button', () => {
   test('Escape puts down the FLOOR trace it always claimed to',
     async ({ page }) => {
       const f = await open(page);
-      await page.goto(`/MODEL.html?level=${MAIN_FL}&view=floor&left=1`);
+      await page.goto(`/MODEL.html?level=${MAIN_FL}&view=floor&left=1&lpane=build`);
       await expect(readout(page)).toContainText('floors', { timeout: 10000 });
       const ff = await h.planFrame(page);
       await page.locator('[data-tool-key="floor"]').click();

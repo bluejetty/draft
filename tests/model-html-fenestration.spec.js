@@ -75,12 +75,23 @@ async function open(page, file = base({})) {
   // ?left=1 for the tool column (FENESTRATION has no legacy button, so its key
   // is the only way to arm it) and ?right=1 for the properties slot, which is
   // where DOOR / WINDOW is chosen and which ships hidden and collapsed.
-  await page.goto('/MODEL.html?left=1&right=1');
+  //
+  // AND `lpane=build`, since 29 Sep: the left rail is three tabs now and the
+  // FENESTRATION key is on BUILD.
+  await page.goto('/MODEL.html?left=1&lpane=build&right=1');
   await expect(readout(page)).toContainText('walls', { timeout: 10000 });
   await expect(page.locator('[data-tool-key="fenestration"]')).toBeVisible();
 }
 
-const armOpening = page => page.locator('[data-tool-key="fenestration"]').click();
+// ONE PRESS, STILL. The key is on BUILD and DOOR / WINDOW opens in the
+// PROPERTIES box -- but PROPERTIES stands open BESIDE the tool tab (Movie,
+// 29 Sep), so the panel appears under the key that raised it and the drafter
+// does not move. `showLeftPane` only guards against the rail sitting on
+// DRAFTING when a caller has left it there.
+const armOpening = async page => {
+  await h.showLeftPane(page, 'build');
+  await page.locator('[data-tool-key="fenestration"]').click();
+};
 
 const pickType = (page, id) =>
   page.locator(`[data-prop-row="opening"] [data-prop-value="${id}"]`).click();
@@ -317,7 +328,10 @@ async function doorOnTheNorthWall(page) {
   // SELECT is the resting tool, and the tool column is how a drafter gets
   // back to it -- the opening tool stays armed by design, so without this
   // the next press would place a second door on top of the first.
-  await page.locator('[data-tool-key="select"]').click();
+  // SELECT IS ON DRAFTING and this file works from BUILD, so arming it
+  // crosses tabs -- which is what a drafter does too, and what
+  // `armFromRail` exists to walk.
+  await h.armFromRail(page, 'select');
   return f;
 }
 

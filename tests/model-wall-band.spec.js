@@ -63,7 +63,7 @@ async function open(page, { file = base({}), view = 'plan' } = {}) {
         { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, f: file });
   // ?left=1 for the tool column — the rail key is how WALL is armed here.
-  await page.goto(`/MODEL.html?level=${MAIN_FL}&view=${view}&left=1`);
+  await page.goto(`/MODEL.html?level=${MAIN_FL}&view=${view}&left=1&lpane=build`);
   await expect(readout(page)).toContainText('walls', { timeout: 10000 });
   await expect(page.locator('[data-tool-key="wall"]')).toBeVisible();
 }

@@ -419,7 +419,20 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
                         : el.dataset.levelLock !== undefined ? 'level-lock'
                           : el.dataset.levelLockBreak !== undefined ? 'level-lock-break'
                             : el.dataset.fixtureKind !== undefined ? 'fixture-kind'
-                              : el.tagName.toLowerCase());
+                              // THE PROPERTIES FOLD, named rather than let
+                              // through. It moved INSIDE #tool-slot on 29 Sep
+                              // when the rail became tabbed -- the box sits in
+                              // the PROPERTIES pane now -- so it arrives in
+                              // this census for the first time. Adding
+                              // 'button' to the expected list was the easy
+                              // answer and the wrong one: this fallback IS the
+                              // safety, and a context menu host or a file
+                              // input smuggled into the slot has to keep
+                              // arriving as a bare tag and failing. Naming
+                              // what can be named shrinks what the fallback
+                              // can swallow.
+                              : el.dataset.propsFold !== undefined ? 'props-fold'
+                                : el.tagName.toLowerCase());
         return {
           buttons: [...document.querySelectorAll('button')].filter(outside)
             .map(b => b.id || b.textContent.trim()).sort(),
@@ -593,7 +606,26 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // OUTLINE. It sat undetected because that work ran the boneyard spec
           // and not this one; the census found it the moment anything else
           // touched the list. Declared now rather than after a third one.
-          buttons: ['left-tab', 'right-tab',
+          // AND AN EIGHTH TIME, with the left rail's tabs (Movie, 29 Sep:
+          // "i'd like to spit it into multiple tabs"). `build-tab` and
+          // `props-tab` join `left-tab`, which is the DRAFTING tab now.
+          //
+          // NO ABSENCE ROW MOVES, and the verdict is the one this list
+          // already reached for the two sidebar tabs: a tab opens a pane and
+          // draws nothing. All three change which of the rail's existing
+          // controls is on screen; not one of them authors an entity, and the
+          // keys behind them are the same seventeen the column always held --
+          // they are split across two tabs rather than stacked in one.
+          //
+          // AND THIS CHECK CAUGHT ME THE SAME WAY IT CAUGHT THE TOOL COLUMN,
+          // four entries up: red on CI while the suites I had thought to run
+          // locally were green. The note there says it exactly -- "running the
+          // suites related to the work is not the same as running the suites
+          // the work disturbs" -- and I read that sentence only after CI had
+          // told me twice. What I did differently the second time was
+          // enumerate every spec that references a tool key and check each
+          // one, rather than predict which would break.
+          buttons: ['left-tab', 'build-tab', 'props-tab', 'right-tab',
             'BUNGALOW', 'BILEVEL', 'DETACHED GARAGE', 'bone',
             'copy', 'paste',
             'delete', 'save', 'take-over',
@@ -636,7 +668,6 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // rather than worth fixing, since a control that only exists
             // once something is selected is not part of "what the page
             // offers" in the sense the absences are read against.
-            'PROPERTIES',
             // AND A SEVENTH TIME, with the DRAFTING BRUSH (Movie, 20 Sep).
             //
             // NO ABSENCE ROW MOVES, and this one is worth saying carefully
@@ -785,6 +816,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'assembly-start', 'assembly-ungroup',
             'fixture-kind',
             'level-lock', 'level-lock-break',
+            // THE FOLD CROSSED OVER on 29 Sep: the PROPERTIES box moved into
+            // the slot with the tabs, so it leaves `buttons` above and
+            // arrives here. One control, one list, still counted once.
+            'props-fold',
             'sel-filter', 'sel-mode', 'tool-key'].sort(),
         });
     });

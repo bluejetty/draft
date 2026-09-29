@@ -54,7 +54,7 @@ async function open(page, file) {
   // `hidden data-collapsed`. Without the second, the two panel checks measured
   // a properties panel that was not on screen: the same fault as the boards
   // spec earlier today, in the other rail, and I walked into it again.
-  await page.goto('/MODEL.html?left=1&right=1');
+  await page.goto('/MODEL.html?left=1&lpane=build&right=1');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await expect(page.locator('[data-tool-key="column"]')).toBeVisible();
 }

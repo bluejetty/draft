@@ -62,6 +62,11 @@ async function armRoof(page) {
   // drafter who shut it (:4340) -- so a spec that skips this reads a populated
   // slot as "hidden" and blames the gesture.
   await h.openModelRail(page);
+  // ..and the BUILD tab, since 29 Sep: the left rail is two tool tabs and
+  // ROOF is a build key, so the rail opening on DRAFTING leaves it inside a
+  // pane that is not up. Enabled and visible are different questions and this
+  // helper has always cared about both.
+  await h.showLeftPane(page, 'build');
   const key = page.locator('[data-tool-key="roof"]');
   await expect(key, 'ROOF must be live on the DRAFTING board').toBeEnabled();
   await key.click();

@@ -43,7 +43,7 @@ const base = extra => ({
   ...extra,
 });
 
-async function open(page, file) {
+async function open(page, file, pane = 'build') {
   await h.openModel(page, { webgl: false });
   await page.evaluate(async ({ bucket, f }) => {
     await window.SharedFileStore.saveSharedFile(
@@ -57,10 +57,19 @@ async function open(page, file) {
   // elements inside a display:none panel. Passing there proved the CSS rule
   // and nothing about what a drafter sees, which is the same defect this file
   // is written against, arriving in its own fixture.
-  await page.goto('/MODEL.html?left=1');
+  // AND `lpane` SAYS WHICH TAB, since 29 Sep. The seventeen keys are no
+  // longer one column: DRAW / EDIT is on DRAFTING and BUILD is on its own
+  // tab, so `?left=1` alone puts two thirds of them behind a tab that is not
+  // up -- the same "measuring a column that is not on screen" this helper was
+  // written to stop, one layer further in. BUILD is the default here because
+  // every key this file clicks (`wall`, `roof`) is a build key.
+  await page.goto(`/MODEL.html?left=1&lpane=${pane}`);
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-  // The column is ON SCREEN before anything is measured on it.
-  await expect(page.locator('[data-tool-key="wall"]')).toBeVisible();
+  // The column is ON SCREEN before anything is measured on it -- and it is a
+  // key FROM THE OPENED TAB, because asserting a build key while DRAFTING is
+  // up would fail for the right reason and read like a bug in the page.
+  await expect(page.locator(
+    `[data-tool-key="${pane === 'build' ? 'wall' : 'select'}"]`)).toBeVisible();
 }
 
 const key = (page, id) => page.locator(`[data-tool-key="${id}"]`);
@@ -240,7 +249,7 @@ test('a board change leaves the panels that share the tool slot alone',
     // THE CHECK THAT WAS MISSING, and its absence cost 25 red checks in three
     // MERGED suites while every check in this file stayed green.
     //
-    // #tool-slot is shared. buildToolColumn calls replaceChildren on it;
+    // #tool-slot is shared. buildToolColumn called replaceChildren on it;
     // buildSelectionPanel and buildAssemblyPanel APPEND into it. Rebuilding
     // the column on a board change therefore deleted both of them, and the
     // page loads with a board change in it -- `board = boardOfDrawing()` runs
@@ -251,7 +260,16 @@ test('a board change leaves the panels that share the tool slot alone',
     // tool keys, and tool keys were the one thing the rebuild preserved. A
     // suite that only inspects what its own feature touches cannot see what
     // that feature destroys.
-    await open(page, base({ board: 'drafting' }));
+    //
+    // THE HAZARD DID NOT GO AWAY WITH THE TABS, it moved: a pane is a shared
+    // parent for exactly the same reason the slot was, and the DRAFTING pane
+    // now holds the draw keys, SELECTION, OBJECT TYPE and ASSEMBLY together.
+    // buildToolColumn swaps its own `[data-tool-group]` element instead of the
+    // pane's children, which is what keeps this check green -- so this test
+    // guards the new arrangement, not a retired one.
+    //
+    // DRAFTING, since that is the pane the selection chips are on.
+    await open(page, base({ board: 'drafting' }), 'drafting');
     await expect(page.locator('[data-sel-mode]').first()).toBeVisible();
 
     await page.locator('[data-board="toy"]').click();
@@ -269,7 +287,10 @@ test('the selection filters do not operate in TOY, and do in DRAFTING',
     // selection filters, the assembly verbs -- none of them operate in TOY".
     // I built the first and reported the section done. These are the other
     // two, and the spec that missed them only ever looked at tool keys.
-    await open(page, base({ board: 'toy' }));
+    // DRAFTING, because that is where these chips live now: SELECTION and
+    // OBJECT TYPE modify what Select grabs, so they sit with the key that
+    // arms it rather than on BUILD.
+    await open(page, base({ board: 'toy' }), 'drafting');
     const chips = page.locator('[data-sel-mode], [data-sel-filter]');
     const n = await chips.count();
     expect(n).toBeGreaterThan(3);
@@ -292,7 +313,9 @@ test('the assembly verbs do not operate in TOY, even with items selected',
     // nothing is picked, so a TOY check on an empty selection would pass
     // against the OLD reason and prove nothing about the board. Selecting
     // first is what makes this check about §6.
-    await open(page, base({ board: 'drafting' }));
+    // DRAFTING: the assembly verbs act on what Select got hold of, so they
+    // are on that tab with the selection modes this test drives.
+    await open(page, base({ board: 'drafting' }), 'drafting');
     await page.locator('[data-sel-mode="click"]').click();
     await page.waitForTimeout(60);
     const box = await page.locator('#plan').boundingBox();

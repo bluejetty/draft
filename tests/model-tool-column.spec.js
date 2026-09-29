@@ -159,11 +159,11 @@ test('a SETTINGS remap moves the letter on the key face', async ({ page }) => {
 test('the register holds one tool, not seventeen booleans', async ({ page }) => {
   await openColumn(page);
 
-  await page.locator('[data-tool-key="line"]').click();
+  await h.armFromRail(page, 'line');
   let got = await keys(page);
   expect(got.filter(k => k.armed).map(k => k.id)).toEqual(['line']);
 
-  await page.locator('[data-tool-key="wall"]').click();
+  await h.armFromRail(page, 'wall');
   got = await keys(page);
   expect(got.filter(k => k.armed).map(k => k.id)).toEqual(['wall']);
 
@@ -171,6 +171,10 @@ test('the register holds one tool, not seventeen booleans', async ({ page }) => 
   // "No tool" is not a state the old page has — select is its resting tool —
   // and a page with no armed key looks exactly like a page whose keypad
   // stopped working.
+  //
+  // A RAW CLICK, NOT `armFromRail`. That helper asserts the key came up
+  // ARMED, which is the exact opposite of what this press is for. BUILD is
+  // already the tab in view from the press above, so there is no tab to cross.
   await page.locator('[data-tool-key="wall"]').click();
   got = await keys(page);
   expect(got.filter(k => k.armed).map(k => k.id)).toEqual(['select']);
@@ -190,13 +194,15 @@ test('the WALL key is the ONLY register: the old #draw-wall button is gone',
     await expect(page.locator('[data-draw-wall]')).toHaveCount(0);
     await expect(page.locator('#draw-wall')).toHaveCount(0);
 
+    // WALL IS ON THE BUILD TAB; the rail opens on DRAFTING.
+    await h.showLeftPane(page, 'build');
     await wallKey.click();
     await expect(wallKey).toHaveAttribute('aria-pressed', 'true');
 
     // And the other way: SELECT puts WALL down. One register, so exactly one
     // key is lit at a time -- the sibling check above holds that -- and the
     // page has no arming state left that the column cannot see.
-    await page.locator('[data-tool-key="select"]').click();
+    await h.armFromRail(page, 'select');
     await expect(wallKey).toHaveAttribute('aria-pressed', 'false');
     const lit = (await keys(page)).filter(k => k.armed).map(k => k.id);
     expect(lit).toEqual(['select']);
@@ -205,7 +211,7 @@ test('the WALL key is the ONLY register: the old #draw-wall button is gone',
 test('a wall still commits when WALL is armed from the column',
   async ({ page }) => {
     await openColumn(page);
-    await page.locator('[data-tool-key="wall"]').click();
+    await h.armFromRail(page, 'wall');
 
     const box = await page.locator('#plan').boundingBox();
     const scale = await page.evaluate(() => Number(

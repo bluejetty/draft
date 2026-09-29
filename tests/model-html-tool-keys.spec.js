@@ -43,16 +43,23 @@ const base = extra => ({
 // ?left=1 opens the left rail. The column is `hidden` by default, and a spec
 // that reads aria-pressed inside a display:none panel is measuring the CSS
 // rather than what a drafter sees — the board spec's own fixture note.
-async function open(page, file) {
+// AND `lpane` SAYS WHICH TAB, since 29 Sep: the keys are split across
+// DRAFTING and BUILD, so `?left=1` alone leaves two thirds of them behind a
+// tab that is not up. BUILD, because `wall` is the key this fixture proves
+// the rail with. The letters themselves are a document-level handler and do
+// not care which tab is showing -- that is what the tests below measure, and
+// `armed` reads every key whether its pane is up or not.
+async function open(page, file, pane = 'build') {
   await h.openModel(page, { webgl: false });
   await page.evaluate(async ({ bucket, f }) => {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(f)], 'drawing.json',
         { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, f: file });
-  await page.goto('/MODEL.html?left=1');
+  await page.goto(`/MODEL.html?left=1&lpane=${pane}`);
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-  await expect(page.locator('[data-tool-key="wall"]')).toBeVisible();
+  await expect(page.locator(
+    `[data-tool-key="${pane === 'build' ? 'wall' : 'select'}"]`)).toBeVisible();
 }
 
 const armed = page => page.evaluate(() => {
