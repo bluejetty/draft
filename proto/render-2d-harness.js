@@ -83,6 +83,33 @@ const dropBulge = src => {
   return out;
 };
 
+// A-DIMS-INT strings both faces of every wall, so a figure narrower than its
+// own run is now routine rather than a corner case. The painter halves it;
+// this puts that back to one size, which is what the sheet looked like before
+// and what it would silently return to if the branch were ever dropped.
+const neverHalveTheFigure = src => {
+  const before = src;
+  const out = src.replace(
+    'ctx.measureText(label).width > room ? HALF_FONT : FULL_FONT',
+    'FULL_FONT',
+  );
+  if (out === before) throw new Error('neverHalveTheFigure matched nothing -- the rule moved');
+  return out;
+};
+
+// And the other way: halving EVERY figure passes any check that only asks
+// whether small runs are halved, so the rule needs a mutant that is wrong in
+// the generous direction too.
+const alwaysHalveTheFigure = src => {
+  const before = src;
+  const out = src.replace(
+    'ctx.measureText(label).width > room ? HALF_FONT : FULL_FONT',
+    'HALF_FONT',
+  );
+  if (out === before) throw new Error('alwaysHalveTheFigure matched nothing -- the rule moved');
+  return out;
+};
+
 // The other named hole: drawWallSeg2D's mitre path. MODEL.html passes
 // joins = null, so every wall butts and this half of the painter does not run
 // in the live page at all -- which is exactly why it could rot unnoticed.
@@ -1134,6 +1161,71 @@ suite('drawDimension2D', 'the measurement is the world distance, formatted by th
   const ctx = recordingCtx();
   R.drawDimension2D(ctx, toS, { start: { x: 0, z: 0 }, end: { x: 12, z: 5 } }, {}, dimEnv);
   expect('13 feet, through env.label', calls(ctx, 'fillText')[0][0], "13.0'");
+});
+
+// ── THE FIGURE THAT WILL NOT FIT ITS OWN RUN ──────────────────────────
+//
+// Movie, 29 Sep: "the wall thicknesses can be displayed with text side 1/2 of
+// the wall to wall normal dimensions (3.5" / 5.5")". A-DIMS-INT strings both
+// faces of every wall, so a 5 1/2" figure between two arrowheads is now a
+// thing this painter is routinely asked to draw.
+//
+// WHAT THESE CAN AND CANNOT PROVE. recordingCtx's measureText is a
+// proportional stand-in -- `text.length * 6`, and deliberately blind to the
+// font -- so these pin WHICH SIDE OF THE RULE a given run falls on, and not
+// that an 11px figure is really that many pixels wide. The rule is what the
+// painter decides; the true width is the browser's business.
+//
+// The last font set is the one the label carries: the painter sets the full
+// size first to measure with, so a check reading the first would report the
+// full size every time and pass against a painter that never halved anything.
+// The module arrives as each suite's argument, so it is passed in rather
+// than reached for: nothing at file scope here holds it.
+const dimFont = (R, dim) => {
+  const ctx = recordingCtx();
+  R.drawDimension2D(ctx, toS, dim, {}, dimEnv);
+  return sets(ctx, 'font').pop();
+};
+const FULL_11 = "600 11px 'Barlow Condensed', system-ui, sans-serif";
+const HALF_6 = "600 6px 'Barlow Condensed', system-ui, sans-serif";
+
+suite('drawDimension2D', 'a figure with room keeps its full size', R => {
+  expect('12 ft of run is room enough',
+    dimFont(R, { start: { x: 0, z: 0 }, end: { x: 12, z: 0 } }), FULL_11);
+});
+
+suite('drawDimension2D', 'a wall-thickness run halves the figure', R => {
+  // 5 1/2 inches -- the 2x6 Movie named, and the run A-DIMS-INT draws between
+  // a wall's two faces.
+  expect('a 5 1/2 inch run cannot hold an 11px figure',
+    dimFont(R, { start: { x: 0, z: 0 }, end: { x: 5.5 / 12, z: 0 } }), HALF_6);
+  expect('nor can a 3 1/2 inch one',
+    dimFont(R, { start: { x: 0, z: 0 }, end: { x: 3.5 / 12, z: 0 } }), HALF_6);
+});
+
+// BOTH SIDES OF THE LINE. A rule that halved everything, or nothing, passes
+// the two suites above; only a cut in the right place passes these.
+//
+// THE ARITHMETIC, because guessing it is how this check was wrong first
+// time. dimEnv.label prints one decimal and a foot mark -- "3.7'" is FOUR
+// characters, which the stand-in makes 24px, not the five I assumed. toS is
+// 10px to the foot and the two arrowheads take 12, so the cut lands where
+// 10 * ft - 12 crosses 24: at 3.6 ft. These straddle it by a tenth.
+suite('drawDimension2D', 'the size changes at the width of the figure', R => {
+  expect('3.7 ft leaves 25px for a 24px figure, so it stays full',
+    dimFont(R, { start: { x: 0, z: 0 }, end: { x: 3.7, z: 0 } }), FULL_11);
+  expect('3.5 ft leaves 23px for the same figure, so it halves',
+    dimFont(R, { start: { x: 0, z: 0 }, end: { x: 3.5, z: 0 } }), HALF_6);
+});
+
+// AND IT IS STILL PRINTED. Halving is not hiding: a figure too big even at
+// half still goes on the sheet, because an overflowing number tells a drafter
+// to change his scale and a missing one tells him nothing.
+suite('drawDimension2D', 'a run too tight even for half still prints', R => {
+  const ctx = recordingCtx();
+  R.drawDimension2D(ctx, toS, { start: { x: 0, z: 0 }, end: { x: 0.2, z: 0 } }, {}, dimEnv);
+  expect('the figure is drawn', calls(ctx, 'fillText').length, 1);
+  expect('at the halved size', sets(ctx, 'font').pop(), HALF_6);
 });
 
 suite('drawDimension2D', 'both ends carry an arrowhead', R => {
@@ -2916,6 +3008,8 @@ function coverage() {
     /ctx\.strokeStyle = env\.columnColor;/g, "ctx.strokeStyle = '#1d1f20';");
 
   const BRANCH_MUTATIONS = [
+    ['drawDimension2D never halves a figure too big for its run', neverHalveTheFigure],
+    ['drawDimension2D halves every figure, room or not', alwaysHalveTheFigure],
     ['strokeSegPath2D bulge branch', dropBulge],
     ['drawWallSeg2D mitre path', dropMitre],
     ['drawOrigin2D env colour', dropOriginEnvColour],
