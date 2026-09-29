@@ -28,6 +28,7 @@ if (!window.DraftCutView) {
   const geo = () => window.DraftGeometry2D;
   let warnedNoPatterns = false;
   let warnedNoRoofPatterns = false;
+  let warnedNoFootings = false;
   const { WALL_TYPES, DEFAULT_FINISH_ID, finishById, bandIsCapped,
     bandRange, bandSpan } = window.DraftWallTypes;
   const { formatInchesOnly } = window.DraftFormatters;
@@ -3257,6 +3258,14 @@ if (!window.DraftCutView) {
       const head = Math.min(...(hung.length ? hung : over).map(g => g.baseE));
       if (head <= yBottom) return;   // nothing of it is in the drawing
       const bh = window.DraftBuildHouse;
+      if (!bh && !warnedNoFootings) {
+        warnedNoFootings = true;
+        // 12" IS A REAL SIZE, which is what makes this one dangerous: the pile
+        // is drawn, correctly, at a width nobody chose. A wrong number that
+        // looks right is worse than a blank.
+        console.warn('cut-view: build-house.js is not loaded, so every pile '
+          + 'footing is drawn at the 12" fallback rather than its own size.');
+      }
       const sizeIn = (bh && bh.footingFor(column.footing).sizeIn) || 12;
       const half = sizeIn / 24;
       [u - half, u + half].forEach(edge => {

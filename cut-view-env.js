@@ -25,6 +25,9 @@
 // sharing this. Said here so the next reader knows the count is three, not two.
 if (!window.DraftCutViewEnv) {
 (() => {
+  // Once per page: this env is rebuilt on every level change.
+  let warnedNoRoofWords = false;
+
   const DEFAULT_FOOTING_WIDTH_IN = 20;
   const ICF_FOOTING_WIDTH_IN = 24;
 
@@ -84,6 +87,17 @@ if (!window.DraftCutViewEnv) {
     // why -- which is exactly how the finish page came up blank on 27 Sep.
     const roofTypes = window.DraftRoofTypes || null;
     const profiles = window.DraftProfileManager || null;
+    // The comment above says what this costs; this says it OUT LOUD, where a
+    // drafter looking at a roof drawn in the wrong material can find it. A
+    // dropped `roofing` reads as data loss, not as a missing script tag.
+    if (!warnedNoRoofWords && (!roofTypes || !profiles)) {
+      warnedNoRoofWords = true;
+      console.warn('cut-view-env: '
+        + [!roofTypes && 'roof-types.js', !profiles && 'profile-manager.js']
+          .filter(Boolean).join(' and ')
+        + ' is not loaded, so a stored roofing or gable-corner choice is dropped '
+        + 'on load -- the roof draws as the default and the saved choice is gone.');
+    }
     const roofs = format.roofs(saved.roofs, levelIds, {
       roofingIds: roofTypes ? roofTypes.ROOFING_TYPES.map(r => r.id) : null,
       cornerStyles: profiles ? profiles.GABLE_CORNER_STYLES : null,
