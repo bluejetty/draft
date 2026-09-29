@@ -83,4 +83,24 @@ function optionalPositional(argv = process.argv.slice(2)) {
   return rest[0];
 }
 
-module.exports = { FLAGS, mutationMode, noFlags, optionalPositional };
+// For an engine that ALSO takes positionals. fascia-end-harness.js reads
+// `[--mutate] [file.draft ...]`: it cannot use mutationMode(), which would
+// reject the drawings, and it must not keep its own copy of the split --
+// the flag half is the exact thing this module exists to get right, and the
+// engine list CI runs is derived from a call INTO this file, so a harness
+// parsing its own argv owns a mutation table that only ever runs by hand.
+//
+// The ORDER is optionalPositional()'s, for optionalPositional()'s reason:
+// flags are separated out before anything is read as a path, so a mistyped
+// flag can never arrive at the code that treats an argument as a filename.
+// Unlike that one the count is unbounded -- this harness paints a list.
+function mutationModeWithFiles(argv = process.argv.slice(2)) {
+  const flags = argv.filter(a => a.startsWith('-'));
+  reject(flags, FLAGS);
+  return {
+    mutate: flags.some(a => FLAGS.has(a)),
+    files: argv.filter(a => !a.startsWith('-')),
+  };
+}
+
+module.exports = { FLAGS, mutationMode, mutationModeWithFiles, noFlags, optionalPositional };

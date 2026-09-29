@@ -22,27 +22,65 @@
 // is downstream of -- noted, not this order's to fix.
 //
 //   node proto/degenerate-chain-harness.js
+//   node proto/degenerate-chain-harness.js --mutate
 //
 // Exit 0 = every check passed.
+//
+// WHY IT TOOK A MUTATION MODE. Devin's audit, 28 Sep, found this file among
+// seven that ACCEPTED `--mutate`, ran the plain checks and printed no table,
+// so a count of which harnesses take the flag scored it as covered.
+//
+// WHAT THE MUTATIONS CAN AND CANNOT REACH. Links 2, 3 and 4 below reproduce
+// MODEL.dc.html's own arithmetic in this file deliberately -- the page holds
+// no handle to it -- so no edit to the repo could change them. The mutations
+// therefore aim at the one thing the chain actually depends on: geometry-2d's
+// pointToSegment and offsetOutlineVariable. If the shared export's degenerate
+// rule, its clamp, or the offset's treatment of a coincident point changes,
+// the chain this file pins is a different chain, and something here goes red.
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
-const win = {};
-const sandbox = { window: win, console, Math, Number, String, Object, Array, JSON, Set, Map, isFinite };
-sandbox.globalThis = sandbox;
-vm.createContext(sandbox);
-vm.runInContext(fs.readFileSync(path.join(ROOT, 'geometry-2d.js'), 'utf8'), sandbox, { filename: 'geometry-2d.js' });
+// THE FLAG IS THE SHARED GUARD'S, NOT A HAND-ROLLED COPY OF IT.
+//
+// The block here read argv itself. Two things followed. It refused
+// `--coverage`, which proto/harness-args.js treats as the SAME mode spelled a
+// second way, so one of the two documented spellings exited 2 on this file.
+// And CI derives its engine list from the CALL FORM
+// `require('./harness-args.js').mutationMode()` -- a harness that parses its
+// own argv is invisible to that grep, so the table below would have run here
+// and nowhere else. A mutation table CI never runs is the silence this whole
+// piece of work is about, one level out.
+const MUTATE = require('./harness-args.js').mutationMode();
 
-const G = win.DraftGeometry2D;
+const SOURCE = fs.readFileSync(path.join(ROOT, 'geometry-2d.js'), 'utf8');
+
+// LOADED PER RUN: a mutation is an edit to geometry-2d.js's source, so the
+// module cannot be loaded once onto a shared sandbox and reused.
+const load = (edit) => {
+  const win = {};
+  const sandbox = { window: win, console, Math, Number, String, Object, Array, JSON, Set, Map, isFinite };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(edit ? edit(SOURCE) : SOURCE, sandbox, { filename: 'geometry-2d.js' });
+  return win.DraftGeometry2D;
+};
+
 let passed = 0;
-const failures = [];
+let failures = [];
 const check = (name, condition, detail) => {
   if (condition) { passed += 1; return; }
   failures.push(detail ? `${name}\n      ${detail}` : name);
 };
 const near = (a, b, eps = 1e-9) => Math.abs(a - b) < eps;
+
+function runChecks(edit) {
+passed = 0;
+failures = [];
+let G;
+try { G = load(edit); } catch (err) { check('geometry-2d.js loads', false, err.message); return; }
+if (!G) { check('geometry-2d.js defines DraftGeometry2D', false, String(G)); return; }
 
 // ── The fixture: a 10x10 square with ONE collapsed corner ────────────────
 // Index 2 and index 3 are the same point. This is what an import or a
@@ -177,8 +215,68 @@ check('on a sound segment the private copy and the shared export agree',
 check('and they agree past the end of a sound segment too',
   near(privateDistToSegment({ x: 20, z: 0 }, sound.a, sound.b), sharedDist({ x: 20, z: 0 }, sound.a, sound.b)),
   'the clamp behaves identically');
+}
 
-// ── Report ──
-for (const f of failures) console.log(`  FAIL ${f}`);
-console.log(`\ndegenerate chain harness: ${passed} checks passed, ${failures.length} failed`);
-process.exit(failures.length ? 1 : 0);
+if (!MUTATE) {
+  runChecks(null);
+  for (const f of failures) console.log(`  FAIL ${f}`);
+  console.log(`\ndegenerate chain harness: ${passed} checks passed, ${failures.length} failed`);
+  process.exit(failures.length ? 1 : 0);
+}
+
+// ── MUTATIONS ───────────────────────────────────────────────────────────
+//
+// Every one of these is a plausible tidy-up of geometry-2d.js that would
+// change what a click on a collapsed corner does, and none of them looks
+// wrong on its own line. That is the point of the chain: the harm is at the
+// far end, in the page, where nobody is reading this arithmetic.
+const MUTATIONS = [
+  // The collapse this whole file exists to prevent: the shared export made to
+  // answer what MODEL.dc.html's private copy answers.
+  ['the shared export measures a degenerate segment to its start point', 'geometry-2d.js',
+    c => c.replace('      if (len2 < 0.0001) return { d: Infinity, t: 0 };\n',
+      '      if (len2 < 0.0001) return { d: Math.hypot(worldPt.x - ax, worldPt.z - az), t: 0 };\n')],
+
+  // The guard deleted outright -- 0/0 makes the distance NaN, and NaN passes
+  // no threshold, so the failure is silent rather than loud.
+  ['the degenerate guard is removed and the distance becomes NaN', 'geometry-2d.js',
+    c => c.replace('      if (len2 < 0.0001) return { d: Infinity, t: 0 };\n', '')],
+
+  // The Infinity rule widened until it swallows real edges: a 10ft wall is
+  // suddenly unclickable, and no degenerate check above would notice.
+  ['the degenerate threshold is widened to swallow sound segments', 'geometry-2d.js',
+    c => c.replace('      if (len2 < 0.0001) return', '      if (len2 < 1e6) return')],
+
+  // Without the clamp the nearest point runs off the end of the segment, so
+  // a click past a wall measures to a point that is not on it.
+  ['the clamp on t is dropped, so the nearest point leaves the segment', 'geometry-2d.js',
+    c => c.replace('      const t = Math.max(0, Math.min(1, ((worldPt.x - ax) * dx + (worldPt.z - az) * dz) / len2));',
+      '      const t = ((worldPt.x - ax) * dx + (worldPt.z - az) * dz) / len2;')],
+
+  // Link 1: if the offset stopped pushing anything out, the whole chain would
+  // be a story about an inert routine rather than about a collapsed corner.
+  ['the variable offset returns the outline it was given, unmoved', 'geometry-2d.js',
+    c => c.replace('    const unit = offsetWith(1, points.map(() => 1));\n'
+      + '    const flip = area(unit) >= area(points) ? 1 : -1;\n'
+      + '    return offsetWith(flip, distances);',
+      '    return points.map(pt => ({ x: pt.x, z: pt.z }));')],
+
+  // The same `|| 1` guard the page carries, removed from the shared offset:
+  // the zero-length edge divides by zero and the corner comes out NaN.
+  ['the offset divides a collapsed edge by zero instead of guarding it', 'geometry-2d.js',
+    c => c.replace('        const len = Math.hypot(dx, dz) || 1;\n        const d = dists[index] || 0;',
+      '        const len = Math.hypot(dx, dz);\n        const d = dists[index] || 0;')],
+];
+
+let caught = 0;
+for (const [name, , edit] of MUTATIONS) {
+  if (edit(SOURCE) === SOURCE) {
+    console.log(`  ANCHOR MISSED  ${name}  (the edit changed nothing -- re-aim it)`);
+    continue;
+  }
+  runChecks(edit);
+  if (failures.length) caught += 1;
+  else console.log(`  SURVIVED  ${name}`);
+}
+console.log(`degenerate-chain-harness: ${caught}/${MUTATIONS.length} mutations caught`);
+process.exit(caught === MUTATIONS.length ? 0 : 1);
