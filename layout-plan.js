@@ -352,6 +352,25 @@ if (!window.DraftLayoutPlan) {
       // "draws" -- an untagged dimension from before this key existed, and a
       // profile that predates a layer being added, both keep drawing.
       layerStandard: layerTable ? (id => layerTable[id] || null) : null,
+      // ── AND WHICH LAYERS THIS VIEW CARRIES AT ALL ─────────────────────
+      //
+      // The other half of the same gate, and the first caller `layersFor`
+      // has ever had. The profile answers "is this layer on" once for the
+      // drawing; the view's own `contents` answers "is it on THIS drawing of
+      // the level" -- which is what lets one sheet of a level show its
+      // interior strings and another not, without the drafter re-ticking the
+      // standards table between two viewports of the same house.
+      //
+      // NULL WHEN NO VIEW WAS NAMED, which is the same compatibility promise
+      // `hasLayerViews` keeps below: a layout composed before views existed
+      // is composed byte-for-byte as it was, because there is no view whose
+      // contents could exclude anything.
+      //
+      // `layersFor` FALLS BACK TO THE LEVEL'S DEFAULT VIEW rather than to an
+      // empty list, so an old or hand-edited layout naming a view that no
+      // longer exists draws that level's default drawing instead of a blank
+      // viewport.
+      viewLayers: view !== null && VIEWS ? VIEWS.layersFor(levelId, view) : null,
       // A SAVED VIEWPORT CARRYING NO VIEW MEANS EVERY VIEW ON THE LEVEL, which
       // is this file's standing compatibility promise -- a layout composed
       // before views existed must compose byte-for-byte as it did. Saying
