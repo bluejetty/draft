@@ -247,10 +247,21 @@ const MUTATIONS = [
       + '        u1 = Math.max(u1, Math.min(eave.u1, run.u1 + reach));',
     '        u0 = Math.min(u0, eave.u0);\n        u1 = Math.max(u1, eave.u1);')],
 
-  ['the painter grows its runs with no reach stated', 'cut-view.js',
-    c => c.replace('eaveSpans, 0.05, silhouette.length > 1\n'
-      + '          ? 2 * Math.abs(silhouette[1].u - silhouette[0].u) : Infinity)',
-    'eaveSpans)')],
+  // AND THE SECOND OF THOSE TWO IS NOW A PARAGRAPH, not a row, because the
+  // takeover fix below took its subject away. Handing the call site no reach
+  // at all -- `eaveSpans)` -- was a row until the run ending at a takeover
+  // stopped drawing its grown end, and the growth that ran twenty-four feet
+  // was that end. MEASURED with the mutant applied: the tape is byte-identical
+  // over all sixteen fixtures and every standard elevation, 3467 lines either
+  // way. A row that cannot change one stroke in the set is not a row.
+  //
+  // The arithmetic the caller feeds still has two rows of its own (above, and
+  // the two reach checks further down), so what is uncovered is only the
+  // CALLER's choice of bound -- and it would become real the moment a fixture
+  // has a run ending against open sky more than two samples short of its own
+  // eave, with another roof's eave at the same height beyond it. No massing in
+  // the set does that: the only same-height pairs in it are the attached
+  // garage cases, where the roof in front is what ends the run.
 
   ['the facing test is inverted, and every rake in the drawing goes', 'cut-view.js',
     c => c.replace('const onGable = (p, q) => gableSegs.some(s => s.toward > 0.01',
@@ -259,6 +270,15 @@ const MUTATIONS = [
   ['a wall corner is left standing on the floor under a roof sheet', 'cut-view.js',
     c => c.replace('if (floor >= lo - ROOF_COVER_EPS && floor < hi - ROOF_COVER_EPS) {',
       'if (false) {')],
+
+  // THE TWO HALVES OF THE SECOND REPORT ON THE SAME SAVE, 29 Sep.
+  ['a run ending where another roof takes over is still creased with a board',
+    'cut-view.js', c => c.replace('if (pen && pen.base !== s.base) closePen(false);',
+      'if (pen && pen.base !== s.base) closePen();')],
+
+  ['a point exactly on a roof-s outline counts as off the roof', 'cut-view.js',
+    c => c.replace('        if (geo().pointToSegment(pt, { start: a, end: b }).d > 1e-6) continue;',
+      '        continue;')],
 ];
 
 if (MUTATE) {
@@ -276,6 +296,7 @@ drawings.forEach(file => {
   if (!fs.existsSync(file)) { failures.push(`${label} is missing`); return; }
   const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
   const env = H.buildEnv(win, saved);
+  const stack = win.DraftCutView.sectionLevelStack(env);
   H.standardElevationCuts(env).forEach(cut => {
     const view = H.paintElevation(win, env, cut, { pxPerFt: 40 });
     const bands = bandsOf(view);
@@ -340,6 +361,43 @@ drawings.forEach(file => {
     });
     check(`${label} ${cut.id}: every long outline step is level, or on a roof plane`,
       offRoof.length === 0, offRoof.join('\n      '));
+
+    // ── AND A BOARD IS ONLY STRUCK WHERE THE SHEET ENDS ────────────────
+    //
+    // Movie, 29 Sep, on the same save once the long step was gone: "some odd
+    // lines on the garage have shown up" -- two short strokes hanging off the
+    // underside of the lean-to, dying in mid-air.
+    //
+    // A RUN OF THE SILHOUETTE ENDS FOR TWO DIFFERENT REASONS. Either the roof
+    // ends -- open sky past it, and the outline closes down its fascia board,
+    // which is what the risers above are -- or another roof TAKES THE FRONT
+    // OVER, the house's own sheet standing in front of a lean-to that carries
+    // on behind it. The second is not an edge of anything: the surface goes
+    // on, hidden, and a board struck there stands in the middle of a roof.
+    // The START of such a run has never drawn one (the outline moves to the
+    // surface); its END drew one every time.
+    //
+    // MEASURED IN PLAN, NOT IN THE PAINTER'S OWN TERMS. A fascia riser is a
+    // vertical exactly one board tall; the roof it belongs to is the one
+    // whose eave it stands at; and "the sheet carries on" is that roof's
+    // PLAN span running past the riser on both sides. A quarter of a foot
+    // keeps a corner that a sample stepped over out of it. Over all sixteen
+    // fixtures this flags nothing but the two strokes Movie marked.
+    const buried = [];
+    verticals.forEach(v => {
+      if (Math.abs(v.w - SILHOUETTE_W) > 1e-9) return;
+      if (Math.abs((v.eHi - v.eLo) - FASCIA_FT) > 0.02) return;   // not a board
+      env.roofs().forEach(roof => {
+        if (Math.abs(win.DraftCutView.roofEaveElev(roof, stack, env) - v.eHi) > 0.05) return;
+        const us = (roof.points || []).map(p => p.x * view.axis.x + p.z * view.axis.z);
+        if (!us.length) return;
+        if (v.u <= Math.min(...us) + 0.25 || v.u >= Math.max(...us) - 0.25) return;
+        buried.push(`u ${v.u.toFixed(2)} e ${v.eLo.toFixed(2)}..${v.eHi.toFixed(2)} `
+          + `inside ${roof.id} ${Math.min(...us).toFixed(2)}..${Math.max(...us).toFixed(2)}`);
+      });
+    });
+    check(`${label} ${cut.id}: no fascia board is struck where the sheet carries on`,
+      buried.length === 0, buried.join('\n      '));
 
     // ── AND NOTHING CROSSES THE BAND WHERE THE EAVE CARRIES ON ──────────
     //
@@ -454,6 +512,85 @@ check('and the two-piece eave was actually reached',
     [{ u0: 0, u1: 10.3, top: TOP }], 0.05, REACH);
   check('a run inside the reach of its eave-s end is grown to the end itself',
     Math.abs(near[0].u1 - 10.3) < 1e-9, `u1 ${near[0].u1}`);
+
+  // ── AND THE EDGE OF A SHEET IS PART OF THE SHEET ────────────────────────
+  //
+  // The other half of Movie's 29 Sep pair. A wall that dies into a roof gets
+  // its top from `sectionRoofHeightAt`, which finds the face the point stands
+  // on by a crossing count -- and a crossing count is HALF-OPEN by
+  // construction: a point exactly on the boundary falls outside. Where a wall
+  // meets the house it stands exactly on the roof polygon's own line, every
+  // time, because both are the same wall line; so the last station of the
+  // climb read "no roof here" and the wall dropped to its plate for one
+  // sample, leaving the stub Movie marked.
+  //
+  // The roof HAS a height on its edge -- that is where the two faces meet --
+  // so the statement is a continuity one: approaching the boundary from
+  // inside and standing on it must agree, not differ by the whole climb.
+  const sheet = { points: [{ x: 0, z: 0 }, { x: 0, z: 10 }, { x: 12, z: 10 }, { x: 12, z: 0 }],
+    pitch: 6, edges: ['gable', 'eave', 'gable', 'eave'] };
+  // THE FAR SIDE OF EACH AXIS is the one a crossing count drops -- the test
+  // is `pi.z > pt.z` against `pj.z > pt.z`, so an edge is counted at its low
+  // end and not at its high one. x 0 reads as on the sheet by luck of that
+  // asymmetry; x 12 is the side that answered "no roof" and is the side a
+  // garage stub dying east into a house stands on.
+  const onEdge = CV.sectionRoofHeightAt({ x: 12, z: 5 }, sheet);
+  const justIn = CV.sectionRoofHeightAt({ x: 11.999, z: 5 }, sheet);
+  check('a point on a roof-s own outline is on the roof, not off it',
+    onEdge !== null && justIn !== null, `edge ${onEdge}, inside ${justIn}`);
+  check('the rise on the edge is the rise a hair inside it',
+    onEdge !== null && justIn !== null && Math.abs(onEdge - justIn) < 0.01,
+    `edge ${onEdge}, inside ${justIn}`);
+}
+
+// ── AND THE SAME PAIR READ OFF MOVIE'S OWN SAVE ──────────────────────────
+//
+// The arithmetic above says the edge of a sheet has a height; this says the
+// garage wall USES it. On E2 of Movie's bilevel the stub wall runs u -5..-1
+// under the lean-to and dies into the house at u -1, which is the lean-to
+// polygon's own line. Its climb is sampled, so the last sample is the one
+// that landed on the boundary: before the fix it read 8.10, the plate, a foot
+// and a half under the roof it is holding up, and the drop between the two
+// last samples was the stroke Movie marked at the wall.
+//
+// THE ROOF'S HEIGHT THERE IS COMPUTED, not typed: the wall must arrive within
+// an inch of where the lean-to's underside actually is.
+const BILEVEL = path.join(ROOT, 'proto', 'repro-bilevel-roomover-garage.draft');
+if (!fs.existsSync(BILEVEL)) {
+  failures.push('proto/repro-bilevel-roomover-garage.draft is missing');
+} else {
+  const CV = win.DraftCutView;
+  const saved = JSON.parse(fs.readFileSync(BILEVEL, 'utf8'));
+  const env = H.buildEnv(win, saved);
+  const cut = H.standardElevationCuts(env).find(c => c.id === 'E2');
+  const view = H.paintElevation(win, env, cut, { pxPerFt: 40 });
+  // The stub's own stroke, found by the span it occupies rather than by
+  // index: the only wall ink living wholly between the garage's west face
+  // and the house wall.
+  const stub = view.strokes.filter(s => Math.abs(s.w - 1.25) < 1e-9
+    && s.pts.every(p => p.u > -5.02 && p.u < -0.98) && s.pts.length > 4);
+  check('Movie\u2019s bilevel still paints the stub wall under the lean-to on E2',
+    stub.length === 1, `${stub.length} strokes`);
+  if (stub.length === 1) {
+    const at = stub[0].pts.filter(p => Math.abs(p.u - (-1)) < 0.01)
+      .map(p => p.e).sort((a, b) => a - b);
+    // The lean-to is found by what covers the wall's end, not by id: the
+    // lowest roof with a surface over the junction point is the one the
+    // stub holds up.
+    const stackOf = CV.sectionLevelStack(env);
+    // READ A HAIR INSIDE THE JUNCTION, not on it: the height the wall should
+    // arrive at has to be a fact about the roof, not an answer from the very
+    // call under test -- otherwise breaking the boundary case would move the
+    // target along with the wall and the check would hold either way.
+    const under = env.roofs().map(r => {
+      const rise = CV.sectionRoofHeightAt({ x: 8, z: -1.02 }, r);
+      return rise == null ? null : CV.roofBaseElev(r, stackOf, env) + rise;
+    }).filter(e => e != null).sort((a, b) => a - b)[0];
+    check('the stub wall meets the lean-to at the house, not its own plate',
+      at.length > 0 && under != null && Math.abs(at[at.length - 1] - under) < 1 / 12,
+      `wall tops at u -1: ${at.map(n => n.toFixed(2)).join(', ')}; roof underside ${
+        under == null ? 'n/a' : under.toFixed(2)}`);
+  }
 }
 
 // ── TWO MORE OF MOVIE'S 21 SEP REPORTS, on his own drawing ────────────────

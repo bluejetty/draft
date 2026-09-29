@@ -1159,6 +1159,20 @@ if (!window.DraftCutView) {
       }
       if (inside) return geo().roofFaceRise(face, pt, roof.pitch || 4);
     }
+    // A POINT ON THE OUTLINE IS ON THE ROOF. The crossing test is half-open,
+    // so a point lying exactly on a face's boundary answers "outside" -- and a
+    // wall's end corner is exactly that point wherever a roof dies flush into
+    // a wall. The surface has a height there; only the parity rule does not.
+    // Two faces sharing that edge carry the same height along it, so the first
+    // one found is the answer either of them would give.
+    for (const face of faces) {
+      const poly = face.points;
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i], b = poly[(i + 1) % poly.length];
+        if (geo().pointToSegment(pt, { start: a, end: b }).d > 1e-6) continue;
+        return geo().roofFaceRise(face, pt, roof.pitch || 4);
+      }
+    }
     return null;
   }
 
@@ -4928,8 +4942,15 @@ if (!window.DraftCutView) {
       // at the eave's true edge and is exactly the fascia board: at a roof's
       // outer corner the surface top IS the fascia top, so the run out to it
       // is the last of the slope and the drop from it is 5.5" of board.
-      const closePen = () => {
+      //
+      // AND ONLY AGAINST OPEN AIR. Where another roof TAKES OVER the front --
+      // a lean-to running on behind the house's own sheet -- this run's end is
+      // not an edge of anything: the surface carries on, hidden. The start of
+      // such a run has never drawn a riser (see the moveTo below), and the end
+      // of one drew a fascia drop hanging in mid-slope with nothing under it.
+      const closePen = (openAir = true) => {
         if (!pen) return;
+        if (!openAir) { pen = null; return; }
         const u1 = grownAt.has(penI) ? grownAt.get(penI) : pen.u;
         if (u1 !== pen.u) ctx.lineTo(X(u1), Y(pen.base + fasciaFt));
         ctx.lineTo(X(u1), Y(pen.base));
@@ -4941,7 +4962,7 @@ if (!window.DraftCutView) {
           prevLit = false;
           return;
         }
-        if (pen && pen.base !== s.base) closePen();
+        if (pen && pen.base !== s.base) closePen(false);
         // A roof taking over from another — a garage roof running on under
         // the house's overhang — has no vertical edge, so it starts at its
         // surface.
