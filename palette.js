@@ -35,6 +35,21 @@ if (!window.DraftPalette) {
     'ink-primary',      // body text
     'ink-secondary',    // supporting text that is still meant to be read
     'ink-quiet',        // hints and captions, deliberately below the fold
+    // THE TWO SENTENCES A PAGE SAYS BACK. Four pages write a one-line result
+    // beside their buttons -- saved, or could not -- and until now not one of
+    // them could say it in a role: the allowlist in
+    // proto/skinned-page-harness.js carries "#status -- no role for a success
+    // message" and "no role for a warning" as the reason those literals were
+    // permitted to stay. The literals are a day green and a day brown, so on
+    // a night sheet they read 3.36 and 3.32 on the page -- both under AA's
+    // 4.5, on the one sentence that exists to be noticed.
+    //
+    // NOT accent AND NOT ink-secondary. The accent is the brand and it moves
+    // with the theme, which would make "saved" red on RUFF and blue on ROUGH;
+    // ink-secondary says nothing at all. A result has a valence, and that is
+    // what these two carry.
+    'ink-good',         // it worked: saved, accepted, in
+    'ink-warn',         // it did not, or not quite: refused, duplicate, stale
     // Drawing -- what the painters put on the canvas
     'draw-grid-minor',
     'draw-grid-major',
@@ -178,6 +193,15 @@ if (!window.DraftPalette) {
       'ink-primary':     '#e7e5e2',
       'ink-secondary':   '#b9bcbe',
       'ink-quiet':       '#8b8f92',
+      // THE SAME TWO HUES THE PAGES ALREADY SPEAK IN, LIFTED. The green and
+      // the brown are #557a46 and #a06035 -- 3.36 and 3.32 on this page --
+      // and these are those colours raised until they clear AA on all three
+      // grounds a status line lands on: the page, a panel, and a chip.
+      // Measured at 6.24 / 6.55 / 5.23 and 6.08 / 6.38 / 5.10. A hue change
+      // would be a second edit nobody asked for; what was wrong was the
+      // lightness, on one mode.
+      'ink-good':        '#76ad61',   // 6.24 page / 6.55 panel / 5.23 chip
+      'ink-warn':        '#cf8f55',   // 6.08 page / 6.38 panel / 5.10 chip
       'draw-grid-minor': '#26292a',
       'draw-grid-major': '#34383a',
       'draw-grid-coarse': '#454a4c',
@@ -282,6 +306,13 @@ if (!window.DraftPalette) {
       'ink-primary':     '#1d1f20',
       'ink-secondary':   '#44484a',
       'ink-quiet':       '#666b6e',
+      // DAY IS NOT LEFT AS IT WAS, AND THAT IS THE FIND. The literals were
+      // picked on a white page and assumed good there: they measure 4.41 and
+      // 4.45 on this one -- both under 4.5, by a margin small enough that
+      // nobody looking at the screen would ever call it. So the same two
+      // hues go a step darker here rather than staying put.
+      'ink-good':        '#4a6b3d',   // 5.42 page / 5.13 panel / 4.78 chip
+      'ink-warn':        '#8f5529',   // 5.36 page / 5.07 panel / 4.73 chip
       'draw-grid-minor': '#e0e1e3',
       'draw-grid-major': '#cbcdcf',
       'draw-grid-coarse': '#b0b3b5',
