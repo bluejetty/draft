@@ -2200,6 +2200,24 @@ if (!window.DraftCutView) {
     const { faces, fdnFaces, garageFor } = elevationFaces(env, cut, stack, axis);
     if (!faces.length) return false;
 
+    // WHETHER THE WINDOW SIZE TAGS DRAW AT ALL, asked once for the elevation
+    // rather than per opening. A size tag is a fenestration dimension, so it
+    // rides A-DIMS-FENS -- the same layer the plan's opening-centre string is
+    // on. Unticking it in STANDARDS takes both.
+    //
+    // VISIBLE ONLY, NOT PRINTABLE, and deliberately: plan-composition's
+    // layerShows also drops a layer whose Print box is clear, but it is
+    // handed `isPrinting` and this painter has no such mode -- nothing in
+    // cut-view.js knows whether it is drawing to paper. Reading `printable`
+    // here would hide the tag on screen because of a PRINT setting, which is
+    // a different and wrong answer. When elevations learn about printing this
+    // is the line that has to learn with them.
+    //
+    // NO STANDARD MEANS IT DRAWS: an env whose page never wired the profile
+    // is not a page that hid the tag.
+    const fenStandard = env.layerStandard ? env.layerStandard('A-DIMS-FENS') : null;
+    const showFenTags = !fenStandard || fenStandard.visible !== false;
+
     // Roof silhouette: at each spot along the cut, the tallest roof surface
     // anywhere along the viewing depth — the ridge/hip outline from outside.
     const roofs = env.roofs();
@@ -4171,7 +4189,7 @@ if (!window.DraftCutView) {
             + 'any elevation carries its size tag -- the glass draws, the size '
             + 'does not.');
         }
-        if (f.type === 'window' && window.DraftFenLabels) {
+        if (f.type === 'window' && window.DraftFenLabels && showFenTags) {
           const sizeLabel = window.DraftFenLabels.fenLabel({
             type: 'window', widthFt: f.width, heightFt: head - sill });
           if (sizeLabel) {

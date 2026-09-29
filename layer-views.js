@@ -15,11 +15,25 @@
 // no entity in the drawing format yet (E-POWER, S-SLAB, S-FDN, S-FOOTING) —
 // the table states the intent, and a view whose layers carry nothing simply
 // deals no sheet rather than a blank one.
+//
+// AND `layersFor` HAS NO CALLERS. Checked 29 Sep, across every page and
+// module: this table's `contents` is read by nothing. The export exists, the
+// lists are maintained, and no painter has ever asked one of them what to
+// draw. What actually gates a layer today is plan-composition.js's
+// `layerShows`, which reads the PROFILE's visible/printable flags — one
+// answer for the whole drawing, not one per view.
+//
+// That is why the A-DIMS-* lists below change nothing on screen yet. They are
+// the spec for the day `layersFor` is wired into the composer, which is what
+// would let a REAL ESTATE PLAN default its dimensions off while a
+// CONSTRUCTION LAYOUT defaults them on — the same drawing, two layer sets.
+// Naming the retired PLAN / FLOOR / FOUNDATION / E-POWER DIMENSION ids here
+// would have left the table lying about layers that no longer exist.
 if (!window.DraftLayerViews) {
 (() => {
   const FLOOR_LEVEL_VIEWS = Object.freeze([
-    Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION', 'A-ANNO-NOTE'] }),
-    Object.freeze({ id:'plan', label:'FLOOR PLAN (WALLS)', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-STR', 'PLAN DIMENSION', 'ROOM-IDS-AREA', 'A-ANNO-NOTE'] }),
+    Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-FENS', 'A-ANNO-NOTE'] }),
+    Object.freeze({ id:'plan', label:'FLOOR PLAN (WALLS)', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-STR', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'ROOM-IDS-AREA', 'A-ANNO-NOTE'] }),
     // S-COL-FOOTING JOINS S-BEAM HERE (Movie, 25 Sep). A floor's beam was
     // already on this view and what holds it up was on none: S-COL-FOOTING
     // appeared only in the FOUNDATION set below, so a post on MAIN FL was a
@@ -30,16 +44,16 @@ if (!window.DraftLayerViews) {
     // (drawing-format.js:657) whether it stands on a pad or on the beam
     // below, so a floor view that wants to draw posts has to name that layer.
     // Renaming it would be a format change for a word.
-    Object.freeze({ id:'floor', label:'FLOOR LAYOUT (FLOOR)', contents:['S-BEAM', 'S-COL-FOOTING', 'S-SLAB', 'A-FL-OPNG', 'FLOOR DIMENSION', 'A-ANNO-NOTE'] }),
+    Object.freeze({ id:'floor', label:'FLOOR LAYOUT (FLOOR)', contents:['S-BEAM', 'S-COL-FOOTING', 'S-SLAB', 'A-FL-OPNG', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-COLS', 'A-ANNO-NOTE'] }),
     Object.freeze({ id:'stair', label:'STAIR', contents:['A-STR', 'A-FL-OPNG', 'STAIR SECTION', 'A-ANNO-NOTE'] }),
   ]);
   const LEVEL_LAYER_VIEWS = Object.freeze({
     5: FLOOR_LEVEL_VIEWS,
     3: FLOOR_LEVEL_VIEWS,
     1: Object.freeze([
-      Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'E-POWER DIMENSION', 'A-ANNO-NOTE'] }),
+      Object.freeze({ id:'e-power', label:'ELECTRIC', contents:['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-FENS', 'A-ANNO-NOTE'] }),
       Object.freeze({ id:'plan', label:'BASEMENT (WALLS)', contents:['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'ROOM-IDS-AREA', 'A-ANNO-NOTE'] }),
-      Object.freeze({ id:'foundation', label:'FOUNDATION', contents:['S-FDN', 'S-COL-FOOTING', 'S-FOOTING', 'S-BEAM', 'S-SLAB', 'FOUNDATION DIMENSION', 'A-ANNO-NOTE'] }),
+      Object.freeze({ id:'foundation', label:'FOUNDATION', contents:['S-FDN', 'S-COL-FOOTING', 'S-FOOTING', 'S-BEAM', 'S-SLAB', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-COLS', 'A-ANNO-NOTE'] }),
     ]),
   });
   // SITE and ROOF are whole-level drafting contexts; every other positive
