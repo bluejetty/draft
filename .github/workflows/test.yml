@@ -198,7 +198,15 @@ jobs:
                       proto/level-lock-harness.js \
                       proto/no-inline-distance-harness.js \
                       proto/small-tools-harness.js \
-                      proto/washroom-harness.js; do
+                      proto/washroom-harness.js \
+                      proto/stair-rules-harness.js \
+                      proto/tour-rules-harness.js \
+                      proto/bone-sound-harness.js \
+                      proto/orientation-guard-harness.js \
+                      proto/spec-master-harness.js \
+                      proto/spec-pages-harness.js \
+                      proto/titleblock-harness.js \
+                      proto/traffic-counter-harness.js; do
             if ! printf '%s\n' "${engines[@]}" | grep -qx "$must"; then
               failed=$((failed + 1))
               echo "FAIL  $must is a known engine and the derived list does not contain it"
