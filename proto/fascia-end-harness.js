@@ -125,24 +125,45 @@ const drawings = files.length ? files : [
   // leaves #save disabled reading UNSAVED -- which looks exactly like a
   // build that did not happen.)
   'repro-2storey-garage-beam.draft',
+  // ── AND THE ONE WITH TWO ROOFS ON ONE PLATE ───────────────────────────
+  //
+  // Movie, 29 Sep, on E2 of his own save: a line leaves the top of the
+  // little lean-to, runs across the house face climbing slightly, and stops
+  // in mid-wall meeting nothing at either end.
+  //
+  // BILEVEL + ATTACHED ROOM-OVER GARAGE, which no other fixture here is,
+  // and the arrangement is the whole point: the lean-to tying the garage to
+  // the house and the garage roof bear on ONE plate, and the house roof
+  // stands in front of both. The house roof takes the silhouette over four
+  // feet in, so the lean-to's run ends at an INTERSECTION -- while the
+  // garage's far eave, at that same plate, runs the full depth of the
+  // garage. Same band and overlapping, so extendRunsToEaves grew a
+  // four-foot run to twenty-eight.
+  //
+  // The step it drew measured u -3.17..21.00, 24.17 ft at a slope of 0.054 --
+  // caught by the long-outline-step check below, which is why this file is a
+  // fixture rather than a new check.
+  'repro-bilevel-roomover-garage.draft',
 ].map(name => path.join(ROOT, 'proto', name));
 
 // ── THE MUTANTS ───────────────────────────────────────────────────────────
 //
 // Each row bends ONE line of cut-view.js back to the state a check here was
 // written against, and every one of them has to make this file go red. Two
-// of the five are the defects in the header restored (the ordering and the
-// inverted run); the rest are the same-band guard, the facing rule and the
+// of the seven are the defects in the header restored (the ordering and the
+// inverted run); the rest are the two limits on what a run may be grown to
+// -- its own band, and no further than the sampling could have missed, that
+// one bent at both the arithmetic and the call -- the facing rule and the
 // corner lift.
 //
-// A MUTANT RUNS AS ITS OWN PROCESS. The checks below paint six drawings at
+// A MUTANT RUNS AS ITS OWN PROCESS. The checks below paint seven drawings at
 // module load through a sandbox built once, so there is no re-entry to hand a
 // second cut-view.js to; the parent writes the bent source out and the child
 // loads it through DRAFT_HARNESS_SOURCE_OVERRIDES (see harness-env.js).
 const MUTATIONS = [
   ['the silhouette is drawn before the runs are grown, as it was', 'cut-view.js',
-    c => c.replace('        u0 = Math.min(u0, eave.u0);\n'
-      + '        u1 = Math.max(u1, eave.u1);',
+    c => c.replace('        u0 = Math.min(u0, Math.max(eave.u0, run.u0 - reach));\n'
+      + '        u1 = Math.max(u1, Math.min(eave.u1, run.u1 + reach));',
     '        u0 = run.u0;\n        u1 = run.u1;')],
 
   ['a descending walk keeps its run ends the wrong way round', 'cut-view.js',
@@ -218,6 +239,18 @@ const MUTATIONS = [
   // honest record of that is this paragraph rather than a row that can only
   // ever print SURVIVED. The one direction that DOES change the drawing is
   // below, and it is caught.
+
+  // THE BOUND THE ROOM-OVER GARAGE ADDED, taken back out two ways: the reach
+  // ignored at the arithmetic, and the caller handing down no reach at all.
+  ['a run grows the whole length of any eave in its band', 'cut-view.js',
+    c => c.replace('        u0 = Math.min(u0, Math.max(eave.u0, run.u0 - reach));\n'
+      + '        u1 = Math.max(u1, Math.min(eave.u1, run.u1 + reach));',
+    '        u0 = Math.min(u0, eave.u0);\n        u1 = Math.max(u1, eave.u1);')],
+
+  ['the painter grows its runs with no reach stated', 'cut-view.js',
+    c => c.replace('eaveSpans, 0.05, silhouette.length > 1\n'
+      + '          ? 2 * Math.abs(silhouette[1].u - silhouette[0].u) : Infinity)',
+    'eaveSpans)')],
 
   ['the facing test is inverted, and every rake in the drawing goes', 'cut-view.js',
     c => c.replace('const onGable = (p, q) => gableSegs.some(s => s.toward > 0.01',
@@ -384,6 +417,44 @@ check('the drawings actually painted fascia bands to check',
 // is banded in two pieces, every one of those assertions is vacuous.
 check('and the two-piece eave was actually reached',
   seamsSeen > 0, `${seamsSeen} elevation(s) with the low eave banded in two`);
+
+// ── THE TWO LIMITS ON GROWTH, IN ARITHMETIC ─────────────────────────────
+//
+// THE BAND GUARD USED TO BE CAUGHT BY THE OFF-ROOF CHECK ABOVE, and the
+// reach bound the room-over garage added is why it no longer is: with the
+// guard taken out the house's outline still steps onto the garage's eave,
+// but it can only travel two samples doing it -- half a foot on these
+// drawings -- and that check's floor is half a foot of run. The mutant is
+// not equivalent, it is SMALLER THAN THE INK the drawing checks can see, so
+// the claim is made where it is exact instead.
+//
+// Both are stated with the reach the painter itself hands down, so neither
+// is a rule the drawing does not use.
+{
+  const CV = win.DraftCutView;
+  const TOP = 8.55;
+  const REACH = 0.5;
+  const run = (u0, u1) => ({ u0, u1, top: TOP, base: TOP - 0.45 });
+
+  const other = CV.extendRunsToEaves([run(0, 10)],
+    [{ u0: 5, u1: 40, top: TOP - 9 }], 0.05, REACH);
+  check('an eave at another height does not extend a run that is not its own',
+    other[0].u1 === 10, `u1 ${other[0].u1}`);
+
+  // WHAT MOVIE'S E2 WAS, in its own numbers: a four-foot run of the lean-to
+  // and the garage's twenty-eight-foot eave, same plate, overlapping.
+  const far = CV.extendRunsToEaves([run(-7, -3.17)],
+    [{ u0: -7, u1: 21, top: TOP }], 0.05, REACH);
+  check('an eave carrying on far past the run-s end grows it by the reach only',
+    Math.abs(far[0].u1 - (-3.17 + REACH)) < 1e-9, `u1 ${far[0].u1}`);
+
+  // AND THE CORNER THE PROBES STEPPED OVER IS STILL SNAPPED TO EXACTLY --
+  // the bound is a limit on how far, not a replacement for the eave's end.
+  const near = CV.extendRunsToEaves([run(0, 10)],
+    [{ u0: 0, u1: 10.3, top: TOP }], 0.05, REACH);
+  check('a run inside the reach of its eave-s end is grown to the end itself',
+    Math.abs(near[0].u1 - 10.3) < 1e-9, `u1 ${near[0].u1}`);
+}
 
 // ── TWO MORE OF MOVIE'S 21 SEP REPORTS, on his own drawing ────────────────
 //

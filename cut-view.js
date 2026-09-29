@@ -624,7 +624,33 @@ if (!window.DraftCutView) {
   //
   // PURE, AND SEPARATE, so it can be checked. Everything around it is canvas
   // work that has to be looked at; this is arithmetic that can be measured.
-  function extendRunsToEaves(runs, eaves, eps = 0.05) {
+  //
+  // ── AND ONLY AS FAR AS THE SAMPLING COULD HAVE MISSED ────────────────────
+  //
+  // Movie, 29 Sep, on a BILEVEL + ATTACHED ROOM-OVER GARAGE: a line leaves the
+  // top of the little lean-to, crosses the house face climbing slightly, and
+  // stops in mid-wall meeting nothing at either end. It is this growth.
+  //
+  // On that E2 the lean-to tying the garage to the house is the tallest
+  // surface for four feet and the HOUSE roof takes over after that, so the run
+  // is u -7..-3.17. The garage's far eave is at the same plate and runs the
+  // whole depth of the garage, u -7..21. Equal tops, overlapping intervals --
+  // so a four-foot run was grown to twenty-eight, and the outline's closing
+  // riser went in at u 21 with the slope run out to meet it. Twenty-four feet
+  // of line across the middle of a wall.
+  //
+  // WHAT IS BEING CORRECTED IS A SAMPLING SHORTFALL, so the correction is
+  // bounded by what the sampling can hide: a corner the probes stepped over,
+  // a sample or two of u. A run ending where another surface RISES IN FRONT
+  // of it is not short of anything -- it ends at an intersection, found to
+  // within a step -- and the eave carrying on past that point belongs to the
+  // part of the roof now behind something else. Reach is that bound; the
+  // caller passes it in samples of its own cut, and the eave's exact end is
+  // still what an end inside the bound is snapped to.
+  //
+  // No reach given means unbounded, which is how the pure checks state the
+  // height and overlap rules in their own numbers.
+  function extendRunsToEaves(runs, eaves, eps = 0.05, reach = Infinity) {
     if (!Array.isArray(runs) || !Array.isArray(eaves)) return runs;
     return runs.map(run => {
       let u0 = run.u0, u1 = run.u1;
@@ -637,8 +663,8 @@ if (!window.DraftCutView) {
         // TOUCHING COUNTS AS OVERLAP. The sampling stops short, so the run's
         // end and the edge's start can be a sample apart rather than crossing.
         if (eave.u1 < u0 - eps || eave.u0 > u1 + eps) return;
-        u0 = Math.min(u0, eave.u0);
-        u1 = Math.max(u1, eave.u1);
+        u0 = Math.min(u0, Math.max(eave.u0, run.u0 - reach));
+        u1 = Math.max(u1, Math.min(eave.u1, run.u1 + reach));
       });
       return { ...run, u0, u1 };
     });
@@ -4866,8 +4892,14 @@ if (!window.DraftCutView) {
           });
         });
       }
+      // TWO SAMPLES OF REACH. One is the corner the probes stepped over; the
+      // second is the slack the eps above already allows for a run and an edge
+      // that end a sample apart. Anything further off is another surface's
+      // eave, seen past the point where this run stopped.
       extendRunsToEaves(runs.map(r => ({ ...r, top: r.base + ROOF_FASCIA_IN / 12 })),
-        eaveSpans).forEach((grown, index) => {
+        eaveSpans, 0.05, silhouette.length > 1
+          ? 2 * Math.abs(silhouette[1].u - silhouette[0].u) : Infinity)
+        .forEach((grown, index) => {
         runs[index].u0 = grown.u0;
         runs[index].u1 = grown.u1;
       });
