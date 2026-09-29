@@ -57,7 +57,32 @@
      THE LESSON THIS LEDGER OWES ITS NEXT READER: a module dropped from a page
      is only dropped if nothing the page still loads ASKS for it. Both of
      these were asked for by layout-plan.js, which this page has loaded all
-     along. ALL IN THE HEAD: the bars are written where their mount call
+     along.
+
+     AND THE SAME RULE, APPLIED TO THE FIX ITSELF. cut-view.js is here for
+     ONE THING: its STANDARDS table, which layout-plan reads for the garage
+     slab. Nothing on this page calls a cut-view PAINTER -- there are no
+     elevations on a listing plan -- so the modules those painters reach for
+     are deliberately absent, and a mirror check will list them:
+
+       finish-patterns, roof-patterns, roof-types   wall and roof hatching,
+                                                    only ever asked for
+                                                    behind `opts.finishes`,
+                                                    which this page never sets
+       build-house                                  pile footing sizes, read
+                                                    by the elevation's column
+                                                    painter
+       fen-labels                                   window and door tags on an
+                                                    ELEVATION; the plan's own
+                                                    tags come through
+                                                    plan-composition, which
+                                                    this page gates off
+
+     Written down because the count going UP after a fix is exactly the shape
+     that gets waved away, and because the previous version of this ledger
+     shows what happens when nobody checks whether a stated absence is still
+     true. If any of those five is ever reached from this page, it is a
+     defect and not an inconvenience: add the script, do not widen a guard. ALL IN THE HEAD: the bars are written where their mount call
      stands, mid-parse, so a module loaded after the body is one that call
      cannot find. -->
 <script src="./shell-bars.js"></script>
