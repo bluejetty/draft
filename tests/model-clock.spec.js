@@ -306,3 +306,71 @@ for (const page of ['MODEL', 'PROJECT', 'EXTFINISH', 'REALESTATEPLAN',
     }
   });
 }
+
+// ── AND THE SAME CLOCK ON EVERY PAGE THAT CARRIES THE BAR ────────────────
+//
+// Movie, 29 Sep, with six pages screenshotted side by side: "see over in
+// bottom right corner the TIME - text is different in most of them its
+// bigger, can you make them all look the same as the MODEL.html".
+//
+// THE SOCKET-WITHOUT-THE-LAMP FAILURE, one layer up from the one shell-bars.js
+// already records. `mountClock()` runs on every page carrying the bar -- the
+// module argues for exactly that, "the clock is the same on every page
+// carrying this bar" -- but the rule that makes the mounted <div> a CLOCK sat
+// in MODEL.html's own stylesheet, written the day MODEL was the only page with
+// a corner for it. Five pages got the element and the page's body type: 16px,
+// mixed case, proportional figures, three times the size of the visit count it
+// shares the lane with.
+//
+// EVERY FILE INVOLVED WAS INDIVIDUALLY CORRECT, which is why nothing went red:
+// the mount is right, MODEL's rule is right, and no page is missing anything
+// it declares. The defect is only visible ACROSS pages, so the test has to be
+// too -- which is why this reads MODEL first and compares the rest to it
+// rather than pinning 10px here. A deliberate change to the clock's type is
+// made once, in the shared stylesheet, and this test follows it.
+//
+// COLOUR IS NOT COMPARED. --ink-quiet is repainted per skin and MODEL wears
+// night by default while the others do not, so the ink is legitimately a
+// different value on two pages showing the identical clock. traffic-counter.js
+// carries the same reasoning for the count beside it.
+for (const page_ of ['PROJECT.html', 'LAYOUT.html', 'SPECS.html',
+  'EXTFINISH.html', 'REALESTATEPLAN.html']) {
+  test(`the clock is set in MODEL's type on ${page_}`, async ({ page }) => {
+    const read = async () => page.evaluate(() => {
+      const el = document.getElementById('clock');
+      if (!el) return null;
+      const s = getComputedStyle(el);
+      return {
+        text: (el.textContent || '').trim(),
+        fontFamily: s.fontFamily,
+        fontSize: s.fontSize,
+        fontWeight: s.fontWeight,
+        letterSpacing: s.letterSpacing,
+        textTransform: s.textTransform,
+        fontVariantNumeric: s.fontVariantNumeric,
+        whiteSpace: s.whiteSpace,
+      };
+    });
+
+    await page.goto('/MODEL.html');
+    await expect(page.locator('#clock')).not.toBeEmpty();
+    const model = await read();
+
+    await page.goto('/' + page_);
+    await expect(page.locator('#clock')).not.toBeEmpty();
+    const here = await read();
+
+    expect(here, `${page_} mounts a clock at all`).not.toBeNull();
+    // THE CAPITALS ARE PAINT, NOT THE STRING. `text-transform` renders them;
+    // textContent stays "Tue, Sep 29, 2026" on MODEL too, which is why the
+    // half of the complaint about case is asserted through the property below
+    // rather than by upper-casing the reading here.
+    expect(here.textTransform, 'the reading is set in capitals, as MODEL\'s is')
+      .toBe('uppercase');
+    for (const key of Object.keys(model)) {
+      if (key === 'text') continue;
+      expect(here[key], `${page_}'s clock matches MODEL's ${key}`)
+        .toBe(model[key]);
+    }
+  });
+}
