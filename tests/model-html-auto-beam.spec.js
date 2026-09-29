@@ -113,6 +113,11 @@ const savedFile = page => page.evaluate(async bucket => {
 async function armTool(page, id) {
   await page.locator('[data-board-switch] [data-board="drafting"]').click();
   await page.waitForTimeout(150);
+  // AND THE TAB THE KEY IS ON. The left rail is DRAFTING and BUILD since
+  // 29 Sep; BEAM and COLUMN are build keys, so a rail sitting on DRAFTING
+  // leaves them inside a pane that is not up. The board switch above answers
+  // whether the key is ENABLED; this answers whether it is reachable.
+  await h.showLeftPane(page, h.TOOL_PANE[id] || 'drafting');
   const key = page.locator(`[data-tool-key="${id}"]`);
   if (await key.getAttribute('aria-pressed') !== 'true') {
     await key.click();

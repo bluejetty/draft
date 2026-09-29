@@ -63,7 +63,7 @@ async function open(page) {
       new File([JSON.stringify(f)], 'drawing.json',
         { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, f: base() });
-  await page.goto(`/MODEL.html?level=${MAIN_FL}&view=plan&left=1`);
+  await page.goto(`/MODEL.html?level=${MAIN_FL}&view=plan&left=1&lpane=build`);
   await expect(readout(page)).toContainText('walls', { timeout: 10000 });
   return h.planFrame(page);
 }

@@ -260,7 +260,12 @@ test('the properties box folds without shutting the rail it sits in', async ({ p
   await expect(page.locator('#left-rail'),
     'folding the properties must not shut the rail holding the tool keys')
     .toBeVisible();
-  await expect(page.locator('[data-tool-key="wall"]')).toBeVisible();
+  // A KEY FROM THE TAB THAT IS UP. This asked for WALL, which is a BUILD key;
+  // the rail opens on DRAFTING, so since the tabs landed that assertion fails
+  // for the right reason and reads like the fold shut something. SELECT is
+  // the resting tool and it is on the tab `#left-tab` opens, so it is the key
+  // that answers the claim this test actually makes.
+  await expect(page.locator('[data-tool-key="select"]')).toBeVisible();
 
   // IT SURVIVES A RELOAD, like the two rails either side of it, and for the
   // same reason: a drafter who folded it does not want it back every time the

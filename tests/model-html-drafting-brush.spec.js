@@ -107,7 +107,7 @@ async function open(page) {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(out)], 'drawing.json', { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, src: FIXTURE });
-  await page.goto('/MODEL.html?mode=night&left=1');
+  await page.goto('/MODEL.html?mode=night&left=1&lpane=build');
   await expect(page.locator('#readout')).toContainText('walls 6/6', { timeout: 6000 });
 }
 

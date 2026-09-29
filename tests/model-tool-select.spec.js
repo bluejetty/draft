@@ -196,10 +196,17 @@ test('picking a mode also arms SELECT', async ({ page }) => {
   await open(page);
   // Arm something else first, or "select is armed" is the state the page
   // started in and this assertion proves nothing.
-  await page.locator('[data-tool-key="wall"]').click();
+  // WALL IS ON BUILD and this file sits on DRAFTING for the selection
+  // chips, so arming it crosses tabs.
+  await h.armFromRail(page, 'wall');
   await expect(page.locator('[data-tool-key="wall"]'))
     .toHaveAttribute('aria-pressed', 'true');
 
+  // BACK TO DRAFTING FOR THE CHIP. Arming WALL left the rail on BUILD, and
+  // the selection modes live with the key they modify. The crossing is the
+  // point of the test rather than an obstacle to it: picking a mode has to
+  // arm SELECT from wherever the drafter reaches it.
+  await h.showLeftPane(page, 'drafting');
   await page.locator('[data-sel-mode="window"]').click();
   await expect(page.locator('[data-tool-key="select"]'))
     .toHaveAttribute('aria-pressed', 'true');

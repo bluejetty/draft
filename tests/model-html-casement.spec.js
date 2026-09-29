@@ -71,12 +71,18 @@ async function open(page, file = base({})) {
       new File([JSON.stringify(f)], 'drawing.json',
         { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, f: file });
-  await page.goto('/MODEL.html?left=1&right=1');
+  // `lpane=build`, since 29 Sep: the left rail is tabbed now and FENESTRATION
+  // is a BUILD key. Its CASEMENT row opens in the PROPERTIES box, which stands
+  // open beside the tool tab, so the panel is still one press from the key.
+  await page.goto('/MODEL.html?left=1&lpane=build&right=1');
   await expect(readout(page)).toContainText('walls', { timeout: 10000 });
   await expect(page.locator('[data-tool-key="fenestration"]')).toBeVisible();
 }
 
-const armOpening = page => page.locator('[data-tool-key="fenestration"]').click();
+const armOpening = async page => {
+  await h.showLeftPane(page, 'build');
+  await page.locator('[data-tool-key="fenestration"]').click();
+};
 const pickType = (page, id) =>
   page.locator(`[data-prop-row="opening"] [data-prop-value="${id}"]`).click();
 const pickCasement = (page, id) =>
@@ -195,7 +201,7 @@ test('switching a window already drawn changes its panes and not its size',
     // SELECT is the resting tool and the opening tool stays armed by design,
     // so without this the press below would place a SECOND window on the first
     // rather than selecting it.
-    await page.locator('[data-tool-key="select"]').click();
+    await h.armFromRail(page, 'select');
     await page.mouse.click(...f.at(0, -10));
     await page.waitForTimeout(150);
     await expect(page.locator('#props-slot [data-prop-row="casement"]')).toBeVisible();
@@ -226,7 +232,7 @@ test('a door offers no CASEMENT row when it is the thing selected',
     const f = await h.planFrame(page);
     await page.mouse.click(...f.at(0, -10));
     await page.waitForTimeout(150);
-    await page.locator('[data-tool-key="select"]').click();
+    await h.armFromRail(page, 'select');
     await page.mouse.click(...f.at(0, -10));
     await page.waitForTimeout(150);
 
