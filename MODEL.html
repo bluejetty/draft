@@ -11127,7 +11127,37 @@
       jogMergeFt: AD.JOG_MERGE_FT,
       stringSpacingFt: AD.STRING_SPACING_FT,
     });
-    if (!segments) return -1;
+    // ── AND THE COLUMN STACK, ON THE TWO SHEETS THAT FRAME ───────────────
+    //
+    // Movie, 29 Sep: "on the FLOOR LAYOUT and FOUNDATION LAYOUT the
+    // A-DIMS-COLS layer should measure the columns (and beam since the col
+    // sits on it) from both directions".
+    //
+    // GATED ON THE VIEW, not left to each record's own `view` field. A beam
+    // can be stored on 'plan', and posts strung across the walls plan are
+    // clutter on the sheet a client reads. The two views that want them are
+    // the ones a framer builds from -- which is what he asked for.
+    const framing = view === 'floor' || view === 'foundation';
+    const onThisSheet = list => (list || []).filter(item =>
+      Number(item.levelId) === levelId && item.view === view);
+    const columnSegments = framing ? AD.computeColumnDimStrings({
+      beams: onThisSheet(drawing.beams),
+      columns: onThisSheet(drawing.columns),
+      outlines,
+      walls,
+      // The stair hole, so a string does not run across it. Same filter the
+      // painter uses at :2448 -- level, host and a real polygon.
+      floorOpenings: (drawing.surfaceOpenings || []).filter(opening =>
+        Number(opening.levelId) === levelId && opening.hostType === 'floor'
+        && (opening.points || []).length >= 3),
+    }) : [];
+    // THE EARLY RETURN IS UNCHANGED FOR THE CASE IT WAS WRITTEN FOR. It fires
+    // when computeAutoDimStrings finds nothing big enough to string, and that
+    // must still mean "keep the dims you have" rather than "clear them". What
+    // it no longer does is throw away a column stack on a level whose
+    // perimeter could not be strung.
+    if (!segments && !columnSegments.length) return -1;
+    const allSegments = [...(segments || []), ...columnSegments];
     if (!Array.isArray(drawing.dimensions)) drawing.dimensions = [];
     // RE-RUNNING REPLACES THIS LEVEL AND VIEW'S OWN AUTO STRINGS and nothing
     // else. `auto: true` is what separates a generated string from one a
@@ -11141,7 +11171,7 @@
       if (mine) removed.push(dimension);
       return !mine;
     });
-    segments.forEach(segment => {
+    allSegments.forEach(segment => {
       // THE srcIds ARE DROPPED, AND THAT IS A REAL LOSS RATHER THAN A TIDY-UP.
       // The module returns srcStartId/srcEndId so the old page can link each
       // end to a master corner, and its dims then FOLLOW when that corner is
@@ -12591,46 +12621,6 @@
       parts.push(`${clearedWindows.dropped} window${clearedWindows.dropped === 1 ? '' : 's'} dropped — a roof leaves no glass there`);
     }
 
-    // ── AND THE DIMENSIONS, ON EVERY LEVEL THE PRESS TOUCHED ─────────────
-    //
-    // MODEL.dc.html's BUILD HOUSE calls _placeAutoDims for every level it
-    // built on, and so does this: a house that arrives undimensioned is a
-    // drawing somebody still has to measure by hand, which is the whole thing
-    // AUTO DIMS exists to stop.
-    //
-    // EVERY LEVEL THAT GOT GEOMETRY, gathered from the records rather than
-    // from a list written out here -- the storeys, the foundation under them
-    // and the roof over, each already knows which level it went to. Written
-    // as a list, this would have to be edited again by the same hand that
-    // added the next body, and the one it forgot would simply arrive without
-    // dimensions and say nothing about it.
-    //
-    // THE HOME VIEW OF EACH, not the active one: a dimension is filed against
-    // a layer view, and a string filed against the view the drafter happens
-    // to be standing in would be invisible on the plan it measures.
-    const dimensioned = [];
-    const touched = new Map();
-    const noteLevel = (id, view) => {
-      if (id == null) return;
-      const key = `${id}:${view}`;
-      if (!touched.has(key)) touched.set(key, { levelId: Number(id), view });
-    };
-    storeys.forEach(level => noteLevel(level.id, 'plan'));
-    if (under.items.length) noteLevel(FOUNDATION_LEVEL_ID, 'foundation');
-    if (built.length) noteLevel(ROOF_LEVEL_ID, 'plan');
-    const sweptDims = [];
-    touched.forEach(({ levelId: id, view }) => {
-      const result = placeAutoDims(id, view);
-      // -1 IS A REAL ANSWER: the level holds nothing big enough to string.
-      // It is not an error and it is not a count of zero.
-      if (result === -1) return;
-      dimensioned.push(...result.placed);
-      sweptDims.push(...result.removed);
-    });
-    if (dimensioned.length) {
-      extra.push(...dimensioned.map(item => ({ list: drawing.dimensions, item })));
-      parts.push(`${dimensioned.length} dims`);
-    }
 
     // AND THE MID-SPAN BEAM, which is where Movie asked for it first: "we
     // should just autoplace the beam once into the 'premade homes' and if i
@@ -12732,6 +12722,65 @@
         parts.push(`${staired.refused.length} stair opening`
           + `${staired.refused.length === 1 ? '' : 's'} NOT cut`);
       }
+    }
+
+    // ── AND THE DIMENSIONS, LAST, WHEN THERE IS SOMETHING TO MEASURE ─────
+    //
+    // THIS PASS USED TO RUN BEFORE THE STRUCTURE, and on the framing views it
+    // therefore measured a level with no beams, no posts and no stair hole in
+    // it yet -- all three of which A-DIMS-COLS strings. A built house arrived
+    // with its perimeter dimensioned and its columns not, and nothing said so:
+    // pressing AUTO DIMS afterwards produced them, which is the shape of a
+    // feature that looks like it was never switched on.
+    //
+    // MOVED RATHER THAN RE-RUN, and the difference is the undo. A second pass
+    // sweeps the first pass's strings, so those records would sit in `extra`
+    // to be removed AND in `sweptDims` to be restored -- and would survive the
+    // Ctrl+Z that is supposed to take the whole building with it.
+    //
+    // SAFE TO MOVE because nothing it now runs after reads a dimension:
+    // placeAutoBeam reads the stair holes, placeAutoStairs reads the beams,
+    // and neither asks what has been measured. The build line reports the
+    // dims after the beams and stairs now, which is the order they are in.
+    // ── AND THE DIMENSIONS, ON EVERY LEVEL THE PRESS TOUCHED ─────────────
+    //
+    // MODEL.dc.html's BUILD HOUSE calls _placeAutoDims for every level it
+    // built on, and so does this: a house that arrives undimensioned is a
+    // drawing somebody still has to measure by hand, which is the whole thing
+    // AUTO DIMS exists to stop.
+    //
+    // EVERY LEVEL THAT GOT GEOMETRY, gathered from the records rather than
+    // from a list written out here -- the storeys, the foundation under them
+    // and the roof over, each already knows which level it went to. Written
+    // as a list, this would have to be edited again by the same hand that
+    // added the next body, and the one it forgot would simply arrive without
+    // dimensions and say nothing about it.
+    //
+    // THE HOME VIEW OF EACH, not the active one: a dimension is filed against
+    // a layer view, and a string filed against the view the drafter happens
+    // to be standing in would be invisible on the plan it measures.
+    const dimensioned = [];
+    const touched = new Map();
+    const noteLevel = (id, view) => {
+      if (id == null) return;
+      const key = `${id}:${view}`;
+      if (!touched.has(key)) touched.set(key, { levelId: Number(id), view });
+    };
+    storeys.forEach(level => noteLevel(level.id, 'plan'));
+    if (under.items.length) noteLevel(FOUNDATION_LEVEL_ID, 'foundation');
+    if (built.length) noteLevel(ROOF_LEVEL_ID, 'plan');
+    const sweptDims = [];
+    touched.forEach(({ levelId: id, view }) => {
+      const result = placeAutoDims(id, view);
+      // -1 IS A REAL ANSWER: the level holds nothing big enough to string.
+      // It is not an error and it is not a count of zero.
+      if (result === -1) return;
+      dimensioned.push(...result.placed);
+      sweptDims.push(...result.removed);
+    });
+    if (dimensioned.length) {
+      extra.push(...dimensioned.map(item => ({ list: drawing.dimensions, item })));
+      parts.push(`${dimensioned.length} dims`);
     }
 
     undoStack.length = mark;

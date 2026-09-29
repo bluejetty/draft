@@ -55,7 +55,24 @@ if (!window.DraftAutoDims) {
     OVERALL: 'A-DIMS-OVR',       // the footprint: eave to eave, corner to corner
     EXTERIOR: 'A-DIMS-EXT',      // the overhang string and the outline jogs
     FENESTRATION: 'A-DIMS-FENS', // window and door centres
+    COLUMNS: 'A-DIMS-COLS',      // where the posts and the beam line sit
   });
+
+  // How far off the columns their strings sit. Movie, 29 Sep: "about 1ft from
+  // the cols".
+  const COLUMN_CLEAR_FT = 1;
+  const HOLE_MARGIN_FT = 0.25;
+  // How far off a beam's line a column may stand and still be ON that beam.
+  // Half a foot is wider than any placement error and narrower than the gap
+  // to a second beam, so a neighbour's posts never join this beam's string.
+  const ON_BEAM_FT = 0.5;
+  // How close to a floor opening a string may sit. A string must not be drawn
+  // ACROSS a hole -- there is nothing under it to measure to -- but it does
+  // not need a foot of air to clear one. Inflating the hole by the full
+  // clearance instead blocked BOTH sides of a beam running along a stair
+  // hole's edge, so the beam got no string at all: a hole two feet away
+  // silently cost the drawing its column dimensions. Three inches keeps the
+  // string off the edge without claiming ground the hole does not occupy.
 
   // The grid the dimension labels print on: formatArchitecturalInches rounds
   // to the sixteenth, so 1/16" is 1/192 of a foot.
@@ -80,6 +97,14 @@ if (!window.DraftAutoDims) {
   //
   // A partial too short to draw is ABSORBED, never dropped: dropping one
   // leaves a hole in the chain and the survivors stop summing to the overall.
+  // HOISTED OUT OF computeAutoDimStrings so the column stack below reads the
+  // same one. It closed over nothing; moving it changes no behaviour, and a
+  // second copy is what this repo keeps paying for.
+  const uniqSorted = values => {
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted.filter((value, index) => index === 0 || value - sorted[index - 1] > 0.01);
+  };
+
   const printableCoords = values => {
     const snapped = values.map(value => Math.round(value / PRINT_GRID_FT) * PRINT_GRID_FT);
     if (snapped.length < 2) return snapped;
@@ -170,10 +195,6 @@ if (!window.DraftAutoDims) {
       group.bbox.maxX - group.bbox.minX >= 0.01 && group.bbox.maxZ - group.bbox.minZ >= 0.01);
     if (!sized.length) return null;
     const houseBox = sized.find(group => group.house)?.bbox || null;
-    const uniqSorted = values => {
-      const sorted = [...values].sort((a, b) => a - b);
-      return sorted.filter((value, index) => index === 0 || value - sorted[index - 1] > 0.01);
-    };
     // Near-coincident corners string as ONE coordinate: a slightly off-square
     // outline gets straight strings instead of a pile of inch-scale jogs. The
     // end clusters keep the true extremes so overalls measure the footprint.
@@ -373,8 +394,155 @@ if (!window.DraftAutoDims) {
     return segments;
   }
 
+  // ── THE COLUMN STACK, WHICH IS NOT THE PERIMETER STACK ──────────────────
+  //
+  // Movie, 29 Sep: "on the FLOOR LAYOUT and FOUNDATION LAYOUT the A-DIMS-COLS
+  // layer should measure the columns (and beam since the col sits on it) from
+  // both directions" ... "on the interior of the floor" ... "about 1ft from
+  // the cols" ... "on a side that doesn't have stair hole" ... "the COLS will
+  // need to be dimensioned from ext edge of house" ... and the shape, exactly:
+  // "when you measure along a beam you need each column and then the ext edge
+  // where the beams sit and the other direction center of column to ext edges
+  // on either side".
+  //
+  // TWO STRINGS PER BEAM, answering two different questions:
+  //
+  //   ALONG   [ext edge, col, col, ..., ext edge]   where the posts stand on
+  //                                                 the beam, and where the
+  //                                                 beam bears at each end
+  //   ACROSS  [ext edge, beam line, ext edge]       where that beam line sits
+  //                                                 across the house
+  //
+  // A SEPARATE FUNCTION, not a branch inside computeAutoDimStrings, and the
+  // reason is what that one does: it groups footprints, decides which SIDE
+  // each stack hangs off, steps every stack out past whatever footprint is in
+  // its way, and continues stacks that end up sharing a corridor. None of it
+  // applies to a string running INSIDE the house beside a beam. Threading a
+  // third geometry through those passes would put working, delicate code at
+  // risk to share nothing -- the only overlap is two pure helpers, and those
+  // are hoisted rather than copied.
+  //
+  // MEASURED FROM THE HOUSE EDGE, not from the beam's own ends. A beam bears
+  // on the exterior wall, so the first and last figures on the along string
+  // are the bearing distances a framer needs; reading them off the beam's
+  // endpoints instead would print two zeros.
+  function computeColumnDimStrings({
+    beams, columns, outlines, walls, floorOpenings,
+    clearFt = COLUMN_CLEAR_FT,
+  }) {
+    const beamList = Array.isArray(beams) ? beams : [];
+    const columnList = Array.isArray(columns) ? columns : [];
+    if (!beamList.length || !columnList.length) return [];
+
+    // THE HOUSE EDGE, found the same way and in the same order
+    // computeAutoDimStrings finds it -- outlines when the drawing has them,
+    // wall corners when it does not -- so the two can never disagree about
+    // where the house ends. A garage outline is not the house.
+    const outlinePoints = (Array.isArray(outlines) ? outlines : [])
+      .filter(outline => !outline.garage)
+      .flatMap(outline => outline.points || []);
+    const corners = outlinePoints.length ? outlinePoints
+      : (Array.isArray(walls) ? walls : []).flatMap(wall => [wall.start, wall.end]);
+    if (corners.length < 2) return [];
+    const edge = {
+      x: [Math.min(...corners.map(p => p.x)), Math.max(...corners.map(p => p.x))],
+      z: [Math.min(...corners.map(p => p.z)), Math.max(...corners.map(p => p.z))],
+    };
+    if (edge.x[1] - edge.x[0] < 0.01 || edge.z[1] - edge.z[0] < 0.01) return [];
+
+    // Every floor opening as a box. A stair hole is a polygon, but which SIDE
+    // of a beam it falls on is a question its extents answer.
+    const holes = (Array.isArray(floorOpenings) ? floorOpenings : [])
+      .map(hole => (hole && Array.isArray(hole.points) ? hole.points : []))
+      .filter(points => points.length >= 3)
+      .map(points => ({
+        x: [Math.min(...points.map(p => p.x)), Math.max(...points.map(p => p.x))],
+        z: [Math.min(...points.map(p => p.z)), Math.max(...points.map(p => p.z))],
+      }));
+
+    const segments = [];
+    // One run of coordinates at one fixed position, cut into segments the way
+    // the perimeter stack cuts its own. Interior strings have no OUTWARD side
+    // to keep ink on, so these always run low to high rather than flipping.
+    const emit = (runAxis, rawCoords, fixedValue) => {
+      const coords = printableCoords(rawCoords);
+      for (let i = 0; i < coords.length - 1; i++) {
+        const a = coords[i], b = coords[i + 1];
+        segments.push({
+          start: runAxis === 'x' ? { x: a, z: fixedValue } : { x: fixedValue, z: a },
+          end: runAxis === 'x' ? { x: b, z: fixedValue } : { x: fixedValue, z: b },
+          layer: DIM_LAYERS.COLUMNS,
+          srcStartId: null,
+          srcEndId: null,
+        });
+      }
+    };
+
+    beamList.forEach(beam => {
+      if (!beam || !beam.start || !beam.end) return;
+      const horizontal = Math.abs(beam.end.x - beam.start.x)
+        >= Math.abs(beam.end.z - beam.start.z);
+      const along = horizontal ? 'x' : 'z';
+      const across = horizontal ? 'z' : 'x';
+      const fixed = (beam.start[across] + beam.end[across]) / 2;
+      const runLo = Math.min(beam.start[along], beam.end[along]);
+      const runHi = Math.max(beam.start[along], beam.end[along]);
+
+      // THE POSTS THIS BEAM CARRIES AND NO OTHERS. A column belongs to a beam
+      // when it stands on that beam's line and within its run, so a parallel
+      // beam's posts never join this one's string -- which would print a
+      // figure to a post that is not on the member being dimensioned.
+      const onBeam = columnList.filter(column => {
+        const point = column && column.point;
+        if (!point) return false;
+        if (Math.abs(point[across] - fixed) > ON_BEAM_FT) return false;
+        return point[along] >= runLo - ON_BEAM_FT && point[along] <= runHi + ON_BEAM_FT;
+      });
+      if (!onBeam.length) return;
+      const posts = uniqSorted(onBeam.map(column => column.point[along]));
+
+      // ── ALONG THE BEAM ────────────────────────────────────────────────
+      // WHICH SIDE: away from a stair hole beside it, and inside the house
+      // either way. Movie: "on a side that doesn't have stair hole".
+      const clearSide = direction => {
+        const at = fixed + direction * clearFt;
+        if (at <= edge[across][0] + 0.01 || at >= edge[across][1] - 0.01) return false;
+        return !holes.some(hole => {
+          // Only a hole this beam actually runs past can be in the way.
+          if (Math.min(hole[along][1], runHi) - Math.max(hole[along][0], runLo) <= 0) return false;
+          return at >= hole[across][0] - HOLE_MARGIN_FT
+            && at <= hole[across][1] + HOLE_MARGIN_FT;
+        });
+      };
+      const side = clearSide(1) ? 1 : clearSide(-1) ? -1 : 0;
+      if (side !== 0) {
+        const inner = posts.filter(value =>
+          value > edge[along][0] + 0.01 && value < edge[along][1] - 0.01);
+        emit(along, [edge[along][0], ...inner, edge[along][1]], fixed + side * clearFt);
+      }
+
+      // ── ACROSS IT ─────────────────────────────────────────────────────
+      // One string locating the beam line between the two exterior edges it
+      // sits between. Every post on a beam shares that coordinate, so this is
+      // one string per beam rather than one per column.
+      //
+      // A beam sitting ON an exterior edge gets none: the string would be the
+      // house depth with a figure of zero beside it, which is the overall
+      // dimension wearing the wrong layer.
+      if (fixed > edge[across][0] + 0.01 && fixed < edge[across][1] - 0.01) {
+        const at = posts[0] - clearFt > edge[along][0] + 0.01
+          ? posts[0] - clearFt : posts[0] + clearFt;
+        if (at > edge[along][0] + 0.01 && at < edge[along][1] - 0.01) {
+          emit(across, [edge[across][0], fixed, edge[across][1]], at);
+        }
+      }
+    });
+    return segments;
+  }
+
   window.DraftAutoDims = Object.freeze({
-    computeAutoDimStrings, STRING_SPACING_FT, JOG_MERGE_FT, DIM_LAYERS,
+    computeAutoDimStrings, computeColumnDimStrings,
+    STRING_SPACING_FT, JOG_MERGE_FT, COLUMN_CLEAR_FT, DIM_LAYERS,
   });
 })();
 }
