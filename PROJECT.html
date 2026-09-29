@@ -547,7 +547,22 @@
     .detail-button:disabled { cursor:default; border-color:var(--edge-panel); color:var(--ink-quiet); }
     .drop-slot { margin-top:16px; border:1.5px dashed var(--edge-panel); background:color-mix(in srgb, var(--ink-primary) 4%, transparent); padding:26px 16px; text-align:center; color:var(--ink-quiet); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; }
     .drop-slot small { display:block; margin-top:5px; text-transform:none; letter-spacing:0; font-family:'Barlow',system-ui,sans-serif; font-weight:400; font-size:11px; }
-    #status { margin-top:14px; min-height:16px; color:#557a46; font-size:12px; }
+    /* THE ONE COLOUR ON THIS PAGE THAT NEVER MOVED WITH THE SKIN. It was
+       #557a46, a literal, so it read the same green on the night page and the
+       day one and was measured at neither: 3.36:1 on night and 4.41:1 on day,
+       both under the 4.5 the palette harness holds every other pair to. It
+       survived precisely BECAUSE it is a literal -- the harness checks palette
+       roles, and a hardcoded hex is not one.
+       AND THE GREEN WAS SAYING THE WRONG THING HALF THE TIME. Six of the calls
+       into this line are refusals -- "A garage sill only steps DOWN from MAIN
+       FL, never up.", "Could not save" -- and a refusal in success green is a
+       worse fault than a dim one. --ink-secondary is the page's own voice for
+       a line of prose like this, it is asserted against --surface-page on all
+       four skins, and appearing at all is what marks the line as new.
+       If the green is wanted back it belongs in palette.js as a role of its
+       own, so that the harness holds it to the same floor as everything else
+       and it can differ on night and day. */
+    #status { margin-top:14px; min-height:16px; color:var(--ink-secondary); font-size:12px; }
     @media (max-width:1180px) { .band { grid-template-columns:1fr; justify-items:center; } .sched { width:min(420px,100%); }
       /* One track, so the assignments above would spill into implicit
          columns nobody can see. Stacked, order is the source order again. */
