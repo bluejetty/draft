@@ -209,6 +209,79 @@ function run(win) {
     !('finishBands' in one({ finishBands: [{ finishId: 'nope', lowFt: 0, highFt: 3 }] })),
     JSON.stringify(one({ finishBands: [{ finishId: 'nope', lowFt: 0, highFt: 3 }] })
       .finishBands ?? null));
+
+  // ── AND A DROPPED BAND SAYS SO ────────────────────────────────────────
+  //
+  // Movie, 29 Sep: *"NO BAND"*. Everything above this is the format being
+  // RIGHT to refuse; none of it made the refusal audible. The wall itself is
+  // well formed, so it is never refused and never reaches `env.drops`; the
+  // band is simply absent from the wall that comes back, and the page's
+  // refusal count reads zero. From the drafter's chair that is indistinguish-
+  // able from a drag that never took.
+  //
+  // `env.finishDrops` is the sink, deliberately NOT `env.drops`: MODEL.html
+  // re-emits everything in that one as a whole record, so a band in it would
+  // be written back out as a WALL. Checked here rather than on a page because
+  // the rule is the format's, and a page reading it is the next question.
+  const dropsFor = bands => {
+    const finishDrops = [];
+    FORMAT.walls([{ ...SEG, finishBands: bands }], LEVELS, { ...env, finishDrops });
+    return finishDrops;
+  };
+  // THE THREE REFUSALS, EACH BY NAME. A count would not do: they are three
+  // different accidents with three different answers, and "1 band dropped"
+  // sends the drafter looking at the wrong one.
+  const REFUSALS = [
+    ['a finish this build does not have', { finishId: 'terracotta', lowFt: 0, highFt: 3 },
+      'unknown-finish'],
+    ['no bottom that is a number', { finishId: 'brick', lowFt: 'low', highFt: 3 },
+      'no-bottom'],
+    ['a top at or below its own bottom', { finishId: 'brick', lowFt: 3, highFt: 1 },
+      'no-height'],
+  ];
+  REFUSALS.forEach(([why, band, reason]) => {
+    const got = dropsFor([band]);
+    check(`a band dropped for ${why} is reported`,
+      got.length === 1, `${got.length} report(s)`);
+    check(`and it is reported AS that, not as a bare count   [${reason}]`,
+      got[0]?.reason === reason, String(got[0]?.reason));
+  });
+  // THE WALL AND THE POSITION TRAVEL WITH IT, because neither survives
+  // anywhere else: the wall keeps no record of a band it lost, and the array
+  // that comes back has been filtered, so nothing in it can be counted against
+  // the file to find which one went.
+  const middle = dropsFor([BAND, { finishId: 'brick', lowFt: 3, highFt: 1 }, BAND]);
+  check('a dropped band names the wall it was drawn on',
+    middle[0]?.wallId === 'w1', String(middle[0]?.wallId));
+  check('and its place in the FILE, which the filtered list can no longer show',
+    middle[0]?.index === 1, String(middle[0]?.index));
+  check('and hands back the raw band, so the report is about the record that exists',
+    JSON.stringify(middle[0]?.band) === JSON.stringify({ finishId: 'brick', lowFt: 3, highFt: 1 }),
+    JSON.stringify(middle[0]?.band));
+  check('and the good bands either side of it are still on the wall',
+    FORMAT.walls([{ ...SEG, finishBands: [BAND, { finishId: 'brick', lowFt: 3, highFt: 1 },
+      BAND] }], LEVELS, env)[0].finishBands?.length === 2,
+    JSON.stringify(FORMAT.walls([{ ...SEG,
+      finishBands: [BAND, { finishId: 'brick', lowFt: 3, highFt: 1 }, BAND] }],
+    LEVELS, env)[0].finishBands));
+  // A BAND THAT WAS KEPT IS NOT A REFUSAL, and a sink that fired on every band
+  // would be the same silence wearing a bell.
+  check('a band that survives is not reported as dropped',
+    dropsFor([BAND]).length === 0, JSON.stringify(dropsFor([BAND])));
+  // AND A RETIRED ID IS STILL MAPPED, NOT REPORTED. This is the case a caller
+  // re-deriving the rule outside the format gets wrong: `siding_v` is not in
+  // the vocabulary any more, so a call site testing membership by itself would
+  // call every wall sided before 27 Sep a refusal. The format maps it.
+  check('a band on a RETIRED finish id is mapped, and so is not reported at all',
+    dropsFor([{ finishId: 'siding_v', lowFt: 0, highFt: 3 }]).length === 0,
+    JSON.stringify(dropsFor([{ finishId: 'siding_v', lowFt: 0, highFt: 3 }])));
+  // A PAGE THAT ASKS NOTHING IS UNCHANGED. Every page but one passes no sink
+  // at all, and the normalise they get must be the normalise they had.
+  check('and a caller that hands no sink normalises exactly as before',
+    JSON.stringify(FORMAT.walls([{ ...SEG, finishBands: [BAND] }], LEVELS, env))
+      === JSON.stringify(FORMAT.walls([{ ...SEG, finishBands: [BAND] }], LEVELS,
+        { ...env, finishDrops: [] })),
+    JSON.stringify(FORMAT.walls([{ ...SEG, finishBands: [BAND] }], LEVELS, env)[0].finishBands));
   check('and a band carries its own colour, separately from the wall\'s',
     one({ finishColor: '#ffffff', finishBands: [{ ...BAND, color: '#8b5a2b' }] })
       .finishBands[0].color === '#8b5a2b',
@@ -472,11 +545,11 @@ const MUTATIONS = [
       "const HEX = /^#[0-9a-f]{6}$/i;", 'const HEX = /^#?[0-9a-z]*$/i;')],
   ['a band with no height at all is kept, so it claims a strip of nothing',
     s => sub(s, 'drawing-format.js',
-      '    if (!toTop && (!Number.isFinite(hi) || hi <= lo)) return null;',
+      "    if (!toTop && (!Number.isFinite(hi) || hi <= lo)) return refuse('no-height');",
       '    if (false) return null;')],
   ['an inverted band is kept, so its top is below its bottom',
     s => sub(s, 'drawing-format.js',
-      '    if (!toTop && (!Number.isFinite(hi) || hi <= lo)) return null;',
+      "    if (!toTop && (!Number.isFinite(hi) || hi <= lo)) return refuse('no-height');",
       '    if (!toTop && !Number.isFinite(hi)) return null;')],
   ['a band naming an unknown finish is kept',
     s => sub(s, 'drawing-format.js',
@@ -484,8 +557,8 @@ const MUTATIONS = [
       '    const id = asked || null;')],
   ['one bad band takes the good ones down with it',
     s => sub(s, 'drawing-format.js',
-      '      .map(band => finishBand(band, ids, legacy, anchors)).filter(Boolean);',
-      '      .map(band => finishBand(band, ids));\n'
+      '          : null))\n      .filter(Boolean);',
+      '          : null));\n'
       + '    if (bands.some(band => !band)) bands.length = 0;')],
   ['an empty band list is written anyway, so a wall carries a key meaning nothing',
     s => sub(s, 'drawing-format.js',
@@ -493,12 +566,44 @@ const MUTATIONS = [
       '      finishBands: bands,')],
   ['the bands are sorted by height, so what the drafter did last stops deciding',
     s => sub(s, 'drawing-format.js',
-      '      .map(band => finishBand(band, ids, legacy, anchors)).filter(Boolean);',
-      '      .map(band => finishBand(band, ids)).filter(Boolean)\n'
+      '          : null))\n      .filter(Boolean);',
+      '          : null))\n      .filter(Boolean)\n'
       + '      .sort((a, b) => a.lowFt - b.lowFt);')],
   ['a band loses its own colour, so a two-tone wall is one colour',
     s => sub(s, 'drawing-format.js',
       "      ...(bandColor ? { color: bandColor } : {}) };", '    };')],
+
+  // ── AND THE REFUSALS STAY AUDIBLE ───────────────────────────────────
+  // One per drop, because silencing one of three is the exact shape of the
+  // defect: the other two still speak, so the page still looks like it reports.
+  ['a band naming a finish this build does not have goes back to dropping in silence',
+    s => sub(s, 'drawing-format.js', "    if (!id) return refuse('unknown-finish');",
+      '    if (!id) return null;')],
+  ['a band with no bottom goes back to dropping in silence',
+    s => sub(s, 'drawing-format.js',
+      "    if (!Number.isFinite(lo)) return refuse('no-bottom');",
+      '    if (!Number.isFinite(lo)) return null;')],
+  ['an inverted band goes back to dropping in silence',
+    s => sub(s, 'drawing-format.js',
+      "    if (!toTop && (!Number.isFinite(hi) || hi <= lo)) return refuse('no-height');",
+      '    if (!toTop && (!Number.isFinite(hi) || hi <= lo)) return null;')],
+  ['the sink never reaches the bands, so every refusal is silent again',
+    s => sub(s, 'drawing-format.js',
+      '          env.finishAnchors || [], env.finishDrops),',
+      '          env.finishAnchors || []),')],
+  ['every refusal reports the same reason, so the drafter is sent to the wrong band',
+    s => sub(s, 'drawing-format.js',
+      '    const refuse = reason => { if (note) note(reason); return null; };',
+      "    const refuse = () => { if (note) note('unknown-finish'); return null; };")],
+  ['a dropped band forgets its place in the file',
+    s => sub(s, 'drawing-format.js',
+      '            wallId: String(wall?.id || \'\').trim() || null, index, band, reason })',
+      '            wallId: String(wall?.id || \'\').trim() || null, index: 0, band, reason })')],
+  ['a band that was KEPT is reported dropped too, so the report means nothing',
+    s => sub(s, 'drawing-format.js',
+      '    const refuse = reason => { if (note) note(reason); return null; };',
+      '    const refuse = reason => { if (note) note(reason); return null; };\n'
+      + '    if (note) note(\'unknown-finish\');')],
 
   ['a retired finish id is dropped instead of mapped, so a sided wall goes stucco',
     s => sub(s, 'drawing-format.js', '    const asked = legacy[wall?.finish] || wall?.finish;',

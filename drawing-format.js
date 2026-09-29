@@ -497,10 +497,38 @@ if (!window.DraftDrawingFormat) {
   // produces by DRAGGING, so a malformed one is a gesture that went wrong
   // rather than a file somebody hand-edited -- and the safe answer to a
   // gesture that went wrong is nothing, not a guess at what was meant.
-  const finishBand = (raw, ids, legacy = {}, anchors = []) => {
+  //
+  // DROPPED IS NOT THE SAME AS UNSPOKEN, and for three refusals it was. Movie,
+  // 29 Sep: *"NO BAND"* -- a wall he had clad came back bare, and every layer
+  // between the file and the screen agreed there was nothing to say. The band
+  // is gone from the normalised wall, the WALL is not refused so it never
+  // reaches `env.drops`, and the count on the page reads zero. A drafter is
+  // left to conclude the drag never took.
+  //
+  // So each refusal notes itself, and `note` is the same caller-supplied sink
+  // `levelLocks` takes and for the reason written there: the rule stays in one
+  // place instead of being re-derived at a call site where it would drift.
+  // Re-derivation is not merely awkward here, it is WRONG -- `legacy` maps a
+  // retired id onto a live one, so a caller re-testing `ids.includes(band
+  // .finishId)` by itself would report every pre-27-Sep siding band as a
+  // refusal when the normaliser in fact carried all of them through.
+  //
+  // A REASON, NOT A COUNT. The three are different accidents with different
+  // answers -- a finish this build does not have, a band with no bottom, and a
+  // band whose top is at or under its own bottom -- and a page that says
+  // "1 band dropped" sends the drafter looking at the wrong one.
+  //
+  // AND A SINK OF ITS OWN, NOT `env.drops`. That array is read back by
+  // MODEL.html and RE-EMITTED as whole records by the Write Tier
+  // (RULING-a-rejected-item-is-still-the-drafters). A band pushed into it
+  // would be written back out as if it were a WALL, and counted in the page's
+  // refusal total as one. `env.finishDrops` is separate so the two can never
+  // be confused, and so a page that wants neither goes on passing neither.
+  const finishBand = (raw, ids, legacy = {}, anchors = [], note = null) => {
+    const refuse = reason => { if (note) note(reason); return null; };
     const asked = legacy[raw?.finishId] || raw?.finishId;
     const id = ids.includes(asked) ? asked : null;
-    if (!id) return null;
+    if (!id) return refuse('unknown-finish');
     // ANCHORED TO A NAMED LINE, and an unknown name falls back to the default
     // rather than dropping the band: the anchor says where a band is MEASURED
     // FROM, so a band with a name this build does not know is still a band --
@@ -509,14 +537,14 @@ if (!window.DraftDrawingFormat) {
     const toTop = raw?.toTop === true;
     const lo = Number(raw?.lowFt);
     const hi = Number(raw?.highFt);
-    if (!Number.isFinite(lo)) return null;
+    if (!Number.isFinite(lo)) return refuse('no-bottom');
     // NEGATIVE IS MEANINGFUL NOW, and this used to refuse it. Every band was
     // measured from a wall's foot, where below the foot was below the wall;
     // measured from a NAMED LINE, a negative is how a band crosses it -- sill
     // less two feet is cladding carried down over the concrete, which is the
     // thing Movie asked for on 27 Sep. What is still refused is a band that
     // claims no wall: a top at or below its own bottom.
-    if (!toTop && (!Number.isFinite(hi) || hi <= lo)) return null;
+    if (!toTop && (!Number.isFinite(hi) || hi <= lo)) return refuse('no-height');
     const bandColor = finishColour(raw?.color);
     // THE SIDE INSETS AND THE CORNER WRAP, all conditional: a band that runs
     // the full width of its wall and turns no corner carries none of them, so
@@ -557,12 +585,25 @@ if (!window.DraftDrawingFormat) {
   // wall types use two hundred lines up and it is here for the same reason:
   // on 27 Sep the two siding rows swapped places, and without this every wall
   // clad before that came back STUCCO with nothing anywhere saying why.
-  const finishOf = (wall, ids, legacy = {}, anchors = []) => {
+  const finishOf = (wall, ids, legacy = {}, anchors = [], drops = null) => {
     const asked = legacy[wall?.finish] || wall?.finish;
     const base = ids.includes(asked) ? asked : null;
     const color = finishColour(wall?.finishColor);
+    // THE WALL'S OWN ID AND THE BAND'S OWN INDEX travel with each refusal,
+    // because neither is recoverable afterwards: the wall keeps no record of a
+    // band it lost, and the surviving array has been filtered, so position 2 in
+    // it is not position 2 in the file. Same argument `collectRefusals` makes
+    // for carrying an index, one collection down.
     const bands = (Array.isArray(wall?.finishBands) ? wall.finishBands : [])
-      .map(band => finishBand(band, ids, legacy, anchors)).filter(Boolean);
+      .map((band, index) => finishBand(band, ids, legacy, anchors,
+        Array.isArray(drops)
+          // THE RAW BAND, UNTOUCHED, for the same reason `collectRefusals`
+          // hands back the raw item: anything normalised on the way into the
+          // sink would be a report about a record that does not exist.
+          ? reason => drops.push({
+            wallId: String(wall?.id || '').trim() || null, index, band, reason })
+          : null))
+      .filter(Boolean);
     return {
       ...(base ? { finish: base } : {}),
       ...(color ? { finishColor: color } : {}),
@@ -667,7 +708,7 @@ if (!window.DraftDrawingFormat) {
         // A BASE FINISH, A COLOUR AND ANY BANDS -- all three conditional, so a
         // wall nobody has clad reads out exactly as it read in.
         ...finishOf(wall, env.finishIds || [], env.legacyFinishes || {},
-          env.finishAnchors || []),
+          env.finishAnchors || [], env.finishDrops),
       };
     }), env.drops).filter(Boolean);
   };
