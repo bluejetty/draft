@@ -364,6 +364,45 @@ test('AUTO DIMS strings the level the drafter is standing on, and names it',
       .toBeGreaterThan(0);
   });
 
+test('the column stack lands on the framing sheets and not on the walls plan',
+  async ({ page }) => {
+    await openBoards(page);
+    await order(page, 'bungalow', 'bungalow');
+    await saveNow(page);
+    const saved = await savedFile(page);
+
+    // THE FIXTURE'S REACH, BEFORE ANYTHING IS READ OFF IT. A house narrow
+    // enough to span without a beam files no beams and no columns
+    // (build-house.js: `if (shortSpan <= beamAtFt) return { beams: [],
+    // columns: [] }`), and then "no column dimension appeared" is a claim
+    // about a drawing that had nothing to dimension.
+    expect(saved.beams.length,
+      'the build placed no beam, so no post is carried and the stack is untested')
+      .toBeGreaterThan(0);
+    expect(saved.columns.length,
+      'the build placed no column, so the stack is untested').toBeGreaterThan(0);
+
+    const cols = saved.dimensions.filter(d => d.layer === 'A-DIMS-COLS');
+    expect(cols.length, 'the build placed posts and dimensioned none of them')
+      .toBeGreaterThan(0);
+
+    // ON THE FRAMING SHEETS ONLY. placeAutoDims gates the stack on the view
+    // rather than on each record's own `view` field, because a beam can be
+    // stored on 'plan' and posts strung across the walls plan are clutter on
+    // the sheet a client reads.
+    expect(cols.some(d => d.view === 'plan'),
+      'a column string landed on the walls plan').toBe(false);
+    expect(cols.every(d => d.view === 'floor' || d.view === 'foundation'),
+      `column strings landed on ${[...new Set(cols.map(d => d.view))].join(', ')}`)
+      .toBe(true);
+
+    // AND THE PERIMETER STACK IS STILL THERE. The two are separate functions
+    // now, and a wiring that returned only one of them would leave a sheet
+    // measured in one direction and silent in the other.
+    const layers = new Set(saved.dimensions.map(d => d.layer));
+    expect(layers.has('A-DIMS-OVR'), 'the overall strings went missing').toBe(true);
+  });
+
 test('pressing AUTO DIMS twice replaces the strings; one undo restores them',
   async ({ page }) => {
     // THE SWEEP IS THE HALF THAT IS EASY TO LOSE. A re-run takes the level's

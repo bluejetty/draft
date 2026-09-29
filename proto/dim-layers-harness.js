@@ -103,6 +103,8 @@ function strings(win, { points = HOUSE, openings = [], roofs = [] } = {}) {
   }) || [];
 }
 const countBy = (segs, layer) => segs.filter(s => s.layer === layer).length;
+const uniqOf = values => [...values].sort((a, b) => a - b)
+  .filter((v, i, all) => i === 0 || v - all[i - 1] > 0.01);
 const spanOf = s => Math.hypot(s.end.x - s.start.x, s.end.z - s.start.z);
 
 function run() {
@@ -138,8 +140,14 @@ function run() {
 
   // ── EVERY STRING IS TAGGED, AND ONLY WITH IDS THAT EXIST ──────────────────
   const known = new Set(Object.values(AD.DIM_LAYERS));
-  ok('DIM_LAYERS names the three kinds auto-dims emits', known.size === 3,
+  // FOUR NOW: OVR, EXT and FENS on the perimeter, COLS beside the beams. INT
+  // is still absent because nothing emits it -- and this count is what says
+  // so out loud, rather than the object quietly growing a constant for a
+  // string that is never pushed.
+  ok('DIM_LAYERS names the four kinds auto-dims emits', known.size === 4,
     [...known].join(','));
+  ok('and A-DIMS-INT is not among them, because nothing emits it yet',
+    !known.has('A-DIMS-INT'));
   const untagged = withWindow.filter(s => !s.layer);
   ok('no segment leaves auto-dims without a layer', untagged.length === 0,
     `${untagged.length} untagged`);
@@ -197,6 +205,99 @@ function run() {
     `${countBy(roofed, AD.DIM_LAYERS.FENESTRATION)}`);
   ok('every roofed segment is tagged too',
     roofed.every(s => known.has(s.layer)));
+
+  // ── THE COLUMN STACK ──────────────────────────────────────────────────
+  //
+  // A beam down the middle of the 36 x 66 house with two posts under it. The
+  // numbers are chosen so every claim below can be MEASURED rather than
+  // counted: posts at 12 and 24 inside a house 0..36 means the along string
+  // reads 12, 12, 12 and the across string reads 33, 33.
+  // THE BEAM STOPS SHORT OF THE HOUSE EDGE, at the wall's inner face, which
+  // is where a beam actually bears. It ran 0 to 36 -- exactly the edges --
+  // until the mutation table caught what that hid: measuring from the beam's
+  // own ends and measuring from the house edge gave the SAME answer, so the
+  // check could not tell them apart and the mutation walked through it. Half
+  // a foot of wall at each end is the whole difference, and it is a figure a
+  // framer needs.
+  const BEAM = { id: 1, start: { x: 0.5, z: 33 }, end: { x: 35.5, z: 33 } };
+  const POSTS = [
+    { id: 1, point: { x: 12, z: 33 } },
+    { id: 2, point: { x: 24, z: 33 } },
+  ];
+  const colStrings = (over = {}) => AD.computeColumnDimStrings({
+    beams: [BEAM], columns: POSTS, outlines: [{ points: HOUSE, garage: false }],
+    walls: wallsAround(HOUSE), floorOpenings: [], ...over,
+  });
+
+  const cols = colStrings();
+  ok('a beam with posts under it strings something', cols.length > 0,
+    `${cols.length} segments`);
+  ok('every column segment is tagged A-DIMS-COLS',
+    cols.length > 0 && cols.every(s => s.layer === AD.DIM_LAYERS.COLUMNS),
+    [...new Set(cols.map(s => s.layer))].join(','));
+
+  // ALONG: runs on x, so z is constant and the x coordinates are the posts
+  // plus BOTH house edges. Movie: "each column and then the ext edge where
+  // the beams sit".
+  const alongSegs = cols.filter(s => Math.abs(s.start.z - s.end.z) < 0.01);
+  const alongX = uniqOf(alongSegs.flatMap(s => [s.start.x, s.end.x]));
+  ok('the along string starts at the house edge, not where the beam ends',
+    alongX.length > 0 && Math.abs(alongX[0]) < 0.02
+    && Math.abs(alongX[0] - 0.5) > 0.02, String(alongX[0]));
+  ok('the along string runs from one house edge to the other',
+    alongX.length && Math.abs(alongX[0] - 0) < 0.02
+    && Math.abs(alongX[alongX.length - 1] - 36) < 0.02, alongX.join(','));
+  ok('and stops at each post on the way',
+    alongX.some(v => Math.abs(v - 12) < 0.02) && alongX.some(v => Math.abs(v - 24) < 0.02),
+    alongX.join(','));
+  // MEASURED, NOT COUNTED. A string of the right shape with the wrong figures
+  // is the bug this catches: 0-12-24-36 reads 12, 12, 12.
+  const alongRuns = [];
+  for (let i = 0; i < alongX.length - 1; i++) alongRuns.push(alongX[i + 1] - alongX[i]);
+  ok('so every figure on it is 12 ft', alongRuns.length === 3
+    && alongRuns.every(v => Math.abs(v - 12) < 0.02),
+    alongRuns.map(v => v.toFixed(2)).join(' '));
+  ok('the along string sits one foot off the beam, not on it',
+    alongSegs.length > 0
+    && alongSegs.every(s => Math.abs(Math.abs(s.start.z - 33) - 1) < 0.01),
+    [...new Set(alongSegs.map(s => s.start.z))].join(','));
+
+  // ACROSS: runs on z, locating the beam line between the two edges.
+  const acrossSegs = cols.filter(s => Math.abs(s.start.x - s.end.x) < 0.01);
+  const acrossZ = uniqOf(acrossSegs.flatMap(s => [s.start.z, s.end.z]));
+  ok('the across string spans the other direction of the house',
+    acrossZ.length === 3 && Math.abs(acrossZ[0]) < 0.02
+    && Math.abs(acrossZ[1] - 33) < 0.02 && Math.abs(acrossZ[2] - 66) < 0.02,
+    acrossZ.join(','));
+  ok('one across string per beam, not one per post', acrossSegs.length === 2,
+    `${acrossSegs.length} segments`);
+
+  // BOTH DIRECTIONS, because "it strings the posts" is half a claim.
+  ok('no beams means no column strings', colStrings({ beams: [] }).length === 0);
+  ok('no posts means no column strings', colStrings({ columns: [] }).length === 0);
+  // A post standing off this beam's line is not this beam's post -- otherwise
+  // a parallel beam's posts print a figure against a member they do not touch.
+  ok('a post that is not on the beam does not join its string',
+    colStrings({ columns: [{ id: 9, point: { x: 18, z: 10 } }] }).length === 0);
+  ok('a post on the beam DOES, so the check above reads the line and not the count',
+    colStrings({ columns: [{ id: 9, point: { x: 18, z: 33 } }] }).length > 0);
+
+  // THE STAIR HOLE PUSHES IT OVER. Movie: "on a side that doesn't have stair
+  // hole". Asserted by WHICH SIDE it lands on, in both directions.
+  const holeAt = z0 => [{ points: [
+    { x: 10, z: z0 }, { x: 20, z: z0 }, { x: 20, z: z0 + 8 }, { x: 10, z: z0 + 8 }] }];
+  const pushedUp = colStrings({ floorOpenings: holeAt(34) })
+    .filter(s => Math.abs(s.start.z - s.end.z) < 0.01);
+  ok('a hole on the far side of the beam puts the along string on the near side',
+    pushedUp.length > 0 && pushedUp.every(s => s.start.z < 33),
+    [...new Set(pushedUp.map(s => s.start.z))].join(','));
+  const pushedDown = colStrings({ floorOpenings: holeAt(25) })
+    .filter(s => Math.abs(s.start.z - s.end.z) < 0.01);
+  // This one is the case the first margin got wrong: a hole whose edge IS the
+  // beam line. Both sides looked blocked and the beam got no string at all.
+  ok('a hole running up to the beam puts the string on its other side',
+    pushedDown.length > 0 && pushedDown.every(s => s.start.z > 33),
+    [...new Set(pushedDown.map(s => s.start.z))].join(','));
 
   // ── THE FORMAT KEEPS IT ───────────────────────────────────────────────────
   // The link that would otherwise lose everything above on the next save.
@@ -425,6 +526,26 @@ const MUTATIONS = [
       'strings.push({ coords: jogCoords, layer: null })')],
   ['the segment is built without carrying the layer',
     'auto-dims.js', c => c.replace('            layer: string.layer,\n', '')],
+  ['the along string measures from the beam ends, not the house edge',
+    'auto-dims.js', c => c.replace(
+      'emit(along, [edge[along][0], ...inner, edge[along][1]], fixed + side * clearFt);',
+      'emit(along, [runLo, ...inner, runHi], fixed + side * clearFt);')],
+  ['the column strings sit on the beam instead of clear of it',
+    'auto-dims.js', c => c.replace(
+      'clearFt = COLUMN_CLEAR_FT,', 'clearFt = 0,')],
+  ['the across string is never emitted',
+    'auto-dims.js', c => c.replace(
+      'if (fixed > edge[across][0] + 0.01 && fixed < edge[across][1] - 0.01) {',
+      'if (false) {')],
+  ['a post off the beam line joins the beam anyway',
+    'auto-dims.js', c => c.replace(
+      'if (Math.abs(point[across] - fixed) > ON_BEAM_FT) return false;', '')],
+  ['the stair hole stops being looked for',
+    'auto-dims.js', c => c.replace(
+      'const side = clearSide(1) ? 1 : clearSide(-1) ? -1 : 0;', 'const side = 1;')],
+  ['a column segment loses its layer',
+    'auto-dims.js', c => c.replace(
+      'layer: DIM_LAYERS.COLUMNS,', 'layer: null,')],
   ['the format drops the layer again',
     'drawing-format.js', c => c.replace(
       'const layer = oneOf(dimension?.layer, DIMENSION_LAYERS, null);',
