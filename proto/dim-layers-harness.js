@@ -39,7 +39,8 @@ if (ARGS.length) {
 // format. layout-plan.js is last because it reads the others off `window`.
 const FILES = ['formatters.js', 'wall-types.js', 'geometry-2d.js', 'drawing-format.js',
   'room-standards.js', 'level-assembly.js', 'profile-manager.js', 'layer-views.js',
-  'render-2d.js', 'plan-composition.js', 'auto-dims.js', 'layout-plan.js'];
+  'render-2d.js', 'plan-composition.js', 'auto-dims.js', 'cut-view-env.js',
+  'layout-plan.js'];
 
 function loadWith(source = {}) {
   const warnings = [];
@@ -281,6 +282,101 @@ function run() {
     }
   }
 
+  // ── THE ELEVATION'S ENV CARRIES THE TICKS TOO ───────────────────────────
+  //
+  // cut-view-env.js is the shared env EXTFINISH and LAYOUT hand the elevation
+  // painter, and it is a different file from the one harness-env.js builds --
+  // so the painting section below, which supplies its own layerStandard,
+  // cannot say a word about whether the real pages supply one. This does.
+  const CVE = win.DraftCutViewEnv;
+  ok('cut-view-env is loaded', !!CVE);
+  if (CVE) {
+    const elevEnv = CVE.buildCutViewEnv({
+      levels: [{ id: 3, name: 'MAIN FL', elev: 0 }],
+      walls: wallsAround(HOUSE).map((w, i) => ({
+        id: i + 1, levelId: 3, view: 'plan', start: w.start, end: w.end,
+        thickness: 0.5, topHeight: 8,
+      })),
+      fenestrations: [], floors: [], roofs: [], columns: [], beams: [],
+      dimensions: [], shapes: [], lines: [], notes: [], stairs: [],
+    }, [{ id: 3, name: 'MAIN FL', elev: 0 }]);
+    ok('cut-view-env builds an env at all', !!elevEnv);
+    ok('cut-view-env hands the painter a layerStandard lookup',
+      typeof elevEnv?.layerStandard === 'function', typeof elevEnv?.layerStandard);
+    ok('that lookup answers for the fenestration dimension layer',
+      elevEnv?.layerStandard?.('A-DIMS-FENS')?.visible === true,
+      JSON.stringify(elevEnv?.layerStandard?.('A-DIMS-FENS')));
+  }
+
+  // ── AND THE SAME LAYER ON THE ELEVATION ─────────────────────────────────
+  //
+  // Movie, 29 Sep: "can we make the window number get layer A-DIMS-FENS so
+  // the user can turn them off in ELEVATION views if desired".
+  //
+  // A size tag is what the elevation says instead of an opening-centre
+  // string, so it rides the same layer and one tick takes both. Painted
+  // rather than reasoned about: the claim is that the TAG LEAVES THE SHEET,
+  // and only a painter can answer that.
+  //
+  // This section borrows harness-env.js because building an elevation by hand
+  // -- level stack, cut, axis, extents -- is that file's whole job, and a
+  // second copy is what this repo keeps paying for. It READS it and edits
+  // nothing in proto/, so it does not collide with the mutation-table patch
+  // landing there.
+  //
+  // AND IT IS THE ONE SECTION THE MUTATION TABLE CANNOT REACH, said here
+  // rather than left to look as proven as the rest: harness-env's loader
+  // takes no source hook, so a mutation to cut-view.js does not reach the
+  // modules these checks run against. The gate was proved by hand instead --
+  // deleting `&& showFenTags` leaves 12 tags where 0 are expected, which is
+  // every window in the fixture. Wiring a source hook into that loader is the
+  // fix, and it belongs in harness-env.js rather than here.
+  const HE = require('./harness-env.js');
+  const saved = JSON.parse(fs.readFileSync(path.join(ROOT, 'proto',
+    'repro-washroom-bungalow.draft'), 'utf8'));
+  const ev = HE.loadDraftModules();
+  const env = HE.buildEnv(ev, saved);
+  // ALL FOUR ELEVATIONS, not a chosen one: which side a given window lands on
+  // is a fact about the fixture, and a check pinned to E1 would go quiet the
+  // day someone moved a window rather than going red.
+  const cuts = HE.standardElevationCuts(env);
+  // A size tag is two numbers around an X, which is the shape fen-labels
+  // prints and nothing else on an elevation does.
+  const isTag = t => /\d+\s*[Xx]\s*\d+/.test(String(t && t.text));
+  const paint = layerStandard => {
+    const use = layerStandard === undefined ? env : { ...env, layerStandard };
+    return cuts.map(cut => HE.paintElevation(ev, use, cut))
+      .reduce((all, out) => ({
+        tags: all.tags + (out.texts || []).filter(isTag).length,
+        strokes: all.strokes + (out.strokes || []).length,
+      }), { tags: 0, strokes: 0 });
+  };
+  const tagsIn = out => ({ length: out.tags });
+
+  const shown = paint(undefined);
+  // THE FIXTURE'S REACH AGAIN. 12 windows in this drawing, and if none of
+  // them tags on E1 then "hiding the layer removed the tags" is a claim about
+  // an empty sheet -- which is exactly how the plan's own tag hid behind a
+  // guard through four screenshots.
+  ok('the elevation paints window size tags to begin with', tagsIn(shown).length > 0,
+    `${tagsIn(shown).length} tags`);
+  const hidden = paint(() => ({ name: 'A-DIMS-FENS', visible: false, printable: true }));
+  ok('unticking A-DIMS-FENS takes every size tag off the elevation',
+    tagsIn(hidden).length === 0, `${tagsIn(hidden).length} left`);
+  const ticked = paint(() => ({ name: 'A-DIMS-FENS', visible: true, printable: true }));
+  ok('ticking it puts them back', tagsIn(ticked).length === tagsIn(shown).length,
+    `${tagsIn(ticked).length} vs ${tagsIn(shown).length}`);
+  // The windows themselves are not on that layer and must not follow the tag
+  // off the sheet -- hiding a DIMENSION layer that took the glass with it
+  // would be a far worse bug than the one this fixes.
+  ok('the windows still draw when their size tags are hidden',
+    hidden.strokes === shown.strokes,
+    `${hidden.strokes} vs ${shown.strokes} strokes`);
+  // NO STANDARD DRAWS, the same way an untagged dimension does: a page that
+  // never wired a profile has not hidden anything.
+  ok('an elevation with no layer standard still tags its windows',
+    tagsIn(paint(() => null)).length === tagsIn(shown).length);
+
   return { win, warnings };
 }
 
@@ -333,6 +429,13 @@ const MUTATIONS = [
   ['layout-plan stops handing over the standards',
     'layout-plan.js', c => c.replace(
       'layerStandard: layerTable ? (id => layerTable[id] || null) : null,', '')],
+  ['cut-view-env stops handing over the standards',
+    'cut-view-env.js', c => c.replace(
+      'layerStandard: layerTable ? (id => layerTable[id] || null) : null,', '')],
+  ['cut-view-env hands over an empty table',
+    'cut-view-env.js', c => c.replace(
+      'layerStandard: layerTable ? (id => layerTable[id] || null) : null,',
+      'layerStandard: id => null,')],
   ['layout-plan hands over an empty table',
     'layout-plan.js', c => c.replace(
       'layerStandard: layerTable ? (id => layerTable[id] || null) : null,',

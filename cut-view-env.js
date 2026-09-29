@@ -27,6 +27,7 @@ if (!window.DraftCutViewEnv) {
 (() => {
   // Once per page: this env is rebuilt on every level change.
   let warnedNoRoofWords = false;
+  let warnedNoLayerStandards = false;
 
   const DEFAULT_FOOTING_WIDTH_IN = 20;
   const ICF_FOOTING_WIDTH_IN = 24;
@@ -148,10 +149,35 @@ if (!window.DraftCutViewEnv) {
       window.DraftGeometry2D.pointToSegment(pt, { start: a, end: b }).d;
     const standards = window.DraftStructureStandards.normaliseStructureStandards(
       window.DraftProfileManager?.getActive('standards')?.content?.model?.structureStandards);
+    // ── AND THE LAYER TICKS, off the same active profile ──────────────────
+    //
+    // Movie, 29 Sep: "can we make the window number get layer A-DIMS-FENS so
+    // the user can turn them off in ELEVATION views if desired".
+    //
+    // A window's size tag IS a fenestration dimension -- it is the elevation's
+    // way of saying what the plan's opening-centre string says -- so it
+    // answers to that layer rather than to a switch of its own. One tick, both
+    // drawings, which is the point of the layer being named for what it
+    // measures instead of for the sheet it sits on.
+    const layerApi = window.DraftLayerStandards;
+    if (!warnedNoLayerStandards && !(window.DraftProfileManager && layerApi)) {
+      warnedNoLayerStandards = true;
+      console.warn('cut-view-env: profile-manager.js is not loaded, so every '
+        + 'layer draws regardless of its Visible tick -- window size tags '
+        + 'cannot be switched off on any elevation this env draws.');
+    }
+    const layerTable = window.DraftProfileManager && layerApi
+      ? layerApi.normaliseLayerStandards(
+        window.DraftProfileManager.getActive('standards')?.content?.model?.layerStandards)
+      : null;
     const datum = format.number(saved.elevationDatum, 0) === 100 ? 100 : 0;
     const units = saved.units === 'metric' ? 'metric' : 'imperial';
     const ftIn = feet => window.DraftFormatters.formatArchitecturalInches(feet * 12);
     return {
+      // null for a layer the table does not carry, which the painter reads as
+      // "draws" -- the same shape plan-composition's layerShows uses, so the
+      // plan and the elevation cannot answer differently.
+      layerStandard: layerTable ? (id => layerTable[id] || null) : null,
       floorLevels: () => floorLevels,
       levelAssembly,
       // ASKS THE MODULE. This spelt the arithmetic out until 7 Sep -- one of
