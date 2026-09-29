@@ -117,14 +117,14 @@ const levelRuns = view => {
 // halves are fixed here -- the two fixtures this harness measures are named
 // in the checks below, not chosen by the caller, so a positional is refused
 // rather than pretended at, and `--mutate` does what it says.
-const ARGV = process.argv.slice(2);
-const MUTATE = ARGV.includes('--mutate');
-const REST = ARGV.filter(a => a !== '--mutate');
-if (REST.length) {
-  console.error(`foundation-face-harness: takes no arguments (got ${REST.join(' ')})`);
-  console.error('usage: node foundation-face-harness.js [--mutate]');
-  process.exit(2);
-}
+// and it is the shared guard that answers it, not a copy of the guard. CI
+// derives its engine list from the CALL FORM
+// `require('./harness-args.js').mutationMode()`, so a harness that reads its
+// own argv carries a mutation table that CI never runs -- the same silence as
+// the flag that was filtered away, one level out. The shared guard also takes
+// `--coverage`, the second spelling of this one mode, which the hand-rolled
+// block refused.
+const MUTATE = require('./harness-args.js').mutationMode();
 
 // ── THE MUTANTS ───────────────────────────────────────────────────────────
 //

@@ -152,16 +152,26 @@ jobs:
           # engines by hand, and a fourth existed on a sibling branch before
           # it merged: a hand-kept list is a claim about the present that
           # nothing enforces. So the list is derived from the one fact that
-          # makes a file an engine -- it calls mutationMode() from the shared
-          # guard. The grep keys on the CALL FORM, require(...).mutationMode(),
+          # makes a file an engine -- it calls into the shared guard for its
+          # mode. The grep keys on the CALL FORM, require(...).mutationMode(),
           # because the bare name appears in comments in twenty harnesses
           # that have no engine at all. Every file this selects carries the
           # guard by construction, so the "least-guarded file in the glob"
           # objection to a glob does not apply here.
+          #
+          # TWO CALL FORMS, because there are two shapes of engine: one that
+          # takes the flag alone, and one that takes drawings with it
+          # (mutationModeWithFiles). The second was added the day seven
+          # harnesses grew tables, and the reason it is HERE rather than
+          # papered over there is that all seven had been parsing their own
+          # argv -- real tables, every row caught, and not one of them
+          # selected by this grep. A derived list is only as wide as the
+          # forms it knows, so a new shape of guard is a change to this line.
           shopt -s nullglob
           engines=()
           for h in proto/*-harness.js; do
-            grep -qF "harness-args.js').mutationMode()" "$h" && engines+=("$h")
+            grep -qE "harness-args\.js'\)\.mutationMode(WithFiles)?\(\)" "$h" \
+              && engines+=("$h")
           done
 
           # A FLOOR, NOT AN INVENTORY. The derived list must contain every
@@ -172,10 +182,23 @@ jobs:
           # a fifth engine is picked up by the grep without touching this
           # list, and the list goes stale only in the safe direction.
           failed=0
+          #
+          # The seven below joined it the day they stopped being silent. They
+          # are named for the same reason the first four are: each had a
+          # mutation table CI could not see, and the thing that made them
+          # visible is one require line apiece. A require line is exactly what
+          # drifts.
           for must in proto/merge-vertex-harness.js \
                       proto/outline-accessors-harness.js \
                       proto/render-2d-harness.js \
-                      proto/wall-joins-harness.js; do
+                      proto/wall-joins-harness.js \
+                      proto/degenerate-chain-harness.js \
+                      proto/fascia-end-harness.js \
+                      proto/foundation-face-harness.js \
+                      proto/level-lock-harness.js \
+                      proto/no-inline-distance-harness.js \
+                      proto/small-tools-harness.js \
+                      proto/washroom-harness.js; do
             if ! printf '%s\n' "${engines[@]}" | grep -qx "$must"; then
               failed=$((failed + 1))
               echo "FAIL  $must is a known engine and the derived list does not contain it"

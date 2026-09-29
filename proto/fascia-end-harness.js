@@ -85,15 +85,14 @@ const bandsOf = view => view.strokes
 // checks. Silence is the worst answer of the three: a refusal is honest and a
 // table is useful, but a clean run against an unbent painter says nothing and
 // looks like everything.
-const ARGV = process.argv.slice(2);
-const MUTATE = ARGV.includes('--mutate');
-const files = ARGV.filter(a => a !== '--mutate');
-const badFlags = files.filter(a => a.startsWith('-'));
-if (badFlags.length) {
-  console.error(`unknown argument(s): ${badFlags.join(' ')}`);
-  console.error('usage: node fascia-end-harness.js [--mutate] [file.draft ...]');
-  process.exit(2);
-}
+//
+// IT IS THE SHARED GUARD THAT ANSWERS IT. This file takes drawings as well as
+// the flag, which is why the split lived here at all; it lives in
+// proto/harness-args.js now, as mutationModeWithFiles(). Two reasons. The
+// hand-rolled version refused `--coverage`, the second spelling of this one
+// mode. And CI derives its engine list from a call into that file, so a
+// harness reading its own argv keeps a mutation table that CI never runs.
+const { mutate: MUTATE, files } = require('./harness-args.js').mutationModeWithFiles();
 const drawings = files.length ? files : [
   'repro-2storey-garage.draft',
   'repro-bungalow-garage-roofs.draft',

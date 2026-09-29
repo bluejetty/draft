@@ -40,12 +40,17 @@ const vm = require('vm');
 // Derived, never a literal: a harness that names one machine's checkout is one
 // nobody else can run. test.yml records that fault for two earlier harnesses.
 const ROOT = path.join(__dirname, '..');
-const MUTATE = process.argv.slice(2).includes('--mutate');
-const REST = process.argv.slice(2).filter(a => a !== '--mutate');
-if (REST.length) {
-  console.error(`small-tools-harness: takes no arguments (got ${REST.join(' ')})`);
-  process.exit(2);
-}
+// THE FLAG IS THE SHARED GUARD'S, NOT A HAND-ROLLED COPY OF IT.
+//
+// The block here read argv itself. Two things followed. It refused
+// `--coverage`, which proto/harness-args.js treats as the SAME mode spelled a
+// second way, so one of the two documented spellings exited 2 on this file.
+// And CI derives its engine list from the CALL FORM
+// `require('./harness-args.js').mutationMode()` -- a harness that parses its
+// own argv is invisible to that grep, so the table below would have run here
+// and nowhere else. A mutation table CI never runs is the silence this whole
+// piece of work is about, one level out.
+const MUTATE = require('./harness-args.js').mutationMode();
 
 // One edit, aimed at one file by name: the mutation table's rows say which of
 // the two subjects they bend, and every read below goes through here so a row

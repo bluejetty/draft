@@ -37,12 +37,17 @@ const fs = require('fs');
 const path = require('path');
 
 const PAGE = path.join(__dirname, '..', 'MODEL.dc.html');
-const MUTATE = process.argv.slice(2).includes('--mutate');
-const REST = process.argv.slice(2).filter(a => a !== '--mutate');
-if (REST.length) {
-  console.error(`no-inline-distance-harness: takes no arguments (got ${REST.join(' ')})`);
-  process.exit(2);
-}
+// THE FLAG IS THE SHARED GUARD'S, NOT A HAND-ROLLED COPY OF IT.
+//
+// The block here read argv itself. Two things followed. It refused
+// `--coverage`, which proto/harness-args.js treats as the SAME mode spelled a
+// second way, so one of the two documented spellings exited 2 on this file.
+// And CI derives its engine list from the CALL FORM
+// `require('./harness-args.js').mutationMode()` -- a harness that parses its
+// own argv is invisible to that grep, so the table below would have run here
+// and nowhere else. A mutation table CI never runs is the silence this whole
+// piece of work is about, one level out.
+const MUTATE = require('./harness-args.js').mutationMode();
 
 // COMMENTS ARE NOT CODE. This file's own prose discusses `len2 = dx * dx + dz
 // * dz || 1` and the clamp at length -- the PR #352 comment quotes the very

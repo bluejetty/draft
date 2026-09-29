@@ -22,12 +22,17 @@ const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
-const MUTATE = process.argv.slice(2).includes('--mutate');
-const ARGS = process.argv.slice(2).filter(a => a !== '--mutate');
-if (ARGS.length) {
-  console.error(`washroom-harness: takes no arguments (got ${ARGS.join(' ')})`);
-  process.exit(2);
-}
+// THE FLAG IS THE SHARED GUARD'S, NOT A HAND-ROLLED COPY OF IT.
+//
+// The block here read argv itself. Two things followed. It refused
+// `--coverage`, which proto/harness-args.js treats as the SAME mode spelled a
+// second way, so one of the two documented spellings exited 2 on this file.
+// And CI derives its engine list from the CALL FORM
+// `require('./harness-args.js').mutationMode()` -- a harness that parses its
+// own argv is invisible to that grep, so the table below would have run here
+// and nowhere else. A mutation table CI never runs is the silence this whole
+// piece of work is about, one level out.
+const MUTATE = require('./harness-args.js').mutationMode();
 
 const SOURCE = fs.readFileSync(path.join(ROOT, 'washroom.js'), 'utf8');
 
