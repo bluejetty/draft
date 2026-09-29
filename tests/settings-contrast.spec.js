@@ -86,33 +86,61 @@ async function speak(page, { warning }) {
   }, warning);
 }
 
-for (const mode of ['night', 'day']) {
-  test(`SETTINGS: the saved sentence is readable on ${mode}`, async ({ page }) => {
-    await page.goto(`/SETTINGS.html?mode=${mode}`);
-    await speak(page, { warning: false });
-    expect(await ratio(page, '#status')).toBeGreaterThanOrEqual(AA_BODY);
-  });
+// THE PAGES THAT SAY A RESULT BACK, and which sentences each one has. The
+// status line was widened from SETTINGS to a table on 29 Sep because
+// STANDARDS carried the SAME TWO LITERALS -- #557a46 and #a06035, the pair
+// this patch made roles for -- in the same #status / #status.warning rule,
+// and was not a subject of the literal scanner either, so nothing on either
+// side of the suite was looking at it. Measured before the fix: 3.36 and 3.32
+// on night, 4.41 and 4.45 on day. Four readings, four failures, on the one
+// sentence that exists to tell a drafter whether the key took.
+//
+// PROJECT.html AND LAYOUT.html STILL CARRY THAT PAIR and are deliberately not
+// in this table. They are their owners' pages; the roles exist for them now
+// and the skinned-page allowlist says so in as many words. Add the row with
+// the conversion, not before it -- a row here asserting a page nobody has
+// converted is a red check that reports somebody else's undone work.
+//
+// `link` is null for a page with no brand-coloured text in its intro:
+// STANDARDS has an .intro paragraph but no anchor in it, and a selector that
+// matches nothing must not quietly become a passing case.
+const PAGES = [
+  { name: 'SETTINGS', page: '/SETTINGS.html', link: '.intro a' },
+  { name: 'STANDARDS', page: '/STANDARDS.html', link: null },
+];
 
-  test(`SETTINGS: the warning sentence is readable on ${mode}`, async ({ page }) => {
-    await page.goto(`/SETTINGS.html?mode=${mode}`);
-    await speak(page, { warning: true });
-    expect(await ratio(page, '#status.warning')).toBeGreaterThanOrEqual(AA_BODY);
-  });
+for (const { name, page: path, link } of PAGES) {
+  for (const mode of ['night', 'day']) {
+    test(`${name}: the saved sentence is readable on ${mode}`, async ({ page }) => {
+      await page.goto(`${path}?mode=${mode}`);
+      await speak(page, { warning: false });
+      expect(await ratio(page, '#status')).toBeGreaterThanOrEqual(AA_BODY);
+    });
 
-  test(`SETTINGS: the standards link is readable on ${mode}`, async ({ page }) => {
-    await page.goto(`/SETTINGS.html?mode=${mode}`);
-    expect(await ratio(page, '.intro a')).toBeGreaterThanOrEqual(AA_BODY);
+    test(`${name}: the warning sentence is readable on ${mode}`, async ({ page }) => {
+      await page.goto(`${path}?mode=${mode}`);
+      await speak(page, { warning: true });
+      expect(await ratio(page, '#status.warning')).toBeGreaterThanOrEqual(AA_BODY);
+    });
+
+    if (link) {
+      test(`${name}: the standards link is readable on ${mode}`, async ({ page }) => {
+        await page.goto(`${path}?mode=${mode}`);
+        expect(await ratio(page, link)).toBeGreaterThanOrEqual(AA_BODY);
+      });
+    }
+  }
+
+  // THE INSTRUMENT, CHECKED ON A PAIR WHOSE ANSWER IS KNOWN. A measurement
+  // that silently returns a comfortable number for everything passes this
+  // file without reading the page at all: body ink on the page ground is
+  // 13.16 on night by palette.js's own published figure, and the page against
+  // itself is 1.00. Run per page, because "the measurement reads the real
+  // page" is a claim about a page, not about the helper.
+  test(`${name}: the measurement reads the real page`, async ({ page }) => {
+    await page.goto(`${path}?mode=night`);
+    const body = await inkAndGround(page, 'body');
+    expect(contrast(body.ink, body.ground)).toBeGreaterThan(12);
+    expect(contrast(body.ground, body.ground)).toBeCloseTo(1, 5);
   });
 }
-
-// THE INSTRUMENT, CHECKED ON A PAIR WHOSE ANSWER IS KNOWN. A measurement that
-// silently returns a comfortable number for everything passes this file
-// without reading the page at all: body ink on the page ground is 13.16 on
-// night by palette.js's own published figure, and the page against itself is
-// 1.00.
-test('SETTINGS: the measurement reads the real page', async ({ page }) => {
-  await page.goto('/SETTINGS.html?mode=night');
-  const body = await inkAndGround(page, 'body');
-  expect(contrast(body.ink, body.ground)).toBeGreaterThan(12);
-  expect(contrast(body.ground, body.ground)).toBeCloseTo(1, 5);
-});
