@@ -8,33 +8,59 @@
 // trusting the comment that describes it.
 //
 //   node proto/washroom-harness.js
+//   node proto/washroom-harness.js --mutate
 //
 // Exit 0 = every check passed.
+//
+// WHY IT TOOK A MUTATION MODE. Devin's audit, 28 Sep, found this file in a
+// class of seven that ACCEPTED `--mutate`, ran the plain checks, printed no
+// table and exited 0 -- scored as covered by any count that asks whether the
+// flag is taken. A harness that refuses the flag is honest; one that swallows
+// it is not. The table below is what the flag now means here.
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
-const win = {};
-const sandbox = { window: win, console, Math, Number, String, Object, Array, JSON, isFinite };
-sandbox.globalThis = sandbox;
-vm.createContext(sandbox);
-vm.runInContext(fs.readFileSync(path.join(ROOT, 'washroom.js'), 'utf8'), sandbox, { filename: 'washroom.js' });
+const MUTATE = process.argv.slice(2).includes('--mutate');
+const ARGS = process.argv.slice(2).filter(a => a !== '--mutate');
+if (ARGS.length) {
+  console.error(`washroom-harness: takes no arguments (got ${ARGS.join(' ')})`);
+  process.exit(2);
+}
 
-const W = win.DraftWashroom;
+const SOURCE = fs.readFileSync(path.join(ROOT, 'washroom.js'), 'utf8');
+
+// LOADED PER RUN. A mutation is an edit to the module's source, so the module
+// cannot be loaded once onto a shared sandbox and reused.
+const load = (edit) => {
+  const win = {};
+  const sandbox = { window: win, console, Math, Number, String, Object, Array, JSON, isFinite };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(edit ? edit(SOURCE) : SOURCE, sandbox, { filename: 'washroom.js' });
+  return win.DraftWashroom;
+};
+
 let passed = 0;
-const failures = [];
+let failures = [];
 const check = (name, condition, detail) => {
   if (condition) { passed += 1; return; }
   failures.push(detail ? `${name}\n      ${detail}` : name);
 };
+
+function runChecks(edit) {
+passed = 0;
+failures = [];
+let W;
+try { W = load(edit); } catch (err) { check('washroom.js loads', false, err.message); return; }
 
 // ── THE MODULE LOADED AT ALL ─────────────────────────────────────────────
 // Every check below reads off W. If washroom.js failed to define it, they
 // would all throw rather than fail, and a harness that dies is not a harness
 // that reports.
 check('washroom.js defines DraftWashroom', !!W, String(W));
-if (!W) { console.log('washroom harness: 0 passed, 1 failed'); process.exit(1); }
+if (!W) return;
 
 // ── THE FIT ──────────────────────────────────────────────────────────────
 // The spec's own numbers, stated here independently of the module so this is
@@ -87,6 +113,29 @@ check('walking in: sink, then toilet, then the tub at the far end',
 check('the door is at the sink end, opposite the wet wall',
   std.door.v === std.widthFt && std.door.u < std.lengthFt / 2,
   `door u=${std.door.u.toFixed(2)} v=${std.door.v.toFixed(2)} of ${std.lengthFt.toFixed(2)}x${std.widthFt.toFixed(2)}`);
+
+// EACH FIXTURE OCCUPIES THE RUN THE ARITHMETIC GAVE IT. Without this the
+// drawn room and the stated runs could disagree while the order, the total
+// length and every fixture on its own still looked right -- a mutation that
+// gave the sink the tub's 30" run survived until this went in.
+const runOf = kind => {
+  const f = std.fixtures.find(x => x.kind === kind);
+  return f ? (f.u1 - f.u0) * 12 : NaN;
+};
+check('the drawn sink run is the sink run the arithmetic gave',
+  Math.abs(runOf('sink') - std.runsIn.sinkRunIn) < 1e-9,
+  `${runOf('sink').toFixed(3)}" drawn vs ${std.runsIn.sinkRunIn}" stated`);
+check('the drawn toilet run is the toilet run the arithmetic gave',
+  Math.abs(runOf('toilet') - std.runsIn.toiletRunIn) < 1e-9,
+  `${runOf('toilet').toFixed(3)}" drawn vs ${std.runsIn.toiletRunIn}" stated`);
+check('the drawn tub depth is the tub depth the arithmetic gave',
+  Math.abs(runOf('tub') - std.runsIn.tubDepthIn) < 1e-9,
+  `${runOf('tub').toFixed(3)}" drawn vs ${std.runsIn.tubDepthIn}" stated`);
+check('and the drawn fixtures reach the far wall, less the finish',
+  Math.abs(Math.max(...std.fixtures.map(f => f.u1)) * 12
+    - (std.lengthFt * 12 - std.runsIn.finishIn)) < 1e-9,
+  `fixtures end at ${(Math.max(...std.fixtures.map(f => f.u1)) * 12).toFixed(3)}"`
+  + ` in a ${(std.lengthFt * 12).toFixed(3)}" room`);
 
 // NO WINDOW, and stated as a value. A caller reading `window: null` knows it
 // was decided; a missing key would read as an oversight.
@@ -212,9 +261,96 @@ check('a real garage outranks the door prediction',
 // back to the caller instead of guessing a side and looking certain.
 check('with nothing to go on it returns null rather than guessing',
   W.garageSide({}) === null, String(W.garageSide({})));
-
-console.log(`washroom harness: ${passed} checks passed, ${failures.length} failed`);
-if (failures.length) {
-  failures.forEach(line => console.log(`  ✘ ${line}`));
-  process.exit(1);
 }
+
+if (!MUTATE) {
+  runChecks(null);
+  console.log(`washroom harness: ${passed} checks passed, ${failures.length} failed`);
+  if (failures.length) {
+    failures.forEach(line => console.log(`  ✘ ${line}`));
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+// ── MUTATIONS ───────────────────────────────────────────────────────────
+//
+// Each edits washroom.js in memory and asserts the checks above go red.
+//
+// THE FIRST TWO ARE THE ERROR THE UNIT EXISTS TO PREVENT: the "outside of
+// stud" reading, which overruns the room by 14" while every fixture still
+// looks right on its own. The rest are the ways the room could be drawn and
+// built wrong without looking wrong: a tub against the wet wall with no
+// chase for its supply, a keep-out at one end of a stair only, a sink that
+// eats growth for ever.
+const MUTATIONS = [
+  ['the length is read outside of stud, losing the finish', 'washroom.js',
+    c => c.replace('const STANDARD_LENGTH_IN = TUB_DEPTH_IN + TOILET_RUN_IN + SINK_RUN_IN + FINISH_IN;',
+      'const STANDARD_LENGTH_IN = TUB_DEPTH_IN + TOILET_RUN_IN + SINK_RUN_IN;')],
+
+  ['closes() cannot say no -- it reports ok whatever it found', 'washroom.js',
+    c => c.replace('return { sum, lengthIn, ok: reasons.length === 0, reasons };',
+      'return { sum, lengthIn, ok: true, reasons };')],
+
+  ['the tub is pushed against the wet wall, with no chase for its supply', 'washroom.js',
+    c => c.replace('          v0: CHASE_IN * IN,\n          v1: CHASE_IN * IN + TUB_LENGTH_IN * IN,',
+      '          v0: 0,\n          v1: TUB_LENGTH_IN * IN,')],
+
+  ['the chase is put on the far side, away from the wet wall', 'washroom.js',
+    c => c.replace('chase: { u0: tub.u0, u1: tub.u1, v0: 0, v1: CHASE_IN * IN },',
+      'chase: { u0: tub.u0, u1: tub.u1, v0: W - CHASE_IN * IN, v1: W },')],
+
+  ['the sink grows for ever instead of stopping at 42"', 'washroom.js',
+    c => c.replace('const toSink = Math.min(spare, SINK_RUN_MAX_IN - SINK_RUN_IN);',
+      'const toSink = spare;')],
+
+  ['growth opens the gap first and leaves the sink at 36"', 'washroom.js',
+    c => c.replace('const toSink = Math.min(spare, SINK_RUN_MAX_IN - SINK_RUN_IN);',
+      'const toSink = 0;')],
+
+  // The drawn sink given the tub's run: order, total length and every
+  // fixture on its own still read correctly. This is the one that survived
+  // the first table and bought the drawn-run checks above.
+  ['the drawn sink run is the tub depth, not the sink run', 'washroom.js',
+    c => c.replace('const sink = { u0: u, u1: u + r.sinkRunIn * IN };',
+      'const sink = { u0: u, u1: u + r.tubDepthIn * IN };')],
+
+  ['the door is put at the tub end instead of the sink end', 'washroom.js',
+    c => c.replace('door: { u: sink.u0 + (r.sinkRunIn * IN) / 2, v: W, facing: \'in\' },',
+      'door: { u: tub.u0 + (r.tubDepthIn * IN) / 2, v: W, facing: \'in\' },')],
+
+  ['a stair gets ONE landing zone instead of two', 'washroom.js',
+    c => c.replace('        { at: a, sign: -1 },\n        { at: b, sign: +1 },',
+      '        { at: b, sign: +1 },')],
+
+  ['both landing zones fall at the same end of the run', 'washroom.js',
+    c => c.replace('        { at: a, sign: -1 },', '        { at: a, sign: +1 },')],
+
+  ['a zero-length stair divides by its own length instead of being skipped', 'washroom.js',
+    c => c.replace('      if (len < 1e-6) return [];', '')],
+
+  ['the windowless WC becomes a missing key rather than a decision', 'washroom.js',
+    c => c.replace('      window: null,', '')],
+
+  ['garageSide guesses left when it has nothing to go on', 'washroom.js',
+    c => c.replace("    if (doorSide === 'centre' || doorSide === 'center') return 'left';\n    return null;",
+      "    return 'left';")],
+
+  ['the door prediction outranks a garage that is actually there', 'washroom.js',
+    c => c.replace("    if (garageOutlineSide === 'left' || garageOutlineSide === 'right') return garageOutlineSide;\n", '')
+      .replace("    if (doorSide === 'right') return 'left';",
+        "    if (doorSide === 'right') return 'left';\n    if (garageOutlineSide) return garageOutlineSide;")],
+];
+
+let caught = 0;
+for (const [name, , edit] of MUTATIONS) {
+  if (edit(SOURCE) === SOURCE) {
+    console.log(`  ANCHOR MISSED  ${name}  (the edit changed nothing -- re-aim it)`);
+    continue;
+  }
+  runChecks(edit);
+  if (failures.length) caught += 1;
+  else console.log(`  SURVIVED  ${name}`);
+}
+console.log(`washroom-harness: ${caught}/${MUTATIONS.length} mutations caught`);
+process.exit(caught === MUTATIONS.length ? 0 : 1);

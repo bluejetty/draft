@@ -28,6 +28,25 @@ const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
 
+// ── A MUTATED MODULE, HANDED IN FROM OUTSIDE ─────────────────────────
+//
+// The painter harnesses that run through this bench -- fascia-end,
+// foundation-face -- paint half a dozen drawings at module load, so a
+// mutation run is a fresh PROCESS per mutant rather than a re-entry. The
+// parent writes the bent source to a JSON file and names it here; every
+// module this loader reads is checked against it first.
+//
+// A FILE, NOT THE SOURCE ITSELF, because cut-view.js is a quarter of a
+// megabyte and an environment variable is not the place for it.
+//
+// Absent, which is every run but a mutation run, this reads nothing and
+// costs nothing.
+const SOURCE_OVERRIDES = (() => {
+  const at = process.env.DRAFT_HARNESS_SOURCE_OVERRIDES;
+  if (!at) return null;
+  return JSON.parse(fs.readFileSync(at, 'utf8'));
+})();
+
 function loadDraftModules() {
   const win = {};
   const sandbox = { window: win, console, Math, Number, String, Object, Array, JSON, Map, Set, isFinite, parseFloat, parseInt };
@@ -61,8 +80,33 @@ function loadDraftModules() {
     'cut-view.js']) {
     const full = path.join(ROOT, file);
     if (!fs.existsSync(full)) continue;
-    try { vm.runInContext(fs.readFileSync(full, 'utf8'), sandbox, { filename: file }); }
-    catch (err) { console.error(`[harness] ${file}: ${err.message}`); }
+    const text = SOURCE_OVERRIDES && SOURCE_OVERRIDES[file] != null
+      ? SOURCE_OVERRIDES[file] : fs.readFileSync(full, 'utf8');
+    try { vm.runInContext(text, sandbox, { filename: file }); }
+    catch (err) {
+      console.error(`[harness] ${file}: ${err.message}`);
+      // A MUTANT THAT WILL NOT PARSE IS NOT A MUTANT CAUGHT.
+      //
+      // This catch has always logged and carried on, which is right for a
+      // plain run: a module that throws at load leaves its globals undefined
+      // and the checks that need them fail loudly a moment later.
+      //
+      // IT IS WRONG UNDER A MUTATION. Probed by appending `throw new
+      // Error("boom")` to cut-view.js: the loader printed one line to stderr
+      // and the harness went on to report `64 checks passed, 0 failed`,
+      // because every painted check reads the sandbox's own recorded strokes
+      // and the sandbox still had the ones from before the throw. The parent
+      // reads the child's exit code, so a broken edit would have counted as
+      // a mutant caught -- the exact silence this bench exists to remove.
+      //
+      // So under an override the load error is the run's answer: stop here,
+      // with a code the parent cannot read as either pass or fail.
+      if (SOURCE_OVERRIDES) {
+        console.error('[harness] the mutated source did not load; '
+          + 'the mutant proves nothing. Re-aim the row.');
+        process.exit(3);
+      }
+    }
   }
   return win;
 }

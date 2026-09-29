@@ -23,10 +23,26 @@
 // A distance to a POINT never needs it. Zero occurrences in this file today.
 //
 // Run: node proto/no-inline-distance-harness.js
+//      node proto/no-inline-distance-harness.js --mutate
+//
+// WHY IT TOOK A MUTATION MODE. Devin's audit, 28 Sep, found this file among
+// seven that ACCEPTED `--mutate`, ran the plain checks and printed no table.
+// The gap mattered more here than anywhere: this harness passes by finding
+// NOTHING, so a broken pattern and a clean page produce the same green line.
+// The planted-copy checks below already guarded the two signatures; the
+// mutation table now plants a copy in the PAGE ITSELF, in each of the
+// disguises a real re-inlining would wear, and requires the harness to go
+// red on every one.
 const fs = require('fs');
 const path = require('path');
 
 const PAGE = path.join(__dirname, '..', 'MODEL.dc.html');
+const MUTATE = process.argv.slice(2).includes('--mutate');
+const REST = process.argv.slice(2).filter(a => a !== '--mutate');
+if (REST.length) {
+  console.error(`no-inline-distance-harness: takes no arguments (got ${REST.join(' ')})`);
+  process.exit(2);
+}
 
 // COMMENTS ARE NOT CODE. This file's own prose discusses `len2 = dx * dx + dz
 // * dz || 1` and the clamp at length -- the PR #352 comment quotes the very
@@ -45,13 +61,18 @@ const SIGNATURES = [
 ];
 
 let passed = 0;
-const failures = [];
+let failures = [];
 const check = (name, ok, detail) => {
   if (ok) { passed += 1; return; }
   failures.push(detail ? `${name}\n      ${detail}` : name);
 };
 
-const source = fs.readFileSync(PAGE, 'utf8');
+const SOURCE = fs.readFileSync(PAGE, 'utf8');
+
+function runChecks(edit) {
+passed = 0;
+failures = [];
+const source = edit ? edit(SOURCE) : SOURCE;
 const code = stripComments(source);
 const lineOf = index => code.slice(0, index).split('\n').length;
 
@@ -97,7 +118,89 @@ check('a copy quoted inside a comment does not count',
   stripComments(`// const t = Math.max(0, Math.min(1, x));\nconst ok = 1;`)
     .includes('Math.max') === false,
   'commented-out arithmetic still reads as code');
+}
 
-for (const f of failures) console.log(`  FAIL ${f}`);
-console.log(`\nno-inline-distance harness: ${passed} checks passed, ${failures.length} failed`);
-process.exit(failures.length ? 1 : 0);
+if (!MUTATE) {
+  runChecks(null);
+  for (const f of failures) console.log(`  FAIL ${f}`);
+  console.log(`\nno-inline-distance harness: ${passed} checks passed, ${failures.length} failed`);
+  process.exit(failures.length ? 1 : 0);
+}
+
+// ── MUTATIONS ───────────────────────────────────────────────────────────
+//
+// Each plants a private point-to-segment distance back into MODEL.dc.html and
+// requires this harness to notice. A SURVIVING mutation here means the page
+// could grow a private copy tomorrow and the check would still print green --
+// which is the exact failure the file was written to prevent, turned on
+// itself.
+//
+// THE ANCHOR IS THE FORWARDER ITSELF, which is where a re-inlining would
+// actually land: _distToLineSeg is one line calling the shared export, and
+// every copy this file ever caught began as somebody filling that line in.
+//
+// The disguises are not decorative. A re-inlining arrives as somebody's
+// helper written from memory, so it comes with whatever spacing and whatever
+// local name that person favours, and a pattern that only matches the one
+// formatting in the repo today catches none of them.
+const FORWARDER = '    return window.DraftGeometry2D.pointToSegment(worldPt, seg);';
+
+const MUTATIONS = [
+  ['the forwarder is filled in with a textbook private copy', 'MODEL.dc.html',
+    c => c.replace(FORWARDER,
+      '    const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;\n'
+      + '    const len2 = dx * dx + dz * dz || 1;\n'
+      + '    const t = Math.max(0, Math.min(1, ((worldPt.x - seg.start.x) * dx'
+      + ' + (worldPt.z - seg.start.z) * dz) / len2));\n'
+      + '    return { d: Math.hypot(worldPt.x - seg.start.x - dx * t,'
+      + ' worldPt.z - seg.start.z - dz * t), t };')],
+
+  ['the clamp alone, with the squared length under a name of its own', 'MODEL.dc.html',
+    c => c.replace(FORWARDER,
+      '    const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;\n'
+      + '    const span = dx * dx + dz * dz || 1;\n'
+      + '    const t = Math.max(0, Math.min(1, ((worldPt.x - seg.start.x) * dx'
+      + ' + (worldPt.z - seg.start.z) * dz) / span));\n'
+      + '    return { d: Math.hypot(worldPt.x - seg.start.x - dx * t,'
+      + ' worldPt.z - seg.start.z - dz * t), t };')],
+
+  ['the clamp written with spaces inside its brackets', 'MODEL.dc.html',
+    c => c.replace(FORWARDER,
+      '    const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;\n'
+      + '    const span = dx * dx + dz * dz || 1;\n'
+      + '    const t = Math.max( 0 , Math.min( 1 , ((worldPt.x - seg.start.x) * dx'
+      + ' + (worldPt.z - seg.start.z) * dz) / span ) );\n'
+      + '    return { d: Math.hypot(worldPt.x - seg.start.x - dx * t,'
+      + ' worldPt.z - seg.start.z - dz * t), t };')],
+
+  ['a squared segment length held in lenSq, the clamp left elsewhere', 'MODEL.dc.html',
+    c => c.replace(FORWARDER,
+      '    const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;\n'
+      + '    const lenSq = dx * dx + dz * dz || 1;\n'
+      + '    const t = ((worldPt.x - seg.start.x) * dx'
+      + ' + (worldPt.z - seg.start.z) * dz) / lenSq;\n'
+      + '    return { d: Math.hypot(worldPt.x - seg.start.x - dx * t,'
+      + ' worldPt.z - seg.start.z - dz * t), t };')],
+
+  ['a squared segment length held in length2', 'MODEL.dc.html',
+    c => c.replace(FORWARDER,
+      '    const dx = seg.end.x - seg.start.x, dz = seg.end.z - seg.start.z;\n'
+      + '    const length2 = dx * dx + dz * dz || 1;\n'
+      + '    const t = ((worldPt.x - seg.start.x) * dx'
+      + ' + (worldPt.z - seg.start.z) * dz) / length2;\n'
+      + '    return { d: Math.hypot(worldPt.x - seg.start.x - dx * t,'
+      + ' worldPt.z - seg.start.z - dz * t), t };')],
+];
+
+let caught = 0;
+for (const [name, , edit] of MUTATIONS) {
+  if (edit(SOURCE) === SOURCE) {
+    console.log(`  ANCHOR MISSED  ${name}  (the edit changed nothing -- re-aim it)`);
+    continue;
+  }
+  runChecks(edit);
+  if (failures.length) caught += 1;
+  else console.log(`  SURVIVED  ${name}`);
+}
+console.log(`no-inline-distance-harness: ${caught}/${MUTATIONS.length} mutations caught`);
+process.exit(caught === MUTATIONS.length ? 0 : 1);

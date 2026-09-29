@@ -79,7 +79,21 @@ const bandsOf = view => view.strokes
     return { u0: Math.min(...us), u1: Math.max(...us), base: s.pts[0].e };
   });
 
-const files = process.argv.slice(2).filter(a => !a.startsWith('-'));
+// THE FLAG IS ANSWERED, NOT FILTERED OUT. This line read
+// `.filter(a => !a.startsWith('-'))`, so `--mutate` was dropped on the floor
+// and the harness printed its ordinary green as though it had checked its own
+// checks. Silence is the worst answer of the three: a refusal is honest and a
+// table is useful, but a clean run against an unbent painter says nothing and
+// looks like everything.
+const ARGV = process.argv.slice(2);
+const MUTATE = ARGV.includes('--mutate');
+const files = ARGV.filter(a => a !== '--mutate');
+const badFlags = files.filter(a => a.startsWith('-'));
+if (badFlags.length) {
+  console.error(`unknown argument(s): ${badFlags.join(' ')}`);
+  console.error('usage: node fascia-end-harness.js [--mutate] [file.draft ...]');
+  process.exit(2);
+}
 const drawings = files.length ? files : [
   'repro-2storey-garage.draft',
   'repro-bungalow-garage-roofs.draft',
@@ -114,6 +128,65 @@ const drawings = files.length ? files : [
   'repro-2storey-garage-beam.draft',
 ].map(name => path.join(ROOT, 'proto', name));
 
+// ── THE MUTANTS ───────────────────────────────────────────────────────────
+//
+// Each row bends ONE line of cut-view.js back to the state a check here was
+// written against, and every one of them has to make this file go red. Two
+// of the five are the defects in the header restored (the ordering and the
+// inverted run); the rest are the same-band guard, the facing rule and the
+// corner lift.
+//
+// A MUTANT RUNS AS ITS OWN PROCESS. The checks below paint six drawings at
+// module load through a sandbox built once, so there is no re-entry to hand a
+// second cut-view.js to; the parent writes the bent source out and the child
+// loads it through DRAFT_HARNESS_SOURCE_OVERRIDES (see harness-env.js).
+const MUTATIONS = [
+  ['the silhouette is drawn before the runs are grown, as it was', 'cut-view.js',
+    c => c.replace('        u0 = Math.min(u0, eave.u0);\n'
+      + '        u1 = Math.max(u1, eave.u1);',
+    '        u0 = run.u0;\n        u1 = run.u1;')],
+
+  ['a descending walk keeps its run ends the wrong way round', 'cut-view.js',
+    c => c.replace('if (r.u0 <= r.u1) return;', 'if (true) return;')],
+
+  ['a run grows to any eave at any height, not one in its own band', 'cut-view.js',
+    c => c.replace('if (Math.abs(eave.top - run.top) > eps) return;', '')],
+
+  // TWO ROWS ARE NOT HERE, AND THEY WERE TRIED FIRST -- both survived, and
+  // measurement says they are equivalent rather than uncaught:
+  //
+  //   `const rake = !eave && onGable(a, b) && Math.abs(eb - ea) > 0.05;`
+  //      with the slope test dropped
+  //   `s.toward > 0.01` opened to `s.toward > -1`
+  //
+  // Each raises the count of edges called a rake (38 -> 43 and 38 -> 110
+  // over these six drawings), and neither changes ONE STROKE: every extra
+  // rake is either hidden behind something or filtered again downstream --
+  // the band branch carries its own run-level slope test, and a gable facing
+  // away has no shown station to hang a board on. Hashing the whole tape,
+  // every stroke of every elevation of all seven fixtures, both mutants are
+  // identical to the unbent painter.
+  //
+  // So the two lines are belt-and-braces on this fixture set, and the
+  // honest record of that is this paragraph rather than a row that can only
+  // ever print SURVIVED. The one direction that DOES change the drawing is
+  // below, and it is caught.
+
+  ['the facing test is inverted, and every rake in the drawing goes', 'cut-view.js',
+    c => c.replace('const onGable = (p, q) => gableSegs.some(s => s.toward > 0.01',
+      'const onGable = (p, q) => gableSegs.some(s => s.toward < 0.01')],
+
+  ['a wall corner is left standing on the floor under a roof sheet', 'cut-view.js',
+    c => c.replace('if (floor >= lo - ROOF_COVER_EPS && floor < hi - ROOF_COVER_EPS) {',
+      'if (false) {')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('fascia-end-harness',
+    MUTATIONS, { root: ROOT, harness: __filename, args: files });
+  process.exit(all ? 0 : 1);
+}
+
 const win = H.loadDraftModules();
 let bandsSeen = 0;
 let seamsSeen = 0;
@@ -143,6 +216,50 @@ drawings.forEach(file => {
     });
     check(`${label} ${cut.id}: no outline riser stranded inside a fascia band`,
       strays.length === 0, strays.join('\n      '));
+
+    // ── AND NO OUTLINE STEP LIES ON NO ROOF AT ALL ─────────────────────
+    //
+    // WHAT THE STRAY-RISER CHECK ABOVE CANNOT SEE. extendRunsToEaves only
+    // grows a run to an eave IN ITS OWN BAND -- `Math.abs(eave.top -
+    // run.top) > eps` -- and with that one line taken out the check above
+    // stays green, because the band and the riser move together: they are
+    // both grown, so the riser still stands at an end.
+    //
+    // What moves instead is the SILHOUETTE, and it moves somewhere no roof
+    // is. Measured on repro-2storey-garage E1 with the guard removed, the
+    // house's outline steps straight off its own eave onto the garage's:
+    //
+    //     u 17.83  e 17.78   ->   u 22.00  e 17.70
+    //
+    // Four feet of level ink at the house eave height, running out over the
+    // garage, with the end riser then standing at u 22 instead of u 18.
+    //
+    // THE RULE IS THE OUTLINE'S OWN VOCABULARY, not a tolerance. Every long
+    // step in a roof silhouette is one of three things: an eave or a ridge,
+    // which is LEVEL; a rake or a hip, which lies on a roof PLANE and so
+    // falls at the pitch, and the format's shallowest is 2:12; or a riser,
+    // which is vertical. A step of four feet at a slope of 0.018 is none of
+    // them -- it is a sampled point joined to an end belonging to another
+    // roof, and the slope is only the gap between the two eave heights.
+    //
+    // 1:12 is the floor, half the shallowest pitch the format offers, so a
+    // legitimate rake clears it by a factor of two and the artifacts
+    // measured here (0.018 and 0.004) miss it by five.
+    const offRoof = [];
+    view.strokes.forEach(s => {
+      if (Math.abs(s.w - SILHOUETTE_W) > 1e-9) return;
+      for (let i = 1; i < s.pts.length; i++) {
+        const a = s.pts[i - 1], b = s.pts[i];
+        if (b.move) continue;
+        const du = Math.abs(b.u - a.u), de = Math.abs(b.e - a.e);
+        if (du < 0.5 || de < 0.005) continue;          // short, or level
+        if (de / du >= 1 / 12) continue;               // on a roof plane
+        offRoof.push(`u ${a.u.toFixed(2)}..${b.u.toFixed(2)} `
+          + `e ${a.e.toFixed(2)}..${b.e.toFixed(2)} at slope ${(de / du).toFixed(3)}`);
+      }
+    });
+    check(`${label} ${cut.id}: every long outline step is level, or on a roof plane`,
+      offRoof.length === 0, offRoof.join('\n      '));
 
     // ── AND NOTHING CROSSES THE BAND WHERE THE EAVE CARRIES ON ──────────
     //

@@ -8,29 +8,56 @@
 // keeps only the part that owns the real point objects.
 //
 //   node proto/level-lock-harness.js
+//   node proto/level-lock-harness.js --mutate
 //
 // Exit 0 = every check passed.
+//
+// WHY IT TOOK A MUTATION MODE. Devin's audit, 28 Sep, found this file in a
+// class of seven that ACCEPTED `--mutate`, ran the plain checks, printed no
+// table and exited 0 -- so any count asking "does it take the flag?" scored
+// them as covered. That is worse than the thirty-seven that refuse the flag
+// outright, because a refusal is honest. The table below is the answer, and
+// the argument parser now refuses anything it does not understand.
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
-const win = {};
-const sandbox = { window: win, console, Math, Number, String, Object, Array, JSON, Set, Map, isFinite };
-sandbox.globalThis = sandbox;
-vm.createContext(sandbox);
-vm.runInContext(fs.readFileSync(path.join(ROOT, 'level-lock.js'), 'utf8'), sandbox, { filename: 'level-lock.js' });
+const MUTATE = process.argv.slice(2).includes('--mutate');
+const ARGS = process.argv.slice(2).filter(a => a !== '--mutate');
+if (ARGS.length) {
+  console.error(`level-lock-harness: takes no arguments (got ${ARGS.join(' ')})`);
+  process.exit(2);
+}
 
-const L = win.DraftLevelLock;
+const SOURCE = fs.readFileSync(path.join(ROOT, 'level-lock.js'), 'utf8');
+
+// THE MODULE IS LOADED PER RUN, not once at the top: a mutation is an edit to
+// its source, and a module frozen onto a shared sandbox could not be replaced.
+const load = (edit) => {
+  const win = {};
+  const sandbox = { window: win, console, Math, Number, String, Object, Array, JSON, Set, Map, isFinite };
+  sandbox.globalThis = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(edit ? edit(SOURCE) : SOURCE, sandbox, { filename: 'level-lock.js' });
+  return win.DraftLevelLock;
+};
+
 let passed = 0;
-const failures = [];
+let failures = [];
 const check = (name, condition, detail) => {
   if (condition) { passed += 1; return; }
   failures.push(detail ? `${name}\n      ${detail}` : name);
 };
 
+function run(edit) {
+passed = 0;
+failures = [];
+let L;
+try { L = load(edit); } catch (err) { check('level-lock.js loads', false, err.message); return; }
+
 check('level-lock.js defines DraftLevelLock', !!L, String(L));
-if (!L) { console.log('level lock harness: 0 passed, 1 failed'); process.exit(1); }
+if (!L) return;
 
 // ── MAKING A LOCK ────────────────────────────────────────────────────────
 const stack = L.makeLock('lock-1', 'WC STACK', ['g-main', 'g-second', 'g-base']);
@@ -122,9 +149,78 @@ check('no locks at all is not an error',
   && L.uniquePoints([]).length === 0 && L.translate([], 1, 1) === 0, 'empty inputs');
 check('a malformed lock does not throw',
   L.lockFor([null, {}, { members: null }], 'g1') === null, 'malformed locks');
-
-console.log(`level lock harness: ${passed} checks passed, ${failures.length} failed`);
-if (failures.length) {
-  failures.forEach(line => console.log(`  ✘ ${line}`));
-  process.exit(1);
 }
+
+if (!MUTATE) {
+  run(null);
+  console.log(`level lock harness: ${passed} checks passed, ${failures.length} failed`);
+  if (failures.length) {
+    failures.forEach(line => console.log(`  ✘ ${line}`));
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+// ── MUTATIONS ───────────────────────────────────────────────────────────
+//
+// Each edits level-lock.js in memory and asserts the checks above go red. A
+// check that survives its own mutation is not a check. Every one of these is
+// a way the lock could be wrong while still looking like a working feature:
+// it still makes locks, still finds them, still moves something.
+const MUTATIONS = [
+  // The one the module was written to prevent. A Set is identity-based; an
+  // array is not, so the shared corner is collected twice and moved twice.
+  ['a shared corner is collected once per item, not once', 'level-lock.js',
+    c => c.replace('const points = new Set();', 'const points = [];')
+      .replace('.forEach(p => points.add(p));', '.forEach(p => points.push(p));')
+      .replace('if (item.point) points.add(item.point);', 'if (item.point) points.push(item.point);')],
+
+  // A lock of one is indistinguishable on screen from a lock that works.
+  ['a lock of ONE member is allowed', 'level-lock.js',
+    c => c.replace('if (!id || members.length < 2) return null;', 'if (!id) return null;')],
+
+  // The de-duplication at creation: the same member named twice makes a
+  // two-member lock that is really a lock of one.
+  ['the same member twice counts as two members', 'level-lock.js',
+    c => c.replace('const members = [...new Set((groupIds || []).filter(Boolean))];',
+      'const members = (groupIds || []).filter(Boolean);')],
+
+  // The mover owns its own move already; including it moves it twice.
+  ['the mover is returned among its own siblings', 'level-lock.js',
+    c => c.replace('return lock ? lock.members.filter(id => id !== groupId) : [];',
+      'return lock ? lock.members.slice() : [];')],
+
+  // y is the storey. Touching it drags one floor's assembly onto another's.
+  ['translate moves the storey as well as the plan', 'level-lock.js',
+    c => c.replace('{ point.x += dx; point.z += dz; }',
+      '{ point.x += dx; point.z += dz; point.y = (point.y || 0) + dz; }')],
+
+  // breakLock returns a new list; splicing the caller's would make an undo
+  // restore a lock that had already been removed underneath it.
+  ['breaking mutates the list it was given', 'level-lock.js',
+    c => c.replace('const breakLock = (locks, lockId) => (locks || []).filter(lock => lock?.id !== lockId);',
+      'const breakLock = (locks, lockId) => { const i = (locks || []).findIndex(l => l?.id === lockId);'
+      + ' if (i >= 0) locks.splice(i, 1); return locks || []; };')],
+
+  // An id is what a lock is found by; a lock without one can never be broken.
+  ['a lock with no id is made anyway', 'level-lock.js',
+    c => c.replace('if (!id || members.length < 2) return null;', 'if (members.length < 2) return null;')],
+
+  // A single-point item (a column) carries `point`, not start/end.
+  ['an item carrying a single point is skipped', 'level-lock.js',
+    c => c.replace('if (item.point) points.add(item.point);', '')],
+];
+
+let caught = 0;
+for (const [name, , edit] of MUTATIONS) {
+  const before = SOURCE;
+  if (edit(before) === before) {
+    console.log(`  ANCHOR MISSED  ${name}  (the edit changed nothing -- re-aim it)`);
+    continue;
+  }
+  run(edit);
+  if (failures.length) caught += 1;
+  else console.log(`  SURVIVED  ${name}`);
+}
+console.log(`level-lock-harness: ${caught}/${MUTATIONS.length} mutations caught`);
+process.exit(caught === MUTATIONS.length ? 0 : 1);

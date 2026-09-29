@@ -110,6 +110,75 @@ const levelRuns = view => {
   return out;
 };
 
+// ── THE FLAG, ANSWERED ────────────────────────────────────────────────────
+//
+// The header advertised `[file.draft ...]` and the file never read argv at
+// all: every argument, `--mutate` included, went straight into the bin. Both
+// halves are fixed here -- the two fixtures this harness measures are named
+// in the checks below, not chosen by the caller, so a positional is refused
+// rather than pretended at, and `--mutate` does what it says.
+const ARGV = process.argv.slice(2);
+const MUTATE = ARGV.includes('--mutate');
+const REST = ARGV.filter(a => a !== '--mutate');
+if (REST.length) {
+  console.error(`foundation-face-harness: takes no arguments (got ${REST.join(' ')})`);
+  console.error('usage: node foundation-face-harness.js [--mutate]');
+  process.exit(2);
+}
+
+// ── THE MUTANTS ───────────────────────────────────────────────────────────
+//
+// Each row puts one line of cut-view.js back the way it was on the day Movie
+// reported the defect the checks below measure: the all-or-nothing cover
+// test, the cover measured to the concrete instead of to the plate on it,
+// the depth test that decides which face is in front, and the clip that
+// gives a crease its length. Every one of them has to make this file go red.
+//
+// A MUTANT RUNS AS ITS OWN PROCESS -- see proto/mutant-subprocess.js for why.
+const MUTATIONS = [
+  ['a face is hidden only when another covers it END TO END', 'cut-view.js',
+    c => c.replace('        if (o.hi <= r.lo + 0.05 || o.lo >= r.hi - 0.05) return [r];',
+      '        if (!(o.lo <= r.lo + 0.05 && o.hi >= r.hi - 0.05)) return [r];')],
+
+  ['what hides a face is its concrete, not the plate on top of it', 'cut-view.js',
+    c => c.replace('&& o.topE + plateOf(o) >= g.topE - 1e-3',
+      '&& o.topE >= g.topE - 1e-3')],
+
+  ['a plate is never counted, however short the rise to it', 'cut-view.js',
+    c => c.replace('      return rise > 0.01 && rise < PLATE_CAP_FT ? rise : 0;',
+      '      return 0;')],
+
+  ['a face at the SAME depth hides the one beside it', 'cut-view.js',
+    c => c.replace('      && o.depth > g.depth + 1e-6\n', '')],
+
+  ['a corner stops at the concrete and leaves the plate unclosed', 'cut-view.js',
+    c => c.replace('        ctx.moveTo(X(u), Y(g.topE + (interior ? 0 : plateOf(g))));',
+      '        ctx.moveTo(X(u), Y(g.topE));')],
+
+  // A SIXTH ROW IS NOT HERE, and it was written before these five:
+  //
+  //   `const foot = Math.max(shownBase, Math.min(g.topE, hiddenTo));`
+  //      flattened to `const foot = shownBase;`
+  //
+  // -- the clip that gives a buried crease its length. It survived, and the
+  // painter's own note says why: since cover started being measured to the
+  // top of the PLATE, a face whose step is hidden yields no runs and never
+  // reaches that pass, so there is nothing left for the clip to shorten.
+  // Hashing every stroke of every elevation of all fifteen .draft fixtures
+  // in proto/, the flattened painter is byte-identical to the real one.
+  //
+  // So it is dead code on today's fixtures rather than an uncaught
+  // behaviour, and the honest record of that is this paragraph. It becomes
+  // a real row the day a fixture carries a far face that genuinely stands
+  // proud of what is in front of it.
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('foundation-face-harness',
+    MUTATIONS, { root: ROOT, harness: __filename });
+  process.exit(all ? 0 : 1);
+}
+
 const win = H.loadDraftModules();
 
 // ── THE STEP LANDS ON THE TIE, on Movie's own drawing ────────────────────
