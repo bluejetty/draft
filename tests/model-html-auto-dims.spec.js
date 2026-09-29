@@ -403,6 +403,34 @@ test('the column stack lands on the framing sheets and not on the walls plan',
     expect(layers.has('A-DIMS-OVR'), 'the overall strings went missing').toBe(true);
   });
 
+test('the interior string measures wall FACES, not centrelines', async ({ page }) => {
+  await openBoards(page);
+  await order(page, 'bungalow', 'bungalow');
+  await saveNow(page);
+  const saved = await savedFile(page);
+
+  const ints = saved.dimensions.filter(d => d.layer === 'A-DIMS-INT');
+  expect(ints.length, 'no interior string was placed on any level').toBeGreaterThan(0);
+
+  // THE WALL THICKNESS IS THE PROOF, and it is why this asserts a MEASUREMENT
+  // rather than a count. A string run to wall CENTRELINES can never produce a
+  // figure of 3.5in or 5.5in -- those runs exist only between the two faces
+  // of one wall. Finding one means the string reached a face; finding none
+  // would mean it reached the stored line and no count of segments would say
+  // so.
+  const runs = ints.map(d => Math.hypot(d.end.x - d.start.x, d.end.z - d.start.z));
+  const stud = [3.5 / 12, 5.5 / 12];
+  expect(runs.some(run => stud.some(t => Math.abs(run - t) < 0.01)),
+    `no run is a stud thickness; got ${runs.map(r => r.toFixed(3)).sort().join(' ')}`)
+    .toBe(true);
+
+  // AND IT IS A PERIMETER STRING, so it rides the walls plan with the rest of
+  // that stack rather than the framing sheets the column stack goes to.
+  expect(ints.some(d => d.view === 'plan'),
+    `interior strings landed only on ${[...new Set(ints.map(d => d.view))].join(', ')}`)
+    .toBe(true);
+});
+
 test('pressing AUTO DIMS twice replaces the strings; one undo restores them',
   async ({ page }) => {
     // THE SWEEP IS THE HALF THAT IS EASY TO LOSE. A re-run takes the level's
