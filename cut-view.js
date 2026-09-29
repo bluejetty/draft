@@ -1159,6 +1159,54 @@ if (!window.DraftCutView) {
       }
       if (inside) return geo().roofFaceRise(face, pt, roof.pitch || 4);
     }
+    // A POINT ON THE OUTLINE IS ON THE ROOF. The crossing test is half-open,
+    // so a point lying exactly on a face's boundary answers "outside" -- and a
+    // wall's end corner is exactly that point wherever a roof dies flush into
+    // a wall. The surface has a height there; only the parity rule does not.
+    // Two faces sharing that edge carry the same height along it, so the first
+    // one found is the answer either of them would give.
+    //
+    // AND IT IS REACHED ON EVERY MISS, which is most calls: a wall station
+    // with open sky over it asks this question too, and so does every station
+    // asked about a roof it does not stand under. Walking each face's edges
+    // through pointToSegment for all of those cost SIX TIMES the whole
+    // elevation paint over the sixteen fixtures -- 1.5 s to 9.8 s, and eight
+    // seconds again on each of this file's mutants, which put the harness job
+    // past its limit. Two boxes of plain arithmetic bring it back, and both
+    // are exact: they drop only work that could not have answered.
+    //
+    // THE FOOTPRINT'S BOX FIRST, which is where nearly every miss ends. Every
+    // face vertex is a footprint point, a point on a footprint edge, or an
+    // interior skeleton node -- `roofFaces` builds them from exactly those --
+    // so a point outside the footprint's box is on no face's edge. It is
+    // taken HERE rather than at the top of the function because a point the
+    // loop above answered never needed it, and that is the other half of the
+    // calls.
+    let rxLo = Infinity, rxHi = -Infinity, rzLo = Infinity, rzHi = -Infinity;
+    for (let i = 0; i < roof.points.length; i++) {
+      const p = roof.points[i];
+      if (p.x < rxLo) rxLo = p.x;
+      if (p.x > rxHi) rxHi = p.x;
+      if (p.z < rzLo) rzLo = p.z;
+      if (p.z > rzHi) rzHi = p.z;
+    }
+    if (pt.x < rxLo - 1e-6 || pt.x > rxHi + 1e-6
+      || pt.z < rzLo - 1e-6 || pt.z > rzHi + 1e-6) return null;
+    // THEN EACH EDGE'S OWN BOX. A point within 1e-6 of a segment is inside
+    // that segment's box grown by 1e-6, so every edge whose distance could
+    // have been small still reaches the test below. A face-wide box would not
+    // do here: a hip or a rake is a diagonal, and most of its box is nowhere
+    // near any of its edges.
+    for (const face of faces) {
+      const poly = face.points;
+      for (let i = 0; i < poly.length; i++) {
+        const a = poly[i], b = poly[(i + 1) % poly.length];
+        if (pt.x < Math.min(a.x, b.x) - 1e-6 || pt.x > Math.max(a.x, b.x) + 1e-6
+          || pt.z < Math.min(a.z, b.z) - 1e-6 || pt.z > Math.max(a.z, b.z) + 1e-6) continue;
+        if (geo().pointToSegment(pt, { start: a, end: b }).d > 1e-6) continue;
+        return geo().roofFaceRise(face, pt, roof.pitch || 4);
+      }
+    }
     return null;
   }
 
@@ -4928,8 +4976,15 @@ if (!window.DraftCutView) {
       // at the eave's true edge and is exactly the fascia board: at a roof's
       // outer corner the surface top IS the fascia top, so the run out to it
       // is the last of the slope and the drop from it is 5.5" of board.
-      const closePen = () => {
+      //
+      // AND ONLY AGAINST OPEN AIR. Where another roof TAKES OVER the front --
+      // a lean-to running on behind the house's own sheet -- this run's end is
+      // not an edge of anything: the surface carries on, hidden. The start of
+      // such a run has never drawn a riser (see the moveTo below), and the end
+      // of one drew a fascia drop hanging in mid-slope with nothing under it.
+      const closePen = (openAir = true) => {
         if (!pen) return;
+        if (!openAir) { pen = null; return; }
         const u1 = grownAt.has(penI) ? grownAt.get(penI) : pen.u;
         if (u1 !== pen.u) ctx.lineTo(X(u1), Y(pen.base + fasciaFt));
         ctx.lineTo(X(u1), Y(pen.base));
@@ -4941,7 +4996,7 @@ if (!window.DraftCutView) {
           prevLit = false;
           return;
         }
-        if (pen && pen.base !== s.base) closePen();
+        if (pen && pen.base !== s.base) closePen(false);
         // A roof taking over from another — a garage roof running on under
         // the house's overhang — has no vertical edge, so it starts at its
         // surface.

@@ -59,8 +59,19 @@ jobs:
   # mutation failure that is actually a coverage failure. Green today at
   # 17/17. wall-joins and merge-vertex have no painter gate.
   harnesses:
+    # A CEILING FOR A HANG, NOT A BUDGET FOR THE WORK, and it had quietly
+    # become the second. On the commit before this one the job ran 4m38s of
+    # its five minutes -- 25s of plain harnesses and 4m04s of mutation
+    # engines -- so the next table of rows to land was going to be cancelled
+    # rather than red, and a cancelled job names nothing. This change is the
+    # one that found it: it was cancelled mid-sweep having reported no
+    # failure at all.
+    #
+    # The number is the same kind as playwright's 45: high enough that only
+    # something genuinely stuck reaches it. The sweep grows a little with
+    # every mutation row, and every row is a row someone wanted.
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 12
     steps:
       # @v7 ON ALL THREE ACTIONS, AND THE MAJOR WAS CHECKED PER ACTION.
       #
