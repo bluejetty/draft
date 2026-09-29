@@ -294,6 +294,77 @@ const CHECKS = [
     label: 'no layer table at all draws the drawing, not nothing',
     fn: win => [run(win, { layerStandard: () => null }).includes('floor#f1'), true],
   },
+  // ── AND WHICH LAYERS THE VIEW ITSELF CARRIES ─────────────────────────
+  //
+  // `viewLayers` is layer-views.js's `contents` list for the view being
+  // composed, and it gates BEFORE the profile: the profile says whether a
+  // layer is on, the view says whether it is on THIS drawing of the level.
+  // Both sheet pages pass it; MODEL.html deliberately does not.
+  {
+    label: 'a layer the view does not carry is not drawn, however the profile is ticked',
+    fn: win => {
+      // Every layer in the drawing except the floor's, and the profile
+      // saying yes to everything -- so the only thing that can take the
+      // floor off the sheet is the view's own list.
+      const tape = run(win, {
+        viewLayers: ['A-SHAPE', 'A-GLAZ', 'A-FIXT', 'A-ANNO', 'A-DIMS', 'E-DEVC'],
+        layerStandard: () => ({ visible: true, printable: true }),
+      });
+      return [`${tape.some(m => m.startsWith('floor'))} ${tape.some(m => m.startsWith('dimension'))}`,
+        'false true'];
+    },
+  },
+  {
+    label: 'an entity that names NO layer is never asked -- the format writes no key for most of them',
+    fn: win => {
+      // A list that carries nothing this drawing uses, and a dimension
+      // saved before the layer key existed sitting beside a tagged one.
+      // The untagged dimension draws and the tagged one does not -- gating
+      // on membership alone would empty every drawing ever saved, because
+      // the format omits the key rather than writing a null.
+      const dimensions = [
+        { id: 'dBare', levelId: 3, view: 'plan' },
+        { id: 'dTagged', levelId: 3, view: 'plan', layer: 'A-DIMS' },
+      ];
+      const tape = run(win, { viewLayers: ['E-POWER'], dimensions });
+      return [tape.filter(m => m.startsWith('dimension')).join(' '), 'dimension#dBare'];
+    },
+  },
+  {
+    label: 'a view that carries the layer leaves the profile to answer as before',
+    fn: win => {
+      const off = run(win, {
+        viewLayers: ['A-FLOR'],
+        layerStandard: id => ({ visible: id !== 'A-FLOR', printable: true }),
+      }).some(m => m.startsWith('floor'));
+      const on = run(win, { viewLayers: ['A-FLOR'] }).includes('floor#f1');
+      return [`${off} ${on}`, 'false true'];
+    },
+  },
+  {
+    label: 'no view list at all gates nothing -- a viewport saved before views compose as it did',
+    fn: win => {
+      const none = run(win, { viewLayers: null }).join(' ');
+      const empty = run(win, { viewLayers: [] }).join(' ');
+      return [`${none === run(win).join(' ')} ${empty === none}`, 'true true'];
+    },
+  },
+  {
+    label: 'the two gates are AND, not OR -- either one alone takes the entity off',
+    fn: win => {
+      // Off by the view, on by the profile; then the reverse. Reading the
+      // pair as OR would draw the floor both times.
+      const byView = run(win, {
+        viewLayers: ['A-DIMS'],
+        layerStandard: () => ({ visible: true, printable: true }),
+      }).some(m => m.startsWith('floor'));
+      const byProfile = run(win, {
+        viewLayers: ['A-FLOR', 'A-DIMS'],
+        layerStandard: id => ({ visible: id !== 'A-FLOR', printable: true }),
+      }).some(m => m.startsWith('floor'));
+      return [`${byView} ${byProfile}`, 'false false'];
+    },
+  },
   // ── A STAGE WITH NO ENV IS SKIPPED, NOT GUESSED ──────────────────────
   {
     label: 'a caller that cannot supply an env loses that stage and nothing else',
@@ -371,6 +442,20 @@ const MUTATIONS = [
         .filter(fixture => fixture.levelId === levelId
           && wallById.has(fixture.wallId) && shows(fixture.layer))`,
     '      pick(env.fixtures).filter(fixture => shows(fixture.layer))')],
+  ['a layer the view does not carry is drawn anyway',
+    s => s.replace("      if (carried && layerId != null && layerId !== '' && !carried.has(layerId)) return false;", '')],
+  ['the view list gates by presence rather than by membership',
+    s => s.replace('!carried.has(layerId)', 'carried.has(layerId)')],
+  ['an untagged entity is asked the question too, and fails it',
+    s => s.replace("if (carried && layerId != null && layerId !== ''", 'if (carried')],
+  ['an empty list is read as a view that carries nothing',
+    s => s.replace(`    const carried = Array.isArray(env.viewLayers) && env.viewLayers.length
+      ? new Set(env.viewLayers)
+      : null;`,
+  `    const carried = Array.isArray(env.viewLayers) ? new Set(env.viewLayers) : null;`)],
+  ['the view answers INSTEAD of the profile rather than as well',
+    s => s.replace("      if (carried && layerId != null && layerId !== '' && !carried.has(layerId)) return false;",
+      "      if (carried && layerId != null && layerId !== '') return carried.has(layerId);")],
   ['a hidden layer draws anyway',
     s => s.replace('    if (!standard.visible) return false;', '')],
   ['a no-print layer prints',
