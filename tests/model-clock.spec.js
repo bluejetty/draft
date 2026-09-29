@@ -340,8 +340,18 @@ for (const page_ of ['PROJECT.html', 'LAYOUT.html', 'SPECS.html',
       const el = document.getElementById('clock');
       if (!el) return null;
       const s = getComputedStyle(el);
+      const box = e => e ? e.getBoundingClientRect() : null;
+      const lane = box(document.getElementById('foot-lane'));
+      const bar = box(document.getElementById('house-strip'));
+      const mine = box(el);
       return {
         text: (el.textContent || '').trim(),
+        clockTop: Math.round(mine.top),
+        clockHeight: Math.round(mine.height),
+        laneTop: lane ? Math.round(lane.top) : null,
+        laneHeight: lane ? Math.round(lane.height) : null,
+        barTop: bar ? Math.round(bar.top) : null,
+        barHeight: bar ? Math.round(bar.height) : null,
         fontFamily: s.fontFamily,
         fontSize: s.fontSize,
         fontWeight: s.fontWeight,
@@ -361,14 +371,31 @@ for (const page_ of ['PROJECT.html', 'LAYOUT.html', 'SPECS.html',
     const here = await read();
 
     expect(here, `${page_} mounts a clock at all`).not.toBeNull();
+    // AND IT FITS THE LANE IT STANDS IN, at the width the fitted elevation is
+    // measured at. #foot-lane is 24px of hem the bar already holds clear, and
+    // shell-bars.css leaves the lane's `top` alone on purpose so a reading a
+    // pixel taller leans UP into the bar rather than down under the sheet --
+    // which means a clock set too large does not announce itself by moving
+    // the footer, it just quietly overlaps whatever the bar is showing. On
+    // main the mixed-case clock was a 19px box in a 24px lane and already
+    // leaning; this is the line that says it no longer is.
+    expect(here.laneTop, `${page_}'s foot lane is where it always was`)
+      .toBe(here.barTop + here.barHeight - here.laneHeight);
+    expect(here.clockTop, `${page_}'s clock starts inside the lane, not above it`)
+      .toBeGreaterThanOrEqual(here.laneTop);
+    expect(here.clockTop + here.clockHeight,
+      `${page_}'s clock ends inside the lane -- the footer does not grow for it`)
+      .toBeLessThanOrEqual(here.laneTop + here.laneHeight);
     // THE CAPITALS ARE PAINT, NOT THE STRING. `text-transform` renders them;
     // textContent stays "Tue, Sep 29, 2026" on MODEL too, which is why the
     // half of the complaint about case is asserted through the property below
     // rather than by upper-casing the reading here.
     expect(here.textTransform, 'the reading is set in capitals, as MODEL\'s is')
       .toBe('uppercase');
+    const GEOMETRY = ['clockTop', 'clockHeight', 'laneTop', 'laneHeight',
+      'barTop', 'barHeight'];
     for (const key of Object.keys(model)) {
-      if (key === 'text') continue;
+      if (key === 'text' || GEOMETRY.includes(key)) continue;
       expect(here[key], `${page_}'s clock matches MODEL's ${key}`)
         .toBe(model[key]);
     }
