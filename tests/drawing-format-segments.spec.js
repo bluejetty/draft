@@ -20,15 +20,15 @@ test.describe('drawing-format walls/lines/floors', () => {
     await page.locator('[data-first-bone-press]').click();
     await h.waitForSaved(page);
 
-    const out = await page.evaluate(() => {
-      const F = window.DraftDrawingFormat;
-      const root = window.__dcRoot;
-      const saved = JSON.parse(window.localStorage.getItem('__lastSavedDrawing') || 'null');
-      return { hasRoot: !!root, hasSaved: !!saved, exports: Object.keys(F).length };
-    });
     // The old page's live arrays are not reachable from the test context in
     // this harness, so the comparison runs against the SAVED drawing, which is
     // what both sides inflate from anyway.
+    //
+    // There used to be a probe here reading `window.__dcRoot` and a
+    // `__lastSavedDrawing` key off localStorage into an `out` object. Neither
+    // name exists anywhere in the app and nothing ever read `out`, so it was
+    // three lies that could not fail. Deleted rather than repaired: the
+    // controls below are the real ones, and they run on the saved drawing.
     const saved = await h.savedDrawing(page);
 
     const mine = await page.evaluate(drawing => {

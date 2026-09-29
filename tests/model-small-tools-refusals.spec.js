@@ -42,13 +42,15 @@ test('a refused beam is dropped from the drawing and kept in the file', async ({
   await page.goto('/MODEL.html');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 
-  // THE PAGE DECLINED TO ACT ON IT: the working drawing holds the good beam
-  // only, so nothing downstream can read an id that is not an id.
-  const inHand = await page.evaluate(() =>
-    (window.__drawingForTest?.beams || []).map(b => b.id));
-  if (inHand.length) {
-    expect(inHand, 'the refused beam reached the working drawing').toEqual([41]);
-  }
+  // THE PAGE DECLINED TO ACT ON IT. The working drawing is a closure variable
+  // with no way in from here, and this file will not put a hook in the page to
+  // make one -- so the assertion runs on what the page SAYS instead, which is
+  // the same fact stated where a drafter can read it. `beams` is one of
+  // REFUSED_KEYS, so the refused record bumps the readout's own count; the
+  // good one does not. One planted, one reported.
+  await expect(page.locator('#readout'),
+    'the refused beam was drawn, or the page said nothing about refusing it')
+    .toContainText('1 not drawn, kept in file', { timeout: 10000 });
 
   // AND THE FILE STILL HAS BOTH. This is the half that matters: refusing is
   // declining to act, not deleting a drafter's geometry.
