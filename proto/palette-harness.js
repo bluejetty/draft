@@ -104,7 +104,30 @@ const PAIRS = [
   // RUFF's red measured 4.06 here, which is what "hard to see when its small"
   // was.
   ['accent-mark', 'surface-panel', 4.5],
+  // AND ON THE PAGE, which was never asked until SETTINGS' one link stopped
+  // wearing MODEL's selection blue and took the mark instead. The mark is
+  // measured on a panel because that is where the section headings sit; a
+  // link in a paragraph sits on the page, and the two grounds are different
+  // colours on every skin.
+  ['accent-mark', 'surface-page', 4.5],
   ['ink-primary', 'surface-chip', 4.5],
+  // A RESULT SENTENCE IS BODY TEXT, and it is the sentence a drafter is
+  // looking for, so it answers to 4.5 rather than to the 3.0 a mark gets.
+  // THREE GROUNDS EACH, because the four pages that write one do not agree
+  // where it sits: SETTINGS and STANDARDS put it on the page beside the
+  // buttons, LAYOUT's is inside a dialog panel, and a chip is one restyle
+  // away. Gating only the ground in use today is how #557a46 survived on a
+  // white page and then went out on a black one.
+  ['ink-good', 'surface-page', 4.5],
+  ['ink-good', 'surface-panel', 4.5],
+  ['ink-good', 'surface-chip', 4.5],
+  ['ink-warn', 'surface-page', 4.5],
+  ['ink-warn', 'surface-panel', 4.5],
+  ['ink-warn', 'surface-chip', 4.5],
+  // AND THEY MUST STAY TWO COLOURS. Equal ratios are not the requirement --
+  // a drafter reads "saved" and "could not" apart by hue at a glance, and a
+  // palette edit that nudged both to the same lifted green would pass every
+  // ratio above while deleting the distinction.
 ];
 // THE ACCENT IS ASKED FOR TWO THINGS THAT PULL APART, AND SOMETIMES 4.5 IS
 // NOT AVAILABLE FOR BOTH. It is read as text ON the page (#readout b), so it
@@ -179,6 +202,36 @@ for (const theme of P.THEMES) {
   }
 }
 console.log(`\n  worst pair anywhere: ${worst.toFixed(2)} — ${worstName}`);
+
+console.log('\n--- a good result and a bad one are two colours, not one');
+// The ratios above are satisfied by making both of these the same lifted
+// green, which would read perfectly and say nothing: a drafter tells "saved"
+// from "could not" by hue before reading either word. Hue angle, because
+// that is the property being relied on -- two colours of equal luminance and
+// different hue are exactly the case this must pass, and a contrast ratio
+// between the two inks would call them identical.
+const hue = css => {
+  const hex = String(css).replace('#', '');
+  const ch = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const max = Math.max(...ch), min = Math.min(...ch), d = max - min;
+  if (d === 0) return 0;
+  const [rr, gg, bb] = ch;
+  let h;
+  if (max === rr) h = ((gg - bb) / d) % 6;
+  else if (max === gg) h = (bb - rr) / d + 2;
+  else h = (rr - gg) / d + 4;
+  h *= 60;
+  return h < 0 ? h + 360 : h;
+};
+for (const theme of P.THEMES) {
+  for (const mode of P.MODES) {
+    const v = P.resolve(theme, mode);
+    const apart = Math.abs(hue(v['ink-good']) - hue(v['ink-warn']));
+    const degrees = Math.min(apart, 360 - apart);
+    check(`${theme}/${mode}  ink-good and ink-warn are ${degrees.toFixed(0)}° apart`,
+      degrees >= 40, `min 40°`);
+  }
+}
 
 console.log('\n--- the drawing ink separates from the ground it is drawn on');
 // Not a WCAG case (these are lines, not text), but a grid that cannot be told

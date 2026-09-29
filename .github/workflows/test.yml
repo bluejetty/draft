@@ -219,7 +219,9 @@ jobs:
                       proto/titleblock-harness.js \
                       proto/traffic-counter-harness.js \
                       proto/plan-composition-harness.js \
-                      proto/layout-plan-harness.js; do
+                      proto/layout-plan-harness.js \
+                      proto/layer-views-harness.js \
+                      proto/shared-file-store-harness.js; do
             if ! printf '%s\n' "${engines[@]}" | grep -qx "$must"; then
               failed=$((failed + 1))
               echo "FAIL  $must is a known engine and the derived list does not contain it"

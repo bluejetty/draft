@@ -84,7 +84,7 @@
       margin:calc(var(--strip-h) + 24px) auto calc(var(--house-h) + 40px); }
     h1 { margin:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:27px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
     .intro { max-width:760px; margin:7px 0 0; color:var(--ink-secondary); font-size:14px; line-height:1.5; }
-    .notice { display:none; margin-top:18px; padding:10px 12px; border-left:3px solid #a06035; background:rgba(160,96,53,.08); color:var(--ink-secondary); font-size:12px; line-height:1.45; }
+    .notice { display:none; margin-top:18px; padding:10px 12px; border-left:3px solid var(--ink-warn); background:color-mix(in srgb, var(--ink-warn) 8%, transparent); color:var(--ink-secondary); font-size:12px; line-height:1.45; }
     .notice.visible { display:block; }
     .columns { display:grid; grid-template-columns:250px minmax(0,1fr) 300px; gap:16px; align-items:start; margin-top:20px; }
     .card { border:1px solid var(--edge-panel); background:var(--surface-panel); }
@@ -104,9 +104,9 @@
     .toc-row .name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .toc-row.off .name, .toc-row.off .id { color:var(--ink-quiet); text-decoration:line-through; }
     .dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
-    .dot.verify { background:#a06035; }
+    .dot.verify { background:var(--ink-warn); }
     .dot.edited { background:var(--accent-mark); }
-    .dot.added { background:#557a46; }
+    .dot.added { background:var(--ink-good); }
 
     /* ── The editor ────────────────────────────────────────────────────── */
     .field-label { margin-top:11px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-quiet); }
@@ -118,7 +118,7 @@
     .btn:hover { border-color:var(--accent-mark); color:var(--accent-mark); }
     .btn[disabled] { opacity:.4; cursor:default; }
     .btn-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
-    .flag { margin-top:10px; padding:8px 10px; font-size:11px; line-height:1.45; border-left:3px solid #a06035; background:rgba(160,96,53,.08); color:var(--ink-secondary); }
+    .flag { margin-top:10px; padding:8px 10px; font-size:11px; line-height:1.45; border-left:3px solid var(--ink-warn); background:color-mix(in srgb, var(--ink-warn) 8%, transparent); color:var(--ink-secondary); }
     .flag.master { border-left-color:var(--accent-mark); background:color-mix(in srgb, var(--accent-mark) 8%, transparent); }
     .empty { color:var(--ink-quiet); font-size:12px; line-height:1.5; }
 
@@ -160,7 +160,7 @@
     /* Off-sheet measuring pen: same width as a column, out of sight. */
     #measure { position:absolute; left:-4000px; top:0; width:326px; visibility:hidden; }
 
-    #status { margin-top:14px; min-height:16px; color:#557a46; font-size:12px; }
+    #status { margin-top:14px; min-height:16px; color:var(--ink-good); font-size:12px; }
     .zoom-row { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
     .zoom-row .spacer { flex:1; }
 

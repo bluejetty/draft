@@ -97,12 +97,19 @@ let NOT_STYLE = src => {
 let WHOLE = src => src;
 
 // PROJECT.html -- all three are in SPEC-project-shell.md with their measured
-// contrast; none has a role in palette.js to go to. One region, because that
-// page has no canvas of its own to hold paper on.
+// contrast. One region, because that page has no canvas of its own to hold
+// paper on. Two of them NOW HAVE A ROLE and are still here: palette.js gained
+// ink-good and ink-warn when SETTINGS was converted, so these are no longer
+// "nowhere to go" -- they are an unconverted page, and PROJECT is not that
+// patch's to edit. The reason is written that way on purpose: an allowlist
+// entry whose stated reason has quietly stopped being true is how a list like
+// this turns into a place to hide.
 const PROJECT_ALLOWED = Object.freeze({
-  '#a06035': 'the .notice left border -- no role for a warning',
+  '#a06035': 'the .notice left border -- ink-warn now exists for this; PROJECT '
+    + 'has not been converted to it yet',
   'rgba(160,96,53,.08)': 'the .notice tint, the same warning colour',
-  '#557a46': '#status -- no role for a success message',
+  '#557a46': '#status -- ink-good now exists for this; PROJECT has not been '
+    + 'converted to it yet',
 });
 
 const SUBJECTS = Object.freeze([
@@ -114,7 +121,8 @@ const SUBJECTS = Object.freeze([
     // states of a sentence and the veil a modal sits under. 83 of this
     // block's 86 literals became roles.
     { what: 'its stylesheet', slice: STYLE, allowed: Object.freeze({
-      '#557a46': 'the profile dialog said yes -- no role for a success message',
+      '#557a46': 'the profile dialog said yes -- ink-good now exists for this; '
+        + 'LAYOUT has not been converted to it yet',
       '#b04050': 'the profile dialog said no, and a failed sheet save -- no '
         + 'role for a failure message either. MODEL.html keeps the same value '
         + 'on .sel-help',
@@ -141,6 +149,18 @@ const SUBJECTS = Object.freeze([
         + 'lifted to clear AA on black, which leaves it near 2.4 on white paper',
       'rgba(0,0,0,0.22)': "the paper's drop shadow -- a light, not a colour, "
         + 'and on the day skin the only thing holding the sheet off the desk',
+    }) },
+  ] },
+  // SETTINGS.html -- converted here, and it is the page that earned the two
+  // new roles. Its stylesheet is allowed NOTHING: every colour in it is a
+  // role now, including the two the status line says its result in and the
+  // link that was wearing MODEL's selection blue.
+  { page: 'SETTINGS.html', regions: [
+    { what: 'its stylesheet', slice: STYLE, allowed: Object.freeze({}) },
+    { what: 'its markup and boot', slice: NOT_STYLE, allowed: Object.freeze({
+      '#261': 'not a colour: the board number in the bone-crunch sentence. '
+        + 'The same shape as paint in the same way &#8217; was, and the reason '
+        + 'this list is read rather than trusted',
     }) },
   ] },
 ]);
@@ -271,7 +291,17 @@ check('the allowlists are exactly the ones recorded here',
     'LAYOUT.html/its stylesheet: #557a46 #b04050 rgba(0,0,0,0.35)',
     'LAYOUT.html/its canvas painter: #1d1f20 #5980a6 #ffffff rgba(0,0,0,0.22) '
       + 'rgba(29,31,32,0.18) rgba(29,31,32,0.25) rgba(29,31,32,0.45)',
+    'SETTINGS.html/its stylesheet: ',
+    'SETTINGS.html/its markup and boot: #261',
   ].join('\n')]);
+
+// AND THE RESULT SENTENCE IS SAID IN A ROLE, BOTH WAYS ROUND. The literal
+// scan above cannot see this: a page that dropped #status's colour rule
+// altogether would carry no literal and read as body ink, which is the same
+// sentence in the wrong voice rather than an unreadable one.
+check('SETTINGS: the status line takes both its colours from the palette',
+  () => [/#status \{[^}]*color:var\(--ink-good\)/.test(code('SETTINGS.html'))
+    && /#status\.warning \{ color:var\(--ink-warn\); \}/.test(code('SETTINGS.html')), true]);
 
 // ── The canvas is the half a stylesheet sweep misses ──────────────────
 //
@@ -388,6 +418,28 @@ const MUTATIONS = [
     editing('LAYOUT.html', s => s.replace(
       '.lay-pick.lay-paper.on { border-color: var(--accent);\n    background-color: var(--accent);',
       '.lay-pick.lay-paper.on { border-color: var(--ink-primary);\n    background-color: var(--ink-primary);'))],
+
+  // --- SETTINGS.html ---------------------------------------------------
+  ['SETTINGS: the status green goes back to the literal it was',
+    editing('SETTINGS.html', s => s.replace('color:var(--ink-good)', 'color:#557a46'))],
+  ['SETTINGS: the warning brown goes back to the literal it was',
+    editing('SETTINGS.html', s => s.replace('color:var(--ink-warn)', 'color:#a06035'))],
+  // THE ONE THE LITERAL SCAN CANNOT SEE. No literal comes back -- the result
+  // sentence just stops having a voice and inherits body ink.
+  ['SETTINGS: the status line loses its colour rule entirely',
+    editing('SETTINGS.html', s => s.replace('color:var(--ink-good); font-size:12px;',
+      'font-size:12px;'))],
+  ['SETTINGS: the standards link goes back to the drafting blue',
+    editing('SETTINGS.html', s => s.replace('.link { color:var(--accent-mark); }',
+      '.link { color:#5980a6; }'))],
+  ['SETTINGS: the page stops applying a skin',
+    editing('SETTINGS.html', s => s.replace('P.apply(document,', 'void (document,'))],
+  ['SETTINGS: the page picks its own skin instead of the one MODEL wrote',
+    editing('SETTINGS.html', s => s.replace("'draft-skin'", "'settings-skin'"))],
+  ['SETTINGS: palette.js loses its place at the front',
+    editing('SETTINGS.html', s => s.replace(
+      '<script src="./palette.js"></script>',
+      '<script src="./tour.js"></script>\n  <script src="./palette.js"></script>'))],
 
   // --- the instrument --------------------------------------------------
   // If breaking the scanner does NOT turn a check red, the green run above was

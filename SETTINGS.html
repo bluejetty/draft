@@ -67,6 +67,13 @@
     main { width:min(880px, calc(100vw - 32px)); margin:34px auto 48px; }
     h1 { margin:0; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:27px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
     .intro { max-width:640px; margin:7px 0 0; color:var(--ink-secondary); font-size:14px; line-height:1.5; }
+    /* THE DRAFTING BLUE WAS THE WRONG BLUE FOR TEXT. #5980a6 is MODEL's
+       selection colour, and it is 3.99 on the night page and 3.71 on the day
+       one -- this link failed on BOTH modes, which is why reading only the
+       night sheet would have half-fixed it. The mark is the role a small
+       piece of brand-coloured text belongs to, and it is measured on every
+       skin already. */
+    .link { color:var(--accent-mark); }
     .notice { margin-top:18px; padding:10px 12px; border-left:3px solid var(--accent-mark); background:color-mix(in srgb, var(--accent-mark) 8%, transparent); color:var(--ink-secondary); font-size:12px; line-height:1.45; }
     .groups { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:14px; margin-top:22px; }
     .group { border:1px solid var(--edge-panel); background:var(--surface-panel); }
@@ -87,8 +94,13 @@
     button.action { height:34px; border:1px solid var(--edge-panel); background:var(--surface-chip); color:var(--ink-primary); padding:0 12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-size:12px; font-weight:600; letter-spacing:.06em; cursor:pointer; }
     button.action.primary { border-color:var(--accent-mark); background:var(--accent-mark); color:var(--accent-ink); }
     button.action:hover { border-color:var(--accent-mark); }
-    #status { margin-left:auto; color:#557a46; font-size:12px; }
-    #status.warning { color:#a06035; }
+    /* THE SENTENCE THE PAGE SAYS BACK, IN A ROLE. These two were a day green
+       and a day brown typed in before this page had a skin, and they stayed
+       through the conversion because there was no role for a result to go
+       to. On night they measured 3.36 and 3.32 on this page -- under AA, on
+       the one line a drafter looks at to learn whether the key took. */
+    #status { margin-left:auto; color:var(--ink-good); font-size:12px; }
+    #status.warning { color:var(--ink-warn); }
     .layouts { margin-top:18px; }
     .layouts-title { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:13px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--accent-mark); margin-bottom:8px; }
     .layout-row { display:flex; flex-wrap:wrap; gap:8px; }
@@ -141,7 +153,7 @@
   </header>
   <main>
     <h1>Keyboard Settings</h1>
-    <p class="intro">Choose shortcuts that feel natural to you; they are saved to this browser immediately. Layers live in <a href="./STANDARDS.html" style="color:#5980a6;">Company Standard Layers</a>, and the drawing layer for new lines is picked in Model Space.</p>
+    <p class="intro">Choose shortcuts that feel natural to you; they are saved to this browser immediately. Layers live in <a href="./STANDARDS.html" class="link">Company Standard Layers</a>, and the drawing layer for new lines is picked in Model Space.</p>
     <section class="drafter" aria-label="Drafter identity">
       <div class="drafter-title">Drafter</div>
       <p class="drafter-note">Your name and phone number, saved with these settings and used on titleblocks and sheets.</p>
