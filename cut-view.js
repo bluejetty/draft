@@ -29,6 +29,7 @@ if (!window.DraftCutView) {
   let warnedNoPatterns = false;
   let warnedNoRoofPatterns = false;
   let warnedNoFootings = false;
+  let warnedNoFenLabels = false;
   const { WALL_TYPES, DEFAULT_FINISH_ID, finishById, bandIsCapped,
     bandRange, bandSpan } = window.DraftWallTypes;
   const { formatInchesOnly } = window.DraftFormatters;
@@ -4157,6 +4158,19 @@ if (!window.DraftCutView) {
         // HORIZONTAL, unlike the plan tag. On a plan the wall runs any which
         // way and the tag turns with it; an elevation's glass is always
         // upright, so there is nothing to turn to.
+        // THE FIFTH OF THE FOUR, and it was mine. The tag on the PLAN hid
+        // behind a guard exactly like this one and cost a morning; the plan
+        // was given its script and this half was never given a voice. A
+        // window draws, its glass draws, and the size simply is not there.
+        //
+        // GATED ON A WINDOW BEING PRESENT, so a section with no glass in it
+        // stays quiet -- there is nothing to label and nothing is missing.
+        if (f.type === 'window' && !window.DraftFenLabels && !warnedNoFenLabels) {
+          warnedNoFenLabels = true;
+          console.warn('cut-view: fen-labels.js is not loaded, so no window on '
+            + 'any elevation carries its size tag -- the glass draws, the size '
+            + 'does not.');
+        }
         if (f.type === 'window' && window.DraftFenLabels) {
           const sizeLabel = window.DraftFenLabels.fenLabel({
             type: 'window', widthFt: f.width, heightFt: head - sill });
