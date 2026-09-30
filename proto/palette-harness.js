@@ -349,6 +349,70 @@ for (const theme of P.THEMES) {
       check(`${theme}/${mode}  ${role}`, ratio >= min, `${ratio.toFixed(2)} (min ${min})`);
     });
 
+    // THE TRACE FAMILY, at the same 3.0 -- they are line work, not text.
+    //
+    // These are the numbers that made the roles necessary rather than tidy.
+    // As literals in MODEL.html each colour was ONE value serving both
+    // grounds, and two of them could not: the house boneyard red read 2.91 on
+    // night, and the garage boneyard orange 2.91 on day. One hex cannot sit
+    // on #1d1f20 and #f2f2f3 and clear a floor on both, which is the whole
+    // argument for a role, and it is asserted per role rather than as an
+    // aggregate so a failure names the colour.
+    ['draw-trace-boneyard', 'draw-trace-level', 'draw-trace-garage-boneyard',
+      'draw-trace-garage-level', 'draw-trace-bungalow', 'draw-trace-bilevel',
+      'draw-trace-attached', 'draw-selected', 'draw-selected-all'
+    ].forEach(role => {
+      const ratio = P.contrast(v[role], v['surface-page']);
+      check(`${theme}/${mode}  ${role}`, ratio >= 3.0, `${ratio.toFixed(2)} (min 3.0)`);
+    });
+
+    // AND THE FOUR OUTLINE IDENTITIES ARE TOLD APART BY HUE, not by contrast.
+    //
+    // THE FIRST DRAFT OF THIS CHECK USED P.contrast() AND WAS WRONG. A WCAG
+    // ratio is a LUMINANCE comparison: it answers "can this be read against
+    // that", not "are these two different colours". The boneyard red and the
+    // level blue score 1.13 against each other and are obviously distinct to
+    // look at -- the ratio is near 1 precisely because they are the same
+    // lightness, which is what makes them work as a pair on one ground. Used
+    // as a categorical test it fails every correctly built legend.
+    //
+    // So the question is hue separation, the same one ink-good and ink-warn
+    // already answer, at the same 40 degrees. A categorical family is only
+    // doing its job if its members are distinguishable FROM EACH OTHER: four
+    // traces can be on one screen at once, and a legend whose entries match
+    // is no legend.
+    //
+    // THIS FAMILY'S FLOOR IS 30 DEGREES, AND IT IS NOT THE 40 ABOVE.
+    //
+    // 40 was chosen for ink-good against ink-warn, a PAIR that actually sits
+    // at 74.9 -- comfortable headroom for two colours meaning yes and no.
+    // Reusing it here because it appears higher up the file would be the
+    // numeric version of borrowing the wrong name: this is a FOUR-member
+    // categorical family, and its closest pair is the house boneyard red
+    // against the garage boneyard orange at 39.666 degrees. Red and orange
+    // are adjacent by design -- red is the house, orange is the garage --
+    // and that adjacency is the scheme, not a defect in it.
+    //
+    // 30 admits it with margin while still catching the failure this exists
+    // to catch: somebody making two members the same colour, which reads as
+    // 0. A floor nothing can clear is a check that gets deleted.
+    //
+    // THE SEPARATION IS PRINTED TO ONE DECIMAL, deliberately. The first draft
+    // rounded to whole degrees, so 39.666 printed as "40" and failed a "min
+    // 40" on the same line -- a reading that contradicts its own verdict is
+    // worse than no reading.
+    const IDENTITIES = ['draw-trace-boneyard', 'draw-trace-level',
+      'draw-trace-garage-boneyard', 'draw-trace-garage-level'];
+    for (let i = 0; i < IDENTITIES.length; i += 1) {
+      for (let j = i + 1; j < IDENTITIES.length; j += 1) {
+        const apart = Math.abs(hue(v[IDENTITIES[i]]) - hue(v[IDENTITIES[j]]));
+        const degrees = Math.min(apart, 360 - apart);
+        check(`${theme}/${mode}  ${IDENTITIES[i].replace('draw-trace-', '')} vs `
+          + `${IDENTITIES[j].replace('draw-trace-', '')} are ${degrees.toFixed(1)}° apart`,
+          degrees >= 30, 'min 30°');
+      }
+    }
+
     // draw-underlay is asserted with the rest and is NOT WIRED to anything.
     // That is deliberate on both counts. drawUnderlays2D paints a jpg or a
     // PDF page and no ink of its own, so no painter reads the key today; it
