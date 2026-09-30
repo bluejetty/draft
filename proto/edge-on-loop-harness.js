@@ -23,14 +23,101 @@
 // outline segments, bulges and all, so the check below is what stops that
 // delegation quietly becoming a lie.
 
-// No mutation mode here, so this harness accepts no arguments at all --
-// noFlags(), not mutationMode(), or `--mutate` would print a green table for
-// a mode that does not exist.
-require('./harness-args.js').noFlags();
+// THIS FILE ALREADY DID MUTATION TESTING -- BY HAND, AND ONLY ONCE. Two of
+// the checks below say so in their own comments: one was "written after a
+// mutation loosening `near(a) && near(b)` to `||` survived every other check
+// in this file", and another after a loopSegments that stopped at the last
+// pair "survived this file until this check was written". geometry-2d.js
+// carries a third, where a redundant `|| !segments.length` was deleted
+// because a mutation of it changed no answer at all.
+//
+// THAT WORK WAS REAL AND NOTHING RE-RAN IT. A finding in prose is a claim
+// about the day it was written; the table below is the same three rows plus
+// the ones nobody had got to, run on every push.
+const MUTATE = require('./harness-args.js').mutationMode();
+const path = require('path');
+const { loadDraftModules } = require('./harness-env.js');
 
-global.window = global.window || {};
-require('../geometry-2d.js');
-const G = global.window.DraftGeometry2D;
+const ROOT = path.join(__dirname, '..');
+
+const MUTATIONS = [
+  // ── THE MIDPOINT CLAUSE ─────────────────────────────────────────────────
+  // THE ROW THIS FILE WAS WRITTEN AROUND. Both ends on the house is not the
+  // same question as the edge being on the house, and the shape that tells
+  // them apart -- a chord across an L's notch -- is not in any fixture the
+  // browser suite draws. Dropping the wall it names leaves the building open
+  // to the weather.
+  ['both ends on the loop is enough, with no midpoint sample',
+    'geometry-2d.js',
+    c => c.replace('    return near(a) && near(b)\n'
+      + '      && near({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });',
+      '    return near(a) && near(b);')],
+
+  // AND ALL THREE SAMPLES HAVE TO LAND. This is the hand-run row recorded in
+  // the check below it: either end plus a middle says yes to a wall that is
+  // mostly nowhere.
+  ['either end will do, so long as the middle lands', 'geometry-2d.js',
+    c => c.replace('    return near(a) && near(b)\n'
+      + '      && near({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });',
+      '    return (near(a) || near(b))\n'
+      + '      && near({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });')],
+
+  ['the midpoint is not the middle, but the first end-s x', 'geometry-2d.js',
+    c => c.replace('      && near({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });',
+      '      && near({ x: a.x, z: (a.z + b.z) / 2 });')],
+
+  // ── THE CLOSING EDGE ────────────────────────────────────────────────────
+  // THE SECOND HAND-RUN ROW. A loop that stops at the last pair leaves one
+  // whole wall of every building unaskable, and every other check in this
+  // file passes while it does.
+  ['the loop never closes, so its last wall cannot be asked about',
+    'geometry-2d.js',
+    c => c.replace('      end: list[(index + 1) % list.length],',
+      '      end: list[index + 1] || point,')],
+
+  // ── THE TOLERANCE ───────────────────────────────────────────────────────
+  // A tenth of a foot is the old page-s own eps, carried over: enough for a
+  // corner that has been through a vertex pool and a save, not enough for a
+  // wall that is really somewhere else.
+  ['the default tolerance is a foot, not a tenth', 'geometry-2d.js',
+    c => c.replace('  function edgeOnLoop(a, b, segments, eps = 0.1) {',
+      '  function edgeOnLoop(a, b, segments, eps = 1) {')],
+
+  ['the caller-s tolerance is ignored for the built-in one', 'geometry-2d.js',
+    c => c.replace('    const near = pt => segments.some(seg => pointToSegment(pt, seg).d <= eps);',
+      '    const near = pt => segments.some(seg => pointToSegment(pt, seg).d <= 0.1);')],
+
+  // ── THE BULGE ───────────────────────────────────────────────────────────
+  // SEGMENTS, NOT POINTS, is the reason MODEL.dc.html can hand this its own
+  // outline unchanged. Straighten the arc and this answers a different
+  // question on exactly the drawings where the answer is hard to see.
+  // ANCHORED ON THE FUNCTION LINE ABOVE IT, because `if (!seg.bulge) {` on
+  // its own matches TWICE in geometry-2d.js -- pointOnLineSeg has the same
+  // line, and replace() takes the first. mutant-anchors-harness refused this
+  // row until it named which one it meant, which is the guard doing exactly
+  // its job: the row would have bent a function this check never calls and
+  // then reported the arc claim as proven.
+  ['an arc is read as its chord', 'geometry-2d.js',
+    c => c.replace('  function pointToSegment(worldPt, seg) {\n    if (!seg.bulge) {',
+      '  function pointToSegment(worldPt, seg) {\n    if (true) {')],
+
+  // ── THE SAMPLES AND THE GUARD ───────────────────────────────────────────
+  ['a sample has to be near EVERY segment, not some segment',
+    'geometry-2d.js',
+    c => c.replace('    const near = pt => segments.some(seg => pointToSegment(pt, seg).d <= eps);',
+      '    const near = pt => segments.every(seg => pointToSegment(pt, seg).d <= eps);')],
+
+  ['a missing segment list throws instead of answering no', 'geometry-2d.js',
+    c => c.replace('    if (!Array.isArray(segments)) return false;\n', '')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('edge-on-loop',
+    MUTATIONS, { root: ROOT, harness: __filename });
+  process.exit(all ? 0 : 1);
+}
+
+const G = loadDraftModules().DraftGeometry2D;
 
 const P = (...corners) => corners.map(([x, z]) => ({ x, z }));
 const at = (x, z) => ({ x, z });
