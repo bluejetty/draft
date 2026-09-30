@@ -2753,6 +2753,12 @@
     const FL = window.DraftFenLabels;
     const BH = window.DraftBuildHouse;
     if (!FL || !BH || !R || !R.labelAlongLine2D) return;
+    // THE TICK, read at paint time from layerStandardOf a few hundred lines
+    // down. Same rule and same wording as cut-view.js's own gate so the plan
+    // and the elevation cannot answer differently about one layer: a layer
+    // the table does not carry DRAWS.
+    const winStandard = layerStandardOf('A-DIMS-WIN');
+    if (winStandard && winStandard.visible === false) return;
     const outlines = new Map();
     const outlineOf = id => {
       if (!outlines.has(id)) outlines.set(id, houseOutlineOn(id));
@@ -3278,6 +3284,37 @@
     .normaliseStructureStandards(
       window.DraftProfileManager.getActive('standards')?.content?.model?.structureStandards);
 
+  // THE LAYER TABLE, from the same profile and by the same two globals.
+  //
+  // THIS PAGE HAD NO READER AT ALL until now, and the cost was exact: the
+  // window size tag moved to A-DIMS-WIN on 30 Sep so Movie could drop the
+  // corner string and keep the sizes, cut-view-env.js gave Construction
+  // Layout and EXT. FINISH the lookup that makes the tick work -- and the one
+  // page he actually draws on honoured none of it. Unticking the layer took
+  // the size off every printed elevation and left it on the plan in front of
+  // him, which is a worse answer than not offering the tick.
+  //
+  // MODEL.html:3621 says "this page has none to read" about A-STR, and that
+  // was true when it was written. It is the sentence this line retires.
+  //
+  // NOT CACHED, and that is parity rather than laziness. Standards live in
+  // localStorage and take effect on the next paint -- the model epoch a few
+  // lines down deliberately does not carry the profile, "standards live in
+  // localStorage and take effect on the" next look. A table cached here would
+  // make the tick need a reload, which is the shape of the bug being fixed.
+  //
+  // NO TABLE MEANS EVERY LAYER DRAWS, the same rule cut-view.js states at its
+  // own gate: a page whose profile never loaded is not a page that hid the
+  // layer. The two must not answer differently about one tick.
+  const layerStandardOf = id => {
+    const api = window.DraftLayerStandards;
+    const pm = window.DraftProfileManager;
+    if (!api || !pm) return null;
+    return api.normaliseLayerStandards(
+      pm.getActive('standards')?.content?.model?.layerStandards)[id] || null;
+  };
+
+
   // THE MODEL EPOCH: bumped when the DRAWING changes and at nothing else --
   // not on pan, zoom, a level switch or a view switch. MODEL.dc.html bumps
   // its rail epoch at exactly two places, the load and _markUnsaved
@@ -3517,6 +3554,19 @@
 
     // A garage outline's master lives on the boneyard shelf; an outline that
     return {
+      // THE SAME TICK THE PLAN READS, handed to the shared painter.
+      //
+      // cut-view.js asks `env.layerStandard('A-DIMS-WIN')` before it draws a
+      // window's size tag. cut-view-env.js has answered that for Construction
+      // Layout and EXT. FINISH since the layer split; THIS page answered
+      // nothing, so the identical elevation, drawn by the identical painter,
+      // carried the tag here and dropped it there. A shared painter that two
+      // callers feed differently is two painters wearing one name.
+      //
+      // A FUNCTION, NOT A TABLE, matching cut-view-env's shape: the painter
+      // reads a MISSING entry as "draws", so a page with no profile loaded is
+      // not a page that hid the layer.
+      layerStandard: id => layerStandardOf(id),
       floorLevels: () => LV.floorLevels(drawing?.levels),
       levelAssembly: levelId => assemblyFor(levelId),
       levelFloorFt: levelId => LA.levelFloorFt(assemblyFor(levelId)),

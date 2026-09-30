@@ -93,3 +93,123 @@ test('the formatter reads a window off its own record, unsnapped', async ({ page
   expect(labels.odd).toBe('37 X 49');
   expect(labels.door).toBe('ED36');
 });
+
+// ── AND THE DRAFTER CAN TURN THEM OFF ─────────────────────────────────────
+//
+// Movie, 30 Sep: *"i think i put them on layer A-DIMS-FENS but if i want to
+// turn of the outside line dimensions and leave the window sizes on i won't
+// be able too"*. The tags moved to A-DIMS-WIN for that, and the elevations
+// honoured it the same day -- cut-view-env.js builds the lookup for
+// Construction Layout and EXT. FINISH.
+//
+// THIS PAGE HONOURED NOTHING. The plan tag had no layer gate of any kind, so
+// the one place a drafter actually draws was the one place the tick did not
+// reach: unticking A-DIMS-WIN hid the size on every printed elevation and
+// left it on the plan in front of him.
+//
+// THE GESTURE IS THE REAL ONE -- the tick in STANDARDS, not a seeded
+// localStorage key. What is being checked is that the two pages agree about
+// a layer, and a test that writes the storage itself has assumed the half of
+// that which can be wrong.
+//
+// BOTH COUNTS IN ONE TEST, because "no tags" is what an empty drawing says
+// too. The baseline is taken first, on the same fixture in the same session,
+// so the second reading is a claim about the tick rather than about the
+// house.
+async function sizeTags(page) {
+  return page.evaluate(() => window.__tags.filter(t => /^\d+ X \d+$/.test(t)));
+}
+
+// A FRESH TAPE PER VISIT. The patch is on the context prototype and a
+// navigation throws that realm away, so a tape installed before the trip to
+// STANDARDS would come back empty and read as "the tags are gone".
+async function retape(page, width) {
+  await page.evaluate(() => {
+    window.__tags = [];
+    const orig = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, x, y) {
+      window.__tags.push(String(text));
+      return orig.call(this, text, x, y);
+    };
+  });
+  await page.waitForTimeout(2000);
+  // A DIFFERENT WIDTH FROM THE LAST ONE, deliberately: setting the size it
+  // already has fires no resize, and the forced repaint is the whole reason
+  // this line is here.
+  await page.setViewportSize({ width, height: 764 });
+  await page.waitForTimeout(1000);
+}
+
+test('unticking A-DIMS-WIN takes every size tag off the plan', async ({ page }) => {
+  await openWithTags(page);
+  const before = await sizeTags(page);
+  expect(before.length,
+    'no size tags to begin with, so hiding them would prove nothing')
+    .toBeGreaterThan(0);
+
+  await page.goto('/STANDARDS.html');
+  await expect(page.locator('#groups .group')).toHaveCount(7);
+  await page.locator('[data-layer-visible="A-DIMS-WIN"]').uncheck();
+  await expect(page.locator('#status')).toContainText('hidden');
+
+  await page.goto('/MODEL.html');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 15000 });
+  await retape(page, 1362);
+  const after = await sizeTags(page);
+  expect(after, 'the plan kept its window sizes after the layer was hidden')
+    .toEqual([]);
+});
+
+test('and the corner-string layer does not take them with it', async ({ page }) => {
+  await openWithTags(page);
+  const before = await sizeTags(page);
+  expect(before.length, 'no size tags to begin with').toBeGreaterThan(0);
+
+  // THE HALF THAT WAS THE BUG. A-DIMS-FENS is the string locating centres
+  // from the corners; dropping it must leave the sizes exactly where they
+  // were, which is the whole reason the two are different layers.
+  await page.goto('/STANDARDS.html');
+  await expect(page.locator('#groups .group')).toHaveCount(7);
+  await page.locator('[data-layer-visible="A-DIMS-FENS"]').uncheck();
+  await expect(page.locator('#status')).toContainText('hidden');
+
+  await page.goto('/MODEL.html');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 15000 });
+  await retape(page, 1362);
+  const after = await sizeTags(page);
+  expect(after.sort(), 'hiding the corner string took the window sizes with it')
+    .toEqual(before.sort());
+});
+
+// ── AND THE ELEVATION THIS PAGE DRAWS ITSELF ──────────────────────────────
+//
+// Not the rail's thumbnails -- a full-size E1 on the main canvas, which is
+// what MODEL paints when a cut is the active view (`drawCutView(cutEnv()...)`
+// at :3917). It is the SAME painter the Construction Layout uses, and that
+// one has honoured the tick since cut-view-env.js built it a lookup. This
+// page handed the painter no lookup at all, so the identical elevation
+// answered differently depending on which page it was drawn from.
+//
+// THE RAIL SEATS ARE NOT THE SUBJECT and would not have caught it: cut-view
+// drops a tag wider than the glass it names (`wide + 4 <= ow`), so a
+// thumbnail an inch across carries none either way.
+test('the elevation this page draws honours the same tick', async ({ page }) => {
+  await openWithTags(page);
+  await page.goto('/MODEL.html?view=cut%3AE1');
+  await retape(page, 1362);
+  const before = await sizeTags(page);
+  expect(before.length,
+    'no size tags on E1 to begin with, so hiding them would prove nothing')
+    .toBeGreaterThan(0);
+
+  await page.goto('/STANDARDS.html');
+  await expect(page.locator('#groups .group')).toHaveCount(7);
+  await page.locator('[data-layer-visible="A-DIMS-WIN"]').uncheck();
+  await expect(page.locator('#status')).toContainText('hidden');
+
+  await page.goto('/MODEL.html?view=cut%3AE1');
+  await retape(page, 1364);
+  const after = await sizeTags(page);
+  expect(after, 'the elevation kept its window sizes after the layer was hidden')
+    .toEqual([]);
+});
