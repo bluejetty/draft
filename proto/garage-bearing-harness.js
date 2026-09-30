@@ -2803,6 +2803,95 @@ function run(win) {
       `${seen.filter(t => t.buried).length} buried of ${seen.length}`);
   }
 
+  // ── A HOUSE WALL THAT CARRIES A STOREY CLIMBS NO GARAGE GABLE ─────────
+  //
+  // Movie, 29 Sep, on a BILEVEL + ATTACHED ROOM-OVER GARAGE, E2: a line
+  // leaves the top of the little lean-to, runs up across the house face and
+  // stops in mid-wall. It was the house's main-floor face climbing the
+  // garage's gable: the garage's gable edge lies on the house wall, the two
+  // bear on the same plate, and nothing asked whether a second storey stood
+  // on that wall. It does, so there is no triangle there to climb.
+  //
+  // ASKED AS SLOPE, of wall ink only. A carried wall's top is its plate --
+  // level -- and its corners are plumb, so any wall-face line between the
+  // plate and the storey above that is neither is the climb.
+  //
+  // THE GUARDS ARE GABLE WALLS THAT DO CLIMB: the garage's own far gable end,
+  // and its near gable end meeting the house square on, which has to reach
+  // the rake AT the house and not drop to the plate one station short of it.
+  {
+    const WALL_FACE_W = 1.25;
+    const sloped = (view, box) => {
+      let feet = 0, top = null;
+      view.strokes.forEach(st => {
+        if (Math.abs(st.w - WALL_FACE_W) > 1e-9) return;
+        for (let k = 1; k < st.pts.length; k += 1) {
+          const a = st.pts[k - 1], b = st.pts[k];
+          if (b.move || b.close) continue;
+          if (Math.abs(a.u - b.u) < 1e-6 || Math.abs(a.e - b.e) < 1e-6) continue;
+          const inside = q => q.u >= box.uLo && q.u <= box.uHi && q.e > box.eLo && q.e < box.eHi;
+          if (!inside(a) || !inside(b)) continue;
+          feet += Math.hypot(a.u - b.u, a.e - b.e);
+          [a, b].forEach(q => { if (!top || q.e > top.e) top = q; });
+        }
+      });
+      return { feet, top };
+    };
+    const viewOf = (dEnv, id) => {
+      const cut = standardElevationCuts(dEnv).find(c => c.id === id);
+      return cut ? paintElevation(win, dEnv, cut, { pxPerFt: 40 }) : null;
+    };
+
+    const gStack = CV.sectionLevelStack(base);
+    const gPlate = gStack.floors[0].wallTop, gUpper = gStack.floors[1];
+    const gE4 = viewOf(base, 'E4'), gE2 = viewOf(base, 'E2');
+    check('carried-wall fixture: the garage house has a storey on its main floor',
+      !!gUpper && gUpper.floorBottom >= gPlate - 0.05 && !!gE4 && !!gE2,
+      gUpper ? `plate ${ftIn(gPlate)}, 2nd floor from ${ftIn(gUpper.floorBottom)}` : 'one storey');
+    if (gUpper && gE4 && gE2) {
+      // E4 looks along +x: the house's x = 8 wall, the one the garage's
+      // gable edge lies on, is u -6..6. Its middle -4..4 is where the
+      // garage's far gable end stands behind it, stroked and then painted
+      // over by the second floor, so the two SHOULDERS are what is asked:
+      // 2 ft either side that only the house wall can draw in.
+      const shoulder = uLo => sloped(gE4, { uLo, uHi: uLo + 2.03, eLo: gPlate + 0.05, eHi: gUpper.wallTop });
+      const sides = [shoulder(-6.05), shoulder(3.98)];
+      const climb = { feet: sides[0].feet + sides[1].feet, top: sides[0].top || sides[1].top };
+      check('E4: the house wall under the second floor stays on its plate under the garage gable',
+        climb.feet < 0.05,
+        `${climb.feet.toFixed(2)} ft of sloping wall line, up to ${climb.top ? ftIn(climb.top.e) : '-'}`);
+      const far = sloped(gE2, { uLo: -4.05, uHi: 4.05, eLo: gPlate + 0.05, eHi: gUpper.wallTop });
+      check('and E2: the garage\'s own far gable end still climbs its gable',
+        far.feet > 3, `${far.feet.toFixed(2)} ft of sloping wall line`);
+    }
+
+    const bFile = path.join(ROOT, 'proto', 'repro-bilevel-roomover-garage.draft');
+    if (!fs.existsSync(bFile)) {
+      check('proto/repro-bilevel-roomover-garage.draft is present', false, 'missing');
+    } else {
+      const bEnv = buildEnv(win, JSON.parse(fs.readFileSync(bFile, 'utf8')));
+      const bStack = CV.sectionLevelStack(bEnv);
+      const bPlate = bStack.floors[0].wallTop, bUpper = bStack.floors[1];
+      const bE2 = viewOf(bEnv, 'E2');
+      check('bilevel fixture: two storeys and an E2 to look at',
+        !!bUpper && bUpper.floorBottom >= bPlate - 0.05 && !!bE2,
+        bUpper ? `plate ${ftIn(bPlate)}, 2nd floor from ${ftIn(bUpper.floorBottom)}` : 'one storey');
+      if (bUpper && bE2) {
+        // E2: the house's x = 9 face is u -1..31, the lean-to's gable end
+        // wall is u -5..-1 and meets the house at u = -1.
+        const house = sloped(bE2, { uLo: -0.95, uHi: 31.05, eLo: bPlate + 0.05, eHi: bUpper.wallTop });
+        check('E2: the bilevel\'s main-floor face draws no line up the garage gable',
+          house.feet < 0.05,
+          `${house.feet.toFixed(2)} ft of sloping wall line, up to ${house.top ? ftIn(house.top.e) : '-'}`
+            + (house.top ? ` at u ${house.top.u.toFixed(2)}` : ''));
+        const gable = sloped(bE2, { uLo: -5.05, uHi: -0.95, eLo: bPlate + 0.05, eHi: bUpper.wallTop });
+        check('and the lean-to\'s gable end still climbs, to the rake at the house wall',
+          gable.feet > 2 && !!gable.top && gable.top.u > -1.05 && gable.top.e > bPlate + 1,
+          `${gable.feet.toFixed(2)} ft, highest ${gable.top ? `${ftIn(gable.top.e)} at u ${gable.top.u.toFixed(2)}` : '-'}`);
+      }
+    }
+  }
+
   return missed;
 }
 
@@ -3297,6 +3386,17 @@ const MUTATIONS = [
   ['a band clips its pattern to the wall head instead of its own top',
     src => src.replace(`        ctx.moveTo(x0, Y(hi)); ctx.lineTo(x1, Y(hi));`,
       `        ctx.moveTo(x0, Y(lines.head)); ctx.lineTo(x1, Y(lines.head));`)],
+  // THE E2 STRAY LINE AS MOVIE SAW IT: nothing asks whether a storey stands
+  // on the wall, so a carried house wall climbs the garage's gable.
+  ['a wall carrying a storey climbs a gable again (the E2 stray line)',
+    src => src.replace(`      if (carriesStoreyAbove(pt, plateTop, wall, wallDir)) return top;\n`, '')],
+  // THE TWO WAYS TO OVER-ASK IT, each of which drops a real gable wall to
+  // its plate somewhere: a wall above that only shares a corner with this
+  // one, or a wall on the same storey.
+  ['a parallel wall above counts as a load with no stretch of this one under it',
+    src => src.replace(`      if (shared <= STOREY_ABOVE_EPS) return false;\n`, '')],
+  ['a wall on the same storey counts as the storey above',
+    src => src.replace(`      if (other.level.floorBottom < plateTop - STOREY_ABOVE_EPS) return false;\n`, '')],
 ];
 
 console.log('\n' + 'mutation'.padEnd(72) + 'caught by');
