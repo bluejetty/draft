@@ -14,11 +14,77 @@
 // which is why a 12" pile and an 8" pile are the same circle on the plan.
 //
 // Run: node proto/pad-footing-harness.js
-require('./harness-args.js').noFlags();
-global.window = global.window || {};
-require('../geometry-2d.js');
-require('../build-house.js');
-const { COLUMN_FOOTINGS, footingFor, padSizeIn, padGroups } = global.window.DraftBuildHouse;
+const MUTATE = require('./harness-args.js').mutationMode();
+const path = require('path');
+const ROOT = path.join(__dirname, '..');
+
+// ── THE MUTANTS ───────────────────────────────────────────────────────────
+//
+// THE SUBJECT IS LOADED THROUGH harness-env.js NOW, and that is the only
+// reason this table can exist. It was three require() calls into
+// global.window, which node caches and a mutant cannot reach; the sandbox
+// loader reads every module fresh and prefers DRAFT_HARNESS_SOURCE_OVERRIDES
+// when the parent has written one. Nothing else about the checks moved, and
+// all 35 pass either way -- measured before the table was written, so a row
+// that goes red is the row and not the loader.
+const MUTATIONS = [
+  // dc's rule, and the one the validator shares: an unknown id is a PAD.
+  // Falling back to the last row instead hands a PILE, silently, to every
+  // column whose footing id was typed wrong.
+  ['an unknown footing falls back to the last row, not the pad', 'build-house.js',
+    c => c.replace('COLUMN_FOOTINGS.find(footing => footing.id === id) || COLUMN_FOOTINGS[0];',
+      'COLUMN_FOOTINGS.find(footing => footing.id === id)'
+      + ' || COLUMN_FOOTINGS[COLUMN_FOOTINGS.length - 1];')],
+
+  // A PILE'S SIZE IS ITS DIAMETER. A typed padIn on one is a second answer to
+  // a settled question, and the guard against it is one negation.
+  ['a pile takes a typed pad size', 'build-house.js',
+    c => c.replace('    return !footing.pile && Number.isFinite(custom) && custom > 0',
+      '    return Number.isFinite(custom) && custom > 0')],
+
+  ['a negative typed size is drawn instead of ignored', 'build-house.js',
+    c => c.replace('&& Number.isFinite(custom) && custom > 0',
+      '&& Number.isFinite(custom)')],
+
+  // THE ROW THE OUT-OF-ORDER FIXTURE EXISTS FOR, and the harness says so at
+  // its own site: listed 0, 3.2, 6.4 every touching pair is ALSO adjacent in
+  // the array, so a next-neighbour pass gives the same single group and this
+  // mutant walks through. With the middle pad listed LAST it does not.
+  ['only pads adjacent in the list are compared, not every pair',
+    'build-house.js',
+    c => c.replace('for (let j = i + 1; j < pads.length; j++) {',
+      'for (let j = i + 1; j < Math.min(i + 2, pads.length); j++) {')],
+
+  ['the join gap is not added, so only pads that already overlap pour as one',
+    'build-house.js',
+    c => c.replace('if (a.minX <= b.maxX + gap && b.minX <= a.maxX + gap',
+      'if (a.minX <= b.maxX && b.minX <= a.maxX')],
+
+  // A hair either side of a boundary is not where a drafter wants the answer
+  // to flip, which is why the rule is "within" and a check sits exactly on it.
+  ['the gap is exclusive, so edges exactly the gap apart form twice',
+    'build-house.js',
+    c => c.replace('        if (a.minX <= b.maxX + gap && b.minX <= a.maxX + gap',
+      '        if (a.minX < b.maxX + gap && b.minX < a.maxX + gap')],
+
+  // A pile is a hole, not concrete to pour a rectangle over.
+  ['a pile is poured into a pad group', 'build-house.js',
+    c => c.replace('(columns || []).filter(column => !footingFor(column?.footing).pile',
+      '(columns || []).filter(column => (true)')],
+
+  ['a column with no point is thrown at rather than skipped', 'build-house.js',
+    c => c.replace('&& column?.point && Number.isFinite(column.point.x)',
+      '&& Number.isFinite(column.point.x)')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('pad-footing',
+    MUTATIONS, { root: ROOT, harness: __filename });
+  process.exit(all ? 0 : 1);
+}
+
+const { COLUMN_FOOTINGS, footingFor, padSizeIn, padGroups } =
+  require('./harness-env.js').loadDraftModules().DraftBuildHouse;
 
 let failed = 0, ran = 0;
 const check = (label, got, want) => {

@@ -39,13 +39,95 @@
 // lesson and the ROOF_FASCIA_IN one, a third time.
 //
 //   node proto/window-head-harness.js
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
+const path = require('path');
+const ROOT = path.join(__dirname, '..');
 
-global.window = global.window || {};
-require('../geometry-2d.js');
-require('../drawing-format.js');
-const G = window.DraftGeometry2D;
-const F = window.DraftDrawingFormat;
+// ── THE MUTANTS ───────────────────────────────────────────────────────────
+//
+// THE SUBJECT IS LOADED THROUGH harness-env.js NOW, and that is the only
+// reason this table can exist. It was two require() calls into global.window,
+// which node caches and a mutant cannot reach; the sandbox loader reads every
+// module fresh and prefers DRAFT_HARNESS_SOURCE_OVERRIDES when the parent has
+// written one. Nothing about the checks moved and all of them pass either way
+// -- measured before the table was written, so a row that goes red is the row
+// and not the loader.
+//
+// THE SUBJECT IS TWO FILES, which is the point of the first row: the head
+// lives in geometry-2d.js (where a window is PLACED) and in drawing-format.js
+// (where an old one is MIGRATED), and the harness exists because those two
+// can drift apart silently.
+const MUTATIONS = [
+  ['the two copies of the head drift apart', 'drawing-format.js',
+    c => c.replace('  const WINDOW_HEAD_FT = 7;', '  const WINDOW_HEAD_FT = 7.5;')],
+
+  // A DOOR STANDS ON THE FLOOR: its head IS its height, and 6'-8" is the leaf
+  // the office orders. Migrating it orders a different door.
+  ['a door is migrated to the window head along with the windows',
+    'drawing-format.js',
+    c => c.replace("      const superseded = type === 'window' && SUPERSEDED_WINDOW_HEADS_FT",
+      '      const superseded = SUPERSEDED_WINDOW_HEADS_FT')],
+
+  // THE SIZE IS WHAT SURVIVES. Leaving the sill where it was makes a migrated
+  // window taller instead of higher -- a different window, silently.
+  ['the sill stays put, so a migrated window grows instead of rising',
+    'drawing-format.js',
+    c => c.replace('      const sillHeight = superseded\n'
+      + '        ? Math.max(0, storedSill + (WINDOW_HEAD_FT - storedHead)) : storedSill;',
+      '      const sillHeight = storedSill;')],
+
+  // The dealer's old catalogue head. Dropping it leaves every 6'-6" window
+  // where it is AND makes the two lists disagree.
+  ['the dealer-s old 6 ft 6 head is dropped from the superseded list',
+    'drawing-format.js',
+    c => c.replace('  const SUPERSEDED_WINDOW_HEADS_FT = Object.freeze([(6 * 12 + 8) / 12, 6.5]);',
+      '  const SUPERSEDED_WINDOW_HEADS_FT = Object.freeze([(6 * 12 + 8) / 12]);')],
+
+  // THE RULING IS THAT THEY STOPPED SHARING A HEAD. Pointing one constant at
+  // the other again is exactly what would quietly undo it.
+  ['a door heads at the window height again', 'geometry-2d.js',
+    c => c.replace('  const DEFAULT_OPENING_HEAD_FT = (6 * 12 + 8) / 12;',
+      '  const DEFAULT_OPENING_HEAD_FT = 7;')],
+
+  // HALF AN INCH IS FOR FLOAT NOISE IN A STORED HEAD. Widened, it swallows a
+  // head the drafter typed on purpose -- and the migration runs on every
+  // open, so it would drag his 8 ft window back to 7 ft every time.
+  ['the float slack is widened until it swallows a typed head',
+    'drawing-format.js',
+    c => c.replace('  const WINDOW_HEAD_SLACK_FT = 1 / 24;',
+      '  const WINDOW_HEAD_SLACK_FT = 2;')],
+
+  // A bump refuses every existing file outright: checkEnvelope reads an older
+  // version as invalid, not as something to upgrade, and this module has no
+  // upgrade path. The migration had to be one that needs none.
+  ['the format version is bumped, which refuses every file already saved',
+    'drawing-format.js',
+    c => c.replace('  const VERSION = 1;', '  const VERSION = 2;')],
+
+  // ── ONE GUARD IS UNREACHABLE, AND SAYING SO IS WORTH MORE THAN A ROW ─────
+  //
+  // `Math.max(0, storedSill + (WINDOW_HEAD_FT - storedHead))` cannot clamp
+  // anything as the code stands, and dropping the max() survives. Both
+  // superseded heads are BELOW 7 -- 6'-8" and 6'-6" -- so the shift is always
+  // POSITIVE (+0.333 and +0.5), and a sill that was not already negative
+  // cannot be pushed under the floor by it. The check above it passes for
+  // that reason rather than because the clamp caught something.
+  //
+  // It is not wrong, and it is not dead code to delete: a superseded head
+  // ABOVE 7 would make the shift negative and the clamp load-bearing the same
+  // day. It is simply not covered, and a row that can only ever print
+  // SURVIVED would say the opposite.
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('window-head',
+    MUTATIONS, { root: ROOT, harness: __filename });
+  process.exit(all ? 0 : 1);
+}
+
+const win = require('./harness-env.js').loadDraftModules();
+const G = win.DraftGeometry2D;
+const F = win.DraftDrawingFormat;
 
 let pass = 0;
 const fails = [];

@@ -20,12 +20,82 @@
 // quietly move the existing answer.
 //
 // Run: node proto/mid-span-beam-harness.js
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
+const path = require('path');
+const ROOT = path.join(__dirname, '..');
 
-global.window = global.window || {};
-require('../geometry-2d.js');
-require('../build-house.js');
-const { midSpanBeams } = global.window.DraftBuildHouse;
+// ── THE MUTANTS ───────────────────────────────────────────────────────────
+//
+// THE SUBJECT IS LOADED THROUGH harness-env.js NOW, and that is the only
+// reason this table can exist. It was two require() calls into global.window,
+// which node caches and a mutant cannot reach; the sandbox loader reads every
+// module fresh and prefers DRAFT_HARNESS_SOURCE_OVERRIDES when the parent has
+// written one. Nothing about the checks moved and all of them pass either way
+// -- measured before the table was written, so a row that goes red is the row
+// and not the loader.
+const MUTATIONS = [
+  // JOISTS SPAN THE SHORT WAY. Read off the long side instead, a 40 x 18
+  // house gets a beam it does not need -- which is the whole trigger.
+  ['the trigger is read off the long span, not the short', 'build-house.js',
+    c => c.replace('    const shortSpan = Math.min(w, d);',
+      '    const shortSpan = Math.max(w, d);')],
+
+  // THE TRIGGER'S VALUE, not its strictness. 19 is Movie's number; at 18 a
+  // 19 ft short span gets a beam it should not have.
+  //
+  // THE STRICTNESS ROW WAS TRIED FIRST AND SURVIVED, and that is a property
+  // of the subject rather than a hole in the checks. `shortSpan <= beamAtFt`
+  // at :240 opened to `<` lets a 19 ft house through the early return -- and
+  // the LOCAL span test at :278 refuses it again on the same threshold with
+  // matching strictness (`localSpanAt(...) > beamAtFt`, and 19 > 19 is
+  // false). Opening that one instead is caught by the early return for the
+  // same reason, from the other side. Two gates, one number, and neither is
+  // solely responsible: no single-line bend of either can put a beam in a
+  // 19 ft house, so neither is a row. Bending the number moves both at once,
+  // which is why this is the row that bites.
+  ['the trigger is 18 ft, so a 19 ft span gets a beam it does not need',
+    'build-house.js',
+    c => c.replace('  const midSpanBeams = (points, { beamAtFt = 19, maxSpanFt = 12,',
+      '  const midSpanBeams = (points, { beamAtFt = 18, maxSpanFt = 12,')],
+
+  ['the beam is laid across the short axis instead of along the long one',
+    'build-house.js',
+    c => c.replace("    const axis = w >= d ? 'x' : 'z';",
+      "    const axis = w >= d ? 'z' : 'x';")],
+
+  // A stair hole is why the beam is not simply on the centre line.
+  ['a hole in the floor is not cut out of the strip', 'build-house.js',
+    c => c.replace('    holes.forEach(hole => {', '    [].forEach(hole => {')],
+
+  ['two beams at the third points arrive a storey too late', 'build-house.js',
+    c => c.replace('    const cuts = shortSpan > 2 * beamAtFt',
+      '    const cuts = shortSpan > 3 * beamAtFt')],
+
+  // CEIL, NOT FLOOR: 40 ft at a 12 ft limit is four spans of 10, not three of
+  // 13.33. Floor is the arithmetic that keeps the post count down and puts a
+  // span over the limit, which is the one thing the limit is for.
+  ['the run is divided down, so a span may run past the limit', 'build-house.js',
+    c => c.replace('        const spans = Math.max(1, Math.ceil((to - from) / maxSpanFt));',
+      '        const spans = Math.max(1, Math.floor((to - from) / maxSpanFt));')],
+
+  // The ends bear on the outline, so a post there is a post in a wall.
+  ['posts are put at the run ends as well as the divisions', 'build-house.js',
+    c => c.replace('        for (let s = 1; s < spans; s++) cuts.push({ t: from + ((to - from) * s) / spans, unsupported: true });',
+      '        for (let s = 0; s <= spans; s++) cuts.push({ t: from + ((to - from) * s) / spans, unsupported: true });')],
+
+  ['a caller-supplied bearing test is ignored and the outline always carries',
+    'build-house.js',
+    c => c.replace("    const bears = typeof bearsAt === 'function' ? bearsAt : onOutline;",
+      '    const bears = onOutline;')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('mid-span-beam',
+    MUTATIONS, { root: ROOT, harness: __filename });
+  process.exit(all ? 0 : 1);
+}
+
+const { midSpanBeams } = require('./harness-env.js').loadDraftModules().DraftBuildHouse;
 
 let failed = 0, ran = 0;
 const checkEq = (label, got, want) => {
