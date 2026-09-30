@@ -331,8 +331,41 @@ if (!window.DraftProfileManager) {
         Object.freeze({ id: 'A-DIMS-OVR', name: 'A-DIMS-OVR', use: 'Overall size — the footprint corner to corner, eave to eave. The one string a listing plan keeps.', printable: true, visibility: true }),
         Object.freeze({ id: 'A-DIMS-EXT', name: 'A-DIMS-EXT', use: 'Exterior detail — the overhang string and the outline jogs.', printable: true, visibility: true }),
         Object.freeze({ id: 'A-DIMS-INT', name: 'A-DIMS-INT', use: 'Interior — wall faces and items inside the footprint (stair hole, partitions near an exterior wall).', printable: true, visibility: true }),
-        Object.freeze({ id: 'A-DIMS-FENS', name: 'A-DIMS-FENS', use: 'Window and door centres.', printable: true, visibility: true }),
+        Object.freeze({ id: 'A-DIMS-FENS', name: 'A-DIMS-FENS', use: 'The exterior string locating window and door centres from the building corners. NOT their sizes — those are A-DIMS-WIN and A-DIMS-DOOR, so a drafter can drop the corner string and keep the sizes.', printable: true, visibility: true }),
         Object.freeze({ id: 'A-DIMS-COLS', name: 'A-DIMS-COLS', use: 'Column and beam locations, measured in both directions on FLOOR and FOUNDATION.', printable: true, visibility: true }),
+        // ── THE SIZE TAGS, WHICH ARE NOT LOCATIONS ──────────────────────────
+        //
+        // Movie, 30 Sep: *"i think i put them on layer A-DIMS-FENS but if i
+        // want to turn of the outside line dimensions and leave the window
+        // sizes on i won't be able too"*.
+        //
+        // He was right, and it was his own ruling of 29 Sep that put them
+        // together: *"can we make the window number get layer A-DIMS-FENS so
+        // the user can turn them off in ELEVATION views if desired"*. One
+        // layer answered that, and answered the next question wrong -- the
+        // corner string and the 36X36 are different marks about the same
+        // window, and a drafter wants each without the other.
+        //
+        // THREE, NOT ONE, because the same split is coming for the rest:
+        // A-DIMS-DOOR and A-DIMS-EQUIP carry NOTHING TODAY and that is said
+        // out loud rather than implied. Only windows are tagged -- cut-view
+        // gates on `f.type === 'window'` and MODEL's plan painter returns on
+        // anything that is not one. The layers exist so the ids are settled
+        // before the tags arrive, not because they are already doing work.
+        //
+        // STILL UNDER Dimensions, and it is a fair question whether a size
+        // tag is a dimension. It is filed here because a drafter looking for
+        // "the numbers on my drawing" looks in one place, and because these
+        // three and the five above are switched for the same reason on the
+        // same sheet. What follows from the prefix and does NOT apply:
+        // drawing-format.js's DIMENSION_LAYERS and auto-dims' DIM_LAYERS both
+        // list the FIVE, and both are right to. Those name what a DIMENSION
+        // RECORD may claim and what auto-dims emits; a size tag is neither --
+        // it is painted from the opening itself and no record carries the id.
+        // auto-dims' own count check pins that list at five on purpose.
+        Object.freeze({ id: 'A-DIMS-WIN', name: 'A-DIMS-WIN', use: 'Window size tags — the 36X36 beside each window on plan and centred on it in elevation.', printable: true, visibility: true }),
+        Object.freeze({ id: 'A-DIMS-DOOR', name: 'A-DIMS-DOOR', use: 'Door size tags. Nothing draws one yet; the layer is here so the id is settled when they arrive.', printable: true, visibility: true }),
+        Object.freeze({ id: 'A-DIMS-EQUIP', name: 'A-DIMS-EQUIP', use: 'Size tags on everything that is not a window or a door — cabinets, tubs, showers. Nothing draws one yet.', printable: true, visibility: true }),
       ]),
     }),
     Object.freeze({

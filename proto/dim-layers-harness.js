@@ -489,7 +489,10 @@ function run() {
     ok('cut-view-env builds an env at all', !!elevEnv);
     ok('cut-view-env hands the painter a layerStandard lookup',
       typeof elevEnv?.layerStandard === 'function', typeof elevEnv?.layerStandard);
-    ok('that lookup answers for the fenestration dimension layer',
+    ok('that lookup answers for the window size layer',
+      elevEnv?.layerStandard?.('A-DIMS-WIN')?.visible === true,
+      JSON.stringify(elevEnv?.layerStandard?.('A-DIMS-WIN')));
+    ok('and still for the corner string it was split from',
       elevEnv?.layerStandard?.('A-DIMS-FENS')?.visible === true,
       JSON.stringify(elevEnv?.layerStandard?.('A-DIMS-FENS')));
   }
@@ -546,12 +549,34 @@ function run() {
   // guard through four screenshots.
   ok('the elevation paints window size tags to begin with', tagsIn(shown).length > 0,
     `${tagsIn(shown).length} tags`);
-  const hidden = paint(() => ({ name: 'A-DIMS-FENS', visible: false, printable: true }));
-  ok('unticking A-DIMS-FENS takes every size tag off the elevation',
+  // A SIZE IS NOT A LOCATION, and until 30 Sep both rode A-DIMS-FENS. Movie:
+  // *"i think i put them on layer A-DIMS-FENS but if i want to turn of the
+  // outside line dimensions and leave the window sizes on i won't be able
+  // too"*. So the tag moved to A-DIMS-WIN and A-DIMS-FENS kept what its name
+  // says -- the exterior string locating centres from the corners.
+  //
+  // THE STUB ANSWERS PER ID NOW. It took one standard for every layer, which
+  // could not express the question this section exists to answer: with the
+  // corner string hidden and the sizes ticked, the sheet must still carry
+  // every tag. A lookup that answers the same for both layers passes that
+  // check by accident.
+  const standardsWhere = hidden => id => ({
+    name: id, visible: !hidden.includes(id), printable: true,
+  });
+
+  const hidden = paint(standardsWhere(['A-DIMS-WIN']));
+  ok('unticking A-DIMS-WIN takes every size tag off the elevation',
     tagsIn(hidden).length === 0, `${tagsIn(hidden).length} left`);
-  const ticked = paint(() => ({ name: 'A-DIMS-FENS', visible: true, printable: true }));
+  const ticked = paint(standardsWhere([]));
   ok('ticking it puts them back', tagsIn(ticked).length === tagsIn(shown).length,
     `${tagsIn(ticked).length} vs ${tagsIn(shown).length}`);
+
+  // THE WHOLE POINT OF THE SPLIT, and the check that is red until the tag
+  // stops reading A-DIMS-FENS: the corner string goes, the sizes stay.
+  const fensOff = paint(standardsWhere(['A-DIMS-FENS']));
+  ok('dropping the corner string leaves every window size on the elevation',
+    tagsIn(fensOff).length === tagsIn(shown).length,
+    `${tagsIn(fensOff).length} of ${tagsIn(shown).length} tags survived`);
   // The windows themselves are not on that layer and must not follow the tag
   // off the sheet -- hiding a DIMENSION layer that took the glass with it
   // would be a far worse bug than the one this fixes.
