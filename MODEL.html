@@ -2599,10 +2599,10 @@
       outlineStart: outlineCorners[0] || null,
       frozenEnd: null,
       colors: {
-        boneyard: '#b04050',
-        level: '#5980a6',
-        garageBoneyard: '#cf7a1f',
-        garageLevel: '#7d5ba6',
+        boneyard: skin['draw-trace-boneyard'],
+        level: skin['draw-trace-level'],
+        garageBoneyard: skin['draw-trace-garage-boneyard'],
+        garageLevel: skin['draw-trace-garage-level'],
         // THE HOUSE TRACE COLOUR IS A QUESTION ON THIS PAGE, not a constant.
         // The painter asks what colour a house trace is; here the answer is
         // the colour of the build-bar family that armed it, which is the
@@ -2611,7 +2611,7 @@
         // that draws for both pages -- the old page has no per-family trace
         // colour and is not being given one by this rung.
         traceHouse: outlineTraceColor(),
-        traceAttached: '#3f7fd6',
+        traceAttached: skin['draw-trace-attached'],
       },
     });
   };
@@ -7156,14 +7156,25 @@
   // A wall is a segment, so it gets the overlay, and render-2d.js needs no
   // change at all.
   //
-  // The colours are MODEL.dc.html's literals. #5980a6 is the drafting blue --
-  // 81 uses across the repo -- and the palette has no `selected` role to ask
-  // for, only 'draw-floor-edge' which happens to hold the same hex under a
-  // name that means something else. Naming a role is tier 2j's boarded colour
-  // problem; borrowing the wrong name here would be worse than a literal that
-  // says where it came from.
-  const SELECT_INK = 'rgba(89,128,166,0.55)';   // MODEL.dc.html:7385
-  const SELECT_HANDLE = '#5980a6';              // MODEL.dc.html:7388
+  // THE SELECTION HAS ITS OWN ROLES NOW, and the reason it did not is worth
+  // keeping because it was right at the time: these were MODEL.dc.html's
+  // literals, #5980a6 being the drafting blue, and the palette had no
+  // `selected` role to ask for -- only 'draw-floor-edge', which happens to
+  // hold the same hex under a name that means the slab outline. Borrowing
+  // that name would have been worse than a literal saying where it came from.
+  // So draw-selected and draw-selected-all exist, named for what they are.
+  //
+  // READ AT CALL TIME, NOT CAPTURED. A `const` here would freeze on whichever
+  // skin was live when the page booted, and this page re-applies the palette
+  // on a theme switch (:7022) without reloading -- so a captured blue would
+  // survive the switch and the selection alone would stay on the old skin.
+  const selectHandle = () => skin['draw-selected'];
+  const SELECT_ALPHA = 0.55;                    // MODEL.dc.html:7385
+  const selectInk = () => {
+    const hex = String(selectHandle()).replace('#', '');
+    const [r, g, b] = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16));
+    return `rgba(${r},${g},${b},${SELECT_ALPHA})`;
+  };
   const SELECT_GRAB_PX = 12;                    // MODEL.dc.html:16707, _findLineHit
   // ── the selection ─────────────────────────────────────────────────────────
   // A SET, NOT A WALL. This was `let selectedSeg = null` -- correct while a
@@ -7391,13 +7402,14 @@
   // Blue for the current level, red for every level -- the two colours the
   // mode help promises in words, so the box a drafter sees matches the
   // sentence they just read.
-  const BAND_INK = { window: SELECT_HANDLE, 'window-all': '#b04050' };
+  const bandInk = selMode => (selMode === 'window-all'
+    ? skin['draw-selected-all'] : skin['draw-selected']);
 
   const paintBand = () => {
     if (!bandDrag || !bandDrag.active) return;
     const a = toS(bandDrag.from), b = toS(bandDrag.to);
     ctx.save();
-    ctx.strokeStyle = BAND_INK[selectionMode] || SELECT_HANDLE;
+    ctx.strokeStyle = bandInk(selectionMode);
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 3]);
     ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y),
@@ -7653,7 +7665,7 @@
     onScreen.fenestration = [...openingShapes.keys()];
     const lone = selectedWall();
     ctx.save();
-    ctx.strokeStyle = SELECT_INK;
+    ctx.strokeStyle = selectInk();
     ctx.lineWidth = 7;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
@@ -7670,7 +7682,7 @@
         if (item === lone) {
           // Square handles at each end -- the same 8px squares the old page
           // draws, and the grab targets the corner drag uses.
-          ctx.fillStyle = SELECT_HANDLE;
+          ctx.fillStyle = selectHandle();
           [a, b].forEach(pt => ctx.fillRect(pt.x - 4, pt.y - 4, 8, 8));
         }
         return;
@@ -9441,16 +9453,18 @@
   //
   // THE GARAGE FAMILY IS ABSENT ON PURPOSE -- see armOutline, which refuses it
   // rather than colouring it.
-  const OUTLINE_TRACE_COLORS = Object.freeze({
-    bungalow: '#c0392b',
-    bilevel: '#3f7fd6',
+  // ROLE NAMES, not colours: the value is read from the live skin at call
+  // time so a theme switch reaches a trace already on screen.
+  const OUTLINE_TRACE_ROLES = Object.freeze({
+    bungalow: 'draw-trace-bungalow',
+    bilevel: 'draw-trace-bilevel',
   });
   // The colour the PAINTER is handed for a house trace. Falls back to the
   // house red rather than throwing: a family the map has not heard of is a
   // menu that grew, and a trace drawn in the ordinary house colour is a far
   // better answer to that than a trace that does not draw.
   const outlineTraceColor = () =>
-    OUTLINE_TRACE_COLORS[outlineFamily?.id] || OUTLINE_TRACE_COLORS.bungalow;
+    skin[OUTLINE_TRACE_ROLES[outlineFamily?.id] || OUTLINE_TRACE_ROLES.bungalow];
 
   // HOW NEAR COUNTS AS CLOSING. In FEET rather than pixels, so the same press
   // closes the same loop whatever the zoom: a pixel tolerance would demand
