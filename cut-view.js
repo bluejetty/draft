@@ -3427,11 +3427,52 @@ if (!window.DraftCutView) {
     // or not. That check now counts wall ink alone and fails for the right
     // reason; the collapse rides on it rather than on nothing.
     const distToSegment = (p, a, b) => geo().pointToSegment(p, { start: a, end: b }).d;
+    // ── A WALL THAT CARRIES A STOREY HAS NO GABLE TO CLIMB ───────────────
+    //
+    // Movie, 29 Sep, on a BILEVEL + ATTACHED ROOM-OVER GARAGE: a line leaves
+    // the top of the little lean-to and runs across the house face, climbing,
+    // then stops in mid-wall. It was the house's own main-floor face: its top
+    // left the plate at the garage's near corner, peaked at the garage RIDGE,
+    // and came back down to the plate where the garage ended.
+    //
+    // The garage's gable edge is the line the garage shares with the house —
+    // no overhang, dying straight into it — and the house wall on that line
+    // bears the same plate, so every test below passed and the wall climbed
+    // the garage's triangle. But the house is two storeys there: that wall
+    // goes on up to its own second-floor plate, and the second storey stands
+    // on it. There is no triangle of wall between the plate and those rakes;
+    // there is a floor, and a wall above that.
+    //
+    // A gable triangle exists only where the storey is the LAST one on that
+    // wall. `floorBottom` of the storey above IS this storey's plate (see
+    // sectionLevelStack), so "something stands on this plate along this wall"
+    // is the exact question, and the answer is a wall record rather than a
+    // guess about build type — a two-storey house with a one-storey wing gets
+    // its gable on the wing and not on the body, from the same test.
+    //
+    // STANDING ON IT, NOT MERELY NEAR IT. The wall above has to share a
+    // stretch of this one, measured along it. A garage gable end meeting the
+    // house square on touches a second-floor wall at its last station and
+    // runs parallel to another a foot off, sharing only a corner with it;
+    // neither stands on the gable wall, which climbs all the way to the house.
+    const STOREY_ABOVE_EPS = 0.05;
+    const CARRIED_REACH_FT = 1;
+    const carriesStoreyAbove = (pt, plateTop, wall, wallDir) => faces.some(other => {
+      if (other.level.floorBottom < plateTop - STOREY_ABOVE_EPS) return false;
+      const along = q => (q.x - wall.start.x) * wallDir.x + (q.z - wall.start.z) * wallDir.z;
+      const own = along(wall.end);
+      const a = along(other.wall.start), b = along(other.wall.end);
+      const shared = Math.min(Math.max(a, b), Math.max(0, own))
+        - Math.max(Math.min(a, b), Math.min(0, own));
+      if (shared <= STOREY_ABOVE_EPS) return false;
+      return distToSegment(pt, other.wall.start, other.wall.end) <= CARRIED_REACH_FT;
+    });
     // Only a wall running ALONG the gable climbs; a perpendicular wall
     // passing the gable's corner keeps its plate.
-    const gableTopAt = (pt, plateTop, wallDir) => {
+    const gableTopAt = (pt, plateTop, wallDir, wall) => {
       let top = plateTop;
       if (!facesByRoof) return top;
+      if (carriesStoreyAbove(pt, plateTop, wall, wallDir)) return top;
       facesByRoof.forEach((roofFaces, roof) => {
         const base = roofBaseElev(roof, stack, env);
         if (Math.abs(base - plateTop) > 0.6) return;   // bears on another storey
@@ -3602,7 +3643,7 @@ if (!window.DraftCutView) {
         // Never below the face's own floor: a band floor under this storey
         // would turn the face inside out rather than hide it.
         const top = Math.max(floor, roofClippedTop(at, face.depth,
-          gableTopAt(at, level.wallTop, wallDir)));
+          gableTopAt(at, level.wallTop, wallDir, wall)));
         tops.push({ u, top });
       }
       return { face, loU, hiU, floor, worldAt, wallDir, tops };
@@ -3614,7 +3655,8 @@ if (!window.DraftCutView) {
       && other.loU <= geom.loU + 0.05 && other.hiU >= geom.hiU - 0.05
       && other.floor <= geom.floor + 1e-3
       && geom.tops.every(s =>
-        gableTopAt(other.worldAt(s.u), other.face.level.wallTop, other.wallDir) >= s.top - 1e-3));
+        gableTopAt(other.worldAt(s.u), other.face.level.wallTop, other.wallDir,
+          other.face.wall) >= s.top - 1e-3));
     // ── THE CLADDING ON ONE FACE ──────────────────────────────────────
     //
     // A BASE OVER THE WHOLE FACE, THEN THE BANDS OVER THAT, in the order they
