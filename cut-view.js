@@ -3838,7 +3838,17 @@ if (!window.DraftCutView) {
         // finish's lines read through the band on top of it.
         ctx.fillStyle = C.face;
         ctx.fillRect(x0, Y(hi), x1 - x0, (hi - lo) * pxPerFt);
+        // ITS OWN CLIP, INSIDE THE FACE'S. A pattern may overhang its box --
+        // fieldstone runs a whole cell past every edge -- and the face's clip
+        // reaches the wall head, so only this keeps the stone on the band.
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x0, Y(hi)); ctx.lineTo(x1, Y(hi));
+        ctx.lineTo(x1, Y(lo)); ctx.lineTo(x0, Y(lo));
+        ctx.closePath();
+        ctx.clip();
         FP.drawFinish(ctx, boxAt(lo, hi, x0, x1), finishById(band.finishId), C);
+        ctx.restore();
         // ── AND THE WATER TABLE WHERE IT STOPS SHORT ──────────────────
         //
         // Movie: *"we should put a ledge at the top of the stone that

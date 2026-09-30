@@ -2321,6 +2321,102 @@ function run(win) {
     }
   }
 
+  // ── AND A BAND'S STONE STAYS INSIDE THE BAND ─────────────────────────
+  //
+  // Movie, 29 Sep, on his own saved drawing: the fieldstone band ran past
+  // its top. Measured on that file (20260929T0557.draft, its 0-3' band set
+  // to fieldstone) and on repro-garage-house before the fix: stone showed
+  // 1'-3 3/4" ABOVE a 3'-0" band on every elevation, E1 to E4. Ashlar,
+  // brick, shake, ledgestone and roundstone on the same band: 0".
+  //
+  // THE PATTERN IS RIGHT TO OVERHANG. finish-patterns' fieldstone lattice
+  // starts a cell outside its box and runs a cell past it, so no stone at
+  // the edge is sliced into a ruled line -- and it says, in so many words,
+  // that the caller's clip is what cuts it. The base finish had that clip;
+  // a band inherited the FACE's, which reaches the wall head.
+  //
+  // SO THE CLAIM IS THE CLIP, READ THE WAY THE CLADDING BLOCK ABOVE READS
+  // IT: a marker before and after each drawFinish. The marker's clip is that
+  // call's clip, and the strokes between the two are that call's pattern.
+  // The band's own FACE FILL is the ruler -- the last fill before the call is
+  // the rectangle the band painted, so no number here has to agree with a
+  // number in the painter.
+  {
+    const OPEN = '#ff00ff', SHUT = '#00ffff';
+    const stone = JSON.parse(JSON.stringify(SAVED));
+    const mainId = Number(buildEnv(win, stone).floorLevels()[0].id);
+    const houseOnMain = w => Number(w.levelId) === mainId && !w.body;
+    stone.walls.filter(houseOnMain).forEach(w => {
+      w.finishBands = [{ finishId: 'fieldstone', anchor: 'sill', lowFt: 0, highFt: 3 }];
+    });
+    const stoneEnv = buildEnv(win, stone);
+
+    const FP = win.DraftFinishPatterns;
+    const realDraw = FP.drawFinish;
+    const mark = (ctx, ink) => {
+      const was = ctx.strokeStyle, lw = ctx.lineWidth;
+      ctx.strokeStyle = ink; ctx.lineWidth = 0.01;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(1, 0); ctx.stroke();
+      ctx.strokeStyle = was; ctx.lineWidth = lw;
+    };
+    const calls = [];
+    standardElevationCuts(stoneEnv).forEach(cut => {
+      const ids = [];
+      win.DraftFinishPatterns = { ...FP,
+        drawFinish: (ctx, box, finish, inks) => {
+          ids.push(finish && finish.id);
+          mark(ctx, OPEN);
+          const out = realDraw(ctx, box, finish, inks);
+          mark(ctx, SHUT);
+          return out;
+        } };
+      const view = paintElevation(win, stoneEnv, cut, { pxPerFt: 40, finishes: true });
+      win.DraftFinishPatterns = FP;
+      const opens = view.strokes.filter(st => st.ink === OPEN);
+      const shuts = view.strokes.filter(st => st.ink === SHUT);
+      opens.forEach((o, k) => {
+        if (ids[k] !== 'fieldstone' || !shuts[k]) return;
+        const fill = view.modelFills.filter(f => f.seq < o.seq).pop();
+        const pattern = view.strokes.filter(st => st.seq > o.seq && st.seq < shuts[k].seq);
+        calls.push({ cut: cut.id, px: 1 / view.pxPerFt, fill, clip: o.clip, pattern });
+      });
+    });
+
+    const boundsOf = pts => ({
+      uLo: Math.min(...pts.map(p => p.u)), uHi: Math.max(...pts.map(p => p.u)),
+      eLo: Math.min(...pts.map(p => p.e)), eHi: Math.max(...pts.map(p => p.e)),
+    });
+    // THE FIXTURE'S REACH, ASSERTED FIRST, and the second one is the one
+    // that matters: if fieldstone ever stopped overhanging its box, every
+    // clip would pass this block without having been asked anything.
+    check('band fixture: fieldstone bands painted on the house elevations',
+      calls.length > 0, `${calls.length} fieldstone call(s)`);
+    const overhang = calls.filter(c => c.fill && c.pattern.length
+      && boundsOf(c.pattern.flatMap(st => st.pts)).eHi > boundsOf(c.fill.pts).eHi + 2 * c.px);
+    check('band fixture: the stone pattern overhangs its band, so the clip is what cuts it',
+      calls.length > 0 && overhang.length === calls.length,
+      `${overhang.length} of ${calls.length} reach past the band top`);
+
+    const loose = [];
+    calls.forEach(c => {
+      if (!c.fill || !c.clip || c.clip.length < 3) {
+        loose.push(`${c.cut}: no clip`);
+        return;
+      }
+      const band = boundsOf(c.fill.pts);
+      const clip = boundsOf(c.clip);
+      const ink = boundsOf(c.pattern.flatMap(st => st.pts));
+      const shown = Math.min(clip.eHi, ink.eHi);
+      const off = ['uLo', 'uHi', 'eLo', 'eHi'].filter(k => !near(clip[k], band[k], 1.5 * c.px));
+      if (off.length) {
+        loose.push(`${c.cut}: stone shows ${((shown - band.eHi) * 12).toFixed(2)}" above a band `
+          + `topping at ${ftIn(band.eHi)} (clip ${off.join('/')} off)`);
+      }
+    });
+    check('a band\'s pattern is CLIPPED to the band it painted, not to the whole face',
+      calls.length > 0 && loose.length === 0, loose.join('; '));
+  }
+
   // ── AND AN EXTERIOR DOOR KEEPS SIX INCHES OF ITS WALL BARE ────────────
   //
   // Movie, 28 Sep, straight after the stone reached the sill: *"we should put
@@ -3188,6 +3284,19 @@ const MUTATIONS = [
     `      ...wallItems.filter(item => item.band),
       ...wallItems.filter(item => !item.band),
       ...roofFills.map(fill => ({ depth: fill.depth, go: () => paintRoof(fill) })),`)],
+  // THE BAND STONE DEFECT AS MOVIE SAW IT: the band paints under the face's
+  // clip alone, so fieldstone runs 1'-3 3/4" up the wall above its band.
+  ['a band draws its pattern under the face\'s clip, not its own (stone over-fills)',
+    src => src.replace(`        ctx.closePath();
+        ctx.clip();
+        FP.drawFinish(ctx, boxAt(lo, hi, x0, x1), finishById(band.finishId), C);`,
+    `        ctx.closePath();
+        FP.drawFinish(ctx, boxAt(lo, hi, x0, x1), finishById(band.finishId), C);`)],
+  // THE NEAR MISS: a clip that is there but cut to the wall head, which a
+  // "was it clipped at all" check would pass.
+  ['a band clips its pattern to the wall head instead of its own top',
+    src => src.replace(`        ctx.moveTo(x0, Y(hi)); ctx.lineTo(x1, Y(hi));`,
+      `        ctx.moveTo(x0, Y(lines.head)); ctx.lineTo(x1, Y(lines.head));`)],
 ];
 
 console.log('\n' + 'mutation'.padEnd(72) + 'caught by');
