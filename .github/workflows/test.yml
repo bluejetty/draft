@@ -222,7 +222,12 @@ jobs:
                       proto/layout-plan-harness.js \
                       proto/layer-views-harness.js \
                       proto/shared-file-store-harness.js \
-                      proto/palette-harness.js; do
+                      proto/palette-harness.js \
+                      proto/garage-slab-harness.js \
+                      proto/pad-footing-harness.js \
+                      proto/mid-span-beam-harness.js \
+                      proto/window-head-harness.js \
+                      proto/casement-harness.js; do
             if ! printf '%s\n' "${engines[@]}" | grep -qx "$must"; then
               failed=$((failed + 1))
               echo "FAIL  $must is a known engine and the derived list does not contain it"

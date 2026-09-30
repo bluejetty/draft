@@ -29,13 +29,88 @@
 // and the first check below is the whole of the price.
 //
 //   node proto/casement-harness.js
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
 
 const fs = require('fs');
 const path = require('path');
 const E = require('./elevation-harness.js');
 
 const ROOT = path.join(__dirname, '..');
+
+// ── THE MUTANTS ───────────────────────────────────────────────────────────
+//
+// The subject is THREE files, which is this harness's whole argument: the
+// vocabulary is drawing-format.js's, the sizes are geometry-2d.js's keyed by
+// it, and the bar down the glass is cut-view.js's. A row in each says the
+// seam between them is watched and not just described.
+//
+// WHAT CANNOT BE MUTATED FROM HERE, said rather than left to be discovered:
+// premade-plans.js. It is loaded through node's own require() a few lines
+// down -- it is not in harness-env.js's sandbox list -- so
+// DRAFT_HARNESS_SOURCE_OVERRIDES never reaches it, and the six checks about
+// what the design deals over the garage have no row. They are real checks
+// with no mutant behind them, which is the same gap this table is closing
+// elsewhere, one module further in.
+const MUTATIONS = [
+  // THE SEAM. The sizes are a table KEYED BY the vocabulary precisely so the
+  // two cannot disagree about which casements exist without this going red.
+  ['the vocabulary grows a casement the size table has never heard of',
+    'drawing-format.js',
+    c => c.replace("  const CASEMENT_TYPES = Object.freeze(['single', 'double']);",
+      "  const CASEMENT_TYPES = Object.freeze(['single', 'double', 'triple']);")],
+
+  ['a double casement is not the 66 inches he asked for', 'geometry-2d.js',
+    c => c.replace('    double: Object.freeze({ widthFt: 66 / 12, heightFt: 36 / 12 }),',
+      '    double: Object.freeze({ widthFt: 60 / 12, heightFt: 36 / 12 }),')],
+
+  // SHORTER AND WIDER IS THE WHOLE SHAPE OF IT. Given a single's height a
+  // double stops being a different unit and becomes a wide one.
+  ['a double is as tall as a single, so the pair is no longer a shape',
+    'geometry-2d.js',
+    c => c.replace('    double: Object.freeze({ widthFt: 66 / 12, heightFt: 36 / 12 }),',
+      '    double: Object.freeze({ widthFt: 66 / 12, heightFt: DEFAULT_WINDOW_HEIGHT_FT }),')],
+
+  // A PLACER WITH NO SIZE PLACES NO WINDOW AT ALL, so an unknown casement has
+  // to answer as a single rather than as undefined.
+  ['an unknown casement answers with no size instead of a single',
+    'geometry-2d.js',
+    c => c.replace('  const casementSizeFt = kind => CASEMENT_SIZES_FT[kind] || CASEMENT_SIZES_FT.single;',
+      '  const casementSizeFt = kind => CASEMENT_SIZES_FT[kind];')],
+
+  ['a stored word that is not a casement is read straight through',
+    'drawing-format.js',
+    c => c.replace("          ? oneOf(opening?.casement, CASEMENT_TYPES, 'single') : null,",
+      '          ? opening?.casement : null,')],
+
+  // A `casement: 'single'` on every door in every file would be a key that
+  // says nothing about the thing it is written on.
+  ['a door is given a casement', 'drawing-format.js',
+    c => c.replace("        casement: type === 'window'\n"
+      + "          ? oneOf(opening?.casement, CASEMENT_TYPES, 'single') : null,",
+      "        casement: oneOf(opening?.casement, CASEMENT_TYPES, 'single'),")],
+
+  // THE POINT OF THE WHOLE RULING IS A BAR DOWN THE MIDDLE OF THE GLASS.
+  // Everything above this row could be true with nothing drawn.
+  ['the mullion is never drawn', 'cut-view.js',
+    c => c.replace("            if (f.casement === 'double' && ow > inset * 5) {",
+      '            if (false) {')],
+
+  ['every window gets a mullion, double or not', 'cut-view.js',
+    c => c.replace("            if (f.casement === 'double' && ow > inset * 5) {",
+      '            if (ow > inset * 5) {')],
+
+  // THE VERSION ROW BELONGS TO window-head-harness.js, which owns the same
+  // line for a different argument. Both files check F.VERSION and both are
+  // right to; mutating it twice would be one claim wearing two tables, which
+  // is the shape this repo keeps taking back out.
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('casement',
+    MUTATIONS, { root: ROOT, harness: __filename });
+  process.exit(all ? 0 : 1);
+}
+
 const win = E.loadDraftModules();
 const G = win.DraftGeometry2D;
 const F = win.DraftDrawingFormat;

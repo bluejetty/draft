@@ -20,8 +20,76 @@
 // halves of his sentence describe the same slab rather than two rules.
 //
 // Run: node proto/garage-slab-harness.js
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
+const path = require('path');
 const { loadDraftModules } = require('./harness-env.js');
+const ROOT = path.join(__dirname, '..');
+
+// ── THE MUTANTS ───────────────────────────────────────────────────────────
+//
+// Every row bends ONE line of cut-view.js into a slab this file's own
+// argument says is wrong, and every one has to make it go red. The subject is
+// twelve lines of arithmetic, so the table is small on purpose: what is worth
+// proving here is that the checks above are load-bearing, not that a big
+// table can be written.
+//
+// A MUTANT RUNS AS ITS OWN PROCESS, through mutant-subprocess.js. The parent
+// bends the source, the child is this same harness with
+// DRAFT_HARNESS_SOURCE_OVERRIDES pointing at it, and harness-env.js's loader
+// prefers what it finds there. Re-entry in-process would re-use the sandbox
+// cut-view.js was already run into.
+const MUTATIONS = [
+  // THE HARNESS'S WHOLE ARGUMENT IS WHICH END THE NUMBER IS MEASURED AT, so
+  // the first row puts the back's number at the door. That is the slab
+  // project-page.js actually drew, and it is why this file exists.
+  ['the back-of-garage 4 inches is put at the door', 'cut-view.js',
+    c => c.replace('const GARAGE_SLAB_AT_DOOR_IN = 8;',
+      'const GARAGE_SLAB_AT_DOOR_IN = 4;')],
+
+  ['the slope is a quarter inch per foot, not an eighth', 'cut-view.js',
+    c => c.replace('const GARAGE_SLAB_SLOPE_IN_PER_FT = 1 / 8;',
+      'const GARAGE_SLAB_SLOPE_IN_PER_FT = 1 / 4;')],
+
+  // THE SIGN. A slab that falls AWAY from the door still reads 8" at the
+  // opening and still flattens somewhere, so only a check written as a
+  // difference over a span catches it -- which is the shape the rate checks
+  // above are deliberately written in.
+  ['the slab falls away from the door instead of rising to the concrete',
+    'cut-view.js',
+    c => c.replace('const fall = GARAGE_SLAB_AT_DOOR_IN - d * GARAGE_SLAB_SLOPE_IN_PER_FT;',
+      'const fall = GARAGE_SLAB_AT_DOOR_IN + d * GARAGE_SLAB_SLOPE_IN_PER_FT;')],
+
+  ['nothing caps the curb, so past 64 ft the floor climbs over its own beam',
+    'cut-view.js',
+    c => c.replace('    return fall > 0 ? fall : 0;', '    return fall;')],
+
+  // OFF THE SLAB. `|| 0` looks like the same guard and is not: it lets a
+  // NEGATIVE distance through, which reads as the slab rising out through
+  // the opening -- the exact thing the clamp's own comment forbids.
+  ['a point outside the door is read as a negative depth', 'cut-view.js',
+    c => c.replace('    const d = Number(fromDoorFt) > 0 ? Number(fromDoorFt) : 0;',
+      '    const d = Number(fromDoorFt) || 0;')],
+
+  // ── ONE ROW IS NOT HERE, AND IT WAS TRIED FIRST ──────────────────────────
+  //
+  // Typing the flat station -- `const GARAGE_SLAB_FLAT_AT_FT = 64;` in place
+  // of the quotient -- SURVIVES, and it survives for a reason worth writing
+  // down rather than hiding by leaving the check out.
+  //
+  // Both assertions about it still pass: it IS 64, and 64 IS the quotient,
+  // because neither constant it is composed from has moved. The check exists
+  // to catch DRIFT -- the day the curb or the slope changes and a typed 64
+  // stays behind -- so it is load-bearing only under a SECOND change, and a
+  // mutation row bends one thing. A row that cannot go red is not a row, and
+  // recording that here is worth more than a table with a green lie in it.
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('garage-slab',
+    MUTATIONS, { root: ROOT, harness: __filename });
+  process.exit(all ? 0 : 1);
+}
+
 const CV = (loadDraftModules() || global.window).DraftCutView;
 const below = CV.garageSlabBelowConcreteIn;
 const S = CV.STANDARDS;
