@@ -18,6 +18,12 @@ const ALL_LAYER_IDS = [
   // -- which is what a REAL ESTATE PLAN needs and a CONSTRUCTION LAYOUT does
   // not.
   'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-COLS',
+  // THE SIZE TAGS, split off A-DIMS-FENS on 30 Sep so the corner string and
+  // the 36X36 can be switched apart. A-DIMS-DOOR and A-DIMS-EQUIP carry
+  // nothing yet -- only windows are tagged -- and they are listed here
+  // anyway, because what this spec proves about them is that STANDARDS
+  // RENDERS THEM WITH A TICK, which is true the day the id exists.
+  'A-DIMS-WIN', 'A-DIMS-DOOR', 'A-DIMS-EQUIP',
   'S-BEAM', 'S-SLAB', 'S-FDN', 'S-COL-FOOTING', 'S-FOOTING',
   'E-POWER',
 ];
@@ -29,6 +35,7 @@ const ALL_LAYER_IDS = [
 const SWITCHABLE_LAYER_IDS = [
   'draft', 'no-draft',
   'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-COLS',
+  'A-DIMS-WIN', 'A-DIMS-DOOR', 'A-DIMS-EQUIP',
 ];
 
 async function openStandards(page) {

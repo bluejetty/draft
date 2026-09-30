@@ -2289,7 +2289,15 @@ if (!window.DraftCutView) {
     //
     // NO STANDARD MEANS IT DRAWS: an env whose page never wired the profile
     // is not a page that hid the tag.
-    const fenStandard = env.layerStandard ? env.layerStandard('A-DIMS-FENS') : null;
+    // A-DIMS-WIN, NOT A-DIMS-FENS, AND THE SPLIT IS THE POINT. The tag rode
+    // the centre-string layer from 29 Sep -- Movie: "can we make the window
+    // number get layer A-DIMS-FENS so the user can turn them off in ELEVATION
+    // views if desired". One layer answered that and answered the next
+    // question wrong, which he found on 30 Sep: "if i want to turn of the
+    // outside line dimensions and leave the window sizes on i won't be able
+    // too". The corner string and the 36X36 are different marks about the
+    // same window and a drafter wants each without the other.
+    const fenStandard = env.layerStandard ? env.layerStandard('A-DIMS-WIN') : null;
     const showFenTags = !fenStandard || fenStandard.visible !== false;
 
     // Roof silhouette: at each spot along the cut, the tallest roof surface
