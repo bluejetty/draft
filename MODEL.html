@@ -2724,7 +2724,7 @@
   // pass -- `const R = window.DraftRender2D` is declared inside each one too --
   // and a helper written at this level that reaches for them compiles, runs,
   // throws on the first window and draws nothing. It did exactly that once.
-  const WINDOW_TAG_GAP_FT = 0.55;
+  // THE GAP IS fen-labels.js's PLAN_TAG_GAP_FT now, with the placement.
   // The click target is a little larger than the ink, which is the usual
   // allowance for a 9px label: the tag is a CONTROL now, and a control you
   // have to hit exactly is a control that feels broken.
@@ -2770,30 +2770,25 @@
       if (opening.type !== 'window' || !geometry || !geometry.glazing) return;
       const label = FL.fenLabelForOpening(opening, { exteriorWall: true });
       if (!label) return;
-      const out = exteriorNormalAt(outlineOf(opening.levelId), geometry.center);
-      if (!out) return;
-      // ALONG THE GLASS, which is the line the drafter is reading. The label
-      // runs the window's own width so it cannot be mistaken for the one next
-      // door, and it is stepped off the wall by the assembly's own half
-      // thickness -- the corners say how far that is, not a guess.
-      const [ga, gb] = geometry.glazing;
-      const run = Math.hypot(gb.x - ga.x, gb.z - ga.z) || 1;
-      const ux = (gb.x - ga.x) / run, uz = (gb.z - ga.z) / run;
-      const half = Math.max(...geometry.corners.map(corner =>
-        Math.abs((corner.x - geometry.center.x) * out.x
-          + (corner.z - geometry.center.z) * out.z)));
-      const gap = half + WINDOW_TAG_GAP_FT;
-      const cxw = geometry.center.x + out.x * gap;
-      const czw = geometry.center.z + out.z * gap;
+      // WHERE IT GOES IS fen-labels.js's NOW, and this page's copy is gone
+      // rather than left beside it. The Construction Layout draws this same
+      // tag from plan-composition.js and was drawing it the OLD way --
+      // horizontal, on whichever side the wall happened to be drawn from,
+      // and on doors too -- because the 28 Sep rebuild happened here and not
+      // there. Two placements of one tag is the drift this repo keeps paying
+      // for; the 0.55 ft gap was already written in both files.
+      //
+      // exteriorNormalAt WENT WITH IT. It had exactly one caller on this page
+      // -- this tag -- so nothing is stranded and no second copy is made.
+      const line = FL.planTagLine(geometry, outlineOf(opening.levelId));
+      if (!line) return;
       // OFFSET 0, ON A LINE ALREADY MOVED OUTSIDE. labelAlongLine2D's own
       // offset is perpendicular in the ROTATED frame, and its read-direction
       // flip makes a->b and b->a the same angle -- so which side it lands on
       // cannot be chosen by handing it the line backwards. The side is decided
-      // here, where the outline knows which way is out, and the helper is left
-      // to do the one thing only it does.
-      const placed = R.labelAlongLine2D(ctx,
-        toS({ x: cxw - ux * run / 2, z: czw - uz * run / 2 }),
-        toS({ x: cxw + ux * run / 2, z: czw + uz * run / 2 }),
+      // in the helper, where the outline knows which way is out, and
+      // labelAlongLine2D is left to do the one thing only it does.
+      const placed = R.labelAlongLine2D(ctx, toS(line.a), toS(line.b),
         label, { offset: 0, color: skin['ink-quiet'] || skin['draw-wall-edge'] });
       // WHERE IT LANDED, FROM THE PAINTER'S OWN MOUTH. The tag takes a press
       // now, and a hit test that worked the placement out a second time would
@@ -2980,28 +2975,6 @@
   // every window in the drawing -- silently, because the guard returns null
   // and the caller skips. Both shapes are taken, so a caller holding either
   // is right.
-  const exteriorNormalAt = (outline, at) => {
-    const pts = Array.isArray(outline) ? outline
-      : (outline && Array.isArray(outline.points) ? outline.points : null);
-    if (!pts || pts.length < 3 || !at) return null;
-    let best = null, bestD = Infinity;
-    pts.forEach((p, i) => {
-      const q = pts[(i + 1) % pts.length];
-      const dx = q.x - p.x, dz = q.z - p.z;
-      const len2 = dx * dx + dz * dz;
-      if (len2 < 1e-9) return;
-      const t = Math.max(0, Math.min(1,
-        ((at.x - p.x) * dx + (at.z - p.z) * dz) / len2));
-      const d = Math.hypot(at.x - (p.x + dx * t), at.z - (p.z + dz * t));
-      if (d < bestD) { bestD = d; best = { dx, dz, len: Math.sqrt(len2) }; }
-    });
-    if (!best) return null;
-    const ux = best.dx / best.len, uz = best.dz / best.len;
-    // Interior to the LEFT of a positively wound ring; out is the other way.
-    const inside = window.DraftBuildHouse.outlineInteriorRef(pts) === 'left'
-      ? { x: -uz, z: ux } : { x: uz, z: -ux };
-    return { x: -inside.x, z: -inside.z };
-  };
 
   // ── WHAT AN OPENING NEEDS TO KNOW ABOUT ITS WALL ────────────────────────
   //
