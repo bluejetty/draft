@@ -10,21 +10,130 @@
 //   node proto/building-bodies-harness.js
 //
 // Exit 0 = every check passed.
-require('./harness-args.js').noFlags();
-
-const fs = require('fs');
+const MUTATE = require('./harness-args.js').mutationMode();
 const path = require('path');
-const vm = require('vm');
+const { loadDraftModules } = require('./harness-env.js');
 
 const ROOT = path.join(__dirname, '..');
-const win = {};
-const sandbox = { window: win, console, Object, Array, String, Number, JSON };
-sandbox.globalThis = sandbox;
-vm.createContext(sandbox);
-vm.runInContext(fs.readFileSync(path.join(ROOT, 'building-bodies.js'), 'utf8'),
-  sandbox, { filename: 'building-bodies.js' });
 
-const B = win.DraftBuildingBodies;
+// ── THE MUTANTS ───────────────────────────────────────────────────────────
+//
+// THIS FILE BUILT ITS OWN vm SANDBOX UNTIL 30 SEP, and that is the whole
+// reason it had no table. A sandbox harness-env.js did not make cannot see
+// DRAFT_HARNESS_SOURCE_OVERRIDES, so no row could reach the source: the
+// module was unbendable, and an unbendable module cannot be checked by
+// bending it. Adding building-bodies.js to loadDraftModules' list was the
+// one change that made a table possible at all.
+//
+// A MUTANT RUNS AS ITS OWN PROCESS, through mutant-subprocess.js -- the
+// parent bends the source, the child is this same harness with the override
+// pointing at it, and harness-env.js's loader prefers what it finds there.
+const MUTATIONS = [
+  // ── pointInLoop ─────────────────────────────────────────────────────────
+  // EVEN-ODD IS THE WHOLE ALGORITHM. A latch answers "the ray hit something"
+  // instead of "the ray hit an odd number of things", which is right for
+  // every point inside a convex shape and wrong for every point left of one.
+  // A check that only ever sampled the middle of a square could not tell the
+  // two apart, so this row exists to prove the ones outside it are real.
+  ['the ray latches instead of flipping, so anything it hits reads as inside',
+    'building-bodies.js',
+    c => c.replace('      if (crosses) inside = !inside;',
+      '      if (crosses) inside = true;')],
+
+  // A RAY THROUGH A VERTEX MUST COUNT IT ONCE. `!==` is what says EXACTLY
+  // one end of the edge is above the sample; `||` says at least one is, so
+  // the two edges meeting at a vertex both count and the ray crossing it
+  // comes back with the answer inverted.
+  ['an edge counts when either end is above the sample, not exactly one',
+    'building-bodies.js',
+    c => c.replace('      const crosses = ((a.z > at.z) !== (b.z > at.z))',
+      '      const crosses = ((a.z > at.z) || (b.z > at.z))')],
+
+  // ── storeyBodies ────────────────────────────────────────────────────────
+  ['a garage counts as one of the storey\'s bodies', 'building-bodies.js',
+    c => c.replace('      && outline.garage !== true\n', '')],
+
+  ['a two-point outline counts as a footprint', 'building-bodies.js',
+    c => c.replace('      && (outline.points || []).length >= 3)',
+      '      && (outline.points || []).length >= 0)')],
+
+  // LEVEL IDS ARRIVE BOTH WAYS. A saved file can hand back '2' where the
+  // page held 2, so both sides are coerced; === alone silently returns an
+  // empty storey, which reads as "nothing drawn here" rather than as an
+  // error.
+  ['the storey id is compared without coercing it', 'building-bodies.js',
+    c => c.replace('    .filter(outline => Number(outline.levelId) === Number(storeyId)',
+      '    .filter(outline => outline.levelId === storeyId')],
+
+  // ── houseOutlineOn ──────────────────────────────────────────────────────
+  ['the level id is compared without coercing it', 'building-bodies.js',
+    c => c.replace('      .find(item => Number(item.id) === Number(levelId));',
+      '      .find(item => item.id === levelId);')],
+
+  // THE SMALLEST BODY WINS. auto-stair-mutants.js carries a row with this
+  // same aim, and it has to drive a browser to see it; this one is the same
+  // claim for the price of a subprocess.
+  ['the smallest body on the storey is taken for the house',
+    'building-bodies.js',
+    c => c.replace('      ownArea(body.outline) > ownArea(best.outline) ? body : best).outline;',
+      '      ownArea(body.outline) < ownArea(best.outline) ? body : best).outline;')],
+
+  ['a room over the garage is eligible to be the house', 'building-bodies.js',
+    c => c.replace('    const house = bodies.filter(body => !bodyOverGarage(drawing, body.outline));',
+      '    const house = bodies;')],
+
+  // ── bodyOverGarage ──────────────────────────────────────────────────────
+  // THE SHARE IS WHAT SEPARATES SITTING ON IT FROM TOUCHING IT. At zero, a
+  // house whose corner laps a garage by a few feet is disqualified from
+  // being the house -- which is the exact reading the constant's own comment
+  // forbids.
+  ['any overlap at all counts as sitting over the garage', 'building-bodies.js',
+    c => c.replace('    return inBody > 0 && over / inBody > OVER_GARAGE_BODY_SHARE;',
+      '    return inBody > 0 && over / inBody > 0;')],
+
+  // AND THE FALLBACK. Every body on the storey over a garage is a DETACHED
+  // garage with a room on it, which Movie says does want a stair -- so the
+  // filter cannot be allowed to empty the pool.
+  ['nothing falls back when every body sits over a garage', 'building-bodies.js',
+    c => c.replace('    const pool = house.length ? house : bodies;',
+      '    const pool = house;')],
+
+  // ── TWO ROWS ARE NOT HERE, AND BOTH WERE TRIED FIRST ────────────────────
+  //
+  // THE EPSILON GUARD. `((b.z - a.z) || Number.EPSILON)` is what this
+  // module's own comment called the behavioural difference between its
+  // pointInLoop and the two private copies in geometry-2d.js. A row dropping
+  // the `|| Number.EPSILON` SURVIVES, and not because the checks are weak:
+  // the guard cannot be reached. `crosses` needs `(a.z > at.z) !== (b.z >
+  // at.z)`, false whenever a.z === b.z, so `&&` short-circuits before the
+  // division -- and a zero denominator needs exactly the a.z === b.z the
+  // short circuit has already refused. Measured as well as argued: 12,996
+  // samples over a square, an L, a comb and a ring with a repeated point,
+  // guarded against bare, ZERO disagreements. Both geometry-2d copies are
+  // written with the same `&&`, so all three agree; building-bodies.js has
+  // been corrected to say so, which is worth more than a row here because it
+  // says unifying the three is safe.
+  //
+  // THE HALF-OPEN SIDE. `(a.z > at.z) !== (b.z > at.z)` turned `>=` also
+  // SURVIVES, and this one is a row that should not exist rather than a hole
+  // to plug. Both forms are consistent half-open rules; they disagree only
+  // at points lying exactly on a vertex row -- 84,100 samples over four
+  // shapes, 496 disagreements, every one of them on such a row and none
+  // anywhere else -- and where two bodies share an edge BOTH forms count a
+  // point on it exactly once. They differ only in WHICH body owns the line:
+  // `>` gives it to the upper, `>=` to the lower. Nothing any caller can see
+  // turns on that, so a check written to kill the row would be pinning an
+  // arbitrary side and calling it a requirement. The `||` row above is the
+  // crossing-test row that CAN go red for a reason that matters.
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('building-bodies',
+    MUTATIONS, { root: ROOT, harness: __filename });
+  process.exit(all ? 0 : 1);
+}
+
+const B = loadDraftModules().DraftBuildingBodies;
 let passed = 0;
 const failures = [];
 const check = (name, condition, detail) => {
@@ -125,6 +234,159 @@ check('and a detached garage closes it to the house',
 const legacy = { outlines: [house, upper, attached, detached] };
 check('a file that already holds both still reads as full',
   B.isFull(legacy) && B.missing(legacy).length === 0, left(legacy));
+
+// ── WHAT IS INSIDE WHAT ──────────────────────────────────────────────────
+//
+// pointInLoop, storeyBodies and houseOutlineOn moved into this file on 30 Sep
+// so the window size tags and the auto stair could stop reading MODEL's
+// closure for them. NOTHING OFFLINE TOUCHED THEM. The checks above are all
+// about the one-building cap, and the three answers below were exercised
+// only by driving a browser -- a module read by MODEL.html, layout-plan.js
+// and plan-composition.js should be able to say whether it works without one.
+
+const SQUARE = [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 10 }, { x: 0, z: 10 }];
+// AN L, because a bounding box answers the notch wrong and a convex-only
+// check would never find out.
+const ELL = [{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 4 },
+  { x: 4, z: 4 }, { x: 4, z: 10 }, { x: 0, z: 10 }];
+
+check('the middle of a square is inside it',
+  B.pointInLoop(SQUARE, { x: 5, z: 5 }), 'centre');
+// TO THE LEFT, WHERE THE RAY CROSSES TWICE. This is the point that tells
+// even-odd from "the ray hit something": a latch reads it as inside, and a
+// check that only ever sampled the centre could not tell the two apart.
+check('a point left of a square is outside it, though the ray crosses twice',
+  !B.pointInLoop(SQUARE, { x: -5, z: 5 }), 'left of square');
+check('and one to the right is outside it, with nothing to cross at all',
+  !B.pointInLoop(SQUARE, { x: 15, z: 5 }), 'right of square');
+// DIAGONALLY OFF THE CORNER, outside on BOTH axes and below every vertex the
+// shape has. Straight out to the side is not the same question: with every
+// vertex above the sample the horizontal edges start counting too, and
+// whether that lands odd or even depends on how many there are. This point
+// is where a crossing test that asks "is either end above" instead of
+// "is exactly one end above" first gives a wrong answer.
+check('a point below and left of the whole square is outside it',
+  !B.pointInLoop(SQUARE, { x: -5, z: -5 }), 'off the corner');
+check('the notch of an L is outside it',
+  !B.pointInLoop(ELL, { x: 7, z: 7 }), 'L notch');
+check('and both of the L\'s arms are inside it',
+  B.pointInLoop(ELL, { x: 7, z: 2 }) && B.pointInLoop(ELL, { x: 2, z: 7 }),
+  `arm z2 ${B.pointInLoop(ELL, { x: 7, z: 2 })}, arm z7 ${B.pointInLoop(ELL, { x: 2, z: 7 })}`);
+check('beside the L, level with its lower arm, is outside it',
+  !B.pointInLoop(ELL, { x: -5, z: 2 }), 'beside the low arm');
+// A RAY THROUGH A VERTEX COUNTS IT ONCE. z = 4 runs straight through the L's
+// inside corner, where two edges meet: `!==` is what says exactly one end of
+// an edge is above the sample, so the pair contributes one crossing and not
+// two.
+check('a ray straight through the L\'s inner corner still reads inside',
+  B.pointInLoop(ELL, { x: 2, z: 4 }), 'through the corner');
+
+// ── THE BODIES ON ONE STOREY ─────────────────────────────────────────────
+const sq = (x, z, w, d) =>
+  [{ x, z }, { x: x + w, z }, { x: x + w, z: z + d }, { x, z: z + d }];
+// LEVEL 2 IS FILED UNDER A STRING and one of its outlines answers with a
+// number, because a saved file hands back both and storeyBodies coerces
+// both sides on purpose.
+const storeys = {
+  levels: [{ id: 1 }, { id: '2' }],
+  outlines: [
+    { id: 'h', levelId: 1, points: sq(0, 0, 24, 20) },
+    { id: 'g', levelId: 1, garage: true, points: sq(40, 0, 24, 24) },
+    { id: 'thin', levelId: 1, points: [{ x: 0, z: 0 }, { x: 1, z: 1 }] },
+    { id: 'u', levelId: 2, points: sq(0, 0, 10, 10) },
+    { id: 's', levelId: '2', points: sq(60, 60, 6, 6) },
+  ],
+};
+const idsOn = (drawing, id) =>
+  B.storeyBodies(drawing, id).map(body => body.outline.id).join(',');
+
+check('a storey holds the footprints filed on it',
+  idsOn(storeys, 1) === 'h', idsOn(storeys, 1));
+check('a garage on that storey is not one of its bodies',
+  !idsOn(storeys, 1).split(',').includes('g'), idsOn(storeys, 1));
+// TWO POINTS ARE A LINE, NOT A FOOTPRINT. ownArea would hand back 0 for it
+// and the reduce would quietly carry it along as a body.
+check('and a two-point outline is not a footprint at all',
+  !idsOn(storeys, 1).split(',').includes('thin'), idsOn(storeys, 1));
+check('a storey id given as a string finds the same bodies as the number',
+  idsOn(storeys, '1') === idsOn(storeys, 1) && idsOn(storeys, '1') === 'h',
+  `'1' -> ${idsOn(storeys, '1')}, 1 -> ${idsOn(storeys, 1)}`);
+check('and an outline whose own levelId is a string is found too',
+  idsOn(storeys, 2) === 'u,s', idsOn(storeys, 2));
+check('the body carries the storey it was asked for',
+  B.storeyBodies(storeys, 1)[0].storeyId === 1,
+  String(B.storeyBodies(storeys, 1)[0].storeyId));
+
+// ── WHICH BODY IS THE HOUSE ──────────────────────────────────────────────
+const houseOn = (drawing, id) => {
+  const outline = B.houseOutlineOn(drawing, id);
+  return outline ? outline.id : null;
+};
+
+check('a storey with nothing on it has no house outline',
+  houseOn({ levels: [{ id: 1 }], outlines: [] }, 1) === null,
+  String(houseOn({ levels: [{ id: 1 }], outlines: [] }, 1)));
+check('and a level the drawing does not have has none either',
+  houseOn(storeys, 9) === null, String(houseOn(storeys, 9)));
+check('a level whose id was saved as a string is still found',
+  houseOn(storeys, 2) === 'u', String(houseOn(storeys, 2)));
+
+// THE BIGGEST BODY IS THE HOUSE, NOT THE FIRST ONE FILED. `small` is filed
+// first on purpose: pool[0] and the largest are the same outline on a house
+// with one body, so a one-body fixture cannot tell a reduce from an index.
+const twoHouses = {
+  levels: [{ id: 1 }],
+  outlines: [
+    { id: 'small', levelId: 1, points: sq(0, 0, 12, 16) },
+    { id: 'big', levelId: 1, points: sq(20, 0, 24, 20) },
+  ],
+};
+check('the biggest body on the storey is the house, not the first one filed',
+  houseOn(twoHouses, 1) === 'big', String(houseOn(twoHouses, 1)));
+
+// A ROOM OVER THE GARAGE IS NOT THE HOUSE, EVEN AS THE BIGGER BODY. This is
+// Movie's own defect from 25 Sep -- the flight to 2ND FL laid out inside the
+// room over the garage -- and `room` is 720 sq ft against the house's 480 so
+// that size alone gives the wrong answer.
+const overGarage = {
+  levels: [{ id: 1 }, { id: 2 }],
+  outlines: [
+    { id: 'garage', levelId: 1, garage: true, points: sq(0, 0, 24, 30) },
+    { id: 'house', levelId: 2, points: sq(40, 0, 24, 20) },
+    { id: 'room', levelId: 2, points: sq(0, 0, 24, 30) },
+  ],
+};
+check('a bigger room sitting over the garage is still not the house',
+  houseOn(overGarage, 2) === 'house', String(houseOn(overGarage, 2)));
+
+// TOUCHING IS NOT SITTING ON. The house laps the garage by a 4 ft corner --
+// 16 sq ft of 900 -- and `shed` is here so the answer can go WRONG: with
+// nothing else on the storey a disqualified house still comes back through
+// the fallback, and the row that drops the share to zero would survive.
+const cornerTouch = {
+  levels: [{ id: 1 }, { id: 2 }],
+  outlines: [
+    { id: 'garage', levelId: 1, garage: true, points: sq(0, 0, 24, 24) },
+    { id: 'house', levelId: 2, points: sq(20, 20, 30, 30) },
+    { id: 'shed', levelId: 2, points: sq(60, 60, 10, 10) },
+  ],
+};
+check('a house lapping the garage at one corner is still the house',
+  houseOn(cornerTouch, 2) === 'house', String(houseOn(cornerTouch, 2)));
+
+// AND WHEN EVERY BODY IS OVER A GARAGE, ONE OF THEM IS STILL THE ANSWER.
+// That file is a detached garage with a room on it, which Movie says DOES
+// want a stair -- so the filter emptying the pool has to fall back rather
+// than refuse.
+const allOver = {
+  levels: [{ id: 1 }, { id: 2 }],
+  outlines: [
+    { id: 'garage', levelId: 1, garage: true, points: sq(0, 0, 24, 30) },
+    { id: 'room', levelId: 2, points: sq(0, 0, 24, 30) },
+  ],
+};
+check('a detached garage with a room over it still names that room',
+  houseOn(allOver, 2) === 'room', String(houseOn(allOver, 2)));
 
 console.log(`building bodies harness: ${passed} checks passed, ${failures.length} failed`);
 if (failures.length) {

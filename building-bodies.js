@@ -110,11 +110,24 @@ if (!window.DraftBuildingBodies) {
   // and exports neither, and MODEL.html's was the third. MODEL delegates here
   // now, so the count does not rise.
   //
-  // IT IS MODEL's FORM, not geometry-2d's, and the difference is real: this
-  // one guards the zero denominator with Number.EPSILON where those two
-  // divide by (pj.z - pi.z) outright. A horizontal edge is the case that
-  // separates them. Which is right is a question for whoever unifies the
-  // three, and it is not being decided here by picking quietly.
+  // IT IS MODEL's FORM, not geometry-2d's: this one guards the zero
+  // denominator with `|| Number.EPSILON` where those two divide by
+  // (pj.z - pi.z) outright. THAT GUARD CANNOT BE REACHED, and this comment
+  // said the opposite until 30 Sep -- it called the difference real and left
+  // which is right as a question for whoever unifies the three.
+  //
+  // `crosses` needs `(a.z > at.z) !== (b.z > at.z)`, and that is false
+  // whenever a.z === b.z, so `&&` short-circuits before the division ever
+  // runs: a zero denominator needs exactly the a.z === b.z the short circuit
+  // has already refused. Both geometry-2d copies are written with the same
+  // `&&`. Measured as well as argued -- 12,996 samples over a square, an L,
+  // a comb and a ring with a repeated point, guarded against bare, zero
+  // disagreements.
+  //
+  // SO THE THREE AGREE, AND UNIFYING THEM IS SAFE. That is worth more than
+  // the warning it replaces. The guard stays: it costs nothing and it is the
+  // right shape if the crossing test is ever loosened -- but it is not what
+  // makes this copy different from the other two, because nothing does.
   const pointInLoop = (points, at) => {
     let inside = false;
     for (let i = 0, j = points.length - 1; i < points.length; j = i++) {

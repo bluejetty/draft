@@ -58,6 +58,24 @@ function loadDraftModules() {
   // said nothing, which is how a probe came back reporting zero hatch strokes
   // on a house whose every wall was clad.
   for (const file of ['formatters.js', 'wall-types.js', 'geometry-2d.js', 'drawing-format.js',
+    // AND WHAT THE DRAWING ALREADY HOLDS. building-bodies.js reads no
+    // other module and is read by MODEL.html and layout-plan.js, but it
+    // was absent from this list -- so its own harness built a SECOND vm
+    // sandbox to reach it, and a sandbox this loader did not make cannot
+    // honour DRAFT_HARNESS_SOURCE_OVERRIDES.
+    //
+    // That is not a tidiness point. It is why the module had no mutation
+    // engine on 30 Sep while carrying pointInLoop, storeyBodies and
+    // houseOutlineOn -- the three the window size tags pick their side of
+    // the wall with. A module no loader can bend is a module no row can
+    // aim at.
+    'building-bodies.js',
+    // AND THE SHOELACE. areas.js reads window.DraftGeometry2D, but only at
+    // call time, so it loads cleanly after it and adds one global. It was
+    // missing here for the same reason and with the same cost: the two
+    // harnesses that read it require()d it themselves and so could not be
+    // mutated.
+    'areas.js',
     'room-standards.js', 'level-assembly.js', 'build-house.js', 'finish-patterns.js',
     // THE ROOF'S TWO, beside the wall's one. cut-view reaches for both off
     // `window` when finishes are asked for, and without them here every roof

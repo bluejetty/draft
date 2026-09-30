@@ -29,12 +29,81 @@
 // rather than being half-fixed inside this change.
 //
 // Run: node proto/areas-harness.js
-require('./harness-args.js').noFlags();
+// THIS FILE ALSO MUTATION TESTED BY HAND, ONCE. The east-wall flush check
+// below says so: "Found by mutation: disabling the boundary test entirely
+// left every other check green" -- `within` casts its ray to the RIGHT, so a
+// corner on the WEST edge still crosses the east wall and reads inside with
+// no boundary rule at all. The west flush case was passing for the wrong
+// reason and one run found it. Nothing re-ran that.
+const MUTATE = require('./harness-args.js').mutationMode();
+const path = require('path');
+const { loadDraftModules } = require('./harness-env.js');
 
-global.window = global.window || {};
-require('../geometry-2d.js');
-require('../areas.js');
-const { computeAreas } = global.window.DraftAreas;
+const ROOT = path.join(__dirname, '..');
+
+// ── THE MUTANTS ───────────────────────────────────────────────────────────
+//
+// The number under test goes on a permit application, and verdict 2's whole
+// point was that it was wrong SILENTLY and always in the applicant's favour.
+// So the first row is that defect restored exactly, and the rest ask whether
+// the fix can be undone one piece at a time without this file noticing.
+const MUTATIONS = [
+  // VERDICT 2, RESTORED. `openingsSqFt += polygonArea(opening.points)` with
+  // no test that the hole is on the floor -- an opening run past the
+  // exterior wall, or floating outside the building entirely, still took its
+  // full area off the figure.
+  ['an opening is deducted without asking whether it is on the floor',
+    'areas.js',
+    c => c.replace('            if (insideHost(opening.points, floor.points)) {',
+      '            if (true) {')],
+
+  // AND THE OTHER WAY. Refusing everything is equally silent and equally
+  // wrong, and it is what a careless containment fix does to the flush
+  // stairwell this design exists to allow.
+  ['no opening is ever on its floor, so nothing is deducted', 'areas.js',
+    c => c.replace('            if (insideHost(opening.points, floor.points)) {',
+      '            if (false) {')],
+
+  // THE LEVEL-S LINE IS THE ONLY PLACE A REFUSED OPENING IS VISIBLE. The
+  // ruling chose refusing over clipping precisely because the drawing is
+  // wrong and should say so; a count that never rises turns the whole thing
+  // back into a silent number.
+  ['a refused opening is not counted, so nothing says the drawing is wrong',
+    'areas.js',
+    c => c.replace('              excludedOpenings += 1;\n', '')],
+
+  // THE HOST. Without it every opening in the file comes off every floor.
+  ['every opening is deducted from every floor, whatever it names',
+    'areas.js',
+    c => c.replace('          (openingsByHost.get(floor.id) || []).forEach(opening => {',
+      '          (openings || []).forEach(opening => {')],
+
+  ['a two-point opening is a shape, and gets as far as the host test',
+    'areas.js',
+    c => c.replace('    openings.filter(opening => opening.points.length >= 3).forEach(opening => {',
+      '    openings.filter(opening => opening.points.length >= 0).forEach(opening => {')],
+
+  // ── THE SHOELACE ────────────────────────────────────────────────────────
+  ['the shoelace is not halved, so every area is doubled', 'areas.js',
+    c => c.replace('  }, 0) / 2);', '  }, 0));')],
+
+  ['the shoelace cross product is a sum, not a difference', 'areas.js',
+    c => c.replace('    return sum + (pt.x * next.z - next.x * pt.z);',
+      '    return sum + (pt.x * next.z + next.x * pt.z);')],
+
+  ['the ring does not close, so its last corner pairs with nothing',
+    'areas.js',
+    c => c.replace('    const next = points[(index + 1) % points.length];',
+      '    const next = points[index + 1] || points[index];')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('areas',
+    MUTATIONS, { root: ROOT, harness: __filename });
+  process.exit(all ? 0 : 1);
+}
+
+const { computeAreas } = loadDraftModules().DraftAreas;
 
 let failed = 0, ran = 0;
 const check = (label, got, want) => {

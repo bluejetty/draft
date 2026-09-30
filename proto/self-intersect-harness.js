@@ -8,18 +8,113 @@
 // This proves only the detector. What the app should DO about a crossing
 // outline is unruled and is not decided here.
 
-// No mutation mode here, so this harness accepts no arguments at all. It
-// used to read none: `node self-intersect-harness.js --mutate` printed a full
-// passing run and exited 0, having mutated nothing. noFlags(), not
-// mutationMode() -- the latter would accept --mutate and print green for a
-// mode that does not exist.
-require('./harness-args.js').noFlags();
+// THIS HARNESS TOOK NO ARGUMENTS UNTIL 30 SEP. `--mutate` once printed a
+// full passing run and exited 0 having mutated nothing; noFlags() stopped
+// the lie by refusing the flag, and the loader below is what finally made
+// the mode real -- node's require() reads the file off disk and cannot see
+// DRAFT_HARNESS_SOURCE_OVERRIDES.
+const MUTATE = require('./harness-args.js').mutationMode();
+const path = require('path');
+const { loadDraftModules } = require('./harness-env.js');
 
-global.window = global.window || {};
-require('../geometry-2d.js');
-require('../areas.js');            // polygonArea lives here, not in geometry-2d
-const G = global.window.DraftGeometry2D;
-const A = global.window.DraftAreas;
+const ROOT = path.join(__dirname, '..');
+
+// ── THE MUTANTS ───────────────────────────────────────────────────────────
+//
+// The checks below are almost all NEGATIVE -- fifteen shapes that must not be
+// flagged against three that must. That balance is the point of the function
+// and it is also the way a detector can be green while doing nothing: a
+// selfIntersects that always returned false would pass fifteen of eighteen.
+// So the rows that matter here are the ones that make it over-eager, because
+// over-eager is the failure this function was rewritten to fix.
+const MUTATIONS = [
+  // THE REGRESSION THIS FUNCTION EXISTS BECAUSE OF, restored exactly. An
+  // earlier version used segmentIntersection, whose tolerance counts a TOUCH
+  // as a hit, and the vertex magnet leaves zero-width spikes in ordinary
+  // saved rings -- out and back along one line. It called every one of them
+  // a crossing and refused houses the app itself draws.
+  ['touching counts as crossing, so a magnet spike is a crossing again',
+    'geometry-2d.js',
+    c => c.replace('      if (side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0) return true;',
+      '      if (side(a, b, c) * side(a, b, d) <= 0 && side(c, d, a) * side(c, d, b) <= 0) return true;')],
+
+  // AND IT TAKES BOTH SEGMENTS. One alone asks whether this edge-s LINE
+  // separates the other edge-s ends, which is true all over any concave
+  // plan -- an L, a T, a deep C.
+  ['one segment-s line separating the other-s ends is enough',
+    'geometry-2d.js',
+    c => c.replace('      if (side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0) return true;',
+      '      if (side(a, b, c) * side(a, b, d) < 0) return true;')],
+
+  // ANCHORED ON THE LOOP THAT FOLLOWS IT, because `const side = ...` matches
+  // TWICE in geometry-2d.js -- ringInsideRing declares the same helper, with
+  // the same name, body and indentation, and replace() takes the first.
+  // mutant-anchors refused the row until it said which one it meant. (That
+  // the two are byte-identical is its own small finding: one orientation
+  // helper, written out twice.)
+  ['the cross product is a sum, so which side is which is nonsense',
+    'geometry-2d.js',
+    c => c.replace('    const side = (a, b, p) => Math.sign((b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x));\n'
+      + '    for (let i = 0; i < n; i += 1) {',
+      '    const side = (a, b, p) => Math.sign((b.x - a.x) * (p.z - a.z) + (b.z - a.z) * (p.x - a.x));\n'
+      + '    for (let i = 0; i < n; i += 1) {')],
+
+  ['a non-array throws instead of answering no', 'geometry-2d.js',
+    c => c.replace('    if (!Array.isArray(points) || points.length < 4) return false;\n', '')],
+
+  // THE DETECTOR THAT DOES NOTHING. Fifteen of the eighteen checks are
+  // negative, so a selfIntersects that never fires passes most of this file;
+  // this row is what says the three positive ones are real.
+  ['nothing is ever a crossing', 'geometry-2d.js',
+    c => c.replace('      if (side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0) return true;',
+      '      if (false) return true;')],
+
+  // AND THE FLOOR ON A RING. Four corners is the smallest ring that CAN
+  // cross itself, and every positive check in this file has exactly four.
+  ['a four-corner ring is too small to be asked about', 'geometry-2d.js',
+    c => c.replace('    if (!Array.isArray(points) || points.length < 4) return false;',
+      '    if (!Array.isArray(points) || points.length < 8) return false;')],
+
+  // ── THREE ROWS ARE NOT HERE, AND ALL THREE WERE WRITTEN FIRST ───────────
+  //
+  // They are in one group because they have one cause: the strict sign test
+  // makes three older guards unreachable, and none of them can be bent into
+  // a different answer by any ring.
+  //
+  //   `for (let j = i + 2; ...)` loosened to `i + 1`, so ADJACENT segments
+  //   are compared. They share a corner, so one side is always 0 and the
+  //   product is never < 0.
+  //
+  //   `if (i === 0 && j === n - 1) continue;` deleted, so the CLOSING PAIR
+  //   is compared. Same reason -- it shares points[0].
+  //
+  //   `points[(i + 1) % n]` for `b` turned into a non-wrapping read, so the
+  //   last segment never closes the ring. The inner loop starts at i + 2,
+  //   so when i is n - 1 it does not run at all and that `b` is never used.
+  //   `d` wraps on its own line and is untouched, so the closing segment is
+  //   still compared as the INNER one.
+  //
+  // MEASURED, NOT ONLY ARGUED: 400,000 random rings of 4 to 7 corners, plus
+  // the eighteen shapes below and two built to cross on the closing edge --
+  // zero disagreements with the unmutated function, for all three.
+  //
+  // THE GUARDS STAY. They were load-bearing under the segmentIntersection
+  // version this replaced, whose tolerance counted a touch as a hit, and
+  // they are the right shape again the moment the sign test is loosened --
+  // which is exactly what the first row of this table does. They earn their
+  // place by skipping work, not by changing an answer, and a row that cannot
+  // go red for a reason that matters is not a row.
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('self-intersect',
+    MUTATIONS, { root: ROOT, harness: __filename });
+  process.exit(all ? 0 : 1);
+}
+
+const modules = loadDraftModules();
+const G = modules.DraftGeometry2D;
+const A = modules.DraftAreas;
 const P = (...c) => c.map(([x, z]) => ({ x, z }));
 
 let failed = 0, ran = 0;
