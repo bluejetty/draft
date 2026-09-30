@@ -348,6 +348,21 @@ if (!window.DraftLayoutPlan) {
     composition.drawPlan(ctx, toS, {
       levelId,
       viewId: view,
+      // ── WHICH OUTLINE IS THE HOUSE, for the window size tag ───────────
+      //
+      // The tag sits on the EXTERIOR side of the glass and nothing can say
+      // which side that is without the outline. building-bodies.js answers
+      // it, and the MODEL SPACE ASKS THE SAME FUNCTION -- which is the whole
+      // point, because a sheet that nearly agreed with the screen would put
+      // the tag inside the house on exactly the plans where a body sits over
+      // the garage.
+      //
+      // WITHHELD IN SHELL, by the same `unless` the dimensions take. A
+      // neighborhood at 1"=40' asks for the building rather than the
+      // construction document, so the tag stage never opens there and needs
+      // no mode of its own.
+      houseOutline: unless(id => (window.DraftBuildingBodies
+        ? window.DraftBuildingBodies.houseOutlineOn(saved, id) : null)),
       // null for a layer the table does not carry, which layerShows reads as
       // "draws" -- an untagged dimension from before this key existed, and a
       // profile that predates a layer being added, both keep drawing.
