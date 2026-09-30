@@ -84,6 +84,18 @@
      numbers. -->
 <script src="./closets.js"></script>
 <script src="./fixture-geometry.js"></script>
+<!-- WHICH OUTLINE IS THE HOUSE ON A STOREY, for the window size tag: the
+     tag sits on the EXTERIOR side of the glass, and nothing can say which
+     side that is without the outline. building-bodies.js answers it and
+     build-house.js answers the winding question underneath -- BOTH are here
+     rather than a second copy of either on this page, which is the trade
+     this repo keeps making and the reason the tag agrees with the Model
+     Space instead of nearly agreeing.
+
+     build-house.js resolves DraftGeometry2D at CALL time, so its position in
+     this list does not matter. -->
+<script src="./build-house.js"></script>
+<script src="./building-bodies.js"></script>
 <script src="./plan-composition.js"></script>
 <script src="./layout-plan.js"></script>
 <script src="./formatters.js"></script>

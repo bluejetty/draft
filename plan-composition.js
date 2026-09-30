@@ -292,39 +292,52 @@ if (!window.DraftPlanComposition) {
         { isPrinting: Boolean(env.isPrinting), ...(env.openingEnv || {}) });
     });
 
-    if (env.showFenLabels && window.DraftFenLabels && env.houseOutline && env.edgeOnOutline) {
-      const wallById = new Map(walls.map(wall => [wall.id, wall]));
+    // ── AND EACH WINDOW SAYS ITS SIZE ────────────────────────────────────
+    //
+    // Movie, 30 Sep: *"the window tags are eg 36X36 and are on floor plans and
+    // elevations centered on the windows"*. The elevation boxes on a sheet
+    // have carried them all along -- cut-view.js tags a window wherever it
+    // draws one -- and the PLAN box beside them carried nothing, so one sheet
+    // gave a builder window sizes off the elevations only.
+    //
+    // THIS STAGE HAD NEVER RUN. It was gated on `env.showFenLabels`, which
+    // nothing in the repo ever passed. The gate is the LAYER now, which is a
+    // switch a drafter actually has.
+    //
+    // THE PLACEMENT IS fen-labels.js's, SHARED WITH THE MODEL SPACE. What
+    // stood here was the placement from before 28 Sep: horizontal fillText,
+    // the side taken from the glazing's perpendicular -- whose sign is
+    // whichever way the wall was drawn, so it landed inside the house as often
+    // as out -- and a tag on EVERY opening, doors included. It looked
+    // plausible and it was three rulings out of date.
+    //
+    // env.houseOutline IS THE SHELL GATE TOO. A neighborhood at 1"=40' asks
+    // for the building and not the construction document, and layout-plan
+    // withholds the outline there for the same reason it withholds dimensions
+    // -- so this needs no mode of its own.
+    if (env.houseOutline && shows('A-DIMS-WIN')
+      && window.DraftFenLabels && window.DraftFenLabels.planTagLine
+      && window.DraftRender2D && window.DraftRender2D.labelAlongLine2D) {
+      const FL = window.DraftFenLabels;
+      const R = window.DraftRender2D;
       const outlineByLevel = new Map();
       const outlineFor = id => {
         if (!outlineByLevel.has(id)) outlineByLevel.set(id, env.houseOutline(id));
         return outlineByLevel.get(id);
       };
       ctx.save();
-      ctx.fillStyle = env.labelColor || '#1d1f20';
       ctx.font = env.labelFont || "600 9px 'Barlow Condensed', system-ui, sans-serif";
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
       geometryOf.forEach((geometry, opening) => {
-        const wall = wallById.get(opening.wallId);
-        if (!wall) return;
-        const outline = outlineFor(opening.levelId);
-        const label = window.DraftFenLabels.fenLabelForOpening(opening, {
-          exteriorWall: Boolean(outline && env.edgeOnOutline(wall.start, wall.end, outline)),
-        });
+        // WINDOWS ONLY. fenLabelForOpening answers for a door as well -- that
+        // is the leaf size the office orders -- so a stage that forgot to ask
+        // the type would print one beside every door and look right doing it.
+        if (opening.type !== 'window') return;
+        const label = FL.fenLabelForOpening(opening, { exteriorWall: true });
         if (!label) return;
-        // BESIDE THE SYMBOL, off the wall FACE: glazing runs along the wall,
-        // so its perpendicular is the wall's normal, and the assembly's own
-        // corners bound the half thickness the label has to clear.
-        const [ga, gb] = geometry.glazing;
-        const run = Math.hypot(gb.x - ga.x, gb.z - ga.z) || 1;
-        const nx = -(gb.z - ga.z) / run, nz = (gb.x - ga.x) / run;
-        const half = Math.max(...geometry.corners.map(corner =>
-          Math.abs((corner.x - geometry.center.x) * nx + (corner.z - geometry.center.z) * nz)));
-        const at = toS({
-          x: geometry.center.x + nx * (half + 0.55),
-          z: geometry.center.z + nz * (half + 0.55),
-        });
-        ctx.fillText(label, at.x, at.y);
+        const line = FL.planTagLine(geometry, outlineFor(opening.levelId));
+        if (!line) return;
+        R.labelAlongLine2D(ctx, toS(line.a), toS(line.b), label,
+          { offset: 0, color: env.labelColor || '#1d1f20' });
       });
       ctx.restore();
     }

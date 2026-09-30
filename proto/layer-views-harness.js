@@ -272,8 +272,8 @@ const MUTATIONS = [
       '    const view = views.find(v => v.id === viewId);')],
 
   ['the column string joins the walls plan', 'layer-views.js',
-    c => c.replace("'A-DIMS-INT', 'A-DIMS-FENS', 'ROOM-IDS-AREA',",
-      "'A-DIMS-INT', 'A-DIMS-COLS', 'A-DIMS-FENS', 'ROOM-IDS-AREA',")],
+    c => c.replace("'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-WIN', 'ROOM-IDS-AREA',",
+      "'A-DIMS-INT', 'A-DIMS-COLS', 'A-DIMS-FENS', 'A-DIMS-WIN', 'ROOM-IDS-AREA',")],
 
   ['the post comes off the floor view again', 'layer-views.js',
     c => c.replace("(['S-BEAM', 'S-COL-FOOTING', 'S-SLAB',", "(['S-BEAM', 'S-SLAB',")],

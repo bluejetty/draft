@@ -35,7 +35,7 @@ const MUTANTS = [
   // laid out inside the room over the garage -- storeyBodies keeps that room
   // (raiseGarage files it with no `garage` flag) and the lookup took the LAST
   // body rather than the house.
-  { file: 'MODEL.html',
+  { file: 'building-bodies.js',
     // THE DEFECT MOVIE REPORTED, restored exactly: the last body filed on the
     // storey wins. That is what houseOutlineOn did before 25 Sep, and it is
     // why his flight to 2ND FL laid out at x 2.7 z 30.6, inside the room over
@@ -53,7 +53,7 @@ const MUTANTS = [
       + '      ownArea(body.outline) > ownArea(best.outline) ? body : best).outline;',
     with: '    return bodies[bodies.length - 1].outline;',
     test: 'the stair to the second floor lands in the house, not over the garage' },
-  { file: 'MODEL.html',
+  { file: 'building-bodies.js',
     // AIMED AT THE TWO-BODY FIXTURE, not at twoStorey-over. It survived
     // against that one for a reason worth keeping: the house there is both
     // the biggest body on the storey and the only one that is not over the
@@ -65,7 +65,7 @@ const MUTANTS = [
     find: '    return inBody > 0 && over / inBody > OVER_GARAGE_BODY_SHARE;',
     with: '    return false;',
     test: 'the stair takes the biggest house body, not the first one filed' },
-  { file: 'MODEL.html',
+  { file: 'building-bodies.js',
     // SAME REASON, OTHER COINCIDENCE. It was aimed at the built two-storey,
     // where the house is the only body on the storey -- pool[0] and the
     // largest are the same outline, so there was nothing to tell apart. The
