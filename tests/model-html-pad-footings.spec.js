@@ -42,7 +42,12 @@ const SPY = `
         if (typeof member === 'function' && /^draw/.test(name)) {
           wrapped += 1;
           copy[name] = function (...args) {
-            (window.__paintCalls[name] = window.__paintCalls[name] || []).push(1);
+            // A COLUMN RECORDS THE SIZE IT WAS HANDED, everything else a 1.
+            // The page resolves a footing and the painter only draws it, so
+            // the diameter a pile is drawn at is decided HERE, on the way in
+            // -- and a count cannot tell an 8" pile from a 6" one.
+            (window.__paintCalls[name] = window.__paintCalls[name] || []).push(
+              name === 'drawColumn2D' ? (args[3]?.footing?.sizeIn ?? null) : 1);
             return member.apply(this, args);
           };
         } else copy[name] = member;
@@ -155,8 +160,19 @@ test('a built foundation draws a pad under every telepost', async ({ page }) => 
 test('a pad is drawn on the foundation and nowhere else', async ({ page }) => {
   // A pad is concrete in the ground and the plan it belongs on is the one
   // about the ground. Drawn on a floor plan it reads as something in the room.
+  //
+  // AND THE MAIN FLOOR NEEDS A COLUMN OF ITS OWN for that to mean anything.
+  // The pads are grouped from the ACTIVE level's columns, and the built
+  // house stands every telepost on FOUNDATION -- so on MAIN FL there was
+  // nothing to draw a pad under, and a page that drew pads on every plan
+  // still drew zero there. Measured 30 Sep: that mutant SURVIVED this test.
+  // A post on the main floor, pad footing and all, is what the rule has to
+  // decline.
   await page.addInitScript(SPY);
-  await seed(page);
+  await seed(page, empty({
+    columns: [{ id: 9001, point: { x: 6, y: 0, z: 6 }, levelId: MAIN_FL,
+      view: 'plan', footing: 'pad36' }],
+  }));
   await page.goto('/MODEL.html?left=1&right=1');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await order(page, 'bungalow', 'twoStorey');
@@ -169,10 +185,10 @@ test('a pad is drawn on the foundation and nowhere else', async ({ page }) => {
   expect(times(onMain, 'drawPadGroup2D'),
     'a buried pad was drawn onto a floor plan, where it reads as furniture')
     .toBe(0);
-  // AND THE CONTROL: the main floor DID paint, so the zero above is a rule
-  // rather than a page that drew nothing at all.
-  expect(Object.keys(onMain).length,
-    'the main floor painted nothing, so the pad count proves nothing')
+  // AND THE CONTROL: the main floor DID paint, and painted its post, so the
+  // zero above is a rule declining a column rather than no column to decline.
+  expect(times(onMain, 'drawColumn2D'),
+    'the main floor drew no column, so the pad count proves nothing')
     .toBeGreaterThan(0);
 });
 
@@ -243,4 +259,23 @@ test('every pile is drawn at its own diameter, not one size for all',
       ['pad36', 36, 'TYP 36×36 PAD'],
       ['pad42', 42, 'MED 42×42 PAD'],
     ]);
+
+    // AND WHAT THE PAGE HANDS THE PAINTER, which is where the defect lived.
+    // The table above was right the whole time the page was wrong: MODEL.html
+    // never asked it, and passed `sizeIn: 6` for every pile. Measured 30 Sep:
+    // restoring that line SURVIVED every check in this file, because the only
+    // one about diameters read the table and not the drawing.
+    await page.addInitScript(SPY);
+    await seed(page, empty({
+      columns: [
+        { id: 9101, point: { x: 4, y: 0, z: 4 }, levelId: FOUNDATION,
+          view: 'foundation', footing: 'pile8' },
+        { id: 9102, point: { x: 20, y: 0, z: 4 }, levelId: FOUNDATION,
+          view: 'foundation', footing: 'pile12' },
+      ],
+    }));
+    const calls = await paintedOn(page, FOUNDATION, 'foundation');
+    expect((calls.drawColumn2D || []).slice().sort((a, b) => a - b),
+      'a pile was drawn at a diameter its footing does not name')
+      .toEqual([8, 12]);
   });

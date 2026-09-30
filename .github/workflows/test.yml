@@ -261,6 +261,69 @@ jobs:
           done
           [ "$failed" -eq 0 ]
 
+      - name: Run the mutation gates that drive a harness
+        run: |
+          # TWENTY-FIVE GATES EXIST AND THIS JOB RAN NONE OF THEM. Each
+          # proto/*-mutants.js file bends one line of a real source file, runs
+          # the check that should notice, and restores -- 303 rows in all. Only
+          # mutant-anchors-harness read them, and only to confirm their anchors
+          # still MATCH; nothing ever asked whether they still KILL. Measured
+          # 30 Sep, all 303: 11 survived, in four gates.
+          #
+          # TWO OF THE TWENTY-FIVE DRIVE A HARNESS AND NOT A SPEC, and those
+          # two are what this step runs. shared-shell-mutants.js says why in
+          # its own header -- "the whole gate is seconds rather than minutes...
+          # THIS ONE HAS NO EXCUSE." Measured: 23 rows, about five seconds for
+          # both. The other 23 files are 280 Playwright rows and roughly 55
+          # minutes, which is a scheduling decision and not this step's
+          # business.
+          #
+          # DERIVED, NOT LISTED, on the one fact that makes a gate cheap: it
+          # does not shell out to Playwright. A gate that grows a spec drops
+          # out of this step by construction rather than timing the job out.
+          # (A gate whose rows name a harness but which still drives a spec
+          # for the rest -- auto-piles, pad-footing -- stays out, correctly.)
+          shopt -s nullglob
+          gates=()
+          for g in proto/*-mutants.js; do
+            grep -q "playwright test" "$g" || gates+=("$g")
+          done
+
+          # A LOOP THAT MATCHES NOTHING PASSES -- the same trap this job names
+          # above for the harnesses themselves, and the more likely one here:
+          # the grep is a NEGATIVE test, so a rename that breaks the glob and a
+          # Playwright call that changes shape both read as "no cheap gates".
+          if [ ${#gates[@]} -eq 0 ]; then
+            echo "no harness-driven gate matched proto/*-mutants.js -- nothing ran"
+            exit 1
+          fi
+
+          # A FLOOR, NOT AN INVENTORY, as with the engine list above. These two
+          # were the cheap ones when this was written; a third is picked up by
+          # the loop without touching this list, and the list goes stale only
+          # in the safe direction.
+          failed=0
+          for must in proto/layout-record-mutants.js \
+                      proto/shared-shell-mutants.js; do
+            printf '%s\n' "${gates[@]}" | grep -qxF "$must" || {
+              failed=$((failed + 1))
+              printf 'FAIL  %s is a known harness-driven gate and the loop did not select it\n' "$must"
+            }
+          done
+
+          echo "${#gates[@]} harness-driven gates"
+          for g in "${gates[@]}"; do
+            out=$(node "$g" 2>&1) && code=0 || code=$?
+            if [ "$code" -ne 0 ]; then
+              failed=$((failed + 1))
+              printf 'FAIL  %s  (exit %s)\n' "$g" "$code"
+              echo "$out" | tail -30 | sed 's/^/      /'
+            else
+              printf 'ok    %s  %s\n' "$g" "$(echo "$out" | grep -oE '[0-9]+/[0-9]+ killed' | tail -1)"
+            fi
+          done
+          [ "$failed" -eq 0 ]
+
   playwright:
     runs-on: ubuntu-latest
     # SIX SHARDS. IT WAS FOUR, AND THE READING THAT CHANGED IT IS BELOW.

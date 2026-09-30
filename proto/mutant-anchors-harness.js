@@ -158,6 +158,19 @@ for (const name of files) {
       failures.push(`${label}: test grep ${JSON.stringify(m.test)} matches no title in ${spec}`
         + ' -- playwright would run NOTHING and exit non-zero, scoring this mutation as KILLED');
     }
+    // A ROW MAY NAME A HARNESS INSTEAD OF A SPEC TITLE, and the same trap
+    // waits there: `node` on a path that is not there exits non-zero, which
+    // scores as KILLED. The gate refuses a red harness before its first row,
+    // but the gates are not in CI and this is. And one row, one instrument --
+    // a row carrying both would be graded on whichever the engine reads first.
+    if (m.harness !== undefined) {
+      if (typeof m.harness !== 'string' || !m.harness) {
+        failures.push(`${label}: 'harness' is not a path`);
+      } else if (!fs.existsSync(path.join(ROOT, m.harness))) {
+        failures.push(`${label}: harness ${m.harness} does not exist -- node would exit non-zero, scoring this mutation as KILLED`);
+      }
+      if (m.test !== undefined) failures.push(`${label}: carries both 'test' and 'harness'`);
+    }
   });
 }
 
