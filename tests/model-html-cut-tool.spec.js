@@ -265,11 +265,20 @@ test('the empty state says NO SECTIONS, and the row appears once one is cut',
     // is that the empty state is CURRENT: it named a page with no cut tool
     // once, long after the cut tool arrived. So it pins the words the panel
     // is meant to say and refuses the two it has said before.
+    //
+    // AND ITS ABSENCE IS A FAILURE, NOT A REASON TO SKIP. This read
+    // `if (await empty.count())` until now, which meant the three lines that
+    // are the whole point of the test only ran when the thing they check
+    // happened to be on screen: delete the empty state outright and this went
+    // green having asserted nothing about it. The later `toHaveCount(0)` does
+    // not cover the gap either -- it passes trivially against an element that
+    // was never there. So the count is asserted first, and the words after.
     const empty = page.locator('[data-no-sections]');
-    if (await empty.count()) {
-      await expect(empty).toHaveText('NO SECTIONS');
-      await expect(empty).not.toContainText('no cut tool');
-    }
+    await expect(empty, 'the empty line is gone; this test is about its words, '
+      + 'so its absence is the failure and not a reason to skip')
+      .toHaveCount(1);
+    await expect(empty).toHaveText('NO SECTIONS');
+    await expect(empty).not.toContainText('no cut tool');
 
     await pressCut(page);
     await cutThrough(page, A, B, SOUTH);
