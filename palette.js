@@ -136,6 +136,37 @@ if (!window.DraftPalette) {
                         // QUIETER than the footprint they belong to. That
                         // ordering is the check: guide contrast below roof
                         // contrast, on both skins.
+    // TRACE -- an outline's identity while it is being drawn or parked, and
+    // the selection that picks one up. A CATEGORICAL family, not a scale:
+    // these colours exist to be told apart FROM EACH OTHER, the way a legend
+    // does, so they are not a lightness ramp of one hue and must never be
+    // folded into ink-* or surface-*. That is the whole reason they were
+    // literals in MODEL.html until now -- there was no role shaped like this
+    // to ask for, and borrowing a wrong name would have been worse than a
+    // literal saying where it came from.
+    //
+    // THEY ARE LINE WORK, so the floor is 3.0, not the 4.5 body text answers
+    // to -- the same split draw-note (4.5) and draw-fixture / draw-stair /
+    // draw-cut (3.0) already carry.
+    'draw-trace-boneyard',        // a house outline parked in the boneyard
+    'draw-trace-level',           // a house outline placed on a level
+    'draw-trace-garage-boneyard', // the same two, for a garage, kept apart
+    'draw-trace-garage-level',    // because both can be on screen at once
+    'draw-trace-bungalow',        // the build family a trace was armed from,
+    'draw-trace-bilevel',         // which is the order's rule 4
+    // SEPARATE FROM BILEVEL AND EQUAL TO IT TODAY, deliberately. MODEL.html
+    // carried both as #3f7fd6 and wrote the warning down: "whoever lands
+    // them owns telling them apart". Garage runs are not on that page yet, so
+    // nothing has to differ now -- but two ROLES at one value can be pulled
+    // apart later without touching a line that reads them, where one role
+    // used twice cannot.
+    'draw-trace-attached',        // an attached garage run
+    // SELECTION, which is not a trace but shares this family's job of being
+    // told apart. draw-floor-edge holds the same blue under a name that means
+    // the slab outline, and borrowing it would be the wrong name rather than
+    // a shared idea.
+    'draw-selected',              // the handle and band for THIS level
+    'draw-selected-all',          // the band when the mode is every level
     // Brand -- the family that actually differs between RUFF and ROUGH
     'accent',           // the one colour that carries the brand
     'accent-ink',       // text that sits ON the accent
@@ -263,6 +294,18 @@ if (!window.DraftPalette) {
       // reading day always had.
       'draw-roof':       '#c4915a',
       'draw-roof-guide': '#a3703f',   // 3.90 -- clears 3.0, sits under the roof's 5.95
+      // TRACE. Ratios are against surface-page; the floor for line work is 3.0.
+      // Every value here is MODEL.html's own literal EXCEPT the two marked
+      // LIFTED, which were measured below the floor on this mode.
+      'draw-trace-boneyard':        '#c86876',  // 4.49  LIFTED from #b04050, which read 2.91
+      'draw-trace-level':           '#5980a6',  // 3.99
+      'draw-trace-garage-boneyard': '#cf7a1f',  // 5.09
+      'draw-trace-garage-level':    '#7d5ba6',  // 3.09
+      'draw-trace-bungalow':        '#c0392b',  // 3.04  the old page's traceHouse exactly
+      'draw-trace-bilevel':         '#3f7fd6',  // 4.11
+      'draw-trace-attached':        '#3f7fd6',  // 4.11  equal to bilevel today, see ROLES
+      'draw-selected':              '#5980a6',  // 3.99
+      'draw-selected-all':          '#c86876',  // 4.49  LIFTED with boneyard: same colour, same fault
       'accent-ink':      '#1d1f20',
     }),
     day: Object.freeze({
@@ -353,6 +396,16 @@ if (!window.DraftPalette) {
       'draw-roof-guide': '#a3703f',   // 3.79 -- under the roof's 6.64, same as night's ordering.
                                       // Both values are what render-2d.js hardcoded before this
                                       // role existed, so DAY IS UNCHANGED.
+      // TRACE, against day's ground. Only the garage boneyard moves here.
+      'draw-trace-boneyard':        '#b04050',  // 5.08
+      'draw-trace-level':           '#5980a6',  // 3.71
+      'draw-trace-garage-boneyard': '#a15f18',  // 4.51  LIFTED from #cf7a1f, which read 2.91
+      'draw-trace-garage-level':    '#7d5ba6',  // 4.79
+      'draw-trace-bungalow':        '#c0392b',  // 4.86
+      'draw-trace-bilevel':         '#3f7fd6',  // 3.60
+      'draw-trace-attached':        '#3f7fd6',  // 3.60
+      'draw-selected':              '#5980a6',  // 3.71
+      'draw-selected-all':          '#b04050',  // 5.08
       'accent-ink':      '#ffffff',
     }),
   });
