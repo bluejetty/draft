@@ -67,25 +67,75 @@ check('only surfaces are texturable', P.TEXTURABLE.every(r => r.startsWith('surf
 // palette.js and the fallback kept the old gold, and the only symptom was a
 // gold frame before boot -- invisible in every screenshot and every spec.
 // Caught by reading the file, which is not a method. So it is asserted.
-console.log('\n--- the pre-boot fallbacks in MODEL.html match the night skin');
+console.log('\n--- a page that re-states a palette role matches the palette');
 {
   const fs = require('fs');
   const path = require('path');
-  const html = fs.readFileSync(path.join(__dirname, '..', 'MODEL.html'), 'utf8');
-  // The :root block only -- the rest of the file is full of var() references.
-  const root = html.slice(html.indexOf(':root'), html.indexOf('html, body'));
+  const ROOT = path.join(__dirname, '..');
   const night = P.resolve('ruff', 'night');
-  // Only the roles the block actually declares: it is a paint-before-boot
-  // stopgap for the CHROME, not a second copy of all 30 drawing roles, and
+
+  // THE POPULATION IS THE DISK, NOT A PAGE NAMED HERE. This began as
+  // MODEL.html only, which was right while MODEL was the only page with
+  // pre-boot fallbacks and wrong the moment a second one grew them: a check
+  // that names its subject finds the instance and leaves the class. Every
+  // .html is scanned; MODEL is asserted below as a FLOOR, not an inventory.
+  //
+  // RUFF/NIGHT IS THE EXPECTATION AND THE CODE NAMES IT TWICE: apply()'s own
+  // signature is `apply(doc, theme = 'ruff', mode = 'night')`, and MODEL's
+  // boot reads storedOr('theme', ..., 'ruff') / storedOr('mode', ..., 'night').
+  //
+  // ONLY THE ROLES A PAGE ACTUALLY DECLARES. The block is a paint-before-boot
+  // stopgap for the CHROME, not a second copy of every drawing role, and
   // demanding the rest would be inventing a requirement nobody has.
-  const declared = [...root.matchAll(/--([a-z-]+):\s*([^;]+);/g)]
-    .map(m => [m[1], m[2].trim()])
-    .filter(([role]) => P.ROLES.includes(role));
-  check('the block declares something', declared.length > 0, `${declared.length} roles`);
-  declared.forEach(([role, value]) => {
-    check(`--${role} matches palette.js`, value === night[role],
-      value === night[role] ? value : `${value} in MODEL.html, ${night[role]} in palette.js`);
-  });
+  //
+  // MEMBERSHIP IN ROLES, NOT A NAME PREFIX, and check 2 below freezes why:
+  // index.html declares --ink, --paper and --blue-dark, which are ENTRY's own
+  // variables. A prefix rule drags ENTRY onto a roster it is deliberately off
+  // -- board #310 holds it apart and it takes no skin -- and then demands it
+  // match a palette it does not use. --ink is not --ink-primary.
+  const decomment = src => src
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const DECL = /--([a-z][a-z0-9-]*)\s*:\s*(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6})\s*[;}]/g;
+  const rolesIn = src => {
+    const out = [];
+    DECL.lastIndex = 0;
+    let m;
+    while ((m = DECL.exec(decomment(src))) !== null) {
+      if (P.ROLES.includes(m[1])) out.push([m[1], m[2].toLowerCase()]);
+    }
+    return out;
+  };
+
+  // THE INSTRUMENT BEFORE THE SUBJECT. A scanner that finds nothing reports
+  // the same "0 drifted" as a repo with no drift, so it is fed four fixtures
+  // by hand: one it MUST find, and three it must NOT count.
+  check('the scanner finds a plain role declaration',
+    rolesIn(':root { --ink-primary: #e7e5e2; }').length === 1);
+  check('the scanner ignores a non-role variable',
+    rolesIn(":root { --ink: #163653; --paper: #eef5fb; }").length === 0);
+  check('the scanner ignores a role named inside a comment',
+    rolesIn('/* --ink-primary: #e7e5e2; was the old value */').length === 0);
+  check('the scanner ignores a declaration that is not a hex literal',
+    rolesIn(':root { --ink-primary: var(--x); }').length === 0);
+
+  const pages = fs.readdirSync(ROOT).filter(f => f.endsWith('.html')).sort();
+  check('the scan reaches the pages', pages.length >= 5, `${pages.length} on disk`);
+
+  let declaredAnywhere = 0;
+  for (const page of pages) {
+    const declared = rolesIn(fs.readFileSync(path.join(ROOT, page), 'utf8'));
+    declaredAnywhere += declared.length;
+    declared.forEach(([role, value]) => {
+      check(`${page}  --${role} matches palette.js`, value === String(night[role]).toLowerCase(),
+        value === String(night[role]).toLowerCase() ? value
+          : `${value} in ${page}, ${night[role]} in palette.js`);
+    });
+  }
+  check('something declares role fallbacks', declaredAnywhere > 0, `${declaredAnywhere} declarations`);
+  // The floor: MODEL carried eight on 30 Sep. A count alone survives a swap.
+  check('MODEL.html still carries its pre-boot fallbacks',
+    rolesIn(fs.readFileSync(path.join(ROOT, 'MODEL.html'), 'utf8')).length >= 8);
 }
 
 console.log('\n--- legibility, measured (WCAG AA: 4.5 body, 3.0 large)');
