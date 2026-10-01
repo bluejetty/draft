@@ -1801,7 +1801,24 @@ if (!window.DraftDrawingFormat) {
         ? Number(viewport.sheet) : 1;
       if (!safeId(id) || id < 1 || seen.has(id) || kind == null) return null;
       if (pif == null || xIn === null || yIn === null) return null;
-      const base = { id, kind, pif, xIn, yIn, sheet };
+      // THE WINDOW, CROPPED OR GROWN (Movie, 1 Oct: "the user should be
+      // allowed to adjust the window size and position of the layouts on the
+      // page", and "the scale should stay the same unless they decide to
+      // change the scale"). Insets in paper inches off each side of the frame
+      // the view would have uncropped: positive trims in, negative grows out.
+      // The drawing never moves or rescales with it. Absent when untouched,
+      // so every viewport saved before it reads the same.
+      const crop = (() => {
+        const c = viewport?.crop;
+        if (!c || typeof c !== 'object') return null;
+        const sides = ['l', 't', 'r', 'b'].map(side => {
+          const value = num(c[side]);
+          return value === null ? 0 : Math.max(-40, Math.min(40, value));
+        });
+        return sides.some(value => value !== 0)
+          ? { l: sides[0], t: sides[1], r: sides[2], b: sides[3] } : null;
+      })();
+      const base = { id, kind, pif, xIn, yIn, sheet, ...(crop ? { crop } : {}) };
       if (kind === 'plan') {
         const viewportLevelId = levelId(viewport?.levelId, levelIds);
         if (viewportLevelId == null) return null;
