@@ -750,13 +750,13 @@
      the selection, whatever is in it. It is on screen exactly while there is
      something to delete -- and the iPad has no Delete key, so this button is
      the only way to delete anything at all there. */
-  #delete, #undo { font-family: var(--font-ui); font-size:12px; font-weight:600;
+  #delete, #model-undo { font-family: var(--font-ui); font-size:12px; font-weight:600;
     letter-spacing:0.06em; text-transform:uppercase; cursor:pointer;
     color: var(--ink-primary);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px; padding:6px 14px; }
-  #delete:hover, #undo:hover { color: var(--accent); border-color: var(--accent); }
-  #delete[hidden], #undo[hidden] { display:none; }
+  #delete:hover, #model-undo:hover { color: var(--accent); border-color: var(--accent); }
+  #delete[hidden], #model-undo[hidden] { display:none; }
 
   /* THE MIDDLE PRESS: the bone, the one press the sign covers. DELETE, COPY
      and PASTE travel with it because they are verbs, not places.

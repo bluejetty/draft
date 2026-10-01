@@ -471,8 +471,11 @@ if (!window.DraftShellBars) {
          for one of the types. It rides with the pair rather than with the
          places, because it is a verb. -->
     <!-- UNDO, ON SCREEN (audit C4). Ctrl+Z was the only way back, and an
-         iPad has no Ctrl key. A verb, so it rides with DELETE. -->
-    <button id="undo" type="button" data-undo hidden
+         iPad has no Ctrl key. A verb, so it rides with DELETE. NAMED FOR
+         MODEL, not plain `undo`: LAYOUT carries this bar too and has its
+         own [data-undo] in its status strip, which a second one here would
+         shadow. Pages other than MODEL never unhide it. -->
+    <button id="model-undo" type="button" data-model-undo hidden
       title="Undo the last change (Ctrl+Z)">UNDO</button>
     <button id="delete" type="button" data-delete hidden
       title="Delete what is selected">DELETE</button>

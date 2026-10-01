@@ -346,7 +346,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
     async ({ page }) => {
       await seed(page);
       await openNewPage(page);
-      const undo = page.locator('[data-undo]');
+      const undo = page.locator('[data-model-undo]');
       await expect(undo, 'nothing done yet, nothing to undo').toBeHidden();
 
       await tapAt(page, ON_W_A, 0);
