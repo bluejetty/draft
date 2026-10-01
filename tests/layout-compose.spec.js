@@ -708,7 +708,7 @@ test('picking a scale rescales the selected viewport, and undo puts it back', as
 test('ELECTRIC PLAN is dealt last when devices are placed, and REMOVE SHEET takes a sheet out',
   async ({ page }) => {
     const d = twoStorey();
-    d.electricDevices = [{ id: 'e1', levelId: 3, kind: 'outlet', x: 2, z: 0 }];
+    d.electricDevices = [{ id: 'e1', levelId: 3, kind: 'pot', at: { x: 2, y: 0, z: 2 } }];
     await openLayout(page, d);
     await waitForCompose(page);
     const dealt = await savedLayout(page);
