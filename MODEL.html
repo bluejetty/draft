@@ -4223,6 +4223,10 @@
     // THE SAME RULE AS DELETE, and asked here for the same reason: a section
     // view or a modal suppresses every verb, because neither is a workspace a
     // paste could land on.
+    // UNDO IS ON SCREEN WHILE THERE IS SOMETHING TO UNDO, the same rule as
+    // DELETE above -- and, unlike DELETE, under a section too: taking back
+    // the cut that made the section is exactly what a drafter may want there.
+    if (undoButton) undoButton.hidden = !undoStack.length || modalUp();
     if (copyButton) {
       copyButton.hidden = !selection.length || !!activeCut() || modalUp();
     }
@@ -8876,6 +8880,7 @@
   // for one register is the drift this pass exists to end, and the key is the
   // survivor because the other sixteen tools are already only there.
   const deleteButton = document.getElementById('delete');
+  const undoButton = document.getElementById('undo');
   const copyButton = document.getElementById('copy');
   const pasteButton = document.getElementById('paste');
 
@@ -15855,6 +15860,7 @@
     showToolProps(tool);
   });
   deleteButton.addEventListener('click', pressDelete);
+  if (undoButton) undoButton.addEventListener('click', () => { if (!modalUp()) undoOnce(); });
   if (copyButton) copyButton.addEventListener('click', () => { copySelection(); paint(); });
   if (pasteButton) pasteButton.addEventListener('click', () => { pasteHeld(); });
 
@@ -16694,149 +16700,160 @@
       pressDelete();
       return;
     }
+    // THE KEY AND THE BUTTON ARE THE SAME VERB, as DELETE's are: both call
+    // undoOnce, so neither can learn something the other does not.
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
-      const step = undoStack.pop();
-      if (!step) return;
+      if (!undoStack.length) return;
       e.preventDefault();
-      // ONE PRESS IS ONE UNDO whether the press moved one corner or a wall's
-      // two, drew a wall, or deleted one: the entry is whatever that gesture
-      // captured, so a wall goes back in one keystroke rather than two.
-      if (step.kind === 'move') {
-        step.before.forEach(b => {
-          b.vtx.x = b.x;
-          b.vtx.z = b.z;
-          // The offsets go BACK to what they were, not to a re-measure. Undo that
-          // recomputed them would leave the corner at its old position carrying a
-          // new offset — a different drawing from the one before the drag, and one
-          // whose difference nothing on screen would show.
-          if (b.offX !== undefined) { b.vtx.offX = b.offX; b.vtx.offZ = b.offZ; }
-        });
-      } else if (step.kind === 'move-opening') {
-        // The record is mutated in place, so undo puts the one number back
-        // rather than restoring a copy -- a copy would detach the opening
-        // every other reader already holds by reference.
-        step.opening.offset = step.was;
-      } else if (step.kind === 'size-opening') {
-        // A typed size moves two numbers, and both go back together: undoing
-        // the width alone would leave the window the height it was retyped to
-        // and read as a half-finished undo.
-        step.opening.width = step.wasWidth;
-        step.opening.sillHeight = step.wasSill;
-      } else if (step.kind === 'edge-tag') {
-        // The roof's own edges array is mutated in place, so undo puts the one
-        // word back rather than restoring a copy of the roof -- a copy would
-        // detach the record every other reader already holds by reference.
-        step.roof.edges[step.index] = step.was;
-      } else if (step.kind === 'add-item') {
-        // Structure placement. The list is captured in the step, so this works
-        // for columns and beams without knowing which it is holding.
-        const at = step.list.indexOf(step.item);
-        if (at >= 0) step.list.splice(at, 1);
-      } else if (step.kind === 'props') {
-        // A DUST GOES BACK. The step holds each item and a copy of it as it
-        // was, and the record is mutated IN PLACE rather than swapped for the
-        // copy -- the selection, the properties panel and every painter hold
-        // these by reference, and handing back a new object would leave all
-        // of them pointing at the one that is no longer in the drawing.
-        //
-        // KEYS THE BRUSH ADDED ARE REMOVED, not left at their old value:
-        // `garage` arrives on a window that never had one, and assigning the
-        // `before` copy over the top would leave it standing. What was not
-        // there before must not be there after.
-        step.edits.forEach(({ item, before }) => {
-          Object.keys(item).forEach(key => {
-            if (!(key in before)) delete item[key];
-          });
-          Object.assign(item, before);
-        });
-        showSelectionProps();
-      } else if (step.kind === 'remove-item') {
-        // The mirror of 'add-item', and the same trick: the list is captured
-        // in the step, so one branch puts a line, floor, outline, column or
-        // beam back without knowing which it is holding.
-        step.list.splice(Math.min(step.index, step.list.length), 0, step.item);
-      } else if (step.kind === 'built') {
-        // A WHOLE ORDER GOES BACK AT ONCE, walls and the loop that names
-        // them, and the corners it minted are retired with them -- the
-        // same reason single-wall undo retires its own.
-        step.walls.forEach(wall => {
-          const at = drawing.walls.indexOf(wall);
-          if (at >= 0) drawing.walls.splice(at, 1);
-        });
-        setSelection(selection.filter(entry => !step.walls.includes(entry.item)));
-        retirePoolCorners(step.walls.flatMap(wall => [wall.start, wall.end]));
-        // THE LOOPS GO BACK ONLY IF THE ORDER MADE THEM. An ordered garage and
-        // a premade bungalow mint their own and take them back with the walls;
-        // a house raised from a loop the DRAFTER traced leaves that loop
-        // standing -- he drew it, the bone only built on it, and an undo that
-        // swallowed his trace would take back a gesture he never asked to
-        // undo. So a build that owns nothing carries an empty list.
-        (step.outlines || []).forEach(outline => {
-          const outlineAt = step.list ? step.list.indexOf(outline) : -1;
-          if (outlineAt >= 0) step.list.splice(outlineAt, 1);
-        });
-        // The openings the order hung on those walls go with them.
-        (step.openings || []).forEach(record => {
-          const at = (drawing.fenestrations || []).indexOf(record);
-          if (at >= 0) drawing.fenestrations.splice(at, 1);
-        });
-        // AND THE REST OF THE BUILDING: the storey's floor, the slab, the
-        // footing lines and the roof. Each carries the list it went into, so
-        // this branch needs to know nothing about what any of them IS.
-        (step.items || []).forEach(({ list, item }) => {
-          const at = list.indexOf(item);
-          if (at >= 0) list.splice(at, 1);
-        });
-        // AND WHAT THE PRESS TOOK OUT GOES BACK IN. Removing what a press
-        // added is only half an undo when the press also replaced something:
-        // AUTO DIMS sweeps a level's previous auto strings before laying
-        // fresh ones, and without this the drafter would end with neither.
-        (step.restored || []).forEach(({ list, items }) => {
-          items.forEach(item => { if (!list.includes(item)) list.push(item); });
-        });
-      } else if (step.kind === 'add') {
-        const at = drawing.walls.indexOf(step.wall);
-        if (at >= 0) drawing.walls.splice(at, 1);
-        setSelection(selection.filter(entry => entry.item !== step.wall));
-        // AND RETIRE THE CORNERS IT INTRODUCED, or the pool keeps a phantom
-        // the next drawn wall snaps to — a corner belonging to a wall that no
-        // longer exists, invisible and magnetic.
-        retirePoolCorners([step.wall.start, step.wall.end]);
-      } else if (step.kind === 'remove') {
-        drawing.walls.splice(Math.min(step.index, drawing.walls.length), 0, step.wall);
-        // The dependents come back BY VALUE into the same raw arrays the
-        // cascade took them out of. They were never normalised on the way in
-        // (this page rides them through on the ...parsed spread), so putting
-        // the same objects back is the only restoration that is exact.
-        step.deps.forEach(d => { if (Array.isArray(d.list)) d.list.splice(Math.min(d.index, d.list.length), 0, d.item); });
-        // AND THE CORNERS GO BACK IN THE POOL. The restored wall already holds
-        // these objects — identity on the wall survives the round trip — but
-        // the pool is what the NEXT drawn endpoint searches. Leave them out
-        // and a wall drawn onto the restored free end mints a fresh object at
-        // the same coordinates instead of joining: every number right, the
-        // drawing right, and the mitre silently gone. That is the same class
-        // as the pooling mutation this rung's specs already caught, arriving
-        // through undo instead of through create.
-        (step.retired || []).forEach(corner => {
-          if (!vertexPool.includes(corner)) vertexPool.push(corner);
-        });
-      }
-      // AN UNDO IS AN EDIT TOO. The drawing on screen no longer matches the
-      // file — going back to where you started is only free if you never
-      // saved the trip out.
-      markDirty();
-      // AND THE RAILS ARE PART OF THE DRAWING ON SCREEN. Until the CUT tool
-      // there was no undoable thing with a row of its own — a wall, a column
-      // and a beam all live on the canvas, so paint() alone put the page
-      // back. A section has a row in SECTIONS, and undo without this line
-      // took the cut out of the record and left its row sitting there: press
-      // it and the page looks for a cut that is gone. The rebuild is the same
-      // one every commit already runs, and it is a no-op for the kinds that
-      // touch nothing but the canvas.
-      buildChrome();
-      paint();
+      undoOnce();
     }
   });
+
+  // ONE UNDO, whichever control did the pressing. Until audit C4 the only
+  // control was Ctrl+Z, and an iPad has no Ctrl key: a drafter there had no
+  // way back from any edit at all.
+  const undoOnce = () => {
+    const step = undoStack.pop();
+    if (!step) return false;
+    // ONE PRESS IS ONE UNDO whether the press moved one corner or a wall's
+    // two, drew a wall, or deleted one: the entry is whatever that gesture
+    // captured, so a wall goes back in one keystroke rather than two.
+    if (step.kind === 'move') {
+      step.before.forEach(b => {
+        b.vtx.x = b.x;
+        b.vtx.z = b.z;
+        // The offsets go BACK to what they were, not to a re-measure. Undo that
+        // recomputed them would leave the corner at its old position carrying a
+        // new offset — a different drawing from the one before the drag, and one
+        // whose difference nothing on screen would show.
+        if (b.offX !== undefined) { b.vtx.offX = b.offX; b.vtx.offZ = b.offZ; }
+      });
+    } else if (step.kind === 'move-opening') {
+      // The record is mutated in place, so undo puts the one number back
+      // rather than restoring a copy -- a copy would detach the opening
+      // every other reader already holds by reference.
+      step.opening.offset = step.was;
+    } else if (step.kind === 'size-opening') {
+      // A typed size moves two numbers, and both go back together: undoing
+      // the width alone would leave the window the height it was retyped to
+      // and read as a half-finished undo.
+      step.opening.width = step.wasWidth;
+      step.opening.sillHeight = step.wasSill;
+    } else if (step.kind === 'edge-tag') {
+      // The roof's own edges array is mutated in place, so undo puts the one
+      // word back rather than restoring a copy of the roof -- a copy would
+      // detach the record every other reader already holds by reference.
+      step.roof.edges[step.index] = step.was;
+    } else if (step.kind === 'add-item') {
+      // Structure placement. The list is captured in the step, so this works
+      // for columns and beams without knowing which it is holding.
+      const at = step.list.indexOf(step.item);
+      if (at >= 0) step.list.splice(at, 1);
+    } else if (step.kind === 'props') {
+      // A DUST GOES BACK. The step holds each item and a copy of it as it
+      // was, and the record is mutated IN PLACE rather than swapped for the
+      // copy -- the selection, the properties panel and every painter hold
+      // these by reference, and handing back a new object would leave all
+      // of them pointing at the one that is no longer in the drawing.
+      //
+      // KEYS THE BRUSH ADDED ARE REMOVED, not left at their old value:
+      // `garage` arrives on a window that never had one, and assigning the
+      // `before` copy over the top would leave it standing. What was not
+      // there before must not be there after.
+      step.edits.forEach(({ item, before }) => {
+        Object.keys(item).forEach(key => {
+          if (!(key in before)) delete item[key];
+        });
+        Object.assign(item, before);
+      });
+      showSelectionProps();
+    } else if (step.kind === 'remove-item') {
+      // The mirror of 'add-item', and the same trick: the list is captured
+      // in the step, so one branch puts a line, floor, outline, column or
+      // beam back without knowing which it is holding.
+      step.list.splice(Math.min(step.index, step.list.length), 0, step.item);
+    } else if (step.kind === 'built') {
+      // A WHOLE ORDER GOES BACK AT ONCE, walls and the loop that names
+      // them, and the corners it minted are retired with them -- the
+      // same reason single-wall undo retires its own.
+      step.walls.forEach(wall => {
+        const at = drawing.walls.indexOf(wall);
+        if (at >= 0) drawing.walls.splice(at, 1);
+      });
+      setSelection(selection.filter(entry => !step.walls.includes(entry.item)));
+      retirePoolCorners(step.walls.flatMap(wall => [wall.start, wall.end]));
+      // THE LOOPS GO BACK ONLY IF THE ORDER MADE THEM. An ordered garage and
+      // a premade bungalow mint their own and take them back with the walls;
+      // a house raised from a loop the DRAFTER traced leaves that loop
+      // standing -- he drew it, the bone only built on it, and an undo that
+      // swallowed his trace would take back a gesture he never asked to
+      // undo. So a build that owns nothing carries an empty list.
+      (step.outlines || []).forEach(outline => {
+        const outlineAt = step.list ? step.list.indexOf(outline) : -1;
+        if (outlineAt >= 0) step.list.splice(outlineAt, 1);
+      });
+      // The openings the order hung on those walls go with them.
+      (step.openings || []).forEach(record => {
+        const at = (drawing.fenestrations || []).indexOf(record);
+        if (at >= 0) drawing.fenestrations.splice(at, 1);
+      });
+      // AND THE REST OF THE BUILDING: the storey's floor, the slab, the
+      // footing lines and the roof. Each carries the list it went into, so
+      // this branch needs to know nothing about what any of them IS.
+      (step.items || []).forEach(({ list, item }) => {
+        const at = list.indexOf(item);
+        if (at >= 0) list.splice(at, 1);
+      });
+      // AND WHAT THE PRESS TOOK OUT GOES BACK IN. Removing what a press
+      // added is only half an undo when the press also replaced something:
+      // AUTO DIMS sweeps a level's previous auto strings before laying
+      // fresh ones, and without this the drafter would end with neither.
+      (step.restored || []).forEach(({ list, items }) => {
+        items.forEach(item => { if (!list.includes(item)) list.push(item); });
+      });
+    } else if (step.kind === 'add') {
+      const at = drawing.walls.indexOf(step.wall);
+      if (at >= 0) drawing.walls.splice(at, 1);
+      setSelection(selection.filter(entry => entry.item !== step.wall));
+      // AND RETIRE THE CORNERS IT INTRODUCED, or the pool keeps a phantom
+      // the next drawn wall snaps to — a corner belonging to a wall that no
+      // longer exists, invisible and magnetic.
+      retirePoolCorners([step.wall.start, step.wall.end]);
+    } else if (step.kind === 'remove') {
+      drawing.walls.splice(Math.min(step.index, drawing.walls.length), 0, step.wall);
+      // The dependents come back BY VALUE into the same raw arrays the
+      // cascade took them out of. They were never normalised on the way in
+      // (this page rides them through on the ...parsed spread), so putting
+      // the same objects back is the only restoration that is exact.
+      step.deps.forEach(d => { if (Array.isArray(d.list)) d.list.splice(Math.min(d.index, d.list.length), 0, d.item); });
+      // AND THE CORNERS GO BACK IN THE POOL. The restored wall already holds
+      // these objects — identity on the wall survives the round trip — but
+      // the pool is what the NEXT drawn endpoint searches. Leave them out
+      // and a wall drawn onto the restored free end mints a fresh object at
+      // the same coordinates instead of joining: every number right, the
+      // drawing right, and the mitre silently gone. That is the same class
+      // as the pooling mutation this rung's specs already caught, arriving
+      // through undo instead of through create.
+      (step.retired || []).forEach(corner => {
+        if (!vertexPool.includes(corner)) vertexPool.push(corner);
+      });
+    }
+    // AN UNDO IS AN EDIT TOO. The drawing on screen no longer matches the
+    // file — going back to where you started is only free if you never
+    // saved the trip out.
+    markDirty();
+    // AND THE RAILS ARE PART OF THE DRAWING ON SCREEN. Until the CUT tool
+    // there was no undoable thing with a row of its own — a wall, a column
+    // and a beam all live on the canvas, so paint() alone put the page
+    // back. A section has a row in SECTIONS, and undo without this line
+    // took the cut out of the record and left its row sitting there: press
+    // it and the page looks for a cut that is gone. The rebuild is the same
+    // one every commit already runs, and it is a no-op for the kinds that
+    // touch nothing but the canvas.
+    buildChrome();
+    paint();
+    return true;
+  };
   window.addEventListener('resize', resize);
 
   // ── AND A RAIL THAT CHANGES SHAPE IS A STALE DRAWING ──────────────────────

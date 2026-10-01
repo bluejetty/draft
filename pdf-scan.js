@@ -64,7 +64,10 @@ if (!window.DraftPdfScan) {
         : imageOps > 0 ? 'image'
         : 'vector';
       scan.isVector = scan.tier === 'vector' || scan.tier === 'hybrid';
-      const scale = Math.min(2.6, 2200 / viewport1.width);
+      // THE LONG SIDE, as the photo path below caps it. Capping the width
+      // alone let a tall portrait page past iOS Safari's canvas limit, where
+      // toBlob answers null and the scan stored nothing (audit 8.4).
+      const scale = Math.min(2.6, 2200 / Math.max(viewport1.width, viewport1.height));
       const viewport = page.getViewport({ scale });
       const canvas = document.createElement('canvas');
       canvas.width = Math.round(viewport.width);
@@ -74,6 +77,7 @@ if (!window.DraftPdfScan) {
       if (scan.previewUrl) URL.revokeObjectURL(scan.previewUrl);
       scan.previewUrl = '';
       const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', 0.8));
+      if (!blob) throw new Error('page conversion failed');
       scan.convertedBlob = blob;
       scan.previewUrl = URL.createObjectURL(blob);
     }

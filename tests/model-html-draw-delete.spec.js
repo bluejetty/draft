@@ -339,6 +339,26 @@ test.describe('MODEL.html draw + delete a wall', () => {
       expect((await stored(page)).walls.map(w => w.id).sort()).toEqual(['w-a', 'w-b']);
     });
 
+  // AUDIT C4. An iPad has no Ctrl key, so Ctrl+Z alone left a drafter there
+  // no way back from any edit. The button is the key's twin: the same
+  // undoOnce, on screen exactly while there is something to undo.
+  test('the UNDO button takes back an edit, and is there only while it can',
+    async ({ page }) => {
+      await seed(page);
+      await openNewPage(page);
+      const undo = page.locator('[data-undo]');
+      await expect(undo, 'nothing done yet, nothing to undo').toBeHidden();
+
+      await tapAt(page, ON_W_A, 0);
+      await page.locator('[data-delete]').click();
+      expect(await wallsShown(page)).toEqual({ shown: 1, total: 1 });
+      await expect(undo).toBeVisible();
+
+      await undo.click();
+      expect(await wallsShown(page)).toEqual({ shown: 2, total: 2 });
+      await expect(undo, 'the one step is spent').toBeHidden();
+    });
+
   test('undo puts a deleted wall back WITH its dependents', async ({ page }) => {
     await seed(page);
     await openNewPage(page);

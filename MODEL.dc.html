@@ -6046,7 +6046,10 @@ class Component extends DCLogic {
       // Overridden points ride their master point at a stored offset; files
       // saved before offsets existed measure theirs from the loaded positions.
       this._deriveOverrideOffsets();
-       const numericItemIds = [...this._lines, ...this._walls, ...this._floors, ...this._fenestrations, ...this._surfaceOpenings, ...this._shapes, ...this._roofs, ...this._outlines, ...this._boneyardOutlines, ...this._boneyardOutlines.flatMap(outline => outline.marks || [])]
+       // FIXTURES DRAW FROM THE SAME COUNTER (_newDrawingItemId('fixture')),
+       // so they are counted here too, or a file whose highest id is a
+       // fixture hands that id out again on the next placement (audit 2.2).
+       const numericItemIds = [...this._lines, ...this._walls, ...this._floors, ...this._fenestrations, ...(this._fixtures || []), ...this._surfaceOpenings, ...this._shapes, ...this._roofs, ...this._outlines, ...this._boneyardOutlines, ...this._boneyardOutlines.flatMap(outline => outline.marks || [])]
          .map(item => Number(String(item.id).match(/-(\d+)$/)?.[1]))
          .filter(Number.isInteger);
        const numericPointIds = this._boneyardOutlines
@@ -19430,7 +19433,7 @@ class Component extends DCLogic {
     }
     this._markUnsaved();
     this.setState({
-      drawingMessage: `AUTO DIMS placed ${added} dimensions around the ${this._draftingContextLabel(view)} plan — re-run after edits to refresh them.`,
+      drawingMessage: `AUTO DIMS placed ${added} dimensions on the ${this._draftingContextLabel(view)} view — re-run after edits to refresh them.`,
       drawingMessageError: false,
     });
     return true;

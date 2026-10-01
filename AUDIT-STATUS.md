@@ -17,7 +17,7 @@ Legend: ✅ fixed · 🟡 partly fixed · ❌ open · ⚪ left as is on purpose 
 | file | ✅ | 🟡 | ❌ | ⚪ |
 |---|---|---|---|---|
 | AUDIT-CRITICAL (16) | 9 | 4 | 2 | 1 |
-| AUDIT-FULL (numbered findings) | 19 | 9 | 11 | 1 |
+| AUDIT-FULL (numbered findings) | 25 | 8 | 6 | 1 |
 | AUDIT-PERF (actionable items) | 3 | 2 | 2 | — |
 | AUDIT-QUESTIONS (17) | 13 answered | | 4 unanswered | |
 
@@ -28,7 +28,7 @@ Legend: ✅ fixed · 🟡 partly fixed · ❌ open · ⚪ left as is on purpose 
 | C1 | dimension strings don't add up | ✅ | — repro r10b: 0 of 400 strings drift | |
 | C2 | no touch input | 🟡 | done on `MODEL.dc.html`; `MODEL.html` and LAYOUT have no pinch-zoom | M |
 | C3 | LAYOUT overwrites MODEL's work | ✅ | — repro r1 passes | |
-| C4 | undo only on the keyboard | 🟡 | `MODEL.html` has Ctrl+Z only: no redo, no on-screen UNDO/REDO | S |
+| C4 | undo only on the keyboard | 🟡 | `MODEL.html` now has an on-screen UNDO; it still has no REDO (each kind of edit needs its own reverse step) | M |
 | C5 | section floor band crosses the garage | ✅ | — (repro r13's pixel scan is stale; the drawing is right) | |
 | C6 | rounding drops the roof from sections | ✅ | — repros r20–r25 pass | |
 | M1 | overlay drawn at 1× | ⚪ | ruled deliberate (Q6) | |
@@ -38,7 +38,7 @@ Legend: ✅ fixed · 🟡 partly fixed · ❌ open · ⚪ left as is on purpose 
 | M5 | deleting a level orphans its things | ✅ | — repro r6 passes | |
 | M6 | `offsetOutline` breaks on spikes and duplicate points | ❌❓ | still loses the overhang at a duplicated corner; spike/bowtie policy unruled | M |
 | M7 | jog dimension lands where no wall stands | ✅ | — | |
-| M8 | LAYOUT can't be used by touch | 🟡 | no pinch-zoom; deleting a viewport is keyboard-only | S–M |
+| M8 | LAYOUT can't be used by touch | 🟡 | viewport DELETE button added; no pinch-zoom yet | M |
 | M9 | elevation recomputed every frame | 🟡 | 2× faster; the full-size view still has no cache | M |
 | M10 | LAYOUT loses work when a save fails | ✅ | — | |
 
@@ -49,21 +49,21 @@ Legend: ✅ fixed · 🟡 partly fixed · ❌ open · ⚪ left as is on purpose 
 | 1.1 | file store write not atomic | ✅ | | |
 | 1.5 | two MODEL tabs overwrite each other | ✅ | | |
 | 1.6 | endless bones in private browsing | ⚪ | by design | |
-| 2.1 | duplicate level ids | 🟡 | `drawing-format.js` `levels()` still doesn't dedupe | S |
-| 2.2 | fixtures left out of id recovery | ❌ | add `_fixtures` to the id spread | S |
+| 2.1 | duplicate level ids | ✅ | `levels()` keeps the first record per id | |
+| 2.2 | fixtures left out of id recovery | ✅ | | |
 | 2.3 | zero-length walls accepted | ✅ | | |
 | 2.4 | ids near MAX_SAFE_INTEGER | ❌ | nit: reject unsafe ids | S |
 | 3.1 | short partials dropped | ✅ | | |
 | 3.2 | `wallBounds` pads a full wall each side | ❌ | nit: pad by reference line, or fix the comment | S |
 | 3.3 | metric prints mm against an inch model | ✅ | | |
-| 3.4 | `-0'-0"` printed | ❌ | nit: no sign on a zero | S |
+| 3.4 | `-0'-0"` printed | ✅ | | |
 | 3b.1 | garage counted in the area total | ✅ | | |
 | 3b.2 | overlapping floors counted twice | ❌ | warn on overlap | M |
 | 4.1 | level ids 3/5/7 hard-coded | ❌ | ~13 literals to replace with named lookups | M |
-| 4.1b | "the PLAN plan" | ❌ | nit: wording | S |
+| 4.1b | "the PLAN plan" | ✅ | | |
 | 4.2 | ADD LEVEL uses `window.prompt` | ❌ | in-app dialog + strict number parse | M |
 | 5.1 | controls under 44px | 🟡 | touch-size spec runs on `MODEL.dc.html` only | M |
-| 5.2 | iPad smart quotes break typed lengths | ❌ | `12’-6”` still refused — two `.replace` calls | S |
+| 5.2 | iPad smart quotes break typed lengths | ✅ | `12’-6”` and `12′-6″` now read as 12'-6" | |
 | 5.3 | status line cut off | 🟡 | `MODEL.html` fine; `.dc` only | S |
 | 5.4 | buttons say "(ENTER)" on an iPad | 🟡 | `MODEL.html` fine; `.dc` only | S |
 | 5.5 | tool palette pushes the canvas | ✅ | | |
@@ -80,7 +80,7 @@ Legend: ✅ fixed · 🟡 partly fixed · ❌ open · ⚪ left as is on purpose 
 | 7.4 | fixed sleeps in tests (894) | ❌ | low; incremental | L |
 | 8.1 | third-party request on every page | 🟡❓ | fonts gone, but a GoatCounter visit counter now pings on every page | decision |
 | 8.2 | markup from a drawing file reaches the page | ✅ | was new since the audit; drawing-file text is now escaped in `MODEL.html` (readout, notices) and `EXTFINISH.html` (elevation, roof and band lists) — `tests/markup-in-drawing-file.spec.js` | |
-| 8.4 | PDF scan caps width only | ❌ | cap the long side + null-check the blob | S |
+| 8.4 | PDF scan caps width only | ✅ | caps the long side; a failed conversion now says so (the operator scan still runs on the main thread) | |
 
 ## AUDIT-PERF
 

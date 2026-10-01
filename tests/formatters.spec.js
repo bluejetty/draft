@@ -139,3 +139,28 @@ test('values snap to the sixteenth grid and round trips are stable', async ({ pa
   });
   expect(results.reprints).toEqual(results.strings);
 });
+
+// AUDIT 5.2. An iPad's keyboard turns 12'-6" into 12’-6” on its own, and a
+// spec pasted from a document carries primes ′ ″. All of them are feet and
+// inches; refusing them told a drafter their typing was wrong when it was
+// the keyboard's.
+test('curly quotes and primes read as feet and inches', async ({ page }) => {
+  const results = await page.evaluate(() => {
+    const parse = t => window.DraftFormatters.parseArchitecturalLength(t);
+    return ['12’-6”', '12′-6″', '8’11 1/2”', '6”'].map(t => parse(t));
+  });
+  expect(results).toEqual([
+    { ok: true, inches: 150 }, { ok: true, inches: 150 },
+    { ok: true, inches: 107.5 }, { ok: true, inches: 6 },
+  ]);
+});
+
+// AUDIT 3.4. A value that rounds to zero has no sign to print.
+test('a negative that rounds to zero prints without a minus', async ({ page }) => {
+  const results = await page.evaluate(() => {
+    const f = window.DraftFormatters;
+    return [f.formatArchitecturalInches(-0.01), f.formatInchesOnly(-0.01),
+      f.formatArchitecturalInches(-1), f.formatInchesOnly(-0.5)];
+  });
+  expect(results).toEqual([`0'-0"`, `0"`, `-0'-1"`, `-1/2"`]);
+});
