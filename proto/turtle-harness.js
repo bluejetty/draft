@@ -17,17 +17,49 @@
 // turtle walks the inside face and thickness goes outward, and the check that
 // proves it asks the constraint module rather than restating the arithmetic.
 
-// No mutation mode here, so this harness accepts no arguments at all. It
-// used to read none: `node turtle-harness.js --mutate` printed a full
-// passing run and exited 0, having mutated nothing. noFlags(), not
-// mutationMode() -- the latter would accept --mutate and print green for a
-// mode that does not exist.
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
 
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+// Against the checks this file had, SEVEN OF TEN were caught -- measured.
+// Every walk here started at the origin facing east, and every heading was in
+// range, so walk()'s two options and turn()'s fold were never exercised. The
+// checks under "WHERE IT STARTS AND WHICH WAY" are what those three asked for.
+const MUTATIONS = [
+  ['left and right are the same turn, and every house is mirrored', 'turtle.js',
+    c => c.replace('if (which === TURN.LEFT) return (at + 3) % 4;', 'if (which === TURN.LEFT) return (at + 1) % 4;')],
+  ['a typed 12.6 is cut to 12, not rounded to 13', 'turtle.js',
+    c => c.replace('return Math.round(asked / step) * step;', 'return Math.floor(asked / step) * step;')],
+  ['a string is read as a distance', 'turtle.js',
+    c => c.replace("const num = value => (typeof value === 'number' && Number.isFinite(value) ? value : null);",
+      'const num = value => (Number.isFinite(Number(value)) && value != null ? Number(value) : null);')],
+  ['a turn on the spot draws a zero-length wall', 'turtle.js',
+    c => c.replace('      if (next.ranFt === 0) return;   // a turn on the spot draws nothing\n', '')],
+  ['a walk a foot short is nudged shut', 'turtle.js',
+    c => c.replace('const closes = (path, tolFt = 1e-9) => {', 'const closes = (path, tolFt = 1.5) => {')],
+  ['the inside is read off the wrong side of the walk', 'turtle.js',
+    c => c.replace('    return doubled < 0;', '    return doubled > 0;')],
+  ['the turtle draws in 2x4, so the room measures the wrong 12', 'turtle.js',
+    c => c.replace("const wallsFrom = (path, { wallType = 'stud_2x6' } = {}) => {",
+      "const wallsFrom = (path, { wallType = 'stud_2x4' } = {}) => {")],
+  ['a walk always starts at the origin, wherever it was asked to', 'turtle.js',
+    c => c.replace('let at = { x: (startAt && num(startAt.x)) ?? 0, z: (startAt && num(startAt.z)) ?? 0 };',
+      'let at = { x: 0, z: 0 };')],
+  ['a walk always sets off east, whichever way it was facing', 'turtle.js',
+    c => c.replace('    let facing = num(heading) ?? 0;', '    let facing = 0;')],
+  ['a heading below zero is not folded back into the four', 'turtle.js',
+    c => c.replace('    const at = ((num(heading) ?? 0) % 4 + 4) % 4;', '    const at = (num(heading) ?? 0) % 4;')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('turtle',
+    MUTATIONS, { root: ROOT, harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
 global.window = {};
 ['wall-types.js', 'room-standards.js', 'geometry-2d.js', 'toy-constraints.js', 'turtle.js']
   .forEach(file => { (0, eval)(fs.readFileSync(path.join(ROOT, file), 'utf8')); });
@@ -171,6 +203,24 @@ const box = (w, d, which = 'right') => T.walk([
   // And the thickness is the material's, untouched by any of the rounding.
   check('while the wall keeps its real 5 1/2" thickness',
     near(C.thicknessFt(north) * 12, 5.5, 1e-6), `${C.thicknessFt(north) * 12}"`);
+}
+
+// ── 7 · WHERE IT STARTS AND WHICH WAY (1 Oct) ─────────────────────────────
+// A second room is walked from the corner of the first, not from the origin,
+// and a turtle can be set off facing any of the four ways.
+{
+  const from = T.walk([{ turn: 'straight', goFt: 4 }], { startAt: { x: 5, z: 3 } });
+  check('a walk starts where it is put down',
+    from.points[0].x === 5 && from.points[0].z === 3 && from.at.x === 9 && from.at.z === 3,
+    JSON.stringify(from.points));
+  const north = T.walk([{ turn: 'straight', goFt: 4 }], { heading: 3 });
+  check('and sets off the way it is facing',
+    north.at.x === 0 && north.at.z === -4 && facing(north.legs[0].heading) === 'N',
+    JSON.stringify(north.at));
+  // One left from east is heading -1 to anything that counts backwards; it
+  // must still be one of the four, not an index the table has not got.
+  check('a heading below zero folds back into the four',
+    facing(T.turn(-1, 'straight')) === 'N' && facing(T.turn(-1, 'right')) === 'E');
 }
 
 // ── Report ───────────────────────────────────────────────────────────────

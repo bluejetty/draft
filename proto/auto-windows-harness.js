@@ -6,12 +6,52 @@
 //
 //   node proto/auto-windows-harness.js
 
-// No mutation mode here, so this harness accepts no arguments at all. It
-// used to read none: `node auto-windows-harness.js --mutate` printed a full
-// passing run and exited 0, having mutated nothing. noFlags(), not
-// mutationMode() -- the latter would accept --mutate and print green for a
-// mode that does not exist.
-require('./harness-args.js').noFlags();
+const path = require('path');
+const MUTATE = require('./harness-args.js').mutationMode();
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+// Against the checks this file had, TEN OF TWELVE were caught -- measured.
+// Both survivors were the same shape: a check measuring the module against
+// ITS OWN constant. "Never crowd" compared gaps to A.TUNABLES.MIN_GAP_FT, so
+// a module that dropped the gap to a foot moved the yardstick with it; and
+// the density cap only ever asked "no MORE than the long-wall cap", which a
+// long wall wrongly capped at three still satisfies. The ruled numbers are now
+// written in the checks themselves, as the section heading always stated them.
+const MUTATIONS = [
+  ['openings crowd: a foot between them', 'auto-windows.js',
+    c => c.replace('    MIN_GAP_FT: 3,          // clear between opening EDGES', '    MIN_GAP_FT: 1,          // clear between opening EDGES')],
+  ['a window runs into the corner', 'auto-windows.js',
+    c => c.replace('    MIN_CORNER_FT: 2,       // clear from a corner', '    MIN_CORNER_FT: 0,       // clear from a corner')],
+  ['the front is held to its minimum, not maximized', 'auto-windows.js',
+    c => c.replace('            Math.max(TUNABLES.FRONT_MIN, Math.floor(face.lengthFt / 10)));',
+      '            TUNABLES.FRONT_MIN);')],
+  ['the back gets one window a floor', 'auto-windows.js',
+    c => c.replace('    BACK_MIN: 2,            // back default 2 per floor', '    BACK_MIN: 1,            // back default 2 per floor')],
+  ['with no bedroom trapped, the right side takes the windows', 'auto-windows.js',
+    c => c.replace("const windowSides = trappedSides.size ? [...trappedSides].sort() : ['left'];",
+      "const windowSides = trappedSides.size ? [...trappedSides].sort() : ['right'];")],
+  ['a bedroom with a front window is counted as trapped', 'auto-windows.js',
+    c => c.replace("        if (sides.some(side => side === 'front' || side === 'back')) return;\n", '')],
+  ['no wall is ever long enough for the long-wall cap', 'auto-windows.js',
+    c => c.replace('    LONG_FACE_FT: 40,       // what counts as long', '    LONG_FACE_FT: 400,      // what counts as long')],
+  ['the roof clearance under a sill is dropped', 'auto-windows.js',
+    c => c.replace('const ROOF_CLEAR_FT = 4 / 12;', 'const ROOF_CLEAR_FT = 0;')],
+  ['a roof above the sill is drawn through', 'auto-windows.js',
+    c => c.replace('    if (raised <= sillFt + 1e-9) return { sillFt, roofTopFt: top, lifted: false };',
+      '    if (true) return { sillFt, roofTopFt: top, lifted: false };')],
+  ['a window with no glass left is kept, sill above its head', 'auto-windows.js',
+    c => c.replace('    if (headFt - raised < MIN_GLASS_FT) return null;\n', '')],
+  ['the garage single becomes a 9ft door', 'auto-windows.js',
+    c => c.replace('    SINGLE_FT: 8, DOUBLE_FT: 16, NARROW_FT: 9, HEAD_FT: 7,', '    SINGLE_FT: 9, DOUBLE_FT: 16, NARROW_FT: 9, HEAD_FT: 7,')],
+  ['the WC unit is the full-height default', 'auto-windows.js',
+    c => c.replace("    kind: 'wc', widthFt: 24 / 12, heightFt: 24 / 12,", "    kind: 'wc', widthFt: 24 / 12, heightFt: 42 / 12,")],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('auto-windows',
+    MUTATIONS, { root: path.join(__dirname, '..'), harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
 
 global.window = global.window || {};
 // GEOMETRY-2D FIRST, because auto-windows.js asks it for the window head --
@@ -127,11 +167,13 @@ eq('a diagonal leaning south still reads front', A.faceOrientation({ x: 0.4, z: 
   Object.entries(byFace).forEach(([faceId, list]) => {
     const len = RECT().find(f => f.id === faceId).lengthFt;
     list.sort((a, b) => a.offset - b.offset).forEach((w, i) => {
-      if (w.offset - w.widthFt / 2 < A.TUNABLES.MIN_CORNER_FT - 1e-9) tooNear++;
-      if (w.offset + w.widthFt / 2 > len - A.TUNABLES.MIN_CORNER_FT + 1e-9) tooNear++;
+      // THE RULED 2'-0" AND 3'-0", WRITTEN HERE -- not read back off the module,
+      // whose constant is the very thing a regression would move (1 Oct).
+      if (w.offset - w.widthFt / 2 < 2 - 1e-9) tooNear++;
+      if (w.offset + w.widthFt / 2 > len - 2 + 1e-9) tooNear++;
       const next = list[i + 1];
       if (next && (next.offset - next.widthFt / 2) - (w.offset + w.widthFt / 2)
-        < A.TUNABLES.MIN_GAP_FT - 1e-9) tooClose++;
+        < 3 - 1e-9) tooClose++;
     });
   });
   eq('no two openings crowd each other', tooClose, 0);
@@ -145,6 +187,10 @@ eq('a diagonal leaning south still reads front', A.faceOrientation({ x: 0.4, z: 
   const by = countBy(windows);
   check('a long side stops at the long-wall cap',
     (by.left || 0) <= A.TUNABLES.SIDE_MAX_LONG, `left=${by.left}`);
+  // 1 Oct: AND IT IS A CAP THAT IS REACHED. A 60ft side is long by any
+  // reading, and may carry more than the ordinary three; a check that only
+  // bounds it from above passes a long wall capped as a short one.
+  check('a 60ft side carries more than an ordinary side may', (by.left || 0) > 3, `left=${by.left}`);
   check('a short front still gets what it can fit', (by.front || 0) >= 1, `front=${by.front}`);
 }
 {

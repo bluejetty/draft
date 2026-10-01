@@ -11,12 +11,58 @@
 // Exit code 0 = every check passed. The Playwright specs pin the commit
 // layer (tests/room-grow.spec.js); this pins the math.
 
-// No mutation mode here, so this harness accepts no arguments at all. It
-// used to read none: `node room-grow-harness.js --mutate` printed a full
-// passing run and exited 0, having mutated nothing. noFlags(), not
-// mutationMode() -- the latter would accept --mutate and print green for a
-// mode that does not exist.
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+// Against the checks this file had, TEN OF TWELVE were caught -- measured.
+// One survivor is answered by the "SPINE STAYS ON THE WELL" check below
+// (marked 1 Oct, before section 8): every well here was deep
+// enough to meet the corridor wherever it landed, so the clamp that keeps the
+// spine ON the well never had to act. A random search over 3000 floors found
+// it deciding in 224; the smallest of them is the fixture.
+//
+// ── ONE ROW IS NOT HERE, AND WHAT IT FOUND IS A QUESTION, NOT A CHECK ─────
+// "bedrooms and WCs become optional" SURVIVED: no case in this file passes a
+// minimums table, and seedFor only reads the category's `optional` from one.
+// Given DEFAULT_ROOM_MINIMUMS on a tight 30x22 floor (two bedrooms, kitchen,
+// living, WC, den), the module as it stands squeezes BOTH BEDROOMS to 5ft and
+// flags them under minimum while the optional LIVING keeps 16ft and the DEN
+// 20ft -- and the mutant, making bedrooms optional, gives them MORE room. The
+// comment over that code says optional rooms "pin to their row" and the
+// mandatory ones split what is left, which reads as the opposite. That is a
+// ruling for Movie, not a check to write: pinning today's numbers would lock
+// in what may be the defect. Recorded 1 Oct; not tabled until it is decided.
+const MUTATIONS = [
+  ['the ordinary bedroom ladder starts at 1, on top of the primary', 'room-grow.js',
+    c => c.replace("let next = !basement && base === 'BEDROOM' ? 2 : 1;", 'let next = 1;')],
+  ['the basement loses its B-series', 'room-grow.js',
+    c => c.replace("const prefix = basement ? 'B' : '';", "const prefix = '';")],
+  ['the ladder lands on a number somebody claimed', 'room-grow.js',
+    c => c.replace('            while (claimed.has(next)) next += 1;\n', '')],
+  ['two rooms claiming one number both keep it', 'room-grow.js',
+    c => c.replace('tag.claimedNo > 0 && !claimed.has(tag.claimedNo)) {', 'tag.claimedNo > 0) {')],
+  ['a primary is allowed in the basement', 'room-grow.js',
+    c => c.replace("    if (levelId === basementLevelId) return { ok: false, reason: 'basement' };\n", '')],
+  ['a second primary is allowed while one stands', 'room-grow.js',
+    c => c.replace("return standing ? { ok: false, reason: 'standing' } : { ok: true };", 'return { ok: true };')],
+  ['a stall is not a shower', 'room-grow.js',
+    c => c.replace("const shower = set.has('SHOWER') || set.has('STALL');", "const shower = set.has('SHOWER');")],
+  ['the primary seeds at an ordinary bedroom\'s size', 'room-grow.js',
+    c => c.replace('return { minAreaSqFt: row.minAreaSqFt * 1.5, minDimensionFt: row.minDimensionFt, optional: false };',
+      'return { minAreaSqFt: row.minAreaSqFt, minDimensionFt: row.minDimensionFt, optional: false };')],
+  ['a room in a leg the corridor misses says nothing', 'room-grow.js',
+    c => c.replace("      report.push('a room grew in a leg the corridor does not reach — hall it by hand');", '')],
+  ['the spine slides wherever it likes, off the stair well', 'room-grow.js',
+    c => c.replace('      cz = Math.min(wellBox.z1 + corridorFt / 2, Math.max(wellBox.z0 - corridorFt / 2, cz));', '')],
+  ['the rooms beside a stair well are left open to it', 'room-grow.js',
+    c => c.replace('          if (seg.wellStart) addWall(seg.x0, interval.z0, seg.x0, interval.z1);\n', '')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('room-grow',
+    MUTATIONS, { root: require('path').join(__dirname, '..'), harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
 
 const fs = require('fs');
 const path = require('path');
@@ -679,6 +725,19 @@ check('L + well in the leg: the leg still grew its room',
   legWell.rooms.some(room => room.rect.x0 >= 25), JSON.stringify(legWell.rooms.map(r => r.rect)));
 wellCase('T + well in the stem', T_RING, well(18, 8), T_STAMPS);
 wellCase('U + well in a leg', U_RING, well(3, 8), U_STAMPS);
+
+// 1 Oct: THE SPINE STAYS ON THE WELL. A shallow well off the middle, and a
+// primary pulling the corridor away from it: the clamp holds the corridor's
+// edge to the well's, and without it the stairs open onto a room.
+{
+  const shallow = { x0: 1, x1: 4.5, z0: -5, z1: -1 };
+  const plan = G.growRooms({ points: rect(24, 20),
+    stairWells: [well(shallow.x0, shallow.z0, shallow.x1 - shallow.x0, shallow.z1 - shallow.z0)],
+    stamps: [{ id: 1, base: 'BEDROOM 1', x: -2, z: -6 }, { id: 2, base: 'KITCHEN', x: 2, z: -4 }] });
+  check('the corridor reaches the stair well it opens onto',
+    plan.corridor && plan.corridor.z0 <= shallow.z1 + 1e-6 && plan.corridor.z1 >= shallow.z0 - 1e-6,
+    JSON.stringify(plan.corridor));
+}
 
 // ── 8. Odd rings are survived, and nothing leaves silently ────────────
 {

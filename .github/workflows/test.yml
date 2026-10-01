@@ -238,7 +238,17 @@ jobs:
                       proto/garage-site-harness.js \
                       proto/fixture-kinds-harness.js \
                       proto/opening-round-trip-harness.js \
-                      proto/uncovered-harness.js; do
+                      proto/uncovered-harness.js \
+                      proto/first-run-harness.js \
+                      proto/cut-view-warnings-harness.js \
+                      proto/electric-rules-harness.js \
+                      proto/turtle-harness.js \
+                      proto/toy-context-harness.js \
+                      proto/closets-harness.js \
+                      proto/gruff-interview-harness.js \
+                      proto/auto-windows-harness.js \
+                      proto/toy-constraints-harness.js \
+                      proto/room-grow-harness.js; do
             if ! printf '%s\n' "${engines[@]}" | grep -qx "$must"; then
               failed=$((failed + 1))
               echo "FAIL  $must is a known engine and the derived list does not contain it"

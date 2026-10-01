@@ -20,17 +20,65 @@
 // So there is no neck measurement here and there must never be one. If a room
 // in this file is not a rectangle, something upstream has gone wrong.
 
-// No mutation mode here, so this harness accepts no arguments at all. It
-// used to read none: `node closets-harness.js --mutate` printed a full
-// passing run and exited 0, having mutated nothing. noFlags(), not
-// mutationMode() -- the latter would accept --mutate and print green for a
-// mode that does not exist.
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
 
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+//
+// Against the checks this file had, ELEVEN OF FOURTEEN were caught --
+// measured. Two survivors were real and are answered in the checks marked
+// "1 Oct": the plumbing check passed by ALPHABET (plumbing on E, the other
+// shared wall on S, and E sorts first on the final tie-break, so a plumbing
+// wall with no priority at all still won), and no fixture ever blocked the
+// near corner, so a closet that could only go in one corner of a wall passed.
+//
+// ── ONE ROW IS NOT HERE, ON PURPOSE ───────────────────────────────────────
+// "On a tie the far end wins" -- `(a.end - b.end)` reversed -- SURVIVED, and it
+// should. The rule is "snug into EITHER corner" (closets.js, above the
+// candidates); which corner wins a dead heat is determinism, not a ruling.
+// A check pinning the near end would make an arbitrary choice look like a
+// requirement, so the row was dropped rather than answered.
+const MUTATIONS = [
+  ['the shelf-above line moves onto the rail line', 'closets.js',
+    c => c.replace('const SHELF_FT = 1.5;', 'const SHELF_FT = 1;')],
+  ['the door is read off the inside face, trim forgotten', 'closets.js',
+    c => c.replace('return DOORS.find(door => door.widthFt <= width - 2 * DOOR_TRIM_FT) || null;',
+      'return DOORS.find(door => door.widthFt <= width) || null;')],
+  ['THE SQUARING RULE reversed: the closet goes on the long wall', 'closets.js',
+    c => c.replace('candidates.sort((a, b) => (b.squareness - a.squareness)', 'candidates.sort((a, b) => (a.squareness - b.squareness)')],
+  ['a closet is built over a window', 'closets.js',
+    c => c.replace('    if (covers) return true;\n', '')],
+  ['a door swing is ignored', 'closets.js',
+    c => c.replace("      if (opening.type !== 'door') return false;", '      return false;')],
+  ['a window is given a swing', 'closets.js',
+    c => c.replace("      if (opening.type !== 'door') return false;", '      if (false) return false;')],
+  ['a plumbing wall is just another shared wall', 'closets.js',
+    c => c.replace('shared: wall.plumbing ? 2 : wall.shared ? 1 : 0,', 'shared: wall.shared || wall.plumbing ? 1 : 0,')],
+  ['a shared wall outranks the squaring rule', 'closets.js',
+    c => c.replace('candidates.sort((a, b) => (b.squareness - a.squareness)\n      || (b.shared - a.shared)',
+      'candidates.sort((a, b) => (b.shared - a.shared)\n      || (b.squareness - a.squareness)')],
+  ['the primary suite is given a closet it did not ask for', 'closets.js',
+    c => c.replace('      if (room.primary) return;\n', '')],
+  ['running again stacks a second closet', 'closets.js',
+    c => c.replace('      if (already.some(closet => closet.roomId === room.id)) return;\n', '')],
+  ['the clear strip shrinks below Movie\'s 3ft', 'closets.js',
+    c => c.replace('const CLEAR_STRIP_MIN_FT = 3;', 'const CLEAR_STRIP_MIN_FT = 2.5;')],
+  ['the strip is measured along the wall, not across it', 'closets.js',
+    c => c.replace("    const across = object.dim === 'width'\n      ? num(room.clearWidthFt)\n      : num(room.clearDepthFt);",
+      "    const across = object.dim === 'width'\n      ? num(room.clearDepthFt)\n      : num(room.clearWidthFt);")],
+  ['only the near end of a wall is ever tried', 'closets.js',
+    c => c.replace('      [0, run - width].forEach((alongFt, index) => {', '      [0].forEach((alongFt, index) => {')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('closets',
+    MUTATIONS, { root: ROOT, harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
 global.window = {};
 ['closets.js'].forEach(file => { (0, eval)(fs.readFileSync(path.join(ROOT, file), 'utf8')); });
 const C = window.DraftClosets;
@@ -174,6 +222,19 @@ const rect = (w, d, ids = ['N', 'E', 'S', 'W']) => ([
     C.blockedByOpening(corner, room[0], 0, 4, room, asWindow) === false);
 }
 
+// 1 Oct: EITHER CORNER, NOT ONLY THE FIRST. A window at the near end of both
+// short walls still leaves their far corners clear, and the closet belongs
+// there -- not on a long wall that gives back the squareness.
+{
+  const oblong = rect(12, 14);
+  const nearWindows = ['N', 'S'].map(id => ({ wallId: id, type: 'window', offsetFt: 0, widthFt: 3 }));
+  const put = C.placeIn({ walls: oblong, openings: nearWindows, widthFt: 4 });
+  const run = C.lengthOf(oblong.find(wall => wall.id === put.wallId) || oblong[0]);
+  check('with the near corners taken, the closet goes in a far corner of a short wall',
+    (put.wallId === 'N' || put.wallId === 'S') && Math.abs(put.offsetFt - (run - 4)) < 1e-9,
+    JSON.stringify({ wallId: put.wallId, offsetFt: put.offsetFt }));
+}
+
 // ── 5 · The shared wall breaks ties, and never more than that ────────────
 // For SOUND DEADENING -- two feet of hanging clothes between a bedroom and the
 // noisiest wall it has. Not pipe access: anyone later moving a closet OFF a
@@ -191,6 +252,15 @@ const rect = (w, d, ids = ['N', 'E', 'S', 'W']) => ([
   check('and a plumbing wall wins ahead of any other shared wall',
     C.placeIn({ walls: plumbed, openings: [], widthFt: 4 }).wallId === 'E',
     JSON.stringify(C.placeIn({ walls: plumbed, openings: [], widthFt: 4 })));
+  // 1 Oct: AND FROM THE OTHER SIDE OF THE ALPHABET. Above, plumbing is on E and
+  // the other shared wall on S -- and E also wins the final tie-break by name,
+  // so that check passed with plumbing given no priority at all. Here the
+  // plumbing wall is W, which sorts after E; only the priority can pick it.
+  const mirrored = square.map(wall => (wall.id === 'E' ? { ...wall, shared: 'bedroom' }
+    : wall.id === 'W' ? { ...wall, shared: 'bathroom', plumbing: true } : wall));
+  check('a plumbing wall wins even when its name sorts last',
+    C.placeIn({ walls: mirrored, openings: [], widthFt: 4 }).wallId === 'W',
+    JSON.stringify(C.placeIn({ walls: mirrored, openings: [], widthFt: 4 })));
 
   // THE ONE THAT MATTERS. On an oblong room the shared wall must NOT drag the
   // closet off the wall that squares the room -- that gives back exactly the

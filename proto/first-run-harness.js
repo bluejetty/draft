@@ -13,17 +13,53 @@
 // bathrooms?" to a screen that already asks something, or makes one stage the
 // exception that has to be answered. Written down here so that costs a test.
 
-// No mutation mode here, so this harness accepts no arguments at all. It
-// used to read none: `node first-run-harness.js --mutate` printed a full
-// passing run and exited 0, having mutated nothing. noFlags(), not
-// mutationMode() -- the latter would accept --mutate and print green for a
-// mode that does not exist.
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
 
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+// The first two break the two rules at the head of this file. Against the
+// checks this file had, EIGHT OF NINE were caught -- measured. The survivor
+// was rounding: no answer here had a fraction in it.
+//
+// THE SKIP ROW BENDS THE DEFAULT TO 2, NOT 3, AND THAT IS NOT ARBITRARY: the
+// interview's own default is 3, so a row restating it as 3 could never go red.
+const MUTATIONS = [
+  ['a second question: the choice screen asks too', 'first-run.js',
+    c => c.replace("const asking = state => ((state && state.stage) || STAGE.GREET) === STAGE.ASK;",
+      "const asking = state => [STAGE.ASK, STAGE.CHOOSE].includes((state && state.stage) || STAGE.GREET);")],
+  ['the end of the ceremony becomes a stage to escape', 'first-run.js',
+    c => c.replace('const skippable = state => ((state && state.stage) || STAGE.GREET) !== STAGE.DONE;',
+      'const skippable = state => true;')],
+  ['a skipped question lands on a number of the ceremony\'s own', 'first-run.js',
+    c => c.replace('return { ...state, stage: STAGE.CHOOSE, bedrooms: QUESTION.fallback,',
+      'return { ...state, stage: STAGE.CHOOSE, bedrooms: 2,')],
+  ['a skip is pretended away', 'first-run.js',
+    c => c.replace('            skipped: [...skipped, STAGE.ASK] };', '            skipped };')],
+  ['skipping the choice blocks on it', 'first-run.js',
+    c => c.replace("          return { ...state, stage: STAGE.DONE, way: null, skipped: [...skipped, STAGE.CHOOSE] };",
+      '          return state;')],
+  ['a wild number is taken as given', 'first-run.js',
+    c => c.replace('return Math.min(QUESTION.most, Math.max(QUESTION.least, n));',
+      'return Math.max(QUESTION.least, n);')],
+  ['a half-answer is truncated rather than rounded', 'first-run.js',
+    c => c.replace('const n = Math.round(Number(value));', 'const n = Math.trunc(Number(value));')],
+  ['the closing line names the default, not the house that was made', 'first-run.js',
+    c => c.replace('const bedrooms = (state && state.bedrooms) || QUESTION.fallback;',
+      'const bedrooms = QUESTION.fallback;')],
+  ['the cancelled rung drifts back in', 'first-run.js',
+    c => c.replace("    Object.freeze({ id: 'turtle', label: 'I WILL DRAW IT',",
+      "    Object.freeze({ id: 'rabbit', label: 'GIVE ME A FEW', blurb: '', ready: false }),\n    Object.freeze({ id: 'turtle', label: 'I WILL DRAW IT',")],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('first-run',
+    MUTATIONS, { root: ROOT, harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
 global.window = {};
 ['gruff-interview.js', 'first-run.js']
   .forEach(file => { (0, eval)(fs.readFileSync(path.join(ROOT, file), 'utf8')); });
@@ -126,6 +162,10 @@ const run = (...steps) => steps.reduce((state, action) => F.advance(state, actio
 // ── 5 · The answer is taken as given, within reason ─────────────────────
 {
   check('a number is kept', run({}, { bedrooms: 5 }).bedrooms === 5);
+  // A typed "2.6" is nearer three bedrooms than two, and a truncation would
+  // quietly lose the room.
+  check('a half-answer rounds to the nearer room',
+    run({}, { bedrooms: 2.6 }).bedrooms === 3, String(run({}, { bedrooms: 2.6 }).bedrooms));
   check('nonsense falls back rather than making a nonsense house',
     run({}, { bedrooms: 'lots' }).bedrooms === G.DEFAULTS.bedrooms);
   // Clamped rather than refused: refusing would be a second question, and
