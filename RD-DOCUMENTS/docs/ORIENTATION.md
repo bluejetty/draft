@@ -421,7 +421,7 @@ Beyond `roughdrafter` / `roughdrafter-band`:
 
 - **Layer names**, persisted on every entity: `A-WALL-EXT`, `A-WALL-INT`,
   `A-DOOR`, `A-GLAZ`, `A-FL`, `A-FL-DECK`, `A-FL-FLOORING`,
-  `A-ROOF`, `A-STR`, `A-STR-DECK`, `A-FIXT`, `A-CASE`,
+  `A-ROOF`, `A-STR`, `A-STR-DECK`, `A-FIXT`,
   `A-ANNO-NOTE`, `S-BEAM`, `S-COL-FOOTING`, `S-FOOTING`, `S-FDN`, `S-SLAB`,
   `E-POWER`, `X-WALL-CUSTOM`.
 - **Titleblock ids:** `bluejetty`, `roughdrafter`, `bluejetty-band`,

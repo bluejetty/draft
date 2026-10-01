@@ -58,10 +58,10 @@ test('one corner click places the plain corner-L kitchen at the proven spots', a
   const shortWall = drawing.walls.find(w => w !== longWall);
   expect(drawing.fixtures).toHaveLength(6);
 
-  // Two straight cabinet runs on A-CASE, one per leg.
+  // Two straight cabinet runs on A-FIXT, one per leg.
   const cabinets = byKind(drawing, 'cabinet');
   expect(cabinets).toHaveLength(2);
-  cabinets.forEach(run => expect(run.layer).toBe('A-CASE'));
+  cabinets.forEach(run => expect(run.layer).toBe('A-FIXT'));
   const longRun = cabinets.find(run => run.wallId === longWall.id);
   const shortRun = cabinets.find(run => run.wallId === shortWall.id);
   expect(longRun.width).toBeGreaterThan(15);  // 20' leg minus corner and fridge bay

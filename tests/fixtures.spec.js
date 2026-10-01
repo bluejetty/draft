@@ -2,7 +2,7 @@
 // A fixture stores its host wall, its centre offset along the wall, and which
 // face the body projects from — geometry redraws from the current wall, so
 // fixtures ride wall edits. Cabinets and vanities are two-click runs on
-// A-CASE; the tub is a two-wall alcove fixture that stretches up to 6" past
+// A-FIXT too (one layer for every fixture, Movie 1 Oct); the tub is a two-wall alcove fixture that stretches up to 6" past
 // standard and slides along its back wall.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
@@ -74,7 +74,7 @@ test('a washer places from the LAUNDRY group on A-FIXT', async ({ page }) => {
   expect(fixture.side).toBe(-1);
 });
 
-test('a cabinet run takes two clicks along the wall and saves on A-CASE', async ({ page }) => {
+test('a cabinet run takes two clicks along the wall and saves on A-FIXT', async ({ page }) => {
   await h.openModel(page);
   await drawWall(page, -10, 0, 10, 0);
   await h.selectTool(page, 'Fixture'); // CABINET is the default catalog entry
@@ -86,7 +86,7 @@ test('a cabinet run takes two clicks along the wall and saves on A-CASE', async 
   expect(drawing.fixtures).toHaveLength(1);
   const run = drawing.fixtures[0];
   expect(run.kind).toBe('cabinet');
-  expect(run.layer).toBe('A-CASE');
+  expect(run.layer).toBe('A-FIXT');
   expect(run.wallId).toBe(drawing.walls[0].id);
   expect(run.width).toBeCloseTo(6, 0);  // the two clicks are 6ft apart
   expect(run.offset).toBeCloseTo(7, 0); // centred between along 4 and along 10
@@ -104,7 +104,7 @@ test('a vanity run is 21" deep casework', async ({ page }) => {
 
   const run = (await h.savedDrawing(page)).fixtures[0];
   expect(run.kind).toBe('vanity');
-  expect(run.layer).toBe('A-CASE');
+  expect(run.layer).toBe('A-FIXT');
   expect(run.depth).toBeCloseTo(1.75, 5);
 });
 
@@ -280,10 +280,10 @@ test('deleting the host wall removes the fixtures riding it', async ({ page }) =
   expect(drawing.fixtures).toHaveLength(0);
 });
 
-test('A-FIXT and A-CASE are Company Standard Layers', async ({ page }) => {
+test('A-FIXT is the one fixture layer: casework rides it, A-CASE is gone', async ({ page }) => {
+  // Movie, 1 Oct: "maybe we only need A-FIXT and the CASE stuff can go in there".
   await page.goto('/STANDARDS.html');
   await expect(page.locator('[data-layer-name="A-FIXT"]')).toBeVisible();
-  await expect(page.locator('[data-layer-name="A-CASE"]')).toBeVisible();
   await expect(page.locator('[data-layer-print="A-FIXT"]')).toBeChecked();
-  await expect(page.locator('[data-layer-print="A-CASE"]')).toBeChecked();
+  await expect(page.locator('[data-layer-name="A-CASE"]')).toHaveCount(0);
 });

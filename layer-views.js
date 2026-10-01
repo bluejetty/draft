@@ -39,7 +39,10 @@ if (!window.DraftLayerViews) {
 (() => {
   const FLOOR_LEVEL_VIEWS = Object.freeze([
     Object.freeze({ id:'e-power', label:'ELECTRIC', contents: Object.freeze(['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-FENS', 'A-ANNO-NOTE']) }),
-    Object.freeze({ id:'plan', label:'FLOOR PLAN (WALLS)', contents: Object.freeze(['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-STR', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-WIN', 'ROOM-IDS-AREA', 'A-ANNO-NOTE']) }),
+    // A-FIXT JOINS THE WALLS PLAN (1 Oct). Every fixture -- casework too, now
+    // that A-CASE folded into it -- is drawn on the floor plan, and a sheet
+    // naming this view hid them all while no view listed the layer.
+    Object.freeze({ id:'plan', label:'FLOOR PLAN (WALLS)', contents: Object.freeze(['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'A-FL', 'A-FL-DECK', 'A-FL-FLOORING', 'A-STR', 'A-FIXT', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-WIN', 'ROOM-IDS-AREA', 'A-ANNO-NOTE']) }),
     // S-COL-FOOTING JOINS S-BEAM HERE (Movie, 25 Sep). A floor's beam was
     // already on this view and what holds it up was on none: S-COL-FOOTING
     // appeared only in the FOUNDATION set below, so a post on MAIN FL was a

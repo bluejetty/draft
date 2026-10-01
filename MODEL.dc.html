@@ -2511,13 +2511,13 @@ const NOTE_END_OPTIONS = [
 // wall: each stores WHICH wall and WHERE along it, and its footprint redraws
 // from the current wall geometry every frame, so moving or stretching the
 // wall carries the fixtures with it. Plumbing fixtures and appliances live on
-// A-FIXT; casework (base cabinets / vanities, drawn as two-click runs with a
-// countertop line) lives on A-CASE. The TUB is the alcove special case: it
+// A-FIXT, and so does casework (base cabinets / vanities, drawn as two-click
+// runs with a countertop line) -- one layer, since a thing cannot sit on two
+// (Movie, 1 Oct: "maybe we only need A-FIXT and the CASE stuff can go in there"). The TUB is the alcove special case: it
 // also anchors to the faucet-end wall, fills the alcove, stretches up to 6"
 // past its standard length, and any remaining space draws as a deck strip —
 // slide the tub to pick which end the deck lands on.
 const FIXTURE_LAYER = 'A-FIXT';
-const CASEWORK_LAYER = 'A-CASE';
 const FIXTURE_COLOR = '#1d1f20';
 // The tub's spec lives in fixture-geometry.js with the maths that reads it,
 // so the refusal message below cannot quote a minimum the geometry does not use.
@@ -9313,7 +9313,7 @@ class Component extends DCLogic {
     if (tool === 'column') return COLUMN_LAYER;
     if (tool === 'beam') return BEAM_LAYER;
     if (tool === 'stair') return STAIR_LAYER;
-    if (tool === 'fixture') return fixtureKindDef(this.state.fixtureKind).casework ? CASEWORK_LAYER : FIXTURE_LAYER;
+    if (tool === 'fixture') return FIXTURE_LAYER;
     if (tool === 'annotation') return NOTE_LAYER;
     return this._draftingContextLabel(viewId);
   }
@@ -15429,7 +15429,7 @@ class Component extends DCLogic {
   }
 
   _addFixture(kind, wall, props) {
-    const layer = kind.casework ? CASEWORK_LAYER : FIXTURE_LAYER;
+    const layer = FIXTURE_LAYER;
     this._fixtures.push({
       id: this._newDrawingItemId('fixture'),
       wallId: wall.id,
@@ -15580,7 +15580,7 @@ class Component extends DCLogic {
       levelId: piece.wall.levelId,
       view: 'plan',
       kind: piece.kind.id,
-      layer: piece.kind.casework ? CASEWORK_LAYER : FIXTURE_LAYER,
+      layer: FIXTURE_LAYER,
       ...piece.props,
     }));
     this._markUnsaved();
@@ -15727,7 +15727,7 @@ class Component extends DCLogic {
     // Placement ghost: the active catalog entry previews on the nearest wall.
     const kind = fixtureKindDef(this.state.fixtureKind);
     if (kind.preset) return; // the preset drops many pieces — no single ghost
-    const layer = kind.casework ? CASEWORK_LAYER : FIXTURE_LAYER;
+    const layer = FIXTURE_LAYER;
     if (kind.id === 'tub' && this._tubPending) {
       const wall = this._walls.find(w => w.id === this._tubPending.wallId);
       if (wall) {

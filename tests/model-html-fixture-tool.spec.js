@@ -142,7 +142,7 @@ test('casework lands on its own layer', async ({ page }) => {
   const fixtures = await fixturesOf(page);
   expect(fixtures).toHaveLength(1);
   expect(fixtures[0].kind).toBe('cabinet');
-  expect(fixtures[0].layer).toBe('A-CASE');
+  expect(fixtures[0].layer).toBe('A-FIXT');
 
   // The run spans the two presses: 40% of the wall, to the inch.
   const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
