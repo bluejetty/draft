@@ -130,14 +130,14 @@ if (!window.DraftTour) {
   // from; a renamed stamp has base:null and its custom name is forever.
   // Numbering is DERIVED from placement order (id order), so deleting a
   // stamp renumbers the rest with no stored counter. BEDROOM and WC run
-  // house-wide ladders (room-grow.js owns those, plus the BEDROOM 1
+  // house-wide ladders (room-numbers.js owns those, plus the BEDROOM 1
   // primary and the basement B-series); every other base stays per-floor,
   // bare until a second lands.
   const HOUSE_WIDE = ['BEDROOM', 'WC', 'BEDROOM 1'];
   const stampDisplayName = (stamps, stamp) => {
     if (!stamp.base) return stamp.name; // renamed — custom forever
-    if (HOUSE_WIDE.includes(stamp.base) && window.DraftRoomGrow) {
-      const name = window.DraftRoomGrow.assignStampNumbers(stamps).get(stamp.id);
+    if (HOUSE_WIDE.includes(stamp.base) && window.DraftRoomNumbers) {
+      const name = window.DraftRoomNumbers.assignStampNumbers(stamps).get(stamp.id);
       if (name) return name;
     }
     const pool = stamps
@@ -163,12 +163,12 @@ if (!window.DraftTour) {
   const detectorNumberStart = (stamps, base, levelId, basementLevelId = 1) => {
     const houseWide = ['BEDROOM', 'WC'].includes(base);
     const basement = levelId === basementLevelId;
-    if (houseWide && window.DraftRoomGrow) {
+    if (houseWide && window.DraftRoomNumbers) {
       // Read the numbers the stamps ACTUALLY carry (the primary's 1, the
       // ordinary ladder from 2, claims, the basement B-series) and start
       // one past the highest — counting stamps would collide now that the
       // ordinary bedroom ladder starts at 2.
-      const names = window.DraftRoomGrow.assignStampNumbers(stamps, { basementLevelId });
+      const names = window.DraftRoomNumbers.assignStampNumbers(stamps, { basementLevelId });
       const pattern = new RegExp(`^${base} ${basement ? 'B' : ''}(\\d+)$`);
       let highest = 0;
       stamps.forEach(stamp => {

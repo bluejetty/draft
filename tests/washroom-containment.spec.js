@@ -94,7 +94,7 @@ function strayCorners(saved) {
 }
 
 async function buildAndRead(page, points) {
-  await h.openModel(page, { autoStairs: true, tourEscort: true, roomGrow: true });
+  await h.openModel(page, { autoStairs: true, tourEscort: true });
   await traceHouse(page, points);
   await page.locator('[data-build-house]').click();
   await h.waitForSaved(page);

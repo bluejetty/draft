@@ -432,8 +432,8 @@ test.describe('MODEL.html tier 1', () => {
       //
       // IT IS NOT QUITE FREE, and the honest note is that it is not the
       // dependency-less kind build-menu.js is. tour.js reaches for
-      // window.DraftRoomGrow in its room-stamp naming -- guarded, so it
-      // degrades rather than throws -- and this page loads no room-grow.js.
+      // window.DraftRoomNumbers in its room-stamp naming -- guarded, so it
+      // degrades rather than throws -- and this page loads no room-numbers.js.
       // The reveal path touches none of that code; the cost is a module
       // carrying more than this page asks of it, which is cheaper than a
       // second copy of the choreography.

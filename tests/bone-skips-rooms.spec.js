@@ -32,8 +32,8 @@ async function bareOutline(page) {
   await h.waitForSaved(page);
 }
 
-// The same four-room program tests/room-grow.spec.js uses to prove partitions
-// DO grow. Written straight into the saved drawing rather than through the
+// The four-room program the removed tests/room-grow.spec.js used to prove
+// partitions DID grow, when anything could. Written straight into the saved drawing rather than through the
 // tray, because the tray is a tour pause and this press must be post-tour.
 async function stampProgram(page) {
   await page.evaluate(async () => {
@@ -63,7 +63,7 @@ const grownWalls = saved => (saved.walls || [])
 const washrooms = saved => (saved.groups || []).filter(g => g.washroomLevelId != null);
 
 async function builtAndStamped(page) {
-  await h.openModel(page, { autoStairs: true, tourEscort: true, roomGrow: true });
+  await h.openModel(page, { autoStairs: true, tourEscort: true });
   await bareOutline(page);
   await page.locator('[data-build-house]').click();   // shell + the dealt washroom
   await h.waitForSaved(page);
@@ -115,7 +115,7 @@ test('a bone press grows no partitions from a stamped program, and the washroom 
 // contract changing, and it should be a decision rather than a drift.
 test('the bone builds structure, stairs and one washroom a floor — and nothing else inside',
   async ({ page }) => {
-    await h.openModel(page, { autoStairs: true, tourEscort: true, roomGrow: true });
+    await h.openModel(page, { autoStairs: true, tourEscort: true });
     await bareOutline(page);
     await page.locator('[data-build-house]').click();
     await h.waitForSaved(page);
@@ -147,7 +147,7 @@ test('the bone builds structure, stairs and one washroom a floor — and nothing
   });
 
 test('the build summary says nothing about rooms rather than lying about them', async ({ page }) => {
-  await h.openModel(page, { autoStairs: true, tourEscort: true, roomGrow: true });
+  await h.openModel(page, { autoStairs: true, tourEscort: true });
   await bareOutline(page);
   await page.locator('[data-build-house]').click();
   await h.waitForSaved(page);

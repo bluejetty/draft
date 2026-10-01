@@ -207,7 +207,7 @@ const walk = (state, steps, reply = canned) => {
   })());
 }
 
-// ── Companions ride with their host, the way room-grow expects ────────
+// ── Companions ride with their host ───────────────────────────────────
 {
   let s = G.startState({}, 1);
   s = G.answer(s, 'primarySuite', 'yes');
@@ -221,7 +221,7 @@ const walk = (state, steps, reply = canned) => {
   check('and both sit on the primary spot',
     ensuite.x === primary.x && ensuite.z === primary.z
     && walkIn.x === primary.x && walkIn.z === primary.z);
-  check('every stamp carries a base room-grow knows',
+  check('every stamp carries a base',
     p.stamps.every(x => typeof x.base === 'string' && x.base.length > 0));
 }
 
@@ -322,58 +322,12 @@ const walk = (state, steps, reply = canned) => {
   check('five bedrooms ask more than two', big > small, `${big} vs ${small}`);
 }
 
-// ── The grower actually accepts it ────────────────────────────────────
-// The ground rule for this board is to consume room-grow's interface, not
-// rework it. The only honest way to know the stamp program is the shape it
-// wants is to hand it over and watch it grow.
-{
-  require('../geometry-2d.js');
-  require('../room-grow.js');
-  const R = window.DraftRoomGrow;
-  const box = { x0: -20, x1: 20, z0: -14, z1: 14 };
-  const ring = [
-    { x: box.x0, z: box.z0 }, { x: box.x1, z: box.z0 },
-    { x: box.x1, z: box.z1 }, { x: box.x0, z: box.z1 },
-  ];
-  let s = G.startState({ outline: box, levelIds: [3, 5] }, 7);
-  for (let i = 0; i < 20; i++) {
-    const q = G.nextQuestion(s);
-    if (q.done) break;
-    s = G.answer(s, q.id, canned(q));
-  }
-  const p = G.program(s);
-  [1, 2].forEach(storey => {
-    const stamps = p.stamps.filter(x => x.storey === storey).map(x => ({
-      id: x.id, base: x.base, x: x.x, z: x.z,
-      ...(x.companionOf != null ? { companionOf: x.companionOf } : {}),
-    }));
-    if (!stamps.length) return;
-    const grown = R.growRooms({ points: ring, stamps });
-    check(`storey ${storey}: the grower takes the program and grows rooms`,
-      grown.rooms.length > 0, `rooms=${grown.rooms.length} report=${grown.report.join('|')}`);
-    check(`storey ${storey}: and puts up walls for them`,
-      grown.walls.length > 0, `walls=${grown.walls.length}`);
-    // Every stamp comes back with a claim — companions included, since the
-    // grower nests an ensuite or walk-in inside its bedroom rather than
-    // dropping it.
-    check(`storey ${storey}: every stamp comes back with a claim`,
-      grown.rooms.length === stamps.length,
-      `rooms=${grown.rooms.length} stamps=${stamps.length}`);
-    check(`storey ${storey}: each claim names the stamp it grew from`,
-      grown.rooms.every(room => stamps.some(x => x.id === room.stampId)),
-      grown.rooms.map(r => r.stampId).join(','));
-  });
-  // A silent client's program must grow too — that is the bone-at-any-rung
-  // promise reaching all the way through to geometry.
-  const quiet = G.program(G.startState({ outline: box, levelIds: [3, 5] }, 1));
-  const groundFloor = quiet.stamps.filter(x => x.storey === 1).map(x => ({
-    id: x.id, base: x.base, x: x.x, z: x.z,
-    ...(x.companionOf != null ? { companionOf: x.companionOf } : {}),
-  }));
-  const grownQuiet = R.growRooms({ points: ring, stamps: groundFloor });
-  check('a program nobody answered still grows a real floor',
-    grownQuiet.rooms.length > 0, `rooms=${grownQuiet.rooms.length}`);
-}
+// ── (The grower is gone) ──────────────────────────────────────────────
+// A section here handed the program to room-grow.js's growRooms and watched it
+// grow. room-grow.js was removed 1 Oct, ruled out by the drafter, so there is
+// no grower left to accept it; the stamps still place, and the checks above
+// still pin their shape.
+
 
 console.log(`gruff interview harness: ${pass} checks passed, ${fails.length} failed`);
 fails.forEach(line => console.log('  FAIL ' + line));

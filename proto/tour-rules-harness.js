@@ -13,7 +13,7 @@
 // numbers out, no DOM, no store -- which is the whole reason the module was
 // carved out. So the subject is loaded from source into a sandbox and called
 // directly. Two exports (stampDisplayName, detectorNumberStart) read
-// window.DraftRoomGrow when it is there; both paths are checked, because the
+// window.DraftRoomNumbers when it is there; both paths are checked, because the
 // fallback is the one that runs on a page that has not loaded it and it is the
 // one nobody would notice losing.
 //
@@ -42,11 +42,11 @@ const readSubject = name => {
   return EDIT && EDIT.file === name ? EDIT.fn(text) : text;
 };
 
-// roomGrow: null loads tour.js with no DraftRoomGrow on the window, which is
-// what a page that has not loaded room-grow.js gives it.
-function loadTour(roomGrow) {
+// roomNumbers: null loads tour.js with no DraftRoomNumbers on the window, which is
+// what a page that has not loaded room-numbers.js gives it.
+function loadTour(roomNumbers) {
   const win = {};
-  if (roomGrow) win.DraftRoomGrow = roomGrow;
+  if (roomNumbers) win.DraftRoomNumbers = roomNumbers;
   const sandbox = { window: win, console, Math, Number, String, Object, Array,
     JSON, Map, Set, RegExp, isFinite, parseFloat, parseInt };
   sandbox.globalThis = sandbox;
@@ -237,9 +237,9 @@ function runChecks() {
   }
   check('the reveal never goes back down', climbed);
 
-  // ── ROOM STAMP NAMES, WITHOUT room-grow.js ───────────────────────────
+  // ── ROOM STAMP NAMES, WITHOUT room-numbers.js ───────────────────────────
   // The fallback path: per-floor numbering, bare until a second lands. This
-  // is what a page that has not loaded room-grow.js gets, and no browser
+  // is what a page that has not loaded room-numbers.js gets, and no browser
   // test stands on it.
   const stamps = [
     { id: 1, levelId: 2, base: 'OFFICE', name: 'OFFICE' },
@@ -267,9 +267,9 @@ function runChecks() {
   check('a base with no stamps starts at 1',
     T.detectorNumberStart(stamps, 'DEN', 2) === 1);
 
-  // ── ROOM STAMP NAMES, WITH room-grow.js ──────────────────────────────
+  // ── ROOM STAMP NAMES, WITH room-numbers.js ──────────────────────────────
   // A stand-in ladder, so what is checked is that tour.js DEFERS to it --
-  // not what room-grow.js decides, which is room-grow's own business.
+  // not what room-numbers.js decides, which is room-numbers' own business.
   const grown = loadTour({
     assignStampNumbers: list => new Map(list.map(s => [s.id, `${s.base} B9`])),
   });
@@ -426,7 +426,7 @@ const MUTATIONS = [
     c => c.replace('if (!stamp.base) return stamp.name; // renamed — custom forever', '')],
 
   ['the house-wide ladder is ignored when it is loaded', 'tour.js',
-    c => c.replace('if (HOUSE_WIDE.includes(stamp.base) && window.DraftRoomGrow) {',
+    c => c.replace('if (HOUSE_WIDE.includes(stamp.base) && window.DraftRoomNumbers) {',
       'if (false) {')],
 
   ['the detector starts ON the last number instead of past it', 'tour.js',

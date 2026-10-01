@@ -79,7 +79,7 @@ function shape(walls) {
 }
 
 async function dealtHouse(page) {
-  await h.openModel(page, { autoStairs: true, tourEscort: true, roomGrow: true });
+  await h.openModel(page, { autoStairs: true, tourEscort: true });
   await traceHouse(page, RECT);
   await page.locator('[data-build-house]').click();
   await h.waitForSaved(page);

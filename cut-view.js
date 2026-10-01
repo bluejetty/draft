@@ -981,7 +981,7 @@ if (!window.DraftCutView) {
   // It stops working the moment an interior wall exists: a cut through a
   // partitioned house yields three crossings, the pairing opens a gap under
   // the partition, and the band stops in the middle of a floor that is
-  // really there. room-grow.js and closets.js already build interior walls.
+  // really there. closets.js already builds interior walls.
   //
   // A floor polygon has no such problem in either direction: a courtyard has
   // no floor over it, and a partition does not touch the polygon at all. It

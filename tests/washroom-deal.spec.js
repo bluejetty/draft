@@ -29,7 +29,7 @@ const washrooms = saved => (saved.groups || []).filter(g => g.washroomLevelId !=
 const locks = saved => saved.levelLocks || [];
 
 test('a bone press deals a washroom on every silent floor, stacked and locked', async ({ page }) => {
-  await h.openModel(page, { autoStairs: true, tourEscort: true, roomGrow: true });
+  await h.openModel(page, { autoStairs: true, tourEscort: true });
   await bareOutline(page);
 
   const before = await h.savedDrawing(page);
@@ -87,7 +87,7 @@ test('a bone press deals a washroom on every silent floor, stacked and locked', 
 });
 
 test('one press is still one undo, with the washrooms in it', async ({ page }) => {
-  await h.openModel(page, { autoStairs: true, tourEscort: true, roomGrow: true });
+  await h.openModel(page, { autoStairs: true, tourEscort: true });
   await bareOutline(page);
   await page.locator('[data-build-house]').click();
   await h.waitForSaved(page);
@@ -106,7 +106,7 @@ test('one press is still one undo, with the washrooms in it', async ({ page }) =
 });
 
 test('a floor the drafter stamped gets no washroom dealt', async ({ page }) => {
-  await h.openModel(page, { autoStairs: true, tourEscort: true, roomGrow: true });
+  await h.openModel(page, { autoStairs: true, tourEscort: true });
   await h.pickBuild(page, 'twoStorey');
   await page.keyboard.press('Enter');
   for (const [x, z] of RECT) await h.clickWorld(page, x, z);
@@ -146,7 +146,7 @@ test('a floor the drafter stamped gets no washroom dealt', async ({ page }) => {
 // BOARD #349 — UNIT OWNERSHIP. Two facts that cost nothing today and cannot
 // be recovered later, so they are written from day one.
 test('a dealt unit says so, carries no master links, and stops saying so once touched', async ({ page }) => {
-  await h.openModel(page, { autoStairs: true, tourEscort: true, roomGrow: true });
+  await h.openModel(page, { autoStairs: true, tourEscort: true });
   await bareOutline(page);
   await page.locator('[data-build-house]').click();
   await h.waitForSaved(page);
