@@ -10152,7 +10152,7 @@
   // the next opening would come out the old size while the box said
   // otherwise. So a bad entry says why on the strip and the box goes back to
   // the number actually in force.
-  const propField = (label, valueFt, commit, redraw) => {
+  const propField = (label, valueFt, commit, redraw, { inches = false } = {}) => {
     const F = window.DraftFormatters;
     const row = document.createElement('div');
     row.dataset.propRow = label.toLowerCase();
@@ -10177,7 +10177,12 @@
       // empty box would go through the parser on every blur and refuse,
       // putting an error on the strip for a drafter who typed nothing.
       if (valueFt == null && !input.value.trim()) return;
-      const parsed = F.parseArchitecturalLength(input.value);
+      // A BARE NUMBER IN A DOOR OR WINDOW BOX IS INCHES (Movie, 1 Oct: "yes
+      // they do mean \" in the door thing.. same as in the windows"). Nobody
+      // sizes a door at 36 FEET, and the wall boxes' rule -- a bare number is
+      // feet -- gave exactly that. 3-0, 0-36, 3' and 36" still read as they
+      // always did; only the bare number changes, and only here.
+      const parsed = (inches ? F.parseAssemblyInches : F.parseArchitecturalLength)(input.value);
       if (!parsed.ok) {
         sayOnStrip(parsed.error);
         input.value = shown();
@@ -10200,7 +10205,7 @@
   // The opening panel's own fields, which is what the above WAS until walls
   // needed the same row. Only the redraw differs: this panel knows its name.
   const openingField = (label, valueFt, commit) =>
-    propField(label, valueFt, commit, showOpeningProps);
+    propField(label, valueFt, commit, showOpeningProps, { inches: true });
 
   // A LIST AS A DROPDOWN, for when the choices outgrow a row of chips -- the
   // door list is ten long and the rail is 277px.
@@ -10228,12 +10233,14 @@
   };
 
   // A catalog entry's sizes as chips. A garage door's carry a height, so
-  // its faces read 8'×8'; every other door's are inches.
+  // its faces read the way Movie marks one, in feet: 8W × 8H, 16W × 7H.
+  // Every other door's are inches. No unit mark on either (Movie, 1 Oct: "the
+  // user will understand what it represents without seeing the unit").
   const doorSizeKey = (entry, widthFt, headFt) => (entry.type === 'garage'
     ? `${widthFt}x${headFt}` : String(Math.round(widthFt * 12)));
   const doorSizeChips = entry => entry.sizes.map(size => (entry.type === 'garage'
-    ? [`${size.widthFt}x${size.heightFt}`, `${size.widthFt}'×${size.heightFt}'`]
-    : [String(Math.round(size * 12)), `${Math.round(size * 12)}"`]));
+    ? [`${size.widthFt}x${size.heightFt}`, `${size.widthFt}W × ${size.heightFt}H`]
+    : [String(Math.round(size * 12)), String(Math.round(size * 12))]));
   const doorSizeFromKey = (entry, key) => {
     if (entry.type === 'garage') {
       const size = entry.sizes.find(sz => `${sz.widthFt}x${sz.heightFt}` === key);
@@ -15434,11 +15441,11 @@
         box.append(propField('DOOR WIDTH', split.doorFt, feet => {
           if (!(feet > 0)) return 'The door needs a width greater than zero.';
           return resizeOpenings(feet + split.windowFt, () => ({ gardenWindowWidth: split.windowFt }));
-        }, showSelectionProps));
+        }, showSelectionProps, { inches: true }));
         box.append(propField('WINDOW WIDTH', split.windowFt, feet => {
           if (!(feet > 0)) return 'The window needs a width greater than zero.';
           return resizeOpenings(split.doorFt + feet, () => ({ gardenWindowWidth: feet }));
-        }, showSelectionProps));
+        }, showSelectionProps, { inches: true }));
       }
       if (openings.every(o => o.garage !== true)) {
         box.append(doorHandRow(
@@ -15450,7 +15457,7 @@
     }
 
     box.append(propField('WIDTH', agreedOn(openings, o => Number(o.width) || 0),
-      feet => resizeOpenings(feet), showSelectionProps));
+      feet => resizeOpenings(feet), showSelectionProps, { inches: true }));
 
     // ONLY A WINDOW HAS ONE, for the reason above. A sill row on a door
     // would edit a number the record writes as zero whatever it said.
@@ -15465,7 +15472,7 @@
           }
           applyToOpenings(openings, () => ({ sillHeight: feet }));
           return null;
-        }, showSelectionProps));
+        }, showSelectionProps, { inches: true }));
     }
 
     box.append(propField('HEAD', agreedOn(openings, o => Number(o.headHeight) || 0),
@@ -15478,7 +15485,7 @@
         }
         applyToOpenings(openings, () => ({ headHeight: feet }));
         return null;
-      }, showSelectionProps));
+      }, showSelectionProps, { inches: true }));
     return box;
   };
 

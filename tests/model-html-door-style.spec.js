@@ -110,6 +110,12 @@ test('a new STYLE keeps the size; a new TYPE goes to its default', async ({ page
   await expect(note(page)).toContainText(`8'-0" WIDE`);
   await expect(note(page)).toContainText(`HEAD 8'-0"`);
   await expect(page.locator('[data-door-flip]')).toHaveCount(0);
+  // Its chips read the way a garage door is marked, in feet: 16W × 7H.
+  const sixteen = page.locator('[data-prop-row="size"] [data-prop-value="16x7"]');
+  await expect(sixteen).toHaveText('16W × 7H');
+  await sixteen.click();
+  await expect(note(page)).toContainText(`16'-0" WIDE`);
+  await expect(note(page)).toContainText(`HEAD 7'-0"`);
 });
 
 test('a door placed by hand saves its type, style and hand', async ({ page }) => {
@@ -132,10 +138,13 @@ test('a GARDEN door splits into a door width and a window width', async ({ page 
   await open(page);
   await armOpening(page);
   await pickDoor(page, 'ext-garden');
+  // The chip face is the bare number; nobody needs the inch mark.
+  await expect(page.locator('[data-prop-row="size"] [data-prop-value="60"]')).toHaveText('60');
   await page.locator('[data-prop-row="size"] [data-prop-value="60"]').click();
   await expect(page.locator('[data-prop-field="door width"]')).toHaveValue(`2'-6"`);
   await expect(page.locator('[data-prop-field="window width"]')).toHaveValue(`2'-6"`);
-  await page.locator('[data-prop-field="door width"]').fill("3'");
+  // A bare number in a door box is inches: 36 is 3'-0", not 36 feet.
+  await page.locator('[data-prop-field="door width"]').fill('36');
   await page.locator('[data-prop-field="door width"]').press('Enter');
   await expect(note(page)).toContainText(`EXT – GARDEN 5'-6"`);
   const f = await h.planFrame(page);
@@ -173,4 +182,12 @@ test('on a door already drawn: style keeps the size, type resets it, flips flip'
   [o] = await survives(page);
   expect([o.doorType, o.doorStyle, o.hingeFlip]).toEqual(['int', 'french', true]);
   expect(o.width, 'a new type goes to its default').toBeCloseTo(4, 6);
+
+  // A bare number typed into a drawn door's WIDTH is inches too.
+  await panel.locator('[data-prop-field="width"]').fill('42');
+  await panel.locator('[data-prop-field="width"]').press('Enter');
+  await page.waitForTimeout(150);
+  await save(page);
+  [o] = await survives(page);
+  expect(o.width, '42 typed is 3\'-6"').toBeCloseTo(3.5, 6);
 });
