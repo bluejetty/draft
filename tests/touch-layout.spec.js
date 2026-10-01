@@ -116,3 +116,22 @@ test('a finger places a viewport on the sheet and drags it', async ({ page }) =>
   expect(saved.layout.viewports[0].xIn, 'the finger moved it').toBeCloseTo(11, 1);
   expect(saved.layout.viewports[0].yIn).toBeCloseTo(6.5, 1);
 });
+
+// AUDIT M8. Delete and Backspace were the only way to take a viewport off a
+// sheet, and an iPad has neither. The strip's DELETE is the keys' twin, on
+// screen exactly while a viewport is selected.
+test('a finger takes a viewport off the sheet with DELETE', async ({ page }) => {
+  await openLayout(page);
+  const del = page.locator('[data-delete-viewport]');
+  await expect(del, 'nothing selected, nothing to delete').toBeHidden();
+
+  await page.locator('[data-layout-add-viewport]').tap();
+  const spot = await sheetToClient(page, 8, 5);
+  await withLayoutSave(page, () => page.touchscreen.tap(spot.x, spot.y));
+  await page.touchscreen.tap(spot.x, spot.y);
+  await expect(del).toBeVisible();
+
+  await withLayoutSave(page, () => del.tap());
+  expect((await savedDrawing(page)).layout.viewports, 'the viewport is gone').toHaveLength(0);
+  await expect(del).toBeHidden();
+});

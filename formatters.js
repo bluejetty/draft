@@ -20,8 +20,10 @@ if (!window.DraftFormatters) {
 
   function formatArchitecturalInches(totalInches) {
     if (!Number.isFinite(totalInches)) return '';
-    const negative = totalInches < 0;
     const sixteenths = Math.round(Math.abs(totalInches) / SIXTEENTH_IN);
+    // A value that rounds to nothing has no sign: -0.01" is 0'-0", not
+    // -0'-0" (audit 3.4).
+    const negative = totalInches < 0 && sixteenths > 0;
     const wholeInches = Math.floor(sixteenths / 16);
     const numerator = sixteenths % 16;
     const feet = Math.floor(wholeInches / 12);
@@ -38,8 +40,10 @@ if (!window.DraftFormatters) {
   // as plain inches: 11 7/8", 16", 3/4".
   function formatInchesOnly(totalInches) {
     if (!Number.isFinite(totalInches)) return '';
-    const negative = totalInches < 0;
     const sixteenths = Math.round(Math.abs(totalInches) / SIXTEENTH_IN);
+    // A value that rounds to nothing has no sign: -0.01" is 0'-0", not
+    // -0'-0" (audit 3.4).
+    const negative = totalInches < 0 && sixteenths > 0;
     const wholeInches = Math.floor(sixteenths / 16);
     const numerator = sixteenths % 16;
     let body = '';
@@ -106,7 +110,12 @@ if (!window.DraftFormatters) {
   }
 
   function parseArchitecturalLength(value) {
-    const raw = String(value ?? '').trim();
+    // AN iPAD TYPES CURLY QUOTES. Smart punctuation turns 12'-6" into
+    // 12’-6”, and the prime marks ′ ″ are what a drafter pastes from a
+    // spec; all of them mean feet and inches here (audit 5.2).
+    const raw = String(value ?? '').trim()
+      .replace(/[\u2018\u2019\u2032]/g, "'")
+      .replace(/[\u201C\u201D\u2033]/g, '"');
     if (!raw) return { ok: false, error: 'Enter a dimension such as 8-1 1/8.' };
     if (/^[+-]?0(?:\.0+)?$/.test(raw)) return architecturalLengthResult(0);
 

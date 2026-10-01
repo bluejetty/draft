@@ -127,7 +127,7 @@ const MUTANTS = [
 
   { file: 'MODEL.html',
     name: 'UNDO ASSIGNS ONLY: a window that was dusted stays an overhead door',
-    find: '          Object.keys(item).forEach(key => {\n            if (!(key in before)) delete item[key];\n          });',
+    find: '        Object.keys(item).forEach(key => {\n          if (!(key in before)) delete item[key];\n        });',
     with: '          /* mutant */',
     test: 'a key the brush added is removed by the undo, not left standing' },
 

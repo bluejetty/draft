@@ -103,3 +103,12 @@ test('background levels exclude the active level and cap at two', async ({ page 
     .backgroundLevelIds([1, 2, 2, 3, 4, 99], new Set([1, 2, 3, 4]), 1));
   expect(ids).toEqual([2, 3]);
 });
+
+// AUDIT 2.1. Two levels sharing an id gave LAYOUT and the cut views, which
+// read this list raw, two answers to "which level is this item on".
+test('levels keep one record per id, the first', async ({ page }) => {
+  const kept = await page.evaluate(() => window.DraftDrawingFormat.levels([
+    { id: 3, name: 'main fl' }, { id: 3, name: 'impostor' }, { id: 5, name: '2nd fl' },
+  ]).map(l => `${l.id} ${l.name}`));
+  expect(kept).toEqual(['3 MAIN FL', '5 2ND FL']);
+});

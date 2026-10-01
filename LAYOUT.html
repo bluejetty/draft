@@ -435,6 +435,12 @@
   /* Spent, not broken: the dormant idiom from the shared bar's chips rather
      than a fourth grey. */
   .strip-history:disabled { color: var(--ink-quiet); opacity:0.35; cursor:default; }
+  /* DELETE, BESIDE THE HISTORY IT FEEDS (audit M8). The Delete key was the
+     only way to take a viewport off a sheet, and an iPad has none. A word
+     rather than an icon, as MODEL's DELETE is. */
+  .strip-history[data-delete-viewport] { font-family: var(--font-ui); font-size:11px;
+    font-weight:600; letter-spacing:0.06em; padding:0 8px; }
+  .strip-history[hidden] { display:none; }
   /* THE NAV CLUSTER'S RULES CAME OUT WITH IT. MODEL · LAYOUT · PROJECT ·
      SPECS and the logo were this page's own copy of a row that shell-bars.js
      now writes for every page, out of one table, with the current page marked
@@ -611,6 +617,8 @@
         <path d="M10.4 4.4 L13 7 L10.4 9.6"></path>
       </svg>
     </button>
+    <button type="button" data-delete-viewport class="strip-history" hidden
+      title="Take the selected viewport off the sheet" aria-label="Delete the selected viewport">DELETE</button>
   </div>
   <span data-sheet-readout></span>
   <!-- THE PROFILE PAIR RIDES HERE NOW, where the nav cluster used to. The
@@ -1953,12 +1961,19 @@ class Component extends PageLogic {
     }
     if ((e.key === 'Delete' || e.key === 'Backspace') && this.state.selectedViewportId != null) {
       e.preventDefault();
-      this.setState({
-        viewports: this.state.viewports.filter(viewport => viewport.id !== this.state.selectedViewportId),
-        selectedViewportId: null,
-        auto: false,
-      }, () => { this._persistLayout(); this._draw(); });
+      this._deleteSelectedViewport();
     }
+  }
+
+  // ONE DELETE, whichever control pressed it: the key and the strip's button
+  // call this, so neither can learn something the other does not.
+  _deleteSelectedViewport() {
+    if (this.state.selectedViewportId == null) return;
+    this.setState({
+      viewports: this.state.viewports.filter(viewport => viewport.id !== this.state.selectedViewportId),
+      selectedViewportId: null,
+      auto: false,
+    }, () => { this._persistLayout(); this._draw(); });
   }
 
   // THE PICKED SCALE IS A CEILING, NOT A COMMAND (Movie, 21 Sep: "needs more
@@ -2232,6 +2247,8 @@ class Component extends PageLogic {
     redo.disabled = !this.state.historyFuture;
     title(undo, this.state.historyPast ? 'Undo the last sheet change' : 'Nothing to undo yet');
     title(redo, this.state.historyFuture ? 'Redo the sheet change just undone' : 'Nothing to redo');
+    // ON SCREEN EXACTLY WHILE THERE IS SOMETHING TO DELETE, as MODEL's is.
+    document.querySelector('[data-delete-viewport]').hidden = this.state.selectedViewportId == null;
 
     document.querySelector('[data-sheet-readout]').textContent =
       `${pw}" × ${ph}"  ·  ${SCALES[activeScale].label}`;
@@ -2294,6 +2311,7 @@ class Component extends PageLogic {
     });
     on('[data-undo]', 'click', () => this._undoLayout());
     on('[data-redo]', 'click', () => this._redoLayout());
+    on('[data-delete-viewport]', 'click', () => this._deleteSelectedViewport());
   }
 
   // THE COMPOSER, ON DEMAND. It replaces every viewport on every sheet, so a
