@@ -545,6 +545,14 @@
         });
       };
 
+      // TEXT FROM A DRAWING FILE IS NOT MARKUP. Ids, level names and band
+      // heights below all come out of a file that may have been handed to
+      // the drafter by someone else, and each is spliced into innerHTML. An
+      // uppercased level name still carries an entity-encoded handler, so
+      // every one is escaped at the splice (audit 8.2).
+      const escapeHtml = value => String(value).replace(/[&<>"']/g,
+        ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+
       // ── THE RAILS ─────────────────────────────────────────────────────
       const finishOptions = () => WT.EXTERIOR_FINISHES
         .map(f => `<option value="${f.id}">${f.label}</option>`).join('');
@@ -553,9 +561,9 @@
 
       const elevList = document.getElementById('elev-list');
       const paintElevList = () => {
-        elevList.innerHTML = cuts.map(cut => `<button class="elev-btn" data-elev="${cut.id}"
-          aria-pressed="${cut.id === currentElev}">${cut.id}<span class="mark">${
-          ELEV_NAMES[cut.id] || ''}</span></button>`).join('')
+        elevList.innerHTML = cuts.map(cut => `<button class="elev-btn" data-elev="${escapeHtml(cut.id)}"
+          aria-pressed="${cut.id === currentElev}">${escapeHtml(cut.id)}<span class="mark">${
+          escapeHtml(ELEV_NAMES[cut.id] || '')}</span></button>`).join('')
           || '<p class="empty">No walls in this drawing yet.</p>';
         elevList.querySelectorAll('[data-elev]').forEach(btn =>
           btn.addEventListener('click', () => {
@@ -593,8 +601,8 @@
       const paintRoofList = () => {
         const roofs = Array.isArray(drawing?.roofs) ? drawing.roofs : [];
         roofList.innerHTML = roofs.map((roof, i) =>
-          `<button class="elev-btn" data-roof="${roof.id}"
-            aria-pressed="${String(roof.id) === roofPicked}">${roofLabel(roof, i)}</button>`).join('')
+          `<button class="elev-btn" data-roof="${escapeHtml(roof.id)}"
+            aria-pressed="${String(roof.id) === roofPicked}">${escapeHtml(roofLabel(roof, i))}</button>`).join('')
           || '<p class="empty">No roofs in this drawing yet.</p>';
         roofList.querySelectorAll('[data-roof]').forEach(btn =>
           btn.addEventListener('click', () => {
@@ -727,11 +735,11 @@
         const list = document.getElementById('band-list');
         list.innerHTML = bands.length ? bands.map((band, i) => {
           const label = WT.finishById(band.finishId).label;
-          const span = band.toTop ? `${band.lowFt}&prime;&ndash;top`
-            : `${band.lowFt}&ndash;${band.highFt}&prime;`;
+          const span = band.toTop ? `${escapeHtml(band.lowFt)}&prime;&ndash;top`
+            : `${escapeHtml(band.lowFt)}&ndash;${escapeHtml(band.highFt)}&prime;`;
           return `<div class="band" data-open="${i === bandPicked}">
             <span class="what" data-open-band="${i}"
-              title="Adjust this band">${label}</span>
+              title="Adjust this band">${escapeHtml(label)}</span>
             <span style="color:var(--ink-quiet)">${span}</span>
             <button class="drop" data-drop="${i}" title="Remove this band">&times;</button></div>`;
         }).join('') : '<p class="empty">No bands &mdash; the whole wall is one finish.</p>';

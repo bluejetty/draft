@@ -17,7 +17,7 @@ Legend: ✅ fixed · 🟡 partly fixed · ❌ open · ⚪ left as is on purpose 
 | file | ✅ | 🟡 | ❌ | ⚪ |
 |---|---|---|---|---|
 | AUDIT-CRITICAL (16) | 9 | 4 | 2 | 1 |
-| AUDIT-FULL (numbered findings) | 18 | 9 | 12 | 1 |
+| AUDIT-FULL (numbered findings) | 19 | 9 | 11 | 1 |
 | AUDIT-PERF (actionable items) | 3 | 2 | 2 | — |
 | AUDIT-QUESTIONS (17) | 13 answered | | 4 unanswered | |
 
@@ -79,7 +79,7 @@ Legend: ✅ fixed · 🟡 partly fixed · ❌ open · ⚪ left as is on purpose 
 | 7.3d | load failure paths untested | 🟡 | seed a too-new / garbage file | S |
 | 7.4 | fixed sleeps in tests (894) | ❌ | low; incremental | L |
 | 8.1 | third-party request on every page | 🟡❓ | fonts gone, but a GoatCounter visit counter now pings on every page | decision |
-| **8.2** | **markup from a drawing file reaches the page** | ❌ | **new since the audit: a level name, cut name or error text can inject script from a shared `.draft` file** (`MODEL.html` readout and notices, `EXTFINISH.html` roof list) | **S** |
+| 8.2 | markup from a drawing file reaches the page | ✅ | was new since the audit; drawing-file text is now escaped in `MODEL.html` (readout, notices) and `EXTFINISH.html` (elevation, roof and band lists) — `tests/markup-in-drawing-file.spec.js` | |
 | 8.4 | PDF scan caps width only | ❌ | cap the long side + null-check the blob | S |
 
 ## AUDIT-PERF

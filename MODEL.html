@@ -1654,6 +1654,15 @@
   // the code will complain.
   let substitutedWallTypes = new Map();
 
+  // TEXT FROM A DRAWING FILE IS NOT MARKUP. A level name, a cut name and a
+  // parser's error message all come out of a file that may have been handed
+  // to the drafter by someone else, and every one of them reaches an
+  // innerHTML below. Uppercasing a level name does not defang it -- an
+  // entity-encoded handler survives toUpperCase -- so each is escaped where
+  // it is spliced in (audit 8.2).
+  const escapeHtml = value => String(value).replace(/[&<>"']/g,
+    ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+
   const say = (title, body) => {
     noticeBody.innerHTML = `<h1>${title}</h1>${body}`;
     notice.classList.add('show');
@@ -4194,7 +4203,7 @@
       ctx.restore();
       readoutText.textContent = 'painter failed';
       say('The drawing could not be painted',
-        `<p><code>${String(err && err.message || err)}</code></p>`);
+        `<p><code>${escapeHtml(err && err.message || err)}</code></p>`);
       throw err;
     }
     ctx.restore();
@@ -4349,13 +4358,13 @@
     // a fault rather than the normal case. The drafter's two kinds of cut are
     // named as two kinds.
     const title = cut.auto
-      ? `elevation <b>${cut.name || cut.id} · ${elevationName(cut.id)}</b>`
-      : `section <b>${cut.name || cut.id}</b>`;
+      ? `elevation <b>${escapeHtml(cut.name || cut.id)} · ${escapeHtml(elevationName(cut.id))}</b>`
+      : `section <b>${escapeHtml(cut.name || cut.id)}</b>`;
     return `${title}   ${what}   `
       + `of <b>${(drawing.walls || []).length}</b> in the drawing
 `
-      + `${levelName()} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
-      + `view <b>${CUT_VIEW}${cut.id}</b>   `
+      + `${escapeHtml(levelName())} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
+      + `view <b>${CUT_VIEW}${escapeHtml(cut.id)}</b>   `
       + `${theme}/${mode}   `
       + `scale <b>fit to the cut</b>   `
       + `paint <b>${lastPaintMs.toFixed(2)}</b> ms   `
@@ -4404,8 +4413,8 @@
       // `underlays 1/0`, and a ratio above one is not a fact, it is a bug.
       + `underlays <b>${underlays().filter(u => underlayImages.has(u.id)).length}</b>`
       + `/${underlays().length}\n`
-      + `${levelName()} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
-      + `view <b>${onActiveLevel().viewId || 'all'}</b>   `
+      + `${escapeHtml(levelName())} <b>${activeLevelId()}</b>/${(drawing.levels || []).length}   `
+      + `view <b>${escapeHtml(onActiveLevel().viewId || 'all')}</b>   `
       + `${theme}/${mode}   `
       + `scale <b>${view.scale.toFixed(2)}</b> px/ft   `
       // Why the grid is or is not there, so its absence reads as a fact about
@@ -16894,7 +16903,7 @@
     } catch (err) {
       readoutText.textContent = 'unreadable';
       say('The saved drawing could not be parsed',
-        `<p><code>${String(err && err.message || err)}</code></p>`);
+        `<p><code>${escapeHtml(err && err.message || err)}</code></p>`);
       return false;
     }
 
@@ -16906,7 +16915,7 @@
     if (!check.ok) {
       readoutText.textContent = `envelope ${check.reason}`;
       say('That drawing is not one this page can read',
-        `<p>checkEnvelope said <code>${check.reason}</code>.
+        `<p>checkEnvelope said <code>${escapeHtml(check.reason)}</code>.
             <code>version</code> means it was written by a newer MODEL than this page knows.</p>`);
       return false;
     }
@@ -17135,7 +17144,7 @@
     } catch (err) {
       readoutText.textContent = 'store unavailable';
       say('The drawing store could not be opened',
-        `<p>IndexedDB refused to open: <code>${String(err && err.message || err)}</code></p>
+        `<p>IndexedDB refused to open: <code>${escapeHtml(err && err.message || err)}</code></p>
          <p>Private-browsing windows and blocked site data both do this.</p>`);
       return;
     }
@@ -17400,7 +17409,7 @@
               Reload to pick up the current drawing, then save again.</p>`);
         return false;
       }
-      say('The save failed', `<p><code>${String(error && error.message || error)}</code></p>`);
+      say('The save failed', `<p><code>${escapeHtml(error && error.message || error)}</code></p>`);
       return false;
     }
   };
