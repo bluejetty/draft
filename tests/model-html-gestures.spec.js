@@ -628,6 +628,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           buttons: ['left-tab', 'build-tab', 'props-tab', 'right-tab',
             'BUNGALOW', 'BILEVEL', 'DETACHED GARAGE', 'bone',
             'copy', 'paste',
+            // UNDO ON SCREEN (audit C4) is the Ctrl+Z row's own verb with a
+            // button on it: the parity table already has Undo **present**,
+            // and a second way to press it makes nothing new.
+            'model-undo',
             'delete', 'save', 'take-over',
             'file-new', 'file-open', 'file-save-as',
             // REAL ESTATE LAYOUT LEFT THIS ROW FOR `anchors` ON 27 SEP, when
