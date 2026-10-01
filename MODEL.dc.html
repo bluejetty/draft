@@ -3262,6 +3262,14 @@ class Component extends DCLogic {
         // proto/opening-round-trip-harness.js now compares the two lists, so
         // the next field added to the reader cannot go the same way.
         casement: opening.casement || null,
+        // AND THE DOOR'S TYPE, STYLE AND HAND (1 Oct), for the casement's
+        // reason: this page draws a FRENCH or a POCKET through the shared
+        // painter but does not edit them, and must not drop them on save.
+        doorType: opening.doorType || null,
+        doorStyle: opening.doorStyle || null,
+        gardenWindowWidth: opening.doorStyle === 'garden' ? (opening.gardenWindowWidth ?? null) : null,
+        hingeFlip: opening.type === 'door' ? opening.hingeFlip === true : null,
+        swingFlip: opening.type === 'door' ? opening.swingFlip === true : null,
         garage: opening.garage === true,
         auto: opening.auto === true,
       })),

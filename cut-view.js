@@ -26,6 +26,11 @@
 if (!window.DraftCutView) {
 (() => {
   const geo = () => window.DraftGeometry2D;
+  // The style a door is drawn in on an elevation: one of the styles below,
+  // or a single for anything else -- a door drawn before styles existed has
+  // always been a single.
+  const ELEVATION_DOOR_STYLES = Object.freeze(['single', 'french', 'pocket', 'barn', 'slide', 'bypass', 'garden']);
+  const elevationDoorStyle = f => (ELEVATION_DOOR_STYLES.includes(f.doorStyle) ? f.doorStyle : 'single');
   let warnedNoPatterns = false;
   let warnedNoRoofPatterns = false;
   let warnedNoFootings = false;
@@ -4343,7 +4348,101 @@ if (!window.DraftCutView) {
             ctx.restore();
           }
         }
-        if (f.type === 'door' && !f.garage) {
+        const doorStyle = f.type === 'door' && !f.garage ? elevationDoorStyle(f) : null;
+        if (doorStyle && doorStyle !== 'single') {
+          // ── A DOOR BY ITS STYLE (Movie, 1 Oct) ──────────────────────────
+          //
+          // Each is drawn inside the same opening the single fills, with the
+          // hinge on the side the plan hangs it: the jamb at the wall's start
+          // unless FLIP HINGE moved it. Lines, never strokeRect -- the
+          // elevation harness's recording context cannot see a strokeRect,
+          // and a detail nothing can measure is the one that quietly stops
+          // being drawn (the mullion's lesson, below).
+          const IN = pxPerFt / 12;
+          const hingeU = uc + (f.hingeFlip === true ? 1 : -1) * du * f.width / 2;
+          const latchU = uc - (f.hingeFlip === true ? 1 : -1) * du * f.width / 2;
+          const hingeLeft = X(hingeU) <= X(latchU);
+          const yt = Y(top), yb = Y(bottom);
+          const xl = ox, xr = ox + ow;
+          const seg = (x0, y0, x1, y1) => { ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); };
+          const frameLines = (x0, x1, inset) => {
+            if (x1 - x0 <= inset * 2 || yb - yt <= inset * 2) return;
+            seg(x0 + inset, yt + inset, x1 - inset, yt + inset);
+            seg(x1 - inset, yt + inset, x1 - inset, yb - inset);
+            seg(x1 - inset, yb - inset, x0 + inset, yb - inset);
+            seg(x0 + inset, yb - inset, x0 + inset, yt + inset);
+          };
+          const knob = x => {
+            const r = Math.max(1.5, 1.25 * IN);
+            const ky = Y(Math.min(floor + 3, (top + bottom) / 2));
+            ctx.moveTo(x + r, ky);
+            ctx.arc(x, ky, r, 0, Math.PI * 2);
+          };
+          const mid = (xl + xr) / 2;
+          ctx.beginPath();
+          if (doorStyle === 'french') {
+            // Two leaves meeting at a stile, a knob each side of it.
+            seg(mid - 0.75 * IN, yt, mid - 0.75 * IN, yb);
+            seg(mid + 0.75 * IN, yt, mid + 0.75 * IN, yb);
+            frameLines(xl, mid, 4 * IN);
+            frameLines(mid, xr, 4 * IN);
+            knob(mid - 2.5 * IN);
+            knob(mid + 2.5 * IN);
+          } else if (doorStyle === 'pocket') {
+            // No knob: a recessed pull at the latch edge.
+            const px = hingeLeft ? xr - 3 * IN : xl + 1 * IN;
+            const py = Y(Math.min(floor + 3, (top + bottom) / 2));
+            seg(px, py - 3 * IN, px + 2 * IN, py - 3 * IN);
+            seg(px + 2 * IN, py - 3 * IN, px + 2 * IN, py + 3 * IN);
+            seg(px + 2 * IN, py + 3 * IN, px, py + 3 * IN);
+            seg(px, py + 3 * IN, px, py - 3 * IN);
+          } else if (doorStyle === 'barn') {
+            // The slab hangs over the opening on an exposed track that runs
+            // past the hinge jamb, where the door parks open.
+            const trackY = Y(Math.min(top + 0.5, level.wallTop));
+            const reach = ow + 2 * IN;
+            const t0 = hingeLeft ? Math.max(X(uMin), xl - reach) : xl - 2 * IN;
+            const t1 = hingeLeft ? xr + 2 * IN : Math.min(X(uMax), xr + reach);
+            seg(t0, trackY, t1, trackY);
+            seg(xl - 2 * IN, trackY, xl - 2 * IN, yb);
+            seg(xr + 2 * IN, trackY, xr + 2 * IN, yb);
+            const bar = hingeLeft ? xr - 3 * IN : xl + 3 * IN;
+            const by = Y(Math.min(floor + 3, (top + bottom) / 2));
+            seg(bar, by - 9 * IN, bar, by + 9 * IN);
+          } else if (doorStyle === 'slide') {
+            // A framed patio unit: two glass panels and the stile where
+            // they meet, the handle on the one that slides.
+            frameLines(xl, xr, 2 * IN);
+            seg(mid - 0.5 * IN, yt + 2 * IN, mid - 0.5 * IN, yb - 2 * IN);
+            seg(mid + 0.5 * IN, yt + 2 * IN, mid + 0.5 * IN, yb - 2 * IN);
+            frameLines(xl + 2 * IN, mid, 2 * IN);
+            frameLines(mid, xr - 2 * IN, 2 * IN);
+            const hx = hingeLeft ? mid - 3 * IN : mid + 3 * IN;
+            const hy = Y(Math.min(floor + 3, (top + bottom) / 2));
+            seg(hx, hy - 4 * IN, hx, hy + 4 * IN);
+          } else if (doorStyle === 'bypass') {
+            // Two slabs overlapping at the middle, a pull at each outer edge.
+            seg(mid - 0.5 * IN, yt, mid - 0.5 * IN, yb);
+            seg(mid + 0.5 * IN, yt, mid + 0.5 * IN, yb);
+            const py = Y(Math.min(floor + 3, (top + bottom) / 2));
+            seg(xl + 3 * IN, py - 3 * IN, xl + 3 * IN, py + 3 * IN);
+            seg(xr - 3 * IN, py - 3 * IN, xr - 3 * IN, py + 3 * IN);
+          } else if (doorStyle === 'garden') {
+            // One unit, the same height: the door at the hinge side with the
+            // wider frame, the fixed window beside it with the thinner one
+            // and more glass, a mullion between.
+            const split = geo().gardenSplitFt(f);
+            const splitU = hingeU + (latchU - hingeU) * (split.doorFt / f.width);
+            const sx = X(splitU);
+            seg(sx, yt, sx, yb);
+            const [doorL, doorR] = hingeLeft ? [xl, sx] : [sx, xr];
+            const [winL, winR] = hingeLeft ? [sx, xr] : [xl, sx];
+            frameLines(doorL, doorR, 4 * IN);
+            frameLines(winL, winR, 2 * IN);
+            knob(hingeLeft ? sx - 2.5 * IN : sx + 2.5 * IN);
+          }
+          ctx.stroke();
+        } else if (f.type === 'door' && !f.garage) {
           // Flat slab door face with a round knob at handle height on the
           // latch side.
           const knobR = Math.max(1.5, (1.25 / 12) * pxPerFt);

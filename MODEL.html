@@ -10072,6 +10072,13 @@
   // SINGLE CASEMENT, this one DOUBLE CASEMENT"*. A door has none, so this is
   // read only while a window is the thing being placed.
   let fenestrationCasement = 'single';
+  // WHICH DOOR THE NEXT DOOR WILL BE (Movie, 1 Oct): one entry of
+  // geometry-2d's DOOR_CATALOG -- a type and a style together -- and which
+  // way it opens. A GARDEN's window share is held beside it.
+  let fenestrationDoor = 'ext-single';
+  let doorHingeFlip = false;
+  let doorSwingFlip = false;
+  let gardenWindowFt = null;
   let openingPanelUp = false;
 
   // ── WHAT THE NEXT OPENING WILL MEASURE ──────────────────────────────────
@@ -10145,7 +10152,7 @@
   // the next opening would come out the old size while the box said
   // otherwise. So a bad entry says why on the strip and the box goes back to
   // the number actually in force.
-  const propField = (label, valueFt, commit, redraw) => {
+  const propField = (label, valueFt, commit, redraw, { inches = false } = {}) => {
     const F = window.DraftFormatters;
     const row = document.createElement('div');
     row.dataset.propRow = label.toLowerCase();
@@ -10170,7 +10177,12 @@
       // empty box would go through the parser on every blur and refuse,
       // putting an error on the strip for a drafter who typed nothing.
       if (valueFt == null && !input.value.trim()) return;
-      const parsed = F.parseArchitecturalLength(input.value);
+      // A BARE NUMBER IN A DOOR OR WINDOW BOX IS INCHES (Movie, 1 Oct: "yes
+      // they do mean \" in the door thing.. same as in the windows"). Nobody
+      // sizes a door at 36 FEET, and the wall boxes' rule -- a bare number is
+      // feet -- gave exactly that. 3-0, 0-36, 3' and 36" still read as they
+      // always did; only the bare number changes, and only here.
+      const parsed = (inches ? F.parseAssemblyInches : F.parseArchitecturalLength)(input.value);
       if (!parsed.ok) {
         sayOnStrip(parsed.error);
         input.value = shown();
@@ -10193,7 +10205,98 @@
   // The opening panel's own fields, which is what the above WAS until walls
   // needed the same row. Only the redraw differs: this panel knows its name.
   const openingField = (label, valueFt, commit) =>
-    propField(label, valueFt, commit, showOpeningProps);
+    propField(label, valueFt, commit, showOpeningProps, { inches: true });
+
+  // A LIST AS A DROPDOWN, for when the choices outgrow a row of chips -- the
+  // door list is ten long and the rail is 277px.
+  const propSelect = (label, options, current, pick) => {
+    const row = document.createElement('div');
+    row.dataset.propRow = label.toLowerCase();
+    const name = document.createElement('div');
+    name.className = 'props-title';
+    name.textContent = label;
+    const select = document.createElement('select');
+    select.className = 'prop-field';
+    select.dataset.propSelect = label.toLowerCase();
+    select.setAttribute('aria-label', label);
+    options.forEach(([id, face]) => {
+      const option = document.createElement('option');
+      option.value = id;
+      option.textContent = face;
+      if (id === current) option.selected = true;
+      select.append(option);
+    });
+    if (current == null) select.selectedIndex = -1;
+    select.addEventListener('change', () => pick(select.value));
+    row.append(name, select);
+    return row;
+  };
+
+  // A catalog entry's sizes as chips. A garage door's carry a height, so
+  // its faces read the way Movie marks one, in feet: 8W × 8H, 16W × 7H.
+  // Every other door's are inches. No unit mark on either (Movie, 1 Oct: "the
+  // user will understand what it represents without seeing the unit").
+  const doorSizeKey = (entry, widthFt, headFt) => (entry.type === 'garage'
+    ? `${widthFt}x${headFt}` : String(Math.round(widthFt * 12)));
+  const doorSizeChips = entry => entry.sizes.map(size => (entry.type === 'garage'
+    ? [`${size.widthFt}x${size.heightFt}`, `${size.widthFt}W × ${size.heightFt}H`]
+    : [String(Math.round(size * 12)), String(Math.round(size * 12))]));
+  const doorSizeFromKey = (entry, key) => {
+    if (entry.type === 'garage') {
+      const size = entry.sizes.find(sz => `${sz.widthFt}x${sz.heightFt}` === key);
+      return size ? { widthFt: size.widthFt, heightFt: size.heightFt } : null;
+    }
+    const inches = Number(key);
+    return Number.isFinite(inches) && inches > 0 ? { widthFt: inches / 12 } : null;
+  };
+
+  // FLIP HINGE and FLIP SWING (Movie, 1 Oct: "switch door swing on the side
+  // vs other side and then also outside vs inswing"). Two presses, four ways
+  // a door can hang; the chip is lit while its flip is on.
+  const doorHandRow = (hingeFlip, swingFlip, flip) => {
+    const row = document.createElement('div');
+    row.dataset.propRow = 'hand';
+    const name = document.createElement('div');
+    name.className = 'props-title';
+    name.textContent = 'OPENS';
+    const chips = document.createElement('div');
+    chips.className = 'chip-row';
+    [['hinge', 'FLIP HINGE', hingeFlip], ['swing', 'FLIP SWING', swingFlip]].forEach(([id, face, on]) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sel-chip';
+      btn.dataset.doorFlip = id;
+      btn.textContent = face;
+      btn.setAttribute('aria-pressed', String(on));
+      btn.addEventListener('click', () => flip(id));
+      chips.append(btn);
+    });
+    row.append(name, chips);
+    return row;
+  };
+
+  // What a placed door carries of its kind: the brush's, when it is dusting
+  // one, else the DOOR list's.
+  const doorRecordFields = dusting => {
+    if (dusting) {
+      return {
+        doorType: dusting.doorType ?? null,
+        doorStyle: dusting.doorStyle || 'single',
+        ...(dusting.doorStyle === 'garden' ? { gardenWindowWidth: dusting.gardenWindowWidth ?? null } : {}),
+        hingeFlip: dusting.hingeFlip === true,
+        swingFlip: dusting.swingFlip === true,
+      };
+    }
+    const entry = window.DraftGeometry2D.DOOR_CATALOG.find(e => e.id === fenestrationDoor);
+    if (!entry || entry.type === 'garage') return entry ? { garage: true } : {};
+    return {
+      doorType: entry.type,
+      doorStyle: entry.style,
+      ...(entry.style === 'garden' ? { gardenWindowWidth: gardenWindowFt } : {}),
+      hingeFlip: doorHingeFlip,
+      swingFlip: doorSwingFlip,
+    };
+  };
 
   const showOpeningProps = () => {
     const P = window.ModelProps;
@@ -10224,6 +10327,58 @@
         openingSill = Math.max(0, openingHeads.window - size.heightFt);
         showOpeningProps();
       }));
+    }
+
+    // ── THE DOOR: ONE LIST, THEN A SIZE, THEN WHICH WAY IT OPENS ──────────
+    //
+    // Movie, 1 Oct: "they won't need seperate categories when selecting the
+    // door ... they can all be on big list", and the size rule -- "if the
+    // STYLE changes the size should remain the same, if the TYPE changes the
+    // size should go to default".
+    if (fenestrationType === 'door') {
+      const G = window.DraftGeometry2D;
+      const entry = G.DOOR_CATALOG.find(e => e.id === fenestrationDoor) || G.DOOR_CATALOG[0];
+      box.append(propSelect('DOOR', G.DOOR_CATALOG.map(e => [e.id, e.label]), entry.id, id => {
+        const next = G.DOOR_CATALOG.find(e => e.id === id);
+        if (!next) return;
+        if (next.type !== entry.type) {
+          openingSizes.door = next.defaultFt;
+          openingHeads.door = next.defaultHeightFt || G.DEFAULT_OPENING_HEAD_FT;
+        }
+        fenestrationDoor = id;
+        gardenWindowFt = null;
+        showOpeningProps();
+      }));
+      box.append(propRow('SIZE', doorSizeChips(entry), doorSizeKey(entry, openingSizes.door, openingHeads.door), key => {
+        const size = doorSizeFromKey(entry, key);
+        if (!size) return;
+        openingSizes.door = size.widthFt;
+        if (size.heightFt) openingHeads.door = size.heightFt;
+        gardenWindowFt = null;
+        showOpeningProps();
+      }));
+      if (entry.style === 'garden') {
+        const split = G.gardenSplitFt({ width: openingSizes.door, gardenWindowWidth: gardenWindowFt });
+        box.append(openingField('DOOR WIDTH', split.doorFt, feet => {
+          if (!(feet > 0)) return 'The door needs a width greater than zero.';
+          gardenWindowFt = split.windowFt;
+          openingSizes.door = feet + split.windowFt;
+          return null;
+        }));
+        box.append(openingField('WINDOW WIDTH', split.windowFt, feet => {
+          if (!(feet > 0)) return 'The window needs a width greater than zero.';
+          gardenWindowFt = feet;
+          openingSizes.door = split.doorFt + feet;
+          return null;
+        }));
+      }
+      if (entry.type !== 'garage') {
+        box.append(doorHandRow(doorHingeFlip, doorSwingFlip, which => {
+          if (which === 'hinge') doorHingeFlip = !doorHingeFlip;
+          else doorSwingFlip = !doorSwingFlip;
+          showOpeningProps();
+        }));
+      }
     }
 
     // WIDTH IS PER TYPE, so the field edits the one the drafter is holding.
@@ -10267,7 +10422,9 @@
     const note = document.createElement('div');
     note.className = 'props-title';
     note.dataset.openingNote = '';
-    note.textContent = `${F.formatArchitecturalInches(openingWidthFt() * 12)} WIDE, `
+    const doorName = fenestrationType === 'door'
+      ? `${(window.DraftGeometry2D.DOOR_CATALOG.find(e => e.id === fenestrationDoor) || {}).label || 'DOOR'} ` : '';
+    note.textContent = `${doorName}${F.formatArchitecturalInches(openingWidthFt() * 12)} WIDE, `
       + `SILL ${F.formatArchitecturalInches(openingSillFt() * 12)}, `
       + `HEAD ${F.formatArchitecturalInches(openingHeadFt() * 12)}`;
     box.append(note);
@@ -10553,6 +10710,10 @@
       // `garage: false` on every hand-placed window would be a key the old
       // page never wrote, in every file this page saves.
       ...(dusting && dusting.garage === true ? { garage: true } : {}),
+      // THE DOOR'S TYPE, STYLE AND HAND, from the brush when it carries them
+      // and from the DOOR list when it does not. A garage door is the
+      // `garage` flag; the reader names its type and style from that.
+      ...(type === 'door' ? doorRecordFields(dusting) : {}),
       // NOT THE BONE'S. auto-windows.js re-deals what it dealt; one the
       // drafter placed by hand is his from the moment it lands.
       auto: false,
@@ -13730,7 +13891,8 @@
     // overhead door an overhead door, and Movie's own example is dusting one.
     // `offset` and `wallId` are the two that must NEVER travel -- they are
     // where it is.
-    fenestration: ['type', 'layer', 'width', 'sillHeight', 'headHeight', 'garage', 'casement'],
+    fenestration: ['type', 'layer', 'width', 'sillHeight', 'headHeight', 'garage', 'casement',
+      'doorType', 'doorStyle', 'gardenWindowWidth', 'hingeFlip', 'swingFlip'],
     // NOT `structure`. Whether a floor is framed or a slab is read from the
     // layer set it lives on (layer-views.js's floorHomeView), so copying it
     // would make a floor's own two answers disagree -- and `points` is its
@@ -13776,6 +13938,15 @@
     (BRUSH_PROPS[kind] || []).forEach(key => {
       if (item[key] !== undefined) out[key] = item[key];
     });
+    // A DOOR DRAWN BEFORE DOOR STYLES carries none of their keys, and a brush
+    // that lifted nothing would leave a FRENCH door it dusts still FRENCH.
+    // What an old door IS is a plain single hung the default way, so that is
+    // what it lends.
+    if (kind === 'fenestration' && item.type === 'door' && item.garage !== true) {
+      if (out.doorStyle === undefined) out.doorStyle = 'single';
+      if (out.hingeFlip === undefined) out.hingeFlip = false;
+      if (out.swingFlip === undefined) out.swingFlip = false;
+    }
     return out;
   };
 
@@ -15217,27 +15388,76 @@
         id => applyToOpenings(openings, () => ({ casement: id }))));
     }
 
+    // A NEW WIDTH, CLAMPED TO EACH OPENING'S OWN WALL -- the WIDTH field's
+    // rule, shared with the DOOR list and the GARDEN fields so all three
+    // refuse a width the wall cannot carry the same way. `extra` adds to each
+    // opening's patch (a type, a style, a head).
+    const resizeOpenings = (feet, extra = () => ({})) => {
+      if (!(feet > 0)) return 'An opening needs a width greater than zero.';
+      const refused = [];
+      const clamped = new Map();
+      openings.forEach(opening => {
+        const wall = openingHostWall(opening);
+        if (!wall) { refused.push(opening); return; }
+        const fit = G.clampOpeningToWall(wall, Number(opening.offset) || 0, feet,
+          { walls: walls(), thicknessFt: openingThicknessFt() });
+        if (!fit) { refused.push(opening); return; }
+        clamped.set(opening, fit.offset);
+      });
+      if (refused.length) {
+        return `That wall is too short to carry a `
+          + `${F.formatArchitecturalInches(feet * 12)} opening.`;
+      }
+      applyToOpenings(openings, opening =>
+        ({ width: feet, offset: clamped.get(opening), ...extra(opening) }));
+      return null;
+    };
+
+    // ── THE DOOR: WHICH ONE, AND WHICH WAY IT OPENS (Movie, 1 Oct) ─────────
+    //
+    // The size rule is his: a new STYLE keeps the door's size, a new TYPE
+    // takes the type's default -- so EXT TYP. to EXT FRENCH stays 36", and
+    // EXT to INT goes to 30". Into or out of a garage door is a new type,
+    // and the head goes with the size.
+    if (agreedOn(openings, typeOf) === 'door') {
+      const entryOf = o => G.doorCatalogEntry(o)?.id || null;
+      const current = agreedOn(openings, entryOf);
+      box.append(propSelect('DOOR', G.DOOR_CATALOG.map(e => [e.id, e.label]), current, id => {
+        const next = G.DOOR_CATALOG.find(e => e.id === id);
+        if (!next) return;
+        const kind = opening => (next.type === 'garage'
+          ? { garage: true, doorType: 'garage', doorStyle: 'overhead' }
+          : { garage: false, doorType: next.type, doorStyle: next.style,
+            ...(next.style === 'garden' ? { gardenWindowWidth: null } : {}) });
+        const typeChanges = openings.some(o => G.doorCatalogEntry(o)?.type !== next.type);
+        if (!typeChanges) { applyToOpenings(openings, kind); return; }
+        const head = next.defaultHeightFt || G.DEFAULT_OPENING_HEAD_FT;
+        const refusal = resizeOpenings(next.defaultFt, o => ({ ...kind(o), headHeight: head }));
+        if (refusal) sayOnStrip(refusal);
+      }));
+      if (openings.length === 1 && openings[0].doorStyle === 'garden') {
+        const only = openings[0];
+        const split = G.gardenSplitFt(only);
+        box.append(propField('DOOR WIDTH', split.doorFt, feet => {
+          if (!(feet > 0)) return 'The door needs a width greater than zero.';
+          return resizeOpenings(feet + split.windowFt, () => ({ gardenWindowWidth: split.windowFt }));
+        }, showSelectionProps, { inches: true }));
+        box.append(propField('WINDOW WIDTH', split.windowFt, feet => {
+          if (!(feet > 0)) return 'The window needs a width greater than zero.';
+          return resizeOpenings(split.doorFt + feet, () => ({ gardenWindowWidth: feet }));
+        }, showSelectionProps, { inches: true }));
+      }
+      if (openings.every(o => o.garage !== true)) {
+        box.append(doorHandRow(
+          openings.every(o => o.hingeFlip === true),
+          openings.every(o => o.swingFlip === true),
+          which => applyToOpenings(openings, o => (which === 'hinge'
+            ? { hingeFlip: o.hingeFlip !== true } : { swingFlip: o.swingFlip !== true }))));
+      }
+    }
+
     box.append(propField('WIDTH', agreedOn(openings, o => Number(o.width) || 0),
-      feet => {
-        if (!(feet > 0)) return 'An opening needs a width greater than zero.';
-        const refused = [];
-        const clamped = new Map();
-        openings.forEach(opening => {
-          const wall = openingHostWall(opening);
-          if (!wall) { refused.push(opening); return; }
-          const fit = G.clampOpeningToWall(wall, Number(opening.offset) || 0, feet,
-            { walls: walls(), thicknessFt: openingThicknessFt() });
-          if (!fit) { refused.push(opening); return; }
-          clamped.set(opening, fit.offset);
-        });
-        if (refused.length) {
-          return `That wall is too short to carry a `
-            + `${F.formatArchitecturalInches(feet * 12)} opening.`;
-        }
-        applyToOpenings(openings, opening =>
-          ({ width: feet, offset: clamped.get(opening) }));
-        return null;
-      }, showSelectionProps));
+      feet => resizeOpenings(feet), showSelectionProps, { inches: true }));
 
     // ONLY A WINDOW HAS ONE, for the reason above. A sill row on a door
     // would edit a number the record writes as zero whatever it said.
@@ -15252,7 +15472,7 @@
           }
           applyToOpenings(openings, () => ({ sillHeight: feet }));
           return null;
-        }, showSelectionProps));
+        }, showSelectionProps, { inches: true }));
     }
 
     box.append(propField('HEAD', agreedOn(openings, o => Number(o.headHeight) || 0),
@@ -15265,7 +15485,7 @@
         }
         applyToOpenings(openings, () => ({ headHeight: feet }));
         return null;
-      }, showSelectionProps));
+      }, showSelectionProps, { inches: true }));
     return box;
   };
 

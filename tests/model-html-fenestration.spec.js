@@ -642,7 +642,7 @@ test('the width belongs to the type, so a door and a window keep their own',
     await open(page);
     await armOpening(page);
     await pickType(page, 'window');
-    await typeInto(page, 'width', '6');
+    await typeInto(page, 'width', "6'");
     await pickType(page, 'door');
 
     // THE DOOR'S OWN WIDTH IS BACK, untouched by what the window was set to.
@@ -679,7 +679,7 @@ test('a head that is not above its sill is refused, and nothing changes',
     await pickType(page, 'window');
     const before = await fieldValue(page, 'head');
 
-    await typeInto(page, 'head', '1');   // below the 2'-6" sill
+    await typeInto(page, 'head', '12');   // 12 inches: below the 2'-6" sill
     await expect(page.locator('#strip-message')).toContainText('is not above the sill');
     // THE BOX GOES BACK TO WHAT IS IN FORCE. A field left holding a number the
     // page refused is a field lying about the state -- the next opening would
@@ -714,12 +714,13 @@ test('nonsense in a field is refused out loud and the box reverts',
   });
 
 test('the panel shows what is in force, not what was typed', async ({ page }) => {
-  // 3.5 is a legal entry and 3'-6" is what it means. A panel echoing the
-  // keystrokes would show two different drawings the same number two ways.
+  // 42 is a legal entry and 3'-6" is what it means: a bare number in a door
+  // or window box is inches (Movie, 1 Oct). A panel echoing the keystrokes
+  // would show two different drawings the same number two ways.
   await open(page);
   await armOpening(page);
   await pickType(page, 'window');
-  await typeInto(page, 'width', '3.5');
+  await typeInto(page, 'width', '42');
   expect(await fieldValue(page, 'width')).toBe("3'-6\"");
   await expect(page.locator('[data-opening-note]')).toContainText("3'-6\"");
 });

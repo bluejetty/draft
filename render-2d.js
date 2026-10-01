@@ -1954,6 +1954,18 @@ if (!window.DraftRender2D) {
   // a bright hole punched through a dark wall. Same fault drawRoof2D was moved
   // off. MODEL.dc.html has no night skin, keeps the literals through these
   // fallbacks, and is untouched.
+  // The door styles this painter draws; anything else is drawn as a single.
+  // Not exported -- coverage() in the render harness treats every export as
+  // a painter. proto/door-style-harness.js holds it to drawing-format.js's.
+  const DOOR_STYLES_DRAWN = Object.freeze(['single', 'french', 'pocket', 'barn', 'slide', 'bypass', 'garden']);
+  // A GARDEN's door leaf, out of its whole width: the stored window share
+  // when it leaves the leaf room, half otherwise -- drawing-format.js's rule.
+  const gardenDoorFt = (opening, total) => {
+    const stored = Number(opening.gardenWindowWidth);
+    const windowFt = Number.isFinite(stored) && stored > 0 && stored < total - 1 / 12 ? stored : total / 2;
+    return total - windowFt;
+  };
+
   function drawOpening2D(ctx, toS, opening, options = {}, env = {}) {
     const geoInfo = options.geometry;
     if (!geoInfo) return;
@@ -2006,21 +2018,109 @@ if (!window.DraftRender2D) {
       });
     }
     if (opening.type === 'door' && !opening.garage) {
-      // Leaf and quarter swing: the flat slab standing open off the hinge
-      // jamb, the arc sweeping back to the latch jamb.
-      const hinge = toS(gwa);
-      const tip = toS({ x: gwa.x + gnx * glazeRun, z: gwa.z + gnz * glazeRun });
-      const latch = toS(gwb);
-      ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(hinge.x, hinge.y); ctx.lineTo(tip.x, tip.y); ctx.stroke();
-      const r = Math.hypot(tip.x - hinge.x, tip.y - hinge.y);
-      const a0 = Math.atan2(tip.y - hinge.y, tip.x - hinge.x);
-      const a1 = Math.atan2(latch.y - hinge.y, latch.x - hinge.x);
-      let sweep = a1 - a0;
-      while (sweep > Math.PI) sweep -= 2 * Math.PI;
-      while (sweep < -Math.PI) sweep += 2 * Math.PI;
-      ctx.lineWidth = 1.25;
-      ctx.beginPath(); ctx.arc(hinge.x, hinge.y, r, a0, a0 + sweep, sweep < 0); ctx.stroke();
+      // ── THE DOOR, BY STYLE (Movie, 1 Oct) ─────────────────────────────
+      //
+      // EVERY STYLE IS DRAWN IN ONE FRAME: A is the hinge jamb, u runs from
+      // it to the latch jamb, n is the side the leaf swings to, and
+      // P(s, t) = A + u*s + n*t in world feet. With neither flip set, A is
+      // the jamb nearer the wall's start and n is the left of the wall's
+      // direction -- exactly where the single door has always been drawn,
+      // so an old drawing looks as it did. FLIP HINGE swaps the jambs,
+      // FLIP SWING swaps the side; the pocket, the barn track and a GARDEN's
+      // leaf all follow the hinge, as Movie asked.
+      //
+      // THE STYLE LIST IS THIS FILE'S OWN, because this painter loads with
+      // nothing else on the page (proto/render-2d-harness.js runs it bare).
+      // proto/door-style-harness.js holds it to drawing-format.js's.
+      const style = DOOR_STYLES_DRAWN.includes(opening.doorStyle) ? opening.doorStyle : 'single';
+      const flipH = opening.hingeFlip === true;
+      const flipS = opening.swingFlip === true ? -1 : 1;
+      const A = flipH ? gwb : gwa;
+      const ux = flipH ? -gux : gux, uz = flipH ? -guz : guz;
+      const nx = gnx * flipS, nz = gnz * flipS;
+      const W = glazeRun;
+      const IN = 1 / 12;
+      const P = (sAlong, tAcross) => toS({
+        x: A.x + ux * sAlong + nx * tAcross, z: A.z + uz * sAlong + nz * tAcross,
+      });
+      const h = Math.max(...geoInfo.corners.map(corner =>
+        Math.abs((corner.x - geoInfo.center.x) * gnx + (corner.z - geoInfo.center.z) * gnz)));
+      const line = (a, b) => { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); };
+      const box = (s0, s1, t0, t1) => {
+        const q = [P(s0, t0), P(s1, t0), P(s1, t1), P(s0, t1)];
+        ctx.beginPath(); q.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+        ctx.closePath(); ctx.stroke();
+      };
+      // A leaf standing open off a hinge at s = sHinge, `len` long, toward
+      // +s (dir 1) or -s (dir -1), and the quarter arc back to where it
+      // closes. The single door is exactly this call with (0, W, 1).
+      const swing = (sHinge, len, dir) => {
+        const hinge = P(sHinge, 0);
+        const tip = P(sHinge, len);
+        const latch = P(sHinge + dir * len, 0);
+        ctx.lineWidth = 1.5;
+        line(hinge, tip);
+        const r = Math.hypot(tip.x - hinge.x, tip.y - hinge.y);
+        const a0 = Math.atan2(tip.y - hinge.y, tip.x - hinge.x);
+        const a1 = Math.atan2(latch.y - hinge.y, latch.x - hinge.x);
+        let sweep = a1 - a0;
+        while (sweep > Math.PI) sweep -= 2 * Math.PI;
+        while (sweep < -Math.PI) sweep += 2 * Math.PI;
+        ctx.lineWidth = 1.25;
+        ctx.beginPath(); ctx.arc(hinge.x, hinge.y, r, a0, a0 + sweep, sweep < 0); ctx.stroke();
+      };
+      // A jamb frame block, `along` deep into the opening from s = sAt.
+      const frame = (sAt, along) => box(sAt, sAt + along, -(h + 0.5 * IN), h + 0.5 * IN);
+      if (style === 'french') {
+        // Two leaves, each hung at its own jamb, meeting in the middle.
+        swing(0, W / 2, 1);
+        swing(W, W / 2, -1);
+      } else if (style === 'pocket') {
+        // The pocket: a dashed cavity inside the wall, one door's width past
+        // the hinge jamb. The slab is drawn half way out of it.
+        const c = Math.min(h * 0.6, 1 * IN);
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 3]);
+        box(-W, 0, -c, c);
+        ctx.setLineDash([]);
+        ctx.lineWidth = 1.5;
+        box(-W / 2, W / 2, -0.6875 * IN, 0.6875 * IN);
+      } else if (style === 'barn') {
+        // The track rides the swing face past the hinge jamb, and the leaf
+        // hangs on it parked open beside the opening.
+        ctx.lineWidth = 1.25;
+        line(P(-W - 2 * IN, h + 2.75 * IN), P(W + 2 * IN, h + 2.75 * IN));
+        ctx.lineWidth = 1.5;
+        box(-W - 2 * IN, 2 * IN, h + 0.75 * IN, h + 2.25 * IN);
+      } else if (style === 'slide') {
+        // A patio slider: framed, two glass panels overlapping at the
+        // middle, the one at the hinge jamb the one that slides.
+        ctx.lineWidth = 1.25;
+        frame(0, 2 * IN);
+        frame(W - 2 * IN, 2 * IN);
+        const half = W / 2 + 1 * IN;
+        box(2 * IN, half, -1.75 * IN, -0.5 * IN);
+        box(W - half, W - 2 * IN, 0.5 * IN, 1.75 * IN);
+      } else if (style === 'bypass') {
+        // A closet bypass: two slabs on two tracks, overlapping an inch.
+        ctx.lineWidth = 1.5;
+        const half = W / 2 + 0.5 * IN;
+        box(0, half, -1.5625 * IN, -0.1875 * IN);
+        box(W - half, W, 0.1875 * IN, 1.5625 * IN);
+      } else if (style === 'garden') {
+        // One unit: a door leaf at the hinge jamb and a fixed window beside
+        // it. The door wears the wider frame, the window the thinner one
+        // and more glass.
+        const doorFt = gardenDoorFt(opening, W);
+        swing(0, doorFt, 1);
+        ctx.lineWidth = 1.25;
+        frame(0, 2 * IN);
+        frame(doorFt - 0.75 * IN, 1.5 * IN);
+        frame(W - 1 * IN, 1 * IN);
+        [0.375 * IN, -0.375 * IN].forEach(t => line(P(doorFt + 0.75 * IN, t), P(W - 1 * IN, t)));
+      } else {
+        swing(0, W, 1);
+      }
     }
     if (!env.isPrinting) {
       // Centre grab point -- the dimension / snap anchor.
