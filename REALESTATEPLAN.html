@@ -402,9 +402,14 @@
       const areaReport = () => {
         const A = window.DraftAreas;
         if (!A || !drawing) return null;
-        const onSheet = levels.filter(level => planned(level.id))
-          .sort((a, b) => (b.elev || 0) - (a.elev || 0));
         const pts = list => (Array.isArray(list) ? list : []);
+        // A LEVEL WITH A PLAN OR A FLOOR. The foundation's walls are drawn on
+        // its own FOUNDATION view, so "has plan walls" alone would leave the
+        // foundation off the very box that is asked to list it; its slab is
+        // what is measured.
+        const floored = levelId => pts(drawing.floors).some(f => f && f.levelId === levelId);
+        const onSheet = levels.filter(level => planned(level.id) || floored(level.id))
+          .sort((a, b) => (b.elev || 0) - (a.elev || 0));
         const report = A.computeAreas({
           levels: onSheet.map(level => ({ id: level.id, name: level.name || `LEVEL ${level.id}` })),
           floors: pts(drawing.floors).filter(f => f && Array.isArray(f.points))
@@ -443,7 +448,9 @@
         ctx.fillStyle = '#1d1f20';
         ctx.textBaseline = 'alphabetic';
         rows.forEach(([name, value, total]) => {
-          ctx.font = `${total ? 700 : 600} 13px "Barlow Condensed", system-ui, sans-serif`;
+          // 600 for both, larger for the total: the page loads Barlow
+          // Condensed at 600, and a 700 fell back to another face entirely.
+          ctx.font = `600 ${total ? 15 : 13}px "Barlow Condensed", system-ui, sans-serif`;
           if (total) {
             ctx.strokeStyle = '#1d1f20';
             ctx.lineWidth = 1;
