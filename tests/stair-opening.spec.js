@@ -116,7 +116,7 @@ test('a stair opening cuts the measured rectangle keyed to the wall face', async
   expect(drawing.surfaceOpenings).toHaveLength(1);
   const opening = drawing.surfaceOpenings[0];
   expect(opening.hostType).toBe('floor');
-  expect(opening.layer).toBe('A-FL-OPNG');
+  expect(opening.layer).toBe('A-FL');
   expect(opening.levelId).toBe(3);
   expect(opening.points).toHaveLength(4);
 
@@ -161,7 +161,7 @@ test('an opening that runs past the floor is refused, with the length named', as
   // THE ASSERTION IS PHRASED TO EXCLUDE SUCCESS, and it had to be rewritten to
   // manage it. The first version asked for "10'-5"" and /past|room|fit/i, and
   // BOTH passed against the unguarded page: the success line is
-  //   Stair opening cut on A-FL-OPNG - 3'-1" x 10'-5" (... clears 6'-10" headroom ...)
+  //   Stair opening cut on A-FL - 3'-1" x 10'-5" (... clears 6'-10" headroom ...)
   // so "10'-5"" matched its length and /room/ matched "headROOM". Two refusal
   // assertions satisfied by a successful cut -- only the opening count below
   // was doing any work. So: a phrase success cannot contain, AND an explicit
@@ -276,7 +276,7 @@ test('the stair opening survives a reload on its floor', async ({ page }) => {
 
   const drawing = await h.savedDrawing(page);
   expect(drawing.surfaceOpenings).toHaveLength(1);
-  expect(drawing.surfaceOpenings[0].layer).toBe('A-FL-OPNG');
+  expect(drawing.surfaceOpenings[0].layer).toBe('A-FL');
   const floor = drawing.floors.find(f => f.structure === 'floor');
   expect(drawing.surfaceOpenings[0].hostId).toBe(floor.id);
 });

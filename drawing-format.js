@@ -478,7 +478,11 @@ if (!window.DraftDrawingFormat) {
         hostId,
         points,
         levelId: openingLevelId,
-        layer: hostType === 'roof' ? 'A-ROOF-OPNG' : 'A-FL-OPNG',
+        // A HOLE IS PART OF WHAT IT IS CUT INTO, so it rides its host's layer
+        // (Movie, 1 Oct: "i don't think we need A-FL-OPNG its just when the
+        // A-FL has a hole in it"; and the roof the same). A file saved with
+        // the old A-FL-OPNG / A-ROOF-OPNG reads onto the new ones here.
+        layer: hostType === 'roof' ? 'A-ROOF' : 'A-FL',
         ...(hostType === 'floor' && Number.isInteger(stairId) && stairId > 0 ? { stairId } : {}),
       };
     }).filter(Boolean);

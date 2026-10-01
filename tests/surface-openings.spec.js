@@ -1,8 +1,8 @@
 // FENESTRATION's hole mode: select a floor or roof with Select, then E cuts a
 // free-form opening into it — any closed shape, not just a rectangle. With
 // nothing selected, E keeps its wall door / window behavior, so walls and
-// roof / floor holes mix on the same layout. Holes save on A-FL-OPNG /
-// A-ROOF-OPNG and never move their host's boundary.
+// roof / floor holes mix on the same layout. Holes save on their host's
+// layer, A-FL / A-ROOF, and never move their host's boundary.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -48,7 +48,7 @@ async function selectAt(page, x, z) {
   await page.waitForTimeout(200);
 }
 
-test('E cuts a free-form opening into a selected floor on A-FL-OPNG', async ({ page }) => {
+test('E cuts a free-form opening into a selected floor on A-FL', async ({ page }) => {
   await h.openModel(page);
   await drawFloor(page);
   await selectAt(page, 0, 0); // click inside the floor selects it
@@ -68,14 +68,14 @@ test('E cuts a free-form opening into a selected floor on A-FL-OPNG', async ({ p
   const opening = saved.surfaceOpenings[0];
   expect(opening.hostType).toBe('floor');
   expect(opening.hostId).toBe(saved.floors[0].id);
-  expect(opening.layer).toBe('A-FL-OPNG');
+  expect(opening.layer).toBe('A-FL');
   expect(opening.points).toHaveLength(5);
   // The host floor's own boundary is untouched.
   expect(saved.floors[0].points).toHaveLength(4);
   expect(saved.floors[0].points.some(p => h.near(p.x, -10) && h.near(p.z, -6))).toBe(true);
 });
 
-test('E cuts an opening into a selected roof on A-ROOF-OPNG', async ({ page }) => {
+test('E cuts an opening into a selected roof on A-ROOF', async ({ page }) => {
   await h.openModel(page);
   await drawBasicRoof(page);
   await selectAt(page, 0, 6); // inside the roof body, away from edges
@@ -93,7 +93,7 @@ test('E cuts an opening into a selected roof on A-ROOF-OPNG', async ({ page }) =
   const opening = saved.surfaceOpenings[0];
   expect(opening.hostType).toBe('roof');
   expect(opening.hostId).toBe(saved.roofs[0].id);
-  expect(opening.layer).toBe('A-ROOF-OPNG');
+  expect(opening.layer).toBe('A-ROOF');
   expect(opening.points).toHaveLength(3);
   expect(saved.roofs[0].points).toHaveLength(4);
 });
@@ -148,7 +148,7 @@ test('openings survive a reload attached to their host', async ({ page }) => {
   const saved = await h.savedDrawing(page);
   expect(saved.surfaceOpenings).toHaveLength(1);
   expect(saved.surfaceOpenings[0].hostId).toBe(saved.floors[0].id);
-  expect(saved.surfaceOpenings[0].layer).toBe('A-FL-OPNG');
+  expect(saved.surfaceOpenings[0].layer).toBe('A-FL');
 });
 
 test('opening corners drag with Select without moving the host floor', async ({ page }) => {
@@ -245,10 +245,12 @@ test('the hole renders as a gap in the floor fill', async ({ page }) => {
   expect(h.countColor(holePixels, FLOOR_FILL)).toBe(0);
 });
 
-test('A-FL-OPNG and A-ROOF-OPNG are Company Standard Layers', async ({ page }) => {
+test('a hole has no layer of its own: STANDARDS lists A-FL and A-ROOF, no -OPNG', async ({ page }) => {
+  // Movie, 1 Oct: "i don't think we need A-FL-OPNG its just when the A-FL
+  // has a hole in it", and "we won't need roof opening".
   await page.goto('/STANDARDS.html');
-  await expect(page.locator('[data-layer-name="A-FL-OPNG"]')).toBeVisible();
-  await expect(page.locator('[data-layer-name="A-ROOF-OPNG"]')).toBeVisible();
-  await expect(page.locator('[data-layer-print="A-FL-OPNG"]')).toBeChecked();
-  await expect(page.locator('[data-layer-print="A-ROOF-OPNG"]')).toBeChecked();
+  await expect(page.locator('[data-layer-name="A-FL"]')).toBeVisible();
+  await expect(page.locator('[data-layer-name="A-ROOF"]')).toBeVisible();
+  await expect(page.locator('[data-layer-name="A-FL-OPNG"]')).toHaveCount(0);
+  await expect(page.locator('[data-layer-name="A-ROOF-OPNG"]')).toHaveCount(0);
 });

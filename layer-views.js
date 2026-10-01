@@ -50,8 +50,8 @@ if (!window.DraftLayerViews) {
     // (drawing-format.js:657) whether it stands on a pad or on the beam
     // below, so a floor view that wants to draw posts has to name that layer.
     // Renaming it would be a format change for a word.
-    Object.freeze({ id:'floor', label:'FLOOR LAYOUT (FLOOR)', contents: Object.freeze(['S-BEAM', 'S-COL-FOOTING', 'S-SLAB', 'A-FL-OPNG', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-COLS', 'A-ANNO-NOTE']) }),
-    Object.freeze({ id:'stair', label:'STAIR', contents: Object.freeze(['A-STR', 'A-FL-OPNG', 'STAIR SECTION', 'A-ANNO-NOTE']) }),
+    Object.freeze({ id:'floor', label:'FLOOR LAYOUT (FLOOR)', contents: Object.freeze(['S-BEAM', 'S-COL-FOOTING', 'S-SLAB', 'A-FL', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-COLS', 'A-ANNO-NOTE']) }),
+    Object.freeze({ id:'stair', label:'STAIR', contents: Object.freeze(['A-STR', 'A-FL', 'STAIR SECTION', 'A-ANNO-NOTE']) }),
   ]);
   const LEVEL_LAYER_VIEWS = Object.freeze({
     5: FLOOR_LEVEL_VIEWS,

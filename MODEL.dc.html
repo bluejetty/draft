@@ -2391,7 +2391,8 @@ const STAIR_BEAM_CLEAR_IN = 2;
 // Surface openings — free-form closed outlines cut from a selected floor or
 // roof footprint (stairwells, skylights, chimneys). Any closed shape works;
 // the host keeps its own geometry and the opening renders as a hole in it.
-const SURFACE_OPENING_LAYERS = Object.freeze({ floor: 'A-FL-OPNG', roof: 'A-ROOF-OPNG' });
+// A hole rides the layer of what it is cut into (Movie, 1 Oct).
+const SURFACE_OPENING_LAYERS = Object.freeze({ floor: 'A-FL', roof: 'A-ROOF' });
 // Roof defaults — the footprint is drawn edge-first or built from a SHAPE
 // outline grown by the eave overhang. The fascia is a fixed 5½" for
 // now, with its bottom level with the top of the wall plate, so the heel at
@@ -16152,7 +16153,7 @@ class Component extends DCLogic {
   // Two clicks: the first against a wall keys the opening to that wall's
   // interior face, the second picks which way it runs along the wall. The
   // rectangle must land inside a floor on the level, and cuts as an ordinary
-  // surface opening on A-FL-OPNG.
+  // surface opening on A-FL.
   _handleStairOpeningClick() {
     const pt = this._snapPt; if (!pt) return;
     const req = this._stairOpeningRequirement();
@@ -16226,7 +16227,7 @@ class Component extends DCLogic {
     this._commitSurfaceOpening({ type: 'floor', item: floor }, points);
     this.setState({
       isDrawing: false,
-      drawingMessage: `Stair opening cut on A-FL-OPNG — ${formatArchitecturalInches(size.widthIn)} × ${formatArchitecturalInches(size.lengthIn)}`
+      drawingMessage: `Stair opening cut on A-FL — ${formatArchitecturalInches(size.widthIn)} × ${formatArchitecturalInches(size.lengthIn)}`
         + ` (stair width + ${formatInchesOnly(STAIR_OPENING_FINISH_IN)} finish · length clears ${formatArchitecturalInches(this.state.stairHeadroomFt * 12)} headroom to ${size.descent.landing}).`,
       drawingMessageError: false,
     });
@@ -23215,7 +23216,7 @@ class Component extends DCLogic {
             : value === 'stairs'
               ? (stairOpeningReq
                 ? `${stairOpeningReq} — both floor surfaces must be measurable before a stair opening can be sized`
-                : 'Stair opening — cuts a measured rough opening into the floor on A-FL-OPNG')
+                : 'Stair opening — cuts a measured rough opening into the floor on A-FL')
               : 'Door opening — saves on A-DOOR, sill at the bottom of the wall',
           border: isActive ? '#1d1f20' : 'rgba(29,31,32,0.2)',
           bg: isActive ? '#1d1f20' : '#fff',
@@ -23248,7 +23249,7 @@ class Component extends DCLogic {
       fenestrationLayerNote: this.state.fenestrationType === 'window'
         ? 'Saves on A-GLAZ · heights from the bottom of the wall'
         : this.state.fenestrationType === 'stairs'
-          ? 'Saves on A-FL-OPNG · keyed to the interior face of the wall it sits along'
+          ? 'Saves on A-FL · keyed to the interior face of the wall it sits along'
           : 'Saves on A-DOOR · sill sits at the bottom of the wall',
       shapeToolActive: shaping,
       outlineToolActive: activeTool === 'outline',
