@@ -70,8 +70,16 @@ jobs:
     # The number is the same kind as playwright's 45: high enough that only
     # something genuinely stuck reaches it. The sweep grows a little with
     # every mutation row, and every row is a row someone wanted.
+    #
+    # AND IT HAD BECOME A BUDGET AGAIN, so it moved again (1 Oct): 12 -> 15.
+    # #564 ran this job in 9m50s against the 12, and elevation-harness's
+    # engine adds about 70s more -- every row repaints every elevation, ~11s
+    # apiece. Eleven minutes against twelve is a ceiling a slow runner would
+    # find without anything being stuck, which is the cancelled-not-red
+    # failure the paragraph above was written about. The table was cut to six
+    # rows to keep the cost down; the ceiling moved for the rest.
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
       # @v7 ON ALL THREE ACTIONS, AND THE MAJOR WAS CHECKED PER ACTION.
       #
@@ -248,7 +256,8 @@ jobs:
                       proto/gruff-interview-harness.js \
                       proto/auto-windows-harness.js \
                       proto/toy-constraints-harness.js \
-                      proto/room-grow-harness.js; do
+                      proto/room-grow-harness.js \
+                      proto/elevation-harness.js; do
             if ! printf '%s\n' "${engines[@]}" | grep -qx "$must"; then
               failed=$((failed + 1))
               echo "FAIL  $must is a known engine and the derived list does not contain it"
