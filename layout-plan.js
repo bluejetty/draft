@@ -251,6 +251,14 @@ if (!window.DraftLayoutPlan) {
     // has to decline to build an env rather than teach the composer a mode.
     const shell = env.shell === true;
     const unless = built => (shell ? null : built);
+    // A REAL ESTATE PLAN (`listing: true`): the plan a buyer reads. Movie, 1
+    // Oct: "on REAL ESTATE LAYOUTS we should NOT show the dimensions at all,
+    // but they should show ROOM TAGS with approx size", walls SOLID, and no
+    // window, door or equipment sizes ("not on any real estate plans"). It
+    // keeps what `shell` throws away -- stairs and fixtures, which is how a
+    // buyer reads a room -- so it is its own switch rather than shell's.
+    const listing = env.listing === true;
+    const forConstruction = built => (shell || listing ? null : built);
 
     const of = key => (Array.isArray(saved?.[key]) ? saved[key] : []);
     const openings = of('surfaceOpenings');
@@ -361,7 +369,7 @@ if (!window.DraftLayoutPlan) {
       // neighborhood at 1"=40' asks for the building rather than the
       // construction document, so the tag stage never opens there and needs
       // no mode of its own.
-      houseOutline: unless(id => (window.DraftBuildingBodies
+      houseOutline: forConstruction(id => (window.DraftBuildingBodies
         ? window.DraftBuildingBodies.houseOutlineOn(saved, id) : null)),
       // null for a layer the table does not carry, which layerShows reads as
       // "draws" -- an untagged dimension from before this key existed, and a
@@ -417,7 +425,7 @@ if (!window.DraftLayoutPlan) {
       // to say about the look of an opening, and it is why render-2d's painter
       // takes colours at all.
       openingEnv: { openingGapColor: paperColor },
-      wallEnv: { wallTypes: WALL_TYPES },
+      wallEnv: { wallTypes: WALL_TYPES, solid: listing },
       floorEnv: {
         surfaceOpeningsFor,
         offsetOutline: (pts, dist) => geo.offsetOutline(pts, dist),
@@ -525,10 +533,20 @@ if (!window.DraftLayoutPlan) {
       // a construction OUTLINE -- deliberately unlike a floor or a roof -- so
       // a sheet missing one is missing a guide, not a building.
       shapeEnv: null,
-      dimensionEnv: unless({
+      dimensionEnv: forConstruction({
         label: ft => fmt.formatArchitecturalInches(ft * 12),
         colors: DIMENSION_COLORS,
       }),
+      // THE NAME ON A CONSTRUCTION PLAN, THE NAME AND THE SIZE ON A LISTING
+      // (Movie, 1 Oct: "the 2nd line will be only for REAL ESTATE LAYOUTS -
+      // the 1st Line (ROOM TITLE) will be needed for both"). Printing, so no
+      // UNDER MIN nag reaches paper.
+      roomTagEnv: unless({
+        color: '#1d1f20',
+        isPrinting: true,
+        areaFor: listing ? (tag => tag.size || '') : (() => ''),
+      }),
+      roomTags: of('roomTags'),
       noteEnv: unless({ color: '#1d1f20', fillColor: paperColor }),
     });
     return true;

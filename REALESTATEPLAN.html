@@ -94,6 +94,9 @@
 <script src="./layer-views.js"></script>
 <script src="./render-2d.js"></script>
 <script src="./geometry-2d.js"></script>
+<!-- AFTER geometry-2d.js: areas.js asks it whether a stair hole lies inside
+     its floor, and throws rather than guess without it. -->
+<script src="./areas.js"></script>
 <script src="./stair-geometry.js"></script>
 <script src="./closets.js"></script>
 <script src="./fixture-geometry.js"></script>
@@ -311,6 +314,10 @@
         // available)" -- so it is on the sheet as a reserved rectangle with its
         // own label, not as a silence. It cannot be ticked on, because there is
         // nothing to tick on yet.
+        // THE AREAS, as a seat of their own so they can be ticked off like a
+        // plan (Movie, 1 Oct: "the floor areas and total house area on main
+        // and above levels and area for foundation area").
+        seats.push({ kind: 'areas', id: null, label: 'FLOOR AREAS', on: true });
         seats.push({ kind: 'view3d', id: null, label: 'FRONT 3D VIEW',
           waiting: true, on: true });
       };
@@ -380,6 +387,81 @@
         return out;
       };
 
+      // ── THE AREAS ─────────────────────────────────────────────────────
+      //
+      // Movie, 1 Oct: "the floor areas and total house area on main and above
+      // levels and area for foundation area ... (but basement not always
+      // shown)". So: every level's own area, top down; the HOUSE total is the
+      // levels at grade and above; anything below grade -- the foundation or
+      // a basement -- is its own line and never in the house total.
+      //
+      // MEASURED BY areas.js, the calculator the AREAS dialog has used: a
+      // floor's polygons, less the stair holes cut in it, with the GARAGE
+      // kept out of every figure. A level with no floor drawn falls back to
+      // its outline, and one with neither says so rather than printing 0.
+      const areaReport = () => {
+        const A = window.DraftAreas;
+        if (!A || !drawing) return null;
+        const onSheet = levels.filter(level => planned(level.id))
+          .sort((a, b) => (b.elev || 0) - (a.elev || 0));
+        const pts = list => (Array.isArray(list) ? list : []);
+        const report = A.computeAreas({
+          levels: onSheet.map(level => ({ id: level.id, name: level.name || `LEVEL ${level.id}` })),
+          floors: pts(drawing.floors).filter(f => f && Array.isArray(f.points))
+            .map(f => ({ id: f.id, levelId: f.levelId, points: f.points, garage: f.garage === true })),
+          openings: pts(drawing.surfaceOpenings)
+            .filter(o => o && o.hostType === 'floor' && Array.isArray(o.points))
+            .map(o => ({ hostId: o.hostId, points: o.points })),
+          outlines: pts(drawing.outlines).filter(o => o && Array.isArray(o.points))
+            .map(o => ({ levelId: o.levelId, points: o.points })),
+          roomTags: [],
+          basementLevelId: null,
+        });
+        const elevOf = id => (onSheet.find(level => level.id === id)?.elev || 0);
+        const above = report.levels.filter(row => elevOf(row.levelId) >= 0);
+        const below = report.levels.filter(row => elevOf(row.levelId) < 0);
+        const measured = above.filter(row => row.netSqFt !== null);
+        return {
+          above, below,
+          houseSqFt: measured.length ? measured.reduce((sum, row) => sum + row.netSqFt, 0) : null,
+        };
+      };
+      const sqft = n => (n === null || n === undefined
+        ? 'NO FLOOR DRAWN' : `${Math.round(n).toLocaleString('en-US')} SQ FT`);
+
+      const drawAreas = (ctx, box) => {
+        const report = areaReport();
+        const rows = [];
+        if (report) {
+          report.above.forEach(row => rows.push([row.name.toUpperCase(), sqft(row.netSqFt)]));
+          rows.push(['TOTAL HOUSE', sqft(report.houseSqFt), true]);
+          report.below.forEach(row => rows.push([row.name.toUpperCase(), sqft(row.netSqFt)]));
+        }
+        const lineH = 18;
+        const left = box.x + 14, right = box.x + box.w - 14;
+        let y = box.y + 22;
+        ctx.fillStyle = '#1d1f20';
+        ctx.textBaseline = 'alphabetic';
+        rows.forEach(([name, value, total]) => {
+          ctx.font = `${total ? 700 : 600} 13px "Barlow Condensed", system-ui, sans-serif`;
+          if (total) {
+            ctx.strokeStyle = '#1d1f20';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(left, y - 13);
+            ctx.lineTo(right, y - 13);
+            ctx.stroke();
+          }
+          ctx.textAlign = 'left';
+          ctx.fillText(name, left, y);
+          ctx.textAlign = 'right';
+          ctx.fillText(value, right, y);
+          y += lineH + (total ? 6 : 0);
+        });
+        // What the page drew, for the spec: the rows as text, nothing parsed back.
+        window.__rpAreas = rows.map(([name, value]) => `${name} ${value}`);
+      };
+
       // ONE PLAN INTO ONE BOX, at whatever scale makes it fit. A listing plan
       // is not drawn to a named scale -- nobody measures off it -- so the fit
       // is the box's and the scale bar a construction sheet carries is absent
@@ -398,6 +480,11 @@
         ctx.textBaseline = 'alphabetic';
         ctx.fillText(seat.label.toUpperCase(), box.x + 4, box.y + box.h - 5);
 
+        if (seat.kind === 'areas') {
+          drawAreas(ctx, box);
+          ctx.restore();
+          return;
+        }
         if (seat.kind !== 'plan') {
           ctx.fillStyle = skin['ink-quiet'];
           ctx.textAlign = 'center';
@@ -442,15 +529,17 @@
         // 19 is the painter's own offset and 7 is half an 11px label plus its
         // backing box. If either number in render-2d.js ever moves, the strings
         // start clipping again -- which is precisely what
-        // realestateplan-strings.spec.js measures, so the drift fails a test
+        // realestateplan-listing.spec.js measured, so the drift failed a test
         // rather than reaching a sheet.
         const STANDOFF_PX = 19;
         const LABEL_HALF_PX = 7;
         // ONLY WHERE THERE ARE STRINGS TO CLEAR. A plan with no dimensions on
         // it would otherwise be drawn 26px smaller in every direction to leave
         // room for nothing.
-        const dimensioned = (Array.isArray(drawing.dimensions) ? drawing.dimensions : [])
-          .some(dimension => dimension && dimension.levelId === seat.id);
+        // AND THERE ARE NONE ON A LISTING (Movie, 1 Oct: "on REAL ESTATE
+        // LAYOUTS we should NOT show the dimensions at all"), so no room is
+        // kept for strings that are not drawn.
+        const dimensioned = false;
         const pad = 14 + (dimensioned ? STANDOFF_PX + LABEL_HALF_PX : 0);
         const spanX = Math.max(1, bounds.maxX - bounds.minX);
         const spanZ = Math.max(1, bounds.maxZ - bounds.minZ);
@@ -477,6 +566,9 @@
         LP.drawPlan(ctx, toS, drawing, seat.id, {
           view: 'plan',
           paperColor: '#ffffff',
+          // THE LISTING PLAN: no dimensions, no size tags, solid walls, and
+          // each room tag with its size line. Stairs and fixtures stay.
+          listing: true,
         });
         ctx.restore();
         ctx.restore();
