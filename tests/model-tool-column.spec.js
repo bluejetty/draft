@@ -32,7 +32,8 @@ const REPRO = JSON.parse(fs.readFileSync(
   path.join(__dirname, '..', 'proto', 'repro-garage-house.draft'), 'utf8'));
 
 // The seventeen, in the old page's own order (MODEL.dc.html:23890-23907) with
-// the faces read off it. `key: ''` is a face the old page leaves bare.
+// the faces read off it -- and ROOM TAG after ANNOTATION, the eighteenth
+// (Movie, 1 Oct), which the old page never had. `key: ''` is a face the old page leaves bare.
 const ROSTER = [
   ['draw', 'select', 'Select', 'S'],
   ['draw', 'extend', 'Extend', 'X'],
@@ -43,6 +44,7 @@ const ROSTER = [
   ['draw', 'shape', 'SHAPE', 'A'],
   ['draw', 'dimension', 'DIMENSION', 'D'],
   ['draw', 'annotation', 'ANNOTATION', ''],
+  ['draw', 'roomtag', 'ROOM TAG', ''],
   ['build', 'wall', 'WALL', 'W'],
   ['build', 'fenestration', 'FENESTRATION', 'E'],
   ['build', 'floor', 'FLOOR', 'F'],
@@ -73,7 +75,7 @@ async function seedHouse(page) {
 // tool to arm, so the board it needs is fixture rather than subject.
 //
 // THE DEFAULT THAT MAKES THIS NECESSARY IS RULED, not incidental. A drafter
-// opening the app for the first time gets TOY, and so fifteen keys down;
+// opening the app for the first time gets TOY, and so sixteen keys down;
 // Movie confirmed that on 13 Sep. It was harmless while nothing was
 // constrained by the board and it is a decision now, so
 // tests/model-tool-boards.spec.js pins it with a check rather than leaving it
@@ -95,7 +97,7 @@ const keys = page => page.locator('[data-tool-key]').evaluateAll(els => els.map(
   armed: el.getAttribute('aria-pressed') === 'true',
 })));
 
-test('seventeen keys, in the old page\'s order and grouping', async ({ page }) => {
+test('eighteen keys, in the old page\'s order and grouping', async ({ page }) => {
   await openColumn(page);
   const got = await keys(page);
 
@@ -111,7 +113,7 @@ test('seventeen keys, in the old page\'s order and grouping', async ({ page }) =
     .toHaveText('BUILD');
 });
 
-test('twelve keys carry a letter and five are deliberately bare',
+test('twelve keys carry a letter and six are deliberately bare',
   async ({ page }) => {
     await openColumn(page);
     const got = await keys(page);
@@ -123,7 +125,7 @@ test('twelve keys carry a letter and five are deliberately bare',
     // letters were ever loosened to ''.
     expect(got.filter(k => k.key !== '')).toHaveLength(12);
     expect(got.filter(k => k.key === '').map(k => k.id))
-      .toEqual(['annotation', 'column', 'beam', 'stair', 'fixture']);
+      .toEqual(['annotation', 'roomtag', 'column', 'beam', 'stair', 'fixture']);
   });
 
 test('a SETTINGS remap moves the letter on the key face', async ({ page }) => {

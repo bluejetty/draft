@@ -1915,6 +1915,47 @@
     .filter(n => { const f = onActiveLevel(); return f.byLevel(n)
       && (f.viewId == null || n.view === f.viewId)
       && n.view !== 'stair'; });
+  // ── ROOM TAGS ─────────────────────────────────────────────────────────────
+  //
+  // Movie, 1 Oct: "just make ROOM TAG that a user can place and fill out the
+  // info", NAME on the top line and the size, in feet, on the second. No
+  // detection and no auto-placing: a tag is a label the drafter puts down.
+  //
+  // FLOOR PLAN ONLY. A tag is a record of the walls drawing (view 'plan', the
+  // only view the format gives one), and ROOM-IDS-AREA sits in that view's
+  // layer list alone -- so a tag shows where its layer does.
+  const ROOM_TAG_LAYER = 'ROOM-IDS-AREA';
+  const roomTags = () => (drawing?.roomTags || [])
+    .filter(t => { const f = onActiveLevel(); return f.byLevel(t)
+      && (f.viewId == null || f.viewId === 'plan'); });
+  const roomTagsShown = () => layerStandardOf(ROOM_TAG_LAYER)?.visible !== false;
+  // THE BOX IS MEASURED, not cached from the last paint: a hit test and the
+  // highlight both need it, and the highlight paints BEFORE the tags do. The
+  // fonts are the painter's own (render-2d.js drawRoomTag2D).
+  const roomTagBox = tag => {
+    const s = toS(tag.at);
+    ctx.save();
+    ctx.font = '600 13px "Barlow Condensed", system-ui, sans-serif';
+    let w = ctx.measureText(String(tag.name || '')).width;
+    if (tag.size) {
+      ctx.font = '500 10px "Barlow Condensed", system-ui, sans-serif';
+      w = Math.max(w, ctx.measureText(String(tag.size)).width);
+    }
+    ctx.restore();
+    const pad = 4;
+    return {
+      left: s.x - w / 2 - pad, right: s.x + w / 2 + pad,
+      top: s.y - (tag.size ? 14 : 8) - pad, bottom: s.y + (tag.size ? 12 : 8) + pad,
+    };
+  };
+  const roomTagAt = worldPt => {
+    if (!roomTagsShown()) return null;
+    const p = toS(worldPt);
+    return roomTags().slice().reverse().find(tag => {
+      const b = roomTagBox(tag);
+      return p.x >= b.left && p.x <= b.right && p.y >= b.top && p.y <= b.bottom;
+    }) || null;
+  };
   // FIXTURES INHERIT THEIR WALL'S VISIBILITY -- they do not carry a view rule
   // of their own. MODEL.dc.html:_activeFixtures keeps a fixture whose levelId
   // matches AND whose wallId is in the set of walls the page is showing, and
@@ -3154,6 +3195,16 @@
       R.drawNoteScreen2D(ctx, toS(note.anchor), toS(note.text), note, {}, env));
   };
 
+  // The name, and the size under it when there is one -- exactly as typed.
+  // render-2d's `areaFor` is the painter's second line, and the size is what
+  // goes there now that nothing on this page computes an area.
+  const paintRoomTags = () => {
+    const R = window.DraftRender2D;
+    if (!R || !roomTagsShown()) return;
+    const env = { color: skin['draw-note'], areaFor: tag => tag.size || '' };
+    roomTags().forEach(tag => R.drawRoomTag2D(ctx, toS, tag, {}, env));
+  };
+
   // The fixture body is filled with the page's own ground so the wall hatch
   // shows faintly through it -- which is what the painter's old literal white
   // meant on a light page, and the opposite of what it meant on a dark one.
@@ -3978,6 +4029,8 @@
         // place the bone puts them (MODEL.dc.html:7025, immediately after the
         // dimension pass): annotation goes over the geometry it annotates.
         paintNotes();
+        // Room tags are annotation too, and go down with the notes.
+        paintRoomTags();
         // The datum marker goes on top of everything, as it does in the old
         // page (MODEL.dc.html:6956, immediately before the committed lines):
         // it is the one point the drafter must always be able to find.
@@ -7685,6 +7738,13 @@
 
   // Returns { type, item } or null, in the old page's precedence.
   const hitAt = worldPt => {
+    // A ROOM TAG IS ON TOP OF WHAT IT NAMES: it is painted last, over the
+    // floor and often over a fixture, so the pick agrees with the picture.
+    // Movie, 1 Oct: "i wasn't able to select the ROOM TAG".
+    if (filterAllows('roomtag')) {
+      const tag = roomTagAt(worldPt);
+      if (tag) return { type: 'roomtag', item: tag };
+    }
     // AN OPENING BEATS ITS HOST WALL, and the old page says why in its own
     // words: "Openings under a select click take priority over their host
     // wall, so an opening can be picked and deleted without grabbing the wall
@@ -7772,7 +7832,7 @@
   const paintSelection = () => {
     if (!selection.length) return;
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines(),
-      fixture: fixtures(), stair: stairs(), roof: roofs() };
+      fixture: fixtures(), stair: stairs(), roof: roofs(), roomtag: roomTags() };
     // THE OPENINGS AND THEIR SHAPES IN ONE PASS. openingsOn resolves geometry
     // per opening, which is not free, and the highlight needs both the list
     // (to answer "is it still on screen") and the quad (to draw it). Calling
@@ -7790,6 +7850,14 @@
       // Only if it is still on screen's level: a selection kept across a level
       // change would paint a highlight over nothing.
       if (!(onScreen[type] || []).includes(item)) return;
+      if (type === 'roomtag') {
+        const b = roomTagBox(item);
+        ctx.save();
+        ctx.lineWidth = 3;
+        ctx.strokeRect(b.left, b.top, b.right - b.left, b.bottom - b.top);
+        ctx.restore();
+        return;
+      }
       if (type === 'wall' || type === 'line') {
         const a = toS(item.start), b = toS(item.end);
         ctx.beginPath();
@@ -8616,6 +8684,29 @@
     }));
   };
 
+  // ROOM TAG: one press puts a tag down, selected, with its NAME box ready to
+  // type over. The tool stays armed, so a drafter walks the plan room by room.
+  const placeRoomTag = at => {
+    const { levelId, viewId } = onActiveLevel();
+    if (viewId != null && viewId !== 'plan') {
+      sayOnStrip('ROOM TAGS go on the FLOOR PLAN (WALLS) view.');
+      return null;
+    }
+    drawing.roomTags = drawing.roomTags || [];
+    // A WHOLE-NUMBER ID, which the format requires, and past every one used:
+    // the counter the old page keeps and the highest id in the file both.
+    const ids = drawing.roomTags.map(t => Number(t.id)).filter(Number.isInteger);
+    const id = Math.max(0, ...ids, (Number(drawing.nextRoomTagId) || 1) - 1) + 1;
+    drawing.nextRoomTagId = id + 1;
+    const tag = selectPlaced('roomtag', addItem(drawing.roomTags, {
+      id, at: { x: at.x, z: at.z }, levelId, view: 'plan',
+      name: 'ROOM', areaSqFt: 0, underMin: false, stamped: true, layer: ROOM_TAG_LAYER,
+    }));
+    const name = document.querySelector('[data-prop-text="name"]');
+    if (name) { name.focus(); name.select(); }
+    return tag;
+  };
+
   // WHAT WAS JUST PLACED IS WHAT IS SELECTED, exactly as commitWall does for a
   // wall. It is also what gives the properties panel something to show: this
   // page cannot hit-test a column, so the placement is the only moment the
@@ -8903,13 +8994,16 @@
     fixture: 'fixtures',
     roof: 'roofs',
     stair: 'stairs',
+    roomtag: 'roomTags',
   });
 
   // HELD BY COPY ONLY WHERE A PASTE CAN LAND IT. A fixture rides a wall by
   // id and a stair owns the hole cut for it in the floor, so a pasted copy
   // of either would come down bound to things on the level it left. They
   // delete and undo like the rest; they are not carried.
-  const NOT_COPIED = new Set(['fixture', 'stair', 'roof']);
+  // A ROOM TAG IS NOT CARRIED EITHER: its id is a whole number the format
+  // insists on, and a paste re-ids with a string.
+  const NOT_COPIED = new Set(['fixture', 'stair', 'roof', 'roomtag']);
 
   const deleteEntry = entry => {
     if (!entry || !drawing) return false;
@@ -15580,6 +15674,68 @@
   // AN EMPTY BOX WOULD BE THE WRONG ANSWER. It would read as "this page has
   // no properties for a line", which is not what is true: a line HAS no
   // properties to change, and those are different sentences.
+  // A TEXT BOX, which propField is not: that one is a length, formatted and
+  // parsed. This one keeps what was typed. It commits on Enter or on leaving
+  // the box, and Escape puts the old text back.
+  const propText = (label, value, commit) => {
+    const row = document.createElement('div');
+    row.dataset.propRow = label.toLowerCase();
+    const name = document.createElement('div');
+    name.className = 'props-title';
+    name.textContent = label;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'prop-field';
+    input.dataset.propText = label.toLowerCase();
+    input.setAttribute('aria-label', label);
+    input.value = value;
+    let done = false;
+    const apply = () => {
+      if (done) return;
+      done = true;
+      if (input.value !== value) commit(input.value);
+    };
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); apply(); input.blur(); }
+      if (e.key === 'Escape') { done = true; input.value = value; input.blur(); }
+    });
+    input.addEventListener('blur', apply);
+    row.append(name, input);
+    return row;
+  };
+
+  // NAME on top, SIZE under it (Movie, 1 Oct). The size is in feet the way he
+  // writes it -- 12X10, 12-6X10, 12-4 1/4X10 -- WIDTH by HEIGHT as the room
+  // sits on the plan, and printed exactly as typed: "if they only put in 12
+  // only show 12".
+  const roomTagPropsNode = tag => {
+    const box = document.createElement('div');
+    const edit = change => {
+      undoStack.push(brushUndoStep([tag]));
+      change();
+      markDirty();
+      showSelectionProps();
+      paint();
+    };
+    box.append(propText('NAME', tag.name || '', text => {
+      const name = text.replace(/\s+/g, ' ').trim().toUpperCase();
+      // A NAMELESS TAG IS NO TAG: the format drops it on the next load. The
+      // box goes back to the name it had rather than saving one that leaves.
+      if (!name) { sayOnStrip('A ROOM TAG needs a name -- DELETE takes the tag away.'); showSelectionProps(); return; }
+      edit(() => { tag.name = name; });
+    }));
+    box.append(propText('SIZE', tag.size || '', text => {
+      const size = text.replace(/\s+/g, ' ').trim();
+      edit(() => { if (size) tag.size = size; else delete tag.size; });
+    }));
+    const note = document.createElement('div');
+    note.className = 'props-title';
+    note.dataset.propNote = '';
+    note.textContent = 'SIZE IN FEET, WIDTH X HEIGHT: 12X10, 12-6X10. DRAG THE TAG TO MOVE IT.';
+    box.append(note);
+    return box;
+  };
+
   const linePropsNode = lines => {
     const box = document.createElement('div');
     const total = lines.reduce((sum, line) => sum
@@ -15612,6 +15768,8 @@
   // and its subject come apart, so no builder is allowed to decide for
   // itself whether to leave the box alone.
   const SELECTION_PANELS = {
+    roomtag: items => (items.length === 1
+      ? { title: 'ROOM TAG', node: roomTagPropsNode(items[0]) } : null),
     wall: items => ({ title: 'WALL', node: wallPropsNode(items) }),
     fenestration: items => ({ title: 'OPENING', node: openingPropsNode(items) }),
     floor: items => ({ title: 'FLOOR', node: floorPropsNode(items) }),
@@ -16517,6 +16675,9 @@
     if (activeTool === 'floor') { floorPress(at); return; }
     if (activeTool === 'fenestration') { placeOpening(at); return; }
     if (activeTool === 'fixture') { fixturePress(at); return; }
+    // preventDefault, or the press's own focus change lands after the handler
+    // and takes the NAME box's focus straight back off it.
+    if (activeTool === 'roomtag') { e.preventDefault(); placeRoomTag(at); return; }
     // STAIR HAS NO HAND PLACEMENT YET, and a tool that swallows a press in
     // silence is worse than one that refuses it: the drafter reads the click
     // as landing and the stair as failing to draw. Movie's own ordering --
@@ -16582,6 +16743,20 @@
     // VERTEX BEFORE BODY — the old page's own precedence (_findVertexHit at
     // MODEL.dc.html:16791, then _findLineHit at :16799). A press near a corner
     // is a corner press even though it is also on the wall.
+    // ── MOVING A ROOM TAG ────────────────────────────────────────────────
+    // A SELECTED tag goes where it is dragged (Movie, 1 Oct: "the user should
+    // be able to select it and move it"); the first click selects, as an
+    // opening's does. Before the corner: a tag is painted over everything.
+    const tagGrab = roomTagAt(at);
+    if (tagGrab && selection.some(entry => entry.item === tagGrab)) {
+      moveDrag = {
+        kind: 'roomtag', tag: tagGrab, before: { ...tagGrab },
+        grab: at, from: { ...tagGrab.at },
+        sx: e.clientX, sy: e.clientY, active: false,
+      };
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
     const corner = cornerAt(at);
     // ── SLIDING AN OPENING ALONG ITS WALL ────────────────────────────────
     //
@@ -16708,6 +16883,13 @@
       if (md.active) {
         const rect = canvas.getBoundingClientRect();
         const raw = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+        if (md.kind === 'roomtag') {
+          // A NEW POINT EACH EVENT, never the old one edited: the undo step
+          // holds the point the tag started at, and it must stay that point.
+          md.tag.at = { x: md.from.x + raw.x - md.grab.x, z: md.from.z + raw.z - md.grab.z };
+          paint();
+          return;
+        }
         if (md.kind === 'opening') {
           const G = window.DraftGeometry2D;
           const wall = md.host;
@@ -16894,6 +17076,17 @@
       if (md.active) {
         // Both halves of a locked move go into ONE history entry: the drafter
         // made one gesture, so one Ctrl+Z undoes all of it. See lockBefore.
+        if (md.kind === 'roomtag') {
+          // The 'props' step puts the record back IN PLACE, the point with it.
+          if (md.tag.at.x !== md.from.x || md.tag.at.z !== md.from.z) {
+            undoStack.push({ kind: 'props', edits: [{ item: md.tag, before: md.before }] });
+            markDirty();
+          }
+          moveDrag = null;
+          if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+          paint();
+          return;
+        }
         if (md.kind === 'opening') {
           // ONE GESTURE, ONE UNDO, and the step carries the one number that
           // changed. A 'move' step restores VERTICES and an opening has none
@@ -17042,6 +17235,14 @@
   }, { passive: false });
 
   window.addEventListener('keydown', e => {
+    // TYPING IS NOT A COMMAND. A key pressed in a box on this page -- a
+    // property, a name -- belongs to that box: Backspace in the WIDTH field
+    // used to reach DELETE below and take the selected window away, and a 0
+    // typed into a size refitted the sheet. The tool letters already keep out
+    // of boxes (the column's own handler); these keys now do too.
+    const typing = e.target instanceof HTMLElement
+      && (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName));
+    if (typing) return;
     if (e.key === '0') { fit(); paint(); }
     // ESCAPE IS THE OLD PAGE'S ESCAPE, measured rather than invented.
     // MODEL.dc.html:22165-22172 does two things in ONE press: it cancels every

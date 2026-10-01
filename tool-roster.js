@@ -43,6 +43,11 @@
     { id: 'shape',        name: 'SHAPE',        group: 'draw',  kind: 'contextual', command: 'shape' },
     { id: 'dimension',    name: 'DIMENSION',    group: 'draw',  kind: 'contextual', command: 'dimension' },
     { id: 'annotation',   name: 'ANNOTATION',   group: 'draw',  kind: 'contextual', command: null },
+    // ROOM TAG (Movie, 1 Oct): "if the user want to add a room tag,, there
+    // should be a DRAFTING TOOL for ROOM TAG", and "just make ROOM TAG that a
+    // user can place and fill out the info". A drafting key, so TOY has none;
+    // no letter yet, like ANNOTATION beside it.
+    { id: 'roomtag',      name: 'ROOM TAG',     group: 'draw',  kind: 'contextual', command: null },
     { id: 'wall',         name: 'WALL',         group: 'build', kind: 'contextual', command: 'wall' },
     { id: 'fenestration', name: 'FENESTRATION', group: 'build', kind: 'contextual', command: 'fenestration' },
     { id: 'floor',        name: 'FLOOR',        group: 'build', kind: 'contextual', command: 'floor' },

@@ -118,11 +118,11 @@ test('the roster answers per board, and every board can rest', async ({ page }) 
   expect(r.unknownId).toBe(false);
 });
 
-test('on TOY the other fifteen keys are down, and on DRAFTING none are',
+test('on TOY the other sixteen keys are down, and on DRAFTING none are',
   async ({ page }) => {
     await open(page, base({ board: 'toy' }));
     const down = await downKeys(page);
-    expect(down).toHaveLength(15);
+    expect(down).toHaveLength(16);
     expect(down).not.toContain('select');
     expect(down).not.toContain('wall');
 
@@ -224,7 +224,7 @@ test('the load path constrains, even against a browser remembering DRAFTING',
     expect(await downKeys(page), 'the seed is DRAFTING').toEqual([]);
 
     await open(page, base({ board: 'toy' }));
-    expect(await downKeys(page)).toHaveLength(15);
+    expect(await downKeys(page)).toHaveLength(16);
   });
 
 test('a browser that has never chosen opens on TOY, with the keys down',
@@ -236,12 +236,12 @@ test('a browser that has never chosen opens on TOY, with the keys down',
     //
     // RULED, not merely current: Movie, 13 Sep, confirmed TOY is the
     // first-run default. The check stays because the reason for it does -- an
-    // incidental default that fifteen keys depend on is the thing worth
+    // incidental default that sixteen keys depend on is the thing worth
     // refusing, and now that it is a decision it should fail loudly if
     // something moves it by accident.
     await open(page, base({}));   // the file records no board either
     expect(await boardOf(page)).toBe('toy');
-    expect(await downKeys(page)).toHaveLength(15);
+    expect(await downKeys(page)).toHaveLength(16);
   });
 
 test('a board change leaves the panels that share the tool slot alone',
@@ -278,7 +278,7 @@ test('a board change leaves the panels that share the tool slot alone',
       'the selection panel survives a board change').toBeVisible();
     // The keys are still doing their job, so this is not passing by having
     // stopped constraining.
-    expect(await downKeys(page)).toHaveLength(15);
+    expect(await downKeys(page)).toHaveLength(16);
   });
 
 test('the selection filters do not operate in TOY, and do in DRAFTING',

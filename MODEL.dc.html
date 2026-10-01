@@ -3395,6 +3395,10 @@ class Component extends DCLogic {
         levelId: tag.levelId,
         view: 'plan',
         name: tag.name,
+        // The size line MODEL.html's ROOM TAG writes. This page does not edit
+        // it, but a serializer that names its fields one by one drops any it
+        // does not name -- and a save here would erase every room's size.
+        ...(tag.size ? { size: tag.size } : {}),
         areaSqFt: tag.areaSqFt,
         stamped: tag.stamped === true,
         ...(tag.stamped === true && tag.base ? { base: tag.base } : {}),

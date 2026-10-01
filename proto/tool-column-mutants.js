@@ -29,14 +29,14 @@ const MUTANTS = [
     file: 'tool-roster.js',
     find: "    { id: 'shape',        name: 'SHAPE',        group: 'draw',  kind: 'contextual', command: 'shape' },\n",
     with: '',
-    test: 'seventeen keys',
+    test: 'eighteen keys',
   },
   {
     name: 'two tools swap places',
     file: 'tool-roster.js',
     find: "    { id: 'copy',         name: 'Copy',         group: 'draw',  kind: 'standard',   command: 'copy' },\n    { id: 'trim',         name: 'Trim',         group: 'draw',  kind: 'standard',   command: 'trim' },\n",
     with: "    { id: 'trim',         name: 'Trim',         group: 'draw',  kind: 'standard',   command: 'trim' },\n    { id: 'copy',         name: 'Copy',         group: 'draw',  kind: 'standard',   command: 'copy' },\n",
-    test: 'seventeen keys',
+    test: 'eighteen keys',
   },
   {
     name: 'a bare key gets a letter invented for it',
