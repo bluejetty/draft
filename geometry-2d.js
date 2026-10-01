@@ -1538,6 +1538,58 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   // the PLACER, and a placer with no size places no window at all.
   const casementSizeFt = kind => CASEMENT_SIZES_FT[kind] || CASEMENT_SIZES_FT.single;
 
+  // ── EVERY DOOR THE DRAFTER CAN PICK, IN ONE LIST ─────────────────────────
+  //
+  // Movie, 1 Oct: TYPE, STYLE and SIZE -- and "they won't need seperate
+  // categories when selecting the door, only for identifying them they can
+  // all be on big list". So this is that list, in the order it is shown:
+  // each entry is a type and a style together, the common sizes for it, and
+  // the size it starts at. Sizes are WIDTHS in feet; a garage door's carry
+  // its height too, because "8ftX8ft" is the size he named.
+  //
+  // drawing-format.js owns the words (DOOR_TYPES, DOOR_STYLES) and
+  // proto/door-style-harness.js fails if a word here is not one of them.
+  //
+  // THE SIZE RULE IS HIS TOO: "if the STYLE changes the size should remain
+  // the same, if the TYPE changes the size should go to default" -- which is
+  // the placer's business, and `default` is what it goes to.
+  //
+  // MORE WILL COME ("later on i'm sure i will need to add alot more
+  // properties for doors"), and an entry is where a new one goes.
+  const inches = list => Object.freeze(list.map(n => n / 12));
+  const DOOR_CATALOG = Object.freeze([
+    { id: 'ext-single', type: 'ext', style: 'single', label: 'EXT – TYP.', sizes: inches([32, 34, 36]), defaultFt: 36 / 12 },
+    { id: 'ext-slide', type: 'ext', style: 'slide', label: 'EXT – SLIDER', sizes: inches([60, 72, 96]), defaultFt: 60 / 12 },
+    { id: 'ext-french', type: 'ext', style: 'french', label: 'EXT – FRENCH', sizes: inches([48, 60, 72]), defaultFt: 60 / 12 },
+    { id: 'ext-garden', type: 'ext', style: 'garden', label: 'EXT – GARDEN', sizes: inches([60, 72]), defaultFt: 60 / 12 },
+    { id: 'int-single', type: 'int', style: 'single', label: 'INT – TYP.', sizes: inches([24, 28, 30, 32, 34, 36]), defaultFt: 30 / 12 },
+    { id: 'int-pocket', type: 'int', style: 'pocket', label: 'INT – POCKET', sizes: inches([24, 28, 30, 32, 36]), defaultFt: 30 / 12 },
+    { id: 'int-barn', type: 'int', style: 'barn', label: 'INT – BARN', sizes: inches([30, 36, 42]), defaultFt: 36 / 12 },
+    { id: 'int-bypass', type: 'int', style: 'bypass', label: 'INT – BYPASS', sizes: inches([48, 60, 72]), defaultFt: 48 / 12 },
+    { id: 'int-french', type: 'int', style: 'french', label: 'INT – FRENCH', sizes: inches([48, 60]), defaultFt: 48 / 12 },
+    { id: 'garage-overhead', type: 'garage', style: 'overhead', label: 'GARAGE – OVERHEAD',
+      sizes: Object.freeze([[8, 7], [8, 8], [9, 7], [9, 8], [16, 7], [16, 8]].map(([w, h]) => Object.freeze({ widthFt: w, heightFt: h }))),
+      defaultFt: 8, defaultHeightFt: 8 },
+  ].map(entry => Object.freeze(entry)));
+  // The entry a stored door belongs to. A door with no type (drawn before
+  // types existed) is matched by style alone, so an old single still lights
+  // TYP. -- the exterior one, as the first of its style in the list.
+  const doorCatalogEntry = opening => {
+    if (!opening || opening.type !== 'door') return null;
+    if (opening.garage === true) return DOOR_CATALOG.find(e => e.type === 'garage');
+    const style = opening.doorStyle || 'single';
+    return DOOR_CATALOG.find(e => e.style === style && e.type === opening.doorType)
+      || DOOR_CATALOG.find(e => e.style === style) || DOOR_CATALOG[0];
+  };
+  // A GARDEN's leaf and window, from its total; the same fallback the reader
+  // applies (half each) for a record that does not say or cannot be right.
+  const gardenSplitFt = opening => {
+    const total = Number(opening?.width) || 0;
+    const stored = Number(opening?.gardenWindowWidth);
+    const windowFt = Number.isFinite(stored) && stored > 0 && stored < total - 1 / 12 ? stored : total / 2;
+    return { doorFt: total - windowFt, windowFt };
+  };
+
   // The width an opening of this type takes when the drafter has not typed
   // one. A door and a window are the only two kinds this app cuts into a
   // wall, so anything that is not a window is a door -- the same fallback
@@ -1768,6 +1820,9 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     DEFAULT_WINDOW_HEIGHT_FT,
     CASEMENT_SIZES_FT,
     casementSizeFt,
+    DOOR_CATALOG,
+    doorCatalogEntry,
+    gardenSplitFt,
     DEFAULT_OPENING_HEAD_FT,
     defaultOpeningWidthFt,
     OPENING_FREE_END_POST_IN,
