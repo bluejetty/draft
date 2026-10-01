@@ -6,7 +6,7 @@
 // program is complete, because whatever nobody said falls to a
 // crowd-pleasing default.
 //
-// Pure and DOM-free, in the style of room-grow.js: the board displays what
+// Pure and DOM-free, in the style of build-house.js: the board displays what
 // this hands it, and every word Gruff says lives here rather than in the
 // board. No AI, no cloud, no network — a scripted tree. The only "random"
 // is his choice of opener, and that is seeded so the same interview reads
@@ -14,7 +14,7 @@
 //
 // This module also owns PLACEMENT. The client never points at the drawing;
 // they say "front" or "by the stairs" and the zone resolver below turns
-// that into the stamp coordinates room-grow already consumes. One placement
+// that into stamp coordinates on the drawing. One placement
 // path, and this is it.
 if (!window.DraftGruffInterview) {
 (() => {

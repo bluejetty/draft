@@ -38,7 +38,7 @@ async function bareOutline(page) {
 // Build a two-storey house so the bone deals a washroom on each floor and
 // locks them together — that lock is the fixture.
 async function houseWithALock(page) {
-  await h.openModel(page, { autoStairs: true, tourEscort: true, roomGrow: true });
+  await h.openModel(page, { autoStairs: true, tourEscort: true });
   await bareOutline(page);
   await page.locator('[data-build-house]').click();
   await h.waitForSaved(page);

@@ -1,8 +1,8 @@
 // AUTO WINDOWS (board #169) — the office's siting ruleset as a pure module.
 // Faces, room claims and existing openings in; a list of window placements
 // out. No DOM, no component state: MODEL gathers the real geometry and
-// commits the results, exactly like build-house.js / auto-stair.js /
-// room-grow.js. Node-loadable so proto/auto-windows-harness.js can drive it.
+// commits the results, exactly like build-house.js / auto-stair.js.
+// Node-loadable so proto/auto-windows-harness.js can drive it.
 //
 // The bone deals the FIRST HAND, never the last: everything it places is an
 // ordinary fenestration carrying `auto: true`, and the drafter's own marks

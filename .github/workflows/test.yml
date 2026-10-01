@@ -256,7 +256,7 @@ jobs:
                       proto/gruff-interview-harness.js \
                       proto/auto-windows-harness.js \
                       proto/toy-constraints-harness.js \
-                      proto/room-grow-harness.js \
+                      proto/room-numbers-harness.js \
                       proto/elevation-harness.js; do
             if ! printf '%s\n' "${engines[@]}" | grep -qx "$must"; then
               failed=$((failed + 1))
