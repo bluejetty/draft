@@ -20,11 +20,42 @@
 // defect -- it would mean a file could claim to hold one.
 //
 //   node proto/fixture-kinds-harness.js
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+// The closet row below is the one this file's own comment records running by
+// hand once; it is here so it runs every time. Against the checks this file
+// had, SIX OF SEVEN were caught -- measured. The survivor was kindFor's
+// fallback, which nothing here called with an id the catalogue lacks.
+const MUTATIONS = [
+  ['the format forgets a kind, so a placed closet is dropped on load', 'drawing-format.js',
+    c => c.replace("'tub', 'shower', 'stall', 'closet'];", "'tub', 'shower', 'stall'];")],
+  ['the format accepts the L preset, so a file can claim to hold one', 'drawing-format.js',
+    c => c.replace("'tub', 'shower', 'stall', 'closet'];", "'tub', 'shower', 'stall', 'closet', 'kitchenL'];")],
+  ['the closet restates its depth as the literal sum', 'fixture-kinds.js',
+    c => c.replace('depthFt: CLOSET_INSIDE_DEPTH_FT + CLOSET_WALL_FT,', 'depthFt: 2.375,')],
+  ['the sink becomes a two-click run', 'fixture-kinds.js',
+    c => c.replace("{ id: 'sink',    label: 'SINK',    group: 'KITCHEN',  widthFt: 2.5,    depthFt: 2,      casework: false, run: false,",
+      "{ id: 'sink',    label: 'SINK',    group: 'KITCHEN',  widthFt: 2.5,    depthFt: 2,      casework: false, run: true,")],
+  ['presets are counted as storable', 'fixture-kinds.js',
+    c => c.replace('    .filter(kind => kind.preset !== true).map(kind => kind.id);', '    .map(kind => kind.id);')],
+  ['the tub loses its width', 'fixture-kinds.js',
+    c => c.replace("{ id: 'tub',     label: 'TUB',     group: 'BATH',     widthFt: 5,",
+      "{ id: 'tub',     label: 'TUB',     group: 'BATH',     widthFt: 0,")],
+  ['an unknown id swallows the click instead of answering the first kind', 'fixture-kinds.js',
+    c => c.replace('const kindFor = id => FIXTURE_KINDS.find(kind => kind.id === id) || FIXTURE_KINDS[0];',
+      'const kindFor = id => FIXTURE_KINDS.find(kind => kind.id === id) || null;')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('fixture-kinds',
+    MUTATIONS, { root: ROOT, harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
 global.window = global;
 require(path.join(ROOT, 'closets.js'));
 require(path.join(ROOT, 'fixture-kinds.js'));
@@ -113,6 +144,12 @@ check('cabinet, vanity and closet are the only runs',
 check('casework is cabinet and vanity',
   K.FIXTURE_KINDS.filter(k => k.casework).map(k => k.id).sort().join(',') === 'cabinet,vanity',
   K.FIXTURE_KINDS.filter(k => k.casework).map(k => k.id).join(','));
+
+// THE FALLBACK IS THE OLD PAGE'S, carried on purpose: an id the catalogue
+// does not hold answers with the first kind, so a click is never swallowed.
+check('an unknown id answers with the first kind, not nothing',
+  K.kindFor('no-such-fixture')?.id === K.FIXTURE_KINDS[0].id,
+  String(K.kindFor('no-such-fixture')?.id));
 
 // A frozen table cannot be edited by a page that borrows it.
 check('the catalogue is frozen, entries included',

@@ -25,9 +25,24 @@ const { spawnSync } = require('child_process');
 
 // label   what to print the tally under
 // rows    [name, file, fn] -- fn takes the file's text and returns it bent
-// opts    { root, harness, args }
+// opts    { root, harness, args, preload }
+//
+// preload: true for a harness that reads its subject with require() or
+// readFileSync rather than through harness-env.js -- mutant-preload.js then
+// serves the bent text to both. See that file for why.
 function runMutations(label, rows, opts) {
-  const { root, harness, args = [] } = opts;
+  const { root, harness, args = [], preload = false } = opts;
+  const node = preload ? ['-r', path.join(__dirname, 'mutant-preload.js')] : [];
+  // A HARNESS THAT IS ALREADY RED KILLS EVERY ROW, and the tally reads 100%
+  // while measuring nothing. Found 1 Oct: a check written wrong failed the
+  // clean run of fixture-kinds-harness and its table still printed 7/7. So
+  // the harness runs once unbent first, and a red one refuses the table.
+  const clean = spawnSync(process.execPath, [...node, harness, ...args], { encoding: 'utf8' });
+  if (clean.status !== 0) {
+    console.log(`${label}: REFUSED -- the harness fails with nothing mutated, so every row would read as caught.`);
+    console.log((clean.stdout || '').trim().split('\n').slice(-8).map(line => `      ${line}`).join('\n'));
+    return false;
+  }
   let caught = 0;
   rows.forEach(([name, file, fn]) => {
     const before = fs.readFileSync(path.join(root, file), 'utf8');
@@ -38,7 +53,7 @@ function runMutations(label, rows, opts) {
     }
     const at = path.join(os.tmpdir(), `${label}-mutant-${process.pid}.json`);
     fs.writeFileSync(at, JSON.stringify({ [file]: after }));
-    const run = spawnSync(process.execPath, [harness, ...args], {
+    const run = spawnSync(process.execPath, [...node, harness, ...args], {
       encoding: 'utf8',
       env: { ...process.env, DRAFT_HARNESS_SOURCE_OVERRIDES: at },
     });

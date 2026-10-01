@@ -23,9 +23,40 @@
 // Run: node proto/page-head-harness.js
 const fs = require('fs');
 const path = require('path');
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
 
 const ROOT = path.join(__dirname, '..');
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+// Each bends ONE page's head the way a hand edit does. The subject here is
+// markup, so the rows are HTML; mutant-preload.js serves the bent page to the
+// readFileSync calls below.
+const MUTATIONS = [
+  ['a page loses its icon line', 'PROJECT.html',
+    c => c.replace('  <link rel="icon" type="image/svg+xml" href="favicon.svg">\n', '')],
+  ['the icon points at a file that is not there', 'MODEL.html',
+    c => c.replace('<link rel="icon" type="image/svg+xml" href="favicon.svg" />',
+      '<link rel="icon" type="image/svg+xml" href="favicon.png" />')],
+  ['one page points at some other file that IS there', 'SPECS.html',
+    c => c.replace('  <link rel="icon" type="image/svg+xml" href="favicon.svg">',
+      '  <link rel="icon" type="image/svg+xml" href="robots.txt">')],
+  ['the icon line is commented out, which still reads as present', 'LAYOUT.html',
+    c => c.replace('<link rel="icon" type="image/svg+xml" href="favicon.svg">',
+      '<!-- <link rel="icon" type="image/svg+xml" href="favicon.svg"> -->')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('page-head',
+    MUTATIONS, { root: ROOT, harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
+
+// A COMMENTED-OUT LINK IS NOT A LINK. The browser skips it and the tab goes
+// blank, but a regex over the raw file found it and called the page done --
+// measured 1 Oct, the commented-out row above SURVIVED. So every page is read
+// with its comments taken out first.
+const markup = f => fs.readFileSync(path.join(ROOT, f), 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+
 const pages = fs.readdirSync(ROOT).filter(f => f.endsWith('.html')).sort();
 
 const CHECKS = [];
@@ -42,7 +73,7 @@ check('the scan finds pages at all', pages.length >= 5, true);
 // tags `/>` and the .dc.html pages do not, and pinning the byte sequence
 // would fail on a page that is perfectly correct.
 const missing = pages.filter(f =>
-  !/<link[^>]*rel=["']icon["'][^>]*>/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')));
+  !/<link[^>]*rel=["']icon["'][^>]*>/i.test(markup(f)));
 check('every page links a favicon', missing.join(', '), '');
 
 // And it has to point at something that exists. A link to a missing file is
@@ -50,7 +81,7 @@ check('every page links a favicon', missing.join(', '), '');
 const hrefs = new Set();
 for (const f of pages) {
   const m = /<link[^>]*rel=["']icon["'][^>]*href=["']([^"']+)["']/i
-    .exec(fs.readFileSync(path.join(ROOT, f), 'utf8'));
+    .exec(markup(f));
   if (m) hrefs.add(m[1]);
 }
 check('they all point at the same asset', hrefs.size, 1);

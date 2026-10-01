@@ -4,16 +4,44 @@
 // this harness is the SWEEP: generate() picks a width at random, so a bug that
 // only bites at 47' would otherwise surface on a stranger's first press.
 
-// No mutation mode here, so this harness accepts no arguments at all. It
-// used to read none: `node starter-shape-harness.js --mutate` printed a full
-// passing run and exited 0, having mutated nothing. noFlags(), not
-// mutationMode() -- the latter would accept --mutate and print green for a
-// mode that does not exist.
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
 
 const fs = require('fs');
 const path = require('path');
 const root = path.join(__dirname, '..');
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+//
+// Against the checks this file had, THREE OF SEVEN were caught -- measured.
+// The sweep pins whole feet, area and centring, and every survivor was
+// something else: a T whose stem had slid to one end, a width outside its
+// range, a kind the random pick could never land on, and an isUsable that no
+// longer looked at the area. The four checks under "WHAT THE SWEEP CANNOT
+// SEE" are what those asked for.
+const MUTATIONS = [
+  ['the rectangle\'s depth is left as a fraction of a foot', 'starter-shape.js',
+    c => c.replace('const depth = Math.round(TARGET_SQ_FT / width);', 'const depth = TARGET_SQ_FT / width;')],
+  ['the T\'s stem slides to one end, which is an L with extra corners', 'starter-shape.js',
+    c => c.replace('const left = Math.round((width - stemWidth) / 2);', 'const left = 0;')],
+  ['the house is centred in depth but not across', 'starter-shape.js',
+    c => c.replace('return points.map(p => pt(p.x - dx, p.z - dz));', 'return points.map(p => pt(p.x, p.z - dz));')],
+  ['a forced kind is ignored', 'starter-shape.js',
+    c => c.replace('const chosen = kind && BUILDERS[kind]', 'const chosen = false')],
+  ['the random width escapes its range', 'starter-shape.js',
+    c => c.replace('const width = WIDTH_RANGE.least + Math.round(rng() * span);',
+      'const width = WIDTH_RANGE.least + Math.round(rng() * span) + 8;')],
+  ['the last kind is never drawn', 'starter-shape.js',
+    c => c.replace('KINDS[Math.floor(rng() * KINDS.length) % KINDS.length]',
+      'KINDS[Math.floor(rng() * (KINDS.length - 1)) % KINDS.length]')],
+  ['isUsable stops checking the area', 'starter-shape.js',
+    c => c.replace('    && Math.abs(shape.areaSqFt - TARGET_SQ_FT) <= TOLERANCE_SQ_FT\n', '\n')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('starter-shape',
+    MUTATIONS, { root, harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
 global.window = {};
 new Function(fs.readFileSync(path.join(root, 'starter-shape.js'), 'utf8'))();
 const S = global.window.DraftStarterShape;
@@ -62,6 +90,32 @@ for (let i = 0; i < 500; i += 1) {
   const s = S.generate();
   ok(`random #${i} is usable`, S.isUsable(s), `${s.kind} ${s.widthFt}' ${s.areaSqFt}sqft`);
 }
+
+// ── WHAT THE SWEEP CANNOT SEE ─────────────────────────────────────────────
+//
+// A T IS SYMMETRIC. Its area, its corners and its bounding box survive the
+// stem sliding to one end, so the sweep passed an L with two extra corners.
+for (let w = S.WIDTH_RANGE.least; w <= S.WIDTH_RANGE.most; w += 1) {
+  const xs = S.shapeFor(S.KIND.T, w).map(p => p.x).sort((a, b) => a - b);
+  const mirrored = xs.map(x => -x).sort((a, b) => a - b);
+  ok(`T @${w}' is symmetric across its stem`,
+     xs.every((x, i) => Math.abs(x - mirrored[i]) <= 1), JSON.stringify(xs));
+}
+
+// The random source spans [0, 1), so its two ends are the whole range.
+for (const r of [0, 0.999999]) {
+  const s = S.generate(() => r);
+  ok(`a random width at rng ${r} stays in range`,
+     s.widthFt >= S.WIDTH_RANGE.least && s.widthFt <= S.WIDTH_RANGE.most, `got ${s.widthFt}`);
+}
+// And every kind is reachable from it -- a kind the pick can never land on
+// is a shape nobody is ever shown.
+const drawn = new Set([0, 0.34, 0.67, 0.999999].map(r => S.generate(() => r).kind));
+ok('every kind can come up', S.KINDS.every(kind => drawn.has(kind)), JSON.stringify([...drawn]));
+
+// isUsable is the gate on the area, not only on the corners and whole feet.
+ok('a shape far off the target area is not usable',
+   !S.isUsable({ points: S.shapeFor(S.KIND.RECTANGLE, 40), areaSqFt: 900 }));
 
 // ── the export is frozen, like every other module here ────────────────────
 ok('export is frozen', Object.isFrozen(S));
