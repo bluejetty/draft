@@ -49,9 +49,9 @@ if (!window.DraftClosets) {
   const FOOTPRINT_DEPTH_FT = INSIDE_DEPTH_FT + WALL_FT;
 
   const DOORS = Object.freeze([
-    { label: 'DD72', widthFt: 6 },
-    { label: 'DD60', widthFt: 5 },
-    { label: 'DD48', widthFt: 4 },
+    { label: 'D72',  widthFt: 6 },
+    { label: 'D60',  widthFt: 5 },
+    { label: 'D48',  widthFt: 4 },
     { label: 'D36',  widthFt: 3 },
     { label: 'D30',  widthFt: 2.5 },
     { label: 'D24',  widthFt: 2 },

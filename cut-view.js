@@ -2304,6 +2304,15 @@ if (!window.DraftCutView) {
     // same window and a drafter wants each without the other.
     const fenStandard = env.layerStandard ? env.layerStandard('A-DIMS-WIN') : null;
     const showFenTags = !fenStandard || fenStandard.visible !== false;
+    // A DOOR'S SIZE ON AN ELEVATION IS OFF UNTIL THE OFFICE TURNS IT ON
+    // (Movie, 1 Oct: "WINDOW sizes ON in elevation ... DOORS off by default
+    // but they could turn it on"). Two switches, both needed: STANDARDS'
+    // DOOR SIZES ON ELEVATIONS, and A-DIMS-DOOR's own Visible tick. A page
+    // that hands no fenestration standards draws none -- off is the default.
+    const doorStandard = env.layerStandard ? env.layerStandard('A-DIMS-DOOR') : null;
+    const fenStandards = env.fenStandards ? env.fenStandards() : null;
+    const showDoorTags = !!(fenStandards && fenStandards.doorsOnElevations)
+      && (!doorStandard || doorStandard.visible !== false);
 
     // Roof silhouette: at each spot along the cut, the tallest roof surface
     // anywhere along the viewing depth — the ridge/hip outline from outside.
@@ -4344,6 +4353,29 @@ if (!window.DraftCutView) {
             const tall = (top - bottom) * pxPerFt;
             if (wide + 4 <= ow && tall >= 11) {
               ctx.fillText(sizeLabel, ox + ow / 2, (Y(top) + Y(bottom)) / 2);
+            }
+            ctx.restore();
+          }
+        }
+        // THE DOOR'S, when the office asked for it: D36, or G 16W x 8H on a
+        // garage door, centred on the leaf by the window's own fit rule.
+        if (f.type === 'door' && window.DraftFenLabels && showDoorTags) {
+          const doorLabel = window.DraftFenLabels.fenLabel({
+            // A door stands on the floor: its height is its head, not a
+            // window's head-less-sill (a door's stored sill is 0, which the
+            // line above reads as "use the default window sill").
+            type: 'door', widthFt: f.width, heightFt: head,
+            garage: f.garage === true || f.doorType === 'garage' });
+          if (doorLabel) {
+            ctx.save();
+            ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+            ctx.fillStyle = INK;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const wide = ctx.measureText(doorLabel).width;
+            const tall = (top - bottom) * pxPerFt;
+            if (wide + 4 <= ow && tall >= 11) {
+              ctx.fillText(doorLabel, ox + ow / 2, (Y(top) + Y(bottom)) / 2);
             }
             ctx.restore();
           }

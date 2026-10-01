@@ -224,6 +224,30 @@ check('the barn door parks past the hinge jamb, and moves with it',
   eq('a door stored as single draws the same elevations as one storing nothing', styled('single') === base, true);
   ['french', 'pocket', 'barn', 'slide', 'bypass', 'garden'].forEach(style =>
     check(`a ${style.toUpperCase()} door changes the elevation`, styled(style) !== base));
+
+  // ── A DOOR'S SIZE ON AN ELEVATION: OFF UNTIL THE OFFICE TURNS IT ON ──────
+  // Movie, 1 Oct: "WINDOW sizes ON in elevation construction plans (by
+  // default) DOORS off by default but they could turn it on".
+  const doorTexts = fenStandards => {
+    const env = E.buildEnv(win, JSON.parse(JSON.stringify(raw)));
+    if (fenStandards !== undefined) env.fenStandards = () => fenStandards;
+    return E.standardElevationCuts(env)
+      .flatMap(cut => E.paintElevation(win, env, cut).texts.map(t => t.text))
+      .filter(text => /^D\d+$/.test(text) || /^G .*W x .*H$/.test(text));
+  };
+  eq('no door size on an elevation when the page hands no standards', doorTexts(undefined).length, 0);
+  eq('none when the office has not turned it on', doorTexts({ doorsOnElevations: false }).length, 0);
+  const on = doorTexts({ doorsOnElevations: true });
+  check('and the 5 ft door reads D60 once the office turns it on', on.includes('D60'), JSON.stringify(on));
+  const hidden = (() => {
+    const env = E.buildEnv(win, JSON.parse(JSON.stringify(raw)));
+    env.fenStandards = () => ({ doorsOnElevations: true });
+    env.layerStandard = id => (id === 'A-DIMS-DOOR' ? { visible: false } : null);
+    return E.standardElevationCuts(env)
+      .flatMap(cut => E.paintElevation(win, env, cut).texts.map(t => t.text))
+      .filter(text => /^D\d+$/.test(text));
+  })();
+  eq('and A-DIMS-DOOR turned off still hides it', hidden.length, 0);
 }
 
 console.log(`door-style harness: ${pass} checks passed, ${fails.length} failed`);

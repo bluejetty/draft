@@ -345,11 +345,11 @@ if (!window.DraftProfileManager) {
         // window, and a drafter wants each without the other.
         //
         // THREE, NOT ONE, because the same split is coming for the rest:
-        // A-DIMS-DOOR and A-DIMS-EQUIP carry NOTHING TODAY and that is said
-        // out loud rather than implied. Only windows are tagged -- cut-view
-        // gates on `f.type === 'window'` and MODEL's plan painter returns on
-        // anything that is not one. The layers exist so the ids are settled
-        // before the tags arrive, not because they are already doing work.
+        // A-DIMS-DOOR DRAWS SINCE 1 OCT: D36 beside each door on the plan
+        // (G 16W x 8H on a garage), and on an elevation only when STANDARDS
+        // turns door sizes on. A-DIMS-EQUIP still carries NOTHING, and that is
+        // said out loud rather than implied: the id is settled before the tags
+        // arrive, not because it is already doing work.
         //
         // STILL UNDER Dimensions, and it is a fair question whether a size
         // tag is a dimension. It is filed here because a drafter looking for
@@ -361,8 +361,8 @@ if (!window.DraftProfileManager) {
         // RECORD may claim and what auto-dims emits; a size tag is neither --
         // it is painted from the opening itself and no record carries the id.
         // auto-dims' own count check pins that list at five on purpose.
-        Object.freeze({ id: 'A-DIMS-WIN', name: 'A-DIMS-WIN', use: 'Window size tags — the 36X36 beside each window on plan and centred on it in elevation.', printable: true, visibility: true }),
-        Object.freeze({ id: 'A-DIMS-DOOR', name: 'A-DIMS-DOOR', use: 'Door size tags. Nothing draws one yet; the layer is here so the id is settled when they arrive.', printable: true, visibility: true }),
+        Object.freeze({ id: 'A-DIMS-WIN', name: 'A-DIMS-WIN', use: 'Window size tags — the W 36 X 42 beside each window on plan and centred on it in elevation.', printable: true, visibility: true }),
+        Object.freeze({ id: 'A-DIMS-DOOR', name: 'A-DIMS-DOOR', use: 'Door size tags — D36 beside each door on the plan, G 16W x 8H on a garage door. On elevations only when Fenestration labels turns door sizes on.', printable: true, visibility: true }),
         Object.freeze({ id: 'A-DIMS-EQUIP', name: 'A-DIMS-EQUIP', use: 'Size tags on everything that is not a window or a door — cabinets, tubs, showers. Nothing draws one yet.', printable: true, visibility: true }),
       ]),
     }),

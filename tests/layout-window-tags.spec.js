@@ -60,7 +60,7 @@ async function tape(page) {
 }
 
 const sizeTags = page => page.evaluate(() =>
-  window.__tags.filter(t => /^\d+ X \d+$/.test(t)));
+  window.__tags.filter(t => /^W \d+ X \d+$/.test(t)));
 
 async function sheetMetrics(page) {
   const box = await page.locator('[data-layout-canvas]').boundingBox();
@@ -96,24 +96,25 @@ test('a plan viewport tags every window with its size', async ({ page }) => {
   // inches. A tag that agreed on "some text appeared" and disagreed on the
   // SIZE would be the drift this whole job is about.
   expect(tags, 'the sheet and the Model Space disagree about a window size')
-    .toContain('48 X 50');
+    .toContain('W 48 X 50');
 });
 
-test('and a door is not given one', async ({ page }) => {
-  await openLayout(page, REPRO);
+test('and a door carries its D', async ({ page }) => {
+  // Movie, 1 Oct: "all window/door/equipe sizes on floor plans on construction
+  // plans". A door's tag is D and its width in inches -- G 16W x 8H on a
+  // garage. THE SHEET OPENS ON 2ND FL and the fixture's doors are all on MAIN
+  // FL, so one 2ND FL window is made a 3 ft door standing on the floor.
+  const drawing = JSON.parse(JSON.stringify(REPRO));
+  const upstairs = drawing.fenestrations.find(f => f.type === 'window' && f.levelId === 5);
+  expect(upstairs, 'the fixture has a window on 2ND FL to make a door of').toBeTruthy();
+  Object.assign(upstairs, { type: 'door', layer: 'A-DOOR', width: 3, sillHeight: 0, headHeight: 6.67 });
+  await openLayout(page, drawing);
   await tape(page);
   await placeViewport(page, PW / 2, PH / 2);
-
-  // THE OLD PLACEMENT TAGGED EVERY OPENING. fenLabelForOpening answers for a
-  // door too -- it is the door LEAF size the office orders -- so a stage that
-  // forgot to ask the type would print one beside every door on the sheet and
-  // look plausible doing it.
-  const doors = (REPRO.fenestrations || []).filter(f => f.type === 'door');
-  expect(doors.length, 'no doors in the fixture, so this proves nothing')
-    .toBeGreaterThan(0);
-  const tags = await sizeTags(page);
-  const windows = (REPRO.fenestrations || []).filter(f => f.type === 'window');
-  expect(tags.length,
-    `${tags.length} tags for ${windows.length} windows and ${doors.length} doors`)
-    .toBeLessThanOrEqual(windows.length);
+  const tags = await page.evaluate(() => window.__tags);
+  expect(tags, 'the door was not given its D').toContain('D36');
+  expect(tags.filter(t => /^(ED|DD)\d+$/.test(t)), 'ED and DD are gone').toEqual([]);
+  // AND ONLY THE WINDOWS CARRY A WINDOW'S TAG: the door is not counted twice.
+  expect(await sizeTags(page), 'the door was given a window tag')
+    .not.toContain('W 36 X 80');
 });

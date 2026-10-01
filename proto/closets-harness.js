@@ -135,9 +135,9 @@ const rect = (w, d, ids = ['N', 'E', 'S', 'W']) => ([
   check('a 4\'-0" closet takes a D36', C.doorFor(4).label === 'D36',
     JSON.stringify(C.doorFor(4)));
   // The width at which the two readings of the trim rule visibly disagree: 4"
-  // each side off the outside allows a DD48 here, 4" off the inside does not.
-  check('a 4\'-8" closet takes a DD48, which is the outside-face reading',
-    C.doorFor(4 + 8 / 12).label === 'DD48', JSON.stringify(C.doorFor(4 + 8 / 12)));
+  // each side off the outside allows a D48 here, 4" off the inside does not.
+  check('a 4\'-8" closet takes a D48, which is the outside-face reading',
+    C.doorFor(4 + 8 / 12).label === 'D48', JSON.stringify(C.doorFor(4 + 8 / 12)));
   check('the door always leaves 4" of outside face each side',
     C.DOORS.every(door => {
       const width = door.widthFt + 2 * C.DOOR_TRIM_FT;

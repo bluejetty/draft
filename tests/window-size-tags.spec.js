@@ -56,21 +56,32 @@ test('every window on the plan is tagged with its size in inches', async ({ page
   await openWithTags(page);
   const seen = await page.evaluate(() => ({
     all: window.__tags.length,
-    sizes: [...new Set(window.__tags.filter(t => /^\d+ X \d+$/.test(t)))],
+    sizes: [...new Set(window.__tags.filter(t => /^W \d+ X \d+$/.test(t)))],
   }));
   expect(seen.all, 'the plan painted text at all').toBeGreaterThan(0);
   // THE FIXTURE'S WINDOWS ARE 4 FT WIDE with a 2'-10" sill and a 7'-0" head,
   // so 48 by 50 is the arithmetic done in inches -- and it is the window's
   // OWN size, not a rung of the stock ladder, which carries no 48x50.
-  expect(seen.sizes, 'the size reads width X height, in inches, with no letter')
-    .toContain('48 X 50');
+  expect(seen.sizes, 'the size reads W, then width X height, in inches')
+    .toContain('W 48 X 50');
 });
 
-test('the tag is the size, not the old W-ladder name', async ({ page }) => {
+test('a window carries its W, and every door on the plan its D', async ({ page }) => {
+  // Movie, 1 Oct: "for later ESTIMATION purposes we should put the W before
+  // the window sizes", every door D, and "all window/door/equipe sizes on
+  // floor plans on construction plans".
   await openWithTags(page);
-  const lettered = await page.evaluate(() =>
-    window.__tags.filter(t => /^W ?\d+ ?[xX] ?\d+$/.test(t)));
-  expect(lettered, 'no window tag carries a W any more').toEqual([]);
+  const seen = await page.evaluate(() => ({
+    bare: window.__tags.filter(t => /^\d+ X \d+$/.test(t)),
+    doors: window.__tags.filter(t => /^D\d+$/.test(t) || /^G .+W x .+H$/.test(t)),
+    oldNames: window.__tags.filter(t => /^(ED|DD)\d+$/.test(t)),
+  }));
+  expect(seen.bare, 'no window tag without its W').toEqual([]);
+  expect(seen.oldNames, 'ED and DD are gone: every door is D').toEqual([]);
+  const doors = (REPRO.fenestrations || []).filter(f => f.type === 'door');
+  expect(doors.length, 'no doors in the fixture, so this proves nothing').toBeGreaterThan(0);
+  expect(seen.doors.length, `${seen.doors.length} door tags for ${doors.length} doors`)
+    .toBeGreaterThan(0);
 });
 
 test('the formatter reads a window off its own record, unsnapped', async ({ page }) => {
@@ -85,13 +96,13 @@ test('the formatter reads a window off its own record, unsnapped', async ({ page
       odd: FL.fenLabelForOpening(
         { type: 'window', width: 37 / 12, sillHeight: 1, headHeight: 1 + 49 / 12 },
         { exteriorWall: true }),
-      // A DOOR KEEPS ITS LADDER NAME. Only the window lost its letter.
+      // A DOOR IS D, wherever it hangs (Movie, 1 Oct: ED and DD folded into D).
       door: FL.fenLabelForOpening(
         { type: 'door', width: 3, headHeight: (6 * 12 + 8) / 12 }, { exteriorWall: true }),
     };
   });
-  expect(labels.odd).toBe('37 X 49');
-  expect(labels.door).toBe('ED36');
+  expect(labels.odd).toBe('W 37 X 49');
+  expect(labels.door).toBe('D36');
 });
 
 // ── AND THE DRAFTER CAN TURN THEM OFF ─────────────────────────────────────
@@ -117,7 +128,7 @@ test('the formatter reads a window off its own record, unsnapped', async ({ page
 // so the second reading is a claim about the tick rather than about the
 // house.
 async function sizeTags(page) {
-  return page.evaluate(() => window.__tags.filter(t => /^\d+ X \d+$/.test(t)));
+  return page.evaluate(() => window.__tags.filter(t => /^W \d+ X \d+$/.test(t)));
 }
 
 // A FRESH TAPE PER VISIT. The patch is on the context prototype and a

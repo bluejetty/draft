@@ -374,7 +374,7 @@ test.describe('MODEL.html tier 1', () => {
       // paying it is a twin of the half that IS called.
       './build-house.js',
       // fen-labels.js is the words on a window or a door -- `36 X 42` for a
-      // window, `ED36` for an exterior door -- and it is the DELETES-A-
+      // window, `D36` for a door -- and it is the DELETES-A-
       // DIVERGENCE kind this list should grow by rather than a new capability.
       // MODEL.dc.html has loaded it since board #398, and so do the
       // Construction Layout, STANDARDS and EXT. FINISH. This page was the one

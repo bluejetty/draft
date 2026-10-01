@@ -2768,7 +2768,7 @@ function run(win) {
     const seen = [];
     standardElevationCuts(tagEnv).forEach(cut => {
       const view = paintElevation(win, tagEnv, cut, { pxPerFt: 40 });
-      view.texts.filter(t => /^\d+ X \d+$/.test(t.text)).forEach(t => {
+      view.texts.filter(t => /^W \d+ X \d+$/.test(t.text)).forEach(t => {
         // ── STILL SHOWING, OR PAINTED OVER ──────────────────────────────
         //
         // A window on a far wall has its tag drawn by that wall's own pass and
