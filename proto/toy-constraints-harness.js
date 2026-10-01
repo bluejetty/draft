@@ -22,12 +22,57 @@
 // It is written here, at the top, because it is exactly the kind of decision
 // someone tidies up in six months without knowing it was decided.
 
-// No mutation mode here, so this harness accepts no arguments at all. It
-// used to read none: `node toy-constraints-harness.js --mutate` printed a full
-// passing run and exited 0, having mutated nothing. noFlags(), not
-// mutationMode() -- the latter would accept --mutate and print green for a
-// mode that does not exist.
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+// One bent rule per section of the checks below. Against the checks this file
+// had, SEVEN OF TWELVE were caught -- measured. Every survivor was a fixture
+// that two rules guarded at once, or none closely: the only angled wall was
+// 35 degrees off, nowhere near the half-degree tolerance; the square wall
+// touching it was also WELDED to it, so the weld group blocked it even with
+// the contact rule gone; no corner was ever marked open; and the one tight
+// opening ran 2.9ft off its wall, which no edge margin decides. Section 12 is
+// what those four asked for.
+//
+// ── ONE ROW IS ELSEWHERE ──────────────────────────────────────────────────
+// "a foundation that follows still blocks the push" SURVIVED here, and is
+// not answered here: proto/wall-move-harness.js carries that exact mutation
+// in its own table and kills it, through allowedMove in DRAFTING mode. A
+// second check of the same line in this file would be coverage counted twice.
+const MUTATIONS = [
+  ['a drag of 1.6ft moves the wall one foot, not two', 'toy-constraints.js',
+    c => c.replace('    const step = num(stepFt) || FOOT_FT;\n    return Math.round(d / step) * step;',
+      '    const step = num(stepFt) || FOOT_FT;\n    return Math.floor(d / step) * step;')],
+  ['a wall five degrees off square is called square', 'toy-constraints.js',
+    c => c.replace('const ORTHO_TOL_DEG = 0.5;', 'const ORTHO_TOL_DEG = 5;')],
+  ['inertness does not spread by contact', 'toy-constraints.js',
+    c => c.replace('    if (others.some(other => !isOrthogonal(other) && endsTouch(wall, other))) {',
+      '    if (false) {')],
+  ['a corner marked open still welds', 'toy-constraints.js',
+    c => c.replace('    return a.corner !== false && b.corner !== false;', '    return true;')],
+  ['a 3ft overhang passes silently', 'toy-constraints.js',
+    c => c.replace('const CANTILEVER_FREE_FT = 2;', 'const CANTILEVER_FREE_FT = 3;')],
+  ['piles are not called for until 6ft out', 'toy-constraints.js',
+    c => c.replace('const CANTILEVER_PILES_FT = 4.5;', 'const CANTILEVER_PILES_FT = 6;')],
+  ['DRAFTING blocks the bump it should only advise', 'toy-constraints.js',
+    c => c.replace("      if (mode === MODE.DRAFTING && band === BAND.BUMP_FOUNDATION) return;  // advised, not blocked\n", '')],
+  ['a 20ft span goes without its beam', 'toy-constraints.js',
+    c => c.replace('const BEAM_AT_FT = 19;', 'const BEAM_AT_FT = 20;')],
+  ['a span past twice the limit still gets one beam', 'toy-constraints.js',
+    c => c.replace('beams: shortSpanFt > BEAM_AT_FT * 2 ? 2 : 1,', 'beams: 1,')],
+  ['the room minimum is judged on the box, not the floor', 'toy-constraints.js',
+    c => c.replace('insideSqFt: num(room.insideSqFt) ?? width * depth,', 'insideSqFt: width * depth,')],
+  ['an opening may run to the very end of its wall', 'toy-constraints.js',
+    c => c.replace('const OPENING_EDGE_FT = 2 / 12;', 'const OPENING_EDGE_FT = 0;')],
+  ['a thing standing in the room is never asked', 'toy-constraints.js',
+    c => c.replace('        if (!verdict || verdict.ok !== false) return;', '        return;')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('toy-constraints',
+    MUTATIONS, { root: require('path').join(__dirname, '..'), harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
 
 const fs = require('fs');
 const path = require('path');
@@ -498,6 +543,37 @@ const wall = (id, x0, z0, x1, z1, extra = {}) => ({
     T.allowedMove(w, 3, ctx([{ wallId: 'other', sign: 1 }])).delta === 3);
   check('and pulling the short way in is never the beam that stops you',
     T.allowedMove(w, -3, ctx([{ wallId: 'a', sign: 1 }])).delta === -3);
+}
+
+// ── 12 · ONE RULE AT A TIME (1 Oct) ───────────────────────────────────────
+{
+  // Three degrees off is not square. The half-degree tolerance is for a
+  // wall that is square and was drawn a hair out, not for a skewed one.
+  const skew = wall('skew', 0, 0, 20, 20 * Math.tan(3 * Math.PI / 180));
+  check('a wall three degrees off square is inert', !T.isOrthogonal(skew));
+
+  // CONTACT, WITH NO WELD. The angled wall's corner is marked open, so it
+  // does not weld to the square one -- and the square one is still inert,
+  // because it is touching it. That is the contact rule on its own.
+  const angled = wall('angled', 0, 0, 10, 7, { corner: false });
+  const square = wall('square', 10, 7, 10, 20);
+  const s = T.allowedMove(square, 2, { walls: [angled, square], rooms: [], openings: [] });
+  check('touching an angled wall makes a square one inert, weld or no weld',
+    s.delta === 0 && s.reason === T.REASON.TOUCHES_NON_ORTHOGONAL, `got ${s.delta} / ${s.reason}`);
+
+  // An open corner is two walls that meet and do not move together.
+  const shared = wall('shared', 0, 0, 0, 12);
+  const opened = wall('return', 0, 12, 6, 12, { corner: false });
+  check('a corner marked open does not weld',
+    T.weldGroup(shared, { walls: [shared, opened] }).length === 1);
+
+  // The margin itself: 2" of wall each side of an opening, so 1.2" is not
+  // enough and 6" is.
+  const host = wall('host', 0, 0, 0, 10);
+  const at = offsetFt => T.isLegal({ walls: [host], rooms: [],
+    openings: [{ id: 'o', wallId: 'host', offsetFt, widthFt: 3 }] }).ok;
+  check('an opening 1.2" from the end of its wall does not fit', !at(0.1));
+  check('and one 6" from it does', at(0.5));
 }
 
 // ── Report ───────────────────────────────────────────────────────────────

@@ -9,12 +9,43 @@
 //
 // Exit 0 = every check passed.
 
-// No mutation mode here, so this harness accepts no arguments at all. It
-// used to read none: `node electric-rules-harness.js --mutate` printed a full
-// passing run and exited 0, having mutated nothing. noFlags(), not
-// mutationMode() -- the latter would accept --mutate and print green for a
-// mode that does not exist.
-require('./harness-args.js').noFlags();
+const path = require('path');
+const MUTATE = require('./harness-args.js').mutationMode();
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+// Against the checks this file had, SEVEN OF NINE were caught -- measured.
+// No fixture held an unswitched light, and the only spacing fixture sat its
+// light dead centre, where every candidate is equally near the middle and the
+// order cannot show. The two checks marked "1 Oct" are what those asked for.
+const MUTATIONS = [
+  ['the light centres on the corner average, which drifts down the longer leg', 'electric-rules.js',
+    c => c.replace('if (Math.abs(a) < 1e-9) {           // degenerate', 'if (true) {           // degenerate')],
+  ['THE PARTY WALL: the switch is taken from whichever room comes last', 'electric-rules.js',
+    c => c.replace('    const room = roomHolding(rooms, light);', '    const room = rooms[rooms.length - 1];')],
+  ['a light in no room is handed the first room\'s switch', 'electric-rules.js',
+    c => c.replace('const roomHolding = (rooms, pt) => rooms.find(room => contains(room.polygon, pt)) || null;',
+      'const roomHolding = (rooms, pt) => rooms.find(room => contains(room.polygon, pt)) || rooms[0];')],
+  ['unswitched lights count as a bank, and the gang grows a switch for them', 'electric-rules.js',
+    c => c.replace('banksOf(lights.filter(l => l.roomId === roomId && l.switchId != null)).length;',
+      'banksOf(lights.filter(l => l.roomId === roomId)).length;')],
+  ['the first outlet sits in the corner', 'electric-rules.js',
+    c => c.replace('for (let d = gap / 2; d < runFt; d += gap) {', 'for (let d = 0; d < runFt; d += gap) {')],
+  ['the outlet spacing leaves the measured band', 'electric-rules.js',
+    c => c.replace('outletSpacingFt: 6,', 'outletSpacingFt: 10,')],
+  ['a spacing candidate outside the room is offered', 'electric-rules.js',
+    c => c.replace("    ]).filter(pt => contains(room.polygon, pt))\n", '    ])\n')],
+  ['the spacing candidates lead with the one furthest from the middle', 'electric-rules.js',
+    c => c.replace('.sort((p, q) => Math.hypot(p.x - c.x, p.z - c.z) - Math.hypot(q.x - c.x, q.z - c.z));',
+      '.sort((p, q) => Math.hypot(q.x - c.x, q.z - c.z) - Math.hypot(p.x - c.x, p.z - c.z));')],
+  ['a built light is not marked as the build\'s', 'electric-rules.js',
+    c => c.replace('      return { ...light, auto: true, switchId:', '      return { ...light, switchId:')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('electric-rules',
+    MUTATIONS, { root: path.join(__dirname, '..'), harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
 
 const R = require('../electric-rules.js');
 
@@ -100,6 +131,11 @@ const rect = (x0, z0, x1, z1) => [
   // Deleting the last light of a bank makes the bank stop existing. Nothing
   // is swept, because there was never a record to sweep -- which is the
   // whole reason the bank is derived rather than stored.
+  // 1 Oct: AN UNSWITCHED LIGHT IS NOT A BANK. It has no switch to put in the
+  // gang, so counting it would give the box a toggle wired to nothing.
+  check('an unswitched light adds no switch to the gang',
+    R.gangCountFor('K', [...lights.filter(l => l.switchId === 's1'),
+      { id: 9, roomId: 'K', switchId: null }]), 1);
   const afterDelete = lights.filter(l => l.switchId !== 's2');
   check('the last deletion makes a bank vanish, leaving no orphan',
     R.banksOf(afterDelete).length, 1);
@@ -130,6 +166,11 @@ const rect = (x0, z0, x1, z1) => [
     spaced.every(p => R.contains(room.polygon, p)), true);
   const d = Math.hypot(spaced[0].x - 7, spaced[0].z - 6);
   check('rule 5: at the measured 5-7 ft', d >= 5 && d <= 7, true);
+  // 1 Oct: AND THE ONE OFFERED FIRST IS NEAREST THE MIDDLE. From a light off
+  // in one corner, two candidates land inside: 6 ft across toward the middle,
+  // and 6 ft back along the wall. The magnet should pull toward the room.
+  check('rule 5: from a corner light, the first offer leans toward the middle',
+    [R.spacingCandidates(room, [{ x: 4, z: 4 }])[0]].map(p => [p.x, p.z])[0], [10, 4]);
 }
 
 // ── Generate accepts every candidate, and flags them as the build's ─────

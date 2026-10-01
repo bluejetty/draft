@@ -17,17 +17,63 @@
 // looking at the screen, which is why the mapping is a module and why the
 // first thing proved here is all four directions.
 
-// No mutation mode here, so this harness accepts no arguments at all. It
-// used to read none: `node toy-context-harness.js --mutate` printed a full
-// passing run and exited 0, having mutated nothing. noFlags(), not
-// mutationMode() -- the latter would accept --mutate and print green for a
-// mode that does not exist.
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
 
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+// The first is the defect the head of this file names. Against the checks
+// this file had, SEVEN OF ELEVEN were caught -- measured. Section 3 is
+// headed "two edges on one wall" and its L is six separate walls, so no wall
+// in it ever carried two edges; nothing held a room under the area floor; and
+// every fixture listed its walls in drawing order, which is the only order in
+// which a host search that ignores direction still happens to pick right.
+// Section 7 is what three of those four asked for.
+//
+// ── ONE ROW IS NOT HERE, AND IT WAS TRIED ─────────────────────────────────
+// When one wall hosts two edges, the sign comes from the LONGER one:
+// `if (runFt > prior.longest) { ... prior.sign = ... }`. Made `if (false)` it
+// SURVIVED, and no fixture could be found to kill it: 48 spur-and-branch
+// cases and 4000 random interior walls, all identical. The rule only decides
+// anything when two edges of ONE straight wall run OPPOSITE ways at DIFFERENT
+// lengths; a spur's two faces run opposite ways at the same length, so the
+// first already is the longest. Not shown unreachable -- not found. It is
+// recorded here rather than tabled, because a row that cannot go red reads as
+// a kill it never made.
+const MUTATIONS = [
+  ['A SIGN BACKWARDS: the toy refuses the safe way and permits the illegal one', 'toy-context.js',
+    c => c.replace('seen.set(host.id, { wallId: host.id, dim: dimOf(wall),\n          sign: along > 0 ? -1 : 1,',
+      'seen.set(host.id, { wallId: host.id, dim: dimOf(wall),\n          sign: along > 0 ? 1 : -1,')],
+  ['an east-west wall is said to move the width', 'toy-context.js',
+    c => c.replace(">= Math.abs(wall.end.z - wall.start.z) ? 'depth' : 'width');",
+      ">= Math.abs(wall.end.z - wall.start.z) ? 'width' : 'depth');")],
+  ['the area keeps the walls\' own thickness', 'toy-context.js',
+    c => c.replace('      inside -= Math.hypot(seg.end.x - seg.start.x, seg.end.z - seg.start.z) * seg.halfFt;\n', '')],
+  ['the corner squares are not given back', 'toy-context.js',
+    c => c.replace('    inside += pts.length * halfAvg * halfAvg;\n', '')],
+  ['a wall\'s second edge does not add to its run', 'toy-context.js',
+    c => c.replace('        prior.runFt += runFt;\n', '')],
+  ['a sliver of a loop is counted as a room', 'toy-context.js',
+    c => c.replace('.filter(room => room && room.insideSqFt >= floor);', '.filter(room => room);')],
+  ['an opening on a wall that is not here is carried anyway', 'toy-context.js',
+    c => c.replace('      })).filter(opening => byId.has(opening.wallId)),', '      })),')],
+  ['MODEL\'s offset never arrives as offsetFt', 'toy-context.js',
+    c => c.replace('offsetFt: opening.offsetFt !== undefined ? opening.offsetFt : opening.offset,',
+      'offsetFt: opening.offsetFt,')],
+  ['a wall across the edge is taken for the wall along it', 'toy-context.js',
+    c => c.replace('      if (cross > PARALLEL_TOL) return;\n', '')],
+  ['the least dimension is the longer side', 'toy-context.js',
+    c => c.replace('minDimensionFt: Math.min(clearWidthFt, clearDepthFt),', 'minDimensionFt: Math.max(clearWidthFt, clearDepthFt),')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('toy-context',
+    MUTATIONS, { root: ROOT, harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
 global.window = {};
 ['wall-types.js', 'room-standards.js', 'geometry-2d.js', 'areas.js',
   'toy-constraints.js', 'toy-context.js']
@@ -285,6 +331,36 @@ const boundOn = (room, wallId) => room.bounds.find(b => b.wallId === wallId);
       && near(ctx.openings[0].widthFt, 3), JSON.stringify(ctx.openings));
   check('an opening on a wall that is not here is dropped, not carried',
     !ctx.openings.some(o => o.id === 'ghost'));
+}
+
+// ── 7 · WHAT THE FIXTURES ABOVE NEVER HELD (1 Oct) ────────────────────────
+{
+  const shell = [wall('N', 0, 0, 20, 0), wall('E', 20, 0, 20, 14),
+    wall('S', 20, 14, 0, 14), wall('W', 0, 14, 0, 0)];
+  // TWO EDGES ON ONE WALL, for real. A wall teeing into the north wall from
+  // OUTSIDE splits the room's north edge at the junction, and both pieces are
+  // hosted by the same wall -- whose run is their sum, not the first piece.
+  const teed = C.gather({ walls: [...shell, wall('STUB', 6, 0, 6, -6)] });
+  check('the tee really does split the north edge', teed.rooms[0].points.length === 5,
+    `${teed.rooms[0].points.length} points`);
+  check('and the north wall still contributes its whole 20ft',
+    boundOn(teed.rooms[0], 'N').runFt === 20, JSON.stringify(boundOn(teed.rooms[0], 'N')));
+
+  // A loop under the area floor is a gap between studs, not a room.
+  const closet = C.gather({ walls: [...shell, wall('C1', 0, 3, 3, 3), wall('C2', 3, 3, 3, 0)] });
+  check('a 3ft square pocket is not a room', closet.rooms.length === 1,
+    `${closet.rooms.length} rooms: ${closet.rooms.map(r => Math.round(r.insideSqFt)).join(', ')} sq ft`);
+
+  // THE BOUNDS DO NOT DEPEND ON THE ORDER THE WALLS WERE DRAWN. The L's notch
+  // wall lines up with the midpoint of its north edge; listed first, a host
+  // search that ignored direction handed it the north and west walls' runs.
+  const L = [wall('N', 0, 0, 20, 0), wall('E', 20, 0, 20, 10), wall('MIDS', 20, 10, 10, 10),
+    wall('MIDE', 10, 10, 10, 20), wall('S', 10, 20, 0, 20), wall('W', 0, 20, 0, 0)];
+  const key = walls => C.gather({ walls }).rooms[0].bounds
+    .map(b => `${b.wallId}:${b.dim}:${b.sign}:${b.runFt}`).sort().join(' ');
+  check('an L drawn notch-first has the same bounds as one drawn in order',
+    key([L[3], ...L.filter((_, i) => i !== 3)]) === key(L),
+    `${key([L[3], ...L.filter((_, i) => i !== 3)])}\n      vs ${key(L)}`);
 }
 
 // ── Report ───────────────────────────────────────────────────────────────

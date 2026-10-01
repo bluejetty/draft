@@ -17,12 +17,12 @@ const vm = require('vm');
 const env = require('./harness-env.js');
 
 const ROOT = path.join(__dirname, '..');
-const MUTATE = process.argv.slice(2).includes('--mutate');
-const ARGS = process.argv.slice(2).filter(a => a !== '--mutate');
-if (ARGS.length) {
-  console.error(`cut-view-warnings-harness: takes no arguments (got ${ARGS.join(' ')})`);
-  process.exit(2);
-}
+// THROUGH harness-args.js, NOT ARGV READ BY HAND (1 Oct). This file had a
+// working table, 5/5, from the day it was written -- and CI never ran it,
+// because the engines step finds an engine by its mutationMode() call and
+// this one parsed --mutate itself. The workflow's own comment names that
+// exact trap for seven other harnesses; this was the eighth.
+const MUTATE = require('./harness-args.js').mutationMode();
 
 const BASE = ['formatters.js', 'wall-types.js', 'geometry-2d.js', 'drawing-format.js',
   'room-standards.js', 'level-assembly.js', 'cut-marks.js', 'render-2d.js'];
@@ -148,7 +148,26 @@ const MUTATIONS = [
     c => c.replace('!bh && !warnedNoFootings', 'false && !warnedNoFootings')],
   ['roof-pattern warning repeats per roof', 'cut-view.js',
     c => c.replace('warnedNoRoofPatterns = true;', 'warnedNoRoofPatterns = false;')],
+  // 1 Oct: the other two halves of the class, for the cases above that had
+  // only one. Each of the three is checked for being said, saying what is
+  // lost, and being said once.
+  ['build-house warning names the file and describes the wrong loss', 'cut-view.js',
+    c => c.replace(`+ 'footing is drawn at the 12" fallback rather than its own size.');`,
+      `+ 'is drawn at the 12" fallback rather than its own size.');`)],
+  ['build-house warning repeats per pile', 'cut-view.js',
+    c => c.replace('warnedNoFootings = true;', 'warnedNoFootings = false;')],
+  ['roof-pattern warning deleted', 'cut-view.js',
+    c => c.replace('        if (!warnedNoRoofPatterns) {', '        if (false) {')],
 ];
+
+// A RUN THAT IS ALREADY RED KILLS EVERY ROW, and this loop scores a row by
+// whether failures went up -- so a clean run that fails would read 100%
+// while measuring nothing. It is run once unbent first.
+run();
+if (failures) {
+  console.log(`cut-view-warnings-harness: REFUSED -- ${failures} check(s) fail with nothing mutated`);
+  process.exit(1);
+}
 
 let caught = 0;
 for (const [name, , edit] of MUTATIONS) {

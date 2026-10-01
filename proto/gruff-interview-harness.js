@@ -3,12 +3,52 @@
 //
 //   node proto/gruff-interview-harness.js
 
-// No mutation mode here, so this harness accepts no arguments at all. It
-// used to read none: `node gruff-interview-harness.js --mutate` printed a full
-// passing run and exited 0, having mutated nothing. noFlags(), not
-// mutationMode() -- the latter would accept --mutate and print green for a
-// mode that does not exist.
-require('./harness-args.js').noFlags();
+const path = require('path');
+const MUTATE = require('./harness-args.js').mutationMode();
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+// Against the checks this file had, EIGHT OF TWELVE were caught -- measured.
+// All four survivors were in the parsers, which were checked on the answers
+// that parse cleanly and never on the ones where two rules disagree: a minus
+// sign, a "please" in front of a "don't", stairs at the front of the house,
+// and a choice said in a sentence. The four parser checks marked "1 Oct" are
+// what they asked for.
+const MUTATIONS = [
+  ['a drawn level stack still asks how many floors', 'gruff-interview.js',
+    c => c.replace('      skipWhen: facts => Number.isFinite(facts.storeys),', '      skipWhen: facts => false,')],
+  ['a placed door still asks which side it is on', 'gruff-interview.js',
+    c => c.replace('      skipWhen: facts => ZONES.includes(facts.entrySide),', '      skipWhen: facts => false,')],
+  ['a count on file is asked cold instead of confirmed', 'gruff-interview.js',
+    c => c.replace("const prompt = settled != null && typeof q.confirm === 'function'", "const prompt = false && typeof q.confirm === 'function'")],
+  ['the bone is mentioned every question', 'gruff-interview.js',
+    c => c.replace('const REMINDER_EVERY = 4;', 'const REMINDER_EVERY = 1;')],
+  ['the reminder rides the very first question', 'gruff-interview.js',
+    c => c.replace('    if (asked > 0 && asked % REMINDER_EVERY === 0) {', '    if (asked % REMINDER_EVERY === 0) {')],
+  ['a nonsense answer is written down anyway', 'gruff-interview.js',
+    c => c.replace('    if (parsed == null) {\n      return Object.freeze({', '    if (false) {\n      return Object.freeze({')],
+  ['a re-ask loses its good-natured line', 'gruff-interview.js',
+    c => c.replace('prompt: retried ? `${pick(RE_ASKS, state.seed + asked)} ${prompt}` : prompt,', 'prompt,')],
+  ['"minus two bedrooms" is taken at its word', 'gruff-interview.js',
+    c => c.replace('if (digits) return Math.max(0, parseInt(digits[0], 10));', 'if (digits) return parseInt(digits[0], 10);')],
+  ['"a couple" is read as one, because "a" is tried first', 'gruff-interview.js',
+    c => c.replace('const words = Object.entries(WORD_NUMBERS).sort((x, y) => y[0].length - x[0].length);',
+      'const words = Object.entries(WORD_NUMBERS);')],
+  ['"please don\'t" is read as a yes', 'gruff-interview.js',
+    c => c.replace('    if (NO.test(s)) return false;\n    if (YES.test(s)) return true;', '    if (YES.test(s)) return true;\n    if (NO.test(s)) return false;')],
+  ['"by the front stairs" is read as the front: the street words are tried first', 'gruff-interview.js',
+    c => c.replace("    if (/\\bstair|\\bstairs\\b|by the stairs|near the stairs/.test(s)) return 'by the stairs';\n"
+      + "    if (/\\bfront\\b|\\bstreet\\b|\\bforward\\b|\\bfacing\\b/.test(s)) return 'front';\n",
+      "    if (/\\bfront\\b|\\bstreet\\b|\\bforward\\b|\\bfacing\\b/.test(s)) return 'front';\n"
+      + "    if (/\\bstair|\\bstairs\\b|by the stairs|near the stairs/.test(s)) return 'by the stairs';\n")],
+  ['a choice must be typed exactly', 'gruff-interview.js',
+    c => c.replace('    return loose || null;', '    return null;')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('gruff-interview',
+    MUTATIONS, { root: path.join(__dirname, '..'), harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
 
 global.window = global.window || {};
 require('../gruff-interview.js');
@@ -232,6 +272,12 @@ const walk = (state, steps, reply = canned) => {
   eq('no in any dress', G.parseYesNo('nah'), false);
   eq('a zone said sideways', G.parseZone('out front please'), 'front');
   eq('and the stairs by name', G.parseZone('near the stairs'), 'by the stairs');
+  // 1 Oct: WHERE TWO RULES DISAGREE, which is where a parser is actually wrong.
+  eq('a minus sign is not a negative count', G.parseCount('-2'), 0);
+  eq('a refusal wins over the politeness in front of it', G.parseYesNo("please don't"), false);
+  eq('stairs at the front are by the stairs, not the front', G.parseZone('by the front stairs'), 'by the stairs');
+  eq('a choice said in a sentence is still that choice',
+    G.parseAnswer({ kind: 'choice', options: ['standard', 'generous'] }, 'generous ones please'), 'generous');
   eq('gibberish parses to nothing', G.parseCount('asdf'), null);
 }
 {
