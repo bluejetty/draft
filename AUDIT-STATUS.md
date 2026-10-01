@@ -16,10 +16,10 @@ Legend: ✅ fixed · 🟡 partly fixed · ❌ open · ⚪ left as is on purpose 
 
 | file | ✅ | 🟡 | ❌ | ⚪ |
 |---|---|---|---|---|
-| AUDIT-CRITICAL (16) | 9 | 4 | 2 | 1 |
+| AUDIT-CRITICAL (16) | 10 | 4 | 1 | 1 |
 | AUDIT-FULL (numbered findings) | 25 | 8 | 6 | 1 |
 | AUDIT-PERF (actionable items) | 3 | 2 | 2 | — |
-| AUDIT-QUESTIONS (17) | 13 answered | | 4 unanswered | |
+| AUDIT-QUESTIONS (17) | 15 answered | | 2 unanswered | |
 
 ## AUDIT-CRITICAL
 
@@ -33,7 +33,7 @@ Legend: ✅ fixed · 🟡 partly fixed · ❌ open · ⚪ left as is on purpose 
 | C6 | rounding drops the roof from sections | ✅ | — repros r20–r25 pass | |
 | M1 | overlay drawn at 1× | ⚪ | ruled deliberate (Q6) | |
 | M2 | Google Fonts blocks startup | ✅ | — fonts self-hosted | |
-| M3 | a placed viewport's scale can't change | ❌❓ | needs Q4 | S |
+| M3 | a placed viewport's scale can't change | ✅ | ruled (Q4): a pick rescales the selected viewport, undoably; the readout names its scale | |
 | M4 | `num()` turns null into 0 | ✅ | — repro r7 passes | |
 | M5 | deleting a level orphans its things | ✅ | — repro r6 passes | |
 | M6 | `offsetOutline` breaks on spikes and duplicate points | ❌❓ | still loses the overhang at a duplicated corner; spike/bowtie policy unruled | M |
@@ -98,8 +98,6 @@ Legend: ✅ fixed · 🟡 partly fixed · ❌ open · ⚪ left as is on purpose 
 
 | Q | plain question |
 |---|---|
-| Q4 | Once a drawing is placed on a sheet, should you be able to change its scale? |
-| Q7 | When sheets print, sharp vector lines or a high-resolution picture of the screen? |
 | Q10 | Should the guided tour start by itself? (it's parked off today) |
 | Q13 | Should a new user start with only 3 free bones, then one an hour? |
 | 8.1 | Keep the GoatCounter visit counter, make it opt-in, or remove it? |

@@ -144,16 +144,16 @@ test('the flag deals plans, the section, and E1-E4 onto sheets', async ({ page }
   expect(elev('E1').pif).toBe(elev('E2').pif);
   expect(elev('E3').pif).toBe(elev('E4').pif);
 
-  // Movie's set order (board NEW-2 part 2): the ELEVATIONS lead the set, then
-  // the plans, then the sections. This reverses what the composer did before
-  // -- it dealt plans bottom-up first and the elevations last -- and that
-  // reversal is the point of the board, not a regression.
+  // Movie's set order (1 Oct): SITE PLAN is sheet 1 and has no painter yet,
+  // so the ELEVATIONS are the first ink, on sheet 2; the plans and sections
+  // follow them.
   const elevSheets = kinds('elevation').map(viewport => viewport.sheet);
   [...kinds('plan'), ...kinds('section')].forEach(viewport => {
     expect(viewport.sheet).toBeGreaterThan(Math.max(...elevSheets));
   });
-  expect(Math.min(...elevSheets)).toBe(1);
-  expect(layout.viewports.some(viewport => viewport.sheet === 1)).toBe(true);
+  expect(Math.min(...elevSheets)).toBe(2);
+  expect(layout.sheets[0].title).toBe('SITE PLAN');
+  expect(layout.viewports.some(viewport => viewport.sheet === 1)).toBe(false);
 });
 
 test('the dealt sheets carry real ink: plan, section, and elevation pages', async ({ page }) => {
@@ -172,9 +172,11 @@ test('a manual touch takes the sheets over, and a reload leaves them alone', asy
   await openLayout(page, boneDrawing());
   await waitForCompose(page);
   const dealt = await savedLayout(page);
-  const target = dealt.viewports.find(viewport => viewport.sheet === 1);
+  // The first sheet with ink on it -- SITE PLAN, sheet 1, has none yet.
+  const target = dealt.viewports.find(viewport => viewport.sheet === 2);
+  await page.locator('[data-layout-sheet="2"]').click();
 
-  // Drag the first sheet's viewport a little: the flag comes off.
+  // Drag that sheet's viewport a little: the flag comes off.
   const m = await sheetMetrics(page);
   const from = {
     x: m.box.x + m.panX + target.xIn * m.zoom,
@@ -276,7 +278,7 @@ const sheetOf = (layout, match) => {
   return vp ? vp.sheet : null;
 };
 
-test("the set deals in Movie's order, elevations first and the basement last", async ({ page }) => {
+test("the set deals in Movie's order, under his names", async ({ page }) => {
   await openLayout(page, twoStorey());
   await waitForCompose(page);
   const layout = await savedLayout(page);
@@ -289,16 +291,26 @@ test("the set deals in Movie's order, elevations first and the basement last", a
   const sect = sheetOf(layout, v => v.kind === 'section');
   const bsmt = sheetOf(layout, v => v.kind === 'plan' && v.levelId === 1 && v.view === 'plan');
 
-  // Sheets 1-2 elevations; then floors top down; FOUNDATION; sections; the
-  // basement plan last. Sheets 3, 4, 6, 8 and 14 of Movie's list are absent
-  // on purpose -- SITE and ROOF have no painter, and the floor-layout and
-  // electrical sheets have no entities in the drawing format to paint.
-  expect(e1).toBe(1);
-  expect(e3).toBe(2);
-  expect(second).toBeLessThan(main);
-  expect(main).toBeLessThan(fdn);
-  expect(fdn).toBeLessThan(sect);
-  expect(sect).toBeLessThan(bsmt);
+  // Movie, 1 Oct: SITE PLAN, ELEVATIONS (as many as needed), ROOF PLAN,
+  // 2ND FL PLAN, 2ND FLOOR, MAIN FL PLAN, MAIN FLOOR, FOUNDATION, SECTIONS,
+  // ELECTRIC PLAN. The sheets with no painter yet are dealt by name with
+  // nothing on them; the basement plan goes after the sections, just before
+  // ELECTRIC.
+  expect(layout.sheets.map(sheet => sheet.title)).toEqual([
+    'SITE PLAN', 'ELEVATIONS', 'ELEVATIONS', 'ROOF PLAN',
+    '2ND FL PLAN', '2ND FLOOR', 'MAIN FL PLAN', 'MAIN FLOOR',
+    'FOUNDATION', 'SECTIONS', 'BASEMENT PLAN', 'ELECTRIC PLAN',
+  ]);
+  expect(e1).toBe(2);
+  expect(e3).toBe(3);
+  expect(second).toBe(5);
+  expect(main).toBe(7);
+  expect(fdn).toBe(9);
+  expect(sect).toBe(10);
+  expect(bsmt).toBe(11);
+  // The named sheets with no painter carry nothing.
+  [1, 4, 6, 8, 12].forEach(sheet =>
+    expect(layout.viewports.some(v => v.sheet === sheet), `sheet ${sheet}`).toBe(false));
 });
 
 test('FOUNDATION and the basement plan are two sheets off one level', async ({ page }) => {
@@ -432,10 +444,13 @@ test('a bungalow deals the same order minus the 2ND FL sheet', async ({ page }) 
   await openLayout(page, d);
   await waitForCompose(page);
   const layout = await savedLayout(page);
-  // Never deal a blank sheet: no 2ND FL walls, no 2ND FL sheet.
+  // No 2ND FL walls, so neither 2ND FL sheet: that pair is not waiting on a
+  // painter, it is not part of this house.
   expect(layout.viewports.some(v => v.levelId === 5)).toBe(false);
-  expect(sheetOf(layout, v => v.elevId === 'E1')).toBe(1);
-  expect(sheetOf(layout, v => v.kind === 'plan' && v.levelId === 3)).toBeGreaterThan(2);
+  expect(layout.sheets.map(sheet => sheet.title)).not.toContain('2ND FL PLAN');
+  expect(layout.sheets.map(sheet => sheet.title)).not.toContain('2ND FLOOR');
+  expect(sheetOf(layout, v => v.elevId === 'E1')).toBe(2);
+  expect(sheetOf(layout, v => v.kind === 'plan' && v.levelId === 3)).toBe(5);
 });
 
 test('a level with nothing on a view deals no sheet for it', async ({ page }) => {
@@ -501,8 +516,9 @@ test('DEAL SHEETS deals the set on a drawing the flag was never set on', async (
   layout.viewports.forEach(v => {
     (bySheet[v.sheet || 1] = bySheet[v.sheet || 1] || []).push(v.kind);
   });
-  expect(bySheet[1]).toEqual(['elevation', 'elevation']);
+  expect(bySheet[1]).toBeUndefined();                    // SITE PLAN, no painter yet
   expect(bySheet[2]).toEqual(['elevation', 'elevation']);
+  expect(bySheet[3]).toEqual(['elevation', 'elevation']);
   expect(Object.keys(bySheet).length).toBeGreaterThan(2);
   await expect(page.locator('[data-layout-sheet]')).not.toHaveCount(1);
 
@@ -565,4 +581,123 @@ test('an empty sheet is dealt without asking', async ({ page }) => {
   await page.locator('[data-layout-deal-sheets]').click();
   await waitForCompose(page);
   expect((await savedLayout(page)).auto).toBe(true);
+});
+
+// ── THE NAMED SET, KEPT ─────────────────────────────────────────────────────
+//
+// The set's names live in `layout.sheets`, and that key passes through
+// MODEL's reader too -- a name this page wrote and the next MODEL save threw
+// away would come back as a worked-out title, and a named EMPTY sheet would
+// come back as no sheet at all.
+test('the named sheets survive a reload, an undo and a hand on the set', async ({ page }) => {
+  await openLayout(page, twoStorey());
+  await waitForCompose(page);
+  const dealt = await savedLayout(page);
+  expect(dealt.sheets).toHaveLength(12);
+
+  await page.reload();
+  await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
+  await expect(page.locator('[data-layout-sheet]')).toHaveCount(12);
+  expect((await savedLayout(page)).sheets).toEqual(dealt.sheets);
+
+  // + SHEET makes a thirteenth that stays, and takes the set off the composer.
+  const seq = await page.evaluate(() => Number(document.body.dataset.layoutSaveSeq || 0));
+  await page.locator('[data-layout-add-sheet]').click();
+  await page.waitForFunction(p => Number(document.body.dataset.layoutSaveSeq || 0) > p, seq);
+  const added = await savedLayout(page);
+  expect(added.sheets).toHaveLength(13);
+  expect(added.auto).toBe(false);
+  await expect(page.locator('[data-layout-sheet]')).toHaveCount(13);
+
+  // Undo takes it back, and the page is not left on a sheet that is gone.
+  await page.locator('[data-undo]').click();
+  await expect(page.locator('[data-layout-sheet]')).toHaveCount(12);
+  await expect(page.locator('[data-layout-sheet="12"]')).toHaveClass(/\bon\b/);
+});
+
+// ── THE SHEET RAIL ──────────────────────────────────────────────────────────
+//
+// Movie, 1 Oct: the set down the right side as "a mini view layout of each",
+// two columns, "small so we don't need to scroll".
+for (const viewport of [{ width: 1366, height: 768 }, { width: 1024, height: 768 }]) {
+  test(`the rail shows every sheet without a scroll at ${viewport.width}x${viewport.height}`,
+    async ({ page }) => {
+      await page.setViewportSize(viewport);
+      await openLayout(page, twoStorey());
+      await waitForCompose(page);
+      const rail = page.locator('[data-sheet-rail]');
+      const thumbs = rail.locator('[data-sheet-thumb]');
+      await expect(thumbs).toHaveCount(12);
+      await expect(thumbs.nth(0)).toHaveAttribute('title', '1 SITE PLAN');
+      await expect(thumbs.nth(11)).toHaveAttribute('title', '12 ELECTRIC PLAN');
+
+      const railBox = await rail.boundingBox();
+      const canvasBox = await page.locator('[data-layout-canvas]').boundingBox();
+      expect(railBox.x, 'the rail stands beside the sheet, not on it')
+        .toBeGreaterThanOrEqual(canvasBox.x + canvasBox.width - 1);
+      expect(await rail.evaluate(el => el.scrollHeight <= el.clientHeight),
+        'the whole set fits without a scroll').toBe(true);
+      // Two columns: the first two thumbnails share a row.
+      const [a, b] = [await thumbs.nth(0).boundingBox(), await thumbs.nth(1).boundingBox()];
+      expect(Math.abs(a.y - b.y)).toBeLessThan(2);
+      expect(b.x).toBeGreaterThan(a.x);
+    });
+}
+
+test('a thumbnail takes the desk to its sheet, and only a changed sheet repaints', async ({ page }) => {
+  await openLayout(page, twoStorey());
+  await waitForCompose(page);
+  const thumbs = page.locator('[data-sheet-thumb]');
+  await page.waitForFunction(() => Number(document.body.dataset.thumbPaints || 0) >= 12);
+
+  await thumbs.nth(6).click();
+  await expect(thumbs.nth(6)).toHaveClass(/\bon\b/);
+  await expect(thumbs.nth(6)).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('[data-layout-sheet="7"]')).toHaveClass(/\bon\b/);
+
+  // Going to a sheet changes no sheet, so nothing repaints.
+  await page.waitForTimeout(300);
+  const before = await page.evaluate(() => Number(document.body.dataset.thumbPaints));
+  await thumbs.nth(1).click();
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(() => Number(document.body.dataset.thumbPaints))).toBe(before);
+});
+
+// ── THE SCALE OF A PLACED VIEWPORT (audit M3) ──────────────────────────────
+//
+// Ruled 1 Oct: "the user needs to be able to change the scale in case it
+// isn't placed how they like it". A pick used to set the NEXT placement's
+// scale and nothing else, while the readout reported it as if it had moved
+// the viewport on the sheet.
+test('picking a scale rescales the selected viewport, and undo puts it back', async ({ page }) => {
+  await openLayout(page, twoStorey());
+  await waitForCompose(page);
+  const dealt = await savedLayout(page);
+  const target = dealt.viewports.find(v => v.kind === 'plan' && v.levelId === 3);
+  await page.locator(`[data-layout-sheet="${target.sheet}"]`).click();
+
+  const m = await sheetMetrics(page);
+  await page.mouse.click(m.box.x + m.panX + target.xIn * m.zoom, m.box.y + m.panY + target.yIn * m.zoom);
+  await expect(page.locator('[data-delete-viewport]')).toBeVisible();
+
+  const pick = SCALE_LADDER.find(pif => pif < target.pif);
+  const label = await page.evaluate(pif => SCALES.find(s => s.pif === pif).label, pick);
+  const seq = await page.evaluate(() => Number(document.body.dataset.layoutSaveSeq || 0));
+  await page.locator('[data-scale-list] button', { hasText: label }).first().click();
+  await page.waitForFunction(p => Number(document.body.dataset.layoutSaveSeq || 0) > p, seq);
+
+  const after = await savedLayout(page);
+  const moved = after.viewports.find(v => v.id === target.id);
+  expect(moved.pif).toBe(pick);
+  expect(moved.xIn).toBeCloseTo(target.xIn, 6);
+  expect(moved.yIn).toBeCloseTo(target.yIn, 6);
+  expect(after.auto).toBe(false);
+  // Every other viewport is exactly as it was.
+  expect(after.viewports.filter(v => v.id !== target.id))
+    .toEqual(dealt.viewports.filter(v => v.id !== target.id));
+  await expect(page.locator('[data-sheet-readout]')).toContainText(label);
+
+  await page.locator('[data-undo]').click();
+  await page.waitForTimeout(300);
+  expect((await savedLayout(page)).viewports.find(v => v.id === target.id).pif).toBe(target.pif);
 });

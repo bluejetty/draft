@@ -136,6 +136,7 @@ test.describe('the saved format', () => {
         paperKey: '11x17', orientation: 'landscape', titleblock: 'bluejetty-band',
         northArrow: false, auto: true, nextViewportId: 2,
         viewports: [{ id: 1, kind: 'plan', pif: 1 / 8, xIn: 4, yIn: 3, sheet: 1, levelId }],
+        sheets: [{ title: 'SITE PLAN' }, { title: 'ELECTRIC PLAN' }],
       };
       const file = new File([JSON.stringify(drawing)], 'model-drawing.json',
         { type: 'application/json' });
@@ -183,6 +184,10 @@ test.describe('the saved format', () => {
     // clears; it has to survive the round trip or the composer re-deals a
     // hand-arranged sheet.
     expect(after.layout.auto).toBe(true);
+    // AND THE SET'S NAMES (1 Oct), which are the only record that a sheet with
+    // nothing on it yet exists at all: drawing-format's reader is what MODEL
+    // writes back, so a reader that dropped `sheets` would erase them here.
+    expect(after.layout.sheets).toEqual([{ title: 'SITE PLAN' }, { title: 'ELECTRIC PLAN' }]);
   });
 
   // W0 FINDING C. `specs` is `layout`'s twin and had no test of any kind.

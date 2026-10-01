@@ -85,7 +85,7 @@ const MUTANTS = [
     // for lives in the page anyway.
     name: 'THE SHEET LIST IS ONE SHEET LONG whatever the record says, so four '
       + 'sheets of a five-sheet set cannot be reached at all',
-    find: '    return Math.max(1, ...this.state.viewports.map(viewport => viewport.sheet || 1));',
+    find: '    return Math.max(1, this.state.sheets.length, ...this.state.viewports.map(viewport => viewport.sheet || 1));',
     with: '    return 1;',
     test: 'the sheet set opens on the sheets it was left on' },
 ];
