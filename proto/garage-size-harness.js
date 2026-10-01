@@ -11,13 +11,45 @@
 //   node proto/garage-size-harness.js
 //
 // Exit 0 = every check passed.
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
 
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+// Against the checks this file had, SIX OF EIGHT were caught -- measured.
+// Both survivors were the default, which nothing here asked for: the size
+// every detached garage now gets, since the board stopped asking (Movie,
+// 24 Sep). The check under THE DEFAULT is what they asked for.
+const MUTATIONS = [
+  ['16x24 turned round: 24 across the door wall', 'build-menu.js',
+    c => c.replace("{ id: '16x24', label: \"16' x 24'\", widthFt: 16, depthFt: 24 }",
+      "{ id: '16x24', label: \"16' x 24'\", widthFt: 24, depthFt: 16 }")],
+  ['the minimum drops to nothing, so a blank field is a garage', 'build-menu.js',
+    c => c.replace('const GARAGE_SIZE_MIN_FT = 8;', 'const GARAGE_SIZE_MIN_FT = 0;')],
+  ['the bounds go exclusive, so the smallest offered garage is refused', 'build-menu.js',
+    c => c.replace('&& value >= GARAGE_SIZE_MIN_FT && value <= GARAGE_SIZE_MAX_FT;',
+      '&& value > GARAGE_SIZE_MIN_FT && value < GARAGE_SIZE_MAX_FT;')],
+  ['only the width is checked', 'build-menu.js',
+    c => c.replace('if (!sane(w) || !sane(d)) return null;', 'if (!sane(w)) return null;')],
+  ['a typed size names itself back to front', 'build-menu.js',
+    c => c.replace("id: 'custom', label: `${w}' x ${d}'`,", "id: 'custom', label: `${d}' x ${w}'`,")],
+  ['the default garage is a size Movie did not pick', 'build-menu.js',
+    c => c.replace("const GARAGE_DEFAULT_SIZE_ID = '24x26';", "const GARAGE_DEFAULT_SIZE_ID = '25x25';")],
+  ['the default names a size the shelf has not got', 'build-menu.js',
+    c => c.replace("const GARAGE_DEFAULT_SIZE_ID = '24x26';", "const GARAGE_DEFAULT_SIZE_ID = '24x24';")],
+  ['a frost-wall garage stops asking how big', 'build-menu.js',
+    c => c.replace("foundation: 'frostwall', needsSize: true }", "foundation: 'frostwall' }")],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('garage-size',
+    MUTATIONS, { root: ROOT, harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
 const win = {};
 const sandbox = { window: win, console, Object, Array, String, Number, JSON };
 sandbox.globalThis = sandbox;
@@ -85,6 +117,16 @@ check('and a shop-sized one over the maximum',
 check('the bounds are inclusive at both ends',
   !!BM.customGarageSize(BM.GARAGE_SIZE_MIN_FT, BM.GARAGE_SIZE_MAX_FT),
   JSON.stringify(BM.customGarageSize(BM.GARAGE_SIZE_MIN_FT, BM.GARAGE_SIZE_MAX_FT)));
+
+// ── THE DEFAULT ──────────────────────────────────────────────────────────
+// Movie, 24 Sep: "default size could be 24x26 if that size is done already".
+// It is the one every detached garage gets while the board does not ask, and
+// it is read off the shelf, so a default naming a size the shelf has not got
+// answers null rather than building a box no list agrees exists.
+check('the default garage is 24x26, off the shelf',
+  BM.garageDefaultSize()?.id === '24x26'
+  && BM.garageDefaultSize() === BM.garageSizeById('24x26'),
+  JSON.stringify(BM.garageDefaultSize()));
 
 // ── WHO ASKS THE QUESTION ────────────────────────────────────────────────
 // A HOUSE'S SIZE ARRIVES WITH ITS PREMADE DESIGN; a garage is a box, so

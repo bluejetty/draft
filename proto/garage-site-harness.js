@@ -10,13 +10,45 @@
 //   node proto/garage-site-harness.js
 //
 // Exit 0 = every check passed.
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
 
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
 const ROOT = path.join(__dirname, '..');
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+// Against the checks this file had, SIX OF EIGHT were caught -- measured.
+// The empty-sheet garage was checked for centring ACROSS and not BACK, and
+// no drawing here had a wall with a missing end; the two checks marked
+// "1 Oct" below are what those survivors asked for.
+const MUTATIONS = [
+  ['no yard between the buildings', 'garage-site.js',
+    c => c.replace('const SETBACK_FT = 10;', 'const SETBACK_FT = 0;')],
+  ['walls are not counted, so a drafted house is walked through', 'garage-site.js',
+    c => c.replace('      .forEach(wall => { take(wall.start); take(wall.end); });', '      ;')],
+  ['every level crowds every other', 'garage-site.js',
+    c => c.replace('const onLevel = thing => Number(thing?.levelId) === Number(levelId);',
+      'const onLevel = thing => true;')],
+  ['the garage is laid out 24 across by 16 back', 'garage-site.js',
+    c => c.replace('      { x: leftX + w, z: frontZ - d },\n      { x: leftX + w, z: frontZ },',
+      '      { x: leftX + d, z: frontZ - w },\n      { x: leftX + d, z: frontZ },')],
+  ['the door wall lines up with the back of the house', 'garage-site.js',
+    c => c.replace('const frontZ = standing ? standing.maxZ : d / 2;', 'const frontZ = standing ? standing.minZ : d / 2;')],
+  ['on an empty sheet the garage hangs off the middle line', 'garage-site.js',
+    c => c.replace('const frontZ = standing ? standing.maxZ : d / 2;', 'const frontZ = standing ? standing.maxZ : 0;')],
+  ['a zero width is a size', 'garage-site.js',
+    c => c.replace('|| w <= 0 || d <= 0) return null;', '|| w < 0 || d <= 0) return null;')],
+  ['a wall with a missing end poisons the house box', 'garage-site.js',
+    c => c.replace('      if (!Number.isFinite(pt?.x) || !Number.isFinite(pt?.z)) return;\n', '')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('garage-site',
+    MUTATIONS, { root: ROOT, harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
 const win = {};
 const sandbox = { window: win, console, Object, Array, String, Number, JSON, Math };
 sandbox.globalThis = sandbox;
@@ -65,6 +97,11 @@ check('the loop is four corners, not a closed five',
 check('on an empty level the garage is centred across the sheet',
   Math.abs(box(empty).minX + box(empty).maxX) < 1e-9,
   JSON.stringify(box(empty)));
+// 1 Oct: AND BACK FROM IT. "Takes the middle" is both axes; checking only x
+// passed a garage hanging wholly behind the middle line.
+check('and centred front to back',
+  Math.abs(box(empty).minZ + box(empty).maxZ) < 1e-9,
+  JSON.stringify(box(empty)));
 
 // ── BESIDE THE HOUSE, NEVER THROUGH IT ───────────────────────────────────
 const beside = GS.plotFor(HOUSE, 1, size(24, 26));
@@ -89,6 +126,18 @@ const drafted = {
 check('a hand-drawn house with no bone is still something to stand beside',
   GS.plotFor(drafted, 1, size(16, 24))[0].x > 14,
   JSON.stringify(GS.plotFor(drafted, 1, size(16, 24))));
+
+// 1 Oct: A WALL WITH A MISSING END IS SKIPPED, NOT TRUSTED. A half-saved
+// wall is exactly what a drawing mid-edit holds, and one undefined corner in
+// Math.min makes the whole house box NaN -- which plots a garage at NaN.
+const halfWall = {
+  outlines: HOUSE.outlines,
+  walls: [{ levelId: 1, start: { x: 50, z: 0 }, end: null }],
+};
+check('a wall with a missing end does not poison the house box',
+  JSON.stringify(GS.occupied(halfWall, 1))
+    === JSON.stringify({ minX: -10, maxX: 50, minZ: -30, maxZ: 0 }),
+  JSON.stringify(GS.occupied(halfWall, 1)));
 
 // ── ANOTHER LEVEL IS NOT THIS LEVEL ──────────────────────────────────────
 // A garage on the foundation level is not crowded by the second storey; it

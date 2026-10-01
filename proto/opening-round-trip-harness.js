@@ -41,12 +41,36 @@
 // why nothing caught this.
 //
 //   node proto/opening-round-trip-harness.js
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
 
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+// The first is the 23 Sep defect itself. The fourth comes at it from the
+// other side -- the READER grows a field -- which is how it actually happened.
+const MUTATIONS = [
+  ['THE DEFECT: the dc page stops writing casement', 'MODEL.dc.html',
+    c => c.replace('        casement: opening.casement || null,\n', '')],
+  ['the dc page stops writing garage', 'MODEL.dc.html',
+    c => c.replace('        garage: opening.garage === true,\n', '')],
+  ['the dc block takes a spread, and the contract changes unannounced', 'MODEL.dc.html',
+    c => c.replace('      fenestrations: this._fenestrations.map(opening => ({\n',
+      '      fenestrations: this._fenestrations.map(opening => ({\n        ...opening,\n')],
+  ['the reader grows a field the dc writer does not know', 'drawing-format.js',
+    c => c.replace('        auto: opening?.auto === true,', '        auto: opening?.auto === true,\n        mark: null,')],
+  ['the dc serializer is restructured out from under the parse', 'MODEL.dc.html',
+    c => c.replace('      fenestrations: this._fenestrations.map(opening => ({',
+      '      fenestrations: this._fenestrations.map((opening) => ({')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('opening-round-trip',
+    MUTATIONS, { root: ROOT, harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
 global.window = global.window || {};
 require(path.join(ROOT, 'geometry-2d.js'));
 require(path.join(ROOT, 'drawing-format.js'));

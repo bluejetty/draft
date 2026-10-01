@@ -10,10 +10,37 @@
 // SHAPES, which are quicker to state as coordinates than to drive through a
 // canvas. The page-level checks assert that roofs get made; this asserts that
 // the right area was found.
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+// The first is the one the PIECE COUNT section below records running by hand;
+// it is in the table so it runs every time rather than once. Against the
+// checks this file had, FOUR OF FIVE were caught -- measured. The survivor
+// was the same blindness turned on its side: no fixture needed a rectangle
+// to grow ACROSS, so the case under "AND ACROSS" is what it asked for.
+const MUTATIONS = [
+  ['the rectangles stop growing downward', 'geometry-2d.js',
+    c => c.replace('        while (r2 + 1 < open.length\n          && open[r2 + 1].slice(c, c2 + 1).every(Boolean)) r2 += 1;\n', '')],
+  ['the rectangles stop growing across', 'geometry-2d.js',
+    c => c.replace('        while (c2 + 1 < open[r].length && open[r][c2 + 1]) c2 += 1;\n', '')],
+  ['the storey above is ignored, so every floor takes a whole roof', 'geometry-2d.js',
+    c => c.replace('return inside(lower, xMid, zMid) && !(cover && inside(cover, xMid, zMid));',
+      'return inside(lower, xMid, zMid);')],
+  ['a claimed cell is not cleared, so two roofs cover one strip', 'geometry-2d.js',
+    c => c.replace('          for (let cc = c; cc <= c2; cc += 1) open[rr][cc] = false;\n', '')],
+  ['the grid is cut on the floor\'s lines only, not the storey\'s', 'geometry-2d.js',
+    c => c.replace('const all = lower.map(pick).concat(cover ? cover.map(pick) : []);',
+      'const all = lower.map(pick);')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('uncovered',
+    MUTATIONS, { root: ROOT, harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
 global.window = {};
 ['geometry-2d.js'].forEach(file =>
   (0, eval)(fs.readFileSync(path.join(ROOT, file), 'utf8')));
@@ -129,6 +156,21 @@ const box = ring => [
   check('a storey alongside the floor leaves ONE roof, not one per band',
     out.length === 1, `got ${out.length} pieces`);
   check('and it is the whole strip', total(out) === 8, `got ${total(out)}`);
+}
+
+// ── AND ACROSS, the same blindness on its side (1 Oct) ─────────────────────
+//
+// The downward fixture above has a twin. A mutant that stopped the rectangles
+// growing ACROSS survived every check here, for the same reason: area and
+// non-overlap do not care how a region is cut up. Measured the same way --
+// over 4000 random pairs the partition differs in 690 -- and this is the
+// cleanest: a strip of floor with a storey off to one side, not touching it,
+// whose edges still cut the grid into three columns.
+{
+  const out = G.uncoveredRegions(R(1, 2, 4, 3), R(2, 10, 3, 19));
+  check('a storey off to one side leaves ONE roof, not one per column',
+    out.length === 1, `got ${out.length} pieces`);
+  check('and it is the whole strip', total(out) === 3, `got ${total(out)}`);
 }
 
 console.log();

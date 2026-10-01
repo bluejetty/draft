@@ -17,6 +17,14 @@
 // passing run and exited 0, having mutated nothing. noFlags(), not
 // mutationMode() -- the latter would accept --mutate and print green for a
 // mode that does not exist.
+//
+// AND NO ENGINE IS COMING, which is a finding and not an oversight (1 Oct).
+// This is a PROBE, not a check: it prints what happens and exits 0 whichever
+// way it goes. There is no assertion for a mutant to break, so every row
+// would survive, and the only assertion it could grow -- "layout-plan.js
+// throws without wall-types.js" -- would pin the HAZARD as if it were the
+// contract. The day the captures go lazy, that check would go red on the fix.
+// What it found is recorded where it belongs, in MIGRATION-STATUS.md.
 require('./harness-args.js').noFlags();
 
 global.window = global;

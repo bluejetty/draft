@@ -16,12 +16,47 @@
 // This was the one module of MODEL's seventeen with neither a harness nor a
 // spec. It did not need refactoring to get one.
 
-// No mutation mode here, so this harness accepts no arguments at all. It
-// used to read none: `node pdf-scan-harness.js --mutate` printed a full
-// passing run and exited 0, having mutated nothing. noFlags(), not
-// mutationMode() -- the latter would accept --mutate and print green for a
-// mode that does not exist.
-require('./harness-args.js').noFlags();
+const path = require('path');
+const MUTATE = require('./harness-args.js').mutationMode();
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+// Each is a wrong number on every measurement taken off the underlay. Against
+// the checks this file had, ONE OF EIGHT was caught -- measured. The harness
+// pinned parseScaleEntry's imperial arithmetic and calibrateScale's IMAGE
+// path; the PDF path, worldSizeFromScan and detectScalesInText had never been
+// called, and the seven survivors were all there. "THE OTHER THREE PATHS"
+// below is what they asked for. Each
+// String.replace bends the FIRST match, and the order in pdf-scan.js is
+// detectScalesInText, then parseScaleEntry -- so a row written against the
+// shared regex arithmetic lands in the detector, and one written against
+// parseScaleEntry's own lines says so in its anchor.
+const MUTATIONS = [
+  ['a typed scale counts its feet as inches', 'pdf-scan.js',
+    c => c.replace("const totalInches = feet * 12 + inches;\n        if (val && totalInches) return",
+      "const totalInches = feet + inches;\n        if (val && totalInches) return")],
+  ['a typed 1:1 is taken for a scale', 'pdf-scan.js',
+    c => c.replace('if (rm && parseInt(rm[1], 10) > 1) return', 'if (rm && parseInt(rm[1], 10) > 0) return')],
+  ['a PDF page is measured in CSS pixels, not points', 'pdf-scan.js',
+    c => c.replace('const pxPerPaperInch = canvasWidth / pageDims.w * 72;',
+      'const pxPerPaperInch = canvasWidth / pageDims.w * 96;')],
+  ['the calibration span ignores how far the marks are apart vertically', 'pdf-scan.js',
+    c => c.replace('const distPx = Math.hypot(dx, dy);', 'const distPx = Math.abs(dx);')],
+  ['a scaled PDF\'s height is taken off its width', 'pdf-scan.js',
+    c => c.replace('heightFt: paperInchesH * selectedScale.ratio / 12', 'heightFt: paperInchesW * selectedScale.ratio / 12')],
+  ['an image\'s aspect is turned on its side', 'pdf-scan.js',
+    c => c.replace(': (imgWidth ? imgHeight / imgWidth : 1);', ': (imgWidth ? imgWidth / imgHeight : 1);')],
+  ['a scale printed twice on a sheet is offered twice', 'pdf-scan.js',
+    c => c.replace("        if (seen.has(raw)) continue;\n        seen.add(raw);\n        found.push({ raw, ratio: totalInches / val, unit: 'imperial' });",
+      "        found.push({ raw, ratio: totalInches / val, unit: 'imperial' });")],
+  ['the detector offers 1:1, which every title block prints somewhere', 'pdf-scan.js',
+    c => c.replace('if (!n || n === 1) continue;', 'if (!n) continue;')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('pdf-scan',
+    MUTATIONS, { root: path.join(__dirname, '..'), harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
 
 global.window = global.window || {};
 require('../pdf-scan.js');
@@ -88,6 +123,39 @@ check('1:50 is a bare ratio, not an imperial scale', S.parseScaleEntry('1:50'),
 // nothing on screen to say so.
 check('unparseable text is null, not a guess', S.parseScaleEntry('rubbish'), null);
 check('the empty string is null', S.parseScaleEntry(''), null);
+
+check('1:1 is not a scale, typed or not', S.parseScaleEntry('1:1'), null);
+
+// ── THE OTHER THREE PATHS ─────────────────────────────────────────────────
+// A PDF page is measured in POINTS, 72 to the inch. A 720pt page drawn 720px
+// wide is 72px per paper inch, so marks 72px apart span one paper inch --
+// and calling that 48 real inches is 1:48. Arithmetic, not remembered.
+check('one paper inch on a PDF called 4ft is 1:48',
+  S.calibrateScale({ marks: [{ fx: 0.1, fy: 0.5 }, { fx: 0.2, fy: 0.5 }],
+    canvasWidth: 720, canvasHeight: 500, kind: 'pdf', pageDims: { w: 720, h: 500 }, realInches: 48 })
+    .scale?.ratio, 48);
+
+// A 3-4-5 span: 300px across and 400px down is 500px, not 300.
+check('a diagonal span is measured along the diagonal',
+  S.calibrateScale({ marks: [{ fx: 0, fy: 0 }, { fx: 0.3, fy: 0.4 }],
+    canvasWidth: 1000, canvasHeight: 1000, kind: 'image', pageDims: null, realInches: 12 }),
+  { ok: true, widthFt: 2 });
+
+// A letter sheet on its side, 11in x 8.5in, at 1:48 is 44ft x 34ft.
+check('a scaled PDF sheet takes its height off its own height',
+  S.worldSizeFromScan({ kind: 'pdf', pageDims: { w: 792, h: 612 }, selectedScale: { ratio: 48 } }),
+  { widthFt: 44, heightFt: 34 });
+// An image twice as wide as tall, typed at 40ft, is 20ft deep.
+check('an image keeps its own aspect',
+  S.worldSizeFromScan({ kind: 'image', imgWidth: 2000, imgHeight: 1000, typedWidthFt: 40 }),
+  { widthFt: 40, heightFt: 20 });
+
+// A title block prints its scale more than once, and 1:1 on every sheet; the
+// picker offers each real scale once and never the 1:1.
+check('the detector offers each scale once, and never 1:1',
+  S.detectScalesInText('PLAN 1/4"=1\'-0" ... ELEV 1/4"=1\'-0" ... DETAIL 1:1 ... SITE 1:100')
+    .map(found => found.raw),
+  ['1/4" = 1\'-0"', '1:100']);
 
 console.log(failed ? `\n  ${failed} of ${ran} checks FAILED\n` : `\n  ${ran} checks passed\n`);
 process.exit(failed ? 1 : 0);

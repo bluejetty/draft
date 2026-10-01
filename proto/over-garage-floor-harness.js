@@ -39,7 +39,29 @@
 // Run: node proto/over-garage-floor-harness.js
 const fs = require('fs');
 const path = require('path');
-require('./harness-args.js').noFlags();
+const MUTATE = require('./harness-args.js').mutationMode();
+
+// ── MUTATIONS (1 Oct) ─────────────────────────────────────────────────────
+// The first is the defect this file was written for; the rest are the other
+// ways the package can come apart from the datum it was chosen to meet.
+const MUTATIONS = [
+  ['THE DEFECT: the package quoted as the joist, 3/4" too deep', 'level-assembly.js',
+    c => c.replace('const OVER_GARAGE_JOIST_IN = 19 + 1 / 4;', 'const OVER_GARAGE_JOIST_IN = 20;')],
+  ['level 4 stops being the floor over the garage', 'level-assembly.js',
+    c => c.replace("{ 1: 'foundation', 2: 'entry', 4: 'overGarage' }", "{ 1: 'foundation', 2: 'entry' }")],
+  ['the role is asked for and ignored', 'level-assembly.js',
+    c => c.replace('    ...(ROLE_DEFAULTS[role] || {}),\n', '\n')],
+  ['the sheathing thins to 5/8", so the two tops no longer meet', 'level-assembly.js',
+    c => c.replace('    sheathingIn: 3 / 4,', '    sheathingIn: 5 / 8,')],
+  ['the house floor goes to an 11 1/4" joist', 'level-assembly.js',
+    c => c.replace('    joistDepthIn: 11 + 7 / 8,', '    joistDepthIn: 11 + 1 / 4,')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('over-garage-floor',
+    MUTATIONS, { root: path.join(__dirname, '..'), harness: __filename, preload: true });
+  process.exit(all ? 0 : 1);
+}
 
 const win = {};
 // eslint-disable-next-line no-new-func
