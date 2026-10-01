@@ -44,7 +44,54 @@ const check = (name, condition, detail) => {
 // rejected BEFORE anything treats argv as a path. Before this the line read
 // process.argv[2] directly and `--mutate` died on ENOENT with exit 1 -- the
 // one harness of twenty-two that answered a wrong flag with "checks failed".
-const file = require('./harness-args.js').optionalPositional() || path.join(ROOT, 'proto', 'repro-L-house.draft');
+//
+// AND NOW A MUTATION MODE BESIDE IT (1 Oct), through mutationModeWithFiles()
+// -- the shared guard for exactly this shape, a flag plus optional drawings --
+// so --mutate is a mode and anything else that starts with '-' is still
+// refused before it can be read as a path.
+const { mutate: MUTATE, files } = require('./harness-args.js').mutationModeWithFiles();
+const file = files[0] || path.join(ROOT, 'proto', 'repro-L-house.draft');
+
+// ── MUTATIONS ─────────────────────────────────────────────────────────
+//
+// SIX ROWS, AND THE NUMBER IS A BUDGET. Every row repaints every standard
+// elevation of the fixture -- about eleven seconds -- and the harnesses job
+// runs this sweep inside a fixed ceiling. So the table is the rows that land
+// on what this file is FOR: the fascia, the hidden line, the band that
+// carries on, and the storey above. Against the checks this file had, eleven
+// candidates measured FOUR caught; two more are answered by the block at the
+// end ("WHAT THE ATTACHED GARAGE'S SIDE VIEW MUST NOT SHOW").
+//
+// ── FIVE ROWS ARE NOT HERE, AND THEY ARE NOT THIS FILE'S ──────────────────
+// The truss chord (3.5"), grade below the foundation top (14"), the garage
+// sill step (2ft), the default door head (6'-10") and the garage door bucks
+// (12") each SURVIVED -- and each, bent, changed NOT ONE STROKE of any
+// elevation of any of the seven fixtures. Measured by painting all of them
+// with and without the row and diffing. They reach sections or other paint
+// modes, not this view, so the honest owner of each is the harness for that
+// view; none has one today, which is a gap worth knowing about rather than a
+// check to fake here.
+const MUTATIONS = [
+  ['the fascia board is the wrong size', 'cut-view.js',
+    c => c.replace('  const ROOF_FASCIA_IN = 5.5;', '  const ROOF_FASCIA_IN = 7.25;')],
+  ['a wall a foot off no longer counts as carrying the storey above', 'cut-view.js',
+    c => c.replace('    const CARRIED_REACH_FT = 1;', '    const CARRIED_REACH_FT = 0;')],
+  ['a roof edge behind a nearer wall is drawn through it', 'cut-view.js',
+    c => c.replace('        if (u != null && behindWall(pt, u, elev)) return true;\n', '')],
+  ['a roof edge is hidden by the walls BEHIND it', 'cut-view.js',
+    c => c.replace('        return faceGeoms.some(geom => geom.face.depth > depth + WALL_COVER_EPS',
+      '        return faceGeoms.some(geom => geom.face.depth < depth - WALL_COVER_EPS')],
+  ['a sheet that carries on gets a line anyway: the wrap tolerance is lost', 'cut-view.js',
+    c => c.replace('    const WRAP_TOL_FT = 1e-6;', '    const WRAP_TOL_FT = -1;')],
+  ['the sky above a roof is cut short', 'cut-view.js',
+    c => c.replace('  const SKY_ABOVE_ROOF_FT = 10;', '  const SKY_ABOVE_ROOF_FT = 0;')],
+];
+
+if (MUTATE) {
+  const all = require('./mutant-subprocess.js').runMutations('elevation',
+    MUTATIONS, { root: ROOT, harness: __filename, args: files });
+  process.exit(all ? 0 : 1);
+}
 const win = loadDraftModules();
 const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
 const env = buildEnv(win, saved);
@@ -2286,6 +2333,48 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
   check('and a bottom ask of zero changes nothing',
     Math.abs(deep({ margins: { bottom: 0 } }).flat - plain.flat) < 1e-9,
     `${at(deep({ margins: { bottom: 0 } }).flat)} against ${at(plain.flat)}`);
+}
+
+// ── WHAT THE ATTACHED GARAGE'S SIDE VIEW MUST NOT SHOW (1 Oct) ──────────
+//
+// Two rows of this file's mutation table SURVIVED every check above, and both
+// land on the attached garage seen from E2 -- the one view where a gable
+// stands BEHIND a nearer wall and a garage wall stops under a storey it does
+// not carry. Found by painting all seven fixtures with and without each row
+// and diffing the strokes; these are the views that moved.
+{
+  const gEnv = buildEnv(win, JSON.parse(fs.readFileSync(
+    path.join(ROOT, 'proto', 'repro-garage-house.draft'), 'utf8')));
+  const e2 = paintElevation(win, gEnv, standardElevationCuts(gEnv).find(c => c.id === 'E2'));
+
+  // A ROOF BEHIND A NEARER WALL IS HIDDEN. The garage's gable rakes, from
+  // (-6, 8.57) up to (0, 10.57), stand behind the wall in front of them; with
+  // the hidden-line test gone they drew straight through it. A box over that
+  // area will not do -- this view legitimately carries the storey above's
+  // wall there -- so the check asks for the rake line itself.
+  const segs = segmentsOf(e2);
+  const rake = segs.filter(({ a, b }) => [[a, b], [b, a]].some(([p, q]) =>
+    Math.hypot(p.u + 6, p.e - 8.57) < 0.05 && Math.hypot(q.u, q.e - 10.57) < 0.05)).length;
+  check('E2 of the attached garage: the gable rake behind the near wall is not drawn',
+    rake === 0, `${rake} segment(s) on the hidden rake`);
+
+  // A WALL UNDER A STOREY IT DOES NOT CARRY STOPS AT ITS OWN PLATE. With the
+  // carried reach at zero, a garage wall drew a SAWTOOTH top -- up into the
+  // storey above at every sample that happened to meet it, and back down.
+  // One climbing face is legitimate here (the gable wall that climbs to the
+  // house, single-peaked, as any gable is), so the check is the sawtooth:
+  // no wall face in this view has more than one peak above the 8.1ft plate.
+  const peaks = st => {
+    const tops = st.pts.filter(p => p.e > 0.1).map(p => p.e);
+    let n = 0;
+    for (let i = 1; i < tops.length - 1; i++) {
+      if (tops[i] > tops[i - 1] + 1e-6 && tops[i] >= tops[i + 1] - 1e-6 && tops[i] > 8.15) n++;
+    }
+    return n;
+  };
+  const most = Math.max(0, ...e2.strokes.filter(st => st.w === WALL_FACE_W).map(peaks));
+  check('E2 of the attached garage: no wall face has a sawtooth top',
+    most <= 1, `a wall face peaks ${most} times`);
 }
 
 console.log(`elevation harness: ${passed} checks passed, ${failures.length} failed`);
