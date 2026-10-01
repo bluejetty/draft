@@ -316,12 +316,14 @@
      is measured against the accent and nothing else. */
   .lay-pick.lay-paper.on { border-color: var(--accent);
     background-color: var(--accent); background-image:none; color: var(--accent-ink); }
-  #lay-add-sheet { display:block; width:100%; text-align:left;
+  #lay-add-sheet, #lay-remove-sheet { display:block; width:100%; text-align:left;
     border:1px dashed var(--edge-panel); background:none; color: var(--ink-quiet);
     font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
     font-size:11px; letter-spacing:0.02em; text-transform:uppercase;
     padding:5px 10px; cursor:pointer; }
-  #lay-add-sheet:hover { border-color: var(--accent-mark); color: var(--accent-mark); }
+  #lay-add-sheet:hover, #lay-remove-sheet:hover:not(:disabled) { border-color: var(--accent-mark); color: var(--accent-mark); }
+  #lay-remove-sheet { margin-top:4px; }
+  #lay-remove-sheet:disabled { opacity:0.35; cursor:default; }
   #lay-north { margin-top:6px; margin-bottom:0; }
   #lay-north.on { border-color: var(--accent);
     background-color: var(--accent); background-image:none; color: var(--accent-ink); }
@@ -534,6 +536,10 @@
       <div class="lay-section-title">Sheet</div>
       <div data-sheet-list></div>
       <button type="button" data-layout-add-sheet id="lay-add-sheet">+ Sheet</button>
+      <!-- REMOVE SHEET (Movie, 1 Oct: "BASEMENT PLAN and ELECTRIC PLAN
+           sometimes i don't include them"). Takes the sheet on the desk out of
+           the set, whatever is on it, and closes the gap; undo brings it back. -->
+      <button type="button" data-layout-remove-sheet id="lay-remove-sheet">− Remove Sheet</button>
     </div>
 
     <div class="lay-section">
@@ -1263,7 +1269,18 @@ class Component extends PageLogic {
     // The basement after the sections and before ELECTRIC (Movie, 1 Oct).
     const basement = planSheet(1, 'plan');
     if (basement) deal('BASEMENT PLAN', [basement]);
-    deal('ELECTRIC PLAN');
+    // ELECTRIC ONLY WHEN THERE IS ELECTRIC (Movie, 1 Oct): "sometimes i
+    // don't include them". A house with no devices placed gets no sheet.
+    // Read through the format's own reader, so a record it would refuse
+    // does not deal a sheet the painter would leave blank.
+    const levelIds = new Set(this._levels.map(level => level.id));
+    // THE MAIN FLOOR'S PLAN, FOR NOW (Movie, 1 Oct: "leave electric plan
+    // layout blank drawing of floor plan for now ... when we add E-POWER
+    // layer symbols we will show them"). The sheet carries the floor it is
+    // wired on; the symbols join it when their painter lands.
+    if (window.DraftDrawingFormat.electricDevices(this._saved.electricDevices, levelIds).length) {
+      deal('ELECTRIC PLAN', [main[0] ? { ...main[0] } : null]);
+    }
     if (!sheetPlan.some(entry => entry.views.length)) return;
 
     const viewports = [];
@@ -1764,6 +1781,22 @@ class Component extends PageLogic {
     const sheets = Array.from({ length: count }, (_, i) => this.state.sheets[i] || { title: '' });
     this.setState({ sheets: [...sheets, { title: '' }], activeSheet: count + 1, selectedViewportId: null, auto: false },
       () => { this._persistLayout(); this._draw(); });
+  }
+
+  // REMOVE SHEET takes the sheet on the desk out of the set: its viewports go
+  // with it, every later sheet moves up one so the numbers stay 1, 2, 3, and
+  // the composer lets go. The last sheet cannot go -- a set is never empty.
+  _removeSheet() {
+    const count = this._sheetCount();
+    if (count <= 1) return;
+    const gone = this.state.activeSheet;
+    const sheets = Array.from({ length: count }, (_, i) => this.state.sheets[i] || { title: '' });
+    sheets.splice(gone - 1, 1);
+    const viewports = this.state.viewports
+      .filter(viewport => (viewport.sheet || 1) !== gone)
+      .map(viewport => ((viewport.sheet || 1) > gone ? { ...viewport, sheet: viewport.sheet - 1 } : viewport));
+    this.setState({ sheets, viewports, activeSheet: Math.min(gone, count - 1),
+      selectedViewportId: null, auto: false }, () => { this._persistLayout(); this._draw(); });
   }
 
   // A SHEET IS COUNTED IF IT IS NAMED OR IF SOMETHING IS ON IT. The named
@@ -2400,6 +2433,7 @@ class Component extends PageLogic {
     redo.disabled = !this.state.historyFuture;
     title(undo, this.state.historyPast ? 'Undo the last sheet change' : 'Nothing to undo yet');
     title(redo, this.state.historyFuture ? 'Redo the sheet change just undone' : 'Nothing to redo');
+    document.querySelector('[data-layout-remove-sheet]').disabled = this._sheetCount() <= 1;
     // ON SCREEN EXACTLY WHILE THERE IS SOMETHING TO DELETE, as MODEL's is.
     document.querySelector('[data-delete-viewport]').hidden = this.state.selectedViewportId == null;
 
@@ -2550,6 +2584,7 @@ class Component extends PageLogic {
     document.querySelectorAll('[data-orient]').forEach(button =>
       button.addEventListener('click', () => this._setOrientation(button.dataset.orient)));
     on('[data-layout-add-sheet]', 'click', () => this._addSheet());
+    on('[data-layout-remove-sheet]', 'click', () => this._removeSheet());
     on('[data-layout-add-viewport]', 'click', () => this.setState(
       { addingViewport: !this.state.addingViewport }, () => this._draw()));
     on('[data-layout-deal-sheets]', 'click', () => this._dealSheets());

@@ -299,7 +299,7 @@ test("the set deals in Movie's order, under his names", async ({ page }) => {
   expect(layout.sheets.map(sheet => sheet.title)).toEqual([
     'SITE PLAN', 'ELEVATIONS', 'ELEVATIONS', 'ROOF PLAN',
     '2ND FL PLAN', '2ND FLOOR', 'MAIN FL PLAN', 'MAIN FLOOR',
-    'FOUNDATION', 'SECTIONS', 'BASEMENT PLAN', 'ELECTRIC PLAN',
+    'FOUNDATION', 'SECTIONS', 'BASEMENT PLAN',
   ]);
   expect(e1).toBe(2);
   expect(e3).toBe(3);
@@ -309,7 +309,7 @@ test("the set deals in Movie's order, under his names", async ({ page }) => {
   expect(sect).toBe(10);
   expect(bsmt).toBe(11);
   // The named sheets with no painter carry nothing.
-  [1, 4, 6, 8, 12].forEach(sheet =>
+  [1, 4, 6, 8].forEach(sheet =>
     expect(layout.viewports.some(v => v.sheet === sheet), `sheet ${sheet}`).toBe(false));
 });
 
@@ -593,26 +593,26 @@ test('the named sheets survive a reload, an undo and a hand on the set', async (
   await openLayout(page, twoStorey());
   await waitForCompose(page);
   const dealt = await savedLayout(page);
-  expect(dealt.sheets).toHaveLength(12);
+  expect(dealt.sheets).toHaveLength(11);
 
   await page.reload();
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
-  await expect(page.locator('[data-layout-sheet]')).toHaveCount(12);
+  await expect(page.locator('[data-layout-sheet]')).toHaveCount(11);
   expect((await savedLayout(page)).sheets).toEqual(dealt.sheets);
 
-  // + SHEET makes a thirteenth that stays, and takes the set off the composer.
+  // + SHEET makes a twelfth that stays, and takes the set off the composer.
   const seq = await page.evaluate(() => Number(document.body.dataset.layoutSaveSeq || 0));
   await page.locator('[data-layout-add-sheet]').click();
   await page.waitForFunction(p => Number(document.body.dataset.layoutSaveSeq || 0) > p, seq);
   const added = await savedLayout(page);
-  expect(added.sheets).toHaveLength(13);
+  expect(added.sheets).toHaveLength(12);
   expect(added.auto).toBe(false);
-  await expect(page.locator('[data-layout-sheet]')).toHaveCount(13);
+  await expect(page.locator('[data-layout-sheet]')).toHaveCount(12);
 
   // Undo takes it back, and the page is not left on a sheet that is gone.
   await page.locator('[data-undo]').click();
-  await expect(page.locator('[data-layout-sheet]')).toHaveCount(12);
-  await expect(page.locator('[data-layout-sheet="12"]')).toHaveClass(/\bon\b/);
+  await expect(page.locator('[data-layout-sheet]')).toHaveCount(11);
+  await expect(page.locator('[data-layout-sheet="11"]')).toHaveClass(/\bon\b/);
 });
 
 // ── THE SHEET RAIL ──────────────────────────────────────────────────────────
@@ -627,9 +627,9 @@ for (const viewport of [{ width: 1366, height: 768 }, { width: 1024, height: 768
       await waitForCompose(page);
       const rail = page.locator('[data-sheet-rail]');
       const thumbs = rail.locator('[data-sheet-thumb]');
-      await expect(thumbs).toHaveCount(12);
+      await expect(thumbs).toHaveCount(11);
       await expect(thumbs.nth(0)).toHaveAttribute('title', '1 SITE PLAN');
-      await expect(thumbs.nth(11)).toHaveAttribute('title', '12 ELECTRIC PLAN');
+      await expect(thumbs.nth(10)).toHaveAttribute('title', '11 BASEMENT PLAN');
 
       const railBox = await rail.boundingBox();
       const canvasBox = await page.locator('[data-layout-canvas]').boundingBox();
@@ -648,7 +648,7 @@ test('a thumbnail takes the desk to its sheet, and only a changed sheet repaints
   await openLayout(page, twoStorey());
   await waitForCompose(page);
   const thumbs = page.locator('[data-sheet-thumb]');
-  await page.waitForFunction(() => Number(document.body.dataset.thumbPaints || 0) >= 12);
+  await page.waitForFunction(() => Number(document.body.dataset.thumbPaints || 0) >= 11);
 
   await thumbs.nth(6).click();
   await expect(thumbs.nth(6)).toHaveClass(/\bon\b/);
@@ -701,3 +701,41 @@ test('picking a scale rescales the selected viewport, and undo puts it back', as
   await page.waitForTimeout(300);
   expect((await savedLayout(page)).viewports.find(v => v.id === target.id).pif).toBe(target.pif);
 });
+
+// ELECTRIC ONLY WHEN THERE IS ELECTRIC, and the drafter can take any sheet
+// out (Movie, 1 Oct: "BASEMENT PLAN and ELECTRIC PLAN sometimes i don't
+// include them").
+test('ELECTRIC PLAN is dealt last when devices are placed, and REMOVE SHEET takes a sheet out',
+  async ({ page }) => {
+    const d = twoStorey();
+    d.electricDevices = [{ id: 'e1', levelId: 3, kind: 'outlet', x: 2, z: 0 }];
+    await openLayout(page, d);
+    await waitForCompose(page);
+    const dealt = await savedLayout(page);
+    expect(dealt.sheets.map(sheet => sheet.title).slice(-2)).toEqual(['BASEMENT PLAN', 'ELECTRIC PLAN']);
+    // Until the E-POWER symbols have a painter, the sheet carries the main
+    // floor's plan, so it is never blank.
+    const electric = dealt.viewports.filter(v => v.sheet === dealt.sheets.length);
+    expect(electric.map(v => [v.kind, v.levelId, v.view])).toEqual([['plan', 3, 'plan']]);
+
+    // Take out sheet 10, the section: its viewport goes, the basement moves up
+    // to 10, and the numbers stay unbroken.
+    const sectionSheet = dealt.viewports.find(v => v.kind === 'section').sheet;
+    expect(sectionSheet).toBe(10);
+    await page.locator('[data-layout-sheet="10"]').click();
+    const seq = await page.evaluate(() => Number(document.body.dataset.layoutSaveSeq || 0));
+    await page.locator('[data-layout-remove-sheet]').click();
+    await page.waitForFunction(p => Number(document.body.dataset.layoutSaveSeq || 0) > p, seq);
+    const after = await savedLayout(page);
+    expect(after.sheets.map(sheet => sheet.title).slice(-3)).toEqual(['FOUNDATION', 'BASEMENT PLAN', 'ELECTRIC PLAN']);
+    expect(after.viewports.some(v => v.kind === 'section')).toBe(false);
+    expect(after.viewports.find(v => v.kind === 'plan' && v.levelId === 1 && v.view === 'plan').sheet).toBe(10);
+    expect(after.auto).toBe(false);
+    await expect(page.locator('[data-sheet-thumb]')).toHaveCount(11);
+    expect(after.viewports.filter(v => v.sheet === 11).map(v => v.levelId)).toEqual([3]);
+
+    // Undo puts it back where it was.
+    await page.locator('[data-undo]').click();
+    await page.waitForTimeout(300);
+    expect((await savedLayout(page)).sheets).toEqual(dealt.sheets);
+  });
