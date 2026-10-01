@@ -472,7 +472,7 @@ if (!window.DraftShellBars) {
          places, because it is a verb. -->
     <!-- UNDO, ON SCREEN (audit C4). Ctrl+Z was the only way back, and an
          iPad has no Ctrl key. A verb, so it rides with DELETE. NAMED FOR
-         MODEL, not plain `undo`: LAYOUT carries this bar too and has its
+         MODEL, not plain "undo": LAYOUT carries this bar too and has its
          own [data-undo] in its status strip, which a second one here would
          shadow. Pages other than MODEL never unhide it. -->
     <button id="model-undo" type="button" data-model-undo hidden
