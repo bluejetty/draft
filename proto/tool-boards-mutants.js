@@ -108,11 +108,26 @@ const MUTANTS = [
     with: '',
     test: 'against a browser remembering DRAFTING' },
 
-  { file: 'MODEL.html',
-    name: 'THE BUG ITSELF: a board change rebuilds the slot and wipes its neighbours',
-    find: '    if (roster && !roster.availableOn(activeTool, board)) setTool(RESTING_TOOL);\n    refreshToolAvailability();',
-    with: '    if (roster && !roster.availableOn(activeTool, board)) setTool(RESTING_TOOL);\n    buildToolColumn();',
-    test: 'leaves the panels that share the tool slot alone' },
+  // ── THE BUG ITSELF IS NOT A ROW ANY MORE, AND IT WAS ONE ─────────────────
+  //
+  // It read: a board change calls buildToolColumn() instead of
+  // refreshToolAvailability(). Measured 30 Sep, it SURVIVED every check in
+  // the spec, and it survives for a reason worth writing down rather than
+  // hiding by leaving the row quietly in place.
+  //
+  // THE BUG TOOK TWO THINGS AND THE CODE NOW REFUSES EACH. It needed a
+  // rebuild on a board change AND a rebuild that clears the shared parent.
+  // The first is refused by the board change walking availability instead;
+  // the second by buildToolColumn swapping its own [data-tool-group] box
+  // rather than the pane's children. Restore either alone and the other
+  // holds: the rebuild above is harmless, and a clearing rebuild is never
+  // called a second time -- buildToolColumn runs once, at boot, before the
+  // selection and assembly panels exist. That one was measured too
+  // (`pane.replaceChildren(box)` in place of the swap): it SURVIVES as well.
+  //
+  // So the check is load-bearing only under a SECOND change, and a row bends
+  // one thing. The spec test stays -- it is what goes red the day both
+  // guards slip -- but a row that cannot go red is not a row.
 
   // ── §6's OTHER TWO SURFACES ─────────────────────────────────────────────
   { file: 'tool-roster.js',
