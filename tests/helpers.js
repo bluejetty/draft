@@ -633,7 +633,7 @@ async function wallArmed(page) {
 const TOOL_PANE = Object.freeze({
   select: 'drafting', extend: 'drafting', copy: 'drafting', trim: 'drafting',
   node: 'drafting', line: 'drafting', shape: 'drafting',
-  dimension: 'drafting', annotation: 'drafting',
+  dimension: 'drafting', annotation: 'drafting', roomtag: 'drafting',
   wall: 'build', fenestration: 'build', floor: 'build', roof: 'build',
   column: 'build', beam: 'build', stair: 'build', fixture: 'build',
 });

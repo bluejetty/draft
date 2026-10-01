@@ -1164,12 +1164,19 @@ if (!window.DraftDrawingFormat) {
       // evaluateRoom refuses to flag a guess -- so an unknown string here
       // is inert rather than dangerous.
       const roomCategory = String(tag?.roomCategory ?? '').trim().toLowerCase().slice(0, 32);
+      // THE SECOND LINE, the room's size as the drafter wrote it (Movie, 1 Oct:
+      // "name top line and each of the FT dims on 2nd line", "if they only put
+      // in 12 only show 12"). Kept AS TYPED -- 12X10, 12-6X10, 12-4 1/4X10 --
+      // never parsed or reformatted, because it is a label and not a length.
+      // Absent when blank, so every tag saved before it reads the same.
+      const size = String(tag?.size ?? '').replace(/\s+/g, ' ').trim().slice(0, 40);
       return {
         id,
         at,
         levelId: tagLevelId,
         view: 'plan',
         name,
+        ...(size ? { size } : {}),
         areaSqFt: area > 0 ? area : 0,
         underMin: tag?.underMin === true,
         // ── THE TWO FACTS BEHIND THE UNDER MIN VERDICT ──────────────────
