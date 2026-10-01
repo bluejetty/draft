@@ -337,3 +337,47 @@ footprint.
 
 <!-- next: -->
 
+---
+
+## The BONEYARD / WIREFRAME page — Movie, 1 Oct 2026
+
+The two-window idea above, given its own page. Recorded as he described
+it; nothing is built yet, and it is queued after the LAYOUT sheets and
+SELECT.
+
+### The tab
+- New page tab between MODEL and EXT. FINISH.
+- Label: **BONEYARD** on the RUFF skin, **WIREFRAME** on the ROUGH skin
+  (OUTLINE is an acceptable alternative name).
+- Queue position: last, after LAYOUT sheets and SELECT.
+
+### Left window: 3D iso wireframe
+- Only the exterior-wall outline of each level: 4-5 lines per loop. House
+  and garage both.
+- Colours: FOUNDATION purple, MAIN FLOOR red, 2ND FL green, ROOF orange.
+  Bi-level lower levels blue (MOD BILEVEL is still to be designed).
+- Heights: foundation at the bottom of the foundation wall; floors at the
+  top of the sheathing; roof at the top of the ceiling. (OPEN: one loop per
+  level plus a top ceiling loop? Suggested, not yet confirmed.)
+- Rotation: any direction, but STEPPED. Each step is 15 degrees and draws
+  one still frame, with no animation in between (to save processing).
+- While editing, the 3D window only picks the view and level: tap a loop
+  and the 2D window switches to that level.
+
+### Right window: 2D, current level only
+- Shows the selected level's outline.
+- Editing uses the TOY tools: move walls in and out, whole feet, square
+  corners. To be tuned after testing.
+- A new plan entered through BONEYARD walks the normal process in this
+  window. (OPEN: the tracing steps are suggested; not yet confirmed.)
+
+### What moves what
+- FOUNDATION: moving it moves everything above it (main fl, 2nd fl, roof).
+- MAIN FLOOR and 2ND FLOOR move individually, by the floor-pull ladder
+  (tour.js floorPullLadder): 0-2 ft cantilever with no pile; 2 ft to 4'-6"
+  forbidden (snaps); a pile from 4'-6"; spans of 8 ft max; 18 ft ceiling.
+- ROOF follows the 2ND FL outline by default, but can also be pulled out on
+  its own (front entry, covered back deck), by the same ladder: a pile at
+  4'-6" minimum, then about every 8 ft.
+- The 8 ft pile spacing is a safe DEFAULT, not a fixed rule: the user can
+  change it (an office setting, likely on STANDARDS).

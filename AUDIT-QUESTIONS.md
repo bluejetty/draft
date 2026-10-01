@@ -46,6 +46,10 @@ the only path. Is that the intended model (a viewport is immutable, place a new
 one), or was the "apply to selection" branch never written? The answer changes M3
 from a bug to a missing affordance plus a lying status bar.
 
+> **Ruled 1 Oct (Movie): yes, it must change.** "The user needs to be able to
+> change the scale in case it isn't placed how they like it." A pick now
+> rescales the selected viewport, undoably, and the readout names its scale.
+
 **Q5 — What is the story for two open tabs?**
 The first-run notice tells users to close other tabs "for optimal performance",
 which reads as a performance hint. But two tabs is also the mechanism by which
@@ -66,6 +70,10 @@ becomes a paper defect rather than a screen one. If printing re-renders into a
 print-resolution canvas (or emits vectors via the vendored jsPDF / pdf-lib, both
 of which are in `vendor/` but unreferenced by any page I read), M1 stays a screen
 issue. Which way is it going? That decides M1's severity.
+
+> **Ruled 1 Oct (Movie): sharp vector, as a PDF.** Printing re-draws the sheet
+> as vectors; it never rasterises the screen canvas, so M1 stays a screen
+> question and the Q6 ruling stands.
 
 **Q8 — Are `jspdf` and `pdf-lib` in `vendor/` dead weight or staged work?**
 889 KB of PDF-writing libraries are vendored and, as far as I can find, loaded by

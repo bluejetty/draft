@@ -1786,6 +1786,17 @@ if (!window.DraftDrawingFormat) {
       northArrow: raw?.northArrow === true,
       auto: raw?.auto === true,
       viewports,
+      // THE SHEETS THEMSELVES, by title (Movie, 1 Oct). Sheet N is
+      // sheets[N-1]. Until now a sheet existed only because a viewport sat
+      // on it, so the set could not hold a named sheet with nothing drawn on
+      // it yet -- SITE PLAN, ROOF PLAN, the floor layouts, ELECTRIC PLAN.
+      // Read here, not only in LAYOUT, because MODEL reads this key and
+      // writes back exactly what this returns: a key this drops is a key the
+      // next MODEL save erases. An old file has none, and LAYOUT then works
+      // the titles out from the viewports as it always has.
+      sheets: (Array.isArray(raw?.sheets) ? raw.sheets : []).slice(0, 99)
+        .map(sheet => ({ title: typeof sheet?.title === 'string'
+          ? sheet.title.trim().toUpperCase().slice(0, 40) : '' })),
       nextViewportId: Math.max(
         Number.isInteger(Number(raw?.nextViewportId)) ? Number(raw.nextViewportId) : 1,
         ...viewports.map(viewport => viewport.id + 1),

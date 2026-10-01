@@ -316,12 +316,14 @@
      is measured against the accent and nothing else. */
   .lay-pick.lay-paper.on { border-color: var(--accent);
     background-color: var(--accent); background-image:none; color: var(--accent-ink); }
-  #lay-add-sheet { display:block; width:100%; text-align:left;
+  #lay-add-sheet, #lay-remove-sheet { display:block; width:100%; text-align:left;
     border:1px dashed var(--edge-panel); background:none; color: var(--ink-quiet);
     font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
     font-size:11px; letter-spacing:0.02em; text-transform:uppercase;
     padding:5px 10px; cursor:pointer; }
-  #lay-add-sheet:hover { border-color: var(--accent-mark); color: var(--accent-mark); }
+  #lay-add-sheet:hover, #lay-remove-sheet:hover:not(:disabled) { border-color: var(--accent-mark); color: var(--accent-mark); }
+  #lay-remove-sheet { margin-top:4px; }
+  #lay-remove-sheet:disabled { opacity:0.35; cursor:default; }
   #lay-north { margin-top:6px; margin-bottom:0; }
   #lay-north.on { border-color: var(--accent);
     background-color: var(--accent); background-image:none; color: var(--accent-ink); }
@@ -395,6 +397,24 @@
      which is a job --surface-page does on three skins and nearly not at all
      on day, where the page is #f2f2f3. The sheet's drop shadow is what holds
      that edge, and it is drawn for this reason rather than for depth. */
+  /* THE SHEET RAIL. A fixed width, never a share of the row: the paper is
+     fitted to the canvas once at load and _resize does not refit it, so a
+     rail that changed width would leave the sheet sitting off-centre. The
+     thumbnails' own size is set from the script, which is the only place
+     that knows how many sheets there are and how tall the rail is. */
+  #lay-rail { width:172px; flex-shrink:0; overflow-y:auto; padding:8px;
+    box-sizing:border-box; border-left:1px solid var(--edge-panel);
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none); }
+  #lay-rail-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+  .lay-thumb { display:flex; flex-direction:column; align-items:center; gap:2px;
+    min-width:0; padding:3px; cursor:pointer; border:1px solid transparent;
+    border-radius:4px; background:none; color: var(--ink-secondary); }
+  .lay-thumb:hover { border-color: var(--edge-panel); }
+  .lay-thumb.on { border-color: var(--accent-mark); color: var(--ink-primary); }
+  .lay-thumb canvas { display:block; width:var(--thumb-w, 64px); height:var(--thumb-h, 42px); }
+  .lay-thumb span { display:block; max-width:100%; overflow:hidden; white-space:nowrap;
+    text-overflow:ellipsis; font-family:'Barlow Condensed', system-ui, sans-serif;
+    font-size:10px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; }
   #lay-canvas-wrap { flex:1; position:relative; overflow:hidden;
     background-color: var(--surface-page); background-image: var(--surface-page-tex, none); }
   /* touch-action:none ONLY on the sheet (audit C2): a finger dragging a
@@ -516,6 +536,10 @@
       <div class="lay-section-title">Sheet</div>
       <div data-sheet-list></div>
       <button type="button" data-layout-add-sheet id="lay-add-sheet">+ Sheet</button>
+      <!-- REMOVE SHEET (Movie, 1 Oct: "BASEMENT PLAN and ELECTRIC PLAN
+           sometimes i don't include them"). Takes the sheet on the desk out of
+           the set, whatever is on it, and closes the gap; undo brings it back. -->
+      <button type="button" data-layout-remove-sheet id="lay-remove-sheet">− Remove Sheet</button>
     </div>
 
     <div class="lay-section">
@@ -541,10 +565,10 @@
       <div class="lay-section-title">Viewport</div>
       <button type="button" data-layout-add-viewport id="lay-add-viewport">+ Add Viewport</button>
       <!-- DEAL SHEETS -- the composer already existed and nothing could ask
-           for it. _composeDefaultSet deals the whole set: two sheets of
-           elevations, a plan per floor top storey first, the foundation, the
-           sections, the basement -- skipping any sheet nothing would put ink
-           on, and picking each sheet's scale by walking the ladder down until
+           for it. _composeDefaultSet deals the whole set in Movie's order
+           (1 Oct): SITE PLAN, ELEVATIONS, ROOF PLAN, 2ND FL PLAN, 2ND FLOOR,
+           MAIN FL PLAN, MAIN FLOOR, FOUNDATION, SECTIONS, ELECTRIC PLAN --
+           a named sheet is dealt even before it has a painter, and picking each sheet's scale by walking the ladder down until
            the views fit. It ran in exactly ONE circumstance: a saved layout
            carrying `auto: true`, which the bone sets on a fresh build.
 
@@ -581,6 +605,20 @@
   <div id="lay-canvas-wrap" data-layout-container>
     <canvas id="lay-canvas" data-layout-canvas></canvas>
   </div>
+
+  <!-- THE SHEET RAIL (Movie, 1 Oct): "put the list of LAYOUTS names on the
+       right side ... a mini view layout of each ... 2 columns and keep them
+       small so we don't need to scroll". Every sheet of the set as a small
+       picture of itself, numbered and named, the one on the desk outlined;
+       a tap goes to it.
+
+       A <nav>, NOT AN <aside>: shell-bars.css fixes every aside to the
+       viewport edge at 195px, which is the MODEL rail's rule and would lift
+       this one off the page. AFTER THE CANVAS in the document, because specs
+       find the sheet as the first canvas on the page. -->
+  <nav id="lay-rail" data-sheet-rail aria-label="Sheets">
+    <div id="lay-rail-grid" data-sheet-rail-grid></div>
+  </nav>
 
 </div>
 
@@ -799,6 +837,7 @@ class Component extends PageLogic {
     activeLevelId: null,
     addingViewport: false,
     viewports: [],              // { id, kind, levelId|cutId|elevId, pif, sheet, xIn, yIn } — sheet inches
+    sheets: [],                 // [{ title }] — sheet N is sheets[N-1]; empty = titles worked out from viewports
     nextViewportId: 1,
     selectedViewportId: null,
     zoom: 1,   // pixels per paper inch on screen
@@ -840,6 +879,10 @@ class Component extends PageLogic {
     });
 
     this._ro = new ResizeObserver(() => { this._resize(); this._draw(); });
+    // The rail's height decides the thumbnails' size, and a window that
+    // changes height has to deal them again.
+    const rail = document.querySelector('[data-sheet-rail]');
+    if (rail) new ResizeObserver(() => this._paintRail()).observe(rail);
     const cont = document.querySelector('[data-layout-container]');
     if (cont) this._ro.observe(cont);
 
@@ -890,6 +933,7 @@ class Component extends PageLogic {
     if (saved && !format.checkEnvelope(saved).ok) saved = null;
     this._saved = saved;
     this._drawingChecked = true;
+    this._drawingGen = (this._drawingGen || 0) + 1;
     this._levels = saved ? format.levels(saved.levels) : [];
     this._planBoundsByLevel = new Map();
     this._cutEnv = null;
@@ -901,6 +945,7 @@ class Component extends PageLogic {
     const layout = saved?.layout ? format.layout(saved.layout, levelIds, cutIds) : null;
     const patch = {
       viewports: layout ? layout.viewports : [],
+      sheets: layout ? layout.sheets : [],
       nextViewportId: layout ? layout.nextViewportId : 1,
       activeLevelId: this._defaultLevelId(),
       auto: layout?.auto === true,
@@ -1100,6 +1145,7 @@ class Component extends PageLogic {
       northArrow: this.state.northArrow,
       auto: this.state.auto,
       viewports: this.state.viewports,
+      sheets: this.state.sheets,
       nextViewportId: this.state.nextViewportId,
     };
   }
@@ -1165,9 +1211,8 @@ class Component extends PageLogic {
       const foot = this._viewFootprintFt(view);
       return foot ? { ...view, wFt: foot.wFt, hFt: foot.hFt } : null;
     };
-    // A sheet is dealt only if something would put ink on it. A bungalow has
-    // no 2ND FL sheet; a drawing with no concrete has no FOUNDATION sheet.
-    // Never deal a blank sheet.
+    // A VIEW is placed only if something would put ink in it: planSheet is
+    // null for a level with no walls in that view.
     const planSheet = (levelId, view) => {
       const walls = window.DraftLayoutPlan.planWalls(this._saved, levelId, view);
       return walls.length ? sized({ kind: 'plan', levelId, view }) : null;
@@ -1179,29 +1224,71 @@ class Component extends PageLogic {
       .map(cut => sized({ kind: 'elevation', elevId: cut.id }))
       .filter(Boolean);
 
-    // Movie's set order (board NEW-2 part 2). Sheets 3 and 4 (SITE, ROOF) and
-    // the floor-layout and electrical sheets are absent on purpose: no
-    // painter and, for S-SLAB / S-FDN / E-POWER, no entities in the drawing
-    // format to paint. They are their own boards, not silent omissions.
+    // MOVIE'S SET, IN HIS ORDER AND UNDER HIS NAMES (1 Oct): "SITE PLAN,
+    // ELEVATIONS, ROOF PLAN, 2ND FL PLAN, 2ND FLOOR, MAIN FL PLAN, MAIN
+    // FLOOR, FOUNDATION, SECTIONS (maybe more than 1), ELECTRIC PLAN" --
+    // numbered 1, 2, 3 in that order, with as many ELEVATIONS and SECTIONS
+    // pages as the drawing needs.
+    //
+    // A NAMED SHEET IS DEALT EVEN WITH NOTHING TO DRAW ON IT. SITE PLAN, ROOF
+    // PLAN, the two floor layouts and ELECTRIC PLAN have no painter yet, and
+    // this used to leave them out so that no blank sheet was ever dealt. The
+    // set is a map of the job, though, and a map with towns missing teaches
+    // the wrong shape -- the page row's own rule -- so they are dealt by name
+    // and fill in as their painters land. What still deals nothing is a
+    // drawing with nothing in it at all: eight empty sheets is not a set.
+    //
+    // THE 2ND FLOOR PAIR ONLY WHEN THERE IS A 2ND FLOOR. A bungalow's set
+    // does not carry a 2ND FL PLAN with nothing on it -- that one is not
+    // waiting on a painter, it is not part of this house.
     const sheetPlan = [];
-    if (elevViews.length) sheetPlan.push(elevViews.slice(0, 2));      // 1
-    if (elevViews.length > 2) sheetPlan.push(elevViews.slice(2));     // 2
-    floorLevels.forEach(level => {                                    // 5, 7
+    const deal = (title, views = []) => sheetPlan.push({ title, views: views.filter(Boolean) });
+    const plansOf = ids => floorLevels.filter(level => ids(level.id))
+      .map(level => planSheet(level.id, 'plan')).filter(Boolean);
+    deal('SITE PLAN');
+    for (let i = 0; i < Math.max(1, elevViews.length); i += 2) {
+      deal('ELEVATIONS', elevViews.slice(i, i + 2));
+    }
+    deal('ROOF PLAN');
+    // Levels the drafter added sit above the stock storeys and read first,
+    // top down, each under its own name.
+    floorLevels.filter(level => level.id >= 9).forEach(level => {
       const view = planSheet(level.id, 'plan');
-      if (view) sheetPlan.push([view]);
+      if (view) deal(`${level.name} PLAN`, [view]);
     });
-    const foundation = planSheet(1, 'foundation');                    // 9
-    if (foundation) sheetPlan.push([foundation]);
-    sectionViews.forEach(view => sheetPlan.push([view]));             // 10-12
-    const basement = planSheet(1, 'plan');                            // 13
-    if (basement) sheetPlan.push([basement]);
-    if (!sheetPlan.length) return;
+    const upper = plansOf(id => id === 5 || id === 4);
+    upper.forEach(view => deal('2ND FL PLAN', [view]));
+    if (upper.length) deal('2ND FLOOR');
+    const main = plansOf(id => id === 3 || id === 2);
+    if (!main.length) deal('MAIN FL PLAN');
+    main.forEach(view => deal('MAIN FL PLAN', [view]));
+    deal('MAIN FLOOR');
+    deal('FOUNDATION', [planSheet(1, 'foundation')]);
+    if (!sectionViews.length) deal('SECTIONS');
+    sectionViews.forEach(view => deal('SECTIONS', [view]));
+    // The basement after the sections and before ELECTRIC (Movie, 1 Oct).
+    const basement = planSheet(1, 'plan');
+    if (basement) deal('BASEMENT PLAN', [basement]);
+    // ELECTRIC ONLY WHEN THERE IS ELECTRIC (Movie, 1 Oct): "sometimes i
+    // don't include them". A house with no devices placed gets no sheet.
+    // Read through the format's own reader, so a record it would refuse
+    // does not deal a sheet the painter would leave blank.
+    const levelIds = new Set(this._levels.map(level => level.id));
+    // THE MAIN FLOOR'S PLAN, FOR NOW (Movie, 1 Oct: "leave electric plan
+    // layout blank drawing of floor plan for now ... when we add E-POWER
+    // layer symbols we will show them"). The sheet carries the floor it is
+    // wired on; the symbols join it when their painter lands.
+    if (window.DraftDrawingFormat.electricDevices(this._saved.electricDevices, levelIds).length) {
+      deal('ELECTRIC PLAN', [main[0] ? { ...main[0] } : null]);
+    }
+    if (!sheetPlan.some(entry => entry.views.length)) return;
 
     const viewports = [];
     let nextId = 1;
     // Sheet numbering follows the order: sheet 1 is the first dealt.
-    sheetPlan.forEach((views, index) => {
+    sheetPlan.forEach(({ views }, index) => {
       const sheet = index + 1;
+      if (!views.length) return;
       const pif = this._autoScaleFor(views, region);
       const commit = (view, xIn, yIn) => {
         const base = { id: nextId++, pif, sheet, xIn, yIn };
@@ -1229,6 +1316,7 @@ class Component extends PageLogic {
     });
     this.setState({
       viewports,
+      sheets: sheetPlan.map(({ title }) => ({ title })),
       nextViewportId: nextId,
       selectedViewportId: null,
       activeSheet: 1,
@@ -1271,7 +1359,10 @@ class Component extends PageLogic {
     this._restoringLayout = true;
     Object.assign(this.state, next);
     this._layoutSnapshot = snapshot;
+    // AN UNDO CAN TAKE SHEETS AWAY, and the page must not be left standing
+    // on one that no longer exists.
     this.setState({ ...next, selectedViewportId: null }, () => {
+      if (this.state.activeSheet > this._sheetCount()) this.state.activeSheet = this._sheetCount();
       this._fitPaper();
       this._draw();
       this._persistLayout();
@@ -1550,7 +1641,23 @@ class Component extends PageLogic {
     const canvas = this._canvas;
     const ctx = this._ctx;
     if (!ctx || !canvas) return;
-    const { paperKey, orientation, zoom, panX, panY } = this.state;
+    const { zoom, panX, panY } = this.state;
+    this._paintSheet(ctx, canvas, { zoom, panX, panY }, this.state.activeSheet);
+  }
+
+  // ONE SHEET, ONTO ANY CANVAS. The desk's canvas at the page's zoom, or a
+  // thumbnail in the sheet rail at a few pixels to the inch -- the same
+  // painter both times, so a thumbnail cannot drift from the sheet it names.
+  //
+  // A THUMBNAIL DROPS WHAT IS NOT INK: the desk, the shadow, the paper-size
+  // label, every viewport's frame and caption, and the titleblock's lettering
+  // (its type has floors of 6 and 9px, which at five pixels to the inch
+  // would spill over the whole strip). What is left is the sheet as it reads
+  // from across the room: border, titleblock box, drawings.
+  _paintSheet(ctx, canvas, view, sheet, opts = {}) {
+    const thumb = opts.thumb === true;
+    const { paperKey, orientation } = this.state;
+    const { zoom, panX, panY } = view;
     const paper = PAPER_SIZES[paperKey];
     const pw = orientation === 'landscape' ? paper.h : paper.w;
     const ph = orientation === 'landscape' ? paper.w : paper.h;
@@ -1567,13 +1674,15 @@ class Component extends PageLogic {
     ctx.fillStyle = skin['surface-page'];
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Paper shadow. A LIGHT, NOT A COLOUR: black at 22% darkens whatever is
-    // under it, which is the job on all four skins -- the same argument
-    // shell-bars.css makes for keeping its modal scrim a literal.
-    ctx.shadowColor = 'rgba(0,0,0,0.22)';
-    ctx.shadowBlur = 18;
-    ctx.shadowOffsetX = 4;
-    ctx.shadowOffsetY = 4;
+    if (!thumb) {
+      // Paper shadow. A LIGHT, NOT A COLOUR: black at 22% darkens whatever is
+      // under it, which is the job on all four skins -- the same argument
+      // shell-bars.css makes for keeping its modal scrim a literal.
+      ctx.shadowColor = 'rgba(0,0,0,0.22)';
+      ctx.shadowBlur = 18;
+      ctx.shadowOffsetX = 4;
+      ctx.shadowOffsetY = 4;
+    }
     // THE PAPER, and from here down every literal is deliberate. A sheet is
     // white on all four skins because that is the sheet that gets printed,
     // and the ink on it is near-black for the same reason. The temptation is
@@ -1622,8 +1731,12 @@ class Component extends PageLogic {
           const tbH = (window.DraftTitleblock?.BAND_H_IN || 1.5) * zoom;
           return { x: inner.x, y: inner.y + inner.h - tbH, w: inner.w, h: tbH };
         })();
-    if (style) {
-      window.DraftTitleblock.draw(ctx, tbBox, style, this._titleblockInfo(), this._logos?.[style.id] || null);
+    if (thumb) {
+      ctx.strokeStyle = 'rgba(29,31,32,0.25)';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(tbBox.x, tbBox.y, tbBox.w, tbBox.h);
+    } else if (style) {
+      window.DraftTitleblock.draw(ctx, tbBox, style, this._titleblockInfo(sheet), this._logos?.[style.id] || null);
     } else {
       ctx.strokeStyle = 'rgba(29,31,32,0.25)';
       ctx.lineWidth = 1;
@@ -1639,33 +1752,73 @@ class Component extends PageLogic {
     // this one takes a role while the ink a few lines above does not: it is
     // printed on the desk, so on a night skin the old ink-at-40% would have
     // been dark grey on near-black.
-    ctx.fillStyle = skin['ink-quiet'];
-    ctx.font = `600 11px 'Barlow Condensed', sans-serif`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'bottom';
-    const sheetCount = this._sheetCount();
-    ctx.fillText(
-      `${pw}" × ${ph}"  (${paperKey.toUpperCase()})${sheetCount > 1 ? `  ·  SHEET ${this.state.activeSheet} OF ${sheetCount}` : ''}`,
-      panX, panY - 6,
-    );
+    if (!thumb) {
+      ctx.fillStyle = skin['ink-quiet'];
+      ctx.font = `600 11px 'Barlow Condensed', sans-serif`;
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      const sheetCount = this._sheetCount();
+      ctx.fillText(
+        `${pw}" × ${ph}"  (${paperKey.toUpperCase()})${sheetCount > 1 ? `  ·  SHEET ${sheet} OF ${sheetCount}` : ''}`,
+        panX, panY - 6,
+      );
+    }
 
-    this._sheetViewports().forEach(viewport => this._drawViewport(ctx, viewport));
+    this._sheetViewports(sheet).forEach(viewport => this._drawViewport(ctx, viewport, view, { thumb }));
   }
 
   _sheetViewports(sheet = this.state.activeSheet) {
     return this.state.viewports.filter(viewport => (viewport.sheet || 1) === sheet);
   }
 
+  // + SHEET MAKES A SHEET THAT STAYS. It used to only move the page to one
+  // past the last, which vanished the moment the drafter looked away -- a
+  // sheet existed only while something sat on it. Now it joins the named
+  // list (with no name yet, so its title is still worked out from whatever
+  // lands on it), and that is a hand on the set, so the composer lets go.
+  _addSheet() {
+    const count = this._sheetCount();
+    const sheets = Array.from({ length: count }, (_, i) => this.state.sheets[i] || { title: '' });
+    this.setState({ sheets: [...sheets, { title: '' }], activeSheet: count + 1, selectedViewportId: null, auto: false },
+      () => { this._persistLayout(); this._draw(); });
+  }
+
+  // REMOVE SHEET takes the sheet on the desk out of the set: its viewports go
+  // with it, every later sheet moves up one so the numbers stay 1, 2, 3, and
+  // the composer lets go. The last sheet cannot go -- a set is never empty.
+  _removeSheet() {
+    const count = this._sheetCount();
+    if (count <= 1) return;
+    const gone = this.state.activeSheet;
+    const sheets = Array.from({ length: count }, (_, i) => this.state.sheets[i] || { title: '' });
+    sheets.splice(gone - 1, 1);
+    const viewports = this.state.viewports
+      .filter(viewport => (viewport.sheet || 1) !== gone)
+      .map(viewport => ((viewport.sheet || 1) > gone ? { ...viewport, sheet: viewport.sheet - 1 } : viewport));
+    this.setState({ sheets, viewports, activeSheet: Math.min(gone, count - 1),
+      selectedViewportId: null, auto: false }, () => { this._persistLayout(); this._draw(); });
+  }
+
+  // A SHEET IS COUNTED IF IT IS NAMED OR IF SOMETHING IS ON IT. The named
+  // list is the dealt set (SITE PLAN, ROOF PLAN and the rest can be empty);
+  // a viewport dragged past its end still makes its sheet exist, as it
+  // always has.
   _sheetCount() {
-    return Math.max(1, ...this.state.viewports.map(viewport => viewport.sheet || 1));
+    return Math.max(1, this.state.sheets.length, ...this.state.viewports.map(viewport => viewport.sheet || 1));
+  }
+
+  // WHAT A SHEET IS CALLED: the dealt name if it has one, else what is on it.
+  _sheetTitle(sheet = this.state.activeSheet) {
+    return this.state.sheets[sheet - 1]?.title || this._pageTitle(this._sheetViewports(sheet));
   }
 
   // One plan viewport: the model drawn at the viewport's architectural scale,
   // clipped to its sheet rectangle. The transform chains model feet → paper
   // inches (pif) → screen pixels (sheet zoom + pan); the plan centre sits on
   // the viewport's xIn / yIn.
-  _drawViewport(ctx, viewport) {
-    const { zoom, panX, panY, selectedViewportId } = this.state;
+  _drawViewport(ctx, viewport, view = this.state, opts = {}) {
+    const { zoom, panX, panY } = view;
+    const { selectedViewportId } = this.state;
     const rect = this._viewportRectIn(viewport);
     const px = {
       x: panX + rect.xIn * zoom,
@@ -1688,6 +1841,9 @@ class Component extends PageLogic {
         ctx.clip();
         window.DraftLayoutPlan.drawPlan(ctx, toS, this._saved, viewport.levelId, {
           padFt: 0.5 / 12,
+          // A thumbnail is the building's shape and nothing else: no
+          // dimensions or text to smear at a few pixels to the inch.
+          shell: opts.thumb === true,
           paperColor: '#ffffff',
           // WHICH DRAWING OF THE LEVEL. Left out until 23 Sep, and that is
           // what made the FOUNDATION sheet and the basement sheet the same
@@ -1721,6 +1877,7 @@ class Component extends PageLogic {
         ctx.restore();
       }
     }
+    if (opts.thumb) return;
     // The frame is desk furniture, not ink: faint always, blue when selected.
     // LITERAL, THOUGH, AND NOT THE ACCENT, because furniture or not it is
     // drawn ON the white sheet. The accent is measured against the skin's own
@@ -1775,12 +1932,12 @@ class Component extends PageLogic {
   // The words the titleblock prints: project info rides the drawing, the
   // drafter's identity rides the personal settings package, and the scale
   // reads AS NOTED the moment two viewports disagree.
-  _titleblockInfo() {
+  _titleblockInfo(sheet = this.state.activeSheet) {
     const format = window.DraftDrawingFormat;
     const project = format.projectInfo(this._saved?.projectInfo);
     const drafter = window.DraftDrafter.normaliseDrafter(
       window.DraftProfileManager?.getActive('settings')?.content?.model?.drafter);
-    const sheetViewports = this._sheetViewports();
+    const sheetViewports = this._sheetViewports(sheet);
     const pifs = [...new Set(sheetViewports.map(viewport => viewport.pif))];
     const scale = pifs.length === 1
       ? (SCALES.find(s => s.pif === pifs[0])?.label || 'AS NOTED')
@@ -1793,9 +1950,9 @@ class Component extends PageLogic {
       drafterPhone: drafter.phone,
       date: new Date().toISOString().slice(0, 10),
       scale,
-      sheet: String(this.state.activeSheet),
+      sheet: String(sheet),
       revision: '',
-      pageTitle: this._pageTitle(sheetViewports),
+      pageTitle: this._sheetTitle(sheet),
       // The sidebar toggle flies the arrow: site plans by convention (#43),
       // any sheet by choice. The real plumbing — true north placed in model
       // space, construction north derived — is board #289.
@@ -2087,8 +2244,32 @@ class Component extends PageLogic {
     }
   }
 
+  // A PICKED SCALE GOES TO THE SELECTED VIEWPORT when there is one (audit
+  // M3, ruled 1 Oct: "the user needs to be able to change the scale in case
+  // it isn't placed how they like it"). It used to set the NEXT placement's
+  // scale only, so a viewport on the sheet could not be rescaled short of
+  // deleting it and placing it again -- while the readout reported the pick
+  // as if it had. The viewport keeps its centre, the change is undoable like
+  // any other, and it is a hand on the set, so the composer lets go of it.
+  // With nothing selected it is what it always was: the next placement's.
   _setScale(idx) {
+    const selected = this._selectedViewport();
+    if (selected) {
+      const pif = SCALES[idx].pif;
+      if (selected.pif === pif) return;
+      this.setState({
+        viewports: this.state.viewports.map(viewport =>
+          viewport.id === selected.id ? { ...viewport, pif } : viewport),
+        auto: false,
+      }, () => { this._persistLayout(); this._draw(); });
+      return;
+    }
     this.setState({ activeScale: idx }, () => this._rememberActiveProfile('settings'));
+  }
+
+  _selectedViewport() {
+    const id = this.state.selectedViewportId;
+    return id == null ? null : this.state.viewports.find(viewport => viewport.id === id) || null;
   }
 
   _setTitleblock(id) {
@@ -2158,14 +2339,19 @@ class Component extends PageLogic {
     picks('[data-sheet-list]',
       Array.from({ length: this._sheetCount() }, (_, i) => ({
         key: i + 1,
-        label: `SHEET ${i + 1}`,
+        label: `${i + 1}  ${this._sheetTitle(i + 1)}`,
         on: this.state.activeSheet === i + 1,
         data: { 'data-layout-sheet': String(i + 1) },
       })),
       sheet => this._setActiveSheet(sheet));
 
+    // THE LIST AND THE READOUT NAME THE SELECTED VIEWPORT'S SCALE while one
+    // is selected -- that is the scale a pick will change -- and the next
+    // placement's otherwise.
+    const selectedPif = this._selectedViewport()?.pif;
     picks('[data-scale-list]',
-      SCALES.map((scale, i) => ({ key: i, label: scale.label, on: activeScale === i })),
+      SCALES.map((scale, i) => ({ key: i, label: scale.label,
+        on: selectedPif != null ? scale.pif === selectedPif : activeScale === i })),
       i => this._setScale(i));
 
     const levels = this._levelsWithWalls?.() || [];
@@ -2247,13 +2433,119 @@ class Component extends PageLogic {
     redo.disabled = !this.state.historyFuture;
     title(undo, this.state.historyPast ? 'Undo the last sheet change' : 'Nothing to undo yet');
     title(redo, this.state.historyFuture ? 'Redo the sheet change just undone' : 'Nothing to redo');
+    document.querySelector('[data-layout-remove-sheet]').disabled = this._sheetCount() <= 1;
     // ON SCREEN EXACTLY WHILE THERE IS SOMETHING TO DELETE, as MODEL's is.
     document.querySelector('[data-delete-viewport]').hidden = this.state.selectedViewportId == null;
 
     document.querySelector('[data-sheet-readout]').textContent =
-      `${pw}" × ${ph}"  ·  ${SCALES[activeScale].label}`;
+      `${pw}" × ${ph}"  ·  ${selectedPif != null
+        ? (SCALES.find(scale => scale.pif === selectedPif)?.label || 'AS NOTED')
+        : SCALES[activeScale].label}`;
 
     this._paintProfileDialog();
+    this._paintRail();
+  }
+
+  // ─── The sheet rail ────────────────────────────────────────────────────
+  // Rebuilt only when the sheets' names or number change; otherwise this
+  // moves the outline and asks each thumbnail whether its sheet changed.
+  _paintRail() {
+    const grid = document.querySelector('[data-sheet-rail-grid]');
+    if (!grid || !this._drawingChecked) return;
+    const count = this._sheetCount();
+    const labels = Array.from({ length: count }, (_, i) => `${i + 1} ${this._sheetTitle(i + 1)}`);
+    const signature = labels.join('|');
+    if (grid.dataset.signature !== signature) {
+      grid.replaceChildren(...labels.map((label, i) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'lay-thumb';
+        button.dataset.sheetThumb = String(i + 1);
+        button.title = label;
+        const name = document.createElement('span');
+        name.textContent = label;
+        button.append(document.createElement('canvas'), name);
+        button.addEventListener('click', () => this._setActiveSheet(i + 1));
+        return button;
+      }));
+      grid.dataset.signature = signature;
+      this._thumbKeys = new Map();
+    }
+    grid.querySelectorAll('[data-sheet-thumb]').forEach(button => {
+      const on = Number(button.dataset.sheetThumb) === this.state.activeSheet;
+      button.classList.toggle('on', on);
+      if (on) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+    this._sizeRail(grid, count);
+    this._queueThumbs(grid);
+  }
+
+  // SMALL ENOUGH THAT THE WHOLE SET FITS WITHOUT A SCROLL: two columns, as
+  // many rows as the set needs, each thumbnail the largest that fits both its
+  // column and its share of the rail's height. Below a floor the rail
+  // scrolls rather than shrink the sheets to specks.
+  _sizeRail(grid, count) {
+    const rail = grid.parentElement;
+    const { pw, ph } = this._paperIn();
+    const pad = 8, gap = 6, labelH = 16;
+    const rows = Math.max(1, Math.ceil(count / 2));
+    const colW = (rail.clientWidth - pad * 2 - gap) / 2 - 8;
+    const rowH = (rail.clientHeight - pad * 2 - gap * (rows - 1)) / rows - labelH - 8;
+    const w = Math.max(40, Math.min(colW, rowH * pw / ph));
+    grid.style.setProperty('--thumb-w', `${Math.floor(w)}px`);
+    grid.style.setProperty('--thumb-h', `${Math.floor(w * ph / pw)}px`);
+  }
+
+  _paperIn() {
+    const paper = PAPER_SIZES[this.state.paperKey];
+    const landscape = this.state.orientation === 'landscape';
+    return { pw: landscape ? paper.h : paper.w, ph: landscape ? paper.w : paper.h };
+  }
+
+  // A THUMBNAIL REPAINTS ONLY WHEN ITS SHEET CHANGED. The key is everything
+  // the picture is made of -- the paper, the titleblock, the sheet's name and
+  // its viewports, which drawing is loaded, and the thumbnail's own size --
+  // so moving a viewport on sheet 5 repaints sheet 5 and nothing else. ONE
+  // PER FRAME: an elevation costs tens of milliseconds to paint, and a dealt
+  // set painted in one go would stall the page as it opens.
+  _queueThumbs(grid) {
+    const { pw } = this._paperIn();
+    const { paperKey, orientation, titleblock } = this.state;
+    this._thumbQueue = [...grid.querySelectorAll('[data-sheet-thumb]')].filter(button => {
+      const sheet = Number(button.dataset.sheetThumb);
+      const canvas = button.querySelector('canvas');
+      button.dataset.thumbKey = JSON.stringify([paperKey, orientation, titleblock, this._sheetTitle(sheet),
+        this._sheetViewports(sheet), this._drawingGen, canvas.clientWidth, canvas.clientHeight]);
+      // RECORDED WHEN PAINTED, not when queued: this runs on every state
+      // change, and a queue rebuilt mid-way must still hold whatever the
+      // last one had not reached.
+      return this._thumbKeys.get(sheet) !== button.dataset.thumbKey;
+    }).map(button => ({ sheet: Number(button.dataset.sheetThumb), button, pw }));
+    if (this._thumbQueue.length && !this._thumbFrame) {
+      this._thumbFrame = requestAnimationFrame(() => this._paintNextThumb());
+    }
+  }
+
+  _paintNextThumb() {
+    this._thumbFrame = null;
+    const next = this._thumbQueue?.shift();
+    if (!next) return;
+    const { sheet, button, pw } = next;
+    const canvas = button.querySelector('canvas');
+    this._thumbKeys.set(sheet, button.dataset.thumbKey);
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(canvas.clientWidth * dpr));
+    canvas.height = Math.max(1, Math.round(canvas.clientHeight * dpr));
+    try {
+      this._paintSheet(canvas.getContext('2d'), canvas,
+        { zoom: canvas.width / pw, panX: 0, panY: 0 }, sheet, { thumb: true });
+    } catch (err) {
+      // A thumbnail that cannot paint is left blank; the desk is what counts.
+      console.warn('sheet thumbnail', sheet, err);
+    }
+    document.body.dataset.thumbPaints = String(Number(document.body.dataset.thumbPaints || 0) + 1);
+    if (this._thumbQueue.length) this._thumbFrame = requestAnimationFrame(() => this._paintNextThumb());
   }
 
   _paintProfileDialog() {
@@ -2291,7 +2583,8 @@ class Component extends PageLogic {
     on('[data-open-standards]', 'click', () => this._openProfileDialog('standards'));
     document.querySelectorAll('[data-orient]').forEach(button =>
       button.addEventListener('click', () => this._setOrientation(button.dataset.orient)));
-    on('[data-layout-add-sheet]', 'click', () => this._setActiveSheet(this._sheetCount() + 1));
+    on('[data-layout-add-sheet]', 'click', () => this._addSheet());
+    on('[data-layout-remove-sheet]', 'click', () => this._removeSheet());
     on('[data-layout-add-viewport]', 'click', () => this.setState(
       { addingViewport: !this.state.addingViewport }, () => this._draw()));
     on('[data-layout-deal-sheets]', 'click', () => this._dealSheets());
