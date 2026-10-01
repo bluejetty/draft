@@ -123,6 +123,50 @@ async function armStair(page) {
 
 const autoStairButton = page => page.locator('[data-auto-stair]');
 
+// HOW CLOSE A BEAM COMES TO A WELL, flat -- and ZERO WHEN IT CROSSES ONE.
+//
+// This used to be four endpoint-to-segment distances, inline in the beam test
+// below, and that measures every case except the one the test is named for.
+// A beam running straight THROUGH a well has both its ends far outside it and
+// meets no corner, so the nearest thing any of those four distances found was
+// a corner a foot and a half away: a well cut square through a beam passed
+// at 18". Found 1 Oct when a mutant that blinds the beam lookup SURVIVED a
+// fixture built to catch it. Same rule as the page's own stairBeamGapFt:
+// crossing an edge, or an end inside the well, is no gap at all.
+const wellGap = (beam, poly) => {
+  const segDist = (p, a, b) => {
+    const dx = b.x - a.x, dz = b.z - a.z;
+    const len2 = dx * dx + dz * dz;
+    const t = len2 ? Math.max(0, Math.min(1,
+      ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2)) : 0;
+    return Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t));
+  };
+  const cross = (o, a, b) => (a.x - o.x) * (b.z - o.z) - (a.z - o.z) * (b.x - o.x);
+  const crosses = (a, b, c, d) => cross(a, b, c) * cross(a, b, d) < 0
+    && cross(c, d, a) * cross(c, d, b) < 0;
+  const inside = at => {
+    let hit = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[i], b = poly[j];
+      if (((a.z > at.z) !== (b.z > at.z))
+        && (at.x < (b.x - a.x) * (at.z - a.z) / ((b.z - a.z) || Number.EPSILON) + a.x)) {
+        hit = !hit;
+      }
+    }
+    return hit;
+  };
+  if (inside(beam.start) || inside(beam.end)) return 0;
+  let gap = Infinity;
+  poly.forEach((pt, i) => {
+    const next = poly[(i + 1) % poly.length];
+    if (crosses(beam.start, beam.end, pt, next)) gap = 0;
+    gap = Math.min(gap,
+      segDist(beam.start, pt, next), segDist(beam.end, pt, next),
+      segDist(pt, beam.start, beam.end), segDist(next, beam.start, beam.end));
+  });
+  return gap;
+};
+
 // ── THE HOUSE ARRIVES WITH ITS STAIRS ──────────────────────────────────────
 
 test('a built two-storey arrives with stacked flights and cut openings',
@@ -377,16 +421,6 @@ test('no stair opening lands on a beam carrying its floor', async ({ page }) => 
   const openings = (saved.surfaceOpenings || []).filter(o => o.stairId != null);
   expect(openings.length).toBeGreaterThan(0);
 
-  // Distance from a segment to a point, flat: the well's edges against the
-  // beam's ends and the beam against the well's corners.
-  const segDist = (p, a, b) => {
-    const dx = b.x - a.x, dz = b.z - a.z;
-    const len2 = dx * dx + dz * dz;
-    const t = len2 ? Math.max(0, Math.min(1,
-      ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2)) : 0;
-    return Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t));
-  };
-
   let checked = 0;
   openings.forEach(opening => {
     // The beams carrying THIS floor: its own FLOOR view, plus FOUNDATION's on
@@ -396,13 +430,7 @@ test('no stair opening lands on a beam carrying its floor', async ({ page }) => 
       || (opening.levelId === MAIN_FL && beam.levelId === FOUNDATION
         && beam.view === 'foundation'));
     beams.forEach(beam => {
-      let gap = Infinity;
-      opening.points.forEach((pt, i) => {
-        const next = opening.points[(i + 1) % opening.points.length];
-        gap = Math.min(gap,
-          segDist(beam.start, pt, next), segDist(beam.end, pt, next),
-          segDist(pt, beam.start, beam.end), segDist(next, beam.start, beam.end));
-      });
+      const gap = wellGap(beam, opening.points);
       checked += 1;
       expect(gap, `a beam runs within ${(gap * 12).toFixed(1)}" of the well on `
         + `level ${opening.levelId}`).toBeGreaterThan(2 / 12 - 0.01);
@@ -415,6 +443,109 @@ test('no stair opening lands on a beam carrying its floor', async ({ page }) => 
   expect(checked, 'no beam was checked against any well, so this test proves '
     + 'nothing').toBeGreaterThan(0);
 });
+
+// ── THE THREE RULES THE BUILT HOUSE NEVER REACHES ──────────────────────────
+//
+// Measured 30 Sep: four mutation rows SURVIVED this whole file, and every
+// other stair spec too. Each bends a rule the twoStorey bungalow never asks:
+// its upper flight lands in the same place stacked or free, its wells are
+// placed clear of the beams before any nudge is needed, and it has no slab.
+// A check is only as wide as its fixture, so these are the fixtures that ask.
+//
+// A PLAIN TWO-STOREY, SEEDED rather than ordered, so each test below can put
+// in exactly the one thing it is about.
+const twoStoreyHouse = (extra = {}) => empty({
+  outlines: [rect({ id: 'lower', levelId: MAIN_FL }), rect({ id: 'upper', levelId: SECOND_FL })],
+  floors: [floorOn({ id: 'floor-main', levelId: MAIN_FL }),
+    floorOn({ id: 'floor-2nd', levelId: SECOND_FL })],
+  ...extra,
+});
+
+async function pressAutoStair(page) {
+  await armStair(page);
+  await expect(autoStairButton(page)).toBeEnabled();
+  await autoStairButton(page).click();
+  await page.waitForTimeout(400);
+  return (await page.locator('#strip-message').textContent()) || '';
+}
+
+// STACKED, AND SAID SO. The first test in this file measures the stack on
+// POSITION, and on a symmetric house a free placement lands in the same spot
+// -- so `if (stairPlacementLegal(stacked))` made false SURVIVED it: the upper
+// flight was placed free and happened to stand over the lower. The note is
+// the one thing the two paths do not share, and it is what the drafter reads.
+test('the upper flight is stacked over the one below, and the strip says so',
+  async ({ page }) => {
+    await open(page, twoStoreyHouse());
+    const said = await pressAutoStair(page);
+    expect(said, 'the second floor was placed free rather than stacked')
+      .toMatch(/2ND FL: \d+ risers stacked over the run below/);
+  });
+
+// A STAIR ALREADY STANDING ON A BEAM IS NUDGED CLEAR BEFORE ITS HOLE IS CUT.
+//
+// The suggestion steers clear of the beams on its own -- "straight run along
+// the beam edge" -- so on a built house the nudge never has anything to do,
+// and removing it SURVIVED. Where it is load-bearing is a stair the
+// suggestion did not place: one already in the drawing, waiting for its
+// opening. So these two are seeded, each standing square on a beam.
+//
+// ONE PER CLAUSE of stairFloorBeams, which is two different lookups: MAIN FL
+// is the lowest storey and is carried by FOUNDATION's beams (where every
+// generated beam is filed -- dc's 7 Sep defect was not looking there), and
+// 2ND FL by its own FLOOR view's. Drop either clause and that level's well is
+// cut straight through its beam.
+test('a stair already standing on a beam is nudged clear before its hole is cut',
+  async ({ page }) => {
+    const run = levelId => ({
+      levelId, view: 'plan', widthFt: 3, riseFt: 8.895833333333334, risers: 14,
+      treadRunIn: 10, rail: 'left', shape: 'straight', turn: 'right', winders: 0,
+      start: { x: -5.416666666666667, y: 0, z: 1.7083333333333333 },
+      end: { x: 5.416666666666667, y: 0, z: 1.7083333333333333 },
+    });
+    const across = { start: { x: -20, y: 0, z: 1.7 }, end: { x: 20, y: 0, z: 1.7 } };
+    await open(page, twoStoreyHouse({
+      stairs: [{ id: 1, ...run(MAIN_FL) }, { id: 2, ...run(SECOND_FL) }],
+      beams: [
+        { id: 1, ...across, levelId: FOUNDATION, view: 'foundation' },
+        { id: 2, ...across, levelId: SECOND_FL, view: 'floor' },
+      ],
+    }));
+    const said = await pressAutoStair(page);
+    expect(said, 'a stair standing on a beam was not moved').toMatch(/nudged .* clear/);
+    await saveNow(page);
+    const saved = await savedFile(page);
+
+    [[MAIN_FL, 1], [SECOND_FL, 2]].forEach(([levelId, beamId]) => {
+      const opening = (saved.surfaceOpenings || []).find(o =>
+        o.stairId != null && Number(o.levelId) === levelId);
+      expect(opening, `no opening was cut on level ${levelId}`).toBeTruthy();
+      const gap = wellGap(saved.beams.find(item => item.id === beamId), opening.points);
+      expect(gap, `the well on level ${levelId} was cut ${(gap * 12).toFixed(1)}" `
+        + 'from the beam carrying its floor').toBeGreaterThan(2 / 12 - 0.01);
+    });
+  });
+
+// A SLAB IS POURED, NOT FRAMED, and nothing cuts a stairwell out of one. The
+// first test checks the host it got is not a slab -- on a house with no slab
+// to be given. Here MAIN FL is one, so the rule has a floor to refuse.
+test('a stair over a poured slab gets no hole, and the strip says why',
+  async ({ page }) => {
+    const house = twoStoreyHouse();
+    house.floors[0] = { ...house.floors[0], structure: 'slab' };
+    await open(page, house);
+    const said = await pressAutoStair(page);
+    expect(said, 'the refusal was not reported').toContain('MAIN FL: no floor to cut it from');
+    await saveNow(page);
+    const saved = await savedFile(page);
+    const holes = (saved.surfaceOpenings || []).filter(o => o.stairId != null);
+    expect(holes.some(o => o.hostId === 'floor-main'),
+      'a stairwell was cut out of a poured slab').toBe(false);
+    // THE CONTROL: the framed floor above still gets its hole, so the
+    // refusal is about the slab and not a press that cut nothing.
+    expect(holes.some(o => o.hostId === 'floor-2nd'),
+      'the framed second floor got no hole either').toBe(true);
+  });
 
 // ── THE BUTTON ─────────────────────────────────────────────────────────────
 
