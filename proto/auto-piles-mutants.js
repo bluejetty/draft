@@ -59,7 +59,10 @@ const MUTANTS = [
       + 'of standing between them',
     find: '      pts.splice(best.i, 1, { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 });',
     with: '      pts.splice(best.i, 1, { x: a.x, z: a.z });',
-    test: 'two piles that would land within 3 ft become one between them' },
+    // The spec checks the RULE -- no two holes within 3 ft -- and a kept
+    // corner obeys it. Where the survivor STANDS is arithmetic, and the
+    // harness pins it: "and the survivor stands between the tighter pair".
+    harness: 'proto/auto-piles-harness.js' },
   { file: 'MODEL.html',
     name: 'THE DEFECT THIS FIXED: a grade-beam garage is built on nothing',
     find: "      if (kind === 'gradebeam') {",
@@ -157,7 +160,13 @@ const MUTANTS = [
     name: 'no dedup, so every corner is piled twice (the one the harness caught)',
     find: '      if (out.some(pt => Math.hypot(pt.x - x, pt.z - z) < MERGE_FT)) return;',
     with: '',
-    test: 'the piles ride the beam centreline, not the outline' },
+    // NOT AN EQUIVALENT MUTANT, though the page cannot see it: mergeClose
+    // folds the duplicate back onto its own position, so every hole is still
+    // one hole. What the fold loses is srcIndex -- the merged pile claims no
+    // corner, so it stops riding its vertex when the outline is dragged.
+    // Measured: five harness checks fail, "every corner rides its own ring
+    // index" first.
+    harness: 'proto/auto-piles-harness.js' },
   { file: 'build-house.js',
     name: 'the spacing packs instead of evening out: 9 ft and then a stub',
     find: '      const spans = Math.max(1, Math.ceil(usable / spacing));',
@@ -193,6 +202,20 @@ const run = grep => {
   } catch { return 'failed'; }
 };
 
+// A ROW MAY NAME A HARNESS INSTEAD OF A SPEC TITLE, and the arithmetic rows
+// have to. The spec's own header hands the arithmetic to the harness -- what
+// only a page test reaches is whether the page ASKS -- so a row that bends
+// build-house.js and grades itself on the spec is asking the one instrument
+// that was told not to look. Measured 30 Sep: every build-house.js survivor
+// in this table SURVIVED the spec and was KILLED by the harness, which is
+// what their own names said ("the one the harness caught").
+const runHarness = harness => {
+  try {
+    execSync(`node ${harness}`, { cwd: ROOT, stdio: 'pipe' });
+    return 'passed';
+  } catch { return 'failed'; }
+};
+
 // THE GUARD COVERS EVERY FILE THE TABLE TOUCHES, not just MODEL.html. The
 // siblings all mutate one file and check that one; this table reaches into
 // build-house.js and drawing-format.js as well, and `git checkout --` would
@@ -206,6 +229,16 @@ if (dirty) {
   process.exit(1);
 }
 
+// A HARNESS THAT IS ALREADY RED KILLS EVERY ROW AIMED AT IT, and the table
+// would read 100% while measuring nothing. So each one named is run clean
+// first, and a red one refuses the run rather than being scored.
+for (const harness of new Set(MUTANTS.map(m => m.harness).filter(Boolean))) {
+  if (runHarness(harness) !== 'passed') {
+    console.error(`REFUSING TO RUN: ${harness} fails before any mutation, so it would kill every row aimed at it.`);
+    process.exit(1);
+  }
+}
+
 let killed = 0, ran = 0, ambiguous = 0;
 for (const m of MUTANTS) {
   const path = `${ROOT}/${m.file}`;
@@ -215,7 +248,7 @@ for (const m of MUTANTS) {
   if (hits > 1) { console.log(`  AMBIGUOUS (${hits} matches): ${m.name}`); ambiguous += 1; continue; }
   ran += 1;
   fs.writeFileSync(path, before.replace(m.find, m.with));
-  let result = run(m.test);
+  let result = m.harness ? runHarness(m.harness) : run(m.test);
   let note = '';
   if (result === 'passed' && run(null) === 'failed') {
     result = 'failed'; note = '  (caught by another check -- re-aim `test`)';

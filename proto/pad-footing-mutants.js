@@ -35,7 +35,9 @@ const MUTANTS = [
     name: 'piles get pads too, so every hole grows a rectangle',
     find: '    const pads = (columns || []).filter(column => !footingFor(column?.footing).pile',
     with: '    const pads = (columns || []).filter(column => (true)',
-    test: 'a built foundation draws a pad under every telepost' },
+    // The house the spec builds has no piles, so this has nothing to bend
+    // there. The harness does: "a drawing of only piles has no pad groups".
+    harness: 'proto/pad-footing-harness.js' },
   { file: 'MODEL.html',
     name: 'the openings drawn are the level\'s OWN, not the floor above it',
     find: '    const carried = floorCarriedBy(activeLevelId());',
@@ -63,7 +65,7 @@ const MUTANTS = [
     name: 'an unknown footing resolves to a pile rather than the standard pad',
     find: '    COLUMN_FOOTINGS.find(footing => footing.id === id) || COLUMN_FOOTINGS[0];',
     with: '    COLUMN_FOOTINGS.find(footing => footing.id === id) || COLUMN_FOOTINGS[2];',
-    test: 'every pile is drawn at its own diameter, not one size for all' },
+    harness: 'proto/pad-footing-harness.js' },
 ];
 
 const run = grep => {
@@ -71,6 +73,19 @@ const run = grep => {
     execSync('npx playwright test tests/model-html-pad-footings.spec.js'
       + (grep ? ` -g ${JSON.stringify(grep)}` : '') + ' --reporter=line',
       { cwd: ROOT, stdio: 'pipe' });
+    return 'passed';
+  } catch { return 'failed'; }
+};
+
+// A ROW MAY NAME A HARNESS INSTEAD OF A SPEC TITLE, and the arithmetic rows
+// have to. The spec's own header hands the arithmetic to the harness -- what
+// only a page test reaches is whether the page ASKS -- so a row that bends
+// build-house.js and grades itself on the spec is asking the one instrument
+// that was told not to look. Measured 30 Sep: every build-house.js survivor
+// in this table SURVIVED the spec and was KILLED by the harness.
+const runHarness = harness => {
+  try {
+    execSync(`node ${harness}`, { cwd: ROOT, stdio: 'pipe' });
     return 'passed';
   } catch { return 'failed'; }
 };
@@ -83,6 +98,16 @@ if (dirty) {
   process.exit(1);
 }
 
+// A HARNESS THAT IS ALREADY RED KILLS EVERY ROW AIMED AT IT, and the table
+// would read 100% while measuring nothing. So each one named is run clean
+// first, and a red one refuses the run rather than being scored.
+for (const harness of new Set(MUTANTS.map(m => m.harness).filter(Boolean))) {
+  if (runHarness(harness) !== 'passed') {
+    console.error(`REFUSING TO RUN: ${harness} fails before any mutation, so it would kill every row aimed at it.`);
+    process.exit(1);
+  }
+}
+
 let killed = 0, ran = 0, ambiguous = 0;
 for (const m of MUTANTS) {
   const path = `${ROOT}/${m.file}`;
@@ -92,7 +117,7 @@ for (const m of MUTANTS) {
   if (hits > 1) { console.log(`  AMBIGUOUS (${hits} matches): ${m.name}`); ambiguous += 1; continue; }
   ran += 1;
   fs.writeFileSync(path, before.replace(m.find, m.with));
-  let result = run(m.test);
+  let result = m.harness ? runHarness(m.harness) : run(m.test);
   let note = '';
   if (result === 'passed' && run(null) === 'failed') {
     result = 'failed'; note = '  (caught by another check -- re-aim `test`)';

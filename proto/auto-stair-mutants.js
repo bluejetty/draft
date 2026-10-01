@@ -84,7 +84,7 @@ const MUTANTS = [
     name: 'the upper flight is placed free instead of over the one below',
     find: '      if (stairPlacementLegal(stacked)) {',
     with: '      if (false) {',
-    test: 'a built two-storey arrives with stacked flights and cut openings' },
+    test: 'the upper flight is stacked over the one below, and the strip says so' },
   { file: 'MODEL.html',
     name: 'THE BUG THIS PORT HIT: the stair id is a string, so the reader '
       + 'drops every one of them',
@@ -105,14 +105,25 @@ const MUTANTS = [
     name: 'the well is never nudged off the beams carrying the floor',
     find: '      moved = stairNudgeOffBeams(stair) || moved;',
     with: '      moved = moved || false;',
-    test: 'no stair opening lands on a beam carrying its floor' },
+    test: 'a stair already standing on a beam is nudged clear before its hole is cut' },
   { file: 'MODEL.html',
-    name: "dc's own defect restored: only the level's OWN floor view is "
-      + 'searched, so the generated beams are invisible and the check passes '
-      + 'on an empty list',
+    // RENAMED 1 Oct. This row used to carry the name of the next one, and
+    // bent the OTHER clause: it blinds the level's own FLOOR view and leaves
+    // FOUNDATION's standing, which is the opposite of dc's defect.
+    name: "a level's own FLOOR-view beams are not searched, so an upper "
+      + "storey's well is cut through the beam carrying it",
     find: '      (Number(beam.levelId) === Number(levelId) && beam.view === \'floor\')',
     with: '      (Number(beam.levelId) === Number(levelId) && beam.view === \'nope\')',
-    test: 'no stair opening lands on a beam carrying its floor' },
+    test: 'a stair already standing on a beam is nudged clear before its hole is cut' },
+  { file: 'MODEL.html',
+    name: "dc's own defect restored: only the level's OWN floor view is "
+      + 'searched, so the generated beams on FOUNDATION are invisible and the '
+      + "lowest storey's well is cut through them",
+    find: '      (Number(beam.levelId) === Number(levelId) && beam.view === \'floor\')\n'
+      + '      || (Number(levelId) === lowestId\n'
+      + '        && Number(beam.levelId) === FOUNDATION_LEVEL_ID && beam.view === \'foundation\'));',
+    with: '      (Number(beam.levelId) === Number(levelId) && beam.view === \'floor\'));',
+    test: 'a stair already standing on a beam is nudged clear before its hole is cut' },
   { file: 'MODEL.html',
     name: 'a level that already has a stair gets a second one stacked on it',
     find: '    if (planStairs.some(stair => Number(stair.levelId) === Number(levelId))) return null;',
@@ -127,7 +138,7 @@ const MUTANTS = [
     name: 'the hole is cut out of a poured slab',
     find: "          && floor.structure !== 'slab' && (floor.points || []).length >= 3);",
     with: '          && (floor.points || []).length >= 3);',
-    test: 'a built two-storey arrives with stacked flights and cut openings' },
+    test: 'a stair over a poured slab gets no hole, and the strip says why' },
   { file: 'MODEL.html',
     name: 'the button offers itself with nothing to descend from',
     find: '    const ready = !!window.DraftAutoStair && placeable.length > 0;',
