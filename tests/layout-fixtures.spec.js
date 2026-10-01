@@ -50,7 +50,7 @@ function washroomDrawing({ fixtures = true } = {}) {
     fenestrations: [],
     fixtures: fixtures ? [
       // Basin and toilet stand on the wet wall, walking in from the door end.
-      { id: 'f1', wallId: 'w1', levelId: 1, view: 'plan', kind: 'vanity', layer: 'A-CASE', offset: 1.5, width: 2.5, depth: 1.75, side: 1 },
+      { id: 'f1', wallId: 'w1', levelId: 1, view: 'plan', kind: 'vanity', layer: 'A-FIXT', offset: 1.5, width: 2.5, depth: 1.75, side: 1 },
       { id: 'f2', wallId: 'w1', levelId: 1, view: 'plan', kind: 'toilet', layer: 'A-FIXT', offset: 4.25, width: 5 / 3, depth: 7 / 3, side: 1 },
       // The alcove tub backs onto w2 with its faucet end at the wet wall, so
       // every supply in the room lands in the one 2x6.

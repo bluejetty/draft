@@ -10469,8 +10469,10 @@
   // is fixture-kinds.js, which is the old page's array moved rather than
   // retyped.
   const FIXTURE_PICK_PX = 30;          // MODEL.dc.html:2200, the same grab zone
+  // ONE LAYER FOR ALL OF IT: cabinets and vanities ride A-FIXT with the sink
+  // in them, since a thing cannot sit on two layers
+  // (Movie, 1 Oct: "maybe we only need A-FIXT and the CASE stuff can go in there").
   const FIXTURE_LAYER = 'A-FIXT';
-  const CASEWORK_LAYER = 'A-CASE';
 
   // Which catalogue entry the tool is holding, and -- for the three kinds that
   // take two clicks -- where the first one landed.
@@ -10533,7 +10535,7 @@
       levelId: wall.levelId,
       view: wall.view || 'plan',
       kind: kind.id,
-      layer: kind.casework ? CASEWORK_LAYER : FIXTURE_LAYER,
+      layer: FIXTURE_LAYER,
       depth: kind.depthFt,
       ...props,
     };

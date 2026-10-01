@@ -289,16 +289,14 @@ if (!window.DraftProfileManager) {
       layers: Object.freeze([
         Object.freeze({ id: 'A-WALL-EXT', name: 'A-WALL-EXT', use: 'Exterior walls (Wall tool).', printable: true }),
         Object.freeze({ id: 'A-WALL-INT', name: 'A-WALL-INT', use: 'Interior walls (Wall tool).', printable: true }),
-        Object.freeze({ id: 'A-FL', name: 'A-FL', use: 'Floor plan geometry.', printable: true }),
+        Object.freeze({ id: 'A-FL', name: 'A-FL', use: 'Floor plan geometry, with the holes cut into it (stairwells, chases).', printable: true }),
         Object.freeze({ id: 'A-FL-DECK', name: 'A-FL-DECK', use: 'Floor deck.', printable: true }),
         Object.freeze({ id: 'A-FL-FLOORING', name: 'A-FL-FLOORING', use: 'Floor finishes.', printable: true }),
-        Object.freeze({ id: 'A-FL-OPNG', name: 'A-FL-OPNG', use: 'Floor openings — stairwells, chases (Fenestration tool on a selected floor).', printable: true }),
         Object.freeze({ id: 'A-DOOR', name: 'A-DOOR', use: 'Door openings (Fenestration tool).', printable: true }),
         Object.freeze({ id: 'A-GLAZ', name: 'A-GLAZ', use: 'Window openings (Fenestration tool).', printable: true }),
         Object.freeze({ id: 'A-STR', name: 'A-STR', use: 'Interior stairs with their handrails and guardrails (Stair tool).', printable: true }),
         Object.freeze({ id: 'A-STR-DECK', name: 'A-STR-DECK', use: 'Exterior / deck stairs with their handrails and guardrails.', printable: true }),
-        Object.freeze({ id: 'A-FIXT', name: 'A-FIXT', use: 'Plumbing fixtures and appliances — tub, toilet, sink, fridge, stove, washer/dryer (Fixture tool).', printable: true }),
-        Object.freeze({ id: 'A-CASE', name: 'A-CASE', use: 'Casework — base cabinets, vanities, and their countertops (Fixture tool).', printable: true }),
+        Object.freeze({ id: 'A-FIXT', name: 'A-FIXT', use: 'Plumbing fixtures, appliances and casework — tub, toilet, sink, fridge, stove, washer/dryer, base cabinets, vanities and their countertops (Fixture tool).', printable: true }),
         Object.freeze({ id: 'ROOM-IDS-AREA', name: 'ROOM-IDS-AREA', use: 'Room tags and areas.', printable: true }),
       ]),
     }),
@@ -381,8 +379,7 @@ if (!window.DraftProfileManager) {
     Object.freeze({
       group: 'Architectural — ROOF',
       layers: Object.freeze([
-        Object.freeze({ id: 'A-ROOF', name: 'A-ROOF', use: 'Roof footprints, ridges, hips, and valleys (Roof tool on ROOF).', printable: true }),
-        Object.freeze({ id: 'A-ROOF-OPNG', name: 'A-ROOF-OPNG', use: 'Roof openings — skylights, chimneys, dormers (Fenestration tool on a selected roof).', printable: true }),
+        Object.freeze({ id: 'A-ROOF', name: 'A-ROOF', use: 'Roof footprints, ridges, hips, and valleys (Roof tool on ROOF), with the holes cut into it.', printable: true })
       ]),
     }),
     Object.freeze({

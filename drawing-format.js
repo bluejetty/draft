@@ -423,7 +423,6 @@ if (!window.DraftDrawingFormat) {
   // island records a standoff: the clear distance from the host wall face to
   // the island's near edge, so it stands free of the wall but still rides it.
   const FIXTURE_KINDS = ['cabinet', 'vanity', 'sink', 'fridge', 'stove', 'dish', 'island', 'pantry', 'washer', 'dryer', 'toilet', 'tub', 'shower', 'stall', 'closet'];
-  const FIXTURE_CASEWORK = ['cabinet', 'vanity'];
   // `env.drops` like walls, lines, floors and dimensions: a refused record is
   // REPORTED rather than silently gone. MODEL.html re-emits what it refused
   // on save (withRefused), so without this sink a caller that normalises
@@ -449,7 +448,9 @@ if (!window.DraftDrawingFormat) {
         levelId: fixtureLevelId,
         view: 'plan',
         kind,
-        layer: FIXTURE_CASEWORK.includes(kind) ? 'A-CASE' : 'A-FIXT',
+        // Casework too: one layer for every fixture (Movie, 1 Oct: "maybe we only need A-FIXT and the CASE stuff can go in there").
+        // A file saved with A-CASE reads onto A-FIXT here.
+        layer: 'A-FIXT',
         offset,
         width,
         depth,
@@ -478,7 +479,11 @@ if (!window.DraftDrawingFormat) {
         hostId,
         points,
         levelId: openingLevelId,
-        layer: hostType === 'roof' ? 'A-ROOF-OPNG' : 'A-FL-OPNG',
+        // A HOLE IS PART OF WHAT IT IS CUT INTO, so it rides its host's layer
+        // (Movie, 1 Oct: "i don't think we need A-FL-OPNG its just when the
+        // A-FL has a hole in it"; and the roof the same). A file saved with
+        // the old A-FL-OPNG / A-ROOF-OPNG reads onto the new ones here.
+        layer: hostType === 'roof' ? 'A-ROOF' : 'A-FL',
         ...(hostType === 'floor' && Number.isInteger(stairId) && stairId > 0 ? { stairId } : {}),
       };
     }).filter(Boolean);

@@ -85,7 +85,7 @@ test('BUILD HOUSE cuts the stair opening; a re-build keeps it', async ({ page })
   const opening = saved.surfaceOpenings[0];
   expect(opening.hostType).toBe('floor');
   expect(opening.levelId).toBe(3);
-  expect(opening.layer).toBe('A-FL-OPNG');
+  expect(opening.layer).toBe('A-FL');
   expect(opening.stairId).toBe(saved.stairs[0].id);
   // Hosted on the MAIN FL framed floor.
   const floor = saved.floors.find(f => f.levelId === 3 && f.structure === 'floor');

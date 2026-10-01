@@ -552,7 +552,7 @@ not a wiring job like beams, stairs-on-plan or fixtures were.
   for one.
 - `planSheet(levelId, view)` gates on `planWalls(...).length`, and `drawPlan`
   bails with `if (!walls.length) return false`. **A stair view has no walls**
-  — its contents are `A-STR`, `A-FL-OPNG`, `STAIR SECTION`, `A-ANNO-NOTE`
+  — its contents are `A-STR`, `A-FL`, `STAIR SECTION`, `A-ANNO-NOTE`
   (`layer-views.js:24`) — so a hand-placed STAIR viewport would draw nothing
   even today. The walls gate is a reasonable rule for a floor plan and a wrong
   one for every generated view.
