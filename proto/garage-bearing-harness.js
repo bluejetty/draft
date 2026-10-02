@@ -3301,8 +3301,8 @@ const MUTATIONS = [
   // Eleven inches on the fixture, and the only reason it is visible at all is
   // that the fixture raises one head on purpose.
   ['the elevation tag reads the height the plate cut it to, not the window',
-    src => src.replace('            type: \'window\', widthFt: f.width, heightFt: head - sill });',
-      '            type: \'window\', widthFt: f.width, heightFt: top - bottom });')],
+    src => src.replace('            type: \'window\', widthFt: f.width, heightFt: head - sill, units: env.units });',
+      '            type: \'window\', widthFt: f.width, heightFt: top - bottom, units: env.units });')],
   // ── AND THE FINISH ON THE EXPOSED CONCRETE ──────────────────────────
   ['the foundation is never clad, whatever the drafter picked',
     src => src.replace("      if (opts && opts.finishes && g.wall && g.wall.finish",
