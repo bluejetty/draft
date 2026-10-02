@@ -4243,6 +4243,38 @@
           }
           ctx.restore();
         }
+        // THE SHAPE IN HAND: the corners placed, a band to the cursor, and
+        // the close ring once three corners make closing legal.
+        if (activeTool === 'shape' && shapeCorners.length) {
+          const trace = cursorWorld
+            ? shapeCorners.concat([{ x: cursorWorld.x, z: cursorWorld.z }])
+            : shapeCorners;
+          ctx.save();
+          ctx.strokeStyle = skin['draw-note'];
+          ctx.fillStyle = skin['draw-note'];
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([6, 4]);
+          ctx.beginPath();
+          trace.forEach((pt, i) => {
+            const p = toS(pt);
+            if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+          });
+          ctx.stroke();
+          ctx.setLineDash([]);
+          shapeCorners.forEach(corner => {
+            const p = toS(corner);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+          });
+          if (shapeCorners.length >= 3) {
+            const first = toS(shapeCorners[0]);
+            ctx.beginPath();
+            ctx.arc(first.x, first.y, 7, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
         // THE RULER'S OWN LINE, dashed so it cannot be mistaken for geometry.
         // It is the only mark on this canvas that is not in the drawing and
         // never will be, and the dash is how a drafter knows that without
@@ -7787,6 +7819,13 @@
       const stair = stairAt(worldPt);
       if (stair) return { type: 'stair', item: stair };
     }
+    // A SHAPE BEATS THE FLOOR UNDER IT: a suite outlined inside a floor would
+    // otherwise be unreachable, every click inside it taking the floor.
+    if (filterAllows('shape')) {
+      const shape = shapes().slice().reverse()
+        .find(sh => (sh.points || []).length >= 3 && pointInRing(sh.points, worldPt));
+      if (shape) return { type: 'shape', item: shape };
+    }
     if (filterAllows('outline')) {
       const outline = outlineAt(worldPt);
       if (outline) return { type: 'outline', item: outline };
@@ -7844,7 +7883,7 @@
   const paintSelection = () => {
     if (!selection.length) return;
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines(),
-      fixture: fixtures(), stair: stairs(), roof: roofs(), roomtag: roomTags() };
+      fixture: fixtures(), stair: stairs(), roof: roofs(), roomtag: roomTags(), shape: shapes() };
     // THE OPENINGS AND THEIR SHAPES IN ONE PASS. openingsOn resolves geometry
     // per opening, which is not free, and the highlight needs both the list
     // (to answer "is it still on screen") and the quad (to draw it). Calling
@@ -9007,6 +9046,7 @@
     roof: 'roofs',
     stair: 'stairs',
     roomtag: 'roomTags',
+    shape: 'shapes',
   });
 
   // HELD BY COPY ONLY WHERE A PASTE CAN LAND IT. A fixture rides a wall by
@@ -9749,6 +9789,7 @@
   // structure -- and one shared array would let an abandoned trace of either
   // finish as the other.
   let floorCorners = [];
+  let shapeCorners = [];
 
   // THE FAMILY COLOURS, and what each one is answerable to.
   //
@@ -9868,6 +9909,7 @@
   toolListeners.push(next => {
     outlineCorners = [];
     floorCorners = [];
+    shapeCorners = [];
     outlineFamily = null;
     // ARMED FROM THE KEY, which carries no house type with it -- so the trace
     // is the plain house red that outlineTraceColor falls back to, and the
@@ -10063,6 +10105,50 @@
     }
     floorCorners.push(here);
     paint();
+  };
+
+  // ── SHAPE ─────────────────────────────────────────────────────────────────
+  // A closed outline of the drafter's own, corner by corner, closed on the
+  // first corner -- the FLOOR gesture, saving a SHAPE. Movie, 1 Oct: a
+  // secondary suite is measured by "outlining the location of the suite (make
+  // a shape and use that shape for the area)". A crossed loop is refused, as
+  // the outline and the floor refuse one.
+  const shapePress = at => {
+    const here = { x: at.x, z: at.z };
+    if (shapeCorners.length >= 3) {
+      const first = shapeCorners[0];
+      if (Math.hypot(here.x - first.x, here.z - first.z) <= OUTLINE_CLOSE_FT) {
+        commitShape();
+        return;
+      }
+    }
+    shapeCorners.push(here);
+    paint();
+  };
+
+  const commitShape = () => {
+    const loop = shapeCorners.slice();
+    if (loop.length < 3) return null;
+    if (window.DraftGeometry2D.selfIntersects(loop)) {
+      sayOnStrip('That shape crosses itself, so it encloses no area.');
+      return null;
+    }
+    const { levelId } = onActiveLevel();
+    drawing.shapes = drawing.shapes || [];
+    const shape = addItem(drawing.shapes, {
+      id: newDrawingItemId('shape'),
+      points: loop,
+      levelId,
+      sourceLevelId: null,
+      flooring: null,
+      layer: 'SHAPE',
+    });
+    shapeCorners = [];
+    // SELECTED, so its PROPERTIES -- the SECONDARY SUITE tick -- are up.
+    setTool(RESTING_TOOL);
+    selectPlaced('shape', shape);
+    sayOnStrip('SHAPE closed. Tick SECONDARY SUITE in PROPERTIES if this is the suite.');
+    return shape;
   };
 
   // WHAT A FLOOR RECORD IS, in one place. The gesture below and the premade
@@ -13798,6 +13884,7 @@
   const previewTracksCursor = () => (activeTool === 'wall' && !!drawStart)
     || (activeTool === 'cut' && !!cutStart)
     || (activeTool === 'floor' && floorCorners.length > 0)
+    || (activeTool === 'shape' && shapeCorners.length > 0)
     || (activeTool === 'outline' && outlineCorners.length > 0)
     || (rulerOn && !!rulerFrom);
 
@@ -15748,6 +15835,40 @@
     return box;
   };
 
+  // A SHAPE'S AREA, and whether it is the SECONDARY SUITE (Movie, 1 Oct).
+  // A ticked shape's area is the SUITE line under its floor on the Real
+  // Estate plan's FLOOR AREAS.
+  const shapePropsNode = shape => {
+    const box = document.createElement('div');
+    const area = document.createElement('div');
+    area.className = 'props-title';
+    area.dataset.propSpan = '';
+    const sqft = Math.abs(shape.points.reduce((sum, p, i) => {
+      const q = shape.points[(i + 1) % shape.points.length];
+      return sum + (p.x * q.z - q.x * p.z) / 2;
+    }, 0));
+    area.textContent = `AREA ${Math.round(sqft).toLocaleString('en-US')} SQ FT`;
+    box.append(area);
+    const chips = document.createElement('div');
+    chips.className = 'chip-row';
+    const suite = document.createElement('button');
+    suite.type = 'button';
+    suite.className = 'sel-chip';
+    suite.dataset.shapeSuite = '';
+    suite.textContent = 'SECONDARY SUITE';
+    suite.setAttribute('aria-pressed', String(shape.suite === true));
+    suite.addEventListener('click', () => {
+      undoStack.push(brushUndoStep([shape]));
+      if (shape.suite === true) delete shape.suite; else shape.suite = true;
+      markDirty();
+      showSelectionProps();
+      paint();
+    });
+    chips.append(suite);
+    box.append(chips);
+    return box;
+  };
+
   const linePropsNode = lines => {
     const box = document.createElement('div');
     const total = lines.reduce((sum, line) => sum
@@ -15782,6 +15903,8 @@
   const SELECTION_PANELS = {
     roomtag: items => (items.length === 1
       ? { title: 'ROOM TAG', node: roomTagPropsNode(items[0]) } : null),
+    shape: items => (items.length === 1
+      ? { title: 'SHAPE', node: shapePropsNode(items[0]) } : null),
     wall: items => ({ title: 'WALL', node: wallPropsNode(items) }),
     fenestration: items => ({ title: 'OPENING', node: openingPropsNode(items) }),
     floor: items => ({ title: 'FLOOR', node: floorPropsNode(items) }),
@@ -16624,7 +16747,7 @@
   // forgotten about. A gesture here is one that PERSISTS BETWEEN PRESSES.
   const cancelGestures = () => {
     const had = !!(drawStart || rulerFrom || pendingBone || cutStart || beamStart || lineStart
-      || outlineCorners.length || floorCorners.length);
+      || outlineCorners.length || floorCorners.length || shapeCorners.length);
     drawStart = null;
     rulerFrom = null;
     beamStart = null;
@@ -16633,6 +16756,7 @@
     cutEnd = null;
     outlineCorners = [];
     floorCorners = [];
+    shapeCorners = [];
     outlineFamily = null;
     if (pendingBone) { pendingBone = null; sayOnStrip('run cancelled'); }
     return had;
@@ -16685,6 +16809,7 @@
     if (activeTool === 'roof') { roofPress(at); return; }
     if (activeTool === 'outline') { outlinePress(at); return; }
     if (activeTool === 'floor') { floorPress(at); return; }
+    if (activeTool === 'shape') { shapePress(at); return; }
     if (activeTool === 'fenestration') { placeOpening(at); return; }
     if (activeTool === 'fixture') { fixturePress(at); return; }
     // preventDefault, or the press's own focus change lands after the handler

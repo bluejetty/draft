@@ -3220,6 +3220,9 @@ class Component extends DCLogic {
         levelId: shape.levelId,
         sourceLevelId: shape.sourceLevelId ?? null,
         flooring: shape.flooring ? { ...shape.flooring } : null,
+        // MODEL.html's SECONDARY SUITE tick: kept through a save here, which
+        // names its fields one by one and would drop it otherwise.
+        ...(shape.suite === true ? { suite: true } : {}),
         layer: shape.flooring ? 'A-FL-FLOORING' : SHAPE_LAYER,
       })),
       roofs: this._roofs.map(roof => ({

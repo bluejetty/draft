@@ -809,6 +809,11 @@ if (!window.DraftDrawingFormat) {
         levelId: shapeLevelId,
         sourceLevelId: levelId(shape?.sourceLevelId, levelIds),
         flooring: shapeFlooring,
+        // A SECONDARY SUITE'S OUTLINE (Movie, 1 Oct: "the user will need to
+        // determine the area by outlining the location of the suite (make a
+        // shape and use that shape for the area)"). Its area is the suite's
+        // line on the Real Estate plan. Absent unless ticked.
+        ...(shape?.suite === true ? { suite: true } : {}),
         layer: shapeFlooring ? 'A-FL-FLOORING' : 'SHAPE',
       };
     }), env.drops).filter(Boolean);
