@@ -869,6 +869,128 @@ if (!window.DraftPremadePlans) {
     garageTieRoof: null,
   });
 
+  // ── BILEVEL ──────────────────────────────────────────────────────────────
+  //
+  // Movie, 2 Oct: a premade BILEVEL "so they don't have to draw the outlines",
+  // with "a entry floor sitting on the foundation wall", "entered onto from
+  // front door and garage door (if attached)", and from that landing "2 sets
+  // of stairs 1 going to main fl and one going down to basement (one going
+  // down to basement on 'garage door' side and the up to main on house door
+  // side)". The entry is "12ft wide (sideways) and 6 deep (from front)",
+  // "inside house rectangle", and "will need to cut out part of the house
+  // outline".
+  //
+  // THE BUNGALOW'S 32 x 40 AND ITS GARAGE, unchanged -- the same footprint on
+  // every family of the board until somebody says otherwise.
+  //
+  // THE ENTRY STRADDLES THE GARAGE LINE. Movie, same day: "the entry area will
+  // need to straddle the garage line so both doors work". The garage covers
+  // the house front from x = -4 to the right; the entry runs x = -10 to +2,
+  // so its left six feet face the street (the FRONT DOOR, and the stair UP)
+  // and its right six feet face the inside of the garage (the door IN FROM
+  // THE GARAGE, and the stair DOWN). The plain BILEVEL keeps the same spot so
+  // the two tiles are one design with and without a garage.
+  //
+  // NOT YET, by Movie's ruling of the same day: "don't do the columns, pads or
+  // overlap yet, i will show you later". So the edges the entry shares with
+  // the house carry NO wall from either side here -- the 3 1/2" wall between
+  // them, the post between the stairs and the pads under it are his to show.
+  const ENTRY_WIDTH_FT = 12;
+  const ENTRY_DEPTH_FT = 6;
+  const ENTRY_LEFT_FT = -10;
+  // Each run 3'-6" wide, side by side across the landing's back edge.
+  const BILEVEL_STAIR_WIDTH_FT = 3.5;
+
+  const entryLoop = () => {
+    const front = DEPTH_FT / 2;
+    const back = front - ENTRY_DEPTH_FT;
+    const left = ENTRY_LEFT_FT;
+    const right = left + ENTRY_WIDTH_FT;
+    // [back, right, front, left], the house's own winding.
+    return [pt(left, back), pt(right, back), pt(right, front), pt(left, front)];
+  };
+
+  // THE HOUSE WITH THE ENTRY CUT OUT of its front. Edges, in order:
+  //   0 back   1 right   2 front, right of the entry   3 notch, right side
+  //   4 notch, back   5 notch, left side   6 front, left of the entry   7 left
+  const bilevelHouseLoop = () => {
+    const halfW = WIDTH_FT / 2;
+    const halfD = DEPTH_FT / 2;
+    const [eBackL, eBackR, eFrontR, eFrontL] = entryLoop();
+    return [
+      pt(-halfW, -halfD), pt(halfW, -halfD), pt(halfW, halfD),
+      eFrontR, eBackR, eBackL, eFrontL,
+      pt(-halfW, halfD),
+    ];
+  };
+
+  // MAIN FL's windows. The bungalow's back and sides, on this loop's edge
+  // numbers; the front only where the street can see it.
+  const bilevelHouseOpenings = ({ garage = false } = {}) => [
+    opening(0, 8, 4, 'window'),
+    opening(0, 16, 4, 'window'),
+    opening(0, 24, 4, 'window'),
+    opening(1, 12, 4, 'window'),
+    opening(1, 28, 4, 'window'),
+    // Edge 2 runs from the house's right corner to the entry -- all of it
+    // behind the garage when there is one.
+    ...(garage ? [] : [opening(2, 7, 4, 'window')]),
+    // Edge 6: the six feet left of the entry.
+    opening(6, 3, 3, 'window'),
+    opening(7, 12, 4, 'window'),
+    opening(7, 28, 4, 'window'),
+  ];
+
+  // THE TWO DOORS INTO THE LANDING, on the entry's front (edge 2, which runs
+  // from its right corner leftwards). The left six feet are outdoors, the
+  // right six behind the garage.
+  const entryOpenings = ({ garage = false } = {}) => [
+    opening(2, ENTRY_WIDTH_FT - 3, 3, 'door'),
+    ...(garage ? [opening(2, 3, MAN_DOOR_WIDTH_FT, 'door')] : []),
+  ];
+
+  // THE STAIRS, as runs the page turns into stair records: `start` is the
+  // upper-floor nosing and the run goes downhill from it. The page owns the
+  // riser count; the design owns where each flight stands.
+  //   UP   on MAIN FL, descending to the landing -- the house-door side.
+  //   DOWN on ENTRY, descending to the basement -- the garage-door side.
+  const bilevelStairs = () => {
+    const back = DEPTH_FT / 2 - ENTRY_DEPTH_FT;
+    const mid = ENTRY_LEFT_FT + ENTRY_WIDTH_FT / 2;
+    const w = BILEVEL_STAIR_WIDTH_FT;
+    return {
+      up: Object.freeze({ x: mid - w / 2, z: back, toward: -1, widthFt: w }),
+      down: Object.freeze({ x: mid + w / 2, z: back, toward: -1, widthFt: w }),
+    };
+  };
+
+  const bilevel = ({ garage = false } = {}) => ({
+    house: bilevelHouseLoop(),
+    houseOpenings: bilevelHouseOpenings({ garage }),
+    storeys: 1,
+    // THE ENTRY IS ITS OWN BODY ON ITS OWN LEVEL -- the half level, 2.
+    entry: entryLoop(),
+    entryOpenings: entryOpenings({ garage }),
+    stairs: bilevelStairs(),
+    // THE CONCRETE IS UNDER THE WHOLE RECTANGLE: the entry is inside it.
+    foundation: houseLoop(),
+    // ONE ROOF OVER THE RECTANGLE, on MAIN FL's ceiling, open foyer and all.
+    houseRoof: houseLoop(),
+    // THE BUNGALOW'S GARAGE, measured against the RECTANGLE (`foundation`)
+    // rather than the notched house: its house-side wall runs along the
+    // front line where the house's front and the entry's front both stand,
+    // and either body already raises that wall.
+    garage: garage ? garageLoop() : null,
+    garageOpenings: garage ? garageOpenings() : null,
+    // THE GARAGE STANDS AT GRADE, half a storey under MAIN FL, so it is
+    // roofed on its own plate the way a 2 STOREY's garage is.
+    garageRoof: garage ? garageRoofLoop() : null,
+    garageRoofHouseEnd: (garage && GARAGE_ROOF_HOUSE_END) || null,
+    garageTieRoof: garage ? garageTieRoofLoop() : null,
+    garageTieRoofFlush: GARAGE_TIE_ROOF_FLUSH,
+    garageTieRoofRake: GARAGE_TIE_ROOF_RAKE,
+  });
+
   // WHAT THE BOARD CAN ACTUALLY BUILD, keyed by build-menu.js entry id. A
   // caller asks this rather than testing entry ids itself, so the day 2 STOREY
   // gets a design the board does not also need editing. Movie, 18 Sep: "for 2
@@ -883,6 +1005,8 @@ if (!window.DraftPremadePlans) {
     twoStorey: () => twoStorey({ garage: false }),
     'twoStorey-garage': () => twoStorey({ garage: true }),
     'twoStorey-over': () => twoStorey({ garage: true, overGarage: true }),
+    bilevel: () => bilevel({ garage: false }),
+    'bilevel-garage': () => bilevel({ garage: true }),
   });
 
   const planFor = entryId => (PLANS[entryId] ? PLANS[entryId]() : null);
@@ -893,7 +1017,8 @@ if (!window.DraftPremadePlans) {
     OVERHEAD_DOOR_WIDTHS_FT, GARAGE_ROOF_HOUSE_END,
     GARAGE_TIE_ROOF_FLUSH, GARAGE_TIE_ROOF_RAKE,
     MAN_DOOR_WIDTH_FT, GARAGE_WINDOW_WIDTH_FT, GARAGE_DOOR_HEAD_FT,
-    bungalow, twoStorey, planFor, detachedGarageOpenings,
+    ENTRY_WIDTH_FT, ENTRY_DEPTH_FT, ENTRY_LEFT_FT, BILEVEL_STAIR_WIDTH_FT,
+    bungalow, twoStorey, bilevel, planFor, detachedGarageOpenings,
     entryIds: () => Object.keys(PLANS),
   });
 })();

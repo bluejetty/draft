@@ -44,6 +44,12 @@ const MUTATIONS = [
   ['a typed WOOD FILL is ignored', 'level-assembly.js',
     c => c.replace('if (row?.[key] != null && Number.isFinite(value) && value > 0) out[key] = value;\n    });\n    [',
       'void value;\n    });\n    [')],
+  ['MAIN\'s rim band is papered across the entry\'s tall wall again', 'cut-view.js',
+    c => c.replace('            && face.level.wallTop > level.floorTop + 1e-6',
+      '            && false')],
+  ['the entry\'s wall stops at its own storey\'s ceiling again', 'cut-view.js',
+    c => c.replace('      const level = ownTop > storey.wallTop + 0.05 && storey.id === ENTRY_LEVEL_ID',
+      '      const level = false && storey.id === ENTRY_LEVEL_ID')],
   ['a plain BILEVEL gets the storey over the garage', 'level-assembly.js',
     c => c.replace("out.upper = buildType === 'modifiedBilevel';", 'out.upper = true;')],
 ];
@@ -90,6 +96,38 @@ near('MOD BILEVEL: 2ND FL still climbs from MAIN, not from OVER GARAGE', floor(m
 
 const typed = stackOf('bilevel', { sectionTable: { rows: { bilevel: { woodFillHeightFt: 5 } } } });
 near('a typed WOOD FILL moves ENTRY with it', floor(typed, 2).floorBottom, -1.0521 - 5);
+
+// ── AND THE FRONT OF A BILEVEL, SEEN FROM THE STREET ─────────────────────
+// The entry's front runs from the landing to MAIN FL's ceiling (13'-6 1/2"
+// on PROJECT's defaults): the elevation stands it to its own top rather than
+// to the ENTRY storey's, and MAIN's rim band does not paper over it.
+{
+  const front = (levelId, id, x0, x1, topHeight) =>
+    ({ id, levelId, start: { x: x0, z: 20 }, end: { x: x1, z: 20 }, ...(topHeight ? { topHeight } : {}) });
+  const saved = {
+    buildType: 'bilevel', levels: LEVELS,
+    walls: [
+      front(3, 'mainL', -16, -10),
+      front(2, 'entry', -10, 2, 13.5417),
+      { id: 'back', levelId: 3, start: { x: -16, z: -20 }, end: { x: 16, z: -20 } },
+    ],
+  };
+  const env = H.buildEnv(win, saved);
+  const cut = H.standardElevationCuts(env).find(c => c.id === 'E1');
+  const out = H.paintElevation(win, env, cut, {});
+  const fills = out.modelFills || [];
+  const spans = (f, u, lo, hi) => {
+    const us = f.pts.map(p => p.u), es = f.pts.map(p => p.e);
+    return Math.min(...us) < u && Math.max(...us) > u && Math.min(...es) >= lo && Math.max(...es) <= hi;
+  };
+  // MAIN's band: floorBottom -1.0521 to floorTop 0, padded a pixel.
+  const band = u => fills.filter(f => f.ink === '#fff' && spans(f, u, -1.2, 0.2)).length;
+  near('a BILEVEL front: MAIN\'s rim band still runs across MAIN\'s own wall', band(-13) > 0 ? 1 : 0, 1);
+  near('a BILEVEL front: and not across the entry\'s wall, which runs past it', band(-4) > 0 ? 1 : 0, 0);
+  const entryTop = Math.max(...fills.filter(f => f.pts.some(p => Math.abs(p.u + 4) < 6))
+    .flatMap(f => f.pts.filter(p => p.u > -9.5 && p.u < 1.5).map(p => p.e)));
+  near('a BILEVEL front: the entry\'s wall climbs to MAIN FL\'s ceiling', entryTop, 109.125 / 12, 0.1);
+}
 
 // AND NOTHING ELSE MOVES. A bungalow with the same levels stacks as it did.
 const plain = stackOf(null);

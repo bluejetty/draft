@@ -708,6 +708,7 @@ if (!window.DraftCutView) {
   // Any other level (a 2ND FL the default stack carries) climbs from MAIN as
   // before. Returns null when the drawing is not a split with an ENTRY, and
   // the plain stack is used.
+  const ENTRY_LEVEL_ID = 2;
   function splitFloorStack(env, floors) {
     const LA = window.DraftLevelAssembly;
     if (!LA || !LA.isSplitType || !LA.isSplitType(envBuildType(env))) return null;
@@ -1519,8 +1520,17 @@ if (!window.DraftCutView) {
         });
         return;
       }
-      const level = levelById[wall.levelId];
-      if (!level || Math.abs(p2.u - p1.u) < 0.5) return;
+      const storey = levelById[wall.levelId];
+      if (!storey || Math.abs(p2.u - p1.u) < 0.5) return;
+      // A WALL TALLER THAN ITS STOREY reaches its own top. A bilevel's entry
+      // front runs unbroken from the landing to MAIN FL's ceiling -- the foyer
+      // is open over the landing -- and stopped at the ENTRY level's own
+      // ceiling, under MAIN's floor, it left a hole in the front with the
+      // back wall's windows showing through it. Only ever UP: a wall stored
+      // shorter than its storey keeps the storey's top, as every one has.
+      const ownTop = storey.floorTop + (Number(wall.topHeight) || 0);
+      const level = ownTop > storey.wallTop + 0.05 && storey.id === ENTRY_LEVEL_ID
+        ? { ...storey, wallTop: ownTop } : storey;
       faces.push({
         wall, u1: p1.u, u2: p2.u, depth: (p1.d + p2.d) / 2, level,
         garage: garageFor(wall),
@@ -4941,8 +4951,23 @@ if (!window.DraftCutView) {
         // window. What is pushed to rimBands is what was PAINTED, so the roof
         // pass downstream reads the same surface the sheet shows.
         const parts = uncovered(run.lo, run.hi, depth);
-        paintedOf.set(run, parts);
-        parts.forEach(part => {
+        // AND NOT ACROSS A WALL THAT RUNS PAST THIS FLOOR. A bilevel's entry
+        // front stands on the landing and climbs to MAIN FL's ceiling -- the
+        // foyer is open, there is no floor package in it -- so MAIN's rim
+        // drawn across it papered a strip of white over the front door.
+        const shown = parts.flatMap(part => faces
+          .filter(face => face.level.id !== level.id
+            && face.level.floorTop < level.floorBottom - 1e-6
+            && face.level.wallTop > level.floorTop + 1e-6
+            && face.depth >= depth - 1e-6)
+          .map(spanOf)
+          .reduce((kept, through) => kept.flatMap(piece => {
+            if (through.hi <= piece.lo + 1e-6 || through.lo >= piece.hi - 1e-6) return [piece];
+            return [{ lo: piece.lo, hi: through.lo }, { lo: through.hi, hi: piece.hi }]
+              .filter(bit => bit.hi - bit.lo >= 0.5);
+          }), [part]));
+        paintedOf.set(run, shown);
+        shown.forEach(part => {
           bandFills.push({ part, depth });
           rimBands.push({
             lo: part.lo, hi: part.hi,

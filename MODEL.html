@@ -3744,9 +3744,14 @@
         .reverse(),
       assemblyFor,
       floorFtFor: id => LA.levelFloorFt(assemblyFor(id)),
+      // THE HOUSE'S OWN WALLS. A garage's concrete is filed on FOUNDATION
+      // too, at its own height, and is not what a basement stair lands under:
+      // on a bilevel its 8' beam out-measured the 5'-1 1/2" basement wall and
+      // the stair down grew three feet.
       wallTopFtFor: (id, view = 'plan') => {
         const tops = all
-          .filter(wall => wall.levelId === id && (wall.view || 'plan') === view)
+          .filter(wall => wall.levelId === id && (wall.view || 'plan') === view
+            && wall.body !== 'garage')
           .map(wall => wall.topHeight);
         return tops.length ? Math.max(...tops) : LA.DEFAULT_WALL_TOP_FT;
       },
@@ -11569,9 +11574,17 @@
   // is the same principle as the foundation guard: a record filed against a
   // level the drawing does not list is dropped on the next load, and a bone
   // press is not permission to restructure somebody's level stack.
+  //
+  // NOT THE HALF LEVELS. ENTRY (2) and OVER GARAGE (4) are floors, but they
+  // are not storeys a house is stacked on: a bilevel's ENTRY sits UNDER its
+  // MAIN FL, and counted here it would be the "lowest storey" the whole house
+  // was raised on. The design files its half-level bodies by name.
   const storeyLevels = wanted => window.DraftLayerViews
     .floorLevels(drawing?.levels || [])
+    .filter(level => !HALF_LEVEL_IDS.includes(Number(level.id)))
     .slice(0, Math.max(1, Number(wanted) || 1));
+  const HALF_LEVEL_IDS = Object.freeze([2, 4]);
+  const ENTRY_LEVEL_ID = 2;
 
   // A LEVEL THE DRAWING ACTUALLY HAS. drawing-format.js validates every
   // record's levelId against the drawing's own level list and DROPS the ones
@@ -11590,13 +11603,17 @@
   // NO SECOND OUTLINE. The foundation is the same loop raised again in
   // concrete, and an outline for it would be a second footprint for one
   // building -- which every count of outlines reads as two houses.
-  const raiseFoundationUnder = (loop, { garage = false } = {}) => {
+  // `topHeight` is the wall to the BEARING LINE, pour + sill -- a bilevel
+  // pours 5'-0" where a house pours 8'-0". Left out, the wall takes the
+  // level's own default, as it always has.
+  const raiseFoundationUnder = (loop, { garage = false, topHeight } = {}) => {
     const made = { walls: [], items: [] };
     const levelId = FOUNDATION_LEVEL_ID;
     const fdn = raiseLoop(loop, levelId, {
       viewId: 'foundation',
       wallType: contextWallType('foundation'),
       withOutline: false,
+      topHeight,
     });
     made.walls.push(...fdn.walls);
 
@@ -13359,6 +13376,86 @@
     };
   };
 
+  // ── A BILEVEL'S TWO FLIGHTS ────────────────────────────────────────────
+  //
+  // Movie, 2 Oct: from the landing "2 sets of stairs 1 going to main fl and
+  // one going down to basement (one going down to basement on 'garage door'
+  // side and the up to main on house door side)".
+  //
+  // THE DESIGN SAYS WHERE, THE LEVELS SAY HOW FAR. Each run comes from
+  // premade-plans.js as a point on the landing's back edge and a direction;
+  // the rise is stair-geometry's stairDescent, the same number the stair
+  // keeps re-deriving after it is placed:
+  //
+  //   UP    filed on MAIN FL -- a stair is filed on the floor it descends
+  //         FROM -- so its top nosing is back in the house and it lands on
+  //         the landing's back edge. Rise: ENTRY's wall + MAIN's package.
+  //   DOWN  filed on ENTRY, its top nosing on that same edge, running back
+  //         under MAIN FL to the slab. Rise: ENTRY's package + the pour and
+  //         sill, less the slab.
+  //
+  // AND MAIN FL IS OPEN OVER BOTH. The DOWN flight runs under MAIN's deck,
+  // and a deck across it is a floor at forehead height on the way down -- so
+  // each flight gets its opening in MAIN's deck, filed with its stairId so
+  // the auto pass after this finds both served and cuts nothing twice.
+  //
+  // Returns undo-shaped {list, item} pairs: one press, one Ctrl+Z.
+  const placeBilevelStairs = (spec, mainLevelId) => {
+    const SG = window.DraftStairGeometry;
+    if (!SG || !spec) return [];
+    if (!Array.isArray(drawing.stairs)) drawing.stairs = [];
+    if (!Array.isArray(drawing.surfaceOpenings)) drawing.surfaceOpenings = [];
+    const made = [];
+    const levels = stairLevels();
+    const mainDeck = (drawing.floors || []).find(floor =>
+      Number(floor.levelId) === Number(mainLevelId) && floor.structure !== 'slab');
+    let id = newStructureId(drawing.stairs);
+    const flight = (run, levelId, topAtLanding) => {
+      const descent = SG.stairDescent(levelId, levels);
+      if (!run || !descent || !(descent.riseFt > 0)) return;
+      const layout = SG.stairLayout(descent.riseFt);
+      const far = run.z + run.toward * layout.runFt;
+      const startZ = topAtLanding ? run.z : far;
+      const endZ = topAtLanding ? far : run.z;
+      const stair = {
+        id,
+        start: { x: run.x, y: 0, z: startZ },
+        end: { x: run.x, y: 0, z: endZ },
+        levelId,
+        view: 'plan',
+        widthFt: run.widthFt,
+        riseFt: layout.riseFt,
+        risers: layout.risers,
+        treadRunIn: SG.STAIR_TREAD_RUN_IN,
+        rail: stairRailSide,
+        shape: 'straight',
+        turn: 'right',
+        winders: 0,
+        auto: true,
+      };
+      id += 1;
+      drawing.stairs.push(stair);
+      made.push({ list: drawing.stairs, item: stair });
+      if (!mainDeck) return;
+      const half = run.widthFt / 2;
+      const z0 = Math.min(startZ, endZ), z1 = Math.max(startZ, endZ);
+      const opening = {
+        id: newDrawingItemId('opening'),
+        hostType: 'floor',
+        hostId: mainDeck.id,
+        points: [{ x: run.x - half, z: z0 }, { x: run.x + half, z: z0 },
+          { x: run.x + half, z: z1 }, { x: run.x - half, z: z1 }],
+        levelId: Number(mainLevelId),
+        stairId: stair.id,
+      };
+      drawing.surfaceOpenings.push(opening);
+      made.push({ list: drawing.surfaceOpenings, item: opening });
+    };
+    flight(spec.up, Number(mainLevelId), false);
+    flight(spec.down, ENTRY_LEVEL_ID, true);
+    return made;
+  };
+
   const buildPremadePlan = order => {
     if (!drawing) return null;
     const plan = window.DraftPremadePlans.planFor(order?.entry?.id);
@@ -13375,6 +13472,40 @@
     // ONE GESTURE, ONE UNDO, the same as the ordered garage: the walls' own
     // 'add' steps are dropped for the single 'built' one covering both bodies.
     const mark = undoStack.length;
+    // ── A BILEVEL'S HALF LEVEL, AND ITS HEIGHTS ─────────────────────────
+    //
+    // Movie, 2 Oct: "the BILEVEL needs a entry floor sitting on the
+    // foundation wall", heights from "the 'PROJECT' information for bilevel".
+    // A design with an `entry` gets the ENTRY level (2) added if the drawing
+    // lacks it -- the drafter pressed a tile that says BILEVEL, which IS the
+    // permission the level guard elsewhere asks for -- and the numbers come
+    // from PROJECT's section-table row through the same splitValues every
+    // elevation stands the levels on (cut-view.js splitFloorStack).
+    const levelItems = [];
+    let split = null;
+    if (plan.entry) {
+      const LA = window.DraftLevelAssembly;
+      const type = drawing.buildType || order?.entry?.type;
+      split = LA.splitValues(type, drawing.sectionTable?.rows?.[type]);
+      if (!levelPresent(ENTRY_LEVEL_ID)) {
+        const level = { id: ENTRY_LEVEL_ID, name: 'ENTRY', elev: -4, visible: true };
+        const fdnAt = (drawing.levels || [])
+          .findIndex(entry => Number(entry.id) === FOUNDATION_LEVEL_ID);
+        drawing.levels.splice(fdnAt < 0 ? drawing.levels.length : fdnAt, 0, level);
+        levelItems.push({ list: drawing.levels, item: level });
+      }
+      // THE ENTRY'S OWN WALL HEIGHT IS DERIVED: the fill wall and the entry
+      // joists stand on one sill and both reach MAIN's bearing line, so what
+      // is left is the fill less the entry package -- PROJECT's arithmetic.
+      // Stored, because the stair that climbs from the landing to MAIN FL
+      // reads its rise off this level's wall (stair-geometry stairDescent).
+      const entryPkgFt = LA.levelFloorFt(assemblyFor(ENTRY_LEVEL_ID));
+      drawing.levelAssemblies = drawing.levelAssemblies || {};
+      drawing.levelAssemblies[ENTRY_LEVEL_ID] = {
+        ...(drawing.levelAssemblies[ENTRY_LEVEL_ID] || {}),
+        wallHeightFt: split.woodFillHeightFt - entryPkgFt,
+      };
+    }
     // ── THE SHELL, ONE STOREY AT A TIME ──────────────────────────────────
     //
     // MODEL.dc.html's _buildHouse walks `floors.forEach` and calls
@@ -13397,9 +13528,51 @@
     // it would stop agreeing. The same trap wallsByEdge was built to close.
     let garageBody = null;
     let overGarageBody = null;
+    // A BILEVEL'S HOUSE leaves the entry's edges bare -- the wall between the
+    // two is Movie's to show ("don't do the columns, pads or overlap yet") --
+    // and stands its walls PROJECT's 9'-1 1/8".
     const raised = storeys.map((level, index) => raiseLoop(plan.house, level.id,
       { openings: index === 0 ? plan.houseOpenings
-        : (plan.upperOpenings || plan.houseOpenings) }));
+        : (plan.upperOpenings || plan.houseOpenings),
+        ...(plan.entry ? { against: plan.entry, topHeight: split.mainWallHeightFt } : {}) }));
+    // ── AND THE ENTRY, ON ITS OWN LEVEL ──────────────────────────────────
+    //
+    // ONLY ITS FRONT IS A WALL here, for the same reason the house leaves the
+    // notch bare. And that front runs UNBROKEN from the landing to MAIN FL's
+    // ceiling -- the foyer is open over the landing -- so it is the entry's
+    // wall, the fill and MAIN's package and MAIN's storey tall: 13'-6 1/2" on
+    // PROJECT's defaults.
+    let entryBody = null;
+    let entryLevelId = null;
+    if (plan.entry && levelPresent(ENTRY_LEVEL_ID)) {
+      const LA = window.DraftLevelAssembly;
+      entryLevelId = ENTRY_LEVEL_ID;
+      const tallFt = split.mainWallHeightFt
+        + LA.levelFloorFt(assemblyFor(levelId))
+        + split.woodFillHeightFt
+        - LA.levelFloorFt(assemblyFor(ENTRY_LEVEL_ID));
+      entryBody = raiseLoop(plan.entry, ENTRY_LEVEL_ID,
+        { openings: plan.entryOpenings, against: plan.house, topHeight: tallFt });
+      raised.push(entryBody);
+      // ── AND THE WOOD FILL ALL ROUND ──────────────────────────────────
+      //
+      // "Both pour the same 5'-0" wall and make the rest of the basement
+      // height up in wood above it" (project-page.js, Movie 4 Sep). So the
+      // house's perimeter carries a stud wall from the sill to MAIN FL's
+      // bearing line. It stands on the same sill as the ENTRY's joists, so
+      // it is filed on ENTRY at that level's own wall height (the fill less
+      // the entry package, as stored above). Without it the elevation showed
+      // a four-foot gap between the concrete and MAIN's floor.
+      //
+      // THE NOTCHED LOOP, against the entry, so the run across the entry's
+      // front is the entry's own tall wall and not a second one under it.
+      const fillBody = raiseLoop(plan.house, ENTRY_LEVEL_ID, {
+        against: plan.entry,
+        withOutline: false,
+        topHeight: split.woodFillHeightFt - LA.levelFloorFt(assemblyFor(ENTRY_LEVEL_ID)),
+      });
+      raised.push(fillBody);
+    }
     if (plan.garage) {
       // THE HOUSE IS WHAT THE GARAGE IS MEASURED AGAINST, and it is handed
       // over rather than found: the garage hangs off the house by
@@ -13419,7 +13592,7 @@
       // level, not this loop raised twice.
       garageBody = raiseLoop(plan.garage, levelId,
         { garage: true, body: 'garage',
-          openings: plan.garageOpenings, against: plan.house });
+          openings: plan.garageOpenings, against: plan.foundation || plan.house });
       raised.push(garageBody);
     }
 
@@ -13461,7 +13634,7 @@
     // rung -- its grade beam, footings, piles and slab are a different set of
     // members with their own rules, and half a garage foundation would be
     // worse than none.
-    const extra = [];
+    const extra = [...levelItems];
     const parts = ['house'];
     // A FLOOR UNDER EVERY STOREY, which is _buildHouse's own per-level pass:
     // walls AND a floor, once per floor level. A second storey framed with no
@@ -13472,6 +13645,13 @@
       drawing.floors.push(deck);
       extra.push({ list: drawing.floors, item: deck });
     });
+    // THE LANDING'S OWN DECK, the shape of the entry. MAIN FL's deck above is
+    // the notched house, so the foyer over the landing is open.
+    if (entryBody) {
+      const deck = floorRecord(plan.entry, entryLevelId, 'floor');
+      drawing.floors.push(deck);
+      extra.push({ list: drawing.floors, item: deck });
+    }
     // THE ROOM OVER THE GARAGE GETS ITS OWN DECK, because it is its own
     // footprint. The storey loop above lays a floor the shape of the HOUSE,
     // and the room hangs off the side of it -- so a room framed by that pass
@@ -13485,8 +13665,13 @@
 
     // EACH PIECE ONLY WHERE THE DRAWING HAS SOMEWHERE TO PUT IT, and the
     // strip says which pieces went up rather than claiming all of them.
+    // UNDER THE RECTANGLE when the design names one (a bilevel's entry is cut
+    // out of its house but stands inside its concrete), and a split pours
+    // PROJECT's 5'-0" with the sill on top.
     const under = levelPresent(FOUNDATION_LEVEL_ID)
-      ? raiseFoundationUnder(plan.house) : { walls: [], items: [] };
+      ? raiseFoundationUnder(plan.foundation || plan.house, split ? {
+        topHeight: split.fdnWallHeightFt + window.DraftLevelAssembly.SILL_PLATE_IN / 12,
+      } : {}) : { walls: [], items: [] };
     if (under.items.length) parts.push('foundation');
     extra.push(...under.items);
 
@@ -13494,7 +13679,8 @@
     // share get neither a beam nor a footing -- the same rule its stud walls
     // already follow, through the same edgeOnLoop.
     const garageConcrete = (plan.garage && garageBody?.outline)
-      ? raiseGarageConcrete(plan.garage, garageBody.outline, { against: plan.house })
+      ? raiseGarageConcrete(plan.garage, garageBody.outline,
+        { against: plan.foundation || plan.house })
       : { walls: [], items: [] };
     extra.push(...garageConcrete.items);
     // SAID OUT LOUD, because a garage that arrives on nothing and a garage
@@ -13518,6 +13704,15 @@
     // there and does the right thing beside a 2 STOREY. That agreement is
     // checked rather than assumed.
     const madeRoofs = [];
+    // THE GARAGE'S PLATE, as the roof reads it: cut-view bears a garage roof
+    // at the LOWEST floor's top plus this. On a bilevel the lowest floor is
+    // the ENTRY deck, while the garage's walls stand on the sill under it --
+    // one entry package lower -- so the plate is the walls' height less that
+    // package, or the roof floats ten inches over the walls it sits on.
+    const garagePlateFt = (split && garageBody)
+      ? Math.max(...garageBody.walls.map(wall => Number(wall.topHeight) || 0))
+        - window.DraftLevelAssembly.levelFloorFt(assemblyFor(ENTRY_LEVEL_ID))
+      : assemblyFor(levelId).wallHeightFt;
     if (levelPresent(ROOF_LEVEL_ID)) {
       // THE ROOF'S OWN LOOP, which is NOT always the house's body. A
       // bungalow with a garage is roofed over the perimeter of both -- the
@@ -13529,7 +13724,7 @@
         // same assembly its walls were raised to rather than typed again.
         madeRoofs.push(raiseRoofOver(plan.garageRoof, {
           garage: true,
-          plateHeightFt: assemblyFor(levelId).wallHeightFt,
+          plateHeightFt: garagePlateFt,
           sourceLevelId: levelId,
           // THE EDGE THE DESIGN SAYS DIES INTO THE BUILDING BEHIND IT. With a
           // room over, that edge also lies on the room and the derivation
@@ -13540,7 +13735,7 @@
           // the stub abuts the ROOM and never reaches the house; without one
           // the garage roof abuts the house along the two edges its walls
           // already skip. Either way it is the body the footprint stops at.
-          against: plan.overGarage || plan.house,
+          against: plan.overGarage || plan.foundation || plan.house,
         }));
       }
       // ── AND THE FOOT OF THE TIE, WHICH THE STUB STOPS SHORT OF ─────────
@@ -13558,11 +13753,11 @@
       if (plan.garageTieRoof) {
         madeRoofs.push(raiseRoofOver(plan.garageTieRoof, {
           garage: true,
-          plateHeightFt: assemblyFor(levelId).wallHeightFt,
+          plateHeightFt: garagePlateFt,
           sourceLevelId: levelId,
           flush: plan.garageTieRoofFlush,
           rake: plan.garageTieRoofRake,
-          against: plan.house,
+          against: plan.foundation || plan.house,
         }));
       }
       // ── THE ROOM'S OWN ROOF, WHEN THE DESIGN GIVES IT ONE ─────────────
@@ -13602,9 +13797,10 @@
     // clearOpeningsOverRoofs for the rule and for why the board that
     // diagnosed this named the wrong module.
     const clearedWindows = clearOpeningsOverRoofs([
-      ...raised.map(body => ({ loop: plan.house, body })),
+      ...raised.filter(body => body !== entryBody).map(body => ({ loop: plan.house, body })),
       { loop: plan.garage, body: garageBody },
       { loop: plan.overGarage, body: overGarageBody },
+      { loop: plan.entry, body: entryBody },
     ]);
     if (clearedWindows.lifted) {
       parts.push(`${clearedWindows.lifted} window${clearedWindows.lifted === 1 ? '' : 's'} raised clear of a roof`);
@@ -13697,6 +13893,9 @@
     // NOT A SECOND BEAM PASS HERE. Re-deriving the beams after the stairs
     // would move them out from under the well the nudge had just aligned to,
     // and the two would chase each other with no fixed point.
+    // A BILEVEL'S TWO FLIGHTS ARE THE DESIGN'S, placed before the auto pass so
+    // it finds both levels already served and leaves them be.
+    if (entryBody && plan.stairs) extra.push(...placeBilevelStairs(plan.stairs, levelId));
     const staired = placeAutoStairs();
     if (staired !== -1) {
       extra.push(...staired.placed);
@@ -13759,6 +13958,7 @@
       if (!touched.has(key)) touched.set(key, { levelId: Number(id), view });
     };
     storeys.forEach(level => noteLevel(level.id, 'plan'));
+    if (entryBody) noteLevel(entryLevelId, 'plan');
     if (under.items.length) noteLevel(FOUNDATION_LEVEL_ID, 'foundation');
     if (built.length) noteLevel(ROOF_LEVEL_ID, 'plan');
     const sweptDims = [];
@@ -13815,6 +14015,7 @@
     // the storey is the difference between an empty sheet that looks broken
     // and an empty sheet that tells you where to look.
     if (plan.garage) parts.splice(1, 0, 'garage');
+    if (entryBody) parts.splice(1, 0, 'entry landing');
     // WHAT WENT UP, AND WHAT DID NOT. A design carrying a room over the
     // garage into a drawing with one floor level has nowhere to put it, and
     // the drafter pressed a tile with ROOM OVER written on it -- so the strip
@@ -13887,7 +14088,7 @@
     signRefusal = {
       line: 'NOT READY YET.',
       note: `${order.entry.label} has no design on the board yet. `
-        + '1 STOREY and 1 STOREY + GARAGE do.',
+        + `${window.DraftPremadePlans.entryIds().length} tiles on the board do.`,
     };
     paintSign();
   });
