@@ -126,8 +126,17 @@ test('on a metric drawing the tag box takes millimetres', async ({ page }) => {
 
 test('the window boxes show millimetres, and a bare number typed there is mm',
   async ({ page }) => {
-    await openTagged(page, 'metric');
-    await h.selectTool(page, 'window');
+    // ON THE DRAFTING BOARD, where the FENESTRATION key is live -- the TOY
+    // board greys it, and the fixture names no board of its own.
+    await h.openModel(page, { webgl: false });
+    await page.evaluate(async ({ bucket, saved }) => {
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
+    }, { bucket: h.STORAGE_BUCKET, saved: { ...REPRO, units: 'metric', board: 'drafting' } });
+    await page.goto('/MODEL.html?left=1&lpane=build&right=1');
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+    await page.locator('[data-tool-key="fenestration"]').click();
+    await page.locator('[data-prop-row="opening"] [data-prop-value="window"]').click();
     const width = page.locator('[data-prop-field="width"]').first();
     await expect(width).toBeVisible();
     await expect(width, 'a number of millimetres, no feet or inches')
@@ -135,10 +144,10 @@ test('the window boxes show millimetres, and a bare number typed there is mm',
     const note = page.locator('[data-opening-note]');
     await expect(note).toContainText(' mm WIDE');
 
-    await width.fill('1220');
+    await width.fill('1525');
     await width.press('Enter');
-    await expect(note).toContainText('1220 mm WIDE');
-    await expect(width).toHaveValue('1220');
+    await expect(note).toContainText('1525 mm WIDE');
+    await expect(width).toHaveValue('1525');
 
     // AND AN IMPERIAL LENGTH STILL READS AS ONE: 3'-0" is 914.4, shown 915.
     await width.fill(`3'-0"`);
