@@ -1664,7 +1664,7 @@ if (!window.DraftCutView) {
           });
         });
       geo().profileEnvelope(profiles).forEach(pt => {
-        roofSamples.push({ u: pt.u, elev: pt.rise });
+        roofSamples.push({ u: pt.u, elev: pt.rise, resume: !!pt.resume, noDrop: !!pt.noDrop });
       });
     }
 
@@ -2049,13 +2049,19 @@ if (!window.DraftCutView) {
       let pen = null;
       roofSamples.forEach(s => {
         if (s.elev == null) {
-          if (pen) ctx.lineTo(X(pen.u), Y(pen.elev - fasciaFt));
+          // A BREAK. Usually an eave: the fascia drops and the pen lifts. A
+          // roof running in UNDER a higher eave (`noDrop`) has no fascia there
+          // -- it just stops behind the other one.
+          if (pen && !s.noDrop) ctx.lineTo(X(pen.u), Y(pen.elev - fasciaFt));
           pen = null;
           return;
         }
         if (!pen) {
-          ctx.moveTo(X(s.u), Y(s.elev - fasciaFt));     // fascia drop at the edge
-          ctx.lineTo(X(s.u), Y(s.elev));
+          if (s.resume) ctx.moveTo(X(s.u), Y(s.elev));  // carries on under a higher eave
+          else {
+            ctx.moveTo(X(s.u), Y(s.elev - fasciaFt));   // fascia drop at the edge
+            ctx.lineTo(X(s.u), Y(s.elev));
+          }
         } else ctx.lineTo(X(s.u), Y(s.elev));
         pen = s;
       });
