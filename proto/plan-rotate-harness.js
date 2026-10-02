@@ -409,6 +409,50 @@ function run(win) {
       JSON.stringify(M.eMarkSeat(id, 4)) === JSON.stringify(M.eMarkSeat(id, 0))),
     'back where they started');
 
+  // ── TURNING WHERE IT LIES, FOR THE BUILDERS ──────────────────────────
+  //
+  // Movie, 1 Oct: *"i'd like the drawings to start out with E1 on the right
+  // side"* -- so MODEL turns the drawing back to E1's unturned seat, lets the
+  // premade house or the ordered garage build front-down, and turns forward.
+  // IN PLACE, because the build's undo step holds its walls by identity.
+  if (!R.turnInPlace) {
+    check('plan-rotate exports turnInPlace', false, 'missing');
+    return missed;
+  }
+  const live = JSON.parse(JSON.stringify(saved));
+  const liveWas = JSON.stringify(live);
+  const firstWall = live.walls[0];
+  const wasPoints = points(live);
+  R.turnInPlace(live, 1);
+  check('turnInPlace keeps the very records, so undo still finds them',
+    live.walls[0] === firstWall, 'walls[0] identity');
+  const nowPoints = points(live);
+  // THE SAME EXCEPTIONS rotateDrawing keeps, and for the same reasons.
+  const exempt = new Set((R.NOT_ROTATED || []).map(rule => rule.key));
+  const stood = wasPoints.filter((p, i) => (p.x || p.z)
+    && !exempt.has(p.at.split(/[.[]/)[0])
+    && nowPoints[i].x === p.x && nowPoints[i].z === p.z);
+  check('and turns every point the drawing carries, the datum among them',
+    !stood.length && nowPoints.some(p => p.at.includes('drawingOrigin')),
+    stood.slice(0, 4).map(p => p.at).join(' '));
+  check('and leaves the turn count alone -- the caller turns back and forward',
+    (live.planTurn || 0) === (saved.planTurn || 0), String(live.planTurn));
+  R.turnInPlace(live, 3);
+  check('back and forward is the drawing to the bit, not merely to the lattice',
+    JSON.stringify(live) === liveWas, 'round trip');
+  // A CORNER TWO WALLS SHARE IS ONE OBJECT, and turned once per wall it would
+  // be turned twice -- the house's corners in one frame and its walls' other
+  // ends in the next.
+  const corner = { x: 4, z: 1 };
+  const pool = [{ x: 7, z: 2 }];
+  const shared = { walls: [
+    { start: { x: 0, z: 0 }, end: corner }, { start: corner, end: { x: 4, z: 9 } }] };
+  R.turnInPlace(shared, 1, { also: pool });
+  check('a shared corner turns once, not once per wall',
+    corner.x === -1 && corner.z === 4, JSON.stringify(corner));
+  check('and the corner pool it is handed turns with the walls',
+    pool[0].x === -2 && pool[0].z === 7, JSON.stringify(pool[0]));
+
   return missed;
 }
 
@@ -432,6 +476,18 @@ const sub = (src, file, find, replace) => {
 };
 
 const MUTATIONS = [
+  // ── TURNING IN PLACE, FOR THE BUILDERS ──────────────────────────────
+  ['a shared corner is turned once per wall that holds it',
+    s => sub(s, 'plan-rotate.js', '      seen.add(pt);\n', '')],
+  ['the corner pool is left in the other frame',
+    s => sub(s, 'plan-rotate.js', '    (Array.isArray(also) ? also : []).forEach(move);\n', '')],
+  ['the datum stays behind while the house turns under it',
+    s => sub(s, 'plan-rotate.js', '    move(drawing.drawingOrigin);\n', '')],
+  ['turning in place copies the records, so undo hunts walls that are gone',
+    s => sub(s, 'plan-rotate.js', '    move(drawing.drawingOrigin);\n',
+      '    ROTATED.forEach(rule => { if (Array.isArray(drawing[rule.key])) '
+      + 'drawing[rule.key] = drawing[rule.key].map(item => ({ ...item })); });\n'
+      + '    move(drawing.drawingOrigin);\n')],
   // ── THE RECORDS MOVIE NAMED, DROPPED ONE AT A TIME ──────────────────
   ['the room tags are forgotten, so every label stays in the wrong room',
     s => sub(s, 'plan-rotate.js', "    { key: 'roomTags', at: ['at'] },\n", '')],

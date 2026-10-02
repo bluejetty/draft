@@ -212,7 +212,66 @@ if (!window.DraftPlanRotate) {
     return out;
   };
 
+  // ── TURNING A DRAWING WHERE IT LIES, FOR A BUILDER ────────────────────
+  //
+  // Movie, 1 Oct: *"i'd like the drawings to start out with E1 on the right
+  // side looking leftwards towards the house"*. The premade house and the
+  // ordered garage are written front-down -- E1's own seat with no turn -- so
+  // MODEL turns the drawing back to that seat, lets the builder work, and
+  // turns everything forward again, the new building with it.
+  //
+  // IN PLACE, the opposite of rotateDrawing's bargain, and for the one reason
+  // that bargain cannot serve: the builder's undo step holds its walls and
+  // records BY IDENTITY, and a copy would leave Ctrl+Z hunting objects that
+  // are no longer in the drawing. So the POINT OBJECTS move, and every record
+  // and every undo step keeps holding the same ones.
+  //
+  // ABOUT THE ORIGIN, which is what makes back-and-forward exact: a turn about
+  // zero is a swap and a negation with no centre to add and take away, so the
+  // walls a drafter already drew come back to the bit, not merely to the
+  // lattice. ONCE PER OBJECT, because a corner two walls share is one object
+  // and turning it once per wall would turn it twice.
+  //
+  // `also` takes points held outside the drawing's lists -- MODEL's corner
+  // pool -- which must turn with the walls or a new wall would merge onto a
+  // corner standing in the other frame. planTurn is NOT touched: the caller
+  // turns back and forward, and the count is where it started.
+  const turnInPlace = (drawing, turns = 1, { also = [] } = {}) => {
+    const q = (((Number(turns) || 0) % 4) + 4) % 4;
+    if (!q || !drawing || typeof drawing !== 'object') return drawing;
+    const seen = new Set();
+    const move = pt => {
+      if (!pt || typeof pt !== 'object' || seen.has(pt)) return;
+      if (!Number.isFinite(Number(pt.x)) || !Number.isFinite(Number(pt.z))) return;
+      seen.add(pt);
+      const next = spin(pt, q);
+      pt.x = next.x;
+      pt.z = next.z;
+    };
+    ROTATED.forEach(rule => {
+      const list = drawing[rule.key];
+      if (!Array.isArray(list)) return;
+      list.forEach(item => {
+        if (!item || typeof item !== 'object') return;
+        (rule.at || []).forEach(field => move(item[field]));
+        (rule.spin || []).forEach(field => move(item[field]));
+        if (rule.points && Array.isArray(item.points)) item.points.forEach(move);
+        if (rule.bare) move(item);
+        if (rule.swapSize && q % 2 === 1
+          && Number.isFinite(Number(item.widthFt)) && Number.isFinite(Number(item.heightFt))) {
+          const was = item.widthFt;
+          item.widthFt = item.heightFt;
+          item.heightFt = was;
+        }
+      });
+    });
+    move(drawing.drawingOrigin);
+    (Array.isArray(also) ? also : []).forEach(move);
+    return drawing;
+  };
+
   window.DraftPlanRotate = Object.freeze({
+    turnInPlace,
     QUARTER_TURNS,
     LATTICE,
     snap,
