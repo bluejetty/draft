@@ -140,8 +140,12 @@ async function loadWith(page, src, mode = 'night') {
 // house is really in -- it is never clicked into place -- while DELETING the
 // key would mean something else entirely: a drawing older than the datum,
 // back-filled to the world origin, which draws a grid and a marker.
-const NO_DATUM = 'd.drawingOrigin = null; return d;';
-const AT_DATUM = 'd.drawingOrigin = { x: 0, z: 0 }; return d;';
+// WALLS TAKEN AWAY, since 1 Oct: a drawing with walls always has its datum
+// -- the SITE POINT, where the front and left foundation faces meet -- so the
+// stored drawingOrigin only decides the marker on a drawing with none. That
+// is the only place a with/without comparison can still be made.
+const NO_DATUM = 'd.walls = []; d.drawingOrigin = null; return d;';
+const AT_DATUM = 'd.walls = []; d.drawingOrigin = { x: 0, z: 0 }; return d;';
 
 // The marker's pixels on one skin: render without a datum, render with one,
 // and keep what changed.

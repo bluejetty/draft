@@ -268,6 +268,10 @@ const longestFlatRun = ops => {
     const a = pts[i - 1], b = pts[i];
     if (b.op !== 'lineTo') continue;
     if (Math.abs(a.y - b.y) > 0.5) continue;      // horizontal in screen space
+    // NOT A GRID LINE: those run edge to edge from x = 0, and the house has a
+    // grid since its datum became the site point (1 Oct). The cut line is
+    // drawn across the house, never from the canvas edge.
+    if (Math.min(a.x, b.x) <= 0.5) continue;
     best = Math.max(best, Math.abs(b.x - a.x));
   }
   return best;
