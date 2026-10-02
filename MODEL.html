@@ -4111,6 +4111,7 @@
         paintOrigin();
         paintNorth();
         paintNorthIcon();
+        paintTrackingRays();
         // ── THE WALL IN HAND ────────────────────────────────────────────
         //
         // Movie, 27 Sep: *"after the first point for wall is made a dotted
@@ -9895,6 +9896,85 @@
   // the master anyway, sight unseen, because BUILD HOUSE reads outlines and
   // the drawing is shared with a page that does show it.
   let outlineCorners = [];
+  // ── THE ORANGE TRACKING RAYS ───────────────────────────────────────────
+  //
+  // Movie, 1 Oct: *"at this point when i'm drawing a wall past the first point
+  // i'd like orange lines to shoot across the screen 90 horiz from the first
+  // point"*, then *"show the orange lines going rays outward in H and V
+  // directions 90 180 270 0 and if he crosses one of them, light it up
+  // glow"*, *"brighter orange"*, *"no snapping to the line"*, *"only brighten
+  // it and glow it when he is on it"*, and *"make those orange lines for all
+  // the ext wall nodes when they draw that and the outline too"*.
+  //
+  // SO: FROM EVERY POINT OF THE RUN IN HAND, four rays -- right, down, left,
+  // up -- faint, across the whole sheet. The one the cursor is on lights up
+  // bright and glows. Nothing is pulled anywhere: the rays are a sight line
+  // for the eye, and the press lands where it always did.
+  //
+  // THE WALL RUN'S POINTS ARE COLLECTED HERE because the wall gesture only
+  // keeps its open end (`drawStart`); each place the run has stood is pushed
+  // as it moves on, and the list empties when the run ends. The outline keeps
+  // its own corners already.
+  let wallRunNodes = [];
+  const RAY_HIT_PX = 6;
+  const trackingNodes = () => {
+    if (activeTool === 'outline') return outlineCorners;
+    if (activeTool !== 'wall' || !drawStart) { wallRunNodes = []; return wallRunNodes; }
+    const last = wallRunNodes[wallRunNodes.length - 1];
+    if (!last || Math.hypot(last.x - drawStart.x, last.z - drawStart.z) > 1e-6) {
+      wallRunNodes.push({ x: drawStart.x, z: drawStart.z });
+    }
+    return wallRunNodes;
+  };
+  // Which rays the cursor is on: within a few pixels of the line, and on the
+  // ray's own side of its node (a ray runs one way only).
+  const litRays = (nodes, cursor) => {
+    if (!cursor) return [];
+    const c = toS(cursor);
+    const lit = [];
+    nodes.forEach((node, i) => {
+      const p = toS(node);
+      const dx = c.x - p.x, dy = c.y - p.y;
+      if (Math.abs(dy) <= RAY_HIT_PX && Math.abs(dx) > RAY_HIT_PX) lit.push({ i, dir: dx > 0 ? 0 : 180 });
+      if (Math.abs(dx) <= RAY_HIT_PX && Math.abs(dy) > RAY_HIT_PX) lit.push({ i, dir: dy > 0 ? 90 : 270 });
+    });
+    return lit;
+  };
+  const paintTrackingRays = () => {
+    // THE SHEET ONLY. The rail paints its thumbnails through this same pass
+    // with `ctx` pointed at a little canvas; a sight line has no business on
+    // a thumbnail, and its attribute must describe the sheet.
+    if (ctx.canvas !== canvas) return;
+    const nodes = trackingNodes();
+    if (!nodes.length) { canvas.removeAttribute('data-tracking-rays'); return; }
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    const lit = litRays(nodes, cursorWorld);
+    const isLit = (i, dir) => lit.some(r => r.i === i && r.dir === dir);
+    const end = (p, dir) => (dir === 0 ? { x: w, y: p.y } : dir === 180 ? { x: 0, y: p.y }
+      : dir === 90 ? { x: p.x, y: h } : { x: p.x, y: 0 });
+    ctx.save();
+    nodes.forEach((node, i) => {
+      const p = toS(node);
+      [0, 90, 180, 270].forEach(dir => {
+        const on = isLit(i, dir);
+        const q = end(p, dir);
+        ctx.strokeStyle = on ? '#ffa21a' : 'rgba(255, 140, 26, 0.28)';
+        ctx.lineWidth = on ? 1.75 : 1;
+        ctx.shadowColor = on ? 'rgba(255, 170, 40, 0.95)' : 'transparent';
+        ctx.shadowBlur = on ? 10 : 0;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(q.x, q.y);
+        ctx.stroke();
+      });
+    });
+    ctx.restore();
+    // FOR THE SPECS: the nodes the rays leave from and which of them is lit.
+    canvas.setAttribute('data-tracking-rays', JSON.stringify({
+      nodes: nodes.map(n => [Number(n.x.toFixed(4)), Number(n.z.toFixed(4))]),
+      lit: lit.map(r => [r.i, r.dir]),
+    }));
+  };
   // WHICH BUILD FAMILY ARMED THE TRACE, kept for the colour: the order's rule
   // 4 is that a house outline draws in the build-bar family's colour, "red
   // house / blue split".
