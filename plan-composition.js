@@ -261,6 +261,16 @@ if (!window.DraftPlanComposition) {
     if (env.noteEnv) {
       notes.forEach(note => render.drawNoteScreen2D(ctx, toS(note.anchor), toS(note.text), note, {}, env.noteEnv));
     }
+
+    // ROOM TAGS, last, over what they name (Movie, 1 Oct): the NAME on every
+    // plan, and the SIZE under it on a Real Estate plan only -- which line
+    // shows is the caller's `areaFor`. Gated by ROOM-IDS-AREA like any layer,
+    // which also keeps them to the walls plan on a sheet that names a view.
+    if (env.roomTagEnv) {
+      pick(env.roomTags, { views: false })
+        .filter(tag => shows(tag.layer || 'ROOM-IDS-AREA'))
+        .forEach(tag => render.drawRoomTag2D(ctx, toS, tag, {}, env.roomTagEnv));
+    }
   };
 
   // ── OPENINGS, AND THE TWO THINGS WRITTEN BESIDE THEM ─────────────────────

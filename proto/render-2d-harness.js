@@ -2352,6 +2352,28 @@ suite('drawWallSeg2D', 'the reference line says which side of the drawn line the
     Math.round(left.max - left.min), Math.round(right.max - right.min));
 });
 
+suite('drawWallSeg2D', 'a listing plan fills every layer solid, with no pattern', R => {
+  // Movie, 1 Oct: "the walls should be SOLID FILL on the REAL ESTATE PLANS
+  // ... Construction plans only lines and not filled walls".
+  const fillsFor = (wallType, env) => {
+    const ctx = recordingCtx();
+    R.drawWallSeg2D(ctx, toS, { ...WALL, wallType }, false, null, 'fill', env);
+    const styles = [];
+    let style = null;
+    ctx.tape.forEach(entry => {
+      if (entry.op === 'set' && entry.prop === 'fillStyle') style = entry.value;
+      if (entry.op === 'fill') styles.push(style);
+    });
+    return { styles, strokes: ctx.tape.filter(e => e.op === 'stroke').length };
+  };
+  const solid = fillsFor('icf', { ...wallEnv, solid: true });
+  expect('every one of an ICF\'s three layers is filled', solid.styles.length, 3);
+  expect('each with the edge ink', solid.styles.every(s => s === '#1d1f20'), true);
+  expect('and no hatch is stroked inside them', solid.strokes, 0);
+  const plain = fillsFor('stud_2x6', wallEnv);
+  expect('a construction plan\'s stud wall is still paper', plain.styles.join(), '#ffffff');
+});
+
 suite('drawWallSeg2D', 'every layer edge is drawn, so a three-layer wall has four', R => {
   // Counted on the boundary pass: the hatch inside each layer strokes too,
   // and counting those made an ICF look like five extra boundaries.

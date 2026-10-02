@@ -22,6 +22,12 @@ if (!window.DraftRender2D) {
     const wallFillPrev  = wallColors.wallPreview     || 'rgba(255,255,255,0.8)';
     const wallEdge      = wallColors.wallEdge        || '#1d1f20';
     const wallEdgePrev  = wallColors.wallEdgePreview || 'rgba(29,31,32,0.45)';
+    // SOLID WALLS, for a Real Estate plan (Movie, 1 Oct: "the walls should be
+    // SOLID FILL on the REAL ESTATE PLANS ... Construction plans only lines
+    // and not filled walls"). Every layer is filled with the edge ink, and no
+    // material pattern is drawn: a listing reads walls as black, not as studs
+    // and concrete.
+    const solidWalls    = env.solid === true;
     const wtDef = env.wallTypes.find(w => w.id === (seg.wallType || 'stud_2x6')) || env.wallTypes[1];
     const totalFt = wtDef.totalIn / 12;
     const half = totalFt / 2;
@@ -185,7 +191,10 @@ if (!window.DraftRender2D) {
         ctx.lineTo(p2.x,p2.y); ctx.lineTo(p3.x,p3.y);
         ctx.closePath();
 
-        if (layer.fill === 'stud') {
+        if (solidWalls) {
+          ctx.fillStyle = wallEdge;
+          ctx.fill();
+        } else if (layer.fill === 'stud') {
           ctx.fillStyle = preview ? wallFillPrev : wallFill;
           ctx.fill();
         } else if (layer.fill === 'concrete') {
