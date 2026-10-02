@@ -389,7 +389,63 @@ check('and every opening has a head above its sill, which the format demands',
 // ── the catalogue ──
 check('the board offers a plan for every entry that has one',
   P => [P.entryIds().sort().join(','),
-    'bungalow,bungalow-garage,twoStorey,twoStorey-garage,twoStorey-over']);
+    'bilevel,bilevel-garage,bungalow,bungalow-garage,twoStorey,twoStorey-garage,twoStorey-over']);
+
+// ── the BILEVEL (Movie, 2 Oct) ──
+// "12ft wide (sideways) with and 6 deep (from front)", "inside house
+// rectangle", "cut out part of the house outline", and "the entry area will
+// need to straddle the garage line so both doors work".
+const span = loop => ({
+  x0: Math.min(...loop.map(p => p.x)), x1: Math.max(...loop.map(p => p.x)),
+  z0: Math.min(...loop.map(p => p.z)), z1: Math.max(...loop.map(p => p.z)),
+});
+check('the entry is 12 wide by 6 deep', P => {
+  const e = span(P.bilevel().entry);
+  return [`${e.x1 - e.x0}x${e.z1 - e.z0}`, '12x6'];
+});
+check('it sits inside the house rectangle, against the front', P => {
+  const e = span(P.bilevel().entry), r = span(P.bilevel().foundation);
+  return [e.x0 >= r.x0 && e.x1 <= r.x1 && e.z0 >= r.z0 && e.z1 === r.z1, true];
+});
+check('the house outline has the entry cut out of it', P => {
+  const plan = P.bilevel();
+  const area = loop => Math.abs(loop.reduce((sum, p, i) => {
+    const q = loop[(i + 1) % loop.length];
+    return sum + p.x * q.z - q.x * p.z;
+  }, 0) / 2);
+  return [area(plan.house), area(plan.foundation) - area(plan.entry)];
+});
+check('the entry straddles the garage line', P => {
+  const plan = P.bilevel({ garage: true });
+  const e = span(plan.entry), g = span(plan.garage);
+  return [e.x0 < g.x0 && g.x0 < e.x1, true];
+});
+check('the front door is on the open side and the garage door behind the garage', P => {
+  const plan = P.bilevel({ garage: true });
+  const e = span(plan.entry), g = span(plan.garage);
+  // Edge 2 runs from the entry's right corner leftwards.
+  const xs = plan.entryOpenings.map(o => e.x1 - o.offsetFt);
+  return [`${xs.length}:${xs.filter(x => x < g.x0).length}:${xs.filter(x => x > g.x0).length}`, '2:1:1'];
+});
+check('a plain bilevel has the front door alone', P => [P.bilevel().entryOpenings.length, 1]);
+check('UP is on the house-door side, DOWN on the garage-door side', P => {
+  const st = P.bilevel({ garage: true }).stairs;
+  return [st.up.x < st.down.x, true];
+});
+check('both flights leave the landing back into the house', P => {
+  const plan = P.bilevel();
+  const e = span(plan.entry);
+  return [[plan.stairs.up, plan.stairs.down].every(r => r.z === e.z0 && r.toward === -1), true];
+});
+check('and they fit side by side inside the landing\'s width', P => {
+  const plan = P.bilevel();
+  const e = span(plan.entry);
+  const { up, down } = plan.stairs;
+  return [up.x - up.widthFt / 2 >= e.x0 && down.x + down.widthFt / 2 <= e.x1
+    && up.x + up.widthFt / 2 <= down.x - down.widthFt / 2 + 1e-9, true];
+});
+check('no window looks into the garage on a BILEVEL + GARAGE', P =>
+  [P.bilevel({ garage: true }).houseOpenings.some(o => o.edge === 2), false]);
 
 // ── 2 STOREY ──
 // Movie, 19 Sep: "make the 2 storey the same for now sizewise".
@@ -662,7 +718,7 @@ check('and only the second of those carries a garage',
     'null,true']);
 
 check('an entry with no design yet answers null rather than a wrong house',
-  P => [P.planFor('bilevel'), null]);
+  P => [P.planFor('modifiedBilevel'), null]);
 
 // ── THE DETACHED GARAGE OFF THE BOARD ────────────────────────────────────
 //
