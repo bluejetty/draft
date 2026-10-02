@@ -1864,6 +1864,18 @@ if (!window.DraftDrawingFormat) {
       orientation: oneOf(raw?.orientation, ['landscape', 'portrait'], null),
       titleblock: oneOf(raw?.titleblock, LAYOUT_TITLEBLOCKS, 'roughdrafter'),
       northArrow: raw?.northArrow === true,
+      // THE TWO NORTHS (Movie, 1 Oct): construction north in quarter turns
+      // clockwise of up the plan, true north in whole degrees right (+) or
+      // left (-) of it. Kept here, on the record MODEL and the Construction
+      // Layout both write, so a change on either page is the other's. Absent
+      // until somebody sets one; north.js reads absent as straight up.
+      ...(raw?.north && typeof raw.north === 'object' ? { north: {
+        cn: ((Math.round(Number(raw.north.cn) || 0) % 4) + 4) % 4,
+        tn: (() => {
+          const d = ((Math.round(Number(raw.north.tn) || 0) + 180) % 360 + 360) % 360 - 180;
+          return d === -180 ? 180 : d;
+        })(),
+      } } : {}),
       auto: raw?.auto === true,
       viewports,
       // THE SHEETS THEMSELVES, by title (Movie, 1 Oct). Sheet N is

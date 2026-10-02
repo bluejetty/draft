@@ -1134,7 +1134,7 @@
      rises from the foot and will cover exactly this row, which is why the
      things a drafter reads WHILE DRAWING went the other way.
      WHAT IS NOT HERE: the generator. See the seam note beside ModelBuild. -->
-<script>window.DraftShellBars.bottomBar({ page: 'model' });</script>
+<script>window.DraftShellBars.bottomBar({ page: 'model', tools: ['north', 'rotate'] });</script>
 
 <!-- GRUFF'S DRIVE-THRU SIGN. Movie, 15 Sep: the menu "should pop up from the
      bottom of the screen and cover both the DRIVE-THRU MENU BUTTON and the
@@ -1344,6 +1344,7 @@
      alternative was office defaults, which would have shown four elevation
      marks to a drafter who had switched them off. -->
 <script src="./cut-marks.js"></script>
+<script src="./north.js"></script>
 <script src="./plan-rotate.js"></script>
 <script src="./outline-master.js"></script>
 <!-- The house types the build bar offers. Lifted out of MODEL.dc.html so both
@@ -3807,6 +3808,32 @@
     });
   };
 
+  // ── THE TWO NORTHS, on the plan and on the button ───────────────────────
+  // Movie, 1 Oct: construction north (dark, the main one, a quarter at a
+  // time) and true north (grey, a degree at a time) -- shown on the plan, set
+  // from the NORTH button's popup. Kept on the drawing's layout record, the
+  // key the Construction Layout writes too, so the two pages share one north.
+  const northOf = () => (window.DraftNorth
+    ? window.DraftNorth.normalise(drawing?.layout?.north) : { cn: 0, tn: 0 });
+  let northIconKey = null;
+  const paintNorthIcon = () => {
+    const button = document.querySelector('[data-north-button]');
+    if (!button || !window.DraftNorth) return;
+    const n = northOf();
+    const key = `${n.cn}:${n.tn}`;
+    if (key === northIconKey) return;
+    northIconKey = key;
+    button.innerHTML = window.DraftNorth.iconSvg(n);
+  };
+  const paintNorth = () => {
+    if (!window.DraftNorth || !drawing) return;
+    const w = canvas.clientWidth;
+    window.DraftNorth.drawPair(ctx, w - 80, 96, 30, northOf(), {
+      cnColor: skin['draw-wall-edge'] || '#1d1f20',
+      tnColor: skin['ink-quiet'] || '#8c9196',
+    });
+  };
+
   const paintOrigin = () => {
     const R = window.DraftRender2D;
     if (!R) {
@@ -4072,6 +4099,8 @@
         // page (MODEL.dc.html:6956, immediately before the committed lines):
         // it is the one point the drafter must always be able to find.
         paintOrigin();
+        paintNorth();
+        paintNorthIcon();
         // ── THE WALL IN HAND ────────────────────────────────────────────
         //
         // Movie, 27 Sep: *"after the first point for wall is made a dotted
@@ -13814,7 +13843,9 @@
   const rulerChip = strip.querySelector('[data-mode-ruler]');
   const tsquareChip = strip.querySelector('[data-mode-tsquare]');
   const scaleChip = strip.querySelector('[data-mode-scale]');
-  const rotateChip = strip.querySelector('[data-mode-rotate]');
+  // IN THE BOTTOM BAR since 1 Oct, not the top strip -- so asked of the
+  // document rather than of the strip.
+  const rotateChip = document.querySelector('[data-mode-rotate]');
   const brushChip = strip.querySelector('[data-mode-brush]');
   const brushLoadOut = strip.querySelector('[data-brush-load]');
   const lengthBox = document.getElementById('frozen-length');
@@ -14063,6 +14094,18 @@
   // that is the whole point of the press, "depending on length of house so it
   // fits on the layout pages nicer" -- so leaving the camera where it was
   // would put a house that now runs the other way half off the sheet.
+  const northButton = document.querySelector('[data-north-button]');
+  if (northButton) {
+    northButton.addEventListener('click', () => {
+      if (!drawing || !window.DraftNorth) return;
+      window.DraftNorth.openPopup(northButton, northOf(), next => {
+        drawing.layout = { ...(drawing.layout || {}), north: next };
+        markDirty();
+        paint();
+      });
+    });
+  }
+
   if (rotateChip) {
     rotateChip.addEventListener('click', () => {
       if (!drawing) return;

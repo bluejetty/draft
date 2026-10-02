@@ -663,6 +663,11 @@
   #sheet-row button:disabled, #sheet-row button:disabled:hover {
     color: var(--ink-quiet); opacity:0.35; cursor:not-allowed;
     border-color: var(--edge-panel); }
+  /* THE PAGE'S OWN BUTTONS at the head of the right-hand row: NORTH, and
+     HOUSE ROTATE at half again a chip's size (Movie, 1 Oct: "a slightly
+     larger 150% sized PAGE ROTATE button"). Icons, so square-ish. */
+  #sheet-row .bar-tool { padding:0 6px; justify-content:center; min-width:28px; }
+  #sheet-row .bar-tool-big { height:36px; min-width:42px; padding:0 8px; }
   /* THE CHANGE NOTE USED TO STEP DOWN WHEN THE BANNER WAS UP -- 34px for the
      banner's line, 68px to clear it -- and the column is where that goes: a
      hidden child is `display:none`, which leaves the stack, so the two are
