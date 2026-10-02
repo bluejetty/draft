@@ -237,14 +237,14 @@ if (!window.DraftPlanRotate) {
   // corner standing in the other frame. planTurn is NOT touched: the caller
   // turns back and forward, and the count is where it started.
   const turnInPlace = (drawing, turns = 1, { also = [] } = {}) => {
-    const n = (((Number(turns) || 0) % 4) + 4) % 4;
-    if (!n || !drawing || typeof drawing !== 'object') return drawing;
+    const q = (((Number(turns) || 0) % 4) + 4) % 4;
+    if (!q || !drawing || typeof drawing !== 'object') return drawing;
     const seen = new Set();
     const move = pt => {
       if (!pt || typeof pt !== 'object' || seen.has(pt)) return;
       if (!Number.isFinite(Number(pt.x)) || !Number.isFinite(Number(pt.z))) return;
       seen.add(pt);
-      const next = spin(pt, n);
+      const next = spin(pt, q);
       pt.x = next.x;
       pt.z = next.z;
     };
@@ -257,7 +257,7 @@ if (!window.DraftPlanRotate) {
         (rule.spin || []).forEach(field => move(item[field]));
         if (rule.points && Array.isArray(item.points)) item.points.forEach(move);
         if (rule.bare) move(item);
-        if (rule.swapSize && n % 2 === 1
+        if (rule.swapSize && q % 2 === 1
           && Number.isFinite(Number(item.widthFt)) && Number.isFinite(Number(item.heightFt))) {
           const was = item.widthFt;
           item.widthFt = item.heightFt;
