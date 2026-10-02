@@ -8621,6 +8621,40 @@
   // ONE PRESS, ONE UNDO. Five separate steps would have Ctrl+Z leave three
   // walls and a garage-flagged loop standing around them, which is not a
   // state any gesture can otherwise produce.
+  // ── BUILT FRONT-DOWN, STANDING WHERE E1 IS ──────────────────────────────
+  //
+  // Movie, 1 Oct: *"i'd like the drawings to start out with E1 on the right
+  // side looking leftwards towards the house"* -- and HOUSE ROTATE moves E1
+  // too. The premade house and the ordered garage are both designed with their
+  // front down the plan, E1's seat before any turn, and until this they came
+  // out that way whatever the drawing's turn: a garage door facing E3 on a
+  // turned drawing, its "front" on the elevation that reads the back.
+  //
+  // SO THE BUILDER WORKS IN ITS OWN FRAME. The drawing turns back to no turn,
+  // the builder places against the house exactly as it was written to, and
+  // everything turns forward again -- the new building with it. In place and
+  // about the origin (plan-rotate.js says why), so the 'built' undo step still
+  // holds the very walls it names and the drafter's own walls come back to the
+  // bit. The corner pool turns too, or a new wall would merge onto a corner
+  // standing in the other frame.
+  const builtFrontDown = build => order => {
+    const ROT = window.DraftPlanRotate;
+    const turn = ((Number(drawing?.planTurn) || 0) % 4 + 4) % 4;
+    if (!drawing || !turn || !ROT?.turnInPlace) return build(order);
+    ROT.turnInPlace(drawing, 4 - turn, { also: vertexPool });
+    markDirty();
+    let out = null;
+    try {
+      out = build(order);
+    } finally {
+      ROT.turnInPlace(drawing, turn, { also: vertexPool });
+      markDirty();
+      fit();
+      paint();
+    }
+    return out;
+  };
+
   const buildOrderedGarage = order => {
     if (!drawing || !order?.entry?.needsSize || !order.size) return null;
     // THE LOWEST FLOOR LEVEL, NOT THE ACTIVE ONE -- the same fix the premade
@@ -8728,7 +8762,7 @@
   // the drafter's next move is to look at the garage, and it is behind the
   // sign.
   window.ModelBuild.onOrder(order => {
-    if (!buildOrderedGarage(order)) return;
+    if (!builtFrontDown(buildOrderedGarage)(order)) return;
     window.ModelBuild.orderServed();
     setSign(false);
   });
@@ -13689,7 +13723,7 @@
   // tile through the same predicate and stands off.
   window.ModelBuild.onOrder(order => {
     if (!order?.entry || isGarageChoice(order)) return;
-    if (buildPremadePlan(order)) {
+    if (builtFrontDown(buildPremadePlan)(order)) {
       setSign(false);
       // SPENT: something was BUILT, which is exactly what orderServed means
       // (:4262). A refusal below spends nothing -- the drafter's choice still
@@ -18426,6 +18460,12 @@
     activeLevelIdx: 3,
     nextLevelId: 9,
     nextDrawingItemId: 1,
+    // E1 ON THE RIGHT, looking left at the house. Movie, 1 Oct: *"i'd like
+    // the drawings to start out with E1 on the right side looking leftwards
+    // towards the house, which will place E2 on the bottom looking up"*.
+    // Three quarter turns is that seat (cut-marks.js: S, W, N, E), and HOUSE
+    // ROTATE carries on round from it.
+    planTurn: 3,
   })], 'new-drawing.json', { type: 'application/json' });
 
   // ── LEAVING THE PAGE IS LEAVING THE DRAWING ──────────────────────────────
