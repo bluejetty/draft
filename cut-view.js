@@ -687,11 +687,74 @@ if (!window.DraftCutView) {
     });
   }
 
+  // ── A SPLIT STANDS ITS HALF-LEVELS WHERE PROJECT DOES ─────────────────
+  //
+  // Movie, 2 Oct: the premade BILEVEL takes its "floor heights and
+  // thicknesses" from PROJECT, and "the BILEVEL needs a entry floor sitting on
+  // the foundation wall". So on a BILEVEL or MOD BILEVEL that has an ENTRY:
+  //
+  //   ENTRY        on the SILL atop the 5'-0" pour; its joists and the wood
+  //                fill wall beside them both reach MAIN's bearing line, so
+  //                its wall is the fill less its own package (3'-4 3/4").
+  //   MAIN FL      the datum, 0 -- as on every drawing. It is NOT the lowest
+  //                floor here, which is the whole point of the change.
+  //   OVER GARAGE  (MOD BILEVEL) the lower 2nd floor: its deck the typed
+  //                deck-to-deck above ENTRY's, not a storey over MAIN.
+  //
+  // The numbers are PROJECT's own -- its section table row through
+  // DraftLevelAssembly.splitValues -- and the arithmetic is its
+  // buildWallSection's: fill = entry wall + entry package.
+  //
+  // Any other level (a 2ND FL the default stack carries) climbs from MAIN as
+  // before. Returns null when the drawing is not a split with an ENTRY, and
+  // the plain stack is used.
+  function splitFloorStack(env, floors) {
+    const LA = window.DraftLevelAssembly;
+    if (!LA || !LA.isSplitType || !LA.isSplitType(envBuildType(env))) return null;
+    const ids = floors.map(level => Number(level.id));
+    if (!ids.includes(2) || !ids.includes(3)) return null;
+    const type = envBuildType(env);
+    const split = LA.splitValues(type, env.sectionRow ? env.sectionRow(type) : null);
+    const pkgFt = id => env.levelFloorFt(id);
+    const main = env.levelAssembly(3);
+    const mainPkgFt = split.mainJoistDepthIn || split.mainSheathingIn
+      ? ((split.mainJoistDepthIn ?? main.joistDepthIn) + (split.mainSheathingIn ?? main.sheathingIn)) / 12
+      : pkgFt(3);
+    const place = {};
+    place[3] = { floorTop: 0, floorBottom: -mainPkgFt, wallTop: split.mainWallHeightFt };
+    const entrySill = -mainPkgFt - split.woodFillHeightFt;
+    place[2] = { floorBottom: entrySill, floorTop: entrySill + pkgFt(2), wallTop: -mainPkgFt };
+    if (split.upper && ids.includes(4)) {
+      const deck = place[2].floorTop + split.upperDeckAboveEntryFt;
+      place[4] = { floorTop: deck, floorBottom: deck - pkgFt(4), wallTop: deck + split.upperWallHeightFt };
+    }
+    // Everything else stacks on the last FULL storey below it in the list.
+    let under = place[3];
+    return floors.map(level => {
+      const id = Number(level.id);
+      const assembly = env.levelAssembly(id);
+      let at = place[id];
+      if (!at) {
+        const floorTop = under.wallTop + pkgFt(id);
+        at = { floorTop, floorBottom: floorTop - pkgFt(id), wallTop: floorTop + assembly.wallHeightFt };
+      }
+      if (id !== 2 && id !== 4) under = at;
+      return {
+        id: level.id, name: level.name, ...at,
+        joistDepthIn: assembly.joistDepthIn,
+        sheathingIn: assembly.sheathingIn,
+      };
+    });
+  }
+
   function sectionLevelStack(env) {
     const floors = env.floorLevels();
     if (!floors.length) return null;
     let floorTop = 0;
-    const stack = floors.map((level, index) => {
+    const splitStack = splitFloorStack(env, floors);
+    const split = splitStack ? window.DraftLevelAssembly.splitValues(envBuildType(env),
+      env.sectionRow ? env.sectionRow(envBuildType(env)) : null) : null;
+    const stack = splitStack || floors.map((level, index) => {
       if (index > 0) {
         floorTop += env.levelAssembly(floors[index - 1].id).wallHeightFt
           + env.levelFloorFt(level.id);
@@ -706,7 +769,8 @@ if (!window.DraftCutView) {
         sheathingIn: assembly.sheathingIn,
       };
     });
-    const lowest = stack[0];
+    // The lowest DECK, which on a split is ENTRY and not the first in the list.
+    const lowest = stack.reduce((low, level) => (level.floorBottom < low.floorBottom ? level : low), stack[0]);
     const foundationAssembly = env.levelAssembly(1);
     const wallTop = lowest.floorBottom;
     // ── THE PLATE COMES OFF BEFORE THE POUR DOES ─────────────────────────
@@ -754,8 +818,10 @@ if (!window.DraftCutView) {
     // THE FOOTINGS MOVE WITH IT, because footingBottom is measured from this
     // base. That is the correction, not a side effect: the wall is a plate
     // taller than the painter had it, so its underside is a plate deeper.
+    // A SPLIT POURS ITS OWN WALL: PROJECT's 5'-0", with the rest of the
+    // basement made up in wood above the sill.
     const wallBottom = wallTop - houseSillPlateFt()
-      - env.levelWallTopFt(1, 'foundation');
+      - (split ? split.fdnWallHeightFt : env.levelWallTopFt(1, 'foundation'));
     // ── A ROOF BEARS ON THE WALLS THAT HOLD IT UP ────────────────────────
     //
     // `bearing` was the top of the TOPMOST FLOOR LEVEL IN THE STACK, and the
@@ -787,18 +853,23 @@ if (!window.DraftCutView) {
     // bearing at zero would put its roof through the floor.
     const built = new Set((env.walls() || []).map(wall => Number(wall.levelId)));
     const standing = stack.filter(level => built.has(Number(level.id)));
-    const bearer = standing.length ? standing[standing.length - 1]
-      : stack[stack.length - 1];
+    // The TALLEST standing storey: on a split the list does not climb in
+    // order, so the last one is not always the top.
+    const tallest = list => list.reduce((top, level) => (level.wallTop > top.wallTop ? level : top), list[0]);
+    const bearer = standing.length ? tallest(standing) : tallest(stack);
+    // The split row's slab and footing where it typed them, as PROJECT reads.
+    const slabIn = split?.slabThicknessIn ?? foundationAssembly.slabThicknessIn;
+    const footingIn = split?.footingDepthIn ?? foundationAssembly.footingDepthIn;
     return {
       floors: stack,
       bearing: bearer.wallTop,
       foundation: {
         wallTop, wallBottom,
         grade: gradeFromBearing(wallTop),
-        slabTop: wallBottom + foundationAssembly.slabThicknessIn / 12,
-        slabIn: foundationAssembly.slabThicknessIn,
-        footingBottom: wallBottom - foundationAssembly.footingDepthIn / 12,
-        footingIn: foundationAssembly.footingDepthIn,
+        slabTop: wallBottom + slabIn / 12,
+        slabIn,
+        footingBottom: wallBottom - footingIn / 12,
+        footingIn,
         footingWidthIn: env.footingWidthIn(1),
       },
     };

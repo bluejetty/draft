@@ -1017,6 +1017,18 @@ check('the garage sill drop agrees with cut-view.js', P =>
   [P.GARAGE_SILL_BELOW_HOUSE_FT, CUT_VIEW.GARAGE_SILL_BELOW_HOUSE_FT]);
 check('the garage slab thickness agrees with cut-view.js', P =>
   [P.SECTION_TABLE_DEFAULTS.detachedGarage.slabThicknessIn, CUT_VIEW.GARAGE_SLAB_THICKNESS_IN]);
+// AND THE SPLIT'S. level-assembly.js holds the BILEVEL numbers every
+// elevation and section stands a split's half-levels on; PROJECT's own wall
+// section reads SPLIT_BASE. Same numbers, two homes, held equal here.
+check('the split defaults agree with level-assembly.js SPLIT_DEFAULTS', P => {
+  const window = {};
+  new Function('window', fs.readFileSync(path.join(__dirname, '..', 'level-assembly.js'), 'utf8'))(window);
+  const held = window.DraftLevelAssembly.SPLIT_DEFAULTS;
+  const keys = Object.keys(held);
+  const off = keys.filter(k => Math.abs(P.SECTION_TABLE_DEFAULTS.bilevel[k] - held[k]) > 1e-9
+    || Math.abs(P.SECTION_TABLE_DEFAULTS.modifiedBilevel[k] - held[k]) > 1e-9);
+  return [off.join(','), ''];
+});
 
 
 // ── Run ────────────────────────────────────────────────────────────────

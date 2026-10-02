@@ -213,6 +213,12 @@ if (!window.DraftCutViewEnv) {
           || masters.find(master => master.id === garage?.masterId)?.foundation;
         return mode === 'thickened' ? 'thickened' : 'gradebeam';
       },
+      // WHAT KIND OF BUILDING, and PROJECT's section-table row for it: a
+      // BILEVEL stands its ENTRY and OVER GARAGE where PROJECT's numbers put
+      // them (cut-view.js splitFloorStack), and without these two every sheet
+      // would stack them a full storey apart.
+      buildType: () => saved.buildType ?? null,
+      sectionRow: rowId => saved.sectionTable?.rows?.[rowId] ?? null,
       edgeOnOutline: (a, b, outline, eps = 0.1) => {
         if (!outline) return false;
         const count = outline.open ? outline.points.length - 1 : outline.points.length;
