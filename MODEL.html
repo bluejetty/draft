@@ -9592,7 +9592,20 @@
     const at = (drawing.walls || []).indexOf(wall);
     drawing.walls.splice(at < 0 ? drawing.walls.length : at + 1, 0, tail);
     boneGainsPoint(was.a, was.b, pt);
-    rebuildRoofs();                        // §5: the ring changed
+    // NO ROOF REBUILD. Movie, on a BREAK in an interior wall: *"i made a
+    // 'BREAK' in an interior wall and a roof appeared. do you know why?"* --
+    // this line used to call rebuildRoofs() "because the ring changed", and it
+    // ran for EVERY break. rebuildRoofs walks every level, so the break was
+    // only the trigger: a drawing that had never been through the roof
+    // builder got a 4/12 hip over the whole top floor from a click on a
+    // partition.
+    //
+    // AND A BREAK NEVER CHANGES A ROOF. On an exterior wall it adds a point
+    // along a STRAIGHT edge of the bone -- the same area, the same uncovered
+    // region, the same roof. On an interior wall it touches no bone at all.
+    // The roof follows the bone when the bone's shape changes, which is the
+    // drag that comes after a break (the boneFollows + rebuildRoofs on drag
+    // end), not the break itself.
     undoStack.push({ kind: 'add', wall: tail });
     markDirty();
     paint();
