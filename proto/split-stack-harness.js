@@ -24,7 +24,7 @@ const path = require('path');
 const H = require('./harness-env.js');
 
 const ROOT = path.join(__dirname, '..');
-const MUTATE = process.argv.includes('--mutate');
+const MUTATE = require('./harness-args.js').mutationMode();
 
 const MUTATIONS = [
   ['the split is ignored and ENTRY stacks a storey under MAIN again', 'cut-view.js',
