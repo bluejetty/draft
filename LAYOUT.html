@@ -458,7 +458,7 @@
   /* DELETE, BESIDE THE HISTORY IT FEEDS (audit M8). The Delete key was the
      only way to take a viewport off a sheet, and an iPad has none. A word
      rather than an icon, as MODEL's DELETE is. */
-  .strip-history[data-delete-viewport] { font-family: var(--font-ui); font-size:11px;
+  .strip-history[data-delete-viewport], .strip-history[data-fit-window] { font-family: var(--font-ui); font-size:11px;
     font-weight:600; letter-spacing:0.06em; padding:0 8px; }
   .strip-history[hidden] { display:none; }
   /* THE NAV CLUSTER'S RULES CAME OUT WITH IT. MODEL · LAYOUT · PROJECT ·
@@ -655,6 +655,8 @@
         <path d="M10.4 4.4 L13 7 L10.4 9.6"></path>
       </svg>
     </button>
+    <button type="button" data-fit-window class="strip-history" hidden
+      title="Put the selected viewport's window back to fit its drawing" aria-label="Fit the window to the drawing">FIT WINDOW</button>
     <button type="button" data-delete-viewport class="strip-history" hidden
       title="Take the selected viewport off the sheet" aria-label="Delete the selected viewport">DELETE</button>
   </div>
@@ -902,6 +904,15 @@ class Component extends PageLogic {
       if (this._claimPointer(e)) this._onMouseDown(e);
     });
     this._canvas.addEventListener('pointercancel', this._pcl = (e) => this._abandonPointer(e));
+    // THE RESIZE ARROW over a grip, so a drafter can see where the window
+    // takes a drag before pressing. Only while no gesture is under way.
+    this._canvas.addEventListener('pointermove', this._hov = (e) => {
+      if (this._activePointerId != null) return;
+      const grip = this._cropHandleAt(this._sheetPointIn(e));
+      const CURSORS = { n: 'ns-resize', s: 'ns-resize', e: 'ew-resize', w: 'ew-resize',
+        nw: 'nwse-resize', se: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize' };
+      this._canvas.style.cursor = grip ? CURSORS[grip.handle] : '';
+    });
     window.addEventListener('pointermove',      this._wmmv = (e) => { if (this._ownsPointer(e)) this._onMouseMove(e); });
     window.addEventListener('pointerup',        this._mup  = (e) => {
       if (!this._ownsPointer(e)) return;
@@ -1125,14 +1136,57 @@ class Component extends PageLogic {
   }
 
   // A viewport's rectangle on the sheet in paper inches, centred on xIn / yIn
-  // and sized by the view's model extents at the viewport's own scale.
-  _viewportRectIn(viewport) {
+  // and sized by the view's model extents at the viewport's own scale -- the
+  // frame it would have UNCROPPED, which is where its drawing is laid out.
+  _naturalRectIn(viewport) {
     const foot = this._viewFootprintFt(viewport);
     const wFt = foot ? foot.wFt : null;
     const hFt = foot ? foot.hFt : null;
     const wIn = wFt !== null ? Math.max(wFt * viewport.pif, 0.75) : 2;
     const hIn = hFt !== null ? Math.max(hFt * viewport.pif, 0.75) : 2;
     return { xIn: viewport.xIn - wIn / 2, yIn: viewport.yIn - hIn / 2, wIn, hIn };
+  }
+
+  // THE WINDOW, as the drafter has cropped or grown it (Movie, 1 Oct: "the
+  // user should be allowed to adjust the window size and position of the
+  // layouts on the page", and "the scale should stay the same unless they
+  // decide to change the scale"). `crop` insets each side of the natural
+  // frame, positive in and negative out; the drawing is laid out on the
+  // natural frame and only CLIPPED to this one, so it never moves or rescales.
+  // Everything that asks where a viewport is -- the clip, the click, the
+  // outline, the handles -- asks here.
+  _viewportRectIn(viewport) {
+    const base = this._naturalRectIn(viewport);
+    const c = viewport.crop;
+    if (!c) return base;
+    const MIN_IN = 0.5;
+    let x0 = base.xIn + (c.l || 0), x1 = base.xIn + base.wIn - (c.r || 0);
+    let y0 = base.yIn + (c.t || 0), y1 = base.yIn + base.hIn - (c.b || 0);
+    if (x1 - x0 < MIN_IN) { const m = (x0 + x1) / 2; x0 = m - MIN_IN / 2; x1 = m + MIN_IN / 2; }
+    if (y1 - y0 < MIN_IN) { const m = (y0 + y1) / 2; y0 = m - MIN_IN / 2; y1 = m + MIN_IN / 2; }
+    return { xIn: x0, yIn: y0, wIn: x1 - x0, hIn: y1 - y0 };
+  }
+
+  // THE EIGHT GRIPS on a selected viewport's window, in sheet inches: the
+  // corners move two sides, the edge middles one.
+  _cropHandlesIn(viewport) {
+    const r = this._viewportRectIn(viewport);
+    const xs = { w: r.xIn, m: r.xIn + r.wIn / 2, e: r.xIn + r.wIn };
+    const ys = { n: r.yIn, m: r.yIn + r.hIn / 2, s: r.yIn + r.hIn };
+    return [
+      ['nw', xs.w, ys.n], ['n', xs.m, ys.n], ['ne', xs.e, ys.n], ['e', xs.e, ys.m],
+      ['se', xs.e, ys.s], ['s', xs.m, ys.s], ['sw', xs.w, ys.s], ['w', xs.w, ys.m],
+    ].map(([handle, xIn, yIn]) => ({ handle, xIn, yIn }));
+  }
+
+  // Which grip is under a sheet point, within a few screen pixels.
+  _cropHandleAt(ptIn) {
+    const id = this.state.selectedViewportId;
+    const viewport = id == null ? null : this.state.viewports.find(v => v.id === id);
+    if (!viewport) return null;
+    const reach = 8 / (this.state.zoom || 1);
+    return this._cropHandlesIn(viewport).find(h =>
+      Math.abs(h.xIn - ptIn.xIn) <= reach && Math.abs(h.yIn - ptIn.yIn) <= reach) || null;
   }
 
   // The sheet as this page owns it — the ONLY key this page may write, and
@@ -1583,6 +1637,7 @@ class Component extends PageLogic {
       c.removeEventListener('wheel', this._whl);
       c.removeEventListener('pointerdown', this._mdn);
       c.removeEventListener('pointercancel', this._pcl);
+      c.removeEventListener('pointermove', this._hov);
     }
     window.removeEventListener('pointermove', this._wmmv);
     window.removeEventListener('pointerup', this._mup);
@@ -1864,12 +1919,16 @@ class Component extends PageLogic {
       const extents = this._paintExtents(viewport);
       const env = this._cutViewEnv();
       if (cut && extents && env) {
+        // LAID OUT ON THE NATURAL FRAME, CLIPPED TO THE WINDOW: a cut view
+        // fits itself to the box it is handed, so handing it the cropped one
+        // would rescale the drawing with every drag of a grip.
+        const full = this._naturalRectIn(viewport);
         ctx.save();
         ctx.beginPath();
         ctx.rect(px.x, px.y, px.w, px.h);
         ctx.clip();
-        ctx.translate(px.x, px.y);
-        window.DraftCutView.drawCutView(env, ctx, px.w, px.h, cut, {
+        ctx.translate(panX + full.xIn * zoom, panY + full.yIn * zoom);
+        window.DraftCutView.drawCutView(env, ctx, full.wIn * zoom, full.hIn * zoom, cut, {
           pxPerFt: viewport.pif * zoom,
           extents,
           paperColor: '#ffffff',
@@ -1888,6 +1947,15 @@ class Component extends PageLogic {
     ctx.strokeStyle = selected ? '#5980a6' : 'rgba(29,31,32,0.18)';
     ctx.lineWidth = selected ? 1.5 : 0.75;
     ctx.strokeRect(px.x, px.y, px.w, px.h);
+    if (selected) {
+      // THE GRIPS: drag one to crop or grow the window; the drawing stays.
+      ctx.fillStyle = '#ffffff';
+      this._cropHandlesIn(viewport).forEach(h => {
+        const hx = panX + h.xIn * zoom, hy = panY + h.yIn * zoom;
+        ctx.fillRect(hx - 4, hy - 4, 8, 8);
+        ctx.strokeRect(hx - 4, hy - 4, 8, 8);
+      });
+    }
     const scale = SCALES.find(s => s.pif === viewport.pif);
     ctx.fillStyle = selected ? '#5980a6' : 'rgba(29,31,32,0.45)';
     ctx.font = `600 ${Math.max(9, zoom * 0.14)}px 'Barlow Condensed', sans-serif`;
@@ -2052,6 +2120,7 @@ class Component extends PageLogic {
     this._releasePointer(e);
     this._panning = false;
     this._draggingViewport = null;
+    this._croppingViewport = null;
     this._draw();
   }
 
@@ -2067,6 +2136,18 @@ class Component extends PageLogic {
     const ptIn = this._sheetPointIn(e);
     if (this.state.addingViewport) {
       this._placeViewport(ptIn);
+      e.preventDefault();
+      return;
+    }
+    // A GRIP BEFORE THE BODY: the grips sit on the frame's edge, half of
+    // each inside it, and the body would otherwise take every press on them.
+    const grip = this._cropHandleAt(ptIn);
+    if (grip) {
+      const viewport = this.state.viewports.find(v => v.id === this.state.selectedViewportId);
+      this._croppingViewport = {
+        id: viewport.id, handle: grip.handle, from: ptIn,
+        crop: { l: 0, t: 0, r: 0, b: 0, ...(viewport.crop || {}) },
+      };
       e.preventDefault();
       return;
     }
@@ -2087,6 +2168,21 @@ class Component extends PageLogic {
       this._draw();
       return;
     }
+    if (this._croppingViewport) {
+      const ptIn = this._sheetPointIn(e);
+      const grip = this._croppingViewport;
+      const dx = ptIn.xIn - grip.from.xIn, dy = ptIn.yIn - grip.from.yIn;
+      const crop = { ...grip.crop };
+      if (grip.handle.includes('w')) crop.l = grip.crop.l + dx;
+      if (grip.handle.includes('e')) crop.r = grip.crop.r - dx;
+      if (grip.handle.includes('n')) crop.t = grip.crop.t + dy;
+      if (grip.handle.includes('s')) crop.b = grip.crop.b - dy;
+      this.state.viewports = this.state.viewports.map(viewport =>
+        (viewport.id === grip.id ? { ...viewport, crop } : viewport));
+      grip.moved = true;
+      this._draw();
+      return;
+    }
     if (this._draggingViewport) {
       const ptIn = this._sheetPointIn(e);
       const drag = this._draggingViewport;
@@ -2101,6 +2197,12 @@ class Component extends PageLogic {
 
   _onMouseUp() {
     this._panning = false;
+    if (this._croppingViewport) {
+      const moved = this._croppingViewport.moved;
+      this._croppingViewport = null;
+      if (moved) this.setState({ viewports: this.state.viewports, auto: false }, () => this._persistLayout());
+      return;
+    }
     if (this._draggingViewport) {
       const moved = this._draggingViewport.moved;
       this._draggingViewport = null;
@@ -2120,6 +2222,21 @@ class Component extends PageLogic {
       e.preventDefault();
       this._deleteSelectedViewport();
     }
+  }
+
+  // FIT WINDOW: the crop comes off and the frame fits its drawing again. The
+  // drawing does not move -- it never did -- so this is the window only.
+  _fitSelectedWindow() {
+    const id = this.state.selectedViewportId;
+    if (id == null) return;
+    this.setState({
+      viewports: this.state.viewports.map(viewport => {
+        if (viewport.id !== id || !viewport.crop) return viewport;
+        const { crop, ...rest } = viewport;
+        return rest;
+      }),
+      auto: false,
+    }, () => { this._persistLayout(); this._draw(); });
   }
 
   // ONE DELETE, whichever control pressed it: the key and the strip's button
@@ -2414,7 +2531,7 @@ class Component extends PageLogic {
     note.textContent = 'Draw a house in the MODEL space first — viewports project the saved drawing.';
 
     const canvas = document.querySelector('[data-layout-canvas]');
-    canvas.classList.toggle('grabbing', Boolean(this._panning || this._draggingViewport));
+    canvas.classList.toggle('grabbing', Boolean(this._panning || this._draggingViewport || this._croppingViewport));
     canvas.classList.toggle('arming', Boolean(addingViewport) && !this._panning && !this._draggingViewport);
 
     const status = document.querySelector('[data-layout-status]');
@@ -2436,6 +2553,9 @@ class Component extends PageLogic {
     document.querySelector('[data-layout-remove-sheet]').disabled = this._sheetCount() <= 1;
     // ON SCREEN EXACTLY WHILE THERE IS SOMETHING TO DELETE, as MODEL's is.
     document.querySelector('[data-delete-viewport]').hidden = this.state.selectedViewportId == null;
+    // FIT WINDOW only while the selected window has been cropped or grown.
+    const picked = this.state.viewports.find(v => v.id === this.state.selectedViewportId);
+    document.querySelector('[data-fit-window]').hidden = !(picked && picked.crop);
 
     document.querySelector('[data-sheet-readout]').textContent =
       `${pw}" × ${ph}"  ·  ${selectedPif != null
@@ -2605,6 +2725,7 @@ class Component extends PageLogic {
     on('[data-undo]', 'click', () => this._undoLayout());
     on('[data-redo]', 'click', () => this._redoLayout());
     on('[data-delete-viewport]', 'click', () => this._deleteSelectedViewport());
+    on('[data-fit-window]', 'click', () => this._fitSelectedWindow());
   }
 
   // THE COMPOSER, ON DEMAND. It replaces every viewport on every sheet, so a

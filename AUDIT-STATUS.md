@@ -17,7 +17,7 @@ Legend: ✅ fixed · 🟡 partly fixed · ❌ open · ⚪ left as is on purpose 
 | file | ✅ | 🟡 | ❌ | ⚪ |
 |---|---|---|---|---|
 | AUDIT-CRITICAL (16) | 10 | 4 | 1 | 1 |
-| AUDIT-FULL (numbered findings) | 25 | 8 | 6 | 1 |
+| AUDIT-FULL (numbered findings) | 27 | 8 | 4 | 1 |
 | AUDIT-PERF (actionable items) | 3 | 2 | 2 | — |
 | AUDIT-QUESTIONS (17) | 15 answered | | 2 unanswered | |
 
@@ -52,9 +52,9 @@ Legend: ✅ fixed · 🟡 partly fixed · ❌ open · ⚪ left as is on purpose 
 | 2.1 | duplicate level ids | ✅ | `levels()` keeps the first record per id | |
 | 2.2 | fixtures left out of id recovery | ✅ | | |
 | 2.3 | zero-length walls accepted | ✅ | | |
-| 2.4 | ids near MAX_SAFE_INTEGER | ❌ | nit: reject unsafe ids | S |
+| 2.4 | ids near MAX_SAFE_INTEGER | ✅ | an id the next one cannot follow is refused on load (`safeId` in drawing-format.js) | |
 | 3.1 | short partials dropped | ✅ | | |
-| 3.2 | `wallBounds` pads a full wall each side | ❌ | nit: pad by reference line, or fix the comment | S |
+| 3.2 | `wallBounds` pads a full wall each side | ✅ | kept on purpose and now said so: a face-drawn wall and a mitred corner reach a full thickness | |
 | 3.3 | metric prints mm against an inch model | ✅ | | |
 | 3.4 | `-0'-0"` printed | ✅ | | |
 | 3b.1 | garage counted in the area total | ✅ | | |

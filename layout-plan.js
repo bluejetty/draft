@@ -99,6 +99,12 @@ if (!window.DraftLayoutPlan) {
     let minX = Infinity, minZ = Infinity, maxX = -Infinity, maxZ = -Infinity;
     walls.forEach(wall => {
       const def = WALL_TYPES.find(type => type.id === wall.wallType) || WALL_TYPES[1];
+      // A WHOLE ASSEMBLY EACH WAY, ON PURPOSE (audit 3.2 asked). A wall drawn
+      // on its LEFT or RIGHT face puts all of its thickness on one side of
+      // the line, and a mitred corner carries the outer face past the
+      // endpoint by up to the same again -- so half would clip real ink.
+      // The cost is a frame up to one wall thickness roomy on a centred wall,
+      // which planBounds' callers pad over anyway.
       const reach = def.totalIn / 12;
       [wall.start, wall.end].forEach(pt => {
         minX = Math.min(minX, pt.x - reach); maxX = Math.max(maxX, pt.x + reach);

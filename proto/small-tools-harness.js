@@ -176,6 +176,13 @@ for (const row of ROWS) {
   }
   check(`${row.call}() refuses ${row.broke}`, refused.length === 0,
     `${refused.length} survived — this collection would carry it to a tool`);
+  // AUDIT 2.4: an id the next one cannot follow. `highest + 1` at 2**53 - 1
+  // is the same number again, so the next record placed would collide.
+  if (Number.isInteger(row.good.id)) {
+    const huge = fn([{ ...row.good, id: Number.MAX_SAFE_INTEGER }], LEVEL_IDS);
+    check(`${row.call}() refuses an id at MAX_SAFE_INTEGER`, huge.length === 0,
+      `${huge.length} survived`);
+  }
 
   say(`${row.tool.padEnd(11)} ${row.call.padEnd(12)} ${String(kept.length === 1).padEnd(13)} `
     + `${row.broke.padEnd(35)} ${refused.length === 0 ? 'yes' : 'NO'}`);
@@ -233,7 +240,7 @@ if (!MUTATE) {
 // bend the load block, because the finding at the bottom of this file -- four
 // collections guarded, notes still riding through on `...parsed` -- is only
 // worth keeping if it can still go red when that changes.
-const BEAM_ID_GUARD = 'if (!Number.isInteger(id) || seen.has(id) || !start || !end'
+const BEAM_ID_GUARD = 'if (!safeId(id) || seen.has(id) || !start || !end'
   + ' || beamLevelId == null || !view) return null;';
 
 const MUTATIONS = [

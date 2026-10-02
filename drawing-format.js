@@ -3,6 +3,12 @@
 // file store or component state, so both file loading and undo history use it.
 if (!window.DraftDrawingFormat) {
 (() => {
+  // AN ID THE NEXT ONE CAN FOLLOW (audit 2.4). Every counter in the pages is
+  // `highest id + 1`, and at 2**53 - 1 that sum is the same number again --
+  // so a hand-edited file carrying an id that large would make the next
+  // column, stair or tag collide with it. Such an id is refused on load like
+  // any other unusable one; no drawing the app writes comes near it.
+  const safeId = id => Number.isSafeInteger(id) && id < Number.MAX_SAFE_INTEGER;
   // Bump when the stored shape changes; loads of any other version are refused.
   const VERSION = 1;
 
@@ -90,7 +96,7 @@ if (!window.DraftDrawingFormat) {
       const dirX = num(cut?.dirVec?.x);
       const dirZ = num(cut?.dirVec?.z);
       const elev = num(cut?.elev);
-      if (!Number.isInteger(id) || seen.has(id) || !startPt || !endPt
+      if (!safeId(id) || seen.has(id) || !startPt || !endPt
         || dirX === null || dirZ === null || elev === null) return null;
       const dirLength = Math.hypot(dirX, dirZ);
       if (dirLength < 0.001) return null;
@@ -235,7 +241,7 @@ if (!window.DraftDrawingFormat) {
       const end = point(dimension?.end);
       const dimensionLevelId = levelId(dimension?.levelId, levelIds);
       const view = oneOf(dimension?.view, ['plan', 'floor', 'e-power', 'foundation'], null);
-      if (!Number.isInteger(id) || seen.has(id) || !start || !end || dimensionLevelId == null || !view) return null;
+      if (!safeId(id) || seen.has(id) || !start || !end || dimensionLevelId == null || !view) return null;
       if (Math.hypot(end.x - start.x, end.z - start.z) < 0.001) return null;
       seen.add(id);
       // NO KEY AT ALL when there is no layer, which is not the same as null
@@ -903,7 +909,7 @@ if (!window.DraftDrawingFormat) {
       const centre = point(column?.point);
       const columnLevelId = levelId(column?.levelId, levelIds);
       const view = oneOf(column?.view, ['plan', 'floor', 'foundation'], null);
-      if (!Number.isInteger(id) || seen.has(id) || !centre || columnLevelId == null || !view) return null;
+      if (!safeId(id) || seen.has(id) || !centre || columnLevelId == null || !view) return null;
       seen.add(id);
       const footing = oneOf(column?.footing, ['pad36', 'pad42', 'pile8', 'pile10', 'pile12'], 'pad36');
       // A pad column can carry a custom square size (inches) typed on the
@@ -959,7 +965,7 @@ if (!window.DraftDrawingFormat) {
       const end = point(beam?.end);
       const beamLevelId = levelId(beam?.levelId, levelIds);
       const view = oneOf(beam?.view, ['plan', 'floor', 'foundation'], null);
-      if (!Number.isInteger(id) || seen.has(id) || !start || !end || beamLevelId == null || !view) return null;
+      if (!safeId(id) || seen.has(id) || !start || !end || beamLevelId == null || !view) return null;
       if (Math.hypot(end.x - start.x, end.z - start.z) < 0.001) return null;
       seen.add(id);
       return {
@@ -992,7 +998,7 @@ if (!window.DraftDrawingFormat) {
       const stairLevelId = levelId(stair?.levelId, levelIds);
       const view = oneOf(stair?.view, ['plan'], null);
       const riseFt = positive(stair?.riseFt, null);
-      if (!Number.isInteger(id) || seen.has(id) || !start || !end || stairLevelId == null || !view) return null;
+      if (!safeId(id) || seen.has(id) || !start || !end || stairLevelId == null || !view) return null;
       if (Math.hypot(end.x - start.x, end.z - start.z) < 0.001) return null;
       if (riseFt === null) return null;
       seen.add(id);
@@ -1041,7 +1047,7 @@ if (!window.DraftDrawingFormat) {
       const view = oneOf(note?.view, ['plan', 'floor', 'e-power', 'foundation', 'stair'], null);
       const body = String(note?.body ?? '').trim();
       const end = oneOf(note?.end, ['arrow', 'line', 'none'], 'arrow');
-      if (!Number.isInteger(id) || seen.has(id) || !anchor || !text || noteLevelId == null || !view || !body) return null;
+      if (!safeId(id) || seen.has(id) || !anchor || !text || noteLevelId == null || !view || !body) return null;
       if (end !== 'none' && Math.hypot(text.x - anchor.x, text.z - anchor.z) < 0.001) return null;
       seen.add(id);
       return {
@@ -1143,7 +1149,7 @@ if (!window.DraftDrawingFormat) {
       const at = point(tag?.at);
       const tagLevelId = levelId(tag?.levelId, levelIds);
       const name = String(tag?.name ?? '').trim().toUpperCase();
-      if (!Number.isInteger(id) || seen.has(id) || !at || tagLevelId == null || !name) return null;
+      if (!safeId(id) || seen.has(id) || !at || tagLevelId == null || !name) return null;
       seen.add(id);
       const area = number(tag?.areaSqFt, 0);
       // Stamps (board #198): a tag the drafter placed from the room tray
@@ -1235,7 +1241,7 @@ if (!window.DraftDrawingFormat) {
     const seen = new Set();
     const shelves = (Array.isArray(raw) ? raw : []).map(shelf => {
       const id = Number(shelf?.id);
-      if (!Number.isInteger(id) || id < 1 || seen.has(id)) return null;
+      if (!safeId(id) || id < 1 || seen.has(id)) return null;
       seen.add(id);
       return { id, name: String(shelf?.name || `SHELF ${id}`).toUpperCase() };
     }).filter(Boolean);
@@ -1793,9 +1799,26 @@ if (!window.DraftDrawingFormat) {
       const yIn = num(viewport?.yIn);
       const sheet = Number.isInteger(Number(viewport?.sheet)) && Number(viewport.sheet) >= 1
         ? Number(viewport.sheet) : 1;
-      if (!Number.isInteger(id) || id < 1 || seen.has(id) || kind == null) return null;
+      if (!safeId(id) || id < 1 || seen.has(id) || kind == null) return null;
       if (pif == null || xIn === null || yIn === null) return null;
-      const base = { id, kind, pif, xIn, yIn, sheet };
+      // THE WINDOW, CROPPED OR GROWN (Movie, 1 Oct: "the user should be
+      // allowed to adjust the window size and position of the layouts on the
+      // page", and "the scale should stay the same unless they decide to
+      // change the scale"). Insets in paper inches off each side of the frame
+      // the view would have uncropped: positive trims in, negative grows out.
+      // The drawing never moves or rescales with it. Absent when untouched,
+      // so every viewport saved before it reads the same.
+      const crop = (() => {
+        const c = viewport?.crop;
+        if (!c || typeof c !== 'object') return null;
+        const sides = ['l', 't', 'r', 'b'].map(side => {
+          const value = num(c[side]);
+          return value === null ? 0 : Math.max(-40, Math.min(40, value));
+        });
+        return sides.some(value => value !== 0)
+          ? { l: sides[0], t: sides[1], r: sides[2], b: sides[3] } : null;
+      })();
+      const base = { id, kind, pif, xIn, yIn, sheet, ...(crop ? { crop } : {}) };
       if (kind === 'plan') {
         const viewportLevelId = levelId(viewport?.levelId, levelIds);
         if (viewportLevelId == null) return null;
