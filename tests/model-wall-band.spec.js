@@ -93,6 +93,15 @@ const inkAt = (page, cx, cy) => page.evaluate(({ x, y }) => {
   const g = canvas.getContext('2d').getImageData(2, 2, 1, 1).data;
   let worst = 0;
   for (let i = 0; i < data.length; i += 4) {
+    // NOT THE ORANGE TRACKING RAYS. Since 2 Oct every point of the run sends
+    // faint orange sight lines across the sheet, and the anchor's own rays lie
+    // exactly along the east and south aims this file samples -- so every
+    // sample read "inked" at both aims and the band could no longer be told
+    // from them. The band and the ghost are neutral inks; a ray is the one
+    // mark here whose red stands far above its blue, so that is what is
+    // skipped. Where the band crosses a ray it is painted over it, and reads
+    // as the band.
+    if (data[i] - data[i + 2] > 15) continue;
     worst = Math.max(worst, Math.abs(data[i] - g[0])
       + Math.abs(data[i + 1] - g[1]) + Math.abs(data[i + 2] - g[2]));
   }
