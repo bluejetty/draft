@@ -1170,6 +1170,33 @@ test('§4 — MOVE THIS WALL leaves the bone exactly as it was',
     await expect(boneChoice(page), 'and the choice went away').toBeHidden();
   });
 
+// A BREAK BUILDS NO ROOF. Movie: "i made a 'BREAK' in an interior wall and a
+// roof appeared. do you know why?" -- the break ran the roof builder over the
+// whole house. Neither kind of break changes a roof: an interior wall is not
+// the bone, and a point on a straight edge of the bone is the same footprint.
+for (const [where, walls, spot] of [
+  ['an interior wall', base({}).walls.concat([{ id: 'i', start: V(0, -10), end: V(0, 10),
+    levelId: 3, view: 'plan', wallType: 'stud_2x4', baseHeight: 0, topHeight: 8,
+    refLine: 'center' }]), [0, 3.4]],
+  ['an exterior wall', base({}).walls, [3.4, -10]],
+]) {
+  test(`§4 — a BREAK in ${where} puts up no roof`, async ({ page }) => {
+    // WITH A BONE, as Movie's drawing had: the roof builder roofs a level by
+    // its outline, so a fixture without one could never grow the roof and
+    // would pass with the bug still in.
+    await open(page, base({ board: 'toy', walls, outlines: [{ id: 'bone', levelId: 3,
+      masterId: null, points: [V(-10, -10), V(10, -10), V(10, 10), V(-10, 10)] }] }));
+    const { at } = await frame(page);
+    const before = (await wallsNamed(page)).length;
+    await selectThen(page, at, spot);
+    await boneChoice(page).locator('[data-break-here]').click();
+    await page.waitForTimeout(120);
+    await saveIt(page);
+    expect((await wallsNamed(page)).length, 'the break happened').toBe(before + 1);
+    expect(await roofsOf(page), 'and nothing grew a roof').toEqual([]);
+  });
+}
+
 test('§4 — DRAFTING never offers the choice', async ({ page }) => {
     await open(page, base({ board: 'drafting' }));
     const { at } = await frame(page);
