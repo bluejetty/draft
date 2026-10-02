@@ -991,6 +991,74 @@ if (!window.DraftPremadePlans) {
     garageTieRoofRake: GARAGE_TIE_ROOF_RAKE,
   });
 
+  // ── MODIFIED BILEVEL ─────────────────────────────────────────────────────
+  //
+  // The BILEVEL + GARAGE with the room over the garage. Movie, 2 Oct: "above
+  // the garage stairs will be another set of stairs going to the 2nd floor
+  // over garage", the room "half the garage about (make it like the 2
+  // storey)", and -- checked against his Sharma plans (459 Sharma Cres, S1,
+  // S2, sheet 7) -- the third flight starts on MAIN FL and climbs back toward
+  // the front ABOVE the down flight, onto a landing over the entry, with a
+  // door from the landing into the room. The room carries its own roof.
+  //
+  // THE ROOM IS THE 2 STOREY'S (overGarageLoop), 18 ft of the garage, but on
+  // OVER GARAGE (4), half a storey over MAIN: "the 'over garage' layer is for
+  // bilevels when that would be a 'lower' 2nd floor".
+  //
+  // THE ENTRY'S FRONT IS TWO WALLS HERE. Its street half still runs from the
+  // landing to MAIN's ceiling; its garage half stops under the upper landing,
+  // where the room's own back wall -- and the door into it -- carry on above.
+  // So the entry loop splits its front where the garage starts.
+  const modifiedEntryLoop = () => {
+    const [bl, br, fr, fl] = entryLoop();
+    const garageLeft = WIDTH_FT / 2 + GARAGE_PAST_FT - GARAGE_WIDTH_FT;
+    // [back, right, front behind the garage, front on the street, left]
+    return [bl, br, fr, pt(garageLeft, fr.z), fl];
+  };
+  // THE UPPER LANDING, over the garage half of the entry -- the Sharma
+  // plans' landing over the entry, here the 6 x 6 the entry leaves behind
+  // the garage.
+  const upperLandingLoop = () => {
+    const [bl, br, fr] = entryLoop();
+    const garageLeft = WIDTH_FT / 2 + GARAGE_PAST_FT - GARAGE_WIDTH_FT;
+    return [pt(garageLeft, bl.z), br, fr, pt(garageLeft, fr.z)];
+  };
+  // The street door on the street half (edge 3, from the garage line
+  // leftwards); the door in from the garage on the garage half (edge 2).
+  const modifiedEntryOpenings = () => [
+    opening(2, 3, MAN_DOOR_WIDTH_FT, 'door'),
+    opening(3, 3, 3, 'door'),
+  ];
+  // The room's windows as the 2 STOREY's, and the door in off the landing on
+  // its back wall (edge 0, from the room's left corner -- over the landing).
+  const modifiedRoomOpenings = () => [
+    ...overGarageOpenings(),
+    opening(0, 3, MAN_DOOR_WIDTH_FT, 'door'),
+  ];
+
+  const modifiedBilevel = () => {
+    const base = bilevel({ garage: true });
+    const stairs = base.stairs;
+    return {
+      ...base,
+      entry: modifiedEntryLoop(),
+      entryOpenings: modifiedEntryOpenings(),
+      // THE THIRD FLIGHT, over the down flight: filed on OVER GARAGE, its top
+      // nosing on the upper landing's back edge, running back down to MAIN.
+      stairs: { ...stairs, upper: Object.freeze({ ...stairs.down }) },
+      upperLanding: upperLandingLoop(),
+      overGarage: overGarageLoop(),
+      overGarageOpenings: modifiedRoomOpenings(),
+      // ITS OWN ROOF, on its own ceiling: the room stands half a storey over
+      // MAIN, so it cannot share the house's plate.
+      overGarageRoof: overGarageLoop(),
+      // AND THE GARAGE'S ROOF IS WHAT THE ROOM LEAVES -- the 2 STOREY's own
+      // answer -- with the tie under the room's roof.
+      garageRoof: garageRoofLoop({ overGarage: true }),
+      garageTieRoof: null,
+    };
+  };
+
   // WHAT THE BOARD CAN ACTUALLY BUILD, keyed by build-menu.js entry id. A
   // caller asks this rather than testing entry ids itself, so the day 2 STOREY
   // gets a design the board does not also need editing. Movie, 18 Sep: "for 2
@@ -1007,6 +1075,7 @@ if (!window.DraftPremadePlans) {
     'twoStorey-over': () => twoStorey({ garage: true, overGarage: true }),
     bilevel: () => bilevel({ garage: false }),
     'bilevel-garage': () => bilevel({ garage: true }),
+    modifiedBilevel: () => modifiedBilevel(),
   });
 
   const planFor = entryId => (PLANS[entryId] ? PLANS[entryId]() : null);
@@ -1018,7 +1087,7 @@ if (!window.DraftPremadePlans) {
     GARAGE_TIE_ROOF_FLUSH, GARAGE_TIE_ROOF_RAKE,
     MAN_DOOR_WIDTH_FT, GARAGE_WINDOW_WIDTH_FT, GARAGE_DOOR_HEAD_FT,
     ENTRY_WIDTH_FT, ENTRY_DEPTH_FT, ENTRY_LEFT_FT, BILEVEL_STAIR_WIDTH_FT,
-    bungalow, twoStorey, bilevel, planFor, detachedGarageOpenings,
+    bungalow, twoStorey, bilevel, modifiedBilevel, planFor, detachedGarageOpenings,
     entryIds: () => Object.keys(PLANS),
   });
 })();

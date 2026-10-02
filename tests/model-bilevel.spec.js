@@ -125,3 +125,40 @@ test('one Ctrl+Z takes the whole bilevel back, ENTRY level and all', async ({ pa
   expect(d.stairs.length).toBe(0);
   expect(d.levels.map(l => Number(l.id))).toEqual([8, 7, 5, 3, 1]);
 });
+
+// THE MODIFIED BILEVEL: the 2 STOREY's room over the garage on OVER GARAGE,
+// 6'-3" over MAIN (the Sharma plans' 10 risers), reached by a third flight
+// over the down flight onto a landing over the entry, with its own roof.
+test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight and its roof',
+  async ({ page }) => {
+    const d = await buildBilevel(page, 'modifiedBilevel');
+    expect(d.buildType).toBe('modifiedBilevel');
+    expect(d.levels.map(l => Number(l.id)), 'OVER GARAGE above MAIN, ENTRY below it')
+      .toEqual([8, 7, 5, 4, 3, 2, 1]);
+    const room = d.outlines.find(o => Number(o.levelId) === 4);
+    expect(room, 'the room is filed on OVER GARAGE').toBeTruthy();
+    const roomWalls = d.walls.filter(w => Number(w.levelId) === 4);
+    expect(roomWalls.length).toBeGreaterThan(3);
+    roomWalls.forEach(w => expect(w.topHeight).toBeCloseTo(109.125 / 12, 3));
+    // A door off the landing into the room.
+    expect(d.fenestrations.some(f => f.type === 'door'
+      && roomWalls.some(w => w.id === f.wallId))).toBe(true);
+    // Decks on OVER GARAGE: the room and the landing.
+    expect(d.floors.filter(f => Number(f.levelId) === 4).length).toBe(2);
+    // Three flights; the third over the down one, 6'-3" up from MAIN.
+    const down = d.stairs.find(s => Number(s.levelId) === 2);
+    const third = d.stairs.find(s => Number(s.levelId) === 4);
+    expect(d.stairs.length).toBe(3);
+    expect(third.riseFt).toBeCloseTo(6.25, 2);
+    expect(third.start.x).toBeCloseTo(down.start.x, 3);
+    expect(third.start.z).toBeCloseTo(14, 3);
+    // The entry's garage half stops at the landing; its street half climbs on.
+    const entryTops = d.walls.filter(w => Number(w.levelId) === 2 && w.topHeight > 5)
+      .map(w => Number(w.topHeight.toFixed(3))).sort();
+    expect(entryTops).toEqual([10.698, 13.542]);
+    // The room has its own roof, raised from OVER GARAGE.
+    expect(d.roofs.some(r => Number(r.sourceLevelId) === 4)).toBe(true);
+    // And the garage's walls reach the room's floor.
+    d.walls.filter(w => w.body === 'garage' && (w.view || 'plan') === 'plan')
+      .forEach(w => expect(w.topHeight).toBeCloseTo(9.8646, 3));
+  });

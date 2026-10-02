@@ -77,7 +77,7 @@ const MUTANTS = [
 
   { file: 'MODEL.html',
     name: 'the runs are placed and the floor is never opened',
-    find: '    const cut = buildStairOpenings();',
+    find: '    const cut = buildStairOpenings(served);',
     with: '    const cut = { cut: 0, nudges: [], refused: [], placed: [] };',
     test: 'a built two-storey arrives with stacked flights and cut openings' },
   { file: 'MODEL.html',

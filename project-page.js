@@ -189,7 +189,11 @@ if (!window.DraftProjectPage) {
     //
     // PROVISIONAL BY HIS OWN WORDS, which is the argument for it being a typed
     // cell rather than a constant: he corrects it in the card, not in a file.
-    upperDeckAboveEntryFt: 9,
+    // MOVED TO 10'-8 3/8", Movie, 2 Oct, choosing the Sharma plans' height
+    // (459 Sharma Cres, S1): "2ND FLOOR STAIR FLIGHT 10 RISERS 75" TOTAL RISE"
+    // over MAIN FL -- 6'-3" -- and MAIN sits 4'-5 3/8" over the ENTRY deck on
+    // these defaults. The cell still measures from the ENTRY deck.
+    upperDeckAboveEntryFt: 10 + 8.375 / 12,
     // The balcony is joisted like a house floor, not like the deck over the
     // garage: "the balcony floor can be 11 7/8\"tji but over the garage default
     // 19.25\" (plus 3/4\"". One level, two depths -- so the garage's package

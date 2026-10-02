@@ -17,7 +17,7 @@
 //   ENTRY sill        -1.0521 - 4.2292       = -5.2813
 //   ENTRY deck        -5.2813 + 0.8333       = -4.4479   (4'-5 3/8" under MAIN)
 //   pour bottom       -5.2813 - 1/8 - 5      = -10.4063
-//   OVER GARAGE deck  -4.4479 + 9            = 4.5521    (MOD BILEVEL only)
+//   OVER GARAGE deck  -4.4479 + 10.6979      = 6.25      (MOD BILEVEL only: 6'-3" over MAIN)
 //
 // Run: node proto/split-stack-harness.js [--mutate]
 const path = require('path');
@@ -91,7 +91,8 @@ near('BILEVEL: a 5\'-0" pour under the sill plate', bi.foundation.wallBottom, -1
 near('BILEVEL: no storey over the garage -- 4 climbs from MAIN', floor(bi, 4).floorBottom, floor(bi, 3).wallTop);
 
 const mod = stackOf('modifiedBilevel');
-near('MOD BILEVEL: OVER GARAGE deck 9\' over ENTRY\'s', floor(mod, 4).floorTop, -4.4479 + 9);
+near('MOD BILEVEL: OVER GARAGE deck 6\'-3" over MAIN, the Sharma plans\' 10 risers', floor(mod, 4).floorTop, 6.25);
+near('MOD BILEVEL: the house roof still bears on MAIN FL\'s ceiling', mod.bearing, floor(mod, 3).wallTop);
 near('MOD BILEVEL: 2ND FL still climbs from MAIN, not from OVER GARAGE', floor(mod, 5).floorBottom, floor(mod, 3).wallTop);
 
 const typed = stackOf('bilevel', { sectionTable: { rows: { bilevel: { woodFillHeightFt: 5 } } } });

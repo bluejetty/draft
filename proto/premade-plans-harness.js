@@ -389,7 +389,7 @@ check('and every opening has a head above its sill, which the format demands',
 // ── the catalogue ──
 check('the board offers a plan for every entry that has one',
   P => [P.entryIds().sort().join(','),
-    'bilevel,bilevel-garage,bungalow,bungalow-garage,twoStorey,twoStorey-garage,twoStorey-over']);
+    'bilevel,bilevel-garage,bungalow,bungalow-garage,modifiedBilevel,twoStorey,twoStorey-garage,twoStorey-over']);
 
 // ── the BILEVEL (Movie, 2 Oct) ──
 // "12ft wide (sideways) with and 6 deep (from front)", "inside house
@@ -444,6 +444,25 @@ check('and they fit side by side inside the landing\'s width', P => {
   return [up.x - up.widthFt / 2 >= e.x0 && down.x + down.widthFt / 2 <= e.x1
     && up.x + up.widthFt / 2 <= down.x - down.widthFt / 2 + 1e-9, true];
 });
+// ── the MODIFIED BILEVEL (Movie, 2 Oct, and his Sharma plans) ──
+check('the MOD BILEVEL\'s room is the 2 STOREY\'s room over the garage', P =>
+  [JSON.stringify(P.modifiedBilevel().overGarage), JSON.stringify(P.twoStorey({ garage: true, overGarage: true }).overGarage)]);
+check('it carries its own roof', P => [P.modifiedBilevel().overGarageRoof !== null, true]);
+check('its third flight stands over the down flight', P => {
+  const st = P.modifiedBilevel().stairs;
+  return [st.upper.x === st.down.x && st.upper.z === st.down.z, true];
+});
+check('the upper landing is the garage half of the entry', P => {
+  const plan = P.modifiedBilevel();
+  const l = span(plan.upperLanding), e = span(plan.entry), g = span(plan.garage);
+  return [l.x0 === g.x0 && l.x1 === e.x1 && l.z0 === e.z0 && l.z1 === e.z1, true];
+});
+check('the entry front splits at the garage line, a door either side', P => {
+  const plan = P.modifiedBilevel();
+  return [`${plan.entry.length}:${plan.entryOpenings.map(o => o.edge).sort().join(',')}`, '5:2,3'];
+});
+check('a door leads off the landing into the room', P =>
+  [P.modifiedBilevel().overGarageOpenings.some(o => o.edge === 0 && o.type === 'door'), true]);
 check('no window looks into the garage on a BILEVEL + GARAGE', P =>
   [P.bilevel({ garage: true }).houseOpenings.some(o => o.edge === 2), false]);
 
@@ -718,7 +737,7 @@ check('and only the second of those carries a garage',
     'null,true']);
 
 check('an entry with no design yet answers null rather than a wrong house',
-  P => [P.planFor('modifiedBilevel'), null]);
+  P => [P.planFor('no-such-entry'), null]);
 
 // ── THE DETACHED GARAGE OFF THE BOARD ────────────────────────────────────
 //

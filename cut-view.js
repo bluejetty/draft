@@ -857,13 +857,19 @@ if (!window.DraftCutView) {
     // The TALLEST standing storey: on a split the list does not climb in
     // order, so the last one is not always the top.
     const tallest = list => list.reduce((top, level) => (level.wallTop > top.wallTop ? level : top), list[0]);
-    const bearer = standing.length ? tallest(standing) : tallest(stack);
+    // A SPLIT'S HOUSE ROOF LANDS ON MAIN FL'S CEILING. The storey over its
+    // garage is roofed on its own level (see roofBaseElev), so the house roof
+    // does not ride up to it -- PROJECT's own section says the same: "a stack
+    // that stops at MAIN FL lands the eave on MAIN FL's ceiling".
+    const splitMain = splitStack && stack.find(level => Number(level.id) === 3);
+    const bearer = splitMain || (standing.length ? tallest(standing) : tallest(stack));
     // The split row's slab and footing where it typed them, as PROJECT reads.
     const slabIn = split?.slabThicknessIn ?? foundationAssembly.slabThicknessIn;
     const footingIn = split?.footingDepthIn ?? foundationAssembly.footingDepthIn;
     return {
       floors: stack,
       bearing: bearer.wallTop,
+      split: !!splitStack,
       foundation: {
         wallTop, wallBottom,
         grade: gradeFromBearing(wallTop),
@@ -1200,6 +1206,13 @@ if (!window.DraftCutView) {
     const plate = Number(roof.plateHeightFt);
     if (isGarageRoof(roof, env) && Number.isFinite(plate) && stack.floors.length) {
       return stack.floors[0].floorTop + plate;
+    }
+    // ON A SPLIT, A ROOF RAISED FROM A LEVEL BEARS ON THAT LEVEL'S CEILING. The
+    // MOD BILEVEL's room over the garage sits 6'-3" over MAIN FL and carries
+    // its own roof; at the house's bearing it would stand inside the room.
+    if (stack.split && roof.sourceLevelId != null) {
+      const own = stack.floors.find(level => Number(level.id) === Number(roof.sourceLevelId));
+      if (own) return own.wallTop;
     }
     return stack.bearing;
   }
