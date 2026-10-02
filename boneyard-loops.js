@@ -59,7 +59,9 @@ if (!window.DraftBoneyardLoops) {
     // THE ROOF: the TOP floor's house outline, at that floor's ceiling (its
     // wall top). Not a loop of its own drawing -- "one for the roof which will
     // be at highest floor ceiling".
-    const top = floors[floors.length - 1];
+    // The HIGHEST ceiling, not the last level in the list: a split's levels
+    // do not climb in list order (cut-view.js splitFloorStack).
+    const top = floors.reduce((hi, f) => (f.floor.wallTop > hi.floor.wallTop ? f : hi), floors[floors.length - 1]);
     const roofLoops = top.loops.filter(l => !l.garage);
     if (roofLoops.length) {
       out.push({ levelId: 7, kind: 'roof', name: 'ROOF',

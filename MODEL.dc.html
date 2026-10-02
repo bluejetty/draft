@@ -10141,6 +10141,7 @@ class Component extends DCLogic {
       garageOutlines: levelId => this._garageOutlines(levelId),
       garageFoundation: garage => this._garageFoundation(garage),
       buildType: () => this.state.buildType,
+      sectionRow: rowId => this.state.sectionTable?.rows?.[rowId] ?? null,
       edgeOnOutline: (a, b, outline) => this._edgeOnOutline(a, b, outline),
       masterPointById: srcId => this._masterPointById(srcId),
       gableCornerStyle: () => this._gableCornerStyle(),

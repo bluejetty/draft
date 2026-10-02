@@ -387,6 +387,51 @@ if (!window.DraftLevelAssembly) {
     return tops.length ? Math.max(...tops) : DEFAULT_WALL_TOP_FT;
   };
 
+  // ── THE SPLIT'S HEIGHTS: ONE TABLE FOR EVERY PAGE ──────────────────────
+  //
+  // Movie, 2 Oct, on the premade BILEVEL: "use the 'PROJECT' information for
+  // bilevel to determine floor heights and thicknesses". Those numbers are the
+  // PROJECT page's section table -- its BILEVEL and MOD BILEVEL rows, which
+  // start from project-page.js SPLIT_BASE -- and until now only PROJECT's own
+  // wall section read them. Every elevation and section on every other page
+  // stood its floors one on top of the next, so an ENTRY level would have
+  // come out a whole storey under MAIN FL instead of half of one.
+  //
+  // THE DEFAULTS ARE HELD HERE AND PROJECT KEEPS ITS COPY, checked equal by
+  // proto/section-table-harness.js: project-page.js freezes its table at
+  // load, and its harnesses load it without this module in front of it.
+  const SPLIT_TYPES = Object.freeze(['bilevel', 'modifiedBilevel']);
+  const SPLIT_PLATE_STACK_IN = 1.5 * 3;
+  const SPLIT_DEFAULTS = Object.freeze({
+    // A 5'-0" pour with the basement made up in wood above it.
+    fdnWallHeightFt: 5,
+    // An 8' precut sawn in two, on three plates: 4'-2 3/4".
+    woodFillHeightFt: (46.25 + SPLIT_PLATE_STACK_IN) / 12,
+    // 9'-1 1/8": the 104 5/8" precut on three plates.
+    mainWallHeightFt: (104.625 + SPLIT_PLATE_STACK_IN) / 12,
+    upperWallHeightFt: (104.625 + SPLIT_PLATE_STACK_IN) / 12,
+    // The lower 2nd floor's deck, measured from the ENTRY deck.
+    upperDeckAboveEntryFt: 9,
+    upperJoistDepthIn: 11.875,
+    upperExtentFt: 5.5,
+  });
+  const isSplitType = buildType => SPLIT_TYPES.includes(buildType);
+  // The row's own number where one was typed, the default where not -- the
+  // same "stored beats default" rule as every other field in this file.
+  const splitValues = (buildType, row) => {
+    const out = { ...SPLIT_DEFAULTS };
+    Object.keys(SPLIT_DEFAULTS).forEach(key => {
+      const value = Number(row?.[key]);
+      if (row?.[key] != null && Number.isFinite(value) && value > 0) out[key] = value;
+    });
+    ['mainJoistDepthIn', 'mainSheathingIn', 'slabThicknessIn', 'footingDepthIn'].forEach(key => {
+      const value = Number(row?.[key]);
+      if (row?.[key] != null && Number.isFinite(value) && value > 0) out[key] = value;
+    });
+    out.upper = buildType === 'modifiedBilevel';
+    return out;
+  };
+
   window.DraftLevelAssembly = Object.freeze({
     DEFAULT_FLOOR_THICKNESS_IN,
     defaultLevelAssembly,
@@ -411,6 +456,10 @@ if (!window.DraftLevelAssembly) {
     DEFAULT_JOIST_TYPE,
     DEFAULT_FOOTING_DEPTH_IN,
     DEFAULT_FDN_SLAB_THICKNESS_IN,
+    SPLIT_TYPES,
+    SPLIT_DEFAULTS,
+    isSplitType,
+    splitValues,
   });
 })();
 }

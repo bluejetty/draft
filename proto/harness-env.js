@@ -355,7 +355,8 @@ function buildEnv(win, saved) {
       const mode = g?.foundation || masters.find(m => m.id === g?.masterId)?.foundation;
       return mode === 'thickened' || mode === 'frostwall' ? mode : 'gradebeam';
     },
-    buildType: () => null,
+    buildType: () => saved.buildType ?? null,
+    sectionRow: rowId => saved.sectionTable?.rows?.[rowId] ?? null,
     edgeOnOutline: (a, b, outline, eps = 0.1) => {
       if (!outline) return false;
       const count = outline.open ? outline.points.length - 1 : outline.points.length;

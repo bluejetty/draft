@@ -3027,8 +3027,8 @@ const MUTATIONS = [
   // foundation's base is what was actually wrong, and the check above --
   // the fallback and the datum answering alike -- is what catches it.
   ['the foundation base forgets the sill plate, as it did before 97a82c9',
-    s => s.replace("const wallBottom = wallTop - houseSillPlateFt()\n      - env.levelWallTopFt(1, 'foundation');",
-      "const wallBottom = wallTop - env.levelWallTopFt(1, 'foundation');")],
+    s => s.replace("const wallBottom = wallTop - houseSillPlateFt()\n      - (split ?",
+      "const wallBottom = wallTop\n      - (split ?")],
   // THE OTHER HALF OF THAT ONE. Taking the plate off the base put the top of
   // concrete where concrete really tops out; these two are what say the
   // 1 1/2" it opened up is now painted, and painted as WALL.

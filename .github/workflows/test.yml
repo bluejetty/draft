@@ -213,6 +213,7 @@ jobs:
                       proto/wall-joins-harness.js \
                       proto/degenerate-chain-harness.js \
                       proto/fascia-end-harness.js \
+                      proto/split-stack-harness.js \
                       proto/foundation-face-harness.js \
                       proto/level-lock-harness.js \
                       proto/no-inline-distance-harness.js \
