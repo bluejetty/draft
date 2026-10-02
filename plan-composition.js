@@ -345,7 +345,7 @@ if (!window.DraftPlanComposition) {
         // say, so it is not inferred from the wall here.
         const isWindow = opening.type === 'window';
         if (isWindow ? !showWin : (opening.type !== 'door' || !showDoor)) return;
-        const label = FL.fenLabelForOpening(opening, { exteriorWall: isWindow });
+        const label = FL.fenLabelForOpening(opening, { exteriorWall: isWindow, units: env.units });
         if (!label) return;
         const line = FL.openingTagLine(opening, geometry, outlineFor(opening.levelId));
         if (!line) return;

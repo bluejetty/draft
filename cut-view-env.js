@@ -238,6 +238,8 @@ if (!window.DraftCutViewEnv) {
       },
       ftIn,
       elevationDatum: () => datum,
+      // The size tags read the same switch the level marks do.
+      units,
     };
   }
 

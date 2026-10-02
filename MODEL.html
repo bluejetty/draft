@@ -2850,7 +2850,8 @@
       if (!geometry || !geometry.glazing) return;
       const isWindow = opening.type === 'window';
       if (isWindow ? !showWin : (opening.type !== 'door' || !showDoor)) return;
-      const label = FL.fenLabelForOpening(opening, { exteriorWall: isWindow });
+      const label = FL.fenLabelForOpening(opening, { exteriorWall: isWindow,
+        units: drawing?.units });
       if (!label) return;
       // WHERE IT GOES IS fen-labels.js's NOW, and this page's copy is gone
       // rather than left beside it. The Construction Layout draws this same
@@ -2995,12 +2996,17 @@
     const FL = window.DraftFenLabels;
     const G = window.DraftGeometry2D;
     if (!FL || !G) return;
-    const size = FL.parseWindowSize(text);
+    // IN THE DRAWING'S UNITS: the box opened on the tag as painted, so a metric
+    // drawing hands back millimetres.
+    const metric = drawing?.units === 'metric';
+    const size = FL.parseWindowSize(text, { units: drawing?.units });
+    const say = ft => (metric ? `${FL.mmTo(ft, 5)} mm` : `${Math.round(ft * 12)}"`);
     // REFUSE, DO NOT GUESS -- the numberField above keeps the same rule. A
     // size that cannot be read must never become a size nobody typed: this is
     // a drawing someone builds from.
     if (!size) {
-      sayOnStrip(`${String(text).trim() || 'That'} is not a size — type it as 36 X 42, in inches.`);
+      sayOnStrip(`${String(text).trim() || 'That'} is not a size — type it as `
+        + `${metric ? '915 X 1065, in millimetres' : '36 X 42, in inches'}.`);
       return;
     }
     const host = walls().find(wall => String(wall.id) === String(opening.wallId));
@@ -3012,13 +3018,13 @@
     const fits = G.clampOpeningToWall(host, opening.offset, size.widthFt,
       { walls: walls(), thicknessFt: openingThicknessFt() });
     if (!fits) {
-      sayOnStrip(`${Math.round(size.widthFt * 12)}" is wider than this wall can carry.`);
+      sayOnStrip(`${say(size.widthFt)} is wider than this wall can carry.`);
       return;
     }
     const head = Number(opening.headHeight) || 0;
     const sill = head - size.heightFt;
     if (!(sill >= 0)) {
-      sayOnStrip(`${Math.round(size.heightFt * 12)}" tall would put the sill through the floor.`);
+      sayOnStrip(`${say(size.heightFt)} tall would put the sill through the floor.`);
       return;
     }
     // ONE TYPED SIZE, ONE UNDO, carrying the two numbers a resize moves. The
@@ -3717,6 +3723,10 @@
       },
       ftIn,
       elevationDatum: () => drawing?.elevationDatum ?? null,
+      // THE SIZE TAGS READ THE SWITCH TOO (Movie, 1 Oct: "is it possible to
+      // adjust the window and door ... dimensions to metric"), so the
+      // elevation's W 915 X 1065 agrees with the plan's.
+      units: drawing?.units === 'metric' ? 'metric' : 'imperial',
     };
   };
 
@@ -6067,6 +6077,10 @@
     drawing.units = wanted ? 'metric' : 'imperial';
     markDirty();
     paintUnits();
+    // THE SIZE BOXES READ THE SWITCH TOO, and an open panel would otherwise go
+    // on showing 3'-0" on a drawing that now says 915 everywhere else.
+    if (selectionPanelUp) showSelectionProps();
+    else showToolProps(activeTool);
     paint();
   }));
 
@@ -10433,8 +10447,33 @@
   // the next opening would come out the old size while the box said
   // otherwise. So a bad entry says why on the strip and the box goes back to
   // the number actually in force.
+  // ── A DOOR OR WINDOW SIZE ON A METRIC DRAWING IS MILLIMETRES ───────────
+  //
+  // Movie, 1 Oct: *"is it possible to adjust the window and door / fixture
+  // dimensions to metric / back to imperial?"* -- *"when the METRIC button
+  // hit"*. The size boxes show 915 where they showed 3'-0", and a BARE NUMBER
+  // typed into one means millimetres, the way a bare number means inches on
+  // an imperial drawing. `m` reads metres; anything else -- 3'-0", 36" --
+  // still goes to the imperial reader, so a drafter who thinks in feet is
+  // never refused.
+  //
+  // Only the boxes that take inches on an imperial drawing (`inches: true`:
+  // the door and window boxes). A wall or a floor keeps its feet.
+  const metricSizes = () => drawing?.units === 'metric' && !!window.DraftFenLabels;
+  const sizeText = ft => (metricSizes()
+    ? `${window.DraftFenLabels.mmTo(ft, 5)} mm`
+    : window.DraftFormatters.formatArchitecturalInches(ft * 12));
+  const parseMetricSize = text => {
+    const m = String(text ?? '').trim().match(/^(\d+(?:\.\d+)?)\s*(mm|m)?$/i);
+    if (!m) return null;
+    const mm = Number(m[1]) * (m[2] && m[2].toLowerCase() === 'm' ? 1000 : 1);
+    if (!(mm > 0)) return { ok: false, error: `${text} is not a size.` };
+    return { ok: true, inches: mm / 25.4 };
+  };
+
   const propField = (label, valueFt, commit, redraw, { inches = false } = {}) => {
     const F = window.DraftFormatters;
+    const metric = inches && metricSizes();
     const row = document.createElement('div');
     row.dataset.propRow = label.toLowerCase();
     const name = document.createElement('div');
@@ -10449,7 +10488,8 @@
     // number would be a claim about all of them, and typing over it is how
     // the drafter says "all of these, this".
     const shown = () => (valueFt == null ? ''
-      : F.formatArchitecturalInches(valueFt * 12));
+      : metric ? String(window.DraftFenLabels.mmTo(valueFt, 5))
+        : F.formatArchitecturalInches(valueFt * 12));
     input.value = shown();
     if (valueFt == null) input.placeholder = '\u2014';
     input.setAttribute('aria-label', label);
@@ -10463,7 +10503,13 @@
       // sizes a door at 36 FEET, and the wall boxes' rule -- a bare number is
       // feet -- gave exactly that. 3-0, 0-36, 3' and 36" still read as they
       // always did; only the bare number changes, and only here.
-      const parsed = (inches ? F.parseAssemblyInches : F.parseArchitecturalLength)(input.value);
+      //
+      // A METRIC BOX LEFT AS IT WAS SHOWN IS NOT AN EDIT. It shows the size
+      // to the nearest 5 mm, so committing it back would move a 36" window to
+      // 915 mm -- 36.02" -- on every blur, a change nobody made.
+      if (metric && input.value.trim() === shown()) return;
+      const parsed = (metric && parseMetricSize(input.value))
+        || (inches ? F.parseAssemblyInches : F.parseArchitecturalLength)(input.value);
       if (!parsed.ok) {
         sayOnStrip(parsed.error);
         input.value = shown();
@@ -10519,9 +10565,20 @@
   // user will understand what it represents without seeing the unit").
   const doorSizeKey = (entry, widthFt, headFt) => (entry.type === 'garage'
     ? `${widthFt}x${headFt}` : String(Math.round(widthFt * 12)));
-  const doorSizeChips = entry => entry.sizes.map(size => (entry.type === 'garage'
-    ? [`${size.widthFt}x${size.heightFt}`, `${size.widthFt}W × ${size.heightFt}H`]
-    : [String(Math.round(size * 12)), String(Math.round(size * 12))]));
+  //
+  // ON A METRIC DRAWING THE FACES ARE MILLIMETRES, the same numbers the tag
+  // will print (fen-labels.js rounds both): 915, 4880W × 2440H. The KEYS stay
+  // in the catalog's own units, since they name an entry and not a reading.
+  const doorSizeChips = entry => {
+    const FL = window.DraftFenLabels;
+    const metric = drawing?.units === 'metric' && FL;
+    return entry.sizes.map(size => (entry.type === 'garage'
+      ? [`${size.widthFt}x${size.heightFt}`, metric
+        ? `${FL.mmTo(size.widthFt, 10)}W × ${FL.mmTo(size.heightFt, 10)}H`
+        : `${size.widthFt}W × ${size.heightFt}H`]
+      : [String(Math.round(size * 12)),
+        metric ? String(FL.mmTo(size, 5)) : String(Math.round(size * 12))]));
+  };
   const doorSizeFromKey = (entry, key) => {
     if (entry.type === 'garage') {
       const size = entry.sizes.find(sz => `${sz.widthFt}x${sz.heightFt}` === key);
@@ -10676,8 +10733,8 @@
       box.append(openingField('SILL', openingSill, feet => {
         if (feet < 0) return 'A sill cannot be below the floor.';
         if (feet >= openingHeadFt()) {
-          return `A sill at ${F.formatArchitecturalInches(feet * 12)} is not `
-            + `below the head at ${F.formatArchitecturalInches(openingHeadFt() * 12)}.`;
+          return `A sill at ${sizeText(feet)} is not `
+            + `below the head at ${sizeText(openingHeadFt())}.`;
         }
         openingSill = feet;
         return null;
@@ -10690,8 +10747,8 @@
       // comparison asks openingSillFt rather than the stored window number.
       const sill = openingSillFt();
       if (!(feet > sill)) {
-        return `A head at ${F.formatArchitecturalInches(feet * 12)} is not `
-          + `above the sill at ${F.formatArchitecturalInches(sill * 12)}.`;
+        return `A head at ${sizeText(feet)} is not `
+          + `above the sill at ${sizeText(sill)}.`;
       }
       openingHeads[fenestrationType === 'window' ? 'window' : 'door'] = feet;
       return null;
@@ -10705,9 +10762,9 @@
     note.dataset.openingNote = '';
     const doorName = fenestrationType === 'door'
       ? `${(window.DraftGeometry2D.DOOR_CATALOG.find(e => e.id === fenestrationDoor) || {}).label || 'DOOR'} ` : '';
-    note.textContent = `${doorName}${F.formatArchitecturalInches(openingWidthFt() * 12)} WIDE, `
-      + `SILL ${F.formatArchitecturalInches(openingSillFt() * 12)}, `
-      + `HEAD ${F.formatArchitecturalInches(openingHeadFt() * 12)}`;
+    note.textContent = `${doorName}${sizeText(openingWidthFt())} WIDE, `
+      + `SILL ${sizeText(openingSillFt())}, `
+      + `HEAD ${sizeText(openingHeadFt())}`;
     box.append(note);
     P.set('FENESTRATION', box);
     openingPanelUp = true;
@@ -15704,7 +15761,7 @@
       });
       if (refused.length) {
         return `That wall is too short to carry a `
-          + `${F.formatArchitecturalInches(feet * 12)} opening.`;
+          + `${sizeText(feet)} opening.`;
       }
       applyToOpenings(openings, opening =>
         ({ width: feet, offset: clamped.get(opening), ...extra(opening) }));
@@ -15764,9 +15821,9 @@
         feet => {
           const bad = openings.find(o => feet >= (Number(o.headHeight) || 0));
           if (bad) {
-            return `A sill at ${F.formatArchitecturalInches(feet * 12)} is not `
+            return `A sill at ${sizeText(feet)} is not `
               + `below the head at `
-              + `${F.formatArchitecturalInches((Number(bad.headHeight) || 0) * 12)}.`;
+              + `${sizeText((Number(bad.headHeight) || 0))}.`;
           }
           applyToOpenings(openings, () => ({ sillHeight: feet }));
           return null;
@@ -15777,9 +15834,9 @@
       feet => {
         const bad = openings.find(o => feet <= (Number(o.sillHeight) || 0));
         if (bad) {
-          return `A head at ${F.formatArchitecturalInches(feet * 12)} is not `
+          return `A head at ${sizeText(feet)} is not `
             + `above the sill at `
-            + `${F.formatArchitecturalInches((Number(bad.sillHeight) || 0) * 12)}.`;
+            + `${sizeText((Number(bad.sillHeight) || 0))}.`;
         }
         applyToOpenings(openings, () => ({ headHeight: feet }));
         return null;

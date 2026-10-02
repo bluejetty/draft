@@ -35,6 +35,18 @@ if (!window.DraftCutView) {
   let warnedNoRoofPatterns = false;
   let warnedNoFootings = false;
   let warnedNoFenLabels = false;
+
+  // A SIZE TAG SET IN THE LARGEST OF 9, 8 OR 7 PX THAT FITS THE OPENING, with
+  // two pixels clear each side and a box at least 11 px tall. Leaves the font
+  // set on `ctx` and says whether anything fitted; false means draw nothing.
+  const fitTagText = (ctx, label, roomPx, tallPx) => {
+    if (!(tallPx >= 11)) return false;
+    for (const px of [9, 8, 7]) {
+      ctx.font = `600 ${px}px 'Barlow Condensed', system-ui, sans-serif`;
+      if (ctx.measureText(label).width + 4 <= roomPx) return true;
+    }
+    return false;
+  };
   const { WALL_TYPES, DEFAULT_FINISH_ID, finishById, bandIsCapped,
     bandRange, bandSpan } = window.DraftWallTypes;
   const { formatInchesOnly } = window.DraftFormatters;
@@ -4339,19 +4351,22 @@ if (!window.DraftCutView) {
         }
         if (f.type === 'window' && window.DraftFenLabels && showFenTags) {
           const sizeLabel = window.DraftFenLabels.fenLabel({
-            type: 'window', widthFt: f.width, heightFt: head - sill });
+            type: 'window', widthFt: f.width, heightFt: head - sill, units: env.units });
           if (sizeLabel) {
             ctx.save();
-            ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
             ctx.fillStyle = INK;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             // OFF THE SHEET IF IT WILL NOT FIT. A tag wider than the glass it
             // names, or taller than it, is not a smaller tag -- it is ink
             // across the neighbouring wall. Better absent than wrong.
-            const wide = ctx.measureText(sizeLabel).width;
-            const tall = (top - bottom) * pxPerFt;
-            if (wide + 4 <= ow && tall >= 11) {
+            //
+            // BUT A STEP SMALLER FIRST. A metric tag is two digits longer
+            // than the inches it replaces (Movie, 1 Oct: "make text smaller
+            // if necessary"), so it tries 9, 8 and 7 px before giving up --
+            // never below 7, where a tag stops being read and starts being
+            // texture.
+            if (fitTagText(ctx, sizeLabel, ow, (top - bottom) * pxPerFt)) {
               ctx.fillText(sizeLabel, ox + ow / 2, (Y(top) + Y(bottom)) / 2);
             }
             ctx.restore();
@@ -4365,16 +4380,13 @@ if (!window.DraftCutView) {
             // window's head-less-sill (a door's stored sill is 0, which the
             // line above reads as "use the default window sill").
             type: 'door', widthFt: f.width, heightFt: head,
-            garage: f.garage === true || f.doorType === 'garage' });
+            garage: f.garage === true || f.doorType === 'garage', units: env.units });
           if (doorLabel) {
             ctx.save();
-            ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
             ctx.fillStyle = INK;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            const wide = ctx.measureText(doorLabel).width;
-            const tall = (top - bottom) * pxPerFt;
-            if (wide + 4 <= ow && tall >= 11) {
+            if (fitTagText(ctx, doorLabel, ow, (top - bottom) * pxPerFt)) {
               ctx.fillText(doorLabel, ox + ow / 2, (Y(top) + Y(bottom)) / 2);
             }
             ctx.restore();

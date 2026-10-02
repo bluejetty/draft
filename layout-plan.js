@@ -362,6 +362,9 @@ if (!window.DraftLayoutPlan) {
     composition.drawPlan(ctx, toS, {
       levelId,
       viewId: view,
+      // THE DRAWING'S OWN SWITCH, for the window and door size tags: a sheet
+      // off a metric drawing tags W 915 X 1065, as the Model Space does.
+      units: saved?.units === 'metric' ? 'metric' : 'imperial',
       // ── WHICH OUTLINE IS THE HOUSE, for the window size tag ───────────
       //
       // The tag sits on the EXTERIOR side of the glass and nothing can say

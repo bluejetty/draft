@@ -33,28 +33,51 @@ if (!window.DraftFenLabels) {
   // Garage doors read in feet; quarter-foot grid keeps 8.5 honest and 8 clean.
   const trimFeet = ft => String(Math.round(ft * 4) / 4);
 
-  const fenLabel = ({ type, widthFt, heightFt, exterior, double: isDouble, garage }) => {
+  // ── AND THE SAME TAGS IN MILLIMETRES ────────────────────────────────────
+  //
+  // Movie, 1 Oct: *"is it possible to adjust the window and door / fixture
+  // dimensions to metric / back to imperial?"*, *"when the METRIC button
+  // hit"*, *"make text smaller if necessary and yes rounding you decide"*,
+  // and for the garage *"put the mm number 4880 2440"*.
+  //
+  // ALL OF IT IN MILLIMETRES, the garage too -- metric has no feet to keep
+  // the garage apart, so the W and the H are what still say which is which.
+  // A WINDOW OR DOOR TO THE NEAREST 5 MM (36" is 914.4, written 915), the
+  // grain a metric window schedule is ordered in. A GARAGE DOOR TO THE
+  // NEAREST 10, which is his 4880 x 2440 for a 16 x 8 -- to the 5 it would
+  // read 4875. The letters do not change: a takeoff still counts W, D and G.
+  //
+  // `units` is the drawing's own field: 'metric' is metric, and anything else
+  // -- missing included -- is the imperial every reader already defaults to.
+  const MM_PER_FT = 304.8;
+  const isMetric = units => units === 'metric';
+  const mmTo = (ft, step) => Math.round(ft * MM_PER_FT / step) * step;
+
+  const fenLabel = ({ type, widthFt, heightFt, exterior, double: isDouble, garage, units }) => {
     if (!Number.isFinite(widthFt) || widthFt <= 0) return '';
+    const metric = isMetric(units);
+    const size = ft => (metric ? mmTo(ft, 5) : roundInches(ft));
     if (type === 'window') {
       if (!Number.isFinite(heightFt) || heightFt <= 0) return '';
       // WIDTH BY HEIGHT, off the opening's own numbers: "match the actual size
       // of the window". Nothing is snapped to the stock ladder here -- a
       // drafter who typed 37 gets 37, and the ladder is what he picks FROM,
       // not what the sheet claims he built.
-      return `W ${roundInches(widthFt)} X ${roundInches(heightFt)}`;
+      return `W ${size(widthFt)} X ${size(heightFt)}`;
     }
     if (type !== 'door') return '';
     if (garage) {
       if (!Number.isFinite(heightFt) || heightFt <= 0) return '';
       // WIDTH FIRST, AND SAYS WHICH IS WHICH: "make it obvious which is which
       // in the garage".
+      if (metric) return `G ${mmTo(widthFt, 10)}W x ${mmTo(heightFt, 10)}H`;
       return `G ${trimFeet(widthFt)}W x ${trimFeet(heightFt)}H`;
     }
     // ONE LETTER FOR EVERY OTHER DOOR. `exterior` and `double` are still
     // accepted, so a caller that passes them is not wrong -- they simply no
     // longer change the name.
     void exterior; void isDouble;
-    return `D${roundInches(widthFt)}`;
+    return `D${size(widthFt)}`;
   };
 
   // Classification the plan can derive without asking anyone: garage from
@@ -63,7 +86,7 @@ if (!window.DraftFenLabels) {
   // host wall riding the house outline (the codebase's own exterior test —
   // loose walls with no closed outline read interior, which fails to the
   // plain D label, never to a wrong claim).
-  const fenLabelForOpening = (opening, { exteriorWall } = {}) => {
+  const fenLabelForOpening = (opening, { exteriorWall, units } = {}) => {
     if (!opening) return '';
     const widthFt = opening.width;
     const heightFt = opening.type === 'window'
@@ -78,6 +101,7 @@ if (!window.DraftFenLabels) {
       exterior: exteriorWall === true,
       double: widthFt >= 4,
       garage,
+      units,
     });
   };
 
@@ -99,12 +123,17 @@ if (!window.DraftFenLabels) {
   // lone 36 a width or a square?), three or more, zero, negative, and
   // anything with no digits at all. A size that cannot be read must not
   // silently become a size that was not typed -- this is a drawing.
-  const parseWindowSize = text => {
+  //
+  // ON A METRIC DRAWING THE TWO NUMBERS ARE MILLIMETRES -- the tag the box
+  // opens with says 915 X 1065, and a reader that took those back as inches
+  // would make a window seventy-six feet wide.
+  const parseWindowSize = (text, { units } = {}) => {
     const nums = String(text ?? '').match(/\d+(?:\.\d+)?/g);
     if (!nums || nums.length !== 2) return null;
-    const widthIn = Number(nums[0]), heightIn = Number(nums[1]);
-    if (!(widthIn > 0) || !(heightIn > 0)) return null;
-    return { widthFt: widthIn / 12, heightFt: heightIn / 12 };
+    const width = Number(nums[0]), height = Number(nums[1]);
+    if (!(width > 0) || !(height > 0)) return null;
+    const perFt = isMetric(units) ? MM_PER_FT : 12;
+    return { widthFt: width / perFt, heightFt: height / perFt };
   };
 
   // The preferred stock ladder — which sizes the office actually orders.
@@ -272,6 +301,9 @@ if (!window.DraftFenLabels) {
 
   window.DraftFenLabels = Object.freeze({
     fenLabel,
+    MM_PER_FT,
+    isMetric,
+    mmTo,
     fenLabelForOpening,
     parseWindowSize,
     DEFAULT_FEN_STANDARDS,
