@@ -2,11 +2,20 @@
 // plus the COMPANY STANDARDS stock table behind it. Labels are how the
 // office reads a plan; the quirks below are deliberate and encoded here so
 // nobody has to remember them:
-//   G 8x16  garage overhead doors — FEET, HEIGHT x WIDTH (height first)
-//   ED36    exterior / man doors  — inches, width only
-//   D32     interior swing doors  — inches, width only
-//   DD72    double doors          — inches, width only
-//   36 X 42 windows               — INCHES, WIDTH X HEIGHT, and NO letter
+//   G 16W x 8H  garage overhead doors — FEET, WIDTH then HEIGHT, marked W/H
+//   D36         every other door      — inches, width only
+//   W 36 X 42   windows               — INCHES, WIDTH X HEIGHT
+//
+// THREE LETTERS, FOR ESTIMATING (Movie, 1 Oct): "for later ESTIMATION
+// purposes we should put the W before the window sizes ... for doors i think
+// it should go like : G - GARAGE DOOR, D - EXT, INT or Double ... all those
+// can be D, don't need to distinguish them ... and then W for window". And
+// the garage reads the way he marks one -- "Garage 16W X 8H", "use the W and
+// the H" -- with the letters on the garage ALONE, since "garage is only one in
+// FT". ED and DD are gone: an exterior door and a pair are D like any other.
+//
+// THE WINDOW LOST ITS LETTER ON 28 SEP AND GOT IT BACK ON 1 OCT, for the
+// estimate: a takeoff counts W's, D's and G's.
 //
 // THE WINDOW LOST ITS LETTER ON 28 SEP. Movie: *"make the windows on the floor
 // plans and on the elevations size : \"36 X 42\" width by height in inches"*,
@@ -32,17 +41,19 @@ if (!window.DraftFenLabels) {
       // of the window". Nothing is snapped to the stock ladder here -- a
       // drafter who typed 37 gets 37, and the ladder is what he picks FROM,
       // not what the sheet claims he built.
-      return `${roundInches(widthFt)} X ${roundInches(heightFt)}`;
+      return `W ${roundInches(widthFt)} X ${roundInches(heightFt)}`;
     }
     if (type !== 'door') return '';
     if (garage) {
       if (!Number.isFinite(heightFt) || heightFt <= 0) return '';
-      return `G ${trimFeet(heightFt)}x${trimFeet(widthFt)}`;
+      // WIDTH FIRST, AND SAYS WHICH IS WHICH: "make it obvious which is which
+      // in the garage".
+      return `G ${trimFeet(widthFt)}W x ${trimFeet(heightFt)}H`;
     }
-    // A double IS a double wherever it hangs, so DD outranks ED — a 4'
-    // patio pair reads DD48, not ED48.
-    if (isDouble) return `DD${roundInches(widthFt)}`;
-    if (exterior) return `ED${roundInches(widthFt)}`;
+    // ONE LETTER FOR EVERY OTHER DOOR. `exterior` and `double` are still
+    // accepted, so a caller that passes them is not wrong -- they simply no
+    // longer change the name.
+    void exterior; void isDouble;
     return `D${roundInches(widthFt)}`;
   };
 
@@ -58,7 +69,7 @@ if (!window.DraftFenLabels) {
     const heightFt = opening.type === 'window'
       ? (opening.headHeight ?? 0) - (opening.sillHeight ?? 0)
       : opening.headHeight;
-    const garage = opening.garage === true
+    const garage = opening.garage === true || opening.doorType === 'garage'
       || (exteriorWall === true && opening.type === 'door' && widthFt >= 8);
     return fenLabel({
       type: opening.type,
@@ -97,15 +108,26 @@ if (!window.DraftFenLabels) {
   };
 
   // The preferred stock ladder — which sizes the office actually orders.
-  // Door families are widths in inches; garage and window entries are the
-  // label bodies themselves (HxW feet / WxH inches). Seeds are the boss's
-  // stated ladder; D carries the closet run (D36–D18) since it is one
-  // family. showLabels defaults OFF so no current drawing changes until
-  // the office opts in.
+  // Door families are widths in inches; garage entries are WIDTH x HEIGHT in
+  // feet (16x8 is the 16W x 8H double) and window entries WIDTH x HEIGHT in
+  // inches. The family keys keep their old names (ed, dd) so a saved office
+  // keeps its lists; what the rows are CALLED is STANDARDS.html's, and the
+  // DOUBLE row is FRENCH now (Movie, 1 Oct: "rename double FRENCH").
+  //
+  // showLabels is MODEL.dc.html's switch and is left as that page reads it.
+  // The current pages answer to the layers instead -- A-DIMS-WIN and
+  // A-DIMS-DOOR -- because a tick on STANDARDS that the pages ignored was a
+  // switch that did nothing.
+  //
+  // doorsOnElevations: a door's size on an ELEVATION is OFF until the office
+  // turns it on (Movie, 1 Oct: "WINDOW sizes ON in elevation construction
+  // plans (by default) DOORS off by default but they could turn it on"). On
+  // the floor plan both draw, by their layers.
   const DEFAULT_FEN_STANDARDS = Object.freeze({
     showLabels: false,
+    doorsOnElevations: false,
     stock: Object.freeze({
-      garage: Object.freeze(['8x16', '8x9']),
+      garage: Object.freeze(['16x8', '9x8']),
       ed: Object.freeze(['36', '32']),
       d: Object.freeze(['36', '32', '30', '24', '18']),
       dd: Object.freeze(['72', '60', '48']),
@@ -121,6 +143,7 @@ if (!window.DraftFenLabels) {
     const storedStock = stored.stock && typeof stored.stock === 'object' ? stored.stock : {};
     return {
       showLabels: stored.showLabels === true,
+      doorsOnElevations: stored.doorsOnElevations === true,
       stock: Object.fromEntries(Object.entries(DEFAULT_FEN_STANDARDS.stock).map(([family, fallback]) => {
         const list = Array.isArray(storedStock[family])
           ? storedStock[family].map(entry => String(entry).trim()).filter(Boolean)
@@ -209,6 +232,44 @@ if (!window.DraftFenLabels) {
     };
   };
 
+  // A DOOR'S TAG GOES WHERE ITS LEAF DOES NOT. An interior door has no
+  // outside to step to, and the side it swings into is under the arc -- so
+  // the tag is stepped off the OTHER face, by the same half-thickness-plus-gap
+  // a window's is. For the usual inswing front door that is the outside too.
+  // The swing side is render-2d's: the left of the glazing run, turned over
+  // by FLIP SWING.
+  const doorTagLine = (opening, geometry, { gapFt = PLAN_TAG_GAP_FT } = {}) => {
+    if (!geometry || !geometry.glazing || !geometry.corners || !geometry.center) return null;
+    const [ga, gb] = geometry.glazing;
+    const run = Math.hypot(gb.x - ga.x, gb.z - ga.z) || 1;
+    const ux = (gb.x - ga.x) / run, uz = (gb.z - ga.z) / run;
+    const flip = opening && opening.swingFlip === true ? -1 : 1;
+    const away = { x: uz * flip, z: -ux * flip };
+    const half = Math.max(...geometry.corners.map(corner =>
+      Math.abs((corner.x - geometry.center.x) * away.x
+        + (corner.z - geometry.center.z) * away.z)));
+    const gap = half + gapFt;
+    const cx = geometry.center.x + away.x * gap;
+    const cz = geometry.center.z + away.z * gap;
+    return {
+      a: { x: cx - ux * run / 2, z: cz - uz * run / 2 },
+      b: { x: cx + ux * run / 2, z: cz + uz * run / 2 },
+    };
+  };
+
+  // WHICH LINE A TAG RUNS ALONG, for any opening: a window and a garage door
+  // step outside the house; every other door steps off the face its leaf
+  // does not swing to. A garage with no outline to read falls back to that.
+  const openingTagLine = (opening, geometry, outline) => {
+    if (!opening) return null;
+    const isGarage = opening.type === 'door'
+      && (opening.garage === true || opening.doorType === 'garage');
+    if (opening.type === 'window' || isGarage) {
+      return planTagLine(geometry, outline) || (isGarage ? doorTagLine(opening, geometry) : null);
+    }
+    return opening.type === 'door' ? doorTagLine(opening, geometry) : null;
+  };
+
   window.DraftFenLabels = Object.freeze({
     fenLabel,
     fenLabelForOpening,
@@ -219,6 +280,8 @@ if (!window.DraftFenLabels) {
     PLAN_TAG_GAP_FT,
     exteriorNormalAt,
     planTagLine,
+    doorTagLine,
+    openingTagLine,
   });
 })();
 }

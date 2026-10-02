@@ -178,6 +178,12 @@ if (!window.DraftCutViewEnv) {
       // "draws" -- the same shape plan-composition's layerShows uses, so the
       // plan and the elevation cannot answer differently.
       layerStandard: layerTable ? (id => layerTable[id] || null) : null,
+      // The office's Fenestration labels, for the one switch cut-view asks
+      // of them: whether a door carries its size on an elevation.
+      fenStandards: () => (window.DraftFenLabels && window.DraftProfileManager
+        ? window.DraftFenLabels.normaliseFenStandards(
+          window.DraftProfileManager.getActive('standards')?.content?.model?.fenestrationStandards)
+        : null),
       floorLevels: () => floorLevels,
       levelAssembly,
       // ASKS THE MODULE. This spelt the arithmetic out until 7 Sep -- one of

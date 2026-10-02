@@ -2807,8 +2807,12 @@
     // down. Same rule and same wording as cut-view.js's own gate so the plan
     // and the elevation cannot answer differently about one layer: a layer
     // the table does not carry DRAWS.
-    const winStandard = layerStandardOf('A-DIMS-WIN');
-    if (winStandard && winStandard.visible === false) return;
+    // AND THE DOORS, by A-DIMS-DOOR's own tick (Movie, 1 Oct: "all
+    // window/door/equipe sizes on floor plans"). Only the window's tag takes
+    // a press; a door's is read, and its size is changed in PROPERTIES.
+    const showWin = layerStandardOf('A-DIMS-WIN')?.visible !== false;
+    const showDoor = layerStandardOf('A-DIMS-DOOR')?.visible !== false;
+    if (!showWin && !showDoor) return;
     const outlines = new Map();
     const outlineOf = id => {
       if (!outlines.has(id)) outlines.set(id, houseOutlineOn(id));
@@ -2817,8 +2821,10 @@
     ctx.save();
     ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
     openingsOn(shown).forEach(({ opening, geometry }) => {
-      if (opening.type !== 'window' || !geometry || !geometry.glazing) return;
-      const label = FL.fenLabelForOpening(opening, { exteriorWall: true });
+      if (!geometry || !geometry.glazing) return;
+      const isWindow = opening.type === 'window';
+      if (isWindow ? !showWin : (opening.type !== 'door' || !showDoor)) return;
+      const label = FL.fenLabelForOpening(opening, { exteriorWall: isWindow });
       if (!label) return;
       // WHERE IT GOES IS fen-labels.js's NOW, and this page's copy is gone
       // rather than left beside it. The Construction Layout draws this same
@@ -2830,7 +2836,7 @@
       //
       // exteriorNormalAt WENT WITH IT. It had exactly one caller on this page
       // -- this tag -- so nothing is stranded and no second copy is made.
-      const line = FL.planTagLine(geometry, outlineOf(opening.levelId));
+      const line = FL.openingTagLine(opening, geometry, outlineOf(opening.levelId));
       if (!line) return;
       // OFFSET 0, ON A LINE ALREADY MOVED OUTSIDE. labelAlongLine2D's own
       // offset is perpendicular in the ROTATED frame, and its read-direction
@@ -2847,7 +2853,7 @@
       //
       // MEASURED HERE RATHER THAN IN THE HELPER: a width costs a measureText
       // per label, and of this page's labels only these take a click.
-      if (live && placed) {
+      if (live && placed && isWindow) {
         windowTagHits.push({
           opening, label, cx: placed.cx, cy: placed.cy, angle: placed.angle,
           halfW: ctx.measureText(label).width / 2 + TAG_HIT_PAD,
@@ -3600,6 +3606,12 @@
       // reads a MISSING entry as "draws", so a page with no profile loaded is
       // not a page that hid the layer.
       layerStandard: id => layerStandardOf(id),
+      // DOOR SIZES ON ELEVATIONS, the office's switch (STANDARDS), the same
+      // way cut-view-env hands it to the sheets.
+      fenStandards: () => (window.DraftFenLabels && window.DraftProfileManager
+        ? window.DraftFenLabels.normaliseFenStandards(
+          window.DraftProfileManager.getActive('standards')?.content?.model?.fenestrationStandards)
+        : null),
       floorLevels: () => LV.floorLevels(drawing?.levels),
       levelAssembly: levelId => assemblyFor(levelId),
       levelFloorFt: levelId => LA.levelFloorFt(assemblyFor(levelId)),

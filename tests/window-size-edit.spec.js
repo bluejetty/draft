@@ -24,7 +24,7 @@ const h = require('./helpers');
 
 const REPRO = JSON.parse(fs.readFileSync(
   path.join(__dirname, '..', 'proto', 'repro-movie-bands.draft'), 'utf8'));
-const SIZE = /^\d+ X \d+$/;
+const SIZE = /^W \d+ X \d+$/;
 
 // The tape: every string the canvas is asked to paint, WITH where the context
 // was standing when it was asked. labelAlongLine2D translates to the tag's
@@ -58,7 +58,7 @@ async function openTagged(page) {
   // and a press at a thumbnail's coordinates lands on empty sheet.
   await page.setViewportSize({ width: 1360, height: 764 });
   await page.waitForFunction(
-    () => (window.__tags || []).some(t => t.cv === 'plan' && /^\d+ X \d+$/.test(t.text)),
+    () => (window.__tags || []).some(t => t.cv === 'plan' && /^W \d+ X \d+$/.test(t.text)),
     null, { timeout: 15000 });
 }
 
@@ -68,7 +68,7 @@ async function openTagged(page) {
 const tagsNow = page => page.evaluate(() => {
   const dpr = window.devicePixelRatio || 1;
   return (window.__tags || [])
-    .filter(t => t.cv === 'plan' && /^\d+ X \d+$/.test(t.text))
+    .filter(t => t.cv === 'plan' && /^W \d+ X \d+$/.test(t.text))
     .map(t => ({ text: t.text, x: t.e / dpr, y: t.f / dpr }));
 });
 
@@ -122,17 +122,17 @@ test('the size typed there resizes the window: centred on width, down from the h
     // THE FIXTURE'S OWN REACH, asked before anything is read off it: the
     // window must not already be this size, or "it changed" is the state it
     // started in.
-    expect(before.text, 'the window starts at some other size').not.toBe('24 X 36');
+    expect(before.text, 'the window starts at some other size').not.toBe('W 24 X 36');
 
-    await entry.fill('24 X 36');
+    await entry.fill('W 24 X 36');
     await entry.press('Enter');
-    await page.waitForFunction(() => (window.__tags || []).some(t => t.text === '24 X 36'),
+    await page.waitForFunction(() => (window.__tags || []).some(t => t.text === 'W 24 X 36'),
       null, { timeout: 10000 });
 
     // THE CENTRE LINE DID NOT MOVE -- Movie's own rule. `offset` is the
     // centre, so a width change that leaves it alone is already centred; this
     // is what catches a future "helpful" nudge that re-seats the opening.
-    const after = (await tagsNow(page)).filter(t => t.text === '24 X 36').pop();
+    const after = (await tagsNow(page)).filter(t => t.text === 'W 24 X 36').pop();
     expect(after, 'the retagged window is on the sheet').toBeTruthy();
     expect(Math.hypot(after.x - before.x, after.y - before.y),
       'the window grew about its centre, it did not slide').toBeLessThan(2);
@@ -161,9 +161,9 @@ test('a mistyped size can be taken back with one Ctrl+Z', async ({ page }) => {
   const before = await clickLastTag(page);
   const entry = page.locator('[data-window-size-entry]');
   await expect(entry).toBeVisible();
-  await entry.fill('24 X 36');
+  await entry.fill('W 24 X 36');
   await entry.press('Enter');
-  await page.waitForFunction(() => (window.__tags || []).some(t => t.text === '24 X 36'),
+  await page.waitForFunction(() => (window.__tags || []).some(t => t.text === 'W 24 X 36'),
     null, { timeout: 10000 });
 
   await page.evaluate(() => { window.__tags = []; });
