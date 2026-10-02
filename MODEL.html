@@ -2281,8 +2281,33 @@
   // `drawing.drawingOrigin || null` would collapse the two and strip the grid
   // from every old drawing -- and no fixture would catch it, because the old
   // page always writes the key now.
+  // THE SITE POINT, when there is a house to take it from (cut-marks.js
+  // siteDatum: where the front and left outside foundation faces meet). It
+  // is the gold target and the grid's origin both, so in TOY the one-foot
+  // blocks line up from it (Movie, 1 Oct: "kindof like MINECRAFT, in the 1FT
+  // block idea"). Cached on the model epoch like the elevation marks.
+  let siteDatumCache = { epoch: -1, point: null };
+  const siteDatumNow = () => {
+    if (siteDatumCache.epoch !== modelEpoch) {
+      const WT = window.DraftWallTypes;
+      const thicknessFt = wall => {
+        const def = WT && WT.WALL_TYPES.find(type => type.id === wall.wallType);
+        return def ? def.totalIn / 12 : 0;
+      };
+      siteDatumCache = {
+        epoch: modelEpoch,
+        point: window.DraftCutMarks && window.DraftCutMarks.siteDatum
+          ? window.DraftCutMarks.siteDatum(drawing?.walls || [],
+            { turn: drawing?.planTurn || 0, thicknessFt })
+          : null,
+      };
+    }
+    return siteDatumCache.point;
+  };
   const gridDatum = () => {
     if (!drawing) return null;
+    const site = siteDatumNow();
+    if (site) return site;
     if (!('drawingOrigin' in drawing)) return { x: 0, z: 0 };
     const raw = drawing.drawingOrigin;
     if (!raw || typeof raw !== 'object') return null;
@@ -4409,6 +4434,7 @@
     const d = gridDatum();
     if (!d) return 'none — no grid';
     const at = `${d.x.toFixed(2)},${d.z.toFixed(2)}`;
+    if (siteDatumNow()) return `${at} (front-left of foundation)`;
     return (drawing && !('drawingOrigin' in drawing)) ? `${at} (world, back-filled)` : at;
   };
 

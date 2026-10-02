@@ -83,7 +83,11 @@ test.describe('MODEL.html grid', () => {
       'the generated house is never clicked into place, so its datum is null')
       .toBeNull();
 
+    // WALLS TAKEN AWAY: with walls the datum is always the SITE POINT (the
+    // test below), so the stored origin's three states are a wall-less
+    // drawing's.
     await page.goto('/MODEL.html?mode=night');
+    await rewriteStored(page, "d.walls = []; return d;");
     await expect(page.locator('#readout')).toContainText('walls', { timeout: 6000 });
     await expect(page.locator('#readout'),
       'the readout says why, so an absent grid is not a mystery')
@@ -100,13 +104,13 @@ test.describe('MODEL.html grid', () => {
       + 'means anything')
       .toBe(noDatum);
 
-    await rewriteStored(page, "d.drawingOrigin = { x: 0, z: 0 }; return d;");
+    await rewriteStored(page, "d.walls = []; d.drawingOrigin = { x: 0, z: 0 }; return d;");
     await expect(page.locator('#readout')).toContainText('datum 0.00,0.00');
     const atOrigin = await canvasHash(page);
     expect(atOrigin, 'a datum must put a grid on the canvas')
       .not.toBe(noDatum);
 
-    await rewriteStored(page, "d.drawingOrigin = { x: 4, z: -7 }; return d;");
+    await rewriteStored(page, "d.walls = []; d.drawingOrigin = { x: 4, z: -7 }; return d;");
     await expect(page.locator('#readout')).toContainText('datum 4.00,-7.00');
     expect(await canvasHash(page),
       'and the grid must be ANCHORED to the datum -- moving it moves the '
@@ -118,10 +122,10 @@ test.describe('MODEL.html grid', () => {
     async ({ page }) => {
       await houseOnOldPage(page);
       await page.goto('/MODEL.html?mode=night');
-      await expect(page.locator('#readout')).toContainText('walls', { timeout: 6000 });
+      await rewriteStored(page, "d.walls = []; return d;");
       const noDatum = await canvasHash(page);
 
-      await rewriteStored(page, "delete d.drawingOrigin; return d;");
+      await rewriteStored(page, "d.walls = []; delete d.drawingOrigin; return d;");
       await expect(page.locator('#readout'),
         'absent is not null: an old drawing was made on the world grid')
         .toContainText('0.00,0.00 (world, back-filled)');

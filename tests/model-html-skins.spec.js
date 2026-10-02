@@ -231,16 +231,21 @@ test.describe('MODEL.html skins', () => {
       // invented threshold in this suite's history. The cure is not a better
       // number -- it is to stop asking a question whose answers are close
       // together.
+      // AND THE GRID IS BACK, deliberately, since 1 Oct: a house always has a
+      // datum now -- the SITE POINT, where the front and left foundation faces
+      // meet -- so the generated house draws its grid like any other. Measured
+      // with it: ground 0.80 on day, higher on night. The ground still
+      // dominates; it no longer has the canvas to itself.
       for (const [name, p] of [['night', night], ['day', day]]) {
         expect(p.groundPx / p.total, `${name}: the ground should dominate`)
-          .toBeGreaterThan(0.9);
+          .toBeGreaterThan(0.7);
         expect(p.strong, `${name}: there must be real linework, far from the `
           + 'ground -- a skin painting walls in the OTHER skin\'s ink would '
           + 'land in groundPx instead')
           .toBeGreaterThan(2000);
       }
 
-      // AND NO GRID -- but asserted through the readout, not by counting
+      // AND ITS GRID IS THE SITE POINT'S -- asserted through the readout, not by counting
       // pixels. Night ink anti-aliasing onto the night ground manufactures
       // pixels at the grid's own greys, so a colour count cannot separate a
       // painted grid from a rendered edge (1 px in one house, 306 in
@@ -250,10 +255,9 @@ test.describe('MODEL.html skins', () => {
         await page.goto(`/MODEL.html?mode=${name}`);
         await expect(page.locator('#readout')).toContainText('walls', { timeout: 5000 });
         await expect(page.locator('#readout'),
-          `${name}: the generated house has no datum, so there is no grid to `
-          + 'anchor -- and the readout should say so rather than leave it a '
-          + 'mystery')
-          .toContainText('datum none');
+          `${name}: the generated house is never clicked into place, so its `
+          + 'grid is anchored to the site point -- and the readout says so')
+          .toContainText('(front-left of foundation)');
       }
     });
 

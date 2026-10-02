@@ -229,7 +229,66 @@ if (!window.DraftCutMarks) {
     return { start: along(tMin), end: along(tMax) };
   };
 
+  // ── THE SITE POINT: WHERE THE FRONT AND THE LEFT SIDE MEET ────────────
+  //
+  // Movie, 1 Oct: "when a house is positioned on a LOT the most important
+  // locations we need to know it FRONT of the building. and 2nd most
+  // important ... at least 1 side - so i was thinking just alway get the left
+  // side (E2 side). so basically that GOLD TARGET should always be in the
+  // position where it is inline with both the FRONT and LEFT side of the
+  // house" -- on the "face of foundation", and "front of garage grade beam if
+  // garage". And "the house shouldn't move ... the gold target should move to
+  // align itself".
+  //
+  // SO IT IS DERIVED, NEVER STORED: the front-most outside face along E1's
+  // side and the left-most along E2's, crossed. A jog or a garage that sticks
+  // out wins, so the point can be out in the air rather than on a corner. The
+  // seats come from eMarkSeat, so a turned house takes its point with it.
+  //
+  // FOUNDATION FIRST -- the walls on the foundation view, a garage's grade
+  // beam among them. With no foundation yet, the main floor's walls stand in,
+  // and then any floor's. `thicknessFt(wall)` is the caller's, because the
+  // wall table is a page's module and this file reads no tables.
+  const siteDatum = (walls, { turn = 0, thicknessFt } = {}) => {
+    const live = (walls || []).filter(wall => wall && wall.levelId > 0 && wall.start && wall.end);
+    // THE FOUNDATION LEVEL'S, on its foundation drawing -- not any wall that
+    // happens to be filed on a foundation view, which a stray on another
+    // level can be.
+    const pick = [
+      live.filter(wall => wall.view === 'foundation' && wall.levelId === 1),
+      live.filter(wall => wall.view !== 'foundation' && wall.levelId === 3),
+      live.filter(wall => wall.view !== 'foundation'),
+    ].find(list => list.length);
+    if (!pick) return null;
+    const pts = [];
+    pick.forEach(wall => {
+      const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+      const len = Math.hypot(dx, dz);
+      if (len < 1e-6) return;
+      // The body's two faces, by the reference line render-2d draws from:
+      // LEFT puts the drawn line on one face and the body to +perp, RIGHT
+      // the other way, CENTER straddles it.
+      const nx = -dz / len, nz = dx / len;
+      const t = Math.max(0, Number(thicknessFt ? thicknessFt(wall) : 0) || 0);
+      const ref = wall.refLine || 'left';
+      const a = ref === 'left' ? 0 : ref === 'right' ? -t : -t / 2;
+      [wall.start, wall.end].forEach(p => [a, a + t].forEach(o =>
+        pts.push({ x: p.x + nx * o, z: p.z + nz * o })));
+    });
+    if (!pts.length) return null;
+    const front = eMarkSeat('E1', turn), left = eMarkSeat('E2', turn);
+    const extreme = seat => {
+      const values = pts.map(p => p[seat.axis]);
+      return seat.sign > 0 ? Math.max(...values) : Math.min(...values);
+    };
+    const out = { x: 0, z: 0 };
+    out[front.axis] = extreme(front);
+    out[left.axis] = extreme(left);
+    return out;
+  };
+
   window.DraftCutMarks = Object.freeze({
+    siteDatum,
     planWallExtents,
     eMarkDimEdges,
     eMarkClearFt,
