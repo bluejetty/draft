@@ -426,8 +426,17 @@
         const above = report.levels.filter(row => elevOf(row.levelId) >= 0);
         const below = report.levels.filter(row => elevOf(row.levelId) < 0);
         const measured = above.filter(row => row.netSqFt !== null);
+        // SECONDARY SUITES: a SHAPE the drafter outlined and ticked, measured
+        // and listed under the floor it is drawn on (Movie, 1 Oct: "the suite
+        // will have its own AREA marker like MAIN FL, 2ND FL, FOUNDATION ...
+        // on which floor the suite is on they will have 2 area markers"). The
+        // floor's own figure is left as it is -- the suite is inside it.
+        const suitesOn = levelId => pts(drawing.shapes)
+          .filter(sh => sh && sh.suite === true && sh.levelId === levelId
+            && Array.isArray(sh.points) && sh.points.length >= 3)
+          .map(sh => Math.abs(A.polygonArea(sh.points)));
         return {
-          above, below,
+          above, below, suitesOn,
           houseSqFt: measured.length ? measured.reduce((sum, row) => sum + row.netSqFt, 0) : null,
         };
       };
@@ -438,9 +447,15 @@
         const report = areaReport();
         const rows = [];
         if (report) {
-          report.above.forEach(row => rows.push([row.name.toUpperCase(), sqft(row.netSqFt)]));
+          const level = row => {
+            const name = row.name.toUpperCase();
+            rows.push([name, sqft(row.netSqFt)]);
+            report.suitesOn(row.levelId)
+              .forEach(area => rows.push([`  SUITE (${name})`, sqft(area)]));
+          };
+          report.above.forEach(level);
           rows.push(['TOTAL HOUSE', sqft(report.houseSqFt), true]);
-          report.below.forEach(row => rows.push([row.name.toUpperCase(), sqft(row.netSqFt)]));
+          report.below.forEach(level);
         }
         const lineH = 18;
         const left = box.x + 14, right = box.x + box.w - 14;
