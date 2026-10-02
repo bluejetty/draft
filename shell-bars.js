@@ -88,6 +88,15 @@ if (!window.DraftShellBars) {
     // neighbour in that trade is Construction Layout rather than the elevation
     // workspace. So the chip split in two and the order is his: EXT. FINISH
     // between MODEL and REAL ESTATE PLAN.
+    // THE BONEYARD, between MODEL and EXT. FINISH (Movie, 1 Oct): the house's
+    // bones as a 3D wireframe -- one loop per floor and one for the roof. Its
+    // NAME FOLLOWS THE SKIN: BONEYARD on RUFF, WIREFRAME on ROUGH. The chip
+    // is written with the skin already applied (palette runs in the head), and
+    // wireSkin renames it when the skin is switched.
+    Object.freeze({ id: 'boneyard', row: 'page', label: 'BONEYARD', labelRough: 'WIREFRAME',
+      href: './BONEYARD.html',
+      title: 'BONEYARD \u2014 the bones of the house, one loop per floor, in 3D',
+      here: 'The boneyard \u2014 you are here' }),
     Object.freeze({ id: 'ext-finish', row: 'page', label: 'EXT. FINISH',
       href: './EXTFINISH.html',
       title: 'EXT. FINISH \u2014 the elevations, and the finishes on them',
@@ -132,8 +141,13 @@ if (!window.DraftShellBars) {
   // and a DISABLED BUTTON for one that does not exist yet. Three elements
   // rather than three classes, because that is what each thing IS -- and it
   // is the shape the row already had.
+  const skinLabel = entry => (entry.labelRough
+    && document.documentElement.getAttribute('data-theme') === 'rough'
+    ? entry.labelRough : entry.label);
   const chip = (entry, current) => {
-    const attrs = `data-page="${entry.id}"${entry.extra || ''}`;
+    const attrs = `data-page="${entry.id}"${entry.extra || ''}`
+      + (entry.labelRough ? ` data-label-ruff="${entry.label}" data-label-rough="${entry.labelRough}"` : '');
+    entry = { ...entry, label: skinLabel(entry) };
     if (entry.id === current) {
       return `  <span ${attrs} aria-current="page"\n`
         + `    title="${entry.here || entry.title}">${entry.label}</span>`;
@@ -147,6 +161,25 @@ if (!window.DraftShellBars) {
   };
   const rowOf = (which, current) => PAGES.filter(p => p.row === which)
     .map(p => chip(p, current)).join('\n');
+
+  // A CHIP NAMED FOR THE SKIN FOLLOWS IT. Every page switches skins through
+  // DraftPalette.apply, which sets <html data-theme>; MODEL does it with its
+  // own switch rather than wireSkin, so the rename listens to the attribute
+  // and not to any one page's code.
+  let skinLabelsWatched = false;
+  const watchSkinLabels = () => {
+    if (skinLabelsWatched || typeof MutationObserver === 'undefined') return;
+    skinLabelsWatched = true;
+    const rename = () => {
+      const rough = document.documentElement.getAttribute('data-theme') === 'rough';
+      document.querySelectorAll('[data-label-rough]').forEach(el => {
+        const want = rough ? el.dataset.labelRough : el.dataset.labelRuff;
+        if (el.textContent !== want) el.textContent = want;
+      });
+    };
+    new MutationObserver(rename).observe(document.documentElement,
+      { attributes: true, attributeFilter: ['data-theme'] });
+  };
 
   // THE COUNT USED TO STAND HERE, to the left of STATUS READOUT (Movie, 19
   // Sep: "lets put it on lower left (2nd row from bottom to the left of
@@ -714,6 +747,7 @@ if (!window.DraftShellBars) {
       'file-ext', 'printscreen', 'units', 'board', 'instruments']),
     project: Object.freeze(['save']),
     'ext-finish': Object.freeze(['file-new']),
+    boneyard: Object.freeze([]),
     construction: Object.freeze([]),
     specs: Object.freeze([]),
     'real-estate': Object.freeze([]),
@@ -824,6 +858,7 @@ if (!window.DraftShellBars) {
     //             button another button for NORTH ARROW rotation". The page
     //             wires them; the bar only seats them.
     bottomBar: (opts = {}) => {
+      watchSkinLabels();
       const tools = (opts.tools || []).map(tool => BAR_TOOLS[tool] || '').join('');
       put(BOTHEAD + '\n'
         + '<div id="page-row" data-page-row>\n' + rowOf('page', opts.page) + '\n</div>\n'

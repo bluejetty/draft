@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<title>Rough Drafter &mdash; Boneyard</title>
+<link rel="stylesheet" href="vendor/fonts.css" />
+<!-- THE BONEYARD / WIREFRAME PAGE (Movie, 1 Oct): the house's bones as an
+     isometric 3D wireframe on the left -- one loop per floor and one for the
+     roof (2 Oct: "only 1 loops per floor and one for the roof which will be
+     at highest floor ceiling") -- and the chosen level, flat, on the right.
+
+     PR 1 OF 4 IS LOOKING, NOT EDITING. Editing the bones on the right (the
+     TOY tools), drawing a new outline here, the drive-thru on an empty
+     boneyard, and the shelves come in the PRs after this one. -->
+<link rel="stylesheet" href="./shell-bars.css" />
+<script src="./palette.js"></script>
+<!-- ALL IN THE HEAD, as on EXT. FINISH: the bars are written where their
+     mount call stands. The heights come from cut-view's sectionLevelStack --
+     the table every elevation stands its floors on -- so this page loads what
+     that function's env asks for. -->
+<script src="./shell-bars.js"></script>
+<script src="./profile-manager.js"></script>
+<script src="./shared-file-store.js"></script>
+<script src="./drawing-format.js"></script>
+<script src="./wall-types.js"></script>
+<script src="./roof-types.js"></script>
+<script src="./level-assembly.js"></script>
+<script src="./geometry-2d.js"></script>
+<script src="./build-house.js"></script>
+<script src="./formatters.js"></script>
+<script src="./cut-marks.js"></script>
+<script src="./fen-labels.js"></script>
+<script src="./cut-view.js"></script>
+<script src="./cut-view-env.js"></script>
+<script src="./boneyard-loops.js"></script>
+<script src="./orientation-guard.js"></script>
+<script>
+  // THE SKIN IS ONE CHOICE ACROSS THE APP: the same `draft-skin` key MODEL
+  // writes, read synchronously so the page has its colours on the first frame.
+  (() => {
+    const P = window.DraftPalette;
+    const params = new URLSearchParams(location.search);
+    const stored = (() => {
+      try { return JSON.parse(localStorage.getItem('draft-skin') || 'null') || {}; }
+      catch { return {}; }
+    })();
+    const theme = params.get('theme') || stored.theme || 'ruff';
+    const mode = params.get('mode') || stored.skinMode || 'night';
+    window.__byTheme = { theme, mode };
+    window.__bySkin = P.apply(document, theme, mode);
+  })();
+</script>
+<style>
+  :root { --sheet-edge: 1px solid var(--edge-panel); }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; background: var(--surface-page); color: var(--ink-primary);
+    font-family: 'Barlow Condensed', system-ui, sans-serif;
+    display: flex; flex-direction: column; overflow: hidden;
+    padding-top: var(--strip-h);
+    padding-bottom: calc(var(--house-h) + var(--browser-lane));
+  }
+  main { flex: 1; display: flex; min-height: 0; gap: 10px; padding: 10px; }
+  .pane {
+    flex: 1; min-width: 0; display: flex; flex-direction: column;
+    border: var(--sheet-edge); background: var(--surface-chip);
+  }
+  .pane-head {
+    flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+    border-bottom: var(--sheet-edge); background: var(--surface-panel);
+    font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+  }
+  .pane-head .title { color: var(--accent-mark); font-weight: 600; flex: 1; }
+  .pane canvas { flex: 1; min-height: 0; width: 100%; display: block; }
+  canvas#bones3d { cursor: grab; touch-action: none; }
+  .btn {
+    appearance: none; border: 1px solid var(--edge-panel); background: var(--surface-chip);
+    color: var(--ink-primary); font: inherit; font-size: 12px; letter-spacing: .07em;
+    padding: 3px 10px; cursor: pointer;
+  }
+  .btn:hover { border-color: var(--accent-mark); color: var(--accent-mark); }
+  #angle { min-width: 36px; text-align: center; font-family: 'DM Mono', ui-monospace, monospace; }
+  .legend { display: flex; gap: 6px; flex-wrap: wrap; }
+  .legend button {
+    appearance: none; border: 1px solid var(--edge-panel); background: var(--surface-chip);
+    color: var(--ink-primary); font: inherit; font-size: 11px; letter-spacing: .06em;
+    padding: 2px 8px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+  }
+  .legend button[aria-pressed="true"] { border-color: var(--accent-mark); color: var(--accent-mark); }
+  .legend .swatch { width: 10px; height: 10px; display: inline-block; }
+  #status { flex: none; padding: 4px 12px; font-size: 11px; color: var(--ink-quiet); min-height: 20px; }
+</style>
+</head>
+<body>
+  <script>window.DraftShellBars.topBar({ instruments: true });</script>
+  <main>
+    <!-- LEFT: THE BONES IN 3D. Isometric; it turns in 15-degree steps, one
+         still frame per step and nothing in between (Movie, 1 Oct: stepped,
+         "to save processing"). A tap on a loop picks that level for the right. -->
+    <section class="pane" aria-label="The bones in 3D">
+      <div class="pane-head">
+        <span class="title">BONES &mdash; 3D</span>
+        <button type="button" class="btn" id="turn-left" title="Turn 15° left">&#9664;</button>
+        <span id="angle">45°</span>
+        <button type="button" class="btn" id="turn-right" title="Turn 15° right">&#9654;</button>
+      </div>
+      <canvas id="bones3d"></canvas>
+    </section>
+    <!-- RIGHT: THE CHOSEN LEVEL, FLAT. Looking only in this PR; the TOY
+         tools that edit it here come next. -->
+    <section class="pane" aria-label="The chosen level">
+      <div class="pane-head">
+        <span class="title" id="level-title">LEVEL</span>
+        <div class="legend" id="legend"></div>
+      </div>
+      <canvas id="bones2d"></canvas>
+    </section>
+  </main>
+  <div id="status" role="status"></div>
+  <script>window.DraftShellBars.bottomBar({ page: 'boneyard', bone: false });</script>
+
+  <script>
+    (async () => {
+      const BL = window.DraftBoneyardLoops;
+      const FORMAT = window.DraftDrawingFormat;
+      const BUCKET = 'model-drawing';
+      const c3 = document.getElementById('bones3d');
+      const c2 = document.getElementById('bones2d');
+      const statusEl = document.getElementById('status');
+      const say = text => { statusEl.textContent = text; };
+      let skin = window.__bySkin || {};
+
+      let levels = [];
+      let angle = 45;
+      let picked = null;
+      let laid = { levels: [], scale: 0 };
+
+      const load = async () => {
+        const store = window.SharedFileStore;
+        if (!store) return null;
+        let file = null;
+        try { file = await store.loadSharedFile(BUCKET); } catch { file = null; }
+        if (!file) return null;
+        try {
+          const parsed = JSON.parse(await file.text());
+          return FORMAT.checkEnvelope(parsed).ok ? parsed : null;
+        } catch { return null; }
+      };
+
+      const sized = canvas => {
+        const dpr = window.devicePixelRatio || 1;
+        const w = canvas.clientWidth, h = canvas.clientHeight;
+        if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+          canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+        }
+        const ctx = canvas.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.clearRect(0, 0, w, h);
+        return { ctx, w, h };
+      };
+
+      const strokePolys = (ctx, polys, color, width) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        polys.forEach(poly => {
+          ctx.beginPath();
+          poly.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+          ctx.closePath();
+          ctx.stroke();
+        });
+      };
+
+      // ── THE 3D WINDOW ───────────────────────────────────────────────
+      const paint3d = () => {
+        const { ctx, w, h } = sized(c3);
+        laid = BL.layout(levels, angle, w, h);
+        laid.levels.forEach(level => {
+          const on = picked && picked.kind === level.kind && picked.levelId === level.levelId;
+          strokePolys(ctx, level.polys, level.color, on ? 3 : 1.6);
+        });
+        document.getElementById('angle').textContent = `${angle}°`;
+        c3.setAttribute('data-angle', String(angle));
+        // FOR THE SPECS: what is drawn, and where each level's first corner landed.
+        c3.setAttribute('data-bones', JSON.stringify(laid.levels.map(l => ({
+          name: l.name, kind: l.kind, elev: Number(l.elev.toFixed(4)), loops: l.loops.length,
+          color: l.color, at: l.polys[0] && l.polys[0][0]
+            ? [Number(l.polys[0][0].x.toFixed(1)), Number(l.polys[0][0].y.toFixed(1))] : null,
+        }))));
+      };
+
+      // ── THE 2D WINDOW: THE CHOSEN LEVEL, FLAT ───────────────────────
+      const paint2d = () => {
+        const { ctx, w, h } = sized(c2);
+        document.getElementById('level-title').textContent = picked ? picked.name : 'LEVEL';
+        c2.setAttribute('data-level', picked ? picked.name : '');
+        if (!picked) return;
+        const pts = picked.loops.flatMap(l => l.points);
+        const xs = pts.map(p => p.x), zs = pts.map(p => p.z);
+        const minX = Math.min(...xs), maxX = Math.max(...xs);
+        const minZ = Math.min(...zs), maxZ = Math.max(...zs);
+        const m = 30;
+        const s = Math.min((w - 2 * m) / Math.max(maxX - minX, 1), (h - 2 * m) / Math.max(maxZ - minZ, 1));
+        const ox = (w - (maxX - minX) * s) / 2, oy = (h - (maxZ - minZ) * s) / 2;
+        const polys = picked.loops.map(l => l.points.map(p => ({ x: ox + (p.x - minX) * s, y: oy + (p.z - minZ) * s })));
+        strokePolys(ctx, polys, picked.color, 2);
+      };
+
+      const paintLegend = () => {
+        const legend = document.getElementById('legend');
+        legend.replaceChildren(...levels.map(level => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.dataset.boneLevel = level.name;
+          b.setAttribute('aria-pressed', String(picked === level));
+          const sw = document.createElement('span');
+          sw.className = 'swatch';
+          sw.style.background = level.color;
+          b.append(sw, level.name);
+          b.addEventListener('click', () => { pick(level); });
+          return b;
+        }));
+      };
+
+      const pick = level => {
+        picked = level;
+        paintLegend();
+        paint3d();
+        paint2d();
+      };
+      const paintAll = () => { paint3d(); paint2d(); };
+
+      // ── TURNING: 15 DEGREES A STEP, ONE FRAME PER STEP ──────────────
+      const turn = steps => {
+        const next = BL.stepAngle(angle, steps);
+        if (next === angle) return;
+        angle = next;
+        paint3d();
+      };
+      document.getElementById('turn-left').addEventListener('click', () => turn(-1));
+      document.getElementById('turn-right').addEventListener('click', () => turn(1));
+      // A DRAG TURNS TOO, but still in steps: a step per 40 px dragged, and
+      // nothing is painted between steps. A press that does not drag is a tap,
+      // and a tap on a loop picks its level.
+      let drag = null;
+      c3.addEventListener('pointerdown', e => {
+        drag = { x: e.clientX, y: e.clientY, from: angle, moved: false };
+        c3.setPointerCapture(e.pointerId);
+      });
+      c3.addEventListener('pointermove', e => {
+        if (!drag) return;
+        const dx = e.clientX - drag.x;
+        if (Math.abs(dx) > 6) drag.moved = true;
+        const steps = Math.trunc(dx / 40);
+        const next = BL.stepAngle(drag.from, steps);
+        if (next !== angle) { angle = next; paint3d(); }
+      });
+      c3.addEventListener('pointerup', e => {
+        const was = drag;
+        drag = null;
+        if (!was || was.moved) return;
+        const box = c3.getBoundingClientRect();
+        const hit = BL.levelAt(laid, { x: e.clientX - box.left, y: e.clientY - box.top });
+        if (hit) pick(levels.find(l => l.kind === hit.kind && l.levelId === hit.levelId) || null);
+      });
+      window.addEventListener('keydown', e => {
+        if (e.key === 'ArrowLeft') turn(-1);
+        if (e.key === 'ArrowRight') turn(1);
+      });
+
+      // ── THE DRAWING ─────────────────────────────────────────────────
+      const raw = await load();
+      if (raw) {
+        const env = window.DraftCutViewEnv.buildCutViewEnv(raw, FORMAT.levels(raw.levels));
+        const stack = env ? window.DraftCutView.sectionLevelStack(env) : null;
+        levels = BL.boneLevels(raw, stack);
+      }
+      if (levels.length) {
+        // THE LOWEST FLOOR FIRST: it is where a house starts.
+        picked = levels.find(l => l.kind === 'floor') || levels[0];
+        say('Tap a loop, or a level above, to see it flat on the right. ◀ ▶ or drag to turn.');
+      } else {
+        say('Nothing in the boneyard yet — draw or build a house in the MODEL space first.');
+      }
+      paintLegend();
+      paintAll();
+      document.body.dataset.boneyardReady = '1';
+      window.addEventListener('resize', paintAll);
+      window.DraftShellBars.wireSkin({
+        theme: window.__byTheme.theme,
+        mode: window.__byTheme.mode,
+        onSkin: next => { skin = next; paintAll(); },
+      });
+    })();
+  </script>
+  <script src="./traffic-counter.js" defer></script>
+</body>
+</html>

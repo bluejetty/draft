@@ -221,9 +221,10 @@ const declared = [...MODULE.matchAll(/id:\s*'([a-z-]+)',\s*row:\s*'([a-z]+)'/g)]
 // "insert tab -> 'EXT. FINISH' and make this area that name"). The count is in
 // the name of the check on purpose: a chip added without a line here is a chip
 // nothing in the repo has agreed to.
-check('the page table names all seven pages',
+// EIGHT ON 2 OCT: BONEYARD, between MODEL and EXT. FINISH (Movie, 1 Oct).
+check('the page table names all eight pages',
   declared.map(m => m[1]).sort(),
-  ['construction', 'estimates', 'ext-finish', 'model', 'project', 'real-estate',
+  ['boneyard', 'construction', 'estimates', 'ext-finish', 'model', 'project', 'real-estate',
     'specs']);
 check('every page sits in a row that exists',
   declared.filter(m => m[2] !== 'page' && m[2] !== 'sheet').map(m => `${m[1]}:${m[2]}`), []);
