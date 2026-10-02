@@ -92,7 +92,11 @@ if (!window.DraftShellBars) {
       href: './EXTFINISH.html',
       title: 'EXT. FINISH \u2014 the elevations, and the finishes on them',
       here: 'The exterior finishes \u2014 you are here' }),
-    Object.freeze({ id: 'real-estate', row: 'page', label: 'REAL ESTATE PLAN',
+    // AND IT MOVED TO THE RIGHT ROW (Movie, 1 Oct): "the REAL ESTATE LAYOUT
+    // tab is on the right side at bottom (to the left of CONSTRUCTION
+    // LAYOUT)" -- beside the other sheet that prints, as the split above
+    // argued it belonged.
+    Object.freeze({ id: 'real-estate', row: 'sheet', label: 'REAL ESTATE PLAN',
       href: './REALESTATEPLAN.html',
       title: 'REAL ESTATE PLAN \u2014 the plans laid out the way a listing shows them',
       here: 'The real estate plan \u2014 you are here' }),
@@ -108,6 +112,21 @@ if (!window.DraftShellBars) {
       href: null,
       title: 'ESTIMATES \u2014 quantities and costs off this model, not built yet' }),
   ]);
+
+  // ── THE PAGE'S OWN BUTTONS IN THE BOTTOM BAR ──────────────────────────
+  // NORTH shows its arrow pointing the way construction north is set; the
+  // page repaints it (DraftNorth.iconSvg) once it has read the drawing.
+  // HOUSE ROTATE is the chip that lived in MODEL's top strip, moved down here
+  // at half again its size. Its id and data hook are kept, so every caller
+  // and test that pressed it presses it here.
+  const BAR_TOOLS = Object.freeze({
+    north: '  <button type="button" id="bar-north" class="bar-tool" data-north-button\n'
+      + '    title="NORTH \u2014 construction north and true north" aria-label="North arrows">'
+      + '<svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"'
+      + ' aria-hidden="true"><path d="M8 13 V5"></path><path d="M8 2 L10.4 6.2 L5.6 6.2 Z" fill="currentColor"></path>'
+      + '<text x="12.6" y="14.6" font-size="5" fill="currentColor" stroke="none">N</text></svg></button>\n',
+    rotate: '    <!-- ── TURN THE HOUSE A QUARTER ──────────────────────────────────────\n         Movie, 27 Sep: "can we add a HOUSE ROTATE function (maybe in\n         instruments panel top on the right side. make a little monopoly style\n         house with a rotation around around the outside of it. Make it rotate\n         the actual model space so the E1 E2 etc all rotate. make the rotations\n         90degrees don\'t allow in between", and on why: "this will allow them\n         to rotate a house 90 degress depending on length of house so it fits\n         on the layout pages nicer".\n\n         ONE BUTTON, NOT TWO. Four presses is back where you started, so a\n         second button turning the other way saves at most one press and costs\n         a permanent second control on a strip that is already full. If he\n         wants the other way round it is one line.\n\n         DRAWN IN PATHS like every other chip here: a gable and a box, which\n         is the monopoly house, and three quarters of a ring with a head on it\n         going clockwise -- the way the press turns. An arrow that went the\n         other way would be a control lying about itself. -->\n    <button type="button" id="strip-rotate" class="bar-tool bar-tool-big" data-mode-rotate\n      title="TURN THE HOUSE — a quarter turn clockwise; the elevations turn with it and E1 stays the front">\n      <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">\n        <path d="M4.6 9.2 L8 6.3 L11.4 9.2"></path>\n        <path d="M5.8 9.2 V12.3 H10.2 V9.2"></path>\n        <path d="M2.7 7.6 A6.3 6.3 0 0 1 13.3 7.6" stroke-width="1"></path>\n        <path d="M11.9 6.2 L13.5 7.8 L11.9 9" stroke-width="1"></path>\n      </svg>\n    </button>\n',
+  });
 
   // A chip is a LINK to a page you can go to, a SPAN for the one you are on,
   // and a DISABLED BUTTON for one that does not exist yet. Three elements
@@ -352,33 +371,6 @@ if (!window.DraftShellBars) {
         <path d="M6.6 4.8 V11.2" stroke-width="1.2"></path>
         <path d="M5.1 6.1 L6.6 4.8" stroke-width="1.2"></path>
         <path d="M9.7 4.8 L10.6 7.1" stroke-width="1.1"></path>
-      </svg>
-    </button>
-    <!-- ── TURN THE HOUSE A QUARTER ──────────────────────────────────────
-         Movie, 27 Sep: "can we add a HOUSE ROTATE function (maybe in
-         instruments panel top on the right side. make a little monopoly style
-         house with a rotation around around the outside of it. Make it rotate
-         the actual model space so the E1 E2 etc all rotate. make the rotations
-         90degrees don't allow in between", and on why: "this will allow them
-         to rotate a house 90 degress depending on length of house so it fits
-         on the layout pages nicer".
-
-         ONE BUTTON, NOT TWO. Four presses is back where you started, so a
-         second button turning the other way saves at most one press and costs
-         a permanent second control on a strip that is already full. If he
-         wants the other way round it is one line.
-
-         DRAWN IN PATHS like every other chip here: a gable and a box, which
-         is the monopoly house, and three quarters of a ring with a head on it
-         going clockwise -- the way the press turns. An arrow that went the
-         other way would be a control lying about itself. -->
-    <button type="button" id="strip-rotate" class="chip" data-mode-rotate
-      title="TURN THE HOUSE — a quarter turn clockwise; the elevations turn with it and E1 stays the front">
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
-        <path d="M4.6 9.2 L8 6.3 L11.4 9.2"></path>
-        <path d="M5.8 9.2 V12.3 H10.2 V9.2"></path>
-        <path d="M2.7 7.6 A6.3 6.3 0 0 1 13.3 7.6" stroke-width="1"></path>
-        <path d="M11.9 6.2 L13.5 7.8 L11.9 9" stroke-width="1"></path>
       </svg>
     </button>
     <span class="chip dormant" data-mode-shield title="ERASING SHIELD — not built on this page yet">
@@ -824,11 +816,19 @@ if (!window.DraftShellBars) {
     //             visibly wrong rather than quietly.
     // opts.bone   false mounts the bottom bar WITHOUT the bone and its
     //             drive-thru press. ESTIMATES may want this.
+    // opts.tools  the page's own buttons at the head of the right-hand row,
+    //             left of REAL ESTATE PLAN: 'north' (the two norths) and
+    //             'rotate' (HOUSE ROTATE). Movie, 1 Oct: "to the left of that
+    //             new REAL ESTATE tab i'd like a slightly larger 150% sized
+    //             PAGE ROTATE button ... and then to the left of that ROTATION
+    //             button another button for NORTH ARROW rotation". The page
+    //             wires them; the bar only seats them.
     bottomBar: (opts = {}) => {
+      const tools = (opts.tools || []).map(tool => BAR_TOOLS[tool] || '').join('');
       put(BOTHEAD + '\n'
         + '<div id="page-row" data-page-row>\n' + rowOf('page', opts.page) + '\n</div>\n'
         + (opts.bone === false ? '  <div class="grow"></div>\n' : BOTMIDDLE + '\n')
-        + '  <div id="sheet-row" data-sheet-row>\n' + rowOf('sheet', opts.page) + '\n  </div>\n'
+        + '  <div id="sheet-row" data-sheet-row>\n' + tools + rowOf('sheet', opts.page) + '\n  </div>\n'
         + BOTTAIL);
       // AFTER the markup, because the slot it fills arrives with it. `put`
       // inserts mid-parse, so the lane is in the document by the next line.

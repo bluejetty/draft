@@ -146,8 +146,16 @@ if (!window.DraftTitleblock) {
     // North-arrow corner — inked when the sheet flies it (the LAYOUT toggle;
     // site plans by convention), and the cell holds its place on every sheet
     // so the composition never shifts.
+    // BOTH NORTHS when the drawing has set one (north.js): construction north
+    // dark, true north grey beside it (Movie, 1 Oct). A drawing that never
+    // set one keeps the plain arrow straight up the sheet.
     if (info.northArrow) {
-      drawNorthArrow(ctx, x + w / 2, y + (arrowB - y) / 2, Math.min(w, arrowB - y) * 0.34);
+      const cx = x + w / 2, cy = y + (arrowB - y) / 2, r = Math.min(w, arrowB - y) * 0.34;
+      if (info.north && window.DraftNorth) {
+        window.DraftNorth.drawPair(ctx, cx, cy, r, info.north, { cnColor: INK, tnColor: '#8c9196' });
+      } else {
+        drawNorthArrow(ctx, cx, cy, r);
+      }
     }
     if (style.arrowDivider !== false) divider(arrowB);
 

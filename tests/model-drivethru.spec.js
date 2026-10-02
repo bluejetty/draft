@@ -94,13 +94,18 @@ test('the foot bar: PROJECT and MODEL left, the bone in the middle, the sheets r
       // and make this area that name", and "the REAL ESTATE PLAN area will be
       // similar to the CONSTRUCTION layout". His order, which is the order
       // here: the finishes come before the sheet that shows them off.
-      .toEqual(['PROJECT', 'MODEL', 'EXT. FINISH', 'REAL ESTATE PLAN']);
+      // AND REAL ESTATE PLAN WENT RIGHT ON 1 OCT -- Movie: "the REAL ESTATE
+      // LAYOUT tab is on the right side at bottom (to the left of
+      // CONSTRUCTION LAYOUT)".
+      .toEqual(['PROJECT', 'MODEL', 'EXT. FINISH']);
 
     expect(await page.locator('#sheet-row > *').evaluateAll(els => els.map(
       el => (el.textContent || '').trim().replace(/\s+/g, ' '))),
     'the sheets belong at the far right, in reading order')
-      // NIGHT/DAY went up with it, so this group is the sheets alone.
-      .toEqual(['CONSTRUCTION LAYOUT', 'SPECIFICATIONS', 'ESTIMATES']);
+      // NIGHT/DAY went up with it, so this group is the sheets alone --
+      // headed, since 1 Oct, by MODEL's own two buttons: NORTH (its arrow's
+      // N is its only text) and HOUSE ROTATE (an icon, no text).
+      .toEqual(['N', '', 'REAL ESTATE PLAN', 'CONSTRUCTION LAYOUT', 'SPECIFICATIONS', 'ESTIMATES']);
 
     // WHERE THEY WENT, asserted here rather than left implied. A pair that
     // vanished from the bottom bar and reached nowhere would pass both
@@ -143,7 +148,7 @@ test('the foot bar: PROJECT and MODEL left, the bone in the middle, the sheets r
     // link to its page, and ESTIMATES, which is still unbuilt, is still down.
     await expect(page.locator('#page-row [data-page="ext-finish"]'))
       .toHaveAttribute('href', './EXTFINISH.html');
-    await expect(page.locator('#page-row [data-page="real-estate"]'))
+    await expect(page.locator('#sheet-row [data-page="real-estate"]'))
       .toHaveAttribute('href', './REALESTATEPLAN.html');
     await expect(page.locator('#sheet-row [data-page="estimates"]')).toBeDisabled();
   });

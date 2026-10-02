@@ -697,6 +697,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // depending on length of house so it fits on the layout pages
             // nicer". The table gains a row rather than losing an absence.
             'strip-rotate',
+            // AND THE NORTH BUTTON beside it in the bottom bar (1 Oct): it
+            // opens the two norths' popup and draws nothing on the house.
+            'bar-north',
             // THE READOUT IS A WORD UNTIL IT IS ASKED FOR (Movie, 15 Sep), so
             // the counts that used to sit open at the foot are behind two
             // presses now: `readout-tab` shows them and `readout-close` puts

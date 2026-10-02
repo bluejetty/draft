@@ -319,6 +319,9 @@ test.describe('MODEL.html tier 1', () => {
       // and proto/fixture-kinds-harness.js fails if it ever stops doing that.
       './fixture-kinds.js',
       './cut-marks.js',
+      // THE TWO NORTHS (1 Oct): the NORTH button's popup and the arrows on the
+      // plan. Plain data and canvas, no framework; LAYOUT loads the same file.
+      './north.js',
       // plan-rotate.js joined with HOUSE ROTATE (Movie, 27 Sep). It is the
       // same kind of entry as cut-marks beside it: a table of which records
       // carry a plan coordinate, which this page would otherwise have to hold

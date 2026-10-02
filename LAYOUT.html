@@ -105,6 +105,7 @@
 <script src="./fen-labels.js"></script>
 <script src="./cut-view.js"></script>
 <script src="./cut-view-env.js"></script>
+<script src="./north.js"></script>
 <script src="./titleblock.js"></script>
 <!-- Landscape on every working screen (board #310): in portrait on a touch
      device this covers the page until the tablet is turned. ENTRY is the one
@@ -677,7 +678,7 @@
        arrived would have made importing a profile impossible everywhere in
        the app that is not the old DC page. Movie, asked, kept it. -->
 </div>
-<script>window.DraftShellBars.bottomBar({ page: 'construction' });</script>
+<script>window.DraftShellBars.bottomBar({ page: 'construction', tools: ['north'] });</script>
 
 <script>
 // ── THE PAGE, OFF THE DC RUNTIME ────────────────────────────────────────
@@ -833,6 +834,8 @@ class Component extends PageLogic {
     orientation: 'landscape',  // 'landscape' | 'portrait'
     titleblock: 'roughdrafter', // DraftTitleblock style id — 11×17 sheets only
     northArrow: false, // the titleblock's arrow cell — site plans by convention, any sheet by choice
+    // THE TWO NORTHS (north.js), shared with MODEL through the layout record.
+    north: null,
     auto: false,       // the sheets are the composer's dealt hand; any manual edit takes them over
     activeSheet: 1,
     activeScale: WORKING_SCALE_IDX, // index into SCALES — 1/4" is the working plan scale
@@ -966,6 +969,7 @@ class Component extends PageLogic {
     if (layout?.orientation) patch.orientation = layout.orientation;
     if (layout?.titleblock) patch.titleblock = layout.titleblock;
     if (typeof layout?.northArrow === 'boolean') patch.northArrow = layout.northArrow;
+    if (layout?.north) patch.north = layout.north;
     this.setState(patch, () => {
       // The bone's request: a fresh build asks for the default sheet set, and
       // the sheets stay the composer's until a hand touches them. A drawing
@@ -1197,6 +1201,7 @@ class Component extends PageLogic {
       orientation: this.state.orientation,
       titleblock: this.state.titleblock,
       northArrow: this.state.northArrow,
+      ...(this.state.north ? { north: this.state.north } : {}),
       auto: this.state.auto,
       viewports: this.state.viewports,
       sheets: this.state.sheets,
@@ -2025,6 +2030,8 @@ class Component extends PageLogic {
       // any sheet by choice. The real plumbing — true north placed in model
       // space, construction north derived — is board #289.
       northArrow: this.state.northArrow,
+      // WHICH WAY IT POINTS: construction north dark, true north grey.
+      north: this.state.north,
     };
   }
 
@@ -2403,6 +2410,28 @@ class Component extends PageLogic {
 
   // The arrow flies on site plans by convention, but any sheet may raise or
   // strike it — auto-setup from a model-space true north is board #289.
+  // THE NORTH BUTTON in the bottom bar: the same popup MODEL opens, on the
+  // same record (Movie, 1 Oct: "make those 2 buttons match ... and what they
+  // do"). A change here is MODEL's too: it is saved on the layout record.
+  _openNorth() {
+    const button = document.querySelector('[data-north-button]');
+    if (!button || !window.DraftNorth) return;
+    window.DraftNorth.openPopup(button, this.state.north, next => {
+      this.setState({ north: next }, () => {
+        this._persistLayout();
+        this._draw();
+        this._paintNorthIcon();
+      });
+    });
+  }
+
+  _paintNorthIcon() {
+    const button = document.querySelector('[data-north-button]');
+    if (button && window.DraftNorth) {
+      button.innerHTML = window.DraftNorth.iconSvg(window.DraftNorth.normalise(this.state.north));
+    }
+  }
+
   _toggleNorthArrow() {
     this.setState({ northArrow: !this.state.northArrow, auto: false }, () => {
       this._draw();
@@ -2421,6 +2450,7 @@ class Component extends PageLogic {
   // drag -- _onMouseMove writes `this.state` directly and calls `_draw()`,
   // exactly as it did under React, so a paint only follows a real change.
   _paintPanel() {
+    this._paintNorthIcon();
     const {
       paperKey, orientation, activeScale, addingViewport, activeLevelId,
     } = this.state;
@@ -2725,6 +2755,7 @@ class Component extends PageLogic {
     on('[data-undo]', 'click', () => this._undoLayout());
     on('[data-redo]', 'click', () => this._redoLayout());
     on('[data-delete-viewport]', 'click', () => this._deleteSelectedViewport());
+    on('[data-north-button]', 'click', () => this._openNorth());
     on('[data-fit-window]', 'click', () => this._fitSelectedWindow());
   }
 
