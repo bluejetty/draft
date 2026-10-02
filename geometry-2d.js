@@ -1102,14 +1102,71 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
       }
       return null;
     };
-    return sorted.map(u => {
+    // ── A ROOF THAT ENDS OVER ANOTHER IS A STEP, NOT A SLOPE ─────────────
+    //
+    // Movie, 1 Oct, on a section through a two-storey and its attached
+    // garage: "the garage roof looks funny". The house roof ends at its eave,
+    // 17'-2" up, two feet past the garage's gable; the garage roof runs on
+    // below it at 13'-3". Sampled only by its VALUE at each event, the
+    // envelope joined the house eave straight to the garage ridge's far end --
+    // and both stretches are 4/12, so the house roof read as one long slope
+    // running down over the garage to its far wall.
+    //
+    // So each event is asked from BOTH SIDES. Where the left and right
+    // envelopes disagree, the event becomes a step: the left value, a break
+    // (`rise: null`), then the right value. The break says which side carries
+    // the eave: dropping onto a lower roof, the upper one ends at its fascia
+    // and the lower one simply carries on (`resume`); climbing onto a higher
+    // one, the lower roof runs in under an eave and draws no fascia of its
+    // own (`noDrop`). And where NO profile covers one side -- open sky between
+    // a house and a detached garage -- the line breaks there too, instead of
+    // bridging the yard.
+    const sideAt = (profile, u, side) => {
+      for (let i = 0; i < profile.length - 1; i++) {
+        const a = profile[i], b = profile[i + 1];
+        if (b.u - a.u <= 1e-9) continue;
+        const covers = side < 0
+          ? (u > a.u + 1e-9 && u <= b.u + 1e-6)
+          : (u >= a.u - 1e-6 && u < b.u - 1e-9);
+        if (covers) return a.rise + (b.rise - a.rise) * (u - a.u) / (b.u - a.u);
+      }
+      return null;
+    };
+    const maxAt = (u, side) => {
       let best = null;
       profiles.forEach(profile => {
-        const v = valueAt(profile, u);
+        const v = side ? sideAt(profile, u, side) : valueAt(profile, u);
         if (v != null && (best === null || v > best)) best = v;
       });
-      return { u, rise: best };
-    }).filter(pt => pt.rise != null);
+      return best;
+    };
+    const out = [];
+    sorted.forEach((u, index) => {
+      const left = index === 0 ? null : maxAt(u, -1);
+      const right = index === sorted.length - 1 ? null : maxAt(u, 1);
+      if (left != null && right != null && Math.abs(left - right) < 1e-6) {
+        out.push({ u, rise: Math.max(left, right) });
+        return;
+      }
+      if (left == null && right == null) {
+        const at = maxAt(u, 0);
+        if (at != null) out.push({ u, rise: at });
+        return;
+      }
+      if (left != null) out.push({ u, rise: left });
+      if (left != null && right != null) {
+        out.push(left > right
+          ? { u, rise: null }
+          : { u, rise: null, noDrop: true });
+        out.push(left > right ? { u, rise: right, resume: true } : { u, rise: right });
+        return;
+      }
+      if (left != null) { out.push({ u, rise: null }); return; }
+      out.push({ u, rise: right });
+    });
+    // A trailing break carries nothing the painter needs.
+    while (out.length && out[out.length - 1].rise == null) out.pop();
+    return out;
   };
 
   // ─── Where walls meet ─────────────────────────────────────────────────────

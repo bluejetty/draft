@@ -204,6 +204,40 @@ test('the envelope holds through the real path: skeleton → faces → profile �
   expect(out.empty).toBe(0);
 });
 
+// ── A ROOF THAT ENDS OVER ANOTHER IS A STEP ────────────────────────────────
+//
+// Movie, 1 Oct, on a section through a two-storey and its attached garage:
+// "the garage roof looks funny". These are the two profiles that section cuts
+// -- the house hip ending at its eave (u 22, 17'-2") and the garage roof
+// running on underneath at its own plate (13'-3" flat to u 34, then down to
+// its eave). Joined by value alone the envelope slid from the house eave
+// straight to the garage ridge's end: two 4/12 stretches, one long slope.
+test('a roof ending over a lower one steps down to it, and does not slope across', async ({ page }) => {
+  const out = await page.evaluate(() => {
+    const G = window.DraftGeometry2D;
+    const house = [{ u: -22, rise: 17.2 }, { u: -12, rise: 20.53 }, { u: 12, rise: 20.53 }, { u: 22, rise: 17.2 }];
+    const garage = [{ u: 20, rise: 13.22 }, { u: 34, rise: 13.22 }, { u: 48, rise: 8.55 }];
+    const env = G.profileEnvelope([house, garage]);
+    // Two disjoint roofs: a house and a detached garage across the yard.
+    const apart = G.profileEnvelope([
+      [{ u: 0, rise: 10 }, { u: 10, rise: 13 }, { u: 20, rise: 10 }],
+      [{ u: 40, rise: 9 }, { u: 50, rise: 11 }, { u: 60, rise: 9 }],
+    ]);
+    return { env, apart };
+  });
+  const at22 = out.env.filter(p => Math.abs(p.u - 22) < 1e-9);
+  expect(at22.map(p => p.rise), 'at the house eave: its fascia, a break, then the garage roof')
+    .toEqual([17.2, null, 13.22]);
+  expect(at22[2].resume, 'the garage roof carries on under the eave, no fascia of its own').toBe(true);
+  const lit = out.env.filter(p => p.rise != null && p.u > 22 && p.u < 34);
+  expect(lit.every(p => Math.abs(p.rise - 13.22) < 1e-9),
+    'between the house eave and the garage ridge end, the garage ridge -- not a slope from 17\'')
+    .toBe(true);
+  const gap = out.apart.filter(p => p.rise == null);
+  expect(gap.length, 'open sky between two roofs is a break, not a line across the yard').toBe(1);
+  expect(out.apart.filter(p => p.rise != null && p.u > 20 && p.u < 40)).toEqual([]);
+});
+
 test('no page keeps its own copy of the plan geometry helpers', async ({ page }) => {
   const source = await page.evaluate(async () => {
     const response = await fetch('/MODEL.dc.html');
