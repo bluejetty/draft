@@ -112,3 +112,28 @@ test('the tab sits between MODEL and EXT. FINISH, named for the skin', async ({ 
   await page.locator('[data-page="boneyard"]').click();
   await expect(page).toHaveURL(/BONEYARD\.html/);
 });
+
+// A BILEVEL's ENTRY is a HALF level: its loop sits 4'-5 3/8" under MAIN FL,
+// on the sill atop PROJECT's 5'-0" pour, and the roof is on MAIN's ceiling --
+// the same stack the elevations use (cut-view.js splitFloorStack).
+test('a BILEVEL stands its ENTRY loop half a level under MAIN FL', async ({ page }) => {
+  const box = (x0, z0, x1, z1) => [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }];
+  const d = empty();
+  d.buildType = 'bilevel';
+  d.levels.splice(4, 0, { id: 2, name: 'ENTRY', elev: -4 });
+  d.outlines = [
+    { id: 'o-main', levelId: 3, points: box(0, 0, 40, 32) },
+    { id: 'o-entry', levelId: 2, points: box(14, 26, 26, 32) },
+  ];
+  d.walls = [{ id: 'w1', levelId: 3, start: { x: 0, z: 0 }, end: { x: 40, z: 0 } }];
+  await seed(page, d);
+  await page.goto('/BONEYARD.html');
+  await expect(page.locator('body')).toHaveAttribute('data-boneyard-ready', '1', { timeout: 10000 });
+  const b = await bones(page);
+  const at = name => b.find(l => l.name === name).elev;
+  expect(b.map(l => l.name)).toEqual(['FOUNDATION', 'ENTRY', 'MAIN FL', 'ROOF']);
+  expect(at('MAIN FL')).toBeCloseTo(0, 3);
+  expect(at('ENTRY'), 'ENTRY deck 4\'-5 3/8" under MAIN').toBeCloseTo(-4.4479, 3);
+  expect(at('FOUNDATION'), 'the bottom of a 5\'-0" pour under ENTRY\'s sill').toBeCloseTo(-10.4063, 3);
+  expect(at('ROOF'), 'the roof on MAIN\'s 9\'-1 1/8" ceiling').toBeCloseTo(109.125 / 12, 3);
+});
