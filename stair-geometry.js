@@ -73,6 +73,11 @@ if (!window.DraftStairGeometry) {
   //   floorFtFor    -- id => the floor assembly thickness in feet
   //   wallTopFtFor  -- (id, view) => the wall top height in feet
   const stairDescent = (levelId, levels) => {
+    // A SPLIT'S LEVELS DO NOT STACK ONE ON THE NEXT, so a caller that knows
+    // where its half-levels stand may answer for them. Absent, or with no
+    // answer for this level, the rise is worked out below as it always was.
+    const told = typeof levels.riseFtFor === 'function' ? levels.riseFtFor(levelId) : null;
+    if (told && told.riseFt > 0) return told;
     const { floors, assemblyFor, floorFtFor, wallTopFtFor } = levels;
     const idx = floors.findIndex(level => level.id === levelId);
     if (idx < 0) return null;

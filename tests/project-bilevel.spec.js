@@ -186,10 +186,17 @@ test('band 2 draws a split: fill wall present, entry landing below main', async 
   // Measured from main, which is itself ~4.5 ft above entry, that leaves
   // about 4.5 ft, and the bound is written from entry so the check says what
   // the rule says rather than what a subtraction happens to leave.
-  expect(feetBelow('floor-2', 'floor-5')).toBeGreaterThan(8);
-  expect(feetBelow('floor-2', 'floor-5')).toBeLessThan(10);
+  //
+  // MOVED 2 OCT, by Movie's choice of his Sharma plans' height: 6'-3" over
+  // MAIN (10 risers of 7 1/2"), so 10'-8 3/8" over the ENTRY deck on these
+  // defaults. Still a split's lower 2nd floor -- well under a full storey
+  // over MAIN, which the last check holds.
+  expect(feetBelow('floor-2', 'floor-5')).toBeGreaterThan(9.5);
+  expect(feetBelow('floor-2', 'floor-5')).toBeLessThan(11.5);
   expect(feetBelow('floor-3', 'floor-5'),
     'the upper deck fell to or below main').toBeGreaterThan(3);
+  expect(feetBelow('floor-3', 'floor-5'),
+    'the upper deck rose to a full storey over main').toBeLessThan(8);
 
   // THE ENTRY FLOOR BEARS ON THE FILL WALL, so it sits BELOW that wall's
   // midpoint -- near its base, on the sill both of them share. This is the fact

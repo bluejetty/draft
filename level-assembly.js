@@ -410,8 +410,9 @@ if (!window.DraftLevelAssembly) {
     // 9'-1 1/8": the 104 5/8" precut on three plates.
     mainWallHeightFt: (104.625 + SPLIT_PLATE_STACK_IN) / 12,
     upperWallHeightFt: (104.625 + SPLIT_PLATE_STACK_IN) / 12,
-    // The lower 2nd floor's deck, measured from the ENTRY deck.
-    upperDeckAboveEntryFt: 9,
+    // The lower 2nd floor's deck, measured from the ENTRY deck: 6'-3" over
+    // MAIN (the Sharma plans' 10 risers of 7 1/2") on a 4'-5 3/8" drop.
+    upperDeckAboveEntryFt: 10 + 8.375 / 12,
     upperJoistDepthIn: 11.875,
     upperExtentFt: 5.5,
   });
