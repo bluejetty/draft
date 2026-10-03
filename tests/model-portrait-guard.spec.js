@@ -97,11 +97,30 @@ test.describe('MODEL.html — landscape on a tablet', () => {
     // off the disk now and orientation-lock.spec.js reads the same one, so
     // there is nothing left for the two to disagree about.
     expect(rosterProblems()).toEqual([]);
+    // ASKED AS EACH PAGE FINISHES PARSING, and written down in the tab's
+    // sessionStorage, rather than asked afterwards. A page may move on by
+    // itself -- an empty BONEYARD sends the drafter to the drive-thru
+    // (Movie, 3 Oct) -- and an evaluate after the goto would then be asking
+    // a page that is mid-navigation, or the wrong page.
+    await page.addInitScript(() => {
+      document.addEventListener('DOMContentLoaded', () => {
+        try {
+          sessionStorage.setItem(`guard:${location.pathname}`,
+            String(!!window.DraftOrientationGuard));
+        } catch { /* nothing to record into */ }
+      });
+    });
     const missing = [];
     for (const path of GUARDED_PATHS) {
       await page.goto(path);
-      const has = await page.evaluate(() => !!window.DraftOrientationGuard);
-      if (!has) missing.push(path);
+      await page.waitForLoadState('load');
+      const key = `guard:${new URL(path, 'http://x').pathname}`;
+      const has = await page.evaluate(k => sessionStorage.getItem(k), key)
+        .catch(async () => {
+          await page.waitForLoadState('load');
+          return page.evaluate(k => sessionStorage.getItem(k), key);
+        });
+      if (has !== 'true') missing.push(path);
     }
     expect(missing, 'every working screen owes board #310 a landscape guard').toEqual([]);
   });

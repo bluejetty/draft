@@ -650,6 +650,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // The previews tab, the second of the right edge's two.
             'previews-tab',
             'dt-close', 'dt-bone',
+            // CLICK HERE to draw house OUTLINE (Movie, 3 Oct), on the screen
+            // and, for ROUGH, under the selections. It arms the OUTLINE tool,
+            // which the outline row already has present -- a second door to
+            // the same trace, so no absence row moves.
+            'dt-outline', 'dt-outline-shelf',
             // PRINTSCREEN PRINTS THE SCREEN, and that is the whole of it: a
             // three-page presentation made from pictures the page has
             // already painted -- this view, the whole plan, the rail's

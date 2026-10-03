@@ -97,6 +97,8 @@
   .btn[aria-pressed="true"] { border-color: var(--accent-mark); color: var(--accent-mark); }
   .btn:disabled { opacity: .45; cursor: default; }
   canvas#bones2d { touch-action: none; }
+  #to-drivethru { flex: none; align-self: center; margin: 0 0 8px; }
+  #to-drivethru[hidden] { display: none; }
   #status { flex: none; padding: 4px 12px; font-size: 11px; color: var(--ink-quiet); min-height: 20px; }
 </style>
 </head>
@@ -131,6 +133,9 @@
     </section>
   </main>
   <div id="status" role="status"></div>
+  <button type="button" class="btn" id="to-drivethru" hidden
+    title="Nothing here yet: pick a house at the drive-thru, built or drawn"
+    >PICK A HOUSE AT THE DRIVE-THRU</button>
   <script>window.DraftShellBars.bottomBar({ page: 'boneyard', bone: false });</script>
 
   <script>
@@ -150,6 +155,15 @@
       const breakBtn = document.getElementById('break');
       const undoBtn = document.getElementById('undo');
       const say = text => { statusEl.textContent = text; };
+      const DRIVE_THRU = './MODEL.html?from=boneyard';
+      const toDriveThru = document.getElementById('to-drivethru');
+      toDriveThru.addEventListener('click', () => location.assign(DRIVE_THRU));
+      const cameFromTheApp = () => {
+        try {
+          const from = new URL(document.referrer);
+          return from.origin === location.origin && !/BONEYARD\.html$/i.test(from.pathname);
+        } catch { return false; }
+      };
       const ft = v => (FMT ? FMT.formatArchitecturalInches(Math.abs(v) * 12) : `${Math.abs(v)}'`);
       let skin = window.__bySkin || {};
 
@@ -673,7 +687,24 @@
         window.addEventListener('pointerdown', skipGrow, true);
         window.addEventListener('keydown', skipGrow, true);
         growStart = performance.now();
-      } else if (!levels.length) say('Nothing in the boneyard yet — draw or build a house in the MODEL space first.');
+      } else if (!levels.length) {
+        // AN EMPTY BONEYARD BRINGS UP THE DRIVE-THRU (Movie, 3 Oct): there is
+        // nothing on the shelf to look at, so the drafter goes to MODEL,
+        // where the sign rises to pick a house -- built, or drawn.
+        //
+        // WHEN HE CAME FROM ANOTHER PAGE OF THE APP, straight away. Opened
+        // on its own (a bookmark, a typed address) the page stays and says
+        // so, with the same way out on a button -- a page that will not stay
+        // open cannot be looked at, and nothing about an empty yard needs
+        // hiding.
+        say('Nothing in the boneyard yet.');
+        toDriveThru.hidden = false;
+        if (cameFromTheApp()) {
+          document.body.dataset.boneyardReady = '1';
+          location.replace(DRIVE_THRU);
+          return;
+        }
+      }
       else if (!lease) say(leaseWords());
       else say('Tap a loop, or a level above, to see it flat on the right. Tap an edge there to push it; BREAK puts a corner on a foot mark.');
       paintLegend();
