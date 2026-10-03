@@ -59,6 +59,11 @@ const MUTATIONS = [
     c => c.replace('const poured = concreteLoop(drawing);', 'const poured = null;')],
   ['a garage push leaves its concrete behind', 'boneyard-edit.js',
     c => c.replace('if (garage) pushLevelRecords(d, 1, true, L, newId);', '')],
+  ['the bones all grow at once instead of bottom first', 'boneyard-loops.js',
+    c => c.replace('const t = (ms - k * levelMs) / levelMs;', 'const t = ms / levelMs;')],
+  ['the lowest bone pops up instead of rising off the ground', 'boneyard-loops.js',
+    c => c.replace('const base = k ? slots[k - 1] : level.elev - FIRST_RISE_FT;',
+      'const base = k ? slots[k - 1] : level.elev;')],
 ];
 
 if (MUTATE) {
@@ -283,6 +288,18 @@ check('walls that do not close make no loop', E.chainLoop(ring(rect(0, 0, 4, 6))
       minZ(outline(r.drawing, 5).points)], [-27, [-25], -20]);
   check('and it never comes in past its wall',
     E.pushEdge(d0, { kind: 'roof', levelId: 7, loopIndex: 0, edgeIndex: 0, deltaFt: 1 }, ctx(d0)).reason, 'NO_RUNG');
+}
+
+// ── THE GROW: BOTTOM FIRST, EACH OFF THE ONE BELOW (Movie, 3 Oct) ─────
+{
+  const lv = [{ elev: 9 }, { elev: -4 }, { elev: 0 }, { elev: 0 }, { elev: 18 }];
+  const at = ms => BL.growStage(lv, ms, 100).map(st => (st.shown ? r3(st.h) : null));
+  check('a moment in, only the foundation is up, rising off the ground', at(50)[1] > -8 && at(50)[1] < -4
+    && at(50).filter(v => v !== null).length === 1, true);
+  check('the two floors at one height rise together, off the foundation', [at(150)[2] === at(150)[3],
+    at(150)[2] > -4 && at(150)[2] < 0, at(150)[0], at(150)[4]], [true, true, null, null]);
+  check('at the end every bone stands at its own height', at(1000), [9, -4, 0, 0, 18]);
+  check('four heights, four slots', BL.growMs(lv, 100), 400);
 }
 
 console.log(failed ? `\n${failed} check(s) FAILED, ${passed} passed` : `\nall ${passed} boneyard-edit checks passed`);

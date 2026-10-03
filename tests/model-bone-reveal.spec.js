@@ -26,6 +26,12 @@
 // save -- so the page said SAVED with part of the house still queued. The
 // rising reveal is a mask over a finished drawing: no edit, no save, nothing
 // to promise. The last check here says so rather than leaving it assumed.
+//
+// AND THE BONES GROW FIRST (Movie, 3 Oct): "show the 3d ISO bone grow first
+// and then flip to model space and show the front elevation grow". A served
+// order saves, goes to BONEYARD.html?grow=1, the bones rise there, and the
+// BONEYARD sends the drafter back with reveal=1. So every wait for E1 below
+// is a wait across that round trip.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -80,7 +86,7 @@ test('a bone press jumps to E1 with both rails open', async ({ page }) => {
   // CUT_VIEW + the id. The first draft of the port passed a bare 'E1', which
   // resolves to nothing and falls through to the layer-view branch -- the
   // fault cutForViewId's own comment already records from an earlier bug.
-  await expect.poll(() => page.url(), { timeout: 8000 })
+  await expect.poll(() => page.url(), { timeout: 20000 })
     .toContain('view=cut%3AE1');
   const url = new URL(page.url());
   expect(url.searchParams.get('left'), 'the left rail opens for the curtain')
@@ -91,7 +97,7 @@ test('a bone press jumps to E1 with both rails open', async ({ page }) => {
 
 test('the curtain covers the elevation and then climbs off it', async ({ page }) => {
   await buildAHouse(page, { boneReveal: true });
-  await expect.poll(() => page.url(), { timeout: 8000 }).toContain('view=cut%3AE1');
+  await expect.poll(() => page.url(), { timeout: 20000 }).toContain('view=cut%3AE1');
 
   // DURING: the held beat plus a little. revealStart sits one REVEAL_HOLD_MS
   // in the future, so these frames compute a clip below the canvas and the
@@ -125,7 +131,7 @@ test('BONE REVEAL off builds without leaving the plan', async ({ page }) => {
 
 test('the reveal writes nothing, so SAVED keeps its promise', async ({ page }) => {
   await buildAHouse(page, { boneReveal: true });
-  await expect.poll(() => page.url(), { timeout: 8000 }).toContain('view=cut%3AE1');
+  await expect.poll(() => page.url(), { timeout: 20000 }).toContain('view=cut%3AE1');
   await page.locator('#save').click();
   await expect(page.locator('#save')).toHaveText('SAVED', { timeout: 6000 });
   const atSaved = JSON.stringify(await h.savedDrawing(page));
@@ -138,4 +144,35 @@ test('the reveal writes nothing, so SAVED keeps its promise', async ({ page }) =
   expect(JSON.stringify(await h.savedDrawing(page)),
     'the rising reveal changed the drawing -- it is a mask, it must not write')
     .toBe(atSaved);
+});
+
+test('the bones grow in the BONEYARD first, then MODEL grows E1', async ({ page }) => {
+  await buildAHouse(page, { boneReveal: true });
+  await page.waitForURL(/BONEYARD\.html\?grow=1/, { timeout: 10000 });
+  await expect(page.locator('body')).toHaveAttribute('data-boneyard-grow', 'playing', { timeout: 10000 });
+  // SAVED BEFORE THE TRIP: the BONEYARD reads the store, so the build has to
+  // be in it or the bones would be the house from before the press.
+  const stored = await h.savedDrawing(page);
+  expect(stored.walls.length, 'the build was not saved before going to the BONEYARD')
+    .toBeGreaterThan(4);
+  // THE BONES RISE: every level ends up drawn at a height, from the
+  // foundation up.
+  await expect.poll(async () => JSON.parse(await page.locator('#bones3d').getAttribute('data-grow') || '[]')
+    .every(v => v !== null), { timeout: 10000 }).toBe(true);
+  // AND BACK, where the elevation grow takes over and the ask is spent.
+  await page.waitForURL(/MODEL\.html/, { timeout: 10000 });
+  await expect.poll(() => page.url(), { timeout: 10000 }).toContain('view=cut%3AE1');
+  expect(new URL(page.url()).searchParams.get('reveal'), 'reveal=1 is spent on arrival').toBeNull();
+});
+
+test('a tap skips the bones straight to the front elevation', async ({ page }) => {
+  await buildAHouse(page, { boneReveal: true });
+  await page.waitForURL(/BONEYARD\.html\?grow=1/, { timeout: 10000 });
+  await expect(page.locator('body')).toHaveAttribute('data-boneyard-grow', 'playing', { timeout: 10000 });
+  const tapped = Date.now();
+  await page.locator('#bones3d').click();
+  await page.waitForURL(/MODEL\.html/, { timeout: 10000 });
+  expect(Date.now() - tapped, 'the tap did not skip -- the whole grow played out')
+    .toBeLessThan(2500);
+  await expect.poll(() => page.url(), { timeout: 10000 }).toContain('view=cut%3AE1');
 });

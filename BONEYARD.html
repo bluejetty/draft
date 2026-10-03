@@ -225,6 +225,7 @@
       const paint3d = () => {
         const { ctx, w, h } = sized(c3);
         laid = BL.layout(shown(), angle, w, h);
+        if (growStart !== null) { paintGrow(ctx); return; }
         laid.levels.forEach(level => {
           const on = picked && picked.kind === level.kind && picked.levelId === level.levelId;
           strokePolys(ctx, level.polys, level.color, on ? 3 : 1.6);
@@ -238,6 +239,66 @@
             ? [Number(l.polys[0][0].x.toFixed(1)), Number(l.polys[0][0].y.toFixed(1))] : null,
         }))));
       };
+
+      // ── THE GROW: MODEL SENT A FRESH BUILD HERE TO BE SHOWN ─────────
+      //
+      // Movie, 3 Oct: "show the 3d ISO bone grow first and then flip to model
+      // space and show the front elevation grow". MODEL saves the build and
+      // comes here with `grow=1`; the bones rise level by level in this
+      // window, bottom first (boneyard-loops.js decides where each one is),
+      // and then the page goes back to MODEL with `reveal=1`, which plays the
+      // E1 grow. A tap or a key skips straight to that.
+      //
+      // Each level is drawn where it has risen to, with a riser from each of
+      // its corners down to the level it is coming off -- the studs going up.
+      // The scale is the finished stack's, so nothing shifts as levels land.
+      const query = new URLSearchParams(location.search);
+      const growing = query.get('grow') === '1';
+      let growStart = null;
+      let leaving = false;
+      // Only back to MODEL, and only with a query string: `back` comes in the
+      // URL, so anything else in it is ignored rather than followed.
+      const backTo = () => {
+        const asked = query.get('back') || '';
+        const back = new URLSearchParams(/^\?[^#]*$/.test(asked) ? asked.slice(1) : '');
+        back.set('reveal', '1');
+        return `./MODEL.html?${back.toString()}`;
+      };
+      const leave = () => {
+        if (leaving) return;
+        leaving = true;
+        document.body.dataset.boneyardGrow = 'done';
+        location.assign(backTo());
+      };
+      const paintGrow = ctx => {
+        const ms = performance.now() - growStart;
+        const stage = BL.growStage(laid.levels, ms);
+        const lift = Math.cos(BL.TILT) * laid.scale;
+        laid.levels.forEach((level, i) => {
+          const st = stage[i];
+          if (!st.shown) return;
+          const dy = (level.elev - st.h) * lift;
+          const dyBase = (level.elev - st.base) * lift;
+          ctx.globalAlpha = 0.45;
+          ctx.strokeStyle = level.color;
+          ctx.lineWidth = 1;
+          level.polys.forEach(poly => poly.forEach(p => {
+            ctx.beginPath();
+            ctx.moveTo(p.x, p.y + dyBase);
+            ctx.lineTo(p.x, p.y + dy);
+            ctx.stroke();
+          }));
+          ctx.globalAlpha = 1;
+          strokePolys(ctx, level.polys.map(poly => poly.map(p => ({ x: p.x, y: p.y + dy }))),
+            level.color, st.done ? 1.6 : 2.4);
+        });
+        c3.setAttribute('data-grow', JSON.stringify(stage.map(st => (st.shown ? Number(st.h.toFixed(2)) : null))));
+        if (ms < BL.growMs(laid.levels) + GROW_HOLD_MS) requestAnimationFrame(paint3d);
+        else leave();
+      };
+      // The finished bones stay up for a beat before the page moves on.
+      const GROW_HOLD_MS = 900;
+      const skipGrow = () => { if (growStart !== null) leave(); };
 
       // ── THE 2D WINDOW: THE CHOSEN LEVEL, FLAT ───────────────────────
       //
@@ -580,7 +641,9 @@
         // THE LOWEST FLOOR FIRST: it is where a house starts.
         picked = levels.find(l => l.kind === 'floor') || levels[0];
         // THE LEASE, for editing. Refused means MODEL holds it in another tab.
-        if (S && S.claimLease) {
+        // NOT CLAIMED FOR THE GROW: the page is only passing through on the
+        // way back to MODEL, which claims it again on arrival.
+        if (S && S.claimLease && !growing) {
           try {
             const holderId = S.leaseHolderId();
             const got = await S.claimLease(BUCKET, LEASE_SCOPE, holderId);
@@ -602,7 +665,15 @@
         document.body.dataset.boneyardEditable = lease ? '1' : '0';
       }
       setBreaking(false);
-      if (!levels.length) say('Nothing in the boneyard yet — draw or build a house in the MODEL space first.');
+      if (growing) {
+        // Nothing to grow is not a reason to strand the drafter here.
+        if (!levels.length) { leave(); return; }
+        document.body.dataset.boneyardGrow = 'playing';
+        say('THE BONES GROW — tap or press any key to skip to the front elevation.');
+        window.addEventListener('pointerdown', skipGrow, true);
+        window.addEventListener('keydown', skipGrow, true);
+        growStart = performance.now();
+      } else if (!levels.length) say('Nothing in the boneyard yet — draw or build a house in the MODEL space first.');
       else if (!lease) say(leaseWords());
       else say('Tap a loop, or a level above, to see it flat on the right. Tap an edge there to push it; BREAK puts a corner on a foot mark.');
       paintLegend();
