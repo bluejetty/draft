@@ -63,9 +63,10 @@ const MUTANTS = [
     test: 'every record survives the reload' },
   { file: 'MODEL.html',
     name: 'a re-run lays a second set on top of the first',
-    find: '    drawing.beams = (drawing.beams || []).filter(beam => {\n'
-      + '      if (!isMine(beam)) return true;\n      sweptBeams.push(beam);\n      return false;\n    });',
-    with: '',
+    // RE-AIMED when the sweep began filtering in place (so the build's one
+    // undo still holds the array its piles were filed against).
+    find: '    drawing.beams = sweep(drawing.beams || [], sweptBeams, beam => !isMine(beam));',
+    with: '    drawing.beams = drawing.beams || [];',
     test: 're-running replaces its own structure and leaves a drafter’s alone' },
   { file: 'MODEL.html',
     name: 'the sweep takes the drafter’s own beam with it',

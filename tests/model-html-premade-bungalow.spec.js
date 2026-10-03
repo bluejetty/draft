@@ -349,6 +349,11 @@ test('one Ctrl+Z takes the whole order back, house and garage together',
     // times to get back where he started.
     expect(saved.outlines, 'both loops went back').toHaveLength(0);
     expect(saved.walls, 'and every wall with them').toHaveLength(0);
+    // AND THE GARAGE'S PILES. They went in before the beam pass, which used
+    // to swap drawing.columns for a fresh array -- so the undo removed them
+    // from a list the drawing no longer held and all ten stayed.
+    expect(saved.columns || [], 'and the piles under the garage').toHaveLength(0);
+    expect(saved.beams || [], 'and the beams').toHaveLength(0);
   });
 
 test('the board comes down once it has built what was ordered', async ({ page }) => {
