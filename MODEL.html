@@ -365,13 +365,19 @@
     font-size:clamp(7px, 1vw, 10px); opacity:0.55; letter-spacing:0.06em;
     color:inherit; text-decoration:none; line-height:1.25; }
   #dt-project:hover { opacity:0.95; text-decoration:underline; }
+  #dt-build-now, #dt-build-now-shelf,
   #dt-outline, #dt-outline-shelf { pointer-events:auto; align-self:flex-start;
     appearance:none; background:none; border:none; padding:0; cursor:pointer;
     font:inherit; font-size:clamp(9px, 1.4vw, 14px); color:inherit;
     text-decoration:underline; letter-spacing:0.03em; }
+  #dt-build-now[hidden], #dt-build-now-shelf[hidden],
   #dt-outline[hidden], #dt-outline-shelf[hidden] { display:none; }
   /* THE SHELF COPY IS ROUGH'S: the ruff sign says it on its screen. */
-  html:not([data-theme="rough"]) #dt-outline-shelf { display:none; }
+  html:not([data-theme="rough"]) #dt-outline-shelf,
+  html:not([data-theme="rough"]) #dt-build-now-shelf { display:none; }
+  /* AND THE BUILD-NOW PRESS SITS ON THE LINE ABOVE IT (Movie, 3 Oct). */
+  html[data-theme="rough"] #dt-build-now-shelf { position:absolute; left:6%; width:88%;
+    top:80.5%; text-align:center; color:#1f3f6b; font-size:clamp(11px, 1.6vw, 16px); }
   html[data-theme="rough"] #dt-outline-shelf { position:absolute; left:6%; width:88%;
     top:86%; text-align:center; color:#1f3f6b; font-size:clamp(11px, 1.6vw, 16px); }
   /* The tile strip: the house types, on the board's own shelf. */
@@ -1170,6 +1176,12 @@
            build now -or- CLICK HERE to draw house OUTLINE". Shown once a type
            is picked, for every type. The ROUGH sheet has no screen, so the
            same press stands on its shelf as well (#dt-outline-shelf). -->
+      <!-- AND THE BUILT ONE, SAID IN WORDS (Movie, 3 Oct): "above CLICK HERE
+           to draw HOUSE OUTLINE... add another line that says PRESS TO DRAW
+           HOUSE WITHOUT drawing OUTLINE (and will do the same as pressing the
+           'BONE')". It is the bone's press, not a copy of what it does. -->
+      <button id="dt-build-now" type="button" data-drivethru-build-now hidden
+        >PRESS TO DRAW HOUSE WITHOUT drawing OUTLINE</button>
       <button id="dt-outline" type="button" data-drivethru-outline hidden
         >CLICK HERE to draw house OUTLINE</button>
       <!-- THE WAY OUT FOR THE DRAFTER WHO WANTS THE NUMBERS. Movie, 19 Sep:
@@ -1225,6 +1237,8 @@
     </div>
     <!-- ROUGH'S COPY OF THE OUTLINE PRESS, under the selections: the sheet
          has no screen to say it on. Outside #dt-tiles, which holds tiles. -->
+    <button id="dt-build-now-shelf" type="button" data-drivethru-build-now hidden
+      >PRESS TO DRAW HOUSE WITHOUT drawing OUTLINE</button>
     <button id="dt-outline-shelf" type="button" data-drivethru-outline hidden
       >CLICK HERE to draw house OUTLINE</button>
     <button id="dt-bone" type="button" data-drivethru-bone
@@ -5629,6 +5643,7 @@
 
   const signShut = () => sign.hasAttribute('data-shut');
   const outlinePresses = [...document.querySelectorAll('[data-drivethru-outline]')];
+  const buildNowPresses = [...document.querySelectorAll('[data-drivethru-build-now]')];
   const isGarageOrder = picked =>
     picked?.family?.id === 'detachedGarage' || Boolean(picked?.entry?.foundation);
   // THE SIGN GOES DOWN AND THE TRACE IS ARMED, with the type on it.
@@ -5653,6 +5668,12 @@
     outlinePresses.forEach(press => {
       press.hidden = !canTrace;
       press.textContent = traceWords;
+    });
+    // OFFERED BESIDE IT, on the same terms: a type with nothing left to ask.
+    const buildWords = `PRESS TO DRAW ${isGarageOrder(picked) ? 'GARAGE' : 'HOUSE'} WITHOUT drawing OUTLINE`;
+    buildNowPresses.forEach(press => {
+      press.hidden = !canTrace;
+      press.textContent = buildWords;
     });
     const open = openFamilyId ? BM.familyById(openFamilyId) : null;
     if (signRefusal) {
@@ -5977,6 +5998,8 @@
     return true;
   };
   document.getElementById('dt-bone').addEventListener('click', orderAtWindow);
+  // THE WORDS ARE THE BONE: one handler, so the two can never build differently.
+  buildNowPresses.forEach(press => press.addEventListener('click', orderAtWindow));
 
   // ── THE BONE'S SECOND PRESS ──────────────────────────────────────────
   //

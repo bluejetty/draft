@@ -160,6 +160,40 @@ test('the drive-thru offers to draw it, for a house and for a garage', async ({ 
   expect(masters.map(m => m.garage), 'the traced loop is a garage').toEqual([true]);
 });
 
+// Movie, 3 Oct: "above CLICK HERE to draw HOUSE OUTLINE... add another line
+// that says PRESS TO DRAW HOUSE WITHOUT drawing OUTLINE (and will do the same
+// as pressing the 'BONE')".
+test('the line above it builds the house the way the bone does', async ({ page }) => {
+  await open(page);
+  await page.goto('/MODEL.html?theme=rough');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await h.openDriveThru(page);
+  const now = page.locator('#dt-build-now-shelf');
+  await expect(now, 'nothing picked, nothing to build').toBeHidden();
+  await page.locator('[data-build-family="bungalow"]').click();
+  await page.locator('[data-build-entry="bungalow"]').click();
+  await expect(now).toHaveText('PRESS TO DRAW HOUSE WITHOUT drawing OUTLINE');
+  // ABOVE the outline line, not beside or under it.
+  const a = await now.boundingBox(), b = await page.locator('#dt-outline-shelf').boundingBox();
+  expect(a.y + a.height, 'it sits above the outline line').toBeLessThanOrEqual(b.y + 1);
+  await now.click();
+  await expect(page.locator('#drivethru'), 'the sign goes down').toHaveAttribute('data-shut', '');
+  await page.locator('#save').click();
+  await h.waitForSaved(page);
+  const d = await h.savedDrawing(page);
+  expect(d.walls.filter(w => Number(w.levelId) === 3).length, 'the house is built').toBeGreaterThan(0);
+  expect(d.boneyardOutlines, 'and nothing was traced').toEqual([]);
+});
+
+test('on RUFF the screen says it too, over the outline line', async ({ page }) => {
+  await open(page);
+  await h.openDriveThru(page);
+  await page.locator('[data-build-family="detachedGarage"]').click();
+  await page.locator('[data-build-entry="detached-thickened"]').click();
+  await expect(page.locator('#dt-build-now')).toHaveText('PRESS TO DRAW GARAGE WITHOUT drawing OUTLINE');
+  await expect(page.locator('#dt-build-now-shelf'), 'the shelf copy is ROUGH\'s').toBeHidden();
+});
+
 test('on ROUGH the sheet carries the same press under the selections', async ({ page }) => {
   await open(page);
   await page.goto('/MODEL.html?theme=rough');

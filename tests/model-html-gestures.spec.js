@@ -655,6 +655,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // which the outline row already has present -- a second door to
             // the same trace, so no absence row moves.
             'dt-outline', 'dt-outline-shelf',
+            // PRESS TO DRAW HOUSE WITHOUT drawing OUTLINE (Movie, 3 Oct): the
+            // bone's own press in words, so a second door to the same build.
+            'dt-build-now', 'dt-build-now-shelf',
             // PRINTSCREEN PRINTS THE SCREEN, and that is the whole of it: a
             // three-page presentation made from pictures the page has
             // already painted -- this view, the whole plan, the rail's
