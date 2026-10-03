@@ -482,7 +482,10 @@ back to MODEL, which plays the E1 rising reveal. A tap skips to E1.
   screen, the same press sits under the selections.
 - The press shuts the sign and arms the OUTLINE tool for that type. A garage
   traced this way is saved as a garage outline (`garage: true`).
-- An empty BONEYARD sends the drafter to MODEL and the sign rises.
+- An empty BONEYARD reached from another page of the app sends the drafter
+  to MODEL and the sign rises. Opened on its own (a bookmark, a typed
+  address) it stays, says it is empty, and offers PICK A HOUSE AT THE
+  DRIVE-THRU.
 
 ### Not in PR 3a (PR 3b)
 - Building the whole house from a traced outline (floor, roof, foundation,

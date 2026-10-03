@@ -92,13 +92,26 @@ test('a tap on a loop shows that level flat on the right', async ({ page }) => {
 });
 
 // Movie, 3 Oct: "An empty BONEYARD brings up the drive-thru".
-test('an empty boneyard sends the drafter to the drive-thru', async ({ page }) => {
+test('an empty boneyard, reached from the app, goes on to the drive-thru', async ({ page }) => {
   await seed(page, empty());
-  await page.goto('/BONEYARD.html');
+  await page.goto('/MODEL.html');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.locator('[data-page="boneyard"]').click();
   await page.waitForURL(/MODEL\.html/, { timeout: 10000 });
   await expect(page.locator('#drivethru'), 'the sign rose to pick a house')
     .not.toHaveAttribute('data-shut', '', { timeout: 10000 });
   expect(new URL(page.url()).searchParams.get('from'), 'the ask is spent').toBeNull();
+});
+
+test('an empty boneyard opened on its own stays, and offers the drive-thru', async ({ page }) => {
+  await seed(page, empty());
+  await page.goto('/BONEYARD.html');
+  await expect(page.locator('body')).toHaveAttribute('data-boneyard-ready', '1', { timeout: 10000 });
+  await expect(page.locator('#status')).toContainText('Nothing in the boneyard yet');
+  expect(await bones(page)).toEqual([]);
+  await page.locator('#to-drivethru').click();
+  await page.waitForURL(/MODEL\.html/, { timeout: 10000 });
+  await expect(page.locator('#drivethru')).not.toHaveAttribute('data-shut', '', { timeout: 10000 });
 });
 
 test('the tab sits between MODEL and EXT. FINISH, named for the skin', async ({ page }) => {
