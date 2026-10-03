@@ -173,8 +173,36 @@ if (!window.DraftBoneyardLoops) {
 
   const stepAngle = (deg, steps) => ((((deg + steps * STEP_DEG) % 360) + 360) % 360);
 
+  // ── THE GROW (Movie, 3 Oct) ─────────────────────────────────────────
+  // "show the 3d ISO bone grow first and then flip to model space and show
+  // the front elevation grow". The bones come up the way a house does:
+  // bottom first, one height at a time, each rising off the one below it.
+  // Levels at the SAME height (the house's floor and the garage's) share a
+  // slot and rise together. The lowest rises off the ground FIRST_RISE_FT
+  // under it, so the foundation is seen coming up too, not just appearing.
+  //
+  // Pure: given the levels and the milliseconds since the start, where each
+  // one is. `shown` false is not drawn yet; `h` is the height it is drawn at
+  // now and `base` the one it rises from. The page draws, this decides.
+  const GROW_LEVEL_MS = 700;
+  const FIRST_RISE_FT = 4;
+  const growSlots = levels => [...new Set(levels.map(l => l.elev))].sort((a, b) => a - b);
+  const growStage = (levels, ms, levelMs = GROW_LEVEL_MS) => {
+    const slots = growSlots(levels);
+    return levels.map(level => {
+      const k = slots.indexOf(level.elev);
+      const base = k ? slots[k - 1] : level.elev - FIRST_RISE_FT;
+      const t = (ms - k * levelMs) / levelMs;
+      if (t <= 0) return { shown: false, base, h: base, done: false };
+      const p = t >= 1 ? 1 : 1 - Math.pow(1 - t, 3);
+      return { shown: true, base, h: base + (level.elev - base) * p, done: t >= 1 };
+    });
+  };
+  const growMs = (levels, levelMs = GROW_LEVEL_MS) => growSlots(levels).length * levelMs;
+
   window.DraftBoneyardLoops = Object.freeze({
     COLORS, STEP_DEG, TILT, boneLevels, project, layout, levelAt, stepAngle,
+    GROW_LEVEL_MS, FIRST_RISE_FT, growStage, growMs,
   });
 })();
 }

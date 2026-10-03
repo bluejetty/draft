@@ -3503,6 +3503,36 @@
     goToView(CUT_VIEW + 'E1');
   };
 
+  // ── THE BONES GROW FIRST (Movie, 3 Oct) ──────────────────────────────────
+  // "can you show the 3d ISO bone grow first and then flip to model space and
+  // show the front elevation grow". So a served order no longer starts the
+  // rising reveal here: it SAVES, goes to the BONEYARD, which grows the bones
+  // level by level in its 3D window, and the BONEYARD sends the drafter back
+  // here with `reveal=1`, where boot plays the E1 grow on the drawing it just
+  // read. Same gate as the reveal (BONE REVEAL in SETTINGS, an E1 to jump to)
+  // so a drafter who turned the show off stays on his plan.
+  //
+  // SAVED FIRST, OR NOT AT ALL. The BONEYARD reads the store, not this page,
+  // so a trip taken without the write would grow the house he had before the
+  // press. A save that is refused -- no lease, a stale rev -- keeps him here
+  // and plays the elevation grow in place, the way it always did.
+  //
+  // ON THE NEXT TICK, because orderServed is called from inside the order's
+  // listener: the sign still has to come down and the build bar still has to
+  // settle before the drawing is written.
+  const GROW_PAGE = './BONEYARD.html';
+  const presentBuild = () => {
+    if (!boneRevealOn()) return;
+    if (!autoElevationCuts().some(cut => String(cut.id) === 'E1')) return;
+    setTimeout(async () => {
+      if (!(await save())) { startBoneReveal(); return; }
+      const back = new URLSearchParams(location.search);
+      back.delete('reveal');
+      const query = back.toString();
+      location.assign(`${GROW_PAGE}?grow=1&back=${encodeURIComponent(query ? `?${query}` : '')}`);
+    }, 0);
+  };
+
   const paintCuts = () => {
     const R = window.DraftRender2D;
     const CM = window.DraftCutMarks;
@@ -5083,8 +5113,9 @@
     // AND THE SAME WORD STARTS THE SHOW. Board #283 says "every bone press
     // that grows the house", and this is the one place that means a house
     // was actually grown -- a press that refused, or one the wallet turned
-    // away, never reaches here.
-    startBoneReveal();
+    // away, never reaches here. It now starts in the BONEYARD: see
+    // presentBuild.
+    presentBuild();
     chosenEntryId = null;
     chosenSizeId = null;
     openFamilyId = null;
@@ -18537,6 +18568,15 @@
       spent.searchParams.delete('new');
       history.replaceState(null, '', spent.pathname + spent.search + spent.hash);
     }
+    // ── BACK FROM THE BONEYARD'S GROW, AND THAT ASK IS SPENT FIRST TOO ──
+    // Same reasoning as `new=1` above: a refresh must not play it twice.
+    // Taken out of `params` as well as the bar, since syncUrl writes the bar
+    // FROM `params` and would otherwise put it straight back.
+    const wantsReveal = params.get('reveal') === '1';
+    if (wantsReveal) {
+      params.delete('reveal');
+      syncUrl();
+    }
     let file = null;
     try {
       // loadSharedFileAt, not loadSharedFile: the file AND the revision it was
@@ -18608,6 +18648,9 @@
     // images and should be on screen before they arrive. Each one repaints
     // itself as it lands.
     loadUnderlayImages();
+    // THE SECOND HALF OF THE SHOW: the bones grew in the BONEYARD, and now
+    // the house climbs out of the ground on E1.
+    if (wantsReveal) startBoneReveal();
     // CLAIMED ONCE THERE IS SOMETHING TO EDIT. A page that failed to load a
     // drawing has nothing to protect and should not hold the lease shut against
     // a page that does.
