@@ -454,3 +454,38 @@ span, on that body's records:
   built, the eave keeps its width and follows the wall.
 - Bilevels: the foundation bone is the concrete loop, but the half levels
   have not been tried against the rules above.
+
+## The grow, and PR 3a: drawing the outline (built 3 Oct 2026)
+
+### The grow
+"show the 3d ISO bone grow first and then flip to model space and show the
+front elevation grow". A bone press that builds (with BONE REVEAL on) saves,
+opens the BONEYARD, raises the bones bottom first in the 3D window, then goes
+back to MODEL, which plays the E1 rising reveal. A tap skips to E1.
+
+### The OUTLINE tool draws like EXT WALL
+- Every corner after the first is square off the last one (90-degree
+  corners) and a whole number of feet along, on every board.
+- The rubber band, the LENGTH box and the strip show the corner the next
+  press will put down. A typed length must be whole feet. A typed angle
+  must be a multiple of 90.
+- The orange rays come from every corner, as before.
+- It closes on the first corner. The edge home must be square: a press near
+  the first corner from a corner that does not line up with it is refused
+  and the strip says to follow the first corner's orange line.
+- A crossed loop is still refused.
+
+### The drive-thru
+- Once a type is picked the sign reads "PRESS BUTTON to build now -or-" with
+  "CLICK HERE to draw house OUTLINE" under it ("garage OUTLINE" for the
+  detached garage). It is offered for every type. On ROUGH, which has no
+  screen, the same press sits under the selections.
+- The press shuts the sign and arms the OUTLINE tool for that type. A garage
+  traced this way is saved as a garage outline (`garage: true`).
+- An empty BONEYARD sends the drafter to MODEL and the sign rises.
+
+### Not in PR 3a (PR 3b)
+- Building the whole house from a traced outline (floor, roof, foundation,
+  beams, stairs, windows and doors). The BUILD card still raises walls only.
+- The garage step after the house trace, and the bilevel's entry placed
+  automatically after the garage.

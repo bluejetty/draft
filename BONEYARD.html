@@ -673,7 +673,15 @@
         window.addEventListener('pointerdown', skipGrow, true);
         window.addEventListener('keydown', skipGrow, true);
         growStart = performance.now();
-      } else if (!levels.length) say('Nothing in the boneyard yet — draw or build a house in the MODEL space first.');
+      } else if (!levels.length) {
+        // AN EMPTY BONEYARD BRINGS UP THE DRIVE-THRU (Movie, 3 Oct): there is
+        // nothing on the shelf to look at, so the drafter goes to MODEL,
+        // where the sign rises to pick a house -- built, or drawn.
+        say('Nothing in the boneyard yet — off to the drive-thru to pick a house.');
+        document.body.dataset.boneyardReady = '1';
+        location.replace('./MODEL.html?from=boneyard');
+        return;
+      }
       else if (!lease) say(leaseWords());
       else say('Tap a loop, or a level above, to see it flat on the right. Tap an edge there to push it; BREAK puts a corner on a foot mark.');
       paintLegend();

@@ -365,6 +365,15 @@
     font-size:clamp(7px, 1vw, 10px); opacity:0.55; letter-spacing:0.06em;
     color:inherit; text-decoration:none; line-height:1.25; }
   #dt-project:hover { opacity:0.95; text-decoration:underline; }
+  #dt-outline, #dt-outline-shelf { pointer-events:auto; align-self:flex-start;
+    appearance:none; background:none; border:none; padding:0; cursor:pointer;
+    font:inherit; font-size:clamp(9px, 1.4vw, 14px); color:inherit;
+    text-decoration:underline; letter-spacing:0.03em; }
+  #dt-outline[hidden], #dt-outline-shelf[hidden] { display:none; }
+  /* THE SHELF COPY IS ROUGH'S: the ruff sign says it on its screen. */
+  html:not([data-theme="rough"]) #dt-outline-shelf { display:none; }
+  html[data-theme="rough"] #dt-outline-shelf { position:absolute; left:6%; width:88%;
+    top:86%; text-align:center; color:#1f3f6b; font-size:clamp(11px, 1.6vw, 16px); }
   /* The tile strip: the house types, on the board's own shelf. */
   #dt-tiles { position:absolute; left:5.9%; top:32.5%; width:88.2%; height:44.1%;
     box-sizing:border-box; display:flex; flex-direction:column;
@@ -1157,6 +1166,12 @@
     <div id="dt-screen" aria-live="polite">
       <div id="dt-line" data-drivethru-line></div>
       <div id="dt-note" data-drivethru-note></div>
+      <!-- THE OTHER WAY TO GET THE HOUSE (Movie, 3 Oct): "PRESS BUTTON to
+           build now -or- CLICK HERE to draw house OUTLINE". Shown once a type
+           is picked, for every type. The ROUGH sheet has no screen, so the
+           same press stands on its shelf as well (#dt-outline-shelf). -->
+      <button id="dt-outline" type="button" data-drivethru-outline hidden
+        >CLICK HERE to draw house OUTLINE</button>
       <!-- THE WAY OUT FOR THE DRAFTER WHO WANTS THE NUMBERS. Movie, 19 Sep:
            "on the bottom of the drivethru menu area (where display area is)
            we should put a button to the PROJECT area that says 'CLICK HERE
@@ -1208,6 +1223,10 @@
         </div>
       </div>
     </div>
+    <!-- ROUGH'S COPY OF THE OUTLINE PRESS, under the selections: the sheet
+         has no screen to say it on. Outside #dt-tiles, which holds tiles. -->
+    <button id="dt-outline-shelf" type="button" data-drivethru-outline hidden
+      >CLICK HERE to draw house OUTLINE</button>
     <button id="dt-bone" type="button" data-drivethru-bone
       title="Build the house you picked">
       <img data-bone-art src="./assets/bone-red.png" alt="BONE — build it" />
@@ -2665,7 +2684,10 @@
       // changing; handing it over with no corners placed would band from
       // nothing, and handing it over after the loop commits would band from a
       // trace that is gone.
-      snapPt: activeTool === 'outline' && outlineCorners.length ? cursorWorld : null,
+      // Through outlinePoint, so the band shows the corner the press will put
+      // down -- square and on the foot -- not the raw cursor.
+      snapPt: activeTool === 'outline' && outlineCorners.length && cursorWorld
+        ? outlinePoint(cursorWorld) : null,
       outlineDrawing: activeTool === 'outline' && outlineCorners.length > 0,
       outlinePoints: outlineCorners,
       // The close target. The painter rings it once three corners are down,
@@ -5043,6 +5065,7 @@
   const chooseHandlers = [];
   const buildHandlers = [];
   const orderHandlers = [];
+  const outlineHandlers = [];
   let chosenEntryId = null;
   // 'menu' or 'outline' -- which button called the sign up, and so what the
   // bone on the post will mean when it is pressed.
@@ -5131,6 +5154,8 @@
     // fireBuild: said out loud rather than inferred from a return value.
     buildServed: () => { buildWasServed = true; },
     onOrder: fn => { if (typeof fn === 'function') orderHandlers.push(fn); },
+    // CLICK HERE to draw house OUTLINE: the geometry side arms the trace.
+    onOutline: fn => { if (typeof fn === 'function') outlineHandlers.push(fn); },
   });
 
   // HOW BIG, for the entries that ask (the detached garage, and only it).
@@ -5600,6 +5625,17 @@
   window.setInterval(refreshWallet, 60000);
 
   const signShut = () => sign.hasAttribute('data-shut');
+  const outlinePresses = [...document.querySelectorAll('[data-drivethru-outline]')];
+  const isGarageOrder = picked =>
+    picked?.family?.id === 'detachedGarage' || Boolean(picked?.entry?.foundation);
+  // THE SIGN GOES DOWN AND THE TRACE IS ARMED, with the type on it.
+  outlinePresses.forEach(press => press.addEventListener('click', () => {
+    const picked = chosen();
+    if (!picked?.entry) return;
+    round = 'outline';
+    setSign(false);
+    outlineHandlers.forEach(fn => fn(picked));
+  }));
 
   // WHAT GRUFF SAYS WHEN HE IS REFUSING, set by the press that was refused
   // and spent by the next paint, so it cannot outlive the moment it explains.
@@ -5607,6 +5643,14 @@
 
   paintSign = () => {
     const picked = chosen();
+    // THE OUTLINE PRESS, offered once there is a type to draw and nothing
+    // left to ask about it.
+    const canTrace = !!picked?.entry && !(picked.entry.needsSize && !chosenSize());
+    const traceWords = `CLICK HERE to draw ${isGarageOrder(picked) ? 'garage' : 'house'} OUTLINE`;
+    outlinePresses.forEach(press => {
+      press.hidden = !canTrace;
+      press.textContent = traceWords;
+    });
     const open = openFamilyId ? BM.familyById(openFamilyId) : null;
     if (signRefusal) {
       signLine.textContent = signRefusal.line;
@@ -5632,7 +5676,7 @@
       // difference between the two presses.
       signNote.textContent = round === 'outline'
         ? 'Press the bone and I\u2019ll walk you through drawing it.'
-        : 'Press the bone and I\u2019ll build it.';
+        : 'PRESS BUTTON to build now -or-';
     } else if (open) {
       signLine.textContent = `${open.label} \u2014 WHICH ONE?`;
       signNote.textContent = open.title;
@@ -5772,7 +5816,9 @@
   // AND A HAND ON THE PAGE CANCELS IT. Someone who starts working inside
   // those two seconds has said what they came for, and the board rising
   // over them would take the press they were making.
-  if (new URLSearchParams(location.search).get('from') === 'entry') {
+  // AND FROM AN EMPTY BONEYARD the same way (Movie, 3 Oct): nothing on the
+  // shelf yet, so the drafter is sent here to pick a house.
+  if (['entry', 'boneyard'].includes(new URLSearchParams(location.search).get('from'))) {
     const spent = new URL(location.href);
     spent.searchParams.delete('from');
     history.replaceState(null, '', spent.pathname + spent.search + spent.hash);
@@ -10093,10 +10139,14 @@
   // bone takes the sign down over the top of it -- so the page cannot tell
   // him two different things about one gesture.
   const sayTraceThe = picked => sayOnStrip(
-    `Trace your ${picked?.entry?.label || 'house'} — press each corner, then the `
-    + 'first corner again to close.');
+    `Trace your ${isGarageChoice(picked) ? 'garage' : (picked?.entry?.label || 'house')} — `
+    + 'press each corner, then the first corner again to close.');
 
-  const armOutline = picked => {
+  // Whether the trace in hand is a garage's: only ever from the OUTLINE
+  // press, since a garage tile alone does not arm a trace.
+  let outlineGarage = false;
+
+  const armOutline = (picked, { fromLink = false } = {}) => {
     // A DETACHED GARAGE PRESS IS NOT A HOUSE TRACE, and answering it with one
     // is worse than answering it with nothing. The old page sends those
     // entries to _toggleGarageMode('detached') with the foundation they
@@ -10113,7 +10163,10 @@
     // found the working gesture by pressing the bone anyway. A refusal that
     // is out of date is worse than no refusal: it argues the drafter out of
     // something that works.
-    if (isGarageChoice(picked)) {
+    // UNLESS HE ASKED TO DRAW IT: the OUTLINE press is offered for every
+    // type (Movie, 3 Oct), the garage included, and then the loop he draws
+    // is the garage's.
+    if (isGarageChoice(picked) && !fromLink) {
       sayOnStrip('Pick a size, then press the bone — I’ll set the garage on the lot.');
       return;
     }
@@ -10142,6 +10195,7 @@
     // measurement, and it is labelled as such.
     setTool('outline');
     outlineFamily = picked?.family ?? null;
+    outlineGarage = isGarageChoice(picked);
     sayTraceThe(picked);
     paint();
   };
@@ -10163,6 +10217,7 @@
     floorCorners = [];
     shapeCorners = [];
     outlineFamily = null;
+    outlineGarage = false;
     // ARMED FROM THE KEY, which carries no house type with it -- so the trace
     // is the plain house red that outlineTraceColor falls back to, and the
     // sentence is the one without a name in it. A house-type press says the
@@ -10170,21 +10225,59 @@
     if (next === 'outline') sayTraceThe(null);
   });
 
-  const outlinePress = at => {
-    const here = { x: at.x, z: at.z };
+  // ── IT DRAWS LIKE EXT WALL (Movie, 3 Oct) ─────────────────────────────
+  // "like EXT WALL": every edge square to the one before it -- 90-degree
+  // corners -- and a whole number of feet long, on every board, with the
+  // LENGTH and ANGLE boxes, the same rubber band and the orange rays. The
+  // first corner lands where it is pressed (or on a corner it is near), the
+  // way the wall's first point does; every corner after it is the cursor
+  // squared off the last corner and brought to the nearest whole foot, so
+  // the whole loop sits on whole feet from where it started and the last
+  // edge can come home square.
+  const outlineTail = () => outlineCorners[outlineCorners.length - 1] || null;
+  const outlinePoint = at => {
+    const from = outlineTail();
+    if (!from) {
+      const corner = cornerSnap(at, []);
+      return corner ? { x: corner.x, z: corner.z } : { x: at.x, z: at.z };
+    }
+    const square = Math.abs(at.x - from.x) >= Math.abs(at.z - from.z)
+      ? { x: at.x, z: from.z } : { x: from.x, z: at.z };
+    const footed = onTheFoot(from, square);
+    return { x: footed.x, z: footed.z };
+  };
+  const sameCorner = (a, b) => Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.z - b.z) < 1e-6;
+  // The edge home from the last corner has to be square too.
+  const closesSquare = () => {
+    const first = outlineCorners[0], last = outlineTail();
+    return Math.abs(last.x - first.x) < 1e-6 || Math.abs(last.z - first.z) < 1e-6;
+  };
+
+  // ONE WAY A CORNER GOES DOWN, for the press and for both typed boxes.
+  // `raw` is where the press actually landed, for the close test; a typed
+  // corner has none and closes only by landing exactly on the first.
+  const outlineAdd = (pt, raw = null) => {
     // THREE CORNERS BEFORE CLOSING IS LEGAL, because two enclose no floor --
     // the same floor the old page's own guard is about. Below three, a press
     // near the first corner is a drafter placing a corner there, not closing.
     if (outlineCorners.length >= 3) {
       const first = outlineCorners[0];
-      if (Math.hypot(here.x - first.x, here.z - first.z) <= OUTLINE_CLOSE_FT) {
-        commitOutline();
+      const onFirst = sameCorner(pt, first);
+      const nearFirst = raw && Math.hypot(raw.x - first.x, raw.z - first.z) <= OUTLINE_CLOSE_FT;
+      if (onFirst || nearFirst) {
+        if (onFirst || closesSquare()) { commitOutline(); return; }
+        sayOnStrip('Line the last corner up with the first — follow its orange line — then close.');
         return;
       }
     }
-    outlineCorners.push(here);
+    if (outlineTail() && sameCorner(pt, outlineTail())) return;
+    clearNotice();
+    outlineCorners.push(pt);
+    stripRefresh();
     paint();
   };
+
+  const outlinePress = at => outlineAdd(outlinePoint(at), { x: at.x, z: at.z });
 
   const commitOutline = () => {
     const loop = outlineCorners.slice();
@@ -10211,6 +10304,8 @@
     // MODEL.dc.html holds `pointId`. Writing the memory spelling would produce
     // a master whose points have no id at all once the old page loads it --
     // and it would look perfect until a corner was dragged.
+    // A GARAGE'S LOOP SAYS SO, as the old page's garage masters do.
+    if (outlineGarage) spec.garage = true;
     const master = OM.storageMaster(spec);
     const levels = (drawing.levels || []);
     const copies = OM.copiesForLevels(master, levels, {
@@ -11221,6 +11316,7 @@
   // press records the type (that half already worked) and now arms the trace,
   // which is what _pressBuildType has always done in one motion.
   window.ModelBuild.onChoose(picked => { if (picked) armOutline(picked); });
+  window.ModelBuild.onOutline(picked => armOutline(picked, { fromLink: true }));
 
   // ── HANGING A DESIGN'S OPENINGS ON THE WALLS IT JUST RAISED ──────────────
   //
@@ -14517,6 +14613,10 @@
     // drift, and the drafter believes the one he can see." This has been
     // wrong on the TOY board since §1 landed.
     if (drawStart && activeTool === 'wall') return { from: drawStart, to: drawPoint(cursorWorld) };
+    // THE OUTLINE READS THE SAME WAY: the edge the next press will put down.
+    if (activeTool === 'outline' && outlineCorners.length) {
+      return { from: outlineTail(), to: outlinePoint(cursorWorld) };
+    }
     if (rulerFrom) return { from: rulerFrom, to: cursorWorld };
     return null;
   };
@@ -14611,7 +14711,8 @@
     // the only moment a typed length has an anchor and a direction to be
     // measured along. Enabled at any other time it would take a number and
     // have nowhere to put it.
-    const typable = !!(activeTool === 'wall' && drawStart && cursorWorld);
+    const typable = !!(((activeTool === 'wall' && drawStart)
+      || (activeTool === 'outline' && outlineCorners.length)) && cursorWorld);
     if (lengthBox.disabled === typable) {
       lengthBox.disabled = !typable;
       if (!typable) lengthBox.value = '';
@@ -14639,7 +14740,9 @@
     // every failure today.
     stripMessage.textContent = stripNotice || (rulerOn
       ? (rulerFrom ? 'ruler — second point' : 'ruler — first point')
-      : (activeTool === 'wall' ? (drawStart ? 'wall — second point' : 'wall — first point') : ''));
+      : (activeTool === 'wall' ? (drawStart ? 'wall — second point' : 'wall — first point')
+        : (activeTool === 'outline'
+          ? (outlineCorners.length ? 'outline — next corner' : 'outline — first corner') : '')));
     // Last, and from here rather than from the pointer handlers, so the label
     // goes out the moment the run does -- every path that ends a run already
     // calls stripRefresh, and a length still on screen after the gesture is
@@ -15070,7 +15173,45 @@
   // no flag: a refusal that recorded itself would be a change.
   promote.querySelector('[data-promote-stay]').addEventListener('click', closePromote);
 
+  // THE OUTLINE'S TYPED EDGE: whole feet only, square only, along the way
+  // the cursor is pointing (or the typed bearing). No TOY question -- the
+  // outline is always on the foot and on the square, which is TOY's own law.
+  const typedOutlineEdge = ({ feet = null, deg = null }) => {
+    const from = outlineTail();
+    if (!from || !cursorWorld) return;
+    const aim = outlinePoint(cursorWorld);
+    let ux = aim.x - from.x, uz = aim.z - from.z;
+    if (deg !== null) {
+      if (Math.abs(deg % 90) > 1e-9) { stripMessage.textContent = 'the outline turns in 90° steps'; return; }
+      const rad = deg * Math.PI / 180;
+      const tx = Math.round(Math.cos(rad)), tz = -Math.round(Math.sin(rad));
+      // Which end of the line: the hand's, as the wall's angle box does.
+      const sign = (ux * tx + uz * tz) < 0 ? -1 : 1;
+      const run = feet ?? Math.max(1, Math.round(Math.hypot(ux, uz)));
+      ux = tx * sign; uz = tz * sign;
+      outlineAdd({ x: from.x + ux * run, z: from.z + uz * run });
+      return;
+    }
+    const len = Math.hypot(ux, uz);
+    if (len < 1e-6) { stripMessage.textContent = 'point away from the corner first'; return; }
+    outlineAdd({ x: from.x + ux / len * feet, z: from.z + uz / len * feet });
+  };
+  const typedOutlineFeet = () => {
+    const parsed = F.parseArchitecturalLength(lengthBox.value);
+    if (!parsed.ok) { stripMessage.textContent = parsed.error; return undefined; }
+    const feet = parsed.inches / 12;
+    if (!(feet > 0)) return undefined;
+    if (!toyCouldMakeLength(feet)) { stripMessage.textContent = 'the outline goes in whole feet'; return undefined; }
+    return feet;
+  };
+
   const commitTypedLength = () => {
+    if (activeTool === 'outline') {
+      const feet = typedOutlineFeet();
+      if (feet !== undefined) typedOutlineEdge({ feet });
+      lengthBox.blur();
+      return;
+    }
     const parsed = F.parseArchitecturalLength(lengthBox.value);
     if (!parsed.ok) { stripMessage.textContent = parsed.error; return; }
     const feet = parsed.inches / 12;
@@ -15116,6 +15257,13 @@
     const deg = parseFloat(String(angleBox.value).replace(/[°\s]/g, ''));
     if (!Number.isFinite(deg) || Math.abs(deg) > 180) {
       stripMessage.textContent = 'angle in degrees, -180 to 180';
+      return;
+    }
+    if (activeTool === 'outline') {
+      const typed = F.parseArchitecturalLength(lengthBox.value);
+      const feet = typed.ok && typed.inches > 0 ? typedOutlineFeet() : null;
+      if (feet !== undefined) typedOutlineEdge({ feet, deg });
+      angleBox.blur();
       return;
     }
     if (!drawStart || !cursorWorld) return;
