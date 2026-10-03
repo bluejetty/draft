@@ -12530,16 +12530,18 @@
     const isMine = item => item.auto === true
       && Number(item.levelId) === levelId && item.view === view;
     const isPile = item => String(item.footing || '').startsWith('pile');
-    drawing.beams = (drawing.beams || []).filter(beam => {
-      if (!isMine(beam)) return true;
-      sweptBeams.push(beam);
-      return false;
-    });
-    drawing.columns = (drawing.columns || []).filter(column => {
-      if (!isMine(column) || isPile(column)) return true;
-      sweptColumns.push(column);
-      return false;
-    });
+    // IN PLACE, NOT REASSIGNED. A press that built the garage's piles a step
+    // earlier filed them for its one undo as {list, item} against THIS array;
+    // a fresh array here left that undo removing them from a list the drawing
+    // no longer held, and Ctrl+Z took the house and left the ten piles.
+    const sweep = (list, swept, keep) => {
+      const kept = list.filter(item => keep(item) || (swept.push(item), false));
+      list.splice(0, list.length, ...kept);
+      return list;
+    };
+    drawing.beams = sweep(drawing.beams || [], sweptBeams, beam => !isMine(beam));
+    drawing.columns = sweep(drawing.columns || [], sweptColumns,
+      column => !isMine(column) || isPile(column));
 
     // THE LINK BACK TO THE OUTLINE is what carries a beam through an edit.
     // midSpanBeams tags an end that landed on a corner with `srcIndex` into
@@ -13485,6 +13487,97 @@
     return made;
   };
 
+  // ── A BILEVEL'S FRAMING ROUND THE ENTRY ────────────────────────────────
+  //
+  // Movie, 3 Oct: the entry floor overlaps the house by 3.5" on its three
+  // inside edges "so an interior wall can be built to hold up the entry floor
+  // and then extended further to also hold the main floor" -- a wall that
+  // FILLS rather than bears: "it doesn't SUPPORT the floor the beams should
+  // but will fill in the inbetween areas". And "copy sharmas" for the rest:
+  // dropped LVL beams down both long sides of the stair opening, a post at
+  // each end of each, pads under the posts (Sharma sheets 8 and 9).
+  //
+  // THE FILL WALLS are 2x4s on the basement's own plan, slab to MAIN's
+  // underside: PROJECT's pour, its sill and its wood fill. The sides stop at
+  // the inside face of the front foundation wall they run into.
+  //
+  // THE BEAMS carry MAIN and THE POSTS stand on the basement slab, so both
+  // are filed where a bungalow's main-floor beams and teleposts are: on
+  // FOUNDATION, its FOUNDATION view -- the plan that draws a post's pad.
+  // The beams run from the fill wall's line back to the far end of the
+  // opening beside them, which is the flight's own run. Not `auto`: they are
+  // the design's, and a later AUTO BEAM press sweeps only its own.
+  //
+  // THE POSTS stand on standard 36" pads. Where two sit 2'-5 1/2" apart in an
+  // inside corner the pads pour as one, which is Sharma's 3' x 5' there.
+  //
+  // Returns { body, items, beams, posts } -- the walls as a body for the
+  // build's one undo, everything else as {list, item} pairs.
+  const placeBilevelFraming = (framing, flights, split, { frontFaceFt = 8 / 12 } = {}) => {
+    const LA = window.DraftLevelAssembly;
+    if (!framing || !split || !levelPresent(FOUNDATION_LEVEL_ID)) return null;
+    const fillTopFt = split.fdnWallHeightFt + LA.SILL_PLATE_IN / 12 + split.woodFillHeightFt;
+    const frontZ = Math.max(...framing.fillWalls.flatMap(run => [run.start.z, run.end.z]));
+    const walls = framing.fillWalls.map(run => {
+      const trim = pt => (Math.abs(pt.z - frontZ) < 1e-6 && run.start.x === run.end.x
+        ? { x: pt.x, z: pt.z - frontFaceFt } : pt);
+      return commitWall(trim(run.start), trim(run.end), {
+        bone: false, levelId: FOUNDATION_LEVEL_ID, view: 'plan',
+        wallType: 'stud_2x4', refLine: 'center', baseHeight: 0, topHeight: fillTopFt,
+      });
+    });
+    const items = [];
+    drawing.beams = drawing.beams || [];
+    drawing.columns = drawing.columns || [];
+    let nextBeamId = newStructureId(drawing.beams);
+    let nextColumnId = newStructureId(drawing.columns);
+    const post = at => {
+      const record = {
+        id: nextColumnId++,
+        point: { x: at.x, y: 0, z: at.z },
+        levelId: FOUNDATION_LEVEL_ID,
+        view: 'foundation',
+        footing: 'pad36',
+      };
+      drawing.columns.push(record);
+      items.push({ list: drawing.columns, item: record });
+    };
+    framing.posts.forEach(post);
+    // ONE BEAM DOWN EACH OUTSIDE EDGE OF THE WELL, read off the openings the
+    // flights just cut rather than worked out again here.
+    const holes = flights.filter(entry => entry.list === drawing.surfaceOpenings)
+      .map(entry => entry.item.points);
+    let beams = 0;
+    if (holes.length) {
+      const minX = pts => Math.min(...pts.map(p => p.x));
+      const maxX = pts => Math.max(...pts.map(p => p.x));
+      const farZ = pts => Math.min(...pts.map(p => p.z));
+      const leftHole = holes.reduce((a, b) => (minX(b) < minX(a) ? b : a));
+      const rightHole = holes.reduce((a, b) => (maxX(b) > maxX(a) ? b : a));
+      [[minX(leftHole), farZ(leftHole)], [maxX(rightHole), farZ(rightHole)]].forEach(([x, z]) => {
+        const record = {
+          id: nextBeamId++,
+          start: { x, y: 0, z: framing.wellBeamZ },
+          end: { x, y: 0, z },
+          levelId: FOUNDATION_LEVEL_ID,
+          view: 'foundation',
+          mode: 'dropped',
+        };
+        drawing.beams.push(record);
+        items.push({ list: drawing.beams, item: record });
+        beams += 1;
+        post(record.start);
+        post(record.end);
+      });
+    }
+    return {
+      body: { outline: null, walls, openings: [] },
+      items,
+      beams,
+      posts: items.filter(entry => entry.list === drawing.columns).length,
+    };
+  };
+
   const buildPremadePlan = order => {
     if (!drawing) return null;
     const plan = window.DraftPremadePlans.planFor(order?.entry?.id);
@@ -13574,9 +13667,9 @@
     // it would stop agreeing. The same trap wallsByEdge was built to close.
     let garageBody = null;
     let overGarageBody = null;
-    // A BILEVEL'S HOUSE leaves the entry's edges bare -- the wall between the
-    // two is Movie's to show ("don't do the columns, pads or overlap yet") --
-    // and stands its walls PROJECT's 9'-1 1/8".
+    // A BILEVEL'S HOUSE leaves the entry's edges bare -- the one fill wall in
+    // the overlap stands there instead (placeBilevelFraming) -- and stands
+    // its walls PROJECT's 9'-1 1/8".
     const raised = storeys.map((level, index) => raiseLoop(plan.house, level.id,
       { openings: index === 0 ? plan.houseOpenings
         : (plan.upperOpenings || plan.houseOpenings),
@@ -13722,7 +13815,8 @@
     // THE LANDING'S OWN DECK, the shape of the entry. MAIN FL's deck above is
     // the notched house, so the foyer over the landing is open.
     if (entryBody) {
-      const deck = floorRecord(plan.entry, entryLevelId, 'floor');
+      // ONE 2x4 PAST ITS INSIDE EDGES, onto the fill wall (entryDeckLoop).
+      const deck = floorRecord(plan.entryDeck || plan.entry, entryLevelId, 'floor');
       drawing.floors.push(deck);
       extra.push({ list: drawing.floors, item: deck });
     }
@@ -13994,6 +14088,20 @@
         parts.push(`${staired.refused.length} stair opening`
           + `${staired.refused.length === 1 ? '' : 's'} NOT cut`);
       }
+    }
+    // AND THE FRAMING ROUND THE ENTRY, once the well it frames is cut.
+    // The side walls stop at the front foundation wall's inside face.
+    const fdnType = under.walls[0] && window.DraftWallTypes.WALL_TYPES
+      .find(type => type.id === under.walls[0].wallType);
+    const framed = entryBody
+      ? placeBilevelFraming(plan.framing, flights, split,
+        fdnType ? { frontFaceFt: fdnType.totalIn / 12 } : {})
+      : null;
+    if (framed) {
+      raised.push(framed.body);
+      extra.push(...framed.items);
+      parts.push(`${framed.body.walls.length} fill walls, ${framed.beams} stairwell beams`
+        + ` and ${framed.posts} posts`);
     }
 
     // ── AND THE DIMENSIONS, LAST, WHEN THERE IS SOMETHING TO MEASURE ─────

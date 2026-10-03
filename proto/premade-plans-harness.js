@@ -444,6 +444,45 @@ check('and they fit side by side inside the landing\'s width', P => {
   return [up.x - up.widthFt / 2 >= e.x0 && down.x + down.widthFt / 2 <= e.x1
     && up.x + up.widthFt / 2 <= down.x - down.widthFt / 2 + 1e-9, true];
 });
+// ── the framing round the entry (Movie, 3 Oct) ──
+check('a 4.5" gap between the flights: a 3.5" post with 1/2" drywall each side', P => {
+  const { up, down } = P.bilevel().stairs;
+  return [+(((down.x - down.widthFt / 2) - (up.x + up.widthFt / 2)) * 12).toFixed(6), 4.5];
+});
+check('the gap straddles the garage line, so the post stands on it', P => {
+  const { up, down } = P.bilevel({ garage: true }).stairs;
+  return [(up.x + down.x) / 2, -4];
+});
+check('the entry deck runs 3.5" past its left, right and back edges', P => {
+  const d = span(P.bilevel().entryDeck), e = span(P.bilevel().entry);
+  return [[e.x0 - d.x0, d.x1 - e.x1, e.z0 - d.z0, d.z1 - e.z1].map(v => +(v * 12).toFixed(6)).join(),
+    '3.5,3.5,3.5,0'];
+});
+check('but not across the head of the flights', P => {
+  const plan = P.bilevel();
+  const { up, down } = plan.stairs;
+  const l = up.x - up.widthFt / 2, r = down.x + down.widthFt / 2;
+  const e = span(plan.entry);
+  return [plan.entryDeck.filter(p => p.x > l + 1e-9 && p.x < r - 1e-9).length === 0
+    && plan.entryDeck.filter(p => Math.abs(p.z - e.z0) < 1e-9).length === 2, true];
+});
+check('four fill walls down the middle of the overlap, none across the stairs', P => {
+  const plan = P.bilevel();
+  const { up, down } = plan.stairs;
+  const l = up.x - up.widthFt / 2, r = down.x + down.widthFt / 2;
+  const walls = plan.framing.fillWalls;
+  const across = walls.filter(w => w.start.z === w.end.z);
+  return [walls.length === 4 && across.length === 2
+    && across.every(w => [w.start.x, w.end.x].every(x => x <= l + 1e-9 || x >= r - 1e-9)), true];
+});
+check('posts in both inside corners and in the gap, on the fill wall\'s line', P => {
+  const plan = P.bilevel();
+  const z = 14 - 1.75 / 12;
+  return [plan.framing.posts.map(p => `${+p.x.toFixed(4)},${+(p.z - z).toFixed(6)}`).join(' '),
+    `${+(-10 - 1.75 / 12).toFixed(4)},0 -4,0 ${+(2 + 1.75 / 12).toFixed(4)},0`];
+});
+check('the MOD BILEVEL keeps the same framing', P =>
+  [JSON.stringify(P.modifiedBilevel().framing), JSON.stringify(P.bilevel({ garage: true }).framing)]);
 // ── the MODIFIED BILEVEL (Movie, 2 Oct, and his Sharma plans) ──
 check('the MOD BILEVEL\'s room is the 2 STOREY\'s room over the garage', P =>
   [JSON.stringify(P.modifiedBilevel().overGarage), JSON.stringify(P.twoStorey({ garage: true, overGarage: true }).overGarage)]);
