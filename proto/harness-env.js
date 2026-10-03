@@ -95,7 +95,10 @@ function loadDraftModules() {
     // for a tag that never drew. That is not hypothetical: the plan tag hid
     // behind exactly this guard on MODEL.html, through four screenshots.
     'fen-labels.js',
-    'cut-view.js']) {
+    'cut-view.js',
+    // AND THE BONEYARD'S EDITOR with what it reads: the floor-pull ladder in
+    // tour.js and the bone loops it edits.
+    'tour.js', 'boneyard-edit.js', 'boneyard-loops.js']) {
     const full = path.join(ROOT, file);
     if (!fs.existsSync(full)) continue;
     const text = SOURCE_OVERRIDES && SOURCE_OVERRIDES[file] != null
