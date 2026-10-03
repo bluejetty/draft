@@ -215,7 +215,14 @@ test('five quick presses are five saved pushes', async ({ page }) => {
       window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
     }
   });
-  const d = await saved(page, 5);
-  const main = d.outlines.find(o => Number(o.levelId) === 3 && !o.garage);
+  let d = await saved(page, 5);
+  let main = d.outlines.find(o => Number(o.levelId) === 3 && !o.garage);
   expect(span(main.points).x1).toBeCloseTo(21, 4);
+  // AND THE EDGE IS STILL PICKED after them. Overlapping presses each went
+  // looking for the edge where it had been and dropped the pick, so the next
+  // press -- in CI, the ladder test's third -- did nothing.
+  await page.keyboard.press('ArrowRight');
+  d = await saved(page, 6);
+  main = d.outlines.find(o => Number(o.levelId) === 3 && !o.garage);
+  expect(span(main.points).x1).toBeCloseTo(22, 4);
 });

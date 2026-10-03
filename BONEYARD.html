@@ -452,7 +452,18 @@
         selected = hit ? { loopIndex, edgeIndex: hit.index } : null;
       };
 
-      const push = async deltaFt => {
+      // ONE EDIT AT A TIME. Each push reads the picked edge, changes the
+      // drawing and then re-finds that edge where it now stands; a second
+      // press let in between found the edge already moved under it, lost the
+      // pick, and every press after it did nothing. So edits queue: a press
+      // waits for the one before it to finish, re-pick and all.
+      let editing = Promise.resolve();
+      const queued = fn => (...args) => {
+        editing = editing.then(() => fn(...args)).catch(() => {});
+        return editing;
+      };
+
+      const push = queued(async deltaFt => {
         if (!selected || !picked) return;
         if (readOnly()) { say(leaseWords()); return; }
         const loop = picked.loops[selected.loopIndex];
@@ -467,9 +478,9 @@
         }
         paint2d();
         say(describe(result.report));
-      };
+      });
 
-      const doBreak = async (hit, world) => {
+      const doBreak = queued(async (hit, world) => {
         if (readOnly()) { say(leaseWords()); return; }
         const along = hit.edge.axis === 'z' ? world.x : world.z;
         const result = BE.breakEdge(raw, { kind: picked.kind, levelId: picked.levelId,
@@ -477,7 +488,7 @@
         if (!result.ok) { say(why(result.reason)); return; }
         await commit(result);
         say(`Broken at ${ft(Math.round(along))} — tap either part and push it.`);
-      };
+      });
 
       const setBreaking = on => {
         breaking = on;
@@ -487,7 +498,7 @@
       };
       breakBtn.addEventListener('click', () => setBreaking(!breaking));
 
-      const undoLast = async () => {
+      const undoLast = queued(async () => {
         if (!undo.length || readOnly()) return;
         raw = undo.pop();
         restack();
@@ -497,7 +508,7 @@
         paintAll();
         await save();
         say('Undone.');
-      };
+      });
       undoBtn.addEventListener('click', undoLast);
 
       // A press on an edge picks it, and a drag pushes it -- in whole feet,
