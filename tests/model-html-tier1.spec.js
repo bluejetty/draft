@@ -459,6 +459,10 @@ test.describe('MODEL.html tier 1', () => {
       // roofs count or what the heights are measured from, and either is a
       // right window on one page and a wrong one on the other.
       './auto-windows.js',
+      // AND THE TRACED HOUSE (BONEYARD PR 3b): the drafter's own loops made
+      // into the plan buildPremadePlan reads, so the premade build stays the
+      // one builder rather than a second copy of it living on this page.
+      './traced-plans.js',
       // AND WHERE AN ORDERED GARAGE STANDS. 40 lines, no dependency of its
       // own: a traced loop says where it goes by being traced, an autobuilt
       // one has to be told, and PROJECT will have to be told the same thing
