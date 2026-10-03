@@ -29,6 +29,10 @@ if (!window.DraftBoneyardLoops) {
     foundation: '#9b6bd6',   // purple
     floors: Object.freeze(['#e0453a', '#3fae5a', '#2fa3c4', '#c9a227']), // red, green, then on
     roof: '#ff8c1a',         // orange
+    // The openings' centre dots: a door one colour, a window another, and
+    // neither a level's.
+    door: '#d63fa8',         // magenta
+    window: '#1e6fd9',       // blue
   });
 
   // Each loop keeps its outline's id: the BONEYARD's editor (boneyard-edit.js)
@@ -58,6 +62,72 @@ if (!window.DraftBoneyardLoops) {
     return b.every(p => set.has(k(p)));
   };
 
+  // ── THE OPENINGS IN THE BONE (Movie, 3 Oct) ─────────────────────────
+  // "show the doors and window as openings in the outline with a dot where
+  // their center position is" -- in the BONEYARD's 2D and 3D both, every
+  // opening a gap in the line its own width, a dot at its centre, one colour
+  // for a door and another for a window.
+  //
+  // An opening is a fenestration in a wall of the level; it is found on the
+  // loop edge its wall runs along (parallel, within OPENING_TOL_FT of it --
+  // a wall stands on its outline, not always exactly on the line) and kept
+  // as feet along that edge from the edge's first corner.
+  const OPENING_TOL_FT = 1;
+  const openingsOn = (drawing, levelId, loops) => {
+    const walls = new Map(((drawing && drawing.walls) || []).map(w => [String(w.id), w]));
+    const found = loops.map(() => []);
+    ((drawing && drawing.fenestrations) || []).forEach(f => {
+      // THE WALL'S LEVEL: an opening is cut into a wall and is wherever it is.
+      const wall = walls.get(String(f.wallId));
+      if (!wall || !wall.start || !wall.end || Number(wall.levelId) !== Number(levelId)) return;
+      const wx = wall.end.x - wall.start.x, wz = wall.end.z - wall.start.z;
+      const wl = Math.hypot(wx, wz);
+      if (!(wl > 0)) return;
+      const off = Number(f.offset) || 0;
+      const c = { x: wall.start.x + wx * off / wl, z: wall.start.z + wz * off / wl };
+      let best = null;
+      loops.forEach((loop, li) => loop.points.forEach((a, ei) => {
+        const b = loop.points[(ei + 1) % loop.points.length];
+        const ex = b.x - a.x, ez = b.z - a.z;
+        const len = Math.hypot(ex, ez);
+        if (!(len > 0)) return;
+        // Parallel to the wall, and the centre beside the edge, not past it.
+        if (Math.abs(ex * wz - ez * wx) / (len * wl) > 1e-3) return;
+        const t = ((c.x - a.x) * ex + (c.z - a.z) * ez) / len;
+        const d = Math.abs((c.x - a.x) * ez - (c.z - a.z) * ex) / len;
+        if (t < -1e-6 || t > len + 1e-6 || d > OPENING_TOL_FT) return;
+        if (!best || d < best.d) best = { li, ei, t, len, d };
+      }));
+      if (!best) return;
+      const half = Math.max(0, Number(f.width) || 0) / 2;
+      found[best.li].push({ id: f.id, edge: best.ei, type: f.type === 'door' ? 'door' : 'window',
+        at: best.t, from: Math.max(0, best.t - half), to: Math.min(best.len, best.t + half) });
+    });
+    return found;
+  };
+
+  // A loop as the runs of line between its openings, and the dots at their
+  // centres: [{a, b}] and [{p, type}], in plan feet. A loop with no openings
+  // is its edges, corner to corner.
+  const runsOf = loop => {
+    const pts = loop.points;
+    const runs = [], dots = [];
+    pts.forEach((a, ei) => {
+      const b = pts[(ei + 1) % pts.length];
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      const at = t => ({ x: a.x + (b.x - a.x) * (len ? t / len : 0), z: a.z + (b.z - a.z) * (len ? t / len : 0) });
+      const gaps = (loop.openings || []).filter(o => o.edge === ei).sort((p, q) => p.from - q.from);
+      let t = 0;
+      gaps.forEach(g => {
+        if (g.from > t + 1e-6) runs.push({ a: at(t), b: at(g.from) });
+        t = Math.max(t, g.to);
+        dots.push({ p: at(g.at), type: g.type });
+      });
+      if (len > t + 1e-6) runs.push({ a: at(t), b });
+    });
+    return { runs, dots };
+  };
+
   // EVERY LEVEL THAT HAS A BONE, bottom to top, each with its colour and the
   // height its loop stands at.
   const boneLevels = (drawing, stack) => {
@@ -72,7 +142,9 @@ if (!window.DraftBoneyardLoops) {
     // Where the concrete runs the same loop as the lowest floor, that floor's
     // loop is drawn -- the same bone, from the same corner, as before.
     const own = loopsOn(drawing, 1);
-    const lowest = floors[0].loops.filter(l => !l.garage);
+    // Copies: the floor's own loops take its openings below; the foundation's
+    // are solid.
+    const lowest = floors[0].loops.filter(l => !l.garage).map(l => ({ ...l }));
     const poured = concreteLoop(drawing);
     const fdnLoops = own.length ? own
       : (poured && !(lowest.length === 1 && sameLoop(poured.points, lowest[0].points))
@@ -82,6 +154,8 @@ if (!window.DraftBoneyardLoops) {
         elev: stack.foundation.wallBottom, color: COLORS.foundation, loops: fdnLoops });
     }
     floors.forEach(({ floor, index, loops }) => {
+      const openings = openingsOn(drawing, floor.id, loops);
+      loops.forEach((loop, i) => { if (openings[i].length) loop.openings = openings[i]; });
       out.push({ levelId: floor.id, kind: 'floor', name: floor.name || `LEVEL ${floor.id}`,
         elev: floor.floorTop, color: COLORS.floors[Math.min(index, COLORS.floors.length - 1)], loops });
     });
@@ -109,7 +183,7 @@ if (!window.DraftBoneyardLoops) {
         })
       : null;
     const roofLoops = inset ? [{ id: ownRoof.id, garage: false, roof: true, points: inset }]
-      : top.loops.filter(l => !l.garage);
+      : top.loops.filter(l => !l.garage).map(({ openings, ...l }) => l);
     if (roofLoops.length) {
       out.push({ levelId: 7, kind: 'roof', name: 'ROOF', sourceLevelId: top.floor.id,
         elev: top.floor.wallTop, color: COLORS.roof, loops: roofLoops });
@@ -138,6 +212,11 @@ if (!window.DraftBoneyardLoops) {
     const raw = levels.map(level => ({
       ...level,
       polys: level.loops.map(loop => loop.points.map(p => project(p, level.elev, deg))),
+      cut: level.loops.map(loop => {
+        const { runs, dots } = runsOf(loop);
+        return { runs: runs.map(r => ({ a: project(r.a, level.elev, deg), b: project(r.b, level.elev, deg) })),
+          dots: dots.map(d => ({ ...project(d.p, level.elev, deg), type: d.type })) };
+      }),
     }));
     const all = raw.flatMap(l => l.polys.flat());
     if (!all.length) return { levels: [], scale: 0 };
@@ -151,7 +230,12 @@ if (!window.DraftBoneyardLoops) {
     return {
       scale,
       levels: raw.map(l => ({ ...l,
-        polys: l.polys.map(poly => poly.map(p => ({ x: ox + p.x * scale, y: oy + p.y * scale }))) })),
+        polys: l.polys.map(poly => poly.map(p => ({ x: ox + p.x * scale, y: oy + p.y * scale }))),
+        cut: l.cut.map(c => ({
+          runs: c.runs.map(r => ({ a: { x: ox + r.a.x * scale, y: oy + r.a.y * scale },
+            b: { x: ox + r.b.x * scale, y: oy + r.b.y * scale } })),
+          dots: c.dots.map(d => ({ x: ox + d.x * scale, y: oy + d.y * scale, type: d.type })),
+        })) })),
     };
   };
 
@@ -201,7 +285,7 @@ if (!window.DraftBoneyardLoops) {
   const growMs = (levels, levelMs = GROW_LEVEL_MS) => growSlots(levels).length * levelMs;
 
   window.DraftBoneyardLoops = Object.freeze({
-    COLORS, STEP_DEG, TILT, boneLevels, project, layout, levelAt, stepAngle,
+    COLORS, STEP_DEG, TILT, OPENING_TOL_FT, boneLevels, openingsOn, runsOf, project, layout, levelAt, stepAngle,
     GROW_LEVEL_MS, FIRST_RISE_FT, growStage, growMs,
   });
 })();

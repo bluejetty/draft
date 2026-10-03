@@ -64,6 +64,14 @@ const MUTATIONS = [
   ['the lowest bone pops up instead of rising off the ground', 'boneyard-loops.js',
     c => c.replace('const base = k ? slots[k - 1] : level.elev - FIRST_RISE_FT;',
       'const base = k ? slots[k - 1] : level.elev;')],
+  ['the openings are not found', 'boneyard-loops.js',
+    c => c.replace('if (!best) return;\n      const half', 'if (true) return;\n      const half')],
+  ['an opening is found on a level its wall is not on', 'boneyard-loops.js',
+    c => c.replace(' || Number(wall.levelId) !== Number(levelId)) return;', ') return;')],
+  ['the gap is not cut out of the line', 'boneyard-loops.js',
+    c => c.replace('t = Math.max(t, g.to);', '')],
+  ['the gap is centred on the wall start, not the opening', 'boneyard-loops.js',
+    c => c.replace('const off = Number(f.offset) || 0;', 'const off = 0;')],
 ];
 
 if (MUTATE) {
@@ -300,6 +308,37 @@ check('walls that do not close make no loop', E.chainLoop(ring(rect(0, 0, 4, 6))
     at(150)[2] > -4 && at(150)[2] < 0, at(150)[0], at(150)[4]], [true, true, null, null]);
   check('at the end every bone stands at its own height', at(1000), [9, -4, 0, 0, 18]);
   check('four heights, four slots', BL.growMs(lv, 100), 400);
+}
+
+// ── THE OPENINGS IN THE BONE (Movie, 3 Oct) ──────────────────────────
+// "show the doors and window as openings in the outline with a dot where
+// their center position is".
+{
+  const d = house();
+  // A door on the front (wall 2, (16,20) to (-16,20)), 10 ft along: x = 6.
+  d.fenestrations.push({ id: 'door-1', wallId: d.walls[2].id, levelId: 3, type: 'door', offset: 10, width: 3 });
+  // And a window on 2ND FL, whose walls are their own.
+  d.fenestrations.push({ id: 'up-1', wallId: d.walls[11].id, levelId: 5, type: 'window', offset: 5, width: 2 });
+  const lv = levelsOf(d);
+  const main = lv.find(l => l.name === 'MAIN FL').loops[0];
+  check('MAIN\'s window and door, each on its own edge, with its centre and its width',
+    main.openings.map(o => [o.type, o.edge, r3(o.at), r3(o.from), r3(o.to)]),
+    [['window', 3, 30, 28, 32], ['door', 2, 10, 8.5, 11.5]]);
+  check('2ND FL\'s window is 2ND FL\'s, not MAIN\'s', lv.find(l => l.name === '2ND FL').loops[0].openings
+    .map(o => [o.type, o.edge, r3(o.at)]), [['window', 3, 5]]);
+  check('the foundation and the roof are solid', lv.filter(l => l.kind !== 'floor')
+    .map(l => l.loops.some(loop => loop.openings)), [false, false]);
+  const { runs, dots } = BL.runsOf(main);
+  check('the line is broken at each opening: 4 edges, 2 gaps, 6 runs', runs.length, 6);
+  check('the front breaks either side of the door', runs.filter(r => r.a.z === 20 && r.b.z === 20)
+    .map(r => [r3(r.a.x), r3(r.b.x)]), [[16, 7.5], [4.5, -16]]);
+  check('a dot at each centre, door or window', dots.map(dd => [dd.type, r3(dd.p.x), r3(dd.p.z)]),
+    [['door', 6, 20], ['window', -16, -10]]);
+  const laid = BL.layout(lv, 45, 400, 300);
+  check('laid out: the dots are on screen where the plan points project',
+    laid.levels.find(l => l.name === 'MAIN FL').cut[0].dots.length, 2);
+  check('MAIN\'s window is not drawn on 2ND FL, over the same line',
+    lv.find(l => l.name === '2ND FL').loops[0].openings.length, 1);
 }
 
 console.log(failed ? `\n${failed} check(s) FAILED, ${passed} passed` : `\nall ${passed} boneyard-edit checks passed`);
