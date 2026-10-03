@@ -11925,14 +11925,21 @@
   // Reading `foundation` and building the same thing for all three would be
   // worse than building nothing, because the drawing would then state a
   // foundation it does not have.
-  const raiseGarageConcrete = (loop, garage, { against = null } = {}) => {
+  // `houseTop` IS THE HOUSE'S OWN BEARING LINE when the build poured one of
+  // its own -- a split's 5'-0" + sill (Movie, 3 Oct, on a MODIFIED BILEVEL:
+  // "the grade beam is missing, the 1.5" sill plate should match height and
+  // then 32" grade beam below and the piles under the grade beam"). Read off
+  // the level's 8'-0" default instead, the beam was set ~3 ft high against
+  // the bilevel's deeper wall bottom: all of it behind the garage's siding
+  // and none of it below grade. Left out, the level's default, as before.
+  const raiseGarageConcrete = (loop, garage, { against = null, houseTop: bearing } = {}) => {
     const made = { walls: [], items: [] };
     const levelId = FOUNDATION_LEVEL_ID;
     if (!levelPresent(levelId)) return made;
     const S = window.DraftCutView.STANDARDS;
     const kind = garageFoundationOf(garage);
     const detached = garage?.detached === true;
-    const houseTop = assemblyFor(levelId).wallHeightFt;
+    const houseTop = Number.isFinite(bearing) ? bearing : assemblyFor(levelId).wallHeightFt;
     // ASKS cut-view rather than repeating the subtraction: grade is measured
     // from the top of CONCRETE and `houseTop` is the bearing line, one sill
     // plate above it. Spelled out here, this line read 1 1/2" high -- the
@@ -14075,9 +14082,11 @@
     // UNDER THE RECTANGLE when the design names one (a bilevel's entry is cut
     // out of its house but stands inside its concrete), and a split pours
     // PROJECT's 5'-0" with the sill on top.
+    const splitBearing = split
+      ? split.fdnWallHeightFt + window.DraftLevelAssembly.SILL_PLATE_IN / 12 : undefined;
     const under = levelPresent(FOUNDATION_LEVEL_ID)
       ? raiseFoundationUnder(plan.foundation || plan.house, split ? {
-        topHeight: split.fdnWallHeightFt + window.DraftLevelAssembly.SILL_PLATE_IN / 12,
+        topHeight: splitBearing,
       } : {}) : { walls: [], items: [] };
     if (under.items.length) parts.push('foundation');
     extra.push(...under.items);
@@ -14087,7 +14096,7 @@
     // already follow, through the same edgeOnLoop.
     const garageConcrete = (plan.garage && garageBody?.outline)
       ? raiseGarageConcrete(plan.garage, garageBody.outline,
-        { against: plan.foundation || plan.house })
+        { against: plan.foundation || plan.house, houseTop: splitBearing })
       : { walls: [], items: [] };
     extra.push(...garageConcrete.items);
     // SAID OUT LOUD, because a garage that arrives on nothing and a garage

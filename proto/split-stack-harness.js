@@ -48,10 +48,12 @@ const MUTATIONS = [
     c => c.replace('            && face.level.wallTop > level.floorTop + 1e-6',
       '            && false')],
   ['the entry\'s wall stops at its own storey\'s ceiling again', 'cut-view.js',
-    c => c.replace('      const level = ownTop > storey.wallTop + 0.05 && storey.id === ENTRY_LEVEL_ID',
-      '      const level = false && storey.id === ENTRY_LEVEL_ID')],
+    c => c.replace('      let level = ownTop > storey.wallTop + 0.05 && storey.id === ENTRY_LEVEL_ID',
+      '      let level = false && storey.id === ENTRY_LEVEL_ID')],
   ['a plain BILEVEL gets the storey over the garage', 'level-assembly.js',
     c => c.replace("out.upper = buildType === 'modifiedBilevel';", 'out.upper = true;')],
+  ['a split\'s garage climbs to MAIN FL\'s ceiling again', 'cut-view.js',
+    c => c.replace('if (plate != null) level = { ...level, wallTop: plate };', 'void plate;')],
 ];
 
 if (MUTATE) {
@@ -128,6 +130,38 @@ near('a typed WOOD FILL moves ENTRY with it', floor(typed, 2).floorBottom, -1.05
   const entryTop = Math.max(...fills.filter(f => f.pts.some(p => Math.abs(p.u + 4) < 6))
     .flatMap(f => f.pts.filter(p => p.u > -9.5 && p.u < 1.5).map(p => p.e)));
   near('a BILEVEL front: the entry\'s wall climbs to MAIN FL\'s ceiling', entryTop, 109.125 / 12, 0.1);
+}
+
+// ── THE MOD BILEVEL'S GARAGE, ON ITS OWN BEAM AND UNDER ITS OWN ROOF ─────
+// Movie, 3 Oct, on E4: "the garage wall height also extends too high up. it
+// should only go to the underside of the 2nd floor" -- and "the grade beam is
+// missing, the 1.5" sill plate should match height and then 32" grade beam
+// below". A MOD BILEVEL + its garage as MODEL built it from the drive-thru
+// (proto/repro-modbilevel-garage-beam.draft):
+//
+//   garage sill       the house sill                         -5.2813
+//   OVER GARAGE       its floor's underside, the garage roof   4.5833
+//   the beam          32" of concrete under a 1 1/2" plate   -5.4063 .. -8.0729
+{
+  const fs = require('fs');
+  const saved = JSON.parse(fs.readFileSync(path.join(ROOT, 'proto', 'repro-modbilevel-garage-beam.draft'), 'utf8'));
+  const env = H.buildEnv(win, saved);
+  const stack = CV.sectionLevelStack(env);
+  const cut = H.standardElevationCuts(env).find(c => c.id === 'E4');
+  const { faces } = CV.elevationFaces(env, cut, stack, CV.cutAxis(cut));
+  const tops = kind => faces.filter(f => (kind === 'garage') === Boolean(f.garage)
+    && Number(f.wall.levelId) === 3).map(f => f.level.wallTop);
+  near('MOD BILEVEL E4: every garage wall stops under the room\'s floor',
+    Math.max(...tops('garage')), floor(stack, 4).floorBottom);
+  near('MOD BILEVEL E4: and MAIN FL\'s own walls still reach MAIN\'s ceiling',
+    Math.min(...tops('house')), floor(stack, 3).wallTop);
+  const beam = saved.walls.filter(w => Number(w.levelId) === 1 && w.body === 'garage');
+  near('MOD BILEVEL: the garage sill is the house sill',
+    CV.garageBearing(env, stack.foundation, env.garageOutlines(3)[0]), stack.foundation.wallTop);
+  near('MOD BILEVEL: the beam it was built with tops out a plate under that',
+    stack.foundation.wallBottom + Math.max(...beam.map(w => w.topHeight)), -5.4063);
+  near('MOD BILEVEL: and hangs 32" -- 18" of it under grade',
+    stack.foundation.wallBottom + Math.min(...beam.map(w => w.baseHeight)), stack.foundation.grade - 1.5);
 }
 
 // AND NOTHING ELSE MOVES. A bungalow with the same levels stacks as it did.

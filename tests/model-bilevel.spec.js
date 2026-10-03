@@ -51,6 +51,17 @@ test('BILEVEL + GARAGE: an ENTRY level, the entry cut out of the house, and both
   async ({ page }) => {
     const d = await buildBilevel(page, 'bilevel-garage');
     expect(d.buildType).toBe('bilevel');
+    // THE GARAGE'S GRADE BEAM HANGS OFF THE HOUSE'S OWN SILL (Movie, 3 Oct:
+    // "the 1.5" sill plate should match height and then 32" grade beam
+    // below"): the bilevel pours 5'-0" + a 1 1/2" plate, so the beam tops out
+    // at 5'-0" over the wall bottom and hangs 32" from there -- not off the
+    // 8'-0" a house wall defaults to.
+    const beam = d.walls.filter(w => Number(w.levelId) === 1 && w.body === 'garage');
+    expect(beam.length, 'the garage stands on a beam').toBeGreaterThan(0);
+    beam.forEach(w => {
+      expect(w.topHeight).toBeCloseTo(5, 3);
+      expect(w.baseHeight).toBeCloseTo(5 - 32 / 12, 3);
+    });
     expect(d.levels.map(l => Number(l.id)), 'ENTRY added between MAIN FL and FOUNDATION')
       .toEqual([8, 7, 5, 3, 2, 1]);
     const house = d.outlines.find(o => Number(o.levelId) === 3 && !o.garage);
