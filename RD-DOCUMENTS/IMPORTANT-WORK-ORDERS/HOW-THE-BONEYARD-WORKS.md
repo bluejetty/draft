@@ -495,8 +495,11 @@ back to MODEL, which plays the E1 rising reveal. A tap skips to E1.
 3. If the type hangs a garage on the house (the + GARAGE types, ROOM OVER,
    MODIFIED BILEVEL), the strip says "Now trace the garage" and the OUTLINE
    tool stays armed for it.
-4. The strip says "Press the bone to build your ...". The bone's BUILD
-   builds the whole house like a premade one: walls, floors, concrete,
+4. Closing the last loop BUILDS IT -- Movie, 3 Oct, "Build right away" --
+   through the bone's own build (`ModelBuild.build`, the same toll and the
+   same handlers). A trace the type refuses, or an empty wallet, builds
+   nothing, says why, and leaves "Press the bone to build your ..." as the
+   way on. It builds the whole house like a premade one: walls, floors, concrete,
    piles, roofs, beams and columns, stairs, dims, windows and doors, then the
    bones grow and E1 grows.
 5. The traced loops come off the drawing with the build (the built outlines

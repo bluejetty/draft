@@ -49,12 +49,10 @@ async function trace(page, corners) {
   for (const [x, z] of [...corners, corners[0]]) await page.mouse.click(...at(x, z));
 }
 
-// The bone's second press offers BUILD; BUILD builds off the trace.
+// CLOSING THE LAST LOOP BUILDS IT (Movie, 3 Oct: "Build right away") --
+// no bone press. What is left is to save and read the file back.
 async function build(page) {
-  await page.locator('#bone').click();
-  await expect(page.locator('#build-choice')).toBeVisible();
-  await page.locator('[data-build-choice-build]').click();
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(500);
   await page.locator('#save').click();
   await h.waitForSaved(page);
   return h.savedDrawing(page);
@@ -70,7 +68,6 @@ test('a traced 1 STOREY + GARAGE is built whole, under one roof', async ({ page 
   await trace(page, HOUSE);
   await expect(page.locator('#strip-message')).toContainText('Now trace the garage');
   await trace(page, GARAGE);
-  await expect(page.locator('#strip-message')).toContainText('Press the bone to build your 1 STOREY + GARAGE');
   const d = await build(page);
 
   const main = d.outlines.filter(o => Number(o.levelId) === 3);
@@ -124,7 +121,6 @@ test('a traced DETACHED GARAGE is built on its own loop', async ({ page }) => {
   await open(page);
   await drawType(page, 'detachedGarage', 'detached-thickened');
   await trace(page, [[0, 0], [14, 0], [14, 18], [0, 18]]);
-  await expect(page.locator('#strip-message')).toContainText('Press the bone to build your garage');
   const d = await build(page);
   const g = d.outlines.filter(o => o.garage && o.detached);
   expect(g.length, 'one detached garage').toBe(1);
@@ -162,4 +158,18 @@ test('a traced MODIFIED BILEVEL gets its entry and its room over the garage', as
   expect(d.levels.some(l => Number(l.id) === 4), 'OVER GARAGE').toBe(true);
   expect(d.outlines.some(o => Number(o.levelId) === 4), 'the room').toBe(true);
   expect(d.stairs.length, 'three flights').toBeGreaterThanOrEqual(3);
+});
+
+// A TRACE THE TYPE CANNOT TAKE IS NOT BUILT, and says why: the bone stays
+// the way on once the drafter has fixed it.
+test('a closed trace the type refuses builds nothing and says why', async ({ page }) => {
+  await open(page);
+  await drawType(page, 'bilevel', 'bilevel');
+  await trace(page, [[0, 0], [8, 0], [8, 8], [0, 8]]);
+  await expect(page.locator('#strip-message')).toContainText('front');
+  await page.locator('#save').click();
+  await h.waitForSaved(page);
+  const d = await h.savedDrawing(page);
+  expect(d.walls.length, 'no house').toBe(0);
+  expect(d.boneyardOutlines.length, 'the trace is kept').toBe(1);
 });
