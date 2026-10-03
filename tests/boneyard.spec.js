@@ -91,6 +91,34 @@ test('a tap on a loop shows that level flat on the right', async ({ page }) => {
   await expect(page.locator('#level-title')).toHaveText('2ND FL');
 });
 
+// Movie, 3 Oct: "show the doors and window as openings in the outline with a
+// dot where their center position is" -- in the bone, 2D and 3D both.
+test('every door and window is a gap in the bone with a dot at its centre', async ({ page }) => {
+  await boneyardOfTwoStorey(page);
+  const saved = await h.savedDrawing(page);
+  const doorsOn = id => saved.fenestrations.filter(f => f.type === 'door' && saved.walls
+    .some(w => String(w.id) === String(f.wallId) && Number(w.levelId) === id)).length;
+  const in3d = JSON.parse(await page.locator('#bones3d').getAttribute('data-openings'));
+  const main3d = in3d.filter(o => o.level === 'MAIN FL');
+  expect(main3d.filter(o => o.type === 'door').length, 'MAIN FL\'s doors, garage doors too')
+    .toBe(doorsOn(3));
+  expect(main3d.some(o => o.type === 'window'), 'and its windows').toBe(true);
+  expect(in3d.some(o => o.level === '2ND FL' && o.type === 'window'), '2ND FL has its own').toBe(true);
+  expect(in3d.some(o => o.level === 'FOUNDATION' || o.level === 'ROOF'), 'the foundation and roof are solid')
+    .toBe(false);
+  // The 2D window shows the picked level's, the same ones.
+  await expect(page.locator('#bones2d')).toHaveAttribute('data-level', 'MAIN FL');
+  const in2d = JSON.parse(await page.locator('#bones2d').getAttribute('data-openings'));
+  expect(in2d.map(o => o.type).sort()).toEqual(main3d.map(o => o.type).sort());
+  // And the dot is drawn: the canvas under a door's dot is the door colour.
+  const door = in2d.find(o => o.type === 'door');
+  const px = await page.locator('#bones2d').evaluate((c, [x, y]) => {
+    const dpr = window.devicePixelRatio || 1;
+    return Array.from(c.getContext('2d').getImageData(Math.round(x * dpr), Math.round(y * dpr), 1, 1).data.slice(0, 3));
+  }, door.at);
+  expect(px, 'magenta').toEqual([0xd6, 0x3f, 0xa8]);
+});
+
 // Movie, 3 Oct: "An empty BONEYARD brings up the drive-thru".
 test('an empty boneyard, reached from the app, goes on to the drive-thru', async ({ page }) => {
   await seed(page, empty());

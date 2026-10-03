@@ -230,6 +230,35 @@
         ctx.setLineDash([]);
       };
 
+      // A LOOP WITH ITS OPENINGS (Movie, 3 Oct): the line broken where a door
+      // or window is, and a dot at its centre -- a door's colour, a window's.
+      // `cut` is boneyard-loops.js's, laid out: runs of line and dots, in
+      // screen points; `dy` lifts it (the grow).
+      const strokeCut = (ctx, cut, color, width, dy = 0) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.lineCap = 'butt';
+        cut.forEach(c => c.runs.forEach(r => {
+          ctx.beginPath();
+          ctx.moveTo(r.a.x, r.a.y + dy);
+          ctx.lineTo(r.b.x, r.b.y + dy);
+          ctx.stroke();
+        }));
+        cut.forEach(c => c.dots.forEach(d => {
+          ctx.fillStyle = d.type === 'door' ? BL.COLORS.door : BL.COLORS.window;
+          ctx.beginPath(); ctx.arc(d.x, d.y + dy, Math.max(2.5, width + 1), 0, Math.PI * 2); ctx.fill();
+        }));
+      };
+      // The same, for the 2D window: a level's loops in plan feet, to screen.
+      const cutOf = (loops, to) => loops.map(loop => {
+        const { runs, dots } = BL.runsOf(loop);
+        return { runs: runs.map(r => ({ a: to(r.a), b: to(r.b) })),
+          dots: dots.map(d => ({ ...to(d.p), type: d.type })) };
+      });
+      // FOR THE SPECS: every opening drawn, by level, with its dot.
+      const openingsAttr = lvls => JSON.stringify(lvls.flatMap(l => (l.cut || []).flatMap(c => c.dots
+        .map(d => ({ level: l.name, type: d.type, at: [Number(d.x.toFixed(1)), Number(d.y.toFixed(1))] })))));
+
       // What is on screen: the drawing, or the push being dragged.
       const shown = () => (preview ? preview.levels : levels);
       const shownPicked = () => (picked
@@ -242,8 +271,9 @@
         if (growStart !== null) { paintGrow(ctx); return; }
         laid.levels.forEach(level => {
           const on = picked && picked.kind === level.kind && picked.levelId === level.levelId;
-          strokePolys(ctx, level.polys, level.color, on ? 3 : 1.6);
+          strokeCut(ctx, level.cut, level.color, on ? 3 : 1.6);
         });
+        c3.setAttribute('data-openings', openingsAttr(laid.levels));
         document.getElementById('angle').textContent = `${angle}°`;
         c3.setAttribute('data-angle', String(angle));
         // FOR THE SPECS: what is drawn, and where each level's first corner landed.
@@ -303,8 +333,7 @@
             ctx.stroke();
           }));
           ctx.globalAlpha = 1;
-          strokePolys(ctx, level.polys.map(poly => poly.map(p => ({ x: p.x, y: p.y + dy }))),
-            level.color, st.done ? 1.6 : 2.4);
+          strokeCut(ctx, level.cut, level.color, st.done ? 1.6 : 2.4, dy);
         });
         c3.setAttribute('data-grow', JSON.stringify(stage.map(st => (st.shown ? Number(st.h.toFixed(2)) : null))));
         if (ms < BL.growMs(laid.levels) + GROW_HOLD_MS) requestAnimationFrame(paint3d);
@@ -352,6 +381,7 @@
         const level = shownPicked();
         document.getElementById('level-title').textContent = level ? level.name : 'LEVEL';
         c2.setAttribute('data-level', level ? level.name : '');
+        c2.setAttribute('data-openings', '[]');
         // Refitted only when something has gone off the window.
         if (!frame || (!drag && !fits(w, h))) frame = frameFor(w, h);
         if (!level || !frame) return;
@@ -367,7 +397,9 @@
           const p = toScreen(col.point);
           ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
         });
-        strokePolys(ctx, level.loops.map(l => l.points.map(toScreen)), level.color, 2);
+        const cut = cutOf(level.loops, toScreen);
+        strokeCut(ctx, cut, level.color, 2);
+        c2.setAttribute('data-openings', openingsAttr([{ name: level.name, cut }]));
         // Every corner, so a BREAK can be seen.
         ctx.fillStyle = level.color;
         level.loops.forEach(l => l.points.forEach(pt => {

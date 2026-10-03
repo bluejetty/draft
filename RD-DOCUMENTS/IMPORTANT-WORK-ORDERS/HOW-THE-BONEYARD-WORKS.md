@@ -529,3 +529,23 @@ overhead door and man door.
 - A garage type with no garage traced.
 - A bilevel whose front wall has no straight 12 ft for the landing.
 - A room over a garage that is not a rectangle against the house.
+
+## Doors and windows in the bone (built 3 Oct 2026)
+
+Movie, 3 Oct: "is it possible to show the doors and window as openings in the
+outline with a dot where their center position is" — in the bone, in the
+BONEYARD's 2D and 3D windows both.
+
+- **A gap the opening's width** in the loop's line, and **a dot at its
+  centre**: magenta for a door (garage overhead doors included), blue for a
+  window — neither is a level's colour.
+- **Which loop edge.** An opening is a fenestration in a wall; the wall's
+  level says which floor's bone it is in (not the record's own `levelId`), and
+  the edge is the one the wall runs along — parallel, with the opening's
+  centre within 1 ft of it (`OPENING_TOL_FT`) and between its corners.
+- **The foundation and the roof are solid.** Only floor loops carry openings.
+- **Pure.** `boneyard-loops.js` finds them (`openingsOn`, kept on each loop as
+  `openings: [{edge, at, from, to, type}]` in feet along the edge) and cuts the
+  loop into runs and dots (`runsOf`); `layout` projects both as `cut`. The page
+  only strokes the runs and fills the dots, in the grow too.
+- Specs read `#bones3d[data-openings]` and `#bones2d[data-openings]`.
