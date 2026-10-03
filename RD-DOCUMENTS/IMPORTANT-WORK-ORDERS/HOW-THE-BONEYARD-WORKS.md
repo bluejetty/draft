@@ -381,3 +381,76 @@ SELECT.
   4'-6" minimum, then about every 8 ft.
 - The 8 ft pile spacing is a safe DEFAULT, not a fixed rule: the user can
   change it (an office setting, likely on STANDARDS).
+
+---
+
+## PR 2: editing the bones (built 3 Oct 2026)
+
+Movie, 3 Oct, choosing between options: a moved bone takes the house with it
+("walls, floors, roof follow"); an edge moves by "drag or arrow keys, whole
+feet"; PR 2 carries "all of them" of the moving rules, piles included; the
+tracing steps wait for the OUTLINE rework in PR 3. And, while it was being
+built: "also need to 'break' the outline (per foot)".
+
+### What the right window does
+- **Pick** a level (a loop on the left, or its button), then **tap an edge**
+  on the right. It lights up with its length.
+- **Push** it: drag it, or the arrow keys (left/right for an edge running
+  front to back, up/down for one running side to side). Whole feet, square
+  to itself, corners stay square. With no edge picked, left/right still
+  turn the 3D.
+- **BREAK** (or `B`): tap an edge and a corner goes on the nearest foot
+  mark, at least a foot in from either end. Then each part pushes alone,
+  and a push of one part makes a jog.
+- **UNDO** (or Ctrl+Z) takes the last change back. Every change is saved as
+  it is made.
+- The page edits under the same lease as MODEL. With MODEL open for editing
+  in another tab it shows the bones and says why it will not change them.
+
+### How the house follows (`boneyard-edit.js`)
+A premade house has no master outline, so nothing is linked to the bone by
+id. Every built house's walls, decks, slabs and footings stand ON the
+outline, so a push moves every point on the pushed line inside the pushed
+span, on that body's records:
+- The walls along the line travel; walls meeting it stretch; where only
+  part of an edge moves, the wall is cut and a short wall (a copy of the
+  moved one) closes the jog. Windows and doors keep their place on the wall.
+- The foundation's bone is its concrete, chained wall to wall. While it
+  runs the same loop as the floor over it, that floor's loop is drawn.
+- A garage edge takes the garage's own concrete, slab and piles with it.
+  The edge a garage shares with the house does not move: BREAK it where
+  they part and push the free part.
+- The roof's eave is the same edge one overhang out. Past a corner that
+  turns in it goes out by the overhang, past one that turns out it comes in,
+  and a bump out widens it by the overhang each side.
+- Dimension strings with an end on the pushed wall, or standing just
+  outside it, ride with it.
+
+### The moving rules, as built
+- **Outward**, any floor or the foundation: every level above responds,
+  bottom up. Flush: it goes out too. Overhanging: the overhang is spent
+  first. An overhang that would end between 2'-0" and 4'-6" is trimmed to
+  2'-0" (the floor above loses the difference, its piles come out) and
+  the status line says so.
+- **Inward**: everything hooked above (flush or overhanging) comes in the
+  same amount; an overhang keeps its width.
+- **A floor's own pull** walks the ladder against the level under it. A
+  press that would land in the gap jumps it: from 2'-0" the next press out
+  is 4'-6", and from 4'-6" the next press in is 2'-0".
+- **The roof** can be pulled on its own (its bone is its eave brought back in
+  by its overhang), by the same ladder, never in past its wall.
+- **Piles** under an overhang stand in the ladder's rows, at most 8'-0"
+  apart along the edge. They are 10" piles marked P1 and are not `auto`, so
+  AUTO PILES (which re-places only its own) leaves them.
+
+### Not in PR 2
+- The 8'-0" spacing is a constant here; making it an office setting on
+  STANDARDS is still to do.
+- A garage's own pile spacing is not re-worked when its walls lengthen.
+  Press AUTO PILES on MODEL after a big garage change.
+- AUTO DIMS and AUTO BEAM are not re-run; press them on MODEL after a big
+  change. The stair and its opening do not move.
+- OPEN, still: whether a roof eave counts as an overhang to be eaten. As
+  built, the eave keeps its width and follows the wall.
+- Bilevels: the foundation bone is the concrete loop, but the half levels
+  have not been tried against the rules above.

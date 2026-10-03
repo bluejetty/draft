@@ -11,9 +11,10 @@
      roof (2 Oct: "only 1 loops per floor and one for the roof which will be
      at highest floor ceiling") -- and the chosen level, flat, on the right.
 
-     PR 1 OF 4 IS LOOKING, NOT EDITING. Editing the bones on the right (the
-     TOY tools), drawing a new outline here, the drive-thru on an empty
-     boneyard, and the shelves come in the PRs after this one. -->
+     PR 2 OF 4 EDITS THEM ON THE RIGHT (boneyard-edit.js): pick an edge, push
+     it in whole feet, BREAK it on a foot mark, and the house follows. Drawing
+     a new outline here, the drive-thru on an empty boneyard, and the shelves
+     come in the PRs after this one. -->
 <link rel="stylesheet" href="./shell-bars.css" />
 <script src="./palette.js"></script>
 <!-- ALL IN THE HEAD, as on EXT. FINISH: the bars are written where their
@@ -34,6 +35,8 @@
 <script src="./fen-labels.js"></script>
 <script src="./cut-view.js"></script>
 <script src="./cut-view-env.js"></script>
+<script src="./tour.js"></script>
+<script src="./boneyard-edit.js"></script>
 <script src="./boneyard-loops.js"></script>
 <script src="./orientation-guard.js"></script>
 <script>
@@ -91,6 +94,9 @@
   }
   .legend button[aria-pressed="true"] { border-color: var(--accent-mark); color: var(--accent-mark); }
   .legend .swatch { width: 10px; height: 10px; display: inline-block; }
+  .btn[aria-pressed="true"] { border-color: var(--accent-mark); color: var(--accent-mark); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  canvas#bones2d { touch-action: none; }
   #status { flex: none; padding: 4px 12px; font-size: 11px; color: var(--ink-quiet); min-height: 20px; }
 </style>
 </head>
@@ -109,12 +115,17 @@
       </div>
       <canvas id="bones3d"></canvas>
     </section>
-    <!-- RIGHT: THE CHOSEN LEVEL, FLAT. Looking only in this PR; the TOY
-         tools that edit it here come next. -->
+    <!-- RIGHT: THE CHOSEN LEVEL, FLAT, AND WHERE IT IS EDITED. Tap an edge,
+         then drag it or use the arrow keys: whole feet, square to itself.
+         BREAK puts a corner on a foot mark so part of an edge moves alone.
+         "The 3D is never edited directly" -- it mirrors what happens here. -->
     <section class="pane" aria-label="The chosen level">
       <div class="pane-head">
         <span class="title" id="level-title">LEVEL</span>
         <div class="legend" id="legend"></div>
+        <button type="button" class="btn" id="break" aria-pressed="false"
+          title="Put a corner on an edge at a foot mark (B)">BREAK</button>
+        <button type="button" class="btn" id="undo" title="Undo the last change (Ctrl+Z)" disabled>UNDO</button>
       </div>
       <canvas id="bones2d"></canvas>
     </section>
@@ -125,29 +136,59 @@
   <script>
     (async () => {
       const BL = window.DraftBoneyardLoops;
+      const BE = window.DraftBoneyardEdit;
       const FORMAT = window.DraftDrawingFormat;
+      const FMT = window.DraftFormatters;
+      const S = window.SharedFileStore;
       const BUCKET = 'model-drawing';
+      // THE SAME LEASE MODEL HOLDS: one page edits the drawing at a time, and
+      // this page and MODEL in the same tab are the same holder.
+      const LEASE_SCOPE = 'model';
       const c3 = document.getElementById('bones3d');
       const c2 = document.getElementById('bones2d');
       const statusEl = document.getElementById('status');
+      const breakBtn = document.getElementById('break');
+      const undoBtn = document.getElementById('undo');
       const say = text => { statusEl.textContent = text; };
+      const ft = v => (FMT ? FMT.formatArchitecturalInches(Math.abs(v) * 12) : `${Math.abs(v)}'`);
       let skin = window.__bySkin || {};
 
+      let raw = null;
+      let rev = null;
+      let stack = null;
       let levels = [];
       let angle = 45;
       let picked = null;
       let laid = { levels: [], scale: 0 };
+      // The edge the drafter picked: which loop of the picked level, which edge.
+      let selected = null;
+      let breaking = false;
+      let undo = [];
+      let lease = null;
+      let preview = null;
+      let saves = 0;
+      // A push being dragged on the right: where it started and how far.
+      let drag = null;
 
       const load = async () => {
-        const store = window.SharedFileStore;
-        if (!store) return null;
-        let file = null;
-        try { file = await store.loadSharedFile(BUCKET); } catch { file = null; }
-        if (!file) return null;
+        if (!S) return null;
+        let got = null;
+        try { got = await S.loadSharedFileAt(BUCKET); } catch { got = null; }
+        if (!got || !got.file) return null;
+        rev = got.rev;
         try {
-          const parsed = JSON.parse(await file.text());
+          const parsed = JSON.parse(await got.file.text());
           return FORMAT.checkEnvelope(parsed).ok ? parsed : null;
         } catch { return null; }
+      };
+
+      const restack = () => {
+        const env = window.DraftCutViewEnv.buildCutViewEnv(raw, FORMAT.levels(raw.levels));
+        stack = env ? window.DraftCutView.sectionLevelStack(env) : null;
+        levels = BL.boneLevels(raw, stack);
+        if (picked) {
+          picked = levels.find(l => l.kind === picked.kind && l.levelId === picked.levelId) || null;
+        }
       };
 
       const sized = canvas => {
@@ -162,21 +203,28 @@
         return { ctx, w, h };
       };
 
-      const strokePolys = (ctx, polys, color, width) => {
+      const strokePolys = (ctx, polys, color, width, dash = []) => {
         ctx.strokeStyle = color;
         ctx.lineWidth = width;
+        ctx.setLineDash(dash);
         polys.forEach(poly => {
           ctx.beginPath();
           poly.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
           ctx.closePath();
           ctx.stroke();
         });
+        ctx.setLineDash([]);
       };
+
+      // What is on screen: the drawing, or the push being dragged.
+      const shown = () => (preview ? preview.levels : levels);
+      const shownPicked = () => (picked
+        ? shown().find(l => l.kind === picked.kind && l.levelId === picked.levelId) || picked : null);
 
       // ── THE 3D WINDOW ───────────────────────────────────────────────
       const paint3d = () => {
         const { ctx, w, h } = sized(c3);
-        laid = BL.layout(levels, angle, w, h);
+        laid = BL.layout(shown(), angle, w, h);
         laid.levels.forEach(level => {
           const on = picked && picked.kind === level.kind && picked.levelId === level.levelId;
           strokePolys(ctx, level.polys, level.color, on ? 3 : 1.6);
@@ -192,20 +240,83 @@
       };
 
       // ── THE 2D WINDOW: THE CHOSEN LEVEL, FLAT ───────────────────────
+      //
+      // THE FRAME IS THE WHOLE BUILDING'S, so a level keeps its place when
+      // another is picked and an edit does not slide the plan under the
+      // finger. It is fixed for the length of a drag.
+      let frame = null;
+      const frameFor = (w, h) => {
+        const pts = levels.flatMap(l => l.loops.flatMap(loop => loop.points));
+        if (!pts.length) return null;
+        const xs = pts.map(p => p.x), zs = pts.map(p => p.z);
+        const pad = 6;
+        const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad;
+        const minZ = Math.min(...zs) - pad, maxZ = Math.max(...zs) + pad;
+        const m = 20;
+        const s = Math.min((w - 2 * m) / Math.max(maxX - minX, 1), (h - 2 * m) / Math.max(maxZ - minZ, 1));
+        return { s, ox: (w - (maxX - minX) * s) / 2 - minX * s, oy: (h - (maxZ - minZ) * s) / 2 - minZ * s };
+      };
+      const toScreen = p => ({ x: frame.ox + p.x * frame.s, y: frame.oy + p.z * frame.s });
+      const fits = (w, h) => levels.every(l => l.loops.every(loop => loop.points.every(pt => {
+        const p = toScreen(pt);
+        return p.x >= 4 && p.x <= w - 4 && p.y >= 4 && p.y <= h - 4;
+      })));
+      const toWorld = (x, y) => ({ x: (x - frame.ox) / frame.s, z: (y - frame.oy) / frame.s });
+
+      // The level under the picked one, drawn faint: what an overhang hangs past.
+      const under = level => {
+        const order = shown().filter(l => l.kind === 'foundation' || l.kind === 'floor')
+          .sort((a, b) => a.elev - b.elev);
+        if (level.kind === 'roof') return shown().find(l => l.kind === 'floor' && l.levelId === level.sourceLevelId);
+        const at = order.findIndex(l => l.kind === level.kind && l.levelId === level.levelId);
+        return at > 0 ? order[at - 1] : null;
+      };
+
       const paint2d = () => {
         const { ctx, w, h } = sized(c2);
-        document.getElementById('level-title').textContent = picked ? picked.name : 'LEVEL';
-        c2.setAttribute('data-level', picked ? picked.name : '');
-        if (!picked) return;
-        const pts = picked.loops.flatMap(l => l.points);
-        const xs = pts.map(p => p.x), zs = pts.map(p => p.z);
-        const minX = Math.min(...xs), maxX = Math.max(...xs);
-        const minZ = Math.min(...zs), maxZ = Math.max(...zs);
-        const m = 30;
-        const s = Math.min((w - 2 * m) / Math.max(maxX - minX, 1), (h - 2 * m) / Math.max(maxZ - minZ, 1));
-        const ox = (w - (maxX - minX) * s) / 2, oy = (h - (maxZ - minZ) * s) / 2;
-        const polys = picked.loops.map(l => l.points.map(p => ({ x: ox + (p.x - minX) * s, y: oy + (p.z - minZ) * s })));
-        strokePolys(ctx, polys, picked.color, 2);
+        const level = shownPicked();
+        document.getElementById('level-title').textContent = level ? level.name : 'LEVEL';
+        c2.setAttribute('data-level', level ? level.name : '');
+        // Refitted only when something has gone off the window.
+        if (!frame || (!drag && !fits(w, h))) frame = frameFor(w, h);
+        if (!level || !frame) return;
+        const below = under(level);
+        if (below) {
+          strokePolys(ctx, below.loops.map(l => l.points.map(toScreen)),
+            skin['ink-quiet'] || '#888', 1, [5, 4]);
+        }
+        // The piles the bones stand on, where any overhang needs them.
+        ctx.fillStyle = skin['ink-quiet'] || '#888';
+        (preview ? preview.drawing : raw).columns?.forEach(col => {
+          if (col.pileMark !== BE.PILE_MARK || !col.point) return;
+          const p = toScreen(col.point);
+          ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+        });
+        strokePolys(ctx, level.loops.map(l => l.points.map(toScreen)), level.color, 2);
+        // Every corner, so a BREAK can be seen.
+        ctx.fillStyle = level.color;
+        level.loops.forEach(l => l.points.forEach(pt => {
+          const p = toScreen(pt);
+          ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+        }));
+        if (selected && level.loops[selected.loopIndex]) {
+          const loop = level.loops[selected.loopIndex];
+          const a = loop.points[selected.edgeIndex];
+          const b = loop.points[(selected.edgeIndex + 1) % loop.points.length];
+          if (a && b) {
+            const pa = toScreen(a), pb = toScreen(b);
+            ctx.strokeStyle = skin['accent-mark'] || '#ffb000';
+            ctx.lineWidth = 5;
+            ctx.beginPath(); ctx.moveTo(pa.x, pa.y); ctx.lineTo(pb.x, pb.y); ctx.stroke();
+            const len = Math.hypot(b.x - a.x, b.z - a.z);
+            ctx.fillStyle = skin['accent-mark'] || '#ffb000';
+            ctx.font = '12px "DM Mono", monospace';
+            ctx.fillText(ft(len), (pa.x + pb.x) / 2 + 6, (pa.y + pb.y) / 2 - 6);
+          }
+        }
+        c2.setAttribute('data-selected', selected ? JSON.stringify(selected) : '');
+        c2.setAttribute('data-frame', JSON.stringify(frame));
+        c2.setAttribute('data-loops', JSON.stringify(level.loops.map(l => l.points.map(p => [p.x, p.z]))));
       };
 
       const paintLegend = () => {
@@ -226,6 +337,7 @@
 
       const pick = level => {
         picked = level;
+        selected = null;
         paintLegend();
         paint3d();
         paint2d();
@@ -244,50 +356,259 @@
       // A DRAG TURNS TOO, but still in steps: a step per 40 px dragged, and
       // nothing is painted between steps. A press that does not drag is a tap,
       // and a tap on a loop picks its level.
-      let drag = null;
+      let spin = null;
       c3.addEventListener('pointerdown', e => {
-        drag = { x: e.clientX, y: e.clientY, from: angle, moved: false };
+        spin = { x: e.clientX, y: e.clientY, from: angle, moved: false };
         c3.setPointerCapture(e.pointerId);
       });
       c3.addEventListener('pointermove', e => {
-        if (!drag) return;
-        const dx = e.clientX - drag.x;
-        if (Math.abs(dx) > 6) drag.moved = true;
+        if (!spin) return;
+        const dx = e.clientX - spin.x;
+        if (Math.abs(dx) > 6) spin.moved = true;
         const steps = Math.trunc(dx / 40);
-        const next = BL.stepAngle(drag.from, steps);
+        const next = BL.stepAngle(spin.from, steps);
         if (next !== angle) { angle = next; paint3d(); }
       });
       c3.addEventListener('pointerup', e => {
-        const was = drag;
-        drag = null;
+        const was = spin;
+        spin = null;
         if (!was || was.moved) return;
         const box = c3.getBoundingClientRect();
         const hit = BL.levelAt(laid, { x: e.clientX - box.left, y: e.clientY - box.top });
         if (hit) pick(levels.find(l => l.kind === hit.kind && l.levelId === hit.levelId) || null);
       });
+
+      // ── EDITING ─────────────────────────────────────────────────────
+      const editCtx = () => ({
+        levels,
+        ladder: window.DraftTour && window.DraftTour.floorPullLadder,
+        roofSourceId: (levels.find(l => l.kind === 'roof') || {}).sourceLevelId,
+      });
+      const WORDS = {
+        NOT_SQUARE: 'that edge is not square, so it cannot be pushed here',
+        SHARED: 'the garage and the house meet along that edge — BREAK it where they part and push the free part',
+        NO_RUNG: 'that overhang is already as far as the ladder allows that way',
+        NO_ROOF: 'there is no roof edge over that line to move',
+        AT_END: 'a break goes at least a foot in from each end of the edge',
+        NO_MOVE: 'nothing to move',
+      };
+      const why = reason => WORDS[reason] || `cannot: ${reason}`;
+      const describe = report => {
+        const parts = report.moves.map(m => `${m.name} ${m.outFt > 0 ? 'out' : 'in'} ${ft(m.outFt)}`);
+        if (report.overhangFt != null) {
+          parts[0] += report.overhangFt > 1e-3 ? ` (overhang now ${ft(report.overhangFt)})`
+            : report.overhangFt < -1e-3 ? ` (set back ${ft(report.overhangFt)})` : ' (flush)';
+        }
+        report.trims.forEach(t => parts.push(`${t.name} trimmed ${ft(t.trimFt)} — its overhang is back to 2'-0" with no piles`));
+        if (report.roofs) parts.push('the roof followed');
+        if (report.piles.placed) parts.push(`${report.piles.placed} pile${report.piles.placed === 1 ? '' : 's'} under the overhang`);
+        if (report.piles.removed && !report.piles.placed) parts.push(`${report.piles.removed} pile${report.piles.removed === 1 ? '' : 's'} taken out`);
+        return parts.join(' · ');
+      };
+
+      const readOnly = () => !lease;
+      // ONE WRITE AT A TIME. Two arrow presses in quick succession are two
+      // edits, and two writes in flight would both carry the revision read
+      // before either landed -- the second refused as stale and the page
+      // locked out. So writes queue, each taking the drawing as it is then.
+      let writing = Promise.resolve(true);
+      const save = () => {
+        writing = writing.then(() => writeNow());
+        return writing;
+      };
+      const writeNow = async () => {
+        if (!S || !lease) return false;
+        const file = new File([JSON.stringify(raw)], 'model-drawing.json', { type: 'application/json' });
+        try {
+          rev = await S.saveSharedFile(file, BUCKET, { ifRev: Number.isInteger(rev) ? rev : null, lease });
+          // FOR THE SPECS: how many edits this page has written.
+          saves += 1;
+          document.body.dataset.boneyardSaves = String(saves);
+          return true;
+        } catch (error) {
+          say(`NOT SAVED — ${error && error.message ? error.message : error}. Reload the page before editing again.`);
+          lease = null;
+          return false;
+        }
+      };
+
+      const commit = async result => {
+        undo.push(raw);
+        raw = result.drawing;
+        restack();
+        undoBtn.disabled = false;
+        paintLegend();
+        paintAll();
+        await save();
+      };
+
+      // After a push, keep the same edge picked where it now stands.
+      const reselect = (loopIndex, line) => {
+        const level = picked;
+        const loop = level && level.loops[loopIndex];
+        if (!loop) { selected = null; return; }
+        const hit = BE.edgesOf(loop.points).find(e => e.square && e.axis === line.axis
+          && Math.abs(e.c - line.c) < 1e-3 && Math.min(e.hi, line.hi) - Math.max(e.lo, line.lo) > 1e-3);
+        selected = hit ? { loopIndex, edgeIndex: hit.index } : null;
+      };
+
+      // ONE EDIT AT A TIME. Each push reads the picked edge, changes the
+      // drawing and then re-finds that edge where it now stands; a second
+      // press let in between found the edge already moved under it, lost the
+      // pick, and every press after it did nothing. So edits queue: a press
+      // waits for the one before it to finish, re-pick and all.
+      let editing = Promise.resolve();
+      const queued = fn => (...args) => {
+        editing = editing.then(() => fn(...args)).catch(() => {});
+        return editing;
+      };
+
+      const push = queued(async deltaFt => {
+        if (!selected || !picked) return;
+        if (readOnly()) { say(leaseWords()); return; }
+        const loop = picked.loops[selected.loopIndex];
+        const edge = loop && BE.edgeOf(loop.points, selected.edgeIndex);
+        const result = BE.pushEdge(raw, { kind: picked.kind, levelId: picked.levelId,
+          loopIndex: selected.loopIndex, edgeIndex: selected.edgeIndex, deltaFt }, editCtx());
+        if (!result.ok) { say(why(result.reason)); return; }
+        const moved = result.report.moves[0];
+        await commit(result);
+        if (edge && edge.square) {
+          reselect(selected.loopIndex, { ...edge, c: edge.c + moved.outFt * edge.n });
+        }
+        paint2d();
+        say(describe(result.report));
+      });
+
+      const doBreak = queued(async (hit, world) => {
+        if (readOnly()) { say(leaseWords()); return; }
+        const along = hit.edge.axis === 'z' ? world.x : world.z;
+        const result = BE.breakEdge(raw, { kind: picked.kind, levelId: picked.levelId,
+          loopIndex: hit.loopIndex, edgeIndex: hit.edge.index, atFt: along }, editCtx());
+        if (!result.ok) { say(why(result.reason)); return; }
+        await commit(result);
+        say(`Broken at ${ft(Math.round(along))} — tap either part and push it.`);
+      });
+
+      const setBreaking = on => {
+        breaking = on;
+        breakBtn.setAttribute('aria-pressed', String(on));
+        c2.setAttribute('data-mode', on ? 'break' : 'edit');
+        if (on) say('BREAK: tap an edge where the corner goes — it lands on the nearest foot.');
+      };
+      breakBtn.addEventListener('click', () => setBreaking(!breaking));
+
+      const undoLast = queued(async () => {
+        if (!undo.length || readOnly()) return;
+        raw = undo.pop();
+        restack();
+        selected = null;
+        undoBtn.disabled = !undo.length;
+        paintLegend();
+        paintAll();
+        await save();
+        say('Undone.');
+      });
+      undoBtn.addEventListener('click', undoLast);
+
+      // A press on an edge picks it, and a drag pushes it -- in whole feet,
+      // square to itself, shown as it goes and done when the finger lifts.
+      const edgeUnder = (x, y) => {
+        const level = picked;
+        if (!level || !frame) return null;
+        return BE.edgeNear(level.loops, toWorld(x, y), 10 / frame.s);
+      };
+      c2.addEventListener('pointerdown', e => {
+        const box = c2.getBoundingClientRect();
+        const x = e.clientX - box.left, y = e.clientY - box.top;
+        const hit = edgeUnder(x, y);
+        if (!hit) { selected = null; paint2d(); return; }
+        if (breaking) { doBreak(hit, toWorld(x, y)); return; }
+        selected = { loopIndex: hit.loopIndex, edgeIndex: hit.edge.index };
+        paint2d();
+        if (!hit.edge.square) { say(why('NOT_SQUARE')); return; }
+        drag = { x, y, edge: hit.edge, feet: 0 };
+        c2.setPointerCapture(e.pointerId);
+        const len = ft(hit.edge.length);
+        say(`${picked.name}: ${len} edge picked — drag it, or use the arrow keys, a foot at a time.`);
+      });
+      c2.addEventListener('pointermove', e => {
+        if (!drag) return;
+        const box = c2.getBoundingClientRect();
+        const dx = e.clientX - box.left - drag.x, dy = e.clientY - box.top - drag.y;
+        const feet = Math.round((drag.edge.axis === 'x' ? dx : dy) / frame.s);
+        if (feet === drag.feet) return;
+        drag.feet = feet;
+        const result = feet ? BE.pushEdge(raw, { kind: picked.kind, levelId: picked.levelId,
+          loopIndex: selected.loopIndex, edgeIndex: selected.edgeIndex, deltaFt: feet }, editCtx()) : null;
+        preview = result && result.ok
+          ? { drawing: result.drawing, levels: BL.boneLevels(result.drawing, stack) } : null;
+        say(result ? (result.ok ? describe(result.report) : why(result.reason)) : '');
+        paintAll();
+      });
+      c2.addEventListener('pointerup', async () => {
+        const was = drag;
+        drag = null;
+        preview = null;
+        if (!was || !was.feet) { paintAll(); return; }
+        await push(was.feet);
+      });
+
+      const leaseWords = () => 'MODEL is open for editing in another tab — the bones can be looked at here but not changed.';
+
       window.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undoLast(); return; }
+        if (e.key === 'Escape') { setBreaking(false); selected = null; paint2d(); return; }
+        if (e.key.toLowerCase() === 'b' && !e.ctrlKey && !e.metaKey) { setBreaking(!breaking); return; }
+        const loop = selected && picked && picked.loops[selected.loopIndex];
+        const edge = loop && BE.edgeOf(loop.points, selected.edgeIndex);
+        // WITH AN EDGE PICKED the arrows push it a foot; without, left and
+        // right turn the 3D as before.
+        if (edge && edge.square) {
+          const step = { ArrowLeft: ['x', -1], ArrowRight: ['x', 1], ArrowUp: ['z', -1], ArrowDown: ['z', 1] }[e.key];
+          if (step && step[0] === edge.axis) { e.preventDefault(); push(step[1]); return; }
+          if (step) return;
+        }
         if (e.key === 'ArrowLeft') turn(-1);
         if (e.key === 'ArrowRight') turn(1);
       });
 
       // ── THE DRAWING ─────────────────────────────────────────────────
-      const raw = await load();
-      if (raw) {
-        const env = window.DraftCutViewEnv.buildCutViewEnv(raw, FORMAT.levels(raw.levels));
-        const stack = env ? window.DraftCutView.sectionLevelStack(env) : null;
-        levels = BL.boneLevels(raw, stack);
-      }
+      raw = await load();
+      if (raw) restack();
       if (levels.length) {
         // THE LOWEST FLOOR FIRST: it is where a house starts.
         picked = levels.find(l => l.kind === 'floor') || levels[0];
-        say('Tap a loop, or a level above, to see it flat on the right. ◀ ▶ or drag to turn.');
-      } else {
-        say('Nothing in the boneyard yet — draw or build a house in the MODEL space first.');
+        // THE LEASE, for editing. Refused means MODEL holds it in another tab.
+        if (S && S.claimLease) {
+          try {
+            const holderId = S.leaseHolderId();
+            const got = await S.claimLease(BUCKET, LEASE_SCOPE, holderId);
+            if (got && got.ok) {
+              lease = { scope: LEASE_SCOPE, holderId, generation: got.generation };
+              const beat = setInterval(async () => {
+                if (!lease) { clearInterval(beat); return; }
+                try {
+                  const again = await S.renewLease(BUCKET, LEASE_SCOPE, holderId);
+                  if (!again || !again.ok || again.generation !== lease.generation) { lease = null; say(leaseWords()); }
+                } catch { /* the next beat tries again */ }
+              }, S.LEASE_HEARTBEAT_MS || 3750);
+              window.addEventListener('pagehide', () => {
+                if (lease) S.releaseLease(BUCKET, LEASE_SCOPE, holderId).catch(() => {});
+              });
+            }
+          } catch { lease = null; }
+        }
+        document.body.dataset.boneyardEditable = lease ? '1' : '0';
       }
+      setBreaking(false);
+      if (!levels.length) say('Nothing in the boneyard yet — draw or build a house in the MODEL space first.');
+      else if (!lease) say(leaseWords());
+      else say('Tap a loop, or a level above, to see it flat on the right. Tap an edge there to push it; BREAK puts a corner on a foot mark.');
       paintLegend();
       paintAll();
       document.body.dataset.boneyardReady = '1';
-      window.addEventListener('resize', paintAll);
+      window.addEventListener('resize', () => { frame = null; paintAll(); });
       window.DraftShellBars.wireSkin({
         theme: window.__byTheme.theme,
         mode: window.__byTheme.mode,

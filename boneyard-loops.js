@@ -31,9 +31,32 @@ if (!window.DraftBoneyardLoops) {
     roof: '#ff8c1a',         // orange
   });
 
+  // Each loop keeps its outline's id: the BONEYARD's editor (boneyard-edit.js)
+  // breaks an edge by writing a corner into that outline.
   const loopsOn = (drawing, levelId) => ((drawing && drawing.outlines) || [])
     .filter(o => Number(o.levelId) === Number(levelId) && (o.points || []).length >= 3)
-    .map(o => ({ garage: o.garage === true, points: o.points.map(p => ({ x: Number(p.x), z: Number(p.z) })) }));
+    .map(o => ({ id: o.id, garage: o.garage === true,
+      points: o.points.map(p => ({ x: Number(p.x), z: Number(p.z) })) }));
+
+  // THE FOUNDATION'S OWN CONCRETE, chained wall to wall -- once the bones can
+  // be pushed, the foundation and the floor over it stop being one loop, and
+  // the concrete is where the foundation actually is. Null when the walls do
+  // not close (or there are none).
+  const concreteLoop = drawing => {
+    const E = window.DraftBoneyardEdit;
+    if (!E) return null;
+    const walls = ((drawing && drawing.walls) || []).filter(w => Number(w.levelId) === 1
+      && w.view === 'foundation' && w.body !== 'garage');
+    const pts = E.chainLoop(walls);
+    return pts ? { id: null, garage: false, points: pts } : null;
+  };
+  // The same loop either way round and from either corner.
+  const sameLoop = (a, b) => {
+    if (!a || !b || a.length !== b.length) return false;
+    const k = p => `${Math.round(p.x * 1000)},${Math.round(p.z * 1000)}`;
+    const set = new Set(a.map(k));
+    return b.every(p => set.has(k(p)));
+  };
 
   // EVERY LEVEL THAT HAS A BONE, bottom to top, each with its colour and the
   // height its loop stands at.
@@ -46,8 +69,14 @@ if (!window.DraftBoneyardLoops) {
     // THE FOUNDATION carries the house it holds up: its own outline where one
     // was drawn, otherwise the lowest floor's house footprint -- a garage
     // stands on a slab, not on the foundation wall.
+    // Where the concrete runs the same loop as the lowest floor, that floor's
+    // loop is drawn -- the same bone, from the same corner, as before.
     const own = loopsOn(drawing, 1);
-    const fdnLoops = own.length ? own : floors[0].loops.filter(l => !l.garage);
+    const lowest = floors[0].loops.filter(l => !l.garage);
+    const poured = concreteLoop(drawing);
+    const fdnLoops = own.length ? own
+      : (poured && !(lowest.length === 1 && sameLoop(poured.points, lowest[0].points))
+        ? [poured] : lowest);
     if (fdnLoops.length && stack.foundation) {
       out.push({ levelId: 1, kind: 'foundation', name: 'FOUNDATION',
         elev: stack.foundation.wallBottom, color: COLORS.foundation, loops: fdnLoops });
@@ -62,9 +91,27 @@ if (!window.DraftBoneyardLoops) {
     // The HIGHEST ceiling, not the last level in the list: a split's levels
     // do not climb in list order (cut-view.js splitFloorStack).
     const top = floors.reduce((hi, f) => (f.floor.wallTop > hi.floor.wallTop ? f : hi), floors[floors.length - 1]);
-    const roofLoops = top.loops.filter(l => !l.garage);
+    // THE ROOF'S OWN FOOTPRINT where it has one -- its eave brought back in by
+    // its overhang, which is the top floor's loop until a roof is pulled out
+    // on its own (a covered entry, a back deck).
+    const G = window.DraftGeometry2D;
+    const ownRoof = ((drawing && drawing.roofs) || []).find(r => r.sourceLevelId == null
+      && !r.garage && (r.points || []).length >= 3);
+    const inset = ownRoof && G && G.offsetOutlineVariable
+      ? G.offsetOutlineVariable(ownRoof.points.map(p => ({ x: Number(p.x), z: Number(p.z) })),
+        ownRoof.points.map((_, i) => -(Number((ownRoof.edgeOverhang || [])[i] ?? ownRoof.overhang) || 0)))
+        .map(p => ({ x: Math.round(p.x * 1e6) / 1e6, z: Math.round(p.z * 1e6) / 1e6 }))
+        // Two eave corners can come back in to one point (a bump's corner and
+        // the break beside it); one corner is kept.
+        .filter((p, i, all) => {
+          const q = all[(i + 1) % all.length];
+          return all.length < 2 || Math.hypot(p.x - q.x, p.z - q.z) > 1e-6;
+        })
+      : null;
+    const roofLoops = inset ? [{ id: ownRoof.id, garage: false, roof: true, points: inset }]
+      : top.loops.filter(l => !l.garage);
     if (roofLoops.length) {
-      out.push({ levelId: 7, kind: 'roof', name: 'ROOF',
+      out.push({ levelId: 7, kind: 'roof', name: 'ROOF', sourceLevelId: top.floor.id,
         elev: top.floor.wallTop, color: COLORS.roof, loops: roofLoops });
     }
     return out;
