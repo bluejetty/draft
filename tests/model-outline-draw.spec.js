@@ -134,6 +134,8 @@ test('the drive-thru offers to draw it, for a house and for a garage', async ({ 
   await expect(link).toHaveText('CLICK HERE to draw house OUTLINE');
   await link.click();
   await expect(page.locator('#drivethru'), 'the sign goes down').toHaveAttribute('data-shut', '');
+  // It takes a press until it has slid away -- the bone is under its path.
+  await expect(page.locator('#drivethru')).toBeHidden();
   await expect(page.locator('#strip-message')).toContainText('Trace your 1 STOREY');
 
   // A GARAGE: offered the same way, and the loop is the garage's.
