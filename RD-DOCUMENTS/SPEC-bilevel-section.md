@@ -290,6 +290,29 @@ floor-to-floor level. The garage slab sits 4" below the top of its concrete,
 which is 5 1/2" below the top of its sill, while the entry floor sits ABOVE
 the same sill. Level sills, floors about 15 1/2" apart.
 
+### The garage's grade beam, and where its walls stop (fixed 3 Oct 2026)
+
+Movie, 3 Oct, on E1/E4 of a built MODIFIED BILEVEL: "the grade beam is
+missing, the 1.5\" sill plate should match height and then 32\" grade beam
+below and the piles under the grade beam", and "the garage wall height also
+extends too high up. it should only go to the underside of the 2nd floor".
+
+- **The beam hangs off the house's own sill.** MODEL raised the garage's
+  concrete off the FOUNDATION level's 8'-0" default while the bilevel pours
+  5'-0" + sill, so the beam landed ~3 ft high -- wholly behind the garage's
+  siding, none of it below grade. `raiseGarageConcrete` now takes the split's
+  bearing (`houseTop`). On PROJECT's defaults: sill -5'-3 3/8" (the house
+  sill), concrete -5'-4 7/8" to -8'-0 7/8" -- 14" above grade, 18" below --
+  and the piles under it.
+- **A split's garage walls stop where the garage's own roof bears**: under a
+  room, the OVER GARAGE floor's underside (+4'-7"); with no room, the garage
+  roof's plate. The elevation had stood them to MAIN FL's ceiling, the storey
+  they are filed on. Asked of the roof rather than the walls' stored height,
+  because older bilevels stored those at the level default. Other types are
+  unchanged.
+- **Already-built bilevels keep their old garage concrete** until rebuilt from
+  the drive-thru; the wall-height fix shows on them at once.
+
 ## Types that do not exist yet, and when a garage storey needs its own level
 
 Movie, 5 Sep: *"later on we should actually make a 2 storey bilevel and also

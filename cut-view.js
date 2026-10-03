@@ -302,9 +302,10 @@ if (!window.DraftCutView) {
   // the drop unconditionally, with no split clause at all, so a frost-walled
   // bilevel was BUILT 2 ft down and DRAWN level. Exporting the rule is the
   // only version of this that cannot drift again.
+  const SPLIT_TYPES = Object.freeze(['bilevel', 'modifiedBilevel']);
   function garageSillDropFt(buildType, mode) {
     if (mode !== 'frostwall') return 0;
-    return ['bilevel', 'modifiedBilevel'].includes(buildType) ? 0 : GARAGE_SILL_BELOW_HOUSE_FT;
+    return SPLIT_TYPES.includes(buildType) ? 0 : GARAGE_SILL_BELOW_HOUSE_FT;
   }
   const envBuildType = env => (env && env.buildType ? env.buildType() : null);
 
@@ -1158,6 +1159,26 @@ if (!window.DraftCutView) {
     // (audit C5). The elevation path already groups this way.
     const garagesByLevel = {};
     const garageFor = wall => garageOfWall(wall, env, garagesByLevel);
+    // Where a garage's own roof bears, once per garage: null when it has none.
+    const roofBaseByGarage = new Map();
+    const garageRoofBase = garage => {
+      if (!roofBaseByGarage.has(garage)) {
+        const roof = env.roofs().find(r => {
+          const g = garageOfRoof(r, env);
+          if (g !== undefined) return !!g && sameGarageBody(g, garage);
+          // UNDECIDABLE BY SOURCE LINKS -- the premade build raises its roofs
+          // without them -- so the stored flag says it is a garage roof and
+          // where it stands says whose.
+          const pts = r.points || [];
+          if (r.garage !== true || pts.length < 3) return false;
+          const mid = { x: pts.reduce((a, q) => a + q.x, 0) / pts.length,
+            z: pts.reduce((a, q) => a + q.z, 0) / pts.length };
+          return pointInPolygon(mid, garage.points || []);
+        });
+        roofBaseByGarage.set(garage, roof ? roofBaseElev(roof, stack, env) : null);
+      }
+      return roofBaseByGarage.get(garage);
+    };
     env.walls().forEach(wall => {
       // BONEYARD shelf walls live on negative pseudo levels and are not in
       // the building at all.
@@ -1497,6 +1518,26 @@ if (!window.DraftCutView) {
     // stands on the garage's beam plate or slab, off the house floor stack.
     const garagesByLevel = {};
     const garageFor = wall => garageOfWall(wall, env, garagesByLevel);
+    // Where a garage's own roof bears, once per garage: null when it has none.
+    const roofBaseByGarage = new Map();
+    const garageRoofBase = garage => {
+      if (!roofBaseByGarage.has(garage)) {
+        const roof = env.roofs().find(r => {
+          const g = garageOfRoof(r, env);
+          if (g !== undefined) return !!g && sameGarageBody(g, garage);
+          // UNDECIDABLE BY SOURCE LINKS -- the premade build raises its roofs
+          // without them -- so the stored flag says it is a garage roof and
+          // where it stands says whose.
+          const pts = r.points || [];
+          if (r.garage !== true || pts.length < 3) return false;
+          const mid = { x: pts.reduce((a, q) => a + q.x, 0) / pts.length,
+            z: pts.reduce((a, q) => a + q.z, 0) / pts.length };
+          return pointInPolygon(mid, garage.points || []);
+        });
+        roofBaseByGarage.set(garage, roof ? roofBaseElev(roof, stack, env) : null);
+      }
+      return roofBaseByGarage.get(garage);
+    };
     const faces = [];
     const fdnFaces = [];
     env.walls().forEach(wall => {
@@ -1542,11 +1583,30 @@ if (!window.DraftCutView) {
       // back wall's windows showing through it. Only ever UP: a wall stored
       // shorter than its storey keeps the storey's top, as every one has.
       const ownTop = storey.floorTop + (Number(wall.topHeight) || 0);
-      const level = ownTop > storey.wallTop + 0.05 && storey.id === ENTRY_LEVEL_ID
+      const garage = garageFor(wall);
+      let level = ownTop > storey.wallTop + 0.05 && storey.id === ENTRY_LEVEL_ID
         ? { ...storey, wallTop: ownTop } : storey;
+      // ── A SPLIT'S GARAGE STOPS UNDER ITS OWN ROOF ────────────────────
+      //
+      // Movie, 3 Oct, on E4 of a MODIFIED BILEVEL: "the garage wall height
+      // also extends too high up. it should only go to the underside of the
+      // 2nd floor". The garage was drawn to MAIN FL's ceiling -- the storey
+      // it is filed on, a whole storey above where it stops -- and stood a
+      // wall over its own lean-to.
+      //
+      // ON A SPLIT THE GARAGE IS NOT THAT STOREY: it stands on the sill under
+      // ENTRY, and its walls stop where its own roof bears -- under a room,
+      // the OVER GARAGE floor's underside, which is where MODEL raises both
+      // the walls and that roof. Asked of the ROOF rather than the walls'
+      // stored height, because a bilevel saved before 3 Oct stored its garage
+      // walls at the level default and bore its roof at the plate; the roof
+      // is right on both. Every other house keeps the storey's top.
+      if (garage && SPLIT_TYPES.includes(envBuildType(env))) {
+        const plate = garageRoofBase(garage);
+        if (plate != null) level = { ...level, wallTop: plate };
+      }
       faces.push({
-        wall, u1: p1.u, u2: p2.u, depth: (p1.d + p2.d) / 2, level,
-        garage: garageFor(wall),
+        wall, u1: p1.u, u2: p2.u, depth: (p1.d + p2.d) / 2, level, garage,
       });
     });
     faces.sort((a, b) => a.depth - b.depth);   // viewer sits on +dir: far first
