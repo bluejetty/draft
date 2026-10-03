@@ -98,7 +98,10 @@ function loadDraftModules() {
     'cut-view.js',
     // AND THE BONEYARD'S EDITOR with what it reads: the floor-pull ladder in
     // tour.js and the bone loops it edits.
-    'tour.js', 'boneyard-edit.js', 'boneyard-loops.js']) {
+    'tour.js', 'boneyard-edit.js', 'boneyard-loops.js',
+    // AND THE TRACED HOUSE: a premade design built off the drafter's loops,
+    // with the dealer that places its windows.
+    'premade-plans.js', 'auto-windows.js', 'traced-plans.js']) {
     const full = path.join(ROOT, file);
     if (!fs.existsSync(full)) continue;
     const text = SOURCE_OVERRIDES && SOURCE_OVERRIDES[file] != null

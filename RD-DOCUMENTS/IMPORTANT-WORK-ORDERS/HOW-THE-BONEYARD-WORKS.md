@@ -487,8 +487,45 @@ back to MODEL, which plays the E1 rising reveal. A tap skips to E1.
   address) it stays, says it is empty, and offers PICK A HOUSE AT THE
   DRIVE-THRU.
 
-### Not in PR 3a (PR 3b)
-- Building the whole house from a traced outline (floor, roof, foundation,
-  beams, stairs, windows and doors). The BUILD card still raises walls only.
-- The garage step after the house trace, and the bilevel's entry placed
-  automatically after the garage.
+## PR 3b: the bone builds the traced house (built 3 Oct 2026)
+
+### The steps
+1. CLICK HERE to draw house OUTLINE (or pick a type, which arms the trace).
+2. Trace the main floor.
+3. If the type hangs a garage on the house (the + GARAGE types, ROOM OVER,
+   MODIFIED BILEVEL), the strip says "Now trace the garage" and the OUTLINE
+   tool stays armed for it.
+4. The strip says "Press the bone to build your ...". The bone's BUILD
+   builds the whole house like a premade one: walls, floors, concrete,
+   piles, roofs, beams and columns, stairs, dims, windows and doors, then the
+   bones grow and E1 grows.
+5. The traced loops come off the drawing with the build (the built outlines
+   stand in their place); one Ctrl+Z takes the house and puts them back.
+
+traced-plans.js turns the loops into the plan buildPremadePlan already
+reads, so there is one builder.
+
+### His rulings (3 Oct)
+- **Roofs:** a bungalow + garage, and a 2 STOREY with the room over the
+  garage, are ONE roof round both bodies. A garage on a lower plate (2 STOREY
+  + garage, the bilevels) keeps its own lower roof.
+- **The bilevel's entry** (12 x 6) is placed for him: straddling the garage
+  line on the front wall, as the premade does (the street half takes the
+  front door and the stair UP, the garage half the door from the garage and
+  the stair DOWN). A garage on the other side turns it left for right. With
+  no garage it is centred on the front wall.
+- **Room over the garage:** 18 ft of the garage at the house end; the rest
+  keeps its own lower roof.
+- **Windows and doors:** auto-windows.js's rules as they are -- a front door
+  in the widest stretch of front wall the garage leaves, windows dealt by the
+  module (one side wall may stay bare), the overhead door on the street face
+  (opposite the wall the garage hangs off the house by) and a man door.
+
+### A detached garage
+Traced as a garage outline and built on its own loop: walls, concrete, roof,
+overhead door and man door.
+
+### Refusals (said on the strip, nothing built)
+- A garage type with no garage traced.
+- A bilevel whose front wall has no straight 12 ft for the landing.
+- A room over a garage that is not a rectangle against the house.

@@ -1415,6 +1415,9 @@
      roofs count or what the heights are measured from, and that is a right
      window on one page and a wrong one on the other. -->
 <script src="./auto-windows.js"></script>
+<!-- A PREMADE DESIGN BUILT OFF THE DRAFTER'S OWN OUTLINE (BONEYARD PR 3):
+     the traced loops become the plan buildPremadePlan already reads. -->
+<script src="./traced-plans.js"></script>
 <!-- Where an ordered garage stands. A traced loop says where it goes by
      being traced; an autobuilt one has to be told, and that is a rule about
      buildings rather than about this page. -->
@@ -8772,8 +8775,10 @@
     return out;
   };
 
-  const buildOrderedGarage = order => {
-    if (!drawing || !order?.entry?.needsSize || !order.size) return null;
+  // `given` IS A GARAGE THE DRAFTER TRACED: its own corners and doors
+  // (traced-plans.js), and the trace records to put back on Ctrl+Z.
+  const buildOrderedGarage = (order, given = null) => {
+    if (!drawing || !order?.entry?.needsSize || (!order.size && !given?.corners)) return null;
     // THE LOWEST FLOOR LEVEL, NOT THE ACTIVE ONE -- the same fix the premade
     // house needed, and the other half of what Movie reported. A garage
     // ordered while looking at FOUNDATION had its STUD walls committed
@@ -8784,7 +8789,8 @@
     const storey = lowestFloorLevel();
     if (!storey) return null;
     const levelId = storey.id;
-    const corners = window.DraftGarageSite.plotFor(drawing, levelId, order.size);
+    const corners = given?.corners
+      || window.DraftGarageSite.plotFor(drawing, levelId, order.size);
     if (!corners) return null;
     drawing.outlines = drawing.outlines || [];
     const outline = {
@@ -8830,7 +8836,7 @@
     // AND THE WALL THICKNESS THIS PAGE FRAMED IT IN, because that is what
     // carries the end of the overhead door's lintel -- premade-plans.js sizes
     // the door to fit and cannot know what contextWallType handed back.
-    const openings = dealOpenings(
+    const openings = given?.openings ? dealOpenings(given.openings, walls, levelId) : dealOpenings(
       window.DraftPremadePlans.detachedGarageOpenings({
         widthFt: order.size.widthFt,
         depthFt: order.size.depthFt,
@@ -8870,7 +8876,8 @@
     // list of one rather than the branch learning two shapes.
     undoStack.push({ kind: 'built', walls: walls.concat(concrete.walls),
       outlines: [outline], list: drawing.outlines, openings,
-      items: concrete.items.concat(roof ? [roof] : []) });
+      items: concrete.items.concat(roof ? [roof] : []),
+      restored: given?.restore || [] });
     markDirty();
     paint();
     return outline;
@@ -10146,6 +10153,16 @@
   // press, since a garage tile alone does not arm a trace.
   let outlineGarage = false;
 
+  // ── THE TRACED HOUSE, STEP BY STEP (BONEYARD PR 3) ───────────────────
+  // Movie, 3 Oct: "main floor -> garage (if attached) -> bone builds, like
+  // the premade houses". The type picked on the board rides along with the
+  // trace, and each loop is kept as it closes; the bone then builds the
+  // whole house off them (traced-plans.js -> buildPremadePlan).
+  let tracedOrder = null;
+  let tracedHouse = null;
+  let tracedGarage = null;
+  let tracedMasters = [];
+
   const armOutline = (picked, { fromLink = false } = {}) => {
     // A DETACHED GARAGE PRESS IS NOT A HOUSE TRACE, and answering it with one
     // is worse than answering it with nothing. The old page sends those
@@ -10196,6 +10213,12 @@
     setTool('outline');
     outlineFamily = picked?.family ?? null;
     outlineGarage = isGarageChoice(picked);
+    // A NEW TYPE STARTS A NEW HOUSE: the loops of an earlier trace stay in
+    // the drawing, but they are not this order's.
+    tracedOrder = picked?.entry ? picked : null;
+    tracedHouse = null;
+    tracedGarage = null;
+    tracedMasters = [];
     sayTraceThe(picked);
     paint();
   };
@@ -10305,6 +10328,7 @@
     // a master whose points have no id at all once the old page loads it --
     // and it would look perfect until a corner was dragged.
     // A GARAGE'S LOOP SAYS SO, as the old page's garage masters do.
+    const closingGarage = outlineGarage;
     if (outlineGarage) spec.garage = true;
     const master = OM.storageMaster(spec);
     const levels = (drawing.levels || []);
@@ -10323,6 +10347,22 @@
     undoStack.push({ kind: 'add-outline', master, copies });
     outlineCorners = [];
     activeTool = RESTING_TOOL;
+    // THE NEXT STEP OF A TRACED HOUSE: the garage when the type hangs one
+    // on the house, else the bone.
+    if (tracedOrder) {
+      tracedMasters.push({ master, copies });
+      if (closingGarage) tracedGarage = tracedOutline;
+      else tracedHouse = tracedOutline;
+      const label = tracedOrder.entry?.label || 'house';
+      if (!closingGarage && window.DraftTracedPlans?.needsGarage(tracedOrder.entry?.id)) {
+        setTool('outline');
+        outlineFamily = tracedOrder.family ?? null;
+        outlineGarage = true;
+        sayOnStrip('Now trace the garage against the house — press each corner, then the first corner again to close.');
+      } else {
+        sayOnStrip(`Press the bone to build your ${isGarageChoice(tracedOrder) ? 'garage' : label}.`);
+      }
+    }
     markDirty();
     stripRefresh();
     paint();
@@ -10418,9 +10458,72 @@
     return walls;
   };
 
+  // ── THE WHOLE HOUSE OFF THE TRACE ──────────────────────────────────────
+  //
+  // When the trace was started from the board, the bone builds what the
+  // board would have built -- floors, concrete, roofs, beams, stairs, dims,
+  // windows and doors -- on the drafter's loops instead of the premade's
+  // (traced-plans.js). The trace records come off the drawing with it, the
+  // built outlines standing in their place, and one Ctrl+Z puts them back.
+  const TRACE_REFUSALS = Object.freeze({
+    NO_GARAGE: 'Trace the garage too — it is part of this house.',
+    NO_FRONT: 'The front wall needs a straight run of 12 ft for the entry.',
+    ROOM_NEEDS_RECTANGLE: 'The room over the garage needs a rectangular garage against the house.',
+  });
+  const traceStillThere = rec => !!rec && (drawing?.outlines || []).includes(rec);
+  const traceRestore = () => {
+    const restore = [];
+    tracedMasters.forEach(({ master, copies }) => {
+      const mi = (drawing.boneyardOutlines || []).indexOf(master);
+      if (mi >= 0) {
+        drawing.boneyardOutlines.splice(mi, 1);
+        restore.push({ list: drawing.boneyardOutlines, items: [master] });
+      }
+      const gone = copies.filter(copy => drawing.outlines.includes(copy));
+      gone.forEach(copy => drawing.outlines.splice(drawing.outlines.indexOf(copy), 1));
+      if (gone.length) restore.push({ list: drawing.outlines, items: gone });
+    });
+    return restore;
+  };
+  const buildTracedHouse = order => {
+    const TP = window.DraftTracedPlans;
+    if (!TP || !order?.entry) return null;
+    const pts = rec => rec.points.map(p => ({ x: p.x, z: p.z }));
+    if (isGarageChoice(order)) {
+      const loop = traceStillThere(tracedGarage) ? tracedGarage
+        : (traceStillThere(tracedHouse) ? tracedHouse : null);
+      const garage = loop ? TP.detachedFromTrace(pts(loop)) : null;
+      if (!garage) return null;
+      return buildOrderedGarage(order, { ...garage, restore: traceRestore() });
+    }
+    if (!traceStillThere(tracedHouse)) return null;
+    const plan = TP.planFromTrace({
+      entryId: order.entry.id,
+      house: pts(tracedHouse),
+      garage: traceStillThere(tracedGarage) ? pts(tracedGarage) : null,
+    });
+    if (plan.error) {
+      sayOnStrip(TRACE_REFUSALS[plan.error] || 'This trace cannot be built as that type.');
+      return null;
+    }
+    return buildPremadePlan(order, { plan, restore: traceRestore() });
+  };
+
   // THE SEAM'S FIRST LISTENER. It says buildServed when the house went up,
   // which is how the press learns it has been answered -- see fireBuild.
   window.ModelBuild.onBuild(() => {
+    if (tracedOrder && (traceStillThere(tracedHouse) || traceStillThere(tracedGarage))) {
+      const order = tracedOrder;
+      if (!builtFrontDown(buildTracedHouse)(order)) return;
+      tracedOrder = null;
+      tracedHouse = null;
+      tracedGarage = null;
+      tracedMasters = [];
+      window.ModelBuild.buildServed();
+      // AND THE SAME SHOW A PREMADE PRESS GETS: the bones grow, then E1.
+      presentBuild();
+      return;
+    }
     if (buildFromDrawnOutline()) window.ModelBuild.buildServed();
   });
 
@@ -13705,9 +13808,12 @@
     };
   };
 
-  const buildPremadePlan = order => {
+  // `given` IS A TRACED HOUSE: traced-plans.js's plan off the drafter's own
+  // loops, and the trace records the build takes off the drawing, to be put
+  // back by the same Ctrl+Z that takes the house.
+  const buildPremadePlan = (order, given = null) => {
     if (!drawing) return null;
-    const plan = window.DraftPremadePlans.planFor(order?.entry?.id);
+    const plan = given?.plan || window.DraftPremadePlans.planFor(order?.entry?.id);
     if (!plan) return null;
     // THE LOWEST FLOOR LEVEL, NOT THE ACTIVE ONE. A drafter standing on
     // FOUNDATION when he presses the bone is not asking for a house made of
@@ -14312,7 +14418,8 @@
       // that had them.
       restored: (sweptDims.length
         ? [{ list: drawing.dimensions, items: sweptDims }] : [])
-        .concat(sweptStructure),
+        .concat(sweptStructure)
+        .concat(given?.restore || []),
       // ONE PRESS IS STILL ONE UNDO, and the openings are part of that press.
       // Left out, Ctrl+Z would take the house and leave eleven windows and
       // doors hosted on walls that no longer exist -- records the loader drops
