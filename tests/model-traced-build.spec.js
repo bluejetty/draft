@@ -39,6 +39,9 @@ async function drawType(page, family, entry) {
   await page.locator(`[data-build-entry="${entry}"]`).click();
   await page.locator('#dt-outline').click();
   await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
+  // The sign slides down for 220 ms and takes a press until it is gone: a
+  // corner in its path would land on the sign, not the plan.
+  await expect(page.locator('#drivethru')).toBeHidden();
 }
 
 async function trace(page, corners) {
