@@ -419,7 +419,38 @@
             ctx.fillStyle = skin['accent-mark'] || '#ffb000';
             ctx.font = '12px "DM Mono", monospace';
             ctx.fillText(ft(len), (pa.x + pb.x) / 2 + 6, (pa.y + pb.y) / 2 - 6);
+            // AND THE TWO EDGES EITHER SIDE, which are the ones that stretch
+            // or shrink as this one is pushed. Movie, 4 Oct: "add the lengths
+            // to the 2 side lines connected to the wall that will move (so we
+            // can see the length change as they pull out or in)". Each sits
+            // just outside the loop, at its edge's middle, in the edge's own
+            // colour so it reads as that line's number and not the picked one's.
+            const n = loop.points.length;
+            const cx = loop.points.reduce((s, p) => s + p.x, 0) / n;
+            const cz = loop.points.reduce((s, p) => s + p.z, 0) / n;
+            const sides = [(selected.edgeIndex - 1 + n) % n, (selected.edgeIndex + 1) % n]
+              .filter((i, k, all) => i !== selected.edgeIndex && all.indexOf(i) === k)
+              .map(i => {
+                const p0 = loop.points[i], p1 = loop.points[(i + 1) % n];
+                const mid = { x: (p0.x + p1.x) / 2, z: (p0.z + p1.z) / 2 };
+                const L = Math.hypot(p1.x - p0.x, p1.z - p0.z);
+                const m = toScreen(mid), c = toScreen({ x: cx, z: cz });
+                const dx = m.x - c.x, dy = m.y - c.y, d = Math.hypot(dx, dy) || 1;
+                return { edgeIndex: i, lengthFt: Math.round(L * 1e4) / 1e4,
+                  x: m.x + (dx / d) * 10, y: m.y + (dy / d) * 10 };
+              });
+            ctx.fillStyle = level.color;
+            sides.forEach(side => {
+              const text = ft(side.lengthFt);
+              const w = ctx.measureText(text).width;
+              // Left of the anchor when the edge's outside is to the left.
+              ctx.fillText(text, side.x < (pa.x + pb.x) / 2 && side.x < toScreen({ x: cx, z: cz }).x
+                ? side.x - w : side.x, side.y + 4);
+            });
+            c2.setAttribute('data-side-lengths', JSON.stringify(sides.map(s => s.lengthFt)));
           }
+        } else {
+          c2.setAttribute('data-side-lengths', '[]');
         }
         c2.setAttribute('data-selected', selected ? JSON.stringify(selected) : '');
         c2.setAttribute('data-frame', JSON.stringify(frame));

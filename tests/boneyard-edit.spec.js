@@ -77,9 +77,13 @@ test('the arrows push the picked edge a foot at a time, and the house goes with 
   // The house's back wall, z = -20.
   await tapWorld(page, 0, -20);
   await expect(page.locator('#bones2d')).not.toHaveAttribute('data-selected', '');
+  // The two side edges carry their lengths (Movie, 4 Oct: "add the lengths to
+  // the 2 side lines connected to the wall that will move").
+  await expect(page.locator('#bones2d')).toHaveAttribute('data-side-lengths', '[40,40]');
   await page.keyboard.press('ArrowUp');
   await page.keyboard.press('ArrowUp');
   const d = await saved(page, 2);
+  await expect(page.locator('#bones2d')).toHaveAttribute('data-side-lengths', '[42,42]');
   const main = d.outlines.find(o => Number(o.levelId) === 3 && !o.garage);
   expect(span(main.points).z0, 'MAIN FL came out with the foundation').toBeCloseTo(-22, 4);
   const back = d.walls.filter(w => Math.abs(w.start.z + 22) < 1e-6 && Math.abs(w.end.z + 22) < 1e-6);
@@ -225,4 +229,22 @@ test('five quick presses are five saved pushes', async ({ page }) => {
   d = await saved(page, 6);
   main = d.outlines.find(o => Number(o.levelId) === 3 && !o.garage);
   expect(span(main.points).x1).toBeCloseTo(22, 4);
+});
+
+// AND THEY CHANGE WHILE THE EDGE IS STILL IN THE HAND, not only once it lands:
+// "so we can see the length change as they pull out or in".
+test('the side lengths follow a drag before it is let go', async ({ page }) => {
+  await boneyardOf(page, 'bungalow', 'bungalow');
+  await page.locator('[data-bone-level="FOUNDATION"]').click();
+  await tapWorld(page, 0, -20);
+  await expect(page.locator('#bones2d')).toHaveAttribute('data-side-lengths', '[40,40]');
+  const canvas = page.locator('#bones2d');
+  const frame = JSON.parse(await canvas.getAttribute('data-frame'));
+  const box = await canvas.boundingBox();
+  const at = p => [box.x + frame.ox + p.x * frame.s, box.y + frame.oy + p.z * frame.s];
+  await page.mouse.move(...at({ x: 0, z: -20 }));
+  await page.mouse.down();
+  await page.mouse.move(...at({ x: 0, z: -23 }), { steps: 6 });
+  await expect(canvas).toHaveAttribute('data-side-lengths', '[43,43]');
+  await page.mouse.up();
 });
