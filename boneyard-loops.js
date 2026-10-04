@@ -260,6 +260,8 @@ if (!window.DraftBoneyardLoops) {
     const oy = (h - (maxY - minY) * scale) / 2 - minY * scale;
     return {
       scale,
+      // Any other point at any height, onto the same screen: the posts.
+      at: (p, e) => { const q = project(p, e, deg); return { x: ox + q.x * scale, y: oy + q.y * scale }; },
       levels: raw.map(l => ({ ...l,
         polys: l.polys.map(poly => poly.map(p => ({ x: ox + p.x * scale, y: oy + p.y * scale }))),
         cut: l.cut.map(c => ({

@@ -658,13 +658,14 @@ if (!window.DraftRender2D) {
   // page that owns the answer.
   function drawColumn2D(ctx, toS, column, options = {}, env) {
     if (!column?.point) return;
-    const { footing = null, centreOnly = false, preview = false } = options;
+    const { footing = null, centreOnly = false, preview = false, sizeIn: ownSizeIn = null } = options;
     const origin = toS({ x: 0, y: column.point.y || 0, z: 0 });
     const unit = toS({ x: 1, y: column.point.y || 0, z: 0 });
     const pxPerFt = Math.max(0.001, Math.hypot(unit.x - origin.x, unit.y - origin.y));
     const c = toS(column.point);
     const pile = footing?.pile === true;
-    const sizeIn = pile ? (footing.sizeIn || 6) : COLUMN_SIZE_IN;
+    // A post on a pile (cut-view.js pilePosts) is a 6x6, not a telepost.
+    const sizeIn = pile ? (footing.sizeIn || 6) : (ownSizeIn || COLUMN_SIZE_IN);
     const half = Math.max(2.5, (sizeIn / 12) * pxPerFt / 2);
 
     ctx.save();

@@ -196,6 +196,18 @@
         } catch { return null; }
       };
 
+      // The posts a drawing's piles carry, once per drawing: a drag paints
+      // many times over one preview.
+      const posts = new WeakMap();
+      const postsOf = drawing => {
+        if (!drawing || !stack || !window.DraftCutView.pilePosts) return [];
+        if (!posts.has(drawing)) {
+          const env = window.DraftCutViewEnv.buildCutViewEnv(drawing, FORMAT.levels(drawing.levels));
+          posts.set(drawing, env ? window.DraftCutView.pilePosts(env, window.DraftCutView.sectionLevelStack(env)) : []);
+        }
+        return posts.get(drawing);
+      };
+
       const restack = () => {
         const env = window.DraftCutViewEnv.buildCutViewEnv(raw, FORMAT.levels(raw.levels));
         stack = env ? window.DraftCutView.sectionLevelStack(env) : null;
@@ -273,6 +285,23 @@
           const on = picked && picked.kind === level.kind && picked.levelId === level.levelId;
           strokeCut(ctx, level.cut, level.color, on ? 3 : 1.6);
         });
+        // THE POSTS (Movie, 4 Oct: "show me the veritical stick"): a pile out
+        // in the open carries a post up to what it holds -- cut-view.js's
+        // pilePosts, the same answer the elevations draw -- stood here as a
+        // stick from the top of the concrete to that floor or roof, in that
+        // bone's colour.
+        const sticks = laid.at ? postsOf(preview ? preview.drawing : raw) : [];
+        ctx.lineWidth = 1.6;
+        sticks.forEach(post => {
+          const a = laid.at(post.point, post.foot), b = laid.at(post.point, post.top);
+          const held = post.carries === 'roof' ? null
+            : laid.levels.find(l => l.kind !== 'roof' && Number(l.levelId) === Number(post.levelId));
+          ctx.strokeStyle = held ? held.color : BL.COLORS.roof;
+          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        });
+        c3.setAttribute('data-posts', JSON.stringify(sticks.map(post => ({
+          x: post.point.x, z: post.point.z, foot: Number(post.foot.toFixed(4)),
+          top: Number(post.top.toFixed(4)), carries: post.carries }))));
         c3.setAttribute('data-openings', openingsAttr(laid.levels));
         document.getElementById('angle').textContent = `${angle}°`;
         c3.setAttribute('data-angle', String(angle));

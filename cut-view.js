@@ -1263,6 +1263,68 @@ if (!window.DraftCutView) {
     return roofBaseElev(roof, stack, env) + ROOF_FASCIA_IN / 12;
   }
 
+  // ── A PILE OUT IN THE OPEN CARRIES A POST ──────────────────────────────
+  //
+  // Movie, 4 Oct, on EXT FINISH after pulling a roof out in BONEYARD: "a pile
+  // was added under the roof i extended but no POST/ Column going from the
+  // pile to the roof", then "when piles are generated also add a column to
+  // the bottom of whatever is being supported", and "make the top of pile /
+  // bottom of column level with the top of concrete".
+  //
+  // DERIVED, NOT STORED. A pile record is already a column on a pile footing
+  // -- the post is that same column's shaft above the concrete, and what it
+  // holds is a question the drawing answers every time it is asked: the
+  // lowest floor or roof over its point. Stored, a second record would have
+  // to follow every push, and every drawing made before today would stand
+  // its piles bare.
+  //
+  // ONLY A PILE IN THE OPEN. One inside or on a foundation outline -- the
+  // house's or the garage's -- stands under concrete, and what it carries is
+  // the beam or the slab, not a post; the overhang ladder puts its piles
+  // strictly outside the wall it pushes off. Tour-placed piles (`auto`) are
+  // the garage's grade beam piles and are left alone.
+  //
+  // 6x6, 5 1/2" square, from the top of the concrete (the house's bearing
+  // line less its sill plate) up to the underside of what it carries: a
+  // floor's underside, or the roof's bearing line.
+  const POST_SIZE_IN = 5.5;
+  function pilePosts(env, stack) {
+    if (!stack || !env || !env.columns) return [];
+    const foot = stack.foundation.wallTop - houseSillPlateFt();
+    const near = (p, pts, tol) => pts.some((a, i) => {
+      const b = pts[(i + 1) % pts.length];
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const len2 = dx * dx + dz * dz;
+      const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2)) : 0;
+      return Math.hypot(p.x - (a.x + t * dx), p.z - (a.z + t * dz)) <= tol;
+    });
+    const over = (p, pts) => pointInPolygon(p, pts) || near(p, pts, 0.05);
+    const floors = (env.floors() || []).filter(f => f.points && f.points.length >= 3);
+    const concrete = floors.filter(f => (f.view || 'plan') === 'foundation');
+    const decks = floors
+      .filter(f => (f.view || 'plan') !== 'foundation' && !f.garage)
+      .map(f => ({ pts: f.points, level: stack.floors.find(l => Number(l.id) === Number(f.levelId)) }))
+      .filter(d => d.level);
+    const roofs = (env.roofs() || []).filter(r => r.points && r.points.length >= 3);
+    return env.columns()
+      .filter(c => (c.view || 'plan') === 'foundation' && c.point && c.auto !== true
+        && String(c.footing || '').startsWith('pile'))
+      .map(column => {
+        const p = column.point;
+        if (concrete.some(f => over(p, f.points))) return null;
+        const carried = [
+          ...decks.filter(d => over(p, d.pts)).map(d => ({ top: d.level.floorBottom, levelId: d.level.id })),
+          ...roofs.filter(r => over(p, r.points)).map(r => ({ top: roofBaseElev(r, stack, env), roof: r })),
+        ];
+        if (!carried.length) return null;
+        const held = carried.reduce((low, c) => (c.top < low.top ? c : low));
+        if (held.top <= foot + 0.01) return null;
+        return { column, point: p, foot, top: held.top, sizeIn: POST_SIZE_IN,
+          carries: held.roof ? 'roof' : 'floor', levelId: held.levelId ?? null };
+      })
+      .filter(Boolean);
+  }
+
   // Roof surface height over a plan point, from the roof's REAL face
   // polygons (geometry-2d builds them off the straight skeleton): locate the
   // containing face, evaluate its plane. The old rule — min over every eave
@@ -3474,7 +3536,11 @@ if (!window.DraftCutView) {
       .filter(column => (column.view || 'plan') === 'foundation'
         && String(column.footing || '').startsWith('pile')
         && column.point);
+    // A pile carrying a post is drawn with its post, after the roof.
+    const posts = pilePosts(env, stack);
+    const postOf = new Set(posts.map(post => post.column));
     pileColumns.forEach(column => {
+      if (postOf.has(column)) return;
       const u = column.point.x * axis.x + column.point.z * axis.z;
       if (u < uMin - 0.5 || u > uMax + 0.5) return;
       const over = fdnGeoms.filter(g => g.lo - 0.5 <= u && u <= g.hi + 0.5);
@@ -6064,6 +6130,55 @@ if (!window.DraftCutView) {
       });
     }
 
+    // ── THE POSTS, AND THE PILES UNDER THEM ─────────────────────────────
+    //
+    // pilePosts says which piles carry a post and how high it goes. Painted
+    // LAST, after the walls and the roof: a post out in the open stands in
+    // front of the house it holds up, and painted with the piles it would be
+    // under every wall face that follows. Behind the house it is hidden the
+    // way a pile is -- by a foundation nearer than it over its station --
+    // and here by ANY nearer concrete, since a post is no part of the
+    // garage's beam arrangement the way the garage's own piles are.
+    //
+    // The post is solid, 5 1/2" wide, from the top of the concrete up to
+    // what it carries; the pile is its own width, solid above grade and
+    // dashed below it down off the sheet, as every pile is.
+    const drawn = [];
+    posts.forEach(post => {
+      const u = post.point.x * axis.x + post.point.z * axis.z;
+      if (u < uMin - 0.5 || u > uMax + 0.5) return;
+      const depth = post.point.x * dir.x + post.point.z * dir.z;
+      if (fdnGeoms.some(g => g.depth > depth + 1 && u > g.lo + 0.05 && u < g.hi - 0.05)) return;
+      const bh = window.DraftBuildHouse;
+      const pileHalf = ((bh && bh.footingFor(post.column.footing).sizeIn) || 12) / 24;
+      const half = post.sizeIn / 24;
+      // A box in model feet, filled and outlined as one path.
+      const box = (u0, u1, e0, e1, fill) => {
+        ctx.beginPath();
+        ctx.moveTo(X(u0), Y(e0)); ctx.lineTo(X(u1), Y(e0));
+        ctx.lineTo(X(u1), Y(e1)); ctx.lineTo(X(u0), Y(e1));
+        ctx.closePath();
+        ctx.fillStyle = fill; ctx.fill();
+        ctx.strokeStyle = INK; ctx.lineWidth = 1; ctx.stroke();
+      };
+      ctx.setLineDash([]);
+      // The pile's head above grade, then its shaft below, dashed.
+      if (post.foot > fdn.grade) box(u - pileHalf, u + pileHalf, fdn.grade, post.foot, C.faceShade);
+      ctx.strokeStyle = ink(0.5); ctx.lineWidth = 1;
+      ctx.setLineDash([5, 4]);
+      [u - pileHalf, u + pileHalf].forEach(edge => {
+        ctx.beginPath();
+        ctx.moveTo(X(edge), Y(Math.min(fdn.grade, post.foot)));
+        ctx.lineTo(X(edge), Y(yBottom));
+        ctx.stroke();
+      });
+      ctx.setLineDash([]);
+      box(u - half, u + half, post.foot, post.top, C.face);
+      drawn.push({ u: Number(u.toFixed(3)), foot: Number(post.foot.toFixed(4)),
+        top: Number(post.top.toFixed(4)), carries: post.carries });
+    });
+    if (ctx.canvas && ctx.canvas.setAttribute) ctx.canvas.setAttribute('data-posts', JSON.stringify(drawn));
+
     // Grade, heavy, straight across the sheet — the exposed concrete stands
     // on it and everything below it reads dashed.
     ctx.strokeStyle = INK; ctx.lineWidth = 2;
@@ -6111,6 +6226,8 @@ if (!window.DraftCutView) {
     faceSillFt,
     roofBaseElev,
     roofEaveElev,
+    pilePosts,
+    POST_SIZE_IN,
     garageBearing,
     garageConcreteTop,
     garageSlabTop,
