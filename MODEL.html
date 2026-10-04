@@ -7704,34 +7704,87 @@
   // selects nothing, which is correct and would look exactly like a bug if it
   // were not written down.
   let bandDrag = null;
+  // THE ITEMS-MODE BOX, live while a left drag from empty sheet is under way
+  // (Movie, 4 Oct: "drag box select"). Its own variable rather than a field on
+  // the pan's `dragging`, which is declared far below the painter.
+  let itemBox = null;
 
-  const enclosedBy = (a, b) => {
-    const minX = Math.min(a.x, b.x), maxX = Math.max(a.x, b.x);
-    const minZ = Math.min(a.z, b.z), maxZ = Math.max(a.z, b.z);
-    const inside = pt => pt && pt.x >= minX && pt.x <= maxX
-      && pt.z >= minZ && pt.z <= maxZ;
-    // ALL LEVELS reads the whole collection; WINDOW reads what is on screen.
-    const all = selectionMode === 'window-all';
+  // ── WHAT A BOX CAN CATCH: every type hitAt picks ─────────────────────────
+  //
+  // Movie, 4 Oct: the box catches "every pickable type", and the OBJECT TYPE
+  // filter still narrows it. Each item is its outline in plan feet: a wall or
+  // a line is its centre line, an area its ring, a door/window or fixture the
+  // quad the painter draws, a stair its flights and landing, a tag the box
+  // its text paints in.
+  const boxShapes = all => {
     const scope = (key, onScreen) => (all ? (drawing?.[key] || []) : onScreen());
     const out = [];
-    if (filterAllows('wall')) {
-      scope('walls', walls).forEach(item => {
-        if (inside(item.start) && inside(item.end)) out.push({ type: 'wall', item });
+    const seg = item => [[item.start, item.end]];
+    const ring = item => [(item.points || []).filter(Boolean)];
+    if (filterAllows('wall')) scope('walls', walls).forEach(item => out.push({ type: 'wall', item, parts: seg(item), open: true }));
+    if (filterAllows('line')) scope('lines', lines).forEach(item => out.push({ type: 'line', item, parts: seg(item), open: true }));
+    if (filterAllows('floor')) scope('floors', floors).forEach(item => out.push({ type: 'floor', item, parts: ring(item) }));
+    // THE OTHERS ARE THIS LEVEL'S: what the sheet paints is what a box drawn
+    // on it can mean. ALL LEVELS reaches them through their walls' levels
+    // only where a record is filed that way, so it keeps the three it had.
+    if (all) return out;
+    if (filterAllows('outline')) outlines().forEach(item => out.push({ type: 'outline', item, parts: ring(item) }));
+    if (filterAllows('shape')) shapes().forEach(item => out.push({ type: 'shape', item, parts: ring(item) }));
+    if (filterAllows('roof')) roofs().forEach(item => out.push({ type: 'roof', item, parts: ring(item) }));
+    if (filterAllows('fenestration')) {
+      openingsOn(walls()).forEach(({ opening, geometry }) =>
+        out.push({ type: 'fenestration', item: opening, parts: [geometry.corners] }));
+    }
+    if (filterAllows('fixture') && window.DraftFixtureGeometry) {
+      const host = drawing?.walls || [];
+      fixtures().forEach(item => {
+        const geo = window.DraftFixtureGeometry.fixtureGeometry(host, item);
+        if (geo) out.push({ type: 'fixture', item, parts: [geo.corners, ...(geo.decks || [])] });
       });
     }
-    if (filterAllows('line')) {
-      scope('lines', lines).forEach(item => {
-        if (inside(item.start) && inside(item.end)) out.push({ type: 'line', item });
-      });
+    if (filterAllows('stair')) {
+      const levels = stairLevels();
+      stairs().forEach(item => out.push({ type: 'stair', item, parts: stairRings(item, levels) }));
     }
-    if (filterAllows('floor')) {
-      scope('floors', floors).forEach(item => {
-        const pts = (item.points || []).filter(Boolean);
-        if (pts.length >= 3 && pts.every(inside)) out.push({ type: 'floor', item });
+    if (filterAllows('roomtag') && roomTagsShown()) {
+      roomTags().forEach(item => {
+        const b = roomTagBox(item);
+        out.push({ type: 'roomtag', item, parts: [[toWorld(b.left, b.top), toWorld(b.right, b.top),
+          toWorld(b.right, b.bottom), toWorld(b.left, b.bottom)]] });
       });
     }
     return out;
   };
+
+  // ENCLOSED takes what lies wholly inside; CROSSING also takes what the box
+  // touches -- a corner inside, or an edge across one of the box's own.
+  const boxCatch = (a, b, { crossing = false, all = false } = {}) => {
+    const minX = Math.min(a.x, b.x), maxX = Math.max(a.x, b.x);
+    const minZ = Math.min(a.z, b.z), maxZ = Math.max(a.z, b.z);
+    const inside = pt => pt && pt.x >= minX && pt.x <= maxX && pt.z >= minZ && pt.z <= maxZ;
+    const box = [{ x: minX, z: minZ }, { x: maxX, z: minZ }, { x: maxX, z: maxZ }, { x: minX, z: maxZ }];
+    const cross = (p, q, r, t) => {
+      const d = (u, v, w) => (v.x - u.x) * (w.z - u.z) - (v.z - u.z) * (w.x - u.x);
+      const d1 = d(r, t, p), d2 = d(r, t, q), d3 = d(p, q, r), d4 = d(p, q, t);
+      return ((d1 > 0) !== (d2 > 0)) && ((d3 > 0) !== (d4 > 0));
+    };
+    const edges = (pts, open) => {
+      const list = [];
+      const n = open ? pts.length - 1 : pts.length;
+      for (let i = 0; i < n; i += 1) list.push([pts[i], pts[(i + 1) % pts.length]]);
+      return list;
+    };
+    return boxShapes(all).filter(({ parts, open }) => {
+      const rings = parts.filter(p => p && p.length >= (open ? 2 : 3) && p.every(Boolean));
+      if (!rings.length) return false;
+      if (rings.every(p => p.every(inside))) return true;
+      if (!crossing) return false;
+      return rings.some(p => p.some(inside) || edges(p, open).some(([u, v]) =>
+        edges(box, false).some(([r, t]) => cross(u, v, r, t))));
+    }).map(({ type, item }) => ({ type, item }));
+  };
+  // The WINDOW modes' own rule, unchanged: fully enclosed.
+  const enclosedBy = (a, b) => boxCatch(a, b, { all: selectionMode === 'window-all' });
 
   // Blue for the current level, red for every level -- the two colours the
   // mode help promises in words, so the box a drafter sees matches the
@@ -7739,13 +7792,19 @@
   const bandInk = selMode => (selMode === 'window-all'
     ? skin['draw-selected-all'] : skin['draw-selected']);
 
+  // THE ITEMS BOX SAYS WHICH IT IS (Movie, 4 Oct, CAD style): dragged left to
+  // right it is a solid blue window, right to left a dashed green crossing.
+  const boxIsCrossing = band => toS(band.to).x < toS(band.from).x;
   const paintBand = () => {
-    if (!bandDrag || !bandDrag.active) return;
-    const a = toS(bandDrag.from), b = toS(bandDrag.to);
+    const band = bandDrag || itemBox;
+    if (!band || !band.active) return;
+    const a = toS(band.from), b = toS(band.to);
     ctx.save();
-    ctx.strokeStyle = bandInk(selectionMode);
+    const itemsBox = band === itemBox;
+    const crossing = itemsBox && boxIsCrossing(band);
+    ctx.strokeStyle = crossing ? skin['draw-selected-cross'] : bandInk(selectionMode);
     ctx.lineWidth = 1;
-    ctx.setLineDash([4, 3]);
+    ctx.setLineDash(itemsBox && !crossing ? [] : [4, 3]);
     ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y),
       Math.abs(b.x - a.x), Math.abs(b.y - a.y));
     ctx.restore();
@@ -15822,8 +15881,9 @@
     { id: 'window-all', label: 'ALL LEVELS' },
   ];
   const MODE_HELP = {
-    click: 'Click items to select; Shift adds or removes. Press and drag for a '
-      + 'blue window — hold Shift while dragging for a red all-levels window.',
+    click: 'Click items to select; Shift adds or removes. Drag left to right for a '
+      + 'blue box of what it encloses, right to left for a green box of what it '
+      + 'crosses. Right-drag (two fingers) pans.',
     window: 'Drag a blue box to select fully enclosed items on the current level.',
     'window-all': 'Drag a red box to select fully enclosed items on every level.',
   };
@@ -17763,14 +17823,49 @@
   // when there is nothing to cancel -- but the repaint only when something
   // actually changed, because a full canvas redraw for a press that did
   // nothing is the cost the hover branch's note is about.
+  // THE CANCEL NOW RIDES THE RIGHT BUTTON'S RELEASE (endDrag), so a right DRAG
+  // can pan without putting the gesture down. The menu is still refused here.
   canvas.addEventListener('contextmenu', e => {
     e.preventDefault();
-    if (!cancelGestures()) return;
-    stripRefresh();
-    paint();
   });
 
+  // ── PANNING WITHOUT THE LEFT BUTTON (Movie, 4 Oct) ─────────────────────
+  //
+  // A left drag on empty sheet now draws the selection box, so the pan moves:
+  // the RIGHT button drags the sheet (a right click that does not travel
+  // still puts the gesture down, as it always has), and on a touch screen
+  // TWO FINGERS drag it. `touchPts` is every finger on the glass.
+  const touchPts = new Map();
+  let twoPan = null;
+  const touchMid = () => {
+    const pts = [...touchPts.values()];
+    return { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+  };
+  const startPan = (x, y, extra = {}) => ({ sx: x, sy: y, cx: view.cx, cz: view.cz, moved: 0, ...extra });
   canvas.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'touch') {
+      touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      // THE SECOND FINGER TAKES THE GESTURE: whatever the first began (a box,
+      // a pan, a grab not yet armed) is dropped, and the two pan together.
+      if (touchPts.size === 2) {
+        bandDrag = null;
+        itemBox = null;
+        moveDrag = null;
+        dragging = null;
+        const m = touchMid();
+        twoPan = startPan(m.x, m.y);
+        canvas.setPointerCapture(e.pointerId);
+        paint();
+        return;
+      }
+      if (touchPts.size > 2) return;
+    }
+    if (e.button === 2) {
+      dragging = startPan(e.clientX, e.clientY, { pan: true });
+      canvas.classList.add('dragging');
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
     // THE LEFT BUTTON DRAWS. Nothing asked which button until now, so a
     // right-click placed a wall point on its way to opening a menu, and a
     // middle-click did whatever the left one would have. The contextmenu
@@ -17986,11 +18081,30 @@
     // could grab this" about a corner already in hand.
     canvas.classList.remove('over-corner', 'over-wall');
     if (hoverCorner) { hoverCorner = null; paint(); }
-    dragging = { sx: e.clientX, sy: e.clientY, cx: view.cx, cz: view.cz, moved: 0 };
-    canvas.classList.add('dragging');
+    dragging = startPan(e.clientX, e.clientY);
+    // WITH SELECT IN HAND THE DRAG IS A BOX, not a pan (Movie, 4 Oct). A press
+    // that never travels is still the click below; the box arms at the same
+    // 4px a corner drag does.
+    if (activeTool === RESTING_TOOL) {
+      itemBox = { from: at, to: at, active: false };
+      dragging.box = itemBox;
+    } else {
+      canvas.classList.add('dragging');
+    }
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener('pointermove', e => {
+    if (e.pointerType === 'touch' && touchPts.has(e.pointerId)) {
+      touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (twoPan && touchPts.size >= 2) {
+        const m = touchMid();
+        view.cx = twoPan.cx - (m.x - twoPan.sx) / view.scale;
+        view.cz = twoPan.cz - (m.y - twoPan.sy) / view.scale;
+        paint();
+        return;
+      }
+    }
+    if (twoPan) return;
     if (bandDrag) {
       // The same 4px arm the corner drag uses: under that it is a click, and a
       // one-pixel box that selects nothing is indistinguishable from a tap
@@ -18165,11 +18279,26 @@
     }
     dragging.moved = Math.max(dragging.moved,
       Math.hypot(e.clientX - dragging.sx, e.clientY - dragging.sy));
+    if (dragging.box) {
+      const rect = canvas.getBoundingClientRect();
+      dragging.box.to = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+      if (dragging.moved > DRAG_ARM_PX) dragging.box.active = true;
+      if (dragging.box.active) paint();
+      return;
+    }
     view.cx = dragging.cx - (e.clientX - dragging.sx) / view.scale;
     view.cz = dragging.cz - (e.clientY - dragging.sy) / view.scale;
     paint();
   });
   const endDrag = e => {
+    if (e && e.pointerType === 'touch') {
+      touchPts.delete(e.pointerId);
+      if (twoPan) {
+        if (touchPts.size < 2) twoPan = null;
+        if (canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+        return;
+      }
+    }
     if (bandDrag) {
       const band = bandDrag;
       bandDrag = null;
@@ -18286,6 +18415,34 @@
       return;
     }
     if (!dragging) return;
+    // THE RIGHT BUTTON PANS; one that did not travel is the right CLICK, which
+    // puts the gesture in hand down, as it did before the pan moved here.
+    if (dragging.pan) {
+      if (dragging.moved <= 4 && cancelGestures()) { stripRefresh(); paint(); }
+      dragging = null;
+      canvas.classList.remove('dragging');
+      if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+      return;
+    }
+    // THE BOX: left to right takes what it encloses, right to left what it
+    // crosses too; Shift adds to the selection, as a Shift-click does.
+    if (dragging.box && dragging.box.active) {
+      const box = dragging.box;
+      itemBox = null;
+      dragging = null;
+      if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+      const caught = [];
+      boxCatch(box.from, box.to, { crossing: boxIsCrossing(box) })
+        .forEach(entry => withGroup(entry).forEach(w => {
+          if (!caught.some(c => c.item === w.item)) caught.push(w);
+        }));
+      setSelection(e && e.shiftKey
+        ? selection.concat(caught.filter(c => !selection.some(entry => entry.item === c.item)))
+        : caught);
+      paint();
+      return;
+    }
+    itemBox = null;
     // A CLICK SELECTS, A DRAG PANS, and the difference is 4px of travel. Every
     // pointerdown starts a pan here -- it has since tier 1 -- so selection
     // cannot take pointerdown without taking panning with it. Deciding on

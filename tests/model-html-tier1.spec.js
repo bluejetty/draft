@@ -604,11 +604,12 @@ test.describe('MODEL.html tier 1', () => {
 
     // Panning changes what is under the canvas centre, so the ink pattern has
     // to move. A pan that silently did nothing would still pass a scale check.
+    // WITH THE RIGHT BUTTON since 4 Oct: a left drag in SELECT is the box.
     const inkBefore = await wallInk(page);
     await page.mouse.move(cx, cy);
-    await page.mouse.down();
+    await page.mouse.down({ button: 'right' });
     await page.mouse.move(cx + 260, cy + 160, { steps: 8 });
-    await page.mouse.up();
+    await page.mouse.up({ button: 'right' });
     const inkAfter = await wallInk(page);
     expect(inkAfter).not.toBe(inkBefore);
   });
