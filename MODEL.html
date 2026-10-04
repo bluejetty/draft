@@ -2595,6 +2595,29 @@
     columns().forEach(column => R.drawColumn2D(ctx, toS, column, {
       footing: B ? B.footingFor(column.footing) : null,
     }, env));
+    // ── AND THE POSTS STANDING ON PILES OUT IN THE OPEN ─────────────────
+    //
+    // Movie, 4 Oct: "when piles are generated also add a column to the
+    // bottom of whatever is being supported". cut-view.js pilePosts says
+    // which piles carry one and how high; a post is on the WALLS plan of
+    // every storey it passes through -- a roof's post on the main floor
+    // under a porch roof, and on the second floor too when it climbs to a
+    // roof up there. A post that only reaches the main floor's underside
+    // stands in no storey and is on no floor plan.
+    if (activeViewId() === 'plan' && Number(activeLevelId()) !== 1
+      && (drawing?.columns || []).some(c => c.view === 'foundation' && c.auto !== true
+        && String(c.footing || '').startsWith('pile'))) {
+      const CV = window.DraftCutView;
+      const cEnv = CV && cutEnv();
+      const stack = cEnv && CV.sectionLevelStack(cEnv);
+      const level = stack && stack.floors.find(l => Number(l.id) === Number(activeLevelId()));
+      if (level) {
+        CV.pilePosts(cEnv, stack)
+          .filter(post => post.top > level.floorTop + 0.01 && post.foot < level.wallTop - 0.01)
+          .forEach(post => R.drawColumn2D(ctx, toS, { point: post.point },
+            { sizeIn: post.sizeIn }, env));
+      }
+    }
   };
 
   // ── WHAT IS OPEN IN THE FLOOR ABOVE ────────────────────────────────────────

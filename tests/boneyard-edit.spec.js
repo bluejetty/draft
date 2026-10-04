@@ -262,3 +262,26 @@ test('the 2D window shows the other bones faded under the picked one', async ({ 
   // The roof's own floor is the dashed one; the foundation is faded.
   await expect(page.locator('#bones2d')).toHaveAttribute('data-faded', '["FOUNDATION"]');
 });
+
+// Movie, 4 Oct: "a pile was added under the roof i extended but no POST/
+// Column going from the pile to the roof" ... "show me the veritical stick".
+test('a roof pulled out onto piles stands a post on each, up to the roof', async ({ page }) => {
+  await boneyardOf(page, 'bungalow', 'bungalow');
+  await page.locator('[data-bone-level="ROOF"]').click();
+  // The roof's front edge, over the wall at z = 20.
+  await tapWorld(page, 0, 20);
+  await expect(page.locator('#bones2d')).not.toHaveAttribute('data-selected', '');
+  for (let i = 0; i < 3; i += 1) await page.keyboard.press('ArrowDown');
+  const d = await saved(page, 3);
+  const piles = d.columns.filter(c => c.pileMark === 'P1');
+  expect(piles.length, 'piles under the roof').toBeGreaterThan(0);
+  const posts = JSON.parse(await page.locator('#bones3d').getAttribute('data-posts'));
+  expect(posts.length, 'one stick per pile').toBe(piles.length);
+  const bones = JSON.parse(await page.locator('#bones3d').getAttribute('data-bones'));
+  const roof = bones.find(b => b.kind === 'roof');
+  posts.forEach(p => {
+    expect(p.carries).toBe('roof');
+    expect(p.top, 'up to the roof bone').toBeCloseTo(roof.elev, 3);
+    expect(p.foot, 'from the top of the concrete').toBeLessThan(p.top);
+  });
+});
