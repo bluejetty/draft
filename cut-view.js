@@ -5264,13 +5264,16 @@ if (!window.DraftCutView) {
       bandLevels.push({ level, spans, runs, paintedOf, bandFills });
     });
     const paintRimBand = (level, part) => {
-      // A WHOLE PIXEL ROW UNDER IT. Y() lands on a pixel's centre, so one
-      // pixel past it is half a row -- and the wall below's own top line,
-      // 1 1/4 wide on that centre, kept a sliver showing under the band
-      // (Movie, 4 Oct, a faint line along a BILEVEL's ENTRY top).
-      const yTopPx = Y(level.floorTop) - 1, yBotPx = Y(level.floorBottom) + 1.5;
+      const yTopPx = Y(level.floorTop) - 1, yBotPx = Y(level.floorBottom) + 1;
       ctx.fillStyle = C.face;
       ctx.fillRect(X(part.lo) - 1, yTopPx, (part.hi - part.lo) * pxPerFt + 2, yBotPx - yTopPx);
+      // AND THE REST OF THAT PIXEL ROW, BETWEEN THE CORNERS. Y() lands on a
+      // pixel's centre, so one pixel past it is half a row -- and the wall
+      // below's own top line, 1 1/4 wide on that centre, kept a sliver
+      // showing under the band (Movie, 4 Oct, a faint line along a
+      // BILEVEL's ENTRY top). Inset from the ends, because the corner lines
+      // run through there and a full row would put a gap in them.
+      ctx.fillRect(X(part.lo) + 1, Y(level.floorBottom) + 0.5, (part.hi - part.lo) * pxPerFt - 2, 1);
     };
 
     // FAR FIRST, AND ON A TIE THE WALL GOES DOWN BEFORE THE ROOF. A sheet

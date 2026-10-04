@@ -3021,12 +3021,13 @@ function run(win) {
         (bPainted.strokes || []).some(st => st.ink === '#fff' && st.pts.some((pt, i) => i > 0
           && Math.abs(pt.u + 10) < 0.02 && Math.abs(st.pts[i - 1].u + 10) < 0.02
           && Math.min(pt.e, st.pts[i - 1].e) < 3.5 && Math.max(pt.e, st.pts[i - 1].e) > 6.5)));
-      const band = (bPainted.modelFills || []).find(f => f.pts.length === 4
-        && Math.abs(Math.max(...f.pts.map(p => p.e)) - bMain.floorTop) < 0.06
-        && Math.min(...f.pts.map(p => p.e)) < bMain.floorBottom - 0.02);
-      check('BILEVEL + GARAGE E1: MAIN\'s floor band reaches a whole pixel row under its floor',
-        !!band && Math.min(...band.pts.map(p => p.e)) <= bMain.floorBottom - 1.25 / 40,
-        band ? `bottom ${Math.min(...band.pts.map(p => p.e)).toFixed(4)} floor ${bMain.floorBottom.toFixed(4)}` : 'no band');
+      // The half row: a strip under the band, inset from its ends.
+      const strip = (bPainted.modelFills || []).find(f => f.pts.length === 4
+        && Math.abs(Math.max(...f.pts.map(p => p.e)) - Math.min(...f.pts.map(p => p.e)) - 1 / 40) < 1e-6
+        && Math.max(...f.pts.map(p => p.e)) < bMain.floorBottom
+        && Math.max(...f.pts.map(p => p.e)) > bMain.floorBottom - 2 / 40);
+      check('BILEVEL + GARAGE E1: MAIN\'s floor band reaches a whole pixel row under its floor, between its corners',
+        !!strip, 'no half-row strip under the band');
     } else {
       check('proto/repro-bilevel-garage-e1.draft is present', false, 'missing');
     }
@@ -3053,7 +3054,7 @@ const MUTATIONS = [
   ['a face no longer strokes its outline in its own fill',
     s => s.replace('      ctx.strokeStyle = C.face; ctx.lineWidth = 1;\n      ctx.stroke();\n', '')],
   ['a floor band stops half a row under its floor again',
-    s => s.replace('yBotPx = Y(level.floorBottom) + 1.5;', 'yBotPx = Y(level.floorBottom) + 1;')],
+    s => s.replace('      ctx.fillRect(X(part.lo) + 1, Y(level.floorBottom) + 0.5, (part.hi - part.lo) * pxPerFt - 2, 1);\n', '')],
   ['an end line is drawn full height when only part of it is uncovered',
     s => s.replace('        return open.filter(([lo, hi]) => hi - lo > 0.01);',
       '        return open.length ? [[foot, top]] : [];')],
