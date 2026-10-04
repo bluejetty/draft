@@ -808,8 +808,14 @@ if (!window.DraftProjectPage) {
     // assumed -- floors[datumIndex] is what sits at 0, and everything below
     // it comes out negative, which is where a bilevel's entry floor belongs.
     const datumIndex = values.datumIndex ?? 0;
-    const below = floors.slice(0, datumIndex).reduce((sum, level) =>
-      sum + level.wallHeightFt + (level.joistDepthIn + level.sheathingIn) / 12, 0);
+    // Each level below climbs its own wall and the NEXT level's floor
+    // package -- the same step the loop below takes -- so the datum floor
+    // lands on 0. Summing a level's OWN package put a bilevel's MAIN FL a
+    // package-difference off 0 and floated the ENTRY deck 2 1/2" above the
+    // house sill it bears on (Movie, 4 Oct: "looks like house sill plate is
+    // lower").
+    const below = floors.slice(0, datumIndex).reduce((sum, level, i) =>
+      sum + level.wallHeightFt + (floors[i + 1].joistDepthIn + floors[i + 1].sheathingIn) / 12, 0);
     let y = -below;
     const mainDepthFt = (floors[datumIndex].joistDepthIn + floors[datumIndex].sheathingIn) / 12;
     // WHERE EACH DECK ENDED UP, so a level can stand on one that is not the
@@ -986,13 +992,13 @@ if (!window.DraftProjectPage) {
       // and its back is that face offset 3 1/2" AWAY FROM THE ROOM the whole
       // way, which is what turns the corner rather than stopping at it.
       //
-      // The back turns at ext - chordFt, not at ext: offsetting the vertical
-      // face leftward and the two horizontal faces upward puts both corners of
-      // the back on that line. Ending the upper chord at ext and starting the
+      // The back turns at ext + chordFt, not at ext: offsetting the vertical
+      // face toward the attic and the two horizontal faces upward puts both
+      // corners of the back on that line. Ending the upper chord at ext and starting the
       // lower one there -- which is what was drawn before -- left a 3 1/2"
       // square of nothing at each corner and read as three separate members
       // that happened to touch.
-      const turnX = ext - chordFt;
+      const turnX = ext + chordFt;
       // The room face: the ceiling plane, the drop, and the ceiling plane
       // again. All one weight, because it is all one surface -- the drop was
       // heavier when it doubled as the balcony's inner wall, and that wall
@@ -1000,7 +1006,11 @@ if (!window.DraftProjectPage) {
       line(0, plateY, ext, plateY, 1);
       line(ext, lowerPlate, ext, plateY, 1);                    // the drop
       line(ext, lowerPlate, cut, lowerPlate, 1);
-      // And its back, the same three runs offset by the chord.
+      // And its back, the same three runs offset by the chord AWAY FROM THE
+      // ROOM. The drop's room is the balcony's, on the ext side, so its back
+      // is a chord further along -- Movie, 4 Oct: "in the ceiling drop the
+      // 'bottom chord' lines cross over but shouldn't". Offset toward the
+      // balcony, the back ran through the room face at both corners.
       line(heelWebX, plateY + chordFt, turnX, plateY + chordFt, 1);
       line(turnX, lowerPlate + chordFt, turnX, plateY + chordFt, 1);
       line(turnX, lowerPlate + chordFt, cut, lowerPlate + chordFt, 1);
