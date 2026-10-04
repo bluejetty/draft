@@ -24,6 +24,14 @@ const ROOT = path.join(__dirname, '..');
 const MUTATE = require('./harness-args.js').mutationMode();
 
 const MUTATIONS = [
+  ['the ENTRY is pushed as a storey again', 'boneyard-edit.js',
+    c => c.replace('if (asked === landing) return pushLanding(drawing, req, ctx, all);', '')],
+  ['an inward push drags any edge facing the same way', 'boneyard-edit.js',
+    c => c.replace('if (prev.out < 0 && hit.h > REACH_FT + TOL) break;', '')],
+  ['a notched front moves on one side of the notch only', 'boneyard-edit.js',
+    c => c.replace('        twins.push({ loop: lp, edge: e });', '')],
+  ['the landing\'s push leaves MAIN\'s notch behind', 'boneyard-edit.js',
+    c => c.replace('if (into) carryOnLine(d, into, edge, edge.lo, edge.hi, out * edge.n, newId, report);', '')],
   ['the house\'s roof stands on the room over the garage\'s plate', 'boneyard-loops.js',
     c => c.replace('const plates = floors.filter(f => !ownedBy.has(Number(f.floor.id)));', 'const plates = floors;')],
   ['a roof on a plate of its own is not drawn on the bone', 'boneyard-loops.js',
@@ -335,6 +343,61 @@ check('walls that do not close make no loop', E.chainLoop(ring(rect(0, 0, 4, 6))
   check('pulling the room\'s roof moves that roof, not the house\'s',
     r.ok && [r3(Math.max(...r.drawing.roofs[1].points.map(p => p.x))), r3(Math.max(...r.drawing.roofs[0].points.map(p => p.x)))],
     [24, 18]);
+}
+
+// ── A BILEVEL'S ENTRY IS A LANDING (Movie, 4 Oct) ──────────────────────
+// Stretching a MOD BILEVEL's ENTRY put "8 piles under the overhang" inside
+// the house -- "they shouldn't show up there on the interior" -- and folded
+// MAIN FL's outline back on itself. The landing is no storey under MAIN: its
+// pushes carry MAIN's notch round it and place no piles, and MAIN bears on
+// the foundation.
+{
+  const fs = require('fs');
+  const CV = win.DraftCutView;
+  const m0 = JSON.parse(fs.readFileSync(path.join(ROOT, 'proto', 'repro-modbilevel-e1.draft'), 'utf8'));
+  const mLevels = d => BL.boneLevels(d, CV.sectionLevelStack(H.buildEnv(win, d)));
+  const mCtx = d => {
+    const levels = mLevels(d);
+    return { levels, ladder, roofSourceId: (levels.find(l => l.kind === 'roof') || {}).sourceLevelId };
+  };
+  const mPush = (d, kind, levelId, edgeIndex, deltaFt) =>
+    E.pushEdge(d, { kind, levelId, loopIndex: 0, edgeIndex, deltaFt }, mCtx(d));
+  const houseOf = (d, id) => d.outlines.find(o => Number(o.levelId) === id && !o.garage).points.map(p => [p.x, p.z]);
+  const P1 = d => d.columns.filter(c => c.pileMark === 'P1').length;
+  // ENTRY: [(-10,14) (2,14) (2,20) (-4,20) (-10,20)]; edge 0 is its back.
+  const out = mPush(m0, 'floor', 2, 0, -5);
+  check('ENTRY out 5 ft at the back: no piles, MAIN\'s notch goes with it',
+    out.ok && [P1(out.drawing), houseOf(out.drawing, 3)],
+    [0, [[-16, -20], [16, -20], [16, 20], [2, 20], [2, 9], [-10, 9], [-10, 20], [-16, 20]]]);
+  const inn = mPush(m0, 'floor', 2, 4, 3);
+  check('ENTRY side in 3 ft: no piles, MAIN\'s back wall stays where it is',
+    inn.ok && [P1(inn.drawing), houseOf(inn.drawing, 3)],
+    [0, [[-16, -20], [16, -20], [16, 20], [2, 20], [2, 14], [-7, 14], [-7, 20], [-16, 20]]]);
+  const front = mPush(m0, 'floor', 2, 2, 2);
+  check('ENTRY front out 2 ft over the garage line: the room over the garage stays',
+    front.ok && JSON.stringify(houseOf(front.drawing, 4)) === JSON.stringify(houseOf(m0, 4)), true);
+  // FOUNDATION: [(-16,-20) (16,-20) (16,20) (-16,20)]; edge 2 is its front.
+  const fdn = mPush(m0, 'foundation', 1, 2, 2);
+  check('FOUNDATION front out 2 ft: MAIN\'s front both sides of the notch, the ENTRY front, no piles',
+    fdn.ok && [P1(fdn.drawing), houseOf(fdn.drawing, 3), houseOf(fdn.drawing, 2)],
+    [0, [[-16, -20], [16, -20], [16, 22], [2, 22], [2, 14], [-10, 14], [-10, 22], [-16, 22]],
+      [[-10, 14], [2, 14], [2, 22], [-4, 22], [-10, 22]]]);
+  // The far edge facing the same way is another wall, not one hanging off
+  // this line: the room over the garage, 37 ft from the back wall.
+  const backIn = mPush(m0, 'foundation', 1, 0, 3);
+  check('FOUNDATION back in 3 ft: MAIN follows, the room over the garage does not',
+    backIn.ok && [houseOf(backIn.drawing, 3)[0], JSON.stringify(houseOf(backIn.drawing, 4)) === JSON.stringify(houseOf(m0, 4))],
+    [[-16, -17], true]);
+  // And an edge further out than any ladder reaches is another wall, not
+  // one hanging off this line: a 2ND FL drawn 20 ft past MAIN's back stays
+  // where it is when MAIN's back comes in.
+  const far = house({ upper: rect(-16, -40, 16, 20) });
+  const farIn = push(far, 'floor', 3, 0, 3);
+  check('MAIN back in 3 ft: a 2ND FL edge 20 ft further out is not dragged',
+    farIn.ok && [minZ(outline(farIn.drawing, 3).points), minZ(outline(farIn.drawing, 5).points)], [-17, -40]);
+  const main = mPush(m0, 'floor', 3, 0, -6);
+  check('MAIN FL out 6 ft at the back: piled against the FOUNDATION, not the ENTRY',
+    main.ok && [P1(main.drawing) > 0, main.report.overhangFt], [true, 6]);
 }
 
 // ── THE GROW: BOTTOM FIRST, EACH OFF THE ONE BELOW (Movie, 3 Oct) ─────

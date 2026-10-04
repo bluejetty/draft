@@ -470,6 +470,57 @@ if (!window.DraftBoneyardEdit) {
   // push can reach are the foundation's and the floors'.
   const floorsOf = levels => (levels || []).filter(l => l.kind === 'foundation' || l.kind === 'floor')
     .slice().sort((a, b) => a.elev - b.elev);
+  // The bilevel's ENTRY level (cut-view's ENTRY_LEVEL_ID): a landing inside
+  // the house, framed on the slab -- see pushEdge.
+  const LANDING_LEVEL_ID = 2;
+  const isLanding = l => l.kind === 'floor' && Number(l.levelId) === LANDING_LEVEL_ID;
+  // The farthest a floor hangs past what is under it (tour.js FLOOR_PULL_MAX_FT).
+  const REACH_FT = 18;
+  // Every edge of `lvl` lying on the moved line, whichever way it faces, goes
+  // with it by the same world distance -- a notch's side moves with the
+  // landing that fills it.
+  const carryOnLine = (d, lvl, e, lo, hi, worldDelta, newId, report) => {
+    let moved = false;
+    lvl.loops.forEach(lp => {
+      if (lp.garage) return;
+      edgesOf(lp.points).forEach(o => {
+        if (!o.square || o.axis !== e.axis || !near(o.c, e.c)) return;
+        const a = Math.max(lo, o.lo), b = Math.min(hi, o.hi);
+        if (b - a <= TOL) return;
+        pushLevelRecords(d, lvl.levelId, false,
+          { axis: o.axis, c: o.c, n: o.n, lo: a, hi: b, delta: worldDelta }, newId);
+        moved = true;
+      });
+    });
+    if (moved && !report.moves.some(m => m.levelId === lvl.levelId && m.kind === lvl.kind)) {
+      report.moves.push({ name: lvl.name, levelId: lvl.levelId, kind: lvl.kind, outFt: worldDelta * e.n });
+    }
+  };
+  const pushLanding = (drawing, req, ctx, all) => {
+    const level = all.find(isLanding);
+    const loop = level.loops[req.loopIndex];
+    if (!loop) return { ok: false, reason: 'NO_LOOP' };
+    const edge = edgeOf(loop.points, req.edgeIndex);
+    if (!edge) return { ok: false, reason: 'NO_EDGE' };
+    if (!edge.square) return { ok: false, reason: 'NOT_SQUARE' };
+    const want = Math.round(Number(req.deltaFt) || 0);
+    if (!want) return { ok: false, reason: 'NO_MOVE' };
+    const out = want * edge.n;
+    const d = clone(drawing);
+    const newId = idMaker(d);
+    const report = { moves: [], trims: [], piles: { placed: 0, removed: 0 }, roofs: 0, overhangFt: null };
+    const L = { axis: edge.axis, c: edge.c, n: edge.n, lo: edge.lo, hi: edge.hi, delta: out * edge.n };
+    pushLevelRecords(d, level.levelId, false, L, newId);
+    report.moves.push({ name: level.name, levelId: level.levelId, kind: level.kind, outFt: out });
+    // MAIN FL's notch around the landing: the storey the landing is cut
+    // into, which is the next floor up. The room over the garage is not --
+    // its back wall shares the landing's front line only by being built on it.
+    const into = all.filter(l => l.kind === 'floor' && l.elev > level.elev)
+      .sort((a, b) => a.elev - b.elev)[0];
+    if (into) carryOnLine(d, into, edge, edge.lo, edge.hi, out * edge.n, newId, report);
+    return { ok: true, drawing: d, report };
+  };
+
   const levelOf = (levels, kind, levelId) => (levels || []).find(l => l.kind === kind
     && Number(l.levelId) === Number(levelId));
 
@@ -513,9 +564,28 @@ if (!window.DraftBoneyardEdit) {
   // Returns { ok: true, drawing, report } or { ok: false, reason }.
   const pushEdge = (drawing, req, ctx) => {
     if (req.kind === 'roof') return pushRoofEdge(drawing, req, ctx);
-    const stack = floorsOf(ctx.levels);
-    const p = stack.findIndex(l => l.kind === req.kind && Number(l.levelId) === Number(req.levelId));
-    if (p < 0) return { ok: false, reason: 'NO_LEVEL' };
+    // ── A BILEVEL'S ENTRY IS A LANDING, NOT A STOREY ──────────────────
+    //
+    // Movie, 4 Oct, stretching the ENTRY of a MOD BILEVEL: the status said
+    // "8 piles under the overhang", then "10", and the dots landed inside the
+    // house -- "they shouldn't show up there on the interior". The ENTRY sits
+    // below MAIN FL in the list, so the editor read it as the storey MAIN
+    // bears on: an ENTRY push measured itself against the foundation's far
+    // wall as a cantilever and piled it, and an inward push dragged MAIN FL's
+    // back wall -- 34 ft away, the nearest edge facing the same way -- in by
+    // the same amount, folding MAIN's outline back on itself.
+    //
+    // THE LANDING STANDS INSIDE THE HOUSE, on the slab. So it is out of the
+    // stack the ladder and the cascade climb: MAIN FL bears on the foundation,
+    // and a push of the landing moves the landing and MAIN FL's notch around
+    // it (the edges lying on the same line), with no ladder and no piles.
+    const all = floorsOf(ctx.levels);
+    const landing = all.find(isLanding) || null;
+    const asked = all.find(l => l.kind === req.kind && Number(l.levelId) === Number(req.levelId));
+    if (!asked) return { ok: false, reason: 'NO_LEVEL' };
+    if (asked === landing) return pushLanding(drawing, req, ctx, all);
+    const stack = all.filter(l => l !== landing);
+    const p = stack.indexOf(asked);
     const level = stack[p];
     const loop = level.loops[req.loopIndex];
     if (!loop) return { ok: false, reason: 'NO_LOOP' };
@@ -564,7 +634,13 @@ if (!window.DraftBoneyardEdit) {
         if (garage) pushLevelRecords(d, 1, true, L, newId);
         report.roofs += pushRoofs(d, roofsFor(d, lvl.levelId, ctx.roofSourceId), lp.points, L);
       }
-      report.moves.push({ name: lvl.name, levelId: lvl.levelId, kind: lvl.kind, outFt: amount });
+      // One line per level and distance, however many of its edges moved.
+      if (!report.moves.some(m => m.levelId === lvl.levelId && m.kind === lvl.kind && near(m.outFt, amount))) {
+        report.moves.push({ name: lvl.name, levelId: lvl.levelId, kind: lvl.kind, outFt: amount });
+      }
+      // The landing's edges on the same line go with it: the entry's front
+      // is the house's front where the two meet.
+      if (landing && !garage) carryOnLine(d, landing, e, lo, hi, amount * e.n, newId, report);
     };
 
     moveLoop(level, loop, edge, edge.lo, edge.hi, out);
@@ -576,6 +652,28 @@ if (!window.DraftBoneyardEdit) {
       if (lvl.kind !== 'floor') continue;
       const hit = inlineEdge(lvl, prev);
       if (!hit) break;
+      // HOOKED, NOT MERELY FACING THE SAME WAY. An edge further out than the
+      // ladder ever reaches is not hanging off this one -- it is another wall
+      // of the building -- so an inward push does not drag it.
+      if (prev.out < 0 && hit.h > REACH_FT + TOL) break;
+      // ALL OF THE LEVEL'S EDGES ON THAT LINE, not the first one found: a
+      // notched front (a bilevel's MAIN FL around its entry) is two edges on
+      // one line, and moving one left the other standing behind.
+      const twins = [];
+      lvl.loops.forEach(lp => edgesOf(lp.points).forEach(e => {
+        if ((lp === hit.loop && e.index === hit.edge.index) || !e.square || e.axis !== prev.axis || e.n !== prev.n
+          || !near(e.c, hit.edge.c) || lp.garage !== hit.loop.garage) return;
+        if (Math.min(e.hi, prev.hi) - Math.max(e.lo, prev.lo) <= TOL) return;
+        twins.push({ loop: lp, edge: e });
+      }));
+      // OVER A GARAGE, NOT OVER AIR. The room over a garage stands on the
+      // garage's walls; the strip between this line and it is the garage's
+      // roof, and needs no piles and no trim.
+      const mid = pointAt(prev.axis, prev.c + (prev.out + hit.h) / 2 * prev.n,
+        (Math.max(prev.lo, hit.edge.lo) + Math.min(prev.hi, hit.edge.hi)) / 2);
+      const overGarage = stack.slice(0, q).some(l => l.loops.some(lp => lp.garage
+        && inside(lp.points, mid)));
+      if (overGarage) break;
       const lo = Math.max(prev.lo, hit.edge.lo), hi = Math.min(prev.hi, hit.edge.hi);
       let move = 0;
       if (prev.out > 0) {
@@ -591,7 +689,11 @@ if (!window.DraftBoneyardEdit) {
       const newH = hit.h + move - prev.out;
       strips.push({ axis: edge.axis, n: edge.n, base: prev.c + prev.out * prev.n, lo, hi,
         oldH: hit.h + 0, newH, oldBase: prev.c });
-      if (!near(move, 0)) moveLoop(lvl, hit.loop, hit.edge, lo, hi, move);
+      if (!near(move, 0)) {
+        moveLoop(lvl, hit.loop, hit.edge, lo, hi, move);
+        twins.forEach(t => moveLoop(lvl, t.loop, t.edge,
+          Math.max(prev.lo, t.edge.lo), Math.min(prev.hi, t.edge.hi), move));
+      }
       if (near(move, 0)) break;
       prev = { axis: edge.axis, n: edge.n, c: hit.edge.c, lo, hi, out: move };
     }
