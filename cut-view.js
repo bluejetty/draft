@@ -4288,14 +4288,45 @@ if (!window.DraftCutView) {
       const topR = Math.min(tops[tops.length - 1].top, level.wallTop);
       const footL = footAt(loU + nudge, topL);
       const footR = footAt(hiU - nudge, topR);
+      // ── NO SEAM WHERE THE WALL CARRIES ON IN THE SAME PLANE ───────────
+      //
+      // Movie, 4 Oct, on E1 of a MODIFIED BILEVEL: "see that LINE in the
+      // wall it looks like there the entry area is / main floor. we need to
+      // remove that line". The house's front (its fill wall and MAIN's wall
+      // over it) and the entry's tall front are separate records meeting at
+      // one corner-less point on one face, and each drew its own end there.
+      // An end is a corner only where the face stops: if faces in the same
+      // plane abut it and, with the floor bands between them, cover the whole
+      // height of this end, the cladding runs straight across.
+      const carriesOn = (u, side, foot, top) => {
+        const near = (a, b) => Math.abs(a - b) < 0.05;
+        const cover = faceGeoms
+          .filter(g => g !== geom && near(g.face.depth, face.depth)
+            && (side < 0 ? near(g.hiU, u) : near(g.loU, u)))
+          .map(g => ({ lo: g.floor, hi: g.face.level.wallTop }))
+          // A floor band reaching into the neighbour's side of u.
+          .concat(rimBands.filter(b => near(b.depth, face.depth) && (side < 0
+            ? b.lo < u - 0.05 && b.hi >= u - 1e-6
+            : b.hi > u + 0.05 && b.lo <= u + 1e-6))
+            .map(b => ({ lo: b.bottom, hi: b.top })))
+          .sort((a, b) => a.lo - b.lo);
+        let reach = foot;
+        for (const c of cover) {
+          if (c.lo > reach + 0.02) break;
+          reach = Math.max(reach, c.hi);
+        }
+        return reach >= top - 0.02;
+      };
+      const seamL = carriesOn(loU, -1, footL, topL);
+      const seamR = carriesOn(hiU, 1, footR, topR);
       ctx.beginPath();
-      if (topL - footL > 0.01) {
+      if (topL - footL > 0.01 && !seamL) {
         ctx.moveTo(xa, Y(footL));
         ctx.lineTo(xa, Y(topL));
       }
       ctx.moveTo(X(tops[0].u), Y(tops[0].top));
       tops.slice(1).forEach(s => ctx.lineTo(X(s.u), Y(s.top)));
-      if (topR - footR > 0.01) {
+      if (topR - footR > 0.01 && !seamR) {
         ctx.moveTo(xb, Y(topR));
         ctx.lineTo(xb, Y(footR));
       }
@@ -4913,6 +4944,8 @@ if (!window.DraftCutView) {
       hi: Math.min(Math.max(face.u1, face.u2), uMax),
       depth: face.depth,
       levelId: face.level.id,
+      top: face.level.wallTop,
+      bottom: face.garage ? -Infinity : face.level.floorTop,
     });
     const houseSpans = houseFaces.map(spanOf).filter(span => span.hi - span.lo >= 0.5);
     // ── AND A GARAGE IN FRONT IS SOMETHING NEARER ──────────────────────
@@ -4947,9 +4980,17 @@ if (!window.DraftCutView) {
     // The stretches of [lo, hi] that no nearer face covers. Returned as a
     // list because a face can be interrupted in the middle -- a garage
     // standing off a house's centre leaves a band either side of it.
-    const uncovered = (lo, hi, depth) => {
+    // `top`, where given, is the height the stretch has to be hidden up to:
+    // a nearer face that stops below it hides only its own lower part, and
+    // paint order already does that -- clipping the whole stretch for it is
+    // how the OVER GARAGE floor band of a MODIFIED BILEVEL went missing over
+    // its garage's lean-to, and the entry wall behind showed its top through
+    // the gap (Movie, 4 Oct: "i also noticed a 'height' line that should be
+    // removed").
+    const uncovered = (lo, hi, depth, top = null) => {
       let parts = [{ lo, hi }];
-      allSpans.filter(other => other.depth > depth + 1e-6).forEach(other => {
+      allSpans.filter(other => other.depth > depth + 1e-6
+        && (top == null || other.top >= top - 1e-6)).forEach(other => {
         const next = [];
         parts.forEach(part => {
           if (other.hi <= part.lo + 1e-6 || other.lo >= part.hi - 1e-6) { next.push(part); return; }
@@ -5023,7 +5064,7 @@ if (!window.DraftCutView) {
         // package seen flat, and a garage in front of it is a wall, not a
         // window. What is pushed to rimBands is what was PAINTED, so the roof
         // pass downstream reads the same surface the sheet shows.
-        const parts = uncovered(run.lo, run.hi, depth);
+        const parts = uncovered(run.lo, run.hi, depth, level.floorTop);
         // AND NOT ACROSS A WALL THAT RUNS PAST THIS FLOOR. A bilevel's entry
         // front stands on the landing and climbs to MAIN FL's ceiling -- the
         // foyer is open, there is no floor package in it -- so MAIN's rim
@@ -5205,7 +5246,10 @@ if (!window.DraftCutView) {
       // Vertical edges through the band: the run boundaries plus any face
       // corner inside a run that isn't hidden behind a nearer face — a jog
       // in the facade keeps its corner line crossing the floor.
-      const edges = new Set();
+      // u -> the depth the edge stands at: a run's end at its nearest face,
+      // an interior joint at its own span's (an interior wall's end stands
+      // behind the exterior wall, and is hidden by it).
+      const edges = new Map();
       runs.filter(run => run.hi - run.lo >= 0.5).forEach(run => {
         // A RUN'S OWN ENDS ARE THE BAND'S ENDS, so they are drawn without
         // asking whether a nearer FACE covers them -- by construction nothing
@@ -5234,19 +5278,65 @@ if (!window.DraftCutView) {
         // same two lines are drawn as before. Only a clipped run moves, and
         // it moves to where the ink actually stops.
         const midE = (level.floorBottom + level.floorTop) / 2;
+        // NO CORNER WHERE THE FACE RUNS ON IN ITS OWN PLANE -- paintFace's
+        // `carriesOn`, asked of the band. Movie, 4 Oct: "see that LINE in the
+        // wall". A joint between two records at one depth is not a corner,
+        // and a band that stops against a wall standing in the same plane
+        // (a bilevel's entry front, open past MAIN's floor) stops inside the
+        // cladding, not at an edge of the building.
+        const same = (a, b) => Math.abs(a - b) < 0.05;
+        const flushJoint = (u, depth) => {
+          const at = faces.filter(f => same(f.depth, depth));
+          const lo = f => Math.min(f.u1, f.u2), hi = f => Math.max(f.u1, f.u2);
+          return at.some(f => same(hi(f), u)) && at.some(f => same(lo(f), u));
+        };
+        const flushStop = (u, depth, part) => faces.some(f => same(f.depth, depth)
+          && f.level.wallTop >= level.floorTop - 0.02
+          && (f.garage ? -Infinity : f.level.floorTop) <= level.floorBottom + 0.02
+          && (same(u, part.lo) ? same(Math.max(f.u1, f.u2), u) : same(Math.min(f.u1, f.u2), u)));
+        // The NEAREST span at u: the band's visible face there, where
+        // runDepth answers the farthest (a back wall projects onto the same u).
+        const nearDepth = u => spans.reduce((d, sp) => (u >= sp.lo - 0.05 && u <= sp.hi + 0.05
+          && (d == null || sp.depth > d) ? sp.depth : d), null) ?? runDepth(spans, u);
         (paintedOf.get(run) || []).forEach(part => {
           [part.lo, part.hi].forEach(u => {
-            if (!behindRoof(atUDepth(u, runDepth(spans, u)), midE)) edges.add(u);
+            const d = nearDepth(u);
+            if (flushStop(u, d, part)) return;
+            edges.set(u, d);
           });
         });
         spans.forEach(span => [span.lo, span.hi].forEach(u => {
-          if (u > run.lo + 0.05 && u < run.hi - 0.05
-            && edgeVisible(u, span.depth, midE)) edges.add(u);
+          if (u > run.lo + 0.05 && u < run.hi - 0.05 && !flushJoint(u, span.depth)
+            && !edges.has(u)) edges.set(u, span.depth);
         }));
       });
+      // EACH EDGE DOWN TO WHERE A ROOF IN FRONT TAKES OVER, not all or
+      // nothing on the band's middle: over a garage's lean-to the building's
+      // corner shows above the sheet and is hidden under it.
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       ctx.beginPath();
-      edges.forEach(u => { ctx.moveTo(X(u), yTopPx); ctx.lineTo(X(u), yBotPx); });
+      edges.forEach((d, u) => {
+        const STEPS = 12;
+        let from = null;
+        for (let k = 0; k <= STEPS; k++) {
+          const e = level.floorTop - (level.floorTop - level.floorBottom) * (k / STEPS);
+          // Hidden by a nearer face that stands at this height, or a roof.
+          // A nearer floor band is as solid as a nearer wall: a house's own
+          // band stands between its walls, and a face test alone saw a gap.
+          const seen = !allSpans.some(o => o.depth > d + 1e-6
+            && o.lo < u - 0.05 && o.hi > u + 0.05 && o.top >= e - 1e-6 && o.bottom <= e + 1e-6)
+            && !rimBands.some(b => b.depth > d + 1e-6
+              && b.lo < u - 0.05 && b.hi > u + 0.05 && b.top >= e - 1e-6 && b.bottom <= e + 1e-6)
+            && !behindRoof(atUDepth(u, d), e);
+          if (seen && from == null) from = e;
+          if ((!seen || k === STEPS) && from != null) {
+            const to = seen ? level.floorBottom : e;
+            ctx.moveTo(X(u), from === level.floorTop ? yTopPx : Y(from));
+            ctx.lineTo(X(u), to === level.floorBottom ? yBotPx : Y(to));
+            from = null;
+          }
+        }
+      });
       ctx.stroke();
     });
 
