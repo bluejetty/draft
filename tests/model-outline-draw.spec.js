@@ -217,3 +217,27 @@ test('on ROUGH the sheet carries the same press under the selections', async ({ 
   await shelf.click();
   await expect(page.locator('#strip-message')).toContainText('Trace your 1 STOREY');
 });
+
+// UNDO TAKES BACK A CORNER WHILE THE LOOP IS STILL BEING TRACED. Movie, 4 Oct:
+// "made an accidental placement and wanted to [undo], but nothing happens. can
+// we make the UNDO feature go back one line in the outline creation".
+test('Ctrl+Z and the UNDO button take the last traced corner back', async ({ page }) => {
+  await open(page);
+  const { at } = await h.planFrame(page);
+  await h.selectTool(page, 'outline');
+  await page.mouse.click(...at(-10, -8));
+  await page.mouse.click(...at(10, -8));
+  await page.mouse.click(...at(10, 8));
+  // The slip: a corner out past where the loop turns.
+  await page.mouse.click(...at(20, 8));
+  await page.keyboard.press('Control+z');
+  // And another, taken back with the on-screen button.
+  await page.mouse.click(...at(10, 14));
+  await expect(page.locator('#model-undo')).toBeVisible();
+  await page.locator('#model-undo').click();
+  await page.mouse.click(...at(-10, 8));
+  await page.mouse.click(...at(-10, -8));
+  const masters = await savedMasters(page);
+  expect(masters.length, 'the loop closed and was kept').toBe(1);
+  expect(offsets(masters[0])).toEqual([[0, 0], [20, 0], [20, 16], [0, 16]]);
+});
