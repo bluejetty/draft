@@ -161,14 +161,16 @@ const armed = (page, attr) => page.locator(`[${attr}][aria-pressed="true"]`)
   .evaluateAll(els => els.map(el => el.getAttribute(
     el.hasAttribute('data-sel-mode') ? 'data-sel-mode' : 'data-sel-filter')));
 
-test('three modes and five filters, ITEMS and ALL to start', async ({ page }) => {
+// NO ALL CHIP since 4 Oct (Movie: "just select ALL when nothing else is
+// selected"): nothing lit is everything, so nothing is armed at the start.
+test('three modes and the type filters, ITEMS and nothing lit to start', async ({ page }) => {
   await open(page);
   await expect(page.locator('[data-sel-mode]')).toHaveText(
     ['ITEMS', 'WINDOW', 'ALL LEVELS']);
   await expect(page.locator('[data-sel-filter]')).toHaveText(
-    ['ALL', 'LINE', 'WALL', 'OUTLINE', 'FLOOR']);
+    ['LINE', 'WALL', 'OUTLINE', 'FLOOR', 'DOOR/WIN', 'FIXTURE', 'STAIR', 'TAG', 'SHAPE', 'ROOF']);
   expect(await armed(page, 'data-sel-mode')).toEqual(['click']);
-  expect(await armed(page, 'data-sel-filter')).toEqual(['all']);
+  expect(await armed(page, 'data-sel-filter')).toEqual([]);
 });
 
 test('the mode help says exactly what the old page says', async ({ page }) => {
@@ -218,18 +220,19 @@ test('an engaged filter turns the help red and names itself', async ({ page }) =
   await open(page);
   const help = page.locator('[data-filter-help]');
 
-  await expect(help).toHaveText('Engage a type so Select only grabs that object '
-    + '— even under other geometry.');
+  await expect(help).toHaveText('Nothing lit grabs everything. Press a type so '
+    + 'Select only grabs that object — even under other geometry.');
   await expect(help).not.toHaveAttribute('data-engaged', /.*/);
 
   await page.locator('[data-sel-filter="wall"]').click();
   await expect(help).toHaveText('WALL is engaged: nothing else responds. '
-    + 'Click ALL — or press Esc with nothing selected — to release.');
+    + 'Press it again — or Esc with nothing selected — to release.');
   await expect(help).toHaveAttribute('data-engaged', '');
 
-  // Back to ALL and the red goes. Without this half, a build that painted the
-  // help red permanently would pass the assertion above.
-  await page.locator('[data-sel-filter="all"]').click();
+  // Pressed again it lets go, and the red goes. Without this half, a build
+  // that painted the help red permanently would pass the assertion above.
+  await page.locator('[data-sel-filter="wall"]').click();
+  await expect(page.locator('[data-sel-filter="wall"]')).toHaveAttribute('aria-pressed', 'false');
   await expect(help).not.toHaveAttribute('data-engaged', /.*/);
 });
 
@@ -260,6 +263,22 @@ test('the WALL filter stops a line responding, and ALL lets it back',
     await page.waitForTimeout(80);
     await expect(page.locator('[data-delete]')).toBeVisible();
   });
+
+// Movie, 4 Oct: "if i press WALL and then SELECT it will only select WALLS,
+// or same thing for other object types". A type with no wall of its own in
+// this fixture still engages, and engaging it shuts the wall out.
+test('every other type engages on its own and shuts the wall out', async ({ page }) => {
+  await open(page);
+  await page.locator('[data-sel-filter="stair"]').click();
+  expect(await armed(page, 'data-sel-filter')).toEqual(['stair']);
+  await page.mouse.click(...await at(page, 0, -WALL));
+  await page.waitForTimeout(80);
+  expect(await selCount(page), 'STAIR is engaged, so the wall does not respond').toBe(0);
+  // ONE AT A TIME: another type takes over rather than adding to it.
+  await page.locator('[data-sel-filter="fenestration"]').click();
+  expect(await armed(page, 'data-sel-filter')).toEqual(['fenestration']);
+  await expect(page.locator('[data-filter-help]')).toContainText('DOOR/WIN is engaged');
+});
 
 test('shift adds and shift removes', async ({ page }) => {
   await open(page);
@@ -412,7 +431,7 @@ test('Esc clears the selection first and releases the filter second',
     await page.waitForTimeout(60);
     await expect(page.locator('[data-filter-help]'))
       .not.toHaveAttribute('data-engaged', /.*/);
-    expect(await armed(page, 'data-sel-filter')).toEqual(['all']);
+    expect(await armed(page, 'data-sel-filter')).toEqual([]);
   });
 
 test('a window takes what it fully encloses, not what it crosses',
