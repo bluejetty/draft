@@ -4482,7 +4482,7 @@
     // UNDO IS ON SCREEN WHILE THERE IS SOMETHING TO UNDO, the same rule as
     // DELETE above -- and, unlike DELETE, under a section too: taking back
     // the cut that made the section is exactly what a drafter may want there.
-    if (undoButton) undoButton.hidden = !undoStack.length || modalUp();
+    if (undoButton) undoButton.hidden = (!undoStack.length && !pendingCornerList()) || modalUp();
     if (copyButton) {
       copyButton.hidden = !selection.length || !!activeCut() || modalUp();
     }
@@ -10090,6 +10090,15 @@
   // the master anyway, sight unseen, because BUILD HOUSE reads outlines and
   // the drawing is shared with a page that does show it.
   let outlineCorners = [];
+  // The corners of whichever loop is being traced right now, or null: the
+  // armed tool's own list, and only while it holds a corner. UNDO takes from
+  // this before it touches the saved edits.
+  const pendingCornerList = () => {
+    const list = activeTool === 'outline' ? outlineCorners
+      : activeTool === 'floor' ? floorCorners
+        : activeTool === 'shape' ? shapeCorners : null;
+    return list && list.length ? list : null;
+  };
   // ── THE ORANGE TRACKING RAYS ───────────────────────────────────────────
   //
   // Movie, 1 Oct: *"at this point when i'm drawing a wall past the first point
@@ -18590,7 +18599,7 @@
     // THE KEY AND THE BUTTON ARE THE SAME VERB, as DELETE's are: both call
     // undoOnce, so neither can learn something the other does not.
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
-      if (!undoStack.length) return;
+      if (!undoStack.length && !pendingCornerList()) return;
       e.preventDefault();
       undoOnce();
     }
@@ -18599,7 +18608,22 @@
   // ONE UNDO, whichever control did the pressing. Until audit C4 the only
   // control was Ctrl+Z, and an iPad has no Ctrl key: a drafter there had no
   // way back from any edit at all.
+  //
+  // A CORNER IN HAND COMES OFF FIRST. Movie, 4 Oct, tracing an outline: "made
+  // an accidental placement and wanted to [undo], but nothing happens. can we
+  // make the UNDO feature go back one line in the outline creation". The
+  // corners of an outline, floor or shape being traced are not on the undo
+  // stack -- nothing is saved until the loop closes -- so the stack had
+  // nothing to give back. Undo now takes the last corner off the trace; with
+  // no trace in hand it undoes the last saved edit, as it always did.
   const undoOnce = () => {
+    const corners = pendingCornerList();
+    if (corners) {
+      corners.pop();
+      sayOnStrip(corners.length ? 'last corner taken back' : 'first corner taken back');
+      paint();
+      return true;
+    }
     const step = undoStack.pop();
     if (!step) return false;
     // ONE PRESS IS ONE UNDO whether the press moved one corner or a wall's
