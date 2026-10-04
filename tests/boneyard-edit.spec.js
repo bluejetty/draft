@@ -248,3 +248,17 @@ test('the side lengths follow a drag before it is let go', async ({ page }) => {
   await expect(canvas).toHaveAttribute('data-side-lengths', '[43,43]');
   await page.mouse.up();
 });
+
+// THE OTHER BONES, FADED, FOR LINING UP. Movie, 4 Oct: "could we show the
+// other 'BONE lines in faded out or something so i can line up stuff if i
+// need to floor to floor, and when they select one, bring it to top and
+// increase thickness and opacity of that one". The level under the picked one
+// keeps its grey dashes; every other one is drawn faded in its own colour.
+test('the 2D window shows the other bones faded under the picked one', async ({ page }) => {
+  await boneyardOf(page, 'bungalow', 'bungalow');
+  await page.locator('[data-bone-level="MAIN FL"]').click();
+  await expect(page.locator('#bones2d')).toHaveAttribute('data-faded', '["ROOF"]');
+  await page.locator('[data-bone-level="ROOF"]').click();
+  // The roof's own floor is the dashed one; the foundation is faded.
+  await expect(page.locator('#bones2d')).toHaveAttribute('data-faded', '["FOUNDATION"]');
+});
