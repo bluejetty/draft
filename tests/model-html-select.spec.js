@@ -151,7 +151,9 @@ test.describe('MODEL.html selection', () => {
         .toBe(unselected);
     });
 
-  test('a drag pans and does not select', async ({ page }) => {
+  // THE RIGHT BUTTON PANS since 4 Oct (Movie: a left drag in SELECT draws the
+  // selection box now, and "Right-mouse drag" moves the sheet).
+  test('a right-drag pans and does not select', async ({ page }) => {
     await houseOnOldPage(page);
     await open(page);
     const unselected = await canvasHash(page);
@@ -163,9 +165,9 @@ test.describe('MODEL.html selection', () => {
     const box = await page.locator('#plan').boundingBox();
     const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
     await page.mouse.move(cx, cy);
-    await page.mouse.down();
+    await page.mouse.down({ button: 'right' });
     await page.mouse.move(cx + 120, cy + 40, { steps: 8 });
-    await page.mouse.up();
+    await page.mouse.up({ button: 'right' });
     await page.waitForTimeout(60);
 
     const panned = await canvasHash(page);
@@ -173,9 +175,9 @@ test.describe('MODEL.html selection', () => {
 
     // Pan back the same distance: if nothing was selected the picture returns.
     await page.mouse.move(cx + 120, cy + 40);
-    await page.mouse.down();
+    await page.mouse.down({ button: 'right' });
     await page.mouse.move(cx, cy, { steps: 8 });
-    await page.mouse.up();
+    await page.mouse.up({ button: 'right' });
     await page.waitForTimeout(60);
     expect(await canvasHash(page),
       'panning back must restore the original picture -- if the drag had also '

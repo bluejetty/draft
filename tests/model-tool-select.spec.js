@@ -437,9 +437,8 @@ test('Esc clears the selection first and releases the filter second',
 
 // ── THE BOX IN ITEMS (Movie, 4 Oct: "drag box select please") ───────────
 // CAD style: dragged left to right the box takes what it ENCLOSES, right to
-// left what it CROSSES as well. The box runs x -6..6, z -2..2: it encloses the
-// probe line (x -4..4 on z 0) and crosses the floor's east and west edges
-// (x ±5) without holding a corner of it, and reaches no wall.
+// left what it CROSSES as well. A box x -6..6, z -2..2 encloses the probe line
+// (x -4..4 on z 0) and reaches no wall.
 test('ITEMS: a box dragged left to right takes only what it encloses', async ({ page }) => {
   await open(page);
   expect(await armed(page, 'data-sel-mode')).toEqual(['click']);
@@ -447,10 +446,15 @@ test('ITEMS: a box dragged left to right takes only what it encloses', async ({ 
   expect(await selCount(page), 'the probe line only').toBe(1);
 });
 
+// A BOX ACROSS THE NORTH WALL (z -10), holding neither of its ends: enclosing
+// takes nothing, crossing takes the wall. (The fixture's floor is filed on the
+// FLOOR view, so it is not on this sheet to be caught.)
 test('ITEMS: dragged right to left it takes what it crosses too', async ({ page }) => {
   await open(page);
-  await dragBox(page, [6, 2], [-6, -2]);
-  expect(await selCount(page), 'the probe line and the floor it cuts across').toBe(2);
+  await dragBox(page, [-6, -11], [6, -8]);
+  expect(await selCount(page), 'left to right: the wall is only crossed').toBe(0);
+  await dragBox(page, [6, -8], [-6, -11]);
+  expect(await selCount(page), 'right to left: the wall it crosses').toBe(1);
 });
 
 test('ITEMS: Shift adds a box to what is already picked', async ({ page }) => {
