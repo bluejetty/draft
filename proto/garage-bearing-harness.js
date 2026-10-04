@@ -2892,6 +2892,71 @@ function run(win) {
     }
   }
 
+    // ── THE MOD BILEVEL'S FRONT: ONE FACE, AND ITS ROOM'S FLOOR BAND ────
+    //
+    // Movie, 4 Oct, on E1: "see that LINE in the wall it looks like there the
+    // entry area is / main floor. we need to remove that line. and i also
+    // noticed a 'height' line that should be removed".
+    //
+    // ASKED OF WHAT IS SEEN, not of what is stroked: a line painted and then
+    // covered by a later fill is not on the sheet. Ink at (u, e) is visible
+    // when no fill painted after it contains that point.
+    // A MODIFIED BILEVEL built from the drive-thru on 4 Oct, after the room's
+    // roof went square -- the lean-to and the room's floor band as he saw them.
+    const mFile = path.join(ROOT, 'proto', 'repro-modbilevel-e1.draft');
+    if (fs.existsSync(mFile)) {
+      const mEnv = buildEnv(win, JSON.parse(fs.readFileSync(mFile, 'utf8')));
+      const mStack = CV.sectionLevelStack(mEnv);
+      const entry = mStack.floors.find(l => l.id === 2);
+      const main = mStack.floors.find(l => l.id === 3);
+      const over = mStack.floors.find(l => l.id === 4);
+      const cut = standardElevationCuts(mEnv).find(c => c.id === 'E1');
+      const painted = cut && paintElevation(win, mEnv, cut, { pxPerFt: 40 });
+      check('MOD BILEVEL fixture: ENTRY, MAIN, OVER GARAGE and an E1',
+        !!(entry && main && over && painted));
+      if (entry && main && over && painted) {
+        const axis = painted.axis;
+        const uOf = pt => pt.x * axis.x + pt.z * axis.z;
+        const inside = (pts, u, e) => {
+          let hit = false;
+          for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+            const a = pts[i], b = pts[j];
+            if ((a.e > e) !== (b.e > e) && u < (b.u - a.u) * (e - a.e) / (b.e - a.e) + a.u) hit = !hit;
+          }
+          return hit;
+        };
+        const seen = (seq, u, e) => !(painted.modelFills || []).some(f => f.seq > seq && inside(f.pts, u, e));
+        const segs = [];
+        (painted.strokes || []).forEach(st => st.pts.forEach((pt, i) => {
+          if (i === 0 || pt.move) return;
+          segs.push({ seq: st.seq, a: st.pts[i - 1], b: pt });
+        }));
+        // The joint between the house's front and the entry's: x = -10.
+        const uJ = uOf({ x: -10, z: 20 });
+        const seam = segs.filter(s => Math.abs(s.a.u - uJ) < 0.02 && Math.abs(s.b.u - uJ) < 0.02)
+          .filter(s => [0.25, 0.5, 0.75].some(t => {
+            const e = s.a.e + (s.b.e - s.a.e) * t;
+            return e > entry.floorTop + 0.1 && e < main.wallTop - 0.1 && seen(s.seq, uJ, e);
+          }));
+        check('E1: no seam where the house front meets the entry front, in one plane',
+          seam.length === 0, `${seam.length} visible segment(s) at u ${uJ.toFixed(2)}`);
+        // The OVER GARAGE floor package over the garage's lean-to: no line
+        // at its top across the room's width.
+        const uA = uOf({ x: -4, z: 38 }), uB = uOf({ x: 20, z: 38 });
+        const lo = Math.min(uA, uB) + 0.1, hi = Math.max(uA, uB) - 0.1;
+        const stub = segs.filter(s => Math.abs(s.a.e - over.floorTop) < 0.05 && Math.abs(s.b.e - over.floorTop) < 0.05)
+          .filter(s => [0.1, 0.3, 0.5, 0.7, 0.9].some(t => {
+            const u = s.a.u + (s.b.u - s.a.u) * t;
+            // Just under the line: the room's wall fill starts ON it, the band goes under it.
+            return u > lo && u < hi && seen(s.seq, u, s.a.e - 0.03);
+          }));
+        check('E1: no line along the room\'s floor over the garage roof',
+          stub.length === 0, `${stub.length} visible segment(s) at ${ftIn(over.floorTop)}`);
+      }
+    } else {
+      check('proto/repro-modbilevel-e1.draft is present', false, 'missing');
+    }
+
   return missed;
 }
 
@@ -2907,6 +2972,12 @@ if (!MUTATION_MODE) {
 // away. A mutation nothing catches is a rule this harness only appears to
 // hold.
 const MUTATIONS = [
+  ['a wall face draws its end where the same plane carries on',
+    s => s.replace('      const seamL = carriesOn(loU, -1, footL, topL);', '      const seamL = false;')],
+  ['a floor band is clipped by a nearer face that stops below it',
+    s => s.replace('        && (top == null || other.top >= top - 1e-6)).forEach(other => {', '        ).forEach(other => {')],
+  ['a floor band draws its end against a wall in its own plane',
+    s => s.replace('            if (flushStop(u, d, part)) return;', '')],
   // ── RE-AIMED: IT WAS NAMED FOR ONE FUNCTION AND MUTATING ANOTHER ────
   //
   // Its anchor was `- GARAGE_BEAM_PLATE_IN / 12;\n  }`, which occurs TWICE in
@@ -3008,7 +3079,7 @@ const MUTATIONS = [
   // move: replacing the list at its source takes the clip away from the fill
   // AND from the edges that close it, which is the whole of "stops asking".
   ['the rim band stops asking what stands in front of it',
-    s => s.replace('        const parts = uncovered(run.lo, run.hi, depth);',
+    s => s.replace('        const parts = uncovered(run.lo, run.hi, depth, level.floorTop);',
       '        const parts = [{ lo: run.lo, hi: run.hi }];')],
   ['the occlusion test goes back to house faces only, blind to the garage',
     s => s.replace('    const allSpans = faces.map(spanOf).filter(span => span.hi - span.lo >= 0.5);',
