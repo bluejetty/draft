@@ -130,7 +130,10 @@ test('the drive-thru offers to draw it, for a house and for a garage', async ({ 
   await expect(link, 'nothing picked, nothing to draw').toBeHidden();
   await page.locator('[data-build-family="bungalow"]').click();
   await page.locator('[data-build-entry="bungalow"]').click();
-  await expect(page.locator('#dt-note')).toHaveText('PRESS BUTTON to build now -or-');
+  // The old "PRESS BUTTON to build now -or-" note is gone: the build-now
+  // line under it said the same thing.
+  await expect(page.locator('#dt-note')).toHaveText('');
+  await expect(page.locator('#dt-build-now')).toHaveText('PRESS TO DRAW HOUSE WITHOUT drawing OUTLINE');
   await expect(link).toHaveText('CLICK HERE to draw house OUTLINE');
   await link.click();
   await expect(page.locator('#drivethru'), 'the sign goes down').toHaveAttribute('data-shut', '');
