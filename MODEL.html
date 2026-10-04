@@ -3793,6 +3793,8 @@
       // PROJECT's section-table row for a build type -- a BILEVEL's half-levels
       // stand on its numbers (cut-view.js splitFloorStack).
       sectionRow: rowId => drawing?.sectionTable?.rows?.[rowId] ?? null,
+      foundationHoldDown: () => ({ attachment: drawing?.foundationAttachment,
+        ladderIn: drawing?.foundationLadderIn }),
       // BOTH ENDS AND THE MIDDLE, as the old page asks it: an edge lying along
       // an outline needs all three on the boundary, or a chord across a
       // concave outline would read as an edge of it. The segment walk comes

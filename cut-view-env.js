@@ -219,6 +219,9 @@ if (!window.DraftCutViewEnv) {
       // would stack them a full storey apart.
       buildType: () => saved.buildType ?? null,
       sectionRow: rowId => saved.sectionTable?.rows?.[rowId] ?? null,
+      // How the framing is held down, PROJECT's own pair: a sill or a PT
+      // ladder, and the ladder's depth.
+      foundationHoldDown: () => ({ attachment: saved.foundationAttachment, ladderIn: saved.foundationLadderIn }),
       edgeOnOutline: (a, b, outline, eps = 0.1) => {
         if (!outline) return false;
         const count = outline.open ? outline.points.length - 1 : outline.points.length;

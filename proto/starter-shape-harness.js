@@ -81,8 +81,13 @@ const a2 = S.generate(fixedRng([0.1, 0.5]));
 ok('a fixed rng repeats exactly', JSON.stringify(a1) === JSON.stringify(a2));
 
 // ── a forced kind is honoured ─────────────────────────────────────────────
+// AGAINST EVERY PICK, not one random one: with Math.random a generate that
+// ignored the forced kind still landed on it now and then, and the mutant
+// below survived about one CI run in 27 (#608's harness job, 4 Oct). These
+// are the same four draws that reach every kind further down.
 for (const kind of S.KINDS) {
-  ok(`generate can be forced to ${kind}`, S.generate(Math.random, kind).kind === kind);
+  ok(`generate can be forced to ${kind}`,
+    [0, 0.34, 0.67, 0.999999].every(r => S.generate(() => r, kind).kind === kind));
 }
 
 // ── generate() can never produce an unusable shape ────────────────────────

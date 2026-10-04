@@ -1309,7 +1309,15 @@ function run(win) {
         // BOTH HALVES OR NEITHER. Without the second check, "stroke nothing
         // down there" passes -- and the top of the pour is a real line that
         // has to stay.
-        const lineAt = e => painted.strokes.some(s => {
+        //
+        // AND THEN HE ASKED FOR IT, LIGHTER BELOW. Movie, 4 Oct: "i'm
+        // considering adding a second line (1.5\" down) to show the location
+        // of the sill plate", then "make the lower 'sil plate' line lighter".
+        // So the plate's top now carries the full-weight line and the top
+        // of the pour under it goes light -- the weight difference is what
+        // keeps the strip from reading as a slot.
+        const INK_FULL = '#1d1f20';   // PAPER_INKS.line, the painter's INK
+        const strokeAt = e => painted.strokes.find(s => {
           for (let k = 1; k < s.pts.length; k += 1) {
             const a = s.pts[k - 1], b = s.pts[k];
             if (b.move || b.close) continue;
@@ -1319,10 +1327,11 @@ function run(win) {
           }
           return false;
         });
-        check(`${cut.id}: the ${garage ? 'garage' : 'house'} sill plate over ${ftIn(conc)} carries no line across its top`,
-          !lineAt(bear), `probed ${ftIn(bear)} over u ${lo.toFixed(2)}..${hi.toFixed(2)}`);
-        check(`${cut.id}: and the top of the pour at ${ftIn(conc)} still draws one`,
-          lineAt(conc), `probed ${ftIn(conc)} over u ${lo.toFixed(2)}..${hi.toFixed(2)}`);
+        const topLine = strokeAt(bear), pourLine = strokeAt(conc);
+        check(`${cut.id}: the ${garage ? 'garage' : 'house'} sill plate over ${ftIn(conc)} carries a full-weight line across its top`,
+          !!topLine && topLine.ink === INK_FULL, `probed ${ftIn(bear)} over u ${lo.toFixed(2)}..${hi.toFixed(2)}: ${topLine ? topLine.ink : 'none'}`);
+        check(`${cut.id}: and the top of the pour at ${ftIn(conc)} still draws one, lighter`,
+          !!pourLine && pourLine.ink !== INK_FULL, `probed ${ftIn(conc)} over u ${lo.toFixed(2)}..${hi.toFixed(2)}: ${pourLine ? pourLine.ink : 'none'}`);
         const bad = seen.filter(s => !s.strip || s.strip.ink !== wallInk);
         check(`${cut.id}: the ${garage ? 'garage' : 'house'} sill plate over ${ftIn(conc)} is painted, and as WALL`,
           bad.length === 0,
@@ -3198,9 +3207,9 @@ const MUTATIONS = [
   // half drew it; this is the two halves of undrawing it, so neither the
   // outline nor the fill can put the step back on its own.
   ['the concrete-s top steps down at a door on the elevation again',
-    s => s.replace('        ctx.moveTo(X(r.lo), Y(g.topE)); ctx.lineTo(X(r.hi), Y(g.topE));',
-      '        notched(r, bs).forEach(q => { ctx.moveTo(X(q.lo), Y(g.topE - q.drop));'
-      + ' ctx.lineTo(X(q.hi), Y(g.topE - q.drop)); });')],
+    s => s.replace('        runs.forEach(r => { ctx.moveTo(X(r.lo), Y(g.topE)); ctx.lineTo(X(r.hi), Y(g.topE)); });',
+      '        runs.forEach(r => notched(r, bs).forEach(q => { ctx.moveTo(X(q.lo), Y(g.topE - q.drop));'
+      + ' ctx.lineTo(X(q.hi), Y(g.topE - q.drop)); }));')],
   //
   // THERE IS NO MATCHING MUTANT FOR THE FILL, and that is a measurement rather
   // than an omission. A door's own recess is painted over its rough opening
@@ -3221,8 +3230,8 @@ const MUTATIONS = [
       '    return garageSlabBelowConcreteIn('
       + 'GARAGE_SLAB_FLAT_AT_FT - garageDepthFt(env, garage, pt)) / 12;')],
   ['the sill plate is painted across the door opening',
-    s => s.replace('      runs.forEach(r => notched(r, bs).filter(p => !p.drop)',
-      '      runs.forEach(r => notched(r, bs).filter(p => true)')],
+    s => s.replace('      runs.forEach(r => notched(r, bs).filter(p => !p.drop)\n        .forEach(p => ctx.fillRect(',
+      '      runs.forEach(r => notched(r, bs).filter(p => true)\n        .forEach(p => ctx.fillRect(')],
   // AND THE THREE WAYS A DOOR STOPS STANDING ON WHAT IS UNDER IT. The first
   // is the 26 Sep defect itself -- a door in a buck stopping at the wall's
   // floor, which leaves the wall fill's own edge showing across the opening
