@@ -5241,13 +5241,15 @@ if (!window.DraftCutView) {
     };
     // The band's vertical edges, drawn after every face and roof: a corner
     // line crossing the floor package is a corner whatever is clad over it.
-    const edgeDepth = new Map();
     bandLevels.forEach(({ level, spans, runs, paintedOf }) => {
       const yTopPx = Y(level.floorTop) - 1, yBotPx = Y(level.floorBottom) + 1;
       // Vertical edges through the band: the run boundaries plus any face
       // corner inside a run that isn't hidden behind a nearer face — a jog
       // in the facade keeps its corner line crossing the floor.
-      const edges = new Set();
+      // u -> the depth the edge stands at: a run's end at its nearest face,
+      // an interior joint at its own span's (an interior wall's end stands
+      // behind the exterior wall, and is hidden by it).
+      const edges = new Map();
       runs.filter(run => run.hi - run.lo >= 0.5).forEach(run => {
         // A RUN'S OWN ENDS ARE THE BAND'S ENDS, so they are drawn without
         // asking whether a nearer FACE covers them -- by construction nothing
@@ -5300,29 +5302,31 @@ if (!window.DraftCutView) {
           [part.lo, part.hi].forEach(u => {
             const d = nearDepth(u);
             if (flushStop(u, d, part)) return;
-            edges.add(u);
+            edges.set(u, d);
           });
         });
         spans.forEach(span => [span.lo, span.hi].forEach(u => {
-          if (u > run.lo + 0.05 && u < run.hi - 0.05 && !flushJoint(u, span.depth)) edges.add(u);
+          if (u > run.lo + 0.05 && u < run.hi - 0.05 && !flushJoint(u, span.depth)
+            && !edges.has(u)) edges.set(u, span.depth);
         }));
-        edgeDepth.set(level, nearDepth);
       });
       // EACH EDGE DOWN TO WHERE A ROOF IN FRONT TAKES OVER, not all or
       // nothing on the band's middle: over a garage's lean-to the building's
       // corner shows above the sheet and is hidden under it.
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       ctx.beginPath();
-      const depthAt = edgeDepth.get(level);
-      edges.forEach(u => {
+      edges.forEach((d, u) => {
         const STEPS = 12;
         let from = null;
         for (let k = 0; k <= STEPS; k++) {
           const e = level.floorTop - (level.floorTop - level.floorBottom) * (k / STEPS);
           // Hidden by a nearer face that stands at this height, or a roof.
-          const d = depthAt(u);
+          // A nearer floor band is as solid as a nearer wall: a house's own
+          // band stands between its walls, and a face test alone saw a gap.
           const seen = !allSpans.some(o => o.depth > d + 1e-6
             && o.lo < u - 0.05 && o.hi > u + 0.05 && o.top >= e - 1e-6 && o.bottom <= e + 1e-6)
+            && !rimBands.some(b => b.depth > d + 1e-6
+              && b.lo < u - 0.05 && b.hi > u + 0.05 && b.top >= e - 1e-6 && b.bottom <= e + 1e-6)
             && !behindRoof(atUDepth(u, d), e);
           if (seen && from == null) from = e;
           if ((!seen || k === STEPS) && from != null) {
