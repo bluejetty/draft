@@ -386,6 +386,20 @@
         if (!frame || (!drag && !fits(w, h))) frame = frameFor(w, h);
         if (!level || !frame) return;
         const below = under(level);
+        // EVERY OTHER BONE, FADED, for lining one floor up on another. Movie,
+        // 4 Oct: "could we show the other 'BONE lines in faded out or
+        // something so i can line up stuff if i need to floor to floor, and
+        // when they select one, bring it to top and increase thickness and
+        // opacity of that one". Each in its own colour, thin and see-through,
+        // under everything; the level under the picked one keeps its grey
+        // dashes (what an overhang hangs past) rather than drawing twice.
+        const faded = shown().filter(l => l !== level && l !== below
+          && !(l.kind === level.kind && l.levelId === level.levelId));
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        faded.forEach(l => strokePolys(ctx, l.loops.map(loop => loop.points.map(toScreen)), l.color, 1.5));
+        ctx.restore();
+        c2.setAttribute('data-faded', JSON.stringify(faded.map(l => l.name)));
         if (below) {
           strokePolys(ctx, below.loops.map(l => l.points.map(toScreen)),
             skin['ink-quiet'] || '#888', 1, [5, 4]);
@@ -398,7 +412,8 @@
           ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
         });
         const cut = cutOf(level.loops, toScreen);
-        strokeCut(ctx, cut, level.color, 2);
+        // The picked bone on top of them all, heavier than it was.
+        strokeCut(ctx, cut, level.color, 3);
         c2.setAttribute('data-openings', openingsAttr([{ name: level.name, cut }]));
         // Every corner, so a BREAK can be seen.
         ctx.fillStyle = level.color;
