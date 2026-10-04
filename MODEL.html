@@ -5703,7 +5703,9 @@
       // difference between the two presses.
       signNote.textContent = round === 'outline'
         ? 'Press the bone and I\u2019ll walk you through drawing it.'
-        : 'PRESS BUTTON to build now -or-';
+        // NOTHING, now the build-now line says it (Movie, 4 Oct: the note
+        // only repeated "PRESS TO DRAW HOUSE WITHOUT drawing OUTLINE").
+        : '';
     } else if (open) {
       signLine.textContent = `${open.label} \u2014 WHICH ONE?`;
       signNote.textContent = open.title;
