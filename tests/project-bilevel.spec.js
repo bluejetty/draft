@@ -400,3 +400,25 @@ test('nothing is printed under the split card', async ({ page }) => {
   });
   expect(trailing).toEqual([]);
 });
+
+// ── THE MOD BILEVEL'S GARAGE, LINED UP AND ROOFED ─────────────────────────
+//
+// Movie, 4 Oct, on this card: "the MOD BILEVEL has the stairs going to 2nd
+// level but no 2nd level over garage", and "the sill plate on the house and
+// the garage don't look like they line up ... looks like house sill plate is
+// lower". The room got no wall, so its roof sat on the deck; and the garage
+// was measured off an entry deck stacked with the entry's own package
+// instead of MAIN's, 2 5/8" over the house's sill.
+test('MOD BILEVEL: the garage sill is the house sill, and the room over it stands',
+  async ({ page }) => {
+    await openProject(page);
+    await page.locator('#bilevel-family-row button[data-family-entry="modifiedBilevel"]').click();
+    await page.waitForTimeout(300);
+    const paint = await page.evaluate(() =>
+      document.querySelector('#bilevel-canvas').paintedSection);
+    const at = paint.anchors;
+    // Both anchors sit at the middle of their sill plate, both plates 1 1/2".
+    expect(Math.abs(at.garageSill.y - at.attachment.y) / paint.view.scale).toBeLessThan(0.01);
+    // The room's wall is drawn, a storey tall on the deck.
+    expect(at.garageOverWallHeight, 'no wall stands on the deck over the garage').toBeTruthy();
+  });

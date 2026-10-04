@@ -110,10 +110,14 @@ test('the near slice shows the half-storeys and the far edge shows the main floo
     // One on the far edge, and it is the main floor -- the datum, whose deck
     // top is 0 by definition on every drawing this page makes.
     expect(far.decks.length).toBe(1);
-    expect(far.decks[0].top).toBeCloseTo(0.219, 2);
+    // It was 0.219 until 4 Oct: the stack climbed the entry with its own
+    // package rather than MAIN's, so MAIN sat 2 5/8" off its own datum and the
+    // entry deck floated over the house sill (Movie: "looks like house sill
+    // plate is lower").
+    expect(far.decks[0].top).toBeCloseTo(0, 3);
     // AND IT IS NOT ON THE NEAR SLICE, stated separately: a count alone is
     // satisfied by any two of the three.
-    near.decks.forEach(deck => expect(Math.abs(deck.top - 0.219)).toBeGreaterThan(0.5));
+    near.decks.forEach(deck => expect(Math.abs(deck.top)).toBeGreaterThan(0.5));
   });
 
 // A HIDDEN BAND IS A HIDDEN FLOOR, NOT A HOLE IN THE WALL. The band's own
@@ -175,12 +179,14 @@ test('the bottom chord turns down the drop at its own thickness',
     const chord = chordFt[0];
     expect(chord).toBeGreaterThan(0.2);
 
-    // The back of the turn: one vertical, a chord in from the face, running
-    // corner to corner of the offset.
+    // The back of the turn: one vertical, a chord past the face on the attic
+    // side -- away from the balcony it faces -- running corner to corner of
+    // the offset. A chord the other way ran the back through the room face
+    // at both corners (Movie, 4 Oct: "the 'bottom chord' lines cross over").
     // A THOUSANDTH OF A FOOT is the tolerance on anything DERIVED here: the
     // chord above is a difference of two drawn heights, so it carries their
     // rounding, while ext is a number this file typed.
-    const back = near.verticals.filter(v => Math.abs(v.x - (ext - chord)) < 1e-3);
+    const back = near.verticals.filter(v => Math.abs(v.x - (ext + chord)) < 1e-3);
     expect(back.length).toBe(1);
     expect(back[0].lo).toBeCloseTo(lower.y + chord, 3);
     expect(back[0].hi).toBeCloseTo(upper.y + chord, 3);
@@ -189,8 +195,8 @@ test('the bottom chord turns down the drop at its own thickness',
     // that was empty: an upper back ending at ext leaves the turn hanging.
     const upperBack = near.horizontals.find(h => Math.abs(h.y - (upper.y + chord)) < 1e-3);
     const lowerBack = near.horizontals.find(h => Math.abs(h.y - (lower.y + chord)) < 1e-3);
-    expect(upperBack.x2).toBeCloseTo(ext - chord, 3);
-    expect(lowerBack.x1).toBeCloseTo(ext - chord, 3);
+    expect(upperBack.x2).toBeCloseTo(ext + chord, 3);
+    expect(lowerBack.x1).toBeCloseTo(ext + chord, 3);
   });
 
 // ── THE NEAR EAVE ─────────────────────────────────────────────────────────

@@ -1616,7 +1616,12 @@
           // "the left eave on the house is cut off can you add that back
           // one". The far edge has always drawn its eave; this is the near
           // one, so the two ends of the slice finally match.
-          eaves: true,
+          //
+          // EXCEPT UNDER A ROOM OVER THE GARAGE. Then the garage roof stands
+          // on the house's own plate and dies into its plane (Movie, 4 Oct:
+          // "no 2nd level over garage"), so there is no lower roof for the
+          // eave to hang over -- it would be drawn inside the garage's roof.
+          eaves: !bilevelBuild().roomOver,
         };
       };
 
@@ -1633,9 +1638,11 @@
       const bilevelUpperDeckFt = () => {
         const floors = bilevelValues().floors;
         if (!floors[2]) return null;
-        const entry = floors[0];
+        // The entry deck is MAIN FL less the entry's wall and MAIN's own
+        // floor package -- the step buildWallSection climbs.
+        const entry = floors[0], main = floors[1];
         const entryDeckFt = -(entry.wallHeightFt
-          + (entry.joistDepthIn + entry.sheathingIn) / 12);
+          + (main.joistDepthIn + main.sheathingIn) / 12);
         return entryDeckFt + floors[2].deckAboveFt;
       };
 
@@ -1651,10 +1658,16 @@
       // foundation wall a half storey lower, so the house sill on this band
       // is the entry deck less the entry package. Measuring the garage from
       // the wrong house put it above the house it attaches to.
+      //
+      // THE ENTRY DECK IS MAIN LESS MAIN'S PACKAGE, not the entry's. Movie,
+      // 4 Oct: "the sill plate on the house and the garage don't look like
+      // they line up ... looks like house sill plate is lower". Using the
+      // entry's 10" package twice put this sill 2 1/2" over the house's.
       const bilevelHouseSillFt = () => {
-        const entry = bilevelValues().floors[0];
-        const pkgFt = (entry.joistDepthIn + entry.sheathingIn) / 12;
-        return -(entry.wallHeightFt + pkgFt) - pkgFt;
+        const [entry, main] = bilevelValues().floors;
+        const entryPkgFt = (entry.joistDepthIn + entry.sheathingIn) / 12;
+        const mainPkgFt = (main.joistDepthIn + main.sheathingIn) / 12;
+        return -(entry.wallHeightFt + mainPkgFt) - entryPkgFt;
       };
 
       // THE GARAGE THE UPPER LEVEL RUNS OVER. Movie, 16 Sep: "and it should be
@@ -1723,6 +1736,28 @@
             roomOver,
             overJoistIn: over.joistDepthIn,
             overSheathingIn: over.sheathingIn,
+            // THE ROOM ITSELF. Movie, 4 Oct: "the MOD BILEVEL has the stairs
+            // going to 2nd level but no 2nd level over garage" -- with no
+            // wall handed in, the roof sprang straight off the deck. The room
+            // is the 2ND FL's storey on that deck, so its plate lands on the
+            // house's 2ND FL plate.
+            ...(roomOver ? (() => {
+              const house = bilevelValues();
+              const overWallFt = house.floors[2]?.wallHeightFt ?? 0;
+              return {
+                overWallHeightFt: overWallFt,
+                overWallIn: WALL_TYPE_VIEW[activeWallType].totalIn,
+                // AND THE HOUSE ROOF IT DIES INTO, on the same plate: the
+                // 2 STOREY band's answer, so the garage roof meets the
+                // house's plane instead of running over its eave.
+                houseRoof: {
+                  plateFt: bilevelUpperDeckFt() + overWallFt,
+                  heelIn: house.roof.heelIn,
+                  pitch: house.roof.pitch,
+                  cutFt: BILEVEL_CUT_FT,
+                },
+              };
+            })() : {}),
           },
         };
       };
