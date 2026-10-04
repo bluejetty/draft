@@ -5170,6 +5170,9 @@
     // The geometry side's word that the FOOT's bone raised something. See
     // fireBuild: said out loud rather than inferred from a return value.
     buildServed: () => { buildWasServed = true; },
+    // THE BONE'S BUILD, pressed by the page itself: a traced house goes up
+    // the moment its last loop closes. The same toll and the same handlers.
+    build: () => fireBuild(),
     onOrder: fn => { if (typeof fn === 'function') orderHandlers.push(fn); },
     // CLICK HERE to draw house OUTLINE: the geometry side arms the trace.
     onOutline: fn => { if (typeof fn === 'function') outlineHandlers.push(fn); },
@@ -10182,6 +10185,7 @@
   // trace, and each loop is kept as it closes; the bone then builds the
   // whole house off them (traced-plans.js -> buildPremadePlan).
   let tracedOrder = null;
+  let tracedBuildsOnClose = false;
   let tracedHouse = null;
   let tracedGarage = null;
   let tracedMasters = [];
@@ -10239,6 +10243,10 @@
     // A NEW TYPE STARTS A NEW HOUSE: the loops of an earlier trace stay in
     // the drawing, but they are not this order's.
     tracedOrder = picked?.entry ? picked : null;
+    // ONLY THE OUTLINE PRESS BUILDS ON CLOSE (Movie, 3 Oct: "if they select
+    // the OUTLINE ... build the house"). A type picked at the window arms
+    // the same trace and still waits for the bone, as it always has.
+    tracedBuildsOnClose = Boolean(fromLink && tracedOrder);
     tracedHouse = null;
     tracedGarage = null;
     tracedMasters = [];
@@ -10352,6 +10360,7 @@
     // and it would look perfect until a corner was dragged.
     // A GARAGE'S LOOP SAYS SO, as the old page's garage masters do.
     const closingGarage = outlineGarage;
+    let buildAfterClose = false;
     if (outlineGarage) spec.garage = true;
     const master = OM.storageMaster(spec);
     const levels = (drawing.levels || []);
@@ -10383,12 +10392,19 @@
         outlineGarage = true;
         sayOnStrip('Now trace the garage against the house — press each corner, then the first corner again to close.');
       } else {
+        // THE LAST LOOP CLOSED, SO THE HOUSE GOES UP when the trace came off
+        // the OUTLINE press (Movie, 3 Oct: "right away", no bone press).
+        // Said first so a build that is refused -- a trace the type cannot
+        // take, an empty wallet -- leaves the bone as the way on, and its
+        // own refusal written over this.
         sayOnStrip(`Press the bone to build your ${isGarageChoice(tracedOrder) ? 'garage' : label}.`);
+        buildAfterClose = tracedBuildsOnClose;
       }
     }
     markDirty();
     stripRefresh();
     paint();
+    if (buildAfterClose) window.ModelBuild.build();
     return master;
   };
 

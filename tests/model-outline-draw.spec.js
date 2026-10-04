@@ -156,8 +156,16 @@ test('the drive-thru offers to draw it, for a house and for a garage', async ({ 
   for (const [x, z] of [[30, 0], [52, 0], [52, 22], [30, 22], [30, 0]]) {
     await page.mouse.click(...at(x, z));
   }
-  const masters = await savedMasters(page);
-  expect(masters.map(m => m.garage), 'the traced loop is a garage').toEqual([true]);
+  // CLOSING IT BUILDS IT (Movie, 3 Oct): the loop is the garage's, and the
+  // garage stands on it straight away.
+  await page.waitForTimeout(500);
+  await page.locator('#save').click();
+  await h.waitForSaved(page);
+  const d = await h.savedDrawing(page);
+  const g = d.outlines.filter(o => o.garage && o.detached);
+  expect(g.length, 'the traced loop became the garage').toBe(1);
+  const xs = g[0].points.map(p => p.x);
+  expect([Math.min(...xs), Math.max(...xs)]).toEqual([30, 52]);
 });
 
 // Movie, 3 Oct: "above CLICK HERE to draw HOUSE OUTLINE... add another line
