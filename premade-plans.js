@@ -1103,6 +1103,36 @@ if (!window.DraftPremadePlans) {
     opening(0, 3, MAN_DOOR_WIDTH_FT, 'door'),
   ];
 
+  // THE ROOM'S ROOF IS SQUARE. Movie, 4 Oct, on the MOD BILEVEL: the room's
+  // roof "needs a 'roof'", the "balcony on the 2nd floor, and upperstair
+  // flights needs to have that roof above it for adequate headroom" -- and,
+  // drawing it, "make it strait across and will stickframe in that part ...
+  // will make the roof squar which will look better". So the roof covers the
+  // room AND the upper landing as one rectangle, run straight across the jog
+  // where the room's back wall steps in. "The actual bearing for the roof
+  // will be on the jogged in wall": it stands on the room's own plate, and
+  // the corner past that wall is cavity, stick-framed.
+  //
+  // Wound the way the first loop is, from the corner nearest its first
+  // point, so the roof turns the same way round as the room it covers.
+  const squareOver = (...loops) => {
+    const all = loops.filter(Boolean).flat();
+    if (!all.length) return null;
+    const xs = all.map(p => p.x), zs = all.map(p => p.z);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+    const first = loops.find(Boolean);
+    const area = first.reduce((s, p, i) => {
+      const q = first[(i + 1) % first.length];
+      return s + p.x * q.z - q.x * p.z;
+    }, 0);
+    const rect = [pt(x0, z0), pt(x1, z0), pt(x1, z1), pt(x0, z1)];
+    const ring = area < 0 ? [rect[0], rect[3], rect[2], rect[1]] : rect;
+    const s0 = first[0];
+    const k = ring.reduce((best, p, i) => (Math.hypot(p.x - s0.x, p.z - s0.z)
+      < Math.hypot(ring[best].x - s0.x, ring[best].z - s0.z) ? i : best), 0);
+    return [...ring.slice(k), ...ring.slice(0, k)];
+  };
+
   const modifiedBilevel = () => {
     const base = bilevel({ garage: true });
     const stairs = base.stairs;
@@ -1117,8 +1147,9 @@ if (!window.DraftPremadePlans) {
       overGarage: overGarageLoop(),
       overGarageOpenings: modifiedRoomOpenings(),
       // ITS OWN ROOF, on its own ceiling: the room stands half a storey over
-      // MAIN, so it cannot share the house's plate.
-      overGarageRoof: overGarageLoop(),
+      // MAIN, so it cannot share the house's plate. Square over the room and
+      // the landing (squareOver).
+      overGarageRoof: squareOver(overGarageLoop(), upperLandingLoop()),
       // AND THE GARAGE'S ROOF IS WHAT THE ROOM LEAVES -- the 2 STOREY's own
       // answer -- with the tie under the room's roof.
       garageRoof: garageRoofLoop({ overGarage: true }),
@@ -1155,7 +1186,7 @@ if (!window.DraftPremadePlans) {
     MAN_DOOR_WIDTH_FT, GARAGE_WINDOW_WIDTH_FT, GARAGE_DOOR_HEAD_FT,
     ENTRY_WIDTH_FT, ENTRY_DEPTH_FT, ENTRY_LEFT_FT, BILEVEL_STAIR_WIDTH_FT,
     BILEVEL_STAIR_GAP_FT, BILEVEL_OVERLAP_FT,
-    bungalow, twoStorey, bilevel, modifiedBilevel, planFor, detachedGarageOpenings,
+    bungalow, twoStorey, bilevel, modifiedBilevel, planFor, detachedGarageOpenings, squareOver,
     entryIds: () => Object.keys(PLANS),
   });
 })();

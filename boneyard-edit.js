@@ -628,7 +628,8 @@ if (!window.DraftBoneyardEdit) {
     const ladder = ctx.ladder;
     const spacingFt = Number(ctx.pileSpacingFt) > 0 ? Number(ctx.pileSpacingFt) : PILE_SPACING_FT;
     let out = want * edge.n;
-    const top = levelOf(ctx.levels, 'floor', roofLevel.sourceLevelId);
+    // A loop on a plate of its own stands on its own floor.
+    const top = levelOf(ctx.levels, 'floor', loop.sourceLevelId ?? roofLevel.sourceLevelId);
     const under = top && belowEdge(top, edge);
     const strips = [];
     if (under) {
@@ -642,7 +643,9 @@ if (!window.DraftBoneyardEdit) {
     if (near(out, 0)) return { ok: false, reason: 'NO_RUNG' };
     const d = clone(drawing);
     const L = { axis: edge.axis, c: edge.c, n: edge.n, lo: edge.lo, hi: edge.hi, delta: out * edge.n };
-    const roofs = (d.roofs || []).filter(r => r.sourceLevelId == null && !r.garage);
+    // The roof that loop IS, where it is one; otherwise the house's.
+    const mine = (d.roofs || []).filter(r => r.id != null && r.id === loop.id);
+    const roofs = mine.length ? mine : (d.roofs || []).filter(r => r.sourceLevelId == null && !r.garage);
     const moved = pushRoofs(d, roofs, loop.points, L);
     if (!moved) return { ok: false, reason: 'NO_ROOF' };
     const report = { moves: [{ name: 'ROOF', levelId: 7, kind: 'roof', outFt: out }], trims: [],
