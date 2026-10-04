@@ -495,7 +495,9 @@ back to MODEL, which plays the E1 rising reveal. A tap skips to E1.
 3. If the type hangs a garage on the house (the + GARAGE types, ROOM OVER,
    MODIFIED BILEVEL), the strip says "Now trace the garage" and the OUTLINE
    tool stays armed for it.
-4. Closing the last loop BUILDS IT -- Movie, 3 Oct, "Build right away" --
+4. Off the OUTLINE press, closing the last loop BUILDS IT -- Movie, 3 Oct,
+   "Build right away" (a type picked at the window arms the same trace and
+   still waits for the bone) --
    through the bone's own build (`ModelBuild.build`, the same toll and the
    same handlers). A trace the type refuses, or an empty wallet, builds
    nothing, says why, and leaves "Press the bone to build your ..." as the
