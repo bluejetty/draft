@@ -188,8 +188,13 @@ test('and the corner-string layer does not take them with it', async ({ page }) 
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 15000 });
   await retape(page, 1362);
   const after = await sizeTags(page);
-  expect(after.sort(), 'hiding the corner string took the window sizes with it')
-    .toEqual(before.sort());
+  // THE DISTINCT SIZES, NOT THE TAPE'S LENGTH. The tape records every paint
+  // in its window, so the same tags arrive once per repaint and the count
+  // follows how busy the machine was (CI, 4 Oct: 18 against 31, every size
+  // still there). What this test guards is a size going missing.
+  const distinct = list => [...new Set(list)].sort();
+  expect(distinct(after), 'hiding the corner string took the window sizes with it')
+    .toEqual(distinct(before));
 });
 
 // ── AND THE ELEVATION THIS PAGE DRAWS ITSELF ──────────────────────────────

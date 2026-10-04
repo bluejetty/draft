@@ -7537,7 +7537,7 @@
   // WINDOW drags a blue box over the current level, ALL LEVELS drags a red one
   // over every level, and they are mutually exclusive.
   let selectionMode = 'click';        // 'click' | 'window' | 'window-all'
-  let selectFilter = 'all';           // 'all' | 'line' | 'wall' | 'outline' | 'floor'
+  let selectFilter = 'all';           // 'all', or one of hitAt's types (FILTERS)
 
   const selectedWall = () => (selection.length === 1 && selection[0].type === 'wall'
     ? selection[0].item : null);
@@ -7686,11 +7686,9 @@
   // 'all' passes everything; any other filter passes only its own type. The old
   // page's whole rule, in one line (_selectFilterAllows :18180).
   //
-  // AN OPENING IS REACHABLE ONLY UNDER ALL, and that falls out rather than
-  // being written: the OBJECT TYPE vocabulary is 'all' | 'line' | 'wall' |
-  // 'outline' | 'floor', so `selectFilter === 'fenestration'` is a comparison
-  // that can never be true. Same as the old page, whose filter list is the
-  // same five.
+  // EVERY TYPE hitAt ANSWERS HAS ITS OWN FILTER since 4 Oct (Movie: "same
+  // thing for other object types"), so a door, a stair or a tag can be
+  // engaged on its own. The old page's list was the first five.
   const filterAllows = type => selectFilter === 'all' || selectFilter === type;
 
   // ── the window drag ───────────────────────────────────────────────────────
@@ -15830,16 +15828,25 @@
     'window-all': 'Drag a red box to select fully enclosed items on every level.',
   };
   const FILTERS = [
-    { id: 'all', label: 'ALL', aria: 'Grab any object type' },
     { id: 'line', label: 'LINE', aria: 'Grab only lines' },
     { id: 'wall', label: 'WALL', aria: 'Grab only walls' },
     { id: 'outline', label: 'OUTLINE', aria: 'Grab only outlines' },
     { id: 'floor', label: 'FLOOR', aria: 'Grab only floors' },
+    // EVERY OTHER THING SELECT CAN PICK (Movie, 4 Oct: "if i press WALL and
+    // then SELECT it will only select WALLS, or same thing for other object
+    // types"). One per type `hitAt` answers, under the type it answers with,
+    // so the filter and the pick cannot disagree about a name.
+    { id: 'fenestration', label: 'DOOR/WIN', aria: 'Grab only doors and windows' },
+    { id: 'fixture', label: 'FIXTURE', aria: 'Grab only fixtures' },
+    { id: 'stair', label: 'STAIR', aria: 'Grab only stairs' },
+    { id: 'roomtag', label: 'TAG', aria: 'Grab only room tags' },
+    { id: 'shape', label: 'SHAPE', aria: 'Grab only shapes' },
+    { id: 'roof', label: 'ROOF', aria: 'Grab only roofs' },
   ];
   const filterHelp = () => (selectFilter === 'all'
-    ? 'Engage a type so Select only grabs that object — even under other geometry.'
-    : `${selectFilter.toUpperCase()} is engaged: nothing else responds. `
-      + 'Click ALL — or press Esc with nothing selected — to release.');
+    ? 'Nothing lit grabs everything. Press a type so Select only grabs that object — even under other geometry.'
+    : `${(FILTERS.find(f => f.id === selectFilter)?.label || selectFilter.toUpperCase())} is engaged: nothing else responds. `
+      + 'Press it again — or Esc with nothing selected — to release.');
 
   // PICKING A MODE ALSO ARMS SELECT, which is the old page's own behaviour
   // (setClickSelectionMode and its two siblings all set activeTool: 'select').
@@ -15851,7 +15858,13 @@
     syncSelectionPanel();
   };
 
-  const setSelectFilter = id => { selectFilter = id; syncSelectionPanel(); };
+  // NO ALL BUTTON (Movie, 4 Oct: "if nothing is selected ... just select ALL
+  // when nothing else is selected"). Nothing lit IS all, so pressing the lit
+  // type again lets it go -- and 'all' stays the state's own word for that.
+  const setSelectFilter = id => {
+    selectFilter = id === selectFilter ? 'all' : id;
+    syncSelectionPanel();
+  };
 
   let syncSelectionPanel = () => {};
 
