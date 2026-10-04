@@ -360,7 +360,7 @@ for (const theme of P.THEMES) {
     // aggregate so a failure names the colour.
     ['draw-trace-boneyard', 'draw-trace-level', 'draw-trace-garage-boneyard',
       'draw-trace-garage-level', 'draw-trace-bungalow', 'draw-trace-bilevel',
-      'draw-trace-attached', 'draw-selected', 'draw-selected-all'
+      'draw-trace-attached', 'draw-selected', 'draw-selected-all', 'draw-selected-cross'
     ].forEach(role => {
       const ratio = P.contrast(v[role], v['surface-page']);
       check(`${theme}/${mode}  ${role}`, ratio >= 3.0, `${ratio.toFixed(2)} (min 3.0)`);

@@ -167,6 +167,7 @@ if (!window.DraftPalette) {
     // a shared idea.
     'draw-selected',              // the handle and band for THIS level
     'draw-selected-all',          // the band when the mode is every level
+    'draw-selected-cross',        // the crossing box: dragged right to left
     // Brand -- the family that actually differs between RUFF and ROUGH
     'accent',           // the one colour that carries the brand
     'accent-ink',       // text that sits ON the accent
@@ -306,6 +307,7 @@ if (!window.DraftPalette) {
       'draw-trace-attached':        '#3f7fd6',  // 4.11  equal to bilevel today, see ROLES
       'draw-selected':              '#5980a6',  // 3.99
       'draw-selected-all':          '#c86876',  // 4.49  LIFTED with boneyard: same colour, same fault
+      'draw-selected-cross':        '#4fa36a',
       'accent-ink':      '#1d1f20',
     }),
     day: Object.freeze({
@@ -406,6 +408,7 @@ if (!window.DraftPalette) {
       'draw-trace-attached':        '#3f7fd6',  // 3.60
       'draw-selected':              '#5980a6',  // 3.71
       'draw-selected-all':          '#b04050',  // 5.08
+      'draw-selected-cross':        '#2f7d47',
       'accent-ink':      '#ffffff',
     }),
   });

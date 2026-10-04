@@ -177,9 +177,10 @@ test('the mode help says exactly what the old page says', async ({ page }) => {
   await open(page);
   const help = page.locator('[data-sel-help]');
 
+  // ITEMS' line is this page's own since 4 Oct: the drag in ITEMS is a box.
   await expect(help).toHaveText('Click items to select; Shift adds or removes. '
-    + 'Press and drag for a blue window — hold Shift while dragging for a red '
-    + 'all-levels window.');
+    + 'Drag left to right for a blue box of what it encloses, right to left for '
+    + 'a green box of what it crosses. Right-drag (two fingers) pans.');
 
   await page.locator('[data-sel-mode="window"]').click();
   await expect(help).toHaveText(
@@ -433,6 +434,47 @@ test('Esc clears the selection first and releases the filter second',
       .not.toHaveAttribute('data-engaged', /.*/);
     expect(await armed(page, 'data-sel-filter')).toEqual([]);
   });
+
+// ── THE BOX IN ITEMS (Movie, 4 Oct: "drag box select please") ───────────
+// CAD style: dragged left to right the box takes what it ENCLOSES, right to
+// left what it CROSSES as well. The box runs x -6..6, z -2..2: it encloses the
+// probe line (x -4..4 on z 0) and crosses the floor's east and west edges
+// (x ±5) without holding a corner of it, and reaches no wall.
+test('ITEMS: a box dragged left to right takes only what it encloses', async ({ page }) => {
+  await open(page);
+  expect(await armed(page, 'data-sel-mode')).toEqual(['click']);
+  await dragBox(page, [-6, -2], [6, 2]);
+  expect(await selCount(page), 'the probe line only').toBe(1);
+});
+
+test('ITEMS: dragged right to left it takes what it crosses too', async ({ page }) => {
+  await open(page);
+  await dragBox(page, [6, 2], [-6, -2]);
+  expect(await selCount(page), 'the probe line and the floor it cuts across').toBe(2);
+});
+
+test('ITEMS: Shift adds a box to what is already picked', async ({ page }) => {
+  await open(page);
+  await page.mouse.click(...await at(page, 0, -WALL));
+  await page.waitForTimeout(60);
+  expect(await selCount(page)).toBe(1);
+  await dragBox(page, [-6, -2], [6, 2], { shift: true });
+  expect(await selCount(page), 'the wall kept, the line added').toBe(2);
+});
+
+test('ITEMS: the right button drags the sheet and picks nothing', async ({ page }) => {
+  await open(page);
+  const view = () => page.locator('#plan').getAttribute('data-view');
+  const before = await view();
+  const a = await at(page, 2, 2);
+  await page.mouse.move(...a);
+  await page.mouse.down({ button: 'right' });
+  await page.mouse.move(a[0] + 40, a[1] + 30);
+  await page.mouse.move(a[0] + 80, a[1] + 60);
+  await page.mouse.up({ button: 'right' });
+  expect(await view(), 'the sheet moved').not.toBe(before);
+  expect(await selCount(page), 'and nothing was boxed').toBe(0);
+});
 
 test('a window takes what it fully encloses, not what it crosses',
   async ({ page }) => {
