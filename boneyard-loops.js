@@ -12,6 +12,8 @@
 //   FOUNDATION   the house footprint, at the BOTTOM of the foundation wall
 //   each FLOOR   its outlines (house and garage), at its TOP OF SHEATHING
 //   ROOF         the top floor's house outline, at that floor's CEILING
+//                -- and a roof on a plate of its own (the MOD BILEVEL's room)
+//                at its own floor's ceiling
 //
 // THE HEIGHTS ARE THE ELEVATIONS' OWN. `stack` is cut-view's
 // sectionLevelStack, the one table every elevation and section on every page
@@ -164,16 +166,22 @@ if (!window.DraftBoneyardLoops) {
     // be at highest floor ceiling".
     // The HIGHEST ceiling, not the last level in the list: a split's levels
     // do not climb in list order (cut-view.js splitFloorStack).
-    const top = floors.reduce((hi, f) => (f.floor.wallTop > hi.floor.wallTop ? f : hi), floors[floors.length - 1]);
-    // THE ROOF'S OWN FOOTPRINT where it has one -- its eave brought back in by
+    // AND NOT A FLOOR THAT CARRIES A ROOF OF ITS OWN: the MOD BILEVEL's room
+    // over the garage stands half a storey over MAIN on its own plate, so
+    // the house's roof is MAIN's, and the room's is drawn on the room's.
+    const G = window.DraftGeometry2D;
+    const ownedBy = new Set(((drawing && drawing.roofs) || [])
+      .filter(r => r.sourceLevelId != null && !r.garage && (r.points || []).length >= 3)
+      .map(r => Number(r.sourceLevelId)));
+    const plates = floors.filter(f => !ownedBy.has(Number(f.floor.id)));
+    const pool = plates.length ? plates : floors;
+    const top = pool.reduce((hi, f) => (f.floor.wallTop > hi.floor.wallTop ? f : hi), pool[pool.length - 1]);
+    // A ROOF'S OWN FOOTPRINT where it has one -- its eave brought back in by
     // its overhang, which is the top floor's loop until a roof is pulled out
     // on its own (a covered entry, a back deck).
-    const G = window.DraftGeometry2D;
-    const ownRoof = ((drawing && drawing.roofs) || []).find(r => r.sourceLevelId == null
-      && !r.garage && (r.points || []).length >= 3);
-    const inset = ownRoof && G && G.offsetOutlineVariable
-      ? G.offsetOutlineVariable(ownRoof.points.map(p => ({ x: Number(p.x), z: Number(p.z) })),
-        ownRoof.points.map((_, i) => -(Number((ownRoof.edgeOverhang || [])[i] ?? ownRoof.overhang) || 0)))
+    const footprint = roof => (G && G.offsetOutlineVariable
+      ? G.offsetOutlineVariable(roof.points.map(p => ({ x: Number(p.x), z: Number(p.z) })),
+        roof.points.map((_, i) => -(Number((roof.edgeOverhang || [])[i] ?? roof.overhang) || 0)))
         .map(p => ({ x: Math.round(p.x * 1e6) / 1e6, z: Math.round(p.z * 1e6) / 1e6 }))
         // Two eave corners can come back in to one point (a bump's corner and
         // the break beside it); one corner is kept.
@@ -181,12 +189,33 @@ if (!window.DraftBoneyardLoops) {
           const q = all[(i + 1) % all.length];
           return all.length < 2 || Math.hypot(p.x - q.x, p.z - q.z) > 1e-6;
         })
-      : null;
+      : null);
+    const ownRoof = ((drawing && drawing.roofs) || []).find(r => r.sourceLevelId == null
+      && !r.garage && (r.points || []).length >= 3);
+    const inset = ownRoof ? footprint(ownRoof) : null;
+    // The top floor's loop stands in only where NO roof of the house's was
+    // drawn: a roof made off a floor's outline is that floor's roof, below.
     const roofLoops = inset ? [{ id: ownRoof.id, garage: false, roof: true, points: inset }]
+      : ownedBy.size ? []
       : top.loops.filter(l => !l.garage).map(({ openings, ...l }) => l);
+    // AND EVERY ROOF ON A PLATE OF ITS OWN, at that floor's ceiling. Movie,
+    // 4 Oct: "the upper roof needs a 'roof' - orange' wireframe on the bone".
+    // One ROOF level still -- one button, one colour -- with each loop
+    // carrying the height and the floor it stands on.
+    ((drawing && drawing.roofs) || []).forEach(roof => {
+      if (roof.sourceLevelId == null || roof.garage || (roof.points || []).length < 3) return;
+      const on = floors.find(f => Number(f.floor.id) === Number(roof.sourceLevelId));
+      const pts = on && footprint(roof);
+      if (!pts || pts.length < 3) return;
+      roofLoops.push({ id: roof.id, garage: false, roof: true, points: pts,
+        elev: on.floor.wallTop, sourceLevelId: on.floor.id });
+    });
     if (roofLoops.length) {
-      out.push({ levelId: 7, kind: 'roof', name: 'ROOF', sourceLevelId: top.floor.id,
-        elev: top.floor.wallTop, color: COLORS.roof, loops: roofLoops });
+      // The level stands where its first loop does: the house's roof, or the
+      // first roof on a plate of its own when the house has none.
+      const lead = roofLoops[0];
+      out.push({ levelId: 7, kind: 'roof', name: 'ROOF', sourceLevelId: lead.sourceLevelId ?? top.floor.id,
+        elev: lead.elev ?? top.floor.wallTop, color: COLORS.roof, loops: roofLoops });
     }
     return out;
   };
@@ -211,11 +240,13 @@ if (!window.DraftBoneyardLoops) {
   const layout = (levels, deg, w, h, margin = 30) => {
     const raw = levels.map(level => ({
       ...level,
-      polys: level.loops.map(loop => loop.points.map(p => project(p, level.elev, deg))),
+      // A loop may stand at its own height (a roof on a plate of its own).
+      polys: level.loops.map(loop => loop.points.map(p => project(p, loop.elev ?? level.elev, deg))),
       cut: level.loops.map(loop => {
         const { runs, dots } = runsOf(loop);
-        return { runs: runs.map(r => ({ a: project(r.a, level.elev, deg), b: project(r.b, level.elev, deg) })),
-          dots: dots.map(d => ({ ...project(d.p, level.elev, deg), type: d.type })) };
+        const e = loop.elev ?? level.elev;
+        return { runs: runs.map(r => ({ a: project(r.a, e, deg), b: project(r.b, e, deg) })),
+          dots: dots.map(d => ({ ...project(d.p, e, deg), type: d.type })) };
       }),
     }));
     const all = raw.flatMap(l => l.polys.flat());

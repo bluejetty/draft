@@ -227,7 +227,13 @@ test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight 
       .map(w => Number(w.topHeight.toFixed(3))).sort();
     expect(entryTops).toEqual([10.698, 13.542]);
     // The room has its own roof, raised from OVER GARAGE.
-    expect(d.roofs.some(r => Number(r.sourceLevelId) === 4)).toBe(true);
+    const roomRoof = d.roofs.find(r => Number(r.sourceLevelId) === 4);
+    expect(roomRoof).toBeTruthy();
+    // Square over the room AND the upper landing (Movie, 4 Oct: "make it
+    // strait across"), two feet of eave all round: the landing's back edge
+    // is z = 14, so the eave is at 12.
+    expect(span(roomRoof.points)).toEqual(span([{ x: -6, z: 12 }, { x: 22, z: 40 }]));
+    expect(roomRoof.points.length).toBe(4);
     // And the garage's walls reach the room's floor.
     d.walls.filter(w => w.body === 'garage' && (w.view || 'plan') === 'plan')
       .forEach(w => expect(w.topHeight).toBeCloseTo(9.8646, 3));

@@ -24,6 +24,16 @@ const ROOT = path.join(__dirname, '..');
 const MUTATE = require('./harness-args.js').mutationMode();
 
 const MUTATIONS = [
+  ['the house\'s roof stands on the room over the garage\'s plate', 'boneyard-loops.js',
+    c => c.replace('const plates = floors.filter(f => !ownedBy.has(Number(f.floor.id)));', 'const plates = floors;')],
+  ['a roof on a plate of its own is not drawn on the bone', 'boneyard-loops.js',
+    c => c.replace('if (roof.sourceLevelId == null || roof.garage || (roof.points || []).length < 3) return;', 'return;')],
+  ['the room\'s roof is drawn at the house roof\'s height', 'boneyard-loops.js',
+    c => c.replace('polys: level.loops.map(loop => loop.points.map(p => project(p, loop.elev ?? level.elev, deg))),',
+      'polys: level.loops.map(loop => loop.points.map(p => project(p, level.elev, deg))),')
+      .replace('elev: on.floor.wallTop, sourceLevelId: on.floor.id });', 'sourceLevelId: on.floor.id });')],
+  ['pulling the room\'s roof moves the house\'s', 'boneyard-edit.js',
+    c => c.replace('const mine = (d.roofs || []).filter(r => r.id != null && r.id === loop.id);', 'const mine = [];')],
   ['an overhang is never spent: every level above goes out with the push', 'boneyard-edit.js',
     c => c.replace('if (left <= TOL) move = -left;', 'if (true) move = prev.out;')],
   ['an overhang left in the gap is not trimmed back to 2\'-0"', 'boneyard-edit.js',
@@ -296,6 +306,35 @@ check('walls that do not close make no loop', E.chainLoop(ring(rect(0, 0, 4, 6))
       minZ(outline(r.drawing, 5).points)], [-27, [-25], -20]);
   check('and it never comes in past its wall',
     E.pushEdge(d0, { kind: 'roof', levelId: 7, loopIndex: 0, edgeIndex: 0, deltaFt: 1 }, ctx(d0)).reason, 'NO_RUNG');
+}
+
+// ── A ROOF ON A PLATE OF ITS OWN ────────────────────────────────────────
+// Movie, 4 Oct, on the MOD BILEVEL: "the upper roof needs a 'roof' - orange'
+// wireframe on the bone". The room over the garage stands on OVER GARAGE,
+// half a storey over MAIN, with its own square roof; the house's roof is
+// MAIN's.
+{
+  const d0 = house({ upper: null });
+  d0.levels.splice(1, 0, { id: 4, name: 'OVER GARAGE' });
+  d0.outlines.push({ id: 'outline-room', levelId: 4, garage: false,
+    points: rect(-4, 20, 20, 38).map(p => ({ ...p, y: 0 })) });
+  d0.roofs.push({ id: 'roof-room', levelId: 7, sourceLevelId: 4, garage: false, overhang: 2,
+    points: rect(-6, 12, 22, 40), edges: ['eave', 'eave', 'eave', 'eave'], edgeOverhang: [2, 2, 2, 2] });
+  const SPLIT = { foundation: { wallBottom: -9 }, floors: [
+    { id: 3, name: 'MAIN FL', floorTop: 0, wallTop: 8 }, { id: 4, name: 'OVER GARAGE', floorTop: 6.25, wallTop: 14.25 }] };
+  const levels = BL.boneLevels(d0, SPLIT);
+  const roofBone = levels.find(l => l.kind === 'roof');
+  check('the house\'s roof stands on MAIN, not on the room over the garage', roofBone.elev, 8);
+  const room = roofBone.loops.find(l => l.id === 'roof-room');
+  check('the room\'s roof is drawn too, square, at the room\'s own ceiling',
+    room && [pts(room.points), room.elev, room.sourceLevelId],
+    [[[-4, 14], [20, 14], [20, 38], [-4, 38]], 14.25, 4]);
+  const at = roofBone.loops.indexOf(room);
+  const c = { levels, ladder, roofSourceId: roofBone.sourceLevelId };
+  const r = E.pushEdge(d0, { kind: 'roof', levelId: 7, loopIndex: at, edgeIndex: 1, deltaFt: 2 }, c);
+  check('pulling the room\'s roof moves that roof, not the house\'s',
+    r.ok && [r3(Math.max(...r.drawing.roofs[1].points.map(p => p.x))), r3(Math.max(...r.drawing.roofs[0].points.map(p => p.x)))],
+    [24, 18]);
 }
 
 // ── THE GROW: BOTTOM FIRST, EACH OFF THE ONE BELOW (Movie, 3 Oct) ─────

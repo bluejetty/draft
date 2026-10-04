@@ -487,6 +487,14 @@ check('the MOD BILEVEL keeps the same framing', P =>
 check('the MOD BILEVEL\'s room is the 2 STOREY\'s room over the garage', P =>
   [JSON.stringify(P.modifiedBilevel().overGarage), JSON.stringify(P.twoStorey({ garage: true, overGarage: true }).overGarage)]);
 check('it carries its own roof', P => [P.modifiedBilevel().overGarageRoof !== null, true]);
+// Movie, 4 Oct: "make it strait across ... will make the roof squar". One
+// rectangle over the room AND the upper landing, wound the room's way round.
+check('its roof is square, over the room and the upper landing', P => {
+  const plan = P.modifiedBilevel();
+  const r = plan.overGarageRoof, b = span([...plan.overGarage, ...plan.upperLanding]);
+  return [JSON.stringify(r), JSON.stringify([{ x: b.x0, z: b.z0 }, { x: b.x1, z: b.z0 },
+    { x: b.x1, z: b.z1 }, { x: b.x0, z: b.z1 }])];
+});
 check('its third flight stands over the down flight', P => {
   const st = P.modifiedBilevel().stairs;
   return [st.upper.x === st.down.x && st.upper.z === st.down.z, true];
@@ -1346,6 +1354,8 @@ const GARAGE_TIE_DECL = `    // One foot BEHIND the house's front line, which is
     const tieZ = houseFront - GARAGE_TIE_FT;`;
 
 const MUTATIONS = [
+  ['the room-s roof is the room alone, short of the landing',
+    c => c.replace('overGarageRoof: squareOver(overGarageLoop(), upperLandingLoop()),', 'overGarageRoof: overGarageLoop(),')],
   // ── THE GARAGE ROOF'S HOUSE END ──
   ['the roof follows the tie again, hipping four feet against the house wall',
     s2 => s2.replace('const back = houseFront + (overGarage ? OVER_GARAGE_LENGTH_FT : 0);',
