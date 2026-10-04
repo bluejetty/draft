@@ -2737,7 +2737,19 @@ if (!window.DraftCutView) {
       .filter(face => face.hi - face.lo >= 0.5)
       .map(face => ({
         ...face,
-        topE: fdn.wallBottom + face.top,
+        // ── THE HOUSE'S CONCRETE STOPS A PLATE UNDER ITS BEARING ─────────
+        //
+        // Movie, 4 Oct, on E1 of a MOD BILEVEL: "the grade beam and house
+        // sill plates don't seem to line up ... there is no LINE at the
+        // house". A split stores its house foundation walls at the pour PLUS
+        // the plate, 5'-1 1/2", while the stack measures them up from a
+        // 5'-0" pour -- so the house's grey ran to the bearing line and the
+        // plate under the rim was concrete. Capped at the house's own top of
+        // concrete, every house reads the same: the pour, then the plate.
+        // A no-op wherever the stored height is the pour, which is every
+        // house built the other way.
+        topE: face.garage ? fdn.wallBottom + face.top
+          : Math.min(fdn.wallBottom + face.top, fdn.wallTop - houseSillPlateFt()),
         baseE: fdn.wallBottom + face.base,
         projFt: face.bearing
           ? Math.max(0, fdn.footingWidthIn - face.wallIn) / 2 / 12 : 0,
@@ -2808,6 +2820,30 @@ if (!window.DraftCutView) {
     const plateOf = g => {
       const rise = plateTopOf(g) - g.topE;
       return rise > 0.01 && rise < PLATE_CAP_FT ? rise : 0;
+    };
+    // HOW THIS CONCRETE HOLDS ITS FRAMING DOWN: PROJECT's FND ATTACHMENT
+    // and LADDER DEPTH -- a split's own row, else the drawing's -- for the
+    // house; the DETACHED GARAGE row for a detached garage; an attached
+    // garage is drawn on a sill in PROJECT and so here. An ICF wall takes no
+    // ladder (PROJECT: "the sill plate is the only option for the ICF
+    // walls"). Answers the ladder's depth in feet, or 0 for a sill.
+    const holdDownOf = g => {
+      const read = row => {
+        if (!row || row.foundationAttachment !== 'ladder') return 0;
+        const inches = Number(row.foundationLadderIn);
+        return ([3.5, 5.5].includes(inches) ? inches : 3.5) / 12;
+      };
+      if (g.garage) {
+        return g.garage.detached && env.sectionRow ? read(env.sectionRow('detachedGarage')) : 0;
+      }
+      if (String(g.wall?.wallType || '').startsWith('icf')) return 0;
+      const top = env.foundationHoldDown ? env.foundationHoldDown() || {} : {};
+      const split = SPLIT_TYPES.includes(envBuildType(env)) && env.sectionRow
+        ? env.sectionRow(envBuildType(env)) || {} : {};
+      return read({
+        foundationAttachment: split.foundationAttachment ?? top.attachment,
+        foundationLadderIn: split.foundationLadderIn ?? top.ladderIn,
+      });
     };
     const behindFdn = (g, o) => o !== g
       && o.depth > g.depth + 1e-6
@@ -3045,6 +3081,16 @@ if (!window.DraftCutView) {
     shownFdn.forEach(({ g, runs }) => {
       const shownBase = Math.max(g.baseE, fdn.grade);
       const bs = bucksOf(g);
+      // THE TOP OF CONCRETE GOES LIGHT UNDER A PLATE. Movie, 4 Oct: "make
+      // the lower 'sil plate' line lighter" -- the top of the plate above it
+      // is the line that reads; the concrete's own top is the quieter one.
+      const plateLine = plateOf(g);
+      if (plateLine) {
+        ctx.strokeStyle = ink(0.45);
+        ctx.beginPath();
+        runs.forEach(r => { ctx.moveTo(X(r.lo), Y(g.topE)); ctx.lineTo(X(r.hi), Y(g.topE)); });
+        ctx.stroke();
+      }
       ctx.strokeStyle = INK;
       ctx.beginPath();
       runs.forEach(r => {
@@ -3053,10 +3099,42 @@ if (!window.DraftCutView) {
         // other -- which is the step the note at the fill above records him
         // calling off. The base never stepped: a buck is cut out of the TOP of
         // the beam and the 20" under it is continuous concrete either way.
-        ctx.moveTo(X(r.lo), Y(g.topE)); ctx.lineTo(X(r.hi), Y(g.topE));
+        if (!plateLine) { ctx.moveTo(X(r.lo), Y(g.topE)); ctx.lineTo(X(r.hi), Y(g.topE)); }
         ctx.moveTo(X(r.lo), Y(shownBase)); ctx.lineTo(X(r.hi), Y(shownBase));
       });
       ctx.stroke();
+      // ── AND THE TOP OF THE SILL PLATE, A SECOND LINE OVER IT ──────────
+      //
+      // Movie, 4 Oct: "i'm considering adding a second line (1.5\" down) to
+      // show the location of the sill plate" -- both lines, on the house and
+      // the garage: the top of concrete above, the top of the plate 1 1/2"
+      // over it. Only where a plate is drawn, and not across a door buck,
+      // which carries none.
+      if (plateLine) {
+        ctx.beginPath();
+        runs.forEach(r => notched(r, bs).filter(p => !p.drop).forEach(p => {
+          ctx.moveTo(X(p.lo), Y(g.topE + plateLine)); ctx.lineTo(X(p.hi), Y(g.topE + plateLine));
+        }));
+        ctx.stroke();
+        // ── A PT LADDER'S BOTTOM, A THIRD LINE, LIGHT ─────────────────
+        //
+        // Movie, 4 Oct: "what if the user changes to 'PT LADDER'? ... add
+        // another line" -- the bottom of the ladder's 2x4 or 2x6 (PROJECT's
+        // LADDER DEPTH), measured down from the top line, where it is set
+        // into the pour. Only where PROJECT says this concrete is held down
+        // by a ladder.
+        const ladderFt = holdDownOf(g);
+        const ladderBottom = g.topE + plateLine - ladderFt;
+        if (ladderFt && ladderBottom > shownBase + 0.01 && ladderBottom < g.topE - 0.01) {
+          ctx.strokeStyle = ink(0.45);
+          ctx.beginPath();
+          runs.forEach(r => notched(r, bs).filter(p => !p.drop).forEach(p => {
+            ctx.moveTo(X(p.lo), Y(ladderBottom)); ctx.lineTo(X(p.hi), Y(ladderBottom));
+          }));
+          ctx.stroke();
+          ctx.strokeStyle = INK;
+        }
+      }
       // THE RUN'S OWN ENDS, not the face's. Where a face disappears behind a
       // nearer one, that end is where its concrete stops being visible, which
       // is the corner the drafter sees -- and it is exactly the foot this fix

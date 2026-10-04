@@ -642,8 +642,15 @@ if (!window.DraftProjectPage) {
   const ATTACHMENT_LABEL = Object.freeze({
     sill: 'SILL PLATE', ladder: 'PT LADDER',
   });
-  const LADDER_MEMBER_IN = 1.5;   // a 2x6 on edge, its thickness
-  const LADDER_DEPTH_IN = 5.5;    // and its width, standing vertical
+  const LADDER_MEMBER_IN = 1.5;   // a 2x on edge, its thickness
+  // AND ITS WIDTH, STANDING VERTICAL: a 2x4 or a 2x6. Movie, 4 Oct: "we
+  // should actually give the user the option to make the PT LADDER 5.5\" or
+  // 3.5\"" and "make 3.5\" the DEFAULT". Stored as the drawing's
+  // `foundationLadderIn` and on a split's or detached garage's own row.
+  const LADDER_DEPTHS_IN = Object.freeze([3.5, 5.5]);
+  const DEFAULT_LADDER_DEPTH_IN = 3.5;
+  const ladderDepthIn = value => (LADDER_DEPTHS_IN.includes(Number(value))
+    ? Number(value) : DEFAULT_LADDER_DEPTH_IN);
   const LADDER_WIDTH_IN = 8;      // outside to outside, the wall's own 8"
   const CUT_DEPTH_FT = 4; // "the first 4 ft of the exterior wall cut inward"
   // The garage panel used to be the JUNCTION only -- a 4'-6" slice measured
@@ -664,11 +671,11 @@ if (!window.DraftProjectPage) {
   // Draws whichever hold-down was chosen, in the 1 1/2" band above the
   // concrete. Shared by the house and the garage so the two can never drift
   // into drawing the same detail differently.
-  const attachment = (rect, line, kind, x, concTop, wallFt, proudIn = sillPlateIn()) => {
+  const attachment = (rect, line, kind, x, concTop, wallFt, proudIn = sillPlateIn(), ladderIn = null) => {
     const proudFt = proudIn / 12;
     if (kind !== 'ladder') { rect(x, concTop, wallFt, proudFt, 1.5); return; }
     // Two members on edge at the wall faces, most of them below the pour.
-    const memberFt = LADDER_MEMBER_IN / 12, deepFt = LADDER_DEPTH_IN / 12;
+    const memberFt = LADDER_MEMBER_IN / 12, deepFt = ladderDepthIn(ladderIn) / 12;
     const topFt = concTop + proudFt;
     [x, x + wallFt - memberFt].forEach(mx =>
       rect(mx, topFt - deepFt, memberFt, deepFt, 1.5));
@@ -1081,7 +1088,7 @@ if (!window.DraftProjectPage) {
     const beamFt = GRADE_BEAM_THICKNESS_IN / 12;
     const bandFt = gradeBeam ? beamFt : fdnFt;
     rect(0, fdnBot, bandFt, concTopFt - fdnBot, 2);
-    attachment(rect, line, fdn.attachment, 0, concTopFt, bandFt, attachFt * 12);
+    attachment(rect, line, fdn.attachment, 0, concTopFt, bandFt, attachFt * 12, fdn.ladderIn);
     // The fill wall stands on the attachment, its own faces at the wall's
     // thickness rather than the concrete's -- it is framing, not pour.
     if (fillFt) {
@@ -1688,7 +1695,7 @@ if (!window.DraftProjectPage) {
     const plateY = wallBaseY + g.wallHeightFt;
     rect(0, wallBaseY, wallFt, g.wallHeightFt, 1.5);
     attachment(rect, line, g.attachment || 'sill', 0, wallBaseY, wallFt,
-      attachFt * 12);
+      attachFt * 12, g.ladderIn);
     anchors.sill = { x: wallFt + 0.55, y: wallBaseY + attachFt / 2 };
     anchors.wallHeight = { x: wallFt + 0.55, y: wallBaseY + g.wallHeightFt / 2 };
 
@@ -2650,6 +2657,9 @@ if (!window.DraftProjectPage) {
     GRADE_BELOW_CONCRETE_IN,
     FOUNDATION_ATTACHMENTS,
     ATTACHMENT_LABEL,
+    LADDER_DEPTHS_IN,
+    DEFAULT_LADDER_DEPTH_IN,
+    ladderDepthIn,
     LADDER_WIDTH_IN,
     SECTION_TABLE_ROWS,
     SECTION_TABLE_ITEMS,

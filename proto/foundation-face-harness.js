@@ -86,9 +86,20 @@ const check = (name, condition, detail) => {
 // -- which is the same fact the note at `levelRuns` already turns on -- so
 // asking each stroke for its highest run names the top of concrete and
 // nothing else. A notch can only go DOWN from it.
+// AND THE SILL PLATE'S TOP IS NOT A TOP OF CONCRETE. Movie, 4 Oct, asked
+// for a full-weight line along the top of the plate and the pour's own top
+// drawn light under it -- so a face now paints its concrete top light, in a
+// stroke of its own, and a level run 1 1/2" over a light one is the plate.
+const PLATE_FT = 1.5 / 12;
 const topRuns = (runs, grade, faceW) => {
   const best = new Map();
-  runs.filter(r => Math.abs(r.w - faceW) < 1e-9 && r.e > grade + 0.5 && r.e < 0.5)
+  const light = runs.filter(r => r.ink && r.ink !== '#1d1f20');
+  // A plate, not a step: the painter's own PLATE_CAP_FT, 6", is what it
+  // will paint a plate across -- an older drawing's house walls stored at
+  // the generic 8'-0" make a 3" one.
+  const isPlateTop = r => light.some(q => r.e - q.e > PLATE_FT - 0.01 && r.e - q.e < 0.5
+    && q.u0 < r.u1 - 0.05 && r.u0 < q.u1 - 0.05);
+  runs.filter(r => Math.abs(r.w - faceW) < 1e-9 && r.e > grade + 0.5 && r.e < 0.5 && !isPlateTop(r))
     .forEach(r => {
       const had = best.get(r.stroke);
       if (!had || r.e > had.e + 1e-9) best.set(r.stroke, r);
@@ -104,7 +115,7 @@ const levelRuns = view => {
       if (b.move) continue;
       if (Math.abs(a.e - b.e) > 0.005) continue;
       if (Math.abs(a.u - b.u) < 0.3) continue;
-      out.push({ e: a.e, u0: Math.min(a.u, b.u), u1: Math.max(a.u, b.u), w: s.w, stroke });
+      out.push({ e: a.e, u0: Math.min(a.u, b.u), u1: Math.max(a.u, b.u), w: s.w, stroke, ink: s.ink });
     }
   });
   return out;

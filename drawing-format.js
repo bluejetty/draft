@@ -1701,6 +1701,9 @@ if (!window.DraftDrawingFormat) {
     // stock by default and either can be something else, so the height is one
     // cell serving whichever is chosen. Null means the office 1 1/2".
     'foundationAttachmentIn',
+    // AND HOW DEEP A PT LADDER'S MEMBERS ARE: a 2x4 (3 1/2", the default) or
+    // a 2x6 (5 1/2"). Movie, 4 Oct. Null means the default.
+    'foundationLadderIn',
   ]);
   // Not every per-type value is a measurement. A garage's foundation is a
   // CHOICE between two things it can be, and `positive()` would quietly turn

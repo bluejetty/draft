@@ -1140,16 +1140,16 @@ const MUTATIONS = [
   // Movie's correction, undone: the plate drawn at the TOP of the wall again,
   // which is the line he marked off before saying where it belonged.
   ['the bottom sill plate goes back to the top of the wall',
-    s => s.replace('0, wallBaseY, wallFt,\n      attachFt * 12);',
-      '0, plateY - sillFt, wallFt,\n      attachFt * 12);')],
+    s => s.replace('0, wallBaseY, wallFt,\n      attachFt * 12, g.ladderIn);',
+      '0, plateY - sillFt, wallFt,\n      attachFt * 12, g.ladderIn);')],
   // The plausible misreading of "3.5\"x1.5\" stud": write the 3 1/2" down.
   ['the sill plate is written 3 1/2" wide instead of following the wall',
-    s => s.replace('0, wallBaseY, wallFt,\n      attachFt * 12);',
-      '0, wallBaseY, 3.5 / 12,\n      attachFt * 12);')],
+    s => s.replace('0, wallBaseY, wallFt,\n      attachFt * 12, g.ladderIn);',
+      '0, wallBaseY, 3.5 / 12,\n      attachFt * 12, g.ladderIn);')],
   // Back to a line across the wall, which is what it was before he named it.
   ['the sill plate is a line across the wall rather than a member',
     s => s.replace(
-      "    attachment(rect, line, g.attachment || 'sill', 0, wallBaseY, wallFt,\n      attachFt * 12);",
+      "    attachment(rect, line, g.attachment || 'sill', 0, wallBaseY, wallFt,\n      attachFt * 12, g.ladderIn);",
       '    line(0, wallBaseY + attachFt, wallFt, wallBaseY + attachFt, 1);')],
   // AND THE TWO BOXES ABOVE IT GO BACK TO BEING DECORATION. Both of these
   // draw a perfectly good detail; what they lose is the connection between

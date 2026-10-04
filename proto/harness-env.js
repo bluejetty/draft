@@ -363,6 +363,7 @@ function buildEnv(win, saved) {
     },
     buildType: () => saved.buildType ?? null,
     sectionRow: rowId => saved.sectionTable?.rows?.[rowId] ?? null,
+    foundationHoldDown: () => ({ attachment: saved.foundationAttachment, ladderIn: saved.foundationLadderIn }),
     edgeOnOutline: (a, b, outline, eps = 0.1) => {
       if (!outline) return false;
       const count = outline.open ? outline.points.length - 1 : outline.points.length;

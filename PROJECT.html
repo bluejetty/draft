@@ -1040,6 +1040,12 @@
       let foundationAttachmentIn = positive(
         drawing?.foundationAttachmentIn, projectPage.SILL_PLATE_IN);
       const attachmentIn = () => foundationAttachmentIn;
+      // AND A PT LADDER'S DEPTH: a 2x4 or a 2x6, 3 1/2" by default (Movie,
+      // 4 Oct: "make 3.5\" the DEFAULT").
+      let foundationLadderIn = projectPage.ladderDepthIn(drawing?.foundationLadderIn);
+      const ladderIn = () => foundationLadderIn;
+      const LADDER_CHOICES = () => projectPage.LADDER_DEPTHS_IN
+        .map(inches => ({ id: String(inches), label: inches === 3.5 ? '3 1/2" (2x4)' : '5 1/2" (2x6)' }));
       const attachmentFt = () => attachmentIn() / 12;
       const datumFt = Number(drawing?.elevationDatum) === 100 ? 100 : 0;
 
@@ -1173,6 +1179,7 @@
         activeWallType,
         foundationAttachment,
         foundationAttachmentIn,
+        foundationLadderIn,
         ...(methodPressedHere ? { buildType } : {}),
         ...(garagePlanPressedHere ? { garagePlan } : {}),
       });
@@ -1369,6 +1376,7 @@
             gradeOffsetFt: gradeOffsetFt(),
             attachment: attachmentChoice(),
             attachmentIn: attachmentIn(),
+            ladderIn: ladderIn(),
             // Which of the two the drafter picked in FDN TYPE. The section
             // reads it to decide what goes UNDER the concrete -- a strip
             // footing, or piles and a void form.
@@ -1506,6 +1514,7 @@
           footingDepthIn: splitOr('footingDepthIn', null),
           attachment: splitOr('foundationAttachment', attachmentChoice()),
           attachmentIn: splitOr('foundationAttachmentIn', attachmentIn()),
+          ladderIn: projectPage.ladderDepthIn(splitOr('foundationLadderIn', ladderIn())),
           roofPitch: splitOr('roofPitch', roofPitch),
           roofOverhangFt: splitOr('roofOverhangFt', roofOverhang),
           roofHeelIn: splitOr('roofHeelIn', roofHeelIn()),
@@ -1597,6 +1606,7 @@
             gradeOffsetFt: gradeOffsetFt(),
             attachment: split.attachment,
             attachmentIn: split.attachmentIn,
+            ladderIn: split.ladderIn,
           },
           roof: { pitch: split.roofPitch, overhangFt: split.roofOverhangFt,
             fasciaIn: ROOF_FASCIA_IN, heelIn: split.roofHeelIn },
@@ -2293,6 +2303,14 @@
         { side: 'right', key: 'attachmentHeight', name: 'Height', anchor: false,
           get: () => splitOr('foundationAttachmentIn', attachmentIn()),
           field: 'foundationAttachmentIn', unit: 'in' },
+        { side: 'right', key: 'ladderDepth', name: 'Ladder', anchor: false,
+          choices: LADDER_CHOICES,
+          read: () => String(projectPage.ladderDepthIn(splitOr('foundationLadderIn', ladderIn()))),
+          write: value => {
+            if (!projectPage.LADDER_DEPTHS_IN.includes(Number(value))) return false;
+            writeCell(bilevelRowId(), 'foundationLadderIn', Number(value));
+            return `Split's PT ladder is ${value}" deep.`;
+          } },
         // THE HOUSE FOUNDATION IS A WORD HERE for the reason WALL TYPE is:
         // the split's row has no cell for it, and this band may not write the
         // live drawing's own.
@@ -2451,6 +2469,7 @@
             foundation: detachedFoundation(),
             attachment: detachedAttachment(),
             attachmentIn: detachedAttachmentIn(),
+            ladderIn: projectPage.ladderDepthIn(sectionTable.rows.detachedGarage?.foundationLadderIn),
             fdnWallHeightFt: detachedFdnFt(),
             slabIn: cellValue('detachedGarage', 'slabThicknessIn').value,
             wallHeightFt: cellValue('detachedGarage', 'mainWallHeightFt').value,
@@ -2515,6 +2534,14 @@
         { side: 'left', key: 'attachmentHeight', name: 'HEIGHT',
           get: () => detachedAttachmentIn(),
           field: 'foundationAttachmentIn', unit: 'in' },
+        { side: 'left', key: 'ladderDepth', name: 'LADDER',
+          choices: LADDER_CHOICES,
+          read: () => String(projectPage.ladderDepthIn(sectionTable.rows.detachedGarage?.foundationLadderIn)),
+          write: value => {
+            if (!projectPage.LADDER_DEPTHS_IN.includes(Number(value))) return false;
+            writeCell('detachedGarage', 'foundationLadderIn', Number(value));
+            return `Detached garage's PT ladder is ${value}" deep.`;
+          } },
         { side: 'left', key: 'fdnType', name: 'FDN TYPE',
           choices: () => projectPage.GARAGE_FOUNDATIONS.detachedGarage
             .map(id => ({ id, label: projectPage.GARAGE_FOUNDATION_LABEL[id] })),
@@ -2844,6 +2871,19 @@
           const value = parseInches(text);
           if (value == null || value <= 0 || value > 12) return false;
           setAttachmentIn(value);
+          return true;
+        },
+      });
+      // HOW DEEP THE LADDER IS, beside the pair it belongs to: a 2x4 or a
+      // 2x6 on edge (Movie, 4 Oct). A sill plate ignores it.
+      addInput('ladderDepth', 'LADDER DEPTH', {
+        name: 'ladderDepth',
+        kind: 'choice',
+        choices: LADDER_CHOICES,
+        get: () => String(ladderIn()),
+        set: value => {
+          if (!projectPage.LADDER_DEPTHS_IN.includes(Number(value))) return false;
+          foundationLadderIn = Number(value);
           return true;
         },
       });
