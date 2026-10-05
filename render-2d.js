@@ -468,6 +468,25 @@ if (!window.DraftRender2D) {
       .concat((Array.isArray(roof.cuts) ? roof.cuts : [])
         .map(cut => (cut.points || []).map(pt => toS(pt))).filter(loop => loop.length >= 3));
     ctx.save();
+    // ── AND NOTHING OF IT INSIDE A HIGHER STOREY'S WALLS ─────────────────
+    //
+    // Movie, 5 Oct, on the ROOF PLAN: the main roof stops at the OUTSIDE face
+    // of the 2nd floor walls and "should not go to the inside of the ext
+    // walls". The caller hands those outlines (geometry-2d roofBearing); the
+    // sheet, its edges and its hips are all clipped away inside them.
+    const exclude = (Array.isArray(options.exclude) ? options.exclude : [])
+      .map(loop => loop.map(pt => toS(pt))).filter(loop => loop.length >= 3);
+    if (exclude.length) {
+      const big = 1e6;
+      ctx.beginPath();
+      ctx.moveTo(-big, -big); ctx.lineTo(big, -big); ctx.lineTo(big, big); ctx.lineTo(-big, big);
+      ctx.closePath();
+      exclude.forEach(loop => {
+        loop.forEach((pt, index) => (index ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)));
+        ctx.closePath();
+      });
+      ctx.clip('evenodd');
+    }
     ctx.beginPath();
     pts.forEach((pt, index) => (index ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)));
     ctx.closePath();
@@ -641,6 +660,38 @@ if (!window.DraftRender2D) {
         ctx.beginPath(); ctx.arc(pt.x, pt.y, 2, 0, Math.PI * 2); ctx.fill();
       }));
     }
+    ctx.restore();
+  }
+
+  // ── THE TOPS OF THE WALLS A ROOF STANDS ON ──────────────────────────────
+  //
+  // Movie, 5 Oct: "on the roof plan can you show the tops of the walls that
+  // the roofs are sitting on (should be 5.5\" walls on both levels)" -- thin
+  // and solid. Each wall's two faces, from its own reference line and the
+  // thickness the caller resolves (the wall type's, 5 1/2" for a 2x6).
+  function drawWallTops2D(ctx, toS, walls, options = {}, env = {}) {
+    if (!Array.isArray(walls) || !walls.length) return;
+    const thicknessFt = typeof options.thicknessFt === 'function' ? options.thicknessFt : () => 5.5 / 12;
+    const faces = typeof env.wallFaceOffsets === 'function' ? env.wallFaceOffsets
+      : (wall, t) => ({ startOff: 0, endOff: t });
+    ctx.save();
+    ctx.strokeStyle = options.color || (env.colors && env.colors.wallTop) || '#1d1f20';
+    ctx.lineWidth = options.lineWidth || 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    walls.forEach(wall => {
+      const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+      const len = Math.hypot(dx, dz);
+      if (!(len > 1e-6)) return;
+      const nx = -dz / len, nz = dx / len;
+      const { startOff, endOff } = faces(wall, thicknessFt(wall));
+      [startOff, endOff].forEach(off => {
+        const a = toS({ x: wall.start.x + nx * off, z: wall.start.z + nz * off });
+        const b = toS({ x: wall.end.x + nx * off, z: wall.end.z + nz * off });
+        ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+      });
+    });
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -2235,6 +2286,7 @@ if (!window.DraftRender2D) {
   window.DraftRender2D = Object.freeze({
     drawWallSeg2D,
     drawRoof2D,
+    drawWallTops2D,
     drawShape2D,
     drawFixture2D,
     drawRoomTag2D,

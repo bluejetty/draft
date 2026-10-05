@@ -1724,6 +1724,39 @@ const roofEnv = over => ({
 });
 const ROOF = { id: 'r1', points: RECT, edges: ['eave', 'eave', 'eave', 'eave'], overhang: 1 };
 
+// Movie, 5 Oct: on the ROOF PLAN the main roof stops at the outside face of
+// the 2nd floor walls -- the caller hands that outline as `exclude`, and the
+// sheet is clipped away inside it.
+suite('drawRoof2D', 'an excluded outline clips the roof away inside it', R => {
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, ROOF, { exclude: [[{ x: 1, z: 1 }, { x: 2, z: 1 }, { x: 2, z: 2 }]] }, roofEnv());
+  expect('clipped even-odd', calls(ctx, 'clip').map(a => a[0]).join(','), 'evenodd');
+  const plain = recordingCtx();
+  R.drawRoof2D(plain, toS, ROOF, {}, roofEnv());
+  expect('and no clip without one', count(plain, 'clip'), 0);
+});
+
+// ── drawWallTops2D ──
+// Movie, 5 Oct: "show the tops of the walls that the roofs are sitting on
+// (should be 5.5\" walls on both levels)", thin and solid.
+suite('drawWallTops2D', 'each wall draws both faces, a wall thickness apart', R => {
+  const ctx = recordingCtx();
+  const wall = { start: { x: 0, z: 0 }, end: { x: 10, z: 0 } };
+  R.drawWallTops2D(ctx, toS, [wall], { thicknessFt: () => 5.5 / 12, color: '#123' },
+    { wallFaceOffsets: (w, t) => ({ startOff: 0, endOff: t }) });
+  const ys = calls(ctx, 'moveTo').map(a => a[1]);
+  expect('two faces', ys.length, 2);
+  expect('5 1/2" apart', Math.round((Math.max(...ys) - Math.min(...ys)) * 1000) / 1000,
+    Math.round(5.5 / 12 * 10 * 1000) / 1000);
+  expect('solid, thin, in the caller\'s ink', JSON.stringify([calls(ctx, 'setLineDash')[0][0].length,
+    sets(ctx, 'lineWidth').includes(1), sets(ctx, 'strokeStyle').includes('#123')]), '[0,true,true]');
+});
+suite('drawWallTops2D', 'no walls, nothing drawn', R => {
+  const ctx = recordingCtx();
+  R.drawWallTops2D(ctx, toS, [], {}, {});
+  expect('nothing painted', ctx.tape.length, 0);
+});
+
 suite('drawRoof2D', 'a roof needs three points', R => {
   const ctx = recordingCtx();
   R.drawRoof2D(ctx, toS, { ...ROOF, points: RECT.slice(0, 2) }, {}, roofEnv());
