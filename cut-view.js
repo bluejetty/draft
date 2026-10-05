@@ -6212,18 +6212,36 @@ if (!window.DraftCutView) {
                 // So the foot gets its own visibility, at its own height.
                 const footE = eaveTop - ROOF_FASCIA_IN / 12;
                 const tLo = Math.min(r.t0, r.t1), tHi = Math.max(r.t0, r.t1);
-                const steps = Math.max(2, Math.ceil(Math.abs(r.u1 - r.u0) / 0.1));
+                // Half-foot stations, then bisected to the real boundary the
+                // way the run's own ends are: a ridge poking 1 1/2" past the
+                // board is under a foot wide, and painting every station of
+                // every eave at a finer spacing costs the mutation sweeps.
+                const steps = Math.max(2, Math.ceil(Math.abs(r.u1 - r.u0) / 0.5));
                 const footShows = t => !hidden(
                   { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t }, footE, ua + (ub - ua) * t);
+                const footEdge = (tIn, tOut) => {
+                  let lo = tIn, hi = tOut;
+                  for (let i = 0; i < 8; i += 1) {
+                    const mid = (lo + hi) / 2;
+                    if (footShows(mid)) lo = mid; else hi = mid;
+                  }
+                  return lo;
+                };
+                const ts = [];
+                for (let k = 0; k <= steps; k += 1) ts.push(tLo + (tHi - tLo) * k / steps);
+                const shows = ts.map(footShows);
                 const feet = [];
                 let foot = null;
-                for (let k = 0; k <= steps; k += 1) {
-                  const t = tLo + (tHi - tLo) * k / steps;
-                  if (!footShows(t)) { foot = null; continue; }
-                  const u = ua + (ub - ua) * t;
-                  if (!foot) { foot = { u0: u, u1: u }; feet.push(foot); }
-                  foot.u1 = u;
-                }
+                ts.forEach((t, k) => {
+                  if (!shows[k]) { foot = null; return; }
+                  if (!foot) {
+                    const t0 = k > 0 ? footEdge(t, ts[k - 1]) : t;
+                    foot = { u0: ua + (ub - ua) * t0, u1: 0 };
+                    feet.push(foot);
+                  }
+                  const t1 = k < ts.length - 1 && !shows[k + 1] ? footEdge(t, ts[k + 1]) : t;
+                  foot.u1 = ua + (ub - ua) * t1;
+                });
                 ctx.strokeStyle = INK; ctx.lineWidth = 2.25;
                 feet.filter(f => Math.abs(f.u1 - f.u0) > 0.05).forEach(f => {
                   ctx.beginPath();
