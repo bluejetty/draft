@@ -56,6 +56,8 @@ const MUTATIONS = [
   ['a room wall a jog off the line stands in for the stick-framed back wall', 'boneyard-edit.js',
     c => c.replace('if (!e.square || e.axis !== axis || Math.abs(e.c - c) > 1e-6) return;',
       'if (!e.square || e.axis !== axis || Math.abs(e.c - c) > 1.5) return;')],
+  ['a house that is not a MOD BILEVEL gets the walls too', 'boneyard-edit.js',
+    c => c.replace("    if (d.buildType !== 'modifiedBilevel') return 0;\n", '')],
   ['the old walls are left when the roof moves again', 'boneyard-edit.js',
     c => c.replace("    d.walls = (d.walls || []).filter(w => w.hoodOf !== String(roof.id));\n", '')],
   ['the ladder is not walked: a floor lands in the 2\'-0" to 4\'-6" gap', 'boneyard-edit.js',
@@ -501,6 +503,12 @@ check('walls that do not close make no loop', E.chainLoop(ring(rect(0, 0, 4, 6))
     runs, [[[6, -2], [6, 4]], [[6, -2], [19, -2]], [[19, -16], [19, -2]], [[6, 4], [20, 4]]].map(x => x.sort().join(' ')).sort());
   check('from MAIN\'s ceiling to the room\'s plate', hood.length && hood.every(w =>
     Math.abs(w.baseHeight - (109.125 / 12 - 6.25)) < 1e-3 && Math.abs(w.topHeight - 109.125 / 12) < 1e-3), true);
+  // MOD BILEVEL ONLY: the same push on the same house filed as a plain
+  // BILEVEL builds no walls under the roof.
+  const asBilevel = { ...d0, buildType: 'bilevel' };
+  const rb = E.pushEdge(asBilevel, { kind: 'roof', levelId: 7, loopIndex: at, edgeIndex: west.index, deltaFt: -1 }, c0);
+  check('only a MODIFIED BILEVEL gets walls under the roof',
+    rb.ok && rb.drawing.walls.filter(w => w.hoodOf).length, 0);
   const r2 = r.ok && E.pushEdge(r.drawing, { kind: 'roof', levelId: 7, loopIndex: at, edgeIndex: west.index, deltaFt: 1 }, hCtx(r.drawing));
   check('pushed back, the walls follow and are not doubled',
     r2 && r2.ok && r2.drawing.walls.filter(w => w.hoodOf === 'roof-70')

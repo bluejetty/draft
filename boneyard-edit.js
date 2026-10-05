@@ -796,6 +796,10 @@ if (!window.DraftBoneyardEdit) {
   // the roof's id so the next push replaces exactly them. Returns the count.
   const roofHood = (d, roof, ctx) => {
     if (!roof || roof.garage || roof.sourceLevelId == null || !ctx || !ctx.hoodHeights) return 0;
+    // A MODIFIED BILEVEL ONLY, for now. Movie, 5 Oct: "for now lets only do
+    // this for MODIFIED BILEVEL to accomodate the stair / balcony area which
+    // shouldn't be necessary in the other houses".
+    if (d.buildType !== 'modifiedBilevel') return 0;
     const levelId = Number(roof.sourceLevelId);
     d.walls = (d.walls || []).filter(w => w.hoodOf !== String(roof.id));
     const heights = ctx.hoodHeights(levelId);
