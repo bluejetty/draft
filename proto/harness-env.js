@@ -353,6 +353,8 @@ function buildEnv(win, saved) {
     },
     walls: () => walls,
     roofs: () => roofs,
+    elevationMarks: name => (format.elevationMarks ? format.elevationMarks(saved.elevationMarks) : [])
+      .filter(m => m.cut === name),
     floors: () => floors,
     columns: () => columns,
     fenestrations: () => fenestrations,

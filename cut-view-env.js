@@ -201,6 +201,12 @@ if (!window.DraftCutViewEnv) {
           && String(wall.wallType || '').startsWith('icf'));
         return icf ? ICF_FOOTING_WIDTH_IN : DEFAULT_FOOTING_WIDTH_IN;
       },
+      // The drafter's lines and notes on each elevation, so a sheet prints
+      // the view as MODEL shows it (Movie, 5 Oct: "Yes", on the sheets too).
+      elevationMarks: (() => {
+        const marks = format && format.elevationMarks ? format.elevationMarks(saved.elevationMarks) : [];
+        return name => marks.filter(m => m.cut === name);
+      })(),
       walls: () => walls,
       roofs: () => roofs,
       floors: () => floors,

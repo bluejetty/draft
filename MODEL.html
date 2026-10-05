@@ -1578,6 +1578,14 @@
   // the ruler, and paint() is defined a thousand lines above it. A `let` read
   // before its declaration is a throw, not an undefined, and the boot paint
   // would hit it.
+  // THE ELEVATION'S OWN GESTURES (lines and notes drawn on E1-E4 and the
+  // sections). Declared up here because paint() reads them, and paint can run
+  // before the block that works them has been reached. See elevPress below.
+  let elevFrame = null;      // where a foot of the elevation on screen lands
+  let elevLineStart = null;  // { u, e } -- a line half drawn
+  let elevCursor = null;     // { u, e } -- the pointer, for the line's preview
+  let elevSelected = null;   // the id of the mark Select is holding
+  let elevNotePress = null;  // { at, x, y } -- a note press not yet lifted
   let tsquareOn = false;    // T-SQUARE down: the run in hand is held square
   // THE FOOT LIGHT. A PAGE SETTING, NOT DRAWING DATA -- a drawing carrying
   // "the foot light was on" would arrive in someone else's session and start
@@ -3723,6 +3731,9 @@
 
     // A garage outline's master lives on the boneyard shelf; an outline that
     return {
+      // THE DRAFTER'S OWN LINES AND NOTES on this view (cut-view.js paints
+      // them last, over the building).
+      elevationMarks: name => (drawing?.elevationMarks || []).filter(m => m.cut === name),
       // THE SAME TICK THE PLAN READS, handed to the shared painter.
       //
       // cut-view.js asks `env.layerStandard('A-DIMS-WIN')` before it draws a
@@ -4160,7 +4171,14 @@
         // `skin`: inDaylight swaps it to day for the length of the shoot, so
         // a drafter working at night still hands a client a white drawing.
         window.DraftCutView.drawCutView(cutEnv(), ctx, cssW, cssH, cut,
-          { margins: rails, colors: window.DraftCutView.inksFromSkin(skin) });
+          { margins: rails, colors: window.DraftCutView.inksFromSkin(skin),
+            // The frame comes back so a press can be read in the view's feet,
+            // and the line being drawn and the mark held are shown in place.
+            onFrame: f => { elevFrame = f; },
+            selectedMark: elevSelected,
+            selectColor: skin['draw-selected'],
+            markPreview: (activeTool === 'line' && elevLineStart && elevCursor)
+              ? { kind: 'line', a: elevLineStart, b: elevCursor } : null });
         // THE MASK CLIMBS BOTTOM TO TOP, dotted underground first, footing to
         // ridge -- the order a house is actually built in, which is why the
         // elevation is the view this plays on. Self-driving: each frame asks
@@ -14868,6 +14886,181 @@
     paint();
   };
 
+  // ── LINES AND NOTES ON AN ELEVATION ────────────────────────────────────
+  //
+  // Movie, 5 Oct: "i'd like to be able to also draw lines and add annotations
+  // to the elevations" -- asked how a note should look, "Both": plain text,
+  // or with a leader arrow; and on the LAYOUT sheets too.
+  //
+  // IN THE VIEW'S OWN FEET. cut-view.js hands back its frame on every paint
+  // (elevFrame), so a press is read as `u` along the view and `e` the
+  // elevation -- the numbers the mark is stored and painted by, whatever the
+  // zoom or the sheet scale.
+  //
+  //   LINE        press, press: a line; it carries on from its end like the
+  //               plan's LINE, and Escape puts it down. The T-square holds it
+  //               level or plumb.
+  //   ANNOTATION  tap where the text goes; or PRESS ON THE THING AND DRAG to
+  //               where the text goes, for a leader arrow -- a drag works on
+  //               the iPad, where a modifier key would not. Then type it and
+  //               press Enter.
+  //   SELECT      a tap on a mark holds it; Delete removes it. Undo takes back
+  //               either.
+  const elevAt = (cx, cy) => (elevFrame ? {
+    u: elevFrame.uMin + (cx - elevFrame.x0) / elevFrame.pxPerFt,
+    e: elevFrame.yTop - (cy - elevFrame.y0) / elevFrame.pxPerFt,
+  } : null);
+  const elevPx = p => ({ x: elevFrame.x0 + (p.u - elevFrame.uMin) * elevFrame.pxPerFt,
+    y: elevFrame.y0 + (elevFrame.yTop - p.e) * elevFrame.pxPerFt });
+  const elevMarks = () => {
+    if (!Array.isArray(drawing.elevationMarks)) drawing.elevationMarks = [];
+    return drawing.elevationMarks;
+  };
+  const newMarkId = () => {
+    let n = elevMarks().length + 1;
+    while (elevMarks().some(m => m.id === `mark-${n}`)) n += 1;
+    return `mark-${n}`;
+  };
+  const addElevMark = mark => {
+    elevMarks().push(mark);
+    undoStack.push({ kind: 'add-item', list: elevMarks(), item: mark });
+    markDirty();
+  };
+  const squared = (a, b) => {
+    if (!tsquareOn) return b;
+    return Math.abs(b.u - a.u) >= Math.abs(b.e - a.e) ? { u: b.u, e: a.e } : { u: a.u, e: b.e };
+  };
+  // The mark under a point on screen, nearest first, within 8 px.
+  const elevMarkAt = (cx, cy) => {
+    const cut = activeCut();
+    if (!cut || !elevFrame) return null;
+    let best = null, bestD = 8;
+    (drawing.elevationMarks || []).filter(m => m.cut === cut.name).forEach(m => {
+      let d = Infinity;
+      if (m.kind === 'line') {
+        const a = elevPx(m.a), b = elevPx(m.b);
+        d = window.DraftGeometry2D.pointToSegment({ x: cx, z: cy },
+          { start: { x: a.x, z: a.y }, end: { x: b.x, z: b.y } }).d;
+      } else {
+        const t = elevPx(m.at);
+        const w = Math.max(30, String(m.text || '').length * 7);
+        if (cx >= t.x - 4 && cx <= t.x + w && Math.abs(cy - t.y) <= 10) d = 0;
+        if (m.tip) {
+          const p = elevPx(m.tip);
+          d = Math.min(d, window.DraftGeometry2D.pointToSegment({ x: cx, z: cy },
+            { start: { x: t.x, z: t.y }, end: { x: p.x, z: p.y } }).d);
+        }
+      }
+      if (d < bestD) { bestD = d; best = m; }
+    });
+    return best;
+  };
+  const elevPress = (e, rect) => {
+    const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
+    const here = elevAt(cx, cy);
+    if (!here) return false;
+    const cut = activeCut();
+    if (activeTool === 'line') {
+      if (!elevLineStart) {
+        elevLineStart = here;
+        elevCursor = here;
+        sayOnStrip('LINE on the elevation — press where it ends. Escape to finish.');
+        paint();
+        return true;
+      }
+      const end = squared(elevLineStart, here);
+      if (Math.hypot(end.u - elevLineStart.u, end.e - elevLineStart.e) < 0.05) return true;
+      addElevMark({ id: newMarkId(), cut: cut.name, kind: 'line',
+        a: { ...elevLineStart }, b: end });
+      elevLineStart = end;
+      paint();
+      return true;
+    }
+    if (activeTool === 'annotation') {
+      elevNotePress = { at: here, x: e.clientX, y: e.clientY };
+      return true;
+    }
+    if (activeTool === RESTING_TOOL) {
+      const hit = elevMarkAt(cx, cy);
+      if (!hit) { if (elevSelected) { elevSelected = null; paint(); } return false; }
+      elevSelected = hit.id;
+      sayOnStrip(hit.kind === 'line' ? 'Line held — Delete removes it.' : 'Note held — Delete removes it.');
+      paint();
+      return true;
+    }
+    return false;
+  };
+  const elevMove = e => {
+    const rect = canvas.getBoundingClientRect();
+    const here = elevAt(e.clientX - rect.left, e.clientY - rect.top);
+    if (!here) return;
+    elevCursor = squared(elevLineStart, here);
+    paint();
+  };
+  const elevNoteLift = e => {
+    const press = elevNotePress;
+    elevNotePress = null;
+    const rect = canvas.getBoundingClientRect();
+    const moved = Math.hypot(e.clientX - press.x, e.clientY - press.y) > 8;
+    const lift = elevAt(e.clientX - rect.left, e.clientY - rect.top) || press.at;
+    // A DRAG IS A LEADER: pressed on the thing, lifted where the text goes.
+    const at = moved ? lift : press.at;
+    const tip = moved ? press.at : null;
+    askNoteText(e.clientX, e.clientY, text => {
+      if (!text) return;
+      addElevMark({ id: newMarkId(), cut: activeCut().name, kind: 'note', at, text,
+        ...(tip ? { tip } : {}) });
+      paint();
+    });
+  };
+  // A small box where the note goes; Enter keeps it, Escape drops it.
+  const askNoteText = (clientX, clientY, done) => {
+    const box = document.createElement('input');
+    box.type = 'text';
+    box.dataset.elevNote = '';
+    box.placeholder = 'NOTE — Enter to place';
+    Object.assign(box.style, { position: 'fixed', left: `${clientX}px`, top: `${clientY - 14}px`,
+      zIndex: 50, font: "600 14px 'Barlow Condensed', system-ui, sans-serif",
+      padding: '2px 6px', minWidth: '180px' });
+    let settled = false;
+    const settle = keep => {
+      if (settled) return;
+      settled = true;
+      const text = keep ? box.value.trim().toUpperCase() : '';
+      box.remove();
+      done(text);
+    };
+    box.addEventListener('keydown', ev => {
+      ev.stopPropagation();
+      if (ev.key === 'Enter') { ev.preventDefault(); settle(true); }
+      if (ev.key === 'Escape') { ev.preventDefault(); settle(false); }
+    });
+    box.addEventListener('blur', () => settle(true));
+    document.body.appendChild(box);
+    // AT ONCE, not on the next tick: the drafter starts typing the moment the
+    // box shows, and a key that lands before it has focus goes to the page --
+    // where S, C, K and the rest are tool letters.
+    box.focus();
+  };
+  const deleteElevMark = () => {
+    const list = elevMarks();
+    const index = list.findIndex(m => m.id === elevSelected);
+    elevSelected = null;
+    if (index < 0) return;
+    const [item] = list.splice(index, 1);
+    undoStack.push({ kind: 'remove-item', list, index, item });
+    markDirty();
+    paint();
+  };
+  toolListeners.push(next => {
+    elevLineStart = null;
+    elevNotePress = null;
+    if (drawing && activeCut()) {
+      if (next === 'line') sayOnStrip('LINE on the elevation — press where it starts.');
+      if (next === 'annotation') sayOnStrip('NOTE — tap where the text goes, or press on the thing and drag to the text for an arrow.');
+    }
+  });
+
   // ── TRIM: run one wall's end on to another wall, and meld the two ──────
   //
   // Movie, 5 Oct: "i'd especially like to TRIM interior walls against other
@@ -18099,13 +18292,15 @@
   // capture would leave the browser holding a pointer this page had
   // forgotten about. A gesture here is one that PERSISTS BETWEEN PRESSES.
   const cancelGestures = () => {
-    const had = !!(drawStart || rulerFrom || pendingBone || cutStart || beamStart
+    const had = !!(drawStart || rulerFrom || pendingBone || cutStart || beamStart || elevLineStart
       || outlineCorners.length || floorCorners.length || shapeCorners.length);
     drawStart = null;
     rulerFrom = null;
     beamStart = null;
     cutStart = null;
     cutEnd = null;
+    elevLineStart = null;
+    elevNotePress = null;
     outlineCorners = [];
     floorCorners = [];
     shapeCorners = [];
@@ -18169,6 +18364,9 @@
     // a second one.
     if (e.button !== 0) return;
     const rect = canvas.getBoundingClientRect();
+    // AN ELEVATION ON SCREEN takes its own presses: LINE, ANNOTATION, and
+    // Select on a mark. Anything else falls through as it always did.
+    if (drawing && activeCut() && elevPress(e, rect)) return;
     const at = toWorld(e.clientX - rect.left, e.clientY - rect.top);
     // THE RULER TAKES THE PRESS BEFORE ANYTHING ELSE, because it is the one
     // instrument that must be usable ON TOP of whatever is being drawn: a
@@ -18390,6 +18588,7 @@
     canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener('pointermove', e => {
+    if (drawing && activeCut() && elevLineStart) elevMove(e);
     if (e.pointerType === 'touch' && touchPts.has(e.pointerId)) {
       touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (twoPan && touchPts.size >= 2) {
@@ -18804,6 +19003,7 @@
     drawPress(toWorld(e.clientX - rect.left, e.clientY - rect.top));
   });
   canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointerup', e => { if (elevNotePress) elevNoteLift(e); });
   canvas.addEventListener('pointercancel', endDrag);
 
   canvas.addEventListener('wheel', e => {
@@ -18867,6 +19067,7 @@
       // something selected Esc clears the selection first, so a drafter never
       // loses both in one press.
       if (!selection.length && selectFilter !== 'all') setSelectFilter('all');
+      elevSelected = null;
       setSelection([]);
       stripRefresh();
       paint();
@@ -18878,6 +19079,7 @@
     // the wall and watch the floor stay. Both now call pressDelete, so
     // neither can learn something the other does not.
     if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (activeCut() && elevSelected) { e.preventDefault(); deleteElevMark(); return; }
       if (!selection.length) return;
       e.preventDefault();
       pressDelete();
@@ -19204,6 +19406,11 @@
       // acts on gets normalised on the way in.
       board: F.board(parsed.board),
       boardPromptSeen: F.boardPromptSeen(parsed.boardPromptSeen),
+      // The drafter's lines and notes on the elevations, by view name. ONLY
+      // WHEN THE FILE HAS THEM: a drawing opened and saved untouched must come
+      // back key for key, so the list is made on the first mark, not here.
+      ...(parsed.elevationMarks !== undefined && F.elevationMarks
+        ? { elevationMarks: F.elevationMarks(parsed.elevationMarks) } : {}),
       walls: F.walls(parsed.walls, levelIds, {
         wallTypes: WT.WALL_TYPES,
         legacyWallTypes: WT.LEGACY_WALL_TYPES,
