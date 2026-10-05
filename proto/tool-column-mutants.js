@@ -79,7 +79,8 @@ const MUTANTS = [
     // register which tool is armed. Blanking the whole block would not
     // compile, so this falsifies the condition instead, which is the same
     // defect: a press that no longer reaches the wall gesture.
-    find: "    if (activeTool === 'wall') {",
+    // drawsRun(): WALL and LINE share the gesture since 5 Oct.
+    find: "    if (drawsRun()) {",
     with: '    if (false) {',
     test: 'a wall still commits',
   },

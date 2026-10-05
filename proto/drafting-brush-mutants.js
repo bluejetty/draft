@@ -103,8 +103,10 @@ const MUTANTS = [
 
   { file: 'MODEL.html',
     name: 'THE DRAWN WALL IGNORES THE BRUSH: the load is held and never spent',
-    find: "    const wall = commitWall(drawStart, end, brushOptions('wall'));\n    // CHAINING",
-    with: '    const wall = commitWall(drawStart, end);\n    // CHAINING',
+    // drawPress commits through commitDrawn since LINE shares the wall's
+    // gesture (Movie, 5 Oct); the brush is spent there.
+    find: "      return { type: 'wall', item: commitWall(from, to, brushOptions('wall')) };",
+    with: "      return { type: 'wall', item: commitWall(from, to) };",
     test: 'arming WALL puts the brush-s press down and keeps what it holds' },
 
   { file: 'MODEL.html',

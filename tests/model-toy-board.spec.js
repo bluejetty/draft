@@ -218,21 +218,6 @@ async function typeLength(page, text) {
   await page.waitForTimeout(150);
 }
 
-// THE ANGLE BOX, WITH THE LENGTH BOX FILLED FIRST. commitTypedAngle reads both
-// — the bearing it is given and whatever the length box holds — so a helper
-// that set only the angle would be driving half the gesture and measuring the
-// other half by accident.
-async function typeAngle(page, deg, length) {
-  const len = page.locator('[data-frozen-length]');
-  await expect(len, 'the boxes must be live before either can be typed')
-    .toBeEnabled({ timeout: 4000 });
-  await len.fill(length);
-  const box = page.locator('[data-frozen-angle]');
-  await box.fill(String(deg));
-  await page.keyboard.press('Enter');
-  await page.waitForTimeout(150);
-}
-
 test('typing a length in TOY asks before it promotes', async ({ page }) => {
   await open(page, base({ board: 'toy' }));
   await startARun(page);
@@ -352,51 +337,20 @@ test('a whole foot in TOY commits without asking, and stays in TOY',
       .toBeVisible();
   });
 
-test('a typed axis bearing with a whole foot stays in TOY too',
+// TOY TAKES NO ANGLE. These three checks used to type bearings into TOY and
+// watch which ones asked to promote. Movie, 5 Oct, giving the ANGLE box and
+// the PROTRACTOR a lock: "i guess this should only be allowed if not in TOY
+// mode". TOY squares every run already, so the box is dead there and the
+// protractor will not light.
+test('TOY has no ANGLE: the box is dead and the protractor will not light',
   async ({ page }) => {
     await open(page, base({ board: 'toy' }));
     await startARun(page);
-    const before = await wallCount(page);
-
-    // TOY SQUARES EVERY RUN TO AN AXIS, so a typed 90 is a wall TOY would have
-    // drawn. Typed with a whole foot beside it, both numbers are TOY's and
-    // there is nothing to promote.
-    await typeAngle(page, '90', ON_THE_FOOT);
-    await expect(page.locator('[data-promote]')).toBeHidden();
-    expect(await wallCount(page), 'the wall was built').toBe(before + 1);
+    await expect(page.locator('[data-frozen-angle]')).toBeDisabled();
+    await page.locator('[data-mode-protractor]').click({ force: true }).catch(() => {});
+    await expect(page.locator('[data-mode-protractor]')).not.toHaveClass(/lit/);
     expect(await boardOf(page), 'still TOY').toBe('toy');
   });
-
-test('an axis bearing with a PRECISE length still asks — both numbers count',
-  async ({ page }) => {
-    await open(page, base({ board: 'toy' }));
-    await startARun(page);
-    const before = await wallCount(page);
-
-    // THE HALF THAT IS EASY TO GET WRONG. The angle commit reads BOTH boxes,
-    // so gating on the bearing alone would let 12'-6" through wearing an axis
-    // — a precise wall admitted because the direction was tidy.
-    await typeAngle(page, '90', PRECISE);
-    await expect(page.locator('[data-promote]'),
-      'a precise length is precise whatever bearing it is typed with')
-      .toBeVisible();
-    expect(await wallCount(page), 'nothing committed while it asks').toBe(before);
-    expect(await boardOf(page), 'and nothing promoted').toBe('toy');
-  });
-
-test('an off-axis bearing still asks, whole foot or not', async ({ page }) => {
-  await open(page, base({ board: 'toy' }));
-  await startARun(page);
-
-  // AND THE OTHER HALF. 37 degrees is not a wall TOY can hold at any length,
-  // so a whole foot does not rescue it — which is what stops the fix above
-  // from having quietly become "TOY accepts typed values".
-  await typeAngle(page, '37', ON_THE_FOOT);
-  await expect(page.locator('[data-promote]'),
-    'an angle TOY cannot square to is a promotion whatever its length')
-    .toBeVisible();
-  expect(await boardOf(page), 'nothing promoted').toBe('toy');
-});
 
 // ── §1: four directions, whole feet, and no leaking into DRAFTING ───────────
 

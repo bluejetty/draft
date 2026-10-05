@@ -363,14 +363,15 @@ if (!window.DraftShellBars) {
       <span>ANGLE</span>
     </span>
 
-    <span class="chip" data-mode-protractor title="PROTRACTOR — reads the angle of the run in hand">
+    <button type="button" id="strip-protractor" class="chip" data-mode-protractor
+      title="PROTRACTOR — reads the angle of the run in hand; lit, it holds the run to the typed ANGLE">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
         <path d="M2 12.5 A6 6 0 0 1 14 12.5 Z"></path>
         <path d="M8 12.5 L11.6 8.3" stroke-width="0.9"></path>
         <path d="M4.2 9.9 L5.1 10.8 M8 6.5 V7.9 M11.8 9.9 L10.9 10.8" stroke-width="0.9"></path>
       </svg>
       <span id="strip-protractor-angle" data-protractor-angle>—</span>
-    </span>
+    </button>
 
     <button type="button" id="strip-tsquare" class="chip" data-mode-tsquare
       title="T-SQUARE — holds the wall being drawn square to the sheet">

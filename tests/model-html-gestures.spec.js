@@ -698,6 +698,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // one object's properties onto another" -- and the direction is
             // the opposite of everything above it.
             'strip-ruler', 'strip-tsquare', 'strip-scale', 'strip-brush',
+            // AND THE PROTRACTOR, a press since 5 Oct: lit, it holds the run
+            // in hand to the typed ANGLE (Movie: "can we press the protractor
+            // and enter a number into the ANGLE textbox and force the line to
+            // travel in that angle"). It was a read-only gauge before.
+            'strip-protractor',
             // AND THE SECOND CONTROL THE OLD PAGE DOES NOT HAVE, for the same
             // reason the brush is the first: MODEL.dc.html cannot turn a
             // house at all. Movie, 27 Sep: "can we add a HOUSE ROTATE
