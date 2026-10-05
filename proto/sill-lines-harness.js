@@ -42,7 +42,7 @@ const MUTATIONS = [
     c => c.replace('foundationAttachment: split.foundationAttachment ?? top.attachment,',
       'foundationAttachment: top.attachment,')],
   ['a floor on the sill plate paints its band over the plate line', 'cut-view.js',
-    c => c.replace('const onSill = Math.abs(level.floorBottom - fdn.wallTop) < 0.01;', 'const onSill = false;')],
+    c => c.replace('const onSill = !!stack.split && Math.abs(level.floorBottom - fdn.wallTop) < 0.01;', 'const onSill = false;')],
   ['PROJECT\'s ladder defaults to the 2x6', 'project-page.js',
     c => c.replace('const DEFAULT_LADDER_DEPTH_IN = 3.5;', 'const DEFAULT_LADDER_DEPTH_IN = 5.5;')],
 ];

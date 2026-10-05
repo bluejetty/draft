@@ -5270,7 +5270,13 @@ if (!window.DraftCutView) {
       // ENTRY's band ran a pixel past its floor bottom and the strip below
       // filled the rest of that row, which is exactly where the plate top
       // is drawn. So that band stops on the row above it and lays no strip.
-      const onSill = Math.abs(level.floorBottom - fdn.wallTop) < 0.01;
+      //
+      // ON A SPLIT ONLY. A one- or two-storey house's MAIN sits on its sill
+      // too, but there an attached garage's wall face, painted after the
+      // foundation lines and standing lower than the house's plate, takes
+      // the middle of that row anyway -- so the band's cover is all that
+      // kept the sheet clean (garage-elevation-occlusion.spec.js, E2).
+      const onSill = !!stack.split && Math.abs(level.floorBottom - fdn.wallTop) < 0.01;
       const yTopPx = Y(level.floorTop) - 1;
       const yBotPx = onSill ? Y(level.floorBottom) - 0.5 : Y(level.floorBottom) + 1;
       ctx.fillStyle = C.face;
