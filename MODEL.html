@@ -13805,6 +13805,83 @@
   // the auto pass after this finds both served and cuts nothing twice.
   //
   // Returns undo-shaped {list, item} pairs: one press, one Ctrl+Z.
+  // ── THE ROOM'S ROOF RUNS BACK OVER THE THIRD FLIGHT ────────────────────
+  //
+  // Movie, 4 Oct, on the MOD BILEVEL: "the roof needs to extend to the END
+  // of the stairs so that the person climbing the stairs will have adequate
+  // headroom" -- to the bottom step on MAIN FL, its eave past that -- and
+  // "if it is above the main roof there should be a wall that goes from the
+  // bottom of the 2nd fl roof to the top of the main fl ceiling". Shown both,
+  // he chose the narrow one: a strip the width of the upper landing, back
+  // over the flight, so the room's roof becomes an L rather than growing
+  // into one big square over the house.
+  //
+  // THE BOTTOM STEP is where placeBilevelStairs will put it -- the same
+  // descent and layout, read before the flight exists because the roofs go
+  // up first. THE WALLS stand on OVER GARAGE, from MAIN's ceiling (its wall
+  // top, less the flight's rise, on this level's datum) to the room's own
+  // plate: across the strip's back end and down both its sides, as far as
+  // the landing. Stick-framed, bearing on MAIN's ceiling.
+  //
+  // NULL when there is no third flight or landing to cover, and the roof is
+  // the design's own loop.
+  const stairHood = (plan, levelId) => {
+    const SG = window.DraftStairGeometry;
+    const run = plan.stairs?.upper, landing = plan.upperLanding;
+    if (!SG || !run || !landing || levelId == null) return null;
+    const descent = SG.stairDescent(levelId, stairLevels());
+    if (!descent || !(descent.riseFt > 0)) return null;
+    const bottomZ = run.z + run.toward * SG.stairLayout(descent.riseFt).runFt;
+    const xs = landing.map(p => p.x);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    const z0 = Math.min(run.z, bottomZ), z1 = Math.max(run.z, bottomZ);
+    if (!(z1 - z0 > 0.01)) return null;
+    const strip = [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }];
+    const roof = window.DraftPremadePlans.joinLoops(plan.overGarageRoof, strip);
+    if (!roof) return null;
+    const LA = window.DraftLevelAssembly;
+    const split = LA.splitValues(drawing.buildType, drawing.sectionTable?.rows?.[drawing.buildType]);
+    const baseHeight = split.mainWallHeightFt - descent.riseFt;
+    const topHeight = split.upperWallHeightFt;
+    // EVERY EDGE OF THE ROOF'S WALL LINE THE ROOM'S OWN WALLS DO NOT STAND
+    // ON: the strip's end and sides, the landing's sides, and the old square's
+    // back edge across to its corner -- that last stretch "stick framed on the
+    // outside so there won't be a jog at the north end". Each is the edge
+    // less whatever collinear stretch of the room's loop already covers it.
+    const room = plan.overGarage || [];
+    const along = (a, b) => (Math.abs(a.z - b.z) < 1e-6 ? 'x' : 'z');
+    const covered = (a, b) => {
+      const axis = along(a, b), other = axis === 'x' ? 'z' : 'x';
+      const spans = [];
+      room.forEach((p, i) => {
+        const q = room[(i + 1) % room.length];
+        if (along(p, q) !== axis || Math.abs(p[other] - a[other]) > 1e-6
+          || Math.abs(q[other] - a[other]) > 1e-6) return;
+        spans.push([Math.min(p[axis], q[axis]), Math.max(p[axis], q[axis])]);
+      });
+      return spans;
+    };
+    const runs = [];
+    roof.forEach((a, i) => {
+      const b = roof[(i + 1) % roof.length];
+      const axis = along(a, b);
+      const lo = Math.min(a[axis], b[axis]), hi = Math.max(a[axis], b[axis]);
+      let open = [[lo, hi]];
+      covered(a, b).forEach(([c0, c1]) => {
+        open = open.flatMap(([o0, o1]) => [[o0, Math.min(o1, c0)], [Math.max(o0, c1), o1]])
+          .filter(([o0, o1]) => o1 - o0 > 0.01);
+      });
+      open.forEach(([o0, o1]) => {
+        const at = v => (axis === 'x' ? { x: v, z: a.z } : { x: a.x, z: v });
+        runs.push(a[axis] <= b[axis] ? [at(o0), at(o1)] : [at(o1), at(o0)]);
+      });
+    });
+    const walls = runs.map(([a, b]) => commitWall(a, b, {
+      bone: false, levelId, view: 'plan', refLine: 'center', baseHeight, topHeight,
+    }));
+    return { roof, walls };
+  };
+
   const placeBilevelStairs = (spec, mainLevelId) => {
     const SG = window.DraftStairGeometry;
     if (!SG || !spec) return [];
@@ -14268,6 +14345,9 @@
     // there and does the right thing beside a 2 STOREY. That agreement is
     // checked rather than assumed.
     const madeRoofs = [];
+    // The walls that close in under the room's roof where it runs back over
+    // the third flight (stairHood), for the build's one undo.
+    const hoodWalls = [];
     // THE GARAGE'S PLATE, as the roof reads it: cut-view bears a garage roof
     // at the LOWEST floor's top plus this. On a bilevel the lowest floor is
     // the ENTRY deck, while the garage's walls stand on the sill under it --
@@ -14342,10 +14422,12 @@
       // garageRoof branch above avoids. A design that one day wants the room
       // roofed separately says so by handing a loop, and nothing here moves.
       if (overGarageBody && plan.overGarageRoof) {
-        madeRoofs.push(raiseRoofOver(plan.overGarageRoof, {
+        const hood = stairHood(plan, overGarageLevelId);
+        madeRoofs.push(raiseRoofOver(hood ? hood.roof : plan.overGarageRoof, {
           sourceLevelId: overGarageLevelId,
           against: plan.house,
         }));
+        if (hood) hoodWalls.push(...hood.walls);
       }
     }
     const built = madeRoofs.filter(Boolean);
@@ -14559,7 +14641,7 @@
     undoStack.push({
       kind: 'built',
       walls: raised.flatMap(body => body.walls)
-        .concat(under.walls, garageConcrete.walls),
+        .concat(under.walls, garageConcrete.walls, hoodWalls),
       outlines: raised.map(body => body.outline).filter(Boolean),
       list: drawing.outlines,
       // EVERY OTHER RECORD THE PRESS MADE, each with the list it went into, so
