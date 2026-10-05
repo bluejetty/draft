@@ -2377,6 +2377,54 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
     most <= 1, `a wall face peaks ${most} times`);
 }
 
+// ── LINES AND NOTES ON AN ELEVATION (Movie, 5 Oct) ─────────────────────
+// "i'd like to be able to also draw lines and add annotations to the
+// elevations." They live in the drawing as `elevationMarks`, in the view's
+// own feet (u along the view, e up), so the painter puts them back where they
+// were drawn at any scale -- and LAYOUT's sheets read the same list.
+{
+  const F = win.DraftDrawingFormat;
+  const raw = [
+    { id: 'm1', cut: 'E2', kind: 'line', a: { u: 1, e: 2 }, b: { u: 9, e: 2 } },
+    { id: 'm2', cut: 'E2', kind: 'note', at: { u: 3, e: 12 }, text: 'VINYL SIDING' },
+    { id: 'm3', cut: 'E2', kind: 'note', at: { u: 6, e: 14 }, text: 'STICK FRAMED', tip: { u: 4, e: 9 } },
+    { id: 'm4', cut: 'E3', kind: 'line', a: { u: 0, e: 0 }, b: { u: 5, e: 0 } },
+    { id: 'm1', cut: 'E2', kind: 'line', a: { u: 0, e: 0 }, b: { u: 1, e: 1 } },
+    { cut: 'E2', kind: 'line', a: { u: 0, e: 0 }, b: { u: 1, e: 1 } },
+    { id: 'm9', kind: 'note', at: { u: 0, e: 0 }, text: 'NO VIEW' },
+    { id: 'm8', cut: 'E2', kind: 'note', at: { u: 0, e: 0 }, text: '' },
+  ];
+  const kept = F.elevationMarks(raw);
+  check('marks: the format keeps good marks and drops a duplicate id, no id, no view, no text',
+    kept.map(m => m.id).join(',') === 'm1,m2,m3,m4', kept.map(m => m.id).join(','));
+  check('marks: a note keeps its leader tip', kept[2] && kept[2].tip && kept[2].tip.u === 4);
+
+  const mEnv = buildEnv(win, { ...saved, elevationMarks: raw });
+  check('marks: the sheet env hands a view only its own marks',
+    mEnv.elevationMarks('E2').length === 3 && mEnv.elevationMarks('E3').length === 1,
+    `${mEnv.elevationMarks('E2').length} on E2, ${mEnv.elevationMarks('E3').length} on E3`);
+  const e2cut = standardElevationCuts(mEnv).find(c => c.id === 'E2');
+  if (e2cut) {
+    const view = paintElevation(win, mEnv, e2cut);
+    const segs = segmentsOf(view);
+    const on = (p, u, e) => Math.hypot(p.u - u, p.e - e) < 0.05;
+    check('marks: the drawn line is on the elevation where it was drawn',
+      segs.some(({ a, b }) => (on(a, 1, 2) && on(b, 9, 2)) || (on(a, 9, 2) && on(b, 1, 2))));
+    const words = view.texts.filter(t => /VINYL SIDING|STICK FRAMED/.test(t.text));
+    check('marks: both notes print', words.length === 2, words.map(t => t.text).join(' / '));
+    const vinyl = words.find(t => t.text === 'VINYL SIDING');
+    check('marks: a note prints at its own spot', vinyl && on(vinyl, 3, 12),
+      vinyl ? `(${vinyl.u.toFixed(2)}, ${vinyl.e.toFixed(2)})` : 'missing');
+    check('marks: the leader runs from the thing it points at',
+      segs.some(({ a, b }) => on(a, 4, 9) || on(b, 4, 9)));
+    const bare = paintElevation(win, buildEnv(win, saved), e2cut);
+    check('marks: and they are ink the drawing without marks does not have',
+      segmentsOf(bare).length < segs.length && !bare.texts.some(t => /VINYL SIDING/.test(t.text)));
+  } else {
+    check('marks: the fixture has an E2 to draw on', false);
+  }
+}
+
 console.log(`elevation harness: ${passed} checks passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach(line => console.log(`  \u2718 ${line}`));

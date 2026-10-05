@@ -1164,6 +1164,41 @@ if (!window.DraftDrawingFormat) {
       return { ...base, host: DEVICE_HOSTS[kind] || 'ceiling', at };
     }).filter(Boolean);
 
+  // ── LINES AND NOTES DRAWN ON AN ELEVATION ─────────────────────────────────
+  //
+  // Movie, 5 Oct: "draw lines and add annotations to the elevations". Each
+  // mark belongs to ONE view by name (`cut`: E1..E4, or a section's S1..) and
+  // is placed in that view's own feet -- `u` along it, `e` the elevation --
+  // which is what cut-view.js paints it by. A line is two points; a note is a
+  // point and its text, and a leader arrow's tip when it has one.
+  const elevationMarks = raw => {
+    const pt = p => {
+      const u = Number(p?.u), e = Number(p?.e);
+      return Number.isFinite(u) && Number.isFinite(e) ? { u, e } : null;
+    };
+    const seen = new Set();
+    return (Array.isArray(raw) ? raw : []).map(m => {
+      const id = String(m?.id ?? '').trim();
+      const cut = String(m?.cut ?? '').trim();
+      if (!id || seen.has(id) || !cut) return null;
+      if (m?.kind === 'line') {
+        const a = pt(m.a), b = pt(m.b);
+        if (!a || !b) return null;
+        seen.add(id);
+        return { id, cut, kind: 'line', a, b };
+      }
+      if (m?.kind === 'note') {
+        const at = pt(m.at);
+        const text = String(m.text ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+        if (!at || !text) return null;
+        seen.add(id);
+        const tip = pt(m.tip);
+        return { id, cut, kind: 'note', at, text, ...(tip ? { tip } : {}) };
+      }
+      return null;
+    }).filter(Boolean);
+  };
+
   const roomTags = (rawTags, levelIds) => {
     const seen = new Set();
     return (Array.isArray(rawTags) ? rawTags : []).map(tag => {
@@ -2032,6 +2067,7 @@ if (!window.DraftDrawingFormat) {
     stairs,
     notes,
     roomTags,
+    elevationMarks,
     electricDevices,
     fenestrations,
     fixtures,

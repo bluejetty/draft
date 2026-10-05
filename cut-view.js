@@ -1833,6 +1833,71 @@ if (!window.DraftCutView) {
     };
   };
 
+  // ── THE DRAFTER'S OWN LINES AND NOTES ON AN ELEVATION ─────────────────────
+  //
+  // Movie, 5 Oct: "i'd like to be able to also draw lines and add annotations
+  // to the elevations" -- a note in plain text, or with a leader arrow ("Both"),
+  // and on the LAYOUT sheets too ("Yes").
+  //
+  // STORED IN THE ELEVATION'S OWN FEET: `u` along the cut, `e` the elevation,
+  // the two numbers every other line on this sheet is placed by -- so a mark
+  // stays where it was put at any zoom and on any sheet scale. Painted LAST,
+  // over the building, by whichever page draws the view: the sheet and the
+  // model ask the same env for the same list (`elevationMarks(cut.name)`).
+  //
+  // AND THE FRAME GOES BACK OUT (`opts.onFrame`), the one place a page can
+  // learn where a foot of this drawing landed, so a press can be read in feet.
+  function paintElevationMarks(env, ctx, cut, X, Y, pxPerFt, C, opts, frame) {
+    if (opts && typeof opts.onFrame === 'function') opts.onFrame(frame);
+    const marks = (env && typeof env.elevationMarks === 'function'
+      ? env.elevationMarks(cut.name) : null) || [];
+    const selected = opts && opts.selectedMark;
+    const live = opts && opts.markPreview;
+    const all = live ? marks.concat([live]) : marks;
+    if (!all.length) return;
+    const ink = C.line;
+    const textPx = Math.max(9, Math.min(16, pxPerFt * 0.55));
+    ctx.save();
+    all.forEach(m => {
+      const hot = selected && m.id && m.id === selected;
+      ctx.strokeStyle = hot ? ((opts && opts.selectColor) || '#2f6fd6') : ink;
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.lineWidth = hot ? 2 : 1.25;
+      ctx.setLineDash(m === live ? [5, 4] : []);
+      if (m.kind === 'line' && m.a && m.b) {
+        ctx.beginPath();
+        ctx.moveTo(X(m.a.u), Y(m.a.e));
+        ctx.lineTo(X(m.b.u), Y(m.b.e));
+        ctx.stroke();
+        return;
+      }
+      if (m.kind !== 'note' || !m.at) return;
+      const tx = X(m.at.u), ty = Y(m.at.e);
+      const text = String(m.text || '');
+      ctx.font = `600 ${textPx}px 'Barlow Condensed', system-ui, sans-serif`;
+      const width = ctx.measureText(text).width;
+      if (m.tip) {
+        const px = X(m.tip.u), py = Y(m.tip.e);
+        // The leader lands on the near end of the text, at its middle.
+        const toRight = px >= tx + width / 2;
+        const lx = toRight ? tx + width + 3 : tx - 3;
+        ctx.beginPath(); ctx.moveTo(lx, ty); ctx.lineTo(px, py); ctx.stroke();
+        const ang = Math.atan2(py - ty, px - lx), head = Math.max(6, textPx * 0.6);
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.lineTo(px - head * Math.cos(ang - 0.35), py - head * Math.sin(ang - 0.35));
+        ctx.lineTo(px - head * Math.cos(ang + 0.35), py - head * Math.sin(ang + 0.35));
+        ctx.closePath(); ctx.fill();
+      }
+      if (text) {
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        ctx.fillText(text, tx, ty);
+      }
+    });
+    ctx.restore();
+  }
+
   function drawCutView(env, ctx, w, h, cut, opts) {
     const fit = externalFit(opts);
     const C = inksFor(opts);
@@ -2384,6 +2449,8 @@ if (!window.DraftCutView) {
       });
       ctx.stroke();
     }
+    paintElevationMarks(env, ctx, cut, X, Y, pxPerFt, C, opts,
+      { x0, y0, pxPerFt, uMin, yTop });
   }
 
   // One crossed wall on the section: the stud rectangle for its level, with
@@ -6412,6 +6479,8 @@ if (!window.DraftCutView) {
     ctx.moveTo(marginL - 18, Y(fdn.grade));
     ctx.lineTo(w - marginR, Y(fdn.grade));
     ctx.stroke();
+    paintElevationMarks(env, ctx, cut, X, Y, pxPerFt, C, opts,
+      { x0, y0, pxPerFt, uMin, yTop });
     return true;
   }
 
