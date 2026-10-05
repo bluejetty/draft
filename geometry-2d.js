@@ -810,8 +810,120 @@ const roofFaces = (roof, arcs) => {
     const line = edge.parent || { a: edge.a, b: edge.b };
     faces.push({ points: poly, area: area2 / 2, eave: { a: line.a, b: line.b } });
   });
-  return faces;
+  return cutRoofFaces(faces, roof);
 };
+
+// ── A ROOF WITH A PIECE CUT OUT OF IT ──────────────────────────────────────
+//
+// Movie, 5 Oct, on a MOD BILEVEL whose upper roof was pushed out over the
+// main roof: "the main floor roof should stop at the new wall". The roof
+// keeps its own outline -- and so its own ridge and hips -- and `roof.cuts`
+// lists the convex loops taken out of it. Notching the outline instead was
+// measured and is wrong: the skeleton re-solves round the notch and the
+// ridge west of it climbs by up to two feet. A cut leaves every plane where
+// it was and only takes paper away, so every face keeps its eave line (and
+// so its height) and only its polygon shrinks.
+//
+// THE PIECES OF A POLYGON OUTSIDE A CONVEX HOLE: for each hole edge in turn,
+// the part of the polygon beyond that edge and inside every edge before it.
+// Disjoint, and together exactly the polygon less the hole.
+const cutLoopsOf = roof => (Array.isArray(roof?.cuts) ? roof.cuts : [])
+  .map(cut => (Array.isArray(cut?.points) ? cut.points : []).map(p => ({ x: Number(p.x), z: Number(p.z) })))
+  .filter(loop => loop.length >= 3 && loop.every(p => Number.isFinite(p.x) && Number.isFinite(p.z)))
+  .map(loop => {
+    const area2 = loop.reduce((sum, p, i) => {
+      const q = loop[(i + 1) % loop.length];
+      return sum + p.x * q.z - q.x * p.z;
+    }, 0);
+    return area2 < 0 ? loop.slice().reverse() : loop;
+  });
+// Keeps the side of a -> b where the cross product has sign `side`.
+const clipToHalfPlane = (poly, a, b, side) => {
+  const sideOf = p => ((b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x)) * side;
+  const out = [];
+  poly.forEach((p, i) => {
+    const q = poly[(i + 1) % poly.length];
+    const sp = sideOf(p), sq = sideOf(q);
+    if (sp >= 0) out.push(p);
+    if ((sp > 0 && sq < 0) || (sp < 0 && sq > 0)) {
+      const t = sp / (sp - sq);
+      out.push({ x: p.x + (q.x - p.x) * t, z: p.z + (q.z - p.z) * t });
+    }
+  });
+  return out;
+};
+const polyArea2 = poly => poly.reduce((sum, p, i) => {
+  const q = poly[(i + 1) % poly.length];
+  return sum + p.x * q.z - q.x * p.z;
+}, 0);
+const minusConvex = (poly, hole) => {
+  const pieces = [];
+  let rest = poly;
+  for (let i = 0; i < hole.length && rest.length >= 3; i++) {
+    const a = hole[i], b = hole[(i + 1) % hole.length];
+    const outside = clipToHalfPlane(rest, a, b, -1);
+    if (outside.length >= 3 && Math.abs(polyArea2(outside)) > 1e-6) pieces.push(outside);
+    rest = clipToHalfPlane(rest, a, b, 1);
+  }
+  return pieces;
+};
+// A PIECE'S EDGE THAT IS ONLY A SEAM between two pieces of one face: it lies
+// on a hole edge's LINE but off that edge itself, so the same plane carries
+// on across it. `seams[i]` marks edge i (points[i] -> points[i + 1]) so a
+// painter that strokes face edges can leave them out; the cut's own edges,
+// where the sheet really stops, are not seams.
+const seamsOf = (points, holes) => points.map((p, i) => {
+  const q = points[(i + 1) % points.length];
+  const mid = { x: (p.x + q.x) / 2, z: (p.z + q.z) / 2 };
+  return holes.some(hole => hole.some((a, j) => {
+    const b = hole[(j + 1) % hole.length];
+    const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    const off = pt => Math.abs((b.x - a.x) * (pt.z - a.z) - (b.z - a.z) * (pt.x - a.x)) / len;
+    if (off(p) > 1e-6 || off(q) > 1e-6) return false;
+    const t = ((mid.x - a.x) * (b.x - a.x) + (mid.z - a.z) * (b.z - a.z)) / (len * len);
+    return t < -1e-9 || t > 1 + 1e-9;
+  }));
+});
+const cutRoofFaces = (faces, roof) => {
+  const holes = cutLoopsOf(roof);
+  if (!holes.length) return faces;
+  return faces.flatMap(face => holes
+    .reduce((polys, hole) => polys.flatMap(poly => minusConvex(poly, hole)), [face.points])
+    .map(points => splitAtCorners(points, holes))
+    .map(points => ({ ...face, points, area: Math.abs(polyArea2(points)) / 2, seams: seamsOf(points, holes) })));
+};
+// A piece's edge along a hole's line can run past the hole's corner -- part
+// of it the cut, part a seam. Putting the corner in as a vertex makes each
+// edge one or the other, which is what seamsOf answers per edge.
+const splitAtCorners = (points, holes) => points.flatMap((p, i) => {
+  const q = points[(i + 1) % points.length];
+  const dx = q.x - p.x, dz = q.z - p.z;
+  const len2 = dx * dx + dz * dz;
+  if (len2 < 1e-12) return [p];
+  const ts = holes.flat().map(c => {
+    const t = ((c.x - p.x) * dx + (c.z - p.z) * dz) / len2;
+    const off = Math.abs(dx * (c.z - p.z) - dz * (c.x - p.x)) / Math.sqrt(len2);
+    return off < 1e-6 && t > 1e-6 && t < 1 - 1e-6 ? t : null;
+  }).filter(t => t != null).sort((u, v) => u - v);
+  return [p, ...ts.map(t => ({ x: p.x + dx * t, z: p.z + dz * t }))];
+});
+// The stretches of a segment (a ridge or hip guide) outside every cut.
+const cutRoofSegment = (seg, roof) => cutLoopsOf(roof).reduce((parts, hole) => parts.flatMap(part => {
+  let t0 = 0, t1 = 1;
+  const dx = part.b.x - part.a.x, dz = part.b.z - part.a.z;
+  for (let i = 0; i < hole.length; i++) {
+    const a = hole[i], b = hole[(i + 1) % hole.length];
+    // Inside is the left of a -> b: (b - a) x (p - a) > 0.
+    const num = (b.x - a.x) * (part.a.z - a.z) - (b.z - a.z) * (part.a.x - a.x);
+    const den = (b.x - a.x) * dz - (b.z - a.z) * dx;
+    if (Math.abs(den) < 1e-12) { if (num <= 0) return [part]; continue; }
+    const t = -num / den;
+    if (den > 0) t0 = Math.max(t0, t); else t1 = Math.min(t1, t);
+  }
+  if (t1 - t0 < 1e-9) return [part];
+  const at = t => ({ x: part.a.x + dx * t, z: part.a.z + dz * t });
+  return [[0, t0], [t1, 1]].filter(([u, v]) => v - u > 1e-6).map(([u, v]) => ({ ...part, a: at(u), b: at(v) }));
+}), [seg]);
 
 const roofFaceRise = (face, p, pitch) => {
   const ex = face.eave.b.x - face.eave.a.x, ez = face.eave.b.z - face.eave.a.z;
@@ -1856,6 +1968,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     roofSkeleton,
     mergeVertex,
     roofFaces,
+    cutRoofSegment,
     roofFaceRise,
     roofRiseAt,
     roofWeldSpans,

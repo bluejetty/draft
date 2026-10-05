@@ -5982,6 +5982,10 @@ if (!window.DraftCutView) {
         roofFaces.forEach(face => {
           const poly = face.points;
           for (let i = 0; i < poly.length; i++) {
+            // A SEAM IS NOT AN EDGE: where a roof's cut split one face into
+            // pieces, the plane carries on across the join (geometry-2d's
+            // cutRoofFaces marks them).
+            if (face.seams && face.seams[i]) continue;
             const a = poly[i], b = poly[(i + 1) % poly.length];
             const key = [a, b].map(p => `${p.x.toFixed(2)},${p.z.toFixed(2)}`).sort().join('|');
             if (seen.has(key)) continue;   // shared ridge/hip/valley: once is enough

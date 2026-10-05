@@ -904,6 +904,18 @@ if (!window.DraftDrawingFormat) {
           ? { roofing: roof.roofing } : {}),
         ...(Array.isArray(env.cornerStyles) && env.cornerStyles.includes(roof?.gableCorner)
           ? { gableCorner: roof.gableCorner } : {}),
+        // WHAT IS CUT OUT OF IT: convex loops, each tagged with the upper
+        // roof whose walls it stops at (`hoodOf`) so BONEYARD's next push can
+        // replace exactly its own. See geometry-2d's cutRoofFaces.
+        ...((() => {
+          const cuts = (Array.isArray(roof?.cuts) ? roof.cuts : []).map(cut => {
+            const loop = (Array.isArray(cut?.points) ? cut.points : []).map(point).filter(Boolean);
+            if (loop.length < 3) return null;
+            const hoodOf = String(cut?.hoodOf ?? '').trim();
+            return { points: loop, ...(hoodOf ? { hoodOf } : {}) };
+          }).filter(Boolean);
+          return cuts.length ? { cuts } : {};
+        })()),
         layer: 'A-ROOF',
       };
     }).filter(Boolean);
