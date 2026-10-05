@@ -112,6 +112,21 @@ test('+ CUT and three presses make a section', async ({ page }) => {
   expect(cut.name).toMatch(/^S\d+$/);
 });
 
+// CUT IS A KEY IN THE DRAW / EDIT COLUMN AND THE LETTER C (Movie, 5 Oct:
+// "add the 'CUT' command to the draftng menu and give it LETTER command" --
+// "ya use C"). The letter arms the same three presses + CUT does.
+test('C arms CUT, its key lights, and three presses make a section', async ({ page }) => {
+  await newPageOnSavedHouse(page);
+  const before = cutsOf(await savedFile(page));
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('c');
+  await expect(page.locator('[data-tool-key="cut"]')).toHaveAttribute('aria-pressed', 'true');
+  await cutThrough(page, A, B, SOUTH);
+  await saveOnNewPage(page);
+  const after = cutsOf(await savedFile(page));
+  expect(after.length, 'one more cut than there was').toBe(before.length + 1);
+});
+
 test('the stored direction points away from the side that was pressed',
   async ({ page }) => {
     await newPageOnSavedHouse(page);

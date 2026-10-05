@@ -110,8 +110,10 @@ test('the roster answers per board, and every board can rest', async ({ page }) 
   // Taking it off this board moves TOY's drawing onto a path §1's squaring and
   // foot-landing rule does not cover; that is its own rung with its own
   // checks. Adding outline takes nothing from anybody, swapping them would.
-  expect(r.toy, 'TOY offers select, wall and the outline gesture, and nothing else')
-    .toEqual(['select', 'wall', 'outline']);
+  // AND CUT (Movie, 5 Oct, "could be on TOY i think"): a section draws
+  // nothing into the house, it only adds a way to look at it.
+  expect(r.toy, 'TOY offers select, cut, wall and the outline gesture, and nothing else')
+    .toEqual(['select', 'cut', 'wall', 'outline']);
   expect(r.drafting).toBe(r.all);
   expect(r.unknown).toBe(r.all);
   expect(r.restsEverywhere).toBe(true);
