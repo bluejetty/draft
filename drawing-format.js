@@ -764,6 +764,11 @@ if (!window.DraftDrawingFormat) {
         // #275: grown interior walls stay auto until the drafter touches them
         // -- regeneration replaces only still-tagged walls.
         ...(wall?.auto === true ? { auto: true } : {}),
+        // THE ROOF A CAVITY WALL CLOSES IN UNDER (boneyard-edit.js roofHood):
+        // the walls an upper roof stands on where it runs out over the main
+        // roof, regenerated whenever that roof is pushed -- so they carry the
+        // roof's id, and only they are swept.
+        ...(String(wall?.hoodOf ?? '').trim() ? { hoodOf: String(wall.hoodOf).trim() } : {}),
         // A BASE FINISH, A COLOUR AND ANY BANDS -- all three conditional, so a
         // wall nobody has clad reads out exactly as it read in.
         ...finishOf(wall, env.finishIds || [], env.legacyFinishes || {},

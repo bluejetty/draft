@@ -14473,11 +14473,18 @@
       // roofed separately says so by handing a loop, and nothing here moves.
       if (overGarageBody && plan.overGarageRoof) {
         const hood = stairHood(plan, overGarageLevelId);
-        madeRoofs.push(raiseRoofOver(hood ? hood.roof : plan.overGarageRoof, {
+        const roomRoof = raiseRoofOver(hood ? hood.roof : plan.overGarageRoof, {
           sourceLevelId: overGarageLevelId,
           against: plan.house,
-        }));
-        if (hood) hoodWalls.push(...hood.walls);
+        });
+        madeRoofs.push(roomRoof);
+        if (hood) {
+          // Tagged with the roof they close in under, so a later BONEYARD
+          // push of that roof replaces them rather than adding a second set
+          // (boneyard-edit.js roofHood).
+          if (roomRoof && roomRoof.item) hood.walls.forEach(w => { w.hoodOf = String(roomRoof.item.id); });
+          hoodWalls.push(...hood.walls);
+        }
       }
     }
     const built = madeRoofs.filter(Boolean);

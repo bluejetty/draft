@@ -3964,11 +3964,15 @@ if (!window.DraftCutView) {
       // all, and a foot above its own head would draw one upside down.
       return Math.min(lifted, top);
     };
+    // HOW FAR ABOVE ITS STOREY'S FLOOR A WALL STARTS: only a wall hung under
+    // a roof pushed out over the storey below (`hoodOf`) says, and it starts
+    // on that storey's ceiling. Every other wall stands on its floor.
+    const hungBy = wall => (wall.hoodOf ? Math.max(0, Number(wall.baseHeight) || 0) : 0);
     const faceGeoms = faces.map(face => {
       const { wall, u1, u2, level } = face;
       const loU = Math.max(Math.min(u1, u2), uMin);
       const hiU = Math.min(Math.max(u1, u2), uMax);
-      const floor = face.garage ? garageBase(face.garage) : level.floorTop;
+      const floor = face.garage ? garageBase(face.garage) : level.floorTop + hungBy(wall);
       const worldAt = u => {
         const t = (u - u1) / (u2 - u1);
         return {
@@ -4402,12 +4406,19 @@ if (!window.DraftCutView) {
       const { face, loU, hiU, floor, tops, worldAt } = geom;
       const { wall, u1, u2, level } = face;
       const xa = X(loU), xb = X(hiU);
+      // A GARAGE STANDS ON ITS PLATE, AND THE PLATE'S LINE IS ITS FOOT. That
+      // line goes down before the faces, on a pixel's centre, so a fill from
+      // Y(floor) took half its row and left it grey beside the house's black
+      // -- Movie, 5 Oct: "the garage line is grey the house line is black ...
+      // they should match in shade of line". Stop half a pixel short, as the
+      // house's band on its sill does (paintRimBand).
+      const yFoot = face.garage ? Y(floor) - 0.5 : Y(floor);
       ctx.fillStyle = C.face;
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       ctx.beginPath();
-      ctx.moveTo(xa, Y(floor));
+      ctx.moveTo(xa, yFoot);
       tops.forEach(s => ctx.lineTo(X(s.u), Y(s.top)));
-      ctx.lineTo(xb, Y(floor));
+      ctx.lineTo(xb, yFoot);
       ctx.closePath();
       ctx.fill();
       // ── AND A HALF PIXEL PAST ITS OWN EDGE ────────────────────────────
@@ -4430,18 +4441,18 @@ if (!window.DraftCutView) {
       // on garage". Both seams this stroke is for are a side and a top.
       ctx.save();
       ctx.beginPath();
-      ctx.moveTo(xa, Y(floor));
+      ctx.moveTo(xa, yFoot);
       tops.forEach(s => ctx.lineTo(X(s.u), Y(s.top)));
-      ctx.lineTo(xb, Y(floor));
+      ctx.lineTo(xb, yFoot);
       ctx.strokeStyle = C.face; ctx.lineWidth = 1;
       ctx.stroke();
       ctx.restore();
       // THE FACE'S OWN OUTLINE STAYS THE CURRENT PATH, for the finish clip
       // below, which reads it.
       ctx.beginPath();
-      ctx.moveTo(xa, Y(floor));
+      ctx.moveTo(xa, yFoot);
       tops.forEach(s => ctx.lineTo(X(s.u), Y(s.top)));
-      ctx.lineTo(xb, Y(floor));
+      ctx.lineTo(xb, yFoot);
       ctx.closePath();
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       // ── AND WHAT THE WALL IS CLAD IN GOES ONTO THAT FILL ──────────────
@@ -5137,7 +5148,10 @@ if (!window.DraftCutView) {
       depth: face.depth,
       levelId: face.level.id,
       top: face.level.wallTop,
-      bottom: face.garage ? -Infinity : face.level.floorTop,
+      bottom: face.garage ? -Infinity : face.level.floorTop + hungBy(face.wall),
+      // A wall hung off the storey below's ceiling (`hoodOf`) has no floor
+      // package of this storey under it, so it lays no rim band.
+      hood: !!face.wall.hoodOf,
     });
     const houseSpans = houseFaces.map(spanOf).filter(span => span.hi - span.lo >= 0.5);
     // ── AND A GARAGE IN FRONT IS SOMETHING NEARER ──────────────────────
@@ -5235,7 +5249,7 @@ if (!window.DraftCutView) {
     const rimBands = [];
     const bandLevels = [];
     stack.floors.forEach(level => {
-      const spans = houseSpans.filter(span => span.levelId === level.id);
+      const spans = houseSpans.filter(span => span.levelId === level.id && !span.hood);
       if (!spans.length) return;
       // Contiguous runs of face coverage — a level with two separate wings
       // wears two rim bands, not one across the gap between them.
@@ -5366,6 +5380,66 @@ if (!window.DraftCutView) {
       ...wallItems,
       ...roofFills.map(fill => ({ depth: fill.depth, go: () => paintRoof(fill) })),
     ].sort((a, b) => a.depth - b.depth).forEach(item => item.go());
+
+    // ── A WALL STANDING ON THE ROOF BELOW SHOWS WHERE IT CLEARS THAT ROOF ──
+    //
+    // Movie, 5 Oct, on E2 of a MOD BILEVEL whose upper roof was pushed out
+    // over the main roof in BONEYARD: "we should see the wall below the 2nd
+    // floor roof (bottom of this wall should allign with the main floor
+    // ceiling)". The wall (`hoodOf`, see boneyard-edit.js roofHood) stands
+    // on MAIN's ceiling, which is under the main roof, and pokes up through
+    // it. Paint order alone cannot draw that: the main roof's eave is nearer
+    // than the wall, so its sheet goes down after the wall and covers all of
+    // it. So the part above the roof is painted again here, after every
+    // sheet: from the highest roof along the ray toward the viewer (its own
+    // roof aside, which is above it) up to the top the face already has.
+    faceGeoms.filter(geom => geom.face.wall.hoodOf && !faceHidden(geom)).forEach(geom => {
+      const { face, tops, worldAt } = geom;
+      const ownRoofId = String(face.wall.hoodOf);
+      const span = dHi - face.depth;
+      const footAt = (u, floor) => {
+        if (!facesByRoof || span < 0.1) return floor;
+        const pt = worldAt(u);
+        const far = { x: pt.x + dir.x * span, z: pt.z + dir.z * span };
+        let foot = floor;
+        facesByRoof.forEach((roofFaces, roof) => {
+          if (String(roof.id) === ownRoofId) return;
+          const base = roofEaveElev(roof, stack, env);
+          geo().roofProfile(roof, roofFaces, pt, far, dir).forEach(p => {
+            foot = Math.max(foot, base + p.rise);
+          });
+        });
+        return foot;
+      };
+      const floor = face.level.floorTop + (Number(face.wall.baseHeight) || 0);
+      const strip = tops.map(s => ({ u: s.u, top: s.top, foot: Math.min(s.top, footAt(s.u, floor)) }));
+      // One run per stretch where the wall clears the roof in front of it.
+      const runs = [];
+      let cur = null;
+      strip.forEach(s => {
+        if (s.top - s.foot > 0.02) { (cur = cur || []).push(s); } else if (cur) { runs.push(cur); cur = null; }
+      });
+      if (cur) runs.push(cur);
+      runs.filter(run => run.length > 1).forEach(run => {
+        ctx.beginPath();
+        run.forEach((s, i) => (i ? ctx.lineTo(X(s.u), Y(s.top)) : ctx.moveTo(X(s.u), Y(s.top))));
+        for (let i = run.length - 1; i >= 0; i--) ctx.lineTo(X(run[i].u), Y(run[i].foot));
+        ctx.closePath();
+        ctx.fillStyle = C.face;
+        ctx.fill();
+        ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
+        ctx.beginPath();
+        // The line where it meets the roof, and its ends where they stand
+        // clear; its top is the soffit's line, already drawn.
+        run.forEach((s, i) => (i ? ctx.lineTo(X(s.u), Y(s.foot)) : ctx.moveTo(X(s.u), Y(s.foot))));
+        [run[0], run[run.length - 1]].forEach(s => {
+          if (Math.abs(s.u - geom.loU) < 1e-6 || Math.abs(s.u - geom.hiU) < 1e-6) {
+            ctx.moveTo(X(s.u), Y(s.foot)); ctx.lineTo(X(s.u), Y(s.top));
+          }
+        });
+        ctx.stroke();
+      });
+    });
 
     // IS THIS POINT BEHIND A ROOF? Lifted out of `hidden` so the rim-band
     // edge pass below can ask it too -- `hidden` itself cannot move, because
