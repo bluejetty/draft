@@ -38,7 +38,8 @@ test('a type picked before NEW still reaches the file the bone builds into', asy
   // The tile stamped THIS drawing, so it is dirty and NEW asks first.
   await page.locator('[data-file-new]').click();
   await page.locator('[data-guard-discard]').click();
-  await expect(page.locator('#save')).toHaveText(/UNSAVED/);
+  // NEW STORES THE BLANK (Movie, 5 Oct, option (a)), so the page reads SAVED.
+  await expect(page.locator('#save')).toHaveText('SAVED', { timeout: 6000 });
 
   // The choice outlived the drawing: the foot bone offers to build it.
   await page.locator('#bone').click();

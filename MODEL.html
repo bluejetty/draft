@@ -19757,6 +19757,7 @@
   let guardProceed = null;
   const closeGuard = () => {
     guardProceed = null;
+    guardSaveWith = null;
     if (fileGuard) fileGuard.hidden = true;
     paint();
   };
@@ -19769,8 +19770,13 @@
   // this thing: every answer including CANCEL returns from here immediately,
   // so work written after the call would run on all three. It has to be
   // handed over to run on two of them.
-  const askToSave = (question, proceed) => {
+  // `saveWith`, where given, is what SAVE FIRST does instead of the plain
+  // store write -- NEW's guard saves a COPY TO THE COMPUTER as well, because
+  // NEW is about to clear the stored drawing too.
+  let guardSaveWith = null;
+  const askToSave = (question, proceed, saveWith = null) => {
     guardProceed = proceed;
+    guardSaveWith = saveWith;
     if (fileGuardText) fileGuardText.textContent = question;
     if (fileGuard) fileGuard.hidden = false;
     paint();
@@ -19790,7 +19796,7 @@
       // SAVE FIRST MEANS SAVED. A refused lease or a stale revision leaves the
       // drawing exactly where it is and the guard up, so the drafter still
       // has the edits and the message explaining why.
-      if (!(await save())) return;
+      if (!(await (guardSaveWith ? guardSaveWith() : save()))) return;
       closeGuard();
       if (proceed) proceed();
     });
@@ -19909,8 +19915,32 @@
     guardUnsaved(`leaving for ${where}`, () => { window.location.href = href; });
   }, true);
 
-  const newDrawing = () => guardUnsaved('starting a new one',
-    async () => { await adoptAndShow(blankDrawingFile()); });
+  // ── NEW CLEARS THE DRAWING, NOT JUST THE SCREEN ─────────────────────────
+  //
+  // Movie, 5 Oct: "if i press NEW - it brings up a blank page, but if i
+  // press 'F5' when it refreshes the plan it brings back the last plan i
+  // drew ... Once the USER presses NEW - the old drawing should DISAPPEAR and
+  // not come back if they didn't save it". Asked which way, (a): NEW stores
+  // the blank, so a refresh, EXT. FINISH and every other page read the new
+  // empty drawing -- after asking, whenever there is anything to lose, to
+  // save a COPY TO THE COMPUTER first. The browser's store is the only other
+  // place a plain SAVE ever went, and NEW is about to empty it.
+  const drawingHasWork = () => !!drawing && ['walls', 'lines', 'floors', 'roofs', 'outlines',
+    'shapes', 'fenestrations', 'dimensions', 'stairs', 'columns', 'beams', 'notes', 'roomTags']
+    .some(key => Array.isArray(drawing[key]) && drawing[key].length);
+  const newDrawing = () => {
+    const clear = async () => {
+      if (!(await adoptAndShow(blankDrawingFile()))) return;
+      await save();
+    };
+    if (!dirty && !drawingHasWork()) { clear(); return; }
+    askToSave('NEW clears this drawing from this browser. Save a copy to your computer first?',
+      clear, async () => {
+        const name = generatedFileName();
+        const ok = await save({ download: name });
+        return ok;
+      });
+  };
 
   const openDrawing = () => guardUnsaved('opening another', () => {
     if (fileInput) fileInput.click();
