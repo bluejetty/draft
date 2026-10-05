@@ -36,13 +36,13 @@ const MUTANTS = [
   // whose `find` no longer matches stops testing anything and says nothing.
   { file: 'tool-roster.js',
     name: 'TOY loses the wall tool, so §1 has nothing to run on',
-    find: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline']);",
-    with: "  const TOY_TOOLS = Object.freeze([RESTING, 'outline']);",
+    find: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline', 'cut']);",
+    with: "  const TOY_TOOLS = Object.freeze([RESTING, 'outline', 'cut']);",
     test: 'the roster answers per board' },
   { file: 'tool-roster.js',
     name: 'TOY loses SELECT, so the fallback lands on a refused tool',
-    find: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline']);",
-    with: "  const TOY_TOOLS = Object.freeze(['wall', 'outline']);",
+    find: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline', 'cut']);",
+    with: "  const TOY_TOOLS = Object.freeze(['wall', 'outline', 'cut']);",
     test: 'the roster answers per board' },
   // AND THE NEW MEMBER GETS ITS OWN. Movie's ruling is that the outline
   // gesture survives on TOY -- "drawing the outline is not a drafting tool, it
@@ -50,8 +50,8 @@ const MUTANTS = [
   // will not let a TOY house start.
   { file: 'tool-roster.js',
     name: 'TOY loses the outline gesture, so a TOY house cannot begin',
-    find: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline']);",
-    with: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall']);",
+    find: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline', 'cut']);",
+    with: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'cut']);",
     test: 'the roster answers per board' },
   { file: 'tool-roster.js',
     name: 'an id that is not a tool is available',

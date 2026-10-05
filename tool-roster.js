@@ -48,6 +48,11 @@
     // user can place and fill out the info". A drafting key, so TOY has none;
     // no letter yet, like ANNOTATION beside it.
     { id: 'roomtag',      name: 'ROOM TAG',     group: 'draw',  kind: 'contextual', command: null },
+    // CUT (Movie, 5 Oct): "add the 'CUT' command to the draftng menu and give
+    // it LETTER command" -- C, which DEFAULT_KEYBINDINGS has carried for `cut`
+    // since the old page. And on TOY too: "why not on TOY? could be on TOY i
+    // think" -- a section is a way of LOOKING at the house, not drafting it.
+    { id: 'cut',          name: 'CUT',          group: 'draw',  kind: 'contextual', command: 'cut' },
     { id: 'wall',         name: 'WALL',         group: 'build', kind: 'contextual', command: 'wall' },
     { id: 'fenestration', name: 'FENESTRATION', group: 'build', kind: 'contextual', command: 'fenestration' },
     { id: 'floor',        name: 'FLOOR',        group: 'build', kind: 'contextual', command: 'floor' },
@@ -118,7 +123,9 @@
   // board moves TOY's drawing onto a path that rule does not cover. That is
   // its own rung with its own checks, not a line to change on the way past.
   // Adding outline takes nothing away from anybody; swapping them would.
-  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline']);
+  // CUT JOINS IT (Movie, 5 Oct, "could be on TOY i think"): cutting a
+  // section draws nothing into the house, it only adds a way to look at it.
+  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline', 'cut']);
 
   // An unknown board is treated as DRAFTING -- the unrestricted one. The other
   // way round, an unknown board would silently strip sixteen tools off the

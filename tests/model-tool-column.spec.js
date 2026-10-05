@@ -45,6 +45,9 @@ const ROSTER = [
   ['draw', 'dimension', 'DIMENSION', 'D'],
   ['draw', 'annotation', 'ANNOTATION', ''],
   ['draw', 'roomtag', 'ROOM TAG', ''],
+  // CUT (Movie, 5 Oct): "add the 'CUT' command to the draftng menu and give
+  // it LETTER command" -- "ya use C".
+  ['draw', 'cut', 'CUT', 'C'],
   ['build', 'wall', 'WALL', 'W'],
   ['build', 'fenestration', 'FENESTRATION', 'E'],
   ['build', 'floor', 'FLOOR', 'F'],
@@ -97,7 +100,7 @@ const keys = page => page.locator('[data-tool-key]').evaluateAll(els => els.map(
   armed: el.getAttribute('aria-pressed') === 'true',
 })));
 
-test('eighteen keys, in the old page\'s order and grouping', async ({ page }) => {
+test('nineteen keys, in the old page\'s order and grouping', async ({ page }) => {
   await openColumn(page);
   const got = await keys(page);
 
@@ -113,7 +116,7 @@ test('eighteen keys, in the old page\'s order and grouping', async ({ page }) =>
     .toHaveText('BUILD');
 });
 
-test('twelve keys carry a letter and six are deliberately bare',
+test('thirteen keys carry a letter and six are deliberately bare',
   async ({ page }) => {
     await openColumn(page);
     const got = await keys(page);
@@ -123,7 +126,7 @@ test('twelve keys carry a letter and six are deliberately bare',
     // Stated as a count as well as a table, because the table above would also
     // be satisfied by a build that prints nothing on ANY face if the expected
     // letters were ever loosened to ''.
-    expect(got.filter(k => k.key !== '')).toHaveLength(12);
+    expect(got.filter(k => k.key !== '')).toHaveLength(13);
     expect(got.filter(k => k.key === '').map(k => k.id))
       .toEqual(['annotation', 'roomtag', 'column', 'beam', 'stair', 'fixture']);
   });

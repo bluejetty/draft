@@ -14833,12 +14833,19 @@
   let cutStart = null;
   let cutEnd = null;
 
-  const armCut = () => {
-    activeTool = 'cut';
+  // ARMED THROUGH THE REGISTER, like every key in the column. Movie, 5 Oct:
+  // "can we add the 'CUT' command to the draftng menu and give it LETTER
+  // command" -- "ya use C". So CUT is a DRAW / EDIT key with the C its
+  // binding always named, and + CUT in the SECTIONS head is the same press.
+  // Whichever way it is armed (or put down), the cut's own half-placed
+  // points go, so a line started under CUT never finishes under another tool.
+  toolListeners.push(next => {
     cutStart = null;
     cutEnd = null;
-    drawStart = null;
-    sayOnStrip('CUT — press where the section line starts.');
+    if (next === 'cut') sayOnStrip('CUT — press where the section line starts.');
+  });
+  const armCut = () => {
+    setTool('cut');
     paint();
   };
 
