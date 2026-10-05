@@ -5077,7 +5077,30 @@
    "pitch": 4,
    "fascia": 5.5,
    "garage": false,
-   "layer": "A-ROOF"
+   "layer": "A-ROOF",
+   "cuts": [
+    {
+     "points": [
+      {
+       "x": 7,
+       "z": -2
+      },
+      {
+       "x": 20,
+       "z": -2
+      },
+      {
+       "x": 20,
+       "z": 4
+      },
+      {
+       "x": 7,
+       "z": 4
+      }
+     ],
+     "hoodOf": "roof-70"
+    }
+   ]
   },
   {
    "id": "roof-69",

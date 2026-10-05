@@ -794,6 +794,62 @@ if (!window.DraftBoneyardEdit) {
   // foundation, i.e. over the main roof. Walls there go on the room's level
   // from MAIN's ceiling to the room's plate (ctx.hoodHeights), tagged with
   // the roof's id so the next push replaces exactly them. Returns the count.
+  // ── AND THE MAIN ROOF STOPS AT THOSE WALLS ──────────────────────────────
+  //
+  // Movie, 5 Oct: "the main floor roof should stop at the new wall" -- "except
+  // at the part where it jogs in the back ... the main roof will go all the
+  // way to the actual 2nd floor wall (will be about 3ft overhang), but a
+  // small stickframed wall at 2ft will make that wall appear flat".
+  //
+  // SO THE CUT IS what the new walls box in over the house: inside the
+  // upper roof's wall line and over the house's foundation, less the strip
+  // between a stick-framed wall and the room's own wall a jog behind it. On
+  // the main roof (the house's own, not a garage's), as rectangles -- the
+  // cells of the grid every one of those corners lies on, merged by row --
+  // tagged with the upper roof's id like the walls are.
+  const cutMainRoof = (d, roof, line, house, runs, roomEdges) => {
+    const main = (d.roofs || []).filter(r => !r.garage && r.sourceLevelId == null);
+    if (!main.length) return;
+    const strips = [];
+    runs.forEach(r => roomEdges.forEach(e => {
+      if (!e.square || e.axis !== r.axis) return;
+      const gap = Math.abs(e.c - r.c);
+      if (gap < 1e-6 || gap > 1.5 + 1e-6) return;
+      const lo = Math.max(r.lo, e.lo), hi = Math.min(r.hi, e.hi);
+      if (hi - lo < 0.01) return;
+      const c0 = Math.min(r.c, e.c), c1 = Math.max(r.c, e.c);
+      strips.push(r.axis === 'x' ? { x0: c0, x1: c1, z0: lo, z1: hi } : { x0: lo, x1: hi, z0: c0, z1: c1 });
+    }));
+    const all = [...line, ...house.flat()];
+    const xs = [...new Set(all.map(p => p.x))].sort((u, v) => u - v);
+    const zs = [...new Set(all.map(p => p.z))].sort((u, v) => u - v);
+    const inStrip = p => strips.some(s => p.x > s.x0 && p.x < s.x1 && p.z > s.z0 && p.z < s.z1);
+    const rows = [];
+    for (let j = 0; j < zs.length - 1; j++) {
+      let run = null;
+      for (let i = 0; i < xs.length - 1; i++) {
+        const mid = { x: (xs[i] + xs[i + 1]) / 2, z: (zs[j] + zs[j + 1]) / 2 };
+        const take = inside(line, mid) && house.some(h => inside(h, mid)) && !inStrip(mid);
+        if (take && run) run.x1 = xs[i + 1];
+        else if (take) run = { x0: xs[i], x1: xs[i + 1], z0: zs[j], z1: zs[j + 1] };
+        if (!take && run) { rows.push(run); run = null; }
+      }
+      if (run) rows.push(run);
+    }
+    // A row run continuing one directly above it, same ends, is one rectangle.
+    const rects = [];
+    rows.forEach(r => {
+      const above = rects.find(q => near(q.x0, r.x0) && near(q.x1, r.x1) && near(q.z1, r.z0));
+      if (above) above.z1 = r.z1; else rects.push({ ...r });
+    });
+    if (!rects.length) return;
+    main.forEach(r => {
+      r.cuts = (r.cuts || []).concat(rects.map(q => ({
+        points: [{ x: q.x0, z: q.z0 }, { x: q.x1, z: q.z0 }, { x: q.x1, z: q.z1 }, { x: q.x0, z: q.z1 }],
+        hoodOf: String(roof.id),
+      })));
+    });
+  };
   const roofHood = (d, roof, ctx) => {
     if (!roof || roof.garage || roof.sourceLevelId == null || !ctx || !ctx.hoodHeights) return 0;
     // A MODIFIED BILEVEL ONLY, for now. Movie, 5 Oct: "for now lets only do
@@ -802,6 +858,11 @@ if (!window.DraftBoneyardEdit) {
     if (d.buildType !== 'modifiedBilevel') return 0;
     const levelId = Number(roof.sourceLevelId);
     d.walls = (d.walls || []).filter(w => w.hoodOf !== String(roof.id));
+    (d.roofs || []).forEach(r => {
+      if (!Array.isArray(r.cuts)) return;
+      r.cuts = r.cuts.filter(cut => cut.hoodOf !== String(roof.id));
+      if (!r.cuts.length) delete r.cuts;
+    });
     const heights = ctx.hoodHeights(levelId);
     const pts = roof.points || [];
     if (!heights || pts.length < 4 || !pts.every((p, i) => {
@@ -876,6 +937,7 @@ if (!window.DraftBoneyardEdit) {
         hoodOf: String(roof.id),
       });
     });
+    if (runs.length) cutMainRoof(d, roof, line, house, runs, roomEdges);
     return runs.length;
   };
 

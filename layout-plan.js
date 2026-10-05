@@ -529,6 +529,7 @@ if (!window.DraftLayoutPlan) {
         offsetOutline: (pts, dist) => geo.offsetOutline(pts, dist),
         offsetOutlineVariable: (pts, dists) => geo.offsetOutlineVariable(pts, dists),
         roofSkeleton: geo.roofSkeleton,
+        cutRoofSegment: geo.cutRoofSegment,
         // WELDED AGAINST WHAT THIS SHEET ACTUALLY DRAWS. plan-composition
         // picks roofs with `{ views: false }` -- a roof is never view-filtered
         // -- so `of('roofs')` is exactly the set that reaches the painter, and

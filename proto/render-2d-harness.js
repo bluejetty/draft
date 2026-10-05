@@ -1798,6 +1798,30 @@ suite('drawRoof2D', 'ridge, hip and valley guides are drawn dashed, from the ske
   expect('drawn dashed', calls(withGuides, 'setLineDash').some(a => JSON.stringify(a[0]) === '[8,5]'), true);
 });
 
+// ── AND A ROOF WITH A PIECE CUT OUT OF IT ──
+// Movie, 5 Oct: "the main floor roof should stop at the new wall". The cut is
+// a hole in the sheet -- in the fill and in the outline, like an opening --
+// and a ridge guide stops at it, where the page says.
+const ROOF_CUT = { points: [{ x: 6, z: 4 }, { x: 14, z: 4 }, { x: 14, z: 10 }, { x: 6, z: 10 }] };
+suite('drawRoof2D', 'a cut is a hole in the sheet, filled round and outlined', R => {
+  const bare = recordingCtx();
+  R.drawRoof2D(bare, toS, ROOF, {}, roofEnv());
+  const cut = recordingCtx();
+  R.drawRoof2D(cut, toS, { ...ROOF, cuts: [ROOF_CUT] }, {}, roofEnv());
+  expect('one more closed loop in the path', count(cut, 'closePath'), count(bare, 'closePath') + 1);
+  expect('still filled even-odd', calls(cut, 'fill')[0][0], 'evenodd');
+});
+suite('drawRoof2D', 'a ridge guide stops at a cut when the page says where', R => {
+  const ridge = [{ a: { x: 0, z: 7 }, b: { x: 20, z: 7 } }];
+  const split = seg => [{ a: seg.a, b: { x: 6, z: 7 } }, { a: { x: 14, z: 7 }, b: seg.b }];
+  const ctx = recordingCtx();
+  R.drawRoof2D(ctx, toS, { ...ROOF, cuts: [ROOF_CUT] }, {},
+    roofEnv({ roofSkeleton: () => ridge, cutRoofSegment: split }));
+  const bare = recordingCtx();
+  R.drawRoof2D(bare, toS, { ...ROOF, cuts: [ROOF_CUT] }, {}, roofEnv());
+  expect('the guide is drawn in two pieces, either side', count(ctx, 'stroke'), count(bare, 'stroke') + 2);
+});
+
 // THE SKIN REACHES THE ROOF -- and the sentinel is what makes that provable.
 //
 // SENTINEL_ROOF is not #c4915a. If it were, a painter that hardcoded the new
@@ -3036,6 +3060,10 @@ function coverage() {
     ['drawWallSeg2D mitre path', dropMitre],
     ['drawOrigin2D env colour', dropOriginEnvColour],
     ['drawOrigin2D colour fallback', dropOriginFallback],
+    ['drawRoof2D ignores a roof\'s cuts', src => src.replace(
+      '      .concat((Array.isArray(roof.cuts) ? roof.cuts : [])', '      .concat(([])')],
+    ['drawRoof2D draws a ridge guide straight through a cut', src => src.replace(
+      '(env.cutRoofSegment ? env.cutRoofSegment(seg, roof) : [seg])', '[seg]')],
     ['drawRoof2D ignores the skin and keeps the day brown', dropRoofEnvColour],
     ['drawRoof2D guides ignore the skin', dropRoofGuideEnvColour],
     ['drawRoof2D wash left on the old brown while the outline moves', unDeriveRoofWash],

@@ -382,9 +382,13 @@ if (!window.DraftRender2D) {
     if (pts.length < 3) return;
     const referenceColor = options.referenceColor;
     // Openings cut from this roof render as holes in the fill (even-odd).
-    const holes = roof.id
+    const holes = (roof.id
       ? env.surfaceOpeningsFor('roof', roof.id).map(opening => opening.points.map(pt => toS(pt)))
-      : [];
+      : [])
+      // AND WHAT IS CUT OUT OF IT where a higher roof's walls stop it
+      // (geometry-2d's cutRoofFaces): the same hole, drawn the same way.
+      .concat((Array.isArray(roof.cuts) ? roof.cuts : [])
+        .map(cut => (cut.points || []).map(pt => toS(pt))).filter(loop => loop.length >= 3));
     ctx.save();
     ctx.beginPath();
     pts.forEach((pt, index) => (index ? ctx.lineTo(pt.x, pt.y) : ctx.moveTo(pt.x, pt.y)));
@@ -539,7 +543,10 @@ if (!window.DraftRender2D) {
     ctx.strokeStyle = referenceColor || (env.colors && env.colors.roofGuide) || '#a3703f';
     ctx.lineWidth = referenceColor ? 1 : 1.5;
     ctx.setLineDash([8, 5]);
-    env.roofSkeleton(roof).forEach(seg => {
+    // Not across a cut: a page that can say where the cut leaves a guide
+    // (geometry-2d's cutRoofSegment) hands it in; one that cannot draws it whole.
+    env.roofSkeleton(roof)
+      .flatMap(seg => (env.cutRoofSegment ? env.cutRoofSegment(seg, roof) : [seg])).forEach(seg => {
       const a = toS(seg.a), b = toS(seg.b);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     });
