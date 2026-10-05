@@ -6135,12 +6135,14 @@ if (!window.DraftCutView) {
               if (!st.shown) { run = null; return; }
               const prev = stations[i - 1], next = stations[i + 1];
               if (!run) {
-                const p = atT(prev ? edgeBetween(st.t, prev.t) : st.t);
-                run = { u0: p.u, e0: p.e, u1: p.u, e1: p.e };
+                const t0 = prev ? edgeBetween(st.t, prev.t) : st.t;
+                const p = atT(t0);
+                run = { u0: p.u, e0: p.e, u1: p.u, e1: p.e, t0, t1: t0 };
                 runs.push(run);
               }
-              const q = atT(next && !next.shown ? edgeBetween(st.t, next.t) : st.t);
-              run.u1 = q.u; run.e1 = q.e;
+              const t1 = next && !next.shown ? edgeBetween(st.t, next.t) : st.t;
+              const q = atT(t1);
+              run.u1 = q.u; run.e1 = q.e; run.t1 = t1;
             });
             const eave = isEaveEdge(ea, eb, eaveTop);
             // AND A RAKE SLOPES, which is what makes it a rake and not the
@@ -6198,10 +6200,34 @@ if (!window.DraftCutView) {
                   ctx.beginPath();
                   ctx.moveTo(X(sp.u0), Y(eaveTop)); ctx.lineTo(X(sp.u1), Y(eaveTop));
                   ctx.stroke();
-                  ctx.strokeStyle = INK; ctx.lineWidth = 2.25;
+                });
+                // ── THE BOARD'S FOOT IS ASKED ON ITS OWN ───────────────
+                //
+                // Movie, 5 Oct, on E3 of a MOD BILEVEL: "the top peak of the
+                // roof should extend up above the eave of the 2nd floor roof
+                // (main fl roof peak it is in front)". The run above is where
+                // the eave's TOP shows, and the heavy line 5.5" under it was
+                // drawn the whole length of that run -- straight across the
+                // main roof's ridge, which stands nearer and between the two.
+                // So the foot gets its own visibility, at its own height.
+                const footE = eaveTop - ROOF_FASCIA_IN / 12;
+                const tLo = Math.min(r.t0, r.t1), tHi = Math.max(r.t0, r.t1);
+                const steps = Math.max(2, Math.ceil(Math.abs(r.u1 - r.u0) / 0.1));
+                const footShows = t => !hidden(
+                  { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t }, footE, ua + (ub - ua) * t);
+                const feet = [];
+                let foot = null;
+                for (let k = 0; k <= steps; k += 1) {
+                  const t = tLo + (tHi - tLo) * k / steps;
+                  if (!footShows(t)) { foot = null; continue; }
+                  const u = ua + (ub - ua) * t;
+                  if (!foot) { foot = { u0: u, u1: u }; feet.push(foot); }
+                  foot.u1 = u;
+                }
+                ctx.strokeStyle = INK; ctx.lineWidth = 2.25;
+                feet.filter(f => Math.abs(f.u1 - f.u0) > 0.05).forEach(f => {
                   ctx.beginPath();
-                  ctx.moveTo(X(sp.u0), Y(eaveTop - ROOF_FASCIA_IN / 12));
-                  ctx.lineTo(X(sp.u1), Y(eaveTop - ROOF_FASCIA_IN / 12));
+                  ctx.moveTo(X(f.u0), Y(footE)); ctx.lineTo(X(f.u1), Y(footE));
                   ctx.stroke();
                 });
               } else if (rake && Math.abs(r.u1 - r.u0) > 0.2
