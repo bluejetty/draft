@@ -565,6 +565,19 @@
         levels,
         ladder: window.DraftTour && window.DraftTour.floorPullLadder,
         roofSourceId: (levels.find(l => l.kind === 'roof') || {}).sourceLevelId,
+        // THE WALL UNDER AN UPPER ROOF RUN OUT OVER THE MAIN ROOF (boneyard-
+        // edit.js roofHood): from MAIN's ceiling to the room's plate, on the
+        // room's own level datum, off the same stack the views stand on.
+        hoodHeights: levelId => {
+          const floors = (stack && stack.floors) || [];
+          const main = floors.find(l => Number(l.id) === 3);
+          const own = floors.find(l => Number(l.id) === Number(levelId));
+          if (!main || !own || !(own.wallTop > own.floorTop)) return null;
+          return {
+            baseHeight: Math.max(0, main.wallTop - own.floorTop),
+            topHeight: own.wallTop - own.floorTop,
+          };
+        },
       });
       const WORDS = {
         NOT_SQUARE: 'that edge is not square, so it cannot be pushed here',
@@ -585,6 +598,7 @@
         if (report.roofs) parts.push('the roof followed');
         if (report.piles.placed) parts.push(`${report.piles.placed} pile${report.piles.placed === 1 ? '' : 's'} under the overhang`);
         if (report.piles.removed && !report.piles.placed) parts.push(`${report.piles.removed} pile${report.piles.removed === 1 ? '' : 's'} taken out`);
+        if (report.hoodWalls) parts.push(`${report.hoodWalls} wall${report.hoodWalls === 1 ? '' : 's'} under it over the main roof`);
         return parts.join(' · ');
       };
 

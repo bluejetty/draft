@@ -44,8 +44,8 @@ const MUTATIONS = [
   ['a floor on the sill plate paints its band over the plate line', 'cut-view.js',
     c => c.replace('const onSill = !!stack.split && Math.abs(level.floorBottom - fdn.wallTop) < 0.01;', 'const onSill = false;')],
   ['a wall face strokes along its foot again', 'cut-view.js',
-    c => c.replace("      ctx.lineTo(xb, Y(floor));\n      ctx.strokeStyle = C.face; ctx.lineWidth = 1;",
-      "      ctx.lineTo(xb, Y(floor));\n      ctx.lineTo(xa, Y(floor));\n      ctx.strokeStyle = C.face; ctx.lineWidth = 1;")],
+    c => c.replace("      ctx.lineTo(xb, yFoot);\n      ctx.strokeStyle = C.face; ctx.lineWidth = 1;",
+      "      ctx.lineTo(xb, yFoot);\n      ctx.lineTo(xa, yFoot);\n      ctx.strokeStyle = C.face; ctx.lineWidth = 1;")],
   ['PROJECT\'s ladder defaults to the 2x6', 'project-page.js',
     c => c.replace('const DEFAULT_LADDER_DEPTH_IN = 3.5;', 'const DEFAULT_LADDER_DEPTH_IN = 5.5;')],
 ];
