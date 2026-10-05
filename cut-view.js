@@ -4421,8 +4421,28 @@ if (!window.DraftCutView) {
       // wall window and a level datum. The fill's own colour stroked round
       // its outline closes the half pixel; the face is opaque, so anything
       // it laps was behind it anyway.
+      //
+      // ROUND THE SIDES AND THE TOP ONLY, NOT ALONG THE FOOT. The foot of a
+      // wall standing on its foundation IS the top of the sill plate, and the
+      // plate's line is drawn there before the faces go down -- so a stroke
+      // along the foot rubbed it out on every face that reached it. Movie, 4
+      // Oct: "sill plate looks to me only on house (not completely) and not
+      // on garage". Both seams this stroke is for are a side and a top.
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(xa, Y(floor));
+      tops.forEach(s => ctx.lineTo(X(s.u), Y(s.top)));
+      ctx.lineTo(xb, Y(floor));
       ctx.strokeStyle = C.face; ctx.lineWidth = 1;
       ctx.stroke();
+      ctx.restore();
+      // THE FACE'S OWN OUTLINE STAYS THE CURRENT PATH, for the finish clip
+      // below, which reads it.
+      ctx.beginPath();
+      ctx.moveTo(xa, Y(floor));
+      tops.forEach(s => ctx.lineTo(X(s.u), Y(s.top)));
+      ctx.lineTo(xb, Y(floor));
+      ctx.closePath();
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       // ── AND WHAT THE WALL IS CLAD IN GOES ONTO THAT FILL ──────────────
       //

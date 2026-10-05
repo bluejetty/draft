@@ -43,6 +43,9 @@ const MUTATIONS = [
       'foundationAttachment: top.attachment,')],
   ['a floor on the sill plate paints its band over the plate line', 'cut-view.js',
     c => c.replace('const onSill = !!stack.split && Math.abs(level.floorBottom - fdn.wallTop) < 0.01;', 'const onSill = false;')],
+  ['a wall face strokes along its foot again', 'cut-view.js',
+    c => c.replace("      ctx.lineTo(xb, Y(floor));\n      ctx.strokeStyle = C.face; ctx.lineWidth = 1;",
+      "      ctx.lineTo(xb, Y(floor));\n      ctx.lineTo(xa, Y(floor));\n      ctx.strokeStyle = C.face; ctx.lineWidth = 1;")],
   ['PROJECT\'s ladder defaults to the 2x6', 'project-page.js',
     c => c.replace('const DEFAULT_LADDER_DEPTH_IN = 3.5;', 'const DEFAULT_LADDER_DEPTH_IN = 5.5;')],
 ];
@@ -135,6 +138,36 @@ const paintE1 = d => {
   check('and the house\'s plate line is not painted over by the floor band on it',
     plateRuns.some(r => r.lo < houseU && r.hi > houseU) && covered.length === 0,
     `${plateRuns.length} plate run(s), ${covered.length} covered`);
+}
+
+// ── AND NO FACE RUBS IT OUT ALONG ITS FOOT ───────────────────────────────
+//
+// Movie, 4 Oct: "sill plate looks to me only on house (not completely) and
+// not on garage". Each wall face strokes its outline in its own colour to
+// close a half-pixel seam (#609), and the stroke ran along the foot too --
+// which, on a wall standing on its foundation, is exactly the plate's line.
+// The fills never covered it, so a check on fills alone could not see this.
+{
+  const env = buildEnv(win, saved);
+  const top = CV.sectionLevelStack(env).foundation.wallTop;
+  const rubbed = [];
+  standardElevationCuts(env).forEach(cut => {
+    const p = paintElevation(win, env, cut, { pxPerFt: 16.6 });
+    const plates = [], erasers = [];
+    p.strokes.forEach(st => st.pts.forEach((b, i) => {
+      if (!i || b.move) return;
+      const a = st.pts[i - 1];
+      if (Math.abs(a.e - b.e) > 0.005 || Math.abs(a.e - top) > 2 / 16.6 || Math.abs(a.u - b.u) < 0.5) return;
+      const seg = { seq: st.seq, lo: Math.min(a.u, b.u), hi: Math.max(a.u, b.u) };
+      if (st.ink === INK_FULL) plates.push(seg);
+      else if (/^#f/i.test(st.ink)) erasers.push(seg);
+    }));
+    plates.forEach(pl => erasers.forEach(er => {
+      if (er.seq > pl.seq && er.lo < pl.hi - 0.1 && er.hi > pl.lo + 0.1) rubbed.push(`${cut.id} ${er.lo.toFixed(1)}..${er.hi.toFixed(1)}`);
+    }));
+  });
+  check('no wall face strokes its own colour along the sill line after it is drawn',
+    rubbed.length === 0, rubbed.join(', '));
 }
 
 // ── A PT LADDER: ITS BOTTOM, 3 1/2" BY DEFAULT ───────────────────────────
