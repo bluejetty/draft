@@ -1162,6 +1162,87 @@ if (!window.DraftPremadePlans) {
   // gets a design the board does not also need editing. Movie, 18 Sep: "for 2
   // lets just do the bungalows and attached garages, the bilevel will be more
   // complex and need more work".
+  // ── TWO SQUARE-CORNERED LOOPS AS ONE ──────────────────────────────────
+  //
+  // Movie, 4 Oct, on the MOD BILEVEL's OVER GARAGE plan: "see the 2 X floors
+  // - make them 1 floor", the red line through the seam where the upper
+  // landing's deck met the room's. They are one floor over one set of
+  // joists, so the build lays them as one.
+  //
+  // ON A GRID, because every loop here is square-cornered: every x and z any
+  // corner uses cuts the plane into cells, a cell is in if its centre is in
+  // either loop, and the union's outline is the cell sides with in on one
+  // side and out on the other, walked round. Collinear corners are dropped,
+  // and the result is wound the way `a` is. NULL when the two do not touch
+  // (two pieces are not one floor) or either is not square-cornered.
+  const joinLoops = (a, b) => {
+    if (!a || !b) return null;
+    const square = loop => loop.every((p, i) => {
+      const q = loop[(i + 1) % loop.length];
+      return Math.abs(p.x - q.x) < 1e-6 || Math.abs(p.z - q.z) < 1e-6;
+    });
+    if (!square(a) || !square(b)) return null;
+    const uniq = vs => [...new Set(vs.map(v => Math.round(v * 1e6) / 1e6))].sort((m, n) => m - n);
+    const xs = uniq([...a, ...b].map(p => p.x)), zs = uniq([...a, ...b].map(p => p.z));
+    const inside = (loop, x, z) => {
+      let hit = false;
+      for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
+        const p = loop[i], q = loop[j];
+        if ((p.z > z) !== (q.z > z) && x < (q.x - p.x) * (z - p.z) / (q.z - p.z) + p.x) hit = !hit;
+      }
+      return hit;
+    };
+    const cell = (i, j) => i >= 0 && j >= 0 && i < xs.length - 1 && j < zs.length - 1
+      && (inside(a, (xs[i] + xs[i + 1]) / 2, (zs[j] + zs[j + 1]) / 2)
+        || inside(b, (xs[i] + xs[i + 1]) / 2, (zs[j] + zs[j + 1]) / 2));
+    // Directed sides with the inside on the left (x right, z down the grid).
+    const next = new Map();
+    const key = (i, j) => `${i},${j}`;
+    let sides = 0;
+    const side = (i0, j0, i1, j1) => {
+      if (next.has(key(i0, j0))) return false;
+      next.set(key(i0, j0), [i1, j1]);
+      sides += 1;
+      return true;
+    };
+    for (let i = 0; i < xs.length - 1; i++) {
+      for (let j = 0; j < zs.length - 1; j++) {
+        if (!cell(i, j)) continue;
+        if (!cell(i, j - 1) && !side(i, j, i + 1, j)) return null;
+        if (!cell(i + 1, j) && !side(i + 1, j, i + 1, j + 1)) return null;
+        if (!cell(i, j + 1) && !side(i + 1, j + 1, i, j + 1)) return null;
+        if (!cell(i - 1, j) && !side(i, j + 1, i, j)) return null;
+      }
+    }
+    if (!sides) return null;
+    const [start] = next.keys();
+    const ring = [];
+    let at = start.split(',').map(Number);
+    for (let n = 0; n <= sides; n++) {
+      ring.push(at);
+      at = next.get(key(...at));
+      if (!at) return null;
+      if (key(...at) === start) break;
+    }
+    if (ring.length !== sides) return null;   // more than one piece
+    const pts = ring.map(([i, j]) => pt(xs[i], zs[j]));
+    const kept = pts.filter((p, i) => {
+      const o = pts[(i + pts.length - 1) % pts.length], q = pts[(i + 1) % pts.length];
+      return !((Math.abs(o.x - p.x) < 1e-6 && Math.abs(p.x - q.x) < 1e-6)
+        || (Math.abs(o.z - p.z) < 1e-6 && Math.abs(p.z - q.z) < 1e-6));
+    });
+    const area = loop => loop.reduce((s2, p, i) => {
+      const q = loop[(i + 1) % loop.length];
+      return s2 + p.x * q.z - q.x * p.z;
+    }, 0);
+    const wound = Math.sign(area(kept)) === Math.sign(area(a)) ? kept : kept.slice().reverse();
+    // From the corner nearest a's first, so the floor starts where a did.
+    const s0 = a[0];
+    const k = wound.reduce((best, p, i) => (Math.hypot(p.x - s0.x, p.z - s0.z)
+      < Math.hypot(wound[best].x - s0.x, wound[best].z - s0.z) ? i : best), 0);
+    return [...wound.slice(k), ...wound.slice(0, k)];
+  };
+
   const PLANS = Object.freeze({
     bungalow: () => bungalow({ garage: false }),
     'bungalow-garage': () => bungalow({ garage: true }),
@@ -1186,7 +1267,7 @@ if (!window.DraftPremadePlans) {
     MAN_DOOR_WIDTH_FT, GARAGE_WINDOW_WIDTH_FT, GARAGE_DOOR_HEAD_FT,
     ENTRY_WIDTH_FT, ENTRY_DEPTH_FT, ENTRY_LEFT_FT, BILEVEL_STAIR_WIDTH_FT,
     BILEVEL_STAIR_GAP_FT, BILEVEL_OVERLAP_FT,
-    bungalow, twoStorey, bilevel, modifiedBilevel, planFor, detachedGarageOpenings, squareOver,
+    bungalow, twoStorey, bilevel, modifiedBilevel, planFor, detachedGarageOpenings, squareOver, joinLoops,
     entryIds: () => Object.keys(PLANS),
   });
 })();

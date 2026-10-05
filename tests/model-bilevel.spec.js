@@ -213,8 +213,13 @@ test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight 
     // A door off the landing into the room.
     expect(d.fenestrations.some(f => f.type === 'door'
       && roomWalls.some(w => w.id === f.wallId))).toBe(true);
-    // Decks on OVER GARAGE: the room and the landing.
-    expect(d.floors.filter(f => Number(f.levelId) === 4).length).toBe(2);
+    // ONE deck on OVER GARAGE, the room and the landing together (Movie,
+    // 4 Oct: "see the 2 X floors- make them 1 floor").
+    const decks = d.floors.filter(f => Number(f.levelId) === 4);
+    expect(decks.length).toBe(1);
+    expect(span(decks[0].points), 'the landing (back to z 14) and the room in one')
+      .toEqual(span([{ x: -4, z: 14 }, { x: 20, z: 38 }]));
+    expect(decks[0].points.length, 'no seam: the landing\'s corner is the deck\'s').toBe(8);
     // Three flights; the third over the down one, 6'-3" up from MAIN.
     const down = d.stairs.find(s => Number(s.levelId) === 2);
     const third = d.stairs.find(s => Number(s.levelId) === 4);

@@ -14210,16 +14210,19 @@
     // and the room hangs off the side of it -- so a room framed by that pass
     // alone is a room standing on nothing, which is the same thing a storey
     // with no deck under it would be.
-    // AND THE UPPER LANDING'S, on the same level as the room it leads into.
-    if (overGarageBody && plan.upperLanding) {
-      const deck = floorRecord(plan.upperLanding, overGarageLevelId, 'floor');
-      drawing.floors.push(deck);
-      extra.push({ list: drawing.floors, item: deck });
-    }
+    // AND THE UPPER LANDING IN THE SAME DECK, on the same level as the room
+    // it leads into. Movie, 4 Oct: "see the 2 X floors - make them 1 floor"
+    // -- one floor over one set of joists, not two with a seam between them
+    // (premade-plans.js joinLoops). Two only if the landing does not touch.
     if (overGarageBody) {
-      const deck = floorRecord(plan.overGarage, overGarageLevelId, 'floor');
-      drawing.floors.push(deck);
-      extra.push({ list: drawing.floors, item: deck });
+      const joined = plan.upperLanding
+        && window.DraftPremadePlans.joinLoops(plan.overGarage, plan.upperLanding);
+      const loops = joined ? [joined] : [plan.upperLanding, plan.overGarage].filter(Boolean);
+      loops.forEach(loop => {
+        const deck = floorRecord(loop, overGarageLevelId, 'floor');
+        drawing.floors.push(deck);
+        extra.push({ list: drawing.floors, item: deck });
+      });
     }
 
     // EACH PIECE ONLY WHERE THE DRAWING HAS SOMEWHERE TO PUT IT, and the
