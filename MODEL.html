@@ -5432,6 +5432,8 @@
     // one that forgets. So: refused before any handler runs, and paid for
     // only if one of them actually served.
     if (!canAffordBuild()) { refuseForBones(); return false; }
+    // The traced build's half of fireOrder's stamp, for the same reason.
+    stampBuildType();
     buildWasServed = false;
     // EVERY handler is called, and the flag is read after -- never a short
     // circuit, which would silently skip whatever registered later.
@@ -5446,7 +5448,18 @@
   // for this type, 'outline' means walk the drafter through drawing it.
   // AND ITS SIZE, when the entry asked for one. `size` is null on every
   // other order rather than absent, so the geometry side reads one shape.
+  //
+  // THE TYPE IS STAMPED AGAIN AT THE BUILD, not only at the tile. Movie, 4
+  // Oct, on a MOD BILEVEL whose main roof stood at the room-over-garage's
+  // plate, whose garage sill sat 1 1/2" under the house's and whose garage
+  // wall ran up through the room's floor: the file had no buildType, so
+  // every elevation stacked it as a plain 2 STOREY. The tile stamps the
+  // drawing open WHEN IT IS PRESSED, and the choice outlives that drawing --
+  // press MODIFIED BILEVEL, press NEW, press the bone, and the house rose
+  // into a blank that was never told what it is. Stamping at the build
+  // covers that and every other way the drawing can change under a choice.
   const fireOrder = () => {
+    stampBuildType();
     const order = {
       ...(chosen() || { family: null, entry: null }), round, size: chosenSize(),
     };
