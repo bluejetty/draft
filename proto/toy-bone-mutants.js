@@ -80,7 +80,7 @@ const MUTANTS = [
   // and is overwritten passes every check that inspects state.
   { file: 'MODEL.html',
     name: 'THE REFUSAL NEVER FIRES: a disconnected run is allowed while one is open',
-    find: '      if (toyRunRefused(drawPoint(at))) return;',
+    find: "      if (activeTool === 'wall' && toyRunRefused(drawPoint(at))) return;",
     with: '',
     test: 'refuses a new one' },
   { file: 'MODEL.html',
@@ -114,8 +114,8 @@ const MUTANTS = [
     // killed", which reads exactly like a clean sheet. A mutant that did not
     // run is not a mutant that died, and the count has to be read against the
     // number defined, never on its own.
-    find: '      if (toyRunRefused(drawPoint(at))) return;\n      clearNotice();',
-    with: '      if (toyRunRefused(drawPoint(at))) return;',
+    find: "      if (activeTool === 'wall' && toyRunRefused(drawPoint(at))) return;\n      clearNotice();",
+    with: "      if (activeTool === 'wall' && toyRunRefused(drawPoint(at))) return;",
     test: 'Escape cancels' },
 ];
 

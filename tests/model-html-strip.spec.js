@@ -379,40 +379,55 @@ test.describe('MODEL.html instrument strip', () => {
 
   // THE ANGLE BOX IS THE OTHER HALF OF THE PROTRACTOR. Movie: "we should have
   // a angle textbox actually" — the page could read a bearing and not take
-  // one, which makes the protractor a gauge rather than an instrument.
+  // one, which makes the protractor a gauge rather than an instrument. And on
+  // 5 Oct: "allow them to enter an angle but don't engage unless they light
+  // up the protractor" — so Enter keeps the number and commits nothing, and a
+  // lit protractor holds the run to it.
   //
-  // The check is the round trip a drafter would do: aim off-square, type the
-  // square number, and the stored wall is square while keeping the length the
-  // length box was holding.
-  test('the ANGLE box turns the wall to a typed bearing, and is dead with nothing in hand',
+  // The check is the round trip a drafter would do: aim off-square, keep the
+  // square number, light the protractor, type a length — and the stored wall
+  // is square at that length.
+  test('the ANGLE box keeps a bearing and the lit PROTRACTOR holds the wall to it',
     async ({ page }) => {
       await seed(page, { board: 'drafting' });
       await openModel(page);
 
       const box = page.locator('#frozen-angle');
-      await expect(box, 'no run in hand: a typed bearing has nothing to turn')
+      await expect(box, 'no run tool up: there is nothing to keep a bearing for')
         .toBeDisabled();
 
       await h.armWall(page);
+      await expect(box, 'a bearing can be kept before the first press').toBeEnabled();
       await tapAt(page, -4, -4);
       await hoverAt(page, 2, -2);        // deliberately off square
-      await expect(box).toBeEnabled();
 
-      await page.locator('#frozen-length').fill("10'");
+      const before = (await stored(page)).walls.length;
       await box.click();
       await box.fill('0');
       await box.press('Enter');
       await page.waitForTimeout(80);
       await page.locator('[data-model-save]').click();
       await page.waitForTimeout(200);
+      expect((await stored(page)).walls.length, 'keeping a bearing commits nothing')
+        .toBe(before);
+
+      await page.locator('[data-mode-protractor]').click();
+      await expect(page.locator('[data-mode-protractor]')).toHaveClass(/lit/);
+      await hoverAt(page, 2, -2);
+      const len = page.locator('#frozen-length');
+      await len.fill("10'");
+      await len.press('Enter');
+      await page.waitForTimeout(80);
+      await page.locator('[data-model-save]').click();
+      await page.waitForTimeout(200);
 
       const walls = (await stored(page)).walls;
       const turned = walls.find(w => w.id !== 'w-a');
-      expect(turned, 'the turned wall reached the file').toBeTruthy();
+      expect(turned, 'the held wall reached the file').toBeTruthy();
       expect(turned.end.z, '0° is level, whatever the cursor was doing')
         .toBeCloseTo(turned.start.z, 6);
       expect(Math.hypot(turned.end.x - turned.start.x, turned.end.z - turned.start.z),
-        'and it took the length the other box was holding').toBeCloseTo(10, 3);
+        'and it took the typed length').toBeCloseTo(10, 3);
     });
 
   test('the RULER measures and writes nothing — the one instrument that must not draw',

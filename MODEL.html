@@ -4284,7 +4284,7 @@
           // match, and a stale drawStart would put a WALL ghost along a ruler
           // measure. One clause against a whole class of surprise, and it
           // states out loud whose mark this is.
-          if (activeTool === 'wall' && run && R
+          if (drawsRun() && run && R
             && Math.hypot(run.to.x - run.from.x, run.to.z - run.from.z) > 0.001) {
             const ghost = { start: run.from, end: run.to, ...wallShape(brushOptions('wall')) };
             // JOINS NULL, WHICH GIVES CAPPED ENDS, and capped is the honest
@@ -4293,7 +4293,8 @@
             // which classifies on vertex identity -- so the ghost would
             // reshape a REAL wall's corner mid-gesture and unshape it again
             // if the drafter pressed escape.
-            R.drawWallSeg2D(ctx, toS, ghost, true, null, 'both', wallEnv());
+            // A LINE HAS NO THICKNESS TO SHOW, so it is the dash alone.
+            if (activeTool === 'wall') R.drawWallSeg2D(ctx, toS, ghost, true, null, 'both', wallEnv());
             const a = toS(run.from), b = toS(run.to);
             ctx.save();
             // THE WALL'S OWN EDGE INK, not the accent. wallEnv's note settles
@@ -4318,6 +4319,25 @@
           ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
           ctx.stroke();
           ctx.restore();
+          // THE LOCKED BEARING, across the sheet through the start, so the
+          // drafter sees the rail the run is on before he moves along it.
+          const lock = angleLockDeg();
+          if (lock != null) {
+            const rad = lock * Math.PI / 180;
+            const far = 10000 / view.scale;
+            const a = toS({ x: drawStart.x - Math.cos(rad) * far, z: drawStart.z + Math.sin(rad) * far });
+            const b = toS({ x: drawStart.x + Math.cos(rad) * far, z: drawStart.z - Math.sin(rad) * far });
+            ctx.save();
+            ctx.strokeStyle = skin['accent'];
+            ctx.globalAlpha = 0.45;
+            ctx.setLineDash([2, 6]);
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+            ctx.restore();
+          }
         }
         // THE CUT BEING PLACED. Without this the three presses land on a
         // sheet that never changes, which is the defect the outline tool had
@@ -9134,42 +9154,31 @@
     return selectPlaced('beam', beam);
   };
 
-  // ── LINE: TWO PRESSES, ONE LINE (Movie, 1 Oct) ────────────────────────────
+  // ── LINE: THE WALL'S GESTURE, A LINE'S RECORD ─────────────────────────────
   //
-  // THE KEY WAS ARMABLE AND THE PRESS FELL THROUGH. LINE has been on the
-  // drafting board's roster all along and setTool armed it -- crosshair and
-  // all -- but the press dispatch had no branch for it, so a tap selected
-  // whatever was under it and a drag panned. Nothing a drafter would call
-  // drawing a line ever happened.
-  //
-  // THE BEAM'S GESTURE: press a start, press an end, one record. The ends
-  // are POOLED like every other line's, so a line drawn onto a line's corner
-  // shares it. Layer `draft`, which is what the reader gives any line whose
-  // layer it does not know.
-  let lineStart = null;
-  const linePress = at => {
+  // Movie, 1 Oct, gave LINE two presses and one line; 5 Oct: "make the line
+  // act like the WALL everything the same". So LINE now goes through
+  // drawPress with the wall -- chaining, T-square, foot, corner snap, tracking
+  // rays, LENGTH and ANGLE -- and only this decides what a piece writes. The
+  // ends are POOLED like every other line's, so a line drawn onto a line's
+  // corner shares it, and layer `draft` is what the reader gives any line
+  // whose layer it does not know.
+  const commitDrawn = (from, to) => {
+    if (activeTool !== 'line') {
+      return { type: 'wall', item: commitWall(from, to, brushOptions('wall')) };
+    }
     const { levelId, viewId } = onActiveLevel();
     const lineView = wallHomeView(viewId);
-    if (!lineStart) {
-      lineStart = { x: at.x, z: at.z };
-      sayOnStrip('LINE: press where it ends.');
-      paint();
-      return null;
-    }
-    // A press on the start again is a correction, as it is for a beam: the
-    // reader drops a line of no length, so writing one would vanish on load.
-    if (Math.hypot(at.x - lineStart.x, at.z - lineStart.z) < 0.001) return null;
     drawing.lines = drawing.lines || [];
     const line = addItem(drawing.lines, {
       id: newDrawingItemId('line'),
-      start: poolVertex({ x: lineStart.x, z: lineStart.z }, levelId, lineView),
-      end: poolVertex({ x: at.x, z: at.z }, levelId, lineView),
+      start: poolVertex({ x: from.x, z: from.z }, levelId, lineView),
+      end: poolVertex({ x: to.x, z: to.z }, levelId, lineView),
       levelId,
       view: lineView,
       layer: 'draft',
     });
-    lineStart = null;
-    return selectPlaced('line', line);
+    return { type: 'line', item: line };
   };
 
   // ── ROOF: THE FOOTPRINT IS THE GESTURE ────────────────────────────────────
@@ -9582,6 +9591,41 @@
   const RESTING_TOOL = 'select';
   let activeTool = RESTING_TOOL;
   let drawStart = null;
+  // THE PROTRACTOR IS AN INSTRUMENT NOW, lit or unlit like the T-square.
+  // Movie, 5 Oct: "can we press the protractor and enter a number into the
+  // ANGLE textbox and force the line to travel in that angle" -- "for LINE
+  // WALLS and other similar commands (Outline)" -- then "allow them to enter
+  // an angle but don't engage unless they light up the protractor" and "when
+  // the protractor is lit the T square should be UNLIT".
+  //
+  // SO TWO FACTS: the angle the drafter typed (Enter in the ANGLE box keeps
+  // it, and commits nothing), and whether the protractor is lit. Only both
+  // together hold the run to that bearing; the hand then sets the length.
+  let protractorOn = false;
+  let typedAngle = null;
+  // NOT ON TOY. Movie: "i guess this should only be allowed if not in TOY
+  // mode" -- TOY holds every run to the four axes already, and §6 takes the
+  // instruments away.
+  const angleLockDeg = () => (board !== 'toy' && protractorOn && typedAngle != null
+    ? typedAngle : null);
+  // The point along the locked bearing nearest the hand, either way along it
+  // (the protractor folds a bearing to -90..90, so the hand picks the end, as
+  // the typed angle always has). `axis` rounds the bearing to the nearest
+  // quarter turn, for a tool that only draws square.
+  const lockedPoint = (from, at, { axis = false } = {}) => {
+    const lock = angleLockDeg();
+    if (lock == null || !from || !at) return null;
+    const deg = axis ? Math.round(lock / 90) * 90 : lock;
+    const rad = deg * Math.PI / 180;
+    const ux = Math.cos(rad), uz = -Math.sin(rad);
+    const t = (at.x - from.x) * ux + (at.z - from.z) * uz;
+    return { x: from.x + ux * t, y: 0, z: from.z + uz * t };
+  };
+  // WALL AND LINE ARE ONE GESTURE. Movie, 5 Oct: "make the line act like the
+  // WALL everything the same WALL works good". Same presses, same chaining,
+  // same instruments and typed boxes; only the record each piece writes
+  // differs (commitDrawn).
+  const drawsRun = () => activeTool === 'wall' || activeTool === 'line';
   // Where the wall gesture's pointer went down, and whether that press opened
   // the run. Read by the pointerup that places the line; see its comment.
   let wallPress = null;
@@ -9620,7 +9664,6 @@
     // BEAM finish under COLUMN.
     drawStart = null;
     beamStart = null;
-    lineStart = null;
     canvas.style.cursor = next === RESTING_TOOL ? '' : 'crosshair';
     // The instrument strip is a third reader of the same fact, added by #398
     // against the boolean this replaced. It reads the register now like
@@ -9689,6 +9732,11 @@
   };
 
   const drawPoint = at => {
+    // THE LOCKED BEARING BEFORE EVERYTHING ELSE: the run travels along it and
+    // nothing pulls it off -- no square, no corner snap -- only the whole foot
+    // when that is on.
+    const locked = lockedPoint(drawStart, at);
+    if (locked) return onTheFoot_if() ? onTheFoot(drawStart, locked) : locked;
     const wanted = squareTo(drawStart, at);
     const fixed = squaredAxis(drawStart, at);
     const snapped = fixed ? axisSnap(wanted, fixed) : cornerSnap(wanted, []);
@@ -10071,7 +10119,7 @@
     if (!drawStart) {
       // Resume before refusing: a press on the open end is the drafter
       // carrying on, which is the one case the refusal must not catch.
-      const open = toyOpenEnd(at);
+      const open = activeTool === 'wall' ? toyOpenEnd(at) : null;
       // stripRefresh BESIDE THE PAINT, on both openings. Without it the strip
       // still read "wall — first point" with a first point already down, and
       // the length box and angle box -- which stripRefresh is what enables --
@@ -10080,7 +10128,7 @@
       // the anchor and nothing moves afterwards. Found by a check asserting
       // the strip SAID second point rather than that drawStart was set.
       if (open) { clearNotice(); drawStart = open; stripRefresh(); paint(); return; }
-      if (toyRunRefused(drawPoint(at))) return;
+      if (activeTool === 'wall' && toyRunRefused(drawPoint(at))) return;
       clearNotice();
       drawStart = drawPoint(at); stripRefresh(); paint(); return;
     }
@@ -10098,12 +10146,12 @@
     // raise their walls -- a loaded brush must not change what the bone
     // builds. Empty brush, empty options, and the drafter's stored defaults
     // answer exactly as they did.
-    const wall = commitWall(drawStart, end, brushOptions('wall'));
+    const made = commitDrawn(drawStart, end);
     // CHAINING, the old page's habit: the next wall starts where this one
     // ended, so a room is four taps and not eight. The pooled END object is
     // the start, so the corner is shared by identity.
-    drawStart = wall.end;
-    setSelection([{ type: 'wall', item: wall }]);
+    drawStart = made.item.end;
+    setSelection([made]);
     stripRefresh();
     paint();
   };
@@ -10160,7 +10208,7 @@
   const RAY_HIT_PX = 6;
   const trackingNodes = () => {
     if (activeTool === 'outline') return outlineCorners;
-    if (activeTool !== 'wall' || !drawStart) { wallRunNodes = []; return wallRunNodes; }
+    if (!drawsRun() || !drawStart) { wallRunNodes = []; return wallRunNodes; }
     const last = wallRunNodes[wallRunNodes.length - 1];
     if (!last || Math.hypot(last.x - drawStart.x, last.z - drawStart.z) > 1e-6) {
       wallRunNodes.push({ x: drawStart.x, z: drawStart.z });
@@ -10401,8 +10449,10 @@
       const corner = cornerSnap(at, []);
       return corner ? { x: corner.x, z: corner.z } : { x: at.x, z: at.z };
     }
-    const square = Math.abs(at.x - from.x) >= Math.abs(at.z - from.z)
-      ? { x: at.x, z: from.z } : { x: from.x, z: at.z };
+    // An outline is square, so its lock is the nearest quarter turn.
+    const square = lockedPoint(from, at, { axis: true })
+      || (Math.abs(at.x - from.x) >= Math.abs(at.z - from.z)
+        ? { x: at.x, z: from.z } : { x: from.x, z: at.z });
     const footed = onTheFoot(from, square);
     return { x: footed.x, z: footed.z };
   };
@@ -14893,6 +14943,7 @@
   const protractorOut = document.getElementById('strip-protractor-angle');
   const rulerChip = strip.querySelector('[data-mode-ruler]');
   const tsquareChip = strip.querySelector('[data-mode-tsquare]');
+  const protractorChip = strip.querySelector('[data-mode-protractor]');
   const scaleChip = strip.querySelector('[data-mode-scale]');
   // IN THE BOTTOM BAR since 1 Oct, not the top strip -- so asked of the
   // document rather than of the strip.
@@ -14958,7 +15009,7 @@
     // not the cursor measured separately -- two readings of one distance
     // drift, and the drafter believes the one he can see." This has been
     // wrong on the TOY board since §1 landed.
-    if (drawStart && activeTool === 'wall') return { from: drawStart, to: drawPoint(cursorWorld) };
+    if (drawStart && drawsRun()) return { from: drawStart, to: drawPoint(cursorWorld) };
     // THE OUTLINE READS THE SAME WAY: the edge the next press will put down.
     if (activeTool === 'outline' && outlineCorners.length) {
       return { from: outlineTail(), to: outlinePoint(cursorWorld) };
@@ -14993,7 +15044,7 @@
   // activeTool === 'wall'` would be the same amount of code and would leave
   // the other four frozen -- which is how this survived four tools that had a
   // band before the wall did.
-  const previewTracksCursor = () => (activeTool === 'wall' && !!drawStart)
+  const previewTracksCursor = () => (drawsRun() && !!drawStart)
     || (activeTool === 'cut' && !!cutStart)
     || (activeTool === 'floor' && floorCorners.length > 0)
     || (activeTool === 'shape' && shapeCorners.length > 0)
@@ -15014,7 +15065,7 @@
   let pointerScreen = null;
   const syncDrawLength = () => {
     if (!drawLenEl) return;
-    const run = activeTool === 'wall' && drawStart ? runInHand() : null;
+    const run = drawsRun() && drawStart ? runInHand() : null;
     if (!run || !pointerScreen) { drawLenEl.hidden = true; return; }
     drawLenEl.hidden = false;
     drawLenEl.textContent =
@@ -15040,6 +15091,7 @@
     protractorOut.textContent = run ? angleLabel(run.from, run.to) : '—';
     rulerChip.classList.toggle('lit', rulerOn);
     tsquareChip.classList.toggle('lit', tsquareOn);
+    protractorChip.classList.toggle('lit', protractorOn && board !== 'toy');
     scaleChip.classList.toggle('lit', footOn);
     // LIT MEANS LOADED, not merely armed, and that is the whole reason this
     // tool needs no mode indicator anywhere else: an armed-but-empty brush
@@ -15057,20 +15109,24 @@
     // the only moment a typed length has an anchor and a direction to be
     // measured along. Enabled at any other time it would take a number and
     // have nowhere to put it.
-    const typable = !!(((activeTool === 'wall' && drawStart)
+    const typable = !!(((drawsRun() && drawStart)
       || (activeTool === 'outline' && outlineCorners.length)) && cursorWorld);
     if (lengthBox.disabled === typable) {
       lengthBox.disabled = !typable;
       if (!typable) lengthBox.value = '';
     }
-    // THE ANGLE BOX LIVES UNDER THE SAME RULE, for the same reason: a typed
-    // bearing needs a start point to turn about.
-    if (angleBox.disabled === typable) {
-      angleBox.disabled = !typable;
-      if (!typable) angleBox.value = '';
+    // THE ANGLE BOX TAKES A NUMBER WHENEVER A RUN TOOL IS UP, run in hand or
+    // not: typing it commits nothing now, it is kept for the protractor
+    // (commitTypedAngle). Not on TOY, which has no instruments. While a
+    // number is kept the box shows it; otherwise it reads the run, as before.
+    const angleTypable = board !== 'toy' && (drawsRun() || activeTool === 'outline');
+    if (angleBox.disabled === angleTypable) {
+      angleBox.disabled = !angleTypable;
+      if (!angleTypable) angleBox.value = '';
     }
-    if (typable && document.activeElement !== angleBox) {
-      angleBox.value = run ? angleLabel(run.from, run.to) : '';
+    if (angleTypable && document.activeElement !== angleBox) {
+      angleBox.value = typedAngle != null ? `${typedAngle}°`
+        : (run && typable ? angleLabel(run.from, run.to) : '');
     }
     // While the drafter is typing, the box is his; the live length would
     // overwrite the digits mid-word.
@@ -15086,7 +15142,8 @@
     // every failure today.
     stripMessage.textContent = stripNotice || (rulerOn
       ? (rulerFrom ? 'ruler — second point' : 'ruler — first point')
-      : (activeTool === 'wall' ? (drawStart ? 'wall — second point' : 'wall — first point')
+      : (drawsRun() ? `${activeTool} — ${drawStart ? 'second point' : 'first point'}`
+        + (angleLockDeg() != null ? ` · ANGLE LOCKED ${angleLockDeg()}°` : '')
         : (activeTool === 'outline'
           ? (outlineCorners.length ? 'outline — next corner' : 'outline — first corner') : '')));
     // Last, and from here rather than from the pointer handlers, so the label
@@ -15107,12 +15164,26 @@
   rulerChip.addEventListener('click', () => {
     rulerOn = !rulerOn;
     rulerFrom = null;
-    canvas.style.cursor = rulerOn ? 'crosshair' : (activeTool === 'wall' ? 'crosshair' : '');
+    canvas.style.cursor = rulerOn ? 'crosshair' : (drawsRun() ? 'crosshair' : '');
     stripRefresh();
     paint();
   });
   tsquareChip.addEventListener('click', () => {
     tsquareOn = !tsquareOn;
+    // ONE INSTRUMENT HOLDS THE RUN AT A TIME: "when the protractor is lit
+    // the T square should be UNLIT", and the other way round.
+    if (tsquareOn) protractorOn = false;
+    stripRefresh();
+    paint();
+  });
+  protractorChip.addEventListener('click', () => {
+    if (board === 'toy') { sayOnStrip('the PROTRACTOR is a DRAFTING instrument'); return; }
+    protractorOn = !protractorOn;
+    if (protractorOn) tsquareOn = false;
+    if (protractorOn && typedAngle == null) {
+      sayOnStrip('PROTRACTOR lit — type an ANGLE and press Enter to lock to it');
+      if (!angleBox.disabled) angleBox.focus();
+    } else clearNotice();
     stripRefresh();
     paint();
   });
@@ -15430,7 +15501,7 @@
     // takes the press whole: a WALL left armed under a brush would be a tool
     // the page says is on and that no press can reach.
     if (brushOn && activeTool !== RESTING_TOOL) setTool(RESTING_TOOL);
-    canvas.style.cursor = brushOn ? 'copy' : (activeTool === 'wall' ? 'crosshair' : '');
+    canvas.style.cursor = brushOn ? 'copy' : (drawsRun() ? 'crosshair' : '');
     stripRefresh();
     paint();
   });
@@ -15570,79 +15641,42 @@
       askToPromote(() => commitTypedLength());
       return;
     }
-    const aim = squareTo(drawStart, cursorWorld);
+    const aim = lockedPoint(drawStart, cursorWorld) || squareTo(drawStart, cursorWorld);
     const dx = aim.x - drawStart.x, dz = aim.z - drawStart.z;
     const len = Math.hypot(dx, dz);
     if (len < 1e-6) { stripMessage.textContent = 'point away from the start first'; return; }
     const end = { x: drawStart.x + dx / len * feet, y: 0, z: drawStart.z + dz / len * feet };
-    const wall = commitWall(drawStart, end, brushOptions('wall'));
-    drawStart = wall.end;
+    const made = commitDrawn(drawStart, end);
+    drawStart = made.item.end;
     // THE SELECTION IS A SET ON THIS BRANCH. #398 wrote this line as
     // `selectedSeg = wall` against the single-wall variable that the selection
     // set replaced -- the third binding this merge had to re-seat, after
     // deleteLevel's setArmed and the strip's four reads of drawArmed. Same
     // shape every time: one branch deletes a name, another starts using it,
     // and git has nothing to say.
-    setSelection([{ type: 'wall', item: wall }]);
+    setSelection([made]);
     lengthBox.blur();
     stripRefresh();
     paint();
   };
-  // TYPING AN ANGLE COMMITS THE WALL TOO, and it is the length path with the
-  // two halves swapped: there the typed number is the distance and the cursor
-  // gives the direction, here the typed number is the direction and the
-  // distance comes from whatever the other box or the cursor is holding.
-  //
-  // WHICH WAY 30° POINTS is decided by the hand, not by the sign of the
-  // number. The protractor reads -90..90 off +X -- a wall drawn left reads
-  // the same as the same wall drawn right, deliberately -- so the typed
-  // bearing gives a LINE and the cursor's own aim picks the end of it. Type
-  // the number the protractor is showing and nothing moves, which is the test
-  // of a readout a drafter can also set.
+  // TYPING AN ANGLE KEEPS IT; THE PROTRACTOR ENGAGES IT. This used to commit
+  // a wall along the typed bearing on Enter. Movie, 5 Oct: "allow them to
+  // enter an angle but don't engage unless they light up the protractor". So
+  // Enter only keeps the number; with the protractor lit, every piece of the
+  // run travels along it (drawPoint, outlinePoint) and the hand or the LENGTH
+  // box sets how far.
   const commitTypedAngle = () => {
-    const deg = parseFloat(String(angleBox.value).replace(/[°\s]/g, ''));
+    const raw = String(angleBox.value).replace(/[°\s]/g, '');
+    if (raw === '') { typedAngle = null; angleBox.blur(); stripRefresh(); paint(); return; }
+    const deg = parseFloat(raw);
     if (!Number.isFinite(deg) || Math.abs(deg) > 180) {
       stripMessage.textContent = 'angle in degrees, -180 to 180';
       return;
     }
-    if (activeTool === 'outline') {
-      const typed = F.parseArchitecturalLength(lengthBox.value);
-      const feet = typed.ok && typed.inches > 0 ? typedOutlineFeet() : null;
-      if (feet !== undefined) typedOutlineEdge({ feet, deg });
-      angleBox.blur();
-      return;
-    }
-    if (!drawStart || !cursorWorld) return;
-    const aim = squareTo(drawStart, cursorWorld);
-    const rad = deg * Math.PI / 180;
-    let ux = Math.cos(rad), uz = -Math.sin(rad);
-    if ((aim.x - drawStart.x) * ux + (aim.z - drawStart.z) * uz < 0) { ux = -ux; uz = -uz; }
-    // THE LENGTH THE DRAFTER CAN SEE, in the order he can see it: the length
-    // box if he has typed one, else the run the cursor is making.
-    const typed = F.parseArchitecturalLength(lengthBox.value);
-    const feet = typed.ok && typed.inches > 0 ? typed.inches / 12
-      : Math.hypot(aim.x - drawStart.x, aim.z - drawStart.z);
-    if (!(feet > 1e-6)) { stripMessage.textContent = 'point away from the start first'; return; }
-    // ASKED HERE RATHER THAN AT THE TOP, because this commit uses TWO typed
-    // numbers and both have to be TOY's for it to stay on TOY. The bearing is
-    // the drafter's, and the LENGTH box is read a few lines above -- so a
-    // typed 90 with 12'-6" in the length box is a precise wall wearing an axis,
-    // and gating on the bearing alone would have let it through.
-    //
-    // NOTHING HAS BEEN MUTATED ABOVE, which is what makes moving it down safe:
-    // everything between the old seat and here computes and writes nothing, so
-    // the guard still runs before anything happens, which is what its own note
-    // asks for.
-    if (board === 'toy' && !(toyCouldMakeAngle(deg) && toyCouldMakeLength(feet))
-      && !drawing?.boardPromptSeen) {
-      askToPromote(() => commitTypedAngle());
-      return;
-    }
-    const end = { x: drawStart.x + ux * feet, y: 0, z: drawStart.z + uz * feet };
-    const wall = commitWall(drawStart, end, brushOptions('wall'));
-    drawStart = wall.end;
-    setSelection([{ type: 'wall', item: wall }]);
+    typedAngle = deg;
     angleBox.blur();
+    if (!protractorOn) sayOnStrip(`ANGLE ${deg}° kept — light the PROTRACTOR to lock to it`);
+    else clearNotice();
     stripRefresh();
     paint();
   };
@@ -17934,12 +17968,11 @@
   // capture would leave the browser holding a pointer this page had
   // forgotten about. A gesture here is one that PERSISTS BETWEEN PRESSES.
   const cancelGestures = () => {
-    const had = !!(drawStart || rulerFrom || pendingBone || cutStart || beamStart || lineStart
+    const had = !!(drawStart || rulerFrom || pendingBone || cutStart || beamStart
       || outlineCorners.length || floorCorners.length || shapeCorners.length);
     drawStart = null;
     rulerFrom = null;
     beamStart = null;
-    lineStart = null;
     cutStart = null;
     cutEnd = null;
     outlineCorners = [];
@@ -18028,7 +18061,6 @@
     // that one line with the press/lift split. Neither claim is about the other.
     if (activeTool === 'column') { placeColumn(at); return; }
     if (activeTool === 'beam') { beamPress(at); return; }
-    if (activeTool === 'line') { linePress(at); return; }
     if (activeTool === 'roof') { roofPress(at); return; }
     if (activeTool === 'outline') { outlinePress(at); return; }
     if (activeTool === 'floor') { floorPress(at); return; }
@@ -18047,7 +18079,7 @@
       return;
     }
     if (activeTool === 'cut') { cutPress(at); return; }
-    if (activeTool === 'wall') {
+    if (drawsRun()) {
       // §1: "either drag, or press again and drag -- both must work". The lift
       // needs two facts this press knows and pointerup does not: where the
       // finger went down, and whether this press OPENED the run. Without the
@@ -18623,7 +18655,7 @@
   canvas.addEventListener('pointerup', e => {
     const press = wallPress;
     wallPress = null;
-    if (!press || !drawStart || activeTool !== 'wall') return;
+    if (!press || !drawStart || !drawsRun()) return;
     // A LIFT THAT DID NOT TRAVEL, ON A PRESS THAT OPENED THE RUN, IS A TAP --
     // the first half of a gesture, whichever pointer is doing it. Committing
     // here would turn every PC click into a zero-length wall attempt, and
