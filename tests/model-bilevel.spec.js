@@ -213,8 +213,13 @@ test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight 
     // A door off the landing into the room.
     expect(d.fenestrations.some(f => f.type === 'door'
       && roomWalls.some(w => w.id === f.wallId))).toBe(true);
-    // Decks on OVER GARAGE: the room and the landing.
-    expect(d.floors.filter(f => Number(f.levelId) === 4).length).toBe(2);
+    // ONE deck on OVER GARAGE, the room and the landing together (Movie,
+    // 4 Oct: "see the 2 X floors- make them 1 floor").
+    const decks = d.floors.filter(f => Number(f.levelId) === 4);
+    expect(decks.length).toBe(1);
+    expect(span(decks[0].points), 'the landing (back to z 14) and the room in one')
+      .toEqual(span([{ x: -4, z: 14 }, { x: 20, z: 38 }]));
+    expect(decks[0].points.length, 'no seam: the landing\'s corner is the deck\'s').toBe(8);
     // Three flights; the third over the down one, 6'-3" up from MAIN.
     const down = d.stairs.find(s => Number(s.levelId) === 2);
     const third = d.stairs.find(s => Number(s.levelId) === 4);
@@ -230,10 +235,32 @@ test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight 
     const roomRoof = d.roofs.find(r => Number(r.sourceLevelId) === 4);
     expect(roomRoof).toBeTruthy();
     // Square over the room AND the upper landing (Movie, 4 Oct: "make it
-    // strait across"), two feet of eave all round: the landing's back edge
-    // is z = 14, so the eave is at 12.
-    expect(span(roomRoof.points)).toEqual(span([{ x: -6, z: 12 }, { x: 22, z: 40 }]));
-    expect(roomRoof.points.length).toBe(4);
+    // strait across"), and on 4 Oct again: "the roof needs to extend to the
+    // END of the stairs" -- the third flight's bottom step on MAIN FL, at
+    // z = 14 - its run -- in a strip the landing's width ("option 2"). So an
+    // L, two feet of eave all round.
+    const bottomZ = third.end.z;
+    expect(bottomZ, 'the third flight runs back from the landing').toBeLessThan(14);
+    expect(span(roomRoof.points)).toEqual(span([{ x: -6, z: bottomZ - 2 }, { x: 22, z: 40 }]));
+    expect(roomRoof.points.length, 'an L, not the old square').toBe(6);
+    // And closed in where it stands over the main roof ("a wall that goes
+    // from the bottom of the 2nd fl roof to the top of the main fl
+    // ceiling"): on OVER GARAGE, from MAIN's ceiling (9'-1 1/8" less the
+    // 6'-3" rise) to the room's plate, round every edge of the roof's wall
+    // line the room's own walls do not stand on -- the strip's end, its two
+    // sides, the square's back edge and its corner down to the room, framed
+    // straight so there is no jog.
+    const hood = d.walls.filter(w => Number(w.levelId) === 4 && w.baseHeight > 1);
+    const runs = hood.map(w => [w.start, w.end].map(p => [p.x, p.z]).sort().join(' ')).sort();
+    expect(runs).toEqual([
+      [[-4, bottomZ], [-4, 20]], [[-4, bottomZ], [2, bottomZ]], [[2, bottomZ], [2, 14]],
+      [[2, 14], [20, 14]], [[20, 14], [20, 19]],
+    ].map(r => r.sort().join(' ')).sort());
+    hood.forEach(w => {
+      expect(w.baseHeight).toBeCloseTo(109.125 / 12 - third.riseFt, 3);
+      expect(w.topHeight).toBeCloseTo(109.125 / 12, 3);
+    });
+
     // And the garage's walls reach the room's floor.
     d.walls.filter(w => w.body === 'garage' && (w.view || 'plan') === 'plan')
       .forEach(w => expect(w.topHeight).toBeCloseTo(9.8646, 3));

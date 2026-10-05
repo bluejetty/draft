@@ -5264,9 +5264,24 @@ if (!window.DraftCutView) {
       bandLevels.push({ level, spans, runs, paintedOf, bandFills });
     });
     const paintRimBand = (level, part) => {
-      const yTopPx = Y(level.floorTop) - 1, yBotPx = Y(level.floorBottom) + 1;
+      // A FLOOR ON THE FOUNDATION HAS NO WALL HEAD UNDER IT, only the sill
+      // plate's top line -- which is wanted. Movie, 4 Oct, on a MOD BILEVEL's
+      // E1: "the sill plate lines don't show both lines on the house". The
+      // ENTRY's band ran a pixel past its floor bottom and the strip below
+      // filled the rest of that row, which is exactly where the plate top
+      // is drawn. So that band stops on the row above it and lays no strip.
+      //
+      // ON A SPLIT ONLY. A one- or two-storey house's MAIN sits on its sill
+      // too, but there an attached garage's wall face, painted after the
+      // foundation lines and standing lower than the house's plate, takes
+      // the middle of that row anyway -- so the band's cover is all that
+      // kept the sheet clean (garage-elevation-occlusion.spec.js, E2).
+      const onSill = !!stack.split && Math.abs(level.floorBottom - fdn.wallTop) < 0.01;
+      const yTopPx = Y(level.floorTop) - 1;
+      const yBotPx = onSill ? Y(level.floorBottom) - 0.5 : Y(level.floorBottom) + 1;
       ctx.fillStyle = C.face;
       ctx.fillRect(X(part.lo) - 1, yTopPx, (part.hi - part.lo) * pxPerFt + 2, yBotPx - yTopPx);
+      if (onSill) return;
       // AND THE REST OF THAT PIXEL ROW, BETWEEN THE CORNERS. Y() lands on a
       // pixel's centre, so one pixel past it is half a row -- and the wall
       // below's own top line, 1 1/4 wide on that centre, kept a sliver

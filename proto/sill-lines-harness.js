@@ -41,6 +41,8 @@ const MUTATIONS = [
   ['the split\'s own row is ignored for the drawing\'s', 'cut-view.js',
     c => c.replace('foundationAttachment: split.foundationAttachment ?? top.attachment,',
       'foundationAttachment: top.attachment,')],
+  ['a floor on the sill plate paints its band over the plate line', 'cut-view.js',
+    c => c.replace('const onSill = !!stack.split && Math.abs(level.floorBottom - fdn.wallTop) < 0.01;', 'const onSill = false;')],
   ['PROJECT\'s ladder defaults to the 2x6', 'project-page.js',
     c => c.replace('const DEFAULT_LADDER_DEPTH_IN = 3.5;', 'const DEFAULT_LADDER_DEPTH_IN = 5.5;')],
 ];
@@ -107,6 +109,32 @@ const paintE1 = d => {
     pour.length > 0 && pour.every(r => r.ink !== INK_FULL), JSON.stringify(pour.map(r => r.ink)));
   check('a sill plate draws no ladder line',
     at(bear - 3.5 / 12).length === 0 && at(bear - 5.5 / 12).length === 0);
+
+  // AND NOTHING PAINTED LATER COVERS IT. Movie, 4 Oct: "the sill plate
+  // lines don't show both lines on the house" -- the ENTRY's floor band,
+  // which bears on that plate, ran a pixel past its bottom and laid a strip
+  // over the row the line is drawn on. Measured at the page's own scale,
+  // where a pixel is about an inch.
+  const small = paintElevation(win, buildEnv(win, saved),
+    standardElevationCuts(buildEnv(win, saved)).find(c => c.id === 'E1'), { pxPerFt: 16.6 });
+  const px = 1 / 16.6;
+  const plateRuns = [];
+  small.strokes.forEach(st => st.pts.forEach((b, i) => {
+    if (!i || b.move || st.ink !== INK_FULL) return;
+    const a = st.pts[i - 1];
+    if (Math.abs(a.e - b.e) < 0.005 && Math.abs(a.e - bear) < 2 * px && Math.abs(a.u - b.u) > 1) {
+      plateRuns.push({ seq: st.seq, e: a.e, lo: Math.min(a.u, b.u), hi: Math.max(a.u, b.u) });
+    }
+  }));
+  const covered = plateRuns.filter(r => (small.modelFills || []).some(f => {
+    if (f.seq <= r.seq) return false;
+    const es = f.pts.map(q => q.e), us = f.pts.map(q => q.u);
+    return Math.min(...es) < r.e - px / 4 && Math.max(...es) > r.e + px / 4
+      && Math.min(...us) < houseU && Math.max(...us) > houseU && r.lo < houseU && r.hi > houseU;
+  }));
+  check('and the house\'s plate line is not painted over by the floor band on it',
+    plateRuns.some(r => r.lo < houseU && r.hi > houseU) && covered.length === 0,
+    `${plateRuns.length} plate run(s), ${covered.length} covered`);
 }
 
 // ── A PT LADDER: ITS BOTTOM, 3 1/2" BY DEFAULT ───────────────────────────
