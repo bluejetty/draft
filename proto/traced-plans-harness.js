@@ -25,7 +25,7 @@ const MUTATE = require('./harness-args.js').mutationMode();
 
 const MUTATIONS = [
   ['the MOD BILEVEL room roof stops at the room', 'traced-plans.js',
-    c => c.replace('plan.overGarageRoof = P().squareOver(over.room, plan.upperLanding);', 'plan.overGarageRoof = over.room;')],
+    c => c.replace('plan.overGarageRoof = P().joinLoops(P().squareOver(over.room), plan.upperLanding);', 'plan.overGarageRoof = over.room;')],
   ['the bungalow + garage is roofed apart', 'traced-plans.js',
     c => c.replace('const one = unionLoops(H, Graw);', 'const one = null;')],
   ['the dropped garage shares the house roof', 'traced-plans.js',
@@ -84,12 +84,13 @@ const plan = (entryId, garage = GARAGE) => T.planFromTrace({
   check('room over: 18 ft at the house end, under the house roof; the rest roofed lower',
     [box(r.overGarage), box(r.houseRoof), box(r.garageRoof)],
     [[-4, 20, 20, 38], [-16, -20, 20, 38], [-4, 38, 20, 46]]);
-  // Movie, 4 Oct: the MOD BILEVEL's room roof is square over the room and
-  // the upper landing, straight across the jog between them.
+  // Movie, 4-5 Oct: the MOD BILEVEL's room roof is square over the room,
+  // straight across its jog, and joined to the upper landing -- so its back
+  // edge lines up with the jog, not with the front of the stairs.
   const m = plan('modifiedBilevel');
   const both = [...m.overGarage, ...m.upperLanding];
-  check('MOD BILEVEL: the room\'s roof is square, over the room and the landing',
-    [m.overGarageRoof.length, box(m.overGarageRoof)], [4, box(both)]);
+  check('MOD BILEVEL: the room\'s roof is square over the room, joined to the landing',
+    [m.overGarageRoof.length, box(m.overGarageRoof)], [6, box(both)]);
 }
 
 // ── THE GARAGE'S WALLS AND DOORS ────────────────────────────────────────

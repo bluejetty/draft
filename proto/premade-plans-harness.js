@@ -487,13 +487,18 @@ check('the MOD BILEVEL keeps the same framing', P =>
 check('the MOD BILEVEL\'s room is the 2 STOREY\'s room over the garage', P =>
   [JSON.stringify(P.modifiedBilevel().overGarage), JSON.stringify(P.twoStorey({ garage: true, overGarage: true }).overGarage)]);
 check('it carries its own roof', P => [P.modifiedBilevel().overGarageRoof !== null, true]);
-// Movie, 4 Oct: "make it strait across ... will make the roof squar". One
-// rectangle over the room AND the upper landing, wound the room's way round.
-check('its roof is square, over the room and the upper landing', P => {
+// Movie, 4 Oct: "make it strait across ... will make the roof squar" -- the
+// ROOM's roof, straight across its 1 ft jog. And 5 Oct: the cavity wall
+// "only needs to line up with the 1ft jog not the front of the stairs", the
+// roof edge in with it, the piece over the stairs where it was. So the
+// square over the room, joined to the landing -- not one square over both.
+check('its roof is square over the room, across the jog, and joined to the landing', P => {
   const plan = P.modifiedBilevel();
-  const r = plan.overGarageRoof, b = span([...plan.overGarage, ...plan.upperLanding]);
-  return [JSON.stringify(r), JSON.stringify([{ x: b.x0, z: b.z0 }, { x: b.x1, z: b.z0 },
-    { x: b.x1, z: b.z1 }, { x: b.x0, z: b.z1 }])];
+  const room = span(plan.overGarage), land = span(plan.upperLanding);
+  const r = plan.overGarageRoof;
+  return [JSON.stringify(r), JSON.stringify(P.joinLoops([{ x: room.x0, z: room.z0 }, { x: room.x1, z: room.z0 },
+    { x: room.x1, z: room.z1 }, { x: room.x0, z: room.z1 }], plan.upperLanding))
+    + (r.some(p => p.z === land.z0) && r.some(p => p.z === room.z0 && p.x === land.x1) ? '' : ' NOT STEPPED')];
 });
 check('its third flight stands over the down flight', P => {
   const st = P.modifiedBilevel().stairs;
@@ -1355,7 +1360,7 @@ const GARAGE_TIE_DECL = `    // One foot BEHIND the house's front line, which is
 
 const MUTATIONS = [
   ['the room-s roof is the room alone, short of the landing',
-    c => c.replace('overGarageRoof: squareOver(overGarageLoop(), upperLandingLoop()),', 'overGarageRoof: overGarageLoop(),')],
+    c => c.replace('overGarageRoof: joinLoops(squareOver(overGarageLoop()), upperLandingLoop()),', 'overGarageRoof: overGarageLoop(),')],
   // ── THE GARAGE ROOF'S HOUSE END ──
   ['the roof follows the tie again, hipping four feet against the house wall',
     s2 => s2.replace('const back = houseFront + (overGarage ? OVER_GARAGE_LENGTH_FT : 0);',
