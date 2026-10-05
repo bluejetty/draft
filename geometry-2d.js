@@ -1367,6 +1367,91 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     return joins;
   }
 
+  // ── WALLS THAT MEET MID-SPAN, SPLIT FOR THE DRAWING ONLY ─────────────────
+  //
+  // Movie, 5 Oct: "TRIM interior walls against other INTERIOR and EXTERIOR
+  // walls, and when the trim happens i'd like the walls to 'meld' together"
+  // -- "2 interior wall that cross or meet at corner should meld".
+  //
+  // wallJoins only sees walls that SHARE a corner object. A partition ending
+  // on the middle of another wall (a T), or two walls crossing (an X), share
+  // none, so the T drew its end cap and the X drew all eight face lines
+  // through each other. This hands the painter PIECES instead: each wall cut
+  // where another wall's end lands on its centreline (cut AT that end's own
+  // point object, so the three meet as a tee) and where two centrelines cross
+  // inside both (cut at one new shared point, so the four meet as a multi).
+  // The records are not touched -- openings, selection and the saved file all
+  // keep reading the real walls -- and a piece carries `meldOf`, its wall.
+  //
+  // ONLY WALLS OF ONE POOL MELD: the pool key is (level, view, body) on the
+  // pooled corner, so a garage wall crossing a house wall stays as it was,
+  // the same rule wallJoins keeps by identity.
+  function meldPieces(walls) {
+    const EPS = 1e-6, NEAR = 1e-3;
+    // The pooled corner's key where there is one; the wall's own fields where
+    // a page did not pool (a LAYOUT sheet), so a garage still keeps to itself.
+    const keyOf = w => [w.start?._draftLevelId ?? w.levelId,
+      w.start?._draftViewId ?? (w.view || 'plan'),
+      w.start?._draftBody ?? (w.body || 'house')].join('|');
+    const live = walls.filter(w => w && w.start && w.end
+      && Math.hypot(w.end.x - w.start.x, w.end.z - w.start.z) > NEAR);
+    const cuts = new Map(live.map(w => [w, []]));
+    const crossPoints = [];
+    const sharedCross = (x, z, like) => {
+      const found = crossPoints.find(p => Math.abs(p.x - x) < NEAR && Math.abs(p.z - z) < NEAR);
+      if (found) return found;
+      const p = { x, y: Number.isFinite(like.y) ? like.y : 0, z,
+        _draftLevelId: like._draftLevelId, _draftViewId: like._draftViewId, _draftBody: like._draftBody };
+      crossPoints.push(p);
+      return p;
+    };
+    const along = (w, p) => {
+      const dx = w.end.x - w.start.x, dz = w.end.z - w.start.z;
+      const len2 = dx * dx + dz * dz;
+      const t = ((p.x - w.start.x) * dx + (p.z - w.start.z) * dz) / len2;
+      const off = Math.abs((p.x - w.start.x) * dz - (p.z - w.start.z) * dx) / Math.sqrt(len2);
+      return { t, off };
+    };
+    for (let i = 0; i < live.length; i++) {
+      for (let j = 0; j < live.length; j++) {
+        if (i === j) continue;
+        const a = live[i], b = live[j];
+        if (keyOf(a) !== keyOf(b)) continue;
+        // A TEE: b ends on a's centreline, inside a.
+        [b.start, b.end].forEach(p => {
+          if (p === a.start || p === a.end) return;
+          const { t, off } = along(a, p);
+          const len = Math.hypot(a.end.x - a.start.x, a.end.z - a.start.z);
+          if (off < NEAR && t * len > NEAR && (1 - t) * len > NEAR) cuts.get(a).push({ t, p });
+        });
+        // AN X: the centrelines cross inside both. Once per pair.
+        if (j < i) continue;
+        const r = { x: a.end.x - a.start.x, z: a.end.z - a.start.z };
+        const s = { x: b.end.x - b.start.x, z: b.end.z - b.start.z };
+        const den = r.x * s.z - r.z * s.x;
+        if (Math.abs(den) < EPS) continue;
+        const qp = { x: b.start.x - a.start.x, z: b.start.z - a.start.z };
+        const t = (qp.x * s.z - qp.z * s.x) / den;
+        const u = (qp.x * r.z - qp.z * r.x) / den;
+        const la = Math.hypot(r.x, r.z), lb = Math.hypot(s.x, s.z);
+        if (t * la <= NEAR || (1 - t) * la <= NEAR || u * lb <= NEAR || (1 - u) * lb <= NEAR) continue;
+        const p = sharedCross(a.start.x + r.x * t, a.start.z + r.z * t, a.start);
+        cuts.get(a).push({ t, p });
+        cuts.get(b).push({ t: u, p });
+      }
+    }
+    const pieces = [];
+    live.forEach(w => {
+      const list = cuts.get(w).sort((m, n) => m.t - n.t)
+        .filter((c, k, all) => k === 0 || c.t - all[k - 1].t > EPS);
+      if (!list.length) { pieces.push(w); return; }
+      let from = w.start;
+      list.forEach(c => { pieces.push({ ...w, start: from, end: c.p, meldOf: w }); from = c.p; });
+      pieces.push({ ...w, start: from, end: w.end, meldOf: w });
+    });
+    return pieces;
+  }
+
   // THE OTHER HALF OF wallJoins, and the reason it could not mitre on the new
   // page. wallJoins keys endpoints by OBJECT IDENTITY; JSON restores values,
   // not references, so a drawing read back off disk has a separate point
@@ -1975,6 +2060,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     roofProfile,
     profileEnvelope,
     wallJoins,
+    meldPieces,
     outlineSegment,
     outlineSegmentCount,
     lineControlPoint,

@@ -408,9 +408,9 @@ const CHECKS = [
 
 const MUTATIONS = [
   ['the two wall passes collapse into one loop',
-    s => s.replace(`    walls.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv));
-    walls.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv));`,
-    `    walls.forEach(wall => {
+    s => s.replace(`    pieces.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv));
+    pieces.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv));`,
+    `    pieces.forEach(wall => {
       render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv);
       render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv);
     });`)],

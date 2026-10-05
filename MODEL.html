@@ -2819,8 +2819,13 @@
     // iterates, and a redundant guard on "the drawing mitres the way it looks"
     // is worth its two words.
     const shown = walls();
-    const joins = G.wallJoins(shown);
-    shown.forEach(wall => {
+    // MELDED, where a wall ends on another's middle or two walls cross: the
+    // painter is handed the walls cut at those points so the T and the X join
+    // like corners do (geometry-2d's meldPieces). Drawing only -- `shown`
+    // stays the real walls for the openings below and for everything else.
+    const pieces = G.meldPieces ? G.meldPieces(shown) : shown;
+    const joins = G.wallJoins(pieces);
+    pieces.forEach(wall => {
       if (!wall.start || !wall.end) return;
       R.drawWallSeg2D(ctx, toS, wall, false, joins, 'both', wallEnv());
     });
@@ -4350,6 +4355,20 @@
         // the view will LOOK, the file keeps where the viewer STANDS, and the
         // one is negated from the other here so the preview cannot drift from
         // the commit.
+        // THE WALL PICKED FOR TRIM, and the end that will move.
+        if (activeTool === 'trim' && trimPick) {
+          const w = trimPick.wall;
+          const A = toS(w.start), B = toS(w.end), E = toS(w[trimPick.end]);
+          ctx.save();
+          ctx.strokeStyle = skin['draw-selected'];
+          ctx.fillStyle = skin['draw-selected'];
+          ctx.lineWidth = 4;
+          ctx.globalAlpha = 0.6;
+          ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke();
+          ctx.globalAlpha = 1;
+          ctx.beginPath(); ctx.arc(E.x, E.y, 6, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
         if (activeTool === 'cut' && cutStart) {
           const G = window.DraftGeometry2D;
           const far = cutEnd || cursorWorld;
@@ -14849,6 +14868,103 @@
     paint();
   };
 
+  // ── TRIM: run one wall's end on to another wall, and meld the two ──────
+  //
+  // Movie, 5 Oct: "i'd especially like to TRIM interior walls against other
+  // INTERIOR and EXTERIOR walls, and when the trim happens i'd like the walls
+  // to 'meld' together" -- and, asked whether this was it, "seems right ...
+  // yes please 2 interior wall that cross or meet at corner should meld".
+  //
+  // TWO PRESSES. The first picks the wall and the END that moves (the half it
+  // was pressed on); the second picks the wall it runs into. That end goes to
+  // where the two centrelines meet -- shortened or lengthened, the same press
+  // -- and lands ON the other wall's centreline, which is what the plan reads
+  // as a tee and melds (geometry-2d's meldPieces; render-2d breaks the face).
+  // Where the meeting point is past the other wall's end, or within a wall's
+  // thickness of it, that end comes to the point too: a corner, which mitres.
+  //
+  // The moving end gets a corner OF ITS OWN from the pool rather than having
+  // its old one dragged, because that old one may be shared with another
+  // wall that is not being trimmed.
+  let trimPick = null;
+  const TRIM_CORNER_FT = 1.5;
+  toolListeners.push(next => {
+    trimPick = null;
+    if (next === 'trim') sayOnStrip('TRIM — press the wall to trim, on the half whose end should move.');
+  });
+  const trimPress = at => {
+    const G = window.DraftGeometry2D;
+    const hit = wallAt(at);
+    if (!hit) { sayOnStrip('TRIM — press on a wall.'); return; }
+    if (!trimPick) {
+      const { t } = G.pointToSegment(at, hit);
+      trimPick = { wall: hit, end: t < 0.5 ? 'start' : 'end' };
+      sayOnStrip('Now press the wall it should run into.');
+      paint();
+      return;
+    }
+    const a = trimPick.wall, endA = trimPick.end, b = hit;
+    if (b === a) { sayOnStrip('Press a DIFFERENT wall for it to run into.'); return; }
+    const r = { x: a.end.x - a.start.x, z: a.end.z - a.start.z };
+    const sv = { x: b.end.x - b.start.x, z: b.end.z - b.start.z };
+    const den = r.x * sv.z - r.z * sv.x;
+    if (Math.abs(den) < 1e-9) {
+      trimPick = null;
+      sayOnStrip('Those two walls are parallel — they never meet. Press the wall to trim again.');
+      paint();
+      return;
+    }
+    const q = { x: b.start.x - a.start.x, z: b.start.z - a.start.z };
+    const t = (q.x * sv.z - q.z * sv.x) / den;
+    const u = (q.x * r.z - q.z * r.x) / den;
+    const P = { x: a.start.x + r.x * t, z: a.start.z + r.z * t };
+    const kept = endA === 'start' ? a.end : a.start;
+    if (Math.hypot(P.x - kept.x, P.z - kept.z) < 0.25
+      || (endA === 'start' ? t >= 1 : t <= 0)) {
+      trimPick = null;
+      sayOnStrip('That would turn the wall inside out — press the wall to trim again.');
+      paint();
+      return;
+    }
+    const lenB = Math.hypot(sv.x, sv.z);
+    const nearB = u < 0.5 ? 'start' : 'end';
+    const toNearB = (u < 0.5 ? u : 1 - u) * lenB;
+    const corner = u <= 0 || u >= 1 || toNearB <= TRIM_CORNER_FT;
+    const changes = [];
+    const moveEnd = (wall, end, to) => {
+      const was = wall[end];
+      if (Math.abs(was.x - to.x) < 1e-9 && Math.abs(was.z - to.z) < 1e-9) return;
+      const ref = was;
+      const v = G.mergeVertex(vertexPool, { x: to.x, y: ref.y, z: to.z },
+        ref._draftLevelId, ref._draftViewId, ref._draftBody || 'house');
+      // Openings are measured from the START, so a start that moves takes
+      // them along by the same distance.
+      const shifts = [];
+      if (end === 'start') {
+        const dirx = wall.end.x - was.x, dirz = wall.end.z - was.z;
+        const dl = Math.hypot(dirx, dirz) || 1;
+        const moved = ((v.x - was.x) * dirx + (v.z - was.z) * dirz) / dl;
+        (drawing.fenestrations || []).forEach(o => {
+          if (!o || o.wallId !== wall.id) return;
+          shifts.push({ opening: o, was: o.offset });
+          o.offset = (Number(o.offset) || 0) - moved;
+        });
+      }
+      wall[end] = v;
+      changes.push({ wall, end, was, shifts });
+    };
+    moveEnd(a, endA, P);
+    if (corner) moveEnd(b, nearB, P);
+    const retired = retirePoolCorners(changes.map(c => c.was));
+    trimPick = null;
+    if (!changes.length) { sayOnStrip('Already there — nothing to trim.'); paint(); return; }
+    undoStack.push({ kind: 'trim', changes, retired });
+    markDirty();
+    sayOnStrip(corner ? 'Trimmed to a corner. Press the next wall to trim.'
+      : 'Trimmed and melded. Press the next wall to trim.');
+    paint();
+  };
+
   const cutPress = at => {
     const here = { x: at.x, z: at.z };
     if (!cutStart) {
@@ -18094,6 +18210,7 @@
       return;
     }
     if (activeTool === 'cut') { cutPress(at); return; }
+    if (activeTool === 'trim') { trimPress(at); return; }
     if (drawsRun()) {
       // §1: "either drag, or press again and drag -- both must work". The lift
       // needs two facts this press knows and pointerup does not: where the
@@ -18808,6 +18925,17 @@
         // new offset — a different drawing from the one before the drag, and one
         // whose difference nothing on screen would show.
         if (b.offX !== undefined) { b.vtx.offX = b.offX; b.vtx.offZ = b.offZ; }
+      });
+    } else if (step.kind === 'trim') {
+      // Each end back on the corner it had, the openings back where they sat,
+      // and any corner the trim retired back in the pool -- in reverse, so a
+      // corner trim's second end unwinds before its first.
+      step.changes.slice().reverse().forEach(c => {
+        c.wall[c.end] = c.was;
+        c.shifts.forEach(sh => { sh.opening.offset = sh.was; });
+      });
+      (step.retired || []).forEach(corner => {
+        if (!vertexPool.includes(corner)) vertexPool.push(corner);
       });
     } else if (step.kind === 'move-opening') {
       // The record is mutated in place, so undo puts the one number back

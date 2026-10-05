@@ -169,9 +169,13 @@ if (!window.DraftPlanComposition) {
     if (env.shapeEnv) shapes.forEach(shape => render.drawShape2D(ctx, toS, shape, {}, env.shapeEnv));
     if (env.roofEnv) roofs.forEach(roof => render.drawRoof2D(ctx, toS, roof, {}, env.roofEnv));
 
-    const joins = env.wallJoins ? env.wallJoins(walls) : null;
-    walls.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv));
-    walls.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv));
+    // MELDED where a wall ends on another or two cross (geometry-2d's
+    // meldPieces) -- the pieces are for the painter only; openings and
+    // fixtures below still read the real walls.
+    const pieces = env.meldPieces ? env.meldPieces(walls) : walls;
+    const joins = env.wallJoins ? env.wallJoins(pieces) : null;
+    pieces.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv));
+    pieces.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv));
 
     drawOpenings(ctx, toS, env, walls, shows);
 

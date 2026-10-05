@@ -421,6 +421,7 @@ if (!window.DraftLayoutPlan) {
       notes: of('notes'),
 
       wallJoins: geo.wallJoins,
+      meldPieces: geo.meldPieces,
       lineControlPoint: geo.lineControlPoint,
       openingGeometry: opening => {
         const wall = walls.find(w => w.id === opening.wallId);
