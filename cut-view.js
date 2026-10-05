@@ -1602,6 +1602,7 @@ if (!window.DraftCutView) {
     };
     const faces = [];
     const fdnFaces = [];
+    const tagsGarage = env.walls().some(w => w.body === 'garage');
     env.walls().forEach(wall => {
       const p1 = proj(wall.start), p2 = proj(wall.end);
       if (Math.max(p1.u, p2.u) < uMin || Math.min(p1.u, p2.u) > uMax) return;
@@ -1645,7 +1646,17 @@ if (!window.DraftCutView) {
       // back wall's windows showing through it. Only ever UP: a wall stored
       // shorter than its storey keeps the storey's top, as every one has.
       const ownTop = storey.floorTop + (Number(wall.topHeight) || 0);
-      const garage = garageFor(wall);
+      // A WALL THE GARAGE ONLY SHARES IS THE HOUSE'S, on a split. Movie, 4
+      // Oct, on E1 of a BILEVEL + GARAGE: a line up the entry's edge above
+      // the garage roof. The house front x 2..16 runs along the garage's
+      // outline, so garageFor answered garage: the wall stood on the
+      // garage's sill and stopped at the garage's plate, the house's back
+      // wall showed through above it, and its end drew a line beside the
+      // entry. Where the drawing tags its garage walls (`body: 'garage'`,
+      // as every build since the tie does) only those are the garage's; an
+      // untagged drawing keeps the geometry's answer.
+      const split = SPLIT_TYPES.includes(envBuildType(env));
+      const garage = split && tagsGarage && wall.body !== 'garage' ? null : garageFor(wall);
       let level = ownTop > storey.wallTop + 0.05 && storey.id === ENTRY_LEVEL_ID
         ? { ...storey, wallTop: ownTop } : storey;
       // ── A SPLIT'S GARAGE STOPS UNDER ITS OWN ROOF ────────────────────
@@ -1663,7 +1674,7 @@ if (!window.DraftCutView) {
       // stored height, because a bilevel saved before 3 Oct stored its garage
       // walls at the level default and bore its roof at the plate; the roof
       // is right on both. Every other house keeps the storey's top.
-      if (garage && SPLIT_TYPES.includes(envBuildType(env))) {
+      if (garage && split) {
         const plate = garageRoofBase(garage);
         if (plate != null) level = { ...level, wallTop: plate };
       }
@@ -4399,6 +4410,20 @@ if (!window.DraftCutView) {
       ctx.lineTo(xb, Y(floor));
       ctx.closePath();
       ctx.fill();
+      // ── AND A HALF PIXEL PAST ITS OWN EDGE ────────────────────────────
+      //
+      // Movie, 4 Oct, on E1 of a BILEVEL + GARAGE: two faint lines in the
+      // wall -- one at the entry's edge from sill to head, one along the
+      // ENTRY level's top. Neither was ink. Two faces in one plane meet ON a
+      // pixel boundary that X() and Y() put at the pixel's centre, so each
+      // fill covers half that column and the column ends up three-quarters
+      // wall and one-quarter WHATEVER IS BEHIND -- there, the jamb of a back
+      // wall window and a level datum. The fill's own colour stroked round
+      // its outline closes the half pixel; the face is opaque, so anything
+      // it laps was behind it anyway.
+      ctx.strokeStyle = C.face; ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       // ── AND WHAT THE WALL IS CLAD IN GOES ONTO THAT FILL ──────────────
       //
       // CLIPPED TO THE FACE'S OWN POLYGON, which is still the current path --
@@ -4454,26 +4479,29 @@ if (!window.DraftCutView) {
             : b.hi > u + 0.05 && b.lo <= u + 1e-6))
             .map(b => ({ lo: b.bottom, hi: b.top })))
           .sort((a, b) => a.lo - b.lo);
+        // THE STRETCHES NOTHING CARRIES ON ACROSS, not all-or-nothing. Movie,
+        // 4 Oct, on E1 of a BILEVEL + GARAGE: the entry's edge drew full height
+        // because the house front beside it had no floor band for one foot
+        // of it -- a foot that stands behind the garage anyway. The end is a
+        // corner only where it is uncovered, so only there is it drawn.
+        const open = [];
         let reach = foot;
         for (const c of cover) {
-          if (c.lo > reach + 0.02) break;
+          if (c.hi <= reach) continue;
+          if (c.lo > reach + 0.02) open.push([reach, Math.min(c.lo, top)]);
           reach = Math.max(reach, c.hi);
+          if (reach >= top - 0.02) break;
         }
-        return reach >= top - 0.02;
+        if (reach < top - 0.02) open.push([reach, top]);
+        return open.filter(([lo, hi]) => hi - lo > 0.01);
       };
-      const seamL = carriesOn(loU, -1, footL, topL);
-      const seamR = carriesOn(hiU, 1, footR, topR);
+      const endL = topL - footL > 0.01 ? carriesOn(loU, -1, footL, topL) : [];
+      const endR = topR - footR > 0.01 ? carriesOn(hiU, 1, footR, topR) : [];
       ctx.beginPath();
-      if (topL - footL > 0.01 && !seamL) {
-        ctx.moveTo(xa, Y(footL));
-        ctx.lineTo(xa, Y(topL));
-      }
+      endL.forEach(([lo, hi]) => { ctx.moveTo(xa, Y(lo)); ctx.lineTo(xa, Y(hi)); });
       ctx.moveTo(X(tops[0].u), Y(tops[0].top));
       tops.slice(1).forEach(s => ctx.lineTo(X(s.u), Y(s.top)));
-      if (topR - footR > 0.01 && !seamR) {
-        ctx.moveTo(xb, Y(topR));
-        ctx.lineTo(xb, Y(footR));
-      }
+      endR.forEach(([lo, hi]) => { ctx.moveTo(xb, Y(hi)); ctx.lineTo(xb, Y(lo)); });
       // ── AND NO WALL FACE LINES ITS OWN BASE ──────────────────────────
       //
       // Movie, 26 Sep, on E1 and E4 of a 2 STOREY + GARAGE + ROOM OVER,
@@ -5239,6 +5267,13 @@ if (!window.DraftCutView) {
       const yTopPx = Y(level.floorTop) - 1, yBotPx = Y(level.floorBottom) + 1;
       ctx.fillStyle = C.face;
       ctx.fillRect(X(part.lo) - 1, yTopPx, (part.hi - part.lo) * pxPerFt + 2, yBotPx - yTopPx);
+      // AND THE REST OF THAT PIXEL ROW, BETWEEN THE CORNERS. Y() lands on a
+      // pixel's centre, so one pixel past it is half a row -- and the wall
+      // below's own top line, 1 1/4 wide on that centre, kept a sliver
+      // showing under the band (Movie, 4 Oct, a faint line along a
+      // BILEVEL's ENTRY top). Inset from the ends, because the corner lines
+      // run through there and a full row would put a gap in them.
+      ctx.fillRect(X(part.lo) + 1, Y(level.floorBottom) + 0.5, (part.hi - part.lo) * pxPerFt - 2, 1);
     };
 
     // FAR FIRST, AND ON A TIE THE WALL GOES DOWN BEFORE THE ROOF. A sheet

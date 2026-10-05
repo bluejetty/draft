@@ -2935,8 +2935,11 @@ function run(win) {
           return hit;
         };
         const seen = (seq, u, e) => !(painted.modelFills || []).some(f => f.seq > seq && inside(f.pts, u, e));
+        // INK ONLY: a face strokes its own outline in its fill's colour to
+        // close the half-pixel seam between two fills, and that is paint, not
+        // a line on the sheet.
         const segs = [];
-        (painted.strokes || []).forEach(st => st.pts.forEach((pt, i) => {
+        (painted.strokes || []).filter(st => st.ink !== '#fff').forEach(st => st.pts.forEach((pt, i) => {
           if (i === 0 || pt.move) return;
           segs.push({ seq: st.seq, a: st.pts[i - 1], b: pt });
         }));
@@ -2966,6 +2969,69 @@ function run(win) {
       check('proto/repro-modbilevel-e1.draft is present', false, 'missing');
     }
 
+    // ── A BILEVEL + GARAGE, E1 ────────────────────────────────────────
+    //
+    // Movie, 4 Oct, circling three lines on E1 of a BILEVEL + GARAGE built
+    // from the drive-thru: up the entry's left edge from sill to head, up its
+    // right edge above the garage roof, and along the ENTRY level's top.
+    //
+    // The right one was ink: the house front x 2..16 runs along the garage's
+    // outline, so it was taken for the garage's and stopped at the garage's
+    // plate, and the entry beside it drew its end. The other two were SEAMS --
+    // two fills meeting on a pixel's centre each cover half the column, and
+    // the back wall's window jamb and a level datum showed through. Polygons
+    // cannot show a seam, so those two are held by what closes them: every
+    // face strokes its outline in its own fill, and a floor band reaches a
+    // whole pixel row under the floor it carries.
+    const bFile = path.join(ROOT, 'proto', 'repro-bilevel-garage-e1.draft');
+    if (fs.existsSync(bFile)) {
+      const bEnv = buildEnv(win, JSON.parse(fs.readFileSync(bFile, 'utf8')));
+      const bStack = CV.sectionLevelStack(bEnv);
+      const bMain = bStack.floors.find(l => l.id === 3);
+      const bCut = standardElevationCuts(bEnv).find(c => c.id === 'E1');
+      const bPainted = paintElevation(win, bEnv, bCut, { pxPerFt: 40 });
+      const inside = (pts, u, e) => {
+        let hit = false;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+          const a = pts[i], b = pts[j];
+          if ((a.e > e) !== (b.e > e) && u < (b.u - a.u) * (e - a.e) / (b.e - a.e) + a.u) hit = !hit;
+        }
+        return hit;
+      };
+      const seen = (seq, u, e) => !(bPainted.modelFills || []).some(f => f.seq > seq && inside(f.pts, u, e));
+      const inkAt = (u, e) => (bPainted.strokes || []).filter(st => st.ink !== '#fff').some(st =>
+        st.pts.some((pt, i) => i > 0 && !pt.move && Math.abs(pt.u - u) < 0.02
+          && Math.abs(st.pts[i - 1].u - u) < 0.02
+          && Math.min(pt.e, st.pts[i - 1].e) < e && Math.max(pt.e, st.pts[i - 1].e) > e
+          // A hair either side: a line ON a later fill's edge is half
+          // covered, and the polygon test cannot say which half.
+          && (seen(st.seq, u - 0.01, e) || seen(st.seq, u + 0.01, e))));
+      check('BILEVEL + GARAGE E1: no line up the entry\'s left edge, sill to head',
+        ![3.5, 5, 6.5].some(e => inkAt(-10, e)));
+      check('BILEVEL + GARAGE E1: no line up the entry\'s right edge over the garage roof',
+        ![6, 7.5, 8.5].some(e => inkAt(2, e)));
+      const front = (bPainted.modelFills || []).find(f => f.pts.length >= 4
+        && Math.abs(Math.min(...f.pts.map(p => p.u)) - 2) < 0.05
+        && Math.abs(Math.max(...f.pts.map(p => p.u)) - 16) < 0.05
+        && f.ink !== '#e8e8ea');
+      check('BILEVEL + GARAGE E1: the house front over the garage stands to MAIN\'s plate, not the garage\'s',
+        !!front && Math.abs(Math.max(...front.pts.map(p => p.e)) - bMain.wallTop) < 0.05,
+        front ? `top ${Math.max(...front.pts.map(p => p.e)).toFixed(3)} want ${bMain.wallTop.toFixed(3)}` : 'no face u 2..16');
+      check('BILEVEL + GARAGE E1: each wall face closes the seam with its neighbour in its own fill',
+        (bPainted.strokes || []).some(st => st.ink === '#fff' && st.pts.some((pt, i) => i > 0
+          && Math.abs(pt.u + 10) < 0.02 && Math.abs(st.pts[i - 1].u + 10) < 0.02
+          && Math.min(pt.e, st.pts[i - 1].e) < 3.5 && Math.max(pt.e, st.pts[i - 1].e) > 6.5)));
+      // The half row: a strip under the band, inset from its ends.
+      const strip = (bPainted.modelFills || []).find(f => f.pts.length === 4
+        && Math.abs(Math.max(...f.pts.map(p => p.e)) - Math.min(...f.pts.map(p => p.e)) - 1 / 40) < 1e-6
+        && Math.max(...f.pts.map(p => p.e)) < bMain.floorBottom
+        && Math.max(...f.pts.map(p => p.e)) > bMain.floorBottom - 2 / 40);
+      check('BILEVEL + GARAGE E1: MAIN\'s floor band reaches a whole pixel row under its floor, between its corners',
+        !!strip, 'no half-row strip under the band');
+    } else {
+      check('proto/repro-bilevel-garage-e1.draft is present', false, 'missing');
+    }
+
   return missed;
 }
 
@@ -2981,8 +3047,20 @@ if (!MUTATION_MODE) {
 // away. A mutation nothing catches is a rule this harness only appears to
 // hold.
 const MUTATIONS = [
+  // BILEVEL + GARAGE E1, Movie 4 Oct: the three lines and what closed them.
+  ['a split\'s house wall on the garage outline is the garage\'s again',
+    s => s.replace("const garage = split && tagsGarage && wall.body !== 'garage' ? null : garageFor(wall);",
+      'const garage = garageFor(wall);')],
+  ['a face no longer strokes its outline in its own fill',
+    s => s.replace('      ctx.strokeStyle = C.face; ctx.lineWidth = 1;\n      ctx.stroke();\n', '')],
+  ['a floor band stops half a row under its floor again',
+    s => s.replace('      ctx.fillRect(X(part.lo) + 1, Y(level.floorBottom) + 0.5, (part.hi - part.lo) * pxPerFt - 2, 1);\n', '')],
+  ['an end line is drawn full height when only part of it is uncovered',
+    s => s.replace('        return open.filter(([lo, hi]) => hi - lo > 0.01);',
+      '        return open.length ? [[foot, top]] : [];')],
   ['a wall face draws its end where the same plane carries on',
-    s => s.replace('      const seamL = carriesOn(loU, -1, footL, topL);', '      const seamL = false;')],
+    s => s.replace('      const endL = topL - footL > 0.01 ? carriesOn(loU, -1, footL, topL) : [];',
+      '      const endL = topL - footL > 0.01 ? [[footL, topL]] : [];')],
   ['a floor band is clipped by a nearer face that stops below it',
     s => s.replace('        && (top == null || other.top >= top - 1e-6)).forEach(other => {', '        ).forEach(other => {')],
   ['a floor band draws its end against a wall in its own plane',
