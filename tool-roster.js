@@ -125,7 +125,9 @@
   // Adding outline takes nothing away from anybody; swapping them would.
   // CUT JOINS IT (Movie, 5 Oct, "could be on TOY i think"): cutting a
   // section draws nothing into the house, it only adds a way to look at it.
-  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline', 'cut']);
+  // AND TRIM (Movie, 5 Oct, "this is good for now"): it only moves a wall's
+  // end on to another wall, so it cannot break §1's foot and right angle.
+  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline', 'cut', 'trim']);
 
   // An unknown board is treated as DRAFTING -- the unrestricted one. The other
   // way round, an unknown board would silently strip sixteen tools off the

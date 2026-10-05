@@ -238,18 +238,94 @@ if (!window.DraftRender2D) {
 
     if (mode === 'fill') return;
 
+    // ── WHERE ANOTHER WALL MELDS INTO THIS ONE, ITS FACE LINE BREAKS ──────
+    //
+    // Movie, 5 Oct: "when the trim happens i'd like the walls to 'meld'
+    // together", and "2 interior wall that cross or meet at corner should
+    // meld". A partition teed into this wall leaves no line across its own
+    // mouth -- the face on ITS side stops at the partition's two faces -- and
+    // where two walls cross (a multi of four pieces, see geometry-2d's
+    // meldPieces) every line of this piece stops at the other wall's faces,
+    // so the crossing reads as one open junction.
+    //
+    // As distances along this piece from its START, per boundary offset.
+    const segDir = { x: dx / len, z: dz / len };
+    const gapsFor = across => {
+      const gaps = [];
+      [seg.start, seg.end].forEach(pt => {
+        if (!joins || !joins.has(pt)) return;
+        const join = joins.get(pt);
+        const atStart = pt === seg.start;
+        // Away from this vertex, along this piece.
+        const away = atStart ? segDir : { x: -segDir.x, z: -segDir.z };
+        let crossers = [];
+        if (join.type === 'tee' && join.host.some(entry => entry.seg === seg)) {
+          const stem = join.stem;
+          const out = { x: (stem.at === 'start' ? stem.seg.end.x - stem.seg.start.x : stem.seg.start.x - stem.seg.end.x),
+            z: (stem.at === 'start' ? stem.seg.end.z - stem.seg.start.z : stem.seg.start.z - stem.seg.end.z) };
+          const side = nx * out.x + nz * out.z;
+          // Only the face on the stem's own side opens.
+          const face = side >= 0 ? endOff : startOff;
+          if (Math.abs(across - face) > 1e-6) return;
+          crossers = [stem];
+        } else if (join.type === 'multi') {
+          crossers = join.entries.filter(entry => entry.seg !== seg && (() => {
+            const ox = entry.seg.end.x - entry.seg.start.x, oz = entry.seg.end.z - entry.seg.start.z;
+            return Math.abs(segDir.x * oz - segDir.z * ox) / (Math.hypot(ox, oz) || 1) > 0.01;
+          })());
+        } else {
+          return;
+        }
+        if (!crossers.length) return;
+        const origin = wp(pt, across);
+        let reach = 0;
+        crossers.forEach(entry => {
+          const o = entry.seg;
+          const odx = o.end.x - o.start.x, odz = o.end.z - o.start.z;
+          const oLen = Math.hypot(odx, odz);
+          if (oLen < 0.001) return;
+          const onx = -odz / oLen, onz = odx / oLen;
+          const m = wallMetrics(o);
+          [m.first, m.last].forEach(oAcross => {
+            const oOrigin = { x: pt.x + onx * oAcross, z: pt.z + onz * oAcross };
+            const ix = lineIntersection(origin, away.x, away.z, oOrigin, odx, odz);
+            if (!ix) return;
+            const d = (ix.x - origin.x) * away.x + (ix.z - origin.z) * away.z;
+            if (d > reach) reach = d;
+          });
+        });
+        if (reach <= 0) return;
+        gaps.push(atStart ? [-Infinity, reach] : [len - reach, Infinity]);
+      });
+      return gaps;
+    };
+    // One boundary line, end to end, less its gaps.
+    const strokeFace = across => {
+      const A = joinPoint(seg.start, across).point, B = joinPoint(seg.end, across).point;
+      const gaps = gapsFor(across);
+      const sOf = p => (p.x - seg.start.x) * segDir.x + (p.z - seg.start.z) * segDir.z;
+      const sA = sOf(A), sB = sOf(B);
+      let runs = [[sA, sB]];
+      gaps.forEach(([g0, g1]) => {
+        runs = runs.flatMap(([r0, r1]) => [[r0, Math.min(r1, g0)], [Math.max(r0, g1), r1]])
+          .filter(([r0, r1]) => r1 - r0 > 1e-4);
+      });
+      const at = sv => ({ x: A.x + (B.x - A.x) * (sv - sA) / ((sB - sA) || 1),
+        z: A.z + (B.z - A.z) * (sv - sA) / ((sB - sA) || 1) });
+      runs.forEach(([r0, r1]) => {
+        const a = toS(at(r0)), b = toS(at(r1));
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      });
+    };
+
     // Boundary lines (all layer edges + end caps)
     ctx.strokeStyle = preview ? wallEdgePrev : wallEdge;
     ctx.lineWidth   = preview ? 1 : 1.5;
     let bOff = startOff;
     wtDef.layers.forEach((layer, i) => {
       const bNext = bOff + layer.in / 12;
-      if (i === 0) {
-        const a = toS(joinPoint(seg.start, bOff).point), b = toS(joinPoint(seg.end, bOff).point);
-        ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
-      }
-      const a = toS(joinPoint(seg.start, bNext).point), b = toS(joinPoint(seg.end, bNext).point);
-      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+      if (i === 0) strokeFace(bOff);
+      strokeFace(bNext);
       bOff = bNext;
     });
     // End caps stop at a shared vertex. The mitered layer boundaries above
@@ -274,6 +350,8 @@ if (!window.DraftRender2D) {
       ctx.fillStyle = wallEdge;
       const DOT_R = 2.5;
       [seg.start, seg.end].forEach(pt => {
+        // A melded piece's cut is not a corner anybody drew (meldPieces).
+        if (seg.meldOf && pt !== seg.meldOf.start && pt !== seg.meldOf.end) return;
         const s = toS(pt);
         ctx.beginPath(); ctx.arc(s.x,s.y,DOT_R,0,Math.PI*2); ctx.fill();
       });

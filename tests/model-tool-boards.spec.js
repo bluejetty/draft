@@ -112,19 +112,20 @@ test('the roster answers per board, and every board can rest', async ({ page }) 
   // checks. Adding outline takes nothing from anybody, swapping them would.
   // AND CUT (Movie, 5 Oct, "could be on TOY i think"): a section draws
   // nothing into the house, it only adds a way to look at it.
-  expect(r.toy, 'TOY offers select, cut, wall and the outline gesture, and nothing else')
-    .toEqual(['select', 'cut', 'wall', 'outline']);
+  // AND TRIM (Movie, 5 Oct): it only moves a wall's end on to another wall.
+  expect(r.toy, 'TOY offers select, trim, cut, wall and the outline gesture, and nothing else')
+    .toEqual(['select', 'trim', 'cut', 'wall', 'outline']);
   expect(r.drafting).toBe(r.all);
   expect(r.unknown).toBe(r.all);
   expect(r.restsEverywhere).toBe(true);
   expect(r.unknownId).toBe(false);
 });
 
-test('on TOY the other sixteen keys are down, and on DRAFTING none are',
+test('on TOY the other fifteen keys are down, and on DRAFTING none are',
   async ({ page }) => {
     await open(page, base({ board: 'toy' }));
     const down = await downKeys(page);
-    expect(down).toHaveLength(16);
+    expect(down).toHaveLength(15);
     expect(down).not.toContain('select');
     expect(down).not.toContain('wall');
 
@@ -226,7 +227,7 @@ test('the load path constrains, even against a browser remembering DRAFTING',
     expect(await downKeys(page), 'the seed is DRAFTING').toEqual([]);
 
     await open(page, base({ board: 'toy' }));
-    expect(await downKeys(page)).toHaveLength(16);
+    expect(await downKeys(page)).toHaveLength(15);
   });
 
 test('a browser that has never chosen opens on TOY, with the keys down',
@@ -243,7 +244,7 @@ test('a browser that has never chosen opens on TOY, with the keys down',
     // something moves it by accident.
     await open(page, base({}));   // the file records no board either
     expect(await boardOf(page)).toBe('toy');
-    expect(await downKeys(page)).toHaveLength(16);
+    expect(await downKeys(page)).toHaveLength(15);
   });
 
 test('a board change leaves the panels that share the tool slot alone',
@@ -280,7 +281,7 @@ test('a board change leaves the panels that share the tool slot alone',
       'the selection panel survives a board change').toBeVisible();
     // The keys are still doing their job, so this is not passing by having
     // stopped constraining.
-    expect(await downKeys(page)).toHaveLength(16);
+    expect(await downKeys(page)).toHaveLength(15);
   });
 
 test('the selection filters do not operate in TOY, and do in DRAFTING',

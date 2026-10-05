@@ -354,12 +354,47 @@ test('NEW past the guard is the five-level blank, read in through the format',
       .toEqual(['2 2ND FL', '1 MAIN FL']);
   });
 
-test('a clean page does not ask at all', async ({ page }) => {
+// NEW CLEARS THE DRAWING, NOT JUST THE SCREEN. Movie, 5 Oct: "if i press NEW
+// - it brings up a blank page, but if i press 'F5' ... it brings back the
+// last plan i drew ... the old drawing should DISAPPEAR and not come back if
+// they didn't save it" -- and, asked, option (a): NEW stores the blank, after
+// offering to save a copy to the computer whenever there is anything to lose.
+test('a saved drawing with work in it still asks, since NEW empties the store too',
+  async ({ page }) => {
+    await openPage(page);
+    await page.locator('#file-new').click();
+    await expect(page.locator('#file-guard')).toBeVisible();
+    await expect(page.locator('[data-file-guard-text]')).toContainText('Save a copy to your computer');
+  });
+
+test('NEW past the guard stores the blank: a refresh brings back the blank, not the old plan',
+  async ({ page }) => {
+    await openPage(page);
+    expect(await wallTotal(page)).toBeGreaterThan(0);
+    await page.locator('#file-new').click();
+    await page.locator('[data-guard-discard]').click();
+    await expect(page.locator('#readout')).toContainText('walls 0/0');
+    await expect(page.locator('[data-model-save]')).toHaveText('SAVED', { timeout: 6000 });
+    await page.reload();
+    await expect(page.locator('#readout')).toContainText('walls 0/0', { timeout: 10000 });
+  });
+
+test('SAVE FIRST on NEW puts a copy on the computer before it clears', async ({ page }) => {
+  await openPage(page);
+  const download = page.waitForEvent('download', { timeout: 8000 });
+  await page.locator('#file-new').click();
+  await page.locator('[data-guard-save]').click();
+  expect((await download).suggestedFilename()).toMatch(/\.draft$/);
+  await expect(page.locator('#readout')).toContainText('walls 0/0', { timeout: 6000 });
+});
+
+test('an empty page does not ask at all', async ({ page }) => {
   await openPage(page);
   await page.locator('#file-new').click();
-  await expect(page.locator('#file-guard')).toBeHidden();
-  await page.waitForTimeout(300);
+  await page.locator('[data-guard-discard]').click();
   await expect(page.locator('#readout')).toContainText('walls 0/0');
+  await page.locator('#file-new').click();
+  await expect(page.locator('#file-guard')).toBeHidden();
 });
 
 test('SAVE FIRST that FAILS keeps the drawing and the guard', async ({ page }) => {
