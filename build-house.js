@@ -266,6 +266,14 @@ if (!window.DraftBuildHouse) {
       const bays = Math.ceil((b - a) / beamAtFt - 1e-9);
       for (let k = 1; k < bays; k++) cutStrips.push({ c: a + ((b - a) * k) / bays, strip: [a, b] });
     });
+    // A STAIR HOLE IS NOT THE WHOLE WIDTH. It cuts the joists over the
+    // opening and nowhere else, so beside it they still span the full short
+    // way. When every strip is narrow enough on its own, the house still
+    // needs its beam, and it goes mid-span of the larger strip, as before.
+    if (!cutStrips.length && strips.length) {
+      const [a, b] = strips.reduce((w, s) => (s[1] - s[0] > w[1] - w[0] ? s : w));
+      cutStrips.push({ c: (a + b) / 2, strip: [a, b] });
+    }
     cutStrips.sort((p, q) => p.c - q.c);
     const cuts = cutStrips.map(entry => entry.c);
     const alongCoord = pt => (axis === 'x' ? pt.x : pt.z);

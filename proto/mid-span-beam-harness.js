@@ -85,6 +85,10 @@ const MUTATIONS = [
       '      const mid = (Math.min(...points.map(crossCoord)) + Math.max(...points.map(crossCoord))) / 2;\n'
       + '      const host = spans.find(([a, b]) => a <= mid && mid <= b) || [0, 0];')],
 
+  // A stair that splits the floor into narrow strips does not take the beam.
+  ['a stair leaving only narrow strips drops the beam', 'build-house.js',
+    c => c.replace('    if (!cutStrips.length && strips.length) {', '    if (false) {')],
+
   // A row lying on a section's wall is a beam on the foundation.
   ['a row along an arm\'s own wall is kept as a beam', 'build-house.js',
     c => c.replace('      const host = spans.find(([a, b]) => a + 1e-6 < c && c < b - 1e-6) || [0, 0];',
@@ -283,6 +287,15 @@ const poly = list => list.map(([x, z]) => ({ x, z }));
   const plan = midSpanBeams(rect(40, 32), { holes: [{ min: -16, max: -8 }] });
   checkList('the beam re-lands mid-span of the larger remaining strip',
     zsOf(plan.beams.map(b => b.start)), [4]);
+}
+
+{
+  // 28 x 24 with the stair taking z -3..9: strips of 9 and 3, neither past
+  // 19 on its own. The joists beside the opening still span 24, so the
+  // beam stays -- mid-span of the larger strip (house-tour.spec.js:224).
+  const plan = midSpanBeams(rect(28, 24), { holes: [{ min: -3, max: 9 }] });
+  checkList('a stair leaving only narrow strips still keeps the beam, in the larger one',
+    zsOf(plan.beams.map(b => b.start)), [-7.5]);
 }
 
 // ── An end that bears on nothing gets a post ──────────────────────────────
