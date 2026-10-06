@@ -20220,6 +20220,7 @@
   };
 
 
+  let projectOrder = null;
   const boot = async () => {
     resize();
     // ── ANOTHER PAGE CAN ASK FOR A BLANK ONE, AND THE ASK IS SPENT FIRST ──
@@ -20245,6 +20246,13 @@
     // Same reasoning as `new=1` above: a refresh must not play it twice.
     // Taken out of `params` as well as the bar, since syncUrl writes the bar
     // FROM `params` and would otherwise put it straight back.
+    // ── AND AN ORDER FROM THE PROJECT PAGE, spent the same way ──
+    if (params.get('order')) {
+      projectOrder = { entryId: params.get('order'), round: params.get('round') };
+      params.delete('order');
+      params.delete('round');
+      syncUrl();
+    }
     const wantsReveal = params.get('reveal') === '1';
     if (wantsReveal) {
       params.delete('reveal');
@@ -20861,6 +20869,68 @@
       fireOrder();
     });
 
+  // ── AN ORDER FROM THE PROJECT PAGE ──────────────────────────────────────
+  //
+  // Movie, 6 Oct: "i'd like a user to be able to go into the PROJECT area on
+  // a NEW plan, and pick the type within that area (rather than on the
+  // popup) and once they select everything they want, they press the
+  // BONE/HOUSE it will build as they chose" ... "it should ask them - DRAW
+  // OUTLINE or NO OUTLINE?".
+  //
+  // PROJECT ASKS THE QUESTION AND THIS PAGE DOES THE WORK, through the same
+  // two presses the drive-thru offers -- "CLICK HERE to draw OUTLINE" and
+  // "PRESS TO DRAW HOUSE WITHOUT drawing OUTLINE" -- so the two doors cannot
+  // build differently. The ask arrives as ?order=<entry>&round=outline|menu.
+  //
+  // A FILE THAT ALREADY HOLDS A BUILDING asks to start fresh first (his
+  // answer: "ASK TO FRESH START"), save or discard as NEW does -- and the
+  // fresh file KEEPS THE PROJECT'S NUMBERS, because those are what he just
+  // set up on the PROJECT page and what "build as they chose" means.
+  //
+  // A DETACHED GARAGE WITH NO OUTLINE IS 24' x 24' (his answer).
+  const PROJECT_KEYS = ['projectInfo', 'zoneHeights', 'sectionTable', 'levelAssemblies',
+    'roofPitch', 'roofOverhang', 'roofHeelIn', 'activeWallType', 'foundationAttachment',
+    'foundationAttachmentIn', 'foundationLadderIn', 'buildType', 'garagePlan'];
+  const blankKeepingProject = from => {
+    const blank = {
+      version: window.DraftDrawingFormat.VERSION,
+      levels: BLANK_LEVELS.map(level => ({ ...level })),
+      activeLevelIdx: 3, nextLevelId: 9, nextDrawingItemId: 1, planTurn: 3,
+    };
+    PROJECT_KEYS.forEach(key => { if (from && from[key] != null) blank[key] = from[key]; });
+    return new File([JSON.stringify(blank)], 'new-drawing.json', { type: 'application/json' });
+  };
+  const PROJECT_GARAGE_FT = 24;
+  const runProjectOrder = ({ entryId, round: wanted } = {}) => {
+    if (!drawing || !entryId) return;
+    const entry = BM.entryById(entryId);
+    if (!entry) return;
+    pressEntry(entryId);
+    if (entry.needsSize) {
+      chosenSizeId = 'custom';
+      sizeWidth.value = String(PROJECT_GARAGE_FT);
+      sizeDepth.value = String(PROJECT_GARAGE_FT);
+      syncBuildBar();
+    }
+    const go = () => {
+      if (wanted === 'outline') {
+        round = 'outline';
+        setSign(false);
+        const picked = chosen();
+        outlineHandlers.forEach(fn => fn(picked));
+      } else {
+        orderAtWindow();
+      }
+    };
+    if (!window.DraftBuildingBodies.hasBuilding(drawing)) { go(); return; }
+    askToSave('This plan already has a building. Save it, then start a new plan with your PROJECT settings?',
+      async () => {
+        if (!(await adoptAndShow(blankKeepingProject(drawing)))) return;
+        stampBuildType();
+        go();
+      });
+  };
+
   if (fileInput) {
     fileInput.addEventListener('change', async event => {
       const file = event.target.files && event.target.files[0];
@@ -21199,7 +21269,11 @@
     });
   }
 
-  boot();
+  boot().then(() => {
+    const order = projectOrder;
+    projectOrder = null;
+    if (order) runProjectOrder(order);
+  });
 })();
 </script>
 <!-- THE CLOCK MOVED INTO THE BAR (27 Sep). It was mounted from here, into

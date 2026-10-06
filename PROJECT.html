@@ -282,6 +282,12 @@
     .stack-card.view-only .card-body { opacity:.55; }
     .view-only-note { display:none; margin:0; padding:6px 10px; border-bottom:1px solid var(--edge-panel); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--accent-mark); }
     .stack-card.view-only .view-only-note { display:block; }
+    .build-ask-card { min-width:280px; max-width:calc(100vw - 32px); padding:16px; border:1px solid var(--accent); background:var(--surface-panel); box-shadow:0 0 12px 2px var(--accent); }
+    .build-ask-title { margin:0 0 12px; font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--ink-primary); }
+    .build-ask-row { display:flex; gap:8px; }
+    .build-ask button { flex:1; padding:8px 10px; border:1px solid var(--edge-panel); background:var(--surface-panel); color:var(--ink-primary); font-family:'Barlow Condensed',system-ui,sans-serif; font-weight:600; letter-spacing:.07em; text-transform:uppercase; cursor:pointer; }
+    .build-ask button:hover, .build-ask button:focus-visible { border-color:var(--accent); }
+    .build-ask .build-ask-cancel { display:block; width:100%; margin-top:8px; color:var(--ink-secondary); }
     /* The stage's one visible section must not inherit stack-card's top
        margin, or the big drawing sits lower than the column beside it. */
     .type-stage > .stack-card { margin-top:0; }
@@ -804,6 +810,16 @@
 
 
     <div id="status" role="status"></div>
+    <div id="project-build-ask" class="build-ask" role="dialog" aria-modal="true" aria-labelledby="build-ask-title" hidden>
+      <div class="build-ask-card">
+        <p id="build-ask-title" class="build-ask-title">Build <span data-build-ask-name></span></p>
+        <div class="build-ask-row">
+          <button type="button" data-build-ask="outline">Draw outline</button>
+          <button type="button" data-build-ask="menu">No outline</button>
+        </div>
+        <button type="button" class="build-ask-cancel" data-build-ask="cancel">Cancel</button>
+      </div>
+    </div>
   </main>
   <!-- THE BOTTOM BAR. page:'project' is what marks PROJECT as "you are here"
        -- the chip becomes a span instead of a link, off the one PAGES table
@@ -1264,8 +1280,8 @@
       // since the tab opened and stop showing the stale one.
       let refreshMethodRow = null;
       const save = note => {
-        if (readOnly) return;
-        saveQueue = saveQueue.catch(() => {})
+        if (readOnly) return Promise.resolve();
+        return saveQueue = saveQueue.catch(() => {})
           .then(() => writeProjectToStore())
           .then(() => { refreshMethodRow?.(); })
           .then(() => showStatus(note || 'Saved with the drawing.'))
@@ -3406,7 +3422,10 @@
             button.dataset.familyEntry = entry.id;
             button.disabled = readOnly;
             button.addEventListener('click', () => {
-              if (readOnly || detachedFoundation() === entry.foundation) return;
+              // THE STORED CHOICE, NOT THE DEFAULTED ONE: on a fresh plan the
+              // thickened edge is only the default, and pressing it is how the
+              // DETACHED GARAGE becomes the project (Movie, 6 Oct).
+              if (readOnly || sectionTable.rows.detachedGarage?.garageFoundation === entry.foundation) return;
               save(setDetachedFoundation(entry.foundation));
               repaint();
             });
@@ -4690,7 +4709,10 @@
       const homeType = () => {
         if (CARD_FOR_TYPE[buildType]) return CARD_FOR_TYPE[buildType];
         const detached = (drawing?.outlines || []).some(outline => outline?.detached === true);
-        return detached ? 'detached' : null;
+        if (detached) return 'detached';
+        // A FRESH PLAN PICKS ON THE PAGE NOW (Movie, 6 Oct), so a foundation
+        // pressed on the DETACHED GARAGE card makes that card the project's.
+        return sectionTable?.rows?.detachedGarage?.garageFoundation != null ? 'detached' : null;
       };
       const familyCols = {
         detached: document.querySelector('#detached-family-row'),
@@ -4982,23 +5004,60 @@
         barSave.addEventListener('click', () => save('Project saved.'));
       }
 
-      // THE BONE. The bar owns the button; this page owns the verb -- and the
-      // verb is NOT BUILT YET, so it says so rather than doing nothing.
-      // Movie: "if they CHOOSE one and then adjust the info in it, and then
-      // press the BONE/HOUSE that house with those characteristics should be
-      // built." That needs premade designs for the bilevels, which
-      // premade-plans.js does not have: planFor() covers the five bungalow
-      // and two-storey entries and neither bilevel. Until it does, a press
-      // that silently built the wrong house would be worse than one that
-      // explains itself.
+      // THE BONE BUILDS WHAT THIS PAGE CHOSE (Movie, 6 Oct): "pick the type
+      // within that area (rather than on the popup) and once they select
+      // everything they want, they press the BONE/HOUSE it will build as they
+      // chose" ... "it should ask them - DRAW OUTLINE or NO OUTLINE?".
+      //
+      // THE ORDER IS THE GLOWING CARD'S LIT BUTTON -- the entry, not just the
+      // family -- and it goes to MODEL as ?order=&round=, where the drive-thru's
+      // own two presses do the building. The page SAVES FIRST, so the numbers
+      // set here are in the file MODEL opens.
       const bone = document.getElementById('bone');
+      const buildAsk = document.querySelector('#project-build-ask');
+      const chosenEntry = () => {
+        const home = homeType();
+        const col = home ? familyCols[home] : null;
+        const lit = col?.querySelector('.family-button[aria-pressed="true"]');
+        return lit ? window.DraftBuildMenu.entryById(lit.dataset.familyEntry) : null;
+      };
+      const closeAsk = () => { if (buildAsk) buildAsk.hidden = true; };
+      const sendOrder = round => {
+        const entry = chosenEntry();
+        if (!entry) return;
+        closeAsk();
+        Promise.resolve(save('Sending the project to MODEL to build.')).then(() => {
+          const url = new URL('./MODEL.html', location.href);
+          url.searchParams.set('order', entry.id);
+          url.searchParams.set('round', round);
+          location.href = url.pathname + url.search;
+        });
+      };
+      if (buildAsk) {
+        buildAsk.querySelector('[data-build-ask="outline"]').addEventListener('click', () => sendOrder('outline'));
+        buildAsk.querySelector('[data-build-ask="menu"]').addEventListener('click', () => sendOrder('menu'));
+        buildAsk.querySelector('[data-build-ask="cancel"]').addEventListener('click', closeAsk);
+        document.addEventListener('keydown', event => {
+          if (event.key === 'Escape' && !buildAsk.hidden) closeAsk();
+        });
+      }
       if (bone) {
         bone.addEventListener('click', () => {
-          const el = document.querySelector('#status');
-          if (el) el.textContent = buildType
-            ? 'Building from the project page is coming — the premade designs '
-              + 'do not cover the bilevels yet.'
-            : 'Choose a type first, then the bone builds it.';
+          const entry = chosenEntry();
+          if (!entry || readOnly) {
+            const el = document.querySelector('#status');
+            if (el) el.textContent = readOnly
+              ? 'This page cannot reach the drawing store, so it cannot build.'
+              : 'Pick a type on a card first, then the bone builds it.';
+            return;
+          }
+          const family = window.DraftBuildMenu.BUILD_MENU
+            .find(item => (item.entries || []).includes(entry));
+          const name = entry.foundation
+            ? `${family?.label || 'DETACHED GARAGE'} · ${entry.label} · 24' x 24'` : entry.label;
+          buildAsk.querySelector('[data-build-ask-name]').textContent = name;
+          buildAsk.hidden = false;
+          buildAsk.querySelector('[data-build-ask="outline"]').focus();
         });
       }
     })();
