@@ -951,10 +951,20 @@
      board's "break the bone here, or move this wall?", a different bone
      entirely: reusing its id because both are about a bone and both offer
      two answers is exactly the collision DEFINITIONS.md exists to stop. */
-  #bone-choice, #build-choice { position:fixed; inset:0; z-index:7; display:flex;
+  #bone-choice, #build-choice, #garage-lesson { position:fixed; inset:0; z-index:7; display:flex;
     align-items:center; justify-content:center; padding:24px;
     background:rgba(0,0,0,0.35); }
-  #bone-choice[hidden], #build-choice[hidden] { display:none; }
+  #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden] { display:none; }
+  /* PROFESSOR GRUFF'S GARAGE LESSON, the old page's card (MODEL.dc.html
+     garageCallout) in this page's shell: who is talking, the rule, and the
+     right-vs-wrong sketch. */
+  .gruff-head { display:flex; gap:12px; align-items:flex-start; }
+  .gruff-head svg { flex-shrink:0; }
+  .gruff-name { font-family: var(--font-ui); font-size:13px; font-weight:700;
+    letter-spacing:0.08em; text-transform:uppercase; color: var(--ink-primary); }
+  .gruff-sketches { display:flex; gap:14px; justify-content:center; margin:4px 0 12px; }
+  .gruff-off { display:flex; align-items:center; gap:6px; margin-top:10px;
+    font-family: var(--font-ui); font-size:11px; color: var(--ink-quiet); cursor:pointer; }
   /* The queued house, named on its own line above the two answers -- Movie,
      19 Sep: "(and should show what type of house they are currently going to
      build - (1 storey bungalow, 2 storey over garage, Modified Bilevel
@@ -1322,6 +1332,58 @@
       <button type="button" data-build-choice-change>Change it</button>
       <button type="button" data-build-choice-build>Build it</button>
     </div>
+  </div>
+</div>
+
+<!-- THE GARAGE STEP SAYS HOW IT CONNECTS (Movie, 6 Oct: "check the
+     model.dc.html. it worked good in there (the garage outline )"). The old
+     page's Professor Gruff card, shown when a traced house closes and its
+     type hangs a garage on it: start ON the house, three legs out, around
+     and back, land ON the house. -->
+<div id="garage-lesson" data-garage-lesson hidden role="dialog" aria-label="Draw the garage">
+  <div class="promote-card">
+    <div class="gruff-head">
+      <svg width="48" height="48" viewBox="0 0 44 44" fill="none" aria-hidden="true">
+        <path d="M22 5 L37 11.5 L22 18 L7 11.5 Z" fill="#1d1f20"></path>
+        <path d="M34 13 V19" stroke="#1d1f20" stroke-width="1.4"></path>
+        <circle cx="34" cy="20.5" r="1.6" fill="#c0392b"></circle>
+        <path d="M12 18 Q8.5 26 12 32 Q15.5 29.5 15.5 22 Z" fill="#8a5a33"></path>
+        <path d="M32 18 Q35.5 26 32 32 Q28.5 29.5 28.5 22 Z" fill="#8a5a33"></path>
+        <circle cx="22" cy="28" r="10" fill="#c89158"></circle>
+        <ellipse cx="22" cy="32" rx="5.5" ry="4.2" fill="#f0d9b8"></ellipse>
+        <circle cx="22" cy="30.5" r="1.8" fill="#1d1f20"></circle>
+        <path d="M22 32.5 V34.5 M22 34.5 Q20 36 18.6 34.8 M22 34.5 Q24 36 25.4 34.8" stroke="#1d1f20" stroke-width="1.1" fill="none"></path>
+        <circle cx="18.5" cy="26" r="2.4" stroke="#1d1f20" stroke-width="1" fill="#fff"></circle>
+        <circle cx="25.5" cy="26" r="2.4" stroke="#1d1f20" stroke-width="1" fill="#fff"></circle>
+        <path d="M20.9 26 H23.1" stroke="#1d1f20" stroke-width="1"></path>
+        <circle cx="18.5" cy="26" r="1" fill="#1d1f20"></circle>
+        <circle cx="25.5" cy="26" r="1" fill="#1d1f20"></circle>
+      </svg>
+      <div>
+        <div class="gruff-name">Professor Gruff</div>
+        <p>An attached garage <b>hangs off the house</b>: click your first corner <b>ON the house outline</b>, draw the three legs out, around, and back, and land the last corner <b>ON the house</b> too. It closes itself along the house wall.</p>
+      </div>
+    </div>
+    <div class="gruff-sketches">
+      <svg width="120" height="72" viewBox="0 0 120 72" aria-hidden="true">
+        <rect x="8" y="14" width="58" height="44" fill="none" stroke="#c0392b" stroke-width="2"></rect>
+        <path d="M66 22 H104 V50 H66" fill="none" stroke="#7a4a21" stroke-width="2"></path>
+        <circle cx="66" cy="22" r="3.4" fill="#2e7d32"></circle>
+        <circle cx="66" cy="50" r="3.4" fill="#2e7d32"></circle>
+        <path d="M50 62 l4 5 7 -9" stroke="#2e7d32" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>
+      </svg>
+      <svg width="120" height="72" viewBox="0 0 120 72" aria-hidden="true">
+        <rect x="8" y="14" width="58" height="44" fill="none" stroke="#c0392b" stroke-width="2"></rect>
+        <path d="M74 20 H108 V48 H74" fill="none" stroke="#7a4a21" stroke-width="2"></path>
+        <circle cx="74" cy="20" r="3.4" fill="none" stroke="#c0392b" stroke-width="1.6"></circle>
+        <circle cx="74" cy="48" r="3.4" fill="none" stroke="#c0392b" stroke-width="1.6"></circle>
+        <path d="M50 58 l10 10 M60 58 l-10 10" stroke="#c0392b" stroke-width="2.4" stroke-linecap="round"></path>
+      </svg>
+    </div>
+    <div class="promote-row">
+      <button type="button" data-garage-lesson-go>GOT IT — DRAW THE GARAGE (ENTER)</button>
+    </div>
+    <label class="gruff-off"><input type="checkbox" data-garage-lesson-off> Don't show this again</label>
   </div>
 </div>
 
@@ -6145,6 +6207,44 @@
       ? `${picked.family?.label || 'DETACHED GARAGE'} \u00b7 ${picked.entry.label}`
       : picked.entry.label;
   };
+  // ── PROFESSOR GRUFF'S GARAGE LESSON ────────────────────────────────────
+  // The old page's own setting, in the same place (settings package,
+  // model.garageIntroOff), so "Don't show this again" ticked on either page
+  // holds on both.
+  const garageLesson = document.getElementById('garage-lesson');
+  const garageIntroOff = () => window.DraftProfileManager
+    ?.getActive('settings')?.content?.model?.garageIntroOff === true;
+  const openGarageLesson = () => {
+    if (!garageLesson || garageIntroOff()) return;
+    garageLesson.querySelector('[data-garage-lesson-off]').checked = false;
+    garageLesson.hidden = false;
+    // ON THE NEXT TICK: the press that closed the house is still landing,
+    // and its mousedown hands focus to the plan after this runs.
+    setTimeout(() => garageLesson.querySelector('[data-garage-lesson-go]').focus(), 0);
+  };
+  const closeGarageLesson = () => {
+    if (!garageLesson || garageLesson.hidden) return;
+    garageLesson.hidden = true;
+    const PM = window.DraftProfileManager;
+    if (PM && garageLesson.querySelector('[data-garage-lesson-off]').checked) {
+      const was = PM.getActive('settings');
+      PM.saveActive(PM.createPackage('settings', was?.name, { model: { garageIntroOff: true } }));
+    }
+    canvas.focus?.();
+  };
+  if (garageLesson) {
+    garageLesson.querySelector('[data-garage-lesson-go]').addEventListener('click', closeGarageLesson);
+    // ENTER, AS HIS BUTTON SAYS, wherever the focus happens to be -- and
+    // Escape the same -- taken before the page's own keys see it.
+    window.addEventListener('keydown', event => {
+      if (garageLesson.hidden || (event.key !== 'Escape' && event.key !== 'Enter')) return;
+      if (event.key === 'Enter' && event.target?.matches?.('[data-garage-lesson-off]')) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeGarageLesson();
+    }, true);
+  }
+
   const closeBuildChoice = () => { buildChoice.hidden = true; };
   const openBuildChoice = () => {
     buildChoice.querySelector('[data-build-choice-house]').textContent =
@@ -6176,7 +6276,7 @@
       // trace with no loop drawn, and that press is still the premade order.
       if (tracedOrder && traceStillThere(tracedHouse) && !tracedGarage
           && window.DraftTracedPlans?.needsGarage(tracedOrder.entry?.id)) {
-        sayOnStrip(`Trace the garage first — press each corner, then the first corner again to close.${
+        sayOnStrip(`Draw the garage first — start ON the house, three legs out, around and back, and land ON the house.${
           tracedBuildsOnClose ? ' Your house goes up as soon as it closes.' : ''}`);
         return;
       }
@@ -9630,7 +9730,7 @@
   // z-index 7 and asks a question that has to be answered first; the foot
   // strip sits at 6, under all of them. The drive-thru sign is not built and
   // will be the fifth entry in this list rather than a new mechanism.
-  const MODAL_IDS = ['promote', 'bone-choice', 'build-choice', 'file-guard', 'save-as'];
+  const MODAL_IDS = ['promote', 'bone-choice', 'build-choice', 'file-guard', 'save-as', 'garage-lesson'];
   const modalUp = () => MODAL_IDS.some(id => {
     const node = document.getElementById(id);
     return !!node && !node.hidden;
@@ -10522,11 +10622,89 @@
   // the whole loop sits on whole feet from where it started and the last
   // edge can come home square.
   const outlineTail = () => outlineCorners[outlineCorners.length - 1] || null;
+  // ── THE ATTACHED GARAGE'S OPEN RUN (MODEL.dc.html's, Movie 6 Oct) ─────
+  // A traced house's garage can be drawn the old page's way: first corner ON
+  // the house, three legs (or more) out, around and back, last corner ON the
+  // house -- and it closes itself along the house wall. A closed loop still
+  // works as it always did.
+  const GARAGE_RUN_LINE = 'Now draw the garage: start ON the house, three legs out, around and back, '
+    + 'and land the last corner ON the house — it closes itself.';
+  const garageRunHouse = () => (activeTool === 'outline' && outlineGarage && tracedOrder
+    && traceStillThere(tracedHouse) ? tracedHouse.points.map(p => ({ x: Number(p.x), z: Number(p.z) })) : null);
+  const ringEdges = loop => loop.map((a, i) => ({ i, a, b: loop[(i + 1) % loop.length] }));
+  const nearestOnSegment = (p, a, b) => {
+    const dx = b.x - a.x, dz = b.z - a.z;
+    const len2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2));
+    const q = { x: a.x + t * dx, z: a.z + t * dz };
+    return { q, t, d: Math.hypot(p.x - q.x, p.z - q.z) };
+  };
+  // Which house edge a point lies on, or -1.
+  const houseEdgeAt = (house, p) => {
+    const hit = ringEdges(house).find(e => nearestOnSegment(p, e.a, e.b).d < 1e-6);
+    return hit ? hit.i : -1;
+  };
+  // The first corner lands ON the house wall when pressed near it, a whole
+  // number of feet along that wall.
+  const snapOntoHouse = (house, at) => {
+    const best = ringEdges(house).map(e => ({ e, ...nearestOnSegment(at, e.a, e.b) }))
+      .sort((p, q) => p.d - q.d)[0];
+    if (!best || best.d > OUTLINE_CLOSE_FT) return null;
+    const { a, b } = best.e;
+    const len = Math.hypot(b.x - a.x, b.z - a.z);
+    const along = Math.max(0, Math.min(len, Math.round(best.t * len)));
+    return { x: a.x + (b.x - a.x) * along / len, z: a.z + (b.z - a.z) * along / len };
+  };
+  // The last leg is brought onto the house wall when it is pressed near it:
+  // along its own line to where that line meets the house.
+  const legOntoHouse = (house, from, pt) => {
+    const dx = Math.sign(pt.x - from.x), dz = Math.sign(pt.z - from.z);
+    if (!dx && !dz) return null;
+    let best = null;
+    ringEdges(house).forEach(({ a, b }) => {
+      // Axis-aligned leg against any edge: solve from + s*(dx,dz) on a..b.
+      const ex = b.x - a.x, ez = b.z - a.z;
+      const den = dx * ez - dz * ex;
+      if (Math.abs(den) < 1e-9) return;
+      const s = ((a.x - from.x) * ez - (a.z - from.z) * ex) / den;
+      const u = ((a.x - from.x) * dz - (a.z - from.z) * dx) / den;
+      if (s <= 1e-6 || u < -1e-6 || u > 1 + 1e-6) return;
+      const q = { x: from.x + dx * s, z: from.z + dz * s };
+      const off = Math.hypot(q.x - pt.x, q.z - pt.z);
+      if (off <= OUTLINE_CLOSE_FT && (!best || off < best.off)) best = { q, off };
+    });
+    return best ? best.q : null;
+  };
+  // Home along the house wall from `end` to `start`, the shorter way round.
+  const alongHouse = (house, end, start) => {
+    const ei = houseEdgeAt(house, end), si = houseEdgeAt(house, start);
+    if (ei < 0 || si < 0) return null;
+    const n = house.length;
+    const walk = step => {
+      const out = [];
+      let i = ei;
+      for (let guard = 0; guard < n && i !== si; guard += 1) {
+        i = (i + step + n) % n;
+        // Forward visits each edge's END corner; backward each edge's START.
+        out.push(step > 0 ? house[i] : house[(i + 1) % n]);
+      }
+      return out;
+    };
+    const length = pts => [end, ...pts, start].reduce((sum, p, k, all) =>
+      (k ? sum + Math.hypot(p.x - all[k - 1].x, p.z - all[k - 1].z) : 0), 0);
+    if (ei === si) return [];
+    const fwd = walk(1), back = walk(-1);
+    return length(fwd) <= length(back) ? fwd : back;
+  };
+
   const outlinePoint = at => {
     const from = outlineTail();
     if (!from) {
       const corner = cornerSnap(at, []);
-      return corner ? { x: corner.x, z: corner.z } : { x: at.x, z: at.z };
+      if (corner) return { x: corner.x, z: corner.z };
+      const house = garageRunHouse();
+      const onHouse = house && snapOntoHouse(house, at);
+      return onHouse || { x: at.x, z: at.z };
     }
     // An outline is square, so its lock is the nearest quarter turn.
     const square = lockedPoint(from, at, { axis: true })
@@ -10549,6 +10727,26 @@
     // THREE CORNERS BEFORE CLOSING IS LEGAL, because two enclose no floor --
     // the same floor the old page's own guard is about. Below three, a press
     // near the first corner is a drafter placing a corner there, not closing.
+    // THE OPEN RUN ENDS ON THE HOUSE: three legs at least, first corner on
+    // the house wall, and this one landing on it (or pressed near enough to
+    // be brought onto it along its own leg).
+    const house = garageRunHouse();
+    if (house && outlineCorners.length >= 3 && houseEdgeAt(house, outlineCorners[0]) >= 0) {
+      const landed = houseEdgeAt(house, pt) >= 0 ? pt
+        : (raw && legOntoHouse(house, outlineTail(), pt));
+      const home = landed && !sameCorner(landed, outlineCorners[0])
+        && alongHouse(house, landed, outlineCorners[0]);
+      if (home) {
+        const run = outlineCorners;
+        outlineCorners = [...run, landed, ...home]
+          .filter((p, i, all) => !i || !sameCorner(p, all[i - 1]));
+        if (sameCorner(outlineCorners[outlineCorners.length - 1], outlineCorners[0])) outlineCorners.pop();
+        // A REFUSED LOOP GIVES HIM BACK HIS RUN, not the house corners it
+        // borrowed, so the next press carries on from his last corner.
+        if (!commitOutline()) outlineCorners = run;
+        return;
+      }
+    }
     if (outlineCorners.length >= 3) {
       const first = outlineCorners[0];
       const onFirst = sameCorner(pt, first);
@@ -10625,7 +10823,8 @@
         setTool('outline');
         outlineFamily = tracedOrder.family ?? null;
         outlineGarage = true;
-        sayOnStrip('Now trace the garage against the house — press each corner, then the first corner again to close.');
+        sayOnStrip(GARAGE_RUN_LINE);
+        openGarageLesson();
       } else {
         // THE LAST LOOP CLOSED, SO THE HOUSE GOES UP when the trace came off
         // the OUTLINE press (Movie, 3 Oct: "right away", no bone press).
