@@ -252,6 +252,38 @@ test('a span under 19 ft gets no beam, and the page says so rather than going qu
     expect((saved.beams || []).length, 'a house under 19 ft got a beam anyway').toBe(0);
   });
 
+// MOVIE, 6 OCT: "the beams are further than 19ft apart. for AUTOplacement
+// with 1-0 5/8" floor the max span of joists is 19ft so we will need to shift
+// the beams/columns and add at least 1 more row, maybe 2 are needed".
+//
+// HIS HOUSE, near enough: an L 81 ft across the top 26 and 47 ft down the
+// rest of 92. The old rule stopped at two rows and left 34 ft of joist.
+test('a wide L takes as many beam rows as it needs to keep every joist within 19 ft',
+  async ({ page }) => {
+    const L = [[0, 0], [81, 0], [81, 26], [47, 26], [47, 92], [0, 92]];
+    await open(page, empty({ outlines: [{
+      id: 'outline-l', levelId: 3, garage: false,
+      points: L.map(([x, z]) => ({ x, y: 0, z })),
+    }] }));
+    await armBeamTool(page);
+    await autoBeamButton(page).click();
+    await saveNow(page);
+    const beams = ((await savedFile(page)).beams || []).filter(beam => beam.auto === true);
+    expect(beams.length, 'no beam at all').toBeGreaterThan(0);
+    // Rows run along z here (92 > 81), so a joist is a stretch of x between
+    // two walls or beams, read across the house every half foot.
+    const rows = beams.map(beam => ({ x: beam.start.x,
+      z0: Math.min(beam.start.z, beam.end.z), z1: Math.max(beam.start.z, beam.end.z) }));
+    let worst = 0;
+    for (let z = 0.25; z < 92; z += 0.5) {
+      const right = z < 26 ? 81 : 47;
+      const stops = [0, right, ...rows.filter(row => row.z0 - 1e-6 <= z && z <= row.z1 + 1e-6
+        && row.x > 0 && row.x < right).map(row => row.x)].sort((a, b) => a - b);
+      for (let i = 0; i + 1 < stops.length; i++) worst = Math.max(worst, stops[i + 1] - stops[i]);
+    }
+    expect(worst, 'a joist still spans past 19 ft').toBeLessThanOrEqual(19 + 1e-6);
+  });
+
 test('re-running replaces its own structure and leaves a drafter’s alone',
   async ({ page }) => {
     // `auto: true` IS THE WHOLE DISCRIMINATOR, the same rule AUTO DIMS takes.
