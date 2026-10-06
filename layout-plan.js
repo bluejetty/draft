@@ -233,6 +233,56 @@ if (!window.DraftLayoutPlan) {
   // caller for that reason: the wall boundary stroke is centred on the face,
   // so an opening's gap has to reach a little past each face to interrupt it,
   // and "a little" is a couple of SCREEN pixels. The sheet owns its camera.
+  // ── THE ROOF PLAN SHEET ──────────────────────────────────────────────────
+  //
+  // Movie, 6 Oct: "yes lets do the roof plan sheet" -- the ROOF PLAN sheet was
+  // dealt by name and left blank, because this painter drew a level only
+  // through its walls and the roof level has none. It draws what the Model
+  // Space's roof plan draws (MODEL.html paintRoofs): every roof on the level,
+  // each stopped at the outside face of a storey whose own roof stands over
+  // it, and the tops of the exterior walls each roof stands on, thin and solid
+  // (geometry-2d roofBearing, render-2d drawWallTops2D). False when the level
+  // has no roofs either, so a caller still learns there was nothing to draw.
+  function drawRoofPlan(ctx, toS, saved, levelId) {
+    const geo = window.DraftGeometry2D;
+    const render = window.DraftRender2D;
+    if (!geo || !render) return false;
+    const of = key => (Array.isArray(saved?.[key]) ? saved[key] : []);
+    const roofs = of('roofs').filter(roof => roof?.levelId === levelId
+      && Array.isArray(roof.points) && roof.points.length >= 3);
+    if (!roofs.length) return false;
+    const openings = of('surfaceOpenings');
+    const roofEnv = {
+      isPrinting: true,
+      offsetOutline: (pts, dist) => geo.offsetOutline(pts, dist),
+      offsetOutlineVariable: (pts, dists) => geo.offsetOutlineVariable(pts, dists),
+      roofSkeleton: geo.roofSkeleton,
+      cutRoofSegment: geo.cutRoofSegment,
+      roofWelds: roof => geo.roofWeldSpans(roof, roofs),
+      surfaceOpeningsFor: (hostType, hostId) => openings.filter(opening =>
+        opening.hostType === hostType && opening.hostId === hostId
+        && Array.isArray(opening.points) && opening.points.length >= 3),
+    };
+    const bearing = new Map((geo.roofBearing ? geo.roofBearing({
+      roofs, walls: of('walls'), outlines: of('outlines'), levels: of('levels'),
+    }) : []).map(b => [b.roof, b]));
+    roofs.forEach(roof => {
+      const b = bearing.get(roof);
+      render.drawRoof2D(ctx, toS, roof, b && b.exclude.length ? { exclude: b.exclude } : {}, roofEnv);
+    });
+    const thicknessFt = wall => {
+      const type = WALL_TYPES.find(t => t.id === wall.wallType)
+        || WALL_TYPES.find(t => t.id === LEGACY_WALL_TYPES[wall.wallType])
+        || WALL_TYPES.find(t => t.id === 'stud_2x6');
+      return (type ? type.totalIn : 5.5) / 12;
+    };
+    if (render.drawWallTops2D) {
+      bearing.forEach(b => render.drawWallTops2D(ctx, toS, b.walls,
+        { thicknessFt, color: '#1d1f20' }, { wallFaceOffsets: geo.wallFaceOffsets }));
+    }
+    return true;
+  }
+
   function drawPlan(ctx, toS, saved, levelId, env = {}) {
     const composition = window.DraftPlanComposition;
     const geo = window.DraftGeometry2D;
@@ -240,7 +290,7 @@ if (!window.DraftLayoutPlan) {
 
     const view = env.view || null;
     const walls = planWalls(saved, levelId, view);
-    if (!walls.length) return false;
+    if (!walls.length) return drawRoofPlan(ctx, toS, saved, levelId);
 
     // THE BUILDING, OR THE CONSTRUCTION DOCUMENT. `env.shell` asks for the
     // first: walls, floors, roofs and the holes in them, and nothing that

@@ -118,9 +118,10 @@ test('the flag deals plans, the section, and E1-E4 onto sheets', async ({ page }
   // The flag survives the compose: the sheets stay the composer's.
   expect(layout.auto).toBe(true);
 
-  // Every plan with walls, the drawn section, and all four elevations.
+  // Every plan with walls, the roof plan, the drawn section, and all four
+  // elevations.
   const kinds = kind => layout.viewports.filter(viewport => viewport.kind === kind);
-  expect(kinds('plan').map(viewport => viewport.levelId).sort()).toEqual([1, 3]);
+  expect(kinds('plan').map(viewport => viewport.levelId).sort()).toEqual([1, 3, 7]);
   expect(kinds('section').map(viewport => viewport.cutId)).toEqual([1]);
   expect(kinds('elevation').map(viewport => viewport.elevId).sort())
     .toEqual(['E1', 'E2', 'E3', 'E4']);
@@ -166,6 +167,22 @@ test('the dealt sheets carry real ink: plan, section, and elevation pages', asyn
     await page.waitForTimeout(200);
     expect(await inkAround(page, viewport.xIn, viewport.yIn, 3.5)).toBeGreaterThan(50);
   }
+});
+
+// THE ROOF PLAN SHEET DRAWS (Movie, 6 Oct: "yes lets do the roof plan
+// sheet"). It was dealt by name and left blank: layout-plan.js drew a level
+// only through its walls, and the roof level has none. Its viewport is the
+// roof level, and it carries ink -- the roofs and the wall tops under them.
+test('the ROOF PLAN sheet carries the roof level, in ink', async ({ page }) => {
+  await openLayout(page, boneDrawing());
+  await waitForCompose(page);
+  const layout = await savedLayout(page);
+  const roof = layout.viewports.find(viewport => viewport.kind === 'plan' && viewport.levelId === 7);
+  expect(roof, 'a roof-level viewport').toBeTruthy();
+  expect(layout.sheets[roof.sheet - 1].title).toBe('ROOF PLAN');
+  await page.locator(`[data-layout-sheet="${roof.sheet}"]`).click();
+  await page.waitForTimeout(200);
+  expect(await inkAround(page, roof.xIn, roof.yIn, 3.5)).toBeGreaterThan(50);
 });
 
 test('a manual touch takes the sheets over, and a reload leaves them alone', async ({ page }) => {
@@ -231,13 +248,13 @@ test('BUILD HOUSE raises the flag, and LAYOUT answers it with the full set', asy
   expect((await h.savedDrawing(page)).layout.auto).toBe(true);
 
   // LAYOUT reads the flag and deals the set: plans for every built level,
-  // and the four standard elevations.
+  // the roof plan, and the four standard elevations.
   await page.goto('/LAYOUT.html');
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
   await waitForCompose(page);
   const layout = await savedLayout(page);
   const kinds = kind => layout.viewports.filter(viewport => viewport.kind === kind);
-  expect(kinds('plan').map(viewport => viewport.levelId).sort()).toEqual([1, 3, 5]);
+  expect(kinds('plan').map(viewport => viewport.levelId).sort()).toEqual([1, 3, 5, 7]);
   expect(kinds('elevation').map(viewport => viewport.elevId).sort())
     .toEqual(['E1', 'E2', 'E3', 'E4']);
 });
@@ -308,8 +325,11 @@ test("the set deals in Movie's order, under his names", async ({ page }) => {
   expect(fdn).toBe(9);
   expect(sect).toBe(10);
   expect(bsmt).toBe(11);
+  // THE ROOF PLAN carries the roof level (Movie, 6 Oct: "yes lets do the
+  // roof plan sheet").
+  expect(sheetOf(layout, v => v.kind === 'plan' && v.levelId === 7)).toBe(4);
   // The named sheets with no painter carry nothing.
-  [1, 4, 6, 8].forEach(sheet =>
+  [1, 6, 8].forEach(sheet =>
     expect(layout.viewports.some(v => v.sheet === sheet), `sheet ${sheet}`).toBe(false));
 });
 

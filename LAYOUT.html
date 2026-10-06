@@ -1308,7 +1308,10 @@ class Component extends PageLogic {
     for (let i = 0; i < Math.max(1, elevViews.length); i += 2) {
       deal('ELEVATIONS', elevViews.slice(i, i + 2));
     }
-    deal('ROOF PLAN');
+    // THE ROOF PLAN, wherever the drawing has a roof (Movie, 6 Oct): the roof
+    // level drawn by layout-plan.js's drawRoofPlan.
+    const roofed = (this._saved.roofs || []).some(roof => roof?.levelId === 7);
+    deal('ROOF PLAN', [roofed ? sized({ kind: 'plan', levelId: 7, view: null }) : null]);
     // Levels the drafter added sit above the stock storeys and read first,
     // top down, each under its own name.
     floorLevels.filter(level => level.id >= 9).forEach(level => {
