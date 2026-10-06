@@ -22,6 +22,12 @@
 //               is traced, straddling the garage line as the premade does;
 //               with no garage it is centred on the front wall.
 //   ROOM OVER   18 ft of the garage at the house end, as the premade.
+//               On a MOD BILEVEL the drafter moves its end wall (Movie,
+//               5-6 Oct): "dont get them to draw a line, just get them to
+//               move the line", in whole feet, 8 ft at least, as far as the
+//               garage front or 2 ft past it -- and "if it goes all the way
+//               or cantilevered the lower roof can be removed"; short of
+//               the front, a lower roof covers the open garage.
 //   OPENINGS    auto-windows.js's rules as they are: a front door on the
 //               front wall clear of the garage, windows dealt by the module,
 //               an overhead door and a man door on the garage.
@@ -37,6 +43,8 @@ if (!window.DraftTracedPlans) {
   const G = () => window.DraftGeometry2D;
 
   const ROOM_OVER_GARAGE_FT = 18;
+  const ROOM_OVER_MIN_FT = 8;
+  const ROOM_OVER_CANTILEVER_FT = 2;
   const FRONT_DOOR_WIDTH_FT = 3;
   const MAN_DOOR_WIDTH_FT = 2.5;
   // The premade bilevel's own frame: its landing spans x -10..2 on the front
@@ -284,10 +292,18 @@ if (!window.DraftTracedPlans) {
   };
 
   // ── THE ROOM OVER THE GARAGE ───────────────────────────────────────────
-  // 18 ft of a rectangular garage, from the wall it shares with the house.
-  // Returns { room, rest } -- rest null when the garage is no deeper -- or
-  // null when the garage is not a rectangle against the house.
-  const roomOverGarage = (garage, house) => {
+  // 18 ft of a rectangular garage, from the wall it shares with the house,
+  // or `depthFt` when the drafter has moved its end wall: whole feet, no
+  // shorter than 8 ft (or the garage, if shallower) and no further than 2 ft
+  // past the garage front. Returns { room, rest, ... } -- rest null when the
+  // room reaches the front or hangs past it -- or null when the garage is
+  // not a rectangle against the house. The shared wall (a, b), the way in
+  // and the garage's depth come back too, for the line the drafter drags.
+  const roomDepthRange = depth => ({
+    lo: Math.min(ROOM_OVER_MIN_FT, depth),
+    hi: depth + ROOM_OVER_CANTILEVER_FT,
+  });
+  const roomOverGarage = (garage, house, depthFt = null) => {
     const g = clean(garage);
     if (g.length !== 4) return null;
     const shared = edgesOf(g)
@@ -298,11 +314,15 @@ if (!window.DraftTracedPlans) {
     const { e } = shared;
     const inward = { x: -e.n.x, z: -e.n.z };
     const depth = edgesOf(g)[(e.index + 1) % 4].len;
-    const d = Math.min(ROOM_OVER_GARAGE_FT, depth);
+    const range = roomDepthRange(depth);
+    const asked = Number(depthFt);
+    const d = Number.isFinite(asked) && depthFt != null
+      ? Math.max(range.lo, Math.min(range.hi, Math.round(asked)))
+      : Math.min(ROOM_OVER_GARAGE_FT, depth);
     const off = (p, k) => pt(p.x + inward.x * k, p.z + inward.z * k);
     const room = [e.a, e.b, off(e.b, d), off(e.a, d)];
     const rest = depth - d > TOL ? [off(e.a, d), off(e.b, d), off(e.b, depth), off(e.a, depth)] : null;
-    return { room, rest };
+    return { room, rest, a: e.a, b: e.b, inward, depth, depthFt: d, range };
   };
   // Which edge of `loop` dies into `other` (the gable cut flush).
   const flushEdge = (loop, other) => {
@@ -382,7 +402,7 @@ if (!window.DraftTracedPlans) {
   // ── THE PLAN ───────────────────────────────────────────────────────────
   // { entryId, house, garage } -> a plan buildPremadePlan reads, or
   // { error } saying why not.
-  const planFromTrace = ({ entryId, house, garage = null } = {}) => {
+  const planFromTrace = ({ entryId, house, garage = null, roomDepthFt = null } = {}) => {
     const base = P().planFor(entryId);
     if (!base) return { error: 'NO_DESIGN' };
     const H = clean(house);
@@ -400,7 +420,7 @@ if (!window.DraftTracedPlans) {
       const c = carry(spot);
       const house2 = notch(H, spot);
       const entry = c.loop(base.entry);
-      const over = base.overGarage ? roomOverGarage(Graw, H) : null;
+      const over = base.overGarage ? roomOverGarage(Graw, H, roomDepthFt) : null;
       if (base.overGarage && !over) return { error: 'ROOM_NEEDS_RECTANGLE' };
       const garageLoop = Gr;
       const plan = {
@@ -467,7 +487,7 @@ if (!window.DraftTracedPlans) {
       return plan;
     }
     if (base.overGarage) {
-      const over = roomOverGarage(Graw, H);
+      const over = roomOverGarage(Graw, H, roomDepthFt);
       if (!over) return { error: 'ROOM_NEEDS_RECTANGLE' };
       plan.overGarage = splitAt(over.room, H);
       plan.overGarageOpenings = dealOn(plan.overGarage, { levelId: 2, skip: [H] });
@@ -502,7 +522,7 @@ if (!window.DraftTracedPlans) {
   };
 
   window.DraftTracedPlans = Object.freeze({
-    ROOM_OVER_GARAGE_FT,
+    ROOM_OVER_GARAGE_FT, ROOM_OVER_MIN_FT, ROOM_OVER_CANTILEVER_FT,
     clean, edgesOf, coveredSpans, splitAt, unionLoops, roomOverGarage,
     entrySpot, notch, needsGarage, planFromTrace, detachedFromTrace, flushEdge,
   });

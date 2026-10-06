@@ -4531,6 +4531,7 @@
           }
           ctx.restore();
         }
+        paintRoomPick();
         // THE RULER'S OWN LINE, dashed so it cannot be mistaken for geometry.
         // It is the only mark on this canvas that is not in the drawing and
         // never will be, and the dash is how a drafter knows that without
@@ -10417,6 +10418,9 @@
   let tracedHouse = null;
   let tracedGarage = null;
   let tracedMasters = [];
+  // WHERE THE ROOM OVER THE GARAGE ENDS, in feet from the house, once the
+  // drafter has moved its end wall; null is the design's own 18 ft.
+  let roomOverFt = null;
 
   const armOutline = (picked, { fromLink = false } = {}) => {
     // A DETACHED GARAGE PRESS IS NOT A HOUSE TRACE, and answering it with one
@@ -10478,6 +10482,7 @@
     tracedHouse = null;
     tracedGarage = null;
     tracedMasters = [];
+    roomOverFt = null;
     sayTraceThe(picked);
     paint();
   };
@@ -10629,6 +10634,16 @@
         // own refusal written over this.
         sayOnStrip(`Press the bone to build your ${isGarageChoice(tracedOrder) ? 'garage' : label}.`);
         buildAfterClose = tracedBuildsOnClose;
+        // A MOD BILEVEL STOPS HERE TO ASK WHERE ITS ROOM ENDS (Movie, 5 Oct):
+        // "the entry and balcony will be autodrawn, and then could be ask the
+        // user where they would like the 2nd floor over the garage to extend
+        // to". They are shown over his trace (paintRoomPick) and the room's
+        // end wall is a line he moves -- "dont get them to draw a line, just
+        // get them to move the line" -- so the house waits for the bone.
+        if (closingGarage && roomPick()) {
+          buildAfterClose = false;
+          sayOnStrip(ROOM_PICK_LINE);
+        }
       }
     }
     markDirty();
@@ -10754,6 +10769,95 @@
     });
     return restore;
   };
+  // ── THE ROOM OVER THE GARAGE, ITS END WALL MOVED BY HAND ───────────────
+  //
+  // Movie, 5-6 Oct, on a traced MOD BILEVEL: once the house and garage are
+  // traced, show the entry and the balcony and let him move "how far towards
+  // the front of the garage the wall goes (if it goes all the way to the
+  // front or cantilevers over the edge" -- whole feet, 8 ft at least, up to
+  // 2 ft past the front; at the front or past it the lower garage roof goes,
+  // and short of it a lower roof covers the open garage (traced-plans.js).
+  //
+  // IN THE BUILDER'S FRAME. planFromTrace reads +z as the front, and the
+  // build turns the drawing back to no turn before it reads the trace
+  // (builtFrontDown), so the preview does the same to the points and turns
+  // what it draws forward again.
+  const ROOM_PICK_LINE = 'Drag the orange line to where the room over the garage ends — '
+    + '8 ft at least, up to 2 ft past the garage front. Then press the bone to build.';
+  const planTurnNow = () => ((Number(drawing?.planTurn) || 0) % 4 + 4) % 4;
+  const toBuilderFrame = p => window.DraftPlanRotate.spin(p, (4 - planTurnNow()) % 4);
+  const fromBuilderFrame = p => window.DraftPlanRotate.spin(p, planTurnNow());
+  const roomPick = () => {
+    const TP = window.DraftTracedPlans;
+    const base = window.DraftPremadePlans?.planFor(tracedOrder?.entry?.id);
+    if (!TP || !window.DraftPlanRotate || !base?.entry || !base.overGarage) return null;
+    if (!traceStillThere(tracedHouse) || !traceStillThere(tracedGarage)) return null;
+    const house = tracedHouse.points.map(toBuilderFrame);
+    const garage = tracedGarage.points.map(toBuilderFrame);
+    const plan = TP.planFromTrace({ entryId: tracedOrder.entry.id, house, garage, roomDepthFt: roomOverFt });
+    const over = TP.roomOverGarage(garage, house, roomOverFt);
+    if (!over || plan.error) return null;
+    const off = k => [over.a, over.b].map(p => fromBuilderFrame({
+      x: p.x + over.inward.x * k, z: p.z + over.inward.z * k }));
+    return { plan, over, line: off(over.depthFt) };
+  };
+  const roomPickWords = over => (over.depthFt > over.depth
+    ? `room ${over.depthFt} ft — ${over.depthFt - over.depth} ft past the garage front, no lower roof`
+    : over.depthFt === over.depth
+      ? `room ${over.depthFt} ft — to the garage front, no lower roof`
+      : `room ${over.depthFt} ft — lower roof over the last ${over.depth - over.depthFt} ft of garage`);
+  let roomDrag = null;
+  const ROOM_GRAB_PX = 10;
+  const nearRoomLine = (pick, sx, sy) => {
+    const [a, b] = pick.line.map(toS);
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((sx - a.x) * dx + (sy - a.y) * dy) / len2));
+    return Math.hypot(sx - (a.x + t * dx), sy - (a.y + t * dy)) <= ROOM_GRAB_PX;
+  };
+  const paintRoomPick = () => {
+    const pick = roomPick();
+    if (!pick) return;
+    const loop = l => {
+      if (!l || l.length < 2) return;
+      ctx.beginPath();
+      l.map(fromBuilderFrame).map(toS).forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+    };
+    ctx.save();
+    ctx.strokeStyle = skin['draw-line'];
+    ctx.lineWidth = 1.25;
+    ctx.setLineDash([6, 4]);
+    // THE ENTRY AND THE BALCONY, drawn for him as he asked, and the room.
+    [pick.plan.entry, pick.plan.upperLanding].forEach(l => { loop(l); ctx.stroke(); });
+    loop(pick.over.room);
+    ctx.globalAlpha = 0.12;
+    ctx.fillStyle = skin['accent'];
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.stroke();
+    // THE LINE HE MOVES.
+    ctx.setLineDash([]);
+    ctx.strokeStyle = skin['accent'];
+    ctx.lineWidth = roomDrag ? 5 : 4;
+    const [a, b] = pick.line.map(toS);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.fillStyle = skin['accent'];
+    ctx.font = '12px "DM Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(`ROOM ${pick.over.depthFt}'`, (a.x + b.x) / 2, (a.y + b.y) / 2 - 6);
+    ctx.restore();
+  };
+  // EXPOSED FOR THE SPEC, which has to find the line to press on it.
+  window.ModelRoomPick = Object.freeze({
+    line: () => roomPick()?.line.map(p => ({ ...p })) || null,
+    depthFt: () => roomPick()?.over.depthFt ?? null,
+  });
+
   const buildTracedHouse = order => {
     const TP = window.DraftTracedPlans;
     if (!TP || !order?.entry) return null;
@@ -10770,6 +10874,7 @@
       entryId: order.entry.id,
       house: pts(tracedHouse),
       garage: traceStillThere(tracedGarage) ? pts(tracedGarage) : null,
+      roomDepthFt: roomOverFt,
     });
     if (plan.error) {
       sayOnStrip(TRACE_REFUSALS[plan.error] || 'This trace cannot be built as that type.');
@@ -10788,6 +10893,7 @@
       tracedHouse = null;
       tracedGarage = null;
       tracedMasters = [];
+      roomOverFt = null;
       window.ModelBuild.buildServed();
       // AND THE SAME SHOW A PREMADE PRESS GETS: the bones grow, then E1.
       presentBuild();
@@ -18369,6 +18475,45 @@
     return { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
   };
   const startPan = (x, y, extra = {}) => ({ sx: x, sy: y, cx: view.cx, cz: view.cz, moved: 0, ...extra });
+  // THE ROOM'S END WALL TAKES THE PRESS FIRST, while there is one to move.
+  // Registered before the tools' own listeners so a press on the line is
+  // never also a selection box or a pan.
+  canvas.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || activeCut() || modalUp()) return;
+    const pick = roomPick();
+    if (!pick) return;
+    const r = canvas.getBoundingClientRect();
+    if (!nearRoomLine(pick, e.clientX - r.left, e.clientY - r.top)) return;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    roomDrag = { pointerId: e.pointerId };
+    canvas.setPointerCapture(e.pointerId);
+    paint();
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!roomDrag || e.pointerId !== roomDrag.pointerId) return;
+    e.stopImmediatePropagation();
+    const pick = roomPick();
+    if (!pick) { roomDrag = null; return; }
+    const r = canvas.getBoundingClientRect();
+    const w = toBuilderFrame(toWorld(e.clientX - r.left, e.clientY - r.top));
+    const { a, inward, range } = pick.over;
+    const t = (w.x - a.x) * inward.x + (w.z - a.z) * inward.z;
+    const next = Math.max(range.lo, Math.min(range.hi, Math.round(t)));
+    if (next !== pick.over.depthFt) {
+      roomOverFt = next;
+      sayOnStrip(`${roomPickWords(roomPick().over)}. Press the bone to build.`);
+    }
+    paint();
+  });
+  const endRoomDrag = e => {
+    if (!roomDrag || e.pointerId !== roomDrag.pointerId) return;
+    e.stopImmediatePropagation();
+    roomDrag = null;
+    paint();
+  };
+  canvas.addEventListener('pointerup', endRoomDrag);
+  canvas.addEventListener('pointercancel', endRoomDrag);
   canvas.addEventListener('pointerdown', e => {
     if (e.pointerType === 'touch') {
       touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
