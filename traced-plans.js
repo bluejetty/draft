@@ -425,9 +425,9 @@ if (!window.DraftTracedPlans) {
       if (over) {
         const room = splitAt(over.room, H);
         plan.overGarage = room;
-        // SQUARE over the room and the upper landing, straight across the
-        // jog (premade-plans.js squareOver, Movie 4 Oct).
-        plan.overGarageRoof = P().squareOver(over.room, plan.upperLanding);
+        // SQUARE over the room, straight across its jog, and joined to the
+        // upper landing (premade-plans.js modifiedBilevel, Movie 4-5 Oct).
+        plan.overGarageRoof = P().joinLoops(P().squareOver(over.room), plan.upperLanding);
         plan.garageRoof = over.rest;
         plan.garageRoofHouseEnd = over.rest ? flushEdge(over.rest, over.room) : null;
         // THE DOOR IN OFF THE UPPER LANDING, on the room's house-side wall

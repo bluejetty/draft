@@ -1147,9 +1147,15 @@ if (!window.DraftPremadePlans) {
       overGarage: overGarageLoop(),
       overGarageOpenings: modifiedRoomOpenings(),
       // ITS OWN ROOF, on its own ceiling: the room stands half a storey over
-      // MAIN, so it cannot share the house's plate. Square over the room and
-      // the landing (squareOver).
-      overGarageRoof: squareOver(overGarageLoop(), upperLandingLoop()),
+      // MAIN, so it cannot share the house's plate. Square over the ROOM,
+      // straight across its 1 ft jog, and joined to the landing.
+      //
+      // NOT ONE SQUARE OVER BOTH any more. Movie, 5 Oct, moving the cavity
+      // wall that square put in line with the front of the stairs: "the
+      // 'roof cavity' only needs to line up with the 1ft jog not the front
+      // of the stairs", and the roof edge comes in with it; "the peice over
+      // the stairs should be fully back where it is now".
+      overGarageRoof: joinLoops(squareOver(overGarageLoop()), upperLandingLoop()),
       // AND THE GARAGE'S ROOF IS WHAT THE ROOM LEAVES -- the 2 STOREY's own
       // answer -- with the tie under the room's roof.
       garageRoof: garageRoofLoop({ overGarage: true }),

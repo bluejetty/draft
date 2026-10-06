@@ -234,8 +234,8 @@ test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight 
     // The room has its own roof, raised from OVER GARAGE.
     const roomRoof = d.roofs.find(r => Number(r.sourceLevelId) === 4);
     expect(roomRoof).toBeTruthy();
-    // Square over the room AND the upper landing (Movie, 4 Oct: "make it
-    // strait across"), and on 4 Oct again: "the roof needs to extend to the
+    // Square over the room, straight across its jog (Movie, 4 Oct: "make it
+    // strait across"), joined to the upper landing; and on 4 Oct again: "the roof needs to extend to the
     // END of the stairs" -- the third flight's bottom step on MAIN FL, at
     // z = 14 - its run -- in a strip the landing's width ("option 2"). So an
     // L, two feet of eave all round.
@@ -247,14 +247,15 @@ test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight 
     // from the bottom of the 2nd fl roof to the top of the main fl
     // ceiling"): on OVER GARAGE, from MAIN's ceiling (9'-1 1/8" less the
     // 6'-3" rise) to the room's plate, round every edge of the roof's wall
-    // line the room's own walls do not stand on -- the strip's end, its two
-    // sides, the square's back edge and its corner down to the room, framed
-    // straight so there is no jog.
+    // line the room's own walls do not stand on -- the strip's end and its
+    // two sides, and the cavity wall in line with the room's 1 ft jog
+    // (z 19), framed straight so there is no jog. Movie, 5 Oct: it "only
+    // needs to line up with the 1ft jog not the front of the stairs" (z 14).
     const hood = d.walls.filter(w => Number(w.levelId) === 4 && w.baseHeight > 1);
     const runs = hood.map(w => [w.start, w.end].map(p => [p.x, p.z]).sort().join(' ')).sort();
     expect(runs).toEqual([
-      [[-4, bottomZ], [-4, 20]], [[-4, bottomZ], [2, bottomZ]], [[2, bottomZ], [2, 14]],
-      [[2, 14], [20, 14]], [[20, 14], [20, 19]],
+      [[-4, bottomZ], [-4, 20]], [[-4, bottomZ], [2, bottomZ]], [[2, bottomZ], [2, 19]],
+      [[2, 19], [16, 19]],
     ].map(r => r.sort().join(' ')).sort());
     hood.forEach(w => {
       expect(w.baseHeight).toBeCloseTo(109.125 / 12 - third.riseFt, 3);
