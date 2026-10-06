@@ -204,12 +204,13 @@ if (!window.DraftBuildHouse) {
 
   // ── The tour's mid-span beam rule (board #230, answers confirmed) ──
   // Joists span the SHORT way, so a house whose short span exceeds beamAtFt
-  // gets ONE beam along the LONG axis at mid-span (two at third points past
-  // 2x — the engineer sorts anything wilder), clipped to the outline;
+  // gets beams along the LONG axis -- one at mid-span, and another evenly
+  // spaced row each time the span passes another beamAtFt, so no joist runs
+  // further than beamAtFt (Movie, 6 Oct) -- clipped to the outline;
   // columns split each run into spans no longer than maxSpanFt ("a beam is
   // one span between two supports"). holes are intervals along the short
-  // axis (a stair opening) the beam must respect: it lands mid-span of the
-  // LARGER remaining clear strip. Validated offline before wiring.
+  // axis (a stair opening) the beam must respect: each clear strip either side
+  // of one takes its own rows. Validated offline before wiring.
 
   // Clip an axis line (axis 'x' = the line RUNS along x at the given
   // cross-coordinate) to the polygon: even-odd pairing of edge crossings.
@@ -251,31 +252,44 @@ if (!window.DraftBuildHouse) {
         return out;
       });
     });
-    strips.sort((a, b) => (b[1] - b[0]) - (a[1] - a[0]));
-    const strip = strips[0];
-    const stripLen = strip[1] - strip[0];
-    const cuts = shortSpan > 2 * beamAtFt
-      ? [strip[0] + stripLen / 3, strip[0] + (2 * stripLen) / 3]
-      : [strip[0] + stripLen / 2];
-    // A run only carries a beam where the LOCAL joist span needs one: in an
-    // L, the mid-line can pass a foot from a narrow wing's back wall — that
-    // wing spans under the trigger on its own and gets no beam. For the
-    // rectilinear outlines houses are, the local span is piecewise-constant
-    // between vertex coordinates along the beam axis, so trim exactly there.
+    // ── AS MANY ROWS AS THE SPAN NEEDS (Movie, 6 Oct) ──
+    // "for AUTOplacement with 1-0 5/8" floor the max span of joists is 19ft
+    // so we will need to shift the beams/columns and add at least 1 more row,
+    // maybe 2". One beam, or two at third points past 2x, ran out at 57 ft
+    // and an 81 ft wide L came back with 27 ft joists. Each clear strip now
+    // takes the FEWEST evenly spaced rows that keep every gap within
+    // beamAtFt: ceil(len / beamAtFt) bays, one row between each pair.
+    // EVERY STRIP that is too wide, not only the larger one: a stair opening
+    // that leaves 22 ft on its short side is still a 22 ft floor.
+    const cutStrips = [];
+    strips.forEach(([a, b]) => {
+      const bays = Math.ceil((b - a) / beamAtFt - 1e-9);
+      for (let k = 1; k < bays; k++) cutStrips.push({ c: a + ((b - a) * k) / bays, strip: [a, b] });
+    });
+    cutStrips.sort((p, q) => p.c - q.c);
+    const cuts = cutStrips.map(entry => entry.c);
     const alongCoord = pt => (axis === 'x' ? pt.x : pt.z);
     const crossCoord = pt => (axis === 'x' ? pt.z : pt.x);
     const breaks = [...new Set(points.map(alongCoord))].sort((a, b) => a - b);
-    const stripMid = (strip[0] + strip[1]) / 2;
-    const localSpanAt = t => {
+    // THE SPAN THIS BEAM SITS IN, not the one through the middle of the
+    // house. With one beam the two were the same floor; with rows across an
+    // L, the row out in the wing would have been asked about the main body
+    // and dropped where the wing needs it.
+    //
+    // A ROW ON A SECTION'S OWN WALL carries nothing there: the foundation is
+    // already under it. A row snapped onto the line where a wing meets the
+    // body runs inside the body and along the wing's wall, and only the first
+    // half of that is a beam.
+    const localSpanAt = (t, c) => {
       const spans = clipLineToPolygon(points, axis === 'x' ? 'z' : 'x', t);
-      const host = spans.find(([a, b]) => a - 1e-9 <= stripMid && stripMid <= b + 1e-9) || [0, 0];
+      const host = spans.find(([a, b]) => a + 1e-6 < c && c < b - 1e-6) || [0, 0];
       return host[1] - host[0];
     };
-    const trimRun = ([r0, r1]) => {
+    const trimRun = c => ([r0, r1]) => {
       const edges = [r0, ...breaks.filter(b => b > r0 + 1e-9 && b < r1 - 1e-9), r1];
       const kept = [];
       for (let i = 0; i + 1 < edges.length; i++) {
-        if (localSpanAt((edges[i] + edges[i + 1]) / 2) > beamAtFt) {
+        if (localSpanAt((edges[i] + edges[i + 1]) / 2, c) > beamAtFt) {
           if (kept.length && Math.abs(kept[kept.length - 1][1] - edges[i]) < 1e-9) {
             kept[kept.length - 1][1] = edges[i + 1];
           } else kept.push([edges[i], edges[i + 1]]);
@@ -316,11 +330,14 @@ if (!window.DraftBuildHouse) {
     // re-entrant node breaks a tie, since that is where a point load actually
     // lands (board #244).
     const reentrantIndexes = new Set(reentrants.map(entry => entry.index));
-    const snapFor = c0 => {
+    //
+    // Two rows reaching for one corner need no rule of their own: the pair
+    // would leave a gap past beamAtFt, which the span check below refuses.
+    const snapFor = ({ c: c0, strip: own }) => {
       let best = null;
       points.forEach((pt, index) => {
         const cc = crossCoord(pt);
-        if (cc <= strip[0] + 1e-9 || cc >= strip[1] - 1e-9) return;
+        if (cc <= own[0] + 1e-9 || cc >= own[1] - 1e-9) return;
         const dist = Math.abs(cc - c0);
         if (dist > beamAtFt) return;
         const reentrant = reentrantIndexes.has(index);
@@ -338,26 +355,29 @@ if (!window.DraftBuildHouse) {
     // unsnapped baseline (a stair hole can leave the smaller strip over-span
     // today; the snap only has to introduce nothing new).
     const violations = cutList => {
-      const runsByCut = cutList.map(c => clipLineToPolygon(points, axis, c).flatMap(trimRun));
+      const runsByCut = cutList.map(c => clipLineToPolygon(points, axis, c).flatMap(trimRun(c)));
       const bad = new Set();
+      // EVERY SECTION OF EVERY PIECE, not the one through the middle: an L's
+      // wing is a floor of its own and its joists have the same limit.
       for (let i = 0; i + 1 < breaks.length; i++) {
         const m = (breaks[i] + breaks[i + 1]) / 2;
         const sections = clipLineToPolygon(points, axis === 'x' ? 'z' : 'x', m);
-        const host = sections.find(([a, b]) => a - 1e-9 <= stripMid && stripMid <= b + 1e-9);
-        if (!host || host[1] - host[0] <= beamAtFt + 1e-9) continue;
-        const stops = [host[0], host[1]];
-        cutList.forEach((c, k) => {
-          if (c <= host[0] + 1e-9 || c >= host[1] - 1e-9) return;
-          if (runsByCut[k].some(([r0, r1]) => r0 - 1e-9 <= m && m <= r1 + 1e-9)) stops.push(c);
+        sections.forEach((host, h) => {
+          if (host[1] - host[0] <= beamAtFt + 1e-9) return;
+          const stops = [host[0], host[1]];
+          cutList.forEach((c, k) => {
+            if (c <= host[0] + 1e-9 || c >= host[1] - 1e-9) return;
+            if (runsByCut[k].some(([r0, r1]) => r0 - 1e-9 <= m && m <= r1 + 1e-9)) stops.push(c);
+          });
+          stops.sort((a, b) => a - b);
+          for (let s = 0; s + 1 < stops.length; s++) {
+            if (stops[s + 1] - stops[s] > beamAtFt + 1e-9) { bad.add(`${i}:${h}`); break; }
+          }
         });
-        stops.sort((a, b) => a - b);
-        for (let s = 0; s + 1 < stops.length; s++) {
-          if (stops[s + 1] - stops[s] > beamAtFt + 1e-9) { bad.add(i); break; }
-        }
       }
       return bad;
     };
-    const snaps = cuts.map(c0 => ({ c0, snap: snapFor(c0) }));
+    const snaps = cutStrips.map(entry => ({ c0: entry.c, snap: snapFor(entry) }));
     let finalCuts = snaps.map(s => (s.snap ? s.snap.c : s.c0));
     if (snaps.some(s => s.snap && s.snap.dist > 1e-9)) {
       const baseViol = violations(cuts);
@@ -532,7 +552,7 @@ if (!window.DraftBuildHouse) {
     const beams = [];
     const columns = [];
     finalCuts.forEach(c => {
-      clipLineToPolygon(points, axis, c).flatMap(trimRun).forEach(([r0, r1]) => {
+      clipLineToPolygon(points, axis, c).flatMap(trimRun(c)).forEach(([r0, r1]) => {
         const at = t => (axis === 'x' ? { x: t, z: c } : { x: c, z: t });
         const withSrc = t => {
           const index = cornerIndexAt(t, c);
