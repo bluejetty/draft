@@ -350,18 +350,27 @@ if (!window.DraftTracedPlans) {
   // way: from the wall it shares with the house, as deep as asked, and the
   // rest is what lies beyond. The room is the garage clipped at that line;
   // hung past the far wall it is the garage with its far side carried out.
+  //
+  // A GARAGE WRAPPED ROUND A HOUSE CORNER (Movie, 6 Oct screenshot: down the
+  // house's side wall and across the end of its front) shares two walls, and
+  // part of it lies behind either one. The room is then measured from the
+  // wall that faces the street -- the house front, the way the premade
+  // MODIFIED BILEVEL's room runs from it toward the garage door -- and the
+  // part of the garage beside the house, behind that line, is room too.
+  // Only a garage that lies wholly behind the line it is measured from has
+  // nothing to measure, and is refused.
   const roomOverShapedGarage = (g, house, depthFt) => {
     if (g.length < 4) return null;
     const shared = edgesOf(g)
-      .map(e => ({ e, on: coveredLength(e, house) }))
+      .map(e => ({ e, on: coveredLength(e, house), front: e.n.z < -0.5 }))
       .filter(x => x.on > TOL)
-      .sort((p, q) => q.on - p.on)[0];
+      .sort((p, q) => (q.front - p.front) || (q.on - p.on))[0];
     if (!shared) return null;
     const { e } = shared;
     const inward = { x: -e.n.x, z: -e.n.z };
     const t = p => (p.x - e.a.x) * inward.x + (p.z - e.a.z) * inward.z;
     const u = p => (p.x - e.a.x) * e.ux + (p.z - e.a.z) * e.uz;
-    if (g.some(p => t(p) < -TOL)) return null;
+    if (!g.some(p => t(p) > TOL)) return null;
     const depth = Math.max(...g.map(t));
     const range = roomDepthRange(depth);
     const d = roomDepthOf(depth, depthFt);
