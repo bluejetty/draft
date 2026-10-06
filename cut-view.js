@@ -1882,13 +1882,17 @@ if (!window.DraftCutView) {
         const toRight = px >= tx + width / 2;
         const lx = toRight ? tx + width + 3 : tx - 3;
         ctx.beginPath(); ctx.moveTo(lx, ty); ctx.lineTo(px, py); ctx.stroke();
-        const ang = Math.atan2(py - ty, px - lx), head = Math.max(6, textPx * 0.6);
-        ctx.setLineDash([]);
-        ctx.beginPath();
-        ctx.moveTo(px, py);
-        ctx.lineTo(px - head * Math.cos(ang - 0.35), py - head * Math.sin(ang - 0.35));
-        ctx.lineTo(px - head * Math.cos(ang + 0.35), py - head * Math.sin(ang + 0.35));
-        ctx.closePath(); ctx.fill();
+        // A STRAIGHT END is the line alone (Movie, 6 Oct); the arrowhead is
+        // for a note that asked for one, or was drawn before the choice.
+        if (m.end !== 'line') {
+          const ang = Math.atan2(py - ty, px - lx), head = Math.max(6, textPx * 0.6);
+          ctx.setLineDash([]);
+          ctx.beginPath();
+          ctx.moveTo(px, py);
+          ctx.lineTo(px - head * Math.cos(ang - 0.35), py - head * Math.sin(ang - 0.35));
+          ctx.lineTo(px - head * Math.cos(ang + 0.35), py - head * Math.sin(ang + 0.35));
+          ctx.closePath(); ctx.fill();
+        }
       }
       if (text) {
         ctx.textAlign = 'left'; ctx.textBaseline = 'middle';

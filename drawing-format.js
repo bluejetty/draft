@@ -1201,7 +1201,10 @@ if (!window.DraftDrawingFormat) {
         if (!at || !text) return null;
         seen.add(id);
         const tip = pt(m.tip);
-        return { id, cut, kind: 'note', at, text, ...(tip ? { tip } : {}) };
+        // WHAT THE POINTER ENDS IN: 'line' is a plain straight end; anything
+        // else -- and a note drawn before the choice existed -- is the arrow.
+        const end = tip && m.end === 'line' ? { end: 'line' } : {};
+        return { id, cut, kind: 'note', at, text, ...(tip ? { tip } : {}), ...end };
       }
       return null;
     }).filter(Boolean);
