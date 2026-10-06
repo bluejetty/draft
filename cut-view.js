@@ -1696,12 +1696,15 @@ if (!window.DraftCutView) {
   // fascia band and the silhouette, stopped at the window's edge.
   //
   // SO THE WINDOW TAKES IN EVERY ROOF, seen along the elevation's own axis.
-  // Only ever wider: a mark the drafter ran long keeps its length.
+  // Only ever wider, and ONLY FOR THE FOUR STANDARD MARKS (`auto`) -- the
+  // ones sized off the walls. A cut the drafter placed by hand is the view
+  // he chose: one drawn across the garage alone stays the garage alone.
   //
   // THE LINE ITSELF IS LENGTHENED, not just the window: the silhouette is
   // sampled from startPt to endPt and every other reader measures off the
   // same two points, so one longer line keeps them all in step.
   const reachingEaves = (env, cut, axis) => {
+    if (cut?.auto !== true) return cut;
     const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
     const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
     let uMin = Math.min(uA, uB), uMax = Math.max(uA, uB);

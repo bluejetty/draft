@@ -405,10 +405,10 @@ function standardElevationCuts(env) {
   const edge = { S: maxZ, N: minZ, E: maxX, W: minX };
   const at = id => edge[E_MARK_SIDES[id].side] + E_MARK_SIDES[id].sign * clear;
   return [
-    { id: 'E1', name: 'E1', elev: 0, levelId: null, startPt: { x: minX - pad, z: at('E1') }, endPt: { x: maxX + pad, z: at('E1') }, dirVec: E_MARK_SIDES.E1.dir },
-    { id: 'E2', name: 'E2', elev: 0, levelId: null, startPt: { x: at('E2'), z: minZ - pad }, endPt: { x: at('E2'), z: maxZ + pad }, dirVec: E_MARK_SIDES.E2.dir },
-    { id: 'E3', name: 'E3', elev: 0, levelId: null, startPt: { x: minX - pad, z: at('E3') }, endPt: { x: maxX + pad, z: at('E3') }, dirVec: E_MARK_SIDES.E3.dir },
-    { id: 'E4', name: 'E4', elev: 0, levelId: null, startPt: { x: at('E4'), z: minZ - pad }, endPt: { x: at('E4'), z: maxZ + pad }, dirVec: E_MARK_SIDES.E4.dir },
+    { id: 'E1', name: 'E1', elev: 0, levelId: null, auto: true, startPt: { x: minX - pad, z: at('E1') }, endPt: { x: maxX + pad, z: at('E1') }, dirVec: E_MARK_SIDES.E1.dir },
+    { id: 'E2', name: 'E2', elev: 0, levelId: null, auto: true, startPt: { x: at('E2'), z: minZ - pad }, endPt: { x: at('E2'), z: maxZ + pad }, dirVec: E_MARK_SIDES.E2.dir },
+    { id: 'E3', name: 'E3', elev: 0, levelId: null, auto: true, startPt: { x: minX - pad, z: at('E3') }, endPt: { x: maxX + pad, z: at('E3') }, dirVec: E_MARK_SIDES.E3.dir },
+    { id: 'E4', name: 'E4', elev: 0, levelId: null, auto: true, startPt: { x: at('E4'), z: minZ - pad }, endPt: { x: at('E4'), z: maxZ + pad }, dirVec: E_MARK_SIDES.E4.dir },
   ];
 }
 
