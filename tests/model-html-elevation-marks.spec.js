@@ -90,6 +90,45 @@ test('a line, a note and a note with an arrow, drawn on E2, saved and back after
   expect((await marksOf(page)).length).toBe(3);
 });
 
+// THE POINTER (Movie, 6 Oct): "can i have an option for a POINTER ARROW? ...
+// put in just a straight end on the line now (no arrow)". POINTER in the
+// ANNOTATION panel: tap the thing, then where the text goes. The leader ends
+// STRAIGHT -- on the pointer and on the press-and-drag leader alike.
+test('POINTER: tap the thing, tap where the text goes, and the leader ends straight', async ({ page }) => {
+  await openE2(page);
+  await h.armFromRail(page, 'annotation');
+  await page.locator('[data-note-pointer="on"]').click();
+  await expect(page.locator('[data-note-pointer="on"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-note-end="line"]')).toHaveAttribute('aria-pressed', 'true');
+
+  await page.mouse.click(700, 420);              // the thing
+  await expect(page.locator('[data-elev-note]')).toHaveCount(0);
+  await expect(page.locator('#strip-message')).toContainText(/now tap where the text goes/i);
+  await page.mouse.click(820, 220);              // the words
+  await expect(page.locator('[data-elev-note]')).toBeVisible();
+  await page.keyboard.type('Fascia');
+  await page.keyboard.press('Enter');
+
+  // AND THE DRAG STILL WORKS, with the same straight end.
+  await page.locator('[data-note-pointer="off"]').click();
+  await page.mouse.move(500, 420);
+  await page.mouse.down();
+  await page.mouse.move(460, 320, { steps: 5 });
+  await page.mouse.move(420, 220, { steps: 5 });
+  await page.mouse.up();
+  await page.keyboard.type('Soffit');
+  await page.keyboard.press('Enter');
+
+  await page.locator('#save').click();
+  await h.waitForSaved(page);
+  const [pointed, dragged] = await marksOf(page);
+  expect(pointed.text).toBe('FASCIA');
+  expect(pointed.tip.e, 'the pointer goes at the thing, below the words').toBeLessThan(pointed.at.e);
+  expect(pointed.end).toBe('line');
+  expect(dragged.text).toBe('SOFFIT');
+  expect(dragged.end).toBe('line');
+});
+
 test('a mark is picked with SELECT, deleted, and UNDO puts it back', async ({ page }) => {
   await openE2(page);
   await h.armFromRail(page, 'line');

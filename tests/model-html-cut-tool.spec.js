@@ -115,6 +115,21 @@ test('+ CUT and three presses make a section', async ({ page }) => {
 // CUT IS A KEY IN THE DRAW / EDIT COLUMN AND THE LETTER C (Movie, 5 Oct:
 // "add the 'CUT' command to the draftng menu and give it LETTER command" --
 // "ya use C"). The letter arms the same three presses + CUT does.
+// THE T-SQUARE HOLDS THE CUT (Movie, 6 Oct: "the T - doesn't work on the CUT
+// line (but i'd like it too) - T-SQUARE 90 degrees"). An off-level second
+// press lands level with the first.
+test('with the T-square down, the cut line is held level', async ({ page }) => {
+  await newPageOnSavedHouse(page);
+  await page.locator('[data-board-switch] [data-board="drafting"]').click();
+  await page.locator('[data-mode-tsquare]').click();
+  await pressCut(page);
+  await cutThrough(page, A, [B[0], B[1] + 1.5], SOUTH);
+  await saveOnNewPage(page);
+  const cut = cutsOf(await savedFile(page)).slice(-1)[0];
+  expect(cut.endPt.x).toBeCloseTo(B[0], 1);
+  expect(cut.endPt.z, 'squared to the first press').toBeCloseTo(A[1], 3);
+});
+
 test('C arms CUT, its key lights, and three presses make a section', async ({ page }) => {
   await newPageOnSavedHouse(page);
   const before = cutsOf(await savedFile(page));
