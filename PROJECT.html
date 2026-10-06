@@ -272,6 +272,16 @@
     .type-mini { display:block; width:100%; height:auto; }
     .type-name { display:block; padding:6px 8px; border-top:1px solid var(--edge-panel); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; }
     .type-card[aria-selected="true"] .type-name { color:var(--accent-mark); }
+    /* THE PROJECT'S OWN CARD GLOWS (Movie, 6 Oct): "add a GLOW to that one,
+       and allow them to look at the other ones, but keep the main one
+       GLOWING". The glow is the HOME card, whichever card is on show; the
+       inset ring above still says which one is being looked at. */
+    .type-card.home { border-color:var(--accent); box-shadow:0 0 10px 3px var(--accent), 0 0 0 1px var(--accent) inset; }
+    .type-card.home .type-name { color:var(--accent-mark); }
+    .family-col[inert] > .family-button,
+    .stack-card.view-only .card-body { opacity:.55; }
+    .view-only-note { display:none; margin:0; padding:6px 10px; border-bottom:1px solid var(--edge-panel); font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; color:var(--accent-mark); }
+    .stack-card.view-only .view-only-note { display:block; }
     /* The stage's one visible section must not inherit stack-card's top
        margin, or the big drawing sits lower than the column beside it. */
     .type-stage > .stack-card { margin-top:0; }
@@ -4657,6 +4667,74 @@
       const stageEls = new Map(
         [...document.querySelectorAll('[data-stage]')].map(el => [el.dataset.stage, el]));
 
+      // ── THE PROJECT'S OWN CARD ──────────────────────────────────────────
+      //
+      // Movie, 6 Oct: "once the user chooses a BUILDING TYPE, when they go to
+      // the PROJECT AREA can it be on that exact same one they have selected
+      // and also add a GLOW to that one, and allow them to look at the other
+      // ones, but keep the main one GLOWING and don't allow changes on the
+      // ones that they didn't pick, only on the GLOWING one, where the numbers
+      // are actually active on the current plan".
+      //
+      // THE DRAWING SAYS WHICH CARD, not the URL: a bungalow or 2 storey is
+      // the BUNGALOW card, either bilevel the BILEVEL card, and a drawing
+      // whose only building is a detached garage is that card. A drawing that
+      // has named nothing yet has no home, and every card stays editable --
+      // his answer for a fresh file.
+      //
+      // THE HOME CARD'S OWN ROW STAYS LIVE, so 2 STOREY can become 2 STOREY +
+      // GARAGE here -- "only the 'type' within the 'card' can change" -- while
+      // every other card is looked at and not touched.
+      const CARD_FOR_TYPE = { bungalow: 'bungalow', twoStorey: 'bungalow',
+        bilevel: 'bilevel', modifiedBilevel: 'bilevel' };
+      const homeType = () => {
+        if (CARD_FOR_TYPE[buildType]) return CARD_FOR_TYPE[buildType];
+        const detached = (drawing?.outlines || []).some(outline => outline?.detached === true);
+        return detached ? 'detached' : null;
+      };
+      const familyCols = {
+        detached: document.querySelector('#detached-family-row'),
+        bungalow: document.querySelector('#family-row'),
+        bilevel: document.querySelector('#bilevel-family-row'),
+      };
+      const homeLabel = home => {
+        const lit = document.querySelector(`${familyCols[home] ? `#${familyCols[home].id}` : ''} [aria-pressed="true"]`);
+        const card = typeCards.find(c => c.dataset.type === home);
+        // THE ENTRY'S FULL NAME: a paired button reads "+ GARAGE" on its own.
+        const entry = lit && window.DraftBuildMenu.BUILD_MENU
+          .flatMap(family => family.entries || [])
+          .find(item => item.id === lit.dataset.familyEntry);
+        return (entry?.label || lit?.textContent || card?.querySelector('.type-name')?.textContent || home).trim();
+      };
+      // INERT, NOT DISABLED. The schedules set `disabled` themselves on every
+      // repaint (read-only files, derived rows), so a lock written there would
+      // be undone by the next one and would undo theirs on the way out. inert
+      // is its own attribute: nothing inside takes a click, a key or focus,
+      // and nothing else on the page writes it.
+      const applyHome = () => {
+        const home = homeType();
+        typeCards.forEach(card => card.classList.toggle('home', card.dataset.type === home));
+        stageEls.forEach((el, key) => {
+          const locked = home != null && key !== home;
+          el.classList.toggle('view-only', locked);
+          const body = el.querySelector('.card-body');
+          if (body) body.inert = locked;
+          let note = el.querySelector('.view-only-note');
+          if (!note) {
+            note = document.createElement('p');
+            note.className = 'view-only-note';
+            note.dataset.viewOnly = '';
+            el.prepend(note);
+          }
+          note.textContent = locked
+            ? `Viewing only — this project is ${homeLabel(home)}. Edit on the glowing card.` : '';
+        });
+        Object.entries(familyCols).forEach(([key, col]) => {
+          if (col) col.inert = home != null && key !== home;
+        });
+      };
+
+
       // What each small canvas draws. Read at paint time, never stored: the
       // schedules edit these numbers continuously and a thumbnail built once
       // would be a picture of the drawing as it was when the page opened.
@@ -4689,6 +4767,9 @@
       // Called at the end of every repaint, so the three thumbnails carry the
       // same numbers as whichever section is open.
       function paintTypeMinis() {
+        // EVERY REPAINT, because a press in the home row or a file re-read can
+        // move the project to another card.
+        applyHome();
         typeCards.forEach(card => {
           const mini = card.querySelector('.type-mini');
           if (!mini) return;
@@ -4759,6 +4840,10 @@
         .find(family => family.id === id) || {}).entries || [];
 
       const chooseType = pick => {
+        // A PROJECT WITH A HOME CARD IS NOT SWITCHED BY LOOKING (Movie, 6 Oct):
+        // the other cards are there to be seen, and the type changes only in
+        // the glowing card's own row.
+        if (homeType() != null) return;
         const familyId = FAMILY_FOR_CARD[pick];
         // DETACHED GARAGE IS NOT WIRED HERE ON PURPOSE. build-menu.js says
         // why, in its own words: "No `type`: a detached garage says nothing
@@ -4805,7 +4890,10 @@
       buildDetachedSched();
       // The first paint goes through the picker, so the opening state is
       // produced by the same path every later click takes.
-      showType(new URLSearchParams(location.search).get('type'), false);
+      // THE PROJECT'S OWN CARD FIRST, whatever the address was left on: "when
+      // they go to the PROJECT AREA can it be on that exact same one they have
+      // selected". A file with no home still opens where the URL says.
+      showType(homeType() || new URLSearchParams(location.search).get('type'), false);
 
       // ── AND THE FIT HAS TO SURVIVE THE WINDOW MOVING ────────────────────
       //

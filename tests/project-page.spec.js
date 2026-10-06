@@ -395,43 +395,38 @@ test('a family press sets the building method, one at a time, and it saves',
       { message: 'the chosen method never reached the drawing' })
       .toBe('bilevel');
 
-    // And the choice is not merely recorded: the garage sill derive branches
-    // on it, so a page that stored the word and carried on deriving the
-    // bungalow rule fails here.
-    //
-    // OVER A FROST WALL, since 16 Sep: a grade beam is inline whichever the
-    // house is, so the build type only moves the sill on the wall that has a
-    // stem to step down. Set here rather than in the fixture so the change
-    // goes through the page's own control.
-    // BACK TO THE BUNGALOW SECTION WITHOUT CHOOSING IT, which is the whole
-    // point of the distinction the page draws: a card press switches a type
-    // it can switch, a URL visit only shows one. Crossing back by pressing
-    // the BUNGALOW card would land the type on `bungalow` here -- and then
-    // the press below could not move the sill, because the sill would
-    // already be the bungalow's. The controls beneath live in band 1; the
-    // TYPE has to still be bilevel when they are read.
+    // THE BILEVEL CARD IS THE PROJECT'S NOW, and it glows (Movie, 6 Oct):
+    // "add a GLOW to that one, and allow them to look at the other ones, but
+    // keep the main one GLOWING and don't allow changes on the ones that they
+    // didn't pick". So the page reopens on it whatever the address says, the
+    // bungalow card can be looked at, and its row and numbers are not live.
     await page.goto('/PROJECT.html?type=bungalow');
-    await expect(page.locator('[data-family-entry="bilevel-garage"]'))
-      .toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.type-card[data-type="bilevel"]')).toHaveClass(/\bhome\b/);
+    await expect(page.locator('.type-card[data-type="bilevel"]')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('.type-card.home')).toHaveCount(1);
 
-    const foundation = page.locator('[data-detail-input="garageFoundationType"]');
-    await foundation.selectOption('frostwall');
-    await foundation.dispatchEvent('change');
-    const offset = await page.locator('[data-detail-input="garageOffset"]').inputValue();
+    await page.locator('.type-card[data-type="bungalow"]').click();
+    await expect(page.locator('#stage-bungalow')).toBeVisible();
+    await expect(page.locator('#stage-bungalow [data-view-only]'))
+      .toContainText(/viewing only — this project is bilevel \+ garage/i);
+    await expect(page.locator('#stage-bungalow .card-body')).toHaveJSProperty('inert', true);
+    await expect(page.locator('#family-row')).toHaveJSProperty('inert', true);
+    // LOOKING IS NOT CHOOSING: the bungalow card press left the type alone.
+    await expect.poll(async () => (await h.savedDrawing(page))?.buildType).toBe('bilevel');
 
-    await page.locator('[data-family-entry="bungalow-garage"]').click();
-    await expect(page.locator('[data-family-entry="bilevel-garage"]'))
-      .toHaveAttribute('aria-pressed', 'false');
-    expect(await page.locator('[data-detail-input="garageOffset"]').inputValue(),
-      'the garage sill did not follow the method change')
-      .not.toBe(offset);
+    // THE HOME CARD'S OWN ROW STAYS LIVE: "only the 'type' within the 'card'
+    // can change".
+    await page.locator('.type-card[data-type="bilevel"]').click();
+    await expect(page.locator('#stage-bilevel .card-body')).toHaveJSProperty('inert', false);
+    await page.locator('[data-family-entry="bilevel"]').click();
+    await expect(page.locator('[data-family-entry="bilevel"]')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-family-entry="bilevel-garage"]')).toHaveAttribute('aria-pressed', 'false');
 
     // Survives the reload, which is the whole claim of "project data".
-    await expect.poll(async () => (await h.savedDrawing(page))?.buildType)
-      .toBe('bungalow');
     await page.reload();
-    await expect(page.locator('[data-family-entry="bungalow-garage"]'))
+    await expect(page.locator('[data-family-entry="bilevel"]'))
       .toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.type-card[data-type="bilevel"]')).toHaveClass(/\bhome\b/);
   });
 
 // THE TWO DOORS, AND WHICH ONE WINS. Last press, and the trap it avoids is
@@ -480,3 +475,39 @@ test('a method chosen elsewhere is not clobbered by an unrelated PROJECT save',
     // stays dark rather than answering the half it does not know.
     await expect(page.locator('.family-button[aria-pressed="true"]')).toHaveCount(0);
   });
+
+// A DETACHED GARAGE IS A PROJECT TOO (Movie, 6 Oct): a drawing whose only
+// building is the detached garage opens PROJECT on that card, glowing, and
+// the house cards are looked at, not edited.
+test('a detached-garage drawing opens on the glowing DETACHED GARAGE card', async ({ page }) => {
+  await h.openModel(page);
+  await page.evaluate(async () => {
+    const drawing = {
+      version: window.DraftDrawingFormat.VERSION,
+      levels: [{ id: 1, name: 'FOUNDATION', elev: -8 }, { id: 3, name: 'MAIN FL', elev: 0 }],
+      outlines: [{ id: 'g', levelId: 3, garage: true, detached: true, points: [
+        { x: 0, y: 0, z: 0 }, { x: 24, y: 0, z: 0 }, { x: 24, y: 0, z: 26 }, { x: 0, y: 0, z: 26 }] }],
+    };
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(drawing)], 'drawing.json', { type: 'application/json' }), 'model-drawing');
+  });
+  await page.goto('/PROJECT.html?type=bilevel');
+  await expect(page.locator('.type-card[data-type="detached"]')).toHaveClass(/\bhome\b/);
+  await expect(page.locator('#stage-detached')).toBeVisible();
+  await expect(page.locator('#stage-detached .card-body')).toHaveJSProperty('inert', false);
+  await selectType(page, 'bungalow');
+  await expect(page.locator('#stage-bungalow .card-body')).toHaveJSProperty('inert', true);
+  await expect(page.locator('#stage-bungalow [data-view-only]')).toBeVisible();
+});
+
+// A FRESH FILE HAS NO HOME: nothing glows and every card stays editable --
+// his answer for a drawing that has not named a building yet.
+test('a fresh drawing has no glowing card and nothing is locked', async ({ page }) => {
+  await h.openModel(page);
+  await openProjectPage(page);
+  await expect(page.locator('.type-card.home')).toHaveCount(0);
+  for (const type of ['detached', 'bungalow', 'bilevel']) {
+    await selectType(page, type);
+    await expect(page.locator(`#stage-${type} .card-body`)).toHaveJSProperty('inert', false);
+  }
+});
