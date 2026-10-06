@@ -24,6 +24,12 @@ const ROOT = path.join(__dirname, '..');
 const MUTATE = require('./harness-args.js').mutationMode();
 
 const MUTATIONS = [
+  // The wrapped garage: measured from the longest shared wall (the side)
+  // part of it lies behind, and the old guard refused it.
+  ['a garage wrapped round the house corner is refused again', 'traced-plans.js',
+    c => c.replace('    if (!g.some(p => t(p) > TOL)) return null;', '    if (g.some(p => t(p) < -TOL)) return null;')],
+  ['the room is measured from the longest shared wall, not the front', 'traced-plans.js',
+    c => c.replace('.sort((p, q) => (q.front - p.front) || (q.on - p.on))[0];', '.sort((p, q) => q.on - p.on)[0];')],
   ['the MOD BILEVEL room roof stops at the room', 'traced-plans.js',
     c => c.replace('plan.overGarageRoof = P().joinLoops(P().squareOver(over.room), plan.upperLanding);', 'plan.overGarageRoof = over.room;')],
   ['the bungalow + garage is roofed apart', 'traced-plans.js',
@@ -177,6 +183,21 @@ const plan = (entryId, garage = GARAGE) => T.planFromTrace({
   const left = T.planFromTrace({ entryId: 'bilevel-garage', house: HOUSE, garage: rect(-20, 20, 4, 46) });
   check('a garage on the left: line at x = 4, landing -2..10, up flight on the street (right)',
     [box(left.entry), left.stairs.up.x > left.stairs.down.x], [[-2, 14, 10, 20], true]);
+}
+
+// ── A GARAGE WRAPPED ROUND THE HOUSE CORNER (Movie, 6 Oct) ───────────────
+// Down the house's side wall from z = 10 and across the end of its front
+// (x 10..16): two shared walls, part of the garage behind each. The room
+// runs from the FRONT line 18 ft toward the door, the strip beside the house
+// included; the rest keeps the lower roof.
+{
+  const wrap = [{ x: 16, z: 10 }, { x: 40, z: 10 }, { x: 40, z: 46 }, { x: 10, z: 46 },
+    { x: 10, z: 20 }, { x: 16, z: 20 }];
+  const plan = T.planFromTrace({ entryId: 'modifiedBilevel', house: HOUSE, garage: wrap });
+  check('a garage wrapped round the house corner is built, not refused', plan.error, undefined);
+  check('its room runs from the house front 18 ft toward the door, beside the house too',
+    plan.overGarage && box(plan.overGarage), [10, 10, 40, 38]);
+  check('and the rest keeps the lower roof', plan.garageRoof && box(plan.garageRoof), [10, 38, 40, 46]);
 }
 
 // ── REFUSALS ─────────────────────────────────────────────────────────────
