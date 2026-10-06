@@ -5957,10 +5957,9 @@
   // over them would take the press they were making.
   // AND FROM AN EMPTY BONEYARD the same way (Movie, 3 Oct): nothing on the
   // shelf yet, so the drafter is sent here to pick a house.
-  if (['entry', 'boneyard'].includes(new URLSearchParams(location.search).get('from'))) {
-    const spent = new URL(location.href);
-    spent.searchParams.delete('from');
-    history.replaceState(null, '', spent.pathname + spent.search + spent.hash);
+  // AND AFTER NEW (Movie, 5 Oct): "once the sheet is blank, please bring up
+  // the screen for creating a new house" -- the same rise, the same cancel.
+  const pullUpToWindow = () => {
     const cancel = () => {
       ['pointerdown', 'keydown', 'wheel'].forEach(type =>
         document.removeEventListener(type, cancel, true));
@@ -5973,6 +5972,12 @@
     ['pointerdown', 'keydown', 'wheel'].forEach(type =>
       document.addEventListener(type, cancel, true));
     callSign(boneFoot, 'menu');
+  };
+  if (['entry', 'boneyard'].includes(new URLSearchParams(location.search).get('from'))) {
+    const spent = new URL(location.href);
+    spent.searchParams.delete('from');
+    history.replaceState(null, '', spent.pathname + spent.search + spent.hash);
+    pullUpToWindow();
   }
   document.getElementById('dt-close').addEventListener('click', () => {
     setSign(false);
@@ -6157,6 +6162,23 @@
       // there is nothing traced to build from, and the premade design is
       // what the order round is for.
       if (fireBuild()) return;
+      // A TRACE STILL BEING DRAWN IS NOT A PREMADE ORDER. Movie, 5 Oct: "i
+      // tried the outline method ... it allowed me to draw the outline, but
+      // then it asked me about saving or discarding the previous drawing ...
+      // and then it didn't make the outline, it just created the premade
+      // version". A type that hangs a garage on the house waits for the
+      // garage loop, so this press found nothing it could build yet -- and
+      // falling through counted his own house loop as a building already in
+      // the file, offered a clean one, and threw the trace away for the
+      // premade square. While his house loop waits for its garage, the press
+      // says so instead. ONLY THEN: a type picked at the window arms the same
+      // trace with no loop drawn, and that press is still the premade order.
+      if (tracedOrder && traceStillThere(tracedHouse) && !tracedGarage
+          && window.DraftTracedPlans?.needsGarage(tracedOrder.entry?.id)) {
+        sayOnStrip(`Trace the garage first — press each corner, then the first corner again to close.${
+          tracedBuildsOnClose ? ' Your house goes up as soon as it closes.' : ''}`);
+        return;
+      }
       orderAtWindow();
     });
   // Escape backs out, as it does from every other card on this page. It
@@ -20153,6 +20175,12 @@
     const clear = async () => {
       if (!(await adoptAndShow(blankDrawingFile()))) return;
       await save();
+      // AND THE HOUSE PICKER COMES UP ON THE BLANK (Movie, 5 Oct): "once the
+      // sheet is blank, please bring up the screen for creating a new house".
+      // The same call the front door makes -- the house button glows, then
+      // the drive-thru rises -- and a hand on the page inside the glow still
+      // cancels it, so it never lands over someone already drawing.
+      pullUpToWindow();
     };
     if (!dirty && !drawingHasWork()) { clear(); return; }
     askToSave('NEW clears this drawing from this browser. Save a copy to your computer first?',
