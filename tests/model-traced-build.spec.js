@@ -344,6 +344,27 @@ test('TOY: the garage wall is moved over 1 ft without asking', async ({ page }) 
   expect([has(g, 11, 14), has(g, 11, 8)]).toEqual([true, true]);
 });
 
+// LINED UP IS ALREADY FASTENED (Movie, 6 Oct): "if the wall connects at the
+// corner and LINES UP - there is no req. for it to move over". Here the
+// garage's front wall carries on in line with the house's front wall
+// (z = 8) and both buildings sit behind it, so the two 8" walls meet face to
+// face: no question, no move.
+test('a garage wall that lines up with the house wall is not moved', async ({ page }) => {
+  await open(page);
+  await drawType(page, 'bungalow', 'bungalow-garage');
+  await trace(page, HOUSE);
+  await run(page, [[10, 8], [10, -4], [30, -4], [30, 8], [10, 8]]);
+  await page.waitForTimeout(200);
+  await expect(page.locator('#corner-join')).toBeHidden();
+  await expect(page.locator('#strip-message')).not.toContainText(/crosses itself/i);
+  const d = await build(page);
+  const g = garageOf(d);
+  expect(g, 'the garage body').toBeTruthy();
+  const zs = g.points.map(p => p.z), xs = g.points.map(p => p.x);
+  expect([Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)],
+    'the garage exactly as traced').toEqual([10, 30, -4, 8]);
+});
+
 // A TRACE THE TYPE CANNOT TAKE IS NOT BUILT, and says why: the bone stays
 // the way on once the drafter has fixed it.
 test('a closed trace the type refuses builds nothing and says why', async ({ page }) => {
