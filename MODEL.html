@@ -10896,10 +10896,26 @@
       if (ci < 0 || decided.has(cornerKey(v))) continue;
       const along = [house[(ci + house.length - 1) % house.length], house[(ci + 1) % house.length]]
         .map(h => unitTo(v, h));
-      for (const j of [(k + 1) % ring.length, (k + ring.length - 1) % ring.length]) {
+      const legs = [(k + 1) % ring.length, (k + ring.length - 1) % ring.length];
+      for (const j of legs) {
         const d = unitTo(v, ring[j]);
         // Straight on from a house wall, the far side of its corner.
-        if (along.some(h => Math.abs(h.x + d.x) < 1e-6 && Math.abs(h.z + d.z) < 1e-6)) return { ring, k, j };
+        if (!along.some(h => Math.abs(h.x + d.x) < 1e-6 && Math.abs(h.z + d.z) < 1e-6)) continue;
+        // AND ONLY WHEN THE TWO WALLS SIT ON OPPOSITE SIDES OF THE LINE
+        // (Movie, 6 Oct): "if the wall connects at the corner and LINES UP -
+        // there is no req. for it to move over ... it is only needed if it
+        // connects at the edge where the full 8" (or thicker) wall only
+        // touches on the corner, not the full 8" surface". A wall's thickness
+        // is on its building's side. Garage and house on the SAME side of the
+        // line: the two walls run on end to end and meet face to face. On
+        // OPPOSITE sides: the garage's wall touches the house's only at the
+        // corner point, and that is the one that steps over.
+        const n = { x: -d.z, z: d.x };
+        const side = (loop, toward) => (pointInRing(loop,
+          { x: v.x + (toward.x + n.x) * 0.25, z: v.z + (toward.z + n.z) * 0.25 }) ? 1 : -1);
+        const back = { x: -d.x, z: -d.z };
+        if (side(ring, d) === side(house, back)) continue;
+        return { ring, k, j };
       }
     }
     return null;
