@@ -3358,7 +3358,9 @@
         + 'did not load. Check the script order in the page head.');
     }
     const env = dimensionEnv();
-    dimensions().forEach(dimension => R.drawDimension2D(ctx, toS, dimension, {}, env));
+    const lit = new Set(selection.filter(entry => entry.type === 'dimension').map(entry => entry.item));
+    dimensions().forEach(dimension => R.drawDimension2D(ctx, toS, dimension,
+      lit.has(dimension) ? { selected: true } : {}, env));
   };
 
   // LEADER NOTES. Two env keys, and until #302 there was no colour to put in
@@ -8274,6 +8276,52 @@
     .find(roof => (roof.points || []).length >= 3 && pointInRing(roof.points, worldPt)) || null;
 
   // Returns { type, item } or null, in the old page's precedence.
+  // ── DIMENSIONS: WHERE THEY ARE DRAWN, AND THEIR ROWS ───────────────────
+  // The painter stands the dimension line 19px off its two points
+  // (render-2d.js drawDimension2D), so the pick asks of the drawn line, in
+  // screen pixels, not of the points.
+  const DIM_LINE_PX = 19;
+  const dimDrawnLine = d => {
+    const a = toS(d.start), b = toS(d.end);
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len < 1) return null;
+    const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+    return [{ x: a.x + nx * DIM_LINE_PX, y: a.y + ny * DIM_LINE_PX },
+      { x: b.x + nx * DIM_LINE_PX, y: b.y + ny * DIM_LINE_PX }];
+  };
+  const dimensionAt = worldPt => {
+    const s = toS(worldPt);
+    let best = null, bestD = SELECT_GRAB_PX;
+    dimensions().forEach(d => {
+      const line = dimDrawnLine(d);
+      if (!line) return;
+      const [p, q] = line;
+      const dx = q.x - p.x, dy = q.y - p.y;
+      const t = Math.max(0, Math.min(1, ((s.x - p.x) * dx + (s.y - p.y) * dy) / (dx * dx + dy * dy)));
+      const dist = Math.hypot(s.x - (p.x + t * dx), s.y - (p.y + t * dy));
+      if (dist < bestD) { bestD = dist; best = d; }
+    });
+    return best;
+  };
+  // THE ROW A DIMENSION STANDS IN: every dimension on this level and view
+  // whose line is the same straight line (Movie, 6 Oct: the whole row slides
+  // in or out together, staying straight and lined up).
+  const dimNormal = d => {
+    const dx = d.end.x - d.start.x, dz = d.end.z - d.start.z;
+    const len = Math.hypot(dx, dz) || 1;
+    return { x: -dz / len, z: dx / len };
+  };
+  const dimRow = grabbed => {
+    const n = dimNormal(grabbed);
+    const at = p => p.x * n.x + p.z * n.z;
+    const line = at(grabbed.start);
+    return dimensions().filter(d => {
+      const m = dimNormal(d);
+      const parallel = Math.abs(m.x * n.z - m.z * n.x) < 1e-6;
+      return parallel && Math.abs(at(d.start) - line) < 0.01 && Math.abs(at(d.end) - line) < 0.01;
+    });
+  };
+
   const hitAt = worldPt => {
     // A ROOM TAG IS ON TOP OF WHAT IT NAMES: it is painted last, over the
     // floor and often over a fixture, so the pick agrees with the picture.
@@ -8297,6 +8345,12 @@
     if (filterAllows('fixture')) {
       const fixture = fixtureAt(worldPt);
       if (fixture) return { type: 'fixture', item: fixture };
+    }
+    // A DIMENSION IS ANNOTATION, painted over the plan, and its line stands
+    // off what it measures -- so it is asked before the walls it sits beside.
+    if (filterAllows('dimension')) {
+      const dimension = dimensionAt(worldPt);
+      if (dimension) return { type: 'dimension', item: dimension };
     }
     if (filterAllows('wall')) {
       const wall = segAt(walls(), worldPt);
@@ -8376,7 +8430,8 @@
   const paintSelection = () => {
     if (!selection.length) return;
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines(),
-      fixture: fixtures(), stair: stairs(), roof: roofs(), roomtag: roomTags(), shape: shapes() };
+      fixture: fixtures(), stair: stairs(), roof: roofs(), roomtag: roomTags(), shape: shapes(),
+      dimension: dimensions() };
     // THE OPENINGS AND THEIR SHAPES IN ONE PASS. openingsOn resolves geometry
     // per opening, which is not free, and the highlight needs both the list
     // (to answer "is it still on screen") and the quad (to draw it). Calling
@@ -8394,6 +8449,9 @@
       // Only if it is still on screen's level: a selection kept across a level
       // change would paint a highlight over nothing.
       if (!(onScreen[type] || []).includes(item)) return;
+      // A DIMENSION IS DRAWN SELECTED BY ITS OWN PAINTER (paintDimensions),
+      // halo and all, so it reads as the same mark lit up.
+      if (type === 'dimension') return;
       if (type === 'roomtag') {
         const b = roomTagBox(item);
         ctx.save();
@@ -9567,6 +9625,10 @@
     stair: 'stairs',
     roomtag: 'roomTags',
     shape: 'shapes',
+    // A DIMENSION, picked off its line (Movie, 6 Oct: "with the DIMENSION
+    // lines, can they be selectable so i can move some if there is a better
+    // position"). It deletes like the rest; it is not copied.
+    dimension: 'dimensions',
   });
 
   // HELD BY COPY ONLY WHERE A PASTE CAN LAND IT. A fixture rides a wall by
@@ -9575,7 +9637,7 @@
   // delete and undo like the rest; they are not carried.
   // A ROOM TAG IS NOT CARRIED EITHER: its id is a whole number the format
   // insists on, and a paste re-ids with a string.
-  const NOT_COPIED = new Set(['fixture', 'stair', 'roof', 'roomtag']);
+  const NOT_COPIED = new Set(['fixture', 'stair', 'roof', 'roomtag', 'dimension']);
 
   const deleteEntry = entry => {
     if (!entry || !drawing) return false;
@@ -13047,6 +13109,27 @@
       if (mine) removed.push(dimension);
       return !mine;
     });
+    // A ROW THE DRAFTER MOVED STAYS MOVED (Movie, 6 Oct: "Keep my moves").
+    // Each moved record says where its row was first put and how far it has
+    // come; a fresh string landing on that same first line is put the same
+    // distance off, and says so too. Only the measurements are new.
+    const rowKey = (axis, at, layer) => `${axis}|${Math.round(at * 1000)}|${layer || ''}`;
+    const movedRows = new Map();
+    removed.forEach(d => {
+      const m = d.moved;
+      if (m && (m.axis === 'x' || m.axis === 'z') && Number.isFinite(m.from) && Number.isFinite(m.by)) {
+        movedRows.set(rowKey(m.axis, m.from, d.layer), m);
+      }
+    });
+    const keepMove = (dimension) => {
+      const { start, end } = dimension;
+      const axis = Math.abs(start.z - end.z) < 1e-6 ? 'z' : (Math.abs(start.x - end.x) < 1e-6 ? 'x' : null);
+      const m = axis && movedRows.get(rowKey(axis, start[axis], dimension.layer));
+      if (!m) return;
+      start[axis] += m.by;
+      end[axis] += m.by;
+      dimension.moved = { axis, from: m.from, by: m.by };
+    };
     allSegments.forEach(segment => {
       // THE srcIds ARE DROPPED, AND THAT IS A REAL LOSS RATHER THAN A TIDY-UP.
       // The module returns srcStartId/srcEndId so the old page can link each
@@ -13072,6 +13155,7 @@
         layer: segment.layer,
         auto: true,
       };
+      keepMove(dimension);
       drawing.dimensions.push(dimension);
       made.push(dimension);
     });
@@ -16741,6 +16825,7 @@
     { id: 'roomtag', label: 'TAG', aria: 'Grab only room tags' },
     { id: 'shape', label: 'SHAPE', aria: 'Grab only shapes' },
     { id: 'roof', label: 'ROOF', aria: 'Grab only roofs' },
+    { id: 'dimension', label: 'DIM', aria: 'Grab only dimensions' },
   ];
   const filterHelp = () => (selectFilter === 'all'
     ? 'Nothing lit grabs everything. Press a type so Select only grabs that object — even under other geometry.'
@@ -18857,6 +18942,21 @@
     // A SELECTED tag goes where it is dragged (Movie, 1 Oct: "the user should
     // be able to select it and move it"); the first click selects, as an
     // opening's does. Before the corner: a tag is painted over everything.
+    // ── SLIDING A DIMENSION ROW IN OR OUT ────────────────────────────────
+    // A SELECTED dimension takes its whole row with it, square to the line,
+    // so the string stays straight and lined up (Movie, 6 Oct). The first
+    // click selects, as a tag's does.
+    const dimGrab = filterAllows('dimension') ? dimensionAt(at) : null;
+    if (dimGrab && selection.some(entry => entry.item === dimGrab)) {
+      const row = dimRow(dimGrab);
+      moveDrag = {
+        kind: 'dimrow', normal: dimNormal(dimGrab), grab: at,
+        row: row.map(item => ({ item, before: { ...item }, start: { ...item.start }, end: { ...item.end } })),
+        sx: e.clientX, sy: e.clientY, active: false,
+      };
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
     const tagGrab = roomTagAt(at);
     if (tagGrab && selection.some(entry => entry.item === tagGrab)) {
       moveDrag = {
@@ -19013,6 +19113,20 @@
       if (md.active) {
         const rect = canvas.getBoundingClientRect();
         const raw = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+        if (md.kind === 'dimrow') {
+          // SQUARE TO THE LINE ONLY, in 3" steps: the row slides nearer or
+          // farther and never along itself. New points each event, as the
+          // tag's are, so the undo step keeps the ones it started with.
+          const n = md.normal;
+          const by = Math.round(((raw.x - md.grab.x) * n.x + (raw.z - md.grab.z) * n.z) * 4) / 4;
+          md.row.forEach(({ item, start, end }) => {
+            item.start = { ...start, x: start.x + n.x * by, z: start.z + n.z * by };
+            item.end = { ...end, x: end.x + n.x * by, z: end.z + n.z * by };
+          });
+          md.by = by;
+          paint();
+          return;
+        }
         if (md.kind === 'roomtag') {
           // A NEW POINT EACH EVENT, never the old one edited: the undo step
           // holds the point the tag started at, and it must stay that point.
@@ -19221,6 +19335,31 @@
       if (md.active) {
         // Both halves of a locked move go into ONE history entry: the drafter
         // made one gesture, so one Ctrl+Z undoes all of it. See lockBefore.
+        if (md.kind === 'dimrow') {
+          // ONE GESTURE, ONE UNDO for the whole row. And the move is written
+          // on each record (`moved`: where the row was first put, and how far
+          // it has come) so AUTO DIMS, run again, puts the row back where the
+          // drafter left it (Movie, 6 Oct: "Keep my moves").
+          if (md.by) {
+            // ON THE AXIS THE ROW STANDS ACROSS: a row along x is placed by
+            // its z, and the other way about. `from` is where it was first
+            // put -- kept through later moves -- and `by` how far it now is.
+            const n = md.normal;
+            const axis = Math.abs(n.z) >= Math.abs(n.x) ? 'z' : 'x';
+            const clean = v => Math.round(v * 1e6) / 1e6;
+            md.row.forEach(({ item, start }) => {
+              const from = Number.isFinite(item.moved?.from) && item.moved?.axis === axis
+                ? item.moved.from : start[axis];
+              item.moved = { axis, from: clean(from), by: clean(item.start[axis] - from) };
+            });
+            undoStack.push({ kind: 'props', edits: md.row.map(({ item, before }) => ({ item, before })) });
+            markDirty();
+          }
+          moveDrag = null;
+          if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+          paint();
+          return;
+        }
         if (md.kind === 'roomtag') {
           // The 'props' step puts the record back IN PLACE, the point with it.
           if (md.tag.at.x !== md.from.x || md.tag.at.z !== md.from.z) {

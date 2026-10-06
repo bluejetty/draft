@@ -260,10 +260,18 @@ if (!window.DraftDrawingFormat) {
       // no standard, so it draws -- which is why the behaviour is identical
       // and only the saved bytes differ.
       const layer = oneOf(dimension?.layer, DIMENSION_LAYERS, null);
+      // A ROW THE DRAFTER SLID IN OR OUT (Movie, 6 Oct) says where it was
+      // first put and how far it has come, so AUTO DIMS run again keeps the
+      // move. Written only when present -- the same rule as `layer`.
+      const m = dimension?.moved;
+      const moved = m && (m.axis === 'x' || m.axis === 'z')
+        && Number.isFinite(Number(m.from)) && Number.isFinite(Number(m.by))
+        ? { axis: m.axis, from: Number(m.from), by: Number(m.by) } : null;
       return {
         id, start, end, levelId: dimensionLevelId, view,
         ...(layer ? { layer } : {}),
         auto: dimension?.auto === true,
+        ...(moved ? { moved } : {}),
       };
     }), env.drops).filter(Boolean);
   };
