@@ -422,10 +422,9 @@ function paintElevation(win, env, cut, { pxPerFt = 40, ...opts } = {}) {
   const extents = CV.cutViewExtents(env, cut);
   const dir = cut.dirVec;
   const axis = { x: dir.z, z: -dir.x };
-  const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
-  const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
-  const uMin = Math.min(uA, uB), uMax = Math.max(uA, uB);
-  const { yTop, yBottom } = extents;
+  // THE PAINTER'S OWN SPAN, which reaches past the mark's ends to a roof
+  // that overhangs further than they run (cut-view.js reachingEaves).
+  const { uMin, uMax, yTop, yBottom } = extents;
   const w = Math.ceil((uMax - uMin) * pxPerFt) + 40;
   const h = Math.ceil((yTop - yBottom) * pxPerFt) + 40;
   const x0 = ((w) - (uMax - uMin) * pxPerFt) / 2;

@@ -161,6 +161,9 @@ const drawings = files.length ? files : [
 // second cut-view.js to; the parent writes the bent source out and the child
 // loads it through DRAFT_HARNESS_SOURCE_OVERRIDES (see harness-env.js).
 const MUTATIONS = [
+  ['an elevation stops at its mark\u2019s ends, as it did under a 4 ft overhang', 'cut-view.js',
+    c => c.replace('    const forward = uB >= uA;\n', '    if (cut) return cut;\n    const forward = uB >= uA;\n')],
+
   ['the silhouette is drawn before the runs are grown, as it was', 'cut-view.js',
     c => c.replace('        u0 = Math.min(u0, Math.max(eave.u0, run.u0 - reach));\n'
       + '        u1 = Math.max(u1, Math.min(eave.u1, run.u1 + reach));',
@@ -991,6 +994,41 @@ if (!fs.existsSync(MOVIE)) {
       corner ? `foot at ${corner.lo.toFixed(3)} against 10.577 the sheet's edge`
         : 'no corner');
   }
+}
+
+// ── A 4 FT OVERHANG IS DRAWN TO ITS CORNERS ─────────────────────────────
+//
+// Movie, 6 Oct: with the overhang set to 4 ft on the PROJECT page the roof
+// ends came out white and the outlines stopped short. The E marks run the
+// walls plus 2 ft, and the painter stopped every line there while the fill
+// ran on to the real corner. The roof here is the bungalow's own, pushed out
+// to 4 ft by the same reshape the PROJECT page applies.
+{
+  const BUNGALOW = path.join(ROOT, 'proto', 'perf-bungalow.draft');
+  const saved = JSON.parse(fs.readFileSync(BUNGALOW, 'utf8'));
+  const L = win.DraftLevelAssembly, G = win.DraftGeometry2D;
+  saved.roofs = saved.roofs.map(r =>
+    L.reshapeRoof(r, { overhangFt: 4, pitch: r.pitch }, G.offsetOutlineVariable));
+  const env = H.buildEnv(win, saved);
+  ['E1', 'E2'].forEach(id => {
+    const cut = H.standardElevationCuts(env).find(c => c.id === id);
+    const view = H.paintElevation(win, env, cut, { pxPerFt: 40 });
+    const axis = view.axis;
+    const us = saved.roofs.flatMap(r => r.points.map(p => p.x * axis.x + p.z * axis.z));
+    const lo = Math.min(...us), hi = Math.max(...us);
+    const band = bandsOf(view).sort((a, b) => (b.u1 - b.u0) - (a.u1 - a.u0))[0];
+    check(`a 4 ft overhang: the ${id} fascia band runs eave corner to eave corner`,
+      band && Math.abs(band.u0 - lo) < 0.05 && Math.abs(band.u1 - hi) < 0.05,
+      band ? `band u ${band.u0.toFixed(2)}..${band.u1.toFixed(2)}, roof u ${lo.toFixed(2)}..${hi.toFixed(2)}`
+        : 'no band');
+    const outline = view.strokes.filter(st => Math.abs(st.w - SILHOUETTE_W) < 1e-9)
+      .flatMap(st => st.pts.map(p => p.u));
+    check(`a 4 ft overhang: the ${id} roof outline reaches both corners`,
+      outline.length && Math.abs(Math.min(...outline) - lo) < 0.05
+        && Math.abs(Math.max(...outline) - hi) < 0.05,
+      `outline u ${Math.min(...outline).toFixed(2)}..${Math.max(...outline).toFixed(2)}, roof u ${
+        lo.toFixed(2)}..${hi.toFixed(2)}`);
+  });
 }
 
 console.log(`fascia end harness: ${passed} checks passed, ${failures.length} failed`);

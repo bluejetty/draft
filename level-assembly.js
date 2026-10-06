@@ -433,7 +433,112 @@ if (!window.DraftLevelAssembly) {
     return out;
   };
 
+  // ── THE ROOF NUMBERS THE PROJECT PAGE OWNS ──────────────────────────────
+  //
+  // Movie, 6 Oct: set OVERHANG to 5'-0" on the PROJECT page, pressed the
+  // BONE, and got a 2 ft eave. MODEL cut every roof with its own ROOF-tool
+  // number (2 ft, 4/12) and never read the PROJECT one. This is the one
+  // answer to "what overhang and pitch does this roof get", asked by the
+  // build and by the PROJECT save alike.
+  //
+  // THE SAME FALLBACKS THE PROJECT CARDS SHOW. The house reads the split
+  // row on a BILEVEL / MOD BILEVEL (splitOr) and the drawing's own number
+  // otherwise; a garage reads its own row and falls back to the drawing's
+  // number, not the split row's -- cellValue's fallback is the live field.
+  const ROOF_ROWS = Object.freeze(['house', 'attachedGarage', 'detachedGarage']);
+  const ROOF_LEVEL_ID = 7;   // MODEL.html's ROOF_LEVEL_ID
+  const cellNumber = value => (value != null && Number.isFinite(Number(value)) ? Number(value) : null);
+  const positiveNumber = value => (Number.isFinite(Number(value)) && Number(value) > 0 ? Number(value) : null);
+  const projectRoofFor = (drawing, row = 'house', type = drawing?.buildType) => {
+    const rows = drawing?.sectionTable?.rows || {};
+    const own = row === 'house' ? (isSplitType(type) ? rows[type] : null) : rows[row];
+    const overhangFt = cellNumber(own?.roofOverhangFt) ?? positiveNumber(drawing?.roofOverhang) ?? 2;
+    const pitch = cellNumber(own?.roofPitch) ?? positiveNumber(drawing?.roofPitch) ?? 4;
+    return {
+      overhangFt: Math.min(6, Math.max(0, overhangFt)),
+      pitch: Math.min(24, Math.max(0, pitch)),
+    };
+  };
+
+  // WHICH OF THOSE ROWS A ROOF FOLLOWS. The build stamps `follows`; a roof
+  // built before that is read off what it is -- only the build's roofs sit
+  // on the ROOF level, a garage roof cut flush against the house is the
+  // attached one, and one with an eave all round stands alone. A roof the
+  // drafter cut with the ROOF tool sits on its own storey and follows
+  // nothing, so a PROJECT change never moves it.
+  const roofFollows = roof => {
+    if (ROOF_ROWS.includes(roof?.follows)) return roof.follows;
+    if (Number(roof?.levelId) !== ROOF_LEVEL_ID) return null;
+    if (roof?.garage !== true) return 'house';
+    const flush = Array.isArray(roof.edgeOverhang)
+      ? roof.edgeOverhang.some(value => Number(value) === 0)
+      : (roof.edges || []).includes('gable');
+    return flush ? 'attachedGarage' : 'detachedGarage';
+  };
+
+  // ── AND A BUILT ROOF FOLLOWS A CHANGED NUMBER ───────────────────────────
+  //
+  // Movie, 6 Oct: "RESHAPE each time ... allow it to autoregenerate for when
+  // i already have a house drawn". The wallsFollowingHeights rule, for roofs:
+  // it takes BOTH drawings because only the moment of the write knows which
+  // row moved, and a roof follows only the row that did.
+  //
+  // EACH EDGE MOVES BY ITS OWN DIFFERENCE. An eave or a rake goes from the
+  // overhang it has to the new one; a gable cut flush against a wall (zero)
+  // stays on the wall. Offsetting the cut roof by the difference lands where
+  // cutting the wall loop at the new overhang would, so nothing has to
+  // remember the loop the roof was cut from. `offsetVariable` is
+  // geometry-2d's offsetOutlineVariable, handed in so this module keeps no
+  // geometry of its own.
+  //
+  // Null when nothing moved, so the caller leaves the roofs key alone.
+  const reshapeRoof = (roof, to, offsetVariable) => {
+    const points = Array.isArray(roof?.points) ? roof.points : [];
+    const count = points.length;
+    if (count < 3) return roof;
+    const fallback = Number.isFinite(Number(roof.overhang)) ? Number(roof.overhang) : 2;
+    const was = Array.isArray(roof.edgeOverhang) && roof.edgeOverhang.length === count
+      ? roof.edgeOverhang.map(value => (Number.isFinite(Number(value)) ? Number(value) : fallback))
+      : points.map(() => fallback);
+    const now = was.map((value, index) =>
+      (value > 0 || (roof.edges || [])[index] !== 'gable' ? to.overhangFt : value));
+    const delta = now.map((value, index) => value - was[index]);
+    let moved = points;
+    if (delta.some(d => Math.abs(d) > 1e-9)) {
+      const out = offsetVariable(points.map(pt => ({ x: pt.x, z: pt.z })), delta);
+      if (!Array.isArray(out) || out.length !== count
+        || out.some(pt => !Number.isFinite(pt?.x) || !Number.isFinite(pt?.z))) return roof;
+      moved = out.map((pt, index) => ({ ...points[index], x: pt.x, z: pt.z }));
+    }
+    if (moved === points && roof.pitch === to.pitch && roof.overhang === to.overhangFt) return roof;
+    return { ...roof, points: moved, overhang: to.overhangFt, edgeOverhang: now, pitch: to.pitch };
+  };
+  const roofsFollowingProject = (roofs, before, after, offsetVariable) => {
+    if (!Array.isArray(roofs) || !roofs.length || typeof offsetVariable !== 'function') return null;
+    const wanted = {};
+    ROOF_ROWS.forEach(row => {
+      const was = projectRoofFor(before, row);
+      const now = projectRoofFor(after, row);
+      if (was.overhangFt !== now.overhangFt || was.pitch !== now.pitch) wanted[row] = now;
+    });
+    if (!Object.keys(wanted).length) return null;
+    let reshapedAny = false;
+    const following = roofs.map(roof => {
+      const to = wanted[roofFollows(roof)];
+      if (!to) return roof;
+      const reshaped = reshapeRoof(roof, to, offsetVariable);
+      if (reshaped !== roof) reshapedAny = true;
+      return reshaped;
+    });
+    return reshapedAny ? following : null;
+  };
+
   window.DraftLevelAssembly = Object.freeze({
+    ROOF_ROWS,
+    projectRoofFor,
+    roofFollows,
+    reshapeRoof,
+    roofsFollowingProject,
     DEFAULT_FLOOR_THICKNESS_IN,
     defaultLevelAssembly,
     normaliseLevelAssembly,

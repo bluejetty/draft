@@ -59,6 +59,7 @@
   <script src="./shared-file-store.js"></script>
   <script src="./formatters.js"></script>
   <script src="./drawing-format.js"></script>
+  <script src="./geometry-2d.js"></script>
   <script src="./level-assembly.js"></script>
   <script src="./project-page.js"></script>
   <script src="./build-menu.js"></script>
@@ -1258,6 +1259,15 @@
         const followed = window.DraftLevelAssembly.wallsFollowingHeights(
           base.walls, base.levelAssemblies, merged.levelAssemblies);
         if (followed) merged.walls = followed;
+        // ── AND THE ROOFS FOLLOW THE OVERHANG AND PITCH ───────────────────
+        //
+        // Movie, 6 Oct: "RESHAPE each time ... allow it to autoregenerate for
+        // when i already have a house drawn". The same moment, for the same
+        // reason: only here are both the stored numbers and the new ones in
+        // hand, and `base.roofs` is the freshly re-read file's.
+        const reshaped = window.DraftLevelAssembly.roofsFollowingProject(
+          base.roofs, base, merged, window.DraftGeometry2D.offsetOutlineVariable);
+        if (reshaped) merged.roofs = reshaped;
         const file = new File([JSON.stringify(merged)], fileName, { type: 'application/json' });
         try {
           await store.saveSharedFile(file, BUCKET, { ifRev: at.rev });

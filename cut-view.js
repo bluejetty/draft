@@ -1686,10 +1686,45 @@ if (!window.DraftCutView) {
     return { faces, fdnFaces, garageFor, proj, uMin, uMax };
   }
 
+  // ── AN ELEVATION RUNS OUT TO THE EAVES, NOT TO THE MARK'S ENDS ─────────
+  //
+  // Movie, 6 Oct, on a 4 ft overhang: the roof ends came out white with the
+  // outlines stopping short. The four standard marks run the walls' extent
+  // plus 2 ft (cut-marks.js autoElevationCuts), which is exactly a default
+  // eave -- so every roof ever drawn fitted, and a longer one ran past the
+  // window: its fill went on to the real corner while every line, the
+  // fascia band and the silhouette, stopped at the window's edge.
+  //
+  // SO THE WINDOW TAKES IN EVERY ROOF, seen along the elevation's own axis.
+  // Only ever wider: a mark the drafter ran long keeps its length.
+  //
+  // THE LINE ITSELF IS LENGTHENED, not just the window: the silhouette is
+  // sampled from startPt to endPt and every other reader measures off the
+  // same two points, so one longer line keeps them all in step.
+  const reachingEaves = (env, cut, axis) => {
+    const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
+    const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
+    let uMin = Math.min(uA, uB), uMax = Math.max(uA, uB);
+    (env.roofs() || []).forEach(roof => (roof.points || []).forEach(pt => {
+      const u = pt.x * axis.x + pt.z * axis.z;
+      if (Number.isFinite(u)) { uMin = Math.min(uMin, u); uMax = Math.max(uMax, u); }
+    }));
+    const forward = uB >= uA;
+    const toStart = (forward ? uMin : uMax) - uA;
+    const toEnd = (forward ? uMax : uMin) - uB;
+    if (Math.abs(toStart) < 1e-9 && Math.abs(toEnd) < 1e-9) return cut;
+    return {
+      ...cut,
+      startPt: { ...cut.startPt, x: cut.startPt.x + axis.x * toStart, z: cut.startPt.z + axis.z * toStart },
+      endPt: { ...cut.endPt, x: cut.endPt.x + axis.x * toEnd, z: cut.endPt.z + axis.z * toEnd },
+    };
+  };
+
   function cutViewExtents(env, cut) {
     const stack = sectionLevelStack(env);
     if (!stack) return null;
     const axis = cutAxis(cut);
+    if (!sectionWallCrossings(env, cut, axis).length) cut = reachingEaves(env, cut, axis);
     const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
     const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
     let roofTop = null;
@@ -2587,6 +2622,7 @@ if (!window.DraftCutView) {
     const C = inksFor(opts);
     const ink = a => weight(C.ink, a);
     const dir = cut.dirVec;
+    cut = reachingEaves(env, cut, axis);
     const uA = cut.startPt.x * axis.x + cut.startPt.z * axis.z;
     const uB = cut.endPt.x * axis.x + cut.endPt.z * axis.z;
     const uMin = Math.min(uA, uB), uMax = Math.max(uA, uB);
