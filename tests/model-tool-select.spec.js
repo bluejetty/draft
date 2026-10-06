@@ -168,7 +168,8 @@ test('three modes and the type filters, ITEMS and nothing lit to start', async (
   await expect(page.locator('[data-sel-mode]')).toHaveText(
     ['ITEMS', 'WINDOW', 'ALL LEVELS']);
   await expect(page.locator('[data-sel-filter]')).toHaveText(
-    ['LINE', 'WALL', 'OUTLINE', 'FLOOR', 'DOOR/WIN', 'FIXTURE', 'STAIR', 'TAG', 'SHAPE', 'ROOF']);
+    // DIM (Movie, 6 Oct): dimensions are picked, slid a row at a time, deleted.
+    ['LINE', 'WALL', 'OUTLINE', 'FLOOR', 'DOOR/WIN', 'FIXTURE', 'STAIR', 'TAG', 'SHAPE', 'ROOF', 'DIM']);
   expect(await armed(page, 'data-sel-mode')).toEqual(['click']);
   expect(await armed(page, 'data-sel-filter')).toEqual([]);
 });
