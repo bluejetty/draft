@@ -379,6 +379,29 @@ test('NEW past the guard stores the blank: a refresh brings back the blank, not 
     await expect(page.locator('#readout')).toContainText('walls 0/0', { timeout: 10000 });
   });
 
+// Movie, 5 Oct: "once the sheet is blank, please bring up the screen for
+// creating a new house". The house button glows, then the drive-thru rises
+// -- the front door's own call -- and a hand on the page inside the glow
+// keeps it down, so it never lands over someone already drawing.
+test('NEW brings up the house picker on the blank sheet', async ({ page }) => {
+  await openPage(page);
+  await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
+  await page.locator('#file-new').click();
+  await page.locator('[data-guard-discard]').click();
+  await expect(page.locator('#readout')).toContainText('walls 0/0');
+  await expect(page.locator('#drivethru')).not.toHaveAttribute('data-shut', '', { timeout: 6000 });
+});
+
+test('a key pressed inside the glow keeps the house picker down', async ({ page }) => {
+  await openPage(page);
+  await page.locator('#file-new').click();
+  await page.locator('[data-guard-discard]').click();
+  await expect(page.locator('#readout')).toContainText('walls 0/0');
+  await page.keyboard.press('Shift');
+  await page.waitForTimeout(2600);
+  await expect(page.locator('#drivethru')).toHaveAttribute('data-shut', '');
+});
+
 test('SAVE FIRST on NEW puts a copy on the computer before it clears', async ({ page }) => {
   await openPage(page);
   const download = page.waitForEvent('download', { timeout: 8000 });

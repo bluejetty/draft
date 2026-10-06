@@ -5957,10 +5957,9 @@
   // over them would take the press they were making.
   // AND FROM AN EMPTY BONEYARD the same way (Movie, 3 Oct): nothing on the
   // shelf yet, so the drafter is sent here to pick a house.
-  if (['entry', 'boneyard'].includes(new URLSearchParams(location.search).get('from'))) {
-    const spent = new URL(location.href);
-    spent.searchParams.delete('from');
-    history.replaceState(null, '', spent.pathname + spent.search + spent.hash);
+  // AND AFTER NEW (Movie, 5 Oct): "once the sheet is blank, please bring up
+  // the screen for creating a new house" -- the same rise, the same cancel.
+  const pullUpToWindow = () => {
     const cancel = () => {
       ['pointerdown', 'keydown', 'wheel'].forEach(type =>
         document.removeEventListener(type, cancel, true));
@@ -5973,6 +5972,12 @@
     ['pointerdown', 'keydown', 'wheel'].forEach(type =>
       document.addEventListener(type, cancel, true));
     callSign(boneFoot, 'menu');
+  };
+  if (['entry', 'boneyard'].includes(new URLSearchParams(location.search).get('from'))) {
+    const spent = new URL(location.href);
+    spent.searchParams.delete('from');
+    history.replaceState(null, '', spent.pathname + spent.search + spent.hash);
+    pullUpToWindow();
   }
   document.getElementById('dt-close').addEventListener('click', () => {
     setSign(false);
@@ -20153,6 +20158,12 @@
     const clear = async () => {
       if (!(await adoptAndShow(blankDrawingFile()))) return;
       await save();
+      // AND THE HOUSE PICKER COMES UP ON THE BLANK (Movie, 5 Oct): "once the
+      // sheet is blank, please bring up the screen for creating a new house".
+      // The same call the front door makes -- the house button glows, then
+      // the drive-thru rises -- and a hand on the page inside the glow still
+      // cancels it, so it never lands over someone already drawing.
+      pullUpToWindow();
     };
     if (!dirty && !drawingHasWork()) { clear(); return; }
     askToSave('NEW clears this drawing from this browser. Save a copy to your computer first?',
