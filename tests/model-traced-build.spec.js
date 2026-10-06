@@ -216,7 +216,7 @@ test('the MOD BILEVEL room is cantilevered 2 ft past the garage and the lower ro
   await drawType(page, 'bilevel', 'modifiedBilevel');
   await trace(page, HOUSE);
   await trace(page, DEEP_GARAGE);
-  await expect(page.locator('#strip-message')).toContainText('Drag the orange line');
+  await expect(page.locator('#strip-message')).toContainText('Drag the bold line');
   expect(await page.evaluate(() => window.ModelRoomPick.depthFt()), 'the design\'s 18 ft to start').toBe(18);
   // Past the 2 ft it may hang: held at 26.
   await dragRoomTo(page, 40);

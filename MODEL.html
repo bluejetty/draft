@@ -10782,7 +10782,7 @@
   // build turns the drawing back to no turn before it reads the trace
   // (builtFrontDown), so the preview does the same to the points and turns
   // what it draws forward again.
-  const ROOM_PICK_LINE = 'Drag the orange line to where the room over the garage ends — '
+  const ROOM_PICK_LINE = 'Drag the bold line to where the room over the garage ends — '
     + '8 ft at least, up to 2 ft past the garage front. Then press the bone to build.';
   const planTurnNow = () => ((Number(drawing?.planTurn) || 0) % 4 + 4) % 4;
   const toBuilderFrame = p => window.DraftPlanRotate.spin(p, (4 - planTurnNow()) % 4);
@@ -10847,9 +10847,11 @@
     ctx.stroke();
     ctx.fillStyle = skin['accent'];
     ctx.font = '12px "DM Mono", monospace';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.fillText(`ROOM ${pick.over.depthFt}'`, (a.x + b.x) / 2, (a.y + b.y) / 2 - 6);
+    // OFF THE END OF THE LINE, where no wall of the trace runs through it.
+    const tip = a.x >= b.x ? a : b;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`ROOM ${pick.over.depthFt}'`, tip.x + 8, tip.y);
     ctx.restore();
   };
   // EXPOSED FOR THE SPEC, which has to find the line to press on it.
