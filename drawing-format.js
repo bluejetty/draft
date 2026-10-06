@@ -908,6 +908,11 @@ if (!window.DraftDrawingFormat) {
         // read as a plate height of ZERO bears a garage roof at the main
         // floor line instead of on its wall stack.
         plateHeightFt: num(roof?.plateHeightFt),
+        // WHICH PROJECT ROW THE BUILD CUT IT FROM, so a changed overhang or
+        // pitch on the PROJECT page reshapes it (level-assembly.js
+        // roofsFollowingProject). Absent on a roof the drafter cut by hand.
+        ...(['house', 'attachedGarage', 'detachedGarage'].includes(roof?.follows)
+          ? { follows: roof.follows } : {}),
         ...(Array.isArray(env.roofingIds) && env.roofingIds.includes(roof?.roofing)
           ? { roofing: roof.roofing } : {}),
         ...(Array.isArray(env.cornerStyles) && env.cornerStyles.includes(roof?.gableCorner)
