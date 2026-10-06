@@ -10444,6 +10444,16 @@
   let wallRunNodes = [];
   const RAY_HIT_PX = 6;
   const trackingNodes = () => {
+    // AND THE HOUSE'S CORNERS WHILE THE GARAGE IS DRAWN (Movie, 6 Oct: "when
+    // i draw the GARAGE shape can the HOUSE shape nodes also create the
+    // ORANGE Raylines"), so a garage corner lines up with the house's before
+    // the first one is down. After the garage's own, so theirs keep their
+    // places in the list.
+    if (activeTool === 'outline' && outlineGarage && tracedOrder && traceStillThere(tracedHouse)) {
+      const house = tracedHouse.points.map(p => ({ x: Number(p.x), z: Number(p.z) }))
+        .filter(p => !outlineCorners.some(c => Math.abs(c.x - p.x) < 1e-6 && Math.abs(c.z - p.z) < 1e-6));
+      return [...outlineCorners, ...house];
+    }
     if (activeTool === 'outline') return outlineCorners;
     if (!drawsRun() || !drawStart) { wallRunNodes = []; return wallRunNodes; }
     const last = wallRunNodes[wallRunNodes.length - 1];
@@ -15806,6 +15816,8 @@
     || (activeTool === 'floor' && floorCorners.length > 0)
     || (activeTool === 'shape' && shapeCorners.length > 0)
     || (activeTool === 'outline' && outlineCorners.length > 0)
+    // The house's rays light under the cursor before the garage's first corner.
+    || (activeTool === 'outline' && outlineGarage && !!tracedOrder && traceStillThere(tracedHouse))
     || (rulerOn && !!rulerFrom);
 
   // THE LENGTH ON THE DRAWING, beside the one on the strip. Both read
