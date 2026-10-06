@@ -1509,6 +1509,7 @@
 <!-- A PREMADE DESIGN BUILT OFF THE DRAFTER'S OWN OUTLINE (BONEYARD PR 3):
      the traced loops become the plan buildPremadePlan already reads. -->
 <script src="./traced-plans.js"></script>
+<script src="./garage-roofs.js"></script>
 <!-- Where an ordered garage stands. A traced loop says where it goes by
      being traced; an autobuilt one has to be told, and that is a rule about
      buildings rather than about this page. -->
@@ -12910,7 +12911,8 @@
   // one rule, one home.
   const raiseRoofOver = (loop, { garage = false, plateHeightFt = null,
     sourceLevelId = null, against = null, flush = null, rake = null,
-    follows = garage ? 'attachedGarage' : 'house', buildType = drawing.buildType } = {}) => {
+    follows = garage ? 'attachedGarage' : 'house', buildType = drawing.buildType,
+    stepped = false, cuts = null } = {}) => {
     const G = window.DraftGeometry2D;
     // ── THE OVERHANG AND PITCH ARE THE PROJECT PAGE'S ────────────────────
     //
@@ -12990,6 +12992,33 @@
     // a gable's wall line. Every roof before the tie piece had one distance
     // all the way round, so `overhang` alone was the whole truth; a roof with
     // both kinds of gable at once makes it a lie. See drawRoof2D.
+    // `stepped`: a ring whose flush and eave stretches share a line (the
+    // bungalow's split roofs) is cut by garage-roofs.js, which steps between
+    // them rather than slanting across.
+    const steppedCut = stepped
+      ? window.DraftGarageRoofs.cutRoof(ring, [...named], roofOverhangFt) : null;
+    if (steppedCut) {
+      drawing.roofs = drawing.roofs || [];
+      const roof = {
+        id: newDrawingItemId('roof'),
+        points: steppedCut.points,
+        levelId: ROOF_LEVEL_ID,
+        sourceLevelId,
+        sourceShapeId: null,
+        edges: steppedCut.edges,
+        overhang: roofOverhangFt,
+        edgeOverhang: steppedCut.edgeOverhang,
+        pitch: roofPitch,
+        fascia: ROOF_FASCIA_IN,
+        garage,
+        follows,
+        ...(Array.isArray(cuts) && cuts.length ? { cuts: cuts.map(points => ({ points })) } : {}),
+        layer: 'A-ROOF',
+      };
+      if (garage && Number.isFinite(plateHeightFt)) roof.plateHeightFt = plateHeightFt;
+      drawing.roofs.push(roof);
+      return { list: drawing.roofs, item: roof };
+    }
     const edgeOverhang = ring.map((_, index) => (flushAt(index) ? 0 : roofOverhangFt));
     const pts = (sharedWith || named.size || raked.size)
       ? G.offsetOutlineVariable(ring, edgeOverhang)
@@ -14904,10 +14933,19 @@
           - LA.levelFloorFt(assemblyFor(OVER_GARAGE_LEVEL_ID))
           + LA.levelFloorFt(assemblyFor(ENTRY_LEVEL_ID))
         : null;
+      // AND OFF A SPLIT, WITH NO ROOM ON IT, TO THE GARAGE'S OWN HEIGHT.
+      // Movie, 6 Oct: the house and garage walls "should be different
+      // heights", the garage's default 10'-1 3/4" from the house sill --
+      // read as a top over MAIN FL so it compares with the house's own
+      // (garage-roofs.js). A room over it still needs its walls at the
+      // house's plate, where that room's floor is.
+      const ownTopFt = (!split && !plan.overGarage)
+        ? window.DraftGarageRoofs.garageTopFt(drawing, null) : null;
+      const garageTopHeight = underRoomFt || ownTopFt;
       garageBody = raiseLoop(plan.garage, levelId,
         { garage: true, body: 'garage',
           openings: plan.garageOpenings, against: plan.foundation || plan.house,
-          ...(underRoomFt ? { topHeight: underRoomFt } : {}) });
+          ...(garageTopHeight ? { topHeight: garageTopHeight } : {}) });
       raised.push(garageBody);
     }
 
@@ -15051,16 +15089,46 @@
     // the ENTRY deck, while the garage's walls stand on the sill under it --
     // one entry package lower -- so the plate is the walls' height less that
     // package, or the roof floats ten inches over the walls it sits on.
+    // OFF A SPLIT the plate IS the garage walls' own top, which is measured
+    // from MAIN FL the way a garage roof's plate is (cut-view roofBaseElev).
     const garagePlateFt = (split && garageBody)
       ? Math.max(...garageBody.walls.map(wall => Number(wall.topHeight) || 0))
         - window.DraftLevelAssembly.levelFloorFt(assemblyFor(ENTRY_LEVEL_ID))
-      : assemblyFor(levelId).wallHeightFt;
+      : (garageBody && !plan.overGarage)
+        ? Math.max(...garageBody.walls.map(wall => Number(wall.topHeight) || 0))
+        : assemblyFor(levelId).wallHeightFt;
+    // ── A BUNGALOW'S GARAGE: ONE ROOF IF THE TOPS MATCH, TWO IF NOT ─────
+    //
+    // Movie, 6 Oct: "if both walls are same height exactly they should be
+    // ONE roof". The design hands one roof over both; when the garage tops
+    // out above or below the house, garage-roofs.js cuts two instead and the
+    // lower one dies into the taller wall.
+    const grouped = (!split && garageBody && plan.storeys === 1 && !plan.overGarage
+      && !plan.garageRoof)
+      ? window.DraftGarageRoofs.roofLoops({
+        house: plan.house, garage: plan.garage,
+        houseTopFt: assemblyFor(levelId).wallHeightFt, garageTopFt: garagePlateFt })
+      : null;
+    const twoRoofs = grouped && !grouped.merged ? grouped : null;
     if (levelPresent(ROOF_LEVEL_ID)) {
       // THE ROOF'S OWN LOOP, which is NOT always the house's body. A
       // bungalow with a garage is roofed over the perimeter of both -- the
       // design says so through `houseRoof`, because where the two bodies
       // meet is the design's arithmetic and not this page's.
-      madeRoofs.push(raiseRoofOver(plan.houseRoof || plan.house, { buildType: roofType }));
+      madeRoofs.push(twoRoofs
+        ? raiseRoofOver(twoRoofs.house.ring, { buildType: roofType, flush: twoRoofs.house.flush,
+          stepped: true, cuts: twoRoofs.house.cuts })
+        : raiseRoofOver(plan.houseRoof || plan.house, { buildType: roofType }));
+      if (twoRoofs) {
+        madeRoofs.push(raiseRoofOver(twoRoofs.garage.ring, {
+          buildType: roofType,
+          garage: true,
+          plateHeightFt: garagePlateFt,
+          sourceLevelId: levelId,
+          flush: twoRoofs.garage.flush,
+          stepped: true,
+        }));
+      }
       if (plan.garageRoof) {
         // THE PLATE IS THE STOREY THE GARAGE ACTUALLY STANDS ON, asked of the
         // same assembly its walls were raised to rather than typed again.

@@ -61,6 +61,8 @@
   <script src="./drawing-format.js"></script>
   <script src="./geometry-2d.js"></script>
   <script src="./level-assembly.js"></script>
+  <script src="./traced-plans.js"></script>
+  <script src="./garage-roofs.js"></script>
   <script src="./project-page.js"></script>
   <script src="./build-menu.js"></script>
   <script src="./design-notices.js"></script>
@@ -1268,6 +1270,27 @@
         const reshaped = window.DraftLevelAssembly.roofsFollowingProject(
           base.roofs, base, merged, window.DraftGeometry2D.offsetOutlineVariable);
         if (reshaped) merged.roofs = reshaped;
+        // ── THE GARAGE'S WALLS FOLLOW ITS OWN HEIGHT, AND THE ROOFS REGROUP ─
+        //
+        // Movie, 6 Oct: the house and garage walls "should be different
+        // heights" -- the house's WALL HEIGHT moves the house's walls only
+        // (wallsFollowingHeights skips the garage), the ATTACHED GARAGE's
+        // moves the garage's -- "if both walls are same height exactly they
+        // should be ONE roof", so a change to either regroups a bungalow's
+        // roofs (garage-roofs.js).
+        const LA = window.DraftLevelAssembly, GR = window.DraftGarageRoofs;
+        const bodies = GR.bodiesOf(base);
+        const garageOutline = bodies ? bodies.garage : null;
+        const garageWas = GR.garageTopFt(base, garageOutline);
+        const garageNow = GR.garageTopFt(merged, garageOutline);
+        const garageWalls = LA.garageWallsFollowing(merged.walls, garageWas, garageNow,
+          GR.detachedWallTest(base));
+        if (garageWalls) merged.walls = garageWalls;
+        if (Math.abs(garageWas - garageNow) > 1e-9
+          || Math.abs(LA.houseWallTopFt(base) - LA.houseWallTopFt(merged)) > 1e-9) {
+          const regrouped = GR.regroupRoofs(merged);
+          if (regrouped) merged.roofs = regrouped;
+        }
         const file = new File([JSON.stringify(merged)], fileName, { type: 'application/json' });
         try {
           await store.saveSharedFile(file, BUCKET, { ifRev: at.rev });

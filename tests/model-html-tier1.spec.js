@@ -463,6 +463,11 @@ test.describe('MODEL.html tier 1', () => {
       // into the plan buildPremadePlan reads, so the premade build stays the
       // one builder rather than a second copy of it living on this page.
       './traced-plans.js',
+      // AND ONE ROOF OR TWO over a bungalow's house and garage (Movie, 6 Oct:
+      // "if both walls are same height exactly they should be ONE roof").
+      // Pure, and PROJECT regroups built roofs with the same module, so the
+      // build and the regroup cannot disagree about which edges go flush.
+      './garage-roofs.js',
       // AND WHERE AN ORDERED GARAGE STANDS. 40 lines, no dependency of its
       // own: a traced loop says where it goes by being traced, an autobuilt
       // one has to be told, and PROJECT will have to be told the same thing

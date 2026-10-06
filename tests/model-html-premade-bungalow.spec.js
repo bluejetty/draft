@@ -50,13 +50,22 @@ const empty = () => ({
   groups: [], levelLocks: [], underlays: [],
 });
 
-async function open(page) {
+// A HOUSE AT 9'-1 1/8", WHICH THE GARAGE'S 10'-1 3/4" DEFAULT TOPS OUT LEVEL
+// WITH (Movie, 6 Oct: the garage stands on the house sill, one MAIN floor
+// package below the house's floor). The checks that are about a garage
+// standing at the house's plate -- one roof over a bungalow and its garage,
+// a 2 STOREY's garage roof a storey down -- open on this. At the office's
+// 8'-1 1/8" the garage stands a foot taller and is roofed apart, which
+// tests/project-garage-height.spec covers.
+const matchedTops = () => ({ ...empty(), levelAssemblies: { 3: { wallHeightFt: 109.125 / 12 } } });
+
+async function open(page, file = empty()) {
   await h.openModel(page, { webgl: false });
   await page.evaluate(async ({ bucket, f }) => {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(f)], 'drawing.json',
         { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: empty() });
+  }, { bucket: BUCKET, f: file });
   await page.goto('/MODEL.html');
   // The readout's TEXT, not its visibility: it is a debug strip and starts
   // hidden, so toBeVisible waits for ever on a page that loaded perfectly.
@@ -993,12 +1002,12 @@ test('the room over the garage does not raise the house wall it stands against',
 });
 
 test('the room over the garage gets its windows and its floor', async ({ page }) => {
-  await open(page);
+  await open(page, matchedTops());
   await order(page, 'bungalow', 'twoStorey-over');
   await saveOnNewPage(page);
   const over = await savedFile(page);
 
-  await open(page);
+  await open(page, matchedTops());
   await order(page, 'bungalow', 'twoStorey-garage');
   await saveOnNewPage(page);
   const without = await savedFile(page);
@@ -1183,7 +1192,7 @@ test('the garage roof bears on the garage-s own walls, under either house', asyn
   // outline". There is no garage roof there to bear on anything, which the
   // check below this one is about. A 2 STOREY's garage is deliberately single
   // storey, so its roof is a storey down and still its own.
-  await open(page);
+  await open(page, matchedTops());
   await order(page, 'bungalow', 'twoStorey-garage');
   await saveOnNewPage(page);
   const m = await cutStack(page);
@@ -1219,7 +1228,7 @@ test('the garage roof bears on the garage-s own walls, under either house', asyn
 // acted on the first of two simultaneous arrivals and left the second hanging
 // off the ring as a spike. proto/roof-skeleton-harness.js carries the shape.
 test('a bungalow and its garage are one roof over one perimeter', async ({ page }) => {
-  await open(page);
+  await open(page, matchedTops());
   await order(page, 'bungalow', 'bungalow-garage');
   await saveOnNewPage(page);
   const saved = await savedFile(page);
@@ -1244,7 +1253,7 @@ test('a bungalow and its garage are one roof over one perimeter', async ({ page 
 });
 
 test('a 2 STOREY-s garage roof bears one storey below the house-s', async ({ page }) => {
-  await open(page);
+  await open(page, matchedTops());
   await order(page, 'bungalow', 'twoStorey-garage');
   await saveOnNewPage(page);
   const m = await cutStack(page);
@@ -1269,7 +1278,7 @@ test('a 2 STOREY-s garage roof bears one storey below the house-s', async ({ pag
 test('the garage roof takes its plate from the storey it stands on', async ({ page }) => {
   // NOT A TYPED NUMBER. The plate is what makes the drop the right size, and
   // a literal here would pass on a page that had stopped asking the assembly.
-  await open(page);
+  await open(page, matchedTops());
   await order(page, 'bungalow', 'twoStorey-garage');
   await saveOnNewPage(page);
   const m = await cutStack(page);

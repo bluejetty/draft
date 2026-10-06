@@ -22,12 +22,19 @@ const empty = () => ({
   groups: [], levelLocks: [], underlays: [],
 });
 
-async function open(page) {
+// A HOUSE AT 9'-1 1/8", WHICH THE GARAGE'S 10'-1 3/4" DEFAULT TOPS OUT LEVEL
+// WITH (Movie, 6 Oct: the garage stands on the house sill, one MAIN floor
+// package below the house's floor). At the office's 8'-1 1/8" the garage
+// stands a foot taller and gets its own roof -- tests/project-garage-height
+// covers that; the checks here are about a garage under the house's plate.
+const matchedTops = () => ({ ...empty(), levelAssemblies: { 3: { wallHeightFt: 109.125 / 12 } } });
+
+async function open(page, file = empty()) {
   await h.openModel(page, { webgl: false });
   await page.evaluate(async ({ bucket, f }) => {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: empty() });
+  }, { bucket: BUCKET, f: file });
   await page.goto('/MODEL.html');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
@@ -87,7 +94,7 @@ const HOUSE = [[-10, -8], [10, -8], [10, 8], [-10, 8]];
 const GARAGE = [[-2, 8], [12, 8], [12, 24], [-2, 24]];
 
 test('a traced 1 STOREY + GARAGE is built whole, under one roof', async ({ page }) => {
-  await open(page);
+  await open(page, matchedTops());
   await drawType(page, 'bungalow', 'bungalow-garage');
   await trace(page, HOUSE);
   await expect(page.locator('#strip-message')).toContainText('Now draw the garage');
@@ -292,7 +299,7 @@ test('the garage step brings up Professor Gruff, and "don\'t show this again" ho
 });
 
 test('a garage drawn as three legs off the house closes itself along the house wall', async ({ page }) => {
-  await open(page);
+  await open(page, matchedTops());
   await drawType(page, 'bungalow', 'bungalow-garage');
   await trace(page, HOUSE);
   // First corner on the front wall, out, across, and back -- the last press a

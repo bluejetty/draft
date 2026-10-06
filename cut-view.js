@@ -1674,7 +1674,13 @@ if (!window.DraftCutView) {
       // stored height, because a bilevel saved before 3 Oct stored its garage
       // walls at the level default and bore its roof at the plate; the roof
       // is right on both. Every other house keeps the storey's top.
-      if (garage && split) {
+      //
+      // AND OFF A SPLIT, WHEN THE GARAGE HAS A ROOF OF ITS OWN. Movie, 6 Oct:
+      // the house and garage walls "should be different heights" -- a garage
+      // roofed apart from the house bears at its own plate, so its walls stop
+      // there; one roofed together with the house has no roof of its own and
+      // keeps the storey's top, which is the same height by construction.
+      if (garage) {
         const plate = garageRoofBase(garage);
         if (plate != null) level = { ...level, wallTop: plate };
       }
