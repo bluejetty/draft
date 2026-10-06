@@ -160,6 +160,32 @@ test('a traced MODIFIED BILEVEL gets its entry and its room over the garage', as
   expect(d.stairs.length, 'three flights').toBeGreaterThanOrEqual(3);
 });
 
+// THE BONE MID-TRACE IS NOT A PREMADE ORDER. Movie, 5 Oct: "i tried the
+// outline method ... it allowed me to draw the outline, but then it asked me
+// about saving or discarding the previous drawing ... and then it didn't make
+// the outline, it just created the premade version square version". The
+// MODIFIED BILEVEL waits for the garage loop; a press of the bone before it
+// fell through to the order, counted his house loop as a building already in
+// the file, offered a clean file and built the premade square. It says what
+// the trace still needs now, and the trace carries on to his own house.
+test('the bone pressed before the garage is traced asks for the garage, not a new file', async ({ page }) => {
+  await open(page);
+  await drawType(page, 'bilevel', 'modifiedBilevel');
+  await trace(page, HOUSE);
+  await expect(page.locator('#strip-message')).toContainText('Now trace the garage');
+  await page.locator('#bone').click();
+  await page.locator('[data-build-choice-build]').click();
+  await expect(page.locator('#strip-message')).toContainText('Trace the garage first');
+  await expect(page.locator('#file-guard')).toBeHidden();
+  await trace(page, DEEP_GARAGE);
+  const d = await build(page);
+  expect(d.levels.some(l => Number(l.id) === 4), 'OVER GARAGE').toBe(true);
+  // HIS house, not the premade square: the main floor stands on his loop.
+  const xs = d.walls.filter(w => Number(w.levelId) === 3 && w.body !== 'garage')
+    .flatMap(w => [w.start.x, w.end.x]);
+  expect(Math.min(...xs)).toBeCloseTo(Math.min(...HOUSE.map(p => p[0])), 0);
+});
+
 // A TRACE THE TYPE CANNOT TAKE IS NOT BUILT, and says why: the bone stays
 // the way on once the drafter has fixed it.
 test('a closed trace the type refuses builds nothing and says why', async ({ page }) => {

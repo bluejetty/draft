@@ -6162,6 +6162,22 @@
       // there is nothing traced to build from, and the premade design is
       // what the order round is for.
       if (fireBuild()) return;
+      // A TRACE STILL BEING DRAWN IS NOT A PREMADE ORDER. Movie, 5 Oct: "i
+      // tried the outline method ... it allowed me to draw the outline, but
+      // then it asked me about saving or discarding the previous drawing ...
+      // and then it didn't make the outline, it just created the premade
+      // version". A type that hangs a garage on the house waits for the
+      // garage loop, so this press found nothing it could build yet -- and
+      // falling through counted his own house loop as a building already in
+      // the file, offered a clean one, and threw the trace away for the
+      // premade square. While the traced order is open, the press says what
+      // the trace still needs instead.
+      if (tracedOrder) {
+        sayOnStrip(tracedHouse && !tracedGarage && outlineGarage
+          ? 'Trace the garage first — press each corner, then the first corner again to close. Your house goes up as soon as it closes.'
+          : 'Finish tracing the outline first — press each corner, then the first corner again to close.');
+        return;
+      }
       orderAtWindow();
     });
   // Escape backs out, as it does from every other card on this page. It
