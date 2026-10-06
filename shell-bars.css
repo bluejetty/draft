@@ -889,10 +889,12 @@
      three kinds of modal would teach the drafter that they are three
      different kinds of thing. They are one -- a question that must be
      answered before the page does what was asked. */
-  #file-guard, #save-as { position:fixed; inset:0; z-index:7; display:flex;
+  /* PROJECT's BUILD question (DRAW OUTLINE / NO OUTLINE) is one more of
+     them, so it wears this shell rather than a scrim of its own. */
+  #file-guard, #save-as, #project-build-ask { position:fixed; inset:0; z-index:7; display:flex;
     align-items:center; justify-content:center; padding:24px;
     background:rgba(0,0,0,0.35); }
-  #file-guard[hidden], #save-as[hidden] { display:none; }
+  #file-guard[hidden], #save-as[hidden], #project-build-ask[hidden] { display:none; }
   #save-as-name { width:100%; box-sizing:border-box; margin:0 0 12px;
     padding:7px 9px; border-radius:3px; border:1px solid var(--edge-panel);
     background-color: var(--surface-chip); color: var(--ink-primary);
