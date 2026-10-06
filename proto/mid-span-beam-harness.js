@@ -34,12 +34,11 @@ const ROOT = path.join(__dirname, '..');
 // -- measured before the table was written, so a row that goes red is the row
 // and not the loader.
 const MUTATIONS = [
-  // JOISTS SPAN THE SHORT WAY. Read off the long side instead, a 40 x 18
-  // house gets a beam it does not need -- which is the whole trigger.
-  ['the trigger is read off the long span, not the short', 'build-house.js',
-    c => c.replace('    const shortSpan = Math.min(w, d);',
-      '    const shortSpan = Math.max(w, d);')],
-
+  // JOISTS SPAN THE SHORT WAY -- and since 6 Oct that is asked twice. The
+  // early return on the short span used to be the only gate; now the row
+  // count is taken off the short axis's own strip, so a 40 x 18 house reads
+  // one bay and lays nothing whichever side the early return measured. Bending
+  // it alone changes no answer, so it is not a row here.
   // THE TRIGGER'S VALUE, not its strictness. 19 is Movie's number; at 18 a
   // 19 ft short span gets a beam it should not have.
   //
@@ -67,9 +66,33 @@ const MUTATIONS = [
   ['a hole in the floor is not cut out of the strip', 'build-house.js',
     c => c.replace('    holes.forEach(hole => {', '    [].forEach(hole => {')],
 
-  ['two beams at the third points arrive a storey too late', 'build-house.js',
-    c => c.replace('    const cuts = shortSpan > 2 * beamAtFt',
-      '    const cuts = shortSpan > 3 * beamAtFt')],
+  // MOVIE, 6 OCT: rows enough that no joist passes 19 ft. Rounded the other
+  // way, an 81 ft house is three bays of 27.
+  ['the bays are counted down, so a joist may run past 19 ft', 'build-house.js',
+    c => c.replace('      const bays = Math.ceil((b - a) / beamAtFt - 1e-9);',
+      '      const bays = Math.max(1, Math.floor((b - a) / beamAtFt));')],
+
+  // The old cap: one beam, or two at third points, whatever the width.
+  ['no more than two rows however wide the house', 'build-house.js',
+    c => c.replace('      for (let k = 1; k < bays; k++) cutStrips.push(',
+      '      for (let k = 1; k < Math.min(bays, 3); k++) cutStrips.push(')],
+
+  // A row is kept where the floor IT sits in needs it -- the old rule asked
+  // the section through the middle of the house, which an arm off to one
+  // side never contains.
+  ['a row out in an arm is judged by the middle of the house', 'build-house.js',
+    c => c.replace('      const host = spans.find(([a, b]) => a + 1e-6 < c && c < b - 1e-6) || [0, 0];',
+      '      const mid = (Math.min(...points.map(crossCoord)) + Math.max(...points.map(crossCoord))) / 2;\n'
+      + '      const host = spans.find(([a, b]) => a <= mid && mid <= b) || [0, 0];')],
+
+  // A stair that splits the floor into narrow strips does not take the beam.
+  ['a stair leaving only narrow strips drops the beam', 'build-house.js',
+    c => c.replace('    if (!cutStrips.length && strips.length) {', '    if (false) {')],
+
+  // A row lying on a section's wall is a beam on the foundation.
+  ['a row along an arm\'s own wall is kept as a beam', 'build-house.js',
+    c => c.replace('      const host = spans.find(([a, b]) => a + 1e-6 < c && c < b - 1e-6) || [0, 0];',
+      '      const host = spans.find(([a, b]) => a - 1e-9 <= c && c <= b + 1e-9) || [0, 0];')],
 
   // CEIL, NOT FLOOR: 40 ft at a 12 ft limit is four spans of 10, not three of
   // 13.33. Floor is the arithmetic that keeps the post count down and puts a
@@ -161,14 +184,100 @@ const lensOf = beams => beams
   checkEq('and adds the posts to match', plan.columns.length, 4);
 }
 
-// ── Past twice the trigger, two beams at the third points ─────────────────
+// ══ MOVIE'S ROW RULE, 6 OCT ═══════════════════════════════════════════════
+// "for AUTOplacement with 1-0 5/8" floor the max span of joists is 19ft so
+//  we will need to shift the beams/columns and add at least 1 more row,
+//  maybe 2 are needed"
+
+// The widest joist span left anywhere in the floor: each cross-section of the
+// outline, cut by the beams that run through that slice.
+const worstJoist = (points, beams) => {
+  const runsAlongX = beams.every(b => Math.abs(b.start.z - b.end.z) < 1e-6);
+  const along = p => (runsAlongX ? p.x : p.z), cross = p => (runsAlongX ? p.z : p.x);
+  const lo = Math.min(...points.map(along)), hi = Math.max(...points.map(along));
+  let worst = 0;
+  for (let t = lo + 0.05; t < hi; t += 0.5) {
+    const hits = [];
+    points.forEach((a, i) => {
+      const b = points[(i + 1) % points.length];
+      if ((along(a) > t) === (along(b) > t)) return;
+      hits.push(cross(a) + (t - along(a)) / (along(b) - along(a)) * (cross(b) - cross(a)));
+    });
+    hits.sort((p, q) => p - q);
+    for (let i = 0; i + 1 < hits.length; i += 2) {
+      const stops = [hits[i], hits[i + 1]];
+      beams.forEach(b => {
+        const c = cross(b.start), s0 = Math.min(along(b.start), along(b.end)), s1 = Math.max(along(b.start), along(b.end));
+        if (c > hits[i] && c < hits[i + 1] && t >= s0 - 1e-6 && t <= s1 + 1e-6) stops.push(c);
+      });
+      stops.sort((p, q) => p - q);
+      for (let s = 0; s + 1 < stops.length; s++) worst = Math.max(worst, stops[s + 1] - stops[s]);
+    }
+  }
+  return round(worst);
+};
+const poly = list => list.map(([x, z]) => ({ x, z }));
 {
-  // 60 x 40: short span 40 > 2 x 19, so the strip's thirds rather than its
-  // middle. The strip is z = -20..20, so the cuts are at -20 + 40/3 and
-  // -20 + 80/3.
+  // 60 x 40: the old rule put two rows at the thirds, 13.33 apart -- the
+  // same answer, since 40 is three bays of 19 or less.
   const plan = midSpanBeams(rect(60, 40));
-  checkList('a very wide house gets two beams at the third points',
+  checkList('40 ft deep takes two rows at the thirds',
     zsOf(plan.beams.map(b => b.start)), [round(-20 + 40 / 3), round(-20 + 80 / 3)]);
+}
+{
+  // 38.5 deep: one beam would leave 19.25 a side.
+  const plan = midSpanBeams(rect(60, 38.5));
+  checkEq('just past 2 x 19 takes a second row', zsOf(plan.beams.map(b => b.start)).length, 2);
+  checkEq('and both spans are legal', worstJoist(rect(60, 38.5), plan.beams) <= 19, true);
+}
+{
+  // 81 x 92, the size of Movie's L: the old rule stopped at two rows and
+  // left 27 ft joists. 81 is five bays of 16.2.
+  const plan = midSpanBeams(rect(81, 92));
+  checkEq('an 81 ft span takes four rows', xsOf(plan.beams.map(b => b.start)).length, 4);
+  checkEq('so no joist passes 19 ft', worstJoist(rect(81, 92), plan.beams) <= 19, true);
+}
+{
+  // Movie's house (6 Oct screenshot): an L, 81 across the top 26 ft and 47
+  // down the rest of 92. The old answer was rows at 27 and 47 -- 34 ft of
+  // joist between the wall and the first.
+  const house = poly([[0, 0], [81, 0], [81, 26], [47, 26], [47, 92], [0, 92]]);
+  const plan = midSpanBeams(house);
+  checkEq('the L has no joist past 19 ft', worstJoist(house, plan.beams) <= 19, true);
+  // The rows out in the wing (x past 47) stop at the wing's back wall.
+  const wingRows = plan.beams.filter(b => b.start.x > 47 + 1e-6);
+  checkEq('rows out in the wing stay in the wing',
+    wingRows.length > 0 && wingRows.every(b => Math.max(b.start.z, b.end.z) <= 26 + 1e-6), true);
+}
+{
+  // A T whose stem is only 20 ft wide in places: every section, not just the
+  // middle one, is held to the limit.
+  const tee = poly([[0, 0], [70, 0], [70, 30], [45, 30], [45, 70], [25, 70], [25, 30], [0, 30]]);
+  const plan = midSpanBeams(tee);
+  checkEq('a T has no joist past 19 ft', worstJoist(tee, plan.beams) <= 19, true);
+}
+{
+  // An E on its side: the main body, a 17 ft arm along the front and a 30 ft
+  // arm along the back. The rows divide 80 ft into five bays; the ones near
+  // the arms snap onto their walls at z = 17 and 50. The front arm spans 17
+  // and needs nothing; the back arm spans 30 and needs a row of its own --
+  // which a rule asking the middle of the house (z = 40, in neither arm)
+  // never gives it.
+  const e = poly([[0, 0], [90, 0], [90, 17], [30, 17], [30, 50], [90, 50], [90, 80], [0, 80]]);
+  const plan = midSpanBeams(e);
+  checkEq('a narrow arm gets no row, whatever the arm beside it needs',
+    plan.beams.some(b => Math.max(b.start.x, b.end.x) > 30 + 1e-6 && b.start.z <= 17 + 1e-6), false);
+  checkEq('and no row runs along an arm\'s own wall',
+    plan.beams.some(b => Math.max(b.start.x, b.end.x) > 30 + 1e-6
+      && [17, 50].some(z => Math.abs(b.start.z - z) < 1e-6)), false);
+  checkEq('the wide arm does', plan.beams.some(b => Math.max(b.start.x, b.end.x) > 30 + 1e-6 && b.start.z > 50), true);
+  checkEq('and nothing passes 19', worstJoist(e, plan.beams) <= 19, true);
+}
+{
+  // Wide in both directions, so the rows run the long way and there are many.
+  const plan = midSpanBeams(rect(100, 70));
+  checkEq('a 70 ft span takes three rows', zsOf(plan.beams.map(b => b.start)).length, 3);
+  checkEq('every joist within 19', worstJoist(rect(100, 70), plan.beams) <= 19, true);
 }
 
 // ── A stair hole pushes the beam into the larger clear strip ──────────────
@@ -178,6 +287,15 @@ const lensOf = beams => beams
   const plan = midSpanBeams(rect(40, 32), { holes: [{ min: -16, max: -8 }] });
   checkList('the beam re-lands mid-span of the larger remaining strip',
     zsOf(plan.beams.map(b => b.start)), [4]);
+}
+
+{
+  // 28 x 24 with the stair taking z -3..9: strips of 9 and 3, neither past
+  // 19 on its own. The joists beside the opening still span 24, so the
+  // beam stays -- mid-span of the larger strip (house-tour.spec.js:224).
+  const plan = midSpanBeams(rect(28, 24), { holes: [{ min: -3, max: 9 }] });
+  checkList('a stair leaving only narrow strips still keeps the beam, in the larger one',
+    zsOf(plan.beams.map(b => b.start)), [-7.5]);
 }
 
 // ── An end that bears on nothing gets a post ──────────────────────────────
