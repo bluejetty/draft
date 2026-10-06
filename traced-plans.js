@@ -303,9 +303,33 @@ if (!window.DraftTracedPlans) {
     lo: Math.min(ROOM_OVER_MIN_FT, depth),
     hi: depth + ROOM_OVER_CANTILEVER_FT,
   });
+  // How deep the room is: the design's 18 ft (or the garage, if shallower),
+  // or where he moved its end wall to, held to the range in whole feet.
+  const roomDepthOf = (depth, depthFt) => {
+    const range = roomDepthRange(depth);
+    const asked = Number(depthFt);
+    return Number.isFinite(asked) && depthFt != null
+      ? Math.max(range.lo, Math.min(range.hi, Math.round(asked)))
+      : Math.min(ROOM_OVER_GARAGE_FT, depth);
+  };
+  // THE PART OF A LOOP ON ONE SIDE OF A LINE: `f` is a signed distance and
+  // what is kept is where it is <= 0 (Sutherland-Hodgman against one edge).
+  const clipBy = (loop, f) => {
+    const out = [];
+    loop.forEach((p, i) => {
+      const q = loop[(i + 1) % loop.length];
+      const fp = f(p), fq = f(q);
+      if (fp <= TOL) out.push(p);
+      if ((fp < -TOL && fq > TOL) || (fp > TOL && fq < -TOL)) {
+        const k = fp / (fp - fq);
+        out.push(pt(p.x + (q.x - p.x) * k, p.z + (q.z - p.z) * k));
+      }
+    });
+    return clean(out);
+  };
   const roomOverGarage = (garage, house, depthFt = null) => {
     const g = clean(garage);
-    if (g.length !== 4) return null;
+    if (g.length !== 4) return roomOverShapedGarage(g, house, depthFt);
     const shared = edgesOf(g)
       .map(e => ({ e, on: coveredLength(e, house) }))
       .filter(s => s.on > TOL)
@@ -315,14 +339,40 @@ if (!window.DraftTracedPlans) {
     const inward = { x: -e.n.x, z: -e.n.z };
     const depth = edgesOf(g)[(e.index + 1) % 4].len;
     const range = roomDepthRange(depth);
-    const asked = Number(depthFt);
-    const d = Number.isFinite(asked) && depthFt != null
-      ? Math.max(range.lo, Math.min(range.hi, Math.round(asked)))
-      : Math.min(ROOM_OVER_GARAGE_FT, depth);
+    const d = roomDepthOf(depth, depthFt);
     const off = (p, k) => pt(p.x + inward.x * k, p.z + inward.z * k);
     const room = [e.a, e.b, off(e.b, d), off(e.a, d)];
     const rest = depth - d > TOL ? [off(e.a, d), off(e.b, d), off(e.b, depth), off(e.a, depth)] : null;
     return { room, rest, a: e.a, b: e.b, inward, depth, depthFt: d, range };
+  };
+  // A GARAGE THAT IS NOT A PLAIN RECTANGLE -- one stepped 1 ft off a house
+  // corner (Movie, 6 Oct: "CONNECT AT CORNER") -- takes its room the same
+  // way: from the wall it shares with the house, as deep as asked, and the
+  // rest is what lies beyond. The room is the garage clipped at that line;
+  // hung past the far wall it is the garage with its far side carried out.
+  const roomOverShapedGarage = (g, house, depthFt) => {
+    if (g.length < 4) return null;
+    const shared = edgesOf(g)
+      .map(e => ({ e, on: coveredLength(e, house) }))
+      .filter(x => x.on > TOL)
+      .sort((p, q) => q.on - p.on)[0];
+    if (!shared) return null;
+    const { e } = shared;
+    const inward = { x: -e.n.x, z: -e.n.z };
+    const t = p => (p.x - e.a.x) * inward.x + (p.z - e.a.z) * inward.z;
+    const u = p => (p.x - e.a.x) * e.ux + (p.z - e.a.z) * e.uz;
+    if (g.some(p => t(p) < -TOL)) return null;
+    const depth = Math.max(...g.map(t));
+    const range = roomDepthRange(depth);
+    const d = roomDepthOf(depth, depthFt);
+    const room = d > depth + TOL
+      ? clean(g.map(p => (t(p) > depth - TOL
+        ? pt(p.x + inward.x * (d - depth), p.z + inward.z * (d - depth)) : p)))
+      : clipBy(g, p => t(p) - d);
+    const rest = depth - d > TOL ? clipBy(g, p => d - t(p)) : null;
+    const lo = Math.min(...g.map(u)), hi = Math.max(...g.map(u));
+    const at = k => pt(e.a.x + e.ux * k, e.a.z + e.uz * k);
+    return { room, rest, a: at(lo), b: at(hi), inward, depth, depthFt: d, range };
   };
   // Which edge of `loop` dies into `other` (the gable cut flush).
   const flushEdge = (loop, other) => {

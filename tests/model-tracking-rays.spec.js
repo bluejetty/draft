@@ -97,3 +97,30 @@ test('putting the tool down takes the rays with it', async ({ page }) => {
   await page.mouse.move(...at(5, 5));
   expect(await rays(page), 'no run, no rays').toBeNull();
 });
+
+// AND THE HOUSE'S CORNERS WHILE THE GARAGE IS DRAWN (Movie, 6 Oct: "when i
+// draw the GARAGE shape can the HOUSE shape nodes also create the ORANGE
+// Raylines"): from the moment the house closes, before the garage's first
+// corner, and after the garage's own corners once they are down.
+test('the house\'s corners send rays while its garage is traced', async ({ page }) => {
+  await open(page);
+  await h.openDriveThru(page);
+  await page.locator('[data-build-family="bungalow"]').click();
+  await page.locator('[data-build-entry="bungalow-garage"]').click();
+  await page.locator('#dt-outline').click();
+  await expect(page.locator('#drivethru')).toBeHidden();
+  const { at } = await h.planFrame(page);
+  const house = [[-10, -8], [10, -8], [10, 8], [-10, 8]];
+  for (const [x, z] of [...house, house[0]]) await page.mouse.click(...at(x, z));
+  if (await page.locator('#garage-lesson').isVisible()) await page.keyboard.press('Enter');
+  // Straight below the house's right side: both right corners' downward rays.
+  await page.mouse.move(...at(10, 20));
+  let now = await rays(page);
+  expect(now.nodes, 'the house corners, before any garage corner').toEqual(house);
+  expect(now.lit, 'the right corners\' downward rays').toEqual([[1, 90], [2, 90]]);
+  await page.mouse.click(...at(-2, 8));
+  await page.mouse.move(...at(-2, 14));
+  now = await rays(page);
+  expect(now.nodes[0], 'the garage\'s own corner first').toEqual([-2, 8]);
+  expect(now.nodes.slice(1), 'then the house\'s').toEqual(house);
+});

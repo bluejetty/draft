@@ -53,6 +53,12 @@ async function trace(page, corners) {
     await page.keyboard.press('Enter');
     await expect(page.locator('#garage-lesson')).toBeHidden();
   }
+  // CONNECT AT CORNER, answered the way a drafter does: Enter, 1'-0".
+  await page.waitForTimeout(150);
+  if (await page.locator('#corner-join').isVisible()) {
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#corner-join')).toBeHidden();
+  }
 }
 // The old page's OPEN garage run: presses only, no closing press.
 async function run(page, corners) {
@@ -300,6 +306,44 @@ test('a garage drawn as three legs off the house closes itself along the house w
   expect(d.roofs.length, 'one roof over house and garage').toBe(1);
 });
 
+// CONNECT AT CORNER (Movie, 6 Oct): a garage wall that carries a house wall
+// on past its corner is moved over 1 ft, square, with a stub at the corner,
+// so the garage's foundation bears full on the house wall. On DRAFTING it
+// asks -- 1'-0" first, or the foundation's thickness; on TOY it just does it.
+// The garage here runs down the house's right wall (x = 10) and on past its
+// front corner (10, 8) to z = 14.
+const SIDE_RUN = [[10, -4], [30, -4], [30, 14], [10, 14], [10, 8]];
+const garageOf = d => d.outlines.find(o => Number(o.levelId) === 3 && o.garage);
+const has = (loop, x, z) => loop.points.some(p => Math.abs(p.x - x) < 1e-6 && Math.abs(p.z - z) < 1e-6);
+
+test('DRAFTING: CONNECT AT CORNER asks, and Enter moves the garage wall over 1 ft', async ({ page }) => {
+  await open(page);
+  await drawType(page, 'bungalow', 'bungalow-garage');
+  await trace(page, HOUSE);
+  await run(page, SIDE_RUN);
+  await expect(page.locator('#corner-join')).toBeVisible();
+  await expect(page.locator('#corner-join')).toContainText('FOUNDATION THICKNESS (8")');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('#corner-join')).toBeHidden();
+  const d = await build(page);
+  const g = garageOf(d);
+  expect(g, 'the garage body').toBeTruthy();
+  expect([has(g, 11, 14), has(g, 11, 8), has(g, 10, 14)], 'the wall 1 ft over, the stub at the corner')
+    .toEqual([true, true, false]);
+});
+
+test('TOY: the garage wall is moved over 1 ft without asking', async ({ page }) => {
+  await open(page);
+  await page.locator('[data-board-switch] [data-board="toy"]').click();
+  await drawType(page, 'bungalow', 'bungalow-garage');
+  await trace(page, HOUSE);
+  await run(page, SIDE_RUN);
+  await expect(page.locator('#corner-join')).toBeHidden();
+  const d = await build(page);
+  const g = garageOf(d);
+  expect([has(g, 11, 14), has(g, 11, 8)]).toEqual([true, true]);
+});
+
 // A TRACE THE TYPE CANNOT TAKE IS NOT BUILT, and says why: the bone stays
 // the way on once the drafter has fixed it.
 test('a closed trace the type refuses builds nothing and says why', async ({ page }) => {
@@ -307,6 +351,12 @@ test('a closed trace the type refuses builds nothing and says why', async ({ pag
   await drawType(page, 'bilevel', 'bilevel');
   await trace(page, [[0, 0], [8, 0], [8, 8], [0, 8]]);
   await expect(page.locator('#strip-message')).toContainText('front');
+  // AND THE BONE DOES NOT BUILD THE PREMADE IN ITS PLACE (Movie, 6 Oct: "the
+  // house didn't get drawn in proper shape as requested").
+  await page.locator('#bone').click();
+  await page.locator('[data-build-choice-build]').click();
+  await expect(page.locator('#file-guard')).toBeHidden();
+  await page.waitForTimeout(400);
   await page.locator('#save').click();
   await h.waitForSaved(page);
   const d = await h.savedDrawing(page);

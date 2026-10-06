@@ -951,10 +951,10 @@
      board's "break the bone here, or move this wall?", a different bone
      entirely: reusing its id because both are about a bone and both offer
      two answers is exactly the collision DEFINITIONS.md exists to stop. */
-  #bone-choice, #build-choice, #garage-lesson { position:fixed; inset:0; z-index:7; display:flex;
+  #bone-choice, #build-choice, #garage-lesson, #corner-join { position:fixed; inset:0; z-index:7; display:flex;
     align-items:center; justify-content:center; padding:24px;
     background:rgba(0,0,0,0.35); }
-  #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden] { display:none; }
+  #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden], #corner-join[hidden] { display:none; }
   /* PROFESSOR GRUFF'S GARAGE LESSON, the old page's card (MODEL.dc.html
      garageCallout) in this page's shell: who is talking, the rule, and the
      right-vs-wrong sketch. */
@@ -1384,6 +1384,21 @@
       <button type="button" data-garage-lesson-go>GOT IT — DRAW THE GARAGE (ENTER)</button>
     </div>
     <label class="gruff-off"><input type="checkbox" id="garage-lesson-off" data-garage-lesson-off> Don't show this again</label>
+  </div>
+</div>
+
+<!-- CONNECT AT CORNER (Movie, 6 Oct): a garage wall that carries straight on
+     past a house corner is moved over, square, with a short stub at the
+     corner, so the garage's foundation bears full on the house wall. 1'-0"
+     is the answer on TOY without asking; on DRAFTING this asks, 1'-0" first,
+     or the garage foundation's own thickness. -->
+<div id="corner-join" data-corner-join hidden role="dialog" aria-label="Connect at corner">
+  <div class="promote-card">
+    <p><b>CONNECT AT CORNER</b><br>This garage wall carries on past the house corner. Move it over so its foundation bears full on the house wall:</p>
+    <div class="promote-row">
+      <button type="button" data-corner-foot>1'-0"</button>
+      <button type="button" data-corner-thick>FOUNDATION THICKNESS (<span data-corner-thick-label>8"</span>)</button>
+    </div>
   </div>
 </div>
 
@@ -3358,7 +3373,9 @@
         + 'did not load. Check the script order in the page head.');
     }
     const env = dimensionEnv();
-    dimensions().forEach(dimension => R.drawDimension2D(ctx, toS, dimension, {}, env));
+    const lit = new Set(selection.filter(entry => entry.type === 'dimension').map(entry => entry.item));
+    dimensions().forEach(dimension => R.drawDimension2D(ctx, toS, dimension,
+      lit.has(dimension) ? { selected: true } : {}, env));
   };
 
   // LEADER NOTES. Two env keys, and until #302 there was no colour to put in
@@ -6280,6 +6297,12 @@
           tracedBuildsOnClose ? ' Your house goes up as soon as it closes.' : ''}`);
         return;
       }
+      // AND A TRACE THE TYPE REFUSED IS NOT A PREMADE ORDER EITHER (Movie,
+      // 6 Oct: "the house didn't get drawn in proper shape as requested").
+      // fireBuild has just tried his trace and said why it cannot be built;
+      // falling through here threw it away for the premade. The refusal
+      // stays on the strip, and his trace stays in hand to fix.
+      if (tracedOrder && traceStillThere(tracedHouse)) return;
       orderAtWindow();
     });
   // Escape backs out, as it does from every other card on this page. It
@@ -8274,6 +8297,52 @@
     .find(roof => (roof.points || []).length >= 3 && pointInRing(roof.points, worldPt)) || null;
 
   // Returns { type, item } or null, in the old page's precedence.
+  // ── DIMENSIONS: WHERE THEY ARE DRAWN, AND THEIR ROWS ───────────────────
+  // The painter stands the dimension line 19px off its two points
+  // (render-2d.js drawDimension2D), so the pick asks of the drawn line, in
+  // screen pixels, not of the points.
+  const DIM_LINE_PX = 19;
+  const dimDrawnLine = d => {
+    const a = toS(d.start), b = toS(d.end);
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len < 1) return null;
+    const nx = -(b.y - a.y) / len, ny = (b.x - a.x) / len;
+    return [{ x: a.x + nx * DIM_LINE_PX, y: a.y + ny * DIM_LINE_PX },
+      { x: b.x + nx * DIM_LINE_PX, y: b.y + ny * DIM_LINE_PX }];
+  };
+  const dimensionAt = worldPt => {
+    const s = toS(worldPt);
+    let best = null, bestD = SELECT_GRAB_PX;
+    dimensions().forEach(d => {
+      const line = dimDrawnLine(d);
+      if (!line) return;
+      const [p, q] = line;
+      const dx = q.x - p.x, dy = q.y - p.y;
+      const t = Math.max(0, Math.min(1, ((s.x - p.x) * dx + (s.y - p.y) * dy) / (dx * dx + dy * dy)));
+      const dist = Math.hypot(s.x - (p.x + t * dx), s.y - (p.y + t * dy));
+      if (dist < bestD) { bestD = dist; best = d; }
+    });
+    return best;
+  };
+  // THE ROW A DIMENSION STANDS IN: every dimension on this level and view
+  // whose line is the same straight line (Movie, 6 Oct: the whole row slides
+  // in or out together, staying straight and lined up).
+  const dimNormal = d => {
+    const dx = d.end.x - d.start.x, dz = d.end.z - d.start.z;
+    const len = Math.hypot(dx, dz) || 1;
+    return { x: -dz / len, z: dx / len };
+  };
+  const dimRow = grabbed => {
+    const n = dimNormal(grabbed);
+    const at = p => p.x * n.x + p.z * n.z;
+    const line = at(grabbed.start);
+    return dimensions().filter(d => {
+      const m = dimNormal(d);
+      const parallel = Math.abs(m.x * n.z - m.z * n.x) < 1e-6;
+      return parallel && Math.abs(at(d.start) - line) < 0.01 && Math.abs(at(d.end) - line) < 0.01;
+    });
+  };
+
   const hitAt = worldPt => {
     // A ROOM TAG IS ON TOP OF WHAT IT NAMES: it is painted last, over the
     // floor and often over a fixture, so the pick agrees with the picture.
@@ -8297,6 +8366,12 @@
     if (filterAllows('fixture')) {
       const fixture = fixtureAt(worldPt);
       if (fixture) return { type: 'fixture', item: fixture };
+    }
+    // A DIMENSION IS ANNOTATION, painted over the plan, and its line stands
+    // off what it measures -- so it is asked before the walls it sits beside.
+    if (filterAllows('dimension')) {
+      const dimension = dimensionAt(worldPt);
+      if (dimension) return { type: 'dimension', item: dimension };
     }
     if (filterAllows('wall')) {
       const wall = segAt(walls(), worldPt);
@@ -8376,7 +8451,8 @@
   const paintSelection = () => {
     if (!selection.length) return;
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines(),
-      fixture: fixtures(), stair: stairs(), roof: roofs(), roomtag: roomTags(), shape: shapes() };
+      fixture: fixtures(), stair: stairs(), roof: roofs(), roomtag: roomTags(), shape: shapes(),
+      dimension: dimensions() };
     // THE OPENINGS AND THEIR SHAPES IN ONE PASS. openingsOn resolves geometry
     // per opening, which is not free, and the highlight needs both the list
     // (to answer "is it still on screen") and the quad (to draw it). Calling
@@ -8394,6 +8470,9 @@
       // Only if it is still on screen's level: a selection kept across a level
       // change would paint a highlight over nothing.
       if (!(onScreen[type] || []).includes(item)) return;
+      // A DIMENSION IS DRAWN SELECTED BY ITS OWN PAINTER (paintDimensions),
+      // halo and all, so it reads as the same mark lit up.
+      if (type === 'dimension') return;
       if (type === 'roomtag') {
         const b = roomTagBox(item);
         ctx.save();
@@ -9567,6 +9646,10 @@
     stair: 'stairs',
     roomtag: 'roomTags',
     shape: 'shapes',
+    // A DIMENSION, picked off its line (Movie, 6 Oct: "with the DIMENSION
+    // lines, can they be selectable so i can move some if there is a better
+    // position"). It deletes like the rest; it is not copied.
+    dimension: 'dimensions',
   });
 
   // HELD BY COPY ONLY WHERE A PASTE CAN LAND IT. A fixture rides a wall by
@@ -9575,7 +9658,7 @@
   // delete and undo like the rest; they are not carried.
   // A ROOM TAG IS NOT CARRIED EITHER: its id is a whole number the format
   // insists on, and a paste re-ids with a string.
-  const NOT_COPIED = new Set(['fixture', 'stair', 'roof', 'roomtag']);
+  const NOT_COPIED = new Set(['fixture', 'stair', 'roof', 'roomtag', 'dimension']);
 
   const deleteEntry = entry => {
     if (!entry || !drawing) return false;
@@ -9730,7 +9813,7 @@
   // z-index 7 and asks a question that has to be answered first; the foot
   // strip sits at 6, under all of them. The drive-thru sign is not built and
   // will be the fifth entry in this list rather than a new mechanism.
-  const MODAL_IDS = ['promote', 'bone-choice', 'build-choice', 'file-guard', 'save-as', 'garage-lesson'];
+  const MODAL_IDS = ['promote', 'bone-choice', 'build-choice', 'file-guard', 'save-as', 'garage-lesson', 'corner-join'];
   const modalUp = () => MODAL_IDS.some(id => {
     const node = document.getElementById(id);
     return !!node && !node.hidden;
@@ -10382,6 +10465,16 @@
   let wallRunNodes = [];
   const RAY_HIT_PX = 6;
   const trackingNodes = () => {
+    // AND THE HOUSE'S CORNERS WHILE THE GARAGE IS DRAWN (Movie, 6 Oct: "when
+    // i draw the GARAGE shape can the HOUSE shape nodes also create the
+    // ORANGE Raylines"), so a garage corner lines up with the house's before
+    // the first one is down. After the garage's own, so theirs keep their
+    // places in the list.
+    if (activeTool === 'outline' && outlineGarage && tracedOrder && traceStillThere(tracedHouse)) {
+      const house = tracedHouse.points.map(p => ({ x: Number(p.x), z: Number(p.z) }))
+        .filter(p => !outlineCorners.some(c => Math.abs(c.x - p.x) < 1e-6 && Math.abs(c.z - p.z) < 1e-6));
+      return [...outlineCorners, ...house];
+    }
     if (activeTool === 'outline') return outlineCorners;
     if (!drawsRun() || !drawStart) { wallRunNodes = []; return wallRunNodes; }
     const last = wallRunNodes[wallRunNodes.length - 1];
@@ -10766,9 +10859,118 @@
 
   const outlinePress = at => outlineAdd(outlinePoint(at), { x: at.x, z: at.z });
 
-  const commitOutline = () => {
+  // ── CONNECT AT CORNER (Movie, 6 Oct) ──────────────────────────────────
+  // "when i make the garage connect at the corners like this it would
+  // automatically move the wall over 1' from the corner so the foundation
+  // concrete would be completely fastened (full 8\"width) to the house wall".
+  // MODEL.dc.html's _chooseGarageCornerStub: a garage leg that carries a
+  // house wall on past the house's corner is moved over square, toward the
+  // garage, and a short stub joins it to the corner. His ruling: 1 ft, the
+  // only answer on TOY; on DRAFTING 1 ft or the garage foundation's own
+  // thickness.
+  const near = (a, b) => Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.z - b.z) < 1e-6;
+  const unitTo = (a, b) => {
+    const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    return { x: (b.x - a.x) / len, z: (b.z - a.z) / len };
+  };
+  // A CORNER ASKS ONCE: the stub a shift puts in runs straight on from the
+  // house's OTHER wall at that corner, and asking about it would ask forever.
+  const cornerKey = p => `${p.x.toFixed(4)},${p.z.toFixed(4)}`;
+  const cornerJoinOf = (loop, decided = new Set()) => {
+    const house = garageJoinHouse();
+    if (!house) return null;
+    // A house corner the garage passes straight through gets a corner of its
+    // own first, so the leg past it can be found as a leg.
+    let ring = loop.slice();
+    house.forEach(c => {
+      for (let i = 0; i < ring.length; i += 1) {
+        const p = ring[i], q = ring[(i + 1) % ring.length];
+        if (near(p, c) || near(q, c)) continue;
+        const G = window.DraftGeometry2D;
+        if (G.pointToSegment(c, { start: p, end: q }).d < 1e-6) { ring.splice(i + 1, 0, { x: c.x, z: c.z }); return; }
+      }
+    });
+    for (let k = 0; k < ring.length; k += 1) {
+      const v = ring[k];
+      const ci = house.findIndex(c => near(c, v));
+      if (ci < 0 || decided.has(cornerKey(v))) continue;
+      const along = [house[(ci + house.length - 1) % house.length], house[(ci + 1) % house.length]]
+        .map(h => unitTo(v, h));
+      for (const j of [(k + 1) % ring.length, (k + ring.length - 1) % ring.length]) {
+        const d = unitTo(v, ring[j]);
+        // Straight on from a house wall, the far side of its corner.
+        if (along.some(h => Math.abs(h.x + d.x) < 1e-6 && Math.abs(h.z + d.z) < 1e-6)) return { ring, k, j };
+      }
+    }
+    return null;
+  };
+  const shiftAtCorner = ({ ring, k, j }, ft) => {
+    const n = ring.length;
+    const r = [...ring.slice(k), ...ring.slice(0, k)];
+    const jj = (j - k + n) % n;
+    const v = r[0], d = unitTo(v, r[jj]);
+    let perp = { x: -d.z, z: d.x };
+    const probe = { x: v.x + (perp.x + d.x) * 0.25, z: v.z + (perp.z + d.z) * 0.25 };
+    if (!pointInRing(r, probe)) perp = { x: -perp.x, z: -perp.z };
+    const move = p => ({ x: p.x + perp.x * ft, z: p.z + perp.z * ft });
+    return jj === 1 ? [v, move(v), move(r[1]), ...r.slice(2)]
+      : [v, ...r.slice(1, n - 1), move(r[n - 1]), move(v)];
+  };
+  const garageJoinHouse = () => (outlineGarage && tracedOrder && traceStillThere(tracedHouse)
+    ? tracedHouse.points.map(p => ({ x: Number(p.x), z: Number(p.z) })) : null);
+  const garageFoundationFt = () => (window.DraftWallTypes?.WALL_TYPES
+    .find(t => t.id === 'concrete_8')?.totalIn || 8) / 12;
+  const cornerCard = document.getElementById('corner-join');
+  let cornerPending = null;
+  const settleCorner = ft => {
+    const pending = cornerPending;
+    cornerPending = null;
+    if (cornerCard) cornerCard.hidden = true;
+    if (!pending) return;
+    outlineCorners = shiftAtCorner(pending, ft);
+    commitOutline(new Set([...pending.decided, cornerKey(pending.ring[pending.k])]));
+  };
+  if (cornerCard) {
+    cornerCard.querySelector('[data-corner-foot]').addEventListener('click', () => settleCorner(1));
+    cornerCard.querySelector('[data-corner-thick]').addEventListener('click', () => settleCorner(garageFoundationFt()));
+    // ENTER TAKES THE FIRST, 1'-0", wherever the focus is; Escape backs out
+    // and leaves the trace in hand.
+    window.addEventListener('keydown', event => {
+      if (cornerCard.hidden || (event.key !== 'Enter' && event.key !== 'Escape')) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.key === 'Enter') {
+        const focused = document.activeElement;
+        if (focused?.matches?.('[data-corner-thick]')) settleCorner(garageFoundationFt());
+        else settleCorner(1);
+      } else {
+        cornerPending = null;
+        cornerCard.hidden = true;
+        paint();
+      }
+    }, true);
+  }
+
+  const commitOutline = (decided = new Set()) => {
     const loop = outlineCorners.slice();
     if (loop.length < 3) return null;
+    const join = cornerJoinOf(loop, decided);
+    if (join) {
+      const asked = new Set([...decided, cornerKey(join.ring[join.k])]);
+      if (board === 'toy') {
+        outlineCorners = shiftAtCorner(join, 1);
+        sayOnStrip('The garage wall moved over 1 ft from the house corner, so its foundation bears full on the house wall.');
+        return commitOutline(asked);
+      }
+      if (cornerCard) {
+        cornerPending = { ...join, decided };
+        const inches = Math.round(garageFoundationFt() * 12);
+        cornerCard.querySelector('[data-corner-thick-label]').textContent = `${inches}"`;
+        cornerCard.hidden = false;
+        setTimeout(() => cornerCard.querySelector('[data-corner-foot]').focus(), 0);
+        return null;
+      }
+    }
     // A CROSSED LOOP ENCLOSES NO FLOOR, and the old page refuses it at
     // MODEL.dc.html's own close with the same test from the same module. The
     // pending corners are KEPT on a refusal so the drafter can move the last
@@ -13047,6 +13249,27 @@
       if (mine) removed.push(dimension);
       return !mine;
     });
+    // A ROW THE DRAFTER MOVED STAYS MOVED (Movie, 6 Oct: "Keep my moves").
+    // Each moved record says where its row was first put and how far it has
+    // come; a fresh string landing on that same first line is put the same
+    // distance off, and says so too. Only the measurements are new.
+    const rowKey = (axis, at, layer) => `${axis}|${Math.round(at * 1000)}|${layer || ''}`;
+    const movedRows = new Map();
+    removed.forEach(d => {
+      const m = d.moved;
+      if (m && (m.axis === 'x' || m.axis === 'z') && Number.isFinite(m.from) && Number.isFinite(m.by)) {
+        movedRows.set(rowKey(m.axis, m.from, d.layer), m);
+      }
+    });
+    const keepMove = (dimension) => {
+      const { start, end } = dimension;
+      const axis = Math.abs(start.z - end.z) < 1e-6 ? 'z' : (Math.abs(start.x - end.x) < 1e-6 ? 'x' : null);
+      const m = axis && movedRows.get(rowKey(axis, start[axis], dimension.layer));
+      if (!m) return;
+      start[axis] += m.by;
+      end[axis] += m.by;
+      dimension.moved = { axis, from: m.from, by: m.by };
+    };
     allSegments.forEach(segment => {
       // THE srcIds ARE DROPPED, AND THAT IS A REAL LOSS RATHER THAN A TIDY-UP.
       // The module returns srcStartId/srcEndId so the old page can link each
@@ -13072,6 +13295,7 @@
         layer: segment.layer,
         auto: true,
       };
+      keepMove(dimension);
       drawing.dimensions.push(dimension);
       made.push(dimension);
     });
@@ -15722,6 +15946,8 @@
     || (activeTool === 'floor' && floorCorners.length > 0)
     || (activeTool === 'shape' && shapeCorners.length > 0)
     || (activeTool === 'outline' && outlineCorners.length > 0)
+    // The house's rays light under the cursor before the garage's first corner.
+    || (activeTool === 'outline' && outlineGarage && !!tracedOrder && traceStillThere(tracedHouse))
     || (rulerOn && !!rulerFrom);
 
   // THE LENGTH ON THE DRAWING, beside the one on the strip. Both read
@@ -16741,6 +16967,7 @@
     { id: 'roomtag', label: 'TAG', aria: 'Grab only room tags' },
     { id: 'shape', label: 'SHAPE', aria: 'Grab only shapes' },
     { id: 'roof', label: 'ROOF', aria: 'Grab only roofs' },
+    { id: 'dimension', label: 'DIM', aria: 'Grab only dimensions' },
   ];
   const filterHelp = () => (selectFilter === 'all'
     ? 'Nothing lit grabs everything. Press a type so Select only grabs that object — even under other geometry.'
@@ -18857,6 +19084,21 @@
     // A SELECTED tag goes where it is dragged (Movie, 1 Oct: "the user should
     // be able to select it and move it"); the first click selects, as an
     // opening's does. Before the corner: a tag is painted over everything.
+    // ── SLIDING A DIMENSION ROW IN OR OUT ────────────────────────────────
+    // A SELECTED dimension takes its whole row with it, square to the line,
+    // so the string stays straight and lined up (Movie, 6 Oct). The first
+    // click selects, as a tag's does.
+    const dimGrab = filterAllows('dimension') ? dimensionAt(at) : null;
+    if (dimGrab && selection.some(entry => entry.item === dimGrab)) {
+      const row = dimRow(dimGrab);
+      moveDrag = {
+        kind: 'dimrow', normal: dimNormal(dimGrab), grab: at,
+        row: row.map(item => ({ item, before: { ...item }, start: { ...item.start }, end: { ...item.end } })),
+        sx: e.clientX, sy: e.clientY, active: false,
+      };
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
     const tagGrab = roomTagAt(at);
     if (tagGrab && selection.some(entry => entry.item === tagGrab)) {
       moveDrag = {
@@ -19013,6 +19255,20 @@
       if (md.active) {
         const rect = canvas.getBoundingClientRect();
         const raw = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+        if (md.kind === 'dimrow') {
+          // SQUARE TO THE LINE ONLY, in 3" steps: the row slides nearer or
+          // farther and never along itself. New points each event, as the
+          // tag's are, so the undo step keeps the ones it started with.
+          const n = md.normal;
+          const by = Math.round(((raw.x - md.grab.x) * n.x + (raw.z - md.grab.z) * n.z) * 4) / 4;
+          md.row.forEach(({ item, start, end }) => {
+            item.start = { ...start, x: start.x + n.x * by, z: start.z + n.z * by };
+            item.end = { ...end, x: end.x + n.x * by, z: end.z + n.z * by };
+          });
+          md.by = by;
+          paint();
+          return;
+        }
         if (md.kind === 'roomtag') {
           // A NEW POINT EACH EVENT, never the old one edited: the undo step
           // holds the point the tag started at, and it must stay that point.
@@ -19221,6 +19477,31 @@
       if (md.active) {
         // Both halves of a locked move go into ONE history entry: the drafter
         // made one gesture, so one Ctrl+Z undoes all of it. See lockBefore.
+        if (md.kind === 'dimrow') {
+          // ONE GESTURE, ONE UNDO for the whole row. And the move is written
+          // on each record (`moved`: where the row was first put, and how far
+          // it has come) so AUTO DIMS, run again, puts the row back where the
+          // drafter left it (Movie, 6 Oct: "Keep my moves").
+          if (md.by) {
+            // ON THE AXIS THE ROW STANDS ACROSS: a row along x is placed by
+            // its z, and the other way about. `from` is where it was first
+            // put -- kept through later moves -- and `by` how far it now is.
+            const n = md.normal;
+            const axis = Math.abs(n.z) >= Math.abs(n.x) ? 'z' : 'x';
+            const clean = v => Math.round(v * 1e6) / 1e6;
+            md.row.forEach(({ item, start }) => {
+              const from = Number.isFinite(item.moved?.from) && item.moved?.axis === axis
+                ? item.moved.from : start[axis];
+              item.moved = { axis, from: clean(from), by: clean(item.start[axis] - from) };
+            });
+            undoStack.push({ kind: 'props', edits: md.row.map(({ item, before }) => ({ item, before })) });
+            markDirty();
+          }
+          moveDrag = null;
+          if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+          paint();
+          return;
+        }
         if (md.kind === 'roomtag') {
           // The 'props' step puts the record back IN PLACE, the point with it.
           if (md.tag.at.x !== md.from.x || md.tag.at.z !== md.from.z) {
