@@ -48,12 +48,19 @@ const empty = () => ({
   groups: [], levelLocks: [], underlays: [],
 });
 
-async function open(page) {
+// A HOUSE AT 9'-1 1/8", WHICH THE GARAGE'S 10'-1 3/4" DEFAULT TOPS OUT LEVEL
+// WITH (Movie, 6 Oct: the garage stands on the house sill, one MAIN floor
+// package below the house's floor). At the office's 8'-1 1/8" the garage
+// stands a foot taller and gets its own roof -- tests/project-garage-height
+// covers that; the checks here are about a garage under the house's plate.
+const matchedTops = () => ({ ...empty(), levelAssemblies: { 3: { wallHeightFt: 109.125 / 12 } } });
+
+async function open(page, file = empty()) {
   await h.openModel(page, { webgl: false });
   await page.evaluate(async ({ bucket, f }) => {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: empty() });
+  }, { bucket: BUCKET, f: file });
   await page.goto('/MODEL.html');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
@@ -126,7 +133,7 @@ function spanX(win) {
 }
 
 test('the 2 STOREY + GARAGE raises its upper front windows clear of the garage roof', async ({ page }) => {
-  await open(page);
+  await open(page, matchedTops());
   await order(page, 'bungalow', 'twoStorey-garage');
   await saveOnNewPage(page);
   const saved = await savedFile(page);
