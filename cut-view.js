@@ -5668,6 +5668,22 @@ if (!window.DraftCutView) {
       // EACH EDGE DOWN TO WHERE A ROOF IN FRONT TAKES OVER, not all or
       // nothing on the band's middle: over a garage's lean-to the building's
       // corner shows above the sheet and is hidden under it.
+      // A BAND DOES NOT HIDE ITS OWN CORNERS. It is recorded flat, at its
+      // run's NEAREST face, all the way along -- so at a jog in the facade
+      // its strip stood in front of the deeper face's corner and swallowed
+      // the very line it was drawing. Movie, 6 Oct, on E4 of his MOD BILEVEL,
+      // marking the gaps in the corner line under 0'-0" and at the sill:
+      // "that is the wall lines that are missing". Another wing's band in
+      // front still hides it, as a nearer wall does.
+      // STILL HIDDEN where nearer walls of this floor stand on BOTH sides of
+      // it -- two pieces meeting in one plane in front of a deeper wall's end
+      // -- which is the case the flat strip was there to cover. Only at a
+      // jog, where the nearer wall ENDS, is the corner the building's own.
+      const ownBand = b => Math.abs(b.top - level.floorTop) < 0.05
+        && Math.abs(b.bottom - level.floorBottom) < 0.05
+        && runs.some(run => b.lo >= run.lo - 0.05 && b.hi <= run.hi + 0.05);
+      const nearerBothSides = (u, d) => [u - 0.1, u + 0.1].every(x => spans.some(sp =>
+        sp.depth > d + 1e-6 && sp.lo <= x && sp.hi >= x));
       ctx.strokeStyle = INK; ctx.lineWidth = 1.25;
       ctx.beginPath();
       edges.forEach((d, u) => {
@@ -5680,7 +5696,7 @@ if (!window.DraftCutView) {
           // band stands between its walls, and a face test alone saw a gap.
           const seen = !allSpans.some(o => o.depth > d + 1e-6
             && o.lo < u - 0.05 && o.hi > u + 0.05 && o.top >= e - 1e-6 && o.bottom <= e + 1e-6)
-            && !rimBands.some(b => b.depth > d + 1e-6
+            && !rimBands.some(b => b.depth > d + 1e-6 && (!ownBand(b) || nearerBothSides(u, d))
               && b.lo < u - 0.05 && b.hi > u + 0.05 && b.top >= e - 1e-6 && b.bottom <= e + 1e-6)
             && !behindRoof(atUDepth(u, d), e);
           if (seen && from == null) from = e;

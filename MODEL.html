@@ -14854,9 +14854,15 @@
       // roofed separately says so by handing a loop, and nothing here moves.
       if (overGarageBody && plan.overGarageRoof) {
         const hood = stairHood(plan, overGarageLevelId);
+        // A BILEVEL'S ROOM STANDS HALF A STOREY OVER MAIN, so nothing of the
+        // house rises past its roof: every edge is an eave and every corner
+        // hips up to the ridge at 45 (Movie, 6 Oct, on the traced MOD
+        // BILEVEL: "it should be ridgeline to corner at 45"). Cut flush
+        // against the house it gabled the room's house side -- the main
+        // roof is what stops at the room's walls (roofBearing's exclude).
         const roomRoof = raiseRoofOver(hood ? hood.roof : plan.overGarageRoof, {
           sourceLevelId: overGarageLevelId,
-          against: plan.house,
+          against: plan.entry ? null : plan.house,
         });
         madeRoofs.push(roomRoof);
         if (hood) {
