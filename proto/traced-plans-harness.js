@@ -34,7 +34,16 @@ const MUTATIONS = [
   ['the entry ignores the garage line', 'traced-plans.js',
     c => c.replace('if (gLo > lo + TOL) { line = gLo; mirror = false; }', 'if (false) { line = gLo; mirror = false; }')],
   ['the room takes the whole garage', 'traced-plans.js',
-    c => c.replace('const d = Math.min(ROOM_OVER_GARAGE_FT, depth);', 'const d = depth;')],
+    c => c.replace(': Math.min(ROOM_OVER_GARAGE_FT, depth);', ': depth;')],
+  ['the moved end wall is not held to 8 ft', 'traced-plans.js',
+    c => c.replace('lo: Math.min(ROOM_OVER_MIN_FT, depth),', 'lo: 0,')],
+  ['the moved end wall may hang any distance past the garage', 'traced-plans.js',
+    c => c.replace('hi: depth + ROOM_OVER_CANTILEVER_FT,', 'hi: Infinity,')],
+  ['the moved end wall is not in whole feet', 'traced-plans.js',
+    c => c.replace('Math.min(range.hi, Math.round(asked))', 'Math.min(range.hi, asked)')],
+  ['the moved end wall is ignored', 'traced-plans.js',
+    c => c.replace('const over = base.overGarage ? roomOverGarage(Graw, H, roomDepthFt) : null;',
+      'const over = base.overGarage ? roomOverGarage(Graw, H) : null;')],
   ['the overhead door takes the longest run, not the street', 'traced-plans.js',
     c => c.replace('manDoorFaceIndex: joint ? joint.index : null,', 'manDoorFaceIndex: null,')],
   ['no front door', 'traced-plans.js',
@@ -91,6 +100,31 @@ const plan = (entryId, garage = GARAGE) => T.planFromTrace({
   const both = [...m.overGarage, ...m.upperLanding];
   check('MOD BILEVEL: the room\'s roof is square over the room, joined to the landing',
     [m.overGarageRoof.length, box(m.overGarageRoof)], [6, box(both)]);
+}
+
+// ── THE ROOM'S END WALL, MOVED (Movie, 5-6 Oct) ─────────────────────────
+// "allow them to move how far towards the front of the garage the wall goes
+// (if it goes all the way to the front or cantilevers over the edge" -- in
+// whole feet, 8 ft at least, 2 ft past the front at most; "if it goes all the
+// way or cantilevered the lower roof can be removed", and short of the front
+// a lower roof covers the open garage. The garage here is 26 ft deep (z 20..46).
+{
+  const at = ft => T.planFromTrace({ entryId: 'modifiedBilevel', house: HOUSE, garage: GARAGE, roomDepthFt: ft });
+  const reach = p => box(p.overGarage)[3];
+  const lower = p => (p.garageRoof ? box(p.garageRoof) : null);
+  check('left alone it is the 18 ft at the house end, the rest roofed lower',
+    [reach(at(null)), lower(at(null))], [38, [-4, 38, 20, 46]]);
+  check('moved to 22 ft: the lower roof covers the 4 ft left open',
+    [reach(at(22)), lower(at(22))], [42, [-4, 42, 20, 46]]);
+  check('to the garage front: no lower roof', [reach(at(26)), lower(at(26))], [46, null]);
+  check('2 ft past the front, cantilevered: no lower roof', [reach(at(28)), lower(at(28))], [48, null]);
+  check('no further than 2 ft past', reach(at(40)), 48);
+  check('no shorter than 8 ft', reach(at(3)), 28);
+  check('in whole feet', reach(at(21.4)), 41);
+  const o = T.roomOverGarage(GARAGE, HOUSE, 20);
+  check('the line it is dragged on: the shared wall, the way in, the depth and the range',
+    [box([o.a, o.b]), o.inward, o.depth, o.depthFt, o.range], [[-4, 20, 20, 20], { x: 0, z: 1 }, 26, 20, { lo: 8, hi: 28 }]);
+  check('the room is still roofed with its landing when moved', at(24).overGarageRoof.length, 6);
 }
 
 // ── THE GARAGE'S WALLS AND DOORS ────────────────────────────────────────
