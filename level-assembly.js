@@ -368,6 +368,12 @@ if (!window.DraftLevelAssembly) {
     if (!moved.size) return null;
     let changed = false;
     const next = walls.map(wall => {
+      // A GARAGE WALL IS NOT THE HOUSE'S. Movie, 6 Oct: "i increased the
+      // HOUSE wall (not GARAGE WALL) the garage wall also moved to house
+      // height though. they should be different heights". It stands on the
+      // same storey, so the height test alone swept it along; it follows
+      // the garage's own WALL HEIGHT instead (garageWallsFollowing).
+      if (wall?.body === 'garage') return wall;
       const step = moved.get(String(wall?.levelId));
       if (!step) return wall;
       if (!(Math.abs(Number(wall.topHeight) - step.was) < 1e-9)) return wall;
@@ -431,6 +437,50 @@ if (!window.DraftLevelAssembly) {
     });
     out.upper = buildType === 'modifiedBilevel';
     return out;
+  };
+
+  // ── WHERE AN ATTACHED GARAGE'S WALLS TOP OUT ────────────────────────────
+  //
+  // Movie, 6 Oct: the attached garage's default wall is 9'-1 1/8" + 1'-0 5/8"
+  // = 10'-1 3/4" -- it stands on the house SILL, one MAIN floor package
+  // below the floor the house walls stand on -- "and then only change it if
+  // the user changes the text input". project-page.js keeps the same figure
+  // as ATTACHED_GARAGE_WALL_FT for the PROJECT card; section-table-harness
+  // holds the two together.
+  //
+  // THE TOP IS MEASURED FROM MAIN FL, the datum the house's own wall and a
+  // garage roof's plateHeightFt (cut-view.js roofBaseElev) are both read
+  // from. So a garage wall's stored topHeight, its roof's plate and the
+  // house wall can be compared directly: equal tops are one roof.
+  const DEFAULT_ATTACHED_GARAGE_WALL_FT = (104.625 + 4.5 + 11.875 + 0.75) / 12;
+  const MAIN_LEVEL_ID = 3;
+  const attachedGarageWallFt = drawing => {
+    const typed = drawing?.sectionTable?.rows?.attachedGarage?.mainWallHeightFt;
+    return Number.isFinite(Number(typed)) && typed != null && Number(typed) > 0
+      ? Number(typed) : DEFAULT_ATTACHED_GARAGE_WALL_FT;
+  };
+  const houseWallTopFt = drawing =>
+    levelAssemblyFor(drawing?.levelAssemblies, MAIN_LEVEL_ID).wallHeightFt;
+  // `dropFt` is how far the garage sill sits under the house sill --
+  // cut-view.js garageSillDropFt, 0 on a grade beam.
+  const garageTopAboveMainFt = (drawing, dropFt = 0) => attachedGarageWallFt(drawing)
+    - levelFloorFt(levelAssemblyFor(drawing?.levelAssemblies, MAIN_LEVEL_ID)) - (Number(dropFt) || 0);
+
+  // THE GARAGE'S WALLS FOLLOW ITS OWN NUMBER, the way the house's follow
+  // theirs: a garage wall standing at the old top moves to the new one, and
+  // one the drafter set by hand stays. `isDetached` keeps a detached
+  // garage's walls out of it -- they answer to a different row.
+  const garageWallsFollowing = (walls, wasFt, nowFt, isDetached = () => false) => {
+    if (!Array.isArray(walls) || !walls.length) return null;
+    if (!Number.isFinite(wasFt) || !Number.isFinite(nowFt) || Math.abs(wasFt - nowFt) < 1e-9) return null;
+    let moved = false;
+    const next = walls.map(wall => {
+      if (wall?.body !== 'garage' || isDetached(wall)) return wall;
+      if (!(Math.abs(Number(wall.topHeight) - wasFt) < 1e-6)) return wall;
+      moved = true;
+      return { ...wall, topHeight: nowFt };
+    });
+    return moved ? next : null;
   };
 
   // ── THE ROOF NUMBERS THE PROJECT PAGE OWNS ──────────────────────────────
@@ -534,6 +584,11 @@ if (!window.DraftLevelAssembly) {
   };
 
   window.DraftLevelAssembly = Object.freeze({
+    DEFAULT_ATTACHED_GARAGE_WALL_FT,
+    attachedGarageWallFt,
+    houseWallTopFt,
+    garageTopAboveMainFt,
+    garageWallsFollowing,
     ROOF_ROWS,
     projectRoofFor,
     roofFollows,

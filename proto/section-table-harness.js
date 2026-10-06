@@ -360,8 +360,21 @@ check('the garage frames a taller wall than the house', P => {
   const house = P.wallHeightFtFromStud(P.STUD_LENGTHS_IN[0]);
   return [P.GARAGE_WALL_FT > house, true];
 });
+// THE ATTACHED GARAGE IS ONE MAIN FLOOR PACKAGE TALLER (Movie, 6 Oct): it
+// stands on the house sill, so 9'-1 1/8" + 1'-0 5/8" tops out level with a
+// 9'-1 1/8" house -- 10'-1 3/4". The detached row keeps the precut.
 check('the garage default sets its own wall, not HOUSE\'s', P =>
-  [P.SECTION_TABLE_DEFAULTS.attachedGarage.mainWallHeightFt, P.GARAGE_WALL_FT]);
+  [P.SECTION_TABLE_DEFAULTS.attachedGarage.mainWallHeightFt, P.ATTACHED_GARAGE_WALL_FT]);
+check('the attached default is 10\'-1 3/4"', P =>
+  [Math.round(P.ATTACHED_GARAGE_WALL_FT * 12 * 8) / 8, 121.75]);
+check('the detached default keeps the 9\'-1 1/8" precut', P =>
+  [P.SECTION_TABLE_DEFAULTS.detachedGarage.mainWallHeightFt, P.GARAGE_WALL_FT]);
+check('MODEL reads the same attached default PROJECT shows', P => {
+  const w = {};
+  // eslint-disable-next-line no-new-func
+  new Function('window', require('fs').readFileSync(require('path').join(__dirname, '..', 'level-assembly.js'), 'utf8'))(w);
+  return [w.DraftLevelAssembly.DEFAULT_ATTACHED_GARAGE_WALL_FT, P.ATTACHED_GARAGE_WALL_FT];
+});
 // THE REASON, not just the number. A 7'-0" overhead door needs the head drop
 // above it -- two top plates, an 11 7/8" LVL and the rough-opening plate -- so
 // the wall has to reach 8'-4 1/2". This is the check that would fail if anyone

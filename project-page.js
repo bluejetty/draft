@@ -331,6 +331,19 @@ if (!window.DraftProjectPage) {
   // They keep arriving because the fallback is silent: no default means HOUSE,
   // and HOUSE is always plausible.
   const GARAGE_WALL_FT = wallHeightFtFromStud(STUD_LENGTHS_IN[1]);
+  // ── AN ATTACHED GARAGE IS ONE MAIN FLOOR PACKAGE TALLER ────────────────
+  //
+  // Movie, 6 Oct: "for GARAGE height can we make it 9-1 1/8" + 1-0 5/8" so
+  // that the default height will match ... the house wall if it is at
+  // 9-1 1/8"". The attached garage stands on the HOUSE SILL (cut-view.js
+  // garageBearing, sill to sill), while the house wall starts one floor
+  // package higher, on its MAIN floor -- 11 7/8" TJI + 3/4" sheathing. So
+  // the garage wall that tops out level with a 9'-1 1/8" house is that much
+  // taller: 10'-1 3/4". His ruling: "leave it at 10'-1 3/4" as default and
+  // then only change it if the user changes the text input". A DETACHED
+  // garage has no house to meet and keeps GARAGE_WALL_FT. level-assembly.js
+  // carries the same figure for MODEL (DEFAULT_ATTACHED_GARAGE_WALL_FT).
+  const ATTACHED_GARAGE_WALL_FT = GARAGE_WALL_FT + (11.875 + 0.75) / 12;
 
   const SECTION_TABLE_DEFAULTS = Object.freeze({
     bilevel: SPLIT_BASE,
@@ -342,7 +355,7 @@ if (!window.DraftProjectPage) {
     attachedGarage: Object.freeze({
       fdnWallHeightFt: GARAGE_GRADE_BEAM_IN / 12,
       slabThicknessIn: 4,
-      mainWallHeightFt: GARAGE_WALL_FT,
+      mainWallHeightFt: ATTACHED_GARAGE_WALL_FT,
     }),
     // AND THE DETACHED ROW HAD THE SAME HOLE. The comment above describes the
     // attached garage's defect and #293 fixed that row alone; its neighbour was
@@ -2651,6 +2664,7 @@ if (!window.DraftProjectPage) {
     GARAGE_SILL_BELOW_HOUSE_FT,
     GARAGE_SLAB_BELOW_CONCRETE_IN,
     GARAGE_WALL_FT,
+    ATTACHED_GARAGE_WALL_FT,
     OPENING_HEAD_DROP_IN,
     GARAGE_DOOR_HEIGHT_IN,
     GRADE_MIN_BELOW_CONCRETE_IN,
