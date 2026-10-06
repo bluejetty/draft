@@ -2031,6 +2031,59 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     return cutSide(start, end, at) > 0 ? perps.right : perps.left;
   };
 
+
+  // ── WHAT EACH ROOF STANDS ON, FOR THE ROOF PLAN ──────────────────────────
+  //
+  // Movie, 5 Oct, on the ROOF PLAN: "show the tops of the walls that the
+  // roofs are sitting on (should be 5.5" walls on both levels)" -- "only the
+  // exterior walls of main floor under main roof, and ... 2nd floor for 2nd
+  // floor roof", and the main roof stops at the OUTSIDE face of the 2nd floor
+  // walls: it "should not go to the inside of the ext walls".
+  //
+  // A roof raised off a storey of its own (`sourceLevelId`) stands on that
+  // storey. The house roof stands on the highest storey (the levels list runs
+  // top down) that has house walls and is not some other roof's own storey.
+  // Garage roofs are left out: he named the two levels and not the garage.
+  //
+  // EXTERIOR = a house wall lying along that storey's outline; a storey with
+  // no outline gives all its house walls. The walls a pushed-out roof hangs
+  // (`hoodOf`) are cavity framing, not what the roof bears on, and stay out.
+  //
+  // `exclude`: where a roof on a storey of its own stands over the house
+  // roof, the house roof stops at that storey's outline -- the outside face.
+  const ROOF_PLAN_SKIP_LEVELS = new Set([7, 8]);
+  const roofBearing = ({ roofs = [], walls = [], outlines = [], levels = [] } = {}) => {
+    const houseWalls = id => walls.filter(w => Number(w.levelId) === Number(id)
+      && w.body !== 'garage' && !w.hoodOf && w.start && w.end);
+    const outlineOf = id => outlines.find(o => Number(o.levelId) === Number(id) && !o.garage
+      && Array.isArray(o.points) && o.points.length >= 3);
+    const onLoop = (wall, loop) => {
+      const pts = loop.points;
+      return pts.some((a, i) => {
+        const b = pts[(i + 1) % pts.length];
+        const seg = { start: a, end: b };
+        return pointToSegment(wall.start, seg).d < 0.05 && pointToSegment(wall.end, seg).d < 0.05;
+      });
+    };
+    const exterior = id => {
+      const loop = outlineOf(id);
+      const list = houseWalls(id);
+      return loop ? list.filter(w => onLoop(w, loop)) : list;
+    };
+    const own = roof => roof && !roof.garage && roof.sourceLevelId != null
+      && !ROOF_PLAN_SKIP_LEVELS.has(Number(roof.sourceLevelId));
+    const ownLevels = new Set(roofs.filter(own).map(r => Number(r.sourceLevelId)));
+    const houseLevel = (levels || []).map(l => Number(l && l.id))
+      .find(id => Number.isFinite(id) && !ROOF_PLAN_SKIP_LEVELS.has(id)
+        && !ownLevels.has(id) && houseWalls(id).length);
+    return roofs.filter(r => r && !r.garage).map(roof => {
+      const levelId = own(roof) ? Number(roof.sourceLevelId) : houseLevel;
+      const exclude = own(roof) ? [] : [...ownLevels]
+        .map(id => outlineOf(id)).filter(Boolean).map(o => o.points);
+      return { roof, levelId: levelId ?? null, walls: levelId == null ? [] : exterior(levelId), exclude };
+    });
+  };
+
   window.DraftGeometry2D = {
     distance,
     worldPerPixel,
@@ -2094,6 +2147,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     cutPerpendiculars,
     cutSide,
     cutDirVec,
+    roofBearing,
   };
 })();
 }

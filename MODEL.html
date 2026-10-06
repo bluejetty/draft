@@ -2555,10 +2555,24 @@
 
   const paintRoofs = () => {
     const R = window.DraftRender2D;
+    const G = window.DraftGeometry2D;
+    // ON THE ROOF PLAN, what each roof stands on (Movie, 5 Oct): the tops of
+    // the exterior walls it bears on, and the main roof stopped at the outside
+    // face of the storey whose own roof stands over it. geometry-2d decides
+    // which walls; render-2d draws them.
+    const bearing = new Map((G.roofBearing && drawing
+      ? G.roofBearing({ roofs: roofs(), walls: drawing.walls || [],
+        outlines: drawing.outlines || [], levels: drawing.levels || [] })
+      : []).map(b => [b.roof, b]));
     roofs().forEach(roof => {
       if ((roof.points || []).length < 3) return;
-      R.drawRoof2D(ctx, toS, roof, {}, paintEnv());
+      const b = bearing.get(roof);
+      R.drawRoof2D(ctx, toS, roof, b && b.exclude.length ? { exclude: b.exclude } : {}, paintEnv());
     });
+    const thicknessFt = openingThicknessFt();
+    bearing.forEach(b => R.drawWallTops2D && R.drawWallTops2D(ctx, toS, b.walls, {
+      thicknessFt, color: skin['draw-wall-edge'] || skin['draw-line'],
+    }, { wallFaceOffsets: G.wallFaceOffsets }));
   };
 
   // STRUCTURE THE DRAFTER NEVER DREW. BUILD HOUSE lands a mid-span beam and
