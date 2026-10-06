@@ -951,10 +951,10 @@
      board's "break the bone here, or move this wall?", a different bone
      entirely: reusing its id because both are about a bone and both offer
      two answers is exactly the collision DEFINITIONS.md exists to stop. */
-  #bone-choice, #build-choice, #garage-lesson { position:fixed; inset:0; z-index:7; display:flex;
+  #bone-choice, #build-choice, #garage-lesson, #corner-join { position:fixed; inset:0; z-index:7; display:flex;
     align-items:center; justify-content:center; padding:24px;
     background:rgba(0,0,0,0.35); }
-  #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden] { display:none; }
+  #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden], #corner-join[hidden] { display:none; }
   /* PROFESSOR GRUFF'S GARAGE LESSON, the old page's card (MODEL.dc.html
      garageCallout) in this page's shell: who is talking, the rule, and the
      right-vs-wrong sketch. */
@@ -1384,6 +1384,21 @@
       <button type="button" data-garage-lesson-go>GOT IT — DRAW THE GARAGE (ENTER)</button>
     </div>
     <label class="gruff-off"><input type="checkbox" id="garage-lesson-off" data-garage-lesson-off> Don't show this again</label>
+  </div>
+</div>
+
+<!-- CONNECT AT CORNER (Movie, 6 Oct): a garage wall that carries straight on
+     past a house corner is moved over, square, with a short stub at the
+     corner, so the garage's foundation bears full on the house wall. 1'-0"
+     is the answer on TOY without asking; on DRAFTING this asks, 1'-0" first,
+     or the garage foundation's own thickness. -->
+<div id="corner-join" data-corner-join hidden role="dialog" aria-label="Connect at corner">
+  <div class="promote-card">
+    <p><b>CONNECT AT CORNER</b><br>This garage wall carries on past the house corner. Move it over so its foundation bears full on the house wall:</p>
+    <div class="promote-row">
+      <button type="button" data-corner-foot>1'-0"</button>
+      <button type="button" data-corner-thick>FOUNDATION THICKNESS (<span data-corner-thick-label>8"</span>)</button>
+    </div>
   </div>
 </div>
 
@@ -6282,6 +6297,12 @@
           tracedBuildsOnClose ? ' Your house goes up as soon as it closes.' : ''}`);
         return;
       }
+      // AND A TRACE THE TYPE REFUSED IS NOT A PREMADE ORDER EITHER (Movie,
+      // 6 Oct: "the house didn't get drawn in proper shape as requested").
+      // fireBuild has just tried his trace and said why it cannot be built;
+      // falling through here threw it away for the premade. The refusal
+      // stays on the strip, and his trace stays in hand to fix.
+      if (tracedOrder && traceStillThere(tracedHouse)) return;
       orderAtWindow();
     });
   // Escape backs out, as it does from every other card on this page. It
@@ -9792,7 +9813,7 @@
   // z-index 7 and asks a question that has to be answered first; the foot
   // strip sits at 6, under all of them. The drive-thru sign is not built and
   // will be the fifth entry in this list rather than a new mechanism.
-  const MODAL_IDS = ['promote', 'bone-choice', 'build-choice', 'file-guard', 'save-as', 'garage-lesson'];
+  const MODAL_IDS = ['promote', 'bone-choice', 'build-choice', 'file-guard', 'save-as', 'garage-lesson', 'corner-join'];
   const modalUp = () => MODAL_IDS.some(id => {
     const node = document.getElementById(id);
     return !!node && !node.hidden;
@@ -10838,9 +10859,118 @@
 
   const outlinePress = at => outlineAdd(outlinePoint(at), { x: at.x, z: at.z });
 
-  const commitOutline = () => {
+  // ── CONNECT AT CORNER (Movie, 6 Oct) ──────────────────────────────────
+  // "when i make the garage connect at the corners like this it would
+  // automatically move the wall over 1' from the corner so the foundation
+  // concrete would be completely fastened (full 8\"width) to the house wall".
+  // MODEL.dc.html's _chooseGarageCornerStub: a garage leg that carries a
+  // house wall on past the house's corner is moved over square, toward the
+  // garage, and a short stub joins it to the corner. His ruling: 1 ft, the
+  // only answer on TOY; on DRAFTING 1 ft or the garage foundation's own
+  // thickness.
+  const near = (a, b) => Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.z - b.z) < 1e-6;
+  const unitTo = (a, b) => {
+    const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    return { x: (b.x - a.x) / len, z: (b.z - a.z) / len };
+  };
+  // A CORNER ASKS ONCE: the stub a shift puts in runs straight on from the
+  // house's OTHER wall at that corner, and asking about it would ask forever.
+  const cornerKey = p => `${p.x.toFixed(4)},${p.z.toFixed(4)}`;
+  const cornerJoinOf = (loop, decided = new Set()) => {
+    const house = garageJoinHouse();
+    if (!house) return null;
+    // A house corner the garage passes straight through gets a corner of its
+    // own first, so the leg past it can be found as a leg.
+    let ring = loop.slice();
+    house.forEach(c => {
+      for (let i = 0; i < ring.length; i += 1) {
+        const p = ring[i], q = ring[(i + 1) % ring.length];
+        if (near(p, c) || near(q, c)) continue;
+        const G = window.DraftGeometry2D;
+        if (G.pointToSegment(c, { start: p, end: q }).d < 1e-6) { ring.splice(i + 1, 0, { x: c.x, z: c.z }); return; }
+      }
+    });
+    for (let k = 0; k < ring.length; k += 1) {
+      const v = ring[k];
+      const ci = house.findIndex(c => near(c, v));
+      if (ci < 0 || decided.has(cornerKey(v))) continue;
+      const along = [house[(ci + house.length - 1) % house.length], house[(ci + 1) % house.length]]
+        .map(h => unitTo(v, h));
+      for (const j of [(k + 1) % ring.length, (k + ring.length - 1) % ring.length]) {
+        const d = unitTo(v, ring[j]);
+        // Straight on from a house wall, the far side of its corner.
+        if (along.some(h => Math.abs(h.x + d.x) < 1e-6 && Math.abs(h.z + d.z) < 1e-6)) return { ring, k, j };
+      }
+    }
+    return null;
+  };
+  const shiftAtCorner = ({ ring, k, j }, ft) => {
+    const n = ring.length;
+    const r = [...ring.slice(k), ...ring.slice(0, k)];
+    const jj = (j - k + n) % n;
+    const v = r[0], d = unitTo(v, r[jj]);
+    let perp = { x: -d.z, z: d.x };
+    const probe = { x: v.x + (perp.x + d.x) * 0.25, z: v.z + (perp.z + d.z) * 0.25 };
+    if (!pointInRing(r, probe)) perp = { x: -perp.x, z: -perp.z };
+    const move = p => ({ x: p.x + perp.x * ft, z: p.z + perp.z * ft });
+    return jj === 1 ? [v, move(v), move(r[1]), ...r.slice(2)]
+      : [v, ...r.slice(1, n - 1), move(r[n - 1]), move(v)];
+  };
+  const garageJoinHouse = () => (outlineGarage && tracedOrder && traceStillThere(tracedHouse)
+    ? tracedHouse.points.map(p => ({ x: Number(p.x), z: Number(p.z) })) : null);
+  const garageFoundationFt = () => (window.DraftWallTypes?.WALL_TYPES
+    .find(t => t.id === 'concrete_8')?.totalIn || 8) / 12;
+  const cornerCard = document.getElementById('corner-join');
+  let cornerPending = null;
+  const settleCorner = ft => {
+    const pending = cornerPending;
+    cornerPending = null;
+    if (cornerCard) cornerCard.hidden = true;
+    if (!pending) return;
+    outlineCorners = shiftAtCorner(pending, ft);
+    commitOutline(new Set([...pending.decided, cornerKey(pending.ring[pending.k])]));
+  };
+  if (cornerCard) {
+    cornerCard.querySelector('[data-corner-foot]').addEventListener('click', () => settleCorner(1));
+    cornerCard.querySelector('[data-corner-thick]').addEventListener('click', () => settleCorner(garageFoundationFt()));
+    // ENTER TAKES THE FIRST, 1'-0", wherever the focus is; Escape backs out
+    // and leaves the trace in hand.
+    window.addEventListener('keydown', event => {
+      if (cornerCard.hidden || (event.key !== 'Enter' && event.key !== 'Escape')) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.key === 'Enter') {
+        const focused = document.activeElement;
+        if (focused?.matches?.('[data-corner-thick]')) settleCorner(garageFoundationFt());
+        else settleCorner(1);
+      } else {
+        cornerPending = null;
+        cornerCard.hidden = true;
+        paint();
+      }
+    }, true);
+  }
+
+  const commitOutline = (decided = new Set()) => {
     const loop = outlineCorners.slice();
     if (loop.length < 3) return null;
+    const join = cornerJoinOf(loop, decided);
+    if (join) {
+      const asked = new Set([...decided, cornerKey(join.ring[join.k])]);
+      if (board === 'toy') {
+        outlineCorners = shiftAtCorner(join, 1);
+        sayOnStrip('The garage wall moved over 1 ft from the house corner, so its foundation bears full on the house wall.');
+        return commitOutline(asked);
+      }
+      if (cornerCard) {
+        cornerPending = { ...join, decided };
+        const inches = Math.round(garageFoundationFt() * 12);
+        cornerCard.querySelector('[data-corner-thick-label]').textContent = `${inches}"`;
+        cornerCard.hidden = false;
+        setTimeout(() => cornerCard.querySelector('[data-corner-foot]').focus(), 0);
+        return null;
+      }
+    }
     // A CROSSED LOOP ENCLOSES NO FLOOR, and the old page refuses it at
     // MODEL.dc.html's own close with the same test from the same module. The
     // pending corners are KEPT on a refusal so the drafter can move the last

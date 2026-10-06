@@ -41,6 +41,8 @@ const MUTATIONS = [
     c => c.replace('hi: depth + ROOM_OVER_CANTILEVER_FT,', 'hi: Infinity,')],
   ['the moved end wall is not in whole feet', 'traced-plans.js',
     c => c.replace('Math.min(range.hi, Math.round(asked))', 'Math.min(range.hi, asked)')],
+  ['a stepped garage gets no room', 'traced-plans.js',
+    c => c.replace('if (g.length !== 4) return roomOverShapedGarage(g, house, depthFt);', 'if (g.length !== 4) return null;')],
   ['the moved end wall is ignored', 'traced-plans.js',
     c => c.replace('const over = base.overGarage ? roomOverGarage(Graw, H, roomDepthFt) : null;',
       'const over = base.overGarage ? roomOverGarage(Graw, H) : null;')],
@@ -125,6 +127,23 @@ const plan = (entryId, garage = GARAGE) => T.planFromTrace({
   check('the line it is dragged on: the shared wall, the way in, the depth and the range',
     [box([o.a, o.b]), o.inward, o.depth, o.depthFt, o.range], [[-4, 20, 20, 20], { x: 0, z: 1 }, 26, 20, { lo: 8, hi: 28 }]);
   check('the room is still roofed with its landing when moved', at(24).overGarageRoof.length, 6);
+}
+
+// ── A GARAGE STEPPED 1 FT OFF A HOUSE CORNER (Movie, 6 Oct) ─────────────
+// "CONNECT AT CORNER": a garage whose side runs on past the house's corner
+// is shifted 1 ft over with a square stub, so its foundation bears full on
+// the house wall. That garage is not a rectangle any more, and the room
+// over it is still the 18 ft at the house end -- the garage clipped there.
+{
+  const stepped = [{ x: 16, z: 0 }, { x: 40, z: 0 }, { x: 40, z: 30 }, { x: 17, z: 30 }, { x: 17, z: 20 }, { x: 16, z: 20 }];
+  const o = T.roomOverGarage(stepped, HOUSE);
+  check('a stepped garage still has its room: 18 ft from the house wall, the rest beyond',
+    [box(o.room), o.room.length, box(o.rest), o.depth], [[16, 0, 34, 30], 6, [34, 0, 40, 30], 24]);
+  check('and its end line spans the whole garage', [box([o.a, o.b])], [[16, 0, 16, 30]]);
+  const past = T.roomOverGarage(stepped, HOUSE, 26);
+  check('hung 2 ft past its far wall, the room carries that wall out', [box(past.room), past.rest], [[16, 0, 42, 30], null]);
+  const m = T.planFromTrace({ entryId: 'modifiedBilevel', house: HOUSE, garage: stepped });
+  check('a MOD BILEVEL builds on it', [m.error || null, !!m.overGarage], [null, true]);
 }
 
 // ── THE GARAGE'S WALLS AND DOORS ────────────────────────────────────────

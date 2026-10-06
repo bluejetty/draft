@@ -733,6 +733,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // card: it teaches how the garage run connects and authors
             // nothing, so no absence row moves.
             'GOT IT — DRAW THE GARAGE (ENTER)',
+            // CONNECT AT CORNER (Movie, 6 Oct): how far a garage wall that
+            // carries on past a house corner is moved over. A choice inside
+            // the trace, not a new way to make anything.
+            '1\'-0"', 'FOUNDATION THICKNESS (8")',
             'Save first', 'Discard', 'Cancel',   // the unsaved guard
             'Save', 'Cancel'].sort(),           // the SAVE AS card
           // THE PAGE ROW'S LIVE DESTINATIONS. Links, not buttons, so they
