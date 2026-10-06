@@ -176,6 +176,12 @@ test('a traced MODIFIED BILEVEL gets its entry and its room over the garage', as
   expect(d.levels.some(l => Number(l.id) === 4), 'OVER GARAGE').toBe(true);
   expect(d.outlines.some(o => Number(o.levelId) === 4), 'the room').toBe(true);
   expect(d.stairs.length, 'three flights').toBeGreaterThanOrEqual(3);
+  // THE ROOM'S ROOF HIPS AT EVERY CORNER (Movie, 6 Oct: "it should be
+  // ridgeline to corner at 45"): it stands half a storey over MAIN, so no
+  // edge dies into the house as a gable.
+  const upper = d.roofs.find(r => Number(r.sourceLevelId) === 4);
+  expect(upper, 'the room\'s own roof').toBeTruthy();
+  expect(upper.edges.every(e => e === 'eave'), 'all eaves').toBe(true);
 });
 
 // THE BONE MID-TRACE IS NOT A PREMADE ORDER. Movie, 5 Oct: "i tried the
