@@ -729,6 +729,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // bone already opens; BUILD IT fires the seam the bone already
             // fires. So no absence row moves.
             'Change it', 'Build it',
+            // PROFESSOR GRUFF'S GARAGE LESSON (Movie, 6 Oct), the old page's
+            // card: it teaches how the garage run connects and authors
+            // nothing, so no absence row moves.
+            'GOT IT — DRAW THE GARAGE (ENTER)',
             'Save first', 'Discard', 'Cancel',   // the unsaved guard
             'Save', 'Cancel'].sort(),           // the SAVE AS card
           // THE PAGE ROW'S LIVE DESTINATIONS. Links, not buttons, so they
@@ -785,8 +789,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // through draw-wall's own gesture exactly as the length box does.
           // It authors no entity and moves no point, so no absence row
           // changes.
+          // AND THE LESSON'S "Don't show this again" tick, a setting.
           inputs: ['size-w', 'size-d', 'frozen-length', 'frozen-angle',
-            'file-input', 'save-as-name'].sort(),
+            'file-input', 'save-as-name', 'garage-lesson-off'].sort(),
           railKinds: ['seat'],
           // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
           // no unlabelled button: an entry this cannot name would arrive as
