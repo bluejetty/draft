@@ -89,8 +89,10 @@ test('a built house arrives dimensioned, on every level it was built on',
     // the foundation set, the roofs on the ROOF level's plan. A string filed
     // against the view the drafter happened to be standing in would be
     // invisible on the plan it measures.
+    // The storey's FLOOR LAYOUT too (Movie, 7 Oct: "need exterior dims added
+    // to the 1 FLOOR and 2 FLOOR plans").
     expect(Object.keys(tally).sort(), 'a level with geometry was left unmeasured')
-      .toEqual(['1:foundation', '3:plan', '7:plan']);
+      .toEqual(['1:foundation', '3:floor', '3:plan', '7:plan']);
     Object.entries(tally).forEach(([key, count]) => {
       expect(count, `${key} got a string stack with nothing in it`).toBeGreaterThan(0);
     });
