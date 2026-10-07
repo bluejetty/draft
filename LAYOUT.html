@@ -990,7 +990,8 @@ class Component extends PageLogic {
   // The level a new viewport shows first: the busiest plan — a house drawing
   // lands on MAIN FL.
   _defaultLevelId() {
-    const withWalls = this._levelsWithWalls();
+    const withWalls = this._levelsWithWalls()
+      .filter(level => !window.DraftLayoutPlan.ridesOnFullFloor(this._saved, level.id));
     if (!withWalls.length) return this._levels[0]?.id ?? null;
     return withWalls.reduce((best, level) => (level.wallCount > best.wallCount ? level : best)).id;
   }
@@ -1265,6 +1266,8 @@ class Component extends PageLogic {
     const region = this._composeRegionIn();
     const floorLevels = this._levelsWithWalls()
       .filter(level => level.id > 0 && level.id !== 1 && level.id !== 7 && level.id !== 8)
+      // A HALF-FLOOR is drawn on its full floor's sheet, not on one of its own.
+      .filter(level => !window.DraftLayoutPlan.ridesOnFullFloor(this._saved, level.id))
       .slice()
       .sort((x, y) => y.id - x.id);          // top storey first, the way a set reads
     const sized = view => {

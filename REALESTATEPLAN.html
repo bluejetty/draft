@@ -298,7 +298,8 @@
       // house -- and `optional` is the only thing this page does differently
       // with it, so getting it wrong costs a tick and not a drawing.
       const buildSeats = () => {
-        const withWalls = levels.filter(level => planned(level.id))
+        // A HALF-FLOOR prints on its full floor's plan, not as a seat of its own.
+        const withWalls = levels.filter(level => planned(level.id) && !LP.ridesOnFullFloor(drawing, level.id))
           .sort((a, b) => (a.elev || 0) - (b.elev || 0));
         const lowest = withWalls[0];
         seats = withWalls.map(level => ({

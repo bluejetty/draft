@@ -64,13 +64,17 @@ function loadWith(omit = [], source = {}) {
 // Records what it is asked to paint. strokeRect is a no-op and measureText
 // returns a zero width, the same shapes harness-env's recorder uses.
 function recorder() {
-  const texts = [];
+  const texts = [], alphas = [], stack = [];
   const ctx = {
-    texts, save() {}, restore() {}, beginPath() {}, closePath() {}, moveTo() {},
+    texts, alphas, globalAlpha: 1,
+    save() { stack.push(this.globalAlpha); },
+    restore() { if (stack.length) this.globalAlpha = stack.pop(); },
+    beginPath() {}, closePath() {}, moveTo() {},
     lineTo() {}, arc() {}, rect() {}, stroke() {}, fill() {}, clip() {},
     fillRect() {}, strokeRect() {}, translate() {}, rotate() {}, scale() {},
     setLineDash() {}, quadraticCurveTo() {}, bezierCurveTo() {}, ellipse() {},
-    fillText(t) { texts.push(String(t)); }, strokeText(t) { texts.push(String(t)); },
+    fillText(t) { texts.push(String(t)); alphas.push(this.globalAlpha); },
+    strokeText(t) { texts.push(String(t)); alphas.push(this.globalAlpha); },
     measureText() { return { width: 0 }; }, setTransform() {}, getTransform() {
       return { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
     },
@@ -88,7 +92,7 @@ function draw(win, levelId, { saved = SAVED, env = {} } = {}) {
   if (!LP) return { ok: false, texts: [], why: 'DraftLayoutPlan never defined' };
   try {
     LP.drawPlan(ctx, toS, saved, levelId, env);
-    return { ok: true, texts: ctx.texts };
+    return { ok: true, texts: ctx.texts, alphas: ctx.alphas, endAlpha: ctx.globalAlpha };
   } catch (err) { return { ok: false, texts: ctx.texts, why: err.message }; }
 }
 
@@ -219,6 +223,46 @@ function run(label) {
   check('the warning is said once however many times the sheet paints',
     stairWarnings.length === 1, `said ${stairWarnings.length} times`);
 
+  // ── THE HALF-FLOOR RIDES ON ITS FULL FLOOR (Movie, 7 Oct) ─────────────
+  //
+  // "in layout areas we will only need to show the MAIN floors and those
+  // will show up too on them": the 0.5 floor's walls, openings and stairs
+  // print on MAIN FL's sheet, lighter, under MAIN FL's own; its dimensions
+  // and notes do not. The fixture's stairs and a dimension are moved to a
+  // half-floor (level 2) that copies MAIN FL's walls 30 ft east.
+  const HALF = 2;
+  const halfWalls = (SAVED.walls || []).filter(w => w.levelId === MAIN)
+    .map((w, i) => ({ ...w, id: 91000 + i, levelId: HALF,
+      start: { ...w.start, x: (w.start?.x || 0) + 30 }, end: { ...w.end, x: (w.end?.x || 0) + 30 } }));
+  const split = {
+    ...SAVED,
+    levels: [...SAVED.levels.filter(l => l.id !== HALF), { id: HALF, name: 'ENTRY', elev: -4 }],
+    walls: [...(SAVED.walls || []).filter(w => w.levelId !== HALF), ...halfWalls],
+    stairs: (SAVED.stairs || []).map(st => (st.levelId === MAIN ? { ...st, levelId: HALF } : st)),
+    dimensions: [...(SAVED.dimensions || []),
+      { id: 91900, levelId: HALF, view: 'plan', start: { x: 0, y: 0, z: 60 }, end: { x: 23.3125, y: 0, z: 60 } }],
+  };
+  const LPF = full.win.DraftLayoutPlan;
+  const mainSheet = draw(full.win, MAIN, { saved: split });
+  const halfStair = mainSheet.texts.findIndex(t => STAIR.test(t));
+  check('the full floor\'s sheet draws its half-floor\'s stairs', halfStair >= 0,
+    `texts: ${mainSheet.texts.slice(0, 8).join(' | ') || '(none)'}`);
+  check('lighter than the full floor\'s own ink',
+    halfStair >= 0 && mainSheet.alphas[halfStair] < 1, `alpha ${mainSheet.alphas[halfStair]}`);
+  check('and the full floor\'s own ink is back to full strength',
+    mainSheet.endAlpha === 1 && mainSheet.alphas.some(a => a === 1));
+  check('the half-floor\'s dimensions stay off the full floor\'s sheet',
+    !mainSheet.texts.some(t => /23'/.test(t)));
+  check('the half-floor gets no sheet of its own once the full floor has walls',
+    LPF.ridesOnFullFloor(split, HALF) === true && LPF.ridesOnFullFloor(split, MAIN) === false);
+  const noMain = { ...split, walls: split.walls.filter(w => w.levelId !== MAIN) };
+  check('but with no full floor drawn it still prints by itself',
+    LPF.ridesOnFullFloor(noMain, HALF) === false);
+  const box = LPF.planBounds(split, MAIN);
+  const halfMaxX = Math.max(...halfWalls.map(w => Math.max(w.start.x, w.end.x)));
+  check('the full floor\'s frame takes in its half-floor', box && box.maxX >= halfMaxX,
+    `maxX ${box && box.maxX} < ${halfMaxX}`);
+
   if (label) console.log(label);
 }
 
@@ -253,6 +297,19 @@ const MUTATIONS = [
   ['the list comes from the level-s default view rather than the one being drawn',
     'layout-plan.js', c => c.replace('VIEWS.layersFor(levelId, view)',
       'VIEWS.layersFor(levelId, VIEWS.defaultLayerViewId(levelId))')],
+  ['the half-floor is never drawn under its full floor',
+    'layout-plan.js', c => c.replace('const half = env.halfLevel === true ? null : HALF_LEVEL_UNDER[levelId];',
+      'const half = null;')],
+  ['the half-floor draws at full strength',
+    'layout-plan.js', c => c.replace('ctx.globalAlpha *= HALF_LEVEL_SHEET_ALPHA;', '')],
+  ['the half-floor brings its dimensions along',
+    'layout-plan.js', c => c.replace('const only = list => (halfLevel ? [] : list);', 'const only = list => list;')],
+  ['a half-floor keeps a sheet of its own',
+    'layout-plan.js', c => c.replace('return full != null && planWalls(saved, Number(full)).length > 0;', 'return false;')],
+  ['a lone half-floor is dropped too',
+    'layout-plan.js', c => c.replace('return full != null && planWalls(saved, Number(full)).length > 0;', 'return full != null;')],
+  ['the frame leaves the half-floor out',
+    'layout-plan.js', c => c.replace('.concat(half != null ? planWalls(saved, half) : [])', '')],
   ['the warning repeats on every paint',
     'layout-plan.js', c => c.replace('warnedNoLayerViews = true;', 'warnedNoLayerViews = false;')],
 ];
