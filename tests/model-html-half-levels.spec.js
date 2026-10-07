@@ -100,3 +100,30 @@ test('the basement plan shows the foundation walls and posts, which it cannot pi
   expect(await ink(), 'and the foundation walls').toBeGreaterThan(posts + 200);
   await expect(page.locator('#readout')).toContainText(/walls 0\b/);
 });
+
+// AND ON THE FLOOR LAYOUT, THE PAIR'S FLOOR AREA (Movie, 7 Oct): "we should
+// also show the 0.5 FLOOR in the 1 FLOOR", lighter than the 1 floor's own.
+test('the 1 FLOOR layout shows the 0.5 floor\'s floor area, lighter', async ({ page }) => {
+  const paper = () => page.evaluate(() => {
+    const c = document.getElementById('plan');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    const k = (Math.floor(c.height / 2) * c.width + 4) * 4;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (Math.abs(d[i] - d[k]) + Math.abs(d[i + 1] - d[k + 1]) + Math.abs(d[i + 2] - d[k + 2]) > 6) n += 1;
+    }
+    return n;
+  });
+  const main = BUNGALOW.floors.find(f => Number(f.levelId) === 3 && f.view === 'floor')
+    || { id: 'f3', levelId: 3, view: 'floor', points: [{ x: 0, z: 0 }, { x: 30, z: 0 }, { x: 30, z: 20 }, { x: 0, z: 20 }] };
+  const xs = main.points.map(p => p.x), zs = main.points.map(p => p.z);
+  const x1 = Math.max(...xs), z0 = Math.min(...zs);
+  // A 0.5 floor standing out past MAIN FL's east side, where MAIN has no floor.
+  const entryFloor = { id: 'entry-deck', levelId: 2, view: 'floor', structure: 'framed',
+    points: [{ x: x1, z: z0 }, { x: x1 + 12, z: z0 }, { x: x1 + 12, z: z0 + 10 }, { x: x1, z: z0 + 10 }] };
+  const base = { ...SPLIT, stairs: [], floors: [...(BUNGALOW.floors || []).filter(f => Number(f.levelId) !== 2), main] };
+  await load(page, base, '3&view=floor');
+  const without = await paper();
+  await load(page, { ...base, floors: [...base.floors, entryFloor] }, '3&view=floor');
+  expect(await paper()).toBeGreaterThan(without + 500);
+});

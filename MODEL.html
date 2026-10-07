@@ -3110,6 +3110,25 @@
       ghostKeep = null;
     }
   };
+  // AND ON THE FLOOR LAYOUT, THE PAIR'S FLOOR AREA (Movie, 7 Oct): "we should
+  // also show the 0.5 FLOOR in the 1 FLOOR" -- the partner's floor drawn
+  // lighter, UNDER this level's own, so where the two overlap this floor's
+  // shade is the one read and the half-floor shows only where it alone is.
+  const paintHalfLevelGhostFloors = () => {
+    const partner = HALF_LEVEL_PARTNER[activeLevelId()];
+    if (partner == null || !drawing) return;
+    if (!(drawing.levels || []).some(l => Number(l.id) === partner)) return;
+    ghostLevelId = partner;
+    try {
+      if (!floors().length) return;
+      ctx.save();
+      ctx.globalAlpha = HALF_LEVEL_GHOST_ALPHA;
+      paintFloors();
+      ctx.restore();
+    } finally {
+      ghostLevelId = null;
+    }
+  };
   const paintWalls = () => {
     // Lazy, so a load-order change cannot bind these to undefined at parse
     // time -- but LOUD, not guarded. An earlier version returned quietly when
@@ -4598,6 +4617,7 @@
         // geometry" -- MODEL.dc.html's own words at the same seam. A tracing
         // image that painted over the walls would be worse than none.
         if (traceOn) paintUnderlays();
+        paintHalfLevelGhostFloors();
         paintFloors(); paintRoofs(); paintShapes(); paintStructure();
         // AFTER THE STRUCTURE IT SITS OVER, before the walls. An opening above
         // is context for what this level carries, so it reads over the pads
@@ -15813,6 +15833,10 @@
       if (!touched.has(key)) touched.set(key, { levelId: Number(id), view });
     };
     storeys.forEach(level => noteLevel(level.id, 'plan'));
+    // AND THE FLOOR LAYOUT OF EACH FULL STOREY (Movie, 7 Oct): "need exterior
+    // dims added to the 1 FLOOR and 2 FLOOR plans (not necessary on the .5"
+    // ones). The half-floors -- ENTRY and OVER GARAGE -- get none.
+    storeys.forEach(level => noteLevel(level.id, 'floor'));
     if (entryBody) noteLevel(entryLevelId, 'plan');
     if (overGarageBody) noteLevel(overGarageLevelId, 'plan');
     if (under.items.length) noteLevel(FOUNDATION_LEVEL_ID, 'foundation');
