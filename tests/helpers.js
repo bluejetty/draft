@@ -21,7 +21,33 @@ async function openModel(page, {
   // house every run -- see the block by the init script below. `null` opts
   // back into the real random one.
   starterHouse = { kind: 'rectangle', widthFt: 48 },
+  // THE GARAGE-ALIGN QUESTION IS ANSWERED NO unless a spec opts out (Movie,
+  // 7 Oct): the BONE asks whether to line a garage that tops out above the
+  // house ceiling up with it, and a fresh default house always does. NO is
+  // what every spec written before the question saw -- the garage built at
+  // its own height -- so the specs about something else are not each made
+  // to answer it. tests/model-garage-align.spec.js opts out.
+  garageAlign = 'no',
 } = {}) {
+  // ANSWERED INSIDE THE PAGE, the moment the card opens: the BONE's build
+  // waits on the answer, and a spec that reads the drawing straight after
+  // the press must find it built. A Playwright locator handler only fires on
+  // the spec's NEXT action, which builds the house in the middle of it.
+  if (garageAlign === 'no' || garageAlign === 'yes') {
+    await page.addInitScript(answer => {
+      const watch = () => {
+        const card = document.getElementById('garage-align');
+        if (!card) return false;
+        const press = () => {
+          if (!card.hidden) card.querySelector(`[data-garage-align-${answer}]`)?.click();
+        };
+        new MutationObserver(press).observe(card, { attributes: true, attributeFilter: ['hidden'] });
+        press();
+        return true;
+      };
+      if (!watch()) document.addEventListener('DOMContentLoaded', watch, { once: true });
+    }, garageAlign);
+  }
   // Init scripts run on every navigation, so the flag keeps a reload inside a
   // test from wiping the drawing the test just made. The FAT TEST WALLET
   // (board #261): every spec gets 999 bones so bone-count never becomes a

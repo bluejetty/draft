@@ -737,6 +737,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // carries on past a house corner is moved over. A choice inside
             // the trace, not a new way to make anything.
             '1\'-0"', 'FOUNDATION THICKNESS (8")',
+            // GARAGE HIGHER THAN THE HOUSE (Movie, 7 Oct): the BONE asks
+            // whether to line a garage above the house ceiling up with it.
+            // An answer to the build's own question; nothing new is made.
+            'YES - LINE UP (ONE ROOF)', 'NO - KEEP 10\'-1 3/4"',
             'Save first', 'Discard', 'Cancel',   // the unsaved guard
             'Save', 'Cancel'].sort(),           // the SAVE AS card
           // THE PAGE ROW'S LIVE DESTINATIONS. Links, not buttons, so they
