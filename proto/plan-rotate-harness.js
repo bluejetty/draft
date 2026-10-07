@@ -236,6 +236,15 @@ function run(win) {
     `${R.rotateDrawing(saved, 2).underlays[0].widthFt} x `
     + `${R.rotateDrawing(saved, 2).underlays[0].heightFt}`);
 
+  // AND THE PICTURE IN IT TURNS (Movie, 7 Oct: "have it turn traced images
+  // too"): swapping the sides alone squeezed it. The count is what the
+  // painter turns it by, and four quarters is upright again.
+  check('an underlay counts the quarter turns it has been through',
+    turned.underlays[0].turn === 1 && R.rotateDrawing(saved, 3).underlays[0].turn === 3,
+    `${turned.underlays[0].turn}, ${R.rotateDrawing(saved, 3).underlays[0].turn}`);
+  check('and four quarters leaves it upright, with no count at all',
+    !('turn' in R.rotateDrawing(R.rotateDrawing(saved, 3), 1).underlays[0]),
+    JSON.stringify(R.rotateDrawing(R.rotateDrawing(saved, 3), 1).underlays[0].turn));
   // ── THE DATUM AND THE COUNT OF TURNS ──────────────────────────────────
   check('the drafter-s own zero turns with the house it was set on',
     turned.drawingOrigin && (turned.drawingOrigin.x !== saved.drawingOrigin.x

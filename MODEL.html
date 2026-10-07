@@ -959,6 +959,17 @@
   /* THE TRACE CARD: what the file is, the scale it was drawn at, and the
      two-point CALIBRATE on its own preview. */
   .trace-card [hidden] { display:none !important; }
+  /* The level's tracing images in the ask card, each with MOVE and DELETE. */
+  .trace-list { margin:0 0 12px; }
+  .trace-row { display:flex; align-items:center; gap:6px; padding:3px 0;
+    border-bottom:1px solid var(--edge-panel); font-family: var(--font-ui); font-size:12px;
+    color: var(--ink-primary); }
+  .trace-row span { flex:1; overflow-wrap:anywhere; }
+  .trace-row button { cursor:pointer; padding:3px 8px; border-radius:3px; border:1px solid var(--edge-panel);
+    background: var(--surface-chip); color: var(--ink-quiet); font-family: var(--font-ui);
+    font-size:10px; font-weight:600; letter-spacing:0.04em; }
+  .trace-row button:hover { border-color: var(--accent); color: var(--accent); }
+  .trace-row [data-trace-delete]:hover { border-color:#b04050; color:#b04050; }
   .trace-card { max-width:30em; width:100%; max-height:calc(100vh - 60px); overflow-y:auto; }
   .trace-card input[type=text] { width:100%; box-sizing:border-box; margin-top:4px; padding:4px 8px;
     border:1px solid var(--edge-panel); border-radius:3px; background: var(--surface-chip);
@@ -1441,6 +1452,7 @@
 <div id="trace-ask" data-trace-ask hidden role="dialog" aria-label="Trace images">
   <div class="promote-card">
     <p><b>TRACE</b><br><span data-trace-count></span> Upload another image to trace over?</p>
+    <div class="trace-list" data-trace-list></div>
     <div class="promote-row">
       <button type="button" id="trace-upload" data-trace-upload>UPLOAD IMAGE / PDF</button>
       <button type="button" id="trace-later" data-trace-later>NOT NOW</button>
@@ -16556,7 +16568,7 @@
     if (traceScan?.pdfDoc) traceScan.pdfDoc.destroy().catch(() => {});
     traceScan = null;
   };
-  const closeTraceCard = () => { dropTraceScan(); traceCard.hidden = true; };
+  const closeTraceCard = () => { dropTraceScan(); traceCard.hidden = true; paint(); };
 
   // THE CARD, redrawn from the scan record whenever anything on it changes.
   const traceHasScale = () => Boolean(traceScan?.kind === 'pdf' && traceScan.selectedScale && traceScan.pageDims);
@@ -16720,14 +16732,116 @@
       if (traceOn) { setTraceOn(false); return; }
       setTraceOn(true);
       // ON ASKS whether to bring in another, naming what is already there.
-      const n = underlays().length;
-      traceAsk.querySelector('[data-trace-count]').textContent = n
-        ? `${n} image${n === 1 ? '' : 's'} on ${traceLevelName()}.`
-        : `No images on ${traceLevelName()} yet.`;
-      traceAsk.hidden = false;
+      openTraceAsk();
     });
   }
-  traceAsk.querySelector('[data-trace-later]').addEventListener('click', () => { traceAsk.hidden = true; });
+  // ── MOVE AND DELETE (Movie, 7 Oct) ──────────────────────────────────────
+  //
+  // The ask card lists the level's images, each with MOVE and DELETE. MOVE
+  // hands the next drag on the plan to that image -- press anywhere, drag,
+  // let go -- and Esc puts it back. Both are one UNDO each. DELETE keeps the
+  // stored file, so UNDO brings the picture back as it was.
+  let traceMoving = null;   // { underlay, from, before }
+  const openTraceAsk = () => {
+    const mine = underlays();
+    const n = mine.length;
+    traceAsk.querySelector('[data-trace-count]').textContent = n
+      ? `${n} image${n === 1 ? '' : 's'} on ${traceLevelName()}.`
+      : `No images on ${traceLevelName()} yet.`;
+    const list = traceAsk.querySelector('[data-trace-list]');
+    list.textContent = '';
+    mine.forEach(underlay => {
+      const row = document.createElement('div');
+      row.className = 'trace-row';
+      row.dataset.traceRow = underlay.id;
+      const name = document.createElement('span');
+      name.textContent = underlay.name || underlay.id;
+      const move = document.createElement('button');
+      move.type = 'button';
+      move.textContent = 'MOVE';
+      move.dataset.traceMove = underlay.id;
+      move.addEventListener('click', () => {
+        traceAsk.hidden = true;
+        traceMoving = { underlay, from: null, before: null };
+        sayOnStrip(`Drag ${underlay.name || 'the image'} to where it belongs \u2014 Esc to leave it.`);
+      });
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.textContent = 'DELETE';
+      del.dataset.traceDelete = underlay.id;
+      del.addEventListener('click', () => {
+        const at = drawing.underlays.indexOf(underlay);
+        if (at < 0) return;
+        drawing.underlays.splice(at, 1);
+        undoStack.push({ kind: 'remove-item', list: drawing.underlays, index: at, item: underlay });
+        markDirty();
+        paint();
+        updateReadout();
+        sayOnStrip(`${underlay.name || 'The image'} is off ${traceLevelName()} \u2014 UNDO brings it back.`);
+        openTraceAsk();
+      });
+      row.append(name, move, del);
+      list.appendChild(row);
+    });
+    traceAsk.hidden = false;
+  };
+  // THE DRAG. Registered on the window in the capture phase so it runs ahead
+  // of every tool's own press, and only while a MOVE is armed.
+  const endTraceMove = commit => {
+    const m = traceMoving;
+    traceMoving = null;
+    if (!m) return;
+    if (m.before && !commit) Object.assign(m.underlay, m.before);
+    if (m.before && commit && (m.before.x !== m.underlay.x || m.before.z !== m.underlay.z)) {
+      undoStack.push({ kind: 'props', edits: [{ item: m.underlay, before: m.before }] });
+      markDirty();
+    }
+    sayOnStrip('');
+    paint();
+  };
+  const tracePoint = event => {
+    const r = canvas.getBoundingClientRect();
+    return toWorld(event.clientX - r.left, event.clientY - r.top);
+  };
+  window.addEventListener('pointerdown', event => {
+    if (!traceMoving || event.target !== canvas || event.button !== 0) return;
+    event.stopImmediatePropagation();
+    event.preventDefault();
+    traceMoving.from = tracePoint(event);
+    traceMoving.before = { x: traceMoving.underlay.x, z: traceMoving.underlay.z };
+  }, true);
+  window.addEventListener('pointermove', event => {
+    const m = traceMoving;
+    if (!m || !m.from) return;
+    event.stopImmediatePropagation();
+    const at = tracePoint(event);
+    m.underlay.x = m.before.x + (at.x - m.from.x);
+    m.underlay.z = m.before.z + (at.z - m.from.z);
+    paint();
+  }, true);
+  // The click the browser sends after the drag is the drag's own, not a
+  // press for whatever tool is up -- swallowed once.
+  let swallowTraceClick = false;
+  window.addEventListener('pointerup', event => {
+    if (!traceMoving || !traceMoving.from) return;
+    event.stopImmediatePropagation();
+    swallowTraceClick = true;
+    endTraceMove(true);
+  }, true);
+  window.addEventListener('click', event => {
+    if (!swallowTraceClick) return;
+    swallowTraceClick = false;
+    if (event.target === canvas) { event.stopImmediatePropagation(); event.preventDefault(); }
+  }, true);
+  window.addEventListener('keydown', event => {
+    if (traceMoving && event.key === 'Escape') {
+      event.stopImmediatePropagation();
+      endTraceMove(false);
+    }
+  }, true);
+
+  // Closed through paint(), which is what shows UNDO again once no card is up.
+  traceAsk.querySelector('[data-trace-later]').addEventListener('click', () => { traceAsk.hidden = true; paint(); });
   traceAsk.querySelector('[data-trace-upload]').addEventListener('click', () => {
     traceAsk.hidden = true;
     traceFile.click();

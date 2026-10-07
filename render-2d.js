@@ -1272,12 +1272,22 @@ if (!window.DraftRender2D) {
       const halfW = underlay.widthFt / 2, halfH = underlay.heightFt / 2;
       const a = toS({ x: underlay.x - halfW, y: 0, z: underlay.z - halfH });
       const b = toS({ x: underlay.x + halfW, y: 0, z: underlay.z + halfH });
-      const left = Math.min(a.x, b.x), top = Math.min(a.y, b.y);
       const width = Math.abs(b.x - a.x), height = Math.abs(b.y - a.y);
       if (width < 1 || height < 1) continue;
+      // TURNED WITH THE HOUSE: `turn` quarter turns clockwise, and on an odd
+      // one the footprint's sides were swapped, so the picture itself is drawn
+      // the other way round inside it.
+      const turn = ((Number(underlay.turn) || 0) % 4 + 4) % 4;
+      const [w, h] = turn % 2 ? [height, width] : [width, height];
       ctx.save();
       ctx.globalAlpha = underlay.opacity;
-      ctx.drawImage(image, left, top, width, height);
+      if (!turn) {
+        ctx.drawImage(image, Math.min(a.x, b.x), Math.min(a.y, b.y), width, height);
+      } else {
+        ctx.translate((a.x + b.x) / 2, (a.y + b.y) / 2);
+        ctx.rotate(turn * Math.PI / 2);
+        ctx.drawImage(image, -w / 2, -h / 2, w, h);
+      }
       ctx.restore();
     }
   }

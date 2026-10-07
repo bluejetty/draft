@@ -128,6 +128,11 @@ if (!window.DraftPlanRotate) {
   };
   // ABOUT A CENTRE, which is the house's own box. Turning about the world
   // origin would send a house drawn away from it into the next county.
+  // A picture's own quarter turns, kept 0-3 and left off when upright.
+  const bumpTurn = (item, turns) => {
+    const t = ((((Number(item.turn) || 0) + turns) % 4) + 4) % 4;
+    if (t) item.turn = t; else delete item.turn;
+  };
   const turnPoint = (pt, centre, turns) => {
     if (!pt || !Number.isFinite(Number(pt.x)) || !Number.isFinite(Number(pt.z))) return pt;
     const local = spin({ x: Number(pt.x) - centre.x, z: Number(pt.z) - centre.z }, turns);
@@ -194,6 +199,10 @@ if (!window.DraftPlanRotate) {
           next.widthFt = next.heightFt;
           next.heightFt = was;
         }
+        // AND THE PICTURE TURNS WITH IT. Swapping the sides alone squeezed a
+        // portrait photo into a landscape box (Movie, 7 Oct: "have it turn
+        // traced images too"); the count is what the painter turns it by.
+        if (rule.swapSize) bumpTurn(next, n);
         return next;
       });
     });
@@ -263,6 +272,7 @@ if (!window.DraftPlanRotate) {
           item.widthFt = item.heightFt;
           item.heightFt = was;
         }
+        if (rule.swapSize) bumpTurn(item, q);
       });
     });
     move(drawing.drawingOrigin);

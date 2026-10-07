@@ -135,3 +135,68 @@ test('a PDF with a printed scale comes in at that scale', async ({ page }) => {
   expect(Math.round(u[0].widthFt * 100) / 100).toBe(34);
   expect(Math.round(u[0].heightFt * 100) / 100).toBe(44);
 });
+
+// ── MOVE, DELETE, AND HOUSE ROTATE (Movie, 7 Oct) ──────────────────────────
+//
+// "MOVE and DELETE: buttons for a tracing image after it's placed" and
+// "HOUSE ROTATE: have it turn traced images too".
+async function openWithImage(page) {
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, f }) => {
+    try { localStorage.removeItem('draft.trace.on'); } catch { /* fine */ }
+    const c = document.createElement('canvas');
+    c.width = 40; c.height = 20;
+    c.getContext('2d').fillRect(0, 0, 40, 20);
+    const blob = await new Promise(res => c.toBlob(res, 'image/png'));
+    await window.SharedFileStore.saveNamedFile(new File([blob], 'underlay-9', { type: 'image/png' }), 'underlays');
+    const d = { ...f, nextDrawingItemId: 10, underlays: [{ id: 'underlay-9', levelId: 3, kind: 'image',
+      name: 'lot.png', page: 1, x: 0, z: 0, widthFt: 40, heightFt: 20, opacity: 0.4 }] };
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(d)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, f: BLANK });
+  await page.goto('/MODEL.html?level=3');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+}
+
+test('MOVE drags an image to a new place, and UNDO puts it back', async ({ page }) => {
+  await openWithImage(page);
+  await chip(page).click();
+  await expect(page.locator('[data-trace-row]')).toHaveCount(1);
+  await expect(page.locator('[data-trace-row]')).toContainText('lot.png');
+  await page.locator('[data-trace-move]').click();
+  await expect(page.locator('#trace-ask')).toBeHidden();
+  const box = await page.locator('#plan').boundingBox();
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx + 60, cy + 30, { steps: 4 });
+  await page.mouse.up();
+  const moved = await savedUnderlays(page);
+  expect(moved[0].x).toBeGreaterThan(0.5);
+  expect(moved[0].z).toBeGreaterThan(0.2);
+  // Along the drag, both ways the same scale: 60 px across, 30 px down.
+  expect(Math.abs(moved[0].x / moved[0].z - 2)).toBeLessThan(0.05);
+  await page.locator('#model-undo').click();
+  const back = await savedUnderlays(page);
+  expect([back[0].x, back[0].z]).toEqual([0, 0]);
+});
+
+test('DELETE takes an image off the level, and UNDO brings it back', async ({ page }) => {
+  await openWithImage(page);
+  await chip(page).click();
+  await page.locator('[data-trace-delete]').click();
+  await expect(page.locator('[data-trace-row]')).toHaveCount(0);
+  await expect(page.locator('[data-trace-count]')).toContainText('No images on');
+  await page.locator('[data-trace-later]').click();
+  expect(await savedUnderlays(page)).toHaveLength(0);
+  await page.locator('#model-undo').click();
+  expect((await savedUnderlays(page)).map(u => u.id)).toEqual(['underlay-9']);
+});
+
+test('HOUSE ROTATE turns the picture with the house, not just its box', async ({ page }) => {
+  await openWithImage(page);
+  await page.locator('[data-mode-rotate]').click();
+  const u = await savedUnderlays(page);
+  expect(u[0].turn).toBe(1);
+  expect([u[0].widthFt, u[0].heightFt]).toEqual([20, 40]);
+});

@@ -529,6 +529,22 @@ suite('drawUnderlays2D', 'a real underlay is drawn at its own opacity', R => {
   expect('and the state is put back', count(ctx, 'restore'), 1);
 });
 
+// TURNED WITH THE HOUSE (Movie, 7 Oct: "have it turn traced images too"):
+// the footprint's sides are already swapped, so the picture is drawn the
+// other way round and turned a quarter about the footprint's centre.
+suite('drawUnderlays2D', 'a turned underlay is drawn turned, not squeezed', R => {
+  const ctx = recordingCtx();
+  const env = underlayEnv();
+  env.underlays = env.underlays.map(u => ({ ...u, turn: 1 }));
+  R.drawUnderlays2D(ctx, toS, env);
+  expect('one image', count(ctx, 'drawImage'), 1);
+  const [, left, top, w, h] = calls(ctx, 'drawImage')[0];
+  expect('drawn the footprint\'s height wide', w, 140);
+  expect('and its width tall', h, 200);
+  expect('centred on the footprint', [left, top].join(), [-70, -100].join());
+  expect('turned a quarter clockwise', calls(ctx, 'rotate')[0][0], Math.PI / 2);
+});
+
 // ── drawBeam2D and drawColumn2D ──
 // Structure the drafter never drew. BUILD HOUSE lands a mid-span beam and its
 // teleposts whenever a clear span passes 19', so these two paint entities that
