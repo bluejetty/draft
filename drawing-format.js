@@ -499,6 +499,11 @@ if (!window.DraftDrawingFormat) {
         // the old A-FL-OPNG / A-ROOF-OPNG reads onto the new ones here.
         layer: hostType === 'roof' ? 'A-ROOF' : 'A-FL',
         ...(hostType === 'floor' && Number.isInteger(stairId) && stairId > 0 ? { stairId } : {}),
+        // ONE HOLE OVER TWO FLIGHTS, a bilevel's: every stair it serves.
+        ...(hostType === 'floor' && Array.isArray(opening?.stairIds)
+          && opening.stairIds.length > 1
+          && opening.stairIds.every(id => Number.isInteger(Number(id)) && Number(id) > 0)
+          ? { stairIds: opening.stairIds.map(Number) } : {}),
       };
     }).filter(Boolean);
 

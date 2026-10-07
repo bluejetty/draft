@@ -9948,7 +9948,8 @@
       take(drawing.stairs || [], entry.item);
       if (!removed.length) return false;
       const holes = drawing.surfaceOpenings || [];
-      holes.filter(hole => hole.stairId === entry.item.id).forEach(hole => take(holes, hole));
+      holes.filter(hole => hole.stairId === entry.item.id
+        || (hole.stairIds || []).includes(entry.item.id)).forEach(hole => take(holes, hole));
       undoStack.push({ kind: 'remove-items', removed });
       markDirty();
       return true;
@@ -14721,7 +14722,8 @@
     (drawing?.stairs || [])
       .filter(stair => (stair.view || 'plan') === 'plan' && !served.has(stair.id))
       .forEach(stair => {
-        if (drawing.surfaceOpenings.some(opening => opening.stairId === stair.id)) return;
+        if (drawing.surfaceOpenings.some(opening => opening.stairId === stair.id
+          || (opening.stairIds || []).includes(stair.id))) return;
         const descent = window.DraftStairGeometry.stairDescent(stair.levelId, stairLevels());
         if (!descent || !(descent.riseFt > 0)) return;
         const nudgedIn = stairAutoFit(stair);
@@ -14924,6 +14926,48 @@
     return { roof, walls };
   };
 
+  // THE OUTLINE OF A FEW AXIS-SQUARE RECTANGLES TAKEN TOGETHER, as one ring,
+  // or null when they do not make exactly one piece. Cut on the grid of their
+  // own edges: a cell is in when its centre is in any rectangle, and the ring
+  // is the cell sides with nothing on the other side, chained and straightened.
+  const rectUnionRing = rects => {
+    const xs = [...new Set(rects.flatMap(r => [r.x0, r.x1]))].sort((p, q) => p - q);
+    const zs = [...new Set(rects.flatMap(r => [r.z0, r.z1]))].sort((p, q) => p - q);
+    const filled = (i, j) => {
+      if (i < 0 || j < 0 || i >= xs.length - 1 || j >= zs.length - 1) return false;
+      const cx = (xs[i] + xs[i + 1]) / 2, cz = (zs[j] + zs[j + 1]) / 2;
+      return rects.some(r => cx > r.x0 && cx < r.x1 && cz > r.z0 && cz < r.z1);
+    };
+    // Each boundary side, walked with the inside on its left.
+    const next = new Map();
+    const key = (i, j) => `${i},${j}`;
+    let sides = 0;
+    for (let i = 0; i < xs.length - 1; i++) {
+      for (let j = 0; j < zs.length - 1; j++) {
+        if (!filled(i, j)) continue;
+        if (!filled(i, j - 1)) { next.set(key(i, j), [i + 1, j]); sides += 1; }
+        if (!filled(i + 1, j)) { next.set(key(i + 1, j), [i + 1, j + 1]); sides += 1; }
+        if (!filled(i, j + 1)) { next.set(key(i + 1, j + 1), [i, j + 1]); sides += 1; }
+        if (!filled(i - 1, j)) { next.set(key(i, j + 1), [i, j]); sides += 1; }
+      }
+    }
+    if (next.size !== sides || !sides) return null;   // a corner touched twice
+    const start = next.keys().next().value.split(',').map(Number);
+    const ring = [];
+    let at = start;
+    for (let n = 0; n <= sides; n++) {
+      ring.push(at);
+      at = next.get(key(...at));
+      if (at[0] === start[0] && at[1] === start[1]) break;
+    }
+    if (ring.length !== sides) return null;            // more than one piece
+    const straight = ring.filter((p, n) => {
+      const q = ring[(n + ring.length - 1) % ring.length], r = ring[(n + 1) % ring.length];
+      return !((q[0] === p[0] && p[0] === r[0]) || (q[1] === p[1] && p[1] === r[1]));
+    });
+    return straight.map(([i, j]) => ({ x: xs[i], z: zs[j] }));
+  };
+
   const placeBilevelStairs = (spec, mainLevelId) => {
     const SG = window.DraftStairGeometry;
     if (!SG || !spec) return [];
@@ -14964,20 +15008,40 @@
       if (!mainDeck) return;
       const half = run.widthFt / 2;
       const z0 = Math.min(startZ, endZ), z1 = Math.max(startZ, endZ);
+      wells.push({ x0: run.x - half, x1: run.x + half, z0, z1, stairId: stair.id });
+    };
+    const wells = [];
+    flight(spec.up, Number(mainLevelId), false);
+    flight(spec.down, ENTRY_LEVEL_ID, true);
+    // ONE HOLE OVER BOTH FLIGHTS (Movie, 7 Oct): "that little floor area
+    // between the stairs (lets just make that a GAP space. they can place the
+    // handrails or a wall seperation between the stairs as they need)". The
+    // strip between the two wells is opened where both run, and the opening
+    // names both stairs. Each flight's own well is kept for the framing,
+    // which hangs a beam down each outside edge at that flight's length.
+    made.wells = wells.map(({ stairId, ...rect }) => rect);
+    const [a, b] = wells.slice().sort((p, q) => p.x0 - q.x0);
+    const lo = b ? Math.max(a.z0, b.z0) : 0, hi = b ? Math.min(a.z1, b.z1) : 0;
+    const rects = b && b.x0 - a.x1 < 1 && hi - lo > 0.01
+      ? [a, b, { x0: a.x1, x1: b.x0, z0: lo, z1: hi }] : null;
+    const joined = rects && rectUnionRing(rects);
+    const holes = joined
+      ? [{ points: joined, stairId: a.stairId, stairIds: [a.stairId, b.stairId] }]
+      : wells.map(w => ({
+        points: [{ x: w.x0, z: w.z0 }, { x: w.x1, z: w.z0 }, { x: w.x1, z: w.z1 }, { x: w.x0, z: w.z1 }],
+        stairId: w.stairId,
+      }));
+    holes.forEach(hole => {
       const opening = {
         id: newDrawingItemId('opening'),
         hostType: 'floor',
         hostId: mainDeck.id,
-        points: [{ x: run.x - half, z: z0 }, { x: run.x + half, z: z0 },
-          { x: run.x + half, z: z1 }, { x: run.x - half, z: z1 }],
         levelId: Number(mainLevelId),
-        stairId: stair.id,
+        ...hole,
       };
       drawing.surfaceOpenings.push(opening);
       made.push({ list: drawing.surfaceOpenings, item: opening });
-    };
-    flight(spec.up, Number(mainLevelId), false);
-    flight(spec.down, ENTRY_LEVEL_ID, true);
+    });
     // THE THIRD FLIGHT, a MOD BILEVEL's: over the down flight, from the upper
     // landing back down to MAIN FL. It stands ON MAIN's deck, so it cuts no
     // hole in it -- and its own level's deck is the landing, which stops at
@@ -15046,8 +15110,8 @@
     framing.posts.forEach(post);
     // ONE BEAM DOWN EACH OUTSIDE EDGE OF THE WELL, read off the openings the
     // flights just cut rather than worked out again here.
-    const holes = flights.filter(entry => entry.list === drawing.surfaceOpenings)
-      .map(entry => entry.item.points);
+    const holes = (flights.wells || []).map(w => [
+      { x: w.x0, z: w.z0 }, { x: w.x1, z: w.z0 }, { x: w.x1, z: w.z1 }, { x: w.x0, z: w.z1 }]);
     let beams = 0;
     if (holes.length) {
       const minX = pts => Math.min(...pts.map(p => p.x));
