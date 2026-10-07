@@ -1458,6 +1458,10 @@ if (!window.DraftDrawingFormat) {
         scaleRatio,
         scaleUnit: scaleRatio ? oneOf(underlay?.scaleUnit, ['imperial', 'ratio'], null) : null,
         layer: 'UNDERLAY',
+        // QUARTER TURNS CLOCKWISE the picture has been through with the house
+        // (HOUSE ROTATE). Absent is upright; only a turned picture carries it.
+        ...(Number.isInteger(Number(underlay?.turn)) && (((Number(underlay.turn) % 4) + 4) % 4)
+          ? { turn: ((Number(underlay.turn) % 4) + 4) % 4 } : {}),
       };
     }).filter(Boolean);
 
