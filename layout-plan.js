@@ -148,7 +148,10 @@ if (!window.DraftLayoutPlan) {
   // of the one drawing it shows, and for a FRAME a superset is safe in the one
   // direction that matters: it can be roomier than it needs, never tighter.
   function planBounds(saved, levelId) {
-    const box = wallBounds(planWalls(saved, levelId));
+    // A FULL FLOOR'S FRAME TAKES IN ITS HALF-FLOOR, drawn on the same sheet.
+    const half = HALF_LEVEL_UNDER[levelId];
+    const box = wallBounds(planWalls(saved, levelId)
+      .concat(half != null ? planWalls(saved, half) : []));
     let minX = box ? box.minX : Infinity, maxX = box ? box.maxX : -Infinity;
     let minZ = box ? box.minZ : Infinity, maxZ = box ? box.maxZ : -Infinity;
     const eat = pt => {
@@ -284,6 +287,23 @@ if (!window.DraftLayoutPlan) {
     return true;
   }
 
+  // THE SPLIT'S HALF-FLOORS RIDE ON THEIR FULL FLOOR (Movie, 7 Oct): "in
+  // layout areas we will only need to show the MAIN floors" -- the 0.5 floor
+  // is drawn on MAIN FL's sheet and the 1.5 floor on 2ND FL's, "slightly
+  // lighter in shade ... and if any lines are on top of each other the 2nd
+  // floor lines should overrule". Walls, windows, doors and stairs only.
+  const HALF_LEVEL_UNDER = Object.freeze({ 3: 2, 5: 4 });
+  const HALF_LEVEL_SHEET_ALPHA = 0.6;
+
+  // A HALF-FLOOR GETS NO SHEET OF ITS OWN once its full floor has walls to
+  // carry it; alone (no full floor drawn yet) it still prints by itself.
+  function ridesOnFullFloor(saved, levelId) {
+    const id = Number(levelId);
+    const full = Object.keys(HALF_LEVEL_UNDER)
+      .find(key => HALF_LEVEL_UNDER[key] === id);
+    return full != null && planWalls(saved, Number(full)).length > 0;
+  }
+
   function drawPlan(ctx, toS, saved, levelId, env = {}) {
     const composition = window.DraftPlanComposition;
     const geo = window.DraftGeometry2D;
@@ -292,6 +312,18 @@ if (!window.DraftLayoutPlan) {
     const view = env.view || null;
     const walls = planWalls(saved, levelId, view);
     if (!walls.length) return drawRoofPlan(ctx, toS, saved, levelId);
+
+    // UNDER, so the full floor's own lines are the ones left on top.
+    const half = env.halfLevel === true ? null : HALF_LEVEL_UNDER[levelId];
+    if (half != null && planWalls(saved, half, view).length) {
+      ctx.save();
+      ctx.globalAlpha *= HALF_LEVEL_SHEET_ALPHA;
+      drawPlan(ctx, toS, saved, half, { ...env, halfLevel: true });
+      ctx.restore();
+    }
+    const halfLevel = env.halfLevel === true;
+    // On the half-floor's pass, only what Movie named.
+    const only = list => (halfLevel ? [] : list);
 
     // THE BUILDING, OR THE CONSTRUCTION DOCUMENT. `env.shell` asks for the
     // first: walls, floors, roofs and the holes in them, and nothing that
@@ -429,7 +461,7 @@ if (!window.DraftLayoutPlan) {
       // neighborhood at 1"=40' asks for the building rather than the
       // construction document, so the tag stage never opens there and needs
       // no mode of its own.
-      houseOutline: forConstruction(id => (window.DraftBuildingBodies
+      houseOutline: halfLevel ? null : forConstruction(id => (window.DraftBuildingBodies
         ? window.DraftBuildingBodies.houseOutlineOn(saved, id) : null)),
       // null for a layer the table does not carry, which layerShows reads as
       // "draws" -- an untagged dimension from before this key existed, and a
@@ -464,12 +496,12 @@ if (!window.DraftLayoutPlan) {
 
       walls,
       fenestrations: of('fenestrations'),
-      floors: of('floors'),
-      roofs: of('roofs'),
-      shapes: of('shapes'),
-      lines: of('lines'),
-      dimensions: of('dimensions'),
-      notes: of('notes'),
+      floors: only(of('floors')),
+      roofs: only(of('roofs')),
+      shapes: only(of('shapes')),
+      lines: only(of('lines')),
+      dimensions: only(of('dimensions')),
+      notes: only(of('notes')),
 
       wallJoins: geo.wallJoins,
       meldPieces: geo.meldPieces,
@@ -552,7 +584,7 @@ if (!window.DraftLayoutPlan) {
         FIXTURE_COLOR,
         fixtureFill: FIXTURE_FILL,
       } : null,
-      fixtures: of('fixtures'),
+      fixtures: only(of('fixtures')),
 
       // BEAMS AND COLUMNS, which a foundation sheet is arguably FOR: a site
       // builder setting teleposts reads them off this drawing. The painters
@@ -569,8 +601,8 @@ if (!window.DraftLayoutPlan) {
         columnColor: '#1d1f20',
         labelFont: "600 9px 'Barlow Condensed', system-ui, sans-serif",
       }),
-      beams: of('beams'),
-      columns: of('columns'),
+      beams: only(of('beams')),
+      columns: only(of('columns')),
       // ONLY A PILE CHANGES THE DRAWN SHAPE; a telepost is the default square.
       // The same rule MODEL.html:3266 applies, and it is the CALLER's answer
       // rather than the painter's.
@@ -608,7 +640,7 @@ if (!window.DraftLayoutPlan) {
         isPrinting: true,
         areaFor: listing ? (tag => tag.size || '') : (() => ''),
       }),
-      roomTags: of('roomTags'),
+      roomTags: only(of('roomTags')),
       noteEnv: unless({ color: '#1d1f20', fillColor: paperColor }),
     });
     return true;
@@ -619,6 +651,7 @@ if (!window.DraftLayoutPlan) {
     planOpenings,
     wallBounds,
     planBounds,
+    ridesOnFullFloor,
     drawPlan,
   });
 })();

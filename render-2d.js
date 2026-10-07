@@ -2211,7 +2211,9 @@ if (!window.DraftRender2D) {
     ctx.beginPath();
     pts.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
     ctx.closePath();
-    ctx.globalAlpha = preview ? 0.75 : 1;
+    // MULTIPLIED, not set: a caller fading the whole pass (MODEL's paired
+    // half-level, at half strength) must fade the openings with it.
+    ctx.globalAlpha *= preview ? 0.75 : 1;
     ctx.fillStyle = gap;
     ctx.fill();
     ctx.strokeStyle = preview ? atAlpha(ink, 0.5) : ink;
