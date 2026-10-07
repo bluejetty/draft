@@ -122,6 +122,10 @@ test('the two flights leave the landing: UP to MAIN on the front-door side, DOWN
     // floor area between the stairs (lets just make that a GAP space").
     const holes = d.surfaceOpenings.filter(o => Number(o.levelId) === 3);
     expect(holes.length).toBe(1);
+    // EXTERIOR DIMS ON THE 1 FLOOR LAYOUT, none on the 0.5's (Movie, 7 Oct).
+    const dimsOn = (lv, view) => d.dimensions.filter(x => Number(x.levelId) === lv && x.view === view);
+    expect(dimsOn(3, 'floor').length, 'the MAIN FL floor layout is dimensioned').toBeGreaterThan(4);
+    expect(dimsOn(2, 'floor').length, 'the ENTRY floor layout is not').toBe(0);
     expect(holes[0].stairIds.slice().sort()).toEqual([up.id, down.id].sort());
     // The middle of the 4.5" gap, a foot back from the landing, is open.
     const inside = (pts, p) => {
