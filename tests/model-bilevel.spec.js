@@ -118,9 +118,24 @@ test('the two flights leave the landing: UP to MAIN on the front-door side, DOWN
     expect(down.start.z).toBeCloseTo(14, 3);
     expect(up.start.z).toBeLessThan(14);
     expect(down.end.z).toBeLessThan(14);
-    // MAIN FL is open over both.
+    // MAIN FL is open over both, in ONE hole (Movie, 7 Oct: "that little
+    // floor area between the stairs (lets just make that a GAP space").
     const holes = d.surfaceOpenings.filter(o => Number(o.levelId) === 3);
-    expect(holes.map(o => o.stairId).sort()).toEqual([up.id, down.id].sort());
+    expect(holes.length).toBe(1);
+    expect(holes[0].stairIds.slice().sort()).toEqual([up.id, down.id].sort());
+    // The middle of the 4.5" gap, a foot back from the landing, is open.
+    const inside = (pts, p) => {
+      let hit = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        if ((pts[i].z > p.z) !== (pts[j].z > p.z)
+          && p.x < ((pts[j].x - pts[i].x) * (p.z - pts[i].z)) / (pts[j].z - pts[i].z) + pts[i].x) hit = !hit;
+      }
+      return hit;
+    };
+    const gapX = ((up.start.x + up.widthFt / 2) + (down.start.x - down.widthFt / 2)) / 2;
+    expect(inside(holes[0].points, { x: gapX, z: 13 }), 'the strip between the flights').toBe(true);
+    expect(inside(holes[0].points, { x: up.start.x, z: 13 }), 'over the UP flight').toBe(true);
+    expect(inside(holes[0].points, { x: down.start.x, z: 13 }), 'over the DOWN flight').toBe(true);
   });
 
 // Movie, 3 Oct: the entry floor overlaps the house by 3.5" on its three

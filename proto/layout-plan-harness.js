@@ -64,13 +64,13 @@ function loadWith(omit = [], source = {}) {
 // Records what it is asked to paint. strokeRect is a no-op and measureText
 // returns a zero width, the same shapes harness-env's recorder uses.
 function recorder() {
-  const texts = [], alphas = [], stack = [];
+  const texts = [], alphas = [], strokes = [], stack = [];
   const ctx = {
-    texts, alphas, globalAlpha: 1,
+    texts, alphas, strokes, globalAlpha: 1,
     save() { stack.push(this.globalAlpha); },
     restore() { if (stack.length) this.globalAlpha = stack.pop(); },
     beginPath() {}, closePath() {}, moveTo() {},
-    lineTo() {}, arc() {}, rect() {}, stroke() {}, fill() {}, clip() {},
+    lineTo() {}, arc() {}, rect() {}, stroke() { strokes.push(this.globalAlpha); }, fill() {}, clip() {},
     fillRect() {}, strokeRect() {}, translate() {}, rotate() {}, scale() {},
     setLineDash() {}, quadraticCurveTo() {}, bezierCurveTo() {}, ellipse() {},
     fillText(t) { texts.push(String(t)); alphas.push(this.globalAlpha); },
@@ -92,7 +92,7 @@ function draw(win, levelId, { saved = SAVED, env = {} } = {}) {
   if (!LP) return { ok: false, texts: [], why: 'DraftLayoutPlan never defined' };
   try {
     LP.drawPlan(ctx, toS, saved, levelId, env);
-    return { ok: true, texts: ctx.texts, alphas: ctx.alphas, endAlpha: ctx.globalAlpha };
+    return { ok: true, texts: ctx.texts, alphas: ctx.alphas, strokes: ctx.strokes, endAlpha: ctx.globalAlpha };
   } catch (err) { return { ok: false, texts: ctx.texts, why: err.message }; }
 }
 
@@ -263,6 +263,49 @@ function run(label) {
   check('the full floor\'s frame takes in its half-floor', box && box.maxX >= halfMaxX,
     `maxX ${box && box.maxX} < ${halfMaxX}`);
 
+  // ── THE BASEMENT PLAN SHOWS ITS FOUNDATION, FADED (Movie, 7 Oct) ──────
+  //
+  // "show the FOUNDATION WALL (slightly lighter ...) (don't show footings,
+  // but show where columns are located". The house's foundation walls and
+  // posts come up faded under the basement's own walls; the garage's
+  // foundation and its piles do not.
+  const w = (id, levelId, view, a, b, extra = {}) => ({ id, levelId, view, wallType: 'stud_2x6',
+    start: { x: a[0], y: 0, z: a[1] }, end: { x: b[0], y: 0, z: b[1] }, baseHeight: 0, topHeight: 8,
+    thickness: 0.5, ...extra });
+  const basement = {
+    ...SAVED,
+    levels: [{ id: 1, name: 'FOUNDATION', elev: -8 }, { id: 3, name: 'MAIN FL', elev: 0 }],
+    walls: [
+      w(95001, 1, 'plan', [4, 4], [12, 4]), w(95002, 1, 'plan', [12, 4], [12, 10]),
+      ...[[[0, 0], [30, 0]], [[30, 0], [30, 20]], [[30, 20], [0, 20]], [[0, 20], [0, 0]]]
+        .map(([a, b], i) => w(95100 + i, 1, 'foundation', a, b, { wallType: 'conc_8' })),
+    ],
+    floors: [], roofs: [], stairs: [], dimensions: [], notes: [], lines: [], shapes: [],
+    fixtures: [], beams: [], roomTags: [], fenestrations: [], outlines: [], surfaceOpenings: [],
+    columns: [],
+  };
+  const ghostStrokes = saved => draw(full.win, 1, { saved, env: { view: 'plan' } })
+    .strokes.filter(a => a < 1).length;
+  const withFdn = ghostStrokes(basement);
+  check('the basement plan draws the foundation walls, lighter', withFdn > 0, `${withFdn} faded strokes`);
+  check('and nothing faded without them',
+    ghostStrokes({ ...basement, walls: basement.walls.filter(x => x.view === 'plan') }) === 0);
+  const garage = { ...basement, walls: [...basement.walls,
+    w(95200, 1, 'foundation', [30, 0], [60, 0], { body: 'garage' })] };
+  check('the garage\'s foundation stays off the basement plan', ghostStrokes(garage) === withFdn,
+    `${ghostStrokes(garage)} vs ${withFdn}`);
+  const post = { ...basement, columns: [{ id: 1, levelId: 1, view: 'foundation', point: { x: 15, y: 0, z: 10 }, footing: 'pad36' }] };
+  check('a post on the foundation shows where it stands', ghostStrokes(post) > withFdn,
+    `${ghostStrokes(post)} vs ${withFdn}`);
+  const pile = { ...basement, columns: [{ id: 2, levelId: 1, view: 'foundation', point: { x: 45, y: 0, z: 10 }, footing: 'pile12' }] };
+  const pileSheet = draw(full.win, 1, { saved: pile, env: { view: 'plan' } });
+  check('but no pile, which is a footing', ghostStrokes(pile) === withFdn
+    && !pileSheet.texts.some(t => /pile/i.test(t)), `${ghostStrokes(pile)} vs ${withFdn}`);
+  check('and the basement\'s own walls still at full strength',
+    draw(full.win, 1, { saved: basement, env: { view: 'plan' } }).strokes.some(a => a === 1));
+  check('the FOUNDATION sheet itself is not faded',
+    draw(full.win, 1, { saved: basement, env: { view: 'foundation' } }).strokes.every(a => a === 1));
+
   if (label) console.log(label);
 }
 
@@ -310,6 +353,16 @@ const MUTATIONS = [
     'layout-plan.js', c => c.replace('return full != null && planWalls(saved, Number(full)).length > 0;', 'return full != null;')],
   ['the frame leaves the half-floor out',
     'layout-plan.js', c => c.replace('.concat(half != null ? planWalls(saved, half) : [])', '')],
+  ['the basement plan never shows its foundation',
+    'layout-plan.js', c => c.replace("if (levelId === BASEMENT_LEVEL_ID && view === 'plan'", 'if (false')],
+  ['the basement\'s foundation draws at full strength',
+    'layout-plan.js', c => c.replace('ctx.globalAlpha *= BASEMENT_FOUNDATION_ALPHA;', '')],
+  ['the garage\'s foundation comes onto the basement plan',
+    'layout-plan.js', c => c.replace("return !!wall && wall.body !== 'garage';", 'return !!wall;')],
+  ['the posts are left off the basement plan',
+    'layout-plan.js', c => c.replace("? of('columns').filter(column => !/pile/i.test(String(column.footing || '')))", "? []")],
+  ['the piles come along with the posts',
+    'layout-plan.js', c => c.replace("? of('columns').filter(column => !/pile/i.test(String(column.footing || '')))", "? of('columns')")],
   ['the warning repeats on every paint',
     'layout-plan.js', c => c.replace('warnedNoLayerViews = true;', 'warnedNoLayerViews = false;')],
 ];
