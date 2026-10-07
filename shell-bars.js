@@ -407,6 +407,26 @@ if (!window.DraftShellBars) {
         <path d="M9.7 4.8 L10.6 7.1" stroke-width="1.1"></path>
       </svg>
     </button>
+    <!-- TRACE: a photo or PDF under the plan to draw over (Movie, 7 Oct:
+         "make it an INSTRUMENT PANEL. when you press it it turn ON and if
+         there is images already loaded it will show them, click it again and
+         it turns off the images turn off"). Drawn as he asked, "a little air
+         photo of some house properties on a block": the block, the lane down
+         its middle, the lot lines, and a house on each lot. -->
+    <button type="button" id="strip-trace" class="chip" data-mode-trace aria-pressed="false"
+      title="TRACE — show the photos and PDFs under this level, and bring in another to trace over">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">
+        <rect x="1" y="1" width="14" height="14" rx="1"></rect>
+        <path d="M1 8 H15" stroke-width="1.6"></path>
+        <path d="M5.7 1 V7 M10.3 1 V7 M5.7 9 V15 M10.3 9 V15" stroke-width="0.7"></path>
+        <rect x="2.2" y="2.4" width="2.3" height="2.4" fill="currentColor" stroke="none"></rect>
+        <rect x="6.9" y="2.4" width="2.3" height="2.4" fill="currentColor" stroke="none"></rect>
+        <rect x="11.5" y="2.4" width="2.3" height="2.4" fill="currentColor" stroke="none"></rect>
+        <rect x="2.2" y="11.2" width="2.3" height="2.4" fill="currentColor" stroke="none"></rect>
+        <rect x="6.9" y="11.2" width="2.3" height="2.4" fill="currentColor" stroke="none"></rect>
+        <rect x="11.5" y="11.2" width="2.3" height="2.4" fill="currentColor" stroke="none"></rect>
+      </svg>
+    </button>
     <span class="chip dormant" data-mode-shield title="ERASING SHIELD — not built on this page yet">
       <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
         <rect x="2.5" y="3.5" width="11" height="9" rx="1"></rect>

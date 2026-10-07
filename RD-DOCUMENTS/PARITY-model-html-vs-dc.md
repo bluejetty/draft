@@ -334,7 +334,7 @@ as a tap guard naming `level-pick`.
 | ASSEMBLY / group / ungroup | assembly rail | **present** — ASSEMBLY and UNGROUP in the left tool column, with the FIXED / NOT FIXED dialog | must-have | **driven**: a selection becomes a named assembly recorded by TYPE AND ID (`_createGroup :17940`) and read back out of the saved file, not off the panel — a grouping held by object reference looks right on screen and is gone after a load. FIXED gives `stretchBehavior: 'rigid'`, NOT FIXED `'item-geometry'`. An item belongs to one assembly: taking it into a new one removes it from its old, and an emptied assembly is dropped. Clicking one member takes the whole assembly, on a click and in a window. UNGROUP releases without deleting — asserted both ways. **One inherited oddity, ported deliberately**: Escape in the name field CREATES a NOT FIXED assembly rather than cancelling (`onGroupNameKey :23685-23687`). Ruled to keep by Devin, 13 Sep |
 | Stacked washrooms, source links | boneyard/assembly work | **absent on this page; keys carried untouched** | **partly settled** | **driven** one-sided only: the keys round-trip through `MODEL.html`. The old page was NOT run on the same fixture — that comparison is still owed |
 | Elevation / section previews | right-hand cards | absent | must-have | `SPEC-model-html-cut-views.md` — 18 accessors, 6 absent |
-| INSERT PHOTO+PDF underlay | INSERT | **partial — paints, cannot insert** | **settled** | **driven**: a seeded underlay is carried and painted; the page has **no `input` element of any type**, so there is nowhere to choose a file |
+| INSERT PHOTO+PDF underlay | TRACE chip (instrument strip) | **present** (7 Oct) | **settled** | **driven** (`model-html-trace.spec.js`): the chip shows/hides a level's images and asks to upload; the card reads the scale printed on a PDF, takes a typed scale or width, and CALIBRATEs from two clicks and a real length; PDFs draw through pdf.js fetched on demand |
 | T-square | down by default, `t` stows | **absent** | **settled** | **driven**: `t` and `T` pressed; neither the readout nor the file changes by one byte |
 | Boneyard | shelves, unplaced geometry | **absent, deliberately** | **settled** | **driven**: the old page reaches it through a negative pseudo-level id; the level picker offers no negative option and every option is a real level |
 | Pan / zoom / fit | mouse, `0` | **present** | must-have | |
@@ -430,8 +430,8 @@ Per the order, these are named and left alone.
   in the table, and is the natural next pass.
 - **Whether select reaches anything but walls.** `selectedSeg` is the only
   selection state I found.
-- **Underlay insertion.** The page paints and filters underlays; I did not find
-  a gesture that adds one, and did not prove there is none.
+- **Underlay insertion.** Settled 7 Oct: the TRACE chip inserts them (see the
+  INSERT PHOTO+PDF row).
 - **Which of the seven small tools a day's work needs.** That is Movie's call,
   not a measurement — I have marked them `?` rather than guessing, because a
   guessed verdict is the thing this week has been about.

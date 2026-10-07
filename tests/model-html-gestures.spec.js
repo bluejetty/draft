@@ -741,6 +741,12 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // whether to line a garage above the house ceiling up with it.
             // An answer to the build's own question; nothing new is made.
             'YES - LINE UP (ONE ROOF)', 'NO - KEEP 10\'-1 3/4"',
+            // TRACE (Movie, 7 Oct): the instrument chip that shows the photos
+            // and PDFs under a level, the ask that follows switching it on,
+            // and the insert card. It places a tracing image -- the old
+            // page's INSERT UNDERLAY, which the table now records as present.
+            'strip-trace', 'trace-upload', 'trace-later', 'trace-prev', 'trace-next',
+            'trace-calibrate', 'trace-cal-apply', 'trace-go', 'trace-other', 'trace-cancel',
             'Save first', 'Discard', 'Cancel',   // the unsaved guard
             'Save', 'Cancel'].sort(),           // the SAVE AS card
           // THE PAGE ROW'S LIVE DESTINATIONS. Links, not buttons, so they
@@ -799,7 +805,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // changes.
           // AND THE LESSON'S "Don't show this again" tick, a setting.
           inputs: ['size-w', 'size-d', 'frozen-length', 'frozen-angle',
-            'file-input', 'save-as-name', 'garage-lesson-off'].sort(),
+            'file-input', 'save-as-name', 'garage-lesson-off',
+            // TRACE's picker and its card's three boxes: scale, width, and
+            // CALIBRATE's real length.
+            'trace-file', 'trace-scale', 'trace-width', 'trace-cal-length'].sort(),
           railKinds: ['seat'],
           // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
           // no unlabelled button: an entry this cannot name would arrive as
@@ -857,35 +866,24 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
         });
     });
 
-  test('INSERT UNDERLAY — no insert gesture, and no file input to hang one on',
+  test('INSERT UNDERLAY — the TRACE chip has its own picker; the drawing picker takes none',
     async ({ page }) => {
-      await seeded(page, `drawing => {
-        drawing.underlays = [{ id: 'ul-1', levelId: (drawing.walls[0] || {}).levelId,
-          kind: 'pdf', name: 'survey.pdf', page: 1, x: 0, z: 0,
-          widthFt: 40, heightFt: 30, opacity: 0.5, scaleRaw: null,
-          scaleRatio: null, scaleUnit: null, layer: 'UNDERLAY' }];
-      }`);
-
-      // IT PAINTS ONE — the row says `partial` and that half is real.
-      await expect(readout(page), 'the page must be carrying the underlay')
-        .toContainText('underlays');
-      expect((await h.savedDrawing(page)).underlays,
-        'the underlay must be in the file this page loaded').toHaveLength(1);
-
-      // AND THERE IS STILL NOWHERE TO PUT A NEW ONE. The page grew a file
-      // input with the shell -- OPEN needs one -- so "no file input at all"
-      // stopped being the honest form of this claim. The claim that matters
-      // is unchanged and is now said directly: the ONE picker on the page
-      // takes DRAWINGS, and an image cannot be offered to it.
-      const pickers = page.locator('input[type=file]');
-      expect(await pickers.count(),
-        'the only file picker on this page is the one OPEN reads a drawing with')
-        .toBe(1);
-      const accept = await pickers.getAttribute('accept');
+      await seeded(page);
+      // TWO PICKERS NOW, each taking only its own kind of file: OPEN reads
+      // drawings, and TRACE (Movie, 7 Oct) takes the photos and PDFs a
+      // drafter traces over. Neither may take the other's.
+      const open = page.locator('#file-input');
+      const accept = await open.getAttribute('accept');
       expect(accept, 'OPEN names the drawing extensions it reads').toBeTruthy();
       expect(accept.includes('image') || accept.includes('.png') || accept.includes('.pdf'),
         'an underlay is an image or a PDF, and the drawing picker must not take one')
         .toBe(false);
+      const trace = await page.locator('#trace-file').getAttribute('accept');
+      expect(trace.includes('.pdf') && trace.includes('.jpg') && trace.includes('.png'),
+        'TRACE takes photos and PDFs').toBe(true);
+      expect(trace.includes('.draft') || trace.includes('json'),
+        'and never a drawing').toBe(false);
+      expect(await page.locator('input[type=file]').count()).toBe(2);
     });
 
   test('T-SQUARE — pressing `t` does nothing the page or the file can show',

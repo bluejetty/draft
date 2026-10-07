@@ -951,10 +951,40 @@
      board's "break the bone here, or move this wall?", a different bone
      entirely: reusing its id because both are about a bone and both offer
      two answers is exactly the collision DEFINITIONS.md exists to stop. */
-  #bone-choice, #build-choice, #garage-lesson, #corner-join, #garage-align { position:fixed; inset:0; z-index:7; display:flex;
+  #bone-choice, #build-choice, #garage-lesson, #corner-join, #garage-align, #trace-ask, #trace-insert { position:fixed; inset:0; z-index:7; display:flex;
     align-items:center; justify-content:center; padding:24px;
     background:rgba(0,0,0,0.35); }
-  #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden], #corner-join[hidden], #garage-align[hidden] { display:none; }
+  #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden], #corner-join[hidden], #garage-align[hidden],
+  #trace-ask[hidden], #trace-insert[hidden] { display:none; }
+  /* THE TRACE CARD: what the file is, the scale it was drawn at, and the
+     two-point CALIBRATE on its own preview. */
+  .trace-card [hidden] { display:none !important; }
+  .trace-card { max-width:30em; width:100%; max-height:calc(100vh - 60px); overflow-y:auto; }
+  .trace-card input[type=text] { width:100%; box-sizing:border-box; margin-top:4px; padding:4px 8px;
+    border:1px solid var(--edge-panel); border-radius:3px; background: var(--surface-chip);
+    color: var(--ink-primary); font-family: var(--font-ui); font-size:12px; }
+  .trace-label { font-family: var(--font-ui); font-size:10px; font-weight:600; letter-spacing:0.06em;
+    color: var(--ink-quiet); margin-top:10px; }
+  .trace-status { font-family: var(--font-ui); font-size:12px; color: var(--ink-quiet); }
+  .trace-preview { position:relative; margin-top:6px; }
+  .trace-preview img { display:block; width:100%; max-height:42vh; object-fit:contain;
+    border:1px solid var(--edge-panel); background:#fff; cursor:crosshair; }
+  .trace-mark { position:absolute; width:10px; height:10px; margin:-5px 0 0 -5px; border-radius:50%;
+    border:2px solid #b04050; background:rgba(176,64,80,0.25); pointer-events:none; }
+  .trace-verdict { margin-top:8px; font-family: var(--font-ui); font-size:11px; font-weight:600;
+    letter-spacing:0.05em; color: var(--accent); }
+  .trace-pages, .trace-cal-row { display:flex; align-items:center; gap:6px; margin-top:8px; }
+  .trace-pages .trace-label, .trace-cal-row .trace-label { margin-top:0; }
+  .trace-cal-row input[type=text] { width:7em; margin-top:0; }
+  .trace-chips { display:flex; flex-wrap:wrap; gap:4px; margin-top:4px; }
+  .trace-card button { cursor:pointer; padding:4px 9px; border-radius:3px; border:1px solid var(--edge-panel);
+    background: var(--surface-chip); color: var(--ink-quiet); font-family: var(--font-ui);
+    font-size:11px; font-weight:600; letter-spacing:0.04em; }
+  .trace-card button[aria-pressed="true"], [data-trace-go] { border-color: var(--accent) !important; color: var(--accent) !important; }
+  .trace-wide { width:100%; margin-top:10px; }
+  .trace-hint { margin-top:6px; font-family: var(--font-ui); font-size:11px; color: var(--ink-quiet); }
+  .trace-err { min-height:0; font-family: var(--font-ui); font-size:10px; color:#b04050; margin-top:3px; }
+  .trace-actions { margin-top:14px; }
   /* PROFESSOR GRUFF'S GARAGE LESSON, the old page's card (MODEL.dc.html
      garageCallout) in this page's shell: who is talking, the rule, and the
      right-vs-wrong sketch. */
@@ -1406,6 +1436,65 @@
   </div>
 </div>
 
+<!-- TRACE (Movie, 7 Oct): the instrument chip that shows the photos and PDFs
+     under a level, and on switching on asks whether to bring in another. -->
+<div id="trace-ask" data-trace-ask hidden role="dialog" aria-label="Trace images">
+  <div class="promote-card">
+    <p><b>TRACE</b><br><span data-trace-count></span> Upload another image to trace over?</p>
+    <div class="promote-row">
+      <button type="button" id="trace-upload" data-trace-upload>UPLOAD IMAGE / PDF</button>
+      <button type="button" id="trace-later" data-trace-later>NOT NOW</button>
+    </div>
+  </div>
+</div>
+<input id="trace-file" type="file" data-trace-file hidden
+  accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,image/gif,image/bmp,.png,.jpg,.jpeg,.webp,.gif,.bmp">
+<div id="trace-insert" data-trace-insert hidden role="dialog" aria-label="Insert an image to trace">
+  <div class="promote-card trace-card">
+    <p><b>INSERT TO TRACE</b> &mdash; on <span data-trace-level></span></p>
+    <div class="trace-status" data-trace-status></div>
+    <div data-trace-body hidden>
+      <div class="trace-preview">
+        <img data-trace-preview alt="Preview">
+        <div data-trace-marks></div>
+      </div>
+      <div class="trace-verdict" data-trace-verdict></div>
+      <div class="trace-pages" data-trace-pages hidden>
+        <span class="trace-label">PAGE</span>
+        <button type="button" id="trace-prev" data-trace-prev>&lsaquo;</button>
+        <span data-trace-page></span>
+        <button type="button" id="trace-next" data-trace-next>&rsaquo;</button>
+      </div>
+      <div data-trace-scale-row>
+        <div class="trace-label">SCALE ON PAPER</div>
+        <div class="trace-chips" data-trace-scales></div>
+        <input id="trace-scale" type="text" data-trace-scale placeholder="type a scale &mdash; 1/4&quot; = 1'-0&quot; or 1:100">
+        <div class="trace-err" data-trace-scale-error></div>
+      </div>
+      <div data-trace-width-row>
+        <div class="trace-label">WIDTH ON PLAN</div>
+        <input id="trace-width" type="text" data-trace-width placeholder="40'">
+        <div class="trace-err" data-trace-width-error></div>
+      </div>
+      <button type="button" id="trace-calibrate" class="trace-wide" data-trace-calibrate>CALIBRATE &mdash; CLICK THE TWO ENDS OF A LINE YOU KNOW</button>
+      <div data-trace-cal hidden>
+        <div class="trace-hint" data-trace-cal-hint></div>
+        <div class="trace-cal-row">
+          <span class="trace-label">REAL LENGTH</span>
+          <input id="trace-cal-length" type="text" data-trace-cal-length placeholder="12'">
+          <button type="button" id="trace-cal-apply" data-trace-cal-apply>APPLY</button>
+        </div>
+        <div class="trace-err" data-trace-cal-error></div>
+      </div>
+    </div>
+    <div class="promote-row trace-actions">
+      <button type="button" id="trace-go" data-trace-go hidden>INSERT</button>
+      <button type="button" id="trace-other" data-trace-other hidden>DIFFERENT FILE</button>
+      <button type="button" id="trace-cancel" data-trace-cancel>CANCEL</button>
+    </div>
+  </div>
+</div>
+
 <div id="corner-join" data-corner-join hidden role="dialog" aria-label="Connect at corner">
   <div class="promote-card">
     <p><b>CONNECT AT CORNER</b><br>This garage wall carries on past the house corner. Move it over so its foundation bears full on the house wall:</p>
@@ -1565,6 +1654,9 @@
 <script src="./level-lock.js"></script>
 <script src="./stair-geometry.js"></script>
 <script src="./stair-section.js"></script>
+<!-- What a picked photo or PDF is, and the scale printed on it -- the TRACE
+     chip's insert card. pdf.js itself is fetched only when a PDF is needed. -->
+<script src="./pdf-scan.js"></script>
 <!-- AUTO STAIR (board #260). auto-stair.js is the pure placement derivation:
      plain data in (outline, beam lines, room stamps, the layout numbers) and
      one suggested stair out, born legal -- its well already inside the
@@ -2158,28 +2250,67 @@
   // painter already does: `if (!image) continue`.
   const underlayImages = new Map();
 
-  // RASTER ONLY, AND THE PDF CASE IS NAMED RATHER THAN SKIPPED.
-  //
-  // MODEL.dc.html decodes both kinds: images straight from the blob, PDF pages
-  // re-rendered through pdf.js. Carrying pdf.js here costs 1.37 MB
-  // (vendor/pdf-3.11.174.min.js + its worker) against a page whose whole claim
-  // is an exact, short dependency list -- so this page decodes rasters and
-  // says so about the rest. The bone's loader already contains the same
-  // refusal (`if (!window.pdfjsLib) continue;`); the difference is that this
-  // page admits it on screen instead of drawing nothing and looking broken.
+  // THE TRACE CHIP DECIDES WHETHER THEY SHOW (Movie, 7 Oct): "when you press
+  // it it turn ON and if there is images already loaded it will show them,
+  // click it again and it turns off the images turn off". Remembered in this
+  // browser, so a drafter halfway through a tracing finds it as they left it.
+  let traceOn = (() => {
+    try { return localStorage.getItem('draft.trace.on') === '1'; } catch { return false; }
+  })();
+
+  // PDF.JS ONLY WHEN A PDF IS ASKED FOR. It is 1.37 MB with its worker, and
+  // this page's claim is a short dependency list -- so a drafter who never
+  // traces a PDF never fetches it. Photos need none of it.
+  let pdfJsLoading = null;
+  const ensurePdfJs = () => {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (!pdfJsLoading) {
+      pdfJsLoading = new Promise((resolve, reject) => {
+        const tag = document.createElement('script');
+        tag.src = './vendor/pdf-3.11.174.min.js';
+        tag.onload = () => {
+          if (!window.pdfjsLib) { reject(new Error('the PDF library did not start')); return; }
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = './vendor/pdf-3.11.174.worker.min.js';
+          resolve(window.pdfjsLib);
+        };
+        tag.onerror = () => reject(new Error('the PDF library could not be fetched'));
+        document.head.appendChild(tag);
+      }).catch(error => { pdfJsLoading = null; throw error; });
+    }
+    return pdfJsLoading;
+  };
+
+  // Photos decode straight from their stored blob; a PDF kept as vector
+  // re-renders its page through pdf.js, as MODEL.dc.html does. Only while
+  // TRACE is on: nothing is fetched or decoded for images nobody is showing.
   const loadUnderlayImages = async () => {
+    if (!traceOn) return;
     for (const underlay of (drawing?.underlays || [])) {
-      if (underlayImages.has(underlay.id) || underlay.kind === 'pdf') continue;
+      if (underlayImages.has(underlay.id)) continue;
       try {
         const file = await window.SharedFileStore.loadNamedFile(underlay.id, 'underlays');
         if (!file) continue;
-        const bitmap = await createImageBitmap(file).catch(() => null);
-        if (!bitmap) continue;
-        const canvas = document.createElement('canvas');
-        canvas.width = bitmap.width;
-        canvas.height = bitmap.height;
-        canvas.getContext('2d').drawImage(bitmap, 0, 0);
-        bitmap.close();
+        let canvas = null;
+        if (underlay.kind === 'pdf') {
+          const pdfjs = await ensurePdfJs();
+          const doc = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+          const page = await doc.getPage(Math.min(underlay.page || 1, doc.numPages));
+          const one = page.getViewport({ scale: 1 });
+          const viewport = page.getViewport({ scale: Math.min(2.6, 2200 / Math.max(one.width, one.height)) });
+          canvas = document.createElement('canvas');
+          canvas.width = Math.round(viewport.width);
+          canvas.height = Math.round(viewport.height);
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+          doc.destroy().catch(() => {});
+        } else {
+          const bitmap = await createImageBitmap(file).catch(() => null);
+          if (!bitmap) continue;
+          canvas = document.createElement('canvas');
+          canvas.width = bitmap.width;
+          canvas.height = bitmap.height;
+          canvas.getContext('2d').drawImage(bitmap, 0, 0);
+          bitmap.close();
+        }
         underlayImages.set(underlay.id, canvas);
         // Each image repaints as it lands, rather than one repaint at the end:
         // a large tracing image can take a moment and the drawing above it is
@@ -2673,9 +2804,15 @@
       R.drawRoof2D(ctx, toS, roof, b && b.exclude.length ? { exclude: b.exclude } : {}, paintEnv());
     });
     const thicknessFt = openingThicknessFt();
-    bearing.forEach(b => R.drawWallTops2D && R.drawWallTops2D(ctx, toS, b.walls, {
-      thicknessFt, color: skin['draw-wall-edge'] || skin['draw-line'],
-    }, { wallFaceOffsets: G.wallFaceOffsets }));
+    // EVERY wall top a roof rests on -- entry and garage too -- once each,
+    // not roof by roof (geometry-2d roofPlanWalls).
+    const tops = G.roofPlanWalls && drawing ? G.roofPlanWalls({ walls: drawing.walls || [],
+      outlines: drawing.outlines || [], floors: drawing.floors || [], levels: drawing.levels || [] }) : [];
+    if (R.drawWallTops2D) {
+      R.drawWallTops2D(ctx, toS, tops, {
+        thicknessFt, color: skin['draw-wall-edge'] || skin['draw-line'],
+      }, { wallFaceOffsets: G.wallFaceOffsets });
+    }
   };
 
   // STRUCTURE THE DRAFTER NEVER DREW. BUILD HOUSE lands a mid-span beam and
@@ -4388,7 +4525,7 @@
         // "Underlays sit beneath everything drawn: over the grid, under
         // geometry" -- MODEL.dc.html's own words at the same seam. A tracing
         // image that painted over the walls would be worse than none.
-        paintUnderlays();
+        if (traceOn) paintUnderlays();
         paintFloors(); paintRoofs(); paintShapes(); paintStructure();
         // AFTER THE STRUCTURE IT SITS OVER, before the walls. An opening above
         // is context for what this level carries, so it reads over the pads
@@ -4839,8 +4976,8 @@
     return (drawing && !('drawingOrigin' in drawing)) ? `${at} (world, back-filled)` : at;
   };
 
-  // PDF underlays on THIS level: the ones the drafter would expect to see.
-  const pdfUnderlays = () => underlays().filter(u => u.kind === 'pdf').length;
+  // Tracing images on THIS level that TRACE is keeping out of sight.
+  const hiddenUnderlays = () => (traceOn ? 0 : underlays().length);
 
   // THE READOUT FOLLOWS THE SECTION, or it stops being an instrument the
   // moment the page is most novel. The first cut branch in paint() returned
@@ -4966,13 +5103,11 @@
       + (substitutedWallTypes.size
         ? `   <b>${substitutedWallTypes.size} wall type${substitutedWallTypes.size === 1 ? '' : 's'} substituted</b>`
         : '')
-      // THE SAME RULE AS `dropped` ABOVE, for the same reason. A PDF underlay
-      // is stored, is on this level, and will never draw here -- so without
-      // this line the drafter sees the thing they were tracing simply gone and
-      // has no way to tell a missing feature from a broken page. Naming it
-      // costs one clause and turns an absence into a fact.
-      + (pdfUnderlays() ? `   <b>${pdfUnderlays()} PDF underlay`
-          + `${pdfUnderlays() === 1 ? '' : 's'} not drawn</b> (needs pdf.js)` : '')
+      // THE SAME RULE AS `dropped` ABOVE: a tracing image that is on this
+      // level and not showing says why, so the drafter can tell a switch from
+      // a loss.
+      + (hiddenUnderlays() ? `   <b>${hiddenUnderlays()} tracing image`
+          + `${hiddenUnderlays() === 1 ? '' : 's'} hidden</b> (TRACE is off)` : '')
       // The frame this readout describes, on both views, so a plan and a
       // section on the same drawing can be compared by looking at them.
       // The rail's six thumbnails, and this is the cost of an EDIT, not of a
@@ -9904,7 +10039,8 @@
   // z-index 7 and asks a question that has to be answered first; the foot
   // strip sits at 6, under all of them. The drive-thru sign is not built and
   // will be the fifth entry in this list rather than a new mechanism.
-  const MODAL_IDS = ['promote', 'bone-choice', 'build-choice', 'file-guard', 'save-as', 'garage-lesson', 'corner-join', 'garage-align'];
+  const MODAL_IDS = ['promote', 'bone-choice', 'build-choice', 'file-guard', 'save-as', 'garage-lesson', 'corner-join', 'garage-align',
+    'trace-ask', 'trace-insert'];
   const modalUp = () => MODAL_IDS.some(id => {
     const node = document.getElementById(id);
     return !!node && !node.hidden;
@@ -16371,6 +16507,299 @@
     } catch { /* a browser refusing storage still gets the light, for this tab */ }
     stripRefresh();
     paint();
+  });
+
+  // ── TRACE: A PHOTO OR A PDF UNDER THE PLAN ────────────────────────────────
+  //
+  // Movie, 7 Oct: "make it an INSTRUMENT PANEL. when you press it it turn ON
+  // and if there is images already loaded it will show them, click it again
+  // and it turns off the images turn off. when it is turned on, popup should
+  // ask the user if they would like to upload another image" -- and "the
+  // previous version model.dc.html could scale PDF plans if there was info",
+  // "also can do that identify line length scal for non pdf stuff".
+  //
+  // THE INSERT IS MODEL.dc.html's, through the same pdf-scan.js: what the
+  // file is, the scale printed on the page (picked up, or typed), a width for
+  // a photo, and CALIBRATE -- two clicks on a line you know and its real
+  // length. The binary goes to the shared store's 'underlays' bucket and the
+  // drawing keeps the placement, so either page draws what the other placed.
+  const traceChip = strip.querySelector('[data-mode-trace]');
+  const traceAsk = document.getElementById('trace-ask');
+  const traceCard = document.getElementById('trace-insert');
+  const traceFile = document.querySelector('[data-trace-file]');
+  const tq = sel => traceCard.querySelector(sel);
+  const TRACE_OPACITY = 0.4;
+  let traceScan = null;      // the file being inspected (pdf-scan's record)
+  let tracePage = 1;
+  let traceCalOn = false;
+
+  const traceLevelName = () => {
+    const level = (drawing?.levels || []).find(l => Number(l.id) === activeLevelId());
+    return level ? levelLabel(level.id, level.name) : 'this level';
+  };
+  const setTraceChip = () => {
+    if (!traceChip) return;
+    traceChip.classList.toggle('lit', traceOn);
+    traceChip.setAttribute('aria-pressed', traceOn ? 'true' : 'false');
+  };
+  setTraceChip();
+  const setTraceOn = on => {
+    traceOn = on;
+    try { localStorage.setItem('draft.trace.on', on ? '1' : '0'); } catch { /* this tab only */ }
+    setTraceChip();
+    if (on) loadUnderlayImages();
+    paint();
+    updateReadout();
+  };
+  const dropTraceScan = () => {
+    if (traceScan?.previewUrl) URL.revokeObjectURL(traceScan.previewUrl);
+    if (traceScan?.pdfDoc) traceScan.pdfDoc.destroy().catch(() => {});
+    traceScan = null;
+  };
+  const closeTraceCard = () => { dropTraceScan(); traceCard.hidden = true; };
+
+  // THE CARD, redrawn from the scan record whenever anything on it changes.
+  const traceHasScale = () => Boolean(traceScan?.kind === 'pdf' && traceScan.selectedScale && traceScan.pageDims);
+  const showTraceCard = (status = '') => {
+    traceCard.hidden = false;
+    tq('[data-trace-level]').textContent = traceLevelName();
+    tq('[data-trace-status]').textContent = status;
+    const ready = Boolean(traceScan && !status);
+    tq('[data-trace-body]').hidden = !ready;
+    tq('[data-trace-go]').hidden = !ready;
+    tq('[data-trace-other]').hidden = !traceScan && !status;
+    if (!ready) return;
+    const scan = traceScan;
+    tq('[data-trace-preview]').src = scan.previewUrl;
+    tq('[data-trace-verdict]').textContent = scan.kind === 'pdf'
+      ? (scan.isVector ? 'PDF \u2014 DRAWN LINES, KEPT AS THE PDF' : 'PDF \u2014 A SCANNED PAGE, KEPT AS AN IMAGE')
+      : 'PHOTO / IMAGE';
+    tq('[data-trace-pages]').hidden = !(scan.kind === 'pdf' && scan.pageCount > 1);
+    tq('[data-trace-page]').textContent = `${tracePage} / ${scan.pageCount || 1}`;
+    // SCALE: the ones printed on the page as chips, the pick in the box. A
+    // photo has no paper to be at a scale, so it gets a WIDTH instead.
+    tq('[data-trace-scale-row]').hidden = scan.kind !== 'pdf';
+    const found = scan.kind === 'pdf' ? (scan.scalesByPage[tracePage] || []) : [];
+    const chips = tq('[data-trace-scales]');
+    chips.textContent = '';
+    found.forEach(scale => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.textContent = scale.raw;
+      chip.dataset.traceScaleChip = '';
+      chip.setAttribute('aria-pressed', scan.selectedScale?.raw === scale.raw ? 'true' : 'false');
+      chip.addEventListener('click', () => {
+        scan.selectedScale = scale;
+        tq('[data-trace-scale]').value = scale.raw;
+        tq('[data-trace-scale-error]').textContent = '';
+        showTraceCard();
+      });
+      chips.appendChild(chip);
+    });
+    tq('[data-trace-width-row]').hidden = traceHasScale();
+    tq('[data-trace-calibrate]').setAttribute('aria-pressed', traceCalOn ? 'true' : 'false');
+    tq('[data-trace-cal]').hidden = !traceCalOn;
+    const marks = scan.calMarks || [];
+    tq('[data-trace-cal-hint]').textContent = marks.length < 2
+      ? 'Click the two ends of a line you know on the picture \u2014 a dimensioned wall, a door, a scale bar.'
+      : 'Now type the real length between the two marks and press APPLY.';
+    const markBox = tq('[data-trace-marks]');
+    markBox.textContent = '';
+    if (traceCalOn) {
+      marks.forEach(mark => {
+        const dot = document.createElement('div');
+        dot.className = 'trace-mark';
+        dot.style.left = `${(mark.fx * 100).toFixed(2)}%`;
+        dot.style.top = `${(mark.fy * 100).toFixed(2)}%`;
+        markBox.appendChild(dot);
+      });
+    }
+  };
+
+  const inspectTraceFile = async file => {
+    dropTraceScan();
+    traceCalOn = false;
+    tracePage = 1;
+    tq('[data-trace-scale]').value = '';
+    tq('[data-trace-width]').value = '';
+    ['[data-trace-scale-error]', '[data-trace-width-error]', '[data-trace-cal-error]']
+      .forEach(sel => { tq(sel).textContent = ''; });
+    tq('[data-trace-cal-length]').value = '';
+    showTraceCard(`READING ${file.name}\u2026`);
+    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+    const scan = {
+      file, kind: isPdf ? 'pdf' : 'image', pageCount: 1, scalesByPage: {}, selectedScale: null,
+      previewUrl: '', pageDims: null, imgWidth: 0, imgHeight: 0, isVector: false,
+      tier: '', textChars: 0, convertedBlob: null, pdfDoc: null, calMarks: [],
+    };
+    try {
+      if (isPdf) {
+        await ensurePdfJs();
+        await window.DraftPdfScan.inspectPdf(scan);
+      } else {
+        await window.DraftPdfScan.inspectImage(scan);
+      }
+    } catch (error) {
+      showTraceCard(`Could not read ${file.name}: ${error?.message || 'not a file this can trace'}.`);
+      return;
+    }
+    traceScan = scan;
+    scan.selectedScale = (scan.scalesByPage[1] || [])[0] || null;
+    tq('[data-trace-scale]').value = scan.selectedScale ? scan.selectedScale.raw : '';
+    showTraceCard();
+  };
+
+  const turnTracePage = async delta => {
+    const scan = traceScan;
+    if (!scan || scan.kind !== 'pdf') return;
+    const page = Math.min(scan.pageCount, Math.max(1, tracePage + delta));
+    if (page === tracePage) return;
+    showTraceCard(`READING PAGE ${page}\u2026`);
+    try {
+      await window.DraftPdfScan.inspectPdfPage(scan, page);
+    } catch {
+      showTraceCard(`Could not read page ${page}.`);
+      return;
+    }
+    tracePage = page;
+    scan.calMarks = [];
+    scan.selectedScale = (scan.scalesByPage[page] || [])[0] || null;
+    tq('[data-trace-scale]').value = scan.selectedScale ? scan.selectedScale.raw : '';
+    showTraceCard();
+  };
+
+  const insertTrace = async () => {
+    const scan = traceScan;
+    if (!scan || !drawing) return;
+    let size;
+    if (traceHasScale()) {
+      size = window.DraftPdfScan.worldSizeFromScan({ kind: scan.kind, pageDims: scan.pageDims,
+        imgWidth: scan.imgWidth, imgHeight: scan.imgHeight, selectedScale: scan.selectedScale, typedWidthFt: 0 });
+    } else {
+      const typed = tq('[data-trace-width]').value.trim() || `40'`;
+      const parsed = F.parseArchitecturalLength(typed);
+      if (!parsed.ok || !(parsed.inches > 0)) {
+        tq('[data-trace-width-error]').textContent = parsed.ok ? 'The width must be more than zero.' : parsed.error;
+        return;
+      }
+      size = window.DraftPdfScan.worldSizeFromScan({ kind: scan.kind, pageDims: scan.pageDims,
+        imgWidth: scan.imgWidth, imgHeight: scan.imgHeight, selectedScale: null, typedWidthFt: parsed.inches / 12 });
+    }
+    const keepVector = scan.kind === 'pdf' && scan.isVector;
+    const id = newDrawingItemId('underlay');
+    try {
+      await window.SharedFileStore.saveNamedFile(keepVector
+        ? new File([scan.file], id, { type: 'application/pdf' })
+        : new File([scan.convertedBlob], id, { type: 'image/webp' }), 'underlays');
+    } catch {
+      showTraceCard('Could not keep the file in this browser\u2019s storage.');
+      return;
+    }
+    const scale = traceHasScale() ? scan.selectedScale : null;
+    const underlay = {
+      id, levelId: activeLevelId(), kind: keepVector ? 'pdf' : 'image', name: scan.file.name,
+      page: scan.kind === 'pdf' ? tracePage : 1,
+      // Dropped where the drafter is looking.
+      x: view.cx, z: view.cz, widthFt: size.widthFt, heightFt: size.heightFt,
+      opacity: TRACE_OPACITY,
+      scaleRaw: scale ? scale.raw : null, scaleRatio: scale ? scale.ratio : null,
+      scaleUnit: scale ? scale.unit : null, layer: 'UNDERLAY',
+    };
+    if (!Array.isArray(drawing.underlays)) drawing.underlays = [];
+    underlayImages.set(id, scan.pageCanvas);
+    closeTraceCard();
+    if (!traceOn) setTraceOn(true);
+    addItem(drawing.underlays, underlay);
+    updateReadout();
+    sayOnStrip(`${underlay.name} is under ${traceLevelName()} to trace over.`);
+  };
+
+  if (traceChip) {
+    traceChip.addEventListener('click', () => {
+      if (!drawing) return;
+      if (traceOn) { setTraceOn(false); return; }
+      setTraceOn(true);
+      // ON ASKS whether to bring in another, naming what is already there.
+      const n = underlays().length;
+      traceAsk.querySelector('[data-trace-count]').textContent = n
+        ? `${n} image${n === 1 ? '' : 's'} on ${traceLevelName()}.`
+        : `No images on ${traceLevelName()} yet.`;
+      traceAsk.hidden = false;
+    });
+  }
+  traceAsk.querySelector('[data-trace-later]').addEventListener('click', () => { traceAsk.hidden = true; });
+  traceAsk.querySelector('[data-trace-upload]').addEventListener('click', () => {
+    traceAsk.hidden = true;
+    traceFile.click();
+  });
+  traceFile.addEventListener('change', () => {
+    const file = traceFile.files && traceFile.files[0];
+    traceFile.value = '';
+    if (file) inspectTraceFile(file);
+  });
+  tq('[data-trace-cancel]').addEventListener('click', closeTraceCard);
+  tq('[data-trace-other]').addEventListener('click', () => traceFile.click());
+  tq('[data-trace-go]').addEventListener('click', () => { insertTrace(); });
+  tq('[data-trace-prev]').addEventListener('click', () => turnTracePage(-1));
+  tq('[data-trace-next]').addEventListener('click', () => turnTracePage(1));
+  tq('[data-trace-scale]').addEventListener('input', event => {
+    if (!traceScan) return;
+    const typed = event.target.value.trim();
+    const parsed = typed ? window.DraftPdfScan.parseScaleEntry(typed) : null;
+    traceScan.selectedScale = parsed;
+    tq('[data-trace-scale-error]').textContent = typed && !parsed
+      ? 'Use a scale like 1/4" = 1\'-0" or 1:100.' : '';
+    tq('[data-trace-width-row]').hidden = traceHasScale();
+  });
+  tq('[data-trace-width]').addEventListener('input', () => { tq('[data-trace-width-error]').textContent = ''; });
+  tq('[data-trace-calibrate]').addEventListener('click', () => {
+    if (!traceScan) return;
+    traceCalOn = !traceCalOn;
+    traceScan.calMarks = [];
+    tq('[data-trace-cal-error]').textContent = '';
+    showTraceCard();
+  });
+  // CALIBRATE's marks go on the preview itself: a third click starts over.
+  tq('[data-trace-preview]').addEventListener('click', event => {
+    if (!traceScan || !traceCalOn) return;
+    const box = event.currentTarget.getBoundingClientRect();
+    // object-fit: contain -- the picture may not fill its box, so the marks
+    // are measured against where it is actually drawn.
+    const img = event.currentTarget;
+    const ratio = Math.min(box.width / (img.naturalWidth || box.width), box.height / (img.naturalHeight || box.height));
+    const w = (img.naturalWidth || box.width) * ratio, h = (img.naturalHeight || box.height) * ratio;
+    const left = box.left + (box.width - w) / 2, top = box.top + (box.height - h) / 2;
+    const fx = (event.clientX - left) / w, fy = (event.clientY - top) / h;
+    if (fx < 0 || fx > 1 || fy < 0 || fy > 1) return;
+    const marks = traceScan.calMarks || [];
+    traceScan.calMarks = marks.length >= 2 ? [{ fx, fy }] : [...marks, { fx, fy }];
+    showTraceCard();
+  });
+  tq('[data-trace-cal-apply]').addEventListener('click', () => {
+    const scan = traceScan;
+    if (!scan || (scan.calMarks || []).length !== 2) {
+      tq('[data-trace-cal-error]').textContent = 'Click both ends of the line on the picture first.';
+      return;
+    }
+    const parsed = F.parseArchitecturalLength(tq('[data-trace-cal-length]').value);
+    if (!parsed.ok || !(parsed.inches > 0)) {
+      tq('[data-trace-cal-error]').textContent = parsed.ok ? 'The length must be more than zero.' : parsed.error;
+      return;
+    }
+    const result = window.DraftPdfScan.calibrateScale({
+      marks: scan.calMarks, canvasWidth: scan.pageCanvas.width, canvasHeight: scan.pageCanvas.height,
+      kind: scan.kind, pageDims: scan.pageDims, realInches: parsed.inches,
+    });
+    if (!result.ok) { tq('[data-trace-cal-error]').textContent = result.error; return; }
+    if (result.scale) {
+      scan.selectedScale = result.scale;
+      tq('[data-trace-scale]').value = result.scale.raw;
+    } else {
+      tq('[data-trace-width]').value = F.formatArchitecturalInches(result.widthFt * 12);
+    }
+    traceCalOn = false;
+    scan.calMarks = [];
+    showTraceCard();
   });
 
   // ── TURN THE HOUSE A QUARTER ──────────────────────────────────────────────
