@@ -951,10 +951,10 @@
      board's "break the bone here, or move this wall?", a different bone
      entirely: reusing its id because both are about a bone and both offer
      two answers is exactly the collision DEFINITIONS.md exists to stop. */
-  #bone-choice, #build-choice, #garage-lesson, #corner-join { position:fixed; inset:0; z-index:7; display:flex;
+  #bone-choice, #build-choice, #garage-lesson, #corner-join, #garage-align { position:fixed; inset:0; z-index:7; display:flex;
     align-items:center; justify-content:center; padding:24px;
     background:rgba(0,0,0,0.35); }
-  #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden], #corner-join[hidden] { display:none; }
+  #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden], #corner-join[hidden], #garage-align[hidden] { display:none; }
   /* PROFESSOR GRUFF'S GARAGE LESSON, the old page's card (MODEL.dc.html
      garageCallout) in this page's shell: who is talking, the rule, and the
      right-vs-wrong sketch. */
@@ -1392,6 +1392,20 @@
      corner, so the garage's foundation bears full on the house wall. 1'-0"
      is the answer on TOY without asking; on DRAFTING this asks, 1'-0" first,
      or the garage foundation's own thickness. -->
+<!-- LINE THE GARAGE UP WITH THE HOUSE CEILING? Movie, 7 Oct: keep the garage's
+     10'-1 3/4" default, but when the BONE builds a garage that tops out above
+     the house's ceiling, ask whether to line it up -- one roof when they meet.
+     NO keeps the typed height and asks again on the next build. -->
+<div id="garage-align" data-garage-align hidden role="dialog" aria-label="Line up the garage">
+  <div class="promote-card">
+    <p><b>GARAGE HIGHER THAN THE HOUSE</b><br>The garage walls top out <span data-garage-align-over>1'-0"</span> above the house ceiling. Line the garage up with the house ceiling? (Garage wall <span data-garage-align-to>9'-2 3/4"</span>.)</p>
+    <div class="promote-row">
+      <button type="button" data-garage-align-yes>YES - LINE UP (ONE ROOF)</button>
+      <button type="button" data-garage-align-no>NO - KEEP <span data-garage-align-keep>10'-1 3/4"</span></button>
+    </div>
+  </div>
+</div>
+
 <div id="corner-join" data-corner-join hidden role="dialog" aria-label="Connect at corner">
   <div class="promote-card">
     <p><b>CONNECT AT CORNER</b><br>This garage wall carries on past the house corner. Move it over so its foundation bears full on the house wall:</p>
@@ -9828,7 +9842,7 @@
   // z-index 7 and asks a question that has to be answered first; the foot
   // strip sits at 6, under all of them. The drive-thru sign is not built and
   // will be the fifth entry in this list rather than a new mechanism.
-  const MODAL_IDS = ['promote', 'bone-choice', 'build-choice', 'file-guard', 'save-as', 'garage-lesson', 'corner-join'];
+  const MODAL_IDS = ['promote', 'bone-choice', 'build-choice', 'file-guard', 'save-as', 'garage-lesson', 'corner-join', 'garage-align'];
   const modalUp = () => MODAL_IDS.some(id => {
     const node = document.getElementById(id);
     return !!node && !node.hidden;
@@ -11292,6 +11306,64 @@
     depthFt: () => roomPick()?.over.depthFt ?? null,
   });
 
+  // ── A GARAGE ABOVE THE HOUSE CEILING: LINE IT UP? ────────────────────────
+  //
+  // Movie, 7 Oct: keep the garage's 10'-1 3/4" default -- "but ... if it
+  // (garage) goes higher, ask the user if they would prefer to allign the
+  // garage height with ceiling height", asked when the BONE is pressed. YES:
+  // "GARAGE and HOUSE will be ONE ROOF" -- the garage's own WALL HEIGHT is set
+  // so its top meets the house's (house wall + MAIN floor package, + the
+  // frost-wall drop), which garage-roofs.js reads as one roof. NO: build as
+  // typed, and ask again next time.
+  //
+  // A SPLIT, OR A GARAGE WITH A ROOM ON IT, IS NEVER ASKED: the split works
+  // its own heights out, and a room over the garage holds its walls at the
+  // house's plate already.
+  const garageAlignCard = document.getElementById('garage-align');
+  let garageAlignGo = null;
+  const garageAboveCeiling = () => {
+    const LA = window.DraftLevelAssembly, GR = window.DraftGarageRoofs;
+    const houseTop = LA.houseWallTopFt(drawing);
+    const garageTop = GR.garageTopFt(drawing, null);
+    return garageTop > houseTop + GR.SAME_TOP_FT
+      ? { houseTop, garageTop, alignedWallFt: LA.attachedGarageWallFt(drawing) - (garageTop - houseTop) }
+      : null;
+  };
+  const asksGarageAlign = (entry, hasGarage) => Boolean(hasGarage && entry
+    && entry.overGarage !== true && !window.DraftLevelAssembly.isSplitType(entry.type));
+  // Runs `go` now, or after the drafter answers. True when it asked.
+  const withGarageAlign = (entry, hasGarage, go) => {
+    const above = asksGarageAlign(entry, hasGarage) ? garageAboveCeiling() : null;
+    if (!above || !garageAlignCard) { go(); return false; }
+    const F = window.DraftFormatters;
+    const ftIn = ft => F.formatArchitecturalInches(ft * 12);
+    garageAlignCard.querySelector('[data-garage-align-over]').textContent = ftIn(above.garageTop - above.houseTop);
+    garageAlignCard.querySelector('[data-garage-align-to]').textContent = ftIn(above.alignedWallFt);
+    garageAlignCard.querySelector('[data-garage-align-keep]').textContent =
+      ftIn(window.DraftLevelAssembly.attachedGarageWallFt(drawing));
+    garageAlignGo = { go, alignedWallFt: above.alignedWallFt };
+    garageAlignCard.hidden = false;
+    return true;
+  };
+  if (garageAlignCard) {
+    const answer = lineUp => {
+      const pending = garageAlignGo;
+      garageAlignGo = null;
+      garageAlignCard.hidden = true;
+      if (!pending) return;
+      if (lineUp) {
+        const table = drawing.sectionTable || { rows: {} };
+        const rows = table.rows || {};
+        drawing.sectionTable = { ...table, rows: { ...rows,
+          attachedGarage: { ...(rows.attachedGarage || {}), mainWallHeightFt: pending.alignedWallFt } } };
+        markDirty();
+      }
+      pending.go();
+    };
+    garageAlignCard.querySelector('[data-garage-align-yes]').addEventListener('click', () => answer(true));
+    garageAlignCard.querySelector('[data-garage-align-no]').addEventListener('click', () => answer(false));
+  }
+
   const buildTracedHouse = order => {
     const TP = window.DraftTracedPlans;
     if (!TP || !order?.entry) return null;
@@ -11322,15 +11394,19 @@
   window.ModelBuild.onBuild(() => {
     if (tracedOrder && (traceStillThere(tracedHouse) || traceStillThere(tracedGarage))) {
       const order = tracedOrder;
-      if (!builtFrontDown(buildTracedHouse)(order)) return;
-      tracedOrder = null;
-      tracedHouse = null;
-      tracedGarage = null;
-      tracedMasters = [];
-      roomOverFt = null;
-      window.ModelBuild.buildServed();
-      // AND THE SAME SHOW A PREMADE PRESS GETS: the bones grow, then E1.
-      presentBuild();
+      const hasGarage = !isGarageChoice(order) && traceStillThere(tracedHouse)
+        && traceStillThere(tracedGarage);
+      withGarageAlign(order.entry, hasGarage, () => {
+        if (!builtFrontDown(buildTracedHouse)(order)) return;
+        tracedOrder = null;
+        tracedHouse = null;
+        tracedGarage = null;
+        tracedMasters = [];
+        roomOverFt = null;
+        window.ModelBuild.buildServed();
+        // AND THE SAME SHOW A PREMADE PRESS GETS: the bones grow, then E1.
+        presentBuild();
+      });
       return;
     }
     if (buildFromDrawnOutline()) window.ModelBuild.buildServed();
@@ -15522,20 +15598,23 @@
   // tile through the same predicate and stands off.
   window.ModelBuild.onOrder(order => {
     if (!order?.entry || isGarageChoice(order)) return;
-    if (builtFrontDown(buildPremadePlan)(order)) {
-      setSign(false);
-      // SPENT: something was BUILT, which is exactly what orderServed means
-      // (:4262). A refusal below spends nothing -- the drafter's choice still
-      // stands, because he has not been answered.
-      window.ModelBuild.orderServed();
-      return;
-    }
-    signRefusal = {
-      line: 'NOT READY YET.',
-      note: `${order.entry.label} has no design on the board yet. `
-        + `${window.DraftPremadePlans.entryIds().length} tiles on the board do.`,
-    };
-    paintSign();
+    const design = window.DraftPremadePlans.planFor(order.entry.id);
+    withGarageAlign(order.entry, Boolean(design?.garage), () => {
+      if (builtFrontDown(buildPremadePlan)(order)) {
+        setSign(false);
+        // SPENT: something was BUILT, which is exactly what orderServed means
+        // (:4262). A refusal below spends nothing -- the drafter's choice still
+        // stands, because he has not been answered.
+        window.ModelBuild.orderServed();
+        return;
+      }
+      signRefusal = {
+        line: 'NOT READY YET.',
+        note: `${order.entry.label} has no design on the board yet. `
+          + `${window.DraftPremadePlans.entryIds().length} tiles on the board do.`,
+      };
+      paintSign();
+    });
   });
 
   // ── THE CUT TOOL: a section line and the way it looks ─────────────────────
