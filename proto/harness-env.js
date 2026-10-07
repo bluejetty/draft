@@ -95,6 +95,9 @@ function loadDraftModules() {
     // for a tag that never drew. That is not hypothetical: the plan tag hid
     // behind exactly this guard on MODEL.html, through four screenshots.
     'fen-labels.js',
+    // AND THE STAIR'S TWO: a section draws every stair the cut passes
+    // through, and cut-view draws none without them.
+    'stair-geometry.js', 'stair-section.js',
     'cut-view.js',
     // AND THE BONEYARD'S EDITOR with what it reads: the floor-pull ladder in
     // tour.js and the bone loops it edits.
@@ -356,6 +359,9 @@ function buildEnv(win, saved) {
     elevationMarks: name => (format.elevationMarks ? format.elevationMarks(saved.elevationMarks) : [])
       .filter(m => m.cut === name),
     floors: () => floors,
+    stairs: () => saved.stairs || [],
+    floorOpenings: floorId => (saved.surfaceOpenings || [])
+      .filter(o => o.hostType === 'floor' && String(o.hostId) === String(floorId)),
     columns: () => columns,
     fenestrations: () => fenestrations,
     garageOutlines: id => outlines.filter(o => o.levelId === id && o.garage && o.points.length >= 3),
