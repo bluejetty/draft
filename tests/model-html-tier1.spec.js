@@ -520,6 +520,9 @@ test.describe('MODEL.html tier 1', () => {
       // disagreeing about what a lock does. No dependency of its own; it is
       // arithmetic over ids and points.
       './level-lock.js', './stair-geometry.js',
+      // THE STAIR WORKSPACE'S TWO PANES (Movie, 7 Oct): the painter MODEL.dc.html
+      // drew its STAIR layer with, moved out so both pages draw one copy.
+      './stair-section.js',
       // THE TWO AUTO STAIR MODULES ARRIVED TOGETHER, and this list caught them
       // the same hour, which is what the exact form is for -- an earlier
       // version of this comment says the palette and build-menu.js were caught

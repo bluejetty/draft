@@ -22,6 +22,7 @@
 <script src="./level-assembly.js"></script>
 <script src="./design-notices.js"></script>
 <script src="./stair-geometry.js"></script>
+<script src="./stair-section.js"></script>
 <script src="./areas.js"></script>
 <script src="./room-standards.js"></script>
 <script src="./turtle.js"></script>
@@ -8591,187 +8592,17 @@ class Component extends DCLogic {
   // points that matter — are emphasised; the floors read as faded bands.
   // Turned shapes draw UNFOLDED along the walk line: a flat landing shows as
   // its level band mid-flight; winders keep climbing straight through.
+  // The painter lives in stair-section.js, shared with MODEL.html.
   _drawStairSectionPane(ctx, rect, stair, layout, descent, dev, uToX, pxPerFt, yOf) {
-    ctx.save();
-    ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
-    const split = dev.split;
-    const shapeNote = split
-      ? ` · ${split.shape} SHAPE UNFOLDED${split.winders ? ` (${split.winders} WINDERS)` : ' (LANDING)'}`
-      : '';
-    this._stairPaneHeader(ctx, rect,
-      `STAIR SECTION — ${layout.risers}R @ ${formatInchesOnly(layout.riserIn)} · TREADS FULL 2x12 · RISERS 3/4" PLY FACE @ ${formatInchesOnly(STAIR_RISER_FACE_IN)}${shapeNote}`);
-    const riseStep = layout.riserIn / 12;
-    const runStep = STAIR_TREAD_RUN_IN / 12;
-    const treadThk = STAIR_TREAD_THICK_IN / 12;
-    const boardW = STAIR_TREAD_BOARD_IN / 12;
-    const riserThk = STAIR_RISER_THICK_IN / 12;
-    const drop = STAIR_STRINGER_DROP_IN / 12;
-    const slope = riseStep / runStep;
-    const fadeFill = 'rgba(89,128,166,0.14)';
-    const fadeLine = 'rgba(89,128,166,0.55)';
-    const noteFont = "600 9px 'Barlow Condensed', system-ui, sans-serif";
-
-    // The flights to draw: one for a straight stair (or winders, which
-    // unfold straight), two around the flat landing for an L or U.
-    const flat = split && !split.winders ? split : null;
-    const flights = flat
-      ? [
-        { u0: 0, e0: 0, risers: flat.t1 + 1 },
-        { u0: flat.t1 * runStep + flat.landFt, e0: -(flat.t1 + 1) * riseStep, risers: layout.risers - flat.t1 - 1 },
-      ]
-      : [{ u0: 0, e0: 0, risers: layout.risers }];
-    const last = flights[flights.length - 1];
-    const landU = last.u0 + last.risers * runStep - STAIR_RISER_FACE_IN / 12;
-
-    // Faded upper floor band, cut at the opening edge (u = 0).
-    const floorFt = this._levelFloorFt(stair.levelId);
-    ctx.fillStyle = fadeFill;
-    ctx.strokeStyle = fadeLine;
-    ctx.lineWidth = 1;
-    ctx.fillRect(rect.x, yOf(0), uToX(0) - rect.x, floorFt * pxPerFt);
-    ctx.strokeRect(rect.x - 2, yOf(0), uToX(0) - rect.x + 2, floorFt * pxPerFt);
-    // Faded landing band under the run-out.
-    ctx.fillRect(uToX(landU), yOf(-layout.riseFt), rect.x + rect.w - uToX(landU), (8 / 12) * pxPerFt);
-    ctx.strokeRect(uToX(landU), yOf(-layout.riseFt), rect.x + rect.w - uToX(landU) + 2, (8 / 12) * pxPerFt);
-
-    flights.forEach(flight => {
-      // Riser j face within this flight, 11" back from the nosing of the
-      // tread it stands on, in workspace u.
-      const faceU = j => flight.u0 + j * runStep - STAIR_RISER_FACE_IN / 12;
-      const elevAt = j => flight.e0 - j * riseStep;
-      // Cut stringer: sawtooth at the finished profile (the boards draw over
-      // it), a plumb cut against the top edge, and a level cut at the bottom.
-      ctx.beginPath();
-      ctx.moveTo(uToX(faceU(1)), yOf(flight.e0));
-      for (let j = 1; j <= flight.risers; j++) {
-        ctx.lineTo(uToX(faceU(j)), yOf(elevAt(j - 1)));
-        ctx.lineTo(uToX(faceU(j)), yOf(elevAt(j)));
-        if (j < flight.risers) ctx.lineTo(uToX(faceU(j + 1)), yOf(elevAt(j)));
-      }
-      const flightRise = flight.risers * riseStep;
-      const uBottom = flight.u0 + (flightRise - drop) / slope;
-      ctx.lineTo(uToX(uBottom), yOf(flight.e0 - flightRise));
-      ctx.lineTo(uToX(faceU(1)), yOf(flight.e0 - (slope * (faceU(1) - flight.u0) + drop)));
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(93,74,138,0.12)';
-      ctx.strokeStyle = STAIR_COLOR;
-      ctx.lineWidth = 1.25;
-      ctx.fill();
-      ctx.stroke();
-
-      // Treads: full 2x12 boards, 1.5" thick, nosing at every 10" run increment.
-      ctx.fillStyle = '#e8e2f2';
-      for (let k = 1; k < flight.risers; k++) {
-        const x = uToX(flight.u0 + k * runStep - boardW), y = yOf(elevAt(k));
-        const bw = boardW * pxPerFt, bh = treadThk * pxPerFt;
-        ctx.fillRect(x, y, bw, bh);
-        ctx.strokeRect(x, y, bw, bh);
-      }
-      // Risers: 3/4" ply standing on the tread below (or the landing), closing
-      // up to the underside of the tread above — the horizontal joint bears on
-      // top of the tread, carpenter style.
-      ctx.fillStyle = '#ddd5ec';
-      for (let j = 1; j <= flight.risers; j++) {
-        const x = uToX(faceU(j) - riserThk);
-        const yTop = yOf(elevAt(j - 1) - treadThk);
-        const yBottom = yOf(elevAt(j));
-        const bw = riserThk * pxPerFt;
-        ctx.fillRect(x, yTop, bw, yBottom - yTop);
-        ctx.strokeRect(x, yTop, bw, yBottom - yTop);
-      }
+    window.DraftStairSection.drawSectionPane(ctx, rect, stair, layout, descent, dev, uToX, pxPerFt, yOf, {
+      header: (c, r, label) => this._stairPaneHeader(c, r, label),
+      floorFt: levelId => this._levelFloorFt(levelId),
+      ftIn: ft => this._ftIn(ft),
+      inchesOnly: inches => formatInchesOnly(inches),
+      walls: () => this._walls,
+      floors: () => this._floors,
+      openingsFor: (kind, id) => this._surfaceOpeningsFor(kind, id),
     });
-
-    // The mid-flight landing on a turned stair: a level structural band
-    // between the two flights, labelled with its clear size rule.
-    if (flat) {
-      const uL0 = flights[1].u0 - flat.landFt;
-      const eL = flights[1].e0;
-      const x = uToX(uL0), w = flat.landFt * pxPerFt;
-      ctx.fillStyle = 'rgba(93,74,138,0.12)';
-      ctx.strokeStyle = STAIR_COLOR;
-      ctx.lineWidth = 1.25;
-      ctx.fillRect(x, yOf(eL), w, (8 / 12) * pxPerFt);
-      ctx.strokeRect(x, yOf(eL), w, (8 / 12) * pxPerFt);
-      ctx.fillStyle = 'rgba(29,31,32,0.7)';
-      ctx.font = noteFont;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-      ctx.fillText(`LANDING — 36" CLEAR${flat.shape === 'U' ? ' · RUNS 4.5" APART' : ''}`, x + w / 2, yOf(eL) - 3);
-    }
-
-    // The handrail, one constant 36" above the nosing line: sloped along
-    // each flight, LEVEL across the landing, connected through the turn.
-    if (stair.rail && stair.rail !== 'none') {
-      const railFt = 3;
-      const railPts = [{ u: 0, e: railFt }];
-      if (flat) {
-        const eL = flights[1].e0;
-        railPts.push({ u: flights[1].u0 - flat.landFt, e: eL + railFt });
-        railPts.push({ u: flights[1].u0, e: eL + railFt });
-      }
-      railPts.push({ u: landU, e: -layout.riseFt + railFt });
-      ctx.strokeStyle = STAIR_COLOR;
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      railPts.forEach((p, i) => (i === 0
-        ? ctx.moveTo(uToX(p.u), yOf(p.e))
-        : ctx.lineTo(uToX(p.u), yOf(p.e))));
-      ctx.stroke();
-      ctx.fillStyle = 'rgba(29,31,32,0.7)';
-      ctx.font = noteFont;
-      ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-      ctx.fillText('RAIL @ 36"', uToX(0) + 4, yOf(railFt) - 2);
-    }
-
-    // The two points that matter: the floor opening edge and the landing.
-    // THE HEADER IS NOT THE NOSING, and this section drew them as one line
-    // until Movie read it: "the nosing of the stair shouldn't be part of the
-    // floor opening". The nosing stays at u = 0, the cut sits
-    // STAIR_OPENING_NOSING_MIN_IN behind it, and the strip between them is
-    // the 1/2" nosing and the 1 1/2" of backing that carries it -- which is
-    // the floor the hole must NOT take away.
-    //
-    // Drawn as it is cut, so the section and _stairOpeningFootprint cannot
-    // tell a drafter two different things about the same edge.
-    const openU = -STAIR_OPENING_NOSING_MIN_IN / 12;
-    ctx.strokeStyle = '#b04050';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(uToX(openU), yOf(0)); ctx.lineTo(uToX(openU), yOf(-floorFt));
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(uToX(landU), yOf(-layout.riseFt)); ctx.lineTo(rect.x + rect.w, yOf(-layout.riseFt));
-    ctx.stroke();
-    // The build-up itself, between the cut and the nosing: a thin tick at the
-    // floor line so the 2" reads as a thing rather than as slack.
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(uToX(openU), yOf(0)); ctx.lineTo(uToX(0), yOf(0));
-    ctx.stroke();
-    ctx.fillStyle = '#b04050';
-    ctx.font = noteFont;
-    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
-    ctx.fillText('EDGE OF STAIR OPENING', uToX(openU) - 4, yOf(0) - 3);
-    ctx.textAlign = 'left';
-    ctx.fillText(`${formatInchesOnly(STAIR_OPENING_NOSING_MIN_IN)} MIN NOSING + BACKING`,
-      uToX(0) + 4, yOf(0) - 3);
-    ctx.textAlign = 'left';
-    if (descent) ctx.fillText(`LANDS ON ${descent.landing.toUpperCase()}`, uToX(dev.runFt) + 8, yOf(-layout.riseFt) - 3);
-
-    // Rise / run figures in the note room on the left.
-    ctx.fillStyle = 'rgba(29,31,32,0.7)';
-    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
-    ctx.fillText(`TOTAL RISE ${this._ftIn(layout.riseFt)}`, rect.x + 10, yOf(-layout.riseFt / 2));
-    ctx.fillText(`TOTAL RUN ${this._ftIn(dev.runFt)}${split ? ' UNFOLDED' : ''}`, rect.x + 10, yOf(-layout.riseFt / 2) + 13);
-
-    // The site rule: grade only ever fills UP to the drawn datum, so risers
-    // are only ever adjusted shorter — never taller than drawn.
-    ctx.fillStyle = 'rgba(29,31,32,0.6)';
-    ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
-    ctx.fillText('VERIFY ACTUAL HEIGHT CHANGE ON SITE — ADJUST RISER HEIGHT DOWN ONLY;',
-      rect.x + 10, rect.y + rect.h - 16);
-    ctx.fillText('IF MORE HEIGHT IS NEEDED, ADD A RISER AND EQUALIZE ALL RISERS.',
-      rect.x + 10, rect.y + rect.h - 5);
-    ctx.restore();
   }
 
   // Down-view plan of the stair in its own frame: the run goes left to right
@@ -8780,132 +8611,17 @@ class Component extends DCLogic {
   // shapes draw UNFOLDED along the walk line — the landing reads as a level
   // band mid-run — so the faded world reference only draws for a straight
   // stair, whose pane frame still matches the world.
+  // The painter lives in stair-section.js, shared with MODEL.html.
   _drawStairPlanPane(ctx, rect, stair, layout, dev, uToX, pxPerFt, vToY) {
-    ctx.save();
-    ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.w, rect.h); ctx.clip();
-    const split = dev.split;
-    const shapeNote = split
-      ? ` · ${split.shape} SHAPE UNFOLDED${split.winders ? ` (${split.winders} WINDERS)` : ''}`
-      : '';
-    this._stairPaneHeader(ctx, rect, `STAIR PLAN — DN ${layout.risers}R TO THE RIGHT · ${this._ftIn(stair.widthFt)} WIDE${shapeNote}`);
-    const runStep = STAIR_TREAD_RUN_IN / 12;
-    const vMid = vToY(0);
-    // Stair-local frame: u downhill along the run, v to the right walking down.
-    const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
-    const len = Math.hypot(dx, dz) || 1;
-    const du = { x: dx / len, z: dz / len };
-    const local = pt => ({
-      u: (pt.x - stair.start.x) * du.x + (pt.z - stair.start.z) * du.z,
-      v: (pt.x - stair.start.x) * -du.z + (pt.z - stair.start.z) * du.x,
+    window.DraftStairSection.drawPlanPane(ctx, rect, stair, layout, dev, uToX, pxPerFt, vToY, {
+      header: (c, r, label) => this._stairPaneHeader(c, r, label),
+      floorFt: levelId => this._levelFloorFt(levelId),
+      ftIn: ft => this._ftIn(ft),
+      inchesOnly: inches => formatInchesOnly(inches),
+      walls: () => this._walls,
+      floors: () => this._floors,
+      openingsFor: (kind, id) => this._surfaceOpeningsFor(kind, id),
     });
-    const toPane = pt => { const l = local(pt); return { x: uToX(l.u), y: vToY(l.v) }; };
-
-    // Faded reference: the level's PLAN walls and FLOOR outlines with their
-    // openings, locked and non-editable in this workspace.
-    if (!split) {
-      const levelId = stair.levelId;
-      const fade = 'rgba(89,128,166,0.4)';
-      ctx.strokeStyle = fade;
-      ctx.lineWidth = 1.25;
-      this._walls
-        .filter(wall => wall.levelId === levelId && (wall.view || 'plan') === 'plan')
-        .forEach(wall => {
-          const a = toPane(wall.start), b = toPane(wall.end);
-          ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-        });
-      ctx.setLineDash([5, 4]);
-      this._floors
-        .filter(floor => floor.levelId === levelId)
-        .forEach(floor => {
-          const points = (floor.points || []).map(toPane);
-          if (points.length < 2) return;
-          ctx.beginPath();
-          points.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
-          ctx.closePath(); ctx.stroke();
-          this._surfaceOpeningsFor('floor', floor.id).forEach(opening => {
-            const hole = opening.points.map(toPane);
-            if (hole.length < 2) return;
-            ctx.beginPath();
-            hole.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
-            ctx.closePath(); ctx.stroke();
-          });
-        });
-      ctx.setLineDash([]);
-    }
-
-    // The stair itself, on A-STR: stringers, tread lines, rail bars, DN
-    // arrow. Unfolded, the tread segments to draw: either the whole run, or
-    // the two runs around the flat landing band.
-    const half = (stair.widthFt / 2) * pxPerFt;
-    const flat = split && !split.winders ? split : null;
-    const segs = flat
-      ? [
-        { u0: 0, treads: flat.t1 },
-        { u0: flat.t1 * runStep + flat.landFt, treads: flat.t2 },
-      ]
-      : [{ u0: 0, treads: layout.treads }];
-    const x0 = uToX(0), x1 = uToX(dev.runFt);
-    ctx.strokeStyle = STAIR_COLOR;
-    ctx.fillStyle = STAIR_COLOR;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(x0, vMid - half); ctx.lineTo(x1, vMid - half);
-    ctx.moveTo(x0, vMid + half); ctx.lineTo(x1, vMid + half);
-    ctx.stroke();
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    segs.forEach(seg => {
-      for (let i = 0; i <= seg.treads; i++) {
-        const x = uToX(seg.u0 + i * runStep);
-        ctx.moveTo(x, vMid - half); ctx.lineTo(x, vMid + half);
-      }
-    });
-    ctx.stroke();
-    // The flat landing band, labelled with its clear-size rule.
-    if (flat) {
-      const lx0 = uToX(flat.t1 * runStep), lx1 = uToX(flat.t1 * runStep + flat.landFt);
-      ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('LANDING', (lx0 + lx1) / 2, vMid + half / 2);
-    }
-    if (stair.rail && stair.rail !== 'none') {
-      const inset = Math.min(half - 1, 0.25 * pxPerFt);
-      const sides = stair.rail === 'both' ? [-1, 1] : [stair.rail === 'right' ? 1 : -1];
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      sides.forEach(side => {
-        const y = vMid + side * (half - inset);
-        ctx.moveTo(x0, y); ctx.lineTo(x1, y);
-      });
-      ctx.stroke();
-    }
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x0, vMid); ctx.lineTo(x1, vMid);
-    ctx.moveTo(x1 - 8, vMid - 4); ctx.lineTo(x1, vMid); ctx.lineTo(x1 - 8, vMid + 4);
-    ctx.stroke();
-    ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
-    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-    ctx.fillText(`DN — ${layout.risers}R @ ${formatInchesOnly(layout.riserIn)}`, (x0 + x1) / 2, vMid - 3);
-
-    // Opening edge emphasised across the stair width -- BEHIND the top nosing
-    // by STAIR_OPENING_NOSING_MIN_IN, the same place the section draws it and
-    // the same place _stairOpeningFootprint cuts it.
-    //
-    // THE TWO PANES MUST AGREE and `stair-view.spec.js` is what holds them to
-    // it: it measures the opening mark's x in each pane and allows 2 px
-    // between them. Moving the section's edge and leaving this one gave 4,
-    // which is how the disagreement was caught rather than shipped.
-    const xOpen = uToX(-STAIR_OPENING_NOSING_MIN_IN / 12);
-    ctx.strokeStyle = '#b04050';
-    ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(xOpen, vMid - half - 6); ctx.lineTo(xOpen, vMid + half + 6);
-    ctx.stroke();
-    ctx.fillStyle = '#b04050';
-    ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
-    ctx.fillText('EDGE OF STAIR OPENING', xOpen - 4, vMid - half - 8);
-    ctx.restore();
   }
 
   // The 0,0 origin: a small circle-and-crosshair target on the grid paper.
@@ -10137,6 +9853,8 @@ class Component extends DCLogic {
       walls: () => this._walls,
       roofs: () => this._roofs,
       floors: () => this._floors,
+      stairs: () => this._stairs,
+      floorOpenings: floorId => this._surfaceOpeningsFor('floor', floorId),
       fenestrations: () => this._fenestrations,
       garageOutlines: levelId => this._garageOutlines(levelId),
       garageFoundation: garage => this._garageFoundation(garage),

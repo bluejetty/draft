@@ -210,6 +210,9 @@ if (!window.DraftCutViewEnv) {
       walls: () => walls,
       roofs: () => roofs,
       floors: () => floors,
+      stairs: () => (Array.isArray(saved.stairs) ? saved.stairs : []),
+      floorOpenings: floorId => (Array.isArray(saved.surfaceOpenings) ? saved.surfaceOpenings : [])
+        .filter(o => o.hostType === 'floor' && String(o.hostId) === String(floorId)),
       columns: () => columns,
       fenestrations: () => fenestrations,
       garageOutlines: levelId => outlines.filter(outline =>

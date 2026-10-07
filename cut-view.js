@@ -1124,6 +1124,21 @@ if (!window.DraftCutView) {
     return ranges;
   };
 
+  // `runs` with the `holes` taken out, both merged u-runs.
+  const subtractRuns = (runs, holes) => runs.flatMap(run => {
+    let parts = [{ ...run }];
+    holes.forEach(hole => {
+      parts = parts.flatMap(part => {
+        if (hole.max <= part.min || hole.min >= part.max) return [part];
+        const out = [];
+        if (hole.min > part.min) out.push({ min: part.min, max: hole.min });
+        if (hole.max < part.max) out.push({ min: hole.max, max: part.max });
+        return out;
+      });
+    });
+    return parts;
+  });
+
   // Merged u-runs where the cut lies over any of the given floor polygons.
   function floorRuns(cut, axis, floors) {
     const a = cut.startPt, b = cut.endPt;
@@ -2060,7 +2075,13 @@ if (!window.DraftCutView) {
         && (floor.points || []).length >= 3);
       if (polys.length) {
         const runs = floorRuns(cut, axis, polys);
-        if (runs.length) return runs;
+        // THE STAIRWELL IS A HOLE IN THE FLOOR, and a section through the
+        // stair shows it: the band stops at the opening's edges.
+        const holes = typeof env.floorOpenings === 'function'
+          ? polys.flatMap(floor => env.floorOpenings(floor.id) || [])
+            .filter(hole => (hole.points || []).length >= 3)
+          : [];
+        if (runs.length) return holes.length ? subtractRuns(runs, floorRuns(cut, axis, holes)) : runs;
       }
       const us = crossings
         .filter(c => c.wall.levelId === levelId && !c.garage)
@@ -2381,6 +2402,11 @@ if (!window.DraftCutView) {
         .forEach(c => drawSectionWall(env, ctx, X, Y, pxPerFt, c, level, opts, C, fdn));
     });
 
+    // THE STAIRS THE CUT PASSES THROUGH, with their rails (Movie, 7 Oct: "i
+    // will need them to also display on the SECTIONS when i make cuts" --
+    // "it should show the full stairs with the rails").
+    drawSectionStairs(env, ctx, cut, axis, stack, X, Y, pxPerFt, C, ptAtU);
+
     // Roof profile over everything: the sampled top chord plus fascia drops.
     const lit = roofSamples.filter(s => s.elev != null);
     if (lit.length > 1) {
@@ -2499,6 +2525,161 @@ if (!window.DraftCutView) {
     }
     paintElevationMarks(env, ctx, cut, X, Y, pxPerFt, C, opts,
       { x0, y0, pxPerFt, uMin, yTop });
+  }
+
+  // ── STAIRS IN A SECTION ───────────────────────────────────────────────
+  //
+  // Every flight the cut line passes over, drawn where it stands. A cut
+  // running WITH the flight (within 45 degrees) shows its whole profile --
+  // stringer, 2x12 treads, 3/4" ply risers, the 36" rail -- by the same
+  // routine the STAIR SECTION page draws with (stair-section.js), so the two
+  // cannot tell a carpenter different things. A cut running ACROSS it shows
+  // the tread and the two stringers the cut slices, the steps beyond it in a
+  // lighter line, and the rail standing over them.
+  //
+  // THE RISE IS THE SECTION'S OWN: from the stair's floor down to the next
+  // floor drawn below it (or the basement slab), so the last riser lands on
+  // the floor this section draws and not on one a hair away from it.
+  //
+  // A turned stair draws flight by flight in its real place; the landing
+  // between them draws where the cut crosses it. Pages without
+  // stair-section.js (an elevation-only page) simply draw no stairs.
+  function drawSectionStairs(env, ctx, cut, axis, stack, X, Y, pxPerFt, C, ptAtU) {
+    const SS = window.DraftStairSection, SG = window.DraftStairGeometry;
+    if (!SS || !SG || typeof env.stairs !== 'function') return;
+    const stairs = (env.stairs() || []).filter(st => st && st.start && st.end
+      && (st.view || 'plan') === 'plan' && st.widthFt > 0);
+    if (!stairs.length) return;
+    const ink = a => weight(C.ink, a);
+    const inks = {
+      line: C.line, stringer: weight(C.assembly, 0.15), tread: C.face, riser: C.face,
+    };
+    const projU = pt => pt.x * axis.x + pt.z * axis.z;
+    // The viewer stands on the +dirVec side and looks the other way: a
+    // point is BEYOND the cut when it lies on the -dirVec side of it.
+    const dir = cut.dirVec || { x: -axis.z, z: axis.x };
+    const depthOf = pt => -((pt.x - cut.startPt.x) * dir.x + (pt.z - cut.startPt.z) * dir.z);
+    const RAIL_FT = 3;
+    const runStep = SG.STAIR_TREAD_RUN_IN / 12;
+    stairs.forEach(stair => {
+      const top = stack.floors.find(level => level.id === Number(stair.levelId));
+      if (!top) return;
+      const below = stack.floors
+        .filter(level => level.floorTop < top.floorTop - 0.5)
+        .reduce((hi, level) => (!hi || level.floorTop > hi.floorTop ? level : hi), null);
+      const bottomFt = below ? below.floorTop : stack.foundation.slabTop;
+      const layout = SG.stairLayout(top.floorTop - bottomFt);
+      if (!(layout.riseFt > 0.5)) return;
+      const parts = SG.stairPlanParts(stair, layout);
+      const { flights } = SS.stairFlights(layout, parts.split);
+      const riseStep = layout.riserIn / 12;
+      const half = stair.widthFt / 2;
+      const railSides = stair.rail === 'both' ? [-1, 1]
+        : stair.rail === 'none' || !stair.rail ? []
+          : [stair.rail === 'right' ? 1 : -1];
+      const railOff = Math.max(0.05, half - SG.STAIR_RAIL_INSET_FT);
+      const yOf = e => Y(top.floorTop + e);
+      ctx.save();
+      parts.runs.forEach((run, i) => {
+        const flight = flights[i];
+        if (!flight) return;
+        const d = run.dir;
+        const rp = { x: -d.z, z: d.x };   // right hand, walking down
+        const at = (s, v) => ({ x: run.start.x + d.x * s + rp.x * v, z: run.start.z + d.z * s + rp.z * v });
+        const lenFt = Math.max(run.lenFt, flight.risers * runStep - SG.STAIR_RISER_FACE_IN / 12);
+        const rect = [at(0, -half), at(lenFt, -half), at(lenFt, half), at(0, half)];
+        const spans = floorRuns(cut, axis, [{ points: rect }]);
+        if (!spans.length) return;
+        const c = d.x * axis.x + d.z * axis.z;
+        const uS = projU(run.start);
+        // Stair u (this flight's) -> section station.
+        const station = u => uS + (u - flight.u0) * c;
+        if (Math.abs(c) > Math.SQRT1_2) {
+          // WITH THE RUN: the whole flight in profile.
+          SS.drawFlight(ctx, flight, layout, u => X(station(u)), yOf, inks);
+          if (railSides.length) {
+            const end = SS.flightRailEnd(flight, layout);
+            ctx.strokeStyle = C.line; ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(X(station(flight.u0)), yOf(flight.e0 + RAIL_FT));
+            ctx.lineTo(X(station(end.u)), yOf(end.e + RAIL_FT));
+            ctx.stroke();
+          }
+          return;
+        }
+        // ACROSS THE RUN: where along the flight the cut slices it.
+        const span = spans.reduce((a, b) => (b.max - b.min > a.max - a.min ? b : a));
+        const mid = ptAtU((span.min + span.max) / 2);
+        const s = (mid.x - run.start.x) * d.x + (mid.z - run.start.z) * d.z;
+        const k = Math.max(1, Math.min(flight.risers - 1, Math.ceil(s / runStep - 1e-6)));
+        const eTread = flight.e0 - k * riseStep;
+        const treadThk = SS.STAIR_TREAD_THICK_IN / 12;
+        const strW = 1.5 / 12;
+        const nosingE = u => flight.e0 - u * (riseStep / runStep);
+        const xa = X(span.min), xb = X(span.max);
+        // Beyond: every other tread on the far side, a light nosing line
+        // across the width, with the stringers' outline down (or up) to it.
+        const far = (depthOf(at(lenFt, 0)) > depthOf(at(0, 0))) ? 1 : -1;
+        const beyond = [];
+        for (let j = 1; j < flight.risers; j += 1) if ((j - k) * far > 0) beyond.push(j);
+        ctx.strokeStyle = ink(0.45); ctx.lineWidth = 0.75;
+        ctx.beginPath();
+        beyond.forEach(j => {
+          const y = yOf(flight.e0 - j * riseStep);
+          ctx.moveTo(xa, y); ctx.lineTo(xb, y);
+        });
+        if (beyond.length) {
+          const eEnd = far > 0 ? flight.e0 - flight.risers * riseStep : flight.e0;
+          ctx.moveTo(xa, yOf(eTread)); ctx.lineTo(xa, yOf(eEnd));
+          ctx.moveTo(xb, yOf(eTread)); ctx.lineTo(xb, yOf(eEnd));
+        }
+        ctx.stroke();
+        // The cut: the tread the line passes through, and a stringer each side.
+        ctx.strokeStyle = C.line; ctx.lineWidth = 1.25;
+        ctx.fillStyle = weight(C.assembly, 0.3);
+        const yT = yOf(eTread), hT = treadThk * pxPerFt;
+        ctx.fillRect(xa, yT, xb - xa, hT);
+        ctx.strokeRect(xa, yT, xb - xa, hT);
+        const strTop = eTread - treadThk;
+        const strBottom = SS.notchRootE(flight, layout, flight.u0 + s) - SS.STAIR_STRINGER_DROP_IN / 12;
+        const sx = strW * pxPerFt;
+        [xa, xb - sx].forEach(x => {
+          ctx.fillRect(x, yOf(strTop), sx, (strTop - strBottom) * pxPerFt);
+          ctx.strokeRect(x, yOf(strTop), sx, (strTop - strBottom) * pxPerFt);
+        });
+        // The rail: seen end-on it runs straight up or down the page, 36"
+        // over the nosings from the slice to the flight's far end.
+        const end = SS.flightRailEnd(flight, layout);
+        const eFar = far > 0 ? end.e : flight.e0;
+        ctx.strokeStyle = C.line; ctx.lineWidth = 2;
+        ctx.beginPath();
+        railSides.forEach(side => {
+          const x = X(projU(at(s, side * railOff)));
+          ctx.moveTo(x, yOf(nosingE(s) + RAIL_FT));
+          ctx.lineTo(x, yOf(eFar + RAIL_FT));
+        });
+        ctx.stroke();
+      });
+      // The landing of a turned stair, where the cut crosses it: a level
+      // band 8" deep at the foot of the first flight.
+      if (parts.landing && flights[1]) {
+        const eL = flights[1].e0;
+        floorRuns(cut, axis, [{ points: parts.landing.poly }]).forEach(span => {
+          ctx.fillStyle = weight(C.assembly, 0.15);
+          ctx.strokeStyle = C.line; ctx.lineWidth = 1.25;
+          const x = X(span.min), wid = (span.max - span.min) * pxPerFt;
+          ctx.fillRect(x, yOf(eL), wid, (8 / 12) * pxPerFt);
+          ctx.strokeRect(x, yOf(eL), wid, (8 / 12) * pxPerFt);
+          if (railSides.length) {
+            ctx.strokeStyle = C.line; ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x, yOf(eL + RAIL_FT)); ctx.lineTo(x + wid, yOf(eL + RAIL_FT));
+            ctx.stroke();
+          }
+        });
+      }
+      ctx.restore();
+    });
   }
 
   // One crossed wall on the section: the stud rectangle for its level, with
