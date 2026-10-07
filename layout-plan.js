@@ -276,9 +276,10 @@ if (!window.DraftLayoutPlan) {
         || WALL_TYPES.find(t => t.id === 'stud_2x6');
       return (type ? type.totalIn : 5.5) / 12;
     };
-    if (render.drawWallTops2D) {
-      bearing.forEach(b => render.drawWallTops2D(ctx, toS, b.walls,
-        { thicknessFt, color: '#1d1f20' }, { wallFaceOffsets: geo.wallFaceOffsets }));
+    if (render.drawWallTops2D && geo.roofPlanWalls) {
+      render.drawWallTops2D(ctx, toS, geo.roofPlanWalls({
+        walls: of('walls'), outlines: of('outlines'), floors: of('floors'), levels: of('levels'),
+      }), { thicknessFt, color: '#1d1f20' }, { wallFaceOffsets: geo.wallFaceOffsets });
     }
     return true;
   }

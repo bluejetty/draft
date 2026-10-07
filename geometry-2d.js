@@ -2084,6 +2084,100 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     });
   };
 
+  // ── EVERY WALL TOP A ROOF RESTS ON ───────────────────────────────────────
+  //
+  // Movie, 7 Oct, on the roof plan: "the corners on the house interior lines
+  // don't 'meld' ... also over the entry area, and over the garage they are
+  // missing -- i would like to show all ext walls that meet at the roof
+  // (where it is resting)". roofBearing named one storey per roof and left
+  // the entry's and the garage's walls out.
+  //
+  // So: each storey's EXTERIOR walls -- house, entry or garage -- with the
+  // stretches a HIGHER storey stands over cut away (that storey's own walls
+  // carry the roof there). `levels` runs top down, as the drawing keeps it.
+  //
+  // A STOREY'S FOOTPRINT is its outlines, its floors and the rooms its own
+  // walls close: the outline alone missed walls a storey grew past it (the
+  // over-garage room reaching over the entry). A wall is EXTERIOR where one
+  // of its faces looks out of that footprint.
+  const roofPlanWalls = ({ walls = [], outlines = [], floors = [], levels = [] } = {}) => {
+    const onEdge = (pts, p) => pts.some((a, i) =>
+      pointToSegment(p, { start: a, end: pts[(i + 1) % pts.length] }).d < 0.05);
+    const inside = (pts, p) => {
+      let hit = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i, i += 1) {
+        const a = pts[i], b = pts[j];
+        if ((a.z > p.z) !== (b.z > p.z)
+          && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
+      }
+      return hit;
+    };
+    const storeys = (levels || []).map(l => Number(l && l.id))
+      .filter(id => Number.isFinite(id) && !ROOF_PLAN_SKIP_LEVELS.has(id));
+    const ownWalls = id => walls.filter(w => Number(w.levelId) === id && !w.hoodOf
+      && (w.view || 'plan') === 'plan' && w.start && w.end);
+    const footprint = id => [
+      ...outlines.filter(o => Number(o.levelId) === id).map(o => o.points),
+      ...floors.filter(f => Number(f.levelId) === id && f.view !== 'foundation').map(f => f.points),
+      ...roomLoops(ownWalls(id)).map(loop => loop.points),
+    ].filter(pts => Array.isArray(pts) && pts.length >= 3);
+    const prints = new Map(storeys.map(id => [id, footprint(id)]));
+    // The stretches of a wall no polygon in `cover` stands over: split at
+    // every crossing with a cover edge, each piece judged by its middle.
+    const uncovered = (wall, cover) => {
+      const a = wall.start, b = wall.end;
+      const ts = [0, 1];
+      cover.forEach(pts => pts.forEach((c, i) => {
+        const d = pts[(i + 1) % pts.length];
+        const den = (b.x - a.x) * (d.z - c.z) - (b.z - a.z) * (d.x - c.x);
+        if (Math.abs(den) < 1e-9) {
+          // Lying along a cover edge: its two ends are where cover starts.
+          [c, d].forEach(q => {
+            const t = paramAlongSegment({ start: a, end: b }, q);
+            if (t > 0 && t < 1 && pointToSegment(q, { start: a, end: b }).d < 0.05) ts.push(t);
+          });
+          return;
+        }
+        const t = ((c.x - a.x) * (d.z - c.z) - (c.z - a.z) * (d.x - c.x)) / den;
+        const u = ((c.x - a.x) * (b.z - a.z) - (c.z - a.z) * (b.x - a.x)) / den;
+        if (t > 0 && t < 1 && u >= -1e-9 && u <= 1 + 1e-9) ts.push(t);
+      }));
+      ts.sort((x, y) => x - y);
+      const at = t => ({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      const kept = [];
+      for (let i = 0; i < ts.length - 1; i += 1) {
+        const t0 = ts[i], t1 = ts[i + 1];
+        if ((t1 - t0) * len < 0.05) continue;
+        const mid = at((t0 + t1) / 2);
+        if (cover.some(pts => onEdge(pts, mid) || inside(pts, mid))) continue;
+        const last = kept[kept.length - 1];
+        if (last && Math.abs(last[1] - t0) < 1e-9) last[1] = t1; else kept.push([t0, t1]);
+      }
+      return kept.map(([t0, t1]) => (t0 === 0 && t1 === 1 ? wall
+        : { ...wall, start: at(t0), end: at(t1) }));
+    };
+    const out = [];
+    storeys.forEach((id, index) => {
+      const own = prints.get(id);
+      const cover = storeys.slice(0, index).flatMap(above => prints.get(above));
+      ownWalls(id).forEach(wall => {
+        const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+        const len = Math.hypot(dx, dz);
+        if (!(len > 0.05)) return;
+        const n = { x: -dz / len, z: dx / len };
+        const mid = { x: (wall.start.x + wall.end.x) / 2, z: (wall.start.z + wall.end.z) / 2 };
+        const looksOut = [1, -1].some(side => {
+          const p = { x: mid.x + n.x * side * 0.4, z: mid.z + n.z * side * 0.4 };
+          return !own.some(pts => inside(pts, p));
+        });
+        if (!looksOut) return;
+        out.push(...uncovered(wall, cover));
+      });
+    });
+    return out;
+  };
+
   window.DraftGeometry2D = {
     distance,
     worldPerPixel,
@@ -2148,6 +2242,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     cutSide,
     cutDirVec,
     roofBearing,
+    roofPlanWalls,
   };
 })();
 }

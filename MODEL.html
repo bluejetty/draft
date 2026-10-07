@@ -2673,9 +2673,15 @@
       R.drawRoof2D(ctx, toS, roof, b && b.exclude.length ? { exclude: b.exclude } : {}, paintEnv());
     });
     const thicknessFt = openingThicknessFt();
-    bearing.forEach(b => R.drawWallTops2D && R.drawWallTops2D(ctx, toS, b.walls, {
-      thicknessFt, color: skin['draw-wall-edge'] || skin['draw-line'],
-    }, { wallFaceOffsets: G.wallFaceOffsets }));
+    // EVERY wall top a roof rests on -- entry and garage too -- once each,
+    // not roof by roof (geometry-2d roofPlanWalls).
+    const tops = G.roofPlanWalls && drawing ? G.roofPlanWalls({ walls: drawing.walls || [],
+      outlines: drawing.outlines || [], floors: drawing.floors || [], levels: drawing.levels || [] }) : [];
+    if (R.drawWallTops2D) {
+      R.drawWallTops2D(ctx, toS, tops, {
+        thicknessFt, color: skin['draw-wall-edge'] || skin['draw-line'],
+      }, { wallFaceOffsets: G.wallFaceOffsets });
+    }
   };
 
   // STRUCTURE THE DRAFTER NEVER DREW. BUILD HOUSE lands a mid-span beam and

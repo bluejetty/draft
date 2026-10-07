@@ -674,23 +674,100 @@ if (!window.DraftRender2D) {
     const thicknessFt = typeof options.thicknessFt === 'function' ? options.thicknessFt : () => 5.5 / 12;
     const faces = typeof env.wallFaceOffsets === 'function' ? env.wallFaceOffsets
       : (wall, t) => ({ startOff: 0, endOff: t });
+    // Each wall's two faces as lines: a point on each end, the direction,
+    // and the offset vector from the wall line.
+    const lines = walls.map(wall => {
+      const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+      const len = Math.hypot(dx, dz);
+      if (!(len > 1e-6)) return null;
+      const d = { x: dx / len, z: dz / len };
+      const n = { x: -d.z, z: d.x };
+      const { startOff, endOff } = faces(wall, thicknessFt(wall));
+      return {
+        wall, d,
+        faces: [startOff, endOff].map(off => ({
+          v: { x: n.x * off, z: n.z * off },
+          a: { x: wall.start.x + n.x * off, z: wall.start.z + n.z * off },
+          b: { x: wall.end.x + n.x * off, z: wall.end.z + n.z * off },
+        })),
+      };
+    }).filter(Boolean);
+    // THE CORNERS MELD (Movie, 7 Oct: "the corners on the house interior
+    // lines don't 'meld'"). Where exactly one other wall turns off at an end,
+    // each face runs on to meet the neighbour's face on the SAME side of the
+    // corner -- the inside face to the inside face, the outside to the
+    // outside -- instead of stopping square at its own end. Matched by
+    // place, since a saved file holds no shared corner objects.
+    const near = (p, q) => Math.hypot(p.x - q.x, p.z - q.z) < 0.05;
+    const meet = (p, d, q, e) => {
+      const cross = d.x * e.z - d.z * e.x;
+      if (Math.abs(cross) < 1e-6) return null;
+      const t = ((q.x - p.x) * e.z - (q.z - p.z) * e.x) / cross;
+      return { x: p.x + d.x * t, z: p.z + d.z * t };
+    };
+    const parallel = (p, q) => Math.abs(p.d.x * q.d.z - p.d.z * q.d.x) <= 1e-3;
+    const onSeg = (p, l) => {
+      const ax = l.wall.start.x, az = l.wall.start.z;
+      const len = Math.hypot(l.wall.end.x - ax, l.wall.end.z - az);
+      const t = (p.x - ax) * l.d.x + (p.z - az) * l.d.z;
+      const off = Math.abs((p.x - ax) * l.d.z - (p.z - az) * l.d.x);
+      return off < 0.05 && t > 0.05 && t < len - 0.05;
+    };
+    // Every face of `line` ends on one face line of `host`: the host face
+    // nearest the stem, so the stem stops against the wall it runs into.
+    const butt = (line, endKey, host, away) => {
+      const face = host.faces.slice().sort((f, g) =>
+        (g.v.x * away.x + g.v.z * away.z) - (f.v.x * away.x + f.v.z * away.z))[0];
+      line.faces.forEach(f => {
+        const hit = meet(f.a, line.d, face.a, host.d);
+        if (hit) f[endKey === 'start' ? 'a' : 'b'] = hit;
+      });
+    };
+    lines.forEach(line => {
+      ['start', 'end'].forEach(endKey => {
+        const at = line.wall[endKey];
+        const sign = endKey === 'start' ? 1 : -1;
+        const mine = { x: line.d.x * sign, z: line.d.z * sign };
+        const sharing = lines.filter(o => o !== line && (near(o.wall.start, at) || near(o.wall.end, at)));
+        // A WALL RUNNING STRAIGHT ON through the corner is the through-wall
+        // of a tee: its faces carry on and the other wall stops against it.
+        if (sharing.some(o => parallel(o, line))) return;
+        const turning = sharing.filter(o => !parallel(o, line));
+        if (!turning.length) {
+          // Ending on another wall's middle: a tee against that wall.
+          const host = lines.find(o => o !== line && !parallel(o, line) && onSeg(at, o));
+          if (host) butt(line, endKey, host, mine);
+          return;
+        }
+        if (turning.length === 2 && parallel(turning[0], turning[1])) {
+          butt(line, endKey, turning[0], mine);
+          return;
+        }
+        if (turning.length !== 1) return;
+        // AN L: each face meets the neighbour's face on the SAME side of the
+        // corner -- inside to inside, outside to outside.
+        const other = turning[0];
+        const theirs = near(other.wall.start, at) ? other.d : { x: -other.d.x, z: -other.d.z };
+        const rank = (fs, toward) => fs.slice()
+          .sort((f, g) => (f.v.x * toward.x + f.v.z * toward.z) - (g.v.x * toward.x + g.v.z * toward.z));
+        const mineSorted = rank(line.faces, theirs);
+        const theirSorted = rank(other.faces, mine);
+        mineSorted.forEach((face, i) => {
+          const twin = theirSorted[i];
+          const hit = meet(face.a, line.d, twin.a, other.d);
+          if (hit) face[endKey === 'start' ? 'a' : 'b'] = hit;
+        });
+      });
+    });
     ctx.save();
     ctx.strokeStyle = options.color || (env.colors && env.colors.wallTop) || '#1d1f20';
     ctx.lineWidth = options.lineWidth || 1;
     ctx.setLineDash([]);
     ctx.beginPath();
-    walls.forEach(wall => {
-      const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
-      const len = Math.hypot(dx, dz);
-      if (!(len > 1e-6)) return;
-      const nx = -dz / len, nz = dx / len;
-      const { startOff, endOff } = faces(wall, thicknessFt(wall));
-      [startOff, endOff].forEach(off => {
-        const a = toS({ x: wall.start.x + nx * off, z: wall.start.z + nz * off });
-        const b = toS({ x: wall.end.x + nx * off, z: wall.end.z + nz * off });
-        ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
-      });
-    });
+    lines.forEach(line => line.faces.forEach(face => {
+      const a = toS(face.a), b = toS(face.b);
+      ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y);
+    }));
     ctx.stroke();
     ctx.restore();
   }
