@@ -5037,6 +5037,24 @@
         barSave.addEventListener('click', () => save('Project saved.'));
       }
 
+      // NEW CLEARS THE HOUSE AND COMES BACK HERE (Movie, 7 Oct): "allow the
+      // NEW button to function in the PROJECT area (clear the MODEL area - and
+      // bring up the selection screen, and then they can proceed to change the
+      // PROJECT info prior to hitting the BONE". MODEL owns what a blank
+      // drawing is and asks whether to save a copy first, so this hands it
+      // the job -- `then=project` sends it straight back, with every card
+      // open again because a blank drawing has no type yet.
+      const fileNew = document.getElementById('file-new');
+      if (fileNew) {
+        fileNew.disabled = false;
+        fileNew.title = 'NEW — clear the house and start a new project here';
+        fileNew.addEventListener('click', async () => {
+          // The last edit may still be on its way to the store.
+          try { await saveQueue; } catch { /* save() reports its own failure */ }
+          window.location.href = './MODEL.html?new=1&then=project';
+        });
+      }
+
       // THE BONE BUILDS WHAT THIS PAGE CHOSE (Movie, 6 Oct): "pick the type
       // within that area (rather than on the popup) and once they select
       // everything they want, they press the BONE/HOUSE it will build as they

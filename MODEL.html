@@ -20571,9 +20571,19 @@
     // work a second time. tests/ext-finish-new.spec.js caught it as a URL
     // still carrying `new=1` after the page had landed.
     const wantsBlank = new URLSearchParams(location.search).get('new') === '1';
+    // NEW FROM THE PROJECT PAGE COMES BACK TO IT (Movie, 7 Oct): "allow the
+    // NEW button to function in the PROJECT area (clear the MODEL area - and
+    // bring up the selection screen, and then they can proceed to change the
+    // PROJECT info prior to hitting the BONE". So it is this page's own NEW --
+    // the same save-a-copy question over the house on screen, the same blank
+    // -- and then back to PROJECT instead of the drive-thru.
+    const newForProject = wantsBlank
+      && new URLSearchParams(location.search).get('then') === 'project';
+    const backToProject = () => { window.location.href = './PROJECT.html'; };
     if (wantsBlank) {
       const spent = new URL(location.href);
       spent.searchParams.delete('new');
+      spent.searchParams.delete('then');
       history.replaceState(null, '', spent.pathname + spent.search + spent.hash);
     }
     // ── BACK FROM THE BONEYARD'S GROW, AND THAT ASK IS SPENT FIRST TOO ──
@@ -20634,11 +20644,16 @@
     // first, which is right when a drawing is on the screen with edits in it.
     // Nothing is on the screen yet here -- boot has not adopted anything --
     // so there is nothing to lose and nothing to ask about.
-    if (wantsBlank) {
+    if (wantsBlank && !newForProject) {
       await adoptAndShow(blankDrawingFile());
       return;
     }
     if (!file) {
+      if (newForProject) {
+        if (await adoptAndShow(blankDrawingFile()) && await askForLease()) await save();
+        backToProject();
+        return;
+      }
       await adoptAndShow(blankDrawingFile());
       return;
     }
@@ -20659,6 +20674,15 @@
     // CLEAN ON ARRIVAL, and stamped rather than assumed: without this the
     // attribute is absent, and absent is not '0' to anything reading it.
     document.body.dataset.saveDirty = '0';
+    // THE HOUSE IS ON SCREEN, so NEW asks about it exactly as the button here
+    // does. CANCEL keeps it and goes back too: the drafter asked from PROJECT.
+    // THE LEASE FIRST: the blank is saved over the house, and a page that
+    // does not hold the lease is refused at the store.
+    if (newForProject) {
+      await askForLease();
+      newDrawing({ then: backToProject, onCancel: backToProject });
+      return;
+    }
     // Deliberately NOT awaited: the drawing is correct without its tracing
     // images and should be on screen before they arrive. Each one repaints
     // itself as it lands.
@@ -20976,6 +21000,7 @@
   const closeGuard = () => {
     guardProceed = null;
     guardSaveWith = null;
+    guardCancel = null;
     if (fileGuard) fileGuard.hidden = true;
     paint();
   };
@@ -20992,9 +21017,11 @@
   // store write -- NEW's guard saves a COPY TO THE COMPUTER as well, because
   // NEW is about to clear the stored drawing too.
   let guardSaveWith = null;
-  const askToSave = (question, proceed, saveWith = null) => {
+  let guardCancel = null;
+  const askToSave = (question, proceed, saveWith = null, onCancel = null) => {
     guardProceed = proceed;
     guardSaveWith = saveWith;
+    guardCancel = onCancel;
     if (fileGuardText) fileGuardText.textContent = question;
     if (fileGuard) fileGuard.hidden = false;
     paint();
@@ -21023,7 +21050,11 @@
       closeGuard();
       if (proceed) proceed();
     });
-    fileGuard.querySelector('[data-guard-cancel]').addEventListener('click', closeGuard);
+    fileGuard.querySelector('[data-guard-cancel]').addEventListener('click', () => {
+      const cancelled = guardCancel;
+      closeGuard();
+      if (cancelled) cancelled();
+    });
   }
 
   // A BLANK DRAWING IS THE OLD PAGE'S FIVE LEVELS, not an empty object: a
@@ -21146,10 +21177,11 @@
   const drawingHasWork = () => !!drawing && ['walls', 'lines', 'floors', 'roofs', 'outlines',
     'shapes', 'fenestrations', 'dimensions', 'stairs', 'columns', 'beams', 'notes', 'roomTags']
     .some(key => Array.isArray(drawing[key]) && drawing[key].length);
-  const newDrawing = () => {
+  const newDrawing = ({ then = null, onCancel = null } = {}) => {
     const clear = async () => {
       if (!(await adoptAndShow(blankDrawingFile()))) return;
       await save();
+      if (then) { then(); return; }
       // AND THE HOUSE PICKER COMES UP ON THE BLANK (Movie, 5 Oct): "once the
       // sheet is blank, please bring up the screen for creating a new house".
       // The same call the front door makes -- the house button glows, then
@@ -21163,7 +21195,7 @@
         const name = generatedFileName();
         const ok = await save({ download: name });
         return ok;
-      });
+      }, onCancel);
   };
 
   const openDrawing = () => guardUnsaved('opening another', () => {
@@ -21275,7 +21307,7 @@
     });
   }
 
-  document.getElementById('file-new').addEventListener('click', newDrawing);
+  document.getElementById('file-new').addEventListener('click', () => newDrawing());
   document.getElementById('file-open').addEventListener('click', openDrawing);
 
   // SAVE AS SAVES. It is the same write as SAVE with a download hung off the
