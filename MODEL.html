@@ -21122,11 +21122,15 @@
     // -- and then back to PROJECT instead of the drive-thru.
     const newForProject = wantsBlank
       && new URLSearchParams(location.search).get('then') === 'project';
+    // KEEP THE NUMBERS, when PROJECT's NEW was answered KEEP (option C).
+    const keepProjectNumbers = newForProject
+      && new URLSearchParams(location.search).get('keep') === '1';
     const backToProject = () => { window.location.href = './PROJECT.html'; };
     if (wantsBlank) {
       const spent = new URL(location.href);
       spent.searchParams.delete('new');
       spent.searchParams.delete('then');
+      spent.searchParams.delete('keep');
       history.replaceState(null, '', spent.pathname + spent.search + spent.hash);
     }
     // ── BACK FROM THE BONEYARD'S GROW, AND THAT ASK IS SPENT FIRST TOO ──
@@ -21223,7 +21227,8 @@
     // does not hold the lease is refused at the store.
     if (newForProject) {
       await askForLease();
-      newDrawing({ then: backToProject, onCancel: backToProject });
+      newDrawing({ then: backToProject, onCancel: backToProject,
+        keep: keepProjectNumbers ? projectNumbersOf(drawing) : null });
       return;
     }
     // Deliberately NOT awaited: the drawing is correct without its tracing
@@ -21636,7 +21641,25 @@
   // visit to an origin with nothing stored. Written twice, the day one gained
   // a level the other would open a different blank -- and a drafter would
   // meet two different empty drawings depending on how he arrived.
-  const blankDrawingFile = () => new File([JSON.stringify({
+  // THE PROJECT PAGE'S NUMBERS, for a NEW that keeps them: heights, the
+  // section table, pitch and overhang, wall type, foundation attachment.
+  // NOT the project's name and owner, and not the house type or garage plan
+  // -- those are the next house's to pick. A detached garage's foundation
+  // choice goes too, because PROJECT reads it as the house's type.
+  const PROJECT_NUMBER_KEYS = ['zoneHeights', 'sectionTable', 'levelAssemblies',
+    'roofPitch', 'roofOverhang', 'roofHeelIn', 'activeWallType',
+    'foundationAttachment', 'foundationAttachmentIn', 'foundationLadderIn'];
+  const projectNumbersOf = d => {
+    const kept = {};
+    PROJECT_NUMBER_KEYS.forEach(key => {
+      if (d && d[key] !== undefined && d[key] !== null) kept[key] = JSON.parse(JSON.stringify(d[key]));
+    });
+    const detached = kept.sectionTable?.rows?.detachedGarage;
+    if (detached) delete detached.garageFoundation;
+    return kept;
+  };
+  const blankDrawingFile = (keep = {}) => new File([JSON.stringify({
+    ...keep,
     version: window.DraftDrawingFormat.VERSION,
     levels: BLANK_LEVELS.map(level => ({ ...level })),
     activeLevelIdx: 3,
@@ -21720,9 +21743,9 @@
   const drawingHasWork = () => !!drawing && ['walls', 'lines', 'floors', 'roofs', 'outlines',
     'shapes', 'fenestrations', 'dimensions', 'stairs', 'columns', 'beams', 'notes', 'roomTags']
     .some(key => Array.isArray(drawing[key]) && drawing[key].length);
-  const newDrawing = ({ then = null, onCancel = null } = {}) => {
+  const newDrawing = ({ then = null, onCancel = null, keep = null } = {}) => {
     const clear = async () => {
-      if (!(await adoptAndShow(blankDrawingFile()))) return;
+      if (!(await adoptAndShow(blankDrawingFile(keep || {})))) return;
       await save();
       if (then) { then(); return; }
       // AND THE HOUSE PICKER COMES UP ON THE BLANK (Movie, 5 Oct): "once the

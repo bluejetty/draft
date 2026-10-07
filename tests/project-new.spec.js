@@ -25,7 +25,10 @@ const HOUSE = {
   outlines: [], shapes: [], surfaceOpenings: [], stairs: [], notes: [],
   roomTags: [], columns: [], beams: [], boneyardOutlines: [],
   groups: [], levelLocks: [], underlays: [],
-  project: { name: 'OLD JOB' },
+  projectInfo: { name: 'OLD JOB', client: 'OLD OWNER' },
+  // THE PROJECT NUMBERS a KEEP carries over: a 7:12 roof and a typed wall.
+  roofPitch: 7,
+  levelAssemblies: { 3: { wallHeightFt: 10 } },
 };
 
 const stored = page => page.evaluate(async bucket => {
@@ -48,6 +51,9 @@ async function seedAndOpenProject(page) {
 test('NEW on PROJECT clears the house and comes back with every card open', async ({ page }) => {
   await seedAndOpenProject(page);
   await page.locator('#file-new').click();
+  // FIRST, whether to keep the PROJECT numbers (Movie, 7 Oct: "ask each time").
+  await expect(page.locator('#project-new-ask')).toBeVisible();
+  await page.locator('[data-new-ask="reset"]').click();
   // MODEL asks about the house on screen, as its own NEW does.
   await expect(page.locator('#file-guard')).toBeVisible({ timeout: 10000 });
   await page.locator('#file-guard [data-guard-discard]').click();
@@ -56,6 +62,9 @@ test('NEW on PROJECT clears the house and comes back with every card open', asyn
   const d = await stored(page);
   expect(d.walls || []).toHaveLength(0);
   expect(d.buildType ?? null).toBeNull();
+  // RESET: the office defaults, not the old house's numbers.
+  expect(d.roofPitch ?? null).toBeNull();
+  expect(d.levelAssemblies?.[3]?.wallHeightFt ?? null).toBeNull();
   // THE SELECTION SCREEN: no type is the house's yet, so nothing is locked.
   await expect(page.locator('#file-new')).toBeEnabled({ timeout: 10000 });
   await expect(page.locator('[data-view-only]').filter({ hasText: 'Viewing only' })).toHaveCount(0);
@@ -64,8 +73,34 @@ test('NEW on PROJECT clears the house and comes back with every card open', asyn
 test('CANCEL keeps the house and still comes back to PROJECT', async ({ page }) => {
   await seedAndOpenProject(page);
   await page.locator('#file-new').click();
+  await page.locator('[data-new-ask="keep"]').click();
   await expect(page.locator('#file-guard')).toBeVisible({ timeout: 10000 });
   await page.locator('#file-guard [data-guard-cancel]').click();
   await page.waitForURL(/PROJECT\.html$/, { timeout: 10000 });
+  expect((await stored(page)).walls).toHaveLength(2);
+});
+
+test('KEEP carries the PROJECT numbers into the new drawing, not the house or its name', async ({ page }) => {
+  await seedAndOpenProject(page);
+  await page.locator('#file-new').click();
+  await page.locator('[data-new-ask="keep"]').click();
+  await expect(page.locator('#file-guard')).toBeVisible({ timeout: 10000 });
+  await page.locator('#file-guard [data-guard-discard]').click();
+  await page.waitForURL(/PROJECT\.html$/, { timeout: 10000 });
+  const d = await stored(page);
+  expect(d.walls || []).toHaveLength(0);
+  expect(d.roofPitch).toBe(7);
+  expect(d.levelAssemblies[3].wallHeightFt).toBe(10);
+  expect(d.projectInfo?.name ?? '').toBe('');
+  expect(d.buildType ?? null).toBeNull();
+  await expect(page.locator('[data-view-only]').filter({ hasText: 'Viewing only' })).toHaveCount(0);
+});
+
+test('CANCEL on the question leaves everything where it was', async ({ page }) => {
+  await seedAndOpenProject(page);
+  await page.locator('#file-new').click();
+  await page.locator('[data-new-ask="cancel"]').click();
+  await expect(page.locator('#project-new-ask')).toBeHidden();
+  await expect(page).toHaveURL(/PROJECT\.html/);
   expect((await stored(page)).walls).toHaveLength(2);
 });

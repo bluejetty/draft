@@ -823,6 +823,20 @@
         <button type="button" class="build-ask-cancel" data-build-ask="cancel">Cancel</button>
       </div>
     </div>
+    <!-- NEW ASKS ABOUT THE NUMBERS (Movie, 7 Oct: option C, "ask each time"):
+         keep the typed PROJECT heights, pitch and overhang for the next house,
+         or put the office defaults back. The house, the name and the owner go
+         either way. -->
+    <div id="project-new-ask" class="build-ask" role="dialog" aria-modal="true" aria-labelledby="new-ask-title" hidden>
+      <div class="build-ask-card">
+        <p id="new-ask-title" class="build-ask-title">NEW &mdash; keep the PROJECT numbers?</p>
+        <div class="build-ask-row">
+          <button type="button" data-new-ask="keep">Keep</button>
+          <button type="button" data-new-ask="reset">Reset to defaults</button>
+        </div>
+        <button type="button" class="build-ask-cancel" data-new-ask="cancel">Cancel</button>
+      </div>
+    </div>
   </main>
   <!-- THE BOTTOM BAR. page:'project' is what marks PROJECT as "you are here"
        -- the chip becomes a span instead of a link, off the one PAGES table
@@ -5048,11 +5062,19 @@
       if (fileNew) {
         fileNew.disabled = false;
         fileNew.title = 'NEW — clear the house and start a new project here';
-        fileNew.addEventListener('click', async () => {
+        // ASKED FIRST, then handed over: `keep=1` tells MODEL to carry the
+        // PROJECT numbers into the blank drawing.
+        const newAsk = document.getElementById('project-new-ask');
+        const goNew = async keep => {
+          newAsk.hidden = true;
           // The last edit may still be on its way to the store.
           try { await saveQueue; } catch { /* save() reports its own failure */ }
-          window.location.href = './MODEL.html?new=1&then=project';
-        });
+          window.location.href = `./MODEL.html?new=1&then=project&keep=${keep ? 1 : 0}`;
+        };
+        fileNew.addEventListener('click', () => { newAsk.hidden = false; });
+        newAsk.querySelector('[data-new-ask="keep"]').addEventListener('click', () => goNew(true));
+        newAsk.querySelector('[data-new-ask="reset"]').addEventListener('click', () => goNew(false));
+        newAsk.querySelector('[data-new-ask="cancel"]').addEventListener('click', () => { newAsk.hidden = true; });
       }
 
       // THE BONE BUILDS WHAT THIS PAGE CHOSE (Movie, 6 Oct): "pick the type
