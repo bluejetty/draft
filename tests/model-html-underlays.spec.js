@@ -7,13 +7,10 @@
 // colours and the painter adds no ink), and it is also what makes this page's
 // version dangerous: silence is indistinguishable from a broken viewer.
 //
-// THE SECOND TEST IS WHY THIS FILE EXISTS. This page decodes rasters and NOT
-// PDFs -- pdf.js is 1.37 MB against a page whose whole claim is a short exact
-// dependency list. That is a defensible trade and an indefensible silence: a
-// drafter opens the viewer, the thing they were tracing is gone, and nothing
-// says why. So the page names it, on the same rule the `dropped` counter
-// already follows -- an absence stated is a fact, an absence unstated is a bug
-// report waiting to happen.
+// THE TRACE CHIP DECIDES WHETHER THEY SHOW (Movie, 7 Oct), and while it is off
+// the readout says how many are hidden -- the same rule the `dropped` counter
+// follows: an absence stated is a fact, an absence unstated is a bug report.
+// PDFs draw too now, through pdf.js fetched only when a PDF is shown.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -43,6 +40,30 @@ async function recordDraws(page) {
   });
 }
 
+// TRACE on in this browser before the page reads it.
+const traceOn = page => page.addInitScript(() => {
+  try { localStorage.setItem('draft.trace.on', '1'); } catch { /* fine */ }
+});
+
+// A one-page letter PDF, written by hand (see model-html-trace.spec.js).
+function onePagePdf() {
+  const stream = '0 0 0 RG 72 400 m 540 400 l S\n';
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}endstream`,
+  ];
+  let out = '%PDF-1.4\n';
+  const offsets = [];
+  objects.forEach((body, i) => { offsets.push(out.length); out += `${i + 1} 0 obj\n${body}\nendobj\n`; });
+  const xref = out.length;
+  out += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.forEach(off => { out += `${String(off).padStart(10, '0')} 00000 n \n`; });
+  out += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return out;
+}
+
 async function houseOnOldPage(page) {
   await h.openModel(page, { webgl: false, rails: false, entryCoach: true });
   await expect(page.locator('[data-entry-coach]')).toBeVisible({ timeout: 4000 });
@@ -52,9 +73,13 @@ async function houseOnOldPage(page) {
 
 // A real 8x8 PNG in the named-file store, so the raster path decodes something
 // a browser genuinely accepts rather than a fabricated blob.
-async function putUnderlay(page, { id, kind, levelId = MAIN_FL, withFile = true }) {
-  await page.evaluate(async ({ bucket, id: uid, kind: k, levelId: lid, withFile: wf }) => {
-    if (wf) {
+async function putUnderlay(page, { id, kind, levelId = MAIN_FL, withFile = true, pdf = null }) {
+  await page.evaluate(async ({ bucket, id: uid, kind: k, levelId: lid, withFile: wf, pdf: pdfText }) => {
+    if (pdfText) {
+      const bytes = Uint8Array.from(pdfText, ch => ch.charCodeAt(0));
+      await window.SharedFileStore.saveNamedFile(
+        new File([bytes], uid, { type: 'application/pdf' }), 'underlays');
+    } else if (wf) {
       const c = document.createElement('canvas');
       c.width = 8; c.height = 8;
       const g = c.getContext('2d');
@@ -73,7 +98,7 @@ async function putUnderlay(page, { id, kind, levelId = MAIN_FL, withFile = true 
     }]);
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(d)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, id, kind, levelId, withFile });
+  }, { bucket: BUCKET, id, kind, levelId, withFile, pdf });
 }
 
 const readout = page => page.locator('#readout');
@@ -81,6 +106,7 @@ const readout = page => page.locator('#readout');
 test.describe('MODEL.html underlays', () => {
   test('a raster underlay decodes and paints under the drawing', async ({ page }) => {
     await recordDraws(page);
+    await traceOn(page);
     await houseOnOldPage(page);
     await putUnderlay(page, { id: 'u-raster', kind: 'image' });
     await page.goto('/MODEL.html');
@@ -100,36 +126,33 @@ test.describe('MODEL.html underlays', () => {
     expect(draws[0].w).toBeGreaterThan(1);
   });
 
-  test('a PDF underlay is NAMED on the page, not silently missing', async ({ page }) => {
+  test('with TRACE off the images are hidden, and the readout says so', async ({ page }) => {
+    await recordDraws(page);
     await houseOnOldPage(page);
-    // THE STORED FILE IS A DECODABLE PNG, DELIBERATELY, even though the record
-    // says `kind: 'pdf'`. With no file at all the loader bails at
-    // loadNamedFile and the kind guard is never reached -- so a sweep that
-    // deleted `|| underlay.kind === 'pdf'` left this file green. A file the
-    // raster path COULD decode makes the guard the only thing stopping it, and
-    // the 0/1 below is then a statement about the guard rather than about a
-    // missing file.
-    await putUnderlay(page, { id: 'u-pdf', kind: 'pdf' });
+    await putUnderlay(page, { id: 'u-hidden', kind: 'image' });
     await page.goto('/MODEL.html');
-
-    await expect(readout(page),
-      'the raster path must not decode a PDF record even when the bytes would')
-      .toContainText('underlays 0/1');
-    // And it must STAY 0/1 -- the loader is async, so a guard that merely
-    // decoded late would satisfy a single read.
+    await expect(readout(page)).toContainText('1 tracing image hidden', { timeout: 6000 });
+    await expect(readout(page)).toContainText('(TRACE is off)');
+    // And nothing is decoded or drawn for an image nobody is showing.
     await page.waitForTimeout(1200);
     await expect(readout(page)).toContainText('underlays 0/1');
-    // THE ASSERTION THIS FILE EXISTS FOR. Without it the drafter sees a level
-    // where their tracing image used to be and nothing to distinguish "this
-    // viewer does not do PDFs" from "this viewer is broken".
-    await expect(readout(page),
-      'a PDF underlay that cannot be drawn here must say so on the page')
-      .toContainText('1 PDF underlay not drawn');
-    await expect(readout(page), 'and say what would fix it').toContainText('needs pdf.js');
+    expect(await page.evaluate(() => window.__draws)).toHaveLength(0);
+  });
+
+  test('a PDF underlay draws its page, through pdf.js fetched on demand', async ({ page }) => {
+    await recordDraws(page);
+    await traceOn(page);
+    await houseOnOldPage(page);
+    await putUnderlay(page, { id: 'u-pdf', kind: 'pdf', pdf: onePagePdf() });
+    await page.goto('/MODEL.html');
+    await expect(readout(page)).toContainText('underlays 1/1', { timeout: 15000 });
+    expect(await page.evaluate(() => window.__draws.length)).toBe(1);
+    expect(await page.evaluate(() => Boolean(window.pdfjsLib))).toBe(true);
   });
 
   test('an underlay on another level does not paint', async ({ page }) => {
     await recordDraws(page);
+    await traceOn(page);
     await houseOnOldPage(page);
     await putUnderlay(page, { id: 'u-elsewhere', kind: 'image', levelId: 1 });
     await page.goto('/MODEL.html');
