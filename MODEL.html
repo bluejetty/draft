@@ -2121,11 +2121,13 @@
   // nothing that picks, selects or edits ever sees it.
   const HALF_LEVEL_PARTNER = Object.freeze({ 2: 3, 3: 2, 4: 5, 5: 4 });
   let ghostLevelId = null;
+  let ghostViewId = null;      // the same, for another view of this level
+  let ghostKeep = null;        // and which of its items the ghost draws
   const onActiveLevel = () => {
     const LV = window.DraftLayerViews;
     const levelId = ghostLevelId ?? activeLevelId();
     const views = LV.layerViewsForLevelId(levelId);
-    const viewId = activeViewId();
+    const viewId = ghostViewId ?? activeViewId();
     // THE FALLBACK DIFFERS BY ITEM TYPE. Measured, not assumed: every
     // `.view || '...'` in MODEL.dc.html reads 'plan' -- wall, line, stair,
     // opening, fixture, device, seg, 20-odd sites -- EXCEPT floors, which
@@ -2144,7 +2146,7 @@
     return { levelId, viewId, onPlan, byLevel };
   };
   const walls = () => (drawing?.walls || [])
-    .filter(w => { const f = onActiveLevel(); return f.byLevel(w) && f.onPlan(w); });
+    .filter(w => { const f = onActiveLevel(); return f.byLevel(w) && f.onPlan(w) && (!ghostKeep || ghostKeep(w)); });
   const lines = () => (drawing?.lines || [])
     .filter(l => { const f = onActiveLevel(); return f.byLevel(l) && f.onPlan(l); });
   const floors = () => (drawing?.floors || [])
@@ -3079,6 +3081,33 @@
       ctx.restore();
     } finally {
       ghostLevelId = null;
+    }
+  };
+  // THE BASEMENT PLAN SHOWS THE FOUNDATION IT STANDS IN (Movie, 7 Oct): "on
+  // the 'BASEMENT' plan ... can you show the FOUNDATION WALL (slightly
+  // lighter and not editable) (don't show footings, but show where columns
+  // are located on the basement plan too". The house's foundation walls and
+  // its posts, off the FOUNDATION view, faded like a half-floor and drawn
+  // under the basement's own walls. No pads and no piles: a pile is the
+  // garage's, and both are footings.
+  const paintBasementFoundationGhost = () => {
+    if (!drawing || Number(activeLevelId()) !== FOUNDATION_LEVEL_ID || activeViewId() !== 'plan') return;
+    const R = window.DraftRender2D;
+    const B = window.DraftBuildHouse;
+    ghostViewId = 'foundation';
+    ghostKeep = item => item.body !== 'garage';
+    try {
+      const posts = columns().filter(c => !(B && B.footingFor(c.footing)?.pile));
+      if (!walls().length && !posts.length) return;
+      ctx.save();
+      ctx.globalAlpha = HALF_LEVEL_GHOST_ALPHA;
+      paintWalls();
+      const env = paintEnv();
+      posts.forEach(column => R.drawColumn2D(ctx, toS, column, {}, env));
+      ctx.restore();
+    } finally {
+      ghostViewId = null;
+      ghostKeep = null;
     }
   };
   const paintWalls = () => {
@@ -4577,6 +4606,7 @@
         paintOpeningsAbove();
         paintOutlines();
         paintHalfLevelGhost();
+        paintBasementFoundationGhost();
         paintLines(); paintWalls();
         // Fixtures ride ON the walls, so they go after them and before the
         // annotation -- the slot the bone puts them in (MODEL.dc.html:6993,

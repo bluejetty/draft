@@ -75,3 +75,28 @@ test('a house with no half-floor draws as before: the 2ND FL is not MAIN FL\'s p
   await load(page, BUNGALOW, 3);
   expect(Math.abs(await stairInk(page) - own)).toBeLessThan(20);
 });
+
+// THE BASEMENT PLAN SHOWS THE FOUNDATION IT STANDS IN (Movie, 7 Oct): "show
+// the FOUNDATION WALL (slightly lighter and not editable) (don't show
+// footings, but show where columns are located on the basement plan too".
+test('the basement plan shows the foundation walls and posts, which it cannot pick', async ({ page }) => {
+  const ink = () => page.evaluate(() => {
+    const c = document.getElementById('plan');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    const k = (Math.floor(c.height / 2) * c.width + 4) * 4;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (Math.abs(d[i] - d[k]) + Math.abs(d[i + 1] - d[k + 1]) + Math.abs(d[i + 2] - d[k + 2]) > 30) n += 1;
+    }
+    return n;
+  });
+  const bare = { ...BUNGALOW, walls: BUNGALOW.walls.filter(w => w.view !== 'foundation'), columns: [] };
+  await load(page, bare, '1&view=plan');
+  const none = await ink();
+  await load(page, { ...bare, columns: BUNGALOW.columns }, '1&view=plan');
+  const posts = await ink();
+  expect(posts, 'the posts').toBeGreaterThan(none + 30);
+  await load(page, BUNGALOW, '1&view=plan');
+  expect(await ink(), 'and the foundation walls').toBeGreaterThan(posts + 200);
+  await expect(page.locator('#readout')).toContainText(/walls 0\b/);
+});

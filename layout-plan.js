@@ -297,6 +297,14 @@ if (!window.DraftLayoutPlan) {
 
   // A HALF-FLOOR GETS NO SHEET OF ITS OWN once its full floor has walls to
   // carry it; alone (no full floor drawn yet) it still prints by itself.
+  // The basement plan's faded foundation: the house's walls, not the garage's.
+  const BASEMENT_LEVEL_ID = 1;
+  const BASEMENT_FOUNDATION_ALPHA = HALF_LEVEL_SHEET_ALPHA;
+  function basementGhostKeeps(saved, wallId) {
+    const wall = (Array.isArray(saved?.walls) ? saved.walls : []).find(item => item?.id === wallId);
+    return !!wall && wall.body !== 'garage';
+  }
+
   function ridesOnFullFloor(saved, levelId) {
     const id = Number(levelId);
     const full = Object.keys(HALF_LEVEL_UNDER)
@@ -310,7 +318,8 @@ if (!window.DraftLayoutPlan) {
     if (!composition || !geo) return false;
 
     const view = env.view || null;
-    const walls = planWalls(saved, levelId, view);
+    const walls = planWalls(saved, levelId, view)
+      .filter(wall => env.foundationGhost !== true || basementGhostKeeps(saved, wall.id));
     if (!walls.length) return drawRoofPlan(ctx, toS, saved, levelId);
 
     // UNDER, so the full floor's own lines are the ones left on top.
@@ -321,7 +330,24 @@ if (!window.DraftLayoutPlan) {
       drawPlan(ctx, toS, saved, half, { ...env, halfLevel: true });
       ctx.restore();
     }
-    const halfLevel = env.halfLevel === true;
+    // THE BASEMENT PLAN SHOWS THE FOUNDATION IT STANDS IN (Movie, 7 Oct):
+    // "show the FOUNDATION WALL (slightly lighter ...) (don't show footings,
+    // but show where columns are located". The house's foundation walls and
+    // its posts, off the FOUNDATION view, under the basement's own walls --
+    // no pads, and no piles, which are the garage's footings.
+    if (levelId === BASEMENT_LEVEL_ID && view === 'plan' && env.halfLevel !== true
+      && env.foundationGhost !== true) {
+      const fdnWalls = planWalls(saved, levelId, 'foundation')
+        .filter(wall => basementGhostKeeps(saved, wall.id));
+      if (fdnWalls.length) {
+        ctx.save();
+        ctx.globalAlpha *= BASEMENT_FOUNDATION_ALPHA;
+        drawPlan(ctx, toS, saved, levelId, { ...env, view: 'foundation', foundationGhost: true });
+        ctx.restore();
+      }
+    }
+    const foundationGhost = env.foundationGhost === true;
+    const halfLevel = env.halfLevel === true || foundationGhost;
     // On the half-floor's pass, only what Movie named.
     const only = list => (halfLevel ? [] : list);
 
@@ -602,7 +628,9 @@ if (!window.DraftLayoutPlan) {
         labelFont: "600 9px 'Barlow Condensed', system-ui, sans-serif",
       }),
       beams: only(of('beams')),
-      columns: only(of('columns')),
+      columns: foundationGhost
+        ? of('columns').filter(column => !/pile/i.test(String(column.footing || '')))
+        : only(of('columns')),
       // ONLY A PILE CHANGES THE DRAWN SHAPE; a telepost is the default square.
       // The same rule MODEL.html:3266 applies, and it is the CALLER's answer
       // rather than the painter's.
