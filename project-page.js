@@ -800,7 +800,22 @@ if (!window.DraftProjectPage) {
   };
 
   const buildWallSection = values => {
-    const floors = values.floors; // bottom-up: [{id, name, wallHeightFt, joistDepthIn, sheathingIn}]
+    // bottom-up: [{id, name, wallHeightFt, joistDepthIn, sheathingIn}]
+    //
+    // THE FAR EDGE ONLY CARRIES THE LEVELS THAT REACH IT. Movie, 7 Oct, on
+    // the modified bilevel: "the left side ceiling was too high (at 2nd floor
+    // height) should be brought down to main fl height". The 2ND FL stops
+    // short (`extentFt`): it stands over the entry and the garage, and past
+    // the balcony the main area is open to its own ceiling. Stacked on the
+    // far wall anyway, it took that wall a storey too high and the eave with
+    // it. Left off here, the wall stops at MAIN FL's ceiling and the roof
+    // lands there by itself, since the plate line is the tallest level drawn.
+    // Only levels ABOVE the datum are dropped, so datumIndex still counts the
+    // same floors.
+    const datumAt = values.datumIndex ?? 0;
+    const floors = values.farEdge === true
+      ? values.floors.filter((level, i) => i <= datumAt || level.extentFt == null)
+      : values.floors;
     const fdn = values.foundation; // {wallHeightFt, thicknessIn, slabIn, footingWidthIn, footingDepthIn}
     const roof = values.roof;      // {pitch, overhangFt, fasciaIn}
     const wallIn = values.wallThicknessIn;

@@ -246,3 +246,22 @@ test('the house carries its own eave at the near edge', async ({ page }) => {
   // exactly none with the eave off.
   expect(outside).toBeGreaterThan(50);
 });
+
+// THE FAR WALL STOPS AT MAIN FL's CEILING. Movie, 7 Oct: "the left side
+// ceiling was too high (at 2nd floor height) should be brought down to main
+// fl height". The 2ND FL stands over the entry and the garage only, so it
+// never reaches the far edge; stacked there anyway it took the far wall, and
+// the eave on it, a storey too high.
+test('the far edge tops out at the main floor ceiling, not the 2nd floor', async ({ page }) => {
+  await open(page);
+  const { near, far } = await sections(page);
+  const main = SPLIT.floors.find(level => level.deckAt === 'far');
+  const farTop = Math.max(...far.verticals.map(v => v.hi));
+  const nearTop = Math.max(...near.verticals.map(v => v.hi));
+  // The roof stands on the wall, so the tallest vertical is past the plate;
+  // what is asked is that nothing of the far wall reaches the near slice's
+  // 2nd floor plate, and that the far wall's own plate is MAIN FL's ceiling.
+  const farWallTop = Math.max(...far.verticals.filter(v => v.lo < 0.01 && v.hi > 1).map(v => v.hi));
+  expect(farWallTop).toBeCloseTo(main.wallHeightFt, 3);
+  expect(farTop).toBeLessThan(nearTop);
+});
