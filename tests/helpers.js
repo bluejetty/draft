@@ -29,10 +29,24 @@ async function openModel(page, {
   // to answer it. tests/model-garage-align.spec.js opts out.
   garageAlign = 'no',
 } = {}) {
+  // ANSWERED INSIDE THE PAGE, the moment the card opens: the BONE's build
+  // waits on the answer, and a spec that reads the drawing straight after
+  // the press must find it built. A Playwright locator handler only fires on
+  // the spec's NEXT action, which builds the house in the middle of it.
   if (garageAlign === 'no' || garageAlign === 'yes') {
-    await page.addLocatorHandler(page.locator('#garage-align'), async () => {
-      await page.locator(`[data-garage-align-${garageAlign}]`).click();
-    });
+    await page.addInitScript(answer => {
+      const watch = () => {
+        const card = document.getElementById('garage-align');
+        if (!card) return false;
+        const press = () => {
+          if (!card.hidden) card.querySelector(`[data-garage-align-${answer}]`)?.click();
+        };
+        new MutationObserver(press).observe(card, { attributes: true, attributeFilter: ['hidden'] });
+        press();
+        return true;
+      };
+      if (!watch()) document.addEventListener('DOMContentLoaded', watch, { once: true });
+    }, garageAlign);
   }
   // Init scripts run on every navigation, so the flag keeps a reload inside a
   // test from wiping the drawing the test just made. The FAT TEST WALLET
