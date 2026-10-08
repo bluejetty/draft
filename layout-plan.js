@@ -385,6 +385,12 @@ if (!window.DraftLayoutPlan) {
     // buyer reads a room -- so it is its own switch rather than shell's.
     const listing = env.listing === true;
     const forConstruction = built => (shell || listing ? null : built);
+    // A HOLOGRAM (`hologram: true`): another .draft shown under the one being
+    // drawn (Movie, 8 Oct, the existing house on a lot getting an addition).
+    // The building as it is drawn -- walls, doors, windows, stairs, fixtures,
+    // room names -- without its dimension strings and notes, which are the
+    // OTHER drawing's annotation and would read as this one's.
+    const hologram = env.hologram === true;
 
     const of = key => (Array.isArray(saved?.[key]) ? saved[key] : []);
     const openings = of('surfaceOpenings');
@@ -498,7 +504,7 @@ if (!window.DraftLayoutPlan) {
       // neighborhood at 1"=40' asks for the building rather than the
       // construction document, so the tag stage never opens there and needs
       // no mode of its own.
-      houseOutline: halfLevel ? null : forConstruction(id => (window.DraftBuildingBodies
+      houseOutline: halfLevel || hologram ? null : forConstruction(id => (window.DraftBuildingBodies
         ? window.DraftBuildingBodies.houseOutlineOn(saved, id) : null)),
       // null for a layer the table does not carry, which layerShows reads as
       // "draws" -- an untagged dimension from before this key existed, and a
@@ -669,7 +675,7 @@ if (!window.DraftLayoutPlan) {
       // a construction OUTLINE -- deliberately unlike a floor or a roof -- so
       // a sheet missing one is missing a guide, not a building.
       shapeEnv: null,
-      dimensionEnv: forConstruction({
+      dimensionEnv: hologram ? null : forConstruction({
         label: ft => fmt.formatArchitecturalInches(ft * 12),
         colors: DIMENSION_COLORS,
       }),
@@ -683,7 +689,7 @@ if (!window.DraftLayoutPlan) {
         areaFor: listing ? (tag => tag.size || '') : (() => ''),
       }),
       roomTags: only(of('roomTags')),
-      noteEnv: unless({ color: '#1d1f20', fillColor: paperColor }),
+      noteEnv: hologram ? null : unless({ color: '#1d1f20', fillColor: paperColor }),
     });
     return true;
   }

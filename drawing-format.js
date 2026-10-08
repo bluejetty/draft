@@ -1470,6 +1470,56 @@ if (!window.DraftDrawingFormat) {
       };
     }).filter(Boolean);
 
+  // HOLOGRAMS: ANOTHER .draft, SHOWN AND NEVER EDITED (Movie, 8 Oct): "allow
+  // users to bring DRAFT 'HOLOGRAM' into another file" -- "will use it to
+  // bring existing house onto a property that has another house being added
+  // or an addition to a house".
+  //
+  // A COPY, NOT A LINK. The browser cannot re-read a file on the drafter's
+  // disk by itself, so `source` is the other drawing as it was when it came
+  // in, and REFRESH is the drafter picking the newer file. A file that opens
+  // on another machine still shows its hologram.
+  //
+  // PLACED, like a house on the neighborhood program: spun `angleDeg` about
+  // the source's own centre (`pivotX`, `pivotZ`), then slid by `x`, `z`.
+  // All four zero is the house exactly where its own file has it.
+  //
+  // ONE DEEP. A hologram's own holograms are dropped: the existing house is
+  // the existing house, not the existing house and whatever it referenced.
+  const holograms = raw => (Array.isArray(raw) ? raw : [])
+    .map(holo => {
+      const id = String(holo?.id || '').trim();
+      const source = holo?.source;
+      if (!id || !source || typeof source !== 'object' || !Array.isArray(source.levels)) return null;
+      if (!checkEnvelope(source).ok) return null;
+      const { holograms: nested, ...flat } = source;
+      const angle = num(holo?.angleDeg);
+      return {
+        id,
+        name: String(holo?.name || '').trim(),
+        x: num(holo?.x) ?? 0,
+        z: num(holo?.z) ?? 0,
+        angleDeg: angle === null ? 0 : ((angle % 360) + 360) % 360,
+        pivotX: num(holo?.pivotX) ?? 0,
+        pivotZ: num(holo?.pivotZ) ?? 0,
+        hidden: holo?.hidden === true,
+        source: flat,
+        layer: 'HOLOGRAM',
+      };
+    }).filter(Boolean);
+
+  // Where a hologram's point lands on the drawing it is placed in.
+  const hologramPoint = (holo, pt) => {
+    const rad = (Number(holo?.angleDeg) || 0) * Math.PI / 180;
+    const cos = Math.cos(rad), sin = Math.sin(rad);
+    const px = Number(holo?.pivotX) || 0, pz = Number(holo?.pivotZ) || 0;
+    const dx = pt.x - px, dz = pt.z - pz;
+    return {
+      x: px + (Number(holo?.x) || 0) + dx * cos - dz * sin,
+      z: pz + (Number(holo?.z) || 0) + dx * sin + dz * cos,
+    };
+  };
+
   // Project information typed on the PROJECT tab: plain descriptive strings
   // carried with the drawing so the titleblock and the site plan's LEGAL LAND
   // DESCRIPTION block can print them. Later per-project settings (model-space
@@ -2110,6 +2160,8 @@ if (!window.DraftDrawingFormat) {
     boneyardOutlines,
     outlines,
     underlays,
+    holograms,
+    hologramPoint,
     projectInfo,
     zoneHeights,
     sectionTable,

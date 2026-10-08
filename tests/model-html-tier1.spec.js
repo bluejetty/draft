@@ -545,6 +545,12 @@ test.describe('MODEL.html tier 1', () => {
       // stop; the derivation runs on a press. So they cost two requests and no
       // startup work, which is the bar this list actually guards.
       './stair-rules.js', './auto-stair.js',
+      // HOLOGRAMS (Movie, 8 Oct): another .draft shown under this one, drawn
+      // by the same whole-drawing painter LAYOUT and the neighborhood program
+      // use. Both define an object and stop; nothing paints with them until a
+      // drawing carries a hologram, so a file without one pays two requests
+      // and no startup work.
+      './plan-composition.js', './layout-plan.js',
       // traffic-counter.js is the app's one deliberate off-site voice, and it
       // has been on every other page since it was written -- index, PROJECT,
       // SETTINGS, STANDARDS, SPECS, both DC pages. This page carried the SLOT

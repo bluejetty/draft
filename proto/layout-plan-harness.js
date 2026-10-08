@@ -334,6 +334,46 @@ function run(label) {
   check('the FOUNDATION sheet itself is not faded',
     draw(full.win, 1, { saved: basement, env: { view: 'foundation' } }).strokes.every(a => a === 1));
 
+  // ── HOLOGRAMS (Movie, 8 Oct): ANOTHER .draft SHOWN UNDER THIS ONE ─────
+  //
+  // The building as drawn -- walls, stairs, fixtures -- without the other
+  // drawing's dimension strings and notes, which would read as this one's.
+  const DIM = /^\d+'-/;
+  const sheet = draw(full.win, MAIN);
+  const holo = draw(full.win, MAIN, { env: { hologram: true } });
+  check('the construction sheet carries dimension strings to drop',
+    sheet.texts.some(t => DIM.test(t)));
+  check('a hologram draws no dimension strings', holo.ok && !holo.texts.some(t => DIM.test(t)),
+    holo.texts.filter(t => DIM.test(t)).slice(0, 3).join(', '));
+  check('but keeps the stairs', holo.texts.some(t => STAIR.test(t)));
+  const noted = { ...SAVED, notes: [{ id: 'n1', levelId: MAIN, view: 'plan',
+    anchor: { x: 2, y: 0, z: 2 }, text: { x: 6, y: 0, z: 6 }, body: 'EXISTING NOTE',
+    end: 'arrow', layer: 'A-ANNO-NOTE' }] };
+  check('the sheet draws a note', draw(full.win, MAIN, { saved: noted }).texts.includes('EXISTING NOTE'));
+  check('a hologram leaves the note off',
+    !draw(full.win, MAIN, { saved: noted, env: { hologram: true } }).texts.includes('EXISTING NOTE'));
+
+  const F = full.win.DraftDrawingFormat;
+  const [kept] = F.holograms([{ id: 'hologram-1', name: ' existing ', angleDeg: -90,
+    source: { ...SAVED, holograms: [{ id: 'inner', source: SAVED }] } }]);
+  check('a hologram keeps its copy of the other drawing',
+    kept && kept.source.walls.length === SAVED.walls.length);
+  check('but never that drawing\'s own holograms', kept && kept.source.holograms === undefined);
+  check('a turn is kept inside a circle', kept && kept.angleDeg === 270);
+  check('and the name trimmed', kept && kept.name === 'existing');
+  check('a file that is not a drawing is not a hologram',
+    F.holograms([{ id: 'h', source: { hello: 1 } }, { id: 'h2', source: { ...SAVED, version: 99 } }]).length === 0);
+  const at = (h, pt) => F.hologramPoint(h, pt);
+  const same = (a, b) => Math.abs(a.x - b.x) < 1e-9 && Math.abs(a.z - b.z) < 1e-9;
+  check('unmoved and unturned, a point stays where its own file has it',
+    same(at({ x: 0, z: 0, angleDeg: 0, pivotX: 5, pivotZ: 5 }, { x: 3, z: 7 }), { x: 3, z: 7 }));
+  check('a quarter turn spins about the pivot, the way the plan turns',
+    same(at({ x: 0, z: 0, angleDeg: 90, pivotX: 10, pivotZ: 0 }, { x: 12, z: 0 }), { x: 10, z: 2 }));
+  check('a point off the pivot\'s line turns the same way round',
+    same(at({ x: 0, z: 0, angleDeg: 90, pivotX: 10, pivotZ: 0 }, { x: 10, z: 2 }), { x: 8, z: 0 }));
+  check('and the slide comes after the turn',
+    same(at({ x: 4, z: -1, angleDeg: 90, pivotX: 10, pivotZ: 0 }, { x: 12, z: 0 }), { x: 14, z: 1 }));
+
   if (label) console.log(label);
 }
 
@@ -395,6 +435,20 @@ const MUTATIONS = [
     'layout-plan.js', c => c.replace("const floorLayout = view === 'floor' && hasFloorLayout(saved, levelId);", 'const floorLayout = false;')],
   ['the half-floor\'s deck is left off the floor layout',
     'layout-plan.js', c => c.replace("floors: env.halfLevel === true && view === 'floor' ? of('floors') : only(of('floors')),", "floors: only(of('floors')),")],
+  ['a hologram brings its dimension strings',
+    'layout-plan.js', c => c.replace('dimensionEnv: hologram ? null : forConstruction({', 'dimensionEnv: forConstruction({')],
+  ['a hologram brings its notes',
+    'layout-plan.js', c => c.replace("noteEnv: hologram ? null : unless(", 'noteEnv: unless(')],
+  ['a hologram is drawn as the bare shell',
+    'layout-plan.js', c => c.replace('const shell = env.shell === true;', 'const shell = env.shell === true || env.hologram === true;')],
+  ['a hologram keeps its own holograms',
+    'drawing-format.js', c => c.replace('const { holograms: nested, ...flat } = source;', 'const flat = source;')],
+  ['a hologram of a newer Draft comes in',
+    'drawing-format.js', c => c.replace('if (!checkEnvelope(source).ok) return null;', '')],
+  ['a hologram turns the wrong way',
+    'drawing-format.js', c => c.replace('x: px + (Number(holo?.x) || 0) + dx * cos - dz * sin,', 'x: px + (Number(holo?.x) || 0) + dx * cos + dz * sin,')],
+  ['a hologram turns about the origin',
+    'drawing-format.js', c => c.replace('const px = Number(holo?.pivotX) || 0, pz = Number(holo?.pivotZ) || 0;', 'const px = 0, pz = 0;')],
   ['the warning repeats on every paint',
     'layout-plan.js', c => c.replace('warnedNoLayerViews = true;', 'warnedNoLayerViews = false;')],
 ];

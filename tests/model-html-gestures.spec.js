@@ -747,6 +747,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // page's INSERT UNDERLAY, which the table now records as present.
             'strip-trace', 'trace-upload', 'trace-later', 'trace-prev', 'trace-next',
             'trace-calibrate', 'trace-cal-apply', 'trace-go', 'trace-other', 'trace-cancel',
+            // HOLOGRAM (Movie, 8 Oct): on the same card, bring in another
+            // .draft to show under this one in blue. It draws nothing of
+            // this drawing's; the rows it lists are built per hologram.
+            'hologram-upload',
             'Save first', 'Discard', 'Cancel',   // the unsaved guard
             'Save', 'Cancel'].sort(),           // the SAVE AS card
           // THE PAGE ROW'S LIVE DESTINATIONS. Links, not buttons, so they
@@ -808,7 +812,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             'file-input', 'save-as-name', 'garage-lesson-off',
             // TRACE's picker and its card's three boxes: scale, width, and
             // CALIBRATE's real length.
-            'trace-file', 'trace-scale', 'trace-width', 'trace-cal-length'].sort(),
+            'trace-file', 'trace-scale', 'trace-width', 'trace-cal-length',
+            // and the hologram's .draft picker.
+            'hologram-file'].sort(),
           railKinds: ['seat'],
           // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
           // no unlabelled button: an entry this cannot name would arrive as
@@ -866,7 +872,7 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
         });
     });
 
-  test('INSERT UNDERLAY — the TRACE chip has its own picker; the drawing picker takes none',
+  test('INSERT UNDERLAY — the TRACE chip has its own pickers; the drawing picker takes none',
     async ({ page }) => {
       await seeded(page);
       // TWO PICKERS NOW, each taking only its own kind of file: OPEN reads
@@ -883,7 +889,13 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
         'TRACE takes photos and PDFs').toBe(true);
       expect(trace.includes('.draft') || trace.includes('json'),
         'and never a drawing').toBe(false);
-      expect(await page.locator('input[type=file]').count()).toBe(2);
+      // AND A THIRD (Movie, 8 Oct): the HOLOGRAM's, which takes a drawing --
+      // another .draft shown under this one -- and never a picture.
+      const hologram = await page.locator('#hologram-file').getAttribute('accept');
+      expect(hologram.includes('.draft'), 'HOLOGRAM takes a drawing').toBe(true);
+      expect(hologram.includes('.pdf') || hologram.includes('.png') || hologram.includes('image'),
+        'and never a picture').toBe(false);
+      expect(await page.locator('input[type=file]').count()).toBe(3);
     });
 
   test('T-SQUARE — pressing `t` does nothing the page or the file can show',
