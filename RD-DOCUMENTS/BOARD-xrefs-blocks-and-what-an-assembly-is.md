@@ -11,7 +11,7 @@
 > *"i think you save it as something other than DWG or the file is brought is
 > as an X-REF i think it iwas called"*
 
-Status: **CLOSED for this product — see the ruling at the foot. The fork it held is settled and recorded in the order. It holds a fork in
+Status: **CLOSED for this product — see the ruling at the foot. (One exception since 8 Oct, the HOLOGRAM of an existing house: see the foot of `BOARD-a-neighbourhood-is-its-own-drawing.md`.) The fork it held is settled and recorded in the order. It holds a fork in
 `ORDER-tiers-of-assembly.md` that has to be settled before that order's
 Stage 1.** Raised as a question, kept as a board because the answer changes a
 data model.

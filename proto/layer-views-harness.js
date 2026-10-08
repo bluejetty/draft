@@ -76,6 +76,10 @@ const UNGATED = {
   // The scanned PDF/image behind the drawing. It is a drafting aid on MODEL
   // and is deliberately absent from every sheet.
   UNDERLAY: 'the scan-in underlay is a drafting aid, never printed',
+  // Another .draft shown under this one (Movie, 8 Oct). It is a whole
+  // drawing with its own layers, painted level by level by drawPlan -- not a
+  // layer of THIS drawing for a view to gate.
+  HOLOGRAM: 'a hologram is another whole drawing, painted level by level, not a layer here',
 };
 
 let passed = 0;
