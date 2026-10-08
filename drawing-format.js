@@ -1503,6 +1503,16 @@ if (!window.DraftDrawingFormat) {
         .map(id => String(id ?? '').trim()).filter(Boolean))];
       const demo = Object.fromEntries(HOLOGRAM_DEMO_KINDS
         .map(kind => [kind, ids(holo?.demo?.[kind])]).filter(([, list]) => list.length));
+      // PART OF A WALL: a run along one wall, in feet from its start --
+      // the opening cut for an addition, with the rest of the wall standing.
+      const pieces = (Array.isArray(holo?.demo?.pieces) ? holo.demo.pieces : []).map(piece => {
+        const wallId = String(piece?.wallId ?? '').trim();
+        const a = num(piece?.from), b = num(piece?.to);
+        if (!wallId || a === null || b === null) return null;
+        const from = Math.max(0, Math.min(a, b)), to = Math.max(a, b);
+        return to - from > 1e-6 ? { wallId, from, to } : null;
+      }).filter(Boolean);
+      if (pieces.length) demo.pieces = pieces;
       return {
         id,
         name: String(holo?.name || '').trim(),

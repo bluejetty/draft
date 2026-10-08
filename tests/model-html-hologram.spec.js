@@ -298,3 +298,67 @@ test('EXISTING, DEMO and NEW each switch their part of the picture', async ({ pa
   const d = await saved(page);
   expect(JSON.stringify(d)).not.toContain('"existing":');
 });
+
+// ── DEMO PART (hologram PR 3) ───────────────────────────────────────────────
+//
+// Two clicks on one wall cut out the run between them -- the opening an
+// addition needs -- and the rest of the wall stands.
+const alongX = (wall, x) => wall.left + (x + 10) / 20 * (wall.right - wall.left);
+// The window's cut is the deepest blue on the plan; a dashed line is too thin
+// to count for much.
+const windowPixels = page => page.evaluate(() => {
+  const c = document.getElementById('plan');
+  const data = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  let n = 0;
+  for (let i = 0; i < data.length; i += 4) if (data[i + 2] - data[i] > 90) n += 1;
+  return n;
+});
+
+test('DEMO PART cuts the piece between two clicks out of a wall, to the inch', async ({ page }) => {
+  await open(page, withHologram());
+  const wall = await findWall(page);
+  const solid = await bluePixels(page);
+  await openCard(page);
+  await page.locator('[data-hologram-demo-part]').click();
+  await page.mouse.click(alongX(wall, 2), wall.y);
+  expect((await saved(page)).holograms[0].demo).toBeUndefined();
+  await page.mouse.click(alongX(wall, 6), wall.y);
+  const [piece] = (await saved(page)).holograms[0].demo.pieces;
+  expect(piece.wallId).toBe('w1');
+  expect(Math.abs(piece.from - 12)).toBeLessThan(0.25);
+  expect(Math.abs(piece.to - 16)).toBeLessThan(0.25);
+  expect(Math.round(piece.from * 12)).toBeCloseTo(piece.from * 12, 6);
+  expect(await bluePixels(page)).toBeLessThan(solid);
+  // The window is not in the piece, so it stays.
+  expect(await windowPixels(page)).toBeGreaterThan(500);
+  // A click inside the piece puts it back.
+  await page.mouse.click(alongX(wall, 4), wall.y);
+  expect((await saved(page)).holograms[0].demo).toBeUndefined();
+  await undo(page);
+  expect((await saved(page)).holograms[0].demo.pieces).toHaveLength(1);
+});
+
+// Is the window's solid cut drawn at its middle? Read off the screen there.
+const deepBlueAt = (page, x, y) => page.evaluate(([px, py]) => {
+  const c = document.getElementById('plan');
+  const r = c.getBoundingClientRect(), k = c.width / r.width;
+  const d = c.getContext('2d').getImageData(Math.round((px - r.left) * k), Math.round((py - r.top) * k), 1, 1).data;
+  return d[2] - d[0] > 90;
+}, [x, y]);
+
+test('a piece over a window takes the window out with it', async ({ page }) => {
+  await open(page, withHologram());
+  const wall = await findWall(page);
+  // Half a wall below the top face: inside the wall, clear of the dashes.
+  const mid = wall.y + 10;
+  expect(await deepBlueAt(page, alongX(wall, -5), mid)).toBe(true);
+  await openCard(page);
+  await page.locator('[data-hologram-demo-part]').click();
+  await page.mouse.click(alongX(wall, -8), wall.y);
+  await page.mouse.click(alongX(wall, -2), wall.y);
+  await page.keyboard.press('Escape');
+  expect((await saved(page)).holograms[0].demo.pieces).toHaveLength(1);
+  expect(await deepBlueAt(page, alongX(wall, -5), mid)).toBe(false);
+  await openCard(page);
+  await expect(page.locator('[data-hologram-demo]')).toHaveText('DEMO (1)');
+});
