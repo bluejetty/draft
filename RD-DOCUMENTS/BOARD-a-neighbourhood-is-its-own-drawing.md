@@ -235,7 +235,14 @@ What it is, as built (hologram PR 1, MODEL.html):
   `[` `]` turn it 15°, 1° with Shift), quarter turns, REFRESH and DELETE —
   each one UNDO.
 
-Still to come, in the order agreed with Movie: DEMO (mark parts of the
-hologram as coming out, drawn dashed) with EXISTING / DEMO / NEW switches;
-DEMO of part of a wall; the hologram on the LAYOUT sheets; and in elevations
-and 3D.
+**DEMO, as built (hologram PR 2).** Each hologram row has DEMO: click the
+hologram's walls, doors/windows or fixtures on the plan to mark them coming
+out (click again to keep one, Esc to stop; each one UNDO). They are kept as
+ids on the hologram (`demo: { walls, fenestrations, fixtures }`) -- nothing
+is deleted from the copy. A wall coming out takes its doors, windows and
+fixtures with it. Three switches on the card, kept per browser: EXISTING (the
+hologram less its DEMO), DEMO (those parts dashed) and NEW (this drawing's own
+work).
+
+Still to come, in the order agreed with Movie: DEMO of part of a wall; the
+hologram on the LAYOUT sheets; and in elevations and 3D.

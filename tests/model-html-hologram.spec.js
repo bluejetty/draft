@@ -181,3 +181,120 @@ test('a file that is not a drawing is refused, and nothing is added', async ({ p
   await expect(page.locator('body')).toContainText('is not a drawing this page can read');
   expect((await saved(page)).holograms).toBeUndefined();
 });
+
+// ── DEMO (Movie, 8 Oct) ─────────────────────────────────────────────────────
+//
+// "would it be possible to make stuff for 'demo' and redraw the new stuff
+// overtop (have both showing or turn on or off which ones you want to look
+// at) - the hologram will stay, but just parts will be 'removed' from the new
+// 'hologram' the DEMO parts".
+//
+// A one-wall existing house with a window in it, so the wall can be found on
+// screen by its own blue rather than by knowing the camera.
+const LEVELS = BLANK.levels;
+const ONE_WALL = { ...BLANK, levels: LEVELS,
+  walls: [{ id: 'w1', levelId: 3, view: 'plan', start: { x: -10, y: 0, z: 0 }, end: { x: 10, y: 0, z: 0 },
+    wallType: 'stud_2x6', refLine: 'center', baseHeight: 0, topHeight: 9 }],
+  fenestrations: [{ id: 'f1', wallId: 'w1', levelId: 3, view: 'plan', type: 'window', layer: 'A-GLAZ',
+    offset: 5, width: 3, sillHeight: 3, headHeight: 7, casement: 'single' }] };
+const withHologram = (extra = {}) => ({ ...BLANK, ...extra,
+  holograms: [{ id: 'hologram-1', name: 'existing', x: 0, z: 0, angleDeg: 0, pivotX: 0, pivotZ: 0,
+    source: ONE_WALL }] });
+// The hologram wall's screen row and its two ends, read off the blue.
+const findWall = page => page.evaluate(() => {
+  const c = document.getElementById('plan');
+  const data = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  const blue = (x, y) => { const i = (y * c.width + x) * 4; return data[i + 2] > 150 && data[i + 2] - data[i] > 50; };
+  const mid = Math.floor(c.width / 2);
+  let row = -1;
+  for (let y = 0; y < c.height && row < 0; y += 1) if (blue(mid, y)) row = y;
+  // The whole row, not a walk out from the middle: the window's cut is a
+  // different blue and would stop a walk at its jamb.
+  let left = c.width, right = 0;
+  for (let x = 0; x < c.width; x += 1) {
+    if (blue(x, row + 1)) { left = Math.min(left, x); right = Math.max(right, x); }
+  }
+  const r = c.getBoundingClientRect(), k = r.width / c.width;
+  return { y: r.top + (row + 2) * k, left: r.left + left * k, right: r.left + right * k };
+});
+// TRACE on opens the card; when it is already on, off and on again does.
+const openCard = async page => {
+  if (await chip(page).getAttribute('aria-pressed') === 'true') await chip(page).click();
+  await chip(page).click();
+};
+
+test('DEMO marks a wall coming out -- dashed, gone from the existing plan -- and a click again keeps it', async ({ page }) => {
+  await open(page, withHologram());
+  const wall = await findWall(page);
+  expect(wall.right - wall.left).toBeGreaterThan(100);
+  const solid = await bluePixels(page);
+  await openCard(page);
+  await page.locator('[data-hologram-demo]').click();
+  await expect(page.locator('#trace-ask')).toBeHidden();
+  // The middle of the wall, clear of the window at its quarter.
+  await page.mouse.click((wall.left + wall.right) / 2 + 20, wall.y);
+  let holo = (await saved(page)).holograms[0];
+  expect(holo.demo).toEqual({ walls: ['w1'] });
+  // Dashed now: far less blue than the solid wall it was.
+  const dashed = await bluePixels(page);
+  expect(dashed).toBeGreaterThan(20);
+  expect(dashed).toBeLessThan(solid * 0.8);
+  // Again: it stays after all.
+  await page.mouse.click((wall.left + wall.right) / 2 + 20, wall.y);
+  holo = (await saved(page)).holograms[0];
+  expect(holo.demo).toBeUndefined();
+  // And UNDO takes the second click back.
+  await undo(page);
+  expect((await saved(page)).holograms[0].demo).toEqual({ walls: ['w1'] });
+});
+
+test('DEMO on a window takes the window and leaves the wall', async ({ page }) => {
+  await open(page, withHologram());
+  const wall = await findWall(page);
+  await openCard(page);
+  await page.locator('[data-hologram-demo]').click();
+  // offset 5 of a 20 ft wall: a quarter of the way along.
+  await page.mouse.click(wall.left + (wall.right - wall.left) * 0.25, wall.y);
+  await page.keyboard.press('Escape');
+  expect((await saved(page)).holograms[0].demo).toEqual({ fenestrations: ['f1'] });
+  // Esc ended it: a click now marks nothing.
+  await page.mouse.click((wall.left + wall.right) / 2 + 20, wall.y);
+  expect((await saved(page)).holograms[0].demo).toEqual({ fenestrations: ['f1'] });
+  await openCard(page);
+  await expect(page.locator('[data-hologram-demo]')).toHaveText('DEMO (1)');
+});
+
+test('EXISTING, DEMO and NEW each switch their part of the picture', async ({ page }) => {
+  await open(page, withHologram({
+    walls: [{ id: 'mine', levelId: 3, view: 'plan', start: { x: -10, y: 0, z: 8 }, end: { x: 10, y: 0, z: 8 },
+      wallType: 'stud_2x6', refLine: 'center', baseHeight: 0, topHeight: 9 }],
+  }));
+  const own = () => page.evaluate(() => {
+    const c = document.getElementById('plan');
+    const data = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] > 150 && data[i + 1] > 150 && Math.abs(data[i] - data[i + 2]) < 25) n += 1;
+    }
+    return n;
+  });
+  const ownOn = await own();
+  const blueOn = await bluePixels(page);
+  await openCard(page);
+  const view = key => page.locator(`[data-hologram-view="${key}"]`);
+  for (const key of ['existing', 'demo', 'new']) await expect(view(key)).toHaveAttribute('aria-pressed', 'true');
+  await view('existing').click();
+  await expect(view('existing')).toHaveAttribute('aria-pressed', 'false');
+  expect(await bluePixels(page)).toBeLessThan(blueOn * 0.2);
+  await view('existing').click();
+  await view('new').click();
+  expect(await own()).toBeLessThan(ownOn * 0.5);
+  expect(await bluePixels(page)).toBeGreaterThan(blueOn * 0.8);
+  // Kept for this browser, not written into the file.
+  await page.goto('/MODEL.html?level=3');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await openCard(page);
+  await expect(view('new')).toHaveAttribute('aria-pressed', 'false');
+  const d = await saved(page);
+  expect(JSON.stringify(d)).not.toContain('"existing":');
+});

@@ -1494,6 +1494,15 @@ if (!window.DraftDrawingFormat) {
       if (!checkEnvelope(source).ok) return null;
       const { holograms: nested, ...flat } = source;
       const angle = num(holo?.angleDeg);
+      // DEMO (Movie, 8 Oct): "just parts will be 'removed' from the new
+      // 'hologram' the DEMO parts, and then the user can REDRAW the new stuff
+      // in that location". The ids of the hologram's own items coming out,
+      // by collection. Nothing is deleted from `source`; the list is what is
+      // drawn dashed, and what the existing plan leaves out.
+      const ids = list => [...new Set((Array.isArray(list) ? list : [])
+        .map(id => String(id ?? '').trim()).filter(Boolean))];
+      const demo = Object.fromEntries(HOLOGRAM_DEMO_KINDS
+        .map(kind => [kind, ids(holo?.demo?.[kind])]).filter(([, list]) => list.length));
       return {
         id,
         name: String(holo?.name || '').trim(),
@@ -1503,10 +1512,15 @@ if (!window.DraftDrawingFormat) {
         pivotX: num(holo?.pivotX) ?? 0,
         pivotZ: num(holo?.pivotZ) ?? 0,
         hidden: holo?.hidden === true,
+        ...(Object.keys(demo).length ? { demo } : {}),
         source: flat,
         layer: 'HOLOGRAM',
       };
     }).filter(Boolean);
+
+  // The hologram items a drafter can mark DEMO: walls, doors and windows,
+  // and fixtures.
+  const HOLOGRAM_DEMO_KINDS = Object.freeze(['walls', 'fenestrations', 'fixtures']);
 
   // Where a hologram's point lands on the drawing it is placed in.
   const hologramPoint = (holo, pt) => {
@@ -1518,6 +1532,15 @@ if (!window.DraftDrawingFormat) {
       x: px + (Number(holo?.x) || 0) + dx * cos - dz * sin,
       z: pz + (Number(holo?.z) || 0) + dx * sin + dz * cos,
     };
+  };
+
+  // And back: the hologram's own point under a point on this drawing.
+  const hologramLocal = (holo, pt) => {
+    const rad = (Number(holo?.angleDeg) || 0) * Math.PI / 180;
+    const cos = Math.cos(rad), sin = Math.sin(rad);
+    const pivot = { x: Number(holo?.pivotX) || 0, z: Number(holo?.pivotZ) || 0 };
+    const dx = pt.x - pivot.x - (Number(holo?.x) || 0), dz = pt.z - pivot.z - (Number(holo?.z) || 0);
+    return { x: pivot.x + dx * cos + dz * sin, z: pivot.z - dx * sin + dz * cos };
   };
 
   // Project information typed on the PROJECT tab: plain descriptive strings
@@ -2162,6 +2185,8 @@ if (!window.DraftDrawingFormat) {
     underlays,
     holograms,
     hologramPoint,
+    hologramLocal,
+    HOLOGRAM_DEMO_KINDS,
     projectInfo,
     zoneHeights,
     sectionTable,

@@ -374,6 +374,19 @@ function run(label) {
   check('and the slide comes after the turn',
     same(at({ x: 4, z: -1, angleDeg: 90, pivotX: 10, pivotZ: 0 }, { x: 12, z: 0 }), { x: 14, z: 1 }));
 
+  // DEMO (Movie, 8 Oct): the ids coming out, by collection, and nothing else.
+  const [marked] = F.holograms([{ id: 'h', source: SAVED,
+    demo: { walls: ['w1', ' w1 ', ''], fenestrations: [], stairs: ['s1'] } }]);
+  check('a DEMO list keeps each id once', marked && JSON.stringify(marked.demo) === '{"walls":["w1"]}',
+    JSON.stringify(marked && marked.demo));
+  check('a hologram with nothing marked carries no DEMO key',
+    F.holograms([{ id: 'h', source: SAVED, demo: { walls: [] } }])[0].demo === undefined);
+  // AND BACK: a click on this drawing finds the hologram's own point.
+  const placed = { x: 4, z: -1, angleDeg: 37, pivotX: 10, pivotZ: 3 };
+  const there = F.hologramPoint(placed, { x: 12.5, z: -6 });
+  check('hologramLocal undoes hologramPoint', same(F.hologramLocal(placed, there), { x: 12.5, z: -6 }),
+    JSON.stringify(F.hologramLocal(placed, there)));
+
   if (label) console.log(label);
 }
 
@@ -449,6 +462,16 @@ const MUTATIONS = [
     'drawing-format.js', c => c.replace('x: px + (Number(holo?.x) || 0) + dx * cos - dz * sin,', 'x: px + (Number(holo?.x) || 0) + dx * cos + dz * sin,')],
   ['a hologram turns about the origin',
     'drawing-format.js', c => c.replace('const px = Number(holo?.pivotX) || 0, pz = Number(holo?.pivotZ) || 0;', 'const px = 0, pz = 0;')],
+  ['a DEMO list keeps its duplicates',
+    'drawing-format.js', c => c.replace('const ids = list => [...new Set((Array.isArray(list) ? list : [])', 'const ids = list => [...((Array.isArray(list) ? list : [])')],
+  ['DEMO takes any collection it is handed',
+    'drawing-format.js', c => c.replace("const HOLOGRAM_DEMO_KINDS = Object.freeze(['walls', 'fenestrations', 'fixtures']);",
+      "const HOLOGRAM_DEMO_KINDS = Object.freeze(['walls', 'fenestrations', 'fixtures', 'stairs']);")],
+  ['an empty DEMO is kept',
+    'drawing-format.js', c => c.replace('...(Object.keys(demo).length ? { demo } : {}),', 'demo,')],
+  ['hologramLocal turns the wrong way back',
+    'drawing-format.js', c => c.replace('return { x: pivot.x + dx * cos + dz * sin, z: pivot.z - dx * sin + dz * cos };',
+      'return { x: pivot.x + dx * cos - dz * sin, z: pivot.z + dx * sin + dz * cos };')],
   ['the warning repeats on every paint',
     'layout-plan.js', c => c.replace('warnedNoLayerViews = true;', 'warnedNoLayerViews = false;')],
 ];
