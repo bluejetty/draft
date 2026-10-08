@@ -381,6 +381,16 @@ function run(label) {
     JSON.stringify(marked && marked.demo));
   check('a hologram with nothing marked carries no DEMO key',
     F.holograms([{ id: 'h', source: SAVED, demo: { walls: [] } }])[0].demo === undefined);
+  // PART OF A WALL: a run along one wall, ends in order, nothing empty.
+  const [cut] = F.holograms([{ id: 'h', source: SAVED, demo: { pieces: [
+    { wallId: 'w1', from: 8, to: 3 }, { wallId: 'w1', from: -2, to: 1 },
+    { wallId: 'w1', from: 4, to: 4 }, { wallId: '', from: 1, to: 2 }, { from: 1, to: 2 }] } }]);
+  check('a piece keeps its ends in order', cut && cut.demo.pieces[0].from === 3 && cut.demo.pieces[0].to === 8,
+    JSON.stringify(cut && cut.demo));
+  check('a piece starts no earlier than the wall', cut && cut.demo.pieces[1].from === 0);
+  check('an empty piece, or one on no wall, is dropped', cut && cut.demo.pieces.length === 2);
+  check('pieces alone are a DEMO', cut && !cut.demo.walls && Array.isArray(cut.demo.pieces));
+
   // AND BACK: a click on this drawing finds the hologram's own point.
   const placed = { x: 4, z: -1, angleDeg: 37, pivotX: 10, pivotZ: 3 };
   const there = F.hologramPoint(placed, { x: 12.5, z: -6 });
@@ -472,6 +482,12 @@ const MUTATIONS = [
   ['hologramLocal turns the wrong way back',
     'drawing-format.js', c => c.replace('return { x: pivot.x + dx * cos + dz * sin, z: pivot.z - dx * sin + dz * cos };',
       'return { x: pivot.x + dx * cos - dz * sin, z: pivot.z + dx * sin + dz * cos };')],
+  ['a piece keeps its ends as clicked',
+    'drawing-format.js', c => c.replace('const from = Math.max(0, Math.min(a, b)), to = Math.max(a, b);', 'const from = a, to = b;')],
+  ['an empty piece is kept',
+    'drawing-format.js', c => c.replace('return to - from > 1e-6 ? { wallId, from, to } : null;', 'return { wallId, from, to };')],
+  ['pieces are never saved',
+    'drawing-format.js', c => c.replace('if (pieces.length) demo.pieces = pieces;', '')],
   ['the warning repeats on every paint',
     'layout-plan.js', c => c.replace('warnedNoLayerViews = true;', 'warnedNoLayerViews = false;')],
 ];

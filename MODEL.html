@@ -3188,6 +3188,9 @@
   // what is coming out), DEMO (what is coming out, dashed -- the way a permit
   // set draws removals) and NEW (this drawing's own work). Kept per browser:
   // they are how the drafter is LOOKING, not something the file says.
+  // DEMO PART's state, up here because the painter shows its first click.
+  let hologramPartMode = false;
+  let hologramPartStart = null;    // { wallId, along, at } -- the first click
   const HOLOGRAM_SHOW_KEY = 'draft.hologram.show';
   const hologramShow = (() => {
     const all = { existing: true, demo: true, new: true };
@@ -3199,25 +3202,81 @@
   })();
   // A WALL COMING OUT TAKES ITS DOORS, WINDOWS AND FIXTURES WITH IT, so a
   // drafter demolishing a wall does not have to find each thing on it.
+  //
+  // PART OF A WALL (hologram PR 3): a wall with pieces cut out of it stands
+  // in the existing plan as the runs either side of them, each its own
+  // wall, and what sat in a piece -- a window where the addition opens up
+  // -- comes out with the piece. What sat on a run moves onto that run.
+  const wallRunsOutside = (wall, pieces) => {
+    const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+    const cuts = pieces.map(p => [Math.max(0, p.from), Math.min(len, p.to)])
+      .filter(([a, b]) => b > a).sort((m, n) => m[0] - n[0]);
+    const runs = [];
+    let at = 0;
+    cuts.forEach(([a, b]) => { if (a > at + 1e-6) runs.push([at, a]); at = Math.max(at, b); });
+    if (len > at + 1e-6) runs.push([at, len]);
+    return { len, runs, cuts };
+  };
+  const wallAlong = (wall, len, d) => ({
+    x: wall.start.x + (wall.end.x - wall.start.x) * d / len,
+    y: wall.start.y || 0,
+    z: wall.start.z + (wall.end.z - wall.start.z) * d / len,
+  });
   const hologramParts = holo => {
     const source = holo.source || {};
     const marked = kind => new Set(holo.demo?.[kind] || []);
     const walls = marked('walls');
-    const onDemoWall = item => walls.has(item?.wallId);
     const fens = marked('fenestrations');
     const fixes = marked('fixtures');
     const list = key => (Array.isArray(source[key]) ? source[key] : []);
+    const piecesOn = new Map();
+    (holo.demo?.pieces || []).forEach(piece => {
+      if (walls.has(piece.wallId)) return;            // the whole wall is out already
+      if (!piecesOn.has(piece.wallId)) piecesOn.set(piece.wallId, []);
+      piecesOn.get(piece.wallId).push(piece);
+    });
+    // Each cut wall: its runs as walls of their own, and the pieces.
+    const split = new Map();
+    list('walls').forEach(wall => {
+      const pieces = piecesOn.get(wall.id);
+      if (!pieces) return;
+      const { len, runs, cuts } = wallRunsOutside(wall, pieces);
+      if (!(len > 0)) return;
+      split.set(wall.id, {
+        len, cuts,
+        runs: runs.map(([a, b], i) => ({ from: a, wall: { ...wall, id: `${wall.id}~${i + 1}`,
+          start: wallAlong(wall, len, a), end: wallAlong(wall, len, b) } })),
+        pieces: cuts.map(([a, b]) => ({ ...wall, start: wallAlong(wall, len, a), end: wallAlong(wall, len, b) })),
+      });
+    });
+    // Something ON a wall: out with the wall, out with a piece it touches,
+    // or moved onto the run it sits on.
+    const placed = (item, halfFt) => {
+      if (walls.has(item?.wallId)) return null;
+      const cut = split.get(item?.wallId);
+      if (!cut) return item;
+      const centre = Number(item.offset) || 0;
+      const lo = centre - halfFt, hi = centre + halfFt;
+      if (cut.cuts.some(([a, b]) => lo < b && hi > a)) return null;
+      const run = cut.runs.find(r => lo >= r.from - 1e-6
+        && hi <= r.from + Math.hypot(r.wall.end.x - r.wall.start.x, r.wall.end.z - r.wall.start.z) + 1e-6);
+      return run ? { ...item, wallId: run.wall.id, offset: centre - run.from } : null;
+    };
+    const keepFen = list('fenestrations').map(f => (fens.has(f.id) ? null : placed(f, (Number(f.width) || 0) / 2)));
+    const keepFix = list('fixtures').map(f => (fixes.has(f.id) ? null : placed(f, 0)));
     return {
       existing: {
         ...source,
-        walls: list('walls').filter(wall => !walls.has(wall.id)),
-        fenestrations: list('fenestrations').filter(f => !fens.has(f.id) && !onDemoWall(f)),
-        fixtures: list('fixtures').filter(f => !fixes.has(f.id) && !onDemoWall(f)),
+        walls: list('walls').flatMap(wall => (walls.has(wall.id) ? []
+          : split.has(wall.id) ? split.get(wall.id).runs.map(run => run.wall) : [wall])),
+        fenestrations: keepFen.filter(Boolean),
+        fixtures: keepFix.filter(Boolean),
       },
       demo: {
-        walls: list('walls').filter(wall => walls.has(wall.id)),
-        fenestrations: list('fenestrations').filter(f => fens.has(f.id) || onDemoWall(f)),
-        fixtures: list('fixtures').filter(f => fixes.has(f.id) || onDemoWall(f)),
+        walls: list('walls').filter(wall => walls.has(wall.id))
+          .concat([...split.values()].flatMap(cut => cut.pieces)),
+        fenestrations: list('fenestrations').filter((f, i) => !keepFen[i]),
+        fixtures: list('fixtures').filter((f, i) => !keepFix[i]),
       },
     };
   };
@@ -3345,6 +3404,15 @@
     ctx.globalAlpha = HOLOGRAM_ALPHA;
     ctx.drawImage(hologramInk, 0, 0);
     ctx.restore();
+    // DEMO PART's first click, so the drafter can see where the cut starts.
+    if (hologramPartStart) {
+      const at = toS(hologramPartStart.at);
+      ctx.save();
+      ctx.strokeStyle = HOLOGRAM_BLUE;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(at.x, at.y, 6, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    }
   };
 
   const paintWalls = () => {
@@ -17247,10 +17315,21 @@
           'Click its walls, doors, windows and fixtures to mark them coming out', () => {
             traceAsk.hidden = true;
             hologramPicking = holo;
+            hologramPartMode = false;
+            hologramPartStart = null;
             if (!hologramShow.demo) setHologramShow('demo', true);
             sayOnStrip(`Click ${hologramNoun(holo)}'s walls, doors, windows or fixtures to mark them DEMO \u2014 click again to keep one, Esc when done.`);
             paint();
           }),
+        button('DEMO PART', 'hologramDemoPart', 'Click two points on one of its walls to cut that piece out', () => {
+          traceAsk.hidden = true;
+          hologramPicking = holo;
+          hologramPartMode = true;
+          hologramPartStart = null;
+          if (!hologramShow.demo) setHologramShow('demo', true);
+          sayOnStrip(`Click one end, then the other, of the piece of ${hologramNoun(holo)}'s wall coming out \u2014 click inside a piece to keep it, Esc when done.`);
+          paint();
+        }),
         button('MOVE', 'hologramMove', 'Drag it; [ and ] turn it, Esc leaves it', () => {
           traceAsk.hidden = true;
           traceMoving = { underlay: holo, from: null, before: null, hologram: true };
@@ -17333,7 +17412,61 @@
   // wall -- and flips it in or out of DEMO. One UNDO each. Esc stops.
   let hologramPicking = null;
   const hologramDemoCount = holo => window.DraftDrawingFormat.HOLOGRAM_DEMO_KINDS
-    .reduce((n, kind) => n + (holo.demo?.[kind]?.length || 0), 0);
+    .reduce((n, kind) => n + (holo.demo?.[kind]?.length || 0), holo.demo?.pieces?.length || 0);
+  // DEMO PART: two clicks on one hologram wall cut out the run between them.
+  // A click inside a run already cut puts it back. Feet along the wall from
+  // its start, to the inch.
+  const hologramWallAt = (holo, world) => {
+    const F = window.DraftDrawingFormat;
+    const local = F.hologramLocal(holo, world);
+    const viewId = activeViewId();
+    const source = holo.source || {};
+    const shapes = hologramShapes(holo, { walls: source.walls || [], fenestrations: [], fixtures: [] },
+      activeLevelId(), HOLOGRAM_VIEWS.has(viewId) ? viewId : 'plan');
+    const slack = 6 / view.scale;
+    let best = null;
+    shapes.forEach(shape => {
+      const [a, b] = shape.line;
+      const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
+      if (!(len > 0)) return;
+      const t = Math.max(0, Math.min(1, ((local.x - a.x) * dx + (local.z - a.z) * dz) / (len * len)));
+      const off = Math.hypot(local.x - a.x - t * dx, local.z - a.z - t * dz);
+      if (off <= shape.reach + slack && (!best || off < best.off)) {
+        best = { wallId: shape.id, along: Math.round(t * len * 12) / 12, len, off };
+      }
+    });
+    return best;
+  };
+  const hologramPartPress = (holo, world) => {
+    const hit = hologramWallAt(holo, world);
+    if (!hit) { sayOnStrip(`No wall of ${hologramNoun(holo)}'s there \u2014 Esc when done.`); return; }
+    const pieces = holo.demo?.pieces || [];
+    const inside = pieces.findIndex(p => p.wallId === hit.wallId && hit.along > p.from && hit.along < p.to);
+    const withPieces = next => {
+      const demo = { ...(holo.demo || {}) };
+      if (next.length) demo.pieces = next; else delete demo.pieces;
+      return Object.keys(demo).length ? demo : undefined;
+    };
+    if (!hologramPartStart && inside >= 0) {
+      hologramEdit(holo, { demo: withPieces(pieces.filter((p, i) => i !== inside)) },
+        'That piece of wall stays \u2014 Esc when done.');
+      return;
+    }
+    if (!hologramPartStart || hologramPartStart.wallId !== hit.wallId) {
+      hologramPartStart = { wallId: hit.wallId, along: hit.along, at: world };
+      sayOnStrip('Now click the other end of the piece coming out \u2014 on the same wall.');
+      paint();
+      return;
+    }
+    const from = Math.min(hologramPartStart.along, hit.along);
+    const to = Math.max(hologramPartStart.along, hit.along);
+    hologramPartStart = null;
+    if (!(to - from > 1e-6)) { sayOnStrip('Click the other end of the piece, not the same spot.'); paint(); return; }
+    const F = window.DraftFormatters || {};
+    const size = F.formatArchitecturalInches ? F.formatArchitecturalInches((to - from) * 12) : `${(to - from).toFixed(2)}'`;
+    hologramEdit(holo, { demo: withPieces([...pieces, { wallId: hit.wallId, from, to }]) },
+      `${size} of wall is DEMO \u2014 click another, or Esc when done.`);
+  };
   function setHologramShow(key, on) {
     hologramShow[key] = on;
     try { localStorage.setItem(HOLOGRAM_SHOW_KEY, JSON.stringify(hologramShow)); } catch { /* this tab only */ }
@@ -17383,6 +17516,7 @@
     swallowPickClick = true;
     const holo = hologramPicking;
     if (!holograms().includes(holo)) { hologramPicking = null; return; }
+    if (hologramPartMode) { hologramPartPress(holo, tracePoint(event)); return; }
     const shape = hologramPick(holo, tracePoint(event));
     if (shape) toggleHologramDemo(holo, shape);
     else sayOnStrip(`Nothing of ${hologramNoun(holo)}'s there on this level \u2014 Esc when done.`);
@@ -17396,6 +17530,8 @@
     if (!hologramPicking || event.key !== 'Escape') return;
     event.stopImmediatePropagation();
     hologramPicking = null;
+    hologramPartMode = false;
+    hologramPartStart = null;
     sayOnStrip('');
     paint();
   }, true);

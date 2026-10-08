@@ -244,5 +244,11 @@ fixtures with it. Three switches on the card, kept per browser: EXISTING (the
 hologram less its DEMO), DEMO (those parts dashed) and NEW (this drawing's own
 work).
 
-Still to come, in the order agreed with Movie: DEMO of part of a wall; the
-hologram on the LAYOUT sheets; and in elevations and 3D.
+**DEMO PART, as built (hologram PR 3).** Two clicks on one hologram wall cut
+out the run between them, to the inch (`demo.pieces: [{ wallId, from, to }]`,
+feet from the wall's start); a click inside a piece puts it back. The existing
+plan draws the runs either side as walls of their own; a door, window or
+fixture touching a piece comes out with it, and one on a run moves onto it.
+
+Still to come, in the order agreed with Movie: the hologram on the LAYOUT
+sheets; and in elevations and 3D.
