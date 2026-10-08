@@ -254,7 +254,11 @@ test('BUILD HOUSE raises the flag, and LAYOUT answers it with the full set', asy
   await waitForCompose(page);
   const layout = await savedLayout(page);
   const kinds = kind => layout.viewports.filter(viewport => viewport.kind === kind);
-  expect(kinds('plan').map(viewport => viewport.levelId).sort()).toEqual([1, 3, 5, 7]);
+  // The walls plans, and the floor layouts of both storeys (Movie, 8 Oct).
+  expect(kinds('plan').filter(viewport => viewport.view !== 'floor')
+    .map(viewport => viewport.levelId).sort()).toEqual([1, 3, 5, 7]);
+  expect(kinds('plan').filter(viewport => viewport.view === 'floor')
+    .map(viewport => viewport.levelId).sort()).toEqual([3, 5]);
   expect(kinds('elevation').map(viewport => viewport.elevId).sort())
     .toEqual(['E1', 'E2', 'E3', 'E4']);
 });
@@ -331,6 +335,22 @@ test("the set deals in Movie's order, under his names", async ({ page }) => {
   // The named sheets with no painter carry nothing.
   [1, 6, 8].forEach(sheet =>
     expect(layout.viewports.some(v => v.sheet === sheet), `sheet ${sheet}`).toBe(false));
+});
+
+// THE FLOOR LAYOUT SHEETS (Movie, 8 Oct): MAIN FLOOR and 2ND FLOOR carry
+// their storey's FLOOR view once it has a deck to draw.
+test('MAIN FLOOR and 2ND FLOOR carry each storey\'s floor layout', async ({ page }) => {
+  const d = twoStorey();
+  const deck = (id, levelId) => ({ id, levelId, view: 'floor', structure: 'framed', layer: 'A-FL',
+    points: [point(-10, -8), point(10, -8), point(10, 8), point(-10, 8)].map(p => ({ x: p.x, z: p.z })) });
+  d.floors = [...(d.floors || []).filter(f => f.view !== 'floor'), deck('deck-3', 3), deck('deck-5', 5)];
+  await openLayout(page, d);
+  await waitForCompose(page);
+  const layout = await savedLayout(page);
+  const titled = title => layout.sheets.findIndex(sheet => sheet.title === title) + 1;
+  const on = sheet => layout.viewports.filter(v => v.sheet === sheet);
+  expect(on(titled('MAIN FLOOR')).map(v => [v.levelId, v.view])).toEqual([[3, 'floor']]);
+  expect(on(titled('2ND FLOOR')).map(v => [v.levelId, v.view])).toEqual([[5, 'floor']]);
 });
 
 test('FOUNDATION and the basement plan are two sheets off one level', async ({ page }) => {

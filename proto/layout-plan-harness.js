@@ -263,15 +263,43 @@ function run(label) {
   check('the full floor\'s frame takes in its half-floor', box && box.maxX >= halfMaxX,
     `maxX ${box && box.maxX} < ${halfMaxX}`);
 
+  const w = (id, levelId, view, a, b, extra = {}) => ({ id, levelId, view, wallType: 'stud_2x6',
+    start: { x: a[0], y: 0, z: a[1] }, end: { x: b[0], y: 0, z: b[1] }, baseHeight: 0, topHeight: 8,
+    thickness: 0.5, ...extra });
+  // ── THE FLOOR LAYOUT SHEET (Movie, 8 Oct) ─────────────────────────────
+  //
+  // A storey's FLOOR view has floors, not walls, and used to draw nothing on
+  // a sheet. It draws its deck now, with the half-floor's deck lighter under.
+  const fl = (id, levelId, pts) => ({ id, levelId, view: 'floor', structure: 'framed',
+    points: pts.map(([x, z]) => ({ x, y: 0, z })) });
+  const floorHouse = {
+    ...SAVED,
+    levels: [{ id: 2, name: 'ENTRY', elev: -4 }, { id: 3, name: 'MAIN FL', elev: 0 }],
+    walls: [], floors: [fl('f3', 3, [[0, 0], [30, 0], [30, 20], [0, 20]])],
+    roofs: [], stairs: [], dimensions: [], notes: [], lines: [], shapes: [], fixtures: [],
+    beams: [], columns: [], roomTags: [], fenestrations: [], outlines: [], surfaceOpenings: [],
+  };
+  const LPF2 = full.win.DraftLayoutPlan;
+  const floorStrokes = saved => draw(full.win, 3, { saved, env: { view: 'floor' } }).strokes;
+  check('a floor layout with no walls is a floor layout', LPF2.hasFloorLayout(floorHouse, 3) === true
+    && LPF2.hasFloorLayout(floorHouse, 2) === false);
+  check('and its sheet draws the deck', floorStrokes(floorHouse).length > 0,
+    `${floorStrokes(floorHouse).length} strokes`);
+  const withEntry = { ...floorHouse, floors: [...floorHouse.floors, fl('f2', 2, [[30, 5], [40, 5], [40, 15], [30, 15]])] };
+  const entryStrokes = floorStrokes(withEntry);
+  check('the 0.5 floor\'s deck comes onto the 1 FLOOR layout, lighter',
+    entryStrokes.some(a => a < 1) && entryStrokes.some(a => a === 1),
+    entryStrokes.join(','));
+  check('and only on the floor layout, not the walls plan',
+    draw(full.win, 3, { saved: { ...withEntry, walls: [w(96001, 3, 'plan', [0, 0], [30, 0])] }, env: { view: 'plan' } })
+      .strokes.every(a => a === 1));
+
   // ── THE BASEMENT PLAN SHOWS ITS FOUNDATION, FADED (Movie, 7 Oct) ──────
   //
   // "show the FOUNDATION WALL (slightly lighter ...) (don't show footings,
   // but show where columns are located". The house's foundation walls and
   // posts come up faded under the basement's own walls; the garage's
   // foundation and its piles do not.
-  const w = (id, levelId, view, a, b, extra = {}) => ({ id, levelId, view, wallType: 'stud_2x6',
-    start: { x: a[0], y: 0, z: a[1] }, end: { x: b[0], y: 0, z: b[1] }, baseHeight: 0, topHeight: 8,
-    thickness: 0.5, ...extra });
   const basement = {
     ...SAVED,
     levels: [{ id: 1, name: 'FOUNDATION', elev: -8 }, { id: 3, name: 'MAIN FL', elev: 0 }],
@@ -363,6 +391,10 @@ const MUTATIONS = [
     'layout-plan.js', c => c.replace("? of('columns').filter(column => !/pile/i.test(String(column.footing || '')))", "? []")],
   ['the piles come along with the posts',
     'layout-plan.js', c => c.replace("? of('columns').filter(column => !/pile/i.test(String(column.footing || '')))", "? of('columns')")],
+  ['a floor layout with no walls draws nothing',
+    'layout-plan.js', c => c.replace("const floorLayout = view === 'floor' && hasFloorLayout(saved, levelId);", 'const floorLayout = false;')],
+  ['the half-floor\'s deck is left off the floor layout',
+    'layout-plan.js', c => c.replace("floors: env.halfLevel === true && view === 'floor' ? of('floors') : only(of('floors')),", "floors: only(of('floors')),")],
   ['the warning repeats on every paint',
     'layout-plan.js', c => c.replace('warnedNoLayerViews = true;', 'warnedNoLayerViews = false;')],
 ];
