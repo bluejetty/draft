@@ -78,8 +78,14 @@ jobs:
     # find without anything being stuck, which is the cancelled-not-red
     # failure the paragraph above was written about. The table was cut to six
     # rows to keep the cost down; the ceiling moved for the rest.
+    #
+    # AND AGAIN (8 Oct): 15 -> 20. #644 ran this job in about 14m30s, and
+    # #645 put the corner-garage repro back in proto/ -- one more file for
+    # every elevation row to repaint -- and was cancelled at 15m04s, all six
+    # playwright shards green beside it. Same cancelled-not-red failure, same
+    # remedy: the ceiling sits clear of the work, not on top of it.
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       # @v7 ON ALL THREE ACTIONS, AND THE MAJOR WAS CHECKED PER ACTION.
       #

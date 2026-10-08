@@ -31,7 +31,11 @@ const MUTATIONS = [
   ['the room is measured from the longest shared wall, not the front', 'traced-plans.js',
     c => c.replace('.sort((p, q) => (q.front - p.front) || (q.on - p.on))[0];', '.sort((p, q) => q.on - p.on)[0];')],
   ['the MOD BILEVEL room roof stops at the room', 'traced-plans.js',
-    c => c.replace('plan.overGarageRoof = P().joinLoops(P().squareOver(over.room), plan.upperLanding);', 'plan.overGarageRoof = over.room;')],
+    c => c.replace('plan.overGarageRoof = P().joinLoops(P().squareOver(over.room), plan.upperLanding)\n          || P().squareOver(over.room);', 'plan.overGarageRoof = over.room;')],
+  ['the room over the garage goes unroofed when the landing misses it', 'traced-plans.js',
+    c => c.replace('\n          || P().squareOver(over.room);', ';')],
+  ['a garage standing forward of the front leaves the entry centred', 'traced-plans.js',
+    c => c.replace('if (sideAt(lo)) { line = lo; mirror = true; }', 'if (false) { line = lo; mirror = true; }')],
   ['the bungalow + garage is roofed apart', 'traced-plans.js',
     c => c.replace('const one = unionLoops(H, Graw);', 'const one = null;')],
   ['the dropped garage shares the house roof', 'traced-plans.js',
@@ -228,6 +232,39 @@ const plan = (entryId, garage = GARAGE) => T.planFromTrace({
     man && along ? [+a.x.toFixed(1), +b.x.toFixed(1)] : JSON.stringify([a, b]), [0.7, 0.7]);
   const at = man && along ? a.z + Math.sign(b.z - a.z) * man.offsetFt : null;
   check('by the corner he marked', at != null && Math.abs(at - -0.2) < 2.5, true);
+}
+
+// ── A GARAGE STANDING FORWARD OF THE HOUSE CORNER (Movie, 8 Oct) ─────────
+// His second trace (saved 0053): the garage fills the house's front-left
+// notch and stands 42 ft forward of the front, so nothing of it covers the
+// front wall. "the 2 doors should strattle where the garage connects with
+// the house": the landing goes against the garage's side wall, street door
+// on the front, garage door on that side wall -- and the room over the
+// garage is roofed ("it had no roof on the room over the garage").
+{
+  const unturn = ([x, z]) => ({ x: -z, z: x });
+  const house = [[-3.97, -7.56], [-57.97, -7.56], [-57.97, -49.56], [26.03, -49.56], [26.03, -17.56],
+    [-3.97, -17.56]].map(unturn);
+  const garage = [[-3.97, -17.56], [68.03, -17.56], [68.03, 28.44], [-3.97, 28.44]].map(unturn);
+  const plan = T.planFromTrace({ entryId: 'modifiedBilevel', house, garage });
+  check('his forward garage builds', plan.error, undefined);
+  const xs = (plan.entry || []).map(p => p.x);
+  check('the landing stands against the garage\'s side wall', +Math.min(...xs).toFixed(2), 17.56);
+  const edges = (plan.entry || []).map((a, i, all) => [a, all[(i + 1) % all.length]]);
+  const man = (plan.entryOpenings || []).find(o => o.type === 'door' && o.widthFt === 2.5);
+  const [a, b] = man ? edges[man.edge] : [{}, {}];
+  check('its garage door is on that side wall', man ? [+a.x.toFixed(2), +b.x.toFixed(2)] : 'none', [17.56, 17.56]);
+  check('the room over the garage has a roof', !!(plan.overGarageRoof && plan.overGarageRoof.length >= 4), true);
+}
+// AND A ROOM THE LANDING NEVER REACHES STILL GETS ONE: a garage on the side,
+// well behind the front, leaves the landing centred on the front, so the
+// room's roof has nothing to join and is roofed on its own.
+{
+  const house = [[0, 0], [40, 0], [40, 30], [0, 30]].map(([x, z]) => ({ x, z }));
+  const garage = [[40, 0], [64, 0], [64, 20], [40, 20]].map(([x, z]) => ({ x, z }));
+  const plan = T.planFromTrace({ entryId: 'modifiedBilevel', house, garage });
+  check('a room the landing misses is still roofed',
+    plan.error ? plan.error : !!(plan.overGarageRoof && plan.overGarageRoof.length >= 4), true);
 }
 
 // ── REFUSALS ─────────────────────────────────────────────────────────────

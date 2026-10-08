@@ -335,7 +335,9 @@ test('DRAFTING: CONNECT AT CORNER asks, and Enter moves the garage wall over 1 f
   const d = await build(page);
   const g = garageOf(d);
   expect(g, 'the garage body').toBeTruthy();
-  expect([has(g, 11, 14), has(g, 11, 8), has(g, 10, 14)], 'the wall 1 ft over, the stub at the corner')
+  // OVER AWAY FROM THE GARAGE (Movie, 8 Oct): the stub lies on the house's
+  // front wall, which runs left from the corner.
+  expect([has(g, 9, 14), has(g, 9, 8), has(g, 10, 14)], 'the wall 1 ft over, the stub at the corner')
     .toEqual([true, true, false]);
 });
 
@@ -348,7 +350,7 @@ test('TOY: the garage wall is moved over 1 ft without asking', async ({ page }) 
   await expect(page.locator('#corner-join')).toBeHidden();
   const d = await build(page);
   const g = garageOf(d);
-  expect([has(g, 11, 14), has(g, 11, 8)]).toEqual([true, true]);
+  expect([has(g, 9, 14), has(g, 9, 8)]).toEqual([true, true]);
 });
 
 // LINED UP IS ALREADY FASTENED (Movie, 6 Oct): "if the wall connects at the
