@@ -2831,7 +2831,10 @@
     const thicknessFt = openingThicknessFt();
     // EVERY wall top a roof rests on -- entry and garage too -- once each,
     // not roof by roof (geometry-2d roofPlanWalls).
-    const tops = G.roofPlanWalls && drawing ? G.roofPlanWalls({ walls: drawing.walls || [],
+    // ROOF PLAN ONLY: roofs() is empty on any other level, and the tops of
+    // walls drawn there read as walls (a room over the garage showed up as a
+    // wall through the garage on MAIN FL).
+    const tops = G.roofPlanWalls && drawing && roofs().length ? G.roofPlanWalls({ walls: drawing.walls || [],
       outlines: drawing.outlines || [], floors: drawing.floors || [], levels: drawing.levels || [] }) : [];
     if (R.drawWallTops2D) {
       R.drawWallTops2D(ctx, toS, tops, {

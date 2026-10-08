@@ -259,6 +259,30 @@ if (!window.DraftTracedPlans) {
         { sillFt: w.sillFt, headFt: w.headFt })),
     ];
   };
+  // THE ENTRY'S DOOR INTO THE GARAGE GOES ON THE WALL THAT TOUCHES IT.
+  // Movie, 7 Oct, on a traced MOD BILEVEL with the garage round the corner
+  // from the entry: the premade's garage-half door then opened outdoors
+  // beside the garage, and he moved it onto the entry's wall shared with the
+  // garage, by the corner. The premade case -- garage beside the entry on
+  // the same face -- already has it there, and is left alone.
+  const entryGarageDoor = (entry, openings, garage) => {
+    if (!garage || !entry || !Array.isArray(openings)) return openings;
+    const edges = edgesOf(entry);
+    const shared = edges.filter(e => e.len >= MAN_DOOR_WIDTH_FT + 1 && onOther(e, garage));
+    if (!shared.length) return openings;
+    const man = openings.findIndex(o => o.type === 'door'
+      && Math.abs(o.widthFt - MAN_DOOR_WIDTH_FT) < TOL);
+    if (man < 0 || shared.some(e => e.index === openings[man].edge)) return openings;
+    const e = shared.sort((p, q) => q.len - p.len)[0];
+    // By the corner he marked: the end of the shared wall that meets the
+    // wall the premade put the door on.
+    const was = edges.find(x => x.index === openings[man].edge);
+    const nearB = was && (same(e.b, was.a) || same(e.b, was.b));
+    const inset = MAN_DOOR_WIDTH_FT / 2 + 0.5;
+    const offsetFt = nearB ? e.len - inset : inset;
+    return openings.map((o, i) => (i === man ? { ...o, edge: e.index, offsetFt } : o));
+  };
+
   // THE GARAGE'S OWN DOORS: the overhead door where auto-windows.js puts it,
   // and a man door on the back or the shortest other free wall.
   const garageDoors = (loop, house) => {
@@ -491,7 +515,7 @@ if (!window.DraftTracedPlans) {
         upperOpenings: null,
         entry,
         entryDeck: c.loop(base.entryDeck),
-        entryOpenings: base.entryOpenings,
+        entryOpenings: entryGarageDoor(entry, base.entryOpenings, Graw),
         stairs: c.stairs(base.stairs),
         framing: c.framing(base.framing),
         upperLanding: c.loop(base.upperLanding),
