@@ -250,5 +250,13 @@ feet from the wall's start); a click inside a piece puts it back. The existing
 plan draws the runs either side as walls of their own; a door, window or
 fixture touching a piece comes out with it, and one on a run moves onto it.
 
-Still to come, in the order agreed with Movie: the hologram on the LAYOUT
-sheets; and in elevations and 3D.
+**ON THE LAYOUT SHEETS, as built (hologram PR 4).** What is drawn from a
+hologram moved out of MODEL.html into `hologram.js`, shared by both pages.
+A plan viewport draws the hologram under the sheet's own work and frames
+the existing house with it; with a plan viewport selected, a HOLOGRAM
+section switches its EXISTING, DEMO and NEW, saved on the viewport (only an
+OFF is written) -- so one drawing deals an existing plan, a demo plan and a
+new plan.
+
+Still to come, in the order agreed with Movie: the hologram in elevations
+and 3D.
