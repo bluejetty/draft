@@ -127,3 +127,21 @@ test('the 1 FLOOR layout shows the 0.5 floor\'s floor area, lighter', async ({ p
   await load(page, { ...base, floors: [...base.floors, entryFloor] }, '3&view=floor');
   expect(await paper()).toBeGreaterThan(without + 500);
 });
+
+// THE ROOF PLAN'S WALL TOPS STAY ON THE ROOF PLAN (Movie, 7 Oct): "a ROOM
+// was created in the garage under the 2nd storey room, but shouldn't be" --
+// the top of the room-over-garage's end wall was drawn on MAIN FL's plan.
+test('MAIN FL does not draw the walls of the room over the garage', async ({ page }) => {
+  const CORNER = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'proto', 'repro-movie-corner-garage.draft'), 'utf8'));
+  const ink = () => page.evaluate(() => {
+    const c = document.getElementById('plan');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] < 300) n += 1;
+    return n;
+  });
+  await load(page, { ...CORNER, walls: CORNER.walls.filter(w => w.levelId !== 4) }, '3&view=plan');
+  const without = await ink();
+  await load(page, CORNER, '3&view=plan');
+  expect(Math.abs(await ink() - without)).toBeLessThan(40);
+});

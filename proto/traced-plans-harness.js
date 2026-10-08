@@ -54,6 +54,10 @@ const MUTATIONS = [
       'const over = base.overGarage ? roomOverGarage(Graw, H) : null;')],
   ['the overhead door takes the longest run, not the street', 'traced-plans.js',
     c => c.replace('manDoorFaceIndex: joint ? joint.index : null,', 'manDoorFaceIndex: null,')],
+  ['the entry\'s garage door stays where the premade puts it', 'traced-plans.js',
+    c => c.replace('entryOpenings: entryGarageDoor(entry, base.entryOpenings, Graw),', 'entryOpenings: base.entryOpenings,')],
+  ['the entry\'s garage door goes to the far end of the shared wall', 'traced-plans.js',
+    c => c.replace('const offsetFt = nearB ? e.len - inset : inset;', 'const offsetFt = nearB ? inset : e.len - inset;')],
   ['no front door', 'traced-plans.js',
     c => c.replace('if (spot) {\n        const centre', 'if (false) {\n        const centre')],
   ['the shared stretch is not split out, so a wall is raised twice', 'traced-plans.js',
@@ -198,6 +202,32 @@ const plan = (entryId, garage = GARAGE) => T.planFromTrace({
   check('its room runs from the house front 18 ft toward the door, beside the house too',
     plan.overGarage && box(plan.overGarage), [10, 10, 40, 38]);
   check('and the rest keeps the lower roof', plan.garageRoof && box(plan.garageRoof), [10, 38, 40, 46]);
+}
+
+// ── THE ENTRY'S DOOR INTO A GARAGE ROUND THE CORNER (Movie, 7 Oct) ─────────
+// His own trace: the garage wraps the house's front corner, so the entry's
+// garage-half wall faces outdoors and its shared wall faces the garage. The
+// door into the garage goes on the shared wall, by the corner he marked.
+{
+  // Read off his saved file, which HOUSE ROTATE had turned three times; a
+  // quarter turn back puts his front, where the entry is, at +z again.
+  const unturn = ([x, z]) => ({ x: -z, z: x });
+  const house = [[-0.2, -0.7], [-0.2, -21.7], [-29.2, -21.7], [-29.2, -33.7], [-52.2, -33.7],
+    [-52.2, -54.7], [-75.2, -54.7], [-75.2, 21.3], [-19.2, 21.3], [-19.2, -0.7]].map(unturn);
+  const garage = [[-0.2, -1.7], [28.8, -1.7], [28.8, 47.3], [-20.2, 47.3], [-20.2, 21.3],
+    [-19.2, 21.3], [-19.2, -0.7], [-0.2, -0.7]].map(unturn);
+  const plan = T.planFromTrace({ entryId: 'modifiedBilevel', house, garage });
+  check('Movie\'s corner garage builds', plan.error, undefined);
+  const edges = (plan.entry || []).map((a, i, all) => [a, all[(i + 1) % all.length]]);
+  const man = (plan.entryOpenings || []).find(o => o.type === 'door' && o.widthFt === 2.5);
+  const [a, b] = man ? edges[man.edge] : [{}, {}];
+  // His shared wall, z = -0.7 in the file, is x = 0.7 here; the corner he
+  // marked, x = -0.2 in the file, is z = -0.2.
+  const along = a && b && Math.abs(a.x - b.x) < 1e-6;
+  check('the entry\'s garage door is on the wall it shares with the garage',
+    man && along ? [+a.x.toFixed(1), +b.x.toFixed(1)] : JSON.stringify([a, b]), [0.7, 0.7]);
+  const at = man && along ? a.z + Math.sign(b.z - a.z) * man.offsetFt : null;
+  check('by the corner he marked', at != null && Math.abs(at - -0.2) < 2.5, true);
 }
 
 // ── REFUSALS ─────────────────────────────────────────────────────────────
