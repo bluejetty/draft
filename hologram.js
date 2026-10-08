@@ -273,7 +273,141 @@
       .map(pt => F.hologramPoint(holo, pt)));
   };
 
+  // ── ELEVATIONS AND SECTIONS (hologram PR 5) ──────────────────────────────
+  //
+  // The cut painter reads a drawing in its own feet, so the hologram goes in
+  // MOVED: every point of the copy (anything carrying an x and a z) through
+  // its placement. Lengths along a wall -- an opening's offset, a piece's
+  // run -- do not move, and a turn does not change them.
+  const placed = (holo, value) => {
+    const F = window.DraftDrawingFormat;
+    const walk = v => {
+      if (Array.isArray(v)) return v.map(walk);
+      if (!v || typeof v !== 'object') return v;
+      const out = {};
+      Object.keys(v).forEach(key => { out[key] = walk(v[key]); });
+      if (Number.isFinite(v.x) && Number.isFinite(v.z)) {
+        const p = F.hologramPoint(holo, v);
+        out.x = p.x; out.z = p.z;
+      }
+      return out;
+    };
+    return walk(value);
+  };
+  // A raster dash: a fine checker knocked out of a pass breaks every line in
+  // it, whatever its slope -- the cut painter strokes solid, and DEMO reads
+  // dashed on every other drawing of the set.
+  let checker = null;
+  const dashPattern = ctx => {
+    if (!checker) {
+      checker = document.createElement('canvas');
+      checker.width = checker.height = 8;
+      const c = checker.getContext('2d');
+      c.fillStyle = '#000';
+      c.fillRect(0, 0, 4, 4);
+      c.fillRect(4, 4, 4, 4);
+    }
+    return ctx.createPattern(checker, 'repeat');
+  };
+  // Paint every shown hologram of `saved` into an elevation or section, in
+  // that drawing's frame -- called from the cut painter's `opts.underlay`,
+  // after its ground and before its own lines, so the new work is drawn over
+  // the existing house and hides what stands behind it. env:
+  // { show: { existing, demo }, paperColor }.
+  const paintCut = (ctx, w, h, cut, saved, frame, env = {}) => {
+    const list = shown(saved);
+    const CV = window.DraftCutView;
+    const CE = window.DraftCutViewEnv;
+    const F = window.DraftDrawingFormat;
+    if (!list.length || !CV || !CE || !F || !frame || !cut) return false;
+    const show = { existing: true, demo: true, ...(env.show || {}) };
+    if (!show.existing && !show.demo) return false;
+    const { ink: inkCanvas, mask: maskCanvas } = canvasesFor(ctx.canvas);
+    const W = inkCanvas.width, H = inkCanvas.height;
+    const ink = inkCanvas.getContext('2d');
+    const extra = maskCanvas.getContext('2d');
+    const clear = c => {
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      c.globalCompositeOperation = 'source-over';
+      c.clearRect(0, 0, W, H);
+      c.setTransform(ctx.getTransform());
+    };
+    clear(ink);
+    const paperColor = env.paperColor || '#ffffff';
+    // In the drawing's own inks, so a night page gets night faces.
+    const pass = { hologram: true, frame, paperColor, ...(env.colors ? { colors: env.colors } : {}) };
+    let drew = false;
+    list.forEach(holo => {
+      try {
+        const split = parts(holo);
+        const source = holo.source || {};
+        const levels = F.levels ? F.levels(source.levels) : (source.levels || []);
+        if (show.existing) {
+          const cutEnv = CE.buildCutViewEnv(placed(holo, split.existing), levels);
+          if (cutEnv) { CV.drawCutView(cutEnv, ink, w, h, cut, pass); drew = true; }
+        }
+        const out = split.demo;
+        if (show.demo && (out.walls.length || out.fenestrations.length)) {
+          // The demo parts alone, dashed, then laid onto the ink.
+          clear(extra);
+          const demoEnv = CE.buildCutViewEnv(placed(holo, { ...source, walls: out.walls,
+            fenestrations: out.fenestrations, fixtures: out.fixtures, roofs: [], floors: [] }), levels);
+          if (demoEnv) {
+            CV.drawCutView(demoEnv, extra, w, h, cut, pass);
+            extra.setTransform(1, 0, 0, 1, 0, 0);
+            extra.globalCompositeOperation = 'destination-out';
+            extra.fillStyle = dashPattern(extra);
+            extra.fillRect(0, 0, W, H);
+            extra.globalCompositeOperation = 'source-over';
+            ink.save();
+            ink.setTransform(1, 0, 0, 1, 0, 0);
+            ink.drawImage(maskCanvas, 0, 0);
+            ink.restore();
+            drew = true;
+          }
+        }
+      } catch (error) {
+        console.warn(`hologram ${holo.name || holo.id} could not be drawn in ${cut.name}`, error);
+      }
+    });
+    if (!drew) return false;
+    // Tint, through the mask, exactly as the plan does.
+    ink.setTransform(1, 0, 0, 1, 0, 0);
+    extra.setTransform(1, 0, 0, 1, 0, 0);
+    extra.globalCompositeOperation = 'copy';
+    extra.drawImage(inkCanvas, 0, 0);
+    extra.globalCompositeOperation = 'source-over';
+    ink.globalCompositeOperation = 'screen';
+    ink.fillStyle = BLUE;
+    ink.fillRect(0, 0, W, H);
+    ink.globalCompositeOperation = 'multiply';
+    ink.fillStyle = PALE;
+    ink.fillRect(0, 0, W, H);
+    ink.globalCompositeOperation = 'destination-in';
+    ink.drawImage(maskCanvas, 0, 0);
+    ink.globalCompositeOperation = 'source-over';
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha *= ALPHA;
+    ctx.drawImage(inkCanvas, 0, 0);
+    ctx.restore();
+    return true;
+  };
+
+  // The cut painter's options for a drawing that may carry a hologram: its
+  // `underlay` and, with NEW off, `underlayOnly`. Nothing at all when there
+  // is no hologram to show, so a plain drawing paints exactly as before.
+  const cutOptions = (ctx, w, h, cut, saved, env = {}) => {
+    if (!shown(saved).length) return {};
+    const show = { existing: true, demo: true, new: true, ...(env.show || {}) };
+    return {
+      underlay: frame => paintCut(ctx, w, h, cut, saved, frame, { ...env, show }),
+      ...(show.new ? {} : { underlayOnly: true }),
+    };
+  };
+
   window.DraftHologram = Object.freeze({
     BLUE, PALE, ALPHA, VIEWS, planViewFor, parts, shapes, wallThicknessFt, paint, framePoints,
+    placed, paintCut, cutOptions,
   });
 })();

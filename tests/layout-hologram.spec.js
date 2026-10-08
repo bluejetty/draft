@@ -78,7 +78,8 @@ const ink = page => page.evaluate(() => {
   const d = c.getContext('2d').getImageData(x0, y0, w, h).data;
   let blue = 0, black = 0;
   for (let i = 0; i < d.length; i += 4) {
-    if (d[i + 2] > 150 && d[i + 2] - d[i] > 50) blue += 1;
+    // Blue: the hologram's lines, and its pale faces on white paper.
+    if (d[i + 2] > 150 && d[i + 2] - d[i] > 25) blue += 1;
     if (d[i] < 90 && d[i + 1] < 90 && d[i + 2] < 90 && d[i + 3] > 200) black += 1;
   }
   return { blue, black };
@@ -143,4 +144,28 @@ test('no hologram, no section', async ({ page }) => {
   await clickSheet(page, 8.5, 5.5);
   await expect(page.locator('[data-hologram-section]')).toBeHidden();
   expect((await ink(page)).blue).toBeLessThan(50);
+});
+
+// ── ELEVATION VIEWPORTS (hologram PR 5) ─────────────────────────────────────
+// An elevation wants the whole level stack the Model Space writes.
+const STACK = [{ id: 8, name: 'SITE', elev: 0 }, { id: 7, name: 'ROOF', elev: 0 },
+  { id: 5, name: '2ND FL', elev: 9 }, { id: 3, name: 'MAIN FL', elev: 0 }, { id: 1, name: 'FOUNDATION', elev: -8 }];
+const onMain = list => list.map(item => ({ ...item, levelId: 3 }));
+test('an elevation viewport shows the existing house, and its switches are its own', async ({ page }) => {
+  const saved = drawing();
+  saved.levels = STACK;
+  saved.walls = onMain(saved.walls);
+  saved.holograms[0].source = { ...saved.holograms[0].source, levels: STACK,
+    walls: onMain(saved.holograms[0].source.walls) };
+  saved.layout = { paperKey: '11x17', orientation: 'landscape', auto: false, nextViewportId: 2,
+    viewports: [{ id: 1, kind: 'elevation', elevId: 'E1', pif: 0.25, xIn: 8.5, yIn: 5.5, sheet: 1 }] };
+  await openLayout(page, saved);
+  const on = await ink(page);
+  expect(on.blue).toBeGreaterThan(300);
+  await clickSheet(page, 8.5, 5.5);
+  await expect(page.locator('[data-hologram-section]')).toBeVisible();
+  await withLayoutSave(page, () => page.locator('[data-layout-hologram="existing"]').click());
+  await withLayoutSave(page, () => page.locator('[data-layout-hologram="demo"]').click());
+  expect((await ink(page)).blue).toBeLessThan(on.blue * 0.3);
+  expect((await savedDrawing(page)).layout.viewports[0].hologram).toEqual({ existing: false, demo: false });
 });

@@ -1703,6 +1703,7 @@
      program draw with, so another drawing can be shown under this one. -->
 <script src="./plan-composition.js"></script>
 <script src="./layout-plan.js"></script>
+<script src="./cut-view-env.js"></script>
 <script src="./hologram.js"></script>
 
 <script>
@@ -3201,6 +3202,8 @@
     return all;
   })();
   const hologramShapes = (holo, items, levelId, view) => H().shapes(holo, items, levelId, view);
+  const hologramWallsPlaced = () => (H() ? holograms().filter(holo => !holo.hidden)
+    .flatMap(holo => H().placed(holo, H().parts(holo).existing.walls || [])) : []);
 
   const paintHolograms = () => {
     if (!H()) return;
@@ -3944,7 +3947,10 @@
       autoElevCache = {
         epoch: modelEpoch,
         cuts: window.DraftCutMarks.autoElevationCuts({
-          walls: drawing?.walls || [],
+          // A SHOWN HOLOGRAM'S WALLS TOO, where they stand: E1 to E4 stand
+          // round the existing house and the addition together, so the
+          // elevation takes in both (hologram PR 5).
+          walls: (drawing?.walls || []).concat(hologramWallsPlaced()),
           dimensions: drawing?.dimensions || [],
           elevationMarkOffsets: drawing?.elevationMarkOffsets || {},
           autoElevations: structureStandards().autoElevations,
@@ -4665,6 +4671,11 @@
         // a drafter working at night still hands a client a white drawing.
         window.DraftCutView.drawCutView(cutEnv(), ctx, cssW, cssH, cut,
           { margins: rails, colors: window.DraftCutView.inksFromSkin(skin),
+            // THE EXISTING HOUSE UNDER IT (hologram PR 5): called back with
+            // the frame, before this drawing's own lines.
+            ...(window.DraftHologram ? window.DraftHologram.cutOptions(ctx, cssW, cssH, cut, drawing,
+              { show: hologramShow, paperColor: skin['surface-page'],
+                colors: window.DraftCutView.inksFromSkin(skin) }) : {}),
             // The frame comes back so a press can be read in the view's feet,
             // and the line being drawn and the mark held are shown in place.
             onFrame: f => { elevFrame = f; },
@@ -4675,6 +4686,7 @@
               : (activeTool === 'annotation' && elevPointerTip && elevCursor)
                 ? { kind: 'note', at: elevCursor, tip: elevPointerTip, text: '', end: noteEnd }
                 : null });
+
         // THE MASK CLIMBS BOTTOM TO TOP, dotted underground first, footing to
         // ridge -- the order a house is actually built in, which is why the
         // elevation is the view this plays on. Self-driving: each frame asks

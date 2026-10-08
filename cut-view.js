@@ -1961,16 +1961,42 @@ if (!window.DraftCutView) {
     ctx.restore();
   }
 
+  // ── A HOLOGRAM'S PASS (`opts.hologram`, with `opts.frame`) ──────────────
+  //
+  // Another .draft shown under this one (Movie, 8 Oct: the existing house on
+  // a lot getting an addition), drawn in the SAME frame as the drawing it
+  // sits under: `opts.frame` is that drawing's own frame as `onFrame` handed
+  // it out, and the pass maps its feet through it so a wall of the existing
+  // house lands where it stands. The pass draws the BUILDING only -- no
+  // ground, no caption, no datum lines, no grade, no marks -- because the
+  // drawing under it already drew those, and a second set tinted blue would
+  // read as a second grade.
+  const pinnedFrame = opts => (opts && opts.frame && Number.isFinite(opts.frame.pxPerFt)
+    ? opts.frame : null);
+  const hologramPass = opts => Boolean(opts && opts.hologram);
+  // AND THE OTHER HALF: a drawing that HAS a hologram hands `opts.underlay`,
+  // called once with its frame -- after the ground, before a single line of
+  // its own -- so the existing house goes down UNDER it and every face of
+  // the new work hides what stands behind it, as it would on site.
+  // `opts.underlayOnly` stops there: NEW switched off, the frame kept.
+  const runUnderlay = (opts, frame) => {
+    if (!opts || typeof opts.underlay !== 'function' || hologramPass(opts)) return false;
+    opts.underlay(frame);
+    return Boolean(opts.underlayOnly);
+  };
+
   function drawCutView(env, ctx, w, h, cut, opts) {
     const fit = externalFit(opts);
     const C = inksFor(opts);
     const ink = a => weight(C.ink, a);
-    ctx.fillStyle = C.ground;
-    ctx.fillRect(0, 0, w, h);
+    if (!hologramPass(opts)) {
+      ctx.fillStyle = C.ground;
+      ctx.fillRect(0, 0, w, h);
+    }
     const stack = sectionLevelStack(env);
     const axis = cutAxis(cut);
     const header = (label) => {
-      if (fit) return;   // the sheet captions its viewports itself
+      if (fit || hologramPass(opts)) return;   // the sheet captions its viewports itself
       ctx.fillStyle = ink(0.55);
       ctx.font = "600 10px 'Barlow Condensed', system-ui, sans-serif";
       ctx.textAlign = 'left'; ctx.textBaseline = 'top';
@@ -1981,6 +2007,8 @@ if (!window.DraftCutView) {
     if (!crossings.length) {
       // Standing outside the model looking at it: an elevation, not a section.
       if (drawElevationView(env, ctx, w, h, cut, stack, axis, header, opts)) return;
+      // A hologram with nothing facing this way simply draws nothing.
+      if (hologramPass(opts)) return;
       header(cut.name);
       ctx.fillStyle = ink(0.55);
       ctx.font = "600 13px 'Barlow Condensed', system-ui, sans-serif";
@@ -2028,16 +2056,25 @@ if (!window.DraftCutView) {
         ...roofSamples.filter(s => s.elev != null).map(s => s.elev))
         + SKY_ABOVE_ROOF_FT;
     const yBottom = fit?.extents ? fit.extents.yBottom : stack.foundation.footingBottom - 2;
+    // A PINNED pass keeps no margins of its own: it draws in the frame it
+    // was handed, and clipping to margins that frame never had cut the
+    // existing house's walls off a sheet viewport.
+    const pin = pinnedFrame(opts);
     const mg = screenMargins(opts, w);
-    const marginL = fit ? 0 : mg.left, marginR = fit ? 0 : mg.right,
-      marginT = fit ? 0 : mg.top, marginB = fit ? 0 : mg.bottom;
-    const pxPerFt = fit ? fit.pxPerFt : Math.max(2, Math.min(
+    const marginL = fit || pin ? 0 : mg.left, marginR = fit || pin ? 0 : mg.right,
+      marginT = fit || pin ? 0 : mg.top, marginB = fit || pin ? 0 : mg.bottom;
+    const pxPerFt = pin ? pin.pxPerFt : fit ? fit.pxPerFt : Math.max(2, Math.min(
       (w - marginL - marginR) / Math.max(uMax - uMin, 4),
       (h - marginT - marginB) / Math.max(yTop - yBottom, 8)));
-    const x0 = marginL + ((w - marginL - marginR) - (uMax - uMin) * pxPerFt) / 2;
-    const y0 = marginT + ((h - marginT - marginB) - (yTop - yBottom) * pxPerFt) / 2;
+    // PINNED: the same foot lands on the same pixel as in the pinned frame,
+    // whatever this drawing's own extents would have chosen.
+    const x0 = pin ? pin.x0 + (uMin - pin.uMin) * pxPerFt
+      : marginL + ((w - marginL - marginR) - (uMax - uMin) * pxPerFt) / 2;
+    const y0 = pin ? pin.y0 + (pin.yTop - yTop) * pxPerFt
+      : marginT + ((h - marginT - marginB) - (yTop - yBottom) * pxPerFt) / 2;
     const X = u => x0 + (u - uMin) * pxPerFt;
     const Y = e => y0 + (yTop - e) * pxPerFt;
+    if (runUnderlay(opts, { x0, y0, pxPerFt, uMin, yTop })) return;
 
     const INK = C.line;
     header(`${cut.name} — GENERATED SECTION · ${env.ftIn(uMax - uMin)} CUT`);
@@ -2045,6 +2082,7 @@ if (!window.DraftCutView) {
     // Elevation marks down the left margin, on the level-card datum.
     const datum = env.elevationDatum();
     const mark = (elevFt, label) => {
+      if (hologramPass(opts)) return;
       ctx.strokeStyle = ink(0.25); ctx.lineWidth = 0.75;
       ctx.beginPath();
       ctx.moveTo(marginL - 18, Y(elevFt)); ctx.lineTo(w - marginR, Y(elevFt));
@@ -2523,6 +2561,7 @@ if (!window.DraftCutView) {
       });
       ctx.stroke();
     }
+    if (hologramPass(opts)) return;
     paintElevationMarks(env, ctx, cut, X, Y, pxPerFt, C, opts,
       { x0, y0, pxPerFt, uMin, yTop });
   }
@@ -2991,16 +3030,23 @@ if (!window.DraftCutView) {
     // figure this then overran would be a drawing off the edge of a sheet.
     const yFit = fit?.extents ? fit.extents.yBottom
       : fdn.footingBottom - GROUND_UNDER_FOOTING_FT;
+    // A PINNED pass keeps no margins of its own: it draws in the frame it
+    // was handed, and clipping to margins that frame never had cut the
+    // existing house's walls off a sheet viewport.
+    const pin = pinnedFrame(opts);
     const mg = screenMargins(opts, w);
-    const marginL = fit ? 0 : mg.left, marginR = fit ? 0 : mg.right,
-      marginT = fit ? 0 : mg.top, marginB = fit ? 0 : mg.bottom;
-    const pxPerFt = fit ? fit.pxPerFt : Math.max(2, Math.min(
+    const marginL = fit || pin ? 0 : mg.left, marginR = fit || pin ? 0 : mg.right,
+      marginT = fit || pin ? 0 : mg.top, marginB = fit || pin ? 0 : mg.bottom;
+    const pxPerFt = pin ? pin.pxPerFt : fit ? fit.pxPerFt : Math.max(2, Math.min(
       (w - marginL - marginR) / Math.max(uMax - uMin, 4),
       (h - marginT - marginB) / Math.max(yTop - yFit, 8)));
-    const x0 = marginL + ((w - marginL - marginR) - (uMax - uMin) * pxPerFt) / 2;
-    const y0 = marginT + ((h - marginT - marginB) - (yTop - yFit) * pxPerFt) / 2;
+    const x0 = pin ? pin.x0 + (uMin - pin.uMin) * pxPerFt
+      : marginL + ((w - marginL - marginR) - (uMax - uMin) * pxPerFt) / 2;
+    const y0 = pin ? pin.y0 + (pin.yTop - yTop) * pxPerFt
+      : marginT + ((h - marginT - marginB) - (yTop - yFit) * pxPerFt) / 2;
     const X = u => Math.round(x0 + (u - uMin) * pxPerFt - 0.5) + 0.5;
     const Y = e => Math.round(y0 + (yTop - e) * pxPerFt - 0.5) + 0.5;
+    if (runUnderlay(opts, { x0, y0, pxPerFt, uMin, yTop })) return true;
 
     const INK = C.line;
     // WHAT MAKES A FACE EDGE AN EAVE: both ends sitting on the fascia top.
@@ -3015,6 +3061,7 @@ if (!window.DraftCutView) {
 
     const datum = env.elevationDatum();
     const mark = (elevFt, uEnd) => {
+      if (hologramPass(opts)) return;
       ctx.strokeStyle = ink(0.25); ctx.lineWidth = 0.75;
       ctx.beginPath();
       ctx.moveTo(marginL - 18, Y(elevFt));
@@ -6800,6 +6847,7 @@ if (!window.DraftCutView) {
 
     // Grade, heavy, straight across the sheet — the exposed concrete stands
     // on it and everything below it reads dashed.
+    if (hologramPass(opts)) return true;
     ctx.strokeStyle = INK; ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(marginL - 18, Y(fdn.grade));

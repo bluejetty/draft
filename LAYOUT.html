@@ -1067,7 +1067,7 @@ class Component extends PageLogic {
   // any edit to the set, and a hand on it, so the composer lets go.
   _toggleViewportHologram(key) {
     const selected = this._selectedViewport();
-    if (!selected || selected.kind !== 'plan') return;
+    if (!selected) return;
     const show = this._viewportHologramShow(selected);
     show[key] = !show[key];
     const off = Object.fromEntries(Object.entries(show).filter(([, on]) => !on).map(([k]) => [k, false]));
@@ -1100,7 +1100,13 @@ class Component extends PageLogic {
   // marks stand them: just outside the plan's walls, looking back at it.
   _standardElevationCuts() {
     if (this._elevCutsCache) return this._elevCutsCache;
-    const walls = (this._cutViewEnv()?.walls() || []).filter(wall => wall.levelId > 0);
+    // A SHOWN HOLOGRAM'S WALLS TOO (hologram PR 5): E1 to E4 stand round the
+    // existing house and the addition together, as on the Model Space.
+    const H = window.DraftHologram;
+    const holoWalls = H ? (this._saved?.holograms || []).filter(holo => !holo.hidden)
+      .flatMap(holo => H.placed(holo, H.parts(holo).existing.walls || [])) : [];
+    const walls = (this._cutViewEnv()?.walls() || []).concat(holoWalls)
+      .filter(wall => wall.levelId > 0 && wall.start && wall.end);
     if (!walls.length) return (this._elevCutsCache = []);
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     walls.forEach(wall => [wall.start, wall.end].forEach(pt => {
@@ -2013,6 +2019,10 @@ class Component extends PageLogic {
           pxPerFt: viewport.pif * zoom,
           extents,
           paperColor: '#ffffff',
+          // THE EXISTING HOUSE UNDER IT (hologram PR 5), in this viewport's
+          // EXISTING, DEMO and NEW.
+          ...(window.DraftHologram ? window.DraftHologram.cutOptions(ctx, full.wIn * zoom, full.hIn * zoom,
+            cut, this._saved, { show: this._viewportHologramShow(viewport), paperColor: '#ffffff' }) : {}),
         });
         ctx.restore();
       }
@@ -2579,7 +2589,7 @@ class Component extends PageLogic {
       i => this._setScale(i));
 
     const holoViewport = this._selectedViewport();
-    const showHologram = Boolean(holoViewport && holoViewport.kind === 'plan' && this._hasHolograms());
+    const showHologram = Boolean(holoViewport && this._hasHolograms());
     document.querySelector('[data-hologram-section]').hidden = !showHologram;
     const holoShow = this._viewportHologramShow(holoViewport);
     picks('[data-hologram-list]',
