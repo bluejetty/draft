@@ -36,7 +36,7 @@ const BASE = ['formatters.js', 'wall-types.js', 'geometry-2d.js', 'drawing-forma
   'fixture-geometry.js', 'render-2d.js', 'plan-composition.js'];
 const OPTIONAL = ['layer-views.js', 'cut-view.js', 'build-house.js', 'roof-types.js',
   'profile-manager.js', 'finish-patterns.js', 'roof-patterns.js', 'cut-marks.js',
-  'fen-labels.js', 'electric-symbols.js'];
+  'fen-labels.js', 'electric-symbols.js', 'hologram.js'];
 
 function loadWith(omit = [], source = {}) {
   const warnings = [];
@@ -391,6 +391,39 @@ function run(label) {
   check('an empty piece, or one on no wall, is dropped', cut && cut.demo.pieces.length === 2);
   check('pieces alone are a DEMO', cut && !cut.demo.walls && Array.isArray(cut.demo.pieces));
 
+  // WHAT THE EXISTING PLAN KEEPS AND WHAT COMES OUT (hologram.js).
+  const HG = full.win.DraftHologram;
+  check('hologram.js loads', Boolean(HG && HG.parts));
+  if (HG) {
+    const w = (id, x0, x1) => ({ id, levelId: 1, view: 'plan', start: { x: x0, y: 0, z: 0 }, end: { x: x1, y: 0, z: 0 },
+      wallType: 'stud_2x6', refLine: 'center' });
+    const src = { version: 1, levels: [{ id: 1 }], walls: [w('a', 0, 20), w('b', 20, 40)],
+      fenestrations: [{ id: 'f-in', wallId: 'a', levelId: 1, offset: 5, width: 3 },
+        { id: 'f-run', wallId: 'a', levelId: 1, offset: 16, width: 2 },
+        { id: 'f-b', wallId: 'b', levelId: 1, offset: 10, width: 3 }] };
+    const split = HG.parts({ source: src, demo: { walls: ['b'], pieces: [{ wallId: 'a', from: 2, to: 9 }] } });
+    const ids = list => list.map(item => item.id).sort().join(',');
+    check('a DEMO wall leaves the existing plan, with what is on it',
+      !split.existing.walls.some(x => x.id === 'b') && ids(split.demo.fenestrations).includes('f-b'));
+    check('a piece leaves the runs either side as walls of their own',
+      ids(split.existing.walls) === 'a~1,a~2', ids(split.existing.walls));
+    check('a window in the piece comes out with it', ids(split.demo.fenestrations) === 'f-b,f-in',
+      ids(split.demo.fenestrations));
+    const moved = split.existing.fenestrations.find(f => f.id === 'f-run');
+    check('a window on a run moves onto it, the same place on the ground',
+      moved && moved.wallId === 'a~2' && Math.abs(moved.offset - 7) < 1e-9, JSON.stringify(moved));
+    check('nothing marked, nothing moves', ids(HG.parts({ source: src }).existing.walls) === 'a,b');
+  }
+
+  // A SHEET'S SWITCHES: only an OFF is written.
+  const vp = F.layout({ viewports: [{ id: 1, kind: 'plan', pif: 0.25, xIn: 1, yIn: 1, levelId: 1,
+    hologram: { existing: false, demo: true, new: 'no' } }] }, new Set([1])).viewports[0];
+  check('a viewport keeps the hologram parts it switched off, and only those',
+    vp && JSON.stringify(vp.hologram) === '{"existing":false}', JSON.stringify(vp));
+  const plainVp = F.layout({ viewports: [{ id: 1, kind: 'plan', pif: 0.25, xIn: 1, yIn: 1, levelId: 1 }] },
+    new Set([1])).viewports[0];
+  check('a viewport with every part on carries no key', plainVp && plainVp.hologram === undefined);
+
   // AND BACK: a click on this drawing finds the hologram's own point.
   const placed = { x: 4, z: -1, angleDeg: 37, pivotX: 10, pivotZ: 3 };
   const there = F.hologramPoint(placed, { x: 12.5, z: -6 });
@@ -488,6 +521,16 @@ const MUTATIONS = [
     'drawing-format.js', c => c.replace('return to - from > 1e-6 ? { wallId, from, to } : null;', 'return { wallId, from, to };')],
   ['pieces are never saved',
     'drawing-format.js', c => c.replace('if (pieces.length) demo.pieces = pieces;', '')],
+  ['a DEMO wall keeps its windows',
+    'hologram.js', c => c.replace('if (walls.has(item?.wallId)) return null;', '')],
+  ['a window touching a piece stays on',
+    'hologram.js', c => c.replace('return run ? { ...item, wallId: run.wall.id, offset: centre - run.from } : null;',
+      'return run ? { ...item, wallId: run.wall.id, offset: centre - run.from } : item;')],
+  ['a window on a run keeps its old offset',
+    'hologram.js', c => c.replace('offset: centre - run.from', 'offset: centre')],
+  ['a sheet writes every switch',
+    'drawing-format.js', c => c.replace(".filter(key => viewport?.hologram?.[key] === false).map(key => [key, false]));",
+      ".map(key => [key, viewport?.hologram?.[key] !== false]));")],
   ['the warning repeats on every paint',
     'layout-plan.js', c => c.replace('warnedNoLayerViews = true;', 'warnedNoLayerViews = false;')],
 ];

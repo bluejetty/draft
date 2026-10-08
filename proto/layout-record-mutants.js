@@ -88,11 +88,8 @@ const MUTANTS = [
     // drawing that had been saved and reopened.
     name: 'THE READER DROPS `view` AGAIN, so FOUNDATION and the basement plan '
       + 'collapse back into two copies of one drawing',
-    find: `        const view = oneOf(viewport?.view, LINE_VIEWS, null);
-        return view
-          ? { ...base, levelId: viewportLevelId, view }
-          : { ...base, levelId: viewportLevelId };`,
-    with: '        return { ...base, levelId: viewportLevelId };' },
+    find: '          ...(view ? { view } : {}),\n',
+    with: '' },
 
   { file: 'shell-bars.js',
     // INVERTED WHEN THE PORT LANDED, and the anchors harness is what said so:

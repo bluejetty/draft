@@ -99,6 +99,9 @@
 <script src="./building-bodies.js"></script>
 <script src="./plan-composition.js"></script>
 <script src="./layout-plan.js"></script>
+<!-- HOLOGRAMS (8 Oct): another .draft under this one, its DEMO dashed --
+     the same painter the Model Space draws them with. -->
+<script src="./hologram.js"></script>
 <script src="./formatters.js"></script>
 <!-- The window size tag's formatter. cut-view.js guards on
      DraftFenLabels and draws no tag without it -- silently, which is
@@ -547,6 +550,14 @@
     <div class="lay-section">
       <div class="lay-section-title">Viewport Scale</div>
       <div data-scale-list></div>
+    </div>
+
+    <!-- HOLOGRAM (8 Oct): with a plan viewport selected and a hologram on
+         the drawing, what of it this sheet shows -- an existing plan, a demo
+         plan and a new plan off one drawing. -->
+    <div class="lay-section" data-hologram-section hidden>
+      <div class="lay-section-title">Hologram</div>
+      <div data-hologram-list></div>
     </div>
 
     <div class="lay-section" data-level-section hidden>
@@ -1025,10 +1036,49 @@ class Component extends PageLogic {
   // one is the sheet's alone.
   _planBounds(levelId) {
     if (!this._planBoundsByLevel.has(levelId)) {
-      this._planBoundsByLevel.set(levelId,
-        window.DraftLayoutPlan.planBounds(this._saved, levelId));
+      // A SHOWN HOLOGRAM IS ON THE SHEET TOO: the frame takes in the existing
+      // house as placed, so an addition's sheet is not cropped to the
+      // addition.
+      let box = window.DraftLayoutPlan.planBounds(this._saved, levelId);
+      const extra = window.DraftHologram ? window.DraftHologram.framePoints(this._saved, levelId) : [];
+      if (extra.length) {
+        box = extra.reduce((b, pt) => ({
+          minX: Math.min(b.minX, pt.x), maxX: Math.max(b.maxX, pt.x),
+          minZ: Math.min(b.minZ, pt.z), maxZ: Math.max(b.maxZ, pt.z),
+        }), box || { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity });
+      }
+      this._planBoundsByLevel.set(levelId, box);
     }
     return this._planBoundsByLevel.get(levelId);
+  }
+
+  // Which of a hologram's parts a plan viewport shows: all three unless the
+  // viewport switched one off.
+  _viewportHologramShow(viewport) {
+    const off = viewport?.hologram || {};
+    return { existing: off.existing !== false, demo: off.demo !== false, new: off.new !== false };
+  }
+
+  _hasHolograms() {
+    return Array.isArray(this._saved?.holograms) && this._saved.holograms.some(holo => !holo.hidden);
+  }
+
+  // Flip one of the selected plan viewport's three switches. Undoable like
+  // any edit to the set, and a hand on it, so the composer lets go.
+  _toggleViewportHologram(key) {
+    const selected = this._selectedViewport();
+    if (!selected || selected.kind !== 'plan') return;
+    const show = this._viewportHologramShow(selected);
+    show[key] = !show[key];
+    const off = Object.fromEntries(Object.entries(show).filter(([, on]) => !on).map(([k]) => [k, false]));
+    this.setState({
+      viewports: this.state.viewports.map(viewport => {
+        if (viewport.id !== selected.id) return viewport;
+        const { hologram: _old, ...rest } = viewport;
+        return Object.keys(off).length ? { ...rest, hologram: off } : rest;
+      }),
+      auto: false,
+    }, () => { this._persistLayout(); this._draw(); });
   }
 
   // ─── The saved drawing as the cut painter's world ────────────────────────
@@ -1916,7 +1966,16 @@ class Component extends PageLogic {
         ctx.beginPath();
         ctx.rect(px.x, px.y, px.w, px.h);
         ctx.clip();
-        window.DraftLayoutPlan.drawPlan(ctx, toS, this._saved, viewport.levelId, {
+        // THE HOLOGRAM FIRST, UNDER THE SHEET'S OWN WORK (hologram PR 4):
+        // the existing house in light blue, what comes out of it dashed. Each
+        // viewport says which of EXISTING, DEMO and NEW it shows, so one
+        // drawing deals an existing plan, a demo plan and a new plan.
+        const show = this._viewportHologramShow(viewport);
+        if (window.DraftHologram) {
+          window.DraftHologram.paint(ctx, toS, this._saved, viewport.levelId,
+            { view: viewport.view || 'plan', show, paperColor: '#ffffff' });
+        }
+        if (show.new) window.DraftLayoutPlan.drawPlan(ctx, toS, this._saved, viewport.levelId, {
           padFt: 0.5 / 12,
           // A thumbnail is the building's shape and nothing else: no
           // dimensions or text to smear at a few pixels to the inch.
@@ -2518,6 +2577,16 @@ class Component extends PageLogic {
       SCALES.map((scale, i) => ({ key: i, label: scale.label,
         on: selectedPif != null ? scale.pif === selectedPif : activeScale === i })),
       i => this._setScale(i));
+
+    const holoViewport = this._selectedViewport();
+    const showHologram = Boolean(holoViewport && holoViewport.kind === 'plan' && this._hasHolograms());
+    document.querySelector('[data-hologram-section]').hidden = !showHologram;
+    const holoShow = this._viewportHologramShow(holoViewport);
+    picks('[data-hologram-list]',
+      showHologram ? [['existing', 'EXISTING'], ['demo', 'DEMO'], ['new', 'NEW']].map(([key, label]) => ({
+        key, label, on: holoShow[key], data: { 'data-layout-hologram': key },
+      })) : [],
+      key => this._toggleViewportHologram(key));
 
     const levels = this._levelsWithWalls?.() || [];
     document.querySelector('[data-level-section]').hidden = !levels.length;

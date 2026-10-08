@@ -2007,9 +2007,17 @@ if (!window.DraftDrawingFormat) {
         // view means EVERY view on the level, so a sheet set composed before
         // views existed must keep drawing what it always drew.
         const view = oneOf(viewport?.view, LINE_VIEWS, null);
-        return view
-          ? { ...base, levelId: viewportLevelId, view }
-          : { ...base, levelId: viewportLevelId };
+        // WHAT OF A HOLOGRAM THIS SHEET SHOWS (hologram PR 4): EXISTING, DEMO
+        // and NEW each on unless switched off, so only an OFF is written --
+        // an existing plan, a demo plan, a new plan are three sheets of one
+        // drawing.
+        const hologram = Object.fromEntries(['existing', 'demo', 'new']
+          .filter(key => viewport?.hologram?.[key] === false).map(key => [key, false]));
+        return {
+          ...base, levelId: viewportLevelId,
+          ...(view ? { view } : {}),
+          ...(Object.keys(hologram).length ? { hologram } : {}),
+        };
       }
       if (kind === 'section') {
         const cutId = Number(viewport?.cutId);

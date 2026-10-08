@@ -551,6 +551,9 @@ test.describe('MODEL.html tier 1', () => {
       // drawing carries a hologram, so a file without one pays two requests
       // and no startup work.
       './plan-composition.js', './layout-plan.js',
+      // And what is drawn from a hologram -- its existing plan less its
+      // DEMO, the DEMO dashed -- shared with the LAYOUT sheets (8 Oct).
+      './hologram.js',
       // traffic-counter.js is the app's one deliberate off-site voice, and it
       // has been on every other page since it was written -- index, PROJECT,
       // SETTINGS, STANDARDS, SPECS, both DC pages. This page carried the SLOT
