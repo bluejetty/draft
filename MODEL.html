@@ -11250,9 +11250,13 @@
     const r = [...ring.slice(k), ...ring.slice(0, k)];
     const jj = (j - k + n) % n;
     const v = r[0], d = unitTo(v, r[jj]);
+    // AWAY FROM THE GARAGE, along the house's other wall at that corner
+    // (Movie, 8 Oct: "the garage lines went 1 ft but wrong direction"): the
+    // stub then lies on that wall and the garage's foundation bears full on
+    // it. Toward the garage, the stub ran off the house into the garage.
     let perp = { x: -d.z, z: d.x };
     const probe = { x: v.x + (perp.x + d.x) * 0.25, z: v.z + (perp.z + d.z) * 0.25 };
-    if (!pointInRing(r, probe)) perp = { x: -perp.x, z: -perp.z };
+    if (pointInRing(r, probe)) perp = { x: -perp.x, z: -perp.z };
     const move = p => ({ x: p.x + perp.x * ft, z: p.z + perp.z * ft });
     return jj === 1 ? [v, move(v), move(r[1]), ...r.slice(2)]
       : [v, ...r.slice(1, n - 1), move(r[n - 1]), move(v)];
