@@ -436,6 +436,18 @@ if (!window.DraftTracedPlans) {
         // there the street half runs one way and the garage half the other.
         if (gLo > lo + TOL) { line = gLo; mirror = false; }
         else if (gHi < hi - TOL) { line = gHi; mirror = true; }
+      } else {
+        // A GARAGE BESIDE THE FRONT'S END, standing forward of it (Movie,
+        // 8 Oct: "the 2 doors should strattle where the garage connects with
+        // the house"): nothing of it covers the front, so the landing goes
+        // against its side wall at that end -- the street door on the front,
+        // the garage door on the shared side wall.
+        const depth = P().ENTRY_DEPTH_FT;
+        const sideAt = x => edgesOf(garage).some(e => Math.abs(e.ux) < TOL
+          && Math.abs(e.a.x - x) < 1e-4
+          && Math.min(e.a.z, e.b.z) <= z - depth + 1e-4 && Math.max(e.a.z, e.b.z) >= z - 1e-4);
+        if (sideAt(lo)) { line = lo; mirror = true; }
+        else if (sideAt(hi)) { line = hi; mirror = false; }
       }
     }
     const half = ENTRY_HALF();
@@ -530,7 +542,11 @@ if (!window.DraftTracedPlans) {
         plan.overGarage = room;
         // SQUARE over the room, straight across its jog, and joined to the
         // upper landing (premade-plans.js modifiedBilevel, Movie 4-5 Oct).
-        plan.overGarageRoof = P().joinLoops(P().squareOver(over.room), plan.upperLanding);
+        // AND NEVER NO ROOF (Movie, 8 Oct: "it had no roof on the room over
+        // the garage"): where the landing does not meet the room the join
+        // has nothing to join, and the room is roofed on its own.
+        plan.overGarageRoof = P().joinLoops(P().squareOver(over.room), plan.upperLanding)
+          || P().squareOver(over.room);
         plan.garageRoof = over.rest;
         plan.garageRoofHouseEnd = over.rest ? flushEdge(over.rest, over.room) : null;
         // THE DOOR IN OFF THE UPPER LANDING, on the room's house-side wall
