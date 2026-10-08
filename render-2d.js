@@ -1544,7 +1544,8 @@ if (!window.DraftRender2D) {
     if (preview) ctx.setLineDash([6, 4]);
     ctx.stroke();
     ctx.setLineDash([]);
-    if (!preview) {
+    // THE CORNER GRIPS ARE THE EDITOR'S; a printed sheet says cornerMarks: false.
+    if (!preview && env.cornerMarks !== false) {
       ctx.fillStyle = selected ? env.colors.selected : env.colors.stroke;
       screenPoints.forEach(point => ctx.fillRect(point.x - 2.5, point.y - 2.5, 5, 5));
       holes.forEach(hole => hole.forEach(point => ctx.fillRect(point.x - 2, point.y - 2, 4, 4)));

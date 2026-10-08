@@ -559,6 +559,7 @@ if (!window.DraftLayoutPlan) {
       openingEnv: { openingGapColor: paperColor },
       wallEnv: { wallTypes: WALL_TYPES, solid: listing },
       floorEnv: {
+        cornerMarks: false,
         surfaceOpeningsFor,
         offsetOutline: (pts, dist) => geo.offsetOutline(pts, dist),
         formatInchesOnly: fmt.formatInchesOnly,
