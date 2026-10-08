@@ -4283,18 +4283,37 @@ if (!window.DraftCutView) {
         z: (wall.end.z - wall.start.z) / wallLen,
       };
       const samples = Math.min(64, Math.max(2, Math.ceil((hiU - loU) / 0.5)));
+      // Dropped to the floor of a nearer roof's band when that band swallows
+      // the wall's top. What is left below still meets the nearer WALLS, and
+      // the painter's opaque fill goes on covering that the way it always has.
+      // Never below the face's own floor: a band floor under this storey
+      // would turn the face inside out rather than hide it.
+      const sampleTop = u => {
+        const at = worldAt(u);
+        const raw = gableTopAt(at, level.wallTop, wallDir, wall);
+        const top = Math.max(floor, roofClippedTop(at, face.depth, raw));
+        return { top, clipped: top < raw - 1e-6 };
+      };
       const tops = [];
+      let prev = null;
       for (let s = 0; s <= samples; s++) {
         const u = loU + (hiU - loU) * s / samples;
-        const at = worldAt(u);
-        // Dropped to the floor of a nearer roof's band when that band swallows
-        // the wall's top. What is left below still meets the nearer WALLS, and
-        // the painter's opaque fill goes on covering that the way it always has.
-        // Never below the face's own floor: a band floor under this storey
-        // would turn the face inside out rather than hide it.
-        const top = Math.max(floor, roofClippedTop(at, face.depth,
-          gableTopAt(at, level.wallTop, wallDir, wall)));
-        tops.push({ u, top });
+        const here = sampleTop(u);
+        // WHERE A ROOF IN FRONT STARTS OR STOPS SWALLOWING THE TOP, the top
+        // STEPS there. Joined sample to sample it drew a slanted line a
+        // whole sample long across the wall (Movie's corner-garage E4), so
+        // the step is found by halving and drawn plumb.
+        if (prev && prev.clipped !== here.clipped) {
+          let a = prev.u, b = u;
+          for (let k = 0; k < 14; k++) {
+            const m = (a + b) / 2;
+            if (sampleTop(m).clipped === prev.clipped) a = m; else b = m;
+          }
+          tops.push({ u: a, top: sampleTop(a).top });
+          tops.push({ u: b, top: sampleTop(b).top });
+        }
+        tops.push({ u, top: here.top });
+        prev = { u, clipped: here.clipped };
       }
       return { face, loU, hiU, floor, worldAt, wallDir, tops };
     });
@@ -5690,7 +5709,24 @@ if (!window.DraftCutView) {
     // it. So the part above the roof is painted again here, after every
     // sheet: from the highest roof along the ray toward the viewer (its own
     // roof aside, which is above it) up to the top the face already has.
-    faceGeoms.filter(geom => geom.face.wall.hoodOf && !faceHidden(geom)).forEach(geom => {
+    //
+    // ONLY THE ONES IN LINE WITH THE STOREY'S OWN FACE (Movie, 8 Oct, on E2
+    // of a MOD BILEVEL with the garage on the corner): the walls round the
+    // upper landing stand set back from the room's front, and drawn above
+    // the roof they made a box hanging under the room's eave that he marked
+    // as wrong. The one carrying the room's front wall on down to the
+    // ceiling stays.
+    const collinearWalls = (a, b) => {
+      const dx = a.end.x - a.start.x, dz = a.end.z - a.start.z;
+      const len = Math.hypot(dx, dz) || 1;
+      const off = p => Math.abs((p.x - a.start.x) * dz - (p.z - a.start.z) * dx) / len;
+      return off(b.start) < 0.05 && off(b.end) < 0.05;
+    };
+    const inLineWithStorey = wall => (env.walls() || []).some(other =>
+      other !== wall && !other.hoodOf && Number(other.levelId) === Number(wall.levelId)
+      && (other.view || 'plan') === (wall.view || 'plan') && collinearWalls(wall, other));
+    faceGeoms.filter(geom => geom.face.wall.hoodOf && !faceHidden(geom)
+      && inLineWithStorey(geom.face.wall)).forEach(geom => {
       const { face, tops, worldAt } = geom;
       const ownRoofId = String(face.wall.hoodOf);
       const span = dHi - face.depth;

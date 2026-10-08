@@ -132,7 +132,7 @@ test('the 1 FLOOR layout shows the 0.5 floor\'s floor area, lighter', async ({ p
 // was created in the garage under the 2nd storey room, but shouldn't be" --
 // the top of the room-over-garage's end wall was drawn on MAIN FL's plan.
 test('MAIN FL does not draw the walls of the room over the garage', async ({ page }) => {
-  const CORNER = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'movie-corner-garage.draft'), 'utf8'));
+  const CORNER = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'proto', 'repro-movie-corner-garage.draft'), 'utf8'));
   const ink = () => page.evaluate(() => {
     const c = document.getElementById('plan');
     const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
