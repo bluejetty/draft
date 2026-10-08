@@ -305,6 +305,13 @@ if (!window.DraftLayoutPlan) {
     return !!wall && wall.body !== 'garage';
   }
 
+  // A level's FLOOR LAYOUT: the floors filed on its 'floor' view.
+  function hasFloorLayout(saved, levelId) {
+    return (Array.isArray(saved?.floors) ? saved.floors : []).some(floor =>
+      floor?.levelId === levelId && (floor.view || 'floor') === 'floor'
+      && Array.isArray(floor.points) && floor.points.length >= 3);
+  }
+
   function ridesOnFullFloor(saved, levelId) {
     const id = Number(levelId);
     const full = Object.keys(HALF_LEVEL_UNDER)
@@ -320,11 +327,15 @@ if (!window.DraftLayoutPlan) {
     const view = env.view || null;
     const walls = planWalls(saved, levelId, view)
       .filter(wall => env.foundationGhost !== true || basementGhostKeeps(saved, wall.id));
-    if (!walls.length) return drawRoofPlan(ctx, toS, saved, levelId);
+    // A FLOOR LAYOUT HAS FLOORS, NOT WALLS of its own: the deck, its holes,
+    // the beams and posts under it and its dimensions.
+    const floorLayout = view === 'floor' && hasFloorLayout(saved, levelId);
+    if (!walls.length && !floorLayout) return drawRoofPlan(ctx, toS, saved, levelId);
 
     // UNDER, so the full floor's own lines are the ones left on top.
     const half = env.halfLevel === true ? null : HALF_LEVEL_UNDER[levelId];
-    if (half != null && planWalls(saved, half, view).length) {
+    if (half != null && (planWalls(saved, half, view).length
+      || (view === 'floor' && hasFloorLayout(saved, half)))) {
       ctx.save();
       ctx.globalAlpha *= HALF_LEVEL_SHEET_ALPHA;
       drawPlan(ctx, toS, saved, half, { ...env, halfLevel: true });
@@ -522,7 +533,9 @@ if (!window.DraftLayoutPlan) {
 
       walls,
       fenestrations: of('fenestrations'),
-      floors: only(of('floors')),
+      // ON A FLOOR LAYOUT THE HALF-FLOOR'S DECK COMES TOO (Movie, 7 Oct: "we
+      // should also show the 0.5 FLOOR in the 1 FLOOR"), lighter and under.
+      floors: env.halfLevel === true && view === 'floor' ? of('floors') : only(of('floors')),
       roofs: only(of('roofs')),
       shapes: only(of('shapes')),
       lines: only(of('lines')),
@@ -680,6 +693,7 @@ if (!window.DraftLayoutPlan) {
     wallBounds,
     planBounds,
     ridesOnFullFloor,
+    hasFloorLayout,
     drawPlan,
   });
 })();

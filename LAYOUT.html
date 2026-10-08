@@ -1322,13 +1322,23 @@ class Component extends PageLogic {
       const view = planSheet(level.id, 'plan');
       if (view) deal(`${level.name} PLAN`, [view]);
     });
+    // THE FLOOR LAYOUTS (Movie, 8 Oct): the storey's FLOOR view -- its deck,
+    // stair holes, beams, posts and dims -- with a half-floor drawn lighter
+    // under its full floor, the way the plans carry theirs.
+    const floorSheet = ids => {
+      const LP = window.DraftLayoutPlan;
+      const id = ids.find(levelId => LP.hasFloorLayout(this._saved, levelId)
+        && !LP.ridesOnFullFloor(this._saved, levelId)
+        && this._levels.some(level => level.id === levelId));
+      return id == null ? null : sized({ kind: 'plan', levelId: id, view: 'floor' });
+    };
     const upper = plansOf(id => id === 5 || id === 4);
     upper.forEach(view => deal('2ND FL PLAN', [view]));
-    if (upper.length) deal('2ND FLOOR');
+    if (upper.length) deal('2ND FLOOR', [floorSheet([5, 4])]);
     const main = plansOf(id => id === 3 || id === 2);
     if (!main.length) deal('MAIN FL PLAN');
     main.forEach(view => deal('MAIN FL PLAN', [view]));
-    deal('MAIN FLOOR');
+    deal('MAIN FLOOR', [floorSheet([3, 2])]);
     deal('FOUNDATION', [planSheet(1, 'foundation')]);
     if (!sectionViews.length) deal('SECTIONS');
     sectionViews.forEach(view => deal('SECTIONS', [view]));
@@ -2003,6 +2013,7 @@ class Component extends PageLogic {
     const level = this._levels.find(l => l.id === viewport.levelId);
     if (!level) return 'PLAN';
     if (viewport.view === 'foundation') return 'FOUNDATION PLAN';
+    if (viewport.view === 'floor') return `${level.name} FLOOR LAYOUT`;
     const splits = (window.DraftLayerViews?.layerViewsForLevelId(level.id) || [])
       .some(view => view.id === 'foundation');
     if (splits && viewport.view === 'plan') return 'BASEMENT PLAN';
