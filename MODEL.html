@@ -12637,7 +12637,7 @@
   //
   // "make some 'default' washrooms i can select and add to the plan": BATH A
   // and BATH B, Movie's own (washroom-presets.js holds what they are). Picked
-  // under the FIXTURE tool's WASHROOM heading, the whole room follows the
+  // on the FIXTURE tool's BATH row, the whole room follows the
   // cursor -- [ and ] turn it a quarter, F mirrors it, Esc puts it down -- and
   // a press drops it: its walls, the D32, the tub, toilet and vanity, the tile
   // coming with them because a toilet stands in the room.
@@ -18840,16 +18840,12 @@
       box.append(title, row);
       home.append(box);
     });
-    // THE DEFAULT WASHROOMS, under their own heading: a pick here is a room,
-    // not a fixture kind, and it is held until Esc or another pick.
-    if (window.DraftWashroomPresets) {
-      const box = document.createElement('div');
-      box.dataset.toolGroup = 'fixture-washroom';
-      const title = document.createElement('div');
-      title.dataset.toolGroupName = '';
-      title.textContent = 'WASHROOM';
-      const row = document.createElement('div');
-      row.className = 'sel-row';
+    // THE DEFAULT WASHROOMS, on the BATH row beside VANITY: a pick here is a
+    // room, not a fixture kind, held until Esc or another pick. On the row
+    // rather than under a heading of their own because the BUILD rail is
+    // sized to its content, and the second BATH line has the room.
+    const bathRow = home.querySelector('[data-tool-group="fixture-bath"] .sel-row');
+    if (window.DraftWashroomPresets && bathRow) {
       window.DraftWashroomPresets.IDS.forEach(id => {
         const preset = window.DraftWashroomPresets.PRESETS[id];
         const btn = document.createElement('button');
@@ -18865,10 +18861,8 @@
           setTool('fixture');
           syncFixturePanel();
         });
-        row.append(btn);
+        bathRow.append(btn);
       });
-      box.append(title, row);
-      home.append(box);
     }
     home.append(help);
 
