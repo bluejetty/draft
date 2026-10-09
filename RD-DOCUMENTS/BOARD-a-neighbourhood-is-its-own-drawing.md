@@ -258,5 +258,14 @@ section switches its EXISTING, DEMO and NEW, saved on the viewport (only an
 OFF is written) -- so one drawing deals an existing plan, a demo plan and a
 new plan.
 
-Still to come, in the order agreed with Movie: the hologram in elevations
-and 3D.
+**IN THE ELEVATIONS AND SECTIONS, as built (hologram PR 5).** The cut
+painter hands a drawing that carries a hologram an `underlay` callback with
+its frame, after its ground and before its own lines; `hologram.js` paints
+the existing house there -- moved into place, tinted blue, its DEMO broken
+into dashes -- so every face of the new work hides what stands behind it.
+A pinned pass (`opts.frame`, `opts.hologram`) draws only the building: no
+ground, caption, datum lines, grade or marks. E1 to E4 stand round the
+existing house and the addition together, on the Model Space and the
+sheets; the EXISTING / DEMO / NEW switches work on every viewport.
+
+**3D WAITS ON 2D** (Movie, 8 Oct): "once i get 2D perfected we will do 3D".

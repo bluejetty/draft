@@ -413,6 +413,15 @@ function run(label) {
     check('a window on a run moves onto it, the same place on the ground',
       moved && moved.wallId === 'a~2' && Math.abs(moved.offset - 7) < 1e-9, JSON.stringify(moved));
     check('nothing marked, nothing moves', ids(HG.parts({ source: src }).existing.walls) === 'a,b');
+    // MOVED FOR THE CUT PAINTER: points go through the placement, lengths
+    // along a wall do not.
+    const moved2 = HG.placed({ x: 5, z: 0, angleDeg: 90, pivotX: 0, pivotZ: 0 },
+      { walls: [w('m', 0, 10)], fenestrations: [{ id: 'f', offset: 4, width: 3 }] });
+    const mw = moved2.walls[0];
+    check('a placed wall stands where the hologram does',
+      Math.abs(mw.start.x - 5) < 1e-9 && Math.abs(mw.end.x - 5) < 1e-9 && Math.abs(mw.end.z - 10) < 1e-9,
+      JSON.stringify(mw));
+    check('an opening keeps its offset along the wall', moved2.fenestrations[0].offset === 4);
   }
 
   // A SHEET'S SWITCHES: only an OFF is written.
@@ -531,6 +540,10 @@ const MUTATIONS = [
   ['a sheet writes every switch',
     'drawing-format.js', c => c.replace(".filter(key => viewport?.hologram?.[key] === false).map(key => [key, false]));",
       ".map(key => [key, viewport?.hologram?.[key] !== false]));")],
+  ['the cut painter gets the hologram where its own file has it',
+    'hologram.js', c => c.replace('out.x = p.x; out.z = p.z;', '')],
+  ['the cut painter never reaches into a list',
+    'hologram.js', c => c.replace('if (Array.isArray(v)) return v.map(walk);', 'if (Array.isArray(v)) return v;')],
   ['the warning repeats on every paint',
     'layout-plan.js', c => c.replace('warnedNoLayerViews = true;', 'warnedNoLayerViews = false;')],
 ];

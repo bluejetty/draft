@@ -362,3 +362,53 @@ test('a piece over a window takes the window out with it', async ({ page }) => {
   await openCard(page);
   await expect(page.locator('[data-hologram-demo]')).toHaveText('DEMO (1)');
 });
+
+// ── IN THE ELEVATIONS (hologram PR 5) ───────────────────────────────────────
+//
+// Movie, 8 Oct: elevations and sections now, 3D "once i get 2D perfected".
+// The existing house stands beside the addition in E1, in blue, UNDER the
+// addition's own lines; E1 to E4 stand round both.
+const box = (prefix, x0, z0, x1, z1) => [[x0, z0, x1, z0], [x1, z0, x1, z1], [x1, z1, x0, z1], [x0, z1, x0, z0]]
+  .map(([sx, sz, ex, ez], i) => ({ id: `${prefix}${i + 1}`, levelId: 3, view: 'plan',
+    start: { x: sx, y: 0, z: sz }, end: { x: ex, y: 0, z: ez },
+    wallType: 'stud_2x6', refLine: 'left', baseHeight: 0, topHeight: 9 }));
+const beside = (extra = {}) => ({ ...BLANK, walls: box('n', 0, 0, 16, 16),
+  holograms: [{ id: 'hologram-1', name: 'existing', x: 0, z: 0, angleDeg: 0, pivotX: 0, pivotZ: 0,
+    source: { ...BLANK, walls: box('e', 16, -4, 44, 20) }, ...extra }] });
+const openE1 = async (page, drawing) => {
+  await open(page, drawing);
+  await page.goto('/MODEL.html?level=3&mode=day&view=cut:E1');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.waitForTimeout(300);
+};
+
+test('E1 shows the existing house in blue beside the addition', async ({ page }) => {
+  await openE1(page, beside());
+  // Its outlines in blue (the pale faces read too close to the day page to
+  // count), against under fifty with the hologram hidden.
+  expect(await bluePixels(page)).toBeGreaterThan(800);
+});
+
+test('a hidden hologram is out of the elevation too', async ({ page }) => {
+  await openE1(page, beside({ hidden: true }));
+  expect(await bluePixels(page)).toBeLessThan(50);
+});
+
+test('NEW off leaves the existing house alone in the elevation', async ({ page }) => {
+  await openE1(page, beside());
+  const dark = () => page.evaluate(() => {
+    const c = document.getElementById('plan');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] < 60 && d[i + 1] < 60 && d[i + 2] < 60) n += 1;
+    return n;
+  });
+  const both = { blue: await bluePixels(page), dark: await dark() };
+  await page.evaluate(() => localStorage.setItem('draft.hologram.show',
+    JSON.stringify({ existing: true, demo: true, new: false })));
+  await page.reload();
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await page.waitForTimeout(300);
+  expect(await bluePixels(page)).toBeGreaterThan(both.blue * 0.8);
+  expect(await dark()).toBeLessThan(both.dark);
+});
