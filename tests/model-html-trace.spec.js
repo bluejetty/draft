@@ -179,6 +179,10 @@ test('MOVE drags an image to a new place, and UNDO puts it back', async ({ page 
   await page.locator('#model-undo').click();
   const back = await savedUnderlays(page);
   expect([back[0].x, back[0].z]).toEqual([0, 0]);
+  // THE WHOLE RECORD COMES BACK, not only where it was: UNDO once put back
+  // x and z and dropped the rest -- its id, level, kind -- so the picture
+  // vanished from the plan the moment its move was undone.
+  expect(back[0]).toMatchObject({ id: 'underlay-9', levelId: 3, kind: 'image', name: 'lot.png' });
 });
 
 test('DELETE takes an image off the level, and UNDO brings it back', async ({ page }) => {

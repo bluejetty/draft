@@ -1433,14 +1433,18 @@ if (!window.DraftDrawingFormat) {
     }).filter(Boolean);
 
   // Underlays are reference images pinned under the plan: a vector PDF page
-  // kept in its original form, or a photo / scanned page converted once to a
-  // compressed image. The binary lives in the shared file store under the
-  // underlay id; only placement and scale metadata is stored here.
+  // kept in its original form, a photo / scanned page converted once to a
+  // compressed image, or a DXF kept as the file and drawn as its own lines
+  // (Movie, 9 Oct: "the ability to view DXF"). The binary lives in the
+  // shared file store under the underlay id; only placement and scale
+  // metadata is stored here -- for a DXF, the unit its numbers are in and
+  // the layers switched off.
+  const DXF_UNITS = ['in', 'ft', 'mm', 'cm', 'm'];
   const underlays = (raw, levelIds) => (Array.isArray(raw) ? raw : [])
     .map(underlay => {
       const id = String(underlay?.id || '').trim();
       const underlayLevelId = levelId(underlay?.levelId, levelIds);
-      const kind = oneOf(underlay?.kind, ['pdf', 'image'], null);
+      const kind = oneOf(underlay?.kind, ['pdf', 'image', 'dxf'], null);
       const x = num(underlay?.x);
       const z = num(underlay?.z);
       const widthFt = positive(underlay?.widthFt, null);
@@ -1464,6 +1468,11 @@ if (!window.DraftDrawingFormat) {
         scaleRatio,
         scaleUnit: scaleRatio ? oneOf(underlay?.scaleUnit, ['imperial', 'ratio'], null) : null,
         layer: 'UNDERLAY',
+        ...(kind === 'dxf' ? {
+          dxfUnits: oneOf(underlay?.dxfUnits, DXF_UNITS, 'in'),
+          hiddenLayers: [...new Set((Array.isArray(underlay?.hiddenLayers) ? underlay.hiddenLayers : [])
+            .map(name => String(name ?? '')).filter(Boolean))],
+        } : {}),
         // QUARTER TURNS CLOCKWISE the picture has been through with the house
         // (HOUSE ROTATE). Absent is upright; only a turned picture carries it.
         ...(Number.isInteger(Number(underlay?.turn)) && (((Number(underlay.turn) % 4) + 4) % 4)
