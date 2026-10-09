@@ -45,6 +45,7 @@ function recorder() {
     drawRoof2D: note('roof'),
     drawOpening2D: note('opening'),
     drawFixture2D: note('fixture'),
+    drawWetFloors2D: (ctx, toS, env) => tape.push(`tile[${(env.fixtures || []).map(f => f.id).join(',')}]`),
     drawStairs2D: (ctx, toS, env) => {
       tape.push(`stairs[${(env.stairs || []).map(s => s.id).join(',')}]`);
     },
@@ -139,7 +140,7 @@ const CHECKS = [
   {
     label: 'the order, end to end, with one of every entity on the level',
     fn: win => [run(win).join(' '),
-      'floor#f1 shape#sh1 roof#r1 wall#w1:fill wall#w1:stroke opening#o1 fixture#x1 '
+      'floor#f1 shape#sh1 roof#r1 tile[x1] wall#w1:fill wall#w1:stroke opening#o1 fixture#x1 '
       + 'stairs[st1] cutMarks outlines line dimension#d1 beam#b1 column#c1:pile note#n1'],
   },
   {
@@ -407,6 +408,14 @@ const CHECKS = [
 ];
 
 const MUTATIONS = [
+  ['the WC tile is laid over the walls instead of under them',
+    s => s.replace(`    const pieces = env.meldPieces ? env.meldPieces(walls) : walls;
+    const joins`, `    const pieces = env.meldPieces ? env.meldPieces(walls) : walls;
+    pieces.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, null, 'fill', env.wallEnv));
+    const joins`)],
+  ['the WC tile reads every level\'s fixtures',
+    s => s.replace('const levelFixtures = list(env.fixtures).filter(fixture => fixture.levelId === levelId && shows(fixture.layer));',
+      'const levelFixtures = list(env.fixtures);')],
   ['the two wall passes collapse into one loop',
     s => s.replace(`    pieces.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv));
     pieces.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv));`,

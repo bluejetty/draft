@@ -172,6 +172,19 @@ if (!window.DraftPlanComposition) {
     // MELDED where a wall ends on another or two cross (geometry-2d's
     // meldPieces) -- the pieces are for the painter only; openings and
     // fixtures below still read the real walls.
+    // THE WC TILE, under the walls so their fill stops it at the face. It
+    // rides the fixture env: a sheet that draws no fixtures draws no tile.
+    const levelFixtures = list(env.fixtures).filter(fixture => fixture.levelId === levelId && shows(fixture.layer));
+    if (env.fixtureEnv && render.drawWetFloors2D && levelFixtures.length) {
+      const ink = env.fixtureEnv.FIXTURE_COLOR;
+      render.drawWetFloors2D(ctx, toS, {
+        walls,
+        fixtures: levelFixtures,
+        fixtureGeometry: env.fixtureEnv.fixtureGeometry,
+        wallFrame: env.fixtureEnv.wallFrame,
+        tileColor: /^#[0-9a-f]{6}$/i.test(ink || '') ? `${ink}55` : ink,
+      });
+    }
     const pieces = env.meldPieces ? env.meldPieces(walls) : walls;
     const joins = env.wallJoins ? env.wallJoins(pieces) : null;
     pieces.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv));

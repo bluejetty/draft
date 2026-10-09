@@ -3821,6 +3821,23 @@
       all.find(w => w.id === fixture.wallId), env));
   };
 
+  // THE WC FLOOR -- 1'-0" tile in a room with a toilet, tub or shower in it
+  // (Movie, 9 Oct: "lighter line at joints"). The fixture ink, faint.
+  const paintWetFloors = () => {
+    const R = window.DraftRender2D;
+    const FG = window.DraftFixtureGeometry;
+    if (!R?.drawWetFloors2D || !FG) return;
+    const all = drawing?.walls || [];
+    const ink = skin['draw-fixture'];
+    R.drawWetFloors2D(ctx, toS, {
+      walls: walls(),
+      fixtures: fixtures(),
+      fixtureGeometry: (fx, wl) => FG.fixtureGeometry(all, fx, wl),
+      wallFrame: wl => FG.wallFrame(wl),
+      tileColor: /^#[0-9a-f]{6}$/i.test(ink) ? `${ink}55` : ink,
+    });
+  };
+
   // CUT MARKS -- the section lines and their bubbles.
   //
   // FOUR INPUTS, AND THEY COME FROM THREE DIFFERENT PLACES. That is the whole
@@ -4734,6 +4751,8 @@
         paintOutlines();
         paintHalfLevelGhost();
         paintBasementFoundationGhost();
+        // The WC tile under the walls, so their fill stops it at the face.
+        paintWetFloors();
         paintLines(); paintWalls();
         // Fixtures ride ON the walls, so they go after them and before the
         // annotation -- the slot the bone puts them in (MODEL.dc.html:6993,

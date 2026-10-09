@@ -1029,6 +1029,52 @@ if (!window.DraftRender2D) {
     return hit;
   }
 
+  // ── THE BATH FIXTURES, TRACED FROM MOVIE'S OWN DRAWINGS ──────────────────
+  //
+  // Movie, 9 Oct: "improve the WC items (toilet, sink, bathtub)", and the DXFs
+  // to draw them from (1._Story.DXF, the two main baths). These are those
+  // outlines, flattened to polylines, in INCHES: `along` the host wall first,
+  // then `out` from the wall face. The toilet and basin are centred on 0
+  // along; the tub runs 0..60 from its head to its drain end and 0..32 out
+  // (Movie's ArchiCAD tub is 32" deep -- it is drawn into whatever depth the
+  // tub has, 30" by default: "can you reduce that tub to 30" x 60"").
+  //
+  // DRAWN AT THEIR OWN SIZE, not stretched to the record: a toilet is 18"
+  // wide whatever clearance it was placed with, and a basin sits in a 6' run
+  // the same size it sits in a V30. Only a record SMALLER than the symbol
+  // scales it down, so nothing is ever drawn past its own box.
+  const TUB_BASIN = [
+    [58,23,58,9,57.9,7.7,57.6,6.5,57.2,5.4,56.5,4.4,55.8,3.6,54.9,3,54,2.7,53,2.6,12.5,2.6,10.7,2.8,8.9,3.4,7.2,4.4,5.8,5.7,4.5,7.4,3.4,9.3,2.6,11.4,2.2,13.7,2,16,2.2,18.3,2.6,20.6,3.4,22.7,4.5,24.6,5.8,26.3,7.2,27.6,8.9,28.6,10.7,29.2,12.5,29.4,53,29.4,54,29.3,54.9,28.9,55.8,28.4,56.5,27.6,57.2,26.6,57.6,25.5,57.9,24.3,58,23],
+  ];
+  const TUB_DRAIN = [
+    [51.5,14.9,52,15.1,52.3,15.7,52.3,16.3,52,16.9,51.5,17.1,51,16.9,50.7,16.3,50.7,15.7,51,15.1,51.5,14.9],
+  ];
+  const TOILET = [
+    [-7.3,17.9,-7,16.2,-6.5,14.5,-5.9,12.9,-5,11.4,5,11.4,5.9,12.9,6.5,14.5,7,16.2,7.3,17.9],
+    [4.6,11.4,5.5,12.9,6.2,14.5,6.7,16.2,7,17.9,7.1,19.6,6.9,21.2,6.5,22.8,5.8,24.3,4.8,25.8,3.4,26.9,1.8,27.6,0,27.8,-1.8,27.6,-3.4,26.9,-4.8,25.8,-5.8,24.3,-6.5,22.8,-6.9,21.2,-7.1,19.6,-7,17.9,-6.7,16.2,-6.2,14.5,-5.5,12.9,-4.6,11.4],
+    [7.4,9.4,6.4,9.4,7.3,17.9,7.4,19.6,7.2,21.2,6.8,22.9,6.1,24.4,5.1,26,3.6,27.1,1.9,27.9,0,28.1,-1.9,27.9,-3.6,27.1,-5,26,-6.1,24.4,-6.8,22.9,-7.2,21.2,-7.4,19.6,-7.3,17.9,-6.4,9.4,-7.3,9.4,-8.2,9,-8.8,8.2,-9,7.3,-8.9,6,-8.7,4.7,-8.3,3.4,-7.7,2.1,7.7,2.1,8.3,3.4,8.7,4.7,8.9,6,9,7.3,8.8,8.2,8.2,9,7.4,9.4],
+    [0,4.9,-0.4,5,-0.6,5.5,-0.4,5.9,0,6,0.4,5.9,0.6,5.5,0.4,5,0,4.9],
+    [-6.4,9.4,-3.2,8.9,0,8.8,3.2,8.9,6.4,9.4],
+  ];
+  const BASIN = [
+    [0,4.1,2.2,4.3,4.4,4.7,6.4,5.4,8.1,6.3,9.6,7.4,10.7,8.7,11.5,10.1,11.8,11.6,11.7,13.1,11.1,14.6,10.2,15.9,8.9,17.2,7.3,18.2,5.4,19,3.3,19.6,1.1,19.8,-1.1,19.8,-3.3,19.6,-5.4,19,-7.3,18.2,-8.9,17.2,-10.2,15.9,-11.2,14.6,-11.7,13.1,-11.8,11.6,-11.5,10.1,-10.7,8.7,-9.6,7.4,-8.1,6.3,-6.4,5.4,-4.4,4.7,-2.2,4.3,0,4.1],
+    [0,5.1,2.2,5.2,4.3,5.7,6.2,6.3,7.8,7.2,9.2,8.3,10.1,9.6,10.7,10.9,10.8,12.3,10.5,13.7,9.7,15,8.6,16.2,7.1,17.2,5.2,18,3.2,18.6,1.1,18.9,-1.1,18.9,-3.2,18.6,-5.3,18,-7.1,17.2,-8.6,16.2,-9.7,15,-10.5,13.7,-10.8,12.3,-10.7,10.9,-10.2,9.6,-9.2,8.3,-7.8,7.2,-6.2,6.3,-4.3,5.7,-2.2,5.2,0,5.1],
+    [-0.5,2.9,-0.5,9.7,-0.4,9.9,0,10,0.4,9.9,0.5,9.7,0.5,2.9,0.4,2.6,0,2.4,-0.4,2.6,-0.5,2.9],
+    [4.3,2.4,3.9,2.5,3.8,2.9,3.9,3.4,4.3,3.5,4.7,3.4,4.9,2.9,4.7,2.5,4.3,2.4],
+    [5.4,3.1,5.3,3.5,5,3.8,4.7,4,4.3,4,3.9,3.9,3.5,3.7,3.3,3.4,3.2,2.9,3.3,2.5,3.5,2.2,3.9,2,4.3,1.9,4.7,1.9,5,2.1,5.3,2.4,5.4,2.8],
+    [4.9,2.9,5.7,2.8,6.6,2.9,6.6,3,6.1,3,4.9,3],
+    [-0.5,3.8,-0.9,3.3,-1,2.7,-0.6,2.1,0,1.9,0.6,2.1,1,2.7,0.9,3.3,0.5,3.8],
+    [-4.3,2.4,-4.7,2.5,-4.9,2.9,-4.7,3.4,-4.3,3.5,-3.9,3.4,-3.8,2.9,-3.9,2.5,-4.3,2.4],
+    [-5.4,2.8,-5.3,2.4,-5,2.1,-4.7,1.9,-4.3,1.9,-3.9,2,-3.5,2.2,-3.3,2.5,-3.2,2.9,-3.3,3.4,-3.5,3.7,-3.9,3.9,-4.3,4,-4.7,4,-5,3.8,-5.3,3.5,-5.4,3.1],
+    [-4.9,3,-6.2,3,-6.6,2.9,-5.7,2.8,-4.9,2.9],
+  ];
+  const TOILET_W_IN = 18, TOILET_D_IN = 28.1;
+  const BASIN_W_IN = 24, BASIN_D_IN = 24;
+  const TUB_L_IN = 60, TUB_D_IN = 32;
+  // Movie's vanity carries a backsplash line, not a counter nosing: the top is
+  // the cabinet box and the line is 3/4" off the wall.
+  const BACKSPLASH_IN = 0.8;
+
   function drawFixture2D(ctx, toS, fixture, options, wall, env) {
     const geo = env.fixtureGeometry(fixture, wall);
     if (!geo) return;
@@ -1073,17 +1119,41 @@ if (!window.DraftRender2D) {
     // change exists to remove -- both boards now name the fill they want.
     ctx.fillStyle = env.fixtureFill;
     ctx.lineWidth = 1.2;
-    rect(a0, a1, cBack, cFront); ctx.fill(); ctx.stroke();
     const kind = fixture.kind;
-    if (kind === 'cabinet' || kind === 'vanity') {
+    // A traced symbol: each polyline [along, out, along, out, ...] in inches,
+    // placed by `along` (inches -> feet along the wall) and `out` (inches off
+    // the back, toward the room).
+    const dirC = cFront >= cBack ? 1 : -1;
+    const tracePath = (flat, along, out) => {
+      ctx.beginPath();
+      for (let i = 0; i < flat.length; i += 2) {
+        const p = P(along(flat[i]), cBack + dirC * out(flat[i + 1]));
+        if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y);
+      }
+    };
+    // THE TOILET HAS NO BOX: the bowl and tank are its outline, so the record's
+    // clearance rectangle is never drawn round it.
+    if (kind !== 'toilet') { rect(a0, a1, cBack, cFront); ctx.fill(); ctx.stroke(); }
+    if (kind === 'vanity') {
+      const widthIn = (a1 - a0) * 12, depthIn = (cMax - cMin) * 12;
+      const back = P(a0, cBack + dirC * BACKSPLASH_IN / 12), backEnd = P(a1, cBack + dirC * BACKSPLASH_IN / 12);
+      ctx.beginPath(); ctx.moveTo(back.x, back.y); ctx.lineTo(backEnd.x, backEnd.y); ctx.stroke();
+      const s = Math.min(1, depthIn / BASIN_D_IN, widthIn / (BASIN_W_IN + 4));
+      const centre = (a0 + a1) / 2;
+      const lift = (depthIn - BASIN_D_IN * s) / 2;
+      BASIN.forEach(flat => { tracePath(flat, x => centre + x * s / 12, o => (lift + o * s) / 12); ctx.stroke(); });
+    } else if (kind === 'toilet') {
+      const s = Math.min(1, (a1 - a0) * 12 / TOILET_W_IN, (cMax - cMin) * 12 / TOILET_D_IN);
+      const centre = (a0 + a1) / 2;
+      const along = x => centre + x * s / 12, out = o => o * s / 12;
+      // The silhouette (tank and bowl, closed) takes the body fill.
+      tracePath(TOILET[2], along, out); ctx.closePath(); ctx.fill();
+      TOILET.forEach(flat => { tracePath(flat, along, out); ctx.stroke(); });
+    } else if (kind === 'cabinet') {
       // Countertop edge — a parallel line just past the cabinet face.
       const counter = cFront + (cFront >= cBack ? 1 : -1) * env.COUNTER_OVERHANG_FT;
       const ca = P(a0, counter), cb = P(a1, counter);
       ctx.beginPath(); ctx.moveTo(ca.x, ca.y); ctx.lineTo(cb.x, cb.y); ctx.stroke();
-      if (kind === 'vanity') {
-        oval((a0 + a1) / 2, mid, Math.max(Math.min((a1 - a0) / 2 - 0.2, 0.7), 0.2), Math.max((cMax - cMin) / 2 - 0.15, 0.2));
-        ctx.stroke();
-      }
     } else if (kind === 'sink') {
       const w = a1 - a0;
       if (w > 2.2) {
@@ -1229,14 +1299,16 @@ if (!window.DraftRender2D) {
         Math.max(Math.min((a1 - a0) / 2 - 0.15, 0.62), 0.2), Math.max(Math.abs(cFront - tank) / 2 - 0.05, 0.2));
       ctx.stroke();
     } else if (kind === 'tub') {
-      // Basin inset, with extra room at the faucet end for the fittings.
+      // Movie's basin, round at the head and square at the drain, stretched
+      // to the tub as placed; the drain sits at the faucet end.
       const faucetAtStart = geo.faucetAlong != null
         && Math.abs(geo.faucetAlong - a0) < Math.abs(geo.faucetAlong - a1);
-      const b0 = a0 + (faucetAtStart ? 0.55 : 0.25);
-      const b1 = a1 - (faucetAtStart ? 0.25 : 0.55);
-      if (b1 > b0 + 0.5) {
-        rect(b0, b1, cMin + 0.2, cMax - 0.2); ctx.stroke();
-        oval(faucetAtStart ? b0 + 0.35 : b1 - 0.35, mid, 0.15, 0.15); ctx.stroke();
+      const perIn = (a1 - a0) / TUB_L_IN;
+      const along = faucetAtStart ? (x => a1 - x * perIn) : (x => a0 + x * perIn);
+      const out = o => o * (cMax - cMin) / TUB_D_IN;
+      if (a1 - a0 > 1) {
+        TUB_BASIN.forEach(flat => { tracePath(flat, along, out); ctx.stroke(); });
+        TUB_DRAIN.forEach(flat => { tracePath(flat, along, out); ctx.stroke(); });
       }
       // Deck strips fill any leftover alcove.
       (geo.decks || []).forEach(deck => {
@@ -1252,6 +1324,123 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+
+  // ── THE WC FLOOR: 1'-0" TILE, LIGHT JOINTS ───────────────────────────────
+  //
+  // Movie, 9 Oct: "the floor in the WC should be 1ft tile, and lighter line at
+  // joints". A WC is a room the walls close (geometry-2d's roomLoops) with a
+  // toilet, tub, shower or stall standing in it -- the fixture says what the
+  // room is, so a bathroom drawn by hand tiles the same as one dropped in.
+  //
+  // PAINTED BEFORE THE WALLS. A room loop runs down the wall centrelines, so
+  // the grid is clipped to it and the walls' own fill covers the half of each
+  // wall it crosses: the joints stop at the finished face without this
+  // painter knowing a wall thickness.
+  //
+  // SQUARE TO THE ROOM, laid from a corner of its longest side, the way a
+  // tiler starts -- a grid on the world axes would cross a turned bathroom on
+  // the diagonal.
+  const WET_FIXTURE_KINDS = Object.freeze(['toilet', 'tub', 'shower', 'stall']);
+  const TILE_FT = 1;
+
+  const pointSegDist = (p, a, b) => {
+    const dx = b.x - a.x, dz = b.z - a.z;
+    const len2 = dx * dx + dz * dz;
+    const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2)) : 0;
+    return Math.hypot(p.x - (a.x + dx * t), p.z - (a.z + dz * t));
+  };
+
+  const pointInLoop = (pt, points) => {
+    let inside = false;
+    for (let i = 0, j = points.length - 1; i < points.length; j = i, i += 1) {
+      const a = points[i], b = points[j];
+      if ((a.z > pt.z) !== (b.z > pt.z)
+        && pt.x < ((b.x - a.x) * (pt.z - a.z)) / (b.z - a.z) + a.x) inside = !inside;
+    }
+    return inside;
+  };
+
+  // Which loops are wet rooms. Pure, and exported so a test can ask it.
+  // `roomLoops` is geometry-2d's, handed in rather than reached for so this
+  // module keeps no load-order dependency of its own.
+  function wetRoomLoops(walls, fixtures, fixtureGeometry, roomLoops) {
+    if (typeof roomLoops !== 'function' || !Array.isArray(walls) || !walls.length) return [];
+    const wet = (fixtures || []).filter(fx => WET_FIXTURE_KINDS.includes(fx.kind));
+    if (!wet.length) return [];
+    const loops = roomLoops(walls.map(wall => ({ start: wall.start, end: wall.end })));
+    const byId = new Map(walls.map(wall => [wall.id, wall]));
+    const picked = new Set();
+    wet.forEach(fx => {
+      const geo = fixtureGeometry(fx, byId.get(fx.wallId));
+      if (!geo || !geo.center) return;
+      // The SMALLEST loop round the fixture: the bathroom, not the house.
+      let best = null;
+      loops.forEach(loop => {
+        if (pointInLoop(geo.center, loop.points) && (!best || loop.area < best.area)) best = loop;
+      });
+      if (best) picked.add(best);
+    });
+    return [...picked];
+  }
+
+  function drawWetFloors2D(ctx, toS, env) {
+    const loops = wetRoomLoops(env.walls, env.fixtures, env.fixtureGeometry,
+      env.roomLoops || window.DraftGeometry2D?.roomLoops);
+    if (!loops.length) return;
+    const a = toS({ x: 0, y: 0, z: 0 }), b = toS({ x: TILE_FT, y: 0, z: 0 });
+    // The scale gate: joints closer than 4 px are a grey wash, not tile.
+    if (Math.hypot(b.x - a.x, b.y - a.y) < 4) return;
+    loops.forEach(loop => {
+      const pts = loop.points;
+      let k = 0, longest = -1;
+      pts.forEach((p, i) => {
+        const q = pts[(i + 1) % pts.length];
+        const len = Math.hypot(q.x - p.x, q.z - p.z);
+        if (len > longest) { longest = len; k = i; }
+      });
+      const o = pts[k], q = pts[(k + 1) % pts.length];
+      const ux = (q.x - o.x) / longest, uz = (q.z - o.z) / longest;
+      const vx = -uz, vz = ux;
+      let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+      pts.forEach(p => {
+        const u = (p.x - o.x) * ux + (p.z - o.z) * uz, v = (p.x - o.x) * vx + (p.z - o.z) * vz;
+        u0 = Math.min(u0, u); u1 = Math.max(u1, u); v0 = Math.min(v0, v); v1 = Math.max(v1, v);
+      });
+      const W = (u, v) => toS({ x: o.x + ux * u + vx * v, y: 0, z: o.z + uz * u + vz * v });
+      // FROM THE FINISHED FACE, not the centreline: the first joint is a full
+      // tile off the wall, as Movie's plans lay it. Half of each corner wall's
+      // thickness, the room side of the corner.
+      const halfOf = (p, r) => {
+        const m = { x: (p.x + r.x) / 2, z: (p.z + r.z) / 2 };
+        let best = null, bestD = Infinity;
+        (env.walls || []).forEach(wall => {
+          const d = pointSegDist(m, wall.start, wall.end);
+          if (d < bestD) { bestD = d; best = wall; }
+        });
+        const frame = best && env.wallFrame ? env.wallFrame(best) : null;
+        return frame ? frame.totalFt / 2 : 0;
+      };
+      const prev = pts[(k - 1 + pts.length) % pts.length];
+      const uStart = halfOf(prev, o) * (u1 > -u0 ? 1 : -1);
+      const vStart = halfOf(o, q) * (v1 > -v0 ? 1 : -1);
+      ctx.save();
+      ctx.beginPath();
+      pts.forEach((p, i) => { const s = toS({ x: p.x, y: 0, z: p.z }); if (i) ctx.lineTo(s.x, s.y); else ctx.moveTo(s.x, s.y); });
+      ctx.closePath();
+      ctx.clip();
+      ctx.strokeStyle = env.tileColor;
+      ctx.lineWidth = 0.6;
+      ctx.beginPath();
+      for (let u = uStart + Math.ceil((u0 - uStart) / TILE_FT) * TILE_FT; u <= u1; u += TILE_FT) {
+        const s = W(u, v0), e = W(u, v1); ctx.moveTo(s.x, s.y); ctx.lineTo(e.x, e.y);
+      }
+      for (let v = vStart + Math.ceil((v0 - vStart) / TILE_FT) * TILE_FT; v <= v1; v += TILE_FT) {
+        const s = W(u0, v), e = W(u1, v); ctx.moveTo(s.x, s.y); ctx.lineTo(e.x, e.y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    });
+  }
 
   // ─── Chrome: what sits under and around the drawing ───────────────────────
   // Three painters with no geometry of their own — the scanned underlay, the
@@ -2379,6 +2568,8 @@ if (!window.DraftRender2D) {
     drawWallTops2D,
     drawShape2D,
     drawFixture2D,
+    drawWetFloors2D,
+    wetRoomLoops,
     drawRoomTag2D,
     drawUnderlays2D,
     drawGrid2D,
