@@ -45,4 +45,16 @@ wall."*
 
 ## Status
 
-- PR 1: this change.
+- PR 1 (#651, merged): Movie's toilet, basin and tub in plan; the 1'-0" tile.
+- PR 2: the fixtures in SECTION cuts. `fixture-profiles.js` carries each
+  one's FRONT and SIDE elevation, traced from WC_PLAN_2..6, with a filled
+  silhouette. `cut-view.js` drawSectionFixtures stands every fixture beyond
+  the cut: the front when it faces the cut, the side (mirrored to the wall it
+  backs onto) when it is turned a quarter, nothing when a wall stands between
+  it and the cut -- which is also what hides one facing away, its own wall
+  being that wall. Farthest first, each silhouette covering what is behind it
+  (Movie: "the piece 'in front' should cover the stuff 'BEHIND'"). A fixture
+  the cut runs through draws at the same weight ("sounds good with your
+  recommendation"); a cut fill can come later. The vanity's front stretches
+  to its run and the tub's to its alcove; a toilet is its own size. MODEL's
+  section view and LAYOUT's section viewports both.

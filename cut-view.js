@@ -2444,6 +2444,8 @@ if (!window.DraftCutView) {
     // will need them to also display on the SECTIONS when i make cuts" --
     // "it should show the full stairs with the rails").
     drawSectionStairs(env, ctx, cut, axis, stack, X, Y, pxPerFt, C, ptAtU);
+    // AND THE BATH FIXTURES BEYOND THE CUT (Movie, 9 Oct: "redraw all").
+    drawSectionFixtures(env, ctx, cut, axis, stack, X, Y, pxPerFt, C);
 
     // Roof profile over everything: the sampled top chord plus fascia drops.
     const lit = roofSamples.filter(s => s.elev != null);
@@ -2564,6 +2566,112 @@ if (!window.DraftCutView) {
     if (hologramPass(opts)) return;
     paintElevationMarks(env, ctx, cut, X, Y, pxPerFt, C, opts,
       { x0, y0, pxPerFt, uMin, yTop });
+  }
+
+  // ── FIXTURES IN A SECTION ─────────────────────────────────────────────
+  //
+  // What a section looking into a room sees of its fixtures: each one beyond
+  // the cut, in Movie's own elevation (fixture-profiles.js), drawn the way it
+  // faces the viewer --
+  //   facing the cut       its FRONT (bowl-on, the vanity's doors, the apron)
+  //   turned a quarter     its SIDE, the wall it backs onto on the side it is
+  //   facing away          nothing: it is behind its own wall
+  // -- and only where no wall stands between it and the cut, so a section
+  // through the bedroom does not show the toilet through the partition.
+  //
+  // A fixture the cut runs through draws the same weight as one beyond it
+  // (Movie, 9 Oct: "sounds good with your recommendation"); a cut fill can
+  // come later. Pages without fixture-profiles.js and fixture-geometry.js
+  // draw none.
+  const FIXTURE_FRONT_COS = Math.SQRT1_2;
+
+  // Facing the cut or turned a quarter. FACING AWAY HAS NO CASE OF ITS OWN:
+  // a fixture that faces away has its host wall between it and the cut, and
+  // the sight test below hides it -- a rule here would never be the one that
+  // decided anything.
+  function sectionFixtureView(out, dir) {
+    const facing = out.x * dir.x + out.z * dir.z;
+    return Math.abs(facing) >= FIXTURE_FRONT_COS ? 'front' : 'side';
+  }
+
+  // Does a wall cross the line of sight from `pt` back to the cut?
+  function sightBlocked(pt, depth, dir, walls) {
+    const end = { x: pt.x + dir.x * depth, z: pt.z + dir.z * depth };
+    return walls.some(wall => {
+      const a = wall.start, b = wall.end;
+      const d1x = end.x - pt.x, d1z = end.z - pt.z, d2x = b.x - a.x, d2z = b.z - a.z;
+      const den = d1x * d2z - d1z * d2x;
+      if (Math.abs(den) < 1e-9) return false;
+      const t = ((a.x - pt.x) * d2z - (a.z - pt.z) * d2x) / den;
+      const v = ((a.x - pt.x) * d1z - (a.z - pt.z) * d1x) / den;
+      return t > 0.02 && t < 1 && v >= 0 && v <= 1;
+    });
+  }
+
+  function drawSectionFixtures(env, ctx, cut, axis, stack, X, Y, pxPerFt, C) {
+    const FP = window.DraftFixtureProfiles, FG = window.DraftFixtureGeometry;
+    if (!FP || !FG || typeof env.fixtures !== 'function') return;
+    const fixtures = (env.fixtures() || []).filter(fx => fx && FP.profileFor(fx.kind, 'front'));
+    if (!fixtures.length) return;
+    const walls = typeof env.walls === 'function' ? env.walls() || [] : [];
+    const dir = cut.dirVec || { x: -axis.z, z: axis.x };
+    const depthOf = pt => -((pt.x - cut.startPt.x) * dir.x + (pt.z - cut.startPt.z) * dir.z);
+    const projU = pt => pt.x * axis.x + pt.z * axis.z;
+    // FARTHEST FIRST, each one's silhouette filled with the ground before its
+    // lines go down: a toilet standing in front of the vanity hides the
+    // vanity behind it.
+    const placed = fixtures.map(fx => {
+      const geo = FG.fixtureGeometry(walls, fx);
+      return geo && geo.frame && geo.center ? { fx, geo, depth: depthOf(geo.center) } : null;
+    }).filter(p => p && p.depth > 0).sort((p, q) => q.depth - p.depth);
+    ctx.save();
+    ctx.strokeStyle = C.line;
+    ctx.fillStyle = C.ground;
+    ctx.lineWidth = 1;
+    placed.forEach(({ fx, geo, depth }) => {
+      const level = stack.floors.find(lv => lv.id === Number(fx.levelId));
+      if (!level) return;
+      const levelWalls = walls.filter(w => w.levelId === fx.levelId && (w.view || 'plan') === 'plan');
+      if (sightBlocked(geo.center, depth, dir, levelWalls)) return;
+      const f = geo.frame;
+      const dirC = geo.frontOff >= geo.backOff ? 1 : -1;
+      const out = { x: f.nx * dirC, z: f.nz * dirC };
+      const view = sectionFixtureView(out, dir);
+      const profile = FP.profileFor(fx.kind, view);
+      if (!profile) return;
+      const a0 = geo.tub ? geo.tubAlongStart : geo.alongStart;
+      const a1 = geo.tub ? geo.tubAlongEnd : geo.alongEnd;
+      const stretch = FP.stretches(fx.kind);
+      let uOf;
+      if (view === 'front') {
+        // Across the face: centred on the fixture, along the wall's run as
+        // the section sees it (a wall running right-to-left mirrors it).
+        const cu = projU(geo.center);
+        const sign = f.ux * axis.x + f.uz * axis.z >= 0 ? 1 : -1;
+        const k = stretch ? ((a1 - a0) * 12) / profile.w : 1;
+        uOf = a => cu + sign * (a * k) / 12;
+      } else {
+        // Out from the wall: the back at the wall face, the front into the
+        // room, whichever way the room lies across the page.
+        const back = f.at((a0 + a1) / 2, geo.backOff);
+        const sign = out.x * axis.x + out.z * axis.z >= 0 ? 1 : -1;
+        const k = stretch ? (Math.abs(geo.frontOff - geo.backOff) * 12) / profile.w : 1;
+        uOf = a => projU(back) + sign * (a * k) / 12;
+      }
+      const floor = level.floorTop;
+      const trace = polys => {
+        ctx.beginPath();
+        polys.forEach(flat => {
+          for (let i = 0; i < flat.length; i += 2) {
+            const x = X(uOf(flat[i])), y = Y(floor + flat[i + 1] / 12);
+            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+          }
+        });
+      };
+      trace(profile.sil || []); ctx.fill();
+      trace(profile.polys); ctx.stroke();
+    });
+    ctx.restore();
   }
 
   // ── STAIRS IN A SECTION ───────────────────────────────────────────────

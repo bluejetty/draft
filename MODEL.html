@@ -1678,6 +1678,7 @@
 <script src="./level-lock.js"></script>
 <script src="./stair-geometry.js"></script>
 <script src="./stair-section.js"></script>
+<script src="./fixture-profiles.js"></script>
 <!-- What a picked photo or PDF is, and the scale printed on it -- the TRACE
      chip's insert card. pdf.js itself is fetched only when a PDF is needed. -->
 <script src="./pdf-scan.js"></script>
@@ -4194,6 +4195,8 @@
       elevationMarks: name => (drawing?.elevationMarks || []).filter(m => m.cut === name),
       // EVERY LEVEL'S STAIRS, not the active level's: a section cuts them all.
       stairs: () => drawing?.stairs || [],
+      // EVERY LEVEL'S FIXTURES, for the bath pieces a section looks at.
+      fixtures: () => drawing?.fixtures || [],
       floorOpenings: floorId => (drawing?.surfaceOpenings || [])
         .filter(o => o.hostType === 'floor' && String(o.hostId) === String(floorId)),
       // THE SAME TICK THE PLAN READS, handed to the shared painter.
