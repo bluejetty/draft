@@ -98,6 +98,8 @@ function loadDraftModules() {
     // AND THE STAIR'S TWO: a section draws every stair the cut passes
     // through, and cut-view draws none without them.
     'stair-geometry.js', 'stair-section.js',
+    // AND THE BATH FIXTURES' ELEVATIONS, which a section draws beyond its cut.
+    'fixture-geometry.js', 'fixture-profiles.js',
     'cut-view.js',
     // AND THE BONEYARD'S EDITOR with what it reads: the floor-pull ladder in
     // tour.js and the bone loops it edits.
@@ -360,6 +362,7 @@ function buildEnv(win, saved) {
       .filter(m => m.cut === name),
     floors: () => floors,
     stairs: () => saved.stairs || [],
+    fixtures: () => saved.fixtures || [],
     floorOpenings: floorId => (saved.surfaceOpenings || [])
       .filter(o => o.hostType === 'floor' && String(o.hostId) === String(floorId)),
     columns: () => columns,
