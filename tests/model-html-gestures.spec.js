@@ -754,6 +754,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // page's INSERT UNDERLAY, which the table now records as present.
             'strip-trace', 'trace-upload', 'trace-later', 'trace-prev', 'trace-next',
             'trace-calibrate', 'trace-cal-apply', 'trace-go', 'trace-other', 'trace-cancel',
+            // And a DXF's second button (Movie, 9 Oct): EDITABLE brings the
+            // file in as the drafter's own LINEs. Lines the LINE tool makes
+            // already; this makes them from a file.
+            'trace-editable',
             // HOLOGRAM (Movie, 8 Oct): on the same card, bring in another
             // .draft to show under this one in blue. It draws nothing of
             // this drawing's; the rows it lists are built per hologram.
