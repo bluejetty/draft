@@ -13060,7 +13060,7 @@
   // one (:37). An attached garage is part of the house it hangs off, so it
   // does not spend the detached garage's slot.
   const raiseLoop = (points, levelId,
-    { garage = false, openings = [], against = null,
+    { garage = false, openings = [], against = null, stackOn = null,
       viewId = 'plan', wallType = null, withOutline = true,
       baseHeight, topHeight, body } = {}) => {
     const BH = window.DraftBuildHouse;
@@ -13117,11 +13117,42 @@
     // plan's edges, and both the skip above and houseWallRuns' own degenerate
     // skip take runs OUT of the list -- so a wall's place in an array stopped
     // meaning its edge the moment either could fire.
+    // ── STACKED ON THE WALL BELOW ────────────────────────────────────────
+    //
+    // Movie, 9 Oct, on the MOD BILEVEL's roof plan: "2nd floor walls should
+    // line up with main floor walls in that area". Where an edge of this loop
+    // runs along a wall line of a loop below (`stackOn`) and that loop lies
+    // on the OTHER side, the wall takes the lower wall's side of the line, so
+    // its body stands on the wall under it instead of a thickness beside it.
+    const lowerLoops = (stackOn || []).filter(l => Array.isArray(l) && l.length >= 3);
+    const insideLoop = (loop, p) => {
+      let hit = false;
+      for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {
+        const a = loop[i], b = loop[j];
+        if ((a.z > p.z) !== (b.z > p.z) && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
+      }
+      return hit;
+    };
+    const refFor = run => {
+      if (!lowerLoops.length) return refLine;
+      const dx = run.end.x - run.start.x, dz = run.end.z - run.start.z;
+      const len = Math.hypot(dx, dz);
+      if (!(len > 1e-6)) return refLine;
+      const mid = { x: (run.start.x + run.end.x) / 2, z: (run.start.z + run.end.z) / 2 };
+      const onLine = lowerLoops.some(loop => loop.some((a, i) =>
+        G.pointToSegment(mid, { start: a, end: loop[(i + 1) % loop.length] }).d < 0.01));
+      if (!onLine) return refLine;
+      // 'left' puts the body on the (-dz, dx) side of start -> end.
+      const outward = refLine === 'left' ? -1 : 1;
+      const probe = { x: mid.x - outward * 0.25 * dz / len, z: mid.z + outward * 0.25 * dx / len };
+      return lowerLoops.some(loop => insideLoop(loop, probe))
+        ? (refLine === 'left' ? 'right' : 'left') : refLine;
+    };
     const wallsByEdge = [];
     BH.houseWallRuns(points).forEach(run => {
       if (sharedWith && G.edgeOnLoop(run.start, run.end, sharedWith)) return;
       wallsByEdge[run.edge] = commitWall(run.start, run.end,
-        { bone: false, refLine, ...on });
+        { bone: false, refLine: refFor(run), ...on });
     });
     const walls = wallsByEdge.filter(Boolean);
 
@@ -15810,7 +15841,8 @@
       : (upperStorey ? upperStorey.id : null);
     if (plan.overGarage && plan.entry && overGarageLevelId != null) {
       overGarageBody = raiseLoop(plan.overGarage, overGarageLevelId,
-        { openings: plan.overGarageOpenings, topHeight: split.upperWallHeightFt });
+        { openings: plan.overGarageOpenings, topHeight: split.upperWallHeightFt,
+          stackOn: [plan.house, plan.entry] });
       raised.push(overGarageBody);
     } else if (plan.overGarage && upperStorey) {
       overGarageBody = raiseLoop(plan.overGarage, upperStorey.id,

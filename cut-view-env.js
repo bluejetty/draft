@@ -58,6 +58,12 @@ if (!window.DraftCutViewEnv) {
         ...(wall?.body === 'garage' ? { body: 'garage' } : {}),
         wallType: wall?.wallType,
         baseHeight: num(wall?.baseHeight) ?? 0,
+        // HUNG UNDER A ROOF (`hoodOf`, boneyard-edit.js roofHood): a wall that
+        // stands on the storey below's ceiling, with no floor of its own under it.
+        // Dropped here, LAYOUT's elevation laid the OVER GARAGE floor band under
+        // it, in front of the main wall and over its window (Movie, 9 Oct, on E3:
+        // "the lines look like they are effected by the 2nd floor").
+        ...(wall?.hoodOf != null ? { hoodOf: String(wall.hoodOf) } : {}),
         topHeight: topHeight !== null && topHeight > 0 ? topHeight : DEFAULT_WALL_TOP_FT,
         // WHAT THE WALL WEARS, carried through rather than re-validated. The
         // record was normalised by drawing-format.js when the file was opened,

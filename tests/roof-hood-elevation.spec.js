@@ -74,3 +74,20 @@ test('E2: the garage sill plate line is as dark as the house\'s', async ({ page 
   expect(house).toBeLessThan(80);
   expect(Math.abs(garage - house), `house ${house}, garage ${garage}`).toBeLessThan(20);
 });
+
+// LAYOUT draws its elevations through cut-view-env.js, and that env dropped
+// `hoodOf`: the walls hung under the room's roof went down as ordinary
+// walls, each with the OVER GARAGE floor band under it, in front of the main
+// wall and over its window (Movie, 9 Oct, on E3: "the lines look like they
+// are effected by the 2nd floor").
+test('LAYOUT\'s elevation env keeps the walls hung under a roof', async ({ page }) => {
+  await page.goto('/LAYOUT.html');
+  await page.waitForFunction(() => window.DraftCutViewEnv && window.DraftDrawingFormat);
+  const got = await page.evaluate(saved => {
+    const env = window.DraftCutViewEnv.buildCutViewEnv(saved, saved.levels.map(l => ({ ...l })));
+    return env.walls().filter(w => w.hoodOf).map(w => w.hoodOf);
+  }, REPRO.drawing || REPRO);
+  const want = (REPRO.drawing || REPRO).walls.filter(w => w.hoodOf).map(w => String(w.hoodOf));
+  expect(want.length).toBeGreaterThan(0);
+  expect(got).toEqual(want);
+});
