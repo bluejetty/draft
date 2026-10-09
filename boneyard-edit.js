@@ -917,7 +917,7 @@ if (!window.DraftBoneyardEdit) {
           if (keep && start == null) start = marks[k];
           if ((!keep || k === marks.length - 2) && start != null) {
             const end = keep ? marks[k + 1] : marks[k];
-            if (end - start > 0.01) runs.push({ axis, c, lo: start, hi: end });
+            if (end - start > 0.01) runs.push({ axis, c, lo: start, hi: end, inward: inward(a, b) });
             start = null;
           }
         }
@@ -925,14 +925,22 @@ if (!window.DraftBoneyardEdit) {
     });
     const newId = idMaker(d);
     const like = (d.walls || []).find(w => Number(w.levelId) === levelId && w.body !== 'garage');
+    // ON THE EXTERIOR FACE, like the room's own walls, so the two line up
+    // outside (Movie, 9 Oct: "why is it CENTERLINE ? should be EXT line so it
+    // lines up"). A run goes low to high, so its inside is whichever side of
+    // that direction faces in from the wall line: 'left' is (-dz, dx), the
+    // side build-house.js's outlineInteriorRef names for a ring wound that way.
     runs.forEach(r => {
       const a = pointAt(r.axis, r.c, r.lo), b = pointAt(r.axis, r.c, r.hi);
+      const dx = Math.sign(b.x - a.x), dz = Math.sign(b.z - a.z);
+      const n = r.inward;
+      const refLine = (near(n.x, -dz) && near(n.z, dx)) ? 'left' : 'right';
       d.walls.push({
         id: newId('wall'),
         start: { x: a.x, y: 0, z: a.z }, end: { x: b.x, y: 0, z: b.z },
         levelId, view: 'plan',
         wallType: (like && like.wallType) || 'stud_2x6',
-        refLine: 'center',
+        refLine,
         baseHeight: heights.baseHeight, topHeight: heights.topHeight,
         hoodOf: String(roof.id),
       });

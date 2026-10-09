@@ -229,6 +229,23 @@ test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight 
     const roomWalls = d.walls.filter(w => Number(w.levelId) === 4);
     expect(roomWalls.length).toBeGreaterThan(3);
     roomWalls.forEach(w => expect(w.topHeight).toBeCloseTo(109.125 / 12, 3));
+    // STACKED ON THE MAIN FLOOR'S WALLS where it stands on them (Movie,
+    // 9 Oct: "2nd floor walls should line up with main floor walls in that
+    // area"): along the house's front (z 20) and down its side for the 1 ft
+    // jog (x 16), the room's wall takes the house side of the line.
+    const bodyToward = w => {
+      const dx = w.end.x - w.start.x, dz = w.end.z - w.start.z, len = Math.hypot(dx, dz);
+      const side = w.refLine === 'left' ? 1 : w.refLine === 'right' ? -1 : 0;
+      return [side * -dz / len, side * dx / len].map(v => Math.round(v) + 0);
+    };
+    const onHouse = roomWalls.filter(w => !w.hoodOf
+      && ((w.start.z === 20 && w.end.z === 20) || (w.start.x === 16 && w.end.x === 16)));
+    expect(onHouse.length, 'the front and the jog').toBe(2);
+    onHouse.forEach(w => expect(bodyToward(w), `${JSON.stringify(w.start)} -> ${JSON.stringify(w.end)}`)
+      .toEqual(w.start.z === 20 && w.end.z === 20 ? [0, -1] : [-1, 0]));
+    // Its other walls keep the room's side.
+    roomWalls.filter(w => !w.hoodOf && !onHouse.includes(w))
+      .forEach(w => expect(w.refLine).toBe('left'));
     // A door off the landing into the room.
     expect(d.fenestrations.some(f => f.type === 'door'
       && roomWalls.some(w => w.id === f.wallId))).toBe(true);
@@ -276,6 +293,18 @@ test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight 
       [[-4, bottomZ], [-4, 20]], [[-4, bottomZ], [2, bottomZ]], [[2, bottomZ], [2, 19]],
       [[2, 19], [16, 19]],
     ].map(r => r.sort().join(' ')).sort());
+    // ON THE EXTERIOR FACE, like the room's own walls, so the two line up
+    // outside (Movie, 9 Oct: "why is it CENTERLINE ? should be EXT line so
+    // it lines up"): each wall's body lies in from its line, toward the
+    // room and the strip.
+    const inward = { '-4': [1, 0], '2': [-1, 0], [bottomZ]: [0, 1], '19': [0, 1] };
+    hood.forEach(w => {
+      const dx = w.end.x - w.start.x, dz = w.end.z - w.start.z, len = Math.hypot(dx, dz);
+      const side = w.refLine === 'left' ? 1 : w.refLine === 'right' ? -1 : 0;
+      const along = Math.abs(dx) < 1e-6 ? String(w.start.x) : String(w.start.z);
+      expect([side * -dz / len, side * dx / len].map(v => Math.round(v) + 0), `${w.refLine} wall at ${along}`)
+        .toEqual(inward[along]);
+    });
     hood.forEach(w => {
       expect(w.baseHeight).toBeCloseTo(109.125 / 12 - third.riseFt, 3);
       expect(w.topHeight).toBeCloseTo(109.125 / 12, 3);
