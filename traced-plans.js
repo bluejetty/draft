@@ -46,7 +46,17 @@ if (!window.DraftTracedPlans) {
   const ROOM_OVER_MIN_FT = 8;
   const ROOM_OVER_CANTILEVER_FT = 2;
   const FRONT_DOOR_WIDTH_FT = 3;
-  const MAN_DOOR_WIDTH_FT = 2.5;
+  // A D36 like the front door (Movie, 9 Oct: "make all default ext doors
+  // D36"), and the wall it takes: the leaf, plus a 2x6 and its 1 1/2" of
+  // lintel bearing at each end. Four feet held the old 2'-6" leaf and does
+  // not hold this one.
+  const MAN_DOOR_WIDTH_FT = 3;
+  const wallFor = widthFt => widthFt + 2 * (5.5 + 1.5) / 12;
+  const MAN_DOOR_WALL_FT = wallFor(MAN_DOOR_WIDTH_FT);
+  // A TRACED GARAGE CAN STAND ONLY 4 FT PROUD, which the premade's no longer
+  // does: there the man door stays on the back wall Movie put it on ("a path
+  // to backyard") as the D30 it was, rather than moving to a side.
+  const SHORT_MAN_DOOR_WIDTH_FT = 2.5;
   // The premade bilevel's own frame: its landing spans x -10..2 on the front
   // line z = 20, and the garage's house-side wall stands at x = -4.
   const PREMADE_LINE_X = -4;
@@ -268,10 +278,11 @@ if (!window.DraftTracedPlans) {
   const entryGarageDoor = (entry, openings, garage) => {
     if (!garage || !entry || !Array.isArray(openings)) return openings;
     const edges = edgesOf(entry);
-    const shared = edges.filter(e => e.len >= MAN_DOOR_WIDTH_FT + 1 && onOther(e, garage));
+    const shared = edges.filter(e => e.len >= MAN_DOOR_WALL_FT && onOther(e, garage));
     if (!shared.length) return openings;
-    const man = openings.findIndex(o => o.type === 'door'
-      && Math.abs(o.widthFt - MAN_DOOR_WIDTH_FT) < TOL);
+    // BY ITS FLAG, NOT ITS WIDTH: it is a D36 now, the same as the front
+    // door beside it, and a width match took the front door instead.
+    const man = openings.findIndex(o => o.type === 'door' && o.manDoor === true);
     if (man < 0 || shared.some(e => e.index === openings[man].edge)) return openings;
     const e = shared.sort((p, q) => q.len - p.len)[0];
     // By the corner he marked: the end of the shared wall that meets the
@@ -308,10 +319,13 @@ if (!window.DraftTracedPlans) {
     const out = plan.doors.map(door => opening(plan.faceIndex, door.offset, door.widthFt, 'door',
       { garage: true, headFt: door.headFt }));
     const man = faces
-      .filter(f => f.index !== plan.faceIndex && f.lengthFt >= MAN_DOOR_WIDTH_FT + 1)
+      .filter(f => f.index !== plan.faceIndex && f.lengthFt >= wallFor(SHORT_MAN_DOOR_WIDTH_FT))
       .sort((p, q) => (p.orientation === 'back' ? -1 : 0) - (q.orientation === 'back' ? -1 : 0)
         || p.lengthFt - q.lengthFt)[0];
-    if (man) out.push(opening(man.index, man.lengthFt / 2, MAN_DOOR_WIDTH_FT, 'door'));
+    if (man) {
+      const widthFt = man.lengthFt >= MAN_DOOR_WALL_FT ? MAN_DOOR_WIDTH_FT : SHORT_MAN_DOOR_WIDTH_FT;
+      out.push(opening(man.index, man.lengthFt / 2, widthFt, 'door'));
+    }
     return out;
   };
 
@@ -557,7 +571,7 @@ if (!window.DraftTracedPlans) {
           && lx >= Math.min(e.a.x, e.b.x) - TOL && lx <= Math.max(e.a.x, e.b.x) + TOL);
         plan.overGarageOpenings = [
           ...dealOn(room, { levelId: 2, skip: [H] }),
-          ...(side ? [opening(side.index, Math.abs(lx - side.a.x), P().MAN_DOOR_WIDTH_FT, 'door')] : []),
+          ...(side ? [opening(side.index, Math.abs(lx - side.a.x), P().ROOM_DOOR_WIDTH_FT, 'door')] : []),
         ];
       } else {
         plan.garageRoof = garageLoop ? Graw : null;

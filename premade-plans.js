@@ -17,9 +17,10 @@
 //   "lets make the bungalows all 32 feet wide"           -> WIDTH_FT
 //   "house 40 long"  ("40x32 = 1280 sqft good starter")  -> DEPTH_FT
 //   "a 24 ft wide garage"                                -> GARAGE_WIDTH_FT
+//     (25 since 9 Oct: the D36 man door took a foot more on the proud side)
 //   "make the garage 26 ft long"                         -> GARAGE_DEPTH_FT
 //   "sticks over past the house by 4 ft (so there will be 12ft of house
-//    visible and 20 ft covered by garage"
+//    visible and 20 ft covered by garage"   (5 ft since 9 Oct: GARAGE_PAST_FT)
 //   "the right garage wall will be 4ft closer to the property line than the
 //    house wall"
 //   "only the garage wall should go the extra foot so will be 27 ft on that
@@ -62,13 +63,23 @@ if (!window.DraftPremadePlans) {
 (() => {
   const WIDTH_FT = 32;
   const DEPTH_FT = 40;
-  const GARAGE_WIDTH_FT = 24;
+  // 25 FT, ONE MORE THAN THE 24 IT WAS, and all of it on the side away from
+  // the house -- see GARAGE_PAST_FT. The stretch along the house is the same
+  // 20 ft it always was.
+  const GARAGE_WIDTH_FT = 25;
   const GARAGE_DEPTH_FT = 26;
   // How far the garage's right wall stands proud of the house's, toward the
-  // property line. The 4 ft of garage rear wall this exposes is the wall a
-  // man-door goes in -- Movie: "so a man-door can be installed that leads on
-  // a path to backyard" -- which is why it is a dimension and not a leftover.
-  const GARAGE_PAST_FT = 4;
+  // property line. The garage rear wall this exposes is the wall a man-door
+  // goes in -- Movie: "so a man-door can be installed that leads on a path to
+  // backyard" -- which is why it is a dimension and not a leftover.
+  //
+  // FIVE FEET, NOT FOUR. Movie, 9 Oct: "make all default ext doors D36" --
+  // "for the one in the garage we might need to add 1 foot to the right side
+  // of the garage (and 2nd floor above". A 3'-0" leaf takes 4'-2" of wall
+  // (a 2x6 and its 1 1/2" of lintel bearing at each end); four feet refused
+  // it. The room over the garage is measured off the same two numbers, so it
+  // takes the foot with it.
+  const GARAGE_PAST_FT = 5;
   // The connection, standardised at a foot. See above.
   const GARAGE_TIE_FT = 1;
 
@@ -237,14 +248,14 @@ if (!window.DraftPremadePlans) {
   // THE GARAGE. Its loop runs [tie, rear, right, door wall, left, shared] --
   // see garageLoop, which builds it in that order.
   //
-  // THE MAN-DOOR IS WHY THE 4 FT REAR WALL EXISTS. Movie: the garage stands
-  // proud of the house "so a man-door can be installed that leads on a path to
-  // backyard". Four feet is not four feet of door: the bearing has to come off
-  // each end, and what is left is a shade under 2'-8". A 2'-6" leaf fits with
-  // room to spare, which is the difference between a door and a door that the
-  // clamp refuses on a rounding error.
+  // THE MAN-DOOR IS WHY THE REAR WALL EXISTS. Movie: the garage stands proud
+  // of the house "so a man-door can be installed that leads on a path to
+  // backyard". Five feet is not five feet of door: the bearing has to come
+  // off each end, and what is left is a shade under 3'-10". The D36 every
+  // exterior door now is fits with room to spare, which is the difference
+  // between a door and a door that the clamp refuses on a rounding error.
   const garageOpenings = () => [
-    opening(1, GARAGE_PAST_FT / 2, 2.5, 'door'),
+    opening(1, GARAGE_PAST_FT / 2, MAN_DOOR_WIDTH_FT, 'door'),
     opening(3, GARAGE_WIDTH_FT / 2, 16, 'door',
       { garage: true, headFt: GARAGE_DOOR_HEAD_FT }),
   ];
@@ -302,7 +313,14 @@ if (!window.DraftPremadePlans) {
   // the window is on the BACK, away from both the street and the neighbour,
   // and it is one number to move when Movie wants it elsewhere -- the same
   // promise houseOpenings makes.
-  const MAN_DOOR_WIDTH_FT = 2.5;
+  //
+  // 3'-0", LIKE THE FRONT DOOR. Movie, 9 Oct: "make all default ext doors
+  // D36". Every man door outside -- the garage's, the bilevel's door in from
+  // the garage, a detached garage's -- reads this one number.
+  const MAN_DOOR_WIDTH_FT = 3;
+  // AN INSIDE DOOR STAYS A D30: the MOD BILEVEL's door off the upper landing
+  // into the room over the garage opens between two rooms, not outdoors.
+  const ROOM_DOOR_WIDTH_FT = 2.5;
   const GARAGE_WINDOW_WIDTH_FT = 3;
 
   // `wallThicknessFt` IS ASKED FOR RATHER THAN ASSUMED. What carries the end
@@ -373,7 +391,7 @@ if (!window.DraftPremadePlans) {
   // door end its own roof at the main-floor level -- which is the shape Movie
   // is describing and the reason for the 2/3.
   //
-  //   24 ft WIDE, the garage's own width, so the walls above land on the
+  //   25 ft WIDE, the garage's own width, so the walls above land on the
   //   walls below rather than mid-span.
   //   18 ft LONG from the house, which is two thirds of the 27 ft the garage
   //   runs including its tie -- his "about 18ft" and his "2/3" agree, and
@@ -425,7 +443,7 @@ if (!window.DraftPremadePlans) {
     // five points instead of four.
     //
     // The room is wider than the house is long here: its back run starts
-    // inside the house's front wall and carries on 4 ft past the house's
+    // inside the house's front wall and carries on 5 ft past the house's
     // right corner, because that is how far the garage sticks out. Left as
     // ONE edge, that run is only PARTLY shared -- and edgeOnLoop tests whole
     // edges, by design, so it would answer "not shared" and the room's back
@@ -457,7 +475,7 @@ if (!window.DraftPremadePlans) {
 
   // Windows on three sides. NOT on either back edge -- the long one is
   // interior, against the house, and a window in it would look into the upper
-  // hall; the 4 ft stub beside it is too short to take one clear of both
+  // hall; the 5 ft stub beside it is too short to take one clear of both
   // corners.
   //
   // EDGES 3, 4 AND 5 -- and they were 2, 3 and 4 until the tie went in, which
@@ -958,7 +976,7 @@ if (!window.DraftPremadePlans) {
   // right six behind the garage.
   const entryOpenings = ({ garage = false } = {}) => [
     opening(2, ENTRY_WIDTH_FT - 3, 3, 'door'),
-    ...(garage ? [opening(2, 3, MAN_DOOR_WIDTH_FT, 'door')] : []),
+    ...(garage ? [opening(2, 3, MAN_DOOR_WIDTH_FT, 'door', { manDoor: true })] : []),
   ];
 
   // THE STAIRS, as runs the page turns into stair records: `start` is the
@@ -1093,14 +1111,14 @@ if (!window.DraftPremadePlans) {
   // The street door on the street half (edge 3, from the garage line
   // leftwards); the door in from the garage on the garage half (edge 2).
   const modifiedEntryOpenings = () => [
-    opening(2, 3, MAN_DOOR_WIDTH_FT, 'door'),
+    opening(2, 3, MAN_DOOR_WIDTH_FT, 'door', { manDoor: true }),
     opening(3, 3, 3, 'door'),
   ];
   // The room's windows as the 2 STOREY's, and the door in off the landing on
   // its back wall (edge 0, from the room's left corner -- over the landing).
   const modifiedRoomOpenings = () => [
     ...overGarageOpenings(),
-    opening(0, 3, MAN_DOOR_WIDTH_FT, 'door'),
+    opening(0, 3, ROOM_DOOR_WIDTH_FT, 'door'),
   ];
 
   // THE ROOM'S ROOF IS SQUARE. Movie, 4 Oct, on the MOD BILEVEL: the room's
@@ -1270,7 +1288,7 @@ if (!window.DraftPremadePlans) {
     GARAGE_PAST_FT, GARAGE_TIE_FT, OVER_GARAGE_LENGTH_FT,
     OVERHEAD_DOOR_WIDTHS_FT, GARAGE_ROOF_HOUSE_END,
     GARAGE_TIE_ROOF_FLUSH, GARAGE_TIE_ROOF_RAKE,
-    MAN_DOOR_WIDTH_FT, GARAGE_WINDOW_WIDTH_FT, GARAGE_DOOR_HEAD_FT,
+    MAN_DOOR_WIDTH_FT, ROOM_DOOR_WIDTH_FT, GARAGE_WINDOW_WIDTH_FT, GARAGE_DOOR_HEAD_FT,
     ENTRY_WIDTH_FT, ENTRY_DEPTH_FT, ENTRY_LEFT_FT, BILEVEL_STAIR_WIDTH_FT,
     BILEVEL_STAIR_GAP_FT, BILEVEL_OVERLAP_FT,
     bungalow, twoStorey, bilevel, modifiedBilevel, planFor, detachedGarageOpenings, squareOver, joinLoops,
