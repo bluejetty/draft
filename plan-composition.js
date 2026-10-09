@@ -125,6 +125,20 @@ if (!window.DraftPlanComposition) {
     };
   };
 
+  // ── THE CAD LAYER EACH PIECE GOES OUT ON ─────────────────────────────────
+  // Movie, 9 Oct, on the DXF a sheet saves to: "all the layers that show on
+  // the specific layer should show". A canvas has no such thing and is not
+  // touched; the DXF recorder (dxf-writer.js) carries `dxfLayer`, and files
+  // what is drawn next under the last one named.
+  const onLayer = (ctx, layer) => { if (ctx && 'dxfLayer' in ctx) ctx.dxfLayer = layer; };
+  // A wall carries no layer of its own: a stud wall 4 1/2" or thinner is an
+  // interior one, anything heavier -- 2x6, ICF, concrete -- an exterior one,
+  // which is how this app builds a house.
+  const wallLayer = wall => {
+    const type = (window.DraftWallTypes?.WALL_TYPES || []).find(t => t.id === wall.wallType);
+    return type && type.totalIn <= 4.5 ? 'A-WALL-INT' : 'A-WALL-EXT';
+  };
+
   // ── THE ORDER ────────────────────────────────────────────────────────────
   //
   // Lifted from MODEL.dc.html's `_redrawOverlay`, minus every editor step.
@@ -165,9 +179,9 @@ if (!window.DraftPlanComposition) {
     // caller that cannot honestly supply one would not draw a paler floor, it
     // would throw in the middle of a sheet. A caller says what it can draw by
     // supplying the env for it, and this is where that is honoured.
-    if (env.floorEnv) floors.forEach(floor => render.drawFloor2D(ctx, toS, floor, {}, env.floorEnv));
-    if (env.shapeEnv) shapes.forEach(shape => render.drawShape2D(ctx, toS, shape, {}, env.shapeEnv));
-    if (env.roofEnv) roofs.forEach(roof => render.drawRoof2D(ctx, toS, roof, {}, env.roofEnv));
+    if (env.floorEnv) floors.forEach(floor => { onLayer(ctx, floor.layer || 'A-FL'); render.drawFloor2D(ctx, toS, floor, {}, env.floorEnv); });
+    if (env.shapeEnv) shapes.forEach(shape => { onLayer(ctx, shape.layer || 'SHAPE'); render.drawShape2D(ctx, toS, shape, {}, env.shapeEnv); });
+    if (env.roofEnv) roofs.forEach(roof => { onLayer(ctx, roof.layer || 'A-ROOF'); render.drawRoof2D(ctx, toS, roof, {}, env.roofEnv); });
 
     // MELDED where a wall ends on another or two cross (geometry-2d's
     // meldPieces) -- the pieces are for the painter only; openings and
@@ -177,6 +191,7 @@ if (!window.DraftPlanComposition) {
     const levelFixtures = list(env.fixtures).filter(fixture => fixture.levelId === levelId && shows(fixture.layer));
     if (env.fixtureEnv && render.drawWetFloors2D && levelFixtures.length) {
       const ink = env.fixtureEnv.FIXTURE_COLOR;
+      onLayer(ctx, 'A-FL-FLOORING');
       render.drawWetFloors2D(ctx, toS, {
         walls,
         fixtures: levelFixtures,
@@ -187,8 +202,10 @@ if (!window.DraftPlanComposition) {
     }
     const pieces = env.meldPieces ? env.meldPieces(walls) : walls;
     const joins = env.wallJoins ? env.wallJoins(pieces) : null;
-    pieces.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv));
-    pieces.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv));
+    // The fill pass is the wall's hatch -- its own layer, so an engineer can
+    // switch the pattern off and keep the wall.
+    pieces.forEach(wall => { onLayer(ctx, 'A-WALL-PATT'); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv); });
+    pieces.forEach(wall => { onLayer(ctx, wallLayer(wall)); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv); });
 
     drawOpenings(ctx, toS, env, walls, shows);
 
@@ -208,6 +225,7 @@ if (!window.DraftPlanComposition) {
         .filter(fixture => fixture.levelId === levelId
           && wallById.has(fixture.wallId) && shows(fixture.layer))
         .forEach(fixture => {
+          onLayer(ctx, fixture.layer || 'A-FIXT');
           render.drawFixture2D(ctx, toS, fixture, {}, wallById.get(fixture.wallId), env.fixtureEnv);
         });
     }
@@ -228,6 +246,7 @@ if (!window.DraftPlanComposition) {
           const placed = env.electricDeviceAt(device);
           if (!placed) return;
           const at = toS(placed.pt);
+          onLayer(ctx, device.layer || 'E-POWER');
           const paint = symbols[env.electricEnv.symbolFor?.(device.kind) || 'wallOutlet']
             || symbols.wallOutlet;
           symbols.drawDevice(ctx, (c, sz) => paint(c, sz), at.x, at.y, size, placed.rotation);
@@ -241,11 +260,12 @@ if (!window.DraftPlanComposition) {
     // filtering by level and view for itself, which is the one job this module
     // exists to stop being written twice.
     if (env.stairEnv) {
+      onLayer(ctx, 'A-STR');
       render.drawStairs2D(ctx, toS,
         { ...env.stairEnv, stairs: pick(env.stairs, { strict: true }) });
     }
-    if (env.cutMarkEnv) render.drawCutMarks2D(ctx, toS, env.cutMarkEnv);
-    if (env.outlineEnv) render.drawOutlines2D(ctx, toS, env.outlineEnv);
+    if (env.cutMarkEnv) { onLayer(ctx, 'A-SECT-MARK'); render.drawCutMarks2D(ctx, toS, env.cutMarkEnv); }
+    if (env.outlineEnv) { onLayer(ctx, 'OUTLINE'); render.drawOutlines2D(ctx, toS, env.outlineEnv); }
 
     strokeLines(ctx, toS, lines, env);
 
@@ -253,7 +273,7 @@ if (!window.DraftPlanComposition) {
     // geometry they measure. The model's overlay puts its selection halos
     // above even these, which is an editor step and stays with the editor.
     if (env.dimensionEnv) {
-      dimensions.forEach(dimension => render.drawDimension2D(ctx, toS, dimension, {}, env.dimensionEnv));
+      dimensions.forEach(dimension => { onLayer(ctx, dimension.layer || 'A-DIMS'); render.drawDimension2D(ctx, toS, dimension, {}, env.dimensionEnv); });
     }
     // STRUCTURE GOES OVER THE DRAWING IT HOLDS UP. `_redrawOverlay` puts beams
     // and columns after the room tags and before the stairs, which is late on
@@ -269,14 +289,17 @@ if (!window.DraftPlanComposition) {
     // THE FOOTING IS THE CALLER'S ANSWER, not the painter's -- only a pile
     // changes the drawn shape, a telepost being the default square.
     if (env.structureEnv) {
-      pick(env.beams).forEach(beam => render.drawBeam2D(ctx, toS, beam, {}, env.structureEnv));
-      pick(env.columns).forEach(column => render.drawColumn2D(ctx, toS, column, {
-        footing: env.columnFooting ? env.columnFooting(column) : null,
-      }, env.structureEnv));
+      pick(env.beams).forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, {}, env.structureEnv); });
+      pick(env.columns).forEach(column => {
+        onLayer(ctx, column.layer || 'S-COL-FOOTING');
+        render.drawColumn2D(ctx, toS, column, {
+          footing: env.columnFooting ? env.columnFooting(column) : null,
+        }, env.structureEnv);
+      });
     }
 
     if (env.noteEnv) {
-      notes.forEach(note => render.drawNoteScreen2D(ctx, toS(note.anchor), toS(note.text), note, {}, env.noteEnv));
+      notes.forEach(note => { onLayer(ctx, note.layer || 'A-ANNO-NOTE'); render.drawNoteScreen2D(ctx, toS(note.anchor), toS(note.text), note, {}, env.noteEnv); });
     }
 
     // ROOM TAGS, last, over what they name (Movie, 1 Oct): the NAME on every
@@ -286,7 +309,7 @@ if (!window.DraftPlanComposition) {
     if (env.roomTagEnv) {
       pick(env.roomTags, { views: false })
         .filter(tag => shows(tag.layer || 'ROOM-IDS-AREA'))
-        .forEach(tag => render.drawRoomTag2D(ctx, toS, tag, {}, env.roomTagEnv));
+        .forEach(tag => { onLayer(ctx, tag.layer || 'ROOM-IDS-AREA'); render.drawRoomTag2D(ctx, toS, tag, {}, env.roomTagEnv); });
     }
   };
 
@@ -315,6 +338,7 @@ if (!window.DraftPlanComposition) {
     });
 
     geometryOf.forEach((geometry, opening) => {
+      onLayer(ctx, opening.layer || (opening.type === 'door' ? 'A-DOOR' : 'A-GLAZ'));
       render.drawOpening2D(ctx, toS, opening, { geometry },
         { isPrinting: Boolean(env.isPrinting), ...(env.openingEnv || {}) });
     });
@@ -366,6 +390,7 @@ if (!window.DraftPlanComposition) {
         if (!label) return;
         const line = FL.openingTagLine(opening, geometry, outlineFor(opening.levelId));
         if (!line) return;
+        onLayer(ctx, isWindow ? 'A-DIMS-WIN' : 'A-DIMS-DOOR');
         R.labelAlongLine2D(ctx, toS(line.a), toS(line.b), label,
           { offset: 0, color: env.labelColor || '#1d1f20' });
       });
@@ -386,6 +411,7 @@ if (!window.DraftPlanComposition) {
       geometryOf.forEach((geometry, opening) => {
         if (opening.type !== 'door' || !concrete.has(opening.wallId)) return;
         const c = toS(geometry.center);
+        onLayer(ctx, 'S-FNDN-NOTE');
         ctx.fillText('CUT GRADE BEAM DN 12" — SLAB POURS OVER', c.x, c.y - 9);
       });
       ctx.restore();
@@ -401,6 +427,7 @@ if (!window.DraftPlanComposition) {
     ctx.lineWidth = 1;
     lines.forEach(seg => {
       const a = toS(seg.start), b = toS(seg.end);
+      onLayer(ctx, seg.layer || 'draft');
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       if (seg.bulge && env.lineControlPoint) {
