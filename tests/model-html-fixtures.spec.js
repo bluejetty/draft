@@ -190,3 +190,34 @@ test('the day page paints them in the day ground and the day ink', async ({ page
   expect(fills).not.toContain(NIGHT_FILL);
   expect(fills).not.toContain(OLD_LITERAL);
 });
+
+// THE WC FLOOR: 1'-0" tile in a room the walls close round a toilet, tub or
+// shower, in the fixture ink made faint (Movie, 9 Oct). Three walls stood off
+// the bone's longest wall make the room; the toilet goes on one of them.
+test('a room with a toilet in it is tiled in the faint fixture ink', async ({ page }) => {
+  await recordPaint(page);
+  await houseOnOldPage(page);
+  const room = (withToilet) => `${HOST}
+    const proto = host;
+    const along = { x: (host.end.x - host.start.x) / len(host), z: (host.end.z - host.start.z) / len(host) };
+    const into = { x: -along.z, z: along.x };
+    const mid = { x: (host.start.x + host.end.x) / 2, z: (host.start.z + host.end.z) / 2 };
+    // Inward is toward the house's middle.
+    const all = d.walls.filter(w => Number(w.levelId) === ${MAIN_FL});
+    const cx = all.reduce((s, w) => s + w.start.x, 0) / all.length, cz = all.reduce((s, w) => s + w.start.z, 0) / all.length;
+    const sgn = ((cx - mid.x) * into.x + (cz - mid.z) * into.z) > 0 ? 1 : -1;
+    const P = (a, b) => ({ x: mid.x + along.x * a + into.x * b * sgn, y: host.start.y || 0, z: mid.z + along.z * a + into.z * b * sgn });
+    const mk = (id, s, e) => ({ ...proto, id, start: s, end: e, wallType: 'stud_2x4', refLine: 'center' });
+    d.walls.push(mk('wcA', P(0, 0), P(0, 9)), mk('wcB', P(0, 9), P(6, 9)), mk('wcC', P(6, 9), P(6, 0)));
+    d.fixtures = (d.fixtures || []).filter(f => !String(f.id).startsWith('wc'));
+    ${withToilet ? `d.fixtures.push({ id: 'wcT', wallId: 'wcB', levelId: ${MAIN_FL}, kind: 'toilet',
+      offset: 3, width: 5 / 3, depth: 7 / 3, side: sgn === 1 ? -1 : 1 });` : ''}
+  `;
+  await loadWith(page, room(false));
+  await page.evaluate(() => { window.__strokes = []; });
+  await page.waitForTimeout(300);
+  expect(await page.evaluate(ink => window.__strokes.includes(ink), `${NIGHT_INK}55`)).toBe(false);
+  await loadWith(page, room(true));
+  await expect.poll(() => page.evaluate(ink => window.__strokes.includes(ink), `${NIGHT_INK}55`)).toBe(true);
+});
+

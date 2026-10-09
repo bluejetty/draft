@@ -136,6 +136,39 @@ test('a washroom draws its three pieces on the sheet', async ({ page }) => {
   expect(withFixtures).toBeGreaterThan(without);  // and the fixtures are extra ink
 });
 
+// THE WC FLOOR IS 1'-0" TILE, in the fixture ink made faint (Movie, 9 Oct:
+// "the floor in the WC should be 1ft tile, and lighter line at joints"). The
+// room is a WC because a toilet, tub or shower stands in it -- so the same
+// four walls round only a vanity lay no tile.
+const TILE_INK = '#1d1f2055';
+async function recordStrokes(page) {
+  await page.addInitScript(() => {
+    window.__strokes = [];
+    const proto = CanvasRenderingContext2D.prototype;
+    const desc = Object.getOwnPropertyDescriptor(proto, 'strokeStyle');
+    Object.defineProperty(proto, 'strokeStyle', {
+      set(v) { window.__strokes.push(String(v)); return desc.set.call(this, v); },
+      get() { return desc.get.call(this); },
+    });
+  });
+}
+
+test('a WC on the sheet is tiled; a room with only a vanity is not', async ({ page }) => {
+  await recordStrokes(page);
+  await openLayout(page, washroomDrawing());
+  await placeViewport(page, 8, 5);
+  expect(await page.evaluate(ink => window.__strokes.includes(ink), TILE_INK)).toBe(true);
+
+  const vanityOnly = washroomDrawing();
+  vanityOnly.fixtures = vanityOnly.fixtures.filter(f => f.kind === 'vanity');
+  await openLayout(page, vanityOnly);
+  await page.evaluate(() => { window.__strokes = []; });
+  await placeViewport(page, 8, 5);
+  const strokes = await page.evaluate(() => window.__strokes);
+  expect(strokes.length).toBeGreaterThan(0);
+  expect(strokes.includes(TILE_INK)).toBe(false);
+});
+
 // A closet is a fixture too -- a small room drawn from the host wall, with a
 // rod, a shelf, hanging clothes and a door off the DD/D ladder. It is the only
 // fixture that reads the four closet numbers and the door picker, and the

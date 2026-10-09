@@ -1547,6 +1547,91 @@ suite('drawFixture2D', 'the four appliances carry their own letters', R => {
   expect('a dishwasher', letterFor('dish'), 'DW');
 });
 
+// ── Movie's traced bath fixtures (9 Oct) ──
+// The toilet is its own outline: no clearance box round it. A vanity and a
+// tub keep their box. The box starts at P(a0, cBack) = toS(0,0) = (400,300).
+const startsAtBoxCorner = (R, kind, geo) => {
+  const ctx = recordingCtx();
+  R.drawFixture2D(ctx, toS, { kind }, {}, null, fixtureEnv({}, geo));
+  return calls(ctx, 'moveTo').some(([x, y]) => Math.abs(x - 400) < 0.01 && Math.abs(y - 300) < 0.01);
+};
+suite('drawFixture2D', 'a toilet draws its bowl and tank, not a box', R => {
+  expect('no box round the toilet', startsAtBoxCorner(R, 'toilet'), false);
+  expect('and the check is not blind -- a vanity has its box', startsAtBoxCorner(R, 'vanity'), true);
+  const ctx = recordingCtx();
+  R.drawFixture2D(ctx, toS, { kind: 'toilet' }, {}, null, fixtureEnv({}, { alongStart: 0, alongEnd: 20 / 12, frontOff: 28 / 12 }));
+  const xs = calls(ctx, 'lineTo').map(a => a[0]);
+  // 18" wide at full size, centred on a 20" record: 1" clear each side.
+  expect('18 inches wide', Math.round((Math.max(...xs) - Math.min(...xs)) / 10 * 12), 18);
+});
+
+suite('drawFixture2D', 'the tub drain sits at the faucet end', R => {
+  // The drain is the small closed ring; its x says which end it is at.
+  const drainX = faucetAlong => {
+    const ctx = recordingCtx();
+    R.drawFixture2D(ctx, toS, { kind: 'tub' }, {}, null,
+      fixtureEnv({}, { tub: true, tubAlongStart: 0, tubAlongEnd: 5, frontOff: 2.5, faucetAlong }));
+    const moves = calls(ctx, 'moveTo');
+    return moves[moves.length - 1][0];
+  };
+  expect('faucet at the start: drain near the start', drainX(0.4) < 425, true);
+  expect('faucet at the end: drain near the end', drainX(4.6) > 425, true);
+});
+
+// ── The WC floor: 1'-0" tile ──
+const G2 = (() => {
+  const w = {};
+  new Function('window', fs.readFileSync(path.join(__dirname, '..', 'geometry-2d.js'), 'utf8'))(w);
+  return w.DraftGeometry2D;
+})();
+const W = (id, x0, z0, x1, z1) => ({ id, start: { x: x0, z: z0 }, end: { x: x1, z: z1 } });
+// A 20' x 20' house with a 6' x 9' room standing loose inside it.
+const HOUSE = [W('n', 0, 0, 20, 0), W('e', 20, 0, 20, 20), W('s', 20, 20, 0, 20), W('w', 0, 20, 0, 0)];
+const BATH = [W('b1', 2, 2, 8, 2), W('b2', 8, 2, 8, 11), W('b3', 8, 11, 2, 11), W('b4', 2, 11, 2, 2)];
+const at = (x, z) => () => ({ center: { x, z } });
+const tileEnv = over => ({
+  walls: [...HOUSE, ...BATH], fixtures: [{ kind: 'toilet', wallId: 'b2' }],
+  fixtureGeometry: at(5, 6), roomLoops: G2.roomLoops,
+  wallFrame: () => ({ totalFt: 0 }), tileColor: '#abcdef', ...over,
+});
+
+suite('wetRoomLoops', 'the room round a toilet is the bathroom, not the house', R => {
+  const loops = R.wetRoomLoops([...HOUSE, ...BATH], [{ kind: 'toilet', wallId: 'b2' }], at(5, 6), G2.roomLoops);
+  expect('one room', loops.length, 1);
+  expect('the 6 x 9 one', Math.round(loops[0].area), 54);
+  expect('a sink makes no wet room',
+    R.wetRoomLoops([...HOUSE, ...BATH], [{ kind: 'sink', wallId: 'b2' }], at(5, 6), G2.roomLoops).length, 0);
+  expect('a tub does',
+    R.wetRoomLoops([...HOUSE, ...BATH], [{ kind: 'tub', wallId: 'b2' }], at(5, 6), G2.roomLoops).length, 1);
+});
+
+suite('drawWetFloors2D', 'a foot grid, in the faint ink, clipped to the room', R => {
+  const ctx = recordingCtx();
+  R.drawWetFloors2D(ctx, toS, tileEnv());
+  expect('clipped', count(ctx, 'clip'), 1);
+  expect('in the tile ink', sets(ctx, 'strokeStyle').includes('#abcdef'), true);
+  // 6' x 9' from a face at 0: joints at 0..6 one way and 0..9 the other
+  // (the first moveTo is the clip path's).
+  expect('7 + 10 joint lines', count(ctx, 'moveTo') - 1, 17);
+  const none = recordingCtx();
+  R.drawWetFloors2D(none, toS, tileEnv({ fixtures: [{ kind: 'vanity', wallId: 'b2' }] }));
+  expect('and no tile without a toilet, tub or shower', none.tape.length, 0);
+});
+
+suite('drawWetFloors2D', 'the first joint is a tile off the finished face', R => {
+  const ctx = recordingCtx();
+  R.drawWetFloors2D(ctx, toS, tileEnv({ wallFrame: () => ({ totalFt: 0.5 }) }));
+  // Walls 6" thick: the face is 3" in, so joints land at 2.25, 3.25 ... both
+  // ways. The grid is laid off the 9' side (x = 2), so the joints across it
+  // start on the x = 8 side and the joints along it on the z = 2 side.
+  const frac = v => Math.round(((v % 1) + 1) % 1 * 100) / 100;
+  const starts = calls(ctx, 'moveTo').slice(1).map(([x, y]) => ({ x: (x - 400) / 10, z: (y - 300) / 10 }));
+  const across = starts.filter(p => Math.abs(p.x - 8) < 1e-6).map(p => frac(p.z));
+  const along = starts.filter(p => Math.abs(p.z - 2) < 1e-6).map(p => frac(p.x));
+  expect('joints one way', across.length > 3 && across.every(f => f === 0.25), true);
+  expect('and the other', along.length > 3 && along.every(f => f === 0.25), true);
+});
+
 suite('drawFixture2D', 'a preview is drawn faint', R => {
   const ctx = recordingCtx();
   R.drawFixture2D(ctx, toS, { kind: 'sink' }, { preview: true }, null, fixtureEnv());
@@ -3128,6 +3213,16 @@ function coverage() {
     ['labelAlongLine2D perpendicular offset (label on the line)', labelNotOffset],
     ['drawColumn2D pile and telepost draw the same', columnShapeIgnored],
     ['drawColumn2D back on the old page ink', dropColumnEnvColour],
+    ['drawFixture2D toilet back in its box', src => src.replace(
+      "if (kind !== 'toilet') { rect(", 'if (true) { rect(')],
+    ['drawFixture2D tub drain always at the start', src => src.replace(
+      'const along = faucetAtStart ? (x => a1 - x * perIn) : (x => a0 + x * perIn);', 'const along = x => a0 + x * perIn;')],
+    ['wetRoomLoops any fixture makes a wet room', src => src.replace(
+      'const wet = (fixtures || []).filter(fx => WET_FIXTURE_KINDS.includes(fx.kind));', 'const wet = (fixtures || []);')],
+    ['wetRoomLoops takes the biggest room, not the smallest', src => src.replace(
+      'loop.area < best.area', 'loop.area > best.area')],
+    ['drawWetFloors2D joints from the centreline', src => src.replace(
+      'const uStart = halfOf(prev, o)', 'const uStart = 0 * halfOf(prev, o)')],
   ];
   BRANCH_MUTATIONS.forEach(([label, mutate]) => {
     const caught = runAll(load(mutate)).filter(r => r.failed || r.threw);

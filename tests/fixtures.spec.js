@@ -93,7 +93,8 @@ test('a cabinet run takes two clicks along the wall and saves on A-FIXT', async 
   expect(run.depth).toBeCloseTo(2, 5);  // 24" base cabinet
 });
 
-test('a vanity run is 21" deep casework', async ({ page }) => {
+// Movie's V30 and V36 are 24" deep (1._Story.DXF, 9 Oct); it was 21".
+test('a vanity run is 24" deep casework', async ({ page }) => {
   await h.openModel(page);
   await drawWall(page, -10, 0, 10, 0);
   await h.selectTool(page, 'Fixture');
@@ -105,7 +106,7 @@ test('a vanity run is 21" deep casework', async ({ page }) => {
   const run = (await h.savedDrawing(page)).fixtures[0];
   expect(run.kind).toBe('vanity');
   expect(run.layer).toBe('A-FIXT');
-  expect(run.depth).toBeCloseTo(1.75, 5);
+  expect(run.depth).toBeCloseTo(2, 5);
 });
 
 test('fixtures ride their host wall when it moves', async ({ page }) => {
