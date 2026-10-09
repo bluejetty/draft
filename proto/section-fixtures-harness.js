@@ -30,13 +30,15 @@ const MUTATIONS = [
   ['a fixture on the viewer\'s side of the cut is drawn', 'cut-view.js',
     c => c.replace('}).filter(p => p && p.depth > 0).sort(', '}).filter(p => p).sort(')],
   ['a vanity is drawn its traced width, not its run', 'cut-view.js',
-    c => c.replace('const k = stretch ? ((a1 - a0) * 12) / profile.w : 1;', 'const k = 1;')],
+    c => c.replace('const k = stretch ? bayIn / profile.w : 1;', 'const k = 1;')],
   ['a side view never mirrors', 'cut-view.js',
     c => c.replace('const sign = out.x * axis.x + out.z * axis.z >= 0 ? 1 : -1;', 'const sign = 1;')],
   ['the nearest fixture goes down first', 'cut-view.js',
     c => c.replace('.sort((p, q) => q.depth - p.depth);', '.sort((p, q) => p.depth - q.depth);')],
   ['a fixture hides nothing behind it', 'cut-view.js',
-    c => c.replace('      trace(profile.sil || []); ctx.fill();\n', '')],
+    c => c.replace('        trace(profile.sil || []); ctx.fill();\n', '')],
+  ['a cabinet run is one stretched door base', 'cut-view.js',
+    c => c.replace('const n = tile ? Math.max(1, Math.round(runIn / tile)) : 1;', 'const n = 1;')],
 ];
 
 if (MUTATE) {
@@ -162,6 +164,20 @@ check('but with no door wall the hall sees them',
   };
   check('a vanity on the far wall shows its faucet at the other end',
     faucetEnd(BATH) !== faucetEnd(turned), true);
+}
+
+// ── A KITCHEN WALL ─────────────────────────────────────────────────────────
+// Movie's kitchen pieces (KITCHENITEMS1/2.DXF) on the same wet wall: a 6'-0"
+// CABINET run is three 24" door bases side by side, not one stretched door;
+// the fridge stands 66" (Movie: "go 66"").
+{
+  const KITCHEN = { ...BATH, fixtures: [
+    fixture('run', 'wall-40', 'cabinet', 3, 6, 2),
+    fixture('ref', 'wall-40', 'fridge', 7.6, 3, 2.5),
+  ] };
+  const spans = extra(KITCHEN, FACING).strokes.map(span).sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  check('a 6\' run is three 24" bays 35 1/2" high, the fridge 36" x 66"', JSON.stringify(spans),
+    JSON.stringify([[24, 35], [24, 35], [24, 35], [36, 66]]));
 }
 
 console.log(`\n${ran - failed}/${ran} checks passed`);

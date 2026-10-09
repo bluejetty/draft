@@ -1075,6 +1075,54 @@ if (!window.DraftRender2D) {
   // the cabinet box and the line is 3/4" off the wall.
   const BACKSPLASH_IN = 0.8;
 
+  // THE PIECES A COUNTER RUNS OVER, which meld where they touch.
+  const COUNTER_KINDS = Object.freeze(['cabinet', 'sinkbase', 'drawerbase', 'doorbase', 'dish', 'stove']);
+  const JOINT_FT = 0.05;
+
+  // Which ends of this counter piece stand against another one: the same
+  // wall, the same face, an end within 5/8" of this one's. Null when the
+  // env names no neighbours to look at -- a painter handed only the fixture
+  // draws it whole, as before.
+  function counterJoints(fixture, geo, a0, a1, env) {
+    const others = Array.isArray(env.fixtures) ? env.fixtures : null;
+    if (!others || typeof env.fixtureGeometry !== 'function') return null;
+    let start = false, end = false;
+    others.forEach(other => {
+      if (other === fixture || !COUNTER_KINDS.includes(other.kind)) return;
+      if (other.wallId !== fixture.wallId || (other.side === -1 ? -1 : 1) !== (fixture.side === -1 ? -1 : 1)) return;
+      const g = env.fixtureGeometry(other);
+      if (!g) return;
+      if (Math.abs(g.alongEnd - a0) < JOINT_FT) start = true;
+      if (Math.abs(g.alongStart - a1) < JOINT_FT) end = true;
+    });
+    return start || end ? { start, end } : null;
+  }
+
+  // WHERE A COUNTER PIECE PRESSED NEAR ANOTHER LANDS: flush against it, so
+  // the two meld, when one of its ends comes within 6" of a neighbour's on
+  // the same face of the same wall -- a press is never that exact, and a
+  // piece 1/2" off its neighbour reads as two counters. Never into one: a
+  // slide that would overlap another piece is not taken. Records only,
+  // `offset` the centre along the host wall as every fixture keeps it.
+  const COUNTER_SNAP_FT = 0.5;
+  function snapCounterOffset(fixtures, piece, snapFt = COUNTER_SNAP_FT) {
+    if (!COUNTER_KINDS.includes(piece.kind)) return piece.offset;
+    const side = piece.side === -1 ? -1 : 1;
+    const half = piece.width / 2;
+    const near = (fixtures || []).filter(o => o && o !== piece && COUNTER_KINDS.includes(o.kind)
+      && o.wallId === piece.wallId && (o.side === -1 ? -1 : 1) === side);
+    const overlaps = at => near.some(o => Math.min(at + half, o.offset + o.width / 2)
+      - Math.max(at - half, o.offset - o.width / 2) > JOINT_FT);
+    let best = piece.offset, gap = snapFt;
+    near.forEach(o => {
+      [o.offset + o.width / 2 + half, o.offset - o.width / 2 - half].forEach(at => {
+        const d = Math.abs(at - piece.offset);
+        if (d < gap && !overlaps(at)) { best = at; gap = d; }
+      });
+    });
+    return best;
+  }
+
   function drawFixture2D(ctx, toS, fixture, options, wall, env) {
     const geo = env.fixtureGeometry(fixture, wall);
     if (!geo) return;
@@ -1133,7 +1181,24 @@ if (!window.DraftRender2D) {
     };
     // THE TOILET HAS NO BOX: the bowl and tank are its outline, so the record's
     // clearance rectangle is never drawn round it.
-    if (kind !== 'toilet') { rect(a0, a1, cBack, cFront); ctx.fill(); ctx.stroke(); }
+    //
+    // WHERE TWO COUNTER PIECES TOUCH they read as one counter (Movie, 9 Oct:
+    // "a lightweight line at the joint to distinguish"): the end standing
+    // against another counter piece on the same face of the same wall is
+    // drawn light, the rest of the box at full weight.
+    const joined = COUNTER_KINDS.includes(kind) ? counterJoints(fixture, geo, a0, a1, env) : null;
+    if (kind !== 'toilet' && !joined) { rect(a0, a1, cBack, cFront); ctx.fill(); ctx.stroke(); }
+    if (joined) {
+      rect(a0, a1, cBack, cFront); ctx.fill();
+      const seg = (p, q) => { const A = P(p[0], p[1]), B = P(q[0], q[1]); ctx.beginPath(); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); ctx.stroke(); };
+      seg([a0, cBack], [a1, cBack]); seg([a0, cFront], [a1, cFront]);
+      [[a0, joined.start], [a1, joined.end]].forEach(([a, light]) => {
+        ctx.save();
+        if (light) { ctx.lineWidth = 0.5; ctx.globalAlpha *= 0.45; }
+        seg([a, cBack], [a, cFront]);
+        ctx.restore();
+      });
+    }
     if (kind === 'vanity') {
       const widthIn = (a1 - a0) * 12, depthIn = (cMax - cMin) * 12;
       const back = P(a0, cBack + dirC * BACKSPLASH_IN / 12), backEnd = P(a1, cBack + dirC * BACKSPLASH_IN / 12);
@@ -1149,11 +1214,23 @@ if (!window.DraftRender2D) {
       // The silhouette (tank and bowl, closed) takes the body fill.
       tracePath(TOILET[2], along, out); ctx.closePath(); ctx.fill();
       TOILET.forEach(flat => { tracePath(flat, along, out); ctx.stroke(); });
-    } else if (kind === 'cabinet') {
+    } else if (kind === 'cabinet' || kind === 'drawerbase' || kind === 'doorbase' || kind === 'sinkbase') {
       // Countertop edge — a parallel line just past the cabinet face.
       const counter = cFront + (cFront >= cBack ? 1 : -1) * env.COUNTER_OVERHANG_FT;
       const ca = P(a0, counter), cb = P(a1, counter);
       ctx.beginPath(); ctx.moveTo(ca.x, ca.y); ctx.lineTo(cb.x, cb.y); ctx.stroke();
+      if (kind === 'sinkbase') {
+        // The double bowl, centred, with the faucet's dot at the back.
+        const mid2 = (a0 + a1) / 2, half = Math.min(0.75, (a1 - a0) / 4 - 0.05);
+        rect(mid2 - 2 * half - 0.04, mid2 - 0.04, cMin + 0.25, cMax - 0.2); ctx.stroke();
+        rect(mid2 + 0.04, mid2 + 2 * half + 0.04, cMin + 0.25, cMax - 0.2); ctx.stroke();
+      }
+    } else if (kind === 'tallcab') {
+      // A full-height piece reads by its cross, the plan convention for a
+      // cabinet that stands to the ceiling.
+      const p0 = P(a0, cBack), p1 = P(a1, cFront), q0 = P(a1, cBack), q1 = P(a0, cFront);
+      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y);
+      ctx.moveTo(q0.x, q0.y); ctx.lineTo(q1.x, q1.y); ctx.stroke();
     } else if (kind === 'sink') {
       const w = a1 - a0;
       if (w > 2.2) {
@@ -1168,14 +1245,14 @@ if (!window.DraftRender2D) {
         oval(a0 + w * fa, cMin + d * fc, 0.28, 0.28);
         ctx.stroke();
       });
-    } else if (kind === 'fridge' || kind === 'washer' || kind === 'dryer' || kind === 'dish') {
+    } else if (kind === 'fridge' || kind === 'fridge30' || kind === 'washer' || kind === 'dryer' || kind === 'dish') {
       rect(a0 + inset, a1 - inset, cMin + inset, cMax - inset); ctx.stroke();
       if (pxPerFt > 6) {
         const c = toS(geo.center);
         ctx.fillStyle = env.FIXTURE_COLOR;
         ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(kind === 'fridge' ? 'REF' : kind === 'washer' ? 'W' : kind === 'dryer' ? 'D' : 'DW', c.x, c.y);
+        ctx.fillText(kind === 'fridge' || kind === 'fridge30' ? 'REF' : kind === 'washer' ? 'W' : kind === 'dryer' ? 'D' : 'DW', c.x, c.y);
       }
     } else if (kind === 'island') {
       // Freestanding island: counter overhang line on the seating side (away
@@ -2563,6 +2640,7 @@ if (!window.DraftRender2D) {
   }
 
   window.DraftRender2D = Object.freeze({
+    snapCounterOffset,
     drawWallSeg2D,
     drawRoof2D,
     drawWallTops2D,

@@ -1447,7 +1447,9 @@ const fixtureEnv = (over = {}, geo = {}) => ({
   ...over,
 });
 const KINDS = ['cabinet', 'vanity', 'sink', 'stove', 'fridge', 'washer', 'dryer', 'dish',
-  'island', 'pantry', 'closet', 'toilet', 'tub', 'shower', 'stall'];
+  'island', 'pantry', 'closet', 'toilet', 'tub', 'shower', 'stall',
+  // Movie's kitchen pieces (9 Oct).
+  'sinkbase', 'drawerbase', 'doorbase', 'tallcab', 'fridge30'];
 
 // What a kind actually painted: the drawing operations in order, WITH their
 // arguments rounded to the tenth of a pixel. An op tally alone is too coarse
@@ -1486,7 +1488,10 @@ suite('drawFixture2D', 'every kind paints something', R => {
 // listed rather than asserted apart -- and listed here so that if one of them
 // ever grows its own drawing, this check says so instead of quietly allowing
 // it.
-const SAME_BY_DESIGN = [['fridge', 'washer', 'dryer', 'dish'], ['shower', 'stall']];
+const SAME_BY_DESIGN = [['fridge', 'fridge30', 'washer', 'dryer', 'dish'], ['shower', 'stall'],
+  // A base cabinet in plan is its box and its counter edge, whatever is
+  // behind its doors -- the drawers show in elevation, not on the floor plan.
+  ['cabinet', 'drawerbase', 'doorbase']];
 
 suite('drawFixture2D', 'no two kinds paint the same picture, bar the ones that share a branch', R => {
   // The ladder's real risk: drop a branch and that kind silently collapses
@@ -1630,6 +1635,56 @@ suite('drawWetFloors2D', 'the first joint is a tile off the finished face', R =>
   const along = starts.filter(p => Math.abs(p.z - 2) < 1e-6).map(p => frac(p.x));
   expect('joints one way', across.length > 3 && across.every(f => f === 0.25), true);
   expect('and the other', along.length > 3 && along.every(f => f === 0.25), true);
+});
+
+// ── Kitchen pieces that touch read as one counter (Movie, 9 Oct) ──
+// Two DOOR BASEs side by side on one face of one wall: the end they share is
+// drawn light, every other edge at full weight. Alone, a piece is all full.
+const piece = (id, offset) => ({ id, kind: 'doorbase', wallId: 'w', side: 1, offset, width: 2, depth: 2 });
+const jointEnv = (fixtures) => fixtureEnv({
+  fixtures,
+  fixtureGeometry: f => fixtureGeo({ alongStart: f.offset - 1, alongEnd: f.offset + 1, center: { x: f.offset, z: 1 } }),
+});
+const lightStrokes = (R, me, all) => {
+  const ctx = recordingCtx();
+  R.drawFixture2D(ctx, toS, me, {}, null, jointEnv(all));
+  return sets(ctx, 'lineWidth').filter(w => w === 0.5).length;
+};
+suite('drawFixture2D', 'two base cabinets that touch share one light joint line', R => {
+  const left = piece('a', 1), right = piece('b', 3), apart = piece('c', 9);
+  expect('the left one draws its joint end light', lightStrokes(R, left, [left, right, apart]), 1);
+  expect('and so does the right one', lightStrokes(R, right, [left, right, apart]), 1);
+  expect('a piece on its own has no light end', lightStrokes(R, apart, [left, right, apart]), 0);
+  const other = { ...right, side: -1 };
+  expect('nor one whose neighbour is on the wall\'s other face', lightStrokes(R, left, [left, other]), 0);
+});
+
+// A press is never exact: a piece pressed within 6" of a neighbour slides
+// flush to it, so the joint above melds -- and never into one.
+suite('snapCounterOffset', 'a counter piece pressed near another lands flush', R => {
+  const run = [{ kind: 'sinkbase', wallId: 'w', side: 1, offset: 4, width: 4 }];
+  const near = { kind: 'drawerbase', wallId: 'w', side: 1, width: 2 };
+  expect('3" past its end, it slides back to it', R.snapCounterOffset(run, { ...near, offset: 7.25 }), 7);
+  expect('and 4" short of the other end, out to that one', R.snapCounterOffset(run, { ...near, offset: 1.33 }).toFixed(2), '1.00');
+  expect('a foot away it stays where it was pressed', R.snapCounterOffset(run, { ...near, offset: 8 }), 8);
+  expect('nor onto a piece on the other face', R.snapCounterOffset(run, { ...near, side: -1, offset: 7.25 }), 7.25);
+  expect('nor does a toilet snap to anything', R.snapCounterOffset(run, { ...near, kind: 'toilet', offset: 7.25 }), 7.25);
+  const gap = [...run, { kind: 'doorbase', wallId: 'w', side: 1, offset: 8, width: 2 }];
+  expect('a slide that would overlap the next piece is not taken',
+    R.snapCounterOffset(gap, { ...near, width: 2.5, offset: 7.4 }), 7.4);
+});
+
+suite('drawFixture2D', 'a full height cab reads by its cross', R => {
+  const ctx = recordingCtx();
+  R.drawFixture2D(ctx, toS, { kind: 'tallcab' }, {}, null, fixtureEnv());
+  // The box runs 0..4 along and 0..2 across; the cross joins its opposite
+  // corners -- a move to one corner and a line straight to the far one,
+  // which the box's own edges never draw.
+  const ops = ctx.tape.filter(e => e.op === 'moveTo' || e.op === 'lineTo')
+    .map(e => `${e.op}:${Math.round(e.args[0])},${Math.round(e.args[1])}`);
+  const diag = (a, b) => ops.some((o, i) => o === `moveTo:${a}` && ops[i + 1] === `lineTo:${b}`);
+  expect('one diagonal', diag('400,300', '440,320'), true);
+  expect('and the other', diag('440,300', '400,320'), true);
 });
 
 suite('drawFixture2D', 'a preview is drawn faint', R => {
@@ -3214,13 +3269,26 @@ function coverage() {
     ['drawColumn2D pile and telepost draw the same', columnShapeIgnored],
     ['drawColumn2D back on the old page ink', dropColumnEnvColour],
     ['drawFixture2D toilet back in its box', src => src.replace(
-      "if (kind !== 'toilet') { rect(", 'if (true) { rect(')],
+      "if (kind !== 'toilet' && !joined) { rect(", 'if (!joined) { rect(')],
     ['drawFixture2D tub drain always at the start', src => src.replace(
       'const along = faucetAtStart ? (x => a1 - x * perIn) : (x => a0 + x * perIn);', 'const along = x => a0 + x * perIn;')],
     ['wetRoomLoops any fixture makes a wet room', src => src.replace(
       'const wet = (fixtures || []).filter(fx => WET_FIXTURE_KINDS.includes(fx.kind));', 'const wet = (fixtures || []);')],
     ['wetRoomLoops takes the biggest room, not the smallest', src => src.replace(
       'loop.area < best.area', 'loop.area > best.area')],
+    ['snapCounterOffset never snaps', src => src.replace(
+      'if (d < gap && !overlaps(at)) { best = at; gap = d; }', 'if (false) { best = at; gap = d; }')],
+    ['snapCounterOffset slides into a neighbour', src => src.replace(
+      'if (d < gap && !overlaps(at)) {', 'if (d < gap) {')],
+    ['snapCounterOffset snaps across the wall', src => src.replace(
+      '&& o.wallId === piece.wallId && (o.side === -1 ? -1 : 1) === side);', '&& o.wallId === piece.wallId);')],
+    ['drawFixture2D counter joints never melded', src => src.replace(
+      'if (Math.abs(g.alongEnd - a0) < JOINT_FT) start = true;', 'if (false) start = true;')],
+    ['drawFixture2D a joint end drawn at full weight', src => src.replace(
+      'if (light) { ctx.lineWidth = 0.5; ctx.globalAlpha *= 0.45; }', 'if (false) { ctx.lineWidth = 0.5; }')],
+    ['drawFixture2D joints across both faces of a wall', src => src.replace(
+      "if (other.wallId !== fixture.wallId || (other.side === -1 ? -1 : 1) !== (fixture.side === -1 ? -1 : 1)) return;",
+      'if (other.wallId !== fixture.wallId) return;')],
     ['drawWetFloors2D joints from the centreline', src => src.replace(
       'const uStart = halfOf(prev, o)', 'const uStart = 0 * halfOf(prev, o)')],
   ];
