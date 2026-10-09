@@ -215,21 +215,21 @@
      darkens whatever is behind it, which is the job on all four skins. Two
      scrims on one page, one of them skin-blind, is the drift this whole
      exercise is about, so this page uses that one. */
-  #lay-scrim { position:fixed; inset:0; z-index:50; display:flex;
+  #lay-scrim, #lay-print-scrim { position:fixed; inset:0; z-index:50; display:flex;
     align-items:flex-start; justify-content:center; padding-top:78px;
     background:rgba(0,0,0,0.35); }
   /* The card is .promote-card's shell (MODEL.html:865), down to the
      translucent panel: a modal over a 35% scrim is already separated from
      the page, so it does not also need to be opaque. */
-  #lay-dialog { width:min(400px, calc(100vw - 32px));
+  #lay-dialog, #lay-print { width:min(400px, calc(100vw - 32px));
     border:1px solid var(--edge-panel);
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     box-shadow:0 16px 44px rgba(0,0,0,0.35); padding:18px; color: var(--ink-primary); }
-  #lay-dialog .lay-head { display:flex; align-items:flex-start; gap:14px; }
-  #lay-dialog .lay-head > div { flex:1; }
-  #lay-dialog-title { font-family:'Barlow Condensed', system-ui, sans-serif;
+  #lay-dialog .lay-head, #lay-print .lay-head { display:flex; align-items:flex-start; gap:14px; }
+  #lay-dialog .lay-head > div, #lay-print .lay-head > div { flex:1; }
+  #lay-dialog-title, #lay-print-title { font-family:'Barlow Condensed', system-ui, sans-serif;
     font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; }
-  #lay-dialog-description { margin-top:5px; font-size:12px; line-height:1.45;
+  #lay-dialog-description, #lay-print-description { margin-top:5px; font-size:12px; line-height:1.45;
     color: var(--ink-secondary); }
   /* THE MARK, NOT THE ACCENT, and this one is measured rather than assumed:
      11px uppercase in --accent over the dialog's panel is 4.28 on RUFF night,
@@ -242,7 +242,7 @@
   #lay-keys-link { display:inline-block; margin-top:9px; color: var(--accent-mark);
     font-family:'Barlow Condensed', system-ui, sans-serif; font-size:11px;
     font-weight:600; letter-spacing:0.06em; text-transform:uppercase; }
-  #lay-dialog-close { border:none; background:transparent; color: var(--ink-quiet);
+  #lay-dialog-close, #lay-print-close { border:none; background:transparent; color: var(--ink-quiet);
     font-size:18px; line-height:1; cursor:pointer; }
   .lay-field-label { margin-top:16px; font-family:'Barlow Condensed', system-ui, sans-serif;
     font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase;
@@ -255,7 +255,7 @@
   #lay-file-name:focus { border-color: var(--accent-mark); }
   #lay-file-ext { margin-left:6px; color: var(--ink-quiet);
     font-family:'Barlow Condensed', system-ui, sans-serif; font-size:12px; white-space:nowrap; }
-  #lay-save { width:100%; height:34px; margin-top:10px; border:1px solid var(--accent);
+  #lay-save, #lay-print-go { width:100%; height:34px; margin-top:10px; border:1px solid var(--accent);
     background-color: var(--accent); color: var(--accent-ink);
     font-family:'Barlow Condensed', system-ui, sans-serif;
     font-size:12px; font-weight:600; letter-spacing:0.06em; cursor:pointer; }
@@ -280,6 +280,21 @@
      argued for. */
   #lay-dialog-message { margin-top:10px; font-size:11px; line-height:1.4; color:#557a46; }
   #lay-dialog-message.lay-bad { color:#b04050; }
+  /* THE PRINT PACKAGE: one row per sheet, ticked if it goes in. */
+  #lay-print-list { margin-top:12px; max-height:46vh; overflow-y:auto;
+    border:1px solid var(--edge-panel); }
+  .lay-print-row { display:flex; align-items:center; gap:8px; padding:6px 8px; cursor:pointer;
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-size:13px; letter-spacing:0.04em; }
+  .lay-print-row + .lay-print-row { border-top:1px solid var(--edge-panel); }
+  .lay-print-row input { accent-color: var(--accent); }
+  .lay-print-row .lay-print-num { width:1.6em; color: var(--ink-quiet); }
+  .lay-print-all { display:flex; gap:6px; margin-top:8px; }
+  .lay-print-all button { flex:1; height:26px; border:1px solid var(--edge-panel); cursor:pointer;
+    background-color: var(--surface-chip); color: var(--ink-secondary);
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; }
+  #lay-print-go:disabled { opacity:0.45; cursor:default; }
+  #lay-print-message { margin-top:10px; font-size:11px; line-height:1.4; color: var(--ink-secondary); }
+  #lay-print-message.lay-bad { color:#b04050; }
 
   /* ── BODY, PANEL, SECTIONS ──────────────────────────────────────────── */
   /* FLEX RATHER THAN A HEIGHT. calc(100vh - 72px) was the old page's own sum
@@ -519,6 +534,28 @@
   </div>
 </div>
 
+<!-- THE PRINT PACKAGE (Movie, 9 Oct): "we should do the PRINT function for
+     LAYOUT for PDF and actual printing too" -- "allow the user to select which
+     layouts to print in their 'package'", at 300 DPI. -->
+<div id="lay-print-scrim" hidden>
+  <div id="lay-print" role="dialog" aria-modal="true" aria-label="Print">
+    <div class="lay-head">
+      <div>
+        <div id="lay-print-title">Print</div>
+        <div id="lay-print-description"></div>
+      </div>
+      <button type="button" id="lay-print-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="lay-print-list" data-print-list></div>
+    <div class="lay-print-all">
+      <button type="button" data-print-all>ALL</button>
+      <button type="button" data-print-none>NONE</button>
+    </div>
+    <button type="button" id="lay-print-go" data-print-go>PRINT</button>
+    <div id="lay-print-message" data-print-message hidden></div>
+  </div>
+</div>
+
 <!-- BODY -->
 <div id="lay-body">
 
@@ -745,6 +782,11 @@ const PAPER_SIZES = {
   '11x17': { label: '11 × 17  (Ledger)', w: 11, h: 17 },
   '8.5x11': { label: '8.5 × 11  (Letter)', w: 8.5, h: 11 },
 };
+
+// A printed sheet is drawn at this many pixels to the paper inch and scaled
+// to its dpi: the painters' pixel line weights and lettering then print as
+// they read on the desk (9px lettering is 1/8" tall).
+const PRINT_PX_PER_IN = 72;
 
 // Architectural scales: label, paperInchesPerFoot
 const SCALES = [
@@ -1788,8 +1830,15 @@ class Component extends PageLogic {
   // (its type has floors of 6 and 9px, which at five pixels to the inch
   // would spill over the whole strip). What is left is the sheet as it reads
   // from across the room: border, titleblock box, drawings.
+  //
+  // A PRINTED SHEET DROPS WHAT IS DESK, NOT SHEET: the desk itself (white),
+  // the shadow, the paper-size label, the dashed margin guide and the
+  // TITLE BLOCK placeholder word, and every viewport's frame and grips. It
+  // keeps the border, the titleblock and the drawings, and each drawing's
+  // title in ink, the way a set is captioned.
   _paintSheet(ctx, canvas, view, sheet, opts = {}) {
     const thumb = opts.thumb === true;
+    const print = opts.print === true;
     const { paperKey, orientation } = this.state;
     const { zoom, panX, panY } = view;
     const paper = PAPER_SIZES[paperKey];
@@ -1805,10 +1854,14 @@ class Component extends PageLogic {
     // --surface-page names. On day that ground is #f2f2f3 and very nearly the
     // paper's own white, so the shadow below stops being depth and becomes
     // the sheet's edge; it is kept for that job.
-    ctx.fillStyle = skin['surface-page'];
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // A printed sheet has no desk: its canvas is the paper, painted white
+    // just below.
+    if (!print) {
+      ctx.fillStyle = skin['surface-page'];
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
 
-    if (!thumb) {
+    if (!thumb && !print) {
       // Paper shadow. A LIGHT, NOT A COLOUR: black at 22% darkens whatever is
       // under it, which is the job on all four skins -- the same argument
       // shell-bars.css makes for keeping its modal scrim a literal.
@@ -1846,7 +1899,7 @@ class Component extends PageLogic {
       ctx.beginPath();
       ctx.roundRect(inner.x, inner.y, inner.w, inner.h, r);
       ctx.stroke();
-    } else {
+    } else if (!print) {
       ctx.strokeStyle = 'rgba(29,31,32,0.18)';
       ctx.lineWidth = 0.75;
       ctx.setLineDash([4, 4]);
@@ -1879,14 +1932,15 @@ class Component extends PageLogic {
       ctx.font = `${Math.max(9, zoom * 0.3)}px 'Barlow Condensed', sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('TITLE BLOCK', tbBox.x + tbBox.w / 2, tbBox.y + tbBox.h / 2);
+      // The placeholder's word is for the desk; the box prints.
+      if (!print) ctx.fillText('TITLE BLOCK', tbBox.x + tbBox.w / 2, tbBox.y + tbBox.h / 2);
     }
 
     // Paper size label (top-left OUTSIDE paper). Outside is the whole reason
     // this one takes a role while the ink a few lines above does not: it is
     // printed on the desk, so on a night skin the old ink-at-40% would have
     // been dark grey on near-black.
-    if (!thumb) {
+    if (!thumb && !print) {
       ctx.fillStyle = skin['ink-quiet'];
       ctx.font = `600 11px 'Barlow Condensed', sans-serif`;
       ctx.textAlign = 'left';
@@ -1898,7 +1952,7 @@ class Component extends PageLogic {
       );
     }
 
-    this._sheetViewports(sheet).forEach(viewport => this._drawViewport(ctx, viewport, view, { thumb }));
+    this._sheetViewports(sheet).forEach(viewport => this._drawViewport(ctx, viewport, view, { thumb, print }));
   }
 
   _sheetViewports(sheet = this.state.activeSheet) {
@@ -2029,6 +2083,17 @@ class Component extends PageLogic {
       }
     }
     if (opts.thumb) return;
+    if (opts.print) {
+      // ON PAPER, only the caption: in ink, centred under the drawing.
+      const scale = SCALES.find(s => s.pif === viewport.pif);
+      ctx.fillStyle = '#1d1f20';
+      ctx.font = `600 ${Math.max(9, zoom * 0.14)}px 'Barlow Condensed', sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(`${this._viewportTitle(viewport)}${scale ? `  \u00b7  ${scale.label}` : ''}`,
+        px.x + px.w / 2, px.y + px.h + 4);
+      return;
+    }
     // The frame is desk furniture, not ink: faint always, blue when selected.
     // LITERAL, THOUGH, AND NOT THE ACCENT, because furniture or not it is
     // drawn ON the white sheet. The accent is measured against the skin's own
@@ -2796,6 +2861,159 @@ class Component extends PageLogic {
     if (this._thumbQueue.length) this._thumbFrame = requestAnimationFrame(() => this._paintNextThumb());
   }
 
+  // ── PRINT: THE PACKAGE ─────────────────────────────────────────────
+  // Movie, 9 Oct: "we should do the PRINT function for LAYOUT for PDF and
+  // actual printing too" -- "allow the user to select which layouts to print
+  // in their 'package'" -- "300 DPi good".
+  //
+  // THE BONE OPENS IT: every sheet in the set, ticked, by number and title.
+  // PRINT draws each ticked sheet the way it prints -- _paintSheet's print
+  // mode -- at 300 dots to the inch, and hands them to the browser's own
+  // print window as one document a sheet to a page, the paper's own size.
+  // That one window is the printer AND the PDF: "Save as PDF" is a
+  // destination in it, as it is for MODEL's PRINTSCREEN.
+  //
+  // DRAWN AT 72 TO THE INCH, SCALED UP TO 300. The painters size their
+  // lines and lettering in pixels, for the desk; at 72 a 9px label prints
+  // 1/8" tall and a 1px line a fine pen, and the scale only makes them
+  // sharper. Drawn straight at 300 the lettering would print a quarter size.
+  _openPrintDialog() {
+    const count = this._sheetCount();
+    const keep = this._printPick instanceof Set
+      ? new Set([...this._printPick].filter(n => n <= count)) : null;
+    this._printPick = keep && keep.size ? keep : new Set(Array.from({ length: count }, (_, i) => i + 1));
+    this._printMessage = '';
+    this._printBusy = false;
+    document.querySelector('#lay-print-scrim').hidden = false;
+    this._paintPrintDialog();
+  }
+
+  _closePrintDialog() {
+    if (this._printBusy) return;
+    document.querySelector('#lay-print-scrim').hidden = true;
+  }
+
+  _paintPrintDialog() {
+    const { paperKey, orientation } = this.state;
+    const count = this._sheetCount();
+    document.querySelector('#lay-print-description').textContent =
+      `Tick the sheets for this package. PRINT opens your browser's print window \u2014 `
+      + `pick a printer, or Save as PDF. ${PAPER_SIZES[paperKey].label.replace(/\s+\(.*$/, '')} `
+      + `${orientation === 'landscape' ? 'landscape' : 'portrait'}, 300 dpi.`;
+    const list = document.querySelector('[data-print-list]');
+    list.textContent = '';
+    for (let n = 1; n <= count; n += 1) {
+      const row = document.createElement('label');
+      row.className = 'lay-print-row';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = this._printPick.has(n);
+      box.dataset.printSheet = String(n);
+      box.disabled = this._printBusy;
+      box.addEventListener('change', () => {
+        if (box.checked) this._printPick.add(n); else this._printPick.delete(n);
+        this._paintPrintDialog();
+      });
+      const num = document.createElement('span');
+      num.className = 'lay-print-num';
+      num.textContent = String(n);
+      const title = document.createElement('span');
+      title.textContent = this._sheetTitle(n) || `SHEET ${n}`;
+      row.append(box, num, title);
+      list.appendChild(row);
+    }
+    const picked = this._printPick.size;
+    const go = document.querySelector('[data-print-go]');
+    go.disabled = !picked || this._printBusy;
+    go.textContent = this._printBusy ? 'PREPARING\u2026'
+      : `PRINT ${picked} SHEET${picked === 1 ? '' : 'S'}`;
+    const message = document.querySelector('[data-print-message]');
+    message.hidden = !this._printMessage;
+    message.textContent = this._printMessage;
+  }
+
+  // ONE SHEET AS IT PRINTS, onto a canvas of its own at `dpi`.
+  _printSheetCanvas(sheet, dpi = 300) {
+    const { paperKey, orientation } = this.state;
+    const paper = PAPER_SIZES[paperKey];
+    const pw = orientation === 'landscape' ? paper.h : paper.w;
+    const ph = orientation === 'landscape' ? paper.w : paper.h;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(pw * dpi);
+    canvas.height = Math.round(ph * dpi);
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpi / PRINT_PX_PER_IN, 0, 0, dpi / PRINT_PX_PER_IN, 0, 0);
+    this._paintSheet(ctx, { width: pw * PRINT_PX_PER_IN, height: ph * PRINT_PX_PER_IN },
+      { zoom: PRINT_PX_PER_IN, panX: 0, panY: 0 }, sheet, { print: true });
+    return { canvas, pw, ph };
+  }
+
+  async _printPackage() {
+    const sheets = [...this._printPick].sort((a, b) => a - b);
+    if (!sheets.length || this._printBusy) return;
+    this._printBusy = true;
+    const urls = [];
+    let size = null;
+    try {
+      for (let i = 0; i < sheets.length; i += 1) {
+        this._printMessage = `Drawing sheet ${sheets[i]} (${i + 1} of ${sheets.length})\u2026`;
+        this._paintPrintDialog();
+        // Let the dialog say so before the drawing holds the page.
+        await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+        const { canvas, pw, ph } = this._printSheetCanvas(sheets[i]);
+        size = { pw, ph };
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        if (!blob) throw new Error('the sheet could not be drawn');
+        urls.push(URL.createObjectURL(blob));
+        canvas.width = canvas.height = 0;
+      }
+    } catch (error) {
+      urls.forEach(url => URL.revokeObjectURL(url));
+      this._printBusy = false;
+      this._printMessage = `Could not prepare the package: ${error?.message || error}.`;
+      this._paintPrintDialog();
+      document.querySelector('[data-print-message]').classList.add('lay-bad');
+      return;
+    }
+    this._printBusy = false;
+    this._printMessage = '';
+    document.querySelector('#lay-print-scrim').hidden = true;
+    await this._sendToPrinter(urls, size, sheets);
+  }
+
+  // THE BROWSER'S PRINT WINDOW, over a page of nothing but the sheets: one
+  // to a page at the paper's own size, no margins -- the sheet has its own.
+  async _sendToPrinter(urls, { pw, ph }, sheets) {
+    const frame = document.createElement('iframe');
+    frame.setAttribute('aria-hidden', 'true');
+    frame.dataset.printFrame = '';
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;';
+    document.body.appendChild(frame);
+    const doc = frame.contentDocument;
+    const name = (this._saved?.name || this._fileName || 'drawing').toString().replace(/[<>&"]/g, '');
+    doc.open();
+    doc.write(`<!doctype html><html><head><meta charset="utf-8"><title>${name} \u2014 sheets ${sheets.join(', ')}</title>`
+      + `<style>@page{size:${pw}in ${ph}in;margin:0}html,body{margin:0;padding:0;background:white}`
+      + `img{display:block;width:${pw}in;height:${ph}in;break-after:page;page-break-after:always}`
+      + 'img:last-child{break-after:auto;page-break-after:auto}</style></head><body>'
+      + `${urls.map((url, i) => `<img src="${url}" alt="Sheet ${sheets[i]}">`).join('')}</body></html>`);
+    doc.close();
+    await Promise.all([...doc.images].map(img => (img.decode ? img.decode().catch(() => {}) : null)));
+    const done = () => {
+      urls.forEach(url => URL.revokeObjectURL(url));
+      frame.remove();
+    };
+    // A CHECK CAN TAKE THE PACKAGE INSTEAD OF A PRINTER: the print window
+    // is the browser's and no script can drive it.
+    if (typeof window.__draftPrintCapture === 'function') {
+      window.__draftPrintCapture({ frame, doc, sheets, done });
+      return;
+    }
+    frame.contentWindow.addEventListener('afterprint', () => setTimeout(done, 0), { once: true });
+    frame.contentWindow.focus();
+    frame.contentWindow.print();
+  }
+
   _paintProfileDialog() {
     const which = this.state.profileDialog;
     document.querySelector('#lay-scrim').hidden = !which;
@@ -2837,6 +3055,14 @@ class Component extends PageLogic {
       { addingViewport: !this.state.addingViewport }, () => this._draw()));
     on('[data-layout-deal-sheets]', 'click', () => this._dealSheets());
 
+    on('#lay-print-close', 'click', () => this._closePrintDialog());
+    on('#lay-print-scrim', 'click', e => { if (e.target.id === 'lay-print-scrim') this._closePrintDialog(); });
+    on('[data-print-all]', 'click', () => {
+      this._printPick = new Set(Array.from({ length: this._sheetCount() }, (_, i) => i + 1));
+      this._paintPrintDialog();
+    });
+    on('[data-print-none]', 'click', () => { this._printPick = new Set(); this._paintPrintDialog(); });
+    on('[data-print-go]', 'click', () => { this._printPackage(); });
     on('#lay-dialog-close', 'click', () => this._closeProfileDialog());
     on('#lay-save', 'click', () => this._saveProfilePackage());
     on('#lay-import', 'click', () => document.querySelector('[data-profile-import]')?.click());
@@ -2929,25 +3155,9 @@ page.componentDidMount();
   S.markSwitch(S.switchSet('data-units'), 'units', 'imperial');
 
   // THE BONE. The bar owns the button; this page owns the verb, and the verb
-  // is PRINT -- board #20, not built. Until it is, a press that silently did
-  // nothing would be worse than one that says what it is waiting for.
-  //
-  // IT SAYS SO IN THE STATUS WORD AND THEN GETS OUT OF THE WAY. The word is
-  // painted from state.persistenceStatus on every _paintPanel, so the way back
-  // is a repaint rather than remembering what was there -- which also means a
-  // save landing during those four seconds wins, as it should.
+  // is PRINT (board #20; Movie, 9 Oct): the package dialog, _openPrintDialog.
   const bone = document.getElementById('bone');
-  if (bone) {
-    let clearing = 0;
-    bone.addEventListener('click', () => {
-      const status = document.querySelector('[data-layout-status]');
-      if (!status) return;
-      status.classList.remove('lay-bad');
-      status.textContent = 'PRINTING A SHEET IS NOT WIRED YET';
-      window.clearTimeout(clearing);
-      clearing = window.setTimeout(() => page._paintPanel(), 4000);
-    });
-  }
+  if (bone) bone.addEventListener('click', () => page._openPrintDialog());
 })();
 </script>
 <!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->
