@@ -184,11 +184,12 @@ test('the plan asks which stretches are welded, and is told about the seam', asy
   const has = (from, to) => flat.some(([p, q]) =>
     (String(p) === String(from) && String(q) === String(to))
     || (String(p) === String(to) && String(q) === String(from)));
-  // THE SEAM ITSELF, in feet. The stub's rear edge runs (-6,20)->(22,20) and
-  // the tie piece carries it on for the six feet from x=16 -- so that stretch
+  // THE SEAM ITSELF, in feet. The stub's rear edge runs (-6,20)->(23,20) and
+  // the tie piece carries it on for the seven feet from x=16 (the garage is
+  // 5 ft proud since 9 Oct, for the D36 man door) -- so that stretch
   // is interior to the one sheet and carries no line, and the twenty-two feet
   // the house roof lies under at a different plate keep theirs.
-  expect(has([16, 20], [22, 20])).toBe(true);
+  expect(has([16, 20], [23, 20])).toBe(true);
   // The tie's own edge against the stub is the same seam from the other side.
   expect(flat.length).toBe(2);
 });

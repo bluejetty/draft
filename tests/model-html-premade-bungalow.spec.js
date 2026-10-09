@@ -280,17 +280,22 @@ test('the attached garage raises no wall the house already has',
     // Both would still have read as "doors on a garage" from any count.
     const byId = new Map((saved.walls || []).map(wall => [String(wall.id), wall]));
     const openings = (saved.fenestrations || []);
-    const manDoor = openings.find(o => o.garage !== true && o.width === 2.5);
+    // A D36 now (Movie, 9 Oct: "make all default ext doors D36"), the same
+    // width as the front door -- so it is found on a GARAGE wall, not by size.
+    const manDoor = openings.find(o => o.garage !== true && o.type === 'door'
+      && byId.get(String(o.wallId))?.body === 'garage');
     const overhead = openings.find(o => o.garage === true);
     expect(manDoor, 'the man-door was written').toBeTruthy();
     expect(overhead, 'and the overhead door').toBeTruthy();
-    // 4 ft is the exposed rear wall, the only wall a man-door belongs on --
-    // it is why the garage stands proud of the house at all.
+    expect(manDoor.width, 'a D36').toBeCloseTo(3, 3);
+    // 5 ft is the exposed rear wall, the only wall a man-door belongs on --
+    // it is why the garage stands proud of the house at all, and the foot
+    // over the old 4 is what a D36 needs.
     expect(len(byId.get(String(manDoor.wallId))),
-      'the man-door is on the 4 ft rear wall').toBeCloseTo(4, 2);
-    // 24 ft is the door wall, the garage's full width.
+      'the man-door is on the 5 ft rear wall').toBeCloseTo(5, 2);
+    // 25 ft is the door wall, the garage's full width.
     expect(len(byId.get(String(overhead.wallId))),
-      'the overhead door is on the 24 ft door wall').toBeCloseTo(24, 2);
+      'the overhead door is on the 25 ft door wall').toBeCloseTo(25, 2);
   });
 
 test('the attached garage does not spend the detached garage-s slot',
