@@ -1572,6 +1572,8 @@
      the same cabinet: it DREW fixtures long before it could place one, and
      a kitchen is seven of them. See ORDER-tiers-of-assembly.md. -->
 <script src="./fixture-kinds.js"></script>
+<!-- Movie's two default washrooms (9 Oct), dropped whole by the FIXTURE tool. -->
+<script src="./washroom-presets.js"></script>
 <!-- Cut marks. cut-marks.js is the geometry; profile-manager.js is here for
      ONE reason and it is worth naming, because it is the first non-drawing
      dependency this page has taken: two of the four inputs a cut needs are not
@@ -3839,6 +3841,54 @@
     });
   };
 
+  // THE WASHROOM PREVIEW: the room washroomPlacement would drop, drawn
+  // through the same painters a dropped one goes through, faint. Its walls
+  // are stand-ins with the ids the fixtures and door name, so fixture
+  // geometry finds them exactly as it will find the real ones.
+  const paintWashroomPreview = () => {
+    const R = window.DraftRender2D;
+    const FG = window.DraftFixtureGeometry;
+    const room = washroomPlacement(cursorWorld);
+    if (!R || !FG || !room) return;
+    const { levelId } = onActiveLevel();
+    const ghost = room.walls.map(w => ({
+      id: `washroom-${w.key}`, start: { ...w.start, y: 0 }, end: { ...w.end, y: 0 },
+      levelId, view: 'plan', wallType: w.wallType, refLine: 'center',
+    }));
+    const all = ghost.concat(room.ext ? [room.ext] : []);
+    const hostId = key => (key === 'ext' ? room.ext.id : `washroom-${key}`);
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = skin['draw-selected'];
+    ctx.strokeStyle = skin['draw-selected'];
+    ctx.lineWidth = 1;
+    ghost.forEach(wall => {
+      const f = FG.wallFrame(wall);
+      if (!f) return;
+      const c = [f.at(0, f.startOff), f.at(f.len, f.startOff), f.at(f.len, f.endOff), f.at(0, f.endOff)].map(toS);
+      ctx.beginPath();
+      c.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    });
+    ctx.restore();
+    const env = {
+      fixtureGeometry: (fx, wl) => FG.fixtureGeometry(all, fx, wl),
+      wallCross: (a, frame, b) => FG.wallCross(a, frame, b),
+      wallFrame: wl => FG.wallFrame(wl),
+      walls: all,
+      closetDoorFor: () => null,
+      COUNTER_OVERHANG_FT: FG.COUNTER_OVERHANG_FT,
+      FIXTURE_COLOR: skin['draw-selected'],
+      fixtureFill: fixtureFill(),
+    };
+    room.fixtures.forEach(f => {
+      const record = { kind: f.kind, wallId: hostId(f.host), offset: f.offset, width: f.width,
+        depth: f.depth, side: f.side,
+        ...(f.kind === 'tub' ? { endWallId: hostId(f.endWall), dir: f.dir } : {}) };
+      R.drawFixture2D(ctx, toS, record, { preview: true }, all.find(w => w.id === record.wallId), env);
+    });
+  };
+
   // CUT MARKS -- the section lines and their bubbles.
   //
   // FOUR INPUTS, AND THEY COME FROM THREE DIFFERENT PLACES. That is the whole
@@ -4917,6 +4967,10 @@
         // the view will LOOK, the file keeps where the viewer STANDS, and the
         // one is negated from the other here so the preview cannot drift from
         // the commit.
+        // THE WASHROOM IN HAND, where a press would drop it: its walls as
+        // bands, its fixtures and door in the preview's faint ink, the tile
+        // floor showing it is the room it will be.
+        if (activeTool === 'fixture' && washroomPreset && cursorWorld) paintWashroomPreview();
         // THE WALL PICKED FOR TRIM, and the end that will move.
         if (activeTool === 'trim' && trimPick) {
           const w = trimPick.wall;
@@ -12579,12 +12633,152 @@
     });
   };
 
+  // ── THE DEFAULT WASHROOMS (Movie, 9 Oct) ──────────────────────────────────
+  //
+  // "make some 'default' washrooms i can select and add to the plan": BATH A
+  // and BATH B, Movie's own (washroom-presets.js holds what they are). Picked
+  // on the FIXTURE tool's BATH row, the whole room follows the
+  // cursor -- [ and ] turn it a quarter, F mirrors it, Esc puts it down -- and
+  // a press drops it: its walls, the D32, the tub, toilet and vanity, the tile
+  // coming with them because a toilet stands in the room.
+  //
+  // THE TUB END JOINS THE HOUSE. Within 18" of the exterior wall it slides
+  // flush and draws no wall of its own there -- the tub sits on the house's
+  // wall ("when the bathroom is against the exterior wall it should join up
+  // like this"); anywhere else that end is a 3 1/2" partition.
+  //
+  // ONE ASSEMBLY, ONE UNDO. The room's walls are filed as an assembly named
+  // for the bath, so it moves as one; UNGROUP breaks it into pieces to edit
+  // and ASSEMBLY puts a new arrangement back together (Movie: "BREAK the
+  // kitchen into pieces, add new pieces or delete pieces and ASSEMBLY the
+  // kitchen in new configuration"). Fixtures and the door ride their walls.
+  let washroomPreset = null;           // 'A' | 'B' | null
+  let washroomTurn = 0;                // degrees, quarter turns
+  let washroomFlip = false;
+
+  // The exterior is the house outline's walls: a wall with both ends on it.
+  // A storey with no outline yet falls back to the thick walls, which is what
+  // an exterior is on every house this page builds.
+  const washroomExteriorWalls = () => {
+    const FG = window.DraftFixtureGeometry;
+    const G = window.DraftGeometry2D;
+    const { levelId } = onActiveLevel();
+    const outline = window.DraftBuildingBodies?.houseOutlineOn(drawing, levelId);
+    const pts = outline && Array.isArray(outline.points) ? outline.points : null;
+    const onOutline = pt => pts && pts.some((a, i) => {
+      const b = pts[(i + 1) % pts.length];
+      return G.pointToSegment(pt, { start: a, end: b }).d < 0.6;
+    });
+    return walls().filter(wall => {
+      if (!wall.start || !wall.end) return false;
+      if (pts) return onOutline(wall.start) && onOutline(wall.end);
+      return (FG.wallFrame(wall)?.totalFt || 0) >= 5.4 / 12;
+    });
+  };
+
+  const washroomPlacement = at => {
+    const WP = window.DraftWashroomPresets;
+    const FG = window.DraftFixtureGeometry;
+    if (!WP || !FG || !washroomPreset || !at) return null;
+    const pose = { at: { x: at.x, z: at.z }, angleDeg: washroomTurn, flip: washroomFlip };
+    const snap = WP.snapToExterior(washroomPreset, pose, washroomExteriorWalls(),
+      wall => FG.wallFrame(wall));
+    return WP.place(washroomPreset, { ...pose, ...(snap ? { at: snap.at, ext: snap.ext } : {}) });
+  };
+
+  const dropWashroom = at => {
+    const room = washroomPlacement(at);
+    if (!room) return null;
+    const { levelId, viewId } = onActiveLevel();
+    const mark = undoStack.length;
+    const byKey = {};
+    const made = room.walls.map(w => {
+      const wall = commitWall(w.start, w.end, { bone: false, refLine: 'center', wallType: w.wallType });
+      byKey[w.key] = wall;
+      return wall;
+    });
+    const hostOf = key => (key === 'ext' ? room.ext : byKey[key]);
+    if (!Array.isArray(drawing.fixtures)) drawing.fixtures = [];
+    const fixtures = room.fixtures.map(f => {
+      const host = hostOf(f.host);
+      if (!host) return null;
+      const record = {
+        id: newDrawingItemId('fixture'),
+        wallId: host.id,
+        levelId: host.levelId,
+        view: host.view || 'plan',
+        kind: f.kind,
+        layer: FIXTURE_LAYER,
+        offset: f.offset,
+        width: f.width,
+        depth: f.depth,
+        side: f.side,
+        ...(f.kind === 'tub' ? { endWallId: byKey[f.endWall].id, dir: f.dir } : {}),
+      };
+      drawing.fixtures.push(record);
+      return record;
+    }).filter(Boolean);
+    const doorHost = hostOf(room.door.host);
+    const door = {
+      id: newDrawingItemId('fenestration'),
+      wallId: doorHost.id,
+      levelId: doorHost.levelId,
+      view: doorHost.view || 'plan',
+      type: 'door',
+      layer: 'A-DOOR',
+      offset: room.door.offset,
+      width: room.door.width,
+      sillHeight: openingSillFt('door'),
+      headHeight: openingHeadFt('door'),
+      casement: null,
+      doorType: 'int',
+      doorStyle: 'single',
+      hingeFlip: room.door.hingeFlip,
+      swingFlip: room.door.swingFlip,
+      auto: false,
+    };
+    if (!Array.isArray(drawing.fenestrations)) drawing.fenestrations = [];
+    drawing.fenestrations.push(door);
+    // THE ASSEMBLY: its walls, named for the bath. What rides them -- the
+    // fixtures, the door -- moves with them without being members.
+    const n = nextGroupNumber();
+    const group = {
+      id: `group-${n}`,
+      name: room.name,
+      fixed: false,
+      stretchBehavior: 'item-geometry',
+      members: made.map(wall => ({ type: 'wall', id: wall.id })),
+      wallSettings: {
+        wallType: made[0].wallType, baseHeight: made[0].baseHeight,
+        topHeight: made[0].topHeight, refLine: made[0].refLine,
+      },
+    };
+    drawing.groups = groups();
+    drawing.groups.push(group);
+    drawing.nextGroupId = 1 + n;
+    // ONE STEP BACK TAKES THE ROOM: the walls' own 'add' steps give way to a
+    // single 'built' carrying everything the press made.
+    undoStack.length = mark;
+    undoStack.push({
+      kind: 'built', walls: made, outlines: [], list: null,
+      openings: [door],
+      items: fixtures.map(item => ({ list: drawing.fixtures, item }))
+        .concat([{ list: drawing.groups, item: group }]),
+    });
+    sayOnStrip(`${room.name} placed${room.ext ? ' against the exterior wall' : ''} — `
+      + 'one assembly: UNGROUP to break it into pieces.');
+    markDirty();
+    paint();
+    return { walls: made, fixtures, door, group, levelId, viewId };
+  };
+
   // WHAT THIS DOES NOT DO YET, said rather than left to be discovered: the TUB
   // takes two WALLS (back, then faucet end) and the kitchen L PRESET drops
   // seven fixtures at once. Both are their own gesture on the old page and
   // neither is ported here. They are refused BY NAME below, so pressing one
   // says what is missing instead of placing the wrong thing or nothing.
   const fixturePress = at => {
+    if (washroomPreset) return dropWashroom(at);
     const kind = fixtureKind();
     if (kind.preset === true || kind.id === 'tub') {
       sayOnStrip(`${kind.label} is not on this page yet — it takes a gesture of its own.`);
@@ -12633,7 +12827,7 @@
   // and beamStart do -- see setTool. Carrying it across would let a cabinet run
   // started under FIXTURE finish under a later press.
   toolListeners.push(next => {
-    if (next !== 'fixture') fixtureRunStart = null;
+    if (next !== 'fixture') { fixtureRunStart = null; washroomPreset = null; }
     syncFixturePanel();
   });
 
@@ -16652,7 +16846,8 @@
     || (activeTool === 'outline' && outlineCorners.length > 0)
     // The house's rays light under the cursor before the garage's first corner.
     || (activeTool === 'outline' && outlineGarage && !!tracedOrder && traceStillThere(tracedHouse))
-    || (rulerOn && !!rulerFrom);
+    || (rulerOn && !!rulerFrom)
+    || (activeTool === 'fixture' && !!washroomPreset);
 
   // THE LENGTH ON THE DRAWING, beside the one on the strip. Both read
   // runInHand, so both read what commitWall will receive -- §1 asks for the
@@ -17369,6 +17564,21 @@
     hologramPartMode = false;
     hologramPartStart = null;
     sayOnStrip('');
+    paint();
+  }, true);
+
+  // THE WASHROOM IN HAND: [ and ] turn it a quarter, F mirrors it, Esc
+  // puts it down. Not while a field has the keys.
+  window.addEventListener('keydown', event => {
+    if (activeTool !== 'fixture' || !washroomPreset) return;
+    if (event.target && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) return;
+    const turn = { BracketLeft: -90, BracketRight: 90 }[event.code];
+    if (turn) washroomTurn = ((washroomTurn + turn) % 360 + 360) % 360;
+    else if (event.code === 'KeyF') washroomFlip = !washroomFlip;
+    else if (event.key === 'Escape') { washroomPreset = null; syncFixturePanel(); }
+    else return;
+    event.stopImmediatePropagation();
+    event.preventDefault();
     paint();
   }, true);
 
@@ -18616,6 +18826,7 @@
         btn.title = kind.note;
         btn.addEventListener('click', () => {
           fixtureKindId = kind.id;
+          washroomPreset = null;
           // A run half-made with one kind must not finish as another: the
           // second press would take the first press's `along` and file a
           // cabinet's width under a vanity. Same rule setTool applies to
@@ -18629,6 +18840,30 @@
       box.append(title, row);
       home.append(box);
     });
+    // THE DEFAULT WASHROOMS, on the BATH row beside VANITY: a pick here is a
+    // room, not a fixture kind, held until Esc or another pick. On the row
+    // rather than under a heading of their own because the BUILD rail is
+    // sized to its content, and the second BATH line has the room.
+    const bathRow = home.querySelector('[data-tool-group="fixture-bath"] .sel-row');
+    if (window.DraftWashroomPresets && bathRow) {
+      window.DraftWashroomPresets.IDS.forEach(id => {
+        const preset = window.DraftWashroomPresets.PRESETS[id];
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sel-chip';
+        btn.dataset.washroom = id;
+        btn.textContent = preset.name;
+        btn.title = `${preset.label} — press to drop it; [ and ] turn it, F mirrors it, Esc puts it down. `
+          + 'The tub end joins an exterior wall it is dropped against.';
+        btn.addEventListener('click', () => {
+          washroomPreset = id;
+          fixtureRunStart = null;
+          setTool('fixture');
+          syncFixturePanel();
+        });
+        bathRow.append(btn);
+      });
+    }
     home.append(help);
 
     syncFixturePanel = () => {
@@ -18638,11 +18873,18 @@
       const on = window.DraftToolRoster?.availableOn('fixture', board) !== false;
       slot.querySelectorAll('[data-fixture-kind]').forEach(btn => {
         btn.setAttribute('aria-pressed',
-          String(activeTool === 'fixture' && btn.dataset.fixtureKind === fixtureKindId));
+          String(activeTool === 'fixture' && !washroomPreset && btn.dataset.fixtureKind === fixtureKindId));
+        btn.disabled = !on;
+      });
+      slot.querySelectorAll('[data-washroom]').forEach(btn => {
+        btn.setAttribute('aria-pressed',
+          String(activeTool === 'fixture' && btn.dataset.washroom === washroomPreset));
         btn.disabled = !on;
       });
       const kind = K.kindFor(fixtureKindId);
-      help.textContent = activeTool === 'fixture'
+      help.textContent = activeTool === 'fixture' && washroomPreset
+        ? `${window.DraftWashroomPresets.PRESETS[washroomPreset].label}: press to drop it — [ ] turn, F mirror, Esc to put it down.`
+        : activeTool === 'fixture'
         ? (fixtureRunStart
           ? `Press the other end of the ${kind.label.toLowerCase()} run.`
           : kind.note)
