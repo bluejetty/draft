@@ -702,14 +702,20 @@ if (!window.DraftDrawingFormat) {
       const core = segmentCore(line, levelIds);
       if (!core) return null;
       const view = LINE_VIEWS.includes(line?.view) ? line.view : 'plan';
+      const imported = String(line?.importedFrom ?? '').trim().slice(0, 255);
       return {
         id: String(line?.id || '').trim(),
         ...core,
         view,
         // A known layer name survives the round trip; the e-power view still
-        // names its own lines; anything unknown falls to draft.
+        // names its own lines; anything unknown falls to draft -- except on a
+        // line brought in from a DXF, which keeps the layer the file gave it
+        // (Movie, 9 Oct: TRACE's EDITABLE), so a save and a later DXF export
+        // hand it back on the layer it came on.
         layer: knownLayers.has(line?.layer) ? line.layer
-          : (view === 'e-power' ? 'E-POWER' : 'draft'),
+          : (imported && String(line?.layer ?? '').trim()) ? String(line.layer).trim().slice(0, 255)
+            : (view === 'e-power' ? 'E-POWER' : 'draft'),
+        ...(imported ? { importedFrom: imported } : {}),
         bulge: Number.isFinite(Number(line?.bulge)) ? Number(line.bulge) : 0,
       };
     }), env.drops).filter(Boolean);

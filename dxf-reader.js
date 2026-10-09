@@ -140,17 +140,22 @@ if (!window.DraftDxfReader) {
   }
   // A polyline segment with a bulge is an arc: bulge = tan(sweep / 4), the
   // sign saying which way round.
-  function bulgePts(x0, y0, x1, y1, bulge) {
+  function bulgeArc(x0, y0, x1, y1, bulge) {
     const sweep = 4 * Math.atan(bulge);
     const chord = Math.hypot(x1 - x0, y1 - y0);
-    if (!chord || Math.abs(sweep) < 1e-9) return [x1, y1];
+    if (!chord || Math.abs(sweep) < 1e-9) return null;
     const r = chord / (2 * Math.sin(Math.abs(sweep) / 2));
     const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
     const h = Math.sqrt(Math.max(0, r * r - (chord / 2) ** 2));
     const ux = (x1 - x0) / chord, uy = (y1 - y0) / chord;
     const side = (bulge > 0) === (Math.abs(sweep) < Math.PI) ? 1 : -1;
     const cx = mx - uy * h * side, cy = my + ux * h * side;
-    const a0 = Math.atan2(y0 - cy, x0 - cx);
+    return { cx, cy, r, a0: Math.atan2(y0 - cy, x0 - cx), sweep };
+  }
+  function bulgePts(x0, y0, x1, y1, bulge) {
+    const arc = bulgeArc(x0, y0, x1, y1, bulge);
+    if (!arc) return [x1, y1];
+    const { cx, cy, r, a0, sweep } = arc;
     const n = Math.max(2, Math.ceil(Math.abs(sweep) / ARC_STEP));
     const pts = [];
     for (let i = 1; i <= n; i += 1) {
@@ -160,6 +165,47 @@ if (!window.DraftDxfReader) {
     pts[pts.length - 2] = x1; pts[pts.length - 1] = y1;
     return pts;
   }
+  // ── CURVES AS PIECES, for a drawing to EDIT ─────────────────────────────
+  // A piece is one segment of the drafter's own LINE: its two ends and, for
+  // a curve, the point halfway round it. The plan draws a curved line as a
+  // quadratic through that midpoint, which an arc of 45 degrees or less
+  // matches to a hair -- so an arc is cut into as many of those as it takes.
+  const PIECE_SWEEP = Math.PI / 4;
+  function arcPieces(cx, cy, r, a0, sweep) {
+    const n = Math.max(1, Math.ceil(Math.abs(sweep) / PIECE_SWEEP - 1e-9));
+    const at = t => [cx + r * Math.cos(a0 + sweep * t), cy + r * Math.sin(a0 + sweep * t)];
+    const out = [];
+    for (let i = 0; i < n; i += 1) out.push({ a: at(i / n), b: at((i + 1) / n), mid: at((i + 0.5) / n) });
+    return out;
+  }
+  // Straight pieces along a run of points, closing it if asked.
+  function runPieces(raw, closed) {
+    const out = [];
+    for (let i = 2; i < raw.length; i += 2) {
+      out.push({ a: [raw[i - 2], raw[i - 1]], b: [raw[i], raw[i + 1]], mid: null });
+    }
+    if (closed && raw.length >= 6) {
+      out.push({ a: [raw[raw.length - 2], raw[raw.length - 1]], b: [raw[0], raw[1]], mid: null });
+    }
+    return out;
+  }
+  // A polyline's pieces: straight between its vertices, or round an arc
+  // where the vertex carries a bulge -- with the ends exactly the vertices.
+  function polyPieces(verts, closed) {
+    const out = [];
+    const step = (p, q) => {
+      const arc = p.bulge ? bulgeArc(p.x, p.y, q.x, q.y, p.bulge) : null;
+      if (!arc) { out.push({ a: [p.x, p.y], b: [q.x, q.y], mid: null }); return; }
+      const pieces = arcPieces(arc.cx, arc.cy, arc.r, arc.a0, arc.sweep);
+      pieces[0].a = [p.x, p.y];
+      pieces[pieces.length - 1].b = [q.x, q.y];
+      out.push(...pieces);
+    };
+    for (let i = 1; i < verts.length; i += 1) step(verts[i - 1], verts[i]);
+    if (closed && verts.length >= 2) step(verts[verts.length - 1], verts[0]);
+    return out;
+  }
+
   // A B-spline by de Boor, sampled evenly in its knot span; with no knots
   // the control polygon is the best there is.
   function splinePts(degree, knots, ctrl, weights) {
@@ -229,7 +275,9 @@ if (!window.DraftDxfReader) {
       .replace(/[{}]/g, '');
   }
 
-  function parse(text) {
+  // `segments: true` also hands back every line as the pieces a drawing can
+  // EDIT -- see `addPieces` -- which TRACE's EDITABLE asks for.
+  function parse(text, { segments: wantSegments = false } = {}) {
     if (/^AutoCAD Binary DXF/.test(String(text).slice(0, 22))) {
       throw new Error('this is a binary DXF; save it as an ASCII DXF');
     }
@@ -289,6 +337,7 @@ if (!window.DraftDxfReader) {
     });
 
     const paths = [];
+    const segments = [];
     const texts = [];
     const counts = new Map();
     const skipped = {};
@@ -329,6 +378,19 @@ if (!window.DraftDxfReader) {
       count(layer);
     };
 
+    // THE SAME LINES AS PIECES, for a drawing to edit: in world space, each
+    // with its layer and colour. Only when asked: a file only viewed never
+    // pays for them.
+    const addPieces = (m, pieces, layer, color) => {
+      if (!wantSegments || truncated) return;
+      pieces.forEach(pc => {
+        const a = apply(m, pc.a[0], pc.a[1]), b = apply(m, pc.b[0], pc.b[1]);
+        if (![...a, ...b].every(Number.isFinite)) return;
+        if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 1e-9) return;
+        segments.push({ layer, color, a, b, mid: pc.mid ? apply(m, pc.mid[0], pc.mid[1]) : null });
+      });
+    };
+
     // A text's height and turn under a block's transform: the height scales
     // by the transform's size, the turn adds its own.
     const addText = (m, obj, layer, color, x, y, h, rot, raw, align, baseline) => {
@@ -360,16 +422,22 @@ if (!window.DraftDxfReader) {
         const color = colorOf(obj, parent, layer);
         const om = mul(m, ocs(obj));
         switch (obj.type) {
-          case 'LINE':
-            addPath(m, [num(obj, 10), num(obj, 20), num(obj, 11), num(obj, 21)], false, layer, color);
+          case 'LINE': {
+            const raw = [num(obj, 10), num(obj, 20), num(obj, 11), num(obj, 21)];
+            addPath(m, raw, false, layer, color);
+            addPieces(m, runPieces(raw, false), layer, color);
             break;
+          }
           case 'LWPOLYLINE': {
             const raw = [];
+            const verts = [];
             let x = null, bulge = 0, firstPt = null;
             obj.codes.forEach(([code, value]) => {
               if (code === 10) x = parseFloat(value);
               else if (code === 20 && x !== null) {
                 const y = parseFloat(value);
+                if (verts.length) verts[verts.length - 1].bulge = bulge;
+                verts.push({ x, y, bulge: 0 });
                 if (!raw.length) { raw.push(x, y); firstPt = [x, y]; }
                 else if (bulge) raw.push(...bulgePts(raw[raw.length - 2], raw[raw.length - 1], x, y, bulge));
                 else raw.push(x, y);
@@ -377,11 +445,13 @@ if (!window.DraftDxfReader) {
                 x = null;
               } else if (code === 42) bulge = parseFloat(value) || 0;
             });
+            if (verts.length) verts[verts.length - 1].bulge = bulge;
             const closed = (parseInt(first(obj, 70, '0'), 10) || 0) & 1;
             if (closed && firstPt && bulge) {
               raw.push(...bulgePts(raw[raw.length - 2], raw[raw.length - 1], firstPt[0], firstPt[1], bulge));
             }
             addPath(om, raw, closed && !bulge, layer, color);
+            addPieces(om, polyPieces(verts, closed), layer, color);
             break;
           }
           case 'POLYLINE': {
@@ -393,10 +463,12 @@ if (!window.DraftDxfReader) {
             i = j - 1;
             if (flags & (16 | 64)) { skip('POLYLINE mesh'); break; }
             const raw = [];
+            const pverts = [];
             let bulge = 0;
             verts.forEach(v => {
               if ((parseInt(first(v, 70, '0'), 10) || 0) & 16) return;   // spline frame point
               const x = num(v, 10), y = num(v, 20);
+              pverts.push({ x, y, bulge: num(v, 42, 0) });
               if (!raw.length) raw.push(x, y);
               else if (bulge) raw.push(...bulgePts(raw[raw.length - 2], raw[raw.length - 1], x, y, bulge));
               else raw.push(x, y);
@@ -407,6 +479,7 @@ if (!window.DraftDxfReader) {
               raw.push(...bulgePts(raw[raw.length - 2], raw[raw.length - 1], raw[0], raw[1], bulge));
             }
             addPath(flags & 8 ? m : om, raw, closed && !bulge, layer, color);
+            addPieces(flags & 8 ? m : om, polyPieces(pverts, closed), layer, color);
             break;
           }
           case 'ARC': {
@@ -414,12 +487,18 @@ if (!window.DraftDxfReader) {
             if (r > 0) {
               const a0 = (num(obj, 50) * Math.PI) / 180, a1 = (num(obj, 51) * Math.PI) / 180;
               addPath(om, arcPts(num(obj, 10), num(obj, 20), r, a0, a1), false, layer, color);
+              let sweep = a1 - a0;
+              while (sweep <= 0) sweep += Math.PI * 2;
+              addPieces(om, arcPieces(num(obj, 10), num(obj, 20), r, a0, sweep), layer, color);
             }
             break;
           }
           case 'CIRCLE': {
             const r = num(obj, 40);
-            if (r > 0) addPath(om, arcPts(num(obj, 10), num(obj, 20), r, 0, Math.PI * 2), true, layer, color);
+            if (r > 0) {
+              addPath(om, arcPts(num(obj, 10), num(obj, 20), r, 0, Math.PI * 2), true, layer, color);
+              addPieces(om, arcPieces(num(obj, 10), num(obj, 20), r, 0, Math.PI * 2), layer, color);
+            }
             break;
           }
           case 'ELLIPSE': {
@@ -435,6 +514,7 @@ if (!window.DraftDxfReader) {
               raw.push(cx + c * mx - s * ratio * my, cy + c * my + s * ratio * mx);
             }
             addPath(om, raw, false, layer, color);
+            addPieces(om, runPieces(raw, false), layer, color);
             break;
           }
           case 'SPLINE': {
@@ -445,7 +525,9 @@ if (!window.DraftDxfReader) {
               ? splinePts(parseInt(first(obj, 71, '3'), 10), all(obj, 40).map(parseFloat), ctrl,
                 all(obj, 41).map(parseFloat))
               : throughPts(xs11.map((x, k) => [x, ys21[k]]));
-            addPath(m, raw, (parseInt(first(obj, 70, '0'), 10) || 0) & 1, layer, color);
+            const closed = (parseInt(first(obj, 70, '0'), 10) || 0) & 1;
+            addPath(m, raw, closed, layer, color);
+            addPieces(m, runPieces(raw, closed), layer, color);
             break;
           }
           case 'SOLID':
@@ -455,11 +537,13 @@ if (!window.DraftDxfReader) {
             const c = [[10, 20], [11, 21], [12, 22], [13, 23]].map(([a, b]) => [num(obj, a), num(obj, b)]);
             const ring = obj.type === '3DFACE' ? c : [c[0], c[1], c[3], c[2]];
             addPath(obj.type === '3DFACE' ? m : om, ring.flat(), true, layer, color);
+            addPieces(obj.type === '3DFACE' ? m : om, runPieces(ring.flat(), true), layer, color);
             break;
           }
           case 'LEADER': {
             const xs = all(obj, 10).map(parseFloat), ys = all(obj, 20).map(parseFloat);
             addPath(m, xs.flatMap((x, k) => [x, ys[k]]), false, layer, color);
+            addPieces(m, runPieces(xs.flatMap((x, k) => [x, ys[k]]), false), layer, color);
             break;
           }
           case 'TEXT':
@@ -553,6 +637,7 @@ if (!window.DraftDxfReader) {
       units,
       bounds: { minX, minY, maxX, maxY },
       paths,
+      ...(wantSegments ? { segments } : {}),
       texts,
       layers,
       skipped,
@@ -560,6 +645,28 @@ if (!window.DraftDxfReader) {
     };
   }
 
-  window.DraftDxfReader = Object.freeze({ UNITS, aciColor, plainText, parse });
+  // THE PIECES AS THE DRAWING'S OWN LINES. `toWorld([x, y])` places a file
+  // point on the plan ({ x, z }); each piece becomes { start, end, bulge,
+  // layer } with `bulge` in the plan's own sense -- feet off the chord's
+  // midpoint along its left normal, to the control point of a quadratic --
+  // set so the curve passes through the arc's true midpoint, which a
+  // quadratic does halfway out to its control point.
+  function piecesToLines(pieces, toWorld) {
+    return (pieces || []).map(pc => {
+      const start = toWorld(pc.a), end = toWorld(pc.b);
+      const dx = end.x - start.x, dz = end.z - start.z;
+      const len = Math.hypot(dx, dz);
+      if (!(len > 1e-9)) return null;
+      let bulge = 0;
+      if (pc.mid) {
+        const m = toWorld(pc.mid);
+        const off = (m.x - (start.x + end.x) / 2) * (-dz / len) + (m.z - (start.z + end.z) / 2) * (dx / len);
+        bulge = Math.abs(off) > 1e-9 ? 2 * off : 0;
+      }
+      return { start, end, bulge, layer: pc.layer };
+    }).filter(Boolean);
+  }
+
+  window.DraftDxfReader = Object.freeze({ UNITS, aciColor, plainText, parse, piecesToLines });
 })();
 }

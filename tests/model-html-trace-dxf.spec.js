@@ -22,8 +22,9 @@ const BLANK = {
 };
 
 // A DXF written out by hand: a 20' x 10' rectangle in red on WALLS, a green
-// line across it on FURN, drawn in inches -- or with no unit at all.
-function dxf({ units = 1 } = {}) {
+// line across it on FURN, drawn in inches -- or with no unit at all -- and
+// whatever else a check adds.
+function dxf({ units = 1, more = [] } = {}) {
   const pairs = [
     0, 'SECTION', 2, 'HEADER',
     ...(units === null ? [] : [9, '$INSUNITS', 70, units]),
@@ -36,6 +37,7 @@ function dxf({ units = 1 } = {}) {
     0, 'LWPOLYLINE', 8, 'WALLS', 90, 4, 70, 1,
     10, 0, 20, 0, 10, 240, 20, 0, 10, 240, 20, 120, 10, 0, 20, 120,
     0, 'LINE', 8, 'FURN', 10, 0, 20, 0, 11, 240, 21, 120,
+    ...more,
     0, 'ENDSEC', 0, 'EOF',
   ];
   const lines = [];
@@ -64,6 +66,11 @@ const savedUnderlays = async page => {
   await page.locator('#save').click();
   await h.waitForSaved(page);
   return (await h.savedDrawing(page)).underlays || [];
+};
+const saved = async page => {
+  await page.locator('#save').click();
+  await h.waitForSaved(page);
+  return h.savedDrawing(page);
 };
 // How many plan pixels are the file's red, and how many its green.
 const inks = page => page.evaluate(() => {
@@ -145,4 +152,118 @@ test('a DWG is refused by name, with what to do instead', async ({ page }) => {
   await pick(page, 'plan.dwg', Buffer.from('AC1032'));
   await expect(card(page).locator('[data-trace-status]')).toContainText('save it as a DXF');
   await expect(card(page).locator('[data-trace-go]')).toBeHidden();
+});
+
+// ── EDITABLE (Movie, 9 Oct): "when they load it ask them if they want
+// EDITABLE or NON-EDITABLE" -- "they will need to reload if they change
+// their mind". ─────────────────────────────────────────────────────────────
+
+test('EDITABLE brings the lit layers in as lines, one group, one UNDO', async ({ page }) => {
+  await open(page);
+  await pick(page, 'plan.dxf', dxf());
+  await expect(card(page).locator('[data-trace-go]')).toHaveText('NON-EDITABLE');
+  // FURN off on the card: only the WALLS rectangle comes in.
+  await card(page).locator('[data-trace-card-layer="FURN"]').click();
+  await expect(card(page).locator('[data-trace-card-layer="FURN"]')).toHaveAttribute('aria-pressed', 'false');
+  await card(page).locator('[data-trace-editable]').click();
+  await expect(card(page)).toBeHidden();
+
+  const d = await saved(page);
+  expect(d.underlays || [], 'nothing locked was laid').toHaveLength(0);
+  const lines = d.lines.filter(l => l.importedFrom === 'plan.dxf');
+  expect(lines, 'the four sides of the rectangle').toHaveLength(4);
+  expect([...new Set(lines.map(l => l.layer))], 'on the layer the file gave them').toEqual(['WALLS']);
+  // Full size: 240" by 120" is 20' by 10'.
+  const xs = lines.flatMap(l => [l.start.x, l.end.x]), zs = lines.flatMap(l => [l.start.z, l.end.z]);
+  expect(Math.round((Math.max(...xs) - Math.min(...xs)) * 100) / 100).toBe(20);
+  expect(Math.round((Math.max(...zs) - Math.min(...zs)) * 100) / 100).toBe(10);
+  expect(lines.every(l => Number(l.levelId) === 3), 'on the level it was loaded on').toBe(true);
+  const group = (d.groups || []).find(g => g.name === 'plan');
+  expect(group, 'one group named for the file').toBeTruthy();
+  expect(group.members.map(m => m.id).sort()).toEqual(lines.map(l => l.id).sort());
+
+  await page.locator('#model-undo').click();
+  const back = await saved(page);
+  expect(back.lines.filter(l => l.importedFrom), 'UNDO takes every line out').toHaveLength(0);
+  expect((back.groups || []).filter(g => g.name === 'plan'), 'and the group').toHaveLength(0);
+});
+
+test('a circle comes in as eight curved lines that bend true', async ({ page }) => {
+  await open(page);
+  // A 12" circle on CIRC, well away from the rectangle.
+  await pick(page, 'circle.dxf', dxf({ more: [0, 'CIRCLE', 8, 'CIRC', 10, 400, 20, 60, 40, 12] }));
+  await card(page).locator('[data-trace-card-layer="WALLS"]').click();
+  await card(page).locator('[data-trace-card-layer="FURN"]').click();
+  await card(page).locator('[data-trace-editable]').click();
+  const lines = (await saved(page)).lines.filter(l => l.layer === 'CIRC');
+  expect(lines).toHaveLength(8);
+  // Every curve's halfway point -- the quadratic through its control point,
+  // the plan's own -- sits on the circle: 1' from the centre.
+  const xs = lines.flatMap(l => [l.start.x, l.end.x]), zs = lines.flatMap(l => [l.start.z, l.end.z]);
+  const c = { x: (Math.max(...xs) + Math.min(...xs)) / 2, z: (Math.max(...zs) + Math.min(...zs)) / 2 };
+  lines.forEach(l => {
+    const dx = l.end.x - l.start.x, dz = l.end.z - l.start.z, len = Math.hypot(dx, dz);
+    const mid = { x: (l.start.x + l.end.x) / 2 + (-dz / len) * l.bulge / 2,
+      z: (l.start.z + l.end.z) / 2 + (dx / len) * l.bulge / 2 };
+    expect(Math.abs(Math.hypot(mid.x - c.x, mid.z - c.z) - 1)).toBeLessThan(0.001);
+  });
+  // AND THE PLAN DRAWS THEM CURVED: MODEL drew every line as its chord
+  // until this came in, so a curve in the record was a straight stroke.
+  const curves = await page.evaluate(() => {
+    let n = 0;
+    const real = CanvasRenderingContext2D.prototype.quadraticCurveTo;
+    CanvasRenderingContext2D.prototype.quadraticCurveTo = function count(...args) {
+      n += 1;
+      return real.apply(this, args);
+    };
+    window.dispatchEvent(new Event('resize'));
+    return new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => {
+      CanvasRenderingContext2D.prototype.quadraticCurveTo = real;
+      resolve(n);
+    })));
+  });
+  expect(curves, 'each of the eight drawn as a curve').toBeGreaterThanOrEqual(8);
+});
+
+test('NON-EDITABLE keeps the layers the card switched off, off', async ({ page }) => {
+  await open(page);
+  await pick(page, 'plan.dxf', dxf());
+  await card(page).locator('[data-trace-card-layer="FURN"]').click();
+  await card(page).locator('[data-trace-go]').click();
+  const [u] = await savedUnderlays(page);
+  expect(u.kind).toBe('dxf');
+  expect(u.hiddenLayers).toEqual(['FURN']);
+});
+
+test('the file\'s words are listed on the card to copy out', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await open(page);
+  await pick(page, 'plan.dxf', dxf({ more: [
+    0, 'TEXT', 8, 'NOTES', 10, 20, 20, 20, 40, 6, 1, 'KITCHEN',
+    0, 'MTEXT', 8, 'NOTES', 10, 60, 20, 20, 40, 6, 1, '{\\fArial|b0;BATH A}',
+    0, 'TEXT', 8, 'NOTES', 10, 90, 20, 20, 40, 6, 1, 'KITCHEN',
+  ] }));
+  const list = card(page).locator('[data-trace-text]');
+  await list.locator('summary').click();
+  await expect(list.locator('summary')).toContainText('TEXT IN THE FILE (2)');
+  await expect(list.locator('[data-trace-copy]')).toHaveCount(2);
+  await list.locator('[data-trace-copy="BATH A"]').click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('BATH A');
+  await list.locator('[data-trace-copy-all]').click();
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('KITCHEN\nBATH A');
+});
+
+test('a big file says how many lines first, and the second press brings them in', async ({ page }) => {
+  await open(page);
+  const more = [];
+  for (let i = 0; i < 5001; i += 1) more.push(0, 'LINE', 8, 'MANY', 10, i, 20, 200, 11, i, 21, 210);
+  await pick(page, 'big.dxf', dxf({ more }));
+  await card(page).locator('[data-trace-card-layer="WALLS"]').click();
+  await card(page).locator('[data-trace-card-layer="FURN"]').click();
+  await card(page).locator('[data-trace-editable]').click();
+  await expect(card(page).locator('[data-trace-status]')).toContainText('5,001 lines');
+  await expect(card(page)).toBeVisible();
+  await card(page).locator('[data-trace-editable]').click();
+  await expect(card(page)).toBeHidden({ timeout: 15000 });
+  expect((await saved(page)).lines.filter(l => l.layer === 'MANY')).toHaveLength(5001);
 });

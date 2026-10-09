@@ -41,6 +41,17 @@ const MUTATIONS = [
     c => c.replace("const kind = oneOf(underlay?.kind, ['pdf', 'image', 'dxf'], null);", "const kind = oneOf(underlay?.kind, ['pdf', 'image'], null);")],
   ['the drawing forgets which layers are off', 'drawing-format.js',
     c => c.replace("hiddenLayers: [...new Set((Array.isArray(underlay?.hiddenLayers) ? underlay.hiddenLayers : [])", "hiddenLayers: [...new Set(([])")],
+  ['an arc is one straight piece', 'dxf-reader.js',
+    c => c.replace('const n = Math.max(1, Math.ceil(Math.abs(sweep) / PIECE_SWEEP - 1e-9));', 'const n = 1;')],
+  ['a curve forgets its midpoint', 'dxf-reader.js',
+    c => c.replace('segments.push({ layer, color, a, b, mid: pc.mid ? apply(m, pc.mid[0], pc.mid[1]) : null });',
+      'segments.push({ layer, color, a, b, mid: null });')],
+  ['the bulge is the sagitta, not twice it', 'dxf-reader.js',
+    c => c.replace('bulge = Math.abs(off) > 1e-9 ? 2 * off : 0;', 'bulge = Math.abs(off) > 1e-9 ? off : 0;')],
+  ['a polyline\'s pieces ignore its bulges', 'dxf-reader.js',
+    c => c.replace('const arc = p.bulge ? bulgeArc(p.x, p.y, q.x, q.y, p.bulge) : null;', 'const arc = null;')],
+  ['a DXF line\'s layer falls to draft', 'drawing-format.js',
+    c => c.replace("          : (imported && String(line?.layer ?? '').trim()) ? String(line.layer).trim().slice(0, 255)\n", '')],
   ['MTEXT keeps its formatting codes', 'dxf-reader.js',
     c => c.replace(".replace(/\\\\[ACFHQTWfhqtwacp][^;\\\\{}]*;/g, '')", '')],
 ];
@@ -173,6 +184,45 @@ const throws = (label, fn, words) => {
   check('and colour 1 is red', D.aciColor(1), '#ff0000');
 }
 
+// ── EDITABLE: THE SAME FILE AS THE DRAWING'S OWN LINES ─────────────────────
+// TRACE's EDITABLE asks the reader for `segments` and turns them into LINE
+// records through piecesToLines. An arc is cut at 45 degrees and every piece
+// carries its true midpoint; the plan draws a curved line as a quadratic
+// whose halfway point sits half its bulge off the chord -- so that halfway
+// point must land on the arc.
+{
+  const lineMid = l => {
+    const dx = l.end.x - l.start.x, dz = l.end.z - l.start.z, len = Math.hypot(dx, dz);
+    return { x: (l.start.x + l.end.x) / 2 + (-dz / len) * l.bulge / 2,
+      z: (l.start.z + l.end.z) / 2 + (dx / len) * l.bulge / 2 };
+  };
+  const plan = ([x, y]) => ({ x, z: -y });
+  const asked = D.parse(file({ entities: [0, 'CIRCLE', 8, 'C', 10, 5, 20, 5, 40, 10] }), { segments: true });
+  check('a file only viewed carries no pieces', 'segments' in D.parse(file({ entities: LINE('A', 0, 0, 1, 0) })), false);
+  const circle = D.piecesToLines(asked.segments, plan);
+  check('a circle is eight curved lines', `${circle.length} ${circle.every(l => l.bulge !== 0)}`, '8 true');
+  check('whose curves pass through the circle', circle.every(l => {
+    const m = lineMid(l);
+    return Math.abs(Math.hypot(m.x - 5, m.z + 5) - 10) < 1e-6;
+  }), true);
+  const quarter = D.piecesToLines(D.parse(file({ entities: [0, 'ARC', 8, 'A', 10, 0, 20, 0, 40, 10, 50, 0, 51, 90] }),
+    { segments: true }).segments, plan);
+  check('a quarter arc is two', quarter.length, 2);
+  check('starting and ending where the arc does', JSON.stringify([quarter[0].start, quarter[1].end]
+    .map(p => [Math.round(p.x * 1e6) / 1e6, Math.round(p.z * 1e6) / 1e6])), JSON.stringify([[10, 0], [0, -10]]));
+  // A bulged polyline segment ends exactly on its vertices, both ways round.
+  const poly = D.piecesToLines(D.parse(file({ entities: [0, 'LWPOLYLINE', 8, 'P', 90, 3, 70, 0,
+    10, 0, 20, 0, 42, 1, 10, 10, 20, 0, 10, 10, 20, 8] }), { segments: true }).segments, plan);
+  check('a polyline: its half circle in four pieces, then its straight', poly.map(l => (l.bulge ? 'C' : 'S')).join(''), 'CCCCS');
+  check('the half circle bows the way the file turns', poly.every((l, i) => i === 4 || lineMid(l).z >= -1e-9), true);
+  const blocked = D.parse(file({ layers: [0, 'LAYER', 2, 'DOORS', 70, 0, 62, 1],
+    blocks: [0, 'BLOCK', 8, '0', 2, 'B', 70, 0, 10, 0, 20, 0, ...LINE('0', 0, 0, 3, 0), 0, 'ENDBLK', 8, '0'],
+    entities: [0, 'INSERT', 8, 'DOORS', 2, 'B', 10, 10, 20, 0, 50, 90] }), { segments: true });
+  check('a piece in a block lands where the INSERT puts it, on its layer',
+    JSON.stringify(D.piecesToLines(blocked.segments, plan).map(l => [l.layer, Math.round(l.end.x * 1e6) / 1e6,
+      Math.round(l.end.z * 1e6) / 1e6])), JSON.stringify([['DOORS', 10, -3]]));
+}
+
 // ── THE DRAWING KEEPS IT ───────────────────────────────────────────────────
 // drawing-format.js holds a DXF underlay's unit and its switched-off layers
 // through a save and a load; a photo gets neither.
@@ -186,6 +236,11 @@ const throws = (label, fn, words) => {
   check('a unit it does not know reads as inches', odd.dxfUnits, 'in');
   const [photo] = F.underlays([{ ...base, kind: 'image', dxfUnits: 'mm' }], new Set([3]));
   check('and a photo carries no DXF fields', 'dxfUnits' in photo || 'hiddenLayers' in photo, false);
+  const seg = { start: { x: 0, z: 0 }, end: { x: 4, z: 0 }, levelId: 3, view: 'plan' };
+  const [got, own] = F.lines([{ ...seg, id: 'l1', layer: 'AA-WALL-EXTR', importedFrom: 'story.DXF' },
+    { ...seg, id: 'l2', layer: 'AA-WALL-EXTR' }], new Set([3]), { knownLayerIds: new Set(['A-WALL']) });
+  check('a line from a DXF keeps the layer the file gave it', `${got.layer} ${got.importedFrom}`, 'AA-WALL-EXTR story.DXF');
+  check('a drawn line on a layer nobody knows still falls to draft', `${own.layer} ${'importedFrom' in own}`, 'draft false');
 }
 
 console.log(`\n${ran - failed}/${ran} checks passed`);

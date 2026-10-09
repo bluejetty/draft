@@ -1005,6 +1005,19 @@
     font-size:11px; font-weight:600; letter-spacing:0.04em; }
   .trace-card button[aria-pressed="true"], [data-trace-go] { border-color: var(--accent) !important; color: var(--accent) !important; }
   .trace-wide { width:100%; margin-top:10px; }
+  .trace-card [data-trace-card-layers] button[aria-pressed="false"] { opacity:0.5; text-decoration:line-through; }
+  [data-trace-editable] { border-color: var(--accent) !important; color: var(--accent) !important; }
+  /* A DXF's words, to copy out: selectable text, a COPY on each. */
+  .trace-text { margin-top:8px; }
+  .trace-text summary { cursor:pointer; font-family: var(--font-ui); font-size:10px; font-weight:600;
+    letter-spacing:0.06em; color: var(--ink-quiet); }
+  .trace-text-list { max-height:9em; overflow-y:auto; margin-top:4px; }
+  .trace-text-row { display:flex; align-items:center; gap:6px; padding:2px 0; font-family: var(--font-ui);
+    font-size:12px; color: var(--ink-primary); }
+  .trace-text-row span { flex:1; user-select:text; overflow-wrap:anywhere; }
+  .trace-text-row button { cursor:pointer; padding:1px 6px; border-radius:3px; border:1px solid var(--edge-panel);
+    background: var(--surface-chip); color: var(--ink-quiet); font-family: var(--font-ui); font-size:9px;
+    font-weight:600; letter-spacing:0.04em; }
   .trace-hint { margin-top:6px; font-family: var(--font-ui); font-size:11px; color: var(--ink-quiet); }
   .trace-err { min-height:0; font-family: var(--font-ui); font-size:10px; color:#b04050; margin-top:3px; }
   .trace-actions { margin-top:14px; }
@@ -1506,6 +1519,9 @@
         <div class="trace-label">THE FILE'S NUMBERS ARE IN</div>
         <div class="trace-chips" data-trace-units></div>
         <div class="trace-hint" data-trace-size></div>
+        <div class="trace-label">LAYERS &mdash; ONLY THE LIT ONES COME IN</div>
+        <div class="trace-chips" data-trace-card-layers></div>
+        <div data-trace-card-text></div>
       </div>
       <div data-trace-width-row>
         <div class="trace-label">WIDTH ON PLAN</div>
@@ -1525,6 +1541,7 @@
     </div>
     <div class="promote-row trace-actions">
       <button type="button" id="trace-go" data-trace-go hidden>INSERT</button>
+      <button type="button" id="trace-editable" data-trace-editable hidden>EDITABLE</button>
       <button type="button" id="trace-other" data-trace-other hidden>DIFFERENT FILE</button>
       <button type="button" id="trace-cancel" data-trace-cancel>CANCEL</button>
     </div>
@@ -2760,8 +2777,18 @@
     ctx.save();
     ctx.strokeStyle = skin['draw-line'];
     ctx.lineWidth = 1;
+    // A CURVED LINE IS DRAWN CURVED. Every line here was a straight stroke
+    // from end to end, so a `bulge` -- a DXF's arcs brought in EDITABLE, or
+    // the old page's arcs -- drew as its chord. render-2d's segment path
+    // owns the curve, through geometry-2d's control point, the same maths
+    // the hit test reads.
+    const R = window.DraftRender2D, G = window.DraftGeometry2D;
     lines().forEach(line => {
       if (!line.start || !line.end) return;
+      if (line.bulge) {
+        R.strokeSegPath2D(ctx, toS, line, { controlPoint: G.lineControlPoint });
+        return;
+      }
       const a = toS(line.start), b = toS(line.end);
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     });
@@ -9010,10 +9037,15 @@
       }
       if (type === 'wall' || type === 'line') {
         const a = toS(item.start), b = toS(item.end);
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
+        if (item.bulge) {
+          // The halo follows the curve the line is drawn on.
+          window.DraftRender2D.strokeSegPath2D(ctx, toS, item, { controlPoint: window.DraftGeometry2D.lineControlPoint });
+        } else {
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
         if (item === lone) {
           // Square handles at each end -- the same 8px squares the old page
           // draws, and the grab targets the corner drag uses.
@@ -17088,6 +17120,11 @@
     const ready = Boolean(traceScan && !status);
     tq('[data-trace-body]').hidden = !ready;
     tq('[data-trace-go]').hidden = !ready;
+    // A DXF ASKS ONCE, HERE (Movie, 9 Oct): locked to trace over, or the
+    // drafter's own lines to edit. Changing that later is a fresh load.
+    const isDxf = traceScan?.kind === 'dxf';
+    tq('[data-trace-go]').textContent = isDxf ? 'NON-EDITABLE' : 'INSERT';
+    tq('[data-trace-editable]').hidden = !ready || !isDxf;
     tq('[data-trace-other]').hidden = !traceScan && !status;
     if (!ready) return;
     const scan = traceScan;
@@ -17141,6 +17178,29 @@
       const ftIn = feet => F.formatArchitecturalInches(feet * 12);
       tq('[data-trace-size]').textContent = `${ftIn(size.widthFt)} \u00d7 ${ftIn(size.heightFt)} (${said}). `
         + `${scan.geo.layers.length} layer${scan.geo.layers.length === 1 ? '' : 's'}.`;
+      // THE LAYERS, picked before either button: what is lit comes in, as
+      // lines to trace over or as lines to edit.
+      const layerBox = tq('[data-trace-card-layers]');
+      layerBox.textContent = '';
+      scan.geo.layers.filter(l => l.count > 0).forEach(layer => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.textContent = layer.name;
+        chip.dataset.traceCardLayer = layer.name;
+        const shown = !scan.hiddenLayers.includes(layer.name);
+        chip.setAttribute('aria-pressed', shown ? 'true' : 'false');
+        chip.title = `${layer.count} piece${layer.count === 1 ? '' : 's'}`;
+        chip.addEventListener('click', () => {
+          scan.hiddenLayers = shown ? [...scan.hiddenLayers, layer.name]
+            : scan.hiddenLayers.filter(n => n !== layer.name);
+          scan.previewUrl = traceDxfPreview(scan.geo, scan.hiddenLayers);
+          showTraceCard();
+        });
+        layerBox.appendChild(chip);
+      });
+      const textBox = tq('[data-trace-card-text]');
+      textBox.textContent = '';
+      textBox.appendChild(traceTextList(scan.geo));
     }
     tq('[data-trace-calibrate]').setAttribute('aria-pressed', traceCalOn ? 'true' : 'false');
     tq('[data-trace-cal]').hidden = !traceCalOn;
@@ -17172,7 +17232,7 @@
   };
   // The card's picture of a DXF: its lines, fitted, in its own colours, on
   // the preview's white.
-  const traceDxfPreview = geo => {
+  const traceDxfPreview = (geo, hidden = geo.layers.filter(l => l.off).map(l => l.name)) => {
     const canvas = document.createElement('canvas');
     canvas.width = 480; canvas.height = 320;
     const c2 = canvas.getContext('2d');
@@ -17182,7 +17242,7 @@
     const ox = (canvas.width - (b.maxX - b.minX) * k) / 2, oy = (canvas.height - (b.maxY - b.minY) * k) / 2;
     c2.lineWidth = 1;
     geo.paths.forEach(p => {
-      if (geo.layers.some(l => l.off && l.name === p.layer)) return;
+      if (hidden.includes(p.layer)) return;
       // The preview is on white paper, so the file's "white on black"
       // colour 7 is the day ink here, whatever the page is.
       c2.strokeStyle = p.color || '#1d1f20';
@@ -17221,6 +17281,7 @@
       }
       // Unitless files are mostly architectural ones drawn in inches.
       traceScan = { file, kind: 'dxf', geo, dxfUnits: geo.units || 'in',
+        hiddenLayers: geo.layers.filter(l => l.off).map(l => l.name),
         previewUrl: traceDxfPreview(geo), calMarks: [] };
       showTraceCard();
       return;
@@ -17314,6 +17375,132 @@
     sayOnStrip(`${underlay.name} is under ${traceLevelName()} to trace over.`);
   };
 
+  // A DXF'S WORDS, TO COPY OUT (Movie, 9 Oct: "can i 'copy' the text from
+  // the DXF and past it in my format?"). On the plan they are drawn, so they
+  // cannot be selected; here each is plain text with a COPY, once each in
+  // the order the file has them, for a room tag, a note, anything typed.
+  const copyText = async text => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // No clipboard permission (an older browser, a frame): the old way.
+      const area = document.createElement('textarea');
+      area.value = text;
+      document.body.appendChild(area);
+      area.select();
+      try { document.execCommand('copy'); } catch { /* nothing more to try */ }
+      area.remove();
+    }
+    sayOnStrip(`Copied \u201c${text.length > 40 ? `${text.slice(0, 40)}\u2026` : text}\u201d.`);
+  };
+  const traceTextList = geo => {
+    const words = [...new Set((geo.texts || []).map(t => t.lines.join(' ').replace(/\s+/g, ' ').trim())
+      .filter(Boolean))];
+    const box = document.createElement('details');
+    box.className = 'trace-text';
+    box.dataset.traceText = '';
+    const head = document.createElement('summary');
+    head.textContent = words.length ? `TEXT IN THE FILE (${words.length}) \u2014 COPY ANY OF IT` : 'NO TEXT IN THE FILE';
+    box.appendChild(head);
+    if (!words.length) return box;
+    const list = document.createElement('div');
+    list.className = 'trace-text-list';
+    words.forEach(word => {
+      const row = document.createElement('div');
+      row.className = 'trace-text-row';
+      const span = document.createElement('span');
+      span.textContent = word;
+      const copy = document.createElement('button');
+      copy.type = 'button';
+      copy.textContent = 'COPY';
+      copy.dataset.traceCopy = word;
+      copy.addEventListener('click', () => copyText(word));
+      row.append(span, copy);
+      list.appendChild(row);
+    });
+    const all = document.createElement('button');
+    all.type = 'button';
+    all.textContent = 'COPY ALL';
+    all.dataset.traceCopyAll = '';
+    all.className = 'trace-wide';
+    all.addEventListener('click', () => copyText(words.join('\n')));
+    box.append(list, all);
+    return box;
+  };
+
+  // EDITABLE: THE DXF AS THE DRAFTER'S OWN LINES. Every piece on a lit layer
+  // becomes a LINE on this level -- arcs as curved lines, cut at 45 degrees
+  // so each one bends true -- placed exactly where NON-EDITABLE would have
+  // laid it: centred where the drafter is looking, full size, file up.
+  // They keep the file's layer names and go in as ONE ASSEMBLY named for
+  // the file, so the whole drawing moves as one; UNGROUP to work on single
+  // lines. One UNDO takes them all out. Text is not brought in as lines --
+  // it is on the card to copy.
+  const TRACE_DXF_ASK_OVER = 5000;
+  const insertTraceDxfEditable = async scan => {
+    let geo;
+    try {
+      geo = window.DraftDxfReader.parse(await scan.file.text(), { segments: true });
+    } catch (error) {
+      showTraceCard(`Could not read ${scan.file.name}: ${error?.message || 'not a DXF this can read'}.`);
+      return;
+    }
+    const hidden = new Set(scan.hiddenLayers);
+    const pieces = geo.segments.filter(pc => !hidden.has(pc.layer));
+    if (!pieces.length) {
+      tq('[data-trace-status]').textContent = 'Every layer with lines on it is off \u2014 light one to bring it in.';
+      return;
+    }
+    // A BIG FILE SAYS SO FIRST: the count, and a second press to go ahead.
+    if (pieces.length > TRACE_DXF_ASK_OVER && scan.bigOk !== pieces.length) {
+      scan.bigOk = pieces.length;
+      tq('[data-trace-status]').textContent = `That is ${pieces.length.toLocaleString()} lines, which can slow `
+        + 'the plan \u2014 switch off layers you do not need, or press EDITABLE again to bring them all in.';
+      return;
+    }
+    const b = geo.bounds;
+    const unitFt = window.DraftDxfReader.UNITS[scan.dxfUnits].ft;
+    const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
+    const at = { x: view.cx, z: view.cz };
+    const toWorld = ([x, y]) => ({ x: at.x + (x - cx) * unitFt, z: at.z - (y - cy) * unitFt });
+    const { levelId, viewId } = onActiveLevel();
+    const lineView = wallHomeView(viewId);
+    drawing.lines = drawing.lines || [];
+    const made = window.DraftDxfReader.piecesToLines(pieces, toWorld).map(seg => ({
+      id: newDrawingItemId('line'),
+      start: seg.start, end: seg.end,
+      levelId, view: lineView,
+      layer: seg.layer,
+      importedFrom: scan.file.name,
+      ...(seg.bulge ? { bulge: seg.bulge } : {}),
+    }));
+    made.forEach(line => drawing.lines.push(line));
+    const items = made.map(item => ({ list: drawing.lines, item }));
+    let group = null;
+    if (made.length >= 2) {
+      const n = nextGroupNumber();
+      group = {
+        id: `group-${n}`,
+        name: scan.file.name.replace(/\.dxf$/i, ''),
+        fixed: false,
+        stretchBehavior: 'item-geometry',
+        members: made.map(line => ({ type: 'line', id: line.id })),
+      };
+      drawing.groups = groups();
+      drawing.groups.push(group);
+      drawing.nextGroupId = 1 + n;
+      items.push({ list: drawing.groups, item: group });
+    }
+    undoStack.push({ kind: 'built', walls: [], outlines: [], list: null, openings: [], items });
+    closeTraceCard();
+    markDirty();
+    if (group) setSelection(itemsOfGroup(group));
+    paint();
+    updateReadout();
+    sayOnStrip(`${made.length.toLocaleString()} line${made.length === 1 ? '' : 's'} from ${scan.file.name} on `
+      + `${traceLevelName()}${group ? ', as one group \u2014 drag it into place, UNGROUP to edit single lines' : ''}.`);
+  };
+
   // THE DXF IS KEPT AS THE FILE, and drawn from it: its lines are never
   // turned into a picture. It lands centred where the drafter is looking,
   // full size, with the layers the file itself has off left off.
@@ -17333,7 +17520,7 @@
       opacity: 0.8,
       scaleRaw: null, scaleRatio: null, scaleUnit: null, layer: 'UNDERLAY',
       dxfUnits: scan.dxfUnits,
-      hiddenLayers: scan.geo.layers.filter(l => l.off).map(l => l.name),
+      hiddenLayers: [...scan.hiddenLayers],
     };
     if (!Array.isArray(drawing.underlays)) drawing.underlays = [];
     underlayImages.set(id, { dxf: true, ...scan.geo });
@@ -17432,7 +17619,12 @@
       });
       row.append(name, move, del);
       list.appendChild(row);
-      if (underlay.kind === 'dxf') list.appendChild(traceLayerChips(underlay));
+      if (underlay.kind === 'dxf') {
+        list.appendChild(traceLayerChips(underlay));
+        // And its words to copy, once the file has loaded.
+        const geo = underlayImages.get(underlay.id);
+        if (geo?.dxf) list.appendChild(traceTextList(geo));
+      }
     });
     renderHologramList();
     traceAsk.hidden = false;
@@ -17838,6 +18030,9 @@
   tq('[data-trace-cancel]').addEventListener('click', closeTraceCard);
   tq('[data-trace-other]').addEventListener('click', () => traceFile.click());
   tq('[data-trace-go]').addEventListener('click', () => { insertTrace(); });
+  tq('[data-trace-editable]').addEventListener('click', () => {
+    if (traceScan?.kind === 'dxf') insertTraceDxfEditable(traceScan);
+  });
   tq('[data-trace-prev]').addEventListener('click', () => turnTracePage(-1));
   tq('[data-trace-next]').addEventListener('click', () => turnTracePage(1));
   tq('[data-trace-scale]').addEventListener('input', event => {
@@ -21783,6 +21978,10 @@
         const at = list.indexOf(item);
         if (at >= 0) list.splice(at, 1);
       });
+      // And none of it stays selected: a line a DXF brought in, gone again,
+      // is not a selection.
+      const gone = new Set((step.items || []).map(({ item }) => item));
+      if (gone.size) setSelection(selection.filter(entry => !gone.has(entry.item)));
       // AND WHAT THE PRESS TOOK OUT GOES BACK IN. Removing what a press
       // added is only half an undo when the press also replaced something:
       // AUTO DIMS sweeps a level's previous auto strings before laying
