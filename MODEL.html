@@ -973,6 +973,13 @@
   .trace-row [data-hologram-delete]:hover { border-color:#b04050; color:#b04050; }
   .trace-row span[data-hologram-name] { color: rgb(82,151,218); }
   .hologram-head { margin: 4px 0 4px; }
+  /* A DXF's layers under its row: lit while showing, struck through while off. */
+  [data-trace-layers] { margin: 0 0 8px; }
+  [data-trace-layers] button { cursor:pointer; padding:2px 7px; border-radius:3px; border:1px solid var(--edge-panel);
+    background: var(--surface-chip); color: var(--ink-primary); font-family: var(--font-ui);
+    font-size:10px; font-weight:600; letter-spacing:0.04em; }
+  [data-trace-layers] button[aria-pressed="false"] { opacity: 0.5; text-decoration: line-through; color: var(--ink-quiet); }
+  [data-trace-layers] button:hover { border-color: var(--accent); }
   .hologram-show button[aria-pressed="true"] { border-color: rgb(82,151,218); color: rgb(82,151,218); }
   .hologram-show button[aria-pressed="false"] { opacity: 0.55; text-decoration: line-through; }
   .trace-card { max-width:30em; width:100%; max-height:calc(100vh - 60px); overflow-y:auto; }
@@ -1472,7 +1479,7 @@
 </div>
 <input id="hologram-file" type="file" data-hologram-file hidden accept=".draft,.json,application/json">
 <input id="trace-file" type="file" data-trace-file hidden
-  accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,image/gif,image/bmp,.png,.jpg,.jpeg,.webp,.gif,.bmp">
+  accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,image/gif,image/bmp,.png,.jpg,.jpeg,.webp,.gif,.bmp,.dxf,.dwg">
 <div id="trace-insert" data-trace-insert hidden role="dialog" aria-label="Insert an image to trace">
   <div class="promote-card trace-card">
     <p><b>INSERT TO TRACE</b> &mdash; on <span data-trace-level></span></p>
@@ -1494,6 +1501,11 @@
         <div class="trace-chips" data-trace-scales></div>
         <input id="trace-scale" type="text" data-trace-scale placeholder="type a scale &mdash; 1/4&quot; = 1'-0&quot; or 1:100">
         <div class="trace-err" data-trace-scale-error></div>
+      </div>
+      <div data-trace-units-row hidden>
+        <div class="trace-label">THE FILE'S NUMBERS ARE IN</div>
+        <div class="trace-chips" data-trace-units></div>
+        <div class="trace-hint" data-trace-size></div>
       </div>
       <div data-trace-width-row>
         <div class="trace-label">WIDTH ON PLAN</div>
@@ -1684,6 +1696,8 @@
 <!-- What a picked photo or PDF is, and the scale printed on it -- the TRACE
      chip's insert card. pdf.js itself is fetched only when a PDF is needed. -->
 <script src="./pdf-scan.js"></script>
+<!-- And a picked DXF: read here into its own lines, no library to fetch. -->
+<script src="./dxf-reader.js"></script>
 <!-- AUTO STAIR (board #260). auto-stair.js is the pure placement derivation:
      plain data in (outline, beam lines, room stamps, the layout numbers) and
      one suggested stair out, born legal -- its well already inside the
@@ -2337,7 +2351,11 @@
         const file = await window.SharedFileStore.loadNamedFile(underlay.id, 'underlays');
         if (!file) continue;
         let canvas = null;
-        if (underlay.kind === 'pdf') {
+        if (underlay.kind === 'dxf') {
+          // A DXF is kept as its lines, never a picture: read once, drawn by
+          // render-2d at whatever zoom.
+          canvas = { dxf: true, ...window.DraftDxfReader.parse(await file.text()) };
+        } else if (underlay.kind === 'pdf') {
           const pdfjs = await ensurePdfJs();
           const doc = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
           const page = await doc.getPage(Math.min(underlay.page || 1, doc.numPages));
@@ -2363,6 +2381,8 @@
         // already correct without it.
         paint();
         updateReadout();
+        // A DXF's layer chips wait on the file; an open card gets them now.
+        if (underlay.kind === 'dxf' && !traceAsk.hidden) openTraceAsk();
       } catch (error) {
         console.warn(`MODEL: underlay ${underlay.id} failed to load:`, error);
       }
@@ -4468,6 +4488,8 @@
       // for rather than pretending to supply a level object.
       activeLevel: { id: activeLevelId() },
       imageFor: id => underlayImages.get(id),
+      // A DXF's colour 7 is "the page's ink": white on night, black on day.
+      dxfInk: skin['draw-fixture'],
     });
   };
 
@@ -17070,9 +17092,11 @@
     if (!ready) return;
     const scan = traceScan;
     tq('[data-trace-preview]').src = scan.previewUrl;
-    tq('[data-trace-verdict]').textContent = scan.kind === 'pdf'
-      ? (scan.isVector ? 'PDF \u2014 DRAWN LINES, KEPT AS THE PDF' : 'PDF \u2014 A SCANNED PAGE, KEPT AS AN IMAGE')
-      : 'PHOTO / IMAGE';
+    tq('[data-trace-verdict]').textContent = scan.kind === 'dxf'
+      ? 'DXF \u2014 ITS OWN LINES, FULL SIZE'
+      : scan.kind === 'pdf'
+        ? (scan.isVector ? 'PDF \u2014 DRAWN LINES, KEPT AS THE PDF' : 'PDF \u2014 A SCANNED PAGE, KEPT AS AN IMAGE')
+        : 'PHOTO / IMAGE';
     tq('[data-trace-pages]').hidden = !(scan.kind === 'pdf' && scan.pageCount > 1);
     tq('[data-trace-page]').textContent = `${tracePage} / ${scan.pageCount || 1}`;
     // SCALE: the ones printed on the page as chips, the pick in the box. A
@@ -17095,7 +17119,29 @@
       });
       chips.appendChild(chip);
     });
-    tq('[data-trace-width-row]').hidden = traceHasScale();
+    tq('[data-trace-width-row]').hidden = traceHasScale() || scan.kind === 'dxf';
+    // A DXF IS FULL SIZE: no scale, no width, no CALIBRATE -- only which
+    // unit its numbers are in, read off the file when it says.
+    tq('[data-trace-calibrate]').hidden = scan.kind === 'dxf';
+    tq('[data-trace-units-row]').hidden = scan.kind !== 'dxf';
+    if (scan.kind === 'dxf') {
+      const unitBox = tq('[data-trace-units]');
+      unitBox.textContent = '';
+      Object.entries(window.DraftDxfReader.UNITS).forEach(([key, unit]) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.textContent = unit.label;
+        chip.dataset.traceUnit = key;
+        chip.setAttribute('aria-pressed', scan.dxfUnits === key ? 'true' : 'false');
+        chip.addEventListener('click', () => { scan.dxfUnits = key; showTraceCard(); });
+        unitBox.appendChild(chip);
+      });
+      const size = traceDxfSize(scan);
+      const said = scan.geo.units ? 'the file says so' : 'the file does not say \u2014 check the size';
+      const ftIn = feet => F.formatArchitecturalInches(feet * 12);
+      tq('[data-trace-size]').textContent = `${ftIn(size.widthFt)} \u00d7 ${ftIn(size.heightFt)} (${said}). `
+        + `${scan.geo.layers.length} layer${scan.geo.layers.length === 1 ? '' : 's'}.`;
+    }
     tq('[data-trace-calibrate]').setAttribute('aria-pressed', traceCalOn ? 'true' : 'false');
     tq('[data-trace-cal]').hidden = !traceCalOn;
     const marks = scan.calMarks || [];
@@ -17115,6 +17161,42 @@
     }
   };
 
+  // A DXF's size on the plan: its box, in the unit picked for it.
+  const traceDxfSize = scan => {
+    const b = scan.geo.bounds;
+    const unitFt = window.DraftDxfReader.UNITS[scan.dxfUnits].ft;
+    return {
+      widthFt: Math.max(0.01, (b.maxX - b.minX) * unitFt),
+      heightFt: Math.max(0.01, (b.maxY - b.minY) * unitFt),
+    };
+  };
+  // The card's picture of a DXF: its lines, fitted, in its own colours, on
+  // the preview's white.
+  const traceDxfPreview = geo => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 480; canvas.height = 320;
+    const c2 = canvas.getContext('2d');
+    const b = geo.bounds;
+    const k = Math.min((canvas.width - 16) / Math.max(1e-9, b.maxX - b.minX),
+      (canvas.height - 16) / Math.max(1e-9, b.maxY - b.minY));
+    const ox = (canvas.width - (b.maxX - b.minX) * k) / 2, oy = (canvas.height - (b.maxY - b.minY) * k) / 2;
+    c2.lineWidth = 1;
+    geo.paths.forEach(p => {
+      if (geo.layers.some(l => l.off && l.name === p.layer)) return;
+      // The preview is on white paper, so the file's "white on black"
+      // colour 7 is the day ink here, whatever the page is.
+      c2.strokeStyle = p.color || '#1d1f20';
+      c2.beginPath();
+      for (let i = 0; i < p.pts.length; i += 2) {
+        const x = ox + (p.pts[i] - b.minX) * k, y = canvas.height - oy - (p.pts[i + 1] - b.minY) * k;
+        if (i === 0) c2.moveTo(x, y); else c2.lineTo(x, y);
+      }
+      if (p.closed) c2.closePath();
+      c2.stroke();
+    });
+    return canvas.toDataURL('image/png');
+  };
+
   const inspectTraceFile = async file => {
     dropTraceScan();
     traceCalOn = false;
@@ -17125,6 +17207,24 @@
       .forEach(sel => { tq(sel).textContent = ''; });
     tq('[data-trace-cal-length]').value = '';
     showTraceCard(`READING ${file.name}\u2026`);
+    if (/\.dwg$/i.test(file.name)) {
+      showTraceCard(`${file.name} is a DWG, which only AutoCAD can open \u2014 save it as a DXF there and pick that.`);
+      return;
+    }
+    if (/\.dxf$/i.test(file.name)) {
+      let geo;
+      try {
+        geo = window.DraftDxfReader.parse(await file.text());
+      } catch (error) {
+        showTraceCard(`Could not read ${file.name}: ${error?.message || 'not a DXF this can read'}.`);
+        return;
+      }
+      // Unitless files are mostly architectural ones drawn in inches.
+      traceScan = { file, kind: 'dxf', geo, dxfUnits: geo.units || 'in',
+        previewUrl: traceDxfPreview(geo), calMarks: [] };
+      showTraceCard();
+      return;
+    }
     const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
     const scan = {
       file, kind: isPdf ? 'pdf' : 'image', pageCount: 1, scalesByPage: {}, selectedScale: null,
@@ -17170,6 +17270,7 @@
   const insertTrace = async () => {
     const scan = traceScan;
     if (!scan || !drawing) return;
+    if (scan.kind === 'dxf') { insertTraceDxf(scan); return; }
     let size;
     if (traceHasScale()) {
       size = window.DraftPdfScan.worldSizeFromScan({ kind: scan.kind, pageDims: scan.pageDims,
@@ -17213,6 +17314,36 @@
     sayOnStrip(`${underlay.name} is under ${traceLevelName()} to trace over.`);
   };
 
+  // THE DXF IS KEPT AS THE FILE, and drawn from it: its lines are never
+  // turned into a picture. It lands centred where the drafter is looking,
+  // full size, with the layers the file itself has off left off.
+  const insertTraceDxf = async scan => {
+    const id = newDrawingItemId('underlay');
+    try {
+      await window.SharedFileStore.saveNamedFile(new File([scan.file], id, { type: 'application/dxf' }), 'underlays');
+    } catch {
+      showTraceCard('Could not keep the file in this browser\u2019s storage.');
+      return;
+    }
+    const size = traceDxfSize(scan);
+    const underlay = {
+      id, levelId: activeLevelId(), kind: 'dxf', name: scan.file.name, page: 1,
+      x: view.cx, z: view.cz, widthFt: size.widthFt, heightFt: size.heightFt,
+      // Lines one pixel wide want more than a photo's 40%.
+      opacity: 0.8,
+      scaleRaw: null, scaleRatio: null, scaleUnit: null, layer: 'UNDERLAY',
+      dxfUnits: scan.dxfUnits,
+      hiddenLayers: scan.geo.layers.filter(l => l.off).map(l => l.name),
+    };
+    if (!Array.isArray(drawing.underlays)) drawing.underlays = [];
+    underlayImages.set(id, { dxf: true, ...scan.geo });
+    closeTraceCard();
+    if (!traceOn) setTraceOn(true);
+    addItem(drawing.underlays, underlay);
+    updateReadout();
+    sayOnStrip(`${underlay.name} is under ${traceLevelName()} at full size \u2014 MOVE it to where it belongs.`);
+  };
+
   if (traceChip) {
     traceChip.addEventListener('click', () => {
       if (!drawing) return;
@@ -17229,6 +17360,38 @@
   // let go -- and Esc puts it back. Both are one UNDO each. DELETE keeps the
   // stored file, so UNDO brings the picture back as it was.
   let traceMoving = null;   // { underlay, from, before }
+  // A DXF's LAYERS, one chip each, lit while it shows: a press switches the
+  // layer off or on, one UNDO each. Only the layers that draw something.
+  const traceLayerChips = underlay => {
+    const box = document.createElement('div');
+    box.className = 'trace-chips';
+    box.dataset.traceLayers = underlay.id;
+    const geo = underlayImages.get(underlay.id);
+    if (!geo?.dxf) {
+      box.textContent = 'Layers show once the file has loaded.';
+      return box;
+    }
+    geo.layers.filter(l => l.count > 0).forEach(layer => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.textContent = layer.name;
+      chip.dataset.traceLayer = layer.name;
+      const shown = !(underlay.hiddenLayers || []).includes(layer.name);
+      chip.setAttribute('aria-pressed', shown ? 'true' : 'false');
+      chip.title = `${layer.count} piece${layer.count === 1 ? '' : 's'} \u2014 press to ${shown ? 'hide' : 'show'}`;
+      chip.addEventListener('click', () => {
+        const before = { ...underlay };
+        const was = underlay.hiddenLayers || [];
+        underlay.hiddenLayers = shown ? [...was, layer.name] : was.filter(n => n !== layer.name);
+        undoStack.push({ kind: 'props', edits: [{ item: underlay, before }] });
+        markDirty();
+        paint();
+        openTraceAsk();
+      });
+      box.appendChild(chip);
+    });
+    return box;
+  };
   const openTraceAsk = () => {
     const mine = underlays();
     const n = mine.length;
@@ -17269,6 +17432,7 @@
       });
       row.append(name, move, del);
       list.appendChild(row);
+      if (underlay.kind === 'dxf') list.appendChild(traceLayerChips(underlay));
     });
     renderHologramList();
     traceAsk.hidden = false;
@@ -17296,7 +17460,9 @@
     return { x: (Math.min(...xs) + Math.max(...xs)) / 2, z: (Math.min(...zs) + Math.max(...zs)) / 2 };
   };
   const hologramEdit = (holo, change, message) => {
-    const before = Object.fromEntries(Object.keys(change).map(key => [key, holo[key]]));
+    // A whole copy, for the same reason as MOVE's: 'props' UNDO keeps only
+    // the keys its copy has.
+    const before = { ...holo };
     Object.assign(holo, change);
     undoStack.push({ kind: 'props', edits: [{ item: holo, before }] });
     markDirty();
@@ -17623,7 +17789,10 @@
     event.stopImmediatePropagation();
     event.preventDefault();
     traceMoving.from = tracePoint(event);
-    traceMoving.before = { x: traceMoving.underlay.x, z: traceMoving.underlay.z };
+    // A WHOLE COPY, because UNDO's 'props' step restores the record to exactly
+    // its copy and drops any key the copy lacks -- an { x, z } here undid a
+    // MOVE by deleting the picture's id, level and kind with it.
+    traceMoving.before = { ...traceMoving.underlay };
   }, true);
   window.addEventListener('pointermove', event => {
     const m = traceMoving;

@@ -1535,6 +1535,7 @@ if (!window.DraftRender2D) {
       if (underlay.levelId !== env.activeLevel.id) continue;
       const image = env.imageFor(underlay.id);
       if (!image) continue;
+      if (image.dxf) { drawDxfUnderlay(ctx, toS, underlay, image, env); continue; }
       const halfW = underlay.widthFt / 2, halfH = underlay.heightFt / 2;
       const a = toS({ x: underlay.x - halfW, y: 0, z: underlay.z - halfH });
       const b = toS({ x: underlay.x + halfW, y: 0, z: underlay.z + halfH });
@@ -1556,6 +1557,92 @@ if (!window.DraftRender2D) {
       }
       ctx.restore();
     }
+  }
+
+  // A DXF UNDER THE PLAN: the file's own lines, drawn as lines at whatever
+  // zoom -- never a picture of them -- in the colours the file gives them,
+  // with the file's colour 7 ("white on black, black on white") in the
+  // page's own ink. Placed the way a picture is: centred at x, z, the
+  // file's top at the top, turned with the house, `unitFt` feet to a file
+  // unit. The layers the drafter switched off (`hiddenLayers`) are skipped,
+  // and so is anything off the screen or too small to see.
+  const DXF_UNIT_FT = { in: 1 / 12, ft: 1, mm: 1 / 304.8, cm: 1 / 30.48, m: 1 / 0.3048 };
+  function drawDxfUnderlay(ctx, toS, underlay, geo, env) {
+    const unitFt = DXF_UNIT_FT[underlay.dxfUnits] || DXF_UNIT_FT.in;
+    const c = toS({ x: underlay.x, y: 0, z: underlay.z });
+    const e = toS({ x: underlay.x + 1, y: 0, z: underlay.z });
+    const pxPerUnit = Math.hypot(e.x - c.x, e.y - c.y) * unitFt;
+    if (!(pxPerUnit > 0)) return;
+    const b = geo.bounds;
+    const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
+    const turn = ((Number(underlay.turn) || 0) % 4 + 4) % 4;
+    const hidden = new Set(underlay.hiddenLayers || []);
+    const ink = env.dxfInk || '#888888';
+    ctx.save();
+    ctx.globalAlpha = underlay.opacity;
+    ctx.translate(c.x, c.y);
+    if (turn) ctx.rotate((turn * Math.PI) / 2);
+    ctx.lineWidth = 1;
+    ctx.lineJoin = 'round';
+    const X = x => (x - cx) * pxPerUnit, Y = y => -(y - cy) * pxPerUnit;
+    // THE SCREEN'S OWN BOX, carried back into the file's units through the
+    // canvas's whole transform -- device pixels, the page's scale, this
+    // translate and turn alike -- so a piece off the screen is never drawn.
+    // A context with no transform to read draws everything.
+    let view = null;
+    const t = typeof ctx.getTransform === 'function' ? ctx.getTransform() : null;
+    if (t && typeof t.inverse === 'function' && ctx.canvas) {
+      const inv = t.inverse();
+      const W = ctx.canvas.width, Hh = ctx.canvas.height;
+      const xs = [], ys = [];
+      [[0, 0], [W, 0], [0, Hh], [W, Hh]].forEach(([dx, dy]) => {
+        const lx = inv.a * dx + inv.c * dy + inv.e, ly = inv.b * dx + inv.d * dy + inv.f;
+        xs.push(lx / pxPerUnit + cx); ys.push(-ly / pxPerUnit + cy);
+      });
+      view = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+    }
+    const onScreen = box => !view
+      || (box[2] >= view[0] && box[0] <= view[2] && box[3] >= view[1] && box[1] <= view[3]);
+    // One stroke per colour, so a file of ten thousand lines is a handful of
+    // strokes rather than ten thousand.
+    const byColor = new Map();
+    geo.paths.forEach(p => {
+      if (hidden.has(p.layer) || !onScreen(p.box)) return;
+      if ((p.box[2] - p.box[0]) * pxPerUnit < 0.3 && (p.box[3] - p.box[1]) * pxPerUnit < 0.3) return;
+      const color = p.color || ink;
+      if (!byColor.has(color)) byColor.set(color, []);
+      byColor.get(color).push(p);
+    });
+    byColor.forEach((list, color) => {
+      ctx.strokeStyle = color;
+      ctx.beginPath();
+      list.forEach(p => {
+        ctx.moveTo(X(p.pts[0]), Y(p.pts[1]));
+        for (let i = 2; i < p.pts.length; i += 2) ctx.lineTo(X(p.pts[i]), Y(p.pts[i + 1]));
+        if (p.closed) ctx.closePath();
+      });
+      ctx.stroke();
+    });
+    // Text too small to read is not drawn at all.
+    geo.texts.forEach(t => {
+      const px = t.h * pxPerUnit;
+      if (hidden.has(t.layer) || px < 4) return;
+      ctx.save();
+      ctx.translate(X(t.x), Y(t.y));
+      if (t.rot) ctx.rotate(-t.rot);
+      ctx.fillStyle = t.color || ink;
+      ctx.font = `${px.toFixed(1)}px 'Barlow Condensed', system-ui, sans-serif`;
+      ctx.textAlign = t.align;
+      ctx.textBaseline = t.baseline;
+      // Lines go down the page from the first; a block anchored at its
+      // middle or bottom moves up by the lines below its first.
+      const step = px * 1.25;
+      const lift = t.baseline === 'bottom' ? (t.lines.length - 1) * step
+        : t.baseline === 'middle' ? ((t.lines.length - 1) * step) / 2 : 0;
+      t.lines.forEach((line, i) => ctx.fillText(line, 0, i * step - lift));
+      ctx.restore();
+    });
+    ctx.restore();
   }
 
   // No datum, no grid: an untouched model space has nothing to measure from,

@@ -487,6 +487,52 @@ const underlayDraws = (R, over) => {
   return { images: count(ctx, 'drawImage'), painted: ctx.tape.length };
 };
 
+// A DXF UNDERLAY is its own lines, not a picture: drawn in the file's
+// colours with its colour 7 in the page's ink, one stroke per colour, the
+// layers switched off left out, `dxfUnits` feet to a unit.
+const dxfGeo = () => ({
+  dxf: true,
+  bounds: { minX: 0, minY: 0, maxX: 24, maxY: 12 },
+  paths: [
+    { layer: 'WALLS', color: '#ff0000', pts: [0, 0, 24, 0], closed: false, box: [0, 0, 24, 0] },
+    { layer: 'WALLS', color: '#ff0000', pts: [0, 12, 24, 12], closed: false, box: [0, 12, 24, 12] },
+    { layer: 'FURN', color: null, pts: [0, 0, 24, 12], closed: false, box: [0, 0, 24, 12] },
+    { layer: 'NOTES', color: '#00ff00', pts: [0, 0, 0, 12], closed: false, box: [0, 0, 0, 12] },
+  ],
+  texts: [],
+  layers: [],
+});
+const dxfDraws = (R, more = {}) => {
+  const ctx = recordingCtx();
+  R.drawUnderlays2D(ctx, toS, underlayEnv({
+    underlays: [{ id: 'u1', levelId: 'L1', kind: 'dxf', x: 0, z: 0, widthFt: 2, heightFt: 1, opacity: 0.8,
+      dxfUnits: 'in', hiddenLayers: ['NOTES'], ...more }],
+    imageFor: () => dxfGeo(),
+    dxfInk: '#abcdef',
+  }));
+  return ctx;
+};
+
+suite('drawUnderlays2D', 'a DXF draws its own lines in its own colours, never as a picture', R => {
+  const ctx = dxfDraws(R);
+  expect('no picture', count(ctx, 'drawImage'), 0);
+  expect('one stroke per colour shown', count(ctx, 'stroke'), 2);
+  expect('the file\'s red and, for its colour 7, the page\'s ink',
+    JSON.stringify(sets(ctx, 'strokeStyle').filter(c => c !== '#000').sort()), JSON.stringify(['#abcdef', '#ff0000']));
+  expect('the layer switched off is left out', count(ctx, 'moveTo'), 3);
+  expect('and shows again when it is switched on', count(dxfDraws(R, { hiddenLayers: [] }), 'moveTo'), 4);
+});
+
+suite('drawUnderlays2D', 'a DXF is full size in the unit its numbers are in', R => {
+  // 24 file units across: 2 ft in inches, 24 ft in feet. toS is 10 px a foot.
+  const across = ctx => {
+    const xs = ctx.tape.filter(e => e.op === 'moveTo' || e.op === 'lineTo').map(e => e.args[0]);
+    return Math.round(Math.max(...xs) - Math.min(...xs));
+  };
+  expect('24 inches is 20 px', across(dxfDraws(R)), 20);
+  expect('24 feet is 240 px', across(dxfDraws(R, { dxfUnits: 'ft' })), 240);
+});
+
 suite('drawUnderlays2D', 'a printing page draws no underlay', R => {
   expect('nothing is painted', underlayDraws(R, { isPrinting: true }).painted, 0);
   expect('but the same page prints one when it is not printing',
@@ -3282,6 +3328,12 @@ function coverage() {
       'if (d < gap && !overlaps(at)) {', 'if (d < gap) {')],
     ['snapCounterOffset snaps across the wall', src => src.replace(
       '&& o.wallId === piece.wallId && (o.side === -1 ? -1 : 1) === side);', '&& o.wallId === piece.wallId);')],
+    ['drawUnderlays2D a DXF ignores its switched-off layers', src => src.replace(
+      'if (hidden.has(p.layer) || !onScreen(p.box)) return;', 'if (!onScreen(p.box)) return;')],
+    ['drawUnderlays2D a DXF colour 7 in a fixed grey', src => src.replace(
+      "const ink = env.dxfInk || '#888888';", "const ink = '#888888';")],
+    ['drawUnderlays2D a DXF always in inches', src => src.replace(
+      'const unitFt = DXF_UNIT_FT[underlay.dxfUnits] || DXF_UNIT_FT.in;', 'const unitFt = DXF_UNIT_FT.in;')],
     ['drawFixture2D counter joints never melded', src => src.replace(
       'if (Math.abs(g.alongEnd - a0) < JOINT_FT) start = true;', 'if (false) start = true;')],
     ['drawFixture2D a joint end drawn at full weight', src => src.replace(

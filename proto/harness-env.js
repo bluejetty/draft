@@ -106,7 +106,9 @@ function loadDraftModules() {
     'tour.js', 'boneyard-edit.js', 'boneyard-loops.js',
     // AND THE TRACED HOUSE: a premade design built off the drafter's loops,
     // with the dealer that places its windows.
-    'premade-plans.js', 'auto-windows.js', 'traced-plans.js']) {
+    'premade-plans.js', 'auto-windows.js', 'traced-plans.js',
+    // AND THE DXF READER that TRACE lays a CAD file under the plan with.
+    'dxf-reader.js']) {
     const full = path.join(ROOT, file);
     if (!fs.existsSync(full)) continue;
     const text = SOURCE_OVERRIDES && SOURCE_OVERRIDES[file] != null
