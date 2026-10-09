@@ -64,7 +64,7 @@ wall."*
   exterior wall it is dropped within 18" of -- the house outline's walls, or
   the thick ones on a storey with no outline yet -- in which case the room
   draws no tub wall and the tub sits on the house's wall. MODEL's FIXTURE
-  tool carries them under a WASHROOM heading: the room follows the cursor
+  tool carries them on its BATH row: the room follows the cursor
   ([ ] turn, F mirror, Esc), a press drops walls, the D32 (into the room,
   hinged where Movie hung it), tub, toilet and vanity as one undo and one
   ASSEMBLY named for the bath. UNGROUP breaks it into pieces and ASSEMBLY
