@@ -276,6 +276,18 @@ test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight 
       [[-4, bottomZ], [-4, 20]], [[-4, bottomZ], [2, bottomZ]], [[2, bottomZ], [2, 19]],
       [[2, 19], [16, 19]],
     ].map(r => r.sort().join(' ')).sort());
+    // ON THE EXTERIOR FACE, like the room's own walls, so the two line up
+    // outside (Movie, 9 Oct: "why is it CENTERLINE ? should be EXT line so
+    // it lines up"): each wall's body lies in from its line, toward the
+    // room and the strip.
+    const inward = { '-4': [1, 0], '2': [-1, 0], [bottomZ]: [0, 1], '19': [0, 1] };
+    hood.forEach(w => {
+      const dx = w.end.x - w.start.x, dz = w.end.z - w.start.z, len = Math.hypot(dx, dz);
+      const side = w.refLine === 'left' ? 1 : w.refLine === 'right' ? -1 : 0;
+      const along = Math.abs(dx) < 1e-6 ? String(w.start.x) : String(w.start.z);
+      expect([side * -dz / len, side * dx / len].map(v => Math.round(v) + 0), `${w.refLine} wall at ${along}`)
+        .toEqual(inward[along]);
+    });
     hood.forEach(w => {
       expect(w.baseHeight).toBeCloseTo(109.125 / 12 - third.riseFt, 3);
       expect(w.topHeight).toBeCloseTo(109.125 / 12, 3);

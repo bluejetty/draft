@@ -56,6 +56,8 @@ const MUTATIONS = [
   ['a room wall a jog off the line stands in for the stick-framed back wall', 'boneyard-edit.js',
     c => c.replace('if (!e.square || e.axis !== axis || Math.abs(e.c - c) > 1e-6) return;',
       'if (!e.square || e.axis !== axis || Math.abs(e.c - c) > 1.5) return;')],
+  ['the walls under the roof go back on their centreline', 'boneyard-edit.js',
+    c => c.replace("        refLine,\n        baseHeight: heights.baseHeight,", "        refLine: 'center',\n        baseHeight: heights.baseHeight,")],
   ['a house that is not a MOD BILEVEL gets the walls too', 'boneyard-edit.js',
     c => c.replace("    if (d.buildType !== 'modifiedBilevel') return 0;\n", '')],
   ['the main roof is not cut at the new walls', 'boneyard-edit.js',
@@ -516,6 +518,18 @@ check('walls that do not close make no loop', E.chainLoop(ring(rect(0, 0, 4, 6))
   const runs = hood.map(w => [w.start, w.end].map(p => [r3(p.x), r3(p.z)]).sort().join(' ')).sort();
   check('a wall 2 ft in from the new edge, and its sides on to the room\'s walls',
     runs, [[[6, -2], [6, 4]], [[6, -2], [19, -2]], [[19, -16], [19, -2]], [[6, 4], [20, 4]]].map(x => x.sort().join(' ')).sort());
+  // ON THE EXTERIOR FACE, not the centreline (Movie, 9 Oct: "should be EXT
+  // line so it lines up"): the body side is in from the wall line, so 3 ft
+  // that way is inside the roof (2 ft eave), and 3 ft the other way is not.
+  const roof70 = r.ok ? r.drawing.roofs.find(x => x.id === 'roof-70').points : [];
+  const bodySide = w => {
+    const dx = w.end.x - w.start.x, dz = w.end.z - w.start.z, len = Math.hypot(dx, dz);
+    const s = w.refLine === 'left' ? 1 : w.refLine === 'right' ? -1 : 0;
+    const m = { x: (w.start.x + w.end.x) / 2, z: (w.start.z + w.end.z) / 2 };
+    return { x: m.x - s * 3 * dz / len, z: m.z + s * 3 * dx / len };
+  };
+  check('on the exterior face, the wall in from the line', hood.length && hood.every(w =>
+    (w.refLine === 'left' || w.refLine === 'right') && ins(roof70, bodySide(w))), true);
   check('from MAIN\'s ceiling to the room\'s plate', hood.length && hood.every(w =>
     Math.abs(w.baseHeight - (109.125 / 12 - 6.25)) < 1e-3 && Math.abs(w.topHeight - 109.125 / 12) < 1e-3), true);
   // MOD BILEVEL ONLY: the same push on the same house filed as a plain

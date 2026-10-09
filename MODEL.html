@@ -15360,8 +15360,13 @@
         runs.push(a[axis] <= b[axis] ? [at(o0), at(o1)] : [at(o1), at(o0)]);
       });
     });
+    // ON THE EXTERIOR FACE, like the room's own walls (raiseLoop), so the two
+    // line up outside. Movie, 9 Oct, on the OVER GARAGE plan: "why is it
+    // CENTERLINE ? should be EXT line so it lines up". The runs keep the
+    // roof's winding, so the roof's interior side is each wall's inside.
+    const refLine = window.DraftBuildHouse.outlineInteriorRef(roof);
     const walls = runs.map(([a, b]) => commitWall(a, b, {
-      bone: false, levelId, view: 'plan', refLine: 'center', baseHeight, topHeight,
+      bone: false, levelId, view: 'plan', refLine, baseHeight, topHeight,
     }));
     return { roof, walls };
   };
