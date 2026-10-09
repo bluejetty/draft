@@ -318,6 +318,9 @@ test.describe('MODEL.html tier 1', () => {
       // closets.js -- so the catalogue names them rather than restating them,
       // and proto/fixture-kinds-harness.js fails if it ever stops doing that.
       './fixture-kinds.js',
+      // Movie's two default washrooms (9 Oct), dropped whole by the FIXTURE
+      // tool; pure layout, read at the press.
+      './washroom-presets.js',
       './cut-marks.js',
       // THE TWO NORTHS (1 Oct): the NORTH button's popup and the arrows on the
       // plan. Plain data and canvas, no framework; LAYOUT loads the same file.

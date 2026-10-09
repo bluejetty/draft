@@ -58,3 +58,19 @@ wall."*
   recommendation"); a cut fill can come later. The vanity's front stretches
   to its run and the tub's to its alcove; a toilet is its own size. MODEL's
   section view and LAYOUT's section viewports both.
+- PR 3: the default washrooms. `washroom-presets.js` lays out BATH A and BATH
+  B from 1._Story.DXF in the room's own frame and places them in the world:
+  turned a quarter at a time, mirrored (F), the tub end slid flush with an
+  exterior wall it is dropped within 18" of -- the house outline's walls, or
+  the thick ones on a storey with no outline yet -- in which case the room
+  draws no tub wall and the tub sits on the house's wall. MODEL's FIXTURE
+  tool carries them under a WASHROOM heading: the room follows the cursor
+  ([ ] turn, F mirror, Esc), a press drops walls, the D32 (into the room,
+  hinged where Movie hung it), tub, toilet and vanity as one undo and one
+  ASSEMBLY named for the bath. UNGROUP breaks it into pieces and ASSEMBLY
+  makes a new arrangement of them (Movie: "BREAK the kitchen into pieces,
+  add new pieces or delete pieces and ASSEMBLY the kitchen in new
+  configuration" -- the same holds for a kitchen when its turn comes).
+  A room joined to the exterior wall keeps its tub on that wall: moving the
+  assembly off the wall later leaves the tub where the wall is.
+
