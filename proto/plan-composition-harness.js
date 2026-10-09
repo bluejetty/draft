@@ -417,8 +417,8 @@ const MUTATIONS = [
     s => s.replace('const levelFixtures = list(env.fixtures).filter(fixture => fixture.levelId === levelId && shows(fixture.layer));',
       'const levelFixtures = list(env.fixtures);')],
   ['the two wall passes collapse into one loop',
-    s => s.replace(`    pieces.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv));
-    pieces.forEach(wall => render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv));`,
+    s => s.replace(`    pieces.forEach(wall => { onLayer(ctx, 'A-WALL-PATT'); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv); });
+    pieces.forEach(wall => { onLayer(ctx, wallLayer(wall)); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv); });`,
     `    pieces.forEach(wall => {
       render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv);
       render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv);
@@ -481,14 +481,14 @@ const MUTATIONS = [
   // anchor with it, so the double-apply guard found the anchor twice and
   // refused -- the guard working exactly as its own comment says it will.)
   ['columns are drawn before the beams they carry',
-    s => s.replace(`      pick(env.beams).forEach(beam => render.drawBeam2D(ctx, toS, beam, {}, env.structureEnv));
-      pick(env.columns).forEach(column => render.drawColumn2D(ctx, toS, column, {
-        footing: env.columnFooting ? env.columnFooting(column) : null,
-      }, env.structureEnv));`,
-    `      pick(env.columns).forEach(column => render.drawColumn2D(ctx, toS, column, {
-        footing: env.columnFooting ? env.columnFooting(column) : null,
-      }, env.structureEnv));
-      pick(env.beams).forEach(beam => render.drawBeam2D(ctx, toS, beam, {}, env.structureEnv));`)],
+    s => s.replace(`      pick(env.beams).forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, {}, env.structureEnv); });
+      pick(env.columns).forEach(column => {`,
+    `      pick(env.columns).forEach(column => {`).replace(`        }, env.structureEnv);
+      });
+    }`, `        }, env.structureEnv);
+      });
+      pick(env.beams).forEach(beam => render.drawBeam2D(ctx, toS, beam, {}, env.structureEnv));
+    }`)],
 ];
 
 function check(win) {

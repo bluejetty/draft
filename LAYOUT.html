@@ -100,6 +100,8 @@
 <script src="./building-bodies.js"></script>
 <script src="./plan-composition.js"></script>
 <script src="./layout-plan.js"></script>
+<!-- SAVE DXF: the sheets as AutoCAD files for an engineer. -->
+<script src="./dxf-writer.js"></script>
 <!-- HOLOGRAMS (8 Oct): another .draft under this one, its DEMO dashed --
      the same painter the Model Space draws them with. -->
 <script src="./hologram.js"></script>
@@ -408,6 +410,14 @@
      The note below already says so, so the button does not repeat it. */
   #lay-deal:disabled { background:none; color: var(--ink-quiet);
     border-color: var(--edge-panel); cursor:default; }
+  /* SAVE DXF reads as Deal Sheets' sibling: the same plain panel button. */
+  #lay-dxf { display:block; width:100%; margin-top:6px; text-align:center;
+    border:1px solid var(--edge-panel);
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    color: var(--ink-primary);
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
+    font-size:13px; letter-spacing:0.04em; text-transform:uppercase;
+    padding:9px 12px; cursor:pointer; }
   #lay-viewport-note { margin-top:8px; font-size:11px; line-height:1.4; color: var(--ink-quiet); }
 
   /* ── THE SHEET ──────────────────────────────────────────────────────── */
@@ -637,6 +647,11 @@
            of that: the composer REPLACES the hand, so it asks once when there
            is a hand to replace. -->
       <button type="button" data-layout-deal-sheets id="lay-deal">Deal Sheets</button>
+      <!-- SAVE DXF (Movie, 9 Oct): "exactly for engineers to have autocad
+           version to manipulate as they need" -- one AutoCAD file a sheet,
+           full size, on the drawing's CAD layers, no titleblock; all of
+           them in one ZIP. -->
+      <button type="button" data-layout-dxf id="lay-dxf" title="Every sheet as its own AutoCAD DXF, full size, in one ZIP">Save DXF (AutoCAD)</button>
       <div id="lay-viewport-note" hidden></div>
       <!-- THE PROFILE PAIR, down here with the page's own verbs rather than
            in the corner Movie cleared. They open a DIALOG that writes a
@@ -2033,9 +2048,13 @@ class Component extends PageLogic {
         // drawing deals an existing plan, a demo plan and a new plan.
         const show = this._viewportHologramShow(viewport);
         if (window.DraftHologram) {
+          if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-EXST';
           window.DraftHologram.paint(ctx, toS, this._saved, viewport.levelId,
             { view: viewport.view || 'plan', show, paperColor: '#ffffff' });
         }
+        // In a DXF, the existing house is its own layer, and what the plan
+        // draws outside a tagged piece falls on A-PLAN.
+        if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-PLAN';
         if (show.new) window.DraftLayoutPlan.drawPlan(ctx, toS, this._saved, viewport.levelId, {
           padFt: 0.5 / 12,
           // A thumbnail is the building's shape and nothing else: no
@@ -2082,7 +2101,7 @@ class Component extends PageLogic {
         ctx.restore();
       }
     }
-    if (opts.thumb) return;
+    if (opts.thumb || opts.export) return;
     if (opts.print) {
       // ON PAPER, only the caption: in ink, centred under the drawing.
       const scale = SCALES.find(s => s.pif === viewport.pif);
@@ -2877,6 +2896,101 @@ class Component extends PageLogic {
   // lines and lettering in pixels, for the desk; at 72 a 9px label prints
   // 1/8" tall and a 1px line a fine pen, and the scale only makes them
   // sharper. Drawn straight at 300 the lettering would print a quarter size.
+  // ── SAVE DXF: EVERY SHEET AS ITS OWN AUTOCAD FILE ──────────────────────
+  // Movie, 9 Oct: "exactly for engineers to have autocad version to
+  // manipulate as they need too" -- "put all as individual autocad files
+  // with each layout" -- "all the layers that show on the specific layer
+  // should show" -- "leave out the TB".
+  //
+  // EACH SHEET IS DRAWN ONTO dxf-writer's recorder exactly as it prints --
+  // the same _drawViewport, at the print's 72 to the paper inch, so text is
+  // the size it prints -- and what it records is turned FULL SIZE: an inch
+  // in the file is an inch of house. A PLAN keeps the drawing's own
+  // coordinates (x east, y north), so every plan sheet of one drawing lines
+  // up on the others in AutoCAD; a second plan on a sheet, and the sections
+  // and elevations, stand beside it, 10' apart. Each drawing's title and
+  // scale sit under it. No titleblock, no border: the sheet is the
+  // drafter's, the drawing is the engineer's.
+  _sheetDxfEntities(sheet) {
+    const W = window.DraftDxfWriter;
+    const Z = PRINT_PX_PER_IN;
+    const view = { zoom: Z, panX: 0, panY: 0 };
+    const GAP_IN = 120;
+    let placed = [];
+    let used = null;
+    const overlaps = (a, b) => a && !(b[0] > a[2] || b[2] < a[0] || b[1] > a[3] || b[3] < a[1]);
+    // Plans first, so they keep their own coordinates.
+    const viewports = [...this._sheetViewports(sheet)].sort((a, b) => (a.kind === 'plan' ? 0 : 1) - (b.kind === 'plan' ? 0 : 1));
+    viewports.forEach(viewport => {
+      const rec = W.recorder({ width: 1e6, height: 1e6,
+        layer: viewport.kind === 'plan' ? 'A-PLAN' : viewport.kind === 'section' ? 'A-SECT' : 'A-ELEV' });
+      this._drawViewport(rec, viewport, view, { export: true });
+      if (!rec.entities.length) return;
+      // Full-size inches to a paper inch at this viewport's scale.
+      const k = 12 / viewport.pif;
+      let map;
+      if (viewport.kind === 'plan') {
+        const b = this._planBounds(viewport.levelId);
+        if (!b) return;
+        const cx = (b.minX + b.maxX) / 2, cz = (b.minZ + b.maxZ) / 2;
+        map = ([x, y]) => [(cx + (x / Z - viewport.xIn) / viewport.pif) * 12,
+          -(cz + (y / Z - viewport.yIn) / viewport.pif) * 12];
+      } else {
+        const full = this._naturalRectIn(viewport);
+        map = ([x, y]) => [(x / Z - full.xIn) * k, -(y / Z - full.yIn) * k];
+      }
+      let ents = W.mapEntities(rec.entities, map);
+      let b = W.bounds(ents);
+      // A cut view, or a plan that would land on another, goes to the right
+      // of what is already placed, tops level.
+      if (used && (viewport.kind !== 'plan' || overlaps(used, b))) {
+        ents = W.shiftEntities(ents, used[2] + GAP_IN - b[0], used[3] - b[3]);
+        b = W.bounds(ents);
+      }
+      const scale = SCALES.find(s => s.pif === viewport.pif);
+      ents.push({ type: 'text', layer: 'A-ANNO-TITL', x: (b[0] + b[2]) / 2, y: b[1] - 0.3 * k,
+        h: 0.125 * k * 0.7, rot: 0, align: 'center', baseline: 'top',
+        text: `${this._viewportTitle(viewport)}${scale ? `  ${scale.label}` : ''}` });
+      b = W.bounds(ents);
+      used = used ? [Math.min(used[0], b[0]), Math.min(used[1], b[1]), Math.max(used[2], b[2]), Math.max(used[3], b[3])] : b;
+      placed = placed.concat(ents);
+    });
+    return placed;
+  }
+
+  // THE SET, ONE ZIP: a DXF per sheet with something on it, numbered and
+  // named for the sheet, in a ZIP named for the project.
+  _saveDxfSheets() {
+    const W = window.DraftDxfWriter;
+    const status = document.querySelector('[data-layout-status]');
+    if (!W || !this._saved) return;
+    const safe = text => String(text || '').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const files = [];
+    for (let sheet = 1; sheet <= this._sheetCount(); sheet += 1) {
+      const entities = this._sheetDxfEntities(sheet);
+      if (!entities.length) continue;
+      const title = safe(this._sheetTitle(sheet)) || `SHEET ${sheet}`;
+      files.push({ name: `${String(sheet).padStart(2, '0')} ${title}.dxf`, text: W.write({ entities }) });
+    }
+    if (!files.length) {
+      if (status) status.textContent = 'NO DRAWINGS ON THE SHEETS TO SAVE AS DXF';
+      return;
+    }
+    // Named as the titleblock names the project, its blank included.
+    const project = safe(this._titleblockInfo(1).projectName) || 'NEW HOME';
+    const blob = new Blob([W.zip(files)], { type: 'application/zip' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${project} DXF.zip`;
+    link.dataset.dxfDownload = String(files.length);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    if (status) status.textContent = `SAVED ${files.length} SHEET${files.length === 1 ? '' : 'S'} AS DXF`;
+  }
+
   _openPrintDialog() {
     const count = this._sheetCount();
     const keep = this._printPick instanceof Set
@@ -3054,6 +3168,7 @@ class Component extends PageLogic {
     on('[data-layout-add-viewport]', 'click', () => this.setState(
       { addingViewport: !this.state.addingViewport }, () => this._draw()));
     on('[data-layout-deal-sheets]', 'click', () => this._dealSheets());
+    on('[data-layout-dxf]', 'click', () => this._saveDxfSheets());
 
     on('#lay-print-close', 'click', () => this._closePrintDialog());
     on('#lay-print-scrim', 'click', e => { if (e.target.id === 'lay-print-scrim') this._closePrintDialog(); });

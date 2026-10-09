@@ -49,7 +49,9 @@ const SOURCE_OVERRIDES = (() => {
 
 function loadDraftModules() {
   const win = {};
-  const sandbox = { window: win, console, Math, Number, String, Object, Array, JSON, Map, Set, isFinite, parseFloat, parseInt };
+  const sandbox = { window: win, console, Math, Number, String, Object, Array, JSON, Map, Set, isFinite, parseFloat, parseInt,
+    // dxf-writer.js's ZIP: a CRC table and the bytes of each file.
+    Uint8Array, Uint32Array, TextEncoder };
   sandbox.globalThis = sandbox;
   vm.createContext(sandbox);
   // finish-patterns.js BEFORE cut-view.js is not required -- the painter looks
@@ -107,8 +109,9 @@ function loadDraftModules() {
     // AND THE TRACED HOUSE: a premade design built off the drafter's loops,
     // with the dealer that places its windows.
     'premade-plans.js', 'auto-windows.js', 'traced-plans.js',
-    // AND THE DXF READER that TRACE lays a CAD file under the plan with.
-    'dxf-reader.js']) {
+    // AND THE DXF READER that TRACE lays a CAD file under the plan with,
+    // and the WRITER that LAYOUT saves its sheets as DXFs through.
+    'dxf-reader.js', 'dxf-writer.js']) {
     const full = path.join(ROOT, file);
     if (!fs.existsSync(full)) continue;
     const text = SOURCE_OVERRIDES && SOURCE_OVERRIDES[file] != null

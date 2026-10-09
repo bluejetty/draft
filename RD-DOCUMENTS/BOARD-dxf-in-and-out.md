@@ -8,12 +8,11 @@ to allow editing of the lines too"* and *"do viewing first"*.
 
 1. **View** (#655). TRACE takes a `.DXF` as its third kind beside a PDF
    page and a photo.
-2. **Edit** (this PR). Movie: *"when they load it ask them if they want
+2. **Edit** (#656). Movie: *"when they load it ask them if they want
    EDITABLE or NON-EDITABLE"* -- *"they will need to reload if they change
    their mind"* -- no BREAK later.
-3. **Save as DXF.** Every line the plan paints, written out full size in
-   inches on the drawing's AIA layer names. The `.draft` stays the master:
-   a DXF holds lines, not walls.
+3. **Save as DXF** (this PR), after PRINT (#657). The `.draft` stays the
+   master: a DXF holds lines, not walls.
 
 ## 1. Viewing
 
@@ -77,6 +76,54 @@ to allow editing of the lines too"* and *"do viewing first"*.
   render-2d's `strokeSegPath2D` now, and the selection halo follows the
   curve. Separately, an UNDO of a press that added lines left them selected.
   It now clears what it took away.
+
+## 3. Saving as DXF
+
+Movie, 9 Oct: *"exactly for engineers to have autocad version to manipulate
+as they need too"*, *"put all as individual autocad files with each
+layout"*, *"all the layers that show on the specific layer should show"*
+and *"leave out the TB"*.
+
+- **SAVE DXF (AUTOCAD)** on LAYOUT's panel saves one ZIP named for the
+  project. It holds one DXF per sheet that has a drawing on it, numbered and
+  named for the sheet (`05 MAIN FL PLAN.dxf`).
+- **The sheet itself, recorded.** `dxf-writer.js`'s recorder stands in for
+  the canvas, and `_drawViewport` draws each viewport onto it exactly as it
+  prints, at PRINT's 72 to the paper inch, so text is the size it prints.
+  What is stroked and lettered is kept:
+  - circular arcs as ARC and CIRCLE
+  - the rest as LINE and POLYLINE
+  - text as TEXT, at its capital height and turn
+  - dashed lines as DASHED
+  - small dark marks (arrowheads, dots) as SOLID or CIRCLE
+  - each viewport clipped to its window
+
+  Fills are left out (poché, tints, knock-outs), and so are pictures.
+- **Full size.** An inch in the file is an inch of house. A plan keeps the
+  drawing's own coordinates (x east, y north), so every plan sheet of one
+  drawing lines up over the others in AutoCAD. Sections, elevations and a
+  second plan on one sheet stand beside it, 10'-0" apart. Each drawing's
+  title and scale sit under it, on A-ANNO-TITL. There is no titleblock and
+  no border.
+- **CAD layers.** `plan-composition.js` names the layer each piece is drawn
+  on, through `ctx.dxfLayer`, which a real canvas never has:
+  - walls go on A-WALL-EXT, or A-WALL-INT for a 2x4 or thinner, with their
+    hatch on A-WALL-PATT
+  - doors on A-DOOR and windows on A-GLAZ, with their size tags on
+    A-DIMS-WIN and A-DIMS-DOOR
+  - fixtures, floors, roofs, stairs, dimensions, notes, room tags, beams and
+    columns go on the layers their records carry
+  - lines brought in from a DXF go on the DXF's own layers
+  - the existing house goes on A-EXST
+  - sections and elevations go on A-SECT and A-ELEV, which is one layer per
+    drawing for now
+
+  Each layer takes the usual AutoCAD colour for its family: walls white,
+  doors green, glazing cyan, fixtures magenta, dimensions red, notes yellow.
+- **AutoCAD R12 ASCII**, in architectural units (`$LUNITS` 4). It is the
+  plainest dialect: every AutoCAD opens it, and SAVE AS DWG works from
+  there. The files were opened in ezdxf with no audit errors, and the plan
+  of a 36' house is 36'-0" across at its own coordinates.
 
 ## Found on the way
 
