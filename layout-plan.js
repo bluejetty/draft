@@ -629,6 +629,8 @@ if (!window.DraftLayoutPlan) {
         COUNTER_OVERHANG_FT: fixtures.COUNTER_OVERHANG_FT,
         FIXTURE_COLOR,
         fixtureFill: FIXTURE_FILL,
+        // The neighbours a counter piece melds with at a joint.
+        fixtures: only(of('fixtures')),
       } : null,
       fixtures: only(of('fixtures')),
 

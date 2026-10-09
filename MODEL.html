@@ -3817,6 +3817,8 @@
       COUNTER_OVERHANG_FT: FG.COUNTER_OVERHANG_FT,
       FIXTURE_COLOR: skin['draw-fixture'],
       fixtureFill: fixtureFill(),
+      // The neighbours a counter piece melds with at a joint.
+      fixtures: fixtures(),
     };
     // options is {} for the same reason it is on notes: preview and selected
     // are states of the fixture TOOL, and this page has no tools.
@@ -12818,8 +12820,14 @@
       sayOnStrip(`That wall is too short for the ${kind.label.toLowerCase()}.`);
       return null;
     }
+    // A KITCHEN PIECE PRESSED BESIDE ANOTHER lands flush against it, so the
+    // joint melds (render-2d snapCounterOffset; Movie, 9 Oct).
+    const offset = window.DraftRender2D.snapCounterOffset(fixtures(), {
+      kind: kind.id, wallId: placement.wall.id, side: placement.side,
+      offset: clamped.offset, width: kind.widthFt,
+    });
     return addFixture(kind, placement.wall, {
-      offset: clamped.offset, width: kind.widthFt, side: placement.side,
+      offset, width: kind.widthFt, side: placement.side,
     });
   };
 

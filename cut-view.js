@@ -2642,34 +2642,45 @@ if (!window.DraftCutView) {
       const a0 = geo.tub ? geo.tubAlongStart : geo.alongStart;
       const a1 = geo.tub ? geo.tubAlongEnd : geo.alongEnd;
       const stretch = FP.stretches(fx.kind);
-      let uOf;
+      // Each BAY is one copy of the face: a CABINET run's front is its
+      // 24" door bases side by side (fixture-profiles tileIn), every other
+      // fixture is one bay the width it is.
+      const bays = [];
       if (view === 'front') {
         // Across the face: centred on the fixture, along the wall's run as
         // the section sees it (a wall running right-to-left mirrors it).
-        const cu = projU(geo.center);
         const sign = f.ux * axis.x + f.uz * axis.z >= 0 ? 1 : -1;
-        const k = stretch ? ((a1 - a0) * 12) / profile.w : 1;
-        uOf = a => cu + sign * (a * k) / 12;
+        const runIn = (a1 - a0) * 12;
+        const tile = FP.tileIn ? FP.tileIn(fx.kind) : null;
+        const n = tile ? Math.max(1, Math.round(runIn / tile)) : 1;
+        const bayIn = runIn / n;
+        const k = stretch ? bayIn / profile.w : 1;
+        for (let i = 0; i < n; i += 1) {
+          const cu = projU(f.at(a0 + ((i + 0.5) * bayIn) / 12, 0));
+          bays.push(a => cu + sign * (a * k) / 12);
+        }
       } else {
         // Out from the wall: the back at the wall face, the front into the
         // room, whichever way the room lies across the page.
         const back = f.at((a0 + a1) / 2, geo.backOff);
         const sign = out.x * axis.x + out.z * axis.z >= 0 ? 1 : -1;
         const k = stretch ? (Math.abs(geo.frontOff - geo.backOff) * 12) / profile.w : 1;
-        uOf = a => projU(back) + sign * (a * k) / 12;
+        bays.push(a => projU(back) + sign * (a * k) / 12);
       }
       const floor = level.floorTop;
-      const trace = polys => {
-        ctx.beginPath();
-        polys.forEach(flat => {
-          for (let i = 0; i < flat.length; i += 2) {
-            const x = X(uOf(flat[i])), y = Y(floor + flat[i + 1] / 12);
-            if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
-          }
-        });
-      };
-      trace(profile.sil || []); ctx.fill();
-      trace(profile.polys); ctx.stroke();
+      bays.forEach(uOf => {
+        const trace = polys => {
+          ctx.beginPath();
+          polys.forEach(flat => {
+            for (let i = 0; i < flat.length; i += 2) {
+              const x = X(uOf(flat[i])), y = Y(floor + flat[i + 1] / 12);
+              if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+          });
+        };
+        trace(profile.sil || []); ctx.fill();
+        trace(profile.polys); ctx.stroke();
+      });
     });
     ctx.restore();
   }

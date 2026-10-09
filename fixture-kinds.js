@@ -53,6 +53,19 @@ if (!window.DraftFixtureKinds) {
       note: '36" x 72" island — click it onto a wall; it stands 42" clear of the counter and slides along the run.' },
     { id: 'pantry',  label: 'PANTRY',  group: 'KITCHEN',  widthFt: 4,      depthFt: 4,      casework: false, run: false,
       note: '48" x 48" corner walk-in pantry with a 45° angled door — click it into a corner.' },
+    // MOVIE'S KITCHEN PIECES (KITCHENITEMS1/2.DXF, 9 Oct): each placed on its
+    // own, one click onto a wall; where two touch they read as one counter
+    // with a light line at the joint.
+    { id: 'sinkbase', label: 'SINK BASE', group: 'KITCHEN', widthFt: 4, depthFt: 2, casework: false, run: false,
+      note: '48" sink base, two doors and a double bowl — click it onto a wall.' },
+    { id: 'drawerbase', label: 'DRAWERS', group: 'KITCHEN', widthFt: 2, depthFt: 2, casework: false, run: false,
+      note: '24" drawer base, four drawers — click it onto a wall.' },
+    { id: 'doorbase', label: 'DOOR BASE', group: 'KITCHEN', widthFt: 2, depthFt: 2, casework: false, run: false,
+      note: '24" door base, a drawer over a door — click it onto a wall.' },
+    { id: 'tallcab', label: 'FULL HT CAB', group: 'KITCHEN', widthFt: 17.75 / 12, depthFt: 2, casework: false, run: false,
+      note: 'FULL HEIGHT CAB, the pantry piece: 17 3/4" wide, 6\'-10 3/4" tall — click it onto a wall.' },
+    { id: 'fridge30', label: 'FRIDGE 30', group: 'KITCHEN', widthFt: 2.5, depthFt: 2, casework: false, run: false,
+      note: '30" top-freezer refrigerator, 66" tall — click it onto a wall. FRIDGE is the 36" side-by-side.' },
     { id: 'kitchenL', label: 'L PRESET', group: 'KITCHEN', widthFt: 4,     depthFt: 2,      casework: false, run: false, preset: true,
       note: 'Corner-L kitchen — click the inside corner where two walls meet: cabinets, sink, DW, fridge, and stove drop in at the proven spots; every piece stays movable.' },
     { id: 'tub',     label: 'TUB',     group: 'BATH',     widthFt: 5,      depthFt: 2.5,    casework: false, run: false,

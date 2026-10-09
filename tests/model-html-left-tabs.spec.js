@@ -199,8 +199,10 @@ test('and the rail is only as tall as what is in it', async ({ page }) => {
     const strip = document.getElementById('house-strip').getBoundingClientRect();
     return { railH: rail.height, railBottom: rail.bottom, stripTop: strip.top };
   });
+  // 440: the build keys and the FIXTURE rows, KITCHEN's four lines with
+  // Movie's base cabinets on them (9 Oct) -- still well short of the pin.
   expect(m.railH, 'the rail shrank to the build keys rather than filling 532px')
-    .toBeLessThan(400);
+    .toBeLessThan(440);
   expect(m.railBottom, 'and still stops above the foot bar')
     .toBeLessThanOrEqual(m.stripTop);
 });
