@@ -15338,6 +15338,19 @@
   // plate: across the strip's back end and down both its sides, as far as
   // the landing. Stick-framed, bearing on MAIN's ceiling.
   //
+  // A ROOF CUT ROUND A TALLER BODY'S WALL LINE (premade-plans.js cutLoops):
+  // the edges on that line become flush gables. Left as it was when the
+  // body takes nothing out of it, or would leave it in pieces.
+  const notchRoofRound = (roof, wallLine) => {
+    const cut = window.DraftPremadePlans.cutLoops(roof.points, wallLine);
+    if (!cut) return false;
+    const overhang = Number(roof.overhang) || 0;
+    roof.points = cut.points.map(pt => ({ x: pt.x, z: pt.z }));
+    roof.edges = cut.onCut.map(onWall => (onWall ? 'gable' : 'eave'));
+    roof.edgeOverhang = cut.onCut.map(onWall => (onWall ? 0 : overhang));
+    return true;
+  };
+
   // NULL when there is no third flight or landing to cover, and the roof is
   // the design's own loop.
   const stairHood = (plan, levelId) => {
@@ -15978,6 +15991,7 @@
         ? raiseRoofOver(twoRoofs.house.ring, { buildType: roofType, flush: twoRoofs.house.flush,
           stepped: true, cuts: twoRoofs.house.cuts })
         : raiseRoofOver(plan.houseRoof || plan.house, { buildType: roofType }));
+      const houseRoofMade = madeRoofs[madeRoofs.length - 1];
       if (twoRoofs) {
         madeRoofs.push(raiseRoofOver(twoRoofs.garage.ring, {
           buildType: roofType,
@@ -16062,6 +16076,21 @@
           against: plan.entry ? null : plan.house,
         });
         madeRoofs.push(roomRoof);
+        // ── AND THE MAIN ROOF STOPS AT IT, WITH NOTHING DRAINING INTO IT ──
+        //
+        // Movie, 10 Oct: the main roof "slopes and creates a spot along the
+        // back of the 2nd floor where rainwater and snow will build up", and
+        // marking it up: "just take out the part sloping to the house". The
+        // room and the stair strip stand higher than MAIN's plate, so the
+        // main roof is cut round their wall line -- the same ring the room's
+        // own roof is raised over -- and every edge it shares with that ring
+        // is a gable: the roof dies into the wall flush, and no plane runs
+        // down into it. The ridge carries on to the strip's end wall, the
+        // north side drains north past the room, and the east end below the
+        // strip keeps its hip (the ROOF tool's edge flip makes it a gable).
+        if (plan.entry && houseRoofMade && houseRoofMade.item) {
+          notchRoofRound(houseRoofMade.item, hood ? hood.roof : plan.overGarageRoof);
+        }
         if (hood) {
           // Tagged with the roof they close in under, so a later BONEYARD
           // push of that roof replaces them rather than adding a second set

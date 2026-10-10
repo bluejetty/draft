@@ -2425,6 +2425,46 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
   }
 }
 
+// ── E3 OF A MOD BILEVEL: THE ROOM'S CORNER, ONE LINE, GROUND TO ROOF ─────
+//
+// Movie, 10 Oct, marking his E3 in blue and orange: "blue where line should
+// be, orange where there shouldn't be lines" -- and "we will draw that spot
+// always straight across on the outside". The room over the garage, the
+// garage under it and the stick-framed wall beside it all stand on one line
+// on the outside (x 19, u -19 on this view). The walls hung under the room's
+// roof are painted again after the roofs, so they show where they clear the
+// main roof; the strip's back wall, in line with the room's, was painted
+// over the room's own front, wiping the corner above the main roof and
+// drawing its own end a foot along (u -20) as a corner instead.
+{
+  const eFile = path.join(ROOT, 'proto', 'repro-modbilevel-e3-corner.draft');
+  const eSaved = JSON.parse(fs.readFileSync(eFile, 'utf8'));
+  const eEnv = buildEnv(win, eSaved.drawing || eSaved);
+  const e3 = paintElevation(win, eEnv, standardElevationCuts(eEnv).find(c => c.id === 'E3'));
+  const inked = e3.strokes.filter(s => /^#1d1f20/i.test(String(s.ink)) && s.w >= 1.2);
+  const vertical = (u, e0, e1) => inked.filter(s => s.pts.some((b, i) => i > 0 && !b.move
+    && Math.abs(b.u - u) < 0.02 && Math.abs(s.pts[i - 1].u - u) < 0.02
+    && Math.min(b.e, s.pts[i - 1].e) <= e0 + 0.05 && Math.max(b.e, s.pts[i - 1].e) >= e1 - 0.05));
+  check('E3 MOD BILEVEL: no corner a foot along, above the main roof',
+    !inked.some(s => s.pts.some((b, i) => i > 0 && !b.move && Math.abs(b.u + 20) < 0.02
+      && Math.abs(s.pts[i - 1].u + 20) < 0.02 && Math.max(b.e, s.pts[i - 1].e) > 10)));
+  const corner = vertical(-19, 9.5, 15.3);
+  const inside = (pts, p) => {
+    let hit = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const a = pts[i], b = pts[j];
+      if ((a.e > p.e) !== (b.e > p.e) && p.u < (b.u - a.u) * (p.e - a.e) / (b.e - a.e) + a.u) hit = !hit;
+    }
+    return hit;
+  };
+  const last = corner.length ? Math.max(...corner.map(s => s.seq)) : Infinity;
+  const wiped = e3.modelFills.filter(f => f.seq > last
+    && inside(f.pts, { u: -19.03, e: 12 }) && inside(f.pts, { u: -18.97, e: 12 }));
+  check('E3 MOD BILEVEL: the room-s corner runs up past the main roof, and nothing paints over it',
+    corner.length > 0 && !wiped.length,
+    `${corner.length} corner strokes, wiped by fills ${wiped.map(f => f.seq).join(',')}`);
+}
+
 console.log(`elevation harness: ${passed} checks passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach(line => console.log(`  \u2718 ${line}`));

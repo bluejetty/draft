@@ -257,6 +257,77 @@ check('an arc is at the height the plane under it puts it',
     });
     return [wrong.slice(0, 3).join('; '), '']; });
 
+// ── A ROOF NOTCHED ROUND A TALLER BODY ───────────────────────────────────
+//
+// Movie, 10 Oct, on the MOD BILEVEL: the main roof sloped down into the room
+// over the garage and the walls round the stair strip, and his sketch said
+// what it should do instead -- "just take out the part sloping to the house":
+// the ridge runs on to the strip's end wall, the north side drains north past
+// the room, and a hip comes off below the strip to the far corner. The roof
+// is cut round the taller body and every edge against it is a gable. His
+// own file's numbers: the roof's eave line is 44 x 36, the room and the
+// strip's wall line come in at x 19 and run down to the strip at x 6.5.
+const MOVIE_NOTCH = [P(-22, -18), P(19, -18), P(19, -2), P(6.5, -2), P(6.5, 4), P(22, 4), P(22, 18), P(-22, 18)];
+const MOVIE_EDGES = ['eave', 'gable', 'gable', 'gable', 'gable', 'eave', 'eave', 'eave'];
+const notched = (G, edges = MOVIE_EDGES) => {
+  const roof = { points: MOVIE_NOTCH, edges, pitch: PITCH };
+  const arcs = G.roofSkeleton(roof);
+  return { roof, arcs, faces: G.roofFaces(roof, arcs) };
+};
+const lineOf = a => {
+  const r = v => +v.toFixed(2);
+  const ends = [[r(a.a.x), r(a.a.z), r(a.ta)], [r(a.b.x), r(a.b.z), r(a.tb)]]
+    .sort((p, q) => p[0] - q[0] || p[1] - q[1]);
+  return ends.map(e => `${e[0]},${e[1]}@${e[2]}`).join(' > ');
+};
+check('his notched roof: the hips, the ridge to the strip, and the one hip below it',
+  G => [notched(G).arcs.map(lineOf).sort().join(' | '),
+    ['-22,-18@0 > -4,0@18', '-22,18@0 > -4,0@18', '-4,0@18 > 6.5,0@18', '8,4@14 > 22,18@0']
+      .sort().join(' | ')]);
+check('his notched roof: four planes, and they tile it',
+  G => { const { faces } = notched(G);
+    return [`${faces.length} ${Math.abs(faces.reduce((s2, f) => s2 + f.area, 0) - areaOf(MOVIE_NOTCH)) < 0.01}`,
+      '4 true']; });
+// NOTHING DRAINS INTO A TALLER WALL: just inside every gable edge, a step in
+// from the wall rises no higher than the step before it -- the roof runs level
+// along the wall or falls away from it. A plane running down into the wall
+// rises as it leaves.
+check('his notched roof: no plane runs down into a wall it stops at',
+  G => { const { roof, faces } = notched(G);
+    const rise = q => {
+      const face = faces.find(f => insidePolygon(q, f.points));
+      return face ? G.roofFaceRise(face, q, PITCH) : NaN;
+    };
+    const bad = [];
+    roof.points.forEach((a, i) => {
+      if (roof.edges[i] !== 'gable') return;
+      const b = roof.points[(i + 1) % roof.points.length];
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      const nx = -(b.z - a.z) / len, nz = (b.x - a.x) / len;   // left of a->b: in, for this winding
+      [0.25, 0.5, 0.75].forEach(t => {
+        const m = { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
+        const one = rise({ x: m.x + nx * 0.5, z: m.z + nz * 0.5 });
+        const two = rise({ x: m.x + nx * 1.5, z: m.z + nz * 1.5 });
+        if (!(two <= one + 1e-6)) bad.push(`(${m.x},${m.z}) ${one.toFixed(3)}->${two.toFixed(3)}`);
+      });
+    });
+    return [bad.join('; '), '']; });
+// THE EAST END BELOW THE STRIP, FLIPPED TO A GABLE with the ROOF tool's edge
+// press (Movie: "the right side of the roof could switch back and forth from
+// gable to hip"): the hip goes, and the south plane runs on to the end wall.
+check('his notched roof with the east end a gable: no hip below the strip',
+  G => { const edges = MOVIE_EDGES.slice(); edges[5] = 'gable';
+    const { arcs, faces } = notched(G, edges);
+    return [`${arcs.map(lineOf).sort().join(' | ')} / ${faces.length}`,
+      `${['-22,-18@0 > -4,0@18', '-22,18@0 > -4,0@18', '-4,0@18 > 6.5,0@18'].sort().join(' | ')} / 3`]; });
+// AND AN INSIDE CORNER WITH AN EAVE ON IT IS STILL THE WAVEFRONT'S: that is a
+// valley, which the notched solver does not do. The L above keeps its own.
+check('an L with eaves at its inside corner keeps the wavefront-s valley',
+  G => { const L = [P(0, 0), P(20, 0), P(20, 10), P(10, 10), P(10, 20), P(0, 20)];
+    const arcs = G.roofSkeleton({ points: L, edges: L.map(() => 'eave'), pitch: PITCH });
+    return [arcs.some(a => (Math.hypot(a.a.x - 10, a.a.z - 10) < 1e-6 && Math.hypot(a.b.x - 5, a.b.z - 5) < 1e-6)
+      || (Math.hypot(a.b.x - 10, a.b.z - 10) < 1e-6 && Math.hypot(a.a.x - 5, a.a.z - 5) < 1e-6)), true]; });
+
 function run() {
   const G = load(null);
   let failed = 0;
@@ -283,6 +354,17 @@ function run() {
 // same. So the direction half of that test is NOT covered by anything here,
 // and saying so is worth more than a table entry that is permanently red.
 const MUTATIONS = [
+  // THE NOTCHED ROOF HANDED BACK TO THE WAVEFRONT, which bends his ridge off
+  // along the strip's south wall.
+  ['a notched roof with gables at its inside corners goes to the wavefront',
+    s => s.replace('    if (notched) return notched;', '    if (false) return notched;')],
+  // An eave that can only be reached round the strip still claims the roof
+  // past it: the east plane leaks north and drains into the strip's wall.
+  ['an eave counts where the roof cannot reach it',
+    s => s.replace('    const boxInside = (x0, x1, z0, z1) => {', '    const boxInside = (x0, x1, z0, z1) => { if (Number.isFinite(x0)) return true;')],
+  // No 45-degree lines to cut on, so a hip can only run square.
+  ['the footprint is never cut on the 45-degree lines',
+    s => s.replace('    const DP = uniq(xs.flatMap(x => zs.map(z => x + z)));', '    const DP = [];')],
   // THE DEFECT ITSELF. Queue the loops a split makes without trimming them,
   // and the second of two simultaneous reflex arrivals is left hanging off
   // the new ring as a spike.

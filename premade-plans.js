@@ -1199,7 +1199,11 @@ if (!window.DraftPremadePlans) {
   // side and out on the other, walked round. Collinear corners are dropped,
   // and the result is wound the way `a` is. NULL when the two do not touch
   // (two pieces are not one floor) or either is not square-cornered.
-  const joinLoops = (a, b) => {
+  // THE GRID RING BEHIND BOTH: the outline of the cells `keep` says are in,
+  // walked round and straightened, wound the way `a` is and started at the
+  // corner nearest a's first. NULL when nothing is in, the cells make more
+  // than one piece, or either loop is not square-cornered.
+  const squareRing = (a, b, keep) => {
     if (!a || !b) return null;
     const square = loop => loop.every((p, i) => {
       const q = loop[(i + 1) % loop.length];
@@ -1217,8 +1221,8 @@ if (!window.DraftPremadePlans) {
       return hit;
     };
     const cell = (i, j) => i >= 0 && j >= 0 && i < xs.length - 1 && j < zs.length - 1
-      && (inside(a, (xs[i] + xs[i + 1]) / 2, (zs[j] + zs[j + 1]) / 2)
-        || inside(b, (xs[i] + xs[i + 1]) / 2, (zs[j] + zs[j + 1]) / 2));
+      && keep(inside(a, (xs[i] + xs[i + 1]) / 2, (zs[j] + zs[j + 1]) / 2),
+        inside(b, (xs[i] + xs[i + 1]) / 2, (zs[j] + zs[j + 1]) / 2));
     // Directed sides with the inside on the left (x right, z down the grid).
     const next = new Map();
     const key = (i, j) => `${i},${j}`;
@@ -1266,6 +1270,34 @@ if (!window.DraftPremadePlans) {
       < Math.hypot(wound[best].x - s0.x, wound[best].z - s0.z) ? i : best), 0);
     return [...wound.slice(k), ...wound.slice(0, k)];
   };
+  const joinLoops = (a, b) => squareRing(a, b, (inA, inB) => inA || inB);
+
+  // ── A LOOP WITH ANOTHER CUT OUT OF IT ──────────────────────────────────
+  //
+  // Movie, 10 Oct, on the MOD BILEVEL's main roof sloping into the room over
+  // the garage: "just take out the part sloping to the house". The main
+  // roof's outline less the taller body's wall line, and which of its edges
+  // lie on that line -- those are where the roof stops against a wall, and
+  // the page makes them gables. NULL when b takes nothing out of a, takes it
+  // all, or leaves it in pieces (a roof is one sheet); both square-cornered.
+  const cutLoops = (a, b) => {
+    const ring = squareRing(a, b, (inA, inB) => inA && !inB);
+    if (!ring) return null;
+    const onSeg = (p, s, t) => {
+      const dx = t.x - s.x, dz = t.z - s.z, len2 = dx * dx + dz * dz;
+      if (len2 < 1e-12) return false;
+      const u = ((p.x - s.x) * dx + (p.z - s.z) * dz) / len2;
+      if (u < -1e-6 || u > 1 + 1e-6) return false;
+      return Math.hypot(s.x + dx * u - p.x, s.z + dz * u - p.z) < 1e-6;
+    };
+    const onLoop = (p, loop) => loop.some((s, i) => onSeg(p, s, loop[(i + 1) % loop.length]));
+    const onCut = ring.map((p, i) => {
+      const q = ring[(i + 1) % ring.length];
+      return onLoop({ x: (p.x + q.x) / 2, z: (p.z + q.z) / 2 }, b);
+    });
+    if (!onCut.some(Boolean)) return null;
+    return { points: ring, onCut };
+  };
 
   const PLANS = Object.freeze({
     bungalow: () => bungalow({ garage: false }),
@@ -1291,7 +1323,7 @@ if (!window.DraftPremadePlans) {
     MAN_DOOR_WIDTH_FT, ROOM_DOOR_WIDTH_FT, GARAGE_WINDOW_WIDTH_FT, GARAGE_DOOR_HEAD_FT,
     ENTRY_WIDTH_FT, ENTRY_DEPTH_FT, ENTRY_LEFT_FT, BILEVEL_STAIR_WIDTH_FT,
     BILEVEL_STAIR_GAP_FT, BILEVEL_OVERLAP_FT,
-    bungalow, twoStorey, bilevel, modifiedBilevel, planFor, detachedGarageOpenings, squareOver, joinLoops,
+    bungalow, twoStorey, bilevel, modifiedBilevel, planFor, detachedGarageOpenings, squareOver, joinLoops, cutLoops,
     entryIds: () => Object.keys(PLANS),
   });
 })();
