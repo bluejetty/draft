@@ -2301,6 +2301,27 @@
       return p.x >= b.left && p.x <= b.right && p.y >= b.top && p.y <= b.bottom;
     }) || null;
   };
+  // ── A NOTE IS PICKED BY ITS TEXT ──────────────────────────────────────────
+  // Movie, 10 Oct ("looks good as you have it"): notes are selected, moved,
+  // deleted and edited like the rest. The box is render-2d's own
+  // (noteBoxScreen2D), the one the painter draws in, so the pick and the
+  // picture cannot disagree; the leader is picked within a few px of it.
+  const NOTE_LEADER_GRAB_PX = 5;
+  const NOTE_TIP_GRAB_PX = 8;
+  const noteBox = note => window.DraftRender2D.noteBoxScreen2D(ctx, toS(note.anchor), toS(note.text), note);
+  const noteAt = worldPt => {
+    const p = toS(worldPt);
+    return notes().slice().reverse().find(note => {
+      const b = noteBox(note);
+      if (p.x >= b.left && p.x <= b.right && p.y >= b.top && p.y <= b.bottom) return true;
+      if (note.end === 'none') return false;
+      const a = toS(note.anchor), t = toS(note.text);
+      const from = { x: t.x >= a.x ? b.left : b.right, y: t.y };
+      // pointToSegment reads x/z; screen y stands in for z.
+      return window.DraftGeometry2D.pointToSegment({ x: p.x, z: p.y },
+        { start: { x: a.x, z: a.y }, end: { x: from.x, z: from.y } }).d <= NOTE_LEADER_GRAB_PX;
+    }) || null;
+  };
   // FIXTURES INHERIT THEIR WALL'S VISIBILITY -- they do not carry a view rule
   // of their own. MODEL.dc.html:_activeFixtures keeps a fixture whose levelId
   // matches AND whose wallId is in the set of walls the page is showing, and
@@ -8591,6 +8612,15 @@
           toWorld(b.right, b.bottom), toWorld(b.left, b.bottom)]] });
       });
     }
+    // A NOTE IS IN THE WINDOW when its text block and the tip of its leader are.
+    if (filterAllows('note')) {
+      notes().forEach(item => {
+        const b = noteBox(item);
+        const box = [toWorld(b.left, b.top), toWorld(b.right, b.top),
+          toWorld(b.right, b.bottom), toWorld(b.left, b.bottom)];
+        out.push({ type: 'note', item, parts: [item.end === 'none' ? box : [...box, item.anchor]] });
+      });
+    }
     return out;
   };
 
@@ -8933,6 +8963,11 @@
       const tag = roomTagAt(worldPt);
       if (tag) return { type: 'roomtag', item: tag };
     }
+    // A NOTE TOO: painted with the tags, over what it points at.
+    if (filterAllows('note')) {
+      const note = noteAt(worldPt);
+      if (note) return { type: 'note', item: note };
+    }
     // AN OPENING BEATS ITS HOST WALL, and the old page says why in its own
     // words: "Openings under a select click take priority over their host
     // wall, so an opening can be picked and deleted without grabbing the wall
@@ -9034,7 +9069,7 @@
     if (!selection.length) return;
     const onScreen = { wall: walls(), line: lines(), floor: floors(), outline: outlines(),
       fixture: fixtures(), stair: stairs(), roof: roofs(), roomtag: roomTags(), shape: shapes(),
-      dimension: dimensions() };
+      dimension: dimensions(), note: notes() };
     // THE OPENINGS AND THEIR SHAPES IN ONE PASS. openingsOn resolves geometry
     // per opening, which is not free, and the highlight needs both the list
     // (to answer "is it still on screen") and the quad (to draw it). Calling
@@ -9055,8 +9090,8 @@
       // A DIMENSION IS DRAWN SELECTED BY ITS OWN PAINTER (paintDimensions),
       // halo and all, so it reads as the same mark lit up.
       if (type === 'dimension') return;
-      if (type === 'roomtag') {
-        const b = roomTagBox(item);
+      if (type === 'roomtag' || type === 'note') {
+        const b = type === 'note' ? noteBox(item) : roomTagBox(item);
         ctx.save();
         ctx.lineWidth = 3;
         ctx.strokeRect(b.left, b.top, b.right - b.left, b.bottom - b.top);
@@ -10233,6 +10268,8 @@
     roof: 'roofs',
     stair: 'stairs',
     roomtag: 'roomTags',
+    // A NOTE (Movie, 10 Oct): deletes and undoes like a tag.
+    note: 'notes',
     shape: 'shapes',
     // A DIMENSION, picked off its line (Movie, 6 Oct: "with the DIMENSION
     // lines, can they be selectable so i can move some if there is a better
@@ -10246,7 +10283,8 @@
   // delete and undo like the rest; they are not carried.
   // A ROOM TAG IS NOT CARRIED EITHER: its id is a whole number the format
   // insists on, and a paste re-ids with a string.
-  const NOT_COPIED = new Set(['fixture', 'stair', 'roof', 'roomtag', 'dimension']);
+  // A NOTE's id is a whole number for the same reason.
+  const NOT_COPIED = new Set(['fixture', 'stair', 'roof', 'roomtag', 'note', 'dimension']);
 
   const deleteEntry = entry => {
     if (!entry || !drawing) return false;
@@ -19111,6 +19149,7 @@
     { id: 'fixture', label: 'FIXTURE', aria: 'Grab only fixtures' },
     { id: 'stair', label: 'STAIR', aria: 'Grab only stairs' },
     { id: 'roomtag', label: 'TAG', aria: 'Grab only room tags' },
+    { id: 'note', label: 'NOTE', aria: 'Grab only notes' },
     { id: 'shape', label: 'SHAPE', aria: 'Grab only shapes' },
     { id: 'roof', label: 'ROOF', aria: 'Grab only roofs' },
     { id: 'dimension', label: 'DIM', aria: 'Grab only dimensions' },
@@ -21188,6 +21227,56 @@
   };
   canvas.addEventListener('pointerup', endRoomDrag);
   canvas.addEventListener('pointercancel', endRoomDrag);
+  // ── EDITING A NOTE'S WORDS ─────────────────────────────────────────────
+  // A double-click on a note opens its words in a box laid over the note
+  // itself (Movie, 10 Oct). Enter keeps, Shift+Enter starts a new line,
+  // Escape puts it back; clicking away keeps. One edit, one undo. A note
+  // emptied out keeps its old words: the format has no note without any.
+  const editNoteText = note => {
+    const rect = canvas.getBoundingClientRect();
+    const b = noteBox(note);
+    const box = document.createElement('textarea');
+    box.dataset.noteEdit = '';
+    box.value = note.body;
+    box.rows = Math.max(1, String(note.body).split('\n').length);
+    Object.assign(box.style, { position: 'fixed', left: `${rect.left + b.left}px`,
+      top: `${rect.top + b.top}px`, minWidth: `${Math.max(180, b.width)}px`, zIndex: 50,
+      font: "600 14px 'Barlow Condensed', system-ui, sans-serif", padding: '2px 6px',
+      textTransform: 'uppercase', resize: 'none' });
+    let settled = false;
+    const settle = keep => {
+      if (settled) return;
+      settled = true;
+      const body = box.value.split('\n').map(line => line.trimEnd()).join('\n').trim().toUpperCase();
+      box.remove();
+      if (!keep || !body || body === note.body) return;
+      undoStack.push(brushUndoStep([note]));
+      note.body = body;
+      markDirty();
+      paint();
+    };
+    box.addEventListener('keydown', ev => {
+      ev.stopPropagation();
+      if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); settle(true); }
+      if (ev.key === 'Escape') { ev.preventDefault(); settle(false); }
+    });
+    box.addEventListener('input', () => { box.rows = Math.max(1, box.value.split('\n').length); });
+    box.addEventListener('blur', () => settle(true));
+    document.body.appendChild(box);
+    box.focus();
+    box.select();
+  };
+  canvas.addEventListener('dblclick', e => {
+    if (!drawing || activeTool !== RESTING_TOOL || activeCut() || stairWorkspaceOn()) return;
+    const rect = canvas.getBoundingClientRect();
+    const note = noteAt(toWorld(e.clientX - rect.left, e.clientY - rect.top));
+    if (!note) return;
+    e.preventDefault();
+    moveDrag = null;
+    setSelection([{ type: 'note', item: note }]);
+    paint();
+    editNoteText(note);
+  });
   canvas.addEventListener('pointerdown', e => {
     if (e.pointerType === 'touch') {
       touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -21334,6 +21423,24 @@
       moveDrag = {
         kind: 'dimrow', normal: dimNormal(dimGrab), grab: at,
         row: row.map(item => ({ item, before: { ...item }, start: { ...item.start }, end: { ...item.end } })),
+        sx: e.clientX, sy: e.clientY, active: false,
+      };
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
+    // ── MOVING A NOTE ──────────────────────────────────────────────────────
+    // A selected note drags by its text, and the leader's tip stays on what
+    // it points at -- the way a drafter moves a note clear of the linework.
+    // Grabbed at the tip, only the tip moves, to point at something else. A
+    // note with no leader moves whole.
+    const noteGrab = noteAt(at);
+    if (noteGrab && selection.some(entry => entry.item === noteGrab)) {
+      const tip = toS(noteGrab.anchor), here = toS(at);
+      const part = noteGrab.end === 'none' ? 'whole'
+        : Math.hypot(tip.x - here.x, tip.y - here.y) <= NOTE_TIP_GRAB_PX ? 'tip' : 'text';
+      moveDrag = {
+        kind: 'note', note: noteGrab, before: { ...noteGrab }, part,
+        grab: at, anchor: { ...noteGrab.anchor }, text: { ...noteGrab.text },
         sx: e.clientX, sy: e.clientY, active: false,
       };
       canvas.setPointerCapture(e.pointerId);
@@ -21506,6 +21613,15 @@
             item.end = { ...end, x: end.x + n.x * by, z: end.z + n.z * by };
           });
           md.by = by;
+          paint();
+          return;
+        }
+        if (md.kind === 'note') {
+          // New points each event, as for a tag: the undo step holds the old.
+          const dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
+          const by = p => ({ x: p.x + dx, z: p.z + dz });
+          if (md.part !== 'tip') md.note.text = by(md.text);
+          if (md.part !== 'text') md.note.anchor = by(md.anchor);
           paint();
           return;
         }
@@ -21735,6 +21851,18 @@
               item.moved = { axis, from: clean(from), by: clean(item.start[axis] - from) };
             });
             undoStack.push({ kind: 'props', edits: md.row.map(({ item, before }) => ({ item, before })) });
+            markDirty();
+          }
+          moveDrag = null;
+          if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+          paint();
+          return;
+        }
+        if (md.kind === 'note') {
+          const n = md.note;
+          if (n.anchor.x !== md.anchor.x || n.anchor.z !== md.anchor.z
+            || n.text.x !== md.text.x || n.text.z !== md.text.z) {
+            undoStack.push({ kind: 'props', edits: [{ item: n, before: md.before }] });
             markDirty();
           }
           moveDrag = null;
