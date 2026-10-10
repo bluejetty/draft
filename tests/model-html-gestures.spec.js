@@ -762,6 +762,11 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // .draft to show under this one in blue. It draws nothing of
             // this drawing's; the rows it lists are built per hologram.
             'hologram-upload',
+            // HOW FAR FORWARD THE ROOM OVER THE GARAGE COMES (Movie, 10 Oct):
+            // the card beside the room's end line. It moves the line the
+            // drafter already drags, in whole feet, and BUILD is the bone's
+            // own build; nothing new is made.
+            'LINE UP WITH BALCONY', 'FULL GARAGE', '− 1 FT', '+ 1 FT', 'BUILD',
             'Save first', 'Discard', 'Cancel',   // the unsaved guard
             'Save', 'Cancel'].sort(),           // the SAVE AS card
           // THE PAGE ROW'S LIVE DESTINATIONS. Links, not buttons, so they

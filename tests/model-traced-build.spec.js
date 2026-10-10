@@ -257,6 +257,48 @@ test('the MOD BILEVEL room is cantilevered 2 ft past the garage and the lower ro
   expect(d.roofs.filter(r => r.garage).length, 'no lower garage roof').toBe(0);
 });
 
+// HOW FAR FORWARD THE ROOM COMES, ASKED (Movie, 10 Oct: "ask the user after
+// they draw the garage how far forward they would like their 2nd floor
+// room" ... "yes do the LINE UP WITH BALCONY" ... "allow them to move it
+// forward 1ft per click"). His crazy house, smaller: the garage against a
+// wing set 16 ft back from the front, running 8 ft out past it. The room is
+// measured from the wing, so LINE UP WITH BALCONY is 16 ft -- its end wall
+// on the house front, where the balcony's face is.
+const WING_HOUSE = [[0, 0], [24, 0], [24, -28], [-20, -28], [-20, -16], [0, -16]];
+const WING_GARAGE = [[-20, -16], [0, -16], [0, 8], [-20, 8]];
+
+test('the MOD BILEVEL room card lines the room up with the balcony and moves it a foot a click', async ({ page }) => {
+  await open(page);
+  await drawType(page, 'bilevel', 'modifiedBilevel');
+  await trace(page, WING_HOUSE);
+  await trace(page, WING_GARAGE);
+  const card = page.locator('#room-pick');
+  await expect(card).toBeVisible();
+  const depth = () => page.evaluate(() => window.ModelRoomPick.depthFt());
+  expect(await page.evaluate(() => window.ModelRoomPick.lineUpFt()), 'the house front').toBe(16);
+  expect(await depth(), 'lined up to start').toBe(16);
+  await expect(card.locator('[data-room-pick-lineup]')).toHaveAttribute('aria-pressed', 'true');
+  await card.locator('[data-room-pick-more]').click();
+  expect(await depth()).toBe(17);
+  await expect(card.locator('[data-room-pick-lineup]')).toHaveAttribute('aria-pressed', 'false');
+  await card.locator('[data-room-pick-less]').click();
+  await card.locator('[data-room-pick-less]').click();
+  expect(await depth()).toBe(15);
+  await card.locator('[data-room-pick-full]').click();
+  expect(await depth(), 'the whole garage').toBe(24);
+  await expect(card.locator('[data-room-pick-full]')).toHaveAttribute('aria-pressed', 'true');
+  await card.locator('[data-room-pick-more]').click();
+  await card.locator('[data-room-pick-more]').click();
+  await expect(card.locator('[data-room-pick-more]'), '2 ft past is as far as it hangs').toBeDisabled();
+  await card.locator('[data-room-pick-lineup]').click();
+  expect(await depth()).toBe(16);
+  await card.locator('[data-room-pick-build]').click();
+  await expect(card).toBeHidden();
+  const d = await build(page);
+  expect(maxZ(roomOver(d)), 'the room ends on the house front').toBeCloseTo(0, 3);
+  expect(d.roofs.filter(r => r.garage).length, 'a lower roof over the 8 ft left open').toBe(1);
+});
+
 test('the MOD BILEVEL room moved short of the front keeps a lower roof over the open garage', async ({ page }) => {
   await open(page);
   await drawType(page, 'bilevel', 'modifiedBilevel');
