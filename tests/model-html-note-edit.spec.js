@@ -179,3 +179,54 @@ test('the NOTE filter grabs a note over the wall under it', async ({ page }) => 
   expect(saved.notes).toEqual([]);
   expect(saved.walls, 'the wall stays').toHaveLength(4);
 });
+
+// LINES AND NOTES MOVE AS ONE PIECE, and a note goes into an assembly
+// (Movie, 10 Oct: a group "moves as one piece, notes included").
+const LINE = { id: 'line-9', levelId: MAIN_FL, view: 'plan', start: { x: -6, z: 2 }, end: { x: -2, z: 2 } };
+const selCount = page => page.evaluate(() => {
+  const m = /(\d+) selected/.exec(document.getElementById('readout').textContent);
+  return m ? Number(m[1]) : 0;
+});
+async function pickLineAndNote(page) {
+  const line = await worldToPage(page, -4, 2);
+  await page.mouse.click(line.px, line.py);
+  await page.waitForTimeout(60);
+  await page.keyboard.down('Shift');
+  await tapWords(page);
+  await page.keyboard.up('Shift');
+  expect(await selCount(page)).toBe(2);
+}
+
+test('a line and a note selected together drag as one piece; one UNDO', async ({ page }) => {
+  await open(page, { ...NOTED(), lines: [LINE] });
+  await pickLineAndNote(page);
+  const from = await worldToPage(page, -4, 2);
+  await dragPx(page, from, { px: from.px + 2 * from.scale, py: from.py - 3 * from.scale });
+  let saved = await save(page);
+  const [line] = saved.lines, [n] = saved.notes;
+  expect(line.start.x).toBeCloseTo(-4, 0);
+  expect(line.start.z).toBeCloseTo(-1, 0);
+  expect(line.end.x).toBeCloseTo(0, 0);
+  expect(n.text.x, 'the note moved by the same').toBeCloseTo(7, 0);
+  expect(n.text.z).toBeCloseTo(1, 0);
+  expect(n.anchor.x, 'its tip too').toBeCloseTo(4, 0);
+  await page.locator('[data-model-undo]').click();
+  saved = await save(page);
+  expect(saved.lines[0].start).toMatchObject({ x: -6, z: 2 });
+  expect(saved.notes[0].text).toEqual({ x: 5, z: 4 });
+});
+
+test('a note goes into an assembly, and the assembly is selected with it', async ({ page }) => {
+  await open(page, { ...NOTED(), lines: [LINE] });
+  await h.showLeftPane(page, 'drafting');
+  await pickLineAndNote(page);
+  await page.locator('[data-assembly-start]').click();
+  await page.locator('[data-assembly-name]').fill('detail');
+  await page.locator('[data-assembly-loose]').click();
+  await page.waitForTimeout(120);
+  expect(await selCount(page), 'both, note included').toBe(2);
+  const { groups } = await save(page);
+  expect(groups).toHaveLength(1);
+  expect(groups[0].members).toEqual(expect.arrayContaining([
+    { type: 'line', id: 'line-9' }, { type: 'note', id: 7 }]));
+});
