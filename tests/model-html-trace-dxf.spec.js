@@ -188,6 +188,38 @@ test('EDITABLE brings the lit layers in as lines, one group, one UNDO', async ({
   expect((back.groups || []).filter(g => g.name === 'plan'), 'and the group').toHaveLength(0);
 });
 
+// THE FILE'S TEXT COMES IN AS NOTES (Movie, 10 Oct: "1" -- at its real size
+// and turn, zooming with the drawing like CAD text), in the same group.
+test('EDITABLE brings the text in as notes at the file\'s height and turn', async ({ page }) => {
+  await open(page);
+  await pick(page, 'words.dxf', dxf({ more: [
+    0, 'TEXT', 8, 'WALLS', 10, 120, 20, 60, 40, 6, 1, 'KITCHEN', 50, 90,
+    0, 'MTEXT', 8, 'WALLS', 10, 0, 20, 120, 40, 3, 71, 1, 1, 'FIRST\\PSECOND',
+  ] }));
+  await card(page).locator('[data-trace-editable]').click();
+  await expect(card(page)).toBeHidden();
+  const d = await saved(page);
+  const notes = d.notes.slice().sort((a, b) => a.body.localeCompare(b.body));
+  expect(notes.map(n => n.body)).toEqual(['FIRST\nSECOND', 'KITCHEN']);
+  const [mtext, kitchen] = notes;
+  expect(kitchen.heightFt, '6" text is half a foot tall').toBeCloseTo(0.5, 6);
+  expect(kitchen.rot, 'turned a quarter, as in the file').toBeCloseTo(Math.PI / 2, 6);
+  expect(kitchen.end, 'no leader').toBe('none');
+  expect(mtext.baseline, 'MTEXT top-left hangs from its point').toBe('top');
+  expect(notes.every(n => Number.isInteger(n.id) && Number(n.levelId) === 3)).toBe(true);
+  // Where the file put it: KITCHEN sits at the rectangle's centre, which is
+  // where the plan's middle lands the file's middle.
+  const lines = d.lines.filter(l => l.importedFrom === 'words.dxf');
+  const xs = lines.flatMap(l => [l.start.x, l.end.x]), zs = lines.flatMap(l => [l.start.z, l.end.z]);
+  expect(kitchen.text.x).toBeCloseTo((Math.min(...xs) + Math.max(...xs)) / 2, 6);
+  expect(kitchen.text.z).toBeCloseTo((Math.min(...zs) + Math.max(...zs)) / 2, 6);
+  const group = d.groups.find(g => g.name === 'words');
+  expect(group.members.filter(m => m.type === 'note').map(m => m.id).sort())
+    .toEqual(notes.map(n => n.id).sort());
+  await page.locator('#model-undo').click();
+  expect((await saved(page)).notes, 'one UNDO takes the notes out too').toHaveLength(0);
+});
+
 test('a circle comes in as eight curved lines that bend true', async ({ page }) => {
   await open(page);
   // A 12" circle on CIRC, well away from the rectangle.

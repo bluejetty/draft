@@ -299,7 +299,10 @@ if (!window.DraftPlanComposition) {
     }
 
     if (env.noteEnv) {
-      notes.forEach(note => { onLayer(ctx, note.layer || 'A-ANNO-NOTE'); render.drawNoteScreen2D(ctx, toS(note.anchor), toS(note.text), note, {}, env.noteEnv); });
+      // A note lettered at its real size (DXF text) needs the sheet's feet.
+      const o = toS({ x: 0, z: 0 }), one = toS({ x: 1, z: 0 });
+      const pxPerFt = Math.hypot(one.x - o.x, one.y - o.y);
+      notes.forEach(note => { onLayer(ctx, note.layer || 'A-ANNO-NOTE'); render.drawNoteScreen2D(ctx, toS(note.anchor), toS(note.text), note, { pxPerFt }, env.noteEnv); });
     }
 
     // ROOM TAGS, last, over what they name (Movie, 1 Oct): the NAME on every
