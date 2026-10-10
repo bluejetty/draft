@@ -1051,6 +1051,24 @@ suite('drawBoneyardMark2D', 'a mark is a bar with a tick at each end', R => {
 const noteEnv = { color: '#c33', fillColor: '#ffe' };
 const NOTE = { body: 'NOSING 1 IN', end: 'line', fill: false, outline: false };
 
+// noteBoxScreen2D is the box a page hit-tests a note by (MODEL.html noteAt),
+// so it must be the box the painter draws: same left edge, same height.
+suite('noteBoxScreen2D', 'the box grows away from the anchor and fits every line', R => {
+  const right = R.noteBoxScreen2D(recordingCtx(), { x: 100, y: 100 }, { x: 200, y: 60 }, { ...NOTE, body: 'TWO\nLINES' });
+  expect('placed right of the anchor it starts at the text point', right.left, 200);
+  expect('two lines high plus the padding', right.height, 2 * 14 + 8);
+  expect('centred on the text point', right.top + right.height / 2, 60);
+  expect('right is left plus width', right.right - right.left, right.width);
+  const left = R.noteBoxScreen2D(recordingCtx(), { x: 100, y: 100 }, { x: 20, y: 60 }, NOTE);
+  expect('placed left of it, the box ends at the text point', left.right, 20);
+  const drawn = recordingCtx();
+  R.drawNoteScreen2D(drawn, { x: 100, y: 100 }, { x: 200, y: 60 }, { ...NOTE, outline: true }, {}, noteEnv);
+  const [x, y, w, h] = calls(drawn, 'roundRect')[0];
+  const box = R.noteBoxScreen2D(recordingCtx(), { x: 100, y: 100 }, { x: 200, y: 60 }, NOTE);
+  expect('the painter draws exactly that box', JSON.stringify([x, y, w, h]),
+    JSON.stringify([box.left, box.top, box.width, box.height]));
+});
+
 suite('drawNoteScreen2D', 'the body is painted, one fillText per line', R => {
   const ctx = recordingCtx();
   R.drawNoteScreen2D(ctx, { x: 100, y: 100 }, { x: 200, y: 60 }, { ...NOTE, body: 'TWO\nLINES' }, {}, noteEnv);

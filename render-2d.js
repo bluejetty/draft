@@ -2243,22 +2243,35 @@ if (!window.DraftRender2D) {
   // placed in pane coordinates rather than on the plan. So this painter needs
   // no toS and reads nothing from the model: two colours are its whole env.
   // It was callable from any page all along; only its location said otherwise.
+  // THE TEXT BLOCK'S BOX, in screen px -- the one place its size is worked
+  // out, so the painter and a page's hit test agree on it to the pixel. The
+  // block grows away from the anchor; the leader meets its near edge.
+  const NOTE_FONT = "600 12px 'Barlow Condensed', system-ui, sans-serif";
+  const NOTE_PAD_X = 6, NOTE_LINE_H = 14;
+  function noteBoxScreen2D(ctx, anchor, text, note) {
+    ctx.save();
+    ctx.font = NOTE_FONT;
+    const lines = String(note.body || '').split('\n');
+    const width = Math.max(24, ...lines.map(line => ctx.measureText(line).width)) + NOTE_PAD_X * 2;
+    ctx.restore();
+    const height = lines.length * NOTE_LINE_H + 8;
+    const left = text.x >= anchor.x ? text.x : text.x - width;
+    const top = text.y - height / 2;
+    return { left, top, right: left + width, bottom: top + height, width, height, lines };
+  }
   function drawNoteScreen2D(ctx, anchor, text, note, options = {}, env) {
     const preview = options.preview === true;
     const alpha = preview ? 0.6 : 1;
+    const box = noteBoxScreen2D(ctx, anchor, text, note);
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = env.color;
     ctx.fillStyle = env.color;
     ctx.lineWidth = 1;
-    ctx.font = "600 12px 'Barlow Condensed', system-ui, sans-serif";
-    const lines = String(note.body || '').split('\n');
-    const padX = 6, lineH = 14;
-    const boxW = Math.max(24, ...lines.map(line => ctx.measureText(line).width)) + padX * 2;
-    const boxH = lines.length * lineH + 8;
-    // The text block grows away from the anchor; the leader meets its near edge.
-    const left = text.x >= anchor.x ? text.x : text.x - boxW;
-    const top = text.y - boxH / 2;
+    ctx.font = NOTE_FONT;
+    const { lines, left, top } = box;
+    const padX = NOTE_PAD_X, lineH = NOTE_LINE_H;
+    const boxW = box.width, boxH = box.height;
     const leaderX = text.x >= anchor.x ? left : left + boxW;
     if (note.end !== 'none') {
       if (preview) ctx.setLineDash([5, 4]);
@@ -2747,6 +2760,7 @@ if (!window.DraftRender2D) {
     strokeSegPath2D,
     labelAlongLine2D,
     drawNoteScreen2D,
+    noteBoxScreen2D,
     drawStairNotes2D,
     drawCutMarks2D,
     drawCutPreview2D,
