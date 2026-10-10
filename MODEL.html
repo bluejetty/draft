@@ -2308,6 +2308,8 @@
   // picture cannot disagree; the leader is picked within a few px of it.
   const NOTE_LEADER_GRAB_PX = 5;
   const NOTE_TIP_GRAB_PX = 8;
+  // What a drag of a selection moves as one piece.
+  const MOVE_TOGETHER = new Set(['line', 'note']);
   const noteBox = note => window.DraftRender2D.noteBoxScreen2D(ctx, toS(note.anchor), toS(note.text), note);
   const noteAt = worldPt => {
     const p = toS(worldPt);
@@ -8701,6 +8703,7 @@
     sweep('wall', walls());
     sweep('line', lines());
     sweep('floor', floors());
+    sweep('note', notes());
     return out;
   };
 
@@ -8735,6 +8738,7 @@
     sweep('wall', drawing?.walls);
     sweep('line', drawing?.lines);
     sweep('floor', drawing?.floors);
+    sweep('note', drawing?.notes);
     return out;
   };
 
@@ -21433,6 +21437,25 @@
     // it points at -- the way a drafter moves a note clear of the linework.
     // Grabbed at the tip, only the tip moves, to point at something else. A
     // note with no leader moves whole.
+    // ── MOVING LINES AND NOTES TOGETHER ─────────────────────────────────────
+    // Several lines and notes selected -- an EDITABLE DXF just loaded, or a
+    // window round some linework -- drag as one piece from any of them
+    // (Movie, 10 Oct: a group "moves as one piece, notes included"). Walls
+    // keep their own corner and body drags, so a selection with a wall in it
+    // is not armed here.
+    const movable = selection.length > 1
+      && selection.every(entry => MOVE_TOGETHER.has(entry.type));
+    if (movable) {
+      const grabbed = noteAt(at) || lineAt(at);
+      if (grabbed && selection.some(entry => entry.item === grabbed)) {
+        moveDrag = {
+          kind: 'items', grab: at, sx: e.clientX, sy: e.clientY, active: false,
+          items: selection.map(({ type, item }) => ({ type, item, before: { ...item } })),
+        };
+        canvas.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
     const noteGrab = noteAt(at);
     if (noteGrab && selection.some(entry => entry.item === noteGrab)) {
       const tip = toS(noteGrab.anchor), here = toS(at);
@@ -21613,6 +21636,19 @@
             item.end = { ...end, x: end.x + n.x * by, z: end.z + n.z * by };
           });
           md.by = by;
+          paint();
+          return;
+        }
+        if (md.kind === 'items') {
+          // New points each event from the ones each item started with, so
+          // the undo step's copies keep the points they were taken with.
+          const dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
+          const by = p => ({ ...p, x: p.x + dx, z: p.z + dz });
+          md.items.forEach(({ type, item, before }) => {
+            if (type === 'line') { item.start = by(before.start); item.end = by(before.end); }
+            if (type === 'note') { item.anchor = by(before.anchor); item.text = by(before.text); }
+          });
+          md.moved = Math.abs(dx) > 1e-9 || Math.abs(dz) > 1e-9;
           paint();
           return;
         }
@@ -21851,6 +21887,16 @@
               item.moved = { axis, from: clean(from), by: clean(item.start[axis] - from) };
             });
             undoStack.push({ kind: 'props', edits: md.row.map(({ item, before }) => ({ item, before })) });
+            markDirty();
+          }
+          moveDrag = null;
+          if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+          paint();
+          return;
+        }
+        if (md.kind === 'items') {
+          if (md.moved) {
+            undoStack.push({ kind: 'props', edits: md.items.map(({ item, before }) => ({ item, before })) });
             markDirty();
           }
           moveDrag = null;
