@@ -1069,6 +1069,26 @@ suite('noteBoxScreen2D', 'the box grows away from the anchor and fits every line
     JSON.stringify([box.left, box.top, box.width, box.height]));
 });
 
+// A NOTE AT ITS REAL SIZE (DXF text): lettered heightFt tall at the plan's
+// scale, so it doubles when the plan zooms in twice as far, and turned.
+suite('noteBoxScreen2D', 'a note with heightFt is sized by the plan, not the screen', R => {
+  const WORLD = { body: 'KITCHEN', end: 'none', heightFt: 0.5, rot: 0, align: 'left', baseline: 'top' };
+  const at = { x: 100, y: 100 };
+  const near = R.noteBoxScreen2D(recordingCtx(), at, at, WORLD, 20);
+  const far = R.noteBoxScreen2D(recordingCtx(), at, at, WORLD, 40);
+  expect('it is lettered at the plan\'s scale', far.height, near.height * 2);
+  expect('hung from its point when set top-left', JSON.stringify([near.left, near.top]), '[100,100]');
+  const turned = R.noteBoxScreen2D(recordingCtx(), at, at, { ...WORLD, rot: Math.PI / 2 }, 20);
+  expect('a quarter turn stands it up: the box is as tall as it was wide',
+    Math.round(turned.height), Math.round(near.width));
+  const flat = R.noteBoxScreen2D(recordingCtx(), at, at, WORLD);
+  expect('without a scale it is the fixed screen note', flat.world, undefined);
+  const ctx = recordingCtx();
+  R.drawNoteScreen2D(ctx, at, at, WORLD, { pxPerFt: 20 }, noteEnv);
+  expect('painted once, its words', calls(ctx, 'fillText')[0][0], 'KITCHEN');
+  expect('no box round DXF text', count(ctx, 'roundRect'), 0);
+});
+
 suite('drawNoteScreen2D', 'the body is painted, one fillText per line', R => {
   const ctx = recordingCtx();
   R.drawNoteScreen2D(ctx, { x: 100, y: 100 }, { x: 200, y: 60 }, { ...NOTE, body: 'TWO\nLINES' }, {}, noteEnv);

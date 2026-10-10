@@ -2246,9 +2246,45 @@ if (!window.DraftRender2D) {
   // THE TEXT BLOCK'S BOX, in screen px -- the one place its size is worked
   // out, so the painter and a page's hit test agree on it to the pixel. The
   // block grows away from the anchor; the leader meets its near edge.
+  //
+  // TEXT AT ITS REAL SIZE (Movie, 10 Oct, for DXF text brought in as notes:
+  // "1"). A note with `heightFt` is lettered that many feet tall on the plan,
+  // so it zooms with the drawing as CAD text does, turned by `rot` (radians,
+  // counter-clockwise as the DXF has it) about its text point and set by
+  // `align` and `baseline` there. It needs the plan's px per foot to size it;
+  // without one it falls back to the fixed screen note. Its box is the square
+  // box round the turned block, which is what a hit test can use.
   const NOTE_FONT = "600 12px 'Barlow Condensed', system-ui, sans-serif";
   const NOTE_PAD_X = 6, NOTE_LINE_H = 14;
-  function noteBoxScreen2D(ctx, anchor, text, note) {
+  // DXF height is the capital's height; the font's em is about 1.4 of that.
+  const NOTE_EM_PER_CAP = 1.4;
+  function worldNoteBox(ctx, text, note, pxPerFt) {
+    const fontPx = Number(note.heightFt) * pxPerFt * NOTE_EM_PER_CAP;
+    const lines = String(note.body || '').split('\n');
+    const lineH = fontPx * 1.2;
+    ctx.save();
+    ctx.font = `600 ${fontPx}px 'Barlow Condensed', system-ui, sans-serif`;
+    const widths = lines.map(line => ctx.measureText(line).width);
+    ctx.restore();
+    const width = Math.max(0, ...widths), height = lines.length * lineH;
+    const align = ['center', 'right'].includes(note.align) ? note.align : 'left';
+    const x0 = align === 'center' ? -width / 2 : align === 'right' ? -width : 0;
+    const y0 = note.baseline === 'top' ? 0
+      : note.baseline === 'middle' ? -height / 2
+        : note.baseline === 'bottom' ? -height
+          : -height + fontPx * 0.25;
+    const angle = -(Number(note.rot) || 0);
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const quad = [[x0, y0], [x0 + width, y0], [x0 + width, y0 + height], [x0, y0 + height]]
+      .map(([x, y]) => ({ x: text.x + x * cos - y * sin, y: text.y + x * sin + y * cos }));
+    const xs = quad.map(p => p.x), ys = quad.map(p => p.y);
+    const left = Math.min(...xs), top = Math.min(...ys);
+    return { world: true, left, top, right: Math.max(...xs), bottom: Math.max(...ys),
+      width: Math.max(...xs) - left, height: Math.max(...ys) - top,
+      lines, fontPx, lineH, align, x0, y0, angle, quad };
+  }
+  function noteBoxScreen2D(ctx, anchor, text, note, pxPerFt) {
+    if (Number(note.heightFt) > 0 && Number(pxPerFt) > 0) return worldNoteBox(ctx, text, note, pxPerFt);
     ctx.save();
     ctx.font = NOTE_FONT;
     const lines = String(note.body || '').split('\n');
@@ -2259,10 +2295,35 @@ if (!window.DraftRender2D) {
     const top = text.y - height / 2;
     return { left, top, right: left + width, bottom: top + height, width, height, lines };
   }
+  function drawWorldNote(ctx, anchor, text, note, box, alpha, env) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = env.color;
+    ctx.fillStyle = env.color;
+    ctx.lineWidth = 1;
+    if (note.end !== 'none') {
+      ctx.beginPath();
+      ctx.moveTo(text.x, text.y);
+      ctx.lineTo(anchor.x, anchor.y);
+      ctx.stroke();
+    }
+    // Too small to read is not drawn: a DXF zoomed far out holds thousands.
+    if (box.fontPx >= 2) {
+      ctx.translate(text.x, text.y);
+      ctx.rotate(box.angle);
+      ctx.font = `600 ${box.fontPx}px 'Barlow Condensed', system-ui, sans-serif`;
+      ctx.textAlign = box.align;
+      ctx.textBaseline = 'top';
+      const x = box.align === 'left' ? box.x0 : 0;
+      box.lines.forEach((line, i) => ctx.fillText(line, x, box.y0 + i * box.lineH));
+    }
+    ctx.restore();
+  }
   function drawNoteScreen2D(ctx, anchor, text, note, options = {}, env) {
     const preview = options.preview === true;
     const alpha = preview ? 0.6 : 1;
-    const box = noteBoxScreen2D(ctx, anchor, text, note);
+    const box = noteBoxScreen2D(ctx, anchor, text, note, options.pxPerFt);
+    if (box.world) { drawWorldNote(ctx, anchor, text, note, box, alpha, env); return; }
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.strokeStyle = env.color;

@@ -2310,7 +2310,7 @@
   const NOTE_TIP_GRAB_PX = 8;
   // What a drag of a selection moves as one piece.
   const MOVE_TOGETHER = new Set(['line', 'note']);
-  const noteBox = note => window.DraftRender2D.noteBoxScreen2D(ctx, toS(note.anchor), toS(note.text), note);
+  const noteBox = note => window.DraftRender2D.noteBoxScreen2D(ctx, toS(note.anchor), toS(note.text), note, view.scale);
   const noteAt = worldPt => {
     const p = toS(worldPt);
     return notes().slice().reverse().find(note => {
@@ -2318,7 +2318,7 @@
       if (p.x >= b.left && p.x <= b.right && p.y >= b.top && p.y <= b.bottom) return true;
       if (note.end === 'none') return false;
       const a = toS(note.anchor), t = toS(note.text);
-      const from = { x: t.x >= a.x ? b.left : b.right, y: t.y };
+      const from = b.world ? t : { x: t.x >= a.x ? b.left : b.right, y: t.y };
       // pointToSegment reads x/z; screen y stands in for z.
       return window.DraftGeometry2D.pointToSegment({ x: p.x, z: p.y },
         { start: { x: a.x, z: a.y }, end: { x: from.x, z: from.y } }).d <= NOTE_LEADER_GRAB_PX;
@@ -3845,7 +3845,7 @@
     // annotation TOOL, and this page has no tools. A committed note is the
     // only kind it can hold.
     notes().forEach(note =>
-      R.drawNoteScreen2D(ctx, toS(note.anchor), toS(note.text), note, {}, env));
+      R.drawNoteScreen2D(ctx, toS(note.anchor), toS(note.text), note, { pxPerFt: view.scale }, env));
   };
 
   // The name, and the size under it when there is one -- exactly as typed.
@@ -17628,8 +17628,9 @@
   // laid it: centred where the drafter is looking, full size, file up.
   // They keep the file's layer names and go in as ONE ASSEMBLY named for
   // the file, so the whole drawing moves as one; UNGROUP to work on single
-  // lines. One UNDO takes them all out. Text is not brought in as lines --
-  // it is on the card to copy.
+  // lines. One UNDO takes them all out. The file's text comes in as NOTES
+  // in the same assembly, lettered at the file's own height and turn (Movie,
+  // 10 Oct); it is on the card to copy as well.
   const TRACE_DXF_ASK_OVER = 5000;
   const insertTraceDxfEditable = async scan => {
     let geo;
@@ -17641,7 +17642,11 @@
     }
     const hidden = new Set(scan.hiddenLayers);
     const pieces = geo.segments.filter(pc => !hidden.has(pc.layer));
-    if (!pieces.length) {
+    // THE FILE'S TEXT COMES IN AS NOTES (Movie, 10 Oct), at its own height
+    // and turn, so it sits where it sat among the lines and zooms with them.
+    const words = (geo.texts || []).filter(t => !hidden.has(t.layer)
+      && t.lines.join('').trim() && Number(t.h) > 0);
+    if (!pieces.length && !words.length) {
       tq('[data-trace-status]').textContent = 'Every layer with lines on it is off \u2014 light one to bring it in.';
       return;
     }
@@ -17669,16 +17674,33 @@
       ...(seg.bulge ? { bulge: seg.bulge } : {}),
     }));
     made.forEach(line => drawing.lines.push(line));
-    const items = made.map(item => ({ list: drawing.lines, item }));
+    drawing.notes = drawing.notes || [];
+    // A note's id is a whole number (the format insists), after the highest.
+    let noteId = drawing.notes.reduce((top, n) => Math.max(top, Number(n.id) || 0), 0);
+    const lettered = words.map(t => {
+      const p = toWorld([t.x, t.y]);
+      return {
+        id: (noteId += 1), anchor: p, text: { ...p }, levelId, view: lineView,
+        body: t.lines.map(line => line.trimEnd()).join('\n').trim(), end: 'none',
+        fill: false, fillOpacity: 0.85, outline: false, bullnose: 0,
+        heightFt: t.h * unitFt, rot: Number(t.rot) || 0,
+        align: t.align || 'left', baseline: t.baseline || 'alphabetic',
+        layer: 'A-ANNO-NOTE',
+      };
+    });
+    lettered.forEach(note => drawing.notes.push(note));
+    const items = [...made.map(item => ({ list: drawing.lines, item })),
+      ...lettered.map(item => ({ list: drawing.notes, item }))];
     let group = null;
-    if (made.length >= 2) {
+    if (made.length + lettered.length >= 2) {
       const n = nextGroupNumber();
       group = {
         id: `group-${n}`,
         name: scan.file.name.replace(/\.dxf$/i, ''),
         fixed: false,
         stretchBehavior: 'item-geometry',
-        members: made.map(line => ({ type: 'line', id: line.id })),
+        members: [...made.map(line => ({ type: 'line', id: line.id })),
+          ...lettered.map(note => ({ type: 'note', id: note.id }))],
       };
       drawing.groups = groups();
       drawing.groups.push(group);
@@ -17691,8 +17713,10 @@
     if (group) setSelection(itemsOfGroup(group));
     paint();
     updateReadout();
-    sayOnStrip(`${made.length.toLocaleString()} line${made.length === 1 ? '' : 's'} from ${scan.file.name} on `
-      + `${traceLevelName()}${group ? ', as one group \u2014 drag it into place, UNGROUP to edit single lines' : ''}.`);
+    const notesSaid = lettered.length
+      ? ` and ${lettered.length.toLocaleString()} note${lettered.length === 1 ? '' : 's'}` : '';
+    sayOnStrip(`${made.length.toLocaleString()} line${made.length === 1 ? '' : 's'}${notesSaid} from ${scan.file.name} on `
+      + `${traceLevelName()}${group ? ', as one group \u2014 drag it into place, UNGROUP to edit single pieces' : ''}.`);
   };
 
   // THE DXF IS KEPT AS THE FILE, and drawn from it: its lines are never

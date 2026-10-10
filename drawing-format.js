@@ -1110,6 +1110,14 @@ if (!window.DraftDrawingFormat) {
         fillOpacity: Math.min(1, Math.max(0, number(note?.fillOpacity, 0.85))),
         outline: note?.outline === true,
         bullnose: Math.min(30, Math.max(0, number(note?.bullnose, 0))),
+        // LETTERED AT ITS REAL SIZE: a note brought in from a DXF keeps the
+        // file's text height in feet, its turn and how it is set on its point.
+        ...(number(note?.heightFt, 0) > 0 ? {
+          heightFt: number(note.heightFt, 0),
+          rot: number(note?.rot, 0),
+          align: oneOf(note?.align, ['left', 'center', 'right'], 'left'),
+          baseline: oneOf(note?.baseline, ['alphabetic', 'bottom', 'middle', 'top'], 'alphabetic'),
+        } : {}),
         layer: 'A-ANNO-NOTE',
       };
     }).filter(Boolean);
