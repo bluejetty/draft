@@ -169,6 +169,10 @@ const plan = (entryId, garage = GARAGE) => T.planFromTrace({
   check('the overhead doors are on the street face', [front.a.z, front.b.z, overhead.length], [46, 46, 2]);
   check('and a man door on the four feet past the house', p.garageOpenings.filter(o => !o.garage)
     .map(o => box([T.edgesOf(p.garage)[o.edge].a, T.edgesOf(p.garage)[o.edge].b])), [[16, 20, 20, 20]]);
+  // A D30 THERE, because four feet cannot carry the D36 every other exterior
+  // door is now (Movie, 9 Oct): the back wall he chose, not a side.
+  check('the man door on four feet is the D30 that fits', p.garageOpenings.filter(o => !o.garage)
+    .map(o => o.widthFt), [2.5]);
   const door = p.houseOpenings.find(o => o.type === 'door');
   const e = T.edgesOf(p.house)[door.edge];
   check('the front door is on the front, clear of the garage', [e.a.z, e.b.z,
@@ -223,11 +227,12 @@ const plan = (entryId, garage = GARAGE) => T.planFromTrace({
   const plan = T.planFromTrace({ entryId: 'modifiedBilevel', house, garage });
   check('Movie\'s corner garage builds', plan.error, undefined);
   const edges = (plan.entry || []).map((a, i, all) => [a, all[(i + 1) % all.length]]);
-  const man = (plan.entryOpenings || []).find(o => o.type === 'door' && o.widthFt === 2.5);
+  const man = (plan.entryOpenings || []).find(o => o.type === 'door' && o.manDoor === true);
   const [a, b] = man ? edges[man.edge] : [{}, {}];
   // His shared wall, z = -0.7 in the file, is x = 0.7 here; the corner he
   // marked, x = -0.2 in the file, is z = -0.2.
   const along = a && b && Math.abs(a.x - b.x) < 1e-6;
+  check('the entry\'s garage door is a D36', man && man.widthFt, 3);
   check('the entry\'s garage door is on the wall it shares with the garage',
     man && along ? [+a.x.toFixed(1), +b.x.toFixed(1)] : JSON.stringify([a, b]), [0.7, 0.7]);
   const at = man && along ? a.z + Math.sign(b.z - a.z) * man.offsetFt : null;
@@ -251,7 +256,7 @@ const plan = (entryId, garage = GARAGE) => T.planFromTrace({
   const xs = (plan.entry || []).map(p => p.x);
   check('the landing stands against the garage\'s side wall', +Math.min(...xs).toFixed(2), 17.56);
   const edges = (plan.entry || []).map((a, i, all) => [a, all[(i + 1) % all.length]]);
-  const man = (plan.entryOpenings || []).find(o => o.type === 'door' && o.widthFt === 2.5);
+  const man = (plan.entryOpenings || []).find(o => o.type === 'door' && o.manDoor === true);
   const [a, b] = man ? edges[man.edge] : [{}, {}];
   check('its garage door is on that side wall', man ? [+a.x.toFixed(2), +b.x.toFixed(2)] : 'none', [17.56, 17.56]);
   check('the room over the garage has a roof', !!(plan.overGarageRoof && plan.overGarageRoof.length >= 4), true);

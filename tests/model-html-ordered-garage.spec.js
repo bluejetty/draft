@@ -304,7 +304,8 @@ test('and a way into it: an overhead door, a man door and a window',
     const man = openingOn(saved, houseSideWall(studs));
     expect(man.length, 'one door on the wall the house is on').toBe(1);
     expect(man[0].type).toBe('door');
-    expect(man[0].width, 'a 2-6 leaf').toBeCloseTo(2.5, 3);
+    // A D36, like every default exterior door (Movie, 9 Oct).
+    expect(man[0].width, 'a 3-0 leaf').toBeCloseTo(3, 3);
     expect(man[0].garage, 'a man door is not an overhead door').toBe(false);
 
     // AND ONE WINDOW, on the back — away from the street and off both doors.

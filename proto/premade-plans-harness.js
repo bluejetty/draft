@@ -153,10 +153,10 @@ check('every house corner is a whole foot',
   P => [P.bungalow().house.every(p => Number.isInteger(p.x) && Number.isInteger(p.z)), true]);
 
 // ── the garage, measured as Movie described it ──
-check('the garage is 24 across its door wall',
+check('the garage is 25 across its door wall',
   P => { const g = P.bungalow({ garage: true }).garage;
          const door = edges(g).find(e => e.dz === 0 && e.from.z === bbox(g).maxZ);
-         return [n(door.len), n(24)]; });
+         return [n(door.len), n(25)]; });
 
 check('and every one of its corners is a whole foot too',
   P => [P.bungalow({ garage: true }).garage
@@ -177,12 +177,12 @@ check('and the garage covers the other 20 of it',
          const garage = bbox(plan.garage);
          return [n(house.maxX - garage.minX), n(20)]; });
 
-check('the garage-s right wall stands 4 ft proud of the house-s, toward the lot line',
+check('the garage-s right wall stands 5 ft proud of the house-s, toward the lot line',
   P => { const plan = P.bungalow({ garage: true });
-         return [n(bbox(plan.garage).maxX - bbox(plan.house).maxX), n(4)]; });
+         return [n(bbox(plan.garage).maxX - bbox(plan.house).maxX), n(5)]; });
 
-// THE TWO SUMS THAT CLOSE. 12 + 20 = the house width and 20 + 4 = the garage
-// width, which is how the reading of Movie's sentence was checked in the first
+// THE TWO SUMS THAT CLOSE. 12 + 20 = the house width and 20 + 5 = the garage
+// width (24 + 4 until Movie's D36 man door took a foot more, 9 Oct), which is how the reading of Movie's sentence was checked in the first
 // place. A plan that got the arrangement wrong fails one of these even when
 // both widths are right.
 check('visible plus covered is the house width',
@@ -197,7 +197,7 @@ check('covered plus proud is the garage width',
          const house = bbox(plan.house);
          const garage = bbox(plan.garage);
          return [n((house.maxX - garage.minX) + (garage.maxX - house.maxX)),
-           n(24)]; });
+           n(25)]; });
 
 // ── the extra foot ──
 check('one garage side runs 27 and the other 26',
@@ -215,12 +215,12 @@ check('the long side is the one on the property-line side',
            .find(e => Math.abs(e.len - 27) < 0.001);
          return [n(long.from.x), n(box.maxX)]; });
 
-check('the exposed rear wall is 4 ft, which is the man-door-s',
+check('the exposed rear wall is 5 ft, which is the man-door-s',
   P => { const plan = P.bungalow({ garage: true });
          const houseFront = bbox(plan.house).maxZ;
          const rear = edges(plan.garage)
            .find(e => e.dz === 0 && e.from.z < houseFront);
-         return [n(rear.len), n(4)]; });
+         return [n(rear.len), n(5)]; });
 
 check('and it sits one foot behind the house-s front line',
   P => { const plan = P.bungalow({ garage: true });
@@ -361,20 +361,20 @@ check('the garage door is 16 ft on the door wall, and says it is a garage door',
   P => { const plan = P.bungalow({ garage: true });
          const door = plan.garageOpenings.find(o => o.garage === true);
          const wall = edgeOf(plan.garage, door.edge);
-         return [`${n(door.widthFt)} on a ${n(wall.len)} ft wall`, `${n(16)} on a ${n(24)} ft wall`]; });
+         return [`${n(door.widthFt)} on a ${n(wall.len)} ft wall`, `${n(16)} on a ${n(25)} ft wall`]; });
 
-// THE MAN-DOOR IS WHY THE 4 FT WALL EXISTS. Movie: the garage stands proud
-// "so a man-door can be installed that leads on a path to backyard". Four feet
-// is not four feet of door -- take the bearing off each end and 2'-10" of it
-// is usable -- so this measures that the leaf FITS, not merely that it is
-// there.
+// THE MAN-DOOR IS WHY THE 5 FT WALL EXISTS. Movie: the garage stands proud
+// "so a man-door can be installed that leads on a path to backyard", and on
+// 9 Oct "make all default ext doors D36". Five feet is not five feet of door
+// -- take the bearing off each end and 3'-10" of it is usable -- so this
+// measures that the leaf FITS, not merely that it is there.
 check('the man-door is on the exposed rear wall, and fits it',
   P => { const plan = P.bungalow({ garage: true });
          const man = plan.garageOpenings.find(o => o.garage !== true);
          const wall = edgeOf(plan.garage, man.edge);
          const room = wall.len - 2 * reserveFor(man.widthFt);
          return [`${n(wall.len)} ft wall, ${n(man.widthFt)} leaf, fits=${man.widthFt <= room}`,
-           `${n(4)} ft wall, ${n(2.5)} leaf, fits=true`]; });
+           `${n(5)} ft wall, ${n(3)} leaf, fits=true`]; });
 
 check('a door sits on the floor and a window does not',
   P => { const plan = P.bungalow({ garage: true });
@@ -561,20 +561,20 @@ check('the upper front carries more glass than the ground floor-s, because '
 // THE NOTCH IS CHECKED ON ITS OWN BELOW rather than folded in here, so "the
 // room is 18 long" and "its corner reaches the tie" stay two facts that can
 // fail separately.
-check('the room over the garage is 24 wide by 18 long from the house-s front line',
+check('the room over the garage is 25 wide by 18 long from the house-s front line',
   P => { const plan = P.twoStorey({ garage: true, overGarage: true });
          const b = bbox(plan.overGarage), house = bbox(plan.house);
-         return [`${n(b.maxX - b.minX)}x${n(b.maxZ - house.maxZ)}`, `${n(24)}x${n(18)}`]; });
+         return [`${n(b.maxX - b.minX)}x${n(b.maxZ - house.maxZ)}`, `${n(25)}x${n(18)}`]; });
 
-// AND THE NOTCH IS FOUR FEET WIDE, the garage's own proud stretch -- not the
+// AND THE NOTCH IS FIVE FEET WIDE, the garage's own proud stretch -- not the
 // whole back run, which is the half of the superseded ruling that was right.
-check('and the tie notch is the proud 4 ft only, not the whole back run',
+check('and the tie notch is the proud 5 ft only, not the whole back run',
   P => { const plan = P.twoStorey({ garage: true, overGarage: true });
          const house = bbox(plan.house);
          const onTie = edges(plan.overGarage)
            .filter(e => Math.abs(e.from.z - (house.maxZ - 1)) < 0.01
              && Math.abs(e.to.z - (house.maxZ - 1)) < 0.01);
-         return [onTie.map(e => n(e.len)).join(','), n(4)]; });
+         return [onTie.map(e => n(e.len)).join(','), n(5)]; });
 
 // AND THIS CHECK'S EXACTNESS WAS LUCK, which only showed when the two bodies
 // were made consistent. It compared the room's bounding box (18, with no tie)
@@ -847,7 +847,7 @@ check('the overhead door is on the door wall, centred across it',
 check('the man door is on the wall the house is on, centred along the depth',
   P => { const door = onEdge(detached(P, 25, 24), 3);
          return [`${n(door.offsetFt)},${n(door.widthFt)},${door.type}`,
-           `${n(12)},${n(2.5)},door`]; });
+           `${n(12)},${n(3)},door`]; });
 
 check('the window is on the back wall, off both doors',
   P => { const win = onEdge(detached(P, 25, 25), 0);
@@ -1069,7 +1069,7 @@ check('and a 2 STOREY with no garage at all is too',
 
 check('the bungalow-s spliced loop is untouched, corner for corner',
   P => [JSON.stringify(P.bungalow({ garage: true }).houseRoof.map(pt => [pt.x, pt.z])),
-    JSON.stringify([[-16, -20], [16, -20], [16, 19], [20, 19], [20, 46], [-4, 46],
+    JSON.stringify([[-16, -20], [16, -20], [16, 19], [21, 19], [21, 46], [-4, 46],
       [-4, 20], [-16, 20]])]);
 
 // THE TWO WINGS ARE ONE SHAPE, which is why they are one function. If this
@@ -1197,7 +1197,7 @@ check('and the garage roof is wound like every other loop here',
 check('the stub with a room over is untouched by all of this',
   P => [JSON.stringify(P.twoStorey({ garage: true, overGarage: true })
     .garageRoof.map(pt => [pt.x, pt.z])),
-  JSON.stringify([[-4, 38], [20, 38], [20, 46], [-4, 46]])]);
+  JSON.stringify([[-4, 38], [21, 38], [21, 46], [-4, 46]])]);
 
 // ── THE SHORT GABLE OVER THE FOOT OF THE TIE ─────────────────────────────
 //
@@ -1647,8 +1647,10 @@ const MUTATIONS = [
   ['the front door is placed by the VISIBLE width instead of the covered one',
     s2 => s2.replace('const covered = GARAGE_WIDTH_FT - GARAGE_PAST_FT;',
       'const covered = WIDTH_FT - GARAGE_WIDTH_FT + GARAGE_PAST_FT;')],
-  ['the man-door is a standard 3 ft leaf, which the 4 ft wall cannot carry',
-    s2 => s2.replace('opening(1, GARAGE_PAST_FT / 2, 2.5, ', 'opening(1, GARAGE_PAST_FT / 2, 3, ')],
+  ['the garage goes back to 4 ft proud, which cannot carry the D36 man-door',
+    s2 => s2.replace('const GARAGE_PAST_FT = 5;', 'const GARAGE_PAST_FT = 4;')],
+  ['the man-door goes back to the 2 ft 6 leaf',
+    s2 => s2.replace('opening(1, GARAGE_PAST_FT / 2, MAN_DOOR_WIDTH_FT, ', 'opening(1, GARAGE_PAST_FT / 2, 2.5, ')],
   ['the garage door is hung on the garage-s long wall instead of the door wall',
     s2 => s2.replace('opening(3, GARAGE_WIDTH_FT / 2, 16, ', 'opening(2, GARAGE_WIDTH_FT / 2, 16, ')],
   ['two front openings are given the same offset',

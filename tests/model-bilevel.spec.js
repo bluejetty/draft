@@ -254,7 +254,7 @@ test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight 
     const decks = d.floors.filter(f => Number(f.levelId) === 4);
     expect(decks.length).toBe(1);
     expect(span(decks[0].points), 'the landing (back to z 14) and the room in one')
-      .toEqual(span([{ x: -4, z: 14 }, { x: 20, z: 38 }]));
+      .toEqual(span([{ x: -4, z: 14 }, { x: 21, z: 38 }]));
     expect(decks[0].points.length, 'no seam: the landing\'s corner is the deck\'s').toBe(8);
     // Three flights; the third over the down one, 6'-3" up from MAIN.
     const down = d.stairs.find(s => Number(s.levelId) === 2);
@@ -277,7 +277,7 @@ test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight 
     // L, two feet of eave all round.
     const bottomZ = third.end.z;
     expect(bottomZ, 'the third flight runs back from the landing').toBeLessThan(14);
-    expect(span(roomRoof.points)).toEqual(span([{ x: -6, z: bottomZ - 2 }, { x: 22, z: 40 }]));
+    expect(span(roomRoof.points)).toEqual(span([{ x: -6, z: bottomZ - 2 }, { x: 23, z: 40 }]));
     expect(roomRoof.points.length, 'an L, not the old square').toBe(6);
     // And closed in where it stands over the main roof ("a wall that goes
     // from the bottom of the 2nd fl roof to the top of the main fl
