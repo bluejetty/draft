@@ -1050,7 +1050,16 @@
     color: var(--ink-quiet); font-family: var(--font-ui); font-size:11px;
     font-weight:600; letter-spacing:0.04em; }
   .promote-row button:hover { border-color: var(--accent); color: var(--accent); }
-  [data-promote-go] { border-color: var(--accent); color: var(--accent); }
+  [data-promote-go], [data-room-pick-build] { border-color: var(--accent); color: var(--accent); }
+  /* HOW FAR FORWARD THE ROOM OVER THE GARAGE COMES (Movie, 10 Oct). Not a
+     dialog: the plan stays live behind it, so the bold line is seen moving
+     as the feet are clicked. */
+  #room-pick { position:fixed; left:50%; top:64px; transform:translateX(-50%);
+    z-index:6; }
+  #room-pick[hidden] { display:none; }
+  #room-pick .promote-card { max-width:34em; }
+  #room-pick .promote-row + .promote-row { margin-top:8px; }
+  #room-pick [aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
   /* THE NOTICE IS A MESSAGE, NOT A DOOR. It covers the whole sheet to be
      read, and while it did so with pointer events it also swallowed every
      press aimed at the bars behind it -- including NEW and OPEN, the two
@@ -1458,6 +1467,25 @@
      corner, so the garage's foundation bears full on the house wall. 1'-0"
      is the answer on TOY without asking; on DRAFTING this asks, 1'-0" first,
      or the garage foundation's own thickness. -->
+<!-- HOW FAR FORWARD THE 2ND FLOOR ROOM COMES (Movie, 10 Oct): "ask the user
+     after they draw the garage how far forward they would like their 2nd
+     floor room" -- LINE UP WITH BALCONY first, so the front reads as one
+     face -- "maybe allow them to move it forward 1ft per click". -->
+<div id="room-pick" data-room-pick hidden role="group" aria-label="Room over the garage">
+  <div class="promote-card">
+    <p><b>HOW FAR FORWARD SHOULD THE 2ND FLOOR ROOM COME?</b><br><span data-room-pick-says></span></p>
+    <div class="promote-row">
+      <button type="button" data-room-pick-lineup aria-pressed="false">LINE UP WITH BALCONY</button>
+      <button type="button" data-room-pick-full aria-pressed="false">FULL GARAGE</button>
+    </div>
+    <div class="promote-row">
+      <button type="button" data-room-pick-less>&minus; 1 FT</button>
+      <button type="button" data-room-pick-more>+ 1 FT</button>
+      <button type="button" data-room-pick-build>BUILD</button>
+    </div>
+  </div>
+</div>
+
 <!-- LINE THE GARAGE UP WITH THE HOUSE CEILING? Movie, 7 Oct: keep the garage's
      10'-1 3/4" default, but when the BONE builds a garage that tops out above
      the house's ceiling, ask whether to line it up -- one roof when they meet.
@@ -11625,6 +11653,9 @@
         // get them to move the line" -- so the house waits for the bone.
         if (closingGarage && roomPick()) {
           buildAfterClose = false;
+          // LINED UP WITH THE BALCONY TO START (Movie, 10 Oct), when it can be.
+          const lineUp = roomLineUpFt(roomPick());
+          if (lineUp != null) roomOverFt = lineUp;
           sayOnStrip(ROOM_PICK_LINE);
         }
       }
@@ -11789,6 +11820,55 @@
     : over.depthFt === over.depth
       ? `room ${over.depthFt} ft — to the garage front, no lower roof`
       : `room ${over.depthFt} ft — lower roof over the last ${over.depth - over.depthFt} ft of garage`);
+  // WHERE THE ROOM LINES UP WITH THE BALCONY: its end wall on the line of
+  // the upper landing's far wall, measured the way the room is (from the
+  // wall it shares with the house, in whole feet). Null when that is not a
+  // depth the room can take -- a landing that does not reach past the house
+  // line, or one beyond the room's range.
+  const roomLineUpFt = pick => {
+    const landing = pick?.plan?.upperLanding;
+    if (!landing || !landing.length) return null;
+    const { a, inward, range } = pick.over;
+    const far = Math.max(...landing.map(p => (p.x - a.x) * inward.x + (p.z - a.z) * inward.z));
+    const d = Math.round(far);
+    return d >= range.lo && d <= range.hi ? d : null;
+  };
+  // ── THE CARD BESIDE THE LINE ───────────────────────────────────────────
+  const roomCard = document.getElementById('room-pick');
+  const syncRoomCard = pick => {
+    if (!roomCard) return;
+    roomCard.hidden = !pick;
+    if (!pick) return;
+    const { over } = pick;
+    const lineUp = roomLineUpFt(pick);
+    const say = roomCard.querySelector('[data-room-pick-says]');
+    const words = `${roomPickWords(over)}.`;
+    if (say.textContent !== words) say.textContent = words;
+    const up = roomCard.querySelector('[data-room-pick-lineup]');
+    up.hidden = lineUp == null;
+    up.setAttribute('aria-pressed', String(lineUp != null && over.depthFt === lineUp));
+    roomCard.querySelector('[data-room-pick-full]')
+      .setAttribute('aria-pressed', String(over.depthFt === over.depth));
+    roomCard.querySelector('[data-room-pick-less]').disabled = over.depthFt <= over.range.lo;
+    roomCard.querySelector('[data-room-pick-more]').disabled = over.depthFt >= over.range.hi;
+  };
+  const setRoomFt = ft => {
+    const pick = roomPick();
+    if (!pick || ft == null) return;
+    roomOverFt = Math.max(pick.over.range.lo, Math.min(pick.over.range.hi, Math.round(ft)));
+    sayOnStrip(`${roomPickWords(roomPick().over)}. Press BUILD or the bone.`);
+    paint();
+  };
+  if (roomCard) {
+    roomCard.querySelector('[data-room-pick-lineup]').addEventListener('click', () => setRoomFt(roomLineUpFt(roomPick())));
+    roomCard.querySelector('[data-room-pick-full]').addEventListener('click', () => setRoomFt(roomPick()?.over.depth));
+    roomCard.querySelector('[data-room-pick-less]').addEventListener('click', () => setRoomFt((roomPick()?.over.depthFt ?? 0) - 1));
+    roomCard.querySelector('[data-room-pick-more]').addEventListener('click', () => setRoomFt((roomPick()?.over.depthFt ?? 0) + 1));
+    roomCard.querySelector('[data-room-pick-build]').addEventListener('click', () => {
+      roomCard.hidden = true;
+      window.ModelBuild.build();
+    });
+  }
   let roomDrag = null;
   const ROOM_GRAB_PX = 10;
   const nearRoomLine = (pick, sx, sy) => {
@@ -11800,6 +11880,7 @@
   };
   const paintRoomPick = () => {
     const pick = roomPick();
+    syncRoomCard(pick);
     if (!pick) return;
     const loop = l => {
       if (!l || l.length < 2) return;
@@ -11841,6 +11922,7 @@
   window.ModelRoomPick = Object.freeze({
     line: () => roomPick()?.line.map(p => ({ ...p })) || null,
     depthFt: () => roomPick()?.over.depthFt ?? null,
+    lineUpFt: () => roomLineUpFt(roomPick()),
   });
 
   // ── A GARAGE ABOVE THE HOUSE CEILING: LINE IT UP? ────────────────────────
@@ -11940,6 +12022,10 @@
         tracedGarage = null;
         tracedMasters = [];
         roomOverFt = null;
+        // The card goes with the line it moved: the build turns the view to
+        // E1, where the plan's paint never runs to hide it.
+        const card = document.getElementById('room-pick');
+        if (card) card.hidden = true;
         window.ModelBuild.buildServed();
         // AND THE SAME SHOW A PREMADE PRESS GETS: the bones grow, then E1.
         presentBuild();
