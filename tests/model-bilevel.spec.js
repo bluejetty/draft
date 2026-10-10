@@ -310,6 +310,24 @@ test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight 
       expect(w.topHeight).toBeCloseTo(109.125 / 12, 3);
     });
 
+    // THE MAIN ROOF STOPS AT THE ROOM AND THE STAIR STRIP, with nothing
+    // draining into them (Movie, 10 Oct: "just take out the part sloping to
+    // the house"). It is cut round the room roof's wall line, and the four
+    // edges it shares with that line are flush gables.
+    const main = d.roofs.find(r => r.sourceLevelId == null && !r.garage);
+    expect(main.points.map(p => [p.x, p.z])).toEqual([[-18, -22], [18, -22], [18, 19], [2, 19],
+      [2, bottomZ], [-4, bottomZ], [-4, 22], [-18, 22]]);
+    expect(main.edges).toEqual(['eave', 'eave', 'gable', 'gable', 'gable', 'gable', 'eave', 'eave']);
+    expect(main.edgeOverhang).toEqual([2, 2, 0, 0, 0, 0, 2, 2]);
+    // Its ridge runs on to the strip's end wall, and the one hip on the
+    // street side of the strip lands on the strip's wall.
+    const lines = await page.evaluate(roof => window.DraftGeometry2D.roofSkeleton(roof)
+      .map(a => [a.a, a.b].map(p => [+p.x.toFixed(2), +p.z.toFixed(2)]).sort((p, q) => p[0] - q[0] || p[1] - q[1])),
+    main);
+    expect(lines).toContainEqual([[0, -4], [0, bottomZ]]);
+    expect(lines.some(([p, q]) => p[0] === -18 && p[1] === 22 && q[0] === -4), 'the street-side hip lands on the strip').toBe(true);
+    expect(lines.length, 'two back hips, the ridge, one street hip').toBe(4);
+
     // And the garage's walls reach the room's floor.
     d.walls.filter(w => w.body === 'garage' && (w.view || 'plan') === 'plan')
       .forEach(w => expect(w.topHeight).toBeCloseTo(9.8646, 3));

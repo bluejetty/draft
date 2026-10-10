@@ -505,6 +505,250 @@ if (!window.DraftGeometry2D) {
     return (polygonArea(first) >= polygonArea(points)) === (distance > 0) ? first : offsetWith(-1);
   };
 
+  const solveNotchedGableRoof = (roof) => {
+    const EPS = 1e-6;
+    const pts = roof.points.map(p => ({ x: p.x, z: p.z }));
+    const n = pts.length;
+    const kinds = pts.map((_, i) => (roof.edges?.[i] === 'gable' ? 'gable' : 'eave'));
+    const area = pts.reduce((s, p, i) => { const q = pts[(i + 1) % n]; return s + p.x * q.z - q.x * p.z; }, 0);
+    const sign = area > 0 ? 1 : -1;
+    const edges = pts.map((a, i) => {
+      const b = pts[(i + 1) % n];
+      const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
+      return { a, b, kind: kinds[i], len, nx: sign * -dz / (len || 1), nz: sign * dx / (len || 1) };
+    }).filter(e => e.len > EPS);
+    if (!edges.every(e => Math.abs(e.a.x - e.b.x) < EPS || Math.abs(e.a.z - e.b.z) < EPS)) return null;
+    const inside = p => {
+      let hit = false;
+      for (let i = 0, j = n - 1; i < n; j = i++) {
+        const a = pts[i], b = pts[j];
+        if ((a.z > p.z) !== (b.z > p.z) && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
+      }
+      return hit;
+    };
+    // A box lies inside the footprint: its centre is in, and no footprint edge
+    // runs through its open interior.
+    const boxInside = (x0, x1, z0, z1) => {
+      if (!inside({ x: (x0 + x1) / 2, z: (z0 + z1) / 2 })) {
+        // A zero-width box is a segment; nudge the test point off any edge it lies on.
+        return false;
+      }
+      return !edges.some(e => {
+        const ex0 = Math.min(e.a.x, e.b.x), ex1 = Math.max(e.a.x, e.b.x);
+        const ez0 = Math.min(e.a.z, e.b.z), ez1 = Math.max(e.a.z, e.b.z);
+        if (ex1 - ex0 < EPS) return ex0 > x0 + EPS && ex0 < x1 - EPS && ez1 > z0 + EPS && ez0 < z1 - EPS;
+        return ez0 > z0 + EPS && ez0 < z1 - EPS && ex1 > x0 + EPS && ex0 < x1 - EPS;
+      });
+    };
+    // Eave planes: collinear eave edges facing the same way are one plane.
+    const planes = [];
+    edges.filter(e => e.kind === 'eave').forEach(e => {
+      const alongX = Math.abs(e.a.z - e.b.z) < EPS;
+      const c = alongX ? e.a.z : e.a.x;
+      const lo = alongX ? Math.min(e.a.x, e.b.x) : Math.min(e.a.z, e.b.z);
+      const hi = alongX ? Math.max(e.a.x, e.b.x) : Math.max(e.a.z, e.b.z);
+      let plane = planes.find(p => p.alongX === alongX && Math.abs(p.c - c) < EPS
+        && Math.sign(alongX ? p.nz : p.nx) === Math.sign(alongX ? e.nz : e.nx));
+      if (!plane) planes.push(plane = { alongX, c, nx: e.nx, nz: e.nz, segs: [] });
+      plane.segs.push([lo, hi]);
+    });
+    if (!planes.length) return null;
+    const planeDist = (plane, p) => {
+      const perp = plane.alongX ? (p.z - plane.c) * plane.nz : (p.x - plane.c) * plane.nx;
+      if (perp < -EPS) return Infinity;
+      const s = plane.alongX ? p.x : p.z;
+      let best = Infinity;
+      plane.segs.forEach(([lo, hi]) => {
+        const q = Math.min(hi, Math.max(lo, s));
+        const d = Math.max(perp, Math.abs(s - q));
+        if (d >= best) return;
+        const qx = plane.alongX ? q : plane.c, qz = plane.alongX ? plane.c : q;
+        const x0 = Math.min(p.x, qx), x1 = Math.max(p.x, qx), z0 = Math.min(p.z, qz), z1 = Math.max(p.z, qz);
+        // Pad a flat box so its centre is off the eave line it touches.
+        const pad = 1e-4;
+        const ok = boxInside(x0 - (x1 - x0 < pad ? pad : 0), x1 + (x1 - x0 < pad ? pad : 0),
+          z0 - (z1 - z0 < pad ? pad : 0), z1 + (z1 - z0 < pad ? pad : 0))
+          || boxInside(x0, Math.max(x1, x0 + pad), z0, Math.max(z1, z0 + pad));
+        if (ok) best = d;
+      });
+      return best;
+    };
+    const height = p => {
+      let best = Infinity, owner = -1;
+      planes.forEach((plane, i) => {
+        const d = planeDist(plane, p);
+        if (d < best - 1e-9) { best = d; owner = i; }
+      });
+      return { h: best, owner };
+    };
+    // A point on an arc or the footprint: the height just inside, nearest wins.
+    const tAt = p => {
+      let best = Infinity;
+      [[1, 1], [1, -1], [-1, 1], [-1, -1], [1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([u, v]) => {
+        const s = { x: p.x + u * 2e-4, z: p.z + v * 2e-4 };
+        if (!inside(s)) return;
+        const h = height(s).h;
+        if (h < best) best = h;
+      });
+      return Number.isFinite(best) ? Math.round(best * 1e3) / 1e3 : 0;
+    };
+    // Candidate lines.
+    const uniq = vs => [...new Set(vs.map(v => Math.round(v * 1e6) / 1e6))].sort((a, b) => a - b);
+    const xs = uniq(pts.map(p => p.x)), zs = uniq(pts.map(p => p.z));
+    const mids = vs => vs.flatMap((a, i) => vs.slice(i + 1).map(b => (a + b) / 2));
+    const X = uniq([...xs, ...mids(xs)]), Z = uniq([...zs, ...mids(zs)]);
+    const DP = uniq(xs.flatMap(x => zs.map(z => x + z)));
+    const DM = uniq(xs.flatMap(x => zs.map(z => x - z)));
+    const splitBy = (poly, f) => {
+      // f(p) > 0 one side. Returns [neg, pos] pieces.
+      const out = [[], []];
+      poly.forEach((p, i) => {
+        const q = poly[(i + 1) % poly.length];
+        const fp = f(p), fq = f(q);
+        if (fp <= EPS) out[0].push(p);
+        if (fp >= -EPS) out[1].push(p);
+        if ((fp < -EPS && fq > EPS) || (fp > EPS && fq < -EPS)) {
+          const t = fp / (fp - fq);
+          const m = { x: p.x + (q.x - p.x) * t, z: p.z + (q.z - p.z) * t };
+          out[0].push(m); out[1].push(m);
+        }
+      });
+      return out.filter(pc => pc.length >= 3);
+    };
+    const segsOut = [];
+    for (let i = 0; i < X.length - 1; i++) {
+      for (let j = 0; j < Z.length - 1; j++) {
+        const x0 = X[i], x1 = X[i + 1], z0 = Z[j], z1 = Z[j + 1];
+        if (!inside({ x: (x0 + x1) / 2, z: (z0 + z1) / 2 })) continue;
+        let pieces = [[{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }]];
+        DP.forEach(c => {
+          if (c <= x0 + z0 + EPS || c >= x1 + z1 - EPS) return;
+          pieces = pieces.flatMap(pc => splitBy(pc, p => p.x + p.z - c));
+        });
+        DM.forEach(c => {
+          if (c <= x0 - z1 + EPS || c >= x1 - z0 - EPS) return;
+          pieces = pieces.flatMap(pc => splitBy(pc, p => p.x - p.z - c));
+        });
+        pieces.forEach(pc => pc.forEach((p, k) => {
+          const q = pc[(k + 1) % pc.length];
+          const len = Math.hypot(q.x - p.x, q.z - p.z);
+          if (len < 1e-5) return;
+          const m = { x: (p.x + q.x) / 2, z: (p.z + q.z) / 2 };
+          const ox = -(q.z - p.z) / len * 1e-3, oz = (q.x - p.x) / len * 1e-3;
+          const s1 = { x: m.x + ox, z: m.z + oz }, s2 = { x: m.x - ox, z: m.z - oz };
+          if (!inside(s1) || !inside(s2)) return;
+          const o1 = height(s1).owner, o2 = height(s2).owner;
+          if (o1 !== o2) segsOut.push([p, q]);
+        }));
+      }
+    }
+    // Merge collinear touching pieces by line.
+    const lineKey = ([p, q]) => {
+      const dx = q.x - p.x, dz = q.z - p.z;
+      if (Math.abs(dz) < EPS) return `z${(p.z).toFixed(4)}`;
+      if (Math.abs(dx) < EPS) return `x${(p.x).toFixed(4)}`;
+      return dx * dz > 0 ? `m${(p.x - p.z).toFixed(4)}` : `p${(p.x + p.z).toFixed(4)}`;
+    };
+    const groups = new Map();
+    segsOut.forEach(s => {
+      const k = lineKey(s);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(s);
+    });
+    const merged = [];
+    groups.forEach((list, k) => {
+      const param = p => (k[0] === 'z' ? p.x : p.z);
+      const ivs = list.map(([p, q]) => (param(p) <= param(q) ? [p, q] : [q, p]))
+        .sort((a, b) => param(a[0]) - param(b[0]));
+      let cur = null;
+      ivs.forEach(([p, q]) => {
+        if (cur && param(p) <= param(cur[1]) + 1e-4) { if (param(q) > param(cur[1])) cur[1] = q; return; }
+        if (cur) merged.push(cur);
+        cur = [p, q];
+      });
+      if (cur) merged.push(cur);
+    });
+    // Split at every other arc's end and every footprint corner lying inside.
+    const ends = merged.flatMap(s => s).concat(pts);
+    const arcs = [];
+    merged.forEach(([p, q]) => {
+      const dx = q.x - p.x, dz = q.z - p.z, len2 = dx * dx + dz * dz;
+      const ts = [0, 1];
+      ends.forEach(e => {
+        const t = ((e.x - p.x) * dx + (e.z - p.z) * dz) / len2;
+        if (t <= 1e-6 || t >= 1 - 1e-6) return;
+        if (Math.hypot(p.x + dx * t - e.x, p.z + dz * t - e.z) < 1e-4) ts.push(t);
+      });
+      ts.sort((a, b) => a - b);
+      for (let i = 0; i < ts.length - 1; i++) {
+        if (ts[i + 1] - ts[i] < 1e-9) continue;
+        const a = { x: p.x + dx * ts[i], z: p.z + dz * ts[i] };
+        const b = { x: p.x + dx * ts[i + 1], z: p.z + dz * ts[i + 1] };
+        const snap = v => Math.round(v * 1e6) / 1e6;
+        a.x = snap(a.x); a.z = snap(a.z); b.x = snap(b.x); b.z = snap(b.z);
+        arcs.push({ a, b, ta: tAt(a), tb: tAt(b) });
+      }
+    });
+    return arcs;
+  };
+
+  // ── A SQUARE-CORNERED ROOF NOTCHED ROUND A TALLER BODY ─────────────────
+  //
+  // Movie, 10 Oct, on the MOD BILEVEL: the main roof sloped down into the
+  // room over the garage and the walls round the stair strip -- "see how the
+  // house roof slopes and creates a spot along the back of the 2nd floor
+  // where rainwater and snow will build up" -- and his sketch: "just take out
+  // the part sloping to the house". So the roof is notched round the taller
+  // body, and every edge it shares with that body is a GABLE: nothing drains
+  // into the wall.
+  //
+  // THE WAVEFRONT BELOW GETS THIS SHAPE WRONG. Fronts that run head-on into a
+  // gable edge, and inside corners between two gables, tie its events, and
+  // on his roof the ridge bent off along the strip's south wall. So this
+  // shape is solved directly: a point's height is its distance to the
+  // nearest eave line it can reach -- measured square, so two eaves meet at
+  // 45 degrees -- where "reach" means the box between the point and its foot
+  // on the eave lies inside the roof. Gable edges are walls: they bound the
+  // roof and drain nothing. Every ridge, hip and valley is where two eaves
+  // tie, and those lines can only lie on a vertex's x or z, a midpoint of
+  // two, or a 45-degree line through a vertex -- so the footprint is cut on
+  // those lines and each piece asks which eave it belongs to.
+  //
+  // ONLY THE SHAPES IT IS EXACT FOR: square-cornered, with at least one
+  // inside corner, and every inside corner between two gables. An inside
+  // corner with an eave on it is a valley, which the wavefront solves and
+  // this does not (the square distance runs a valley along an axis instead
+  // of at 45 degrees). Null for everything else.
+  const NOTCHED_ROOF_CACHE = new Map();
+  const notchedGableRoof = (roof) => {
+    const pts = roof.points || [];
+    const n = pts.length;
+    if (n < 4) return null;
+    const kinds = pts.map((_, i) => (roof.edges?.[i] === 'gable' ? 'gable' : 'eave'));
+    if (!kinds.includes('gable') || !kinds.includes('eave')) return null;
+    if (!pts.every((p, i) => {
+      const q = pts[(i + 1) % n];
+      return Math.abs(p.x - q.x) < 1e-6 || Math.abs(p.z - q.z) < 1e-6;
+    })) return null;
+    const area = pts.reduce((s, p, i) => { const q = pts[(i + 1) % n]; return s + p.x * q.z - q.x * p.z; }, 0);
+    let reflex = 0;
+    for (let i = 0; i < n; i++) {
+      const a = pts[(i + n - 1) % n], b = pts[i], c = pts[(i + 1) % n];
+      const cross = (b.x - a.x) * (c.z - b.z) - (b.z - a.z) * (c.x - b.x);
+      if (Math.abs(cross) < 1e-9 || Math.sign(cross) === Math.sign(area)) continue;
+      reflex += 1;
+      if (kinds[(i + n - 1) % n] !== 'gable' || kinds[i] !== 'gable') return null;
+    }
+    if (!reflex) return null;
+    const key = JSON.stringify([pts.map(p => [p.x, p.z]), kinds]);
+    if (NOTCHED_ROOF_CACHE.has(key)) return NOTCHED_ROOF_CACHE.get(key).map(a => ({ ...a }));
+    const arcs = solveNotchedGableRoof(roof);
+    if (!arcs) return null;
+    if (NOTCHED_ROOF_CACHE.size > 64) NOTCHED_ROOF_CACHE.delete(NOTCHED_ROOF_CACHE.keys().next().value);
+    NOTCHED_ROOF_CACHE.set(key, arcs);
+    return arcs.map(a => ({ ...a }));
+  };
+
   // Straight-skeleton wavefront for the tagged footprint: eave edges advance
   // inward at a uniform rate while gable edges stay put, and the paths the
   // corners trace as edges collapse become the hip / valley / ridge lines.
@@ -513,6 +757,8 @@ if (!window.DraftGeometry2D) {
   const roofSkeleton = (roof) => {
     const initialCount = roof.points.length;
     if (initialCount < 3) return [];
+    const notched = notchedGableRoof(roof);
+    if (notched) return notched;
     let pts = roof.points.map(pt => ({ x: pt.x, z: pt.z }));
     let kinds = pts.map((_, index) => (roof.edges[index] === 'gable' ? 'gable' : 'eave'));
     const signedArea = list => list.reduce((sum, pt, index) => {
