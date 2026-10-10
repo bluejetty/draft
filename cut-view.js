@@ -5911,7 +5911,29 @@ if (!window.DraftCutView) {
         return foot;
       };
       const floor = face.level.floorTop + (Number(face.wall.baseHeight) || 0);
-      const strip = tops.map(s => ({ u: s.u, top: s.top, foot: Math.min(s.top, footAt(s.u, floor)) }));
+      // AND NOT WHERE A NEARER WALL STANDS IN FRONT OF IT. Movie, 10 Oct, on
+      // E3 of a MOD BILEVEL: the strip's back wall, in line with the room's,
+      // was painted over the room's own front -- its end a foot along drawn
+      // as a corner, and the room's real corner wiped out above the main
+      // roof. A face nearer the viewer that spans this point, from at or
+      // below its foot to at or above its top, hides it there.
+      const topOf = (other, u) => {
+        const ts = other.tops;
+        for (let k = 1; k < ts.length; k++) {
+          const a = ts[k - 1], b = ts[k];
+          if (u < Math.min(a.u, b.u) - 1e-6 || u > Math.max(a.u, b.u) + 1e-6) continue;
+          return Math.abs(b.u - a.u) < 1e-9 ? Math.max(a.top, b.top) : a.top + (b.top - a.top) * (u - a.u) / (b.u - a.u);
+        }
+        return -Infinity;
+      };
+      const nearerCovers = (u, foot, top) => faceGeoms.some(other => other !== geom
+        && other.face.depth > face.depth + 0.05
+        && u >= other.loU - 1e-6 && u <= other.hiU + 1e-6
+        && other.floor <= foot + 1e-3 && topOf(other, u) >= top - 1e-3);
+      const strip = tops.map(s => {
+        const foot = Math.min(s.top, footAt(s.u, floor));
+        return { u: s.u, top: s.top, foot: nearerCovers(s.u, foot, s.top) ? s.top : foot };
+      });
       // One run per stretch where the wall clears the roof in front of it.
       const runs = [];
       let cur = null;
