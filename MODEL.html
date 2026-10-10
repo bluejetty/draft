@@ -1050,7 +1050,7 @@
     color: var(--ink-quiet); font-family: var(--font-ui); font-size:11px;
     font-weight:600; letter-spacing:0.04em; }
   .promote-row button:hover { border-color: var(--accent); color: var(--accent); }
-  [data-promote-go] { border-color: var(--accent); color: var(--accent); }
+  [data-promote-go], [data-room-pick-build] { border-color: var(--accent); color: var(--accent); }
   /* HOW FAR FORWARD THE ROOM OVER THE GARAGE COMES (Movie, 10 Oct). Not a
      dialog: the plan stays live behind it, so the bold line is seen moving
      as the feet are clicked. */
@@ -1481,7 +1481,7 @@
     <div class="promote-row">
       <button type="button" data-room-pick-less>&minus; 1 FT</button>
       <button type="button" data-room-pick-more>+ 1 FT</button>
-      <button type="button" data-room-pick-build data-promote-go>BUILD</button>
+      <button type="button" data-room-pick-build>BUILD</button>
     </div>
   </div>
 </div>
