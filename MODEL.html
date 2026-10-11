@@ -917,12 +917,19 @@
     border:1px solid var(--edge-panel); border-radius:4px; }
   .seat:hover { border-color: var(--accent); }
   .seat.active { border-color: var(--accent); box-shadow:0 0 0 1px var(--accent); }
-  /* AN EMPTY SEAT IS A CHAIR, NOT A BUTTON. The creation gesture that fills a
-     section seat on the old page is deferred (SPEC §3), so an empty seat must
-     not invite a press that does nothing. It is disabled rather than merely
-     unstyled: `cursor:default` tells a mouse and nothing else, while disabled
-     also takes it out of the tab order and off a screen reader's list of
-     things to press. */
+  /* A SEAT WITH NOTHING BEHIND IT IS A CHAIR, NOT A BUTTON: disabled rather
+     than merely unstyled, so it leaves the tab order and a screen reader's
+     list of things to press. An empty SECTION seat is the exception -- Movie,
+     11 Oct: "same +CUT as down here, but put it in the middle of the layout
+     preview" -- it is the + CUT press, its mark centred on the blank screen. */
+  .seat { position:relative; }
+  .seat-cut { position:absolute; left:0; right:0; top:0; height:54px;
+    display:flex; align-items:center; justify-content:center; pointer-events:none; }
+  .seat-cut[hidden] { display:none; }
+  .seat-cut span { font-family: var(--font-ui); font-size:9px; font-weight:700;
+    letter-spacing:0.06em; padding:2px 5px; border:1px solid var(--rule);
+    color: var(--ink-quiet); }
+  .seat:hover .seat-cut span { color: var(--ink); border-color: var(--accent); }
   .seat[disabled] { cursor:default; }
   .seat[disabled]:hover { border-color: var(--edge-panel); }
   .seat canvas { display:block; width:82px; height:54px; }
@@ -7859,12 +7866,11 @@
     return {
       cut,
       label: cut ? cutLabel(cut) : name,
-      // NOT the old page's "tap to cut a section into this screen". That seat
-      // offers a creation gesture this page has not got yet (SPEC §3), and a
-      // title promising a tap that does nothing is worse than a plain one.
+      // AN EMPTY SECTION SEAT IS + CUT (Movie, 11 Oct), the same press as
+      // + CUT in the SECTIONS head, so its title is that button's words.
       title: cut
         ? `${cut.name || name} — tap to bring this section center`
-        : `${name} — cut a section on the plan and it takes this seat`,
+        : `${name} — + CUT: press the two ends of the line, then the side you want to look from`,
     };
   };
 
@@ -7884,7 +7890,11 @@
         // level:view of its own. The rebuild key is separate, below.
         seatId: entry.name,
         active: Boolean(base.cut) && params.get('view') === CUT_VIEW + base.cut.id,
-        press: base.cut ? () => goToView(CUT_VIEW + base.cut.id) : null };
+        // An elevation seat is never empty for long (the house cuts it), so
+        // only a section seat offers + CUT when nothing sits in it.
+        addCut: !base.cut && entry.name[0] === 'S',
+        press: base.cut ? () => goToView(CUT_VIEW + base.cut.id)
+          : entry.name[0] === 'S' ? () => armCut() : null };
     }
     // A PLAN SEAT IS LIVE WHENEVER THE PAGE IS ON THAT LEVEL AND DRAWING.
     // Asked of activeLevelId/activeViewId rather than of the URL, because a
@@ -7934,6 +7944,15 @@
         // small enough that the rail still fits once the plan cards join it.
         screen.width = 164; screen.height = 108;
         seat.append(screen);
+        // + CUT over the blank screen of an empty section seat; the label
+        // stays lastChild, which the print caption reads.
+        const plus = document.createElement('div');
+        plus.className = 'seat-cut';
+        plus.hidden = true;
+        const word = document.createElement('span');
+        word.textContent = '+ CUT';
+        plus.append(word);
+        seat.append(plus);
         const label = document.createElement('div');
         label.className = 'seat-label';
         seat.append(label);
@@ -7948,6 +7967,8 @@
       // plan seat always has something behind it, because the chart only
       // seats levels the drawing actually holds.
       seat.disabled = !spec.press;
+      seat.querySelector('.seat-cut').hidden = !spec.addCut;
+      if (spec.addCut) seat.dataset.seatCut = ''; else delete seat.dataset.seatCut;
       seat.classList.toggle('active', spec.active);
       seat.onclick = spec.press;
     });
@@ -8278,7 +8299,7 @@
   // case -- a seat enabled but not yet painted, because the rail paints one
   // per frame -- so an empty rectangle never reaches the paper.
   const inkedSeats = () => [...rail.querySelectorAll('.seat')].filter(seat => {
-    if (seat.disabled) return false;
+    if (seat.disabled || 'seatCut' in seat.dataset) return false;
     const screen = seat.firstChild;
     if (!screen || !screen.width) return false;
     const { data } = screen.getContext('2d')

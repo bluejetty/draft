@@ -187,9 +187,10 @@ test('shut is shut; one press seats the whole chart, every seat reachable',
     expect(page.url()).toContain('view=cut%3AE1');
 
     // THE SEATS BELOW THE FOLD ARE REACHED, not just present.
-    // The last ENABLED seat: the section seats at the end are empty chairs
-    // until a cut exists, and a disabled button proves nothing about scroll.
-    const last = page.locator('.seat:not([disabled])').last();
+    // The last seat that GOES somewhere: the section seats at the end are
+    // + CUT until a cut exists (Movie, 11 Oct), and a press that arms a tool
+    // leaves the URL where it was, so it proves nothing about scroll.
+    const last = page.locator('.seat:not([disabled]):not([data-seat-cut])').last();
     await last.scrollIntoViewIfNeeded();
     await last.click();
     await page.waitForTimeout(200);
