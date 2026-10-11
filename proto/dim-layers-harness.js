@@ -363,15 +363,34 @@ function run() {
     && alongSegs.every(s => Math.abs(Math.abs(s.start.z - 33) - 1) < 0.01),
     [...new Set(alongSegs.map(s => s.start.z))].join(','));
 
-  // ACROSS: runs on z, locating the beam line between the two edges.
+  // NOTHING CROSSES THE FLOOR AT A POST (Movie, 11 Oct, the 14'-6" strings
+  // he struck out): the beam's own position rides the perimeter instead.
   const acrossSegs = cols.filter(s => Math.abs(s.start.x - s.end.x) < 0.01);
-  const acrossZ = uniqOf(acrossSegs.flatMap(s => [s.start.z, s.end.z]));
-  ok('the across string spans the other direction of the house',
-    acrossZ.length === 3 && Math.abs(acrossZ[0]) < 0.02
-    && Math.abs(acrossZ[1] - 33) < 0.02 && Math.abs(acrossZ[2] - 66) < 0.02,
-    acrossZ.join(','));
-  ok('one across string per beam, not one per post', acrossSegs.length === 2,
+  ok('no column string crosses the floor any more', acrossSegs.length === 0,
     `${acrossSegs.length} segments`);
+  // ONE ROW FOR A LINE LAID IN PIECES ("only need 1 mark for beams (if the
+  // beams are lined up)").
+  const pieces = colStrings({ beams: [
+    { id: 1, start: { x: 0.5, z: 33 }, end: { x: 12, z: 33 } },
+    { id: 2, start: { x: 12, z: 33 }, end: { x: 24, z: 33 } },
+    { id: 3, start: { x: 24, z: 33 }, end: { x: 35.5, z: 33 } }] });
+  ok('three pieces on one line string one row, not three',
+    uniqOf(pieces.map(s => s.start.z)).length === 1 && pieces.length === 3,
+    `${pieces.length} segments at z ${uniqOf(pieces.map(s => s.start.z)).join(',')}`);
+  // THE BEAM'S POSITION ON THE OUTSIDE, closest in, on the right side.
+  const withBeam = AD.computeAutoDimStrings({
+    walls: wallsAround(HOUSE), outlines: [{ points: HOUSE, garage: false }], roofs: [], openings: [],
+    offsetOutline: (pts, dist) => G.offsetOutline(pts, dist), firstOffset: 1.5,
+    jogMergeFt: AD.JOG_MERGE_FT, stringSpacingFt: AD.STRING_SPACING_FT, beams: [BEAM],
+  }) || [];
+  const beamRow = withBeam.filter(s => s.layer === AD.DIM_LAYERS.COLUMNS);
+  ok('the beam line is located on the outside of the plan, one row on the right',
+    beamRow.length === 2 && beamRow.every(s => s.start.x > 36 && Math.abs(s.start.x - s.end.x) < 0.01)
+    && uniqOf(beamRow.flatMap(s => [s.start.z, s.end.z])).join(',') === '0,33,66',
+    beamRow.map(s => `${s.start.x.toFixed(1)}:${s.start.z}-${s.end.z}`).join(' '));
+  const eastXs = uniqOf(withBeam.filter(s => s.start.x > 36).map(s => s.start.x));
+  ok('and it is the row closest to the building', eastXs.length > 1
+    && beamRow.every(s => Math.abs(s.start.x - eastXs[0]) < 1e-6), eastXs.join(','));
 
   // BOTH DIRECTIONS, because "it strings the posts" is half a claim.
   ok('no beams means no column strings', colStrings({ beams: [] }).length === 0);
@@ -387,18 +406,49 @@ function run() {
   // hole". Asserted by WHICH SIDE it lands on, in both directions.
   const holeAt = z0 => [{ points: [
     { x: 10, z: z0 }, { x: 20, z: z0 }, { x: 20, z: z0 + 8 }, { x: 10, z: z0 + 8 }] }];
-  const pushedUp = colStrings({ floorOpenings: holeAt(34) })
+  const colsOnly = list => list.filter(s => s.layer === AD.DIM_LAYERS.COLUMNS);
+  const pushedUp = colsOnly(colStrings({ floorOpenings: holeAt(34) }))
     .filter(s => Math.abs(s.start.z - s.end.z) < 0.01);
   ok('a hole on the far side of the beam puts the along string on the near side',
     pushedUp.length > 0 && pushedUp.every(s => s.start.z < 33),
     [...new Set(pushedUp.map(s => s.start.z))].join(','));
-  const pushedDown = colStrings({ floorOpenings: holeAt(25) })
+  // AND ITS LINE STANDS OFF THAT WAY TOO: the screen draws a string to its
+  // left-hand normal, so a row placed clear of the hole runs the way that
+  // keeps the drawn line clear of it (+x stands off to +z).
+  ok('the row placed clear of the hole is drawn standing away from the beam',
+    pushedUp.length > 0 && pushedUp.every(s => s.start.x > s.end.x),
+    pushedUp.map(s => `${s.start.x}>${s.end.x}`).join(' '));
+  const pushedDown = colsOnly(colStrings({ floorOpenings: holeAt(25) }))
     .filter(s => Math.abs(s.start.z - s.end.z) < 0.01);
   // This one is the case the first margin got wrong: a hole whose edge IS the
   // beam line. Both sides looked blocked and the beam got no string at all.
   ok('a hole running up to the beam puts the string on its other side',
     pushedDown.length > 0 && pushedDown.every(s => s.start.z > 33),
     [...new Set(pushedDown.map(s => s.start.z))].join(','));
+
+  // THE STAIR OPENING, BOTH WAYS (Movie, 11 Oct): ext wall to opening,
+  // opening, opening to the far ext wall, about a foot off the opening and
+  // on the side away from a beam beside it.
+  {
+    const hole = holeAt(34);
+    const opening = colStrings({ floorOpenings: hole }).filter(s => s.layer === AD.DIM_LAYERS.INTERIOR);
+    const xRun = opening.filter(s => Math.abs(s.start.z - s.end.z) < 0.01);
+    const zRun = opening.filter(s => Math.abs(s.start.x - s.end.x) < 0.01);
+    ok('the opening is strung across: wall, opening, opening, wall',
+      uniqOf(xRun.flatMap(s => [s.start.x, s.end.x])).join(',') === '0,10,20,36',
+      uniqOf(xRun.flatMap(s => [s.start.x, s.end.x])).join(','));
+    ok('a foot and a quarter off the opening, on the side away from the beam',
+      xRun.length && xRun.every(s => Math.abs(s.start.z - 43.25) < 1e-6),
+      uniqOf(xRun.map(s => s.start.z)).join(','));
+    ok('and along: wall, opening, opening, wall',
+      uniqOf(zRun.flatMap(s => [s.start.z, s.end.z])).join(',') === '0,34,42,66'
+      && zRun.every(s => Math.abs(s.start.x - 8.75) < 1e-6),
+      zRun.map(s => `${s.start.x}:${s.start.z}-${s.end.z}`).join(' '));
+    const noBeam = AD.computeColumnDimStrings({ beams: [], columns: [],
+      outlines: [{ points: HOUSE, garage: false }], walls: wallsAround(HOUSE), floorOpenings: hole });
+    ok('an opening on a floor with no beams is still dimensioned (the 2ND FLOOR)',
+      noBeam.length === 6, `${noBeam.length} segments`);
+  }
 
   // ── THE FORMAT KEEPS IT ───────────────────────────────────────────────────
   // The link that would otherwise lose everything above on the next save.
@@ -682,24 +732,39 @@ const MUTATIONS = [
       'if (!thicknessFt || !faceOffsets) return [];', '')],
   ['the along string measures from the beam ends, not the house edge',
     'auto-dims.js', c => c.replace(
-      'emit(along, [edge[along][0], ...inner, edge[along][1]], fixed + side * clearFt);',
-      'emit(along, [runLo, ...inner, runHi], fixed + side * clearFt);')],
+      'emit(along, [edge[along][0], ...inner, edge[along][1]], fixed + side * clearFt,',
+      'emit(along, [runLo, ...inner, runHi], fixed + side * clearFt,')],
   ['the column strings sit on the beam instead of clear of it',
     'auto-dims.js', c => c.replace(
       'clearFt = COLUMN_CLEAR_FT,', 'clearFt = 0,')],
-  ['the across string is never emitted',
+  // RE-AIMED (11 Oct): the across string is gone; the beam line rides the
+  // perimeter stack now, and these are the rules that replaced it.
+  ['the beam line is not located on the outside of the plan',
     'auto-dims.js', c => c.replace(
-      'if (fixed > edge[across][0] + 0.01 && fixed < edge[across][1] - 0.01) {',
-      'if (false) {')],
+      "strings.push({ coords: uniqSorted([lo, ...beamCoords, hi]), layer: DIM_LAYERS.COLUMNS });", '')],
+  ['beam pieces on one line string a row each again',
+    'auto-dims.js', c => c.replace(
+      'if (line) { line.lo = Math.min(line.lo, lo); line.hi = Math.max(line.hi, hi); }\n      else lines.push',
+      'lines.push')],
+  ['the opening string ignores the beam beside it',
+    'auto-dims.js', c => c.replace(
+      'const order = beamNear(0) && !beamNear(1) ? [1, 0] : [0, 1];', 'const order = [0, 1];')],
+  ['an opening on a floor with no posts goes undimensioned',
+    'auto-dims.js', c => c.replace(
+      'const columnList = Array.isArray(columns) ? columns : [];',
+      'const columnList = Array.isArray(columns) ? columns : [];\n    if (!columnList.length) return [];')],
   ['a post off the beam line joins the beam anyway',
     'auto-dims.js', c => c.replace(
       'if (Math.abs(point[across] - fixed) > ON_BEAM_FT) return false;', '')],
   ['the stair hole stops being looked for',
     'auto-dims.js', c => c.replace(
       'const side = clearSide(1) ? 1 : clearSide(-1) ? -1 : 0;', 'const side = 1;')],
+  ['an interior string stands off across the beam again',
+    'auto-dims.js', c => c.replace(
+      "const flip = runAxis === 'x' ? away < 0 : away > 0;", 'const flip = false;')],
   ['a column segment loses its layer',
     'auto-dims.js', c => c.replace(
-      'layer: DIM_LAYERS.COLUMNS,', 'layer: null,')],
+      'DIM_LAYERS.COLUMNS, side);', 'null, side);')],
   ['the format drops the layer again',
     'drawing-format.js', c => c.replace(
       'const layer = oneOf(dimension?.layer, DIMENSION_LAYERS, null);',
