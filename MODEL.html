@@ -15481,7 +15481,7 @@
 
   // NULL when there is no third flight or landing to cover, and the roof is
   // the design's own loop.
-  const stairHood = (plan, levelId) => {
+  const stairHood = (plan, levelId, deckWalls = []) => {
     const SG = window.DraftStairGeometry;
     const run = plan.stairs?.upper, landing = plan.upperLanding;
     if (!SG || !run || !landing || levelId == null) return null;
@@ -15537,8 +15537,42 @@
     // CENTERLINE ? should be EXT line so it lines up". The runs keep the
     // roof's winding, so the roof's interior side is each wall's inside.
     const refLine = window.DraftBuildHouse.outlineInteriorRef(roof);
-    const walls = runs.map(([a, b]) => commitWall(a, b, {
-      bone: false, levelId, view: 'plan', refLine, baseHeight, topHeight,
+    // ── OVER THE ENTRY'S FRONT IT STANDS ON THE DECK, NOT UNDER THE ROOF ──
+    //
+    // Movie, 10 Oct, on E1: "these walls line up, can we make the 'blend' so
+    // this line doesn't show". Under the upper landing the entry's walls stop
+    // at the landing's deck (the build above), which is this storey's floor
+    // -- there is no main roof between them and the hood. So the stretch of
+    // a hood wall standing on one of them starts on the floor, and the face
+    // runs straight up from the entry's wall instead of leaving the gap from
+    // the deck to MAIN's ceiling that the elevation drew as a box.
+    const lowered = deckWalls.map(wall => [wall.start, wall.end]);
+    const pieces = [];
+    runs.forEach(([a, b]) => {
+      const axis = along(a, b), other = axis === 'x' ? 'z' : 'x';
+      // Measured from a toward b, so a run keeps the roof's winding.
+      const sgn = b[axis] >= a[axis] ? 1 : -1;
+      const t = v => (v - a[axis]) * sgn, len = t(b[axis]);
+      const on = lowered
+        .filter(([p, q]) => along(p, q) === axis && Math.abs(p[other] - a[other]) < 1e-6
+          && Math.abs(q[other] - a[other]) < 1e-6)
+        .map(([p, q]) => [Math.max(0, Math.min(t(p[axis]), t(q[axis]))), Math.min(len, Math.max(t(p[axis]), t(q[axis])))])
+        .filter(([c0, c1]) => c1 - c0 > 0.01)
+        .sort((m, n) => m[0] - n[0]);
+      const at = k => {
+        const v = a[axis] + k * sgn;
+        return axis === 'x' ? { x: v, z: a.z } : { x: a.x, z: v };
+      };
+      let from = 0;
+      on.forEach(([c0, c1]) => {
+        if (c0 - from > 0.01) pieces.push({ a: at(from), b: at(c0), base: baseHeight });
+        pieces.push({ a: at(Math.max(from, c0)), b: at(c1), base: 0 });
+        from = Math.max(from, c1);
+      });
+      if (len - from > 0.01) pieces.push({ a: at(from), b: at(len), base: baseHeight });
+    });
+    const walls = pieces.map(piece => commitWall(piece.a, piece.b, {
+      bone: false, levelId, view: 'plan', refLine, baseHeight: piece.base, topHeight,
     }));
     return { roof, walls };
   };
@@ -15868,6 +15902,8 @@
     // PROJECT's defaults.
     let entryBody = null;
     let entryLevelId = null;
+    // The entry's walls that stop at the upper landing's deck (stairHood).
+    let entryDeckWalls = [];
     if (plan.entry && levelPresent(ENTRY_LEVEL_ID)) {
       const LA = window.DraftLevelAssembly;
       entryLevelId = ENTRY_LEVEL_ID;
@@ -15883,9 +15919,9 @@
       if (plan.upperLanding) {
         const xs = plan.upperLanding.map(pt => pt.x);
         const lo = Math.min(...xs) - 0.01, hi = Math.max(...xs) + 0.01;
-        entryBody.walls
-          .filter(wall => [wall.start, wall.end].every(pt => pt.x >= lo && pt.x <= hi))
-          .forEach(wall => { wall.topHeight = split.upperDeckAboveEntryFt; });
+        entryDeckWalls = entryBody.walls
+          .filter(wall => [wall.start, wall.end].every(pt => pt.x >= lo && pt.x <= hi));
+        entryDeckWalls.forEach(wall => { wall.topHeight = split.upperDeckAboveEntryFt; });
       }
       // ── AND THE WOOD FILL ALL ROUND ──────────────────────────────────
       //
@@ -16191,7 +16227,7 @@
       // garageRoof branch above avoids. A design that one day wants the room
       // roofed separately says so by handing a loop, and nothing here moves.
       if (overGarageBody && plan.overGarageRoof) {
-        const hood = stairHood(plan, overGarageLevelId);
+        const hood = stairHood(plan, overGarageLevelId, entryDeckWalls);
         // A BILEVEL'S ROOM STANDS HALF A STOREY OVER MAIN, so nothing of the
         // house rises past its roof: every edge is an eave and every corner
         // hips up to the ridge at 45 (Movie, 6 Oct, on the traced MOD

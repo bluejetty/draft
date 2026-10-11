@@ -299,6 +299,35 @@ test('the MOD BILEVEL room card lines the room up with the balcony and moves it 
   expect(d.roofs.filter(r => r.garage).length, 'a lower roof over the 8 ft left open').toBe(1);
 });
 
+// THE STAIR HOOD'S FRONT STANDS ON THE ENTRY'S (Movie, 10 Oct: "these walls
+// line up, can we make the 'blend' so this line doesn't show"). His layout:
+// the garage against the house's side, the entry and its landing at the
+// house's corner, so the hood's front is in line with the entry's. Under the
+// landing the entry stops at the deck, so that stretch of the hood starts
+// on OVER GARAGE's floor; the rest still hangs from MAIN's ceiling.
+test('a traced MOD BILEVEL hangs the hood from the deck over the entry\'s front', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await open(page);
+  await drawType(page, 'bilevel', 'modifiedBilevel');
+  const box = await page.locator('#plan').boundingBox();
+  for (let i = 0; i < 4; i++) {
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, 300);
+    await page.waitForTimeout(80);
+  }
+  await trace(page, [[12, 0], [12, -13], [20, -13], [20, -42], [-2, -42], [-2, 0]]);
+  await trace(page, [[-2, -13], [-21, -13], [-21, 24], [-2, 24]]);
+  const d = await boneBuild(page);
+  const entryFront = d.walls.filter(w => Number(w.levelId) === 2 && Math.abs(w.start.z) < 0.01
+    && Math.abs(w.end.z) < 0.01 && w.topHeight > 5 && w.topHeight < 11);
+  expect(entryFront.length, 'the entry\'s front under the landing stops at the deck').toBe(1);
+  const hood = d.walls.filter(w => w.hoodOf);
+  const front = hood.filter(w => Math.abs(w.start.z) < 0.01 && Math.abs(w.end.z) < 0.01);
+  expect(front.length, 'one hood wall on that line').toBe(1);
+  expect(front[0].baseHeight, 'standing on the deck').toBe(0);
+  expect(hood.filter(w => w !== front[0]).every(w => w.baseHeight > 2), 'the rest hang from MAIN\'s ceiling').toBe(true);
+});
+
 test('the MOD BILEVEL room moved short of the front keeps a lower roof over the open garage', async ({ page }) => {
   await open(page);
   await drawType(page, 'bilevel', 'modifiedBilevel');
