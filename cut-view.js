@@ -4928,6 +4928,25 @@ if (!window.DraftCutView) {
       ctx.lineTo(xb, yFoot);
       ctx.strokeStyle = C.face; ctx.lineWidth = 1;
       ctx.stroke();
+      // AND ALONG THE FOOT WHERE A WALL IN THIS PLANE CARRIES ON BELOW IT.
+      // Movie, 10 Oct, on E1 of a traced MOD BILEVEL: "these walls line up,
+      // can we make the 'blend' so this line doesn't show" -- the stair
+      // hood's front standing on the entry's front, one face, with a level
+      // datum peeping through the half pixel where the two fills meet. Only
+      // there: a foot with nothing of its own plane under it is a sill.
+      const near = (a, b) => Math.abs(a - b) < 0.05;
+      faceGeoms.forEach(g => {
+        if (g === geom || !near(g.face.depth, face.depth) || !(g.floor < floor - 0.01)
+          || g.face.level.wallTop < floor - 0.02) return;
+        const a = Math.max(loU, g.loU), b = Math.min(hiU, g.hiU);
+        if (b - a < 0.01) return;
+        // Wider than the ink, so the lower wall's own top edge goes under too.
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(X(a), yFoot);
+        ctx.lineTo(X(b), yFoot);
+        ctx.stroke();
+      });
       ctx.restore();
       // THE FACE'S OWN OUTLINE STAYS THE CURRENT PATH, for the finish clip
       // below, which reads it.
@@ -5010,10 +5029,18 @@ if (!window.DraftCutView) {
       };
       const endL = topL - footL > 0.01 ? carriesOn(loU, -1, footL, topL) : [];
       const endR = topR - footR > 0.01 ? carriesOn(hiU, 1, footR, topR) : [];
+      // NOR A TOP WHERE A WALL OF THIS PLANE STANDS ON IT: the hood's front
+      // on the entry's (the foot note above). Equal depths paint in either
+      // order, so the top that would show is left out, not covered over.
+      const standsOn = (a, b) => faceGeoms.some(g => g !== geom
+        && Math.abs(g.face.depth - face.depth) < 0.05
+        && Math.abs(g.floor - a.top) < 0.02 && Math.abs(g.floor - b.top) < 0.02
+        && g.loU <= Math.min(a.u, b.u) + 1e-6 && g.hiU >= Math.max(a.u, b.u) - 1e-6);
       ctx.beginPath();
       endL.forEach(([lo, hi]) => { ctx.moveTo(xa, Y(lo)); ctx.lineTo(xa, Y(hi)); });
       ctx.moveTo(X(tops[0].u), Y(tops[0].top));
-      tops.slice(1).forEach(s => ctx.lineTo(X(s.u), Y(s.top)));
+      tops.slice(1).forEach((s, i) => (standsOn(tops[i], s)
+        ? ctx.moveTo(X(s.u), Y(s.top)) : ctx.lineTo(X(s.u), Y(s.top))));
       endR.forEach(([lo, hi]) => { ctx.moveTo(xb, Y(hi)); ctx.lineTo(xb, Y(lo)); });
       // ── AND NO WALL FACE LINES ITS OWN BASE ──────────────────────────
       //

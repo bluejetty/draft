@@ -2465,6 +2465,28 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
     `${corner.length} corner strokes, wiped by fills ${wiped.map(f => f.seq).join(',')}`);
 }
 
+// ── E1 OF A TRACED MOD BILEVEL: THE HOOD'S FRONT ON THE ENTRY'S ──────────
+//
+// Movie, 10 Oct: "these walls line up, can we make the 'blend' so this line
+// doesn't show". Under the upper landing the entry's front stops at the deck
+// (e 6.25); the stair hood's front stands on it in the same plane (z 0, u -1
+// to 4). It hung from MAIN's ceiling (e 9.09), leaving a box: the entry's top
+// line across it and the next wall's end up its side. Built from his layout.
+{
+  const hFile = path.join(ROOT, 'proto', 'repro-modbilevel-hood-front.draft');
+  const hSaved = JSON.parse(fs.readFileSync(hFile, 'utf8'));
+  const hEnv = buildEnv(win, hSaved.drawing || hSaved);
+  const e1 = paintElevation(win, hEnv, standardElevationCuts(hEnv).find(c => c.id === 'E1'));
+  const inked = e1.strokes.filter(s => /^#1d1f20/i.test(String(s.ink)) && s.w >= 1.2);
+  const seg = (test) => inked.some(s => s.pts.some((b, i) => i > 0 && !b.move && test(s.pts[i - 1], b)));
+  check('E1 traced MOD BILEVEL: no line along the entry-s top under the hood',
+    !seg((a, b) => Math.abs(a.e - 6.25) < 0.05 && Math.abs(b.e - 6.25) < 0.05
+      && Math.max(a.u, b.u) > -0.9 && Math.min(a.u, b.u) < 3.9));
+  check('E1 traced MOD BILEVEL: no corner up the side of the old box',
+    !seg((a, b) => Math.abs(a.u - 4) < 0.05 && Math.abs(b.u - 4) < 0.05
+      && Math.min(a.e, b.e) < 8.5 && Math.max(a.e, b.e) > 6.5));
+}
+
 console.log(`elevation harness: ${passed} checks passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach(line => console.log(`  \u2718 ${line}`));
