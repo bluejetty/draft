@@ -2346,6 +2346,14 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
   // walls close: the outline alone missed walls a storey grew past it (the
   // over-garage room reaching over the entry). A wall is EXTERIOR where one
   // of its faces looks out of that footprint.
+  //
+  // THE STAIR HOOD COUNTS (Movie, 10 Oct, the three walls round the box the
+  // stair pushes out over the entry: "the walls for the balcony area should
+  // over-ride the walls below to show them"). roofBearing leaves `hoodOf`
+  // walls out -- the roof does not bear on them -- but on the plan they are
+  // the storey's outside face there, so they close a room with the storey's
+  // own walls, draw as tops, and hide the MAIN and ENTRY walls they stand
+  // over. The room's wall between the two goes interior and drops out.
   const roofPlanWalls = ({ walls = [], outlines = [], floors = [], levels = [] } = {}) => {
     const onEdge = (pts, p) => pts.some((a, i) =>
       pointToSegment(p, { start: a, end: pts[(i + 1) % pts.length] }).d < 0.05);
@@ -2360,7 +2368,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     };
     const storeys = (levels || []).map(l => Number(l && l.id))
       .filter(id => Number.isFinite(id) && !ROOF_PLAN_SKIP_LEVELS.has(id));
-    const ownWalls = id => walls.filter(w => Number(w.levelId) === id && !w.hoodOf
+    const ownWalls = id => walls.filter(w => Number(w.levelId) === id
       && (w.view || 'plan') === 'plan' && w.start && w.end);
     const footprint = id => [
       ...outlines.filter(o => Number(o.levelId) === id).map(o => o.points),
