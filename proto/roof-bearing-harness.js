@@ -91,6 +91,23 @@ const key = w => [w.start, w.end].map(p => `${Math.round(p.x * 10) / 10},${Math.
     tops(d).some(w => [1, 2].includes(Number(w.levelId)) && key(w) !== '20,4>20,10'), false);
 }
 
+// THE STAIR HOOD, Movie, 10 Oct, blue lines round the box the stair pushes
+// out over the entry: "the walls for the balcony area should over-ride the
+// walls below to show them". His own file, saved at 21:12.
+{
+  const d = load('repro-movie-roofplan-hood.draft');
+  const got = tops(d);
+  const keys = got.map(key);
+  check('HOOD: its three outside walls are drawn as tops',
+    ['0.2,1.5>0.2,-3.5', '0.2,-3.5>-13.3,-3.5', '-13.3,-3.5>-13.3,2.5'].every(k => keys.includes(k)), true);
+  check('the room\'s wall between the room and the hood is not',
+    got.some(w => w.id === 'wall-57'), false);
+  check('MAIN FL\'s wall under the hood stops where the hood starts',
+    keys.filter(k => k.endsWith(',2.5') && k.startsWith('-41.8,2.5')), ['-41.8,2.5>-12.8,2.5']);
+  check('the ENTRY wall the hood stands on is hidden, the one past it is not',
+    [got.some(w => w.id === 'wall-38'), got.some(w => w.id === 'wall-39')], [false, true]);
+}
+
 // ── AND THE PAINTER JOINS THEM ──────────────────────────────────────────────
 const R = (() => {
   const sandbox = { window: {} };
