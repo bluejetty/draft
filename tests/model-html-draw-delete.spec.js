@@ -158,7 +158,9 @@ async function assertMappingSane(page) {
 }
 
 async function openNewPage(page) {
-  await page.goto('/MODEL.html');
+  // LEVELS / LAYERS opens on landing now (Movie, 10 Oct), over the sheet's
+  // right side; these taps are about the canvas, so the rail is shut.
+  await page.goto('/MODEL.html?right=0');
   await expect(readout(page)).toContainText('MAIN FL', { timeout: 6000 });
   await assertMappingSane(page);
 }
@@ -281,7 +283,7 @@ test.describe('MODEL.html draw + delete a wall', () => {
 
   test('FOUNDATION draws a foundation-set wall, not a stud one', async ({ page }) => {
     await seed(page);
-    await page.goto(`/MODEL.html?level=${FOUNDATION}`);
+    await page.goto(`/MODEL.html?level=${FOUNDATION}&right=0`);
     await expect(readout(page)).toContainText('FOUNDATION', { timeout: 6000 });
     await h.armWall(page);
     await tapAt(page, -4, 3);
