@@ -983,14 +983,9 @@
   #props-tab { top: calc(var(--rail-top) + 2 * (18vh + 8px)); }
   /* The right tabs read bottom-to-top so both edges' tabs run outward from
      the edge they hang on. */
-  #right-tab, #previews-tab { right:0; border-right:none;
+  #right-tab { right:0; border-right:none;
     border-radius:4px 0 0 4px; writing-mode:vertical-lr;
     max-height:32vh; }
-  /* THE SECOND TAB STARTS WHERE THE FIRST ENDS, and the gap is derived
-     rather than eyeballed: 32vh is each tab's cap, so 32vh + 8px clears the
-     first at every window height instead of at the one I happened to test.
-     A fixed pixel top would have overlapped the moment the viewport grew. */
-  #previews-tab { top: calc(var(--rail-top) + 32vh + 8px); }
   /* THE TAB OF THE OPEN PANE IS LIT, so the edge says which of the two the
      panel is showing without the drafter opening both to find out. */
   .rail-tab[aria-selected="true"] { color: var(--accent);
