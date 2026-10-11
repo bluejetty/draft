@@ -226,25 +226,30 @@ test('an elevation seat presses through to its elevation', async ({ page }) => {
   await expect(page.locator('#readout')).toContainText('elevation E1 · FRONT');
 });
 
-test('an empty seat is a chair, not a button', async ({ page }) => {
+test('an empty section seat is + CUT, and a press arms the cut', async ({ page }) => {
   await openWith(page, [SECTION]);
 
-  // S2 has no section behind it. The creation gesture that fills this seat on
-  // the old page is deferred (spec §3), so the seat must not invite a press
-  // that does nothing.
+  // Movie, 11 Oct: "same +CUT as down here, but put it in the middle of the
+  // layout preview". S2 has no section behind it, so it carries + CUT over
+  // its blank screen, and S1, which has one, does not.
   const empty = page.locator('.seat[data-seat="S2"]');
-  await expect(empty).toBeDisabled();
+  await expect(empty).toBeEnabled();
+  await expect(empty.locator('.seat-cut')).toBeVisible();
+  await expect(empty.locator('.seat-cut')).toHaveText('+ CUT');
+  await expect(page.locator('.seat[data-seat="S1"] .seat-cut')).toBeHidden();
 
-  // And pressing it changes nothing — asserted rather than assumed, because
-  // `disabled` on the element and "the click does nothing" are two claims.
+  // CENTRED ON THE SCREEN, not in a corner.
+  const [box, mark] = await Promise.all([empty.locator('canvas').boundingBox(),
+    empty.locator('.seat-cut span').boundingBox()]);
+  expect(Math.abs((mark.x + mark.width / 2) - (box.x + box.width / 2))).toBeLessThan(2);
+  expect(Math.abs((mark.y + mark.height / 2) - (box.y + box.height / 2))).toBeLessThan(2);
+
+  // The press is the + CUT press: no navigation, the CUT tool armed.
   const before = page.url();
-  await empty.click({ force: true });
+  await empty.click();
   await page.waitForTimeout(150);
-  expect(page.url(), 'an empty seat cannot navigate').toBe(before);
-
-  // A seat WITH a view behind it is pressable, or the assertion above would
-  // pass on a rail where every seat was dead.
-  await expect(page.locator('.seat[data-seat="S1"]')).toBeEnabled();
+  expect(page.url(), 'arming CUT does not navigate').toBe(before);
+  await expect(page.locator('#strip-message')).toContainText('CUT — press where the section line starts.');
 });
 
 test('the thumbnails repaint on an edit and NOT on mouse traffic', async ({ page }) => {
