@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Convert to DXF · RoughDrafter</title>
+<meta name="description" content="Convert DWG drawings to DXF, free, right in your browser. Nothing is uploaded.">
+<link rel="icon" href="../favicon.svg">
+<link rel="stylesheet" href="../vendor/fonts.css">
+<!--
+  RoughDrafter DXF converter. Copyright (c) 2026 bluejetty.
+  Free software under the GNU General Public License, version 3 or later --
+  see LICENSE.txt and about.html in this folder. A separate program from
+  RoughDrafter: it shares no code with it and only hands it a finished DXF.
+-->
+<style>
+  :root {
+    --bg: #121415; --panel: #1a1d1f; --edge: #3a3d3f;
+    --ink: #e7e5e2; --ink2: #b9bcbe; --quiet: #8b8f92;
+    --blue: #6fa3d9; --ok: #5fbf7a; --warn: #f0b429;
+    --ui: 'Barlow Condensed', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --mono: 'DM Mono', ui-monospace, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: flex; flex-direction: column;
+    background: var(--bg); color: var(--ink); font-family: var(--ui);
+    background-image: linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px);
+    background-size: 24px 24px; }
+  button { font-family: var(--ui); cursor: pointer; }
+  [hidden] { display: none !important; }
+
+  header { display: flex; align-items: center; gap: 14px; padding: 14px 28px;
+    border-bottom: 1px solid var(--edge); background: rgba(18,20,21,.9); }
+  header a.home { display: flex; align-items: center; gap: 14px; color: inherit; text-decoration: none; }
+  header img { height: 34px; }
+  header .t { font-size: 22px; font-weight: 700; letter-spacing: .08em; }
+  header .t b { color: var(--blue); }
+  header nav { margin-left: auto; display: flex; gap: 8px; }
+  header nav a { font-size: 12px; font-weight: 600; letter-spacing: .08em; color: var(--ink2);
+    border: 1px solid var(--edge); padding: 6px 10px; text-decoration: none; }
+  header nav a:hover { color: var(--ink); border-color: var(--blue); }
+
+  main { width: 100%; max-width: 980px; margin: 0 auto; padding: 30px 24px 60px; flex: 1; }
+  h1 { font-size: 40px; letter-spacing: .06em; margin: 0 0 4px; }
+  h1 span { color: var(--blue); }
+  .sub { color: var(--ink2); font-size: 17px; margin: 0 0 22px; }
+
+  .drop { border: 2px dashed var(--blue); border-radius: 10px; padding: 34px; text-align: center;
+    background: rgba(111,163,217,.06); cursor: pointer; transition: background .15s; }
+  .drop.over { background: rgba(111,163,217,.16); }
+  .drop .big { font-size: 24px; font-weight: 700; letter-spacing: .06em; }
+  .drop .sm { color: var(--quiet); font-size: 15px; margin-top: 6px; }
+  .drop button { margin-top: 16px; font-size: 15px; font-weight: 700; letter-spacing: .1em;
+    color: var(--bg); background: var(--blue); border: 0; padding: 9px 20px; border-radius: 4px; }
+  .fmts { display: flex; gap: 8px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+  .fmts span { font-family: var(--mono); font-size: 12px; border: 1px solid var(--edge); padding: 3px 8px; color: var(--ink2); }
+  .warming { margin-top: 12px; color: var(--quiet); font-size: 14px; }
+
+  .priv { display: flex; gap: 10px; align-items: center; margin-top: 18px; color: var(--ink2); font-size: 15px; }
+  .priv b { color: var(--ok); }
+
+  .list { margin-top: 26px; border: 1px solid var(--edge); background: var(--panel); border-radius: 8px; }
+  .lh { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--edge);
+    font-weight: 700; letter-spacing: .08em; font-size: 14px; color: var(--ink2); }
+  .lh .all { margin-left: auto; font-weight: 700; letter-spacing: .1em; font-size: 13px; color: var(--bg);
+    background: var(--ok); border: 0; padding: 7px 14px; border-radius: 4px; }
+  .row { display: grid; grid-template-columns: 92px 1fr auto; gap: 16px; align-items: center;
+    padding: 12px 16px; border-bottom: 1px solid var(--edge); }
+  .row:last-child { border-bottom: 0; }
+  .th { width: 92px; height: 62px; background: #0d0f10; border: 1px solid var(--edge); border-radius: 3px; display: block; }
+  .nm { font-family: var(--mono); font-size: 14px; word-break: break-all; }
+  .meta { color: var(--quiet); font-size: 13px; margin-top: 3px; }
+  .bar { height: 6px; background: #2a2d2f; border-radius: 3px; margin-top: 8px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 35%; background: var(--blue); border-radius: 3px;
+    animation: slide 1.1s ease-in-out infinite; }
+  @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+  .act { display: flex; flex-direction: column; gap: 6px; align-items: flex-end; }
+  .act button { font-weight: 700; letter-spacing: .1em; font-size: 13px; padding: 7px 12px; border-radius: 4px;
+    border: 1px solid var(--ok); color: var(--ok); background: none; white-space: nowrap; }
+  .act button.open { border-color: var(--blue); color: var(--blue); }
+  .ok { color: var(--ok); } .warn { color: var(--warn); }
+
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex;
+    align-items: center; justify-content: center; padding: 16px; z-index: 5; }
+  .ask { width: 460px; max-width: 100%; background: var(--panel); border: 1px solid var(--blue);
+    border-radius: 10px; padding: 22px 24px; box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+  .ask .k { font-size: 13px; letter-spacing: .12em; color: var(--ok); font-weight: 700; }
+  .ask h2 { margin: 6px 0 4px; font-size: 26px; letter-spacing: .04em; }
+  .ask .f { font-family: var(--mono); font-size: 13px; color: var(--ink2); word-break: break-all; }
+  .ask .pv { margin: 14px 0; width: 100%; height: 150px; background: #0d0f10; border: 1px solid var(--edge); border-radius: 4px; display: block; }
+  .ask .q { font-size: 17px; margin-bottom: 14px; }
+  .ask .btns { display: flex; gap: 10px; }
+  .ask .btns button { flex: 1; font-weight: 700; letter-spacing: .1em; font-size: 14px; padding: 10px; border-radius: 4px; }
+  .ask .yes { background: var(--blue); border: 0; color: var(--bg); }
+  .ask .no { background: none; border: 1px solid var(--edge); color: var(--ink2); }
+  .ask label { display: flex; gap: 8px; align-items: center; margin-top: 12px; color: var(--quiet); font-size: 14px; cursor: pointer; }
+
+  footer { border-top: 1px solid var(--edge); padding: 14px 28px; color: var(--quiet); font-size: 13px;
+    display: flex; gap: 18px; flex-wrap: wrap; }
+  footer a { color: var(--ink2); }
+
+  @media (max-width: 640px) {
+    header { padding: 12px 16px; } header nav a.help { display: none; }
+    main { padding: 22px 16px 40px; } h1 { font-size: 32px; }
+    .drop { padding: 24px 16px; }
+    .row { grid-template-columns: 64px 1fr; } .th { width: 64px; height: 44px; }
+    .act { grid-column: 1 / -1; flex-direction: row; justify-content: flex-end; flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <a class="home" href="../"><img src="../assets/rough-drafter-logo.png" alt="RoughDrafter"><span class="t">ROUGH DRAFTER · <b>DXF</b></span></a>
+  <nav><a href="../MODEL.html" data-open-rd>OPEN ROUGHDRAFTER</a><a class="help" href="about.html">HELP</a></nav>
+</header>
+<main>
+  <h1>CONVERT TO <span>DXF</span></h1>
+  <p class="sub">Turn DWG drawings into DXF — free, right in your browser.</p>
+
+  <div class="drop" data-drop tabindex="0" role="button" aria-label="Choose DWG files to convert">
+    <div class="big">DROP FILES HERE</div>
+    <div class="sm">or click to choose · several at once is fine</div>
+    <button type="button" data-choose>CHOOSE FILES</button>
+    <div class="fmts"><span>.DWG</span></div>
+    <div class="warming" data-warming hidden>Getting the converter ready…</div>
+  </div>
+  <input type="file" accept=".dwg" multiple hidden data-file>
+
+  <div class="priv">🔒 <span><b>Your drawings never leave your computer.</b> Nothing is uploaded.</span></div>
+
+  <div class="list" data-list hidden>
+    <div class="lh"><span data-count></span><button type="button" class="all" data-all hidden>DOWNLOAD ALL (ZIP)</button></div>
+    <div data-rows></div>
+  </div>
+</main>
+
+<div class="scrim" data-ask hidden>
+  <div class="ask" role="dialog" aria-modal="true" aria-labelledby="ask-title">
+    <div class="k">✓ CONVERTED</div>
+    <h2 id="ask-title">Open it in RoughDrafter?</h2>
+    <div class="f" data-ask-file></div>
+    <canvas class="pv" data-ask-preview width="820" height="300"></canvas>
+    <div class="q">It will open in <b>TRACE</b>, where you choose <b>EDITABLE</b> or <b>NON-EDITABLE</b>. The DXF is also saved to your downloads.</div>
+    <div class="btns">
+      <button type="button" class="yes" data-ask-yes>OPEN IN ROUGHDRAFTER</button>
+      <button type="button" class="no" data-ask-no>JUST DOWNLOAD</button>
+    </div>
+    <label><input type="checkbox" data-ask-never> Don’t ask again — always just download</label>
+  </div>
+</div>
+
+<footer>
+  <span>© RoughDrafter</span>
+  <span>Converter built with <a href="https://www.gnu.org/software/libredwg/">LibreDWG</a> (GPL-3.0) ·
+    <a href="about.html">Source code &amp; license</a></span>
+</footer>
+<script type="module" src="app.js"></script>
+</body>
+</html>
