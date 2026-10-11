@@ -150,7 +150,8 @@ test('a file that does not say its unit is asked about, and the pick sizes it', 
 test('a DWG is refused by name, with what to do instead', async ({ page }) => {
   await open(page);
   await pick(page, 'plan.dwg', Buffer.from('AC1032'));
-  await expect(card(page).locator('[data-trace-status]')).toContainText('save it as a DXF');
+  // Pointed at the converter one page over (Movie, 11 Oct: roughdrafter.com/DXF).
+  await expect(card(page).locator('[data-trace-status]')).toContainText('turn it into a DXF on the DXF page');
   await expect(card(page).locator('[data-trace-go]')).toBeHidden();
 });
 

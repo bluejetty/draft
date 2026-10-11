@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>About the DXF converter · RoughDrafter</title>
+<link rel="icon" href="../favicon.svg">
+<link rel="stylesheet" href="../vendor/fonts.css">
+<style>
+  :root { --bg: #121415; --panel: #1a1d1f; --edge: #3a3d3f; --ink: #e7e5e2; --ink2: #b9bcbe;
+    --quiet: #8b8f92; --blue: #6fa3d9;
+    --ui: 'Barlow Condensed', system-ui, sans-serif; --mono: 'DM Mono', ui-monospace, monospace; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--ui); font-size: 18px; line-height: 1.45; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 60px; }
+  a { color: var(--blue); }
+  h1 { letter-spacing: .06em; margin: 0 0 6px; } h1 span { color: var(--blue); }
+  h2 { letter-spacing: .06em; font-size: 22px; margin: 30px 0 8px; border-bottom: 1px solid var(--edge); padding-bottom: 4px; }
+  code { font-family: var(--mono); font-size: 14px; color: var(--ink2); }
+  li { margin: 4px 0; } .quiet { color: var(--quiet); }
+</style>
+</head>
+<body>
+<main>
+  <p><a href="./">← Back to the converter</a></p>
+  <h1>CONVERT TO <span>DXF</span> — HELP</h1>
+  <p>Drop one or more <code>.dwg</code> files on the page. Each one is turned into a <code>.dxf</code>
+    of the same drawing — every layer, block, hatch, dimension and line type — in the same AutoCAD
+    version it was saved as. When they are done you can download them, or open the drawing straight
+    in RoughDrafter, where it arrives in <b>TRACE</b>.</p>
+
+  <h2>PRIVATE BY DESIGN</h2>
+  <p>The converting happens inside your browser. Your drawings are never uploaded anywhere.
+    The first time you use the page your browser downloads the converter itself (about 3&nbsp;MB);
+    after that it is kept and starts straight away.</p>
+
+  <h2>WHAT IT READS</h2>
+  <ul>
+    <li>DWG files from AutoCAD R14 through AutoCAD 2018 and later (the 2018 format is still the
+      current one), and from programs that save DWG such as ArchiCAD, BricsCAD and DraftSight.</li>
+    <li>Very new or very unusual objects may not come through perfectly. If a file will not convert,
+      ask whoever sent it to <b>Save As DXF</b>, or as an older DWG version.</li>
+  </ul>
+
+  <h2>SOURCE CODE AND LICENSE</h2>
+  <p>This converter is free software, released under the
+    <a href="LICENSE.txt">GNU General Public License, version 3</a> or (at your option) any later
+    version. It is a separate program from RoughDrafter itself.</p>
+  <ul>
+    <li>The converter's own source is the files in this folder, exactly as your browser loads them:
+      <a href="index.html"><code>index.html</code></a>, <a href="app.js"><code>app.js</code></a>,
+      <a href="worker.js"><code>worker.js</code></a> and this page.</li>
+    <li>It is built on <a href="https://www.gnu.org/software/libredwg/">GNU LibreDWG</a>, by way of
+      <a href="https://github.com/mlightcad/libredwg-web">libredwg-web</a> version 0.7.17
+      (<a href="vendor/libredwg-web/package.json">package details</a>), both GPL-3.0. The source code
+      for that version, including the LibreDWG C code compiled into
+      <code>vendor/libredwg-web/wasm/libredwg-web.wasm</code>, is published at
+      <a href="https://github.com/mlightcad/libredwg-web/tree/v0.7.17">github.com/mlightcad/libredwg-web</a>,
+      with build instructions in its README.</li>
+  </ul>
+  <p class="quiet">This program is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+    See the GNU General Public License for more details.</p>
+</main>
+</body>
+</html>

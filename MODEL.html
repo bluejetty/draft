@@ -17540,7 +17540,9 @@
     tq('[data-trace-cal-length]').value = '';
     showTraceCard(`READING ${file.name}\u2026`);
     if (/\.dwg$/i.test(file.name)) {
-      showTraceCard(`${file.name} is a DWG, which only AutoCAD can open \u2014 save it as a DXF there and pick that.`);
+      // THE CONVERTER IS ONE PAGE OVER (Movie, 11 Oct: roughdrafter.com/DXF),
+      // a separate program that hands its DXF back here through ?trace=handoff.
+      showTraceCard(`${file.name} is a DWG \u2014 turn it into a DXF on the DXF page (DXF/ on this site), then pick that.`);
       return;
     }
     if (/\.dxf$/i.test(file.name)) {
@@ -22748,6 +22750,8 @@
 
 
   let projectOrder = null;
+  // Set by boot from ?trace=handoff, acted on once the drawing is up.
+  let wantsHandoffAtBoot = false;
   const boot = async () => {
     resize();
     // ── ANOTHER PAGE CAN ASK FOR A BLANK ONE, AND THE ASK IS SPENT FIRST ──
@@ -22792,6 +22796,12 @@
       projectOrder = { entryId: params.get('order'), round: params.get('round') };
       params.delete('order');
       params.delete('round');
+      syncUrl();
+    }
+    // ── A DXF HANDED OVER BY THE CONVERTER (DXF/), spent the same way ──
+    if (params.get('trace') === 'handoff') {
+      wantsHandoffAtBoot = true;
+      params.delete('trace');
       syncUrl();
     }
     const wantsReveal = params.get('reveal') === '1';
@@ -23857,10 +23867,47 @@
     });
   }
 
+  // ── THE CONVERTER'S HANDOFF ─────────────────────────────────────────────
+  //
+  // Movie, 11 Oct, of the DWG -> DXF page: "once the file is converted you
+  // ask the user if they would like to open the file in ROUGHDRAFTER". The
+  // converter (DXF/) is a separate, GPL program; the two share no code and
+  // meet only here, at one IndexedDB slot on this origin that it fills and
+  // this page empties. A slot older than ten minutes is a leftover from a
+  // tab that never got here, and is dropped rather than opened by surprise.
+  const HANDOFF = Object.freeze({ db: 'rd-dxf-handoff', store: 'files', key: 'pending', freshMs: 10 * 60 * 1000 });
+  const takeHandoff = () => new Promise(resolve => {
+    let open;
+    try { open = indexedDB.open(HANDOFF.db, 1); } catch { resolve(null); return; }
+    open.onupgradeneeded = () => open.result.createObjectStore(HANDOFF.store);
+    open.onerror = () => resolve(null);
+    open.onsuccess = () => {
+      const tx = open.result.transaction(HANDOFF.store, 'readwrite');
+      const store = tx.objectStore(HANDOFF.store);
+      const get = store.get(HANDOFF.key);
+      get.onsuccess = () => {
+        const record = get.result || null;
+        store.delete(HANDOFF.key);
+        tx.oncomplete = () => { open.result.close(); resolve(record); };
+      };
+      tx.onerror = () => { open.result.close(); resolve(null); };
+    };
+  });
+  const openHandoff = async () => {
+    const record = await takeHandoff();
+    if (!record || !record.dxf || !(Date.now() - (record.at || 0) < HANDOFF.freshMs)) {
+      showTraceCard('The converted DXF did not arrive \u2014 open the downloaded DXF here instead.');
+      return;
+    }
+    const file = new File([record.dxf], record.name || 'converted.dxf', { type: 'application/dxf' });
+    inspectTraceFile(file);
+  };
+
   boot().then(() => {
     const order = projectOrder;
     projectOrder = null;
     if (order) runProjectOrder(order);
+    if (wantsHandoffAtBoot) openHandoff();
   });
 })();
 </script>
