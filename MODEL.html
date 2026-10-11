@@ -1213,16 +1213,19 @@
      both panes inside it was the arrangement that made the rail scroll past
      the levels to reach the seats. Pressing the open tab shuts the rail;
      pressing the other swaps the pane without shutting. -->
+<!-- ONE TAB AGAIN (Movie, 10 Oct): "move the LAYOUT PREVIEW stuff into the
+     LAYER / LEVELS tab.. right at the start, and then put the text stuff down
+     below all the preview". The previews head the pane and the levels,
+     layers, elevations, sections and BONEYARD list follow; the rail scrolls
+     as one, which is MODEL.dc.html's own arrangement (:1840). -->
 <button id="right-tab" class="rail-tab" type="button" data-right-tab
   data-pane-tab="levels" hidden>LEVELS / LAYERS</button>
-<button id="previews-tab" class="rail-tab" type="button" data-previews-tab
-  data-pane-tab="previews" hidden>LAYOUT PREVIEWS</button>
 <aside id="right-rail" data-right-rail data-collapsed hidden>
+  <div id="view-rail" data-pane="levels"></div>
   <!-- LEVELS / LAYERS. The rail's EDITOR, not its companion: the layer rows
        inside a level card are the same objects as the seats, so adding a
        level adds two seats and deleting one takes them away. -->
   <div id="levels-panel" data-levels-panel data-pane="levels"></div>
-  <div id="view-rail" data-pane="previews"></div>
 </aside>
 <div id="hint">drag to pan · wheel to zoom · 0 to fit</div>
 
@@ -5548,9 +5551,20 @@
   // pane. A row that said `tab: 'right-tab'` would have been a second,
   // wrong answer to "which tab opens the right rail" sitting beside the
   // real one.
-  const railOpen = param => params.get(param) === '1';
+  //
+  // THE RIGHT ONE IS OPEN BY DEFAULT NOW (Movie, 10 Oct): "can you always
+  // bring up this tab LAYERS/LEVELS up when a user entres the site or make an
+  // AUTOBUILD, so they can see it draw onto the PREVIEWS when they press the
+  // BONE". A drafter landing on the page, coming back from the BONEYARD after
+  // a BONE, or opening a saved file finds it open. SHUT is spelled `right=0`,
+  // so a drafter who closes it keeps it closed across a reload; the left
+  // still defaults shut.
+  const railOpen = param => (param === 'right'
+    ? params.get(param) !== '0' : params.get(param) === '1');
   const setRail = (param, open) => {
-    if (open) params.set(param, '1'); else params.delete(param);
+    if (open) params.set(param, '1');
+    else if (param === 'right') params.set(param, '0');
+    else params.delete(param);
     syncUrl();
     syncShell();
     // The canvas did not change size -- the panels float over it, as every
@@ -5571,7 +5585,9 @@
   // survives a reload, and it is shareable. `right` still says OPEN or SHUT
   // on its own, so every check written against `?right=1` keeps its meaning
   // -- the pane is a second, independent fact, not a repacking of the first.
-  const PANES = ['levels', 'previews'];
+  // ONE PANE NOW (Movie, 10 Oct), so an old `pane=previews` link -- a
+  // bookmark, a shared URL -- falls back to it and still shows the previews.
+  const PANES = ['levels'];
   const paneShowing = () =>
     PANES.includes(params.get('pane')) ? params.get('pane') : 'levels';
   const setPane = pane => {
@@ -7965,10 +7981,9 @@
     if (railEpoch !== modelEpoch && railFrame === null) {
       railFrame = requestAnimationFrame(stepSeats);
     }
-    // The PANE owns whether the rail shows: syncRail runs on every paint,
-    // and a bare `hidden = false` here would re-reveal PREVIEWS under the
-    // LEVELS pane on the first level switch after a swap.
-    rail.hidden = paneShowing() !== 'previews';
+    // The previews share the LEVELS / LAYERS pane, at its head (Movie,
+    // 10 Oct), so the pane that shows the levels shows them too.
+    rail.hidden = paneShowing() !== 'levels';
   };
 
   // ONE SEAT PER FRAME, and the reason is a measurement rather than a taste.
@@ -22751,6 +22766,10 @@
     const wantsReveal = params.get('reveal') === '1';
     if (wantsReveal) {
       params.delete('reveal');
+      // BACK FROM A BONE, LEVELS / LAYERS IS UP (Movie, 10 Oct: "so they can
+      // see it draw onto the PREVIEWS when they press the BONE") -- even for
+      // a drafter who shut it before pressing, and even with BONE REVEAL off.
+      params.set('right', '1');
       syncUrl();
     }
     let file = null;
@@ -23473,7 +23492,9 @@
       // CLEARED EITHER WAY, so opening the same file twice in a row fires a
       // second change event instead of silently doing nothing.
       event.target.value = '';
-      if (file) await adoptAndShow(file);
+      // A SAVED FILE OPENS ONTO LEVELS / LAYERS (Movie, 10 Oct), so the
+      // previews of what was just opened are the first thing in view.
+      if (file && (await adoptAndShow(file))) setRail('right', true);
     });
   }
 

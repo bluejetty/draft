@@ -63,7 +63,7 @@ const chromeRects = page => page.evaluate(() => {
   // is a tab the marks are allowed to hide behind. finish-tab was named here
   // on 27 Sep and came off again with the EXT. FINISH pane; the naming is the
   // part to remember, because nothing here notices a tab nobody added.
-  return ['strip', 'house-strip', 'left-tab', 'right-tab', 'previews-tab']
+  return ['strip', 'house-strip', 'left-tab', 'right-tab']
     .map(id => ({ id, r: box(id) })).filter(entry => entry.r);
 });
 

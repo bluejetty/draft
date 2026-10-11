@@ -42,16 +42,10 @@ async function openWith(page, cuts = []) {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, saved: REPRO, sections: cuts });
-  // THE SEATS LIVE BEHIND THE LAYOUT PREVIEWS TAB (Movie, 15 Sep). The right
-  // edge shows one pane at a time and opens on LEVELS / LAYERS, so a spec
-  // about seats has to say which pane it is standing in -- the alternative,
-  // pressing a seat in a pane that is not up, is the sort of click that
-  // "works" against a hidden element and proves nothing.
-  //
-  // AND THE RAIL ITSELF HAS TO BE UP (Movie, 16 Sep): a shut rail is
-  // display:none whole -- the short collapsed strip is deleted -- so the
-  // pane name alone puts the seats in a rail that is not on the sheet.
-  await page.goto('/MODEL.html?mode=night&right=1&pane=previews');
+  // THE SEATS HEAD THE LEVELS / LAYERS PANE (Movie, 10 Oct), which is up by
+  // default. `right=1` is said anyway: a shut rail is display:none whole, so
+  // a spec about seats names the state it stands in.
+  await page.goto('/MODEL.html?mode=night&right=1');
   // THE READY SIGNAL IS THE READOUT, not `data-model-ready` — that attribute
   // belongs to MODEL.dc.html and this page never sets it.
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
@@ -439,7 +433,7 @@ test('ADD A LEVEL AND TWO SEATS APPEAR; DELETE IT AND THEY LEAVE', async ({ page
   await settleRail(page);
   const before = await seatData(page);
 
-  await page.locator('#right-tab').click();
+  // The levels list is already up under the seats, in the same pane.
   await page.evaluate(() => {
     window.prompt = q => (/Level name/.test(q) ? 'ATTIC' : '20');
   });
