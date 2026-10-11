@@ -1263,6 +1263,22 @@ suite('drawDimension2D', 'the measurement is the world distance, formatted by th
   expect('13 feet, through env.label', calls(ctx, 'fillText')[0][0], "13.0'");
 });
 
+// ON A SHEET THE LINE IS WHERE IT IS STORED (Movie's roof plan, 11 Oct):
+// the screen stands it 19 px off its record, and a sheet's frame -- sized to
+// the records -- clipped the outer rows of every stack off the paper.
+suite('drawDimension2D', 'a sheet draws the line on its record, the screen stands it off', R => {
+  const dim = { start: { x: 0, z: 0 }, end: { x: 12, z: 0 } };
+  const lineYs = env => {
+    const ctx = recordingCtx();
+    R.drawDimension2D(ctx, toS, dim, {}, env);
+    return calls(ctx, 'lineTo').filter(a => a[0] === 520).map(a => a[1]);
+  };
+  expect('the screen stands the line 19 px off', lineYs(dimEnv).includes(319), true);
+  expect('a sheet puts it on the record', lineYs({ ...dimEnv, atLine: true }).includes(300), true);
+  expect('and its ticks reach back toward the building',
+    lineYs({ ...dimEnv, atLine: true }).includes(319), false);
+});
+
 // ── THE FIGURE THAT WILL NOT FIT ITS OWN RUN ──────────────────────────
 //
 // Movie, 29 Sep: "the wall thicknesses can be displayed with text side 1/2 of

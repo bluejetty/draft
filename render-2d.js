@@ -1990,8 +1990,8 @@ if (!window.DraftRender2D) {
   // metres, because which units a drawing reads in is the page's business,
   // not the painter's.
   function drawDimension2D(ctx, toS, dimension, options = {}, env) {
-    const a = toS(dimension.start);
-    const b = toS(dimension.end);
+    let a = toS(dimension.start);
+    let b = toS(dimension.end);
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const length = Math.hypot(dx, dy);
@@ -1999,8 +1999,18 @@ if (!window.DraftRender2D) {
     const nx = -dy / length;
     const ny = dx / length;
     const offset = options.preview ? 14 : 19;
-    const da = { x:a.x + nx * offset, y:a.y + ny * offset };
-    const db = { x:b.x + nx * offset, y:b.y + ny * offset };
+    // ON A SHEET THE LINE IS WHERE IT IS STORED (`env.atLine`). The screen
+    // stands the line a fixed 19 px off its record, which a sheet cannot
+    // afford: its frame is sized to the records and clips at its edge, so the
+    // outer rows of every stack fell off the paper (Movie's roof plan, 11
+    // Oct). The ticks reach back toward the building instead of out.
+    const atLine = env && env.atLine === true;
+    const da = atLine ? { x:a.x, y:a.y } : { x:a.x + nx * offset, y:a.y + ny * offset };
+    const db = atLine ? { x:b.x, y:b.y } : { x:b.x + nx * offset, y:b.y + ny * offset };
+    if (atLine) {
+      a = { x:a.x - nx * offset, y:a.y - ny * offset };
+      b = { x:b.x - nx * offset, y:b.y - ny * offset };
+    }
     const value = Math.hypot(dimension.end.x - dimension.start.x, dimension.end.z - dimension.start.z);
     const label = env.label(value);
     const color = options.preview ? env.colors.preview : options.selected ? env.colors.selected : env.colors.stroke;

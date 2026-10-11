@@ -212,6 +212,36 @@ function run() {
   ok('every roofed segment is tagged too',
     roofed.every(s => known.has(s.layer)));
 
+  // ── ONE STACK PER BUILDING, THREE ROWS (Movie, 11 Oct) ──────────────
+  //
+  // "1st row ... edge of roof to edge of wall (showing over hang), edge of
+  // wall to edge of wall / then to edge of roof again ... 2nd row out will be
+  // edge of roof to edge of roofs, and then the 3rd row ... full lengeth of
+  // building roof", front to back and side to side. A house roof with a
+  // garage roof stepped out past its front, and a detached roof well away.
+  {
+    const house = { points: rect(-2, -2, 32, 22), overhang: 2 };
+    const garage = { points: rect(30, 10, 50, 32), overhang: 2, garage: true };
+    const shed = { points: rect(80, 0, 92, 10), overhang: 1, garage: true };
+    const segs = strings(win, { roofs: [house, garage, shed] });
+    const rowOf = (z, x0, x1) => segs.filter(s => Math.abs(s.start.z - z) < 1e-6 && Math.abs(s.end.z - z) < 1e-6
+      && Math.min(s.start.x, s.end.x) >= x0 - 1e-6 && Math.max(s.start.x, s.end.x) <= x1 + 1e-6)
+      .map(s => Math.round(Math.abs(s.end.x - s.start.x) * 100) / 100).sort((a, b) => a - b);
+    const southZs = uniqOf(segs.filter(s => Math.abs(s.start.z - s.end.z) < 1e-6 && s.start.z > 32 && s.start.x < 60)
+      .map(s => s.start.z));
+    ok('ROOFS: the touching house and garage share one south stack of three rows',
+      southZs.length === 3, `${southZs.length} rows at z ${southZs.join(', ')}`);
+    const [r1, r2, r3] = southZs.map(z => rowOf(z, -2, 50));
+    ok('row 1 reads both overhangs and the walls between',
+      JSON.stringify(r1) === JSON.stringify([2, 2, 2, 16, 30]), JSON.stringify(r1));
+    ok('row 2 reads roof edge to roof edge, the step between the roofs',
+      JSON.stringify(r2) === JSON.stringify([20, 32]), JSON.stringify(r2));
+    ok('row 3 is the whole building, eave to eave', JSON.stringify(r3) === JSON.stringify([52]), JSON.stringify(r3));
+    ok('the detached roof keeps its own stack, not the building\'s',
+      segs.some(s => Math.abs(Math.abs(s.end.x - s.start.x) - 12) < 1e-6 && Math.min(s.start.x, s.end.x) >= 80 - 1e-6)
+      && !segs.some(s => Math.abs(Math.abs(s.end.x - s.start.x) - 94) < 1e-6));
+  }
+
   // ── THE INTERIOR STRING ───────────────────────────────────────────────
   //
   // Both faces of every wall that CROSSES this side's string and reaches it.

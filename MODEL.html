@@ -20498,7 +20498,11 @@
   const pressAutoDims = () => {
     if (!drawing) return;
     const levelId = activeLevelId();
-    const view = activeViewId();
+    // A LEVEL WITH NO LAYER VIEWS -- the ROOF -- files its strings under
+    // 'plan', which is where the build puts them. Filed under no view, a
+    // press stacked a second set over the build's instead of replacing it
+    // (Movie's roof plan, 11 Oct: old per-roof strings under the new rows).
+    const view = activeViewId() || 'plan';
     // WHERE THE STRINGS GO IS WHERE THE DRAFTER IS STANDING, which is the old
     // page's rule too -- it dims the active level and its active layer view.
     const result = placeAutoDims(levelId, view);
