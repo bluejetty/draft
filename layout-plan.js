@@ -163,7 +163,16 @@ if (!window.DraftLayoutPlan) {
     const onLevel = key => (Array.isArray(saved?.[key]) ? saved[key] : [])
       .filter(item => item?.levelId === levelId);
     onLevel('lines').forEach(item => { eat(item.start); eat(item.end); });
-    onLevel('dimensions').forEach(item => { eat(item.start); eat(item.end); });
+    // A DIMENSION'S LABEL STRADDLES ITS LINE, so the outermost row needs room
+    // past its own record or half its figure is clipped at the frame edge
+    // (Movie's roof plan, 11 Oct: the 70'-0" overall cut in two).
+    const DIM_LABEL_ROOM_FT = 1.5;
+    onLevel('dimensions').forEach(item => [item.start, item.end].forEach(pt => {
+      const x = num(pt?.x), z = num(pt?.z);
+      if (x === null || z === null) return;
+      [-1, 1].forEach(sx => [-1, 1].forEach(sz =>
+        eat({ x: x + sx * DIM_LABEL_ROOM_FT, z: z + sz * DIM_LABEL_ROOM_FT })));
+    }));
     ['floors', 'roofs', 'outlines'].forEach(key => onLevel(key)
       .forEach(item => (Array.isArray(item.points) ? item.points : []).forEach(eat)));
     if (minX > maxX) return null;
@@ -246,7 +255,7 @@ if (!window.DraftLayoutPlan) {
   // it, and the tops of the exterior walls each roof stands on, thin and solid
   // (geometry-2d roofBearing, render-2d drawWallTops2D). False when the level
   // has no roofs either, so a caller still learns there was nothing to draw.
-  function drawRoofPlan(ctx, toS, saved, levelId) {
+  function drawRoofPlan(ctx, toS, saved, levelId, env = {}) {
     const geo = window.DraftGeometry2D;
     const render = window.DraftRender2D;
     if (!geo || !render) return false;
@@ -283,6 +292,24 @@ if (!window.DraftLayoutPlan) {
       render.drawWallTops2D(ctx, toS, geo.roofPlanWalls({
         walls: of('walls'), outlines: of('outlines'), floors: of('floors'), levels: of('levels'),
       }), { thicknessFt, color: '#1d1f20' }, { wallFaceOffsets: geo.wallFaceOffsets });
+    }
+    // AND ITS DIMENSIONS (Movie, 11 Oct: "can we add the dimensions to the
+    // roof plan"). The roof level's strings -- overhang and wall faces, roof
+    // edge to roof edge, the full length -- are stored on the level like any
+    // plan's, and this sheet left them behind. Last, over what they measure,
+    // and only on a construction sheet: a listing, a shell and a hologram
+    // carry no dimensions on any other sheet either.
+    if (render.drawDimension2D && env.shell !== true && env.listing !== true && env.hologram !== true) {
+      const fmt = window.DraftFormatters || {};
+      const dimensionEnv = {
+        label: ft => fmt.formatArchitecturalInches(ft * 12),
+        colors: DIMENSION_COLORS,
+        atLine: true,
+      };
+      of('dimensions').filter(dimension => dimension?.levelId === levelId).forEach(dimension => {
+        if (ctx && 'dxfLayer' in ctx) ctx.dxfLayer = dimension.layer || 'A-DIMS';
+        render.drawDimension2D(ctx, toS, dimension, {}, dimensionEnv);
+      });
     }
     return true;
   }
@@ -330,7 +357,7 @@ if (!window.DraftLayoutPlan) {
     // A FLOOR LAYOUT HAS FLOORS, NOT WALLS of its own: the deck, its holes,
     // the beams and posts under it and its dimensions.
     const floorLayout = view === 'floor' && hasFloorLayout(saved, levelId);
-    if (!walls.length && !floorLayout) return drawRoofPlan(ctx, toS, saved, levelId);
+    if (!walls.length && !floorLayout) return drawRoofPlan(ctx, toS, saved, levelId, env);
 
     // UNDER, so the full floor's own lines are the ones left on top.
     const half = env.halfLevel === true ? null : HALF_LEVEL_UNDER[levelId];
@@ -680,6 +707,9 @@ if (!window.DraftLayoutPlan) {
       dimensionEnv: hologram ? null : forConstruction({
         label: ft => fmt.formatArchitecturalInches(ft * 12),
         colors: DIMENSION_COLORS,
+        // THE LINE WHERE IT IS STORED, so the frame (sized to the records)
+        // holds every row of a stack (render-2d drawDimension2D).
+        atLine: true,
       }),
       // THE NAME ON A CONSTRUCTION PLAN, THE NAME AND THE SIZE ON A LISTING
       // (Movie, 1 Oct: "the 2nd line will be only for REAL ESTATE LAYOUTS -

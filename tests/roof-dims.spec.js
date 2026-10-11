@@ -81,8 +81,18 @@ test('an L roof strings each side\'s own wall corners between the overhang ends'
   const auto = roofAutoDims(await h.savedDrawing(page));
   // Wall line (-8,-6)(8,-6)(8,0)(0,0)(0,6)(-8,6) inside footprint ±2'.
   // N and W face one flat wall: overhang / span / overhang + overall — 4.
-  // S and E face the notch: their string breaks at its wall corner too — 5.
-  expect(auto).toHaveLength(18);
+  // S and E face the notch: their string breaks at its wall corner too — 5,
+  // and they step, so each gains the roof-edge row between (Movie, 11 Oct:
+  // "2nd row out will be edge of roof to edge of roofs") — 2 more each.
+  expect(auto).toHaveLength(22);
+
+  // S side second row: roof edge to roof edge across the step, -10 → 2 → 10.
+  const southEdges = auto.filter(dimension =>
+    h.near(dimension.start.z, 11) && h.near(dimension.end.z, 11))
+    .map(dimension => Math.abs(dimension.end.x - dimension.start.x)).sort((a, b) => a - b);
+  expect(southEdges).toHaveLength(2);
+  expect(southEdges[0]).toBeCloseTo(8, 3);
+  expect(southEdges[1]).toBeCloseTo(12, 3);
 
   // N side first string: -10 → -8 → 8 → 10; the notch (x=0/2) stays off it.
   const northPieces = auto.filter(dimension =>
@@ -113,7 +123,7 @@ test('an L roof strings each side\'s own wall corners between the overhang ends'
 
   // Re-running replaces the stack instead of doubling it.
   await runAutoDims(page);
-  expect(roofAutoDims(await h.savedDrawing(page))).toHaveLength(18);
+  expect(roofAutoDims(await h.savedDrawing(page))).toHaveLength(22);
 });
 
 test('tagging an edge GABLE leaves the wall-corner strings alone', async ({ page }) => {
@@ -130,7 +140,7 @@ test('tagging an edge GABLE leaves the wall-corner strings alone', async ({ page
 
   await runAutoDims(page);
   const auto = roofAutoDims(await h.savedDrawing(page));
-  expect(auto).toHaveLength(18);
+  expect(auto).toHaveLength(22);
   const north = auto.filter(dimension => dimension.start.z < -8 && dimension.end.z < -8);
   expect(north).toHaveLength(4);
 });

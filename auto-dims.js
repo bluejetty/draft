@@ -183,18 +183,120 @@ if (!window.DraftAutoDims) {
       const wallCorners = walls.flatMap(wall => [toCorner(wall.start), toCorner(wall.end)]);
       if (wallCorners.length >= 2) groups.push({ corners: wallCorners, house: true });
     }
-    // The ROOF level dims its roof footprints for the truss designer: each
-    // roof strings its own stack, broken at the bearing wall corners so every
-    // truss span and overhang reads straight off the plan.
+    // The ROOF level dims its roof footprints for the truss designer.
+    //
+    // ONE STACK PER BUILDING, NOT PER ROOF (Movie, 11 Oct): "the 1st row
+    // closest to the building to be the edge of roof to edge of wall (showing
+    // over hang), edge of wall to edge of wall / then to edge of roof again ...
+    // 2nd row out will be edge of roof to edge of roofs, and then the 3rd row
+    // will be very front edge roof to very back edge of roof (full lengeth of
+    // building roof)" -- "all rows will be front to back and also side to
+    // side". Roofs that touch are one building (house, attached garage, the
+    // room over it); a detached garage's roof stands apart and keeps its own.
     if (roofs.length) {
       groups.length = 0;
-      roofs.forEach(roof => {
-        const pts = roof.points;
+      const boxOf = pts => ({
+        minX: Math.min(...pts.map(pt => pt.x)), maxX: Math.max(...pts.map(pt => pt.x)),
+        minZ: Math.min(...pts.map(pt => pt.z)), maxZ: Math.max(...pts.map(pt => pt.z)),
+      });
+      const touch = (a, b) => a.minX <= b.maxX + 0.05 && b.minX <= a.maxX + 0.05
+        && a.minZ <= b.maxZ + 0.05 && b.minZ <= a.maxZ + 0.05;
+      const items = roofs.map(roof => {
+        const pts = roof.points.map(pt => ({ x: pt.x, z: pt.z }));
         // The bearing line the trusses land on sits one overhang inside the
         // roof edge — the exterior wall face the footprint was grown from.
-        const wallLoop = offsetOutline(pts.map(pt => ({ x: pt.x, z: pt.z })), -roof.overhang);
-        groups.push({ corners: pts.map(toCorner), house: !roof.garage, roof: true,
-          wallFacing: facingOf(wallLoop) });
+        return { roof, pts, box: boxOf(pts), wallLoop: offsetOutline(pts, -roof.overhang) };
+      });
+      const clusters = [];
+      items.forEach(item => {
+        const joined = clusters.filter(cluster => cluster.some(other => touch(other.box, item.box)));
+        const merged = [item, ...joined.flat()];
+        joined.forEach(cluster => clusters.splice(clusters.indexOf(cluster), 1));
+        clusters.push(merged);
+      });
+      const insideAny = (loops, p) => loops.some(pts => {
+        let hit = false;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i, i += 1) {
+          const a = pts[i], b = pts[j];
+          if ((a.z > p.z) !== (b.z > p.z) && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
+        }
+        return hit;
+      });
+      // A SIDE STRINGS ONLY THE EDGES IT CAN SEE: an edge whose outside is
+      // another roof (or, for a wall, another roof's walls) is buried inside
+      // the building and has nothing to show from this side.
+      const step = { N: { x: 0, z: -1 }, S: { x: 0, z: 1 }, W: { x: -1, z: 0 }, E: { x: 1, z: 0 } };
+      const seenFacing = (loopOf, cluster) => {
+        const facing = { N: [], S: [], W: [], E: [] };
+        const runs = { N: [], S: [], W: [], E: [] };
+        cluster.forEach(item => {
+          const own = loopOf(item);
+          const others = cluster.filter(other => other !== item).map(loopOf);
+          // The same facing rule facingOf applies, edge by edge, so each edge
+          // is judged on the side it really faces.
+          const area2 = own.reduce((sum, pt, index) => {
+            const next = own[(index + 1) % own.length];
+            return sum + (pt.x * next.z - next.x * pt.z);
+          }, 0);
+          own.forEach((pt, index) => {
+            const next = own[(index + 1) % own.length];
+            const dx = next.x - pt.x, dz = next.z - pt.z;
+            if (Math.hypot(dx, dz) < 1e-9) return;
+            const nx = area2 > 0 ? dz : -dz;
+            const nz = area2 > 0 ? -dx : dx;
+            const side = Math.abs(nx) >= Math.abs(nz) ? (nx > 0 ? 'E' : 'W') : (nz > 0 ? 'S' : 'N');
+            const along = side === 'N' || side === 'S' ? 'x' : 'z';
+            const a = Math.min(pt[along], next[along]), b = Math.max(pt[along], next[along]);
+            // PART OF AN EDGE CAN BE BURIED: split it wherever another loop's
+            // corner falls along it, and keep the stretches whose outside is
+            // open -- the house front stops where the garage roof starts, not
+            // at its own far corner under that roof.
+            const cuts = uniqSorted([a, b, ...others.flat().map(q => q[along])
+              .filter(v => v > a + 1e-6 && v < b - 1e-6)]);
+            // Neighbouring open stretches join, so a cut that buries nothing
+            // lends no coordinate of its own.
+            let run = null;
+            const across = along === 'x' ? pt.z : pt.x;
+            const close = () => { if (run) runs[side].push({ across, lo: run[0], hi: run[1] }); run = null; };
+            for (let c = 0; c + 1 < cuts.length; c += 1) {
+              const t = (cuts[c] + cuts[c + 1]) / 2;
+              const f = Math.abs(b - a) < 1e-9 ? 0.5 : (t - pt[along]) / (next[along] - pt[along]);
+              const probe = { x: pt.x + dx * f, z: pt.z + dz * f };
+              const out = { x: probe.x + step[side].x * 0.3, z: probe.z + step[side].z * 0.3 };
+              if (insideAny(others, out)) close();
+              else if (run) run[1] = cuts[c + 1];
+              else run = [cuts[c], cuts[c + 1]];
+            }
+            close();
+          });
+        });
+        // TWO ROOFS ON ONE EAVE LINE ARE ONE EDGE: overlapping or touching
+        // stretches at the same offset join before they lend coordinates, so
+        // where the room's roof and the garage's share a front there is no
+        // seam to dimension.
+        Object.keys(runs).forEach(side => {
+          const list = runs[side].sort((m, n) => m.across - n.across || m.lo - n.lo);
+          let cur = null;
+          list.forEach(r => {
+            if (cur && Math.abs(r.across - cur.across) < 1e-6 && r.lo <= cur.hi + 1e-6) {
+              cur.hi = Math.max(cur.hi, r.hi);
+              return;
+            }
+            if (cur) facing[side].push(cur.lo, cur.hi);
+            cur = { ...r };
+          });
+          if (cur) facing[side].push(cur.lo, cur.hi);
+        });
+        return facing;
+      };
+      clusters.forEach(cluster => {
+        groups.push({
+          corners: cluster.flatMap(item => item.pts.map(toCorner)),
+          house: cluster.some(item => !item.roof.garage),
+          roof: true,
+          wallFacing: seenFacing(item => item.wallLoop, cluster),
+          roofFacing: seenFacing(item => item.pts, cluster),
+        });
       });
     }
     groups.forEach(group => {
@@ -350,13 +452,19 @@ if (!window.DraftAutoDims) {
           : side === 'W' ? minX : maxX;
         const strings = [];
         if (group.roof) {
-          // Roof stack: the closest string runs roof edge → the wall corners
-          // facing this side → roof edge (the end pieces read the overhang),
-          // and the overall runs eave to eave across the whole footprint.
+          // Roof stack, three out (Movie, 11 Oct). CLOSEST: roof edge → the
+          // wall faces this side sees → roof edge, so the end pieces read the
+          // overhang. SECOND: every roof edge this side sees, so each step
+          // between roofs reads. THIRD: eave to eave, the whole building.
           const wallCoords = uniqSorted(mergeJogs(group.wallFacing[side]))
             .filter(value => value > lo + 0.01 && value < hi - 0.01);
           if (wallCoords.length) {
             strings.push({ coords: uniqSorted([lo, ...wallCoords, hi]), layer: DIM_LAYERS.EXTERIOR });
+          }
+          const roofCoords = uniqSorted(mergeJogs(group.roofFacing[side]))
+            .filter(value => value > lo + 0.01 && value < hi - 0.01);
+          if (roofCoords.length) {
+            strings.push({ coords: uniqSorted([lo, ...roofCoords, hi]), layer: DIM_LAYERS.EXTERIOR });
           }
           strings.push({ coords: [lo, hi], layer: DIM_LAYERS.OVERALL });
         } else {
