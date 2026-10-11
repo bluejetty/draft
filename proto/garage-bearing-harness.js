@@ -2964,6 +2964,22 @@ function run(win) {
           }));
         check('E1: no line along the room\'s floor over the garage roof',
           stub.length === 0, `${stub.length} visible segment(s) at ${ftIn(over.floorTop)}`);
+        // AND THE BAND ITSELF IS THERE. The line above is gone two ways: the
+        // band covers the entry wall's top, or a face standing in the same
+        // plane leaves that top uninked (Movie, 10 Oct: "these walls line
+        // up"). The second hides a missing band, so the band is asked for by
+        // its fill: one shape the depth of the floor package, floor to floor,
+        // under the room's whole width -- the lean-to's fascia sits inside
+        // that depth too and is not it.
+        const bandAt = u => (painted.modelFills || []).some(f => {
+          const es = f.pts.map(pt => pt.e);
+          return Math.min(...es) > over.floorBottom - 0.1 && Math.min(...es) < over.floorBottom + 0.1
+            && Math.max(...es) > over.floorTop - 0.1 && Math.max(...es) < over.floorTop + 0.2
+            && inside(f.pts, u, over.floorBottom + 0.2);
+        });
+        const bare = [0.1, 0.3, 0.5, 0.7, 0.9].map(t => lo + (hi - lo) * t).filter(u => !bandAt(u));
+        check('E1: and the room\'s floor band runs over the garage roof, across the room',
+          bare.length === 0, bare.length ? `no band at u ${bare.map(u => u.toFixed(2)).join(', ')}` : '5 of 5 points');
       }
     } else {
       check('proto/repro-modbilevel-e1.draft is present', false, 'missing');
