@@ -28,15 +28,19 @@ const BUCKET = 'model-drawing';
 const REPRO = JSON.parse(fs.readFileSync(
   path.join(__dirname, '..', 'proto', 'repro-movie-bands.draft'), 'utf8'));
 
+// LEVELS / LAYERS SHUT (`right=0`) on every visit. It opens on landing now
+// (Movie, 10 Oct), and its preview seats paint other levels' window tags
+// through the same fillText this tape records -- so a reading would depend on
+// which seats happened to paint inside the window, not on the plan.
 async function openWithTags(page) {
   await h.suppressEntryCoach(page);
-  await page.goto('/MODEL.html');
+  await page.goto('/MODEL.html?right=0');
   await page.waitForFunction(() => !!window.SharedFileStore, null, { timeout: 15000 });
   await page.evaluate(async ({ bucket, saved }) => {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, saved: REPRO });
-  await page.goto('/MODEL.html');
+  await page.goto('/MODEL.html?right=0');
   // THE TAPE IS TAKEN BEFORE THE FIRST PAINT, so nothing is missed, and a
   // resize forces one more in case the drawing landed first.
   await page.evaluate(() => {
@@ -86,7 +90,7 @@ test('a window carries its W, and every door on the plan its D', async ({ page }
 
 test('the formatter reads a window off its own record, unsnapped', async ({ page }) => {
   await h.suppressEntryCoach(page);
-  await page.goto('/MODEL.html');
+  await page.goto('/MODEL.html?right=0');
   await page.waitForFunction(() => !!window.DraftFenLabels, null, { timeout: 15000 });
   const labels = await page.evaluate(() => {
     const FL = window.DraftFenLabels;
@@ -163,7 +167,7 @@ test('unticking A-DIMS-WIN takes every size tag off the plan', async ({ page }) 
   await page.locator('[data-layer-visible="A-DIMS-WIN"]').uncheck();
   await expect(page.locator('#status')).toContainText('hidden');
 
-  await page.goto('/MODEL.html');
+  await page.goto('/MODEL.html?right=0');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 15000 });
   await retape(page, 1362);
   const after = await sizeTags(page);
@@ -184,7 +188,7 @@ test('and the corner-string layer does not take them with it', async ({ page }) 
   await page.locator('[data-layer-visible="A-DIMS-FENS"]').uncheck();
   await expect(page.locator('#status')).toContainText('hidden');
 
-  await page.goto('/MODEL.html');
+  await page.goto('/MODEL.html?right=0');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 15000 });
   await retape(page, 1362);
   const after = await sizeTags(page);
@@ -211,7 +215,7 @@ test('and the corner-string layer does not take them with it', async ({ page }) 
 // thumbnail an inch across carries none either way.
 test('the elevation this page draws honours the same tick', async ({ page }) => {
   await openWithTags(page);
-  await page.goto('/MODEL.html?view=cut%3AE1');
+  await page.goto('/MODEL.html?view=cut%3AE1&right=0');
   await retape(page, 1362);
   const before = await sizeTags(page);
   expect(before.length,
@@ -223,7 +227,7 @@ test('the elevation this page draws honours the same tick', async ({ page }) => 
   await page.locator('[data-layer-visible="A-DIMS-WIN"]').uncheck();
   await expect(page.locator('#status')).toContainText('hidden');
 
-  await page.goto('/MODEL.html?view=cut%3AE1');
+  await page.goto('/MODEL.html?view=cut%3AE1&right=0');
   await retape(page, 1364);
   const after = await sizeTags(page);
   expect(after, 'the elevation kept its window sizes after the layer was hidden')
