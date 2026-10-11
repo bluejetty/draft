@@ -141,7 +141,12 @@ if (!window.DraftAutoDims) {
     // never known a wall type. Guessing a thickness here would print a figure
     // that is wrong by a wall and says nothing about it.
     thicknessFt, faceOffsets,
+    // THE BEAMS ON A FRAMING SHEET, whose lines are located on the outside
+    // of the plan (Movie, 11 Oct: "only need 1 mark for beams (if the beams
+    // are lined up) and put it on the EXT of the plan").
+    beams,
   }) {
+    const exteriorBeamLines = beamLinesOf(beams);
     const toCorner = point => ({ x: point.x, z: point.z, srcId: point.srcId || null });
     // Which side each edge of a closed loop faces, and the coordinates its
     // corners lend to that side's string: N/S edges contribute x, W/E z. A
@@ -468,6 +473,18 @@ if (!window.DraftAutoDims) {
           }
           strings.push({ coords: [lo, hi], layer: DIM_LAYERS.OVERALL });
         } else {
+          // THE BEAM LINES, CLOSEST IN, on the right side for beams running
+          // across it and the bottom for beams running up it -- one mark per
+          // line however many pieces it was laid in.
+          if (group.house && (side === 'E' || side === 'S')) {
+            const beamCoords = uniqSorted(exteriorBeamLines
+              .filter(line => line.along === (side === 'E' ? 'x' : 'z'))
+              .map(line => line.fixed)
+              .filter(value => value > lo + 0.01 && value < hi - 0.01));
+            if (beamCoords.length) {
+              strings.push({ coords: uniqSorted([lo, ...beamCoords, hi]), layer: DIM_LAYERS.COLUMNS });
+            }
+          }
           const centres = uniqSorted(openingsFor[groupIndex][side])
             .filter(value => value > lo + 0.01 && value < hi - 0.01);
           if (centres.length) {
@@ -621,21 +638,51 @@ if (!window.DraftAutoDims) {
   // on the exterior wall, so the first and last figures on the along string
   // are the bearing distances a framer needs; reading them off the beam's
   // endpoints instead would print two zeros.
+  // ── BEAM LINES: COLLINEAR BEAMS ARE ONE ──────────────────────────────────
+  //
+  // Movie, 11 Oct, on the MAIN FLOOR layout: "only need 1 mark for beams (if
+  // the beams are lined up)". AUTO BEAM lays a long line as several pieces,
+  // and each piece strung its own edge-to-edge row -- five rows on one line.
+  // Pieces on one line (same direction, same offset) join, whatever gaps sit
+  // between them.
+  const beamLinesOf = beams => {
+    const lines = [];
+    (Array.isArray(beams) ? beams : []).forEach(beam => {
+      if (!beam || !beam.start || !beam.end) return;
+      const horizontal = Math.abs(beam.end.x - beam.start.x)
+        >= Math.abs(beam.end.z - beam.start.z);
+      const along = horizontal ? 'x' : 'z';
+      const across = horizontal ? 'z' : 'x';
+      const fixed = (beam.start[across] + beam.end[across]) / 2;
+      const lo = Math.min(beam.start[along], beam.end[along]);
+      const hi = Math.max(beam.start[along], beam.end[along]);
+      const line = lines.find(other => other.along === along && Math.abs(other.fixed - fixed) <= ON_BEAM_FT);
+      if (line) { line.lo = Math.min(line.lo, lo); line.hi = Math.max(line.hi, hi); }
+      else lines.push({ along, across, fixed, lo, hi });
+    });
+    return lines;
+  };
+
+  // How far off a stair opening its own strings sit (Movie: "keep these
+  // close to the opening (about 1ft / 1-6)").
+  const OPENING_DIM_OFF_FT = 1.25;
+  // A beam this near an opening's side puts the opening's string on the
+  // other side (Movie: "NOT on the same side as a beam if a beam is nearby").
+  const BEAM_NEAR_FT = 4;
+
   function computeColumnDimStrings({
     beams, columns, outlines, walls, floorOpenings,
     clearFt = COLUMN_CLEAR_FT,
   }) {
-    const beamList = Array.isArray(beams) ? beams : [];
     const columnList = Array.isArray(columns) ? columns : [];
-    if (!beamList.length || !columnList.length) return [];
 
     // THE HOUSE EDGE, found the same way and in the same order
     // computeAutoDimStrings finds it -- outlines when the drawing has them,
     // wall corners when it does not -- so the two can never disagree about
     // where the house ends. A garage outline is not the house.
-    const outlinePoints = (Array.isArray(outlines) ? outlines : [])
-      .filter(outline => !outline.garage)
-      .flatMap(outline => outline.points || []);
+    const houseOutlines = (Array.isArray(outlines) ? outlines : [])
+      .filter(outline => !outline.garage && Array.isArray(outline.points) && outline.points.length >= 3);
+    const outlinePoints = houseOutlines.flatMap(outline => outline.points);
     const corners = outlinePoints.length ? outlinePoints
       : (Array.isArray(walls) ? walls : []).flatMap(wall => [wall.start, wall.end]);
     if (corners.length < 2) return [];
@@ -657,36 +704,38 @@ if (!window.DraftAutoDims) {
 
     const segments = [];
     // One run of coordinates at one fixed position, cut into segments the way
-    // the perimeter stack cuts its own. Interior strings have no OUTWARD side
-    // to keep ink on, so these always run low to high rather than flipping.
-    const emit = (runAxis, rawCoords, fixedValue) => {
+    // the perimeter stack cuts its own.
+    //
+    // `away` IS THE SIDE THE LINE STANDS OFF TO: the screen draws a string 19
+    // px to its left-hand normal, and an interior string run low to high on
+    // the far side of a beam drew its line back across the beam onto the
+    // stair side it was placed to avoid. A run is flipped so that stand-off
+    // points away from the beam or opening it was placed clear of.
+    const emit = (runAxis, rawCoords, fixedValue, layer = DIM_LAYERS.COLUMNS, away = 1) => {
       const coords = printableCoords(rawCoords);
+      // Left-hand normal of a run: +z for +x, -x for +z.
+      const flip = runAxis === 'x' ? away < 0 : away > 0;
       for (let i = 0; i < coords.length - 1; i++) {
-        const a = coords[i], b = coords[i + 1];
+        const a = flip ? coords[i + 1] : coords[i], b = flip ? coords[i] : coords[i + 1];
         segments.push({
           start: runAxis === 'x' ? { x: a, z: fixedValue } : { x: fixedValue, z: a },
           end: runAxis === 'x' ? { x: b, z: fixedValue } : { x: fixedValue, z: b },
-          layer: DIM_LAYERS.COLUMNS,
+          layer,
           srcStartId: null,
           srcEndId: null,
         });
       }
     };
 
-    beamList.forEach(beam => {
-      if (!beam || !beam.start || !beam.end) return;
-      const horizontal = Math.abs(beam.end.x - beam.start.x)
-        >= Math.abs(beam.end.z - beam.start.z);
-      const along = horizontal ? 'x' : 'z';
-      const across = horizontal ? 'z' : 'x';
-      const fixed = (beam.start[across] + beam.end[across]) / 2;
-      const runLo = Math.min(beam.start[along], beam.end[along]);
-      const runHi = Math.max(beam.start[along], beam.end[along]);
+    const lines = beamLinesOf(beams);
+    if (columnList.length) lines.forEach(line => {
+      const { along, across, fixed } = line;
+      const runLo = line.lo, runHi = line.hi;
 
-      // THE POSTS THIS BEAM CARRIES AND NO OTHERS. A column belongs to a beam
-      // when it stands on that beam's line and within its run, so a parallel
-      // beam's posts never join this one's string -- which would print a
-      // figure to a post that is not on the member being dimensioned.
+      // THE POSTS THIS LINE CARRIES AND NO OTHERS. A column belongs to a line
+      // when it stands on it and within its run, so a parallel beam's posts
+      // never join this one's string -- which would print a figure to a post
+      // that is not on the member being dimensioned.
       const onBeam = columnList.filter(column => {
         const point = column && column.point;
         if (!point) return false;
@@ -696,47 +745,88 @@ if (!window.DraftAutoDims) {
       if (!onBeam.length) return;
       const posts = uniqSorted(onBeam.map(column => column.point[along]));
 
-      // ── ALONG THE BEAM ────────────────────────────────────────────────
+      // ── ALONG THE BEAM, INSIDE ──────────────────────────────────────────
       // WHICH SIDE: away from a stair hole beside it, and inside the house
-      // either way. Movie: "on a side that doesn't have stair hole".
+      // either way. Movie: "on a side that doesn't have stair hole", and 11
+      // Oct: "the COLUMN dims should NOT be on the 'stair opening side' if
+      // there is a stair opening nearby go on other side of beam".
+      //
+      // THE BEAM'S OWN POSITION is not strung here any more: it rides the
+      // perimeter stack (computeAutoDimStrings `beams`), "on the EXT of the
+      // plan", and the strings that crossed the floor at each post are gone.
       const clearSide = direction => {
         const at = fixed + direction * clearFt;
         if (at <= edge[across][0] + 0.01 || at >= edge[across][1] - 0.01) return false;
         return !holes.some(hole => {
           // Only a hole this beam actually runs past can be in the way.
           if (Math.min(hole[along][1], runHi) - Math.max(hole[along][0], runLo) <= 0) return false;
-          return at >= hole[across][0] - HOLE_MARGIN_FT
-            && at <= hole[across][1] + HOLE_MARGIN_FT;
+          // On this side of the beam, and near it.
+          return direction > 0
+            ? hole[across][1] > fixed + HOLE_MARGIN_FT && hole[across][0] - fixed <= BEAM_NEAR_FT
+            : hole[across][0] < fixed - HOLE_MARGIN_FT && fixed - hole[across][1] <= BEAM_NEAR_FT;
         });
       };
       const side = clearSide(1) ? 1 : clearSide(-1) ? -1 : 0;
       if (side !== 0) {
         const inner = posts.filter(value =>
           value > edge[along][0] + 0.01 && value < edge[along][1] - 0.01);
-        emit(along, [edge[along][0], ...inner, edge[along][1]], fixed + side * clearFt);
+        emit(along, [edge[along][0], ...inner, edge[along][1]], fixed + side * clearFt,
+          DIM_LAYERS.COLUMNS, side);
       }
+    });
 
-      // ── ACROSS IT ─────────────────────────────────────────────────────
-      // One string locating the beam line between the two exterior edges it
-      // sits between. Every post on a beam shares that coordinate, so this is
-      // one string per beam rather than one per column.
-      //
-      // A beam sitting ON an exterior edge gets none: the string would be the
-      // house depth with a figure of zero beside it, which is the overall
-      // dimension wearing the wrong layer.
-      if (fixed > edge[across][0] + 0.01 && fixed < edge[across][1] - 0.01) {
-        const at = posts[0] - clearFt > edge[along][0] + 0.01
-          ? posts[0] - clearFt : posts[0] + clearFt;
-        if (at > edge[along][0] + 0.01 && at < edge[along][1] - 0.01) {
-          emit(across, [edge[across][0], fixed, edge[across][1]], at);
-        }
-      }
+    // ── THE STAIR OPENING, BOTH WAYS (Movie, 11 Oct) ─────────────────────
+    //
+    // "for the stair opening need dims from the ext wall to opening, opening
+    // width, and to opposite ext, keep these close to the opening (about 1ft
+    // / 1-6) from the openings and NOT on the same side as a beam if a beam is
+    // nearby go on opposite side of opening" -- both directions.
+    //
+    // THE EXTERIOR WALLS ARE WHERE THE STRING'S OWN LINE MEETS THE HOUSE, not
+    // the house's extremes: on an L the wall beside the opening can stand well
+    // inside the far corner.
+    const loops = houseOutlines.length ? houseOutlines.map(outline => outline.points) : [];
+    const wallsAlong = (runAxis, fixedValue, lo, hi) => {
+      const other = runAxis === 'x' ? 'z' : 'x';
+      const hits = [];
+      loops.forEach(pts => pts.forEach((a, i) => {
+        const b = pts[(i + 1) % pts.length];
+        const a1 = a[other], b1 = b[other];
+        if ((a1 - fixedValue) * (b1 - fixedValue) > 0 || Math.abs(b1 - a1) < 1e-9) return;
+        hits.push(a[runAxis] + (b[runAxis] - a[runAxis]) * (fixedValue - a1) / (b1 - a1));
+      }));
+      const before = hits.filter(v => v <= lo + 1e-6);
+      const after = hits.filter(v => v >= hi - 1e-6);
+      return [before.length ? Math.max(...before) : edge[runAxis][0],
+        after.length ? Math.min(...after) : edge[runAxis][1]];
+    };
+    holes.forEach(hole => {
+      ['x', 'z'].forEach(runAxis => {
+        const other = runAxis === 'x' ? 'z' : 'x';
+        // The two candidate lines, one each side of the opening.
+        const sides = [hole[other][0] - OPENING_DIM_OFF_FT, hole[other][1] + OPENING_DIM_OFF_FT];
+        const beamNear = sideIndex => lines.some(line => {
+          if (line.along !== runAxis) return false;
+          if (Math.min(line.hi, hole[runAxis][1]) - Math.max(line.lo, hole[runAxis][0]) <= 0) return false;
+          return sideIndex === 0
+            ? line.fixed <= hole[other][0] + HOLE_MARGIN_FT && hole[other][0] - line.fixed <= BEAM_NEAR_FT
+            : line.fixed >= hole[other][1] - HOLE_MARGIN_FT && line.fixed - hole[other][1] <= BEAM_NEAR_FT;
+        });
+        const inside = at => at > edge[other][0] + 0.01 && at < edge[other][1] - 0.01;
+        const order = beamNear(0) && !beamNear(1) ? [1, 0] : [0, 1];
+        const pick = order.find(index => inside(sides[index]));
+        if (pick === undefined) return;
+        const at = sides[pick];
+        const [wallLo, wallHi] = wallsAlong(runAxis, at, hole[runAxis][0], hole[runAxis][1]);
+        emit(runAxis, uniqSorted([wallLo, hole[runAxis][0], hole[runAxis][1], wallHi]), at,
+          DIM_LAYERS.INTERIOR, pick === 0 ? -1 : 1);
+      });
     });
     return segments;
   }
 
   window.DraftAutoDims = Object.freeze({
-    computeAutoDimStrings, computeColumnDimStrings,
+    computeAutoDimStrings, computeColumnDimStrings, beamLinesOf,
     STRING_SPACING_FT, JOG_MERGE_FT, COLUMN_CLEAR_FT, DIM_LAYERS,
   });
 })();

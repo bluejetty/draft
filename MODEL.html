@@ -14206,6 +14206,12 @@
       // face a jamb was drawn against rather than near it.
       thicknessFt: openingThicknessFt(),
       faceOffsets: G.wallFaceOffsets,
+      // THE BEAM LINES, LOCATED ON THE OUTSIDE OF A FRAMING SHEET (Movie, 11
+      // Oct: "put it on the EXT of the plan"). The same beams the column
+      // stack below reads, and none on any other sheet.
+      beams: view === 'floor' || view === 'foundation'
+        ? (drawing.beams || []).filter(beam => Number(beam.levelId) === levelId && beam.view === view)
+        : [],
     });
     // ── AND THE COLUMN STACK, ON THE TWO SHEETS THAT FRAME ───────────────
     //
