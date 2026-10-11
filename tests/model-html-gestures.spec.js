@@ -654,8 +654,6 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // their faces. Neither authors an entity: they change how a
             // length is READ, which is why no absence row moves.
             'IMPERIAL', 'METRIC',
-            // The previews tab, the second of the right edge's two.
-            'previews-tab',
             'dt-close', 'dt-bone',
             // CLICK HERE to draw house OUTLINE (Movie, 3 Oct), on the screen
             // and, for ROUGH, under the selections. It arms the OUTLINE tool,

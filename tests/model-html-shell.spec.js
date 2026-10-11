@@ -106,14 +106,21 @@ const hiddenPct = page => page.evaluate(() => {
   return ink ? 100 * under / ink : 0;
 });
 
-test('both sidebars start shut, and shut costs less sheet than the overlay did',
+test('the left starts shut, LEVELS / LAYERS starts open, and shut costs less sheet than the overlay did',
   async ({ page }) => {
     await openShell(page);
 
-    // BOTH SHUT IS THE OLD PAGE'S OWN DEFAULT — "pull-out tabs: both side
-    // rails start hidden" (MODEL.dc.html:3009) — and the state that costs the
-    // drafter least. Argued with a number, as the order requires.
+    // THE LEFT SHUT IS THE OLD PAGE'S OWN DEFAULT — "pull-out tabs: both side
+    // rails start hidden" (MODEL.dc.html:3009). THE RIGHT IS OPEN NOW (Movie,
+    // 10 Oct: "can you always bring up this tab LAYERS/LEVELS up when a user
+    // entres the site"), so a drafter lands looking at the previews.
     await expect(page.locator('#left-rail')).toBeHidden();
+    await expect(page.locator('#right-rail')).not.toHaveAttribute('data-collapsed', '');
+    await expect(page.locator('#view-rail')).toBeVisible();
+
+    // AND SHUT IS STILL THE CHEAP STATE, argued with a number as the order
+    // requires: one press on the tab and the sheet is back.
+    await page.locator('#right-tab').click();
     await expect(page.locator('#right-rail')).toHaveAttribute('data-collapsed', '');
 
     // Both tabs are reachable, or a shut panel is a panel with no way back.
@@ -148,15 +155,15 @@ test('shut is shut; one press seats the whole chart, every seat reachable',
     // one press over: open, the whole chart is seated and every seat is
     // reachable without leaving the rail.
     //
-    // THE SEATS LIVE IN THE LAYOUT PREVIEWS PANE (Movie, 15 Sep), so the
-    // rail is asked about while it is showing that pane.
-    await page.goto('/MODEL.html?mode=night&pane=previews');
+    // THE SEATS HEAD THE LEVELS / LAYERS PANE (Movie, 10 Oct). Shut is
+    // spelled `right=0` now that the rail opens by default.
+    await page.goto('/MODEL.html?mode=night&right=0');
     await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
     await expect(page.locator('#right-rail')).toHaveAttribute('data-collapsed', '');
     await expect(page.locator('#right-rail'), 'a shut rail keeps a face on the sheet')
       .not.toBeVisible();
 
-    await page.locator('#previews-tab').click();
+    await page.locator('#right-tab').click();
     await page.waitForTimeout(200);
     await expect(page.locator('#right-rail')).not.toHaveAttribute('data-collapsed', '');
     await expect(page.locator('.seat')).toHaveCount(14);
@@ -287,7 +294,7 @@ test('the properties box folds without shutting the rail it sits in', async ({ p
 });
 
 test('each side opens and shuts without disturbing the other', async ({ page }) => {
-  await openShell(page);
+  await openShell(page, '&right=0');
 
   await page.locator('#left-tab').click();
   await page.waitForTimeout(150);
@@ -323,12 +330,18 @@ test('each side remembers its own state across a reload', async ({ page }) => {
   await page.waitForTimeout(150);
   expect(page.url()).toContain('left=1');
   expect(page.url(), 'the right must not have written itself into the URL')
-    .not.toContain('right=1');
+    .not.toContain('right=');
+
+  // SHUT IS REMEMBERED TOO: the right opens by default (Movie, 10 Oct), so a
+  // drafter who shuts it is the one fact a reload has to carry.
+  await page.locator('#right-tab').click();
+  await page.waitForTimeout(150);
+  expect(page.url()).toContain('right=0');
 
   await page.reload();
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await expect(page.locator('#left-rail'), 'the left forgot across a reload').toBeVisible();
-  await expect(page.locator('#right-rail'), 'the right invented a state across a reload')
+  await expect(page.locator('#right-rail'), 'the right forgot it was shut across a reload')
     .toHaveAttribute('data-collapsed', '');
 });
 
@@ -596,77 +609,63 @@ test('the file row stands on an empty origin, over a blank sheet', async ({ page
   expect(await levels()).toBe(before);
 });
 
-// THE RIGHT EDGE HAS TWO TABS NOW (Movie, 15 Sep): "top will be LEVELS /
-// LAYERS, and then next down LAYOUT PREVIEWS". One pane shows at a time, and
-// the pane is in the URL for the same reason the rail's open/shut is.
-test('the right edge has two tabs and shows one pane at a time', async ({ page }) => {
+// ONE TAB ON THE RIGHT EDGE AGAIN (Movie, 10 Oct): "move the LAYOUT PREVIEW
+// stuff into the LAYER / LEVELS tab.. right at the start, and then put the
+// text stuff down below all the preview". The previews head the pane and the
+// levels list follows, in one rail that scrolls as one.
+test('LEVELS / LAYERS holds the previews first and the levels under them', async ({ page }) => {
   await openShell(page);
   const levelsTab = page.locator('#right-tab');
-  const previewsTab = page.locator('#previews-tab');
   await expect(levelsTab).toHaveText('LEVELS / LAYERS');
-  await expect(previewsTab).toHaveText('LAYOUT PREVIEWS');
-
-  // Shut, NOTHING shows (Movie, 16 Sep: "delete the 2nd shorter version")
-  // -- but LEVELS is still the pane on offer: the tab wears the light, and
-  // one press brings up the full panel, not a stub.
-  await expect(page.locator('#right-rail')).toHaveAttribute('data-collapsed', '');
+  await expect(page.locator('#previews-tab'), 'the LAYOUT PREVIEWS tab is back').toHaveCount(0);
   await expect(levelsTab).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('#right-rail')).not.toHaveAttribute('data-collapsed', '');
+  await expect(page.locator('#view-rail')).toBeVisible();
+  await expect(page.locator('#levels-panel')).toBeVisible();
 
+  // PREVIEWS FIRST, then the list -- asked of the rail's own order, which is
+  // what the drafter scrolls through.
+  const order = await page.evaluate(() => [...document.querySelectorAll('#right-rail > *')]
+    .map(el => el.id).filter(Boolean));
+  expect(order.indexOf('view-rail'), 'the previews are not at the head of the pane')
+    .toBeLessThan(order.indexOf('levels-panel'));
+
+  // AN OLD `pane=previews` LINK still lands on the one pane, previews and all.
+  await page.goto('/MODEL.html?mode=night&pane=previews');
+  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+  await expect(page.locator('#view-rail')).toBeVisible();
+  await expect(page.locator('#levels-panel')).toBeVisible();
+
+  // Pressing the tab shuts the rail, and the next press brings it back.
   await levelsTab.click();
   await page.waitForTimeout(150);
-  await expect(page.locator('#right-rail')).not.toHaveAttribute('data-collapsed', '');
-  await expect(page.locator('#levels-panel')).toBeVisible();
-  await expect(page.locator('#view-rail')).toBeHidden();
-
-  // The other tab SWAPS the pane and leaves the rail open -- shutting on a
-  // swap would make the second tab cost two presses to use.
-  await previewsTab.click();
-  await page.waitForTimeout(150);
-  await expect(page.locator('#right-rail')).not.toHaveAttribute('data-collapsed', '');
-  await expect(page.locator('#view-rail')).toBeVisible();
-  await expect(page.locator('#levels-panel'), 'both panes are showing at once')
-    .toBeHidden();
-  await expect(previewsTab).toHaveAttribute('aria-selected', 'true');
-  await expect(levelsTab).toHaveAttribute('aria-selected', 'false');
-
-  // Pressing the tab that is already up shuts the rail, which is the gesture
-  // the single tab had.
-  await previewsTab.click();
-  await page.waitForTimeout(150);
   await expect(page.locator('#right-rail')).toHaveAttribute('data-collapsed', '');
-
-  // THE PANE IS IN THE URL, so it survives a reload and can be sent to
-  // someone else -- the same rule ?level=, ?view= and ?right= follow. The
-  // rail comes back shut, so the memory shows on the tab's light and on
-  // which pane the next press brings up.
-  expect(page.url()).toContain('pane=previews');
-  await page.reload();
-  await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-  await expect(previewsTab, 'the pane forgot across a reload')
-    .toHaveAttribute('aria-selected', 'true');
-  await previewsTab.click();
+  await expect(page.locator('.seat').first()).not.toBeVisible();
+  await expect(page.locator('.lv-card .lv-name').first()).not.toBeVisible();
+  await levelsTab.click();
   await page.waitForTimeout(150);
   await expect(page.locator('#view-rail')).toBeVisible();
-  await expect(page.locator('#levels-panel')).toBeHidden();
 });
 
-// SHUT TOOK THE CHIPS WITH IT (Movie, 16 Sep: "delete the 2nd shorter
-// version"). §7c's worry -- a shut rail loses the level switch -- is answered
-// by the LEVELS / LAYERS tab now: one press opens the full panel, the same
-// one press the chips cost, and the panel it opens is the long one with
-// every level's own name on it.
-test('shut, the rail keeps nothing on the sheet; the tabs are the way back',
+// OPEN ON EVERY DOOR IN (Movie, 10 Oct): landing on the page, coming back from
+// the BONEYARD after a BONE, and opening a saved file all put LEVELS / LAYERS
+// up -- even for a drafter who had shut it -- "so they can see it draw onto
+// the PREVIEWS when they press the BONE".
+test('LEVELS / LAYERS comes up after a BONE and after OPEN, even if it was shut',
   async ({ page }) => {
-    await openShell(page, '&pane=previews');
-    await expect(page.locator('#right-rail')).toHaveAttribute('data-collapsed', '');
-    await expect(page.locator('.lv-card .lv-name').first()).not.toBeVisible();
-    await expect(page.locator('.seat').first()).not.toBeVisible();
+    await openShell(page, '&right=0&reveal=1');
+    await expect(page.locator('#right-rail'), 'back from a BONE, the rail stayed shut')
+      .not.toHaveAttribute('data-collapsed', '');
+    expect(page.url()).not.toContain('reveal=');
 
-    // Open, the pane asked for is the one that shows -- and only it.
-    await page.locator('#previews-tab').click();
-    await page.waitForTimeout(200);
-    await expect(page.locator('#view-rail')).toBeVisible();
-    await expect(page.locator('#levels-panel')).toBeHidden();
+    await page.locator('#right-tab').click();
+    await expect(page.locator('#right-rail')).toHaveAttribute('data-collapsed', '');
+    await page.locator('#file-input').setInputFiles({
+      name: 'opened.draft', mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(REPRO)),
+    });
+    await expect(page.locator('#right-rail'), 'a file opened onto a shut rail')
+      .not.toHaveAttribute('data-collapsed', '');
   });
 
 // THE INSTRUMENTS SIT NEAR THE MIDDLE OF THE SHEET (Movie, 15 Sep: "the
@@ -788,7 +787,7 @@ test('NO PIECE OF CHROME COVERS ANY OTHER, shut or open', async ({ page }) => {
   // drafter", and that promise is only kept for chrome this list knows.
   // #finish-tab was named here on 27 Sep and came off with the EXT. FINISH
   // pane; the next tab to arrive has to be added by hand in the same way.
-  const ids = ['left-tab', 'left-rail', 'right-tab', 'previews-tab', 'right-rail',
+  const ids = ['left-tab', 'left-rail', 'right-tab', 'right-rail',
     'readout', 'readout-tab', 'hint', 'upper-right', 'clock', 'elsewhere',
     'strip', 'file-row', 'mode-corner',
     'settings-corner', 'page-row', 'house-strip'];
@@ -879,9 +878,9 @@ test('every side rail is one width, and keeps every control it holds',
     // inside the old measured bound, AND every control is still in its box.
     //
     // OPENED FIRST: shut shows nothing at all now (Movie, 16 Sep), so the
-    // width worth measuring is the open panel's.
+    // width worth measuring is the open panel's. The right is up on landing
+    // (Movie, 10 Oct); the left takes a press.
     await openShell(page);
-    await page.locator('#right-tab').click();
     await page.locator('#left-tab').click();
     await page.waitForTimeout(200);
     const verdict = await page.evaluate(() => {
