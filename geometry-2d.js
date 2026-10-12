@@ -2420,13 +2420,41 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
         const len = Math.hypot(dx, dz);
         if (!(len > 0.05)) return;
         const n = { x: -dz / len, z: dx / len };
-        const mid = { x: (wall.start.x + wall.end.x) / 2, z: (wall.start.z + wall.end.z) / 2 };
-        const looksOut = [1, -1].some(side => {
+        const looksOutAt = mid => [1, -1].some(side => {
           const p = { x: mid.x + n.x * side * 0.4, z: mid.z + n.z * side * 0.4 };
           return !own.some(pts => inside(pts, p));
         });
-        if (!looksOut) return;
-        out.push(...uncovered(wall, cover));
+        // JUDGED STRETCH BY STRETCH, NOT BY ITS MIDDLE. Movie, 12 Oct, the
+        // OVER GARAGE room's back wall on the roof plan: one wall runs both
+        // behind the stair landing (inside on both faces) and along the main
+        // roof (looking out), and judged at its middle -- which fell on the
+        // landing -- its whole top went missing. Cut where the storey's own
+        // footprint edges cross or meet it, and keep the stretches that look
+        // out, run back together.
+        const ts = [0, 1];
+        own.forEach(pts => pts.forEach((c, i) => {
+          const d = pts[(i + 1) % pts.length];
+          [c, d].forEach(q => {
+            const t = paramAlongSegment(wall, q);
+            if (t > 0 && t < 1 && pointToSegment(q, wall).d < 0.05) ts.push(t);
+          });
+          const den = dx * (d.z - c.z) - dz * (d.x - c.x);
+          if (Math.abs(den) < 1e-9) return;
+          const t = ((c.x - wall.start.x) * (d.z - c.z) - (c.z - wall.start.z) * (d.x - c.x)) / den;
+          const u = ((c.x - wall.start.x) * dz - (c.z - wall.start.z) * dx) / den;
+          if (t > 0 && t < 1 && u >= -1e-9 && u <= 1 + 1e-9) ts.push(t);
+        }));
+        ts.sort((x, y) => x - y);
+        const at = t => ({ x: wall.start.x + dx * t, z: wall.start.z + dz * t });
+        const kept = [];
+        for (let i = 0; i < ts.length - 1; i += 1) {
+          const t0 = ts[i], t1 = ts[i + 1];
+          if ((t1 - t0) * len < 0.05 || !looksOutAt(at((t0 + t1) / 2))) continue;
+          const last = kept[kept.length - 1];
+          if (last && Math.abs(last[1] - t0) < 1e-9) last[1] = t1; else kept.push([t0, t1]);
+        }
+        kept.forEach(([t0, t1]) => out.push(...uncovered(t0 === 0 && t1 === 1 ? wall
+          : { ...wall, start: { ...wall.start, ...at(t0) }, end: { ...wall.end, ...at(t1) } }, cover)));
       });
     });
     return out;
