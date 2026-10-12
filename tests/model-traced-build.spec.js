@@ -328,6 +328,46 @@ test('a traced MOD BILEVEL hangs the hood from the deck over the entry\'s front'
   expect(hood.filter(w => w !== front[0]).every(w => w.baseHeight > 2), 'the rest hang from MAIN\'s ceiling').toBe(true);
 });
 
+// THE HOOD'S WALL CARRYING ON A ROOM WALL'S LINE KEEPS ITS SIDE (Movie, 12
+// Oct, the OVER GARAGE back corner marked blue ADD / red REMOVE): the room's
+// back wall stands on the wall below with its body outside the line, and the
+// hood's stretch carrying on from it had its body inside -- a jog, and a
+// corner that did not close.
+test('a hood wall carrying on a room wall\'s line keeps that wall\'s side of it', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await open(page);
+  await drawType(page, 'bilevel', 'modifiedBilevel');
+  const box = await page.locator('#plan').boundingBox();
+  for (let i = 0; i < 4; i++) {
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, 300);
+    await page.waitForTimeout(80);
+  }
+  await trace(page, [[12, 0], [12, -13], [20, -13], [20, -42], [-2, -42], [-2, 0]]);
+  // THE GARAGE'S SIDE A FOOT PAST THE HOUSE'S, as his is: the room steps
+  // out a foot at the house corner, and the hood squares it off.
+  await trace(page, [[-2, -13], [-21, -13], [-21, 24], [-3, 24], [-3, 0], [-2, 0]]);
+  const d = await boneBuild(page);
+  const level4 = d.walls.filter(w => Number(w.levelId) === 4 && (w.view || 'plan') === 'plan');
+  const body = w => {
+    const dx = w.end.x - w.start.x, dz = w.end.z - w.start.z, k = w.refLine === 'right' ? -1 : 1;
+    return { x: -dz * k, z: dx * k };
+  };
+  const near = (p, q) => Math.hypot(p.x - q.x, p.z - q.z) < 0.01;
+  const pairs = [];
+  level4.filter(w => w.hoodOf).forEach(hood => level4.filter(w => !w.hoodOf).forEach(room => {
+    const a = body(hood), b = body(room);
+    const hx = hood.end.x - hood.start.x, hz = hood.end.z - hood.start.z;
+    const rx = room.end.x - room.start.x, rz = room.end.z - room.start.z;
+    if (Math.abs(hx * rz - hz * rx) > 1e-6) return;
+    if (![hood.start, hood.end].some(p => near(p, room.start) || near(p, room.end))) return;
+    if (Math.abs((room.start.x - hood.start.x) * hz - (room.start.z - hood.start.z) * hx) > 1e-6) return;
+    pairs.push(a.x * b.x + a.z * b.z > 0);
+  }));
+  expect(pairs.length, 'a hood wall carries on a room wall here').toBeGreaterThan(0);
+  expect(pairs.every(Boolean), 'each keeps the room wall\'s side').toBe(true);
+});
+
 test('the MOD BILEVEL room moved short of the front keeps a lower roof over the open garage', async ({ page }) => {
   await open(page);
   await drawType(page, 'bilevel', 'modifiedBilevel');

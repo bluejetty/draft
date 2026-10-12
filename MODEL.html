@@ -15613,8 +15613,35 @@
       });
       if (len - from > 0.01) pieces.push({ a: at(from), b: at(len), base: baseHeight });
     });
+    // A RUN THAT CARRIES ON A ROOM WALL'S LINE KEEPS THAT WALL'S SIDE OF IT.
+    // Movie, 12 Oct, on the OVER GARAGE plan's back corner (blue ADD, red
+    // REMOVE): the room's back wall stands on the wall below and so has its
+    // body on the outside of the line, and the hood's foot of wall carrying
+    // on from it had its body on the inside -- a jog where the two met, and
+    // a corner that did not close. 'left' puts the body on the (-dz, dx)
+    // side of start -> end, the rule raiseLoop's stacking reads.
+    const roomWalls = (drawing.walls || []).filter(wall =>
+      Number(wall.levelId) === Number(levelId) && (wall.view || 'plan') === 'plan');
+    const near = (p, q) => Math.hypot(p.x - q.x, p.z - q.z) < 0.01;
+    const sideFor = (a, b) => {
+      const dx = b.x - a.x, dz = b.z - a.z;
+      const len = Math.hypot(dx, dz);
+      if (!(len > 1e-6)) return refLine;
+      const on = roomWalls.find(wall => {
+        const wx = wall.end.x - wall.start.x, wz = wall.end.z - wall.start.z;
+        const wl = Math.hypot(wx, wz);
+        if (!(wl > 1e-6) || Math.abs(dx * wz - dz * wx) / (len * wl) > 1e-6) return false;
+        return [a, b].some(p => near(p, wall.start) || near(p, wall.end));
+      });
+      if (!on || on.refLine === 'center') return refLine;
+      const wx = on.end.x - on.start.x, wz = on.end.z - on.start.z;
+      const body = on.refLine === 'right' ? -1 : 1;
+      const same = (-dz * -wz + dx * wx) * body > 0;
+      return same ? 'left' : 'right';
+    };
     const walls = pieces.map(piece => commitWall(piece.a, piece.b, {
-      bone: false, levelId, view: 'plan', refLine, baseHeight: piece.base, topHeight,
+      bone: false, levelId, view: 'plan', refLine: sideFor(piece.a, piece.b),
+      baseHeight: piece.base, topHeight,
     }));
     return { roof, walls };
   };

@@ -108,6 +108,23 @@ const key = w => [w.start, w.end].map(p => `${Math.round(p.x * 10) / 10},${Math.
     [got.some(w => w.id === 'wall-38'), got.some(w => w.id === 'wall-39')], [false, true]);
 }
 
+// ── A WALL THAT IS EXTERIOR FOR PART OF ITS RUN (Movie, 12 Oct) ───────────
+// The OVER GARAGE room's back wall runs behind the stair landing (a deck of
+// the storey on both faces) and on along the main roof (looking out). Judged
+// at its middle, which falls behind the landing, its whole top went.
+{
+  const wall = (id, a, b) => ({ id, levelId: 4, view: 'plan', start: { x: a[0], z: a[1] }, end: { x: b[0], z: b[1] } });
+  const sq = (x0, z0, x1, z1) => [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }];
+  const got = G.roofPlanWalls({
+    levels: [{ id: 4 }],
+    walls: [wall('back', [0, 0], [24, 0])],
+    outlines: [{ levelId: 4, points: sq(0, 0, 24, 30) }],
+    floors: [{ levelId: 4, view: 'floor', points: sq(10, -6, 24, 0) }],
+  });
+  const spans = got.map(w => `${w.start.x}>${w.end.x}`);
+  check('the back wall keeps its top where it looks out, and only there', spans, ['0>10']);
+}
+
 // ── AND THE PAINTER JOINS THEM ──────────────────────────────────────────────
 const R = (() => {
   const sandbox = { window: {} };

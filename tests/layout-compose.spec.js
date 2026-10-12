@@ -779,3 +779,64 @@ test('ELECTRIC PLAN is dealt last when devices are placed, and REMOVE SHEET take
     await page.waitForTimeout(300);
     expect((await savedLayout(page)).sheets).toEqual(dealt.sheets);
   });
+
+// ── ELEVATIONS AND SECTIONS IN BIG WINDOWS (Movie, 12 Oct) ─────────────────
+// "showing the title centered below and extra space on the sides and top and
+// bottom if the scale allows it", and "allow up to 3/4 of foundation dotted
+// lines to be removed if necessary for scale" -- an elevation only: "on
+// section the underground lines will be needed".
+test('elevations and sections are dealt in windows that fill the sheet, drawing centred', async ({ page }) => {
+  await openLayout(page, boneDrawing());
+  await waitForCompose(page);
+  const layout = await savedLayout(page);
+  const cuts = layout.viewports.filter(v => v.kind === 'elevation' || v.kind === 'section');
+  expect(cuts.length).toBe(5);
+  cuts.forEach(viewport => {
+    const c = viewport.crop;
+    expect(c, `${viewport.kind} ${viewport.elevId || viewport.cutId} has a window`).toBeTruthy();
+    // Grown out on every side, the same on the left as the right and the
+    // same above as below: the drawing sits in the middle of its window.
+    expect(c.l).toBeLessThan(0);
+    expect(Math.abs(c.l - c.r)).toBeLessThan(1e-6);
+    if (viewport.kind === 'section') {
+      // A section is never cut, so it always sits in the middle.
+      expect(c.t).toBeLessThanOrEqual(0);
+      expect(Math.abs(c.t - c.b)).toBeLessThan(1e-6);
+    } else {
+      // An elevation is centred with air above and below, or won its scale
+      // by cutting its buried foundation and keeps its top.
+      const centred = c.t < 0 && Math.abs(c.t - c.b) < 1e-6;
+      const cut = Math.abs(c.t) < 1e-6 && c.b > 0;
+      expect(centred || cut, JSON.stringify(c)).toBe(true);
+    }
+  });
+  // The pair on one sheet shares a scale and fills the paper top to bottom.
+  const e1 = cuts.find(v => v.elevId === 'E1');
+  const e2 = cuts.find(v => v.elevId === 'E2');
+  expect(e1.pif).toBe(e2.pif);
+  // Plans keep their natural frames.
+  layout.viewports.filter(v => v.kind === 'plan').forEach(v => expect(v.crop).toBeUndefined());
+});
+
+test('a window gives up at most 3/4 of an elevation\'s buried foundation, and none of a section\'s', async ({ page }) => {
+  await openLayout(page, boneDrawing());
+  const got = await page.evaluate(() => {
+    const region = { x: 0.5, y: 0.5, w: 14, h: 6 };
+    const pif = 1 / 8;
+    // Two 30 ft drawings at 1/8" are 3.75" each, 7.5" against 6" less two
+    // captions and a gap: 2.15" short. Each may give up 3/4 of 12 ft buried.
+    const elev = { kind: 'elevation', wFt: 60, hFt: 30, cropFt: 9 };
+    const pair = windowsFor([elev, { ...elev }], pif, region);
+    const roomy = windowsFor([{ ...elev, hFt: 10 }], pif, region);
+    const section = windowsFor([{ kind: 'section', wFt: 60, hFt: 60, cropFt: 0 }], pif, region);
+    return { pair: pair.map(w => w.crop), roomy: roomy[0].crop, section: section[0].crop };
+  });
+  got.pair.forEach(c => {
+    expect(c.t).toBeCloseTo(0, 6);                 // the top of the drawing is kept
+    expect(c.b).toBeGreaterThan(0);                 // the bottom is cut...
+    expect(c.b).toBeLessThanOrEqual(9 / 8 + 1e-9);  // ...by no more than 3/4 of the buried part
+  });
+  expect(got.pair[0].b).toBeCloseTo(got.pair[1].b, 6);
+  expect(got.roomy.b).toBeLessThan(0);              // room to spare: nothing cut, air below
+  expect(got.section.b).toBeLessThanOrEqual(0);     // a section is never cut
+});
