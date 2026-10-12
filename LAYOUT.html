@@ -862,6 +862,46 @@ const VIEW_ALLOWANCE_FT = Object.freeze({
 });
 const COMPOSE_GAP_IN = 0.35;
 const COMPOSE_LABEL_IN = 0.3;
+// HOW MUCH OF THE BURIED FOUNDATION AN ELEVATION MAY GIVE UP FOR A SCALE
+// (Movie, 12 Oct: "allow up to 3/4 of foundation dotted lines to be removed
+// if necessary for scale"). A section keeps all of it: "on section the
+// underground lines will be needed".
+const ELEVATION_BURIED_CROP = 0.75;
+
+// THE WINDOWS OF A STACK OF CUT VIEWS, one under the next down the region.
+// Each takes its drawing's height plus an even share of the paper left over,
+// so the drawing sits centred with air all round. When the stack is too tall
+// for that, the shortfall comes off the bottoms -- off the buried foundation,
+// shared by how much of it each view may give up -- and the window then
+// starts at the top of its drawing. Returns where each drawing is centred
+// (its natural frame, uncropped) and the crop that turns that frame into
+// the window: negative grows a side out, positive trims it in.
+function windowsFor(views, pif, region) {
+  const n = views.length;
+  const avail = region.h - n * COMPOSE_LABEL_IN - (n - 1) * COMPOSE_GAP_IN;
+  const full = views.map(view => Math.max(view.hFt * pif, 0.75));
+  const short = Math.max(0, full.reduce((a, b) => a + b, 0) - avail);
+  const give = views.map(view => (view.cropFt || 0) * pif);
+  const giveAll = give.reduce((a, b) => a + b, 0);
+  const extra = short > 0 ? 0 : (avail - full.reduce((a, b) => a + b, 0)) / n;
+  let top = region.y;
+  return views.map((view, i) => {
+    const cut = short > 0 && giveAll > 0 ? Math.min(give[i], short * give[i] / giveAll) : 0;
+    const hIn = full[i] - cut + extra;
+    const wIn = Math.max(view.wFt * pif, 0.75);
+    const xIn = region.x + region.w / 2;
+    const natTop = top + extra / 2;
+    const yIn = natTop + full[i] / 2;
+    const crop = {
+      l: region.x - (xIn - wIn / 2),
+      r: (xIn + wIn / 2) - (region.x + region.w),
+      t: top - natTop,
+      b: (natTop + full[i]) - (top + hIn),
+    };
+    top += hIn + COMPOSE_LABEL_IN + COMPOSE_GAP_IN;
+    return { view, xIn, yIn, crop };
+  });
+}
 
 // The four standard elevations stand just outside the plan, the same rule the
 // Model Space's E marks follow: dirVec points at the side the viewer is on.
@@ -1396,10 +1436,19 @@ class Component extends PageLogic {
     };
     const sectionViews = this._cuts
       .map(cut => sized({ kind: 'section', cutId: cut.id }))
-      .filter(Boolean);
+      .filter(Boolean)
+      .map(view => ({ ...view, cropFt: 0 }));
+    // THE FEET AN ELEVATION MAY LOSE OFF ITS BOTTOM: a share of the dashed
+    // foundation under grade, and nothing above it.
     const elevViews = this._standardElevationCuts()
       .map(cut => sized({ kind: 'elevation', elevId: cut.id }))
-      .filter(Boolean);
+      .filter(Boolean)
+      .map(view => {
+        const ex = this._cutExtents(view);
+        const buried = ex && Number.isFinite(ex.grade) && Number.isFinite(ex.yBottomDrawn)
+          ? Math.max(0, ex.grade - ex.yBottomDrawn) : 0;
+        return { ...view, cropFt: ELEVATION_BURIED_CROP * buried };
+      });
 
     // MOVIE'S SET, IN HIS ORDER AND UNDER HIS NAMES (1 Oct): "SITE PLAN,
     // ELEVATIONS, ROOF PLAN, 2ND FL PLAN, 2ND FLOOR, MAIN FL PLAN, MAIN
@@ -1479,9 +1528,17 @@ class Component extends PageLogic {
     sheetPlan.forEach(({ views }, index) => {
       const sheet = index + 1;
       if (!views.length) return;
-      const pif = this._autoScaleFor(views, region);
-      const commit = (view, xIn, yIn) => {
-        const base = { id: nextId++, pif, sheet, xIn, yIn };
+      // ELEVATIONS AND SECTIONS IN BIG WINDOWS (Movie, 12 Oct): each one
+      // gets its share of the sheet as its window, the drawing centred in
+      // it with the spare paper round it, and its title centred under it.
+      // The scale may be one the buried foundation only nearly fits, an
+      // elevation then giving up to ELEVATION_BURIED_CROP of it.
+      const cutSheet = views.every(view => view.kind === 'elevation' || view.kind === 'section');
+      const pif = cutSheet
+        ? this._autoScaleFor(views.map(view => ({ ...view, hFt: view.hFt - (view.cropFt || 0) })), region)
+        : this._autoScaleFor(views, region);
+      const commit = (view, xIn, yIn, crop = null) => {
+        const base = { id: nextId++, pif, sheet, xIn, yIn, ...(crop ? { crop } : {}) };
         if (view.kind === 'plan') {
           viewports.push({ ...base, kind: 'plan', levelId: view.levelId, view: view.view });
         } else if (view.kind === 'section') {
@@ -1490,6 +1547,10 @@ class Component extends PageLogic {
           viewports.push({ ...base, kind: 'elevation', elevId: view.elevId });
         }
       };
+      if (cutSheet) {
+        windowsFor(views, pif, region).forEach(({ view, xIn, yIn, crop }) => commit(view, xIn, yIn, crop));
+        return;
+      }
       if (views.length === 1) {
         // Part 1's rule stands: a single view sits in the middle of its sheet.
         commit(views[0], region.x + region.w / 2,

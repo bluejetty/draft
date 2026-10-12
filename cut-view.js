@@ -1781,6 +1781,9 @@ if (!window.DraftCutView) {
       yBottom: stack.foundation.footingBottom - 2,
       yTopDrawn: bare,
       yBottomDrawn: stack.foundation.footingBottom,
+      // Where the dashed, buried part of an elevation begins: a sheet may
+      // crop some of it to win a scale (LAYOUT, Movie 12 Oct).
+      grade: stack.foundation.grade,
     };
   }
 
