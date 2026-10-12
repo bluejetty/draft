@@ -16528,6 +16528,13 @@
     storeys.forEach(level => noteLevel(level.id, 'floor'));
     if (entryBody) noteLevel(entryLevelId, 'plan');
     if (overGarageBody) noteLevel(overGarageLevelId, 'plan');
+    // EVERY PLAN BUT THE ELECTRIC ONE (Movie, 12 Oct: "can we add dimensions
+    // to ALL them except electric plan", then "yes" to every plan getting them
+    // when the house is built): the basement's walls plan too, wherever the
+    // build raised walls on it. The half-floors' floor layouts stay bare, as
+    // he asked on 7 Oct.
+    if ((drawing.walls || []).some(wall => Number(wall.levelId) === FOUNDATION_LEVEL_ID
+      && (wall.view || 'plan') === 'plan')) noteLevel(FOUNDATION_LEVEL_ID, 'plan');
     if (under.items.length) noteLevel(FOUNDATION_LEVEL_ID, 'foundation');
     if (built.length) noteLevel(ROOF_LEVEL_ID, 'plan');
     const sweptDims = [];

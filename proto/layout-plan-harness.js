@@ -468,13 +468,13 @@ function run(label) {
     };
     const LP = full.win.DraftLayoutPlan;
     const R0 = full.win.DraftRender2D;
-    const sheet = (levelId, view = 'floor') => {
+    const sheet = (levelId, view = 'floor', extra = {}, data = framed) => {
       const seen = [];
       full.win.DraftRender2D = { ...R0,
         drawBeam2D: (c, t, item) => seen.push(item.id),
         drawColumn2D: (c, t, item) => seen.push(item.id),
         drawDimension2D: (c, t, item) => seen.push(item.id) };
-      try { LP.drawPlan(recorder(), toS, framed, levelId, { view }); }
+      try { LP.drawPlan(recorder(), toS, data, levelId, { view, ...extra }); }
       finally { full.win.DraftRender2D = R0; }
       return seen.sort().join(',');
     };
@@ -490,6 +490,14 @@ function run(label) {
     check('the 2nd floor sheet shows the main floor beam, posts and beam row',
       sheet(5) === 'b3,c3,d3', sheet(5));
     check('the foundation sheet keeps its own', sheet(1, 'foundation') === 'b1,c1,d1,d1x,p1', sheet(1, 'foundation'));
+    // THE WALLS PLAN SHOWS THE POSTS STANDING ON THAT FLOOR (Movie, 12 Oct:
+    // "show columns on main that will support 2nd floor"), and a listing none.
+    const walled = { ...framed, walls: [...framed.walls, { id: 'w3', levelId: 3, view: 'plan',
+      wallType: 'stud_2x6', refLine: 'center', start: { x: 0, y: 0, z: 0 }, end: { x: 40, y: 0, z: 0 } }] };
+    check('the main floor plan shows the posts holding up the 2nd floor', sheet(3, 'plan', {}, walled) === 'c3',
+      sheet(3, 'plan', {}, walled));
+    check('a listing plan shows no posts', sheet(3, 'plan', { listing: true }, walled) === '',
+      sheet(3, 'plan', { listing: true }, walled));
     const tall = LP.planBounds({ ...framed, dimensions: [dim('far', 1, 'foundation', 'A-DIMS-COLS', 90)] }, 3);
     check('the frame takes in a beam row borrowed from below', tall && tall.maxZ >= 90, JSON.stringify(tall));
   }
@@ -615,6 +623,10 @@ const MUTATIONS = [
     'layout-plan.js', c => c.replace('.filter(dimension => !ownBeamRow(dimension))', '')],
   ['the frame leaves the borrowed rows out',
     'layout-plan.js', c => c.replace('const under = structureUnder(saved, levelId);\n    if (under) {', 'const under = null;\n    if (under) {')],
+  ['the walls plan shows no posts',
+    'layout-plan.js', c => c.replace(": planPosts ? only(of('columns')).concat(planPosts) : only(of('columns')),", ": only(of('columns')),")],
+  ['a listing shows the posts',
+    'layout-plan.js', c => c.replace("view === 'plan' && !halfLevel && !listing && !shell", "view === 'plan' && !halfLevel && !shell")],
   ['the warning repeats on every paint',
     'layout-plan.js', c => c.replace('warnedNoLayerViews = true;', 'warnedNoLayerViews = false;')],
 ];
