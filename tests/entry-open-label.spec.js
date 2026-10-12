@@ -4,6 +4,14 @@
 // (next line centered) ROUGH DRAFTER (next line centered) RESIDENTIAL DRAFTING
 // PROGRAM".
 //
+// OVER THE LOGO, NOT UNDER IT, since he saw it on screen: "lets put the OPEN
+// ROUGH DRAFTER part up top and the other stuff below". The words took the two
+// cells above the logo and the three utility links went down to the bottom
+// row. Both halves are checked, because the complaint was about the ORDER of
+// the page and not about the words alone -- a build that moved the words up
+// and left the errands above them would read the same way round as the one he
+// rejected.
+//
 // THE ONE THING THAT COULD GO QUIETLY WRONG, and what most of this spec is
 // about: the words are a LABEL ON THE DOOR, not a caption beside it. A block
 // that reads OPEN ROUGH DRAFTER and does nothing when it is pressed is worse
@@ -69,7 +77,7 @@ test('the words are inside the one door, so pressing them opens the model space'
     expect(url.searchParams.get('from')).toBe('entry');
   });
 
-test('OPEN is the biggest line, and the block sits under the logo without reaching past it',
+test('OPEN is the biggest line, and the block sits over the logo without reaching past it',
   async ({ page, baseURL }) => {
     await page.goto(`${baseURL}/index.html`);
 
@@ -82,15 +90,22 @@ test('OPEN is the biggest line, and the block sits under the logo without reachi
 
     const logo = await page.locator('.enter-logo').boundingBox();
     const call = await page.locator('.enter-call').boundingBox();
-    // UNDER the logo, not overlapping it.
-    expect(call.y).toBeGreaterThanOrEqual(logo.y + logo.height - 1);
+    // OVER the logo, not overlapping it.
+    expect(call.y + call.height).toBeLessThanOrEqual(logo.y + 1);
+
+    // AND THE ERRANDS ARE UNDER IT. "the other stuff below" -- every ring
+    // link sits beneath the logo now, where they were along the top before.
+    const links = await page.locator('a.ring-link').evaluateAll(
+      els => els.map(el => el.getBoundingClientRect().y));
+    expect(links.length).toBeGreaterThan(0);
+    for (const y of links) expect(y).toBeGreaterThan(logo.y + logo.height - 1);
     // AND NO WIDER. The two ring cells it fills are columns 2 and 3, together
     // exactly one logo wide; past that it would reach into the cells where
     // boxes 11/12 and 5/6 live.
     expect(call.width).toBeLessThanOrEqual(logo.width + 1);
   });
 
-test('a phone shows the label under the logo and still does not scroll',
+test('a phone shows the label over the logo and still does not scroll',
   async ({ page, baseURL }) => {
     // The entry page's standing rule: never scroll to show a way in that
     // should be the first thing you see. The label makes the column taller,
@@ -101,7 +116,7 @@ test('a phone shows the label under the logo and still does not scroll',
     await expect(page.locator('.enter-call')).toBeVisible();
     const logo = await page.locator('.enter-logo').boundingBox();
     const call = await page.locator('.enter-call').boundingBox();
-    expect(call.y).toBeGreaterThan(logo.y);
+    expect(call.y).toBeLessThan(logo.y);
     expect(await page.evaluate(
       () => document.documentElement.scrollHeight <= window.innerHeight)).toBe(true);
   });

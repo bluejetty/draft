@@ -220,20 +220,22 @@
         align-items: center;
         justify-items: center;
       }
-      /* ROWS 2 TO 4, NOT 2 TO 3 (Movie, 12 Oct): "under the logo in the 2
-         spaces below (in the 'table') fill those with text". The logo keeps
-         the middle four cells and the block now reaches one row further down,
-         so the words sit in the two cells under it -- which are boxes 9 and 8
-         by the numbering above. THOSE TWO BOXES ARE SPOKEN FOR NOW: a link
-         given to 8 or 9 later would land under the words rather than beside
-         them, so it wants one of the eight that are still free.
-         `align-self: start` is what keeps the logo where it already was. The
-         area is a row and a half of logo now, and the grid centres its items,
-         so without this the logo would drift down by half the slack the words
-         do not use -- a move nobody asked for on the one thing this page is
-         for. Started at the top, the logo still fills rows 2 and 3 exactly as
-         it did, and the words hang into row 4. */
-      .ring .enter { grid-column: 2 / 4; grid-row: 2 / 5; align-self: start; }
+      /* ROWS 1 TO 3, SO THE WORDS ARE OVER THE LOGO (Movie, 12 Oct): "lets
+         put the OPEN ROUGH DRAFTER part up top and the other stuff below".
+         They were under it first, in row 4 -- which is what he asked for when
+         he could only picture it ("under the logo in the 2 spaces below") --
+         and the page said otherwise once it was on screen: the three utility
+         links were at the top of the sheet and the thing the page is FOR was
+         at the bottom. So the two spoken-for cells are now the ones ABOVE the
+         logo, boxes 2 and 3 by the numbering below, and the links moved down
+         to the bottom row.
+         `align-self: end` is what keeps the logo where it already was. The
+         area is a row and a half of logo, and the grid centres its items, so
+         without this the logo would drift up by half the slack the words do
+         not use -- a move nobody asked for on the one thing this page is for.
+         Ended at the bottom, the logo still fills rows 2 and 3 exactly as it
+         did, and the words hang up into row 1. */
+      .ring .enter { grid-column: 2 / 4; grid-row: 1 / 4; align-self: end; }
       /* Box N's cell: along the top, down the right, back along the bottom,
          up the left -- the order the boxes are filled in. */
       .ring [data-box="1"] { grid-column: 1; grid-row: 1; }
@@ -307,13 +309,19 @@
     <div class="shell">
       <main>
         <div class="ring">
-          <!-- Box 1 -->
-          <a class="ring-link" href="CODES.html" data-box="1">BUILDING CODES / SPAN TABLES</a>
-          <!-- Box 2 -->
-          <a class="ring-link" href="https://pdf.bluejetty.ca/" data-box="2">PDF MANAGER</a>
-          <!-- Box 3 -->
-          <a class="ring-link" href="DXF/" data-box="3">DXF CONVERTER</a>
-          <!-- Boxes 4 to 12: empty until they are given a link. -->
+          <!-- ALONG THE BOTTOM NOW (Movie, 12 Oct): "lets put the OPEN ROUGH
+               DRAFTER part up top and the other stuff below". These three sat
+               in boxes 1 to 3 along the TOP, which put the errands above the
+               door. Boxes 10, 9 and 8 are the bottom row read left to right --
+               the numbering runs clockwise, so it counts down along the
+               bottom. Boxes 2 and 3 are the words over the logo now; 1, 4, 5,
+               6, 7, 11 and 12 are still free. -->
+          <!-- Box 10 -->
+          <a class="ring-link" href="CODES.html" data-box="10">BUILDING CODES / SPAN TABLES</a>
+          <!-- Box 9 -->
+          <a class="ring-link" href="https://pdf.bluejetty.ca/" data-box="9">PDF MANAGER</a>
+          <!-- Box 8 -->
+          <a class="ring-link" href="DXF/" data-box="8">DXF CONVERTER</a>
         <div class="enter">
           <!-- THE DOOR MOVED (Movie, 20 Sep): "can you make the main page
                link to the model.html". This pointed at MODEL.dc.html from the
@@ -338,9 +346,6 @@
                voice user saying what they can see would not reach the link. -->
           <a class="enter-link" href="MODEL.html?from=entry"
              aria-label="OPEN ROUGH DRAFTER — residential drafting program">
-            <img class="enter-logo" src="assets/rough-drafter-logo.png"
-                 width="225" height="225"
-                 alt="Rough Drafter: a rolled blueprint lettered ROUGH DRAFTER" />
             <span class="enter-call">
               <!-- A graphic replaces this span, not the block round it:
                    <img class="enter-open" src="assets/open.png" alt="OPEN" />
@@ -349,6 +354,9 @@
               <span class="enter-name">ROUGH DRAFTER</span>
               <span class="enter-what">RESIDENTIAL DRAFTING PROGRAM</span>
             </span>
+            <img class="enter-logo" src="assets/rough-drafter-logo.png"
+                 width="225" height="225"
+                 alt="Rough Drafter: a rolled blueprint lettered ROUGH DRAFTER" />
           </a>
         </div>
         </div>
