@@ -989,10 +989,10 @@
      board's "break the bone here, or move this wall?", a different bone
      entirely: reusing its id because both are about a bone and both offer
      two answers is exactly the collision DEFINITIONS.md exists to stop. */
-  #bone-choice, #build-choice, #garage-lesson, #corner-join, #garage-align, #trace-ask, #trace-insert { position:fixed; inset:0; z-index:7; display:flex;
+  #bone-choice, #build-choice, #garage-lesson, #corner-join, #garage-align, #garage-span, #trace-ask, #trace-insert { position:fixed; inset:0; z-index:7; display:flex;
     align-items:center; justify-content:center; padding:24px;
     background:rgba(0,0,0,0.35); }
-  #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden], #corner-join[hidden], #garage-align[hidden],
+  #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden], #corner-join[hidden], #garage-align[hidden], #garage-span[hidden],
   #trace-ask[hidden], #trace-insert[hidden] { display:none; }
   /* THE TRACE CARD: what the file is, the scale it was drawn at, and the
      two-point CALIBRATE on its own preview. */
@@ -1563,6 +1563,19 @@
     <div class="promote-row">
       <button type="button" data-garage-align-yes>YES - LINE UP (ONE ROOF)</button>
       <button type="button" data-garage-align-no>NO - KEEP <span data-garage-align-keep>10'-1 3/4"</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- PAST THE OWJ TABLE OVER A GARAGE (Movie, 12 Oct): "if user goes past 31
+     ... have a popup that states: choices 1. REQ ENGINEERED ... Beam / or
+     Joists. OR 2. PLACE COLUMNS to support BEAM". -->
+<div id="garage-span" data-garage-span hidden role="dialog" aria-label="Floor over the garage">
+  <div class="promote-card">
+    <p><b>FLOOR OVER THE GARAGE SPANS <span data-garage-span-ft>32'-0"</span></b><br>That is past what open web joists reach side wall to side wall (31'-0"). Choose how it is carried:</p>
+    <div class="promote-row">
+      <button type="button" data-garage-span-engineer>1. REQ ENGINEERED BEAM / OR JOISTS</button>
+      <button type="button" data-garage-span-columns>2. PLACE COLUMNS TO SUPPORT BEAM</button>
     </div>
   </div>
 </div>
@@ -12170,6 +12183,50 @@
     garageAlignCard.querySelector('[data-garage-align-no]').addEventListener('click', () => answer(false));
   }
 
+  // ── THE GARAGE SPAN ASK ──────────────────────────────────────────────────
+  //
+  // placeAutoBeam drafts choice 1 (no columns, the REQ note) and hands back
+  // what it could not decide; this asks once, then frames those levels again
+  // with the answer -- one undo step for the answer, apart from the build's.
+  // 1 keeps the note; 2 puts DROPPED ENGINEERED BEAMs on columns under the
+  // floor, between the garage doors where they allow.
+  const garageSpanCard = document.getElementById('garage-span');
+  let garageSpanLevels = null;
+  const askGarageSpan = pending => {
+    if (!garageSpanCard || !pending || !pending.length) return false;
+    const widest = Math.max(...pending.map(entry => entry.spanFt));
+    garageSpanCard.querySelector('[data-garage-span-ft]').textContent =
+      window.DraftFormatters.formatArchitecturalInches(widest * 12);
+    garageSpanLevels = [...new Set(pending.map(entry => entry.levelId))];
+    garageSpanCard.hidden = false;
+    return true;
+  };
+  if (garageSpanCard) {
+    const answer = choice => {
+      const levels = garageSpanLevels || [];
+      garageSpanLevels = null;
+      garageSpanCard.hidden = true;
+      let beams = 0, columns = 0;
+      levels.forEach(levelId => {
+        const result = placeAutoBeam({ levelId, garageChoice: choice });
+        if (result === -1) return;
+        beams += result.beams;
+        columns += result.columns;
+        if (result.placed.length || result.restored.length) {
+          undoStack.push({ kind: 'built', walls: [], outlines: [], list: null,
+            items: result.placed, restored: result.restored });
+        }
+      });
+      markDirty();
+      paint();
+      sayOnStrip(choice === 'columns'
+        ? `Floor over the garage: DROPPED ENGINEERED BEAM on columns (${beams} beam${beams === 1 ? '' : 's'}, ${columns} column${columns === 1 ? '' : 's'} on this level).`
+        : 'Floor over the garage: REQ ENGINEERED BEAM / OR JOISTS noted on its floor layout.');
+    };
+    garageSpanCard.querySelector('[data-garage-span-engineer]').addEventListener('click', () => answer('engineer'));
+    garageSpanCard.querySelector('[data-garage-span-columns]').addEventListener('click', () => answer('columns'));
+  }
+
   const buildTracedHouse = order => {
     const TP = window.DraftTracedPlans;
     if (!TP || !order?.entry) return null;
@@ -14651,7 +14708,7 @@
     return out.length ? out : null;
   };
 
-  const placeAutoBeam = ({ levelId = FOUNDATION_LEVEL_ID } = {}) => {
+  const placeAutoBeam = ({ levelId = FOUNDATION_LEVEL_ID, garageChoice = null } = {}) => {
     if (!drawing) return -1;
     // A LEVEL THE DRAWING ACTUALLY HAS, which is what levelPresent exists for:
     // a beam filed against a level this drawing has not got would paint once
@@ -14767,36 +14824,144 @@
       return garageOutlines.some(o => elevOf(o.levelId) < elevOf(storeyId) - 1e-6 && inLoop(o.points, c));
     };
     const OWJ_NOTE = /^ENGINEERED OWJ/;
+    // ── PAST THE TABLE: ASK ─────────────────────────────────────────────
+    //
+    // Movie, 12 Oct: "if user goes past 31 ... have a popup that states:
+    // choices 1. REQ ENGINEERED ... Beam / or Joists. OR 2. PLACE COLUMNS to
+    // support BEAM" -- "the beam doesn't need to be steel", "dropped beam ...
+    // better for ducts etc ... insulation of 2nd floor", "DROPPED ENGINEERED
+    // BEAM". The answer is KEPT ON THE DRAWING by what it wrote: a re-run
+    // finds the REQ note (choice 1) or the beam tag (choice 2) and gives the
+    // same answer again, so AUTO BEAM never asks twice for one garage.
+    const REQ_NOTE = /^REQ ENGINEERED BEAM/;
+    const BEAM_TAG = /^DROPPED ENGINEERED BEAM$/;
+    const notesNow = drawing.notes || [];
+    const isStoreyNote = (note, storeyId, re) => Number(note.levelId) === Number(storeyId)
+      && note.view === 'floor' && re.test(String(note.body || ''));
+    const isBeamTag = note => Number(note.levelId) === Number(levelId) && note.view === view
+      && BEAM_TAG.test(String(note.body || ''));
+    const keptChoice = (points, storeyId) => {
+      if (notesNow.some(note => isStoreyNote(note, storeyId, REQ_NOTE))) return 'engineer';
+      if (notesNow.some(note => isBeamTag(note) && inLoop(points, note.anchor || {}))) return 'columns';
+      return null;
+    };
+    const choiceFor = garageLoops.length ? (() => {
+      const kept = new Map();
+      bodies.forEach(({ outline, storeyId }) => {
+        const pts = outline.points.map(pt => ({ x: pt.x, z: pt.z }));
+        if (overGarage(pts, storeyId)) kept.set(outline, keptChoice(pts, storeyId));
+      });
+      return outline => kept.get(outline) || null;
+    })() : () => null;
+    // EVERY GARAGE NOTE THIS PRESS OWNS GOES BEFORE ANY IS WRITTEN: the OWJ
+    // and REQ notes on the floor above, the beam tags beside the beams.
+    drawing.notes = notesNow.filter(note => !isBeamTag(note)
+      && !(note.view === 'floor' && (OWJ_NOTE.test(String(note.body || ''))
+        || REQ_NOTE.test(String(note.body || '')))
+        && bodies.some(b => Number(b.storeyId) === Number(note.levelId))));
     const owjNotePlaced = [];
-    const owjNote = (points, storeyId) => {
+    const fmtFt = ft => window.DraftFormatters.formatArchitecturalInches(ft * 12);
+    const boxOf = points => {
       const xs = points.map(p => p.x), zs = points.map(p => p.z);
-      const w = Math.max(...xs) - Math.min(...xs), d = Math.max(...zs) - Math.min(...zs);
-      const span = Math.min(w, d);
-      const owj = window.DraftBuildHouse.owjFor(span, { minDepthIn: 19.75 });
-      const fmtFt = ft => window.DraftFormatters.formatArchitecturalInches(ft * 12);
-      const depth = owj.depthIn === 19.75 ? '19-3/4"' : `${owj.depthIn}"`;
-      const body = [
-        `ENGINEERED OWJ ${depth} @ ${owj.ocIn}" O.C.`,
-        `SIDE WALL TO SIDE WALL -- ${fmtFt(span)} SPAN`,
-        owj.fits ? 'TO BE CONFIRMED BY JOIST ENGINEER' : 'SPAN EXCEEDS OWJ TABLE -- CONFIRM WITH SUPPLIER',
-      ].join('\n');
+      return { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
+    };
+    const addNote = (at, levelOf, viewOf, body) => {
       drawing.notes = drawing.notes || [];
-      drawing.notes = drawing.notes.filter(note => !(Number(note.levelId) === Number(storeyId)
-        && note.view === 'floor' && OWJ_NOTE.test(String(note.body || ''))));
       const id = drawing.notes.reduce((top, n) => Math.max(top, Number(n.id) || 0), 0) + 1;
-      const at = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: 0, z: (Math.min(...zs) + Math.max(...zs)) / 2 };
       const note = {
-        id, anchor: at, text: { ...at }, levelId: storeyId, view: 'floor', body, end: 'none',
+        id, anchor: { ...at, y: 0 }, text: { ...at, y: 0 }, levelId: levelOf, view: viewOf, body, end: 'none',
         fill: false, fillOpacity: 0.85, outline: false, bullnose: 0, layer: 'A-ANNO-NOTE',
       };
       drawing.notes.push(note);
       owjNotePlaced.push({ list: drawing.notes, item: note });
     };
+    const owjNote = (points, storeyId, { spanFt = null, between = 'SIDE WALL TO SIDE WALL' } = {}) => {
+      const box = boxOf(points);
+      const span = spanFt ?? Math.min(box.x1 - box.x0, box.z1 - box.z0);
+      const owj = window.DraftBuildHouse.owjFor(span, { minDepthIn: 19.75 });
+      const depth = owj.depthIn === 19.75 ? '19-3/4"' : `${owj.depthIn}"`;
+      addNote({ x: (box.x0 + box.x1) / 2, z: (box.z0 + box.z1) / 2 }, storeyId, 'floor', [
+        `ENGINEERED OWJ ${depth} @ ${owj.ocIn}" O.C.`,
+        `${between} -- ${fmtFt(span)} SPAN`,
+        owj.fits ? 'TO BE CONFIRMED BY JOIST ENGINEER' : 'SPAN EXCEEDS OWJ TABLE -- CONFIRM WITH SUPPLIER',
+      ].join('\n'));
+      return owj;
+    };
+    const reqNote = (points, storeyId) => {
+      const box = boxOf(points);
+      addNote({ x: (box.x0 + box.x1) / 2, z: (box.z0 + box.z1) / 2 }, storeyId, 'floor', [
+        'REQ ENGINEERED BEAM / OR JOISTS',
+        `SIDE WALL TO SIDE WALL -- ${fmtFt(Math.min(box.x1 - box.x0, box.z1 - box.z0))} SPAN`,
+        'BY ENGINEER',
+      ].join('\n'));
+    };
+    // THE GARAGE UNDER A BODY, and its doors and walls for the beam plan.
+    const garageUnder = (points, storeyId) => {
+      const c = points.reduce((m, p) => ({ x: m.x + p.x / points.length, z: m.z + p.z / points.length }), { x: 0, z: 0 });
+      return garageOutlines.find(o => elevOf(o.levelId) < elevOf(storeyId) - 1e-6 && inLoop(o.points, c)) || null;
+    };
+    const garageDoorsOf = garage => {
+      const walls = (drawing.walls || []).filter(w => Number(w.levelId) === Number(garage.levelId));
+      return (drawing.fenestrations || []).filter(f => f.garage === true && f.type === 'door').flatMap(f => {
+        const wall = walls.find(w => w.id === f.wallId);
+        if (!wall) return [];
+        const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+        const t = len > 1e-6 ? f.offset / len : 0;
+        return [{ x: wall.start.x + (wall.end.x - wall.start.x) * t, z: wall.start.z + (wall.end.z - wall.start.z) * t }];
+      });
+    };
+    const nearLoop = (loop, p, tol = 0.75) => loop.some((a, i) => {
+      const b = loop[(i + 1) % loop.length];
+      const dx = b.x - a.x, dz = b.z - a.z, len2 = dx * dx + dz * dz;
+      const t = len2 > 1e-9 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2)) : 0;
+      return Math.hypot(a.x + dx * t - p.x, a.z + dz * t - p.z) <= tol;
+    });
+    const garagePending = [];
+    let garageBeams = 0, garageColumns = 0;
+    const placeGarageColumns = (points, storeyId) => {
+      const garage = garageUnder(points, storeyId);
+      const plan = window.DraftBuildHouse.garageBeamPlan(boxOf(points), {
+        doors: garage ? garageDoorsOf(garage) : [],
+        onWall: p => !!garage && nearLoop(garage.points, p),
+      });
+      plan.beams.forEach(beam => {
+        const id = beamId;
+        beamId += 1;
+        const record = {
+          id, start: { ...beam.start, y: 0 }, end: { ...beam.end, y: 0 },
+          levelId, view, mode: 'dropped', auto: true,
+        };
+        drawing.beams.push(record);
+        placed.push({ list: drawing.beams, item: record });
+        const along = plan.axis === 'x' ? { x: 1.5, z: 0 } : { x: 0, z: 1.5 };
+        // A THIRD OF THE WAY ALONG, clear of the GARAGE tag in the middle.
+        addNote({ x: beam.start.x + (beam.end.x - beam.start.x) / 3 + along.x,
+          z: beam.start.z + (beam.end.z - beam.start.z) / 3 + along.z },
+          levelId, view, 'DROPPED ENGINEERED BEAM');
+      });
+      plan.columns.forEach(p => {
+        const record = { id: columnId++, point: { ...p, y: 0 }, levelId, view, footing: 'pad36', auto: true };
+        drawing.columns.push(record);
+        placed.push({ list: drawing.columns, item: record });
+      });
+      garageBeams += plan.beams.length;
+      garageColumns += plan.columns.length;
+      owjNote(points, storeyId, { spanFt: plan.rowFt, between: 'WALL TO BEAM' });
+    };
 
     bodies.forEach(({ outline, storeyId }) => {
       const points = outline.points.map(pt => ({ x: pt.x, z: pt.z }));
       if (garageLoops.length && overGarage(points, storeyId)) {
-        owjNote(points, storeyId);
+        const box = boxOf(points);
+        const span = Math.min(box.x1 - box.x0, box.z1 - box.z0);
+        if (window.DraftBuildHouse.owjFor(span, { minDepthIn: 19.75 }).fits) {
+          owjNote(points, storeyId);
+          return;
+        }
+        const choice = garageChoice || choiceFor(outline);
+        if (choice === 'columns') { placeGarageColumns(points, storeyId); return; }
+        reqNote(points, storeyId);
+        if (!choice) garagePending.push({ levelId, storeyId, spanFt: span });
         return;
       }
       const plan = window.DraftBuildHouse.midSpanBeams(points, {
@@ -14854,7 +15019,10 @@
     });
 
     placed.push(...owjNotePlaced);
+    beamCount += garageBeams;
+    columnCount += garageColumns;
     return {
+      garagePending,
       placed,
       restored: [
         ...(sweptBeams.length ? [{ list: drawing.beams, items: sweptBeams }] : []),
@@ -16560,6 +16728,7 @@
     // complete job". No branch here says so; the lookup does.
     const sweptStructure = [];
     const framedTally = { beams: 0, columns: 0, unsupported: 0 };
+    const garageSpanPending = [];
     [FOUNDATION_LEVEL_ID, ...window.DraftLayerViews
       .floorLevels(drawing?.levels || []).map(level => Number(level.id))]
       .forEach(id => {
@@ -16570,7 +16739,10 @@
         framedTally.beams += beamed.beams;
         framedTally.columns += beamed.columns;
         framedTally.unsupported += beamed.unsupported;
+        garageSpanPending.push(...(beamed.garagePending || []));
       });
+    // ASKED AFTER THE PRESS HAS FINISHED, so the house is on screen behind it.
+    if (garageSpanPending.length) setTimeout(() => askGarageSpan(garageSpanPending), 0);
     if (framedTally.beams) {
       parts.push(`${framedTally.beams} beam${framedTally.beams === 1 ? '' : 's'}`
         + ` and ${framedTally.columns} column${framedTally.columns === 1 ? '' : 's'}`
@@ -20971,9 +21143,12 @@
         + `${result.columns} column${many(result.columns)} on `
         + `${levelLabel(result.levelId, level && level.name)} — re-run after `
         + 'outline edits to refresh them.' + hanging
-      : 'Every span is under 19′ — no mid-span beam needed.');
+      : result.garagePending?.length
+        ? 'The floor over the garage is past what open web joists reach — choose how it is carried.'
+        : 'Every span is under 19′ — no mid-span beam needed.');
     buildChrome();
     paint();
+    askGarageSpan(result.garagePending);
   };
 
   // ── AUTO PILES, the panel's other button ────────────────────────────────

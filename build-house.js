@@ -734,10 +734,83 @@ if (!window.DraftBuildHouse) {
     return { depthIn: last.depthIn, ocIn, maxSpanFt: last.spanFt[ocIn], fits: false };
   };
 
+  // ── PAST THE TABLE: DROPPED ENGINEERED BEAMS ON COLUMNS ────────────────
+  //
+  // Movie, 12 Oct, on a garage floor wider than the OWJ table reaches: "PLACE
+  // COLUMNS to support BEAM (which are placed 10ft max from the back wall to
+  // where the front of the room above is. or spaced evenly at less than 10ft.
+  // the floor joists can span lets go 30ft between them or even out to approx
+  // car bays based on garage door locations (place the columns centered
+  // between 2 doors so the cars won't hit the columns", then "if more than 60
+  // would need 3 rows", "dropped beam ... better for ducts etc ... and
+  // insulation of 2nd floor", "mark it ENGINEERED BEAM".
+  //
+  // THE JOISTS STILL RUN SIDE WALL TO SIDE WALL (the box's short way). The
+  // beams run the other way, front to back across the body, cutting the joist
+  // span into rows of no more than `maxJoistFt`: one beam up to 60 ft, two
+  // past it -- "3 rows". Each beam sits between two garage doors when the
+  // doors offer a line that keeps every row in reach (`doors`: the garage
+  // doors' centres in plan), else the rows are made even. Columns stand under
+  // each beam no more than `maxColumnFt` apart; an end that lands on a wall
+  // (`onWall`) bears there and takes no column.
+  //
+  // Pure: box {x0, x1, z0, z1} in plan feet. Answers the joist axis, the beam
+  // lines, the column points and the widest joist row left.
+  const garageBeamPlan = (box, {
+    doors = [], onWall = () => false, maxJoistFt = 30, maxColumnFt = 10,
+  } = {}) => {
+    const w = box.x1 - box.x0, d = box.z1 - box.z0;
+    const axis = w <= d ? 'x' : 'z';           // the joists' direction
+    const lo = axis === 'x' ? box.x0 : box.z0;
+    const hi = axis === 'x' ? box.x1 : box.z1;
+    const along0 = axis === 'x' ? box.z0 : box.x0;
+    const along1 = axis === 'x' ? box.z1 : box.x1;
+    const span = hi - lo;
+    const n = Math.max(0, Math.ceil(span / maxJoistFt - 1e-9) - 1);
+    if (!n) return { axis, beams: [], columns: [], rowFt: span };
+    const widest = cuts => {
+      const edges = [lo, ...cuts, hi];
+      return Math.max(...edges.slice(1).map((e, i) => e - edges[i]));
+    };
+    // BETWEEN TWO DOORS: the midpoints of neighbouring door centres, inside
+    // the body. Every choice of n of them is tried; the one leaving the
+    // narrowest widest row wins, if it is within reach.
+    const doorsAt = [...new Set(doors.map(p => (axis === 'x' ? p.x : p.z))
+      .filter(v => v > lo && v < hi).map(v => Math.round(v * 1000) / 1000))]
+      .sort((a, b) => a - b);
+    const between = doorsAt.slice(1).map((v, i) => (v + doorsAt[i]) / 2);
+    let best = null;
+    const pick = (from, start, chosen) => {
+      if (chosen.length === n) {
+        const row = widest(chosen);
+        if (row <= maxJoistFt + 1e-6 && (!best || row < best.row - 1e-9)) best = { cuts: chosen.slice(), row };
+        return;
+      }
+      for (let i = start; i < from.length; i += 1) pick(from, i + 1, [...chosen, from[i]]);
+    };
+    if (between.length >= n && between.length <= 12) pick(between, 0, []);
+    const cuts = best ? best.cuts : Array.from({ length: n }, (_, i) => lo + span * (i + 1) / (n + 1));
+    const at = (u, v) => (axis === 'x' ? { x: u, z: v } : { x: v, z: u });
+    const beams = [], columns = [];
+    cuts.forEach(u => {
+      const start = at(u, along0), end = at(u, along1);
+      beams.push({ start, end });
+      const len = along1 - along0;
+      const bays = Math.max(1, Math.ceil(len / maxColumnFt - 1e-9));
+      for (let k = 0; k <= bays; k += 1) {
+        const p = at(u, along0 + len * k / bays);
+        if ((k === 0 || k === bays) && onWall(p)) continue;
+        columns.push(p);
+      }
+    });
+    return { axis, beams, columns, rowFt: widest(cuts) };
+  };
+
   window.DraftBuildHouse = Object.freeze({
     OWJ_OC_IN,
     OWJ_SPANS,
     owjFor,
+    garageBeamPlan,
     outlineInteriorRef,
     houseWallRuns,
     footingRings,
