@@ -91,19 +91,24 @@ const NORTH_WALL = { start: { x: 0, z: 0 }, end: { x: 36, z: 0 } };
 // SIX INCHES, so a face sits a clean quarter foot off the stored line and
 // every figure below is readable by eye: a 36 ft house reads 0.5, 35.5, 0.5.
 const WALL_FT = 0.5;
+// `extraOutlines` is how a GARAGE reaches this module: an outline of its own
+// carrying garage:true, beside the house's. Its walls have to be handed over
+// too (`extraWalls`), because the interior string measures WALLS and a garage
+// outline alone has none -- the live page filters both off the level and does
+// not infer one from the other.
 function strings(win, { points = HOUSE, openings = [], roofs = [],
-  extraWalls = [], faces = true } = {}) {
+  extraWalls = [], extraOutlines = [], faces = true, firstOffset = 1.5 } = {}) {
   const AD = win.DraftAutoDims;
   const G = win.DraftGeometry2D;
   return AD.computeAutoDimStrings({
     thicknessFt: faces ? (() => WALL_FT) : undefined,
     faceOffsets: faces ? G.wallFaceOffsets : undefined,
     walls: [...wallsAround(points), ...extraWalls],
-    outlines: [{ points, garage: false }],
+    outlines: [{ points, garage: false }, ...extraOutlines],
     roofs,
     openings,
     offsetOutline: (pts, dist) => G.offsetOutline(pts, dist),
-    firstOffset: 1.5,
+    firstOffset,
     jogMergeFt: AD.JOG_MERGE_FT,
     stringSpacingFt: AD.STRING_SPACING_FT,
   }) || [];
@@ -211,6 +216,149 @@ function run() {
     `${countBy(roofed, AD.DIM_LAYERS.FENESTRATION)}`);
   ok('every roofed segment is tagged too',
     roofed.every(s => known.has(s.layer)));
+
+  // ── A MERGED JOG IS A REAL WALL FACE, NEVER THE MEAN (audit M7) ─────
+  //
+  // Two corners closer than JOG_MERGE_FT string as one coordinate, and the
+  // one they string as has to be a face that EXISTS. Collapsing the cluster to
+  // its arithmetic mean puts a printed dimension up to an inch from any wall
+  // on the drawing -- a fabricated coordinate on a permit set.
+  //
+  // IT LIVES HERE BECAUSE THE PAGE CANNOT DRAW IT. tests/auto-dims.spec.js
+  // owned this property and clicked the pair in through the Outline tool: the
+  // second click lands 1 7/16" from the first, INSIDE the vertex snap, so the
+  // page snapped the two onto one point and saved a zero-width spike. The
+  // fixture had no near-coincident pair in it at all, the mean was never on
+  // the drawing to be found, and the check passed on a drawing that could not
+  // fail it. Any pair close enough to merge is close enough to snap, so there
+  // is no click sequence that reaches this -- it needs exact geometry, which
+  // is what this harness is for.
+  {
+    // A slot in the south face whose two sides are 1 7/16" apart: x = 2.88
+    // and x = 3, inside JOG_MERGE_FT (2") so they string as one.
+    const notched = [{ x: 0, z: 0 }, { x: 36, z: 0 }, { x: 36, z: 66 },
+      { x: 3, z: 66 }, { x: 3, z: 60 }, { x: 2.88, z: 60 }, { x: 2.88, z: 66 }, { x: 0, z: 66 }];
+    // THE JOG ROW ALONE. The south stack also carries the interior string,
+    // whose coordinates are wall faces a quarter foot off the stored lines --
+    // real faces, but not the ones this rule is about.
+    const jogXs = pts => uniqOf(strings(win, { points: pts })
+      .filter(s => s.layer === 'A-DIMS-EXT' && Math.abs(s.start.z - s.end.z) < 1e-6
+        && s.start.z > 66)
+      .flatMap(s => [s.start.x, s.end.x]));
+    const southXs = jogXs(notched);
+    const real = uniqOf(notched.map(pt => pt.x));
+    ok('M7: the pair strings as ONE coordinate, not two inch-scale jogs',
+      southXs.filter(x => Math.abs(x - 2.88) < 0.05 || Math.abs(x - 3) < 0.05).length === 1,
+      southXs.join(', '));
+    ok('M7: and that coordinate is a wall face that exists, not their mean',
+      southXs.every(x => real.some(r => Math.abs(r - x) <= 0.01))
+      && !southXs.some(x => Math.abs(x - (2.88 + 3) / 2) < 0.01),
+      southXs.join(', '));
+    // AND THE JOG IS STILL DRAWN. A rule that merged the pair away entirely
+    // would pass both checks above and lose the step off the sheet.
+    ok('M7: the step itself still strings, between the two ends',
+      southXs.length > 2, southXs.join(', '));
+
+    // THE CONTROL, and the shape that broke the page test: two COLLINEAR
+    // stretches of one wall meeting at a point are one wall, not a jog. A
+    // zero-width spike -- which is what the snap left behind -- has no step to
+    // dimension and must not earn a break in a flat run.
+    const spiked = [{ x: 0, z: 0 }, { x: 36, z: 0 }, { x: 36, z: 66 },
+      { x: 3, z: 66 }, { x: 3, z: 60 }, { x: 3, z: 66 }, { x: 0, z: 66 }];
+    ok('M7: a zero-width spike breaks no flat wall, so there is no jog row',
+      jogXs(spiked).length === 0, jogXs(spiked).join(', '));
+  }
+
+  // ── ONE STACK PER BUILDING ON THE PLANS (Movie, 12 Oct) ─────────────
+  //
+  // HIS OWN PLAN, TO HIS OWN NUMBERS. Garage along the top, house below it
+  // and wider, and the three figures he named: "the outer row that is 28'
+  // should go all the way to the other outside wall (maybe around 35'?
+  // total)", "the next string that shows front of garage (19ft i think) add
+  // the extra part on the north side dimention from garage to outside wall",
+  // and "the door dimension can line up with the garage door line".
+  //
+  // 28 is the house's depth, 19 the garage's front, 35 the building both ways
+  // -- so every figure below is one he either asked for or named as wrong.
+  {
+    const house = rect(0, 7, 35, 35);          // 35 wide, 28 deep
+    const garage = rect(0, 0, 19, 7);          // along the top, 19 of the 35
+    const GARAGE_DOOR = 9.5;                   // mid-garage, on its north wall
+    const FRONT_DOOR = 27;                     // on the house's north wall, east of the garage
+    const segs = strings(win, {
+      points: house,
+      extraOutlines: [{ points: garage, garage: true }],
+      extraWalls: wallsAround(garage),
+      openings: [
+        { center: { x: GARAGE_DOOR, z: 0 }, wall: { start: { x: 0, z: 0 }, end: { x: 19, z: 0 } } },
+        { center: { x: FRONT_DOOR, z: 7 }, wall: { start: { x: 19, z: 7 }, end: { x: 35, z: 7 } } },
+      ],
+    });
+    const run = s => Math.round(Math.hypot(s.end.x - s.start.x, s.end.z - s.start.z) * 100) / 100;
+    const horiz = segs.filter(s => Math.abs(s.start.z - s.end.z) < 1e-6);
+    const vert = segs.filter(s => Math.abs(s.start.x - s.end.x) < 1e-6);
+    const rowAt = (list, key, value) => list.filter(s => Math.abs(s.start[key] - value) < 1e-6)
+      .map(run).sort((a, b) => a - b);
+
+    // THE OUTER ROW IS THE BUILDING, BOTH WAYS. 35 on the west side where it
+    // used to stop at 28, and 35 across the north.
+    const westXs = uniqOf(vert.filter(s => s.start.x < 0).map(s => s.start.x));
+    const northZs = uniqOf(horiz.filter(s => s.start.z < 0).map(s => s.start.z));
+    ok('PLANS: the west overall reads the whole building, not the house alone',
+      rowAt(vert, 'x', westXs[0]).join() === '35',
+      `west rows ${westXs.join(', ')} -> ${westXs.map(x => rowAt(vert, 'x', x).join('+')).join(' | ')}`);
+    ok('and the north overall reads it the other way',
+      rowAt(horiz, 'z', northZs[0]).join() === '35',
+      `north rows ${northZs.join(', ')} -> ${northZs.map(z => rowAt(horiz, 'z', z).join('+')).join(' | ')}`);
+
+    // THE ROW INSIDE IT READS THE STEP: the garage's 19 ft front and the 16
+    // ft of house beside it, on ONE line, adding to the 35 above.
+    ok('the north jog row reads the garage front and the rest of the wall',
+      northZs.slice(1).some(z => rowAt(horiz, 'z', z).join() === '16,19'),
+      northZs.map(z => `${z}:${rowAt(horiz, 'z', z).join('+')}`).join(' '));
+
+    // THE TWO DOORS SHARE A ROW. One FENS line across the whole north side,
+    // breaking at both centres -- 9.5 and 27 of the 35.
+    const fens = horiz.filter(s => s.layer === 'A-DIMS-FENS');
+    const fensZ = uniqOf(fens.map(s => s.start.z));
+    ok('the front door and the garage door string on ONE row, not two',
+      fensZ.length === 1, `FENS rows at z ${fensZ.join(', ')}`);
+    ok('and that row breaks at both door centres',
+      uniqOf(fens.flatMap(s => [s.start.x, s.end.x])).join() === '0,9.5,27,35',
+      uniqOf(fens.flatMap(s => [s.start.x, s.end.x])).join());
+
+    // ── THE ORDER OF THE ROWS, OUTWARD (Movie, 12 Oct) ────────────────
+    // "you have it right inside line WINDOWS (FENS), next one INT, next EXT
+    // corners, NEXT ext outter". The north side carries all four, so it is
+    // the one side that can pin the whole order.
+    const northOrder = northZs.map(z => uniqOf(horiz.filter(s => Math.abs(s.start.z - z) < 1e-6)
+      .map(s => s.layer)));
+    ok('the north stack runs FENS, INT, EXT, OVR from the building outward',
+      JSON.stringify(northOrder.reverse()) === JSON.stringify(
+        [['A-DIMS-FENS'], ['A-DIMS-INT'], ['A-DIMS-EXT'], ['A-DIMS-OVR']]),
+      JSON.stringify(northOrder));
+
+    // NOTHING LANDS ON THE BUILDING. Every string is outside the footprint,
+    // which is what the old per-footprint rule was really protecting.
+    ok('no string crosses the plan',
+      !segs.some(s => Math.min(s.start.x, s.end.x) > 0.01 && Math.max(s.start.x, s.end.x) < 34.99
+        && Math.min(s.start.z, s.end.z) > 0.01 && Math.max(s.start.z, s.end.z) < 34.99));
+
+    // AND A DETACHED GARAGE IS STILL ITS OWN BUILDING -- the half of the old
+    // rule that survives. Same garage, moved off the house: no row reaches
+    // across the gap, and it strings its own 19 against its own edge.
+    const away = rect(0, -30, 19, -23);
+    const apart = strings(win, {
+      points: house,
+      extraOutlines: [{ points: away, garage: true }],
+      extraWalls: wallsAround(away),
+    });
+    ok('a detached garage keeps its own stack and its own figures',
+      apart.some(s => Math.abs(s.start.z - s.end.z) < 1e-6 && run(s) === 19)
+      && apart.some(s => Math.abs(s.start.z - s.end.z) < 1e-6 && run(s) === 35)
+      && !apart.some(s => run(s) > 36),
+      apart.filter(s => Math.abs(s.start.z - s.end.z) < 1e-6).map(run).join(' '));
+  }
 
   // ── ONE STACK PER BUILDING, THREE ROWS (Movie, 11 Oct) ──────────────
   //

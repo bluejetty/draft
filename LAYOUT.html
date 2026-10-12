@@ -217,22 +217,32 @@
      darkens whatever is behind it, which is the job on all four skins. Two
      scrims on one page, one of them skin-blind, is the drift this whole
      exercise is about, so this page uses that one. */
-  #lay-scrim, #lay-print-scrim { position:fixed; inset:0; z-index:50; display:flex;
+  #lay-scrim, #lay-print-scrim, #lay-edit-scrim { position:fixed; inset:0; z-index:50; display:flex;
     align-items:flex-start; justify-content:center; padding-top:78px;
     background:rgba(0,0,0,0.35); }
   /* The card is .promote-card's shell (MODEL.html:865), down to the
      translucent panel: a modal over a 35% scrim is already separated from
      the page, so it does not also need to be opaque. */
-  #lay-dialog, #lay-print { width:min(400px, calc(100vw - 32px));
+  #lay-dialog, #lay-print, #lay-edit { width:min(400px, calc(100vw - 32px));
     border:1px solid var(--edge-panel);
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     box-shadow:0 16px 44px rgba(0,0,0,0.35); padding:18px; color: var(--ink-primary); }
-  #lay-dialog .lay-head, #lay-print .lay-head { display:flex; align-items:flex-start; gap:14px; }
-  #lay-dialog .lay-head > div, #lay-print .lay-head > div { flex:1; }
-  #lay-dialog-title, #lay-print-title { font-family:'Barlow Condensed', system-ui, sans-serif;
+  #lay-dialog .lay-head, #lay-print .lay-head, #lay-edit .lay-head { display:flex; align-items:flex-start; gap:14px; }
+  #lay-dialog .lay-head > div, #lay-print .lay-head > div, #lay-edit .lay-head > div { flex:1; }
+  #lay-dialog-title, #lay-print-title, #lay-edit-title { font-family:'Barlow Condensed', system-ui, sans-serif;
     font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; }
-  #lay-dialog-description, #lay-print-description { margin-top:5px; font-size:12px; line-height:1.45;
+  #lay-dialog-description, #lay-print-description, #lay-edit-description { margin-top:5px; font-size:12px; line-height:1.45;
     color: var(--ink-secondary); }
+  /* Y AND N SIDE BY SIDE AND THE SAME SIZE. Neither is the safe one -- going
+     is what the double-click asked for and staying is what the × means -- so
+     neither gets the quiet treatment. The letters are the whole label, so
+     they are set large enough to be a target rather than a hyphen. */
+  #lay-edit-row { display:flex; gap:10px; margin-top:16px; }
+  #lay-edit-row button { flex:1; border:1px solid var(--edge-panel);
+    background:transparent; color: var(--ink-primary); padding:10px 0; cursor:pointer;
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-size:19px; font-weight:600;
+    letter-spacing:0.08em; }
+  #lay-edit-row button:hover { border-color: var(--accent-mark); color: var(--accent-mark); }
   /* THE MARK, NOT THE ACCENT, and this one is measured rather than assumed:
      11px uppercase in --accent over the dialog's panel is 4.28 on RUFF night,
      under AA's 4.5, and the same text in --accent-mark is 9.32. It is also
@@ -244,7 +254,7 @@
   #lay-keys-link { display:inline-block; margin-top:9px; color: var(--accent-mark);
     font-family:'Barlow Condensed', system-ui, sans-serif; font-size:11px;
     font-weight:600; letter-spacing:0.06em; text-transform:uppercase; }
-  #lay-dialog-close, #lay-print-close { border:none; background:transparent; color: var(--ink-quiet);
+  #lay-dialog-close, #lay-print-close, #lay-edit-close { border:none; background:transparent; color: var(--ink-quiet);
     font-size:18px; line-height:1; cursor:pointer; }
   .lay-field-label { margin-top:16px; font-family:'Barlow Condensed', system-ui, sans-serif;
     font-size:11px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase;
@@ -558,6 +568,28 @@
       <input data-profile-import type="file" style="display:none;" />
     </div>
     <div id="lay-dialog-message" hidden></div>
+  </div>
+</div>
+
+<!-- DOUBLE-CLICK A VIEWPORT, GO AND EDIT IT (Movie, 12 Oct): "it POPUP asks:
+     EDIT IN MODEL SPACE - Y / N". Y and N are the two words he asked for, so
+     they are the two buttons -- Y first, because the double-click that opened
+     this box already said which drawing, and the drafter who did it meant to
+     go. The × and the scrim are both N: a confirm that can only be answered
+     forwards is one people learn to dread. -->
+<div id="lay-edit-scrim" hidden>
+  <div id="lay-edit" role="dialog" aria-modal="true" aria-label="Edit in Model Space">
+    <div class="lay-head">
+      <div>
+        <div id="lay-edit-title">Edit in Model Space</div>
+        <div id="lay-edit-description"></div>
+      </div>
+      <button type="button" id="lay-edit-close" aria-label="Close">&times;</button>
+    </div>
+    <div id="lay-edit-row">
+      <button type="button" id="lay-edit-yes" data-edit-model-yes>Y</button>
+      <button type="button" id="lay-edit-no" data-edit-model-no>N</button>
+    </div>
   </div>
 </div>
 
@@ -995,6 +1027,13 @@ class Component extends PageLogic {
     profileFileName: '',
     profileDialogMessage: '',
     profileDialogError: false,
+    // WHICH VIEWPORT A DOUBLE-CLICK IS ASKING ABOUT (Movie, 12 Oct): "if a
+    // user is in LAYOUT area and they DOUBLE CLICK on a VIEWPORT - it POPUP
+    // asks: EDIT IN MODEL SPACE - Y / N - and if they say Y it will take them
+    // to that drawing in MODEL SPACE, or if N will just go back to LAYOUT
+    // AREA and do nothing". The viewport's id, or null for no question
+    // pending. NOT PERSISTED: a question is not part of the sheet.
+    editInModel: null,
     // How deep the sheet's undo stacks are. They live in state because the
     // buttons are drawn from them and _persistLayout — where the history is
     // recorded — runs INSIDE a setState callback, after that render is gone.
@@ -1050,6 +1089,28 @@ class Component extends PageLogic {
       if (this._claimPointer(e)) this._onMouseDown(e);
     });
     this._canvas.addEventListener('pointercancel', this._pcl = (e) => this._abandonPointer(e));
+    // DOUBLE-CLICK A VIEWPORT TO GO AND EDIT IT (Movie, 12 Oct).
+    //
+    // `dblclick` ALONGSIDE THE POINTER DOOR, not inside it. The two presses
+    // of a double-click each arrive as their own `pointerdown` first, so
+    // _onMouseDown has already selected the viewport and armed a drag by the
+    // time this fires -- which is wanted, not a conflict: the drawing the
+    // question is about is the one now selected and outlined. Counting the
+    // presses by hand instead would mean a timer, a distance test and a
+    // guess at the platform's interval, all of which the browser already
+    // knows. `_draggingViewport` is cleared here because the second press
+    // armed a drag that no pointerup will land -- the dialog takes the
+    // focus -- and a live drag record would move the viewport on the next
+    // stray pointermove.
+    this._canvas.addEventListener('dblclick', this._dcl = (e) => {
+      if (this.state.addingViewport) return;
+      const hit = this._viewportAt(this._sheetPointIn(e));
+      if (!hit) return;
+      this._draggingViewport = null;
+      this._croppingViewport = null;
+      e.preventDefault();
+      this._openEditInModel(hit.id);
+    });
     // THE RESIZE ARROW over a grip, so a drafter can see where the window
     // takes a drag before pressing. Only while no gesture is under way.
     this._canvas.addEventListener('pointermove', this._hov = (e) => {
@@ -2260,6 +2321,73 @@ class Component extends PageLogic {
     return this._planTitle(viewport);
   }
 
+  // ── WHERE A VIEWPORT LIVES IN THE MODEL SPACE ───────────────────────────
+  //
+  // THE MODEL SPACE IS ALREADY ADDRESSABLE, which is the whole reason this
+  // feature is a dozen lines rather than a board. MODEL.html resolves
+  // `?level=<id>` through `activeLevelId()` and `?view=<id>` through
+  // `activeViewId()`, and a cut is reached as `view=cut:<id>` through
+  // `cutForViewId()`. Nothing new is needed on that side.
+  //
+  // AN ELEVATION IS A CUT TOO, so it addresses the same way: MODEL.html's
+  // `allCuts()` is `[...autoElevationCuts(), ...cuts()]`, and the auto
+  // elevations carry the ids E1 to E4 that this page's own
+  // `_standardElevationCuts()` builds. A section and an elevation are one
+  // case here, not two.
+  //
+  // NO LEVEL ON A CUT, deliberately. A cut is a view of the whole house and
+  // MODEL.html's `activeViewId()` answers a `cut:` id BEFORE it consults the
+  // level's layer views, so a level sent with it would be read for the
+  // level's own sake and could move the drafter somewhere they did not ask
+  // to be. The plan case is the one that needs both.
+  //
+  // NULL MEANS "NOT ADDRESSABLE" and the caller must handle it: a viewport
+  // whose cut has been deleted out from under it still draws its frame, and
+  // guessing a destination for it would open the wrong drawing.
+  _modelUrlForViewport(viewport) {
+    if (!viewport) return null;
+    if (viewport.kind === 'section' || viewport.kind === 'elevation') {
+      const cut = this._cutForViewport(viewport);
+      if (!cut) return null;
+      return `./MODEL.html?view=cut:${encodeURIComponent(cut.id)}`;
+    }
+    if (viewport.levelId == null) return null;
+    const params = new URLSearchParams({ level: String(viewport.levelId) });
+    // A plan viewport need not name a view -- the composer only sets one
+    // where the level has more than one drawing -- and MODEL.html derives the
+    // level's default when `view` is absent. Sending an empty one would make
+    // it warn and derive anyway, which is a log line for nothing.
+    if (viewport.view) params.set('view', viewport.view);
+    return `./MODEL.html?${params}`;
+  }
+
+  _openEditInModel(id) {
+    const viewport = this.state.viewports.find(item => item.id === id);
+    if (!viewport) return;
+    // The drawing is selected as well as asked about, so the frame the
+    // question names is the one outlined on the sheet behind the dialog.
+    this.setState({ editInModel: id, selectedViewportId: id }, () => this._draw());
+  }
+
+  _closeEditInModel() {
+    if (this.state.editInModel == null) return;
+    // N GOES BACK TO THE LAYOUT AND DOES NOTHING (Movie's own words), so the
+    // selection it arrived with is left exactly as it is.
+    this.setState({ editInModel: null });
+  }
+
+  _confirmEditInModel() {
+    const viewport = this.state.viewports.find(item => item.id === this.state.editInModel);
+    const url = this._modelUrlForViewport(viewport);
+    if (!url) { this._closeEditInModel(); return; }
+    // THE SHEET IS WRITTEN BEFORE THE PAGE TURNS. _persistLayout is what puts
+    // the viewports in the drawing, and the double-click has just moved the
+    // selection -- leaving without it would drop whatever the drafter did on
+    // this sheet since the last write.
+    this._persistLayout();
+    window.location.href = url;
+  }
+
   // WHAT A PLAN SHEET IS CALLED, in one place because there are two readers:
   // the caption under the drawing and the title in the company strip. They
   // said `${level.name} PLAN` separately, and separately is how two answers
@@ -2499,13 +2627,26 @@ class Component extends PageLogic {
 
   _onKeyDown(e) {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    // ESCAPE ANSWERS THE QUESTION FIRST, and answers it N. It is the only key
+    // the dialog takes, and it must not fall through to the two lines below:
+    // those clear the selection, and the selection is what the question is
+    // about -- a drafter who changes their mind should find the frame they
+    // double-clicked still outlined.
+    if (e.key === 'Escape' && this.state.editInModel != null) {
+      this._closeEditInModel();
+      return;
+    }
     if (e.key === 'Escape') {
       if (this.state.addingViewport || this.state.selectedViewportId != null) {
         this.setState({ addingViewport: false, selectedViewportId: null }, () => this._draw());
       }
       return;
     }
-    if ((e.key === 'Delete' || e.key === 'Backspace') && this.state.selectedViewportId != null) {
+    // AND NOTHING DELETES THE DRAWING THE QUESTION IS ABOUT while it is being
+    // asked: the double-click selected it, so Delete would otherwise land on
+    // the viewport the dialog is still naming.
+    if ((e.key === 'Delete' || e.key === 'Backspace')
+      && this.state.editInModel == null && this.state.selectedViewportId != null) {
       e.preventDefault();
       this._deleteSelectedViewport();
     }
@@ -2883,6 +3024,7 @@ class Component extends PageLogic {
         : SCALES[activeScale].label}`;
 
     this._paintProfileDialog();
+    this._paintEditInModel();
     this._paintRail();
   }
 
@@ -3236,6 +3378,33 @@ class Component extends PageLogic {
     frame.contentWindow.print();
   }
 
+  // THE QUESTION NAMES THE DRAWING IT IS ABOUT. "EDIT IN MODEL SPACE - Y / N"
+  // over a sheet of six viewports does not say WHICH, and the one a drafter
+  // meant is the one they double-clicked -- so the title it carries on the
+  // sheet is read back to them here, through `_viewportTitle` rather than a
+  // second spelling of it.
+  //
+  // A VIEWPORT WITH NOWHERE TO GO SAYS SO instead of offering a Y that would
+  // open the wrong drawing: a section whose cut has been deleted still draws
+  // its frame, and `_modelUrlForViewport` returns null for it.
+  _paintEditInModel() {
+    const id = this.state.editInModel;
+    const scrim = document.querySelector('#lay-edit-scrim');
+    if (!scrim) return;
+    scrim.hidden = id == null;
+    if (id == null) return;
+    const viewport = this.state.viewports.find(item => item.id === id);
+    const title = viewport ? this._viewportTitle(viewport) : '';
+    const url = this._modelUrlForViewport(viewport);
+    document.querySelector('#lay-edit-description').textContent = url
+      ? `Open ${title} in the Model Space to edit it. The sheet is saved first, and the layout is here when you come back.`
+      : `${title || 'This viewport'} has no drawing to open — its cut is no longer in the file.`;
+    const yes = document.querySelector('#lay-edit-yes');
+    yes.disabled = !url;
+    yes.style.opacity = url ? '' : '0.4';
+    yes.style.cursor = url ? '' : 'default';
+  }
+
   _paintProfileDialog() {
     const which = this.state.profileDialog;
     document.querySelector('#lay-scrim').hidden = !which;
@@ -3280,6 +3449,14 @@ class Component extends PageLogic {
 
     on('#lay-print-close', 'click', () => this._closePrintDialog());
     on('#lay-print-scrim', 'click', e => { if (e.target.id === 'lay-print-scrim') this._closePrintDialog(); });
+
+    // Y GOES, AND EVERYTHING ELSE IS N. The scrim closes the same way the
+    // print dialog's does -- only a press that landed on the scrim itself,
+    // so a click inside the card does not dismiss it.
+    on('[data-edit-model-yes]', 'click', () => this._confirmEditInModel());
+    on('[data-edit-model-no]', 'click', () => this._closeEditInModel());
+    on('#lay-edit-close', 'click', () => this._closeEditInModel());
+    on('#lay-edit-scrim', 'click', e => { if (e.target.id === 'lay-edit-scrim') this._closeEditInModel(); });
     on('[data-print-all]', 'click', () => {
       this._printPick = new Set(Array.from({ length: this._sheetCount() }, (_, i) => i + 1));
       this._paintPrintDialog();

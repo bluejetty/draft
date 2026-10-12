@@ -2072,24 +2072,32 @@ if (!window.DraftRender2D) {
     // dimensions either side -- which is how a stack of wall faces turns to
     // mush, and why he asked.
     //
-    // HALVED ONCE, NOT SHRUNK TO FIT. Half is the size he asked for and it
-    // stays readable. A figure scaled down until it fitted a hairline run
-    // would be legible to nobody, and would hide the crowding rather than
-    // ease it. A run too tight even for half still PRINTS: an overflowing
-    // figure tells a drafter to change his scale, a missing one tells him
-    // nothing and looks deliberate.
+    // STEPPED DOWN ONCE, NOT SHRUNK TO FIT. One smaller size stays readable.
+    // A figure scaled down until it fitted a hairline run would be legible to
+    // nobody, and would hide the crowding rather than ease it. A run too
+    // tight even for the small size still PRINTS: an overflowing figure tells
+    // a drafter to change his scale, a missing one tells him nothing and
+    // looks deliberate.
     //
-    // 6px IS ELEVEN HALVED AND ROUNDED TO A WHOLE PIXEL. 5.5 is what the
-    // arithmetic gives and what browsers hint unevenly; half a pixel is not
-    // worth a figure that renders differently on two machines.
+    // THREE QUARTERS, NOT HALF (Movie, 12 Oct, on the interior figures:
+    // "right now its about 50%" -- "make it about 75% the size of other
+    // dims"). It began at half, on his 29 Sep wording "the wall thicknesses
+    // can be displayed with text side 1/2 of the wall to wall normal
+    // dimensions", and half read smaller on the sheet than he wanted. THE
+    // RULE IS UNCHANGED -- measured, not classified, stepped down once -- and
+    // only how far it steps moved.
+    //
+    // 8px IS THREE QUARTERS OF ELEVEN ROUNDED TO A WHOLE PIXEL. 8.25 is what
+    // the arithmetic gives and what browsers hint unevenly; a quarter pixel
+    // is not worth a figure that renders differently on two machines.
     //
     // THE ARROWHEADS OWN THE ENDS. `arrow` draws at size 5 from each end, so
     // the room a figure actually has is the run less both of them.
     const FULL_FONT = `600 ${11 * k}px 'Barlow Condensed', system-ui, sans-serif`;
-    const HALF_FONT = `600 ${6 * k}px 'Barlow Condensed', system-ui, sans-serif`;
+    const TIGHT_FONT = `600 ${8 * k}px 'Barlow Condensed', system-ui, sans-serif`;
     ctx.font = FULL_FONT;
     const room = length - 12 * k;
-    const labelFont = ctx.measureText(label).width > room ? HALF_FONT : FULL_FONT;
+    const labelFont = ctx.measureText(label).width > room ? TIGHT_FONT : FULL_FONT;
     labelAlongLine2D(ctx, da, db, label, {
       font: labelFont,
       color, background: env.colors.labelBack, offset: 0, scale: k,

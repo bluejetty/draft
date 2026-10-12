@@ -1704,7 +1704,20 @@ if (!window.DraftDrawingFormat) {
   //
   // THE DERIVED VALUE LIVES HERE rather than in either page, because the whole
   // defect was two pages disagreeing about it. One number, one home.
-  const AUTO_DIM_FIRST_OFFSET_FT = 1.5;
+  //
+  // TWO FEET SINCE 12 OCT, and it was 1'-6" from 6 Sep to then (Movie: "can
+  // you also add 6" more between the house and first dimension"). HE ONLY
+  // MOVED THE FIRST ROW: the rest of a stack steps out from this one by the
+  // string spacing, so they all follow it out by the same 6" and keep their
+  // spacing from each other. It also widens the cut-mark bubbles' gap, which
+  // is half of this by MODEL.html's `cutMarkGapFt` -- they sit in the middle
+  // of the gap and so belong wherever it ends up.
+  //
+  // THIS IS THE MOVE THE `null` ABOVE EXISTS FOR. Every drawing that never
+  // picked an offset reads the new 2 on its next open; the ones that picked
+  // 1'-6" deliberately keep it, which is the contract working rather than a
+  // gap in it.
+  const AUTO_DIM_FIRST_OFFSET_FT = 2;
   const autoDimFirstOffsetFt = raw => positive(raw, null);
   // Which section-table row the type reads on the PROJECT page. The page's
   // rows (project-page.js SECTION_TABLE_ROWS) are HOUSE plus the stored
