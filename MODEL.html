@@ -22808,17 +22808,25 @@
     // PROJECT info prior to hitting the BONE". So it is this page's own NEW --
     // the same save-a-copy question over the house on screen, the same blank
     // -- and then back to PROJECT instead of the drive-thru.
-    const newForProject = wantsBlank
-      && new URLSearchParams(location.search).get('then') === 'project';
+    // AND FROM LAYOUT THE SAME WAY (Movie, 11 Oct: NEW there asks SAVE
+    // CURRENT or DISCARD, then opens a blank file "but stay in layout area").
+    // LAYOUT asks its own question, so `asked=1` means it is not asked again.
+    const thenPage = new URLSearchParams(location.search).get('then');
+    const newForProject = wantsBlank && (thenPage === 'project' || thenPage === 'layout');
+    const alreadyAsked = newForProject
+      && new URLSearchParams(location.search).get('asked') === '1';
     // KEEP THE NUMBERS, when PROJECT's NEW was answered KEEP (option C).
     const keepProjectNumbers = newForProject
       && new URLSearchParams(location.search).get('keep') === '1';
-    const backToProject = () => { window.location.href = './PROJECT.html'; };
+    const backToProject = () => {
+      window.location.href = thenPage === 'layout' ? './LAYOUT.html' : './PROJECT.html';
+    };
     if (wantsBlank) {
       const spent = new URL(location.href);
       spent.searchParams.delete('new');
       spent.searchParams.delete('then');
       spent.searchParams.delete('keep');
+      spent.searchParams.delete('asked');
       history.replaceState(null, '', spent.pathname + spent.search + spent.hash);
     }
     // ── BACK FROM THE BONEYARD'S GROW, AND THAT ASK IS SPENT FIRST TOO ──
@@ -22925,7 +22933,7 @@
     // does not hold the lease is refused at the store.
     if (newForProject) {
       await askForLease();
-      newDrawing({ then: backToProject, onCancel: backToProject,
+      newDrawing({ then: backToProject, onCancel: backToProject, ask: !alreadyAsked,
         keep: keepProjectNumbers ? projectNumbersOf(drawing) : null });
       return;
     }
@@ -23441,7 +23449,7 @@
   const drawingHasWork = () => !!drawing && ['walls', 'lines', 'floors', 'roofs', 'outlines',
     'shapes', 'fenestrations', 'dimensions', 'stairs', 'columns', 'beams', 'notes', 'roomTags']
     .some(key => Array.isArray(drawing[key]) && drawing[key].length);
-  const newDrawing = ({ then = null, onCancel = null, keep = null } = {}) => {
+  const newDrawing = ({ then = null, onCancel = null, keep = null, ask = true } = {}) => {
     const clear = async () => {
       if (!(await adoptAndShow(blankDrawingFile(keep || {})))) return;
       await save();
@@ -23453,7 +23461,7 @@
       // cancels it, so it never lands over someone already drawing.
       pullUpToWindow();
     };
-    if (!dirty && !drawingHasWork()) { clear(); return; }
+    if (!ask || (!dirty && !drawingHasWork())) { clear(); return; }
     askToSave('NEW clears this drawing from this browser. Save a copy to your computer first?',
       clear, async () => {
         const name = generatedFileName();
