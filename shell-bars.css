@@ -477,10 +477,12 @@
     border:1px solid var(--edge-panel); border-radius:4px; outline:none; }
   #frozen-length:disabled { color: var(--ink-quiet); opacity:0.5; }
   #frozen-length:focus { border-color: var(--accent); }
-  /* LIVE: a line in hand (Movie, 12 Oct). The tracking rays' orange round
-     the outside; the inside stays the dark chip so the white number reads. */
+  /* LIVE: a line in hand (Movie, 12 Oct). An orange rim and glow round the
+     outside, the inside left the dark chip so the white number reads. The
+     page that lights it names the colour (MODEL: the tracking rays'). */
   #frozen-length.live, #frozen-length.live:disabled { opacity:1; color: var(--ink-primary);
-    border-color:#ffa21a; box-shadow: 0 0 0 1px #ffa21a, 0 0 9px 1px rgba(255, 162, 26, 0.75); }
+    border-color: var(--length-live, var(--accent));
+    box-shadow: 0 0 0 1px var(--length-live, var(--accent)), 0 0 9px 1px var(--length-live-glow, transparent); }
   /* THE WORD SITS AFTER ITS BOX, between the box and the protractor, where
      Movie put it: the instrument and its number read as one thing with the
      name in the middle naming both. It stays at every width -- the angle box

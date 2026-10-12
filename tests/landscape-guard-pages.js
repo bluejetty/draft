@@ -52,6 +52,9 @@ const EXEMPT = {
   // The ruling's own exception, quoted at the top of orientation-guard.js:
   // "ENTRY (index.html) is the one exception and does not load this file."
   'index.html': 'ENTRY — the one screen the ruling lets follow the device',
+  // BUILDING CODES / SPAN TABLES (12 Oct), off ENTRY's link ring: references
+  // to read, a phone held upright included. Nobody drafts on it.
+  'CODES.html': 'reference page off ENTRY, read on any device',
   // Single-component preview pages: a <x-dc> block, react, support.js and
   // nothing else — around 5KB each, with no app shell, no store and no
   // drawing surface. Nobody drafts on them, so there is no landscape to
