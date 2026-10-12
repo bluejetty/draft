@@ -199,7 +199,9 @@ function run(label) {
     ],
     dimensions: [
       ...tagged.dimensions,
-      { id: 90003, levelId: MAIN, view: 'floor', layer: 'A-DIMS-COLS',
+      // FILED UNDER THE FOUNDATION, where the main floor's beam rows live: the
+      // floor layout borrows them (structureUnder) and the view list gates them.
+      { id: 90003, levelId: 1, view: 'foundation', layer: 'A-DIMS-COLS',
         start: { x: 0, y: 0, z: 48 }, end: { x: 19.75, y: 0, z: 48 } },
     ],
   };
@@ -439,6 +441,59 @@ function run(label) {
   check('hologramLocal undoes hologramPoint', same(F.hologramLocal(placed, there), { x: 12.5, z: -6 }),
     JSON.stringify(F.hologramLocal(placed, there)));
 
+  // ── A FLOOR LAYOUT SHOWS WHAT HOLDS IT UP (Movie, 12 Oct) ─────────────
+  //
+  // The main floor's sheet draws FOUNDATION's beam and posts (not the piles)
+  // and their beam rows; the 2nd floor's draws MAIN FL's. MAIN FL's own beam
+  // is the 2nd floor's and leaves the main floor's sheet.
+  {
+    const deck = (id, levelId) => ({ id, levelId, view: 'floor',
+      points: [{ x: 0, z: 0 }, { x: 40, z: 0 }, { x: 40, z: 30 }, { x: 0, z: 30 }] });
+    const beam = (id, levelId, view) => ({ id, levelId, view, mode: 'flush',
+      start: { x: 0, y: 0, z: 15 }, end: { x: 40, y: 0, z: 15 } });
+    const post = (id, levelId, view, footing) => ({ id, levelId, view, footing, point: { x: 20, y: 0, z: 15 } });
+    const dim = (id, levelId, view, layer, z) => ({ id, levelId, view, layer,
+      start: { x: 0, y: 0, z }, end: { x: 20, y: 0, z } });
+    const framed = {
+      version: SAVED.version,
+      levels: [{ id: 5, name: '2ND FL' }, { id: 3, name: 'MAIN FL' }, { id: 1, name: 'FOUNDATION' }],
+      walls: [{ id: 'w1', levelId: 1, view: 'foundation', wallType: 'stud_2x6', refLine: 'center',
+        start: { x: 0, y: 0, z: 0 }, end: { x: 40, y: 0, z: 0 } }],
+      floors: [deck('f3', 3), deck('f5', 5)],
+      beams: [beam('b1', 1, 'foundation'), beam('b3', 3, 'floor')],
+      columns: [post('c1', 1, 'foundation', 'pad36'), post('p1', 1, 'foundation', 'pile12'),
+        post('c3', 3, 'floor', 'pad36')],
+      dimensions: [dim('d1', 1, 'foundation', 'A-DIMS-COLS', 50), dim('d1x', 1, 'foundation', 'A-DIMS-EXT', 60),
+        dim('d3', 3, 'floor', 'A-DIMS-COLS', 70), dim('d3x', 3, 'floor', 'A-DIMS-EXT', 80)],
+    };
+    const LP = full.win.DraftLayoutPlan;
+    const R0 = full.win.DraftRender2D;
+    const sheet = (levelId, view = 'floor') => {
+      const seen = [];
+      full.win.DraftRender2D = { ...R0,
+        drawBeam2D: (c, t, item) => seen.push(item.id),
+        drawColumn2D: (c, t, item) => seen.push(item.id),
+        drawDimension2D: (c, t, item) => seen.push(item.id) };
+      try { LP.drawPlan(recorder(), toS, framed, levelId, { view }); }
+      finally { full.win.DraftRender2D = R0; }
+      return seen.sort().join(',');
+    };
+    check('the lowest floor is held up by the foundation',
+      JSON.stringify(LP.structureUnder(framed, 3)) === '{"levelId":1,"view":"foundation"}',
+      JSON.stringify(LP.structureUnder(framed, 3)));
+    check('the 2nd floor is held up by the main floor',
+      JSON.stringify(LP.structureUnder(framed, 5)) === '{"levelId":3,"view":"floor"}',
+      JSON.stringify(LP.structureUnder(framed, 5)));
+    check('the foundation itself borrows nothing', LP.structureUnder(framed, 1) === null);
+    check('the main floor sheet shows the foundation beam, its posts and its beam row, not the piles',
+      sheet(3) === 'b1,c1,d1,d3x', sheet(3));
+    check('the 2nd floor sheet shows the main floor beam, posts and beam row',
+      sheet(5) === 'b3,c3,d3', sheet(5));
+    check('the foundation sheet keeps its own', sheet(1, 'foundation') === 'b1,c1,d1,d1x,p1', sheet(1, 'foundation'));
+    const tall = LP.planBounds({ ...framed, dimensions: [dim('far', 1, 'foundation', 'A-DIMS-COLS', 90)] }, 3);
+    check('the frame takes in a beam row borrowed from below', tall && tall.maxZ >= 90, JSON.stringify(tall));
+  }
+
   if (label) console.log(label);
 }
 
@@ -544,6 +599,22 @@ const MUTATIONS = [
     'hologram.js', c => c.replace('out.x = p.x; out.z = p.z;', '')],
   ['the cut painter never reaches into a list',
     'hologram.js', c => c.replace('if (Array.isArray(v)) return v.map(walk);', 'if (Array.isArray(v)) return v;')],
+  ['a floor layout draws its own structure again',
+    'layout-plan.js', c => c.replace("const under = view === 'floor' && !halfLevel ? structureUnder(saved, levelId) : null;", 'const under = null;')],
+  ['the lowest floor borrows from nothing',
+    'layout-plan.js', c => c.replace("if (at === 0) return { levelId: BASEMENT_LEVEL_ID, view: 'foundation' };", 'if (at === 0) return null;')],
+  ['a floor borrows from the floor above',
+    'layout-plan.js', c => c.replace('return { levelId: Number(floors[at - 1].id), view: \'floor\' };', 'return { levelId: Number((floors[at + 1] || floors[at]).id), view: \'floor\' };')],
+  ['the piles come up onto the floor',
+    'layout-plan.js', c => c.replace("under ? borrowed('columns', notPile)", "under ? borrowed('columns', () => true)")],
+  ['the borrowed beam rows are left behind',
+    'layout-plan.js', c => c.replace(".concat(borrowed('dimensions', beamRow))", '')],
+  ['every dimension below comes up',
+    'layout-plan.js', c => c.replace("borrowed('dimensions', beamRow)", "borrowed('dimensions', () => true)")],
+  ['the sheet keeps its own beam rows',
+    'layout-plan.js', c => c.replace('.filter(dimension => !ownBeamRow(dimension))', '')],
+  ['the frame leaves the borrowed rows out',
+    'layout-plan.js', c => c.replace('const under = structureUnder(saved, levelId);\n    if (under) {', 'const under = null;\n    if (under) {')],
   ['the warning repeats on every paint',
     'layout-plan.js', c => c.replace('warnedNoLayerViews = true;', 'warnedNoLayerViews = false;')],
 ];
