@@ -47,7 +47,11 @@ async function openWithTags(page) {
     window.__tags = [];
     const orig = CanvasRenderingContext2D.prototype.fillText;
     CanvasRenderingContext2D.prototype.fillText = function (text, x, y) {
-      window.__tags.push(String(text));
+      // THE PLAN'S OWN INK ONLY. The preview seats paint other levels' tags
+      // through this same fillText whether the panel is open or not -- the
+      // 2ND FL's W 66 X 36 came and went with when a seat happened to paint
+      // (CI, 12 Oct), on main as on every branch.
+      if (this.canvas && this.canvas.id === 'plan') window.__tags.push(String(text));
       return orig.call(this, text, x, y);
     };
   });
@@ -143,7 +147,11 @@ async function retape(page, width) {
     window.__tags = [];
     const orig = CanvasRenderingContext2D.prototype.fillText;
     CanvasRenderingContext2D.prototype.fillText = function (text, x, y) {
-      window.__tags.push(String(text));
+      // THE PLAN'S OWN INK ONLY. The preview seats paint other levels' tags
+      // through this same fillText whether the panel is open or not -- the
+      // 2ND FL's W 66 X 36 came and went with when a seat happened to paint
+      // (CI, 12 Oct), on main as on every branch.
+      if (this.canvas && this.canvas.id === 'plan') window.__tags.push(String(text));
       return orig.call(this, text, x, y);
     };
   });
