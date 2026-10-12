@@ -305,6 +305,8 @@ if (!window.DraftLayoutPlan) {
         label: ft => fmt.formatArchitecturalInches(ft * 12),
         colors: DIMENSION_COLORS,
         atLine: true,
+        // Paper units: the sheet zoom over its print zoom (render-2d).
+        inkScale: env.inkScale,
       };
       of('dimensions').filter(dimension => dimension?.levelId === levelId).forEach(dimension => {
         if (ctx && 'dxfLayer' in ctx) ctx.dxfLayer = dimension.layer || 'A-DIMS';
@@ -710,6 +712,9 @@ if (!window.DraftLayoutPlan) {
         // THE LINE WHERE IT IS STORED, so the frame (sized to the records)
         // holds every row of a stack (render-2d drawDimension2D).
         atLine: true,
+        // AND ITS INK IN PAPER UNITS: ticks and figures scale with the sheet
+        // when it zooms instead of holding their screen size (Movie, 11 Oct).
+        inkScale: env.inkScale,
       }),
       // THE NAME ON A CONSTRUCTION PLAN, THE NAME AND THE SIZE ON A LISTING
       // (Movie, 1 Oct: "the 2nd line will be only for REAL ESTATE LAYOUTS -

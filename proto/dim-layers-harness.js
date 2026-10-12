@@ -242,6 +242,35 @@ function run() {
       && !segs.some(s => Math.abs(Math.abs(s.end.x - s.start.x) - 94) < 1e-6));
   }
 
+  // ── THE GARAGE OFF THE HOUSE'S CORNER (Movie, 11 Oct) ───────────────
+  //
+  // "need some dimension lines for the other side of garage too", marked
+  // straight under the garage's eave. A detached garage up and to the side of
+  // the house: its bottom row line lands inside the house's band for the few
+  // feet the two overlap, and the rule for plans called that whole side
+  // buried. On a roof plan it is the garage's own eave, so it strings -- and
+  // under the garage, not pushed a building away past the house.
+  {
+    const house = { points: rect(0, 0, 54, 33), overhang: 2 };
+    const garage = { points: rect(50, -25, 85, -1), overhang: 2, garage: true };
+    const segs = strings(win, { roofs: [house, garage] });
+    const under = segs.filter(s => Math.abs(s.start.z - s.end.z) < 1e-6
+      && s.start.z > -1 && s.start.z < 8
+      && Math.min(s.start.x, s.end.x) >= 50 - 1e-6 && Math.max(s.start.x, s.end.x) <= 85 + 1e-6);
+    ok('GARAGE: its own south side strings, right under its eave',
+      under.some(s => Math.abs(Math.abs(s.end.x - s.start.x) - 35) < 1e-6),
+      under.map(s => `${s.start.z}:${Math.abs(s.end.x - s.start.x)}`).join(' '));
+    ok('the house\'s own stacks keep their place past the garage',
+      segs.some(s => Math.abs(Math.abs(s.end.x - s.start.x) - 54) < 1e-6 && s.start.z < -25));
+    // A garage TUCKED against the house face, most of its run behind the
+    // house: that side is still buried and still strings nothing.
+    const tucked = { points: rect(10, 33, 40, 55), overhang: 2, garage: true };
+    const tSegs = strings(win, { roofs: [house, tucked] });
+    ok('a garage side mostly behind the house still strings nothing',
+      !tSegs.some(s => Math.abs(s.start.z - s.end.z) < 1e-6 && s.start.z > 33 - 8 && s.start.z < 33
+        && Math.abs(Math.abs(s.end.x - s.start.x) - 30) < 1e-6));
+  }
+
   // ── THE INTERIOR STRING ───────────────────────────────────────────────
   //
   // Both faces of every wall that CROSSES this side's string and reaches it.

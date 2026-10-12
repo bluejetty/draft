@@ -1310,6 +1310,23 @@ suite('drawDimension2D', 'a figure with room keeps its full size', R => {
     dimFont(R, { start: { x: 0, z: 0 }, end: { x: 12, z: 0 } }), FULL_11);
 });
 
+// THE INK IN PAPER UNITS (Movie, 11 Oct: "on the construction plans the
+// DIMENSIONS shouldn't change size when i zoom in and out"). A sheet passes
+// its zoom over its print zoom; the figure, the stand-off and the plate all
+// follow it, and 1 -- print, DXF, Model Space -- is the old drawing exactly.
+suite('drawDimension2D', 'a sheet zoomed in draws its dimension ink bigger', R => {
+  const dim = { start: { x: 0, z: 0 }, end: { x: 12, z: 0 } };
+  const fontAt = env => { const ctx = recordingCtx(); R.drawDimension2D(ctx, toS, dim, {}, env); return sets(ctx, 'font').pop(); };
+  expect('no scale is the screen size', fontAt(dimEnv), FULL_11);
+  expect('a scale of 1 is the print size, unchanged', fontAt({ ...dimEnv, inkScale: 1 }), FULL_11);
+  expect('twice the zoom is twice the figure', fontAt({ ...dimEnv, inkScale: 2 }),
+    "600 22px 'Barlow Condensed', system-ui, sans-serif");
+  const lineYs = env => { const ctx = recordingCtx(); R.drawDimension2D(ctx, toS, dim, {}, env); return calls(ctx, 'lineTo').filter(a => a[0] === 520).map(a => a[1]); };
+  expect('and the stand-off doubles with it', lineYs({ ...dimEnv, inkScale: 2 }).includes(338), true);
+  const plate = env => { const ctx = recordingCtx(); R.drawDimension2D(ctx, toS, dim, {}, env); return calls(ctx, 'fillRect').pop()[3]; };
+  expect('the label plate grows with its figure', plate({ ...dimEnv, inkScale: 2 }), 30);
+});
+
 suite('drawDimension2D', 'a wall-thickness run halves the figure', R => {
   // 5 1/2 inches -- the 2x6 Movie named, and the run A-DIMS-INT draws between
   // a wall's two faces.

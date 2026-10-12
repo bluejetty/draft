@@ -437,6 +437,24 @@ if (!window.DraftAutoDims) {
         // Shared-edge tolerance: a garage welded flush shares a coordinate
         // (to float dust) with the house — that is not an overlap.
         const edge = 0.01;
+        // A ROOF STACK IS BLOCKED ONLY WHERE THE HOUSE IS ACTUALLY IN ITS WAY
+        // (Movie, 11 Oct, marking the garage's bottom edge on the roof plan:
+        // "need some dimension lines for the other side of garage too"). A
+        // garage set off the house's corner has a row line that lands inside
+        // the house's box for a few feet at one end and is open the rest of
+        // the way. The plan rule below treats any touch as buried; on a roof
+        // plan that face is the garage's own eave and the truss designer needs
+        // it. Buried means most of the run is behind the house.
+        if (group.roof) {
+          const ns = side === 'N' || side === 'S';
+          const inBand = ns ? fixed > houseBox.minZ && fixed < houseBox.maxZ
+            : fixed > houseBox.minX && fixed < houseBox.maxX;
+          if (!inBand) return true;
+          const lo = ns ? minX : minZ, hi = ns ? maxX : maxZ;
+          const hlo = ns ? houseBox.minX : houseBox.minZ, hhi = ns ? houseBox.maxX : houseBox.maxZ;
+          const covered = Math.max(0, Math.min(hi, hhi) - Math.max(lo, hlo));
+          return covered <= (hi - lo) / 2;
+        }
         if (side === 'N' || side === 'S') {
           return !(fixed > houseBox.minZ && fixed < houseBox.maxZ
             && minX < houseBox.maxX - edge && maxX > houseBox.minX + edge);
@@ -538,7 +556,16 @@ if (!window.DraftAutoDims) {
           const box = other.bbox;
           const [spanLo, spanHi] = entry.side === 'N' || entry.side === 'S'
             ? [box.minX, box.maxX] : [box.minZ, box.maxZ];
-          if (Math.min(spanHi, entry.hi) - Math.max(spanLo, entry.lo) <= 0.01) return;
+          const shared = Math.min(spanHi, entry.hi) - Math.max(spanLo, entry.lo);
+          if (shared <= 0.01) return;
+          // A GARAGE'S ROOF ROWS STAY UNDER ITS OWN EAVE when the house only
+          // clips the end of the run (Movie's markup, 11 Oct: the rows drawn
+          // straight under the garage, running a few feet over the house's
+          // corner). Pushed past the whole house they would read as the
+          // house's and land a building away from the edge they measure. The
+          // same half-the-run test sideClear uses, so a side it lets through
+          // is a side that strings where it stands.
+          if (entry.group.roof && !entry.group.house && shared <= (entry.hi - entry.lo) / 2) return;
           const [near, far] = entry.side === 'N' ? [box.maxZ, box.minZ]
             : entry.side === 'S' ? [box.minZ, box.maxZ]
             : entry.side === 'W' ? [box.maxX, box.minX]
