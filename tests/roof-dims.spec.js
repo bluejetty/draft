@@ -4,6 +4,15 @@
 // and the outermost string is the overall, eave to eave across the
 // footprint. The wall line sits one overhang inside the roof edge. BUILD
 // HOUSE refreshes the roof stack along with the floor and foundation stacks.
+//
+// EVERY ROW POSITION BELOW IS `edge ± the first offset`, and some are that
+// plus a string spacing. The first offset is drawing-format.js's
+// AUTO_DIM_FIRST_OFFSET_FT, which went from 1'-6" to 2'-0" on 12 Oct (Movie:
+// "add 6\" more between the house and first dimension") -- so every one of
+// these numbers moved out by half a foot with it. They are literals rather
+// than arithmetic off the format because a row is being located, not
+// recomputed: a spec that derived the number it is checking would agree with
+// a painter that put the row anywhere.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -60,16 +69,16 @@ test('a rectangular roof strings overhang / span / overhang plus the overall per
   // Footprint (-6,0)…(6,12), 2' overhang → wall line (-4,2)…(4,10). Per
   // side: overhang / wall span / overhang at the first offset + the overall.
   expect(auto).toHaveLength(16);
-  const north = auto.filter(dimension => h.near(dimension.start.z, -1.5) && h.near(dimension.end.z, -1.5));
+  const north = auto.filter(dimension => h.near(dimension.start.z, -2) && h.near(dimension.end.z, -2));
   expect(north).toHaveLength(3);
   const pieces = north.map(dimension => Math.abs(dimension.end.x - dimension.start.x)).sort((a, b) => a - b);
   expect(pieces[0]).toBeCloseTo(2, 3);
   expect(pieces[1]).toBeCloseTo(2, 3);
   expect(pieces[2]).toBeCloseTo(8, 3);
-  const northOverall = auto.find(dimension => h.near(dimension.start.z, -3) && h.near(dimension.end.z, -3));
+  const northOverall = auto.find(dimension => h.near(dimension.start.z, -3.5) && h.near(dimension.end.z, -3.5));
   expect(northOverall).toBeTruthy();
   expect(Math.abs(northOverall.end.x - northOverall.start.x)).toBeCloseTo(12, 5);
-  const west = auto.filter(dimension => h.near(dimension.start.x, -7.5) && h.near(dimension.end.x, -7.5));
+  const west = auto.filter(dimension => h.near(dimension.start.x, -8) && h.near(dimension.end.x, -8));
   expect(west).toHaveLength(3);
 });
 
@@ -87,8 +96,9 @@ test('an L roof strings each side\'s own wall corners between the overhang ends'
   expect(auto).toHaveLength(22);
 
   // S side second row: roof edge to roof edge across the step, -10 → 2 → 10.
+  // 8 + 2 + 1.5 — the eave, the first offset, one spacing.
   const southEdges = auto.filter(dimension =>
-    h.near(dimension.start.z, 11) && h.near(dimension.end.z, 11))
+    h.near(dimension.start.z, 11.5) && h.near(dimension.end.z, 11.5))
     .map(dimension => Math.abs(dimension.end.x - dimension.start.x)).sort((a, b) => a - b);
   expect(southEdges).toHaveLength(2);
   expect(southEdges[0]).toBeCloseTo(8, 3);
@@ -96,27 +106,27 @@ test('an L roof strings each side\'s own wall corners between the overhang ends'
 
   // N side first string: -10 → -8 → 8 → 10; the notch (x=0/2) stays off it.
   const northPieces = auto.filter(dimension =>
-    h.near(dimension.start.z, -9.5) && h.near(dimension.end.z, -9.5));
+    h.near(dimension.start.z, -10) && h.near(dimension.end.z, -10));
   expect(northPieces).toHaveLength(3);
   expect(northPieces.some(dimension =>
     h.near(dimension.start.x, 2) || h.near(dimension.end.x, 2)
     || h.near(dimension.start.x, 0) || h.near(dimension.end.x, 0))).toBe(false);
   // N overall one spacing further out, eave to eave.
   const northOverall = auto.find(dimension =>
-    h.near(dimension.start.z, -11) && h.near(dimension.end.z, -11));
+    h.near(dimension.start.z, -11.5) && h.near(dimension.end.z, -11.5));
   expect(Math.abs(northOverall.end.x - northOverall.start.x)).toBeCloseTo(20, 5);
 
   // S side first string breaks at the notch wall corner x=0:
   // -10 → -8 → 0 → 8 → 10.
   const southPieces = auto.filter(dimension =>
-    h.near(dimension.start.z, 9.5) && h.near(dimension.end.z, 9.5));
+    h.near(dimension.start.z, 10) && h.near(dimension.end.z, 10));
   expect(southPieces).toHaveLength(4);
   expect(southPieces.some(dimension =>
     h.near(dimension.start.x, 0) || h.near(dimension.end.x, 0))).toBe(true);
 
   // E side first string breaks at the notch wall corner z=0.
   const eastPieces = auto.filter(dimension =>
-    h.near(dimension.start.x, 11.5) && h.near(dimension.end.x, 11.5));
+    h.near(dimension.start.x, 12) && h.near(dimension.end.x, 12));
   expect(eastPieces).toHaveLength(4);
   expect(eastPieces.some(dimension =>
     h.near(dimension.start.z, 0) || h.near(dimension.end.z, 0))).toBe(true);
@@ -166,6 +176,6 @@ test('BUILD HOUSE refreshes the roof stack with the plan stacks', async ({ page 
   expect(auto).toHaveLength(16);
   const minX = Math.min(...saved.roofs[0].points.map(point => point.x));
   const west = auto.filter(dimension =>
-    h.near(dimension.start.x, minX - 1.5) && h.near(dimension.end.x, minX - 1.5));
+    h.near(dimension.start.x, minX - 2) && h.near(dimension.end.x, minX - 2));
   expect(west).toHaveLength(3);
 });
