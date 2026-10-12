@@ -14631,8 +14631,65 @@
     let columnId = newStructureId(drawing.columns);
     let beamCount = 0, columnCount = 0, unsupportedCount = 0;
 
+    // ── NO POSTS IN A GARAGE: ITS FLOOR SPANS WALL TO WALL ON OWJ ────────
+    //
+    // Movie, 12 Oct: "we don't want columns in the garage ... go SIDE WALL to
+    // SIDE WALL direction for joists and use ENGINEERED OWJ". A floor body
+    // that stands over a garage gets no beam and no posts; it gets a note on
+    // its floor layout instead, sized off the short way across it by
+    // build-house.js's owjFor. A re-run replaces the note it wrote before --
+    // known by its wording, since the note record keeps no `auto` key.
+    // A GARAGE ON A STOREY BELOW the body, not one beside it: a body on the
+    // garage's own level is the house next to it, never the room over it.
+    const elevOf = id => Number((drawing.levels || []).find(l => Number(l.id) === Number(id))?.elev) || 0;
+    const garageOutlines = (drawing.outlines || [])
+      .filter(o => o.garage === true && (o.points || []).length >= 3);
+    const garageLoops = garageOutlines.map(o => o.points);
+    const inLoop = (pts, p) => {
+      let hit = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const a = pts[i], b = pts[j];
+        if ((a.z > p.z) !== (b.z > p.z) && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
+      }
+      return hit;
+    };
+    const overGarage = (points, storeyId) => {
+      const c = points.reduce((m, p) => ({ x: m.x + p.x / points.length, z: m.z + p.z / points.length }), { x: 0, z: 0 });
+      return garageOutlines.some(o => elevOf(o.levelId) < elevOf(storeyId) - 1e-6 && inLoop(o.points, c));
+    };
+    const OWJ_NOTE = /^ENGINEERED OWJ/;
+    const owjNotePlaced = [];
+    const owjNote = (points, storeyId) => {
+      const xs = points.map(p => p.x), zs = points.map(p => p.z);
+      const w = Math.max(...xs) - Math.min(...xs), d = Math.max(...zs) - Math.min(...zs);
+      const span = Math.min(w, d);
+      const owj = window.DraftBuildHouse.owjFor(span, { minDepthIn: 19.75 });
+      const fmtFt = ft => window.DraftFormatters.formatArchitecturalInches(ft * 12);
+      const depth = owj.depthIn === 19.75 ? '19-3/4"' : `${owj.depthIn}"`;
+      const body = [
+        `ENGINEERED OWJ ${depth} @ ${owj.ocIn}" O.C.`,
+        `SIDE WALL TO SIDE WALL -- ${fmtFt(span)} SPAN`,
+        owj.fits ? 'TO BE CONFIRMED BY JOIST ENGINEER' : 'SPAN EXCEEDS OWJ TABLE -- CONFIRM WITH SUPPLIER',
+      ].join('\n');
+      drawing.notes = drawing.notes || [];
+      drawing.notes = drawing.notes.filter(note => !(Number(note.levelId) === Number(storeyId)
+        && note.view === 'floor' && OWJ_NOTE.test(String(note.body || ''))));
+      const id = drawing.notes.reduce((top, n) => Math.max(top, Number(n.id) || 0), 0) + 1;
+      const at = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: 0, z: (Math.min(...zs) + Math.max(...zs)) / 2 };
+      const note = {
+        id, anchor: at, text: { ...at }, levelId: storeyId, view: 'floor', body, end: 'none',
+        fill: false, fillOpacity: 0.85, outline: false, bullnose: 0, layer: 'A-ANNO-NOTE',
+      };
+      drawing.notes.push(note);
+      owjNotePlaced.push({ list: drawing.notes, item: note });
+    };
+
     bodies.forEach(({ outline, storeyId }) => {
       const points = outline.points.map(pt => ({ x: pt.x, z: pt.z }));
+      if (garageLoops.length && overGarage(points, storeyId)) {
+        owjNote(points, storeyId);
+        return;
+      }
       const plan = window.DraftBuildHouse.midSpanBeams(points, {
         holes: stairHolesOn(points, storeyId),
         supportsBelow: supportsUnder(levelId),
@@ -14687,6 +14744,7 @@
       unsupportedCount += plan.columns.filter(column => column.unsupported).length;
     });
 
+    placed.push(...owjNotePlaced);
     return {
       placed,
       restored: [
@@ -16531,8 +16589,11 @@
     // EVERY PLAN BUT THE ELECTRIC ONE (Movie, 12 Oct: "can we add dimensions
     // to ALL them except electric plan", then "yes" to every plan getting them
     // when the house is built): the basement's walls plan too, wherever the
-    // build raised walls on it. The half-floors' floor layouts stay bare, as
-    // he asked on 7 Oct.
+    // build raised walls on it, and the half-floors' floor layouts now as
+    // well -- he had said on 7 Oct they were not needed, and on 12 Oct, of
+    // the OVER GARAGE floor layout, "they don't dimension the floor".
+    if (entryBody) noteLevel(entryLevelId, 'floor');
+    if (overGarageBody) noteLevel(overGarageLevelId, 'floor');
     if ((drawing.walls || []).some(wall => Number(wall.levelId) === FOUNDATION_LEVEL_ID
       && (wall.view || 'plan') === 'plan')) noteLevel(FOUNDATION_LEVEL_ID, 'plan');
     if (under.items.length) noteLevel(FOUNDATION_LEVEL_ID, 'foundation');

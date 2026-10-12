@@ -368,6 +368,48 @@ test('a hood wall carrying on a room wall\'s line keeps that wall\'s side of it'
   expect(pairs.every(Boolean), 'each keeps the room wall\'s side').toBe(true);
 });
 
+// NO POSTS IN THE GARAGE: THE ROOM OVER IT SPANS WALL TO WALL ON OWJ (Movie,
+// 12 Oct: "we don't want columns in the garage ... go SIDE WALL to SIDE WALL
+// direction for joists and use ENGINEERED OWJ of 19.75""), and its floor
+// layout is dimensioned ("they don't dimension the floor").
+test('the room over a MOD BILEVEL garage gets OWJ wall to wall, no beam or post in the garage', async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await open(page);
+  await drawType(page, 'bilevel', 'modifiedBilevel');
+  const box = await page.locator('#plan').boundingBox();
+  for (let i = 0; i < 4; i++) {
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(0, 300);
+    await page.waitForTimeout(80);
+  }
+  await trace(page, [[12, 0], [12, -13], [20, -13], [20, -42], [-2, -42], [-2, 0]]);
+  await trace(page, [[-2, -13], [-21, -13], [-21, 24], [-2, 24]]);
+  const d = await boneBuild(page);
+  const garage = d.outlines.find(o => o.garage === true);
+  expect(garage, 'the garage outline').toBeTruthy();
+  const inside = p => {
+    let hit = false;
+    const pts = garage.points;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      if ((pts[i].z > p.z) !== (pts[j].z > p.z)
+        && p.x < (pts[j].x - pts[i].x) * (p.z - pts[i].z) / (pts[j].z - pts[i].z) + pts[i].x) hit = !hit;
+    }
+    return hit;
+  };
+  // THE FLOOR FRAMING'S POSTS -- the stair well's on the foundation stand on
+  // the house's own wall line at the garage's edge and are not this rule's.
+  const posts = (d.columns || []).filter(c => c.view === 'floor' && inside(c.point));
+  expect(posts.length, 'no telepost stands in the garage').toBe(0);
+  const beams = (d.beams || []).filter(b => inside({ x: (b.start.x + b.end.x) / 2, z: (b.start.z + b.end.z) / 2 }));
+  expect(beams.length, 'no beam crosses the garage').toBe(0);
+  const note = (d.notes || []).find(n => Number(n.levelId) === 4 && n.view === 'floor' && /^ENGINEERED OWJ/.test(n.body));
+  expect(note, 'the OWJ note on the room\'s floor layout').toBeTruthy();
+  expect(note.body).toMatch(/19-3\/4" @ 16" O\.C\./);
+  expect(note.body).toMatch(/SIDE WALL TO SIDE WALL/);
+  expect(d.dimensions.filter(x => Number(x.levelId) === 4 && x.view === 'floor').length,
+    'the room\'s floor layout is dimensioned').toBeGreaterThan(0);
+});
+
 test('the MOD BILEVEL room moved short of the front keeps a lower roof over the open garage', async ({ page }) => {
   await open(page);
   await drawType(page, 'bilevel', 'modifiedBilevel');
