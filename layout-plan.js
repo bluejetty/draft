@@ -470,6 +470,16 @@ if (!window.DraftLayoutPlan) {
     // room names -- without its dimension strings and notes, which are the
     // OTHER drawing's annotation and would read as this one's.
     const hologram = env.hologram === true;
+    // THE POSTS THAT HOLD UP THE FLOOR ABOVE, ON THE WALLS PLAN (Movie, 12
+    // Oct: "on the PLANS, only show the column which will support the floor
+    // above (show columns on main that will support 2nd floor)"). Those are
+    // this level's own floor-layout posts, re-filed onto the plan, drawn dark
+    // where they stand in a wall. Not on a listing, where the walls are solid
+    // ("you won't see the columns"), and not the piles.
+    const planPosts = view === 'plan' && !halfLevel && !listing && !shell && !hologram
+      ? (Array.isArray(saved?.columns) ? saved.columns : []).filter(column => column?.levelId === levelId && column.view === 'floor'
+        && !/pile/i.test(String(column.footing || ''))).map(column => ({ ...column, view }))
+      : null;
 
     const of = key => (Array.isArray(saved?.[key]) ? saved[key] : []);
     const openings = of('surfaceOpenings');
@@ -733,7 +743,8 @@ if (!window.DraftLayoutPlan) {
       beams: under ? borrowed('beams', () => true) : only(of('beams')),
       columns: foundationGhost
         ? of('columns').filter(column => !/pile/i.test(String(column.footing || '')))
-        : under ? borrowed('columns', notPile) : only(of('columns')),
+        : under ? borrowed('columns', notPile)
+          : planPosts ? only(of('columns')).concat(planPosts) : only(of('columns')),
       // ONLY A PILE CHANGES THE DRAWN SHAPE; a telepost is the default square.
       // The same rule MODEL.html:3266 applies, and it is the CALLER's answer
       // rather than the painter's.

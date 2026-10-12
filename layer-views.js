@@ -61,7 +61,9 @@ if (!window.DraftLayerViews) {
     3: FLOOR_LEVEL_VIEWS,
     1: Object.freeze([
       Object.freeze({ id:'e-power', label:'ELECTRIC', contents: Object.freeze(['E-POWER', 'A-WALL-EXT', 'A-WALL-INT', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-FENS', 'A-ANNO-NOTE']) }),
-      Object.freeze({ id:'plan', label:'BASEMENT (WALLS)', contents: Object.freeze(['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'ROOM-IDS-AREA', 'A-ANNO-NOTE']) }),
+      // THE BASEMENT PLAN IS DIMENSIONED TOO (Movie, 12 Oct: dimensions on
+      // every plan but the electric one).
+      Object.freeze({ id:'plan', label:'BASEMENT (WALLS)', contents: Object.freeze(['A-WALL-EXT', 'A-WALL-INT', 'A-DOOR', 'A-GLAZ', 'ROOM-IDS-AREA', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-INT', 'A-DIMS-FENS', 'A-DIMS-WIN', 'A-DIMS-DOOR', 'A-ANNO-NOTE']) }),
       Object.freeze({ id:'foundation', label:'FOUNDATION', contents: Object.freeze(['S-FDN', 'S-COL-FOOTING', 'S-FOOTING', 'S-BEAM', 'S-SLAB', 'A-DIMS-OVR', 'A-DIMS-EXT', 'A-DIMS-COLS', 'A-ANNO-NOTE']) }),
     ]),
   });

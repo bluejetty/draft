@@ -769,7 +769,7 @@ if (!window.DraftShellBars) {
     project: Object.freeze(['file-new', 'save']),
     'ext-finish': Object.freeze(['file-new']),
     boneyard: Object.freeze([]),
-    construction: Object.freeze([]),
+    construction: Object.freeze(['file-new']),
     specs: Object.freeze([]),
     'real-estate': Object.freeze([]),
   });

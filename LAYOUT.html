@@ -295,6 +295,23 @@
     background-color: var(--surface-chip); color: var(--ink-secondary);
     font-family:'Barlow Condensed', system-ui, sans-serif; font-size:11px; font-weight:600; letter-spacing:0.06em; }
   #lay-print-go:disabled { opacity:0.45; cursor:default; }
+  /* NEW: save the drawing first, or let it go (Movie, 11 Oct). Same shell
+     as the print card; the first button is the filled one. */
+  #lay-new-scrim { position:fixed; inset:0; z-index:50; display:flex;
+    align-items:flex-start; justify-content:center; padding-top:78px;
+    background:rgba(0,0,0,0.35); }
+  #lay-new { width:min(400px, calc(100vw - 32px)); border:1px solid var(--edge-panel);
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    box-shadow:0 16px 44px rgba(0,0,0,0.35); padding:18px; color: var(--ink-primary); }
+  #lay-new-title { font-family:'Barlow Condensed', system-ui, sans-serif;
+    font-size:17px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; }
+  #lay-new-description { margin-top:5px; font-size:12px; line-height:1.45; color: var(--ink-secondary); }
+  .lay-new-row { display:flex; gap:6px; margin-top:12px; }
+  .lay-new-row button, #lay-new [data-new-cancel] { flex:1; height:32px; border:1px solid var(--edge-panel);
+    background-color: var(--surface-chip); color: var(--ink-primary); cursor:pointer;
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-size:12px; font-weight:600; letter-spacing:0.06em; }
+  .lay-new-row button[data-new-save] { border-color: var(--accent); background-color: var(--accent); color: var(--accent-ink); }
+  #lay-new [data-new-cancel] { display:block; width:100%; margin-top:6px; color: var(--ink-secondary); }
   #lay-print-message { margin-top:10px; font-size:11px; line-height:1.4; color: var(--ink-secondary); }
   #lay-print-message.lay-bad { color:#b04050; }
 
@@ -563,6 +580,22 @@
     </div>
     <button type="button" id="lay-print-go" data-print-go>PRINT</button>
     <div id="lay-print-message" data-print-message hidden></div>
+  </div>
+</div>
+
+<!-- NEW (Movie, 11 Oct): "when a user is in LAYOUT area and they press NEW,
+     can you give them a popup to SAVE CURRENT, or DISCARD? and then open a
+     new blank file for them clean layouts and model area, but stay in layout
+     area". -->
+<div id="lay-new-scrim" hidden>
+  <div id="lay-new" role="dialog" aria-modal="true" aria-labelledby="lay-new-title">
+    <div id="lay-new-title">New drawing</div>
+    <div id="lay-new-description">NEW clears this drawing and its sheets from this browser. Save a copy to your computer first?</div>
+    <div class="lay-new-row">
+      <button type="button" data-new-save>SAVE CURRENT</button>
+      <button type="button" data-new-discard>DISCARD</button>
+    </div>
+    <button type="button" data-new-cancel>Cancel</button>
   </div>
 </div>
 
@@ -3338,6 +3371,51 @@ page.componentDidMount();
   // is PRINT (board #20; Movie, 9 Oct): the package dialog, _openPrintDialog.
   const bone = document.getElementById('bone');
   if (bone) bone.addEventListener('click', () => page._openPrintDialog());
+
+  // ── NEW: SAVE CURRENT OR DISCARD, THEN A BLANK FILE, BACK ON THIS PAGE ──
+  //
+  // MODEL owns what a blank drawing is, so the clearing is its `?new=1`, the
+  // hand-off PROJECT and EXT. FINISH already make; `then=layout` brings the
+  // drafter straight back here, onto empty sheets. The question is asked
+  // HERE, and `asked=1` tells MODEL not to ask it again.
+  //
+  // SAVE CURRENT HANDS OVER THE STORED FILE ITSELF, the same text MODEL's
+  // own save writes to the store and to disk, under MODEL's file name -- so
+  // the copy opens in MODEL exactly as the drawing was.
+  const fileNew = document.getElementById('file-new');
+  const newScrim = document.getElementById('lay-new-scrim');
+  if (fileNew && newScrim) {
+    fileNew.disabled = false;
+    fileNew.classList.remove('dormant');
+    fileNew.title = 'NEW — save or discard this drawing, then start a blank one here';
+    const goNew = () => {
+      window.location.href = './MODEL.html?new=1&then=layout&asked=1';
+    };
+    const close = () => { newScrim.hidden = true; };
+    fileNew.addEventListener('click', () => { newScrim.hidden = false; });
+    newScrim.querySelector('[data-new-cancel]').addEventListener('click', close);
+    newScrim.addEventListener('click', event => { if (event.target === newScrim) close(); });
+    newScrim.querySelector('[data-new-discard]').addEventListener('click', () => { close(); goNew(); });
+    newScrim.querySelector('[data-new-save]').addEventListener('click', async () => {
+      let text = null;
+      try {
+        const file = await window.SharedFileStore.loadSharedFile(MODEL_STORAGE_BUCKET);
+        text = file ? await file.text() : null;
+      } catch { text = null; }
+      if (text) {
+        const name = window.DraftDrawingFormat.drawingFileName('draft');
+        const url = URL.createObjectURL(new File([text], name, { type: 'application/json' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = name;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+      }
+      close();
+      // A beat for the download to start before the page goes.
+      setTimeout(goNew, 300);
+    });
+  }
 })();
 </script>
 <!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->
