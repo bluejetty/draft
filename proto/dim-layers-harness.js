@@ -455,6 +455,21 @@ function run() {
     pushedDown.length > 0 && pushedDown.every(s => s.start.z > 33),
     [...new Set(pushedDown.map(s => s.start.z))].join(','));
 
+  // CLEAR OF THE TEXT ALREADY THERE (Movie, 11 Oct: "not overlapping other
+  // text"). The beam's own tag sits on its -across side and a pile's footing
+  // tag under its post, so the string stands further out on a tagged side.
+  {
+    const zOf = list => uniqOf(colsOnly(list).filter(s => Math.abs(s.start.z - s.end.z) < 0.01).map(s => s.start.z));
+    ok('forced onto the beam tag\'s side, the string stands clear of the tag',
+      zOf(colStrings({ floorOpenings: holeAt(34) })).join(',') === String(33 - AD.TAG_CLEAR_FT),
+      zOf(colStrings({ floorOpenings: holeAt(34) })).join(','));
+    const piled = POSTS.map(post => ({ ...post, footing: 'pile12' }));
+    ok('posts on piles push the string past their footing tags',
+      zOf(colStrings({ columns: piled })).join(',') === String(33 + AD.TAG_CLEAR_FT),
+      zOf(colStrings({ columns: piled })).join(','));
+    ok('an untagged side keeps its foot', zOf(colStrings()).join(',') === '34', zOf(colStrings()).join(','));
+  }
+
   // THE STAIR OPENING, BOTH WAYS (Movie, 11 Oct): ext wall to opening,
   // opening, opening to the far ext wall, about a foot off the opening and
   // on the side away from a beam beside it.
@@ -761,8 +776,14 @@ const MUTATIONS = [
       'if (!thicknessFt || !faceOffsets) return [];', '')],
   ['the along string measures from the beam ends, not the house edge',
     'auto-dims.js', c => c.replace(
-      'emit(along, [edge[along][0], ...inner, edge[along][1]], fixed + side * clearFt,',
-      'emit(along, [runLo, ...inner, runHi], fixed + side * clearFt,')],
+      'emit(along, [edge[along][0], ...inner, edge[along][1]], fixed + side * distOf(side),',
+      'emit(along, [runLo, ...inner, runHi], fixed + side * distOf(side),')],
+  // CLEAR OF THE TAGS (Movie, 11 Oct: "not overlapping other text").
+  ['a column string stands a foot off a tagged side, on top of the tag',
+    'auto-dims.js', c => c.replace(
+      '(tagged(direction) ? Math.max(clearFt, TAG_CLEAR_FT) : clearFt)', 'clearFt')],
+  ['a pile\'s footing tag is not counted as text in the way',
+    'auto-dims.js', c => c.replace('&& along === \'x\' && hasPile', '&& false')],
   ['the column strings sit on the beam instead of clear of it',
     'auto-dims.js', c => c.replace(
       'clearFt = COLUMN_CLEAR_FT,', 'clearFt = 0,')],

@@ -69,6 +69,9 @@ if (!window.DraftAutoDims) {
   // How far off the columns their strings sit. Movie, 29 Sep: "about 1ft from
   // the cols".
   const COLUMN_CLEAR_FT = 1;
+  // How far a column string stands off a beam on a side that already carries
+  // a tag (the beam's own name, or a pile's footing), so its figures clear it.
+  const TAG_CLEAR_FT = 2.5;
   const HOLE_MARGIN_FT = 0.25;
   // How far off a beam's line a column may stand and still be ON that beam.
   // Half a foot is wider than any placement error and narrower than the gap
@@ -781,8 +784,22 @@ if (!window.DraftAutoDims) {
       // THE BEAM'S OWN POSITION is not strung here any more: it rides the
       // perimeter stack (computeAutoDimStrings `beams`), "on the EXT of the
       // plan", and the strings that crossed the floor at each post are gone.
+      // ── AND CLEAR OF THE TEXT ALREADY THERE (Movie, 11 Oct: "not
+      // overlapping other text") ────────────────────────────────────────────
+      //
+      // Two labels sit against a beam line on a sheet. The beam's own
+      // FLUSH/DROPPED BEAM tag rides its -across side (render-2d drawBeam2D:
+      // labelAlongLine2D, offset 5, read from the bottom or right, so above a
+      // level beam and left of an upright one). A PILE's footing tag hangs
+      // under its post (+z, drawColumn2D), which is the +across side of a
+      // level beam. At a foot off the line the string's figures land on
+      // either one, so a side with a tag stands the string further out --
+      // past a 9px tag at the 1/8" sheets these are drawn at.
+      const hasPile = onBeam.some(column => /pile/i.test(String(column.footing || '')));
+      const tagged = direction => direction < 0 || (direction > 0 && along === 'x' && hasPile);
+      const distOf = direction => (tagged(direction) ? Math.max(clearFt, TAG_CLEAR_FT) : clearFt);
       const clearSide = direction => {
-        const at = fixed + direction * clearFt;
+        const at = fixed + direction * distOf(direction);
         if (at <= edge[across][0] + 0.01 || at >= edge[across][1] - 0.01) return false;
         return !holes.some(hole => {
           // Only a hole this beam actually runs past can be in the way.
@@ -797,7 +814,7 @@ if (!window.DraftAutoDims) {
       if (side !== 0) {
         const inner = posts.filter(value =>
           value > edge[along][0] + 0.01 && value < edge[along][1] - 0.01);
-        emit(along, [edge[along][0], ...inner, edge[along][1]], fixed + side * clearFt,
+        emit(along, [edge[along][0], ...inner, edge[along][1]], fixed + side * distOf(side),
           DIM_LAYERS.COLUMNS, side);
       }
     });
@@ -854,7 +871,7 @@ if (!window.DraftAutoDims) {
 
   window.DraftAutoDims = Object.freeze({
     computeAutoDimStrings, computeColumnDimStrings, beamLinesOf,
-    STRING_SPACING_FT, JOG_MERGE_FT, COLUMN_CLEAR_FT, DIM_LAYERS,
+    STRING_SPACING_FT, JOG_MERGE_FT, COLUMN_CLEAR_FT, TAG_CLEAR_FT, DIM_LAYERS,
   });
 })();
 }
