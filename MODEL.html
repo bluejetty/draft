@@ -17295,6 +17295,11 @@
     if (activeTool === 'outline' && outlineCorners.length) {
       return { from: outlineTail(), to: outlinePoint(cursorWorld) };
     }
+    // FLOOR AND SHAPE TOO, for the strip's readout only (Movie, 12 Oct: "area
+    // and shapes like roof and floor too"): the edge from the last corner to
+    // the cursor. Their LENGTH box still takes no typing.
+    const corners = activeTool === 'floor' ? floorCorners : activeTool === 'shape' ? shapeCorners : null;
+    if (corners && corners.length) return { from: corners[corners.length - 1], to: cursorWorld };
     if (rulerFrom) return { from: rulerFrom, to: cursorWorld };
     return null;
   };
@@ -17414,8 +17419,20 @@
     }
     // While the drafter is typing, the box is his; the live length would
     // overwrite the digits mid-word.
-    if (typable && document.activeElement !== lengthBox) {
+    // THE BOX GLOWS ORANGE WHILE A LINE IS IN HAND (Movie, 12 Oct: "brighten
+    // up the LENGTH BOX so the users attention is brought to it ... make it
+    // orange ... around the outside, but leave the inner part darker so the
+    // white number text can easily be seen"): every run, the outline's edges,
+    // and the floor's and shape's -- whatever is being drawn whose length
+    // changes as the hand moves.
+    const cornerEdge = (activeTool === 'floor' && floorCorners.length > 0)
+      || (activeTool === 'shape' && shapeCorners.length > 0);
+    const live = !!cursorWorld && (typable || cornerEdge);
+    lengthBox.classList.toggle('live', live);
+    if (live && document.activeElement !== lengthBox) {
       lengthBox.value = dist === null ? '' : feetLabel(dist);
+    } else if (!live && !typable && lengthBox.value) {
+      lengthBox.value = '';
     }
     // A NOTICE OUTLIVES ONE REFRESH, and it has to. Both the refusal and the
     // cancel wrote straight to stripMessage and were erased microseconds later

@@ -444,7 +444,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           buttons: [...document.querySelectorAll('button')].filter(outside)
             .map(b => b.id || b.textContent.trim()).sort(),
           anchors: [...document.querySelectorAll('a')].filter(outside)
-            .map(a => a.textContent.trim()).sort(),
+            // A PICTURE LINK names itself by its aria-label (the ROUGH
+            // DRAFTER logo, 12 Oct), as a screen reader would read it.
+            .map(a => a.textContent.trim() || a.getAttribute('aria-label') || '').sort(),
           selects: [...document.querySelectorAll('select')].filter(outside)
             .map(s => s.id).sort(),
           // NAMED, NOT COUNTED BY TYPE. This read `i.type`, so every text
@@ -789,6 +791,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           anchors: ['PROJECT', 'BONEYARD', 'EXT. FINISH', 'REAL ESTATE PLAN',
             'CONSTRUCTION LAYOUT', 'SPECIFICATIONS',
             'SETTINGS', 'STANDARDS',
+            // THE ROUGH DRAFTER LOGO (Movie, 12 Oct): back to the entry page.
+            // A way out, like the page row; it authors nothing.
+            'Rough Drafter — entry page',
             'CLICK HERE TO GO OVER THE CONSTRUCTION DETAILS / SECTIONS FOR YOUR PROJECT',
           ].sort(),
           selects: ['file-ext'],
