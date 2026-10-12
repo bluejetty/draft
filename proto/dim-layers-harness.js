@@ -242,6 +242,35 @@ function run() {
       && !segs.some(s => Math.abs(Math.abs(s.end.x - s.start.x) - 94) < 1e-6));
   }
 
+  // ── THE GARAGE OFF THE HOUSE'S CORNER (Movie, 11 Oct) ───────────────
+  //
+  // "need some dimension lines for the other side of garage too", marked
+  // straight under the garage's eave. A detached garage up and to the side of
+  // the house: its bottom row line lands inside the house's band for the few
+  // feet the two overlap, and the rule for plans called that whole side
+  // buried. On a roof plan it is the garage's own eave, so it strings -- and
+  // under the garage, not pushed a building away past the house.
+  {
+    const house = { points: rect(0, 0, 54, 33), overhang: 2 };
+    const garage = { points: rect(50, -25, 85, -1), overhang: 2, garage: true };
+    const segs = strings(win, { roofs: [house, garage] });
+    const under = segs.filter(s => Math.abs(s.start.z - s.end.z) < 1e-6
+      && s.start.z > -1 && s.start.z < 8
+      && Math.min(s.start.x, s.end.x) >= 50 - 1e-6 && Math.max(s.start.x, s.end.x) <= 85 + 1e-6);
+    ok('GARAGE: its own south side strings, right under its eave',
+      under.some(s => Math.abs(Math.abs(s.end.x - s.start.x) - 35) < 1e-6),
+      under.map(s => `${s.start.z}:${Math.abs(s.end.x - s.start.x)}`).join(' '));
+    ok('the house\'s own stacks keep their place past the garage',
+      segs.some(s => Math.abs(Math.abs(s.end.x - s.start.x) - 54) < 1e-6 && s.start.z < -25));
+    // A garage TUCKED against the house face, most of its run behind the
+    // house: that side is still buried and still strings nothing.
+    const tucked = { points: rect(10, 33, 40, 55), overhang: 2, garage: true };
+    const tSegs = strings(win, { roofs: [house, tucked] });
+    ok('a garage side mostly behind the house still strings nothing',
+      !tSegs.some(s => Math.abs(s.start.z - s.end.z) < 1e-6 && s.start.z > 33 - 8 && s.start.z < 33
+        && Math.abs(Math.abs(s.end.x - s.start.x) - 30) < 1e-6));
+  }
+
   // ── THE INTERIOR STRING ───────────────────────────────────────────────
   //
   // Both faces of every wall that CROSSES this side's string and reaches it.
@@ -425,6 +454,21 @@ function run() {
   ok('a hole running up to the beam puts the string on its other side',
     pushedDown.length > 0 && pushedDown.every(s => s.start.z > 33),
     [...new Set(pushedDown.map(s => s.start.z))].join(','));
+
+  // CLEAR OF THE TEXT ALREADY THERE (Movie, 11 Oct: "not overlapping other
+  // text"). The beam's own tag sits on its -across side and a pile's footing
+  // tag under its post, so the string stands further out on a tagged side.
+  {
+    const zOf = list => uniqOf(colsOnly(list).filter(s => Math.abs(s.start.z - s.end.z) < 0.01).map(s => s.start.z));
+    ok('forced onto the beam tag\'s side, the string stands clear of the tag',
+      zOf(colStrings({ floorOpenings: holeAt(34) })).join(',') === String(33 - AD.TAG_CLEAR_FT),
+      zOf(colStrings({ floorOpenings: holeAt(34) })).join(','));
+    const piled = POSTS.map(post => ({ ...post, footing: 'pile12' }));
+    ok('posts on piles push the string past their footing tags',
+      zOf(colStrings({ columns: piled })).join(',') === String(33 + AD.TAG_CLEAR_FT),
+      zOf(colStrings({ columns: piled })).join(','));
+    ok('an untagged side keeps its foot', zOf(colStrings()).join(',') === '34', zOf(colStrings()).join(','));
+  }
 
   // THE STAIR OPENING, BOTH WAYS (Movie, 11 Oct): ext wall to opening,
   // opening, opening to the far ext wall, about a foot off the opening and
@@ -732,8 +776,14 @@ const MUTATIONS = [
       'if (!thicknessFt || !faceOffsets) return [];', '')],
   ['the along string measures from the beam ends, not the house edge',
     'auto-dims.js', c => c.replace(
-      'emit(along, [edge[along][0], ...inner, edge[along][1]], fixed + side * clearFt,',
-      'emit(along, [runLo, ...inner, runHi], fixed + side * clearFt,')],
+      'emit(along, [edge[along][0], ...inner, edge[along][1]], fixed + side * distOf(side),',
+      'emit(along, [runLo, ...inner, runHi], fixed + side * distOf(side),')],
+  // CLEAR OF THE TAGS (Movie, 11 Oct: "not overlapping other text").
+  ['a column string stands a foot off a tagged side, on top of the tag',
+    'auto-dims.js', c => c.replace(
+      '(tagged(direction) ? Math.max(clearFt, TAG_CLEAR_FT) : clearFt)', 'clearFt')],
+  ['a pile\'s footing tag is not counted as text in the way',
+    'auto-dims.js', c => c.replace('&& along === \'x\' && hasPile', '&& false')],
   ['the column strings sit on the beam instead of clear of it',
     'auto-dims.js', c => c.replace(
       'clearFt = COLUMN_CLEAR_FT,', 'clearFt = 0,')],

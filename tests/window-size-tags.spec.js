@@ -191,14 +191,22 @@ test('and the corner-string layer does not take them with it', async ({ page }) 
   await page.goto('/MODEL.html?right=0');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 15000 });
   await retape(page, 1362);
-  const after = await sizeTags(page);
   // THE DISTINCT SIZES, NOT THE TAPE'S LENGTH. The tape records every paint
   // in its window, so the same tags arrive once per repaint and the count
   // follows how busy the machine was (CI, 4 Oct: 18 against 31, every size
   // still there). What this test guards is a size going missing.
+  //
+  // AND READ UNTIL THE PAINT HAS CAUGHT UP. A loaded runner can land the
+  // retape between paints, and a reading taken then lacks a size the very
+  // next frame paints (CI, 12 Oct: "W 66 X 36" absent once, present on every
+  // re-run). Polling for the full set keeps the claim -- a size that is
+  // really gone never arrives and the poll times out on the same message.
   const distinct = list => [...new Set(list)].sort();
-  expect(distinct(after), 'hiding the corner string took the window sizes with it')
-    .toEqual(distinct(before));
+  const want = distinct(before);
+  await expect.poll(async () => distinct(await sizeTags(page)), {
+    message: 'hiding the corner string took the window sizes with it',
+    timeout: 8000,
+  }).toEqual(want);
 });
 
 // ── AND THE ELEVATION THIS PAGE DRAWS ITSELF ──────────────────────────────

@@ -408,6 +408,7 @@ if (!window.DraftRender2D) {
       background = null,  // a colour draws a plate behind the text
       pad = 3,
       baseline = offset === 0 ? 'middle' : 'bottom',
+      scale = 1,          // the plate's pixel sizes, for a caller in paper units
     } = options;
     const angle = Math.atan2(b.y - a.y, b.x - a.x);
     let textAngle = angle;
@@ -421,7 +422,7 @@ if (!window.DraftRender2D) {
     if (background) {
       const width = ctx.measureText(text).width;
       ctx.fillStyle = background;
-      ctx.fillRect(-width / 2 - pad, -offset - 8, width + pad * 2, 15);
+      ctx.fillRect(-width / 2 - pad * scale, -offset - 8 * scale, width + pad * 2 * scale, 15 * scale);
     }
     if (color) ctx.fillStyle = color;
     ctx.textAlign = 'center';
@@ -1995,10 +1996,19 @@ if (!window.DraftRender2D) {
     const dx = b.x - a.x;
     const dy = b.y - a.y;
     const length = Math.hypot(dx, dy);
-    if (length < 1) return;
+    // THE INK IS IN PAPER UNITS ON A SHEET (Movie, 11 Oct: "on the
+    // construction plans the DIMENSIONS shouldn't change size when i zoom in
+    // and out"). Every size below is a pixel figure written for the screen,
+    // and a sheet zoomed out kept them at that size while the drawing shrank
+    // under them. `env.inkScale` is the sheet zoom over its print zoom: 1 at
+    // print and DXF (72 to the inch), so what leaves the building is
+    // unchanged, and the desk view scales the ticks and figures with the
+    // paper they are printed on. Model Space passes nothing and stays 1.
+    const k = env && Number.isFinite(env.inkScale) && env.inkScale > 0 ? env.inkScale : 1;
+    if (length < 1 * k) return;
     const nx = -dy / length;
     const ny = dx / length;
-    const offset = options.preview ? 14 : 19;
+    const offset = (options.preview ? 14 : 19) * k;
     // ON A SHEET THE LINE IS WHERE IT IS STORED (`env.atLine`). The screen
     // stands the line a fixed 19 px off its record, which a sheet cannot
     // afford: its frame is sized to the records and clips at its edge, so the
@@ -2015,7 +2025,7 @@ if (!window.DraftRender2D) {
     const label = env.label(value);
     const color = options.preview ? env.colors.preview : options.selected ? env.colors.selected : env.colors.stroke;
     const arrow = (point, angle) => {
-      const size = 5;
+      const size = 5 * k;
       ctx.beginPath();
       ctx.moveTo(point.x, point.y);
       ctx.lineTo(point.x + size * Math.cos(angle + 2.65), point.y + size * Math.sin(angle + 2.65));
@@ -2026,7 +2036,7 @@ if (!window.DraftRender2D) {
     ctx.save();
     if (options.selected) {
       ctx.strokeStyle = env.colors.selectedHalo;
-      ctx.lineWidth = 7;
+      ctx.lineWidth = 7 * k;
       ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(da.x, da.y); ctx.lineTo(db.x, db.y);
@@ -2035,7 +2045,7 @@ if (!window.DraftRender2D) {
     }
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
-    ctx.lineWidth = options.selected ? 2 : 1;
+    ctx.lineWidth = (options.selected ? 2 : 1) * k;
     ctx.beginPath();
     ctx.moveTo(a.x, a.y); ctx.lineTo(da.x, da.y);
     ctx.moveTo(b.x, b.y); ctx.lineTo(db.x, db.y);
@@ -2075,14 +2085,14 @@ if (!window.DraftRender2D) {
     //
     // THE ARROWHEADS OWN THE ENDS. `arrow` draws at size 5 from each end, so
     // the room a figure actually has is the run less both of them.
-    const FULL_FONT = "600 11px 'Barlow Condensed', system-ui, sans-serif";
-    const HALF_FONT = "600 6px 'Barlow Condensed', system-ui, sans-serif";
+    const FULL_FONT = `600 ${11 * k}px 'Barlow Condensed', system-ui, sans-serif`;
+    const HALF_FONT = `600 ${6 * k}px 'Barlow Condensed', system-ui, sans-serif`;
     ctx.font = FULL_FONT;
-    const room = length - 12;
+    const room = length - 12 * k;
     const labelFont = ctx.measureText(label).width > room ? HALF_FONT : FULL_FONT;
     labelAlongLine2D(ctx, da, db, label, {
       font: labelFont,
-      color, background: env.colors.labelBack, offset: 0,
+      color, background: env.colors.labelBack, offset: 0, scale: k,
     });
     ctx.restore();
   }

@@ -2061,6 +2061,10 @@ class Component extends PageLogic {
           // dimensions or text to smear at a few pixels to the inch.
           shell: opts.thumb === true,
           paperColor: '#ffffff',
+          // DIMENSIONS IN PAPER UNITS (Movie, 11 Oct: "the DIMENSIONS
+          // shouldn't change size when i zoom in and out"). 1 at the print
+          // and DXF zoom, so a printed or exported sheet is unchanged.
+          inkScale: zoom / PRINT_PX_PER_IN,
           // WHICH DRAWING OF THE LEVEL. Left out until 23 Sep, and that is
           // what made the FOUNDATION sheet and the basement sheet the same
           // picture: drawPlan reads `env.view` and takes an absent one to
