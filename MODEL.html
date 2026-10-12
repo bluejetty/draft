@@ -105,6 +105,19 @@
     font: 13px/1.45 var(--font-body);
     color: var(--ink-primary); }
   #plan { display:block; width:100%; height:100%; cursor:grab; touch-action:none; }
+  /* THE LENGTH BOX, LIVE: a line in hand (Movie, 12 Oct: "brighten up the
+     LENGTH BOX ... make it orange ... around the outside, but leave the inner
+     part darker"). The shared sheet draws the glow; the page names its colour,
+     the tracking rays' own orange, since shell-bars.css holds only roles. */
+  :root { --length-live: #ffa21a; --length-live-glow: rgba(255, 162, 26, 0.75); }
+  #north-dock { position:fixed; z-index:6; pointer-events:none; }
+  #north-dock > button { pointer-events:auto; position:absolute; }
+  #north-hit { border:0; padding:0; background:transparent; cursor:pointer; border-radius:50%; }
+  #north-hit:hover, #north-hit:focus-visible { background:rgba(127,127,127,0.12); outline:1px solid var(--edge-panel); }
+  #strip-rotate { display:flex; align-items:center; justify-content:center; width:42px; height:36px;
+    border:1px solid var(--edge-panel); border-radius:4px; cursor:pointer; color: var(--ink-primary);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none); }
+  #strip-rotate:hover, #strip-rotate:focus-visible { border-color: var(--accent-mark); color: var(--accent-mark); }
   #plan.dragging { cursor:grabbing; }
   /* Over a grabbable corner. Declared AFTER .dragging so it wins while a
      corner is actually being dragged -- equal specificity, later rule. */
@@ -1087,6 +1100,28 @@
 <body>
 
 <canvas id="plan"></canvas>
+<!-- THE NORTH ARROW IS ITS OWN BUTTON, AND HOUSE ROTATE STANDS BESIDE IT
+     (Movie, 12 Oct): "rather than having the separate button for N - ARROW to
+     adjust, make it so when you click on the actual NORTH arrow area it opens
+     the adjustment window", "then we can remove the bottom bar button", and
+     "move the PAGE ROTATION button to the right side of where the north arrow
+     is located (centered up down on the north arrow and lines circle / text".
+     The arrow is still painted on the plan; this is the hand over it, seated
+     on it by paintNorth every frame. The ids and hooks are the ones the bar's
+     buttons wore, so every caller still finds them. -->
+<div id="north-dock" hidden>
+  <button type="button" id="north-hit" data-north-button data-north-hit
+    title="NORTH — click to set construction north and true north" aria-label="North arrows"></button>
+  <button type="button" id="strip-rotate" data-mode-rotate
+    title="TURN THE HOUSE — a quarter turn clockwise; the elevations turn with it and E1 stays the front">
+    <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+      <path d="M4.6 9.2 L8 6.3 L11.4 9.2"></path>
+      <path d="M5.8 9.2 V12.3 H10.2 V9.2"></path>
+      <path d="M2.7 7.6 A6.3 6.3 0 0 1 13.3 7.6" stroke-width="1"></path>
+      <path d="M11.9 6.2 L13.5 7.8 L11.9 9" stroke-width="1"></path>
+    </svg>
+  </button>
+</div>
 <!-- THE LOWER-LEFT ROW. Movie, 19 Sep: "i need the viewcounter lets put it
      on lower left (2nd row from bottom to the left of 'STATUS READOUT'". The
      count used to mount beside the PROJECT link, which on this page is the
@@ -1244,7 +1279,7 @@
      rises from the foot and will cover exactly this row, which is why the
      things a drafter reads WHILE DRAWING went the other way.
      WHAT IS NOT HERE: the generator. See the seam note beside ModelBuild. -->
-<script>window.DraftShellBars.bottomBar({ page: 'model', tools: ['north', 'rotate'] });</script>
+<script>window.DraftShellBars.bottomBar({ page: 'model' });</script>
 
 <!-- GRUFF'S DRIVE-THRU SIGN. Movie, 15 Sep: the menu "should pop up from the
      bottom of the screen and cover both the DRIVE-THRU MENU BUTTON and the
@@ -4590,7 +4625,7 @@
     ? window.DraftNorth.normalise(drawing?.layout?.north) : { cn: 0, tn: 0 });
   let northIconKey = null;
   const paintNorthIcon = () => {
-    const button = document.querySelector('[data-north-button]');
+    const button = document.querySelector('[data-north-button]:not([data-north-hit])');
     if (!button || !window.DraftNorth) return;
     const n = northOf();
     const key = `${n.cn}:${n.tn}`;
@@ -4598,10 +4633,57 @@
     northIconKey = key;
     button.innerHTML = window.DraftNorth.iconSvg(n);
   };
+  // WHERE THE ARROW STANDS: far enough in from the right that HOUSE ROTATE
+  // fits beside it.
+  const NORTH_R = 30;
+  const northCentre = () => ({ x: canvas.clientWidth - 112, y: 96 });
+  const northDock = document.getElementById('north-dock');
+  const seatNorthDock = () => {
+    if (!northDock) return;
+    if (!window.DraftNorth || !drawing || driveThruUp()) { northDock.hidden = true; return; }
+    const box = canvas.getBoundingClientRect();
+    const c = northCentre();
+    // THE ARROW'S OWN EXTENT: its letters stand 1.55 r above the centre and
+    // its ring 0.62 r below, so the hand covers both and the turn button is
+    // centred on that same span.
+    const top = c.y - NORTH_R * 1.75, bottom = c.y + NORTH_R * 0.8;
+    northDock.hidden = false;
+    northDock.style.left = `${box.left}px`;
+    northDock.style.top = `${box.top}px`;
+    const hit = document.getElementById('north-hit');
+    if (hit) Object.assign(hit.style, {
+      left: `${c.x - NORTH_R}px`, top: `${top}px`, width: `${NORTH_R * 2}px`, height: `${bottom - top}px`,
+    });
+    const turn = document.getElementById('strip-rotate');
+    if (turn) Object.assign(turn.style, {
+      left: `${c.x + NORTH_R + 10}px`, top: `${(top + bottom) / 2 - 18}px`,
+    });
+    syncNorthHands();
+  };
+  // A PRESS THERE IS A CORNER WHILE A TOOL IS ARMED. The arrow was paint
+  // before 12 Oct and a wall or an outline could be started under it; the
+  // hand only catches a press when nothing is being drawn. Asked again from
+  // stripRefresh, which every tool change runs, as well as from the seat.
+  // AND THE DRIVE-THRU BOARD PUTS THEM AWAY WHILE IT IS UP: its trace and its
+  // tiles are the job then, and the arrow's corner of the sheet is where a
+  // traced house's corner lands as often as anywhere.
+  const driveThruUp = () => {
+    const board = document.getElementById('drivethru');
+    return !!board && !board.hasAttribute('data-shut');
+  };
+  const syncNorthHands = () => {
+    if (northDock && driveThruUp()) northDock.hidden = true;
+    const drafting = activeTool !== RESTING_TOOL;
+    ['north-hit', 'strip-rotate'].forEach(id => {
+      const b = document.getElementById(id);
+      if (b) b.style.pointerEvents = drafting ? 'none' : '';
+    });
+  };
   const paintNorth = () => {
+    seatNorthDock();
     if (!window.DraftNorth || !drawing) return;
-    const w = canvas.clientWidth;
-    window.DraftNorth.drawPair(ctx, w - 80, 96, 30, northOf(), {
+    const c = northCentre();
+    window.DraftNorth.drawPair(ctx, c.x, c.y, NORTH_R, northOf(), {
       cnColor: skin['draw-wall-edge'] || '#1d1f20',
       tnColor: skin['ink-quiet'] || '#8c9196',
     });
@@ -4818,6 +4900,11 @@
 
   const paint = () => {
     const t0 = performance.now();
+    // THE ARROW'S HAND AND HOUSE ROTATE GO WITH THE ARROW: put away here and
+    // seated again by paintNorth, which only a plan paint reaches -- so an
+    // elevation or a section shows neither a click over nothing nor a turn
+    // button beside an arrow that is not there.
+    if (northDock) northDock.hidden = true;
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
@@ -14631,8 +14718,65 @@
     let columnId = newStructureId(drawing.columns);
     let beamCount = 0, columnCount = 0, unsupportedCount = 0;
 
+    // ── NO POSTS IN A GARAGE: ITS FLOOR SPANS WALL TO WALL ON OWJ ────────
+    //
+    // Movie, 12 Oct: "we don't want columns in the garage ... go SIDE WALL to
+    // SIDE WALL direction for joists and use ENGINEERED OWJ". A floor body
+    // that stands over a garage gets no beam and no posts; it gets a note on
+    // its floor layout instead, sized off the short way across it by
+    // build-house.js's owjFor. A re-run replaces the note it wrote before --
+    // known by its wording, since the note record keeps no `auto` key.
+    // A GARAGE ON A STOREY BELOW the body, not one beside it: a body on the
+    // garage's own level is the house next to it, never the room over it.
+    const elevOf = id => Number((drawing.levels || []).find(l => Number(l.id) === Number(id))?.elev) || 0;
+    const garageOutlines = (drawing.outlines || [])
+      .filter(o => o.garage === true && (o.points || []).length >= 3);
+    const garageLoops = garageOutlines.map(o => o.points);
+    const inLoop = (pts, p) => {
+      let hit = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const a = pts[i], b = pts[j];
+        if ((a.z > p.z) !== (b.z > p.z) && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
+      }
+      return hit;
+    };
+    const overGarage = (points, storeyId) => {
+      const c = points.reduce((m, p) => ({ x: m.x + p.x / points.length, z: m.z + p.z / points.length }), { x: 0, z: 0 });
+      return garageOutlines.some(o => elevOf(o.levelId) < elevOf(storeyId) - 1e-6 && inLoop(o.points, c));
+    };
+    const OWJ_NOTE = /^ENGINEERED OWJ/;
+    const owjNotePlaced = [];
+    const owjNote = (points, storeyId) => {
+      const xs = points.map(p => p.x), zs = points.map(p => p.z);
+      const w = Math.max(...xs) - Math.min(...xs), d = Math.max(...zs) - Math.min(...zs);
+      const span = Math.min(w, d);
+      const owj = window.DraftBuildHouse.owjFor(span, { minDepthIn: 19.75 });
+      const fmtFt = ft => window.DraftFormatters.formatArchitecturalInches(ft * 12);
+      const depth = owj.depthIn === 19.75 ? '19-3/4"' : `${owj.depthIn}"`;
+      const body = [
+        `ENGINEERED OWJ ${depth} @ ${owj.ocIn}" O.C.`,
+        `SIDE WALL TO SIDE WALL -- ${fmtFt(span)} SPAN`,
+        owj.fits ? 'TO BE CONFIRMED BY JOIST ENGINEER' : 'SPAN EXCEEDS OWJ TABLE -- CONFIRM WITH SUPPLIER',
+      ].join('\n');
+      drawing.notes = drawing.notes || [];
+      drawing.notes = drawing.notes.filter(note => !(Number(note.levelId) === Number(storeyId)
+        && note.view === 'floor' && OWJ_NOTE.test(String(note.body || ''))));
+      const id = drawing.notes.reduce((top, n) => Math.max(top, Number(n.id) || 0), 0) + 1;
+      const at = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: 0, z: (Math.min(...zs) + Math.max(...zs)) / 2 };
+      const note = {
+        id, anchor: at, text: { ...at }, levelId: storeyId, view: 'floor', body, end: 'none',
+        fill: false, fillOpacity: 0.85, outline: false, bullnose: 0, layer: 'A-ANNO-NOTE',
+      };
+      drawing.notes.push(note);
+      owjNotePlaced.push({ list: drawing.notes, item: note });
+    };
+
     bodies.forEach(({ outline, storeyId }) => {
       const points = outline.points.map(pt => ({ x: pt.x, z: pt.z }));
+      if (garageLoops.length && overGarage(points, storeyId)) {
+        owjNote(points, storeyId);
+        return;
+      }
       const plan = window.DraftBuildHouse.midSpanBeams(points, {
         holes: stairHolesOn(points, storeyId),
         supportsBelow: supportsUnder(levelId),
@@ -14687,6 +14831,7 @@
       unsupportedCount += plan.columns.filter(column => column.unsupported).length;
     });
 
+    placed.push(...owjNotePlaced);
     return {
       placed,
       restored: [
@@ -16531,8 +16676,11 @@
     // EVERY PLAN BUT THE ELECTRIC ONE (Movie, 12 Oct: "can we add dimensions
     // to ALL them except electric plan", then "yes" to every plan getting them
     // when the house is built): the basement's walls plan too, wherever the
-    // build raised walls on it. The half-floors' floor layouts stay bare, as
-    // he asked on 7 Oct.
+    // build raised walls on it, and the half-floors' floor layouts now as
+    // well -- he had said on 7 Oct they were not needed, and on 12 Oct, of
+    // the OVER GARAGE floor layout, "they don't dimension the floor".
+    if (entryBody) noteLevel(entryLevelId, 'floor');
+    if (overGarageBody) noteLevel(overGarageLevelId, 'floor');
     if ((drawing.walls || []).some(wall => Number(wall.levelId) === FOUNDATION_LEVEL_ID
       && (wall.view || 'plan') === 'plan')) noteLevel(FOUNDATION_LEVEL_ID, 'plan');
     if (under.items.length) noteLevel(FOUNDATION_LEVEL_ID, 'foundation');
@@ -17177,6 +17325,11 @@
     if (activeTool === 'outline' && outlineCorners.length) {
       return { from: outlineTail(), to: outlinePoint(cursorWorld) };
     }
+    // FLOOR AND SHAPE TOO, for the strip's readout only (Movie, 12 Oct: "area
+    // and shapes like roof and floor too"): the edge from the last corner to
+    // the cursor. Their LENGTH box still takes no typing.
+    const corners = activeTool === 'floor' ? floorCorners : activeTool === 'shape' ? shapeCorners : null;
+    if (corners && corners.length) return { from: corners[corners.length - 1], to: cursorWorld };
     if (rulerFrom) return { from: rulerFrom, to: cursorWorld };
     return null;
   };
@@ -17250,6 +17403,7 @@
   // side: git has nothing to say when one branch deletes a name another branch
   // starts using.
   function stripRefresh() {
+    syncNorthHands();
     const run = runInHand();
     const dist = run ? Math.hypot(run.to.x - run.from.x, run.to.z - run.from.z) : null;
     lenOut.textContent = dist === null ? '' : feetLabel(dist);
@@ -17296,8 +17450,20 @@
     }
     // While the drafter is typing, the box is his; the live length would
     // overwrite the digits mid-word.
-    if (typable && document.activeElement !== lengthBox) {
+    // THE BOX GLOWS ORANGE WHILE A LINE IS IN HAND (Movie, 12 Oct: "brighten
+    // up the LENGTH BOX so the users attention is brought to it ... make it
+    // orange ... around the outside, but leave the inner part darker so the
+    // white number text can easily be seen"): every run, the outline's edges,
+    // and the floor's and shape's -- whatever is being drawn whose length
+    // changes as the hand moves.
+    const cornerEdge = (activeTool === 'floor' && floorCorners.length > 0)
+      || (activeTool === 'shape' && shapeCorners.length > 0);
+    const live = !!cursorWorld && (typable || cornerEdge);
+    lengthBox.classList.toggle('live', live);
+    if (live && document.activeElement !== lengthBox) {
       lengthBox.value = dist === null ? '' : feetLabel(dist);
+    } else if (!live && !typable && lengthBox.value) {
+      lengthBox.value = '';
     }
     // A NOTICE OUTLIVES ONE REFRESH, and it has to. Both the refusal and the
     // cancel wrote straight to stripMessage and were erased microseconds later

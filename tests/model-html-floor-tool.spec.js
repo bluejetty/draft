@@ -433,3 +433,21 @@ test('the tool puts itself down once the loop closes', async ({ page }) => {
   await press(page, frame, [[-2, 0], [2, 0], [2, 3]]);
   expect(await floorsTotal(page), 'three more presses draw nothing').toBe(1);
 });
+
+// Movie, 12 Oct: the LENGTH box glows orange "for LINE, WALL, OUTLINE commands
+// etc (area and shapes like roof and floor too)" and reads the edge in hand.
+test('the LENGTH box glows and reads the floor edge in hand', async ({ page }) => {
+  await open(page);
+  await armFloor(page);
+  const frame = await frameForLoop(page, SQUARE);
+  const box = page.locator('#frozen-length');
+  await expect(box).not.toHaveClass(/\blive\b/);
+  await press(page, frame, [SQUARE[0]]);
+  const [x0, z0] = SQUARE[0];
+  const at = frame.at(x0 + 6, z0);
+  await page.mouse.move(at[0], at[1]);
+  await expect(box).toHaveClass(/\blive\b/);
+  await expect(box).toHaveValue(/^6'-0"$/);
+  await page.keyboard.press('Escape');
+  await expect(box).not.toHaveClass(/\blive\b/);
+});

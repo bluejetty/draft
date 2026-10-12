@@ -3555,6 +3555,9 @@ if (!window.DraftCutView) {
     // Strokes after every fill, so a near face can't erase a far corner.
     ctx.lineWidth = 1;
     const strokedV = new Set();
+    // THE HOUSE'S PLATE TOPS, kept for the rim band to lay back down -- see
+    // paintRimBand.
+    const housePlateTops = [];
     shownFdn.forEach(({ g, runs }) => {
       const shownBase = Math.max(g.baseE, fdn.grade);
       const bs = bucksOf(g);
@@ -3591,6 +3594,7 @@ if (!window.DraftCutView) {
         ctx.beginPath();
         runs.forEach(r => notched(r, bs).filter(p => !p.drop).forEach(p => {
           ctx.moveTo(X(p.lo), Y(g.topE + plateLine)); ctx.lineTo(X(p.hi), Y(g.topE + plateLine));
+          if (!g.garage) housePlateTops.push({ lo: p.lo, hi: p.hi, e: g.topE + plateLine });
         }));
         ctx.stroke();
         // ── A PT LADDER'S BOTTOM, A THIRD LINE, LIGHT ─────────────────
@@ -5817,17 +5821,35 @@ if (!window.DraftCutView) {
       // filled the rest of that row, which is exactly where the plate top
       // is drawn. So that band stops on the row above it and lays no strip.
       //
-      // ON A SPLIT ONLY. A one- or two-storey house's MAIN sits on its sill
-      // too, but there an attached garage's wall face, painted after the
-      // foundation lines and standing lower than the house's plate, takes
-      // the middle of that row anyway -- so the band's cover is all that
-      // kept the sheet clean (garage-elevation-occlusion.spec.js, E2).
-      const onSill = !!stack.split && Math.abs(level.floorBottom - fdn.wallTop) < 0.01;
+      // AND ON EVERY HOUSE, NOT A SPLIT ONLY. Movie, 12 Oct, on E4 of a 2
+      // storey + garage: "the sill plate is drawn differently on the house vs
+      // how its drawn on the garage. they should be drawn exactly the same".
+      // Both plates top out at -1.0521 there and both lines were drawn; the
+      // band ran a pixel past the house's and painted it out, while the
+      // garage's face stops half a pixel short of its own. The band covered
+      // because a face standing BEHIND the house -- a garage dropped on its
+      // frost wall -- is painted after the foundation lines and takes that
+      // row (garage-elevation-occlusion.spec.js, E2). So the band now stops
+      // short like the garage and lays the house's plate top back down
+      // itself: the foundation pass's own segments, clipped to this band.
+      const onSill = Math.abs(level.floorBottom - fdn.wallTop) < 0.01;
       const yTopPx = Y(level.floorTop) - 1;
       const yBotPx = onSill ? Y(level.floorBottom) - 0.5 : Y(level.floorBottom) + 1;
       ctx.fillStyle = C.face;
       ctx.fillRect(X(part.lo) - 1, yTopPx, (part.hi - part.lo) * pxPerFt + 2, yBotPx - yTopPx);
-      if (onSill) return;
+      if (onSill) {
+        const tops = housePlateTops.filter(p => Math.abs(p.e - level.floorBottom) < 0.01
+          && Math.min(p.hi, part.hi) - Math.max(p.lo, part.lo) > 0.01);
+        if (!tops.length) return;
+        ctx.strokeStyle = INK; ctx.lineWidth = 1;
+        ctx.beginPath();
+        tops.forEach(p => {
+          ctx.moveTo(X(Math.max(p.lo, part.lo)), Y(p.e));
+          ctx.lineTo(X(Math.min(p.hi, part.hi)), Y(p.e));
+        });
+        ctx.stroke();
+        return;
+      }
       // AND THE REST OF THAT PIXEL ROW, BETWEEN THE CORNERS. Y() lands on a
       // pixel's centre, so one pixel past it is half a row -- and the wall
       // below's own top line, 1 1/4 wide on that centre, kept a sliver
@@ -6144,9 +6166,25 @@ if (!window.DraftCutView) {
             edges.set(u, d);
           });
         });
+        // A JOINT STANDS AT THE NEAREST WALL ENDING THERE, not the first one
+        // listed. Movie, 12 Oct, on E4 of a 2 storey with a room over the
+        // garage: "the 2nd floor is the corner walls don't show the crease
+        // line at corner". Where the house meets the room over the garage
+        // three 2ND FL walls end on one u -- an interior partition at -19.75,
+        // the front at 10.25 and the room's front at -18.75 -- and the
+        // partition, listed first, claimed the edge; every band and face in
+        // front then hid it, and the crease broke for the floor's depth. The
+        // same u arrives as two floats a hair apart, so it is matched within
+        // `same`. An interior wall ending behind a face that runs on is still
+        // hidden: that face does not END there, so it is never a candidate.
+        const jointAt = new Map();
         spans.forEach(span => [span.lo, span.hi].forEach(u => {
           if (u > run.lo + 0.05 && u < run.hi - 0.05 && !flushJoint(u, span.depth)
-            && !edges.has(u)) edges.set(u, span.depth);
+            && ![...edges.keys()].some(k => !jointAt.has(k) && same(k, u))) {
+            const key = [...jointAt.keys()].find(k => same(k, u));
+            if (key == null) { jointAt.set(u, true); edges.set(u, span.depth); }
+            else if (span.depth > edges.get(key)) edges.set(key, span.depth);
+          }
         }));
       });
       // EACH EDGE DOWN TO WHERE A ROOF IN FRONT TAKES OVER, not all or

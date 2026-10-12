@@ -690,7 +690,54 @@ if (!window.DraftBuildHouse) {
     return [...groups.values()];
   };
 
+  // ── OPEN WEB JOISTS OVER A GARAGE ────────────────────────────────────────
+  //
+  // Movie, 12 Oct: "we don't want columns in the garage. what i prefer to do
+  // is go SIDE WALL to SIDE WALL direction for joists and use ENGINEERED OWJ
+  // of 19.75" (but these may need to be increased based on distance the
+  // joists need to span", spacing "16" or 12" for longest", and "the joists
+  // over the garage will need to be engineered so they might change but if
+  // we can provide an accurate size its best".
+  //
+  // ONE TABLE, so the supplier's own numbers replace these in one place --
+  // and a SAFE one (Movie, 12 Oct: "a generalized span table for OWJ that
+  // would be 'safe' to use (don't get too close to the limits)", "showing max
+  // span for different joist depths / joist spacing").
+  //
+  // HOW IT WAS MADE, so it can be checked: a generic wood open-web floor
+  // truss chart (40 psf live, 10 psf dead, L/480 live-load deflection) gives
+  // the 19.2" o.c. column -- 14" 22'-1", 16" 23'-9", 18" 25'-4", 20" 26'-10",
+  // 24" 29'-7". The other spacings follow the deflection limit, which goes as
+  // the cube root of the load per joist (span x (19.2 / spacing)^(1/3)); every
+  // figure is then cut by 10% and rounded DOWN to the half foot. 19-3/4" is
+  // the 20" row less 6". Feet, clear span between bearings.
+  const OWJ_OC_IN = Object.freeze([12, 16, 19.2, 24]);
+  const OWJ_SPANS = Object.freeze([
+    Object.freeze({ depthIn: 14, spanFt: Object.freeze({ 12: 23, 16: 21, 19.2: 19.5, 24: 18 }) }),
+    Object.freeze({ depthIn: 16, spanFt: Object.freeze({ 12: 25, 16: 22.5, 19.2: 21, 24: 19.5 }) }),
+    Object.freeze({ depthIn: 18, spanFt: Object.freeze({ 12: 26.5, 16: 24, 19.2: 22.5, 24: 21 }) }),
+    Object.freeze({ depthIn: 19.75, spanFt: Object.freeze({ 12: 27.5, 16: 25, 19.2: 23.5, 24: 21.5 }) }),
+    Object.freeze({ depthIn: 24, spanFt: Object.freeze({ 12: 31, 16: 28, 19.2: 26.5, 24: 24.5 }) }),
+  ]);
+  // THE JOIST FOR A SPAN, the way Movie lays them: 16" o.c. first, the
+  // shallowest depth that spans it but never under `minDepthIn` (over a
+  // garage that is his 19-3/4"); "12" for longest" when no 16" row reaches.
+  // Past the table, `fits: false` and the deepest at 12" -- said, not guessed.
+  const owjFor = (spanFt, { minDepthIn = 0, ocOrder = [16, 12] } = {}) => {
+    const rows = OWJ_SPANS.filter(r => r.depthIn >= minDepthIn - 1e-6);
+    for (const ocIn of ocOrder) {
+      const row = rows.find(r => spanFt <= r.spanFt[ocIn] + 1e-6);
+      if (row) return { depthIn: row.depthIn, ocIn, maxSpanFt: row.spanFt[ocIn], fits: true };
+    }
+    const last = OWJ_SPANS[OWJ_SPANS.length - 1];
+    const ocIn = ocOrder[ocOrder.length - 1];
+    return { depthIn: last.depthIn, ocIn, maxSpanFt: last.spanFt[ocIn], fits: false };
+  };
+
   window.DraftBuildHouse = Object.freeze({
+    OWJ_OC_IN,
+    OWJ_SPANS,
+    owjFor,
     outlineInteriorRef,
     houseWallRuns,
     footingRings,

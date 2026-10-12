@@ -42,6 +42,9 @@ const EXEMPT = {
   // loads neither palette.js nor the shell bars. Measured: its body stays
   // rgb(238,245,251) under all four skins.
   'index.html': 'ENTRY — not one of the four dashboards, carries its own look',
+  // BUILDING CODES / SPAN TABLES (12 Oct), reached from ENTRY's link ring: a
+  // reading page of references and one table, in ENTRY's own fixed look.
+  'CODES.html': 'reference page off ENTRY, carries ENTRY\'s look',
   // Single-component preview pages: an <x-dc> block, react, support.js and
   // nothing else. No app shell, no store, no drawing surface, and a
   // transparent body — there is no dashboard here to skin. (MODEL.dc.html

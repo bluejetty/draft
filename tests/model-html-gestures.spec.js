@@ -444,7 +444,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           buttons: [...document.querySelectorAll('button')].filter(outside)
             .map(b => b.id || b.textContent.trim()).sort(),
           anchors: [...document.querySelectorAll('a')].filter(outside)
-            .map(a => a.textContent.trim()).sort(),
+            // A PICTURE LINK names itself by its aria-label (the ROUGH
+            // DRAFTER logo, 12 Oct), as a screen reader would read it.
+            .map(a => a.textContent.trim() || a.getAttribute('aria-label') || '').sort(),
           selects: [...document.querySelectorAll('select')].filter(outside)
             .map(s => s.id).sort(),
           // NAMED, NOT COUNTED BY TYPE. This read `i.type`, so every text
@@ -715,9 +717,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // depending on length of house so it fits on the layout pages
             // nicer". The table gains a row rather than losing an absence.
             'strip-rotate',
-            // AND THE NORTH BUTTON beside it in the bottom bar (1 Oct): it
-            // opens the two norths' popup and draws nothing on the house.
-            'bar-north',
+            // AND THE NORTH ARROW itself, pressed (12 Oct; the bottom-bar
+            // NORTH button of 1 Oct before it): it opens the two norths'
+            // popup and draws nothing on the house.
+            'north-hit',
             // THE READOUT IS A WORD UNTIL IT IS ASKED FOR (Movie, 15 Sep), so
             // the counts that used to sit open at the foot are behind two
             // presses now: `readout-tab` shows them and `readout-close` puts
@@ -788,6 +791,9 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           anchors: ['PROJECT', 'BONEYARD', 'EXT. FINISH', 'REAL ESTATE PLAN',
             'CONSTRUCTION LAYOUT', 'SPECIFICATIONS',
             'SETTINGS', 'STANDARDS',
+            // THE ROUGH DRAFTER LOGO (Movie, 12 Oct): back to the entry page.
+            // A way out, like the page row; it authors nothing.
+            'Rough Drafter — entry page',
             'CLICK HERE TO GO OVER THE CONSTRUCTION DETAILS / SECTIONS FOR YOUR PROJECT',
           ].sort(),
           selects: ['file-ext'],

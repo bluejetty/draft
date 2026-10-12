@@ -103,9 +103,9 @@ test('the foot bar: PROJECT and MODEL left, the bone in the middle, the sheets r
       el => (el.textContent || '').trim().replace(/\s+/g, ' '))),
     'the sheets belong at the far right, in reading order')
       // NIGHT/DAY went up with it, so this group is the sheets alone --
-      // headed, since 1 Oct, by MODEL's own two buttons: NORTH (its arrow's
-      // N is its only text) and HOUSE ROTATE (an icon, no text).
-      .toEqual(['N', '', 'REAL ESTATE PLAN', 'CONSTRUCTION LAYOUT', 'SPECIFICATIONS', 'ESTIMATES']);
+      // NORTH and HOUSE ROTATE headed it from 1 Oct to 12 Oct, when they
+      // moved up onto the plan beside the north arrow (model-north.spec.js).
+      .toEqual(['REAL ESTATE PLAN', 'CONSTRUCTION LAYOUT', 'SPECIFICATIONS', 'ESTIMATES']);
 
     // WHERE THEY WENT, asserted here rather than left implied. A pair that
     // vanished from the bottom bar and reached nowhere would pass both

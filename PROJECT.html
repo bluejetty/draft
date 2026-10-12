@@ -2026,6 +2026,7 @@
             }
             if (row.choices) {
               node.hidden = !shown;
+              node.style.visibility = row.invisibleWhen && row.invisibleWhen() ? 'hidden' : '';
               // THE BOX BEING USED IS LEFT ALONE, the same rule the typed cells
               // keep below: repaint runs on every change, and rewriting an open
               // dropdown is how a half-made choice becomes the previous one.
@@ -2377,6 +2378,8 @@
           get: () => splitOr('foundationAttachmentIn', attachmentIn()),
           field: 'foundationAttachmentIn', unit: 'in' },
         { side: 'right', key: 'ladderDepth', name: 'Ladder', anchor: false,
+          // Invisible on a sill plate, as band 2's is (Movie, 12 Oct).
+          invisibleWhen: () => splitOr('foundationAttachment', attachmentChoice()) !== 'ladder',
           choices: LADDER_CHOICES,
           read: () => String(projectPage.ladderDepthIn(splitOr('foundationLadderIn', ladderIn()))),
           write: value => {
@@ -2608,6 +2611,8 @@
           get: () => detachedAttachmentIn(),
           field: 'foundationAttachmentIn', unit: 'in' },
         { side: 'left', key: 'ladderDepth', name: 'LADDER',
+          // Invisible on a sill plate, as band 2's is (Movie, 12 Oct).
+          invisibleWhen: () => detachedAttachment() !== 'ladder',
           choices: LADDER_CHOICES,
           read: () => String(projectPage.ladderDepthIn(sectionTable.rows.detachedGarage?.foundationLadderIn)),
           write: value => {
@@ -2948,10 +2953,15 @@
         },
       });
       // HOW DEEP THE LADDER IS, beside the pair it belongs to: a 2x4 or a
-      // 2x6 on edge (Movie, 4 Oct). A sill plate ignores it.
+      // 2x6 on edge (Movie, 4 Oct). A sill plate ignores it, so with SILL
+      // PLATE chosen the row goes INVISIBLE (Movie, 12 Oct: "make the 'ladder'
+      // menu invisible when they have selected the SILL PLATE for attachemnt
+      // (so they don't get confused)") -- invisible, not removed, so the rows
+      // after it keep their places.
       addInput('ladderDepth', 'LADDER DEPTH', {
         name: 'ladderDepth',
         kind: 'choice',
+        invisibleWhen: () => attachmentChoice() !== 'ladder',
         choices: LADDER_CHOICES,
         get: () => String(ladderIn()),
         set: value => {
@@ -4368,6 +4378,9 @@
         controlEls.forEach(({ control, el, tag }, key) => {
           const at = anchors[key];
           const row = el.closest ? el.closest('.sched-row') : null;
+          // INVISIBLE, NOT GONE: the row keeps its seat in the column (the
+          // ladder depth on a sill plate). Every hide rule below still runs.
+          if (row) row.style.visibility = control.invisibleWhen && control.invisibleWhen() ? 'hidden' : '';
           // A LEVEL THIS HOUSE DOES NOT FRAME TAKES ITS WHOLE ROW WITH IT.
           // The no-anchor rule further down catches the three measured rows
           // by itself -- an undrawn level anchors nothing -- but a `choice`

@@ -2322,7 +2322,13 @@ function run(win) {
           const lo = Math.min(...us), hi = Math.max(...us);
           const where = `u ${lo.toFixed(2)}..${hi.toFixed(2)}`;
           if (acrossAt(L.floorTop, lo, hi, f.seq)) lined.push(`level ${L.id} floor ${ftIn(L.floorTop)} ${where}`);
-          if (acrossAt(L.floorBottom, lo, hi, f.seq)) lined.push(`level ${L.id} head ${ftIn(L.floorBottom)} ${where}`);
+          // A BAND ON THE FOUNDATION HAS NO HEAD UNDER IT: its bottom edge is
+          // the top of the sill plate, the line Movie asked for on the house
+          // as on the garage (12 Oct, "they should be drawn exactly the
+          // same") -- elevation-harness.js holds that it shows.
+          const onSill = Math.abs(L.floorBottom
+            - win.DraftCutView.sectionLevelStack(cladEnv).foundation.wallTop) < 0.01;
+          if (!onSill && acrossAt(L.floorBottom, lo, hi, f.seq)) lined.push(`level ${L.id} head ${ftIn(L.floorBottom)} ${where}`);
         });
       });
       check('and no floor line is drawn across the house face, at either edge '

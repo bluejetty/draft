@@ -30,7 +30,10 @@ const MUTATIONS = [
     c => c.replace("        ctx.strokeStyle = ink(0.45);\n        ctx.beginPath();\n        runs.forEach(r => { ctx.moveTo",
       "        ctx.strokeStyle = INK;\n        ctx.beginPath();\n        runs.forEach(r => { ctx.moveTo")],
   ['no line along the top of the plate', 'cut-view.js',
-    c => c.replace('ctx.moveTo(X(p.lo), Y(g.topE + plateLine)); ctx.lineTo(X(p.hi), Y(g.topE + plateLine));', '')],
+    // AND NOT LAID BACK DOWN BY THE BAND, which re-strokes the house's from
+    // the same record since 12 Oct (cut-view.js paintRimBand).
+    c => c.replace('ctx.moveTo(X(p.lo), Y(g.topE + plateLine)); ctx.lineTo(X(p.hi), Y(g.topE + plateLine));', '')
+      .replace('if (!g.garage) housePlateTops.push({ lo: p.lo, hi: p.hi, e: g.topE + plateLine });', '')],
   ['a ladder\'s depth defaults to the 2x6', 'cut-view.js',
     c => c.replace('return ([3.5, 5.5].includes(inches) ? inches : 3.5) / 12;',
       'return ([3.5, 5.5].includes(inches) ? inches : 5.5) / 12;')],
@@ -42,7 +45,7 @@ const MUTATIONS = [
     c => c.replace('foundationAttachment: split.foundationAttachment ?? top.attachment,',
       'foundationAttachment: top.attachment,')],
   ['a floor on the sill plate paints its band over the plate line', 'cut-view.js',
-    c => c.replace('const onSill = !!stack.split && Math.abs(level.floorBottom - fdn.wallTop) < 0.01;', 'const onSill = false;')],
+    c => c.replace('const onSill = Math.abs(level.floorBottom - fdn.wallTop) < 0.01;', 'const onSill = false;')],
   ['a wall face strokes along its foot again', 'cut-view.js',
     c => c.replace("      ctx.lineTo(xb, yFoot);\n      ctx.strokeStyle = C.face; ctx.lineWidth = 1;",
       "      ctx.lineTo(xb, yFoot);\n      ctx.lineTo(xa, yFoot);\n      ctx.strokeStyle = C.face; ctx.lineWidth = 1;")],

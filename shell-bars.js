@@ -206,6 +206,12 @@ if (!window.DraftShellBars) {
        row already teaches that a place you go is a link, and a modal that
        only links onward would be a door in front of a door. -->
   <div id="settings-corner" data-settings-corner>
+    <!-- THE ROUGH DRAFTER LOGO, left of the settings stack (Movie, 12 Oct: "we
+         need a ROUGH DRAFTER logo which links back to the ENTRY area page, put
+         it to the left of the SETTINGS / STANDARDS button up top"). -->
+    <a id="home-logo" data-home-logo href="./"
+      title="ROUGH DRAFTER — back to the entry page" aria-label="Rough Drafter — entry page"><img
+      src="assets/rough-drafter-logo.png" alt="" width="26" height="26" /></a>
     <div id="settings-stack">
       <a data-page="settings" href="./SETTINGS.html"
         title="Keyboard and layer settings">SETTINGS</a>

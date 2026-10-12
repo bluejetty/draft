@@ -377,6 +377,36 @@ test.describe('MODEL.html instrument strip', () => {
       expect(length, "12' typed must be 12' stored").toBeCloseTo(12, 3);
     });
 
+  // Movie, 12 Oct: "brighten up the LENGTH BOX so the users attention is
+  // brought to it ... make it orange ... around the outside, but leave the
+  // inner part darker so the white number text can easily be seen".
+  test('the LENGTH box glows orange while a run is in hand, and only then',
+    async ({ page }) => {
+      await seed(page, { board: 'drafting' });
+      await openModel(page);
+      const box = page.locator('#frozen-length');
+      await expect(box).not.toHaveClass(/\blive\b/);
+      const restBg = await box.evaluate(el => getComputedStyle(el).backgroundColor);
+
+      await h.armWall(page);
+      await tapAt(page, -4, -4);
+      await hoverAt(page, 2, -4);
+      await expect(box).toHaveClass(/\blive\b/);
+      const lit = await box.evaluate(el => {
+        const cs = getComputedStyle(el);
+        return { border: cs.borderTopColor, shadow: cs.boxShadow, bg: cs.backgroundColor };
+      });
+      expect(lit.border, 'an orange rim').toBe('rgb(255, 162, 26)');
+      expect(lit.shadow, 'that glows').toContain('rgba(255, 162, 26');
+      expect(lit.bg, 'and the inside keeps the dark chip').toBe(restBg);
+      const first = await box.inputValue();
+      await hoverAt(page, 5, -4);
+      await expect(box, 'the number follows the hand').not.toHaveValue(first);
+
+      await page.keyboard.press('Escape');
+      await expect(box, 'the run is put down: the glow goes').not.toHaveClass(/\blive\b/);
+    });
+
   // THE ANGLE BOX IS THE OTHER HALF OF THE PROTRACTOR. Movie: "we should have
   // a angle textbox actually" — the page could read a bearing and not take
   // one, which makes the protractor a gauge rather than an instrument. And on
