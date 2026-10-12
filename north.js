@@ -166,7 +166,11 @@ if (!window.DraftNorth) {
     const box = anchor.getBoundingClientRect();
     const w = el.offsetWidth, h = el.offsetHeight;
     el.style.left = `${Math.max(8, Math.min(window.innerWidth - w - 8, box.left + box.width / 2 - w / 2))}px`;
-    el.style.top = `${Math.max(8, box.top - h - 8)}px`;
+    // ABOVE ITS BUTTON when there is room (the bar buttons at the foot of the
+    // page), BELOW it when there is not (the arrow itself near the top of
+    // MODEL's plan), so the popup never lands on what opened it.
+    el.style.top = box.top - h - 8 >= 8 ? `${box.top - h - 8}px`
+      : `${Math.min(window.innerHeight - h - 8, box.bottom + 8)}px`;
     paint();
     const outside = e => { if (!el.contains(e.target) && !anchor.contains(e.target)) closePopup(); };
     const key = e => { if (e.key === 'Escape') { e.stopPropagation(); closePopup(); } };

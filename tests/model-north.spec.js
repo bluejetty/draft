@@ -1,4 +1,5 @@
-// THE TWO NORTHS, and the bottom bar they ride in.
+// THE TWO NORTHS, set by pressing the arrow on the plan (12 Oct; a bottom-bar
+// button before that).
 //
 // Movie, 1 Oct: REAL ESTATE PLAN moves to the right-hand row, left of
 // CONSTRUCTION LAYOUT; HOUSE ROTATE comes down beside it at 150%; and left of
@@ -37,19 +38,24 @@ const stored = page => page.evaluate(async bucket => {
   return JSON.parse(await file.text());
 }, BUCKET);
 
-test('the bottom bar: NORTH, then HOUSE ROTATE at 150%, then REAL ESTATE PLAN, then the sheets', async ({ page }) => {
+test('the north arrow is the button, and HOUSE ROTATE stands beside it', async ({ page }) => {
+  // Movie, 12 Oct: "when you click on the Actual NORTH arrow area it opens the
+  // adjustement window ... than we can remove the bottom bar button", and
+  // "move the PAGE ROTATION button to the right side of where the north arrow
+  // is located (centered up down on the north arrow and lines circle / text".
   await seed(page, HOUSE);
   await page.goto('/MODEL.html?mode=night');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-  const order = await page.locator('#sheet-row > *').evaluateAll(els => els.map(el =>
-    el.matches('[data-north-button]') ? 'NORTH'
-      : el.matches('[data-mode-rotate]') ? 'ROTATE' : el.textContent.trim()));
-  expect(order).toEqual(['NORTH', 'ROTATE', 'REAL ESTATE PLAN', 'CONSTRUCTION LAYOUT', 'SPECIFICATIONS', 'ESTIMATES']);
-  expect(await page.locator('#page-row').textContent()).not.toContain('REAL ESTATE');
-  const rotate = await page.locator('[data-mode-rotate]').boundingBox();
-  const chip = await page.locator('#sheet-row [data-page="construction"]').boundingBox();
-  expect(rotate.height / chip.height, 'HOUSE ROTATE stands half again a chip').toBeCloseTo(1.5, 1);
-  await expect(page.locator('#strip [data-mode-rotate]'), 'and it left the top strip').toHaveCount(0);
+  const order = await page.locator('#sheet-row > *').evaluateAll(els => els.map(el => el.textContent.trim()));
+  expect(order).toEqual(['REAL ESTATE PLAN', 'CONSTRUCTION LAYOUT', 'SPECIFICATIONS', 'ESTIMATES']);
+  await expect(page.locator('#sheet-row [data-north-button], #sheet-row [data-mode-rotate]')).toHaveCount(0);
+  await expect(page.locator('#strip [data-mode-rotate]'), 'nor on the top strip').toHaveCount(0);
+  const hit = await page.locator('#north-hit').boundingBox();
+  const rotate = await page.locator('#strip-rotate').boundingBox();
+  expect(rotate.x, 'rotate stands right of the arrow').toBeGreaterThan(hit.x + hit.width);
+  expect(Math.abs((rotate.y + rotate.height / 2) - (hit.y + hit.height / 2)), 'centred up and down on it').toBeLessThan(1.5);
+  const canvas = await page.locator('#plan').boundingBox();
+  expect(rotate.x + rotate.width, 'and stays on the plan').toBeLessThanOrEqual(canvas.x + canvas.width);
 });
 
 test('MODEL: construction north by 90, true north by 1, saved for the layout to read', async ({ page }) => {

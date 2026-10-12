@@ -105,6 +105,14 @@
     font: 13px/1.45 var(--font-body);
     color: var(--ink-primary); }
   #plan { display:block; width:100%; height:100%; cursor:grab; touch-action:none; }
+  #north-dock { position:fixed; z-index:6; pointer-events:none; }
+  #north-dock > button { pointer-events:auto; position:absolute; }
+  #north-hit { border:0; padding:0; background:transparent; cursor:pointer; border-radius:50%; }
+  #north-hit:hover, #north-hit:focus-visible { background:rgba(127,127,127,0.12); outline:1px solid var(--edge-panel); }
+  #strip-rotate { display:flex; align-items:center; justify-content:center; width:42px; height:36px;
+    border:1px solid var(--edge-panel); border-radius:4px; cursor:pointer; color: var(--ink-primary);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none); }
+  #strip-rotate:hover, #strip-rotate:focus-visible { border-color: var(--accent-mark); color: var(--accent-mark); }
   #plan.dragging { cursor:grabbing; }
   /* Over a grabbable corner. Declared AFTER .dragging so it wins while a
      corner is actually being dragged -- equal specificity, later rule. */
@@ -1087,6 +1095,28 @@
 <body>
 
 <canvas id="plan"></canvas>
+<!-- THE NORTH ARROW IS ITS OWN BUTTON, AND HOUSE ROTATE STANDS BESIDE IT
+     (Movie, 12 Oct): "rather than having the separate button for N - ARROW to
+     adjust, make it so when you click on the actual NORTH arrow area it opens
+     the adjustment window", "then we can remove the bottom bar button", and
+     "move the PAGE ROTATION button to the right side of where the north arrow
+     is located (centered up down on the north arrow and lines circle / text".
+     The arrow is still painted on the plan; this is the hand over it, seated
+     on it by paintNorth every frame. The ids and hooks are the ones the bar's
+     buttons wore, so every caller still finds them. -->
+<div id="north-dock" hidden>
+  <button type="button" id="north-hit" data-north-button data-north-hit
+    title="NORTH — click to set construction north and true north" aria-label="North arrows"></button>
+  <button type="button" id="strip-rotate" data-mode-rotate
+    title="TURN THE HOUSE — a quarter turn clockwise; the elevations turn with it and E1 stays the front">
+    <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+      <path d="M4.6 9.2 L8 6.3 L11.4 9.2"></path>
+      <path d="M5.8 9.2 V12.3 H10.2 V9.2"></path>
+      <path d="M2.7 7.6 A6.3 6.3 0 0 1 13.3 7.6" stroke-width="1"></path>
+      <path d="M11.9 6.2 L13.5 7.8 L11.9 9" stroke-width="1"></path>
+    </svg>
+  </button>
+</div>
 <!-- THE LOWER-LEFT ROW. Movie, 19 Sep: "i need the viewcounter lets put it
      on lower left (2nd row from bottom to the left of 'STATUS READOUT'". The
      count used to mount beside the PROJECT link, which on this page is the
@@ -1244,7 +1274,7 @@
      rises from the foot and will cover exactly this row, which is why the
      things a drafter reads WHILE DRAWING went the other way.
      WHAT IS NOT HERE: the generator. See the seam note beside ModelBuild. -->
-<script>window.DraftShellBars.bottomBar({ page: 'model', tools: ['north', 'rotate'] });</script>
+<script>window.DraftShellBars.bottomBar({ page: 'model' });</script>
 
 <!-- GRUFF'S DRIVE-THRU SIGN. Movie, 15 Sep: the menu "should pop up from the
      bottom of the screen and cover both the DRIVE-THRU MENU BUTTON and the
@@ -4590,7 +4620,7 @@
     ? window.DraftNorth.normalise(drawing?.layout?.north) : { cn: 0, tn: 0 });
   let northIconKey = null;
   const paintNorthIcon = () => {
-    const button = document.querySelector('[data-north-button]');
+    const button = document.querySelector('[data-north-button]:not([data-north-hit])');
     if (!button || !window.DraftNorth) return;
     const n = northOf();
     const key = `${n.cn}:${n.tn}`;
@@ -4598,10 +4628,37 @@
     northIconKey = key;
     button.innerHTML = window.DraftNorth.iconSvg(n);
   };
+  // WHERE THE ARROW STANDS: far enough in from the right that HOUSE ROTATE
+  // fits beside it.
+  const NORTH_R = 30;
+  const northCentre = () => ({ x: canvas.clientWidth - 112, y: 96 });
+  const northDock = document.getElementById('north-dock');
+  const seatNorthDock = () => {
+    if (!northDock) return;
+    if (!window.DraftNorth || !drawing) { northDock.hidden = true; return; }
+    const box = canvas.getBoundingClientRect();
+    const c = northCentre();
+    // THE ARROW'S OWN EXTENT: its letters stand 1.55 r above the centre and
+    // its ring 0.62 r below, so the hand covers both and the turn button is
+    // centred on that same span.
+    const top = c.y - NORTH_R * 1.75, bottom = c.y + NORTH_R * 0.8;
+    northDock.hidden = false;
+    northDock.style.left = `${box.left}px`;
+    northDock.style.top = `${box.top}px`;
+    const hit = document.getElementById('north-hit');
+    if (hit) Object.assign(hit.style, {
+      left: `${c.x - NORTH_R}px`, top: `${top}px`, width: `${NORTH_R * 2}px`, height: `${bottom - top}px`,
+    });
+    const turn = document.getElementById('strip-rotate');
+    if (turn) Object.assign(turn.style, {
+      left: `${c.x + NORTH_R + 10}px`, top: `${(top + bottom) / 2 - 18}px`,
+    });
+  };
   const paintNorth = () => {
+    seatNorthDock();
     if (!window.DraftNorth || !drawing) return;
-    const w = canvas.clientWidth;
-    window.DraftNorth.drawPair(ctx, w - 80, 96, 30, northOf(), {
+    const c = northCentre();
+    window.DraftNorth.drawPair(ctx, c.x, c.y, NORTH_R, northOf(), {
       cnColor: skin['draw-wall-edge'] || '#1d1f20',
       tnColor: skin['ink-quiet'] || '#8c9196',
     });
