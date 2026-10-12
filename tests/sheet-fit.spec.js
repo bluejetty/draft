@@ -217,3 +217,23 @@ test('a single view sits in the middle of its sheet, not the corner', async ({ p
     expect(mid).toBeCloseTo(0.5 + 14.85 / 2, 1);
   }
 });
+
+// CLEAR OF THE ROUNDED CORNER (Movie, 12 Oct: "the viewport shouldn't go over
+// the corner in case something shows there"). The BLUEJETTY block rounds the
+// border 0.35", so the sheet's windows start that far in from the left margin
+// -- and the stacked pair keeps its 1/8", since the height is not touched.
+test('on a rounded border the windows stand clear of its corners', async ({ page }) => {
+  const d = twoStoreyOverBasement();
+  d.layout = { auto: true, titleblock: 'bluejetty' };
+  await openLayout(page, d);
+  await waitForCompose(page);
+  const layout = await savedLayout(page);
+  const elevs = layout.viewports.filter(v => v.kind === 'elevation');
+  expect(elevs.length).toBe(4);
+  elevs.forEach(v => {
+    expect(v.pif, 'still 1/8"').toBe(1 / 8);
+    // Region x 0.85 .. 15.35: the window is centred on it, its left side at
+    // 0.85, inside the corner's arc.
+    expect(v.xIn).toBeCloseTo(0.85 + 14.5 / 2, 2);
+  });
+});

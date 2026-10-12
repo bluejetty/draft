@@ -1418,6 +1418,16 @@ class Component extends PageLogic {
       ? window.DraftTitleblock.styleById(this.state.titleblock) : null;
     if (style?.placement === 'right') w -= window.DraftTitleblock.STRIP_W_IN;
     else h -= (window.DraftTitleblock?.BAND_H_IN || 1.5);
+    // CLEAR OF THE ROUNDED CORNERS (Movie, 12 Oct: "the viewport shouldn't go
+    // over the corner in case something shows there"). The left edge comes in
+    // by the corner's radius, so a frame's top and bottom left corners stand
+    // inside the arc; the height is untouched, which keeps a stacked pair of
+    // elevations on the rung it already makes. The right edge meets the
+    // strip's straight side and has no corner to clear.
+    if (style?.placement === 'right') {
+      const r = style.cornerRadiusIn ?? window.DraftTitleblock.CORNER_RADIUS_IN;
+      return { x: margin + r, y: margin, w: w - r, h };
+    }
     return { x: margin, y: margin, w, h };
   }
 

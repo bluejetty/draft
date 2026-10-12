@@ -756,11 +756,29 @@ if (!window.DraftBuildHouse) {
   //
   // Pure: box {x0, x1, z0, z1} in plan feet. Answers the joist axis, the beam
   // lines, the column points and the widest joist row left.
-  const garageBeamPlan = (box, {
-    doors = [], onWall = () => false, maxJoistFt = 30, maxColumnFt = 10,
-  } = {}) => {
+  // SIDE WALL TO SIDE WALL: the joists land on the two walls without the
+  // garage doors, so they run the same way as the door wall. Front to back
+  // they would only land on the back wall and need a long beam under the
+  // door end. The doors' nearest edge of `box` names the door wall; with no
+  // doors, the shorter side.
+  const garageJoistAxis = (box, doors = []) => {
     const w = box.x1 - box.x0, d = box.z1 - box.z0;
-    const axis = w <= d ? 'x' : 'z';           // the joists' direction
+    let xWall = 0, zWall = 0;                  // doors on a wall running in x / in z
+    doors.forEach(p => {
+      const toX = Math.min(Math.abs(p.z - box.z0), Math.abs(p.z - box.z1));
+      const toZ = Math.min(Math.abs(p.x - box.x0), Math.abs(p.x - box.x1));
+      if (toX < toZ) xWall += 1; else if (toZ < toX) zWall += 1;
+    });
+    if (xWall !== zWall) return xWall > zWall ? 'x' : 'z';
+    return w <= d ? 'x' : 'z';
+  };
+  const garageSpanFt = (box, doors = []) => (garageJoistAxis(box, doors) === 'x'
+    ? box.x1 - box.x0 : box.z1 - box.z0);
+
+  const garageBeamPlan = (box, {
+    doors = [], onWall = () => false, maxJoistFt = 30, maxColumnFt = 10, doorBox = box,
+  } = {}) => {
+    const axis = garageJoistAxis(doorBox, doors);   // the joists' direction
     const lo = axis === 'x' ? box.x0 : box.z0;
     const hi = axis === 'x' ? box.x1 : box.z1;
     const along0 = axis === 'x' ? box.z0 : box.x0;
@@ -811,6 +829,8 @@ if (!window.DraftBuildHouse) {
     OWJ_SPANS,
     owjFor,
     garageBeamPlan,
+    garageJoistAxis,
+    garageSpanFt,
     outlineInteriorRef,
     houseWallRuns,
     footingRings,

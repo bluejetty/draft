@@ -62,6 +62,9 @@ const MUTATIONS = [
     c => c.replace('const rows = OWJ_SPANS.filter(r => r.depthIn >= minDepthIn - 1e-6);', 'const rows = OWJ_SPANS;')],
   ['the garage beams ignore the doors', 'build-house.js',
     c => c.replace('    if (between.length >= n && between.length <= 12) pick(between, 0, []);', '')],
+  // MOVIE, 12 OCT: "side wall to side wall -- the sides that land on walls".
+  ['the garage joists take the short way whatever wall the doors are in', 'build-house.js',
+    c => c.replace('    if (xWall !== zWall) return xWall > zWall ? \'x\' : \'z\';', '')],
   ['a beam end on a wall still gets a column', 'build-house.js',
     c => c.replace('        if ((k === 0 || k === bays) && onWall(p)) continue;', '')],
   ['the longest spans never drop to 12" o.c.',
@@ -128,7 +131,7 @@ if (MUTATE) {
   process.exit(all ? 0 : 1);
 }
 
-const { midSpanBeams, owjFor, OWJ_SPANS, garageBeamPlan } = require('./harness-env.js').loadDraftModules().DraftBuildHouse;
+const { midSpanBeams, owjFor, OWJ_SPANS, garageBeamPlan, garageJoistAxis, garageSpanFt } = require('./harness-env.js').loadDraftModules().DraftBuildHouse;
 
 let failed = 0, ran = 0;
 const checkEq = (label, got, want) => {
@@ -469,6 +472,16 @@ const poly = list => list.map(([x, z]) => ({ x, z }));
   const lopsided = garageBeamPlan(box, { doors: [{ x: 3, z: 40 }, { x: 6, z: 40 }] });
   checkEq('doors that would leave a row past 30 ft give way to even rows', lopsided.beams[0].start.x, 18);
   checkEq('a span the joists reach takes no beam', garageBeamPlan({ x0: 0, x1: 30, z0: 0, z1: 40 }).beams.length, 0);
+  // "side wall to side wall -- the sides that land on walls": a garage wider
+  // than it is deep still spans across, between the walls without doors.
+  const shallow = { x0: 0, x1: 36, z0: 0, z1: 24 };
+  const doorsFront = [{ x: 9, z: 24 }, { x: 27, z: 24 }];
+  checkEq('the joists run the way the door wall runs, not the short way',
+    garageJoistAxis(shallow, doorsFront), 'x');
+  checkEq('so the span is side wall to side wall', garageSpanFt(shallow, doorsFront), 36);
+  checkEq('and the beam still stands between the doors', garageBeamPlan(shallow, { doors: doorsFront }).beams[0].start.x, 18);
+  checkEq('doors on a side wall turn the joists', garageJoistAxis(box, [{ x: 0, z: 20 }]), 'z');
+  checkEq('no doors: the shorter side', garageJoistAxis(shallow, []), 'z');
 }
 
 console.log(`\nmid-span beams: ${ran} checks, ${failed} failed`);

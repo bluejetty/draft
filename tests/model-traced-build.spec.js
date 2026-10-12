@@ -86,6 +86,12 @@ async function build(page) {
 async function boneBuild(page) {
   await page.locator('#bone').click();
   await page.locator('[data-build-choice-build]').click();
+  // A ROOM PAST 31 FT SIDE WALL TO SIDE WALL is asked about after the build;
+  // these specs take the engineer's note and keep the garage clear.
+  const ask = page.locator('#garage-span');
+  if (await ask.isVisible({ timeout: 1500 }).catch(() => false)) {
+    await ask.locator('[data-garage-span-engineer]').click();
+  }
   return build(page);
 }
 
@@ -404,8 +410,11 @@ test('the room over a MOD BILEVEL garage gets OWJ wall to wall, no beam or post 
   expect(beams.length, 'no beam crosses the garage').toBe(0);
   const note = (d.notes || []).find(n => Number(n.levelId) === 4 && n.view === 'floor' && /^ENGINEERED OWJ/.test(n.body));
   expect(note, 'the OWJ note on the room\'s floor layout').toBeTruthy();
-  expect(note.body).toMatch(/19-3\/4" @ 16" O\.C\./);
-  expect(note.body).toMatch(/SIDE WALL TO SIDE WALL/);
+  // SIDE WALL TO SIDE WALL IS THE WAY THE DOOR WALL RUNS (Movie, 12 Oct:
+  // "the sides that land on walls"): these doors are in the x = -21 wall, so
+  // the joists run in z across the room's 31 ft, not its 20 ft the short way.
+  expect(note.body).toMatch(/24" @ 12" O\.C\./);
+  expect(note.body).toMatch(/SIDE WALL TO SIDE WALL -- 31'-0" SPAN/);
   expect(d.dimensions.filter(x => Number(x.levelId) === 4 && x.view === 'floor').length,
     'the room\'s floor layout is dimensioned').toBeGreaterThan(0);
 });
