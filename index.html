@@ -134,6 +134,61 @@
         aspect-ratio: 1;               /* the logo is square, 800x800 */
       }
 
+      /* THE LINKS ROUND THE LOGO (Movie, 12 Oct): "a square shape around the
+         centralized ROUGH DRAFTER logo ... a table that can't be seen with
+         about 4 columns and 4 rows and make the middle 4 boxes as one and put
+         the logo in those 4 boxes centered". The middle four cells are one
+         cell the logo's own width, so each ring cell is half a logo square.
+         Numbered as he named them: box 1 is the top-left, then along the top. */
+      .ring {
+        display: grid;
+        grid-template-columns: repeat(4, calc(var(--logo-w) / 2));
+        grid-template-rows: repeat(4, calc(var(--logo-w) / 2));
+        align-items: center;
+        justify-items: center;
+      }
+      .ring .enter { grid-column: 2 / 4; grid-row: 2 / 4; }
+      /* Box N's cell: along the top, down the right, back along the bottom,
+         up the left -- the order the boxes are filled in. */
+      .ring [data-box="1"] { grid-column: 1; grid-row: 1; }
+      .ring [data-box="2"] { grid-column: 2; grid-row: 1; }
+      .ring [data-box="3"] { grid-column: 3; grid-row: 1; }
+      .ring [data-box="4"] { grid-column: 4; grid-row: 1; }
+      .ring [data-box="5"] { grid-column: 4; grid-row: 2; }
+      .ring [data-box="6"] { grid-column: 4; grid-row: 3; }
+      .ring [data-box="7"] { grid-column: 4; grid-row: 4; }
+      .ring [data-box="8"] { grid-column: 3; grid-row: 4; }
+      .ring [data-box="9"] { grid-column: 2; grid-row: 4; }
+      .ring [data-box="10"] { grid-column: 1; grid-row: 4; }
+      .ring [data-box="11"] { grid-column: 1; grid-row: 3; }
+      .ring [data-box="12"] { grid-column: 1; grid-row: 2; }
+      .ring-link {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 88%;
+        min-height: 44px;
+        padding: 8px;
+        text-align: center;
+        text-decoration: none;
+        color: var(--ink);
+        font-family: "Barlow Condensed", system-ui, sans-serif;
+        font-size: clamp(14px, calc(var(--logo-w) / 22), 21px);
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        line-height: 1.15;
+        text-transform: uppercase;
+        border-radius: 6px;
+        transition: transform 160ms ease, background-color 160ms ease;
+      }
+      .ring-link:hover,
+      .ring-link:focus-visible {
+        transform: translateY(-3px);
+        background-color: rgba(54, 117, 167, 0.1);
+      }
+      .ring-link:focus-visible { outline: 2px solid var(--blue-medium); outline-offset: 4px; }
+      main { align-items: center; }
+
       /* A short window (a laptop with browser chrome eating the height) gets
          its breathing room trimmed rather than the logo, so the doubled
          size survives everywhere it can and the page never scrolls to
@@ -147,6 +202,17 @@
         main { padding: 32px 0; }
         /* --logo-w needs no override: min(460px, 88vw) already shrinks to
            fit a phone. */
+        /* ON A PHONE THE SQUARE WOULD SQUEEZE THE WORDS, so the logo stands
+           alone on top and the links follow it, two to a row. */
+        .ring {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-rows: auto;
+          width: min(100%, 460px);
+          gap: 6px;
+        }
+        .ring .enter { grid-column: 1 / -1; grid-row: auto; order: -1; margin-bottom: 8px; justify-self: center; }
+        .ring .ring-link { width: 100%; grid-column: auto; grid-row: auto; }
+        .ring-empty { display: none; }
       }
 
     </style>
@@ -154,6 +220,14 @@
   <body>
     <div class="shell">
       <main>
+        <div class="ring">
+          <!-- Box 1 -->
+          <a class="ring-link" href="CODES.html" data-box="1">BUILDING CODES / SPAN TABLES</a>
+          <!-- Box 2 -->
+          <a class="ring-link" href="https://pdf.bluejetty.ca/" data-box="2">PDF MANAGER</a>
+          <!-- Box 3 -->
+          <a class="ring-link" href="DXF/" data-box="3">DXF CONVERTER</a>
+          <!-- Boxes 4 to 12: empty until they are given a link. -->
         <div class="enter">
           <!-- THE DOOR MOVED (Movie, 20 Sep): "can you make the main page
                link to the model.html". This pointed at MODEL.dc.html from the
@@ -172,6 +246,7 @@
                  width="225" height="225"
                  alt="Rough Drafter: a rolled blueprint lettered ROUGH DRAFTER" />
           </a>
+        </div>
         </div>
         <!-- THE PREVIEW LINE IS GONE (Movie, 20 Sep): "remove the extra link
              text below the main logo", and "take off that text down at the
