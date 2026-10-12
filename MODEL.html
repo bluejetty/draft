@@ -4875,6 +4875,11 @@
 
   const paint = () => {
     const t0 = performance.now();
+    // THE ARROW'S HAND AND HOUSE ROTATE GO WITH THE ARROW: put away here and
+    // seated again by paintNorth, which only a plan paint reaches -- so an
+    // elevation or a section shows neither a click over nothing nor a turn
+    // button beside an arrow that is not there.
+    if (northDock) northDock.hidden = true;
     ctx.save();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
