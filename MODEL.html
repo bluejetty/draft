@@ -110,6 +110,24 @@
      part darker"). The shared sheet draws the glow; the page names its colour,
      the tracking rays' own orange, since shell-bars.css holds only roles. */
   :root { --length-live: #ffa21a; --length-live-glow: rgba(255, 162, 26, 0.75); }
+  /* THE LENGTH HINT (Movie, 12 Oct): "once they place their first point ...
+     bring up a popup near the LENGTH area with a arrow pointed to it". Under
+     the box, pointing up at it, in the box's own orange; a note, not a
+     control, so a press through it still lands on the sheet. */
+  #length-hint { position:fixed; z-index:8; pointer-events:none; max-width:260px;
+    padding:7px 10px; border-radius:6px; border:1.5px solid var(--length-live);
+    background-color: var(--surface-panel); color: var(--ink-primary);
+    font-family: var(--font-ui); font-size:11px; font-weight:600; letter-spacing:0.05em;
+    text-transform:uppercase; text-align:center; line-height:1.35;
+    box-shadow: 0 0 9px 1px var(--length-live-glow); transform:translateX(-50%); }
+  #length-hint-text { display:block; }
+  /* THE ONE PART THAT TAKES A PRESS (Movie: "put a little checkbox where they
+     can TURN OFF the popup in the future"). */
+  #length-hint-off { display:inline-flex; align-items:center; gap:5px; margin-top:6px;
+    pointer-events:auto; cursor:pointer; font-size:9px; color: var(--ink-quiet); }
+  #length-hint-off input { margin:0; width:12px; height:12px; cursor:pointer; accent-color: var(--length-live); }
+  #length-hint::before { content:''; position:absolute; left:50%; top:-8px; margin-left:-7px;
+    border:7px solid transparent; border-top:0; border-bottom:8px solid var(--length-live); }
   #north-dock { position:fixed; z-index:6; pointer-events:none; }
   #north-dock > button { pointer-events:auto; position:absolute; }
   #north-hit { border:0; padding:0; background:transparent; cursor:pointer; border-radius:50%; }
@@ -1109,6 +1127,10 @@
      The arrow is still painted on the plan; this is the hand over it, seated
      on it by paintNorth every frame. The ids and hooks are the ones the bar's
      buttons wore, so every caller still finds them. -->
+<div id="length-hint" role="status" hidden>
+  <span id="length-hint-text">MOVE LINE TO DESIRED LENGTH, or ENTER LENGTH IN TEXTBOX</span>
+  <label id="length-hint-off"><input type="checkbox" id="length-hint-hide" data-length-hint-off /> DON'T SHOW THIS AGAIN</label>
+</div>
 <div id="north-dock" hidden>
   <button type="button" id="north-hit" data-north-button data-north-hit
     title="NORTH — click to set construction north and true north" aria-label="North arrows"></button>
@@ -17402,6 +17424,38 @@
   // shape as deleteLevel's `setArmed(false)` earlier today, from the other
   // side: git has nothing to say when one branch deletes a name another branch
   // starts using.
+  // THE LENGTH HINT COMES UP WITH THE FIRST POINT AND GOES WITH THE NEXT.
+  // Up on the refresh that first finds a line in hand; down on the next press
+  // on the sheet (that press is the second point), on the first key typed into
+  // the box, or when the line is put down. A chain of walls shows it once.
+  const lengthHint = document.getElementById('length-hint');
+  // TURNED OFF FOR GOOD from its own checkbox, kept in this browser like the
+  // TRACE switch: a reading habit of the drafter's, not a fact of the drawing.
+  const LENGTH_HINT_OFF_KEY = 'draft.lengthHint.off';
+  const lengthHintOff = () => {
+    try { return localStorage.getItem(LENGTH_HINT_OFF_KEY) === '1'; } catch { return false; }
+  };
+  lengthHint?.querySelector('[data-length-hint-off]')?.addEventListener('change', e => {
+    try { localStorage.setItem(LENGTH_HINT_OFF_KEY, e.target.checked ? '1' : '0'); } catch { /* private mode */ }
+    if (e.target.checked) lengthHint.hidden = true;
+  });
+  let hintWasLive = false;
+  const placeLengthHint = () => {
+    const box = lengthBox.getBoundingClientRect();
+    lengthHint.style.left = `${box.left + box.width / 2}px`;
+    lengthHint.style.top = `${box.bottom + 12}px`;
+  };
+  const syncLengthHint = live => {
+    if (!lengthHint) return;
+    if (live && !hintWasLive && !lengthHintOff()) { lengthHint.hidden = false; placeLengthHint(); }
+    if (!live) lengthHint.hidden = true;
+    hintWasLive = live;
+  };
+  const dropLengthHint = () => { if (lengthHint) lengthHint.hidden = true; };
+  canvas.addEventListener('pointerdown', dropLengthHint, true);
+  lengthBox.addEventListener('keydown', dropLengthHint);
+  window.addEventListener('resize', () => { if (lengthHint && !lengthHint.hidden) placeLengthHint(); });
+
   function stripRefresh() {
     syncNorthHands();
     const run = runInHand();
@@ -17459,6 +17513,7 @@
     const cornerEdge = (activeTool === 'floor' && floorCorners.length > 0)
       || (activeTool === 'shape' && shapeCorners.length > 0);
     const live = !!cursorWorld && (typable || cornerEdge);
+    syncLengthHint(live);
     lengthBox.classList.toggle('live', live);
     if (live && document.activeElement !== lengthBox) {
       lengthBox.value = dist === null ? '' : feetLabel(dist);

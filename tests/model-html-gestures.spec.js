@@ -830,6 +830,10 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           // AND THE LESSON'S "Don't show this again" tick, a setting.
           inputs: ['size-w', 'size-d', 'frozen-length', 'frozen-angle',
             'file-input', 'save-as-name', 'garage-lesson-off',
+            // THE LENGTH HINT'S "DON'T SHOW THIS AGAIN" (12 Oct), the same
+            // kind of switch as the garage lesson's: it puts a note away and
+            // authors nothing.
+            'length-hint-hide',
             // TRACE's picker and its card's three boxes: scale, width, and
             // CALIBRATE's real length.
             'trace-file', 'trace-scale', 'trace-width', 'trace-cal-length',
