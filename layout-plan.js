@@ -167,12 +167,22 @@ if (!window.DraftLayoutPlan) {
     // past its own record or half its figure is clipped at the frame edge
     // (Movie's roof plan, 11 Oct: the 70'-0" overall cut in two).
     const DIM_LABEL_ROOM_FT = 1.5;
-    onLevel('dimensions').forEach(item => [item.start, item.end].forEach(pt => {
+    const eatDimension = item => [item.start, item.end].forEach(pt => {
       const x = num(pt?.x), z = num(pt?.z);
       if (x === null || z === null) return;
       [-1, 1].forEach(sx => [-1, 1].forEach(sz =>
         eat({ x: x + sx * DIM_LABEL_ROOM_FT, z: z + sz * DIM_LABEL_ROOM_FT })));
-    }));
+    });
+    onLevel('dimensions').forEach(eatDimension);
+    // AND THE BEAM ROWS BORROWED FROM THE LEVEL UNDER, which the floor
+    // layout draws (structureUnder) and which stand outside the walls.
+    const under = structureUnder(saved, levelId);
+    if (under) {
+      (Array.isArray(saved?.dimensions) ? saved.dimensions : [])
+        .filter(item => item?.levelId === under.levelId && item.view === under.view
+          && item.layer === COLUMN_DIM_LAYER)
+        .forEach(eatDimension);
+    }
     ['floors', 'roofs', 'outlines'].forEach(key => onLevel(key)
       .forEach(item => (Array.isArray(item.points) ? item.points : []).forEach(eat)));
     if (minX > maxX) return null;
@@ -341,6 +351,34 @@ if (!window.DraftLayoutPlan) {
       && Array.isArray(floor.points) && floor.points.length >= 3);
   }
 
+  // ── WHAT HOLDS A FLOOR UP IS ON ITS SHEET ────────────────────────────────
+  //
+  // Movie, 12 Oct: "the beam BELOW the floor should show on the main floor
+  // (the exact same one as in the basement) and on the 2nd floor layout the
+  // MAIN FLOOR beam and colms should show", all at normal weight, with their
+  // AUTO DIMS rows.
+  //
+  // A BEAM IS STORED ON THE LEVEL IT STANDS ON, not the floor it carries:
+  // placeAutoBeam files the main floor's beam on FOUNDATION / foundation and
+  // the 2nd floor's on MAIN FL / floor (MODEL.html floorCarriedBy). So a
+  // floor layout borrows the structure of the level under it -- FOUNDATION
+  // for the lowest floor, the floor below for every other -- and no longer
+  // draws its own, which is the next floor up's.
+  //
+  // NULL WHEN THE DRAWING CANNOT SAY, which keeps the sheet drawing its own
+  // structure the way it did: a drawing with no levels list, or a level that
+  // carries no floor.
+  const COLUMN_DIM_LAYER = 'A-DIMS-COLS'; // auto-dims.js DIM_LAYERS.COLUMNS
+  function structureUnder(saved, levelId) {
+    const VIEWS = window.DraftLayerViews;
+    if (!VIEWS || typeof VIEWS.floorLevels !== 'function') return null;
+    const floors = VIEWS.floorLevels(Array.isArray(saved?.levels) ? saved.levels : []);
+    const at = floors.findIndex(level => Number(level?.id) === Number(levelId));
+    if (at < 0) return null;
+    if (at === 0) return { levelId: BASEMENT_LEVEL_ID, view: 'foundation' };
+    return { levelId: Number(floors[at - 1].id), view: 'floor' };
+  }
+
   function ridesOnFullFloor(saved, levelId) {
     const id = Number(levelId);
     const full = Object.keys(HALF_LEVEL_UNDER)
@@ -390,6 +428,18 @@ if (!window.DraftLayoutPlan) {
     const halfLevel = env.halfLevel === true || foundationGhost;
     // On the half-floor's pass, only what Movie named.
     const only = list => (halfLevel ? [] : list);
+    // A FLOOR LAYOUT DRAWS WHAT HOLDS IT UP (structureUnder): the level
+    // under's beams, posts and beam rows, re-filed onto this sheet so the
+    // composer's level and view filter keeps them. Not the piles, which are
+    // the garage's footings and stay on the foundation.
+    const under = view === 'floor' && !halfLevel ? structureUnder(saved, levelId) : null;
+    const borrowed = (key, keep) => (Array.isArray(saved?.[key]) ? saved[key] : [])
+      .filter(item => item?.levelId === under.levelId && item.view === under.view && keep(item))
+      .map(item => ({ ...item, levelId, view }));
+    const notPile = column => !/pile/i.test(String(column.footing || ''));
+    const beamRow = dimension => dimension.layer === COLUMN_DIM_LAYER;
+    const ownBeamRow = dimension => dimension?.levelId === levelId && dimension.view === view
+      && beamRow(dimension);
 
     // THE BUILDING, OR THE CONSTRUCTION DOCUMENT. `env.shell` asks for the
     // first: walls, floors, roofs and the holes in them, and nothing that
@@ -574,7 +624,9 @@ if (!window.DraftLayoutPlan) {
       roofs: only(of('roofs')),
       shapes: only(of('shapes')),
       lines: only(of('lines')),
-      dimensions: only(of('dimensions')),
+      dimensions: under
+        ? of('dimensions').filter(dimension => !ownBeamRow(dimension)).concat(borrowed('dimensions', beamRow))
+        : only(of('dimensions')),
       notes: only(of('notes')),
 
       wallJoins: geo.wallJoins,
@@ -678,10 +730,10 @@ if (!window.DraftLayoutPlan) {
         columnColor: '#1d1f20',
         labelFont: "600 9px 'Barlow Condensed', system-ui, sans-serif",
       }),
-      beams: only(of('beams')),
+      beams: under ? borrowed('beams', () => true) : only(of('beams')),
       columns: foundationGhost
         ? of('columns').filter(column => !/pile/i.test(String(column.footing || '')))
-        : only(of('columns')),
+        : under ? borrowed('columns', notPile) : only(of('columns')),
       // ONLY A PILE CHANGES THE DRAWN SHAPE; a telepost is the default square.
       // The same rule MODEL.html:3266 applies, and it is the CALLER's answer
       // rather than the painter's.
@@ -738,6 +790,7 @@ if (!window.DraftLayoutPlan) {
     planBounds,
     ridesOnFullFloor,
     hasFloorLayout,
+    structureUnder,
     drawPlan,
   });
 })();
