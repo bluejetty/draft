@@ -54,7 +54,7 @@ const file = files[0] || path.join(ROOT, 'proto', 'repro-L-house.draft');
 
 // ── MUTATIONS ─────────────────────────────────────────────────────────
 //
-// SIX ROWS, AND THE NUMBER IS A BUDGET. Every row repaints every standard
+// EIGHT ROWS, AND THE NUMBER IS A BUDGET. Every row repaints every standard
 // elevation of the fixture -- about eleven seconds -- and the harnesses job
 // runs this sweep inside a fixed ceiling. So the table is the rows that land
 // on what this file is FOR: the fascia, the hidden line, the band that
@@ -85,6 +85,12 @@ const MUTATIONS = [
     c => c.replace('    const WRAP_TOL_FT = 1e-6;', '    const WRAP_TOL_FT = -1;')],
   ['the sky above a roof is cut short', 'cut-view.js',
     c => c.replace('  const SKY_ABOVE_ROOF_FT = 10;', '  const SKY_ABOVE_ROOF_FT = 0;')],
+  // Movie, 12 Oct -- the last block in this file.
+  ['a band joint takes the first wall listed there, not the nearest', 'cut-view.js',
+    c => c.replace('else if (span.depth > edges.get(key)) edges.set(key, span.depth);', '')],
+  ['a house\'s band on its sill paints its plate top out again', 'cut-view.js',
+    c => c.replace('const onSill = Math.abs(level.floorBottom - fdn.wallTop) < 0.01;',
+      'const onSill = !!stack.split && Math.abs(level.floorBottom - fdn.wallTop) < 0.01;')],
 ];
 
 if (MUTATE) {
@@ -2485,6 +2491,60 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
   check('E1 traced MOD BILEVEL: no corner up the side of the old box',
     !seg((a, b) => Math.abs(a.u - 4) < 0.05 && Math.abs(b.u - 4) < 0.05
       && Math.min(a.e, b.e) < 8.5 && Math.max(a.e, b.e) > 6.5));
+}
+
+// ── E4 OF A 2 STOREY + ROOM OVER: THE CORNER THROUGH 2ND FL, AND ONE SILL ─
+//
+// Movie, 12 Oct: "the 2nd floor is the corner walls don't show the crease
+// line at corner, and the sill plate is drawn differently on the house vs
+// how its drawn on the garage. they should be drawn exactly the same and line
+// up". His drawing; MODEL's E4 is this harness's E3. Where the house meets
+// the room over the garage (u 4.60) and at the house's jog (u 24.60) the
+// corner broke across 2ND FL's floor band; and MAIN's band painted out the
+// house's plate top that the garage's, beside it, still showed.
+{
+  const cFile = path.join(ROOT, 'proto', 'repro-movie-2storey-corner-sill.draft');
+  const cSaved = JSON.parse(fs.readFileSync(cFile, 'utf8'));
+  const cEnv = buildEnv(win, cSaved.drawing || cSaved);
+  const cStack = win.DraftCutView.sectionLevelStack(cEnv);
+  const view = paintElevation(win, cEnv, standardElevationCuts(cEnv).find(c => c.id === 'E3'));
+  const inside = (pts, u, e) => {
+    let hit = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const a = pts[i], b = pts[j];
+      if ((a.e > e) !== (b.e > e) && u < (b.u - a.u) * (e - a.e) / (b.e - a.e) + a.u) hit = !hit;
+    }
+    return hit;
+  };
+  const shows = (st, u, e) => !view.modelFills.some(f => f.seq > st.seq && inside(f.pts, u, e));
+  const inked = view.strokes.filter(s => /^#1d1f20/i.test(String(s.ink)));
+  const segs = test => inked.filter(s => s.pts.some((b, i) => i > 0 && !b.move && test(s.pts[i - 1], b)));
+  const second = cStack.floors.find(l => l.id === 5);
+  [4.596, 24.596].forEach(u => {
+    const e = (second.floorBottom + second.floorTop) / 2;
+    const crease = inked.flatMap(st => st.pts.filter((b, i) => i > 0 && !b.move
+      && Math.abs(b.u - u) < 0.04 && Math.abs(st.pts[i - 1].u - b.u) < 1e-6
+      && Math.min(b.e, st.pts[i - 1].e) <= second.floorBottom + 0.02
+      && Math.max(b.e, st.pts[i - 1].e) >= second.floorTop - 0.02).map(b => ({ st, at: b.u })));
+    check(`E4 2 STOREY + ROOM OVER: the corner at u ${u.toFixed(2)} runs through 2ND FL's floor band`,
+      crease.some(({ st, at }) => shows(st, at - 0.01, e) || shows(st, at + 0.01, e)),
+      `${crease.length} strokes span ${second.floorBottom.toFixed(3)}..${second.floorTop.toFixed(3)}`);
+  });
+  // THE SAME TWO LINES AT THE SAME TWO HEIGHTS, AND NEITHER PAINTED OUT.
+  const fdn = cStack.foundation;
+  const plateTop = fdn.wallTop, concrete = fdn.wallTop - win.DraftLevelAssembly.SILL_PLATE_IN / 12;
+  const level = (u, e) => segs((a, b) => Math.abs(a.e - e) < 0.01 && Math.abs(b.e - e) < 0.01
+    && Math.min(a.u, b.u) < u && Math.max(a.u, b.u) > u);
+  const light = (u, e) => view.strokes.some(s => /^rgba/.test(String(s.ink)) && s.pts.some((b, i) => i > 0
+    && !b.move && Math.abs(b.e - e) < 0.01 && Math.abs(s.pts[i - 1].e - e) < 0.01
+    && Math.min(b.u, s.pts[i - 1].u) < u && Math.max(b.u, s.pts[i - 1].u) > u));
+  [['garage', -20], ['house', 15], ['house', 50]].forEach(([who, u]) => {
+    check(`E4 2 STOREY + ROOM OVER: the ${who}'s plate top shows at u ${u}, ${plateTop.toFixed(4)}`,
+      level(u, plateTop).some(st => shows(st, u, plateTop)),
+      `${level(u, plateTop).length} strokes, all painted over`);
+    check(`E4 2 STOREY + ROOM OVER: and the ${who}'s top of concrete under it at u ${u}, ${concrete.toFixed(4)}`,
+      light(u, concrete));
+  });
 }
 
 console.log(`elevation harness: ${passed} checks passed, ${failures.length} failed`);
