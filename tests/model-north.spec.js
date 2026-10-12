@@ -56,6 +56,14 @@ test('the north arrow is the button, and HOUSE ROTATE stands beside it', async (
   expect(Math.abs((rotate.y + rotate.height / 2) - (hit.y + hit.height / 2)), 'centred up and down on it').toBeLessThan(1.5);
   const canvas = await page.locator('#plan').boundingBox();
   expect(rotate.x + rotate.width, 'and stays on the plan').toBeLessThanOrEqual(canvas.x + canvas.width);
+  // WHILE A TOOL IS ARMED A PRESS THERE IS A CORNER, not the popup.
+  const h = require('./helpers');
+  await h.armWall(page);
+  await expect.poll(() => page.evaluate(() => {
+    const b = document.getElementById('north-hit').getBoundingClientRect();
+    return document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2)?.id;
+  })).toBe('plan');
+  await page.keyboard.press('Escape');
   // AN ELEVATION DRAWS NO ARROW, so its hand and HOUSE ROTATE go with it.
   await page.locator('.seat[data-seat="E1"]').click();
   await expect(page.locator('#north-hit')).toBeHidden();

@@ -4640,7 +4640,7 @@
   const northDock = document.getElementById('north-dock');
   const seatNorthDock = () => {
     if (!northDock) return;
-    if (!window.DraftNorth || !drawing) { northDock.hidden = true; return; }
+    if (!window.DraftNorth || !drawing || driveThruUp()) { northDock.hidden = true; return; }
     const box = canvas.getBoundingClientRect();
     const c = northCentre();
     // THE ARROW'S OWN EXTENT: its letters stand 1.55 r above the centre and
@@ -4657,6 +4657,26 @@
     const turn = document.getElementById('strip-rotate');
     if (turn) Object.assign(turn.style, {
       left: `${c.x + NORTH_R + 10}px`, top: `${(top + bottom) / 2 - 18}px`,
+    });
+    syncNorthHands();
+  };
+  // A PRESS THERE IS A CORNER WHILE A TOOL IS ARMED. The arrow was paint
+  // before 12 Oct and a wall or an outline could be started under it; the
+  // hand only catches a press when nothing is being drawn. Asked again from
+  // stripRefresh, which every tool change runs, as well as from the seat.
+  // AND THE DRIVE-THRU BOARD PUTS THEM AWAY WHILE IT IS UP: its trace and its
+  // tiles are the job then, and the arrow's corner of the sheet is where a
+  // traced house's corner lands as often as anywhere.
+  const driveThruUp = () => {
+    const board = document.getElementById('drivethru');
+    return !!board && !board.hasAttribute('data-shut');
+  };
+  const syncNorthHands = () => {
+    if (northDock && driveThruUp()) northDock.hidden = true;
+    const drafting = activeTool !== RESTING_TOOL;
+    ['north-hit', 'strip-rotate'].forEach(id => {
+      const b = document.getElementById(id);
+      if (b) b.style.pointerEvents = drafting ? 'none' : '';
     });
   };
   const paintNorth = () => {
@@ -17383,6 +17403,7 @@
   // side: git has nothing to say when one branch deletes a name another branch
   // starts using.
   function stripRefresh() {
+    syncNorthHands();
     const run = runInHand();
     const dist = run ? Math.hypot(run.to.x - run.from.x, run.to.z - run.from.z) : null;
     lenOut.textContent = dist === null ? '' : feetLabel(dist);
