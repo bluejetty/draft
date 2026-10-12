@@ -202,7 +202,12 @@
   // "the middle of the house sits here" rather than "some arbitrary corner
   // of its coordinate space does".
   const footprint = entry => {
-    const b = window.DraftLayoutPlan.planBounds(entry.saved, entry.levelId);
+    // `floorBelow: false` because this page draws a SHELL, which has no
+    // ghost of the storey below (layout-plan.js: at 1"=40' a second
+    // footprint behind this one is the smudge `shell` exists to remove). The
+    // frame has to agree with the ink or every house is drawn smaller than
+    // its lot warrants.
+    const b = window.DraftLayoutPlan.planBounds(entry.saved, entry.levelId, { floorBelow: false });
     if (!b) return null;
     return {
       cx: (b.minX + b.maxX) / 2, cz: (b.minZ + b.maxZ) / 2,

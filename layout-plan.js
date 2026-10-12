@@ -22,6 +22,7 @@ if (!window.DraftLayoutPlan) {
   let warnedNoStandards = false;
   let warnedNoLayerViews = false;
   let warnedNoLayerStandards = false;
+  let warnedNoLevelAssembly = false;
 
   const num = value => (Number.isFinite(Number(value)) ? Number(value) : null);
 
@@ -147,7 +148,12 @@ if (!window.DraftLayoutPlan) {
   // `planWalls` for. A viewport sized over every view of a level is a superset
   // of the one drawing it shows, and for a FRAME a superset is safe in the one
   // direction that matters: it can be roomier than it needs, never tighter.
-  function planBounds(saved, levelId) {
+  // `floorBelow: false` is for a caller that does NOT draw the storey below --
+  // the neighborhood's shell. The frame and the ink have to agree: a box sized
+  // for a ghost nobody draws makes the house smaller on the page for nothing,
+  // and a box that leaves out a ghost that IS drawn clips it off the paper.
+  // The default is on, because every construction sheet draws it.
+  function planBounds(saved, levelId, { floorBelow: withBelow = true } = {}) {
     // A FULL FLOOR'S FRAME TAKES IN ITS HALF-FLOOR, drawn on the same sheet.
     const half = HALF_LEVEL_UNDER[levelId];
     const box = wallBounds(planWalls(saved, levelId)
@@ -185,6 +191,13 @@ if (!window.DraftLayoutPlan) {
     }
     ['floors', 'roofs', 'outlines'].forEach(key => onLevel(key)
       .forEach(item => (Array.isArray(item.points) ? item.points : []).forEach(eat)));
+    // AND THE GHOST OF THE STOREY UNDERNEATH (Movie, 12 Oct: "adjust the
+    // scale so the larger plan with the extra lightweight lines fits on the
+    // upper floors (which are smaller without the background lines)"). The
+    // viewport's scale is picked from this box, so an upper floor set back
+    // from the one below has to carry it here or the ghost is drawn outside
+    // the frame and clipped — which on screen is a pan and on paper is gone.
+    if (withBelow) floorBelowLoops(saved, levelId).forEach(points => points.forEach(eat));
     if (minX > maxX) return null;
     return { minX, minZ, maxX, maxZ };
   }
@@ -334,6 +347,113 @@ if (!window.DraftLayoutPlan) {
   const HALF_LEVEL_UNDER = Object.freeze({ 3: 2, 5: 4 });
   const HALF_LEVEL_SHEET_ALPHA = 0.6;
 
+  // ── THE STOREY UNDER THIS ONE, GHOSTED (Movie, 12 Oct) ─────────────────
+  //
+  // "we should also show a very lightweight line that shows that ext wall
+  // outlines of the wlls below and then adjust the scale so the larger plan
+  // with the extra lightweight lines fits on the upper floors (which are
+  // smaller without the background lines)" -- "it gives the user a better
+  // visual underatanding of what they are looking at".
+  //
+  // THE SAME SHAPE AS THE BASEMENT'S FOUNDATION, one storey up. His 7 Oct
+  // ruling below -- "show the FOUNDATION WALL (slightly lighter ...)" -- is
+  // this request with the levels swapped, so it is answered the same way:
+  // drawn first so every real line is over it, at a lower alpha, and taken
+  // into the frame so it cannot be clipped off the paper.
+  //
+  // OUTLINES, NOT WALLS, and that is forced rather than preferred. "Ext wall
+  // outlines" needs to know which walls are exterior and NOTHING IN A DRAWING
+  // SAYS: A-WALL-EXT and A-WALL-INT are in the standards table and no code
+  // has ever put a wall on either (auto-dims.js writes the same sentence
+  // where it meets the same wall). An OUTLINE is the traced footprint the
+  // house was built from, so it already IS the exterior line -- closed, and
+  // carrying its garages. A level drawn wall by wall with no outline gets NO
+  // ghost rather than a guessed one, which is why `floorBelow` keeps looking
+  // down for a storey that has one.
+  //
+  // WHICH LEVEL IS "BELOW" COMES FROM THE LADDER THAT ALREADY EXISTS:
+  // level-assembly.js's STOREY_NUMBER, ids ascending with height, kept in one
+  // place precisely so each page does not keep its own answer. FOUNDATION,
+  // ROOF and SITE carry no storey number -- "a number here means a floor to
+  // stand on and they are not floors" -- so none of them is ever the floor
+  // below. That is deliberate for the foundation: it sits under MAIN FL on
+  // the same footprint, the BASEMENT sheet already draws it (below), and a
+  // second line on top of the first would be ink for nothing.
+  //
+  // THE HALF-FLOOR IS SKIPPED because it is already on this sheet, in full,
+  // at HALF_LEVEL_SHEET_ALPHA. 2ND FL therefore shows 1.5 the way it always
+  // did and MAIN FL under the pair as the ghost -- the storey below, not the
+  // half of this one.
+  //
+  // ON EVERY VIEW OF THE LEVEL, not just 'plan'. `planBounds` is cached per
+  // LEVEL and has no view to go on, so a ghost drawn on some views and not
+  // others would mean a frame sized for ink that is not there. Drawing it
+  // wherever the frame allows for it keeps the two exactly in step, and the
+  // orientation it gives is as useful on a FLOOR LAYOUT as on a plan.
+  const GHOST_BELOW_ALPHA = 0.3;
+  // The page is white paper and takes MODEL.dc.html's ink literal, the same
+  // way `structureEnv` below does.
+  const GHOST_BELOW_INK = '#1d1f20';
+
+  const outlineLoopsOn = (saved, levelId) =>
+    (Array.isArray(saved?.outlines) ? saved.outlines : [])
+      .filter(outline => outline?.levelId === levelId
+        && Array.isArray(outline.points) && outline.points.length >= 3)
+      .map(outline => outline.points);
+
+  function floorBelow(saved, levelId) {
+    // SAID BY NAME IF THE LADDER IS NOT THERE. This is the shape the header
+    // of this file names: an absent module reads as an empty object, the
+    // ladder comes back empty, every floor quietly has nothing below it, and
+    // the sheet looks finished. Once per page, like the three above it.
+    const assembly = window.DraftLevelAssembly;
+    if (!assembly || !assembly.STOREY_NUMBER) {
+      if (!warnedNoLevelAssembly) {
+        warnedNoLevelAssembly = true;
+        console.warn('layout-plan: level-assembly.js is missing, so no plan can '
+          + 'show the storey below it. Load it before this file.');
+      }
+      return null;
+    }
+    const ladder = Object.keys(assembly.STOREY_NUMBER)
+      .map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+    if (!ladder.includes(levelId)) return null;
+    const half = HALF_LEVEL_UNDER[levelId];
+    const under = ladder.filter(id => id < levelId && id !== half);
+    for (let i = under.length - 1; i >= 0; i -= 1) {
+      if (outlineLoopsOn(saved, under[i]).length) return under[i];
+    }
+    return null;
+  }
+
+  // The loops an upper floor shows the storey under it by, or [] for a level
+  // that has nothing under it to show.
+  function floorBelowLoops(saved, levelId) {
+    const below = floorBelow(saved, levelId);
+    return below == null ? [] : outlineLoopsOn(saved, below);
+  }
+
+  function drawFloorBelowGhost(ctx, toS, saved, levelId) {
+    const loops = floorBelowLoops(saved, levelId);
+    if (!loops.length) return;
+    ctx.save();
+    ctx.globalAlpha *= GHOST_BELOW_ALPHA;
+    ctx.strokeStyle = GHOST_BELOW_INK;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    loops.forEach(points => {
+      ctx.beginPath();
+      points.forEach((pt, index) => {
+        const p = toS(pt);
+        if (index === 0) ctx.moveTo(p.x, p.y);
+        else ctx.lineTo(p.x, p.y);
+      });
+      ctx.closePath();
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
   // A HALF-FLOOR GETS NO SHEET OF ITS OWN once its full floor has walls to
   // carry it; alone (no full floor drawn yet) it still prints by itself.
   // The basement plan's faded foundation: the house's walls, not the garage's.
@@ -398,6 +518,27 @@ if (!window.DraftLayoutPlan) {
     // the beams and posts under it and its dimensions.
     const floorLayout = view === 'floor' && hasFloorLayout(saved, levelId);
     if (!walls.length && !floorLayout) return drawRoofPlan(ctx, toS, saved, levelId, env);
+
+    // THE STOREY UNDER THIS ONE, FIRST OF ALL, so every other line on the
+    // sheet — this floor's and the half-floor's alike — lands over it.
+    //
+    // ONLY ON THIS LEVEL'S OWN PASS: the recursive calls below are this same
+    // function drawing the half-floor and the foundation, and each would
+    // otherwise ghost ITS OWN storey below as well.
+    //
+    // NOT ON A SHELL AND NOT ON A HOLOGRAM, for the reasons those two modes
+    // exist. A SHELL is a house seen at 1"=40' on the neighborhood, stripped
+    // to walls because everything else at that scale "is a blue smudge that
+    // hides the walls" -- a second footprint behind this one is exactly that
+    // smudge. A HOLOGRAM is ANOTHER drawing shown under the one being drawn,
+    // so its storey below would be a ghost of a ghost, two buildings deep.
+    // A LISTING keeps it: `listing` takes away dimensions and sizes -- the
+    // annotation a buyer does not read -- and this is geometry, which is what
+    // that plan is for.
+    if (env.halfLevel !== true && env.foundationGhost !== true
+      && env.shell !== true && env.hologram !== true) {
+      drawFloorBelowGhost(ctx, toS, saved, levelId);
+    }
 
     // UNDER, so the full floor's own lines are the ones left on top.
     const half = env.halfLevel === true ? null : HALF_LEVEL_UNDER[levelId];
@@ -799,6 +940,8 @@ if (!window.DraftLayoutPlan) {
     planOpenings,
     wallBounds,
     planBounds,
+    floorBelow,
+    floorBelowLoops,
     ridesOnFullFloor,
     hasFloorLayout,
     structureUnder,
