@@ -14887,11 +14887,11 @@
       ].join('\n'));
       return owj;
     };
-    const reqNote = (points, storeyId) => {
+    const reqNote = (points, storeyId, spanFt) => {
       const box = boxOf(points);
       addNote({ x: (box.x0 + box.x1) / 2, z: (box.z0 + box.z1) / 2 }, storeyId, 'floor', [
         'REQ ENGINEERED BEAM / OR JOISTS',
-        `SIDE WALL TO SIDE WALL -- ${fmtFt(Math.min(box.x1 - box.x0, box.z1 - box.z0))} SPAN`,
+        `SIDE WALL TO SIDE WALL -- ${fmtFt(spanFt)} SPAN`,
         'BY ENGINEER',
       ].join('\n'));
     };
@@ -14922,6 +14922,7 @@
       const garage = garageUnder(points, storeyId);
       const plan = window.DraftBuildHouse.garageBeamPlan(boxOf(points), {
         doors: garage ? garageDoorsOf(garage) : [],
+        doorBox: garage ? boxOf(garage.points) : boxOf(points),
         onWall: p => !!garage && nearLoop(garage.points, p),
       });
       plan.beams.forEach(beam => {
@@ -14952,15 +14953,20 @@
     bodies.forEach(({ outline, storeyId }) => {
       const points = outline.points.map(pt => ({ x: pt.x, z: pt.z }));
       if (garageLoops.length && overGarage(points, storeyId)) {
+        // SIDE WALL TO SIDE WALL: the span the joists take between the two
+        // garage walls without doors, not simply the shorter side.
+        const garage = garageUnder(points, storeyId);
+        const doors = garage ? garageDoorsOf(garage) : [];
         const box = boxOf(points);
-        const span = Math.min(box.x1 - box.x0, box.z1 - box.z0);
+        const axis = window.DraftBuildHouse.garageJoistAxis(garage ? boxOf(garage.points) : box, doors);
+        const span = axis === 'x' ? box.x1 - box.x0 : box.z1 - box.z0;
         if (window.DraftBuildHouse.owjFor(span, { minDepthIn: 19.75 }).fits) {
-          owjNote(points, storeyId);
+          owjNote(points, storeyId, { spanFt: span, between: 'SIDE WALL TO SIDE WALL' });
           return;
         }
         const choice = garageChoice || choiceFor(outline);
         if (choice === 'columns') { placeGarageColumns(points, storeyId); return; }
-        reqNote(points, storeyId);
+        reqNote(points, storeyId, span);
         if (!choice) garagePending.push({ levelId, storeyId, spanFt: span });
         return;
       }
