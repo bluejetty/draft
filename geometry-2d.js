@@ -905,8 +905,53 @@ if (!window.DraftGeometry2D) {
           splitT = t; splitVertex = index; splitEdge = edge;
         }
       }
-      const bestT = Math.min(collapseT, splitT);
-      if (!Number.isFinite(bestT)) continue;
+      // ── A WING WITH NOTHING TO MEET IS A SHED, NOT A SILENCE ───────────
+      //
+      // Movie, 13 Oct, having turned an edge to gable: "something messed up
+      // on this roof: when i changed to gable didn't work out too good" --
+      // stray diagonals running off the sheet in E3 and a plane that never
+      // closed.
+      //
+      // WHAT THIS LINE USED TO DO WAS `continue`. A loop whose edges never
+      // collapse and never split has no event, so bestT came out Infinity and
+      // the loop was dropped WITHOUT EMITTING A SINGLE ARC. His roof had
+      // three consecutive gables wrapping one wing, which leaves that wing
+      // one advancing edge and nothing for it to meet: no ridge, no arcs, and
+      // a region of the footprint the painter was handed nothing for. The
+      // skeleton covered x -65..-24 of a footprint running -65..0.
+      //
+      // AND THAT SHAPE IS A REAL ROOF. One eave rising to a gable wall is a
+      // shed -- a lean-to -- and the only thing wrong with it is that a
+      // wavefront has no event to stop at, because the gable it climbs toward
+      // never moves. So the stop is supplied: run the advance out to the
+      // deepest point of the loop and call the line it reaches the ridge.
+      //
+      // IT CANNOT DISTURB A ROOF THAT WORKS TODAY. The cap is reached only
+      // where bestT was Infinity, and Infinity was the dropped case -- every
+      // loop that resolves has a finite collapse or split and takes the same
+      // path it always did.
+      let bestT = Math.min(collapseT, splitT);
+      let cappedShed = false;
+      if (!Number.isFinite(bestT)) {
+        // THE DEEPEST POINT MEASURED OFF THE EDGES THAT ACTUALLY MOVE. The
+        // ring is CCW here, so an edge's normal points inward and the dot
+        // product is how far into the loop a vertex lies from that edge.
+        let capT = 0;
+        for (let index = 0; index < count; index++) {
+          if (speeds[index] <= 0) continue;
+          const n = normals[index], from = pts[index];
+          for (let v = 0; v < count; v++) {
+            const depth = n.x * (pts[v].x - from.x) + n.z * (pts[v].z - from.z);
+            if (depth > capT) capT = depth;
+          }
+        }
+        // NOTHING ADVANCES AT ALL -- every edge a gable -- so there is no
+        // plane to raise and dropping the loop is the honest answer. That is
+        // the one case the old `continue` was right about.
+        if (!(capT > eps)) continue;
+        bestT = capT;
+        cappedShed = true;
+      }
       const t1 = t0 + bestT;
       const moved = pts.map((pt, index) => ({
         x: pt.x + velocities[index].x * bestT,
@@ -915,6 +960,19 @@ if (!window.DraftGeometry2D) {
       moved.forEach((pt, index) => {
         if (Math.hypot(pt.x - pts[index].x, pt.z - pts[index].z) > eps) arcs.push({ a: pts[index], b: pt, ta: t0, tb: t1 });
       });
+      // THE SHED'S HIGH EDGE IS ITS RIDGE. The advancing edge has just been
+      // run out to the far side of the loop; the line it now lies on is where
+      // the plane stops, which is exactly what a ridge is to everything
+      // downstream. Emitted at t1 on both ends because it is level -- a shed
+      // ridge does not rake.
+      if (cappedShed) {
+        for (let index = 0; index < count; index++) {
+          if (speeds[index] <= 0) continue;
+          const a = moved[index], b = moved[(index + 1) % count];
+          if (Math.hypot(b.x - a.x, b.z - a.z) > eps) arcs.push({ a, b, ta: t1, tb: t1 });
+        }
+        continue;
+      }
       if (splitT < collapseT - eps) {
         // Pinch the ring at the reflex corner: two loops share the split point.
         const s = moved[splitVertex];
