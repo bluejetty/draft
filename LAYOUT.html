@@ -114,6 +114,7 @@
 <script src="./cut-view-env.js"></script>
 <script src="./north.js"></script>
 <script src="./titleblock.js"></script>
+<script src="./lot-sizes.js"></script>
 <!-- Landscape on every working screen (board #310): in portrait on a touch
      device this covers the page until the tablet is turned. ENTRY is the one
      screen that does not load it. -->
@@ -462,6 +463,51 @@
     padding:9px 12px; cursor:pointer; }
   #lay-viewport-note { margin-top:8px; font-size:11px; line-height:1.4; color: var(--ink-quiet); }
 
+  /* HOW BIG IS THE LOT? (Movie, 13 Oct) "also do the LAYOUT area if the SITE
+     isn't loaded yet, and they go there, bring it up". MODEL's card, in this
+     page's panel colours -- NOT a scrim, because the sheet behind is what the
+     lot is about to land on and covering it would hide the answer.
+     Bottom-left of the sheet area, clear of the rail and the panel. */
+  #lay-lot { position:fixed; left:50%; top:66px; transform:translateX(-50%);
+    z-index:40; width:min(430px, calc(100vw - 32px));
+    border:1px solid var(--edge-panel);
+    background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
+    box-shadow:0 16px 44px rgba(0,0,0,0.35); padding:14px 16px; color: var(--ink-primary); }
+  #lay-lot[hidden] { display:none; }
+  #lay-lot .lot-head { font-family:'Barlow Condensed', system-ui, sans-serif;
+    font-size:16px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; }
+  #lay-lot .lot-says { margin-top:3px; font-size:12px; line-height:1.4; color: var(--ink-secondary); }
+  #lay-lot .lot-tiles { display:flex; flex-wrap:wrap; gap:5px; margin-top:10px; }
+  #lay-lot .lot-tiles button { flex:1 1 7em; display:flex; flex-direction:column;
+    align-items:center; gap:1px; padding:6px 7px; cursor:pointer;
+    border:1px solid var(--edge-panel);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    color: var(--ink-primary); font-family: var(--font-ui); }
+  #lay-lot .lot-tiles button:hover { border-color: var(--accent); color: var(--accent); }
+  #lay-lot .lot-tiles [aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  #lay-lot .lot-size { font-size:12px; font-weight:700; letter-spacing:0.04em; }
+  #lay-lot .lot-tier { font-size:9px; letter-spacing:0.1em; opacity:0.7; }
+  #lay-lot .lot-area { font-size:9px; opacity:0.7; }
+  #lay-lot .lot-custom { display:flex; gap:4px; align-items:center; margin-top:8px;
+    font-family: var(--font-ui); font-size:11px; color: var(--ink-quiet); }
+  #lay-lot .lot-custom[hidden] { display:none; }
+  #lay-lot .lot-custom input { width:4.6em; font-family: var(--font-ui); font-size:12px;
+    padding:4px 5px; border:1px solid var(--edge-panel);
+    background-color: var(--surface-page); color: var(--ink-primary); }
+  /* --ink-secondary, not --ink-quiet: this sentence is the instruction for
+     what to do after pressing, and on the lighter skins quiet grey on the
+     panel is too faint to read at 10px. */
+  #lay-lot .lot-note { margin-top:10px; font-size:11px; line-height:1.45; color: var(--ink-secondary); }
+  #lay-lot .lot-row { display:flex; gap:6px; margin-top:10px; }
+  #lay-lot .lot-row button { flex:1; height:32px; cursor:pointer;
+    border:1px solid var(--edge-panel);
+    background-color: var(--surface-panel); color: var(--ink-primary);
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
+    font-size:13px; letter-spacing:0.04em; text-transform:uppercase; }
+  #lay-lot [data-lot-draw] { border-color: var(--accent); background-color: var(--accent);
+    color: var(--accent-ink); }
+  #lay-lot [data-lot-draw]:disabled { opacity:0.45; cursor:default; }
+
   /* ── THE SHEET ──────────────────────────────────────────────────────── */
   /* THE DESK, and the one surface in this block that the canvas paints too:
      _draw() clears to the same role, because the wrap shows only in the
@@ -774,6 +820,33 @@
        viewport edge at 195px, which is the MODEL rail's rule and would lift
        this one off the page. AFTER THE CANVAS in the document, because specs
        find the sheet as the first canvas on the page. -->
+  <!-- THE LOT, ASKED HERE TOO (Movie, 13 Oct). Same six sizes and same
+       sentence as MODEL's card, because both read lot-sizes.js -- two copies
+       of a table is how the two pages come to disagree about what an L is.
+
+       FEET ONLY ON THIS PAGE, and that is not an oversight: LAYOUT's METRIC
+       button is greyed for a stated reason (an architectural scale ladder is
+       imperial all the way down), so there is no switch here to type metres
+       against. A drafter who wants to enter metres has MODEL's card. -->
+  <div id="lay-lot" data-lot-pick hidden role="group" aria-label="Lot size">
+    <div class="lot-head">How big is the lot?</div>
+    <div class="lot-says" data-lot-says></div>
+    <div class="lot-tiles" data-lot-tiles></div>
+    <div class="lot-custom" data-lot-custom hidden>
+      <label class="said" for="lay-lot-w">Lot width in feet</label>
+      <input id="lay-lot-w" data-lot-width type="number" inputmode="decimal" step="any" placeholder="__" />
+      <span aria-hidden="true">FT X</span>
+      <label class="said" for="lay-lot-d">Lot depth in feet</label>
+      <input id="lay-lot-d" data-lot-depth type="number" inputmode="decimal" step="any" placeholder="__" />
+      <span aria-hidden="true">FT</span>
+    </div>
+    <div class="lot-note" data-lot-note></div>
+    <div class="lot-row">
+      <button type="button" data-lot-draw>Draw AUTOSITE</button>
+      <button type="button" data-lot-skip>Not now</button>
+    </div>
+  </div>
+
   <nav id="lay-rail" data-sheet-rail aria-label="Sheets">
     <div id="lay-rail-grid" data-sheet-rail-grid></div>
   </nav>
@@ -1037,6 +1110,10 @@ const E_MARK_CLEAR_FT = 2;
 
 
 const MODEL_STORAGE_BUCKET = 'model-drawing';
+// The SITE level, by the Model Space's own numbering (floors odd, half-levels
+// even; SITE and ROOF sit outside it). It is the level the AUTOSITE rectangle
+// is filed on, so the two pages put the lot in the same place.
+const SITE_LEVEL_ID = 8;
 
 class Component extends PageLogic {
   state = {
@@ -2053,6 +2130,11 @@ class Component extends PageLogic {
     if (!ctx || !canvas) return;
     const { zoom, panX, panY } = this.state;
     this._paintSheet(ctx, canvas, { zoom, panX, panY }, this.state.activeSheet);
+    // ARRIVING ON THE SITE PLAN SHEET IS THE QUESTION, and this is the one
+    // place that sees every arrival -- a rail press, a re-deal, a sheet
+    // removed from under the drafter, and the first paint after the set is
+    // composed, which happens after the card is wired.
+    this._syncLotCard();
   }
 
   // ONE SHEET, ONTO ANY CANVAS. The desk's canvas at the page's zoom, or a
@@ -3301,6 +3383,176 @@ class Component extends PageLogic {
     if (status) status.textContent = `SAVED ${files.length} SHEET${files.length === 1 ? '' : 'S'} AS DXF`;
   }
 
+  // ── HOW BIG IS THE LOT? (Movie, 13 Oct) ──────────────────────────────
+  //
+  // "also do the LAYOUT area if the SITE isn't loaded yet, and they go there,
+  // bring it up". The sheet named SITE PLAN is where a drafter "goes to the
+  // SITE" on this page, so landing on it with no lot in the drawing is the
+  // same arrival MODEL answers on the SITE level.
+  //
+  // THE TABLE AND THE SENTENCE COME FROM lot-sizes.js, as MODEL's do, so the
+  // two cards cannot drift. What differs is the unit: this page is imperial
+  // only (its METRIC button is greyed, and the markup says why).
+  _lotSizes() { return window.DraftLotSizes; }
+
+  _lotAlreadyDrawn() {
+    const LS = this._lotSizes();
+    return !!(LS && LS.siteOutlineOf(this._saved?.outlines));
+  }
+
+  // THE SHEET'S OWN NAME, NOT ITS NUMBER. The dealt set puts SITE PLAN first,
+  // but a drafter who re-deals, inserts or renames sheets moves it -- and the
+  // title is what he reads off the rail.
+  _onSiteSheet() {
+    return String(this._sheetTitle(this.state.activeSheet) || '')
+      .trim().toUpperCase() === 'SITE PLAN';
+  }
+
+  _lotChosen() {
+    const LS = this._lotSizes();
+    if (!LS) return null;
+    const card = document.querySelector('#lay-lot');
+    return LS.lotSizeFor(this._lotSizeId,
+      card.querySelector('[data-lot-width]').value,
+      card.querySelector('[data-lot-depth]').value);
+  }
+
+  // CHEAP ON EVERY FRAME, EXPENSIVE ONLY WHEN THE ANSWER MOVES. _draw runs on
+  // every repaint and the sheets are dealt after this card is wired, so the
+  // question has to be re-asked from there -- but _paintLotCard rebuilds its
+  // tiles, and rebuilding them sixty times a second while a drafter drags a
+  // viewport is work nobody asked for. This only repaints when the card's
+  // visibility actually changes.
+  _syncLotCard() {
+    const show = this._onSiteSheet() && !this._lotAlreadyDrawn() && !this._lotAsked;
+    if (show === this._lotShown) return;
+    this._lotShown = show;
+    this._paintLotCard();
+  }
+
+  _paintLotCard() {
+    const LS = this._lotSizes();
+    const card = document.querySelector('#lay-lot');
+    if (!card || !LS) return;
+    // ASKED ONCE PER ARRIVAL. _paintLotCard runs from every sheet change, and
+    // a card that came back after NOT NOW on the next repaint would be a
+    // page arguing with its drafter.
+    const show = this._onSiteSheet() && !this._lotAlreadyDrawn() && !this._lotAsked;
+    this._lotShown = show;
+    card.hidden = !show;
+    if (!show) return;
+    card.querySelector('[data-lot-says]').textContent =
+      'This sheet has no site plan yet. Pick a size, or type your own in feet.';
+    const tiles = card.querySelector('[data-lot-tiles]');
+    tiles.replaceChildren(...LS.LOT_TIERS.map(tier => {
+      const shown = LS.describe(tier);
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.lotTier = tier.id;
+      button.setAttribute('aria-pressed', String(this._lotSizeId === tier.id));
+      const size = document.createElement('span');
+      size.className = 'lot-size';
+      size.textContent = shown.sizeLabel;
+      const tierTag = document.createElement('span');
+      tierTag.className = 'lot-tier';
+      tierTag.textContent = tier.id;
+      const area = document.createElement('span');
+      area.className = 'lot-area';
+      area.textContent = shown.areaLabel;
+      button.append(size, tierTag, area);
+      button.title = `${tier.id} \u2014 ${shown.character}`;
+      button.addEventListener('click', () => { this._lotSizeId = tier.id; this._paintLotCard(); });
+      return button;
+    }));
+    const other = document.createElement('button');
+    other.type = 'button';
+    other.dataset.lotTier = 'custom';
+    other.setAttribute('aria-pressed', String(this._lotSizeId === 'custom'));
+    const otherSize = document.createElement('span');
+    otherSize.className = 'lot-size';
+    otherSize.textContent = 'OTHER';
+    const otherTier = document.createElement('span');
+    otherTier.className = 'lot-tier';
+    otherTier.textContent = 'FT';
+    const otherArea = document.createElement('span');
+    otherArea.className = 'lot-area';
+    otherArea.textContent = 'type it';
+    other.append(otherSize, otherTier, otherArea);
+    other.addEventListener('click', () => {
+      this._lotSizeId = 'custom';
+      this._paintLotCard();
+      card.querySelector('[data-lot-width]').focus();
+    });
+    tiles.appendChild(other);
+
+    card.querySelector('[data-lot-custom]').hidden = this._lotSizeId !== 'custom';
+    card.querySelector('[data-lot-note]').textContent = LS.AUTOSITE_NOTE
+      + ' Drag them in the Model Space.';
+    const chosen = this._lotChosen();
+    const draw = card.querySelector('[data-lot-draw]');
+    draw.disabled = !chosen;
+    draw.textContent = chosen ? `Draw AUTOSITE ${chosen.sizeLabel}` : 'Draw AUTOSITE';
+  }
+
+  // THE LOT IS WRITTEN THROUGH ITS OWN STORE WRITE, not through
+  // _writeLayoutToStore. That one merges `layout` and nothing else, by
+  // design and under spec -- widening it so this page could also write
+  // geometry would put every sheet drag one bug away from rewriting the
+  // drawing. Same read-merge-write with `ifRev`, and the same retry.
+  async _writeSiteToStore(outline, lot, triesLeft = 3) {
+    const store = window.SharedFileStore;
+    if (!store) return;
+    const at = await store.loadSharedFileAt(MODEL_STORAGE_BUCKET);
+    let base = null;
+    if (at.file) {
+      try { base = JSON.parse(await at.file.text()); } catch { base = null; }
+    }
+    if (!base || typeof base !== 'object') base = this._saved;
+    if (!base) return;
+    // A SECOND LOT IS NOT DRAWN. Two pages can be open on one drawing, and
+    // the other one may have answered this question while this card was up.
+    if (this._lotSizes().siteOutlineOf(base.outlines)) { this._saved = base; return; }
+    const merged = { ...base, outlines: [...(base.outlines || []), outline], lot };
+    const file = new File([JSON.stringify(merged)], 'model-drawing.json', { type: 'application/json' });
+    try {
+      await store.saveSharedFile(file, MODEL_STORAGE_BUCKET, { ifRev: at.rev });
+    } catch (error) {
+      if (!error?.stale || triesLeft <= 0) throw error;
+      return this._writeSiteToStore(outline, lot, triesLeft - 1);
+    }
+    this._saved = merged;
+    this._cutEnv = null;
+  }
+
+  _drawAutosite() {
+    const LS = this._lotSizes();
+    const chosen = this._lotChosen();
+    if (!LS || !chosen) return;
+    const centre = LS.centreOfOutlines(this._saved?.outlines) || { centerX: 0, centerZ: 0 };
+    const pts = LS.lotRectanglePoints(chosen.widthFt, chosen.depthFt, centre);
+    if (!pts) return;
+    const outline = {
+      // THE ID IS THIS PAGE'S OWN STRING, because newDrawingItemId lives in
+      // the Model Space. Distinct by construction and never re-used.
+      id: `site-${Date.now().toString(36)}`,
+      masterId: null,
+      levelId: SITE_LEVEL_ID,
+      garage: false,
+      site: true,
+      detached: false,
+      foundation: null,
+      points: pts.map(pt => ({ x: pt.x, y: 0, z: pt.z })),
+      overriddenSrcIds: [],
+    };
+    const lot = { widthFt: chosen.widthFt, depthFt: chosen.depthFt,
+      tier: chosen.custom ? null : chosen.id };
+    this._lotAsked = true;
+    this._paintLotCard();
+    this._writeSiteToStore(outline, lot)
+      .then(() => { this._draw(); this._queueThumbs?.(); })
+      .catch(error => console.warn('Unable to write the site outline:', error));
+  }
+
   _openPrintDialog() {
     const count = this._sheetCount();
     const keep = this._printPick instanceof Set
@@ -3492,6 +3744,21 @@ class Component extends PageLogic {
   // The template carried these as `onClick="{{ name }}"` against closures the
   // render rebuilt every time. These elements never move, so they are bound
   // once and read `this.state` when they fire.
+  _wireLotCard() {
+    const card = document.querySelector('#lay-lot');
+    if (!card) return;
+    this._lotSizeId = null;
+    this._lotAsked = false;
+    card.querySelector('[data-lot-draw]').addEventListener('click', () => this._drawAutosite());
+    card.querySelector('[data-lot-skip]').addEventListener('click', () => {
+      this._lotAsked = true;
+      this._paintLotCard();
+    });
+    card.querySelectorAll('[data-lot-width], [data-lot-depth]')
+      .forEach(input => input.addEventListener('input', () => this._paintLotCard()));
+    this._paintLotCard();
+  }
+
   _wirePanel() {
     const on = (selector, event, handler) =>
       document.querySelector(selector)?.addEventListener(event, handler);
@@ -3570,6 +3837,9 @@ class Component extends PageLogic {
 // finds a canvas to size and a panel already showing what the state says.
 const page = new Component();
 page._wirePanel();
+// AFTER THE PANEL, because the card reads the sheet titles the panel's state
+// carries, and asks its question off them.
+page._wireLotCard();
 page._paintPanel();
 page.componentDidMount();
 

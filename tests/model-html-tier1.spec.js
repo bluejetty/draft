@@ -351,6 +351,11 @@ test.describe('MODEL.html tier 1', () => {
       // now because the tool calls it.
       './outline-master.js',
       './build-menu.js',
+      // The lot tiers and the AUTOSITE rectangle (Movie, 13 Oct), joined for
+      // the SITE question. LAYOUT loads the same file and asks the same
+      // question off it, which is the reason it is a module and not a table
+      // typed into two pages.
+      './lot-sizes.js',
       // building-bodies.js is DEVIN'S, carried in this branch with his
       // garage-sizing commits: what counts as "a house already stands" and "a
       // garage already stands", which PROJECT and the drive-thru tiles both

@@ -1098,6 +1098,39 @@
   #room-pick .promote-card { max-width:34em; }
   #room-pick .promote-row + .promote-row { margin-top:8px; }
   #room-pick [aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  /* HOW BIG THE LOT IS (Movie, 13 Oct). #room-pick's card and its reason:
+     not a dialog, because the AUTOSITE rectangle lands on the plan behind
+     it and the drafter should watch it land. The tiles wrap, since there
+     are six of them and a seventh that opens two fields. */
+  #lot-pick { position:fixed; left:50%; top:64px; transform:translateX(-50%);
+    z-index:6; }
+  #lot-pick[hidden] { display:none; }
+  #lot-pick .promote-card { max-width:34em; }
+  #lot-pick .promote-row + .promote-row { margin-top:8px; }
+  #lot-pick .lot-tiles { display:flex; flex-wrap:wrap; gap:6px; }
+  #lot-pick .lot-tiles button { flex:1 1 7.5em; display:flex; flex-direction:column;
+    align-items:center; gap:1px; padding:6px 8px; cursor:pointer; border-radius:3px;
+    border:1px solid var(--edge-panel);
+    background-color: var(--surface-chip);
+    background-image: var(--surface-chip-tex, none);
+    color: var(--ink-quiet); font-family: var(--font-ui); }
+  #lot-pick .lot-tiles button:hover { border-color: var(--accent); color: var(--accent); }
+  #lot-pick [aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+  /* THE SIZE IS THE NAME and the rest is support, so the dimensions are the
+     only line at full strength. */
+  #lot-pick .lot-size { font-size:12px; font-weight:700; letter-spacing:0.04em; }
+  #lot-pick .lot-tier { font-size:9px; letter-spacing:0.1em; opacity:0.75; }
+  #lot-pick .lot-area { font-size:9px; opacity:0.75; }
+  #lot-pick .lot-custom { display:flex; gap:4px; align-items:center; margin-top:8px;
+    font-family: var(--font-ui); font-size:11px; color: var(--ink-quiet); }
+  #lot-pick .lot-custom[hidden] { display:none; }
+  #lot-pick .lot-custom input { width:4.6em; font-family: var(--font-ui); font-size:12px;
+    padding:4px 5px; border-radius:3px; border:1px solid var(--edge-panel);
+    background-color: var(--surface-panel); color: var(--ink-primary); }
+  /* THE SENTENCE ABOUT ODD SHAPES, quieter than the tiles and above the
+     verb -- it is what to do after pressing, not a choice. */
+  #lot-pick .lot-note { margin-top:10px; font-family: var(--font-ui); font-size:10px;
+    line-height:1.45; color: var(--ink-quiet); }
   /* THE NOTICE IS A MESSAGE, NOT A DOOR. It covers the whole sheet to be
      read, and while it did so with pointer events it also swallowed every
      press aimed at the bars behind it -- including NEW and OPEN, the two
@@ -1553,6 +1586,55 @@
   </div>
 </div>
 
+<!-- HOW BIG IS THE LOT? (Movie, 13 Oct) "when they enter onto the SITE in the
+     MODEL area or on layout area can you ask them to pick a size from this
+     list or to enter their size information (if it rectangle) or tell them
+     they will need to adjust the 'AUTOSITE' if it isn't square".
+
+     ASKED ON ARRIVAL AT SITE, ONCE, and only while the drawing has no lot --
+     a drafter who has drawn his site plan and comes back to it must not be
+     asked to replace it. #room-pick's card rather than a dialog, for the same
+     reason: the rectangle lands on the plan behind this and is worth seeing
+     land.
+
+     THE TILES ARE BUILT FROM lot-sizes.js, not listed here, so the table is
+     said once and LAYOUT's copy of this question cannot drift from it. -->
+<div id="lot-pick" data-lot-pick hidden role="group" aria-label="Lot size">
+  <div class="promote-card">
+    <p><b>HOW BIG IS THE LOT?</b><br><span data-lot-pick-says></span></p>
+    <div class="lot-tiles" data-lot-tiles></div>
+    <div class="lot-custom" data-lot-custom hidden>
+      <label class="said" for="lot-w">Lot width</label>
+      <input id="lot-w" data-lot-width type="number" inputmode="decimal" step="any"
+        placeholder="__" />
+      <span data-lot-unit-w aria-hidden="true">FT X</span>
+      <label class="said" for="lot-d">Lot depth</label>
+      <input id="lot-d" data-lot-depth type="number" inputmode="decimal" step="any"
+        placeholder="__" />
+      <span data-lot-unit-d aria-hidden="true">FT</span>
+    </div>
+    <div class="lot-note" data-lot-note></div>
+    <div class="promote-row">
+      <button type="button" data-lot-pick-draw>DRAW AUTOSITE</button>
+      <button type="button" data-lot-pick-skip>NOT NOW</button>
+    </div>
+    <!-- THE OTHER TWO WAYS ONTO A SITE PLAN (Movie, 13 Oct): "lets add 2 more
+         options - draw the site plan, or next option - upload PDF or JPG, DXF
+         etc of site plan".
+
+         NEITHER IS NEW MACHINERY, which is the point of putting them here.
+         Drawing a lot by hand is the OUTLINE tool, which already closes a
+         loop and already breaks points into it; uploading one is TRACE
+         (7 Oct), whose file input already accepts PDF, JPG, PNG, WEBP, DXF
+         and DWG. What was missing was anybody saying so at the moment the
+         question is asked. -->
+    <div class="promote-row">
+      <button type="button" data-lot-pick-hand>DRAW IT MYSELF</button>
+      <button type="button" data-lot-pick-upload>UPLOAD A SITE PLAN</button>
+    </div>
+  </div>
+</div>
+
 <!-- LINE THE GARAGE UP WITH THE HOUSE CEILING? Movie, 7 Oct: keep the garage's
      10'-1 3/4" default, but when the BONE builds a garage that tops out above
      the house's ceiling, ask whether to line it up -- one roof when they meet.
@@ -1726,6 +1808,7 @@
 <!-- The house types the build bar offers. Lifted out of MODEL.dc.html so both
      pages read one list (build-menu.js says why). -->
 <script src="./build-menu.js"></script>
+<script src="./lot-sizes.js"></script>
 <!-- What the project already holds, against Movie's cap of one house and one
      detached garage. The bone reads it to know whether there is anything
      left to offer. -->
@@ -7855,6 +7938,13 @@
     paint();
   };
 
+  // DECLARED HERE, FILLED IN WITH THE REST OF THE LOT CARD further down --
+  // PROJECT's syncFamilyRow pattern, and for its reason: goToLevel is the
+  // door the SITE question hangs on and it is written above the card that
+  // answers it. A `const` arrow down there would be in its temporal dead
+  // zone from up here, which is a crash rather than a missing repaint.
+  let paintLotPick = () => {};
+
   const goToLevel = id => {
     // LEAVING THE BONEYARD IS PART OF ARRIVING AT A LEVEL. Without this the
     // card stays lit while the plan shows MAIN FL, and the two readouts the
@@ -7874,6 +7964,12 @@
     syncUrl();
     buildChrome();
     refreshToolPropsOnLevel();
+    // ARRIVING AT SITE IS THE QUESTION (Movie, 13 Oct). The flag is cleared
+    // on the way to anywhere else so that coming BACK to a site with no lot
+    // asks again -- a drafter who pressed NOT NOW and walked away has
+    // arrived at the question a second time, which is not nagging.
+    if (Number(id) !== SITE_LEVEL_ID) lotAsked = false;
+    paintLotPick();
     paint();
   };
 
@@ -12105,6 +12201,180 @@
     return d >= range.lo && d <= range.hi ? d : null;
   };
   // ── THE CARD BESIDE THE LINE ───────────────────────────────────────────
+  // ── HOW BIG IS THE LOT? (Movie, 13 Oct) ──────────────────────────────
+  //
+  // "when they go to the SITE layout in MODEL" the question comes up: pick a
+  // tier, or type a width and depth, and AUTOSITE lays a rectangle that size.
+  // The table itself is lot-sizes.js, so LAYOUT's copy of this question reads
+  // the same six sizes and the same sentence about odd shapes.
+  //
+  // THE LOT IS AN OUTLINE carrying `site: true`. That is the whole reason
+  // Movie's "they can click on points to break them" needs no code: outlines
+  // already drag their points, break new ones into an edge, and undo. What
+  // the flag does is keep the lot OUT of the readers that treat an outline as
+  // a building -- auto-dims would string a 45' row around the house and call
+  // the pair one cluster, areas would report the lot as floor area.
+  const LS = window.DraftLotSizes;
+  const lotCard = document.getElementById('lot-pick');
+  // A tier id, 'custom', or null for not answered yet -- chosenSizeId's shape
+  // next door, for the same reason: one place holds the press, the fields are
+  // only read when 'custom' is the press.
+  let lotSizeId = null;
+  // ASKED ONCE PER VISIT, NOT ONCE PER PAINT. NOT NOW has to mean not now,
+  // and the card is repainted on every repaint of the page; without this a
+  // dismissed card would come straight back. Cleared on leaving SITE, so
+  // coming back asks again -- which is right, because coming back to a site
+  // with no lot on it is the drafter arriving at the question a second time.
+  let lotAsked = false;
+
+  const lotMetric = () => drawing?.units === 'metric';
+  const lotOnSite = () => activeLevelId() === SITE_LEVEL_ID && !boneyardActive;
+  const lotExists = () => !!LS.siteOutlineOf(drawing?.outlines);
+  // What the card is currently offering, in the unit in force.
+  const lotChosen = () => LS.lotSizeFor(lotSizeId,
+    lotCard.querySelector('[data-lot-width]').value,
+    lotCard.querySelector('[data-lot-depth]').value,
+    { metric: lotMetric() });
+
+  paintLotPick = () => {
+    if (!lotCard) return;
+    const show = lotOnSite() && !lotExists() && !lotAsked;
+    lotCard.hidden = !show;
+    if (!show) return;
+    const metric = lotMetric();
+    const unit = metric ? 'M' : 'FT';
+    lotCard.querySelector('[data-lot-pick-says]').textContent = metric
+      ? 'Pick a size, or type your own in metres.'
+      : 'Pick a size, or type your own in feet.';
+    const tiles = lotCard.querySelector('[data-lot-tiles]');
+    tiles.replaceChildren(...LS.LOT_TIERS.map(tier => {
+      const shown = LS.describe(tier, { metric });
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.lotTier = tier.id;
+      button.setAttribute('aria-pressed', String(lotSizeId === tier.id));
+      // THREE LINES, AND THE SIZE IS THE LOUD ONE (Movie: "25X120, 35X150
+      // etc"). The tier letter and the area are what tell a drafter who has
+      // not memorised the table which of six he wants.
+      const size = document.createElement('span');
+      size.className = 'lot-size';
+      size.textContent = shown.sizeLabel;
+      const tierTag = document.createElement('span');
+      tierTag.className = 'lot-tier';
+      tierTag.textContent = tier.id;
+      const area = document.createElement('span');
+      area.className = 'lot-area';
+      area.textContent = shown.areaLabel;
+      button.append(size, tierTag, area);
+      button.title = `${tier.id} \u2014 ${shown.character}`;
+      button.addEventListener('click', () => { lotSizeId = tier.id; paintLotPick(); });
+      return button;
+    }));
+    const custom = document.createElement('button');
+    custom.type = 'button';
+    custom.dataset.lotTier = 'custom';
+    custom.setAttribute('aria-pressed', String(lotSizeId === 'custom'));
+    const customSize = document.createElement('span');
+    customSize.className = 'lot-size';
+    customSize.textContent = 'OTHER';
+    const customTag = document.createElement('span');
+    customTag.className = 'lot-tier';
+    customTag.textContent = unit;
+    const customArea = document.createElement('span');
+    customArea.className = 'lot-area';
+    customArea.textContent = 'type it';
+    custom.append(customSize, customTag, customArea);
+    custom.addEventListener('click', () => {
+      lotSizeId = 'custom';
+      paintLotPick();
+      lotCard.querySelector('[data-lot-width]').focus();
+    });
+    tiles.appendChild(custom);
+
+    lotCard.querySelector('[data-lot-custom]').hidden = lotSizeId !== 'custom';
+    lotCard.querySelector('[data-lot-unit-w]').textContent = `${unit} X`;
+    lotCard.querySelector('[data-lot-unit-d]').textContent = unit;
+    lotCard.querySelector('[data-lot-note]').textContent = LS.AUTOSITE_NOTE;
+    // THE VERB SAYS WHAT IT WILL DRAW, and is dead until there is something
+    // to draw -- a typed pair that is out of bounds reads as nothing chosen,
+    // which is what it is.
+    const chosen = lotChosen();
+    const draw = lotCard.querySelector('[data-lot-pick-draw]');
+    draw.disabled = !chosen;
+    draw.textContent = chosen
+      ? `DRAW AUTOSITE ${chosen.sizeLabel}` : 'DRAW AUTOSITE';
+  };
+
+  // AUTOSITE: the rectangle, on the SITE level, centred on whatever is drawn.
+  const drawAutosite = () => {
+    const chosen = lotChosen();
+    if (!chosen || !drawing) return;
+    const centre = LS.centreOfOutlines(drawing.outlines) || { centerX: 0, centerZ: 0 };
+    const pts = LS.lotRectanglePoints(chosen.widthFt, chosen.depthFt, centre);
+    if (!pts) return;
+    drawing.outlines = drawing.outlines || [];
+    addItem(drawing.outlines, {
+      id: newDrawingItemId('outline'),
+      masterId: null,
+      levelId: SITE_LEVEL_ID,
+      garage: false,
+      // THE FLAG IS THE POINT. See the note above addItem's neighbours: it is
+      // what every reader of outlines asks to find out this is a lot line.
+      site: true,
+      detached: false,
+      foundation: null,
+      points: pts.map(pt => ({ x: pt.x, y: 0, z: pt.z })),
+      overriddenSrcIds: [],
+    });
+    // THE SIZE IS KEPT ON THE DRAWING so the page can say what was asked for
+    // after the corners have been dragged off it -- and so LAYOUT need not
+    // re-derive a tier from four points that may no longer be a rectangle.
+    drawing.lot = { widthFt: chosen.widthFt, depthFt: chosen.depthFt,
+      tier: chosen.custom ? null : chosen.id };
+    lotAsked = true;
+    paintLotPick();
+    sayOnStrip(`AUTOSITE ${chosen.sizeLabel} ${chosen.unitLabel} drawn \u2014 `
+      + 'drag its corners to suit your lot.');
+  };
+
+  if (lotCard) {
+    lotCard.querySelector('[data-lot-pick-draw]').addEventListener('click', drawAutosite);
+    lotCard.querySelector('[data-lot-pick-skip]').addEventListener('click', () => {
+      lotAsked = true;
+      paintLotPick();
+    });
+    // DRAW IT MYSELF: the card steps out of the way and hands over the
+    // OUTLINE tool, armed on the SITE level the drafter is already standing
+    // on. The loop he closes is an ordinary outline -- which is what AUTOSITE
+    // lays too, so a hand-drawn lot and a generated one are the same object
+    // from here on. It does not carry `site: true`, deliberately: this page
+    // cannot tell a lot line from a shed he drew, and guessing wrong would
+    // quietly drop a building out of the dimension strings.
+    lotCard.querySelector('[data-lot-pick-hand]').addEventListener('click', () => {
+      lotAsked = true;
+      paintLotPick();
+      setTool('outline');
+      sayOnStrip('Draw the lot line \u2014 click each corner, and close the loop on the first.');
+    });
+    // UPLOAD: TRACE's own file picker, which already takes PDF, JPG, PNG,
+    // DXF and DWG and already asks the scale question a scanned site plan
+    // needs answering. Opening the picker rather than the TRACE card because
+    // the drafter has just said what he wants to do and a second menu
+    // between him and the file dialog is a menu he did not ask for.
+    lotCard.querySelector('[data-lot-pick-upload]').addEventListener('click', () => {
+      lotAsked = true;
+      paintLotPick();
+      const picker = document.querySelector('[data-trace-file]');
+      if (picker) picker.click();
+      else sayOnStrip('Use the TRACE chip to bring in a site plan.');
+    });
+    // A TYPED PAIR REPAINTS THE VERB, which is the only thing that reads it:
+    // the button has to go live the moment both fields are sane and say what
+    // it will draw.
+    lotCard.querySelectorAll('[data-lot-width], [data-lot-depth]')
+      .forEach(input => input.addEventListener('input', paintLotPick));
+  }
+
   const roomCard = document.getElementById('room-pick');
   const syncRoomCard = pick => {
     if (!roomCard) return;
@@ -23855,7 +24125,7 @@
   // -- those are the next house's to pick. A detached garage's foundation
   // choice goes too, because PROJECT reads it as the house's type.
   const PROJECT_NUMBER_KEYS = ['zoneHeights', 'sectionTable', 'levelAssemblies',
-    'roofPitch', 'roofOverhang', 'roofHeelIn', 'activeWallType',
+    'roofPitch', 'roofOverhang', 'roofSideOverhang', 'roofHeelIn', 'activeWallType',
     'foundationAttachment', 'foundationAttachmentIn', 'foundationLadderIn'];
   const projectNumbersOf = d => {
     const kept = {};
@@ -24029,7 +24299,7 @@
   //
   // A DETACHED GARAGE WITH NO OUTLINE IS 24' x 24' (his answer).
   const PROJECT_KEYS = ['projectInfo', 'zoneHeights', 'sectionTable', 'levelAssemblies',
-    'roofPitch', 'roofOverhang', 'roofHeelIn', 'activeWallType', 'foundationAttachment',
+    'roofPitch', 'roofOverhang', 'roofSideOverhang', 'roofHeelIn', 'activeWallType', 'foundationAttachment',
     'foundationAttachmentIn', 'foundationLadderIn', 'buildType', 'garagePlan'];
   const blankKeepingProject = from => {
     const blank = {
@@ -24477,6 +24747,12 @@
     if (arrivedFrom === 'boneyard' || (arrivedFrom === 'entry' && !drawingHasWork())) {
       pullUpToWindow();
     }
+    // ARRIVING ON SITE IS ARRIVING AT THE QUESTION, however the drafter got
+    // there. goToLevel covers the press; this covers the other door -- a
+    // reload, a bookmark, or LAYOUT handing the page over with ?level=8 --
+    // and has to run after boot, because before it there is no drawing to
+    // ask whether a lot is already drawn on.
+    paintLotPick();
   });
 })();
 </script>
