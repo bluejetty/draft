@@ -437,6 +437,21 @@
      The note below already says so, so the button does not repeat it. */
   #lay-deal:disabled { background:none; color: var(--ink-quiet);
     border-color: var(--edge-panel); cursor:default; }
+  /* PRINT WEARS THE ACCENT, the only panel button besides ADD VIEWPORT that
+     does. Movie went looking for it and could not find it: "how do i print
+     this layout page? or multiple pages can't see a print button yet". The
+     package dialog was there the whole time -- on the BONE, which is the
+     one press on this page that looks like anything but a print button.
+     The fill is so the next drafter does not have to hunt either.
+
+     ABOVE SAVE DXF because printing the package is the common verb and
+     handing an engineer a ZIP of DXFs is the rare one. */
+  #lay-print-open { display:block; width:100%; margin-top:6px; text-align:center;
+    border:1px solid var(--accent);
+    background-color: var(--accent); color: var(--accent-ink);
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
+    font-size:13px; letter-spacing:0.04em; text-transform:uppercase;
+    padding:9px 12px; cursor:pointer; }
   /* SAVE DXF reads as Deal Sheets' sibling: the same plain panel button. */
   #lay-dxf { display:block; width:100%; margin-top:6px; text-align:center;
     border:1px solid var(--edge-panel);
@@ -713,6 +728,17 @@
            of that: the composer REPLACES the hand, so it asks once when there
            is a hand to replace. -->
       <button type="button" data-layout-deal-sheets id="lay-deal">Deal Sheets</button>
+      <!-- PRINT, WHERE A PRINT BUTTON BELONGS. Movie, 13 Oct: "how do i
+           print this layout page? or multiple pages can't see a print
+           button yet". The package dialog (_openPrintDialog, below) was
+           already built and already wired -- to the BONE, which on this
+           page is the print press and says so nowhere. The bone keeps
+           working; this is the press a drafter actually finds.
+
+           NOT THE TOP BAR'S PRINTSCREEN, which is greyed here and stays
+           greyed: that is a picture of the screen, MODEL's verb, and the
+           package is a different thing from a screenshot. -->
+      <button type="button" data-layout-print id="lay-print-open" title="PRINT — pick the sheets for this package, then your printer or Save as PDF">Print&hellip;</button>
       <!-- SAVE DXF (Movie, 9 Oct): "exactly for engineers to have autocad
            version to manipulate as they need" -- one AutoCAD file a sheet,
            full size, on the drawing's CAD layers, no titleblock; all of
@@ -3480,6 +3506,9 @@ class Component extends PageLogic {
       { addingViewport: !this.state.addingViewport }, () => this._draw()));
     on('[data-layout-deal-sheets]', 'click', () => this._dealSheets());
     on('[data-layout-dxf]', 'click', () => this._saveDxfSheets());
+    // The panel's PRINT and the bone open the same dialog; neither is a
+    // second implementation of it.
+    on('[data-layout-print]', 'click', () => this._openPrintDialog());
 
     on('#lay-print-close', 'click', () => this._closePrintDialog());
     on('#lay-print-scrim', 'click', e => { if (e.target.id === 'lay-print-scrim') this._closePrintDialog(); });
@@ -3594,8 +3623,26 @@ page.componentDidMount();
 
   // THE BONE. The bar owns the button; this page owns the verb, and the verb
   // is PRINT (board #20; Movie, 9 Oct): the package dialog, _openPrintDialog.
+  //
+  // AND IT SAYS SO NOW. The bar mounts the bone wearing MODEL's own words --
+  // "Gruff's drive-thru: pick a house type, then build it", aria-controls
+  // pointing at a #drivethru board this page does not have -- which is a
+  // flat lie about what the press does here, and is half of why the print
+  // dialog went unfound (Movie, 13 Oct: "can't see a print button yet").
+  // The other half is now the panel's own PRINT button; this is the press
+  // itself telling the truth.
+  //
+  // aria-label RATHER THAN THE `.said` SPAN: shell-bars' paintBoneArt
+  // rewrites that span's text on every theme paint, so a name written into
+  // it would not survive one. A label on the button outranks it anyway.
   const bone = document.getElementById('bone');
-  if (bone) bone.addEventListener('click', () => page._openPrintDialog());
+  if (bone) {
+    bone.title = 'PRINT — pick the sheets for this package, then your printer or Save as PDF';
+    bone.setAttribute('aria-label', 'Print');
+    bone.removeAttribute('aria-controls');
+    bone.removeAttribute('aria-expanded');
+    bone.addEventListener('click', () => page._openPrintDialog());
+  }
 
   // ── NEW: SAVE CURRENT OR DISCARD, THEN A BLANK FILE, BACK ON THIS PAGE ──
   //
