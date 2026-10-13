@@ -284,3 +284,53 @@ test('an elevation with no cut behind it says so instead of offering a wrong Y',
   await page.locator('[data-edit-model-yes]').click({ force: true });
   expect(stillOnLayout(page)).toBe(true);
 });
+
+// ── AND A FINGER IS NOT A MOUSE ─────────────────────────────────────────
+//
+// Chromium synthesizes a `dblclick` from two taps at one spot, and on a sheet
+// those two taps are the ordinary ones: place a viewport, tap it again to
+// select it. The question then appeared unasked AND its scrim covered the
+// status strip, swallowing the next tap -- which is how this was found, as
+// `touch-layout.spec.js`'s DELETE test timing out on the CI runner while
+// passing here. Whether the two taps land inside the platform's double-click
+// interval is a race, so this is pinned on BOTH sides: the double-tap does
+// not ask, and the strip's button does.
+test.describe('on a touchscreen', () => {
+  test.use({ hasTouch: true });
+
+  test('two taps on a viewport select it and ask nothing', async ({ page }) => {
+    await stubModelSpace(page);
+    await openLayout(page, houseDrawing(PLAN_VIEWPORT));
+    const p = await sheetPoint(page, PLAN_VIEWPORT.xIn, PLAN_VIEWPORT.yIn);
+
+    await page.touchscreen.tap(p.x, p.y);
+    await page.touchscreen.tap(p.x, p.y);
+    expect(await hasSelection(page), 'the second tap selected it').toBe(true);
+    expect(await asking(page), 'and asked nothing').toBe(false);
+
+    // The strip is reachable, which is the half of this that bit: a scrim
+    // over DELETE is what turned an unasked question into a timeout.
+    await expect(page.locator('[data-delete-viewport]')).toBeVisible();
+    await page.locator('[data-delete-viewport]').tap();
+    expect((await savedLayout(page)).viewports, 'the tap landed').toHaveLength(0);
+  });
+
+  test('the strip is the finger’s way in, and it opens the same question', async ({ page }) => {
+    await stubModelSpace(page);
+    await openLayout(page, houseDrawing(PLAN_VIEWPORT));
+    const edit = page.locator('[data-edit-in-model]');
+    await expect(edit, 'nothing selected, nothing to edit').toBeHidden();
+
+    const p = await sheetPoint(page, PLAN_VIEWPORT.xIn, PLAN_VIEWPORT.yIn);
+    await page.touchscreen.tap(p.x, p.y);
+    await expect(edit).toBeVisible();
+    await edit.tap();
+
+    expect(await asking(page)).toBe(true);
+    await expect(page.locator('#lay-edit-description')).toContainText('MAIN FL');
+    // And Y still goes to the right drawing, by the strip as by the mouse.
+    await page.locator('[data-edit-model-yes]').tap();
+    const url = await atModelSpace(page);
+    expect(url.searchParams.get('level')).toBe('1');
+  });
+});

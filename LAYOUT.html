@@ -516,7 +516,8 @@
   /* DELETE, BESIDE THE HISTORY IT FEEDS (audit M8). The Delete key was the
      only way to take a viewport off a sheet, and an iPad has none. A word
      rather than an icon, as MODEL's DELETE is. */
-  .strip-history[data-delete-viewport], .strip-history[data-fit-window] { font-family: var(--font-ui); font-size:11px;
+  .strip-history[data-delete-viewport], .strip-history[data-fit-window],
+  .strip-history[data-edit-in-model] { font-family: var(--font-ui); font-size:11px;
     font-weight:600; letter-spacing:0.06em; padding:0 8px; }
   .strip-history[hidden] { display:none; }
   /* THE NAV CLUSTER'S RULES CAME OUT WITH IT. MODEL · LAYOUT · PROJECT ·
@@ -786,6 +787,14 @@
         <path d="M10.4 4.4 L13 7 L10.4 9.6"></path>
       </svg>
     </button>
+    <!-- EDIT IN MODEL, for the finger and for anyone who cannot see a
+         gesture. Double-clicking a viewport is the mouse's way in and stays
+         that way; a double-TAP is deliberately not (the handler's note says
+         why), which would have left an iPad with no route to the feature at
+         all. On screen on exactly the same terms as DELETE: while a viewport
+         is selected. -->
+    <button type="button" data-edit-in-model class="strip-history" hidden
+      title="Open the selected viewport's drawing in the Model Space to edit it" aria-label="Edit the selected viewport in the model space">EDIT IN MODEL</button>
     <button type="button" data-fit-window class="strip-history" hidden
       title="Put the selected viewport's window back to fit its drawing" aria-label="Fit the window to the drawing">FIT WINDOW</button>
     <button type="button" data-delete-viewport class="strip-history" hidden
@@ -1102,8 +1111,27 @@ class Component extends PageLogic {
     // armed a drag that no pointerup will land -- the dialog takes the
     // focus -- and a live drag record would move the viewport on the next
     // stray pointermove.
+    //
+    // A MOUSE DOUBLE-CLICK, NOT A DOUBLE-TAP. Chromium turns two taps at one
+    // spot into a synthesized `dblclick`, and on a sheet the two taps that
+    // produce it are the ordinary ones: place a viewport, then tap it again
+    // to select it. That put the EDIT IN MODEL SPACE question in front of a
+    // drafter who had asked for nothing -- and, because the scrim covers the
+    // status strip, swallowed his next tap on DELETE. It was caught as a red
+    // shard rather than from an iPad, and only on the CI machine, because
+    // whether the two taps fall inside the platform's double-click interval
+    // is a race: locally they did not, on the runner they did.
+    //
+    // `sourceCapabilities.firesTouchEvents` is the browser's own answer to
+    // "did this come from a finger", so no interval or distance is guessed
+    // here either. Where it is not implemented it reads undefined and the
+    // event is taken as a mouse's, which is right: the browsers that lack it
+    // are desktop ones. THE FINGER IS NOT LEFT WITHOUT THE FEATURE -- the
+    // status strip's EDIT IN MODEL button is its route, and a plainer one
+    // than a gesture nobody can see.
     this._canvas.addEventListener('dblclick', this._dcl = (e) => {
       if (this.state.addingViewport) return;
+      if (e.sourceCapabilities && e.sourceCapabilities.firesTouchEvents) return;
       const hit = this._viewportAt(this._sheetPointIn(e));
       if (!hit) return;
       this._draggingViewport = null;
@@ -3014,6 +3042,12 @@ class Component extends PageLogic {
     document.querySelector('[data-layout-remove-sheet]').disabled = this._sheetCount() <= 1;
     // ON SCREEN EXACTLY WHILE THERE IS SOMETHING TO DELETE, as MODEL's is.
     document.querySelector('[data-delete-viewport]').hidden = this.state.selectedViewportId == null;
+    // EDIT IN MODEL on the same terms: there is a drawing to go to exactly
+    // while a viewport is selected. A viewport whose drawing has gone --
+    // a section whose cut was deleted -- is deliberately NOT hidden here:
+    // the dialog is where that is explained, and a button that vanished
+    // would leave the drafter wondering which of them he had selected.
+    document.querySelector('[data-edit-in-model]').hidden = this.state.selectedViewportId == null;
     // FIT WINDOW only while the selected window has been cropped or grown.
     const picked = this.state.viewports.find(v => v.id === this.state.selectedViewportId);
     document.querySelector('[data-fit-window]').hidden = !(picked && picked.crop);
@@ -3481,6 +3515,10 @@ class Component extends PageLogic {
     on('[data-delete-viewport]', 'click', () => this._deleteSelectedViewport());
     on('[data-north-button]', 'click', () => this._openNorth());
     on('[data-fit-window]', 'click', () => this._fitSelectedWindow());
+    // The strip's press and the mouse's double-click open the one dialog.
+    on('[data-edit-in-model]', 'click', () => {
+      if (this.state.selectedViewportId != null) this._openEditInModel(this.state.selectedViewportId);
+    });
   }
 
   // THE COMPOSER, ON DEMAND. It replaces every viewport on every sheet, so a
