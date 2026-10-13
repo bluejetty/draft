@@ -88,6 +88,56 @@ if (!window.DraftBuildMenu) {
       entries: Object.freeze([
         Object.freeze({ id: 'bungalow', label: '1 STOREY', type: 'bungalow' }),
         Object.freeze({ id: 'bungalow-garage', label: '1 STOREY + GARAGE', type: 'bungalow', garage: 'attached' }),
+        // ON-GRADE (Movie, 12 Oct): "this will need to be a new PROJECT area
+        // building type. maybe we could add it to the BUNGALOW section? call
+        // it ON-GRADE" -- "ON-GRADE (BUNGALOW)".
+        //
+        // NO `type` OF ITS OWN, and that was the choice. It is a bungalow by
+        // every question the file asks -- one storey, the same footprint, the
+        // same roof -- and what makes it on-grade is WHERE ITS FLOOR MEETS
+        // THE WALL, which level-assembly.js already answers per level as
+        // `framing`. A fifth BUILD_TYPES id would have meant the persisted
+        // vocabulary, PROJECT's type picker, fifteen specs and eight
+        // harnesses all learning a new word for a building they already
+        // know, and would still not have said the one thing that differs.
+        //
+        // IT ALSO MAKES THE ANSWER REUSABLE, which is Movie's own point:
+        // "this method of framing could also be used for the entry way of
+        // bilevels which is a close to grade floor also". A flag on a level
+        // can go on that level too; a build type cannot.
+        // `framing` IS WHAT MAKES THEM DIFFERENT, and it is here as well as on
+        // the design because PROJECT's family row has to know which of two
+        // bungalow tiles is lit without reaching into premade-plans.js for a
+        // design it never builds. It is the same word level-assembly.js
+        // persists, so the tile, the file and the FLOOR FRAMING choice on the
+        // level card are one answer seen three ways.
+        // ONE TILE, NAMED 'ON-GRADE', AND BOTH HALVES WERE MEASURED.
+        //
+        // Gruff's shelf holds ONE ROW of 122px cards, so what matters is how
+        // many fit ACROSS it -- and that is set by how wide each card's label
+        // makes it. The pair of tiles named "ON-GRADE (BUNGALOW)" and
+        // "ON-GRADE (BUNGALOW) + GARAGE" pushed the family to seven cards and
+        // two rows, which ran ~40px past the bottom of the shelf and into the
+        // band above it, where the board must take no press at all. Three
+        // drive-thru specs caught it.
+        //
+        // SHORTENING ALONE DID NOT SAVE IT: seven cards need two rows at any
+        // label width. Six do fit, on one row, but only at the short name --
+        // "ON-GRADE (BUNGALOW)" is wide enough that five is all the row takes.
+        // So it is one tile AND the short name, not either on its own.
+        //
+        // THE LONG NAME IS NOT LOST. It is the family's own word that was
+        // redundant inside the BUNGALOW submenu; PROJECT's card has room and
+        // says it in full.
+        //
+        // AND THE GARAGE IS NOT LOST EITHER, which is what makes giving up
+        // the second tile cheap: an on-grade house with a garage is ordered
+        // as 1 STOREY + GARAGE and switched to BALLOON / LEDGER on PROJECT --
+        // the same per-level field this tile sets. That is the whole reason
+        // the framing is a flag rather than a build type: the board running
+        // out of room is exactly what a flag survives and a fifth BUILD_TYPES
+        // id would not.
+        Object.freeze({ id: 'bungalow-ongrade', label: 'ON-GRADE', type: 'bungalow', framing: 'balloon' }),
         Object.freeze({ id: 'twoStorey', label: '2 STOREY', type: 'twoStorey' }),
         Object.freeze({ id: 'twoStorey-garage', label: '2 STOREY + GARAGE', type: 'twoStorey', garage: 'attached' }),
         // The room over the garage on a 2 STOREY is the UPPER FLOOR REACHING

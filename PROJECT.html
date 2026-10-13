@@ -938,9 +938,13 @@
       // has read them since the numbering was chosen (floors odd, half-levels
       // even). What moved is what those levels are MADE of.
       const ENTRY_LEVEL_ID = 2;
+      // MAIN FL, by the same numbering. It is the level the ON-GRADE tiles'
+      // floor framing is an answer about.
+      const MAIN_FLOOR_LEVEL_ID = 3;
       const OVER_GARAGE_LEVEL_ID = 4;
       const {
         normaliseLevelAssembly, defaultLevelAssembly, levelRole, JOIST_TYPES,
+        FRAMING_TYPES, DEFAULT_FRAMING,
       } = window.DraftLevelAssembly;
       // What a level's joists are CALLED, for a row that names the member
       // rather than just measuring it. The table is the module's, so a row
@@ -2891,6 +2895,34 @@
             return true;
           },
         });
+        // ── HOW THIS FLOOR MEETS ITS WALL (Movie, 13 Oct) ──────────────
+        //
+        // "BALLOON / LEDGER framing and PLATFORM framing", offered on the
+        // level's card. PLATFORM is the default and is what every drawing
+        // made before this row existed carries, so adding the row moves
+        // nothing: the deck lands ON the wall below as it always has.
+        //
+        // BALLOON / LEDGER hangs the joists INSIDE the wall on a ledger, tops
+        // level with the top of the plate, so only the sheathing covers it --
+        // the deck sits a whole joist depth lower. That is the near-grade
+        // floor the North Point suites are framed with, and the one a
+        // BILEVEL's ENTRY landing wants.
+        //
+        // PER LEVEL, which is the whole reason it is a row here rather than a
+        // build type: a bilevel's ENTRY is balloon-framed while the MAIN FL
+        // over it is not.
+        addInput(`framing-${level.id}`, `${level.name} FLOOR FRAMING`, {
+          name: `framing-${level.id}`,
+          levelId: level.id,
+          kind: 'choice',
+          choices: () => FRAMING_TYPES.map(type => ({ id: type.id, label: type.label })),
+          get: () => assembly(level.id).framing,
+          set: value => {
+            if (!FRAMING_TYPES.some(type => type.id === value)) return false;
+            setAssembly(level.id, 'framing', value);
+            return true;
+          },
+        });
         addInput(`sheathing-${level.id}`, `${level.name} SHEATHING`, {
           name: `sheathing-${level.id}`,
           levelId: level.id,
@@ -3404,7 +3436,15 @@
       // pairing and then, in the next breath, "we can do that for BILEVEL /
       // + GARAGE too" -- so the second column is the same call with the other
       // family rather than a copy of this loop that has to be kept in step.
+      // A FAMILY ANSWERS THE FLOOR-FRAMING QUESTION ONLY IF ITS OWN TILES
+      // DISAGREE ABOUT IT. The bungalows do -- ON-GRADE beside 1 STOREY --
+      // so a press there is a choice between them; the bilevels all say
+      // nothing, so a press there must leave MAIN FL's framing alone rather
+      // than reset a card a drafter edited by hand.
+      const familyAnswersFraming = entries =>
+        entries.some(item => item.framing);
       const buildFamilyColumn = (host, entries) => entries.map((entry, i) => {
+        const answersFraming = familyAnswersFraming(entries);
         const paired = pairsWithPrevious(entry, entries[i - 1]);
         const button = document.createElement('button');
         button.type = 'button';
@@ -3423,10 +3463,24 @@
           if (readOnly) return;
           buildType = entry.type;
           methodPressedHere = true;
+          // AND THE FLOOR CONNECTION, WHERE THE FAMILY HAS TWO ANSWERS TO IT.
+          // ON-GRADE and 1 STOREY are the same `type`; what a drafter is
+          // choosing between them is how MAIN FL's floor meets the wall, so
+          // pressing one has to say so or the two tiles would be the same
+          // press. Platform is written as plainly as balloon: pressing 1
+          // STOREY after ON-GRADE means a platform-framed bungalow, and
+          // leaving the old answer standing would make the tile a lie.
+          //
+          // ONLY FROM A FAMILY WHOSE TILES CARRY ONE. The bilevel column
+          // and the detached foundations say nothing about floor framing,
+          // and must not quietly reset a level card somebody edited.
+          if (answersFraming) {
+            setAssembly(MAIN_FLOOR_LEVEL_ID, 'framing', entry.framing || DEFAULT_FRAMING);
+          }
           applyGaragePlan(planForEntry(entry));
         });
         host.appendChild(button);
-        return { entry, button };
+        return { entry, button, answersFraming };
       });
       const familyButtons = buildFamilyColumn(familyRow, BUNGALOW_FAMILY);
       // WHICH ONE GLOWS. The drawing's own state decides, not the last press:
@@ -3541,9 +3595,23 @@
       }
 
       syncFamilyRow = () => {
-        familyButtons.forEach(({ entry, button }) => {
+        // WHICH BUNGALOW, NOT JUST WHICH TYPE. ON-GRADE and 1 STOREY share a
+        // `type` and a garage plan, so those two tests alone would light the
+        // first of them whatever the drawing is. The third test is the floor
+        // framing, read from MAIN FL's own assembly -- so a house built
+        // on-grade, or a level card switched to BALLOON / LEDGER by hand,
+        // lights the tile that says so.
+        //
+        // A TILE WITHOUT A FRAMING ANSWERS "platform", because that is what
+        // every tile that predates this meant: 1 STOREY has always been the
+        // platform-framed bungalow, it simply had nothing to be distinguished
+        // from. Comparing against the default rather than null is what keeps
+        // it lit on every drawing written before ON-GRADE existed.
+        const mainFraming = assembly(MAIN_FLOOR_LEVEL_ID).framing;
+        familyButtons.forEach(({ entry, button, answersFraming }) => {
           const live = buildType === entry.type
-            && garagePlan != null && planForEntry(entry) === garagePlan;
+            && garagePlan != null && planForEntry(entry) === garagePlan
+            && (!answersFraming || (entry.framing || DEFAULT_FRAMING) === mainFraming);
           button.setAttribute('aria-pressed', live ? 'true' : 'false');
         });
         // THE STORED CHOICE, NOT THE DEFAULTED ONE, and that is the same rule
