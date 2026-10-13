@@ -132,11 +132,23 @@ test('the foot bar: PROJECT and MODEL left, the bone in the middle, the sheets r
     // here for a number that is supposed to be there. The claim was never
     // about the characters: it is that the middle of the foot holds ONE
     // press. So each child answers with its spoken name where it has one.
+    //
+    // AND THE STOREY ARROWS STAND WITH IT (Movie, 12 Oct: "id like UP and DOWN
+    // arrows and when they are pressed the LEVEL goes either to the next one
+    // up or the next one down", with the spot marked in red beside the bone).
+    // They are the second and third presses the middle has ever held, and the
+    // claim this check makes had to grow to say so -- it read `['BONE']` and
+    // went red the moment the arrows landed, on MAIN rather than on the branch
+    // that added them.
+    //
+    // THE CLAIM IS STILL ABOUT WHAT MAY STAND THERE, not about a count: the
+    // bone, and the two arrows that move between storeys. Anything else
+    // arriving in this lane is what this is watching for.
     expect(await page.locator('#dt-bar > *:not([hidden])').evaluateAll(els => els.map(
       el => ((el.querySelector('.said') || el).textContent || '')
         .trim().replace(/\s+/g, ' '))),
-    'the middle of the foot is the bone alone')
-      .toEqual(['BONE']);
+    'the middle of the foot is the bone and the storey arrows')
+      .toEqual(['BONE', '\u25b2', '\u25bc']);
 
     // AND THE PAGES THAT ARE NOT BUILT ARE STILL DOWN. Moving a chip between
     // groups must not have quietly lit it.
