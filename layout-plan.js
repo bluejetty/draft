@@ -721,6 +721,26 @@ if (!window.DraftLayoutPlan) {
       // THE DRAWING'S OWN SWITCH, for the window and door size tags: a sheet
       // off a metric drawing tags W 915 X 1065, as the Model Space does.
       units: saved?.units === 'metric' ? 'metric' : 'imperial',
+      // ── AND THOSE TAGS HOLD THEIR SIZE ON THE PAPER ───────────────────
+      //
+      // Movie, 13 Oct: "on construction layouts the WINDOW/DOOR text marks
+      // D36 etc change as i zoom in and out. can you lock those with the same
+      // size text as in the INT wall walls (5.5" and 3.5")".
+      //
+      // THEY WERE THE ONE LETTERING LEFT IN SCREEN PIXELS. This env passed no
+      // labelFont at all, so plan-composition fell back to a bare 9px -- a
+      // SCREEN size, which holds still while the drawing under it zooms, so
+      // the tag grows against the plan on the way out and shrinks on the way
+      // in. Everything beside it had already been moved onto paper units: the
+      // dimension figures take `inkScale` for exactly this (11 Oct, "ticks and
+      // figures scale with the sheet when it zooms instead of holding their
+      // screen size").
+      //
+      // 8px x inkScale IS THE INTERIOR DIMENSION FIGURE, to the pixel --
+      // render-2d.js's TIGHT_FONT, which is what prints 5 1/2" and 3 1/2"
+      // between the studs. Movie named that text as the one to match, so it
+      // is the same arithmetic rather than a number that looks like it.
+      labelFont: `600 ${8 * (env.inkScale || 1)}px 'Barlow Condensed', system-ui, sans-serif`,
       // ── WHICH OUTLINE IS THE HOUSE, for the window size tag ───────────
       //
       // The tag sits on the EXTERIOR side of the glass and nothing can say

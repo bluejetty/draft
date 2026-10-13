@@ -840,3 +840,4 @@ test('a window gives up at most 3/4 of an elevation\'s buried foundation, and no
   expect(got.roomy.b).toBeLessThan(0);              // room to spare: nothing cut, air below
   expect(got.section.b).toBeLessThanOrEqual(0);     // a section is never cut
 });
+
