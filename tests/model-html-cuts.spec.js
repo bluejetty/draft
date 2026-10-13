@@ -299,7 +299,7 @@ test('the first offset comes off the drawing, not this page\'s own default', asy
   expect(stored).toBeGreaterThan(derived);
 });
 
-test('and a drawing that never chose one derives the format\'s 1.5, not just something',
+test('and a drawing that never chose one derives the format\'s 2.0, not just something',
   async ({ page }) => {
     await recordPaint(page);
     await houseOnOldPage(page);
@@ -317,10 +317,17 @@ test('and a drawing that never chose one derives the format\'s 1.5, not just som
     // cannot see between them. Written after mutating `?? DEFAULT` to `|| 0`
     // and watching this test stay green: absent and null both resolved to 0,
     // so they still agreed with each other, and a page drawing every cut at a
-    // zero gap passed a check called "still derives it". A stored 1.5 is the
+    // zero gap passed a check called "still derives it". A stored 2 is the
     // same number by a different route, so it pins the value rather than the
     // agreement.
-    await loadWith(page, `d.cuts = [${CUT}]; d.autoDimFirstOffsetFt = 1.5;`);
+    //
+    // THE NUMBER MOVES WHEN THE DEFAULT MOVES, and that is the point of it:
+    // it was 1.5 until 12 Oct, when Movie asked for "6" more between the
+    // house and first dimension" and drawing-format.js's
+    // AUTO_DIM_FIRST_OFFSET_FT went to 2. A test that pins a value has to be
+    // edited when the value is deliberately changed -- that is the cost of
+    // pinning it, and it is cheaper than the mutant this check caught.
+    await loadWith(page, `d.cuts = [${CUT}]; d.autoDimFirstOffsetFt = 2;`);
     const storedDefault = await cutRun(page);
 
     expect(absent).toBeGreaterThan(0);

@@ -135,6 +135,154 @@ function run(label) {
     noViews.warnings.some(w => /layer-views\.js/.test(w) && /stair/i.test(w)),
     noViews.warnings.join(' / ') || '(silent)');
 
+  // ── THE STOREY UNDER THIS ONE, GHOSTED (Movie, 12 Oct) ───────────────
+  //
+  // "show a very lightweight line that shows that ext wall outlines of the
+  // wlls below and then adjust the scale so the larger plan with the extra
+  // lightweight lines fits on the upper floors (which are smaller without
+  // the background lines)".
+  //
+  // THE FIXTURE IS HIS CASE EXACTLY, which is why it is used rather than one
+  // written for the occasion: MAIN FL's outlines reach z = 46 because of the
+  // garage, and 2ND FL's stop at 38. The floor below really is bigger than
+  // the floor being drawn, so the frame really does have to grow.
+  {
+    const LP = full.win.DraftLayoutPlan;
+    const spanZ = levelId => {
+      const box = LP.planBounds(SAVED, levelId);
+      return box ? Math.round((box.maxZ - box.minZ) * 100) / 100 : null;
+    };
+    const loopBox = loops => loops.reduce((box, pts) => pts.reduce((b, pt) => ({
+      minZ: Math.min(b.minZ, pt.z), maxZ: Math.max(b.maxZ, pt.z),
+    }), box), { minZ: Infinity, maxZ: -Infinity });
+
+    check('the fixture has a floor below that is BIGGER than the floor above',
+      loopBox(LP.floorBelowLoops(SAVED, 5)).maxZ > loopBox(
+        (SAVED.outlines || []).filter(o => o.levelId === 5).map(o => o.points)).maxZ,
+      'nothing in this fixture reaches past the upper floor, so the frame check '
+      + 'below cannot tell a grown frame from an ungrown one');
+
+    // WHICH LEVEL IS BELOW, off the storey ladder and not off `elev`. SITE
+    // and MAIN FL both sit at elev 0 in this very fixture, so an elevation
+    // comparison would have to break that tie by guessing.
+    check('2ND FL shows MAIN FL under it', LP.floorBelow(SAVED, 5) === 3,
+      String(LP.floorBelow(SAVED, 5)));
+    check('MAIN FL shows nothing under it -- the foundation is not a storey',
+      LP.floorBelow(SAVED, 3) === null, String(LP.floorBelow(SAVED, 3)));
+    check('ROOF and SITE are not floors and get no ghost',
+      LP.floorBelow(SAVED, 7) === null && LP.floorBelow(SAVED, 8) === null);
+
+    // THE HALF-FLOOR IS SKIPPED, and this needs a fixture of its own: the
+    // repro has no outline on 1.5 at all, so leaving the skip out changes
+    // nothing in it and the rule sits unpinned (the mutation table said so --
+    // 'the half-floor already on the sheet is ghosted again' survived).
+    // 1.5 is drawn on 2ND FL's sheet IN FULL by the half-level pass, so
+    // ghosting it as well would be the same lines twice, the second set
+    // fainter; the storey below the PAIR is what an upper floor is missing.
+    const withHalf = {
+      ...SAVED,
+      outlines: [
+        ...(SAVED.outlines || []),
+        { id: 9001, levelId: 4, points: [
+          { x: -8, z: -8 }, { x: 8, z: -8 }, { x: 8, z: 8 }, { x: -8, z: 8 }] },
+      ],
+    };
+    // The fixture's own reach, and it cannot be asked through
+    // floorBelowLoops: the skip is exactly what makes that come back empty,
+    // so asking it there would be asking the rule to prove itself.
+    check('the fixture really does put an outline on 1.5 to be picked up by mistake',
+      withHalf.outlines.some(o => o.levelId === 4 && o.points.length >= 3)
+      && !(SAVED.outlines || []).some(o => o.levelId === 4),
+      'nothing was added on 1.5, so the skip below is not being tested');
+    check('2ND FL still shows MAIN FL, not the 1.5 already drawn on its sheet',
+      LP.floorBelow(withHalf, 5) === 3, String(LP.floorBelow(withHalf, 5)));
+
+    // THE FRAME TAKES IT IN. Without this the ghost is drawn outside the
+    // viewport and clipped -- on screen a pan, on paper gone.
+    //
+    // MEASURED AGAINST THE SAME LEVEL WITHOUT THE GHOST, not against MAIN
+    // FL's own frame. The first version of this check compared the two
+    // levels' spans and failed at 72 against 76.5 -- correctly, because MAIN
+    // FL's frame also carries MAIN FL's DIMENSION rows, and a dimension on
+    // the floor below is not something an upper floor ghosts. The question is
+    // whether 2ND FL's own frame GREW, so the comparison is 2ND FL with the
+    // storey below against 2ND FL with it taken away.
+    const withoutBelow = {
+      ...SAVED,
+      outlines: (SAVED.outlines || []).filter(outline => outline.levelId !== 3),
+    };
+    const spanWithout = (() => {
+      const box = LP.planBounds(withoutBelow, 5);
+      return box ? Math.round((box.maxZ - box.minZ) * 100) / 100 : null;
+    })();
+    check('the ghost has nothing to add once the floor below is taken away',
+      LP.floorBelowLoops(withoutBelow, 5).length === 0);
+    check('2ND FL\'s frame GREW to take the floor below in',
+      spanZ(5) > spanWithout,
+      `with the ghost ${spanZ(5)}, without it ${spanWithout}`);
+    const below = loopBox(LP.floorBelowLoops(SAVED, 5));
+    const frame = LP.planBounds(SAVED, 5);
+    check('and reaches it by the real extent rather than by luck',
+      frame.maxZ >= below.maxZ && frame.minZ <= below.minZ,
+      `frame ${frame.minZ}..${frame.maxZ} vs ghost ${below.minZ}..${below.maxZ}`);
+
+    // AND IT IS DRAWN, LIGHTLY. 0.3 is its own alpha -- the half-floor and
+    // the basement's foundation both use 0.6 -- so the stroke can be told
+    // apart from theirs.
+    const lightStrokes = drawn => (drawn.strokes || [])
+      .filter(a => a > 0.2 && a < 0.45).length;
+    const upper = draw(full.win, 5);
+    check('2ND FL draws the ghost', upper.ok && lightStrokes(upper) > 0,
+      upper.why || `alphas stroked: ${(upper.strokes || []).join(', ')}`);
+    const main = draw(full.win, 3);
+    check('MAIN FL draws no ghost, having no storey under it',
+      main.ok && lightStrokes(main) === 0,
+      main.why || `alphas stroked: ${(main.strokes || []).join(', ')}`);
+    check('and the ghost leaves the alpha as it found it',
+      upper.endAlpha === 1, String(upper.endAlpha));
+
+    // THE TWO MODES THAT DECLINE IT, for the reasons those modes exist. A
+    // SHELL is this house at 1"=40' among its neighbours; a HOLOGRAM is
+    // another drawing shown under this one, so its own storey below would be
+    // a ghost two buildings deep.
+    const shell = draw(full.win, 5, { env: { shell: true } });
+    check('a shell draws no ghost', shell.ok && lightStrokes(shell) === 0,
+      shell.why || `alphas stroked: ${(shell.strokes || []).join(', ')}`);
+    const holo = draw(full.win, 5, { env: { hologram: true } });
+    check('a hologram draws no ghost', holo.ok && lightStrokes(holo) === 0,
+      holo.why || `alphas stroked: ${(holo.strokes || []).join(', ')}`);
+    // A LISTING KEEPS IT: that mode takes away dimensions and sizes, and this
+    // is geometry.
+    const listing = draw(full.win, 5, { env: { listing: true } });
+    check('a listing plan keeps the ghost', listing.ok && lightStrokes(listing) > 0,
+      listing.why || `alphas stroked: ${(listing.strokes || []).join(', ')}`);
+
+    // AND THE FRAME CAN BE TOLD TO LEAVE IT OUT, for the shell caller, whose
+    // box has to agree with its ink either way.
+    const noGhostBox = LP.planBounds(SAVED, 5, { floorBelow: false });
+    check('planBounds can decline the ghost for a caller that does not draw it',
+      noGhostBox && Math.round((noGhostBox.maxZ - noGhostBox.minZ) * 100) / 100 === spanWithout,
+      `${noGhostBox && noGhostBox.maxZ - noGhostBox.minZ} vs ${spanWithout}`);
+  }
+
+  // ── level-assembly.js: the storey ladder the ghost reads ──────────────
+  // The ladder arrives off `window` like the four below, so it fails the same
+  // silent way: an absent module reads as an empty object, every floor has
+  // nothing under it, and the sheet looks finished.
+  {
+    const noLadder = loadWith(['level-assembly.js']);
+    const drawnNoLadder = draw(noLadder.win, 5);
+    check('without level-assembly the sheet still paints',
+      drawnNoLadder.ok, drawnNoLadder.why);
+    check('without level-assembly NO ghost is drawn',
+      (drawnNoLadder.strokes || []).filter(a => a > 0.2 && a < 0.45).length === 0,
+      'a ghost was drawn without the ladder that decides which level it is -- '
+      + 'this check is measuring the wrong thing');
+    check('without level-assembly it SAYS so, and names the file',
+      noLadder.warnings.some(w => /level-assembly\.js/.test(w) && /below/i.test(w)),
+      noLadder.warnings.join(' / ') || '(silent)');
+  }
+
   // ── cut-view.js: the drawing standards ────────────────────────────────
   const noCut = loadWith(['cut-view.js']);
   draw(noCut.win, MAIN);
@@ -549,6 +697,44 @@ const MUTATIONS = [
     'layout-plan.js', c => c.replace('return full != null && planWalls(saved, Number(full)).length > 0;', 'return full != null;')],
   ['the frame leaves the half-floor out',
     'layout-plan.js', c => c.replace('.concat(half != null ? planWalls(saved, half) : [])', '')],
+  // ── THE STOREY UNDER THIS ONE (Movie, 12 Oct) ─────────────────────────
+  ['an upper floor never shows the storey below it',
+    'layout-plan.js', c => c.replace('      drawFloorBelowGhost(ctx, toS, saved, levelId);', '')],
+  ['the ghost draws at full strength',
+    'layout-plan.js', c => c.replace('ctx.globalAlpha *= GHOST_BELOW_ALPHA;', '')],
+  ['the frame leaves the storey below out, so the ghost is clipped off the paper',
+    'layout-plan.js', c => c.replace(
+      'floorBelowLoops(saved, levelId).forEach(points => points.forEach(eat));', '')],
+  ['every level is a storey, so the roof ghosts the floor under it',
+    'layout-plan.js', c => c.replace(
+      "const ladder = Object.keys(assembly.STOREY_NUMBER)",
+      "const ladder = Object.keys({ 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 7: 1, 8: 1 })")],
+  ['the half-floor already on the sheet is ghosted again',
+    'layout-plan.js', c => c.replace('.filter(id => id < levelId && id !== half)',
+      '.filter(id => id < levelId)')],
+  ['the ghost keeps looking down past a storey that has an outline',
+    'layout-plan.js', c => c.replace('if (outlineLoopsOn(saved, under[i]).length) return under[i];',
+      'if (outlineLoopsOn(saved, under[i]).length) continue;')],
+  ['the level-assembly warning deleted',
+    'layout-plan.js', c => c.replace(/if \(!warnedNoLevelAssembly\) \{[\s\S]*?\n      \}\n/, '')],
+  ['the level-assembly warning loses the filename',
+    'layout-plan.js', c => c.replace("'layout-plan: level-assembly.js is missing, so no plan can '",
+      "'layout-plan: a module is missing, so no plan can '")],
+  ['the ghost leaves the alpha turned down for everything after it',
+    'layout-plan.js', c => c.replace(`    ctx.save();
+    ctx.globalAlpha *= GHOST_BELOW_ALPHA;`, '    ctx.globalAlpha *= GHOST_BELOW_ALPHA;')],
+  ['a shell draws the storey below at neighborhood scale',
+    'layout-plan.js', c => c.replace("      && env.shell !== true && env.hologram !== true) {",
+      "      && env.hologram !== true) {")],
+  ['a hologram ghosts its own storey below, two buildings deep',
+    'layout-plan.js', c => c.replace("      && env.shell !== true && env.hologram !== true) {",
+      "      && env.shell !== true) {")],
+  ['a listing plan loses the ghost with the dimensions',
+    'layout-plan.js', c => c.replace("      && env.shell !== true && env.hologram !== true) {",
+      "      && env.shell !== true && env.hologram !== true && env.listing !== true) {")],
+  ['planBounds ignores a caller that declines the ghost',
+    'layout-plan.js', c => c.replace('if (withBelow) floorBelowLoops(saved, levelId)',
+      'if (true) floorBelowLoops(saved, levelId)')],
   ['the basement plan never shows its foundation',
     'layout-plan.js', c => c.replace("if (levelId === BASEMENT_LEVEL_ID && view === 'plan'", 'if (false')],
   ['the basement\'s foundation draws at full strength',

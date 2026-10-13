@@ -4096,8 +4096,9 @@
   // NULL MEANS DERIVE, and reading it any other way reintroduces the bug the
   // key was added to close. `format.autoDimFirstOffsetFt` keeps null for a
   // drawing that never chose (drawing-format.js: "readers normalise, writers
-  // never invent"), so `?? AUTO_DIM_FIRST_OFFSET_FT` is where the 1.5 comes
-  // from -- and moving that default later then reaches every such drawing.
+  // never invent"), so `?? AUTO_DIM_FIRST_OFFSET_FT` is where the gap comes
+  // from -- and moving that default later then reaches every such drawing,
+  // which is what happened on 12 Oct when it went from 1'-6" to 2'-0".
   //
   // HALF, because the bubbles sit in the middle of the gap between the walls
   // and the first string. MODEL.dc.html's `_cutMarkGapFt()` takes the same

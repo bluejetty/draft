@@ -2,7 +2,7 @@
 // the closest string dims corner-to-corner through the fenestration centres
 // facing each side, the next string dims every footprint jog, and the
 // outermost string is the overall. The first string offset is adjustable
-// (1'-6" or 3'-0") and every further string steps out 1'-6". Re-running
+// (2'-0" or 3'-0") and every further string steps out 1'-6". Re-running
 // replaces the previous auto strings; manual dimensions are left alone.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
@@ -114,10 +114,10 @@ test('AUTO DIMS strings a rectangle: overalls everywhere, openings on the door s
   // 2-piece openings string plus its overall.
   expect(auto).toHaveLength(6);
 
-  // Openings string sits at the first offset (1'-6") off the door side and
+  // Openings string sits at the first offset (2'-0") off the door side and
   // breaks at the door centre.
   const openingString = auto.filter(dimension =>
-    h.near(dimension.start.z, -7.5) && h.near(dimension.end.z, -7.5));
+    h.near(dimension.start.z, -8) && h.near(dimension.end.z, -8));
   expect(openingString).toHaveLength(2);
   const centreEnds = openingString
     .flatMap(dimension => [dimension.start.x, dimension.end.x])
@@ -125,7 +125,7 @@ test('AUTO DIMS strings a rectangle: overalls everywhere, openings on the door s
   expect(centreEnds).toHaveLength(2);
   // That side's overall steps out one string spacing further.
   const overall = auto.find(dimension =>
-    h.near(dimension.start.z, -9) && h.near(dimension.end.z, -9));
+    h.near(dimension.start.z, -9.5) && h.near(dimension.end.z, -9.5));
   expect(overall).toBeTruthy();
   expect(Math.abs(overall.end.x - overall.start.x)).toBeCloseTo(16, 3);
 });
@@ -197,14 +197,14 @@ test('each side strings only its own facing corners: the notch stays off the fla
   expect(auto).toHaveLength(8);
   const north = auto.filter(dimension => dimension.start.z < -6.5);
   expect(north).toHaveLength(1);
-  expect(h.near(north[0].start.z, -7.5)).toBe(true);
+  expect(h.near(north[0].start.z, -8)).toBe(true);
   expect(Math.abs(north[0].end.x - north[0].start.x)).toBeCloseTo(16, 3);
   const west = auto.filter(dimension => dimension.start.x < -8.5);
   expect(west).toHaveLength(1);
   const south = auto.filter(dimension => dimension.start.z > 6.5);
   expect(south).toHaveLength(3);
   // The south jog string breaks at the notch corner x=0.
-  const southJogs = south.filter(dimension => h.near(dimension.start.z, 7.5));
+  const southJogs = south.filter(dimension => h.near(dimension.start.z, 8));
   expect(southJogs).toHaveLength(2);
   expect(southJogs.some(dimension =>
     h.near(dimension.start.x, 0) || h.near(dimension.end.x, 0))).toBe(true);
@@ -237,9 +237,9 @@ test('auto strings ride master outline edits, staying outside the moved plan', a
   // Mouse drops land within a pixel of the target, so compare loosely.
   // N and E strings run reversed (ink outward), so match both ends.
   const east = auto.find(dimension => dimension.start.x > 9 && dimension.end.x > 9);
-  expect(east.start.x).toBeCloseTo(13.5, 0);
+  expect(east.start.x).toBeCloseTo(14, 0);
   const west = auto.find(dimension => dimension.start.x < -5 && dimension.end.x < -5);
-  expect(west.start.x).toBeCloseTo(-5.5, 0);
+  expect(west.start.x).toBeCloseTo(-6, 0);
   const north = auto.find(dimension => dimension.start.z < -7);
   expect(Math.min(north.start.x, north.end.x)).toBeCloseTo(-4, 0);
   expect(Math.max(north.start.x, north.end.x)).toBeCloseTo(12, 0);
@@ -254,12 +254,23 @@ test('auto strings ride master outline edits, staying outside the moved plan', a
   const reloaded = await h.savedDrawing(page);
   const northAfter = reloaded.dimensions.filter(dimension =>
     dimension.auto && dimension.levelId === 3)
-    .find(dimension => Math.min(dimension.start.z, dimension.end.z) < -10.5);
+    .find(dimension => Math.min(dimension.start.z, dimension.end.z) < -11);
   expect(northAfter).toBeTruthy();
-  expect(Math.min(northAfter.start.z, northAfter.end.z)).toBeCloseTo(-11.5, 0);
+  expect(Math.min(northAfter.start.z, northAfter.end.z)).toBeCloseTo(-12, 0);
 });
 
-test('house strings clear the attached garage; the shared corridor stacks in order', async ({ page }) => {
+// ONE STACK PER BUILDING, NOT ONE PER FOOTPRINT (Movie, 12 Oct). This test
+// used to assert the opposite -- "the garage's own east overall strings
+// closest, off its far edge; the house's east strings continue the same stack
+// beyond the garage's" -- which is the arrangement he rejected: the overall
+// measured the house and stopped at the house's corner, the garage got rows of
+// its own further out, and the figure a drafter wants (the WHOLE building,
+// corner to corner) was on no row at all.
+//
+// What the old rule was protecting survives as the cluster test, and is
+// tested two tests down: a DETACHED garage does not touch the house, so it
+// is still its own building with its own stack against its own edge.
+test('an attached garage strings as one building with the house', async ({ page }) => {
   await h.openModel(page);
   await drawHouseOutline(page);
   // Attached garage protruding east: open run from (8,-4) out to x=14 and back.
@@ -277,27 +288,96 @@ test('house strings clear the attached garage; the shared corridor stacks in ord
   const saved = await h.savedDrawing(page);
   const auto = saved.dimensions.filter(dimension => dimension.auto);
   const vertical = auto.filter(dimension => h.near(dimension.start.x, dimension.end.x, 0.01));
-  // Nothing lands on the garage: the east corridor is clear from the house
-  // wall (x=8) out to the garage's far edge plus the first offset.
-  expect(vertical.some(dimension => dimension.start.x > 8.01 && dimension.start.x < 15.4)).toBe(false);
-  // The garage's own east overall strings closest, off its far edge (14+1.5).
-  const garageEast = vertical.filter(dimension => h.near(dimension.start.x, 15.5, 0.1));
-  expect(garageEast.length).toBeGreaterThan(0);
-  // The house's east strings continue the same stack beyond the garage's:
-  // corners at 14+1.5+1.5 = 17, overall at 18.5 — outside everything.
-  const houseEast = vertical.filter(dimension => dimension.start.x > 16);
-  expect(houseEast.length).toBeGreaterThan(0);
-  expect(Math.min(...houseEast.map(dimension => dimension.start.x))).toBeCloseTo(17, 1);
-  expect(Math.max(...houseEast.map(dimension => dimension.start.x))).toBeCloseTo(18.5, 1);
-  // The garage's buried west side (against the house) gets no string of its
-  // own — nothing lands at 8-1.5 = 6.5, inside the plan.
-  expect(vertical.some(dimension => Math.abs(dimension.start.x - 6.5) < 0.5)).toBe(false);
-  // Flush against the house is a shared edge, not an overlap: the garage
-  // keeps its north overall at -4-1.5 = -5.5, out in the open beside the house.
   const horizontal = auto.filter(dimension => h.near(dimension.start.z, dimension.end.z, 0.01));
-  const garageNorth = horizontal.find(dimension =>
-    h.near(dimension.start.z, -5.5, 0.3) && Math.min(dimension.start.x, dimension.end.x) > 7);
-  expect(garageNorth).toBeTruthy();
+
+  // Nothing lands on the garage, or anywhere inside the building: the east
+  // corridor is clear from the house wall (x=8) out past the garage's far
+  // edge (x=14) to the first offset beyond it.
+  expect(vertical.some(dimension => dimension.start.x > 8.01 && dimension.start.x < 15.9)).toBe(false);
+  // And the garage's buried west side earns no row inside the plan.
+  expect(vertical.some(dimension => Math.abs(dimension.start.x - 6) < 1)).toBe(false);
+
+  // THE OVERALL IS THE BUILDING. East of the garage, 14 + 2 is the first row
+  // and the outermost is the overall: the full north-south run, -6 to 6.
+  const east = vertical.filter(dimension => dimension.start.x > 14);
+  expect(east.length).toBeGreaterThan(0);
+  expect(Math.min(...east.map(dimension => dimension.start.x))).toBeCloseTo(16, 1);
+  const eastOuter = east.reduce((far, dimension) =>
+    dimension.start.x > far.start.x ? dimension : far);
+  expect(Math.abs(eastOuter.end.z - eastOuter.start.z)).toBeCloseTo(12, 1);
+
+  // THE NORTH ROWS READ RIGHT ACROSS BOTH. The overall spans the house's west
+  // wall to the garage's east: -8 out to 14, twenty-two feet.
+  const north = horizontal.filter(dimension => dimension.start.z < -6.5);
+  expect(north.length).toBeGreaterThan(0);
+  const northOuter = north.reduce((far, dimension) =>
+    dimension.start.z < far.start.z ? dimension : far);
+  expect(Math.abs(northOuter.end.x - northOuter.start.x)).toBeCloseTo(22, 1);
+  expect(Math.min(northOuter.start.x, northOuter.end.x)).toBeCloseTo(-8, 1);
+  expect(Math.max(northOuter.start.x, northOuter.end.x)).toBeCloseTo(14, 1);
+
+  // AND THE ROW INSIDE IT BREAKS WHERE THE GARAGE STEPS OUT, so the house
+  // front and the garage front each print their own figure on one line --
+  // the "add the extra part" he asked for.
+  const northStep = north.filter(dimension => dimension.start.z > northOuter.start.z - 0.01
+    && dimension.start.z < -6.5);
+  expect(northStep.length).toBeGreaterThan(1);
+  const breaks = northStep.flatMap(dimension => [dimension.start.x, dimension.end.x]);
+  expect(breaks.some(x => h.near(x, 8, 0.2))).toBe(true);
+
+  // The garage no longer gets a north row of its own off its own edge: that
+  // face is part of the building's north side now.
+  expect(horizontal.some(dimension => h.near(dimension.start.z, -6, 0.9)
+    && Math.min(dimension.start.x, dimension.end.x) > 7)).toBe(false);
+});
+
+// THE HALF OF THE OLD PER-FOOTPRINT RULE THAT SURVIVES. "Every group's dims
+// hug that group's own edge instead of the combined extents" was replaced for
+// an ATTACHED garage on 12 Oct, and is still exactly right for a DETACHED
+// one: it is a second building, its dims are its own, and an overall reaching
+// across the yard to it would measure a distance nobody builds to.
+//
+// Until now nothing tested this. The attached test above was the only thing
+// standing between the clustering and a change that merged every footprint on
+// the level, and it could not see the difference -- so the surviving half of
+// the ruling got a test of its own rather than a sentence claiming one.
+test('a detached garage stays its own building', async ({ page }) => {
+  await h.openModel(page);
+  await drawHouseOutline(page);
+  // Well clear of the house (x -8..8): its own loop out at x -30..-20.
+  await page.locator('[data-mark-detached-garage]').click();
+  await h.selectTool(page, 'Outline');
+  await h.clickWorld(page, -30, -6);
+  await h.clickWorld(page, -20, -6);
+  await h.clickWorld(page, -20, 2);
+  await h.clickWorld(page, -30, 2);
+  await page.keyboard.press('Enter');
+  const foundation = page.locator('[data-detached-grade-beam]');
+  if (await foundation.count()) await foundation.click();
+  await h.waitForSaved(page);
+
+  await runAutoDims(page);
+  const saved = await h.savedDrawing(page);
+  const auto = saved.dimensions.filter(dimension => dimension.auto);
+  const horizontal = auto.filter(dimension => h.near(dimension.start.z, dimension.end.z, 0.01));
+  const vertical = auto.filter(dimension => h.near(dimension.start.x, dimension.end.x, 0.01));
+
+  // NO ROW REACHES ACROSS THE GAP. The two footprints span 38 ft end to end
+  // and nothing on the sheet says 38.
+  const spans = horizontal.map(dimension => Math.abs(dimension.end.x - dimension.start.x));
+  expect(spans.some(span => span > 20)).toBe(false);
+
+  // The house still strings its own 16 ft, off its own north wall.
+  const houseNorth = horizontal.filter(dimension => h.near(dimension.start.z, -8, 0.2)
+    && Math.max(dimension.start.x, dimension.end.x) > 0);
+  expect(houseNorth.length).toBeGreaterThan(0);
+  expect(Math.abs(houseNorth[0].end.x - houseNorth[0].start.x)).toBeCloseTo(16, 1);
+
+  // And the garage strings its own, hugging its own west edge at -30 - 2,
+  // measuring its own 8 ft of depth rather than the house's 12.
+  const garageWest = vertical.filter(dimension => h.near(dimension.start.x, -32, 0.2));
+  expect(garageWest.length).toBeGreaterThan(0);
+  expect(Math.abs(garageWest[0].end.z - garageWest[0].start.z)).toBeCloseTo(8, 1);
 });
 
 test('an inch-scale jog strings straight: merged into the neighbouring corner', async ({ page }) => {
@@ -319,35 +399,60 @@ test('an inch-scale jog strings straight: merged into the neighbouring corner', 
   expect(auto).toHaveLength(4);
   const north = auto.find(dimension => dimension.start.z < -7);
   expect(Math.abs(north.end.x - north.start.x)).toBeCloseTo(16, 1);
-  // The first string still clears the LOWEST part of the skewed wall by 1'-6".
-  expect(north.start.z).toBeLessThanOrEqual(-6.1 - 1.5 + 0.05);
+  // The first string still clears the LOWEST part of the skewed wall by 2'-0".
+  expect(north.start.z).toBeLessThanOrEqual(-6.1 - 2 + 0.05);
 });
 
+// AUDIT M7, AND THE FIXTURE HAS TO BE SEEDED RATHER THAN CLICKED.
+//
+// This test used to draw the pair with the Outline tool: a slot in the south
+// face whose sides are 1 7/16" apart, x = 2.88 and x = 3. It never got one.
+// The second click lands inside the VERTEX SNAP of the first, so the page
+// snapped the two onto one point and saved a zero-width spike --
+// [[-8,-6],[8,-6],[8,6],[3,6],[3,3],[3,6],[-8,6]], seven points, no pair. The
+// mean this test exists to look for was never on the drawing to be found, and
+// the assertion passed against a fixture that could not fail it. Any pair
+// close enough to MERGE (JOG_MERGE_FT, 2") is close enough to SNAP, so no
+// click sequence reaches this.
+//
+// So the geometry goes in through the store and the page is reloaded on it,
+// which is the only way to put a legal-but-unclickable drawing in front of
+// AUTO DIMS. The pure-module half of the rule is pinned exactly in
+// proto/dim-layers-harness.js; this is the page actually printing it.
 test('a merged jog dimensions to a real wall face, never to the average of two', async ({ page }) => {
-  // Audit M7. An interior cluster of near-coincident corners used to collapse
-  // to its arithmetic MEAN — a printed coordinate up to an inch from any wall
-  // on the sheet. The code comment ("merged into the neighbouring corner") is
-  // the spec; the merged coordinate must be a real member of the cluster.
   await h.openModel(page);
-  // Two steps on the south face 1 7/16" apart: x = 2.88 and x = 3.
   await h.selectTool(page, 'Outline');
-  await page.keyboard.press('t');
   await h.clickWorld(page, -8, -6);
   await h.clickWorld(page, 8, -6);
   await h.clickWorld(page, 8, 6);
-  await h.clickWorld(page, 3, 6);
-  await h.clickWorld(page, 3, 3);
-  await h.clickWorld(page, 2.88, 3);
-  await h.clickWorld(page, 2.88, 6);
   await h.clickWorld(page, -8, 6);
   await page.keyboard.press('Enter');
   await h.waitForSaved(page);
   await h.climbTourToMain(page);
 
+  // The notch, written in: 2.88 and 3 are 1 7/16" apart and merge.
+  const NOTCHED = [[-8, -6], [8, -6], [8, 6], [3, 6], [3, 3], [2.88, 3], [2.88, 6], [-8, 6]];
+  await page.evaluate(async ({ bucket, pts }) => {
+    const file = await window.SharedFileStore.loadSharedFile(bucket);
+    const drawing = JSON.parse(await file.text());
+    const outline = drawing.outlines.find(item => item.levelId === 3 && !item.garage);
+    outline.points = pts.map(([x, z]) => ({ ...outline.points[0], x, z }));
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(drawing)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: h.STORAGE_BUCKET, pts: NOTCHED });
+  await page.reload();
+  await h.waitForModelReady(page);
+
   await runAutoDims(page);
   const saved = await h.savedDrawing(page);
   const outline = saved.outlines.find(item => item.levelId === 3 && !item.garage);
+  // THE SEED SURVIVED. Without this the checks below would read a drawing the
+  // reload could have normalised back to four corners and report a pass for a
+  // notch that is not there -- the exact failure this test was in.
+  expect(outline.points.length).toBe(NOTCHED.length);
   const realXs = [...new Set(outline.points.map(point => point.x))];
+  expect(realXs.some(x => Math.abs(x - 2.88) < 0.001)).toBe(true);
+
   const auto = saved.dimensions.filter(dimension =>
     dimension.auto && dimension.levelId === 3 && dimension.view === 'plan');
   const printedXs = [...new Set(auto
@@ -375,14 +480,14 @@ test('N and E strings run reversed so the drawn line lands outward', async ({ pa
   expect(auto).toHaveLength(4);
   // The rendered dim line sits to the right of start→end, so top and right
   // strings must run east→west / south→north to keep their ink off the plan.
-  const north = auto.find(dimension => h.near(dimension.start.z, -7.5));
+  const north = auto.find(dimension => h.near(dimension.start.z, -8));
   expect(north.start.x).toBeGreaterThan(north.end.x);
-  const east = auto.find(dimension => h.near(dimension.start.x, 9.5));
+  const east = auto.find(dimension => h.near(dimension.start.x, 10));
   expect(east.start.z).toBeGreaterThan(east.end.z);
   // Bottom and left keep the ascending run — their ink already faces out.
-  const south = auto.find(dimension => h.near(dimension.start.z, 7.5));
+  const south = auto.find(dimension => h.near(dimension.start.z, 8));
   expect(south.start.x).toBeLessThan(south.end.x);
-  const west = auto.find(dimension => h.near(dimension.start.x, -9.5));
+  const west = auto.find(dimension => h.near(dimension.start.x, -10));
   expect(west.start.z).toBeLessThan(west.end.z);
 });
 

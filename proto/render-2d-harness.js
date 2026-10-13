@@ -84,29 +84,30 @@ const dropBulge = src => {
 };
 
 // A-DIMS-INT strings both faces of every wall, so a figure narrower than its
-// own run is now routine rather than a corner case. The painter halves it;
-// this puts that back to one size, which is what the sheet looked like before
-// and what it would silently return to if the branch were ever dropped.
-const neverHalveTheFigure = src => {
+// own run is now routine rather than a corner case. The painter steps it
+// down; this puts that back to one size, which is what the sheet looked like
+// before and what it would silently return to if the branch were ever
+// dropped.
+const neverShrinkTheFigure = src => {
   const before = src;
   const out = src.replace(
-    'ctx.measureText(label).width > room ? HALF_FONT : FULL_FONT',
+    'ctx.measureText(label).width > room ? TIGHT_FONT : FULL_FONT',
     'FULL_FONT',
   );
-  if (out === before) throw new Error('neverHalveTheFigure matched nothing -- the rule moved');
+  if (out === before) throw new Error('neverShrinkTheFigure matched nothing -- the rule moved');
   return out;
 };
 
-// And the other way: halving EVERY figure passes any check that only asks
-// whether small runs are halved, so the rule needs a mutant that is wrong in
-// the generous direction too.
-const alwaysHalveTheFigure = src => {
+// And the other way: shrinking EVERY figure passes any check that only asks
+// whether small runs are stepped down, so the rule needs a mutant that is
+// wrong in the generous direction too.
+const alwaysShrinkTheFigure = src => {
   const before = src;
   const out = src.replace(
-    'ctx.measureText(label).width > room ? HALF_FONT : FULL_FONT',
-    'HALF_FONT',
+    'ctx.measureText(label).width > room ? TIGHT_FONT : FULL_FONT',
+    'TIGHT_FONT',
   );
-  if (out === before) throw new Error('alwaysHalveTheFigure matched nothing -- the rule moved');
+  if (out === before) throw new Error('alwaysShrinkTheFigure matched nothing -- the rule moved');
   return out;
 };
 
@@ -1284,7 +1285,10 @@ suite('drawDimension2D', 'a sheet draws the line on its record, the screen stand
 // Movie, 29 Sep: "the wall thicknesses can be displayed with text side 1/2 of
 // the wall to wall normal dimensions (3.5" / 5.5")". A-DIMS-INT strings both
 // faces of every wall, so a 5 1/2" figure between two arrowheads is now a
-// thing this painter is routinely asked to draw.
+// thing this painter is routinely asked to draw. THE STEP IS THREE QUARTERS,
+// NOT HALF, since 12 Oct ("make it about 75% the size of other dims"): half
+// read too small on the sheet. These checks pin the rule, not the fraction --
+// only TIGHT_8 moved.
 //
 // WHAT THESE CAN AND CANNOT PROVE. recordingCtx's measureText is a
 // proportional stand-in -- `text.length * 6`, and deliberately blind to the
@@ -1303,7 +1307,7 @@ const dimFont = (R, dim) => {
   return sets(ctx, 'font').pop();
 };
 const FULL_11 = "600 11px 'Barlow Condensed', system-ui, sans-serif";
-const HALF_6 = "600 6px 'Barlow Condensed', system-ui, sans-serif";
+const TIGHT_8 = "600 8px 'Barlow Condensed', system-ui, sans-serif";
 
 suite('drawDimension2D', 'a figure with room keeps its full size', R => {
   expect('12 ft of run is room enough',
@@ -1327,13 +1331,13 @@ suite('drawDimension2D', 'a sheet zoomed in draws its dimension ink bigger', R =
   expect('the label plate grows with its figure', plate({ ...dimEnv, inkScale: 2 }), 30);
 });
 
-suite('drawDimension2D', 'a wall-thickness run halves the figure', R => {
+suite('drawDimension2D', 'a wall-thickness run steps the figure down', R => {
   // 5 1/2 inches -- the 2x6 Movie named, and the run A-DIMS-INT draws between
   // a wall's two faces.
   expect('a 5 1/2 inch run cannot hold an 11px figure',
-    dimFont(R, { start: { x: 0, z: 0 }, end: { x: 5.5 / 12, z: 0 } }), HALF_6);
+    dimFont(R, { start: { x: 0, z: 0 }, end: { x: 5.5 / 12, z: 0 } }), TIGHT_8);
   expect('nor can a 3 1/2 inch one',
-    dimFont(R, { start: { x: 0, z: 0 }, end: { x: 3.5 / 12, z: 0 } }), HALF_6);
+    dimFont(R, { start: { x: 0, z: 0 }, end: { x: 3.5 / 12, z: 0 } }), TIGHT_8);
 });
 
 // BOTH SIDES OF THE LINE. A rule that halved everything, or nothing, passes
@@ -1347,18 +1351,19 @@ suite('drawDimension2D', 'a wall-thickness run halves the figure', R => {
 suite('drawDimension2D', 'the size changes at the width of the figure', R => {
   expect('3.7 ft leaves 25px for a 24px figure, so it stays full',
     dimFont(R, { start: { x: 0, z: 0 }, end: { x: 3.7, z: 0 } }), FULL_11);
-  expect('3.5 ft leaves 23px for the same figure, so it halves',
-    dimFont(R, { start: { x: 0, z: 0 }, end: { x: 3.5, z: 0 } }), HALF_6);
+  expect('3.5 ft leaves 23px for the same figure, so it steps down',
+    dimFont(R, { start: { x: 0, z: 0 }, end: { x: 3.5, z: 0 } }), TIGHT_8);
 });
 
-// AND IT IS STILL PRINTED. Halving is not hiding: a figure too big even at
-// half still goes on the sheet, because an overflowing number tells a drafter
-// to change his scale and a missing one tells him nothing.
-suite('drawDimension2D', 'a run too tight even for half still prints', R => {
+// AND IT IS STILL PRINTED. Stepping down is not hiding: a figure too big
+// even at the small size still goes on the sheet, because an overflowing
+// number tells a drafter to change his scale and a missing one tells him
+// nothing.
+suite('drawDimension2D', 'a run too tight even for the small size still prints', R => {
   const ctx = recordingCtx();
   R.drawDimension2D(ctx, toS, { start: { x: 0, z: 0 }, end: { x: 0.2, z: 0 } }, {}, dimEnv);
   expect('the figure is drawn', calls(ctx, 'fillText').length, 1);
-  expect('at the halved size', sets(ctx, 'font').pop(), HALF_6);
+  expect('at the stepped-down size', sets(ctx, 'font').pop(), TIGHT_8);
 });
 
 suite('drawDimension2D', 'both ends carry an arrowhead', R => {
@@ -3360,8 +3365,8 @@ function coverage() {
     /ctx\.strokeStyle = env\.columnColor;/g, "ctx.strokeStyle = '#1d1f20';");
 
   const BRANCH_MUTATIONS = [
-    ['drawDimension2D never halves a figure too big for its run', neverHalveTheFigure],
-    ['drawDimension2D halves every figure, room or not', alwaysHalveTheFigure],
+    ['drawDimension2D never shrinks a figure too big for its run', neverShrinkTheFigure],
+    ['drawDimension2D shrinks every figure, room or not', alwaysShrinkTheFigure],
     ['strokeSegPath2D bulge branch', dropBulge],
     ['drawWallSeg2D mitre path', dropMitre],
     ['drawOrigin2D env colour', dropOriginEnvColour],

@@ -2265,8 +2265,12 @@ const NODE_GRAB_HOLD_MS = 100;
 // each of these had exactly one use -- the call in _placeAutoDims -- and a
 // number kept in a page rather than in its module is a copy waiting for a
 // second page to disagree with it.
+// THE FIRST ENTRY IS THE DERIVED DEFAULT, so it moved with it on 12 Oct
+// (drawing-format.js AUTO_DIM_FIRST_OFFSET_FT, 1.5 -> 2). A picker whose
+// closest choice is NOT what an untouched drawing already draws reads as a
+// drawing that has drifted off its own setting.
 const AUTO_DIM_FIRST_OFFSETS_FT = [
-  { value: 1.5, label: '1\'-6"' },
+  { value: 2, label: '2\'-0"' },
   { value: 3, label: '3\'-0"' },
 ];
 // Flooring veneers an AREA shape can carry, laid over the floor sheathing.

@@ -366,7 +366,7 @@ test.describe('the saved format', () => {
         rejects: [null, undefined, 0, -1, 'wide', {}, NaN].map(v => f.autoDimFirstOffsetFt(v)),
       };
     })).toEqual({
-      derived: 1.5,
+      derived: 2,
       keeps: 2.5,
       quoted: null,
       rejects: [null, null, null, null, null, null, null],

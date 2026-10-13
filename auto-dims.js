@@ -151,42 +151,139 @@ if (!window.DraftAutoDims) {
   }) {
     const exteriorBeamLines = beamLinesOf(beams);
     const toCorner = point => ({ x: point.x, z: point.z, srcId: point.srcId || null });
-    // Which side each edge of a closed loop faces, and the coordinates its
-    // corners lend to that side's string: N/S edges contribute x, W/E z. A
-    // side only strings corners it can see, so a far-side notch never echoes.
-    const facingOf = pts => {
+    const boxOf = pts => ({
+      minX: Math.min(...pts.map(pt => pt.x)), maxX: Math.max(...pts.map(pt => pt.x)),
+      minZ: Math.min(...pts.map(pt => pt.z)), maxZ: Math.max(...pts.map(pt => pt.z)),
+    });
+    const touch = (a, b) => a.minX <= b.maxX + 0.05 && b.minX <= a.maxX + 0.05
+      && a.minZ <= b.maxZ + 0.05 && b.minZ <= a.maxZ + 0.05;
+    // Seeds that touch are one building. A seed is a LIST of items rather
+    // than one, because the house's own loops are a single seed however they
+    // sit: two wings drawn as two outlines are one house and always were, and
+    // clustering them by touch would quietly split a stack this has never
+    // split. Only the garages arrive as seeds of their own, to be joined or
+    // not on their geometry.
+    const clusterSeeds = seeds => {
+      const clusters = [];
+      seeds.forEach(seed => {
+        const joined = clusters.filter(cluster =>
+          cluster.some(other => seed.some(item => touch(other.box, item.box))));
+        const merged = [...seed, ...joined.flat()];
+        joined.forEach(cluster => clusters.splice(clusters.indexOf(cluster), 1));
+        clusters.push(merged);
+      });
+      return clusters;
+    };
+    const insideAny = (loops, p) => loops.some(pts => {
+      let hit = false;
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i, i += 1) {
+        const a = pts[i], b = pts[j];
+        if ((a.z > p.z) !== (b.z > p.z) && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
+      }
+      return hit;
+    });
+    // A SIDE STRINGS ONLY THE EDGES IT CAN SEE: an edge whose outside is
+    // another loop of the same building is buried inside it and has nothing
+    // to show from this side. Which side each edge faces, and the coordinates
+    // its corners lend to that side's string: N/S edges contribute x, W/E z.
+    const step = { N: { x: 0, z: -1 }, S: { x: 0, z: 1 }, W: { x: -1, z: 0 }, E: { x: 1, z: 0 } };
+    const seenFacing = loops => {
       const facing = { N: [], S: [], W: [], E: [] };
-      const area2 = pts.reduce((sum, pt, index) => {
-        const next = pts[(index + 1) % pts.length];
-        return sum + (pt.x * next.z - next.x * pt.z);
-      }, 0);
-      pts.forEach((pt, index) => {
-        const next = pts[(index + 1) % pts.length];
-        const dx = next.x - pt.x, dz = next.z - pt.z;
-        const nx = area2 > 0 ? dz : -dz;
-        const nz = area2 > 0 ? -dx : dx;
-        const faces = Math.abs(nx) >= Math.abs(nz) ? (nx > 0 ? 'E' : 'W') : (nz > 0 ? 'S' : 'N');
-        if (faces === 'N' || faces === 'S') facing[faces].push(pt.x, next.x);
-        else facing[faces].push(pt.z, next.z);
+      const runs = { N: [], S: [], W: [], E: [] };
+      loops.forEach((own, ownIndex) => {
+        const others = loops.filter((loop, index) => index !== ownIndex);
+        // Each edge is judged on the side it really faces.
+        const area2 = own.reduce((sum, pt, index) => {
+          const next = own[(index + 1) % own.length];
+          return sum + (pt.x * next.z - next.x * pt.z);
+        }, 0);
+        own.forEach((pt, index) => {
+          const next = own[(index + 1) % own.length];
+          const dx = next.x - pt.x, dz = next.z - pt.z;
+          if (Math.hypot(dx, dz) < 1e-9) return;
+          const nx = area2 > 0 ? dz : -dz;
+          const nz = area2 > 0 ? -dx : dx;
+          const side = Math.abs(nx) >= Math.abs(nz) ? (nx > 0 ? 'E' : 'W') : (nz > 0 ? 'S' : 'N');
+          const along = side === 'N' || side === 'S' ? 'x' : 'z';
+          const a = Math.min(pt[along], next[along]), b = Math.max(pt[along], next[along]);
+          // PART OF AN EDGE CAN BE BURIED: split it wherever another loop's
+          // corner falls along it, and keep the stretches whose outside is
+          // open -- the house front stops where the garage starts, not at its
+          // own far corner behind it.
+          const cuts = uniqSorted([a, b, ...others.flat().map(q => q[along])
+            .filter(v => v > a + 1e-6 && v < b - 1e-6)]);
+          // Neighbouring open stretches join, so a cut that buries nothing
+          // lends no coordinate of its own.
+          let run = null;
+          const across = along === 'x' ? pt.z : pt.x;
+          const close = () => { if (run) runs[side].push({ across, lo: run[0], hi: run[1] }); run = null; };
+          for (let c = 0; c + 1 < cuts.length; c += 1) {
+            const t = (cuts[c] + cuts[c + 1]) / 2;
+            const f = Math.abs(b - a) < 1e-9 ? 0.5 : (t - pt[along]) / (next[along] - pt[along]);
+            const probe = { x: pt.x + dx * f, z: pt.z + dz * f };
+            const out = { x: probe.x + step[side].x * 0.3, z: probe.z + step[side].z * 0.3 };
+            if (insideAny(others, out)) close();
+            else if (run) run[1] = cuts[c + 1];
+            else run = [cuts[c], cuts[c + 1]];
+          }
+          close();
+        });
+      });
+      // TWO LOOPS ON ONE LINE ARE ONE EDGE: overlapping or touching stretches
+      // at the same offset join before they lend coordinates, so where the
+      // house and the garage share a front there is no seam to dimension.
+      Object.keys(runs).forEach(side => {
+        const list = runs[side].sort((m, n) => m.across - n.across || m.lo - n.lo);
+        let cur = null;
+        list.forEach(r => {
+          if (cur && Math.abs(r.across - cur.across) < 1e-6 && r.lo <= cur.hi + 1e-6) {
+            cur.hi = Math.max(cur.hi, r.hi);
+            return;
+          }
+          if (cur) facing[side].push(cur.lo, cur.hi);
+          cur = { ...r };
+        });
+        if (cur) facing[side].push(cur.lo, cur.hi);
       });
       return facing;
     };
-    const mergeFacing = (into, from) =>
-      ['N', 'S', 'W', 'E'].forEach(side => into[side].push(...from[side]));
-    // The house and each garage string their own stacks: every group's dims
-    // hug that group's own edge instead of the combined extents, so a garage
-    // never pushes the house strings out past itself.
+    // ── ONE STACK PER BUILDING ON THE PLANS TOO ─────────────────────────────
+    //
+    // Movie, 12 Oct, on a plan whose garage sits north of the house: "the
+    // outer row that is 28' should go all the way to the other outside wall
+    // (maybe around 35'? total) and then the next string that shows front of
+    // garage (19ft i think) add the extra part on the north side dimention
+    // from garage to outside wall", and "the door dimension can line up with
+    // the garage door line". Three complaints with ONE cause: every row
+    // stopped at its own group's edge, so the overall measured the house and
+    // not the building, the jog row never reached the garage's step, and the
+    // front door and the garage door were strung on two different rows.
+    //
+    // THIS REPLACES THE RULE THAT STOOD HERE -- "the house and each garage
+    // string their own stacks: every group's dims hug that group's own edge
+    // instead of the combined extents, so a garage never pushes the house
+    // strings out past itself". It was right about what it was avoiding and
+    // wrong about the unit. An ATTACHED garage is not a second building whose
+    // dims crowd the house's; it is part of the one footprint the sheet
+    // measures, and the row that stops at the house's corner is the bug. What
+    // that rule was protecting against survives as the cluster test: a
+    // DETACHED garage does not touch the house, so it stays its own building
+    // and still strings its own stack against its own edge.
+    //
+    // It is the ruling the ROOF level already has (Movie, 11 Oct, below) --
+    // one stack per building, every row reading right across it -- which the
+    // floor plans never received. Same clustering, same seen-edge pass.
     const groups = [];
-    const houseOutlines = outlines.filter(outline => !outline.garage);
-    const housePoints = houseOutlines.flatMap(outline => outline.points.map(toCorner));
-    if (housePoints.length) {
-      const facing = { N: [], S: [], W: [], E: [] };
-      houseOutlines.forEach(outline => mergeFacing(facing, facingOf(outline.points)));
-      groups.push({ corners: housePoints, house: true, facing });
-    }
-    outlines.filter(outline => outline.garage)
-      .forEach(outline => groups.push({
-        corners: outline.points.map(toCorner), house: false, facing: facingOf(outline.points) }));
+    const itemOf = outline => ({ outline, pts: outline.points, box: boxOf(outline.points) });
+    const drawn = outlines.filter(outline => outline.points && outline.points.length);
+    const houseSeed = drawn.filter(outline => !outline.garage).map(itemOf);
+    const seeds = houseSeed.length ? [houseSeed] : [];
+    drawn.filter(outline => outline.garage).forEach(outline => seeds.push([itemOf(outline)]));
+    clusterSeeds(seeds).forEach(cluster => groups.push({
+      corners: cluster.flatMap(item => item.pts.map(toCorner)),
+      house: cluster.some(item => !item.outline.garage),
+      facing: seenFacing(cluster.map(item => item.pts)),
+    }));
     if (!groups.length) {
       const wallCorners = walls.flatMap(wall => [toCorner(wall.start), toCorner(wall.end)]);
       if (wallCorners.length >= 2) groups.push({ corners: wallCorners, house: true });
@@ -203,107 +300,21 @@ if (!window.DraftAutoDims) {
     // room over it); a detached garage's roof stands apart and keeps its own.
     if (roofs.length) {
       groups.length = 0;
-      const boxOf = pts => ({
-        minX: Math.min(...pts.map(pt => pt.x)), maxX: Math.max(...pts.map(pt => pt.x)),
-        minZ: Math.min(...pts.map(pt => pt.z)), maxZ: Math.max(...pts.map(pt => pt.z)),
-      });
-      const touch = (a, b) => a.minX <= b.maxX + 0.05 && b.minX <= a.maxX + 0.05
-        && a.minZ <= b.maxZ + 0.05 && b.minZ <= a.maxZ + 0.05;
       const items = roofs.map(roof => {
         const pts = roof.points.map(pt => ({ x: pt.x, z: pt.z }));
         // The bearing line the trusses land on sits one overhang inside the
         // roof edge — the exterior wall face the footprint was grown from.
         return { roof, pts, box: boxOf(pts), wallLoop: offsetOutline(pts, -roof.overhang) };
       });
-      const clusters = [];
-      items.forEach(item => {
-        const joined = clusters.filter(cluster => cluster.some(other => touch(other.box, item.box)));
-        const merged = [item, ...joined.flat()];
-        joined.forEach(cluster => clusters.splice(clusters.indexOf(cluster), 1));
-        clusters.push(merged);
-      });
-      const insideAny = (loops, p) => loops.some(pts => {
-        let hit = false;
-        for (let i = 0, j = pts.length - 1; i < pts.length; j = i, i += 1) {
-          const a = pts[i], b = pts[j];
-          if ((a.z > p.z) !== (b.z > p.z) && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
-        }
-        return hit;
-      });
-      // A SIDE STRINGS ONLY THE EDGES IT CAN SEE: an edge whose outside is
-      // another roof (or, for a wall, another roof's walls) is buried inside
-      // the building and has nothing to show from this side.
-      const step = { N: { x: 0, z: -1 }, S: { x: 0, z: 1 }, W: { x: -1, z: 0 }, E: { x: 1, z: 0 } };
-      const seenFacing = (loopOf, cluster) => {
-        const facing = { N: [], S: [], W: [], E: [] };
-        const runs = { N: [], S: [], W: [], E: [] };
-        cluster.forEach(item => {
-          const own = loopOf(item);
-          const others = cluster.filter(other => other !== item).map(loopOf);
-          // The same facing rule facingOf applies, edge by edge, so each edge
-          // is judged on the side it really faces.
-          const area2 = own.reduce((sum, pt, index) => {
-            const next = own[(index + 1) % own.length];
-            return sum + (pt.x * next.z - next.x * pt.z);
-          }, 0);
-          own.forEach((pt, index) => {
-            const next = own[(index + 1) % own.length];
-            const dx = next.x - pt.x, dz = next.z - pt.z;
-            if (Math.hypot(dx, dz) < 1e-9) return;
-            const nx = area2 > 0 ? dz : -dz;
-            const nz = area2 > 0 ? -dx : dx;
-            const side = Math.abs(nx) >= Math.abs(nz) ? (nx > 0 ? 'E' : 'W') : (nz > 0 ? 'S' : 'N');
-            const along = side === 'N' || side === 'S' ? 'x' : 'z';
-            const a = Math.min(pt[along], next[along]), b = Math.max(pt[along], next[along]);
-            // PART OF AN EDGE CAN BE BURIED: split it wherever another loop's
-            // corner falls along it, and keep the stretches whose outside is
-            // open -- the house front stops where the garage roof starts, not
-            // at its own far corner under that roof.
-            const cuts = uniqSorted([a, b, ...others.flat().map(q => q[along])
-              .filter(v => v > a + 1e-6 && v < b - 1e-6)]);
-            // Neighbouring open stretches join, so a cut that buries nothing
-            // lends no coordinate of its own.
-            let run = null;
-            const across = along === 'x' ? pt.z : pt.x;
-            const close = () => { if (run) runs[side].push({ across, lo: run[0], hi: run[1] }); run = null; };
-            for (let c = 0; c + 1 < cuts.length; c += 1) {
-              const t = (cuts[c] + cuts[c + 1]) / 2;
-              const f = Math.abs(b - a) < 1e-9 ? 0.5 : (t - pt[along]) / (next[along] - pt[along]);
-              const probe = { x: pt.x + dx * f, z: pt.z + dz * f };
-              const out = { x: probe.x + step[side].x * 0.3, z: probe.z + step[side].z * 0.3 };
-              if (insideAny(others, out)) close();
-              else if (run) run[1] = cuts[c + 1];
-              else run = [cuts[c], cuts[c + 1]];
-            }
-            close();
-          });
-        });
-        // TWO ROOFS ON ONE EAVE LINE ARE ONE EDGE: overlapping or touching
-        // stretches at the same offset join before they lend coordinates, so
-        // where the room's roof and the garage's share a front there is no
-        // seam to dimension.
-        Object.keys(runs).forEach(side => {
-          const list = runs[side].sort((m, n) => m.across - n.across || m.lo - n.lo);
-          let cur = null;
-          list.forEach(r => {
-            if (cur && Math.abs(r.across - cur.across) < 1e-6 && r.lo <= cur.hi + 1e-6) {
-              cur.hi = Math.max(cur.hi, r.hi);
-              return;
-            }
-            if (cur) facing[side].push(cur.lo, cur.hi);
-            cur = { ...r };
-          });
-          if (cur) facing[side].push(cur.lo, cur.hi);
-        });
-        return facing;
-      };
-      clusters.forEach(cluster => {
+      // Each roof stands as its own seed: roofs that touch are one building,
+      // and that is the only thing joining them.
+      clusterSeeds(items.map(item => [item])).forEach(cluster => {
         groups.push({
           corners: cluster.flatMap(item => item.pts.map(toCorner)),
           house: cluster.some(item => !item.roof.garage),
           roof: true,
-          wallFacing: seenFacing(item => item.wallLoop, cluster),
-          roofFacing: seenFacing(item => item.pts, cluster),
+          wallFacing: seenFacing(cluster.map(item => item.wallLoop)),
+          roofFacing: seenFacing(cluster.map(item => item.pts)),
         });
       });
     }
