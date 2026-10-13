@@ -76,14 +76,48 @@ check('equal tops are one roof over both', W => {
   const r = W.DraftGarageRoofs.roofLoops({ house: HOUSE, garage: GARAGE, houseTopFt: 9, garageTopFt: 9 });
   return [`${r.merged}|${r.garage}|${r.house.flush.length}`, 'true|null|0'];
 });
-check('a lower garage dies into the house: its shared edges flush, the house all eaves', W => {
+// ── THE END THAT MEETS THE HOUSE IS ONE GABLE ──────────────────────────────
+//
+// Movie, 13 Oct, on his own roof plan with the water drawn in red arrows:
+// "when the roof on the garage goes up into a corner like this, it should go
+// FULL gable" -- "only the full gable on the part that connects to the house
+// (not how it jogs back and there are 2 gables originally".
+//
+// TWO GABLES IS WHAT IT WAS, and this check used to say so. The garage loop
+// carries the tie's one-foot notch, so the end came back as a RUN of flush
+// edges with a right angle in it -- the long wall, the step, the stub -- and
+// the inside corner between them is the pocket that sheds into the house.
+//
+// WHAT CHANGED IN THE CHECK, and it is a change of RULE rather than a test
+// bent to fit: it asserted every flush edge lay WHOLLY on the house
+// (`max(x) <= 16`). The squared gable runs the garage's full width, past the
+// house's corner at 16 and out to 20, because that is what one gable across
+// the end means. The old wording cannot describe the new answer, so it is
+// replaced rather than loosened -- and the things that have not changed (the
+// house keeps every eave, and is never cut by a lower garage) are still here.
+check('a lower garage dies into the house in ONE gable, square across its end', W => {
   const r = W.DraftGarageRoofs.roofLoops({ house: HOUSE, garage: GARAGE, houseTopFt: 12, garageTopFt: 9 });
-  const flushOnHouse = r.garage.flush.every(i => {
-    const a = r.garage.ring[i], b = r.garage.ring[(i + 1) % r.garage.ring.length];
-    return (a.z === 20 && b.z === 20 && Math.max(a.x, b.x) <= 16) || (a.x === 16 && b.x === 16);
-  });
-  return [`${r.merged}|${r.house.flush.length}|${r.garage.flush.length > 0}|${flushOnHouse}|${!r.house.cuts}`,
-    'false|0|true|true|true'];
+  // NO JOG LEFT. The notched loop is six points; squared it is four, and the
+  // 1 ft step at the house corner is gone.
+  const squared = ptsKey(r.garage.ring);
+  // ONE flush edge, not a run of them, and it is the whole end: from the far
+  // side of the garage to the other, on the house's own wall line.
+  const one = r.garage.flush.length === 1;
+  const g = r.garage.flush[0];
+  const a = g == null ? null : r.garage.ring[g];
+  const b = g == null ? null : r.garage.ring[(g + 1) % r.garage.ring.length];
+  const onWall = !!a && a.z === 20 && b.z === 20 && Math.abs(b.x - a.x) === 24;
+  return [`${r.merged}|${r.house.flush.length}|${one}|${onWall}|${!r.house.cuts}|${squared}`,
+    'false|0|true|true|true|-4,20 20,20 20,46 -4,46'];
+});
+// AND A GARAGE THAT MEETS THE HOUSE SQUARE IS NOT TOUCHED. Squaring a join
+// that has no jog in it would be a change looking for a shape to break.
+check('a garage with no jog keeps the ring it had', W => {
+  const SQUARE_GARAGE = [{ x: -4, z: 20 }, { x: 16, z: 20 }, { x: 16, z: 46 }, { x: -4, z: 46 }];
+  const r = W.DraftGarageRoofs.roofLoops({
+    house: HOUSE, garage: SQUARE_GARAGE, houseTopFt: 12, garageTopFt: 9 });
+  return [`${ptsKey(r.garage.ring)}|${r.garage.flush.length}`,
+    '-4,20 16,20 16,46 -4,46|1'];
 });
 check('a taller garage stands out of the house roof: the house is cut, never flushed', W => {
   const r = W.DraftGarageRoofs.roofLoops({ house: HOUSE, garage: GARAGE, houseTopFt: 8, garageTopFt: 9 });
@@ -162,6 +196,21 @@ const MUTATIONS = [
     s => s.replace('    const garageLower = !(garageTopFt > houseTopFt + SAME_TOP_FT);', '    const garageLower = true;')],
   ['the cut is the notched loop, not its rectangle', 'garage-roofs.js',
     s => s.replace('    if (square) {', '    if (false) {')],
+  // THE SQUARING, BROKEN BOTH WAYS. Not done at all is the jog coming back --
+  // two gables and the pocket between them. Done onto the wrong line is the
+  // end squared onto the STEP instead of the house wall, which puts the
+  // garage roof a foot into the house.
+  ['the join keeps its jog, so the end is two gables again', 'garage-roofs.js',
+    s2 => s2.replace('        garage: squareTheJoin(ring, H) };',
+      '        garage: { ring, flush: edgesOn(ring, H) } };')],
+  // THE SQUARED END IS ASKED FOR WITH THE RIGHT QUESTION. `edgesOn` wants an
+  // edge WHOLLY on the house and the squared end runs past its corner, so
+  // asking that one returns nothing and the end becomes an EAVE hanging over
+  // the house. The squaring itself is traced-plans' now and its own table
+  // holds it; this is the half that lives here.
+  ['the squared end is asked for with edgesOn, so it is not a gable at all',
+    'garage-roofs.js',
+    s2 => s2.replace('    const end = T().flushEdge(square, houseRing);', '    const end = null;')],
   ['the step is dropped: one point where eave meets flush', 'garage-roofs.js',
     s => s.replace("      out.push({ p: { x: v.x + cur.nx * dPrev, z: v.z + cur.nz * dPrev }, kind: { gable: true, over: 0 } });\n", '')],
   ['the cut goes inward', 'garage-roofs.js',

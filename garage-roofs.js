@@ -81,6 +81,42 @@ if (!window.DraftGarageRoofs) {
   // `house` and `garage` are the bodies' wall loops. Returns
   //   { merged, house: { ring, flush }, garage: { ring, flush } | null }
   // where `flush` lists the edge indexes cut against the other body.
+  // ── A GARAGE THAT DIES INTO THE HOUSE DIES IN ONE LINE ────────────────────
+  //
+  // Movie, 13 Oct: "when the roof on the garage goes up into a corner like
+  // this, it should go FULL gable" -- "only the full gable on the part that
+  // connects to the house (not how it jogs back and there are 2 gables
+  // originally".
+  //
+  // THE SQUARING ITSELF IS traced-plans' `squareJoin`, and it is there rather
+  // than here because the BUILD does not come through this file: a two-storey
+  // house takes planFromTrace's own path, and that is the path his drawing
+  // took. One rule, asked from both ends, or the roof a build makes and the
+  // roof a regroup makes would differ by a notch.
+  //
+  // AND THE WHOLE SQUARED END IS THE GABLE. `edgesOn` asks "is this edge
+  // WHOLLY on the house", and a garage standing past the house's side wall
+  // meets it for only part of that end -- so after squaring it answers
+  // NOTHING, and an end with no flush edge is an EAVE: the garage roof would
+  // hang two feet over the house, which is worse than the jog it replaced.
+  // traced-plans' `flushEdge` asks the other question -- which edge lies on
+  // the house MOST -- and that is the end. Measured on the premade, which is
+  // why this is two questions and not one.
+  //
+  // WHAT IT COSTS, SAID OUT LOUD: cutRoof welds gable to zero overhang, so
+  // the few feet of that end standing past the house get no rake overhang.
+  // Against a wall corner that is how it is detailed, and the instruction is
+  // "FULL gable on the part that connects to the house" -- but it is a
+  // visible consequence and belongs in a sentence rather than in a diff.
+  const squareTheJoin = (ring, houseRing) => {
+    const square = T().squareJoin(ring, houseRing);
+    const end = T().flushEdge(square, houseRing);
+    const rest = edgesOn(square, houseRing);
+    const flush = [...new Set([...(end == null ? [] : [end]), ...rest])]
+      .sort((a, b) => a - b);
+    return { ring: square, flush };
+  };
+
   const roofLoops = ({ house, garage, houseTopFt, garageTopFt }) => {
     const H = T().clean(house), Gr = T().clean(garage);
     if (sameTop(houseTopFt, garageTopFt)) {
@@ -94,7 +130,7 @@ if (!window.DraftGarageRoofs) {
       const ring = T().splitAt(Gr, H);
       return { merged: false,
         house: { ring: H, flush: [] },
-        garage: { ring, flush: edgesOn(ring, H) } };
+        garage: squareTheJoin(ring, H) };
     }
     // A GARAGE TALLER THAN THE HOUSE STANDS UP OUT OF THE HOUSE'S ROOF. Cut
     // flush against it, the house's front became a gable 20 ft wide -- a tall
