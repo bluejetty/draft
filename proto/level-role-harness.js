@@ -283,6 +283,50 @@ check('a plain floor level answers the same either way', ({ LA, SG }) =>
 // has no entry for it, defaultLevelAssembly spreads `{}`, and the level
 // silently frames like a plain floor -- the wrong building, no error, and the
 // page looks exactly as it does when it is right.
+// ── BALLOON / LEDGER FRAMING (Movie, 13 Oct) ─────────────────────────────
+//
+// "BALLOON / LEDGER framing and PLATFORM framing". A platform floor's deck
+// lands ON the wall below; a balloon/ledger floor hangs INSIDE it on a ledger
+// with the joist tops level with the top of the plate, so only the sheathing
+// covers the plate and the deck sits a whole joist depth lower.
+//
+// COMPOSED FROM THE MODULE, never quoted: a check against 0.0625 would pass
+// with the sheathing hardcoded at the call site, which is the mistake one
+// layer along from the one being guarded -- the same reason the rise checks
+// above are written as sums.
+const framed = (LA, framing) => LA.normaliseLevelAssembly({ framing }, 'floor');
+check('PLATFORM is what a drawing with no answer gets', ({ LA }) =>
+  [LA.normaliseLevelAssembly(undefined, 'floor').framing, 'platform']);
+check('and an unknown framing falls back to it rather than being kept', ({ LA }) =>
+  [framed(LA, 'cantilever').framing, 'platform']);
+check('a platform floor adds its joists AND its sheathing', ({ LA }) => {
+  const a = framed(LA, 'platform');
+  return [LA.levelFloorFt(a), (a.joistDepthIn + a.sheathingIn) / 12];
+});
+check('a balloon / ledger floor adds only its sheathing', ({ LA }) => {
+  const a = framed(LA, 'balloon');
+  return [LA.levelFloorFt(a), a.sheathingIn / 12];
+});
+check('so the deck drops by exactly the joist depth', ({ LA }) => {
+  const p = framed(LA, 'platform'), b = framed(LA, 'balloon');
+  // `near`, because the two routes to the same foot differ in the last bit:
+  // one subtracts two twelfths, the other divides once.
+  return [String(near(LA.levelFloorFt(p) - LA.levelFloorFt(b), p.joistDepthIn / 12, 1e-12)), 'true'];
+});
+// THE DROP IS WORTH HAVING, which is the point of the option: a near-grade
+// threshold rather than one a wheelchair cannot cross. On the default TJI
+// that is 11 7/8" -- call it a foot.
+check('and that drop is most of a foot on the default joist', ({ LA }) => {
+  const p = framed(LA, 'platform'), b = framed(LA, 'balloon');
+  return [ftIn((LA.levelFloorFt(p) - LA.levelFloorFt(b)) * 12), ftIn(p.joistDepthIn)];
+});
+check('the two framings are the only ones offered, and both are labelled', ({ LA }) =>
+  [LA.FRAMING_TYPES.map(t => `${t.id}:${t.label}`).join(' '),
+    'platform:PLATFORM balloon:BALLOON / LEDGER']);
+check('isBalloonFramed answers for the field and nothing else', ({ LA }) =>
+  [[LA.isBalloonFramed(framed(LA, 'balloon')), LA.isBalloonFramed(framed(LA, 'platform')),
+    LA.isBalloonFramed(undefined)].join(','), 'true,false,false']);
+
 check('every role in the id map is a declared role', ({ LA }) => {
   const known = new Set(LA.LEVEL_ROLES);
   return [Object.values(LA.ROLE_BY_LEVEL_ID).filter(role => !known.has(role)).join(','), ''];
@@ -624,8 +668,24 @@ const MUTATIONS = [
   ['the lowest stair forgets it lands on a slab', 'stair',
     s => s.replace('- assembly.slabThicknessIn / 12;', '- 0;')],
   ['the floor package forgets its sheathing', 'module',
-    s => s.replace('const levelFloorFt = assembly => (assembly.joistDepthIn + assembly.sheathingIn) / 12;',
-      'const levelFloorFt = assembly => assembly.joistDepthIn / 12;')],
+    s => s.replace(`    : assembly.joistDepthIn + assembly.sheathingIn) / 12;`,
+      `    : assembly.joistDepthIn) / 12;`)],
+  // ── BALLOON / LEDGER (Movie, 13 Oct) ──────────────────────────────────
+  ['a balloon-framed floor stacks its joists on the wall like a platform one',
+    'module', s => s.replace(`  const levelFloorFt = assembly => (isBalloonFramed(assembly)
+    ? assembly.sheathingIn
+    : assembly.joistDepthIn + assembly.sheathingIn) / 12;`,
+      '  const levelFloorFt = assembly => (assembly.joistDepthIn + assembly.sheathingIn) / 12;')],
+  ['a balloon-framed floor loses its sheathing too, landing flush with the plate',
+    'module', s => s.replace('    ? assembly.sheathingIn\n', '    ? 0\n')],
+  ['every floor is balloon-framed, whatever the card says',
+    'module', s => s.replace("isBalloonFramed = assembly => assembly?.framing === 'balloon'",
+      'isBalloonFramed = () => true')],
+  ['the framing choice is not validated, so a typo becomes a floor',
+    'module', s => s.replace('framing: FRAMING_TYPES.some(type => type.id === raw.framing) ? raw.framing : base.framing,',
+      'framing: raw.framing ?? base.framing,')],
+  ['a drawing with no framing stored is read as balloon rather than platform',
+    'module', s => s.replace("DEFAULT_FRAMING = 'platform'", "DEFAULT_FRAMING = 'balloon'")],
 ];
 
 if (MUTATION_MODE) {

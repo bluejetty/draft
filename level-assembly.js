@@ -48,6 +48,43 @@ if (!window.DraftLevelAssembly) {
     Object.freeze({ id: 'owj', label: 'OWJ', depthIn: null }),
   ]);
   const DEFAULT_JOIST_TYPE = 'tji';
+
+  // ── HOW THE FLOOR MEETS THE WALL (Movie, 13 Oct) ────────────────────────
+  //
+  // "BALLOON / LEDGER framing and PLATFORM framing", offered on the level's
+  // card beside FLOOR JOISTS.
+  //
+  // PLATFORM is what this app has always drawn, and stays the default: the
+  // deck lands ON the wall below and the storey above stands on the deck --
+  // the floor SEPARATES the walls.
+  //
+  // BALLOON / LEDGER hangs the floor INSIDE the walls instead, on a ledger
+  // fastened to the inside face, and the wall runs on past it. Movie, reading
+  // the North Point suite details (D3W / D5W, "0-0 ELEV AT SEAM TOP OF
+  // FOUNDATION"): "the floor isn't ON the foundation it is hanging on the
+  // SIDE of the interior of the foundation and the sill plate is only covered
+  // by the 3/4" sheathing of the flooring (the top of the joists align with
+  // the top of the sill plate)" -- the joists running "inward from the ledger
+  // to the other inside of foundation wall to land on the other ledger".
+  //
+  // WHY IT EARNS A FIELD: the deck comes out a whole joist depth lower, so
+  // the threshold sits near grade instead of a foot above it. That is the
+  // wheelchair-accessible floor the ON-GRADE tile is for, and it is the same
+  // framing a BILEVEL's ENTRY landing wants -- Movie: "this method of framing
+  // could also be used for the entry way of bilevels which is a close to
+  // grade floor also".
+  //
+  // PER LEVEL, NOT PER BUILD TYPE, for exactly that reason: a bilevel's ENTRY
+  // is balloon-framed while the MAIN FL over it is not, so no single answer
+  // for a whole house is true. It belongs beside joistType, which is the
+  // other thing about a floor a level answers for itself.
+  const FRAMING_TYPES = Object.freeze([
+    Object.freeze({ id: 'platform', label: 'PLATFORM' }),
+    Object.freeze({ id: 'balloon', label: 'BALLOON / LEDGER' }),
+  ]);
+  const DEFAULT_FRAMING = 'platform';
+  const isBalloonFramed = assembly => assembly?.framing === 'balloon';
+
   // Footings run 8" deep (typ), setting the bottom of excavation below the wall.
   const DEFAULT_FOOTING_DEPTH_IN = 8;
   // Basement slabs pour 3" (typ house; a garage runs 4").
@@ -239,6 +276,10 @@ if (!window.DraftLevelAssembly) {
   const defaultLevelAssembly = (role = 'floor') => ({
     wallHeightFt: DEFAULT_WALL_TOP_FT,
     joistType: DEFAULT_JOIST_TYPE,
+    // PLATFORM unless a drafter says otherwise -- see FRAMING_TYPES. Every
+    // drawing made before this field existed keeps the floor it was drawn
+    // with, because that is what it was drawn with.
+    framing: DEFAULT_FRAMING,
     joistDepthIn: DEFAULT_FLOOR_ASSEMBLY.joistDepthIn,
     joistSpacingIn: DEFAULT_FLOOR_ASSEMBLY.joistSpacingIn,
     sheathingIn: DEFAULT_FLOOR_ASSEMBLY.sheathingIn,
@@ -279,6 +320,7 @@ if (!window.DraftLevelAssembly) {
     return {
       wallHeightFt: positive(raw.wallHeightFt, base.wallHeightFt),
       joistType: JOIST_TYPES.some(type => type.id === raw.joistType) ? raw.joistType : base.joistType,
+      framing: FRAMING_TYPES.some(type => type.id === raw.framing) ? raw.framing : base.framing,
       joistDepthIn: positive(raw.joistDepthIn, base.joistDepthIn),
       joistSpacingIn: positive(raw.joistSpacingIn, base.joistSpacingIn),
       sheathingIn: positive(raw.sheathingIn, base.sheathingIn),
@@ -298,7 +340,21 @@ if (!window.DraftLevelAssembly) {
   // rather than inlined because a stair's rise is wall height PLUS this, and
   // reading `(joistDepthIn + sheathingIn) / 12` at the call site invites
   // someone to forget the sheathing.
-  const levelFloorFt = assembly => (assembly.joistDepthIn + assembly.sheathingIn) / 12;
+  //
+  // A BALLOON / LEDGER FLOOR ADDS ONLY ITS SHEATHING, because the joists are
+  // not on top of the wall to be added -- they hang inside it, off a ledger,
+  // with their tops level with the top of the plate. What covers the plate is
+  // the sheathing and nothing else, which is Movie's own description of the
+  // North Point detail. So the deck lands a whole joist depth lower than a
+  // platform floor on the same wall -- about a foot on a TJI -- and that drop
+  // is the entire point of the option.
+  //
+  // EVERY READER GETS IT FOR FREE, which is why this stayed one function: a
+  // stair's rise, an elevation's floor line, a section's deck and a roof's
+  // plate all ask here, and none of them has to know which framing it is.
+  const levelFloorFt = assembly => (isBalloonFramed(assembly)
+    ? assembly.sheathingIn
+    : assembly.joistDepthIn + assembly.sheathingIn) / 12;
 
   // Bind the normaliser to a drawing's stored table. Every board that draws a
   // level asks this question -- MODEL.dc.html, LAYOUT.html and the harnesses
@@ -614,6 +670,9 @@ if (!window.DraftLevelAssembly) {
     DEFAULT_WALL_TOP_FT,
     DEFAULT_FLOOR_ASSEMBLY,
     JOIST_TYPES,
+    FRAMING_TYPES,
+    DEFAULT_FRAMING,
+    isBalloonFramed,
     DEFAULT_JOIST_TYPE,
     DEFAULT_FOOTING_DEPTH_IN,
     DEFAULT_FDN_SLAB_THICKNESS_IN,

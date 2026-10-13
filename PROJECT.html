@@ -941,6 +941,7 @@
       const OVER_GARAGE_LEVEL_ID = 4;
       const {
         normaliseLevelAssembly, defaultLevelAssembly, levelRole, JOIST_TYPES,
+        FRAMING_TYPES,
       } = window.DraftLevelAssembly;
       // What a level's joists are CALLED, for a row that names the member
       // rather than just measuring it. The table is the module's, so a row
@@ -2888,6 +2889,34 @@
           set: value => {
             if (!EXTERIOR_CHOICES.includes(value)) return false;
             setAssembly(level.id, 'wallType', value);
+            return true;
+          },
+        });
+        // ── HOW THIS FLOOR MEETS ITS WALL (Movie, 13 Oct) ──────────────
+        //
+        // "BALLOON / LEDGER framing and PLATFORM framing", offered on the
+        // level's card. PLATFORM is the default and is what every drawing
+        // made before this row existed carries, so adding the row moves
+        // nothing: the deck lands ON the wall below as it always has.
+        //
+        // BALLOON / LEDGER hangs the joists INSIDE the wall on a ledger, tops
+        // level with the top of the plate, so only the sheathing covers it --
+        // the deck sits a whole joist depth lower. That is the near-grade
+        // floor the North Point suites are framed with, and the one a
+        // BILEVEL's ENTRY landing wants.
+        //
+        // PER LEVEL, which is the whole reason it is a row here rather than a
+        // build type: a bilevel's ENTRY is balloon-framed while the MAIN FL
+        // over it is not.
+        addInput(`framing-${level.id}`, `${level.name} FLOOR FRAMING`, {
+          name: `framing-${level.id}`,
+          levelId: level.id,
+          kind: 'choice',
+          choices: () => FRAMING_TYPES.map(type => ({ id: type.id, label: type.label })),
+          get: () => assembly(level.id).framing,
+          set: value => {
+            if (!FRAMING_TYPES.some(type => type.id === value)) return false;
+            setAssembly(level.id, 'framing', value);
             return true;
           },
         });
