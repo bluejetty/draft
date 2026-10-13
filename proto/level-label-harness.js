@@ -96,9 +96,49 @@ check('it reads a level without changing it',
 check('the floor-s own words survive inside the label a drafter reads',
   L => [L.levelLabel(3, 'MAIN FL').includes('MAIN FL'), true]);
 
+// ── A HALF LEVEL AND ITS WHOLE ONE ARE ONE STOREY ───────────────────────────
+//
+// Movie, 13 Oct, on a MOD BILEVEL whose main floor beam had been sized by the
+// ENTRY landing and drawn on the landing's own sheet: "lets consider the 0.5
+// and 1 storey as ONE 'level' for this situation".
+//
+// THE TABLE ALREADY SAID IT and nothing asked. STOREY_FLOOR has read 2 and 3
+// as MAIN FL since the day they were numbered -- that is WHY they are 0.5 and
+// 1 rather than two names -- so this is the reading made available, not a new
+// rule. These pin the three questions the framing asks of it.
+check('a half level and its whole one are one storey',
+  L => [L.sameStorey(2, 3) && L.sameStorey(4, 5), true]);
+check('and two different floors are not',
+  L => [L.sameStorey(3, 5) || L.sameStorey(2, 5) || L.sameStorey(1, 2), false]);
+// A LEVEL THE DRAFTER ADDED HAS NO HALF TO PAIR WITH, and folding it into
+// somebody else-s storey would frame his floor with theirs. Ids from 9 up are
+// outside the scheme, and so is FOUNDATION.
+check('a level the table does not know is a storey of its own',
+  L => [[L.sameStorey(9, 10), L.sameStorey(9, 9), L.sameStorey(1, 1)].join(','),
+    'false,true,true']);
+// THE WHOLE ONE SPEAKS FOR THE STOREY, so a message naming the floor being
+// framed says 1 MAIN FL and not the landing again.
+check('the storey is named by its whole level, not its half',
+  L => [[L.storeyHeadOf([2, 3], 2), L.storeyHeadOf([4, 5], 5), L.storeyHeadOf([3], 3)].join(','),
+    '3,5,3']);
+// AND A STOREY WITH ONLY ITS HALF PRESENT still answers -- a drawing can
+// carry an OVER GARAGE with no 2ND FL above it.
+check('a storey present only as its half still has a head',
+  L => [L.storeyHeadOf([4], 4), 4]);
+
 const STORED = { 2: 'ENTRY', 3: 'MAIN FL', 4: 'OVER GARAGE', 5: '2ND FL' };
 
 const MUTATIONS = [
+  // THE STOREY GROUPING, BROKEN THE ONE WAY THAT MATTERS: every level its own
+  // storey, which is the walk the framing did before this and the reason a
+  // 61 ft floor was framed by a six foot landing.
+  ['every level is its own storey, so a half never pairs with its whole',
+    c => c.replace('const storeyKeyOf = levelId => STOREY_FLOOR[levelId] || `level ${Number(levelId)}`;',
+      'const storeyKeyOf = levelId => `level ${Number(levelId)}`;')],
+  // And the other way: the head of a storey read as its HALF, which would
+  // name the landing in every message about the floor being framed.
+  ['the storey is spoken for by its half level',
+    c => c.replace('.sort((a, b) => b - a)[0];', '.sort((a, b) => a - b)[0];')],
   // The numbers go on, the WORDS do not change -- the half-levels keep
   // saying ENTRY and OVER GARAGE.
   ['a half-level keeps its old word and only gains a number',
