@@ -292,13 +292,54 @@ test('an elevation with no cut behind it says so instead of offering a wrong Y',
 // select it. The question then appeared unasked AND its scrim covered the
 // status strip, swallowing the next tap -- which is how this was found, as
 // `touch-layout.spec.js`'s DELETE test timing out on the CI runner while
-// passing here. Whether the two taps land inside the platform's double-click
-// interval is a race, so this is pinned on BOTH sides: the double-tap does
-// not ask, and the strip's button does.
+// passing here.
+//
+// WHETHER TWO TAPS BECOME A dblclick IS THE RACE ITSELF, so a spec that taps
+// twice and checks cannot pin the guard: the taps fell outside the interval
+// on this box every time, and the test passed with the guard taken out. (It
+// was briefly believed to catch it -- the mutant run did go red, but on the
+// line below it, over an unflushed save. Reading the store straight after a
+// tap is its own race; the page's own signal is checked first now, and the
+// file through a poll.)
+//
+// SO THE GUARD IS PINNED ON THE EVENT, NOT ON THE TIMING. The handler's whole
+// question is `sourceCapabilities.firesTouchEvents`, and that is a property of
+// the event, so both answers can be put to it directly and neither depends on
+// a clock. The touch one is what Chromium hands a double-tap; the mouse one
+// (`sourceCapabilities` null, as a real mouse's is here) is the control that
+// stops this passing for the wrong reason -- a guard that refused everything
+// would also "not ask".
+//
+// The real double-tap is still driven, because a synthetic event cannot prove
+// a finger reaches the strip, and that is the half that actually broke.
 test.describe('on a touchscreen', () => {
   test.use({ hasTouch: true });
 
-  test('two taps on a viewport select it and ask nothing', async ({ page }) => {
+  const dblclickFrom = (page, pt, touch) => page.evaluate(({ x, y, touch: fromTouch }) => {
+    const canvas = document.querySelector('[data-layout-canvas]');
+    canvas.dispatchEvent(new MouseEvent('dblclick', {
+      bubbles: true, cancelable: true, clientX: x, clientY: y,
+      // A real mouse's dblclick carries sourceCapabilities null in Chromium,
+      // so the control is the default rather than a second constructed one.
+      ...(fromTouch
+        ? { sourceCapabilities: new InputDeviceCapabilities({ firesTouchEvents: true }) }
+        : {}),
+    }));
+  }, { x: pt.x, y: pt.y, touch });
+
+  test('a dblclick synthesized from a finger is refused; the mouse’s is not', async ({ page }) => {
+    await stubModelSpace(page);
+    await openLayout(page, houseDrawing(PLAN_VIEWPORT));
+    const p = await sheetPoint(page, PLAN_VIEWPORT.xIn, PLAN_VIEWPORT.yIn);
+
+    await dblclickFrom(page, p, true);
+    expect(await asking(page), 'a finger does not ask').toBe(false);
+
+    await dblclickFrom(page, p, false);
+    expect(await asking(page), 'and a mouse still does').toBe(true);
+  });
+
+  test('two taps on a viewport select it, and the strip stays reachable', async ({ page }) => {
     await stubModelSpace(page);
     await openLayout(page, houseDrawing(PLAN_VIEWPORT));
     const p = await sheetPoint(page, PLAN_VIEWPORT.xIn, PLAN_VIEWPORT.yIn);
@@ -308,11 +349,19 @@ test.describe('on a touchscreen', () => {
     expect(await hasSelection(page), 'the second tap selected it').toBe(true);
     expect(await asking(page), 'and asked nothing').toBe(false);
 
-    // The strip is reachable, which is the half of this that bit: a scrim
-    // over DELETE is what turned an unasked question into a timeout.
+    // THE HALF THAT ACTUALLY BROKE: a scrim over DELETE is what turned an
+    // unasked question into a 180-second timeout on the runner.
+    //
+    // THE TAP IS PROVED BY THE PAGE FIRST, THEN BY THE FILE. The delete is
+    // applied to state and the save flushes after it, so a store read taken
+    // straight after the tap can still carry the viewport -- which is how
+    // this spec failed its own first CI run.
     await expect(page.locator('[data-delete-viewport]')).toBeVisible();
     await page.locator('[data-delete-viewport]').tap();
-    expect((await savedLayout(page)).viewports, 'the tap landed').toHaveLength(0);
+    await expect(page.locator('[data-delete-viewport]'),
+      'the tap landed: nothing is selected any more').toBeHidden();
+    await expect.poll(async () => (await savedLayout(page)).viewports.length,
+      { message: 'and the sheet is written without it' }).toBe(0);
   });
 
   test('the strip is the finger’s way in, and it opens the same question', async ({ page }) => {
