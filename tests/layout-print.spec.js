@@ -133,6 +133,47 @@ test('the bone opens the package, every sheet ticked; PRINT sends the ticked one
   await expect(page.locator('[data-print-frame]'), 'and the print page is cleared away').toHaveCount(0);
 });
 
+// A BUTTON THAT SAYS PRINT, WHERE PRINT BUTTONS LIVE.
+//
+// Movie, 13 Oct: "how do i print this layout page? or multiple pages can't
+// see a print button yet" -- with the page open in front of him and the
+// package already built. It was on the BONE, whose only visible word is a
+// picture of a bone and whose tooltip, mounted by the shared bar, offered
+// Gruff's drive-thru. Both halves of that are what this pins: a PRINT press
+// in the panel with the other sheet verbs, and a bone that stops advertising
+// a board this page does not have.
+test('the panel has a PRINT button, and the bone no longer offers the drive-thru', async ({ page }) => {
+  await openLayout(page, boneDrawing());
+  await waitForCompose(page);
+
+  const print = page.locator('[data-layout-print]');
+  await expect(print, 'a press on the panel, not only on the bone').toBeVisible();
+  await expect(print).toHaveText(/PRINT/i);
+  // Beside the page's other output verb, and before it: printing is the
+  // common one.
+  const order = await page.evaluate(() => [...document.querySelectorAll(
+    '#lay-viewport-section button[id]')].map(b => b.id));
+  expect(order).toContain('lay-print-open');
+  expect(order.indexOf('lay-print-open'),
+    'PRINT sits above SAVE DXF').toBeLessThan(order.indexOf('lay-dxf'));
+
+  const bone = page.locator('#bone');
+  await expect(bone).toHaveAttribute('title', /PRINT/);
+  await expect(bone).toHaveAttribute('aria-label', /print/i);
+  expect(await bone.getAttribute('aria-controls'),
+    'and claims no drive-thru board, which this page has not got').toBeNull();
+  expect(await page.locator('#drivethru').count()).toBe(0);
+
+  // The same dialog the bone opens -- one implementation, two presses.
+  await print.click();
+  await expect(page.locator('#lay-print-scrim')).toBeVisible();
+  const n = await page.locator('[data-print-sheet]').count();
+  expect(n, 'with the whole set ticked').toBeGreaterThan(2);
+  await expect(page.locator('[data-print-go]')).toHaveText(`PRINT ${n} SHEETS`);
+  await page.locator('#lay-print-close').click();
+  await expect(page.locator('#lay-print-scrim')).toBeHidden();
+});
+
 test('NONE leaves nothing to print; ALL puts every sheet back', async ({ page }) => {
   await openLayout(page, boneDrawing());
   await waitForCompose(page);

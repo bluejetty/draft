@@ -811,12 +811,20 @@ if (!window.DraftShellBars) {
     printscreen: Object.freeze({
       default: 'PRINTSCREEN — the pages to show a client are made in the '
         + 'MODEL space',
-      // THE ONE THAT WILL COME BACK. This is the page that makes printable
-      // sheets, so it is the page where the button most obviously belongs --
-      // but which sheet, at what size, with the titleblock filled from where,
-      // are questions, and wiring it under cover of a bar change would be
-      // answering them by accident.
-      construction: 'PRINTSCREEN — printing a sheet is not wired yet' }),
+      // IT ANSWERED ITS OWN QUESTIONS AND STAYED GREY. This read "printing
+      // a sheet is not wired yet", which was true of the bar and then went
+      // stale: LAYOUT's print package landed (Movie, 9 Oct) and the
+      // questions this note was waiting on -- which sheets, at what size,
+      // titleblock from where -- are the ones its dialog asks. The button
+      // stays dormant, but it now says where printing lives rather than
+      // that it does not exist, which is what sent Movie hunting for a
+      // print button on 13 Oct.
+      //
+      // STILL DORMANT, DELIBERATELY: PRINTSCREEN is a picture of the screen
+      // for a client, not to scale; the package is drawn sheets at 300 dpi.
+      // One word pointed at both verbs would lose that distinction.
+      construction: 'PRINTSCREEN — a screen picture for a client is made in '
+        + 'the MODEL space; to print these sheets, use PRINT in the panel' }),
     units: Object.freeze({
       default: 'IMPERIAL and METRIC are set where the house is drawn, in the '
         + 'MODEL space',
