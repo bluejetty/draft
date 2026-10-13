@@ -838,9 +838,24 @@ if (!window.DraftRender2D) {
   // label sits somewhere the beam is not, and the two would drift silently.
   const COLUMN_SIZE_IN = 3;   // 3"ø adjustable steel telepost, MODEL.dc.html:2431
 
+  // ── `below`: THE SAME BEAM, SEEN FROM THE FLOOR IT HOLDS UP ──────────────
+  //
+  // Movie, 13 Oct: "the main floor support beam should show on the MAIN FLOOR
+  // (layout) and the foundation plan". It is ONE beam. It is filed on the
+  // level that frames the floor, and the floor's own sheet shows it as
+  // context -- the way each plan already draws the openings in the floor
+  // above it -- rather than a second record on the second sheet for an edit
+  // to one of them to drift away from.
+  //
+  // LIGHTER, AND IT SAYS SO. At full weight a beam line on a floor layout
+  // reads as a beam IN that floor, which is a different thing to build.
+  //
+  // IT STILL PRINTS. The sheet that goes out showing the beam under the floor
+  // is the whole request, so this is alpha and not a no-print rule; the label
+  // is the only part printing drops, as it is for every beam.
   function drawBeam2D(ctx, toS, beam, options = {}, env) {
     if (!beam?.start || !beam?.end) return;
-    const { preview = false } = options;
+    const { preview = false, below = false } = options;
     const a = toS(beam.start);
     const b = toS(beam.end);
     ctx.save();
@@ -848,6 +863,7 @@ if (!window.DraftRender2D) {
     ctx.lineWidth = 3;
     ctx.setLineDash(beam.mode === 'dropped' ? [8, 5] : []);
     if (preview) ctx.globalAlpha = 0.72;
+    if (below) ctx.globalAlpha = 0.45;
     ctx.beginPath();
     ctx.moveTo(a.x, a.y);
     ctx.lineTo(b.x, b.y);
@@ -856,7 +872,7 @@ if (!window.DraftRender2D) {
     if (!preview && !env.isPrinting) {
       // ALONG the beam, not across it. See labelAlongLine2D.
       labelAlongLine2D(ctx, a, b,
-        beam.mode === 'dropped' ? 'DROPPED BEAM' : 'FLUSH BEAM',
+        (beam.mode === 'dropped' ? 'DROPPED BEAM' : 'FLUSH BEAM') + (below ? ' BELOW' : ''),
         { font: env.labelFont, color: env.beamColor, offset: 5 });
     }
     ctx.restore();
@@ -872,7 +888,8 @@ if (!window.DraftRender2D) {
   // page that owns the answer.
   function drawColumn2D(ctx, toS, column, options = {}, env) {
     if (!column?.point) return;
-    const { footing = null, centreOnly = false, preview = false, sizeIn: ownSizeIn = null } = options;
+    const { footing = null, centreOnly = false, preview = false, below = false,
+      sizeIn: ownSizeIn = null } = options;
     const origin = toS({ x: 0, y: column.point.y || 0, z: 0 });
     const unit = toS({ x: 1, y: column.point.y || 0, z: 0 });
     const pxPerFt = Math.max(0.001, Math.hypot(unit.x - origin.x, unit.y - origin.y));
@@ -886,6 +903,10 @@ if (!window.DraftRender2D) {
     ctx.strokeStyle = env.columnColor;
     ctx.lineWidth = 1.5;
     if (preview) ctx.globalAlpha = 0.72;
+    // THE POSTS COME WITH THE BEAM. A beam drawn on the floor it carries with
+    // nothing holding it up is half a drawing, so `below` reaches the posts
+    // too and at the same weight -- see drawBeam2D.
+    if (below) ctx.globalAlpha = 0.45;
     if (!centreOnly) {
       ctx.beginPath();
       if (pile) ctx.arc(c.x, c.y, half, 0, Math.PI * 2);

@@ -3131,6 +3131,53 @@
     }
   };
 
+  // ── AND WHAT IS HOLDING THIS FLOOR UP ──────────────────────────────────────
+  //
+  // Movie, 13 Oct: "the main floor support beam should show on the MAIN FLOOR
+  // (layout) and the foundation plan".
+  //
+  // The beam is filed on the level that FRAMES this floor, which is where it
+  // physically is -- a basement beam is in the basement -- and that plan
+  // draws it as its own. This is the other sheet he asked for: the floor
+  // layout showing the beam under it, drawn faint and labelled BELOW because
+  // it belongs to the plan underneath.
+  //
+  // ONE RECORD, TWO SHEETS. Filing a second beam against this level would put
+  // the same beam in the file twice and leave an edit to one of them to drift
+  // from the other -- which is the trade the E-SAVE note calls out about a
+  // second copy of anything.
+  //
+  // THE FLOOR LAYOUT ONLY, which is the sheet he named and the one S-BEAM is
+  // a layer on. The WALLS plan of the same level is about what stands on this
+  // floor, not what is under it.
+  //
+  // CONTEXT, NOT CONTENT: it is not in `beams()`, so nothing here can be
+  // picked, selected, moved or counted on this sheet -- the same rule the
+  // openings above follow, and for the same reason.
+  const paintBeamsBelow = () => {
+    const R = window.DraftRender2D;
+    const B = window.DraftBuildHouse;
+    if (activeViewId() !== 'floor') return;
+    const from = framesFrom(activeLevelId());
+    if (from == null || Number(from) === Number(activeLevelId())) return;
+    const view = Number(from) === FOUNDATION_LEVEL_ID ? 'foundation' : 'floor';
+    const env = paintEnv();
+    const mine = item => Number(item.levelId) === Number(from) && item.view === view;
+    (drawing?.beams || []).filter(mine)
+      .forEach(beam => R.drawBeam2D(ctx, toS, beam, { below: true }, env));
+    // The posts with it, and NOT the piles: a pile is concrete in the ground
+    // under a garage slab, which is not what this floor stands on.
+    (drawing?.columns || []).filter(column => mine(column)
+      && !String(column.footing || '').startsWith('pile'))
+      .forEach(column => R.drawColumn2D(ctx, toS, column, {
+        below: true, footing: B ? B.footingFor(column.footing) : null,
+        // `below` FIRST, and not for style: pad-footing-mutants anchors on
+        // the footing line as the structure pass writes it, and that string
+        // sits inside this one when the keys are the other way round. Two
+        // matches and the mutation lands on whichever comes first.
+      }, env));
+  };
+
   // ── WHAT IS OPEN IN THE FLOOR ABOVE ────────────────────────────────────────
   //
   // Movie, 25 Sep: "the stair, also on the foundation plan (on on floor plans
@@ -5048,6 +5095,9 @@
         if (showOwn) {
         paintHalfLevelGhostFloors();
         paintFloors(); paintRoofs(); paintShapes(); paintStructure();
+        // THE BEAM UNDER THIS FLOOR, after the structure ON it and before the
+        // openings above, which is the order they stack in the building.
+        paintBeamsBelow();
         // AFTER THE STRUCTURE IT SITS OVER, before the walls. An opening above
         // is context for what this level carries, so it reads over the pads
         // and the beam -- which is the order a drafter looks in: the hole is
