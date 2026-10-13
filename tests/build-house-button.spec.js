@@ -50,17 +50,28 @@ test('an open submenu does not cover the bar it sits in', async ({ page }) => {
   await h.openModel(page);
 
   // THE ROW IS CENTRED ABSOLUTELY IN THE TOP BAR, so it grows both ways and
-  // can end up over the bar's own buttons. The five-entry BUNGALOW submenu did
-  // exactly that -- 288 to 992 at 1280 wide, with NEW starting at 938 -- and
-  // NEW stopped being pressable.
+  // can end up over the bar's own buttons. The BUNGALOW submenu did exactly
+  // that -- 288 to 992 at 1280 wide with its five entries, NEW starting at
+  // 938 -- and NEW stopped being pressable.
+  //
+  // THE COUNT IS THE FAMILY'S, NOT A FIVE. It was a literal and went red the
+  // day ON-GRADE joined the family (13 Oct), which is the third spec that has
+  // happened to -- build-row-lights.spec.js carried the same literal and its
+  // own comment already said why not to. The point of the number here is only
+  // that the WIDEST submenu is open before NEW is pressed, so it has to track
+  // the family rather than state its size.
   //
   // NOTHING FAILED ON PURPOSE. build-row-lights' probe happened to press NEW
   // straight after opening the menu, and the click was swallowed by the
   // detached garage lamp. A layout that eats a button is not the sort of thing
   // that should need luck, so this presses NEW with the WIDEST submenu open:
   // a click that lands proves no part of the cluster is on top of it.
+  const bungalowCount = await page.evaluate(() => window.DraftBuildMenu.BUILD_MENU
+    .find(family => family.id === 'bungalow').entries.length);
+  expect(bungalowCount, 'the widest family still has the most entries')
+    .toBeGreaterThanOrEqual(5);
   await page.locator('[data-build-menu="bungalow"]').click();
-  await expect(page.locator('[data-select-build]')).toHaveCount(5);
+  await expect(page.locator('[data-select-build]')).toHaveCount(bungalowCount);
   await page.getByRole('button', { name: 'NEW', exact: true }).click({ timeout: 5000 });
 });
 
