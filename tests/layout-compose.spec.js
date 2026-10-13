@@ -655,6 +655,88 @@ test('the named sheets survive a reload, an undo and a hand on the set', async (
   await expect(page.locator('[data-layout-sheet="11"]')).toHaveClass(/\bon\b/);
 });
 
+// ── THE PRESS A DRAFTER ACTUALLY REACHES FOR ───────────────────────────────
+//
+// Movie, 13 Oct, having nudged a viewport off where he wanted it: "i
+// accidentally moved the viewport and then tried CNTL-Z to undo the move i
+// just made, but didn't work, can we put the UNDO CNTL-Z function for this
+// in LAYOUT view."
+//
+// THE UNDO WAS NOT MISSING — sixty steps of it, and two buttons on the strip.
+// What was missing was the keyboard: _onKeyDown took Escape and Delete and
+// never looked at a modifier, so the one press every drawing program answers
+// did nothing at all on this page.
+//
+// DRIVEN BY KEY, NOT BY BUTTON, which is the whole point: the button was
+// already green in the test above, and would have stayed green through this
+// defect for as long as nobody tried the keyboard.
+test('Ctrl+Z undoes on the sheet, and Ctrl+Shift+Z puts it back', async ({ page }) => {
+  await openLayout(page, twoStorey());
+  await waitForCompose(page);
+  const before = (await savedLayout(page)).sheets.length;
+
+  const seq = await page.evaluate(() => Number(document.body.dataset.layoutSaveSeq || 0));
+  await page.locator('[data-layout-add-sheet]').click();
+  await page.waitForFunction(p => Number(document.body.dataset.layoutSaveSeq || 0) > p, seq);
+  await expect(page.locator('[data-layout-sheet]')).toHaveCount(before + 1);
+
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('[data-layout-sheet]'),
+    'Ctrl+Z did nothing: the history is there, the keyboard cannot reach it')
+    .toHaveCount(before);
+
+  await page.keyboard.press('Control+Shift+z');
+  await expect(page.locator('[data-layout-sheet]'), 'and redo puts it back')
+    .toHaveCount(before + 1);
+  // THE WINDOWS SPELLING TOO, since that is the keyboard this is drawn on.
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('[data-layout-sheet]')).toHaveCount(before);
+  await page.keyboard.press('Control+y');
+  await expect(page.locator('[data-layout-sheet]')).toHaveCount(before + 1);
+});
+
+// AND IT DOES NOT REACH INTO A FIELD BEING TYPED IN. This page has text
+// boxes -- the file name, the sheet title -- and a Ctrl+Z inside one has to
+// stay the browser's, undoing the typing. The handler has guarded that since
+// it was written; what this pins is that the new block sits AFTER the guard
+// and not before it, which is the one way this change could have broken
+// something that worked.
+//
+// THE FIELD IS PUT THERE BY THE TEST, and deliberately: the real ones live
+// inside dialogs that have to be opened first, and opening one would make
+// this a test about that dialog. The guard reads `e.target instanceof
+// HTMLInputElement`, so any input answers the same question, and the
+// listener under test is the page's own.
+test('Ctrl+Z typed in a text field is the field\'s, not the sheet\'s',
+  async ({ page }) => {
+    await openLayout(page, twoStorey());
+    await waitForCompose(page);
+    const seq = await page.evaluate(() => Number(document.body.dataset.layoutSaveSeq || 0));
+    await page.locator('[data-layout-add-sheet]').click();
+    await page.waitForFunction(p => Number(document.body.dataset.layoutSaveSeq || 0) > p, seq);
+    const sheets = await page.locator('[data-layout-sheet]').count();
+
+    await page.evaluate(() => {
+      const field = document.createElement('input');
+      field.id = 'probe-field';
+      document.body.appendChild(field);
+      field.focus();
+    });
+    await page.keyboard.press('Control+z');
+    await expect(page.locator('[data-layout-sheet]'),
+      'a Ctrl+Z meant for a text box undid the sheet behind it')
+      .toHaveCount(sheets);
+
+    // AND THE CONTROL: out of the field, the very same press undoes. Without
+    // this the check above passes on a page where Ctrl+Z never works at all.
+    await page.evaluate(() => {
+      document.getElementById('probe-field').remove();
+      document.body.focus();
+    });
+    await page.keyboard.press('Control+z');
+    await expect(page.locator('[data-layout-sheet]')).toHaveCount(sheets - 1);
+  });
+
 // ── THE SHEET RAIL ──────────────────────────────────────────────────────────
 //
 // Movie, 1 Oct: the set down the right side as "a mini view layout of each",
