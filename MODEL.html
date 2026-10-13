@@ -1074,6 +1074,17 @@
      build - (1 storey bungalow, 2 storey over garage, Modified Bilevel
      etc.)". A choice between two verbs with no subject is not a choice. */
   [data-build-choice-house] { font-weight:700; letter-spacing:0.06em; }
+  /* IT FOLLOWS THE CURSOR AND TAKES NO PRESSES. pointer-events:none is not
+     decoration here -- a label under the pointer that could be clicked would
+     eat the very click it is describing. */
+  #hover-name { position:fixed; z-index:8; pointer-events:none;
+    padding:2px 6px; border:1px solid var(--edge-panel); border-radius:3px;
+    background-color: var(--surface-panel);
+    background-image: var(--surface-panel-tex, none);
+    color: var(--ink-primary); font-family: var(--font-ui); font-size:11px;
+    letter-spacing:0.03em; white-space:nowrap;
+    box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+  #hover-name[hidden] { display:none; }
   .promote-card { max-width:26em; padding:16px 18px; border-radius:4px;
     border:1px solid var(--edge-panel);
     background-color: var(--surface-panel);
@@ -1419,6 +1430,12 @@
 <span id="strip-message" data-strip-message></span>
 
 <div id="notice"><div id="notice-body"></div></div>
+<!-- WHAT A CLICK WOULD TAKE (Movie, 13 Oct): "can we make a little text area
+     come up along side the cursor when it rolls over items so the user can
+     identify what it would select if they clicked at that time". He was trying
+     to pick a garage door out of a wall it sits in, with a dimension string and
+     a room tag stacked over the same few pixels. -->
+<div id="hover-name" data-hover-name hidden aria-hidden="true"></div>
 <!-- THE PROMOTION CONFIRM. Its own element rather than a window.confirm,
      because §7 names the two answers -- Continue, Stay in TOY -- and OK/Cancel
      does not say which one keeps the drawing where it is. deleteLevel uses
@@ -19064,6 +19081,34 @@
 
   // WHAT THE CHIP SAYS IT IS HOLDING. Short enough for the strip; the whole
   // of it goes in the title, where there is room.
+  // ── WHAT A THING IS CALLED, SAID ONCE ────────────────────────────────
+  //
+  // The brush chip and the hover readout both have to name the same objects,
+  // and two namers is two vocabularies that drift: the chip would say GARAGE
+  // DOOR 8'-0" while the thing under the cursor read DOOR, and a drafter
+  // comparing them would be right to think they were different objects.
+  //
+  // So the SHORT form lives here and both read it. The brush's `long` stays
+  // its own, because it describes a LOAD -- what would be stamped -- and that
+  // is a different sentence from naming what is under the pointer.
+  const shortName = (kind, p) => {
+    const F = window.DraftFormatters;
+    const ftIn = feet => F.formatArchitecturalInches((Number(feet) || 0) * 12);
+    if (!p) return '';
+    if (kind === 'wall') return `WALL ${ftIn(p.topHeight)}`;
+    if (kind === 'fenestration') {
+      // Movie, 13 Oct, naming the thing rather than the kind: not DOOR/WIN but
+      // "GARAGE DOOR 16'-0"". A garage door says so -- which is the one he
+      // could not pick out of a wall it sits in.
+      const name = p.garage === true ? 'GARAGE DOOR'
+        : (p.type === 'door' ? 'DOOR' : 'WINDOW');
+      return `${name} ${ftIn(p.width)}`;
+    }
+    if (kind === 'floor') return `FLOOR ${ftIn(p.thickness)}`;
+    if (kind === 'line') return `LINE ${p.layer || ''}`.trim();
+    return '';
+  };
+
   const brushSays = () => {
     if (!brushLoad) return { short: '', long: '' };
     const F = window.DraftFormatters;
@@ -19072,24 +19117,24 @@
     if (brushLoad.kind === 'wall') {
       const type = window.DraftWallTypes.WALL_TYPES
         .find(t => t.id === (p.wallType || 'stud_2x6'));
-      return { short: `WALL ${ftIn(p.topHeight)}`,
+      return { short: shortName('wall', p),
         long: `${type ? type.label : p.wallType} — ${ftIn(p.baseHeight)} to `
           + `${ftIn(p.topHeight)}, ${p.refLine} reference` };
     }
     if (brushLoad.kind === 'fenestration') {
       const name = p.garage === true ? 'GARAGE DOOR'
         : (p.type === 'door' ? 'DOOR' : 'WINDOW');
-      return { short: `${name} ${ftIn(p.width)}`,
+      return { short: shortName('fenestration', p),
         long: `${name} ${ftIn(p.width)} wide, head ${ftIn(p.headHeight)}`
           + (p.type === 'door' ? '' : `, sill ${ftIn(p.sillHeight)}`) };
     }
     if (brushLoad.kind === 'floor') {
-      return { short: `FLOOR ${ftIn(p.thickness)}`,
+      return { short: shortName('floor', p),
         long: `FLOOR ${ftIn(p.thickness)} thick`
           + (p.thickenedEdge ? ', thickened edge' : '')
           + (p.slopeInPerFt ? `, falling ${p.slopeInPerFt}"/ft` : '') };
     }
-    return { short: `LINE ${p.layer || ''}`.trim(), long: `LINE on ${p.layer}` };
+    return { short: shortName('line', p), long: `LINE on ${p.layer}` };
   };
 
   // A KIND IN THE WORDS THE DRAFTER SEES, for the refusals. 'fenestration' is
@@ -21925,6 +21970,90 @@
     paint();
     editNoteText(note);
   });
+  // ── WHAT A CLICK WOULD TAKE, BESIDE THE CURSOR (Movie, 13 Oct) ───────
+  //
+  // "can we make a little text area come up along side the cursor when it
+  // rolls over items so the user can identify what it would select if they
+  // clicked at that time". He was trying to pick a garage door out of the wall
+  // it sits in, with a dimension string and a room tag over the same few
+  // pixels, and the page only told him afterwards -- "NOTHING THERE. PRESS
+  // SOMETHING OF THE SAME KIND".
+  //
+  // IT ASKS hitAt, THE FUNCTION THE CLICK ITSELF ASKS. Not a second hit test:
+  // hitAt carries the precedence (a tag beats the floor it names, a vertex
+  // beats the segments through it) AND the OBJECT TYPE filters, through
+  // filterAllows. So the label cannot disagree with what a press would
+  // actually give -- which is the whole of its usefulness.
+  //
+  // AND THAT MAKES IT A READ-OUT OF THE FILTERS TOO, which is Movie's own
+  // case: with DOOR/WIN switched off, hovering the garage door names the WALL
+  // behind it. He asked which of the two it should say and the answer is this
+  // one -- a label naming a door that a click cannot take would be the page
+  // lying about the outcome, and he would be no wiser about why.
+  //
+  // NAMED BY shortName, the brush chip's own words, so the thing he is about
+  // to copy properties from reads the same in both places.
+  const hoverName = document.getElementById('hover-name');
+  // The types hitAt can return, each said as the thing rather than the kind.
+  // Defensive about fields: a label is not worth a thrown error over a record
+  // written before one of them existed.
+  const hitSays = hit => {
+    if (!hit || !hit.item) return '';
+    const F = window.DraftFormatters;
+    const ftIn = feet => F.formatArchitecturalInches((Number(feet) || 0) * 12);
+    const it = hit.item;
+    const shared = shortName(hit.type, it);
+    if (shared) return shared;
+    if (hit.type === 'roomtag') return `ROOM TAG ${String(it.text || it.name || '').trim()}`.trim();
+    if (hit.type === 'note') {
+      const words = String(it.text?.body || it.body || it.text || '').trim().split(/\s+/);
+      return `NOTE ${words.slice(0, 3).join(' ')}${words.length > 3 ? '\u2026' : ''}`.trim();
+    }
+    if (hit.type === 'fixture') return `FIXTURE ${String(it.kind || it.fixture || '').toUpperCase()}`.trim();
+    if (hit.type === 'dimension') {
+      const dx = (it.end?.x ?? 0) - (it.start?.x ?? 0);
+      const dz = (it.end?.z ?? 0) - (it.start?.z ?? 0);
+      return `DIM ${ftIn(Math.hypot(dx, dz))}`;
+    }
+    if (hit.type === 'stair') return 'STAIR';
+    if (hit.type === 'shape') return 'SHAPE';
+    if (hit.type === 'outline') return it.garage ? 'OUTLINE (GARAGE)' : 'OUTLINE';
+    if (hit.type === 'roof') return `ROOF ${it.pitch ?? '?'}:12`;
+    return String(hit.type || '').toUpperCase();
+  };
+  // A GESTURE IN HAND OWNS THE POINTER. Naming what is under the cursor while
+  // the drafter is dragging something is noise about a press he is not about
+  // to make -- and during a MOVE the thing under the cursor is what he is
+  // carrying.
+  //
+  // THE LIST IS THIS BRANCH'S. The MOVE command (claude/move-command) adds a
+  // `moveCmd` of its own, and whichever of the two lands second should add it
+  // here -- while a selection is following the cursor the thing under it is
+  // what the drafter is CARRYING, which is the one case where naming it would
+  // be actively wrong. Named here rather than left to be noticed.
+  const hoverBusy = () => Boolean(moveDrag || bandDrag || itemBox
+    || dragging || twoPan || roomDrag || drawStart || rulerOn || brushOn
+    || activeCut() || modalUp());
+  const hideHoverName = () => { if (hoverName && !hoverName.hidden) hoverName.hidden = true; };
+  canvas.addEventListener('pointermove', e => {
+    if (!hoverName) return;
+    if (e.pointerType === 'touch' || hoverBusy() || !drawing) { hideHoverName(); return; }
+    const rect = canvas.getBoundingClientRect();
+    const says = hitSays(hitAt(toWorld(e.clientX - rect.left, e.clientY - rect.top)));
+    if (!says) { hideHoverName(); return; }
+    hoverName.textContent = says;
+    // BESIDE THE CURSOR, not under it, and flipped near the right edge so the
+    // label never runs off the window it is meant to be read in.
+    const pad = 14;
+    hoverName.hidden = false;
+    const w = hoverName.offsetWidth;
+    const x = e.clientX + pad + w > window.innerWidth ? e.clientX - pad - w : e.clientX + pad;
+    hoverName.style.left = `${Math.max(2, x)}px`;
+    hoverName.style.top = `${Math.max(2, e.clientY + pad)}px`;
+  });
+  canvas.addEventListener('pointerleave', hideHoverName);
+  canvas.addEventListener('pointerdown', hideHoverName);
+
   canvas.addEventListener('pointerdown', e => {
     if (e.pointerType === 'touch') {
       touchPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
