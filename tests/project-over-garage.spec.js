@@ -82,15 +82,16 @@ const columnLines = (page, id) => page.evaluate(sel => {
 test('each column pairs a build with the thing that is added to it', async ({ page }) => {
   await openProject(page);
 
-  // ON-GRADE PAIRS WITH ITS OWN GARAGE, on its own line between the two
-  // storeys -- which is the menu's rule arriving unaided: an entry pairs
-  // when the one before it is the same type without a garage, so the two
-  // tiles added on 12 Oct landed here without a word being said about
-  // layout. The long label keeps its words; only the SECOND of a pair is
-  // shortened at the plus.
+  // ON-GRADE STANDS ALONE, between the two storeys -- the menu's pairing rule
+  // arriving unaided: an entry pairs when the one before it is the same type
+  // WITHOUT a garage, and ON-GRADE has no garage tile to pair with, so it
+  // spans both tracks like 2 STOREY + GARAGE + ROOM OVER does. It had one for
+  // a few hours on 13 Oct and lost it to Gruff's shelf, which holds a single
+  // row of cards (build-menu.js says why); an on-grade house with a garage is
+  // 1 STOREY + GARAGE switched to BALLOON / LEDGER on this very page.
   expect(await columnLines(page, 'family-row')).toEqual([
     ['1 STOREY', '+ GARAGE'],
-    ['ON-GRADE (BUNGALOW)', '+ GARAGE'],
+    ['ON-GRADE'],
     ['2 STOREY', '+ GARAGE'],
     ['2 STOREY + GARAGE + ROOM OVER'],
   ]);

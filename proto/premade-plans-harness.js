@@ -393,7 +393,7 @@ check('the board offers a plan for every entry that has one',
     // bungalow's: the board hands planFor an ENTRY ID, so a design that a
     // tile can order has to be reachable by that tile's own name.
     ['bilevel', 'bilevel-garage', 'bungalow', 'bungalow-garage',
-      'bungalow-ongrade', 'bungalow-ongrade-garage',
+      'bungalow-ongrade',
       'modifiedBilevel', 'twoStorey', 'twoStorey-garage', 'twoStorey-over'].join(',')]);
 
 // ── ON-GRADE (Movie, 12 Oct) ──
@@ -406,8 +406,6 @@ check('the board offers a plan for every entry that has one',
 check('ON-GRADE asks for balloon framing, and the plain bungalow asks for none',
   P => [`${P.planFor('bungalow-ongrade').framing},${P.planFor('bungalow').framing}`,
     'balloon,null']);
-check('and it says so with a garage too',
-  P => [P.planFor('bungalow-ongrade-garage').framing, 'balloon']);
 check('the garage is the only other thing the pair disagree about',
   P => {
     const plain = P.planFor('bungalow');
@@ -416,14 +414,12 @@ check('the garage is the only other thing the pair disagree about',
       .filter(key => JSON.stringify(plain[key]) !== JSON.stringify(grade[key]));
     return [differs.join(',') || '(nothing)', 'framing'];
   });
-check('ON-GRADE + GARAGE is the bungalow + garage, framing aside',
-  P => {
-    const plain = P.planFor('bungalow-garage');
-    const grade = P.planFor('bungalow-ongrade-garage');
-    const differs = Object.keys(plain)
-      .filter(key => JSON.stringify(plain[key]) !== JSON.stringify(grade[key]));
-    return [differs.join(',') || '(nothing)', 'framing'];
-  });
+// THE GARAGE VARIANT IS GONE, and this is where that is said in a check
+// rather than only in a comment: there is no 'bungalow-ongrade-garage'
+// design, because Gruff's shelf had one seat and it went to the house
+// (build-menu.js). A design no tile can order is a design nobody can ask for.
+check('there is no on-grade garage design to order',
+  P => [P.planFor('bungalow-ongrade-garage'), null]);
 check('it is still one storey, so nothing downstream reads it as a two',
   P => [P.planFor('bungalow-ongrade').storeys, 1]);
 
@@ -1403,10 +1399,13 @@ const MUTATIONS = [
     s2 => s2.replace(
       `    bungalow: () => bungalow({ garage: false }),`,
       `    bungalow: () => bungalow({ garage: false, framing: 'balloon' }),`)],
-  ['the ON-GRADE with a garage forgets its framing',
+  // A SWAP, NOT AN APPEND. Written as an append the replacement contained its
+  // own anchor, and the anchor audit refused it: a pattern that still matches
+  // after the edit cannot be told apart from one that never applied.
+  ['the on-grade design becomes the garage one the board cannot order',
     s2 => s2.replace(
-      `    'bungalow-ongrade-garage': () => bungalow({ garage: true, framing: 'balloon' }),`,
-      `    'bungalow-ongrade-garage': () => bungalow({ garage: true }),`)],
+      `    'bungalow-ongrade': () => bungalow({ garage: false, framing: 'balloon' }),`,
+      `    'bungalow-ongrade-garage': () => bungalow({ garage: true, framing: 'balloon' }),`)],
   ['ON-GRADE comes out two storeys',
     s2 => s2.replace(
       `    'bungalow-ongrade': () => bungalow({ garage: false, framing: 'balloon' }),`,

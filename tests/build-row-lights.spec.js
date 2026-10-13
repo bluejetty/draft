@@ -139,10 +139,21 @@ test.describe('The build row lamps', () => {
     expect(FAMILIES.filter(id => state.families[id].lit)).toEqual([]);
 
     // Open, it carries that family's finished houses -- Movie's list, 6 Sep.
+    //
+    // READ OFF THE MODULE, LIKE THE FAMILIES ABOVE. This was a literal of
+    // five ids, and it went red the day ON-GRADE (BUNGALOW) joined the family
+    // (13 Oct) -- the same way the FAMILIES literal went red when DETACHED
+    // GARAGE moved to the front on 24 Sep, which is why `familiesOf` exists
+    // thirty lines up. The note there is this one's too: build-menu.js's
+    // array is the one place the roster is said, and a copy here is a copy to
+    // get wrong. What this test is about is that the row carries the family's
+    // houses IN ORDER and lights them one at a time, not what the houses are
+    // called this month.
+    const bungalowEntries = await page.evaluate(() => window.DraftBuildMenu.BUILD_MENU
+      .find(family => family.id === 'bungalow').entries.map(entry => entry.id));
     state = await lamps(page, 'bungalow');
-    expect(Object.keys(state.types)).toEqual([
-      'bungalow', 'bungalow-garage', 'twoStorey', 'twoStorey-garage', 'twoStorey-over',
-    ]);
+    expect(bungalowEntries.length, 'the family has houses to carry').toBeGreaterThan(1);
+    expect(Object.keys(state.types)).toEqual(bungalowEntries);
     expect(litTypes(state)).toEqual([]);
     expect(haloTypes(state)).toEqual([]);
     expect(state.detached.src).toMatch(off('detached'));

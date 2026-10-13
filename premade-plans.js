@@ -1327,11 +1327,13 @@ if (!window.DraftPremadePlans) {
   const PLANS = Object.freeze({
     bungalow: () => bungalow({ garage: false }),
     'bungalow-garage': () => bungalow({ garage: true }),
-    // ON-GRADE, with and without the garage, because the floor connection
-    // and the garage are independent questions and a drafter who wants one
-    // should not have to give up the other.
+    // ON-GRADE. No garage variant: the drive-thru shelf holds six tiles and
+    // the BUNGALOW family had one seat left, so the seat went to the house
+    // (build-menu.js says why). An on-grade house with a garage is ordered as
+    // 1 STOREY + GARAGE and switched to BALLOON / LEDGER on PROJECT -- the
+    // same field this design sets -- so nothing is unreachable, and a design
+    // no tile can order would be a design nobody could ask for.
     'bungalow-ongrade': () => bungalow({ garage: false, framing: 'balloon' }),
-    'bungalow-ongrade-garage': () => bungalow({ garage: true, framing: 'balloon' }),
     // build-menu.js's own entry ids, so the board needs no editing when a
     // design arrives. `twoStorey-over` is deliberately absent -- see the note
     // on twoStorey: the room over the garage wants the over-garage level.
