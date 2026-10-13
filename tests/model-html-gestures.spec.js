@@ -637,6 +637,20 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
           buttons: ['left-tab', 'build-tab', 'props-tab', 'right-tab',
             'BUNGALOW', 'BILEVEL', 'DETACHED GARAGE', 'bone',
             'copy', 'paste',
+            // THE STOREY ARROWS (Movie, 12 Oct: "id like UP and DOWN arrows
+            // and when they are pressed the LEVEL goes either to the next one
+            // up or the next one down"). They MOVE WHERE THE DRAFTER IS
+            // STANDING and make nothing at all -- the same reading as
+            // TOY/DRAFTING and NIGHT/DAY two lists up, which change what the
+            // page shows and touch no absence row. Each press is a goToLevel
+            // like any other, and the level list has offered that since
+            // before this table was written.
+            //
+            // THEY WENT IN ON 12 OCT AND THIS LIST DID NOT LEARN THEM, which
+            // is how main came to be red: the table is only as good as the
+            // roster beside it, and the roster is what grows when the page
+            // does.
+            'model-level-up', 'model-level-down',
             // UNDO ON SCREEN (audit C4) is the Ctrl+Z row's own verb with a
             // button on it: the parity table already has Undo **present**,
             // and a second way to press it makes nothing new.
