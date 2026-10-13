@@ -38,9 +38,22 @@ const MUTATIONS = [
     c => c.replace('if (sideAt(lo)) { line = lo; mirror = true; }', 'if (false) { line = lo; mirror = true; }')],
   ['the bungalow + garage is roofed apart', 'traced-plans.js',
     c => c.replace('const one = unionLoops(H, Graw);', 'const one = null;')],
+  // RE-AIMED when the dropped garage's end began squaring onto the house
+  // wall before its gable was named. Same defect: the two roofs become one.
   ['the dropped garage shares the house roof', 'traced-plans.js',
-    c => c.replace('      plan.houseRoof = H;\n      plan.garageRoof = Graw;\n      plan.garageRoofHouseEnd = flushEdge(Graw, H);',
+    c => c.replace('      plan.houseRoof = H;\n      plan.garageRoof = squareJoin(Graw, H);\n      plan.garageRoofHouseEnd = flushEdge(plan.garageRoof, H);',
       '      plan.houseRoof = unionLoops(H, Graw) || H;\n      plan.garageRoof = null;\n      plan.garageRoofHouseEnd = flushEdge(Graw, H);')],
+  // ── THE SQUARING, BROKEN IN EACH OF ITS THREE WAYS ──────────────────────
+  // Not done at all: the jog comes back, two gables and the pocket between
+  // them. Squared onto the BOX rather than the house's wall: the end stands
+  // a notch INTO the house. And done to everything: an L-shaped garage loses
+  // its wing to a rule meant for a one-foot tie notch.
+  ['the garage end keeps its jog', 'traced-plans.js',
+    c => c.replace('    if (!square) return ring;', '    if (true) return ring;')],
+  ['the end squares onto the box, a notch inside the house', 'traced-plans.js',
+    c => c.replace('    if (!(on[main] > TOL)) return clean(box);', '    return clean(box);')],
+  ['every garage is squared, L-shaped or not', 'traced-plans.js',
+    c => c.replace('areaOf(box) - mine > mine * SQUARE_FILL_SHARE', 'false')],
   ['the entry ignores the garage line', 'traced-plans.js',
     c => c.replace('if (gLo > lo + TOL) { line = gLo; mirror = false; }', 'if (false) { line = gLo; mirror = false; }')],
   ['the room takes the whole garage', 'traced-plans.js',
@@ -270,6 +283,66 @@ const plan = (entryId, garage = GARAGE) => T.planFromTrace({
   const plan = T.planFromTrace({ entryId: 'modifiedBilevel', house, garage });
   check('a room the landing misses is still roofed',
     plan.error ? plan.error : !!(plan.overGarageRoof && plan.overGarageRoof.length >= 4), true);
+}
+
+// ── THE GARAGE END THAT DIES INTO THE HOUSE DIES IN ONE LINE ─────────────
+//
+// Movie, 13 Oct, over his own roof plan with the water marked in red arrows:
+// "when the roof on the garage goes up into a corner like this, it should go
+// FULL gable" -- "only the full gable on the part that connects to the house
+// (not how it jogs back and there are 2 gables originally".
+//
+// A garage loop carries the tie's notch at the house corner, so the end that
+// meets the house is a staircase and `flushEdge` names only the longest step
+// of it as the gable. The rest stays an eave, and the inside corner between
+// them is the pocket that sheds INTO the house.
+//
+// IT FILLS THE NOTCH AND PULLS THAT END ONTO THE HOUSE'S LINE. The bounding
+// box alone would push the end OUT over the house by the notch's depth --
+// right for a garage that oversails it, wrong for one dying into it.
+const sqKey = loop => loop.map(p => `${+p.x.toFixed(2)},${+p.z.toFixed(2)}`).join(' ');
+{
+  const house = [[-16, -20], [16, -20], [16, 20], [-16, 20]].map(([x, z]) => ({ x, z }));
+  // The premade's own garage, tie notch and all: a 1 ft step at the corner.
+  const notched = [[-4, 20], [16, 20], [16, 19], [20, 19], [20, 46], [-4, 46]]
+    .map(([x, z]) => ({ x, z }));
+  check('the tie notch is filled and the end sits on the house wall',
+    sqKey(T.squareJoin(notched, house)), '-4,20 20,20 20,46 -4,46');
+  // ON THE HOUSE'S LINE (z 20), NOT THE BOX'S (z 19), which is the half a
+  // plain hull gets wrong: the roof would stand a foot into the house.
+  check('and not on the box-s line, which is inside the house',
+    T.squareJoin(notched, house).every(p => p.z !== 19), true);
+  // AND THE ONE GABLE RUNS THE GARAGE'S FULL WIDTH, past the house's corner
+  // at 16 and out to 20 -- that is what one gable across the end means.
+  const end = T.squareJoin(notched, house);
+  check('the gable is the whole end', T.flushEdge(end, house), 0);
+
+  // A GARAGE THAT MEETS THE HOUSE SQUARE IS NOT TOUCHED.
+  const square = [[-4, 20], [16, 20], [16, 46], [-4, 46]].map(([x, z]) => ({ x, z }));
+  check('a square join is left alone', sqKey(T.squareJoin(square, house)),
+    '-4,20 16,20 16,46 -4,46');
+
+  // AND NOR IS A GARAGE THAT IS GENUINELY L-SHAPED. Filling that is not
+  // squaring a notch, it is inventing a building -- so the share it would
+  // add is what decides, not the shape of the corner.
+  const ell = [[-4, 20], [20, 20], [20, 34], [8, 34], [8, 46], [-4, 46]]
+    .map(([x, z]) => ({ x, z }));
+  check('an L-shaped garage keeps its wing',
+    sqKey(T.squareJoin(ell, house)), '-4,20 20,20 20,34 8,34 8,46 -4,46');
+  // A slanted edge is nobody-s bounding box either.
+  const slant = [[-4, 20], [16, 20], [20, 30], [20, 46], [-4, 46]].map(([x, z]) => ({ x, z }));
+  check('a slanted garage keeps its slant',
+    sqKey(T.squareJoin(slant, house)), '-4,20 16,20 20,30 20,46 -4,46');
+}
+{
+  // HIS OWN RING, from the drawing he sent: the notch is a 6 x 1 bite out of
+  // the corner where the garage meets the two-storey wall, and the gable runs
+  // the full depth once it is filled.
+  const his = [[-1.49, -18.1], [-7.49, -18.1], [-7.49, -47.1],
+    [16.51, -47.1], [16.51, -17.1], [-1.49, -17.1]].map(([x, z]) => ({ x, z }));
+  const hisHouse = [[-65, -25], [-7.49, -25], [-7.49, 4], [-65, 4]].map(([x, z]) => ({ x, z }));
+  check('his own garage ring squares to the rectangle it should be',
+    sqKey(T.squareJoin(his, hisHouse)), '-7.49,-47.1 16.51,-47.1 16.51,-17.1 -7.49,-17.1');
 }
 
 // ── REFUSALS ─────────────────────────────────────────────────────────────
