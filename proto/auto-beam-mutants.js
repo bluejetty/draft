@@ -33,13 +33,18 @@ const MUTANTS = [
     test: 'a built house arrives with its mid-span beam and teleposts on FOUNDATION' },
   { file: 'MODEL.html',
     name: 'the beam is filed on the level the drafter is standing on',
-    // RE-AIMED. `levelId` is the caller's now, so the equivalent defect is
-    // the level framing its OWN floor rather than the one above it -- which
-    // is what floorCarriedBy exists to answer.
-    // TWO LINES, because pressAutoBeam asks the same question one indent
-    // deeper and a four-space anchor matches INSIDE a six-space one.
-    find: '    const carried = floorCarriedBy(levelId);\n    if (!carried) return -1;',
-    with: '    const carried = { id: levelId, name: null };\n    if (!carried) return -1;',
+    // RE-AIMED TWICE, and the second time because it SURVIVED. It used to
+    // bend `carried`, which was what the body list was taken from -- and
+    // when the framing began asking the storey instead, `carried` stopped
+    // deciding which floor is measured and the mutation stopped doing
+    // anything the specs could see. An anchor that still applies is not a
+    // mutation that still bites, which is the one thing the anchor harness
+    // cannot tell you.
+    //
+    // So it bends what decides it NOW: the bodies. Same defect in the same
+    // words -- the level frames its own floor rather than the one over it.
+    find: '    const bodies = storeyBodiesOver(levelId);',
+    with: '    const bodies = storeyBodies({ id: levelId });',
     test: 'a built house arrives with its mid-span beam and teleposts on FOUNDATION' },
   { file: 'MODEL.html',
     name: 'the beam is filed on the layer set the drafter is standing on',
@@ -70,9 +75,15 @@ const MUTANTS = [
     test: 're-running replaces its own structure and leaves a drafter’s alone' },
   { file: 'MODEL.html',
     name: 'the sweep takes the drafter’s own beam with it',
+    // RE-AIMED when a storey became one thing to frame: the predicate also
+    // takes in what the OLD rule left on a half level, so the anchor grew a
+    // clause. The defect is the same one -- drop `auto` and the sweep eats a
+    // beam the drafter drew himself.
     find: '    const isMine = item => item.auto === true\n'
-      + '      && Number(item.levelId) === levelId && item.view === view;',
-    with: '    const isMine = item => Number(item.levelId) === levelId && item.view === view;',
+      + '      && ((Number(item.levelId) === levelId && item.view === view)\n'
+      + '        || (item.view === \'floor\' && orphanLevels.includes(Number(item.levelId))));',
+    with: '    const isMine = item => ((Number(item.levelId) === levelId && item.view === view)\n'
+      + '        || (item.view === \'floor\' && orphanLevels.includes(Number(item.levelId))));',
     test: 're-running replaces its own structure and leaves a drafter’s alone' },
   { file: 'MODEL.html',
     name: 'the garage is taken for the house, so the beam runs through it',
@@ -121,16 +132,22 @@ const MUTANTS = [
     test: 'a post with nothing under it says so rather than standing quietly' },
   { file: 'MODEL.html',
     name: 'the button frames the level it is on, not the floor it is looking at',
-    find: '    if (at < 0) return Number(levelId);\n'
-      + '    return at > 0 ? Number(floors[at - 1].id) : FOUNDATION_LEVEL_ID;',
+    // RE-AIMED: framesFrom reads by STOREY now, so it walks back past a half
+    // level rather than taking the previous list entry. Same defect -- the
+    // button frames the level the drafter is standing on.
+    find: '    const below = floors.slice(0, at).filter(level => !LA.sameStorey(level.id, levelId));\n'
+      + '    return below.length ? Number(below[below.length - 1].id) : FOUNDATION_LEVEL_ID;',
     with: '    return Number(levelId);',
     test: 'the posts land on the columns below, not on the even divisions' },
   { file: 'MODEL.html',
     name: 'a level frames its own floor rather than the one above it',
-    find: '    if (Number(levelId) === FOUNDATION_LEVEL_ID) return floors[0] || null;\n'
-      + '    const at = floors.findIndex(level => Number(level.id) === Number(levelId));\n'
-      + '    return at < 0 ? null : (floors[at + 1] || null);',
-    with: '    return (drawing?.levels || []).find(level => Number(level.id) === Number(levelId)) || null;',
+    // RE-AIMED: floorCarriedBy asks storeyLevelsOver now. Handing it the
+    // level's OWN entry is the same defect -- a level framing its own floor
+    // instead of the one over it.
+    find: '  const floorCarriedBy = levelId => {\n'
+      + '    const storey = storeyLevelsOver(levelId);',
+    with: '  const floorCarriedBy = levelId => {\n'
+      + '    const storey = (drawing?.levels || []).filter(level => Number(level.id) === Number(levelId));',
     // RE-AIMED. The roof test passed under this mutation for the WRONG reason:
     // floorCarriedBy(ROOF) came back as ROOF itself, ROOF carries no outline,
     // so the button was still greyed and the check still read green. What
@@ -139,8 +156,9 @@ const MUTANTS = [
     test: 'a post with nothing under it says so rather than standing quietly' },
   { file: 'MODEL.html',
     name: 'only one body on a floor is framed, so a second house loop is missed',
-    find: '    const bodies = storeyBodies(carried);',
-    with: '    const bodies = storeyBodies(carried).slice(-1);',
+    // RE-AIMED: the bodies come from the whole STOREY now, both halves of it.
+    find: '    const bodies = storeyBodiesOver(levelId);',
+    with: '    const bodies = storeyBodiesOver(levelId).slice(-1);',
     test: 'a house with a second floor gets a beam under it, not just under the first' },
   { file: 'build-house.js',
     name: 'the beam is cut evenly while its posts stand somewhere else',

@@ -491,6 +491,143 @@ test('a house with a second floor gets a beam under it, not just under the first
       .toEqual(posts(1, 'foundation'));
   });
 
+// ── A HALF LEVEL IS NOT A STOREY TO FRAME ───────────────────────────────────
+//
+// Movie, 13 Oct, on his own MOD BILEVEL: *"that same house i noticed needs
+// more beams in the basement"*. The basement had none. The 61 ft main floor
+// over it had been framed by the ENTRY landing -- six feet across, filed as
+// its own storey between FOUNDATION and MAIN FL -- and the beam holding the
+// house up was drawn on the landing's floor sheet, where he never looked. He
+// had drawn two short ones in the basement by hand, which is how the file
+// arrived.
+//
+// His ruling: *"lets consider the 0.5 and 1 storey as ONE 'level' for this
+// situation"*. level-assembly's own table has read 2 and 3 as MAIN FL since
+// they were numbered 0.5 and 1; nothing had ever asked it.
+//
+// WHAT THIS PINS IS WHERE THE BEAM LANDS, which is the whole of the
+// complaint: on the FOUNDATION, under the floor it carries, and not on the
+// landing.
+const splitLevels = () => [
+  { id: 8, name: 'SITE', elev: 0 },
+  { id: 7, name: 'ROOF', elev: 0 },
+  { id: 5, name: '2ND FL', elev: 9 },
+  { id: 3, name: 'MAIN FL', elev: 0 },
+  { id: 2, name: 'ENTRY', elev: -4 },
+  { id: 1, name: 'FOUNDATION', elev: -10 },
+];
+
+test('a split entry does not frame the floor above it — the foundation does',
+  async ({ page }) => {
+    await open(page, empty({
+      levels: splitLevels(),
+      outlines: [
+        // The landing, on 0.5 MAIN FL: too small to need anything of its own.
+        { ...rect({ wide: 8, deep: 12 }), id: 'outline-landing', levelId: 2 },
+        // And the floor it is part of, on 1 MAIN FL: 32 ft across, so it does.
+        { ...rect({ wide: 40, deep: 32 }), id: 'outline-main', levelId: 3 },
+      ],
+    }));
+    await armBeamTool(page);
+    await autoBeamButton(page).click();
+    await saveNow(page);
+    const saved = await savedFile(page);
+
+    const on = (levelId, view) => (saved.beams || [])
+      .filter(beam => beam.levelId === levelId && beam.view === view);
+    expect(on(1, 'foundation').length,
+      'the beam under the main floor is not on the foundation, which is where a '
+      + 'drafter standing in the basement looks for it').toBeGreaterThan(0);
+    expect(on(2, 'floor').length,
+      'the landing framed the floor above it again — six feet of entry deciding '
+      + 'what holds up thirty-two').toBe(0);
+    // AND THE POSTS WITH IT. A beam on the foundation whose teleposts are still
+    // standing on the landing is the same defect wearing one shoe.
+    const posts = (levelId, view) => (saved.columns || [])
+      .filter(column => column.levelId === levelId && column.view === view
+        && !String(column.footing || '').startsWith('pile'));
+    expect(posts(1, 'foundation').length, 'the beam has nothing holding it up')
+      .toBeGreaterThan(0);
+    expect(posts(2, 'floor').length, 'teleposts left standing on the landing').toBe(0);
+  });
+
+// AND THE PRESS NAMES THE FLOOR IT IS FRAMING, which is the half of this a
+// drafter reads before he presses anything. Naming the landing is how the old
+// rule announced itself, and it read as correct.
+//
+// ASKED FROM THE LANDING, because that is where the two rules differ. Stood
+// on 1 MAIN FL they agree -- the level below is FOUNDATION either way -- and
+// a check that cannot tell them apart proves nothing. Stood on the landing,
+// the old rule framed the landing ITSELF (FOUNDATION carries 0.5) and the new
+// one frames the floor the landing is part of.
+test('the press names the whole floor it frames, not the landing',
+  async ({ page }) => {
+    await open(page, empty({
+      levels: splitLevels(),
+      outlines: [
+        { ...rect({ wide: 8, deep: 12 }), id: 'outline-landing', levelId: 2 },
+        { ...rect({ wide: 40, deep: 32 }), id: 'outline-main', levelId: 3 },
+      ],
+    }));
+    await h.pickModelLevel(page, 2);
+    await armBeamTool(page);
+    const title = await autoBeamButton(page).getAttribute('title');
+    expect(title, 'standing on the landing, the press offers to frame the landing')
+      .toContain('1 MAIN FL');
+    expect(title, 'which is six feet of entry calling itself the floor').not.toContain('0.5');
+  });
+
+// AND AN OLD FILE DOES NOT END UP WITH THE BEAM TWICE. Everything framed
+// under the previous rule sits on the landing's sheet; re-framing has to take
+// those with it, or the same beam is drawn in two places and only one of them
+// is where it belongs.
+test('re-framing sweeps what the old rule left on the landing', async ({ page }) => {
+  await open(page, empty({
+    levels: splitLevels(),
+    outlines: [
+      { ...rect({ wide: 8, deep: 12 }), id: 'outline-landing', levelId: 2 },
+      { ...rect({ wide: 40, deep: 32 }), id: 'outline-main', levelId: 3 },
+    ],
+    // What the old rule wrote: auto structure on the landing's floor sheet.
+    beams: [{ id: 901, levelId: 2, view: 'floor', auto: true,
+      start: { x: -20, y: 0, z: 0 }, end: { x: 20, y: 0, z: 0 } }],
+    columns: [{ id: 902, levelId: 2, view: 'floor', auto: true, footing: 'pad36',
+      point: { x: 0, y: 0, z: 0 } }],
+  }));
+  await armBeamTool(page);
+  await autoBeamButton(page).click();
+  await saveNow(page);
+  const saved = await savedFile(page);
+
+  expect((saved.beams || []).filter(b => b.levelId === 2).length,
+    'the old beam is still on the landing, so the house now shows two').toBe(0);
+  expect((saved.columns || []).filter(c => c.levelId === 2).length,
+    'and its teleposts with it').toBe(0);
+  expect((saved.beams || []).filter(b => b.levelId === 1 && b.view === 'foundation').length)
+    .toBeGreaterThan(0);
+});
+
+// AND A DRAFTER'S OWN WORK ON THE LANDING IS NOT SWEPT WITH IT. The sweep is
+// for what the old RULE wrote; a beam he drew there himself is his.
+test('a beam the drafter drew on the landing survives the re-frame',
+  async ({ page }) => {
+    await open(page, empty({
+      levels: splitLevels(),
+      outlines: [
+        { ...rect({ wide: 8, deep: 12 }), id: 'outline-landing', levelId: 2 },
+        { ...rect({ wide: 40, deep: 32 }), id: 'outline-main', levelId: 3 },
+      ],
+      beams: [{ id: 903, levelId: 2, view: 'floor',
+        start: { x: -3, y: 0, z: 2 }, end: { x: 3, y: 0, z: 2 } }],
+    }));
+    await armBeamTool(page);
+    await autoBeamButton(page).click();
+    await saveNow(page);
+    const saved = await savedFile(page);
+    expect((saved.beams || []).some(b => b.id === 903),
+      'the re-frame ate a beam the drafter drew himself').toBe(true);
+  });
+
 test('two bodies on one floor are two floors, and each is asked on its own span',
   async ({ page }) => {
     // THE BUG THIS IS FOR WAS REAL AND WAS FOUND BY MEASURING, not by review:

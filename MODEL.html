@@ -14674,6 +14674,17 @@
       .map(outline => ({ outline, storeyId: storey.id }));
   };
 
+  // EVERY BODY OF THE STOREY A LEVEL CARRIES, both halves of it. A MOD
+  // BILEVEL files the landing's outline on 0.5 MAIN FL and the rest of the
+  // floor on 1 MAIN FL, and they are two pieces of ONE floor for the level
+  // underneath to hold up -- so the foundation frames both, and each is
+  // still measured on its own as storeyBodies has always done. Each body
+  // keeps its OWN level in `storeyId`, which is what the notes and the
+  // over-garage test read: a note about the landing belongs on the landing's
+  // sheet even when the foundation is what framed it.
+  const storeyBodiesOver = levelId =>
+    storeyLevelsOver(levelId).flatMap(level => storeyBodies(level));
+
   // THE ONE-BODY QUESTION still has callers that want one answer -- AUTO PILES
   // asks which loop the garage shares an edge with, and the panel asks whether
   // there is anything to frame at all. Last one wins there, the rule
@@ -14741,11 +14752,48 @@
   // FOUNDATION carries the lowest storey; a storey carries the next one up.
   // floorLevels is bottom-up and excludes FOUNDATION (it has no 'floor' view),
   // so the two questions are one lookup with one branch.
-  const floorCarriedBy = levelId => {
+  // ── A STOREY, NOT THE NEXT ENTRY IN THE LIST ─────────────────────────────
+  //
+  // Movie, 13 Oct, on the MOD BILEVEL whose main floor beam was nowhere to be
+  // found in its basement: "lets consider the 0.5 and 1 storey as ONE 'level'
+  // for this situation".
+  //
+  // A half level is PART of the floor above it -- level-assembly's own table
+  // has read 0.5 and 1 as MAIN FL since the day they were numbered. Walking
+  // the list one entry at a time put the ENTRY landing between FOUNDATION and
+  // MAIN FL, so the foundation framed a landing six feet across, the 61 ft
+  // floor over the rest of it was framed by that landing instead, and its
+  // beam was filed on the landing's own sheet. He went looking for it in the
+  // basement, found nothing, and drew two by hand.
+  //
+  // THE HEAD OF THE STOREY IS WHAT COMES BACK, so every caller that NAMES the
+  // floor being carried says "1 MAIN FL" rather than naming the landing
+  // again. `storeyBodiesOver` below is what the framing measures, and that
+  // takes the whole storey, both halves of it.
+  const storeyLevelsOver = levelId => {
+    const LA = window.DraftLevelAssembly;
     const floors = window.DraftLayerViews.floorLevels(drawing?.levels || []);
-    if (Number(levelId) === FOUNDATION_LEVEL_ID) return floors[0] || null;
-    const at = floors.findIndex(level => Number(level.id) === Number(levelId));
-    return at < 0 ? null : (floors[at + 1] || null);
+    // The storeys in order, bottom up: the floor list with each run of levels
+    // that share a storey collapsed to one entry.
+    const keys = [];
+    floors.forEach(level => {
+      const key = LA.storeyKeyOf(level.id);
+      if (keys[keys.length - 1] !== key) keys.push(key);
+    });
+    // FOUNDATION carries the lowest storey; a storey carries the next one up.
+    // A level that is in no storey here -- ROOF, SITE, the drafter's own --
+    // carries nothing, which is the answer the list walk gave before.
+    const mine = Number(levelId) === FOUNDATION_LEVEL_ID ? null : LA.storeyKeyOf(levelId);
+    const at = mine === null ? -1 : keys.indexOf(mine);
+    if (mine !== null && at < 0) return [];
+    const want = keys[at + 1];
+    return want ? floors.filter(level => LA.storeyKeyOf(level.id) === want) : [];
+  };
+  const floorCarriedBy = levelId => {
+    const storey = storeyLevelsOver(levelId);
+    if (!storey.length) return null;
+    const head = window.DraftLevelAssembly.storeyHeadOf(storey.map(l => l.id), storey[0].id);
+    return storey.find(level => Number(level.id) === Number(head)) || storey[0];
   };
 
   // ── WHAT IS ALREADY HOLDING THE FLOOR BELOW ──────────────────────────────
@@ -14827,7 +14875,7 @@
     // at 32 x 40, which needs a beam, and the room over the garage at 24 x 19,
     // which does not. One answer for the pair would be wrong whichever loop it
     // came from.
-    const bodies = storeyBodies(carried);
+    const bodies = storeyBodiesOver(levelId);
     if (!bodies.length) return -1;
     // THE DRAWING THAT SHOWS STRUCTURE, NAMED RATHER THAN INHERITED.
     // wallHomeView hands back 'plan' whenever the drafter happens to be on
@@ -14862,8 +14910,20 @@
     // which, the way it does on the old page. Beams carry no footing, so the
     // same predicate reads false for them and their sweep is untouched.
     const sweptBeams = [], sweptColumns = [];
+    // AND WHAT THE OLD RULE LEFT ON A HALF LEVEL. Before a storey was one
+    // thing to frame, the landing of a MOD BILEVEL framed the floor above it
+    // and filed the beam on its own sheet. That level frames nothing now, so
+    // anything `auto` still sitting on it is an orphan from the old rule --
+    // and leaving it would draw the same beam twice, once where it belongs
+    // and once where he could not find it. Only levels of the storey being
+    // framed, only the floor view, and only auto: a beam he drew himself on
+    // the landing is his, and the pile exception below still applies.
+    const orphanLevels = storeyLevelsOver(levelId)
+      .map(level => Number(level.id))
+      .filter(id => id !== Number(carried.id));
     const isMine = item => item.auto === true
-      && Number(item.levelId) === levelId && item.view === view;
+      && ((Number(item.levelId) === levelId && item.view === view)
+        || (item.view === 'floor' && orphanLevels.includes(Number(item.levelId))));
     const isPile = item => String(item.footing || '').startsWith('pile');
     // IN PLACE, NOT REASSIGNED. A press that built the garage's piles a step
     // earlier filed them for its one undo as {list, item} against THIS array;
@@ -21249,13 +21309,23 @@
   // It was also wrong for the drafter. AUTO BEAM on the main floor putting
   // structure on the 2ND FL layer is a surprise; asking for the beam under
   // the floor on screen is what the button looks like it does.
+  // BY STOREY, like floorCarriedBy, and it has to be or the two disagree:
+  // standing on the ENTRY landing of a MOD BILEVEL, the beam that holds it up
+  // is the main floor's beam on FOUNDATION, not one filed against the landing
+  // by the level below the landing -- which is FOUNDATION anyway. Asking this
+  // by storey is what makes "the level that frames me" and "the floor that
+  // level carries" the same relation read from its two ends.
   const framesFrom = levelId => {
+    const LA = window.DraftLevelAssembly;
     const floors = window.DraftLayerViews.floorLevels(drawing?.levels || []);
     const at = floors.findIndex(level => Number(level.id) === Number(levelId));
     // Not a storey at all -- FOUNDATION, ROOF, SITE -- so it frames from where
     // it stands and floorCarriedBy decides whether that means anything.
     if (at < 0) return Number(levelId);
-    return at > 0 ? Number(floors[at - 1].id) : FOUNDATION_LEVEL_ID;
+    // The last level below me that is NOT in my storey. Nothing below means
+    // the lowest storey, and FOUNDATION frames that.
+    const below = floors.slice(0, at).filter(level => !LA.sameStorey(level.id, levelId));
+    return below.length ? Number(below[below.length - 1].id) : FOUNDATION_LEVEL_ID;
   };
 
   const pressAutoBeam = () => {
