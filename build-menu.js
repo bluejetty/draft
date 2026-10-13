@@ -88,6 +88,31 @@ if (!window.DraftBuildMenu) {
       entries: Object.freeze([
         Object.freeze({ id: 'bungalow', label: '1 STOREY', type: 'bungalow' }),
         Object.freeze({ id: 'bungalow-garage', label: '1 STOREY + GARAGE', type: 'bungalow', garage: 'attached' }),
+        // ON-GRADE (Movie, 12 Oct): "this will need to be a new PROJECT area
+        // building type. maybe we could add it to the BUNGALOW section? call
+        // it ON-GRADE" -- "ON-GRADE (BUNGALOW)".
+        //
+        // NO `type` OF ITS OWN, and that was the choice. It is a bungalow by
+        // every question the file asks -- one storey, the same footprint, the
+        // same roof -- and what makes it on-grade is WHERE ITS FLOOR MEETS
+        // THE WALL, which level-assembly.js already answers per level as
+        // `framing`. A fifth BUILD_TYPES id would have meant the persisted
+        // vocabulary, PROJECT's type picker, fifteen specs and eight
+        // harnesses all learning a new word for a building they already
+        // know, and would still not have said the one thing that differs.
+        //
+        // IT ALSO MAKES THE ANSWER REUSABLE, which is Movie's own point:
+        // "this method of framing could also be used for the entry way of
+        // bilevels which is a close to grade floor also". A flag on a level
+        // can go on that level too; a build type cannot.
+        // `framing` IS WHAT MAKES THEM DIFFERENT, and it is here as well as on
+        // the design because PROJECT's family row has to know which of two
+        // bungalow tiles is lit without reaching into premade-plans.js for a
+        // design it never builds. It is the same word level-assembly.js
+        // persists, so the tile, the file and the FLOOR FRAMING choice on the
+        // level card are one answer seen three ways.
+        Object.freeze({ id: 'bungalow-ongrade', label: 'ON-GRADE (BUNGALOW)', type: 'bungalow', framing: 'balloon' }),
+        Object.freeze({ id: 'bungalow-ongrade-garage', label: 'ON-GRADE (BUNGALOW) + GARAGE', type: 'bungalow', garage: 'attached', framing: 'balloon' }),
         Object.freeze({ id: 'twoStorey', label: '2 STOREY', type: 'twoStorey' }),
         Object.freeze({ id: 'twoStorey-garage', label: '2 STOREY + GARAGE', type: 'twoStorey', garage: 'attached' }),
         // The room over the garage on a 2 STOREY is the UPPER FLOOR REACHING

@@ -16275,6 +16275,30 @@
         wallHeightFt: split.woodFillHeightFt - entryPkgFt,
       };
     }
+    // ── AND WHERE THE FLOOR MEETS THE WALL ───────────────────────────────
+    //
+    // ON-GRADE's one difference from the bungalow beside it on the board:
+    // the joists hang on a ledger inside the foundation with their tops
+    // flush with the sill, so only the sheathing lands on top of the wall.
+    // The design says so with `framing` and this writes it onto the floor
+    // level's own assembly, where PROJECT's FLOOR FRAMING choice reads and
+    // edits it afterwards -- the tile sets it, it is not owned by the tile.
+    //
+    // ONTO `levelId`, THE STOREY THE SHELL IS ACTUALLY RAISED ON, not a
+    // hardcoded MAIN FL: the build files itself on lowestFloorLevel() above,
+    // and a framing written to a level the house is not on would be a claim
+    // about an empty storey.
+    //
+    // ONLY WHEN THE DESIGN ASKS. A plain bungalow carries `framing: null`
+    // and nothing is written, so a drafter who had set a level to balloon by
+    // hand and then built an ordinary house keeps his answer.
+    if (plan.framing) {
+      drawing.levelAssemblies = drawing.levelAssemblies || {};
+      drawing.levelAssemblies[levelId] = {
+        ...(drawing.levelAssemblies[levelId] || {}),
+        framing: plan.framing,
+      };
+    }
     // ── THE SHELL, ONE STOREY AT A TIME ──────────────────────────────────
     //
     // MODEL.dc.html's _buildHouse walks `floors.forEach` and calls

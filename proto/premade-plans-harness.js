@@ -389,7 +389,43 @@ check('and every opening has a head above its sill, which the format demands',
 // ── the catalogue ──
 check('the board offers a plan for every entry that has one',
   P => [P.entryIds().sort().join(','),
-    'bilevel,bilevel-garage,bungalow,bungalow-garage,modifiedBilevel,twoStorey,twoStorey-garage,twoStorey-over']);
+    // ON-GRADE joins the roster as two more ids rather than a flag on the
+    // bungalow's: the board hands planFor an ENTRY ID, so a design that a
+    // tile can order has to be reachable by that tile's own name.
+    ['bilevel', 'bilevel-garage', 'bungalow', 'bungalow-garage',
+      'bungalow-ongrade', 'bungalow-ongrade-garage',
+      'modifiedBilevel', 'twoStorey', 'twoStorey-garage', 'twoStorey-over'].join(',')]);
+
+// ── ON-GRADE (Movie, 12 Oct) ──
+//
+// "call it ON-GRADE", in the BUNGALOW family, for a floor "hanging on the
+// SIDE of the interior of the foundation". It is the same building as the
+// bungalow beside it -- the ONE difference is `framing`, and these say so
+// both ways round, because a design that differed in anything else would be
+// a second bungalow to keep in step rather than a floor connection.
+check('ON-GRADE asks for balloon framing, and the plain bungalow asks for none',
+  P => [`${P.planFor('bungalow-ongrade').framing},${P.planFor('bungalow').framing}`,
+    'balloon,null']);
+check('and it says so with a garage too',
+  P => [P.planFor('bungalow-ongrade-garage').framing, 'balloon']);
+check('the garage is the only other thing the pair disagree about',
+  P => {
+    const plain = P.planFor('bungalow');
+    const grade = P.planFor('bungalow-ongrade');
+    const differs = Object.keys(plain)
+      .filter(key => JSON.stringify(plain[key]) !== JSON.stringify(grade[key]));
+    return [differs.join(',') || '(nothing)', 'framing'];
+  });
+check('ON-GRADE + GARAGE is the bungalow + garage, framing aside',
+  P => {
+    const plain = P.planFor('bungalow-garage');
+    const grade = P.planFor('bungalow-ongrade-garage');
+    const differs = Object.keys(plain)
+      .filter(key => JSON.stringify(plain[key]) !== JSON.stringify(grade[key]));
+    return [differs.join(',') || '(nothing)', 'framing'];
+  });
+check('it is still one storey, so nothing downstream reads it as a two',
+  P => [P.planFor('bungalow-ongrade').storeys, 1]);
 
 // ── the BILEVEL (Movie, 2 Oct) ──
 // "12ft wide (sideways) with and 6 deep (from front)", "inside house
@@ -1359,6 +1395,22 @@ const GARAGE_TIE_DECL = `    // One foot BEHIND the house's front line, which is
     const tieZ = houseFront - GARAGE_TIE_FT;`;
 
 const MUTATIONS = [
+  ['ON-GRADE loses its balloon framing and becomes an ordinary bungalow',
+    s2 => s2.replace(
+      `    'bungalow-ongrade': () => bungalow({ garage: false, framing: 'balloon' }),`,
+      `    'bungalow-ongrade': () => bungalow({ garage: false, framing: null }),`)],
+  ['the plain bungalow is balloon framed too, so the pair stop differing',
+    s2 => s2.replace(
+      `    bungalow: () => bungalow({ garage: false }),`,
+      `    bungalow: () => bungalow({ garage: false, framing: 'balloon' }),`)],
+  ['the ON-GRADE with a garage forgets its framing',
+    s2 => s2.replace(
+      `    'bungalow-ongrade-garage': () => bungalow({ garage: true, framing: 'balloon' }),`,
+      `    'bungalow-ongrade-garage': () => bungalow({ garage: true }),`)],
+  ['ON-GRADE comes out two storeys',
+    s2 => s2.replace(
+      `    'bungalow-ongrade': () => bungalow({ garage: false, framing: 'balloon' }),`,
+      `    'bungalow-ongrade': () => ({ ...bungalow({ garage: false, framing: 'balloon' }), storeys: 2 }),`)],
   ['the room-s roof is the room alone, short of the landing',
     c => c.replace('overGarageRoof: joinLoops(squareOver(overGarageLoop()), upperLandingLoop()),', 'overGarageRoof: overGarageLoop(),')],
   // ── THE GARAGE ROOF'S HOUSE END ──
@@ -1664,10 +1716,10 @@ const MUTATIONS = [
   // it was meant to trip went on passing, which is a mutation that proves
   // nothing while looking like one that proves something.
   ['1 STOREY comes with no openings at all',
-    s2 => s2.replace(`  const bungalow = ({ garage = false } = {}) => ({
+    s2 => s2.replace(`  const bungalow = ({ garage = false, framing = null } = {}) => ({
     house: houseLoop(),
     houseOpenings: houseOpenings(),`,
-    `  const bungalow = ({ garage = false } = {}) => ({
+    `  const bungalow = ({ garage = false, framing = null } = {}) => ({
     house: houseLoop(),
     houseOpenings: [],`)],
   ['the two loops are wound against each other',

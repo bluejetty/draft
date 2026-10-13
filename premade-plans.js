@@ -859,9 +859,34 @@ if (!window.DraftPremadePlans) {
   // `garage` is the ATTACHED one. A detached garage is a different body with
   // a different rule and it has its own module (garage-site.js); asking for
   // one here would be a second answer to a question already answered.
-  const bungalow = ({ garage = false } = {}) => ({
+  // ── ON-GRADE IS A BUNGALOW WITH ITS FLOOR HUNG, NOT STACKED ──────────
+  //
+  // Movie, 12 Oct, off a 24-sheet apartment set he was tracing: "the floor
+  // isn't ON the foundation it is hanging on the SIDE of the interior of the
+  // foundation and the sill plate is only covered by the 3/4" sheathing of
+  // the flooring (the top of the joists align with the top of the sill
+  // plate)" -- "ON GRADE BUNGALOW maybe would be a good name because its
+  // good for wheel chair access" -- "call it ON-GRADE", in the BUNGALOW
+  // family.
+  //
+  // IT IS THE SAME BUILDING. Same 32 x 40, same openings, same roof; the one
+  // difference is where its floor meets the wall, and that is a per-level
+  // answer (level-assembly.js's `framing`) rather than a second design. So
+  // `framing` rides the plan and the committer writes it onto MAIN FL's
+  // assembly -- which is why the plain bungalow says `framing: null` out
+  // loud rather than leaving the key off: absent would have to mean
+  // "platform", which is the default being right by accident.
+  //
+  // WHY IT BUYS THE WHEELCHAIR. Hanging the joists on a ledger inside the
+  // foundation instead of standing them on top of the wall takes the whole
+  // joist depth out of the step up from grade -- about a foot -- so the
+  // subfloor finishes 2 1/4" above the concrete (1 1/2" sill, joists flush
+  // with its top, 3/4" sheathing over both) rather than a floor package
+  // above it.
+  const bungalow = ({ garage = false, framing = null } = {}) => ({
     house: houseLoop(),
     houseOpenings: houseOpenings(),
+    framing,
     // SAID, NOT IMPLIED. A bungalow is one storey, and the committer reads
     // this number to know how many floor levels to raise the shell on --
     // leaving it out would make "absent" mean "one", which is the kind of
@@ -1302,6 +1327,11 @@ if (!window.DraftPremadePlans) {
   const PLANS = Object.freeze({
     bungalow: () => bungalow({ garage: false }),
     'bungalow-garage': () => bungalow({ garage: true }),
+    // ON-GRADE, with and without the garage, because the floor connection
+    // and the garage are independent questions and a drafter who wants one
+    // should not have to give up the other.
+    'bungalow-ongrade': () => bungalow({ garage: false, framing: 'balloon' }),
+    'bungalow-ongrade-garage': () => bungalow({ garage: true, framing: 'balloon' }),
     // build-menu.js's own entry ids, so the board needs no editing when a
     // design arrives. `twoStorey-over` is deliberately absent -- see the note
     // on twoStorey: the room over the garage wants the over-garage level.

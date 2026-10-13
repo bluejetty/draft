@@ -39,10 +39,18 @@ test('the first card is BUNGALOWS and its family buttons carry the menu', async 
   // The intro Movie struck is gone, title and all.
   await expect(page.locator('body')).not.toContainText('first 4 ft, cut inward');
 
-  // Same five houses the drive-thru's BUNGALOW family offers -- a card with
-  // its own shorter list would be a second menu to keep in step.
+  // THE SAME HOUSES THE DRIVE-THRU'S BUNGALOW FAMILY OFFERS, counted off
+  // that menu rather than typed here -- a card with its own shorter list
+  // would be a second menu to keep in step, and a hardcoded number is that
+  // list wearing a disguise. It read 5 until ON-GRADE and ON-GRADE + GARAGE
+  // joined the family (Movie, 12 Oct), which is exactly the edit a literal
+  // makes you come back for.
   const buttons = page.locator('#family-row .family-button');
-  await expect(buttons).toHaveCount(5);
+  const inMenu = await page.evaluate(() => window.DraftBuildMenu.BUILD_MENU
+    .find(family => family.id === 'bungalow').entries.length);
+  expect(inMenu, 'the family has grown past the pair it started with')
+    .toBeGreaterThan(5);
+  await expect(buttons).toHaveCount(inMenu);
   await expect(page.locator('[data-family-entry="twoStorey-over"]'))
     .toHaveText('2 STOREY + GARAGE + ROOM OVER');
 });
@@ -74,8 +82,15 @@ const columnLines = (page, id) => page.evaluate(sel => {
 test('each column pairs a build with the thing that is added to it', async ({ page }) => {
   await openProject(page);
 
+  // ON-GRADE PAIRS WITH ITS OWN GARAGE, on its own line between the two
+  // storeys -- which is the menu's rule arriving unaided: an entry pairs
+  // when the one before it is the same type without a garage, so the two
+  // tiles added on 12 Oct landed here without a word being said about
+  // layout. The long label keeps its words; only the SECOND of a pair is
+  // shortened at the plus.
   expect(await columnLines(page, 'family-row')).toEqual([
     ['1 STOREY', '+ GARAGE'],
+    ['ON-GRADE (BUNGALOW)', '+ GARAGE'],
     ['2 STOREY', '+ GARAGE'],
     ['2 STOREY + GARAGE + ROOM OVER'],
   ]);
@@ -224,4 +239,103 @@ test('the press adds the 20" package and lands its deck on the 2nd floor', async
 
   await page.reload();
   await expect(page.locator('[data-room-over-row]')).toHaveAttribute('aria-pressed', 'true');
+});
+
+// ── ON-GRADE, AND WHY THE ROW NEEDED A THIRD TEST TO LIGHT ITSELF ────────
+//
+// Movie, 12 Oct: "call it ON-GRADE", in the BUNGALOW family, for the floor
+// connection he traced off an apartment set -- joists hung on a ledger
+// inside the foundation instead of standing on the wall.
+//
+// IT IS NOT A BUILD TYPE. ON-GRADE and 1 STOREY are both `bungalow`, and
+// both carry the same garage plan, so the two tests the row glowed on until
+// now ("same type", "same garage") cannot tell them apart -- they would have
+// lit 1 STOREY on an on-grade house for ever. The third test is MAIN FL's
+// own floor framing, which is where the difference actually lives and what
+// the level card's FLOOR FRAMING choice edits.
+test('ON-GRADE and 1 STOREY are one type, told apart by the floor framing', async ({ page }) => {
+  await openProject(page);
+
+  const plain = page.locator('[data-family-entry="bungalow"]');
+  const grade = page.locator('[data-family-entry="bungalow-ongrade"]');
+  await expect(grade, 'the tile is on the card').toBeVisible();
+
+  // THE PRESS WRITES THE FRAMING, which is the whole of what it chooses:
+  // the type and the garage plan are the same either way.
+  await grade.click();
+  await expect.poll(async () => {
+    const saved = await h.savedDrawing(page);
+    return `${saved?.buildType}/${saved?.levelAssemblies?.[3]?.framing}`;
+  }, { message: 'a bungalow, framed on a ledger' }).toBe('bungalow/balloon');
+
+  await expect(grade).toHaveAttribute('aria-pressed', 'true');
+  await expect(plain, 'and the tile it shares a type with stays dark')
+    .toHaveAttribute('aria-pressed', 'false');
+
+  // AND BACK, because a tile that can only be pressed one way is not a
+  // choice. 1 STOREY means the platform-framed bungalow; leaving the old
+  // answer standing would make the tile a lie.
+  await plain.click();
+  await expect.poll(async () => (await h.savedDrawing(page))
+    ?.levelAssemblies?.[3]?.framing).toBe('platform');
+  await expect(plain).toHaveAttribute('aria-pressed', 'true');
+  await expect(grade).toHaveAttribute('aria-pressed', 'false');
+
+  // IT SURVIVES THE PAGE. The glow is read from the drawing, not from the
+  // last press, so a reload has to land on the same tile.
+  await grade.click();
+  await expect.poll(async () => (await h.savedDrawing(page))
+    ?.levelAssemblies?.[3]?.framing).toBe('balloon');
+  await page.reload();
+  await expect(page.locator('[data-family-entry="bungalow-ongrade"]'))
+    .toHaveAttribute('aria-pressed', 'true');
+});
+
+// THE BILEVEL COLUMN SHARES THE BUILDER AND MUST NOT SHARE THE ANSWER. Its
+// tiles say nothing about floor framing, so a press there has to leave MAIN
+// FL's alone -- a drafter who set BALLOON / LEDGER on the level card and
+// then picked BILEVEL + GARAGE would otherwise have it silently reset, and
+// the bilevel tile would go dark on his own drawing.
+//
+// THE DRAWING IS SEEDED RATHER THAN PRESSED INTO SHAPE. The bungalow and
+// bilevel family rows live on different cards, and a project that has named
+// its house does not switch cards by being looked at ("A PROJECT WITH A HOME
+// CARD IS NOT SWITCHED BY LOOKING", Movie, 6 Oct) -- so there is no press
+// path from one row to the other, by design. Writing the balloon answer into
+// the file is also the truer fixture: it is the drafter who set it on the
+// level card last session, which is the case this protects.
+test('a bilevel press leaves the floor framing where it was', async ({ page }) => {
+  await h.openModel(page);
+  // The page writes the file; this edits what it wrote, so the fixture is
+  // the drawing PROJECT itself produces rather than a shape typed here that
+  // could drift from the format.
+  await page.goto('/PROJECT.html?type=bilevel');
+  // A PRESS FIRST, BECAUSE A DRAWING NOBODY HAS TOUCHED IS NOT IN THE STORE
+  // YET -- the page writes on change, so there is nothing to edit until
+  // something changes. The plain BILEVEL is the press, and it is also the
+  // state this test is about: a bilevel drawing.
+  await page.locator('#bilevel-family-row button[data-family-entry="bilevel"]').click();
+  await expect.poll(async () => (await h.savedDrawing(page))?.buildType).toBe('bilevel');
+  await page.evaluate(async () => {
+    const file = await window.SharedFileStore.loadSharedFile('model-drawing');
+    const drawing = JSON.parse(await file.text());
+    drawing.buildType = 'bilevel';
+    drawing.levelAssemblies = { ...(drawing.levelAssemblies || {}), 3: {
+      ...(drawing.levelAssemblies?.[3] || {}), framing: 'balloon' } };
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(drawing)], 'model-drawing.json',
+        { type: 'application/json' }), 'model-drawing');
+  });
+  await page.reload();
+
+  const bilevel = page.locator('#bilevel-family-row button[data-family-entry="bilevel-garage"]');
+  await expect(bilevel).toBeVisible();
+  await bilevel.click();
+
+  await expect.poll(async () => (await h.savedDrawing(page))?.garagePlan)
+    .toBe('attached');
+  expect((await h.savedDrawing(page))?.levelAssemblies?.[3]?.framing,
+    'the balloon answer is still his').toBe('balloon');
+  await expect(bilevel, 'and its tile lights on a balloon-framed drawing')
+    .toHaveAttribute('aria-pressed', 'true');
 });
