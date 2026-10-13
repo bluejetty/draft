@@ -62,7 +62,11 @@
         display: flex;
         flex-direction: column;
         justify-content: center;
-        padding: 48px 0;
+        /* "less space at top" / "start the text up higher" (Movie, 13 Oct).
+           Not symmetric any more: the top is what he is reading down from, so
+           it is the one that gives. The bottom keeps enough to clear the
+           visit counter. */
+        padding: 14px 0 22px;
       }
 
       /* The logo's rendered width is the ONE number this page sizes from.
@@ -84,10 +88,22 @@
          old wordmark filled 92.9%, so the wider box paints the mark at the
          same visible size. One file serves the entry page, the home links
          and the printed titleblock — 800x800, so nothing upscales. */
-      :root { --logo-w: min(460px, 88vw, 70vh); }
+      /* ── AND IT HAS TO FIT THE SCREEN AT 100% (Movie, 13 Oct) ──────────
+         "can you adjust the sizes on the main entry page (SMALLER) so it all
+         fits when screen is set to 100% for desktop (like in these photos its
+         100% but not all on the same screen)".
+         THE RING IS TWO LOGOS TALL. Its grid is 4 rows of --logo-w/2, so the
+         page's height is 2 x --logo-w plus the padding round it -- which made
+         920px of ring on a 768px screen at the old 70vh cap, and 70vh never
+         bound at all because 460px got there first. The height cap has to be
+         HALF the room, less the padding, or it is not a cap on anything. */
+      :root { --logo-w: min(460px, 88vw, calc(50vh - 20px)); }
       /* Stated once because two rules space against it: the column inside the
          door, and the spare gap on .enter. */
-      :root { --enter-gap: 9px; }
+      /* Movie, 13 Oct: "less space between logo and text on top and bottom
+         too". This is the one number both of those gaps are, so both close
+         together. */
+      :root { --enter-gap: 4px; }
       /* OPEN's size, and the reason it is a property rather than a number in
          one rule: Movie is drawing a GRAPHIC for the word ("i'll get a
          graphic for OPEN word"). When it arrives, the <span class="enter-open">
