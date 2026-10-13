@@ -857,49 +857,97 @@ test('the bone lights first, and the sign follows it up',
 // Movie, 15 Sep: "when they enter into the model area from the front entry
 // screen the drivethru should pop up after about 2 seconds."
 //
-// THE FLAG IS THE POINT OF THESE TWO. A board that rises on arrival and a
-// board that rises on every load look identical the first time and differ
-// every time after, on a drafter who is mid-drawing -- which is the version
-// that costs a press. So both halves are asserted: it rises from the entry
-// screen, and it stays down on a plain load and on the reload after.
-test('coming in from the front screen, the board rises by itself',
-  async ({ page }) => {
-    await h.openModel(page, { webgl: false });
-    await page.evaluate(async ({ bucket, saved }) => {
-      await window.SharedFileStore.saveSharedFile(
-        new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
-    }, { bucket: BUCKET, saved: REPRO });
+// NARROWED 12 OCT, and this is the half that was missing: "when the user
+// already have plans in memory in the computer (not a blank screen) when they
+// open the website, lets NOT present them with the AUTOBUILD HOUSE menu, lets
+// just let them work on their existing plan and they can press HOUSE/BONE if
+// thy wish for that menu".
+//
+// So the front door means two different things and only one of them wants a
+// menu. Both are asserted below, because a build that raised the board for
+// nobody would pass the first test and a build that raised it for everybody
+// would pass the second.
+//
+// THE FLAG IS STILL THE POINT OF THE THIRD. A board that rises on arrival and
+// a board that rises on every load look identical the first time and differ
+// every time after.
 
-    await page.goto('/MODEL.html?from=entry');
-    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+// BLANK BY THE APP'S OWN DEFINITION, not by a guess at one: these are exactly
+// the keys MODEL.html's `drawingHasWork()` looks at before it decides there is
+// anything to lose. Keeping the levels means the page still boots normally --
+// it is an empty DRAWING, not an empty file.
+const BLANK = {
+  ...REPRO,
+  walls: [], lines: [], floors: [], roofs: [], outlines: [], shapes: [],
+  fenestrations: [], dimensions: [], stairs: [], columns: [], beams: [],
+  notes: [], roomTags: [],
+};
+
+async function arriveFromEntry(page, saved) {
+  await h.openModel(page, { webgl: false });
+  await page.evaluate(async ({ bucket, drawing }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(drawing)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, drawing: saved });
+  await page.goto('/MODEL.html?from=entry');
+  // Boot has finished with the drawing on the page: the stamp goes on at the
+  // end of it. The board is raised after that, so this is the right thing to
+  // wait on before either asking for it or giving it time not to come.
+  await page.waitForFunction(() => document.body.dataset.saveDirty === '0', null, { timeout: 15000 });
+}
+
+test('a drafter with a drawing is left alone: the board does not rise',
+  async ({ page }) => {
+    await arriveFromEntry(page, REPRO);
+
+    // Long enough for the two seconds of glow and the rise after it.
+    await page.waitForTimeout(4000);
+    await expect(page.locator('#drivethru'),
+      'the house menu came up over a drafter who already has plans')
+      .toHaveAttribute('data-shut', '');
+    await expect(page.locator('#bone'),
+      'the bone glowed, which is the board on its way up')
+      .not.toHaveAttribute('data-lit', '');
+
+    // AND THE BONE STILL OPENS IT -- "they can press HOUSE/BONE if thy wish
+    // for that menu". Not raising it is not taking it away.
+    await page.locator('#bone').click();
+    await expect(page.locator('#drivethru'))
+      .not.toHaveAttribute('data-shut', '', { timeout: 5000 });
+  });
+
+test('a drafter with a blank sheet still gets the board by itself',
+  async ({ page }) => {
+    await arriveFromEntry(page, BLANK);
 
     // Same two seconds as the press: the bone glows first, then the board.
     await expect(page.locator('#bone')).toHaveAttribute('data-lit', '');
+    await expect(page.locator('#drivethru'),
+      'nothing to work on and no menu either')
+      .not.toHaveAttribute('data-shut', '', { timeout: 5000 });
+  });
+
+test('the arrival flag is spent, so a reload lands in the drawing',
+  async ({ page }) => {
+    await arriveFromEntry(page, BLANK);
     await expect(page.locator('#drivethru'))
       .not.toHaveAttribute('data-shut', '', { timeout: 5000 });
 
-    // THE FLAG IS SPENT AS IT IS READ, so the reload lands in the drawing.
     expect(new URL(page.url()).searchParams.get('from'),
       'the arrival flag stayed in the address and will fire again on reload')
       .toBe(null);
     await page.reload();
-    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+    await page.waitForFunction(() => document.body.dataset.saveDirty === '0', null, { timeout: 15000 });
     await page.waitForTimeout(3000);
     await expect(page.locator('#drivethru'),
-      'the board rose again on a reload, over a drafter already at work')
+      'the board rose again on a reload, with no front door behind it')
       .toHaveAttribute('data-shut', '');
   });
 
 test('a hand on the page inside the two seconds calls the board off',
   async ({ page }) => {
-    await h.openModel(page, { webgl: false });
-    await page.evaluate(async ({ bucket, saved }) => {
-      await window.SharedFileStore.saveSharedFile(
-        new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
-    }, { bucket: BUCKET, saved: REPRO });
-
-    await page.goto('/MODEL.html?from=entry');
-    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+    // ON THE BLANK SHEET, which is the only arrival that glows now.
+    await arriveFromEntry(page, BLANK);
     await expect(page.locator('#bone')).toHaveAttribute('data-lit', '');
 
     // Someone who starts drawing inside the glow has said what they came

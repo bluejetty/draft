@@ -6804,12 +6804,23 @@
       document.addEventListener(type, cancel, true));
     callSign(boneFoot, 'menu');
   };
-  if (['entry', 'boneyard'].includes(new URLSearchParams(location.search).get('from'))) {
+  // WHICH DOOR THE DRAFTER CAME THROUGH, read once and spent once.
+  //
+  // THE BOARD CANNOT BE DECIDED HERE ANY MORE. This runs while the module
+  // evaluates, and the drawing is not adopted until boot resolves -- `drawing`
+  // is still null, so "has this drafter got work?" has no honest answer yet,
+  // and asking it here would answer NO for everybody. The flag is still spent
+  // here, where it always was, so a reload lands in the drawing; the board
+  // itself is raised in boot().then(), which is the first moment the question
+  // can be put.
+  const arrivedFrom = (() => {
+    const from = new URLSearchParams(location.search).get('from');
+    if (!['entry', 'boneyard'].includes(from)) return null;
     const spent = new URL(location.href);
     spent.searchParams.delete('from');
     history.replaceState(null, '', spent.pathname + spent.search + spent.hash);
-    pullUpToWindow();
-  }
+    return from;
+  })();
   document.getElementById('dt-close').addEventListener('click', () => {
     setSign(false);
     boneFoot.focus();
@@ -24377,6 +24388,31 @@
     projectOrder = null;
     if (order) runProjectOrder(order);
     if (wantsHandoffAtBoot) openHandoff();
+    // ── THE BOARD ONLY MEETS A BLANK SHEET (Movie, 12 Oct) ────────────────
+    //
+    // "when the user already have plans in memory in the computer (not a
+    // blank screen) when they open the website, lets NOT present them with
+    // the AUTOBUILD HOUSE menu, lets just let them work on their existing
+    // plan and they can press HOUSE/BONE if thy wish for that menu".
+    //
+    // THIS NARROWS 15 SEP RATHER THAN UNDOING IT. The board still rises by
+    // itself for a drafter who arrives at an empty sheet -- they have nothing
+    // to work on, and the board is the thing they came for. What changes is
+    // the one who HAS a drawing: the front door used to raise it over their
+    // plan, and the bone on the bar is how they ask for it now. The old rule
+    // was written when the front door meant "start something"; it also means
+    // "come back to what I was doing", and only one of those wants a menu.
+    //
+    // FROM THE BONEYARD IS NOT THE FRONT DOOR, and still rises either way: an
+    // empty shelf is what sent that drafter here to pick a house (Movie, 3
+    // Oct), so the board IS the errand whatever is on the sheet.
+    //
+    // AFTER BOOT, BECAUSE THAT IS WHEN THERE IS A DRAWING TO ASK ABOUT -- see
+    // `arrivedFrom`. drawingHasWork() is the same answer NEW uses before it
+    // offers to save, so "is there anything here" has one definition.
+    if (arrivedFrom === 'boneyard' || (arrivedFrom === 'entry' && !drawingHasWork())) {
+      pullUpToWindow();
+    }
   });
 })();
 </script>
