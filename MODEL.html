@@ -10756,6 +10756,14 @@
   // be filled in later and fired from anywhere.
   const boardListeners = [];
 
+  // DECLARED HERE, FILLED IN WITH THE MOVE COMMAND ELEVEN THOUSAND LINES
+  // DOWN -- the same late-bind this file uses for paintLotPick, and for the
+  // same reason. setTool has to put an in-flight move back, and a `const`
+  // arrow defined down there is in its temporal dead zone from up here.
+  // `typeof` is no guard against that: reading a const before its declaration
+  // throws rather than answering "undefined".
+  let cancelMoveCmd = () => {};
+
   const setTool = id => {
     const roster = window.DraftToolRoster;
     // An unknown id would silently arm nothing and read as "select is on",
@@ -10768,6 +10776,12 @@
     // than a look, and it falls back to the resting tool for the same reason
     // an unknown id does: there is no such thing as no tool.
     const next = roster && roster.availableOn(id, board) ? id : RESTING_TOOL;
+    // A MOVE IN FLIGHT IS PUT BACK WHEN THE TOOL CHANGES. Arming another tool
+    // while a selection follows the cursor would strand it there: nothing
+    // would be listening for the drop click, and the drafter would be left
+    // with his washroom parked wherever the pointer happened to be, with no
+    // undo step for it because none was ever pushed.
+    if (next !== activeTool) cancelMoveCmd();
     activeTool = next;
     // THE BRUSH'S PRESS GOES DOWN AND ITS LOAD STAYS UP. Movie, 20 Sep: "if
     // they change to WALL command and start drawing a wall those 'selected'
@@ -21591,6 +21605,72 @@
   // the wall's body, and `before` is the list of pooled vertices it will move
   // with the numbers they started with.
   let moveDrag = null;
+  // ── MOVE, THE COMMAND (Movie, 13 Oct) ─────────────────────────────────
+  //
+  // "can we press M and then allow the user to select an assembly or item and
+  // then MOVE it to a new location" -- "or if a thing is already selected,
+  // move the selected item" -- "item or group of items (using the square
+  // selection or adding items together)" -- and on the gesture: "click on and
+  // then drag and click again to drop or click hold drag and drop".
+  //
+  // SO BOTH GESTURES, FROM ONE PRESS. A press that travels is a drag and
+  // drops on release; a press that does not is a click, and the selection
+  // then FOLLOWS the cursor until a second click drops it. The two are told
+  // apart by DRAG_ARM_PX, the same threshold every other drag on this page
+  // uses, so a hand that shakes a pixel does not pick one for the drafter.
+  //
+  // WHY IT IS NOT THE `items` DRAG NEXT DOOR. That one is for notes and lines
+  // (MOVE_TOGETHER) and is explicitly not armed when a wall is in the
+  // selection, because walls have their own corner and body drags. A washroom
+  // is walls AND fixtures, which is exactly the thing Movie wants to move and
+  // exactly the thing nothing could move. This translates the VERTEX POOL --
+  // uniquePoints, identity-deduped -- which is what keeps an assembly from
+  // tearing at a corner two of its walls share.
+  //
+  // ABSOLUTE FROM THE SNAPSHOT, never incremental: every frame sets each
+  // vertex to where it started plus the whole delta, so a thousand pointer
+  // events cannot accumulate a thousand rounding errors.
+  let moveCmd = null;
+  const moveCmdSnapshot = () => window.DraftLevelLock
+    .uniquePoints(selection.map(entry => entry.item))
+    .map(v => ({ vtx: v, x: v.x, z: v.z, offX: v.offX, offZ: v.offZ }));
+  const moveCmdApply = to => {
+    if (!moveCmd) return;
+    const dx = to.x - moveCmd.grab.x, dz = to.z - moveCmd.grab.z;
+    moveCmd.before.forEach(b => { b.vtx.x = b.x + dx; b.vtx.z = b.z + dz; });
+    moveCmd.before.forEach(b => relinkVertex(b.vtx));
+    moveCmd.dx = dx; moveCmd.dz = dz;
+  };
+  // PUT EVERYTHING BACK. Escape mid-move, and a move that ends where it began.
+  const moveCmdRevert = () => {
+    if (!moveCmd) return;
+    moveCmd.before.forEach(b => {
+      b.vtx.x = b.x; b.vtx.z = b.z;
+      if (b.offX !== undefined) { b.vtx.offX = b.offX; b.vtx.offZ = b.offZ; }
+    });
+  };
+  // ONE UNDO STEP FOR THE WHOLE MOVE, whatever it carried -- the same rule the
+  // build keeps when it raises a house. 'move' is the existing undo kind and
+  // its `before` is exactly the snapshot shape taken above.
+  const moveCmdCommit = () => {
+    if (!moveCmd) return;
+    const moved = Math.hypot(moveCmd.dx || 0, moveCmd.dz || 0) > 1e-9;
+    if (moved) {
+      undoStack.push({ kind: 'move', before: moveCmd.before });
+      markDirty();
+    }
+    moveCmd = null;
+    sayOnStrip(moved ? 'Moved.' : '');
+    paint();
+  };
+  const moveCmdCancel = () => {
+    if (!moveCmd) return;
+    moveCmdRevert();
+    moveCmd = null;
+    sayOnStrip('Move cancelled.');
+    paint();
+  };
+  cancelMoveCmd = moveCmdCancel;
 
   // ── §3: MOVING A BONE ────────────────────────────────────────────────────
   //
@@ -21972,6 +22052,42 @@
     // leave it nothing to act on. It goes AFTER the ruler because the ruler
     // writes nothing at all and this writes properties.
     if (brushOn) { brushPress(at); return; }
+    // ── MOVE TAKES ITS OWN PRESSES ───────────────────────────────────────
+    //
+    // Before the corner and body hit tests, because those are the gestures
+    // this command replaces while it is armed: a press on a wall under MOVE
+    // is "pick the selection up here", not "drag this one wall's end".
+    //
+    // THREE PRESSES, IN THE ORDER THEY HAPPEN.
+    //   nothing selected -> the press SELECTS, and the move is not begun.
+    //     Movie: "if they press M, select an item, then click on it or click
+    //     hold and drag". So the first press after an empty M is an ordinary
+    //     select and the second one picks it up.
+    //   selection in hand, nothing moving -> the press GRABS at this point.
+    //   already following the cursor -> the press DROPS it.
+    if (activeTool === 'move') {
+      if (moveCmd && moveCmd.sticky) { moveCmdCommit(); return; }
+      if (!selection.length) {
+        // THE PAGE'S OWN HIT TEST, not a second one written here: what MOVE
+        // can pick up must be exactly what SELECT can choose, filters and
+        // precedence included, or the two disagree about what an item is.
+        const hit = hitAt(at);
+        setSelection(hit ? [hit] : []);
+        if (selection.length) {
+          sayOnStrip('Now press on it to pick it up \u2014 drag to place, or click again to drop.');
+        }
+        paint();
+        return;
+      }
+      moveCmd = {
+        grab: at, before: moveCmdSnapshot(),
+        sx: e.clientX, sy: e.clientY, sticky: false, dx: 0, dz: 0,
+      };
+      canvas.setPointerCapture(e.pointerId);
+      sayOnStrip('Moving \u2014 drag to place, or release and click to drop. Escape cancels.');
+      paint();
+      return;
+    }
     // ARMED TAKES THE PRESS WHOLE, before the corner/body hit test and before
     // panning. Otherwise the first tap of a wall that starts on an existing
     // corner would be read as grabbing that corner, and the drafter would drag
@@ -22257,6 +22373,21 @@
       if (bandDrag.active) paint();
       return;
     }
+    // MOVE FOLLOWS THE CURSOR, held or not. While the press is down this is a
+    // drag; once it has been released on the spot (`sticky`) the selection
+    // goes on following until the next click drops it -- which is the whole
+    // of the two-press gesture, and why there is no second state machine.
+    if (moveCmd) {
+      const rect = canvas.getBoundingClientRect();
+      const raw = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+      if (!moveCmd.sticky
+        && Math.hypot(e.clientX - moveCmd.sx, e.clientY - moveCmd.sy) > DRAG_ARM_PX) {
+        moveCmd.dragged = true;
+      }
+      moveCmdApply(raw);
+      paint();
+      return;
+    }
     if (moveDrag) {
       const md = moveDrag;
       if (!md.active && Math.hypot(e.clientX - md.sx, e.clientY - md.sy) > DRAG_ARM_PX) {
@@ -22466,6 +22597,18 @@
     paint();
   });
   const endDrag = e => {
+    // A PRESS THAT TRAVELLED WAS A DRAG, AND IT DROPS HERE. One that did not
+    // was a click, and the selection keeps following the cursor until the next
+    // press -- Movie's two ways in, told apart by the one threshold that every
+    // other drag on this page uses.
+    if (moveCmd) {
+      if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+      if (moveCmd.dragged) { moveCmdCommit(); return; }
+      moveCmd.sticky = true;
+      sayOnStrip('Click to drop it. Escape puts it back.');
+      paint();
+      return;
+    }
     if (e && e.pointerType === 'touch') {
       touchPts.delete(e.pointerId);
       if (twoPan) {
@@ -22769,6 +22912,11 @@
     // keeps. A drafter who learns Escape on one page would lose their tool on
     // the other. The DRAW button is how this page puts the tool down, because
     // it is the affordance a drafter with no keyboard can reach.
+    // ESCAPE PUTS AN IN-FLIGHT MOVE BACK, before anything else Escape does.
+    // A selection following the cursor is the most committed-looking state
+    // this page has that has written nothing yet, so the way out of it has to
+    // be the first thing the key tries.
+    if (e.key === 'Escape' && moveCmd) { moveCmdCancel(); return; }
     if (e.key === 'Escape') {
       // THE BRUSH GETS THE FIRST STEP, and only when it is holding something.
       // Loaded becomes empty; the tool stays up, which is the one thing the

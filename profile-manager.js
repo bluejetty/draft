@@ -118,6 +118,9 @@ if (!window.DraftProfileManager) {
     group: 'Y',
     groupAlt: 'Ctrl+G',
     ungroup: 'Ctrl+Shift+G',
+    // M was the only free letter that says the word (Movie, 13 Oct). G, H, I,
+    // J, V and Z were also unbound; M is the one a drafter guesses.
+    move: 'M',
     extend: 'X',
     extendAlt: 'Ctrl+H',
     copy: 'K',

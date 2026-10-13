@@ -37,6 +37,17 @@
     { id: 'select',       name: 'Select',       group: 'draw',  kind: 'standard',   command: 'select' },
     { id: 'extend',       name: 'Extend',       group: 'draw',  kind: 'standard',   command: 'extend' },
     { id: 'copy',         name: 'Copy',         group: 'draw',  kind: 'standard',   command: 'copy' },
+    // MOVE (Movie, 13 Oct): "can we press M and then allow the user to select
+    // an assembly or item and then MOVE it to a new location" -- "or if a
+    // thing is already selected, move the selected item".
+    //
+    // A COMMAND, NOT A GESTURE, and that is the point of it. Things could
+    // already be dragged, but dragging is a property of SELECT: no key face,
+    // no roster entry, no binding a profile can move, and nothing anywhere on
+    // the page saying it is possible. So this is the first time moving is a
+    // NAMED verb -- which is also what lets it take a typed distance, because
+    // only a two-press gesture leaves a hand free for the LENGTH box.
+    { id: 'move',         name: 'MOVE',         group: 'draw',  kind: 'standard',   command: 'move' },
     { id: 'trim',         name: 'Trim',         group: 'draw',  kind: 'standard',   command: 'trim' },
     { id: 'node',         name: 'NODE / ARC',   group: 'draw',  kind: 'contextual', command: 'node' },
     { id: 'line',         name: 'LINE',         group: 'draw',  kind: 'contextual', command: 'line' },
