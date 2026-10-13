@@ -1091,6 +1091,21 @@
     background-image: var(--surface-panel-tex, none); }
   .promote-card p { margin:0 0 12px; font-family: var(--font-ui);
     font-size:13px; line-height:1.4; color: var(--ink-primary); }
+  /* THE LEASE NOTE UNDER THE THREE ANSWERS. Dressed as #lease is -- same
+     size, same letter-spacing, same uppercase, same accent press -- because
+     it is the same sentence, and a drafter who reads both should recognise
+     the second as the first rather than wonder what else is wrong.
+     `[hidden]` needs the explicit display:none here: display:flex outranks
+     the attribute's own UA rule. */
+  .promote-card [data-guard-lease] { display:flex; gap:10px;
+    align-items:center; justify-content:center; margin:12px 0 0;
+    font-size:11px; letter-spacing:0.06em; text-transform:uppercase;
+    color: var(--ink-primary); }
+  .promote-card [data-guard-lease][hidden] { display:none; }
+  .promote-card [data-guard-take-over] { font:inherit;
+    letter-spacing:inherit; text-transform:inherit; color: var(--accent);
+    background:none; border:1px solid var(--accent); border-radius:4px;
+    padding:3px 8px; cursor:pointer; }
   .promote-row { display:flex; gap:8px; }
   .promote-row button { flex:1; padding:7px 10px; cursor:pointer;
     border-radius:3px; border:1px solid var(--edge-panel);
@@ -23794,6 +23809,7 @@
   const fileInput = document.getElementById('file-input');
   const fileGuard = document.getElementById('file-guard');
   const fileGuardText = fileGuard && fileGuard.querySelector('[data-file-guard-text]');
+  const fileGuardLease = fileGuard && fileGuard.querySelector('[data-guard-lease]');
   const saveAsBox = document.getElementById('save-as');
   const saveAsName = document.getElementById('save-as-name');
 
@@ -23939,6 +23955,17 @@
       const cancelled = guardCancel;
       closeGuard();
       if (cancelled) cancelled();
+    });
+    // THE SAME PRESS THE CORNER BANNER CARRIES, and it does the same one
+    // thing: take the lease. It deliberately does NOT then save -- SAVE
+    // FIRST is the commit point and stays the commit point, so the drafter
+    // takes the drawing back, watches the note go, and presses the button
+    // they were pressing. A takeover that silently wrote would make this the
+    // second way to commit, which RULING-autosave-two-writers.md §3.4 is
+    // explicit about not having.
+    fileGuard.querySelector('[data-guard-take-over]').addEventListener('click', () => {
+      askForLease({ takeover: true })
+        .catch(error => console.warn('draft: takeover failed', error));
     });
   }
 
@@ -24316,6 +24343,13 @@
       if (leaseHolder) leaseBanner.dataset.leaseHolder = leaseHolder;
       else delete leaseBanner.dataset.leaseHolder;
     }
+    // THE GUARD'S COPY OF THE SAME NOTE, painted from the same `held` in the
+    // same pass. The dialog is a modal in the middle of the screen and the
+    // banner is a chip in the corner behind it; a drafter reading the first
+    // does not read the second, which is what "nothing is happening" was.
+    // One source for both, so there is no state where the corner says the
+    // drawing is held and the dialog does not.
+    if (fileGuardLease) fileGuardLease.hidden = held;
     if (leaseMessage && !held) {
       // WORDED AS BEING EDITED ELSEWHERE, NOT AS EXPIRED (§3.4). An
       // expired-but-unclaimed lease is an absent drafter, not a free lease, and a

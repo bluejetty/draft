@@ -685,6 +685,22 @@ if (!window.DraftShellBars) {
       <button type="button" data-guard-discard>Discard</button>
       <button type="button" data-guard-cancel>Cancel</button>
     </div>
+    <!-- WHY SAVE FIRST WILL NOT SAVE, SAID WHERE SAVE FIRST IS. Movie, 13
+         Oct: "i'm tryint to choose SAVE FIRST but nothing is happening" --
+         with the corner banner reading BEING EDITED IN ANOTHER TAB at the
+         same time. That banner was the whole answer, four hundred pixels
+         away from the dialog he was looking at, so the press read as broken.
+         "can we add a note to the popup located middle screen under the
+         buttons that says the same message right underneath the buttons in
+         the middle so the user sees what that is obvious".
+         The SAME sentence, not a second wording of it, and it carries the
+         same one press that resolves it. Hidden until the lease really is
+         held elsewhere -- it is painted from holdsLease() beside the corner
+         banner, so the two cannot disagree. -->
+    <p data-guard-lease hidden>
+      <span data-guard-lease-text>Being edited in another tab</span>
+      <button type="button" data-guard-take-over>TAKE OVER</button>
+    </p>
   </div>
 </div>`;
   const SAVEAS = `<div id="save-as" data-save-as hidden>

@@ -787,6 +787,20 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // own build; nothing new is made.
             'LINE UP WITH BALCONY', 'FULL GARAGE', '− 1 FT', '+ 1 FT', 'BUILD',
             'Save first', 'Discard', 'Cancel',   // the unsaved guard
+            // AND THE GUARD'S FOURTH PRESS. Movie, 13 Oct: "i'm tryint to
+            // choose SAVE FIRST but nothing is happening" -- another tab held
+            // the drawing, so the save was refused, and the only thing that
+            // said so was the chip in the top corner behind the dialog he was
+            // reading. The guard carries that sentence now, and the press
+            // that resolves it with it.
+            //
+            // NO ABSENCE ROW MOVES, and it is the SAME press as `take-over`
+            // three lists up rather than a second kind of one: both call
+            // askForLease({ takeover: true }) and neither writes anything.
+            // Taking the drawing back is not making anything -- it is being
+            // allowed to save what is already in hand, and SAVE FIRST beside
+            // it is still the only thing here that writes.
+            'TAKE OVER',
             'Save', 'Cancel'].sort(),           // the SAVE AS card
           // THE PAGE ROW'S LIVE DESTINATIONS. Links, not buttons, so they
           // would have slipped past the button census entirely -- and a
