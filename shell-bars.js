@@ -527,6 +527,22 @@ if (!window.DraftShellBars) {
          MODEL, not plain "undo": LAYOUT carries this bar too and has its
          own [data-undo] in its status strip, which a second one here would
          shadow. Pages other than MODEL never unhide it. -->
+    <!-- UP AND DOWN A STOREY (Movie, 12 Oct): "id like UP and DOWN arrows and
+         when they are pressed the LEVEL goes either to the next one up or the
+         next one down", marked at this end of the foot strip.
+         NAMED FOR MODEL and hidden here, exactly like UNDO beside them and for
+         the same reason: LAYOUT and PROJECT carry this bar too and have no
+         levels to step through, so the pair stays out of their way until the
+         page that owns levels unhides it.
+         UNDER THE SIGN WITH EVERYTHING ELSE HERE -- the drive-thru rises over
+         this strip and covers the lot. That is right for these two: a drafter
+         part-way through ordering a house is not changing storey.
+         NOT VERBS, so they sit ahead of UNDO and DELETE rather than among
+         them: these two move where you are standing and change nothing. -->
+    <button id="model-level-up" type="button" data-model-level-up hidden
+      title="Go up to the next level">&#9650;</button>
+    <button id="model-level-down" type="button" data-model-level-down hidden
+      title="Go down to the next level">&#9660;</button>
     <button id="model-undo" type="button" data-model-undo hidden
       title="Undo the last change (Ctrl+Z)">UNDO</button>
     <button id="delete" type="button" data-delete hidden

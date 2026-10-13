@@ -5400,6 +5400,20 @@
     // DELETE above -- and, unlike DELETE, under a section too: taking back
     // the cut that made the section is exactly what a drafter may want there.
     if (undoButton) undoButton.hidden = (!undoStack.length && !pendingCornerList()) || modalUp();
+    // THE STOREY ARROWS ARE ON SCREEN WHENEVER THERE IS A DRAWING, and under
+    // a modal they go with everything else on this strip -- the drive-thru
+    // sign rises over it, and a live control under a sign is a press the
+    // drafter cannot see being made.
+    //
+    // GREYED AT THE ENDS RATHER THAN HIDDEN: a pair that vanished on the top
+    // floor would move DELETE and UNDO sideways under the drafter's hand
+    // every time they changed storey. `disabled` says the same thing and
+    // keeps the strip still.
+    [[levelUpButton, LEVEL_UP], [levelDownButton, LEVEL_DOWN]].forEach(([button, direction]) => {
+      if (!button) return;
+      button.hidden = !drawing || modalUp();
+      button.disabled = !levelStepTarget(direction);
+    });
     if (copyButton) {
       copyButton.hidden = !selection.length || !!activeCut() || modalUp();
     }
@@ -7861,6 +7875,46 @@
     buildChrome();
     refreshToolPropsOnLevel();
     paint();
+  };
+
+  // ── ONE STOREY UP, ONE STOREY DOWN (Movie, 12 Oct) ──────────────────────
+  //
+  // "id like UP and DOWN arrows and when they are pressed the LEVEL goes
+  // either to the next one up or the next one down."
+  //
+  // THROUGH goToLevel, so the arrows are the level rows by another route and
+  // not a second way of changing level: the view is kept or dropped by the
+  // same rule, the boneyard card lets go the same way, and the URL carries
+  // the same `?level=`.
+  //
+  // THE ORDER IS THE PANEL'S ORDER, which is `drawing.levels` as stored --
+  // SITE, ROOF, 2ND FL, MAIN FL, FOUNDATION, top down. The panel renders that
+  // array straight through, so the arrows step the list the drafter is
+  // looking at rather than a second ordering of my own. UP is one row EARLIER
+  // in it, DOWN one row later.
+  //
+  // NOT BY `elev`, and the stock list says why: SITE and MAIN FL both sit at
+  // elevation 0, so sorting by height would have to break that tie by
+  // guessing -- and the half levels are spliced into the array at the place
+  // they belong (buildPremadePlan), which is the answer already.
+  //
+  // FROM A SHELF, EITHER ARROW GOES BACK TO THE HOUSE. A boneyard shelf is a
+  // level with a negative id and is not in this list, so the lookup misses
+  // and the step lands on the near end: one press back to a floor rather than
+  // a dead button.
+  const levelStepTarget = direction => {
+    const levels = drawing?.levels || [];
+    if (!levels.length) return null;
+    const here = levels.findIndex(level => Number(level.id) === activeLevelId());
+    if (here < 0) return levels[direction < 0 ? levels.length - 1 : 0];
+    const next = here + direction;
+    return next >= 0 && next < levels.length ? levels[next] : null;
+  };
+  const LEVEL_UP = -1;
+  const LEVEL_DOWN = 1;
+  const levelStep = direction => {
+    const target = levelStepTarget(direction);
+    if (target) goToLevel(Number(target.id));
   };
 
   // ONE WAY INTO A VIEW, for the picker and for a seat press. Both change
@@ -10602,6 +10656,11 @@
   // survivor because the other sixteen tools are already only there.
   const deleteButton = document.getElementById('delete');
   const undoButton = document.getElementById('model-undo');
+  // THE STOREY ARROWS, which this page unhides because this page has levels.
+  // shell-bars.js ships them hidden for LAYOUT and PROJECT, the same way it
+  // ships UNDO above.
+  const levelUpButton = document.getElementById('model-level-up');
+  const levelDownButton = document.getElementById('model-level-down');
   const copyButton = document.getElementById('copy');
   const pasteButton = document.getElementById('paste');
 
@@ -21518,6 +21577,11 @@
   });
   deleteButton.addEventListener('click', pressDelete);
   if (undoButton) undoButton.addEventListener('click', () => { if (!modalUp()) undoOnce(); });
+  // The storey arrows, guarded the same way: the sign covers this strip, so a
+  // press that arrives while it is up did not come from a drafter who could
+  // see the button.
+  if (levelUpButton) levelUpButton.addEventListener('click', () => { if (!modalUp()) levelStep(LEVEL_UP); });
+  if (levelDownButton) levelDownButton.addEventListener('click', () => { if (!modalUp()) levelStep(LEVEL_DOWN); });
   if (copyButton) copyButton.addEventListener('click', () => { copySelection(); paint(); });
   if (pasteButton) pasteButton.addEventListener('click', () => { pasteHeld(); });
 
