@@ -10201,13 +10201,48 @@
       })
       : null;
     undoStack.length = mark;
+    // ── AND THE DIMENSIONS, WHICH THIS PRESS HAS NEVER PLACED ──────────────
+    //
+    // Movie, 13 Oct, looking at a LAYOUT sheet: "just noticed - not
+    // dimensions on the detached garage roof plan, can you check it later."
+    //
+    // IT IS NOT THE ROOF PLAN, AND IT IS NOT LAYOUT. Measured: a detached
+    // garage comes off this press with NO dimensions at all -- the tally is
+    // empty, every plan of it, not merely the roof one. The house's bone
+    // press has strung every level it touched since AUTO DIMS went in; this
+    // press is the other build in the app and it never learned to.
+    //
+    // THE LEVELS THE GARAGE ACTUALLY TOUCHED, asked the same way the house
+    // press asks: its walls go on the lowest storey, its slab and footings on
+    // FOUNDATION, its roof on ROOF. The floor layout is asked too, for the
+    // parity Movie ruled for the house ("can we add dimensions to ALL them
+    // except electric plan") -- placeAutoDims answers -1 where a view holds
+    // nothing worth stringing, so asking costs a no.
+    //
+    // ONE PRESS IS ONE UNDO, so the strings ride the same 'built' step as the
+    // walls: `items` takes what was laid and `restored` what the sweep took
+    // out, which is the pair that branch already knows how to put back.
+    const dimmed = [];
+    const dimSwept = [];
+    [[levelId, 'plan'], [levelId, 'floor'],
+      [FOUNDATION_LEVEL_ID, 'foundation'], [ROOF_LEVEL_ID, 'plan']]
+      .forEach(([id, view]) => {
+        if (!levelPresent(id)) return;
+        const result = placeAutoDims(id, view);
+        // -1 IS A REAL ANSWER: nothing on that view is big enough to string.
+        if (result === -1) return;
+        dimmed.push(...result.placed);
+        dimSwept.push(...result.removed);
+      });
     // `outlines` PLURAL, because a premade bungalow raises two bodies on one
     // press and one press is one undo. The garage passes its single loop as a
     // list of one rather than the branch learning two shapes.
     undoStack.push({ kind: 'built', walls: walls.concat(concrete.walls),
       outlines: [outline], list: drawing.outlines, openings,
-      items: concrete.items.concat(roof ? [roof] : []),
-      restored: given?.restore || [] });
+      items: concrete.items.concat(roof ? [roof] : [])
+        .concat(dimmed.map(item => ({ list: drawing.dimensions, item }))),
+      restored: (given?.restore || [])
+        .concat(dimSwept.length ? [{ list: drawing.dimensions, items: dimSwept }] : []) });
     markDirty();
     paint();
     return outline;

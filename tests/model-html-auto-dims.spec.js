@@ -475,3 +475,73 @@ test('pressing AUTO DIMS twice replaces the strings; one undo restores them',
     expect(undoneIds, 'the strings the press swept were not put back')
       .toEqual(builtIds);
   });
+
+// ── AND THE OTHER BUILD IN THE APP ─────────────────────────────────────────
+//
+// Movie, 13 Oct, looking at a LAYOUT sheet: "just noticed - not dimensions on
+// the detached garage roof plan, can you check it later."
+//
+// IT IS NOT THE ROOF PLAN AND IT IS NOT LAYOUT. Measured on a drawing built
+// through the drive-thru: a detached garage came off the press with NO
+// dimensions at all -- every plan of it, not merely the roof one. The house's
+// bone press has strung every level it touched since AUTO DIMS went in, and
+// the ordered-garage press, which is the other build in this app, never
+// learned to. The roof plan is simply the sheet he happened to be looking at.
+//
+// NO SIZE IS PICKED, because the board stopped asking on 24 Sep -- every
+// detached garage is the shelf's own 24x26 unless ?sizes=ask puts the
+// question back (model-drivethru.spec.js holds that).
+async function orderGarage(page, entry = 'detached-gradebeam') {
+  await h.openDriveThru(page);
+  await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
+  await page.waitForTimeout(150);
+  await page.locator(`#dt-tiles [data-build-entry="${entry}"]`).click();
+  await page.waitForTimeout(150);
+  await page.locator('#dt-bone').click();
+  await page.waitForTimeout(500);
+}
+
+test('an ordered detached garage arrives dimensioned, roof plan and all',
+  async ({ page }) => {
+    await open(page);
+    await orderGarage(page);
+    await saveNow(page);
+    const saved = await savedFile(page);
+    const tally = byLevelView(saved.dimensions);
+
+    // THE PLANS THE GARAGE ACTUALLY PUT GEOMETRY ON: its walls on the lowest
+    // storey, its slab and footings on FOUNDATION, its roof on ROOF -- which
+    // is the sheet in his screenshot.
+    expect(tally['7:plan'], 'the roof plan he was looking at, still unmeasured')
+      .toBeGreaterThan(0);
+    expect(tally['3:plan'], 'nor the walls plan').toBeGreaterThan(0);
+    expect(tally['1:foundation'], 'nor the slab it stands on').toBeGreaterThan(0);
+
+    // AND THEY ARE THE PRESS'S OWN, not a drafter's: `auto` is what lets a
+    // re-run replace them and what keeps a hand-drawn string safe.
+    const roof = (saved.dimensions || []).filter(d => Number(d.levelId) === 7);
+    expect(roof.every(d => d.auto === true),
+      'a string the press laid is not marked auto, so AUTO DIMS cannot replace it')
+      .toBe(true);
+  });
+
+// ONE PRESS IS ONE UNDO, and the strings are part of the press. A Ctrl+Z that
+// took the garage and left its dimensions floating would be worse than no
+// dimensions: a measured drawing of a building that is not there.
+test('one Ctrl+Z takes the garage and its dimensions together', async ({ page }) => {
+  await open(page);
+  await orderGarage(page);
+  await saveNow(page);
+  const built = await savedFile(page);
+  expect((built.dimensions || []).length, 'nothing was placed, so nothing proves undone')
+    .toBeGreaterThan(0);
+  expect((built.outlines || []).length).toBeGreaterThan(0);
+
+  await page.keyboard.press('Control+z');
+  await page.waitForTimeout(300);
+  await saveNow(page);
+  const undone = await savedFile(page);
+  expect((undone.outlines || []).length, 'the garage itself is still standing').toBe(0);
+  expect((undone.dimensions || []).length,
+    'the garage went back and its dimensions were left measuring nothing').toBe(0);
+});
