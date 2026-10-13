@@ -2518,6 +2518,27 @@
         // A THICKENED EDGE CANNOT CARRY THE STOREY, so the press that put one
         // there goes with it rather than being drawn on a floating slab.
         if (kind === 'thickened') writeCell('detachedGarage', 'overGarage', null);
+        // ── AND THE OTHER TWO ARRIVE WITH ONE ──────────────────────────────
+        //
+        // Movie, 13 Oct: "its the detached garages, when someone selects
+        // FROST WALL or GRADE BEAM, lets give them a DEFAULT - 2 storey",
+        // and of the third: "you won't have to worry about stairs on the
+        // thickened edge, we can't have 2nd floor for thickened edge".
+        //
+        // A FOUNDATION THAT GOES DOWN IS ONE THAT CARRIES SOMETHING. Nobody
+        // digs a frost wall or pours a grade beam under a garage they mean to
+        // leave single-storey, so the storey is what the press means and the
+        // drafter takes it away if it was not. The ROOM ABOVE press is still
+        // there and still toggles it.
+        //
+        // ON THE PRESS, NOT ON THE READING. `detachedRoomOver` could default
+        // to true whenever the foundation is not a thickened edge -- and that
+        // would reach back through every drawing already saved with a grade
+        // beam and no room, a storey appearing in somebody's section the next
+        // time they opened it. Written when the foundation is CHOSEN, it is
+        // the same default for every new garage and changes nothing already
+        // drawn.
+        else writeCell('detachedGarage', 'overGarage', 'room');
         syncFamilyRow();
         return `Detached garage on a ${
           projectPage.GARAGE_FOUNDATION_LABEL[kind].toLowerCase()}.`;
