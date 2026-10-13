@@ -33,13 +33,18 @@ const MUTANTS = [
     test: 'a built house arrives with its mid-span beam and teleposts on FOUNDATION' },
   { file: 'MODEL.html',
     name: 'the beam is filed on the level the drafter is standing on',
-    // RE-AIMED. `levelId` is the caller's now, so the equivalent defect is
-    // the level framing its OWN floor rather than the one above it -- which
-    // is what floorCarriedBy exists to answer.
-    // TWO LINES, because pressAutoBeam asks the same question one indent
-    // deeper and a four-space anchor matches INSIDE a six-space one.
-    find: '    const carried = floorCarriedBy(levelId);\n    if (!carried) return -1;',
-    with: '    const carried = { id: levelId, name: null };\n    if (!carried) return -1;',
+    // RE-AIMED TWICE, and the second time because it SURVIVED. It used to
+    // bend `carried`, which was what the body list was taken from -- and
+    // when the framing began asking the storey instead, `carried` stopped
+    // deciding which floor is measured and the mutation stopped doing
+    // anything the specs could see. An anchor that still applies is not a
+    // mutation that still bites, which is the one thing the anchor harness
+    // cannot tell you.
+    //
+    // So it bends what decides it NOW: the bodies. Same defect in the same
+    // words -- the level frames its own floor rather than the one over it.
+    find: '    const bodies = storeyBodiesOver(levelId);',
+    with: '    const bodies = storeyBodies({ id: levelId });',
     test: 'a built house arrives with its mid-span beam and teleposts on FOUNDATION' },
   { file: 'MODEL.html',
     name: 'the beam is filed on the layer set the drafter is standing on',
