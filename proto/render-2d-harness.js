@@ -1355,6 +1355,50 @@ suite('drawDimension2D', 'the size changes at the width of the figure', R => {
     dimFont(R, { start: { x: 0, z: 0 }, end: { x: 3.5, z: 0 } }), TIGHT_8);
 });
 
+// ── AND IT STEPS OUTBOARD ───────────────────────────────────────────────────
+//
+// Movie, 13 Oct, marking in red where he wanted them: "for the 'smaller'
+// sized dimensions INT WALL, roof overhang etc. can you position the text
+// over/under the line (put it FURTHER from the house - on the side AWAY from
+// the house".
+//
+// WHICH SIDE IS THE POINT, not merely that it moved. The painter has no idea
+// where the house is -- but it already knows which way it stood the line off
+// from what it measures, and outboard is further the same way. So these read
+// the figure against the RECORD (z = 0, screen y 300) and against the line.
+// The sheet case is here because it is the one where the two swap roles: the
+// line is ON the record and the ticks reach back toward the building, so a
+// push that merely copied the screen's arithmetic would land the figure
+// inside the house.
+//
+// labelAlongLine2D translates to the midpoint of the line it is handed, so
+// the translate is where the figure went.
+const dimLabelAt = (R, dim, env = dimEnv) => {
+  const ctx = recordingCtx();
+  R.drawDimension2D(ctx, toS, dim, {}, env);
+  return calls(ctx, 'translate').pop();
+};
+suite('drawDimension2D', 'a stepped-down figure sits off the line, away from what it measures', R => {
+  const TIGHT = { start: { x: 0, z: 0 }, end: { x: 0.3, z: 0 } };
+  const ROOMY = { start: { x: 0, z: 0 }, end: { x: 12, z: 0 } };
+  expect('a full-size figure is still on its line', dimLabelAt(R, ROOMY)[1], 319);
+  expect('the stepped-down one is off it', dimLabelAt(R, TIGHT)[1], 329);
+  expect('on the far side of the line from what it measures',
+    dimLabelAt(R, TIGHT)[1] > 319, true);
+  expect('and still centred on its run', dimLabelAt(R, TIGHT)[0], 401.5);
+
+  const sheet = { ...dimEnv, atLine: true };
+  expect('a sheet puts the full-size figure on the record',
+    dimLabelAt(R, ROOMY, sheet)[1], 300);
+  expect('and steps the tight one off it, away from the ticks',
+    dimLabelAt(R, TIGHT, sheet)[1], 310);
+
+  // IN PAPER UNITS like the rest of this painter's ink, so a zoomed sheet
+  // holds the gap instead of closing it.
+  expect('twice the zoom is twice the step',
+    dimLabelAt(R, TIGHT, { ...dimEnv, atLine: true, inkScale: 2 })[1], 320);
+});
+
 // AND IT IS STILL PRINTED. Stepping down is not hiding: a figure too big
 // even at the small size still goes on the sheet, because an overflowing
 // number tells a drafter to change his scale and a missing one tells him
@@ -3367,6 +3411,14 @@ function coverage() {
   const BRANCH_MUTATIONS = [
     ['drawDimension2D never shrinks a figure too big for its run', neverShrinkTheFigure],
     ['drawDimension2D shrinks every figure, room or not', alwaysShrinkTheFigure],
+    // The step outboard, wrong in each of the two ways it can be wrong: not
+    // taken at all (back on the line, which is the sheet he photographed),
+    // and taken toward the house instead of away from it. The second is the
+    // one no screenshot of a single wall would catch.
+    ['drawDimension2D leaves the stepped-down figure on its line',
+      src => src.replace('const push = tight ? 10 * k : 0;', 'const push = 0;')],
+    ['drawDimension2D steps the tight figure toward the house',
+      src => src.replace('const push = tight ? 10 * k : 0;', 'const push = tight ? -10 * k : 0;')],
     ['strokeSegPath2D bulge branch', dropBulge],
     ['drawWallSeg2D mitre path', dropMitre],
     ['drawOrigin2D env colour', dropOriginEnvColour],
