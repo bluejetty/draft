@@ -125,7 +125,11 @@ if (!window.DraftAreas) {
           });
         });
       } else {
-        const outline = outlines.find(candidate =>
+        // AND NOT THE LOT. A site outline is a boundary, not a floor, so
+        // counting it would report a 5,400 sq ft main floor on a house of
+        // 1,280. It is excluded here rather than at the caller because this
+        // is where "an outline stands in for a floor" is decided.
+        const outline = outlines.filter(candidate => candidate.site !== true).find(candidate =>
           candidate.levelId === level.id && candidate.points.length >= 3);
         if (outline) {
           source = 'outline';

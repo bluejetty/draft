@@ -112,9 +112,13 @@ const MUTATIONS = [
       "const own = row === 'house' ? null : rows[row];")],
   ['a typed zero falls back like an empty cell',
     s => s.replace('const overhangFt = cellNumber(own?.roofOverhangFt)', 'const overhangFt = positiveNumber(own?.roofOverhangFt)')],
+  // RE-AIMED when the side eave landed (13 Oct) and this line stopped saying
+  // `to.overhangFt` -- each edge now asks `wantFor`, which is the main eave or
+  // the side one. The DEFECT is the same: the flush-gable rule is what keeps
+  // an edge somebody pulled to zero at zero, and it predates the side eave.
   ['a flush gable is pushed out with the eaves',
-    s => s.replace("(value > 0 || (roof.edges || [])[index] !== 'gable' ? to.overhangFt : value));",
-      '(to.overhangFt));')],
+    s => s.replace("(value > 0 || (roof.edges || [])[index] !== 'gable' ? wantFor(index) : value));",
+      '(wantFor(index)));')],
   ['the roof moves by the new overhang, not the difference',
     s => s.replace('const delta = now.map((value, index) => value - was[index]);', 'const delta = now;')],
   ['every roof on the drawing follows, hand-cut ones too',

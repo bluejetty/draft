@@ -275,7 +275,13 @@ if (!window.DraftAutoDims) {
     // floor plans never received. Same clustering, same seen-edge pass.
     const groups = [];
     const itemOf = outline => ({ outline, pts: outline.points, box: boxOf(outline.points) });
-    const drawn = outlines.filter(outline => outline.points && outline.points.length);
+    // A LOT LINE IS NOT A BUILDING. The AUTOSITE rectangle (Movie, 13 Oct)
+    // lives in `outlines` so it inherits their point editing, which means
+    // every reader of outlines has to say whether it means buildings. This
+    // one does: strung as a building it would put a 45' x 120' row around
+    // the house and call the pair one cluster.
+    const drawn = outlines.filter(outline =>
+      outline.site !== true && outline.points && outline.points.length);
     const houseSeed = drawn.filter(outline => !outline.garage).map(itemOf);
     const seeds = houseSeed.length ? [houseSeed] : [];
     drawn.filter(outline => outline.garage).forEach(outline => seeds.push([itemOf(outline)]));
@@ -722,7 +728,8 @@ if (!window.DraftAutoDims) {
     // wall corners when it does not -- so the two can never disagree about
     // where the house ends. A garage outline is not the house.
     const houseOutlines = (Array.isArray(outlines) ? outlines : [])
-      .filter(outline => !outline.garage && Array.isArray(outline.points) && outline.points.length >= 3);
+      .filter(outline => !outline.garage && outline.site !== true
+        && Array.isArray(outline.points) && outline.points.length >= 3);
     const outlinePoints = houseOutlines.flatMap(outline => outline.points);
     const corners = outlinePoints.length ? outlinePoints
       : (Array.isArray(walls) ? walls : []).flatMap(wall => [wall.start, wall.end]);

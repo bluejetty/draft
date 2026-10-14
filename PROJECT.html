@@ -1070,6 +1070,17 @@
       let roofHeelOverrideIn = Number.isFinite(Number(drawing?.roofHeelIn))
         && drawing?.roofHeelIn != null ? Number(drawing.roofHeelIn) : null;
       let roofOverhang = positive(drawing?.roofOverhang, 2);
+      // THE SIDE EAVE, AND IT DEFAULTS TO NOTHING RATHER THAN TO TWO FEET.
+      // Movie, 13 Oct: "make the MAIN OVERHANG (2'0) default, and then
+      // underneath it also have SIDE OVERHANG ... when they change that the
+      // side eaves will reduce (or increase) on all sides so its symetrical".
+      //
+      // NULL IS THE WHOLE RULE. level-assembly's projectRoofFor falls the side
+      // eave back to the main one, so absent means "symmetrical" and every
+      // drawing written before this is untouched -- while a 2 typed in here by
+      // default would be a number nobody chose, and would stop following the
+      // main eave the moment somebody changed THAT.
+      let roofSideOverhang = positive(drawing?.roofSideOverhang, null);
       let activeWallType = WALL_TYPE_VIEW[drawing?.activeWallType] ? drawing.activeWallType : 'stud_2x6';
       // A page-owned key of its own, not a section-table cell: the table's
       // HOUSE row is `live: true` and reads the drawing's ASSEMBLY, and how
@@ -1222,6 +1233,10 @@
         levelAssemblies,
         roofPitch,
         roofOverhang,
+        // Written whatever it holds, null included: an emptied SIDE OVERHANG
+        // has to reach the file as "follows the main one" rather than being
+        // dropped and leaving the last typed number in the drawing.
+        roofSideOverhang,
         roofHeelIn: roofHeelOverrideIn,
         activeWallType,
         foundationAttachment,
@@ -2176,6 +2191,20 @@
           unit: 'ftin', typed: true,
           put: value => (writeCell(bilevelRowId(), 'roofOverhangFt', value),
             'Bilevel overhang saved.') },
+        // THE SIDE EAVE, UNDER THE MAIN ONE (Movie, 13 Oct), and on this card
+        // too: "add that for all the ROOFs not just the bilevels". It shows
+        // this type's own main overhang until somebody types into it, which is
+        // what level-assembly does with an absent side eave -- see the house
+        // card's SIDE OVERHANG.
+        { side: 'left', key: 'roofSideOverhang', name: 'Side overhang', anchor: false,
+          // splitOr NESTED, which is what "falls back to the main one" is in
+          // this page's own words: the side cell if it is stored, else
+          // whatever the main overhang row is showing.
+          get: () => splitOr('roofSideOverhangFt',
+            splitOr('roofOverhangFt', roofOverhang)),
+          unit: 'ftin', typed: true,
+          put: value => (writeCell(bilevelRowId(), 'roofSideOverhangFt', value),
+            'Bilevel side overhang saved.') },
         { side: 'left', key: 'roofHeel', name: 'Roof heel', anchor: false,
           get: v => v.roof.heelIn / 12, unit: 'ftin', typed: true,
           put: value => (writeCell(bilevelRowId(), 'roofHeelIn', value * 12),
@@ -2209,6 +2238,19 @@
           unit: 'ftin', typed: true,
           put: value => (writeCell('attachedGarage', 'roofOverhangFt', value),
             'Garage overhang saved.') },
+        // The garage's side eave on this card too, reading its own main
+        // overhang until typed. One cell, two cards: a number set here is the
+        // same ATTACHED GARAGE cell the bungalow card writes.
+        { side: 'left', key: 'garageSideOverhang', name: 'side overhang', anchor: false,
+          shown: () => bilevelBuild().garage,
+          // The stored cell, so an untyped one follows the GARAGE's own main
+          // overhang rather than the house's side eave -- see the bungalow
+          // card's garage row for why cellValue is the wrong reader here.
+          get: () => sectionTable.rows.attachedGarage?.roofSideOverhangFt
+            ?? cellValue('attachedGarage', 'roofOverhangFt').value,
+          unit: 'ftin', typed: true,
+          put: value => (writeCell('attachedGarage', 'roofSideOverhangFt', value),
+            'Garage side overhang saved.') },
         { side: 'left', key: 'garageHeel', name: 'roof heel', anchor: false,
           shown: () => bilevelBuild().garage,
           get: () => garageHeelIn() / 12, unit: 'ftin', typed: true,
@@ -2859,6 +2901,35 @@
         set: text => {
           const value = parseFtIn(text);
           if (value != null && value <= 6) { roofOverhang = value; return true; }
+          return false;
+        },
+      });
+      // AND THE SIDE EAVE UNDERNEATH IT, where Movie put it: "make the MAIN
+      // OVERHANG (2'0) default, and then underneath it also have SIDE
+      // OVERHANG ... so its symetrical".
+      //
+      // IT READS THE MAIN ONE UNTIL SOMEBODY TYPES. An empty box here would
+      // say the roof has no side eave, which is a different roof; what absent
+      // actually means is "the same as the main one", so that is the number
+      // the box SHOWS. Typing is what makes it this drawing's own.
+      //
+      // AND EMPTYING IT PUTS IT BACK, which is the only way out of an
+      // override on a page whose every other derived cell works that way --
+      // the roof heel beside it is cleared the same way.
+      addInput('sideOverhang', 'SIDE OVERHANG', {
+        name: 'side overhang',
+        // OFF-SECTION, like the garage's roof rows and for the same reason:
+        // this section is cut ACROSS the house, so the eave it shows is the
+        // main one. The side eave runs the other way and has no line in this
+        // view to label -- and a row with no anchor is otherwise hidden AND
+        // left unfilled, which is what the first cut of this did (an empty
+        // SIDE OVERHANG box on a roof that has one).
+        offSection: true,
+        get: () => ftIn(roofSideOverhang ?? roofOverhang),
+        set: text => {
+          if (!String(text).trim()) { roofSideOverhang = null; return true; }
+          const value = parseFtIn(text);
+          if (value != null && value <= 6) { roofSideOverhang = value; return true; }
           return false;
         },
       });
@@ -3855,6 +3926,30 @@
         () => inchesOnly(ROOF_FASCIA_IN), () => false, undefined, true);
       garageCell('garageOverhang', 'Garage overhang', 'roofOverhangFt', ftIn,
         text => { const v = parseFtIn(text); return v != null && v <= 6 ? v : null; }, true);
+      // AND ITS SIDE EAVE -- Movie, 13 Oct: "add that for all the ROOFs not
+      // just the bilevels also bungalow and the garages too". Not through
+      // `garageCell`, because this cell is the one on the card that is EMPTY
+      // by default and means something when it is: the box shows the garage's
+      // main overhang until somebody types, and emptying it puts that back.
+      // See the house's SIDE OVERHANG above for why absent is the rule rather
+      // than a 2 nobody chose.
+      addGarage('garageSideOverhang', 'Garage side overhang',
+        // THE STORED CELL, NOT cellValue, and the difference is which roof it
+        // falls back to: cellValue ends at the HOUSE's live field, so an
+        // untyped garage would show the house's side eave. What it actually
+        // follows is its OWN main overhang.
+        () => ftIn(sectionTable.rows.attachedGarage?.roofSideOverhangFt
+          ?? cellValue('attachedGarage', 'roofOverhangFt').value),
+        text => {
+          if (!String(text).trim()) {
+            writeCell('attachedGarage', 'roofSideOverhangFt', null);
+            return true;
+          }
+          const value = parseFtIn(text);
+          if (value == null || value > 6) return false;
+          writeCell('attachedGarage', 'roofSideOverhangFt', value);
+          return true;
+        }, undefined, true);
       // SAME RULE AS THE HOUSE, and same band. Movie, 5 Sep: "garage roof
       // should act the same yes". Calculated by default from fascia + rise,
       // typeable when somebody raises it, and cleared back to the calculation
@@ -4651,6 +4746,20 @@
         roofOverhangFt: {
           get: () => roofOverhang,
           set: value => { roofOverhang = value; },
+        },
+        // THE SIDE EAVE IS A LIVE FIELD TOO, and it has to be: cellValue ends
+        // at `liveField[field].get()` for any row that has not stored the
+        // cell, so a field missing from this table is not an empty cell -- it
+        // is a throw on the first repaint that asks for it. (That is exactly
+        // what the first cut of this did.)
+        //
+        // READS THE MAIN EAVE WHEN NOBODY HAS TYPED, which is the same answer
+        // level-assembly gives: absent means symmetrical.
+        roofSideOverhangFt: {
+          get: () => roofSideOverhang ?? roofOverhang,
+          // Null is allowed and is the way back to following the main eave,
+          // the way an emptied heel goes back to its calculation.
+          set: value => { roofSideOverhang = value == null ? null : value; },
         },
         // Clearing the box stores null, which puts the cell back on the
         // calculation -- the only way back, so it has to stay reachable.

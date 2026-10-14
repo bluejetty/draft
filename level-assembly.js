@@ -591,8 +591,15 @@ if (!window.DraftLevelAssembly) {
     const own = row === 'house' ? (isSplitType(type) ? rows[type] : null) : rows[row];
     const overhangFt = cellNumber(own?.roofOverhangFt) ?? positiveNumber(drawing?.roofOverhang) ?? 2;
     const pitch = cellNumber(own?.roofPitch) ?? positiveNumber(drawing?.roofPitch) ?? 4;
+    // THE SIDE EAVE FALLS BACK TO THE MAIN ONE, which is what makes this
+    // change invisible to every drawing that predates it: a roof cut with one
+    // number is symmetrical, and asking it for its side eave gives that same
+    // number back. Only a drafter who types into SIDE OVERHANG gets two.
+    const sideOverhangFt = cellNumber(own?.roofSideOverhangFt)
+      ?? positiveNumber(drawing?.roofSideOverhang) ?? overhangFt;
     return {
       overhangFt: Math.min(6, Math.max(0, overhangFt)),
+      sideOverhangFt: Math.min(6, Math.max(0, sideOverhangFt)),
       pitch: Math.min(24, Math.max(0, pitch)),
     };
   };
@@ -637,8 +644,32 @@ if (!window.DraftLevelAssembly) {
     const was = Array.isArray(roof.edgeOverhang) && roof.edgeOverhang.length === count
       ? roof.edgeOverhang.map(value => (Number.isFinite(Number(value)) ? Number(value) : fallback))
       : points.map(() => fallback);
+    // WHICH EDGES ARE THE SIDES, read off the geometry rather than off the
+    // eave/gable classification. Movie's "side" is the left and right of the
+    // house -- the E2 and E4 faces, the ones a side-yard setback is measured
+    // to -- and that is a question about which way an edge RUNS, not about
+    // whether it is raked. The two agree on a house whose ridge runs front to
+    // back and are opposite on one whose ridge runs across, so reading the
+    // classification would silently swap the two numbers on half the houses.
+    //
+    // AN EDGE THAT RUNS MORE IN z THAN IN x FACES LEFT OR RIGHT. Front is E1
+    // at the largest z, so the front and back edges run across x and the side
+    // edges run along z. A diagonal edge goes with whichever it is more of,
+    // which is the only answer available and is right at both extremes.
+    const sideEdge = index => {
+      const a = points[index];
+      const b = points[(index + 1) % count];
+      if (!a || !b) return false;
+      return Math.abs(Number(b.z) - Number(a.z)) > Math.abs(Number(b.x) - Number(a.x));
+    };
+    const wantFor = index => (sideEdge(index)
+      ? (Number.isFinite(Number(to.sideOverhangFt)) ? Number(to.sideOverhangFt) : to.overhangFt)
+      : to.overhangFt);
+    // A FLUSH GABLE STAYS FLUSH. That rule predates the side eave and is not
+    // weakened by it: an edge pulled to zero was pulled there on purpose, and
+    // a side-eave change must not quietly put a roof back over it.
     const now = was.map((value, index) =>
-      (value > 0 || (roof.edges || [])[index] !== 'gable' ? to.overhangFt : value));
+      (value > 0 || (roof.edges || [])[index] !== 'gable' ? wantFor(index) : value));
     const delta = now.map((value, index) => value - was[index]);
     let moved = points;
     if (delta.some(d => Math.abs(d) > 1e-9)) {
@@ -647,7 +678,15 @@ if (!window.DraftLevelAssembly) {
         || out.some(pt => !Number.isFinite(pt?.x) || !Number.isFinite(pt?.z))) return roof;
       moved = out.map((pt, index) => ({ ...points[index], x: pt.x, z: pt.z }));
     }
-    if (moved === points && roof.pitch === to.pitch && roof.overhang === to.overhangFt) return roof;
+    // AND THE EARLY-OUT HAS TO SEE A SIDE-ONLY CHANGE. It used to compare the
+    // pitch and the one overhang; a roof whose main eave and pitch were
+    // untouched and whose SIDE eave had just been retyped looked unchanged
+    // and was handed back with the old edge array still on it.
+    const sameEdges = Array.isArray(roof.edgeOverhang)
+      && roof.edgeOverhang.length === count
+      && now.every((value, index) => Number(roof.edgeOverhang[index]) === value);
+    if (moved === points && roof.pitch === to.pitch
+      && roof.overhang === to.overhangFt && sameEdges) return roof;
     return { ...roof, points: moved, overhang: to.overhangFt, edgeOverhang: now, pitch: to.pitch };
   };
   const roofsFollowingProject = (roofs, before, after, offsetVariable) => {

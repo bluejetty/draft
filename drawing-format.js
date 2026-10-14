@@ -1436,6 +1436,13 @@ if (!window.DraftDrawingFormat) {
         masterId: String(outline?.masterId || '').trim() || null,
         levelId: outlineLevelId,
         garage: outline?.garage === true,
+        // THE LOT LINE (Movie, 13 Oct). The AUTOSITE rectangle is an outline
+        // so that the point dragging and vertex breaking outlines already
+        // have are what adjusts an odd-shaped lot -- but it is not a
+        // BUILDING, and the flag is what keeps it out of everything that
+        // reads outlines as one: auto-dims strings the house off them and
+        // areas counts floor area off them. A lot line is neither.
+        site: outline?.site === true,
         open: outline?.open === true,
         detached: outline?.detached === true,
         foundation: oneOf(outline?.foundation, GARAGE_FOUNDATIONS, null),
@@ -1864,6 +1871,18 @@ if (!window.DraftDrawingFormat) {
     // heel. `positive()` keeps the null, so a re-normalise cannot turn a
     // calculated heel into a typed 0.
     'roofPitch', 'roofOverhangFt', 'roofHeelIn',
+    // THE SIDE EAVE, SEPARATELY (Movie, 13 Oct): "make the MAIN OVERHANG
+    // (2'0) default, and then underneath it also have SIDE OVERHANG ... when
+    // they change that the side eaves will reduce (or increase) on all sides
+    // so its symetrical" -- "add that for all the ROOFs not just the bilevels
+    // also bungalow and the garages too", which is why it is a cell on this
+    // list rather than a field on one card.
+    //
+    // NULL-UNTIL-OVERRIDDEN like its neighbours, and here that is what keeps
+    // every drawing written before today correct: absent means the side eave
+    // follows the main one, which is the single number those roofs were cut
+    // with. Nothing re-normalises into an asymmetric roof nobody asked for.
+    'roofSideOverhangFt',
     'mainWallHeightFt', 'mainJoistDepthIn', 'mainSheathingIn',
     'upperWallHeightFt', 'upperJoistDepthIn',
     // HOW FAR THE SPLIT'S UPPER DECK SITS ABOVE THE ENTRY FLOOR, and the only
