@@ -431,28 +431,36 @@ if (!window.DraftPremadePlans) {
   // against this wall; a window centred over it would be a window in the
   // stairwell's own headroom.
   const GARAGE_ROOM_WINDOW_FT = 4;
+  //
+  // NAMED wide/deep/thick RATHER THAN w/d/t, which is not a style choice: the
+  // ground floor's design opens with those three lines exactly, and three of
+  // its mutation rows anchor on them. Two identical prologues in one file make
+  // every one of those anchors ambiguous -- `replace()` takes the first match,
+  // so the mutants would quietly start mutating this function instead of the
+  // one they were written for. proto/mutant-anchors-harness.js says so out
+  // loud, which is how this was caught the hour it landed.
   const detachedGarageUpperOpenings = ({ widthFt, depthFt, wallThicknessFt, stair = false } = {}) => {
-    const w = Number(widthFt);
-    const d = Number(depthFt);
-    const t = Number(wallThicknessFt);
-    if (!Number.isFinite(w) || !Number.isFinite(d) || !Number.isFinite(t)) return [];
+    const wide = Number(widthFt);
+    const deep = Number(depthFt);
+    const thick = Number(wallThicknessFt);
+    if (!Number.isFinite(wide) || !Number.isFinite(deep) || !Number.isFinite(thick)) return [];
     const out = [];
     // A RUN OF WALL, from `from` to `to` along the edge, with its windows
     // spread evenly across it: n windows take the n stations that divide the
     // run into n + 1, which is where a drafter puts them by eye.
     const run = (edge, from, to) => {
       const clear = to - from;
-      if (!(clear > 0) || !carries(clear, GARAGE_ROOM_WINDOW_FT, t)) return;
+      if (!(clear > 0) || !carries(clear, GARAGE_ROOM_WINDOW_FT, thick)) return;
       const count = Math.max(1, Math.min(3, Math.floor(clear / 12)));
       for (let i = 1; i <= count; i += 1) {
         out.push(opening(edge, from + (clear * i) / (count + 1),
           GARAGE_ROOM_WINDOW_FT, 'window'));
       }
     };
-    run(0, 0, w);                                        // back
-    run(1, 0, d);                                        // the two sides
-    run(3, 0, d);
-    run(2, 0, stair ? Math.max(0, w - GARAGE_STAIR_STRIP_FT) : w);   // front
+    run(0, 0, wide);                                     // back
+    run(1, 0, deep);                                     // the two sides
+    run(3, 0, deep);
+    run(2, 0, stair ? Math.max(0, wide - GARAGE_STAIR_STRIP_FT) : wide);   // front
     return out;
   };
 
