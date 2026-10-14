@@ -544,6 +544,31 @@ if (!window.DraftLayoutPlan) {
   // hips still read through it.
   const SITE_INSIDE_FILL = 'rgba(29,31,32,0.22)';
 
+  // ── THE PROPERTY LINE ─────────────────────────────────────────────────
+  //
+  // Movie, 14 Oct: "can we make the SITE OUTLINE for the property THICK BLACK
+  // LINES on the layout for contruction plan and on the NIGHT make them
+  // bright thick white and make the long DASH and THICK DOT - LONG DASH -
+  // THICK DOT repeated over and over".
+  //
+  // THAT IS THE SURVEYOR'S LINE, and it is the one line on a site plan that
+  // is read before anything else: every setback on the sheet is measured to
+  // it. It was a plain 2px solid stroke in the page's grey-black, which on a
+  // sheet carrying a roof plan and a wall outline read as one more edge.
+  //
+  // THE DOT IS A ZERO-LENGTH DASH UNDER A ROUND CAP, which is how a canvas
+  // draws a round dot on a dashed line -- a short dash would be a tick, and
+  // ticks and dashes at the same weight read as a broken line rather than as
+  // dash-dot. The cap also adds half the width to each end of the long dash,
+  // so the gaps are written longer than they look to compensate.
+  //
+  // IN PAPER UNITS where the sheet has them: a site plan is drawn at 1:200 or
+  // thereabouts, and a pattern in screen pixels would be a different pattern
+  // on every zoom.
+  const SITE_LINE_INK = '#000000';
+  const SITE_LINE_W = 3;
+  const SITE_LINE_DASH = Object.freeze([14, 8, 0, 8]);
+
   // THE FOOTPRINT IS THE GROUND FLOOR'S OUTLINES, every building on it. The
   // lowest floor level that HAS outlines answers -- a bungalow's and a
   // detached garage's are both on MAIN FL, and a split's lowest is ENTRY --
@@ -651,9 +676,11 @@ if (!window.DraftLayoutPlan) {
     if (lot) {
       if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-SITE';
       ctx.save();
-      ctx.setLineDash([]);
-      ctx.strokeStyle = 'rgba(29,31,32,0.95)';
-      ctx.lineWidth = 2;
+      const scale = env.inkScale || 1;
+      ctx.lineCap = 'round';
+      ctx.setLineDash(SITE_LINE_DASH.map(part => part * scale));
+      ctx.strokeStyle = env.siteLineInk || SITE_LINE_INK;
+      ctx.lineWidth = SITE_LINE_W * scale;
       siteLoop(ctx, toS, lot.points);
       ctx.stroke();
       ctx.restore();

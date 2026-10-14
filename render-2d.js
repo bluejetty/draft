@@ -2192,11 +2192,30 @@ if (!window.DraftRender2D) {
     outlines.forEach(outline => {
       if (outline.points.length < 2) return;
       const selected = env.isSelected(outline);
-      const colour = outline.garage ? garageHex : hex;
+      // THE LOT IS DRAWN AS A PROPERTY LINE, not as a trace (Movie, 14 Oct):
+      // "can we make the SITE OUTLINE for the property THICK BLACK LINES on
+      // the layout for contruction plan and on the NIGHT make them bright
+      // thick white and make the long DASH and THICK DOT - LONG DASH - THICK
+      // DOT repeated over and over".
+      //
+      // IT IS STILL AN OUTLINE, which is the reason this is a branch here
+      // rather than a painter of its own: the lot is dragged, its corners are
+      // handled and it is selected exactly like any other, and a second
+      // painter would be a second set of all of that to keep in step. Only
+      // the ink, the weight and the pattern differ.
+      //
+      // THE SAME PATTERN THE SHEET DRAWS (layout-plan.js's SITE_LINE_DASH):
+      // a zero-length dash under a round cap is how a canvas makes a dot, and
+      // the gaps are written long because the cap adds half the width back to
+      // each end.
+      const isSite = outline.site === true;
+      const colour = isSite ? (env.colors.siteLine || hex)
+        : outline.garage ? garageHex : hex;
       ctx.strokeStyle = colour;
       ctx.fillStyle = colour;
-      ctx.lineWidth = selected ? 3.5 : 2;
-      ctx.setLineDash([9, 5]);
+      ctx.lineCap = isSite ? 'round' : 'butt';
+      ctx.lineWidth = isSite ? (selected ? 4.5 : 3) : (selected ? 3.5 : 2);
+      ctx.setLineDash(isSite ? [14, 8, 0, 8] : [9, 5]);
       ctx.beginPath();
       const count = env.segmentCount(outline);
       for (let index = 0; index < count; index++) {
@@ -2212,6 +2231,7 @@ if (!window.DraftRender2D) {
       }
       ctx.stroke();
       ctx.setLineDash([]);
+      ctx.lineCap = 'butt';
       if (outline.garage) {
         const centroid = outline.points.reduce(
           (sum, point) => ({ x: sum.x + point.x, z: sum.z + point.z }),

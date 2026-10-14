@@ -3489,6 +3489,11 @@
         // colour and is not being given one by this rung.
         traceHouse: outlineTraceColor(),
         traceAttached: skin['draw-trace-attached'],
+        // THE LOT IS NOT A TRACE, and since 14 Oct it does not look like one:
+        // it is the property line, and the painter draws it heavy, dash-dot
+        // and in the sheet's own ink. Its own key so the lot can be edited
+        // like any other outline and still read as a boundary.
+        siteLine: skin['draw-site-line'],
       },
     });
   };
@@ -5134,7 +5139,12 @@
     // drafter does on this level.
     if (activeLevelId() === SITE_LEVEL_ID && window.DraftLayoutPlan) {
       ctx.save();
-      window.DraftLayoutPlan.drawSitePlan(ctx, toS, drawing, {});
+      // AND THE PROPERTY LINE IN THE SKIN'S INK (Movie, 14 Oct: "on the
+      // NIGHT make them bright thick white"). The sheet paints it black,
+      // which is right on paper and invisible on this page's black ground,
+      // so the ink is the one thing the screen hands the painter.
+      window.DraftLayoutPlan.drawSitePlan(ctx, toS, drawing,
+        { siteLineInk: skin['draw-site-line'] });
       ctx.restore();
     }
     // THE TURN GOES WITH IT. The mark stands where E1 and E2 cross, and
