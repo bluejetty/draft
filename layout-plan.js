@@ -569,6 +569,109 @@ if (!window.DraftLayoutPlan) {
   const SITE_LINE_W = 3;
   const SITE_LINE_DASH = Object.freeze([14, 8, 0, 8]);
 
+  // ── THE TWO ROWS OUTSIDE THE PROPERTY LINE ────────────────────────────
+  //
+  // Movie, 14 Oct: "the dimensions which i will also add to the outside of the
+  // site lines. we need the front to back and side to side FULL dimensions of
+  // the site on the outmost dimension and on the inner dimension we need the
+  // location of the hosue from front of site, width of house and then to the
+  // back of the site and same for hosue position side to side ... (make it 3ft
+  // from the property line on the outside for the first dimension position and
+  // then 2ft future for the outside dimensino line".
+  //
+  // THE HOUSE'S POSITION READS NEAREST THE LOT and the lot's own size reads
+  // outside it, which is the order a reader wants: the setback you check
+  // against the bylaw sits beside the line it is measured to.
+  //
+  // IN FEET, NOT PIXELS. These are distances on the ground like the setbacks
+  // beside them, so the rows hold their spacing at every zoom and every sheet
+  // scale; a pixel offset would crowd the lot on a small viewport and drift
+  // off the paper on a large one.
+  const SITE_DIM_FIRST_FT = 3;
+  const SITE_DIM_GAP_FT = 2;
+  const SITE_DIM_OUTER_FT = SITE_DIM_FIRST_FT + SITE_DIM_GAP_FT;
+
+  const boxOfPoints = points => (points.length ? {
+    minX: Math.min(...points.map(pt => pt.x)), maxX: Math.max(...points.map(pt => pt.x)),
+    minZ: Math.min(...points.map(pt => pt.z)), maxZ: Math.max(...points.map(pt => pt.z)),
+  } : null);
+
+  // WHICH WAY IS THE FRONT. E1 is the front of the house and of the lot, and
+  // cut-marks owns which compass side that is once the plan has been turned --
+  // so the rows are built off its answer rather than off a hardcoded "front is
+  // +z", which would stand both of them on the wrong edges of a turned site.
+  const siteAxes = planTurn => {
+    const CM = window.DraftCutMarks;
+    const dir = id => (CM && typeof CM.eMarkDir === 'function' ? CM.eMarkDir(id, planTurn) : null);
+    return { front: dir('E1') || { x: 0, z: 1 }, left: dir('E2') || { x: -1, z: 0 } };
+  };
+
+  // ONE ROW: the stops along `axis`, on a line whose other coordinate is
+  // `lineAt` for all of them -- which is what makes a row a row. A stop pair
+  // closer than a quarter inch is dropped rather than drawn as a zero: a house
+  // built to the property line is legal and common, and "0" against the line
+  // it is built on tells a reader nothing.
+  const siteChain = (stops, axis, lineAt, row) => {
+    const out = [];
+    for (let i = 0; i < stops.length - 1; i += 1) {
+      if (Math.abs(stops[i + 1] - stops[i]) < 0.02) continue;
+      out.push({
+        start: axis === 'z' ? { x: lineAt, z: stops[i] } : { x: stops[i], z: lineAt },
+        end: axis === 'z' ? { x: lineAt, z: stops[i + 1] } : { x: stops[i + 1], z: lineAt },
+        axis,
+        row,
+      });
+    }
+    return out;
+  };
+
+  // THE SITE'S OWN DIMENSION STRINGS, generated rather than stored: they
+  // restate the lot and the building, and the drafter edits both by dragging
+  // -- a stored copy would be a second record of the same two boxes, going
+  // stale between drags. Exported so MODEL paints the same rows on screen and
+  // seats its elevation marks clear of them.
+  function siteDimStrings(saved) {
+    const { lot, bodies } = sitePlanParts(saved);
+    if (!lot) return [];
+    const lotBox = boxOfPoints(lot.points);
+    if (!lotBox) return [];
+    const houseBox = boxOfPoints(bodies.flatMap(body => body.points));
+    const { front, left } = siteAxes(num(saved?.planTurn) || 0);
+    const rows = [];
+    const build = (axis, side) => {
+      const lo = axis === 'z' ? lotBox.minZ : lotBox.minX;
+      const hi = axis === 'z' ? lotBox.maxZ : lotBox.maxX;
+      const across = axis === 'z' ? 'x' : 'z';
+      const sign = Math.sign(across === 'z' ? side.z : side.x) || -1;
+      const edge = sign > 0
+        ? (across === 'z' ? lotBox.maxZ : lotBox.maxX)
+        : (across === 'z' ? lotBox.minZ : lotBox.minX);
+      const at = outFt => edge + sign * outFt;
+      // INNER: where the building stands between the two lot lines -- lot
+      // line to house, the house itself, house to the far lot line.
+      if (houseBox) {
+        const hLo = axis === 'z' ? houseBox.minZ : houseBox.minX;
+        const hHi = axis === 'z' ? houseBox.maxZ : houseBox.maxX;
+        rows.push(...siteChain([lo, hLo, hHi, hi], axis, at(SITE_DIM_FIRST_FT), 'inner'));
+      }
+      // OUTER: the lot, end to end.
+      rows.push(...siteChain([lo, hi], axis, at(SITE_DIM_OUTER_FT), 'outer'));
+    };
+    // Front to back is measured along the front's own axis and read from the
+    // LEFT side; side to side is measured across it and read from the FRONT.
+    // Two edges, so neither row crosses the other's figures.
+    build(front.z ? 'z' : 'x', left);
+    build(front.z ? 'x' : 'z', front);
+    return rows;
+  }
+
+  // HOW FAR OUT EVERYTHING ELSE HAS TO STAND. Movie, same message: "the E1-E4
+  // on the outside can we make it so it is on the OUTSIDE of the site lines".
+  // The marks are seated by MODEL, which asks here rather than keeping its own
+  // copy of 3 and 2 -- one number, so a change to the rows moves the ring with
+  // them instead of leaving it among the figures.
+  const siteDimReachFt = () => SITE_DIM_OUTER_FT;
+
   // THE FOOTPRINT IS THE GROUND FLOOR'S OUTLINES, every building on it. The
   // lowest floor level that HAS outlines answers -- a bungalow's and a
   // detached garage's are both on MAIN FL, and a split's lowest is ENTRY --
@@ -684,6 +787,27 @@ if (!window.DraftLayoutPlan) {
       siteLoop(ctx, toS, lot.points);
       ctx.stroke();
       ctx.restore();
+    }
+    // AND THE TWO ROWS OUTSIDE IT (Movie, 14 Oct): the house's position
+    // against the lot lines nearest the lot, the lot's own size outside that.
+    // Drawn last, like every other sheet's dimensions, over what they measure.
+    const render = window.DraftRender2D;
+    const rows = siteDimStrings(saved);
+    if (rows.length && render && render.drawDimension2D) {
+      if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-SITE-DIMS';
+      const fmt = window.DraftFormatters || {};
+      const dimensionEnv = {
+        label: ft => (fmt.formatArchitecturalInches
+          ? fmt.formatArchitecturalInches(ft * 12) : `${Math.round(ft)}'`),
+        colors: env.siteDimColors || DIMENSION_COLORS,
+        // ON THE LINE, because the line is already where he put it: the rows
+        // stand 3 ft and 5 ft off the lot in FEET, and the screen's default
+        // 19px stand-off would add a second offset in a different unit on top
+        // of it -- the two rows would sit at a different spacing on every zoom.
+        atLine: true,
+        inkScale: env.inkScale,
+      };
+      rows.forEach(row => render.drawDimension2D(ctx, toS, row, {}, dimensionEnv));
     }
     return true;
   }
@@ -1154,6 +1278,8 @@ if (!window.DraftLayoutPlan) {
     drawPlan,
     sitePlanParts,
     drawSitePlan,
+    siteDimStrings,
+    siteDimReachFt,
   });
 })();
 }

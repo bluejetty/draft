@@ -4564,6 +4564,40 @@
     setTimeout(() => { if (garageSpanHolds(grow)) return; grow(); }, 0);
   };
 
+  // ── E1-E4 ON THE SITE PLAN STAND OUTSIDE THE LOT ──────────────────────
+  //
+  // Movie, 14 Oct: "the E1-E4 on the outside can we make it so it is on the
+  // OUTSIDE of the site lines". They are seated off the WALLS, which is right
+  // on a floor plan and wrong here: on the site level the subject is the lot,
+  // and marks round the house sit in the middle of the sheet, inside the
+  // property line and inside the two dimension rows now standing outside it.
+  //
+  // PAINT ONLY. The cuts themselves are what the elevations are generated
+  // from, so this hands the painter a re-seated copy (cut-marks' own
+  // seatMarksAround) and the records keep their ids, offsets and directions.
+  // Every other level answers null and gets the marks it always had.
+  //
+  // CLEAR OF THE ROWS, not of the lot: the ring stands outside the outer
+  // dimension line, and that distance is layout-plan's number rather than a
+  // second copy of 3 + 2 kept here.
+  const siteMarkRing = () => {
+    const LP = window.DraftLayoutPlan;
+    const CM = window.DraftCutMarks;
+    const LS = window.DraftLotSizes;
+    if (activeLevelId() !== SITE_LEVEL_ID || !LP || !CM || !LS) return null;
+    if (typeof CM.seatMarksAround !== 'function') return null;
+    const lot = LS.siteOutlineOf(drawing?.outlines);
+    const points = lot && Array.isArray(lot.points) ? lot.points : null;
+    if (!points || !points.length) return null;
+    const box = {
+      minX: Math.min(...points.map(pt => pt.x)), maxX: Math.max(...points.map(pt => pt.x)),
+      minZ: Math.min(...points.map(pt => pt.z)), maxZ: Math.max(...points.map(pt => pt.z)),
+    };
+    const reach = (typeof LP.siteDimReachFt === 'function' ? LP.siteDimReachFt() : 5)
+      + (CM.E_MARK_CLEAR_FT || 2);
+    return CM.seatMarksAround(autoElevationCuts(), box, reach);
+  };
+
   const paintCuts = () => {
     const R = window.DraftRender2D;
     const CM = window.DraftCutMarks;
@@ -4583,7 +4617,7 @@
     R.drawCutMarks2D(ctx, toS, {
       bubbleStyle: standards.cutBubbleStyle,
       lineSpan: (start, end) => CM.cutLineSpan(all, start, end, cutMarkGapFt()),
-      autoCuts: autoElevationCuts(),
+      autoCuts: siteMarkRing() || autoElevationCuts(),
       cuts: cuts(),
       cutColor: skin['draw-cut'],
       // The bubble interior is the page's own ground, so the lettering inside
@@ -5143,8 +5177,20 @@
       // NIGHT make them bright thick white"). The sheet paints it black,
       // which is right on paper and invisible on this page's black ground,
       // so the ink is the one thing the screen hands the painter.
-      window.DraftLayoutPlan.drawSitePlan(ctx, toS, drawing,
-        { siteLineInk: skin['draw-site-line'] });
+      window.DraftLayoutPlan.drawSitePlan(ctx, toS, drawing, {
+        siteLineInk: skin['draw-site-line'],
+        // AND THE SITE'S DIMENSION ROWS IN THE SKIN'S OWN BLUE. The sheet's
+        // table is written for white paper; on this page the strings are
+        // every other dimension's colour, which is the one a drafter already
+        // reads as "a measurement" here.
+        siteDimColors: {
+          stroke: skin['draw-dim'],
+          selected: skin['draw-selected'],
+          selectedHalo: 'rgba(89,128,166,0.35)',
+          preview: skin['draw-dim'],
+          labelBack: skin['surface-page'],
+        },
+      });
       ctx.restore();
     }
     // THE TURN GOES WITH IT. The mark stands where E1 and E2 cross, and
@@ -5880,12 +5926,22 @@
     // FOUR LINES OF NUMBERS, written once a frame beside the camera. `id`, the
     // two ends, and which way it looks -- everything a reader needs to say
     // which wall an elevation is on and which way round it is.
-    canvas.setAttribute('data-e-marks', JSON.stringify(autoElevationCuts().map(cut => ({
+    const publishMarks = (name, list) => canvas.setAttribute(name, JSON.stringify(list.map(cut => ({
       id: cut.id,
       a: [Number(cut.startPt.x.toFixed(4)), Number(cut.startPt.z.toFixed(4))],
       b: [Number(cut.endPt.x.toFixed(4)), Number(cut.endPt.z.toFixed(4))],
       d: [cut.dirVec.x, cut.dirVec.z],
     }))));
+    // THE RECORD, which is what every elevation is generated from and what
+    // E1 RIGHT and HOUSE ROTATE are asked about.
+    publishMarks('data-e-marks', autoElevationCuts());
+    // AND WHERE THEY WERE ACTUALLY DRAWN, which on the site level is a ring
+    // round the LOT rather than round the house (Movie, 14 Oct: "the E1-E4 on
+    // the outside ... on the OUTSIDE of the site lines"). The same two numbers
+    // on every other level; published separately because "what the file says"
+    // and "what the drafter is looking at" are two questions, and this feature
+    // is the one place they differ.
+    publishMarks('data-e-marks-drawn', siteMarkRing() || autoElevationCuts());
     // AFTER the canvas timing and BEFORE the readout. After, because `paint`
     // in the readout means the main canvas and folding six thumbnails into it
     // would make one frame an edit read like a slow one. Before, because the
