@@ -64,7 +64,18 @@ if (!window.DraftNorth) {
 
   // BOTH ARROWS, true north first so construction north sits on top of it:
   // CN dark and heavier (the main one), TN grey and lighter.
-  const drawPair = (ctx, cx, cy, r, north, { cnColor = '#1d1f20', tnColor = '#8c9196' } = {}) => {
+  // GLOW IS THE CALLER'S, and it is one save/restore around the whole pair
+  // rather than a colour per needle: a halo drawn per stroke would double
+  // where the two needles cross. Movie, 14 Oct: "make it glow from the WHITE
+  // part like it is being iluminated in that color but alow a 'glow ' around
+  // it" / "around the white lettering which is tinted with the color".
+  const drawPair = (ctx, cx, cy, r, north, { cnColor = '#1d1f20', tnColor = '#8c9196',
+    glow = null, glowWidth = 0 } = {}) => {
+    if (glow) {
+      ctx.save();
+      ctx.shadowColor = glow;
+      ctx.shadowBlur = glowWidth || r * 0.9;
+    }
     const n = normalise(north);
     ctx.save();
     ctx.strokeStyle = cnColor;
@@ -77,6 +88,7 @@ if (!window.DraftNorth) {
     // stack their labels: TN just past its own tip, CN further out.
     if (n.tn !== 0) needle(ctx, cx, cy, r * 0.85, tnDeg(n), tnColor, 'TN', 1, 1.28);
     needle(ctx, cx, cy, r, cnDeg(n), cnColor, n.tn !== 0 ? 'CN' : 'N', 1.5, 1.55);
+    if (glow) ctx.restore();
   };
 
   // The button's face: the N arrow pointing the way construction north is set.

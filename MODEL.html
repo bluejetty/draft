@@ -130,12 +130,24 @@
     border:7px solid transparent; border-top:0; border-bottom:8px solid var(--length-live); }
   #north-dock { position:fixed; z-index:6; pointer-events:none; }
   #north-dock > button { pointer-events:auto; position:absolute; }
+  /* NO BOX ON THE ARROW (Movie, 14 Oct: "the NOrth arrow doesn't need a box").
+     The hand is still here and still takes the press; what went is the panel
+     it used to draw under itself on hover -- the arrow lights up instead, in
+     paintNorth, because it is painted on the canvas and CSS cannot reach it. */
   #north-hit { border:0; padding:0; background:transparent; cursor:pointer; border-radius:50%; }
-  #north-hit:hover, #north-hit:focus-visible { background:rgba(127,127,127,0.12); outline:1px solid var(--edge-panel); }
-  #strip-rotate { display:flex; align-items:center; justify-content:center; width:42px; height:36px;
-    border:1px solid var(--edge-panel); border-radius:4px; cursor:pointer; color: var(--ink-primary);
+  /* MATCHED TO THE ARROW, and square: 40px against the arrow's 41. */
+  #strip-rotate { display:flex; align-items:center; justify-content:center; width:40px; height:40px;
+    border:1px solid var(--edge-panel); border-radius:6px; cursor:pointer; color:#ffffff;
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none); }
-  #strip-rotate:hover, #strip-rotate:focus-visible { border-color: var(--accent-mark); color: var(--accent-mark); }
+  /* GOLD, AND THE SAME GOLD THE HOUSE MARK WEARS -- draw-origin, read here as
+     the CSS twin of the key paintOrigin paints with. The LETTERING is tinted
+     and the glow is the colour at strength, which is his "glow from the WHITE
+     part like it is being iluminated in that color". */
+  #strip-rotate:hover, #strip-rotate:focus-visible {
+    border-color: var(--draw-origin, #f0b429);
+    color: color-mix(in srgb, var(--draw-origin, #f0b429) 35%, #ffffff 65%);
+    filter: drop-shadow(0 0 5px var(--draw-origin, #f0b429))
+      drop-shadow(0 0 10px color-mix(in srgb, var(--draw-origin, #f0b429) 60%, transparent)); }
   #plan.dragging { cursor:grabbing; }
   /* Over a grabbable corner. Declared AFTER .dragging so it wins while a
      corner is actually being dragged -- equal specificity, later rule. */
@@ -1269,7 +1281,7 @@
     title="NORTH — click to set construction north and true north" aria-label="North arrows"></button>
   <button type="button" id="strip-rotate" data-mode-rotate
     title="TURN THE HOUSE — a quarter turn clockwise; the elevations turn with it and E1 stays the front">
-    <svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+    <svg width="28" height="28" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
       <path d="M4.6 9.2 L8 6.3 L11.4 9.2"></path>
       <path d="M5.8 9.2 V12.3 H10.2 V9.2"></path>
       <path d="M2.7 7.6 A6.3 6.3 0 0 1 13.3 7.6" stroke-width="1"></path>
@@ -5030,14 +5042,61 @@
     northIconKey = key;
     button.innerHTML = window.DraftNorth.iconSvg(n);
   };
-  // WHERE THE ARROW STANDS: far enough in from the right that HOUSE ROTATE
-  // fits beside it.
-  const NORTH_R = 30;
-  const northCentre = () => ({ x: canvas.clientWidth - 112, y: 96 });
+  // ── THE PAIR, OVER THE RAIL'S TWO COLUMNS ────────────────────────────
+  //
+  // Movie, 14 Oct: "over in upper right area where the N Arrow is and the box
+  // with the ROTATE page, can we make them the same size and center each over
+  // the layouts below ... the N arrow would be alot smaller", then "the same
+  // color WHITE for both and the NOrth arrow doesn't need a box actually just
+  // make them similar size".
+  //
+  // HALF THE SIZE IT WAS. At r=30 the arrow stood 77px tall beside a 36px
+  // button; at 16 the two are a matched pair, which is what he asked for.
+  const NORTH_R = 16;
+  // CENTRED ON THE SEATS THEMSELVES, not on an offset from the right edge.
+  // The rail is two columns of thumbnails and those columns are what the pair
+  // sits over; measuring them means the pair follows the rail when it is
+  // widened (it was, by 15px, four hours ago) instead of drifting off it.
+  // Falls back to the old offsets when the rail is not up -- the arrow is
+  // still painted on a page with no seats to line up with.
+  const railColumns = () => {
+    const seats = [...document.querySelectorAll('[data-seat]')].slice(0, 2)
+      .map(seat => seat.getBoundingClientRect())
+      .filter(box => box.width > 0);
+    if (seats.length < 2) return null;
+    const box = canvas.getBoundingClientRect();
+    const centre = b => b.x + b.width / 2 - box.left;
+    // THE TWO COLUMNS, LEFT FIRST. The first row of the rail holds one seat
+    // in each, and reading them in document order is reading them left to
+    // right -- but only because they are laid out that way, so it is sorted
+    // rather than assumed.
+    return [centre(seats[0]), centre(seats[1])].sort((a, b) => a - b);
+  };
+  const northCentre = () => {
+    const cols = railColumns();
+    return { x: cols ? cols[0] : canvas.clientWidth - 112, y: 96 };
+  };
+  // THE TWO COLOURS ARE THE MARKS' OWN. Movie, 14 Oct: "the GREEN will match
+  // the Site plan registration mark and the Gold will match the HOUSE
+  // registration mark". Both are already palette keys -- draw-site-datum and
+  // draw-origin -- so they are read from the skin rather than typed again
+  // here, and they follow DAY and NIGHT without a second table.
+  let northHover = false;
+  // WHERE THE ARROW WAS LAST PAINTED, which is a different question from
+  // where the dock is seated: the dock is HTML and moves the moment the rail
+  // reports a width, while the arrow is on the canvas and only moves on the
+  // next paint. The observer at the foot of this file compares the two.
+  let paintedNorthX = null;
   const northDock = document.getElementById('north-dock');
   const seatNorthDock = () => {
     if (!northDock) return;
     if (!window.DraftNorth || !drawing || driveThruUp()) { northDock.hidden = true; return; }
+    // AND NOT ON A CUT VIEW. `paint()` puts the dock away and only a plan
+    // paint reaches paintNorth to seat it again -- which was the whole guard
+    // until the ResizeObserver at the foot of this file started calling in
+    // here directly. The rail re-seats on every view change, so an elevation
+    // got the arrow's hand and a turn button back with no arrow under them.
+    if (activeCut()) { northDock.hidden = true; return; }
     const box = canvas.getBoundingClientRect();
     const c = northCentre();
     // THE ARROW'S OWN EXTENT: its letters stand 1.55 r above the centre and
@@ -5052,11 +5111,42 @@
       left: `${c.x - NORTH_R}px`, top: `${top}px`, width: `${NORTH_R * 2}px`, height: `${bottom - top}px`,
     });
     const turn = document.getElementById('strip-rotate');
-    if (turn) Object.assign(turn.style, {
-      left: `${c.x + NORTH_R + 10}px`, top: `${(top + bottom) / 2 - 18}px`,
-    });
+    if (turn) {
+      const cols = railColumns();
+      // ON THE SECOND COLUMN, and centred on the arrow's own line so the two
+      // read as a pair rather than as one control and a stray.
+      const tx = cols ? cols[1] : c.x + NORTH_R + 10 + 21;
+      Object.assign(turn.style, {
+        left: `${tx - 20}px`, top: `${(top + bottom) / 2 - 20}px`,
+      });
+    }
     syncNorthHands();
   };
+  // THE ARROW LIGHTS UNDER THE HAND, and it has to be wired rather than
+  // styled: the needles are painted on the CANVAS, so no :hover rule can
+  // reach them. The invisible hand over them is what the pointer actually
+  // meets, so it carries the flag and asks for a repaint.
+  //
+  // ONE REPAINT PER CROSSING, not per move: the flag is only written when it
+  // changes, because `paint()` redraws the whole plan and a mousemove handler
+  // that repainted on every event would do it sixty times a second for a
+  // halo that is already on screen.
+  const setNorthHover = on => {
+    if (northHover === on) return;
+    northHover = on;
+    paint();
+  };
+  {
+    const hand = document.getElementById('north-hit');
+    if (hand) {
+      hand.addEventListener('pointerenter', () => setNorthHover(true));
+      hand.addEventListener('pointerleave', () => setNorthHover(false));
+      // FOCUS COUNTS TOO, so the keyboard sees what the mouse sees.
+      hand.addEventListener('focus', () => setNorthHover(true));
+      hand.addEventListener('blur', () => setNorthHover(false));
+    }
+  }
+
   // A PRESS THERE IS A CORNER WHILE A TOOL IS ARMED. The arrow was paint
   // before 12 Oct and a wall or an outline could be started under it; the
   // hand only catches a press when nothing is being drawn. Asked again from
@@ -5080,9 +5170,21 @@
     seatNorthDock();
     if (!window.DraftNorth || !drawing) return;
     const c = northCentre();
+    // WHITE, AND GREEN WHEN THE HAND IS OVER IT. Movie, 14 Oct: "make them
+    // glow green for the north arrow if a user passes the mouse over ... make
+    // it glow from the WHITE part like it is being iluminated in that color
+    // but alow a 'glow ' around it" / "around the white lettering which is
+    // tinted with the color".
+    //
+    // THE INK STAYS WHITE AND THE HALO CARRIES THE COLOUR, which is what
+    // "illuminated in that color" is -- a needle painted flat green would
+    // read as a different arrow rather than a lit one.
+    paintedNorthX = c.x;
     window.DraftNorth.drawPair(ctx, c.x, c.y, NORTH_R, northOf(), {
-      cnColor: skin['draw-wall-edge'] || '#1d1f20',
-      tnColor: skin['ink-quiet'] || '#8c9196',
+      cnColor: '#ffffff',
+      tnColor: 'rgba(255,255,255,0.72)',
+      glow: northHover ? (skin['draw-site-datum'] || '#6a9a57') : null,
+      glowWidth: NORTH_R * 1.2,
     });
   };
 
@@ -8671,7 +8773,37 @@
     // The previews share the LEVELS / LAYERS pane, at its head (Movie,
     // 10 Oct), so the pane that shows the levels shows them too.
     rail.hidden = paneShowing() !== 'levels';
+    // AND THE NORTH PAIR SITS OVER THIS RAIL'S TWO COLUMNS (Movie, 14 Oct:
+    // "center each over the layouts below"), so it is re-seated whenever the
+    // columns arrive or move. Without this the dock keeps whatever it worked
+    // out on the paint BEFORE the rail was built -- which is the paint it
+    // usually gets, since nothing repaints the plan afterwards.
+    seatNorthDock();
   };
+
+  // AND AGAIN WHENEVER THE RAIL ITSELF MOVES OR APPEARS. The call at the end
+  // of syncRail is not enough on its own: the rail is HIDDEN unless the
+  // LEVELS / LAYERS pane is the one showing, and a hidden element measures
+  // zero -- so the first seating usually happens while there is nothing to
+  // line up with, and nothing repaints the plan afterwards to try again.
+  // A ResizeObserver is the real signal for "the columns are somewhere new",
+  // which is the question being asked, rather than a retry on a timer.
+  // AND THE ARROW GOES WITH THE DOCK. Seating alone moves the HTML -- the
+  // hand and the turn button -- while the arrow itself is painted on the
+  // canvas and stays where the LAST paint put it, so the pair sat split until
+  // something else happened to repaint. The split was invisible to the eye
+  // (the hand is transparent) and perfectly visible to a canvas hash: three
+  // selection specs read the same drawing twice, got two pictures, and were
+  // right to say so.
+  {
+    const rail = document.getElementById('view-rail');
+    if (rail && typeof ResizeObserver === 'function') {
+      new ResizeObserver(() => {
+        seatNorthDock();
+        if (paintedNorthX !== null && northCentre().x !== paintedNorthX) paint();
+      }).observe(rail);
+    }
+  }
 
   // ONE SEAT PER FRAME, and the reason is a measurement rather than a taste.
   //

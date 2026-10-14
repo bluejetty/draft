@@ -56,10 +56,22 @@ const canvasPixels = async (page) => {
 // 255/255/255 is exact and no skin's ground is that. Day's wall body is
 // #ffffff so it lands there; night's #2f3335 cannot; and a solid fill has a
 // core the anti-aliasing does not reach.
-const pureWhite = pixels => {
+//
+// AND ONLY WHERE THE WALLS PAINTED. This counted the whole canvas until 14
+// Oct, which was true enough while the walls were the only thing on it that
+// could be white -- and then the north arrow became white (Movie: "the same
+// color WHITE for both") and put 15 pure-white pixels in the top right of the
+// night canvas. The claim is about drawWallSeg2D, so the count is differenced
+// against the same canvas with the walls stripped, exactly as peakWallInk
+// below is: whatever paints in both renders cancels, and what is left is
+// white the walls themselves put down.
+const pureWhite = (before, pixels) => {
   let n = 0;
   for (let i = 0; i < pixels.length; i += 4) {
-    if (pixels[i] === 255 && pixels[i + 1] === 255 && pixels[i + 2] === 255) n += 1;
+    if (pixels[i] !== 255 || pixels[i + 1] !== 255 || pixels[i + 2] !== 255) continue;
+    if (before[i] === pixels[i] && before[i + 1] === pixels[i + 1]
+      && before[i + 2] === pixels[i + 2]) continue;
+    n += 1;
   }
   return n;
 };
@@ -138,8 +150,8 @@ async function inkOnBothSkins(page) {
   const beforeDay = await canvasPixels(page);
 
   return {
-    night: { peak: peakWallInk(beforeNight, afterNight), white: pureWhite(afterNight) },
-    day: { peak: peakWallInk(beforeDay, afterDay), white: pureWhite(afterDay) },
+    night: { peak: peakWallInk(beforeNight, afterNight), white: pureWhite(beforeNight, afterNight) },
+    day: { peak: peakWallInk(beforeDay, afterDay), white: pureWhite(beforeDay, afterDay) },
   };
 }
 
