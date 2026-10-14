@@ -18285,7 +18285,40 @@
     cutEnd = null;
     if (next === 'cut') sayOnStrip('CUT — press where the section line starts.');
   });
+  // ── + CUT TAKES YOU SOMEWHERE YOU CAN CUT ──────────────────────────────
+  //
+  // Movie, 14 Oct: "i also noticed if i'm on ELEVATION or some others and i
+  // press +CUT or the SECTION viewport with +CUT in it, nothing happens, if
+  // they user presses either +CUT or command +CUT can you take the user to
+  // the MAIN FLOOR PLAN and allow them to make the cut".
+  //
+  // A CUT IS DRAWN ON A PLAN -- two presses for the ends of the line and a
+  // third for the side to look from, all in plan feet. But + CUT can be
+  // pressed from ANYWHERE: the SECTIONS head stands in the rail on every
+  // view, and an empty S seat offers the same press. On an elevation the tool
+  // armed and then had nothing to land on, so the button read as broken --
+  // which is the worst kind of nothing, because a drafter cannot tell a dead
+  // control from one he has not understood.
+  //
+  // THE MAIN FLOOR IS WHERE A SECTION IS CUT FROM, which is his answer and
+  // the right one: it is the floor carrying the stairs, the openings and the
+  // walls a section is usually taken through.
+  //
+  // UNLESS THE DRAWING HAS NO MAIN FLOOR. A detached garage is drawn on its
+  // own levels and may never have one, so the level is only changed when it
+  // is really there. Otherwise the VIEW alone is dropped, which still lands
+  // the drafter on a plan he can cut -- the one belonging to the level he was
+  // already standing on.
   const armCut = () => {
+    if (activeCut()) {
+      const hasMain = (drawing?.levels || []).some(l => Number(l.id) === MAIN_FLOOR_LEVEL_ID);
+      // goToLevel DROPS THE CUT VIEW ITSELF: a cut id is not one of a level's
+      // layer views, so arriving anywhere clears `?view=cut:E4` on the way in.
+      // That is why this does not clear it by hand as well -- two places
+      // setting one parameter is how they come to disagree.
+      if (hasMain) goToLevel(MAIN_FLOOR_LEVEL_ID);
+      else { params.delete('view'); syncUrl(); buildChrome(); }
+    }
     setTool('cut');
     paint();
   };
