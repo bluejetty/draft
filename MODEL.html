@@ -6351,7 +6351,14 @@
     // Defaulting in both cases made the sign answer a question it had just
     // asked -- "ONE 24' x 26' THICKENED EDGE. GOOD CHOICE." over an untouched
     // size row -- which is what the two checks under ?sizes=ask caught.
-    if (!chosenSizeId) return ASKS_SIZE ? null : BM.garageDefaultSize();
+    // AND WHICH DEFAULT DEPENDS ON THE FOUNDATION, because a frost wall or a
+    // grade beam arrives two storeys (13 Oct) and that garage has a stair and
+    // a man door leading to it -- it needs a door wall that can hold them.
+    // build-menu.js owns which id that is; this only has to hand it the
+    // foundation the tile was pressed for.
+    if (!chosenSizeId) {
+      return ASKS_SIZE ? null : BM.garageDefaultSizeFor(chosen()?.entry?.foundation);
+    }
     if (chosenSizeId !== 'custom') return BM.garageSizeById(chosenSizeId);
     return BM.customGarageSize(sizeWidth.value, sizeDepth.value);
   };
@@ -10231,6 +10238,16 @@
       overriddenSrcIds: [],
     };
     drawing.outlines.push(outline);
+    // WHETHER THERE IS A STOREY IS DECIDED ONCE, HERE, because three things
+    // downstream want the same answer and must not each work it out: the
+    // front wall's bays, the storey itself, and the stair that stands in the
+    // strip the bays leave. 'none' is an answer and is kept -- a drafter who
+    // took the room off and orders another garage is not asking for it back,
+    // and gets the stock single-bay front with it.
+    const fdnKind = order.entry.foundation || null;
+    const detachedRow = () => drawing.sectionTable?.rows?.detachedGarage || {};
+    const carriesStorey = window.DraftBuildMenu.garageCarriesStorey(fdnKind);
+    const wantsRoom = carriesStorey && detachedRow().overGarage !== 'none';
     // The four walls' own 'add' steps are dropped for the single 'built'
     // one below. Left in, the first Ctrl+Z would take the whole garage and
     // the next four would each hunt a wall that is already gone.
@@ -10265,6 +10282,11 @@
         widthFt: order.size.widthFt,
         depthFt: order.size.depthFt,
         wallThicknessFt: openingThicknessFt()(walls[0]),
+        // TWO BAYS AND A STRIP WHERE THERE IS A STAIR TO STAND IN IT -- the
+        // same `wantsRoom` the storey is raised on, so a garage whose room
+        // was turned off keeps the stock single-bay front rather than a strip
+        // left over from a stair nobody is getting.
+        stair: wantsRoom,
       }), walls, levelId);
     // AND ITS CONCRETE. Movie ordered a "detached garage 25x25 with frost
     // wall" and got four stud walls: the tile asked him which foundation and
@@ -10303,12 +10325,8 @@
     // section table so PROJECT's schedule and section show the storey that
     // was just built rather than disagreeing with the model.
     //
-    // 'none' IS AN ANSWER AND IS KEPT. A drafter who took the storey off and
-    // orders another garage is not asking for it back.
-    const fdnKind = order.entry.foundation || null;
-    const detachedRow = () => drawing.sectionTable?.rows?.detachedGarage || {};
-    const carriesStorey = fdnKind === 'frostwall' || fdnKind === 'gradebeam';
-    const wantsRoom = carriesStorey && detachedRow().overGarage !== 'none';
+    // 'none' IS AN ANSWER AND IS KEPT -- see carriesStorey/wantsRoom above,
+    // which is where this press decides, once, whether there is a storey.
     if (carriesStorey && detachedRow().overGarage !== 'room') {
       const table = drawing.sectionTable || { rows: {} };
       const rows = table.rows || {};
@@ -10424,8 +10442,7 @@
         garageSpanAsk.push(...(beamed.garagePending || []));
       }
       // AND A WAY UP INTO IT -- Movie, 13 Oct: a storey over the garage "will
-      // need a set of stairs too". The same auto-stair the premade houses get,
-      // narrowed to the one storey this press raised (see `only`), so the
+      // need a set of stairs too", "along one side", off an 8 ft entry. The
       // flight comes with its well cut out of the deck above it. Its RISE is
       // the one thing that is not the house's: it lands on the garage slab,
       // 5 1/2" under the sill -- see garageSlabDescent.
@@ -10433,7 +10450,7 @@
       // AFTER THE BEAMS, because the stair is nudged clear of whatever is
       // carrying the floor it cuts through, and the beam has to be down for
       // that to be possible.
-      const stairs = placeAutoStairs({ only: [upperId] });
+      const stairs = placeGarageRoomStair(upperId);
       if (stairs !== -1) framed.push(...stairs.placed);
     }
     const dimmed = [];
@@ -16239,6 +16256,84 @@
         }
       });
     return result;
+  };
+
+  // ── THE GARAGE ROOM'S OWN FLIGHT, PLACED RATHER THAN SUGGESTED ───────────
+  //
+  // Movie, 13 Oct, having seen the suggester's answer: "for 2 storey make it
+  // 24X30 and put the stairs along one side", and "the door goes straight to
+  // the bottom of the stairs (about 8ft entry area before the stairs".
+  //
+  // THE SUGGESTER WAS NOT WRONG, IT WAS BLIND. Its job is to find room in a
+  // house whose rooms it does not know, and it scores a run against beams,
+  // stamped room names and the flight below -- an empty 30x24 box offers it
+  // none of those, so it parked the run down the middle. The room's SHAPE is
+  // the answer here and the build knows it: the front wall carries two bays
+  // and a 4 ft strip beside them, and the strip is the stair's.
+  //
+  //   ALONG THE HOUSE SIDE   the strip's own wall, one assembly in, which is
+  //                          the same inset the well is cut to.
+  //   8 FT BACK FROM THE DOOR the entry he asked for, measured from the INSIDE
+  //                          face rather than the centreline -- what a drafter
+  //                          paces is the floor, not the geometry.
+  //   CLIMBING AWAY FROM IT  so the bottom tread meets the man door and the
+  //                          flight runs into the building, not at it.
+  //
+  // NULL WHEN IT WILL NOT FIT, and the caller then falls back to the
+  // suggester: a garage typed shallow enough that 8 ft of entry and the run
+  // do not fit between the walls should get the best position something can
+  // find, not a flight through the back wall.
+  const GARAGE_STAIR_ENTRY_FT = 8;
+  const buildGarageRoomStair = (levelId, corners, id) => {
+    const SG = window.DraftStairGeometry;
+    if (!SG || !corners || corners.length < 3) return null;
+    const descent = SG.stairDescent(levelId, stairLevels());
+    if (!descent || !(descent.riseFt > 0)) return null;
+    const layout = SG.stairLayout(descent.riseFt);
+    const xs = corners.map(pt => pt.x), zs = corners.map(pt => pt.z);
+    const minX = Math.min(...xs), maxZ = Math.max(...zs), minZ = Math.min(...zs);
+    const inset = stairOpeningSetbackFt(levelId);
+    const centreX = minX + inset + stairWidthFt / 2;
+    const bottomZ = maxZ - inset - GARAGE_STAIR_ENTRY_FT;
+    const topZ = bottomZ - layout.runFt;
+    if (topZ < minZ + inset) return null;
+    return {
+      id,
+      // START IS THE UPPER NOSING and start -> end runs DOWNHILL
+      // (drawing-format.js:598), so the top of the flight is the end farther
+      // from the door and `end` is the bottom tread beside the entry.
+      start: { x: centreX, y: 0, z: topZ },
+      end: { x: centreX, y: 0, z: bottomZ },
+      levelId,
+      view: 'plan',
+      widthFt: stairWidthFt,
+      riseFt: layout.riseFt,
+      risers: layout.risers,
+      treadRunIn: SG.STAIR_TREAD_RUN_IN,
+      rail: stairRailSide,
+      shape: 'straight',
+      turn: 'right',
+      winders: 0,
+      auto: true,
+    };
+  };
+
+  // ONE FLIGHT, IN THE STRIP, WITH ITS WELL -- the garage build's own call.
+  // It returns undo-shaped `{list, item}` pairs like placeAutoStairs, so the
+  // press still costs one Ctrl+Z, and it falls back to the suggester when the
+  // deliberate position will not fit.
+  const placeGarageRoomStair = levelId => {
+    if (!drawing) return -1;
+    if (!Array.isArray(drawing.stairs)) drawing.stairs = [];
+    const outline = (drawing.outlines || []).find(loop => Number(loop.levelId) === Number(levelId)
+      && loop.garage !== true && (loop.points || []).length >= 3);
+    const stair = outline
+      ? buildGarageRoomStair(levelId, outline.points, newStructureId(drawing.stairs))
+      : null;
+    if (!stair) return placeAutoStairs({ only: [levelId] });
+    drawing.stairs.push(stair);
+    const cut = buildStairOpenings();
+    return { placed: [{ list: drawing.stairs, item: stair }, ...cut.placed] };
   };
 
   // EVERY DESCENDING FLOOR WITHOUT A STAIR, BOTTOM-UP -- and the order is the

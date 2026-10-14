@@ -338,34 +338,52 @@ test('the ordered garage gets a roof, and every edge of it is an eave',
     expect(sheet.maxZ, 'and the front').toBeGreaterThan(walls.maxZ + 0.1);
   });
 
-test('and a way into it: an overhead door, a man door and a window',
+test('and a way into it: two bays, a man door beside them, and a window',
   async ({ page }) => {
+    // Movie, 13 Oct, on the garage that carries a storey: "place a 2 garage
+    // doors 8ft each and 1 man door 36 along one wall", "make each car bay
+    // approx 12 each and then 4fet left for the mandoor and stairs".
+    //
+    // SO THE FRONT WALL IS THE WHOLE TEST NOW. It used to hold one wide
+    // overhead with the man door round the side; a garage with a stair in it
+    // puts all three on the one wall, because the man door is the way to the
+    // stair and the stair stands in the strip they leave.
     const saved = await orderGarage(page, 'detached-frostwall');
-    const studs = studsOf(saved);
-    expect((saved.fenestrations || []).length, 'three openings').toBe(3);
+    const studs = studsOf(saved).filter(wall => wall.levelId === 3);
+    expect((saved.fenestrations || []).length, 'four openings').toBe(4);
 
-    // THE OVERHEAD DOOR ON THE DOOR WALL, which is the one garage-site.js
-    // says faces the viewer. The board's default 24 ft door wall carries the
-    // 16, so this garage gets the double -- the 16x24 still on the shelf does
-    // not, and premade-plans.js has the ladder and the harness for that.
-    const overhead = openingOn(saved, frontWall(studs));
-    expect(overhead.length, 'one door on the door wall').toBe(1);
-    expect(overhead[0].type).toBe('door');
-    expect(overhead[0].width, '16 ft across a 24 ft wall').toBeCloseTo(16, 3);
-    expect(overhead[0].garage, 'and it is an overhead door').toBe(true);
-    expect(overhead[0].headHeight, 'heading at 7 ft, not at the house-s 6-8')
-      .toBeCloseTo(7, 3);
-    expect(overhead[0].layer, 'on the door layer').toBe('A-DOOR');
+    const front = openingOn(saved, frontWall(studs));
+    expect(front.length, 'two bays and the man door, all on the door wall')
+      .toBe(3);
+    const overhead = front.filter(record => record.garage === true);
+    expect(overhead.length, 'two overhead doors').toBe(2);
+    for (const door of overhead) {
+      expect(door.type).toBe('door');
+      expect(door.width, 'an 8 ft leaf, his number').toBeCloseTo(8, 3);
+      expect(door.headHeight, 'heading at 7 ft, not at the house-s 6-8')
+        .toBeCloseTo(7, 3);
+      expect(door.layer, 'on the door layer').toBe('A-DOOR');
+    }
+    // ONE IN EACH BAY, which is what makes them bays rather than two doors
+    // that happen to be on one wall: the 30 ft wall less the 4 ft strip is two
+    // 13 ft bays, so their centres stand 13 ft apart.
+    const apart = Math.abs(overhead[0].offset - overhead[1].offset);
+    expect(apart, `${apart} ft between the two bays`).toBeCloseTo(13, 1);
 
-    // THE MAN DOOR ON THE HOUSE SIDE. plot() stands the garage east of
-    // everything already built, so the path between the two runs off this
-    // wall — putting it on the far side would send the drafter round the box.
-    const man = openingOn(saved, houseSideWall(studs));
-    expect(man.length, 'one door on the wall the house is on').toBe(1);
+    // THE MAN DOOR IN THE STRIP, at the house end of the same wall — the path
+    // between house and garage runs off this side, and the strip is where the
+    // stair lands.
+    const man = front.filter(record => record.garage !== true);
+    expect(man.length, 'one man door').toBe(1);
     expect(man[0].type).toBe('door');
     // A D36, like every default exterior door (Movie, 9 Oct).
     expect(man[0].width, 'a 3-0 leaf').toBeCloseTo(3, 3);
-    expect(man[0].garage, 'a man door is not an overhead door').toBe(false);
+    // The door wall is walked from the far corner toward the house, so the
+    // strip is the LAST 4 ft of it and the man door stands past both bays.
+    expect(man[0].offset, 'past both bays, in the strip')
+      .toBeGreaterThan(Math.max(...overhead.map(door => door.offset)));
+    expect(openingOn(saved, houseSideWall(studs)).length,
+      'and nothing is left round the side').toBe(0);
 
     // AND ONE WINDOW, on the back — away from the street and off both doors.
     const win = openingOn(saved, backWall(studs));
@@ -419,7 +437,7 @@ test('and the drawing will actually draw them', async ({ page }) => {
   // AND IT HAS SOMETHING TO JUDGE. An empty list passes a "nothing was
   // refused" check perfectly, which is the same garage Movie reported — so
   // the count is asserted first and the verdict second.
-  expect(judged.length, 'three openings to judge').toBe(3);
+  expect(judged.length, 'four openings to judge').toBe(4);
   expect(judged.filter(Boolean), 'every opening fits its wall where it was put')
     .toEqual([]);
 });
@@ -603,6 +621,34 @@ test('and a way up into the room, landing on the garage slab',
     // the drawing thought is a stair whose steps do not add up.
     expect(stair.riseFt / stair.risers * 12,
       `${stair.risers} risers over ${stair.riseFt} ft`).toBeLessThanOrEqual(7.875);
+
+    // ── ALONG ONE SIDE, OFF AN 8 FT ENTRY ──────────────────────────────────
+    //
+    // Movie, 13 Oct: "put the stairs along one side", and "the door goes
+    // straight to the bottom of the stairs (about 8ft entry area before the
+    // stairs". The suggester had parked it down the middle of the room, which
+    // is what an empty box scores best; this garage's shape is the answer and
+    // the build knows it.
+    const box = saved.outlines.find(outline => outline.garage === true);
+    const xs = box.points.map(pt => pt.x), zs = box.points.map(pt => pt.z);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), maxZ = Math.max(...zs);
+    // THE HOUSE SIDE, which is the side the man door's strip is on. Measured
+    // as "nearer that wall than the far one by a mile" rather than to an
+    // inset typed here, which would be this spec keeping its own copy of the
+    // wall assembly.
+    const offWall = ((stair.start.x + stair.end.x) / 2) - minX;
+    expect(offWall, `the run stands ${offWall} ft off the house-side wall`)
+      .toBeLessThan(stair.widthFt + 1);
+    expect(maxX - minX, 'and the room is far wider than that')
+      .toBeGreaterThan(offWall * 3);
+    // AND THE ENTRY IN FRONT OF IT. `end` is the bottom tread, the door wall
+    // is at max z, and what a drafter paces is the floor — so an 8 ft entry
+    // measured off the inside face lands a little under 8 from the
+    // centreline the geometry keeps.
+    const entryFt = maxZ - Math.max(stair.start.z, stair.end.z);
+    expect(entryFt, `${entryFt} ft of floor between the door and the bottom step`)
+      .toBeGreaterThan(7.5);
+    expect(entryFt, 'and not a room-s worth of it').toBeLessThan(9);
   });
 
 test.beforeEach(async ({ page }) => { await open(page); });

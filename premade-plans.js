@@ -329,7 +329,27 @@ if (!window.DraftPremadePlans) {
   // less per end than a 2x6 one, which is the difference between a 9 ft door
   // fitting and not on a wall near the line. The caller has just built the
   // walls and knows.
-  const detachedGarageOpenings = ({ widthFt, depthFt, wallThicknessFt } = {}) => {
+  // ── THE TWO-BAY FRONT, AND THE STRIP BESIDE IT ───────────────────────────
+  //
+  // Movie, 13 Oct, on the garage that carries a storey: "place a 2 garage
+  // doors 8ft each and 1 man door 36 along one wall", then "make each car bay
+  // approx 12 each and then 4fet left for the mandoor and stairs", and "the
+  // door goes straight to the bottom of the stairs (about 8ft entry area
+  // before the stairs".
+  //
+  // SO THE FRONT WALL IS THREE THINGS, not one: two car bays and a strip. The
+  // strip is what the man door opens into and what the stair stands in, which
+  // is why it is 4 ft rather than whatever is left over -- a 3 ft door and a
+  // 3 ft flight need it, and the number is his.
+  //
+  // THE STRIP IS AT THE FAR END OF THE EDGE, which is the HOUSE side: the
+  // loop runs clockwise from the back-left corner, so edge 2 is walked from
+  // the far corner back toward the house and offset `w` is the house end.
+  // The man door and the path off it stay on the side the house is on, which
+  // is the rule the single-bay garage's man door already followed.
+  const GARAGE_STAIR_STRIP_FT = 4;
+  const GARAGE_BAY_DOOR_WIDTH_FT = 8;
+  const detachedGarageOpenings = ({ widthFt, depthFt, wallThicknessFt, stair = false } = {}) => {
     const w = Number(widthFt);
     const d = Number(depthFt);
     const t = Number(wallThicknessFt);
@@ -339,6 +359,29 @@ if (!window.DraftPremadePlans) {
     if (carries(w, GARAGE_WINDOW_WIDTH_FT, t)) {
       out.push(opening(0, w / 2, GARAGE_WINDOW_WIDTH_FT, 'window'));
     }
+    const bay = (w - GARAGE_STAIR_STRIP_FT) / 2;
+    const leaf = stair && bay > 0
+      ? (carries(bay, GARAGE_BAY_DOOR_WIDTH_FT, t)
+        ? GARAGE_BAY_DOOR_WIDTH_FT : widestDoorFor(bay, t))
+      : null;
+    if (leaf) {
+      // ONE DOOR CENTRED IN EACH BAY, so the pier between them is the pier
+      // between the bays rather than a leftover -- and the two read as a pair
+      // from the street whatever width the garage was typed at.
+      out.push(opening(2, bay / 2, leaf, 'door',
+        { garage: true, headFt: GARAGE_DOOR_HEAD_FT }));
+      out.push(opening(2, bay + bay / 2, leaf, 'door',
+        { garage: true, headFt: GARAGE_DOOR_HEAD_FT }));
+      // AND THE MAN DOOR IN THE STRIP, pulled off the corner by what its own
+      // lintel has to bear on. Centred in the strip wherever the corner
+      // allows it, which on his 30 ft wall it does.
+      const clear = t + G.openingBearingFt(MAN_DOOR_WIDTH_FT) + MAN_DOOR_WIDTH_FT / 2;
+      out.push(opening(2, Math.min(w - GARAGE_STAIR_STRIP_FT / 2, w - clear),
+        MAN_DOOR_WIDTH_FT, 'door'));
+      return out;
+    }
+    // ── OR THE STOCK SINGLE-BAY FRONT, where there is no stair to make room
+    // for, or the wall is too narrow to hold two bays and the strip.
     const overhead = widestDoorFor(w, t);
     if (overhead) {
       out.push(opening(2, w / 2, overhead, 'door',
