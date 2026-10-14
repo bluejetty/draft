@@ -55,11 +55,17 @@ async function openStandards(page) {
   await expect(page.locator('[data-logo-file]')).toBeVisible();
 }
 
+// THE CROP DIALOG STANDS BETWEEN THE FILE AND THE LIST since 14 Oct (Movie:
+// "can you offer them a CROP option"), so every upload here presses through
+// it. What the crop itself does is tests/logo-crop.spec.js's question; this
+// file only needs the logo to land.
 async function addLogo(page, name = 'MY COMPANY.png') {
   const before = await page.locator('[data-logo-list] [data-logo-label]').count();
   await page.locator('[data-logo-file]').setInputFiles({
     name, mimeType: 'image/png', buffer: PNG_2PX,
   });
+  await expect(page.locator('[data-crop-back]')).toBeVisible();
+  await page.locator('[data-crop-use]').click();
   await expect(page.locator('[data-logo-list] [data-logo-label]')).toHaveCount(before + 1);
 }
 
@@ -85,15 +91,17 @@ test('a logo uploaded in COMPANY STANDARDS joins the TITLEBLOCK list', async ({ 
   await expect(page.locator('[data-logo-list]')).toContainText('NONE YET');
   await addLogo(page, 'HARBOUR DRAFTING.png');
 
-  // THE NAME COMES OFF THE FILE, less its extension: the one thing on disk
-  // that already says what the mark is.
+  // THE NAME IS A SLOT, NOT THE FILENAME (Movie, 14 Oct: "change its name to
+  // COMPANY 01 (not LOGO)"). His own file was called logo.png, so the
+  // TITLEBLOCK list read LOGO -- which says nothing about whose it is. The
+  // field beside the row is where a real name goes.
   await expect(page.locator('[data-logo-list] [data-logo-label]'))
-    .toHaveValue('HARBOUR DRAFTING');
+    .toHaveValue('COMPANY 01');
 
   await openLayoutWithHouse(page);
   const offered = page.locator('[data-layout-titleblock^="logo:"]');
   await expect(offered, 'the uploaded logo never reached the picker').toHaveCount(1);
-  await expect(offered).toHaveText('HARBOUR DRAFTING');
+  await expect(offered).toHaveText('COMPANY 01');
   // AND THE FOUR SHIPPED ONES ARE STILL THERE. An office's own mark is an
   // addition to the list, not a replacement of it.
   await expect(page.locator('[data-layout-titleblock="roughdrafter"]')).toBeVisible();
@@ -136,9 +144,8 @@ test('several logos can stand in one standard, and one can be taken off again',
   async ({ page }) => {
     // "allow them to upload multiple logos for each COMPANY STANDARDS area".
     await openStandards(page);
-    await page.locator('[data-logo-file]').setInputFiles({ name: 'FIRST.png', mimeType: 'image/png', buffer: PNG_2PX });
-    await expect(page.locator('[data-logo-list] [data-logo-label]')).toHaveCount(1);
-    await page.locator('[data-logo-file]').setInputFiles({ name: 'SECOND.png', mimeType: 'image/png', buffer: PNG_2PX });
+    await addLogo(page, 'FIRST.png');
+    await addLogo(page, 'SECOND.png');
     await expect(page.locator('[data-logo-list] [data-logo-label]')).toHaveCount(2);
 
     await openLayoutWithHouse(page);
@@ -153,7 +160,7 @@ test('several logos can stand in one standard, and one can be taken off again',
 
     await openLayoutWithHouse(page);
     await expect(page.locator('[data-layout-titleblock^="logo:"]')).toHaveCount(1);
-    await expect(page.locator('[data-layout-titleblock^="logo:"]')).toHaveText('SECOND');
+    await expect(page.locator('[data-layout-titleblock^="logo:"]')).toHaveText('COMPANY 02');
   });
 
 test('the logo rides the standards file, there and back', async ({ page }) => {
@@ -179,7 +186,7 @@ test('the logo rides the standards file, there and back', async ({ page }) => {
   await page.locator('[data-upload-file]').setInputFiles({
     name: 'office.draft.standards', mimeType: 'application/json', buffer: Buffer.from(saved),
   });
-  await expect(page.locator('[data-logo-list] [data-logo-label]')).toHaveValue('ROUND TRIP');
+  await expect(page.locator('[data-logo-list] [data-logo-label]')).toHaveValue('COMPANY 01');
   await openLayoutWithHouse(page);
   await expect(page.locator('[data-layout-titleblock^="logo:"]'),
     'the restored logo never reached the picker').toHaveCount(1);
