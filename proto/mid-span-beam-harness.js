@@ -442,13 +442,31 @@ const poly = list => list.map(([x, z]) => ({ x, z }));
 // ── OPEN WEB JOISTS OVER A GARAGE (Movie, 12 Oct) ─────────────────────────
 {
   const pick = (span, opts) => { const o = owjFor(span, opts); return `${o.depthIn}@${o.ocIn}${o.fits ? '' : '!'}`; };
-  const garage = { minDepthIn: 19.75 };
-  checkEq('a 22 ft garage takes his 19-3/4" at 16" o.c.', pick(22, garage), '19.75@16');
-  checkEq('never shallower over a garage, however short', pick(12, garage), '19.75@16');
-  checkEq('past 25 ft it goes deeper, still at 16"', pick(27, garage), '24@16');
-  checkEq('"12" for longest" once no 16" row reaches', pick(30, garage), '24@12');
-  checkEq('past the table it says so', pick(33, garage), '24@12!');
-  checkEq('elsewhere the shallowest that spans it', pick(20, {}), '14@16');
+  // 19-1/4", NOT 19-3/4" (Movie, 13 Oct): every truss depth is its round
+  // number less the 3/4" sheathing, so the FLOOR PACKAGE lands round --
+  // "i like for ours lines up to 20\" even with the sheathing".
+  const garage = { minDepthIn: 19.25 };
+  checkEq('a 22 ft garage takes his 19-1/4" at 16" o.c.', pick(22, garage), '19.25@16');
+  checkEq('never shallower over a garage, however short', pick(12, garage), '19.25@16');
+  checkEq('past 25 ft it goes deeper, still at 16"', pick(27, garage), '23.25@16');
+  checkEq('"12" for longest" once no 16" row reaches', pick(30, garage), '23.25@12');
+  checkEq('past the table it says so', pick(33, garage), '23.25@12!');
+  // AND THE 21-1/4" ROW CARRIES THE SPANS BETWEEN THEM (Movie, 14 Oct), so a
+  // deck that is past 19-1/4" @ 16" does not jump straight to the deepest
+  // truss in the table.
+  checkEq('26 ft takes the new 21-1/4" row', pick(26, garage), '21.25@16');
+  // 15-1/4", the shallowest row. Every depth is its round number less the
+  // sheathing since 13 Oct, so the shallowest truss makes a 16" floor -- and
+  // 13-1/4" left the table on 14 Oct (Movie: "only the 11 7/8\" are
+  // Engineered TJI. the OWJ are 19.25\" or bigger, also smaller one 16\"
+  // 15.25\" 18\" (17.25\"", then "than i guess 21.25\" and 23.25\" and
+  // that's probably it hey"), because a 14" nominal open-web truss is not a
+  // thing he orders -- that depth is a TJI, and a TJI is one depth, 11 7/8".
+  checkEq('elsewhere the shallowest that spans it', pick(20, {}), '15.25@16');
+  // THE DEPTHS ARE A FACT, where the spans are a judgement a supplier's own
+  // chart may replace -- so the five he named are asserted outright.
+  checkEq('the five depths an OWJ comes in',
+    OWJ_SPANS.map(r => r.depthIn).join(), '15.25,17.25,19.25,21.25,23.25');
   checkEq('every row is safer at closer spacing',
     OWJ_SPANS.every(r => r.spanFt[12] > r.spanFt[16] && r.spanFt[16] > r.spanFt[19.2] && r.spanFt[19.2] > r.spanFt[24]), true);
   checkEq('and deeper always spans further',

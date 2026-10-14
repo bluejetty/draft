@@ -413,7 +413,12 @@ test('the room over a MOD BILEVEL garage gets OWJ wall to wall, no beam or post 
   // SIDE WALL TO SIDE WALL IS THE WAY THE DOOR WALL RUNS (Movie, 12 Oct:
   // "the sides that land on walls"): these doors are in the x = -21 wall, so
   // the joists run in z across the room's 31 ft, not its 20 ft the short way.
-  expect(note.body).toMatch(/24" @ 12" O\.C\./);
+  // THE DEEPEST TRUSS IN THE TABLE, at 12" o.c., which is what a 31 ft span
+  // takes. It is written 23-1/4" now rather than 24": Movie, 13 Oct, set the
+  // rule that a truss is its round depth less the 3/4" sheathing, so the
+  // FLOOR PACKAGE lands on 24" and the truss ordered is 23-1/4". Same row of
+  // the same table, named the way it is ordered.
+  expect(note.body).toMatch(/23-1\/4" @ 12" O\.C\./);
   expect(note.body).toMatch(/SIDE WALL TO SIDE WALL -- 31'-0" SPAN/);
   expect(d.dimensions.filter(x => Number(x.levelId) === 4 && x.view === 'floor').length,
     'the room\'s floor layout is dimensioned').toBeGreaterThan(0);

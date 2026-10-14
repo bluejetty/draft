@@ -744,6 +744,11 @@ if (!window.DraftCutView) {
       return {
         id: level.id, name: level.name, ...at,
         joistDepthIn: assembly.joistDepthIn,
+        // WHAT KIND OF JOIST, carried so the band can NAME it -- see the
+        // note on the band's own label in drawSection. Both stack builders
+        // carry it, because a split is where a garage deck most often sits
+        // beside a house deck and the two are not the same joist.
+        joistType: assembly.joistType,
         sheathingIn: assembly.sheathingIn,
       };
     });
@@ -768,6 +773,7 @@ if (!window.DraftCutView) {
         floorBottom: floorTop - env.levelFloorFt(level.id),
         wallTop: floorTop + assembly.wallHeightFt,
         joistDepthIn: assembly.joistDepthIn,
+        joistType: assembly.joistType,
         sheathingIn: assembly.sheathingIn,
       };
     });
@@ -2331,14 +2337,45 @@ if (!window.DraftCutView) {
       ctx.stroke();
       return { lo, hi };
     };
+    // ── THE SLAB STOPS AT THE INSIDE FACE ────────────────────────────────
+    //
+    // Movie, 14 Oct, reading S2 of the two-storey detached garage: "the slab
+    // should stop on the inside of the garage wall (it overlaps now)". Both
+    // spans below were measured to the wall LINE -- the crossing's centre on
+    // a frost wall, the outline (which is the outer face) on a grade beam --
+    // so the slab was drawn straight through the concrete it is poured
+    // against, half a wall at each end on one and a whole wall on the other.
+    //
+    // ONE INSET FOR BOTH, taken off the wall the cut actually crossed rather
+    // than from a wall-type lookup: `c.width` is the thickness this section
+    // is already drawing that wall at, so the slab cannot stop anywhere but
+    // against the face on the sheet. The crossing has to be AT that end --
+    // within half a wall of it -- or it is the other side of the garage and
+    // the end is left alone, which is what keeps a cut that clips a single
+    // grade-beam leg (audit C5) drawing its slab to the outline at the far
+    // end.
+    //
+    // THE DOOR BUCKS ARE UNAFFECTED: `withBucks` inside paintGarageFloor
+    // still reaches the span back OUT to any buck the cut passes, because
+    // there the slab really does pour over the beam and fill the void.
+    const insideFace = (cs, lo, hi) => {
+      const endFace = (u, sign) => {
+        const near = cs.filter(c => Math.abs(c.u - u) <= c.width).sort(
+          (a, b) => Math.abs(a.u - u) - Math.abs(b.u - u))[0];
+        return near ? near.u + sign * near.width / 2 : u;
+      };
+      return { lo: Math.max(lo, endFace(lo, 1)), hi: Math.min(hi, endFace(hi, -1)) };
+    };
     // A frost-wall garage's slab, between the garage's own bearing walls.
     const frostGarages = [...new Set(fdnCrossings
       .filter(c => c.garage && c.wall.baseHeight <= 0.01 && env.garageFoundation(c.garage) === 'frostwall')
       .map(c => c.garage))];
     frostGarages.forEach(garage => {
-      const us = fdnCrossings.filter(c => c.garage === garage).map(c => c.u);
+      const cs = fdnCrossings.filter(c => c.garage === garage);
+      const us = cs.map(c => c.u);
       if (us.length < 2 || Math.max(...us) - Math.min(...us) <= 1) return;
-      paintGarageFloor(garage, Math.min(...us), Math.max(...us));
+      const face = insideFace(cs, Math.min(...us), Math.max(...us));
+      paintGarageFloor(garage, face.lo, face.hi);
     });
 
     // Hung grade beams carry a slab poured over the plate on graded fill:
@@ -2355,12 +2392,17 @@ if (!window.DraftCutView) {
       const outlineUs = garage
         ? garage.points.map(pt => pt.x * axis.x + pt.z * axis.z)
         : [];
-      const lo = outlineUs.length
+      const lo0 = outlineUs.length
         ? Math.max(uMin, Math.min(...outlineUs))
         : Math.min(...beamCrossings.map(c => c.u));
-      const hi = outlineUs.length
+      const hi0 = outlineUs.length
         ? Math.min(uMax, Math.max(...outlineUs))
         : Math.max(...beamCrossings.map(c => c.u));
+      // AND IT STOPS AT THE BEAM'S INSIDE FACE (Movie, 14 Oct) -- see
+      // insideFace above. On this path `lo0`/`hi0` are the outline, which is
+      // the OUTER face, so the whole beam was inside the slab rather than
+      // half of it.
+      const { lo, hi } = insideFace(beamCrossings, lo0, hi0);
       if (hi - lo > 1) {
         // ONE DATUM. The stored wall is the fallback for a crossing whose
         // body is unknown, and it answers by the same rule -- the beam's top
@@ -2435,8 +2477,25 @@ if (!window.DraftCutView) {
         ctx.fillStyle = ink(0.55);
         ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
         ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        // THE BAND SAYS WHAT THE JOIST IS, and until 14 Oct it said TJI
+        // whatever it was. Movie, reading a detached garage's S1: "you
+        // marked it TJI (only the 11 7/8") are Engineered TJI. the OWJ are
+        // 19.25" or bigger". The word was typed into the string while the
+        // level's own joistType sat in the assembly beside the depth this
+        // line already reads -- so a garage deck, which level-assembly.js
+        // has defaulted to `owj` since 28 Sep for the reason a garage has no
+        // interior walls to land on, drew 19 1/4" under the one word that
+        // cannot describe it.
+        //
+        // READ FROM JOIST_TYPES rather than switched on here, so the four
+        // labels are said in one place and a fifth kind needs no edit in
+        // this file. The fallback is the old string, which is what a stack
+        // record from before this carried the field would want.
+        const joist = (window.DraftLevelAssembly?.JOIST_TYPES || [])
+          .find(type => type.id === level.joistType);
         ctx.fillText(
-          `${formatInchesOnly(level.joistDepthIn)} TJI + ${formatInchesOnly(level.sheathingIn)} SHTG`,
+          `${formatInchesOnly(level.joistDepthIn)} ${joist?.label || 'TJI'}`
+          + ` + ${formatInchesOnly(level.sheathingIn)} SHTG`,
           x + 4, Y((level.floorTop + level.floorBottom) / 2));
       });
       crossings.filter(c => c.wall.levelId === level.id && (c.wall.view || 'plan') === 'plan')
@@ -2728,7 +2787,44 @@ if (!window.DraftCutView) {
       const below = stack.floors
         .filter(level => level.floorTop < top.floorTop - 0.5)
         .reduce((hi, level) => (!hi || level.floorTop > hi.floorTop ? level : hi), null);
-      const bottomFt = below ? below.floorTop : stack.foundation.slabTop;
+      // ── A FLIGHT INTO A GARAGE LANDS ON THE SLAB ─────────────────────
+      //
+      // Movie, 13 Oct, on the section of a two-storey detached garage:
+      // "stairs go to 0-0 but should go down to the slab".
+      //
+      // THE FLOOR BELOW IS NOT ALWAYS A FLOOR. `below.floorTop` is the top of
+      // the DECK of the storey underneath, which is right everywhere there is
+      // one -- and under a garage there is no deck, there is concrete, and it
+      // sits lower: one sill plate plus the slab's recess under the pour. That
+      // is the same 5 1/2" the flight's own rise is sized with (MODEL.html's
+      // garageSlabDescent), so drawn to the deck line instead, the last riser
+      // lands on nothing and the section disagrees with the stair's own riser
+      // count -- which is how he saw it.
+      //
+      // ASKED OF THE GARAGE UNDER THIS FLIGHT, not of the level: a storey can
+      // carry a garage and a room side by side, and only the flight standing
+      // over the bay lands on its slab.
+      const stairMid = {
+        x: (stair.start.x + stair.end.x) / 2,
+        z: (stair.start.z + stair.end.z) / 2,
+      };
+      const inLoop = (pts, p) => {
+        let hit = false;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+          const a = pts[i], b = pts[j];
+          if ((a.z > p.z) !== (b.z > p.z)
+            && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
+        }
+        return hit;
+      };
+      const garageUnder = below && typeof env.garageOutlines === 'function'
+        ? (env.garageOutlines(below.id) || [])
+          .find(garage => Array.isArray(garage.points) && garage.points.length > 2
+            && inLoop(garage.points, stairMid))
+        : null;
+      const bottomFt = garageUnder
+        ? garageSlabTop(env, stack.foundation, garageUnder)
+        : (below ? below.floorTop : stack.foundation.slabTop);
       const layout = SG.stairLayout(top.floorTop - bottomFt);
       if (!(layout.riseFt > 0.5)) return;
       const parts = SG.stairPlanParts(stair, layout);
@@ -2750,20 +2846,80 @@ if (!window.DraftCutView) {
         const lenFt = Math.max(run.lenFt, flight.risers * runStep - SG.STAIR_RISER_FACE_IN / 12);
         const rect = [at(0, -half), at(lenFt, -half), at(lenFt, half), at(0, half)];
         const spans = floorRuns(cut, axis, [{ points: rect }]);
-        if (!spans.length) return;
+        // ── A FLIGHT THE CUT MISSES IS STILL IN THE ROOM ─────────────────
+        //
+        // Movie, 14 Oct, on S2 of the two-storey detached garage: "i cut a
+        // section the other direction and the stairs don't show, they should
+        // be on the left side". The stair stands against one side wall and
+        // S2 runs down the other, so the cut passes it rather than through
+        // it -- and every flight here began with "no crossing, nothing to
+        // draw", which is the rule for what the cut SLICES and the wrong rule
+        // for what the viewer SEES. A section shows the room: the far wall,
+        // its windows, and the stair standing against it.
+        //
+        // BEYOND, NOT MERELY ELSEWHERE. Every corner has to be on the far
+        // side of the cut line -- a flight behind the viewer's shoulder is
+        // out of the picture, not in it -- and its stations have to fall
+        // inside the drafter's own mark, so a stair in the next building
+        // along does not wander onto this sheet.
+        const mark = [projU(cut.startPt), projU(cut.endPt)];
+        const markLo = Math.min(...mark), markHi = Math.max(...mark);
+        const rectUs = rect.map(projU);
+        const uLo = Math.min(...rectUs), uHi = Math.max(...rectUs);
+        const seen = spans.length || !rect.every(p => depthOf(p) > -1e-6)
+          || uHi <= markLo + 1e-6 || uLo >= markHi - 1e-6
+          ? null
+          : { min: Math.max(markLo, uLo), max: Math.min(markHi, uHi) };
+        if (!spans.length && !seen) return;
         const c = d.x * axis.x + d.z * axis.z;
         const uS = projU(run.start);
         // Stair u (this flight's) -> section station.
         const station = u => uS + (u - flight.u0) * c;
         if (Math.abs(c) > Math.SQRT1_2) {
-          // WITH THE RUN: the whole flight in profile.
-          SS.drawFlight(ctx, flight, layout, u => X(station(u)), yOf, inks);
+          // WITH THE RUN: the whole flight in profile -- and a flight the cut
+          // only PASSES draws the same profile in the lighter line everything
+          // beyond the cut is drawn in, so a reader can tell what was sliced
+          // from what was merely seen.
+          SS.drawFlight(ctx, flight, layout, u => X(station(u)), yOf,
+            seen ? { line: ink(0.45), stringer: weight(C.assembly, 0.08),
+              tread: weight(C.face, 0.5), riser: weight(C.face, 0.5) } : inks);
           if (railSides.length) {
             const end = SS.flightRailEnd(flight, layout);
-            ctx.strokeStyle = C.line; ctx.lineWidth = 2;
+            ctx.strokeStyle = seen ? ink(0.45) : C.line;
+            ctx.lineWidth = seen ? 1 : 2;
             ctx.beginPath();
             ctx.moveTo(X(station(flight.u0)), yOf(flight.e0 + RAIL_FT));
             ctx.lineTo(X(station(end.u)), yOf(end.e + RAIL_FT));
+            ctx.stroke();
+          }
+          return;
+        }
+        // ACROSS THE RUN AND BEYOND THE CUT: the flight end-on, every nosing
+        // a light line across its width with the stringers down each side.
+        // The sliced case below is the same picture with one tread cut
+        // through it; this one has no cut tread because nothing was cut.
+        if (seen) {
+          const xa = X(seen.min), xb = X(seen.max);
+          const eEnd = flight.e0 - flight.risers * riseStep;
+          ctx.strokeStyle = ink(0.45); ctx.lineWidth = 0.75;
+          ctx.beginPath();
+          for (let j = 0; j <= flight.risers; j += 1) {
+            const y = yOf(flight.e0 - j * riseStep);
+            ctx.moveTo(xa, y); ctx.lineTo(xb, y);
+          }
+          ctx.moveTo(xa, yOf(flight.e0)); ctx.lineTo(xa, yOf(eEnd));
+          ctx.moveTo(xb, yOf(flight.e0)); ctx.lineTo(xb, yOf(eEnd));
+          ctx.stroke();
+          if (railSides.length) {
+            // END-ON, the rail is a line down the page 36" over the nosings,
+            // from the top of the flight to the bottom of it.
+            ctx.strokeStyle = ink(0.45); ctx.lineWidth = 1;
+            ctx.beginPath();
+            railSides.forEach(side => {
+              const x = X(projU(at(0, side * railOff)));
+              ctx.moveTo(x, yOf(flight.e0 + RAIL_FT));
+              ctx.lineTo(x, yOf(eEnd + RAIL_FT));
+            });
             ctx.stroke();
           }
           return;
