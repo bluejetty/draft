@@ -968,22 +968,24 @@ check('both bay doors head at 7 ft and say they are garage doors',
     .map(o => `${o.garage}@${n(o.headFt)}`).join(','),
   `true@${n(7)},true@${n(7)}`]);
 
-// 13 FT APART, which is what makes them BAYS: 30 ft of wall less the 4 ft
-// strip, halved. A pair that happened to be on one wall would not move when
-// the garage was typed wider; these do.
+// 12 FT APART, which is what makes them BAYS: 30 ft of wall less the 6 ft
+// strip, halved. It was 13 until Movie split the same 30 again on 14 Oct --
+// "allow 6ft for the mandoor and 12 and 12 for the 2 bays" -- so the strip
+// took a foot off each bay. A pair that happened to be on one wall would not
+// move when the garage was typed wider; these do.
 check('one centred in each bay, so their centres stand a bay apart',
   P => { const doors = onEdgeAll(stairDeal(P, 30, 24), 2)
     .filter(o => o.garage === true).map(o => o.offsetFt).sort((a, b) => a - b);
-         return [n(doors[1] - doors[0]), n(13)]; });
+         return [n(doors[1] - doors[0]), n(12)]; });
 
-check('and a wider garage spreads them, rather than holding a 13 ft habit',
+check('and a wider garage spreads them, rather than holding a 12 ft habit',
   P => { const doors = onEdgeAll(stairDeal(P, 40, 24), 2)
     .filter(o => o.garage === true).map(o => o.offsetFt).sort((a, b) => a - b);
-         return [n(doors[1] - doors[0]), n(18)]; });
+         return [n(doors[1] - doors[0]), n(17)]; });
 
 // THE STRIP IS AT THE HOUSE END of the wall -- the loop is walked clockwise
 // from the back-left corner, so edge 2 runs from the far corner toward the
-// house and the strip is the LAST 4 ft of it. The man door stands past both
+// house and the strip is the LAST 6 ft of it. The man door stands past both
 // bays, which is the side the path from the house arrives on and the side the
 // stair is laid along.
 check('the man door stands past both bays, in the strip at the house end',

@@ -183,9 +183,12 @@ if (!window.DraftBuildMenu) {
     // THE 30 IS THE DOOR WALL, which is his own ruling once the two readings
     // were put to him. Two 8 ft doors and a 3 ft man door are 19 ft of
     // opening: on a 24 ft wall that leaves 1'-3" of pier between two
-    // overheads, where 30 ft carries two ~13 ft bays and the 4 ft strip he
-    // asked for. The 24 ft of depth is his 8 ft entry plus the stair run,
-    // with room behind it.
+    // overheads, where 30 ft carries the two bays and the strip beside them.
+    // Movie, 14 Oct, split that 30 again -- "allow 6ft for the mandoor and 12
+    // and 12 for the 2 bays" -- so the strip is 6 ft and each bay 12; the
+    // split itself lives in premade-plans.js, which deals the openings. The
+    // 24 ft of depth is his 8 ft entry plus the stair run, with room behind
+    // it.
     Object.freeze({ id: '30x24', label: "30' x 24'", widthFt: 30, depthFt: 24 }),
   ]);
 

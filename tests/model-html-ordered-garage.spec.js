@@ -365,10 +365,13 @@ test('and a way into it: two bays, a man door beside them, and a window',
       expect(door.layer, 'on the door layer').toBe('A-DOOR');
     }
     // ONE IN EACH BAY, which is what makes them bays rather than two doors
-    // that happen to be on one wall: the 30 ft wall less the 4 ft strip is two
-    // 13 ft bays, so their centres stand 13 ft apart.
+    // that happen to be on one wall: the 30 ft wall less the 6 ft strip is two
+    // 12 ft bays, so their centres stand 12 ft apart. Movie, 14 Oct, split the
+    // same 30 this way -- "allow 6ft for the mandoor and 12 and 12 for the 2
+    // bays" -- and an 8 ft leaf still clears a 12 ft bay with 2 ft of pier a
+    // side.
     const apart = Math.abs(overhead[0].offset - overhead[1].offset);
-    expect(apart, `${apart} ft between the two bays`).toBeCloseTo(13, 1);
+    expect(apart, `${apart} ft between the two bays`).toBeCloseTo(12, 1);
 
     // THE MAN DOOR IN THE STRIP, at the house end of the same wall — the path
     // between house and garage runs off this side, and the strip is where the
@@ -379,7 +382,7 @@ test('and a way into it: two bays, a man door beside them, and a window',
     // A D36, like every default exterior door (Movie, 9 Oct).
     expect(man[0].width, 'a 3-0 leaf').toBeCloseTo(3, 3);
     // The door wall is walked from the far corner toward the house, so the
-    // strip is the LAST 4 ft of it and the man door stands past both bays.
+    // strip is the LAST 6 ft of it and the man door stands past both bays.
     expect(man[0].offset, 'past both bays, in the strip')
       .toBeGreaterThan(Math.max(...overhead.map(door => door.offset)));
     expect(openingOn(saved, houseSideWall(studs)).length,

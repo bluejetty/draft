@@ -339,15 +339,26 @@ if (!window.DraftPremadePlans) {
   //
   // SO THE FRONT WALL IS THREE THINGS, not one: two car bays and a strip. The
   // strip is what the man door opens into and what the stair stands in, which
-  // is why it is 4 ft rather than whatever is left over -- a 3 ft door and a
-  // 3 ft flight need it, and the number is his.
+  // is why it is a number rather than whatever is left over -- a 3 ft door and
+  // a 3'-4" flight need it, and the number is his.
+  //
+  // SIX FEET, NOT FOUR (Movie, 14 Oct): "i'd like to add 2 feet to the 2 X 2
+  // storey detached garages and make them 30ft x 24ft - allow 6ft for the
+  // mandoor and 12 and 12 for the 2 bays". The wall does not grow -- 6 + 12 +
+  // 12 is his same 30 -- the strip takes two feet off the bays, which is what
+  // the stair wanted: 1'-0" of clearance off the wall and 3'-4" of flight is
+  // 4'-4", and the man door has to open beside it rather than into it.
+  //
+  // AND A 12 FT BAY STILL CARRIES AN 8 FT DOOR with room to spare: `carries`
+  // asks for the leaf plus a wall thickness and a lintel bearing at each end,
+  // about 9'-4" on a 2x6 wall, so each door keeps roughly 2 ft of pier a side.
   //
   // THE STRIP IS AT THE FAR END OF THE EDGE, which is the HOUSE side: the
   // loop runs clockwise from the back-left corner, so edge 2 is walked from
   // the far corner back toward the house and offset `w` is the house end.
   // The man door and the path off it stay on the side the house is on, which
   // is the rule the single-bay garage's man door already followed.
-  const GARAGE_STAIR_STRIP_FT = 4;
+  const GARAGE_STAIR_STRIP_FT = 6;
   const GARAGE_BAY_DOOR_WIDTH_FT = 8;
   const detachedGarageOpenings = ({ widthFt, depthFt, wallThicknessFt, stair = false } = {}) => {
     const w = Number(widthFt);
