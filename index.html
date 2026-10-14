@@ -291,6 +291,73 @@
         background-color: rgba(54, 117, 167, 0.1);
       }
       .ring-link:focus-visible { outline: 2px solid var(--blue-medium); outline-offset: 4px; }
+      /* THE BOOK CELLS (Movie, 14 Oct): "RED area - EBAY book links". A title
+         line and a quieter line under it -- the author, or what the search is
+         for -- so a cell says which book without running to three lines.
+         The links themselves live in entry-books.js, which is the list he
+         keeps adding to. */
+      .ring-book { flex-direction: column; gap: 2px; }
+      .ring-book .book-by {
+        font-size: 0.72em;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        opacity: 0.72;
+      }
+      /* A CELL WITH A SOURCE LINE UNDER IT. The ring cell is one grid square,
+         so the two links stack inside it rather than taking a square each --
+         a source note is not worth a cell of its own. */
+      .ring-stack {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1px;
+        width: 100%;
+      }
+      /* A STACKED CELL HOLDS MORE THAN ONE PRESS, so its links give up the
+         44px of a lone one: four editions and their source lines in a fixed
+         grid row would otherwise push the ring past the window, and this
+         page's one rule is that it never scrolls to show a way in. 32px with
+         the gap either side still clears a fingertip. */
+      .ring-stack .ring-link { width: 88%; min-height: 32px; padding: 5px 8px; }
+      /* REALLY REALLY SMALL, AND STILL READABLE, which is the whole of what he
+         asked for. 8px is about as far down as type goes before it stops being
+         readable at all -- so what buys the readability back is everything
+         else: no uppercase, no letter-spacing, and the line left at full
+         opacity until it is hovered. */
+      .ring-source {
+        max-width: 88%;
+        font-family: "Barlow Condensed", system-ui, sans-serif;
+        font-size: 8px;
+        line-height: 1.2;
+        letter-spacing: 0;
+        text-align: center;
+        text-decoration: none;
+        color: var(--ink);
+        opacity: 0.55;
+        overflow-wrap: anywhere;
+      }
+      .ring-source:hover, .ring-source:focus-visible { opacity: 1; }
+      .ring-source:focus-visible { outline: 2px solid var(--blue-medium); outline-offset: 2px; }
+      /* THE DISCLOSURE, quiet and not a link: eBay's partner programme asks
+         that the relationship be stated, and a buyer deserves to know before
+         pressing. It is the last cell of the column rather than a line under
+         the page, so it stands with the links it is about. */
+      .ring-note {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 88%;
+        padding: 4px 8px;
+        text-align: center;
+        color: var(--ink);
+        opacity: 0.6;
+        font-family: "Barlow Condensed", system-ui, sans-serif;
+        font-size: clamp(10px, calc(var(--logo-w) / 38), 13px);
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        line-height: 1.2;
+        text-transform: uppercase;
+      }
       main { align-items: center; }
 
       /* A short window (a laptop with browser chrome eating the height) gets
@@ -298,12 +365,23 @@
          size survives everywhere it can and the page never scrolls to
          show a way in that should be the first thing you see. */
       @media (max-height: 720px) {
-        main { padding: 24px 0; }
+        /* 20, NOT 24, AND THE DIFFERENCE IS THE WHOLE POINT. At exactly 720
+           the ring is 680 tall (four rows of half a logo, and --logo-w is
+           capped at 50vh - 20), so 24 either side came to 728 and the page
+           scrolled 8px -- on the one page whose standing rule is that it
+           never scrolls to show a way in. This is older than the code shelf:
+           it measures the same on main with none of this column on it. */
+        main { padding: 20px 0; }
       }
 
       @media (max-width: 760px) {
         .shell { width: min(100% - 32px, 540px); }
-        main { padding: 32px 0; }
+        /* 20, NOT 32. Measured on a 390x844 phone with the code shelf at four
+           editions: the page came to exactly the window's height, with no
+           room for the next one. The breathing room is what gives way --
+           the same rule the short-window query above follows -- so the shelf
+           can grow a few more rows before anything has to be rethought. */
+        main { padding: 20px 0; }
         /* --logo-w needs no override: min(460px, 88vw) already shrinks to
            fit a phone. */
         /* ON A PHONE THE SQUARE WOULD SQUEEZE THE WORDS, so the logo stands
@@ -316,6 +394,22 @@
         }
         .ring .enter { grid-column: 1 / -1; grid-row: auto; order: -1; margin-bottom: 8px; justify-self: center; }
         .ring .ring-link { width: 100%; grid-column: auto; grid-row: auto; }
+        /* A STACKED CELL ON A PHONE IS A LIST, NOT FOUR BUTTONS. The code
+           shelf grew to four editions and their source lines, and on a
+           390x844 screen that column pushed the page past the window --
+           which breaks this page's one standing rule, that it never scrolls
+           to show a way in. So on a phone a stack loses the 44px press
+           height and the padding that goes with it: every link is still
+           there and still pressable (a 28px row with the gap either side
+           clears a fingertip), and the shelf reads as the list it is. */
+        .ring-stack { grid-column: auto; grid-row: auto; gap: 0; }
+        .ring-stack .ring-link {
+          width: 100%;
+          min-height: 28px;
+          padding: 4px 6px;
+          font-size: clamp(12px, calc(var(--logo-w) / 28), 16px);
+        }
+        .ring-source { font-size: 7px; }
         .ring-empty { display: none; }
       }
 
@@ -332,8 +426,53 @@
                the numbering runs clockwise, so it counts down along the
                bottom. Boxes 2 and 3 are the words over the logo now; 1, 4, 5,
                6, 7, 11 and 12 are still free. -->
+          <!-- ── THE LEFT-HAND COLUMN IS THE BOOK SHELF (Movie, 14 Oct) ──
+               "i'd like the left column to be EBAY links to recommended
+               ARCHITECTURAL books ... make sure you get my partner info for
+               affiliate commissions", and "RED area - EBAY book links".
+
+               THE CELLS ARE EMPTY IN THE MARKUP and filled by the script at
+               the foot of this file, because the list outgrows the column:
+               "can you keep adding them to a list and once i fill up the
+               column, just randomly show them each time show different ones
+               from the list". Boxes 1, 12 and 11 are the left column read
+               downward; box 10 is the bottom-left corner and carries the
+               partner disclosure.
+
+               A CELL WITH NO BOOK IN IT DRAWS NOTHING, which is what keeps a
+               short list from leaving three empty squares down the side. -->
+          <!-- Box 1 --><span class="ring-empty" data-book-slot="1" data-box="1"></span>
+          <!-- Box 12 --><span class="ring-empty" data-book-slot="2" data-box="12"></span>
+          <!-- Box 11 --><span class="ring-empty" data-book-slot="3" data-box="11"></span>
           <!-- Box 10 -->
-          <a class="ring-link" href="CODES.html" data-box="10">BUILDING CODES / SPAN TABLES</a>
+          <span class="ring-note" data-box="10" data-book-note hidden>eBay partner links — Rough Drafter may earn a commission</span>
+          <!-- ── THE RIGHT-HAND COLUMN IS THE CODE SHELF (Movie, 14 Oct) ──
+               "on the right - put the building code / span stuff. i will add
+               more building code stuff", drawn as a blue box down the right
+               of the page with an arrow carrying BUILDING CODES / SPAN TABLES
+               up into it.
+
+               AND THEN IT MOVED OFF THIS PAGE AGAIN, which is the honest end
+               of a column that filled up in an afternoon: four editions, two
+               companions and a source line under each. Movie, 14 Oct, once he
+               saw it: "might need to make a seperate page for BUILDING CODE
+               links and just have link from the the ENTRY page".
+
+               THAT PAGE ALREADY EXISTS AND IS ALREADY LINKED FROM HERE. It is
+               called Building Codes & Span Tables, and since 12 Oct its
+               catalog has been where a code, a bylaw or a span chart goes --
+               "we will start cataloging building code, municipal bylaws etc
+               pdfs and links". So the shelf is one link again, box 4, the
+               same one that stood here before any of this, and the editions,
+               the Section 9 companion and CMHC's book live in
+               codes-catalog.js, which is the list that page draws.
+
+               BOXES 5, 6 AND 7 ARE FREE. The municipal bylaws he is going
+               after next ("i will try to find alot of municiple bylaws too
+               maybe later") belong in that catalog too, under their own
+               heading, and not down this column. -->
+          <!-- Box 4 -->
+          <a class="ring-link" href="CODES.html" data-box="4">BUILDING CODES / SPAN TABLES</a>
           <!-- Box 9 -->
           <a class="ring-link" href="https://pdf.bluejetty.ca/" data-box="9">PDF MANAGER</a>
           <!-- Box 8 -->
@@ -399,6 +538,49 @@
          to getting in. -->
 
     <!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->
+  <script src="./entry-books.js"></script>
+  <script>
+    // THE BOOK SHELF, DEALT (Movie, 14 Oct): "once i fill up the column, just
+    // randomly show them each time show different ones from the list".
+    //
+    // THE PICKING IS entry-books.js's, not this page's: one list, one shuffle,
+    // and a harness that can ask it the same question without a browser. What
+    // happens here is only the drawing -- three slots, however many books came
+    // back, and the slots that got none stay empty.
+    (() => {
+      const shelf = window.DraftEntryBooks;
+      const slots = [...document.querySelectorAll('[data-book-slot]')];
+      if (!shelf || !slots.length) return;
+      const books = shelf.pickBooks(slots.length);
+      slots.forEach((slot, index) => {
+        const book = books[index];
+        if (!book) return;
+        const link = document.createElement('a');
+        link.className = 'ring-link ring-book';
+        link.href = book.href;
+        link.target = '_blank';
+        // SPONSORED, which is what these are: a paid link, declared as one.
+        // `noopener` for the new tab, and `nofollow` beside `sponsored`
+        // because older crawlers read only the one they know.
+        link.rel = 'sponsored nofollow noopener';
+        link.dataset.box = slot.dataset.box;
+        const title = document.createElement('span');
+        title.className = 'book-title';
+        title.textContent = book.title;
+        link.append(title);
+        if (book.by) {
+          const by = document.createElement('span');
+          by.className = 'book-by';
+          by.textContent = book.by;
+          link.append(by);
+        }
+        slot.replaceWith(link);
+      });
+      // THE DISCLOSURE SHOWS ONLY WHERE THERE IS SOMETHING TO DISCLOSE.
+      const note = document.querySelector('[data-book-note]');
+      if (note && books.length) note.hidden = false;
+    })();
+  </script>
   <script src="./traffic-counter.js" defer></script>
 </body>
 </html>

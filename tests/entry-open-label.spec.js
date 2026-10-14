@@ -93,12 +93,37 @@ test('OPEN is the biggest line, and the block sits over the logo without reachin
     // OVER the logo, not overlapping it.
     expect(call.y + call.height).toBeLessThanOrEqual(logo.y + 1);
 
-    // AND THE ERRANDS ARE UNDER IT. "the other stuff below" -- every ring
-    // link sits beneath the logo now, where they were along the top before.
-    const links = await page.locator('a.ring-link').evaluateAll(
-      els => els.map(el => el.getBoundingClientRect().y));
-    expect(links.length).toBeGreaterThan(0);
-    for (const y of links) expect(y).toBeGreaterThan(logo.y + logo.height - 1);
+    // AND THE ERRANDS ARE UNDER IT -- the ones along the BOTTOM. "the other
+    // stuff below" (Movie, 12 Oct) was said of the three utility links that
+    // had been sitting along the TOP of the sheet, above the thing the page
+    // is for; it is still true of them.
+    //
+    // THE SIDE COLUMNS ARE NEW AND ARE BESIDE IT (Movie, 14 Oct, drawn in
+    // GIMP over the page): a red box down the LEFT for the book links and a
+    // blue one down the RIGHT for "the building code / span stuff. i will add
+    // more building code stuff". A column that may only start below the logo
+    // is not a column. So the rule this holds is the one he actually set: the
+    // BOTTOM ROW stays under the logo, and nothing on either side reaches
+    // into the logo's own two columns.
+    const boxes = await page.locator('a.ring-link').evaluateAll(
+      els => els.map(el => ({ box: Number(el.dataset.box),
+        ...el.getBoundingClientRect().toJSON() })));
+    expect(boxes.length).toBeGreaterThan(0);
+    const BOTTOM_ROW = [8, 9, 10];
+    for (const link of boxes) {
+      if (BOTTOM_ROW.includes(link.box)) {
+        expect(link.y, `box ${link.box} left the bottom row`)
+          .toBeGreaterThan(logo.y + logo.height - 1);
+      } else {
+        // A SIDE LINK CLEARS THE LOGO SIDEWAYS, which is what keeps the
+        // middle column the logo's own: entirely left of it, or entirely
+        // right of it.
+        const clearsLeft = link.x + link.width <= logo.x + 1;
+        const clearsRight = link.x >= logo.x + logo.width - 1;
+        expect(clearsLeft || clearsRight,
+          `box ${link.box} stands over the logo`).toBe(true);
+      }
+    }
     // AND NO WIDER. The two ring cells it fills are columns 2 and 3, together
     // exactly one logo wide; past that it would reach into the cells where
     // boxes 11/12 and 5/6 live.
