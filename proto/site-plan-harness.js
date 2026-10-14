@@ -19,19 +19,27 @@ const H = require('./harness-env.js');
 const ROOT = path.join(__dirname, '..');
 
 const MUTATIONS = [
+  // RE-AIMED 14 OCT, when the footprint became the ROOF PLAN itself (Movie:
+  // "the ROOF PLAN with the WALL OUTLINES would be a good drawing to use for
+  // the FOOTPRINT"). The old anchor was the outline-and-fill this replaced,
+  // which now only runs where there is no roof.
   ['the site sheet draws no footprint, only the lot', 'layout-plan.js',
-    c => c.replace(`    bodies.forEach(body => {
-      siteLoop(ctx, toS, body.points);
-      ctx.fill();
-      ctx.stroke();
-    });`, '    bodies.forEach(() => {});')],
+    c => c.replace(`        if (drawRoofPlan(ctx, toS, saved, id, { ...env, siteFootprint: true })) {
+          drewFootprint = true;
+        }`, '        drewFootprint = true;')],
+  ['the house-s own area is not shaded', 'layout-plan.js',
+    c => c.replace('      bodies.forEach(body => { siteLoop(ctx, toS, insideOf(body)); ctx.fill(); });',
+      '      bodies.forEach(() => {});')],
+  ['the shading covers the walls as well as the rooms', 'layout-plan.js',
+    c => c.replace('      const inner = geo.offsetOutline(body.points, -thick);',
+      '      const inner = body.points;')],
+  ['the roof plan brings its own dimensions onto the site sheet', 'layout-plan.js',
+    c => c.replace('      && env.hologram !== true && env.siteFootprint !== true) {',
+      '      && env.hologram !== true) {')],
   ['the lot line is not drawn at all', 'layout-plan.js',
     c => c.replace(`      siteLoop(ctx, toS, lot.points);
       ctx.stroke();`, '      siteLoop(ctx, toS, lot.points);')],
-  ['the eave line is dropped, so the setback has nothing to measure to',
-    'layout-plan.js',
-    c => c.replace('    roofs.forEach(roof => { siteLoop(ctx, toS, roof.points); ctx.stroke(); });',
-      '    roofs.forEach(() => {});')],
+
   ['the footprint takes every storey, so an upper floor draws over the ground',
     'layout-plan.js',
     c => c.replace('      bodies: ground === null ? [] : bodies.filter(item => num(item.levelId) === ground),',
@@ -64,13 +72,18 @@ const rect = (x0, z0, x1, z1) => [{ x: x0, z: z0 }, { x: x1, z: z0 },
 // lot: his own drawing, near enough.
 const GARAGE = { id: 'g', levelId: 3, points: rect(0, 0, 30, 24) };
 const UPPER = { id: 'u', levelId: 5, points: rect(0, 0, 30, 18) };
-const ROOF = { id: 'r', levelId: 7, points: rect(-2, -2, 32, 26) };
+// A ROOF CARRIES ITS EDGES, its overhang and its pitch -- drawing-format
+// writes all three on load, and drawRoof2D reads `edges` by index. A fixture
+// without them is a roof no drawing has.
+const ROOF = { id: 'r', levelId: 7, points: rect(-2, -2, 32, 26),
+  edges: ['eave', 'eave', 'eave', 'eave'], overhang: 2, pitch: 4, fascia: 5.5,
+  layer: 'A-ROOF' };
 const LOT = { id: 'lot', site: true, levelId: 8, points: rect(-7, -20, 38, 100) };
 
 const paint = saved => {
-  const { ctx, strokes, fills } = H.recordingCtx();
+  const { ctx, strokes, fills, texts } = H.recordingCtx();
   const drew = LP.drawSitePlan(ctx, p => ({ x: p.x, y: p.z }), saved, {});
-  return { drew, strokes, fills };
+  return { drew, strokes, fills, texts };
 };
 
 const all = paint({ outlines: [LOT, GARAGE, UPPER], roofs: [ROOF] });
@@ -82,14 +95,17 @@ check('a site with a lot and a building draws both', all.drew === true,
 check('and a drawing with neither draws nothing',
   paint({ outlines: [], roofs: [] }).drew === false, 'it drew something from nothing');
 
-// THE FOOTPRINT IS A FILL, which is what makes it read as a building at a
-// site plan's scale rather than as another boundary.
-check('the building is filled, the lot is not',
-  all.fills.length - noHouse.fills.length === 1,
-  `${all.fills.length} fills with the building, ${noHouse.fills.length} without`);
-check('and the lot line is a stroke of its own',
+// THE LOT LINE IS A STROKE OF ITS OWN, over everything else: it is the
+// boundary the whole sheet is about.
+check('the lot line is a stroke of its own',
   all.strokes.length - noLot.strokes.length === 1,
   `${all.strokes.length} strokes with the lot, ${noLot.strokes.length} without`);
+// AND A DRAWING WITH NO ROOF STILL GETS A FOOTPRINT -- a drafter who has
+// traced his walls and not yet pressed the bone has a building to place, and
+// an empty square on the site sheet would say he has not.
+check('a building with no roof yet is still drawn',
+  noHouse.fills.length < paint({ outlines: [LOT, GARAGE], roofs: [] }).fills.length,
+  'an outline with no roof drew no footprint at all');
 
 // ONE FOOTPRINT, NOT ONE PER STOREY. The upper floor stands on the same
 // ground; drawing both would print a second outline inside the first and read
@@ -111,13 +127,44 @@ check('the lot is never counted as a building, whatever level it is filed on',
   JSON.stringify(LP.sitePlanParts({ outlines: [{ ...LOT, levelId: 3 }, GARAGE] })
     .bodies.map(b => b.id)));
 
-// THE EAVE IS THE ROOF'S OWN POINTS, which already carry the overhang they
-// were built with -- so the line on the sheet is the real eave rather than a
-// wall offset by a number typed in the painter.
-const eave = paint({ outlines: [LOT, GARAGE], roofs: [ROOF] });
-check('the eave line is drawn from the roof, and dashed',
-  eave.strokes.length - paint({ outlines: [LOT, GARAGE], roofs: [] }).strokes.length === 1,
-  'no eave line came out of a drawing with a roof');
+// ── THE FOOTPRINT IS THE ROOF PLAN (Movie, 14 Oct) ────────────────────────
+//
+// "for the FOOTPRINT on the site plan the ROOF PLAN with the WALL OUTLINES
+// would be a good drawing to use ... (but the dimensioning will be different
+// on the site plan".
+//
+// So the roof costs a great deal more ink than the dashed eave line this used
+// to draw -- planes, ridges, hips, and the wall tops under them. Measured as
+// a difference against the same drawing with the roof taken away, because the
+// NUMBER of strokes a roof plan makes is the roof painter's business and not
+// this harness's to pin.
+const roofed = paint({ outlines: [LOT, GARAGE], roofs: [ROOF], walls: [], levels: [] });
+const roofless = paint({ outlines: [LOT, GARAGE], roofs: [], walls: [], levels: [] });
+check('a drawing with a roof draws the roof plan as its footprint',
+  roofed.strokes.length > roofless.strokes.length + 2,
+  `${roofed.strokes.length} strokes with the roof, ${roofless.strokes.length} without`);
+
+// AND NO DIMENSIONS COME WITH IT: "the dimensioning will be different on the
+// site plan", so the roof plan's own strings stay on the roof sheet. A
+// dimension draws text, which is the cheapest thing to count.
+const DIMS = { outlines: [LOT, GARAGE], roofs: [ROOF], walls: [], levels: [],
+  dimensions: [{ id: 'd1', levelId: 7, start: { x: 0, z: -4 }, end: { x: 30, z: -4 } }] };
+check('and the roof plan-s own dimensions do not come with it',
+  paint(DIMS).texts.length === roofed.texts.length,
+  `${paint(DIMS).texts.length} texts with a dimension on the roof level, ${roofed.texts.length} without`);
+
+// THE AREA INSIDE THE WALLS IS SHADED (Movie: "perrhaps the FOOTPRINT area of
+// the house could be darker shading too (everything withing interior walls").
+// One fill per building, and it is INSIDE the outline -- the outline is the
+// exterior face, so a shading that matched it exactly would be covering the
+// walls as well as the room.
+const shaded = roofed.fills.filter(f => f.ink === 'rgba(29,31,32,0.22)');
+check('the house-s own area is shaded, once per building', shaded.length === 1,
+  `${shaded.length} shading fills`);
+check('and the shading sits inside the outline, not on it',
+  shaded.length === 1 && Math.min(...shaded[0].pts.map(p => p.x)) > 0 + 1e-6
+    && Math.max(...shaded[0].pts.map(p => p.x)) < 30 - 1e-6,
+  shaded.length === 1 ? JSON.stringify(shaded[0].pts.map(p => [p.x, p.y])) : 'no shading');
 
 // AND THE FRAME HOLDS BOTH (the case that started this: a building wider than
 // its lot). planBounds on the site level has to reach the building, or the
