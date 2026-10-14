@@ -4365,17 +4365,32 @@
   // ON THE NEXT TICK, because orderServed is called from inside the order's
   // listener: the sign still has to come down and the build bar still has to
   // settle before the drawing is written.
+  // AND A QUESTION THE PRESS STILL OWES HOLDS THE TRIP. The grow trip
+  // REPLACES this page, so a card the build raised over the drawing -- the
+  // garage span ask is the one that does it -- is carried off and answered by
+  // whatever it had drafted as the default. Measured, not reasoned: a 40 ft
+  // detached garage drafted its REQ note, the page went to the BONEYARD, and
+  // the "PLACE COLUMNS" half of Movie's 12 Oct ruling was never offered.
+  // Asked here, answered here, and THEN the bones grow.
+  //
+  // ONE HOOK, NOT A SECOND CALLER. Both build doors (the sign's premade house
+  // and the drive-thru garage) end in presentBuild, so the hold lives here
+  // rather than being remembered at each press.
   const GROW_PAGE = './BONEYARD.html';
   const presentBuild = () => {
     if (!boneRevealOn()) return;
     if (!autoElevationCuts().some(cut => String(cut.id) === 'E1')) return;
-    setTimeout(async () => {
+    const grow = async () => {
       if (!(await save())) { startBoneReveal(); return; }
       const back = new URLSearchParams(location.search);
       back.delete('reveal');
       const query = back.toString();
       location.assign(`${GROW_PAGE}?grow=1&back=${encodeURIComponent(query ? `?${query}` : '')}`);
-    }, 0);
+    };
+    // THE ASK IS ALREADY ON SCREEN BY NOW: the builds queue askGarageSpan on
+    // the same tick, before they say orderServed, so by the time this timer
+    // runs the card is either up or there was no question.
+    setTimeout(() => { if (garageSpanHolds(grow)) return; grow(); }, 0);
   };
 
   const paintCuts = () => {
@@ -4619,6 +4634,83 @@
     };
   };
 
+  // ── A ROOM OVER A DETACHED GARAGE LANDS ON CONCRETE ──────────────────────
+  //
+  // Movie, 13 Oct, on the stair into that room: "they will land about 6"
+  // lower than the sill plate , depending on the concrete slab, is there a
+  // calculation for that? maybe only 4"".
+  //
+  // THERE IS, AND IT IS 5 1/2" -- and it is not typed here, it is ASKED of
+  // the file that owns the garage's heights. cut-view.js bears a garage's
+  // walls on the TOP of their sill plate (garageBearing), puts the top of
+  // concrete one plate below that (GARAGE_BEAM_PLATE_IN, 1 1/2") and pours
+  // the slab GARAGE_SLAB_THICKNESS_IN (4") below the concrete -- so the
+  // finished garage floor is 5 1/2" under the line a stair's rise is
+  // otherwise measured from. His two guesses bracket it, and asking cut-view
+  // rather than writing 5.5 means a garage that changes foundation, or a
+  // slab that changes thickness, moves the stair with it.
+  //
+  // WHY THE RISE AND NOT THE DRAWING: stairDescent's ordinary answer is
+  // "this level's floor package plus the wall below", which lands a flight on
+  // the SUBFLOOR of the storey underneath. A detached garage has no subfloor
+  // at all -- there is concrete down there -- so a flight sized the ordinary
+  // way is short by the whole recess, every riser in it is wrong, and the
+  // bottom step floats. The hook it comes in through, `riseFtFor`, is the one
+  // the split levels already use for the same reason: levels that do not
+  // stack one on the next.
+  //
+  // NULL IS THE COMMON ANSWER. Every level that is not a room over a detached
+  // garage falls through to the ordinary arithmetic.
+  const garageSlabDescent = levelId => {
+    const CV = window.DraftCutView;
+    const LA = window.DraftLevelAssembly;
+    if (!CV || !LA || Number(levelId) !== OVER_GARAGE_LEVEL_ID) return null;
+    const loops = drawing?.outlines || [];
+    const rooms = loops.filter(loop => Number(loop.levelId) === Number(levelId)
+      && loop.garage !== true && (loop.points || []).length >= 3);
+    if (rooms.length !== 1) return null;
+    const [room] = rooms;
+    const box = points => {
+      const xs = points.map(pt => pt.x), zs = points.map(pt => pt.z);
+      return { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
+    };
+    const over = box(room.points);
+    // THE GARAGE UNDER IT, BY ITS MIDDLE RATHER THAN BY CONTAINMENT. The room
+    // the build raises has the SAME footprint as the bay, corner for corner,
+    // and a strict point-in-ring test reads a shared corner as outside -- so
+    // a containment check here would answer "no garage under this room" for
+    // the one case this exists for.
+    const garage = loops.find(loop => loop.garage === true && garageDetached(loop)
+      && (loop.points || []).length >= 3 && (() => {
+        const under = box(loop.points);
+        const cx = (under.x0 + under.x1) / 2, cz = (under.z0 + under.z1) / 2;
+        return cx >= over.x0 - 0.01 && cx <= over.x1 + 0.01
+          && cz >= over.z0 - 0.01 && cz <= over.z1 + 0.01;
+      })());
+    if (!garage) return null;
+    // ONE ROOM, AND IT IS THIS ONE -- which is why the list above is counted
+    // rather than searched. OVER GARAGE is a LEVEL, and a house's own room
+    // over its ATTACHED garage lives on the same one: a drawing holding both
+    // has two rooms up there, one landing on concrete and one on a subfloor,
+    // and a single rise cannot be right for both. The detached garage is the
+    // odd one out, so it gives way and the ordinary arithmetic governs the
+    // level. Left here as a known limit rather than mis-sized silently.
+    const env = cutEnv();
+    const fdn = CV.sectionLevelStack(env)?.foundation;
+    if (!fdn) return null;
+    const drop = CV.garageBearing(env, fdn, garage) - CV.garageSlabTop(env, fdn, garage);
+    if (!(drop > 0)) return null;
+    // AND THE ORDINARY RISE IT IS ADDED TO, worked out here rather than by
+    // calling back into stairDescent -- this function is what stairDescent
+    // asks FIRST, so a call back the other way is the same question twice.
+    const floors = stairFloorLevels();
+    const idx = floors.findIndex(level => Number(level.id) === Number(levelId));
+    if (idx < 1) return null;
+    const riseFt = assemblyFor(floors[idx - 1].id).wallHeightFt
+      + LA.levelFloorFt(assemblyFor(levelId)) + drop;
+    return { riseFt, landing: 'the garage slab' };
+  };
+
   const stairLevels = () => {
     const LA = window.DraftLevelAssembly;
     const LV = window.DraftLayerViews;
@@ -4635,6 +4727,9 @@
       // lands on. The lowest level -- the landing down to the slab -- keeps
       // the slab arithmetic below, which already agrees.
       riseFtFor: id => {
+        // THE GARAGE SLAB IS ASKED FIRST, and it answers for one level only.
+        const slab = garageSlabDescent(id);
+        if (slab) return slab;
         if (!LA.isSplitType || !LA.isSplitType(drawing?.buildType)) return null;
         const stack = window.DraftCutView?.sectionLevelStack(cutEnv());
         if (!stack || !stack.split) return null;
@@ -6256,7 +6351,14 @@
     // Defaulting in both cases made the sign answer a question it had just
     // asked -- "ONE 24' x 26' THICKENED EDGE. GOOD CHOICE." over an untouched
     // size row -- which is what the two checks under ?sizes=ask caught.
-    if (!chosenSizeId) return ASKS_SIZE ? null : BM.garageDefaultSize();
+    // AND WHICH DEFAULT DEPENDS ON THE FOUNDATION, because a frost wall or a
+    // grade beam arrives two storeys (13 Oct) and that garage has a stair and
+    // a man door leading to it -- it needs a door wall that can hold them.
+    // build-menu.js owns which id that is; this only has to hand it the
+    // foundation the tile was pressed for.
+    if (!chosenSizeId) {
+      return ASKS_SIZE ? null : BM.garageDefaultSizeFor(chosen()?.entry?.foundation);
+    }
     if (chosenSizeId !== 'custom') return BM.garageSizeById(chosenSizeId);
     return BM.customGarageSize(sizeWidth.value, sizeDepth.value);
   };
@@ -10136,6 +10238,16 @@
       overriddenSrcIds: [],
     };
     drawing.outlines.push(outline);
+    // WHETHER THERE IS A STOREY IS DECIDED ONCE, HERE, because three things
+    // downstream want the same answer and must not each work it out: the
+    // front wall's bays, the storey itself, and the stair that stands in the
+    // strip the bays leave. 'none' is an answer and is kept -- a drafter who
+    // took the room off and orders another garage is not asking for it back,
+    // and gets the stock single-bay front with it.
+    const fdnKind = order.entry.foundation || null;
+    const detachedRow = () => drawing.sectionTable?.rows?.detachedGarage || {};
+    const carriesStorey = window.DraftBuildMenu.garageCarriesStorey(fdnKind);
+    const wantsRoom = carriesStorey && detachedRow().overGarage !== 'none';
     // The four walls' own 'add' steps are dropped for the single 'built'
     // one below. Left in, the first Ctrl+Z would take the whole garage and
     // the next four would each hunt a wall that is already gone.
@@ -10170,6 +10282,11 @@
         widthFt: order.size.widthFt,
         depthFt: order.size.depthFt,
         wallThicknessFt: openingThicknessFt()(walls[0]),
+        // TWO BAYS AND A STRIP WHERE THERE IS A STAIR TO STAND IN IT -- the
+        // same `wantsRoom` the storey is raised on, so a garage whose room
+        // was turned off keeps the stock single-bay front rather than a strip
+        // left over from a stair nobody is getting.
+        stair: wantsRoom,
       }), walls, levelId);
     // AND ITS CONCRETE. Movie ordered a "detached garage 25x25 with frost
     // wall" and got four stud walls: the tile asked him which foundation and
@@ -10192,12 +10309,88 @@
     // AND ONLY WHERE THERE IS A ROOF LEVEL TO PUT IT ON, which is the rule the
     // premade build already follows -- a drawing without one gets the garage it
     // ordered rather than a silent failure or a roof filed nowhere.
+    // ── AND A STOREY OVER IT, WHERE THE FOUNDATION CARRIES ONE ─────────────
+    //
+    // Movie, 13 Oct: "its the detached garages, when someone selects FROST
+    // WALL or GRADE BEAM, lets give them a DEFAULT - 2 storey which will
+    // need a set of stairs too and the thicker floor joists most likely (if
+    // wider than 19ft will need OWJ)" -- and of the third foundation, "you
+    // won't have to worry about stairs on the thickened edge, we can't have
+    // 2nd floor for thickened edge".
+    //
+    // THE SAME DEFAULT FROM THE OTHER DOOR. PROJECT writes it when the
+    // foundation is chosen there; this is the drive-thru, which is the other
+    // place a foundation is picked, and a default that only fired on one of
+    // them would be a default a drafter met at random. Written onto the
+    // section table so PROJECT's schedule and section show the storey that
+    // was just built rather than disagreeing with the model.
+    //
+    // 'none' IS AN ANSWER AND IS KEPT -- see carriesStorey/wantsRoom above,
+    // which is where this press decides, once, whether there is a storey.
+    if (carriesStorey && detachedRow().overGarage !== 'room') {
+      const table = drawing.sectionTable || { rows: {} };
+      const rows = table.rows || {};
+      drawing.sectionTable = { ...table, rows: { ...rows,
+        detachedGarage: { ...(rows.detachedGarage || {}),
+          garageFoundation: fdnKind, overGarage: 'room' } } };
+    }
+    // THE STOREY GOES ON OVER GARAGE (4), which is where PROJECT already
+    // reads this room's joist and sheathing from -- its assembly carries the
+    // 19 1/4" OWJ deck Movie specified for it on 28 Sep. Added here when the
+    // drawing has not got it, the way the bilevel's build adds ENTRY, and
+    // filed in the levels list above MAIN FL.
+    const levelItems = [];
+    const upperId = OVER_GARAGE_LEVEL_ID;
+    let upperWalls = [];
+    let upperOutline = null;
+    let upperDeck = null;
+    if (wantsRoom) {
+      if (!levelPresent(upperId)) {
+        const level = { id: upperId, name: 'OVER GARAGE', elev: 6, visible: true };
+        const at = (drawing.levels || [])
+          .findIndex(entry => Number(entry.id) === levelId);
+        drawing.levels.splice(at < 0 ? 0 : at, 0, level);
+        levelItems.push({ list: drawing.levels, item: level });
+      }
+      // ITS OWN LOOP, so everything that asks "what stands on this level"
+      // -- the beam rule, the dimensions, the plan painter -- finds a body
+      // rather than inferring one from the walls.
+      upperOutline = {
+        id: newDrawingItemId('outline'),
+        masterId: null,
+        levelId: upperId,
+        // NOT `garage`: this is a room, and a loop flagged garage would be
+        // read as another bay by everything that counts garages -- including
+        // the beam rule, which is looking for the garage UNDER this body.
+        garage: false,
+        points: corners.map(pt => ({ x: pt.x, y: 0, z: pt.z })),
+        overriddenSrcIds: [],
+      };
+      drawing.outlines.push(upperOutline);
+      upperWalls = corners.map((corner, index) =>
+        commitWall(corner, corners[(index + 1) % corners.length],
+          { bone: false, levelId: upperId, view: 'plan', body: 'garage' }));
+      // AND A DECK UNDER IT, which is the house build's own per-storey rule:
+      // walls AND a floor, or the section draws a storey standing on
+      // nothing. This deck is what the span rule measures.
+      drawing.floors = drawing.floors || [];
+      upperDeck = floorRecord(corners, upperId, 'floor');
+      drawing.floors.push(upperDeck);
+    }
+    // FLAGGED `garage` WITH ITS OWN PLATE (above), and the plate is the whole
+    // stack when there is a storey in it: the garage wall, the deck over it,
+    // and the room's own wall. A roof left on the lower plate would sit on
+    // the garage ceiling with the room standing through it.
+    const LAsm = window.DraftLevelAssembly;
+    const roofPlateFt = assemblyFor(levelId).wallHeightFt + (wantsRoom
+      ? LAsm.levelFloorFt(assemblyFor(upperId)) + assemblyFor(upperId).wallHeightFt
+      : 0);
     const roof = levelPresent(ROOF_LEVEL_ID)
       ? raiseRoofOver(corners, {
         garage: true,
         follows: 'detachedGarage',
-        plateHeightFt: assemblyFor(levelId).wallHeightFt,
-        sourceLevelId: levelId,
+        plateHeightFt: roofPlateFt,
+        sourceLevelId: wantsRoom ? upperId : levelId,
       })
       : null;
     undoStack.length = mark;
@@ -10222,9 +10415,48 @@
     // ONE PRESS IS ONE UNDO, so the strings ride the same 'built' step as the
     // walls: `items` takes what was laid and `restored` what the sweep took
     // out, which is the pair that branch already knows how to put back.
+    // ── AND WHAT HOLDS THAT DECK UP ────────────────────────────────────────
+    //
+    // Movie, 13 Oct: "can you adjust the floor depths based on how far the
+    // span is for the detached garage. after the 31ft we would need rows of
+    // beam and columns".
+    //
+    // IT IS ALL ALREADY WRITTEN, and for this exact building. placeAutoBeam's
+    // garage pass reads a floor body standing over a garage loop and answers
+    // with build-house.js's own table: owjFor sizes the deck from the span --
+    // its deepest row reaches 31 ft at 12" o.c., which IS his number -- and
+    // past it garageBeamPlan lays the dropped ENGINEERED BEAM on columns he
+    // ruled for on 12 Oct, centred between the garage doors. What was missing
+    // was a detached garage with a floor over it to ask about.
+    //
+    // ASKED FROM THE GARAGE'S OWN LEVEL, which is the level that FRAMES the
+    // deck above it -- the same relation the house press walks.
+    const framed = [];
+    const framedSwept = [];
+    const garageSpanAsk = [];
+    if (wantsRoom) {
+      const beamed = placeAutoBeam({ levelId });
+      if (beamed !== -1) {
+        framed.push(...beamed.placed);
+        framedSwept.push(...beamed.restored);
+        garageSpanAsk.push(...(beamed.garagePending || []));
+      }
+      // AND A WAY UP INTO IT -- Movie, 13 Oct: a storey over the garage "will
+      // need a set of stairs too", "along one side", off an 8 ft entry. The
+      // flight comes with its well cut out of the deck above it. Its RISE is
+      // the one thing that is not the house's: it lands on the garage slab,
+      // 5 1/2" under the sill -- see garageSlabDescent.
+      //
+      // AFTER THE BEAMS, because the stair is nudged clear of whatever is
+      // carrying the floor it cuts through, and the beam has to be down for
+      // that to be possible.
+      const stairs = placeGarageRoomStair(upperId);
+      if (stairs !== -1) framed.push(...stairs.placed);
+    }
     const dimmed = [];
     const dimSwept = [];
     [[levelId, 'plan'], [levelId, 'floor'],
+      ...(wantsRoom ? [[upperId, 'plan'], [upperId, 'floor']] : []),
       [FOUNDATION_LEVEL_ID, 'foundation'], [ROOF_LEVEL_ID, 'plan']]
       .forEach(([id, view]) => {
         if (!levelPresent(id)) return;
@@ -10237,14 +10469,25 @@
     // `outlines` PLURAL, because a premade bungalow raises two bodies on one
     // press and one press is one undo. The garage passes its single loop as a
     // list of one rather than the branch learning two shapes.
-    undoStack.push({ kind: 'built', walls: walls.concat(concrete.walls),
-      outlines: [outline], list: drawing.outlines, openings,
+    undoStack.push({ kind: 'built',
+      walls: walls.concat(concrete.walls).concat(upperWalls),
+      outlines: upperOutline ? [outline, upperOutline] : [outline],
+      list: drawing.outlines, openings,
       items: concrete.items.concat(roof ? [roof] : [])
-        .concat(dimmed.map(item => ({ list: drawing.dimensions, item }))),
-      restored: (given?.restore || [])
+        .concat(framed)
+        .concat(dimmed.map(item => ({ list: drawing.dimensions, item })))
+        // THE LEVEL THE STOREY NEEDED GOES BACK WITH IT, the way the
+        // bilevel's ENTRY does -- a drawing left carrying an empty OVER
+        // GARAGE after an undo is a level the drafter never asked for.
+        .concat(upperDeck ? [{ list: drawing.floors, item: upperDeck }] : [])
+        .concat(levelItems),
+      restored: (given?.restore || []).concat(framedSwept)
         .concat(dimSwept.length ? [{ list: drawing.dimensions, items: dimSwept }] : []) });
     markDirty();
     paint();
+    // ASKED AFTER THE PRESS HAS FINISHED, so the garage is on screen behind
+    // the question -- the house press's own rule.
+    if (garageSpanAsk.length) setTimeout(() => askGarageSpan(garageSpanAsk), 0);
     return outline;
   };
   // AND THE BOARD GETS OUT OF THE WAY once it has built what was ordered:
@@ -12380,6 +12623,17 @@
   // floor, between the garage doors where they allow.
   const garageSpanCard = document.getElementById('garage-span');
   let garageSpanLevels = null;
+  // THE BONE-GROW TRIP WAITS ON THIS CARD. presentBuild hands its trip over
+  // when the card is up and the answer runs it -- see the note on
+  // presentBuild for the defect that bought this. The handover is one-way and
+  // one-shot: a card that is already down holds nothing, so a press that
+  // asked nothing leaves for the BONEYARD on its own tick as it always did.
+  let garageSpanGrow = null;
+  const garageSpanHolds = grow => {
+    if (!garageSpanCard || garageSpanCard.hidden) return false;
+    garageSpanGrow = grow;
+    return true;
+  };
   const askGarageSpan = pending => {
     if (!garageSpanCard || !pending || !pending.length) return false;
     const widest = Math.max(...pending.map(entry => entry.spanFt));
@@ -12410,6 +12664,12 @@
       sayOnStrip(choice === 'columns'
         ? `Floor over the garage: DROPPED ENGINEERED BEAM on columns (${beams} beam${beams === 1 ? '' : 's'}, ${columns} column${columns === 1 ? '' : 's'} on this level).`
         : 'Floor over the garage: REQ ENGINEERED BEAM / OR JOISTS noted on its floor layout.');
+      // AND NOW THE BONES GROW, with the answer already in the drawing the
+      // BONEYARD is about to read. Taken out of the hold first so a trip that
+      // somehow fails cannot be taken twice by the next answer.
+      const grow = garageSpanGrow;
+      garageSpanGrow = null;
+      if (grow) grow();
     };
     garageSpanCard.querySelector('[data-garage-span-engineer]').addEventListener('click', () => answer('engineer'));
     garageSpanCard.querySelector('[data-garage-span-columns]').addEventListener('click', () => answer('columns'));
@@ -15998,6 +16258,84 @@
     return result;
   };
 
+  // ── THE GARAGE ROOM'S OWN FLIGHT, PLACED RATHER THAN SUGGESTED ───────────
+  //
+  // Movie, 13 Oct, having seen the suggester's answer: "for 2 storey make it
+  // 24X30 and put the stairs along one side", and "the door goes straight to
+  // the bottom of the stairs (about 8ft entry area before the stairs".
+  //
+  // THE SUGGESTER WAS NOT WRONG, IT WAS BLIND. Its job is to find room in a
+  // house whose rooms it does not know, and it scores a run against beams,
+  // stamped room names and the flight below -- an empty 30x24 box offers it
+  // none of those, so it parked the run down the middle. The room's SHAPE is
+  // the answer here and the build knows it: the front wall carries two bays
+  // and a 4 ft strip beside them, and the strip is the stair's.
+  //
+  //   ALONG THE HOUSE SIDE   the strip's own wall, one assembly in, which is
+  //                          the same inset the well is cut to.
+  //   8 FT BACK FROM THE DOOR the entry he asked for, measured from the INSIDE
+  //                          face rather than the centreline -- what a drafter
+  //                          paces is the floor, not the geometry.
+  //   CLIMBING AWAY FROM IT  so the bottom tread meets the man door and the
+  //                          flight runs into the building, not at it.
+  //
+  // NULL WHEN IT WILL NOT FIT, and the caller then falls back to the
+  // suggester: a garage typed shallow enough that 8 ft of entry and the run
+  // do not fit between the walls should get the best position something can
+  // find, not a flight through the back wall.
+  const GARAGE_STAIR_ENTRY_FT = 8;
+  const buildGarageRoomStair = (levelId, corners, id) => {
+    const SG = window.DraftStairGeometry;
+    if (!SG || !corners || corners.length < 3) return null;
+    const descent = SG.stairDescent(levelId, stairLevels());
+    if (!descent || !(descent.riseFt > 0)) return null;
+    const layout = SG.stairLayout(descent.riseFt);
+    const xs = corners.map(pt => pt.x), zs = corners.map(pt => pt.z);
+    const minX = Math.min(...xs), maxZ = Math.max(...zs), minZ = Math.min(...zs);
+    const inset = stairOpeningSetbackFt(levelId);
+    const centreX = minX + inset + stairWidthFt / 2;
+    const bottomZ = maxZ - inset - GARAGE_STAIR_ENTRY_FT;
+    const topZ = bottomZ - layout.runFt;
+    if (topZ < minZ + inset) return null;
+    return {
+      id,
+      // START IS THE UPPER NOSING and start -> end runs DOWNHILL
+      // (drawing-format.js:598), so the top of the flight is the end farther
+      // from the door and `end` is the bottom tread beside the entry.
+      start: { x: centreX, y: 0, z: topZ },
+      end: { x: centreX, y: 0, z: bottomZ },
+      levelId,
+      view: 'plan',
+      widthFt: stairWidthFt,
+      riseFt: layout.riseFt,
+      risers: layout.risers,
+      treadRunIn: SG.STAIR_TREAD_RUN_IN,
+      rail: stairRailSide,
+      shape: 'straight',
+      turn: 'right',
+      winders: 0,
+      auto: true,
+    };
+  };
+
+  // ONE FLIGHT, IN THE STRIP, WITH ITS WELL -- the garage build's own call.
+  // It returns undo-shaped `{list, item}` pairs like placeAutoStairs, so the
+  // press still costs one Ctrl+Z, and it falls back to the suggester when the
+  // deliberate position will not fit.
+  const placeGarageRoomStair = levelId => {
+    if (!drawing) return -1;
+    if (!Array.isArray(drawing.stairs)) drawing.stairs = [];
+    const outline = (drawing.outlines || []).find(loop => Number(loop.levelId) === Number(levelId)
+      && loop.garage !== true && (loop.points || []).length >= 3);
+    const stair = outline
+      ? buildGarageRoomStair(levelId, outline.points, newStructureId(drawing.stairs))
+      : null;
+    if (!stair) return placeAutoStairs({ only: [levelId] });
+    drawing.stairs.push(stair);
+    const cut = buildStairOpenings();
+    return { placed: [{ list: drawing.stairs, item: stair }, ...cut.placed] };
+  };
+
   // EVERY DESCENDING FLOOR WITHOUT A STAIR, BOTTOM-UP -- and the order is the
   // rule rather than tidiness, the same way it is for the beams: an upper
   // flight stacks on the one below it, so the floor under it has to be placed
@@ -16010,9 +16348,16 @@
   // house cost two Ctrl+Z.
   //
   // -1 IS A REAL ANSWER: no floor levels at all is not a count of zero.
-  const placeAutoStairs = ({ served = new Set() } = {}) => {
+  // `only` NARROWS IT TO NAMED LEVELS and nothing else: the detached garage's
+  // build raises ONE storey and wants a flight into that storey, not one onto
+  // every floor level the drawing happens to have -- a 2ND FL with nothing on
+  // it would otherwise come back with a stair in mid-air. The stacking lookup
+  // inside suggestStairForLevel still reads the WHOLE floor list, so a
+  // narrowed press still stacks on what is really below it.
+  const placeAutoStairs = ({ served = new Set(), only = null } = {}) => {
     if (!drawing || !window.DraftAutoStair) return -1;
-    const floors = stairFloorLevels();
+    const floors = stairFloorLevels()
+      .filter(level => !only || only.map(Number).includes(Number(level.id)));
     if (!floors.length) return -1;
     if (!Array.isArray(drawing.stairs)) drawing.stairs = [];
     let stairId = newStructureId(drawing.stairs);
