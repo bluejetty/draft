@@ -413,24 +413,41 @@ if (!window.DraftShellBars) {
         <path d="M9.7 4.8 L10.6 7.1" stroke-width="1.1"></path>
       </svg>
     </button>
-    <!-- TRACE: a photo or PDF under the plan to draw over (Movie, 7 Oct:
+    <!-- PHOTO: a photo or PDF under the plan to draw over (Movie, 7 Oct:
          "make it an INSTRUMENT PANEL. when you press it it turn ON and if
          there is images already loaded it will show them, click it again and
-         it turns off the images turn off"). Drawn as he asked, "a little air
-         photo of some house properties on a block": the block, the lane down
-         its middle, the lot lines, and a house on each lot. -->
+         it turns off the images turn off").
+
+         IT WAS A BLOCK OF LOTS SEEN FROM THE AIR, drawn to his first
+         description, and it did not say what it was: six filled rectangles
+         either side of a heavy line read as zigzag at 15px, not as an aerial
+         photo, and nothing in it suggested you could bring a picture IN.
+         Movie, 14 Oct: "for the TRACE - it has a bunch of zigzaps can you
+         take this sailboat as inspiration for that TRACE - instrument design
+         to suggest they can upload a PHOTO or other type. maybe we should
+         rename it PHOTO rather than TRACE", then "leave the outer frame only
+         and then put the sailboat design on the inside of the rounded outer
+         frame".
+
+         SO THE FRAME IS THE ONE THAT WAS ALREADY THERE, to the pixel, and
+         what changed is what stands inside it: a sailboat, which is a
+         PICTURE of something rather than a plan of it -- the whole point of
+         the chip being that it takes a snapshot as readily as a survey.
+
+         FILLED SAILS AND A FILLED HULL, measured rather than chosen: at the
+         15px this actually renders at, stroked sails close up into a blob
+         and the hull welds itself to the waterline. Rendered side by side at
+         15, 22 and 88px before picking. -->
     <button type="button" id="strip-trace" class="chip" data-mode-trace aria-pressed="false"
-      title="TRACE — show the photos and PDFs under this level, and bring in another to trace over">
-      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">
+      title="PHOTO — show the photos and PDFs under this level, and bring in another to draw over">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+        stroke-width="1.2" stroke-linejoin="round" aria-hidden="true">
         <rect x="1" y="1" width="14" height="14" rx="1"></rect>
-        <path d="M1 8 H15" stroke-width="1.6"></path>
-        <path d="M5.7 1 V7 M10.3 1 V7 M5.7 9 V15 M10.3 9 V15" stroke-width="0.7"></path>
-        <rect x="2.2" y="2.4" width="2.3" height="2.4" fill="currentColor" stroke="none"></rect>
-        <rect x="6.9" y="2.4" width="2.3" height="2.4" fill="currentColor" stroke="none"></rect>
-        <rect x="11.5" y="2.4" width="2.3" height="2.4" fill="currentColor" stroke="none"></rect>
-        <rect x="2.2" y="11.2" width="2.3" height="2.4" fill="currentColor" stroke="none"></rect>
-        <rect x="6.9" y="11.2" width="2.3" height="2.4" fill="currentColor" stroke="none"></rect>
-        <rect x="11.5" y="11.2" width="2.3" height="2.4" fill="currentColor" stroke="none"></rect>
+        <path d="M2.3 11.5 H13.7" stroke-width="0.8"></path>
+        <path d="M8 3.7 V10" stroke-width="0.9"></path>
+        <path d="M7.35 4.7 L7.35 9.9 L4.5 9.9 Z" fill="currentColor" stroke="none"></path>
+        <path d="M8.65 5.9 L8.65 9.9 L11.5 9.9 Z" fill="currentColor" stroke="none"></path>
+        <path d="M4 10.4 H12 L10.6 12.2 H5.4 Z" fill="currentColor" stroke="none"></path>
       </svg>
     </button>
     <span class="chip dormant" data-mode-shield title="ERASING SHIELD — not built on this page yet">

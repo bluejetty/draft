@@ -65,6 +65,39 @@ const savedUnderlays = async page => {
   return (await h.savedDrawing(page)).underlays || [];
 };
 
+// THE CHIP IS CALLED PHOTO, AND LOOKS LIKE ONE (Movie, 14 Oct): "for the
+// TRACE - it has a bunch of zigzaps can you take this sailboat as inspiration
+// for that TRACE - instrument design to suggest they can upload a PHOTO or
+// other type. maybe we should rename it PHOTO rather than TRACE", then "leave
+// the outer frame only and then put the sailboat design on the inside of the
+// rounded outer frame".
+//
+// WHAT THIS CATCHES is a half-done rename -- the glyph redrawn and the word
+// left behind on the card, or the other way about -- so both are read, from
+// the two places a drafter meets them. The frame is measured rather than
+// eyeballed because "leave the outer frame only" is a claim about geometry:
+// the rect that was already there, to the pixel, with the block of lots gone
+// from inside it.
+test('the chip says PHOTO, and its glyph is a picture in the old frame', async ({ page }) => {
+  await open(page);
+  await expect(chip(page)).toHaveAttribute('title', /^PHOTO\b/);
+  const glyph = await chip(page).locator('svg').evaluate(svg => ({
+    rects: [...svg.querySelectorAll('rect')].map(r => ['x', 'y', 'width', 'height']
+      .map(a => r.getAttribute(a)).join(',')),
+    paths: svg.querySelectorAll('path').length,
+  }));
+  // ONE RECT, AND IT IS THE FRAME IT ALWAYS WAS. The six that drew the lots
+  // are gone; a seventh standing anywhere means the block came back.
+  expect(glyph.rects, 'the outer frame is not the one that was there')
+    .toEqual(['1,1,14,14']);
+  expect(glyph.paths, 'the boat is not drawn inside it').toBeGreaterThanOrEqual(4);
+
+  // AND THE CARD AGREES, which is where the word actually reaches a drafter.
+  await chip(page).click();
+  await expect(page.locator('#trace-ask')).toContainText('PHOTO');
+  await expect(page.locator('#trace-ask')).not.toContainText('TRACE');
+});
+
 test('the chip turns TRACE on, asks to upload, and turns it off again', async ({ page }) => {
   await open(page);
   await expect(chip(page)).toHaveAttribute('aria-pressed', 'false');

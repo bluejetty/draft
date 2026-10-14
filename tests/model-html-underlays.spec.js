@@ -126,13 +126,16 @@ test.describe('MODEL.html underlays', () => {
     expect(draws[0].w).toBeGreaterThan(1);
   });
 
-  test('with TRACE off the images are hidden, and the readout says so', async ({ page }) => {
+  test('with PHOTO off the images are hidden, and the readout says so', async ({ page }) => {
     await recordDraws(page);
     await houseOnOldPage(page);
     await putUnderlay(page, { id: 'u-hidden', kind: 'image' });
     await page.goto('/MODEL.html');
     await expect(readout(page)).toContainText('1 tracing image hidden', { timeout: 6000 });
-    await expect(readout(page)).toContainText('(TRACE is off)');
+    // THE CHIP IS CALLED PHOTO SINCE 14 OCT (Movie: "maybe we should rename it
+    // PHOTO rather than TRACE"), and the readout names the chip the drafter
+    // has to press -- so it is the new word that has to be here.
+    await expect(readout(page)).toContainText('(PHOTO is off)');
     // And nothing is decoded or drawn for an image nobody is showing.
     await page.waitForTimeout(1200);
     await expect(readout(page)).toContainText('underlays 0/1');
