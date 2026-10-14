@@ -512,6 +512,18 @@ if (!window.DraftShellBars) {
          reaches for the OUTLINE command rather than a second button under the
          board. It stands on the sheet's centre line, the same axis the
          instrument rule above it stands on. -->
+    <!-- UP, BONE, DOWN -- one trio on one line (Movie, 14 Oct): "can you put
+         the UP arrow to the left of the bone and DOWN arrow to the right, and
+         also bring them so they are centered at same location up/down with
+         the BONE/HOUSE button so they all line up (UP / BONE / DOWN)", and
+         "(make it look symetrical makes it more appealling".
+         THE TRIO IS WHAT STANDS ON THE AXIS NOW, not the bone alone -- which
+         keeps the bone on that axis all the same, because the two arrows are
+         the same size and sit one either side of it. The old arrangement had
+         both arrows to the bone's RIGHT, between it and UNDO. -->
+    <div id="dt-trio" data-drivethru-trio>
+    <button id="model-level-up" type="button" data-model-level-up hidden
+      title="Go up to the next level">&#9650;</button>
     <button id="bone" type="button" data-bone-press aria-controls="drivethru"
       aria-expanded="false"
       title="Gruff's drive-thru: pick a house type, then build it"><img
@@ -519,6 +531,9 @@ if (!window.DraftShellBars) {
         src="./assets/bone-red.png"
         alt="" /><span id="bone-balance" data-bone-balance
         aria-hidden="true"></span><span class="said">BONE</span></button>
+    <button id="model-level-down" type="button" data-model-level-down hidden
+      title="Go down to the next level">&#9660;</button>
+    </div>
     <!-- ONE DELETE FOR EVERYTHING SELECTED (§7a), where there were two verbs
          for one of the types. It rides with the pair rather than with the
          places, because it is a verb. -->
@@ -539,10 +554,6 @@ if (!window.DraftShellBars) {
          part-way through ordering a house is not changing storey.
          NOT VERBS, so they sit ahead of UNDO and DELETE rather than among
          them: these two move where you are standing and change nothing. -->
-    <button id="model-level-up" type="button" data-model-level-up hidden
-      title="Go up to the next level">&#9650;</button>
-    <button id="model-level-down" type="button" data-model-level-down hidden
-      title="Go down to the next level">&#9660;</button>
     <button id="model-undo" type="button" data-model-undo hidden
       title="Undo the last change (Ctrl+Z)">UNDO</button>
     <button id="delete" type="button" data-delete hidden

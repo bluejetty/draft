@@ -787,9 +787,28 @@
      in it -- sat over the browser's strip while every other tenant of the
      row cleared it. Measured: the bone's foot was 15px off the floor
      against the page row's 32. */
+  /* THE VERBS CLEAR THE TRIO, not just the bone: the padding reserves half
+     the bone (0.53 of its height is half its width) plus the arrow and gap
+     that now stand on that side. With both arrows hidden -- which is every
+     page but MODEL -- the reserve is wider than it needs to be by one arrow,
+     and a gap is the safe direction to be wrong in. */
   #dt-bar { position:absolute; left:50%; top:0; bottom:var(--browser-lane);
     display:flex; align-items:center; gap:8px;
-    padding-left:calc(var(--foot-press-h, 34px) * 0.53 + 8px); }
+    padding-left:calc(var(--foot-press-h, 34px) * 0.53 + var(--foot-arrow-w, 30px)
+      + 10px + 8px); }
+  /* THE TWO ARROWS ARE ONE SIZE, which is what makes the trio symmetrical:
+     a wider UP than DOWN would shift the bone off the axis by half the
+     difference. Square, and the same height as the verbs beside them. */
+  #model-level-up, #model-level-down {
+    width:var(--foot-arrow-w, 30px); height:var(--foot-arrow-w, 30px);
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; line-height:1; cursor:pointer;
+    color: var(--ink-primary);
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    border:1px solid var(--edge-panel); border-radius:6px; padding:0; }
+  #model-level-up:hover, #model-level-down:hover {
+    color: var(--accent); border-color: var(--accent); }
+  #model-level-up[hidden], #model-level-down[hidden] { display:none; }
   /* THE FOOT'S BONE is the same red bone that sits on the sign's post --
      one artwork for one press, so the two bones cannot start looking like
      two different verbs. Its own box is centred on the strip's 50% axis,
@@ -808,8 +827,21 @@
      line up with the page row across the bar, which is an alignment the verbs
      should keep. Only the press moves, because only the press is tall enough
      for the difference to read. */
-  #bone { position:absolute; left:0; top:calc(50% + var(--browser-lane) / 2);
-    transform:translate(-50%, -50%); padding:0; border:none;
+  /* UP / BONE / DOWN, ONE TRIO ON ONE LINE (Movie, 14 Oct): "put the UP arrow
+     to the left of the bone and DOWN arrow to the right ... so they all line
+     up (UP / BONE / DOWN)", "(make it look symetrical makes it more
+     appealling".
+     THE TRIO TAKES THE BONE'S PLACE ON THE AXIS, which is the same thing said
+     twice: the two arrows are one size and sit one either side, so centring
+     the trio leaves the bone exactly where centring the bone put it -- on the
+     sheet's centre line, the axis the instrument rule above it stands on.
+     Written as ONE absolutely-placed box rather than three, because three
+     boxes measured off each other is how a hidden arrow (LAYOUT and PROJECT
+     ship both hidden) would walk the bone off the axis. A hidden flex child
+     takes no room, and the box stays centred on whatever is left. */
+  #dt-trio { position:absolute; left:0; top:calc(50% + var(--browser-lane) / 2);
+    transform:translate(-50%, -50%); display:flex; align-items:center; gap:10px; }
+  #bone { padding:0; border:none;
     background:none; line-height:0; cursor:pointer; }
   #bone img { display:block; height:var(--foot-press-h, 34px); width:auto; }
   #bone:hover img { filter:brightness(1.12); }
