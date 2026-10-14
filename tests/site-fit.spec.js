@@ -60,20 +60,20 @@ async function open(page, level) {
 // scale and the canvas centre -- the same arithmetic every other MODEL.html
 // spec uses, so this is not a second opinion about the projection.
 async function projector(page) {
-  // THE VIEW ITSELF, not a scale and an assumption about the middle. fit()
-  // offsets the drawing's centre so it lands in the band the bars leave open,
-  // so "height / 2 + z * scale" is wrong by that offset -- which is how the
-  // first cut of this spec reported a mark 42px off the bottom of a canvas it
-  // was comfortably inside.
-  const view = JSON.parse(await page.locator('#plan').getAttribute('data-view'));
-  const box = await page.locator('#plan').boundingBox();
+  // THE PAGE'S OWN CAMERA, through the helper that reads it. fit() offsets
+  // the drawing's centre so it lands in the band the bars leave open, so
+  // "height / 2 + z * scale" is wrong by that offset -- which is how the
+  // first cut of this spec reported a mark 42px off a canvas it was
+  // comfortably inside. planFrame already asks the page; a second reader
+  // here would be the drift it was written to end.
+  const frame = await h.planFrame(page);
   return {
-    scale: view.scale,
-    box,
-    at: (x, z) => ({
-      x: box.width / 2 + (x - view.cx) * view.scale,
-      y: box.height / 2 + (z - view.cz) * view.scale,
-    }),
+    scale: frame.scale,
+    box: frame.box,
+    at: (x, z) => {
+      const [px, py] = frame.at(x, z);
+      return { x: px - frame.box.x, y: py - frame.box.y };
+    },
   };
 }
 

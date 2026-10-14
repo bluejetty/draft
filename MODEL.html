@@ -2917,13 +2917,21 @@
   const fit = (wide = false) => {
     const own = allPoints(wide);
     const pts = thumbTarget || shootingPaper ? own : own.concat(hologramFramePoints());
-    // THE EMPTY TEST MOVED DOWN, past what is folded in below. It used to
-    // stand here, and on the SITE level that is every time: allPoints
-    // measures the ACTIVE level's walls, lines and floors, and a site has
-    // none -- so the fit fell to its 6 px/ft default and the lot, the rows
-    // and the marks were never considered at all. Found by printing the view
-    // rather than by reading the function: the published scale was exactly
-    // the fallback's.
+    // THE EMPTY TEST STILL STANDS HERE FOR EVERY OTHER LEVEL, and only moves
+    // out of the way for the site. It used to fire on a site every time --
+    // allPoints measures the ACTIVE level's walls, lines and floors, and a
+    // site has none -- so the fit fell to its 6 px/ft default and the lot,
+    // the rows and the marks were never considered at all. Found by printing
+    // the view rather than by reading the function: the published scale was
+    // exactly the fallback's.
+    //
+    // NARROWED TO THE SITE, THOUGH. Carrying on past an empty level anywhere
+    // else would frame the elevation ring of a house on ANOTHER level -- a
+    // drafter standing on a storey he has not drawn yet would arrive zoomed
+    // to the house below instead of at the page's own default, which is a
+    // different view on every page that starts empty.
+    const sitePlan = activeLevelId() === SITE_LEVEL_ID && !thumbTarget && !shootingPaper;
+    if (!pts.length && !sitePlan) { view.cx = 0; view.cz = 0; view.scale = 6; return; }
 
     // ── THE ELEVATION MARKS ARE PART OF WHAT IS ON THE SHEET ───────────
     //
@@ -2957,7 +2965,7 @@
       // window. Everything that is drawn out there is folded in here: the lot
       // itself, the ends of every dimension row, and the ring as it is
       // PAINTED (round the lot on this level), not as it is stored.
-      const site = activeLevelId() === SITE_LEVEL_ID;
+      const site = sitePlan;
       const LS = window.DraftLotSizes;
       const LP = window.DraftLayoutPlan;
       const lot = site && LS ? LS.siteOutlineOf(drawing?.outlines) : null;
@@ -6072,15 +6080,6 @@
       b: [Number(cut.endPt.x.toFixed(4)), Number(cut.endPt.z.toFixed(4))],
       d: [cut.dirVec.x, cut.dirVec.z],
     }))));
-    // AND WHERE THE WINDOW IS LOOKING. Two numbers and a scale, published for
-    // the same reason the marks are: "is this on screen" is a question about
-    // the view, and a spec that re-derives the projection from a scale alone
-    // is a second opinion about where the middle of the drawing sits -- which
-    // is exactly what fit() moves when the bars take their band.
-    canvas.setAttribute('data-view', JSON.stringify({
-      cx: Number(view.cx.toFixed(4)), cz: Number(view.cz.toFixed(4)),
-      scale: Number(view.scale.toFixed(4)),
-    }));
     // THE RECORD, which is what every elevation is generated from and what
     // E1 RIGHT and HOUSE ROTATE are asked about.
     publishMarks('data-e-marks', autoElevationCuts());
