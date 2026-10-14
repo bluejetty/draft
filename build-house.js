@@ -706,22 +706,69 @@ if (!window.DraftBuildHouse) {
   //
   // HOW IT WAS MADE, so it can be checked: a generic wood open-web floor
   // truss chart (40 psf live, 10 psf dead, L/480 live-load deflection) gives
-  // the 19.2" o.c. column -- 14" 22'-1", 16" 23'-9", 18" 25'-4", 20" 26'-10",
+  // the 19.2" o.c. column -- 16" 23'-9", 18" 25'-4", 20" 26'-2", 22" 27'-11",
   // 24" 29'-7". The other spacings follow the deflection limit, which goes as
   // the cube root of the load per joist (span x (19.2 / spacing)^(1/3)); every
-  // figure is then cut by 10% and rounded DOWN to the half foot. 19-3/4" is
-  // the 20" row less 6". Feet, clear span between bearings.
+  // figure is then cut by 10% and rounded DOWN to the half foot. Feet, clear
+  // span between bearings. The 22" figure is read between its neighbours
+  // rather than off the chart, which is said here rather than hidden: it is
+  // the only row in the table that was interpolated.
+  //
+  // EVERY DEPTH IS ITS ROUND NUMBER LESS THE SHEATHING, which is the rule
+  // Movie set on 13 Oct: "lets leave ours at 19.25\" and then it will be 20\"
+  // even. lets also do that for the other TRUSS sizes so they end up at 24\"
+  // for exacmple with the sheathing". So the TRUSS is 3/4" shy of a round
+  // figure and the FLOOR PACKAGE lands on it:
+  //
+  //     15-1/4  ->  16      19-1/4  ->  20      23-1/4  ->  24
+  //     17-1/4  ->  18      21-1/4  ->  22
+  //
+  // (His example said the 24" one would be "24.25", which is the rule the
+  // other way round -- 24-1/4 plus sheathing is 25. The rule is what is
+  // built here, and it is the same one his own 19-1/4 -> 20 states.)
+  //
+  // THE 19-1/4" ROW IS THE 20" ROW, and it keeps the 20" figures on purpose.
+  // Movie, 13 Oct, asked which depth to carry -- "so 19.25\" or 19.75\" either
+  // would work right, since they have to build the truss per job" -- and then
+  // answered it himself: "i like for ours lines up to 20\" even with the
+  // sheathing". An open-web truss is built to order, so neither depth is a
+  // catalogue size and both are equally buildable; what decides it is the
+  // framing arithmetic, and 19-1/4" plus 3/4" of sheathing is a round 20"
+  // floor package. PROJECT has scheduled this deck at 19-1/4" since 28 Sep,
+  // so this row is what makes the two sheets say one number.
+  //
+  // THE SPANS ARE NOT RE-DERIVED for the quarter inch, and that is safe
+  // rather than lazy: each row's figures already come off the ROUND depth's
+  // chart cut by 10%, and three quarters of an inch of depth is far inside
+  // that haircut. A supplier's own chart replaces the table whole.
+  //
+  // WHICH DEPTHS AN OWJ COMES IN, Movie, 14 Oct: "the OWJ are 19.25" or
+  // bigger, also smaller one 16" 15.25" 18" (17.25"", then "than i guess
+  // 21.25" and 23.25" and that's probably it hey". Five rows, 16" through
+  // 24" nominal. Two changes from what this table held:
+  //
+  //   - 13-1/4" IS GONE. A 14" nominal open-web truss is not a thing he
+  //     orders; that depth is TJI country, and the TJI is one depth --
+  //     11 7/8" -- which is level-assembly.js's own `tji` row and not an
+  //     open-web joist at all. Nothing chose it anyway on the path that
+  //     matters: over a garage `minDepthIn` is 19-1/4", so this row was only
+  //     ever reachable by a short house-floor span.
+  //   - 21-1/4" IS NEW, the 22" nominal he named. Its figures are the chart
+  //     read between the 20" and 24" rows and then put through the same mill
+  //     as every other row here -- the cube-root spacing rule and the 10%
+  //     haircut, rounded down to the half foot -- so it sits between its two
+  //     neighbours in every column rather than being eyeballed.
   const OWJ_OC_IN = Object.freeze([12, 16, 19.2, 24]);
   const OWJ_SPANS = Object.freeze([
-    Object.freeze({ depthIn: 14, spanFt: Object.freeze({ 12: 23, 16: 21, 19.2: 19.5, 24: 18 }) }),
-    Object.freeze({ depthIn: 16, spanFt: Object.freeze({ 12: 25, 16: 22.5, 19.2: 21, 24: 19.5 }) }),
-    Object.freeze({ depthIn: 18, spanFt: Object.freeze({ 12: 26.5, 16: 24, 19.2: 22.5, 24: 21 }) }),
-    Object.freeze({ depthIn: 19.75, spanFt: Object.freeze({ 12: 27.5, 16: 25, 19.2: 23.5, 24: 21.5 }) }),
-    Object.freeze({ depthIn: 24, spanFt: Object.freeze({ 12: 31, 16: 28, 19.2: 26.5, 24: 24.5 }) }),
+    Object.freeze({ depthIn: 15.25, spanFt: Object.freeze({ 12: 25, 16: 22.5, 19.2: 21, 24: 19.5 }) }),
+    Object.freeze({ depthIn: 17.25, spanFt: Object.freeze({ 12: 26.5, 16: 24, 19.2: 22.5, 24: 21 }) }),
+    Object.freeze({ depthIn: 19.25, spanFt: Object.freeze({ 12: 27.5, 16: 25, 19.2: 23.5, 24: 21.5 }) }),
+    Object.freeze({ depthIn: 21.25, spanFt: Object.freeze({ 12: 29, 16: 26.5, 19.2: 25, 24: 23 }) }),
+    Object.freeze({ depthIn: 23.25, spanFt: Object.freeze({ 12: 31, 16: 28, 19.2: 26.5, 24: 24.5 }) }),
   ]);
   // THE JOIST FOR A SPAN, the way Movie lays them: 16" o.c. first, the
   // shallowest depth that spans it but never under `minDepthIn` (over a
-  // garage that is his 19-3/4"); "12" for longest" when no 16" row reaches.
+  // garage that is his 19-1/4"); "12" for longest" when no 16" row reaches.
   // Past the table, `fits: false` and the deepest at 12" -- said, not guessed.
   const owjFor = (spanFt, { minDepthIn = 0, ocOrder = [16, 12] } = {}) => {
     const rows = OWJ_SPANS.filter(r => r.depthIn >= minDepthIn - 1e-6);

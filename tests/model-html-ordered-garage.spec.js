@@ -605,22 +605,36 @@ test('and a way up into the room, landing on the garage slab',
     expect(well.length, 'with its well cut out of the deck').toBe(1);
     expect(well[0].hostType).toBe('floor');
 
-    // THE RISE, AGAINST THE DRAWING'S OWN ASSEMBLIES rather than a number
-    // typed here: the garage wall it climbs plus the room's floor package is
-    // the ordinary answer, and what is left over is the slab.
-    const plainFt = await page.evaluate(saved => {
+    // ── THE RISE IS THE SECTION'S OWN: ROOM FLOOR DOWN TO THE SLAB ─────────
+    //
+    // Movie, 13 Oct, on S1 of a two-storey garage: "stairs go to 0-0 but
+    // should go down to the slab".
+    //
+    // ASKED OF cut-view, which is what DRAWS the slab, rather than rebuilt
+    // from the assemblies here. The first cut of this spec did rebuild it --
+    // wall height plus floor package plus a 5 1/2" sill-to-slab drop -- and
+    // it agreed with a stair that was three inches short of the concrete,
+    // because on a detached garage the model stands the studs at 0'-0" while
+    // the section places the pour off GRADE. Two arithmetics, one of them
+    // wrong, and a spec that re-derives the wrong one cannot see it.
+    // AND EVERY RISER IN IT IS LEGAL, which is the reason the rise has to be
+    // right: a flight sized to the wrong floor divides its riser count over a
+    // height the drawing does not have.
+    expect(stair.riseFt / stair.risers * 12,
+      `${stair.risers} risers over ${stair.riseFt} ft`).toBeLessThanOrEqual(7.875);
+    expect(stair.riseFt / stair.risers * 12,
+      `${stair.risers} risers over ${stair.riseFt} ft`).toBeGreaterThan(6);
+    // AND IT REACHES BELOW THE LEVEL DATUM, which is the whole of his report:
+    // a flight that stopped at the storey below would be exactly the room's
+    // floor-to-floor, and this one is taller because the concrete is lower.
+    const roomFloorFt = await page.evaluate(saved => {
       const LA = window.DraftLevelAssembly;
       const garage = LA.levelAssemblyFor(saved.levelAssemblies, 3);
       const room = LA.levelAssemblyFor(saved.levelAssemblies, 4);
       return garage.wallHeightFt + LA.levelFloorFt(room);
     }, saved);
-    const dropIn = (stair.riseFt - plainFt) * 12;
-    expect(dropIn, `${dropIn}" of slab under the sill`).toBeCloseTo(5.5, 2);
-    // AND EVERY RISER IN IT IS STILL LEGAL, which is the reason the rise has
-    // to be right: 16 risers over a flight that is really 5 1/2" taller than
-    // the drawing thought is a stair whose steps do not add up.
-    expect(stair.riseFt / stair.risers * 12,
-      `${stair.risers} risers over ${stair.riseFt} ft`).toBeLessThanOrEqual(7.875);
+    expect(stair.riseFt, `${stair.riseFt} ft of rise against a ${roomFloorFt} ft storey`)
+      .toBeGreaterThan(roomFloorFt + 0.5);
 
     // ── ALONG ONE SIDE, OFF AN 8 FT ENTRY ──────────────────────────────────
     //
@@ -641,14 +655,33 @@ test('and a way up into the room, landing on the garage slab',
       .toBeLessThan(stair.widthFt + 1);
     expect(maxX - minX, 'and the room is far wider than that')
       .toBeGreaterThan(offWall * 3);
-    // AND THE ENTRY IN FRONT OF IT. `end` is the bottom tread, the door wall
-    // is at max z, and what a drafter paces is the floor — so an 8 ft entry
-    // measured off the inside face lands a little under 8 from the
-    // centreline the geometry keeps.
+    // AND THE ENTRY IN FRONT OF IT, which is what is LEFT once the flight and
+    // its landing have what they need — and on a 24 ft deep garage that is
+    // not the 8 ft he asked for.
+    //
+    // THE THREE NUMBERS DO NOT FIT IN 24 FEET, and this spec says so rather
+    // than holding one of them and letting the build quietly break another.
+    // The flight runs about 14'-2" now — 18 risers, because it descends to
+    // the SLAB and not to 0'-0" (Movie, 13 Oct: "stairs go to 0-0 but should
+    // go down to the slab") — the landing wants 4'-6" and must have 3'-6",
+    // and the entry wants 8'-0". That is 26'-8" of floor inside a box with
+    // 22'-8" of it. Something gives, and what gives is the entry: the other
+    // two are code and arithmetic rather than preference — a door swinging at
+    // the head of a flight, and a rise divided by a legal riser.
+    //
+    // 28 FEET DEEP IS WHERE ALL THREE FIT, near enough exactly. That is a
+    // change to the stock size, which is Movie's to make and not this spec's
+    // to assume, so what is held here is the rule the build follows.
     const entryFt = maxZ - Math.max(stair.start.z, stair.end.z);
     expect(entryFt, `${entryFt} ft of floor between the door and the bottom step`)
-      .toBeGreaterThan(7.5);
+      .toBeGreaterThan(5);
     expect(entryFt, 'and not a room-s worth of it').toBeLessThan(9);
+    // AND THE LANDING AT THE HEAD KEPT ITS MINIMUM (Movie, 13 Oct: "3-6
+    // min."), which is the thing the entry gave way to.
+    const minZ = Math.min(...zs);
+    const landingFt = Math.min(stair.start.z, stair.end.z) - minZ;
+    expect(landingFt, `${landingFt} ft from the back wall line to the top riser`)
+      .toBeGreaterThan(3.5 - 1e-6);
   });
 
 test.beforeEach(async ({ page }) => { await open(page); });

@@ -4781,16 +4781,37 @@
     const env = cutEnv();
     const fdn = CV.sectionLevelStack(env)?.foundation;
     if (!fdn) return null;
-    const drop = CV.garageBearing(env, fdn, garage) - CV.garageSlabTop(env, fdn, garage);
-    if (!(drop > 0)) return null;
-    // AND THE ORDINARY RISE IT IS ADDED TO, worked out here rather than by
-    // calling back into stairDescent -- this function is what stairDescent
-    // asks FIRST, so a call back the other way is the same question twice.
-    const floors = stairFloorLevels();
-    const idx = floors.findIndex(level => Number(level.id) === Number(levelId));
-    if (idx < 1) return null;
-    const riseFt = assemblyFor(floors[idx - 1].id).wallHeightFt
-      + LA.levelFloorFt(assemblyFor(levelId)) + drop;
+    // ── BOTH ENDS OFF THE SECTION'S OWN STACK ────────────────────────────
+    //
+    // Movie, 13 Oct, looking at S1 of a two-storey garage: "stairs go to 0-0
+    // but should go down to the slab".
+    //
+    // THE FIRST CUT OF THIS ADDED A 5 1/2" DROP to the ordinary rise -- one
+    // sill plate plus the slab's recess -- on the reading that the garage's
+    // walls stand on their bearing line. MEASURED, THEY DO NOT: on a detached
+    // garage the model stands its studs at the level datum (0'-0") while
+    // cut-view places the concrete off GRADE, which on a plain grade-beam
+    // garage puts the slab at -1'-6 1/8" and the bearing at -1'-0 5/8". The
+    // flight was sized 10'-2 5/8" and the section drew it to 9'-9 1/8": three
+    // numbers, no two alike.
+    //
+    // So the rise is simply the room's floor MINUS the slab, both read from
+    // the stack the SECTION draws with -- which is what makes the drawn
+    // flight and the stored riser count the same stair rather than two that
+    // agree until something moves.
+    //
+    // THE GAP BETWEEN THE MODEL'S WALL BASE AND THE DRAWN BEARING IS NOT
+    // THIS FUNCTION'S, and it is not hidden here: a detached garage's studs
+    // sit about a foot above where its section bears them. Reported rather
+    // than papered over, because a stair that reaches the slab is right
+    // either way and that one is a question about the garage.
+    const stack = CV.sectionLevelStack(env);
+    const floorTop = (stack?.floors || [])
+      .find(level => Number(level.id) === Number(levelId))?.floorTop;
+    const slabTop = CV.garageSlabTop(env, fdn, garage);
+    if (!Number.isFinite(floorTop) || !Number.isFinite(slabTop)) return null;
+    const riseFt = floorTop - slabTop;
+    if (!(riseFt > 0)) return null;
     return { riseFt, landing: 'the garage slab' };
   };
 
@@ -15730,8 +15751,22 @@
     const owjNote = (points, storeyId, { spanFt = null, between = 'SIDE WALL TO SIDE WALL' } = {}) => {
       const box = boxOf(points);
       const span = spanFt ?? Math.min(box.x1 - box.x0, box.z1 - box.z0);
-      const owj = window.DraftBuildHouse.owjFor(span, { minDepthIn: 19.75 });
-      const depth = owj.depthIn === 19.75 ? '19-3/4"' : `${owj.depthIn}"`;
+      // 19-1/4", NOT 19-3/4" (Movie, 13 Oct): "i like for ours lines up to 20\"
+      // even with the sheathing". A truss is built to order either way, so the
+      // depth is decided by the framing arithmetic -- and it is the depth
+      // PROJECT has scheduled this deck at since 28 Sep, so the note on the
+      // plan and the row on the schedule now say one number.
+      const owj = window.DraftBuildHouse.owjFor(span, { minDepthIn: 19.25 });
+      // EVERY DEPTH IN THE TABLE IS A QUARTER PAST A WHOLE INCH, so every one
+      // of them is printed as the fraction a drafter reads. This named
+      // 19-1/4" and let the rest through as a decimal, which was harmless
+      // while 19-1/4" was the only row anything over a garage could reach and
+      // would have written "21.25"" on a plan the moment a wider deck picked
+      // the next row up (Movie, 14 Oct, naming the family: 15.25, 17.25,
+      // 19.25, 21.25, 23.25).
+      const owjWhole = Math.floor(owj.depthIn);
+      const owjFrac = { 0.25: '-1/4', 0.5: '-1/2', 0.75: '-3/4' }[Number((owj.depthIn - owjWhole).toFixed(2))];
+      const depth = owjFrac ? `${owjWhole}${owjFrac}"` : `${owj.depthIn}"`;
       addNote({ x: (box.x0 + box.x1) / 2, z: (box.z0 + box.z1) / 2 }, storeyId, 'floor', [
         `ENGINEERED OWJ ${depth} @ ${owj.ocIn}" O.C.`,
         `${between} -- ${fmtFt(span)} SPAN`,
@@ -15812,7 +15847,7 @@
         const box = boxOf(points);
         const axis = window.DraftBuildHouse.garageJoistAxis(garage ? boxOf(garage.points) : box, doors);
         const span = axis === 'x' ? box.x1 - box.x0 : box.z1 - box.z0;
-        if (window.DraftBuildHouse.owjFor(span, { minDepthIn: 19.75 }).fits) {
+        if (window.DraftBuildHouse.owjFor(span, { minDepthIn: 19.25 }).fits) {
           owjNote(points, storeyId, { spanFt: span, between: 'SIDE WALL TO SIDE WALL' });
           return;
         }
@@ -16627,7 +16662,47 @@
   // suggester: a garage typed shallow enough that 8 ft of entry and the run
   // do not fit between the walls should get the best position something can
   // find, not a flight through the back wall.
+  // THE ENTRY HE ASKED FOR, AND THE LANDING HE RULED ON. Movie, 13 Oct: "the
+  // door goes straight to the bottom of the stairs (about 8ft entry area
+  // before the stairs", then "and top of landing needs at least 3ft to the
+  // int of the ext wall" -- revised in the same breath to "make it 3'6 min
+  // from the ext wall line", "4-6 perferred", "3-6 min."
+  //
+  // MEASURED FROM THE WALL LINE, which is what he said and is not the same as
+  // the inside face: the line is the outline's own, the one he reads off the
+  // plan. On his 24 ft depth that is what makes the numbers close -- 8 ft of
+  // entry and a 12'-6" run leave exactly 3'-6" behind the top.
+  //
+  // THE LANDING IS THE CONSTRAINT AND THE ENTRY IS THE GIVE. A landing under
+  // 3'-6" is a code question; an entry a few inches short of 8 is a taste
+  // one. So the landing takes what it needs up to the preferred 4'-6", the
+  // entry takes the rest, and a garage too shallow for both hands the
+  // placement back to the suggester rather than drawing a flight that
+  // arrives at a wall.
   const GARAGE_STAIR_ENTRY_FT = 8;
+  const GARAGE_STAIR_LANDING_MIN_FT = 3.5;
+  const GARAGE_STAIR_LANDING_WANT_FT = 4.5;
+  // AND OFF THE WALL BY A FOOT, Movie 13 Oct: "we should also put the
+  // eterior stairs at 1ft in from the ext wall line to allow 8" con min, or
+  // 1ft for ICF (might need a bit more". So the clearance is not a framing
+  // inset -- it is room for the CONCRETE under the wall, and a foot covers
+  // both the 8" minimum pour and an ICF wall. Measured from the wall LINE,
+  // like the landing, because that is the line he reads it off.
+  //
+  // AND "A BIT MORE" IS WORKED OUT RATHER THAN REMEMBERED. On this page a
+  // wall's reference line is its FACE, not its centreline, so a foot from the
+  // wall line is a foot from the OUTSIDE of the wall: on a 2x6 that leaves
+  // about 6 1/2" of floor inside it, and on ICF -- near a foot thick -- it
+  // leaves nothing at all. So the clearance is the GREATER of his foot and
+  // the wall's own thickness plus a margin, which is a flat foot on framing
+  // and widens itself on ICF without anyone having to notice.
+  const GARAGE_STAIR_WALL_CLEAR_FT = 1;
+  const GARAGE_STAIR_WALL_MARGIN_FT = 0.5;
+  // "lets make stair width 3-4 for 2 storey garage typical (default" -- four
+  // inches wider than the page's own 3'-0", and only here: this is the
+  // garage's stair, not the house's, and the page-wide default is what every
+  // other flight is still placed at.
+  const GARAGE_STAIR_WIDTH_FT = 3 + 4 / 12;
   const buildGarageRoomStair = (levelId, corners, id) => {
     const SG = window.DraftStairGeometry;
     if (!SG || !corners || corners.length < 3) return null;
@@ -16637,10 +16712,27 @@
     const xs = corners.map(pt => pt.x), zs = corners.map(pt => pt.z);
     const minX = Math.min(...xs), maxZ = Math.max(...zs), minZ = Math.min(...zs);
     const inset = stairOpeningSetbackFt(levelId);
-    const centreX = minX + inset + stairWidthFt / 2;
-    const bottomZ = maxZ - inset - GARAGE_STAIR_ENTRY_FT;
-    const topZ = bottomZ - layout.runFt;
-    if (topZ < minZ + inset) return null;
+    const widthFt = GARAGE_STAIR_WIDTH_FT;
+    // `stairOpeningSetbackFt` IS THE WALL ASSEMBLY -- the same number the well
+    // is cut to -- so it is what "the wall's own thickness" asks, and an ICF
+    // garage answers it differently from a 2x6 one without this knowing how.
+    const clearFt = Math.max(GARAGE_STAIR_WALL_CLEAR_FT,
+      inset + GARAGE_STAIR_WALL_MARGIN_FT);
+    const centreX = minX + clearFt + widthFt / 2;
+    // WHAT IS LEFT ONCE THE FLIGHT IS IN IT, wall line to wall line, split
+    // between the landing at the back and the entry at the door. The landing
+    // is served first, up to the preferred 4'-6"; whatever remains is the
+    // entry, which is why a deeper garage spends its extra foot on the walk
+    // in rather than on a landing nobody stands on.
+    const spare = (maxZ - minZ) - layout.runFt;
+    const landing = Math.min(GARAGE_STAIR_LANDING_WANT_FT,
+      Math.max(GARAGE_STAIR_LANDING_MIN_FT, spare - GARAGE_STAIR_ENTRY_FT));
+    // SHORT OF THE MINIMUM IS NOT A STAIR TO DRAW. Better the suggester's
+    // best position than a flight whose top lands 2 ft off the back wall.
+    if (spare - landing < GARAGE_STAIR_LANDING_MIN_FT) return null;
+    const topZ = minZ + landing;
+    const bottomZ = topZ + layout.runFt;
+    if (bottomZ > maxZ - inset) return null;
     return {
       id,
       // START IS THE UPPER NOSING and start -> end runs DOWNHILL
@@ -16650,7 +16742,7 @@
       end: { x: centreX, y: 0, z: bottomZ },
       levelId,
       view: 'plan',
-      widthFt: stairWidthFt,
+      widthFt,
       riseFt: layout.riseFt,
       risers: layout.risers,
       treadRunIn: SG.STAIR_TREAD_RUN_IN,

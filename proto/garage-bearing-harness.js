@@ -697,8 +697,36 @@ function run(win) {
         // THE BACK OF THE SLAB, whether or not a door happens to be there: the
         // fall is the floor's, not a pair of doors'. The far garage beam is the
         // back wall either way.
-        const backU = fdnC.map(c => c.u).filter(u => Math.abs(u - doorU) > 1)
+        const backU0 = fdnC.map(c => c.u).filter(u => Math.abs(u - doorU) > 1)
           .sort((a, b) => Math.abs(b - doorU) - Math.abs(a - doorU))[0];
+        // AND THE SLAB STOPS AT THE WALL'S INSIDE FACE NOW (Movie, 14 Oct:
+        // "the slab should stop on the inside of the garage wall (it overlaps
+        // now)"), so the back wall's CENTRE is no longer over concrete.
+        // Sampling there asked the shape about a station it does not reach and
+        // read -Infinity -- the same instrument failure the note above
+        // describes, in a second place. Pulled in to the slab's own back end,
+        // which is the station this check was always about; the rate below
+        // re-measures the run between the two stations it actually sampled,
+        // so the answer is unchanged by the move.
+        const floorUs = floor.map(p => p.u);
+        const backU = Math.min(Math.max(backU0, Math.min(...floorUs)), Math.max(...floorUs));
+        // WHERE IT STOPS, measured rather than implied by the sample above:
+        // the back end of the slab stands at the inside face of the back
+        // beam, half a wall in from its line. Only the back end -- at the
+        // door the slab pours out over the buck and is MEANT to pass the
+        // wall line.
+        const backC = fdnC.find(c => Math.abs(c.u - backU0) < 1e-6);
+        const inward = Math.sign(doorU - backU0);
+        const backEnd = inward > 0 ? Math.min(...floorUs) : Math.max(...floorUs);
+        // NOT WHERE THE BACK IS A DOOR TOO. On the cut through both doors
+        // that end is a buck, and there the slab is MEANT to pass the wall
+        // line -- it pours over the beam and fills the void behind the door.
+        if (backC && !doorOver(backC)) {
+          check('fall: the slab stops at the inside face of the back beam',
+            near(backEnd, backU0 + inward * backC.width / 2, 0.02),
+            `slab ends ${ftIn(Math.abs(backEnd - backU0))} inside the beam's line,`
+            + ` half of it is ${ftIn(backC.width / 2)}`);
+        }
         check('fall: the floor at the overhead door is GARAGE_SLAB_AT_DOOR_IN below the pour',
           near(cTop - topAt(doorU), S.GARAGE_SLAB_AT_DOOR_IN / 12, 0.02),
           `${ftIn(cTop - topAt(doorU))} below top of concrete`);
@@ -3069,6 +3097,12 @@ if (!MUTATION_MODE) {
 // away. A mutation nothing catches is a rule this harness only appears to
 // hold.
 const MUTATIONS = [
+  // THE SLAB POURED THROUGH ITS OWN WALLS, which is what the section drew
+  // until 14 Oct (Movie: "the slab should stop on the inside of the garage
+  // wall (it overlaps now)").
+  ['the garage slab runs through its walls again',
+    s => s.replace('      return { lo: Math.max(lo, endFace(lo, 1)), hi: Math.min(hi, endFace(hi, -1)) };',
+      '      return { lo, hi };')],
   // BILEVEL + GARAGE E1, Movie 4 Oct: the three lines and what closed them.
   ['a split\'s house wall on the garage outline is the garage\'s again',
     s => s.replace("const garage = split && tagsGarage && wall.body !== 'garage' ? null : garageFor(wall);",
