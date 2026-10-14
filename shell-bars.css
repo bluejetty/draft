@@ -799,15 +799,27 @@
      in it -- sat over the browser's strip while every other tenant of the
      row cleared it. Measured: the bone's foot was 15px off the floor
      against the page row's 32. */
-  /* THE VERBS CLEAR THE TRIO, not just the bone: the padding reserves half
-     the bone (0.53 of its height is half its width) plus the arrow and gap
-     that now stand on that side. With both arrows hidden -- which is every
-     page but MODEL -- the reserve is wider than it needs to be by one arrow,
-     and a gap is the safe direction to be wrong in. */
+  /* THE VERBS USED TO CLEAR THE TRIO BY RESERVING PADDING HERE -- half the
+     bone plus an arrow and two gaps -- which put UNDO hard against the trio's
+     right. Movie, 14 Oct: "too close to the bone", and then "actually can
+     these UNDO etc buttons go on the LEFT side of the bone, there is more
+     space because the button text on that side isn't as long". They are in
+     #dt-verbs now, placed by seatFootVerbs(), so this box carries nothing in
+     flow and reserves nothing: it is the anchor the trio and the verbs are
+     both measured from. */
   #dt-bar { position:absolute; left:50%; top:0; bottom:var(--browser-lane);
-    display:flex; align-items:center; gap:8px;
-    padding-left:calc(var(--foot-press-h, 34px) * 0.53 + var(--foot-arrow-w, 30px)
-      + 10px + 8px); }
+    display:flex; align-items:center; gap:8px; }
+  /* CENTRED ON THE BONE'S OWN LINE, not on #dt-bar's -- "it should be
+     centered UP/DOWN same as the bone please". That is the same
+     `50% + lane/2` the trio uses, and for the reason written against it: the
+     lane is the bar's hem and half of it is not the middle of the bar.
+     `left` is written by the seat; the transform is what makes that number
+     the group's MIDDLE rather than its left edge, which is what "center
+     them both out" asks for when a second verb arrives. */
+  #dt-verbs { position:absolute; top:calc(50% + var(--browser-lane) / 2);
+    transform:translate(-50%, -50%); display:flex; align-items:center; gap:8px;
+    white-space:nowrap; }
+  #dt-verbs[hidden] { display:none; }
   /* THE TWO ARROWS ARE ONE SIZE, which is what makes the trio symmetrical:
      a wider UP than DOWN would shift the bone off the axis by half the
      difference. Square, and the same height as the verbs beside them. */
