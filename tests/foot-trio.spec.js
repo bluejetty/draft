@@ -20,7 +20,7 @@ const boxes = page => page.evaluate(() => {
     const r = el.getBoundingClientRect();
     return { cx: r.x + r.width / 2, cy: r.y + r.height / 2, w: r.width };
   };
-  return { up: read('model-level-up'), bone: read('bone'), down: read('model-level-down'),
+  return { up: read('trio-up'), bone: read('bone'), down: read('trio-down'),
     middle: window.innerWidth / 2 };
 });
 
@@ -70,19 +70,54 @@ test('and the bone is still on the sheet-s centre axis', async ({ page }) => {
     .toBeLessThanOrEqual(1);
 });
 
-test('a page with no levels shows neither arrow, and its bone stays centred',
+test('PROJECT wears the same trio, and its bone is on the axis too', async ({ page }) => {
+  // THIS TEST USED TO SAY "a page with no levels shows neither arrow". That
+  // was true of PROJECT for one day. Movie, 14 Oct: "those arrow can be
+  // placed on the PROJECT and REAL ESTATE PLANS, CONSTRUCTION PLANS but
+  // instead of going up and down levels ... in the project area, cycle
+  // through each HOUSE TYPE selection". So PROJECT now steps house types, and
+  // what is worth measuring here is that it wears the SAME trio: same order,
+  // same gaps, bone still on the page's middle.
+  await page.goto('/PROJECT.html');
+  await page.waitForTimeout(600);
+  const at = await boxes(page);
+  expect(at.up, 'PROJECT shows no UP arrow').not.toBeNull();
+  expect(at.down, 'PROJECT shows no DOWN arrow').not.toBeNull();
+  expect(at.up.cx, 'UP is not left of the bone').toBeLessThan(at.bone.cx);
+  expect(at.down.cx, 'DOWN is not right of the bone').toBeGreaterThan(at.bone.cx);
+  const left = at.bone.cx - at.up.cx;
+  const right = at.down.cx - at.bone.cx;
+  expect(Math.abs(left - right), `${left} px left of the bone, ${right} px right`)
+    .toBeLessThanOrEqual(1);
+  expect(Math.abs(at.bone.cx - at.middle),
+    `the bone stands ${Math.round(at.bone.cx - at.middle)} px off the page's middle`)
+    .toBeLessThanOrEqual(1);
+});
+
+test('a bone-less page gets the trio all the same, and keeps it hidden until it is wired',
   async ({ page }) => {
-    // LAYOUT AND PROJECT CARRY THIS BAR TOO and have no storeys to step
-    // through, so both arrows ship hidden there. A hidden flex item takes no
-    // room -- which is exactly why the trio is one centred box: with the
-    // arrows gone the box holds only the bone, and the bone is still on the
-    // axis rather than pushed half an arrow off it.
-    await page.goto('/PROJECT.html');
+    // REAL ESTATE PLAN mounts the bar with `bone: false`, which used to drop
+    // the whole middle of it -- so the two pages that want no drive-thru had
+    // nowhere for an arrow to stand at all. The trio mounts there now, with
+    // the middle left out.
+    //
+    // AND IT IS STILL HIDDEN, because this page prints ONE sheet: there is no
+    // stack to step and nothing has called stepper(). That is the honest
+    // state for it, and it is the thing to change when a second sheet exists
+    // -- not the markup.
+    await page.goto('/REALESTATEPLAN.html');
     await page.waitForTimeout(600);
-    const at = await boxes(page);
-    expect(at.up, 'PROJECT shows a level arrow it cannot use').toBeNull();
-    expect(at.down, 'PROJECT shows a level arrow it cannot use').toBeNull();
-    expect(Math.abs(at.bone.cx - at.middle),
-      `the bone stands ${Math.round(at.bone.cx - at.middle)} px off the page's middle`)
-      .toBeLessThanOrEqual(1);
+    const seen = await page.evaluate(() => {
+      const trio = document.getElementById('dt-trio');
+      const live = id => {
+        const el = document.getElementById(id);
+        return !!el && !el.hidden;
+      };
+      return { trio: !!trio, bone: !!document.getElementById('bone'),
+        up: live('trio-up'), down: live('trio-down') };
+    });
+    expect(seen.trio, 'the trio never mounted on a bone-less page').toBe(true);
+    expect(seen.bone, 'a bone turned up on a page that asked for none').toBe(false);
+    expect(seen.up, 'REAL ESTATE PLAN shows an arrow with nothing to step').toBe(false);
+    expect(seen.down, 'REAL ESTATE PLAN shows an arrow with nothing to step').toBe(false);
   });

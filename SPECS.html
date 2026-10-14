@@ -611,7 +611,37 @@
       };
 
       const select = id => { selectedId = id; refresh(); };
-      const refresh = () => { renderToc(); renderEditor(); repaint(); };
+      const refresh = () => { renderToc(); renderEditor(); repaint(); trio.sync(); };
+
+      // ── THE TWO ARROWS, DOWN THE CONTENTS ────────────────────────────────
+      // Movie, 14 Oct: "for specs can scroll through the content sections".
+      //
+      // THE STOPS ARE THE CONTENTS AS THE PAGE PRINTS THEM -- resolved(), the
+      // same list the table of contents paints and the sheets lay out, office
+      // master sections and this job's additions in one order. Not the TOC's
+      // DOM rows: those carry division headings between them, and an arrow
+      // that sometimes landed on "16. ELECTRICAL" would be stepping a
+      // different list from the one the drafter is reading.
+      //
+      // A SECTION TURNED OFF IS STILL A STOP. It is still in the contents,
+      // greyed, and turning one back on is exactly the errand that walks the
+      // list -- skipping them would put the arrows out of reach of the thing
+      // they are most useful for.
+      //
+      // AND THE ROW SCROLLS ITSELF INTO VIEW, because the contents are taller
+      // than their card: stepping past the bottom of it with nothing visibly
+      // moving looks like an arrow that stopped working.
+      const trio = window.DraftShellBars.stepper({
+        up: 'Previous section in the contents',
+        down: 'Next section in the contents',
+        count: () => resolved().length,
+        at: () => resolved().findIndex(section => section.id === selectedId),
+        go: index => {
+          select(resolved()[index].id);
+          document.querySelector(`[data-toc-row="${CSS.escape(selectedId)}"]`)
+            ?.scrollIntoView({ block: 'nearest' });
+        },
+      });
 
       // ── Adding a section this job has and the office does not ────────────
       const addCard = document.querySelector('.editor-card .card-title');

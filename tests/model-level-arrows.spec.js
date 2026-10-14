@@ -28,8 +28,8 @@ async function openPage(page) {
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
 
-const up = page => page.locator('#model-level-up');
-const down = page => page.locator('#model-level-down');
+const up = page => page.locator('#trio-up');
+const down = page => page.locator('#trio-down');
 
 // The level the page is actually on, asked of the panel rather than of the
 // URL: the panel marks the active card, and that is what the drafter sees.
@@ -109,21 +109,27 @@ test('an arrow changes the level the same way a level row does: the URL carries 
     expect(new URL(page.url()).searchParams.get('level')).toBe(landed);
   });
 
-test('the arrows are MODEL\'s own: the pages that share the bar do not show them',
+test('the LEVEL is MODEL\'s own: the pages that share the bar step something else',
   async ({ page }) => {
     await openPage(page);
     await expect(up(page)).toBeVisible();
+    // THE WORDS ARE THE PAGE'S, which is the whole of what is shared and what
+    // is not. This test used to say the other pages do not show the arrows at
+    // all, and that was true until Movie asked for them there (14 Oct: "those
+    // arrow can be placed on the PROJECT and REAL ESTATE PLANS, CONSTRUCTION
+    // PLANS but in stead of going up and down levels, go up and down on the
+    // stack of pages in the layouts, or in the project area, cycle throught
+    // each HOUSE TYPE selection"). What would be wrong NOW is an arrow on
+    // another page still promising a storey -- a control with nothing behind
+    // it, which is what the old wording was guarding against.
+    await expect(up(page)).toHaveAttribute('title', /level/i);
 
-    // LAYOUT and PROJECT carry the same foot strip out of shell-bars.js and
-    // have no levels to step, so the pair ships hidden and only this page
-    // unhides it. A button that turned up there would be a control with
-    // nothing behind it.
     for (const url of ['/LAYOUT.html', '/PROJECT.html']) {
       await page.goto(url);
       await page.waitForLoadState('load');
-      const shown = await page.evaluate(() => ['model-level-up', 'model-level-down']
-        .map(id => document.getElementById(id))
-        .filter(el => el && !el.hidden).length);
-      expect(shown, `a storey arrow is showing on ${url}`).toBe(0);
+      await expect(up(page), `${url} shows no arrow`).toBeVisible();
+      const said = await up(page).getAttribute('title');
+      expect(said, `${url} offers an arrow with no word on it`).toBeTruthy();
+      expect(said, `${url} promises a level it has none of`).not.toMatch(/level/i);
     }
   });

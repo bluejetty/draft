@@ -650,7 +650,7 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // is how main came to be red: the table is only as good as the
             // roster beside it, and the roster is what grows when the page
             // does.
-            'model-level-up', 'model-level-down',
+            'trio-up', 'trio-down',
             // UNDO ON SCREEN (audit C4) is the Ctrl+Z row's own verb with a
             // button on it: the parity table already has Undo **present**,
             // and a second way to press it makes nothing new.

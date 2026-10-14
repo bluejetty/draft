@@ -799,16 +799,16 @@
   /* THE TWO ARROWS ARE ONE SIZE, which is what makes the trio symmetrical:
      a wider UP than DOWN would shift the bone off the axis by half the
      difference. Square, and the same height as the verbs beside them. */
-  #model-level-up, #model-level-down {
+  #trio-up, #trio-down {
     width:var(--foot-arrow-w, 30px); height:var(--foot-arrow-w, 30px);
     display:flex; align-items:center; justify-content:center;
     font-size:11px; line-height:1; cursor:pointer;
     color: var(--ink-primary);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     border:1px solid var(--edge-panel); border-radius:6px; padding:0; }
-  #model-level-up:hover, #model-level-down:hover {
+  #trio-up:hover, #trio-down:hover {
     color: var(--accent); border-color: var(--accent); }
-  #model-level-up[hidden], #model-level-down[hidden] { display:none; }
+  #trio-up[hidden], #trio-down[hidden] { display:none; }
   /* THE FOOT'S BONE is the same red bone that sits on the sign's post --
      one artwork for one press, so the two bones cannot start looking like
      two different verbs. Its own box is centred on the strip's 50% axis,

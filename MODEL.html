@@ -11208,10 +11208,14 @@
   const deleteButton = document.getElementById('delete');
   const undoButton = document.getElementById('model-undo');
   // THE STOREY ARROWS, which this page unhides because this page has levels.
-  // shell-bars.js ships them hidden for LAYOUT and PROJECT, the same way it
-  // ships UNDO above.
-  const levelUpButton = document.getElementById('model-level-up');
-  const levelDownButton = document.getElementById('model-level-down');
+  // shell-bars.js ships them hidden, and NAMELESS: four pages step the trio
+  // now and they step four different lists -- sheets on Construction Layout,
+  // house types on PROJECT, sections on SPECS -- so the words belong to
+  // whichever page mounted them. These are MODEL's.
+  const levelUpButton = document.getElementById('trio-up');
+  const levelDownButton = document.getElementById('trio-down');
+  if (levelUpButton) levelUpButton.title = 'Go up to the next level';
+  if (levelDownButton) levelDownButton.title = 'Go down to the next level';
   const copyButton = document.getElementById('copy');
   const pasteButton = document.getElementById('paste');
 
