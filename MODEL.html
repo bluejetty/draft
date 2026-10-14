@@ -722,6 +722,30 @@
   [data-tool-group-name] { font-family: var(--font-ui); font-size:9px;
     font-weight:600; letter-spacing:0.1em; text-transform:uppercase;
     color: var(--ink-quiet); margin-bottom:5px; }
+  /* ── THE ASSEMBLED ONES, UP BESIDE THE TITLE ────────────────────────────
+     Movie, 14 Oct: "bring those ASSEMBLED units for BATH and KITCHEN up
+     beside the title (to the right)", and for the colour, "give them GOLD or
+     whatever the BUILD/ PROPERTIES beside it is using" / "match the BUILT and
+     PROPERTIES outline 'currently GOLD'".
+
+     THAT GOLD IS `--accent`, which is what a selected rail tab wears
+     (.rail-tab[aria-selected="true"] in shell-bars.css). Taking the token
+     rather than the colour is what makes it answer his other question before
+     he asks it -- he had wondered about "Red and Blue depending on Ruuf or
+     Rough", and the token is already exactly that: gold on RUFF, blue on
+     ROUGH, in both NIGHT and DAY.
+
+     A ROW OF ITS OWN, laid along the title: the group's name takes what it
+     needs and the assembled chips ride in the space left over, so a group
+     with none of them looks exactly as it did. */
+  .tool-group-head { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+  .tool-group-head [data-tool-group-name] { margin-bottom:0; flex:0 0 auto; }
+  .tool-group-head .sel-row { margin:0; flex:1 1 auto; }
+  /* ASSEMBLED, NOT A PIECE. A whole kitchen or washroom goes down in one
+     press where everything under it is a single cabinet or fixture, and that
+     is the difference the colour is carrying. */
+  .sel-chip.assembled { color: var(--accent); border-color: var(--accent); }
+  .sel-chip.assembled:hover { border-color: var(--accent); }
   .tool-keys { display:grid; grid-template-columns:repeat(4, 40px); gap:4px; }
   .tool-key { position:relative; width:40px; height:40px; padding:0;
     display:block; cursor:pointer; border-radius:3px;
@@ -21152,10 +21176,25 @@
       title.textContent = group;
       const row = document.createElement('div');
       row.className = 'sel-row';
+      // THE ASSEMBLED ONES STAND BESIDE THE NAME (Movie, 14 Oct: "bring those
+      // ASSEMBLED units for BATH and KITCHEN up beside the title (to the
+      // right)"). A whole kitchen or washroom in one press is a different
+      // kind of thing from the single cabinets and fixtures under it, and the
+      // row it was buried in said nothing about that.
+      //
+      // THE CATALOGUE SAYS WHICH ARE WHICH -- `preset: true` in
+      // fixture-kinds.js -- so a preset added there turns up here by itself,
+      // and nothing in this file has to carry a list of their ids.
+      const head = document.createElement('div');
+      head.className = 'tool-group-head';
+      const headRow = document.createElement('div');
+      headRow.className = 'sel-row';
+      headRow.dataset.assembledRow = group.toLowerCase();
+      head.append(title, headRow);
       K.kindsInGroup(group).forEach(kind => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'sel-chip';
+        btn.className = `sel-chip${kind.preset ? ' assembled' : ''}`;
         btn.dataset.fixtureKind = kind.id;
         btn.textContent = kind.label;
         btn.title = kind.note;
@@ -21170,22 +21209,23 @@
           setTool('fixture');
           syncFixturePanel();
         });
-        row.append(btn);
+        (kind.preset ? headRow : row).append(btn);
       });
-      box.append(title, row);
+      box.append(head, row);
       home.append(box);
     });
-    // THE DEFAULT WASHROOMS, on the BATH row beside VANITY: a pick here is a
-    // room, not a fixture kind, held until Esc or another pick. On the row
-    // rather than under a heading of their own because the BUILD rail is
-    // sized to its content, and the second BATH line has the room.
-    const bathRow = home.querySelector('[data-tool-group="fixture-bath"] .sel-row');
+    // THE DEFAULT WASHROOMS GO BESIDE THE BATH TITLE for the same reason the
+    // kitchen's L PRESET does: a pick here is a whole ROOM, not a fixture
+    // kind, held until Esc or another pick. They used to sit on the BATH row
+    // beside VANITY, which put a washroom and a single sink in one line and
+    // said nothing about the difference.
+    const bathRow = home.querySelector('[data-assembled-row="bath"]');
     if (window.DraftWashroomPresets && bathRow) {
       window.DraftWashroomPresets.IDS.forEach(id => {
         const preset = window.DraftWashroomPresets.PRESETS[id];
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'sel-chip';
+        btn.className = 'sel-chip assembled';
         btn.dataset.washroom = id;
         btn.textContent = preset.name;
         btn.title = `${preset.label} — press to drop it; [ and ] turn it, F mirrors it, Esc puts it down. `
