@@ -5082,6 +5082,11 @@
   // draw-origin -- so they are read from the skin rather than typed again
   // here, and they follow DAY and NIGHT without a second table.
   let northHover = false;
+  // WHERE THE ARROW WAS LAST PAINTED, which is a different question from
+  // where the dock is seated: the dock is HTML and moves the moment the rail
+  // reports a width, while the arrow is on the canvas and only moves on the
+  // next paint. The observer at the foot of this file compares the two.
+  let paintedNorthX = null;
   const northDock = document.getElementById('north-dock');
   const seatNorthDock = () => {
     if (!northDock) return;
@@ -5171,12 +5176,10 @@
     // but alow a 'glow ' around it" / "around the white lettering which is
     // tinted with the color".
     //
-    // TINTED, NOT REPLACED: the ink stays near-white and the HALO carries the
-    // colour, which is what "illuminated in that color" is. A needle painted
-    // flat green would read as a different arrow, not a lit one.
     // THE INK STAYS WHITE AND THE HALO CARRIES THE COLOUR, which is what
     // "illuminated in that color" is -- a needle painted flat green would
     // read as a different arrow rather than a lit one.
+    paintedNorthX = c.x;
     window.DraftNorth.drawPair(ctx, c.x, c.y, NORTH_R, northOf(), {
       cnColor: '#ffffff',
       tnColor: 'rgba(255,255,255,0.72)',
@@ -8785,10 +8788,20 @@
   // line up with, and nothing repaints the plan afterwards to try again.
   // A ResizeObserver is the real signal for "the columns are somewhere new",
   // which is the question being asked, rather than a retry on a timer.
+  // AND THE ARROW GOES WITH THE DOCK. Seating alone moves the HTML -- the
+  // hand and the turn button -- while the arrow itself is painted on the
+  // canvas and stays where the LAST paint put it, so the pair sat split until
+  // something else happened to repaint. The split was invisible to the eye
+  // (the hand is transparent) and perfectly visible to a canvas hash: three
+  // selection specs read the same drawing twice, got two pictures, and were
+  // right to say so.
   {
     const rail = document.getElementById('view-rail');
     if (rail && typeof ResizeObserver === 'function') {
-      new ResizeObserver(() => seatNorthDock()).observe(rail);
+      new ResizeObserver(() => {
+        seatNorthDock();
+        if (paintedNorthX !== null && northCentre().x !== paintedNorthX) paint();
+      }).observe(rail);
     }
   }
 
