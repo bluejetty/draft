@@ -43,6 +43,22 @@ const MUTATIONS = [
     c => c.replace("const GARAGE_DEFAULT_SIZE_ID = '24x26';", "const GARAGE_DEFAULT_SIZE_ID = '24x24';")],
   ['a frost-wall garage stops asking how big', 'build-menu.js',
     c => c.replace("foundation: 'frostwall', needsSize: true }", "foundation: 'frostwall' }")],
+  // ── THE TWO-STOREY DEFAULT (13 Oct) ─────────────────────────────────────
+  ['the two-storey garage falls back to the stock size, so its door wall is 24 ft',
+    'build-menu.js',
+    c => c.replace("const GARAGE_STOREY_DEFAULT_SIZE_ID = '30x24';",
+      "const GARAGE_STOREY_DEFAULT_SIZE_ID = '24x26';")],
+  ['the two-storey size comes out back to front, 24 across the door wall',
+    'build-menu.js',
+    c => c.replace("{ id: '30x24', label: \"30' x 24'\", widthFt: 30, depthFt: 24 }",
+      "{ id: '30x24', label: \"30' x 24'\", widthFt: 24, depthFt: 30 }")],
+  ['a thickened edge is told it carries a storey too', 'build-menu.js',
+    c => c.replace("foundation === 'frostwall' || foundation === 'gradebeam';",
+      "foundation !== null;")],
+  ['only the frost wall carries one, so a grade beam gets the stock garage',
+    'build-menu.js',
+    c => c.replace("foundation === 'frostwall' || foundation === 'gradebeam';",
+      "foundation === 'frostwall';")],
 ];
 
 if (MUTATE) {
@@ -66,8 +82,10 @@ const check = (name, condition, detail) => {
 };
 
 // ── THE THREE MOVIE NAMED, in his order ──────────────────────────────────
-check('the three stock sizes are his three, in his order',
-  BM.GARAGE_SIZES.map(size => size.id).join(' ') === '16x24 24x26 25x25',
+// The fourth, 30x24, is the two-storey one (13 Oct) and stands AFTER them:
+// his three are still his three, and the shelf grew rather than changed.
+check('the three stock sizes are his three, in his order, the two-storey after',
+  BM.GARAGE_SIZES.map(size => size.id).join(' ') === '16x24 24x26 25x25 30x24',
   JSON.stringify(BM.GARAGE_SIZES.map(size => size.id)));
 // WIDTH IS ACROSS THE DOOR WALL. 16x24 and 24x16 are different buildings
 // and the label cannot say which is which, so the numbers are pinned.
@@ -127,6 +145,40 @@ check('the default garage is 24x26, off the shelf',
   BM.garageDefaultSize()?.id === '24x26'
   && BM.garageDefaultSize() === BM.garageSizeById('24x26'),
   JSON.stringify(BM.garageDefaultSize()));
+
+// ── AND A SECOND DEFAULT, FOR A GARAGE THAT CARRIES A STOREY ─────────────
+// Movie, 13 Oct: "for 2 storey make it 24X30 and put the stairs along one
+// side", with the 30 on the door wall (his ruling when the two readings were
+// put to him) so two 8 ft doors, a man door and the stair's strip all fit.
+//
+// THE FOUNDATION IS WHAT DECIDES IT, so that is what is asked -- a caller
+// listing which two of the three ids mean "two storey" would be a second
+// copy of the rule, in the place least likely to be updated with it.
+check('a frost wall and a grade beam ask for the two-storey size',
+  BM.garageDefaultSizeFor('frostwall')?.id === '30x24'
+  && BM.garageDefaultSizeFor('gradebeam')?.id === '30x24',
+  JSON.stringify([BM.garageDefaultSizeFor('frostwall'), BM.garageDefaultSizeFor('gradebeam')]));
+check('a thickened edge, which carries none, keeps the stock 24x26',
+  BM.garageDefaultSizeFor('thickened')?.id === '24x26'
+  && BM.garageDefaultSizeFor(null)?.id === '24x26',
+  JSON.stringify(BM.garageDefaultSizeFor('thickened')));
+check('the two-storey default is off the shelf too, like the stock one',
+  BM.garageDefaultSizeFor('frostwall') === BM.garageSizeById('30x24'),
+  JSON.stringify(BM.garageSizeById('30x24')));
+// 30 ACROSS THE DOOR WALL, 24 BACK, and the pair is pinned for the reason
+// 16x24 is: the label cannot say which number is which, and a 24x30 would
+// put two overhead doors and a man door on a wall that cannot hold them.
+check('30x24 is 30 across the door wall by 24 back',
+  BM.garageSizeById('30x24').widthFt === 30
+  && BM.garageSizeById('30x24').depthFt === 24,
+  JSON.stringify(BM.garageSizeById('30x24')));
+check('garageCarriesStorey names the two that dig, and only those',
+  BM.garageCarriesStorey('frostwall') === true
+  && BM.garageCarriesStorey('gradebeam') === true
+  && BM.garageCarriesStorey('thickened') === false
+  && BM.garageCarriesStorey(null) === false,
+  JSON.stringify(['frostwall', 'gradebeam', 'thickened', null]
+    .map(BM.garageCarriesStorey)));
 
 // ── WHO ASKS THE QUESTION ────────────────────────────────────────────────
 // A HOUSE'S SIZE ARRIVES WITH ITS PREMADE DESIGN; a garage is a box, so

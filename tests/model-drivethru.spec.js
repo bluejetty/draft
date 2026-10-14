@@ -1240,14 +1240,46 @@ test('an unasked garage carries the default size to the seam', async ({ page }) 
     .toEqual({ w: 24, d: 26 });
 });
 
+test('and a garage that carries a storey carries the bigger default',
+  async ({ page }) => {
+    // Movie, 13 Oct: "for 2 storey make it 24X30 and put the stairs along one
+    // side". A frost wall or a grade beam arrives two storeys, and that
+    // garage is a different building — it has a stair in it, a man door
+    // leading to the stair, and two bays beside them. 30 ft of door wall is
+    // what holds all three; the thickened edge above keeps the stock 24x26
+    // because it carries no storey at all.
+    //
+    // ASKED AT THE SEAM, where the order is, rather than of the tile: the
+    // size that rides the order is the one that gets built.
+    await openWithNoBuilding(page);
+    await h.openDriveThru(page);
+    await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
+    await page.locator('#dt-tiles [data-build-entry="detached-frostwall"]').click();
+    const ordered = await page.evaluate(() => {
+      const seen = [];
+      window.ModelBuild.onOrder(order => seen.push(order.size));
+      document.getElementById('dt-bone').click();
+      return seen;
+    });
+    expect(ordered.length, 'the order never reached the seam').toBe(1);
+    expect({ w: ordered[0]?.widthFt, d: ordered[0]?.depthFt },
+      'a two-storey garage took the single-storey default')
+      .toEqual({ w: 30, d: 24 });
+  });
+
 test('the detached garage is asked how big, and the house never is',
   async ({ page }) => {
     await openPageAsking(page);
     await openGarage(page);
 
     await expect(page.locator('#build-sizes')).toBeVisible();
+    // THE FOURTH IS THE TWO-STOREY ONE (Movie, 13 Oct): a garage on a frost
+    // wall or a grade beam arrives with a room over it, and 30 ft of door
+    // wall is what carries its two bays, its man door and the stair's strip.
+    // It is on the shelf like the other three, so a drafter can press it for
+    // a single-storey garage too.
     await expect(page.locator('#size-stock button'))
-      .toHaveText(["16' x 24'", "24' x 26'", "25' x 25'", 'OTHER']);
+      .toHaveText(["16' x 24'", "24' x 26'", "25' x 25'", "30' x 24'", 'OTHER']);
     // AND GRUFF ASKS RATHER THAN PROMISING. Saying "press the bone and
     // I'll build it" with the size still open promises what the bone is
     // about to refuse.

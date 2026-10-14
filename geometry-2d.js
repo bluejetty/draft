@@ -813,6 +813,21 @@ if (!window.DraftGeometry2D) {
           if (Math.abs(ax * bz - az * bx) > 1e-4 || ax * bx + az * bz > -0.9999) continue;
           const tail = lenA <= lenB ? prev : next;
           if (Math.hypot(pt.x - tail.x, pt.z - tail.z) > eps) arcs.push({ a: pt, b: tail, ta: t, tb: t });
+          // THE LEFTOVER KEEPS ITS OWN KIND, AND IT IS NOT ALWAYS THE FIRST
+          // EDGE'S. The two edges either side of a spike point the opposite
+          // way, so one of them is entirely swallowed and the other is left
+          // with the difference. Dropping the point merges them into
+          // prev → next, which inherits loopKinds[prev] -- right when the
+          // FIRST edge is the longer one, wrong when it is the second, and
+          // the second is exactly the case `tail === prev` picks out. Left
+          // alone, an eave that still has run left in it carries on as a
+          // gable: it stops advancing, and the wavefront that should have
+          // met it halfway walks all the way over to it instead. That is a
+          // ridge in the wrong place -- a foot out on Movie's 13 Oct roof,
+          // where the two fronts should have met at 16 ft and the far one
+          // marched 17 -- and the planes either side of it inherit the
+          // error.
+          if (tail === prev) loopKinds[(index + size - 1) % size] = loopKinds[index];
           loopPts.splice(index, 1);
           loopKinds.splice(index, 1);
           trimmed = true;

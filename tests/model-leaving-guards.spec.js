@@ -137,6 +137,98 @@ test.describe('MODEL.html — leaving with unsaved work', () => {
       .toBe(5);
   });
 
+  // ── SAVE FIRST WHEN ANOTHER TAB HOLDS THE DRAWING ──────────────────────────
+  //
+  // Movie, 13 Oct: *"i'm tryint to choose SAVE FIRST but nothing is
+  // happening"* — with this exact dialog on screen and the corner banner
+  // reading BEING EDITED IN ANOTHER TAB at the same moment. The refusal was
+  // right: another tab held the lease, so the write would have been refused
+  // by the store, and the page declines to spend the drafter's attention
+  // finding that out. What was wrong is that the dialog said nothing. The
+  // whole answer was a chip in the opposite corner of the screen, behind the
+  // modal he was looking at.
+  //
+  // So: the same sentence under the three answers, and the one press that
+  // resolves it beside it. The refusal itself is unchanged — this is about
+  // the dialog being legible, not about letting the save through.
+  //
+  // MUTATION: drop `fileGuardLease.hidden = held` from paintLease. Fails.
+  test('SAVE FIRST refused by the lease says so under the buttons, and TAKE '
+    + 'OVER there is the way through', async ({ page, context }) => {
+      const f = await open(page);
+      await expect(page.locator('body'),
+        'this page starts with the drawing').toHaveAttribute('data-lease-held', '1',
+        { timeout: 10000 });
+      expect(await storedWalls(page)).toBe(4);
+      await drawOneWall(page, f);
+
+      // Another tab takes it — the state the screenshot was in.
+      const other = await context.newPage();
+      await other.goto('/MODEL.html?mode=night');
+      await expect(other.locator('#readout')).toContainText('walls', { timeout: 10000 });
+      await other.locator('[data-take-over]').click();
+      await expect(other.locator('body')).toHaveAttribute('data-lease-held', '1',
+        { timeout: 10000 });
+      await expect(page.locator('body'),
+        'and this one knows it has lost it').toHaveAttribute('data-lease-held', '0',
+        { timeout: 12000 });
+
+      await extFinish(page).click();
+      await expect(guard(page)).toBeVisible();
+      const note = page.locator('[data-guard-lease]');
+      await expect(note,
+        'the dialog itself says why SAVE FIRST cannot save').toBeVisible();
+      await expect(note).toContainText(/being edited in another tab/i);
+      // UNDER THE THREE ANSWERS, which is where he was looking. The corner
+      // banner was already on screen and carried the same words; being in the
+      // corner is the entire reason it did not land.
+      expect(await page.evaluate(() => {
+        const row = document.querySelector('#file-guard .promote-row');
+        const n = document.querySelector('[data-guard-lease]');
+        return !!(row && n
+          && (row.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING));
+      }), 'under the buttons, not above them').toBe(true);
+
+      // THE PRESS THAT APPEARED TO DO NOTHING. It still does not save — the
+      // store would refuse it — but the dialog no longer sits there mute, and
+      // the edit is still in hand.
+      await page.locator('[data-guard-save]').click();
+      await page.waitForTimeout(800);
+      await expect(guard(page), 'the guard stays up, holding the question').toBeVisible();
+      expect(page.url(), 'and the browser did not leave').toContain('MODEL.html');
+      expect(await storedWalls(page), 'nothing was written').toBe(4);
+      expect(await beacon(page), 'and the wall is still unsaved, still there').toBe('1');
+      await expect(note, 'with the reason still on screen').toBeVisible();
+
+      // The resolution, in the dialog rather than across the screen. It takes
+      // the lease and nothing else: SAVE FIRST is still the commit point.
+      await page.locator('#file-guard [data-guard-take-over]').click();
+      await expect(page.locator('body')).toHaveAttribute('data-lease-held', '1',
+        { timeout: 10000 });
+      await expect(note, 'the note goes when the reason for it goes').toBeHidden();
+      await expect(guard(page), 'and the question is still being asked').toBeVisible();
+
+      await page.locator('[data-guard-save]').click();
+      await page.waitForURL(/EXTFINISH\.html/, { timeout: 12000 });
+      expect(await storedWalls(page), 'and now SAVE FIRST saves').toBe(5);
+    });
+
+  // AND THE NOTE IS NOT SIMPLY ALWAYS THERE. Every "it is visible" check
+  // above is satisfied by a note that was never hidden — which is the shape
+  // of bug this page has already shipped once, an inline style beating
+  // `[hidden]` on the lease banner itself.
+  test('a page that holds the drawing shows no such note', async ({ page }) => {
+    const f = await open(page);
+    await expect(page.locator('body')).toHaveAttribute('data-lease-held', '1',
+      { timeout: 10000 });
+    await drawOneWall(page, f);
+    await extFinish(page).click();
+    await expect(guard(page)).toBeVisible();
+    await expect(page.locator('[data-guard-lease]')).toBeHidden();
+    await expect(page.locator('[data-lease-banner]'),
+      'nor the corner banner it mirrors').toBeHidden();
+  });
+
   test('Discard goes, and is honest about it', async ({ page }) => {
     const f = await open(page);
     await drawOneWall(page, f);

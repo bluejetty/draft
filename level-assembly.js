@@ -218,6 +218,37 @@ if (!window.DraftLevelAssembly) {
   // this table is allowed to replace.
   const STOREY_STORED = Object.freeze({ 2: 'ENTRY', 3: 'MAIN FL', 4: 'OVER GARAGE', 5: '2ND FL' });
 
+  // ── A HALF LEVEL AND ITS WHOLE ONE ARE ONE STOREY TO FRAME ──────────────
+  //
+  // Movie, 13 Oct, on a MOD BILEVEL whose main floor beam had been filed
+  // against the ENTRY landing: "lets consider the 0.5 and 1 storey as ONE
+  // 'level' for this situation".
+  //
+  // THE TABLE ABOVE ALREADY SAYS IT. STOREY_FLOOR reads 2 and 3 as MAIN FL
+  // and 4 and 5 as 2ND FL -- a half level is a PART of the floor above it,
+  // which is why they are numbered 0.5 and 1 rather than given names of
+  // their own. What was missing is anything that ASKED: the framing walked
+  // the floor list one entry at a time, so a landing six feet across came
+  // between the foundation and the floor it actually holds up, and the beam
+  // under a 61 ft house was sized by the landing and drawn on its sheet.
+  //
+  // ONE STOREY IS THE SET OF LEVELS SHARING A FLOOR NAME, and a level the
+  // table does not know is a storey of its own -- a drafter's own level
+  // (ids from 9 up) has no half to pair with and must not be folded into
+  // somebody else's. `storeyKeyOf` returns that name or the id itself, so
+  // the comparison is one `===` wherever this is asked.
+  const storeyKeyOf = levelId => STOREY_FLOOR[levelId] || `level ${Number(levelId)}`;
+  const sameStorey = (a, b) => storeyKeyOf(a) === storeyKeyOf(b);
+  // THE LEVEL THAT SPEAKS FOR THE STOREY is its WHOLE one, not its half: the
+  // storey is called MAIN FL because of level 3, and a message naming
+  // "0.5 MAIN FL" as the floor being framed would name the landing again.
+  // Highest id wins, which is the whole number in every pair the table has
+  // (3 over 2, 5 over 4) and the only member when there is no pair.
+  const storeyHeadOf = (levelIds, levelId) => (levelIds || [])
+    .map(Number)
+    .filter(id => sameStorey(id, levelId))
+    .sort((a, b) => b - a)[0];
+
   const levelLabel = (levelId, storedName) => {
     const number = STOREY_NUMBER[levelId];
     const stored = String(storedName == null ? '' : storedName).trim();
@@ -694,7 +725,11 @@ if (!window.DraftLevelAssembly) {
     normaliseLevelAssembly,
     levelRole,
     levelLabel,
+    storeyKeyOf,
+    sameStorey,
+    storeyHeadOf,
     STOREY_NUMBER,
+    STOREY_FLOOR,
     LEVEL_ROLES,
     ROLE_BY_LEVEL_ID,
     FOUNDATION_POUR_FT,

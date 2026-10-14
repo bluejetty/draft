@@ -328,6 +328,38 @@ check('an L with eaves at its inside corner keeps the wavefront-s valley',
     return [arcs.some(a => (Math.hypot(a.a.x - 10, a.a.z - 10) < 1e-6 && Math.hypot(a.b.x - 5, a.b.z - 5) < 1e-6)
       || (Math.hypot(a.b.x - 10, a.b.z - 10) < 1e-6 && Math.hypot(a.a.x - 5, a.a.z - 5) < 1e-6)), true]; });
 
+// ── A SPIKE THAT LEAVES AN EAVE WITH RUN STILL IN IT ─────────────────────
+//
+// Movie, 13 Oct, with five screenshots: "something messed up on this roof:
+// when i changed to gable didn't work out too good". His own footprint, moved
+// to the origin so the numbers are whole: a 65 x 32 staircase with three
+// eaves -- the bottom (z 0), the top of the left body (z 23), and the top of
+// the right wing (z 32) -- and gables everywhere else.
+//
+// THE EVENT. At t 15 the wing's eave has come all the way down onto the gable
+// at z 17 over the 24 ft that gable spans, and folds back over itself: a
+// spike, with the swallowed gable on one side and 19 ft of eave still unspent
+// on the other. Dropping the spike point merges the two into one edge -- and
+// that edge inherited the GABLE's kind, so the eave with 19 ft left in it
+// stopped dead. The other eave then had to walk the whole way over to it: the
+// ridge landed on z 17 at t 17, where two eaves 32 ft apart meet at 16.
+//
+// WHY THE CHECKS ABOVE CANNOT SEE IT. Both answers put two planes on the
+// footprint and both tile it exactly -- 1474 sq ft either way. The ridge is
+// simply in the wrong place, and the planes either side of it are the wrong
+// shape by the same foot. Only reading the arcs catches that, which is why
+// this check reads them.
+const MOVIE_STAIR = [P(65, 32), P(65, 17), P(41, 17), P(41, 0), P(0, 0), P(0, 23), P(22, 23), P(22, 32)];
+const MOVIE_STAIR_EDGES = ['gable', 'gable', 'gable', 'eave', 'gable', 'eave', 'gable', 'eave'];
+check('his staircase: the two eaves meet halfway, not at the gable they swallowed',
+  G => { const roof = { points: MOVIE_STAIR, edges: MOVIE_STAIR_EDGES, pitch: PITCH };
+    return [G.roofSkeleton(roof).map(lineOf).sort().join(' | '),
+      ['0,11.5@11.5 > 22,11.5@11.5',   // the left body, 23 ft between its eaves
+        '22,11.5@11.5 > 22,23@0', '22,11.5@11.5 > 22,15@15',
+        '22,15@15 > 22,16@16', '22,16@16 > 22,17@15',
+        '22,16@16 > 41,16@16',         // ← 16, not 17: 32 ft between two eaves
+        '22,17@15 > 22,20.5@11.5', '22,20.5@11.5 > 22,32@0'].sort().join(' | ')]; });
+
 function run() {
   const G = load(null);
   let failed = 0;
@@ -391,6 +423,12 @@ const MUTATIONS = [
   ['only the first of the two loops a split makes is trimmed',
     s => s.replace('        settle(loopA);\n        settle(loopB);',
       '        settle(loopA);\n        queue.push(loopB);')],
+  // THE SPIKE'S LEFTOVER TAKES THE FIRST EDGE'S KIND WHICHEVER WAY ROUND IT
+  // WAS. Right half the time by luck -- when the first edge is the longer
+  // one, the leftover really is its own. The other half an eave with run
+  // still in it is relabelled a gable and stops where it stood.
+  ['a spike leaves its leftover wearing the wrong kind',
+    s => s.replace('          if (tail === prev) loopKinds[(index + size - 1) % size] = loopKinds[index];\n', '')],
   // The loops a split makes carry the wavefront-s advance at the pinch.
   // Restart them at zero and every arc beyond the pinch reports a height
   // measured from the wrong place.

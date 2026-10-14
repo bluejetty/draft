@@ -172,10 +172,24 @@ test('the framing round the entry: fill walls in the overlap, the post between t
     back.forEach(w => [w.start.x, w.end.x].forEach(x =>
       expect(x <= wellL + 1e-6 || x >= wellR - 1e-6, 'no fill across the stairs').toBe(true)));
     // Posts on FOUNDATION, on pads: the two inside corners, the gap, and each
-    // end of each stairwell beam.
+    // end of each stairwell beam -- SEVEN from the entry's own framing.
+    //
+    // AND THE MAIN FLOOR'S OWN TELEPOSTS BESIDE THEM, which is why this
+    // reads nine. Movie, 13 Oct: "lets consider the 0.5 and 1 storey as ONE
+    // 'level' for this situation". The landing used to be a storey of its
+    // own standing between FOUNDATION and MAIN FL, so the main floor was
+    // framed BY the landing and its beam and posts were filed on the
+    // landing's sheet. They have not been added -- they have moved down to
+    // the plan they were always standing on.
     const posts = d.columns.filter(c => Number(c.levelId) === 1 && c.view === 'foundation'
       && c.footing === 'pad36');
-    expect(posts.length).toBe(7);
+    expect(posts.length).toBe(9);
+    // AND THE LANDING CARRIES NONE, which is the other half of the same
+    // fact: without this the count above is satisfied by a frame that put
+    // posts in both places.
+    expect(d.columns.filter(c => Number(c.levelId) === 2
+      && !String(c.footing || '').startsWith('pile')).length,
+    'teleposts left standing on the landing').toBe(0);
     const at = (x, z) => posts.some(c => Math.abs(c.point.x - x) < 1e-3 && Math.abs(c.point.z - z) < 1e-3);
     const backZ = 14 - 1.75 / 12;
     expect(at(-10 - 1.75 / 12, backZ), 'left inside corner').toBe(true);

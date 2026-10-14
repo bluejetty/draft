@@ -175,6 +175,18 @@ if (!window.DraftBuildMenu) {
     Object.freeze({ id: '16x24', label: "16' x 24'", widthFt: 16, depthFt: 24 }),
     Object.freeze({ id: '24x26', label: "24' x 26'", widthFt: 24, depthFt: 26 }),
     Object.freeze({ id: '25x25', label: "25' x 25'", widthFt: 25, depthFt: 25 }),
+    // THE TWO-STOREY ONE. Movie, 13 Oct: "for 2 storey make it 24X30 and put
+    // the stairs along one side", then "place a 2 garage doors 8ft each and 1
+    // man door 36 along one wall", then "make each car bay approx 12 each and
+    // then 4fet left for the mandoor and stairs".
+    //
+    // THE 30 IS THE DOOR WALL, which is his own ruling once the two readings
+    // were put to him. Two 8 ft doors and a 3 ft man door are 19 ft of
+    // opening: on a 24 ft wall that leaves 1'-3" of pier between two
+    // overheads, where 30 ft carries two ~13 ft bays and the 4 ft strip he
+    // asked for. The 24 ft of depth is his 8 ft entry plus the stair run,
+    // with room behind it.
+    Object.freeze({ id: '30x24', label: "30' x 24'", widthFt: 30, depthFt: 24 }),
   ]);
 
   // AND ONE OF THEM IS THE DEFAULT, because the board stopped asking. Movie,
@@ -190,6 +202,15 @@ if (!window.DraftBuildMenu) {
   // is, and the day the question comes back the default is already on the
   // board wearing its own label.
   const GARAGE_DEFAULT_SIZE_ID = '24x26';
+  // AND A SECOND DEFAULT FOR A GARAGE THAT CARRIES A STOREY. A frost wall or
+  // a grade beam arrives two storeys (13 Oct), and that garage is a different
+  // building: it has a stair in it and a man door leading to the stair, so it
+  // needs the wall and the depth to hold them. A thickened edge carries no
+  // storey and keeps the stock 24x26.
+  //
+  // STILL ONE OF THE SHELF'S OWN, for the reason above: a drafter can press
+  // this size himself, and there is one list of what a garage is.
+  const GARAGE_STOREY_DEFAULT_SIZE_ID = '30x24';
 
   // THE FOURTH OPTION HAS BOUNDS, and they are here rather than in the page
   // because a typed size is the one a drafter can get wrong. Below 8ft
@@ -202,6 +223,15 @@ if (!window.DraftBuildMenu) {
   // that has been renamed or dropped answers null and is caught, instead of
   // quietly building a box no list agrees exists.
   const garageDefaultSize = () => garageSizeById(GARAGE_DEFAULT_SIZE_ID);
+  // WHICH DEFAULT A FOUNDATION ASKS FOR. The foundation is the thing that
+  // decides whether there is a storey, so it is the thing asked -- rather
+  // than the caller remembering which two of the three ids mean "two storey"
+  // in a second place.
+  const garageCarriesStorey = foundation =>
+    foundation === 'frostwall' || foundation === 'gradebeam';
+  const garageDefaultSizeFor = foundation => (garageCarriesStorey(foundation)
+    ? garageSizeById(GARAGE_STOREY_DEFAULT_SIZE_ID)
+    : garageSizeById(GARAGE_DEFAULT_SIZE_ID));
   // A typed pair, checked and named, or null. Returning the same shape as a
   // stock size means the caller has one kind of thing to carry: whoever
   // builds the box never asks which of the four the drafter pressed.
@@ -233,7 +263,10 @@ if (!window.DraftBuildMenu) {
     BUILD_MENU,
     GARAGE_SIZES,
     GARAGE_DEFAULT_SIZE_ID,
+    GARAGE_STOREY_DEFAULT_SIZE_ID,
     garageDefaultSize,
+    garageDefaultSizeFor,
+    garageCarriesStorey,
     GARAGE_SIZE_MIN_FT,
     GARAGE_SIZE_MAX_FT,
     garageSizeById,

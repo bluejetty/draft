@@ -2763,6 +2763,33 @@ class Component extends PageLogic {
 
   _onKeyDown(e) {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    // ── CTRL+Z REACHES THE HISTORY THAT WAS ALREADY THERE ──────────────────
+    //
+    // Movie, 13 Oct: "i accidentally moved the viewport and then tried CNTL-Z
+    // to undo the move i just made, but didn't work, can we put the UNDO
+    // CNTL-Z function for this in LAYOUT view."
+    //
+    // THE UNDO WAS NOT MISSING. The stack, the snapshot taken on every sheet
+    // change and both strip buttons have been here since the history went
+    // in; this handler took Escape and Delete and never looked at a
+    // modifier, so the only door to sixty steps of history was a button he
+    // had no reason to look for. The press he reached for is the one every
+    // other drawing program has, and it went nowhere.
+    //
+    // CTRL AND META BOTH, since this runs on a Mac as readily as a PC, and
+    // all three spellings of redo: Ctrl+Y is the Windows one, Ctrl+Shift+Z
+    // is everything else's.
+    //
+    // preventDefault, so the browser does not ALSO undo in some field behind
+    // the sheet -- and the guard above has already handed a real text box
+    // its own undo before this runs.
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      const key = String(e.key || '').toLowerCase();
+      if (key === 'z' && !e.shiftKey) { e.preventDefault(); this._undoLayout(); return; }
+      if (key === 'y' || (key === 'z' && e.shiftKey)) {
+        e.preventDefault(); this._redoLayout(); return;
+      }
+    }
     // ESCAPE ANSWERS THE QUESTION FIRST, and answers it N. It is the only key
     // the dialog takes, and it must not fall through to the two lines below:
     // those clear the selection, and the selection is what the question is

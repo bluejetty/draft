@@ -636,6 +636,50 @@ suite('drawBeam2D', 'a printing pass draws the beam and drops the label', R => {
   expect('but nothing is written', count(ctx, 'fillText'), 0);
 });
 
+// ── THE SAME BEAM SEEN FROM THE FLOOR IT HOLDS UP ───────────────────────────
+//
+// Movie, 13 Oct: "the main floor support beam should show on the MAIN FLOOR
+// (layout) and the foundation plan". One record, two sheets -- the second one
+// draws it as context, so it has to be TELLABLE from a beam that is really on
+// this plan, and it still has to print.
+suite('drawBeam2D', 'a beam below reads as below, and still prints', R => {
+  const ctx = recordingCtx();
+  R.drawBeam2D(ctx, toS, SPAN, { below: true }, structEnv());
+  expect('it says it is below', calls(ctx, 'fillText')[0][0], 'FLUSH BEAM BELOW');
+  expect('and is drawn lighter than one on this plan',
+    sets(ctx, 'globalAlpha').pop() < 1, true);
+  // NOT HIDDEN FROM THE PRINTER. The sheet that goes out carrying the beam
+  // under the floor is the whole of the request, so this is alpha and not a
+  // no-print rule.
+  const printed = recordingCtx();
+  R.drawBeam2D(printed, toS, SPAN, { below: true }, structEnv({ isPrinting: true }));
+  expect('the span prints', count(printed, 'stroke') > 0, true);
+  // A dropped beam keeps saying it is dropped.
+  const dropped = recordingCtx();
+  R.drawBeam2D(dropped, toS, { ...SPAN, mode: 'dropped' }, { below: true }, structEnv());
+  expect('and a dropped one says both', calls(dropped, 'fillText')[0][0], 'DROPPED BEAM BELOW');
+});
+
+// AND A BEAM ON THIS PLAN IS NOT DIMMED, which is the half that makes the
+// check above mean anything: without it, drawing every beam faint passes.
+suite('drawBeam2D', 'a beam on this plan is at full weight and says nothing about below', R => {
+  const ctx = recordingCtx();
+  R.drawBeam2D(ctx, toS, SPAN, {}, structEnv());
+  expect('no dimming', sets(ctx, 'globalAlpha').length, 0);
+  expect('and no BELOW on the label', calls(ctx, 'fillText')[0][0], 'FLUSH BEAM');
+});
+
+// THE POSTS COME WITH IT. A beam on the floor it carries, drawn over posts at
+// full weight, reads as a beam on this plan that someone dimmed by mistake.
+suite('drawColumn2D', 'a post below is drawn as lightly as the beam it holds', R => {
+  const ctx = recordingCtx();
+  R.drawColumn2D(ctx, toS, { point: { x: 4, z: 4 } }, { below: true }, structEnv());
+  expect('the post is lighter', sets(ctx, 'globalAlpha').pop() < 1, true);
+  const own = recordingCtx();
+  R.drawColumn2D(own, toS, { point: { x: 4, z: 4 } }, {}, structEnv());
+  expect('and one on this plan is not', sets(own, 'globalAlpha').length, 0);
+});
+
 suite('drawBeam2D', 'a beam with no ends is not a beam', R => {
   const ctx = recordingCtx();
   R.drawBeam2D(ctx, toS, { id: 2, mode: 'flush' }, {}, structEnv());
@@ -1353,6 +1397,50 @@ suite('drawDimension2D', 'the size changes at the width of the figure', R => {
     dimFont(R, { start: { x: 0, z: 0 }, end: { x: 3.7, z: 0 } }), FULL_11);
   expect('3.5 ft leaves 23px for the same figure, so it steps down',
     dimFont(R, { start: { x: 0, z: 0 }, end: { x: 3.5, z: 0 } }), TIGHT_8);
+});
+
+// ── AND IT STEPS OUTBOARD ───────────────────────────────────────────────────
+//
+// Movie, 13 Oct, marking in red where he wanted them: "for the 'smaller'
+// sized dimensions INT WALL, roof overhang etc. can you position the text
+// over/under the line (put it FURTHER from the house - on the side AWAY from
+// the house".
+//
+// WHICH SIDE IS THE POINT, not merely that it moved. The painter has no idea
+// where the house is -- but it already knows which way it stood the line off
+// from what it measures, and outboard is further the same way. So these read
+// the figure against the RECORD (z = 0, screen y 300) and against the line.
+// The sheet case is here because it is the one where the two swap roles: the
+// line is ON the record and the ticks reach back toward the building, so a
+// push that merely copied the screen's arithmetic would land the figure
+// inside the house.
+//
+// labelAlongLine2D translates to the midpoint of the line it is handed, so
+// the translate is where the figure went.
+const dimLabelAt = (R, dim, env = dimEnv) => {
+  const ctx = recordingCtx();
+  R.drawDimension2D(ctx, toS, dim, {}, env);
+  return calls(ctx, 'translate').pop();
+};
+suite('drawDimension2D', 'a stepped-down figure sits off the line, away from what it measures', R => {
+  const TIGHT = { start: { x: 0, z: 0 }, end: { x: 0.3, z: 0 } };
+  const ROOMY = { start: { x: 0, z: 0 }, end: { x: 12, z: 0 } };
+  expect('a full-size figure is still on its line', dimLabelAt(R, ROOMY)[1], 319);
+  expect('the stepped-down one is off it', dimLabelAt(R, TIGHT)[1], 329);
+  expect('on the far side of the line from what it measures',
+    dimLabelAt(R, TIGHT)[1] > 319, true);
+  expect('and still centred on its run', dimLabelAt(R, TIGHT)[0], 401.5);
+
+  const sheet = { ...dimEnv, atLine: true };
+  expect('a sheet puts the full-size figure on the record',
+    dimLabelAt(R, ROOMY, sheet)[1], 300);
+  expect('and steps the tight one off it, away from the ticks',
+    dimLabelAt(R, TIGHT, sheet)[1], 310);
+
+  // IN PAPER UNITS like the rest of this painter's ink, so a zoomed sheet
+  // holds the gap instead of closing it.
+  expect('twice the zoom is twice the step',
+    dimLabelAt(R, TIGHT, { ...dimEnv, atLine: true, inkScale: 2 })[1], 320);
 });
 
 // AND IT IS STILL PRINTED. Stepping down is not hiding: a figure too big
@@ -3367,6 +3455,28 @@ function coverage() {
   const BRANCH_MUTATIONS = [
     ['drawDimension2D never shrinks a figure too big for its run', neverShrinkTheFigure],
     ['drawDimension2D shrinks every figure, room or not', alwaysShrinkTheFigure],
+    // The step outboard, wrong in each of the two ways it can be wrong: not
+    // taken at all (back on the line, which is the sheet he photographed),
+    // and taken toward the house instead of away from it. The second is the
+    // one no screenshot of a single wall would catch.
+    // THE BEAM BELOW, wrong in each of the two ways it can be: drawn at full
+    // weight (so it reads as a beam in this floor) and not saying what it is.
+    // ANCHORED PAST THE LINE ITSELF, because `if (below)` reads the same in
+    // drawBeam2D and in drawColumn2D and a bare match takes whichever comes
+    // first. mutant-anchors-harness called this ambiguous the moment it was
+    // written, which is the job it is there to do.
+    ['drawBeam2D draws a beam below at full weight',
+      src => src.replace('    if (below) ctx.globalAlpha = 0.45;\n    ctx.beginPath();\n    ctx.moveTo(a.x, a.y);',
+        '    ctx.beginPath();\n    ctx.moveTo(a.x, a.y);')],
+    ['drawBeam2D does not say a beam below is below',
+      src => src.replace(" + (below ? ' BELOW' : '')", '')],
+    ['drawColumn2D draws a post below at full weight',
+      src => src.replace('    if (below) ctx.globalAlpha = 0.45;\n    if (!centreOnly) {',
+        '    if (!centreOnly) {')],
+    ['drawDimension2D leaves the stepped-down figure on its line',
+      src => src.replace('const push = tight ? 10 * k : 0;', 'const push = 0;')],
+    ['drawDimension2D steps the tight figure toward the house',
+      src => src.replace('const push = tight ? 10 * k : 0;', 'const push = tight ? -10 * k : 0;')],
     ['strokeSegPath2D bulge branch', dropBulge],
     ['drawWallSeg2D mitre path', dropMitre],
     ['drawOrigin2D env colour', dropOriginEnvColour],

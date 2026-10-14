@@ -428,6 +428,76 @@ if (!window.DraftTracedPlans) {
     return best ? best.i : null;
   };
 
+  // ── THE END THAT DIES INTO THE HOUSE DIES IN ONE LINE ────────────────────
+  //
+  // Movie, 13 Oct, on his own roof plan with the water drawn in red arrows:
+  // "when the roof on the garage goes up into a corner like this, it should
+  // go FULL gable" -- "only the full gable on the part that connects to the
+  // house (not how it jogs back and there are 2 gables originally".
+  //
+  // A garage loop carries the tie's notch at the house corner, so the end
+  // that meets the house is a STAIRCASE: the long wall, a short step, and a
+  // stub. `flushEdge` above names the longest of those as the gable and the
+  // step beside it stays an eave, which is the jog in his plan and the
+  // inside corner that sheds into the house rather than away from it.
+  //
+  // THE WHOLE END COMES ONTO ONE LINE -- the line of the longest stretch
+  // that is actually on the house, which is the wall the roof dies into.
+  // Not the loop's bounding box: that would push the roof OUT over the
+  // house, which is right for a garage that oversails it (garage-roofs
+  // takes the hull for exactly that case) and wrong for one dying into it.
+  //
+  // THE RUN REACHES PAST THE COVERED PART, because a garage standing proud
+  // of the house's side wall meets it for only part of that end and the
+  // rest is open air on the same line. Squaring only the covered part
+  // leaves the jog one edge further along -- measured, not reasoned.
+  // THE NOTCH IT FILLS IS SMALL BY DEFINITION. A tie notch is a bite out of
+  // one corner; a garage that is genuinely L-shaped is a different building
+  // and must come through untouched, so the squaring only runs when what it
+  // would add is a tenth of the roof or less.
+  const SQUARE_FILL_SHARE = 0.1;
+  const areaOf = loop => Math.abs(loop.reduce((sum, p, i) => {
+    const q = loop[(i + 1) % loop.length];
+    return sum + (p.x * q.z - q.x * p.z);
+  }, 0)) / 2;
+  const squareJoin = (loop, other) => {
+    const ring = clean(loop || []);
+    if (ring.length < 4 || !Array.isArray(other) || other.length < 3) return ring;
+    // SQUARE CORNERS ONLY. The bounding rectangle of a loop with a slanted
+    // edge is not a shape anyone drew, and the tie notch this is for is
+    // always axis-aligned.
+    const square = ring.every((p, i) => {
+      const q = ring[(i + 1) % ring.length];
+      return Math.abs(p.x - q.x) < TOL || Math.abs(p.z - q.z) < TOL;
+    });
+    if (!square) return ring;
+    const xs = ring.map(p => p.x), zs = ring.map(p => p.z);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    const z0 = Math.min(...zs), z1 = Math.max(...zs);
+    const box = [pt(x0, z0), pt(x1, z0), pt(x1, z1), pt(x0, z1)];
+    const mine = areaOf(ring);
+    if (!(mine > TOL) || areaOf(box) - mine > mine * SQUARE_FILL_SHARE) return ring;
+    // AND THE SIDE THAT MEETS THE HOUSE COMES BACK ONTO THE HOUSE'S LINE.
+    // The box alone would push that end OUT over the house by the depth of
+    // the notch -- right for a garage that oversails it, wrong for one dying
+    // into it. The wall it dies into is the longest stretch of the ring that
+    // is really on the house; the box edge parallel to it and nearest to it
+    // is the one that moves.
+    const edges = edgesOf(ring);
+    const on = edges.map(e => coveredLength(e, other));
+    const main = on.reduce((best, len, i) => (len > on[best] ? i : best), 0);
+    if (!(on[main] > TOL)) return clean(box);
+    const a = ring[main], b = ring[(main + 1) % ring.length];
+    const vertical = Math.abs(b.x - a.x) < TOL;
+    const line = vertical ? a.x : a.z;
+    const pull = p => (vertical
+      ? pt(Math.abs(p.x - (Math.abs(line - x0) < Math.abs(line - x1) ? x0 : x1)) < TOL
+        ? line : p.x, p.z)
+      : pt(p.x, Math.abs(p.z - (Math.abs(line - z0) < Math.abs(line - z1) ? z0 : z1)) < TOL
+        ? line : p.z));
+    return clean(box.map(pull));
+  };
+
   // ── THE BILEVEL'S LANDING ──────────────────────────────────────────────
   // The house's front edge (the straight run furthest toward +z) and where
   // on it the 12 x 6 landing goes: straddling the garage line, or centred.
@@ -607,23 +677,27 @@ if (!window.DraftTracedPlans) {
       // ONE ROOF over the house and the room; the rest of the garage keeps
       // its own, lower, dying into the room.
       plan.houseRoof = unionLoops(H, over.room) || H;
-      plan.garageRoof = over.rest;
-      plan.garageRoofHouseEnd = over.rest ? flushEdge(over.rest, over.room) : null;
+      plan.garageRoof = over.rest ? squareJoin(over.rest, over.room) : over.rest;
+      plan.garageRoofHouseEnd = plan.garageRoof
+        ? flushEdge(plan.garageRoof, over.room) : null;
       if (plan.houseRoof === H) plan.overGarageRoof = over.room;
       return plan;
     }
     if (storeys > 1) {
-      // THE DROPPED GARAGE: two roofs.
+      // THE DROPPED GARAGE: two roofs, and the lower one's end against the
+      // house is ONE gable (Movie, 13 Oct) -- squared before the flush edge
+      // is named, or the step beside it stays an eave and the corner
+      // between them sheds into the house.
       plan.houseRoof = H;
-      plan.garageRoof = Graw;
-      plan.garageRoofHouseEnd = flushEdge(Graw, H);
+      plan.garageRoof = squareJoin(Graw, H);
+      plan.garageRoofHouseEnd = flushEdge(plan.garageRoof, H);
       return plan;
     }
     // A BUNGALOW'S GARAGE: one roof over both, or two if they will not join.
     const one = unionLoops(H, Graw);
     plan.houseRoof = one || H;
-    plan.garageRoof = one ? null : Graw;
-    plan.garageRoofHouseEnd = one ? null : flushEdge(Graw, H);
+    plan.garageRoof = one ? null : squareJoin(Graw, H);
+    plan.garageRoofHouseEnd = one ? null : flushEdge(plan.garageRoof, H);
     return plan;
   };
 
@@ -638,6 +712,7 @@ if (!window.DraftTracedPlans) {
     ROOM_OVER_GARAGE_FT, ROOM_OVER_MIN_FT, ROOM_OVER_CANTILEVER_FT,
     clean, edgesOf, coveredSpans, splitAt, unionLoops, roomOverGarage,
     entrySpot, notch, needsGarage, planFromTrace, detachedFromTrace, flushEdge,
+    squareJoin,
   });
 })();
 }

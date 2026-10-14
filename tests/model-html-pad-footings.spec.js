@@ -46,8 +46,15 @@ const SPY = `
             // The page resolves a footing and the painter only draws it, so
             // the diameter a pile is drawn at is decided HERE, on the way in
             // -- and a count cannot tell an 8" pile from a 6" one.
+            // AND A BEAM RECORDS WHETHER IT WAS DRAWN AS THE ONE BELOW.
+            // The sheet a beam is shown ON and the sheet it is FILED on are
+            // two different things now, and a count cannot tell the floor
+            // layout showing the beam under it from the floor layout having
+            // grown a beam of its own.
             (window.__paintCalls[name] = window.__paintCalls[name] || []).push(
-              name === 'drawColumn2D' ? (args[3]?.footing?.sizeIn ?? null) : 1);
+              name === 'drawColumn2D' ? (args[3]?.footing?.sizeIn ?? null)
+                : name === 'drawBeam2D' ? (args[3]?.below === true ? 'below' : 'own')
+                  : 1);
             return member.apply(this, args);
           };
         } else copy[name] = member;
@@ -220,6 +227,53 @@ test('each plan draws the openings in the floor above it', async ({ page }) => {
     'the main floor drew the wrong storey’s openings')
     .toBe(openingsOn(SECOND_FL));
 });
+
+// ── AND WHAT IS HOLDING THE FLOOR UP ───────────────────────────────────────
+//
+// Movie, 13 Oct: "the main floor support beam should show on the MAIN FLOOR
+// (layout) and the foundation plan". The beam is filed on the level that
+// frames the floor -- a basement beam is in the basement -- so this is the
+// second sheet, drawn as context from the one record rather than filed twice.
+test('a floor layout shows the beam holding it up, and the foundation still owns it',
+  async ({ page }) => {
+    await page.addInitScript(SPY);
+    await seed(page);
+    await page.goto('/MODEL.html?left=1&right=1');
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+    await order(page, 'bungalow', 'twoStorey');
+    await saveNow(page);
+    const saved = await savedFile(page);
+
+    const filed = (saved.beams || [])
+      .filter(b => Number(b.levelId) === FOUNDATION && b.view === 'foundation').length;
+    expect(filed, 'the build placed no beam, so every count below proves nothing')
+      .toBeGreaterThan(0);
+    const beams = calls => calls.drawBeam2D || [];
+
+    // THE SHEET HE ASKED FOR.
+    const onLayout = await paintedOn(page, MAIN_FL, 'floor');
+    expect(beams(onLayout).filter(v => v === 'below').length,
+      'the main floor layout does not show the beam under it')
+      .toBe(filed);
+
+    // AND THE FOUNDATION STILL DRAWS IT AS ITS OWN, at full weight -- it is
+    // that plan's beam, and dimming it there would be the fix overshooting.
+    const onFoundation = await paintedOn(page, FOUNDATION, 'foundation');
+    expect(beams(onFoundation).filter(v => v === 'own').length,
+      'the foundation stopped drawing its own beam').toBe(filed);
+    expect(beams(onFoundation).filter(v => v === 'below').length,
+      'the foundation drew its own beam as though it belonged to another plan')
+      .toBe(0);
+
+    // AND NOT ON THE WALLS PLAN OF THE SAME LEVEL. He named the LAYOUT; the
+    // walls plan is about what stands on this floor, not what is under it.
+    const onWalls = await paintedOn(page, MAIN_FL, 'plan');
+    expect(beams(onWalls).length,
+      'the beam below reached the walls plan too').toBe(0);
+    expect(Object.keys(onWalls).length,
+      'the walls plan painted nothing at all, so that zero proves nothing')
+      .toBeGreaterThan(0);
+  });
 
 test('the top storey has nothing overhead to draw', async ({ page }) => {
   // The top storey carries a ROOF, and floorCarriedBy hands back null for it --
