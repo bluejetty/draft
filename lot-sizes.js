@@ -212,14 +212,59 @@ if (!window.DraftLotSizes) {
   //
   // WOUND THE SAME WAY AS EVERY OTHER OUTLINE, clockwise in plan, so the
   // offset and area readers that assume a winding get the one they assume.
-  const lotRectanglePoints = (widthFt, depthFt, { centerX = 0, centerZ = 0 } = {}) => {
+  // ── WHICH WAY THE LOT FACES ──────────────────────────────────────────
+  //
+  // Movie, 14 Oct: "the site is in the wrong position still - the front (25ft
+  // side currently facing bottom E2) should rotate 90 so it faces E1 to the
+  // right", and then the rule itself: "the front of the lot and the front of
+  // the house should line up both facing E1".
+  //
+  // EVERYTHING HERE USED TO BE WRITTEN IN x AND z. The front was +z and the
+  // left was -x, which is where E1 and E2 stand on a house NOBODY HAS TURNED
+  // -- so the lot and the house agreed by coincidence rather than by rule.
+  // cut-marks.js rotates the four marks by the drawing's `planTurn`, and the
+  // HOUSE's own registration mark goes with them (tests/model-html-site-point:
+  // "a turned house takes its target with it"). The lot did not, so one
+  // quarter turn put the front of the lot 90 degrees off the front of the
+  // house and the site datum on the wrong corner.
+  //
+  // READ FROM cut-marks, NOT RE-DERIVED. That file owns which side each mark
+  // stands on and what a turn does to it; a second copy of that table here is
+  // how the lot comes to disagree with the elevations it is drawn beside.
+  // With no cut-marks loaded the untarned seats are used, which is exactly
+  // what this module did before and keeps a page that has not got the module
+  // drawing the same lot it always drew.
+  const UNTURNED = Object.freeze({ front: Object.freeze({ x: 0, z: 1 }),
+    left: Object.freeze({ x: -1, z: 0 }) });
+  const lotAxes = (planTurn = 0) => {
+    const CM = typeof window !== 'undefined' ? window.DraftCutMarks : null;
+    if (!CM || typeof CM.eMarkDir !== 'function') return UNTURNED;
+    const front = CM.eMarkDir('E1', planTurn);
+    const left = CM.eMarkDir('E2', planTurn);
+    return front && left ? { front, left } : UNTURNED;
+  };
+  // How far along a direction a point stands. The two axes are unit vectors
+  // at right angles, so this is the whole of the arithmetic either way.
+  const along = (pt, dir) => Number(pt.x) * dir.x + Number(pt.z) * dir.z;
+
+  // THE RECTANGLE, LAID ON THOSE AXES. The FRONTAGE (`widthFt`, the 25 in a
+  // 25 x 120) runs ACROSS the front, and the DEPTH runs back from it -- which
+  // is what those two words have always meant and is now true whichever way
+  // the house is turned. On an unturned house this is the same four points it
+  // has always returned.
+  const lotRectanglePoints = (widthFt, depthFt, { centerX = 0, centerZ = 0 } = {}, planTurn = 0) => {
     const w = Number(widthFt);
     const d = Number(depthFt);
     if (!Number.isFinite(w) || !Number.isFinite(d) || w <= 0 || d <= 0) return null;
-    const x0 = centerX - w / 2, x1 = centerX + w / 2;
-    const z0 = centerZ - d / 2, z1 = centerZ + d / 2;
+    const { front, left } = lotAxes(planTurn);
+    const at = (acrossHalf, backHalf) => ({
+      x: centerX + left.x * acrossHalf + front.x * backHalf,
+      z: centerZ + left.z * acrossHalf + front.z * backHalf,
+    });
+    // THE SAME WINDING AS BEFORE -- the outline is a closed loop and the
+    // order is what gives it its inside.
     return [
-      { x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 },
+      at(w / 2, -d / 2), at(-w / 2, -d / 2), at(-w / 2, d / 2), at(w / 2, d / 2),
     ];
   };
 
@@ -273,19 +318,27 @@ if (!window.DraftLotSizes) {
   // and the LARGEST z. Read off the outline's own points rather than stored,
   // so it follows the corner after a drafter has dragged the lot into an odd
   // shape -- which is the whole reason the lot is an outline.
-  const siteDatumOf = outline => {
+  const siteDatumOf = (outline, planTurn = 0) => {
     const pts = (outline && Array.isArray(outline.points) ? outline.points : [])
       .filter(p => p && Number.isFinite(Number(p.x)) && Number.isFinite(Number(p.z)));
     if (!pts.length) return null;
-    const minX = Math.min(...pts.map(p => Number(p.x)));
-    const maxZ = Math.max(...pts.map(p => Number(p.z)));
+    // THE CORNER WHERE E1 AND E2 MEET, asked of the axes rather than of x and
+    // z. On an unturned house that is still the smallest x and the largest z,
+    // which is what this did before; on his quarter-turned one E1 is east and
+    // E2 is south, so it is the lower RIGHT corner -- "the 2 registration
+    // marks will both be in the lower right corner of their respective (SITE
+    // / HOUSE)", which comes out of the rule rather than being told to it.
+    const { front, left } = lotAxes(planTurn);
+    const far = dir => Math.max(...pts.map(p => along(p, dir)));
+    const frontEdge = far(front);
+    const leftEdge = far(left);
     // THE CORNER ITSELF WHERE THERE IS ONE. On a rectangle the two extremes
     // meet at a real corner; on a dragged outline they may not, and the mark
     // then stands at the point nearest that meeting -- which is still the
     // front-left of the lot, and still where the two elevations cross.
     let best = null, bestD = Infinity;
     pts.forEach(p => {
-      const d = (Number(p.x) - minX) ** 2 + (Number(p.z) - maxZ) ** 2;
+      const d = (along(p, front) - frontEdge) ** 2 + (along(p, left) - leftEdge) ** 2;
       if (d < bestD) { bestD = d; best = p; }
     });
     return { x: Number(best.x), z: Number(best.z) };
@@ -304,22 +357,38 @@ if (!window.DraftLotSizes) {
   // what Movie measures the 20 from, so it is passed in and used for the
   // front; the left is measured off the WALL, because a setback is a
   // distance from the building to the line and the datum may sit anywhere.
-  const placeLotFor = (widthFt, depthFt, house, opts = {}) => {
-    const size = lotRectanglePoints(widthFt, depthFt);
+  const placeLotFor = (widthFt, depthFt, house, opts = {}, planTurn = 0) => {
+    const size = lotRectanglePoints(widthFt, depthFt, {}, planTurn);
     if (!size || !house) return size;
     const across = Number(widthFt);
     const up = Number(depthFt);
     const side = sideSetbackFt(opts);
-    const datumZ = Number(house.datumZ);
+    const { front, left } = lotAxes(planTurn);
+    // ON THE SAME TWO AXES AS EVERYTHING ELSE HERE. `datumZ`/`frontZ`/`leftX`
+    // are the names this took when front meant +z; what they have always been
+    // is HOW FAR ALONG THE FRONT and HOW FAR ALONG THE LEFT, so they are read
+    // that way and the turn costs nothing.
+    // THE HOUSE'S FRONT-LEFT CORNER, projected onto the two axes. `leftX` and
+    // `datumZ` are the names these took when the front WAS +z; what they have
+    // always meant is the house's left face and its front, so the corner they
+    // name is projected rather than read as raw x and z -- which is the same
+    // two numbers on an unturned house and the right two on any other.
+    const datumAt = Number(house.datumZ);
+    const corner = {
+      x: Number(house.leftX),
+      z: Number.isFinite(datumAt) ? datumAt : Number(house.frontZ),
+    };
     // FRONT: the front lot line sits 20 in front of the house datum.
-    const frontZ = (Number.isFinite(datumZ) ? datumZ : Number(house.frontZ))
-      + FRONT_SETBACK_FT;
+    const frontAt = along(corner, front) + FRONT_SETBACK_FT;
     // LEFT: the left lot line sits `side` to the left of the house's left face.
-    const leftX = Number(house.leftX) - side;
-    return [
-      { x: leftX, z: frontZ - up }, { x: leftX + across, z: frontZ - up },
-      { x: leftX + across, z: frontZ }, { x: leftX, z: frontZ },
-    ];
+    const leftAt = along(corner, left) + side;
+    // Back from the front line by `up`, and across from the left line by
+    // `across` -- the same rectangle, said in the lot's own directions.
+    const at = (backBy, acrossBy) => ({
+      x: front.x * (frontAt - backBy) + left.x * (leftAt - acrossBy),
+      z: front.z * (frontAt - backBy) + left.z * (leftAt - acrossBy),
+    });
+    return [at(up, 0), at(up, across), at(0, across), at(0, 0)];
   };
 
   // ── IS THE LOT BIG ENOUGH FOR WHAT IS ALREADY DRAWN? ─────────────────
