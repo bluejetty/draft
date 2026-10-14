@@ -685,7 +685,7 @@ const MUTATIONS = [
     'layout-plan.js', c => c.replace('VIEWS.layersFor(levelId, view)',
       'VIEWS.layersFor(levelId, VIEWS.defaultLayerViewId(levelId))')],
   ['the half-floor is never drawn under its full floor',
-    'layout-plan.js', c => c.replace('const half = env.halfLevel === true ? null : HALF_LEVEL_UNDER[levelId];',
+    'layout-plan.js', c => c.replace('const half = env.halfLevel === true ? null : halfLevelUnder(levelId);',
       'const half = null;')],
   ['the half-floor draws at full strength',
     'layout-plan.js', c => c.replace('ctx.globalAlpha *= HALF_LEVEL_SHEET_ALPHA;', '')],
@@ -697,6 +697,15 @@ const MUTATIONS = [
     'layout-plan.js', c => c.replace('return full != null && planWalls(saved, Number(full)).length > 0;', 'return full != null;')],
   ['the frame leaves the half-floor out',
     'layout-plan.js', c => c.replace('.concat(half != null ? planWalls(saved, half) : [])', '')],
+  // AND THE PAIRING ITSELF, now that it is read off level-assembly's ladder
+  // rather than listed here as {3:2, 5:4}: find a storey's mates in the
+  // wrong direction and the FULL floor folds into the HALF one.
+  ['the half-floor and its full floor swap places',
+    'layout-plan.js', c => c.replace('const below = storeyMates(levelId).filter(id => id < Number(levelId));',
+      'const below = storeyMates(levelId).filter(id => id > Number(levelId));')],
+  ['no level shares a storey with any other',
+    'layout-plan.js', c => c.replace('.filter(other => other !== Number(levelId) && LA.sameStorey(other, levelId));',
+      '.filter(() => false);')],
   // ── THE STOREY UNDER THIS ONE (Movie, 12 Oct) ─────────────────────────
   ['an upper floor never shows the storey below it',
     'layout-plan.js', c => c.replace('      drawFloorBelowGhost(ctx, toS, saved, levelId);', '')],
