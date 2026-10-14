@@ -254,9 +254,19 @@ test('BUILD HOUSE raises the flag, and LAYOUT answers it with the full set', asy
   await waitForCompose(page);
   const layout = await savedLayout(page);
   const kinds = kind => layout.viewports.filter(viewport => viewport.kind === kind);
-  // The walls plans, and the floor layouts of both storeys (Movie, 8 Oct).
+  // The walls plans, the ROOF plan, and the SITE plan (level 8), plus the
+  // floor layouts of both storeys (Movie, 8 Oct).
+  //
+  // LEVEL 8 JOINED THE SET ON 14 OCT, when the SITE PLAN sheet learned to
+  // carry a view. Movie: "i tried to do the site plan in the layout area - it
+  // should pop up a viewport with the new site plan, (nothing happens)". The
+  // sheet had always been dealt by name and always been empty; it draws the
+  // lot, the building's footprint and the eave line now, so it is dealt a
+  // viewport like every other sheet with something on it. Here there is no
+  // lot yet -- it is the FOOTPRINT of the house just built that puts it on
+  // the sheet.
   expect(kinds('plan').filter(viewport => viewport.view !== 'floor')
-    .map(viewport => viewport.levelId).sort()).toEqual([1, 3, 5, 7]);
+    .map(viewport => viewport.levelId).sort()).toEqual([1, 3, 5, 7, 8]);
   expect(kinds('plan').filter(viewport => viewport.view === 'floor')
     .map(viewport => viewport.levelId).sort()).toEqual([3, 5]);
   expect(kinds('elevation').map(viewport => viewport.elevId).sort())
