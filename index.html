@@ -291,6 +291,38 @@
         background-color: rgba(54, 117, 167, 0.1);
       }
       .ring-link:focus-visible { outline: 2px solid var(--blue-medium); outline-offset: 4px; }
+      /* THE BOOK CELLS (Movie, 14 Oct): "RED area - EBAY book links". A title
+         line and a quieter line under it -- the author, or what the search is
+         for -- so a cell says which book without running to three lines.
+         The links themselves live in entry-books.js, which is the list he
+         keeps adding to. */
+      .ring-book { flex-direction: column; gap: 2px; }
+      .ring-book .book-by {
+        font-size: 0.72em;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        opacity: 0.72;
+      }
+      /* THE DISCLOSURE, quiet and not a link: eBay's partner programme asks
+         that the relationship be stated, and a buyer deserves to know before
+         pressing. It is the last cell of the column rather than a line under
+         the page, so it stands with the links it is about. */
+      .ring-note {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 88%;
+        padding: 4px 8px;
+        text-align: center;
+        color: var(--ink);
+        opacity: 0.6;
+        font-family: "Barlow Condensed", system-ui, sans-serif;
+        font-size: clamp(10px, calc(var(--logo-w) / 38), 13px);
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        line-height: 1.2;
+        text-transform: uppercase;
+      }
       main { align-items: center; }
 
       /* A short window (a laptop with browser chrome eating the height) gets
@@ -332,6 +364,26 @@
                the numbering runs clockwise, so it counts down along the
                bottom. Boxes 2 and 3 are the words over the logo now; 1, 4, 5,
                6, 7, 11 and 12 are still free. -->
+          <!-- ── THE LEFT-HAND COLUMN IS THE BOOK SHELF (Movie, 14 Oct) ──
+               "i'd like the left column to be EBAY links to recommended
+               ARCHITECTURAL books ... make sure you get my partner info for
+               affiliate commissions", and "RED area - EBAY book links".
+
+               THE CELLS ARE EMPTY IN THE MARKUP and filled by the script at
+               the foot of this file, because the list outgrows the column:
+               "can you keep adding them to a list and once i fill up the
+               column, just randomly show them each time show different ones
+               from the list". Boxes 1, 12 and 11 are the left column read
+               downward; box 10 is the bottom-left corner and carries the
+               partner disclosure.
+
+               A CELL WITH NO BOOK IN IT DRAWS NOTHING, which is what keeps a
+               short list from leaving three empty squares down the side. -->
+          <!-- Box 1 --><span class="ring-empty" data-book-slot="1" data-box="1"></span>
+          <!-- Box 12 --><span class="ring-empty" data-book-slot="2" data-box="12"></span>
+          <!-- Box 11 --><span class="ring-empty" data-book-slot="3" data-box="11"></span>
+          <!-- Box 10 -->
+          <span class="ring-note" data-box="10" data-book-note hidden>eBay partner links — Rough Drafter may earn a commission</span>
           <!-- ── THE RIGHT-HAND COLUMN IS THE CODE SHELF (Movie, 14 Oct) ──
                "on the right - put the building code / span stuff. i will add
                more building code stuff", drawn as a blue box down the right
@@ -426,6 +478,49 @@
          to getting in. -->
 
     <!-- Visit counter: async, fail-silent, silent on localhost (see traffic-counter.js). -->
+  <script src="./entry-books.js"></script>
+  <script>
+    // THE BOOK SHELF, DEALT (Movie, 14 Oct): "once i fill up the column, just
+    // randomly show them each time show different ones from the list".
+    //
+    // THE PICKING IS entry-books.js's, not this page's: one list, one shuffle,
+    // and a harness that can ask it the same question without a browser. What
+    // happens here is only the drawing -- three slots, however many books came
+    // back, and the slots that got none stay empty.
+    (() => {
+      const shelf = window.DraftEntryBooks;
+      const slots = [...document.querySelectorAll('[data-book-slot]')];
+      if (!shelf || !slots.length) return;
+      const books = shelf.pickBooks(slots.length);
+      slots.forEach((slot, index) => {
+        const book = books[index];
+        if (!book) return;
+        const link = document.createElement('a');
+        link.className = 'ring-link ring-book';
+        link.href = book.href;
+        link.target = '_blank';
+        // SPONSORED, which is what these are: a paid link, declared as one.
+        // `noopener` for the new tab, and `nofollow` beside `sponsored`
+        // because older crawlers read only the one they know.
+        link.rel = 'sponsored nofollow noopener';
+        link.dataset.box = slot.dataset.box;
+        const title = document.createElement('span');
+        title.className = 'book-title';
+        title.textContent = book.title;
+        link.append(title);
+        if (book.by) {
+          const by = document.createElement('span');
+          by.className = 'book-by';
+          by.textContent = book.by;
+          link.append(by);
+        }
+        slot.replaceWith(link);
+      });
+      // THE DISCLOSURE SHOWS ONLY WHERE THERE IS SOMETHING TO DISCLOSE.
+      const note = document.querySelector('[data-book-note]');
+      if (note && books.length) note.hidden = false;
+    })();
+  </script>
   <script src="./traffic-counter.js" defer></script>
 </body>
 </html>
