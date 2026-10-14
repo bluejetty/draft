@@ -121,6 +121,22 @@ if (!window.DraftPalette) {
                         // the lot. Its pair is the same as draw-underlay's,
                         // for the reason stated there and with the same
                         // warning: one moving is not the other moving.
+    'draw-site-line',   // THE PROPERTY LINE ITSELF -- the lot's boundary, long
+                        // dash and dot, the heaviest line on a site plan.
+                        // Movie, 14 Oct: "can we make the SITE OUTLINE for the
+                        // property THICK BLACK LINES on the layout for
+                        // contruction plan and on the NIGHT make them bright
+                        // thick white".
+                        //
+                        // ITS OWN KEY, NOT draw-site-datum's. The mark says
+                        // WHERE the lot is registered and is green on purpose;
+                        // the line IS the lot, and a property line is drawn in
+                        // the sheet's own ink by every convention there is.
+                        //
+                        // PURE BLACK AND PURE WHITE, which almost nothing else
+                        // here is: "THICK BLACK" and "bright thick white" are
+                        // the request, and a boundary is the one line on the
+                        // sheet that should be read before anything else.
     'draw-floor',       // floor polygons, a wash rather than a fill
     'draw-floor-edge',  // the slab outline and its corner handles, drawn ON
                         // TOP of that wash -- so the wash, not the page, is
@@ -286,6 +302,11 @@ if (!window.DraftPalette) {
       // it IS that value; kept its own key so the lot's target and a tracing
       // underlay can part company without one dragging the other.
       'draw-site-datum': '#6a9a57',   // 5.02
+      // THE PROPERTY LINE, as loud as the page allows: 17.45 on the ground,
+      // the highest number in this column. "bright thick white" (Movie, 14
+      // Oct), and a boundary earns it -- every setback on the sheet is
+      // measured to this line.
+      'draw-site-line':  '#ffffff',   // 17.45
       'draw-floor':      'rgba(120,140,150,0.10)',
       'draw-floor-edge': '#5980a6',
       'draw-wall':       '#2f3335',   // 1.30 on the page -- poche, deliberately quiet
@@ -403,6 +424,11 @@ if (!window.DraftPalette) {
       'draw-cut':        '#b04060',   // 5.01
       'draw-underlay':   '#557a46',   // 4.41 -- the green the datum used to be
       'draw-site-datum': '#557a46',   // 4.41 -- its twin, and its own key
+      // AND BLACK ON PAPER, which is what a construction set is printed on:
+      // "THICK BLACK LINES on the layout for contruction plan". Pure black
+      // rather than the ink-primary near-black the rest of the day column
+      // uses, for the same reason night gets pure white.
+      'draw-site-line':  '#000000',   // 18.72
       'draw-floor':      'rgba(90,110,120,0.10)',
       'draw-floor-edge': '#5980a6',
       'draw-wall':       '#ffffff',   // 1.12 on the page -- the same quiet relationship

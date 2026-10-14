@@ -287,8 +287,50 @@ if (!window.DraftCutMarks) {
     return out;
   };
 
+  // ── THE SAME FOUR MARKS, SEATED ROUND SOMETHING ELSE ──────────────────
+  //
+  // Movie, 14 Oct, looking at the site plan: "the E1-E4 on the outside can we
+  // make it so it is on the OUTSIDE of the site lines". On that drawing the
+  // lot is the subject and the house is a thing standing on it, so marks
+  // seated off the WALLS sit in the middle of the sheet -- inside the property
+  // line, and now inside two rows of dimensions as well.
+  //
+  // THE CUTS THEMSELVES DO NOT MOVE. What E1 looks at is the drawing, not how
+  // far its line stands off it, but every elevation in the file is generated
+  // from these records -- so this hands a painter a re-seated COPY and leaves
+  // the originals, with their ids, their stored offsets and their directions,
+  // alone. Re-seating the stored cuts would be moving every elevation in the
+  // file to tidy one view.
+  //
+  // ONE RING, like the wall-seated one and for its reason: each corner carries
+  // two marks that read as one another's reflection, which only holds while
+  // all four stand the same distance out.
+  //
+  // THE SEAT IS READ BACK OFF EACH CUT'S OWN DIRECTION rather than recomputed
+  // from a turn this is not given. The mark already knows which side it is on
+  // -- that is what dirVec says -- so a turned plan needs nothing added here.
+  const seatMarksAround = (cuts, box, clearFt = E_MARK_CLEAR_FT) => {
+    if (!box || !Array.isArray(cuts)) return cuts || [];
+    const { minX, maxX, minZ, maxZ } = box;
+    if (![minX, maxX, minZ, maxZ].every(Number.isFinite)) return cuts;
+    const pad = 2;
+    const edge = { N: minZ - clearFt, S: maxZ + clearFt, W: minX - clearFt, E: maxX + clearFt };
+    return cuts.map(cut => {
+      if (!E_ORDER.includes(String(cut.id))) return cut;
+      const dir = cut.dirVec || { x: 0, z: 1 };
+      const acrossX = Math.abs(dir.z) > Math.abs(dir.x);
+      const along = acrossX ? (dir.z > 0 ? edge.S : edge.N) : (dir.x > 0 ? edge.E : edge.W);
+      return {
+        ...cut,
+        startPt: acrossX ? { x: minX - pad, z: along } : { x: along, z: minZ - pad },
+        endPt: acrossX ? { x: maxX + pad, z: along } : { x: along, z: maxZ + pad },
+      };
+    });
+  };
+
   window.DraftCutMarks = Object.freeze({
     siteDatum,
+    seatMarksAround,
     planWallExtents,
     eMarkDimEdges,
     eMarkClearFt,
