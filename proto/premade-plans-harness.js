@@ -941,6 +941,83 @@ check('no opening is ever keyed to an edge the plot has not got',
   P => [SWEEP.flatMap(w => detached(P, w, w).map(o => o.edge))
     .filter(edge => !(edge >= 0 && edge <= 3)).join(','), '']);
 
+// ── TWO BAYS AND A STRIP, WHERE THERE IS A STAIR TO STAND IN IT ──────────
+//
+// Movie, 13 Oct: "place a 2 garage doors 8ft each and 1 man door 36 along one
+// wall", "make each car bay approx 12 each and then 4fet left for the mandoor
+// and stairs", "the door goes straight to the bottom of the stairs". So the
+// garage that carries a storey puts all three openings on the DOOR wall, and
+// the strip they leave is where the stair stands.
+const stairDeal = (P, widthFt, depthFt, tFt = STUD_2X6_FT) =>
+  P.detachedGarageOpenings({ widthFt, depthFt, wallThicknessFt: tFt, stair: true });
+const onEdgeAll = (list, edge) => list.filter(o => o.edge === edge);
+
+check('a 30x24 with a stair puts both bays and the man door on the door wall',
+  P => [stairDeal(P, 30, 24).map(o => o.edge).join(','), '0,2,2,2']);
+
+check('and they are two 8 ft overheads, his number',
+  P => [onEdgeAll(stairDeal(P, 30, 24), 2)
+    .filter(o => o.garage === true).map(o => n(o.widthFt)).join(','),
+  `${n(8)},${n(8)}`]);
+
+// AND BOTH HEAD WHERE AN OVERHEAD DOOR HEADS, not where the house's own
+// doors do. A bay door left on the house's 6'-8" head is a garage a van does
+// not fit into, and the elevation would draw it without complaint.
+check('both bay doors head at 7 ft and say they are garage doors',
+  P => [onEdgeAll(stairDeal(P, 30, 24), 2).filter(o => o.garage === true)
+    .map(o => `${o.garage}@${n(o.headFt)}`).join(','),
+  `true@${n(7)},true@${n(7)}`]);
+
+// 13 FT APART, which is what makes them BAYS: 30 ft of wall less the 4 ft
+// strip, halved. A pair that happened to be on one wall would not move when
+// the garage was typed wider; these do.
+check('one centred in each bay, so their centres stand a bay apart',
+  P => { const doors = onEdgeAll(stairDeal(P, 30, 24), 2)
+    .filter(o => o.garage === true).map(o => o.offsetFt).sort((a, b) => a - b);
+         return [n(doors[1] - doors[0]), n(13)]; });
+
+check('and a wider garage spreads them, rather than holding a 13 ft habit',
+  P => { const doors = onEdgeAll(stairDeal(P, 40, 24), 2)
+    .filter(o => o.garage === true).map(o => o.offsetFt).sort((a, b) => a - b);
+         return [n(doors[1] - doors[0]), n(18)]; });
+
+// THE STRIP IS AT THE HOUSE END of the wall -- the loop is walked clockwise
+// from the back-left corner, so edge 2 runs from the far corner toward the
+// house and the strip is the LAST 4 ft of it. The man door stands past both
+// bays, which is the side the path from the house arrives on and the side the
+// stair is laid along.
+check('the man door stands past both bays, in the strip at the house end',
+  P => { const front = onEdgeAll(stairDeal(P, 30, 24), 2);
+         const man = front.find(o => o.garage !== true);
+         const bays = front.filter(o => o.garage === true).map(o => o.offsetFt);
+         return [`${man.offsetFt > Math.max(...bays)},${n(man.widthFt)}`,
+           `true,${n(3)}`]; });
+
+// AND ITS OWN LINTEL STILL BEARS. The strip is 4 ft and the leaf is 3, so
+// centring it in the strip would leave 6" at the corner -- less than the wall
+// it runs into plus the bearing. It is pulled in instead.
+check('and the man door is pulled off the corner far enough to bear',
+  P => { const man = onEdgeAll(stairDeal(P, 30, 24), 2).find(o => o.garage !== true);
+         const clear = 30 - (man.offsetFt + man.widthFt / 2);
+         // It lands EXACTLY on the reserve, so the comparison carries a
+         // float's worth of slack rather than reading a rounding bit as a
+         // door hanging off the corner.
+         return [clear >= STUD_2X6_FT + 1.5 / 12 - 1e-9, true]; });
+
+// A STRIP WITH NO STAIR IN IT IS NOT ASKED FOR. Without the flag the garage
+// is the stock single-bay one it always was, which is what a thickened edge
+// (no storey, no stair) still gets.
+check('and without a stair the front is the stock single bay, man door round the side',
+  P => [detached(P, 30, 24).map(o => `${o.edge}:${o.type}`).join(','),
+    '0:window,2:door,3:door']);
+
+// TOO NARROW FOR TWO BAYS FALLS BACK rather than dealing doors that do not
+// fit: 16 ft of wall less the strip is two 6 ft bays, which carry no overhead
+// door at all.
+check('a 16 ft wall with a stair falls back to the single-bay front',
+  P => [stairDeal(P, 16, 24).map(o => `${o.edge}:${o.type}`).join(','),
+    '0:window,2:door,3:door']);
+
 // ── THE THICKNESS IS READ, NOT ASSUMED ───────────────────────────────────
 //
 // Ten feet of door wall is the length where the two framings disagree: a 2x4
@@ -1508,9 +1585,19 @@ const MUTATIONS = [
   ['the overhead door is hung off the corner instead of centred',
     s2 => s2.replace("out.push(opening(2, w / 2, overhead, 'door',",
       "out.push(opening(2, 0, overhead, 'door',")],
+  // THE STOCK SINGLE-BAY DOOR, named by the line that places it: the
+  // two-bay front (13 Oct) hangs two more overheads off the same object
+  // literal, so the literal alone is no longer an anchor -- it is three.
   ['the overhead door heads at the house-s own door height',
-    s2 => s2.replace("        { garage: true, headFt: GARAGE_DOOR_HEAD_FT }));",
-      "        { garage: true }));")],
+    s2 => s2.replace(`out.push(opening(2, w / 2, overhead, 'door',
+        { garage: true, headFt: GARAGE_DOOR_HEAD_FT }));`,
+    `out.push(opening(2, w / 2, overhead, 'door',
+        { garage: true }));`)],
+  ['the bay doors head at the house-s own door height',
+    s2 => s2.replace(`out.push(opening(2, bay / 2, leaf, 'door',
+        { garage: true, headFt: GARAGE_DOOR_HEAD_FT }));`,
+    `out.push(opening(2, bay / 2, leaf, 'door',
+        { garage: true }));`)],
   ['what the garage is framed in is ignored',
     s2 => s2.replace('const t = Number(wallThicknessFt);', 'const t = 0;')],
   ['the window is put on the door wall, through the overhead door',
