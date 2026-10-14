@@ -1789,11 +1789,15 @@
   </div>
 </div>
 
-<!-- TRACE (Movie, 7 Oct): the instrument chip that shows the photos and PDFs
-     under a level, and on switching on asks whether to bring in another. -->
-<div id="trace-ask" data-trace-ask hidden role="dialog" aria-label="Trace images">
+<!-- PHOTO (Movie, 7 Oct): the instrument chip that shows the photos and PDFs
+     under a level, and on switching on asks whether to bring in another.
+     CALLED TRACE UNTIL 14 OCT ("maybe we should rename it PHOTO rather than
+     TRACE") -- what the drafter reads says PHOTO now; the ids, the data
+     attributes and the file's own `trace` vocabulary are untouched, because
+     renaming those moves nothing on screen and would churn a dozen specs. -->
+<div id="trace-ask" data-trace-ask hidden role="dialog" aria-label="Photos under this level">
   <div class="promote-card">
-    <p><b>TRACE</b><br><span data-trace-count></span> Upload another image to trace over?</p>
+    <p><b>PHOTO</b><br><span data-trace-count></span> Upload another image to draw over?</p>
     <div class="trace-list" data-trace-list></div>
     <!-- HOLOGRAMS (Movie, 8 Oct): another .draft shown under this one in
          light blue, never edited -- the existing house a new one or an
@@ -1810,9 +1814,9 @@
 <input id="hologram-file" type="file" data-hologram-file hidden accept=".draft,.json,application/json">
 <input id="trace-file" type="file" data-trace-file hidden
   accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,image/gif,image/bmp,.png,.jpg,.jpeg,.webp,.gif,.bmp,.dxf,.dwg">
-<div id="trace-insert" data-trace-insert hidden role="dialog" aria-label="Insert an image to trace">
+<div id="trace-insert" data-trace-insert hidden role="dialog" aria-label="Insert a photo">
   <div class="promote-card trace-card">
-    <p><b>INSERT TO TRACE</b> &mdash; on <span data-trace-level></span></p>
+    <p><b>INSERT A PHOTO</b> &mdash; on <span data-trace-level></span></p>
     <div class="trace-status" data-trace-status></div>
     <div data-trace-body hidden>
       <div class="trace-preview">
@@ -6148,7 +6152,7 @@
       // level and not showing says why, so the drafter can tell a switch from
       // a loss.
       + (hiddenUnderlays() ? `   <b>${hiddenUnderlays()} tracing image`
-          + `${hiddenUnderlays() === 1 ? '' : 's'} hidden</b> (TRACE is off)` : '')
+          + `${hiddenUnderlays() === 1 ? '' : 's'} hidden</b> (PHOTO is off)` : '')
       // The frame this readout describes, on both views, so a plan and a
       // section on the same drawing can be compared by looking at them.
       // The rail's six thumbnails, and this is the cost of an EDIT, not of a
@@ -13134,7 +13138,7 @@
       paintLotPick();
       const picker = document.querySelector('[data-trace-file]');
       if (picker) picker.click();
-      else sayOnStrip('Use the TRACE chip to bring in a site plan.');
+      else sayOnStrip('Use the PHOTO chip to bring in a site plan.');
     });
     // A TYPED PAIR REPAINTS THE VERB, which is the only thing that reads it:
     // the button has to go live the moment both fields are sane and say what
@@ -19925,7 +19929,7 @@
     }
     if (!Array.isArray(drawing.holograms)) drawing.holograms = [];
     addItem(drawing.holograms, holo);
-    sayOnStrip(`${name} is in as a hologram, where its own file has it \u2014 TRACE lists it to move or turn.`);
+    sayOnStrip(`${name} is in as a hologram, where its own file has it \u2014 PHOTO lists it to move or turn.`);
   });
   traceAsk.querySelector('[data-hologram-upload]').addEventListener('click', () => {
     traceAsk.hidden = true;
