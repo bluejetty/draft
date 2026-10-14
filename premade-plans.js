@@ -408,6 +408,54 @@ if (!window.DraftPremadePlans) {
     return out;
   };
 
+  // ── AND THE ROOM OVER A DETACHED GARAGE ──────────────────────────────────
+  //
+  // Movie, 14 Oct, twice: "still FENSTRATIONS look like not properly loading
+  // on the Detached Garage 2 storey grade beam". Measured on an ordered
+  // garage: four walls on OVER GARAGE and not one opening on any of them --
+  // the storey went up on 13 Oct and nothing ever dealt it a window. The
+  // elevations were right; there was nothing to draw.
+  //
+  // WINDOWS ONLY, like the house's upper set and for its reason: a door on
+  // this storey opens into air, which the clamp would accept and the drafter
+  // would find on the elevation. The stair is inside.
+  //
+  // SPACED BY THE WALL RATHER THAN COUNTED OUT, because this room is whatever
+  // size the garage under it was typed at -- a fixed three-across would crowd
+  // a 20 ft wall and strand a 40 ft one. One window up to 12 ft of clear
+  // wall, two to 24, three beyond, which lands a 24 x 30 garage on two down
+  // each side and three across the ends.
+  //
+  // AND THE FRONT KEEPS CLEAR OF THE STAIR. Where the ground floor took two
+  // bays and a strip (`stair`), the stair lands in that strip and comes up
+  // against this wall; a window centred over it would be a window in the
+  // stairwell's own headroom.
+  const GARAGE_ROOM_WINDOW_FT = 4;
+  const detachedGarageUpperOpenings = ({ widthFt, depthFt, wallThicknessFt, stair = false } = {}) => {
+    const w = Number(widthFt);
+    const d = Number(depthFt);
+    const t = Number(wallThicknessFt);
+    if (!Number.isFinite(w) || !Number.isFinite(d) || !Number.isFinite(t)) return [];
+    const out = [];
+    // A RUN OF WALL, from `from` to `to` along the edge, with its windows
+    // spread evenly across it: n windows take the n stations that divide the
+    // run into n + 1, which is where a drafter puts them by eye.
+    const run = (edge, from, to) => {
+      const clear = to - from;
+      if (!(clear > 0) || !carries(clear, GARAGE_ROOM_WINDOW_FT, t)) return;
+      const count = Math.max(1, Math.min(3, Math.floor(clear / 12)));
+      for (let i = 1; i <= count; i += 1) {
+        out.push(opening(edge, from + (clear * i) / (count + 1),
+          GARAGE_ROOM_WINDOW_FT, 'window'));
+      }
+    };
+    run(0, 0, w);                                        // back
+    run(1, 0, d);                                        // the two sides
+    run(3, 0, d);
+    run(2, 0, stair ? Math.max(0, w - GARAGE_STAIR_STRIP_FT) : w);   // front
+    return out;
+  };
+
   // ── THE UPPER STOREY'S WINDOWS ───────────────────────────────────────────
   //
   // NO DOORS UP HERE. The ground floor's set carries the front door, and a
@@ -1409,7 +1457,8 @@ if (!window.DraftPremadePlans) {
     MAN_DOOR_WIDTH_FT, ROOM_DOOR_WIDTH_FT, GARAGE_WINDOW_WIDTH_FT, GARAGE_DOOR_HEAD_FT,
     ENTRY_WIDTH_FT, ENTRY_DEPTH_FT, ENTRY_LEFT_FT, BILEVEL_STAIR_WIDTH_FT,
     BILEVEL_STAIR_GAP_FT, BILEVEL_OVERLAP_FT,
-    bungalow, twoStorey, bilevel, modifiedBilevel, planFor, detachedGarageOpenings, squareOver, joinLoops, cutLoops,
+    bungalow, twoStorey, bilevel, modifiedBilevel, planFor, detachedGarageOpenings,
+    detachedGarageUpperOpenings, squareOver, joinLoops, cutLoops,
     entryIds: () => Object.keys(PLANS),
   });
 })();

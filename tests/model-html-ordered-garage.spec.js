@@ -350,7 +350,12 @@ test('and a way into it: two bays, a man door beside them, and a window',
     // stair and the stair stands in the strip they leave.
     const saved = await orderGarage(page, 'detached-frostwall');
     const studs = studsOf(saved).filter(wall => wall.levelId === 3);
-    expect((saved.fenestrations || []).length, 'four openings').toBe(4);
+    // FOUR ON THE GARAGE'S OWN STOREY. Counted by level since 14 Oct: the
+    // room over it now carries windows of its own (Movie: "still FENSTRATIONS
+    // look like not properly loading on the Detached Garage 2 storey grade
+    // beam"), and a count of the whole file would mix the two sets.
+    expect((saved.fenestrations || []).filter(item => Number(item.levelId) === 3).length,
+      'four openings on the garage storey').toBe(4);
 
     const front = openingOn(saved, frontWall(studs));
     expect(front.length, 'two bays and the man door, all on the door wall')
@@ -398,7 +403,10 @@ test('and a way into it: two bays, a man door beside them, and a window',
     // EVERY ONE ON A STUD WALL OF THIS GARAGE, not on its concrete and not on
     // something else's wall. A door cut into the grade beam would draw on the
     // FOUNDATION set and nowhere else.
-    for (const record of saved.fenestrations) {
+    // ON THIS STOREY'S OWN, which `studs` is: the room over the garage has its
+    // own walls and its own windows since 14 Oct, and they are that storey's
+    // business rather than this check's.
+    for (const record of saved.fenestrations.filter(item => Number(item.levelId) === 3)) {
       const host = studs.find(wall => String(wall.id) === String(record.wallId));
       expect(host, `opening ${record.id} hangs on a framed garage wall`).toBeTruthy();
       expect(record.levelId, 'and is filed on the storey').toBe(3);
@@ -440,7 +448,9 @@ test('and the drawing will actually draw them', async ({ page }) => {
   // AND IT HAS SOMETHING TO JUDGE. An empty list passes a "nothing was
   // refused" check perfectly, which is the same garage Movie reported — so
   // the count is asserted first and the verdict second.
-  expect(judged.length, 'four openings to judge').toBe(4);
+  // AND IT HAS SOMETHING TO JUDGE -- the garage's own four at least, plus the
+  // room's windows since 14 Oct, every one of them put through the same clamp.
+  expect(judged.length, 'openings to judge').toBeGreaterThanOrEqual(4);
   expect(judged.filter(Boolean), 'every opening fits its wall where it was put')
     .toEqual([]);
 });

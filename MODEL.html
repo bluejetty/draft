@@ -10707,8 +10707,12 @@
     // AND THE WALL THICKNESS THIS PAGE FRAMED IT IN, because that is what
     // carries the end of the overhead door's lintel -- premade-plans.js sizes
     // the door to fit and cannot know what contextWallType handed back.
+    // THE DESIGN IS ALREADY FACING THE STREET HERE. builtFrontDown turns the
+    // drawing back to no turn before this runs and forward again after, so
+    // edge 2 -- the design's front -- comes out on E1 at every turn. Measured
+    // before adding a rotation this build does not need.
     const openings = given?.openings ? dealOpenings(given.openings, walls, levelId) : dealOpenings(
-      window.DraftPremadePlans.detachedGarageOpenings({
+      (window.DraftPremadePlans.detachedGarageOpenings({
         widthFt: order.size.widthFt,
         depthFt: order.size.depthFt,
         wallThicknessFt: openingThicknessFt()(walls[0]),
@@ -10717,7 +10721,7 @@
         // was turned off keeps the stock single-bay front rather than a strip
         // left over from a stair nobody is getting.
         stair: wantsRoom,
-      }), walls, levelId);
+      })), walls, levelId);
     // AND ITS CONCRETE. Movie ordered a "detached garage 25x25 with frost
     // wall" and got four stud walls: the tile asked him which foundation and
     // then threw the answer away, because nothing on this page read it.
@@ -10774,6 +10778,12 @@
     let upperWalls = [];
     let upperOutline = null;
     let upperDeck = null;
+    // AND THE ROOM'S OWN WINDOWS, held so they ride the one 'built' step with
+    // everything else: one press is one undo, and a row of windows left
+    // hanging over a garage that is gone is the shape of an undo that only
+    // knew about half of what it built. (It was exactly that for an hour --
+    // model-html-ordered-garage's undo check is what said so.)
+    let upperOpenings = [];
     if (wantsRoom) {
       if (!levelPresent(upperId)) {
         const level = { id: upperId, name: 'OVER GARAGE', elev: 6, visible: true };
@@ -10800,6 +10810,22 @@
       upperWalls = corners.map((corner, index) =>
         commitWall(corner, corners[(index + 1) % corners.length],
           { bone: false, levelId: upperId, view: 'plan', body: 'garage' }));
+      // AND ITS WINDOWS. Movie, 14 Oct, twice: "still FENSTRATIONS look like
+      // not properly loading on the Detached Garage 2 storey grade beam".
+      // The storey went up on 13 Oct with four walls and nothing in them, so
+      // every elevation of it was a blank band -- the elevations were right
+      // and there was nothing to draw. Dealt the same way the ground floor's
+      // openings are, off the size the drafter typed and the thickness this
+      // page framed the walls in, so the two sets cannot disagree about
+      // either; premade-plans decides where they go.
+      upperOpenings = dealOpenings((window.DraftPremadePlans.detachedGarageUpperOpenings({
+        widthFt: order.size.widthFt,
+        depthFt: order.size.depthFt,
+        wallThicknessFt: openingThicknessFt()(upperWalls[0]),
+        // THE SAME `stair` THE FRONT BAYS WERE DEALT ON, so the window that
+        // would stand over the stairwell is the one that is left out.
+        stair: wantsRoom,
+      })), upperWalls, upperId);
       // AND A DECK UNDER IT, which is the house build's own per-storey rule:
       // walls AND a floor, or the section draws a storey standing on
       // nothing. This deck is what the span rule measures.
@@ -10902,7 +10928,7 @@
     undoStack.push({ kind: 'built',
       walls: walls.concat(concrete.walls).concat(upperWalls),
       outlines: upperOutline ? [outline, upperOutline] : [outline],
-      list: drawing.outlines, openings,
+      list: drawing.outlines, openings: openings.concat(upperOpenings),
       items: concrete.items.concat(roof ? [roof] : [])
         .concat(framed)
         .concat(dimmed.map(item => ({ list: drawing.dimensions, item })))

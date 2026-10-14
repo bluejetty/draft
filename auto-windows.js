@@ -464,9 +464,30 @@ if (!window.DraftAutoWindows) {
       chosen = faces.find(face => face.orientation === want) || null;
       if (chosen) reason = 'no step-back cue: the door lands opposite the man-door connection';
     }
+    // ── AND WITH NEITHER CUE, THE DOOR FACES THE STREET ──────────────────
+    //
+    // Movie, 14 Oct: "can you put the garage door openings facing FRONT / E1
+    // direction as DEFAULT (corner lots aren't as common so the user can
+    // change that)".
+    //
+    // THIS IS THE STANDALONE GARAGE'S CASE and nobody else's: a garage that
+    // touches the house is answered by the two rules above, which read cues
+    // the drawing actually carries. A detached box in the middle of a lot
+    // carries neither, and the rule it fell to -- the longest run -- is a
+    // fact about the garage's SHAPE, not about which way the lot faces. On
+    // the usual deep garage that is a side wall, so the doors opened onto
+    // the neighbour and the drafter moved them every time.
+    //
+    // E1 IS THE STREET, which is the convention this whole file is written in
+    // (faceOrientation, at the top) and the one his drawings are set up with.
+    // The corner lot is the exception he named, and moving a door is a drag.
+    if (!chosen) {
+      chosen = faces.find(face => face.orientation === 'front') || null;
+      if (chosen) reason = 'no cue: the door faces the street, which is E1';
+    }
     if (!chosen) {
       chosen = faces.reduce((best, face) => (!best || face.lengthFt > best.lengthFt ? face : best), null);
-      reason = 'no step-back cue and no man door: the door takes the longest run';
+      reason = 'no cue and no face toward the street: the door takes the longest run';
     }
 
     // Two singles need both doors, the gap between them and both corners.
