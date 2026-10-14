@@ -497,6 +497,44 @@ if (!window.DraftShellBars) {
      INSIDE the strip, not floating above it, because two fixed bars stacked
      a few pixels apart is the arrangement that put the build bar on SAVE. A
      flex child cannot leave its parent. -->`;
+  const BONE = `    <button id="bone" type="button" data-bone-press aria-controls="drivethru"
+      aria-expanded="false"
+      title="Gruff's drive-thru: pick a house type, then build it"><img
+        data-bone-art
+        src="./assets/bone-red.png"
+        alt="" /><span id="bone-balance" data-bone-balance
+        aria-hidden="true"></span><span class="said">BONE</span></button>
+`;
+  // THE TRIO, WITH OR WITHOUT THE BONE IN THE MIDDLE OF IT. Movie, 14 Oct:
+  // "those arrow can be placed on the PROJECT and REAL ESTATE PLANS,
+  // CONSTRUCTION PLANS but instead of going up and down levels, go up and
+  // down on the stack of pages in the layouts, or in the project area, cycle
+  // through each HOUSE TYPE selection", and "for specs can scroll through the
+  // content sections".
+  //
+  // SO THE ARROWS ARE NOT THE BONE'S, which is what `bone: false` used to
+  // make them: that option dropped the whole middle of the bar, so SPECS and
+  // REAL ESTATE PLAN -- the two pages that ask for no drive-thru -- had
+  // nowhere for an arrow to stand. A bone-less page now gets the trio with
+  // the middle left out, which is still two arrows centred on the sheet's
+  // axis because they are one size and the box is centred, not the bone.
+  //
+  // THE ARROWS SAY NOTHING ABOUT LEVELS HERE. They ship hidden and titleless
+  // and the page that mounts them says what a step means -- stepper() below
+  // writes both titles -- because the four pages mean four different things
+  // by it and a shared default would be wrong on three of them.
+  const trio = withBone => `    <div id="dt-trio" data-drivethru-trio>
+    <button id="trio-up" type="button" data-trio-up hidden>&#9650;</button>
+${withBone ? BONE : ''}    <button id="trio-down" type="button" data-trio-down hidden>&#9660;</button>
+    </div>
+`;
+  // THE MIDDLE OF A BONE-LESS BAR is the trio alone -- not the verbs beside
+  // it. UNDO, DELETE, COPY and PASTE are MODEL's, hidden everywhere else, and
+  // mounting four more ids on a page that never unhides them is four chances
+  // for an id to collide with one the page already owns.
+  const BOTQUIET = `  <div class="grow"></div>
+  <div id="dt-bar" data-drivethru-bar>
+${trio(false)}  </div>`;
   const BOTMIDDLE = `  <div class="grow"></div>
   <!-- THE MIDDLE PAIR (Movie, 15 Sep): "2 buttons, the DRIVE-THRU MENU, and
        the BONE". Exactly two, because the sign rises over this spot and
@@ -512,13 +550,16 @@ if (!window.DraftShellBars) {
          reaches for the OUTLINE command rather than a second button under the
          board. It stands on the sheet's centre line, the same axis the
          instrument rule above it stands on. -->
-    <button id="bone" type="button" data-bone-press aria-controls="drivethru"
-      aria-expanded="false"
-      title="Gruff's drive-thru: pick a house type, then build it"><img
-        data-bone-art
-        src="./assets/bone-red.png"
-        alt="" /><span id="bone-balance" data-bone-balance
-        aria-hidden="true"></span><span class="said">BONE</span></button>
+    <!-- UP, BONE, DOWN -- one trio on one line (Movie, 14 Oct): "can you put
+         the UP arrow to the left of the bone and DOWN arrow to the right, and
+         also bring them so they are centered at same location up/down with
+         the BONE/HOUSE button so they all line up (UP / BONE / DOWN)", and
+         "(make it look symetrical makes it more appealling".
+         THE TRIO IS WHAT STANDS ON THE AXIS NOW, not the bone alone -- which
+         keeps the bone on that axis all the same, because the two arrows are
+         the same size and sit one either side of it. The old arrangement had
+         both arrows to the bone's RIGHT, between it and UNDO. -->
+${trio(true)}
     <!-- ONE DELETE FOR EVERYTHING SELECTED (§7a), where there were two verbs
          for one of the types. It rides with the pair rather than with the
          places, because it is a verb. -->
@@ -539,10 +580,6 @@ if (!window.DraftShellBars) {
          part-way through ordering a house is not changing storey.
          NOT VERBS, so they sit ahead of UNDO and DELETE rather than among
          them: these two move where you are standing and change nothing. -->
-    <button id="model-level-up" type="button" data-model-level-up hidden
-      title="Go up to the next level">&#9650;</button>
-    <button id="model-level-down" type="button" data-model-level-down hidden
-      title="Go down to the next level">&#9660;</button>
     <button id="model-undo" type="button" data-model-undo hidden
       title="Undo the last change (Ctrl+Z)">UNDO</button>
     <button id="delete" type="button" data-delete hidden
@@ -916,7 +953,9 @@ if (!window.DraftShellBars) {
     //             gets a row of links and no current mark, which is wrong but
     //             visibly wrong rather than quietly.
     // opts.bone   false mounts the bottom bar WITHOUT the bone and its
-    //             drive-thru press. ESTIMATES may want this.
+    //             drive-thru press. ESTIMATES may want this. The TRIO still
+    //             mounts -- the two arrows are the page's, not the bone's --
+    //             and stays hidden until the page calls stepper().
     // opts.tools  the page's own buttons at the head of the right-hand row,
     //             left of REAL ESTATE PLAN: 'north' (the two norths) and
     //             'rotate' (HOUSE ROTATE). Movie, 1 Oct: "to the left of that
@@ -929,7 +968,7 @@ if (!window.DraftShellBars) {
       const tools = (opts.tools || []).map(tool => BAR_TOOLS[tool] || '').join('');
       put(BOTHEAD + '\n'
         + '<div id="page-row" data-page-row>\n' + rowOf('page', opts.page) + '\n</div>\n'
-        + (opts.bone === false ? '  <div class="grow"></div>\n' : BOTMIDDLE + '\n')
+        + (opts.bone === false ? BOTQUIET + '\n' : BOTMIDDLE + '\n')
         + '  <div id="sheet-row" data-sheet-row>\n' + tools + rowOf('sheet', opts.page) + '\n  </div>\n'
         + BOTTAIL);
       // AFTER the markup, because the slot it fills arrives with it. `put`
@@ -945,6 +984,68 @@ if (!window.DraftShellBars) {
     },
 
     readout: () => put(READOUT),
+
+    // ---- THE TRIO'S TWO ARROWS, ONE LIST AT A TIME ------------------------
+    //
+    // Movie, 14 Oct: "those arrow can be placed on the PROJECT and REAL
+    // ESTATE PLANS, CONSTRUCTION PLANS but instead of going up and down
+    // levels, go up and down on the stack of pages in the layouts, or in the
+    // project area, cycle through each HOUSE TYPE selection, 1st DETACHED
+    // GARAGE THICKENED EDGE / 2nd DETACHED GARAGE GRADE BEAM (1 storey) ...",
+    // and "for specs can scroll through the content sections".
+    //
+    // FOUR PAGES, FOUR LISTS, ONE PAIR OF ARROWS. What every one of them
+    // wants is the same three sentences -- how many stops, which one am I on,
+    // put me on that one -- so that is the whole of what a page hands over.
+    // The bar owns the rest: the titles, the greying at the ends, and hiding
+    // the pair outright when there is no list to step.
+    //
+    // THIS IS NOT MODEL'S WIRING. MODEL steps LEVELS, which are not an index
+    // into a list -- a level can be absent, and `levelStepTarget` answers
+    // whether there is one in that direction -- so it keeps its own two
+    // listeners and this helper stays about lists. Two callers would have had
+    // to agree about what "index 3" means to a storey, and they do not.
+    //
+    // GREYED AT THE ENDS RATHER THAN HIDDEN, which is MODEL's rule and is
+    // here for its reason: a pair that vanished at the end of the stack would
+    // move the bone sideways under the drafter's hand on the last sheet.
+    //
+    // AND NEITHER ARROW IS DEAD WHEN NOTHING IS CHOSEN YET. PROJECT opens
+    // with no family lit, so `at()` answers -1; DOWN then lands on the first
+    // stop and UP on the last, which is what both words already mean about a
+    // list. An arrow that looked live and did nothing is the other option.
+    //
+    // opts.count()  how many stops the list has
+    // opts.at()     which one we are standing on, 0-based, or -1 for none
+    // opts.go(i)    stand on stop i
+    // opts.up/down  the title each arrow carries, in the page's own words
+    // returns { sync } -- call it whenever the list or the position changes.
+    stepper: (opts = {}) => {
+      const up = document.getElementById('trio-up');
+      const down = document.getElementById('trio-down');
+      if (!up || !down) return { sync: () => {} };
+      if (opts.up) up.title = opts.up;
+      if (opts.down) down.title = opts.down;
+      const step = delta => {
+        const count = opts.count();
+        if (!count) return;
+        const here = opts.at();
+        const next = here < 0 ? (delta > 0 ? 0 : count - 1) : here + delta;
+        if (next < 0 || next >= count || next === here) return;
+        opts.go(next);
+      };
+      up.addEventListener('click', () => step(-1));
+      down.addEventListener('click', () => step(1));
+      const sync = () => {
+        const count = opts.count();
+        const here = opts.at();
+        [up, down].forEach(button => { button.hidden = !count; });
+        up.disabled = !count || here === 0;
+        down.disabled = !count || here === count - 1;
+      };
+      sync();
+      return { sync };
+    },
 
     // counterSlot() CAME OFF HERE on 25 Sep. It existed to give a page with
     // no counts the count's home without the STATUS READOUT tab beside it --

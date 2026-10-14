@@ -3634,6 +3634,59 @@
       // one for the new one, which is the honest ask.
       const detachedFamilyButtons = [];
       const detachedRoomButtons = [];
+      // THE FOUNDATION AND THE STOREY OVER IT, SET IN ONE GO. Lifted out of
+      // the + ROOM OVER handler because the foot's arrows need the other half
+      // of it: stepping UP off "GRADE BEAM + ROOM OVER" has to land on a
+      // grade beam with NO room, and the GRADE BEAM button cannot do that --
+      // it deliberately leaves the room alone, so that pressing a different
+      // foundation keeps the storey you had on it.
+      const setDetachedRoom = (entry, wanted) => {
+        if (readOnly) return;
+        // THE STORED CHOICE, NOT THE DEFAULTED ONE, which is the same test the
+        // foundation button makes two blocks down and for the same reason: on
+        // a fresh plan `detachedFoundation()` already answers "thickened"
+        // because that is the office default, so comparing against it would
+        // decide nothing had changed and never WRITE the choice -- the column
+        // would stay unlit and the arrows would look dead on the first press.
+        const here = sectionTable.rows.detachedGarage?.garageFoundation === entry.foundation;
+        const had = detachedRoomOver();
+        if (here && had === (wanted === 'room')) return;
+        const line = here ? null : setDetachedFoundation(entry.foundation);
+        writeCell('detachedGarage', 'overGarage', wanted);
+        // AND SYNC AFTER THE WRITE, not before it. setDetachedFoundation ends
+        // by syncing -- it is the foundation's own press -- so the pass it
+        // runs sees the room-over cell as it was a line ago, and the button
+        // just pressed comes back unlit. This call is what the press changed.
+        syncFamilyRow();
+        // THE WORD ONLY MENTIONS THE STOREY WHEN THE STOREY IS THE NEWS: a
+        // foundation reached with no room over it either way says what it is
+        // and stops there. "On a grade beam, with no room above" is true, and
+        // reads like something was taken off when nothing was.
+        save(line
+          ? (wanted === 'room' || had
+            ? `${line.replace(/\.$/, '')}, with ${wanted === 'room' ? 'a room above' : 'no room above'}.`
+            : line)
+          : `Room above the detached garage ${wanted === 'room' ? 'added' : 'removed'}.`);
+        repaint();
+      };
+      // ── THE STOPS THE FOOT'S ARROWS WALK, IN MOVIE'S ORDER ──────────────
+      // Movie, 14 Oct: "in the project area, cycle through each HOUSE TYPE
+      // selection, 1st DETACHED GARAGE THICKENED EDGE / 2nd DETACHED GARAGE
+      // GRADE BEAM (1 storey) / 2nd DETACHED GARAGE GRADE BEAM ROOM OVER (2
+      // STOREY) ... FROST WALL... FROST WALL 2 STOREY... BUNGALOW 1 STOREY...
+      // etc".
+      //
+      // THAT ORDER IS THE COLUMNS' OWN, not a second list written out here:
+      // the stops are pushed as the buttons are built, so they come out in
+      // the order the drafter reads down the page -- the detached garage's
+      // five, then the bungalows, then the bilevels. A sixth entry added to
+      // build-menu.js lands in the right place in both at once. The one list
+      // that could drift from the other is the one that does not exist.
+      const trioStops = [];
+      // DECLARED BEFORE syncFamilyRow IS WRITTEN, because syncFamilyRow syncs
+      // it and runs once before the stepper is mounted -- a `const` below
+      // would be in its temporal dead zone there, which `?.` does not soften.
+      let trio = null;
       const detachedFamilyRow = document.querySelector('#detached-family-row');
       if (detachedFamilyRow) {
         window.DraftBuildMenu.BUILD_MENU
@@ -3656,6 +3709,7 @@
             });
             detachedFamilyRow.appendChild(button);
             detachedFamilyButtons.push({ entry, button });
+            trioStops.push({ button, press: () => setDetachedRoom(entry, 'none') });
             // ── AND THE STOREY BESIDE THE FOUNDATION THAT CAN CARRY IT ────
             // Movie's 28 Sep mockup, drawn with the bungalow's pairing:
             // THICKENED EDGE across the top, then GRADE BEAM and FROST WALL
@@ -3683,30 +3737,27 @@
             roomButton.disabled = readOnly;
             roomButton.addEventListener('click', () => {
               if (readOnly) return;
-              const here = detachedFoundation() === entry.foundation;
               // ON THIS FOUNDATION IT TOGGLES; on another it brings the
               // foundation with it. Pressing the button under FROST WALL has
               // to be able to say "a frost wall, with a room over it" in one
               // press, or the column asks for two.
-              const line = here ? null : setDetachedFoundation(entry.foundation);
-              const wanted = here && detachedRoomOver() ? 'none' : 'room';
-              writeCell('detachedGarage', 'overGarage', wanted);
-              // AND SYNC AFTER THE WRITE, not before it. setDetachedFoundation
-              // ends by syncing -- it is the foundation's own press -- so the
-              // pass it runs here sees the room-over cell as it was a line
-              // ago, and the button that had just been pressed came back
-              // unlit. The second call is what this press actually changed.
-              syncFamilyRow();
-              save(line
-                ? `${line.replace(/\.$/, '')}, with a room above.`
-                : `Room above the detached garage ${
-                  wanted === 'room' ? 'added' : 'removed'}.`);
-              repaint();
+              setDetachedRoom(entry, detachedFoundation() === entry.foundation
+                && detachedRoomOver() ? 'none' : 'room');
             });
             detachedFamilyRow.appendChild(roomButton);
             detachedRoomButtons.push({ entry, button: roomButton });
+            // THE ARROWS DO NOT TOGGLE. A stop is a place to stand, so
+            // stepping onto this one always means "this foundation, with the
+            // room" -- never "whatever it is now, flipped".
+            trioStops.push({ button: roomButton, press: () => setDetachedRoom(entry, 'room') });
           });
       }
+      // AND THE HOUSES AFTER THE GARAGES, which is the order Movie listed and
+      // the order the three type rows stand in. A house tile presses itself:
+      // unlike the detached pair there is nothing a step has to undo, because
+      // each tile already names a whole house -- storey, garage and framing.
+      familyButtons.forEach(({ button }) =>
+        trioStops.push({ button, press: () => button.click() }));
 
       syncFamilyRow = () => {
         // WHICH BUNGALOW, NOT JUST WHICH TYPE. ON-GRADE and 1 STOREY share a
@@ -3748,8 +3799,38 @@
           button.setAttribute('aria-pressed',
             chosen === entry.foundation && detachedRoomOver() ? 'true' : 'false');
         });
+        // THE ARROWS READ THE SAME LIT BUTTONS this just set, so they are
+        // never a frame behind the column.
+        trio?.sync();
       };
       syncFamilyRow();
+
+      // ── THE FOOT'S TWO ARROWS, CYCLING THE HOUSE TYPES ───────────────────
+      // WHERE WE ARE STANDING IS READ OFF THE COLUMN, not kept beside it: the
+      // lit button IS the current choice, and syncFamilyRow has just worked
+      // out which that is from the drawing. A second idea of "the current
+      // type" living in this file is the two-sources-of-truth failure MODEL's
+      // own shell comment warns about.
+      //
+      // THE LAST LIT ONE, because the detached garage lights TWO when a room
+      // stands over it -- GRADE BEAM says what it is founded on and + ROOM
+      // OVER says what is on top, and both are true. The room button is built
+      // immediately after its foundation, so the later of the two is always
+      // the more particular answer, which is the stop to step off.
+      //
+      // -1 WHEN NOTHING IS LIT is the honest answer on a fresh plan, where no
+      // choice has been made yet (the thickened edge is only the default, and
+      // the column deliberately lights nothing until somebody presses). The
+      // bar takes DOWN to the first stop and UP to the last from there.
+      trio = window.DraftShellBars.stepper({
+        up: 'Previous house type',
+        down: 'Next house type',
+        count: () => trioStops.length,
+        at: () => trioStops.reduce((found, stop, index) =>
+          stop.button.getAttribute('aria-pressed') === 'true' ? index : found, -1),
+        go: index => trioStops[index].press(),
+      });
+      trio.sync();
 
       controls.forEach(control => {
         const tag = document.createElement('span');

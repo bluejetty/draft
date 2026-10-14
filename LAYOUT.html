@@ -1222,6 +1222,29 @@ class Component extends PageLogic {
     const cont = document.querySelector('[data-layout-container]');
     if (cont) this._ro.observe(cont);
 
+    // ── THE TWO ARROWS, UP AND DOWN THE SHEET STACK ────────────────────────
+    // Movie, 14 Oct: "those arrow can be placed on the PROJECT and REAL
+    // ESTATE PLANS, CONSTRUCTION PLANS but instead of going up and down
+    // levels, go up and down on the stack of pages in the layouts".
+    //
+    // THE STOPS ARE THE SHEETS, which `_sheetCount` already counts the honest
+    // way -- the dealt titles AND the highest sheet any viewport claims, so a
+    // viewport dragged onto sheet 4 of a three-sheet set is a stop even
+    // before the set is re-dealt. The thumbnail rail is the other control on
+    // this same answer; both go through `_setActiveSheet`, so neither can
+    // leave the other behind.
+    //
+    // ONE-BASED ON THE RECORD, ZERO-BASED TO THE BAR: a layout record keys a
+    // viewport's sheet by NUMBER from 1, and the stepper counts stops from 0.
+    // The +1/-1 lives here, on the page that owns the numbering.
+    this._trio = window.DraftShellBars.stepper({
+      up: 'Up a sheet in the set',
+      down: 'Down a sheet in the set',
+      count: () => this._sheetCount(),
+      at: () => this.state.activeSheet - 1,
+      go: index => this._setActiveSheet(index + 1),
+    });
+
     this._resize();
     this._fitPaper();
     this._draw();
@@ -3122,6 +3145,10 @@ class Component extends PageLogic {
         data: { 'data-layout-sheet': String(i + 1) },
       })),
       sheet => this._setActiveSheet(sheet));
+    // AND THE FOOT'S ARROWS ARE THE SAME LIST, so they grey at its ends. Here
+    // rather than in `_draw`, because this is where the sheet list itself is
+    // repainted -- one place that knows the stack changed, not two.
+    this._trio?.sync();
 
     // THE LIST AND THE READOUT NAME THE SELECTED VIEWPORT'S SCALE while one
     // is selected -- that is the scale a pick will change -- and the next
