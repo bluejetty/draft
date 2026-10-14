@@ -410,16 +410,39 @@ test('the room over a MOD BILEVEL garage gets OWJ wall to wall, no beam or post 
   expect(beams.length, 'no beam crosses the garage').toBe(0);
   const note = (d.notes || []).find(n => Number(n.levelId) === 4 && n.view === 'floor' && /^ENGINEERED OWJ/.test(n.body));
   expect(note, 'the OWJ note on the room\'s floor layout').toBeTruthy();
-  // SIDE WALL TO SIDE WALL IS THE WAY THE DOOR WALL RUNS (Movie, 12 Oct:
-  // "the sides that land on walls"): these doors are in the x = -21 wall, so
-  // the joists run in z across the room's 31 ft, not its 20 ft the short way.
-  // THE DEEPEST TRUSS IN THE TABLE, at 12" o.c., which is what a 31 ft span
-  // takes. It is written 23-1/4" now rather than 24": Movie, 13 Oct, set the
-  // rule that a truss is its round depth less the 3/4" sheathing, so the
-  // FLOOR PACKAGE lands on 24" and the truss ordered is 23-1/4". Same row of
-  // the same table, named the way it is ordered.
-  expect(note.body).toMatch(/23-1\/4" @ 12" O\.C\./);
-  expect(note.body).toMatch(/SIDE WALL TO SIDE WALL -- 31'-0" SPAN/);
+  // ── AND THE DOORS MOVED, SO THE SPAN DID (Movie, 14 Oct) ──────────────
+  //
+  // This read 31 ft at 23-1/4" @ 12" o.c., and the comment said why: "these
+  // doors are in the x = -21 wall, so the joists run in z across the room's
+  // 31 ft". The x = -21 wall is this garage's WEST side -- the neighbour's
+  // side -- and the doors were there because the old rule put them opposite
+  // the man-door connection to the house. Movie: "garage door to face street,
+  // user can change it later if needed".
+  //
+  // SO THE DOORS ARE IN THE STREET WALL NOW, and the joists turn with them:
+  // they bear on the two walls either side of the door wall, because a wall
+  // full of overhead doors carries nothing. That is a shorter span and a
+  // shallower truss -- a better building, and the same rule stated.
+  //
+  // THE DOOR WALL IS READ, NOT ASSUMED, because this check is now about the
+  // relationship between the two: move the doors and the span must follow.
+  //
+  // READ BY WHERE IT STANDS, not by a normal worked out here. A wall record's
+  // start and end run whichever way the builder raised them, so "(dz, -dx)"
+  // is outward for half of them and inward for the rest -- a derivation this
+  // spec has no business repeating. The street is +z, so the street wall is
+  // the one standing at the garage's own maximum z.
+  const overhead = (d.fenestrations || []).filter(f => f.garage === true);
+  expect(overhead.length, 'the garage got no overhead door').toBeGreaterThan(0);
+  const doorWall = (d.walls || []).find(w => w.id === overhead[0].wallId);
+  expect(doorWall, 'the overhead door hangs on no wall').toBeTruthy();
+  const southmost = Math.max(...garage.points.map(p => p.z));
+  const wallZ = (doorWall.start.z + doorWall.end.z) / 2;
+  expect(Math.abs(wallZ - southmost),
+    `the overhead doors stand at z ${wallZ}, and the street wall is at ${southmost}`)
+    .toBeLessThan(1);
+  expect(note.body).toMatch(/19-1\/4" @ 16" O\.C\./);
+  expect(note.body).toMatch(/SIDE WALL TO SIDE WALL -- 20'-0" SPAN/);
   expect(d.dimensions.filter(x => Number(x.levelId) === 4 && x.view === 'floor').length,
     'the room\'s floor layout is dimensioned').toBeGreaterThan(0);
 });

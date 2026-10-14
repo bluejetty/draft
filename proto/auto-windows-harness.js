@@ -261,7 +261,12 @@ eq('a diagonal leaning south still reads front', A.faceOrientation({ x: 0.4, z: 
     `gap=${plan.doors[1].offset - plan.doors[0].offset}`);
 }
 {
-  // No step-back cue anywhere: fall to the face opposite the man door.
+  // ── THE STREET WINS WHEREVER A WALL FACES IT (Movie, 14 Oct) ──────────
+  //
+  // This block used to read "no step-back cue anywhere: fall to the face
+  // opposite the man door", and on this rectangle the two answers agree --
+  // the man door is on the back, so opposite IS the street. What changed is
+  // which rule is doing the work, so the check that names it changed with it.
   const plan = A.garageDoorPlan({
     faces: [
       { index: 0, orientation: 'front', lengthFt: 20 },
@@ -271,8 +276,26 @@ eq('a diagonal leaning south still reads front', A.faceOrientation({ x: 0.4, z: 
     ],
     manDoorFaceIndex: 2,
   });
-  eq('an ambiguous rectangle lands opposite the man door', plan?.faceIndex, 0);
-  check('the reason is stated', /opposite/.test(plan?.reason || ''), plan?.reason);
+  eq('a rectangle with a man door behind still opens at the street', plan?.faceIndex, 0);
+  check('the reason is stated', /street/.test(plan?.reason || ''), plan?.reason);
+}
+{
+  // AND THE MAN DOOR IS FOR THE GARAGE WITH NO STREET AT ALL -- one tucked
+  // behind the house, whose only front-facing wall is the wall it hangs off.
+  // That face is handed in so this rule can read it, and it must not be the
+  // one the cars come through.
+  const plan = A.garageDoorPlan({
+    faces: [
+      { index: 0, orientation: 'front', lengthFt: 20 },   // the joint, at the house
+      { index: 1, orientation: 'left', lengthFt: 24 },
+      { index: 2, orientation: 'back', lengthFt: 20 },
+      { index: 3, orientation: 'right', lengthFt: 24 },
+    ],
+    manDoorFaceIndex: 0,
+  });
+  eq('with the only street face at the house, the door lands opposite it',
+    plan?.faceIndex, 2);
+  check('and says which rule placed it', /man-door/.test(plan?.reason || ''), plan?.reason);
 }
 {
   const plan = A.garageDoorPlan({
