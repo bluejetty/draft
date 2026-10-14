@@ -85,6 +85,18 @@ test('DRAW AUTOSITE files the lot and the card does not come back', async ({ pag
   await page.locator('#lay-lot [data-lot-tier]:not([disabled])').first().click();
   await page.locator('#lay-lot [data-lot-draw]').click();
   await expect(card(page)).toBeHidden();
+  // WAITED FOR, NOT ASSUMED. The card closing is a repaint; the lot reaching
+  // the store is a write behind it, and reading the file in the next
+  // statement is a race this lost in CI on 14 Oct -- green on every local run
+  // and on main, red on a loaded runner, reporting "the lot was never
+  // written" about a lot that was written a moment later. A flake that names
+  // the feature is worse than one that names the timing.
+  await page.waitForFunction(async () => {
+    const at = await window.SharedFileStore.loadSharedFileAt('model-drawing');
+    if (!at) return false;
+    const saved = JSON.parse(await at.file.text());
+    return !!window.DraftLotSizes.siteOutlineOf(saved.outlines);
+  }, null, { timeout: 15000 }).catch(() => {});
   // ON THE SITE LEVEL, which is what makes it the same lot MODEL draws rather
   // than a rectangle this page keeps to itself.
   const site = await page.evaluate(async () => {
@@ -93,6 +105,9 @@ test('DRAW AUTOSITE files the lot and the card does not come back', async ({ pag
     const lot = window.DraftLotSizes.siteOutlineOf(saved.outlines);
     return lot ? { levelId: Number(lot.levelId), points: (lot.points || []).length } : null;
   });
+  // THE CATCH ABOVE IS DELIBERATE: a wait that times out must not swallow the
+  // claim, so the assertion below is still what fails, and it fails saying
+  // what is actually wrong.
   expect(site, 'the lot was never written').not.toBeNull();
   expect(site.levelId, 'the lot is filed on SITE').toBe(8);
   expect(site.points, 'and it is a closed rectangle').toBe(4);
