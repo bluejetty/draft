@@ -4997,6 +4997,34 @@
       elev: 0,
       colors: { origin: skin['draw-origin'] },
     });
+    // ── AND THE LOT'S OWN MARK (Movie, 13 Oct) ─────────────────────────────
+    //
+    // "the SITE PLAN will need a seperate registration mark make it a GREEN
+    // TARGET - it should be located at the corne were E1 and E2 are front and
+    // left side corner".
+    //
+    // THE SAME PAINTER, A SECOND TIME. A target is a target: giving the site
+    // its own drawing code would be two marks that could drift apart in
+    // shape, and the only things that differ are WHERE it stands and what
+    // colour it is -- which is exactly what this painter takes.
+    //
+    // WHERE IS READ OFF THE LOT'S CORNERS, not stored: lot-sizes' siteDatumOf
+    // answers min x / max z, the corner E2 and E1 share, and re-reads it
+    // after the drafter has dragged the lot out of square. That is the whole
+    // reason the lot is an outline.
+    //
+    // ONLY WHERE THERE IS A LOT. A drawing with no site plan has no second
+    // datum, and a mark at 0,0 "ready for one" would be a registration point
+    // for a lot nobody has drawn.
+    const lot = window.DraftLotSizes.siteOutlineOf(drawing?.outlines);
+    const siteDatum = lot ? window.DraftLotSizes.siteDatumOf(lot) : null;
+    if (siteDatum) {
+      R.drawOrigin2D(ctx, toS, {
+        datum: siteDatum,
+        elev: 0,
+        colors: { origin: skin['draw-site-datum'] },
+      });
+    }
   };
 
   // THE FRAME TIME IS AN INSTRUMENT, not a test hook. Measured here rather

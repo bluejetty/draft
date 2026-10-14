@@ -107,6 +107,20 @@ if (!window.DraftPalette) {
                         // underlay and the drawing's registration mark are
                         // different things that happen to be the same green,
                         // and one moving is not the other moving.
+    'draw-site-datum',  // THE LOT'S OWN registration mark. Movie, 13 Oct: "the
+                        // SITE PLAN will need a seperate registration mark
+                        // make it a GREEN TARGET - it should be located at the
+                        // corne were E1 and E2 are front and left side
+                        // corner". A SECOND mark, not a second colour for the
+                        // first: the drawing's datum is the drafter's first
+                        // click and the site's is a corner of the LOT, and a
+                        // sheet carrying both has to say which is which.
+                        //
+                        // GREEN BECAUSE THE DATUM LEFT IT. draw-origin went
+                        // gold on 17 Sep, which is what frees green to mean
+                        // the lot. Its pair is the same as draw-underlay's,
+                        // for the reason stated there and with the same
+                        // warning: one moving is not the other moving.
     'draw-floor',       // floor polygons, a wash rather than a fill
     'draw-floor-edge',  // the slab outline and its corner handles, drawn ON
                         // TOP of that wash -- so the wash, not the page, is
@@ -268,6 +282,10 @@ if (!window.DraftPalette) {
       // not the other moving. On 17 Sep the datum went gold and this did not.
       // A shared key would have taken the underlay with it.
       'draw-underlay':   '#6a9a57',   // 5.02 -- the green the datum used to be
+      // THE SAME GREEN, A DIFFERENT MARK. Measured at the same 5.02 because
+      // it IS that value; kept its own key so the lot's target and a tracing
+      // underlay can part company without one dragging the other.
+      'draw-site-datum': '#6a9a57',   // 5.02
       'draw-floor':      'rgba(120,140,150,0.10)',
       'draw-floor-edge': '#5980a6',
       'draw-wall':       '#2f3335',   // 1.30 on the page -- poche, deliberately quiet
@@ -384,6 +402,7 @@ if (!window.DraftPalette) {
       'draw-stair':      '#5d4a8a',   // 6.68
       'draw-cut':        '#b04060',   // 5.01
       'draw-underlay':   '#557a46',   // 4.41 -- the green the datum used to be
+      'draw-site-datum': '#557a46',   // 4.41 -- its twin, and its own key
       'draw-floor':      'rgba(90,110,120,0.10)',
       'draw-floor-edge': '#5980a6',
       'draw-wall':       '#ffffff',   // 1.12 on the page -- the same quiet relationship
