@@ -186,6 +186,33 @@ const plan = (entryId, garage = GARAGE) => T.planFromTrace({
   // door is now (Movie, 9 Oct): the back wall he chose, not a side.
   check('the man door on four feet is the D30 that fits', p.garageOpenings.filter(o => !o.garage)
     .map(o => o.widthFt), [2.5]);
+  // ── AND THE JOINT STILL BEATS THE CONVENTION ──────────────────────────
+  //
+  // On the stock garage the two answers agree -- it stands in FRONT of the
+  // house, so the face opposite its joint IS the street -- which is why the
+  // mutation row below went quiet the day a street default landed in
+  // auto-windows (Movie, 14 Oct: "put the garage door openings facing FRONT /
+  // E1 direction as DEFAULT"). With both rules naming the same wall, dropping
+  // the man-door hint changed nothing and the mutant survived.
+  //
+  // SO THE FIXTURE IS ONE WHERE THEY DISAGREE: a garage hung on the house's
+  // EAST wall, flush with its front. The joint is the garage's west face, so
+  // the cue says east; the convention says the street, which is south. What
+  // is asserted here is that the drawing's own cue wins -- the default is for
+  // a garage that carries no cue at all.
+  //
+  // WORTH A SECOND LOOK ONE DAY: east is the neighbour's side, and a drafter
+  // may well want the street even here. That is a ruling, not a defect, so it
+  // is written down rather than quietly changed.
+  {
+    const side = T.planFromTrace({ entryId: 'bungalow-garage', house: HOUSE,
+      garage: rect(16, -4, 40, 20) });
+    const edges = T.edgesOf(side.garage);
+    const doors = side.garageOpenings.filter(o => o.garage)
+      .map(o => [Math.round(edges[o.edge].n.x), Math.round(edges[o.edge].n.z)]);
+    check('a garage joined on the side opens opposite that joint, not at the street',
+      doors, [[1, 0], [1, 0]]);
+  }
   const door = p.houseOpenings.find(o => o.type === 'door');
   const e = T.edgesOf(p.house)[door.edge];
   check('the front door is on the front, clear of the garage', [e.a.z, e.b.z,
