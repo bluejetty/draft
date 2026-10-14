@@ -196,10 +196,12 @@
           </div>
           <div class="crop-side">
             <div class="crop-label">On the sheet</div>
-            <div class="crop-where">
-              <button class="action" type="button" data-crop-place="right">RIGHT STRIP</button>
-              <button class="action" type="button" data-crop-place="bottom">BOTTOM BAND</button>
-            </div>
+            <!-- WHICH TITLEBLOCK THIS IS, said rather than chosen. The frame
+                 is picked in Construction Layout and a logo goes in whichever
+                 one is current -- "show them what it will look like in the
+                 current TB selection" -- so offering the choice again here
+                 would be a second control on somebody else's answer. -->
+            <div class="crop-where" data-crop-frame></div>
             <canvas data-crop-cell width="230" height="150" aria-label="The company mark cell as it will print"></canvas>
             <div class="crop-label">Whole titleblock</div>
             <canvas data-crop-whole width="230" height="150" aria-label="The whole titleblock as it will print"></canvas>
@@ -508,7 +510,7 @@
             <span class="default-name" style="display:flex; align-items:center;">
               <img src="${escape(logo.dataUrl)}" alt="" style="max-width:104px; max-height:46px; object-fit:contain; background:#fff; border:1px solid var(--edge-panel); padding:3px;" />
             </span>
-            <span class="layer-use">Shows in Construction Layout as <strong>${escape(logo.label)}</strong>, on the ${logo.placement === 'bottom' ? 'bottom band' : 'right-hand strip'} of an 11&times;17 sheet.${logo.seq ? ` <em>Slot ${String(logo.seq).padStart(2, '0')} &mdash; click the name to call it something else; the next logo keeps counting from where it left off.</em>` : ''}</span>
+            <span class="layer-use">Shows in the <strong>LOGO</strong> menu in Construction Layout as <strong>${escape(logo.label)}</strong>, and goes in whichever titleblock that sheet wears.${logo.seq ? ` <em>Slot ${String(logo.seq).padStart(2, '0')} &mdash; click the name to call it something else; the next logo keeps counting from where it left off.</em>` : ''}</span>
             <span class="layer-print" style="justify-content:flex-start; gap:6px;">
               <input class="layer-name-input" type="text" data-logo-label="${escape(logo.id)}" value="${escape(logo.label)}" aria-label="Name for this logo in the titleblock list" title="Click to rename this logo" style="width:100%;" />
               <button class="action" type="button" data-logo-crop="${escape(logo.id)}" title="Crop this logo again, against the titleblock">CROP</button>
@@ -804,7 +806,7 @@
       const cellCanvas = document.querySelector('[data-crop-cell]');
       const wholeCanvas = document.querySelector('[data-crop-whole]');
       const cropNote = document.querySelector('[data-crop-note]');
-      const placeButtons = [...document.querySelectorAll('[data-crop-place]')];
+      const frameNote = document.querySelector('[data-crop-frame]');
       // WHAT THE DIALOG IS WORKING ON: the picture, the rectangle kept out of
       // it in IMAGE pixels, where it will stand on the sheet, and what to do
       // with the answer (a new logo, or a re-crop of one already in the list).
@@ -813,11 +815,17 @@
       // The current titleblock, so the preview opens on the arrangement the
       // drafter is actually using. LAYOUT writes it into whichever package it
       // last saved, so both are asked.
-      const currentTitleblockId = () => {
+      // THE FRAME A SHEET IS WEARING. LAYOUT writes it into whichever package
+      // it last saved, so both are asked; a browser that has never opened
+      // LAYOUT gets the frame every drawing opens on.
+      const currentFrame = () => {
         const manager2 = window.DraftProfileManager;
-        return manager2?.getActive('standards')?.content?.layout?.titleblock
-          || manager2?.getActive('settings')?.content?.layout?.titleblock
-          || 'roughdrafter';
+        const saved = manager2?.getActive('standards')?.content?.layout
+          || manager2?.getActive('settings')?.content?.layout;
+        const id = saved?.titleblock;
+        return window.DraftTitleblock.frameById(
+          id ? window.DraftTitleblock.pickFrom(id).frame : '')
+          || window.DraftTitleblock.FRAMES[0];
       };
 
       const PREVIEW_INFO = Object.freeze({
@@ -840,12 +848,18 @@
       const paintPreview = () => {
         const T = window.DraftTitleblock;
         const picture = cropPicture();
-        const style = { ...T.logoStyle({ id: 'preview', label: crop.label, dataUrl: '', placement: crop.placement }) };
+        const frame = currentFrame();
+        frameNote.textContent = frame.label;
+        // THE REAL COMPOSE, with a mark made of the crop in hand. Anything
+        // this page built by itself could disagree with the sheet.
+        const style = T.compose(frame.id, 'logo:preview',
+          [{ id: 'preview', label: crop.label, dataUrl: 'data:image/png;base64,AA' }]);
         // THE SHEET AT A SIZE THE STRIP CAN BE READ AT, then the parts of it
         // this dialog is about. One render, two views: a second render at a
         // second scale would be a second chance to disagree with the sheet.
-        const zoom = crop.placement === 'right' ? 90 : 34;
-        const PW = 17; const PH = 11;
+        const zoom = style.placement === 'right' ? 90 : 34;
+        const PW = frame.paper === '11x17' ? 17 : 11;
+        const PH = frame.paper === '11x17' ? 11 : 8.5;
         const sheet = document.createElement('canvas');
         sheet.width = Math.round(PW * zoom);
         sheet.height = Math.round(PH * zoom);
@@ -854,9 +868,9 @@
         sctx.fillRect(0, 0, sheet.width, sheet.height);
         const m = 0.5 * zoom;
         const inner = { x: m, y: m, w: sheet.width - m * 2, h: sheet.height - m * 2 };
-        const box = crop.placement === 'right'
-          ? { x: inner.x + inner.w - T.STRIP_W_IN * zoom, y: inner.y, w: T.STRIP_W_IN * zoom, h: inner.h }
-          : { x: inner.x, y: inner.y + inner.h - T.BAND_H_IN * zoom, w: inner.w, h: T.BAND_H_IN * zoom };
+        const box = style.placement === 'right'
+          ? { x: inner.x + inner.w - style.stripWIn * zoom, y: inner.y, w: style.stripWIn * zoom, h: inner.h }
+          : { x: inner.x, y: inner.y + inner.h - style.bandHIn * zoom, w: inner.w, h: style.bandHIn * zoom };
         T.draw(sctx, box, style, PREVIEW_INFO, picture);
 
         const blit = (target, src, area) => {
@@ -872,7 +886,7 @@
         // THE MARK'S OWN CELL, ENLARGED -- the part a crop is judged by. Its
         // bounds come from titleblock.js (MARK_CELL) rather than from two
         // numbers retyped here.
-        const cell = crop.placement === 'right'
+        const cell = style.placement === 'right'
           ? { x: box.x, y: box.y + box.h * T.MARK_CELL.top,
             w: box.w, h: box.h * (T.MARK_CELL.bottom - T.MARK_CELL.top) }
           : { x: box.x, y: box.y, w: box.w * 0.2, h: box.h };
@@ -963,13 +977,6 @@
       cropCanvas.addEventListener('pointerup', endDrag);
       cropCanvas.addEventListener('pointercancel', endDrag);
 
-      const setPlacement = where => {
-        crop.placement = where;
-        placeButtons.forEach(button => button.classList.toggle('on', button.dataset.cropPlace === where));
-        paintCrop();
-      };
-      placeButtons.forEach(button =>
-        button.addEventListener('click', () => setPlacement(button.dataset.cropPlace)));
       document.querySelector('[data-crop-trim]').addEventListener('click', () => {
         crop.rect = { ...contentBounds(crop.canvas) };
         paintCrop();
@@ -986,9 +993,8 @@
       // for, so it is the state the dialog starts in rather than a button he
       // has to find; WHOLE IMAGE is one press away for a mark that wants its
       // own margin.
-      const openCrop = (canvas, label, placement, onUse) => {
-        crop = { canvas, label, placement, onUse, rect: { ...contentBounds(canvas) } };
-        placeButtons.forEach(button => button.classList.toggle('on', button.dataset.cropPlace === placement));
+      const openCrop = (canvas, label, onUse) => {
+        crop = { canvas, label, onUse, rect: { ...contentBounds(canvas) } };
         cropBack.hidden = false;
         paintCrop();
       };
@@ -996,9 +1002,8 @@
       document.querySelector('[data-crop-use]').addEventListener('click', () => {
         const use = crop.onUse;
         const picture = cropPicture();
-        const placement = crop.placement;
         closeCrop();
-        use(picture.toDataURL('image/png'), placement);
+        use(picture.toDataURL('image/png'));
       });
 
       const fileInput = document.querySelector('[data-logo-file]');
@@ -1014,12 +1019,10 @@
           const canvas = await asCanvas(file);
           const seq = nextSeq();
           const label = `COMPANY ${String(seq).padStart(2, '0')}`;
-          const current = window.DraftTitleblock.styleById(currentTitleblockId(), companyLogos);
-          openCrop(canvas, label, current?.placement === 'bottom' ? 'bottom' : 'right',
-            (dataUrl, placement) => {
+          openCrop(canvas, label, dataUrl => {
               const next = window.DraftTitleblock.normaliseCompanyLogos([
                 ...companyLogos,
-                { id: `L${Date.now().toString(36)}`, label, dataUrl, placement, seq },
+                { id: `L${Date.now().toString(36)}`, label, dataUrl, seq },
               ]);
               // NOTHING WAS ADDED means the normaliser refused it, and the
               // only thing it refuses that gets this far is size. Said
@@ -1050,9 +1053,9 @@
           canvas.width = img.naturalWidth || img.width;
           canvas.height = img.naturalHeight || img.height;
           canvas.getContext('2d').drawImage(img, 0, 0);
-          openCrop(canvas, logo.label, logo.placement, (dataUrl, placement) => {
+          openCrop(canvas, logo.label, dataUrl => {
             companyLogos = window.DraftTitleblock.normaliseCompanyLogos(companyLogos
-              .map(entry => (entry.id === logo.id ? { ...entry, dataUrl, placement } : entry)));
+              .map(entry => (entry.id === logo.id ? { ...entry, dataUrl } : entry)));
             saveActive(`${logo.label} cropped.`);
             renderLogos();
           });

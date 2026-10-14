@@ -165,28 +165,95 @@ function runChecks() {
   const right = T.styleById('roughdrafter');
   const band = T.styleById('bluejetty-band');
 
-  // ── THE REGISTRY ─────────────────────────────────────────────────────
-  check('a new company is a STYLES entry, not a new painter', T.STYLES.length === 4);
-  check('every style is reachable by its id',
-    T.STYLES.every(style => T.styleById(style.id) === style));
-  check('the ids are distinct', new Set(T.STYLES.map(s => s.id)).size === 4);
-  check('a company nobody has heard of comes back null, not a wrong strip',
-    T.styleById('acme') === null && T.styleById(undefined) === null,
-    'silently painting another company\'s name on a client sheet is the bad failure here');
-  check('every style names a company and a mark to paint it with',
-    T.STYLES.every(s => s.company && s.logoSrc && s.label));
-  check('every company has both a strip and a band',
-    ['BLUEJETTY', 'ROUGH DRAFTER'].every(company =>
-      T.STYLES.some(s => s.company === company && s.placement === 'right')
-        && T.STYLES.some(s => s.company === company && s.placement === 'bottom')));
-  check('the registry is frozen, entries and all',
-    Object.isFrozen(T.STYLES) && T.STYLES.every(Object.isFrozen) && Object.isFrozen(T));
+  // ── TWO REGISTRIES, NOT ONE ──────────────────────────────────────────
+  // Movie, 14 Oct: "put a button up beside TITLEBLOCK title ... and then that
+  // TB will accept the LOGO which will be a new area below TITLBLOCK". The
+  // four styles used to answer both questions at once, which is why a rounded
+  // frame came with BLUEJETTY's logo welded into it.
+  check('a frame is a shape and a mark is a company, and neither knows the other',
+    T.FRAMES.every(f => f.placement && !f.logoSrc && !f.company)
+      && T.MARKS.every(m => m.logoSrc && m.company && !m.placement),
+    'the old list carried both, so the rounded frame could only ever be BLUEJETTY');
+  check('three shapes for each of the four sheets this shop prints',
+    T.FRAMES.length === 12
+      && new Set(T.FRAMES.map(f => `${f.paper}/${f.orientation}`)).size === 4
+      && new Set(T.FRAMES.map(f => f.shape)).size === 3);
+  check('the sets he named are the landscape 11x17 ones',
+    T.framesFor('11x17', 'landscape').map(f => f.id).join(',') === 'LSQUARE01,LBAND01,LROUND01',
+    'Movie, 14 Oct: "TBs so far : LSQUARE01 , LBAND01 , LROUND01"');
+  check('L is landscape and P is portrait, in every id',
+    T.FRAMES.every(f => f.id.startsWith(f.orientation === 'landscape' ? 'L' : 'P')),
+    '"use L for landscape orientation and P for portrait"');
+  check('01 is the ledger set and 02 the letter one',
+    T.FRAMES.every(f => f.id.endsWith(f.paper === '11x17' ? '01' : '02')));
+  check('a drafter is only offered the three that fit the sheet he is on',
+    T.framesFor('8.5x11', 'portrait').length === 3
+      && T.framesFor('8.5x11', 'portrait').every(f => f.paper === '8.5x11' && f.orientation === 'portrait'));
+  check('a sheet nobody has a set for falls back rather than offering nothing',
+    T.framesFor('30x42', 'landscape').length === 3,
+    'an empty picker reads as broken; the 11x17 landscape set is what every drawing before this wore');
+  check('a letter block is narrower than a ledger one, because the sheet is',
+    T.frameById('LSQUARE02').stripWIn < T.frameById('LSQUARE01').stripWIn
+      && T.frameById('LBAND02').bandHIn < T.frameById('LBAND01').bandHIn,
+    '1.15" is 6.8% of a 17" sheet and 13.5% of an 8.5" one: the same block eats twice the drawing');
+  check('turning the page keeps the SHAPE and re-asks the sheet',
+    T.frameOnSheet('LROUND01', '8.5x11', 'portrait') === 'PROUND02'
+      && T.frameOnSheet('LBAND01', '8.5x11', 'landscape') === 'LBAND02',
+    'changing paper must not move a drafter off his rounded strip onto a square one');
+  check('a frame nobody knows still lands on a frame that fits',
+    T.framesFor('11x17', 'portrait').some(f => f.id === T.frameOnSheet('nonsense', '11x17', 'portrait')));
+  check('ROUGH DRAFTER is the mark a drawing opens on',
+    T.MARKS[0].id === 'roughdrafter',
+    'Movie: "it shows the CURRENT logo (RD default)"');
+  check('both registries are frozen, entries and all',
+    Object.isFrozen(T.FRAMES) && T.FRAMES.every(Object.isFrozen)
+      && Object.isFrozen(T.MARKS) && T.MARKS.every(Object.isFrozen) && Object.isFrozen(T));
   check('the paper sizes are in INCHES, not pixels',
     T.STRIP_W_IN === 1.15 && T.BAND_H_IN === 1.5 && T.CORNER_RADIUS_IN === 0.35,
     'a strip measured in pixels prints a different width on every sheet scale');
-  check('each right-hand style carries its own sheet-border radius',
+
+  // ── ONE OF EACH MAKES A STYLE ────────────────────────────────────────
+  check('a frame and a mark compose the flat object the painter has always taken',
+    right.placement === 'right' && right.company === 'ROUGH DRAFTER'
+      && right.logoSrc && right.cornerRadiusIn === 0);
+  check('the style says which pair it came from, so the page can show both',
+    right.frameId === 'LSQUARE01' && right.markId === 'roughdrafter');
+  check('a pair nobody has heard of comes back null, not a wrong strip',
+    T.compose('acme', 'roughdrafter') === null && T.compose('LSQUARE01', 'acme') === null
+      && T.styleById(undefined) !== null,
+    'silently painting another company\'s name on a client sheet is the bad failure here');
+  check('the round frame keeps its radius and drops its arrow divider',
+    T.compose('LROUND01', 'roughdrafter').cornerRadiusIn === 0.35
+      && T.compose('LROUND01', 'roughdrafter').arrowDivider === false
+      && T.compose('LSQUARE01', 'roughdrafter').cornerRadiusIn === 0);
+  check('the block carries its own width, so the sheet painter stops guessing',
+    T.compose('LSQUARE02', 'roughdrafter').stripWIn === T.frameById('LSQUARE02').stripWIn
+      && T.compose('LBAND02', 'roughdrafter').bandHIn === T.frameById('LBAND02').bandHIn);
+
+  // ── WHAT A DRAWING SAVED BEFORE THE SPLIT ────────────────────────────
+  // Four ids were in the field, each meaning both answers. Every drawing and
+  // every settings package holds one, and a drawing that is never saved again
+  // still has to come up wearing what it was given.
+  check('BLUEJETTY was the ROUND frame with BLUEJETTY in it',
+    T.pickFrom('bluejetty').frame === 'LROUND01' && T.pickFrom('bluejetty').mark === 'bluejetty');
+  check('ROUGH DRAFTER was the SQUARE one',
+    T.pickFrom('roughdrafter').frame === 'LSQUARE01' && T.pickFrom('roughdrafter').mark === 'roughdrafter');
+  check('both BANDs were the same frame, differing only in the mark',
+    T.pickFrom('bluejetty-band').frame === 'LBAND01'
+      && T.pickFrom('roughdrafter-band').frame === 'LBAND01'
+      && T.pickFrom('bluejetty-band').mark === 'bluejetty'
+      && T.pickFrom('roughdrafter-band').mark === 'roughdrafter');
+  check('an uploaded logo was its own whole answer, and keeps the strip it had',
+    T.pickFrom('logo:L1').frame === 'LSQUARE01' && T.pickFrom('logo:L1').mark === 'logo:L1');
+  check('a pair saved since reads as itself',
+    T.pickFrom('LBAND02/bluejetty').frame === 'LBAND02'
+      && T.pickFrom('LBAND02/bluejetty').mark === 'bluejetty');
+  check('anything else opens on the first frame and the default mark',
+    T.pickFrom('').frame === 'LSQUARE01' && T.pickFrom(undefined).mark === 'roughdrafter');
+  check('the four old names still draw what they always drew',
     T.styleById('bluejetty').cornerRadiusIn === 0.35
-      && T.styleById('roughdrafter').cornerRadiusIn === 0);
+      && T.styleById('bluejetty').company === 'BLUEJETTY'
+      && T.styleById('roughdrafter-band').placement === 'bottom');
 
   // ── AN UPLOADED LOGO IS A STYLE ──────────────────────────────────────
   // Movie, 14 Oct: "I'd like to make a section at the top of COMPANY
@@ -200,30 +267,55 @@ function runChecks() {
   // is the design rather than an omission.
   const PNG = 'data:image/png;base64,iVBORw0KGgo=';
   const logos = [{ id: 'L1', label: 'harbour drafting', dataUrl: PNG }];
-  const withLogo = T.stylesFor(logos);
-  check('an uploaded logo joins the list the picker is built from',
-    withLogo.length === T.STYLES.length + 1);
-  check('the four shipped styles come first and come through unchanged',
-    T.STYLES.every((style, i) => withLogo[i] === style),
+  const marks = T.marksFor(logos);
+  check('an uploaded logo joins the MARK list, which is where a logo belongs',
+    marks.length === T.MARKS.length + 1);
+  check('the shipped marks come first and come through unchanged',
+    T.MARKS.every((mark, i) => marks[i] === mark),
     'an office mark is an ADDITION to the list; a drawing that opened on ROUGH DRAFTER still can');
-  check('an uploaded style is reachable by id, and only when its logo is offered',
-    T.styleById('logo:L1', logos) !== null && T.styleById('logo:L1') === null,
-    'styleById with no logos is the question every existing caller already asks');
-  check('the uploaded style points the painter at the uploaded image',
-    T.styleById('logo:L1', logos).logoSrc === PNG);
-  check('it stands on the right-hand strip, with no wordmark invented for it',
-    withLogo[4].placement === 'right' && withLogo[4].logoOnly === true,
+  check('an uploaded mark is reachable by id, and only when its logo is offered',
+    T.markById('logo:L1', logos) !== null && T.markById('logo:L1') === null,
+    'markById with no logos is the question every caller that has no standards asks');
+  check('the uploaded mark points the painter at the uploaded image',
+    T.markById('logo:L1', logos).logoSrc === PNG);
+  check('it goes in whatever frame is chosen, which is the point of the split',
+    T.compose('LROUND01', 'logo:L1', logos).cornerRadiusIn === 0.35
+      && T.compose('LBAND02', 'logo:L1', logos).placement === 'bottom',
+    'before the split an uploaded logo could only ever have the square strip');
+  check('no wordmark is invented for it on the strip',
+    T.compose('LSQUARE01', 'logo:L1', logos).logoOnly === true,
     'the mark fills its cell; this app has no business lettering a company name under it');
-  // AND IT CAN SAY OTHERWISE. Movie, 14 Oct: "show them what it will look
-  // like in the current TB selection" -- a preview can only honour that
-  // without lying if the logo really comes out in the arrangement previewed.
-  const banded = T.stylesFor([{ id: 'L2', label: 'X', dataUrl: PNG, placement: 'bottom' }])[4];
-  check('a logo asked for the bottom band gets the band, and its name with it',
-    banded.placement === 'bottom' && banded.logoOnly === false,
-    'the band IS a row of lettered cells; logoOnly is the strip\'s word, not the band\'s');
-  check('anything else is the strip, so every logo saved before placement stays put',
-    T.stylesFor([{ id: 'L3', label: 'X', dataUrl: PNG }])[4].placement === 'right'
-      && T.stylesFor([{ id: 'L4', label: 'X', dataUrl: PNG, placement: 'sideways' }])[4].placement === 'right');
+  check('the name is carried up out of the file, in capitals like every other label',
+    marks[2].label === 'HARBOUR DRAFTING');
+  check('an uploaded id cannot collide with a shipped mark',
+    marks[2].id.startsWith(T.LOGO_ID_PREFIX)
+      && T.MARKS.every(mark => !mark.id.startsWith(T.LOGO_ID_PREFIX)));
+
+  // WHAT IS REFUSED, one reason at a time.
+  check('a logo with no id is dropped',
+    T.normaliseCompanyLogos([{ label: 'X', dataUrl: PNG }]).length === 0);
+  check('two logos cannot share an id',
+    T.normaliseCompanyLogos([{ id: 'L1', label: 'A', dataUrl: PNG },
+      { id: 'L1', label: 'B', dataUrl: PNG }]).length === 1);
+  check('a src that is not an image data URL is refused',
+    T.normaliseCompanyLogos([{ id: 'L1', label: 'X', dataUrl: 'https://example.com/logo.png' }]).length === 0
+      && T.normaliseCompanyLogos([{ id: 'L2', label: 'X', dataUrl: 'javascript:alert(1)' }]).length === 0,
+    'a printed sheet must not depend on a server being up, and must not carry a script at all');
+  check('an unnamed logo still gets a name to be picked by',
+    T.normaliseCompanyLogos([{ id: 'L1', label: '   ', dataUrl: PNG }])[0].label === 'COMPANY LOGO',
+    'a blank row in the LOGO menu cannot be told from the one above it');
+  check('a logo bigger than the cap is refused',
+    T.normaliseCompanyLogos([{ id: 'L1', label: 'X',
+      dataUrl: `data:image/png;base64,${'A'.repeat(T.MAX_LOGO_BYTES)}` }]).length === 0,
+    'the package lives in localStorage beside every saved drawing');
+  check('no more than MAX_LOGOS are kept',
+    T.normaliseCompanyLogos(Array.from({ length: T.MAX_LOGOS + 4 },
+      (_, i) => ({ id: `L${i}`, label: 'X', dataUrl: PNG }))).length === T.MAX_LOGOS);
+  check('anything that is not a list of logos answers with an empty one',
+    T.normaliseCompanyLogos(undefined).length === 0 && T.normaliseCompanyLogos('x').length === 0
+      && T.normaliseCompanyLogos([null, 7]).length === 0);
+  check('the marks are frozen like the shipped ones',
+    Object.isFrozen(marks) && marks.every(Object.isFrozen));
 
   // THE SLOT NUMBER IS NOT THE NAME. Movie, 14 Oct: "allow them to remane
   // COMPANY 01 if they would like ... next one will still be named COMPANY 02
@@ -241,37 +333,6 @@ function runChecks() {
   check('the mark cell is published, and it is the cell drawRight uses',
     T.MARK_CELL.top === 0.78 && T.MARK_CELL.bottom === 0.92 && Object.isFrozen(T.MARK_CELL),
     'the crop preview enlarges this band out of a real strip; two copies would show a cell the sheet has not got');
-  check('the name is carried up out of the file, in capitals like every other label',
-    withLogo[4].label === 'HARBOUR DRAFTING');
-  check('an uploaded id cannot collide with a shipped style',
-    withLogo[4].id.startsWith(T.LOGO_ID_PREFIX)
-      && T.STYLES.every(style => !style.id.startsWith(T.LOGO_ID_PREFIX)));
-
-  // WHAT IS REFUSED, one reason at a time.
-  check('a logo with no id is dropped',
-    T.normaliseCompanyLogos([{ label: 'X', dataUrl: PNG }]).length === 0);
-  check('two logos cannot share an id',
-    T.normaliseCompanyLogos([{ id: 'L1', label: 'A', dataUrl: PNG },
-      { id: 'L1', label: 'B', dataUrl: PNG }]).length === 1);
-  check('a src that is not an image data URL is refused',
-    T.normaliseCompanyLogos([{ id: 'L1', label: 'X', dataUrl: 'https://example.com/logo.png' }]).length === 0
-      && T.normaliseCompanyLogos([{ id: 'L2', label: 'X', dataUrl: 'javascript:alert(1)' }]).length === 0,
-    'a printed sheet must not depend on a server being up, and must not carry a script at all');
-  check('an unnamed logo still gets a name to be picked by',
-    T.normaliseCompanyLogos([{ id: 'L1', label: '   ', dataUrl: PNG }])[0].label === 'COMPANY LOGO',
-    'a blank row in the TITLEBLOCK list cannot be told from the one above it');
-  check('a logo bigger than the cap is refused',
-    T.normaliseCompanyLogos([{ id: 'L1', label: 'X',
-      dataUrl: `data:image/png;base64,${'A'.repeat(T.MAX_LOGO_BYTES)}` }]).length === 0,
-    'the package lives in localStorage beside every saved drawing');
-  check('no more than MAX_LOGOS are kept',
-    T.normaliseCompanyLogos(Array.from({ length: T.MAX_LOGOS + 4 },
-      (_, i) => ({ id: `L${i}`, label: 'X', dataUrl: PNG }))).length === T.MAX_LOGOS);
-  check('anything that is not a list of logos answers with an empty one',
-    T.normaliseCompanyLogos(undefined).length === 0 && T.normaliseCompanyLogos('x').length === 0
-      && T.normaliseCompanyLogos([null, 7]).length === 0);
-  check('the uploaded styles are frozen like the shipped ones',
-    Object.isFrozen(withLogo) && withLogo.every(Object.isFrozen));
 
   // ── WHICH PAINTER ────────────────────────────────────────────────────
   const stripPaint = paintWith(T, right, INFO);
@@ -539,16 +600,36 @@ const MUTATIONS = [
   // RE-AIMED 14 OCT. styleById grew a second argument when uploaded logos
   // landed, and this mutation still named the one-line version -- so it
   // replaced nothing and "survived" against code it never reached.
-  ['an unknown company falls back to the first style instead of null', 'titleblock.js',
-    c => c.replace('    (logos ? stylesFor(logos) : STYLES).find(style => style.id === id) || null;',
-      '    (logos ? stylesFor(logos) : STYLES).find(style => style.id === id) || STYLES[0];')],
+  // RE-AIMED 14 OCT, when one list of styles became a list of FRAMES and a
+  // list of MARKS. Each of these named a line that no longer exists, so it
+  // replaced nothing and "survived" against code it never reached.
+  ['an unknown pair falls back to the first frame instead of null', 'titleblock.js',
+    c => c.replace('    if (!fr || !mark) return null;',
+      '    if (!fr || !mark) return compose(FRAMES[0].id, MARKS[0].id);')],
 
-  ['an uploaded logo never reaches the picker', 'titleblock.js',
-    c => c.replace('    ...normaliseCompanyLogos(logos).map(logoStyle),\n', '')],
+  ['an uploaded logo never reaches the LOGO menu', 'titleblock.js',
+    c => c.replace('    ...normaliseCompanyLogos(logos).map(logoMark),\n', '')],
 
-  ['an office mark replaces the shipped styles instead of joining them', 'titleblock.js',
-    c => c.replace('  const stylesFor = logos => Object.freeze([\n    ...STYLES,',
-      '  const stylesFor = logos => Object.freeze([')],
+  ['an office mark replaces the shipped ones instead of joining them', 'titleblock.js',
+    c => c.replace('  const marksFor = logos => Object.freeze([\n    ...MARKS,',
+      '  const marksFor = logos => Object.freeze([')],
+
+  ['the frame list is not filtered, so a letter block is offered on a ledger sheet', 'titleblock.js',
+    c => c.replace('    const fit = FRAMES.filter(f => f.paper === paper && f.orientation === orientation);',
+      '    const fit = FRAMES.slice();')],
+
+  ['turning the page loses the shape and lands on the first frame', 'titleblock.js',
+    c => c.replace('    return (set.find(f => f.shape === shape) || set[0]).id;', '    return set[0].id;')],
+
+  ['every frame is sized for 11x17, whatever sheet it is for', 'titleblock.js',
+    c => c.replace('      stripWIn: frame.stripWIn ?? STRIP_W_IN,', '      stripWIn: STRIP_W_IN,')],
+
+  ['a drawing saved as BLUEJETTY comes back square', 'titleblock.js',
+    c => c.replace("    bluejetty: Object.freeze({ frame: 'LROUND01', mark: 'bluejetty' }),",
+      "    bluejetty: Object.freeze({ frame: 'LSQUARE01', mark: 'bluejetty' }),")],
+
+  ['an uploaded logo saved as the whole answer loses its mark', 'titleblock.js',
+    c => c.replace("    if (text.startsWith(LOGO_ID_PREFIX)) return { frame: 'LSQUARE01', mark: text };\n", '')],
 
   ['a logo may be pointed at any URL at all', 'titleblock.js',
     c => c.replace("      if (!/^data:image\\/(png|jpeg|gif|webp|svg\\+xml);/i.test(dataUrl)) return out;\n", '')],
@@ -566,12 +647,11 @@ const MUTATIONS = [
   ['an uploaded id is not prefixed, so it can shadow a shipped style', 'titleblock.js',
     c => c.replace('    id: `${LOGO_ID_PREFIX}${logo.id}`,', '    id: logo.id,')],
 
-  ['every uploaded logo is forced onto the strip, whatever it was previewed in', 'titleblock.js',
-    c => c.replace("    placement: logo.placement === 'bottom' ? 'bottom' : 'right',\n    cornerRadiusIn: 0,",
-      "    placement: 'right',\n    cornerRadiusIn: 0,")],
+  ['a mark decides the frame again, so an uploaded logo is stuck on the strip', 'titleblock.js',
+    c => c.replace('      placement: frame.placement,', "      placement: mark.uploaded ? 'right' : frame.placement,")],
 
-  ['a banded logo prints its mark with no name beside it', 'titleblock.js',
-    c => c.replace("    logoOnly: logo.placement !== 'bottom',", '    logoOnly: true,')],
+  ['the round frame loses its radius', 'titleblock.js',
+    c => c.replace('      cornerRadiusIn: frame.cornerRadiusIn ?? CORNER_RADIUS_IN,', '      cornerRadiusIn: 0,')],
 
   ['a slot number survives as whatever the file said, sign and all', 'titleblock.js',
     c => c.replace('        seq: Number.isFinite(Number(entry.seq)) && Number(entry.seq) > 0\n          ? Math.floor(Number(entry.seq)) : 0,',
@@ -705,7 +785,7 @@ const MUTATIONS = [
     c => c.replace('    ctx.restore();\n  };\n\n  // The original bottom band', '  };\n\n  // The original bottom band')],
 
   ['the registry is left thawed', 'titleblock.js',
-    c => c.replace('  const STYLES = Object.freeze([', '  const STYLES = ([')],
+    c => c.replace('  const FRAMES = Object.freeze([', '  const FRAMES = ([')],
 ];
 
 let caught = 0;

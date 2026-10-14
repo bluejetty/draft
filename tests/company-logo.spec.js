@@ -82,7 +82,7 @@ async function openLayoutWithHouse(page) {
   // nothing has to be pressed to reach it -- but the wait is not optional:
   // the list is built on the first render and every check below asks what is
   // in it.
-  await expect(page.locator('[data-layout-titleblock="roughdrafter"]')).toBeVisible();
+  await expect(page.locator('[data-layout-mark]')).toBeVisible();
 }
 
 test('a logo uploaded in COMPANY STANDARDS joins the TITLEBLOCK list', async ({ page }) => {
@@ -99,13 +99,12 @@ test('a logo uploaded in COMPANY STANDARDS joins the TITLEBLOCK list', async ({ 
     .toHaveValue('COMPANY 01');
 
   await openLayoutWithHouse(page);
-  const offered = page.locator('[data-layout-titleblock^="logo:"]');
-  await expect(offered, 'the uploaded logo never reached the picker').toHaveCount(1);
-  await expect(offered).toHaveText('COMPANY 01');
-  // AND THE FOUR SHIPPED ONES ARE STILL THERE. An office's own mark is an
-  // addition to the list, not a replacement of it.
-  await expect(page.locator('[data-layout-titleblock="roughdrafter"]')).toBeVisible();
-  await expect(page.locator('[data-layout-titleblock="bluejetty"]')).toBeVisible();
+  // THE LOGO MENU, which is its own control since the frame/mark split (14
+  // Oct): the uploaded mark joins the two that ship rather than replacing a
+  // whole titleblock style.
+  await expect(page.locator('[data-layout-mark] option'),
+    'the uploaded logo never reached the LOGO menu')
+    .toHaveText(['ROUGH DRAFTER', 'BLUEJETTY', 'COMPANY 01']);
 });
 
 test('picking it sticks, and the strip draws the uploaded mark', async ({ page }) => {
@@ -113,28 +112,23 @@ test('picking it sticks, and the strip draws the uploaded mark', async ({ page }
   await addLogo(page);
   await openLayoutWithHouse(page);
 
-  // ASKED BEFORE IT IS PRESSED. Clicking a button that is not there waits out
-  // the whole timeout, so a build where the logo never reaches the picker
-  // would cost this spec three minutes to say what this line says in one.
-  await expect(page.locator('[data-layout-titleblock^="logo:"]'),
-    'the uploaded logo never reached the picker').toHaveCount(1);
-  await page.locator('[data-layout-titleblock^="logo:"]').click();
-  // THE PICK IS THE PAGE'S OWN STATE, read back the way the other titleblock
-  // checks read it -- through the button that says which one is on.
-  await expect(page.locator('[data-layout-titleblock^="logo:"]')).toHaveClass(/on/);
+  const uploaded = await page.locator('[data-layout-mark] option').evaluateAll(
+    options => options.map(option => option.value).find(value => value.startsWith('logo:')));
+  expect(uploaded, 'the uploaded logo never reached the LOGO menu').toBeTruthy();
+  await page.locator('[data-layout-mark]').selectOption(uploaded);
+  await expect(page.locator('[data-layout-mark]')).toHaveValue(uploaded);
 
   // AND THE PAINTER GOT AN IMAGE FOR IT. `_logos` is keyed by style id and
   // filled from the same list the picker is built from; a logo offered with
   // no picture behind it is the failure this catches -- the strip would draw
   // its box and nothing in it.
-  const image = await page.evaluate(() => {
-    const id = [...document.querySelectorAll('[data-layout-titleblock]')]
-      .map(button => button.dataset.layoutTitleblock).find(key => key.startsWith('logo:'));
+  const image = await page.evaluate(id => {
     // `page` is LAYOUT's own component instance -- a top-level const in a
-    // classic script, so it answers to its name here.
+    // classic script, so it answers to its name here. The pictures are keyed
+    // by MARK id now: one logo serves all twelve frames.
     const img = page._logos && page._logos[id];
     return img ? { complete: img.complete, data: img.src.startsWith('data:image/') } : null;
-  });
+  }, uploaded);
   expect(image, 'the painter holds no image for the uploaded logo').not.toBeNull();
   expect(image.data, 'the loaded logo is not the uploaded data URL').toBe(true);
   expect(image.complete, 'the logo image never finished loading').toBe(true);
@@ -149,7 +143,7 @@ test('several logos can stand in one standard, and one can be taken off again',
     await expect(page.locator('[data-logo-list] [data-logo-label]')).toHaveCount(2);
 
     await openLayoutWithHouse(page);
-    await expect(page.locator('[data-layout-titleblock^="logo:"]')).toHaveCount(2);
+    await expect(page.locator('[data-layout-mark] option')).toHaveCount(4);
 
     // OFF AGAIN, and the picker loses it. A logo that could be added and not
     // removed is the one state a drafter cannot get out of.
@@ -159,8 +153,8 @@ test('several logos can stand in one standard, and one can be taken off again',
     await expect(page.locator('[data-logo-list] [data-logo-label]')).toHaveCount(1);
 
     await openLayoutWithHouse(page);
-    await expect(page.locator('[data-layout-titleblock^="logo:"]')).toHaveCount(1);
-    await expect(page.locator('[data-layout-titleblock^="logo:"]')).toHaveText('COMPANY 02');
+    await expect(page.locator('[data-layout-mark] option')).toHaveText(
+      ['ROUGH DRAFTER', 'BLUEJETTY', 'COMPANY 02']);
   });
 
 test('the logo rides the standards file, there and back', async ({ page }) => {
@@ -188,8 +182,8 @@ test('the logo rides the standards file, there and back', async ({ page }) => {
   });
   await expect(page.locator('[data-logo-list] [data-logo-label]')).toHaveValue('COMPANY 01');
   await openLayoutWithHouse(page);
-  await expect(page.locator('[data-layout-titleblock^="logo:"]'),
-    'the restored logo never reached the picker').toHaveCount(1);
+  await expect(page.locator('[data-layout-mark] option'),
+    'the restored logo never reached the LOGO menu').toHaveCount(3);
 });
 
 test('a file that is not an image is refused, and says so', async ({ page }) => {

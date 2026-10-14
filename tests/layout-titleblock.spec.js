@@ -123,28 +123,54 @@ async function inkAround(page, xIn, yIn, radiusIn = 0.5) {
   }, { cx: m.panX + xIn * m.zoom, cy: m.panY + yIn * m.zoom, r: radiusIn * m.zoom });
 }
 
-test('the 11×17 sheet offers both companies plus their BAND alternates; ROUGH DRAFTER is the default', async ({ page }) => {
+// ── ONE LIST BECAME TWO MENUS, 14 OCT ──────────────────────────────────
+// Movie: "put a button up beside TITLEBLOCK title ... and then that TB will
+// accept the LOGO which will be a new area below TITLBLOCK". The four styles
+// answered both questions at once -- a rounded frame came with BLUEJETTY's
+// logo welded in -- so every check below that used to press one button now
+// sets one of the two menus.
+const frameMenu = page => page.locator('[data-layout-frame]');
+const markMenu = page => page.locator('[data-layout-mark]');
+
+test('the sheet offers the three frames that fit it, and ROUGH DRAFTER is the default mark', async ({ page }) => {
   await openLayout(page, houseDrawing());
-  await expect(page.locator('[data-layout-titleblock="bluejetty"]')).toBeVisible();
-  await expect(page.locator('[data-layout-titleblock="roughdrafter"]')).toBeVisible();
-  await expect(page.locator('[data-layout-titleblock="bluejetty-band"]')).toBeVisible();
-  await expect(page.locator('[data-layout-titleblock="roughdrafter-band"]')).toBeVisible();
+  // HIS OWN NAMES (14 Oct): "TBs so far : LSQUARE01 , LBAND01 , LROUND01".
+  // Twelve frames exist; a drafter is offered the three for the sheet he is
+  // standing on, which is what keeps this list the exact three he wrote down.
+  await expect(frameMenu(page).locator('option')).toHaveText(['LSQUARE01', 'LBAND01', 'LROUND01']);
+  await expect(frameMenu(page)).toHaveValue('LSQUARE01');
+  await expect(markMenu(page)).toHaveValue('roughdrafter');
   // The default strip runs down the right edge: the sheet-number cell inks
   // its big numeral at the bottom of the strip.
   expect(await inkAround(page, STRIP_X, SHEET_MID_Y, 0.3)).toBeGreaterThan(30);
   // The default pick lands on the drawing with the first persisted write.
-  await withLayoutSave(page, () => page.locator('[data-layout-titleblock="roughdrafter"]').click());
-  expect((await savedDrawing(page)).layout.titleblock).toBe('roughdrafter');
+  await withLayoutSave(page, () => frameMenu(page).selectOption('LSQUARE01'));
+  expect((await savedDrawing(page)).layout.titleblock).toBe('LSQUARE01');
+  expect((await savedDrawing(page)).layout.titleblockMark).toBe('roughdrafter');
 });
 
-test('ROUGH DRAFTER wears sharp corners, BLUEJETTY the rounded ones; the arrow cell starts bare', async ({ page }) => {
+test('the frame and the mark are two choices now, and neither drags the other', async ({ page }) => {
+  // THE WHOLE POINT OF THE SPLIT, and the thing that could not be done before
+  // it: his rounded frame, with his own company's logo in it rather than
+  // BLUEJETTY's.
+  await openLayout(page, houseDrawing());
+  await withLayoutSave(page, () => frameMenu(page).selectOption('LROUND01'));
+  await expect(markMenu(page), 'changing the frame moved the logo').toHaveValue('roughdrafter');
+  await withLayoutSave(page, () => markMenu(page).selectOption('bluejetty'));
+  await expect(frameMenu(page), 'changing the logo moved the frame').toHaveValue('LROUND01');
+  const saved = (await savedDrawing(page)).layout;
+  expect(saved.titleblock).toBe('LROUND01');
+  expect(saved.titleblockMark).toBe('bluejetty');
+});
+
+test('LSQUARE01 wears sharp corners, LROUND01 the rounded ones; the arrow cell starts bare', async ({ page }) => {
   await openLayout(page, houseDrawing());
   // The default ROUGH DRAFTER border turns a square 90° corner: ink sits
   // right at the margin corner point.
   expect(await inkAround(page, 0.5 + 0.02, 0.5 + 0.02, 0.06)).toBeGreaterThan(0);
   // BLUEJETTY's quite-rounded corners leave the sharp corner point bare
   // while the arc's midpoint carries ink.
-  await withLayoutSave(page, () => page.locator('[data-layout-titleblock="bluejetty"]').click());
+  await withLayoutSave(page, () => frameMenu(page).selectOption('LROUND01'));
   const r = 0.35;
   const arcMid = r - r / Math.SQRT2 + 0.02;
   expect(await inkAround(page, 0.5 + 0.02, 0.5 + 0.02, 0.06)).toBe(0);
@@ -167,33 +193,58 @@ test('the NORTH ARROW toggle inks the arrow cell and persists on the drawing', a
   expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25)).toBeGreaterThan(20);
 });
 
-test('the BAND alternate keeps the original bottom strip', async ({ page }) => {
+test('the BAND frame keeps the original bottom strip', async ({ page }) => {
   await openLayout(page, houseDrawing());
-  await withLayoutSave(page, () => page.locator('[data-layout-titleblock="roughdrafter-band"]').click());
-  expect((await savedDrawing(page)).layout.titleblock).toBe('roughdrafter-band');
+  await withLayoutSave(page, () => frameMenu(page).selectOption('LBAND01'));
+  expect((await savedDrawing(page)).layout.titleblock).toBe('LBAND01');
   // The band inks its sheet numeral in the bottom-right cell again.
   expect(await inkAround(page, 0.5 + 16 * 0.94, STRIP_MID_Y, 0.6)).toBeGreaterThan(30);
 });
 
-test('picking BLUEJETTY persists on the drawing and survives a reload', async ({ page }) => {
+test('a pick persists on the drawing and survives a reload', async ({ page }) => {
   await openLayout(page, houseDrawing());
-  await withLayoutSave(page, () => page.locator('[data-layout-titleblock="bluejetty"]').click());
-  expect((await savedDrawing(page)).layout.titleblock).toBe('bluejetty');
+  await withLayoutSave(page, () => frameMenu(page).selectOption('LROUND01'));
+  expect((await savedDrawing(page)).layout.titleblock).toBe('LROUND01');
   // The pick also rides the personal settings package for the next drawing.
   expect(await page.evaluate(() =>
-    window.DraftProfileManager.getActive('settings')?.content?.layout?.titleblock)).toBe('bluejetty');
+    window.DraftProfileManager.getActive('settings')?.content?.layout?.titleblock)).toBe('LROUND01');
   await page.reload();
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
-  // Still BLUEJETTY: the next persisted write keeps it.
-  await withLayoutSave(page, () => page.locator('[data-layout-titleblock="bluejetty"]').click());
-  expect((await savedDrawing(page)).layout.titleblock).toBe('bluejetty');
+  await expect(frameMenu(page), 'the reload lost the frame').toHaveValue('LROUND01');
 });
 
-test('the letter sheet stands the picker down and keeps the plain strip', async ({ page }) => {
+test('a drawing saved before the split still comes up wearing what it was given',
+  async ({ page }) => {
+    // 'bluejetty' was one id meaning BOTH answers: the rounded frame AND
+    // BLUEJETTY's logo. Every drawing and settings package in the field holds
+    // one of the four, and a drawing that is never saved again still has to
+    // open right -- so the id is read through pickFrom rather than migrated.
+    await openLayout(page, houseDrawing());
+    await page.evaluate(async bucket => {
+      const file = await window.SharedFileStore.loadSharedFile(bucket);
+      const saved = JSON.parse(await file.text());
+      saved.layout = { ...(saved.layout || {}), titleblock: 'bluejetty' };
+      delete saved.layout.titleblockMark;
+      await window.SharedFileStore.saveSharedFile(
+        new File([JSON.stringify(saved)], 'model-drawing.json', { type: 'application/json' }), bucket);
+    }, BUCKET);
+    await page.reload();
+    await page.waitForFunction(() => document.body.dataset.layoutReady === '1');
+    await expect(frameMenu(page), 'the old BLUEJETTY lost its rounded frame').toHaveValue('LROUND01');
+    await expect(markMenu(page), 'the old BLUEJETTY lost its logo').toHaveValue('bluejetty');
+  });
+
+test('the letter sheet gets a block of its own, measured for it', async ({ page }) => {
+  // IT USED TO GET NONE (Movie, 14 Oct: "make sets that will fit on the
+  // different sizes for each of those"). There is a set for each of the four
+  // sheets now, so the picker stays up and the shape is carried across --
+  // what changes is the frame, because a 1.15" strip is 13.5% of an 8.5"
+  // sheet against 6.8% of a 17" one.
   await openLayout(page, houseDrawing());
+  await withLayoutSave(page, () => frameMenu(page).selectOption('LROUND01'));
   await withLayoutSave(page, () => page.getByRole('button', { name: '8.5 × 11' }).click());
-  await expect(page.locator('[data-layout-titleblock="bluejetty"]')).toHaveCount(0);
-  await expect(page.locator('[data-layout-titleblock="roughdrafter"]')).toHaveCount(0);
+  await expect(frameMenu(page).locator('option')).toHaveText(['LSQUARE02', 'LBAND02', 'LROUND02']);
+  await expect(frameMenu(page), 'the letter sheet lost his rounded shape').toHaveValue('LROUND02');
 });
 
 test('project and drafter words flow into the strip', async ({ page }) => {

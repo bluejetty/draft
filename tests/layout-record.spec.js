@@ -132,7 +132,11 @@ test('the sheet set opens on the sheets it was left on, and the page holds all o
     await expect(page.locator('[data-layout-sheet]')).toHaveCount(
       new Set(SAVED.viewports.map(v => v.sheet)).size);
     await expect(page.locator('[data-layout-north]')).toContainText('On');
-    await expect(page.locator('[data-layout-titleblock="bluejetty-band"]')).toBeVisible();
+    // 'bluejetty-band' was ONE id meaning both the band frame and BLUEJETTY's
+    // logo, until the two were split on 14 Oct. A record in the field still
+    // holds it, and it still has to come up as what it was.
+    await expect(page.locator('[data-layout-frame]')).toHaveValue('LBAND01');
+    await expect(page.locator('[data-layout-mark]')).toHaveValue('bluejetty');
 
     // AND THE PAGE IS HOLDING THE WHOLE RECORD, not just the parts it shows.
     // One viewport is nudged, which is the page's own save path, and what
@@ -179,10 +183,13 @@ test('the sheet set opens on the sheets it was left on, and the page holds all o
     expect(after.viewports.slice(1).map(seat)).toEqual(SAVED.viewports.slice(1).map(seat));
     expect(after.viewports.filter(v => v.kind === 'plan').map(v => v.view).sort())
       .toEqual(['foundation', 'plan']);
-    expect([after.paperKey, after.orientation, after.titleblock,
-      after.northArrow, after.nextViewportId])
-      .toEqual([SAVED.paperKey, SAVED.orientation, SAVED.titleblock,
-        SAVED.northArrow, SAVED.nextViewportId]);
+    expect([after.paperKey, after.orientation, after.northArrow, after.nextViewportId])
+      .toEqual([SAVED.paperKey, SAVED.orientation, SAVED.northArrow, SAVED.nextViewportId]);
+    // THE TITLEBLOCK IS THE ONE FIELD THAT COMES BACK CHANGED, and on purpose:
+    // 'bluejetty-band' was one id meaning both the band frame and BLUEJETTY's
+    // logo, and re-saving writes the two it was read as. The drawing is the
+    // same drawing -- it is spelled the way the page spells it now.
+    expect([after.titleblock, after.titleblockMark]).toEqual(['LBAND01', 'bluejetty']);
     // The hand stays on the sheets: a set arranged by hand is never re-dealt.
     expect(after.auto).toBe(false);
   });
