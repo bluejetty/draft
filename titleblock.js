@@ -57,7 +57,90 @@ if (!window.DraftTitleblock) {
     }),
   ]);
 
-  const styleById = id => STYLES.find(style => style.id === id) || null;
+  // ── A COMPANY'S OWN LOGO, UPLOADED ───────────────────────────────────────
+  //
+  // Movie, 14 Oct: "for the LOGO - i set it up temporary with te BLUEJETTY
+  // logo as an option for everyone, but it should only be for ME (my
+  // company)... I'd like to make a section at the top of COMPANY STANDARDS,
+  // where they can upload a logo which will be placed on the drawings (if
+  // they choose it)... (allow them to upload multiple logos for each COMPANY
+  // STANDARDS area".
+  //
+  // AN UPLOADED LOGO IS A STYLE, which is the whole of the design: the file's
+  // own note says "a new company is a STYLES entry, not a new painter", and
+  // that is as true of a logo somebody uploads as of one shipped in assets/.
+  // So the painter is not touched at all -- `logoSrc` becomes a data URL
+  // instead of a path, and everything downstream (the picker, LAYOUT's image
+  // preload, drawRight) already knows what to do with a style.
+  //
+  // RIGHT PLACEMENT AND LOGO ONLY, because that is the arrangement a mark
+  // nobody here has seen can be trusted in: the strip gives it a tall cell of
+  // its own, and `logoOnly` lets it fill ~75% of that cell rather than
+  // sharing with a wordmark this app would have to invent. A drafter who
+  // wants their name in letters puts it in the logo.
+  //
+  // PREFIXED ids, so an uploaded logo can never collide with a built-in style
+  // -- `logo:` is not a character a STYLES id uses -- and so a sheet set that
+  // names one can be told apart from one naming BLUEJETTY without a lookup.
+  const LOGO_ID_PREFIX = 'logo:';
+  // WHAT A BROWSER WILL HOLD. Each package lives in localStorage, which gives
+  // a site a few MB in total, and a standards file is emailed around -- so
+  // these are the two numbers that keep a logo from quietly costing somebody
+  // their saved drawings. STANDARDS.html downscales on the way in; this is
+  // the backstop for a file that arrives from anywhere else.
+  const MAX_LOGOS = 8;
+  const MAX_LOGO_BYTES = 400 * 1024;
+
+  const logoStyle = logo => Object.freeze({
+    id: `${LOGO_ID_PREFIX}${logo.id}`,
+    label: logo.label,
+    company: logo.label,
+    logoSrc: logo.dataUrl,
+    placement: 'right',
+    cornerRadiusIn: 0,
+    logoOnly: true,
+    arrowDivider: true,
+    uploaded: true,
+  });
+
+  // WHAT SURVIVES COMING OFF DISK. A standards package is a file a drafter
+  // can edit, mail and re-import, so nothing in it is trusted: a logo needs
+  // an id, a name and a data URL that really is an image, or it is not a
+  // logo. ONLY `data:image/` -- an http(s) src would make a printed sheet
+  // depend on a server being up, and a `javascript:` one would make it worse.
+  const normaliseCompanyLogos = list => {
+    if (!Array.isArray(list)) return [];
+    const seen = new Set();
+    return list.reduce((out, entry) => {
+      if (out.length >= MAX_LOGOS || !entry || typeof entry !== 'object') return out;
+      const id = String(entry.id || '').trim().slice(0, 40);
+      const dataUrl = typeof entry.dataUrl === 'string' ? entry.dataUrl : '';
+      if (!id || seen.has(id)) return out;
+      if (!/^data:image\/(png|jpeg|gif|webp|svg\+xml);/i.test(dataUrl)) return out;
+      if (dataUrl.length > MAX_LOGO_BYTES) return out;
+      seen.add(id);
+      out.push(Object.freeze({
+        id,
+        label: (String(entry.label || '').trim() || 'COMPANY LOGO').slice(0, 40).toUpperCase(),
+        dataUrl,
+      }));
+      return out;
+    }, []);
+  };
+
+  // THE WHOLE PICKER: what ships, then what this office uploaded. Built-ins
+  // first because they are the ones every drawing opens on; an office's own
+  // marks read as additions to the list rather than a replacement of it.
+  const stylesFor = logos => Object.freeze([
+    ...STYLES,
+    ...normaliseCompanyLogos(logos).map(logoStyle),
+  ]);
+
+  // A LOOKUP THAT KNOWS ABOUT BOTH, and still answers the old question when
+  // asked the old way -- every existing caller passes one argument and means
+  // the built-ins.
+  const styleById = (id, logos) =>
+    (logos ? stylesFor(logos) : STYLES).find(style => style.id === id) || null;
 
   const INK = '#1d1f20';
   const FAINT = 'rgba(29,31,32,0.55)';
@@ -373,6 +456,12 @@ if (!window.DraftTitleblock) {
   window.DraftTitleblock = Object.freeze({
     STYLES,
     styleById,
+    stylesFor,
+    logoStyle,
+    normaliseCompanyLogos,
+    LOGO_ID_PREFIX,
+    MAX_LOGOS,
+    MAX_LOGO_BYTES,
     draw,
     STRIP_W_IN,
     BAND_H_IN,

@@ -1205,14 +1205,10 @@ class Component extends PageLogic {
     this._ctx = this._canvas ? this._canvas.getContext('2d') : null;
     if (!this._canvas) return;
 
-    // Company logos for the titleblock identity cell — redraw as each lands.
+    // The four shipped marks and whatever this office uploaded — see
+    // _loadTitleblockLogos, which is also what an import calls.
     this._logos = {};
-    (window.DraftTitleblock?.STYLES || []).forEach(style => {
-      const img = new Image();
-      img.onload = () => this._draw();
-      img.src = style.logoSrc;
-      this._logos[style.id] = img;
-    });
+    this._loadTitleblockLogos();
 
     this._ro = new ResizeObserver(() => { this._resize(); this._draw(); });
     // The rail's height decides the thumbnails' size, and a window that
@@ -1667,7 +1663,7 @@ class Component extends PageLogic {
     const margin = 0.5;
     let w = pw - margin * 2, h = ph - margin * 2;
     const style = paperKey === '11x17' && window.DraftTitleblock
-      ? window.DraftTitleblock.styleById(this.state.titleblock) : null;
+      ? window.DraftTitleblock.styleById(this.state.titleblock, this._companyLogos()) : null;
     if (style?.placement === 'right') w -= window.DraftTitleblock.STRIP_W_IN;
     else h -= (window.DraftTitleblock?.BAND_H_IN || 1.5);
     // CLEAR OF THE ROUNDED CORNERS (Movie, 12 Oct: "the viewport shouldn't go
@@ -2048,13 +2044,59 @@ class Component extends PageLogic {
     const byPif = SCALES.findIndex(s => s.pif === values.activeScalePif);
     if (byPif >= 0) patch.activeScale = byPif;
     else if (Number.isInteger(values.activeScale) && SCALES[values.activeScale]) patch.activeScale = values.activeScale;
-    if (window.DraftTitleblock?.styleById(values.titleblock)) patch.titleblock = values.titleblock;
+    // THE PACKAGE'S OWN LOGOS ANSWER FOR ITS OWN TITLEBLOCK. A standards file
+    // carrying a company's mark also names that mark as the sheet's
+    // titleblock; asked against the built-ins alone the id would be unknown,
+    // and the import would silently fall back to whatever was already set.
+    if (window.DraftTitleblock?.styleById(values.titleblock, pkg?.content?.model?.companyLogos)) {
+      patch.titleblock = values.titleblock;
+    }
     return patch;
+  }
+
+  // ── THE OFFICE'S OWN LOGOS ───────────────────────────────────────────────
+  // Uploaded in COMPANY STANDARDS and kept in the standards package, so they
+  // travel with the file a drafter downloads and re-imports (Movie, 14 Oct:
+  // "can we save all that information onto a file that users can reupload").
+  //
+  // READ, NOT MIRRORED INTO STATE: the package is the one copy, and a second
+  // one in this component is how the picker comes to offer a logo the
+  // standards page has already deleted.
+  _companyLogos() {
+    return window.DraftProfileManager?.getActive('standards')?.content?.model?.companyLogos || [];
+  }
+
+  _titleblockStyles() {
+    return window.DraftTitleblock ? window.DraftTitleblock.stylesFor(this._companyLogos()) : [];
+  }
+
+  // Company logos for the titleblock identity cell — redraw as each lands.
+  // AN UPLOADED LOGO IS A data: URL, which resolves with no round trip, but it
+  // still arrives through `onload` like any other image, so there is one path
+  // here rather than two.
+  //
+  // KEYED BY STYLE ID AND SKIPPED WHEN THE SRC IS UNCHANGED, because this runs
+  // again on every import: rebuilding the four built-in Images each time would
+  // blank the strip for a frame on a page that had them already.
+  _loadTitleblockLogos() {
+    this._logos = this._logos || {};
+    this._titleblockStyles().forEach(style => {
+      if (this._logos[style.id] && this._logos[style.id].src === style.logoSrc) return;
+      const img = new Image();
+      img.onload = () => this._draw();
+      img.src = style.logoSrc;
+      this._logos[style.id] = img;
+    });
   }
 
   _applyProfilePackage(pkg) {
     const patch = this._profileStatePatch(pkg);
-    if (!Object.keys(patch).length) return;
+    // THE LOGOS RELOAD WHETHER OR NOT THE PATCH IS EMPTY. An imported
+    // standards file may say nothing about the paper and still bring a new
+    // mark with it, and an early return would leave the picker offering a
+    // logo with no picture behind it.
+    this._loadTitleblockLogos();
+    if (!Object.keys(patch).length) { this._draw(); return; }
     this.setState(patch, () => {
       this._fitPaper();
       this._draw();
@@ -2276,7 +2318,7 @@ class Component extends PageLogic {
     // keeps the faint dashed margin guide.
     const mPx = 0.5 * zoom;
     const style = paperKey === '11x17' && window.DraftTitleblock
-      ? window.DraftTitleblock.styleById(this.state.titleblock) : null;
+      ? window.DraftTitleblock.styleById(this.state.titleblock, this._companyLogos()) : null;
     const inner = { x: panX + mPx, y: panY + mPx, w: pxW - mPx * 2, h: pxH - mPx * 2 };
     if (style?.placement === 'right') {
       const r = (style.cornerRadiusIn ?? window.DraftTitleblock.CORNER_RADIUS_IN) * zoom;
@@ -3192,7 +3234,7 @@ class Component extends PageLogic {
     const showTitleblocks = paperKey === '11x17' && Boolean(window.DraftTitleblock);
     document.querySelector('[data-titleblock-section]').hidden = !showTitleblocks;
     picks('[data-titleblock-list]',
-      showTitleblocks ? (window.DraftTitleblock?.STYLES || []).map(style => ({
+      showTitleblocks ? this._titleblockStyles().map(style => ({
         key: style.id,
         label: style.label,
         on: this.state.titleblock === style.id,
