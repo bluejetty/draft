@@ -467,9 +467,18 @@
      isn't loaded yet, and they go there, bring it up". MODEL's card, in this
      page's panel colours -- NOT a scrim, because the sheet behind is what the
      lot is about to land on and covering it would hide the answer.
-     Bottom-left of the sheet area, clear of the rail and the panel. */
-  #lay-lot { position:fixed; left:50%; top:66px; transform:translateX(-50%);
-    z-index:40; width:min(430px, calc(100vw - 32px));
+     BOTTOM-LEFT OF THE SHEET AREA, clear of the rail and the panel -- which
+     is what this comment said while the rule below centred the card at the
+     TOP of the page, over the middle of the sheet. That is not a tidiness
+     point: the card sits over the canvas, so wherever it stands it takes the
+     presses underneath it, and standing in the sheet's working middle it took
+     the press that PLACES A VIEWPORT. Caught by two specs that place one
+     (defaults, undo-layout) the moment SITE PLAN became the first sheet
+     dealt -- before that the card was almost never up when they ran.
+     188px is the panel's width and 172px the rail's; the offsets below clear
+     both, and the bottom one clears the status bar. */
+  #lay-lot { position:fixed; left:200px; bottom:52px; top:auto; transform:none;
+    z-index:40; width:min(430px, calc(100vw - 388px));
     border:1px solid var(--edge-panel);
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none);
     box-shadow:0 16px 44px rgba(0,0,0,0.35); padding:14px 16px; color: var(--ink-primary); }
