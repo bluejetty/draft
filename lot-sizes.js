@@ -322,6 +322,77 @@ if (!window.DraftLotSizes) {
     ];
   };
 
+  // ── IS THE LOT BIG ENOUGH FOR WHAT IS ALREADY DRAWN? ─────────────────
+  //
+  // Movie, 14 Oct, after an AUTOSITE 25 x 120 came up under a 30 ft garage:
+  // "oh i guess my site was too narrow for the garage - when the site comes
+  // up can it figure out the house width and not allow lots that are too
+  // small from the selections (allow them to create any size they would like
+  // if they enter data and draw the site" -- then the number itself: "for
+  // that 30 for garage with 2ft overhangs would be min 38 min".
+  //
+  // HIS 38 IS THIS MODULE'S OWN ARITHMETIC, which is why no new constant
+  // appears here: 30 ft of wall, plus a side setback at each side, and the
+  // side setback is already max(wall rule, eave + 2) -- a 2 ft eave gives 4 ft
+  // a side, and 30 + 4 + 4 is 38. The rule was written for where the house
+  // SITS in the lot; asking it for the smallest lot the house fits on is the
+  // same question from the other end.
+  //
+  // DEPTH IS ASKED TOO, with no rear setback invented: a lot has to hold the
+  // house behind the 20 ft front setback, so front + depth is the floor. A
+  // rear yard is a zoning number nobody has given, and guessing one would
+  // fade out lots that are legal.
+  const minLotFor = (house, opts = {}) => {
+    const w = house ? Number(house.widthFt) : NaN;
+    const d = house ? Number(house.depthFt) : NaN;
+    if (!Number.isFinite(w) || !Number.isFinite(d) || w <= 0 || d <= 0) return null;
+    return { widthFt: w + 2 * sideSetbackFt(opts), depthFt: FRONT_SETBACK_FT + d };
+  };
+
+  // A SIZE AGAINST THAT FLOOR. Anything shaped like a stock tier or a typed
+  // pair answers, which is the trick lotSizeFor already plays and the reason
+  // the pages never ask which of the two they are holding.
+  //
+  // NOTHING DRAWN MEANS EVERYTHING FITS (Movie, 14 Oct: "if no house drawn
+  // all would be allowed nothing lighten up"), so a drawing with no building
+  // gets the plain list it had before any of this.
+  const lotFitsHouse = (size, house, opts = {}) => {
+    const min = minLotFor(house, opts);
+    if (!min || !size) return true;
+    return Number(size.widthFt) >= min.widthFt - 1e-9
+      && Number(size.depthFt) >= min.depthFt - 1e-9;
+  };
+
+  // AND THE ONE TO POINT AT (Movie, 14 Oct: "make the most appropriate size
+  // brighter (first size to fit)"). The tiers run smallest to biggest, so the
+  // first that fits is the smallest that does -- the cheapest land that holds
+  // his building, which is what "most appropriate" means to someone buying
+  // it. Null where there is nothing to be appropriate TO, and null again
+  // where the building outgrows the whole table: there the honest answer is
+  // that he will be typing his own size, not that the biggest tier is right.
+  const bestLotTierFor = (house, opts = {}) => {
+    if (!minLotFor(house, opts)) return null;
+    return LOT_TIERS.find(tier => lotFitsHouse(tier, house, opts)) || null;
+  };
+
+  // THE WHOLE BUILDING AS A BOX, which is what the two rules above measure
+  // against. houseFaceOf below answers the two FACES the lot is placed off;
+  // this answers the footprint's own size. Same filter, same reason: an
+  // outline is what a building IS on this page, and `site` is the flag that
+  // says this one is the lot.
+  const houseBoxOf = outlines => {
+    const pts = (Array.isArray(outlines) ? outlines : [])
+      .filter(outline => outline && outline.site !== true && Array.isArray(outline.points))
+      .flatMap(outline => outline.points)
+      .filter(p => p && Number.isFinite(Number(p.x)) && Number.isFinite(Number(p.z)));
+    if (!pts.length) return null;
+    const xs = pts.map(p => Number(p.x));
+    const zs = pts.map(p => Number(p.z));
+    const leftX = Math.min(...xs), rightX = Math.max(...xs);
+    const backZ = Math.min(...zs), frontZ = Math.max(...zs);
+    return { leftX, rightX, backZ, frontZ, widthFt: rightX - leftX, depthFt: frontZ - backZ };
+  };
+
   // The house as those two numbers, off the outlines that are not the lot.
   const houseFaceOf = outlines => {
     const pts = (Array.isArray(outlines) ? outlines : [])
@@ -386,6 +457,10 @@ if (!window.DraftLotSizes) {
     SIDE_SETBACK_BLANK_FT,
     EAVE_CLEAR_FT,
     sideSetbackFt,
+    minLotFor,
+    lotFitsHouse,
+    bestLotTierFor,
+    houseBoxOf,
     siteDatumOf,
     placeLotFor,
     houseFaceOf,

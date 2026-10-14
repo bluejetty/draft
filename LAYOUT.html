@@ -486,17 +486,43 @@
   #lay-lot .lot-head { font-family:'Barlow Condensed', system-ui, sans-serif;
     font-size:16px; font-weight:700; letter-spacing:0.06em; text-transform:uppercase; }
   #lay-lot .lot-says { margin-top:3px; font-size:12px; line-height:1.4; color: var(--ink-secondary); }
-  #lay-lot .lot-tiles { display:flex; flex-wrap:wrap; gap:5px; margin-top:10px; }
-  #lay-lot .lot-tiles button { flex:1 1 7em; display:flex; flex-direction:column;
-    align-items:center; gap:1px; padding:6px 7px; cursor:pointer;
+  /* ONE COLUMN, SMALLEST FIRST -- MODEL's card changed the same way and for
+     Movie's same 14 Oct words; the two cards are one question asked in two
+     places, so they are read the same way round. */
+  #lay-lot .lot-tiles { display:flex; flex-direction:column; gap:4px; margin-top:10px; }
+  #lay-lot .lot-tiles button { display:flex; align-items:baseline; gap:8px;
+    width:100%; text-align:left; padding:5px 8px; cursor:pointer;
     border:1px solid var(--edge-panel);
     background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
     color: var(--ink-primary); font-family: var(--font-ui); }
   #lay-lot .lot-tiles button:hover { border-color: var(--accent); color: var(--accent); }
   #lay-lot .lot-tiles [aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
-  #lay-lot .lot-size { font-size:12px; font-weight:700; letter-spacing:0.04em; }
-  #lay-lot .lot-tier { font-size:9px; letter-spacing:0.1em; opacity:0.7; }
-  #lay-lot .lot-area { font-size:9px; opacity:0.7; }
+  #lay-lot .lot-size { font-size:12px; font-weight:700; letter-spacing:0.04em;
+    min-width:7.2em; white-space:nowrap; }
+  #lay-lot .lot-tier { font-size:9px; letter-spacing:0.1em; opacity:0.7; min-width:3em; }
+  #lay-lot .lot-area { font-size:9px; opacity:0.7; white-space:nowrap; }
+  #lay-lot .lot-character { font-size:9px; opacity:0.7; margin-left:auto;
+    white-space:nowrap; }
+  /* FADED AND UNPICKABLE where the building will not fit, bright where it
+     fits first -- MODEL's card wears the same two rules. */
+  #lay-lot .lot-tiles button.lot-small { opacity:0.4; cursor:default; }
+  #lay-lot .lot-tiles button.lot-small:hover { border-color: var(--edge-panel);
+    color: var(--ink-primary); }
+  #lay-lot .lot-tiles button.lot-best { border-color: var(--accent); }
+  #lay-lot .lot-tiles button.lot-best .lot-size { color: var(--accent); }
+  #lay-lot .lot-tiles button.lot-best .lot-tier,
+  #lay-lot .lot-tiles button.lot-best .lot-area,
+  #lay-lot .lot-tiles button.lot-best .lot-character { opacity:1; }
+  /* TWO COLUMNS: sizes left, commands right. */
+  #lay-lot .lot-body { display:flex; gap:12px; align-items:flex-start; margin-top:10px; }
+  #lay-lot .lot-left { flex:1 1 auto; min-width:0; }
+  #lay-lot .lot-commands { flex:0 0 9.5em; display:flex; flex-direction:column; gap:6px; }
+  #lay-lot .lot-commands button { height:32px; cursor:pointer;
+    border:1px solid var(--edge-panel);
+    background-color: var(--surface-panel); color: var(--ink-primary);
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
+    font-size:13px; letter-spacing:0.04em; text-transform:uppercase;
+    white-space:nowrap; }
   #lay-lot .lot-custom { display:flex; gap:4px; align-items:center; margin-top:8px;
     font-family: var(--font-ui); font-size:11px; color: var(--ink-quiet); }
   #lay-lot .lot-custom[hidden] { display:none; }
@@ -507,12 +533,6 @@
      what to do after pressing, and on the lighter skins quiet grey on the
      panel is too faint to read at 10px. */
   #lay-lot .lot-note { margin-top:10px; font-size:11px; line-height:1.45; color: var(--ink-secondary); }
-  #lay-lot .lot-row { display:flex; gap:6px; margin-top:10px; }
-  #lay-lot .lot-row button { flex:1; height:32px; cursor:pointer;
-    border:1px solid var(--edge-panel);
-    background-color: var(--surface-panel); color: var(--ink-primary);
-    font-family:'Barlow Condensed', system-ui, sans-serif; font-weight:600;
-    font-size:13px; letter-spacing:0.04em; text-transform:uppercase; }
   #lay-lot [data-lot-draw] { border-color: var(--accent); background-color: var(--accent);
     color: var(--accent-ink); }
   #lay-lot [data-lot-draw]:disabled { opacity:0.45; cursor:default; }
@@ -840,20 +860,28 @@
   <div id="lay-lot" data-lot-pick hidden role="group" aria-label="Lot size">
     <div class="lot-head">How big is the lot?</div>
     <div class="lot-says" data-lot-says></div>
-    <div class="lot-tiles" data-lot-tiles></div>
-    <div class="lot-custom" data-lot-custom hidden>
-      <label class="said" for="lay-lot-w">Lot width in feet</label>
-      <input id="lay-lot-w" data-lot-width type="number" inputmode="decimal" step="any" placeholder="__" />
-      <span aria-hidden="true">FT X</span>
-      <label class="said" for="lay-lot-d">Lot depth in feet</label>
-      <input id="lay-lot-d" data-lot-depth type="number" inputmode="decimal" step="any" placeholder="__" />
-      <span aria-hidden="true">FT</span>
+    <!-- SIZES LEFT, COMMANDS RIGHT, as on MODEL's card and for Movie's same
+         14 Oct words. This card carries two of the four commands: DRAW IT
+         MYSELF and UPLOAD A SITE PLAN arm MODEL's own OUTLINE tool and TRACE,
+         which are tools of the Model Space and not of a sheet. -->
+    <div class="lot-body">
+      <div class="lot-left">
+        <div class="lot-tiles" data-lot-tiles></div>
+        <div class="lot-custom" data-lot-custom hidden>
+          <label class="said" for="lay-lot-w">Lot width in feet</label>
+          <input id="lay-lot-w" data-lot-width type="number" inputmode="decimal" step="any" placeholder="__" />
+          <span aria-hidden="true">FT X</span>
+          <label class="said" for="lay-lot-d">Lot depth in feet</label>
+          <input id="lay-lot-d" data-lot-depth type="number" inputmode="decimal" step="any" placeholder="__" />
+          <span aria-hidden="true">FT</span>
+        </div>
+      </div>
+      <div class="lot-commands">
+        <button type="button" data-lot-draw>Draw AUTOSITE</button>
+        <button type="button" data-lot-skip>Not now</button>
+      </div>
     </div>
     <div class="lot-note" data-lot-note></div>
-    <div class="lot-row">
-      <button type="button" data-lot-draw>Draw AUTOSITE</button>
-      <button type="button" data-lot-skip>Not now</button>
-    </div>
   </div>
 
   <nav id="lay-rail" data-sheet-rail aria-label="Sheets">
@@ -1715,7 +1743,17 @@ class Component extends PageLogic {
     const deal = (title, views = []) => sheetPlan.push({ title, views: views.filter(Boolean) });
     const plansOf = ids => floorLevels.filter(level => ids(level.id))
       .map(level => planSheet(level.id, 'plan')).filter(Boolean);
-    deal('SITE PLAN');
+    // THE SITE PLAN, WITH THE SITE ON IT (Movie, 14 Oct: "i tried to do the
+    // site plan in the layout area - it should pop up a viewport with the new
+    // site plan, (nothing happens) i tried to RE-DEAL the sheets, and it
+    // still didn't pop up a site plan"). The sheet has been dealt by name
+    // since the set was written, because a set reads as a map of the job; it
+    // carried no viewport because nothing could paint one. layout-plan.js
+    // draws the lot, the footprint and the eave line now, so the sheet gets
+    // a view as soon as either the lot or a building exists.
+    const siteParts = window.DraftLayoutPlan.sitePlanParts(this._saved);
+    deal('SITE PLAN', [siteParts.lot || siteParts.bodies.length
+      ? sized({ kind: 'plan', levelId: SITE_LEVEL_ID, view: null }) : null]);
     for (let i = 0; i < Math.max(1, elevViews.length); i += 2) {
       deal('ELEVATIONS', elevViews.slice(i, i + 2));
     }
@@ -3431,6 +3469,13 @@ class Component extends PageLogic {
   // only (its METRIC button is greyed, and the markup says why).
   _lotSizes() { return window.DraftLotSizes; }
 
+  // A LENGTH THE WAY THIS PAGE WRITES ONE. The tiers' labels come from
+  // lot-sizes.js's describe(); these are derived numbers (the smallest lot a
+  // building fits on) and are formatted here like every other length.
+  _lotFt(feet) {
+    return window.DraftFormatters.formatArchitecturalInches(Number(feet) * 12);
+  }
+
   _lotAlreadyDrawn() {
     const LS = this._lotSizes();
     return !!(LS && LS.siteOutlineOf(this._saved?.outlines));
@@ -3480,12 +3525,31 @@ class Component extends PageLogic {
     card.querySelector('[data-lot-says]').textContent =
       'This sheet has no site plan yet. Pick a size, or type your own in feet.';
     const tiles = card.querySelector('[data-lot-tiles]');
+    // WHICH OF THEM THE BUILDING FITS ON -- MODEL's card asks lot-sizes.js
+    // the same question and this one must not answer it differently. Movie,
+    // 14 Oct: "fade out the 'too small' sizes", "make the most appropriate
+    // size brighter (first size to fit)", "if no house drawn all would be
+    // allowed nothing lighten up or faded". The eave is the drawing's SIDE
+    // overhang where it has one, since that is the eave facing the side
+    // property line.
+    const house = LS.houseBoxOf(this._saved?.outlines);
+    const sideEave = Number(this._saved?.roofSideOverhang);
+    const eaves = (this._saved?.roofs || []).map(roof => Number(roof.overhang))
+      .filter(value => Number.isFinite(value));
+    const fitOpts = {};
+    if (Number.isFinite(sideEave) && sideEave >= 0) fitOpts.eaveFt = sideEave;
+    else if (eaves.length) fitOpts.eaveFt = Math.max(...eaves);
+    const best = LS.bestLotTierFor(house, fitOpts);
+    const min = LS.minLotFor(house, fitOpts);
     tiles.replaceChildren(...LS.LOT_TIERS.map(tier => {
       const shown = LS.describe(tier);
       const button = document.createElement('button');
       button.type = 'button';
       button.dataset.lotTier = tier.id;
       button.setAttribute('aria-pressed', String(this._lotSizeId === tier.id));
+      const fits = LS.lotFitsHouse(tier, house, fitOpts);
+      if (!fits) { button.classList.add('lot-small'); button.disabled = true; }
+      if (best && tier.id === best.id) button.classList.add('lot-best');
       const size = document.createElement('span');
       size.className = 'lot-size';
       size.textContent = shown.sizeLabel;
@@ -3495,8 +3559,12 @@ class Component extends PageLogic {
       const area = document.createElement('span');
       area.className = 'lot-area';
       area.textContent = shown.areaLabel;
-      button.append(size, tierTag, area);
-      button.title = `${tier.id} \u2014 ${shown.character}`;
+      const character = document.createElement('span');
+      character.className = 'lot-character';
+      character.textContent = fits ? shown.character : 'Too small for this building';
+      button.append(size, tierTag, area, character);
+      button.title = `${tier.id} \u2014 ${fits ? shown.character
+        : `needs at least ${this._lotFt(min.widthFt)} x ${this._lotFt(min.depthFt)}`}`;
       button.addEventListener('click', () => { this._lotSizeId = tier.id; this._paintLotCard(); });
       return button;
     }));
@@ -3513,7 +3581,13 @@ class Component extends PageLogic {
     const otherArea = document.createElement('span');
     otherArea.className = 'lot-area';
     otherArea.textContent = 'type it';
-    other.append(otherSize, otherTier, otherArea);
+    // THE SAME FOUR-PART ROW as the tiers, and still last: a typed size is
+    // never faded, whatever is drawn ("allow them to create any size they
+    // would like if they enter data and draw the site").
+    const otherCharacter = document.createElement('span');
+    otherCharacter.className = 'lot-character';
+    otherCharacter.textContent = 'Any size you like';
+    other.append(otherSize, otherTier, otherArea, otherCharacter);
     other.addEventListener('click', () => {
       this._lotSizeId = 'custom';
       this._paintLotCard();
@@ -3522,8 +3596,10 @@ class Component extends PageLogic {
     tiles.appendChild(other);
 
     card.querySelector('[data-lot-custom]').hidden = this._lotSizeId !== 'custom';
-    card.querySelector('[data-lot-note]').textContent = LS.AUTOSITE_NOTE
-      + ' Drag them in the Model Space.';
+    card.querySelector('[data-lot-note]').textContent = (min
+      ? `${this._lotFt(house.widthFt)} of building with ${this._lotFt(fitOpts.eaveFt ?? 2)} `
+        + `eaves needs at least ${this._lotFt(min.widthFt)} x ${this._lotFt(min.depthFt)}. `
+      : '') + LS.AUTOSITE_NOTE + ' Drag them in the Model Space.';
     const chosen = this._lotChosen();
     const draw = card.querySelector('[data-lot-draw]');
     draw.disabled = !chosen;

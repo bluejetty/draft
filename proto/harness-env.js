@@ -111,7 +111,14 @@ function loadDraftModules() {
     'premade-plans.js', 'auto-windows.js', 'traced-plans.js',
     // AND THE DXF READER that TRACE lays a CAD file under the plan with,
     // and the WRITER that LAYOUT saves its sheets as DXFs through.
-    'dxf-reader.js', 'dxf-writer.js']) {
+    'dxf-reader.js', 'dxf-writer.js',
+    // AND THE SHEET PAINTER, for the site plan: the lot line, the roof plan
+    // that is its footprint, and the shading inside the walls, which
+    // proto/site-plan-harness.js measures off its own strokes. render-2d.js
+    // comes with it -- the roof planes, the wall tops and the dimensions are
+    // all its brushes, and without it drawRoofPlan answers false and draws
+    // NOTHING, silently. It loads after the geometry modules it reads.
+    'render-2d.js', 'plan-composition.js', 'layout-plan.js']) {
     const full = path.join(ROOT, file);
     if (!fs.existsSync(full)) continue;
     const text = SOURCE_OVERRIDES && SOURCE_OVERRIDES[file] != null
