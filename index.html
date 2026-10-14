@@ -303,6 +303,36 @@
         letter-spacing: 0.08em;
         opacity: 0.72;
       }
+      /* A CELL WITH A SOURCE LINE UNDER IT. The ring cell is one grid square,
+         so the two links stack inside it rather than taking a square each --
+         a source note is not worth a cell of its own. */
+      .ring-stack {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1px;
+        width: 100%;
+      }
+      .ring-stack .ring-link { width: 88%; }
+      /* REALLY REALLY SMALL, AND STILL READABLE, which is the whole of what he
+         asked for. 8px is about as far down as type goes before it stops being
+         readable at all -- so what buys the readability back is everything
+         else: no uppercase, no letter-spacing, and the line left at full
+         opacity until it is hovered. */
+      .ring-source {
+        max-width: 88%;
+        font-family: "Barlow Condensed", system-ui, sans-serif;
+        font-size: 8px;
+        line-height: 1.2;
+        letter-spacing: 0;
+        text-align: center;
+        text-decoration: none;
+        color: var(--ink);
+        opacity: 0.55;
+        overflow-wrap: anywhere;
+      }
+      .ring-source:hover, .ring-source:focus-visible { opacity: 1; }
+      .ring-source:focus-visible { outline: 2px solid var(--blue-medium); outline-offset: 2px; }
       /* THE DISCLOSURE, quiet and not a link: eBay's partner programme asks
          that the relationship be stated, and a buyer deserves to know before
          pressing. It is the last cell of the column rather than a line under
@@ -407,9 +437,26 @@
                his way back. -->
           <!-- Box 4 -->
           <a class="ring-link" href="CODES.html" data-box="4">BUILDING CODES / SPAN TABLES</a>
-          <!-- Box 5 -->
-          <a class="ring-link" href="RD-DOCUMENTS/BUILDING-CODES/CanadaNBC2020.pdf"
-            target="_blank" rel="noopener" data-box="5">NBC 2020 — NATIONAL BUILDING CODE</a>
+          <!-- Box 5: THE CODE ITSELF, and the edition after it.
+               Movie, 14 Oct: "i guess they have 2025 out already but i don't
+               think it is 'active' yes still needs to pass legistlation i
+               think, put this link under the 2020 building code, and put 2025
+               in normal text, and put the link in microtext".
+               THE 2020 PDF IS FIRST because it is the code a drawing is built
+               to today; 2025 sits under it as the edition coming. That it is
+               not yet in force rides in the small line rather than in the
+               link's own name -- his own reading, said where it does not
+               shout. A space is left under the 2020 link for its own
+               publications.gc.ca source: "i'll get the 2020 link too for you
+               to add prio to 2025 version after our PDF link". -->
+          <div class="ring-stack" data-box="5">
+            <a class="ring-link" href="RD-DOCUMENTS/BUILDING-CODES/CanadaNBC2020.pdf"
+              target="_blank" rel="noopener">NBC 2020 — NATIONAL BUILDING CODE</a>
+            <a class="ring-link" href="https://publications.gc.ca/collections/collection_2026/cnrc-nrc/NR24-28-2025-eng.pdf"
+              target="_blank" rel="noopener">NBC 2025</a>
+            <a class="ring-source" href="https://publications.gc.ca/collections/collection_2026/cnrc-nrc/NR24-28-2025-eng.pdf"
+              target="_blank" rel="noopener">publications.gc.ca · NR24-28-2025 · not yet in force</a>
+          </div>
           <!-- Box 6 -->
           <a class="ring-link" href="RD-DOCUMENTS/BUILDING-CODES/CanadaNBC2020Sec9Illustrated.pdf"
             target="_blank" rel="noopener" data-box="6">NBC 2020 — SECTION 9 ILLUSTRATED</a>
@@ -419,8 +466,21 @@
                uploaded to RD-DOCUMENTS/REF. The spaces in the filename are
                encoded here because a space in an href is not a space in a
                URL; the file itself is named as he uploaded it. -->
-          <a class="ring-link" href="RD-DOCUMENTS/REF/CMHC%20House%20Construction%20NH17-3-2013-eng.pdf"
-            target="_blank" rel="noopener" data-box="7">CANADIAN WOOD-FRAME HOUSE CONSTRUCTION</a>
+          <div class="ring-stack" data-box="7">
+            <a class="ring-link" href="RD-DOCUMENTS/REF/CMHC%20House%20Construction%20NH17-3-2013-eng.pdf"
+              target="_blank" rel="noopener">CANADIAN WOOD-FRAME HOUSE CONSTRUCTION</a>
+            <!-- WHERE THE COPY CAME FROM, in the smallest type that is still
+                 type (Movie, 14 Oct: "put in really small text so it doesn't
+                 take up much space (microsize almost not able read", then
+                 "(but still can read)", then "but really really small").
+                 THE GOVERNMENT'S OWN COPY, which is the point of showing it at
+                 all: the file above is the one in this repo, and this says
+                 that CMHC publishes it and where. 8px with the uppercase and
+                 the letter-spacing taken off, because those are what make
+                 small type unreadable rather than merely small. -->
+            <a class="ring-source" href="https://publications.gc.ca/collections/collection_2014/schl-cmhc/NH17-3-2013-eng.pdf"
+              target="_blank" rel="noopener">publications.gc.ca · CMHC NH17-3-2013</a>
+          </div>
           <!-- Box 9 -->
           <a class="ring-link" href="https://pdf.bluejetty.ca/" data-box="9">PDF MANAGER</a>
           <!-- Box 8 -->
