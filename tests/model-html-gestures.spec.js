@@ -801,6 +801,31 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // allowed to save what is already in hand, and SAVE FIRST beside
             // it is still the only thing here that writes.
             'TAKE OVER',
+            // HOW BIG IS THE LOT? (Movie, 13 Oct), the SITE level's own card
+            // and its four answers. They carry no ids, so the census sees
+            // them by their faces -- and `NOT NOW` reads as its words here
+            // while TRACE's own NOT NOW three lists up reads as
+            // `trace-later`, because that one has an id and this one does
+            // not. Same sentence, two different controls.
+            //
+            // ONE ABSENCE ROW IS TOUCHED AND NONE MOVES, which took reading
+            // rather than waving through, because DRAW AUTOSITE plainly puts
+            // an outline on the page:
+            //
+            //   - DRAW AUTOSITE writes a closed OUTLINE on SITE at the lot's
+            //     own size. The outline row has been **present** since tier
+            //     2 -- the OUTLINE tool closes a loop and breaks points into
+            //     it -- so this is a second door to a trace the table
+            //     already records, the way `dt-outline` is.
+            //   - DRAW IT MYSELF arms that very tool and steps out of the
+            //     way, which is the same door said out loud.
+            //   - UPLOAD A SITE PLAN opens TRACE, whose own entries sit
+            //     eleven lists up and whose row the table already carries as
+            //     INSERT UNDERLAY, present.
+            //   - NOT NOW puts the card away and authors nothing.
+            //
+            // So the list grows by four and the table does not change.
+            'DRAW AUTOSITE', 'NOT NOW', 'DRAW IT MYSELF', 'UPLOAD A SITE PLAN',
             'Save', 'Cancel'].sort(),           // the SAVE AS card
           // THE PAGE ROW'S LIVE DESTINATIONS. Links, not buttons, so they
           // would have slipped past the button census entirely -- and a
@@ -870,7 +895,18 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // CALIBRATE's real length.
             'trace-file', 'trace-scale', 'trace-width', 'trace-cal-length',
             // and the hologram's .draft picker.
-            'hologram-file'].sort(),
+            'hologram-file',
+            // THE LOT'S OWN TWO FIGURES (Movie, 13 Oct), behind CUSTOM on
+            // the HOW BIG IS THE LOT? card. They are the garage pair's twins
+            // nine lines up and read the same way: a SIZE, not a verb. They
+            // feed the width and depth DRAW AUTOSITE hands to the outline it
+            // writes, and the outline row is already present -- so they
+            // author nothing the OUTLINE tool does not, and no absence row
+            // moves. Named here, like every other input, because the row
+            // INSERT UNDERLAY rests on is "one file input in the whole
+            // page" and that only means something if every input is
+            // accounted for.
+            'lot-w', 'lot-d'].sort(),
           railKinds: ['seat'],
           // EVERY KIND THE PANEL MAY HOLD, and nothing else. No file input,
           // no unlabelled button: an entry this cannot name would arrive as
