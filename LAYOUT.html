@@ -341,6 +341,18 @@
   .lay-section-title { font-family:'Barlow Condensed', system-ui, sans-serif;
     font-size:11px; letter-spacing:0.08em; text-transform:uppercase;
     color: var(--ink-quiet); margin-bottom:8px; }
+  /* A SECTION TITLE WITH ITS OWN CONTROL BESIDE IT (Movie, 14 Oct: "beside
+     TITLEBLOCK title to the right of it"). The menu takes whatever the words
+     leave and no more, so a long frame name shortens the control rather than
+     pushing it out of a 210px rail. */
+  .lay-title-row { display:flex; align-items:center; gap:8px; }
+  .lay-title-row > span { flex:0 0 auto; }
+  .lay-pick-menu { flex:1 1 auto; min-width:0; height:24px;
+    font-family:'Barlow Condensed', system-ui, sans-serif; font-size:11px;
+    letter-spacing:0.06em; text-transform:uppercase;
+    color: var(--ink-primary); background: var(--surface-chip);
+    border:1px solid var(--edge-panel); border-radius:4px; padding:0 4px; cursor:pointer; }
+  .lay-pick-menu:hover { border-color: var(--accent); }
 
   /* A PANEL BUTTON, and the three sizes of it the panel actually uses. `.on`
      is the chosen one -- a class rather than a colour handed down from the
@@ -769,13 +781,41 @@
       <div data-level-list></div>
     </div>
 
-    <!-- TITLEBLOCK: one strip per company, an 11×17 feature. The picker AND
-         the arrow are painted in, not hidden: the letter sheet stands the
-         whole section down, and a control that is only invisible is still
-         there to be tabbed to. -->
+    <!-- ── TITLEBLOCK AND LOGO: TWO QUESTIONS, TWO ROWS ──────────────────
+         Movie, 14 Oct: "we should put a button up beside TITLEBLOCK title to
+         the right of it and put in the CURRENT TB style (lets call first one
+         SQUARE 01) when the user clicks on it a scroll menu with other
+         options opens up and they can change it) and then that TB will accept
+         the LOGO which will be a new area below TITLBLOCK new title 'LOGO'
+         and beside it to the right a scrolling selection once they click on
+         it , but it shows the CURRENT logo (RD default)".
+
+         IT WAS ONE LIST ANSWERING BOTH, which is why he could not have his
+         rounded frame without BLUEJETTY's logo in it: the four entries were
+         2x2 of frame and mark, and an uploaded logo could only ever have the
+         square strip. The frame is the SHAPE of the block; the logo is WHOSE
+         mark is in it.
+
+         A SELECT IS THE CONTROL HE DESCRIBED -- it shows what is current and
+         opens the rest on a press -- and it brings the keyboard and the
+         platform's own touch picker with it, where a column of buttons grows
+         as tall as the list. Twelve frames exist; three are ever offered.
+
+         THE ARROW RIDES WITH THE TITLEBLOCK, because it is a cell of it.
+         Still painted in rather than hidden: a control that is only invisible
+         is still there to be tabbed to. -->
     <div class="lay-section" data-titleblock-section hidden>
-      <div class="lay-section-title">Titleblock</div>
+      <div class="lay-section-title lay-title-row">
+        <span>Titleblock</span>
+        <select class="lay-pick-menu" data-layout-frame aria-label="Titleblock style"></select>
+      </div>
       <div data-titleblock-list></div>
+    </div>
+    <div class="lay-section" data-logo-section hidden>
+      <div class="lay-section-title lay-title-row">
+        <span>Logo</span>
+        <select class="lay-pick-menu" data-layout-mark aria-label="Logo in the titleblock"></select>
+      </div>
     </div>
 
     <div id="lay-viewport-section">
@@ -1156,7 +1196,12 @@ class Component extends PageLogic {
   state = {
     paperKey: '11x17',
     orientation: 'landscape',  // 'landscape' | 'portrait'
-    titleblock: 'roughdrafter', // DraftTitleblock style id — 11×17 sheets only
+    // THE FRAME AND THE MARK, two answers where there was one id (14 Oct).
+    // The frame is the SHAPE of the block and belongs to the sheet; the mark
+    // is whose logo is in it. ROUGH DRAFTER is the default mark -- his words:
+    // "it shows the CURRENT logo (RD default)".
+    titleblock: 'LSQUARE01',   // DraftTitleblock FRAME id, per paper and orientation
+    titleblockMark: 'roughdrafter', // DraftTitleblock MARK id — a shipped one or logo:<id>
     northArrow: false, // the titleblock's arrow cell — site plans by convention, any sheet by choice
     // THE TWO NORTHS (north.js), shared with MODEL through the layout record.
     north: null,
@@ -1358,7 +1403,14 @@ class Component extends PageLogic {
     };
     if (layout?.paperKey) patch.paperKey = layout.paperKey;
     if (layout?.orientation) patch.orientation = layout.orientation;
-    if (layout?.titleblock) patch.titleblock = layout.titleblock;
+    // ONE SAVED id MEANT BOTH ANSWERS until 14 Oct, so it is read through
+    // pickFrom: 'bluejetty' comes back as the ROUND frame with BLUEJETTY's
+    // mark in it, and a drawing saved since carries the two separately.
+    if (layout?.titleblock) {
+      const pick = window.DraftTitleblock.pickFrom(layout.titleblock);
+      patch.titleblock = layout.titleblockMark ? layout.titleblock : pick.frame;
+      patch.titleblockMark = layout.titleblockMark || pick.mark;
+    }
     if (typeof layout?.northArrow === 'boolean') patch.northArrow = layout.northArrow;
     if (layout?.north) patch.north = layout.north;
     this.setState(patch, () => {
@@ -1637,6 +1689,7 @@ class Component extends PageLogic {
       paperKey: this.state.paperKey,
       orientation: this.state.orientation,
       titleblock: this.state.titleblock,
+      titleblockMark: this.state.titleblockMark,
       northArrow: this.state.northArrow,
       ...(this.state.north ? { north: this.state.north } : {}),
       auto: this.state.auto,
@@ -1662,10 +1715,14 @@ class Component extends PageLogic {
     const ph = orientation === 'landscape' ? paper.w : paper.h;
     const margin = 0.5;
     let w = pw - margin * 2, h = ph - margin * 2;
-    const style = paperKey === '11x17' && window.DraftTitleblock
-      ? window.DraftTitleblock.styleById(this.state.titleblock, this._companyLogos()) : null;
-    if (style?.placement === 'right') w -= window.DraftTitleblock.STRIP_W_IN;
-    else h -= (window.DraftTitleblock?.BAND_H_IN || 1.5);
+    // EVERY SHEET CARRIES ONE NOW (Movie, 14 Oct: "make sets that will fit on
+    // the different sizes for each of those ... sizes 8.5x11 and 11X17 only
+    // ones we need now"). The letter sheet used to keep a plain placeholder
+    // strip because there was no block measured for it; there is a set for
+    // each of the four sheets now, and each frame carries its own width.
+    const style = window.DraftTitleblock ? this._titleblockStyle() : null;
+    if (style?.placement === 'right') w -= style.stripWIn;
+    else if (style) h -= style.bandHIn;
     // CLEAR OF THE ROUNDED CORNERS (Movie, 12 Oct: "the viewport shouldn't go
     // over the corner in case something shows there"). The left edge comes in
     // by the corner's radius, so a frame's top and bottom left corners stand
@@ -2031,6 +2088,7 @@ class Component extends PageLogic {
         activeScale: this.state.activeScale,
         activeScalePif: SCALES[this.state.activeScale]?.pif,
         titleblock: this.state.titleblock,
+        titleblockMark: this.state.titleblockMark,
       },
     };
   }
@@ -2044,12 +2102,22 @@ class Component extends PageLogic {
     const byPif = SCALES.findIndex(s => s.pif === values.activeScalePif);
     if (byPif >= 0) patch.activeScale = byPif;
     else if (Number.isInteger(values.activeScale) && SCALES[values.activeScale]) patch.activeScale = values.activeScale;
-    // THE PACKAGE'S OWN LOGOS ANSWER FOR ITS OWN TITLEBLOCK. A standards file
-    // carrying a company's mark also names that mark as the sheet's
-    // titleblock; asked against the built-ins alone the id would be unknown,
-    // and the import would silently fall back to whatever was already set.
-    if (window.DraftTitleblock?.styleById(values.titleblock, pkg?.content?.model?.companyLogos)) {
-      patch.titleblock = values.titleblock;
+    // THE PACKAGE'S OWN LOGOS ANSWER FOR ITS OWN MARK. A standards file
+    // carrying a company's logo also names that logo as the sheet's; asked
+    // against the shipped two alone the id would be unknown, and the import
+    // would silently fall back to whatever was already set.
+    //
+    // READ THROUGH pickFrom for the same reason the drawing record is: a
+    // package written before the split holds one id meaning both.
+    if (values.titleblock) {
+      const logos = pkg?.content?.model?.companyLogos;
+      const pick = window.DraftTitleblock.pickFrom(values.titleblock);
+      const frame = values.titleblockMark ? values.titleblock : pick.frame;
+      const mark = values.titleblockMark || pick.mark;
+      if (window.DraftTitleblock.compose(frame, mark, logos)) {
+        patch.titleblock = frame;
+        patch.titleblockMark = mark;
+      }
     }
     return patch;
   }
@@ -2066,8 +2134,24 @@ class Component extends PageLogic {
     return window.DraftProfileManager?.getActive('standards')?.content?.model?.companyLogos || [];
   }
 
-  _titleblockStyles() {
-    return window.DraftTitleblock ? window.DraftTitleblock.stylesFor(this._companyLogos()) : [];
+  // THE BLOCK THIS SHEET WEARS: one frame plus one mark. The frame is
+  // re-asked against the paper in force, so a drawing saved on 11x17 and
+  // reopened on letter gets the LETTER frame of the SAME SHAPE rather than a
+  // strip measured for a sheet twice the size.
+  _titleblockStyle() {
+    const T = window.DraftTitleblock;
+    if (!T) return null;
+    return T.compose(this._frameForSheet(), this.state.titleblockMark, this._companyLogos());
+  }
+
+  _frameForSheet() {
+    return window.DraftTitleblock
+      .frameOnSheet(this.state.titleblock, this.state.paperKey, this.state.orientation);
+  }
+
+  // Every mark on offer: the two that ship, then this office's own.
+  _titleblockMarks() {
+    return window.DraftTitleblock ? window.DraftTitleblock.marksFor(this._companyLogos()) : [];
   }
 
   // Company logos for the titleblock identity cell — redraw as each lands.
@@ -2075,12 +2159,14 @@ class Component extends PageLogic {
   // still arrives through `onload` like any other image, so there is one path
   // here rather than two.
   //
-  // KEYED BY STYLE ID AND SKIPPED WHEN THE SRC IS UNCHANGED, because this runs
-  // again on every import: rebuilding the four built-in Images each time would
-  // blank the strip for a frame on a page that had them already.
+  // KEYED BY MARK ID AND SKIPPED WHEN THE SRC IS UNCHANGED, because this runs
+  // again on every import: rebuilding the shipped Images each time would blank
+  // the strip for a frame on a page that had them already. BY MARK, not by
+  // style -- the same logo now appears in twelve frames, and one picture per
+  // combination would be a dozen copies of one file.
   _loadTitleblockLogos() {
     this._logos = this._logos || {};
-    this._titleblockStyles().forEach(style => {
+    this._titleblockMarks().forEach(style => {
       if (this._logos[style.id] && this._logos[style.id].src === style.logoSrc) return;
       const img = new Image();
       img.onload = () => this._draw();
@@ -2317,8 +2403,7 @@ class Component extends PageLogic {
     // solid ink with the CLAY sheet's quite-rounded corners. Everything else
     // keeps the faint dashed margin guide.
     const mPx = 0.5 * zoom;
-    const style = paperKey === '11x17' && window.DraftTitleblock
-      ? window.DraftTitleblock.styleById(this.state.titleblock, this._companyLogos()) : null;
+    const style = window.DraftTitleblock ? this._titleblockStyle() : null;
     const inner = { x: panX + mPx, y: panY + mPx, w: pxW - mPx * 2, h: pxH - mPx * 2 };
     if (style?.placement === 'right') {
       const r = (style.cornerRadiusIn ?? window.DraftTitleblock.CORNER_RADIUS_IN) * zoom;
@@ -2339,11 +2424,11 @@ class Component extends PageLogic {
     // letter sheet keeps the plain placeholder strip.
     const tbBox = style?.placement === 'right'
       ? (() => {
-          const tbW = window.DraftTitleblock.STRIP_W_IN * zoom;
+          const tbW = style.stripWIn * zoom;
           return { x: inner.x + inner.w - tbW, y: inner.y, w: tbW, h: inner.h };
         })()
       : (() => {
-          const tbH = (window.DraftTitleblock?.BAND_H_IN || 1.5) * zoom;
+          const tbH = (style?.bandHIn || window.DraftTitleblock?.BAND_H_IN || 1.5) * zoom;
           return { x: inner.x, y: inner.y + inner.h - tbH, w: inner.w, h: tbH };
         })();
     if (thumb) {
@@ -2351,7 +2436,7 @@ class Component extends PageLogic {
       ctx.lineWidth = 1;
       ctx.strokeRect(tbBox.x, tbBox.y, tbBox.w, tbBox.h);
     } else if (style) {
-      window.DraftTitleblock.draw(ctx, tbBox, style, this._titleblockInfo(sheet), this._logos?.[style.id] || null);
+      window.DraftTitleblock.draw(ctx, tbBox, style, this._titleblockInfo(sheet), this._logos?.[style.markId] || null);
     } else {
       ctx.strokeStyle = 'rgba(29,31,32,0.25)';
       ctx.lineWidth = 1;
@@ -3094,6 +3179,21 @@ class Component extends PageLogic {
 
   _setTitleblock(id) {
     this.setState({ titleblock: id, auto: false }, () => {
+      // THE BLOCK'S WIDTH CHANGED, so the paper a viewport may use changed
+      // with it: a letter frame is narrower than a ledger one, and the band
+      // takes height instead of width. _fitPaper is what keeps a placed
+      // viewport inside what is left.
+      this._fitPaper();
+      this._draw();
+      this._rememberActiveProfile('settings');
+      this._persistLayout();
+    });
+  }
+
+  // WHOSE MARK IS IN IT, the other half of the pair (Movie, 14 Oct). Nothing
+  // about the sheet changes, so there is no refit here.
+  _setTitleblockMark(id) {
+    this.setState({ titleblockMark: id, auto: false }, () => {
       this._draw();
       this._rememberActiveProfile('settings');
       this._persistLayout();
@@ -3231,20 +3331,45 @@ class Component extends PageLogic {
     // layout-titleblock.spec.js asks for exactly that (`toHaveCount(0)`), and
     // it is the right question: a control that is merely invisible is still
     // in the tab order.
-    const showTitleblocks = paperKey === '11x17' && Boolean(window.DraftTitleblock);
+    const showTitleblocks = Boolean(window.DraftTitleblock);
     document.querySelector('[data-titleblock-section]').hidden = !showTitleblocks;
-    picks('[data-titleblock-list]',
-      showTitleblocks ? this._titleblockStyles().map(style => ({
-        key: style.id,
-        label: style.label,
-        on: this.state.titleblock === style.id,
-        data: { 'data-layout-titleblock': style.id },
-      })) : [],
-      id => this._setTitleblock(id));
+    document.querySelector('[data-logo-section]').hidden = !showTitleblocks;
+    // ── THE TWO MENUS ───────────────────────────────────────────────────
+    // Each shows what is current and opens the rest on a press, which is what
+    // Movie asked for on 14 Oct. The FRAME list is the three that fit the
+    // sheet in front of him -- twelve exist, and offering a letter frame on a
+    // ledger sheet is offering a block that does not fit.
+    const menu = (selector, items, current, onPick) => {
+      const el = document.querySelector(selector);
+      if (!el) return;
+      el.textContent = '';
+      items.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item.key;
+        option.textContent = item.label;
+        option.selected = item.key === current;
+        el.appendChild(option);
+      });
+      el.value = current;
+      // ONE LISTENER PER RENDER, and the old one goes with the old options:
+      // `onchange` is assigned, not added, so this cannot stack up a
+      // handler per repaint the way addEventListener would.
+      el.onchange = () => onPick(el.value);
+    };
+    if (showTitleblocks) {
+      const T = window.DraftTitleblock;
+      menu('[data-layout-frame]',
+        T.framesFor(paperKey, orientation).map(f => ({ key: f.id, label: f.label })),
+        this._frameForSheet(), id => this._setTitleblock(id));
+      menu('[data-layout-mark]',
+        this._titleblockMarks().map(m => ({ key: m.id, label: m.label })),
+        this.state.titleblockMark, id => this._setTitleblockMark(id));
+    }
 
     // The arrow rides with the picker, for the same reason. The template had
     // it inside the same block.
     if (showTitleblocks) {
+      document.querySelector('[data-titleblock-list]').textContent = '';
       const north = document.createElement('button');
       north.type = 'button';
       north.id = 'lay-north';

@@ -1997,8 +1997,20 @@ if (!window.DraftDrawingFormat) {
   // inches per model foot), and xIn / yIn its centre on the sheet in paper
   // inches from the top-left corner. Sheet coordinates never mix with model
   // feet: pif is the only bridge. Old drawings carry no layout and load with
-  // an empty sheet. `titleblock` (board #285) picks the company strip on the
-  // 11×17 sheet; the ids mirror DraftTitleblock.STYLES.
+  // an empty sheet.
+  //
+  // `titleblock` AND `titleblockMark` ARE TWO ANSWERS since 14 Oct: the FRAME
+  // (the block's shape, measured for one sheet) and the MARK (whose logo is
+  // in it). They were one id naming one of four styles, and this list was
+  // those four -- so a record saving the new frame id came back through here
+  // as 'roughdrafter' and every reload squared a drafter's rounded block.
+  //
+  // NOT A WHITELIST ANY MORE, for a reason worth stating: the frames are a
+  // list of twelve that grows, and an office's uploaded mark has an id this
+  // file cannot know. Copying either here is how the two drift. What this
+  // guards instead is SHAPE -- a bounded string and nothing else -- and
+  // DraftTitleblock.pickFrom / compose decide meaning, falling back to a
+  // frame that exists when the name means nothing.
   //
   // Three semantic kinds, each with its own reference into the model:
   //   plan      → levelId, a level in the drawing
@@ -2011,7 +2023,7 @@ if (!window.DraftDrawingFormat) {
   // rebuild may replace — the flag clears on the drafter's first manual edit
   // so a hand-adjusted layout is never thrown away.
   const LAYOUT_PAPER_KEYS = ['11x17', '8.5x11'];
-  const LAYOUT_TITLEBLOCKS = ['bluejetty', 'roughdrafter', 'bluejetty-band', 'roughdrafter-band'];
+  const tbName = value => (typeof value === 'string' && value && value.length <= 64 ? value : null);
   const LAYOUT_ELEV_IDS = ['E1', 'E2', 'E3', 'E4'];
   const layout = (raw, levelIds, cutIds = new Set()) => {
     const seen = new Set();
@@ -2089,7 +2101,8 @@ if (!window.DraftDrawingFormat) {
     return {
       paperKey: oneOf(raw?.paperKey, LAYOUT_PAPER_KEYS, null),
       orientation: oneOf(raw?.orientation, ['landscape', 'portrait'], null),
-      titleblock: oneOf(raw?.titleblock, LAYOUT_TITLEBLOCKS, 'roughdrafter'),
+      titleblock: tbName(raw?.titleblock) || 'roughdrafter',
+      titleblockMark: tbName(raw?.titleblockMark),
       northArrow: raw?.northArrow === true,
       // THE TWO NORTHS (Movie, 1 Oct): construction north in quarter turns
       // clockwise of up the plan, true north in whole degrees right (+) or

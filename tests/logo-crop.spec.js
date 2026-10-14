@@ -113,29 +113,29 @@ test('the preview is the real titleblock, and it follows the crop', async ({ pag
     .toBeLessThan(trimmed.cell);
 });
 
-test('the sheet it previews on is the one that is picked, and the logo lands there',
-  async ({ page }) => {
-    await openStandards(page);
-    await page.locator('[data-logo-file]').setInputFiles(await pictureFile(page));
-    await expect(page.locator('[data-crop-back]')).toBeVisible();
-    // THE STRIP IS THE DEFAULT, because the current titleblock on a browser
-    // that has never opened LAYOUT is ROUGH DRAFTER, which is a strip.
-    await expect(page.locator('[data-crop-place="right"]')).toHaveClass(/on/);
+test('it previews in the titleblock that is actually current', async ({ page }) => {
+  // "show them what it will look like in the current TB selection". The frame
+  // is picked in Construction Layout and the dialog reads it -- it does not
+  // offer the choice a second time, which would be a second control on
+  // somebody else's answer.
+  await openStandards(page);
+  await page.locator('[data-logo-file]').setInputFiles(await pictureFile(page));
+  await expect(page.locator('[data-crop-back]')).toBeVisible();
+  // A BROWSER THAT HAS NEVER OPENED LAYOUT opens on the frame every drawing
+  // opens on.
+  await expect(page.locator('[data-crop-frame]')).toHaveText('LSQUARE01');
+  await page.locator('[data-crop-cancel]').click();
 
-    await page.locator('[data-crop-place="bottom"]').click();
-    await expect(page.locator('[data-crop-place="bottom"]')).toHaveClass(/on/);
-    await page.locator('[data-crop-use]').click();
-
-    // AND IT REALLY IS A BAND NOW. A preview that showed one arrangement and
-    // saved another would be worse than no preview at all.
-    const saved = await page.evaluate(() =>
-      window.DraftProfileManager.getActive('standards').content.model.companyLogos);
-    expect(saved).toHaveLength(1);
-    expect(saved[0].placement, 'the band previewed, the strip saved').toBe('bottom');
-    const style = await page.evaluate(logos =>
-      window.DraftTitleblock.styleById(`logo:${logos[0].id}`, logos), saved);
-    expect(style.placement).toBe('bottom');
+  // AND IT FOLLOWS THE FRAME, rather than assuming the strip: with the band
+  // picked, the preview is the band.
+  await page.evaluate(() => {
+    const manager = window.DraftProfileManager;
+    manager.saveActive(manager.createPackage('settings', 'mine', { layout: { titleblock: 'LBAND01' } }));
   });
+  await page.locator('[data-logo-file]').setInputFiles(await pictureFile(page));
+  await expect(page.locator('[data-crop-frame]'), 'the preview ignored the current frame')
+    .toHaveText('LBAND01');
+});
 
 test('COMPANY 01, then 02 — and renaming one does not reset the count', async ({ page }) => {
   await openStandards(page);
