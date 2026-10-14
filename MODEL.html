@@ -5086,6 +5086,12 @@
   const seatNorthDock = () => {
     if (!northDock) return;
     if (!window.DraftNorth || !drawing || driveThruUp()) { northDock.hidden = true; return; }
+    // AND NOT ON A CUT VIEW. `paint()` puts the dock away and only a plan
+    // paint reaches paintNorth to seat it again -- which was the whole guard
+    // until the ResizeObserver at the foot of this file started calling in
+    // here directly. The rail re-seats on every view change, so an elevation
+    // got the arrow's hand and a turn button back with no arrow under them.
+    if (activeCut()) { northDock.hidden = true; return; }
     const box = canvas.getBoundingClientRect();
     const c = northCentre();
     // THE ARROW'S OWN EXTENT: its letters stand 1.55 r above the centre and
