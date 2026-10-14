@@ -134,9 +134,12 @@ test('band 3 labels do not overlap each other', async ({ page }) => {
   await page.goto('/PROJECT.html?type=detached');
   await expect(page.locator('#detached-canvas')).toBeVisible();
   await press(page, 'GRADE BEAM').click();
-  await page.waitForTimeout(300);
-  await page.locator('[data-detached-value="roomOver"]').click();
   await page.waitForTimeout(400);
+  // THE STOREY IS ALREADY THERE. A grade beam defaults to two storeys since
+  // 13 Oct, so this used to press ROOM ABOVE to get one and would now press
+  // it away -- and the labels this measures are the ones the storey adds.
+  await expect(page.locator('[data-detached-value="roomOver"]'))
+    .toHaveText('ROOM ABOVE \u2713');
 
   const boxes = await tagBoxes(page);
   expect(boxes.length).toBeGreaterThan(1);
@@ -231,20 +234,41 @@ test('the room above is offered on a beam and a frost wall, never on a slab',
 
     await expect(roomRow).toBeHidden();
 
+    // ── AND IT ARRIVES WITH ONE ────────────────────────────────────────────
+    //
+    // Movie, 13 Oct: "when someone selects FROST WALL or GRADE BEAM, lets
+    // give them a DEFAULT - 2 storey". A foundation that goes down is one
+    // that carries something, so the storey is what the press means. This
+    // check used to press ROOM ABOVE itself and watch the row appear; the
+    // row is there as soon as the foundation is.
     await press(page, 'FROST WALL').click();
     await page.waitForTimeout(300);
     await expect(roomRow).toBeVisible();
-    await expect(wall).toBeHidden();
-
-    const flat = await shoot(page);
-    await room.click();
-    await page.waitForTimeout(300);
-    await expect(room).toHaveText('ROOM ABOVE ✓');
+    await expect(room, 'a frost wall arrived without its storey')
+      .toHaveText('ROOM ABOVE ✓');
     // The storey's own wall arrives WITH the storey -- Movie, 17 Sep, on the
     // attached one: "(one 2nd floor is added)(once)".
     await expect(wall).toBeVisible();
     expect(await read(page, 'overWallHeight')).toBe(`8'-1 1/8"`);
-    expect(await shoot(page)).not.toBe(flat);
+
+    // AND THE PRESS STILL TAKES IT AWAY. A default is not a decision: it is
+    // what he gets without making one, and the toggle is how he unmakes it.
+    const twoStorey = await shoot(page);
+    await room.click();
+    await page.waitForTimeout(300);
+    await expect(room).toHaveText('+ ADD ROOM ABOVE');
+    await expect(wall).toBeHidden();
+    expect(await shoot(page), 'the drawing did not lose its storey')
+      .not.toBe(twoStorey);
+    await room.click();
+    await page.waitForTimeout(300);
+    await expect(wall).toBeVisible();
+
+    // AND A GRADE BEAM IS THE SAME, which is the other half of his ruling.
+    await press(page, 'GRADE BEAM').click();
+    await page.waitForTimeout(300);
+    await expect(room, 'a grade beam arrived without its storey')
+      .toHaveText('ROOM ABOVE ✓');
 
     // AND IT CANNOT SURVIVE A FLOATING SLAB. A thickened edge carries a
     // garage, not a storey of house -- the same rule that keeps an attached
@@ -268,19 +292,28 @@ test('the storey above carries the bungalow\'s four rows and its own head',
     const keys = ['overWallHeight', 'overWallType', 'overSheathing', 'overFloor'];
     const head = page.locator('[data-sched-head="roomAboveHead"]');
 
+    // THE ROWS ARRIVE WITH THE FOUNDATION (Movie, 13 Oct: a grade beam
+    // defaults to two storeys), so they are asserted present and then
+    // asserted GONE on the toggle -- which is the same pair the other way
+    // round, and still says the head and the four rows move together.
     await press(page, 'GRADE BEAM').click();
-    await page.waitForTimeout(300);
-    await expect(head).toBeHidden();
-    for (const key of keys) {
-      await expect(page.locator(`[data-sched-row="${key}"]`)).toBeHidden();
-    }
-
-    await page.locator('[data-detached-value="roomOver"]').click();
     await page.waitForTimeout(300);
     await expect(head).toBeVisible();
     for (const key of keys) {
       await expect(page.locator(`[data-sched-row="${key}"]`)).toBeVisible();
     }
+
+    await page.locator('[data-detached-value="roomOver"]').click();
+    await page.waitForTimeout(300);
+    await expect(head, 'the head stayed printed over the gap').toBeHidden();
+    for (const key of keys) {
+      await expect(page.locator(`[data-sched-row="${key}"]`)).toBeHidden();
+    }
+
+    // And back, so the numbers below are read off a storey that is there.
+    await page.locator('[data-detached-value="roomOver"]').click();
+    await page.waitForTimeout(300);
+    await expect(head).toBeVisible();
     // The office storey: an 8' precut wall, 3/4" sheathing, and 19 1/4" of
     // OPEN WEB JOIST -- Movie, 28 Sep: "the floor joists will need to be
     // 19.25" thick OWJ". A garage has no interior walls to land on, so this
