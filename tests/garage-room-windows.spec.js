@@ -168,3 +168,58 @@ test('but a garage hung off the house still opens away from the man door',
     }));
     expect(plan.faceIndex, `the doors took face ${plan.faceIndex} -- ${plan.reason}`).toBe(1);
   });
+
+// ── AND THE WHOLE WAY THROUGH, ON THE FLOW HE USED ───────────────────────
+//
+// Movie drew the garage himself rather than taking the shelf's: the board's
+// OUTLINE press arms the trace, the loop he walks becomes the garage, and
+// traced-plans asks auto-windows where the doors go. That is the path the
+// rule above actually serves, so it is the path this check walks.
+//
+// MEASURED BOTH WAYS before it was written: with the rule reverted, the two
+// overhead doors land on the wall facing NORTH -- the back of the lot -- and
+// with it they face south, which is E1.
+test('a garage the drafter traces himself opens toward E1', async ({ page }) => {
+  await open(page);
+  await h.openDriveThru(page);
+  await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
+  await page.locator('#dt-tiles [data-build-entry="detached-gradebeam"]').click();
+  // THE OUTLINE PRESS, which is "I'll draw it myself" -- the garage is the one
+  // type the board refuses to trace from the tile alone, so this is the only
+  // door into it.
+  await page.locator('[data-drivethru-outline]').first().click();
+  await page.waitForTimeout(200);
+
+  const hit = (await page.locator('#readout').textContent()).match(/scale ([\d.]+) px\/ft/);
+  expect(hit, 'the readout publishes the scale').toBeTruthy();
+  const scale = Number(hit[1]);
+  const box = await page.locator('#plan').boundingBox();
+  const click = async (x, z) => {
+    await page.mouse.click(box.x + box.width / 2 + x * scale, box.y + box.height / 2 + z * scale);
+    await page.waitForTimeout(90);
+  };
+  // 30 WIDE AND 24 DEEP, so the long walls are the ones running east-west:
+  // the shape where "the longest run" and "the street" are different answers.
+  for (const [x, z] of [[-15, -12], [15, -12], [15, 12], [-15, 12], [-15, -12]]) await click(x, z);
+  await page.waitForTimeout(700);
+  await page.locator('[data-model-save]').click();
+  await expect(page.locator('[data-model-save]')).toHaveText(/saved/i, { timeout: 6000 });
+
+  const saved = await h.savedDrawing(page);
+  const overhead = (saved.fenestrations || []).filter(item => item.garage === true);
+  expect(overhead.length, 'the traced garage got no overhead door').toBeGreaterThan(0);
+  const walls = (saved.walls || []).filter(wall => wall.wallType === 'stud_2x6');
+  const facing = wall => {
+    const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+    const len = Math.hypot(dx, dz) || 1;
+    return { x: Math.round(dz / len), z: Math.round(-dx / len) };
+  };
+  overhead.forEach(door => {
+    const wall = walls.find(item => item.id === door.wallId);
+    expect(wall, `${door.id} hangs on no wall`).toBeTruthy();
+    const out = facing(wall);
+    // E1 looks from +z on an unturned plan, which is where the street is.
+    expect(`${out.x},${out.z}`, `the overhead door faces ${out.x},${out.z}, not the street`)
+      .toBe('0,1');
+  });
+});
