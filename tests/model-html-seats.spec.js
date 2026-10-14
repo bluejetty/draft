@@ -70,6 +70,9 @@ const seatData = page => page.locator('.seat').evaluateAll(els => els.map(el => 
   seat: el.dataset.seat,
   label: el.lastChild.textContent,
   disabled: el.disabled,
+  // WHAT IS ON SCREEN, not what the class list claims: SITE and ROOF take a
+  // row each (13 Oct) and the check for that reads the rendered box.
+  width: Math.round(el.getBoundingClientRect().width),
   // Anything drawn at all. Used only to tell a painted screen from a blank
   // one — WHICH picture was painted is asserted through the readout, which
   // reports the painter's own crossing count.
@@ -135,18 +138,35 @@ test('the rail seats the chart the old page seats', async ({ page }) => {
   // THE FLOOR SEATS CARRY THE STOREY NUMBER the level cards carry, because a
   // seat is named after its level and the level's name on screen is derived
   // -- level-assembly.js's levelLabel. Movie, 19 Sep: "lets name them 0.5
-  // MAIN FL / 1 MAIN FL / 1.5 2ND FL / 2 2ND FL". The chart itself is
-  // unchanged: same fourteen seats, same two columns, same order. Only the
-  // words on four of them moved, and the old page's own reading is kept above
-  // so the two can still be compared line for line.
+  // MAIN FL / 1 MAIN FL / 1.5 2ND FL / 2 2ND FL".
+  //
+  // AND THE ORDER MOVED ON 13 OCT, to the one LAYOUT already deals its sheets
+  // in: "i'd like the arrangement of layout views to start with SITE PLAN -
+  // than ELEVATIONS etc ... than ROOF, 2nd fl, Main Fl, Foundation,
+  // SECTIONS". Same fourteen seats, same two columns; SITE and ROOF are no
+  // longer a pair of their own, because his order puts the elevations between
+  // them. Shown a first cut that gave each of them a whole row to keep the
+  // elevations' 2x2 square, he seated them himself instead: "the SITE can be
+  // 1st position than E1 to the right andthen E2 and E3 2nd row, E4 ROOF on
+  // 3rd row". So the rail just flows, and the elevations now read 1-2-3-4
+  // across rather than the old page's E1|E3 over E2|E4. Its reading is kept
+  // above so the two can still be compared line for line.
   expect(seats.map(s => s.label)).toEqual([
-    'E1 · FRONT', 'E3 · BACK', 'E2 · LEFT', 'E4 · RIGHT',
-    'ROOF PLAN', 'SITE PLAN',
+    'SITE PLAN', 'E1 · FRONT',
+    'E2 · LEFT', 'E3 · BACK',
+    'E4 · RIGHT', 'ROOF PLAN',
     '2 2ND FL PLAN (WALLS)', '2 2ND FL LAYOUT (FLOOR)',
     '1 MAIN FL PLAN (WALLS)', '1 MAIN FL LAYOUT (FLOOR)',
     'FOUNDATION', 'BASEMENT (WALLS)',
     'S1', 'S2',
   ]);
+
+  // EVERY SEAT IS THE SAME WIDTH, which is what "it just flows" means and is
+  // worth asking of the rendered box rather than of the list above: a seat
+  // given a row of its own would still be in the right place in the array and
+  // would push its partner down a row on screen.
+  const widths = new Set(seats.map(s => s.width));
+  expect([...widths], 'one seat is wider than the others').toHaveLength(1);
 
   // THE FOUNDATION PAIR IS NOT plan|floor, and getting that from the label
   // rather than the code is how it would seat a blank: the second card is the
@@ -160,8 +180,15 @@ test('the rail seats the chart the old page seats', async ({ page }) => {
   // across it is the way to get this wrong: MODEL.dc.html fills two columns
   // E1|E3 then E2|E4 (:7266). A drafter who knows that rail looks for E3 to
   // the right of E1, not under it.
-  expect(seats[0].seat, 'E1 and E3 share the first row').toBe('E1');
-  expect(seats[1].seat).toBe('E3');
+  // E1 SITS BESIDE SITE and the rest follow it in order, which is the
+  // arrangement Movie laid out himself (13 Oct). The old page's E1|E3 over
+  // E2|E4 is recorded above and is what this replaced.
+  expect(seats[0].seat, 'SITE heads the rail').toBe('8:all');
+  expect(seats[1].seat, 'with E1 beside it').toBe('E1');
+  expect(seats[2].seat, 'then E2 and E3 across the second row').toBe('E2');
+  expect(seats[3].seat).toBe('E3');
+  expect(seats[4].seat, 'and E4 beside ROOF on the third').toBe('E4');
+  expect(seats[5].seat).toBe('7:all');
 
   // The office side names, off the profile through elevationName.
   expect(seats.find(s => s.seat === 'E1').label).toBe('E1 · FRONT');

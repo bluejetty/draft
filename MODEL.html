@@ -7730,7 +7730,17 @@
     head.append(title, datum, add);
     levelsPanel.append(head);
 
-    levels.forEach(level => {
+    // ── THE SHEET SET'S ORDER HERE TOO (Movie, 13 Oct) ──────────────────────
+    //
+    // "and for the lower down area of level/layers in text, also put it in
+    // that same order staring with SITE PLAN, than ELEVATIONS, than ROOF, 2nd
+    // fl, Main Fl, Foundation, SECTIONS". The levels were already in that
+    // order among themselves; what was out of place was the ELEVATIONS group,
+    // which sat after every level card. So the card builder is lifted out of
+    // its loop and called in two passes with the elevations between them --
+    // the panel and the rail now read the same way down, which is the whole
+    // point of asking for one order.
+    const levelCard = level => {
       const card = document.createElement('div');
       card.className = 'lv-card';
       card.dataset.level = String(level.id);
@@ -7796,7 +7806,7 @@
 
       card.append(bar, body);
       levelsPanel.append(card);
-    });
+    };
 
     // ── ELEVATIONS ──────────────────────────────────────────────────────────
     // Real, and the same four the rail seats: autoElevationCuts is the one
@@ -7827,6 +7837,12 @@
       return b;
     };
 
+    // SITE FIRST, THEN THE ELEVATIONS, THEN EVERYTHING ELSE. Asked by level
+    // id rather than by name or by position, the way the rail seats it: a
+    // drafter who renames SITE still gets his order, and a drawing without one
+    // simply starts at the elevations.
+    levels.filter(level => Number(level.id) === SITE_LEVEL_ID).forEach(levelCard);
+
     section('Elevations');
     const viewNow = params.get('view');
     autoElevationCuts().forEach(cut => {
@@ -7835,6 +7851,10 @@
         () => goToView(CUT_VIEW + cut.id),
         viewNow === CUT_VIEW + cut.id).dataset.viewRow = CUT_VIEW + cut.id;
     });
+
+    // AND THE REST IN THE STACK'S OWN ORDER -- ROOF, the floors top down,
+    // FOUNDATION -- which is already the order he asked for.
+    levels.filter(level => Number(level.id) !== SITE_LEVEL_ID).forEach(levelCard);
 
     // ── SECTIONS ────────────────────────────────────────────────────────────
     const stored = cuts();
@@ -8126,20 +8146,22 @@
   // E1|E3, then E2|E4 (:7266-7267), and the section seats side by side at the
   // bottom (:7281-7290). Reading down a column would put E1 above E2, which is
   // not where a drafter who knows that rail expects to find them.
-  // THE FULL CHART, IN MOVIE'S ORDER (12 Sep), so the six below are the front
-  // of a list rather than a list of their own:
+  // THE FULL CHART, IN MOVIE'S ORDER -- and the order changed on 13 Oct, from
+  // the one he gave on 12 Sep (elevations, then ROOF and SITE as a pair, then
+  // the plans) to the SHEET SET's, which is what LAYOUT already deals:
   //
-  //     1. the four elevations          E1|E3 over E2|E4        <- built
-  //     2. ROOF PLAN and SITE PLAN
-  //     3. the floor plans, level by level
-  //     4. the sections                 S1|S2                   <- built
-  //     5. the electric plan
+  //     1. SITE PLAN                    the whole row
+  //     2. the four elevations          E1|E3 over E2|E4
+  //     3. ROOF PLAN                    the whole row
+  //     4. the floor plans, level by level, top down
+  //     5. the sections                 S1|S2
+  //     6. the electric plan                                    <- not built
   //
   // It is NOT MODEL.dc.html's order, which runs the sections last after every
   // plan (:7281). Sections sit ahead of the electric plan here because that is
-  // where Movie wants to find them. Rows 2, 3 and 5 are not built; when they
-  // are, they go between these two groups rather than after them, which is why
-  // the order is written down now instead of inferred from the array later.
+  // where Movie wants to find them. Row 6 is not built; when it is, it goes
+  // after the sections rather than anywhere else, which is why the order is
+  // written down here instead of inferred from the array later.
   // THE SEATING CHART IS DERIVED, not listed. MODEL.dc.html:7160
   // `_viewRailCards` walks `state.levels` to build it, and that is the whole
   // reason the LEVELS / LAYERS panel came first: add a level and two seats
@@ -8150,19 +8172,18 @@
   // from the order, which said twelve -- it is twelve FILLED seats and two
   // empty section chairs, fourteen elements:
   //
-  //     E1 · FRONT            E3 · BACK
-  //     E2 · LEFT             E4 · RIGHT
-  //     ROOF PLAN             SITE PLAN
+  //     SITE PLAN             E1 · FRONT
+  //     E2 · LEFT             E3 · BACK
+  //     E4 · RIGHT            ROOF PLAN
   //     2ND FL PLAN (WALLS)   2ND FL LAYOUT (FLOOR)
   //     MAIN FL PLAN (WALLS)  MAIN FL LAYOUT (FLOOR)
   //     FOUNDATION            BASEMENT (WALLS)
   //     S1                    S2
   //
   // The rail is two columns, so the flat order is row-major: inner, outer,
-  // inner, outer. SITE and ROOF are seated as a PAIR in row three rather than
-  // getting a plan/layout row each, because layerViewsForLevelId answers with
-  // none for them -- the same fact the panel shows by giving their cards no
-  // layer rows.
+  // inner, outer. SITE and ROOF sat together in row three until 13 Oct, when
+  // the order became the sheet set's; they are seated where Movie put them
+  // himself -- see seatingChart.
   // ROOF is level 7 and SITE is level 8 -- MODEL.dc.html:7201 seats them by
   // id, and layer-views.js calls the pair WHOLE_LEVEL_IDS. By id rather than
   // by name, so renaming a level cannot empty the row; and if a drawing has
@@ -8177,9 +8198,34 @@
     const planSeat = (level, viewId, label) => {
       if (level) seats.push({ kind: 'plan', levelId: Number(level.id), viewId, label });
     };
-    ['E1', 'E3', 'E2', 'E4'].forEach(id => seats.push({ kind: 'cut', name: id }));
-    planSeat(byId(ROOF_LEVEL_ID), null, 'ROOF PLAN');
+    // ── AND THE ORDER IS THE SHEET SET'S (Movie, 13 Oct) ────────────────────
+    //
+    // "i'd like the arrangement of layout views to start with SITE PLAN -
+    // than ELEVATIONS etc ... staring with SITE PLAN, than ELEVATIONS, than
+    // ROOF, 2nd fl, Main Fl, Foundation, SECTIONS". LAYOUT already deals its
+    // sheets this way; this rail ran elevations first and seated SITE beside
+    // ROOF, so a drafter reading one against the other had to re-find
+    // everything. The order above replaces the 12 Sep one written out below.
+    //
+    // IT FLOWS, TWO ACROSS, AND NOTHING TAKES A ROW TO ITSELF. Shown the
+    // first cut of this, where SITE and ROOF each took a whole row to keep
+    // the elevations' 2x2 square, Movie placed them himself: "the SITE can be
+    // 1st position than E1 to the right andthen E2 and E3 2nd row, E4 ROOF on
+    // 3rd row". So the rail simply fills:
+    //
+    //     SITE PLAN             E1 · FRONT
+    //     E2 · LEFT             E3 · BACK
+    //     E4 · RIGHT            ROOF PLAN
+    //
+    // WHICH ALSO RE-ORDERS THE ELEVATIONS, from the old page's E1|E3 over
+    // E2|E4 (MODEL.dc.html:7266) to E1 E2 E3 E4 read across. That pairing was
+    // carried here deliberately -- a drafter who knew the old rail looked for
+    // E3 beside E1 -- and it is his to change: with SITE in front of them the
+    // columns no longer line up anyway, and 1-2-3-4 in order is what he asked
+    // for.
     planSeat(byId(SITE_LEVEL_ID), null, 'SITE PLAN');
+    ['E1', 'E2', 'E3', 'E4'].forEach(id => seats.push({ kind: 'cut', name: id }));
+    planSeat(byId(ROOF_LEVEL_ID), null, 'ROOF PLAN');
     levels.forEach(level => {
       const views = LV.layerViewsForLevelId(level.id);
       if (!views.length) return;

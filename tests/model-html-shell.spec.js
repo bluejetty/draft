@@ -172,13 +172,23 @@ test('shut is shut; one press seats the whole chart, every seat reachable',
     // Asked as the seats' own geometry -- how many share a row -- because a
     // grid-template-columns string can say `repeat(2, 84px)` while an
     // override elsewhere quietly says three.
-    const perRow = await page.evaluate(() => {
-      const tops = [...document.querySelectorAll('.seat')]
-        .map(el => Math.round(el.getBoundingClientRect().top));
-      const first = tops[0];
-      return tops.filter(t => t === first).length;
+    //
+    // ASKED OF EVERY ROW, not only the first. The 13 Oct order puts SITE at
+    // the head and ROOF among the elevations, and a first cut of it gave each
+    // of them a row to itself -- so the shape this rule is about is now the
+    // whole wall rather than row one, and a check reading only the top would
+    // have passed that cut without noticing.
+    const rows = await page.evaluate(() => {
+      const tally = new Map();
+      [...document.querySelectorAll('.seat')].forEach(el => {
+        const top = Math.round(el.getBoundingClientRect().top);
+        tally.set(top, (tally.get(top) || 0) + 1);
+      });
+      return [...tally.values()];
     });
-    expect(perRow, 'the seat grid is not two across').toBe(2);
+    expect(Math.max(...rows), 'the seat grid is not two across').toBe(2);
+    expect(rows.filter(n => n !== 2), 'every row is a pair; nothing stands alone')
+      .toEqual([]);
 
     // And a seat works -- the claim is that no view is ever more than a
     // press, a scroll and a tap away.
