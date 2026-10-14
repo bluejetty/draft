@@ -97,9 +97,29 @@ check('and a drawing with neither draws nothing',
 
 // THE LOT LINE IS A STROKE OF ITS OWN, over everything else: it is the
 // boundary the whole sheet is about.
+//
+// COUNTED BY WEIGHT SINCE 14 OCT, not by the total. This read "one more
+// stroke with the lot than without", which was the same sentence while the
+// line was all the lot brought -- and then the lot started bringing its two
+// dimension rows as well (Movie: "the dimensions which i will also add to the
+// outside of the site lines"), and a true claim went red on an arithmetic
+// that had stopped expressing it. The property line is the only thing on this
+// sheet drawn at its own weight, which is what made it findable.
+const heavyOf = painted => painted.strokes.filter(stroke => stroke.w >= 3);
 check('the lot line is a stroke of its own',
-  all.strokes.length - noLot.strokes.length === 1,
-  `${all.strokes.length} strokes with the lot, ${noLot.strokes.length} without`);
+  heavyOf(all).length - heavyOf(noLot).length === 1,
+  `${heavyOf(all).length} heavy strokes with the lot, ${heavyOf(noLot).length} without`);
+// AND IT BRINGS ITS DIMENSION ROWS WITH IT: the house's position against the
+// two lot lines, and the lot end to end, both ways round. Counted off the
+// module rather than typed here -- what the painter must not do is answer
+// with rows and draw none of them.
+const rows = LP.siteDimStrings({ outlines: [LOT, GARAGE, UPPER], roofs: [ROOF] });
+check('and the lot brings its dimension rows with it',
+  rows.length > 0 && all.strokes.length - noLot.strokes.length > rows.length,
+  `${rows.length} rows, ${all.strokes.length - noLot.strokes.length} strokes added`);
+check('the rows read the house and the lot, inner and outer',
+  rows.some(row => row.row === 'inner') && rows.filter(row => row.row === 'outer').length === 2,
+  JSON.stringify(rows.map(row => `${row.row}:${row.axis}`)));
 // AND A DRAWING WITH NO ROOF STILL GETS A FOOTPRINT -- a drafter who has
 // traced his walls and not yet pressed the bone has a building to place, and
 // an empty square on the site sheet would say he has not.
