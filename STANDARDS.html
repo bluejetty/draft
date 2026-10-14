@@ -94,6 +94,30 @@
     button.action.primary { border-color:var(--accent-mark); background:var(--accent-mark); color:var(--accent-ink); }
     button.action:hover { border-color:var(--accent-mark); }
     #status { margin-left:auto; color:var(--ink-good); font-size:12px; }
+    /* THE CROP DIALOG. Plain and square, like the rest of this page: it is a
+       workbench, not a lightbox. NO CLICK-AWAY DISMISSAL -- a drag that
+       overshoots the crop canvas would land its mouseup on the backdrop, and
+       losing a crop to a slipped drag is the one thing this panel must not
+       do. The two buttons at the foot are the only ways out. */
+    #crop-back { position:fixed; inset:0; z-index:40; background:rgba(12,18,26,0.62);
+      display:flex; align-items:center; justify-content:center; padding:16px; }
+    #crop-back[hidden] { display:none; }
+    .crop-box { background:var(--surface-panel,#fff); border:1px solid var(--edge-panel);
+      padding:14px 16px; max-width:720px; width:100%; max-height:100%; overflow:auto; }
+    .crop-head { display:flex; align-items:baseline; gap:10px; font-family:'Barlow Condensed',system-ui,sans-serif;
+      font-size:15px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; margin-bottom:10px; }
+    .crop-note { font-size:11px; font-weight:400; letter-spacing:0; text-transform:none; color:var(--ink-dim,#667); }
+    .crop-main { display:flex; gap:16px; flex-wrap:wrap; }
+    .crop-main canvas[data-crop-canvas] { border:1px solid var(--edge-panel); background:
+      repeating-conic-gradient(#e9edf1 0% 25%, #fbfcfd 0% 50%) 50% / 16px 16px;
+      touch-action:none; cursor:crosshair; max-width:100%; }
+    .crop-side { display:flex; flex-direction:column; gap:6px; }
+    .crop-side canvas { border:1px solid var(--edge-panel); background:#fff; }
+    .crop-label { font-family:'Barlow Condensed',system-ui,sans-serif; font-size:11px;
+      letter-spacing:.08em; text-transform:uppercase; color:var(--ink-dim,#667); }
+    .crop-where, .crop-tools { display:flex; gap:6px; margin-top:6px; flex-wrap:wrap; }
+    .crop-where button.on { border-color:var(--accent-mark); background:var(--accent-mark); color:var(--accent-ink); }
+    .crop-foot { display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
     #status.warning { color:var(--ink-warn); }
     @media (max-width:720px) {
       .group-head { display:none; }
@@ -133,13 +157,60 @@
       <div class="group-title">Logos</div>
       <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
         <span class="default-name">ADD A LOGO</span>
-        <span class="layer-use">A PNG with a transparent background reads best &mdash; the strip prints it on white paper. Big images are scaled down on the way in, so a logo straight off a letterhead is fine. The mark fills its cell, so one that already carries your company name needs no second line of type.</span>
+        <span class="layer-use">A PNG with a transparent background reads best &mdash; the strip prints it on white paper. Big images are scaled down on the way in, so a logo straight off a letterhead is fine. The mark fills its cell, so one that already carries your company name needs no second line of type. <strong>You crop it next</strong>, against a live picture of the titleblock it is going into.</span>
         <span class="layer-print" style="justify-content:flex-start;">
           <input type="file" id="logo-file" data-logo-file accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" aria-label="Upload a company logo" style="width:100%;" />
         </span>
       </div>
       <div id="logo-list" data-logo-list></div>
     </section>
+
+    <!-- ── CROP, AGAINST THE TITLEBLOCK IT IS GOING INTO ────────────────────
+         Movie, 14 Oct, looking at his own first upload on the live sheet:
+         "for LOGO when they upload can you offer them a CROP option and show
+         them what it will look like in the current TB selection", then "the
+         one i uploaded had too much boarder".
+
+         THE PREVIEW IS THE REAL PAINTER. DraftTitleblock.draw renders the
+         strip into the canvas on the right, and the cell the mark stands in
+         is enlarged out of it -- so what he is judging is the sheet, not a
+         drawing of a sheet made for this dialog. A mock-up here could agree
+         with nothing.
+
+         AND THE BORDER IS TRIMMED BEFORE HE SEES IT. The crop opens on the
+         artwork's own bounds, not the file's, which is the whole of the
+         complaint above: a letterhead PNG is mostly margin, the strip scales
+         the WHOLE file to fit its cell, and the mark comes out small with air
+         around it. -->
+    <div id="crop-back" data-crop-back hidden>
+      <div class="crop-box" role="dialog" aria-modal="true" aria-labelledby="crop-title">
+        <div class="crop-head"><span id="crop-title">Crop the logo</span>
+          <span class="crop-note" data-crop-note></span></div>
+        <div class="crop-main">
+          <div>
+            <canvas data-crop-canvas width="420" height="320" aria-label="Drag the box to choose what is kept"></canvas>
+            <div class="crop-tools">
+              <button class="action" type="button" data-crop-trim>TRIM THE EDGES</button>
+              <button class="action" type="button" data-crop-all>WHOLE IMAGE</button>
+            </div>
+          </div>
+          <div class="crop-side">
+            <div class="crop-label">On the sheet</div>
+            <div class="crop-where">
+              <button class="action" type="button" data-crop-place="right">RIGHT STRIP</button>
+              <button class="action" type="button" data-crop-place="bottom">BOTTOM BAND</button>
+            </div>
+            <canvas data-crop-cell width="230" height="150" aria-label="The company mark cell as it will print"></canvas>
+            <div class="crop-label">Whole titleblock</div>
+            <canvas data-crop-whole width="230" height="150" aria-label="The whole titleblock as it will print"></canvas>
+          </div>
+        </div>
+        <div class="crop-foot">
+          <button class="action" type="button" data-crop-cancel>CANCEL</button>
+          <button class="action primary" type="button" data-crop-use>USE THIS CROP</button>
+        </div>
+      </div>
+    </div>
 
     <h1 style="margin-top:22px;">Company Standard Layers</h1>
     <p class="intro">The office layer list. Commands assign these layers automatically as you draft — nobody manages layers by hand — and this list is what a future AutoCAD/DXF export maps onto, so name each layer the way your CAD standard expects.</p>
@@ -418,6 +489,10 @@
       // than part of render() above, because adding a logo must not rebuild
       // the layer table underneath a half-typed layer name.
       const logoHost = document.querySelector('[data-logo-list]');
+      // ASSIGNED FURTHER DOWN, where the crop dialog is built: the rows are
+      // painted before that code runs, and a row's CROP button must not be a
+      // reference to something that does not exist yet.
+      let recropLogo = () => {};
       const escape = text => String(text ?? '')
         .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
       const renderLogos = () => {
@@ -433,9 +508,10 @@
             <span class="default-name" style="display:flex; align-items:center;">
               <img src="${escape(logo.dataUrl)}" alt="" style="max-width:104px; max-height:46px; object-fit:contain; background:#fff; border:1px solid var(--edge-panel); padding:3px;" />
             </span>
-            <span class="layer-use">Shows in Construction Layout as <strong>${escape(logo.label)}</strong>, on the right-hand strip of an 11&times;17 sheet.</span>
-            <span class="layer-print" style="justify-content:flex-start;">
-              <input class="layer-name-input" type="text" data-logo-label="${escape(logo.id)}" value="${escape(logo.label)}" aria-label="Name for this logo in the titleblock list" style="width:100%;" />
+            <span class="layer-use">Shows in Construction Layout as <strong>${escape(logo.label)}</strong>, on the ${logo.placement === 'bottom' ? 'bottom band' : 'right-hand strip'} of an 11&times;17 sheet.${logo.seq ? ` <em>Slot ${String(logo.seq).padStart(2, '0')} &mdash; click the name to call it something else; the next logo keeps counting from where it left off.</em>` : ''}</span>
+            <span class="layer-print" style="justify-content:flex-start; gap:6px;">
+              <input class="layer-name-input" type="text" data-logo-label="${escape(logo.id)}" value="${escape(logo.label)}" aria-label="Name for this logo in the titleblock list" title="Click to rename this logo" style="width:100%;" />
+              <button class="action" type="button" data-logo-crop="${escape(logo.id)}" title="Crop this logo again, against the titleblock">CROP</button>
             </span>
             <button class="reset-layer" type="button" data-logo-remove="${escape(logo.id)}" aria-label="Remove ${escape(logo.label)}" title="Remove this logo">&times;</button>
           </div>
@@ -447,6 +523,12 @@
               companyLogos.map(logo => (logo.id === id ? { ...logo, label: input.value } : logo)));
             saveActive('Logo renamed.');
             renderLogos();
+          });
+        });
+        logoHost.querySelectorAll('[data-logo-crop]').forEach(button => {
+          button.addEventListener('click', () => {
+            const logo = companyLogos.find(entry => entry.id === button.dataset.logoCrop);
+            if (logo) recropLogo(logo);
           });
         });
         logoHost.querySelectorAll('[data-logo-remove]').forEach(button => {
@@ -628,28 +710,295 @@
       // it -- the one format that would lose by being "optimised" -- and they
       // are small to begin with. It is still size-checked below.
       const LOGO_MAX_PX = 512;
-      const shrink = file => new Promise((resolve, reject) => {
-        if (file.type === 'image/svg+xml') {
-          const reader = new FileReader();
-          reader.onerror = () => reject(new Error('That file could not be read.'));
-          reader.onload = () => resolve(String(reader.result));
-          reader.readAsDataURL(file);
-          return;
-        }
+      // THE PICTURE, DECODED AND BROUGHT DOWN TO SIZE, as a canvas rather than
+      // a data URL: the crop dialog draws from it on every drag, and encoding
+      // a PNG per frame to feed a picture the canvas already holds is a round
+      // trip for nothing. One URL is made at the end, out of the crop.
+      const asCanvas = file => new Promise((resolve, reject) => {
         const url = URL.createObjectURL(file);
         const img = new Image();
         img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('That file is not an image this browser can read.')); };
         img.onload = () => {
           URL.revokeObjectURL(url);
-          const scale = Math.min(1, LOGO_MAX_PX / Math.max(img.width, img.height));
+          // AN SVG WITH NO INTRINSIC SIZE decodes to 0x0 in some browsers;
+          // 300px square is what the spec says to assume, and it is a size a
+          // crop can be drawn against.
+          const iw = img.naturalWidth || img.width || 300;
+          const ih = img.naturalHeight || img.height || 300;
+          const scale = Math.min(1, LOGO_MAX_PX / Math.max(iw, ih));
           const canvas = document.createElement('canvas');
-          canvas.width = Math.max(1, Math.round(img.width * scale));
-          canvas.height = Math.max(1, Math.round(img.height * scale));
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL('image/png'));
+          canvas.width = Math.max(1, Math.round(iw * scale));
+          canvas.height = Math.max(1, Math.round(ih * scale));
+          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas);
         };
         img.src = url;
+      });
+
+      // ── WHERE THE ARTWORK ACTUALLY IS ──────────────────────────────────
+      // Movie, 14 Oct, on his own first upload: "the one i uploaded had too
+      // much boarder". A letterhead PNG is mostly margin, and the strip
+      // scales the WHOLE FILE to fit the mark's cell -- so the margin takes
+      // the cell and the mark comes out small with air around it.
+      //
+      // THE BACKGROUND IS WHAT THE CORNERS AGREE ON. If the four corners do
+      // not match each other the picture bleeds to its edge and there is
+      // nothing to trim, so this answers the whole frame rather than guessing.
+      // Transparent counts as background whatever its RGB says: a PNG's fully
+      // clear pixels carry leftover colour that no one ever sees.
+      const contentBounds = canvas => {
+        const { width: w, height: h } = canvas;
+        const whole = { x: 0, y: 0, w, h };
+        let data;
+        try { data = canvas.getContext('2d').getImageData(0, 0, w, h).data; } catch { return whole; }
+        const at = (x, y) => { const i = (y * w + x) * 4; return [data[i], data[i + 1], data[i + 2], data[i + 3]]; };
+        const same = (a, b) => (a[3] <= 8 && b[3] <= 8)
+          || (Math.abs(a[3] - b[3]) <= 10 && Math.abs(a[0] - b[0]) <= 12
+            && Math.abs(a[1] - b[1]) <= 12 && Math.abs(a[2] - b[2]) <= 12);
+        const bg = at(0, 0);
+        if (![at(w - 1, 0), at(0, h - 1), at(w - 1, h - 1)].every(c => same(c, bg))) return whole;
+        let x0 = w, y0 = h, x1 = -1, y1 = -1;
+        for (let y = 0; y < h; y += 1) {
+          for (let x = 0; x < w; x += 1) {
+            if (same(at(x, y), bg)) continue;
+            if (x < x0) x0 = x;
+            if (x > x1) x1 = x;
+            if (y < y0) y0 = y;
+            if (y > y1) y1 = y;
+          }
+        }
+        // A PICTURE OF NOTHING is left whole rather than cropped to a dot.
+        if (x1 < 0 || x1 - x0 < 2 || y1 - y0 < 2) return whole;
+        return { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+      };
+
+      // ── THE NEXT COMPANY NUMBER ────────────────────────────────────────
+      // Movie, 14 Oct: "change its name to COMPANY 01 (not LOGO) (and allow
+      // others to have 02 03 04 etc", then "allow them to remane COMPANY 01
+      // if they would like by clicking one it once they upload a logo, next
+      // one will still be named COMPANY 02 etc".
+      //
+      // The filename was the old default, and his was called logo.png -- so
+      // the TITLEBLOCK list read LOGO, which says nothing about whose it is.
+      //
+      // THE NUMBER IS NOT READ BACK OFF THE NAME, which is the whole of his
+      // second sentence: it is `seq`, kept beside the label and never shown.
+      // Counting COMPANY nn labels would make the numbering collapse the
+      // moment one is renamed -- call 01 BLUEJETTY and the next upload would
+      // be 01 again, two slots with one number.
+      //
+      // THE LOWEST FREE ONE, not one past the end: delete 01 of three and the
+      // next upload fills the gap rather than becoming 04 beside 02 and 03.
+      const nextSeq = () => {
+        const taken = new Set(companyLogos.map(logo => logo.seq).filter(Boolean));
+        let n = 1;
+        while (taken.has(n)) n += 1;
+        return n;
+      };
+
+      // ── THE CROP DIALOG ────────────────────────────────────────────────
+      // "can you offer them a CROP option and show them what it will look
+      // like in the current TB selection".
+      const cropBack = document.querySelector('[data-crop-back]');
+      const cropCanvas = document.querySelector('[data-crop-canvas]');
+      const cellCanvas = document.querySelector('[data-crop-cell]');
+      const wholeCanvas = document.querySelector('[data-crop-whole]');
+      const cropNote = document.querySelector('[data-crop-note]');
+      const placeButtons = [...document.querySelectorAll('[data-crop-place]')];
+      // WHAT THE DIALOG IS WORKING ON: the picture, the rectangle kept out of
+      // it in IMAGE pixels, where it will stand on the sheet, and what to do
+      // with the answer (a new logo, or a re-crop of one already in the list).
+      let crop = null;
+
+      // The current titleblock, so the preview opens on the arrangement the
+      // drafter is actually using. LAYOUT writes it into whichever package it
+      // last saved, so both are asked.
+      const currentTitleblockId = () => {
+        const manager2 = window.DraftProfileManager;
+        return manager2?.getActive('standards')?.content?.layout?.titleblock
+          || manager2?.getActive('settings')?.content?.layout?.titleblock
+          || 'roughdrafter';
+      };
+
+      const PREVIEW_INFO = Object.freeze({
+        projectName: 'NEW HOME', pageTitle: 'FOUNDATION PLAN',
+        revision: '—', date: new Date().toISOString().slice(0, 10),
+        scale: '1/4" = 1\'-0"', drafterName: '', drafterPhone: '', sheet: '1',
+      });
+
+      // THE CROP AS A CANVAS, which is what the painter is handed: see the
+      // note in titleblock.js about why it no longer insists on an <img>.
+      const cropPicture = () => {
+        const out = document.createElement('canvas');
+        out.width = Math.max(1, Math.round(crop.rect.w));
+        out.height = Math.max(1, Math.round(crop.rect.h));
+        out.getContext('2d').drawImage(crop.canvas, crop.rect.x, crop.rect.y,
+          crop.rect.w, crop.rect.h, 0, 0, out.width, out.height);
+        return out;
+      };
+
+      const paintPreview = () => {
+        const T = window.DraftTitleblock;
+        const picture = cropPicture();
+        const style = { ...T.logoStyle({ id: 'preview', label: crop.label, dataUrl: '', placement: crop.placement }) };
+        // THE SHEET AT A SIZE THE STRIP CAN BE READ AT, then the parts of it
+        // this dialog is about. One render, two views: a second render at a
+        // second scale would be a second chance to disagree with the sheet.
+        const zoom = crop.placement === 'right' ? 90 : 34;
+        const PW = 17; const PH = 11;
+        const sheet = document.createElement('canvas');
+        sheet.width = Math.round(PW * zoom);
+        sheet.height = Math.round(PH * zoom);
+        const sctx = sheet.getContext('2d');
+        sctx.fillStyle = '#fff';
+        sctx.fillRect(0, 0, sheet.width, sheet.height);
+        const m = 0.5 * zoom;
+        const inner = { x: m, y: m, w: sheet.width - m * 2, h: sheet.height - m * 2 };
+        const box = crop.placement === 'right'
+          ? { x: inner.x + inner.w - T.STRIP_W_IN * zoom, y: inner.y, w: T.STRIP_W_IN * zoom, h: inner.h }
+          : { x: inner.x, y: inner.y + inner.h - T.BAND_H_IN * zoom, w: inner.w, h: T.BAND_H_IN * zoom };
+        T.draw(sctx, box, style, PREVIEW_INFO, picture);
+
+        const blit = (target, src, area) => {
+          const ctx = target.getContext('2d');
+          ctx.clearRect(0, 0, target.width, target.height);
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0, 0, target.width, target.height);
+          const k = Math.min(target.width / area.w, target.height / area.h);
+          const dw = area.w * k; const dh = area.h * k;
+          ctx.drawImage(src, area.x, area.y, area.w, area.h,
+            (target.width - dw) / 2, (target.height - dh) / 2, dw, dh);
+        };
+        // THE MARK'S OWN CELL, ENLARGED -- the part a crop is judged by. Its
+        // bounds come from titleblock.js (MARK_CELL) rather than from two
+        // numbers retyped here.
+        const cell = crop.placement === 'right'
+          ? { x: box.x, y: box.y + box.h * T.MARK_CELL.top,
+            w: box.w, h: box.h * (T.MARK_CELL.bottom - T.MARK_CELL.top) }
+          : { x: box.x, y: box.y, w: box.w * 0.2, h: box.h };
+        blit(cellCanvas, sheet, cell);
+        blit(wholeCanvas, sheet, box);
+      };
+
+      // ── THE RECTANGLE, DRAWN AND DRAGGED ───────────────────────────────
+      const HANDLE = 9;
+      const cropView = () => {
+        const k = Math.min(cropCanvas.width / crop.canvas.width, cropCanvas.height / crop.canvas.height);
+        const w = crop.canvas.width * k; const h = crop.canvas.height * k;
+        return { k, x: (cropCanvas.width - w) / 2, y: (cropCanvas.height - h) / 2, w, h };
+      };
+      const paintCrop = () => {
+        const ctx = cropCanvas.getContext('2d');
+        const v = cropView();
+        ctx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
+        ctx.drawImage(crop.canvas, v.x, v.y, v.w, v.h);
+        const r = { x: v.x + crop.rect.x * v.k, y: v.y + crop.rect.y * v.k,
+          w: crop.rect.w * v.k, h: crop.rect.h * v.k };
+        // WHAT IS BEING THROWN AWAY, dimmed -- the border he was complaining
+        // about, shown as the thing the crop removes.
+        ctx.fillStyle = 'rgba(12,18,26,0.45)';
+        ctx.fillRect(0, 0, cropCanvas.width, r.y);
+        ctx.fillRect(0, r.y + r.h, cropCanvas.width, cropCanvas.height - r.y - r.h);
+        ctx.fillRect(0, r.y, r.x, r.h);
+        ctx.fillRect(r.x + r.w, r.y, cropCanvas.width - r.x - r.w, r.h);
+        ctx.strokeStyle = '#e4572e';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+        ctx.fillStyle = '#e4572e';
+        [[r.x, r.y], [r.x + r.w, r.y], [r.x, r.y + r.h], [r.x + r.w, r.y + r.h]]
+          .forEach(([hx, hy]) => ctx.fillRect(hx - HANDLE / 2, hy - HANDLE / 2, HANDLE, HANDLE));
+        cropNote.textContent = `${Math.round(crop.rect.w)} × ${Math.round(crop.rect.h)} px kept`;
+        paintPreview();
+      };
+
+      const clampRect = () => {
+        const c = crop.canvas;
+        crop.rect.w = Math.max(4, Math.min(crop.rect.w, c.width));
+        crop.rect.h = Math.max(4, Math.min(crop.rect.h, c.height));
+        crop.rect.x = Math.max(0, Math.min(crop.rect.x, c.width - crop.rect.w));
+        crop.rect.y = Math.max(0, Math.min(crop.rect.y, c.height - crop.rect.h));
+      };
+
+      let drag = null;
+      const imageAt = event => {
+        const box = cropCanvas.getBoundingClientRect();
+        const v = cropView();
+        // THE CANVAS IS SCALED BY CSS on a narrow window, so the client box
+        // and the backing store are two different rulers.
+        const px = (event.clientX - box.left) * (cropCanvas.width / box.width);
+        const py = (event.clientY - box.top) * (cropCanvas.height / box.height);
+        return { x: (px - v.x) / v.k, y: (py - v.y) / v.k, k: v.k };
+      };
+      cropCanvas.addEventListener('pointerdown', event => {
+        if (!crop) return;
+        const p = imageAt(event);
+        const near = (a, b) => Math.abs(a - b) * p.k <= HANDLE;
+        const left = near(p.x, crop.rect.x); const right = near(p.x, crop.rect.x + crop.rect.w);
+        const top = near(p.y, crop.rect.y); const bottom = near(p.y, crop.rect.y + crop.rect.h);
+        const inside = p.x > crop.rect.x && p.x < crop.rect.x + crop.rect.w
+          && p.y > crop.rect.y && p.y < crop.rect.y + crop.rect.h;
+        if (left || right || top || bottom) drag = { kind: 'size', left, right, top, bottom };
+        else if (inside) drag = { kind: 'move', dx: p.x - crop.rect.x, dy: p.y - crop.rect.y };
+        // A PRESS ON BARE CANVAS STARTS A NEW RECTANGLE, which is the one
+        // gesture that can recover from a crop dragged down to nothing.
+        else { crop.rect = { x: p.x, y: p.y, w: 4, h: 4 }; drag = { kind: 'size', right: true, bottom: true }; }
+        cropCanvas.setPointerCapture(event.pointerId);
+        event.preventDefault();
+      });
+      cropCanvas.addEventListener('pointermove', event => {
+        if (!crop || !drag) return;
+        const p = imageAt(event);
+        if (drag.kind === 'move') { crop.rect.x = p.x - drag.dx; crop.rect.y = p.y - drag.dy; }
+        else {
+          const r = crop.rect;
+          if (drag.left) { const right = r.x + r.w; r.x = Math.min(p.x, right - 4); r.w = right - r.x; }
+          if (drag.right) r.w = Math.max(4, p.x - r.x);
+          if (drag.top) { const bottom = r.y + r.h; r.y = Math.min(p.y, bottom - 4); r.h = bottom - r.y; }
+          if (drag.bottom) r.h = Math.max(4, p.y - r.y);
+        }
+        clampRect();
+        paintCrop();
+      });
+      const endDrag = () => { drag = null; };
+      cropCanvas.addEventListener('pointerup', endDrag);
+      cropCanvas.addEventListener('pointercancel', endDrag);
+
+      const setPlacement = where => {
+        crop.placement = where;
+        placeButtons.forEach(button => button.classList.toggle('on', button.dataset.cropPlace === where));
+        paintCrop();
+      };
+      placeButtons.forEach(button =>
+        button.addEventListener('click', () => setPlacement(button.dataset.cropPlace)));
+      document.querySelector('[data-crop-trim]').addEventListener('click', () => {
+        crop.rect = { ...contentBounds(crop.canvas) };
+        paintCrop();
+      });
+      document.querySelector('[data-crop-all]').addEventListener('click', () => {
+        crop.rect = { x: 0, y: 0, w: crop.canvas.width, h: crop.canvas.height };
+        paintCrop();
+      });
+
+      const closeCrop = () => { crop = null; drag = null; cropBack.hidden = true; };
+      document.querySelector('[data-crop-cancel]').addEventListener('click', closeCrop);
+
+      // THE CROP OPENS ON THE ARTWORK'S OWN BOUNDS. Trimming is what he asked
+      // for, so it is the state the dialog starts in rather than a button he
+      // has to find; WHOLE IMAGE is one press away for a mark that wants its
+      // own margin.
+      const openCrop = (canvas, label, placement, onUse) => {
+        crop = { canvas, label, placement, onUse, rect: { ...contentBounds(canvas) } };
+        placeButtons.forEach(button => button.classList.toggle('on', button.dataset.cropPlace === placement));
+        cropBack.hidden = false;
+        paintCrop();
+      };
+
+      document.querySelector('[data-crop-use]').addEventListener('click', () => {
+        const use = crop.onUse;
+        const picture = cropPicture();
+        const placement = crop.placement;
+        closeCrop();
+        use(picture.toDataURL('image/png'), placement);
       });
 
       const fileInput = document.querySelector('[data-logo-file]');
@@ -662,31 +1011,55 @@
           return;
         }
         try {
-          const dataUrl = await shrink(file);
-          // THE NAME IS THE FILE'S, less its extension -- the one thing on
-          // disk that already says what the mark is. It is editable below,
-          // because a file called "logo-final-2.png" is not a company name.
-          const label = file.name.replace(/\.[^.]+$/, '');
-          const next = window.DraftTitleblock.normaliseCompanyLogos([
-            ...companyLogos,
-            { id: `L${Date.now().toString(36)}`, label, dataUrl },
-          ]);
-          // NOTHING WAS ADDED means the normaliser refused it, and the only
-          // thing it refuses that gets this far is size. Said plainly rather
-          // than as a silent no-op.
-          if (next.length === companyLogos.length) {
-            showStatus('That logo is still too big after scaling — try a simpler image.', true);
-            fileInput.value = '';
-            return;
-          }
-          companyLogos = next;
-          saveActive(`${companyLogos[companyLogos.length - 1].label} added. Pick it in Construction Layout under TITLEBLOCK.`);
-          renderLogos();
+          const canvas = await asCanvas(file);
+          const seq = nextSeq();
+          const label = `COMPANY ${String(seq).padStart(2, '0')}`;
+          const current = window.DraftTitleblock.styleById(currentTitleblockId(), companyLogos);
+          openCrop(canvas, label, current?.placement === 'bottom' ? 'bottom' : 'right',
+            (dataUrl, placement) => {
+              const next = window.DraftTitleblock.normaliseCompanyLogos([
+                ...companyLogos,
+                { id: `L${Date.now().toString(36)}`, label, dataUrl, placement, seq },
+              ]);
+              // NOTHING WAS ADDED means the normaliser refused it, and the
+              // only thing it refuses that gets this far is size. Said
+              // plainly rather than as a silent no-op.
+              if (next.length === companyLogos.length) {
+                showStatus('That logo is still too big after cropping — try a simpler image.', true);
+                return;
+              }
+              companyLogos = next;
+              saveActive(`${label} added. Pick it in Construction Layout under TITLEBLOCK.`);
+              renderLogos();
+            });
         } catch (error) {
           showStatus(error instanceof Error ? error.message : 'That logo could not be read.', true);
         }
         fileInput.value = '';
       });
+
+      // CROPPING ONE ALREADY IN THE LIST, which is what his own first upload
+      // needs: the crop is baked into the stored picture, so this works on
+      // what is stored. It can always take more off and never put it back --
+      // the honest trade for not keeping two copies of every logo in a
+      // package that shares localStorage with every saved drawing.
+      recropLogo = logo => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          canvas.getContext('2d').drawImage(img, 0, 0);
+          openCrop(canvas, logo.label, logo.placement, (dataUrl, placement) => {
+            companyLogos = window.DraftTitleblock.normaliseCompanyLogos(companyLogos
+              .map(entry => (entry.id === logo.id ? { ...entry, dataUrl, placement } : entry)));
+            saveActive(`${logo.label} cropped.`);
+            renderLogos();
+          });
+        };
+        img.onerror = () => showStatus('That logo could not be re-read for cropping.', true);
+        img.src = logo.dataUrl;
+      };
 
       // ── AND BACK IN AGAIN ──────────────────────────────────────────────
       // THE WHOLE PAGE IS REBUILT FROM THE FILE, not just the parts the file

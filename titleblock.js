@@ -91,14 +91,23 @@ if (!window.DraftTitleblock) {
   const MAX_LOGOS = 8;
   const MAX_LOGO_BYTES = 400 * 1024;
 
+  // AND IT SAYS WHICH ARRANGEMENT IT BELONGS IN. Movie, 14 Oct: "show them
+  // what it will look like in the current TB selection" -- which the crop
+  // preview can only honour without lying if the logo really does come out in
+  // the arrangement it was previewed in. The strip is the default and what
+  // every logo uploaded before this one got.
   const logoStyle = logo => Object.freeze({
     id: `${LOGO_ID_PREFIX}${logo.id}`,
     label: logo.label,
     company: logo.label,
     logoSrc: logo.dataUrl,
-    placement: 'right',
+    placement: logo.placement === 'bottom' ? 'bottom' : 'right',
     cornerRadiusIn: 0,
-    logoOnly: true,
+    // THE BAND PRINTS THE COMPANY NAME BESIDE THE MARK, which is what the
+    // band is: a row of lettered cells. On the strip the mark has a tall cell
+    // to itself and fills 75% of it, so a wordmark under it would be the name
+    // twice. `logoOnly` is read by the strip painter only.
+    logoOnly: logo.placement !== 'bottom',
     arrowDivider: true,
     uploaded: true,
   });
@@ -123,6 +132,17 @@ if (!window.DraftTitleblock) {
         id,
         label: (String(entry.label || '').trim() || 'COMPANY LOGO').slice(0, 40).toUpperCase(),
         dataUrl,
+        // ANYTHING BUT 'bottom' IS THE STRIP, which keeps every logo saved
+        // before placement existed exactly where it was.
+        placement: entry.placement === 'bottom' ? 'bottom' : 'right',
+        // THE SLOT NUMBER, KEPT APART FROM THE NAME. Movie, 14 Oct: "allow
+        // them to remane COMPANY 01 if they would like ... next one will
+        // still be named COMPANY 02 etc". Counting the COMPANY nn labels
+        // would make the numbering collapse the moment one is renamed --
+        // rename 01 to BLUEJETTY and the next upload would be 01 again. The
+        // label is the drafter's; this is the app's.
+        seq: Number.isFinite(Number(entry.seq)) && Number(entry.seq) > 0
+          ? Math.floor(Number(entry.seq)) : 0,
       }));
       return out;
     }, []);
@@ -152,6 +172,15 @@ if (!window.DraftTitleblock) {
   const STRIP_W_IN = 1.15;
   const BAND_H_IN = 1.5;
   const CORNER_RADIUS_IN = 0.35;
+
+  // THE CELL THE COMPANY MARK STANDS IN, as fractions of the strip's height.
+  // PUBLISHED because the logo crop on COMPANY STANDARDS previews into it: it
+  // renders the real strip through `draw` and then enlarges this band of it,
+  // which is the part a drafter is actually judging a crop by. Recomputing
+  // 0.78/0.92 on that page would be a second copy of the arithmetic, and a
+  // second copy is how the preview comes to show a cell the sheet does not
+  // have. drawRight reads these same two numbers.
+  const MARK_CELL = Object.freeze({ top: 0.78, bottom: 0.92 });
 
   // Cell widths of the bottom band as fractions of the strip: identity,
   // project, drafter, date + scale, sheet number.
@@ -216,8 +245,8 @@ if (!window.DraftTitleblock) {
     const arrowB = y + h * 0.12;
     const titleB = y + h * 0.44;
     const wordsB = y + h * 0.62;
-    const rowsB = y + h * 0.78;
-    const markB = y + h * 0.92;
+    const rowsB = y + h * MARK_CELL.top;
+    const markB = y + h * MARK_CELL.bottom;
     const divider = yy => {
       ctx.lineWidth = 0.75;
       ctx.beginPath();
@@ -312,13 +341,21 @@ if (!window.DraftTitleblock) {
     // fills ~75% of the cell instead.
     const markH = markB - rowsB;
     let markY = rowsB + markH * 0.12;
-    if (logo && logo.complete && logo.naturalWidth) {
+    // ANY CANVAS-IMAGE SOURCE, not only an <img>. `drawImage` has always
+    // taken a canvas; this read did not -- it asked for `naturalWidth`, which
+    // only an <img> has, so a canvas passed in here drew nothing at all. The
+    // logo crop on COMPANY STANDARDS previews from a canvas, because turning
+    // the crop into a data URL on every drag is a round trip per frame for a
+    // picture the painter can read directly.
+    const logoW0 = logo && (logo.naturalWidth || logo.width);
+    const logoH0 = logo && (logo.naturalHeight || logo.height);
+    if (logo && logo.complete !== false && logoW0 && logoH0) {
       const share = style.logoOnly ? 0.75 : 0.42;
       let logoW = w * (style.logoOnly ? 0.75 : 1) - (style.logoOnly ? 0 : pad * 2);
-      let logoH = logoW * (logo.naturalHeight / logo.naturalWidth);
+      let logoH = logoW * (logoH0 / logoW0);
       if (logoH > markH * share) {
         logoH = markH * share;
-        logoW = logoH * (logo.naturalWidth / logo.naturalHeight);
+        logoW = logoH * (logoW0 / logoH0);
       }
       ctx.drawImage(logo, x + (w - logoW) / 2, markY, logoW, logoH);
       markY += logoH + markH * 0.06;
@@ -466,6 +503,7 @@ if (!window.DraftTitleblock) {
     STRIP_W_IN,
     BAND_H_IN,
     CORNER_RADIUS_IN,
+    MARK_CELL,
   });
 })();
 }

@@ -214,6 +214,33 @@ function runChecks() {
   check('it stands on the right-hand strip, with no wordmark invented for it',
     withLogo[4].placement === 'right' && withLogo[4].logoOnly === true,
     'the mark fills its cell; this app has no business lettering a company name under it');
+  // AND IT CAN SAY OTHERWISE. Movie, 14 Oct: "show them what it will look
+  // like in the current TB selection" -- a preview can only honour that
+  // without lying if the logo really comes out in the arrangement previewed.
+  const banded = T.stylesFor([{ id: 'L2', label: 'X', dataUrl: PNG, placement: 'bottom' }])[4];
+  check('a logo asked for the bottom band gets the band, and its name with it',
+    banded.placement === 'bottom' && banded.logoOnly === false,
+    'the band IS a row of lettered cells; logoOnly is the strip\'s word, not the band\'s');
+  check('anything else is the strip, so every logo saved before placement stays put',
+    T.stylesFor([{ id: 'L3', label: 'X', dataUrl: PNG }])[4].placement === 'right'
+      && T.stylesFor([{ id: 'L4', label: 'X', dataUrl: PNG, placement: 'sideways' }])[4].placement === 'right');
+
+  // THE SLOT NUMBER IS NOT THE NAME. Movie, 14 Oct: "allow them to remane
+  // COMPANY 01 if they would like ... next one will still be named COMPANY 02
+  // etc" -- which only holds if the number is kept somewhere the rename
+  // cannot reach.
+  check('a logo carries a slot number apart from its label',
+    T.normaliseCompanyLogos([{ id: 'L1', label: 'BLUEJETTY', dataUrl: PNG, seq: 1 }])[0].seq === 1);
+  check('a logo with no slot number says so rather than claiming one',
+    T.normaliseCompanyLogos([{ id: 'L1', label: 'X', dataUrl: PNG }])[0].seq === 0,
+    '0 is "unnumbered"; handing it 1 would collide with whatever already holds 1');
+  check('a nonsense slot number is read as unnumbered',
+    T.normaliseCompanyLogos([{ id: 'L1', label: 'X', dataUrl: PNG, seq: -4 }])[0].seq === 0
+      && T.normaliseCompanyLogos([{ id: 'L2', label: 'X', dataUrl: PNG, seq: 'two' }])[0].seq === 0);
+
+  check('the mark cell is published, and it is the cell drawRight uses',
+    T.MARK_CELL.top === 0.78 && T.MARK_CELL.bottom === 0.92 && Object.isFrozen(T.MARK_CELL),
+    'the crop preview enlarges this band out of a real strip; two copies would show a cell the sheet has not got');
   check('the name is carried up out of the file, in capitals like every other label',
     withLogo[4].label === 'HARBOUR DRAFTING');
   check('an uploaded id cannot collide with a shipped style',
@@ -369,6 +396,18 @@ function runChecks() {
     Math.abs(stripPaint.images[0].w / stripPaint.images[0].h
       - LOGO.naturalWidth / LOGO.naturalHeight) < 1e-6,
     'a stretched company logo is the thing a client notices first');
+  // A CANVAS IS A PICTURE TOO. The crop preview on COMPANY STANDARDS hands
+  // the painter a canvas rather than an <img>, because encoding a PNG on
+  // every drag is a round trip for a picture the canvas already holds -- and
+  // a canvas has `width`, not `naturalWidth`. This read asked only for
+  // `naturalWidth`, so a canvas drew NOTHING and the preview came up empty.
+  const canvasLike = { width: 400, height: 200 };
+  const canvasPaint = paintWith(T, right, INFO, canvasLike);
+  check('a canvas is drawn like any other picture, not skipped for lacking naturalWidth',
+    canvasPaint.images.length === 1 && canvasPaint.images[0].img === canvasLike);
+  check('and it is measured by the same rule',
+    Math.abs(canvasPaint.images[0].w / canvasPaint.images[0].h
+      - canvasLike.width / canvasLike.height) < 1e-6);
   const tallLogo = { complete: true, naturalWidth: 100, naturalHeight: 900 };
   const tallPaint = paintWith(T, right, INFO, tallLogo);
   check('a logoOnly mark is given the room the missing wordmark would have taken',
@@ -527,6 +566,24 @@ const MUTATIONS = [
   ['an uploaded id is not prefixed, so it can shadow a shipped style', 'titleblock.js',
     c => c.replace('    id: `${LOGO_ID_PREFIX}${logo.id}`,', '    id: logo.id,')],
 
+  ['every uploaded logo is forced onto the strip, whatever it was previewed in', 'titleblock.js',
+    c => c.replace("    placement: logo.placement === 'bottom' ? 'bottom' : 'right',\n    cornerRadiusIn: 0,",
+      "    placement: 'right',\n    cornerRadiusIn: 0,")],
+
+  ['a banded logo prints its mark with no name beside it', 'titleblock.js',
+    c => c.replace("    logoOnly: logo.placement !== 'bottom',", '    logoOnly: true,')],
+
+  ['a slot number survives as whatever the file said, sign and all', 'titleblock.js',
+    c => c.replace('        seq: Number.isFinite(Number(entry.seq)) && Number(entry.seq) > 0\n          ? Math.floor(Number(entry.seq)) : 0,',
+      '        seq: Number(entry.seq) || 0,')],
+
+  ['the mark cell is two numbers typed where they are used', 'titleblock.js',
+    c => c.replace('    const rowsB = y + h * MARK_CELL.top;', '    const rowsB = y + h * 0.74;')],
+
+  ['the painter insists on an <img> again, so a canvas draws nothing', 'titleblock.js',
+    c => c.replace('    const logoW0 = logo && (logo.naturalWidth || logo.width);',
+      '    const logoW0 = logo && logo.naturalWidth;')],
+
   ['every style draws the band, whatever its placement says', 'titleblock.js',
     c => c.replace("if (style.placement === 'right') drawRight(ctx, box, style, info, logo);",
       "if (false) drawRight(ctx, box, style, info, logo);")],
@@ -598,14 +655,14 @@ const MUTATIONS = [
     c => c.replace('const share = style.logoOnly ? 0.75 : 0.42;', 'const share = 0.42;')],
 
   ['the mark is stretched to the cell instead of keeping its shape', 'titleblock.js',
-    c => c.replace('      let logoH = logoW * (logo.naturalHeight / logo.naturalWidth);',
+    c => c.replace('      let logoH = logoW * (logoH0 / logoW0);',
       '      let logoH = markH * 0.75;')],
 
   ['a tall mark is drawn at full height, through the dividers', 'titleblock.js',
-    c => c.replace('      if (logoH > markH * share) {\n        logoH = markH * share;\n        logoW = logoH * (logo.naturalWidth / logo.naturalHeight);\n      }\n', '')],
+    c => c.replace('      if (logoH > markH * share) {\n        logoH = markH * share;\n        logoW = logoH * (logoW0 / logoH0);\n      }\n', '')],
 
   ['an image that has not loaded is drawn anyway', 'titleblock.js',
-    c => c.replace('    if (logo && logo.complete && logo.naturalWidth) {\n      const share',
+    c => c.replace('    if (logo && logo.complete !== false && logoW0 && logoH0) {\n      const share',
       '    if (logo) {\n      const share')],
 
   ['the phone is printed whether the drafter gave one or not', 'titleblock.js',
