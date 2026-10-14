@@ -20021,7 +20021,24 @@
     }
     if (!Array.isArray(drawing.holograms)) drawing.holograms = [];
     addItem(drawing.holograms, holo);
-    sayOnStrip(`${name} is in as a hologram, where its own file has it \u2014 PHOTO lists it to move or turn.`);
+    // ── AND IT ARRIVES IN HAND ────────────────────────────────────────────
+    //
+    // Movie, 14 Oct: "i need a better way to place the hologram too".
+    //
+    // IT USED TO LAND WHERE ITS OWN FILE HAD IT and say so, which is right
+    // about the arithmetic and wrong about the job: the two drawings were set
+    // up on different days, so "where its own file has it" is almost never
+    // where it belongs on this one. The drafter then had to go and find the
+    // card, open it, and press MOVE before they could put it anywhere.
+    //
+    // SO THE PRESS THAT BRINGS IT IN IS THE PRESS THAT PLACES IT. The same
+    // MOVE the card arms, armed here: drag it where it belongs, [ and ] turn
+    // it, Esc to leave it where the file had it. The card is still the way
+    // back to it later.
+    traceAsk.hidden = true;
+    traceMoving = { underlay: holo, from: null, before: null, hologram: true };
+    sayOnStrip(`${name} is in \u2014 ${traceMoveWord(traceMoving)}`);
+    paint();
   });
   traceAsk.querySelector('[data-hologram-upload]').addEventListener('click', () => {
     traceAsk.hidden = true;
@@ -20198,6 +20215,12 @@
     sayOnStrip('');
     paint();
   };
+  // WHAT THE STRIP SAYS WHILE SOMETHING IS IN HAND. One sentence, said when
+  // the mode is armed and again whenever a click leaves it armed -- a mode a
+  // drafter cannot see is a mode they will assume is over.
+  const traceMoveWord = m => (m?.hologram
+    ? `Drag ${hologramNoun(m.underlay)} to where it belongs \u2014 [ and ] turn it, Esc to leave it.`
+    : 'Drag the picture to where it belongs \u2014 Esc to leave it.');
   const tracePoint = event => {
     const r = canvas.getBoundingClientRect();
     return toWorld(event.clientX - r.left, event.clientY - r.top);
@@ -20224,11 +20247,33 @@
   // The click the browser sends after the drag is the drag's own, not a
   // press for whatever tool is up -- swallowed once.
   let swallowTraceClick = false;
+  // ── A CLICK IS NOT A MOVE, AND MUST NOT END ONE ──────────────────────
+  //
+  // Movie, 14 Oct: "i need a better way to place the hologram too. and 'MOVE'
+  // it later, doesn't seem to be able to move."
+  //
+  // MEASURED, THREE WAYS. MOVE then drag works; MOVE with a tool armed works;
+  // MOVE, a CLICK, then a drag does nothing at all -- and that is the one a
+  // drafter actually does, because a press-and-release on the spot is how
+  // anyone checks that a mode took. The press armed the drag, the release
+  // ended it having moved nothing, and the mode was over before the real drag
+  // started. Nothing said so: the strip had already been cleared.
+  //
+  // SO A RELEASE THAT MOVED NOTHING PUTS THE DRAG DOWN AND KEEPS THE MODE.
+  // Only a release that actually moved the thing commits and finishes; Escape
+  // still leaves, as it always did, and the strip says so again.
+  const TRACE_MOVE_MIN_FT = 0.01;
   window.addEventListener('pointerup', event => {
     if (!traceMoving || !traceMoving.from) return;
     event.stopImmediatePropagation();
     swallowTraceClick = true;
-    endTraceMove(true);
+    const m = traceMoving;
+    const moved = m.before && (Math.abs(m.underlay.x - m.before.x) > TRACE_MOVE_MIN_FT
+      || Math.abs(m.underlay.z - m.before.z) > TRACE_MOVE_MIN_FT);
+    if (moved) { endTraceMove(true); return; }
+    m.from = null;
+    m.before = null;
+    sayOnStrip(traceMoveWord(m));
   }, true);
   window.addEventListener('click', event => {
     if (!swallowTraceClick) return;
