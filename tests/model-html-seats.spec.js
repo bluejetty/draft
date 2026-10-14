@@ -143,33 +143,30 @@ test('the rail seats the chart the old page seats', async ({ page }) => {
   // AND THE ORDER MOVED ON 13 OCT, to the one LAYOUT already deals its sheets
   // in: "i'd like the arrangement of layout views to start with SITE PLAN -
   // than ELEVATIONS etc ... than ROOF, 2nd fl, Main Fl, Foundation,
-  // SECTIONS". Same fourteen seats, same pairs; SITE and ROOF are no longer a
-  // pair of their own, because his order puts the elevations between them --
-  // each takes a row whole instead, which is what keeps E1|E3 over E2|E4 and
-  // the PLAN|LAYOUT pairs below square. The old page's reading is kept above
-  // so the two can still be compared line for line.
+  // SECTIONS". Same fourteen seats, same two columns; SITE and ROOF are no
+  // longer a pair of their own, because his order puts the elevations between
+  // them. Shown a first cut that gave each of them a whole row to keep the
+  // elevations' 2x2 square, he seated them himself instead: "the SITE can be
+  // 1st position than E1 to the right andthen E2 and E3 2nd row, E4 ROOF on
+  // 3rd row". So the rail just flows, and the elevations now read 1-2-3-4
+  // across rather than the old page's E1|E3 over E2|E4. Its reading is kept
+  // above so the two can still be compared line for line.
   expect(seats.map(s => s.label)).toEqual([
-    'SITE PLAN',
-    'E1 · FRONT', 'E3 · BACK', 'E2 · LEFT', 'E4 · RIGHT',
-    'ROOF PLAN',
+    'SITE PLAN', 'E1 · FRONT',
+    'E2 · LEFT', 'E3 · BACK',
+    'E4 · RIGHT', 'ROOF PLAN',
     '2 2ND FL PLAN (WALLS)', '2 2ND FL LAYOUT (FLOOR)',
     '1 MAIN FL PLAN (WALLS)', '1 MAIN FL LAYOUT (FLOOR)',
     'FOUNDATION', 'BASEMENT (WALLS)',
     'S1', 'S2',
   ]);
 
-  // A ROW EACH, WHOLE, and it is asked of the rendered width rather than of
-  // the class: what the drafter sees is a seat as wide as the rail, and a
-  // class that stopped reaching its rule would leave that class in place.
-  // (It did exactly that once here -- a stray `*/` swallowed the rules and
-  // the seats stayed 84px with the class on them.)
-  const width = label => seats.find(s => s.label === label).width;
-  expect(width('SITE PLAN'), 'SITE takes the whole row')
-    .toBeGreaterThan(width('E1 · FRONT') * 1.8);
-  expect(width('ROOF PLAN'), 'and so does ROOF')
-    .toBeGreaterThan(width('E1 · FRONT') * 1.8);
-  expect(width('1 MAIN FL PLAN (WALLS)'), 'a plan seat still shares its row')
-    .toBeCloseTo(width('E1 · FRONT'), 0);
+  // EVERY SEAT IS THE SAME WIDTH, which is what "it just flows" means and is
+  // worth asking of the rendered box rather than of the list above: a seat
+  // given a row of its own would still be in the right place in the array and
+  // would push its partner down a row on screen.
+  const widths = new Set(seats.map(s => s.width));
+  expect([...widths], 'one seat is wider than the others').toHaveLength(1);
 
   // THE FOUNDATION PAIR IS NOT plan|floor, and getting that from the label
   // rather than the code is how it would seat a blank: the second card is the
@@ -183,10 +180,15 @@ test('the rail seats the chart the old page seats', async ({ page }) => {
   // across it is the way to get this wrong: MODEL.dc.html fills two columns
   // E1|E3 then E2|E4 (:7266). A drafter who knows that rail looks for E3 to
   // the right of E1, not under it.
-  // SITE takes the row above them now, so the elevations start at seat 1 --
-  // and the pair is still a pair, which is what this is about.
-  expect(seats[1].seat, 'E1 and E3 share a row, under SITE').toBe('E1');
-  expect(seats[2].seat).toBe('E3');
+  // E1 SITS BESIDE SITE and the rest follow it in order, which is the
+  // arrangement Movie laid out himself (13 Oct). The old page's E1|E3 over
+  // E2|E4 is recorded above and is what this replaced.
+  expect(seats[0].seat, 'SITE heads the rail').toBe('8:all');
+  expect(seats[1].seat, 'with E1 beside it').toBe('E1');
+  expect(seats[2].seat, 'then E2 and E3 across the second row').toBe('E2');
+  expect(seats[3].seat).toBe('E3');
+  expect(seats[4].seat, 'and E4 beside ROOF on the third').toBe('E4');
+  expect(seats[5].seat).toBe('7:all');
 
   // The office side names, off the profile through elevationName.
   expect(seats.find(s => s.seat === 'E1').label).toBe('E1 · FRONT');

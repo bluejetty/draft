@@ -964,15 +964,6 @@
   .seat[disabled] { cursor:default; }
   .seat[disabled]:hover { border-color: var(--edge-panel); }
   .seat canvas { display:block; width:82px; height:54px; }
-  /* SITE AND ROOF TAKE THE WHOLE ROW (Movie, 13 Oct): his order puts the
-     elevations between them, and either one left in a two-column row would
-     knock the E1|E3 / E2|E4 block or the PLAN|LAYOUT pairs below it out of
-     line. Neither has a layer view to fill a second column with anyway.
-     Sized by the GRID rather than by a number of its own: the row is two
-     84px tracks and the 6px between them, and a width typed here would have
-     to be re-typed the day any of those three moves. */
-  .seat-wide { grid-column: 1 / -1; width:auto; }
-  .seat-wide canvas { width:100%; }
   .seat[disabled] canvas { opacity:0.25; }
   .seat-label { padding:3px 4px 4px; border-top:1px solid var(--edge-panel);
     font-family: var(--font-ui); font-size:8px; font-weight:600;
@@ -8079,21 +8070,18 @@
   // from the order, which said twelve -- it is twelve FILLED seats and two
   // empty section chairs, fourteen elements:
   //
-  //     SITE PLAN  (the whole row)
-  //     E1 · FRONT            E3 · BACK
-  //     E2 · LEFT             E4 · RIGHT
-  //     ROOF PLAN  (the whole row)
+  //     SITE PLAN             E1 · FRONT
+  //     E2 · LEFT             E3 · BACK
+  //     E4 · RIGHT            ROOF PLAN
   //     2ND FL PLAN (WALLS)   2ND FL LAYOUT (FLOOR)
   //     MAIN FL PLAN (WALLS)  MAIN FL LAYOUT (FLOOR)
   //     FOUNDATION            BASEMENT (WALLS)
   //     S1                    S2
   //
   // The rail is two columns, so the flat order is row-major: inner, outer,
-  // inner, outer. SITE and ROOF take a row EACH, whole, since neither has
-  // layer rows to fill a second column with -- the same fact the panel shows
-  // by giving their cards no layer rows. They were a pair until 13 Oct, when
-  // the order became the sheet set's and put the elevations between them; see
-  // seatingChart for what that pairing was holding square.
+  // inner, outer. SITE and ROOF sat together in row three until 13 Oct, when
+  // the order became the sheet set's; they are seated where Movie put them
+  // himself -- see seatingChart.
   // ROOF is level 7 and SITE is level 8 -- MODEL.dc.html:7201 seats them by
   // id, and layer-views.js calls the pair WHOLE_LEVEL_IDS. By id rather than
   // by name, so renaming a level cannot empty the row; and if a drawing has
@@ -8105,8 +8093,8 @@
     const levels = drawing?.levels || [];
     const byId = id => levels.find(level => Number(level.id) === id) || null;
     const seats = [];
-    const planSeat = (level, viewId, label, wide = false) => {
-      if (level) seats.push({ kind: 'plan', levelId: Number(level.id), viewId, label, wide });
+    const planSeat = (level, viewId, label) => {
+      if (level) seats.push({ kind: 'plan', levelId: Number(level.id), viewId, label });
     };
     // ── AND THE ORDER IS THE SHEET SET'S (Movie, 13 Oct) ────────────────────
     //
@@ -8117,17 +8105,25 @@
     // ROOF, so a drafter reading one against the other had to re-find
     // everything. The order above replaces the 12 Sep one written out below.
     //
-    // SITE AND ROOF TAKE A ROW EACH, WHOLE, and that is what his order costs.
-    // They were a PAIR because neither has layer rows -- and it is exactly
-    // that pairing his order breaks: SITE alone at the head pushes E1 into
-    // the second column, so the elevations stop reading E1|E3 over E2|E4, and
-    // ROOF alone between them and the floors knocks every PLAN (WALLS) |
-    // LAYOUT (FLOOR) pair out of line behind it. A full-width seat keeps both
-    // blocks square, and suits what is in them: a lot and a roof are the two
-    // widest things this page draws.
-    planSeat(byId(SITE_LEVEL_ID), null, 'SITE PLAN', true);
-    ['E1', 'E3', 'E2', 'E4'].forEach(id => seats.push({ kind: 'cut', name: id }));
-    planSeat(byId(ROOF_LEVEL_ID), null, 'ROOF PLAN', true);
+    // IT FLOWS, TWO ACROSS, AND NOTHING TAKES A ROW TO ITSELF. Shown the
+    // first cut of this, where SITE and ROOF each took a whole row to keep
+    // the elevations' 2x2 square, Movie placed them himself: "the SITE can be
+    // 1st position than E1 to the right andthen E2 and E3 2nd row, E4 ROOF on
+    // 3rd row". So the rail simply fills:
+    //
+    //     SITE PLAN             E1 · FRONT
+    //     E2 · LEFT             E3 · BACK
+    //     E4 · RIGHT            ROOF PLAN
+    //
+    // WHICH ALSO RE-ORDERS THE ELEVATIONS, from the old page's E1|E3 over
+    // E2|E4 (MODEL.dc.html:7266) to E1 E2 E3 E4 read across. That pairing was
+    // carried here deliberately -- a drafter who knew the old rail looked for
+    // E3 beside E1 -- and it is his to change: with SITE in front of them the
+    // columns no longer line up anyway, and 1-2-3-4 in order is what he asked
+    // for.
+    planSeat(byId(SITE_LEVEL_ID), null, 'SITE PLAN');
+    ['E1', 'E2', 'E3', 'E4'].forEach(id => seats.push({ kind: 'cut', name: id }));
+    planSeat(byId(ROOF_LEVEL_ID), null, 'ROOF PLAN');
     levels.forEach(level => {
       const views = LV.layerViewsForLevelId(level.id);
       if (!views.length) return;
@@ -8226,12 +8222,7 @@
     return {
       cut: null,
       plan: entry,
-      // THE WIDTH IS IN THE KEY, not merely on the seat. The key is what
-      // decides whether the rail's DOM is rebuilt, and a wide seat's canvas
-      // is a different SIZE -- a seat that changed width without a rebuild
-      // would paint a 172 px drawing into an 82 px box.
-      wide: entry.wide === true,
-      key: `plan:${entry.levelId}:${entry.viewId || ''}${entry.wide ? ':wide' : ''}`,
+      key: `plan:${entry.levelId}:${entry.viewId || ''}`,
       seatId: `${entry.levelId}:${entry.viewId || 'all'}`,
       label: entry.label,
       title: `${entry.label} — tap to bring this plan center`,
@@ -8260,21 +8251,14 @@
       specs.forEach(spec => {
         const seat = document.createElement('button');
         seat.type = 'button';
-        seat.className = spec.wide ? 'seat seat-wide' : 'seat';
+        seat.className = 'seat';
         seat.dataset.seat = spec.seatId;
         seat.dataset.seatKey = spec.key;
         const screen = document.createElement('canvas');
         // 2x the CSS size, so the lines are crisp on a retina panel. The old
         // page uses 232x152 for a 116x76 seat (:7306); these seats are 82x54,
         // small enough that the rail still fits once the plan cards join it.
-        //
-        // A WIDE SEAT'S BOX IS WIDER, SO ITS CANVAS IS TOO -- and it has to be
-        // the backing store rather than CSS, because paintPlanThumb fits the
-        // drawing to `screen.width / dpr`. Stretching an 82 px canvas across
-        // 172 px would hand SITE and ROOF a drawing squashed to two thirds of
-        // its proportions, which on a lot plan is the one thing that must be
-        // right.
-        screen.width = spec.wide ? 344 : 164; screen.height = 108;
+        screen.width = 164; screen.height = 108;
         seat.append(screen);
         // + CUT over the blank screen of an empty section seat; the label
         // stays lastChild, which the print caption reads.

@@ -173,32 +173,22 @@ test('shut is shut; one press seats the whole chart, every seat reachable',
     // grid-template-columns string can say `repeat(2, 84px)` while an
     // override elsewhere quietly says three.
     //
-    // THE WIDEST ROW IS THE TEST, not the first one. Since 13 Oct the order
-    // is the sheet set's and SITE PLAN heads it alone, with ROOF alone again
-    // between the elevations and the floors -- so a check reading row one
-    // would now be measuring the one row that is deliberately single. Every
-    // other row is a pair, and three across anywhere is what this refuses.
-    const perRow = await page.evaluate(() => {
+    // ASKED OF EVERY ROW, not only the first. The 13 Oct order puts SITE at
+    // the head and ROOF among the elevations, and a first cut of it gave each
+    // of them a row to itself -- so the shape this rule is about is now the
+    // whole wall rather than row one, and a check reading only the top would
+    // have passed that cut without noticing.
+    const rows = await page.evaluate(() => {
       const tally = new Map();
       [...document.querySelectorAll('.seat')].forEach(el => {
         const top = Math.round(el.getBoundingClientRect().top);
         tally.set(top, (tally.get(top) || 0) + 1);
       });
-      return Math.max(...tally.values());
+      return [...tally.values()];
     });
-    expect(perRow, 'the seat grid is not two across').toBe(2);
-    // AND THE TWO WHOLE-ROW SEATS ARE THE ONLY SINGLES, so a row that lost
-    // its partner some other way would not pass as one of these.
-    const singles = await page.evaluate(() => {
-      const rows = new Map();
-      [...document.querySelectorAll('.seat')].forEach(el => {
-        const top = Math.round(el.getBoundingClientRect().top);
-        rows.set(top, [...(rows.get(top) || []), el.lastChild.textContent]);
-      });
-      return [...rows.values()].filter(labels => labels.length === 1).flat();
-    });
-    expect(singles, 'SITE and ROOF take a row each; nothing else does')
-      .toEqual(['SITE PLAN', 'ROOF PLAN']);
+    expect(Math.max(...rows), 'the seat grid is not two across').toBe(2);
+    expect(rows.filter(n => n !== 2), 'every row is a pair; nothing stands alone')
+      .toEqual([]);
 
     // And a seat works -- the claim is that no view is ever more than a
     // press, a scroll and a tap away.
