@@ -259,8 +259,20 @@
        AND IT IS A CEILING AS WELL AS A FLOOR, which is what the right rail
        used `max-width:277px` for: past this width a level name ellipsises,
        which is a label the drafter can still read the start of, against a
-       panel eating the drawing, which he cannot draw on. */
-    --rail-w: 195px; }
+       panel eating the drawing, which he cannot draw on.
+
+       PLUS THE SCROLLBAR'S OWN LANE (Movie, 14 Oct, circling the slider under
+       the seat thumbnails: "can you widen this menu so the RIGHT/LEFT scroll
+       won't be needed"). The arithmetic above was right about everything
+       except what the VERTICAL scrollbar takes: the rail scrolls, and on a
+       desktop its bar eats about 15px off the inside of the box -- so the
+       174px seat grid had 159px to stand in and the browser gave it a
+       sideways slider to reach the rest. 195 + 15 is 210, and the grid fits
+       beside the bar instead of under a second scroller.
+       `scrollbar-gutter:stable` below reserves that lane whether the bar is
+       showing or not, so a rail that grows past a screenful does not jog its
+       contents sideways when the bar appears. */
+    --rail-w: 210px; }
   /* AT THE TOP OF THE SHEET NOW, not the foot (§7b). Movie: the drive-thru
      sign rises from the bottom and covers the house row, so nothing the
      drafter reads WHILE DRAWING may live down there. */
@@ -1091,6 +1103,8 @@
        195 + 20 + 1 on another, which is the opposite of what it was written
        for. Named here for the same reason #file-guard names it at :187. */
     box-sizing:border-box; width:var(--rail-w);
+    /* THE BAR'S LANE IS ALWAYS THERE, showing or not -- see --rail-w. */
+    scrollbar-gutter:stable;
     overscroll-behavior:contain; padding:10px;
     background-color: var(--surface-panel); background-image: var(--surface-panel-tex, none); }
   aside[hidden] { display:none; }
