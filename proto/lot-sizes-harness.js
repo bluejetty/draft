@@ -34,6 +34,17 @@ const ROOT = path.join(__dirname, '..');
 // lot. The checks below are written to catch these rather than to describe
 // the file back to itself.
 const MUTATIONS = [
+  // THE FIT RULE, which is a rule about what the card may OFFER and so has
+  // every chance of being quietly wrong: a lot one foot too narrow still
+  // draws, and the drafter finds out when his eave crosses the line.
+  ['a lot is judged against the walls, with no side setback at all',
+    'lot-sizes.js',
+    c => c.replace('    return { widthFt: w + 2 * sideSetbackFt(opts), depthFt: FRONT_SETBACK_FT + d };',
+      '    return { widthFt: w, depthFt: d };')],
+  ['the brightest size is the biggest that fits rather than the first',
+    'lot-sizes.js',
+    c => c.replace('    return LOT_TIERS.find(tier => lotFitsHouse(tier, house, opts)) || null;',
+      '    return [...LOT_TIERS].reverse().find(tier => lotFitsHouse(tier, house, opts)) || null;')],
   ['the lot is laid out portrait: the frontage runs back instead of across',
     'lot-sizes.js',
     c => c.replace(`    const x0 = centerX - w / 2, x1 = centerX + w / 2;
@@ -294,6 +305,64 @@ check('and it follows the corner when the lot is dragged out of square',
 check('a lot with no points has no datum rather than a NaN one',
   LS.siteDatumOf({ site: true, points: [] }) === null && LS.siteDatumOf(null) === null,
   'a datum was invented for a lot with no corners');
+
+// ── TOO SMALL FOR WHAT IS DRAWN ──────────────────────────────────────────
+//
+// Movie, 14 Oct, having put a 25 ft lot under a 30 ft garage: "can it figure
+// out the house width and not allow lots that are too small from the
+// selections", and then the number itself -- "for that 30 for garage with 2ft
+// overhangs would be min 38 min".
+//
+// HIS 38 IS THE CHECK. A rule that merely refuses SOME lots would pass a
+// dozen vaguer assertions; this one has to land on the same figure he did.
+const GARAGE = { points: [{ x: 0, z: 0 }, { x: 30, z: 0 },
+  { x: 30, z: 24 }, { x: 0, z: 24 }] };
+check('a 30 ft building reads 30 wide and 24 deep off its outline',
+  (() => { const box = LS.houseBoxOf([LOT, GARAGE]);
+           return near(box.widthFt, 30) && near(box.depthFt, 24); })(),
+  JSON.stringify(LS.houseBoxOf([LOT, GARAGE])));
+check('and with 2 ft eaves it needs a 38 ft lot, his own number',
+  near(LS.minLotFor(LS.houseBoxOf([GARAGE]), { eaveFt: 2 }).widthFt, 38),
+  JSON.stringify(LS.minLotFor(LS.houseBoxOf([GARAGE]), { eaveFt: 2 })));
+// THE DEPTH IS THE FRONT SETBACK PLUS THE BUILDING, and no rear yard is
+// invented: 20 + 24.
+check('the depth it needs is the front setback plus the building',
+  near(LS.minLotFor(LS.houseBoxOf([GARAGE]), { eaveFt: 2 }).depthFt, 44),
+  JSON.stringify(LS.minLotFor(LS.houseBoxOf([GARAGE]), { eaveFt: 2 })));
+// A SHORTER EAVE BUYS BACK THE WIDTH ONLY WHERE THE WALL RULE LETS IT. The
+// side setback is max(wall, eave + 2) and a WINDOWED wall is 4 ft on its own
+// -- so a 1 ft eave still needs 38 beside windows, and only a blank wall
+// (2'-6") comes in at 36. Movie's own two rules, meeting.
+check('a 1 ft eave still needs 38 beside windows, because the wall rule is 4',
+  near(LS.minLotFor(LS.houseBoxOf([GARAGE]), { eaveFt: 1 }).widthFt, 38),
+  JSON.stringify(LS.minLotFor(LS.houseBoxOf([GARAGE]), { eaveFt: 1 })));
+check('and a blank wall with a 1 ft eave comes in at 36',
+  near(LS.minLotFor(LS.houseBoxOf([GARAGE]), { eaveFt: 1, windowed: false }).widthFt, 36),
+  JSON.stringify(LS.minLotFor(LS.houseBoxOf([GARAGE]), { eaveFt: 1, windowed: false })));
+
+const fits = id => LS.lotFitsHouse(LS.lotTierById(id), LS.houseBoxOf([GARAGE]), { eaveFt: 2 });
+check('S and M are too small for that garage, and L up are not',
+  fits('S') === false && fits('M') === false && fits('L') === true && fits('XL') === true,
+  [fits('S'), fits('M'), fits('L'), fits('XL')].join());
+// FIRST TO FIT, NOT BIGGEST (Movie: "make the most appropriate size brighter
+// (first size to fit)"), and the tiers are ascending so the first IS the
+// smallest that holds him.
+check('the one to point at is L, the first that fits',
+  LS.bestLotTierFor(LS.houseBoxOf([GARAGE]), { eaveFt: 2 })?.id === 'L',
+  JSON.stringify(LS.bestLotTierFor(LS.houseBoxOf([GARAGE]), { eaveFt: 2 })));
+// NOTHING DRAWN, NOTHING JUDGED ("if no house drawn all would be allowed
+// nothing lighten up or faded").
+check('with nothing drawn every size is allowed and none is brightest',
+  LS.minLotFor(null) === null && LS.bestLotTierFor(null) === null
+    && LS.lotFitsHouse(LS.lotTierById('S'), null) === true
+    && LS.houseBoxOf([LOT]) === null,
+  'an empty drawing was judged against a building it does not have');
+// AND A BUILDING PAST THE WHOLE TABLE POINTS AT NOTHING rather than at the
+// biggest tier: 80 ft of lot cannot hold a 90 ft building, and brightening
+// XXXL would be the card recommending a lot that does not fit either.
+check('a building wider than every tier brightens none of them',
+  LS.bestLotTierFor({ widthFt: 90, depthFt: 40 }, { eaveFt: 2 }) === null,
+  JSON.stringify(LS.bestLotTierFor({ widthFt: 90, depthFt: 40 }, { eaveFt: 2 })));
 
 // AND THE SENTENCE FOR AN ODD-SHAPED LOT, which is the third thing Movie
 // asked the card to do: "tell them they will need to adjust the 'AUTOSITE'

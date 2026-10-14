@@ -77,7 +77,12 @@ test('NOT NOW puts it away and leaves the drawing alone', async ({ page }) => {
 
 test('DRAW AUTOSITE files the lot and the card does not come back', async ({ page }) => {
   await buildAndOpenLayout(page);
-  await page.locator('#lay-lot [data-lot-tier]').first().click();
+  // THE FIRST SIZE THE BUILDING FITS ON, not the first row. Since 14 Oct a
+  // tier too small for what is drawn is faded and disabled (Movie: "not allow
+  // lots that are too small from the selections"), and this fixture's house
+  // rules the narrowest one out -- `.first()` waited three minutes for a
+  // button that will never be enabled.
+  await page.locator('#lay-lot [data-lot-tier]:not([disabled])').first().click();
   await page.locator('#lay-lot [data-lot-draw]').click();
   await expect(card(page)).toBeHidden();
   // ON THE SITE LEVEL, which is what makes it the same lot MODEL draws rather

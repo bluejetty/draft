@@ -2633,7 +2633,10 @@
           // and the fascia is right -- those are office-wide -- but borrowing
           // a lift someone typed for the house would raise a roof on a
           // building that never asked for it.
+          // THE SIDE EAVE IS THIS GARAGE'S OWN (Movie, 14 Oct), null until
+          // typed -- the row above reads it and falls back to the overhang.
           roof: { pitch: roofPitch, overhangFt: roofOverhang,
+            sideOverhangFt: sectionTable.rows.detachedGarage?.roofSideOverhangFt ?? null,
             fasciaIn: ROOF_FASCIA_IN, heelIn: null },
         };
       };
@@ -2719,6 +2722,25 @@
           get: v => v.roof.fasciaIn / 12, anchor: false },
         { side: 'right', key: 'overhang', name: 'OVERHANG',
           get: v => v.roof.overhangFt, anchor: false },
+        // AND ITS SIDE EAVE, which the other two cards have had since 13 Oct
+        // and this one did not. Movie, 14 Oct, having looked: "its on the
+        // bungalows and bilevel looks like but not on the detached garage, we
+        // will need it on that one too".
+        //
+        // IT MATTERS MORE HERE THAN ANYWHERE, which is why it is not just
+        // parity: a detached garage stands in the side yard, and the side eave
+        // is what the side setback is measured to -- his own "for that 30 for
+        // garage with 2ft overhangs would be min 38 min". The SITE card's
+        // smallest-lot line reads this number.
+        //
+        // EMPTY MEANS THE MAIN ONE, like its two neighbours on the other
+        // cards: the box shows this card's OVERHANG until somebody types, and
+        // emptying it puts that back rather than writing a 2 nobody chose.
+        { side: 'right', key: 'sideOverhang', name: 'SIDE OVERHANG', anchor: false,
+          get: v => v.roof.sideOverhangFt ?? v.roof.overhangFt,
+          unit: 'ftin', typed: true,
+          put: value => (writeCell('detachedGarage', 'roofSideOverhangFt', value),
+            'Detached garage side overhang saved.') },
         { side: 'right', head: 'GARAGE' },
         { side: 'right', key: 'wallHeight', name: 'WALL HT',
           get: v => v.garage.wallHeightFt, field: 'mainWallHeightFt', unit: 'ftin',

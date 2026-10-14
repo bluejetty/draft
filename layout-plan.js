@@ -198,6 +198,15 @@ if (!window.DraftLayoutPlan) {
     // from the one below has to carry it here or the ghost is drawn outside
     // the frame and clipped — which on screen is a pan and on paper is gone.
     if (withBelow) floorBelowLoops(saved, levelId).forEach(points => points.forEach(eat));
+    // THE SITE SHEET FRAMES WHAT THE SITE SHEET DRAWS. Its own level carries
+    // the lot and nothing else, so sizing it level-by-level like a storey
+    // would cut the building off the page -- and a building that does not fit
+    // its lot (the case that started all this) is exactly when a drafter
+    // needs to see both.
+    if (num(levelId) === SITE_LEVEL_ID) {
+      const parts = sitePlanParts(saved);
+      [...parts.bodies, ...parts.roofs].forEach(item => item.points.forEach(eat));
+    }
     if (minX > maxX) return null;
     return { minX, minZ, maxX, maxZ };
   }
@@ -506,10 +515,108 @@ if (!window.DraftLayoutPlan) {
     return full != null && planWalls(saved, Number(full)).length > 0;
   }
 
+  // ── THE SITE PLAN ────────────────────────────────────────────────────────
+  //
+  // Movie, 14 Oct, having drawn a lot and gone to the layout: "i tried to do
+  // the site plan in the layout area - it should pop up a viewport with the
+  // new site plan, (nothing happens) i tried to RE-DEAL the sheets, and it
+  // still didn't pop up a site plan" -- and, before that, "also show a
+  // 'footprint shape' of the building on the site plan. is that possible".
+  //
+  // THE SHEET WAS DEALT AND EMPTY ON PURPOSE, until there was something to
+  // put on it: SITE PLAN is one of the names the set deals "even with nothing
+  // to draw on it", because a set with towns missing teaches the wrong shape.
+  // The lot arrived on 13 Oct and nobody came back to this.
+  //
+  // WHAT A SITE PLAN IS, HERE: the lot line, the building's footprint inside
+  // it, and the eave line the footprint sits under -- which is the drawing
+  // his own setback question is asked of ("for that 30 for garage with 2ft
+  // overhangs would be min 38 min"): the eave is what comes closest to the
+  // property line, so it is the line that has to be on the sheet.
+  const SITE_LEVEL_ID = 8;
+  const SITE_FOOTPRINT_FILL = 'rgba(29,31,32,0.10)';
+
+  // THE FOOTPRINT IS THE GROUND FLOOR'S OUTLINES, every building on it. The
+  // lowest floor level that HAS outlines answers -- a bungalow's and a
+  // detached garage's are both on MAIN FL, and a split's lowest is ENTRY --
+  // so what is drawn is what stands on the ground rather than one storey of
+  // it. The lot itself is excluded by its own flag, which is what the flag
+  // is for.
+  function sitePlanParts(saved) {
+    const outlines = (Array.isArray(saved?.outlines) ? saved.outlines : [])
+      .filter(item => item && Array.isArray(item.points) && item.points.length > 2);
+    const lot = outlines.find(item => item.site === true) || null;
+    const bodies = outlines.filter(item => item.site !== true
+      && num(item.levelId) !== null && num(item.levelId) > 1
+      && num(item.levelId) !== SITE_LEVEL_ID && num(item.levelId) !== 7);
+    const ground = bodies.length
+      ? Math.min(...bodies.map(item => num(item.levelId))) : null;
+    const roofs = (Array.isArray(saved?.roofs) ? saved.roofs : [])
+      .filter(item => item && Array.isArray(item.points) && item.points.length > 2);
+    return {
+      lot,
+      bodies: ground === null ? [] : bodies.filter(item => num(item.levelId) === ground),
+      roofs,
+    };
+  }
+
+  const siteLoop = (ctx, toS, points) => {
+    ctx.beginPath();
+    points.forEach((pt, i) => {
+      const s = toS(pt);
+      if (i) ctx.lineTo(s.x, s.y); else ctx.moveTo(s.x, s.y);
+    });
+    ctx.closePath();
+  };
+
+  function drawSitePlan(ctx, toS, saved, env = {}) {
+    const { lot, bodies, roofs } = sitePlanParts(saved);
+    if (!lot && !bodies.length) return false;
+    const px = env.pxPerFt || 1;
+    // THE EAVE LINE FIRST AND DASHED, because it is the outermost thing and
+    // the footprint is read against it. A roof record's points already carry
+    // the overhang they were built with, so this is the real eave rather
+    // than a wall line offset by a number typed here.
+    if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-ROOF';
+    ctx.save();
+    ctx.setLineDash([6 / Math.max(px, 1) * px, 4]);
+    ctx.strokeStyle = 'rgba(29,31,32,0.45)';
+    ctx.lineWidth = 1;
+    roofs.forEach(roof => { siteLoop(ctx, toS, roof.points); ctx.stroke(); });
+    ctx.restore();
+    // THE FOOTPRINT, filled so it reads as a solid at a site plan's scale.
+    if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-PLAN';
+    ctx.fillStyle = SITE_FOOTPRINT_FILL;
+    ctx.strokeStyle = 'rgba(29,31,32,0.95)';
+    ctx.lineWidth = 1.5;
+    bodies.forEach(body => {
+      siteLoop(ctx, toS, body.points);
+      ctx.fill();
+      ctx.stroke();
+    });
+    // AND THE LOT LINE OVER EVERYTHING, heavy: it is the boundary the whole
+    // sheet is about, and on a crowded corner lot the footprint may touch it.
+    if (lot) {
+      if ('dxfLayer' in ctx) ctx.dxfLayer = 'A-SITE';
+      ctx.save();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(29,31,32,0.95)';
+      ctx.lineWidth = 2;
+      siteLoop(ctx, toS, lot.points);
+      ctx.stroke();
+      ctx.restore();
+    }
+    return true;
+  }
+
   function drawPlan(ctx, toS, saved, levelId, env = {}) {
     const composition = window.DraftPlanComposition;
     const geo = window.DraftGeometry2D;
     if (!composition || !geo) return false;
+
+    // THE SITE LEVEL IS NOT A STOREY, and has no walls to find: its sheet is
+    // the lot, the footprint and the eave line (drawSitePlan above).
+    if (num(levelId) === SITE_LEVEL_ID) return drawSitePlan(ctx, toS, saved, env);
 
     const view = env.view || null;
     const walls = planWalls(saved, levelId, view)
@@ -966,6 +1073,8 @@ if (!window.DraftLayoutPlan) {
     hasFloorLayout,
     structureUnder,
     drawPlan,
+    sitePlanParts,
+    drawSitePlan,
   });
 })();
 }

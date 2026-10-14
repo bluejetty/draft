@@ -111,7 +111,12 @@ function loadDraftModules() {
     'premade-plans.js', 'auto-windows.js', 'traced-plans.js',
     // AND THE DXF READER that TRACE lays a CAD file under the plan with,
     // and the WRITER that LAYOUT saves its sheets as DXFs through.
-    'dxf-reader.js', 'dxf-writer.js']) {
+    'dxf-reader.js', 'dxf-writer.js',
+    // AND THE SHEET PAINTER, for the site plan: the lot line, the building's
+    // footprint and the eave, which proto/site-plan-harness.js measures off
+    // its own strokes. It loads last because it reads the geometry and render
+    // modules above at paint time.
+    'plan-composition.js', 'layout-plan.js']) {
     const full = path.join(ROOT, file);
     if (!fs.existsSync(full)) continue;
     const text = SOURCE_OVERRIDES && SOURCE_OVERRIDES[file] != null

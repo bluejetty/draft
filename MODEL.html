@@ -1131,11 +1131,40 @@
   #lot-pick { position:fixed; left:50%; top:64px; transform:translateX(-50%);
     z-index:6; }
   #lot-pick[hidden] { display:none; }
-  #lot-pick .promote-card { max-width:34em; }
+  #lot-pick .promote-card { max-width:44em; }
   #lot-pick .promote-row + .promote-row { margin-top:8px; }
-  #lot-pick .lot-tiles { display:flex; flex-wrap:wrap; gap:6px; }
-  #lot-pick .lot-tiles button { flex:1 1 7.5em; display:flex; flex-direction:column;
-    align-items:center; gap:1px; padding:6px 8px; cursor:pointer; border-radius:3px;
+  /* TWO COLUMNS (Movie, 14 Oct): the sizes on the left, the four commands on
+     the right. The left side grows with its rows and the right holds a
+     column width, so the commands keep one line each however long a lot's
+     description runs. */
+  #lot-pick .lot-body { display:flex; gap:14px; align-items:flex-start;
+    margin-top:8px; }
+  #lot-pick .lot-left { flex:1 1 auto; min-width:0; }
+  #lot-pick .lot-commands { flex:0 0 11.5em; display:flex; flex-direction:column;
+    gap:6px; }
+  #lot-pick .lot-commands button { padding:7px 10px; cursor:pointer;
+    border-radius:3px; border:1px solid var(--edge-panel);
+    background-color: var(--surface-chip);
+    background-image: var(--surface-chip-tex, none);
+    color: var(--ink-quiet); font-family: var(--font-ui); font-size:11px;
+    font-weight:600; letter-spacing:0.04em; white-space:nowrap; }
+  #lot-pick .lot-commands button:hover { border-color: var(--accent); color: var(--accent); }
+  /* THE VERB IS THE ONE THAT DRAWS, so it wears the accent the other three
+     do not -- the same rule [data-promote-go] follows on every other card. */
+  #lot-pick [data-lot-pick-draw] { border-color: var(--accent); color: var(--accent); }
+  #lot-pick [data-lot-pick-draw]:disabled { opacity:0.45; cursor:default;
+    border-color: var(--edge-panel); color: var(--ink-quiet); }
+  /* ONE COLUMN, SMALLEST FIRST (Movie, 14 Oct): "in the list of site sizes
+     can you list them all in 1 column (wide columns allow all the text on one
+     line) many rows to allow all the selections from smallest to biggest
+     last". Six wrapped chips made a reader hunt for the size he wanted among
+     three stacked scraps of text; a column of full-width rows is a list, and
+     a list is read top to bottom. THE ORDER IS lot-sizes.js's OWN and is
+     ascending by construction -- the harness holds that, so this page never
+     sorts a table it does not own. */
+  #lot-pick .lot-tiles { display:flex; flex-direction:column; gap:4px; }
+  #lot-pick .lot-tiles button { display:flex; align-items:baseline; gap:8px;
+    width:100%; text-align:left; padding:5px 9px; cursor:pointer; border-radius:3px;
     border:1px solid var(--edge-panel);
     background-color: var(--surface-chip);
     background-image: var(--surface-chip-tex, none);
@@ -1143,10 +1172,31 @@
   #lot-pick .lot-tiles button:hover { border-color: var(--accent); color: var(--accent); }
   #lot-pick [aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
   /* THE SIZE IS THE NAME and the rest is support, so the dimensions are the
-     only line at full strength. */
-  #lot-pick .lot-size { font-size:12px; font-weight:700; letter-spacing:0.04em; }
-  #lot-pick .lot-tier { font-size:9px; letter-spacing:0.1em; opacity:0.75; }
-  #lot-pick .lot-area { font-size:9px; opacity:0.75; }
+     only part at full strength. ONE LINE each: the size holds a column width
+     so the tier letters line up down the list, the character is pushed right
+     by its own auto margin, and nothing wraps. */
+  #lot-pick .lot-size { font-size:12px; font-weight:700; letter-spacing:0.04em;
+    min-width:7.2em; white-space:nowrap; }
+  #lot-pick .lot-tier { font-size:9px; letter-spacing:0.1em; opacity:0.75;
+    min-width:3em; }
+  #lot-pick .lot-area { font-size:9px; opacity:0.75; white-space:nowrap; }
+  #lot-pick .lot-character { font-size:9px; opacity:0.75; margin-left:auto;
+    white-space:nowrap; }
+  /* TOO SMALL FOR WHAT IS DRAWN: faded and unpickable (Movie, 14 Oct: "fade
+     out the 'too small' sizes"). Still on the list, so the ladder reads as a
+     ladder and a drafter can see what his own building has ruled out. */
+  #lot-pick .lot-tiles button.lot-small { opacity:0.4; cursor:default; }
+  #lot-pick .lot-tiles button.lot-small:hover { border-color: var(--edge-panel);
+    color: var(--ink-quiet); }
+  /* AND THE FIRST ONE THAT FITS IS THE BRIGHT ONE ("make the most
+     appropriate size brighter"): full-strength ink and the accent edge, so
+     the eye lands on it before it has read a single number. */
+  #lot-pick .lot-tiles button.lot-best { border-color: var(--accent);
+    color: var(--ink-primary); }
+  #lot-pick .lot-tiles button.lot-best .lot-size { color: var(--accent); }
+  #lot-pick .lot-tiles button.lot-best .lot-tier,
+  #lot-pick .lot-tiles button.lot-best .lot-area,
+  #lot-pick .lot-tiles button.lot-best .lot-character { opacity:1; }
   #lot-pick .lot-custom { display:flex; gap:4px; align-items:center; margin-top:8px;
     font-family: var(--font-ui); font-size:11px; color: var(--ink-quiet); }
   #lot-pick .lot-custom[hidden] { display:none; }
@@ -1634,36 +1684,45 @@
 <div id="lot-pick" data-lot-pick hidden role="group" aria-label="Lot size">
   <div class="promote-card">
     <p><b>HOW BIG IS THE LOT?</b><br><span data-lot-pick-says></span></p>
-    <div class="lot-tiles" data-lot-tiles></div>
-    <div class="lot-custom" data-lot-custom hidden>
-      <label class="said" for="lot-w">Lot width</label>
-      <input id="lot-w" data-lot-width type="number" inputmode="decimal" step="any"
-        placeholder="__" />
-      <span data-lot-unit-w aria-hidden="true">FT X</span>
-      <label class="said" for="lot-d">Lot depth</label>
-      <input id="lot-d" data-lot-depth type="number" inputmode="decimal" step="any"
-        placeholder="__" />
-      <span data-lot-unit-d aria-hidden="true">FT</span>
+    <!-- SIZES ON THE LEFT, COMMANDS ON THE RIGHT (Movie, 14 Oct): "make 2
+         rows on the left the different sizes, and on the right the other
+         commands: draw autosite, not now, draw myself, upload site plan".
+         The card is a question and four answers to it, and stacking the
+         answers under a block of sizes made the drafter read the whole list
+         before finding out what he could do with it. -->
+    <div class="lot-body">
+      <div class="lot-left">
+        <div class="lot-tiles" data-lot-tiles></div>
+        <div class="lot-custom" data-lot-custom hidden>
+          <label class="said" for="lot-w">Lot width</label>
+          <input id="lot-w" data-lot-width type="number" inputmode="decimal" step="any"
+            placeholder="__" />
+          <span data-lot-unit-w aria-hidden="true">FT X</span>
+          <label class="said" for="lot-d">Lot depth</label>
+          <input id="lot-d" data-lot-depth type="number" inputmode="decimal" step="any"
+            placeholder="__" />
+          <span data-lot-unit-d aria-hidden="true">FT</span>
+        </div>
+      </div>
+      <!-- THE FOUR COMMANDS, in the order he named them. The last two are
+           THE OTHER TWO WAYS ONTO A SITE PLAN (Movie, 13 Oct): "lets add 2
+           more options - draw the site plan, or next option - upload PDF or
+           JPG, DXF etc of site plan".
+
+           NEITHER IS NEW MACHINERY, which is the point of putting them here.
+           Drawing a lot by hand is the OUTLINE tool, which already closes a
+           loop and already breaks points into it; uploading one is TRACE
+           (7 Oct), whose file input already accepts PDF, JPG, PNG, WEBP, DXF
+           and DWG. What was missing was anybody saying so at the moment the
+           question is asked. -->
+      <div class="lot-commands">
+        <button type="button" data-lot-pick-draw>DRAW AUTOSITE</button>
+        <button type="button" data-lot-pick-skip>NOT NOW</button>
+        <button type="button" data-lot-pick-hand>DRAW IT MYSELF</button>
+        <button type="button" data-lot-pick-upload>UPLOAD A SITE PLAN</button>
+      </div>
     </div>
     <div class="lot-note" data-lot-note></div>
-    <div class="promote-row">
-      <button type="button" data-lot-pick-draw>DRAW AUTOSITE</button>
-      <button type="button" data-lot-pick-skip>NOT NOW</button>
-    </div>
-    <!-- THE OTHER TWO WAYS ONTO A SITE PLAN (Movie, 13 Oct): "lets add 2 more
-         options - draw the site plan, or next option - upload PDF or JPG, DXF
-         etc of site plan".
-
-         NEITHER IS NEW MACHINERY, which is the point of putting them here.
-         Drawing a lot by hand is the OUTLINE tool, which already closes a
-         loop and already breaks points into it; uploading one is TRACE
-         (7 Oct), whose file input already accepts PDF, JPG, PNG, WEBP, DXF
-         and DWG. What was missing was anybody saying so at the moment the
-         question is asked. -->
-    <div class="promote-row">
-      <button type="button" data-lot-pick-hand>DRAW IT MYSELF</button>
-      <button type="button" data-lot-pick-upload>UPLOAD A SITE PLAN</button>
-    </div>
   </div>
 </div>
 
@@ -5038,6 +5097,22 @@
     // datum, and a mark at 0,0 "ready for one" would be a registration point
     // for a lot nobody has drawn.
     const lot = window.DraftLotSizes.siteOutlineOf(drawing?.outlines);
+    // ── THE BUILDING'S FOOTPRINT, ON THE SITE LEVEL ──────────────────────
+    //
+    // Movie, 14 Oct: "also show a 'footprint shape' of the building on the
+    // site plan. is that possible". It is the same drawing LAYOUT's SITE
+    // PLAN sheet paints -- layout-plan.js's drawSitePlan, the lot line, the
+    // footprint and the eave -- so the sheet and the screen cannot disagree
+    // about where his building sits on his lot.
+    //
+    // ONLY ON SITE. Every other level draws its own storey; the footprint
+    // here is context for dragging the lot around, which is the one thing a
+    // drafter does on this level.
+    if (activeLevelId() === SITE_LEVEL_ID && window.DraftLayoutPlan) {
+      ctx.save();
+      window.DraftLayoutPlan.drawSitePlan(ctx, toS, drawing, {});
+      ctx.restore();
+    }
     const siteDatum = lot ? window.DraftLotSizes.siteDatumOf(lot) : null;
     if (siteDatum) {
       R.drawOrigin2D(ctx, toS, {
@@ -12683,6 +12758,11 @@
   let lotAsked = false;
 
   const lotMetric = () => drawing?.units === 'metric';
+  // A LENGTH THE WAY THIS PAGE WRITES ONE, for the sentences the card says
+  // about the smallest lot a building fits on. The tiers' own labels come
+  // from lot-sizes.js's describe(); these are derived numbers and are
+  // formatted here like every other length the page prints.
+  const lotFt = feet => window.DraftFormatters.formatArchitecturalInches(Number(feet) * 12);
   const lotOnSite = () => activeLevelId() === SITE_LEVEL_ID && !boneyardActive;
   const lotExists = () => !!LS.siteOutlineOf(drawing?.outlines);
   // What the card is currently offering, in the unit in force.
@@ -12702,15 +12782,59 @@
       ? 'Pick a size, or type your own in metres.'
       : 'Pick a size, or type your own in feet.';
     const tiles = lotCard.querySelector('[data-lot-tiles]');
+    // ── WHICH OF THEM THE BUILDING WILL ACTUALLY FIT ON ───────────────────
+    //
+    // Movie, 14 Oct, having drawn a 30 ft garage and then picked a 25 ft lot:
+    // "can it figure out the house width and not allow lots that are too
+    // small from the selections", "fade out the 'too small' sizes", "make the
+    // most appropriate size brighter (first size to fit)", and -- the case
+    // that keeps this quiet on an empty drawing -- "if no house drawn all
+    // would be allowed nothing lighten up or faded".
+    //
+    // THE EAVE IS THE ONE ON THE DRAWING, not a typed default: his own 38 is
+    // 30 of wall plus 4 a side, and the 4 is the eave's 2 plus its clearance.
+    // A roof record carries the overhang it was built with, so the widest one
+    // drawn is what the setback is measured from; with no roof yet the page's
+    // own panel default answers, which is what the next roof will be built at.
+    // THE SIDE EAVE IS THE ONE THAT MATTERS, and the drawing has had its own
+    // since 13 Oct -- PROJECT's SIDE OVERHANG, `roofSideOverhang`, which
+    // falls back to the main overhang when nobody has set it. It is the eave
+    // that faces the side property line, so it is the eave the side setback
+    // is measured from; the front and back ones answer to the front setback,
+    // which is measured to the WALL.
+    const house = LS.houseBoxOf(drawing?.outlines);
+    const sideEave = Number(drawing?.roofSideOverhang);
+    const eaves = (drawing?.roofs || []).map(roof => Number(roof.overhang))
+      .filter(value => Number.isFinite(value));
+    const fitOpts = { eaveFt: Number.isFinite(sideEave) && sideEave >= 0 ? sideEave
+      : (eaves.length ? Math.max(...eaves) : roofOverhangFt) };
+    const best = LS.bestLotTierFor(house, fitOpts);
+    const min = LS.minLotFor(house, fitOpts);
     tiles.replaceChildren(...LS.LOT_TIERS.map(tier => {
       const shown = LS.describe(tier, { metric });
       const button = document.createElement('button');
       button.type = 'button';
       button.dataset.lotTier = tier.id;
       button.setAttribute('aria-pressed', String(lotSizeId === tier.id));
-      // THREE LINES, AND THE SIZE IS THE LOUD ONE (Movie: "25X120, 35X150
+      // FADED AND UNPICKABLE, which is the two halves of what he asked for:
+      // "not allow lots that are too small" is the disabled, "fade out" is
+      // the class. The row stays on the list rather than vanishing, so the
+      // ladder still reads as a ladder and the drafter can see what his
+      // building has ruled out.
+      const fits = LS.lotFitsHouse(tier, house, fitOpts);
+      if (!fits) {
+        button.classList.add('lot-small');
+        button.disabled = true;
+      }
+      if (best && tier.id === best.id) button.classList.add('lot-best');
+      // ONE LINE, AND THE SIZE IS THE LOUD ONE (Movie: "25X120, 35X150
       // etc"). The tier letter and the area are what tell a drafter who has
-      // not memorised the table which of six he wants.
+      // not memorised the table which of six he wants -- and the CHARACTER is
+      // on the row now rather than hidden in a tooltip (Movie, 14 Oct: "wide
+      // columns allow all the text on one line"), because "Standard suburban"
+      // is what picks a lot and a title attribute is read by nobody in a
+      // hurry. The `title` stays for the same words, which is what a screen
+      // reader and a slow mouse both get.
       const size = document.createElement('span');
       size.className = 'lot-size';
       size.textContent = shown.sizeLabel;
@@ -12720,8 +12844,14 @@
       const area = document.createElement('span');
       area.className = 'lot-area';
       area.textContent = shown.areaLabel;
-      button.append(size, tierTag, area);
-      button.title = `${tier.id} \u2014 ${shown.character}`;
+      const character = document.createElement('span');
+      character.className = 'lot-character';
+      // AND THE ROW SAYS WHY IT IS OUT, where it is out. A faded row with no
+      // reason is a drafter wondering whether the app is broken.
+      character.textContent = fits ? shown.character : 'Too small for this building';
+      button.append(size, tierTag, area, character);
+      button.title = fits ? `${tier.id} \u2014 ${shown.character}`
+        : `${tier.id} \u2014 needs at least ${lotFt(min.widthFt)} x ${lotFt(min.depthFt)}`;
       button.addEventListener('click', () => { lotSizeId = tier.id; paintLotPick(); });
       return button;
     }));
@@ -12738,7 +12868,14 @@
     const customArea = document.createElement('span');
     customArea.className = 'lot-area';
     customArea.textContent = 'type it';
-    custom.append(customSize, customTag, customArea);
+    // THE SAME FOUR-PART ROW as the tiers above it, so OTHER reads as the
+    // last entry in one list rather than as a different kind of control --
+    // and it stays LAST, which is where "smallest to biggest last" puts the
+    // one size that is not on the ladder at all.
+    const customCharacter = document.createElement('span');
+    customCharacter.className = 'lot-character';
+    customCharacter.textContent = 'Any size you like';
+    custom.append(customSize, customTag, customArea, customCharacter);
     custom.addEventListener('click', () => {
       lotSizeId = 'custom';
       paintLotPick();
@@ -12749,7 +12886,16 @@
     lotCard.querySelector('[data-lot-custom]').hidden = lotSizeId !== 'custom';
     lotCard.querySelector('[data-lot-unit-w]').textContent = `${unit} X`;
     lotCard.querySelector('[data-lot-unit-d]').textContent = unit;
-    lotCard.querySelector('[data-lot-note]').textContent = LS.AUTOSITE_NOTE;
+    // THE NOTE SAYS WHAT THE BUILDING NEEDS, before the sentence about odd
+    // shapes. His own arithmetic, in his own units: "for that 30 for garage
+    // with 2ft overhangs would be min 38 min". A typed size is NOT held to
+    // it -- "allow them to create any size they would like if they enter
+    // data and draw the site" -- so this is a statement, not a refusal.
+    lotCard.querySelector('[data-lot-note]').textContent = min
+      ? `${lotFt(house.widthFt)} of building with ${lotFt(fitOpts.eaveFt)} eaves `
+        + `needs at least ${lotFt(min.widthFt)} x ${lotFt(min.depthFt)}. `
+        + `${LS.AUTOSITE_NOTE}`
+      : LS.AUTOSITE_NOTE;
     // THE VERB SAYS WHAT IT WILL DRAW, and is dead until there is something
     // to draw -- a typed pair that is out of bounds reads as nothing chosen,
     // which is what it is.
