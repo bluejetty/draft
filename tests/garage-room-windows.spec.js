@@ -150,24 +150,27 @@ test('a standalone garage puts its doors on the street face, not the longest wal
     expect(plan.reason).toMatch(/street/);
   });
 
-test('but a garage hung off the house still opens away from the man door',
-  async ({ page }) => {
-    // THE CUE THAT EXISTS WINS. The new default is for the garage that has no
-    // cue at all; an attached one still reads the drawing rather than the
-    // convention, or every attached garage would open into the house.
-    await page.goto('/MODEL.html');
-    await page.waitForFunction(() => !!window.DraftAutoWindows, null, { timeout: 10000 });
-    const plan = await page.evaluate(() => window.DraftAutoWindows.garageDoorPlan({
-      faces: [
-        { index: 0, lengthFt: 24, orientation: 'back' },
-        { index: 1, lengthFt: 30, orientation: 'right' },
-        { index: 2, lengthFt: 24, orientation: 'front' },
-        { index: 3, lengthFt: 30, orientation: 'left' },
-      ],
-      manDoorFaceIndex: 3,
-    }));
-    expect(plan.faceIndex, `the doors took face ${plan.faceIndex} -- ${plan.reason}`).toBe(1);
-  });
+test('and a garage hung off the house opens at the street too', async ({ page }) => {
+  // THE STREET WINS WHEREVER A WALL FACES IT. Movie, 14 Oct, asked which
+  // should win where the two disagree: "2" -- the street -- and "garage door
+  // to face street, user can change it later if needed". The old rule sent an
+  // attached garage's doors to the face OPPOSITE its man-door connection,
+  // which on a garage alongside the house is the neighbour's side.
+  await page.goto('/MODEL.html');
+  await page.waitForFunction(() => !!window.DraftAutoWindows, null, { timeout: 10000 });
+  const plan = await page.evaluate(() => window.DraftAutoWindows.garageDoorPlan({
+    faces: [
+      { index: 0, lengthFt: 24, orientation: 'back' },
+      { index: 1, lengthFt: 30, orientation: 'right' },
+      { index: 2, lengthFt: 24, orientation: 'front' },
+      { index: 3, lengthFt: 30, orientation: 'left' },
+    ],
+    // JOINED ON ITS LEFT, so the old rule would have sent the doors right.
+    manDoorFaceIndex: 3,
+  }));
+  expect(plan.faceIndex, `the doors took face ${plan.faceIndex} -- ${plan.reason}`).toBe(2);
+  expect(plan.reason).toMatch(/street/);
+});
 
 // ── AND THE WHOLE WAY THROUGH, ON THE FLOW HE USED ───────────────────────
 //

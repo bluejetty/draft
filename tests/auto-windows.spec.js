@@ -228,7 +228,8 @@ test('a step-back garage puts its door on the street face, in two singles when t
   expect(Math.abs(plan.doors[1].offset - plan.doors[0].offset)).toBeGreaterThanOrEqual(8 + 3 - 1e-9);
 });
 
-test('an ambiguous rectangle lands the garage door opposite the man-door connection', async ({ page }) => {
+test('the garage door takes the street, and the man door decides only without one',
+  async ({ page }) => {
   await h.openModel(page, { autoWindows: true });
   const square = index => ({ index, lengthFt: 20 });
   const plan = await page.evaluate(faces => window.DraftAutoWindows.garageDoorPlan({
@@ -237,10 +238,28 @@ test('an ambiguous rectangle lands the garage door opposite the man-door connect
     { ...square(0), orientation: 'front' }, { ...square(1), orientation: 'left' },
     { ...square(2), orientation: 'back' }, { ...square(3), orientation: 'right' },
   ]);
-  // No step-back cue anywhere, so the man door decides: nobody walks
-  // through the car to get into the house.
+  // THE STREET, WHEREVER A WALL FACES IT (Movie, 14 Oct: "garage door to face
+  // street, user can change it later if needed"). On this rectangle the old
+  // rule agreed -- the man door is on the back, so opposite IS the street --
+  // and what changed is which rule does the work, so the reason is read too.
   expect(plan.faceIndex).toBe(0);
-  expect(plan.reason).toMatch(/opposite/);
+  expect(plan.reason).toMatch(/street/);
+
+  // AND WHERE NO WALL FACES THE STREET: a garage tucked behind the house,
+  // whose one front-facing wall is the wall it hangs off. That face is handed
+  // in so this rule can read it, and it must not be the one the cars come
+  // through.
+  const behind = await page.evaluate(() => window.DraftAutoWindows.garageDoorPlan({
+    faces: [
+      { index: 0, orientation: 'front', lengthFt: 20 },
+      { index: 1, orientation: 'left', lengthFt: 24 },
+      { index: 2, orientation: 'back', lengthFt: 20 },
+      { index: 3, orientation: 'right', lengthFt: 24 },
+    ],
+    manDoorFaceIndex: 0,
+  }));
+  expect(behind.faceIndex, 'it opened through the house').toBe(2);
+  expect(behind.reason).toMatch(/man-door/);
 
   // A short run cannot take a pair, so it falls back to one double.
   const narrow = await page.evaluate(() => window.DraftAutoWindows.garageDoorPlan({

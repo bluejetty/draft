@@ -444,50 +444,66 @@ if (!window.DraftAutoWindows) {
     if (!faces.length) return null;
     const manDoor = Number.isInteger(opts?.manDoorFaceIndex) ? opts.manDoorFaceIndex : null;
 
-    // A garage that STEPS BACK from the house front has already told us
-    // where the street is: the door takes the street face.
+    // ── THE STREET FIRST, WHEREVER A WALL LOOKS AT IT ────────────────────
+    //
+    // Movie, 14 Oct: "can you put the garage door openings facing FRONT / E1
+    // direction as DEFAULT (corner lots aren't as common so the user can
+    // change that)" -- and, asked whether that default should also beat the
+    // cues the drawing carries, "2": the street wins wherever a wall faces
+    // it, and the man-door rule is for the garage that has no such wall.
+    //
+    // WHAT THIS REPLACES. Two inferences ran ahead of it. A garage STEPPED
+    // BACK from the house front took the street -- which is this rule for one
+    // arrangement, so it is folded in rather than kept beside it. A garage
+    // hung off the house took the face OPPOSITE its man-door connection,
+    // which is right for one tucked behind the house and wrong for one
+    // alongside it: there the opposite face is the neighbour's side, and the
+    // drafter moved the door every time.
+    //
+    // E1 IS THE STREET -- this file's own convention (faceOrientation, at the
+    // top), and the one his drawings are set up with.
+    //
+    // NEVER THROUGH THE HOUSE. The caller hands the joint back in the face
+    // list so the man-door rule can read it, and that face points AT the
+    // house -- on a garage behind the house it is the one face reading
+    // 'front'. Opening the car doors into the kitchen is not the street, so
+    // the joint is skipped here and only the man-door rule may name it.
+    //
+    // AND AMONG TWO STREET FACES, the one standing forward: a stepped-back
+    // garage has a front wall at the house line and another further back, and
+    // the drive meets the forward one.
+    //
+    // AND IT HAS TO BE A WALL A DOOR FITS IN. The loop a garage comes out of
+    // carries the corner where the house meets it, so a garage set behind the
+    // house has TWO walls facing the street: the twenty feet it shares with
+    // the house, and the four-foot sliver standing past its corner. The
+    // sliver is a street face by every test except the one that matters, and
+    // the first cut of this rule put a 9 ft door in it -- a door wider than
+    // its own wall, which clampOpeningToWall then refuses on every paint, so
+    // the garage comes out shut on every sheet.
+    const carriesDoor = face =>
+      face.lengthFt >= GARAGE.NARROW_FT + 2 * TUNABLES.MIN_CORNER_FT;
     const stepped = faces.some(face => face.behindHouseFront === true);
-    let chosen = null;
-    let reason = '';
-    if (stepped) {
-      chosen = faces.find(face => face.orientation === 'front' && face.behindHouseFront !== true)
-        || faces.find(face => face.orientation === 'front')
-        || null;
-      if (chosen) reason = 'step-back garage: the door takes the street face';
-    }
+    const street = faces.filter(face =>
+      face.orientation === 'front' && face.index !== manDoor && carriesDoor(face));
+    let chosen = street.find(face => face.behindHouseFront !== true) || street[0] || null;
+    let reason = chosen
+      ? (stepped ? 'step-back garage: the door takes the street face'
+        : 'the door faces the street, which is E1')
+      : '';
     if (!chosen && manDoor != null) {
-      // Ambiguous rectangle: the door lands OPPOSITE the man-door
-      // connection to the house, so nobody walks through the car.
+      // NO WALL LOOKS AT THE STREET -- a garage tucked behind the house, whose
+      // front wall IS the wall it hangs off. The door lands opposite the
+      // man-door connection, so nobody walks through the car.
       const opposite = { front: 'back', back: 'front', left: 'right', right: 'left' };
       const manFace = faces.find(face => face.index === manDoor);
       const want = opposite[manFace?.orientation];
       chosen = faces.find(face => face.orientation === want) || null;
-      if (chosen) reason = 'no step-back cue: the door lands opposite the man-door connection';
-    }
-    // ── AND WITH NEITHER CUE, THE DOOR FACES THE STREET ──────────────────
-    //
-    // Movie, 14 Oct: "can you put the garage door openings facing FRONT / E1
-    // direction as DEFAULT (corner lots aren't as common so the user can
-    // change that)".
-    //
-    // THIS IS THE STANDALONE GARAGE'S CASE and nobody else's: a garage that
-    // touches the house is answered by the two rules above, which read cues
-    // the drawing actually carries. A detached box in the middle of a lot
-    // carries neither, and the rule it fell to -- the longest run -- is a
-    // fact about the garage's SHAPE, not about which way the lot faces. On
-    // the usual deep garage that is a side wall, so the doors opened onto
-    // the neighbour and the drafter moved them every time.
-    //
-    // E1 IS THE STREET, which is the convention this whole file is written in
-    // (faceOrientation, at the top) and the one his drawings are set up with.
-    // The corner lot is the exception he named, and moving a door is a drag.
-    if (!chosen) {
-      chosen = faces.find(face => face.orientation === 'front') || null;
-      if (chosen) reason = 'no cue: the door faces the street, which is E1';
+      if (chosen) reason = 'no wall faces the street: the door lands opposite the man-door connection';
     }
     if (!chosen) {
       chosen = faces.reduce((best, face) => (!best || face.lengthFt > best.lengthFt ? face : best), null);
-      reason = 'no cue and no face toward the street: the door takes the longest run';
+      reason = 'no street face and no man door: the door takes the longest run';
     }
 
     // Two singles need both doors, the gap between them and both corners.
