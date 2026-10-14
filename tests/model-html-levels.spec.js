@@ -63,9 +63,9 @@ test('a card per level, and the layer rows are the module\'s not a copy', async 
     .not.toEqual(HOUSE.levels.map(l => l.name));
 
   // ROOF AND SITE HAVE NO LAYER VIEWS and must therefore show no rows. This
-  // is the same fact that seats them together in one rail row rather than
-  // giving each a PLAN/LAYOUT pair, so a panel that invented rows for them
-  // would be disagreeing with the rail it edits.
+  // is the same fact that gives each of them a whole rail row rather than a
+  // PLAN/LAYOUT pair, so a panel that invented rows for them would be
+  // disagreeing with the rail it edits.
   const rows = await page.evaluate(() => {
     const out = {};
     document.querySelectorAll('.lv-card[data-level]').forEach(card => {
@@ -314,6 +314,36 @@ test('ELEVATIONS are the module\'s four, and pressing one enters that view',
     expect(new URL(page.url()).searchParams.get('view')).toBe('cut:E3');
     // The seat for the same elevation lights too: one piece of state.
     await expect(page.locator('.seat.active')).toHaveCount(1);
+  });
+
+test('and the panel reads in the sheet set\'s order, like the rail above it',
+  async ({ page }) => {
+    // Movie, 13 Oct: "for the lower down area of level/layers in text, also
+    // put it in that same order staring with SITE PLAN, than ELEVATIONS, than
+    // ROOF, 2nd fl, Main Fl, Foundation, SECTIONS".
+    //
+    // THE LEVELS WERE ALREADY IN THAT ORDER among themselves; what was out of
+    // place was the ELEVATIONS group, which sat after every level card. So
+    // this reads the panel's own children top to bottom — which is what a
+    // drafter does — rather than checking the group exists somewhere in it.
+    await openPanel(page);
+    const order = await page.evaluate(() => [...document.querySelectorAll('#levels-panel > *')]
+      .map(el => (el.classList.contains('lv-card') && el.dataset.level
+        ? `LEVEL ${el.querySelector('.lv-name').textContent}`
+        : (el.classList.contains('lv-head') ? `HEAD ${el.querySelector('.lv-head-title').textContent}` : null)))
+      .filter(Boolean));
+    const site = order.indexOf('LEVEL SITE');
+    const elevations = order.indexOf('HEAD Elevations');
+    const roof = order.indexOf('LEVEL ROOF');
+    const sections = order.indexOf('HEAD Sections');
+    expect(site, `SITE is in the panel: ${order.join(' | ')}`).toBeGreaterThanOrEqual(0);
+    expect(elevations, 'the elevations come after SITE').toBeGreaterThan(site);
+    expect(roof, 'and ROOF after the elevations').toBeGreaterThan(elevations);
+    // AND THE FLOORS KEEP THEIR OWN ORDER BEHIND ROOF, top down to the
+    // foundation, with the sections last of the three groups.
+    const foundation = order.indexOf('LEVEL FOUNDATION');
+    expect(foundation, 'FOUNDATION is the last level card').toBeGreaterThan(roof);
+    expect(sections, 'SECTIONS after every level').toBeGreaterThan(foundation);
   });
 
 test('SECTIONS tells the truth about a page with no cut tool', async ({ page }) => {

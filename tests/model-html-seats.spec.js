@@ -70,6 +70,9 @@ const seatData = page => page.locator('.seat').evaluateAll(els => els.map(el => 
   seat: el.dataset.seat,
   label: el.lastChild.textContent,
   disabled: el.disabled,
+  // WHAT IS ON SCREEN, not what the class list claims: SITE and ROOF take a
+  // row each (13 Oct) and the check for that reads the rendered box.
+  width: Math.round(el.getBoundingClientRect().width),
   // Anything drawn at all. Used only to tell a painted screen from a blank
   // one — WHICH picture was painted is asserted through the readout, which
   // reports the painter's own crossing count.
@@ -135,18 +138,38 @@ test('the rail seats the chart the old page seats', async ({ page }) => {
   // THE FLOOR SEATS CARRY THE STOREY NUMBER the level cards carry, because a
   // seat is named after its level and the level's name on screen is derived
   // -- level-assembly.js's levelLabel. Movie, 19 Sep: "lets name them 0.5
-  // MAIN FL / 1 MAIN FL / 1.5 2ND FL / 2 2ND FL". The chart itself is
-  // unchanged: same fourteen seats, same two columns, same order. Only the
-  // words on four of them moved, and the old page's own reading is kept above
+  // MAIN FL / 1 MAIN FL / 1.5 2ND FL / 2 2ND FL".
+  //
+  // AND THE ORDER MOVED ON 13 OCT, to the one LAYOUT already deals its sheets
+  // in: "i'd like the arrangement of layout views to start with SITE PLAN -
+  // than ELEVATIONS etc ... than ROOF, 2nd fl, Main Fl, Foundation,
+  // SECTIONS". Same fourteen seats, same pairs; SITE and ROOF are no longer a
+  // pair of their own, because his order puts the elevations between them --
+  // each takes a row whole instead, which is what keeps E1|E3 over E2|E4 and
+  // the PLAN|LAYOUT pairs below square. The old page's reading is kept above
   // so the two can still be compared line for line.
   expect(seats.map(s => s.label)).toEqual([
+    'SITE PLAN',
     'E1 · FRONT', 'E3 · BACK', 'E2 · LEFT', 'E4 · RIGHT',
-    'ROOF PLAN', 'SITE PLAN',
+    'ROOF PLAN',
     '2 2ND FL PLAN (WALLS)', '2 2ND FL LAYOUT (FLOOR)',
     '1 MAIN FL PLAN (WALLS)', '1 MAIN FL LAYOUT (FLOOR)',
     'FOUNDATION', 'BASEMENT (WALLS)',
     'S1', 'S2',
   ]);
+
+  // A ROW EACH, WHOLE, and it is asked of the rendered width rather than of
+  // the class: what the drafter sees is a seat as wide as the rail, and a
+  // class that stopped reaching its rule would leave that class in place.
+  // (It did exactly that once here -- a stray `*/` swallowed the rules and
+  // the seats stayed 84px with the class on them.)
+  const width = label => seats.find(s => s.label === label).width;
+  expect(width('SITE PLAN'), 'SITE takes the whole row')
+    .toBeGreaterThan(width('E1 · FRONT') * 1.8);
+  expect(width('ROOF PLAN'), 'and so does ROOF')
+    .toBeGreaterThan(width('E1 · FRONT') * 1.8);
+  expect(width('1 MAIN FL PLAN (WALLS)'), 'a plan seat still shares its row')
+    .toBeCloseTo(width('E1 · FRONT'), 0);
 
   // THE FOUNDATION PAIR IS NOT plan|floor, and getting that from the label
   // rather than the code is how it would seat a blank: the second card is the
@@ -160,8 +183,10 @@ test('the rail seats the chart the old page seats', async ({ page }) => {
   // across it is the way to get this wrong: MODEL.dc.html fills two columns
   // E1|E3 then E2|E4 (:7266). A drafter who knows that rail looks for E3 to
   // the right of E1, not under it.
-  expect(seats[0].seat, 'E1 and E3 share the first row').toBe('E1');
-  expect(seats[1].seat).toBe('E3');
+  // SITE takes the row above them now, so the elevations start at seat 1 --
+  // and the pair is still a pair, which is what this is about.
+  expect(seats[1].seat, 'E1 and E3 share a row, under SITE').toBe('E1');
+  expect(seats[2].seat).toBe('E3');
 
   // The office side names, off the profile through elevationName.
   expect(seats.find(s => s.seat === 'E1').label).toBe('E1 · FRONT');
