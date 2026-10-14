@@ -313,7 +313,12 @@
         gap: 1px;
         width: 100%;
       }
-      .ring-stack .ring-link { width: 88%; }
+      /* A STACKED CELL HOLDS MORE THAN ONE PRESS, so its links give up the
+         44px of a lone one: four editions and their source lines in a fixed
+         grid row would otherwise push the ring past the window, and this
+         page's one rule is that it never scrolls to show a way in. 32px with
+         the gap either side still clears a fingertip. */
+      .ring-stack .ring-link { width: 88%; min-height: 32px; padding: 5px 8px; }
       /* REALLY REALLY SMALL, AND STILL READABLE, which is the whole of what he
          asked for. 8px is about as far down as type goes before it stops being
          readable at all -- so what buys the readability back is everything
@@ -360,12 +365,23 @@
          size survives everywhere it can and the page never scrolls to
          show a way in that should be the first thing you see. */
       @media (max-height: 720px) {
-        main { padding: 24px 0; }
+        /* 20, NOT 24, AND THE DIFFERENCE IS THE WHOLE POINT. At exactly 720
+           the ring is 680 tall (four rows of half a logo, and --logo-w is
+           capped at 50vh - 20), so 24 either side came to 728 and the page
+           scrolled 8px -- on the one page whose standing rule is that it
+           never scrolls to show a way in. This is older than the code shelf:
+           it measures the same on main with none of this column on it. */
+        main { padding: 20px 0; }
       }
 
       @media (max-width: 760px) {
         .shell { width: min(100% - 32px, 540px); }
-        main { padding: 32px 0; }
+        /* 20, NOT 32. Measured on a 390x844 phone with the code shelf at four
+           editions: the page came to exactly the window's height, with no
+           room for the next one. The breathing room is what gives way --
+           the same rule the short-window query above follows -- so the shelf
+           can grow a few more rows before anything has to be rethought. */
+        main { padding: 20px 0; }
         /* --logo-w needs no override: min(460px, 88vw) already shrinks to
            fit a phone. */
         /* ON A PHONE THE SQUARE WOULD SQUEEZE THE WORDS, so the logo stands
@@ -378,6 +394,22 @@
         }
         .ring .enter { grid-column: 1 / -1; grid-row: auto; order: -1; margin-bottom: 8px; justify-self: center; }
         .ring .ring-link { width: 100%; grid-column: auto; grid-row: auto; }
+        /* A STACKED CELL ON A PHONE IS A LIST, NOT FOUR BUTTONS. The code
+           shelf grew to four editions and their source lines, and on a
+           390x844 screen that column pushed the page past the window --
+           which breaks this page's one standing rule, that it never scrolls
+           to show a way in. So on a phone a stack loses the 44px press
+           height and the padding that goes with it: every link is still
+           there and still pressable (a 28px row with the gap either side
+           clears a fingertip), and the shelf reads as the list it is. */
+        .ring-stack { grid-column: auto; grid-row: auto; gap: 0; }
+        .ring-stack .ring-link {
+          width: 100%;
+          min-height: 28px;
+          padding: 4px 6px;
+          font-size: clamp(12px, calc(var(--logo-w) / 28), 16px);
+        }
+        .ring-source { font-size: 7px; }
         .ring-empty { display: none; }
       }
 
@@ -420,21 +452,20 @@
                of the page with an arrow carrying BUILDING CODES / SPAN TABLES
                up into it.
 
-               BOXES 4, 5 AND 6 are the right column's top three (the ring is
-               numbered clockwise: 1-4 along the top, 4-7 down the right). 7 is
-               the bottom-right corner and is left free, so the shelf can grow
-               downward as he adds to it without moving what is already here.
+               THE WHOLE RIGHT COLUMN IS THE SHELF (the ring is numbered
+               clockwise: 1-4 along the top, 4-7 down the right), and it fills
+               from the top in the order a drafter reaches for them:
 
-               THE TWO PDFs ARE THE CODE ITSELF, not a page about it: Movie,
-               same hour, "i'd like a seperate link direct to that building
-               code". They are in this repo, under RD-DOCUMENTS/BUILDING-CODES,
-               so the link is a path and not a copy -- and the 2020 edition is
-               what he has ("2020 verision i think is the one i have"); there
-               is no 2022 in the repo.
+                 4  the CODES page, which is this app's own span tables
+                 5  the code in force, and the one coming: NBC 2020, NBC 2025
+                 6  the two that EXPLAIN it: Section 9 illustrated, CMHC's book
+                 7  the editions before this one: NBC 2015, NBC 2010
 
-               A NEW TAB for the two PDFs and not for CODES.html: a 14 MB
-               document opened over the entry page is a drafter who has lost
-               his way back. -->
+               THE LINKS ARE THIS REPO'S OWN COPIES wherever he has uploaded
+               one -- "i'd like a seperate link direct to that building code"
+               -- with the publisher's page under each in microtext. A new tab
+               for every PDF and not for CODES.html: a 14 MB document opened
+               over the entry page is a drafter who has lost his way back. -->
           <!-- Box 4 -->
           <a class="ring-link" href="CODES.html" data-box="4">BUILDING CODES / SPAN TABLES</a>
           <!-- Box 5: THE CODE ITSELF, and the edition after it.
@@ -462,36 +493,63 @@
               target="_blank" rel="noopener">NBC 2025</a>
             <a class="ring-source" href="https://publications.gc.ca/collections/collection_2026/cnrc-nrc/NR24-28-2025-eng.pdf"
               target="_blank" rel="noopener">publications.gc.ca · NR24-28-2025 · not yet in force</a>
+
           </div>
-          <!-- Box 6 -->
-          <a class="ring-link" href="RD-DOCUMENTS/BUILDING-CODES/CanadaNBC2020Sec9Illustrated.pdf"
-            target="_blank" rel="noopener" data-box="6">NBC 2020 — SECTION 9 ILLUSTRATED</a>
-          <!-- Box 7, the bottom-right corner. Movie, 14 Oct: "i also added
-               'Canadian Wood-Frame House Construction' to reference documents
-               can you add a link to it from the right column" -- CMHC's book,
-               uploaded to RD-DOCUMENTS/REF. The spaces in the filename are
-               encoded here because a space in an href is not a space in a
-               URL; the file itself is named as he uploaded it. -->
-          <div class="ring-stack" data-box="7">
+          <!-- Box 6: THE TWO THAT EXPLAIN THE CODE rather than state it --
+               Section 9 drawn out, and CMHC's house-building book (Movie, 14
+               Oct: "i also added 'Canadian Wood-Frame House Construction' to
+               reference documents can you add a link to it from the right
+               column"). Both are in this repo.
+
+               THE CMHC SOURCE LINE is the smallest type that is still type
+               (Movie: "put in really small text so it doesn't take up much
+               space (microsize almost not able read", "(but still can read)",
+               "but really really small"), and it names the government's own
+               copy -- the file above it is this repo's.
+
+               THE HYPHENATED FILENAME is what is linked ("i change the name
+               for the CMHC house guide so there are no spaces in the
+               filenamre"). He is right that it is the quieter path: a space
+               has to be percent-encoded in an href and is mangled by a
+               surprising number of tools between a repo and a browser. -->
+          <div class="ring-stack" data-box="6">
+            <a class="ring-link" href="RD-DOCUMENTS/BUILDING-CODES/CanadaNBC2020Sec9Illustrated.pdf"
+              target="_blank" rel="noopener">NBC 2020 — SECTION 9 ILLUSTRATED</a>
             <a class="ring-link" href="RD-DOCUMENTS/REF/CMHC-House-Construction-NH17-3-2013-eng.pdf"
               target="_blank" rel="noopener">CANADIAN WOOD-FRAME HOUSE CONSTRUCTION</a>
-            <!-- WHERE THE COPY CAME FROM, in the smallest type that is still
-                 type (Movie, 14 Oct: "put in really small text so it doesn't
-                 take up much space (microsize almost not able read", then
-                 "(but still can read)", then "but really really small").
-                 THE GOVERNMENT'S OWN COPY, which is the point of showing it at
-                 all: the file above is the one in this repo, and this says
-                 that CMHC publishes it and where. 8px with the uppercase and
-                 the letter-spacing taken off, because those are what make
-                 small type unreadable rather than merely small.
-                 THE HYPHENATED FILENAME is the one linked (Movie, 14 Oct: "i
-                 change the name for the CMHC house guide so there are no
-                 spaces in the filenamre (hoping less problems with no
-                 spaces)"). He is right that it is the quieter path -- a space
-                 has to be percent-encoded in an href and is mangled by a
-                 surprising number of tools on the way to a browser. -->
             <a class="ring-source" href="https://publications.gc.ca/collections/collection_2014/schl-cmhc/NH17-3-2013-eng.pdf"
               target="_blank" rel="noopener">publications.gc.ca · CMHC NH17-3-2013</a>
+          </div>
+          <!-- Box 7: THE EDITIONS BEFORE THIS ONE. Movie, 14 Oct, sending them
+               one after another: "here is link for 2015 version, i also
+               uploaded the PDF", then 2010. They are kept for READING AN OLD
+               SET -- a drawing built to the code of its day is checked against
+               that code -- so they stand together, newest first, away from the
+               editions a drawing is built to today.
+
+               A CELL OF THEIR OWN IS WHY THEY ARE NOT IN BOX 5: four editions
+               and four source lines in one square pushed the phone layout past
+               the window, and this page's one standing rule is that it never
+               scrolls to show a way in.
+
+               2010 AND 2005 ARE THE PUBLISHER'S PAGES -- no PDF for either
+               has landed in the repo yet, and a link to a file that is not
+               there is worse than a link to the record that is. Each becomes
+               a local file the moment one does, with its record moving down
+               into the small line, which is the shape the rows above use. -->
+          <div class="ring-stack" data-box="7">
+            <a class="ring-link" href="RD-DOCUMENTS/BUILDING-CODES/2015NBC-V2_National_Building_Code.pdf"
+              target="_blank" rel="noopener">NBC 2015</a>
+            <a class="ring-source" href="https://nrc-publications.canada.ca/eng/view/ft/?id=c8876272-9028-4358-9b42-6974ba258d99&amp;dp=2&amp;dsl=en"
+              target="_blank" rel="noopener">nrc-publications.canada.ca · NBC 2015</a>
+            <a class="ring-link" href="https://nrc-publications.canada.ca/eng/view/ft/?id=cbd245df-bc91-4033-a538-fb20fcf536a1&amp;dp=4&amp;dsl=en"
+              target="_blank" rel="noopener">NBC 2010</a>
+            <a class="ring-source" href="https://nrc-publications.canada.ca/eng/view/ft/?id=cbd245df-bc91-4033-a538-fb20fcf536a1&amp;dp=4&amp;dsl=en"
+              target="_blank" rel="noopener">nrc-publications.canada.ca · NBC 2010</a>
+            <a class="ring-link" href="https://nrc-publications.canada.ca/eng/view/ft/?id=2623b771-c768-4b67-a2df-0d5895011263&amp;dsl=en"
+              target="_blank" rel="noopener">NBC 2005</a>
+            <a class="ring-source" href="https://nrc-publications.canada.ca/eng/view/ft/?id=2623b771-c768-4b67-a2df-0d5895011263&amp;dsl=en"
+              target="_blank" rel="noopener">nrc-publications.canada.ca · NBC 2005</a>
           </div>
           <!-- Box 9 -->
           <a class="ring-link" href="https://pdf.bluejetty.ca/" data-box="9">PDF MANAGER</a>
