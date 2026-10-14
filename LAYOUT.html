@@ -113,6 +113,10 @@
 <script src="./cut-view.js"></script>
 <script src="./cut-view-env.js"></script>
 <script src="./north.js"></script>
+<!-- WHICH SIDE EACH ELEVATION STANDS ON, and what a turn does to it. Loaded
+     for lot-sizes.js below, which asks it which way the lot faces: without it
+     this page would lay an AUTOSITE for an unturned house on a turned one. -->
+<script src="./cut-marks.js"></script>
 <script src="./titleblock.js"></script>
 <script src="./lot-sizes.js"></script>
 <!-- Landscape on every working screen (board #310): in portrait on a touch
@@ -3835,7 +3839,10 @@ class Component extends PageLogic {
     const chosen = this._lotChosen();
     if (!LS || !chosen) return;
     const centre = LS.centreOfOutlines(this._saved?.outlines) || { centerX: 0, centerZ: 0 };
-    const pts = LS.lotRectanglePoints(chosen.widthFt, chosen.depthFt, centre);
+    // FACING E1, the same question MODEL asks (Movie, 14 Oct: "the front of
+    // the lot and the front of the house should line up both facing E1").
+    const pts = LS.lotRectanglePoints(chosen.widthFt, chosen.depthFt, centre,
+      Number(this._saved?.planTurn) || 0);
     if (!pts) return;
     const outline = {
       // THE ID IS THIS PAGE'S OWN STRING, because newDrawingItemId lives in

@@ -5137,7 +5137,11 @@
       window.DraftLayoutPlan.drawSitePlan(ctx, toS, drawing, {});
       ctx.restore();
     }
-    const siteDatum = lot ? window.DraftLotSizes.siteDatumOf(lot) : null;
+    // THE TURN GOES WITH IT. The mark stands where E1 and E2 cross, and
+    // cut-marks moves those two with the drawing's planTurn -- so the lot's
+    // own corner has to be asked the same question the house's was.
+    const siteDatum = lot
+      ? window.DraftLotSizes.siteDatumOf(lot, drawing?.planTurn || 0) : null;
     if (siteDatum) {
       R.drawOrigin2D(ctx, toS, {
         datum: siteDatum,
@@ -12939,7 +12943,10 @@
     const chosen = lotChosen();
     if (!chosen || !drawing) return;
     const centre = LS.centreOfOutlines(drawing.outlines) || { centerX: 0, centerZ: 0 };
-    const pts = LS.lotRectanglePoints(chosen.widthFt, chosen.depthFt, centre);
+    // FACING E1, WHICHEVER WAY THE HOUSE IS TURNED (Movie, 14 Oct: "the front
+    // of the lot and the front of the house should line up both facing E1").
+    const pts = LS.lotRectanglePoints(chosen.widthFt, chosen.depthFt, centre,
+      drawing?.planTurn || 0);
     if (!pts) return;
     drawing.outlines = drawing.outlines || [];
     addItem(drawing.outlines, {

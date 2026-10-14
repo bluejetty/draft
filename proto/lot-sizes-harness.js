@@ -47,16 +47,29 @@ const MUTATIONS = [
       '    return [...LOT_TIERS].reverse().find(tier => lotFitsHouse(tier, house, opts)) || null;')],
   ['the lot is laid out portrait: the frontage runs back instead of across',
     'lot-sizes.js',
-    c => c.replace(`    const x0 = centerX - w / 2, x1 = centerX + w / 2;
-    const z0 = centerZ - d / 2, z1 = centerZ + d / 2;`,
-    `    const x0 = centerX - d / 2, x1 = centerX + d / 2;
-    const z0 = centerZ - w / 2, z1 = centerZ + w / 2;`)],
+    c => c.replace('      x: centerX + left.x * acrossHalf + front.x * backHalf,',
+      '      x: centerX + left.x * backHalf + front.x * acrossHalf,')],
+
+  // ── THE TURN, which is the whole of Movie's 14 Oct report: "the front of
+  //    the lot and the front of the house should line up both facing E1".
+  ['the lot ignores the house turn, as it did before 14 Oct', 'lot-sizes.js',
+    c => c.replace('  const lotAxes = (planTurn = 0) => {', '  const lotAxes = () => {')],
+
+  ['the site mark goes back to the corner an unturned house would have', 'lot-sizes.js',
+    c => c.replace('    const { front, left } = lotAxes(planTurn);\n    const far = dir',
+      '    const { front, left } = UNTURNED;\n    const far = dir')],
+
+  ['the frontage and the depth swap, so a 25 x 120 lot is laid 120 across', 'lot-sizes.js',
+    c => c.replace('      at(w / 2, -d / 2), at(-w / 2, -d / 2), at(-w / 2, d / 2), at(w / 2, d / 2),',
+      '      at(d / 2, -w / 2), at(-d / 2, -w / 2), at(-d / 2, w / 2), at(d / 2, w / 2),')],
   ['the front setback is dropped, so the house sits on the front lot line',
     'lot-sizes.js',
-    c => c.replace('      + FRONT_SETBACK_FT;', '      + 0;')],
+    c => c.replace('    const frontAt = along(corner, front) + FRONT_SETBACK_FT;',
+      '    const frontAt = along(corner, front);')],
   ['the front lot line goes BEHIND the house instead of in front of it',
     'lot-sizes.js',
-    c => c.replace('      + FRONT_SETBACK_FT;', '      - FRONT_SETBACK_FT;')],
+    c => c.replace('    const frontAt = along(corner, front) + FRONT_SETBACK_FT;',
+      '    const frontAt = along(corner, front) - FRONT_SETBACK_FT;')],
   ['the side setback takes the TIGHTER of the two rules, not the looser',
     'lot-sizes.js',
     c => c.replace('    return Math.max(wall, eave);', '    return Math.min(wall, eave);')],
@@ -80,8 +93,8 @@ const MUTATIONS = [
       '    const toInch = value => value;')],
   ['the site datum moves to the far corner, away from E1 and E2',
     'lot-sizes.js',
-    c => c.replace('    const minX = Math.min(...pts.map(p => Number(p.x)));\n    const maxZ = Math.max(...pts.map(p => Number(p.z)));',
-      '    const minX = Math.max(...pts.map(p => Number(p.x)));\n    const maxZ = Math.min(...pts.map(p => Number(p.z)));')],
+    c => c.replace('    const far = dir => Math.max(...pts.map(p => along(p, dir)));',
+      '    const far = dir => Math.min(...pts.map(p => along(p, dir)));')],
   ['the lot itself is counted as a building when the house is measured',
     'lot-sizes.js',
     c => c.replace(`      .filter(outline => outline && outline.site !== true && Array.isArray(outline.points))
@@ -108,6 +121,12 @@ const win = {};
 const sandbox = { window: win, console, Object, Array, String, Number, JSON, Math };
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
+// CUT-MARKS FIRST, because lot-sizes asks it which way the lot faces. Without
+// it the module falls back to the unturned seats -- which is the right
+// fallback for a page that has not loaded it, and exactly the wrong bench for
+// checking that a turn is followed.
+vm.runInContext(fs.readFileSync(path.join(ROOT, 'cut-marks.js'), 'utf8'),
+  sandbox, { filename: 'cut-marks.js' });
 vm.runInContext(fs.readFileSync(path.join(ROOT, 'lot-sizes.js'), 'utf8'),
   sandbox, { filename: 'lot-sizes.js' });
 
@@ -370,6 +389,76 @@ check('a building wider than every tier brightens none of them',
 check('there is a sentence to show about adjusting the AUTOSITE',
   typeof LS.AUTOSITE_NOTE === 'string' && /AUTOSITE/i.test(LS.AUTOSITE_NOTE),
   JSON.stringify(LS.AUTOSITE_NOTE));
+
+// ── THE LOT FACES E1, WHICHEVER WAY THE HOUSE IS TURNED ──────────────────
+//
+// Movie, 14 Oct: "the site is in the wrong position still - the front (25ft
+// side currently facing bottom E2) should rotate 90 so it faces E1 to the
+// right", then "the front of the lot and the front of the house should line up
+// both facing E1", and "the 2 registration marks will both be in the lower
+// right corner of their respective (SITE / HOUSE)".
+//
+// IT AGREED BY COINCIDENCE BEFORE: the front was written as +z and the left as
+// -x, which is where E1 and E2 stand on a house NOBODY HAS TURNED. cut-marks
+// rotates the marks by `planTurn` and the HOUSE's own datum goes with them;
+// the lot did not, so one quarter turn put the two 90 degrees apart.
+const CM = win.DraftCutMarks;
+const spanOf = pts => ({
+  x: Math.max(...pts.map(p => p.x)) - Math.min(...pts.map(p => p.x)),
+  z: Math.max(...pts.map(p => p.z)) - Math.min(...pts.map(p => p.z)),
+});
+const FRONTAGE = 25, DEPTH = 120;
+
+check('cut-marks is on the bench, or none of the turn checks mean anything',
+  Boolean(CM && typeof CM.eMarkDir === 'function'));
+
+[0, 1, 2, 3].forEach(turn => {
+  const pts = LS.lotRectanglePoints(FRONTAGE, DEPTH, { centerX: 0, centerZ: 0 }, turn);
+  const span = spanOf(pts);
+  const e1 = CM.eMarkDir('E1', turn);
+  // E1 POINTING ALONG x MEANS THE FRONT FACES LEFT OR RIGHT, so the DEPTH
+  // runs along x and the frontage across z. Asked of the mark rather than
+  // listed per turn: a list here would be the second copy of the seat table
+  // that this whole change exists to remove.
+  const deepAlongX = Math.abs(e1.x) > 0.5;
+  check(`turn ${turn}: the frontage runs across the front, not back from it`,
+    Math.abs((deepAlongX ? span.x : span.z) - DEPTH) < 1e-9
+      && Math.abs((deepAlongX ? span.z : span.x) - FRONTAGE) < 1e-9,
+    JSON.stringify({ e1, span }));
+
+  // AND THE MARK STANDS WHERE E1 AND E2 CROSS. On turn 3 -- his drawing, E1
+  // east and E2 south -- that is the LOWER RIGHT corner, which falls out of
+  // the rule rather than being told to it.
+  const datum = LS.siteDatumOf({ points: pts }, turn);
+  const e2 = CM.eMarkDir('E2', turn);
+  const far = (dir, axis) => (dir[axis] > 0 ? Math.max(...pts.map(p => p[axis]))
+    : dir[axis] < 0 ? Math.min(...pts.map(p => p[axis])) : null);
+  const wantX = far(e1, 'x') ?? far(e2, 'x');
+  const wantZ = far(e1, 'z') ?? far(e2, 'z');
+  check(`turn ${turn}: the site mark stands on the corner E1 and E2 share`,
+    Math.abs(datum.x - wantX) < 1e-9 && Math.abs(datum.z - wantZ) < 1e-9,
+    JSON.stringify({ datum, wantX, wantZ }));
+});
+
+// HIS OWN DRAWING, named: a quarter turn that puts E1 on the right.
+const his = LS.lotRectanglePoints(FRONTAGE, DEPTH, { centerX: 0, centerZ: 0 }, 3);
+const hisDatum = LS.siteDatumOf({ points: his }, 3);
+check('on his turn the mark is the LOWER RIGHT corner, in so many words',
+  Math.abs(hisDatum.x - Math.max(...his.map(p => p.x))) < 1e-9
+    && Math.abs(hisDatum.z - Math.max(...his.map(p => p.z))) < 1e-9,
+  JSON.stringify(hisDatum));
+
+// AND NOTHING MOVED FOR A DRAWING NOBODY TURNED. Every lot drawn before this
+// change was drawn unturned; a fix that shifted them would break the drawings
+// it was meant to leave alone.
+const flat = LS.lotRectanglePoints(FRONTAGE, DEPTH, { centerX: 4, centerZ: -3 }, 0);
+check('an unturned lot is the same four points it always was',
+  JSON.stringify(flat.map(p => [p.x, p.z]))
+    === JSON.stringify([[-8.5, -63], [16.5, -63], [16.5, 57], [-8.5, 57]]),
+  JSON.stringify(flat));
+check('and its mark is still the front-left corner it always was',
+  JSON.stringify(LS.siteDatumOf({ points: flat }, 0)) === JSON.stringify({ x: -8.5, z: 57 }),
+  JSON.stringify(LS.siteDatumOf({ points: flat }, 0)));
 
 console.log(`lot sizes harness: ${passed} checks passed, ${failures.length} failed`);
 if (failures.length) {
