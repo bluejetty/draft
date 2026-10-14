@@ -597,6 +597,21 @@ ${trio(true)}
          part-way through ordering a house is not changing storey.
          NOT VERBS, so they sit ahead of UNDO and DELETE rather than among
          them: these two move where you are standing and change nothing. -->
+    <!-- THE VERBS STAND IN A BOX OF THEIR OWN (Movie, 14 Oct): "when the
+         UNDO / COPY or other buttons show up in this location can we put them
+         centered between the BONE and the RIGHT HAND Layout stuff", "vs how
+         it is now: too close to the bone and also it should be centered
+         UP/DOWN same as the bone please", on two of them at once: "when there
+         are 2 center them both out with consideration for the larger area
+         they cover", and then, having looked at both sides: "actually can
+         these UNDO etc buttons go on the LEFT side of the bone, there is more
+         space because the button text on that side isn't as long".
+         ONE BOX, CENTRED AS A GROUP in the gap LEFT of the trio, so a second
+         verb appearing widens it either way instead of pushing the first one
+         along. Placed by seatFootVerbs() below, because the two edges it sits
+         between -- the page row and the trio -- are measured, not known to
+         the stylesheet. -->
+    <div id="dt-verbs" data-foot-verbs>
     <button id="model-undo" type="button" data-model-undo hidden
       title="Undo the last change (Ctrl+Z)">UNDO</button>
     <button id="delete" type="button" data-delete hidden
@@ -621,6 +636,7 @@ ${trio(true)}
     title="Copy what is selected — paste it on any level or shelf">COPY</button>
   <button id="paste" type="button" data-paste hidden
     title="Paste the copy here, on whatever level or shelf is showing">PASTE</button>
+    </div>
   </div>
   <div class="grow"></div>`;
   // THE LOWEST ROW (Movie, 25 Sep): "move the '# VISITS' and the DATE/TIME
@@ -780,6 +796,95 @@ ${trio(true)}
       + 'called, mid-parse, or the page it lands in is not the page the specs '
       + 'measured.');
     at.insertAdjacentHTML('beforebegin', markup);
+  };
+
+  // ── THE VERBS SIT IN THE GAP, NOT BESIDE THE BONE ─────────────────────
+  //
+  // Movie, 14 Oct: "when the UNDO / COPY or other buttons show up in this
+  // location can we put them centered between the BONE and the RIGHT HAND
+  // Layout stuff", "too close to the bone and also it should be centered
+  // UP/DOWN same as the bone please", "when there are 2 center them both out
+  // with consideration for the larger area they cover", and then, having
+  // looked at the two sides: "actually can these UNDO etc buttons go on the
+  // LEFT side of the bone, there is more space because the button text on
+  // that side isn't as long".
+  //
+  // SO THE GAP IS THE LEFT ONE: between the page row (PROJECT · MODEL ·
+  // BONEYARD · EXT. FINISH) and the trio. He is right about the room -- the
+  // sheet row carries CONSTRUCTION LAYOUT and SPECIFICATIONS and runs much
+  // further in from its end than the page row does from its own.
+  //
+  // MEASURED, BECAUSE NEITHER EDGE IS A NUMBER THE STYLESHEET HAS. The right
+  // one is the trio, which is three buttons wide on MODEL and one on every
+  // other page; the left one is the page row, whose width is its chips'
+  // words. The old rule reserved a fixed padding off the bone and let the
+  // verbs fall where they fell, to its right, which is the "too close" he
+  // reported first.
+  //
+  // THE GROUP IS CENTRED, NOT EACH VERB. Two verbs widen the box either way
+  // about the same middle rather than the second pushing the first along --
+  // "with consideration for the larger area they cover".
+  //
+  // AND IT WILL NOT CLIMB OVER EITHER NEIGHBOUR. On a narrow window the gap
+  // closes, and a group centred in a gap narrower than itself would sit on
+  // the page row or on the trio. Clamped to a hair's margin off each edge,
+  // and if the gap is narrower still the middle is the least-bad place left.
+  const FOOT_VERB_MARGIN = 10;
+  const seatFootVerbs = () => {
+    const box = document.getElementById('dt-verbs');
+    const trio = document.getElementById('dt-trio');
+    const pages = document.getElementById('page-row');
+    const bar = document.getElementById('dt-bar');
+    if (!box || !trio || !pages || !bar) return;
+    // NOTHING TO SEAT when every verb is hidden, which is every page but
+    // MODEL and most of MODEL's own time. An empty box is still 0 wide, so
+    // this is about not reading four rectangles sixty times a second.
+    // WRITTEN ONLY WHEN IT CHANGES, which is not tidiness: `el.hidden = true`
+    // calls setAttribute every time, and setAttribute records a mutation even
+    // when the value it writes is the one already there. The observer below
+    // watches this very attribute, so an unconditional write is an infinite
+    // microtask loop -- MODEL froze mid-parse, before DOMContentLoaded, with
+    // no error anywhere to say why.
+    const live = [...box.children].some(el => !el.hidden);
+    if (box.hidden !== !live) box.hidden = !live;
+    if (!live) return;
+    const barBox = bar.getBoundingClientRect();
+    const trioBox = trio.getBoundingClientRect();
+    const pageBox = pages.getBoundingClientRect();
+    const width = box.getBoundingClientRect().width;
+    if (!width || !trioBox.width || !pageBox.width) return;
+    const half = width / 2;
+    const left = pageBox.right + FOOT_VERB_MARGIN + half;
+    const right = trioBox.left - FOOT_VERB_MARGIN - half;
+    const middle = (pageBox.right + trioBox.left) / 2;
+    const x = left > right ? middle : Math.min(Math.max(middle, left), right);
+    box.style.left = `${x - barBox.left}px`;
+  };
+  // THE BOX CHANGES WIDTH WITHOUT THE WINDOW MOVING: MODEL unhides DELETE the
+  // moment something is selected and hides it again on Escape, and each of
+  // those changes where the middle of the group is. Watching `hidden` on the
+  // four buttons is watching exactly that, and costs nothing while nothing
+  // moves -- a resize listener alone would leave the group off-centre for as
+  // long as the drafter left the selection up.
+  const watchFootVerbs = () => {
+    const box = document.getElementById('dt-verbs');
+    if (!box || box.dataset.seated) return;
+    box.dataset.seated = '1';
+    seatFootVerbs();
+    if (typeof MutationObserver === 'function') {
+      new MutationObserver(() => seatFootVerbs()).observe(box,
+        { attributes: true, attributeFilter: ['hidden'], subtree: true });
+    }
+    // AND BOTH EDGES MOVE WITHOUT THE WINDOW MOVING: the trio loses an arrow
+    // at the ends of a list on the pages that step one, and the page row's
+    // chips are written by the skin labels, so each edge is watched rather
+    // than read once at mount.
+    if (typeof ResizeObserver === 'function') {
+      const watch = new ResizeObserver(() => seatFootVerbs());
+      [document.getElementById('page-row'), document.getElementById('dt-trio')]
+        .forEach(el => { if (el) watch.observe(el); });
+    }
+    window.addEventListener('resize', seatFootVerbs);
   };
 
   // ── THE VERBS A PAGE DOES NOT HANDLE, SAID OUT LOUD ───────────────────
@@ -991,6 +1096,7 @@ ${trio(true)}
       // AFTER the markup, because the slot it fills arrives with it. `put`
       // inserts mid-parse, so the lane is in the document by the next line.
       mountClock();
+      watchFootVerbs();
       // THE PAGE'S NAME ARRIVES HERE AND NOWHERE ELSE, which is why the
       // greying is keyed off the pair rather than off the top bar alone -- see
       // standDown above. It is `opts.page` unchanged: the chip that reads "you
