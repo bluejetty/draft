@@ -188,6 +188,64 @@ function runChecks() {
     T.styleById('bluejetty').cornerRadiusIn === 0.35
       && T.styleById('roughdrafter').cornerRadiusIn === 0);
 
+  // ── AN UPLOADED LOGO IS A STYLE ──────────────────────────────────────
+  // Movie, 14 Oct: "I'd like to make a section at the top of COMPANY
+  // STANDARDS, where they can upload a logo which will be placed on the
+  // drawings (if they choose it)... (allow them to upload multiple logos for
+  // each COMPANY STANDARDS area".
+  //
+  // THE FILE ARRIVES FROM DISK, so none of it is trusted: the standards
+  // package a logo rides in is JSON a drafter can edit and mail. Everything
+  // below is about what survives that — and the painter is untouched, which
+  // is the design rather than an omission.
+  const PNG = 'data:image/png;base64,iVBORw0KGgo=';
+  const logos = [{ id: 'L1', label: 'harbour drafting', dataUrl: PNG }];
+  const withLogo = T.stylesFor(logos);
+  check('an uploaded logo joins the list the picker is built from',
+    withLogo.length === T.STYLES.length + 1);
+  check('the four shipped styles come first and come through unchanged',
+    T.STYLES.every((style, i) => withLogo[i] === style),
+    'an office mark is an ADDITION to the list; a drawing that opened on ROUGH DRAFTER still can');
+  check('an uploaded style is reachable by id, and only when its logo is offered',
+    T.styleById('logo:L1', logos) !== null && T.styleById('logo:L1') === null,
+    'styleById with no logos is the question every existing caller already asks');
+  check('the uploaded style points the painter at the uploaded image',
+    T.styleById('logo:L1', logos).logoSrc === PNG);
+  check('it stands on the right-hand strip, with no wordmark invented for it',
+    withLogo[4].placement === 'right' && withLogo[4].logoOnly === true,
+    'the mark fills its cell; this app has no business lettering a company name under it');
+  check('the name is carried up out of the file, in capitals like every other label',
+    withLogo[4].label === 'HARBOUR DRAFTING');
+  check('an uploaded id cannot collide with a shipped style',
+    withLogo[4].id.startsWith(T.LOGO_ID_PREFIX)
+      && T.STYLES.every(style => !style.id.startsWith(T.LOGO_ID_PREFIX)));
+
+  // WHAT IS REFUSED, one reason at a time.
+  check('a logo with no id is dropped',
+    T.normaliseCompanyLogos([{ label: 'X', dataUrl: PNG }]).length === 0);
+  check('two logos cannot share an id',
+    T.normaliseCompanyLogos([{ id: 'L1', label: 'A', dataUrl: PNG },
+      { id: 'L1', label: 'B', dataUrl: PNG }]).length === 1);
+  check('a src that is not an image data URL is refused',
+    T.normaliseCompanyLogos([{ id: 'L1', label: 'X', dataUrl: 'https://example.com/logo.png' }]).length === 0
+      && T.normaliseCompanyLogos([{ id: 'L2', label: 'X', dataUrl: 'javascript:alert(1)' }]).length === 0,
+    'a printed sheet must not depend on a server being up, and must not carry a script at all');
+  check('an unnamed logo still gets a name to be picked by',
+    T.normaliseCompanyLogos([{ id: 'L1', label: '   ', dataUrl: PNG }])[0].label === 'COMPANY LOGO',
+    'a blank row in the TITLEBLOCK list cannot be told from the one above it');
+  check('a logo bigger than the cap is refused',
+    T.normaliseCompanyLogos([{ id: 'L1', label: 'X',
+      dataUrl: `data:image/png;base64,${'A'.repeat(T.MAX_LOGO_BYTES)}` }]).length === 0,
+    'the package lives in localStorage beside every saved drawing');
+  check('no more than MAX_LOGOS are kept',
+    T.normaliseCompanyLogos(Array.from({ length: T.MAX_LOGOS + 4 },
+      (_, i) => ({ id: `L${i}`, label: 'X', dataUrl: PNG }))).length === T.MAX_LOGOS);
+  check('anything that is not a list of logos answers with an empty one',
+    T.normaliseCompanyLogos(undefined).length === 0 && T.normaliseCompanyLogos('x').length === 0
+      && T.normaliseCompanyLogos([null, 7]).length === 0);
+  check('the uploaded styles are frozen like the shipped ones',
+    Object.isFrozen(withLogo) && withLogo.every(Object.isFrozen));
+
   // ── WHICH PAINTER ────────────────────────────────────────────────────
   const stripPaint = paintWith(T, right, INFO);
   const bandPaint = paintWith(T, band, INFO, LOGO, BAND);
@@ -439,9 +497,35 @@ if (!MUTATE) {
 
 // ── MUTATIONS ───────────────────────────────────────────────────────────
 const MUTATIONS = [
+  // RE-AIMED 14 OCT. styleById grew a second argument when uploaded logos
+  // landed, and this mutation still named the one-line version -- so it
+  // replaced nothing and "survived" against code it never reached.
   ['an unknown company falls back to the first style instead of null', 'titleblock.js',
-    c => c.replace('const styleById = id => STYLES.find(style => style.id === id) || null;',
-      'const styleById = id => STYLES.find(style => style.id === id) || STYLES[0];')],
+    c => c.replace('    (logos ? stylesFor(logos) : STYLES).find(style => style.id === id) || null;',
+      '    (logos ? stylesFor(logos) : STYLES).find(style => style.id === id) || STYLES[0];')],
+
+  ['an uploaded logo never reaches the picker', 'titleblock.js',
+    c => c.replace('    ...normaliseCompanyLogos(logos).map(logoStyle),\n', '')],
+
+  ['an office mark replaces the shipped styles instead of joining them', 'titleblock.js',
+    c => c.replace('  const stylesFor = logos => Object.freeze([\n    ...STYLES,',
+      '  const stylesFor = logos => Object.freeze([')],
+
+  ['a logo may be pointed at any URL at all', 'titleblock.js',
+    c => c.replace("      if (!/^data:image\\/(png|jpeg|gif|webp|svg\\+xml);/i.test(dataUrl)) return out;\n", '')],
+
+  ['a logo of any size is kept', 'titleblock.js',
+    c => c.replace('      if (dataUrl.length > MAX_LOGO_BYTES) return out;\n', '')],
+
+  ['the logo cap does not hold', 'titleblock.js',
+    c => c.replace('      if (out.length >= MAX_LOGOS || !entry || typeof entry !== \'object\') return out;',
+      '      if (!entry || typeof entry !== \'object\') return out;')],
+
+  ['two logos may share an id', 'titleblock.js',
+    c => c.replace('      if (!id || seen.has(id)) return out;', '      if (!id) return out;')],
+
+  ['an uploaded id is not prefixed, so it can shadow a shipped style', 'titleblock.js',
+    c => c.replace('    id: `${LOGO_ID_PREFIX}${logo.id}`,', '    id: logo.id,')],
 
   ['every style draws the band, whatever its placement says', 'titleblock.js',
     c => c.replace("if (style.placement === 'right') drawRight(ctx, box, style, info, logo);",

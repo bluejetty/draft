@@ -42,6 +42,10 @@
   <script src="./profile-manager.js"></script>
   <script src="./room-standards.js"></script>
   <script src="./fen-labels.js"></script>
+  <!-- For what a company logo IS. titleblock.js owns the shape of one and the
+       limits on it, because an uploaded logo is a titleblock STYLE and nothing
+       else; this page only takes the file in. -->
+  <script src="./titleblock.js"></script>
   <!-- Self-hosted (see vendor/fonts.css): no third-party request on the
        critical path of the page. -->
   <link rel="stylesheet" href="vendor/fonts.css" />
@@ -108,7 +112,36 @@
     <a class="back" href="./MODEL.html">← Back to Model</a>
   </header>
   <main>
-    <h1>Company Standard Layers</h1>
+    <!-- ── THE OFFICE'S OWN LOGO, AT THE TOP ────────────────────────────────
+         Movie, 14 Oct: "for the LOGO - i set it up temporary with te
+         BLUEJETTY logo as an option for everyone, but it should only be for
+         ME (my company)... I'd like to make a section at the top of COMPANY
+         STANDARDS, where they can upload a logo which will be placed on the
+         drawings (if they choose it)... (allow them to upload multiple logos
+         for each COMPANY STANDARDS area".
+
+         AT THE TOP, WHICH IS WHERE HE PUT IT: this page opens on the layer
+         table, and a logo is the one thing on it an office sets once, on day
+         one, before any of the rest matters.
+
+         IF THEY CHOOSE IT -- uploading does not put a mark on a drawing.
+         Every logo here joins LAYOUT's TITLEBLOCK list beside the shipped
+         ones, and a sheet set wears the one it is given. -->
+    <h1>Company Logo</h1>
+    <p class="intro">Your own mark, for the titleblock on an 11&times;17 sheet. Upload as many as you like &mdash; each one joins the <strong>TITLEBLOCK</strong> list in Construction Layout, and a sheet set wears whichever you pick there. Nothing is placed on a drawing until you pick it.</p>
+    <section class="group" aria-label="Company logos">
+      <div class="group-title">Logos</div>
+      <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px;">
+        <span class="default-name">ADD A LOGO</span>
+        <span class="layer-use">A PNG with a transparent background reads best &mdash; the strip prints it on white paper. Big images are scaled down on the way in, so a logo straight off a letterhead is fine. The mark fills its cell, so one that already carries your company name needs no second line of type.</span>
+        <span class="layer-print" style="justify-content:flex-start;">
+          <input type="file" id="logo-file" data-logo-file accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" aria-label="Upload a company logo" style="width:100%;" />
+        </span>
+      </div>
+      <div id="logo-list" data-logo-list></div>
+    </section>
+
+    <h1 style="margin-top:22px;">Company Standard Layers</h1>
     <p class="intro">The office layer list. Commands assign these layers automatically as you draft — nobody manages layers by hand — and this list is what a future AutoCAD/DXF export maps onto, so name each layer the way your CAD standard expects.</p>
     <div class="notice"><strong>Layer philosophy:</strong> layers follow AIA-style CAD names (A-WALL-EXT, S-SLAB&hellip;) so drawings convert cleanly to AutoCAD. Views (PLAN, FLOOR, ELECTRIC&hellip;) are display groupings only; this layer list is the source of truth for export. A layer marked <strong>not printed</strong> (like NO-DRAFT) shows in the drawing spaces but is excluded from LAYOUT model displays and printed output.</div>
     <section class="groups" id="groups" aria-label="Standard layers"></section>
@@ -269,6 +302,16 @@
     <div class="actions">
       <button class="action" id="reset" type="button">RESET DEFAULTS</button>
       <button class="action primary" id="download" type="button">DOWNLOAD .DRAFT.STANDARDS</button>
+      <!-- AND BACK IN AGAIN (Movie, 14 Oct): "can we save all that information
+           onto a file that users can reupload if the information gets reloaded
+           and delted", "(will contain their logos too and all the infor they
+           entered". The download has been here since standards packages
+           landed; the way back was only ever in Construction Layout's own
+           dialog, which is not where a drafter who lost their standards goes
+           looking. The logos ride in the same file, because they are a
+           standard like any other on this page. -->
+      <button class="action" id="upload" type="button">UPLOAD .DRAFT.STANDARDS</button>
+      <input type="file" id="upload-file" data-upload-file accept=".standards,.json,application/json" hidden aria-hidden="true" tabindex="-1" />
       <span id="status" role="status"></span>
     </div>
   </main>
@@ -284,6 +327,10 @@
       let roomMinimums = window.DraftRoomStandards.normaliseRoomMinimums(active?.content?.model?.roomMinimums);
       let roomTray = window.DraftRoomStandards.normaliseRoomTray(active?.content?.model?.roomTray);
       let fenestrationStandards = window.DraftFenLabels.normaliseFenStandards(active?.content?.model?.fenestrationStandards);
+      // NORMALISED ON THE WAY IN like every other standard on this page: a
+      // package can arrive from a file somebody edited or mailed, and
+      // titleblock.js is where what counts as a logo is decided.
+      let companyLogos = window.DraftTitleblock.normaliseCompanyLogos(active?.content?.model?.companyLogos);
 
       const defaults = standardsApi.normaliseLayerStandards(null);
       const status = document.querySelector('#status');
@@ -294,7 +341,7 @@
       };
 
       const saveActive = message => {
-        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums, roomTray, fenestrationStandards } });
+        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums, roomTray, fenestrationStandards, companyLogos } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         showStatus(message);
@@ -365,6 +412,58 @@
         });
       };
 
+      // ── THE LOGOS THIS STANDARD HOLDS ──────────────────────────────────
+      // One row each: the mark as it will print, the name it will be known by
+      // in the TITLEBLOCK list, and a × to take it off. ITS OWN RENDER rather
+      // than part of render() above, because adding a logo must not rebuild
+      // the layer table underneath a half-typed layer name.
+      const logoHost = document.querySelector('[data-logo-list]');
+      const escape = text => String(text ?? '')
+        .replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const renderLogos = () => {
+        if (!companyLogos.length) {
+          logoHost.innerHTML = '<div class="layer-row" style="grid-template-columns:120px minmax(0,1fr);">'
+            + '<span class="default-name">NONE YET</span>'
+            + '<span class="layer-use">Construction Layout offers the shipped titleblocks until you add one.</span>'
+            + '</div>';
+          return;
+        }
+        logoHost.innerHTML = companyLogos.map(logo => `
+          <div class="layer-row" style="grid-template-columns:120px minmax(0,1fr) 240px 28px;">
+            <span class="default-name" style="display:flex; align-items:center;">
+              <img src="${escape(logo.dataUrl)}" alt="" style="max-width:104px; max-height:46px; object-fit:contain; background:#fff; border:1px solid var(--edge-panel); padding:3px;" />
+            </span>
+            <span class="layer-use">Shows in Construction Layout as <strong>${escape(logo.label)}</strong>, on the right-hand strip of an 11&times;17 sheet.</span>
+            <span class="layer-print" style="justify-content:flex-start;">
+              <input class="layer-name-input" type="text" data-logo-label="${escape(logo.id)}" value="${escape(logo.label)}" aria-label="Name for this logo in the titleblock list" style="width:100%;" />
+            </span>
+            <button class="reset-layer" type="button" data-logo-remove="${escape(logo.id)}" aria-label="Remove ${escape(logo.label)}" title="Remove this logo">&times;</button>
+          </div>
+        `).join('');
+        logoHost.querySelectorAll('[data-logo-label]').forEach(input => {
+          input.addEventListener('change', () => {
+            const id = input.dataset.logoLabel;
+            companyLogos = window.DraftTitleblock.normaliseCompanyLogos(
+              companyLogos.map(logo => (logo.id === id ? { ...logo, label: input.value } : logo)));
+            saveActive('Logo renamed.');
+            renderLogos();
+          });
+        });
+        logoHost.querySelectorAll('[data-logo-remove]').forEach(button => {
+          button.addEventListener('click', () => {
+            const id = button.dataset.logoRemove;
+            const gone = companyLogos.find(logo => logo.id === id);
+            companyLogos = companyLogos.filter(logo => logo.id !== id);
+            // A SHEET SET STILL NAMING IT IS LAYOUT'S TO NOTICE, not this
+            // page's to reach into: styleById answers null for an id with no
+            // logo behind it, which is the same answer it has always given
+            // for an unknown style, and the sheet falls back as it would.
+            saveActive(`${gone ? gone.label : 'That logo'} removed.`);
+            renderLogos();
+          });
+        });
+      };
+
       const freeformInput = document.querySelector('[data-freeform-footings]');
       freeformInput.checked = structureStandards.freeformFootings;
       freeformInput.addEventListener('change', () => {
@@ -409,6 +508,17 @@
       const fillElevationNames = () => elevationNameInputs.forEach(input => {
         input.value = structureStandards.elevationNames[input.dataset.elevationName];
       });
+      // THE FOUR STRUCTURE CONTROLS, WRITTEN FROM THE RECORD. RESET had this
+      // inline and UPLOAD would have been the second copy -- which is how one
+      // of them comes to forget a control somebody adds later. Every other
+      // block on this page already has its own fill*; this is structure's.
+      const fillStructureInputs = () => {
+        freeformInput.checked = structureStandards.freeformFootings;
+        autoElevInput.checked = structureStandards.autoElevations;
+        bubbleStyleSelect.value = structureStandards.cutBubbleStyle;
+        gableCornerSelect.value = structureStandards.gableCorner;
+        fillElevationNames();
+      };
       fillElevationNames();
       elevationNameInputs.forEach(input => {
         input.addEventListener('change', () => {
@@ -483,11 +593,7 @@
       document.querySelector('#reset').addEventListener('click', () => {
         layerStandards = standardsApi.normaliseLayerStandards(null);
         structureStandards = window.DraftStructureStandards.normaliseStructureStandards(null);
-        freeformInput.checked = structureStandards.freeformFootings;
-        autoElevInput.checked = structureStandards.autoElevations;
-        bubbleStyleSelect.value = structureStandards.cutBubbleStyle;
-        gableCornerSelect.value = structureStandards.gableCorner;
-        fillElevationNames();
+        fillStructureInputs();
         roomMinimums = window.DraftRoomStandards.normaliseRoomMinimums(null);
         fillRoomMinimums();
         roomTray = window.DraftRoomStandards.normaliseRoomTray(null);
@@ -498,14 +604,128 @@
         render();
       });
       document.querySelector('#download').addEventListener('click', () => {
-        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums, roomTray, fenestrationStandards } });
+        const pkg = manager.createPackage('standards', packageName, { model:{ layerStandards, structureStandards, roomMinimums, roomTray, fenestrationStandards, companyLogos } });
         manager.saveActive(pkg);
         packageName = pkg.name;
         const fileName = manager.download(pkg);
         showStatus(`${fileName} downloaded.`);
       });
 
+      // ── UPLOADING A LOGO ───────────────────────────────────────────────
+      //
+      // DOWNSCALED AND RE-ENCODED HERE, not stored as the file arrived. A
+      // logo off a letterhead is routinely a 3000px scan of a few hundred KB,
+      // and this package lives in localStorage -- a site gets a few MB in
+      // total, shared with every saved drawing, so one generous upload can
+      // cost a drafter their work. LOGO_MAX_PX is well past what a 1.15"
+      // strip can show at 300 dpi (345px), so nothing visible is lost.
+      //
+      // PNG OUT, WHATEVER CAME IN, because transparency is the thing that
+      // makes a mark sit on the strip rather than in a white box, and JPEG
+      // would throw it away.
+      //
+      // SVG IS PASSED THROUGH UNTOUCHED. Drawing one to a canvas rasterises
+      // it -- the one format that would lose by being "optimised" -- and they
+      // are small to begin with. It is still size-checked below.
+      const LOGO_MAX_PX = 512;
+      const shrink = file => new Promise((resolve, reject) => {
+        if (file.type === 'image/svg+xml') {
+          const reader = new FileReader();
+          reader.onerror = () => reject(new Error('That file could not be read.'));
+          reader.onload = () => resolve(String(reader.result));
+          reader.readAsDataURL(file);
+          return;
+        }
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('That file is not an image this browser can read.')); };
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+          const scale = Math.min(1, LOGO_MAX_PX / Math.max(img.width, img.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(img.width * scale));
+          canvas.height = Math.max(1, Math.round(img.height * scale));
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.src = url;
+      });
+
+      const fileInput = document.querySelector('[data-logo-file]');
+      fileInput.addEventListener('change', async () => {
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        if (companyLogos.length >= window.DraftTitleblock.MAX_LOGOS) {
+          showStatus(`That is as many logos as one standard holds (${window.DraftTitleblock.MAX_LOGOS}). Remove one first.`, true);
+          fileInput.value = '';
+          return;
+        }
+        try {
+          const dataUrl = await shrink(file);
+          // THE NAME IS THE FILE'S, less its extension -- the one thing on
+          // disk that already says what the mark is. It is editable below,
+          // because a file called "logo-final-2.png" is not a company name.
+          const label = file.name.replace(/\.[^.]+$/, '');
+          const next = window.DraftTitleblock.normaliseCompanyLogos([
+            ...companyLogos,
+            { id: `L${Date.now().toString(36)}`, label, dataUrl },
+          ]);
+          // NOTHING WAS ADDED means the normaliser refused it, and the only
+          // thing it refuses that gets this far is size. Said plainly rather
+          // than as a silent no-op.
+          if (next.length === companyLogos.length) {
+            showStatus('That logo is still too big after scaling — try a simpler image.', true);
+            fileInput.value = '';
+            return;
+          }
+          companyLogos = next;
+          saveActive(`${companyLogos[companyLogos.length - 1].label} added. Pick it in Construction Layout under TITLEBLOCK.`);
+          renderLogos();
+        } catch (error) {
+          showStatus(error instanceof Error ? error.message : 'That logo could not be read.', true);
+        }
+        fileInput.value = '';
+      });
+
+      // ── AND BACK IN AGAIN ──────────────────────────────────────────────
+      // THE WHOLE PAGE IS REBUILT FROM THE FILE, not just the parts the file
+      // happens to carry: every `let` above is re-normalised from the
+      // package, so a standard the file is silent about comes back as its
+      // DEFAULT rather than keeping whatever this browser had. A half-applied
+      // import is the thing a drafter restoring a lost standard would never
+      // find out about.
+      const uploadInput = document.querySelector('[data-upload-file]');
+      document.querySelector('#upload').addEventListener('click', () => uploadInput.click());
+      uploadInput.addEventListener('change', async () => {
+        const file = uploadInput.files && uploadInput.files[0];
+        if (!file) return;
+        try {
+          const pkg = await manager.parseFile(file, 'standards');
+          const model = pkg.content?.model || {};
+          packageName = pkg.name;
+          layerStandards = standardsApi.normaliseLayerStandards(model.layerStandards);
+          structureStandards = window.DraftStructureStandards.normaliseStructureStandards(model.structureStandards);
+          roomMinimums = window.DraftRoomStandards.normaliseRoomMinimums(model.roomMinimums);
+          roomTray = window.DraftRoomStandards.normaliseRoomTray(model.roomTray);
+          fenestrationStandards = window.DraftFenLabels.normaliseFenStandards(model.fenestrationStandards);
+          companyLogos = window.DraftTitleblock.normaliseCompanyLogos(model.companyLogos);
+          manager.saveActive(pkg);
+          render();
+          renderLogos();
+          fillStructureInputs();
+          fillRoomMinimums();
+          fillRoomTray();
+          fillFenStandards();
+          showStatus(`${file.name} loaded and is now the active standard.`);
+        } catch (error) {
+          showStatus(error instanceof Error ? error.message : 'That file could not be read.', true);
+        }
+        uploadInput.value = '';
+      });
+
       render();
+      renderLogos();
       showStatus('');
     })();
   </script>

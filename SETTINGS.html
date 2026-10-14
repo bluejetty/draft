@@ -226,6 +226,14 @@
     <div class="actions">
       <button class="action" id="reset" type="button">RESET DEFAULTS</button>
       <button class="action primary" id="download" type="button">DOWNLOAD .DRAFT.SETTINGS</button>
+      <!-- AND BACK IN AGAIN (Movie, 14 Oct): "in the COMPANY STARDARDS and
+           SETTINGS area , can we save all that information onto a file that
+           users can reupload if the information gets reloaded and delted".
+           The download has been here since settings packages landed; the way
+           back was only ever in Construction Layout's own dialog, which is not
+           where somebody who has just lost their shortcuts goes looking. -->
+      <button class="action" id="upload" type="button">UPLOAD .DRAFT.SETTINGS</button>
+      <input type="file" id="upload-file" data-upload-file accept=".settings,.json,application/json" hidden aria-hidden="true" tabindex="-1" />
       <span id="status" role="status"></span>
     </div>
   </main>
@@ -374,6 +382,20 @@
         saveActive(walletSound ? 'Bone crunch on.' : 'Bone crunch off.');
       });
 
+      // THE FOUR SWITCHES AND THE ROOF INCREMENTS, WRITTEN FROM THE RECORD.
+      // Each was set once, inline, where it is wired -- which is all a page
+      // that only ever reads its settings at load needs. UPLOAD changes them
+      // underneath, so there has to be one place that puts the controls back
+      // in step, and it has to be one place: a switch added later and left
+      // out of a second copy would import as whatever was already on screen.
+      const fillToggles = () => {
+        suggestStairsBox.checked = suggestStairs;
+        autoWindowsBox.checked = autoWindows;
+        boneRevealInput.checked = boneReveal;
+        walletSoundInput.checked = walletSound;
+        fillTourIncrements();
+      };
+
       const saveActive = message => {
         const pkg = manager.createPackage('settings', packageName, { model:{ keybindings:bindings, snapZone, drafter, tourRoofIncrements, boneReveal, suggestStairs, walletSound, autoWindows } });
         manager.saveActive(pkg);
@@ -441,6 +463,40 @@
         packageName = pkg.name;
         const fileName = manager.download(pkg);
         showStatus(`${fileName} downloaded.`);
+      });
+
+      // ── AND BACK IN AGAIN ──────────────────────────────────────────────
+      // EVERY `let` ABOVE IS RE-READ FROM THE FILE, so a setting the file is
+      // silent about comes back as its DEFAULT rather than keeping whatever
+      // this browser happened to hold. A half-applied import is the one
+      // outcome somebody restoring lost settings would never notice.
+      const uploadInput = document.querySelector('[data-upload-file]');
+      document.querySelector('#upload').addEventListener('click', () => uploadInput.click());
+      uploadInput.addEventListener('change', async () => {
+        const file = uploadInput.files && uploadInput.files[0];
+        if (!file) return;
+        try {
+          const pkg = await manager.parseFile(file, 'settings');
+          const model = pkg.content?.model || {};
+          packageName = pkg.name;
+          bindings = keyboard.resolveKeybindings(model.keybindings);
+          snapZone = snaps.normaliseSnapZone(model.snapZone);
+          drafter = drafterTools.normaliseDrafter(model.drafter);
+          tourRoofIncrements = window.DraftTour.normaliseTourRoofIncrements(model.tourRoofIncrements);
+          boneReveal = model.boneReveal !== false;
+          suggestStairs = model.suggestStairs !== false;
+          walletSound = model.walletSound !== false;
+          autoWindows = model.autoWindows !== false;
+          manager.saveActive(pkg);
+          render();
+          renderSnaps();
+          renderDrafter();
+          fillToggles();
+          showStatus(`${file.name} loaded and is now active.`);
+        } catch (error) {
+          showStatus(error instanceof Error ? error.message : 'That file could not be read.', true);
+        }
+        uploadInput.value = '';
       });
 
       render();
