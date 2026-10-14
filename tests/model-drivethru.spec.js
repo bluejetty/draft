@@ -144,11 +144,21 @@ test('the foot bar: PROJECT and MODEL left, the bone in the middle, the sheets r
     // THE CLAIM IS STILL ABOUT WHAT MAY STAND THERE, not about a count: the
     // bone, and the two arrows that move between storeys. Anything else
     // arriving in this lane is what this is watching for.
-    expect(await page.locator('#dt-bar > *:not([hidden])').evaluateAll(els => els.map(
+    //
+    // AND THE LANE IS #dt-trio, NOT #dt-bar. The three went into a box of
+    // their own when the arrows moved either side of the bone, so asking
+    // #dt-bar for its unhidden children gets ONE answer -- the box -- and the
+    // `.said` found inside it is the bone's. That is how this read `['BONE']`
+    // and went red a second time. The claim has not changed; the lane it is
+    // asked of moved one element in.
+    //
+    // THE ORDER IS THE TRIO'S, which is the arrangement Movie asked for on 14
+    // Oct: UP, then the bone, then DOWN.
+    expect(await page.locator('#dt-trio > *:not([hidden])').evaluateAll(els => els.map(
       el => ((el.querySelector('.said') || el).textContent || '')
         .trim().replace(/\s+/g, ' '))),
     'the middle of the foot is the bone and the storey arrows')
-      .toEqual(['BONE', '\u25b2', '\u25bc']);
+      .toEqual(['\u25b2', 'BONE', '\u25bc']);
 
     // AND THE PAGES THAT ARE NOT BUILT ARE STILL DOWN. Moving a chip between
     // groups must not have quietly lit it.
