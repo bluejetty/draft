@@ -4594,11 +4594,48 @@ if (!window.DraftCutView) {
     // a roof pushed out over the storey below (`hoodOf`) says, and it starts
     // on that storey's ceiling. Every other wall stands on its floor.
     const hungBy = wall => (wall.hoodOf ? Math.max(0, Number(wall.baseHeight) || 0) : 0);
+    // ── A GARAGE'S SECOND STOREY STANDS ON ITS OWN FLOOR ─────────────────
+    //
+    // Movie, 14 Oct, over the four elevations of a 2 storey detached garage:
+    // "i think the 2 storey garage windows are showing up on the lower floor
+    // not up high where they should be". They were, on all four, and the
+    // room's own walls with them: EVERY wall of a garage took the garage's
+    // BEARING as its floor, whichever storey it stood on, so the room over
+    // the bay drew its windows 2'-10" off the slab.
+    //
+    // THE BEARING IS A FACT ABOUT THE GROUND STOREY ONLY. It is here because
+    // a garage slab sits BELOW the house's main floor (garageSillDropFt), so
+    // the bay's walls cannot be stood on the storey the drawing files them
+    // on. Nothing of that applies a storey up: the room over the bay is
+    // framed on a deck, and the level stack already says where that deck is
+    // -- 9'-9 1/8" on his garage, the line the elevation was drawing all
+    // along with the windows a storey below it.
+    //
+    // WHICH STOREY IS THE GROUND ONE IS READ OFF THE DRAWING, not typed: the
+    // lowest floor the garage has walls on. A single-storey garage is that
+    // storey and draws exactly as before, which is most of the fixtures.
+    //
+    // BY BODY, NOT BY IDENTITY. A garage reaching two storeys is filed once
+    // per storey and comes back as a different outline object for each --
+    // the trap `sameGarageBody` exists for, and the one that would have made
+    // every storey its own ground.
+    const garageGround = [];
+    faces.forEach(face => {
+      if (!face.garage) return;
+      const at = garageGround.find(g => sameGarageBody(g.garage, face.garage));
+      if (!at) garageGround.push({ garage: face.garage, floorTop: face.level.floorTop });
+      else if (face.level.floorTop < at.floorTop) at.floorTop = face.level.floorTop;
+    });
+    const bearsOnGarage = face => {
+      const at = garageGround.find(g => sameGarageBody(g.garage, face.garage));
+      return !at || face.level.floorTop <= at.floorTop + 0.01;
+    };
     const faceGeoms = faces.map(face => {
       const { wall, u1, u2, level } = face;
       const loU = Math.max(Math.min(u1, u2), uMin);
       const hiU = Math.min(Math.max(u1, u2), uMax);
-      const floor = face.garage ? garageBase(face.garage) : level.floorTop + hungBy(wall);
+      const floor = face.garage && bearsOnGarage(face)
+        ? garageBase(face.garage) : level.floorTop + hungBy(wall);
       const worldAt = u => {
         const t = (u - u1) / (u2 - u1);
         return {
