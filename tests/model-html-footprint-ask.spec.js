@@ -316,6 +316,12 @@ test('MOVE EVERYTHING goes through the master, so every floor follows',
     const master = saved.boneyardOutlines.find(m => m.id === MASTER_ID);
     const ne = master.points.find(p => p.id === srcOf(1));
     expect(ne.x, 'the master itself moved').toBeCloseTo(14, 2);
+    // AND THE WALL IS STILL WHERE THE HAND LEFT IT. The drag re-measured its
+    // offset against a master that then moved the same distance, so a
+    // propagation run before that offset is put back lands the wall at 18 --
+    // twice as far out as anybody asked, from a gesture that looks right on
+    // the master and on every copy.
+    expect(corner(saved).wall.x, 'the wall did not travel twice').toBeCloseTo(14, 2);
     saved.outlines.forEach(outline => {
       const corner = outline.points.find(p => p.srcId === srcOf(1));
       expect(corner.x, `${outline.id} followed its master`).toBeCloseTo(14, 2);
