@@ -781,11 +781,39 @@ if (!window.DraftGeometry2D) {
   // is no open air to shed into and a chamfer there would cut across the
   // wall it dies on.
   //
+  // AND ONLY WHERE THE DISCHARGE HAS NOWHERE GOOD TO GO. Movie, 15 Oct,
+  // looking at the MOD BILEVEL's upper roof: "those 45 degree corners aren't
+  // necessary in these situations either, they should been all 90 degrees no
+  // 45s" -- and then the rule: "there might be a 45 but not in those
+  // situation, only if you really need it for a cricket to not shed water in
+  // the direction of the 2nd floor wall".
+  //
+  // SO THE CHAMFER IS NOT A PROPERTY OF AN L-SHAPED ROOF. Two inside corners
+  // can be the same shape and want opposite answers, and the two he has named
+  // are exactly that pair:
+  //
+  //   THE GARAGE WING'S CORNER (14 Oct, and he asked for the cricket): the
+  //   valley discharges at the eave over the building's own inside corner,
+  //   where two walls meet and nothing is underneath to carry it away. Water
+  //   off both wings arrives at one point on the wall.
+  //
+  //   THE ROOM'S OWN CORNER (15 Oct, and he does not want one): the same L,
+  //   one storey up, discharging onto the MAIN ROOF -- which is a roof, and
+  //   sheds. A chamfer there buys nothing and puts a 45 on the plan.
+  //
+  // Which of the two a corner is depends on what lies under it, and that is a
+  // fact about the REST of the drawing that this function cannot see. So the
+  // caller answers it, and a caller that answers nothing gets no crickets.
+  //
   // AND ONLY WHERE THERE IS ROOM. Both legs have to be longer than twice the
   // cut, or the chamfer eats a whole edge and the ring it leaves is a
   // different roof rather than the same roof with its corner taken off.
   const CRICKET_FT = 2;
-  const cricketRing = (points, edges, edgeOverhang, cricketFt = CRICKET_FT) => {
+  const cricketRing = (points, edges, edgeOverhang, options = CRICKET_FT) => {
+    const opts = typeof options === 'number' ? { cricketFt: options } : (options || {});
+    const cricketFt = opts.cricketFt === undefined ? CRICKET_FT : opts.cricketFt;
+    const needsCricket = typeof opts.needsCricket === 'function'
+      ? opts.needsCricket : () => false;
     const ring = Array.isArray(points) ? points : [];
     const n = ring.length;
     const cut = Number(cricketFt);
@@ -815,7 +843,9 @@ if (!window.DraftGeometry2D) {
         && sign * ((v.x - a.x) * (b.z - v.z) - (v.z - a.z) * (b.x - v.x)) < -1e-9;
       const openAir = kinds[prev] !== 'gable' && kinds[i] !== 'gable';
       const room = len(prev) > 2 * cut && len(i) > 2 * cut;
-      if (!reflex || !openAir || !room) {
+      // ASKED LAST, so a caller's test is only run on a corner that would
+      // otherwise take a chamfer -- it can be as expensive as it needs to be.
+      if (!reflex || !openAir || !room || !needsCricket({ x: v.x, z: v.z }, i)) {
         outPts.push({ x: v.x, z: v.z });
         outKinds.push(kinds[i] || 'eave');
         outOvers.push(overs ? overs[i] : null);
