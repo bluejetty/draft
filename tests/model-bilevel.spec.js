@@ -332,23 +332,39 @@ test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight 
       expect(w.topHeight).toBeCloseTo(109.125 / 12, 3);
     });
 
-    // THE MAIN ROOF STOPS AT THE ROOM AND THE STAIR STRIP, with nothing
-    // draining into them (Movie, 10 Oct: "just take out the part sloping to
-    // the house"). It is cut round the room roof's wall line, and the four
-    // edges it shares with that line are flush gables.
+    // THE MAIN ROOF STOPS AT THE ROOM AND THE STAIR STRIP, AND RUNS AS A
+    // GABLE TO THE FRONT, with nothing draining into them.
+    //
+    // THE CUT ALONE WAS NOT ENOUGH, and that is the 15 Oct report. Movie,
+    // 10 Oct, had asked for "just take out the part sloping to the house" and
+    // the roof was cut round the room's wall line with the shared edges made
+    // flush gables -- which this spec then pinned as "two back hips, the
+    // ridge, one street hip". Those hips are the fault: a hip face either
+    // side of an inside corner of the cut meets in a VALLEY, and the valley
+    // discharges exactly at the room's corner. He marked it in red on the
+    // roof plan -- "the roof ... is still drawing water to the 2nd floor wall
+    // which would cause rotting problems and leaking" -- and chose, of the
+    // two shapes he offered, "gabled all the way to the front but the peak
+    // would need to shift to only the right side of the gable on the front
+    // entry side".
+    //
+    // So the ENDS are gables now: the ridge runs front to back, both faces
+    // shed sideways to the eaves, and the only arc left is that ridge. The
+    // peak shifting is not a rule -- south of the cut the roof is only the
+    // strip beside the room, so the ridge of that stretch sits in the middle
+    // of the strip, which is to the right of the house's own centre line.
     const main = d.roofs.find(r => r.sourceLevelId == null && !r.garage);
     expect(main.points.map(p => [p.x, p.z])).toEqual([[-18, -22], [18, -22], [18, 19], [2, 19],
       [2, bottomZ], [-4, bottomZ], [-4, 22], [-18, 22]]);
-    expect(main.edges).toEqual(['eave', 'eave', 'gable', 'gable', 'gable', 'gable', 'eave', 'eave']);
+    expect(main.edges).toEqual(['gable', 'eave', 'gable', 'gable', 'gable', 'gable', 'gable', 'eave']);
+    // THE OVERHANGS DO NOT MOVE: a gable END is open air with a rake board on
+    // it, and only the four edges that die into the room's wall are flush.
     expect(main.edgeOverhang).toEqual([2, 2, 0, 0, 0, 0, 2, 2]);
-    // Its ridge runs on to the strip's end wall, and the one hip on the
-    // street side of the strip lands on the strip's wall.
     const lines = await page.evaluate(roof => window.DraftGeometry2D.roofSkeleton(roof)
       .map(a => [a.a, a.b].map(p => [+p.x.toFixed(2), +p.z.toFixed(2)]).sort((p, q) => p[0] - q[0] || p[1] - q[1])),
     main);
-    expect(lines).toContainEqual([[0, -4], [0, bottomZ]]);
-    expect(lines.some(([p, q]) => p[0] === -18 && p[1] === 22 && q[0] === -4), 'the street-side hip lands on the strip').toBe(true);
-    expect(lines.length, 'two back hips, the ridge, one street hip').toBe(4);
+    expect(lines).toContainEqual([[0, -22], [0, bottomZ]]);
+    expect(lines.length, 'one ridge, and no hip valley to discharge at the room').toBe(1);
 
     // And the garage's walls reach the room's floor.
     d.walls.filter(w => w.body === 'garage' && (w.view || 'plan') === 'plan')

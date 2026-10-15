@@ -392,19 +392,24 @@ const nearestEaveEndTo = (G, ring, edges) => {
   return Math.round(best * 100) / 100;
 };
 const allEaves = ring => ring.map(() => 'eave');
+// WHETHER A CORNER NEEDS SAVING IS THE CALLER'S ANSWER NOW (Movie, 15 Oct: a
+// cricket "only if you really need it for a cricket to not shed water in the
+// direction of the 2nd floor wall"), so the checks that are about the
+// CHAMFER'S GEOMETRY say it does; the checks below them are about the gate.
+const WALLED = { needsCricket: () => true };
 
 check('the L without a cricket runs its valley right into the corner',
   G => [nearestEaveEndTo(G, CRICKET_L, allEaves(CRICKET_L)), 0]);
 
 check('and with one the nearest valley end stands 2 ft off it',
   G => {
-    const out = G.cricketRing(CRICKET_L, allEaves(CRICKET_L));
+    const out = G.cricketRing(CRICKET_L, allEaves(CRICKET_L), null, WALLED);
     return [nearestEaveEndTo(G, out.points, out.edges), G.CRICKET_FT];
   });
 
 check('the cut takes 2 ft off each leg and leaves the corner between them',
   G => {
-    const out = G.cricketRing(CRICKET_L, allEaves(CRICKET_L));
+    const out = G.cricketRing(CRICKET_L, allEaves(CRICKET_L), null, WALLED);
     const made = out.points.filter(p => Math.hypot(p.x - DEAD_CORNER.x, p.z - DEAD_CORNER.z) < 3)
       .map(p => `${p.x},${p.z}`).sort();
     return [made.join(' | '), ['-4,22', '-6,20'].sort().join(' | ')];
@@ -415,7 +420,7 @@ check('one valley into the corner becomes two off the cricket',
     const plainArcs = G.roofSkeleton({ points: CRICKET_L, edges: allEaves(CRICKET_L), pitch: PITCH })
       .filter(atEave)
       .filter(a => [a.a, a.b].some(p => Math.hypot(p.x - DEAD_CORNER.x, p.z - DEAD_CORNER.z) < 0.01));
-    const out = G.cricketRing(CRICKET_L, allEaves(CRICKET_L));
+    const out = G.cricketRing(CRICKET_L, allEaves(CRICKET_L), null, WALLED);
     const cutArcs = G.roofSkeleton({ points: out.points, edges: out.edges, pitch: PITCH })
       .filter(atEave)
       .filter(a => [a.a, a.b].some(p => Math.hypot(p.x - DEAD_CORNER.x, p.z - DEAD_CORNER.z) < 2.9));
@@ -424,13 +429,13 @@ check('one valley into the corner becomes two off the cricket',
 
 check('a rectangle has no corner to cut, and is handed back untouched',
   G => [G.cricketRing([P(0, 0), P(30, 0), P(30, 24), P(0, 24)],
-    ['eave', 'eave', 'eave', 'eave']), null]);
+    ['eave', 'eave', 'eave', 'eave'], null, WALLED), null]);
 
 check('a corner that dies into a wall is left alone -- no open air to shed into',
   G => {
     const walled = allEaves(CRICKET_L);
     walled[6] = 'gable';          // (-4,20) -> (-16,20), the house's own front
-    const out = G.cricketRing(CRICKET_L, walled);
+    const out = G.cricketRing(CRICKET_L, walled, null, WALLED);
     const made = (out ? out.points : CRICKET_L)
       .filter(p => Math.hypot(p.x - DEAD_CORNER.x, p.z - DEAD_CORNER.z) < 0.01).length;
     return [made, 1];
@@ -443,10 +448,45 @@ check('and a leg too short to spare 2 ft keeps its corner',
     // than this roof with its corner off.
     const tight = [P(-16, -20), P(16, -20), P(16, 19), P(19, 19),
       P(19, 46), P(-4, 46), P(-4, 20), P(-16, 20)];
-    const out = G.cricketRing(tight, allEaves(tight));
+    const out = G.cricketRing(tight, allEaves(tight), null, WALLED);
     const kept = (out ? out.points : tight)
       .filter(p => Math.abs(p.x - 16) < 0.01 && Math.abs(p.z - 19) < 0.01).length;
     return [kept, 1];
+  });
+
+// ── THE GATE: A CRICKET ONLY WHERE A TALLER WALL IS WHAT IT WOULD HIT ─────
+//
+// Movie, 15 Oct, on the MOD BILEVEL's upper roof: "those 45 degree corners
+// aren't necessary in these situations either, they should been all 90 degrees
+// no 45s", and then the rule itself -- "there might be a 45 but not in those
+// situation, only if you really need it for a cricket to not shed water in the
+// direction of the 2nd floor wall". An inside corner in open air sheds over
+// its own eave; the one that needs saving discharges against a wall standing
+// above the roof. That is a fact about the rest of the drawing, so the caller
+// names it and a caller that names nothing gets none.
+check('nothing named, no cricket -- the same L comes back untouched',
+  G => [G.cricketRing(CRICKET_L, allEaves(CRICKET_L)), null]);
+
+check('a caller that says this corner is fine gets none either',
+  G => [G.cricketRing(CRICKET_L, allEaves(CRICKET_L), null, { needsCricket: () => false }), null]);
+
+check('the test is asked AT THE CORNERS, and only at the ones in question',
+  G => {
+    const asked = [];
+    G.cricketRing(CRICKET_L, allEaves(CRICKET_L), null,
+      { needsCricket: pt => { asked.push(`${pt.x},${pt.z}`); return true; } });
+    // THE GATE IS THE LAST TEST, so only a corner that is already reflex,
+    // between two eaves and long enough to spare the cut is ever asked. This
+    // L has two of them -- the garage's near corner at (16,19) and the dead
+    // corner at (-4,20) -- and nothing else on the ring is put to the caller.
+    return [asked.join(' | '), ['16,19', `${DEAD_CORNER.x},${DEAD_CORNER.z}`].join(' | ')];
+  });
+
+check('a corner the caller names still gets its 2 ft',
+  G => {
+    const out = G.cricketRing(CRICKET_L, allEaves(CRICKET_L), null,
+      { needsCricket: pt => Math.hypot(pt.x - DEAD_CORNER.x, pt.z - DEAD_CORNER.z) < 0.01 });
+    return [out ? out.points.length : 0, CRICKET_L.length + 1];
   });
 
 function run() {

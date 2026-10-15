@@ -15704,7 +15704,17 @@
       edges: pts.map((_, index) => (gableAt(index) ? 'gable' : 'eave')),
       ...(ring.length === pts.length ? { edgeOverhang } : {}),
     };
-    const cricketed = G.cricketRing(plain.points, plain.edges, plain.edgeOverhang);
+    // WHICH CORNERS HAVE NOWHERE GOOD TO DISCHARGE. A valley that ends over
+    // ANOTHER ROOF lands on something built to shed; one that ends over the
+    // building's own inside corner lands on the wall, which is the one he
+    // asked to be moved 2 ft back. The roofs already raised by this press are
+    // on the drawing to be asked -- the house's goes up before the garage's
+    // and the room's, which is the order that makes this answerable at all.
+    const under = (drawing?.roofs || [])
+      .filter(other => (other.points || []).length >= 3);
+    const overRoof = pt => under.some(other => pointInLoop(other.points, pt));
+    const cricketed = G.cricketRing(plain.points, plain.edges, plain.edgeOverhang,
+      { needsCricket: pt => !overRoof(pt) });
     const shaped = cricketed || plain;
     drawing.roofs = drawing.roofs || [];
     const roof = {
@@ -17745,6 +17755,37 @@
     return true;
   };
 
+  // ── A ROOF'S ENDS MADE GABLES ──────────────────────────────────────────
+  //
+  // The ridge runs the LONG way, so the ends are the edges across it. Every
+  // eave edge square to the long axis becomes a gable; the sides keep their
+  // eaves and every gable the notch already made keeps its own.
+  //
+  // THE OVERHANG STAYS. A gable END is open air with a rake board on it, not
+  // a roof dying into a wall -- the zero-overhang gables are notchRoofRound's,
+  // and they are already gables, so this never reaches them.
+  const gableRoofEnds = roof => {
+    const pts = roof?.points || [];
+    if (pts.length < 4) return false;
+    const xs = pts.map(p => p.x), zs = pts.map(p => p.z);
+    const long = (Math.max(...xs) - Math.min(...xs))
+      >= (Math.max(...zs) - Math.min(...zs)) ? 'x' : 'z';
+    const edges = (roof.edges || []).slice();
+    let cut = false;
+    pts.forEach((a, i) => {
+      const b = pts[(i + 1) % pts.length];
+      if (edges[i] === 'gable') return;
+      // An edge SQUARE TO the long axis runs along the other one.
+      const across = long === 'x' ? Math.abs(b.x - a.x) < 1e-6 : Math.abs(b.z - a.z) < 1e-6;
+      if (!across) return;
+      edges[i] = 'gable';
+      cut = true;
+    });
+    if (!cut) return false;
+    roof.edges = edges;
+    return true;
+  };
+
   // NULL when there is no third flight or landing to cover, and the roof is
   // the design's own loop.
   const stairHood = (plan, levelId, deckWalls = []) => {
@@ -18571,6 +18612,31 @@
         // strip keeps its hip (the ROOF tool's edge flip makes it a gable).
         if (plan.entry && houseRoofMade && houseRoofMade.item) {
           notchRoofRound(houseRoofMade.item, hood ? hood.roof : plan.overGarageRoof);
+          // ── AND THE ENDS ARE GABLES, SO NOTHING RUNS AT THE ROOM ─────────
+          //
+          // Movie, 15 Oct, with the roof plan marked up -- red arrows for
+          // water running at the 2nd floor wall, blue for where he wants it:
+          // "increase to full width of house and gabled at certain points (or
+          // could have been gabled all the way to the front but the peak
+          // would need to shift to only the right side of the gable on the
+          // front entry side". Asked which, he took the second.
+          //
+          // THE NOTCH ALONE WAS NOT ENOUGH, and the skeleton says why. Cut
+          // round the room with the outer edges still hipped, this roof's
+          // arcs are (-18,-22)->(0,-4), (-4,8)->(-18,22), (0,-4)->(0,6.5) and
+          // (18,-22)->(0,-4): two hip faces meet at each inside corner of the
+          // notch and their VALLEY discharges exactly there -- against the
+          // room's corner, which is the stain in his photograph. Gable the
+          // ends and the same ring answers with ONE arc, (0,-22)->(0,6.5): a
+          // single ridge to the room's wall, two faces, both shedding sideways
+          // to the eaves. Measured on the ring before the code was written.
+          //
+          // AND THE PEAK SHIFTS BY ITSELF. South of the notch the roof is only
+          // the strip beside the room, so the skeleton centres that stretch's
+          // ridge in the strip -- "to only the right side of the gable on the
+          // front entry side" is what a narrower front half does on its own,
+          // not a second rule.
+          gableRoofEnds(houseRoofMade.item);
         }
         if (hood) {
           // Tagged with the roof they close in under, so a later BONEYARD

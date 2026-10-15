@@ -208,7 +208,18 @@ if (!window.DraftGarageRoofs) {
     // would have given it. Two rules would mean a bungalow whose garage wall
     // height changed grew or lost a cricket for no reason a drafter could
     // see, which is the fault regroupRoofs exists to avoid.
-    return G().cricketRing(shape.points, shape.edges, shape.edgeOverhang) || shape;
+    //
+    // AND THE CORNER IS NAMED AS NEEDING ONE. cricketRing asks its caller
+    // whether a corner's valley has anywhere good to discharge (Movie, 15 Oct
+    // -- a cricket only where it saves a wall). The ring this page shapes is
+    // the HOUSE-AND-GARAGE roof, the lowest sheet on the building: an inside
+    // corner of it stands over the building's own corner, where two walls
+    // meet and nothing underneath carries the water away. That is the corner
+    // he asked to have moved 2 ft back. The other ring this function shapes
+    // is the garage's hull, which is convex and has no inside corner to ask
+    // about.
+    return G().cricketRing(shape.points, shape.edges, shape.edgeOverhang,
+      { needsCricket: () => true }) || shape;
   };
 
   // How far an attached garage's sill sits under the house sill.
