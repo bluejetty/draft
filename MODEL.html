@@ -10978,10 +10978,13 @@
     // right up until an attached garage began skipping shared edges, and the
     // openings then moved one wall over and still looked like doors.
     //
-    // THE SIZE THE DRAFTER TYPED, handed to the design rather than re-derived
-    // from the corners: `order.size` is what build-menu.js checked and named,
-    // and measuring the loop back would be a second opinion about which of the
-    // two numbers is the width.
+    // THE SIZE USED TO BE THE ONE THE DRAFTER TYPED, handed to the design
+    // rather than re-derived -- "measuring the loop back would be a second
+    // opinion about which of the two numbers is the width". That reading was
+    // right about ordered garages and wrong about the other half of this
+    // function: a TRACED garage has no typed size at all, and the second
+    // opinion it feared is not available to disagree. See the measurement
+    // below, which comes to the same numbers wherever a size was typed.
     //
     // AND THE WALL THICKNESS THIS PAGE FRAMED IT IN, because that is what
     // carries the end of the overhead door's lintel -- premade-plans.js sizes
@@ -10990,10 +10993,39 @@
     // drawing back to no turn before this runs and forward again after, so
     // edge 2 -- the design's front -- comes out on E1 at every turn. Measured
     // before adding a rotation this build does not need.
+    // ── THE SIZE COMES OFF THE LOOP, NOT OFF THE ORDER ───────────────────
+    //
+    // Movie, 14 Oct, looking at a 2 storey detached garage he had TRACED:
+    // "the garage doors are showing on the main floor but not on 2nd floor
+    // and there is no roof", and "gap between main ceiling and 2nd floor
+    // wall". Three faults, one cause, and it was a crash: `order.size` is
+    // what the drive-thru was ASKED for, and a traced garage brings corners
+    // instead -- the guard at the top of this function allows exactly that.
+    // So `order.size.widthFt` threw, AFTER the walls were committed and
+    // BEFORE the deck, the room's windows and the roof. A build that stops
+    // halfway leaves a drawing that looks built and is not: the storey
+    // stood on nothing, which is the gap he saw, and nothing raised a roof
+    // over it.
+    //
+    // THE LOOP IS THE BUILDING. `order.size` is a request; `corners` is what
+    // got built, and it is always there -- the function returns before here
+    // without it. On a garage the board PLOTTED the two are the same numbers
+    // (garage-site plots width across x and depth back from the door wall),
+    // so nothing about an ordered garage moves; a traced one gets measured
+    // instead of throwing.
+    const sizeBox = corners.reduce((box, pt) => ({
+      x0: Math.min(box.x0, pt.x), x1: Math.max(box.x1, pt.x),
+      z0: Math.min(box.z0, pt.z), z1: Math.max(box.z1, pt.z),
+    }), { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity });
+    const builtSize = { widthFt: sizeBox.x1 - sizeBox.x0, depthFt: sizeBox.z1 - sizeBox.z0 };
+    // THE DESIGN IS ALREADY FACING THE STREET HERE. builtFrontDown turns the
+    // drawing back to no turn before this runs and forward again after, so
+    // edge 2 -- the design's front -- comes out on E1 at every turn. Measured
+    // before adding a rotation this build does not need.
     const openings = given?.openings ? dealOpenings(given.openings, walls, levelId) : dealOpenings(
       (window.DraftPremadePlans.detachedGarageOpenings({
-        widthFt: order.size.widthFt,
-        depthFt: order.size.depthFt,
+        widthFt: builtSize.widthFt,
+        depthFt: builtSize.depthFt,
         wallThicknessFt: openingThicknessFt()(walls[0]),
         // TWO BAYS AND A STRIP WHERE THERE IS A STAIR TO STAND IN IT -- the
         // same `wantsRoom` the storey is raised on, so a garage whose room
@@ -11103,12 +11135,30 @@
       // page framed the walls in, so the two sets cannot disagree about
       // either; premade-plans decides where they go.
       upperOpenings = dealOpenings((window.DraftPremadePlans.detachedGarageUpperOpenings({
-        widthFt: order.size.widthFt,
-        depthFt: order.size.depthFt,
+        widthFt: builtSize.widthFt,
+        depthFt: builtSize.depthFt,
         wallThicknessFt: openingThicknessFt()(upperWalls[0]),
         // THE SAME `stair` THE FRONT BAYS WERE DEALT ON, so the window that
         // would stand over the stairwell is the one that is left out.
         stair: wantsRoom,
+        // ── AND THE ROOM'S OWN WALLS, EDGE BY EDGE ──────────────────────
+        //
+        // The design's rectangle is four edges; a garage the drafter TRACED
+        // is whatever he drew, and his 14 Oct one was an L with six. Handed
+        // only a width and a depth, it dealt the first four and left the
+        // other two blank -- one of which was the wall he was looking at.
+        // These are the edges actually raised, in the order walls[i] is
+        // edge i (the same assumption the ground floor's deal rests on).
+        edgesFt: corners.map((pt, index) => {
+          const next = corners[(index + 1) % corners.length];
+          return Math.hypot(next.x - pt.x, next.z - pt.z);
+        }),
+        // AND WHICH OF THEM THE STAIR COMES UP AGAINST: the wall the
+        // overhead doors went in, asked of the openings that were just
+        // dealt rather than assumed, since a traced garage puts them
+        // wherever the drafter drew them.
+        frontEdge: Math.max(0, walls.findIndex(wall => (openings || [])
+          .some(item => item?.garage === true && String(item.wallId) === String(wall.id)))),
       })), upperWalls, upperId);
       // AND A DECK UNDER IT, which is the house build's own per-storey rule:
       // walls AND a floor, or the section draws a storey standing on

@@ -439,7 +439,8 @@ if (!window.DraftPremadePlans) {
   // so the mutants would quietly start mutating this function instead of the
   // one they were written for. proto/mutant-anchors-harness.js says so out
   // loud, which is how this was caught the hour it landed.
-  const detachedGarageUpperOpenings = ({ widthFt, depthFt, wallThicknessFt, stair = false } = {}) => {
+  const detachedGarageUpperOpenings = ({ widthFt, depthFt, wallThicknessFt, stair = false,
+    edgesFt = null, frontEdge = 2 } = {}) => {
     const wide = Number(widthFt);
     const deep = Number(depthFt);
     const thick = Number(wallThicknessFt);
@@ -457,6 +458,34 @@ if (!window.DraftPremadePlans) {
           GARAGE_ROOM_WINDOW_FT, 'window'));
       }
     };
+    // ── A LOOP THE DRAFTER TRACED HAS ITS OWN EDGES ────────────────────
+    //
+    // Movie, 14 Oct, over an L-shaped garage he had traced himself: "the
+    // garage doors are showing on the main floor but not on 2nd floor". The
+    // crash behind that was MODEL's; what was left once it was fixed is
+    // this function, which deals FOUR edges because it was written for the
+    // board's rectangle. An L has six, so the two the L adds came out blank
+    // -- and on his loop one of them was the front he was looking at.
+    //
+    // SO THE EDGE LIST IS AN ARGUMENT WHEN THERE IS ONE. Every edge takes
+    // windows spaced along its own length, by the same `run` the rectangle
+    // uses; nothing about the spacing changes, only how many walls it is
+    // asked about. `frontEdge` says which one keeps clear of the stair,
+    // because on a traced loop that is wherever the overhead doors went and
+    // this file cannot know it.
+    //
+    // THE RECTANGLE IS STILL THE DEFAULT, and it is not this written twice:
+    // a caller with no edge list is the board's own garage, whose four edges
+    // are wide, deep, wide, deep in that order.
+    if (Array.isArray(edgesFt) && edgesFt.length >= 3) {
+      edgesFt.forEach((len, edge) => {
+        const clear = Number(len);
+        if (!Number.isFinite(clear)) return;
+        run(edge, 0, stair && edge === Number(frontEdge)
+          ? Math.max(0, clear - GARAGE_STAIR_STRIP_FT) : clear);
+      });
+      return out;
+    }
     run(0, 0, wide);                                     // back
     run(1, 0, deep);                                     // the two sides
     run(3, 0, deep);
