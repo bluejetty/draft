@@ -287,6 +287,10 @@ if (!window.DraftLayoutPlan) {
   // it, and the tops of the exterior walls each roof stands on, thin and solid
   // (geometry-2d roofBearing, render-2d drawWallTops2D). False when the level
   // has no roofs either, so a caller still learns there was nothing to draw.
+  // The plate line's ink on paper: MODEL.dc.html's own, like every other
+  // literal in this file.
+  const ROOF_PLATE_INK = '#1d1f20';
+
   function drawRoofPlan(ctx, toS, saved, levelId, env = {}) {
     const geo = window.DraftGeometry2D;
     const render = window.DraftRender2D;
@@ -320,10 +324,28 @@ if (!window.DraftLayoutPlan) {
         || WALL_TYPES.find(t => t.id === 'stud_2x6');
       return (type ? type.totalIn : 5.5) / 12;
     };
+    // ── THE PLATES THE ROOF RESTS ON, IN THE CALLER'S INK ─────────────────
+    //
+    // Movie, 14 Oct: "please show the outline of the top plates of walls that
+    // the roof rests on that are n the roof plan - show those lines also in
+    // the site plane".
+    //
+    // THEY WERE ALREADY BEING DRAWN ON BOTH, in `#1d1f20` -- MODEL.dc.html's
+    // paper ink, which is right on a sheet and is BLACK ON A BLACK GROUND on
+    // MODEL's own site plan. So the lines he was asking for were under his
+    // cursor and invisible: the sheet had them, the screen painted them into
+    // the dark. The same thing the property line and the site dimension rows
+    // were handed their ink for, two reports earlier the same day, and for
+    // exactly the same reason.
+    //
+    // THE DEFAULT IS STILL PAPER. A caller that says nothing gets what every
+    // construction sheet has always drawn; only a caller painting on its own
+    // ground has to say so.
     if (render.drawWallTops2D && geo.roofPlanWalls) {
       render.drawWallTops2D(ctx, toS, geo.roofPlanWalls({
         walls: of('walls'), outlines: of('outlines'), floors: of('floors'), levels: of('levels'),
-      }), { thicknessFt, color: '#1d1f20' }, { wallFaceOffsets: geo.wallFaceOffsets });
+      }), { thicknessFt, color: env.wallTopInk || ROOF_PLATE_INK },
+      { wallFaceOffsets: geo.wallFaceOffsets });
     }
     // AND ITS DIMENSIONS (Movie, 11 Oct: "can we add the dimensions to the
     // roof plan"). The roof level's strings -- overhang and wall faces, roof
