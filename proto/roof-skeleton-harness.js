@@ -360,6 +360,95 @@ check('his staircase: the two eaves meet halfway, not at the gable they swallowe
         '22,16@16 > 41,16@16',         // ← 16, not 17: 32 ft between two eaves
         '22,17@15 > 22,20.5@11.5', '22,20.5@11.5 > 22,32@0'].sort().join(' | ')]; });
 
+// ── THE CRICKET: A VALLEY MUST NOT RUN INTO A CORNER ────────────────────
+//
+// Movie, 19 Sep: a cricket "between the roofs at places where low points
+// could cause water damage". Asked on 14 Oct what the two feet measure:
+// "keep the valley 2ft from the corner so 2ft of extra watershed rather than
+// valley running into the corner".
+//
+// THE SHAPE IS THE PREMADE BUNGALOW + GARAGE, the L its two bodies make on
+// one plate, because that is where the app actually draws a valley: the
+// skeleton runs one out of the reflex corner at (-4,20) and every drop on
+// both wings arrives at that one point.
+//
+// MEASURED AS A DISTANCE, not as a shape. "2 ft from the corner" is a
+// number, and the only honest way to ask it is how far the nearest valley
+// end now sits from where the corner was.
+const CRICKET_L = [P(-16, -20), P(16, -20), P(16, 19), P(21, 19),
+  P(21, 46), P(-4, 46), P(-4, 20), P(-16, 20)];
+const DEAD_CORNER = { x: -4, z: 20 };
+// A skeleton arc that starts at the eave (t ~ 0) and climbs is a valley or a
+// hip; the one that starts AT a reflex corner is the valley out of it.
+const atEave = arc => Math.min(arc.ta, arc.tb) < 0.01;
+const nearestEaveEndTo = (G, ring, edges) => {
+  const arcs = G.roofSkeleton({ points: ring, edges, pitch: PITCH });
+  let best = Infinity;
+  arcs.filter(atEave).forEach(arc => {
+    [arc.a, arc.b].forEach(pt => {
+      best = Math.min(best, Math.hypot(pt.x - DEAD_CORNER.x, pt.z - DEAD_CORNER.z));
+    });
+  });
+  return Math.round(best * 100) / 100;
+};
+const allEaves = ring => ring.map(() => 'eave');
+
+check('the L without a cricket runs its valley right into the corner',
+  G => [nearestEaveEndTo(G, CRICKET_L, allEaves(CRICKET_L)), 0]);
+
+check('and with one the nearest valley end stands 2 ft off it',
+  G => {
+    const out = G.cricketRing(CRICKET_L, allEaves(CRICKET_L));
+    return [nearestEaveEndTo(G, out.points, out.edges), G.CRICKET_FT];
+  });
+
+check('the cut takes 2 ft off each leg and leaves the corner between them',
+  G => {
+    const out = G.cricketRing(CRICKET_L, allEaves(CRICKET_L));
+    const made = out.points.filter(p => Math.hypot(p.x - DEAD_CORNER.x, p.z - DEAD_CORNER.z) < 3)
+      .map(p => `${p.x},${p.z}`).sort();
+    return [made.join(' | '), ['-4,22', '-6,20'].sort().join(' | ')];
+  });
+
+check('one valley into the corner becomes two off the cricket',
+  G => {
+    const plainArcs = G.roofSkeleton({ points: CRICKET_L, edges: allEaves(CRICKET_L), pitch: PITCH })
+      .filter(atEave)
+      .filter(a => [a.a, a.b].some(p => Math.hypot(p.x - DEAD_CORNER.x, p.z - DEAD_CORNER.z) < 0.01));
+    const out = G.cricketRing(CRICKET_L, allEaves(CRICKET_L));
+    const cutArcs = G.roofSkeleton({ points: out.points, edges: out.edges, pitch: PITCH })
+      .filter(atEave)
+      .filter(a => [a.a, a.b].some(p => Math.hypot(p.x - DEAD_CORNER.x, p.z - DEAD_CORNER.z) < 2.9));
+    return [`${plainArcs.length} -> ${cutArcs.length}`, '1 -> 2'];
+  });
+
+check('a rectangle has no corner to cut, and is handed back untouched',
+  G => [G.cricketRing([P(0, 0), P(30, 0), P(30, 24), P(0, 24)],
+    ['eave', 'eave', 'eave', 'eave']), null]);
+
+check('a corner that dies into a wall is left alone -- no open air to shed into',
+  G => {
+    const walled = allEaves(CRICKET_L);
+    walled[6] = 'gable';          // (-4,20) -> (-16,20), the house's own front
+    const out = G.cricketRing(CRICKET_L, walled);
+    const made = (out ? out.points : CRICKET_L)
+      .filter(p => Math.hypot(p.x - DEAD_CORNER.x, p.z - DEAD_CORNER.z) < 0.01).length;
+    return [made, 1];
+  });
+
+check('and a leg too short to spare 2 ft keeps its corner',
+  G => {
+    // The same L with the garage's rear stub cut to 3 ft: less than twice
+    // the cut, so taking 2 ft off it would leave a different roof rather
+    // than this roof with its corner off.
+    const tight = [P(-16, -20), P(16, -20), P(16, 19), P(19, 19),
+      P(19, 46), P(-4, 46), P(-4, 20), P(-16, 20)];
+    const out = G.cricketRing(tight, allEaves(tight));
+    const kept = (out ? out.points : tight)
+      .filter(p => Math.abs(p.x - 16) < 0.01 && Math.abs(p.z - 19) < 0.01).length;
+    return [kept, 1];
+  });
+
 function run() {
   const G = load(null);
   let failed = 0;
@@ -386,6 +475,21 @@ function run() {
 // same. So the direction half of that test is NOT covered by anything here,
 // and saying so is worth more than a table entry that is permanently red.
 const MUTATIONS = [
+  // ── THE CRICKET (Movie, 19 Sep and 14 Oct) ───────────────────────────
+  ['the corner is cut on the wrong side, so the valley still reaches it',
+    s => s.replace('        && sign * ((v.x - a.x) * (b.z - v.z) - (v.z - a.z) * (b.x - v.x)) < -1e-9;',
+      '        && sign * ((v.x - a.x) * (b.z - v.z) - (v.z - a.z) * (b.x - v.x)) > 1e-9;')],
+  ['the cricket is cut into a corner that dies into a wall',
+    s => s.replace("      const openAir = kinds[prev] !== 'gable' && kinds[i] !== 'gable';",
+      '      const openAir = true;')],
+  ['a leg with no room to spare is cut anyway',
+    s => s.replace('      const room = len(prev) > 2 * cut && len(i) > 2 * cut;',
+      '      const room = true;')],
+  ['the cricket keeps the corner it was meant to replace',
+    s => s.replace('      outPts.push({ x: v.x - ((v.x - a.x) / inLen) * cut, z: v.z - ((v.z - a.z) / inLen) * cut });',
+      '      outPts.push({ x: v.x, z: v.z });')],
+  ['the cut is no distance at all',
+    s => s.replace('  const CRICKET_FT = 2;', '  const CRICKET_FT = 0;')],
   // THE NOTCHED ROOF HANDED BACK TO THE WAVEFRONT, which bends his ridge off
   // along the strip's south wall.
   ['a notched roof with gables at its inside corners goes to the wavefront',

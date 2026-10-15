@@ -1243,12 +1243,19 @@ test('a bungalow and its garage are one roof over one perimeter', async ({ page 
   expect(roofs[0].garage, 'and that roof is the house-s, not a garage roof')
     .not.toBe(true);
 
-  // THE PERIMETER OF BOTH BODIES, counted rather than described: the union of
-  // a rectangle and a rectangle that overlaps one of its edges has EIGHT
-  // corners. Four would be the house alone, which is the drawing this
-  // replaces.
+  // THE PERIMETER OF BOTH BODIES, counted rather than described: the union
+  // of a rectangle and a rectangle overlapping one of its edges has EIGHT
+  // corners, against FOUR for the house alone -- the drawing this replaces.
+  //
+  // TEN SINCE THE CRICKET (Movie, 14 Oct: "keep the valley 2ft from the
+  // corner"). Each of the L's two inside corners is cut back 2 ft and comes
+  // back as two points, so an exact count is no longer the question -- a
+  // house on its own has no inside corner to cut and is still four. What
+  // this test is about is that the ring is ONE perimeter around BOTH
+  // bodies, and the two checks say that in the terms it means: more corners
+  // than one rectangle can have, and ink as far out as the garage.
   expect(roofs[0].points.length,
-    'the roof was raised over one body, not over both').toBe(8);
+    'the roof was raised over one body, not over both').toBeGreaterThan(6);
 
   // AND IT REACHES THE GARAGE. The house alone stops at z=20; the garage runs
   // to z=46, so a roof that does not get there is the house's roof wearing
