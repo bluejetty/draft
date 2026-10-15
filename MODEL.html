@@ -10044,6 +10044,20 @@
     };
   };
 
+  // A WELL THAT NO LONGER SITS IN THE FLOOR IT WAS CUT FROM. buildStairOpenings
+  // REFUSES to cut one of those ("the opening runs off the floor") -- but a
+  // drafter moving or reshaping a stair he has already placed is mid-
+  // arrangement, so the hole follows him and the page says what it has become
+  // instead of refusing the gesture. Asked of the host it is filed against,
+  // not of whatever floor it now overlaps: a hole belongs to one floor, and
+  // re-hosting it is an edit nobody asked for.
+  const wellOffItsFloor = hole => {
+    const G = window.DraftGeometry2D;
+    const host = (drawing?.floors || [])
+      .find(floor => String(floor.id) === String(hole.hostId));
+    return !!host && !G.ringInsideRing(hole.points, host.points || []);
+  };
+
   // A ROOF IS PICKED ON THE LEVEL IT IS DRAWN ON, which for a built house is
   // ROOF: roofs() is the active level's, and a roof that is not painted is
   // not offered -- this file's rule everywhere. LAST in the chain, as on the
@@ -16743,6 +16757,12 @@
   // next placement, never the truth about one already drawn.
   let stairWidthFt = DEFAULT_STAIR_WIDTH_FT;
   let stairRailSide = 'left';
+  // THE WINDER ROW IS BEHIND A DOUBLE-CLICK ON L, which is MODEL.dc.html's own
+  // hidden door (`stairWindersOpen`, :2865: "Winders are never the default and
+  // never advertised"). Page state rather than a field on the stair: it is
+  // about what the PANEL is showing, not about the flight -- a stair that
+  // already has winders shows the row whatever this says.
+  let stairWindersOpen = false;
 
   // The house outline on one level: the LAST non-garage loop, which is
   // storeyBodies' own rule and its reason -- "the most recent loop is the one
@@ -22707,6 +22727,145 @@
     return box;
   };
 
+  // ── A STAIR'S SHAPE, ITS TURN, AND ITS WINDERS ──────────────────────────
+  //
+  // Movie, 15 Oct: "you wanted U/L shapes and winders". The format and the
+  // geometry have carried all three since the stair went in --
+  // drawing-format.js validates `shape`, `turn` and `winders`, and
+  // stairShapeSplit / stairPlanParts build the landing and the second leg from
+  // them -- and MODEL.dc.html has the picker. THIS page had no way to say so:
+  // it wrote `winders: 0` and whatever shape the suggester chose, and a
+  // selected stair had no panel at all.
+  //
+  // ON THE SELECTED STAIR, not as the next placement's default. The live page
+  // places through AUTO STAIR, so a "next stair" setting would be a control
+  // over a flight the drafter cannot see yet; the shape he wants is the shape
+  // of the one in front of him. (Width and rail are still the tool's defaults,
+  // untouched here.)
+  const STAIR_TURNS = [['right', 'TURN RIGHT'], ['left', 'TURN LEFT']];
+  const stairPropsNode = stair => {
+    const SG = window.DraftStairGeometry;
+    const F = window.DraftFormatters;
+    const box = document.createElement('div');
+    const layout = SG.stairCurrentLayout(stair, stairLevels());
+
+    // ── WHAT A SHAPE CHANGE COSTS THE WELL ────────────────────────────────
+    //
+    // Everything about an L or a U is derived from the record at paint time,
+    // so the flight itself needs nothing but the word. THE HOLE DOES: it is a
+    // stored ring, cut to the shape the stair had, and an L folds its second
+    // leg out sideways from under it. stairOpeningFootprint already knows all
+    // three shapes -- it is what cut the hole in the first place -- so the
+    // well is RE-CUT here rather than left wrong or left to AUTO STAIR, which
+    // never cuts a second hole for a stair that already has one.
+    //
+    // RE-CUT HERE, TRANSLATED BY THE DRAG, and the two are not in disagreement:
+    // a drag keeps the hole's authored ring because a hole that merely moved
+    // is still the right hole (its length comes from headroom and may have
+    // been nudged), while a shape change invalidates the ring's own topology,
+    // so there is nothing left to preserve. And it is still the DRAFTER
+    // changing his own geometry -- Board #313 forbids the software doing it
+    // unasked, which a hole re-cut on a press he just made is not.
+    //
+    // A SHARED WELL IS NOT RE-CUT, for the drag's reason: it is sized to two
+    // flights and this is one of them. Said, not ignored.
+    const write = patch => {
+      const before = { ...stair };
+      Object.assign(stair, patch);
+      // THE FORMAT'S OWN RULE, applied here rather than discovered on the next
+      // load: `winders: shape === 'L' ? ... : 0`. A U carrying 2 winders would
+      // read back as a U with none, so the page would be showing a choice the
+      // file does not hold.
+      if (stair.shape !== 'L') stair.winders = 0;
+      // Touched by hand, so no longer the suggester's placement -- the drag's
+      // reason, and the same `auto` contract.
+      stair.auto = false;
+      const edits = [{ item: stair, before }];
+      const said = [];
+      const well = stairWellOf(stair);
+      if (well.hole) {
+        const points = stairOpeningFootprint(stair);
+        if (points && points.length >= 3) {
+          // THE OLD RING IS KEPT BY REFERENCE in `before` and a NEW array is
+          // written, never the old one edited -- or the undo copy would hold
+          // the points the edit produced.
+          edits.push({ item: well.hole, before: { ...well.hole } });
+          well.hole.points = points.map(pt => ({ x: pt.x, z: pt.z }));
+          said.push('its well re-cut');
+          if (wellOffItsFloor(well.hole)) said.push('and now running off its floor');
+        } else {
+          said.push('its well left as it was — no footprint could be cut for this shape');
+        }
+      } else if (well.shared) {
+        said.push('the shared well left as it is — two flights climb through it');
+      }
+      // A FLIGHT TOO SHORT TO TURN STILL DRAWS STRAIGHT, and that is
+      // stairShapeSplit's rule (`layout.treads < 3` returns null), not a
+      // refusal invented here. The word is stored either way -- a stair that
+      // gains rise later turns then -- so the sentence is the only place the
+      // drafter can learn why the picture did not change.
+      if (stair.shape !== 'straight' && layout.treads < 3) {
+        said.push(`this flight has ${layout.treads} tread${layout.treads === 1 ? '' : 's'}`
+          + ' — a turn needs 3, so it still draws straight');
+      }
+      undoStack.push({ kind: 'props', edits });
+      markDirty();
+      sayOnStrip(`STAIR ${stair.shape === 'straight' ? 'STRAIGHT'
+        : `${stair.shape} turning ${stair.turn}`}`
+        + `${stair.winders ? ` with ${stair.winders} winders` : ''}`
+        + `${said.length ? ` · ${said.join(' · ')}` : ''}.`);
+      showSelectionProps();
+      paint();
+    };
+
+    const shapeRow = propRow('SHAPE',
+      SG.STAIR_SHAPE_OPTIONS.map(option => [option.id, option.label]),
+      stair.shape || 'straight',
+      id => { if (id !== 'L') stairWindersOpen = false; write({ shape: id }); });
+    // THE HIDDEN DOOR: double-click L to reveal the winder row (the old page's
+    // own gesture). A single click on L still just makes it an L -- revealing
+    // on the first click would advertise winders, which the whole arrangement
+    // exists not to do.
+    const lChip = shapeRow.querySelector('[data-prop-value="L"]');
+    if (lChip) {
+      lChip.title = 'L — two runs over a landing. Double-click for winders.';
+      lChip.addEventListener('dblclick', () => {
+        stairWindersOpen = true;
+        if (stair.shape !== 'L') write({ shape: 'L' });
+        else showSelectionProps();
+      });
+    }
+    box.append(shapeRow);
+
+    // THE TURN ONLY MEANS SOMETHING ONCE THERE IS ONE. A straight flight has
+    // no handed version, so the row is not offered on one -- the old page's
+    // `stairTurnVisible` rule.
+    if ((stair.shape || 'straight') !== 'straight') {
+      box.append(propRow('TURN', STAIR_TURNS, stair.turn === 'left' ? 'left' : 'right',
+        id => write({ turn: id })));
+    }
+    // WINDERS ARE L-ONLY (the format's rule) and shown only once asked for --
+    // or when the stair already has them, which is not a secret to keep from
+    // the drafter who is looking at them.
+    if ((stair.shape || 'straight') === 'L' && (stairWindersOpen || stair.winders > 0)) {
+      box.append(propRow('WINDERS',
+        SG.STAIR_WINDER_OPTIONS.map(count => [count, count === 0 ? 'FLAT' : `${count} WINDERS`]),
+        SG.STAIR_WINDER_OPTIONS.includes(stair.winders) ? stair.winders : 0,
+        count => write({ winders: count })));
+    }
+
+    // THE FLIGHT AS IT IS, in the painter's own words (drawStairs2D writes
+    // `DN — {risers}R @ {riser}`), so the panel and the plan cannot disagree.
+    // SHORT, and the length is load-bearing -- see the BEAM panel's note.
+    const note = document.createElement('div');
+    note.className = 'props-title';
+    note.dataset.stairLayout = '';
+    note.textContent = `${layout.risers}R @ ${F.formatInchesOnly(layout.riserIn)}`
+      + ` · ${layout.treads} TREADS · ${Math.round((stair.widthFt || 3) * 12)}" WIDE`;
+    box.append(note);
+    return box;
+  };
+
   // ── PROPERTIES BELONG TO WHAT IS SELECTED ─────────────────────────────────
   //
   // Movie, 19 Sep: "There should be a PROPERTIES box with in this case WALL
@@ -22730,6 +22889,12 @@
     fenestration: items => ({ title: 'OPENING', node: openingPropsNode(items) }),
     floor: items => ({ title: 'FLOOR', node: floorPropsNode(items) }),
     line: items => ({ title: 'LINE', node: linePropsNode(items) }),
+    // ONE AT A TIME. The shape of two flights at once is two questions --
+    // which way each turns is about where each one sits -- and the pick chain
+    // offers a stair singly anyway; a window-select of several is the only way
+    // to hold two, and it is not a gesture that asks for this panel.
+    stair: items => (items.length === 1
+      ? { title: 'STAIR', node: stairPropsNode(items[0]) } : null),
     // ROOF IS NOT HERE, AND THAT IS A BLOCK RATHER THAN A CHOICE. hitAt's
     // chain is fenestration, wall, line, outline, floor -- a roof cannot be
     // selected on this page at all, so a panel for one would have nothing to
@@ -24598,14 +24763,7 @@
             // cut from -- so both are said rather than left to be discovered.
             const said = [md.well ? 'STAIR and its well moved' : 'STAIR moved'];
             if (md.shared) said.push('the shared well stayed put — two flights climb through it');
-            if (md.well) {
-              const G = window.DraftGeometry2D;
-              const host = (drawing?.floors || [])
-                .find(floor => String(floor.id) === String(md.well.hostId));
-              if (host && !G.ringInsideRing(md.well.points, host.points || [])) {
-                said.push('the well now runs off its floor');
-              }
-            }
+            if (md.well && wellOffItsFloor(md.well)) said.push('the well now runs off its floor');
             sayOnStrip(`${said.join(' · ')}.`);
           }
           moveDrag = null;
