@@ -64,13 +64,19 @@ function loadWith(omit = [], source = {}) {
 // Records what it is asked to paint. strokeRect is a no-op and measureText
 // returns a zero width, the same shapes harness-env's recorder uses.
 function recorder() {
-  const texts = [], alphas = [], strokes = [], stack = [];
+  // `inks` RIDES BESIDE `strokes` rather than inside it: every check in this
+  // file reads `strokes` as a list of ALPHAS, so a stroke that came back as an
+  // object would have rewritten all of them to add one question. The two lists
+  // are the same length and the same order, so strokes[i] and inks[i] are one
+  // stroke asked two ways.
+  const texts = [], alphas = [], strokes = [], inks = [], stack = [];
   const ctx = {
-    texts, alphas, strokes, globalAlpha: 1,
+    texts, alphas, strokes, inks, globalAlpha: 1, strokeStyle: '#000',
     save() { stack.push(this.globalAlpha); },
     restore() { if (stack.length) this.globalAlpha = stack.pop(); },
     beginPath() {}, closePath() {}, moveTo() {},
-    lineTo() {}, arc() {}, rect() {}, stroke() { strokes.push(this.globalAlpha); }, fill() {}, clip() {},
+    lineTo() {}, arc() {}, rect() {},
+    stroke() { strokes.push(this.globalAlpha); inks.push(this.strokeStyle); }, fill() {}, clip() {},
     fillRect() {}, strokeRect() {}, translate() {}, rotate() {}, scale() {},
     setLineDash() {}, quadraticCurveTo() {}, bezierCurveTo() {}, ellipse() {},
     fillText(t) { texts.push(String(t)); alphas.push(this.globalAlpha); },
@@ -92,7 +98,8 @@ function draw(win, levelId, { saved = SAVED, env = {} } = {}) {
   if (!LP) return { ok: false, texts: [], why: 'DraftLayoutPlan never defined' };
   try {
     LP.drawPlan(ctx, toS, saved, levelId, env);
-    return { ok: true, texts: ctx.texts, alphas: ctx.alphas, strokes: ctx.strokes, endAlpha: ctx.globalAlpha };
+    return { ok: true, texts: ctx.texts, alphas: ctx.alphas, strokes: ctx.strokes,
+      inks: ctx.inks, endAlpha: ctx.globalAlpha };
   } catch (err) { return { ok: false, texts: ctx.texts, why: err.message }; }
 }
 
@@ -650,6 +657,38 @@ function run(label) {
     check('the frame takes in a beam row borrowed from below', tall && tall.maxZ >= 90, JSON.stringify(tall));
   }
 
+  // ── THE TOP PLATES THE ROOF RESTS ON, IN THE CALLER'S INK ─────────────
+  //
+  // Movie, 14 Oct: "please show the outline of the top plates of walls that
+  // the roof rests on that are n the roof plan - show those lines also in the
+  // site plane".
+  //
+  // THEY WERE DRAWN ON BOTH ALREADY, in `#1d1f20` -- the sheet's paper ink,
+  // which is right on paper and is BLACK ON A BLACK GROUND on MODEL's own
+  // site plan. He was asking for lines that were under his cursor and
+  // invisible. So what is checked is not "are they drawn" but "whose ink",
+  // which is the thing that was wrong.
+  //
+  // A GARAGE WITH A ROOF ON IT is the fixture -- his own 2 storey detached
+  // garage, which has the roof the plates are read off.
+  {
+    const roofed = JSON.parse(fs.readFileSync(
+      path.join(ROOT, 'proto', 'repro-movie-detached-2storey.draft'), 'utf8'));
+    const ROOF = 7;
+    const paper = draw(full.win, ROOF, { saved: roofed });
+    check('the roof plan draws the plates it rests on', paper.ok && paper.inks.includes('#1d1f20'),
+      paper.ok ? `inks: ${[...new Set(paper.inks)].join(', ')}` : paper.why);
+    // AND A CALLER PAINTING ON ITS OWN GROUND IS OBEYED. MODEL's site plan
+    // hands the skin's wall-edge ink through drawSitePlan, which is the one
+    // change that made these lines visible on the screen he was looking at.
+    const screen = draw(full.win, ROOF, { saved: roofed, env: { wallTopInk: '#8de1ff' } });
+    check('and takes the ink a screen hands it', screen.ok && screen.inks.includes('#8de1ff'),
+      screen.ok ? `inks: ${[...new Set(screen.inks)].join(', ')}` : screen.why);
+    check('without painting the paper ink as well',
+      screen.ok && !screen.inks.includes('#1d1f20'),
+      screen.ok ? `inks: ${[...new Set(screen.inks)].join(', ')}` : screen.why);
+  }
+
   if (label) console.log(label);
 }
 
@@ -703,6 +742,13 @@ const MUTATIONS = [
   ['the half-floor and its full floor swap places',
     'layout-plan.js', c => c.replace('const below = storeyMates(levelId).filter(id => id < Number(levelId));',
       'const below = storeyMates(levelId).filter(id => id > Number(levelId));')],
+  // Movie, 14 Oct -- the plate lines on the site plan.
+  ['the plate line ignores the ink its caller hands it',
+    'layout-plan.js', c => c.replace('{ thicknessFt, color: env.wallTopInk || ROOF_PLATE_INK }',
+      '{ thicknessFt, color: ROOF_PLATE_INK }')],
+  ['the roof plan draws no plate line at all',
+    'layout-plan.js', c => c.replace('if (render.drawWallTops2D && geo.roofPlanWalls) {',
+      'if (false) {')],
   ['no level shares a storey with any other',
     'layout-plan.js', c => c.replace('.filter(other => other !== Number(levelId) && LA.sameStorey(other, levelId));',
       '.filter(() => false);')],

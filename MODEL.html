@@ -5380,6 +5380,14 @@
       // so the ink is the one thing the screen hands the painter.
       window.DraftLayoutPlan.drawSitePlan(ctx, toS, drawing, {
         siteLineInk: skin['draw-site-line'],
+        // AND THE TOP PLATES THE ROOF RESTS ON (Movie, 14 Oct: "please show
+        // the outline of the top plates of walls that the roof rests on that
+        // are n the roof plan - show those lines also in the site plane").
+        // The footprint here IS the roof plan, so it has carried those lines
+        // since the footprint did -- in the sheet's paper ink, which on this
+        // page is black on a black ground. The ROOF level draws them in this
+        // same skin ink (paintRoofs), so the two plans now agree.
+        wallTopInk: skin['draw-wall-edge'] || skin['draw-line'],
         // AND THE SITE'S DIMENSION ROWS IN THE SKIN'S OWN BLUE. The sheet's
         // table is written for white paper; on this page the strings are
         // every other dimension's colour, which is the one a drafter already
