@@ -51,12 +51,12 @@ const base = extra => ({
   ...extra,
 });
 
-async function open(page) {
+async function open(page, board = 'drafting') {
   await h.openModel(page, { webgl: false });
   await page.evaluate(async ({ bucket, f }) => {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, f: base({ board: 'drafting' }) });
+  }, { bucket: BUCKET, f: base({ board }) });
   await page.goto('/MODEL.html');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.waitForTimeout(200);
@@ -204,6 +204,24 @@ test('the corner snap still beats the foot', async ({ page }) => {
   const pt = corner(await saveAndRead(page));
   expect(pt.x, 'the corner caught the bait exactly').toBeCloseTo(BAIT.x, 6);
   expect(pt.z, 'and the foot did not then nudge it off').toBeCloseTo(BAIT.z, 6);
+});
+
+test('THE LEAK: the TOY board does not square a dragged point', async ({ page }) => {
+  // squaring() and onTheFoot_if() each answer "is this run held square /
+  // rounded", and BOTH carry `board === 'toy'` as well as the switch. Reaching
+  // for them here would have squared every corner drag on the bone board,
+  // where nothing has ever squared one -- toy-constraints governs what moves
+  // there. model-html-save.spec.js found it first, by dragging a bone-built
+  // corner 90 across and 50 down and getting a z of exactly 0; this is the
+  // same claim where it can be read as a claim rather than as a save failing.
+  await open(page, 'toy');
+
+  const at = await grabCorner(page);
+  await dragTo(page, at, [12.4, -8.6]);
+
+  const pt = corner(await saveAndRead(page));
+  expect(pt.x, 'the board squares a DRAWN run, not a dragged point').toBeCloseTo(12.4, 2);
+  expect(pt.z, 'so the cross-axis travel survives').toBeCloseTo(-8.6, 2);
 });
 
 test('a dragged point is never its own snap target', async ({ page }) => {

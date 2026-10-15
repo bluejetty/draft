@@ -24574,20 +24574,33 @@
           // joins". A corner caught and then rounded off again would be a snap
           // the drafter saw take and then saw let go.
           //
-          // WITH NEITHER INSTRUMENT LIT THIS IS WHAT IT ALWAYS WAS: squareTo
-          // hands `raw` straight back, squaredAxis answers null, and the line
-          // below is cornerSnap(raw, vtx) || raw.
+          // WITH NEITHER INSTRUMENT LIT THIS IS WHAT IT ALWAYS WAS: `wanted` is
+          // `raw`, `fixed` is null, and the line below is
+          // cornerSnap(raw, vtx) || raw.
+          //
+          // THE LIT INSTRUMENTS, NOT squaring() AND onTheFoot_if(). Those two
+          // answer "is this run being held square / rounded", and BOTH carry
+          // `board === 'toy'` as well as the switch -- which is right for a
+          // run being DRAWN, where TOY's four directions are the board's own
+          // rule. A corner DRAG on TOY has never been squared: toy-constraints
+          // governs what moves there, and model-html-save.spec.js's bone-built
+          // fixture drags a corner 90 across and 50 down and expects both to
+          // land. Squaring that by the board would be this fix leaking into
+          // TOY -- the same leak in the other direction that §3's gate is
+          // written against -- so the gate here is the drafter's switch and
+          // nothing else. Whether TOY should square a dragged corner is a
+          // question for the board, not for this bug.
           const grabbed = md.before[0];
           const from = { x: grabbed.x, z: grabbed.z };
-          const wanted = squareTo(from, raw);
-          const fixed = squaredAxis(from, raw);
+          const wanted = tsquareOn ? squareTo(from, raw) : raw;
+          const fixed = tsquareOn ? squaredAxis(from, raw) : null;
           const snapped = fixed
             ? axisSnap(wanted, fixed, grabbed.vtx)
             : cornerSnap(wanted, grabbed.vtx);
           // MIN 0 FEET, not the drawn run's 1: a nudge of less than half a foot
           // rounds back to where the corner started, and a corner that stayed
           // put is the honest answer to a hand that barely moved.
-          const pt = snapped || (onTheFoot_if()
+          const pt = snapped || (footOn
             ? onTheFoot(from, { x: wanted.x, z: wanted.z }, 0)
             : wanted);
           grabbed.vtx.x = pt.x;
