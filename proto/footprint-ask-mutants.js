@@ -39,7 +39,10 @@ const MUTANTS = [
   { file: 'MODEL.html',
     name: 'OFF THE FOOTPRINT is measured as the LENGTH OF THE PULL, so a corner '
       + 'slid along its own wall is asked about',
-    find: '    const outFt = Math.max(...moves.map(move => offLoop(move.to)));',
+    // SAME LINE AS THE `mid` MUTANT BELOW, a different lie told about it:
+    // this one swaps the distance TO THE FOOTPRINT for the length of the
+    // pull, which reads a corner slid along its own wall as 3 ft off.
+    find: '    const outFt = Math.max(offLoop(mid), ...moves.map(move => offLoop(move.to)));',
     with: '    const outFt = Math.max(...moves.map(move => '
       + 'Math.hypot(move.to.x - move.from.x, move.to.z - move.from.z)));',
     test: 'a corner slid ALONG its own wall' },
