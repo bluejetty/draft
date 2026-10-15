@@ -9525,12 +9525,15 @@
   // into geometry-2d.js, because the old page uses eight different distances
   // (30, 24, 18, 14, 12, 4 px) for different targets and a number frozen in
   // the shared function would be wrong for seven of them.
-  const wallAt = worldPt => {
+  //
+  // `skip` TAKES ONE WALL OUT OF THE RUNNING, which TRIM's second press needs
+  // and nothing else does: see trimPress.
+  const wallAt = (worldPt, skip = null) => {
     const G = window.DraftGeometry2D;
     const thresh = SELECT_GRAB_PX / view.scale;
     let best = null, bestD = thresh;
     walls().forEach(wall => {
-      if (!wall.start || !wall.end) return;
+      if (!wall.start || !wall.end || wall === skip) return;
       const { d } = G.pointToSegment(worldPt, wall);
       if (d < bestD) { bestD = d; best = wall; }
     });
@@ -19177,8 +19180,35 @@
   });
   const trimPress = at => {
     const G = window.DraftGeometry2D;
-    const hit = wallAt(at);
-    if (!hit) { sayOnStrip('TRIM — press on a wall.'); return; }
+    // ── THE SECOND PRESS CANNOT BE THE WALL ALREADY IN HAND ───────────────
+    //
+    // Movie: TRIM refuses the second wall -- "Press a DIFFERENT wall". It did,
+    // and right where the tool is used. wallAt answers with the NEAREST wall,
+    // and the two walls of a trim are at their closest AT THE JUNCTION, which
+    // is where a drafter aims when he is saying "run it into that one". Press
+    // the target a few inches off the crossing, on the picked wall's side, and
+    // the picked wall is nearer: the page reads a second press on the same
+    // wall and refuses the gesture. Measured on two interior walls that cross
+    // at (8,7): the first press on one, the second at (8.1, 7.3) aiming at the
+    // other, and the refusal comes back. The band is SELECT_GRAB_PX wide, so
+    // it is a few pixels zoomed in and more than a foot zoomed out.
+    //
+    // THE SECOND PRESS MEANS "the wall it runs into", and the one in hand
+    // cannot be it -- so it is not a candidate. That also makes the refusal
+    // below say something true when it does appear: there is no OTHER wall
+    // under the press, rather than "you pressed the same one".
+    //
+    // WHAT IT COSTS: pressing the picked wall again used to be a no-op with a
+    // sentence, and now takes the nearest other wall if one is in reach. The
+    // tool's own instruction is what settles it -- the second press was never
+    // a way to re-pick, and Escape and the tool buttons both stand it down.
+    const hit = wallAt(at, trimPick ? trimPick.wall : null);
+    if (!hit) {
+      sayOnStrip(trimPick
+        ? 'Press a DIFFERENT wall for it to run into.'
+        : 'TRIM — press on a wall.');
+      return;
+    }
     if (!trimPick) {
       const { t } = G.pointToSegment(at, hit);
       trimPick = { wall: hit, end: t < 0.5 ? 'start' : 'end' };
@@ -19187,7 +19217,6 @@
       return;
     }
     const a = trimPick.wall, endA = trimPick.end, b = hit;
-    if (b === a) { sayOnStrip('Press a DIFFERENT wall for it to run into.'); return; }
     const r = { x: a.end.x - a.start.x, z: a.end.z - a.start.z };
     const sv = { x: b.end.x - b.start.x, z: b.end.z - b.start.z };
     const den = r.x * sv.z - r.z * sv.x;
