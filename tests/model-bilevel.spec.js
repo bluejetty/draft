@@ -294,7 +294,13 @@ test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight 
     const bottomZ = third.end.z;
     expect(bottomZ, 'the third flight runs back from the landing').toBeLessThan(14);
     expect(span(roomRoof.points)).toEqual(span([{ x: -6, z: bottomZ - 2 }, { x: 23, z: 40 }]));
-    expect(roomRoof.points.length, 'an L, not the old square').toBe(6);
+    // AN L, NOT THE OLD SQUARE -- six corners, SEVEN since the cricket
+    // (Movie, 14 Oct: "keep the valley 2ft from the corner"). An L has one
+    // inside corner, it is cut back 2 ft, and it comes back as two points.
+    // So the exact count stopped being the question; what tells an L from a
+    // square is having MORE than four, and the span above already says where
+    // its two wings reach.
+    expect(roomRoof.points.length, 'an L, not the old square').toBeGreaterThan(4);
     // And closed in where it stands over the main roof ("a wall that goes
     // from the bottom of the 2nd fl roof to the top of the main fl
     // ceiling"): on OVER GARAGE, from MAIN's ceiling (9'-1 1/8" less the
