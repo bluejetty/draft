@@ -10522,8 +10522,15 @@
   //
   // Projecting needs no tolerance and cannot drift: whatever the corner's
   // fixed coordinate is, it is discarded.
-  const axisSnap = (worldPt, fixed) => {
-    const corner = cornerSnap(worldPt, []);
+  //
+  // `moving` IS THE VERTEX BEING DRAGGED, and it is not optional for a drag
+  // even though it is empty for a run being drawn. snapCandidates excludes a
+  // moving corner by reference and by coincident position, so without it a
+  // dragged point is its own nearest candidate and the square's free
+  // coordinate snaps straight back to where the drag started -- a point that
+  // refuses to move, which reads as a lock rather than a snap.
+  const axisSnap = (worldPt, fixed, moving = []) => {
+    const corner = cornerSnap(worldPt, moving);
     if (!corner) return null;
     return fixed === 'z'
       ? { x: corner.x, y: 0, z: worldPt.z }
@@ -12031,13 +12038,20 @@
   // The T-SQUARE is a different instrument and this is not a second one.
   const onTheFoot_if = () => board === 'toy' || footOn;
 
-  const onTheFoot = (from, pt) => {
+  // `minFeet` IS A DRAWING RULE, NOT A ROUNDING RULE, which is why it is a
+  // parameter rather than the constant it used to be. A run being DRAWN is at
+  // least a foot long: round it to nothing and the press commits a wall of no
+  // length, which the reader drops. A point being DRAGGED has no such floor --
+  // a corner nudged four inches with the light lit SHOULD round back to where
+  // it started and stay there, and forcing it a whole foot would make the
+  // light a thing that moves geometry the hand did not.
+  const onTheFoot = (from, pt, minFeet = 1) => {
     if (!from) return pt;
     const dx = pt.x - from.x, dz = pt.z - from.z;
     // One of these is zero under the square, so this is the run's length.
     const len = Math.hypot(dx, dz);
     if (len < 1e-9) return pt;
-    const feet = Math.max(1, Math.round(len));
+    const feet = Math.max(minFeet, Math.round(len));
     return { x: from.x + (dx / len) * feet, y: 0, z: from.z + (dz / len) * feet };
   };
 
@@ -24535,9 +24549,62 @@
           // The corner goes TO the cursor, not by the cursor's delta — the old
           // page's node drag writes the point through (MODEL.dc.html:10848),
           // so a corner grabbed off-centre still lands under the pointer.
-          const pt = cornerSnap(raw, md.before[0].vtx) || raw;
-          md.before[0].vtx.x = pt.x;
-          md.before[0].vtx.z = pt.z;
+          //
+          // ── THE INSTRUMENTS READ ON A POINT DRAG TOO ──────────────────────
+          //
+          // Movie: "dragging a point ignores the T-square and 1' snap". It did,
+          // and only here: a run being DRAWN goes through drawPoint, which
+          // squares it, projects the corner snap onto the axis and rounds the
+          // whole foot. A point being DRAGGED went through cornerSnap and
+          // nothing else, so the same two lit instruments governed where a
+          // corner could be PUT and said nothing about where it could be
+          // MOVED -- a drafter who squared a wall to draw it could pull it off
+          // square a minute later with the T-square still down.
+          //
+          // SO THIS IS drawPoint's OWN ORDER, with the corner's starting place
+          // as the `from` that a drawn run takes from drawStart. Reached
+          // through the same three helpers rather than re-derived: square,
+          // then the snap (axis-projected while squaring, so the squared
+          // coordinate is kept exactly), then the foot if no real corner was
+          // caught.
+          //
+          // THE SNAP STILL BEATS THE FOOT, which is drawPoint's rule and its
+          // reason: "a snap that lands on a real corner is the one case where
+          // the foot gives way -- the corner is where the geometry actually
+          // joins". A corner caught and then rounded off again would be a snap
+          // the drafter saw take and then saw let go.
+          //
+          // WITH NEITHER INSTRUMENT LIT THIS IS WHAT IT ALWAYS WAS: `wanted` is
+          // `raw`, `fixed` is null, and the line below is
+          // cornerSnap(raw, vtx) || raw.
+          //
+          // THE LIT INSTRUMENTS, NOT squaring() AND onTheFoot_if(). Those two
+          // answer "is this run being held square / rounded", and BOTH carry
+          // `board === 'toy'` as well as the switch -- which is right for a
+          // run being DRAWN, where TOY's four directions are the board's own
+          // rule. A corner DRAG on TOY has never been squared: toy-constraints
+          // governs what moves there, and model-html-save.spec.js's bone-built
+          // fixture drags a corner 90 across and 50 down and expects both to
+          // land. Squaring that by the board would be this fix leaking into
+          // TOY -- the same leak in the other direction that §3's gate is
+          // written against -- so the gate here is the drafter's switch and
+          // nothing else. Whether TOY should square a dragged corner is a
+          // question for the board, not for this bug.
+          const grabbed = md.before[0];
+          const from = { x: grabbed.x, z: grabbed.z };
+          const wanted = tsquareOn ? squareTo(from, raw) : raw;
+          const fixed = tsquareOn ? squaredAxis(from, raw) : null;
+          const snapped = fixed
+            ? axisSnap(wanted, fixed, grabbed.vtx)
+            : cornerSnap(wanted, grabbed.vtx);
+          // MIN 0 FEET, not the drawn run's 1: a nudge of less than half a foot
+          // rounds back to where the corner started, and a corner that stayed
+          // put is the honest answer to a hand that barely moved.
+          const pt = snapped || (footOn
+            ? onTheFoot(from, { x: wanted.x, z: wanted.z }, 0)
+            : wanted);
+          grabbed.vtx.x = pt.x;
+          grabbed.vtx.z = pt.z;
         } else {
           // A WALL MOVES BY THE DELTA, and the delta is measured from where
           // the press landed to where the cursor is now — never accumulated
