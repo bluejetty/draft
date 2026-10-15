@@ -84,8 +84,12 @@ const MUTANTS = [
 
   { file: 'MODEL.html',
     name: 'UNDO forgets the siblings: one Ctrl+Z restores half the move',
-    find: `          before: md.lockBefore ? [...md.before, ...md.lockBefore] : md.before });`,
-    with: `          before: md.before });`,
+    // THE PUSH BECAME TWO LINES when the move step grew a name: §6's answer
+    // and the dimension re-lay are both written INTO the step after it has
+    // been pushed, which needs a handle on it. The mutation is the same one
+    // -- the siblings' snapshot dropped from the step undo walks.
+    find: `          before: md.lockBefore ? [...md.before, ...md.lockBefore] : md.before };`,
+    with: `          before: md.before };`,
     test: 'one Ctrl+Z puts BOTH floors back' },
 ];
 

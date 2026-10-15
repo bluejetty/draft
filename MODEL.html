@@ -1043,11 +1043,15 @@
      board's "break the bone here, or move this wall?", a different bone
      entirely: reusing its id because both are about a bone and both offer
      two answers is exactly the collision DEFINITIONS.md exists to stop. */
-  #bone-choice, #build-choice, #garage-lesson, #corner-join, #garage-align, #trace-ask, #trace-insert { position:fixed; inset:0; z-index:7; display:flex;
+  #bone-choice, #build-choice, #garage-lesson, #corner-join, #garage-align, #trace-ask, #trace-insert,
+  #footprint-ask { position:fixed; inset:0; z-index:7; display:flex;
     align-items:center; justify-content:center; padding:24px;
     background:rgba(0,0,0,0.35); }
   #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden], #corner-join[hidden], #garage-align[hidden],
-  #trace-ask[hidden], #trace-insert[hidden] { display:none; }
+  #trace-ask[hidden], #trace-insert[hidden], #footprint-ask[hidden] { display:none; }
+  /* A button the pull puts out of reach is HIDDEN, not greyed -- see the
+     card's own note. The row is flex, so this has to beat its display. */
+  #footprint-ask button[hidden] { display:none !important; }
   /* THE TRACE CARD: what the file is, the scale it was drawn at, and the
      two-point CALIBRATE on its own preview. */
   .trace-card [hidden] { display:none !important; }
@@ -1880,6 +1884,32 @@
     <div class="promote-row">
       <button type="button" data-corner-foot>1'-0"</button>
       <button type="button" data-corner-thick>FOUNDATION THICKNESS (<span data-corner-thick-label>8"</span>)</button>
+    </div>
+  </div>
+</div>
+
+<!-- THE WALL LEFT ITS FOOTPRINT (§6). Movie, 15 Oct: "can we ask them if they
+     would like a cantilever or overhang supported by a beam (2ft max if
+     cantilevel, 4-6 min if supported on beam. or ask them if they would like
+     to move the foundation other floors and roof at the same time --- 3
+     options".
+
+     EACH BUTTON SAYS THE NUMBER IT WILL GIVE, because the ladder may not give
+     back what the hand did: a 3'-0" pull is in the band it forbids, so
+     CANTILEVER reads 2'-0" and ON PILES reads 4'-6". A button that said
+     "CANTILEVER" plainly and then moved the wall a foot would be the page
+     answering a question it had just asked.
+
+     THE ONE THAT DOES NOT FIT IS HIDDEN rather than greyed: past 4'-6" a
+     cantilever is not a near miss, it is a different building, and an 8 ft
+     pull clamped back to 2 ft is not what the hand did. -->
+<div id="footprint-ask" data-footprint-ask hidden role="dialog" aria-label="The wall left its footprint">
+  <div class="promote-card">
+    <p><b>THIS WALL LEFT ITS FOOTPRINT</b><br>It stands <span data-footprint-out>2'-0"</span> <span data-footprint-side>past</span> the floor below. What did you mean?</p>
+    <div class="promote-row">
+      <button type="button" data-footprint-cantilever>CANTILEVER (<span data-footprint-cantilever-label>2'-0"</span>)</button>
+      <button type="button" data-footprint-piles>ON PILES (<span data-footprint-piles-label>4'-6"</span>)</button>
+      <button type="button" data-footprint-all>MOVE FOUNDATION, FLOORS &amp; ROOF</button>
     </div>
   </div>
 </div>
@@ -10461,6 +10491,397 @@
     if (src) { vtx.offX = vtx.x - src.x; vtx.offZ = vtx.z - src.z; }
   };
 
+  // ── §6: A WALL PULLED OFF ITS FOOTPRINT ────────────────────────────────
+  //
+  // Movie, 15 Oct, asked what the footprint should do when a wall is dragged
+  // away from it, and answered with the question itself: "can we ask them if
+  // they would like a cantilever or overhang supported by a beam (2ft max if
+  // cantilevel, 4-6 min if supported on beam. or ask them if they would like
+  // to move the foundation other floors and roof at the same time --- 3
+  // options".
+  //
+  // WHICH IS THE ONLY ANSWER THE PAGE CANNOT WORK OUT ITSELF. The drag says
+  // where the wall went and nothing about what it meant: the same 2 ft east
+  // is a cantilevered floor, a supported overhang, or the whole building
+  // getting wider, and those are three different buildings. It is not what
+  // his standing order covers -- "don't ask the user about placing beams and
+  // columns ... just make the decision based on spans" is about SIZING what
+  // the design needs, and this is the design.
+  //
+  // AND IT WAS A REAL HOLE, MEASURED, not a tidy-up. A wall dragged 4 ft east
+  // moved its corner and left the outline where it was, so AUTO DIMS -- which
+  // strings the OUTLINE, walls only as a fallback -- re-laid a 20'-0" overall
+  // over a 24 ft building. The strings follow once the footprint does, which
+  // is why the re-lay below waited on this.
+  //
+  // THE LADDER IS ALREADY WRITTEN, in two places that agree, and this reads
+  // them rather than restating the numbers: tour.js's floorPullLadder (0 to
+  // 2'-0" free, the 2'-0"-to-4'-6" gap jumped, piles out to 18'-0") and
+  // boneyard-edit.js's CANTILEVER_FT / FIRST_PILE_FT / PILE_SPACING_FT /
+  // PILE_FOOTING. His "4-6 min if supported on beam" is 4'-6", which is what
+  // both of those have said since the BONEYARD went in.
+  const footprintRules = () => {
+    const BE = window.DraftBoneyardEdit;
+    const T = window.DraftTour;
+    return {
+      cantileverFt: BE?.CANTILEVER_FT ?? 2,
+      firstPileFt: BE?.FIRST_PILE_FT ?? 4.5,
+      spacingFt: BE?.PILE_SPACING_FT ?? 8,
+      footing: BE?.PILE_FOOTING ?? 'pile10',
+      // The ladder answers {d, piles}: where the pull may stand, and the rows
+      // that hold it there. A page without tour.js gets the free cantilever
+      // and nothing else, which refuses rather than invents.
+      ladder: T?.floorPullLadder
+        ? want => T.floorPullLadder(want)
+        : want => ({ d: Math.min(want, BE?.CANTILEVER_FT ?? 2), piles: [] }),
+    };
+  };
+
+  // WHICH OUTLINE CORNERS THE DRAG LEFT BEHIND. A corner is "on" the
+  // footprint when the wall vertex stood exactly on an outline point before
+  // the drag -- not near it. The two are written as one place by the BUILD,
+  // by the trace and by the pool, so slack here would catch a corner that was
+  // never on the footprint and move it for no reason the drafter asked.
+  const FOOTPRINT_TOL = 1e-6;
+  const footprintBreak = md => {
+    if (!drawing || !md?.before?.length) return null;
+    if (md.kind !== 'corner' && md.kind !== 'wall') return null;
+    // A BONE MASTER'S OWN POINT IS NOT A WALL OFF ITS FOOTPRINT. Dragging one
+    // IS the "move everything" answer, and §4 above already carries it.
+    if ((drawing.boneyardOutlines || []).some(master =>
+      (master.points || []).includes(md.before[0].vtx))) return null;
+    const levelId = Number(md.body?.levelId ?? activeLevelId());
+    const copies = (drawing.outlines || []).filter(outline =>
+      Number(outline.levelId) === levelId && outline.site !== true
+      && (outline.points || []).length >= 3);
+    if (!copies.length) return null;
+    const moves = [];
+    md.before.forEach(was => {
+      if (Math.hypot(was.vtx.x - was.x, was.vtx.z - was.z) < FOOTPRINT_TOL) return;
+      copies.forEach(outline => {
+        const pt = (outline.points || []).find(p =>
+          Math.abs(p.x - was.x) < FOOTPRINT_TOL && Math.abs(p.z - was.z) < FOOTPRINT_TOL);
+        if (pt) moves.push({ outline, pt, from: { x: was.x, z: was.z },
+          to: { x: was.vtx.x, z: was.vtx.z } });
+      });
+    });
+    if (!moves.length) return null;
+    // HOW FAR OFF, AND WHICH WAY. The distance is to the footprint AS IT
+    // STOOD -- the nearest point on that loop, not the straight-line length
+    // of the pull -- so a corner slid ALONG its own wall reads as nothing off
+    // the footprint and a diagonal reads its true projection.
+    const G = window.DraftGeometry2D;
+    const loop = moves[0].outline.points.map(p => ({ x: p.x, z: p.z }));
+    const offLoop = pt => loop.reduce((best, a, i) => {
+      const b = loop[(i + 1) % loop.length];
+      return Math.min(best, G.pointToSegment(pt, { start: a, end: b }).d);
+    }, Infinity);
+    const outFt = Math.max(...moves.map(move => offLoop(move.to)));
+    if (outFt < 0.01) return null;
+    const outward = moves.some(move => !pointInLoop(loop, move.to));
+    return { moves, outFt, outward, levelId, loop };
+  };
+
+  // ── THE THREE ANSWERS ──────────────────────────────────────────────────
+  //
+  // THE LADDER MOVES THE NUMBER, AND THE WALL GOES WITH IT. A pull of 3'-0"
+  // lands in the band the ladder forbids, so CANTILEVER brings it back to
+  // 2'-0" and ON PILES takes it out to 4'-6" -- and the WALL has to travel
+  // with the footprint, or answering the question would leave the two
+  // disagreeing again, which is the thing that was asked about.
+  const scaleFootprintPull = (pending, targetFt) => {
+    const k = pending.outFt > 0 ? targetFt / pending.outFt : 1;
+    if (Math.abs(k - 1) < 1e-9) return;
+    pending.md.before.forEach(was => {
+      was.vtx.x = was.x + (was.vtx.x - was.x) * k;
+      was.vtx.z = was.z + (was.vtx.z - was.z) * k;
+      relinkVertex(was.vtx);
+    });
+    pending.moves.forEach(move => {
+      move.to = {
+        x: move.from.x + (move.to.x - move.from.x) * k,
+        z: move.from.z + (move.to.z - move.from.z) * k,
+      };
+    });
+    pending.outFt = targetFt;
+  };
+
+  // THIS LEVEL ONLY, AND THE MASTER IS TOLD TO KEEP ITS HANDS OFF. §5a: a
+  // copy point the drafter has taken off the master FREEZES -- and that is
+  // exactly what a cantilever is. This floor stands where he put it while the
+  // floor below stays where it was, and a later master edit must not drag it
+  // back flush and quietly undo the overhang.
+  const footprintThisLevel = (pending, step) => {
+    pending.moves.forEach(({ outline, pt, to }) => {
+      step.before.push({ vtx: pt, x: pt.x, z: pt.z });
+      pt.x = to.x; pt.z = to.z;
+      if (!pt.srcId) return;
+      const list = outline.overriddenSrcIds = outline.overriddenSrcIds || [];
+      if (list.includes(pt.srcId)) return;
+      list.push(pt.srcId);
+      (step.overrides = step.overrides || []).push({ list, id: pt.srcId });
+    });
+  };
+
+  // EVERY POINT THAT STOOD ON THAT CORNER TRAVELS, on every level. Where
+  // there IS a master this goes through it, because that is the link the
+  // drawing already has and §4 carries a dozen riders off it. Where there is
+  // not -- a premade house "carries no master until the drafter makes one",
+  // and the BONEYARD's own rules say so -- it falls back to the module's
+  // geometric rule: what stands ON the outline moves with it.
+  const footprintEveryLevel = (pending, step) => {
+    const moved = [];
+    const masters = new Set();
+    const take = pt => {
+      step.before.push({ vtx: pt, x: pt.x, z: pt.z });
+      moved.push(pt);
+    };
+    pending.moves.forEach(({ pt, from, to }) => {
+      const master = pt.srcId ? masterPointById(pt.srcId) : null;
+      if (master) {
+        // THE MASTER MOVES BY WHAT THE WALL MOVED, not to where the wall is:
+        // the copy may be riding at an offset, and writing the wall's own
+        // position onto the master would silently swallow that gap.
+        take(master);
+        master.x += to.x - from.x;
+        master.z += to.z - from.z;
+        const owner = (drawing.boneyardOutlines || [])
+          .find(m => (m.points || []).includes(master));
+        if (owner) masters.add(owner);
+        return;
+      }
+      const dx = to.x - from.x, dz = to.z - from.z;
+      const atCorner = p => p && Math.abs(p.x - from.x) < FOOTPRINT_TOL
+        && Math.abs(p.z - from.z) < FOOTPRINT_TOL;
+      const carry = p => { if (!atCorner(p) || moved.includes(p)) return; take(p); p.x += dx; p.z += dz; };
+      (drawing.outlines || []).forEach(o => (o.points || []).forEach(carry));
+      (drawing.walls || []).forEach(w => { carry(w.start); carry(w.end); });
+      (drawing.lines || []).forEach(l => { carry(l.start); carry(l.end); });
+      (drawing.floors || []).forEach(f => (f.points || []).forEach(carry));
+      (drawing.beams || []).forEach(b => { carry(b.start); carry(b.end); });
+    });
+    // AND THE ROOF'S EAVE RIDES ITS OWN CORNER. The eave stands one overhang
+    // OUT from the wall below, so it is never AT the corner and the sweep
+    // above cannot see it -- but a corner that travels takes its eave the
+    // same distance, the overhang being unchanged by the move. Matched by
+    // proximity because that offset is the only thing linking the two: the
+    // roof point inside one overhang's diagonal of the old corner, nearest
+    // first, and at most one per roof.
+    let eaves = 0;
+    pending.moves.forEach(({ from, to }) => {
+      const dx = to.x - from.x, dz = to.z - from.z;
+      (drawing.roofs || []).forEach(roof => {
+        const reach = (Number(roof.overhang) || 0) * Math.SQRT2 + 0.01;
+        let best = null;
+        (roof.points || []).forEach(p => {
+          if (moved.includes(p)) return;
+          const d = Math.hypot(p.x - from.x, p.z - from.z);
+          if (d <= reach && (!best || d < best.d)) best = { p, d };
+        });
+        if (!best) return;
+        take(best.p);
+        best.p.x += dx; best.p.z += dz;
+        eaves += 1;
+      });
+    });
+    // ── AND NOW THE MASTER IS TOLD, which is the whole point of having gone
+    // through it: §4 carries a dozen riders off one propagation -- every
+    // level's copy, the walls, the dimension strings, the beams and the
+    // teleposts -- and moving the master without it would move a point
+    // nothing follows.
+    //
+    // THE DRAGGED WALL'S OFFSET GOES BACK FIRST, and this is the one line
+    // that is easy to get wrong in a way that looks right. The drag already
+    // re-measured it (relinkVertex on every move), so the vertex now records
+    // a 4 ft gap from a master that is about to move 4 ft -- propagate it as
+    // it stands and the wall lands 8 ft out. The whole building moving is
+    // exactly the case where the wall did NOT leave its master, so it keeps
+    // the offset it had before the hand touched it.
+    if (masters.size) {
+      pending.md.before.forEach(was => {
+        if (was.offX === undefined) return;
+        was.vtx.offX = was.offX;
+        was.vtx.offZ = was.offZ;
+      });
+      masters.forEach(master => propagateMasterOutline(master));
+      // UNDO RE-RUNS THE PROPAGATION rather than snapshotting what it
+      // touched. The riders are reconstructed from master + offset, and undo
+      // restores both of those from `before` -- so asking again rebuilds
+      // precisely the drawing that was there, by the same contract, however
+      // many riders the propagation grows later.
+      step.repropagate = [...masters];
+    }
+    return { eaves };
+  };
+
+  // THE PILES UNDER A SUPPORTED OVERHANG, along its OUTER edge: one at each
+  // end and infill at most PILE_SPACING_FT apart. The ladder's rows say
+  // WHETHER an overhang needs holding up; where the weight lands is the far
+  // edge, which for a dragged corner or a dragged wall is the line the drag
+  // left behind.
+  //
+  // NOT pilePoints: that one walks a CLOSED house perimeter and stands its
+  // first pile back from the foundation it must not disturb. This is one open
+  // edge in open air, with no foundation to stand off from.
+  //
+  // THE MARK IS NOT WRITTEN HERE. A pile outside the perimeter wall carrying
+  // floor and nothing else is P1 by the rule Movie gave on 15 Oct, and
+  // pileMark reads that off the outlines at paint time -- so a mark written
+  // in would be a second answer to a question already answered.
+  const overhangPiles = (pending, step) => {
+    const rules = footprintRules();
+    const ends = pending.moves.map(move => move.to);
+    const spots = [ends[0]];
+    if (ends.length > 1) {
+      const last = ends[ends.length - 1];
+      const run = Math.hypot(last.x - ends[0].x, last.z - ends[0].z);
+      const bays = Math.max(1, Math.ceil(run / rules.spacingFt));
+      for (let i = 1; i <= bays; i += 1) {
+        spots.push({
+          x: ends[0].x + (last.x - ends[0].x) * (i / bays),
+          z: ends[0].z + (last.z - ends[0].z) * (i / bays),
+        });
+      }
+    }
+    drawing.columns = drawing.columns || [];
+    const placed = [];
+    spots.forEach(spot => {
+      const column = {
+        id: newDrawingItemId('column'),
+        point: { x: spot.x, y: 0, z: spot.z },
+        levelId: FOUNDATION_LEVEL_ID,
+        view: 'foundation',
+        footing: rules.footing,
+        // THE DRAFTER'S, NOT THE SUGGESTER'S. AUTO PILES sweeps its own and
+        // would take these with it -- and they are not a suggestion, they are
+        // what holds up the overhang he just asked for.
+        auto: false,
+      };
+      drawing.columns.push(column);
+      placed.push({ list: drawing.columns, item: column });
+    });
+    (step.items = step.items || []).push(...placed);
+    return placed.length;
+  };
+
+  // ── THE CARD ───────────────────────────────────────────────────────────
+  //
+  // ONE GESTURE, ONE UNDO, as everywhere else on this page: the drag's own
+  // 'move' step is already on the stack when the card goes up, and the answer
+  // is written INTO it -- the outline points onto `before`, the piles onto
+  // `items`, the override onto `overrides`. So the Ctrl+Z that puts the wall
+  // back puts the footprint, the piles and the freeze back with it, and there
+  // is never a half-answered drag on the stack.
+  const footprintCard = document.getElementById('footprint-ask');
+  let footprintPending = null;
+  const ft2txt = ft => window.DraftFormatters.formatArchitecturalInches(ft * 12);
+
+  const settleFootprint = choice => {
+    const pending = footprintPending;
+    footprintPending = null;
+    if (footprintCard) footprintCard.hidden = true;
+    if (!pending) return;
+    const { step } = pending;
+    const rules = footprintRules();
+    const said = [];
+    if (choice === 'cantilever') {
+      scaleFootprintPull(pending, Math.min(pending.outFt, rules.cantileverFt));
+      footprintThisLevel(pending, step);
+      said.push(`CANTILEVER ${ft2txt(pending.outFt)} — the floor projects past the one below`);
+    } else if (choice === 'piles') {
+      const { d, piles } = rules.ladder(Math.max(pending.outFt, rules.firstPileFt));
+      scaleFootprintPull(pending, d);
+      footprintThisLevel(pending, step);
+      const n = piles.length ? overhangPiles(pending, step) : 0;
+      said.push(`OVERHANG ${ft2txt(d)} on ${n} ${n === 1 ? 'pile' : 'piles'}`);
+      // THE LADDER'S OWN JUMP, SAID OUT LOUD. A 3'-0" pull comes back 4'-6"
+      // and the drafter did not type either number; silence here reads as the
+      // page having moved his wall for reasons of its own.
+      if (Math.abs(d - pending.pulled) > 0.01) {
+        said.push(`taken out from ${ft2txt(pending.pulled)} — nothing may stand between `
+          + `${ft2txt(rules.cantileverFt)} and ${ft2txt(rules.firstPileFt)}`);
+      }
+    } else if (choice === 'all') {
+      const { eaves } = footprintEveryLevel(pending, step);
+      said.push(`The whole building moved ${ft2txt(pending.outFt)}`);
+      // WHAT DID NOT FOLLOW IS SAID TOO. A roof whose eave this could not
+      // find is a roof still drawn over the old corner, and a drafter who is
+      // not told goes to print with it.
+      said.push(eaves ? `foundation, floors and ${eaves} roof ${eaves === 1 ? 'eave' : 'eaves'} with it`
+        : 'foundation and floors with it — no roof eave sat on that corner, so check the roof');
+    } else {
+      // ESCAPE: what this page did before the card existed. A wall standing
+      // off its footprint is a real thing to want for a moment, and the only
+      // wrong answer is to decide for him.
+      said.push('The wall stands off its footprint — the floor below is unchanged');
+    }
+    foldRedim(step);
+    markDirty();
+    sayOnStrip(`${said.join(' · ')}.`);
+    paint();
+  };
+
+  // THE TOY BOARD IS NOT ASKED. Nothing on that board has a foundation to
+  // cantilever off, and a modal in the middle of a child's drag is the one
+  // thing the board is built not to do -- it takes the whole-building answer,
+  // which is what a bone push means there, and says so on the strip.
+  const offerFootprintChoice = (md, step) => {
+    const found = footprintBreak(md);
+    if (!found) return false;
+    // `pulled` is what the HAND did and never changes; `outFt` is where the
+    // answer put it, and the ladder may move that.
+    footprintPending = { ...found, md, step, pulled: found.outFt };
+    if (board === 'toy' || !footprintCard) {
+      settleFootprint('all');
+      return true;
+    }
+    const rules = footprintRules();
+    const q = sel => footprintCard.querySelector(sel);
+    q('[data-footprint-out]').textContent = ft2txt(found.outFt);
+    q('[data-footprint-side]').textContent = found.outward ? 'past' : 'inside';
+    const cant = q('[data-footprint-cantilever]');
+    const piles = q('[data-footprint-piles]');
+    // INWARD, NOTHING PROJECTS. A wall pulled back inside the floor below
+    // leaves a deck over what it uncovered rather than an overhang over air,
+    // and neither of those two buttons describes it -- so the only answer
+    // here today is the whole building. The deck is its own order (Movie,
+    // 15 Oct: "move ext wall inward for roof deck / floor req membrane").
+    cant.hidden = !found.outward || found.outFt >= rules.firstPileFt;
+    piles.hidden = !found.outward || found.outFt <= rules.cantileverFt;
+    if (!cant.hidden) {
+      q('[data-footprint-cantilever-label]').textContent =
+        ft2txt(Math.min(found.outFt, rules.cantileverFt));
+    }
+    if (!piles.hidden) {
+      q('[data-footprint-piles-label]').textContent =
+        ft2txt(rules.ladder(Math.max(found.outFt, rules.firstPileFt)).d);
+    }
+    footprintCard.hidden = false;
+    setTimeout(() => (cant.hidden ? piles.hidden ? q('[data-footprint-all]') : piles : cant).focus(), 0);
+    return true;
+  };
+
+  if (footprintCard) {
+    footprintCard.querySelector('[data-footprint-cantilever]')
+      .addEventListener('click', () => settleFootprint('cantilever'));
+    footprintCard.querySelector('[data-footprint-piles]')
+      .addEventListener('click', () => settleFootprint('piles'));
+    footprintCard.querySelector('[data-footprint-all]')
+      .addEventListener('click', () => settleFootprint('all'));
+    // ENTER TAKES WHAT IS FOCUSED, Escape leaves the wall where it was
+    // dropped -- corner-join's own pair of keys, and for its reasons.
+    window.addEventListener('keydown', event => {
+      if (footprintCard.hidden || (event.key !== 'Enter' && event.key !== 'Escape')) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (event.key === 'Escape') { settleFootprint('off'); return; }
+      const focused = document.activeElement;
+      if (focused?.matches?.('[data-footprint-cantilever]')) settleFootprint('cantilever');
+      else if (focused?.matches?.('[data-footprint-piles]')) settleFootprint('piles');
+      else settleFootprint('all');
+    }, true);
+  }
+
   // Only the SELECTED wall's own two corners are grabbable. Selection first,
   // then drag: without that rule every pan begun near any corner anywhere in
   // the drawing would move it instead of sliding the sheet.
@@ -11899,7 +12320,7 @@
   // strip sits at 6, under all of them. The drive-thru sign is not built and
   // will be the fifth entry in this list rather than a new mechanism.
   const MODAL_IDS = ['promote', 'bone-choice', 'build-choice', 'file-guard', 'save-as', 'garage-lesson', 'corner-join', 'garage-align',
-    'trace-ask', 'trace-insert'];
+    'trace-ask', 'trace-insert', 'footprint-ask'];
   const modalUp = () => MODAL_IDS.some(id => {
     const node = document.getElementById(id);
     return !!node && !node.hidden;
@@ -15950,12 +16371,20 @@
   // strings: what it added, and what it swept to add them. Written once and
   // used by the move steps below -- 'built' keeps its own copy of these loops
   // because it interleaves a selection sweep between them.
+  //
+  // APPENDED, NEVER ASSIGNED. §6's answer puts its piles on the same `items`
+  // before this runs, and a step that took the list over would hand undo the
+  // dimensions and keep the piles -- one Ctrl+Z leaving concrete in the
+  // ground under an overhang that is no longer there.
   const foldRedim = step => {
     const redim = redimAfterMove();
     if (!redim) return step;
-    step.items = redim.placed.map(item => ({ list: drawing.dimensions, item }));
-    step.restored = redim.removed.length
-      ? [{ list: drawing.dimensions, items: redim.removed }] : [];
+    (step.items = step.items || []).push(
+      ...redim.placed.map(item => ({ list: drawing.dimensions, item })));
+    if (redim.removed.length) {
+      (step.restored = step.restored || [])
+        .push({ list: drawing.dimensions, items: redim.removed });
+    }
     return step;
   };
 
@@ -25106,7 +25535,14 @@
         // here and is deliberate: the push has to stay where it is so the
         // move is undone in the right order against anything the propagation
         // pushed, and nothing reads a step until an undo pops it.
-        foldRedim(moveStep);
+        //
+        // §6: AND IF THE WALL LEFT ITS FOOTPRINT, THE RE-LAY WAITS FOR THE
+        // ANSWER. The card decides whether the footprint moved with the wall,
+        // moved the whole building, or stayed -- three different buildings to
+        // measure -- so stringing before it is answered would string a
+        // drawing that does not exist yet. settleFootprint folds this same
+        // step when it lands.
+        if (!offerFootprintChoice(md, moveStep)) foldRedim(moveStep);
       } else if (board === 'toy' && md.kind === 'wall' && md.body) {
         // §4's CLICK, and it costs no new gesture. `wallBodyAt` only returns a
         // wall that is ALREADY SELECTED, so reaching here means the drafter
@@ -25329,6 +25765,15 @@
     (step.restored || []).forEach(({ list, items }) => {
       items.forEach(item => { if (!list.includes(item)) list.push(item); });
     });
+    // §6: AND THE FREEZE COMES OFF. A cantilever takes its corner off the
+    // master, and a corner left overridden after its overhang has been undone
+    // is a point that silently stops following the bone -- invisible on the
+    // plan, and only found later when a master edit moves every corner but
+    // that one.
+    (step.overrides || []).forEach(({ list, id }) => {
+      const at = list.indexOf(id);
+      if (at >= 0) list.splice(at, 1);
+    });
   };
 
   const undoOnce = () => {
@@ -25355,6 +25800,13 @@
         // whose difference nothing on screen would show.
         if (b.offX !== undefined) { b.vtx.offX = b.offX; b.vtx.offZ = b.offZ; }
       });
+      // §6: AND THE MASTER IS ASKED AGAIN. A whole-building move was carried
+      // by a propagation rather than by a list of points, so it is undone by
+      // the same propagation: the master and every offset are back to what
+      // they were on the line above, and asking again rebuilds precisely the
+      // drawing that was there -- however many riders the propagation grows
+      // later, which a snapshot taken today would not have known about.
+      (step.repropagate || []).forEach(master => propagateMasterOutline(master));
     } else if (step.kind === 'trim') {
       // Each end back on the corner it had, the openings back where they sat,
       // and any corner the trim retired back in the pool -- in reverse, so a
