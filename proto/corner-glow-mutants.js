@@ -40,13 +40,15 @@ const MUTANTS = [
 
   { file: 'MODEL.html',
     name: 'the ring offers a grab the drag would refuse: an unselected wall lights',
-    // DISAMBIGUATED. Those two lines occur TWICE in MODEL.html -- here in the
-    // corner/ring path, and again in wallBodyAt (:6341). replace() takes the
-    // first, so this happened to be hitting the right one; a reordering would
-    // have moved it to the body grab silently, still reporting a clean result.
-    // The third line is what tells them apart.
-    find: "    const selectedSeg = selectedWall();\n    if (!selectedSeg || !walls().includes(selectedSeg)) return null;\n    const G = window.DraftGeometry2D;",
-    with: "    const selectedSeg = selectedWall() || walls()[0];\n    if (!selectedSeg || !walls().includes(selectedSeg)) return null;\n    const G = window.DraftGeometry2D;",
+    // DISAMBIGUATED, AND IT NO LONGER HAS TO BE. These lines used to read
+    // `selectedWall()` and occurred TWICE in MODEL.html -- here in the
+    // corner/ring path, and again in wallBodyAt -- so the third line was what
+    // told them apart. cornerAt asks selectedSegment() now (a LINE's ends drag
+    // too), which only it does, and the body grab still asks selectedWall. The
+    // third line is kept all the same: a specific anchor costs nothing and the
+    // day the two converge again it is already right.
+    find: "    const selectedSeg = selectedSegment();\n    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;\n    const G = window.DraftGeometry2D;",
+    with: "    const selectedSeg = selectedSegment() || walls()[0];\n    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;\n    const G = window.DraftGeometry2D;",
     test: 'UNSELECTED wall gets no ring' },
 ];
 

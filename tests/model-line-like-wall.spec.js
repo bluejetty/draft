@@ -138,3 +138,83 @@ test('the lock holds a WALL too', async ({ page }) => {
   expect(saved.walls).toHaveLength(1);
   expect(bearing(saved.walls[0])).toBeCloseTo(45, 3);
 });
+
+// ── AND A LINE IS EDITED THE WAY A WALL IS ────────────────────────────────
+//
+// The same ruling as the drawing half -- "make the line act like the WALL
+// everything the same WALL works good" -- and the LINE panel has been saying
+// so since it was written: "A LINE IS TWO POINTS. DRAG AN END TO CHANGE IT."
+// The page had no path for it. cornerAt offered the selected WALL's ends and
+// nothing else, and the multi-item drag wants two things selected, so a press
+// on a single selected line's end slid the sheet. A panel describing a gesture
+// the page has not got reads as the gesture failing.
+async function dragWorld(page, from, to) {
+  const a = await pixelOf(page, from[0], from[1]);
+  const b = await pixelOf(page, to[0], to[1]);
+  await page.mouse.move(a.px, a.py);
+  await page.mouse.down();
+  await page.mouse.move(b.px, b.py, { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(120);
+}
+
+test('a selected LINE drags by an end, as a wall does', async ({ page }) => {
+  await open(page);
+  await h.armFromRail(page, 'line');
+  await tapWorld(page, 2, 2);
+  await tapWorld(page, 10, 2);
+  await page.keyboard.press('Escape');
+  await h.selectTool(page, 'Select');
+
+  // SELECTION FIRST, THEN THE DRAG -- the wall corner's own rule, and the
+  // reason a pan begun near a line end still pans.
+  await tapWorld(page, 6, 2);
+  await dragWorld(page, [10, 2], [13, 5]);
+
+  const saved = await save(page);
+  expect(saved.lines, 'still one line').toHaveLength(1);
+  const [line] = saved.lines;
+  const moved = [line.start, line.end].find(p => p.x > 11);
+  expect(moved, 'the end went where it was dragged').toBeTruthy();
+  expect(moved.x).toBeCloseTo(13, 1);
+  expect(moved.z).toBeCloseTo(5, 1);
+  // AND ONLY THAT END: the other is where it was drawn.
+  const stayed = [line.start, line.end].find(p => p !== moved);
+  expect(stayed.x).toBeCloseTo(2, 3);
+  expect(stayed.z).toBeCloseTo(2, 3);
+});
+
+test('an UNSELECTED line is not dragged by a press on its end', async ({ page }) => {
+  // The rule the wall corner keeps: without it every pan begun near any end
+  // anywhere in the drawing would move it instead of sliding the sheet.
+  await open(page);
+  await h.armFromRail(page, 'line');
+  await tapWorld(page, 2, 2);
+  await tapWorld(page, 10, 2);
+  await page.keyboard.press('Escape');
+  await h.selectTool(page, 'Select');
+
+  await dragWorld(page, [10, 2], [13, 5]);
+  const saved = await save(page);
+  const [line] = saved.lines;
+  expect([line.start.x, line.end.x].sort((a, b) => a - b), 'the line did not move')
+    .toEqual([2, 10]);
+});
+
+test('one Ctrl+Z puts a dragged end back', async ({ page }) => {
+  await open(page);
+  await h.armFromRail(page, 'line');
+  await tapWorld(page, 2, 2);
+  await tapWorld(page, 10, 2);
+  await page.keyboard.press('Escape');
+  await h.selectTool(page, 'Select');
+  await tapWorld(page, 6, 2);
+  await dragWorld(page, [10, 2], [13, 5]);
+
+  await page.locator('#model-undo').click();
+  await page.waitForTimeout(150);
+  const saved = await save(page);
+  const [line] = saved.lines;
+  expect([line.start.x, line.end.x].sort((a, b) => a - b), 'back where it was drawn')
+    .toEqual([2, 10]);
+});
