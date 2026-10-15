@@ -91,6 +91,16 @@ const MUTATIONS = [
   ['a house\'s band on its sill paints its plate top out again', 'cut-view.js',
     c => c.replace('const onSill = Math.abs(level.floorBottom - fdn.wallTop) < 0.01;',
       'const onSill = !!stack.split && Math.abs(level.floorBottom - fdn.wallTop) < 0.01;')],
+  // Movie, 14 Oct -- the room over a detached garage, the last block here.
+  ['every storey of a garage stands on the garage-s bearing', 'cut-view.js',
+    c => c.replace('      const floor = face.garage && bearsOnGarage(face)',
+      '      const floor = face.garage')],
+  // THE `min` IN garageGround HAS NO ROW, and the reason is written here so
+  // nobody adds one and watches it survive: the faces of a 2 storey garage
+  // arrive ground storey first, so "lowest" and "first seen" give the same
+  // answer on every fixture here. The row is only worth writing against a
+  // drawing whose upper walls are listed before its lower ones, which none
+  // of these is.
 ];
 
 if (MUTATE) {
@@ -2544,6 +2554,57 @@ for (const id of ['E1', 'E2', 'E3', 'E4']) {
       `${level(u, plateTop).length} strokes, all painted over`);
     check(`E4 2 STOREY + ROOM OVER: and the ${who}'s top of concrete under it at u ${u}, ${concrete.toFixed(4)}`,
       light(u, concrete));
+  });
+}
+
+// ── A GARAGE'S SECOND STOREY STANDS ON ITS OWN FLOOR ──────────────────
+//
+// Movie, 14 Oct, having looked at all four elevations of a 2 storey
+// detached garage he had just drawn: "i think the 2 storey garage windows
+// are showing up on the lower floor not up high where they should be".
+//
+// WHAT WAS WRONG was one expression in cut-view: a garage wall took the
+// GARAGE'S BEARING as its floor whichever storey it stood on, so the room
+// over the bay drew its windows 2'-10" off the slab. The bearing is a fact
+// about the ground storey -- the slab sits below the house's main floor --
+// and none of it applies a storey up, where the room is framed on a deck
+// the level stack already places.
+//
+// HIS OWN DRAWING IS THE FIXTURE, saved off the live page the hour he
+// reported it: a 24 x 30 detached garage with a room over it, six windows
+// up there and one in the bay below. Checked as FEET OF ELEVATION rather
+// than as ink, because "on the lower floor" is a claim about a number --
+// and the number has a whole storey of slack in it, so nothing here is
+// reading a coincidence.
+{
+  const dFile = path.join(ROOT, 'proto', 'repro-movie-detached-2storey.draft');
+  const dSaved = JSON.parse(fs.readFileSync(dFile, 'utf8'));
+  const dEnv = buildEnv(win, dSaved);
+  const dStack = win.DraftCutView.sectionLevelStack(dEnv);
+  const room = dStack.floors.find(level => Number(level.id) === 4);
+  const bay = dStack.floors.find(level => Number(level.id) === 3);
+  check('detached 2 storey: the stack puts the room a storey over the bay',
+    !!room && !!bay && room.floorTop > bay.floorTop + 7,
+    room && bay ? `bay ${bay.floorTop} room ${room.floorTop}` : 'no stack');
+  // THE ROOM'S WINDOWS ARE 48 x 50 AND THE BAY'S IS 36 x 50, which is what
+  // tells the two sets apart on a sheet that draws both -- read off the size
+  // tag the painter prints, at the height it prints it.
+  standardElevationCuts(dEnv).forEach(cut => {
+    const out = paintElevation(win, dEnv, cut);
+    const tags = out.texts.filter(t => /^W /.test(t.text));
+    const upstairs = tags.filter(t => /48 X 50/.test(t.text));
+    check(`detached 2 storey ${cut.id}: the room's windows are drawn at all`,
+      upstairs.length >= 2, `${tags.length} window tags: ${tags.map(t => t.text).join(', ')}`);
+    upstairs.forEach(tag => check(
+      `detached 2 storey ${cut.id}: a room window at ${tag.e.toFixed(2)} ft is up in the room`,
+      tag.e > room.floorTop && tag.e < room.wallTop,
+      `${room.floorTop.toFixed(2)}..${room.wallTop.toFixed(2)} is the room`));
+    // AND THE BAY'S OWN WINDOW STAYED DOWNSTAIRS, which is the half of this
+    // that a fix could break by lifting every garage wall instead of the
+    // upper ones. It is on E2 alone, so the check is asked where it is.
+    tags.filter(t => /36 X 50/.test(t.text)).forEach(tag => check(
+      `detached 2 storey ${cut.id}: the bay's own window at ${tag.e.toFixed(2)} ft stayed down`,
+      tag.e < bay.wallTop, `${bay.wallTop.toFixed(2)} is the bay's plate`));
   });
 }
 
