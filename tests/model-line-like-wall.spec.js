@@ -218,3 +218,87 @@ test('one Ctrl+Z puts a dragged end back', async ({ page }) => {
   expect([line.start.x, line.end.x].sort((a, b) => a - b), 'back where it was drawn')
     .toEqual([2, 10]);
 });
+
+// ── AND BY ITS BODY, WHICH IS THE OTHER HALF OF THE SAME GESTURE ──────────
+//
+// The ends came first (above). The BODY was left on the wall-only question:
+// wallBodyAt asked selectedWall(), so a press in the middle of a selected
+// line slid the sheet while a press on either end moved the point. One
+// record, two grabs, two answers -- and a drafter reads the one that does
+// nothing as the line being stuck.
+//
+// IT NEEDED NOTHING ELSE, for the ends' own reasons: a line's ends are
+// POOLED VERTICES like a wall's, movingEnds reads the two points any segment
+// has, the 'move' undo step restores points whatever record holds them, and
+// splitRunCorners leaves early on anything but a TOY wall. What the two
+// callers of the grab needed was to stop assuming the answer is a wall.
+
+test('a selected LINE drags by its BODY, moving whole', async ({ page }) => {
+  await open(page);
+  await h.armFromRail(page, 'line');
+  // LONG ENOUGH THAT ITS MIDDLE IS NOT AN END. The corner grab reaches
+  // CORNER_GRAB_PX in feet, which at this scale is several of them, so on a
+  // short line every press is inside one end's zone and a "body" drag is an
+  // end drag wearing its coat. 28 ft puts the middle 14 from either end.
+  await tapWorld(page, 2, 2);
+  await tapWorld(page, 30, 2);
+  await page.keyboard.press('Escape');
+  await h.selectTool(page, 'Select');
+
+  // Selection first, then the press on the middle -- the body grab's rule,
+  // the same one the ends keep.
+  await tapWorld(page, 16, 2);
+  await dragWorld(page, [16, 2], [16, 8]);
+
+  const saved = await save(page);
+  expect(saved.lines, 'still one line').toHaveLength(1);
+  const [line] = saved.lines;
+  // BOTH ENDS TRAVELLED THE SAME 6 FT, which is what makes it a body drag
+  // rather than an end drag that caught the wrong point: a line dragged by
+  // its middle keeps its length and its angle.
+  expect(line.start.z, 'the near end came down').toBeCloseTo(8, 1);
+  expect(line.end.z, 'and so did the far one').toBeCloseTo(8, 1);
+  expect([line.start.x, line.end.x].sort((a, b) => a - b),
+    'and neither moved along the line').toEqual([2, 30]);
+});
+
+test('an UNSELECTED line is not dragged by a press on its body', async ({ page }) => {
+  // The same rule the ends keep, and the reason: a press anywhere near any
+  // line in the drawing would otherwise move it instead of sliding the sheet.
+  await open(page);
+  await h.armFromRail(page, 'line');
+  // LONG ENOUGH THAT ITS MIDDLE IS NOT AN END. The corner grab reaches
+  // CORNER_GRAB_PX in feet, which at this scale is several of them, so on a
+  // short line every press is inside one end's zone and a "body" drag is an
+  // end drag wearing its coat. 28 ft puts the middle 14 from either end.
+  await tapWorld(page, 2, 2);
+  await tapWorld(page, 30, 2);
+  await page.keyboard.press('Escape');
+  await h.selectTool(page, 'Select');
+
+  await dragWorld(page, [16, 2], [16, 8]);
+  const saved = await save(page);
+  const [line] = saved.lines;
+  expect([line.start.z, line.end.z], 'the line did not move').toEqual([2, 2]);
+});
+
+test('one Ctrl+Z puts a body-dragged line back', async ({ page }) => {
+  await open(page);
+  await h.armFromRail(page, 'line');
+  // LONG ENOUGH THAT ITS MIDDLE IS NOT AN END. The corner grab reaches
+  // CORNER_GRAB_PX in feet, which at this scale is several of them, so on a
+  // short line every press is inside one end's zone and a "body" drag is an
+  // end drag wearing its coat. 28 ft puts the middle 14 from either end.
+  await tapWorld(page, 2, 2);
+  await tapWorld(page, 30, 2);
+  await page.keyboard.press('Escape');
+  await h.selectTool(page, 'Select');
+  await tapWorld(page, 16, 2);
+  await dragWorld(page, [16, 2], [16, 8]);
+
+  await page.locator('#model-undo').click();
+  await page.waitForTimeout(150);
+  const saved = await save(page);
+  const [line] = saved.lines;
+  expect([line.start.z, line.end.z], 'both ends are back').toEqual([2, 2]);
+});

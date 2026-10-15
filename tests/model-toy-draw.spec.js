@@ -1100,6 +1100,22 @@ test('§4 — clicking a selected bone offers break here or move this wall',
     await expect(boneChoice(page)).toContainText(/move/i);
   });
 
+// AND A LINE IS NOT A BONE. The body grab answers for a selected LINE as
+// well as a wall now (the LINE panel's own promise, finished), and this card
+// is a BONE's: BREAK HERE puts a joint in the outline the house is built
+// from. Offered on a line it would promise to break something that holds up
+// nothing -- so the click asks whether what it grabbed is a wall.
+test('§4 — a selected LINE is offered no bone choice', async ({ page }) => {
+  await open(page, base({
+    board: 'toy',
+    lines: [{ id: 'l1', levelId: 3, view: 'plan', layer: 'draft',
+      start: V(-6, 4), end: V(6, 4) }],
+  }));
+  const { at } = await frame(page);
+  await selectThen(page, at, [0, 4]);
+  await expect(boneChoice(page), 'no card over a line').toBeHidden();
+});
+
 test('§4 — BREAK HERE splits the wall at the foot mark that was clicked',
   async ({ page }) => {
     await open(page, base({ board: 'toy' }));
