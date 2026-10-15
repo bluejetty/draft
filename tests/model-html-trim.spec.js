@@ -129,3 +129,58 @@ test('a tee and an X draw no line across the joint', async ({ page }) => {
   // And the outside wall's inner face is still drawn beside the tee.
   expect(await darkAlong(5, 0.05, 5, 0.6), 'crossing it beside the tee finds the line').toBeGreaterThan(0);
 });
+
+// ── THE SECOND PRESS NEAR THE JUNCTION ────────────────────────────────────
+//
+// Movie: TRIM refuses the second wall -- "Press a DIFFERENT wall". It did, and
+// right where the tool is used: wallAt answers with the NEAREST wall, and the
+// two walls of a trim are at their closest AT THE JUNCTION -- which is where a
+// drafter aims when he is saying "run it into that one". A press a few inches
+// off the crossing on the picked wall's side is nearer the picked wall, so the
+// page read a second press on the same wall and refused the gesture.
+//
+// MEASURED BEFORE IT WAS FIXED: these two presses, on this fixture, came back
+// with the refusal on the strip and the wall untouched.
+test('the wall it runs into is taken even when the press is nearer the one in hand',
+  async ({ page }) => {
+    // TWO INTERIOR WALLS THAT CROSS at (8,7) -- "2 interior wall that cross or
+    // meet at corner should meld", which is what TRIM was asked for.
+    await open(page, house([
+      W('wall-5', [8, 2], [8, 12], 'stud_2x4'),
+      W('wall-6', [4, 7], [16, 7], 'stud_2x4'),
+    ]));
+    await page.keyboard.press('q');
+    await press(page, 8, 11);     // wall-5, upper half: that end moves
+    // 1.2" off wall-5 and 3.6" off wall-6: the press is NEARER THE WALL IN
+    // HAND, and means the other one.
+    await press(page, 8.1, 7.3);
+
+    await expect(page.locator('#strip-message'), 'the gesture was refused')
+      .not.toContainText('DIFFERENT');
+    const d = await saved(page);
+    expect(pt(wallOf(d, 'wall-5').end), 'the end came down to the crossing')
+      .toEqual([8, 7]);
+    expect(pt(wallOf(d, 'wall-5').start), 'and the other end stayed').toEqual([8, 2]);
+    // A TEE, NOT A CORNER: the wall it ran into is untouched.
+    expect(pt(wallOf(d, 'wall-6').start)).toEqual([4, 7]);
+    expect(pt(wallOf(d, 'wall-6').end)).toEqual([16, 7]);
+  });
+
+test('and with nothing else under the press it says so, which is now true',
+  async ({ page }) => {
+    // THE MESSAGE KEEPS ITS CASE. With the picked wall out of the running, a
+    // press with no OTHER wall in reach is what the sentence describes -- and
+    // the pick is kept, so the next press can still name the wall to run into.
+    await open(page, house([W('wall-5', [8, 2], [8, 12], 'stud_2x4')]));
+    await page.keyboard.press('q');
+    await press(page, 8, 3);      // the lower half: the end at z=2 moves
+    await press(page, 8, 9);      // the same wall, nothing else near it
+    await expect(page.locator('#strip-message')).toContainText('DIFFERENT');
+
+    // THE PICK SURVIVED IT: the next press still trims the wall first chosen,
+    // and the END it chose -- the lower one, down on to the outside wall.
+    await press(page, 12, 0);
+    const d = await saved(page);
+    expect(pt(wallOf(d, 'wall-5').start), 'trimmed to the outside wall').toEqual([8, 0]);
+    expect(pt(wallOf(d, 'wall-5').end), 'the far end stayed').toEqual([8, 12]);
+  });
