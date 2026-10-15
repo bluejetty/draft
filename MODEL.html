@@ -3382,8 +3382,19 @@
     // no table to answer from, so it invented `sizeIn: 6` for every pile and
     // handed the LABEL the raw id. A 12" pile and an 8" pile drew as the same
     // circle marked "pile12". build-house.js owns the table now.
+    // AND WHICH PILE IT IS, by what stands over it. Movie, 15 Oct: "anything
+    // under 'HOUSE' type outline for any storey will need P3, and thing under
+    // GARAGE will need P2, and the ext piles for roof and deck P1". The rule
+    // is build-house.js's; the bodies are this page's -- every building
+    // outline on the drawing, on any storey, with the LOT LINE left out
+    // because a lot is not a building (`site`, the flag auto-dims and areas
+    // already filter on for the same reason).
+    const pileBodies = (drawing?.outlines || [])
+      .filter(outline => outline.site !== true && (outline.points || []).length >= 3)
+      .map(outline => ({ points: outline.points, garage: outline.garage === true }));
     columns().forEach(column => R.drawColumn2D(ctx, toS, column, {
       footing: B ? B.footingFor(column.footing) : null,
+      mark: B ? B.pileMark(column.point, pileBodies) : null,
     }, env));
     // ── AND THE POSTS STANDING ON PILES OUT IN THE OPEN ─────────────────
     //
