@@ -86,12 +86,10 @@ async function build(page) {
 async function boneBuild(page) {
   await page.locator('#bone').click();
   await page.locator('[data-build-choice-build]').click();
-  // A ROOM PAST 31 FT SIDE WALL TO SIDE WALL is asked about after the build;
-  // these specs take the engineer's note and keep the garage clear.
-  const ask = page.locator('#garage-span');
-  if (await ask.isVisible({ timeout: 1500 }).catch(() => false)) {
-    await ask.locator('[data-garage-span-engineer]').click();
-  }
+  // A ROOM PAST THE BARE SPAN USED TO BE ASKED ABOUT HERE, and these specs
+  // took the engineer's note to keep the garage clear. There is no question
+  // now -- the span decides and the beam goes in -- so there is nothing to
+  // dismiss before the build is read.
   return build(page);
 }
 

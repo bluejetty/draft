@@ -579,28 +579,41 @@ test('the floor over it is engineered for the span it actually has',
     // need OWJ)" — and later "can you adjust the floor depths based on how
     // far the span is". TWO SPANS, TWO DEPTHS, which is the only check that
     // can tell a table being read from a constant being printed.
+    //
+    // BOTH UNDER THE BARE-SPAN CEILING, and that is the 15 Oct rule showing
+    // through: past it the deck is not engineered deeper, it is BROKEN BY A
+    // BEAM, so a pair straddling the ceiling would be comparing a 30 ft deck
+    // against an 18 ft row and finding the same joist in both. 24 and 28 are
+    // the widest pair the table still answers on its own.
     await openAsk(page);
     const narrow = owjNoteOf(await orderGarage(page, 'detached-gradebeam', 24));
     await openAsk(page);
-    const wide = owjNoteOf(await orderGarage(page, 'detached-gradebeam', 30));
+    const wide = owjNoteOf(await orderGarage(page, 'detached-gradebeam', 28));
     expect(narrow, 'the 24 ft room says what carries it').toMatch(/ENGINEERED OWJ/);
-    expect(wide, 'so does the 30 ft one').toMatch(/ENGINEERED OWJ/);
+    expect(wide, 'so does the 28 ft one').toMatch(/ENGINEERED OWJ/);
     expect(wide, 'and it is not the same joist').not.toBe(narrow);
     const depth = body => Number((body.match(/OWJ\s+(\d+)/) || [])[1]);
     expect(depth(wide), `${wide} is deeper than ${narrow}`)
       .toBeGreaterThan(depth(narrow));
+    // AND NEITHER NEEDED A BEAM: the whole pair is inside the bare deck.
+    expect((await h.savedDrawing(page)).beams.filter(b => b.auto === true).length,
+      'the 28 ft deck still spans wall to wall').toBe(0);
   });
 
-test('past 31 ft it asks how the floor is carried, and the bones wait',
+test('past the bare span it frames the floor itself, and the bones still grow',
   async ({ page }) => {
-    // THE 12 OCT RULING, REACHED FROM THIS DOOR: "if user goes past 31 ...
-    // have a popup that states: choices 1. REQ ENGINEERED ... Beam / or
-    // Joists. OR 2. PLACE COLUMNS to support BEAM".
+    // THE 12 OCT RULING, REACHED FROM THIS DOOR -- and the 15 Oct one over the
+    // top of it: "don't ask the user about placing beams and columns or the
+    // engineered owj, just make the decision based on spans don't ask the
+    // user, they can adjust it later if they need too". A card used to go up
+    // here offering the engineer's note or the columns, and the bone-grow trip
+    // waited on the answer.
     //
-    // AND THE REASON THE REVEAL IS ON. The grow trip REPLACES this page, so
-    // with the reveal on the card was raised and then carried off to the
-    // BONEYARD unanswered — the whole second choice offered to nobody.
-    // Measured that way: this failed before presentBuild learnt to wait.
+    // THE REVEAL IS STILL ON, and it is the half worth keeping: the grow trip
+    // REPLACES this page, so anything the press means to leave behind has to
+    // be in the drawing BEFORE the trip is taken. The card made that visible
+    // by waiting; with no card, the proof is that the BONEYARD's drawing
+    // already has the framing in it.
     await openAsk(page, { boneReveal: true });
     await h.openDriveThru(page);
     await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
@@ -610,15 +623,8 @@ test('past 31 ft it asks how the floor is carried, and the bones wait',
     await page.locator('#size-d').fill('40');
     await page.locator('#dt-bone').click();
 
-    const card = page.locator('#garage-span');
-    await expect(card).toBeVisible({ timeout: 6000 });
-    await expect(card).toContainText("40'-0\"");
-    // STILL HERE. The question is asked on this page or not at all.
-    expect(page.url(), 'the bones have not grown yet').toContain('MODEL.html');
-
-    await page.locator('[data-garage-span-columns]').click();
-    // AND NOW THE TRIP IS TAKEN, with the answer already in the drawing the
-    // BONEYARD is about to read.
+    await expect(page.locator('#garage-span'), 'no card to answer')
+      .toHaveCount(0);
     await page.waitForURL(/BONEYARD\.html/, { timeout: 8000 });
     const saved = await page.evaluate(async bucket => {
       const file = await window.SharedFileStore.loadSharedFile(bucket);

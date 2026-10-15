@@ -123,6 +123,22 @@ const MUTATIONS = [
     'build-house.js',
     c => c.replace("    const bears = typeof bearsAt === 'function' ? bearsAt : onOutline;",
       '    const bears = onOutline;')],
+
+  // MOVIE, 15 OCT: the bare deck ends where the table stops reaching at the
+  // spacing he lays. Read at 12" instead and his 30 ft garage goes back to
+  // having no beam at all, which is the drawing he reported.
+  ['the bare deck is measured at the 12" o.c. last resort', 'build-house.js',
+    c => c.replace('  const OWJ_BARE_OC_IN = 16;', '  const OWJ_BARE_OC_IN = 12;')],
+  // And the other half of the one number: the rows may run past the ceiling.
+  ['the rows are cut to a flat 30 ft again', 'build-house.js',
+    c => c.replace('doors = [], onWall = () => false, maxJoistFt = garageBareSpanFt(),',
+      'doors = [], onWall = () => false, maxJoistFt = 30,')],
+
+  // THE HEADER PICKS ITS EDGE BY MEASURE, not by taking the first one.
+  ['the stair header always takes the low edge', 'build-house.js',
+    c => c.replace('    const u = runHi > runLo ? hi : lo;', '    const u = lo;')],
+  ['a well with nothing to catch still gets a header', 'build-house.js',
+    c => c.replace('    if (runLo <= 0.01 && runHi <= 0.01) return null;', '')],
 ];
 
 if (MUTATE) {
@@ -131,7 +147,8 @@ if (MUTATE) {
   process.exit(all ? 0 : 1);
 }
 
-const { midSpanBeams, owjFor, OWJ_SPANS, garageBeamPlan, garageJoistAxis, garageSpanFt } = require('./harness-env.js').loadDraftModules().DraftBuildHouse;
+const { midSpanBeams, owjFor, OWJ_SPANS, garageBeamPlan, garageJoistAxis, garageSpanFt,
+  garageBareSpanFt, garageStairHeader } = require('./harness-env.js').loadDraftModules().DraftBuildHouse;
 
 let failed = 0, ran = 0;
 const checkEq = (label, got, want) => {
@@ -480,7 +497,7 @@ const poly = list => list.map(([x, z]) => ({ x, z }));
   const between = garageBeamPlan(box, { doors: [{ x: 9, z: 40 }, { x: 27, z: 40 }], onWall: back });
   checkEq('a 36 ft span takes one beam, front to back', between.beams.length, 1);
   checkEq('between the two doors, so the cars miss its columns', between.beams[0].start.x, 18);
-  checkEq('no joist row past 30 ft', between.rowFt <= 30, true);
+  checkEq('no joist row past the ceiling', between.rowFt <= garageBareSpanFt(), true);
   checkEq('columns no more than 10 ft apart, none at the wall it bears on',
     JSON.stringify(between.columns.map(c => c.z)), JSON.stringify([10, 20, 30, 40]));
   const wide = garageBeamPlan({ x0: 0, x1: 65, z0: 0, z1: 70 },
@@ -489,7 +506,25 @@ const poly = list => list.map(([x, z]) => ({ x, z }));
   checkEq('each between a pair of doors', JSON.stringify(wide.beams.map(b => b.start.x)), JSON.stringify([26, 50]));
   const lopsided = garageBeamPlan(box, { doors: [{ x: 3, z: 40 }, { x: 6, z: 40 }] });
   checkEq('doors that would leave a row past 30 ft give way to even rows', lopsided.beams[0].start.x, 18);
-  checkEq('a span the joists reach takes no beam', garageBeamPlan({ x0: 0, x1: 30, z0: 0, z1: 40 }).beams.length, 0);
+  checkEq('a span the joists reach takes no beam', garageBeamPlan({ x0: 0, x1: 28, z0: 0, z1: 40 }).beams.length, 0);
+  // ── THE 30 FT GARAGE HE REPORTED (Movie, 15 Oct) ────────────────────────
+  //
+  // "there should have been at least 1 beam (or 2 with one by the stairs) the
+  // span was too far". It used to take none: maxJoistFt was a flat 30, which
+  // let a 30 ft row through while the deck over it was being sized off the
+  // table's 12" o.c. last resort. One number for both halves now.
+  // His own: 30 across by 24 deep, doors in the front wall, so the joists run
+  // the way that wall runs and the span is the 30.
+  const his = { x0: 0, x1: 30, z0: 0, z1: 24 };
+  const hisDoors = [{ x: 8, z: 24 }, { x: 22, z: 24 }];
+  checkEq('and the span is the 30, side wall to side wall',
+    garageSpanFt(his, hisDoors), 30);
+  checkEq('and 30 ft -- his own detached garage -- takes one',
+    garageBeamPlan(his, { doors: hisDoors }).beams.length, 1);
+  checkEq('the bare-deck ceiling is the deepest OWJ at 16" o.c.',
+    garageBareSpanFt({ minDepthIn: 19.25 }), 28);
+  checkEq('and the row the beams cut to is that same number',
+    garageBeamPlan(his, { doors: hisDoors }).rowFt <= garageBareSpanFt(), true);
   // "side wall to side wall -- the sides that land on walls": a garage wider
   // than it is deep still spans across, between the walls without doors.
   const shallow = { x0: 0, x1: 36, z0: 0, z1: 24 };
@@ -500,6 +535,35 @@ const poly = list => list.map(([x, z]) => ({ x, z }));
   checkEq('and the beam still stands between the doors', garageBeamPlan(shallow, { doors: doorsFront }).beams[0].start.x, 18);
   checkEq('doors on a side wall turn the joists', garageJoistAxis(box, [{ x: 0, z: 20 }]), 'z');
   checkEq('no doors: the shorter side', garageJoistAxis(shallow, []), 'z');
+}
+
+// ── THE HEADER BY THE STAIRS ──────────────────────────────────────────────
+//
+// Movie, 15 Oct: "at least 1 beam (or 2 with one by the stairs)". The joists
+// run in x here, the well sits 2 ft off the left wall, and the mid-span beam
+// is at 15 -- so the stub by the wall is 2 ft and the inboard side runs 9.5.
+{
+  const well = { x0: 2, x1: 5.5, z0: 8, z1: 20 };
+  const header = garageStairHeader(well, { axis: 'x', supports: [0, 15, 30] });
+  checkEq('the header lands on the edge the joists run farther to reach',
+    header && header.start.x, 5.5);
+  checkEq('and runs the length of the well',
+    header && JSON.stringify([header.start.z, header.end.z]), JSON.stringify([8, 20]));
+  // THE OTHER WAY ABOUT: a well hard against the inboard support and open to
+  // the wall takes its header on the wall side instead. Same rule, read from
+  // the other end -- which is the check that tells the rule from the answer.
+  const far = garageStairHeader({ x0: 10, x1: 14, z0: 8, z1: 20 },
+    { axis: 'x', supports: [0, 15, 30] });
+  checkEq('the long side wins whichever side it is on', far && far.start.x, 10);
+  // A well with a support hard against both ends has nothing to catch.
+  checkEq('a well between two supports takes no header',
+    garageStairHeader({ x0: 0, x1: 15, z0: 8, z1: 20 }, { axis: 'x', supports: [0, 15] }), null);
+  // IN z, the same answers turned a quarter.
+  const turned = garageStairHeader({ x0: 8, x1: 20, z0: 2, z1: 5.5 },
+    { axis: 'z', supports: [0, 15, 30] });
+  checkEq('and the joists running in z turn it with them', turned && turned.start.z, 5.5);
+  checkEq('a well of no width is not a well', garageStairHeader({ x0: 2, x1: 2, z0: 8, z1: 20 },
+    { axis: 'x', supports: [0, 15, 30] }), null);
 }
 
 console.log(`\nmid-span beams: ${ran} checks, ${failed} failed`);

@@ -275,10 +275,6 @@ async function traceGarage(page, corners, entry = 'detached-frostwall') {
     await page.keyboard.press('Enter');
     await page.waitForTimeout(150);
   }
-  const span = page.locator('#garage-span');
-  if (await span.isVisible({ timeout: 1500 }).catch(() => false)) {
-    await span.locator('[data-garage-span-engineer]').click();
-  }
   await page.waitForTimeout(700);
   await page.locator('[data-model-save]').click();
   await expect(page.locator('[data-model-save]')).toHaveText(/saved/i, { timeout: 6000 });

@@ -763,10 +763,6 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // whether to line a garage above the house ceiling up with it.
             // An answer to the build's own question; nothing new is made.
             'YES - LINE UP (ONE ROOF)', 'NO - KEEP 10\'-1 3/4"',
-            // PAST THE OWJ TABLE OVER A GARAGE (Movie, 12 Oct): AUTO BEAM
-            // asks how a floor wider than 31 ft is carried. Its own answer
-            // to its own question; nothing new is made by hand.
-            '1. REQ ENGINEERED BEAM / OR JOISTS', '2. PLACE COLUMNS TO SUPPORT BEAM',
             // TRACE (Movie, 7 Oct): the instrument chip that shows the photos
             // and PDFs under a level, the ask that follows switching it on,
             // and the insert card. It places a tracing image -- the old
