@@ -232,3 +232,93 @@ test('a garage the drafter traces himself opens toward E1', async ({ page }) => 
       .toBe('0,1');
   });
 });
+
+// ── AND A TRACED GARAGE IS BUILT ALL THE WAY, NOT HALFWAY ────────────────
+//
+// Movie, 14 Oct, over a 2 storey detached garage he had drawn himself: "the
+// garage doors are showing on the main floor but not on 2nd floor and there
+// is no roof", then "and gap between main ceiling and 2nd floor wall".
+//
+// THREE SYMPTOMS, ONE CRASH. `order.size` is what the drive-thru was ASKED
+// for and a traced garage brings corners instead, so reading `.widthFt` off
+// it threw -- after the walls were committed and before the deck, the room's
+// windows and the roof. The storey stood on nothing, which is the gap; the
+// band between the two plates was empty because there was no floor there.
+//
+// AND THE TEST ABOVE WATCHED IT HAPPEN. It traces a garage and then reads
+// the overhead doors, which are dealt BEFORE the throw -- so it passed on
+// every run while the second storey came out hollow. That is the whole
+// reason these are asked of the ROOM: a check that stops at the ground floor
+// cannot see a build that stops after it.
+//
+// AN L, NOT A RECTANGLE, because his was: the design deals a rectangle's
+// four edges and a traced loop can have six, which left the two extra walls
+// blank once the crash was fixed -- one of them the front he was looking at.
+const TRACED_L = [[0, 0], [0, -18], [-16, -18], [-16, -27], [-38, -27], [-38, 0]];
+
+async function traceGarage(page, corners, entry = 'detached-frostwall') {
+  await h.openDriveThru(page);
+  await page.locator('#dt-tiles [data-build-family="detachedGarage"]').click();
+  await page.locator(`#dt-tiles [data-build-entry="${entry}"]`).click();
+  await page.locator('[data-drivethru-outline]').first().click();
+  await page.waitForTimeout(200);
+  const hit = (await page.locator('#readout').textContent()).match(/scale ([\d.]+) px\/ft/);
+  expect(hit, 'the readout publishes the scale').toBeTruthy();
+  const scale = Number(hit[1]);
+  const box = await page.locator('#plan').boundingBox();
+  for (const [x, z] of [...corners, corners[0]]) {
+    await page.mouse.click(box.x + box.width / 2 + x * scale, box.y + box.height / 2 + z * scale);
+    await page.waitForTimeout(90);
+  }
+  await page.waitForTimeout(200);
+  if (await page.locator('#corner-join').isVisible().catch(() => false)) {
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(150);
+  }
+  const span = page.locator('#garage-span');
+  if (await span.isVisible({ timeout: 1500 }).catch(() => false)) {
+    await span.locator('[data-garage-span-engineer]').click();
+  }
+  await page.waitForTimeout(700);
+  await page.locator('[data-model-save]').click();
+  await expect(page.locator('[data-model-save]')).toHaveText(/saved/i, { timeout: 6000 });
+  return h.savedDrawing(page);
+}
+
+test('a traced 2 storey garage gets its deck, its roof and its windows',
+  async ({ page }) => {
+    await open(page);
+    const saved = await traceGarage(page, TRACED_L);
+    const upperWalls = (saved.walls || [])
+      .filter(wall => wall.wallType === 'stud_2x6' && Number(wall.levelId) === UPPER);
+    expect(upperWalls.length, 'the storey over the garage never went up').toBe(TRACED_L.length);
+    // THE THREE HE NAMED, in the order he named them.
+    expect(upperOpenings(saved).length, 'the room came out with no windows')
+      .toBeGreaterThan(0);
+    expect((saved.roofs || []).length, 'nothing roofed it').toBeGreaterThan(0);
+    expect((saved.floors || []).some(floor => Number(floor.levelId) === UPPER),
+      'the room stands on no deck -- the gap he saw between the two plates').toBe(true);
+  });
+
+test('and every wall of it takes its share, not just a rectangle\'s four',
+  async ({ page }) => {
+    await open(page);
+    const saved = await traceGarage(page, TRACED_L);
+    const upperWalls = (saved.walls || [])
+      .filter(wall => wall.wallType === 'stud_2x6' && Number(wall.levelId) === UPPER);
+    const hosts = new Set(upperOpenings(saved).map(item => String(item.wallId)));
+    // THE LONG FRONT IS THE ONE THAT WENT BLANK. On this loop it is the 38 ft
+    // run, the last edge of six -- past where a four-edge design can reach,
+    // and the wall his elevation was looking at.
+    const longest = upperWalls.reduce((best, wall) => {
+      const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
+      return !best || len > best.len ? { wall, len } : best;
+    }, null);
+    expect(hosts.has(String(longest.wall.id)),
+      `the ${longest.len.toFixed(0)} ft wall has no window; hosts: ${[...hosts].join(', ')}`)
+      .toBe(true);
+    // AND NOT ONE WALL CARRIES THE LOT: a design that fell back to the
+    // rectangle would crowd the first four edges and leave the rest bare.
+    expect(hosts.size, 'the windows are bunched onto too few walls')
+      .toBeGreaterThanOrEqual(4);
+  });
