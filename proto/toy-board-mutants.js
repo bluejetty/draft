@@ -119,7 +119,7 @@ const MUTANTS = [
     test: 'does not leak' },
   { file: 'MODEL.html',
     name: 'the foot is rounded per coordinate instead of along the run',
-    find: '    const feet = Math.max(1, Math.round(len));\n    return { x: from.x + (dx / len) * feet, y: 0, z: from.z + (dz / len) * feet };',
+    find: '    const feet = Math.max(minFeet, Math.round(len));\n    return { x: from.x + (dx / len) * feet, y: 0, z: from.z + (dz / len) * feet };',
     with: '    return { x: Math.round(pt.x), y: 0, z: Math.round(pt.z) };',
     test: 'measured along the run' },
 ];
