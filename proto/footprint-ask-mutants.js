@@ -15,6 +15,14 @@
 // THE BASELINE RUNS FIRST AND ABORTS THE GATE. A mutant counts as KILLED when
 // the spec fails, so a spec that is already red kills everything and prints a
 // perfect sheet over broken code.
+//
+// ONE MUTANT WAS REMOVED RATHER THAN KILLED, and that is the gate working.
+// It restored the dragged wall's master offset before propagating -- which
+// reads as obviously necessary and is not: a plain corner drag never
+// re-measures that offset (relinkVertex belongs to the ASSEMBLY drag), so the
+// mutant changed no drawing and no spec could have caught it. The line came
+// out and the reason went into MODEL.html where the next reader will be
+// tempted to put it back.
 const { execSync } = require('child_process');
 const fs = require('fs');
 const ROOT = require('path').resolve(__dirname, '..');
@@ -69,13 +77,6 @@ const MUTANTS = [
     name: 'the master moves and nothing is told to follow it',
     find: '      masters.forEach(master => propagateMasterOutline(master));',
     with: '      masters.forEach(master => master);',
-    test: 'MOVE EVERYTHING goes through the master' },
-
-  { file: 'MODEL.html',
-    name: "the dragged wall's re-measured offset is propagated as it stands, "
-      + 'so the wall lands twice as far out',
-    find: '        was.vtx.offX = was.offX;\n        was.vtx.offZ = was.offZ;',
-    with: '        was.vtx.offX = was.vtx.offX;\n        was.vtx.offZ = was.vtx.offZ;',
     test: 'MOVE EVERYTHING goes through the master' },
 
   { file: 'MODEL.html',

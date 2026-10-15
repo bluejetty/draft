@@ -10690,19 +10690,25 @@
     // teleposts -- and moving the master without it would move a point
     // nothing follows.
     //
-    // THE DRAGGED WALL'S OFFSET GOES BACK FIRST, and this is the one line
-    // that is easy to get wrong in a way that looks right. The drag already
-    // re-measured it (relinkVertex on every move), so the vertex now records
-    // a 4 ft gap from a master that is about to move 4 ft -- propagate it as
-    // it stands and the wall lands 8 ft out. The whole building moving is
-    // exactly the case where the wall did NOT leave its master, so it keeps
-    // the offset it had before the hand touched it.
+    // AND THE DRAGGED WALL'S OFFSET NEEDS NOTHING DOING TO IT, which is worth
+    // saying because the opposite looks obviously true. A vertex that had
+    // been re-measured against its master during the drag would record a 4 ft
+    // gap from a master about to move 4 ft, and propagating it as it stood
+    // would land the wall 8 ft out -- twice what the hand did, from a gesture
+    // that reads correctly on the master and on every copy.
+    //
+    // IT CANNOT HAPPEN HERE because a plain corner or wall drag does not
+    // relink: relinkVertex is called from translateItemsBy -- the ASSEMBLY
+    // drag -- and from the ladder's rescale below, and `group` is not a kind
+    // that reaches this function. So the offsets are still the ones the
+    // vertex had before the hand touched it, which is exactly what a whole
+    // building moving wants.
+    //
+    // WRITTEN DOWN RATHER THAN GUARDED AGAINST. A restore here would be a
+    // line nothing can reach, and the mutation gate said so: the mutant that
+    // broke it changed no drawing. The day the corner drag relinks like the
+    // assembly drag does, this is the paragraph that says what that breaks.
     if (masters.size) {
-      pending.md.before.forEach(was => {
-        if (was.offX === undefined) return;
-        was.vtx.offX = was.offX;
-        was.vtx.offZ = was.offZ;
-      });
       masters.forEach(master => propagateMasterOutline(master));
       // UNDO RE-RUNS THE PROPAGATION rather than snapshotting what it
       // touched. The riders are reconstructed from master + offset, and undo
