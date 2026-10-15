@@ -2917,7 +2917,22 @@
   const fit = (wide = false) => {
     const own = allPoints(wide);
     const pts = thumbTarget || shootingPaper ? own : own.concat(hologramFramePoints());
-    if (!pts.length) { view.cx = 0; view.cz = 0; view.scale = 6; return; }
+    // THE EMPTY TEST STILL STANDS HERE FOR EVERY OTHER LEVEL, and only moves
+    // out of the way for the site. It used to fire on a site every time --
+    // allPoints measures the ACTIVE level's walls, lines and floors, and a
+    // site has none -- so the fit fell to its 6 px/ft default and the lot,
+    // the rows and the marks were never considered at all. Found by printing
+    // the view rather than by reading the function: the published scale was
+    // exactly the fallback's.
+    //
+    // NARROWED TO THE SITE, THOUGH. Carrying on past an empty level anywhere
+    // else would frame the elevation ring of a house on ANOTHER level -- a
+    // drafter standing on a storey he has not drawn yet would arrive zoomed
+    // to the house below instead of at the page's own default, which is a
+    // different view on every page that starts empty.
+    const sitePlan = activeLevelId() === SITE_LEVEL_ID && !thumbTarget && !shootingPaper;
+    if (!pts.length && !sitePlan) { view.cx = 0; view.cz = 0; view.scale = 6; return; }
+
     // ── THE ELEVATION MARKS ARE PART OF WHAT IS ON THE SHEET ───────────
     //
     // Movie, 27 Sep: *"can you adjust the 'default' opening window of model
@@ -2937,11 +2952,38 @@
     // to make a picture say so already.
     const framed = pts.slice();
     if (!thumbTarget && !shootingPaper) {
-      autoElevationCuts().forEach(cut => {
+      // ── THE SITE PLAN IS THE LOT, NOT THE HOUSE ────────────────────────
+      //
+      // Movie, 14 Oct: "also on the SITE plan when the user brings it up zoom
+      // to show the full site, dimensions and E1-E4 which will be located
+      // around the perimeter of the site and dimensions".
+      //
+      // `allPoints` measures walls, lines and floors -- the BUILDING -- and
+      // on every other level that is the subject. On this one the building is
+      // a thing standing on the subject, so a fit framed the house and left
+      // the lot, its two rows of figures and the ring of marks outside the
+      // window. Everything that is drawn out there is folded in here: the lot
+      // itself, the ends of every dimension row, and the ring as it is
+      // PAINTED (round the lot on this level), not as it is stored.
+      const site = sitePlan;
+      const LS = window.DraftLotSizes;
+      const LP = window.DraftLayoutPlan;
+      const lot = site && LS ? LS.siteOutlineOf(drawing?.outlines) : null;
+      if (lot) {
+        (lot.points || []).forEach(point => framed.push(point));
+        if (LP && typeof LP.siteDimStrings === 'function') {
+          LP.siteDimStrings(drawing).forEach(row => {
+            framed.push(row.start);
+            framed.push(row.end);
+          });
+        }
+      }
+      (siteMarkRing() || autoElevationCuts()).forEach(cut => {
         if (cut.startPt) framed.push(cut.startPt);
         if (cut.endPt) framed.push(cut.endPt);
       });
     }
+    if (!framed.length) { view.cx = 0; view.cz = 0; view.scale = 6; return; }
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     framed.forEach(p => {
       if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
@@ -8497,6 +8539,12 @@
     // asks again -- a drafter who pressed NOT NOW and walked away has
     // arrived at the question a second time, which is not nagging.
     if (Number(id) !== SITE_LEVEL_ID) lotAsked = false;
+    // AND ARRIVING AT SITE FRAMES THE SITE (Movie, 14 Oct: "when the user
+    // brings it up zoom to show the full site"). Only on the way IN, and only
+    // on this level: re-fitting on every level change would throw away the
+    // zoom a drafter had set on the floor he just left, which is the thing
+    // 0-to-fit exists to let him ask for.
+    if (Number(id) === SITE_LEVEL_ID) fit();
     paintLotPick();
     paint();
   };
