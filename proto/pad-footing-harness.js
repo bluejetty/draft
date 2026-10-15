@@ -28,6 +28,19 @@ const ROOT = path.join(__dirname, '..');
 // all 35 pass either way -- measured before the table was written, so a row
 // that goes red is the row and not the loader.
 const MUTATIONS = [
+  // MOVIE, 15 OCT: house beats garage wherever they overlap -- that is what
+  // puts P3 under a room over a garage and leaves P2 at the garage's own
+  // front. Asking the garage first marks the room's piles P2.
+  ['the garage is asked before the house, so a room over one reads P2',
+    'build-house.js',
+    c => c.replace("    if (loops.some(body => body.garage !== true && inRing(body.points))) return 'P3';\n"
+      + "    if (loops.some(body => body.garage === true && inRing(body.points))) return 'P2';",
+      "    if (loops.some(body => body.garage === true && inRing(body.points))) return 'P2';\n"
+      + "    if (loops.some(body => body.garage !== true && inRing(body.points))) return 'P3';")],
+  ['a pile outside every body is marked as if it carried the house',
+    'build-house.js',
+    c => c.replace("    return 'P1';\n  };\n\n  // A pad column may carry its own size",
+      "    return 'P3';\n  };\n\n  // A pad column may carry its own size")],
   // dc's rule, and the one the validator shares: an unknown id is a PAD.
   // Falling back to the last row instead hands a PILE, silently, to every
   // column whose footing id was typed wrong.
@@ -83,7 +96,7 @@ if (MUTATE) {
   process.exit(all ? 0 : 1);
 }
 
-const { COLUMN_FOOTINGS, footingFor, padSizeIn, padGroups } =
+const { COLUMN_FOOTINGS, footingFor, padSizeIn, padGroups, pileMark } =
   require('./harness-env.js').loadDraftModules().DraftBuildHouse;
 
 let failed = 0, ran = 0;
@@ -207,6 +220,47 @@ const pad = (x, z, footing = 'pad36', extra = {}) => ({ point: { x, z }, footing
     padGroups([pad(0, 0), pad(3.2, 0)], { joinGapFt: 0 }).length, 2);
   check('a wide gap joins what a narrow one did not',
     padGroups([pad(0, 0), pad(10, 0)], { joinGapFt: 8 }).length, 1);
+}
+
+// ── WHICH PILE IS WHICH: P1, P2, P3 ───────────────────────────────────────
+//
+// Movie, 15 Oct: "anything under 'HOUSE' type outline for any storey will need
+// P3, and thing under GARAGE will need P2, and the ext piles for roof and deck
+// P1" -- said first the long way round, with the room over the garage and the
+// transition at its front spelt out. The long version and the short one are
+// the same rule, and these are the checks that say so.
+{
+  const rect = (x0, x1, z0, z1) => [{ x: x0, z: z0 }, { x: x1, z: z0 },
+    { x: x1, z: z1 }, { x: x0, z: z1 }];
+  const house = { points: rect(0, 30, 0, 20), garage: false };
+  const garage = { points: rect(30, 50, 0, 20), garage: true };
+  // THE ROOM OVER THE BACK HALF of the garage, on the storey above: a HOUSE
+  // outline that overlaps a GARAGE one, which is the case the whole first
+  // telling was about.
+  const roomOver = { points: rect(30, 40, 0, 20), garage: false };
+  const all = [house, garage, roomOver];
+
+  check('a pile out in the open carries a deck or a roof', pileMark({ x: 60, z: 10 }, all), 'P1');
+  check('and so does one with nothing over it at all', pileMark({ x: 10, z: 40 }, all), 'P1');
+  check('a pile in the house is P3', pileMark({ x: 15, z: 10 }, all), 'P3');
+  check('a pile under the garage alone is P2', pileMark({ x: 45, z: 10 }, all), 'P2');
+  // HOUSE BEATS GARAGE WHERE THEY OVERLAP, which is the rule the transition is
+  // made of: under the room it is P3, and at the front of the garage -- roof
+  // over it and nothing else -- it goes back to P2. No branch says
+  // "transition"; the house loop stopping IS the transition.
+  check('under the room over the garage it is P3', pileMark({ x: 35, z: 10 }, all), 'P3');
+  check('and the garage front in front of it is P2 again',
+    pileMark({ x: 41, z: 10 }, all), 'P2');
+  check('the storey the room is on makes no difference -- any storey counts',
+    pileMark({ x: 35, z: 10 }, [garage, roomOver]), 'P3');
+
+  // EDGES AND NONSENSE. A pile with no point cannot be under anything, and a
+  // drawing with no outlines is every pile out in the open.
+  check('no bodies at all is P1', pileMark({ x: 15, z: 10 }, []), 'P1');
+  check('a point that is not numbers is P1', pileMark({ x: NaN, z: 0 }, all), 'P1');
+  check('a missing point is P1', pileMark(null, all), 'P1');
+  check('a loop of two points is not a body', pileMark({ x: 15, z: 10 },
+    [{ points: [{ x: 0, z: 0 }, { x: 30, z: 20 }], garage: false }]), 'P1');
 }
 
 console.log(`\npad footings: ${ran} checks, ${failed} failed`);

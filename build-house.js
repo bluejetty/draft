@@ -632,6 +632,46 @@ if (!window.DraftBuildHouse) {
   const footingFor = id =>
     COLUMN_FOOTINGS.find(footing => footing.id === id) || COLUMN_FOOTINGS[0];
 
+  // ── WHICH PILE IS WHICH: P1, P2, P3 ───────────────────────────────────
+  //
+  // Movie, 15 Oct: "rather than noting the piles "12" PILE" just make each
+  // pile "P1"", and then the whole rule in one line: "anything under 'HOUSE'
+  // type outline for any storey will need P3, and thing under GARAGE will
+  // need P2, and the ext piles for roof and deck P1".
+  //
+  // SO THE MARK IS A QUESTION ABOUT WHAT STANDS OVER THE PILE, asked of the
+  // outlines rather than stored on the column. A pile that is dragged, or a
+  // storey that is added over one, changes what it carries -- and a stored
+  // mark would go on saying what was true when it was poured. The table's own
+  // note has said the schedule mark belongs to the pile since the piles went
+  // in ("the schedule mark (P1/P2/P3) carries the length and the steel"); this
+  // is the half that was missing.
+  //
+  // HOUSE BEATS GARAGE wherever they overlap, which is the detail he spelt out
+  // first: a room over part of a garage puts P3 under all of that part, and
+  // the garage's own front -- roof over it and nothing else -- goes back to
+  // P2. Testing the house loops first IS that rule; there is no second branch
+  // for the transition, because the transition is where the house loop stops.
+  //
+  // `bodies` are the building outlines in plan, each {points, garage}. A lot
+  // line is not a building and must not be passed in.
+  const pileMark = (point, bodies = []) => {
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.z)) return 'P1';
+    const inRing = ring => {
+      let hit = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const a = ring[i], b = ring[j];
+        if ((a.z > point.z) !== (b.z > point.z)
+          && point.x < (b.x - a.x) * (point.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
+      }
+      return hit;
+    };
+    const loops = bodies.filter(body => Array.isArray(body?.points) && body.points.length >= 3);
+    if (loops.some(body => body.garage !== true && inRing(body.points))) return 'P3';
+    if (loops.some(body => body.garage === true && inRing(body.points))) return 'P2';
+    return 'P1';
+  };
+
   // A pad column may carry its own size typed on the plan; without one it
   // takes the picked footing's standard. A PILE has no such override -- its
   // size IS its diameter and the id says which.
@@ -959,6 +999,7 @@ if (!window.DraftBuildHouse) {
     midSpanBeams,
     COLUMN_FOOTINGS,
     footingFor,
+    pileMark,
     padSizeIn,
     padGroups,
   });

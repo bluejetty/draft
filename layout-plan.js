@@ -872,6 +872,17 @@ if (!window.DraftLayoutPlan) {
     if (num(levelId) === SITE_LEVEL_ID) return drawSitePlan(ctx, toS, saved, env);
 
     const view = env.view || null;
+    // WHICH PILE IS WHICH, by what stands over it (Movie, 15 Oct). The rule is
+    // build-house.js's; the bodies are every building outline on the drawing,
+    // on any storey, with the LOT LINE left out because a lot is not a
+    // building -- the same `site` flag sitePlanParts and auto-dims read.
+    const pileBodies = (Array.isArray(saved?.outlines) ? saved.outlines : [])
+      .filter(outline => outline && outline.site !== true
+        && Array.isArray(outline.points) && outline.points.length > 2)
+      .map(outline => ({ points: outline.points, garage: outline.garage === true }));
+    const pileMarkOf = column => (window.DraftBuildHouse
+      ? window.DraftBuildHouse.pileMark(column.point, pileBodies)
+      : String(column.footing || ''));
     const walls = planWalls(saved, levelId, view)
       .filter(wall => env.foundationGhost !== true || basementGhostKeeps(saved, wall.id));
     // A FLOOR LAYOUT HAS FLOORS, NOT WALLS of its own: the deck, its holes,
@@ -1246,6 +1257,9 @@ if (!window.DraftLayoutPlan) {
       } : null,
       fixtures: only(of('fixtures')),
 
+      // WHICH PILE IS WHICH, by what stands over it -- build-house.js's rule,
+      // asked with every building outline on the drawing (the LOT LINE is not
+      // a building, which is what `site` is for).
       // BEAMS AND COLUMNS, which a foundation sheet is arguably FOR: a site
       // builder setting teleposts reads them off this drawing. The painters
       // are render-2d.js's own -- drawBeam2D and drawColumn2D, with a mutation
@@ -1269,8 +1283,20 @@ if (!window.DraftLayoutPlan) {
       // ONLY A PILE CHANGES THE DRAWN SHAPE; a telepost is the default square.
       // The same rule MODEL.html:3266 applies, and it is the CALLER's answer
       // rather than the painter's.
+      //
+      // AND THE LABEL IS THE SCHEDULE MARK, as it is in MODEL space (Movie,
+      // 15 Oct): P3 under a house outline on any storey, P2 under a garage,
+      // P1 for the rest. It used to be the raw id, so a LAYOUT foundation
+      // sheet printed "pile12" under every pile -- the same defect MODEL.html
+      // carried until the table went in, surviving here because nothing on
+      // this side read the table either.
+      //
+      // THE DIAMETER IS STILL THE OLD HARD-CODED 6, deliberately: fixing it
+      // changes the size of every pile drawn on a LAYOUT sheet, which is a
+      // question about this page's pixels and not about what a pile is called.
+      // Named here rather than left to be found.
       columnFooting: column => (/pile/i.test(String(column.footing || ''))
-        ? { pile: true, sizeIn: 6, label: column.footing } : null),
+        ? { pile: true, sizeIn: 6, label: pileMarkOf(column) } : null),
       roofEnv: {
         isPrinting: false,
         offsetOutline: (pts, dist) => geo.offsetOutline(pts, dist),

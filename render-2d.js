@@ -889,7 +889,7 @@ if (!window.DraftRender2D) {
   function drawColumn2D(ctx, toS, column, options = {}, env) {
     if (!column?.point) return;
     const { footing = null, centreOnly = false, preview = false, below = false,
-      sizeIn: ownSizeIn = null } = options;
+      sizeIn: ownSizeIn = null, mark = null } = options;
     const origin = toS({ x: 0, y: column.point.y || 0, z: 0 });
     const unit = toS({ x: 1, y: column.point.y || 0, z: 0 });
     const pxPerFt = Math.max(0.001, Math.hypot(unit.x - origin.x, unit.y - origin.y));
@@ -918,12 +918,20 @@ if (!window.DraftRender2D) {
     ctx.moveTo(c.x - cross, c.y); ctx.lineTo(c.x + cross, c.y);
     ctx.moveTo(c.x, c.y - cross); ctx.lineTo(c.x, c.y + cross);
     ctx.stroke();
-    if (pile && footing.label && !preview && !env.isPrinting) {
+    // THE SCHEDULE MARK IF THE CALLER HAS ONE, the diameter if it has not.
+    // Movie, 15 Oct: "rather than noting the piles "12" PILE" just make each
+    // pile "P1"" -- what a pile carries is a question about the outlines over
+    // it, which is the page's to answer and not the painter's, so the mark
+    // comes in beside the footing exactly as the footing does. The diameter
+    // has not gone anywhere: it is the schedule's row, which is where a mark
+    // is a mark OF something.
+    const tag = pile ? (mark || footing.label) : null;
+    if (tag && !preview && !env.isPrinting) {
       ctx.fillStyle = env.columnColor;
       ctx.font = env.labelFont;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillText(footing.label, c.x, c.y + half + 3);
+      ctx.fillText(tag, c.x, c.y + half + 3);
     }
     ctx.restore();
   }
