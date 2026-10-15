@@ -942,6 +942,18 @@
       // floor framing is an answer about.
       const MAIN_FLOOR_LEVEL_ID = 3;
       const OVER_GARAGE_LEVEL_ID = 4;
+      // ── AND THE ROOM OVER A DETACHED GARAGE IS A FULL STOREY ───────────
+      //
+      // Movie, 14 Oct: "the Garage 2 storey shouldn't even have a 1.5 floor -
+      // it is more like a bungalow than a bilevel". OVER GARAGE is the HALF
+      // storey of a split -- a room over an ATTACHED garage, between MAIN FL
+      // and the 2ND FL beside it. A detached garage is not a split: its bay
+      // is one full storey and the room on top is the next, stacked square.
+      // MODEL files it on 2ND FL since that ruling (its GARAGE_ROOM_LEVEL_ID),
+      // so the DETACHED band reads that deck off this level; the attached
+      // band goes on reading OVER GARAGE, which is still exactly what it
+      // means. The two constants are the two buildings, not a rename.
+      const GARAGE_ROOM_LEVEL_ID = 5;
       const {
         normaliseLevelAssembly, defaultLevelAssembly, levelRole, JOIST_TYPES,
         FRAMING_TYPES, DEFAULT_FRAMING,
@@ -951,6 +963,14 @@
       // reading this cannot drift from the FLOOR JOISTS box in MODEL.
       const joistLabel = levelId => JOIST_TYPES.find(
         type => type.id === assembly(levelId).joistType)?.label ?? 'JST';
+      // THE SAME, FOR A LEVEL BEING READ THROUGH A ROLE THAT IS NOT ITS OWN:
+      // the room over a DETACHED garage is on 2ND FL and is framed as a
+      // garage deck (see detachedValues). Its row names the member it
+      // measures -- "OWJ" -- so the name has to come off the same answer the
+      // number did, or the card says OWJ over an I-joist depth.
+      const joistLabelAs = (levelId, roleId) => JOIST_TYPES.find(
+        type => type.id === normaliseLevelAssembly(
+          levelAssemblies[levelId], levelRole(roleId)).joistType)?.label ?? 'JST';
       // THE FOUNDATION POUR STAYS THIS PAGE'S OWN, and the module says why:
       // MODEL.dc.html has always drawn a foundation wall at the house's
       // 8'-1 1/8" while this page poured 8'-0", and BOTH WERE WRONG. Movie
@@ -2605,7 +2625,26 @@
         return EXTERIOR_CHOICES.includes(stored) ? stored : null;
       };
       const detachedValues = () => {
-        const over = assembly(OVER_GARAGE_LEVEL_ID);
+        // ── THE ROOM'S DECK: ITS LEVEL'S NUMBERS, THE GARAGE ROOM'S DEFAULTS
+        //
+        // The level is 2ND FL for a detached garage since 14 Oct (see
+        // GARAGE_ROOM_LEVEL_ID), and the two numbers are read off its
+        // assembly rather than retyped here, exactly as before.
+        //
+        // THE *ROLE* IS STILL THE ROOM-OVER-A-GARAGE'S, and that is not a
+        // fudge: a role is what a level is MADE of when nobody has said, and
+        // a deck clear-spanning a garage with no interior wall under it is
+        // 19 1/4" OWJ (Movie, 28 Sep: "the floor joists will need to be
+        // 19.25\" thick OWJ"). Read through 2ND FL's own role instead, this
+        // card would default a garage deck to the house's floor joist and
+        // disagree with the ENGINEERED OWJ note MODEL prints on the plan.
+        //
+        // STORED ALWAYS WINS, which is the whole of why this is safe: the
+        // moment anything is said about that deck -- a figure typed here, or
+        // the engineered depth MODEL writes when it raises the room -- the
+        // role stops answering and the drawing does.
+        const over = normaliseLevelAssembly(
+          levelAssemblies[GARAGE_ROOM_LEVEL_ID], levelRole(OVER_GARAGE_LEVEL_ID));
         return {
           wallThicknessIn: WALL_TYPE_VIEW[activeWallType].totalIn,
           garage: {
@@ -2798,7 +2837,7 @@
           shown: () => detachedRoomOver(), unit: 'in', typed: true,
           get: v => v.garage.overSheathingIn,
           put: value => (value <= 3
-            && setAssembly(OVER_GARAGE_LEVEL_ID, 'sheathingIn', value) !== false
+            && setAssembly(GARAGE_ROOM_LEVEL_ID, 'sheathingIn', value) !== false
             && 'Room above sheathing saved.') },
         // NAMED AFTER THE MEMBER IT MEASURES. Movie, 28 Sep: "the floor
         // joists will need to be 19.25\" thick OWJ". The depth was already
@@ -2807,11 +2846,11 @@
         // spanning. Read off the level rather than written here, so it stays
         // true if the joist type is ever changed.
         { side: 'right', key: 'overFloor',
-          name: () => joistLabel(OVER_GARAGE_LEVEL_ID),
-          tagName: () => `ROOM FL ${joistLabel(OVER_GARAGE_LEVEL_ID)}`,
+          name: () => joistLabelAs(GARAGE_ROOM_LEVEL_ID, OVER_GARAGE_LEVEL_ID),
+          tagName: () => `ROOM FL ${joistLabelAs(GARAGE_ROOM_LEVEL_ID, OVER_GARAGE_LEVEL_ID)}`,
           shown: () => detachedRoomOver(), unit: 'in', typed: true,
           get: v => v.garage.overJoistIn,
-          put: value => (setAssembly(OVER_GARAGE_LEVEL_ID, 'joistDepthIn', value) !== false
+          put: value => (setAssembly(GARAGE_ROOM_LEVEL_ID, 'joistDepthIn', value) !== false
             && 'Room above joist depth saved.') },
       ];
       const detachedSched = schedBand({

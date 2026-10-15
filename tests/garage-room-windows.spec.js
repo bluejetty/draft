@@ -20,7 +20,13 @@ const fs = require('fs');
 const path = require('path');
 
 const BUCKET = 'model-drawing';
-const UPPER = 4;
+// 2ND FL (Movie, 14 Oct): "the Garage 2 storey shouldn't even have a 1.5
+// floor - it is more like a bungalow than a bilevel". This read 4 -- OVER
+// GARAGE, which is a SPLIT's half storey and is where the room was filed
+// until that ruling. Nothing else in this file moves: the windows it is
+// about are dealt the same way onto the same four walls, one entry higher
+// up the level list.
+const UPPER = 5;
 const REPRO = JSON.parse(fs.readFileSync(
   path.join(__dirname, '..', 'proto', 'repro-garage-house.draft'), 'utf8'));
 

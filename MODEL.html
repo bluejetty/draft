@@ -4977,10 +4977,19 @@
   //
   // NULL IS THE COMMON ANSWER. Every level that is not a room over a detached
   // garage falls through to the ordinary arithmetic.
+  //
+  // EITHER STOREY ANSWERS, and the pair is not a hedge. The room moved from
+  // OVER GARAGE to 2ND FL on 14 Oct (GARAGE_ROOM_LEVEL_ID), and every drawing
+  // saved before that has it on OVER GARAGE -- those files open, and a stair
+  // in them is still standing on a slab. The id is only a cheap first pass
+  // anyway: what actually decides is the test below, one room loop with a
+  // DETACHED garage under it, which no house storey can pass.
   const garageSlabDescent = levelId => {
     const CV = window.DraftCutView;
     const LA = window.DraftLevelAssembly;
-    if (!CV || !LA || Number(levelId) !== OVER_GARAGE_LEVEL_ID) return null;
+    const roomLevel = Number(levelId) === GARAGE_ROOM_LEVEL_ID
+      || Number(levelId) === OVER_GARAGE_LEVEL_ID;
+    if (!CV || !LA || !roomLevel) return null;
     const loops = drawing?.outlines || [];
     const rooms = loops.filter(loop => Number(loop.levelId) === Number(levelId)
       && loop.garage !== true && (loop.points || []).length >= 3);
@@ -11038,13 +11047,15 @@
         detachedGarage: { ...(rows.detachedGarage || {}),
           garageFoundation: fdnKind, overGarage: 'room' } } };
     }
-    // THE STOREY GOES ON OVER GARAGE (4), which is where PROJECT already
-    // reads this room's joist and sheathing from -- its assembly carries the
-    // 19 1/4" OWJ deck Movie specified for it on 28 Sep. Added here when the
-    // drawing has not got it, the way the bilevel's build adds ENTRY, and
-    // filed in the levels list above MAIN FL.
+    // THE STOREY GOES ON 2ND FL (Movie, 14 Oct: "the Garage 2 storey
+    // shouldn't even have a 1.5 floor - it is more like a bungalow than a
+    // bilevel"). It went on OVER GARAGE until then, which is the HALF storey
+    // of a split and is why the cards all read "1.5 2ND FL" over a building
+    // that has no half anything -- see GARAGE_ROOM_LEVEL_ID. Added here when
+    // the drawing has not got it, the way the bilevel's build adds ENTRY,
+    // and filed in the levels list above MAIN FL.
     const levelItems = [];
-    const upperId = OVER_GARAGE_LEVEL_ID;
+    const upperId = GARAGE_ROOM_LEVEL_ID;
     let upperWalls = [];
     let upperOutline = null;
     let upperDeck = null;
@@ -11056,7 +11067,10 @@
     let upperOpenings = [];
     if (wantsRoom) {
       if (!levelPresent(upperId)) {
-        const level = { id: upperId, name: 'OVER GARAGE', elev: 6, visible: true };
+        // THE STOCK NAME AND HEIGHT FOR THIS LEVEL, not a pair typed here:
+        // 2ND FL stands a storey over MAIN FL, and a drawing that already
+        // carries the level keeps whatever it was named and set to.
+        const level = { id: upperId, name: '2ND FL', elev: 9, visible: true };
         const at = (drawing.levels || [])
           .findIndex(entry => Number(entry.id) === levelId);
         drawing.levels.splice(at < 0 ? 0 : at, 0, level);
@@ -15188,6 +15202,27 @@
   const HALF_LEVEL_IDS = Object.freeze([2, 4]);
   const ENTRY_LEVEL_ID = 2;
   const OVER_GARAGE_LEVEL_ID = 4;
+  // ── AND THE ROOM OVER A DETACHED GARAGE IS A FULL STOREY ───────────────
+  //
+  // Movie, 14 Oct, looking at the levels his 2 storey detached garage came
+  // out with: "the Garage 2 storey shouldn't even have a 1.5 floor - it is
+  // more like a bungalow than a bilevel".
+  //
+  // HE IS RIGHT ABOUT THE BUILDING. OVER GARAGE is the HALF storey of a
+  // split -- a room over an ATTACHED garage, sitting between MAIN FL and the
+  // 2ND FL beside it, which is why the ladder numbers it 1.5. A detached
+  // garage is not a split: its bay is one full storey and the room on top is
+  // the next, stacked square, with nothing beside either. Filing that room
+  // on 4 made the drawing say the opposite of what it is, and said it in the
+  // one place he reads it -- "1.5 2ND FL" on every card and every sheet.
+  //
+  // SO IT GOES ON 2ND FL, which he chose when asked. The cost is named
+  // rather than hidden: the deck's joist depth and sheathing are a LEVEL's
+  // assembly, so a drawing carrying both a house's 2nd floor and a detached
+  // garage's room now has one spec for both decks. That is the trade he
+  // took, and PROJECT's detached-garage band follows this constant so the
+  // schedule and the model cannot drift apart on which level it means.
+  const GARAGE_ROOM_LEVEL_ID = 5;
 
   // A LEVEL THE DRAWING ACTUALLY HAS. drawing-format.js validates every
   // record's levelId against the drawing's own level list and DROPS the ones
@@ -16385,6 +16420,33 @@
         `${between} -- ${fmtFt(span)} SPAN`,
         owj.fits ? 'TO BE CONFIRMED BY JOIST ENGINEER' : 'SPAN EXCEEDS OWJ TABLE -- CONFIRM WITH SUPPLIER',
       ].join('\n'));
+      // ── AND THE SCHEDULE SAYS THE SAME DEPTH ──────────────────────────
+      //
+      // The note on the plan and PROJECT's row for this deck have agreed
+      // since 28 Sep, and they agreed by COINCIDENCE: the room over a garage
+      // was filed on OVER GARAGE, whose stock assembly is the 19 1/4" OWJ.
+      // Movie moved that room to 2ND FL on 14 Oct ("more like a bungalow
+      // than a bilevel"), whose stock joist is the house's -- so without
+      // this the plan would say 19-1/4" and the schedule would say the
+      // house's floor, about a deck nobody can frame twice.
+      //
+      // WRITTEN HERE because this is where the depth is DECIDED. A second
+      // call to owjFor somewhere else is a second opinion waiting to drift.
+      //
+      // AND ONLY WHERE THE STOREY IS THIS ROOM'S ALONE. A joist depth is a
+      // LEVEL's, and a drawing carrying a house's 2nd floor as well as a
+      // garage's room has one level for both -- writing the garage's deck
+      // there would retype the house's floor without asking. Movie took that
+      // sharing knowingly when he chose 2ND FL; silently overwriting what he
+      // had already specified for the house is not the same thing.
+      const alone = bodies.filter(b => Number(b.storeyId) === Number(storeyId)).length === 1;
+      if (alone) {
+        drawing.levelAssemblies = drawing.levelAssemblies || {};
+        drawing.levelAssemblies[storeyId] = {
+          ...(drawing.levelAssemblies[storeyId] || {}),
+          joistDepthIn: owj.depthIn,
+        };
+      }
       return owj;
     };
     const reqNote = (points, storeyId, spanFt) => {

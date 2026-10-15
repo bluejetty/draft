@@ -137,8 +137,8 @@ test('its stud walls go on the storey, not on the set being looked at',
     expect(studs.length, 'two rings of framing: the bay and the room').toBe(8);
     expect(studs.filter(wall => wall.levelId === 3).length,
       'four round the garage').toBe(4);
-    expect(studs.filter(wall => wall.levelId === 4).length,
-      'four round the room over it').toBe(4);
+    expect(studs.filter(wall => wall.levelId === 5).length,
+      'four round the room over it, on 2ND FL').toBe(4);
     for (const wall of studs) {
       expect(wall.view, 'on the plan, never the set being looked at').toBe('plan');
       expect(wall.body, 'and known to be the garage-s').toBe('garage');
@@ -468,11 +468,19 @@ test('and the drawing will actually draw them', async ({ page }) => {
 // foundation is chosen, and a default that only fired on one of them is a
 // default a drafter meets at random. So these read the MODEL, not the cell —
 // what was BUILT over the garage, on which level, standing on what.
+//
+// AND THAT LEVEL IS 2ND FL, NOT OVER GARAGE (Movie, 14 Oct): "the Garage 2
+// storey shouldn't even have a 1.5 floor - it is more like a bungalow than a
+// bilevel". OVER GARAGE is a split's HALF storey -- a room over an ATTACHED
+// garage, beside the 2ND FL rather than instead of it -- so filing a detached
+// garage's room there made every card read "1.5 2ND FL" over a building with
+// no half anything in it.
+const ROOM = 5;
 const upperOf = saved => ({
-  level: (saved.levels || []).find(level => Number(level.id) === 4) || null,
-  walls: (saved.walls || []).filter(wall => Number(wall.levelId) === 4),
-  outlines: (saved.outlines || []).filter(loop => Number(loop.levelId) === 4),
-  floors: (saved.floors || []).filter(floor => Number(floor.levelId) === 4),
+  level: (saved.levels || []).find(level => Number(level.id) === ROOM) || null,
+  walls: (saved.walls || []).filter(wall => Number(wall.levelId) === ROOM),
+  outlines: (saved.outlines || []).filter(loop => Number(loop.levelId) === ROOM),
+  floors: (saved.floors || []).filter(floor => Number(floor.levelId) === ROOM),
   cell: saved.sectionTable?.rows?.detachedGarage?.overGarage || null,
 });
 const owjNoteOf = saved => (saved.notes || [])
@@ -482,8 +490,8 @@ const owjNoteOf = saved => (saved.notes || [])
 test('a frost wall carries a room over the garage', async ({ page }) => {
   const saved = await orderGarage(page, 'detached-frostwall');
   const up = upperOf(saved);
-  expect(up.level, 'the OVER GARAGE level is in the stack').toBeTruthy();
-  expect(up.level.name).toBe('OVER GARAGE');
+  expect(up.level, 'the 2ND FL level is in the stack').toBeTruthy();
+  expect(up.level.name).toBe('2ND FL');
   // WALLS AND A FLOOR, BOTH. A storey of walls standing on nothing is what
   // the section draws when the deck is left out, and the deck is also the
   // thing the span rule measures — so neither half is optional.
@@ -497,6 +505,35 @@ test('a frost wall carries a room over the garage', async ({ page }) => {
   expect(up.cell, 'and the schedule says so too').toBe('room');
 });
 
+test('and it reads as a full storey, with no half floor anywhere', async ({ page }) => {
+  // Movie, 14 Oct, reading the cards his 2 storey garage came out with: "the
+  // Garage 2 storey shouldn't even have a 1.5 floor - it is more like a
+  // bungalow than a bilevel".
+  //
+  // ASKED OF WHAT HE READS, which is the only place the fault ever showed.
+  // The records were all correct about this building; what was wrong was
+  // which LEVEL they were filed on, and a level is a word on a card.
+  await orderGarage(page, 'detached-frostwall');
+  const saved = await page.evaluate(async bucket => {
+    const file = await window.SharedFileStore.loadSharedFile(bucket);
+    return JSON.parse(await file.text());
+  }, BUCKET);
+  // NO HALF LEVEL WAS MINTED FOR IT. OVER GARAGE is not in the stock stack --
+  // the build used to add it -- so its absence here is this press declining
+  // to, rather than a level that merely happens not to be there.
+  expect((saved.levels || []).some(level => Number(level.id) === 4),
+    'an OVER GARAGE level was created for a building with no split in it')
+    .toBe(false);
+  // AND THE CARDS SAY SO. levelLabel numbers 2ND FL "2"; it numbered OVER
+  // GARAGE "1.5", which is the string he quoted.
+  const labels = await page.locator('#view-rail .seat .seat-label').allTextContents();
+  expect(labels.length, 'the preview rail is seated').toBeGreaterThan(0);
+  expect(labels.filter(text => /\b1\.5\b/.test(text)),
+    `a half-floor card over a detached garage: ${labels.join(' | ')}`).toEqual([]);
+  expect(labels.some(text => /\b2 2ND FL\b/.test(text)),
+    `no second-storey card at all: ${labels.join(' | ')}`).toBe(true);
+});
+
 test('a grade beam carries one too, and a thickened edge carries none',
   async ({ page }) => {
     const beam = upperOf(await orderGarage(page, 'detached-gradebeam'));
@@ -505,8 +542,12 @@ test('a grade beam carries one too, and a thickened edge carries none',
 
     await open(page);
     const thick = upperOf(await orderGarage(page, 'detached-thickened'));
-    expect(thick.level, 'no storey over a thickened edge').toBeFalsy();
-    expect(thick.walls.length, 'and nothing framed on it').toBe(0);
+    // NOTHING BUILT UP THERE, which is the claim; the LEVEL is no longer the
+    // way to ask it. 2ND FL is a stock level and is in the drawing whether or
+    // not anything stands on it -- OVER GARAGE was not, which is why its
+    // absence used to be the test. An empty storey is the right answer here
+    // and a missing one would be a different drawing.
+    expect(thick.walls.length, 'nothing framed over a thickened edge').toBe(0);
     expect(thick.floors.length, 'and no deck either').toBe(0);
     expect(thick.cell, 'the schedule does not claim one').not.toBe('room');
   });
@@ -607,7 +648,7 @@ test('and a way up into the room, landing on the garage slab',
     // plus the 4" the slab is poured below the concrete. His two guesses
     // bracket it.
     const saved = await orderGarage(page, 'detached-gradebeam');
-    const stairs = (saved.stairs || []).filter(stair => Number(stair.levelId) === 4);
+    const stairs = (saved.stairs || []).filter(stair => Number(stair.levelId) === ROOM);
     expect(stairs.length, 'one flight into the room over the garage').toBe(1);
     const stair = stairs[0];
     expect(stair.auto, 'placed by the press, not by hand').toBe(true);
