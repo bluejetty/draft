@@ -15664,19 +15664,37 @@
     // the answer for edge i of one the answer for edge i of the other.
     const gableAt = index =>
       ring.length === pts.length && sharedEdge(index);
+    // ── AND NO VALLEY RUNS INTO A CORNER (geometry-2d cricketRing) ───────
+    //
+    // Movie, 19 Sep and 14 Oct: a cricket where the low points are, "2ft of
+    // extra watershed rather than valley running into the corner". An inside
+    // corner of this ring is where the skeleton starts a valley, so the
+    // corner is cut back 2 ft each way and the valley ends there instead.
+    //
+    // AFTER the offset and the kinds, never before: the chamfer is a fact
+    // about the ROOF -- it is the roof's own valley that must not reach the
+    // roof's own corner -- and the kinds are what tell an inside corner
+    // standing in open air from one dying into a wall.
+    const plain = {
+      points: pts.map(pt => ({ x: pt.x, z: pt.z })),
+      edges: pts.map((_, index) => (gableAt(index) ? 'gable' : 'eave')),
+      ...(ring.length === pts.length ? { edgeOverhang } : {}),
+    };
+    const cricketed = G.cricketRing(plain.points, plain.edges, plain.edgeOverhang);
+    const shaped = cricketed || plain;
     drawing.roofs = drawing.roofs || [];
     const roof = {
       id: newDrawingItemId('roof'),
-      points: pts.map(pt => ({ x: pt.x, z: pt.z })),
+      points: shaped.points,
       levelId: ROOF_LEVEL_ID,
       sourceLevelId,
       sourceShapeId: null,
-      edges: pts.map((_, index) => (gableAt(index) ? 'gable' : 'eave')),
+      edges: shaped.edges,
       overhang: roofOverhangFt,
       // Indexed like `edges`, and under the SAME guard: an offset that changed
       // the edge count has made the per-edge answer meaningless, and a wrong
       // array is worse than none because the painter would trust it.
-      ...(ring.length === pts.length ? { edgeOverhang } : {}),
+      ...(shaped.edgeOverhang ? { edgeOverhang: shaped.edgeOverhang } : {}),
       pitch: roofPitch,
       fascia: ROOF_FASCIA_IN,
       garage,

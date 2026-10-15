@@ -749,6 +749,99 @@ if (!window.DraftGeometry2D) {
     return arcs.map(a => ({ ...a }));
   };
 
+  // ── THE CRICKET: A VALLEY MUST NOT RUN INTO A CORNER ────────────────────
+  //
+  // Movie, 19 Sep, on two roofs at different heights: "it will need a
+  // 'cricket' between the roofs at places where low points could cause water
+  // damage". Asked on 14 Oct what the two feet in his note measured: "keep
+  // the valley 2ft from the corner so 2ft of extra watershed rather than
+  // valley running into the corner".
+  //
+  // WHERE THE LOW POINT IS. An L-shaped roof -- a house with a garage on the
+  // same plate, or a house with a room over one -- has a REFLEX corner, and
+  // the straight skeleton runs a valley out of it. Measured on the premade
+  // bungalow + garage: one arc, (-4,20) -> (6,10), starting exactly at the
+  // corner. Everything that falls on either wing drains along that line into
+  // one point, which is the dead corner he is naming.
+  //
+  // WHAT A CRICKET IS, GEOMETRICALLY: the corner cut off. Chamfer the reflex
+  // vertex 2 ft back along each leg and the wavefront answers differently --
+  // the single valley becomes TWO, starting at the two ends of the chamfer,
+  // and the chamfer itself raises a small hip face between them. That face is
+  // the cricket, and the valleys now stop 2 ft short of where the corner was.
+  // Measured the same way: (-4,22) -> (6,17.86) and (-6,20) -> (-1.86,10).
+  //
+  // WHICH IS WHY THIS IS A CHANGE TO THE RING AND NOT A NEW KIND OF RECORD.
+  // A cricket bears on another roof's sloping plane, so a roof record -- which
+  // bears on a level's plate -- cannot hold one. As a chamfer it needs
+  // nothing new: the skeleton, the faces, the 3D lift, the elevations, the
+  // sections and the DXF all read the ring they already read.
+  //
+  // ONLY BETWEEN TWO EAVES. A flush edge is a roof dying into a wall; there
+  // is no open air to shed into and a chamfer there would cut across the
+  // wall it dies on.
+  //
+  // AND ONLY WHERE THERE IS ROOM. Both legs have to be longer than twice the
+  // cut, or the chamfer eats a whole edge and the ring it leaves is a
+  // different roof rather than the same roof with its corner taken off.
+  const CRICKET_FT = 2;
+  const cricketRing = (points, edges, edgeOverhang, cricketFt = CRICKET_FT) => {
+    const ring = Array.isArray(points) ? points : [];
+    const n = ring.length;
+    const cut = Number(cricketFt);
+    if (n < 4 || !Number.isFinite(cut) || cut <= 0) return null;
+    const kinds = Array.isArray(edges) ? edges : [];
+    const overs = Array.isArray(edgeOverhang) ? edgeOverhang : null;
+    const area = ring.reduce((sum, p, i) => {
+      const q = ring[(i + 1) % n];
+      return sum + (p.x * q.z - q.x * p.z);
+    }, 0);
+    // A reflex corner turns the opposite way to the ring's own winding.
+    const sign = area >= 0 ? 1 : -1;
+    const len = i => {
+      const a = ring[i], b = ring[(i + 1) % n];
+      return Math.hypot(b.x - a.x, b.z - a.z);
+    };
+    const outPts = [];
+    const outKinds = [];
+    const outOvers = [];
+    let cutAny = false;
+    ring.forEach((v, i) => {
+      const prev = (i + n - 1) % n;
+      const a = ring[prev], b = ring[(i + 1) % n];
+      const inLen = Math.hypot(v.x - a.x, v.z - a.z);
+      const outLen = Math.hypot(b.x - v.x, b.z - v.z);
+      const reflex = inLen > 1e-9 && outLen > 1e-9
+        && sign * ((v.x - a.x) * (b.z - v.z) - (v.z - a.z) * (b.x - v.x)) < -1e-9;
+      const openAir = kinds[prev] !== 'gable' && kinds[i] !== 'gable';
+      const room = len(prev) > 2 * cut && len(i) > 2 * cut;
+      if (!reflex || !openAir || !room) {
+        outPts.push({ x: v.x, z: v.z });
+        outKinds.push(kinds[i] || 'eave');
+        outOvers.push(overs ? overs[i] : null);
+        return;
+      }
+      cutAny = true;
+      // Back along the incoming edge, then forward along the outgoing one.
+      outPts.push({ x: v.x - ((v.x - a.x) / inLen) * cut, z: v.z - ((v.z - a.z) / inLen) * cut });
+      // THE CHAMFER IS AN EAVE and takes the overhang of the edge it leads
+      // into: it is open roof over the corner, with a board along it like any
+      // other eave. Its own entry is the NEW edge; the two it sits between
+      // keep their kinds.
+      outKinds.push('eave');
+      outOvers.push(overs ? overs[i] : null);
+      outPts.push({ x: v.x + ((b.x - v.x) / outLen) * cut, z: v.z + ((b.z - v.z) / outLen) * cut });
+      outKinds.push(kinds[i] || 'eave');
+      outOvers.push(overs ? overs[i] : null);
+    });
+    if (!cutAny) return null;
+    return {
+      points: outPts,
+      edges: outKinds,
+      ...(overs ? { edgeOverhang: outOvers.map(v => (Number.isFinite(v) ? v : 0)) } : {}),
+    };
+  };
+
   // Straight-skeleton wavefront for the tagged footprint: eave edges advance
   // inward at a uniform rate while gable edges stay put, and the paths the
   // corners trace as edges collapse become the hip / valley / ridge lines.
@@ -2494,6 +2587,8 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     offsetOutline,
     offsetOutlineVariable,
     gableOverhangFt,
+    CRICKET_FT,
+    cricketRing,
     roofSkeleton,
     mergeVertex,
     roofFaces,

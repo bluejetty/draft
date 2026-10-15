@@ -197,11 +197,18 @@ if (!window.DraftGarageRoofs) {
       out.push({ p: { x: v.x + cur.nx * d[i], z: v.z + cur.nz * d[i] }, kind });
     });
     if (out.some(o => !Number.isFinite(o.p.x) || !Number.isFinite(o.p.z))) return null;
-    return {
+    const shape = {
       points: out.map(o => o.p),
       edges: out.map(o => (o.kind.gable ? 'gable' : 'eave')),
       edgeOverhang: out.map(o => o.kind.over),
     };
+    // AND NO VALLEY RUNS INTO A CORNER -- the cricket, geometry-2d's
+    // cricketRing. The same cut MODEL's raiseRoofOver makes, out of the same
+    // function, so a roof this page REGROUPS comes out the shape the build
+    // would have given it. Two rules would mean a bungalow whose garage wall
+    // height changed grew or lost a cricket for no reason a drafter could
+    // see, which is the fault regroupRoofs exists to avoid.
+    return G().cricketRing(shape.points, shape.edges, shape.edgeOverhang) || shape;
   };
 
   // How far an attached garage's sill sits under the house sill.
