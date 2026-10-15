@@ -10461,6 +10461,17 @@
   // Only the SELECTED wall's own two corners are grabbable. Selection first,
   // then drag: without that rule every pan begun near any corner anywhere in
   // the drawing would move it instead of sliding the sheet.
+  // THE ONE SEGMENT THE DRAFTER HAS CHOSEN, wall or line -- the two records
+  // whose shape IS two points. selectedWall() stays as it is: the WALL drags
+  // and the assembly panel are about walls, and widening it would hand a line
+  // to machinery that reads wallType and refLine.
+  const selectedSegment = () => {
+    if (selection.length !== 1) return null;
+    const { type, item } = selection[0];
+    if (type === 'wall') return walls().includes(item) ? item : null;
+    if (type === 'line') return lines().includes(item) ? item : null;
+    return null;
+  };
   const cornerAt = worldPt => {
     // THE MASTER'S OWN CORNERS, on the boneyard, and this is §4's missing
     // gesture. Same rule as a wall's: SELECTION FIRST, then the grab -- so a
@@ -10473,8 +10484,22 @@
       const G = window.DraftGeometry2D;
       return G.nearestVertex(lone.points || [], worldPt, CORNER_GRAB_PX / view.scale);
     }
-    const selectedSeg = selectedWall();
-    if (!selectedSeg || !walls().includes(selectedSeg)) return null;
+    // AND A SELECTED LINE'S TWO ENDS, which the LINE panel has promised since
+    // it was written -- "A LINE IS TWO POINTS. DRAG AN END TO CHANGE IT." --
+    // and this page had no path for: this offered the selected WALL's ends and
+    // nothing else, and the multi-item drag needs two things selected, so a
+    // press on a single selected line's end slid the sheet. A panel that
+    // describes a gesture the page has not got is worse than one that says
+    // nothing, because the drafter reads it as the drag failing.
+    //
+    // IT NEEDED NOTHING ELSE. A line's ends are POOLED VERTICES like a wall's
+    // (the LINE tool commits them through poolVertex), the 'corner' drag
+    // writes a point through and relinks it, the 'move' undo step restores
+    // points whatever record holds them, and splitRunCorners leaves early on
+    // anything but a TOY wall. The gesture was already general; the pick was
+    // the only thing that was not.
+    const selectedSeg = selectedSegment();
+    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;
     const G = window.DraftGeometry2D;
     const ends = [selectedSeg.start, selectedSeg.end].filter(Boolean);
     return G.nearestVertex(ends, worldPt, CORNER_GRAB_PX / view.scale);
