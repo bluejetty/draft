@@ -10021,6 +10021,29 @@
       .find(stair => stairRings(stair, levels).some(ring => pointInRing(ring, worldPt))) || null;
   };
 
+  // ── THE HOLE A STAIR CLIMBS THROUGH ─────────────────────────────────────
+  //
+  // buildStairOpenings files each well with its stair's id, and never cuts a
+  // second one for a stair that already has one -- so a flight that moves and
+  // leaves its well behind has no way back to it. The drag takes the well
+  // with it, and this is what it asks for.
+  //
+  // A SHARED WELL IS NOT MOVED, AND IS SAID RATHER THAN IGNORED. A bilevel's
+  // two flights climb through ONE hole (`stairIds`), sized to both: dragging
+  // one flight's share of it by that flight's delta would move the other
+  // flight's headroom out from under it. `shared` is what the release reports.
+  const stairWellOf = stair => {
+    const mine = (drawing?.surfaceOpenings || []).filter(hole =>
+      Number(hole.stairId) === Number(stair.id)
+      || (hole.stairIds || []).map(Number).includes(Number(stair.id)));
+    const alone = mine.filter(hole => (hole.stairIds || []).length <= 1
+      && Array.isArray(hole.points) && hole.points.length >= 3);
+    return {
+      hole: alone.length === 1 ? alone[0] : null,
+      shared: mine.length > alone.length,
+    };
+  };
+
   // A ROOF IS PICKED ON THE LEVEL IT IS DRAWN ON, which for a built house is
   // ROOF: roofs() is the active level's, and a roof that is not painted is
   // not offered -- this file's rule everywhere. LAST in the chain, as on the
@@ -23913,7 +23936,7 @@
     // as landing and the stair as failing to draw. Movie's own ordering --
     // "AUTO STAIR in the STAIR properties panel, THEN a placement system".
     if (activeTool === 'stair') {
-      sayOnStrip('STAIR places through AUTO STAIR for now — hand placement is next.');
+      sayOnStrip('STAIR places through AUTO STAIR for now — hand placement is next. One already placed moves: pick it with SELECT and drag.');
       return;
     }
     if (activeTool === 'cut') { cutPress(at); return; }
@@ -24035,6 +24058,39 @@
       moveDrag = {
         kind: 'roomtag', tag: tagGrab, before: { ...tagGrab },
         grab: at, from: { ...tagGrab.at },
+        sx: e.clientX, sy: e.clientY, active: false,
+      };
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
+    // ── MOVING A STAIR ────────────────────────────────────────────────────
+    //
+    // Movie, 15 Oct: "Stairs locked -- no move or drag". They were: a stair
+    // could be picked and deleted and that was the whole of it, so a flight
+    // the suggester parked down the middle of the house could only be taken
+    // out and re-suggested into the same place.
+    //
+    // A FLIGHT IS TWO POINTS AND IT TRAVELS AS ONE. start is the top nosing
+    // and end fixes the downhill direction, so moving both by the same delta
+    // keeps the run, the bearing, the shape and the turn -- a stair that is
+    // moved is the same stair somewhere else, which is what a drag means.
+    //
+    // WITH THE OTHER SELECTED-OBJECT DRAGS, BEFORE THE CORNER, which is this
+    // page's own order for them (dimrow, note and roomtag all sit above it):
+    // the branch is reachable ONLY for a stair already selected, so a press on
+    // a chosen flight tearing a wall corner out from under it would be the
+    // page answering a gesture nobody made. The pick chain's own precedence
+    // (wall and line BEFORE stair) is untouched -- it decides what the first
+    // click selects, and nothing can be dragged here that it did not choose.
+    const stairGrab = filterAllows('stair') ? stairAt(at) : null;
+    if (stairGrab && selection.some(entry => entry.item === stairGrab)) {
+      const well = stairWellOf(stairGrab);
+      moveDrag = {
+        kind: 'stair', stair: stairGrab, before: { ...stairGrab },
+        grab: at, start: { ...stairGrab.start }, end: { ...stairGrab.end },
+        well: well.hole, wellBefore: well.hole ? { ...well.hole } : null,
+        wellPoints: well.hole ? well.hole.points.map(pt => ({ x: pt.x, z: pt.z })) : null,
+        shared: well.shared,
         sx: e.clientX, sy: e.clientY, active: false,
       };
       canvas.setPointerCapture(e.pointerId);
@@ -24226,6 +24282,38 @@
           // A NEW POINT EACH EVENT, never the old one edited: the undo step
           // holds the point the tag started at, and it must stay that point.
           md.tag.at = { x: md.from.x + raw.x - md.grab.x, z: md.from.z + raw.z - md.grab.z };
+          paint();
+          return;
+        }
+        if (md.kind === 'stair') {
+          // NEW POINTS EACH EVENT, measured from where each one started and
+          // never edited in place -- the undo step holds the objects the drag
+          // began with, which is the discipline every branch above keeps and
+          // the only thing that makes one Ctrl+Z put the flight back.
+          //
+          // BY THE DELTA, absolutely from the grab, for the wall branch's
+          // reason: both points travel exactly the same distance rather than
+          // the same distance to within the drift of a hundred events -- and a
+          // flight whose two ends drift apart is a flight whose run and
+          // bearing have quietly changed.
+          let dx = raw.x - md.grab.x, dz = raw.z - md.grab.z;
+          // WITH THE FOOT LIGHT LIT THE FOOT IS THE SNAP, per axis, exactly as
+          // the wall drag does it -- quantiseFeet reached rather than rounding
+          // written here again.
+          const Q = window.DraftToyConstraints;
+          if (footOn && Q) { dx = Q.quantiseFeet(dx); dz = Q.quantiseFeet(dz); }
+          md.stair.start = { x: md.start.x + dx, z: md.start.z + dz };
+          md.stair.end = { x: md.end.x + dx, z: md.end.z + dz };
+          // THE WELL TRAVELS WITH THE FLIGHT, by the same delta rather than
+          // re-cut from the moved stair: the hole's LENGTH comes from headroom
+          // and may have been nudged or drawn wider than the run, and re-
+          // deriving it would silently replace the drafter's hole with the
+          // suggester's. A NEW ARRAY each event, for the reason above -- the
+          // undo copy holds the array the drag started with.
+          if (md.well) {
+            md.well.points = md.wellPoints.map(pt => ({ x: pt.x + dx, z: pt.z + dz }));
+          }
+          md.moved = Math.abs(dx) > 1e-9 || Math.abs(dz) > 1e-9;
           paint();
           return;
         }
@@ -24482,6 +24570,43 @@
           if (md.tag.at.x !== md.from.x || md.tag.at.z !== md.from.z) {
             undoStack.push({ kind: 'props', edits: [{ item: md.tag, before: md.before }] });
             markDirty();
+          }
+          moveDrag = null;
+          if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+          paint();
+          return;
+        }
+        if (md.kind === 'stair') {
+          if (md.moved) {
+            // ONE GESTURE, ONE UNDO, the well in the same step: the drafter
+            // made one drag, so one Ctrl+Z puts the flight and its hole back
+            // together. A 'props' step restores records in place, which is
+            // what a stair needs -- it has no vertices of its own for a
+            // 'move' step to walk.
+            const edits = [{ item: md.stair, before: md.before }];
+            if (md.well) edits.push({ item: md.well, before: md.wellBefore });
+            // TOUCHED BY HAND, SO NO LONGER THE SUGGESTER'S. The format says
+            // `auto` tags "a placement the auto-stair rule suggested (cleared
+            // the moment the drafter touches it)" -- and a drag is the plainest
+            // touch there is. In the undo step, so Ctrl+Z gives it back.
+            md.stair.auto = false;
+            undoStack.push({ kind: 'props', edits });
+            markDirty();
+            // WHAT MOVED AND WHAT DID NOT, in one sentence. The two things a
+            // drafter cannot see from the plan are a well left behind because
+            // it is shared, and a well that has travelled off the floor it was
+            // cut from -- so both are said rather than left to be discovered.
+            const said = [md.well ? 'STAIR and its well moved' : 'STAIR moved'];
+            if (md.shared) said.push('the shared well stayed put — two flights climb through it');
+            if (md.well) {
+              const G = window.DraftGeometry2D;
+              const host = (drawing?.floors || [])
+                .find(floor => String(floor.id) === String(md.well.hostId));
+              if (host && !G.ringInsideRing(md.well.points, host.points || [])) {
+                said.push('the well now runs off its floor');
+              }
+            }
+            sayOnStrip(`${said.join(' · ')}.`);
           }
           moveDrag = null;
           if (e && canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
