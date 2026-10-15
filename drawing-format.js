@@ -1015,6 +1015,7 @@ if (!window.DraftDrawingFormat) {
       if (!safeId(id) || seen.has(id) || !start || !end || beamLevelId == null || !view) return null;
       if (Math.hypot(end.x - start.x, end.z - start.z) < 0.001) return null;
       seen.add(id);
+      const stairId = Number(beam?.stairId);
       return {
         id,
         start,
@@ -1023,6 +1024,12 @@ if (!window.DraftDrawingFormat) {
         view,
         mode: oneOf(beam?.mode, ['flush', 'dropped'], 'flush'),
         auto: beam?.auto === true, // tour-placed; the stair re-derive may replace it
+        // THE WELL THIS BEAM HEADS OFF. A stairwell header is filed against
+        // its stair exactly as the well itself is (surfaceOpenings' `stairId`),
+        // so the pass that places them can tell a well that already has its
+        // header from one that has not -- and a stair taken away can take its
+        // header with it. Absent on every other beam.
+        ...(Number.isInteger(stairId) && stairId > 0 ? { stairId } : {}),
         layer: 'S-BEAM',
       };
     }), env.drops).filter(Boolean);

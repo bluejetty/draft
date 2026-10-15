@@ -1043,10 +1043,10 @@
      board's "break the bone here, or move this wall?", a different bone
      entirely: reusing its id because both are about a bone and both offer
      two answers is exactly the collision DEFINITIONS.md exists to stop. */
-  #bone-choice, #build-choice, #garage-lesson, #corner-join, #garage-align, #garage-span, #trace-ask, #trace-insert { position:fixed; inset:0; z-index:7; display:flex;
+  #bone-choice, #build-choice, #garage-lesson, #corner-join, #garage-align, #trace-ask, #trace-insert { position:fixed; inset:0; z-index:7; display:flex;
     align-items:center; justify-content:center; padding:24px;
     background:rgba(0,0,0,0.35); }
-  #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden], #corner-join[hidden], #garage-align[hidden], #garage-span[hidden],
+  #bone-choice[hidden], #build-choice[hidden], #garage-lesson[hidden], #corner-join[hidden], #garage-align[hidden],
   #trace-ask[hidden], #trace-insert[hidden] { display:none; }
   /* THE TRACE CARD: what the file is, the scale it was drawn at, and the
      two-point CALIBRATE on its own preview. */
@@ -1790,19 +1790,6 @@
     <div class="promote-row">
       <button type="button" data-garage-align-yes>YES - LINE UP (ONE ROOF)</button>
       <button type="button" data-garage-align-no>NO - KEEP <span data-garage-align-keep>10'-1 3/4"</span></button>
-    </div>
-  </div>
-</div>
-
-<!-- PAST THE OWJ TABLE OVER A GARAGE (Movie, 12 Oct): "if user goes past 31
-     ... have a popup that states: choices 1. REQ ENGINEERED ... Beam / or
-     Joists. OR 2. PLACE COLUMNS to support BEAM". -->
-<div id="garage-span" data-garage-span hidden role="dialog" aria-label="Floor over the garage">
-  <div class="promote-card">
-    <p><b>FLOOR OVER THE GARAGE SPANS <span data-garage-span-ft>32'-0"</span></b><br>That is past what open web joists reach side wall to side wall (31'-0"). Choose how it is carried:</p>
-    <div class="promote-row">
-      <button type="button" data-garage-span-engineer>1. REQ ENGINEERED BEAM / OR JOISTS</button>
-      <button type="button" data-garage-span-columns>2. PLACE COLUMNS TO SUPPORT BEAM</button>
     </div>
   </div>
 </div>
@@ -4669,10 +4656,11 @@
       const query = back.toString();
       location.assign(`${GROW_PAGE}?grow=1&back=${encodeURIComponent(query ? `?${query}` : '')}`);
     };
-    // THE ASK IS ALREADY ON SCREEN BY NOW: the builds queue askGarageSpan on
-    // the same tick, before they say orderServed, so by the time this timer
-    // runs the card is either up or there was no question.
-    setTimeout(() => { if (garageSpanHolds(grow)) return; grow(); }, 0);
+    // ON ITS OWN TICK, as it always did. This used to hand the trip over to
+    // the garage-span card when that card was up, so the bones did not grow
+    // out from under a question the drafter was still answering. There is no
+    // question any more -- the span decides -- so there is nothing to wait for.
+    setTimeout(grow, 0);
   };
 
   // ── E1-E4 ON THE SITE PLAN STAND OUTSIDE THE LOT ──────────────────────
@@ -11267,13 +11255,11 @@
     // deck above it -- the same relation the house press walks.
     const framed = [];
     const framedSwept = [];
-    const garageSpanAsk = [];
     if (wantsRoom) {
       const beamed = placeAutoBeam({ levelId });
       if (beamed !== -1) {
         framed.push(...beamed.placed);
         framedSwept.push(...beamed.restored);
-        garageSpanAsk.push(...(beamed.garagePending || []));
       }
       // AND A WAY UP INTO IT -- Movie, 13 Oct: a storey over the garage "will
       // need a set of stairs too", "along one side", off an 8 ft entry. The
@@ -11286,6 +11272,11 @@
       // that to be possible.
       const stairs = placeGarageRoomStair(upperId);
       if (stairs !== -1) framed.push(...stairs.placed);
+      // AND THE HEADER THE WELL NEEDS, now the well is cut. The beam pass
+      // above ran before the stair and could not see it -- see
+      // placeStairHeaders, which adds and moves nothing else, so running it
+      // here costs the beams nothing.
+      framed.push(...placeStairHeaders({ levelId }));
     }
     const dimmed = [];
     const dimSwept = [];
@@ -11319,9 +11310,6 @@
         .concat(dimSwept.length ? [{ list: drawing.dimensions, items: dimSwept }] : []) });
     markDirty();
     paint();
-    // ASKED AFTER THE PRESS HAS FINISHED, so the garage is on screen behind
-    // the question -- the house press's own rule.
-    if (garageSpanAsk.length) setTimeout(() => askGarageSpan(garageSpanAsk), 0);
     return outline;
   };
   // AND THE BOARD GETS OUT OF THE WAY once it has built what was ordered:
@@ -13707,67 +13695,13 @@
     garageAlignCard.querySelector('[data-garage-align-no]').addEventListener('click', () => answer(false));
   }
 
-  // ── THE GARAGE SPAN ASK ──────────────────────────────────────────────────
-  //
-  // placeAutoBeam drafts choice 1 (no columns, the REQ note) and hands back
-  // what it could not decide; this asks once, then frames those levels again
-  // with the answer -- one undo step for the answer, apart from the build's.
-  // 1 keeps the note; 2 puts DROPPED ENGINEERED BEAMs on columns under the
-  // floor, between the garage doors where they allow.
-  const garageSpanCard = document.getElementById('garage-span');
-  let garageSpanLevels = null;
-  // THE BONE-GROW TRIP WAITS ON THIS CARD. presentBuild hands its trip over
-  // when the card is up and the answer runs it -- see the note on
-  // presentBuild for the defect that bought this. The handover is one-way and
-  // one-shot: a card that is already down holds nothing, so a press that
-  // asked nothing leaves for the BONEYARD on its own tick as it always did.
-  let garageSpanGrow = null;
-  const garageSpanHolds = grow => {
-    if (!garageSpanCard || garageSpanCard.hidden) return false;
-    garageSpanGrow = grow;
-    return true;
-  };
-  const askGarageSpan = pending => {
-    if (!garageSpanCard || !pending || !pending.length) return false;
-    const widest = Math.max(...pending.map(entry => entry.spanFt));
-    garageSpanCard.querySelector('[data-garage-span-ft]').textContent =
-      window.DraftFormatters.formatArchitecturalInches(widest * 12);
-    garageSpanLevels = [...new Set(pending.map(entry => entry.levelId))];
-    garageSpanCard.hidden = false;
-    return true;
-  };
-  if (garageSpanCard) {
-    const answer = choice => {
-      const levels = garageSpanLevels || [];
-      garageSpanLevels = null;
-      garageSpanCard.hidden = true;
-      let beams = 0, columns = 0;
-      levels.forEach(levelId => {
-        const result = placeAutoBeam({ levelId, garageChoice: choice });
-        if (result === -1) return;
-        beams += result.beams;
-        columns += result.columns;
-        if (result.placed.length || result.restored.length) {
-          undoStack.push({ kind: 'built', walls: [], outlines: [], list: null,
-            items: result.placed, restored: result.restored });
-        }
-      });
-      markDirty();
-      paint();
-      sayOnStrip(choice === 'columns'
-        ? `Floor over the garage: DROPPED ENGINEERED BEAM on columns (${beams} beam${beams === 1 ? '' : 's'}, ${columns} column${columns === 1 ? '' : 's'} on this level).`
-        : 'Floor over the garage: REQ ENGINEERED BEAM / OR JOISTS noted on its floor layout.');
-      // AND NOW THE BONES GROW, with the answer already in the drawing the
-      // BONEYARD is about to read. Taken out of the hold first so a trip that
-      // somehow fails cannot be taken twice by the next answer.
-      const grow = garageSpanGrow;
-      garageSpanGrow = null;
-      if (grow) grow();
-    };
-    garageSpanCard.querySelector('[data-garage-span-engineer]').addEventListener('click', () => answer('engineer'));
-    garageSpanCard.querySelector('[data-garage-span-columns]').addEventListener('click', () => answer('columns'));
-  }
-
+  // THE GARAGE SPAN ASK WAS HERE, and it is gone: a card offering "1. REQ
+  // ENGINEERED BEAM / OR JOISTS" or "2. PLACE COLUMNS TO SUPPORT BEAM", the
+  // levels it was asked about, and a hold that kept the bones from growing
+  // out from under a question still on screen. Movie, 15 Oct: "don't ask the
+  // user about placing beams and columns or the engineered owj, just make the
+  // decision based on spans don't ask the user, they can adjust it later if
+  // they need too".
   const buildTracedHouse = order => {
     const TP = window.DraftTracedPlans;
     if (!TP || !order?.entry) return null;
@@ -16204,6 +16138,92 @@
       });
   };
 
+  // ── THE BEAM BY THE STAIRS ──────────────────────────────────────────────
+  //
+  // Movie, 15 Oct, on the detached 2-storey garage: "there should have been at
+  // least 1 beam (or 2 with one by the stairs)". The second one is not another
+  // row across the floor -- it is the header the cut joists land on where the
+  // well interrupts them. build-house.js picks the edge (garageStairHeader);
+  // this finds the wells and the supports to ask it with.
+  //
+  // A PASS OF ITS OWN, AND IT RUNS AFTER THE STAIRS. placeAutoBeam runs before
+  // them on a build -- a decision with its own note, because the stair MOVES to
+  // clear a beam and not the other way about -- so at beam time the well does
+  // not exist yet. This is additive and re-derives nothing: it reads the beams
+  // already placed, never moves one, and skips a well whose header is already
+  // there (`stairId` on the beam, filed the way the well itself is). So it can
+  // be called again after anything, which is what makes it safe to call from
+  // both the press and the build.
+  //
+  // ONLY WHERE THERE ARE BEAMS. A deck the joists cross in one span has no
+  // support line to measure a header against, and this page has never drawn
+  // headers round a well on a plain OWJ deck -- that is the joist engineer's
+  // sheet, and the note on it says so.
+  const placeStairHeaders = ({ levelId }) => {
+    const BH = window.DraftBuildHouse;
+    if (!BH || !Array.isArray(drawing?.beams)) return [];
+    const rows = drawing.beams.filter(beam => beam.auto === true && beam.mode === 'dropped'
+      && Number(beam.levelId) === Number(levelId) && beam.start && beam.end);
+    if (!rows.length) return [];
+    const boxOf = points => {
+      const xs = points.map(p => p.x), zs = points.map(p => p.z);
+      return { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
+    };
+    const centre = points => points.reduce((m, p) => ({
+      x: m.x + p.x / points.length, z: m.z + p.z / points.length }), { x: 0, z: 0 });
+    const inRing = (ring, p) => {
+      let hit = false;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const a = ring[i], b = ring[j];
+        if ((a.z > p.z) !== (b.z > p.z)
+          && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
+      }
+      return hit;
+    };
+    let beamId = newStructureId(drawing.beams);
+    const placed = [];
+    storeyBodiesOver(levelId).forEach(({ outline, storeyId }) => {
+      const points = outline.points.map(pt => ({ x: pt.x, z: pt.z }));
+      const mine = rows.filter(beam => inRing(points, {
+        x: (beam.start.x + beam.end.x) / 2, z: (beam.start.z + beam.end.z) / 2 }));
+      if (!mine.length) return;
+      // THE JOISTS RUN ACROSS THE BEAMS, so the axis is read off a beam rather
+      // than re-derived from the garage doors: one answer, and it is the one
+      // the beams were actually placed on.
+      const first = mine[0];
+      const axis = Math.abs(first.end.z - first.start.z)
+        >= Math.abs(first.end.x - first.start.x) ? 'x' : 'z';
+      const body = boxOf(points);
+      const supports = [
+        axis === 'x' ? body.x0 : body.z0,
+        axis === 'x' ? body.x1 : body.z1,
+        ...mine.map(beam => (axis === 'x' ? beam.start.x : beam.start.z)),
+      ];
+      (drawing.surfaceOpenings || [])
+        .filter(hole => Number(hole.levelId) === Number(storeyId)
+          && hole.hostType === 'floor' && (hole.points || []).length >= 3
+          && Number(hole.stairId) > 0
+          && inRing(points, centre(hole.points))
+          && !drawing.beams.some(beam => Number(beam.stairId) === Number(hole.stairId)))
+        .forEach(hole => {
+          const header = BH.garageStairHeader(boxOf(hole.points), { axis, supports });
+          if (!header) return;
+          // FLUSH, AND NO COLUMN UNDER IT: a header sits in the floor catching
+          // joists and lands on the trimmers either side of the opening. A
+          // post there would stand in the garage holding up a stairwell.
+          const record = {
+            id: beamId, start: { ...header.start, y: 0 }, end: { ...header.end, y: 0 },
+            levelId: Number(levelId), view: first.view, mode: 'flush', auto: true,
+            stairId: Number(hole.stairId),
+          };
+          beamId += 1;
+          drawing.beams.push(record);
+          placed.push({ list: drawing.beams, item: record });
+        });
+    });
+    return placed;
+  };
+
   // THE WORKER, AND THE BUTTON IS NOT ITS ONLY CALLER -- the same split
   // placeAutoDims takes, for the same reason: the bone press folds this into
   // the ONE undo step that covers the whole build, and a worker that pushed
@@ -16336,7 +16356,7 @@
     return out.length ? out : null;
   };
 
-  const placeAutoBeam = ({ levelId = FOUNDATION_LEVEL_ID, garageChoice = null } = {}) => {
+  const placeAutoBeam = ({ levelId = FOUNDATION_LEVEL_ID } = {}) => {
     if (!drawing) return -1;
     // A LEVEL THE DRAWING ACTUALLY HAS, which is what levelPresent exists for:
     // a beam filed against a level this drawing has not got would paint once
@@ -16464,35 +16484,30 @@
       return garageOutlines.some(o => elevOf(o.levelId) < elevOf(storeyId) - 1e-6 && inLoop(o.points, c));
     };
     const OWJ_NOTE = /^ENGINEERED OWJ/;
-    // ── PAST THE TABLE: ASK ─────────────────────────────────────────────
+    // ── PAST THE TABLE: THE SPAN DECIDES ────────────────────────────────
     //
-    // Movie, 12 Oct: "if user goes past 31 ... have a popup that states:
-    // choices 1. REQ ENGINEERED ... Beam / or Joists. OR 2. PLACE COLUMNS to
+    // Movie, 12 Oct, on a span the joists cannot reach: "PLACE COLUMNS to
     // support BEAM" -- "the beam doesn't need to be steel", "dropped beam ...
     // better for ducts etc ... insulation of 2nd floor", "DROPPED ENGINEERED
-    // BEAM". The answer is KEPT ON THE DRAWING by what it wrote: a re-run
-    // finds the REQ note (choice 1) or the beam tag (choice 2) and gives the
-    // same answer again, so AUTO BEAM never asks twice for one garage.
+    // BEAM".
+    //
+    // IT USED TO ASK WHICH OF TWO ANSWERS HE WANTED, in a popup, and keep the
+    // answer on the drawing so a re-run did not ask twice. The popup is gone --
+    // Movie, 15 Oct: "don't ask the user about placing beams and columns or
+    // the engineered owj, just make the decision based on spans don't ask the
+    // user, they can adjust it later if they need too". The span decides now,
+    // every time, and what he does not like he moves.
+    //
+    // THE OTHER ANSWER WENT WITH THE QUESTION. "1. REQ ENGINEERED BEAM / OR
+    // JOISTS" wrote a note and left the floor with nothing holding it up,
+    // which is the one outcome a drawing cannot be left in by a rule that no
+    // longer asks. Its note is still SWEPT below, so a drawing answered that
+    // way before comes back framed instead of keeping a stale label.
     const REQ_NOTE = /^REQ ENGINEERED BEAM/;
     const BEAM_TAG = /^DROPPED ENGINEERED BEAM$/;
     const notesNow = drawing.notes || [];
-    const isStoreyNote = (note, storeyId, re) => Number(note.levelId) === Number(storeyId)
-      && note.view === 'floor' && re.test(String(note.body || ''));
     const isBeamTag = note => Number(note.levelId) === Number(levelId) && note.view === view
       && BEAM_TAG.test(String(note.body || ''));
-    const keptChoice = (points, storeyId) => {
-      if (notesNow.some(note => isStoreyNote(note, storeyId, REQ_NOTE))) return 'engineer';
-      if (notesNow.some(note => isBeamTag(note) && inLoop(points, note.anchor || {}))) return 'columns';
-      return null;
-    };
-    const choiceFor = garageLoops.length ? (() => {
-      const kept = new Map();
-      bodies.forEach(({ outline, storeyId }) => {
-        const pts = outline.points.map(pt => ({ x: pt.x, z: pt.z }));
-        if (overGarage(pts, storeyId)) kept.set(outline, keptChoice(pts, storeyId));
-      });
-      return outline => kept.get(outline) || null;
-    })() : () => null;
     // EVERY GARAGE NOTE THIS PRESS OWNS GOES BEFORE ANY IS WRITTEN: the OWJ
     // and REQ notes on the floor above, the beam tags beside the beams.
     drawing.notes = notesNow.filter(note => !isBeamTag(note)
@@ -16568,14 +16583,6 @@
       }
       return owj;
     };
-    const reqNote = (points, storeyId, spanFt) => {
-      const box = boxOf(points);
-      addNote({ x: (box.x0 + box.x1) / 2, z: (box.z0 + box.z1) / 2 }, storeyId, 'floor', [
-        'REQ ENGINEERED BEAM / OR JOISTS',
-        `SIDE WALL TO SIDE WALL -- ${fmtFt(spanFt)} SPAN`,
-        'BY ENGINEER',
-      ].join('\n'));
-    };
     // THE GARAGE UNDER A BODY, and its doors and walls for the beam plan.
     const garageUnder = (points, storeyId) => {
       const c = points.reduce((m, p) => ({ x: m.x + p.x / points.length, z: m.z + p.z / points.length }), { x: 0, z: 0 });
@@ -16597,7 +16604,6 @@
       const t = len2 > 1e-9 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2)) : 0;
       return Math.hypot(a.x + dx * t - p.x, a.z + dz * t - p.z) <= tol;
     });
-    const garagePending = [];
     let garageBeams = 0, garageColumns = 0;
     const placeGarageColumns = (points, storeyId) => {
       const garage = garageUnder(points, storeyId);
@@ -16641,14 +16647,17 @@
         const box = boxOf(points);
         const axis = window.DraftBuildHouse.garageJoistAxis(garage ? boxOf(garage.points) : box, doors);
         const span = axis === 'x' ? box.x1 - box.x0 : box.z1 - box.z0;
-        if (window.DraftBuildHouse.owjFor(span, { minDepthIn: 19.25 }).fits) {
+        // THE BARE DECK ONLY WHILE THE TABLE REACHES AT 16" O.C. Movie's own
+        // ceiling, read off his own table -- see garageBareSpanFt. It used to
+        // be `owjFor(span).fits`, which let the deck ride the 12" o.c. last
+        // resort: the detached 2-storey garage came out 30 ft wall to wall on
+        // "ENGINEERED OWJ 23-1/4" @ 12" O.C." and no beam at all, which is the
+        // drawing he was looking at when he said the span was too far.
+        if (span <= window.DraftBuildHouse.garageBareSpanFt({ minDepthIn: 19.25 }) + 1e-6) {
           owjNote(points, storeyId, { spanFt: span, between: 'SIDE WALL TO SIDE WALL' });
           return;
         }
-        const choice = garageChoice || choiceFor(outline);
-        if (choice === 'columns') { placeGarageColumns(points, storeyId); return; }
-        reqNote(points, storeyId, span);
-        if (!choice) garagePending.push({ levelId, storeyId, spanFt: span });
+        placeGarageColumns(points, storeyId);
         return;
       }
       const plan = window.DraftBuildHouse.midSpanBeams(points, {
@@ -16708,8 +16717,14 @@
     placed.push(...owjNotePlaced);
     beamCount += garageBeams;
     columnCount += garageColumns;
+    // AND THE HEADERS, LAST, when every row this press laid is on the drawing
+    // for them to be measured against. On a BUILD there are no wells yet and
+    // this finds nothing -- the build calls the same pass again once the
+    // stairs are in.
+    const headers = placeStairHeaders({ levelId });
+    placed.push(...headers);
+    beamCount += headers.length;
     return {
-      garagePending,
       placed,
       restored: [
         ...(sweptBeams.length ? [{ list: drawing.beams, items: sweptBeams }] : []),
@@ -18587,7 +18602,6 @@
     // complete job". No branch here says so; the lookup does.
     const sweptStructure = [];
     const framedTally = { beams: 0, columns: 0, unsupported: 0 };
-    const garageSpanPending = [];
     [FOUNDATION_LEVEL_ID, ...window.DraftLayerViews
       .floorLevels(drawing?.levels || []).map(level => Number(level.id))]
       .forEach(id => {
@@ -18598,10 +18612,7 @@
         framedTally.beams += beamed.beams;
         framedTally.columns += beamed.columns;
         framedTally.unsupported += beamed.unsupported;
-        garageSpanPending.push(...(beamed.garagePending || []));
       });
-    // ASKED AFTER THE PRESS HAS FINISHED, so the house is on screen behind it.
-    if (garageSpanPending.length) setTimeout(() => askGarageSpan(garageSpanPending), 0);
     if (framedTally.beams) {
       parts.push(`${framedTally.beams} beam${framedTally.beams === 1 ? '' : 's'}`
         + ` and ${framedTally.columns} column${framedTally.columns === 1 ? '' : 's'}`
@@ -18661,6 +18672,16 @@
         parts.push(`${staired.refused.length} stair opening`
           + `${staired.refused.length === 1 ? '' : 's'} NOT cut`);
       }
+      // AND THE HEADERS THE WELLS NEED, now the wells are cut. Every level the
+      // beam pass walked, since a stair through a garage room can be on any of
+      // them -- the pass itself is the one that knows there is nothing to do.
+      [FOUNDATION_LEVEL_ID, ...window.DraftLayerViews
+        .floorLevels(drawing?.levels || []).map(level => Number(level.id))]
+        .forEach(id => {
+          const headers = placeStairHeaders({ levelId: id });
+          extra.push(...headers);
+          framedTally.beams += headers.length;
+        });
     }
     // AND THE FRAMING ROUND THE ENTRY, once the well it frames is cut.
     // The side walls stop at the front foundation wall's inside face.
@@ -23279,12 +23300,9 @@
         + `${result.columns} column${many(result.columns)} on `
         + `${levelLabel(result.levelId, level && level.name)} — re-run after `
         + 'outline edits to refresh them.' + hanging
-      : result.garagePending?.length
-        ? 'The floor over the garage is past what open web joists reach — choose how it is carried.'
-        : 'Every span is under 19′ — no mid-span beam needed.');
+      : 'Every span is under 19′ — no mid-span beam needed.');
     buildChrome();
     paint();
-    askGarageSpan(result.garagePending);
   };
 
   // ── AUTO PILES, the panel's other button ────────────────────────────────
