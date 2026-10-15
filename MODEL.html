@@ -1909,6 +1909,12 @@
     <div class="promote-row">
       <button type="button" data-footprint-cantilever>CANTILEVER (<span data-footprint-cantilever-label>2'-0"</span>)</button>
       <button type="button" data-footprint-piles>ON PILES (<span data-footprint-piles-label>4'-6"</span>)</button>
+      <!-- THE INWARD ANSWER (Movie, 15 Oct): "move ext wall inward for roof
+           deck / floor req membrane". Shown only when the wall came IN and
+           there is a storey below for it to step off -- the lowest storey
+           pushed in is just a smaller building, and there is no deck to
+           name. -->
+      <button type="button" data-footprint-deck>STEP IN FOR A ROOF DECK</button>
       <button type="button" data-footprint-all>MOVE FOUNDATION, FLOORS &amp; ROOF</button>
     </div>
   </div>
@@ -10576,10 +10582,27 @@
       const b = loop[(i + 1) % loop.length];
       return Math.min(best, G.pointToSegment(pt, { start: a, end: b }).d);
     }, Infinity);
-    const outFt = Math.max(...moves.map(move => offLoop(move.to)));
+    // AND THE MIDDLE OF WHAT MOVED IS PROBED AS WELL AS ITS ENDS, which a
+    // dragged WALL BODY is the whole reason for. Push a wall 3 ft in and both
+    // of its ends slide along the two walls beside it -- each one lands ON
+    // the footprint, distance zero, while the wall between them is 3 ft away
+    // from where it was. Ends alone read that gesture as nothing having left
+    // the footprint, which is the one gesture "move ext wall inward" is made
+    // of. For a single dragged corner the middle IS the corner, so the same
+    // line answers both.
+    const mid = moves.reduce((sum, move) => ({
+      x: sum.x + move.to.x / moves.length,
+      z: sum.z + move.to.z / moves.length,
+    }), { x: 0, z: 0 });
+    const outFt = Math.max(offLoop(mid), ...moves.map(move => offLoop(move.to)));
     if (outFt < 0.01) return null;
-    const outward = moves.some(move => !pointInLoop(loop, move.to));
-    return { moves, outFt, outward, levelId, loop };
+    // DIRECTION IS READ AT THE MIDDLE AND ONLY THERE. An end that slid along
+    // its neighbouring wall sits ON the loop, where inside-or-out is a
+    // coin toss between implementations -- so a wall pushed IN would read as
+    // outward on the strength of a boundary point. The middle is strictly one
+    // side or the other in every gesture that reaches here.
+    const outward = !pointInLoop(loop, mid);
+    return { moves, outFt, outward, levelId, loop, mid };
   };
 
   // ── THE THREE ANSWERS ──────────────────────────────────────────────────
@@ -10770,6 +10793,76 @@
     return placed.length;
   };
 
+  // ── AND INWARD, WHAT THE WALL UNCOVERED ────────────────────────────────
+  //
+  // Movie, 15 Oct, straight after the outward three: "for interior stretch we
+  // could do the same thing, but it wouldn't create an exterior overhang, it
+  // would offer move the full foundation roof etc, or move ext wall inward
+  // for roof deck / floor req membrane".
+  //
+  // So the card is DIRECTIONAL. Pulled out, a wall is a cantilever, an
+  // overhang or a wider building; pushed in, it is a smaller building or a
+  // storey stepped back over the one below -- and what it steps off is a
+  // ROOF DECK, which is a floor in the weather and needs a membrane.
+  //
+  // ONLY WHERE THERE IS A STOREY BELOW TO STEP OFF. The lowest storey
+  // pushed in is just a smaller building: nothing is uncovered, there is no
+  // deck, and offering one would name a thing that is not there.
+  const storeyBelow = levelId => {
+    const here = (drawing.levels || []).find(l => Number(l.id) === Number(levelId));
+    if (!here) return null;
+    return (drawing.levels || [])
+      .filter(l => (Number(l.elev) || 0) < (Number(here.elev) || 0)
+        && (drawing.outlines || []).some(o => Number(o.levelId) === Number(l.id)
+          && o.site !== true && (o.points || []).length >= 3))
+      .sort((a, b) => (Number(b.elev) || 0) - (Number(a.elev) || 0))[0] || null;
+  };
+
+  // THE GROUND THE WALL CAME OFF: the quad between where the corners stood
+  // and where they stand now. One moved corner makes a sliver and two make a
+  // strip, and the centroid of the points is where the note goes in both --
+  // which is why this returns the points rather than a rectangle.
+  const uncoveredPatch = pending => {
+    const pts = [...pending.moves.map(m => m.from), ...pending.moves.map(m => m.to).reverse()];
+    if (pts.length < 3) return null;
+    const at = pts.reduce((sum, p) => ({ x: sum.x + p.x / pts.length, z: sum.z + p.z / pts.length }),
+      { x: 0, z: 0 });
+    return { points: pts, at };
+  };
+
+  // A STOREY STEPPED BACK, and the deck it leaves called by its name. The
+  // outline move is the cantilever's, inward; what it leaves behind is said
+  // in a note, because the format has no DECK and inventing one to carry a
+  // sentence would be a format change doing a note's job. The geometry -- the
+  // wall in, the floor below still out -- is what makes the deck; the note is
+  // what makes the membrane get built.
+  const DECK_NOTE = 'ROOF DECK — MEMBRANE OVER SLOPED FLOOR';
+  const stepInForDeck = (pending, step) => {
+    footprintThisLevel(pending, step);
+    const patch = uncoveredPatch(pending);
+    const below = storeyBelow(pending.levelId);
+    if (!patch || !below) return null;
+    drawing.notes = drawing.notes || [];
+    const id = drawing.notes.reduce((top, n) => Math.max(top, Number(n.id) || 0), 0) + 1;
+    const at = { ...patch.at, y: 0 };
+    const note = {
+      id, anchor: at, text: { ...at }, levelId: pending.levelId, view: 'plan',
+      // ON THIS LEVEL'S PLAN, not the one below's, because that is the sheet
+      // the deck is read off: standing on the stepped-back storey, the deck
+      // is the ground outside its walls.
+      //
+      // `end: 'none'` IS WHAT LETS THE TEXT SIT ON THE ANCHOR. A leader of no
+      // length is refused by the loader, and a deck wants its name written
+      // across it rather than pointed at from somewhere else.
+      body: DECK_NOTE, end: 'none',
+      fill: false, fillOpacity: 0.85, outline: false, bullnose: 0,
+      layer: 'A-ANNO-NOTE',
+    };
+    drawing.notes.push(note);
+    (step.items = step.items || []).push({ list: drawing.notes, item: note });
+    return { below };
+  };
+
   // ── THE CARD ───────────────────────────────────────────────────────────
   //
   // ONE GESTURE, ONE UNDO, as everywhere else on this page: the drag's own
@@ -10807,6 +10900,15 @@
         said.push(`taken out from ${ft2txt(pending.pulled)} — nothing may stand between `
           + `${ft2txt(rules.cantileverFt)} and ${ft2txt(rules.firstPileFt)}`);
       }
+    } else if (choice === 'deck') {
+      const made = stepInForDeck(pending, step);
+      said.push(`STEPPED IN ${ft2txt(pending.outFt)}`);
+      // THE MEMBRANE IS THE POINT, so it is the sentence rather than a
+      // detail of it: a floor that was inside the building a moment ago is
+      // in the weather now, and nothing else on the plan says so.
+      said.push(made
+        ? `what it stepped off is a ROOF DECK over ${made.below.name} and wants a membrane`
+        : 'nothing was uncovered, so no deck was named');
     } else if (choice === 'all') {
       const { eaves } = footprintEveryLevel(pending, step);
       said.push(`The whole building moved ${ft2txt(pending.outFt)}`);
@@ -10847,13 +10949,15 @@
     q('[data-footprint-side]').textContent = found.outward ? 'past' : 'inside';
     const cant = q('[data-footprint-cantilever]');
     const piles = q('[data-footprint-piles]');
-    // INWARD, NOTHING PROJECTS. A wall pulled back inside the floor below
-    // leaves a deck over what it uncovered rather than an overhang over air,
-    // and neither of those two buttons describes it -- so the only answer
-    // here today is the whole building. The deck is its own order (Movie,
-    // 15 Oct: "move ext wall inward for roof deck / floor req membrane").
+    const deck = q('[data-footprint-deck]');
+    // THE CARD IS DIRECTIONAL (Movie, 15 Oct). Pulled OUT, a wall is a
+    // cantilever, an overhang or a wider building. Pushed IN, nothing
+    // projects: it is a smaller building, or a storey stepped back over the
+    // one below -- and the deck that leaves is only a deck if there IS a
+    // storey below it to step off.
     cant.hidden = !found.outward || found.outFt >= rules.firstPileFt;
     piles.hidden = !found.outward || found.outFt <= rules.cantileverFt;
+    deck.hidden = found.outward || !storeyBelow(found.levelId);
     if (!cant.hidden) {
       q('[data-footprint-cantilever-label]').textContent =
         ft2txt(Math.min(found.outFt, rules.cantileverFt));
@@ -10863,7 +10967,13 @@
         ft2txt(rules.ladder(Math.max(found.outFt, rules.firstPileFt)).d);
     }
     footprintCard.hidden = false;
-    setTimeout(() => (cant.hidden ? piles.hidden ? q('[data-footprint-all]') : piles : cant).focus(), 0);
+    // THE FIRST ANSWER THAT IS ACTUALLY OFFERED takes the focus, so Enter
+    // always lands on something the card is showing. Written as the row's
+    // own order rather than as a chain of ternaries, which is what it was
+    // the moment a fourth button existed.
+    const offered = [cant, piles, deck, q('[data-footprint-all]')]
+      .find(button => !button.hidden);
+    setTimeout(() => offered && offered.focus(), 0);
     return true;
   };
 
@@ -10872,6 +10982,8 @@
       .addEventListener('click', () => settleFootprint('cantilever'));
     footprintCard.querySelector('[data-footprint-piles]')
       .addEventListener('click', () => settleFootprint('piles'));
+    footprintCard.querySelector('[data-footprint-deck]')
+      .addEventListener('click', () => settleFootprint('deck'));
     footprintCard.querySelector('[data-footprint-all]')
       .addEventListener('click', () => settleFootprint('all'));
     // ENTER TAKES WHAT IS FOCUSED, Escape leaves the wall where it was
@@ -10884,6 +10996,7 @@
       const focused = document.activeElement;
       if (focused?.matches?.('[data-footprint-cantilever]')) settleFootprint('cantilever');
       else if (focused?.matches?.('[data-footprint-piles]')) settleFootprint('piles');
+      else if (focused?.matches?.('[data-footprint-deck]')) settleFootprint('deck');
       else settleFootprint('all');
     }, true);
   }

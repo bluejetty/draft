@@ -756,6 +756,12 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // read the number the answer will actually give; the card's own
             // note says why they must.)
             `CANTILEVER (2'-0")`, `ON PILES (4'-6")`,
+            // AND THE INWARD ONE: "move ext wall inward for roof deck / floor
+            // req membrane". Same reading as the other three -- it decides
+            // what the storey the drag already moved leaves behind, and
+            // writes the note that says the deck wants a membrane. A note is
+            // not an entity any absence row is about.
+            'STEP IN FOR A ROOF DECK',
             'MOVE FOUNDATION, FLOORS & ROOF',
             // THE BONE'S SECOND PRESS (Movie, 19 Sep): "on 2nd always offer
             // choice between drivetrhu or house build". Two answers to one

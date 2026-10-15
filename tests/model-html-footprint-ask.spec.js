@@ -64,7 +64,11 @@ const copyFor = (id, levelId) => ({
   points: CORNERS.map((p, i) => ({ ...p, srcId: srcOf(i) })),
 });
 
-const file = ({ board = 'drafting', roof = true, dims = true, master = false } = {}) => ({
+// `drag` is the level the WALLS are on and the one the page opens at -- the
+// storey the gesture happens on. It defaults to MAIN FL, which has nothing
+// under it; the inward half needs 2ND FL, which has.
+const file = ({ board = 'drafting', roof = true, dims = true, master = false,
+  drag = MAIN_FL } = {}) => ({
   version: 1,
   levels: [
     { id: ROOF, name: 'ROOF', elev: 0 },
@@ -72,13 +76,13 @@ const file = ({ board = 'drafting', roof = true, dims = true, master = false } =
     { id: MAIN_FL, name: 'MAIN FL', elev: 0 },
     { id: FOUNDATION, name: 'FOUNDATION', elev: -8 },
   ],
-  activeLevelIdx: master ? 2 : 1,
+  activeLevelIdx: drag === SECOND_FL ? 1 : (master ? 2 : 1),
   board,
   walls: [
     ['n', V(-10, -10), V(10, -10)], ['e', V(10, -10), V(10, 10)],
     ['s', V(10, 10), V(-10, 10)], ['w', V(-10, 10), V(-10, -10)],
   ].map(([id, start, end]) => ({
-    id, start, end, levelId: MAIN_FL, view: 'plan',
+    id, start, end, levelId: drag, view: 'plan',
     wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left',
   })),
   outlines: master
@@ -108,7 +112,13 @@ async function open(page, opts = {}) {
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(f)], 'drawing.json', { type: 'application/json' }), bucket);
   }, { bucket: BUCKET, f: file(opts) });
-  await page.goto('/MODEL.html');
+  // THE LEVEL IS NAMED IN THE URL, not left to activeLevelIdx. The rail
+  // orders levels by the sheet set rather than by the file's array, so that
+  // index is the page's ordering and not this fixture's -- it opened MAIN FL
+  // for a fixture whose walls were all on the 2ND FL, and every gesture
+  // landed on an empty sheet.
+  const level = opts.drag || MAIN_FL;
+  await page.goto(`/MODEL.html?level=${level}`);
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
   await page.waitForTimeout(250);
 }
@@ -130,6 +140,7 @@ const card = page => page.locator('#footprint-ask');
 const cantilever = page => card(page).locator('[data-footprint-cantilever]');
 const piles = page => card(page).locator('[data-footprint-piles]');
 const moveAll = page => card(page).locator('[data-footprint-all]');
+const deck = page => card(page).locator('[data-footprint-deck]');
 
 const saveAndRead = async page => {
   await page.locator('[data-model-save]').click();
@@ -371,3 +382,105 @@ test('undoing a cantilever takes the freeze off with it', async ({ page }) => {
     'the footprint is back').toBeCloseTo(10, 6);
   expect(house.overriddenSrcIds, 'and so is its link to the master').toEqual([]);
 });
+
+// ── AND INWARD, WHAT THE WALL UNCOVERED ───────────────────────────────────
+//
+// Movie, 15 Oct, straight after the outward three: "for interior stretch we
+// could do the same thing, but it wouldn't create an exterior overhang, it
+// would offer move the full foundation roof etc, or move ext wall inward for
+// roof deck / floor req membrane".
+//
+// So the card is DIRECTIONAL, and the two halves share nothing but the
+// gesture: pulled out a wall is a cantilever, an overhang or a wider
+// building; pushed in it is a smaller building or a storey stepped back, and
+// what it steps off is a floor that is suddenly in the weather.
+
+// PUSH THE WHOLE NORTH WALL IN, which is the gesture the inward half is
+// about: "move ext wall inward". A single CORNER cannot step a wall in -- a
+// rectangle's corner slid either way runs along one of its own two walls and
+// never leaves the footprint at all (pinned above) -- so what moves here is
+// the wall BODY, and both of its ends travel together.
+//
+// SELECTION FIRST, then the press: wallBodyAt only offers a wall that is
+// already selected, which is the same rule the corner grab has.
+async function pushWallIn(page, toZ) {
+  const { at } = await h.planFrame(page);
+  await page.mouse.click(...at(0, -10));
+  await page.waitForTimeout(80);
+  await page.mouse.move(...at(0, -10));
+  await page.mouse.down();
+  await page.mouse.move(...at(0, toZ), { steps: 8 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+}
+
+test('pushed IN, the card offers neither overhang', async ({ page }) => {
+  await open(page);
+  await pushWallIn(page, -7);
+  await expect(card(page), 'a wall pushed in is still a question').toBeVisible();
+  await expect(card(page).locator('[data-footprint-side]'),
+    'and the card says which way it went').toHaveText('inside');
+  await expect(cantilever(page), 'nothing projects when a wall comes in').toBeHidden();
+  await expect(piles(page), 'and there is nothing out in the air to hold up').toBeHidden();
+  await expect(moveAll(page), 'a smaller building is always an answer').toBeVisible();
+});
+
+test('the lowest storey has nothing to step off, so no deck is offered',
+  async ({ page }) => {
+    // THE GATE, and the reason for it: the MAIN FL pushed in is just a
+    // smaller building. Nothing is uncovered, there is no deck, and naming
+    // one would put a membrane on the drawing for a floor that does not
+    // exist. The default fixture's dragged level is the lowest with an
+    // outline.
+    await open(page);
+    await pushWallIn(page, -7);
+    await expect(card(page), 'the wall still left its footprint').toBeVisible();
+    await expect(deck(page), 'no storey below to step off').toBeHidden();
+  });
+
+test('STEP IN FOR A ROOF DECK moves this floor and names what it left',
+  async ({ page }) => {
+    await open(page, { master: true, drag: SECOND_FL });
+    await pushWallIn(page, -7);
+    await expect(deck(page), 'there is a MAIN FL under this one').toBeVisible();
+    await deck(page).click();
+    await page.waitForTimeout(250);
+
+    const saved = await saveAndRead(page);
+    const upper = saved.outlines.find(o => o.id === 'upper');
+    const house = saved.outlines.find(o => o.id === 'house');
+    expect(upper.points.find(p => p.srcId === srcOf(1)).z,
+      'the storey stepped back').toBeCloseTo(-7, 2);
+    expect(house.points.find(p => p.srcId === srcOf(1)).z,
+      'and the floor below stayed out, which is what makes it a deck')
+      .toBeCloseTo(-10, 6);
+
+    // THE MEMBRANE IS THE DELIVERABLE. The geometry makes the deck; this is
+    // what makes somebody build it watertight.
+    const note = (saved.notes || []).find(n => /ROOF DECK/i.test(n.body || ''));
+    expect(note, 'the deck is named on the plan').toBeTruthy();
+    expect(note.body, 'and the membrane with it').toMatch(/MEMBRANE/i);
+    expect(note.levelId, "on the stepped storey's own sheet, which is where it "
+      + 'is read from').toBe(SECOND_FL);
+    // Between where the corner was and where it is now: the ground the wall
+    // came off, which is the deck.
+    expect(note.anchor.z, 'anchored on the ground it uncovered')
+      .toBeGreaterThan(-10.01);
+    expect(note.anchor.z).toBeLessThan(-7);
+  });
+
+test('one Ctrl+Z takes the step-in and its membrane note back together',
+  async ({ page }) => {
+    await open(page, { master: true, drag: SECOND_FL });
+    await pushWallIn(page, -7);
+    await deck(page).click();
+    await page.waitForTimeout(200);
+    await page.keyboard.press('Control+z');
+    await page.waitForTimeout(200);
+
+    const saved = await saveAndRead(page);
+    expect(saved.outlines.find(o => o.id === 'upper').points
+      .find(p => p.srcId === srcOf(1)).z, 'the storey is back out').toBeCloseTo(-10, 6);
+    expect((saved.notes || []).filter(n => /ROOF DECK/i.test(n.body || '')),
+      'and the deck it named is gone with it').toHaveLength(0);
+  });
