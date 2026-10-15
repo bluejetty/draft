@@ -15908,6 +15908,57 @@
   // drafter with neither: the ones it swept would be gone for good. They are
   // rarely anything -- a fresh build sweeps nothing -- and that is exactly
   // why a loss here would go unnoticed until the one drawing where it did.
+  // ── THE STRINGS FOLLOW WHAT THEY MEASURE ────────────────────────────────
+  //
+  // Movie's list: "dimensions attached to what they measure". They were not.
+  // A dimension is two points and nothing else -- the format carries no link
+  // to the wall it was strung off -- so dragging a wall left every string
+  // where it was, still reading the old number. Measured on this page: a 20 ft
+  // house whose east wall is dragged 4 ft east keeps a 20'-0" overall string
+  // standing over a 24 ft building, and only pressing AUTO DIMS again fixes
+  // it. A drawing that is wrong until somebody remembers a button is worse
+  // than one that never had the strings.
+  //
+  // ATTACHED BY RE-DERIVING, NOT BY A LINK. The alternative was a reference on
+  // each end -- "this one measures corner X, standing `by` feet off it" -- and
+  // it is the bigger change in every direction: a format addition, a migration
+  // for every drawing already saved, and a second rule for what a string is
+  // measuring that has to agree with auto-dims' own for the drawing to make
+  // sense. auto-dims ALREADY answers "where do the strings go for this
+  // geometry", and placeAutoDims already sweeps its own and keeps the rows the
+  // drafter slid (`moved`). So the move asks it again, which is the same
+  // answer by the only rule there is.
+  //
+  // ONLY WHERE THERE ARE AUTO STRINGS ALREADY. A drafter who has never pressed
+  // AUTO DIMS must not find a dimensioned plan because he nudged a wall --
+  // this follows strings, it does not start them. Hand-drawn dimensions are
+  // not auto and are never swept, so they stay exactly as they are (and stay
+  // stale, which is the honest answer: the page does not know what a string
+  // the drafter drew himself was measuring).
+  const redimAfterMove = () => {
+    if (!drawing) return null;
+    const levelId = activeLevelId();
+    const view = activeViewId() || 'plan';
+    const already = (drawing.dimensions || []).some(dim => dim.auto === true
+      && Number(dim.levelId) === Number(levelId) && (dim.view || 'plan') === view);
+    if (!already) return null;
+    const result = placeAutoDims(levelId, view);
+    return result === -1 ? null : result;
+  };
+
+  // The two lists an undo step carries when a gesture also re-laid the
+  // strings: what it added, and what it swept to add them. Written once and
+  // used by the move steps below -- 'built' keeps its own copy of these loops
+  // because it interleaves a selection sweep between them.
+  const foldRedim = step => {
+    const redim = redimAfterMove();
+    if (!redim) return step;
+    step.items = redim.placed.map(item => ({ list: drawing.dimensions, item }));
+    step.restored = redim.removed.length
+      ? [{ list: drawing.dimensions, items: redim.removed }] : [];
+    return step;
+  };
+
   const placeAutoDims = (levelId, view) => {
     if (!drawing) return -1;
     const G = window.DraftGeometry2D;
@@ -24999,7 +25050,11 @@
           // undo step for it would cost the drafter a Ctrl+Z that appears to
           // do nothing.
           if (md.opening.offset !== md.was) {
-            undoStack.push({ kind: 'move-opening', opening: md.opening, was: md.was });
+            // AND THE STRINGS THAT MEASURE IT: auto-dims strings the openings'
+            // own centres, so a window slid along its wall leaves its jamb
+            // dimensions reading where it used to be. One gesture, one undo,
+            // so the re-laid strings ride this step rather than a second one.
+            undoStack.push(foldRedim({ kind: 'move-opening', opening: md.opening, was: md.was }));
             markDirty();
           }
           moveDrag = null;
@@ -25007,8 +25062,9 @@
           paint();
           return;
         }
-        undoStack.push({ kind: 'move',
-          before: md.lockBefore ? [...md.before, ...md.lockBefore] : md.before });
+        const moveStep = { kind: 'move',
+          before: md.lockBefore ? [...md.before, ...md.lockBefore] : md.before };
+        undoStack.push(moveStep);
         markDirty();
         // §5: the bone moved, so what the storey above covers has changed and
         // the roofs under it are stale. Recomputed on the RELEASE, not on
@@ -25039,6 +25095,18 @@
             .find(m => (m.points || []).includes(md.before[0].vtx));
           if (owner) propagateMasterOutline(owner);
         }
+        // ── AND THE STRINGS THAT MEASURE IT ────────────────────────────────
+        //
+        // LAST, after the lock's siblings have travelled, the bone has
+        // followed and a master's riders have been propagated -- every one of
+        // those moves geometry a string may be measuring, and a re-lay before
+        // them would measure the drawing half way through the gesture.
+        //
+        // THE STEP IS FILLED IN AFTER IT WAS PUSHED, which is the one odd line
+        // here and is deliberate: the push has to stay where it is so the
+        // move is undone in the right order against anything the propagation
+        // pushed, and nothing reads a step until an undo pops it.
+        foldRedim(moveStep);
       } else if (board === 'toy' && md.kind === 'wall' && md.body) {
         // §4's CLICK, and it costs no new gesture. `wallBodyAt` only returns a
         // wall that is ALREADY SELECTED, so reaching here means the drafter
@@ -25248,6 +25316,21 @@
   // stack -- nothing is saved until the loop closes -- so the stack had
   // nothing to give back. Undo now takes the last corner off the trace; with
   // no trace in hand it undoes the last saved edit, as it always did.
+  // THE STRINGS A GESTURE RE-LAID, PUT BACK. A move that re-dimensioned the
+  // level carries both lists on its own step -- what it added and what it
+  // swept to add them -- so the one Ctrl+Z that puts the wall back puts the
+  // old strings back with it. 'built' has the same two loops with a selection
+  // sweep interleaved; these two are all a move step needs.
+  const undoRedim = step => {
+    (step.items || []).forEach(({ list, item }) => {
+      const at = list.indexOf(item);
+      if (at >= 0) list.splice(at, 1);
+    });
+    (step.restored || []).forEach(({ list, items }) => {
+      items.forEach(item => { if (!list.includes(item)) list.push(item); });
+    });
+  };
+
   const undoOnce = () => {
     const corners = pendingCornerList();
     if (corners) {
@@ -25262,6 +25345,7 @@
     // two, drew a wall, or deleted one: the entry is whatever that gesture
     // captured, so a wall goes back in one keystroke rather than two.
     if (step.kind === 'move') {
+      undoRedim(step);
       step.before.forEach(b => {
         b.vtx.x = b.x;
         b.vtx.z = b.z;
@@ -25283,6 +25367,7 @@
         if (!vertexPool.includes(corner)) vertexPool.push(corner);
       });
     } else if (step.kind === 'move-opening') {
+      undoRedim(step);
       // The record is mutated in place, so undo puts the one number back
       // rather than restoring a copy -- a copy would detach the opening
       // every other reader already holds by reference.
