@@ -155,7 +155,7 @@ if (!window.DraftLayoutPlan) {
   // The default is on, because every construction sheet draws it.
   function planBounds(saved, levelId, { floorBelow: withBelow = true } = {}) {
     // A FULL FLOOR'S FRAME TAKES IN ITS HALF-FLOOR, drawn on the same sheet.
-    const half = HALF_LEVEL_UNDER[levelId];
+    const half = halfLevelUnder(levelId);
     const box = wallBounds(planWalls(saved, levelId)
       .concat(half != null ? planWalls(saved, half) : []));
     let minX = box ? box.minX : Infinity, maxX = box ? box.maxX : -Infinity;
@@ -354,7 +354,37 @@ if (!window.DraftLayoutPlan) {
   // is drawn on MAIN FL's sheet and the 1.5 floor on 2ND FL's, "slightly
   // lighter in shade ... and if any lines are on top of each other the 2nd
   // floor lines should overrule". Walls, windows, doors and stairs only.
-  const HALF_LEVEL_UNDER = Object.freeze({ 3: 2, 5: 4 });
+  //
+  // THE PAIRING IS READ OFF THE LADDER, NOT LISTED HERE (Movie, 14 Oct):
+  // "if there are any 3rd floors added in the future i will also want to
+  // present it that way for all the layouts". This was `{3: 2, 5: 4}`, a
+  // second copy of what level-assembly.js's STOREY_FLOOR already says -- 2
+  // and 3 are both MAIN FL, 4 and 5 are both 2ND FL -- so a 2.5 floor added
+  // to that table would have folded nowhere until somebody remembered this
+  // line as well. Derived, the ladder stays the one place a storey is
+  // described, and every list that asks follows it the same day.
+  //
+  // WITHIN A STOREY THE HIGHER ID IS THE FULL FLOOR. That is the ladder's
+  // own rule -- level-assembly's `storeyHeadOf` takes the highest id of the
+  // storey -- and it is why these two are a `max` and a `min` rather than a
+  // lookup: the half floor is the mate BELOW, the full floor the mate ABOVE.
+  const storeyMates = levelId => {
+    const LA = window.DraftLevelAssembly;
+    if (!LA || !LA.STOREY_FLOOR || typeof LA.sameStorey !== 'function') return [];
+    return Object.keys(LA.STOREY_FLOOR).map(Number).filter(Number.isFinite)
+      .filter(other => other !== Number(levelId) && LA.sameStorey(other, levelId));
+  };
+  // The half floor drawn on this level's sheet, or null for a level that is
+  // not a storey's head.
+  const halfLevelUnder = levelId => {
+    const below = storeyMates(levelId).filter(id => id < Number(levelId));
+    return below.length ? Math.max(...below) : null;
+  };
+  // And the other way round: the full floor a half floor rides on.
+  const fullFloorOver = levelId => {
+    const above = storeyMates(levelId).filter(id => id > Number(levelId));
+    return above.length ? Math.min(...above) : null;
+  };
   const HALF_LEVEL_SHEET_ALPHA = 0.6;
 
   // ── THE STOREY UNDER THIS ONE, GHOSTED (Movie, 12 Oct) ─────────────────
@@ -428,7 +458,7 @@ if (!window.DraftLayoutPlan) {
     const ladder = Object.keys(assembly.STOREY_NUMBER)
       .map(Number).filter(Number.isFinite).sort((a, b) => a - b);
     if (!ladder.includes(levelId)) return null;
-    const half = HALF_LEVEL_UNDER[levelId];
+    const half = halfLevelUnder(levelId);
     const under = ladder.filter(id => id < levelId && id !== half);
     for (let i = under.length - 1; i >= 0; i -= 1) {
       if (outlineLoopsOn(saved, under[i]).length) return under[i];
@@ -510,9 +540,7 @@ if (!window.DraftLayoutPlan) {
   }
 
   function ridesOnFullFloor(saved, levelId) {
-    const id = Number(levelId);
-    const full = Object.keys(HALF_LEVEL_UNDER)
-      .find(key => HALF_LEVEL_UNDER[key] === id);
+    const full = fullFloorOver(levelId);
     return full != null && planWalls(saved, Number(full)).length > 0;
   }
 
@@ -851,7 +879,7 @@ if (!window.DraftLayoutPlan) {
     }
 
     // UNDER, so the full floor's own lines are the ones left on top.
-    const half = env.halfLevel === true ? null : HALF_LEVEL_UNDER[levelId];
+    const half = env.halfLevel === true ? null : halfLevelUnder(levelId);
     if (half != null && (planWalls(saved, half, view).length
       || (view === 'floor' && hasFloorLayout(saved, half)))) {
       ctx.save();
@@ -1273,6 +1301,8 @@ if (!window.DraftLayoutPlan) {
     floorBelow,
     floorBelowLoops,
     ridesOnFullFloor,
+    halfLevelUnder,
+    fullFloorOver,
     hasFloorLayout,
     structureUnder,
     drawPlan,
