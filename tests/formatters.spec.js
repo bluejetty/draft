@@ -78,6 +78,35 @@ test('parseArchitecturalLength reads the drafting grammar; bare numbers are feet
   expect(results.negative).toEqual({ ok: true, inches: -30 });
 });
 
+test('feet, a space, inches: "14 6" is 14\'-6", and the first number is always feet', async ({ page }) => {
+  // Movie, 16 Oct: "if they type 14-6 or 14 6 or 14'6 or 14'6" or 14'-6" all
+  // interpreted as 14'-6"". Five of the six already parsed; "14 6" was the
+  // gap. The same branch reads "14 1/2" as fourteen FEET and half an inch,
+  // because this field reads a bare number as feet and the first number is
+  // feet whatever follows it -- AutoCAD's architectural field would say
+  // fourteen and a half inches, and the difference is deliberate.
+  const results = await page.evaluate(() => {
+    const f = window.DraftFormatters;
+    return {
+      spaced: f.parseArchitecturalLength('14 6'),
+      spacedFraction: f.parseArchitecturalLength('14 6 1/2'),
+      feetAndHalfInch: f.parseArchitecturalLength('14 1/2'),
+      negative: f.parseArchitecturalLength('-2 6'),
+      // A second number is inches; a second WORD is still nothing.
+      words: f.parseArchitecturalLength('14 wide'),
+      // And the inch-mark branch keeps what it had: this is inches, not
+      // four feet and a sixteenth.
+      inchesStillInches: f.parseArchitecturalLength('4 1/16"'),
+    };
+  });
+  expect(results.spaced).toEqual({ ok: true, inches: 174 });
+  expect(results.spacedFraction).toEqual({ ok: true, inches: 174.5 });
+  expect(results.feetAndHalfInch).toEqual({ ok: true, inches: 168.5 });
+  expect(results.negative).toEqual({ ok: true, inches: -30 });
+  expect(results.words.ok).toBe(false);
+  expect(results.inchesStillInches).toEqual({ ok: true, inches: 4.0625 });
+});
+
 test('bad input is refused with a message, never NaN', async ({ page }) => {
   const results = await page.evaluate(() => {
     const f = window.DraftFormatters;
