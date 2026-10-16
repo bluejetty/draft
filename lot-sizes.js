@@ -449,7 +449,20 @@ if (!window.DraftLotSizes) {
   // this answers the footprint's own size. Same filter, same reason: an
   // outline is what a building IS on this page, and `site` is the flag that
   // says this one is the lot.
-  const houseBoxOf = outlines => {
+  // ── THE BUILDING'S WIDTH IS ITS WIDTH ACROSS THE FRONT ────────────────
+  //
+  // Movie, 16 Oct, with a bungalow and garage turned a quarter on its site:
+  // "it selected a site plan not wide enough this time". The card had read
+  // the house 32 wide along x and offered the 45 ft lot -- and the lot,
+  // laid on the TURNED axes (lotAxes), put its 45 ft of frontage along z,
+  // where that house runs 50. The house hung out the side of its own lot.
+  //
+  // So the box is measured on the lot's own axes: `widthFt` is the extent
+  // ACROSS the front (along E2, the left mark) and `depthFt` the extent BACK
+  // from it (along E1), whichever way the plan is turned. On an unturned
+  // plan these are the x and z extents they always were. The raw corners
+  // stay for the callers that place things on an unturned plan.
+  const houseBoxOf = (outlines, planTurn = 0) => {
     const pts = (Array.isArray(outlines) ? outlines : [])
       .filter(outline => outline && outline.site !== true && Array.isArray(outline.points))
       .flatMap(outline => outline.points)
@@ -459,7 +472,9 @@ if (!window.DraftLotSizes) {
     const zs = pts.map(p => Number(p.z));
     const leftX = Math.min(...xs), rightX = Math.max(...xs);
     const backZ = Math.min(...zs), frontZ = Math.max(...zs);
-    return { leftX, rightX, backZ, frontZ, widthFt: rightX - leftX, depthFt: frontZ - backZ };
+    const { front, left } = lotAxes(planTurn);
+    const extent = dir => Math.max(...pts.map(p => along(p, dir))) - Math.min(...pts.map(p => along(p, dir)));
+    return { leftX, rightX, backZ, frontZ, widthFt: extent(left), depthFt: extent(front) };
   };
 
   // The house as those two numbers, off the outlines that are not the lot.

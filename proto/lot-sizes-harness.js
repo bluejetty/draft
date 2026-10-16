@@ -54,6 +54,11 @@ const MUTATIONS = [
   //    the lot and the front of the house should line up both facing E1".
   ['the lot ignores the house turn, as it did before 14 Oct', 'lot-sizes.js',
     c => c.replace('  const lotAxes = (planTurn = 0) => {', '  const lotAxes = () => {')],
+  // AND 16 OCT: the house is read along x and z while its lot is laid on the
+  // turned axes, so a turned house is offered a lot it hangs out of.
+  ['the house is measured along x and z whichever way the plan is turned', 'lot-sizes.js',
+    c => c.replace('    return { leftX, rightX, backZ, frontZ, widthFt: extent(left), depthFt: extent(front) };',
+      '    return { leftX, rightX, backZ, frontZ, widthFt: rightX - leftX, depthFt: frontZ - backZ };')],
 
   ['the site mark goes back to the corner an unturned house would have', 'lot-sizes.js',
     c => c.replace('    const { front, left } = lotAxes(planTurn);\n    const far = dir',
@@ -358,6 +363,31 @@ check('a 1 ft eave still needs 38 beside windows, because the wall rule is 4',
 check('and a blank wall with a 1 ft eave comes in at 36',
   near(LS.minLotFor(LS.houseBoxOf([GARAGE]), { eaveFt: 1, windowed: false }).widthFt, 36),
   JSON.stringify(LS.minLotFor(LS.houseBoxOf([GARAGE]), { eaveFt: 1, windowed: false })));
+
+// ── TURNED A QUARTER, THE WIDTH IS STILL THE WIDTH ACROSS THE FRONT ─────
+//
+// Movie, 16 Oct: "it selected a site plan not wide enough this time". His
+// bungalow and garage, 32 along x and 50 along z, turned a quarter so the
+// front faced +x: the card read 32, offered the 45 ft lot, and the lot's
+// frontage -- laid along z on the turned axes -- was 5 ft short of the house.
+const TURNED_HOUSE = { points: [{ x: 0, z: 0 }, { x: 32, z: 0 }, { x: 32, z: 50 }, { x: 0, z: 50 }] };
+check('unturned, a 32 x 50 house is 32 across the front and 50 back',
+  (() => { const b = LS.houseBoxOf([TURNED_HOUSE], 0); return near(b.widthFt, 32) && near(b.depthFt, 50); })(),
+  JSON.stringify(LS.houseBoxOf([TURNED_HOUSE], 0)));
+check('turned a quarter, the same house is 50 across the front and 32 back',
+  (() => { const b = LS.houseBoxOf([TURNED_HOUSE], 1); return near(b.widthFt, 50) && near(b.depthFt, 32); })(),
+  JSON.stringify(LS.houseBoxOf([TURNED_HOUSE], 1)));
+check('and three quarters is the quarter again, a half is unturned',
+  near(LS.houseBoxOf([TURNED_HOUSE], 3).widthFt, 50) && near(LS.houseBoxOf([TURNED_HOUSE], 2).widthFt, 32),
+  [LS.houseBoxOf([TURNED_HOUSE], 3).widthFt, LS.houseBoxOf([TURNED_HOUSE], 2).widthFt].join());
+check('so the turned house needs 58 ft of frontage and is offered XXL, not the 45 ft L',
+  near(LS.minLotFor(LS.houseBoxOf([TURNED_HOUSE], 1), { eaveFt: 2 }).widthFt, 58)
+    && LS.bestLotTierFor(LS.houseBoxOf([TURNED_HOUSE], 1), { eaveFt: 2 })?.id === 'XXL',
+  JSON.stringify([LS.minLotFor(LS.houseBoxOf([TURNED_HOUSE], 1), { eaveFt: 2 }),
+    LS.bestLotTierFor(LS.houseBoxOf([TURNED_HOUSE], 1), { eaveFt: 2 })?.id]));
+check('while unturned it is offered L, as before', LS.bestLotTierFor(LS.houseBoxOf([TURNED_HOUSE], 0), { eaveFt: 2 })?.id === 'L');
+check('the raw corners are still the drawing\'s own, whichever way it is turned',
+  (() => { const b = LS.houseBoxOf([TURNED_HOUSE], 1); return b.leftX === 0 && b.rightX === 32 && b.backZ === 0 && b.frontZ === 50; })());
 
 const fits = id => LS.lotFitsHouse(LS.lotTierById(id), LS.houseBoxOf([GARAGE]), { eaveFt: 2 });
 check('S and M are too small for that garage, and L up are not',
