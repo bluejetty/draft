@@ -148,9 +148,22 @@ if (!window.DraftBoneyardLoops) {
     // are solid.
     const lowest = floors[0].loops.filter(l => !l.garage).map(l => ({ ...l }));
     const poured = concreteLoop(drawing);
-    const fdnLoops = own.length ? own
+    const fdnHouse = own.length ? own
       : (poured && !(lowest.length === 1 && sameLoop(poured.points, lowest[0].points))
         ? [poured] : lowest);
+    // AND THE GARAGE. Movie, 16 Oct: "the foundation doesn't show the garage
+    // outline, but it should show that (like the main floor does)". This
+    // used to say a garage stands on a slab and not on the foundation wall,
+    // and left it off. The garage's foundation is its own line of concrete
+    // -- a grade beam on piles, a thickened-edge slab or a frost wall
+    // (cut-view's garageFoundation) runs under every garage wall -- so the
+    // foundation bone carries the garage the way MAIN does: the lowest
+    // floor's garage loop, solid, at the foundation's height. Not where the
+    // drafter drew a garage outline on the foundation level himself: his own
+    // line stands, and nothing is doubled under it.
+    const garageOnFdn = own.some(l => l.garage) ? []
+      : (floors.map(f => f.loops.filter(l => l.garage)).find(g => g.length) || []).map(l => ({ ...l }));
+    const fdnLoops = [...fdnHouse, ...garageOnFdn];
     if (fdnLoops.length && stack.foundation) {
       out.push({ levelId: 1, kind: 'foundation', name: 'FOUNDATION',
         elev: stack.foundation.wallBottom, color: COLORS.foundation, loops: fdnLoops });
@@ -259,30 +272,50 @@ if (!window.DraftBoneyardLoops) {
   // tipped by the isometric angle, atan(1/sqrt 2) -- at 45 that is the classic
   // three-faces-equal view.
   const TILT = Math.atan(1 / Math.SQRT2);
+  const ISO_TILT_DEG = TILT * 180 / Math.PI;   // 35.264...
   const STEP_DEG = 15;
-  const project = (pt, elev, deg) => {
+  // ── THE TILT LADDER (Movie, 16 Oct) ─────────────────────────────────
+  // "in the 3D Iso rotation control ... put in up and down arrows over the
+  // rotation and 15 degree iterations in those directions too". The eye goes
+  // up and down the way it goes round: a rung at a time, nothing between.
+  // Every 15° from an ELEVATION (0°, looking straight at the walls, every
+  // loop a flat line) to a PLAN (90°, straight down, every loop its own
+  // outline), with the isometric's own 35.26° a rung of its own, so the view
+  // the page opens on is a step on the ladder and not a place between two.
+  // Clamped at both ends: past the plan there is nothing to see.
+  const TILT_LADDER = Object.freeze([0, 15, 30, ISO_TILT_DEG, 45, 60, 75, 90]);
+  const tiltRung = deg => {
+    let best = 0;
+    TILT_LADDER.forEach((t, i) => { if (Math.abs(t - deg) < Math.abs(TILT_LADDER[best] - deg)) best = i; });
+    return best;
+  };
+  const stepTilt = (deg, steps) =>
+    TILT_LADDER[Math.max(0, Math.min(TILT_LADDER.length - 1, tiltRung(deg) + steps))];
+  const project = (pt, elev, deg, tiltDeg = ISO_TILT_DEG) => {
     const a = deg * Math.PI / 180;
+    const t = tiltDeg * Math.PI / 180;
     const rx = pt.x * Math.cos(a) - pt.z * Math.sin(a);
     const rz = pt.x * Math.sin(a) + pt.z * Math.cos(a);
-    return { x: rx, y: rz * Math.sin(TILT) - elev * Math.cos(TILT) };
+    return { x: rx, y: rz * Math.sin(t) - elev * Math.cos(t) };
   };
 
   // Every level's loops projected and fitted into a w x h box with a margin;
   // returns screen polylines plus the scale used.
-  const layout = (levels, deg, w, h, margin = 30) => {
+  // The tilt is the ladder's, ISO unless the page has tipped it.
+  const layout = (levels, deg, w, h, margin = 30, tiltDeg = ISO_TILT_DEG) => {
     const raw = levels.map(level => ({
       ...level,
       // A loop may stand at its own height (a roof on a plate of its own).
-      polys: level.loops.map(loop => loop.points.map(p => project(p, loop.elev ?? level.elev, deg))),
+      polys: level.loops.map(loop => loop.points.map(p => project(p, loop.elev ?? level.elev, deg, tiltDeg))),
       // The very thin lines ride with the bone: same projection, same frame,
       // so a hip cannot land somewhere the roof it belongs to is not.
       thinPolys: (level.thin || []).map(line => ({ ...line,
-        points: line.points.map(p => project(p, line.elev ?? level.elev, deg)) })),
+        points: line.points.map(p => project(p, line.elev ?? level.elev, deg, tiltDeg)) })),
       cut: level.loops.map(loop => {
         const { runs, dots } = runsOf(loop);
         const e = loop.elev ?? level.elev;
-        return { runs: runs.map(r => ({ a: project(r.a, e, deg), b: project(r.b, e, deg) })),
-          dots: dots.map(d => ({ ...project(d.p, e, deg), type: d.type })) };
+        return { runs: runs.map(r => ({ a: project(r.a, e, deg, tiltDeg), b: project(r.b, e, deg, tiltDeg) })),
+          dots: dots.map(d => ({ ...project(d.p, e, deg, tiltDeg), type: d.type })) };
       }),
     }));
     // THE EAVE COUNTS TOWARD THE FIT. It hangs two feet past every bone in
@@ -290,7 +323,7 @@ if (!window.DraftBoneyardLoops) {
     // off the edge of the window -- the one line whose whole point is where
     // it ends.
     const all = raw.flatMap(l => [...l.polys.flat(), ...l.thinPolys.flatMap(line => line.points)]);
-    if (!all.length) return { levels: [], scale: 0 };
+    if (!all.length) return { levels: [], scale: 0, lift: 0 };
     const xs = all.map(p => p.x), ys = all.map(p => p.y);
     const minX = Math.min(...xs), maxX = Math.max(...xs);
     const minY = Math.min(...ys), maxY = Math.max(...ys);
@@ -300,8 +333,10 @@ if (!window.DraftBoneyardLoops) {
     const oy = (h - (maxY - minY) * scale) / 2 - minY * scale;
     return {
       scale,
+      // Screen pixels per foot of HEIGHT at this tilt: what the grow rises by.
+      lift: Math.cos(tiltDeg * Math.PI / 180) * scale,
       // Any other point at any height, onto the same screen: the posts.
-      at: (p, e) => { const q = project(p, e, deg); return { x: ox + q.x * scale, y: oy + q.y * scale }; },
+      at: (p, e) => { const q = project(p, e, deg, tiltDeg); return { x: ox + q.x * scale, y: oy + q.y * scale }; },
       levels: raw.map(l => ({ ...l,
         polys: l.polys.map(poly => poly.map(p => ({ x: ox + p.x * scale, y: oy + p.y * scale }))),
         thinPolys: l.thinPolys.map(line => ({ ...line,
@@ -360,7 +395,8 @@ if (!window.DraftBoneyardLoops) {
   const growMs = (levels, levelMs = GROW_LEVEL_MS) => growSlots(levels).length * levelMs;
 
   window.DraftBoneyardLoops = Object.freeze({
-    COLORS, STEP_DEG, TILT, OPENING_TOL_FT, boneLevels, openingsOn, runsOf, project, layout, levelAt, stepAngle,
+    COLORS, STEP_DEG, TILT, ISO_TILT_DEG, TILT_LADDER, stepTilt, OPENING_TOL_FT,
+    boneLevels, openingsOn, runsOf, project, layout, levelAt, stepAngle,
     GROW_LEVEL_MS, FIRST_RISE_FT, growStage, growMs,
   });
 })();

@@ -107,7 +107,10 @@
     padding: 3px 10px; cursor: pointer;
   }
   .btn:hover { border-color: var(--accent-mark); color: var(--accent-mark); }
-  #angle { min-width: 36px; text-align: center; font-family: 'DM Mono', ui-monospace, monospace; }
+  #angle, #tilt { min-width: 36px; text-align: center; font-family: 'DM Mono', ui-monospace, monospace; }
+  .turns { display: flex; flex-direction: column; gap: 3px; }
+  .turn-row { display: flex; align-items: center; gap: 8px; }
+  .turn-row .btn { padding: 1px 10px; }
   .legend { display: flex; gap: 6px; flex-wrap: wrap; }
   .legend button {
     appearance: none; border: 1px solid var(--edge-panel); background: var(--surface-chip);
@@ -133,9 +136,22 @@
     <section class="pane pane-3d" aria-label="The bones in 3D">
       <div class="pane-head">
         <span class="title">BONES &mdash; 3D</span>
-        <button type="button" class="btn" id="turn-left" title="Turn 15° left">&#9664;</button>
-        <span id="angle">45°</span>
-        <button type="button" class="btn" id="turn-right" title="Turn 15° right">&#9654;</button>
+        <!-- TWO ROWS, THE TILT OVER THE TURN (Movie, 16 Oct: "put in up and
+             down arrows over the rotation and 15 degree iterations in those
+             directions too"). Up raises the eye toward a plan, down lowers it
+             toward an elevation; the readout between them is the tilt. -->
+        <span class="turns">
+          <span class="turn-row">
+            <button type="button" class="btn" id="tip-down" title="Tip down 15°, toward an elevation">&#9660;</button>
+            <span id="tilt">35°</span>
+            <button type="button" class="btn" id="tip-up" title="Tip up 15°, toward a plan">&#9650;</button>
+          </span>
+          <span class="turn-row">
+            <button type="button" class="btn" id="turn-left" title="Turn 15° left">&#9664;</button>
+            <span id="angle">45°</span>
+            <button type="button" class="btn" id="turn-right" title="Turn 15° right">&#9654;</button>
+          </span>
+        </span>
       </div>
       <canvas id="bones3d"></canvas>
     </section>
@@ -208,6 +224,7 @@
       let stack = null;
       let levels = [];
       let angle = 45;
+      let tilt = BL.ISO_TILT_DEG;
       let picked = null;
       // THE LEVELS SHOWN BEHIND THE PICKED ONE, by the drafter's choice.
       //
@@ -390,7 +407,7 @@
       // ── THE 3D WINDOW ───────────────────────────────────────────────
       const paint3d = () => {
         const { ctx, w, h } = sized(c3);
-        laid = BL.layout(shown(), angle, w, h);
+        laid = BL.layout(shown(), angle, w, h, 30, tilt);
         if (growStart !== null) { paintGrow(ctx); return; }
         laid.levels.forEach(level => {
           const on = picked && picked.kind === level.kind && picked.levelId === level.levelId;
@@ -423,6 +440,12 @@
           ({ name: l.name, lines: l.thinPolys, to: same }))));
         document.getElementById('angle').textContent = `${angle}°`;
         c3.setAttribute('data-angle', String(angle));
+        document.getElementById('tilt').textContent = `${Math.round(tilt)}°`;
+        c3.setAttribute('data-tilt', String(Math.round(tilt * 100) / 100));
+        // Dead at the ends of the ladder, the way a BG button is dead with
+        // nothing to show: an arrow that does nothing is a lie.
+        document.getElementById('tip-up').disabled = tilt >= 90;
+        document.getElementById('tip-down').disabled = tilt <= 0;
         // FOR THE SPECS: what is drawn, and where each level's first corner landed.
         c3.setAttribute('data-bones', JSON.stringify(laid.levels.map(l => ({
           name: l.name, kind: l.kind, elev: Number(l.elev.toFixed(4)), loops: l.loops.length,
@@ -464,7 +487,7 @@
       const paintGrow = ctx => {
         const ms = performance.now() - growStart;
         const stage = BL.growStage(laid.levels, ms);
-        const lift = Math.cos(BL.TILT) * laid.scale;
+        const lift = laid.lift;
         laid.levels.forEach((level, i) => {
           const st = stage[i];
           if (!st.shown) return;
@@ -708,6 +731,15 @@
       };
       document.getElementById('turn-left').addEventListener('click', () => turn(-1));
       document.getElementById('turn-right').addEventListener('click', () => turn(1));
+      // ── TIPPING: A RUNG OF THE LADDER A STEP, the same way ───────────
+      const tip = steps => {
+        const next = BL.stepTilt(tilt, steps);
+        if (next === tilt) return;
+        tilt = next;
+        paint3d();
+      };
+      document.getElementById('tip-up').addEventListener('click', () => tip(1));
+      document.getElementById('tip-down').addEventListener('click', () => tip(-1));
       // A DRAG TURNS TOO, but still in steps: a step per 40 px dragged, and
       // nothing is painted between steps. A press that does not drag is a tap,
       // and a tap on a loop picks its level.

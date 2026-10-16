@@ -61,8 +61,111 @@ test('one loop per floor, the foundation under them and the roof at the top ceil
     expect(roof.elev - second.elev, 'the roof at the 2ND FL ceiling, a wall height above its floor')
       .toBeGreaterThan(7);
     expect(main.loops, 'MAIN FL carries the house and the garage').toBe(2);
-    expect(fdn.loops, 'the foundation carries the house only').toBe(1);
-    expect(roof.loops, 'and so does the roof').toBe(1);
+    // Movie, 16 Oct: "the foundation doesn't show the garage outline, but it
+    // should show that (like the main floor does)". It used to carry the
+    // house only, on the reading that a garage stands on a slab; the garage's
+    // grade beam, thickened slab or frost wall is a line of concrete too.
+    expect(fdn.loops, 'the foundation carries the house and the garage, as MAIN does').toBe(2);
+    expect(roof.loops, 'the roof carries the house only').toBe(1);
+  });
+
+test('the foundation\'s garage loop is the floor\'s, solid, and not doubled under one the drafter drew',
+  async ({ page }) => {
+    // THE LOOP BUILDER IS PURE, so the two cases a built house cannot show
+    // are asked of it directly: a garage with no foundation outline of its
+    // own takes the floor's loop; a garage whose foundation outline the
+    // drafter drew himself keeps his line and gets no second one under it.
+    await boneyardOfTwoStorey(page);
+    const out = await page.evaluate(() => {
+      const BL = window.DraftBoneyardLoops;
+      const sq = (x, z, s) => [{ x, z }, { x: x + s, z }, { x: x + s, z: z + s }, { x, z: z + s }];
+      const stack = { floors: [{ id: 3, name: 'MAIN FL', floorTop: 0, wallTop: 8 }],
+        foundation: { wallBottom: -8 } };
+      const house = { id: 'h', levelId: 3, points: sq(0, 0, 30) };
+      const garage = { id: 'g', levelId: 3, garage: true, points: sq(30, 0, 24) };
+      const bare = { outlines: [house, garage], walls: [], roofs: [], fenestrations: [] };
+      const own = { outlines: [house, garage, { id: 'fg', levelId: 1, garage: true, points: sq(30, 2, 24) }],
+        walls: [], roofs: [], fenestrations: [] };
+      const fdn = d => BL.boneLevels(d, stack).find(l => l.kind === 'foundation');
+      const a = fdn(bare), b = fdn(own);
+      return {
+        bare: a.loops.map(l => ({ garage: l.garage === true, id: l.id, openings: !!l.openings,
+          z0: Math.min(...l.points.map(p => p.z)) })),
+        own: b.loops.map(l => ({ garage: l.garage === true, id: l.id })),
+        elev: a.elev,
+      };
+    });
+    expect(out.bare.map(l => l.garage), 'house, then the garage').toEqual([false, true]);
+    expect(out.bare[1].id, 'the floor\'s own garage loop').toBe('g');
+    expect(out.bare[1].openings, 'solid -- the foundation has no doors').toBe(false);
+    expect(out.bare[1].z0, 'at the garage\'s own corner').toBe(0);
+    expect(out.elev, 'and the foundation\'s height').toBe(-8);
+    expect(out.own, 'his own foundation outline stands alone').toEqual([{ garage: true, id: 'fg' }]);
+  });
+
+// Movie, 16 Oct: "in the 3D Iso rotation control up near middle of screen
+// put in up and down arrows over the rotation and 15 degree iterations in
+// those directions too".
+test('it tips up and down a rung at a time: ISO is a rung, a plan and an elevation are the ends',
+  async ({ page }) => {
+    await boneyardOfTwoStorey(page);
+    const c3 = page.locator('#bones3d');
+    const start = await bones(page);
+    await expect(c3).toHaveAttribute('data-tilt', '35.26');
+    await expect(page.locator('#tilt')).toHaveText('35°');
+    await page.locator('#tip-up').click();
+    await expect(c3, 'ISO to the next rung up, 45').toHaveAttribute('data-tilt', '45');
+    expect((await bones(page))[1].at, 'the picture moved').not.toEqual(start[1].at);
+    // 45, 60, 75, 90: three more rungs to the top.
+    for (let i = 0; i < 3; i += 1) await page.locator('#tip-up').click();
+    await expect(c3, 'a plan is the top of the ladder, and it stays there').toHaveAttribute('data-tilt', '90');
+    await expect(page.locator('#tip-up'), 'nothing above a plan').toBeDisabled();
+    await expect(page.locator('#tip-down')).toBeEnabled();
+    // Seven rungs down: 75, 60, 45, ISO, 30, 15, 0.
+    for (let i = 0; i < 7; i += 1) await page.locator('#tip-down').click();
+    await expect(c3, 'an elevation is the bottom').toHaveAttribute('data-tilt', '0');
+    await expect(page.locator('#tip-down'), 'nothing below an elevation').toBeDisabled();
+    await page.locator('#tip-up').click();
+    await page.locator('#tip-up').click();
+    await page.locator('#tip-up').click();
+    await expect(c3, 'and ISO is a rung on the way back up').toHaveAttribute('data-tilt', '35.26');
+    // The turn still turns, tipped or not.
+    await page.locator('#turn-right').click();
+    await expect(c3).toHaveAttribute('data-angle', '60');
+  });
+
+test('tipped flat the bones are an elevation; tipped straight down they are a plan',
+  async ({ page }) => {
+    // Pure: the projection at the two ends of the ladder. At 0° every point
+    // of a loop lands at the loop's own height whatever its plan position --
+    // the bone is a flat line, which is what an elevation of an outline is.
+    // At 90° a point's screen position is its plan position, whatever its
+    // height -- which is a plan.
+    await boneyardOfTwoStorey(page);
+    const out = await page.evaluate(() => {
+      const BL = window.DraftBoneyardLoops;
+      const P = (pt, elev, tilt) => BL.project(pt, elev, 0, tilt);
+      return {
+        flatA: P({ x: 0, z: 0 }, 8, 0).y, flatB: P({ x: 20, z: 15 }, 8, 0).y,
+        flatLower: P({ x: 20, z: 15 }, 0, 0).y,
+        planA: P({ x: 20, z: 15 }, 8, 90), planB: P({ x: 20, z: 15 }, 0, 90),
+        ladder: BL.TILT_LADDER, iso: BL.ISO_TILT_DEG,
+        // The ends of the ladder hold. The page's arrows are dead there, so
+        // only the step itself can say whether a step past a plan is a plan
+        // or wraps round to an elevation.
+        pastTop: BL.stepTilt(90, 1), pastBottom: BL.stepTilt(0, -1),
+        upFromIso: BL.stepTilt(BL.ISO_TILT_DEG, 1), downFromIso: BL.stepTilt(BL.ISO_TILT_DEG, -1),
+      };
+    });
+    expect(out.flatA, 'at 0°, height only').toBeCloseTo(out.flatB, 9);
+    expect(out.flatLower - out.flatA, 'and a lower loop sits lower by its height').toBeCloseTo(8, 9);
+    expect(out.planA.y, 'at 90°, plan only').toBeCloseTo(out.planB.y, 9);
+    expect(out.planA.y, 'z straight down the screen').toBeCloseTo(15, 9);
+    expect(out.ladder, 'every 15°, with ISO its own rung').toEqual([0, 15, 30, out.iso, 45, 60, 75, 90]);
+    expect(out.iso).toBeCloseTo(35.264, 2);
+    expect(out.pastTop, 'a step past a plan is still a plan').toBe(90);
+    expect(out.pastBottom, 'a step past an elevation is still an elevation').toBe(0);
+    expect([out.upFromIso, out.downFromIso], 'ISO steps to 45 and to 30').toEqual([45, 30]);
   });
 
 test('it turns in 15-degree steps, and a full turn is where it started', async ({ page }) => {
