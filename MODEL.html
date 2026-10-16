@@ -18027,6 +18027,162 @@
     return edge < 1;
   };
 
+  // ── THE DEAD STRIP BESIDE A WELL ────────────────────────────────────────
+  //
+  // Movie, 15 Oct, over his own foundation plan: "lets try to minimize cols
+  // ,... see that part i marked pink - its too small to be useful, if that
+  // area is less than 7 ft we should move the stairs to the garage wall (but
+  // leave it 13" space between the ext wall line and where the stair starts
+  // (to allow for foundation wall and insulation)", and, for the other half
+  // of the same rule, "if there is 7ft or more, the north side of the stair
+  // opening would also need 2 more columns on each end of the stair and a
+  // beam".
+  //
+  // ONE MEASUREMENT, TWO ANSWERS. The strip left between the well and the
+  // wall it faces is either a room or it is waste: under 7 ft nothing can be
+  // done with it, so the stair goes over and takes the strip with it; at 7 ft
+  // or more it IS a room, so the stair stays where the suggester put it and
+  // the side it leaves open gets framed instead.
+  //
+  // THE 13" IS NOT TYPED HERE, and that is deliberate. stairOpeningSetbackFt
+  // already derives the same inset from the walls actually standing -- the
+  // foundation wall plus the insulation wall lining it -- and answers 14-1/2"
+  // against this page's 8" concrete and 6-1/2" insulation. His 13" is that
+  // same allowance read off a different assembly; a typed 13 would stop
+  // following the drafter's own wall types the moment he changed one, which
+  // is the thing that setback was written to do.
+  const STAIR_DEAD_STRIP_FT = 7;
+  // A carrying beam within this of a well's long edge IS that side's beam, so
+  // the side is already framed and gets nothing. The mid-span pass lands one
+  // at STAIR_BEAM_CLEAR_IN (2") off the edge it hugs, so this only has to be
+  // wide enough to recognise it and narrow enough not to claim the beam on
+  // the far side of a small room.
+  const STAIR_SIDE_BEAM_NEAR_FT = 1;
+
+  // BOTH SIDES OF A WELL, measured ACROSS the run: a ray from the middle of
+  // each long edge out to the interior ring. `{ ft, dir }`, dir pointing that
+  // way, nearest side first.
+  //
+  // A RAY RATHER THAN A NEAREST-POINT DISTANCE, which stairWallAdjacent above
+  // can use and this cannot: the nearest point of the ring to a well corner
+  // is as likely to be the wall the stair runs INTO as the one it runs
+  // beside, and a strip measured to the wrong wall is a stair slid sideways
+  // for a reason that was never on that side.
+  const stairSideStrips = stair => {
+    const G = window.DraftGeometry2D;
+    const outline = houseOutlineOn(stair.levelId);
+    const poly = stairOpeningFootprint(stair);
+    if (!outline || outline.points.length < 3 || !poly || poly.length < 3) return [];
+    const ring = G.offsetOutline(
+      outline.points.map(pt => ({ x: pt.x, z: pt.z })),
+      -stairOpeningSetbackFt(stair.levelId));
+    const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const n = { x: -dz / len, z: dx / len };
+    const mid = poly.reduce((sum, pt) => ({
+      x: sum.x + pt.x / poly.length, z: sum.z + pt.z / poly.length }), { x: 0, z: 0 });
+    return [1, -1].map(side => {
+      const dir = { x: n.x * side, z: n.z * side };
+      // FROM THE HOLE'S OWN EDGE, not from its middle: the strip is what is
+      // left beside the opening, and half a well is not part of it.
+      const out = Math.max(...poly.map(pt =>
+        (pt.x - mid.x) * dir.x + (pt.z - mid.z) * dir.z));
+      const from = { x: mid.x + dir.x * out, z: mid.z + dir.z * out };
+      const ray = { start: from, end: { x: from.x + dir.x * 1000, z: from.z + dir.z * 1000 } };
+      let best = Infinity;
+      for (let i = 0; i < ring.length; i++) {
+        const hit = G.segmentIntersection(ray,
+          { start: ring[i], end: ring[(i + 1) % ring.length] });
+        if (hit) best = Math.min(best, Math.hypot(hit.x - from.x, hit.z - from.z));
+      }
+      return { ft: best, dir, from };
+    }).filter(side => Number.isFinite(side.ft)).sort((a, b) => a.ft - b.ft);
+  };
+
+  // THE STAIR GOES OVER when the strip beside it is too small to be a room.
+  // Returns the move in feet, 0 when the strip is a room or there is nothing
+  // to measure.
+  //
+  // AND IT PUTS THE STAIR BACK IF THE MOVE IS NOT LEGAL. The strip is clear of
+  // the wall by construction, but a carrying beam can be standing in it, and a
+  // well slid onto a beam is worse than a narrow strip: stairAutoFit would
+  // then nudge it off again, to somewhere neither rule asked for.
+  const stairCloseDeadStrip = stair => {
+    const [near] = stairSideStrips(stair);
+    if (!near || !(near.ft > 0.01) || near.ft >= STAIR_DEAD_STRIP_FT) return 0;
+    // JUST INSIDE THE RING, by the same two-thousandth the beam nudge uses:
+    // a well edge landed exactly ON the setback line reads as outside it on
+    // the next floating-point comparison, and stairAutoFit pulls it back.
+    const t = near.ft - 0.002;
+    stairShift(stair, near.dir.x * t, near.dir.z * t);
+    if (stairPlacementLegal(stair)) return t;
+    stairShift(stair, -near.dir.x * t, -near.dir.z * t);
+    return 0;
+  };
+
+  // WHICH LEVEL A STAIR'S FRAMING IS FILED ON. The beams carrying the lowest
+  // floor are the FOUNDATION's, in the foundation view -- stairFloorBeams
+  // reads them from exactly there -- and every floor above carries its own.
+  // Filed anywhere else, a beam under a well would be invisible to the rule
+  // that keeps the next well off it.
+  const stairFrameFiling = levelId => {
+    const floors = stairFloorLevels();
+    const lowest = floors.length ? Number(floors[0].id) : null;
+    return Number(levelId) === lowest
+      ? { levelId: FOUNDATION_LEVEL_ID, view: 'foundation' }
+      : { levelId: Number(levelId), view: 'floor' };
+  };
+
+  // THE OPEN SIDE OF A WELL GETS A BEAM ON TWO COLUMNS -- "2 more columns on
+  // each end of the stair and a beam".
+  //
+  // PER SIDE, AND ONLY WHERE THE SIDE IS REALLY OPEN: a side standing on the
+  // wall is carried by the wall, and a side the mid-span pass already laid a
+  // beam along is carried by that beam. What is left is a long edge of a hole
+  // with nothing under it, which is the one that needs framing -- so a stair
+  // pushed to the wall by the rule above comes out with ONE beam, not two,
+  // and the columns stay minimised the way he asked.
+  const stairOpenSideFraming = stair => {
+    const poly = stairOpeningFootprint(stair);
+    if (!poly || poly.length < 3) return [];
+    const beams = stairFloorBeams(stair.levelId);
+    const dx = stair.end.x - stair.start.x, dz = stair.end.z - stair.start.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const u = { x: dx / len, z: dz / len };
+    const mid = poly.reduce((sum, pt) => ({
+      x: sum.x + pt.x / poly.length, z: sum.z + pt.z / poly.length }), { x: 0, z: 0 });
+    return stairSideStrips(stair).filter(side => side.ft > STAIR_SIDE_BEAM_NEAR_FT)
+      .filter(side => !beams.some(beam =>
+        stairBeamGapFt(beam, poly) <= STAIR_SIDE_BEAM_NEAR_FT
+        // THE BEAM ON THAT SIDE, not simply a beam near the hole: a gap
+        // measured to the well says nothing about which side of it the beam
+        // is on, and the one hugging the east edge would otherwise excuse the
+        // west edge as well.
+        && ((beam.start.x + beam.end.x) / 2 - mid.x) * side.dir.x
+          + ((beam.start.z + beam.end.z) / 2 - mid.z) * side.dir.z > 0))
+      .map(side => {
+        // THE LONG EDGE, END TO END, and the two columns at its ends: what he
+        // asked for, and also where a trimmer's load comes down.
+        //
+        // SET OUT OF THE HOLE BY THE SAME 2" EVERY OTHER CARRYING BEAM KEEPS.
+        // A beam ON the well edge is a beam across the opening, which is the
+        // one thing the stair rules refuse everywhere else -- stairAutoFit
+        // nudges a well off any beam within STAIR_BEAM_CLEAR_IN, so a beam
+        // laid flush with the edge would have the next press shuffling the
+        // stair away from its own framing. The mid-span beam on the carried
+        // side already stands exactly that far off, so both sides of a well
+        // end up framed the same way.
+        const off = STAIR_BEAM_CLEAR_IN / 12;
+        const along = poly.map(pt => (pt.x - mid.x) * u.x + (pt.z - mid.z) * u.z);
+        const base = { x: side.from.x + side.dir.x * off, z: side.from.z + side.dir.z * off };
+        const a = { x: base.x + u.x * Math.min(...along),
+          z: base.z + u.z * Math.min(...along) };
+        const b = { x: base.x + u.x * Math.max(...along),
+          z: base.z + u.z * Math.max(...along) };
+        return { start: a, end: b, columns: [a, b] };
+      });
+  };
+
   // The rule-derived suggestion for one level, UNCOMMITTED. The beam edges are
   // the ones the well must clear, the stamps weight the circulation core, and
   // `lowerStair` is a soft pull toward the run below -- passed only on the
@@ -18163,6 +18319,29 @@
       auto: true,
       ...extra,
     });
+    // THE EXTRA WIDTH GOES TO THE WALL SIDE, not half of it into the room.
+    //
+    // Movie, 15 Oct: "the above storey stairs goingto the second floor will
+    // have full 6\" still so those stairs can be 6\" wider", and then "line it
+    // up on and leave the extra inch on the exterior wall side the carpenter
+    // can deal with it".
+    //
+    // Rule B widens a flight stacked over a basement run that hugs an
+    // exterior wall -- the basement lost its width to the foundation wall and
+    // the insulation lining it, and the storey above has only a stud wall
+    // there. A wider run left centred on the same line grows BOTH ways, so
+    // half the width it just gained lands in the room, and the two flights no
+    // longer line up on the edge a carpenter sets his stringers to. Taking it
+    // back on the wall side puts the inside edges over each other and leaves
+    // the odd inch where he said to leave it.
+    const widened = record => {
+      const grew = (record.widthFt - (below.widthFt || record.widthFt)) / 2;
+      if (!(grew > 0.0001)) return record;
+      const [near] = stairSideStrips(below);
+      if (!near) return record;
+      stairShift(record, near.dir.x * grew, near.dir.z * grew);
+      return record;
+    };
     if (belowSplit && Number.isInteger(below.splitTreads) && below.splitTreads > 0) {
       const tShort = belowSplit.t1;
       const s = belowSplit.turn === 'right' ? 1 : -1;
@@ -18183,16 +18362,16 @@
         x: landingCentre.x - du.x * (run1u + Lu / 2) - perpU.x * (-widthFt / 2 + Lu / 2),
         z: landingCentre.z - du.z * (run1u + Lu / 2) - perpU.z * (-widthFt / 2 + Lu / 2),
       };
-      return make(start, du, run1u, {
+      return widened(make(start, du, run1u, {
         turn: su > 0 ? 'right' : 'left',
         winders: 0,
         splitTreads: t1u,
-      });
+      }));
     }
     const firstLen = belowSplit
       ? Math.max(1, Math.floor((layout.treads - 1) / 2)) * runStep
       : layout.runFt;
-    return make({ x: below.start.x, z: below.start.z }, d, firstLen, {});
+    return widened(make({ x: below.start.x, z: below.start.z }, d, firstLen, {}));
   };
 
   // SUGGEST FOR ONE LEVEL: stack over the run below first, and fall back to
@@ -18490,6 +18669,53 @@
   // it would otherwise come back with a stair in mid-air. The stacking lookup
   // inside suggestStairForLevel still reads the WHOLE floor list, so a
   // narrowed press still stacks on what is really below it.
+  // THE OPEN SIDE OF EVERY WELL, COMMITTED. Reads stairOpenSideFraming and
+  // writes the records the drawing keeps, undo-shaped like everything else
+  // the build hands back.
+  //
+  // auto: FALSE, and it is the overhang piles' reason again. placeAutoBeam
+  // sweeps and re-derives the beams it marked `auto`, and what it re-derives
+  // is the MID-SPAN plan -- which knows about the hole but not about this
+  // rule, so a sweep would carry off the beam holding the open side of a well
+  // and put nothing back. These are not a suggestion; they are what the
+  // opening stands on.
+  const placeStairSideFraming = stairs => {
+    if (!Array.isArray(drawing?.beams)) drawing.beams = [];
+    if (!Array.isArray(drawing?.columns)) drawing.columns = [];
+    let beamId = newStructureId(drawing.beams);
+    let columnId = newStructureId(drawing.columns);
+    const placed = [];
+    let beams = 0, columns = 0;
+    stairs.forEach(stair => {
+      const filing = stairFrameFiling(stair.levelId);
+      stairOpenSideFraming(stair).forEach(side => {
+        const beam = {
+          id: beamId, start: { ...side.start, y: 0 }, end: { ...side.end, y: 0 },
+          ...filing, mode: 'flush', auto: false, stairId: stair.id,
+        };
+        beamId += 1;
+        drawing.beams.push(beam);
+        placed.push({ list: drawing.beams, item: beam });
+        beams += 1;
+        side.columns.forEach(point => {
+          // THE SAME FILING AS ITS BEAM. A post and the beam it holds up are
+          // one piece of structure, and the mid-span pass files its pair
+          // together for the same reason -- a column on another sheet from
+          // the beam over it is two drawings of one thing.
+          const column = {
+            id: columnId, point: { x: point.x, y: 0, z: point.z },
+            ...filing, footing: 'pad36', auto: false,
+          };
+          columnId += 1;
+          drawing.columns.push(column);
+          placed.push({ list: drawing.columns, item: column });
+          columns += 1;
+        });
+      });
+    });
+    return { placed, beams, columns };
+  };
+
   const placeAutoStairs = ({ served = new Set(), only = null } = {}) => {
     if (!drawing || !window.DraftAutoStair) return -1;
     const floors = stairFloorLevels()
@@ -18507,6 +18733,27 @@
       drawing.stairs.push(res.stair);
       placed.push({ list: drawing.stairs, item: res.stair });
       stairId += 1;
+      // AND THE DEAD STRIP CLOSES HERE, INSIDE THE LOOP, before the next
+      // level is asked for. The flight above stacks on the POSITION of the
+      // one below, so a stair moved after the stack was built would leave the
+      // upper flight standing over where the lower one used to be -- the
+      // drift the comment below this loop already owns, and the one case of
+      // it this page can avoid outright by moving first.
+      //
+      // ONLY A FLIGHT WITH NOTHING UNDER IT, and that is not an optimisation.
+      // A run over another run is STACKED on it for headroom, and the storey
+      // above has a thinner wall on the same side -- so the strip beside the
+      // upper flight is a few inches wide by construction, reads as dead, and
+      // closing it would walk the upper flight off the lower one and undo
+      // both the stack and "line it up on" in one move. The flight below is
+      // where this rule answers, and it answers for the whole stack.
+      const order = stairFloorLevels().map(entry => Number(entry.id));
+      const mine = order.indexOf(Number(level.id));
+      const stacked = (drawing.stairs || []).some(stair => stair !== res.stair
+        && (stair.view || 'plan') === 'plan'
+        && order.indexOf(Number(stair.levelId)) >= 0
+        && order.indexOf(Number(stair.levelId)) < mine);
+      if (!stacked) stairCloseDeadStrip(res.stair);
     });
     // THE HOLES COME AFTER EVERY RUN IS DOWN, not per level inside the loop:
     // an upper flight stacks on the POSITION of the one below it, so every run
@@ -18526,12 +18773,18 @@
     // delta up the stack or refusing a nudge that breaks it, is not written on
     // the strength of a case nobody has hit.
     const cut = buildStairOpenings(served);
+    // THE OPEN SIDES LAST OF ALL, because stairAutoFit inside the cut above
+    // is the final word on where each run stands: framing laid before it
+    // would be a beam along a well edge that then moved.
+    const framed = placeStairSideFraming(placed.map(entry => entry.item));
     return {
-      placed: [...placed, ...cut.placed],
+      placed: [...placed, ...cut.placed, ...framed.placed],
       stairs: placed.length,
       openings: cut.cut,
       nudges: cut.nudges,
       refused: cut.refused,
+      sideBeams: framed.beams,
+      sideColumns: framed.columns,
       notes,
     };
   };
