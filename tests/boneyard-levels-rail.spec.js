@@ -124,20 +124,40 @@ test('the 3D side is the one that gave up the room, model and all', async ({ pag
   expect(three.w, 'the 3D window is the narrower one').toBeLessThan(edit.w * 0.75);
   expect(three.w, 'but it is still a window').toBeGreaterThan(200);
   // "and the 3D model smaller as well": the picture is laid out to the box it
-  // is in, so a narrower box is a smaller model -- and the whole of it is
-  // still on the canvas. A model that kept its old size would hang off.
+  // is in, so a narrower box is a smaller model.
   const canvas = await box(page.locator('#bones3d'));
   expect(Math.abs(canvas.w - (three.w - 2)), 'the canvas took the pane\'s width')
     .toBeLessThan(2);
   const bones = JSON.parse(await page.locator('#bones3d').getAttribute('data-bones'));
   expect(bones.length, 'there are bones to look at').toBeGreaterThan(0);
-  bones.forEach(bone => {
-    expect(bone.at, `${bone.name} was drawn`).toBeTruthy();
-    expect(bone.at[0], `${bone.name} is on the canvas`).toBeGreaterThanOrEqual(0);
-    expect(bone.at[0]).toBeLessThanOrEqual(canvas.w);
-    expect(bone.at[1]).toBeGreaterThanOrEqual(0);
-    expect(bone.at[1]).toBeLessThanOrEqual(canvas.h);
+  // MEASURED OFF THE INK, not off the numbers the painter published. A model
+  // laid out for a window it no longer has still publishes four corners and
+  // still draws -- it just draws them somewhere else. The ink is where the
+  // picture really landed, and `layout` centres the whole bone in its box, so
+  // a picture fitted to any other box is off centre, cut off, or both.
+  const ink = await page.locator('#bones3d').evaluate(c => {
+    const dpr = window.devicePixelRatio || 1;
+    const px = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let y = 0; y < c.height; y += 1) {
+      for (let x = 0; x < c.width; x += 1) {
+        if (px[(y * c.width + x) * 4 + 3] > 8) {
+          if (x < x0) x0 = x; if (x > x1) x1 = x;
+          if (y < y0) y0 = y; if (y > y1) y1 = y;
+        }
+      }
+    }
+    return x1 < 0 ? null : { x0: x0 / dpr, x1: x1 / dpr, y0: y0 / dpr, y1: y1 / dpr,
+      w: c.width / dpr, h: c.height / dpr };
   });
+  expect(ink, 'something was painted').toBeTruthy();
+  expect(Math.abs((ink.x0 + ink.x1) / 2 - ink.w / 2), 'centred across the window')
+    .toBeLessThan(4);
+  expect(Math.abs((ink.y0 + ink.y1) / 2 - ink.h / 2), 'and down it').toBeLessThan(4);
+  // AND IT FILLS THE WINDOW IT WAS GIVEN: smaller because the box is smaller,
+  // not because it was drawn small inside a box it does not use.
+  expect(Math.max(ink.x1 - ink.x0, ink.y1 - ink.y0)
+    / Math.max(ink.w, ink.h), 'the bone fills its window').toBeGreaterThan(0.5);
 });
 
 test('every chip in the rail still picks its level', async ({ page }) => {

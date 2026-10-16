@@ -103,6 +103,13 @@ const MUTANTS = [
     test: 'the 3D side is the one that gave up the room' },
 
   { file: 'BONEYARD.html',
+    name: 'the model is drawn small inside the window instead of to it, which '
+      + 'is a smaller picture for the wrong reason',
+    find: '        laid = BL.layout(shown(), angle, w, h);',
+    with: '        laid = BL.layout(shown(), angle, w, h, 160);',
+    test: 'the 3D side is the one that gave up the room' },
+
+  { file: 'BONEYARD.html',
     name: 'a chip in the rail no longer picks its level',
     find: '          b.addEventListener(\'click\', () => { pick(level); });',
     with: '          if (level.kind === \'roof\') b.addEventListener(\'click\', () => { pick(level); });',
