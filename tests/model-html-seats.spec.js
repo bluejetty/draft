@@ -35,13 +35,17 @@ const SECTION = {
 // `cuts` is LAYOUT's to write (tests/persisted-format.spec.js's writer map), so
 // the fixture writes the file directly rather than pretending this page can
 // author one.
-async function openWith(page, cuts = []) {
+async function openWith(page, cuts = [], board = null) {
   await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, saved, sections }) => {
+  await page.evaluate(async ({ bucket, saved, sections, onBoard }) => {
     saved.cuts = sections;
+    // THE BOARD COMES FROM THE FILE OR NOT AT ALL. There is no press onto
+    // DRAFTING any more (15 Oct), so a check that needs that board says so
+    // here; everything else opens where a drawing opens, which is TOY.
+    if (onBoard) saved.board = onBoard;
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, saved: REPRO, sections: cuts });
+  }, { bucket: BUCKET, saved: REPRO, sections: cuts, onBoard: board });
   // THE SEATS HEAD THE LEVELS / LAYERS PANE (Movie, 10 Oct), which is up by
   // default. `right=1` is said anyway: a shut rail is display:none whole, so
   // a spec about seats names the state it stands in.
@@ -390,16 +394,20 @@ test('the seats paint one per frame, which is what keeps the task short',
 
 test('an edit never blocks the main thread, even with four live elevations',
   async ({ page }) => {
-    await openWith(page, [SECTION]);
-
     // MEASURED ON A DRAFTING BOARD, and the void-sample guard below is what
-    // said so. These are three (four) SEPARATE two-tap runs, and on the default
-    // TOY board §1 refuses a new run while one is unfinished — a rule with its
-    // own check (model-toy-draw.spec.js:447), which also proves putting the
-    // tool down does not cancel the run. So every edit after the first was
-    // correctly refused, committed nothing, and this read as a chrome
-    // regression. The press that walked onto DRAFTING went with the switch on
-    // 15 Oct -- TOY's §1 refusal is a rule about the RUN, not about the tools.
+    // said so. These are four SEPARATE two-tap runs, and on TOY §1 refuses a
+    // new run while one is unfinished — a rule with its own check
+    // (model-toy-draw.spec.js), which also proves putting the tool down does
+    // not cancel the run. So every edit after the first was correctly
+    // refused, committed nothing, and this read as a chrome regression.
+    //
+    // THE BOARD USED TO BE A PRESS HERE and went with the switch on 15 Oct.
+    // Taking the press out was read as "TOY's refusal is about the RUN, not
+    // the tools" -- true, and beside the point: arming again IS the new run
+    // §1 refuses, and Escape would cancel the run rather than commit it. So
+    // the board is named in the FILE now, which is the only way left to ask
+    // for it, and is what this measurement always wanted.
+    await openWith(page, [SECTION], 'drafting');
 
     // WHAT A DRAFTER FEELS, not a millisecond budget. The old assertion here
     // read `rail < 10ms`, which encoded the labels ruling; Movie reversed that

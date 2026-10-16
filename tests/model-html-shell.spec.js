@@ -47,13 +47,17 @@ const SECTION = {
   startPt: { x: -20, z: 0 }, endPt: { x: 30, z: 0 }, dirVec: { x: 0, z: 1 },
 };
 
-async function openShell(page, query = '') {
+async function openShell(page, query = '', board = null) {
   await h.openModel(page, { webgl: false });
-  await page.evaluate(async ({ bucket, saved, cut }) => {
+  await page.evaluate(async ({ bucket, saved, cut, onBoard }) => {
     saved.cuts = [cut];
+    // THE BOARD COMES FROM THE FILE OR NOT AT ALL. There is no press onto
+    // DRAFTING any more (15 Oct), so a check that needs that board says so
+    // here; everything else opens where a drawing opens, which is TOY.
+    if (onBoard) saved.board = onBoard;
     await window.SharedFileStore.saveSharedFile(
       new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
-  }, { bucket: BUCKET, saved: REPRO, cut: SECTION });
+  }, { bucket: BUCKET, saved: REPRO, cut: SECTION, onBoard: board });
   await page.goto(`/MODEL.html?mode=night${query}`);
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
 }
@@ -1001,18 +1005,20 @@ test('a tap that lands on a sidebar says which one', async ({ page }) => {
 });
 
 test('the shell does not put a long task back', async ({ page }) => {
-  await openShell(page, '&left=1&right=1');
-
   // MEASURED ON A DRAFTING BOARD, and the void-sample guard below is what
-  // said so. These are three (four) SEPARATE two-tap runs, and on the default
-  // TOY board §1 refuses a new run while one is unfinished — a rule with its
-  // own check (model-toy-draw.spec.js:447), which also proves putting the
-  // tool down does not cancel the run. So every edit after the first was
-  // correctly refused, committed nothing, and this read as a chrome
-  // regression. The press that walked onto DRAFTING went with the switch on
-  // 15 Oct -- TOY's §1 refusal is a rule about the RUN, not about the tools,
-  // so the fix now is the fixture below starting each edit cleanly rather
-  // than a board that allowed more.
+  // said so. These are three SEPARATE two-tap runs, and on TOY §1 refuses a
+  // new run while one is unfinished — a rule with its own check
+  // (model-toy-draw.spec.js), which also proves putting the tool down does
+  // not cancel the run. So every edit after the first was correctly refused,
+  // committed nothing, and this read as a chrome regression.
+  //
+  // THE BOARD USED TO BE A PRESS HERE and went with the switch on 15 Oct.
+  // Taking the press out was read as "TOY's refusal is about the RUN, not the
+  // tools, so arming cleanly is enough" -- it is not: arming again IS the new
+  // run §1 refuses, and Escape would cancel the run rather than commit it. So
+  // the board is named in the FILE now, which is the only way left to ask for
+  // it, and is what this measurement always wanted.
+  await openShell(page, '&left=1&right=1', 'drafting');
 
   // The order's bar: the last table read 31–54 ms per committed click with no
   // long tasks, and the shell must not undo that. Measured with BOTH panels
