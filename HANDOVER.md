@@ -484,6 +484,46 @@ The two verbs exist and are tested (`model-outline-draw.spec.js`) — this is
 presentation. The banner on the left and the bone (or the house press on
 paper) are the same press, so they share a handler.
 
+### 3.9 — LAYOUT: text at its true printed size at every zoom
+
+> *"i notice the text sizes on the title of the viewport and the elvation
+> within the viewports changes when i zoom in and out, can you put it at the
+> exact size that it will PRINT when the layout is PRINTED so the user can
+> adjust it if they need too"*
+
+**The cause, found:** `LAYOUT.html`'s `zoom` is **pixels per inch of paper**
+(clamped 10–300 at ~2819), and the text sizes are already in paper inches — so
+they would preview correctly. Each is wrapped in a legibility floor that breaks
+it:
+
+```
+2449:  ctx.font = `${Math.max(9, zoom * 0.3)}px ...`      // title block placeholder
+2615:  ctx.font = `600 ${Math.max(9, zoom * 0.14)}px ...` // viewport title
+2643:  ctx.font = `600 ${Math.max(9, zoom * 0.14)}px ...` // viewport title, second call site
+```
+
+0.14" is about 10 pt. **The floor bites below roughly 64 px/inch** — about
+where a whole 11×17 sheet sits fitted to the window — so at the zoom he
+actually works at, the text has stopped scaling with the sheet and reads
+oversized; zoom in past that and it starts scaling again. That is exactly "the
+size changes when I zoom in and out".
+
+**The fix:** drop the floor on anything previewing print, so the size is
+`zoom × <paper inches>` at every zoom. If a minimum is wanted for a thumbnail,
+gate it on the `thumb` flag already passed around rather than on the live
+sheet.
+
+**Also check the text INSIDE the viewports.** The elevation labels, level tags
+and dimension strings in his screenshot come from the plan/elevation painters
+drawn into the viewport, not from those three lines. Look for the same
+`Math.max` floor in `render-2d.js` / `cut-view.js` before calling it done — he
+named both: *"the title of the viewport AND the elevation within the
+viewports"*.
+
+*"so the user can adjust it if they need too"* reads as: seeing the true size
+is what lets him judge whether to change it. If he wants a text-size **control**
+as well, that is a second job — ask before building one.
+
 ---
 
 ## 4. Older carry-overs
