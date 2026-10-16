@@ -420,9 +420,46 @@
   html:not([data-theme="rough"]) #dt-build-now-shelf { display:none; }
   /* AND THE BUILD-NOW PRESS SITS ON THE LINE ABOVE IT (Movie, 3 Oct). */
   html[data-theme="rough"] #dt-build-now-shelf { position:absolute; left:6%; width:88%;
-    top:80.5%; text-align:center; color:#1f3f6b; font-size:clamp(11px, 1.6vw, 16px); }
+    top:85%; text-align:center; color:#1f3f6b; font-size:clamp(11px, 1.6vw, 16px); }
   html[data-theme="rough"] #dt-outline-shelf { position:absolute; left:6%; width:88%;
-    top:86%; text-align:center; color:#1f3f6b; font-size:clamp(11px, 1.6vw, 16px); }
+    top:90.5%; text-align:center; color:#1f3f6b; font-size:clamp(11px, 1.6vw, 16px); }
+  /* ── THE BANNERS, ONE ROW UNDER THE SHELF, EITHER SIDE OF THE PRESS ─────
+     Movie, 16 Oct: "those 2 banners and arrows (red and white) to pop up
+     down below". On the sign the row straddles the bone's post (the bone
+     stands at 50%, 81.7%, 5.5% wide); the gap in the middle is the bone's
+     width plus air, so the arrows meet it and nothing stands on it. The row
+     itself takes no press -- only the two banners do -- which is the rule
+     the whole board keeps. */
+  #dt-banners { position:absolute; left:6%; width:88%; top:80.3%; height:8.2%;
+    display:flex; align-items:center; justify-content:space-between; gap:1%;
+    pointer-events:none; }
+  #dt-banners[hidden] { display:none; }
+  .dt-banner { pointer-events:auto; flex:0 1 31%; height:100%; box-sizing:border-box;
+    appearance:none; border:2px solid #fff; border-radius:5px;
+    background:#d7262f; color:#fff; cursor:pointer; padding:0 1.5%;
+    font-family: var(--font-ui); font-weight:800; letter-spacing:0.06em;
+    font-size:clamp(9px, 1.25vw, 15px); line-height:1.1; text-transform:uppercase;
+    box-shadow:0 2px 6px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.25); }
+  .dt-banner:hover, .dt-banner:focus-visible { background:#ff4033; }
+  .dt-banner[hidden], .dt-arrow[hidden] { display:none; }
+  .dt-arrow { flex:0 0 10%; height:70%; display:block; pointer-events:auto;
+    appearance:none; background:none; border:none; padding:0; cursor:pointer; }
+  .dt-arrow svg { width:100%; height:100%; display:block; }
+  .dt-arrow:hover path, .dt-arrow:focus-visible path { stroke:#ffd9d6; }
+  .dt-arrow path { fill:none; stroke:#fff; stroke-width:5; stroke-linecap:round; stroke-linejoin:round; }
+  .dt-arrow .dt-arrow-shade { stroke:#d7262f; stroke-width:10; }
+  .dt-banner-gap { flex:0 0 9%; }
+  /* THE NUMBER ON THE SIGN'S PRESS, seated for THIS press's artwork rather
+     than the foot's: the sign's disc is drawn larger, and Movie placed the
+     number by eye on each (16 Oct): on the bone "lowered down because the
+     BONE is in the middle", on the house "centered up down in the blue
+     button area in the house" -- "middle". */
+  #dt-bone-balance { position:absolute; left:0; right:0; top:80%;
+    transform:translateY(-50%); text-align:center; pointer-events:none;
+    font-family: var(--font-ui); font-weight:700; color:#fff;
+    text-shadow:0 1px 2px rgba(29,31,32,0.55); letter-spacing:0.02em;
+    line-height:1; }
+  #dt-bone-balance:empty { display:none; }
   /* The tile strip: the house types, on the board's own shelf. */
   #dt-tiles { position:absolute; left:5.9%; top:32.5%; width:88.2%; height:44.1%;
     box-sizing:border-box; display:flex; flex-direction:column;
@@ -574,9 +611,33 @@
     bottom:max(calc(var(--house-h) + 28px),
       calc(50vh - var(--dt-w) / var(--dt-aspect) / 2)); }
   html[data-theme="rough"] #dt-screen { display:none; }
-  html[data-theme="rough"] #dt-bone { display:none; }
-  /* With no screen and no press on it, the selections have the sheet. */
-  html[data-theme="rough"] #dt-tiles { left:6%; top:13%; width:88%; height:72%; }
+  /* THE HOUSE PRESS IN THE MIDDLE OF THE ROW (Movie, 16 Oct: "on the ROUGH -
+     drivethru version can you do it similar to the change on the Ruff
+     version", drawn as [ DRAW HOUSE ] -> (house) -> [ DRAW HOUSE OUTLINE ]).
+     The sheet has no bone to point at, so the sign's own press -- the same
+     button, the same handler, wearing the house under this skin -- stands
+     where the arrows meet, and the shelf gives up the bottom of the sheet
+     for the row. */
+  html[data-theme="rough"] #dt-bone { display:none; top:70%; width:9.5%;
+    border-radius:8px; }
+  /* ONLY WITH THE ROW: the sheet has no post for a press to stand on, so the
+     house press rises and goes with the banners it stands between -- "pop
+     up down below once the user selects the house type". */
+  html[data-theme="rough"] #dt-banners:not([hidden]) ~ #dt-bone { display:block; }
+  html[data-theme="rough"] #dt-tiles { left:6%; top:13%; width:88%; height:56%; }
+  html[data-theme="rough"] #dt-banners { top:72%; height:9%; }
+  html[data-theme="rough"] .dt-banner-gap { flex:0 0 12%; }
+  html[data-theme="rough"] #dt-bone-balance { top:62%; }
+  /* BLUE ON PAPER (Movie, 16 Oct: "the colors on the HOUSE / ROUGH version
+     should be BLUE not RED. Red is RUFF version"): the sheet's own ink, the
+     house press's blue, with the paper's cream for the lettering and the
+     arrows. */
+  html[data-theme="rough"] .dt-banner { background:#1f3f6b; border-color:#f1e9d2; color:#f1e9d2;
+    box-shadow:0 2px 5px rgba(31,63,107,0.35), inset 0 1px 0 rgba(255,255,255,0.18); }
+  html[data-theme="rough"] .dt-banner:hover, html[data-theme="rough"] .dt-banner:focus-visible { background:#2c5a99; }
+  html[data-theme="rough"] .dt-arrow path { stroke:#f1e9d2; }
+  html[data-theme="rough"] .dt-arrow .dt-arrow-shade { stroke:#1f3f6b; }
+  html[data-theme="rough"] .dt-arrow:hover path, html[data-theme="rough"] .dt-arrow:focus-visible path { stroke:#fff; }
   /* Inside the rule, and in the sheet's own ink. The sign's CLOSE is light
      lettering on a dark plate because it sits on a dark sign; the same plate
      on paper reads as a sticker. */
@@ -1591,9 +1652,55 @@
       >PRESS TO DRAW HOUSE WITHOUT drawing OUTLINE</button>
     <button id="dt-outline-shelf" type="button" data-drivethru-outline hidden
       >CLICK HERE to draw house OUTLINE</button>
+    <!-- THE TWO BANNERS AND THEIR ARROWS (Movie, 16 Oct): "i'd like to make
+         the options more obvious by adding them once the user selects the
+         house type, for those 2 banners and arrows (red and white) to pop up
+         down below ... when they click that stuff BONE / or the BANNER on the
+         left it will DRAW the AUTOHOUSE at prespecified dimensions. if they
+         click the stuff circled in green (arrow or the other banner on the
+         right) they will get to DRAW the HOUSE OUTLINE" ... "leave the other
+         links up top beside the dog too".
+
+         FOUR DOORS TO TWO VERBS. The banners carry the same data attributes
+         as the screen's two text links, so they join the same handler lists
+         and are shown on the same terms (paintSign's canTrace) -- they are
+         not a second way of doing it, they are a louder sign for the one way.
+         The arrows are drawn here rather than shipped as pictures so they
+         point at whatever stands between them: the bone on the sign, the
+         HOUSE press on the ROUGH sheet. -->
+    <div id="dt-banners" data-drivethru-banners hidden>
+      <button id="dt-banner-build" class="dt-banner" type="button"
+        data-drivethru-build-now data-drivethru-banner="build"
+        title="Build the house you picked, at its preset dimensions">DRAW HOUSE</button>
+      <!-- BOTH ARROWS POINT RIGHT, and both are presses (Movie, 16 Oct, on
+           the first cut: "that arrow should point at the right box and that
+           arrow and the RIGHT box go to DRAW the outline, the BONE and the
+           left box and arrow DRAW AUTOBUILD ... see that right arrow should
+           also point right"). The row reads as one line: banner, arrow,
+           press, arrow, banner -- the left half builds, the right half
+           draws the outline. -->
+      <button id="dt-arrow-build" class="dt-arrow" type="button" data-drivethru-build-now data-drivethru-banner="arrow"
+        aria-label="Build the house you picked"><svg viewBox="0 0 64 24" aria-hidden="true" focusable="false">
+        <path class="dt-arrow-shade" d="M4 12h42M36 4l14 8-14 8" />
+        <path d="M4 12h42M36 4l14 8-14 8" /></svg></button>
+      <span class="dt-banner-gap" aria-hidden="true"></span>
+      <button id="dt-arrow-outline" class="dt-arrow" type="button" data-drivethru-outline data-drivethru-banner="arrow"
+        aria-label="Draw the house's outline yourself"><svg viewBox="0 0 64 24" aria-hidden="true" focusable="false">
+        <path class="dt-arrow-shade" d="M4 12h42M36 4l14 8-14 8" />
+        <path d="M4 12h42M36 4l14 8-14 8" /></svg></button>
+      <button id="dt-banner-outline" class="dt-banner" type="button"
+        data-drivethru-outline data-drivethru-banner="outline"
+        title="Draw the house's outline yourself, then build it">DRAW HOUSE OUTLINE</button>
+    </div>
     <button id="dt-bone" type="button" data-drivethru-bone
       title="Build the house you picked">
       <img data-bone-art src="./assets/bone-red.png" alt="BONE — build it" />
+      <!-- THE NUMBER THE PRESS WEARS (Movie, 16 Oct): "add the extra HOUSE
+           BUTTON above in the popup area with the NUMBER on it (and also add
+           the number to the one in the RUFF Drive-thru version". The bone
+           wallet's balance, read once and painted here as well as on the
+           foot's press -- one wallet in two places, not a second counter. -->
+      <span id="dt-bone-balance" data-dt-balance aria-hidden="true"></span>
     </button>
   </div>
 </div>
@@ -7457,6 +7564,17 @@
     const chars = broke ? 8 : String(balance).length;
     boneBalanceEl.style.fontSize =
       `${chars <= 1 ? 15 : chars <= 3 ? 11 : chars <= 5 ? 8 : 7}px`;
+    // THE SAME NUMBER ON THE SIGN'S PRESS (Movie, 16 Oct: "add the number to
+    // the one in the RUFF Drive-thru version"): one wallet read, two places.
+    // The sign's disc is drawn larger than the foot's, so the ladder is
+    // scaled by the two presses' widths rather than copied.
+    document.querySelectorAll('[data-dt-balance]').forEach(el => {
+      el.textContent = boneBalanceEl.textContent;
+      const press = el.closest('button');
+      const scale = press && boneFoot && boneFoot.offsetWidth > 0
+        ? Math.max(1, press.offsetWidth / boneFoot.offsetWidth) : 1;
+      el.style.fontSize = `${Math.round(parseFloat(boneBalanceEl.style.fontSize) * scale)}px`;
+    });
     boneFoot.toggleAttribute('data-broke', broke);
     boneFoot.title = broke
       ? `Out of bones \u2014 the next free bone lands in ${waitLabel(nextDripMs)}. `
@@ -7507,17 +7625,26 @@
     // THE OUTLINE PRESS, offered once there is a type to draw and nothing
     // left to ask about it.
     const canTrace = !!picked?.entry && !(picked.entry.needsSize && !chosenSize());
-    const traceWords = `CLICK HERE to draw ${isGarageOrder(picked) ? 'garage' : 'house'} OUTLINE`;
+    const kind = isGarageOrder(picked) ? 'garage' : 'house';
+    const traceWords = `CLICK HERE to draw ${kind} OUTLINE`;
+    // THE BANNERS SAY IT SHORT (Movie's own words on his drawing: DRAW HOUSE,
+    // DRAW HOUSE OUTLINE); the text links keep the sentence.
+    const banner = press => press.dataset.drivethruBanner;
+    const arrow = press => banner(press) === 'arrow';
     outlinePresses.forEach(press => {
       press.hidden = !canTrace;
-      press.textContent = traceWords;
+      if (arrow(press)) return;
+      press.textContent = banner(press) ? `DRAW ${kind.toUpperCase()} OUTLINE` : traceWords;
     });
     // OFFERED BESIDE IT, on the same terms: a type with nothing left to ask.
-    const buildWords = `PRESS TO DRAW ${isGarageOrder(picked) ? 'GARAGE' : 'HOUSE'} WITHOUT drawing OUTLINE`;
+    const buildWords = `PRESS TO DRAW ${kind.toUpperCase()} WITHOUT drawing OUTLINE`;
     buildNowPresses.forEach(press => {
       press.hidden = !canTrace;
-      press.textContent = buildWords;
+      if (arrow(press)) return;
+      press.textContent = banner(press) ? `DRAW ${kind.toUpperCase()}` : buildWords;
     });
+    // AND THE ROW THEY STAND IN rises and goes with them.
+    document.querySelectorAll('[data-drivethru-banners]').forEach(row => { row.hidden = !canTrace; });
     const open = openFamilyId ? BM.familyById(openFamilyId) : null;
     if (signRefusal) {
       signLine.textContent = signRefusal.line;
