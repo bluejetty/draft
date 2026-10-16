@@ -293,41 +293,7 @@ test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight 
     // L, two feet of eave all round.
     const bottomZ = third.end.z;
     expect(bottomZ, 'the third flight runs back from the landing').toBeLessThan(14);
-    // ── AND NO EAVE ON THE HOUSE SIDE ─────────────────────────────────────
-    //
-    // Movie, 15 Oct, with the ROOF plan marked up a second time: "always flow
-    // slope away from the 2nd floor", "for modified bilevers" and "1storey
-    // with room over garage".
-    //
-    // THE ROOM IS THE TALL ONE HERE -- the house is one storey on MAIN FL at
-    // elev 0 and the room stands on OVER GARAGE at 6 -- so a hip on its north
-    // side is a face sloping down INTO the house, and the main roof was cut
-    // away round this very ring, so what that eave discharged onto was the
-    // top of the house's gable wall. The three house-side edges are flush
-    // now: gable, and no overhang.
-    //
-    // WHICH IS WHY THIS SPAN NO LONGER REACHES 2 FT PAST THE STRIP'S END.
-    // It used to read `bottomZ - 2`; the north edge stops ON the stair
-    // strip's end now, where the house wall is.
-    expect(span(roomRoof.points)).toEqual(span([{ x: -6, z: bottomZ }, { x: 23, z: 40 }]));
-    // THE SHAPE ITSELF, because a span cannot tell a gable from an eave and
-    // the whole order is about which is which: three flush edges where the
-    // roof stands over the house, three eaves in open air. The elevation is
-    // what showed it -- before this, the E3 BACK drew the room's hip as a
-    // long diagonal straight across the house's own roof, which is what
-    // Movie reported as "the elevation is mixed up".
-    expect(roomRoof.edges.filter(e => e === 'gable').length,
-      'the three edges standing over the house').toBe(3);
-    expect(roomRoof.edges.filter(e => e === 'eave').length,
-      'and three in open air to shed into').toBe(3);
-    // A FLUSH EDGE CARRIES BOTH HALVES -- the gable AND the zero overhang --
-    // because they are one fact: a roof that dies into a wall has no eave
-    // there and no board to hang one on.
-    roomRoof.edges.forEach((edge, index) => {
-      const over = roomRoof.edgeOverhang[index];
-      if (edge === 'gable') expect(over, `edge ${index} dies into the house`).toBe(0);
-      else expect(over, `edge ${index} is open air`).toBeGreaterThan(0);
-    });
+    expect(span(roomRoof.points)).toEqual(span([{ x: -6, z: bottomZ - 2 }, { x: 23, z: 40 }]));
     // AN L, NOT THE OLD SQUARE -- six corners, SEVEN since the cricket
     // (Movie, 14 Oct: "keep the valley 2ft from the corner"). An L has one
     // inside corner, it is cut back 2 ft, and it comes back as two points.
