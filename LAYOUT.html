@@ -1056,6 +1056,25 @@ const PAPER_SIZES = {
 // to its dpi: the painters' pixel line weights and lettering then print as
 // they read on the desk (9px lettering is 1/8" tall).
 const PRINT_PX_PER_IN = 72;
+// THE VIEWPORT CAPTION, IN INCHES OF PAPER. Movie, 16 Oct: "i notice the text
+// sizes on the title of the viewport and the elvation within the viewports
+// changes when i zoom in and out, can you put it at the exact size that it
+// will PRINT when the layout is PRINTED so the user can adjust it if they
+// need too."
+//
+// These were `Math.max(9, zoom * 0.14)` -- the size WAS in paper inches, and
+// the floor is what broke it. `zoom` is pixels per inch of paper, so the floor
+// bites below about 64 px/inch, which is roughly where a whole 11x17 sheet
+// sits fitted to the window. At the zoom he actually works at, the caption had
+// stopped shrinking with the sheet and read oversized; zoom past that and it
+// started scaling again. That is the "changes when i zoom in and out", and a
+// legibility floor is exactly the wrong answer to it: a preview that cannot
+// lie about size is the whole point.
+//
+// 0.14in is 10pt, which is what it has always printed at. The GAP under the
+// box was a flat 4px and moved for the same reason.
+const VIEWPORT_TITLE_IN = 0.14;
+const VIEWPORT_TITLE_GAP_IN = 4 / PRINT_PX_PER_IN;
 
 // Architectural scales: label, paperInchesPerFoot
 const SCALES = [
@@ -2331,6 +2350,21 @@ class Component extends PageLogic {
     const ctx = this._ctx;
     if (!ctx || !canvas) return;
     const { zoom, panX, panY } = this.state;
+    // FOR THE SPECS: the sheet transform this paint actually used. A check on
+    // whether the lettering is at its printed size has to know what "printed
+    // size" works out to on screen, and that is this number -- zoom is pixels
+    // per inch of paper, so the caption is drawn at zoom x 0.14.
+    document.body.dataset.layoutView = [zoom, panX, panY]
+      .map(n => Math.round(n * 100) / 100).join(',');
+    // AND WHERE EACH VIEWPORT'S BOX LANDED ON THE PAPER. The rect is computed
+    // from the plan's own extents and the scale, never stored, so a check that
+    // wants to look at the caption UNDER a viewport has no way to find it from
+    // the saved file alone.
+    document.body.dataset.layoutRects = JSON.stringify(
+      this._sheetViewports(this.state.activeSheet).map(vp => {
+        const r = this._viewportRectIn(vp);
+        return { id: vp.id, xIn: r.xIn, yIn: r.yIn, wIn: r.wIn, hIn: r.hIn };
+      }));
     this._paintSheet(ctx, canvas, { zoom, panX, panY }, this.state.activeSheet);
     // ARRIVING ON THE SITE PLAN SHEET IS THE QUESTION, and this is the one
     // place that sees every arrival -- a rail press, a re-deal, a sheet
@@ -2446,7 +2480,7 @@ class Component extends PageLogic {
       ctx.lineWidth = 1;
       ctx.strokeRect(tbBox.x, tbBox.y, tbBox.w, tbBox.h);
       ctx.fillStyle = 'rgba(29,31,32,0.18)';
-      ctx.font = `${Math.max(9, zoom * 0.3)}px 'Barlow Condensed', sans-serif`;
+      ctx.font = `${zoom * 0.3}px 'Barlow Condensed', sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       // The placeholder's word is for the desk; the box prints.
@@ -2597,6 +2631,12 @@ class Component extends PageLogic {
         ctx.translate(panX + full.xIn * zoom, panY + full.yIn * zoom);
         window.DraftCutView.drawCutView(env, ctx, full.wIn * zoom, full.hIn * zoom, cut, {
           pxPerFt: viewport.pif * zoom,
+          // THE LETTERING IN PAPER UNITS, the same way the plan has taken it
+          // since 11 Oct. An elevation's level tags and size tags are written
+          // in paper pixels -- 9px at 72 to the inch -- so without this they
+          // are the one thing in the viewport that does not scale with the
+          // sheet.
+          inkScale: zoom / PRINT_PX_PER_IN,
           extents,
           paperColor: '#ffffff',
           // THE EXISTING HOUSE UNDER IT (hologram PR 5), in this viewport's
@@ -2612,11 +2652,11 @@ class Component extends PageLogic {
       // ON PAPER, only the caption: in ink, centred under the drawing.
       const scale = SCALES.find(s => s.pif === viewport.pif);
       ctx.fillStyle = '#1d1f20';
-      ctx.font = `600 ${Math.max(9, zoom * 0.14)}px 'Barlow Condensed', sans-serif`;
+      ctx.font = `600 ${zoom * VIEWPORT_TITLE_IN}px 'Barlow Condensed', sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
       ctx.fillText(`${this._viewportTitle(viewport)}${scale ? `  \u00b7  ${scale.label}` : ''}`,
-        px.x + px.w / 2, px.y + px.h + 4);
+        px.x + px.w / 2, px.y + px.h + zoom * VIEWPORT_TITLE_GAP_IN);
       return;
     }
     // The frame is desk furniture, not ink: faint always, blue when selected.
@@ -2640,12 +2680,12 @@ class Component extends PageLogic {
     }
     const scale = SCALES.find(s => s.pif === viewport.pif);
     ctx.fillStyle = selected ? '#5980a6' : 'rgba(29,31,32,0.45)';
-    ctx.font = `600 ${Math.max(9, zoom * 0.14)}px 'Barlow Condensed', sans-serif`;
+    ctx.font = `600 ${zoom * VIEWPORT_TITLE_IN}px 'Barlow Condensed', sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
     ctx.fillText(
       `${this._viewportTitle(viewport)}${scale ? `  ·  ${scale.label}` : ''}`,
-      px.x + px.w / 2, px.y + px.h + 4,
+      px.x + px.w / 2, px.y + px.h + zoom * VIEWPORT_TITLE_GAP_IN,
     );
   }
 

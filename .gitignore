@@ -1,4 +1,11 @@
-node_modules/
+# NO TRAILING SLASH, and that is the whole of a defect this repo shipped.
+# `node_modules/` matches a DIRECTORY. On 16 Oct a worktree used for running
+# shards in parallel had node_modules symlinked into it, `git add -A` saw a
+# SYMLINK rather than a directory, the pattern did not match, and a link
+# pointing at its own path was committed and merged. A fresh clone then had a
+# self-referential symlink where the packages go, and npx exited silently
+# against it. Without the slash the name is matched however it is spelled.
+node_modules
 test-results/
 playwright-report/
 
