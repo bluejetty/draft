@@ -18205,13 +18205,26 @@
   // returned [] against the app's own beams -- the nudge took its empty-list
   // exit and the legality check reported the beam half clear unconditionally.
   // Both were inert on every automatically built house.
+  // ── THE BEAMS UNDER A FLOOR ARE FILED ON THE LEVEL BELOW IT ─────────
+  //
+  // placeAutoBeam files the beams carrying a floor on the level whose storey
+  // holds them up: the FOUNDATION's beams (view 'foundation') carry the
+  // lowest floor, and MAIN FL's floor-view beams carry the 2ND FL -- or the
+  // room over a garage, whose beam is filed on the garage's level. So the
+  // beams a stair on level S must keep its 2" off are the ones on every
+  // level L with floorCarriedBy(L) === S.
+  //
+  // THIS READ THE STAIR'S OWN LEVEL (and the FOUNDATION for the lowest
+  // floor), which was right for a bungalow and wrong one floor up: a 2ND FL
+  // stair never saw the beam under it, and found 16 Oct, the stair to the
+  // room over a detached garage ran its suggestion on a stand-in line
+  // instead of hugging the garage's beam, 2" off, as every other floor's
+  // does.
   const stairFloorBeams = levelId => {
-    const floors = stairFloorLevels();
-    const lowestId = floors.length ? Number(floors[0].id) : null;
-    return (drawing?.beams || []).filter(beam =>
-      (Number(beam.levelId) === Number(levelId) && beam.view === 'floor')
-      || (Number(levelId) === lowestId
-        && Number(beam.levelId) === FOUNDATION_LEVEL_ID && beam.view === 'foundation'));
+    const carriers = (drawing?.levels || []).map(level => Number(level.id))
+      .filter(id => Number(floorCarriedBy(id)?.id) === Number(levelId));
+    return (drawing?.beams || []).filter(beam => carriers.includes(Number(beam.levelId))
+      && beam.view === (Number(beam.levelId) === FOUNDATION_LEVEL_ID ? 'foundation' : 'floor'));
   };
 
   // Closest approach between a beam's centreline and the well boundary -- zero
