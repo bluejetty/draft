@@ -142,9 +142,15 @@ test('casework lands on its own layer', async ({ page }) => {
   expect(fixtures[0].kind).toBe('cabinet');
   expect(fixtures[0].layer).toBe('A-FIXT');
 
-  // The run spans the two presses: 40% of the wall, to the inch.
+  // The run spans the two presses: 40% of the wall -- ON TOY'S 6" GRAIN,
+  // since 16 Oct. A house built by the bone starts on TOY (#746), and there a
+  // cabinet press lands on the half foot from the nearer corner of its wall
+  // (Movie: "for the CABINETS we allow those to shift extra to 6" scale so we
+  // could have 1ft, 18" 24" 30" 36" 42" 48" etc"). This used to read "to the
+  // inch"; the inch is DRAFTING's, and model-toy-grain.spec.js holds both.
   const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
-  expect(fixtures[0].width).toBeCloseTo(len * 0.40, 2);
+  expect(Math.abs(fixtures[0].width - len * 0.40), 'within a half foot of the presses').toBeLessThan(0.5);
+  expect(fixtures[0].width * 2, 'and on the half foot').toBeCloseTo(Math.round(fixtures[0].width * 2), 6);
 });
 
 test('a press away from every wall places nothing and says why', async ({ page }) => {
