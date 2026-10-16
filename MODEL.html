@@ -18357,7 +18357,10 @@
   // Push the well off any beam it comes within the clearance of, taking
   // whichever side of the beam is the shorter move.
   const stairNudgeOffBeams = stair => {
-    const beams = stairFloorBeams(stair.levelId);
+    // NOT ITS OWN FRAMING: the flush beam on the open side stands half a
+    // beam off the well, inside this clearance, by design.
+    const beams = stairFloorBeams(stair.levelId)
+      .filter(beam => Number(beam.stairId) !== Number(stair.id));
     if (!beams.length) return false;
     const clearFt = STAIR_BEAM_CLEAR_IN / 12;
     let moved = false;
@@ -18410,6 +18413,7 @@
     if (!poly.every(pt => pointInLoop(ring, pt))) return false;
     const clearFt = STAIR_BEAM_CLEAR_IN / 12;
     return stairFloorBeams(stair.levelId)
+      .filter(beam => Number(beam.stairId) !== Number(stair.id))
       .every(beam => stairBeamGapFt(beam, poly) >= clearFt - 1e-4);
   };
 
@@ -18465,6 +18469,32 @@
   // wide enough to recognise it and narrow enough not to claim the beam on
   // the far side of a small room.
   const STAIR_SIDE_BEAM_NEAR_FT = 1;
+  // ── AND THE OPEN SIDE IS FRAMED ONLY PAST 10 FT, WITH THE BEAM'S FACE ON THE
+  // EDGE ──
+  //
+  // Movie, 16 Oct: "when long side is exposed to 10ft or more floor span it
+  // should have a column on each end of the opening and a flush beam along
+  // the opening (edge of beam alligned with edge of opening (center a few
+  // inches inside the floor)".
+  //
+  // TWO RULES ON ONE STRIP, and they stack: under 7 ft the strip is dead and
+  // the stair goes to the wall (STAIR_DEAD_STRIP_FT); from 7 ft it is a room,
+  // and up to 10 ft its joists carry themselves -- nothing is added; at 10 ft
+  // and over the open edge takes the flush beam on a column at each end.
+  //
+  // THE SPAN IS FLOOR SPAN: from the well's edge to the next support on that
+  // side, a carrying beam or the exterior wall, whichever the joists reach
+  // first (stairSideSpans). #745 measured to the wall alone.
+  const STAIR_SIDE_BEAM_SPAN_FT = 10;
+  // THE OFFSET IS THE BEAM'S OWN, not a clearance. #745 set the centreline
+  // STAIR_BEAM_CLEAR_IN (2") off the well edge, which on a 3 1/2" beam put
+  // the face 1/4" inside the hole and looked right by accident. His rule is
+  // the FACE on the opening's edge, so the centre sits half the beam inside
+  // the floor whatever the beam is: two plies of 1 3/4" engineered lumber
+  // here, the flush beam the garage already frames with. The 2" clearance is
+  // untouched -- it still keeps a well off every OTHER carrying beam, and a
+  // stair's own framing is excused from it by its stairId.
+  const STAIR_FLUSH_BEAM_WIDTH_IN = 3.5;
 
   // BOTH SIDES OF A WELL, measured ACROSS the run: a ray from the middle of
   // each long edge out to the interior ring. `{ ft, dir }`, dir pointing that
@@ -18504,6 +18534,27 @@
       }
       return { ft: best, dir, from };
     }).filter(side => Number.isFinite(side.ft)).sort((a, b) => a.ft - b.ft);
+  };
+
+  // THE FLOOR SPAN ON EACH SIDE: the ring's answer, or the first carrying beam
+  // the same ray crosses, whichever is nearer. The joists on that side span
+  // from the well's edge to that support, and that is what the open-side rule
+  // asks about. A stair's own framing (a beam carrying its stairId) is not a
+  // support the well is measured to -- it is the answer, not the question.
+  const stairSideSpans = stair => {
+    const G = window.DraftGeometry2D;
+    const beams = stairFloorBeams(stair.levelId)
+      .filter(beam => Number(beam.stairId) !== Number(stair.id));
+    return stairSideStrips(stair).map(side => {
+      const ray = { start: side.from,
+        end: { x: side.from.x + side.dir.x * 1000, z: side.from.z + side.dir.z * 1000 } };
+      let ft = side.ft;
+      beams.forEach(beam => {
+        const hit = G.segmentIntersection(ray, { start: beam.start, end: beam.end });
+        if (hit) ft = Math.min(ft, Math.hypot(hit.x - side.from.x, hit.z - side.from.z));
+      });
+      return { ...side, ft };
+    });
   };
 
   // THE STAIR GOES OVER when the strip beside it is too small to be a room.
@@ -18558,7 +18609,8 @@
     const u = { x: dx / len, z: dz / len };
     const mid = poly.reduce((sum, pt) => ({
       x: sum.x + pt.x / poly.length, z: sum.z + pt.z / poly.length }), { x: 0, z: 0 });
-    return stairSideStrips(stair).filter(side => side.ft > STAIR_SIDE_BEAM_NEAR_FT)
+    // TEN FEET OF FLOOR OR MORE on that side, to the wall or to a beam.
+    return stairSideSpans(stair).filter(side => side.ft >= STAIR_SIDE_BEAM_SPAN_FT - 1e-6)
       .filter(side => !beams.some(beam =>
         stairBeamGapFt(beam, poly) <= STAIR_SIDE_BEAM_NEAR_FT
         // THE BEAM ON THAT SIDE, not simply a beam near the hole: a gap
@@ -18571,15 +18623,13 @@
         // THE LONG EDGE, END TO END, and the two columns at its ends: what he
         // asked for, and also where a trimmer's load comes down.
         //
-        // SET OUT OF THE HOLE BY THE SAME 2" EVERY OTHER CARRYING BEAM KEEPS.
-        // A beam ON the well edge is a beam across the opening, which is the
-        // one thing the stair rules refuse everywhere else -- stairAutoFit
-        // nudges a well off any beam within STAIR_BEAM_CLEAR_IN, so a beam
-        // laid flush with the edge would have the next press shuffling the
-        // stair away from its own framing. The mid-span beam on the carried
-        // side already stands exactly that far off, so both sides of a well
-        // end up framed the same way.
-        const off = STAIR_BEAM_CLEAR_IN / 12;
+        // THE FACE ON THE OPENING'S EDGE: the centreline half a beam inside
+        // the floor (STAIR_FLUSH_BEAM_WIDTH_IN). That is inside the 2" every
+        // other carrying beam keeps off a well, which is why stairNudgeOffBeams
+        // and stairPlacementLegal excuse a stair's own framing by its stairId
+        // -- without that the next press would shuffle the stair away from
+        // the beam that holds it.
+        const off = STAIR_FLUSH_BEAM_WIDTH_IN / 24;
         const along = poly.map(pt => (pt.x - mid.x) * u.x + (pt.z - mid.z) * u.z);
         const base = { x: side.from.x + side.dir.x * off, z: side.from.z + side.dir.z * off };
         const a = { x: base.x + u.x * Math.min(...along),

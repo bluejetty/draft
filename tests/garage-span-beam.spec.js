@@ -24,7 +24,12 @@ const WIDE = 36;        // past the 28 ft a bare deck reaches
 const STAIR_ID = 7401;
 // A well inside the room, two feet off the left wall: the joists run across it
 // in x, so the side that runs farther to its next support is the inboard edge.
-const WELL = { x0: 2, x1: 5.5, z0: 8, z1: 20 };
+// THE WELL RUNS ALONG THE BEAM, 10 ft of floor from its inboard edge to the
+// mid-span beam at 15 -- "10ft or more", so the header comes. One well
+// across the beam, and one along it with only 9 1/2 ft, for the refusals.
+const WELL = { x0: 1.5, x1: 5, z0: 8, z1: 20 };
+const WELL_ACROSS = { x0: 2, x1: 14, z0: 8, z1: 11.5 };
+const WELL_SHORT = { x0: 2, x1: 5.5, z0: 8, z1: 20 };
 
 const garageWall = (id, W, x0, z0, x1, z1) => ({
   id, levelId: 3, view: 'plan', wallType: 'stud_2x6', refLine: 'center', body: 'garage',
@@ -41,6 +46,23 @@ const door = (offset, i) => ({
 // TWO DOORS AT A QUARTER AND THREE QUARTERS ACROSS -- 9 and 27 ft on the 36 ft
 // garage, which is where the beam between them lands. The front wall runs from
 // x = W back to 0, so an offset along it counts down from W.
+// A straight flight down the long way of its box, and the hole it leaves.
+const stairIn = box => {
+  const along = box.z1 - box.z0 >= box.x1 - box.x0 ? 'z' : 'x';
+  const mid = along === 'z' ? (box.x0 + box.x1) / 2 : (box.z0 + box.z1) / 2;
+  return {
+    id: STAIR_ID, levelId: 5, view: 'plan', layer: 'A-STR',
+    start: along === 'z' ? { x: mid, z: box.z0 } : { x: box.x0, z: mid },
+    end: along === 'z' ? { x: mid, z: box.z1 } : { x: box.x1, z: mid },
+    widthFt: along === 'z' ? box.x1 - box.x0 : box.z1 - box.z0, riseFt: 9, rail: 'left',
+    shape: 'straight', turn: 'right', winders: 0,
+  };
+};
+const wellIn = box => ({
+  id: 'well-1', hostType: 'floor', hostId: 'room-floor', levelId: 5, stairId: STAIR_ID,
+  points: [{ x: box.x0, z: box.z0 }, { x: box.x1, z: box.z0 },
+    { x: box.x1, z: box.z1 }, { x: box.x0, z: box.z1 }],
+});
 const FILE = (W, { well = false } = {}) => ({
   version: 1,
   levels: [
@@ -53,18 +75,8 @@ const FILE = (W, { well = false } = {}) => ({
     garageWall('g-front', W, W, D, 0, D), garageWall('g-left', W, 0, D, 0, 0)],
   fenestrations: [door(W * 0.75, 0), door(W * 0.25, 1)],
   outlines: [loop('garage-out', 3, true, W), loop('room-out', 5, false, W)],
-  stairs: well ? [{
-    id: STAIR_ID, levelId: 5, view: 'plan', layer: 'A-STR',
-    start: { x: (WELL.x0 + WELL.x1) / 2, z: WELL.z0 },
-    end: { x: (WELL.x0 + WELL.x1) / 2, z: WELL.z1 },
-    widthFt: WELL.x1 - WELL.x0, riseFt: 9, rail: 'left',
-    shape: 'straight', turn: 'right', winders: 0,
-  }] : [],
-  surfaceOpenings: well ? [{
-    id: 'well-1', hostType: 'floor', hostId: 'room-floor', levelId: 5, stairId: STAIR_ID,
-    points: [{ x: WELL.x0, z: WELL.z0 }, { x: WELL.x1, z: WELL.z0 },
-      { x: WELL.x1, z: WELL.z1 }, { x: WELL.x0, z: WELL.z1 }],
-  }] : [],
+  stairs: well ? [stairIn(well === true ? WELL : well)] : [],
+  surfaceOpenings: well ? [wellIn(well === true ? WELL : well)] : [],
   lines: [], floors: [], roofs: [], dimensions: [], shapes: [],
   notes: [], roomTags: [], columns: [], beams: [], boneyardOutlines: [], boneyardShelves: [],
   groups: [], levelLocks: [], underlays: [],
@@ -150,8 +162,12 @@ test('the 30 ft detached garage -- his own -- gets its beam and its header', asy
   expect(dropped.length, 'the row across the floor').toBe(1);
 
   // AND THE ONE BY THE STAIRS: a flush header on the well edge the joists run
-  // farther to reach -- the inboard one, since the other side is a 2 ft stub
+  // farther to reach -- the inboard one, since the other side is a stub
   // against the wall. It carries the stair's id, the way the well does.
+  //
+  // THE WELL RUNS ALONG THE BEAM AND 10 FT OF FLOOR LIES BETWEEN THEM, which
+  // is both of his conditions (16 Oct): "only when it is ll and there is
+  // 10ft or more span of floor until the next beam or ext. wall".
   const header = beams.find(b => b.mode === 'flush');
   expect(header, 'the header by the stairs').toBeTruthy();
   expect(header.stairId, 'filed against the stair it heads off').toBe(STAIR_ID);
@@ -165,3 +181,33 @@ test('the 30 ft detached garage -- his own -- gets its beam and its header', asy
   expect(notesOn(d, 5, /^ENGINEERED OWJ/)[0].body).toMatch(/WALL TO BEAM/);
   expect(notesOn(d, 5, /^ENGINEERED OWJ/)[0].body).not.toMatch(/@ 12" O\.C\./);
 });
+
+// ── THE REFUSALS (Movie, 16 Oct) ────────────────────────────────────────────
+//
+// "when the stairs are alligned perp to the main beam like in ths photo above,
+// we don't need beams on the short ends of the stairs, only when it is ll and
+// there is 10ft or more span of floor until the next beam or ext. wall"
+
+test('a stair set ACROSS the beam gets no header on its ends, however far the floor runs',
+  async ({ page }) => {
+    // 12 ft along the joists, 3 1/2 ft across them: a well that runs WITH
+    // the joists and interrupts few. Its ends are headers, not beams.
+    await open(page, 30, { well: WELL_ACROSS });
+    await autoBeam(page);
+    const d = await saved(page);
+    const beams = (d.beams || []).filter(b => b.auto && Number(b.levelId) === 3);
+    expect(beams.filter(b => b.mode === 'dropped').length, 'the row across the floor').toBe(1);
+    expect(beams.find(b => b.mode === 'flush'), 'no header by the stairs').toBeUndefined();
+  });
+
+test('a stair along the beam with under 10 ft of floor to it gets no header either',
+  async ({ page }) => {
+    // The 15 Oct fixture: 9 1/2 ft from the well's inboard edge to the beam at
+    // 15. A room, and a span the joists carry alone.
+    await open(page, 30, { well: WELL_SHORT });
+    await autoBeam(page);
+    const d = await saved(page);
+    const beams = (d.beams || []).filter(b => b.auto && Number(b.levelId) === 3);
+    expect(beams.filter(b => b.mode === 'dropped').length, 'the row across the floor').toBe(1);
+    expect(beams.find(b => b.mode === 'flush'), 'no header under 10 ft').toBeUndefined();
+  });

@@ -137,8 +137,21 @@ const MUTATIONS = [
   // THE HEADER PICKS ITS EDGE BY MEASURE, not by taking the first one.
   ['the stair header always takes the low edge', 'build-house.js',
     c => c.replace('    const u = runHi > runLo ? hi : lo;', '    const u = lo;')],
+  // TWO GUARDS NOW STAND BETWEEN A WELL AND A HEADER IT HAS NO CALL FOR --
+  // "nothing to catch" and "under 10 ft" -- and a zero run fails both, so
+  // bending the first alone changes no answer (measured 16 Oct: it survived).
+  // The row bends both, which is the one edit that puts a header on a well
+  // wedged between two supports.
   ['a well with nothing to catch still gets a header', 'build-house.js',
-    c => c.replace('    if (runLo <= 0.01 && runHi <= 0.01) return null;', '')],
+    c => c.replace('    if (runLo <= 0.01 && runHi <= 0.01) return null;\n', '')
+      .replace('    if (Math.max(runLo, runHi) < minRunFt - 1e-6) return null;\n', '')],
+  // MOVIE, 16 OCT: the two refusals, each bent back to the 15 Oct rule.
+  ['a well set across the beam gets a header on its end again (the photo)', 'build-house.js',
+    c => c.replace('    if (!(a1 - a0 > hi - lo + 0.01)) return null;\n', '')],
+  ['the header comes at any span, not only past 10 ft', 'build-house.js',
+    c => c.replace('    if (Math.max(runLo, runHi) < minRunFt - 1e-6) return null;\n', '')],
+  ['the 10 ft is 7', 'build-house.js',
+    c => c.replace('  const STAIR_HEADER_SPAN_FT = 10;', '  const STAIR_HEADER_SPAN_FT = 7;')],
 ];
 
 if (MUTATE) {
@@ -148,7 +161,7 @@ if (MUTATE) {
 }
 
 const { midSpanBeams, owjFor, OWJ_SPANS, garageBeamPlan, garageJoistAxis, garageSpanFt,
-  garageBareSpanFt, garageStairHeader } = require('./harness-env.js').loadDraftModules().DraftBuildHouse;
+  garageBareSpanFt, garageStairHeader, STAIR_HEADER_SPAN_FT } = require('./harness-env.js').loadDraftModules().DraftBuildHouse;
 
 let failed = 0, ran = 0;
 const checkEq = (label, got, want) => {
@@ -540,28 +553,46 @@ const poly = list => list.map(([x, z]) => ({ x, z }));
 // ── THE HEADER BY THE STAIRS ──────────────────────────────────────────────
 //
 // Movie, 15 Oct: "at least 1 beam (or 2 with one by the stairs)". The joists
-// run in x here, the well sits 2 ft off the left wall, and the mid-span beam
-// is at 15 -- so the stub by the wall is 2 ft and the inboard side runs 9.5.
+// run in x here, the well sits 2 ft off the left wall and runs ALONG the beam,
+// and the mid-span beam is at 16 -- so the stub by the wall is 2 ft and the
+// inboard side runs 10.5.
+//
+// AND 16 OCT: "when the stairs are alligned perp to the main beam like in ths
+// photo above, we don't need beams on the short ends of the stairs, only when
+// it is ll and there is 10ft or more span of floor until the next beam or
+// ext. wall". So the header is a refusal more often than a placement: a well
+// across the beam gets none, and a well along it gets none under 10 ft.
 {
   const well = { x0: 2, x1: 5.5, z0: 8, z1: 20 };
-  const header = garageStairHeader(well, { axis: 'x', supports: [0, 15, 30] });
+  const header = garageStairHeader(well, { axis: 'x', supports: [0, 16, 30] });
   checkEq('the header lands on the edge the joists run farther to reach',
     header && header.start.x, 5.5);
   checkEq('and runs the length of the well',
     header && JSON.stringify([header.start.z, header.end.z]), JSON.stringify([8, 20]));
+  // THE SAME WELL WITH THE BEAM AT 15: 9.5 ft of floor to it, and "only when
+  // ... there is 10ft or more span of floor until the next beam".
+  checkEq('under 10 ft of floor to the next support, no header',
+    garageStairHeader(well, { axis: 'x', supports: [0, 15, 30] }), null);
   // THE OTHER WAY ABOUT: a well hard against the inboard support and open to
   // the wall takes its header on the wall side instead. Same rule, read from
   // the other end -- which is the check that tells the rule from the answer.
+  // Ten feet exactly, which is "10ft or more".
   const far = garageStairHeader({ x0: 10, x1: 14, z0: 8, z1: 20 },
     { axis: 'x', supports: [0, 15, 30] });
   checkEq('the long side wins whichever side it is on', far && far.start.x, 10);
+  // ACROSS THE BEAM -- the photo: a well 12 ft along the joists and 3 1/2 ft
+  // across them, with 16 ft of floor past its end. Its ends are headers, not
+  // beams, however far the floor runs.
+  checkEq('a well set across the beam takes no header on its ends',
+    garageStairHeader({ x0: 2, x1: 14, z0: 8, z1: 11.5 }, { axis: 'x', supports: [0, 30] }), null);
   // A well with a support hard against both ends has nothing to catch.
   checkEq('a well between two supports takes no header',
     garageStairHeader({ x0: 0, x1: 15, z0: 8, z1: 20 }, { axis: 'x', supports: [0, 15] }), null);
   // IN z, the same answers turned a quarter.
   const turned = garageStairHeader({ x0: 8, x1: 20, z0: 2, z1: 5.5 },
-    { axis: 'z', supports: [0, 15, 30] });
+    { axis: 'z', supports: [0, 16, 30] });
   checkEq('and the joists running in z turn it with them', turned && turned.start.z, 5.5);
+  checkEq('the threshold is exported for the pages to quote', STAIR_HEADER_SPAN_FT, 10);
   checkEq('a well of no width is not a well', garageStairHeader({ x0: 2, x1: 2, z0: 8, z1: 20 },
     { axis: 'x', supports: [0, 15, 30] }), null);
 }
