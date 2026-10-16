@@ -14407,9 +14407,14 @@
   // SUBURBAN lot -- the tier the list itself calls standard, not a number
   // typed here.
   const STANDARD_LOT_TIER = 'L';
+  // MEASURED ON THE TURNED PLAN'S AXES: the lot is laid on them, so the
+  // house has to be read on them too (Movie, 16 Oct: "it selected a site
+  // plan not wide enough this time" -- a house turned a quarter, read along
+  // x, offered a lot whose frontage ran along z).
+  const lotHouseBox = () => LS.houseBoxOf(drawing?.outlines, drawing?.planTurn || 0);
   const bestLotTier = () =>
-    LS.bestLotTierFor(LS.houseBoxOf(drawing?.outlines), lotFitOptions())
-    || (LS.houseBoxOf(drawing?.outlines)
+    LS.bestLotTierFor(lotHouseBox(), lotFitOptions())
+    || (lotHouseBox()
       ? null : LS.LOT_TIERS.find(tier => tier.id === STANDARD_LOT_TIER) || null);
 
   paintLotPick = () => {
@@ -14443,7 +14448,7 @@
     // that faces the side property line, so it is the eave the side setback
     // is measured from; the front and back ones answer to the front setback,
     // which is measured to the WALL.
-    const house = LS.houseBoxOf(drawing?.outlines);
+    const house = lotHouseBox();
     const fitOpts = lotFitOptions();
     const best = LS.bestLotTierFor(house, fitOpts);
     const min = LS.minLotFor(house, fitOpts);
