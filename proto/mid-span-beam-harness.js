@@ -61,7 +61,7 @@ const MUTATIONS = [
     'build-house.js',
     c => c.replace('const rows = OWJ_SPANS.filter(r => r.depthIn >= minDepthIn - 1e-6);', 'const rows = OWJ_SPANS;')],
   ['the garage beams ignore the doors', 'build-house.js',
-    c => c.replace('    if (between.length >= n && between.length <= 12) pick(between, 0, []);', '')],
+    c => c.replace('    if (legalBetween.length >= n && legalBetween.length <= 12) pick(legalBetween, 0, []);', '')],
   // MOVIE, 12 OCT: "side wall to side wall -- the sides that land on walls".
   ['the garage joists take the short way whatever wall the doors are in', 'build-house.js',
     c => c.replace('    if (xWall !== zWall) return xWall > zWall ? \'x\' : \'z\';', '')],
@@ -152,6 +152,29 @@ const MUTATIONS = [
     c => c.replace('    if (Math.max(runLo, runHi) < minRunFt - 1e-6) return null;\n', '')],
   ['the 10 ft is 7', 'build-house.js',
     c => c.replace('  const STAIR_HEADER_SPAN_FT = 10;', '  const STAIR_HEADER_SPAN_FT = 7;')],
+  // THE GARAGE SQUARE, Movie 16 Oct: each of his numbers, and each consumer.
+  ['the square is a foot each side of the door, which closes the pier between two doors', 'build-house.js',
+    c => c.replace('  const GARAGE_SQUARE_SIDE_IN = 6;', '  const GARAGE_SQUARE_SIDE_IN = 12;')],
+  ['the square is 24 ft deep (the old "+4 on top")', 'build-house.js',
+    c => c.replace('  const GARAGE_SQUARE_DEPTH_FT = 20;', '  const GARAGE_SQUARE_DEPTH_FT = 24;')],
+  ['the square is measured from the wall line, not its inside face', 'build-house.js',
+    c => c.replace('      const inset = Number.isFinite(door.insetFt) ? door.insetFt : insetFt;', '      const inset = 0;')],
+  ['a shallow garage is not capped: the square runs out the back wall', 'build-house.js',
+    c => c.replace('      const deep = Math.min(wantFt, avail);', '      const deep = wantFt;')],
+  ['the landing is 36" square', 'build-house.js',
+    c => c.replace('  const MAN_DOOR_LANDING_IN = 42;', '  const MAN_DOOR_LANDING_IN = 36;')],
+  ['a well across the square\'s edge is not in it (corners only)', 'build-house.js',
+    c => c.replace('        if (segmentsCross(a, b, k.points[j], k.points[(j + 1) % k.points.length])) return true;', '')],
+  ['a column in the square stands: nothing is dropped', 'build-house.js',
+    c => c.replace('        if (inKeepOut(keepOuts, p)) { dropped.push(p); continue; }\n', '')],
+  ['the beam rests over the door: the row is not slid to solid wall', 'build-house.js',
+    c => c.replace('    const solid = u => u > lo + 0.01 && u < hi - 0.01 && solidAt(u, openings);', '    const solid = u => u > lo + 0.01 && u < hi - 0.01;')],
+  ['the post stands at the opening\'s edge with no bearing of its own', 'build-house.js',
+    c => c.replace('  const BEAM_BEARING_CLEAR_FT = (BEAM_POST_IN / 2 + BEAM_BEARING_IN) / 12;', '  const BEAM_BEARING_CLEAR_FT = 0;')],
+  ['no post is built into the wall under the beam\'s ends', 'build-house.js',
+    c => c.replace('      posts.push(start, end);\n', '')],
+  ['a wall that is all door is reported solid', 'build-house.js',
+    c => c.replace("        bearing = 'none';", "        bearing = 'solid';")],
 ];
 
 if (MUTATE) {
@@ -161,7 +184,9 @@ if (MUTATE) {
 }
 
 const { midSpanBeams, owjFor, OWJ_SPANS, garageBeamPlan, garageJoistAxis, garageSpanFt,
-  garageBareSpanFt, garageStairHeader, STAIR_HEADER_SPAN_FT } = require('./harness-env.js').loadDraftModules().DraftBuildHouse;
+  garageBareSpanFt, garageStairHeader, STAIR_HEADER_SPAN_FT, garageKeepOuts, inKeepOut, hitsKeepOut,
+  GARAGE_SQUARE_DEPTH_FT, GARAGE_SQUARE_SIDE_IN, MAN_DOOR_LANDING_IN, BEAM_BEARING_CLEAR_FT,
+} = require('./harness-env.js').loadDraftModules().DraftBuildHouse;
 
 let failed = 0, ran = 0;
 const checkEq = (label, got, want) => {
@@ -595,6 +620,90 @@ const poly = list => list.map(([x, z]) => ({ x, z }));
   checkEq('the threshold is exported for the pages to quote', STAIR_HEADER_SPAN_FT, 10);
   checkEq('a well of no width is not a well', garageStairHeader({ x0: 2, x1: 2, z0: 8, z1: 20 },
     { axis: 'x', supports: [0, 15, 30] }), null);
+}
+
+// ── THE GARAGE SQUARE: NOTHING STANDS WHERE THE CAR GOES ──────────────────
+//
+// Movie, 16 Oct: "lets go 20ft total 'height (length) for square" ... "(not
+// +4) just 20" ... "actually on the sides only make it increase by 6" so the
+// colms can know they can be placed between the 2 doors" ... "no columns in
+// that area either"; and "the landing area for the man door (42"x42"
+// landing".
+{
+  // His garage: 30 wide, 24 deep, two 6'8" doors on the z = 24 wall at 8 and
+  // 22, a 3 ft man door in the right side wall, 2x6 walls (5 1/2").
+  const ring = [{ x: 0, z: 0 }, { x: 30, z: 0 }, { x: 30, z: 24 }, { x: 0, z: 24 }];
+  const inset = 5.5 / 12;
+  const south = { along: { x: 1, z: 0 }, inward: { x: 0, z: -1 } };
+  const doors = [
+    { id: 'a', at: { x: 8, z: 24 }, ...south, widthFt: 20 / 3, overhead: true },
+    { id: 'b', at: { x: 22, z: 24 }, ...south, widthFt: 20 / 3, overhead: true },
+    { id: 'm', at: { x: 30, z: 4 }, along: { x: 0, z: 1 }, inward: { x: -1, z: 0 }, widthFt: 3, overhead: false },
+  ];
+  const squares = garageKeepOuts(ring, doors, { insetFt: inset });
+  const bays = squares.filter(k => k.kind === 'bay');
+  const xs = k => k.points.map(p => p.x), zs = k => k.points.map(p => p.z);
+  checkEq('one square per overhead door, and the man door\'s landing', squares.map(k => k.kind).join(), 'bay,bay,landing');
+  checkEq('a 6\'8" door\'s square is 7\'-8" wide: the door plus 6" each side',
+    +(Math.max(...xs(bays[0])) - Math.min(...xs(bays[0]))).toFixed(4), +(20 / 3 + 1).toFixed(4));
+  checkEq('so the pier between the doors stays free: 11\'-10" to 18\'-2" is 6\'-4" of wall',
+    +(Math.min(...xs(bays[1])) - Math.max(...xs(bays[0]))).toFixed(4), +(14 - 20 / 3 - 1).toFixed(4));
+  checkEq('20\'-0" deep from the INSIDE face of the door wall',
+    [Math.max(...zs(bays[0])), Math.min(...zs(bays[0]))].map(v => +v.toFixed(4)).join(), [24 - inset, 24 - inset - 20].map(v => +v.toFixed(4)).join());
+  checkEq('not capped: the garage is deeper than its square', bays.some(k => k.capped), false);
+  const landing = squares.find(k => k.kind === 'landing');
+  checkEq('the landing is 42" x 42" inside the man door',
+    [Math.max(...xs(landing)) - Math.min(...xs(landing)), Math.max(...zs(landing)) - Math.min(...zs(landing))].map(v => +v.toFixed(4)).join(), '3.5,3.5');
+  checkEq('and starts at the wall\'s inside face', +Math.max(...xs(landing)).toFixed(4), +(30 - inset).toFixed(4));
+  // A GARAGE SHALLOWER THAN ITS SQUARE: his is about 20 ft door wall to back
+  // wall, so the square takes the whole depth, and the plan has to say so.
+  const shallow = garageKeepOuts([{ x: 0, z: 0 }, { x: 30, z: 0 }, { x: 30, z: 20 }, { x: 0, z: 20 }],
+    doors.slice(0, 2).map(d => ({ ...d, at: { x: d.at.x, z: 20 } })), { insetFt: inset });
+  checkEq('a 20 ft garage is capped at its own depth, inside face to inside face', +shallow[0].depthFt.toFixed(4), +(20 - 2 * inset).toFixed(4));
+  checkEq('and says it is capped', shallow.every(k => k.capped), true);
+  checkEq('the numbers are his: 20 ft, 6", 42"', [GARAGE_SQUARE_DEPTH_FT, GARAGE_SQUARE_SIDE_IN, MAN_DOOR_LANDING_IN].join(), '20,6,42');
+  // WHAT STANDS IN ONE. A well inside a bay, a well straddling its edge, a
+  // well in the pier, a well that swallows the landing.
+  const well = (x0, x1, z0, z1) => [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }];
+  checkEq('a well inside a bay stands where the car goes', hitsKeepOut(squares, well(6, 9, 10, 20)), true);
+  checkEq('a well across a bay\'s edge does too', hitsKeepOut(squares, well(11, 14, 10, 20)), true);
+  checkEq('a well on the pier between the doors is clear', hitsKeepOut(squares, well(12.5, 16, 10, 20)), false);
+  // NO CORNER OF EITHER INSIDE THE OTHER: a well running right across the
+  // bay, wall to pier. Only its edges cross the square's, and that is the
+  // third way two rectangles meet.
+  checkEq('a well that runs clean across a bay is in it', hitsKeepOut(squares, well(2, 14, 10, 12)), true);
+  checkEq('a well past the square\'s 20 ft is clear', hitsKeepOut(squares, well(6, 9, 0.5, 3)), false);
+  checkEq('a well that swallows the landing is in it', hitsKeepOut(squares, well(25, 30, 1, 7)), true);
+  checkEq('a point in the bay', inKeepOut(squares, { x: 8, z: 12 }), true);
+  checkEq('a point on the pier', inKeepOut(squares, { x: 15, z: 12 }), false);
+
+  // THE BEAM PLAN HONOURS IT: columns in a bay are dropped, the pier keeps
+  // its column, and every beam end gets its post in the wall.
+  const box = { x0: 0, x1: 30, z0: 0, z1: 24 };
+  const centres = doors.filter(d => d.overhead).map(d => d.at);
+  const spans = doors.filter(d => d.overhead).map(d => [d.at.x - d.widthFt / 2, d.at.x + d.widthFt / 2]);
+  const plan = garageBeamPlan(box, { doors: centres, keepOuts: squares, openings: spans, onWall: p => p.z <= 0.01 || p.z >= 23.99 });
+  checkEq('the row stands on the pier between the doors', plan.beams[0].start.x, 15);
+  checkEq('its columns are on the pier line, none dropped', JSON.stringify([plan.columns.map(c => c.z), plan.dropped.length]), JSON.stringify([[8, 16], 0]));
+  checkEq('a 6x6 post under each end, in the wall', JSON.stringify(plan.posts), JSON.stringify([{ x: 15, z: 0 }, { x: 15, z: 24 }]));
+  checkEq('solid bearing at both ends', plan.bearing, 'solid');
+  // ONE WIDE DOOR IN THE MIDDLE: the even row would land over it. The row
+  // slides to the door's edge plus the post and its bearing, and the column
+  // that would have stood in the square is dropped.
+  const one = [{ id: 'c', at: { x: 15, z: 24 }, ...south, widthFt: 16, overhead: true }];
+  const oneSquares = garageKeepOuts(ring, one, { insetFt: inset });
+  const p1 = garageBeamPlan(box, { doors: one.map(d => d.at), keepOuts: oneSquares, openings: [[7, 23]], onWall: p => p.z <= 0.01 || p.z >= 23.99 });
+  checkEq('a beam never rests over the garage door: the row slides off it',
+    +p1.beams[0].start.x.toFixed(4), +(7 - BEAM_BEARING_CLEAR_FT).toFixed(4));
+  checkEq('by half a 6x6 and the lintel\'s bearing: 4 1/4"', +(BEAM_BEARING_CLEAR_FT * 12).toFixed(2), 4.25);
+  checkEq('the columns that would have stood in front of the car are dropped',
+    JSON.stringify([p1.columns.length, p1.dropped.length]), JSON.stringify([0, 2]));
+  checkEq('and the long row is reported for the note', +p1.rowFt.toFixed(2), +(30 - (7 - BEAM_BEARING_CLEAR_FT)).toFixed(2));
+  // NO SOLID WALL AT ALL: doors wall to wall.
+  const none = garageBeamPlan(box, { doors: [{ x: 15, z: 24 }], openings: [[0.2, 29.8]] });
+  checkEq('a wall that is all door has no bearing to give, and the plan says so', none.bearing, 'none');
+  // A side wall's door is under no beam end: not an opening to the row.
+  checkEq('the plain plan still answers as before', JSON.stringify(garageBeamPlan(box, { doors: centres }).beams), JSON.stringify(plan.beams));
 }
 
 console.log(`\nmid-span beams: ${ran} checks, ${failed} failed`);

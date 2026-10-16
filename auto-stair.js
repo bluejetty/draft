@@ -230,26 +230,42 @@ if (!window.DraftAutoStair) {
         intervals.forEach(([lo, hi]) => {
           longest = Math.max(longest, hi - lo);
           if (hi - lo < need) return;
-          // Slide the run inside [lo+landing, hi-landing] toward the target.
-          const u0 = Math.max(lo + landingFt,
-            Math.min(hi - landingFt - runFt, targetUV.u - runFt / 2));
-          const centreU = u0 + runFt / 2;
-          // Q3: the top nosing takes the end nearer the target.
-          const topAtHigh = targetUV.u > centreU;
           const at = (u, v) => ({
             x: line.origin.x + line.dir.x * u + line.n.x * v,
             z: line.origin.z + line.dir.z * u + line.n.z * v,
           });
+          const wellAt = u => [
+            at(u, vCentre - half), at(u + runFt, vCentre - half),
+            at(u + runFt, vCentre + half), at(u, vCentre + half),
+          ];
+          // Slide the run inside [lo+landing, hi-landing] toward the target.
+          const uLo = lo + landingFt, uHi = hi - landingFt - runFt;
+          let u0 = Math.max(uLo, Math.min(uHi, targetUV.u - runFt / 2));
+          // NOT WHERE THE CAR GOES. If that well stands in a garage square it
+          // slides along the beam to the nearest clear stretch, and a beam
+          // with no clear stretch offers nothing (Movie, 16 Oct: "the stairs
+          // can't overlap where the garage door / car will be").
+          if (rectInKeepOut(wellAt(u0), opts.keepOuts)) {
+            let clear = null;
+            for (let step = 0.25; step <= uHi - uLo + 1e-9 && clear === null; step += 0.25) {
+              for (const u of [u0 - step, u0 + step]) {
+                if (u < uLo - 1e-9 || u > uHi + 1e-9) continue;
+                if (!rectInKeepOut(wellAt(u), opts.keepOuts)) { clear = u; break; }
+              }
+            }
+            if (clear === null) return;
+            u0 = clear;
+          }
+          const centreU = u0 + runFt / 2;
+          // Q3: the top nosing takes the end nearer the target.
+          const topAtHigh = targetUV.u > centreU;
           const start = at(topAtHigh ? u0 + runFt : u0, vCentre);
           const end = at(topAtHigh ? u0 : u0 + runFt, vCentre);
           out.push({
             shape: 'straight',
             start, end,
             wellCentre: at(centreU, vCentre),
-            well: [
-              at(u0, vCentre - half), at(u0 + runFt, vCentre - half),
-              at(u0 + runFt, vCentre + half), at(u0, vCentre + half),
-            ],
+            well: wellAt(u0),
           });
         });
       });
@@ -358,10 +374,11 @@ if (!window.DraftAutoStair) {
     const kept = out.filter(cand => {
       cand.well = cand.rects.flat();
       return cand.well.every(pt => pointInRing(ring, pt))
-        && cand.rects.every(rect => beamGapOk(rect, lines, gapFt));
+        && cand.rects.every(rect => beamGapOk(rect, lines, gapFt))
+        && cand.rects.every(rect => !rectInKeepOut(rect, opts.keepOuts));
     });
     if (!kept.length && !reasons.length && out.length) {
-      reasons.push(`every ${shape} corner crowded a beam or broke the ring`);
+      reasons.push(`every ${shape} corner crowded a beam, broke the ring or stood where the car goes`);
     }
     return { candidates: kept, reasons };
   };
@@ -448,9 +465,29 @@ if (!window.DraftAutoStair) {
     return out.filter(cand => {
       cand.well = cand.rects.flat();
       return cand.well.every(pt => pointInRing(ring, pt))
-        && cand.rects.every(rect => beamGapOk(rect, lines, opts.gapFt));
+        && cand.rects.every(rect => beamGapOk(rect, lines, opts.gapFt))
+        && cand.rects.every(rect => !rectInKeepOut(rect, opts.keepOuts));
     });
   };
+
+  // A well rectangle stands in a keep-out when a corner of either is inside
+  // the other or an edge crosses -- the three ways two rectangles can meet.
+  const rectInKeepOut = (rect, keepOuts) => (keepOuts || []).some(poly => {
+    if (!Array.isArray(poly) || poly.length < 3) return false;
+    if (rect.some(pt => pointInRing(poly, pt))) return true;
+    if (poly.some(pt => pointInRing(rect, pt))) return true;
+    const cross = (p, q, r) => (q.x - p.x) * (r.z - p.z) - (q.z - p.z) * (r.x - p.x);
+    const meet = (a, b, c, d) => {
+      const d1 = cross(c, d, a), d2 = cross(c, d, b), d3 = cross(a, b, c), d4 = cross(a, b, d);
+      return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+    };
+    for (let i = 0; i < rect.length; i += 1) {
+      for (let j = 0; j < poly.length; j += 1) {
+        if (meet(rect[i], rect[(i + 1) % rect.length], poly[j], poly[(j + 1) % poly.length])) return true;
+      }
+    }
+    return false;
+  });
 
   const pointInRing = (ring, pt) => {
     let inside = false;
@@ -495,6 +532,11 @@ if (!window.DraftAutoStair) {
       landFt = 3, finishIn = 1, gapIn = BEAM_EDGE_GAP_IN,
       uGapIn = 4.5, runStepFt = 10 / 12, softInterior = false,
       lowerStair = null,
+      // THE GARAGE SQUARES under this floor (MODEL.html garageKeepOutsUnder):
+      // polygons no part of a well may stand in. Movie, 16 Oct: "the stairs
+      // can't overlap where the garage door / car will be or the landing
+      // area for the man door".
+      keepOuts = [],
     } = opts;
     if (!Array.isArray(points) || points.length < 3 || !(runFt > 0)) {
       return { stair: null, report: { straight: 'no footprint or run', L: null, U: null } };
@@ -503,7 +545,7 @@ if (!window.DraftAutoStair) {
     const lines = beamLines(beams);
     const target = circulationTarget(points, stamps);
     const finishFt = finishIn / 12, gapFt = gapIn / 12, uGapFt = uGapIn / 12;
-    const common = { runFt, widthFt, landingFt, finishFt, gapFt, landFt, uGapFt, runStepFt };
+    const common = { runFt, widthFt, landingFt, finishFt, gapFt, landFt, uGapFt, runStepFt, keepOuts };
     const report = { straight: null, L: null, U: null };
     // The score is a COST: lower wins. Every term is recorded as it is
     // added, so the winner can say WHY it won — same arithmetic as
@@ -538,7 +580,14 @@ if (!window.DraftAutoStair) {
     // Straight first (no beam under the trigger → no lines: fall back to
     // the ring's own long axis as a single pseudo-line through the target).
     const effLines = lines.length ? lines : [pseudoLine(ring, target.point)];
-    const straight = straightCandidates(ring, effLines, common, target.point);
+    let straight = straightCandidates(ring, effLines, common, target.point);
+    // NO BEAM TO HUG AND THE STAND-IN LINE RUNS THROUGH THE SQUARES: the
+    // other way across the room is tried before giving up on a straight run
+    // -- a well along a two-bay garage's pier runs the short way.
+    if (!straight.candidates.length && !lines.length && keepOuts.length) {
+      const again = straightCandidates(ring, [pseudoLine(ring, target.point, { turned: true })], common, target.point);
+      if (again.candidates.length) straight = again;
+    }
     // Rule A: in the front-entry zone the entry L competes in the SAME
     // pool as straight — it can win even where a straight run fits.
     const pool = [...straight.candidates];
@@ -576,9 +625,9 @@ if (!window.DraftAutoStair) {
     wellCentre: cand.wellCentre,
   });
 
-  const pseudoLine = (ring, target) => {
+  const pseudoLine = (ring, target, { turned = false } = {}) => {
     const xs = ring.map(pt => pt.x), zs = ring.map(pt => pt.z);
-    const wide = (Math.max(...xs) - Math.min(...xs)) >= (Math.max(...zs) - Math.min(...zs));
+    const wide = ((Math.max(...xs) - Math.min(...xs)) >= (Math.max(...zs) - Math.min(...zs))) !== turned;
     const dir = wide ? { x: 1, z: 0 } : { x: 0, z: 1 };
     const n = { x: -dir.z, z: dir.x };
     return { origin: { x: target.x, z: target.z }, dir, n, c: target.x * n.x + target.z * n.z };
