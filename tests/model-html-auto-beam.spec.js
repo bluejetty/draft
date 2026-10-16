@@ -194,6 +194,8 @@ test('every record survives the reload', async ({ page }) => {
     return {
       wroteBeams: (raw.beams || []).length, keptBeams: beams.length,
       wroteColumns: (raw.columns || []).length, keptColumns: columns.length,
+      wroteAutoBeams: (raw.beams || []).filter(beam => beam.auto === true).length,
+      wroteAutoColumns: (raw.columns || []).filter(column => column.auto === true).length,
       autoBeams: beams.filter(beam => beam.auto === true).length,
       autoColumns: columns.filter(column => column.auto === true).length,
     };
@@ -201,9 +203,19 @@ test('every record survives the reload', async ({ page }) => {
 
   expect(kept.keptBeams, 'beams were written that the reload loses').toBe(kept.wroteBeams);
   expect(kept.keptColumns, 'columns were written that the reload loses').toBe(kept.wroteColumns);
+  // THE FLAG SURVIVES, which is the claim -- not that everything a build
+  // writes carries it. Since 16 Oct a build also writes framing that is
+  // deliberately NOT auto: the beam holding the open side of a stair well and
+  // its two columns (see model-stair-dead-strip.spec.js). Those exist because
+  // a re-run must NOT sweep them -- the mid-span plan a sweep re-derives
+  // knows about the hole but not about that rule -- so a check reading "every
+  // beam is auto" would be asserting the very defect they were written to
+  // avoid. Written-auto against kept-auto says what this test came to say.
   expect(kept.autoBeams, 'a beam came back unmarked, so a re-run would not sweep it')
-    .toBe(kept.wroteBeams);
-  expect(kept.autoColumns, 'a column came back unmarked').toBe(kept.wroteColumns);
+    .toBe(kept.wroteAutoBeams);
+  expect(kept.autoColumns, 'a column came back unmarked').toBe(kept.wroteAutoColumns);
+  expect(kept.wroteAutoBeams, 'the mid-span beams stopped being auto altogether')
+    .toBeGreaterThan(0);
 });
 
 test('the BEAM tool raises the panel, and its button is the second way in',
