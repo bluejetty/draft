@@ -5782,6 +5782,15 @@
         // (:7380 against :7432), so the highlight is never buried under the
         // geometry it marks but never covers the annotation either.
         paintSelection();
+        // ── AND WHAT A PICKED OPENING IS FROM ITS CORNERS ─────────────────
+        //
+        // OUTSIDE paintSelection, which returns early when nothing is
+        // picked. Inside it the readout drew correctly and never CLEARED: a
+        // drafter who clicked a window and then clicked off it kept two
+        // numbers on the canvas measuring a selection that was gone, because
+        // the only code that could take them down was the code that does not
+        // run when there is no selection.
+        openingCornerDims(ctx, toS);
         // AFTER the selection, so a hovered corner of a selected wall reads as
         // the ring over its own handle rather than under it.
         paintHoverCorner();
@@ -10361,6 +10370,111 @@
       ctx.stroke();
     });
     ctx.restore();
+    // ── AND A PICKED OPENING SAYS HOW FAR IT IS FROM EACH CORNER ──────────
+    //
+    // Movie, 15 Oct: "with windows and doors when you click them can you show
+    // their dimensions to the corners as well so the user can know how far
+    // they should move it", and on the principle: "just showing the necessary
+    // dims rather than all is a nice feature".
+    //
+    // SO IT IS THE SELECTION THAT ASKS, and nothing is added to the drawing.
+    // These are read off the geometry every frame and vanish with the pick --
+    // a drafter sliding a window wants the two numbers that change, not two
+    // more dimension records to delete afterwards.
+    //
+    // MEASURED TO THE CENTRE, which is the convention this app already keeps:
+    // auto-dims strings its closest row "corner-to-corner through the
+    // fenestration centres", and a framer sets a window by its centre line.
+    // The number here is therefore the same number that row prints, so
+    // sliding to 4'-0" by eye here and reading 4'-0" there is one fact told
+    // twice rather than two that can disagree.
+    //
+    // ONE OPENING ONLY. Two picked at once is four numbers over two walls,
+    // which is the clutter the order was about.
+  };
+
+  // The two spans a picked opening stands between, drawn as a thin line with
+  // the distance centred on it. Screen-only: no record, no undo, no save.
+  const OPENING_DIM_OFF_PX = 13;
+  const openingCornerDims = (ctx, toS) => {
+    // WHAT WAS DRAWN, ON THE CANVAS, so a spec can read the two numbers
+    // instead of scanning pixels for them -- the same way the BONEYARD
+    // reports its side lengths. Cleared every frame: an attribute left
+    // standing after the pick is dropped would say a readout is on screen
+    // that is not.
+    const shownDims = [];
+    const report = () => canvas.setAttribute('data-opening-dims',
+      JSON.stringify(shownDims));
+    if (selection.length !== 1 || selection[0].type !== 'fenestration') { report(); return; }
+    const opening = selection[0].item;
+    const wall = walls().find(w => String(w.id) === String(opening.wallId));
+    if (!wall || !wall.start || !wall.end) { report(); return; }
+    const geometry = openingsOn(walls())
+      .find(entry => entry.opening === opening)?.geometry;
+    const centre = geometry && geometry.center;
+    if (!centre) { report(); return; }
+    const F = window.DraftFormatters;
+    const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+    const run = Math.hypot(dx, dz);
+    if (!(run > 0)) { report(); return; }
+    // THE OFFSET IS PERPENDICULAR IN SCREEN SPACE, not in feet, so the two
+    // numbers stand the same distance off the wall at every zoom -- a gap in
+    // feet closes up as the drafter zooms out and the text lands on the wall.
+    const a = toS(wall.start), b = toS(wall.end), c = toS(centre);
+    const sx = b.x - a.x, sy = b.y - a.y;
+    const slen = Math.hypot(sx, sy) || 1;
+    const nx = -sy / slen, ny = sx / slen;
+    ctx.save();
+    ctx.strokeStyle = selectInk();
+    ctx.fillStyle = selectInk();
+    ctx.lineWidth = 1;
+    ctx.lineCap = 'butt';
+    ctx.font = "600 11px 'DM Mono', ui-monospace, monospace";
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    // ALONG THE WALL, NOT THE DIAGONAL TO IT. The opening's centre is the
+    // centre of the OPENING, which stands on the wall's physical centreline
+    // -- half a thickness off the stored line when the reference is a face.
+    // Measured corner-to-centre straight, both numbers come out a few
+    // thousandths long and no longer add up to the wall: 5.0052 and 15.0018
+    // on a 20 ft wall. Projected onto the run they are 5 and 15, which is
+    // what a tape reads and what the dimension row beside them prints.
+    const ux = dx / run, uz = dz / run;
+    const along = (centre.x - wall.start.x) * ux + (centre.z - wall.start.z) * uz;
+    [wall.start, wall.end].forEach((corner, i) => {
+      const feet = Math.abs(i === 0 ? along : run - along);
+      // AND THERE IS NO "IT IS ON THE CORNER" CASE TO GUARD. It looks as
+      // though a door shoved hard against its jamb would read 0'-0" and want
+      // suppressing -- clampOpeningToWall keeps `half + bearing` off each
+      // end, measured against whatever stands there, so the centre cannot
+      // reach a corner and the smallest this can be is half a door plus its
+      // bearing. A guard here would be a line nothing can run.
+      const p = toS(corner);
+      const from = { x: p.x + nx * OPENING_DIM_OFF_PX, y: p.y + ny * OPENING_DIM_OFF_PX };
+      const to = { x: c.x + nx * OPENING_DIM_OFF_PX, y: c.y + ny * OPENING_DIM_OFF_PX };
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.stroke();
+      const text = F.formatArchitecturalInches(feet * 12);
+      const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+      // THE TEXT SITS IN A GAP IN ITS OWN LINE rather than on top of it:
+      // measured, cleared, then drawn, so a number is never read through the
+      // rule underneath it.
+      const w = ctx.measureText(text).width + 6;
+      ctx.save();
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.lineWidth = 13;
+      ctx.beginPath();
+      ctx.moveTo(mid.x - (sx / slen) * w / 2, mid.y - (sy / slen) * w / 2);
+      ctx.lineTo(mid.x + (sx / slen) * w / 2, mid.y + (sy / slen) * w / 2);
+      ctx.stroke();
+      ctx.restore();
+      ctx.fillText(text, mid.x, mid.y);
+      shownDims.push({ corner: i === 0 ? 'start' : 'end', ft: Math.round(feet * 1e4) / 1e4 });
+    });
+    ctx.restore();
+    report();
   };
 
   // ── move a corner ─────────────────────────────────────────────────────────
