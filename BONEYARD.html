@@ -92,6 +92,15 @@
   .levels-rail .legend { flex-direction: column; align-items: stretch;
     gap: 4px; flex-wrap: nowrap; }
   .levels-rail .legend button { justify-content: flex-start; white-space: nowrap; }
+  /* A LEVEL AND ITS BG, side by side: the name takes the room and BG takes
+     what it needs, so the stack keeps one left edge and one right one. */
+  .level-row { display: flex; align-items: stretch; gap: 4px; }
+  .level-row > button:first-child { flex: 1; min-width: 0; }
+  .legend button.bg {
+    flex: none; font-size: 10px; letter-spacing: .08em; padding: 2px 5px;
+    color: var(--ink-quiet); justify-content: center;
+  }
+  .legend button.bg:disabled { opacity: .3; cursor: default; }
   .btn {
     appearance: none; border: 1px solid var(--edge-panel); background: var(--surface-chip);
     color: var(--ink-primary); font: inherit; font-size: 12px; letter-spacing: .07em;
@@ -200,6 +209,27 @@
       let levels = [];
       let angle = 45;
       let picked = null;
+      // THE LEVELS SHOWN BEHIND THE PICKED ONE, by the drafter's choice.
+      //
+      // Movie, 16 Oct: "in the middle LEVELS area can you add a BG button to
+      // each of those and if they press the BG button that LEVEL will show up
+      // lightweight in the background (won't be noticed where it overlaps but
+      // any parts that aren't aligned will show up in lighter lines (faded
+      // lines) BACKGROUND lines".
+      //
+      // EVERY OTHER LEVEL USED TO BE DRAWN FADED, always. That answers the
+      // 4 Oct ask ("show the other BONE lines in faded out ... so i can line
+      // up stuff") and then keeps answering it on a four-storey stack where
+      // the drafter is lining up two of them and reading four. Asked for is
+      // better than always: a level is behind the picked one because he put
+      // it there.
+      //
+      // Keyed by kind AND level id, like every other comparison on this page:
+      // a level id alone is not unique across a roof and the floor it stands
+      // on. Not persisted -- which levels you are looking THROUGH is a
+      // question about the next five minutes, not about the drawing.
+      const bg = new Set();
+      const keyOf = level => `${level.kind}:${level.levelId}`;
       let laid = { levels: [], scale: 0 };
       // The edge the drafter picked: which loop of the picked level, which edge.
       let selected = null;
@@ -269,6 +299,36 @@
         ctx.setLineDash([]);
       };
 
+      // THE ROOF'S OWN LINES, HAIRLINE: where the overhang ends, and where the
+      // planes meet each other. Movie, 16 Oct: "really thin lins like the edge
+      // walls also very very thin lines".
+      //
+      // NOT strokePolys, FOR TWO REASONS. A hip is an OPEN line and that one
+      // closes every path it is handed, which would draw a second line back
+      // along the first. And the width is the whole point: 0.6 against the
+      // 1.6 of the lightest bone, so the roof's own geometry reads as what the
+      // roof DOES rather than as another storey in the stack.
+      //
+      // `to` is what puts a point on the screen -- identity in the 3D window,
+      // where layout has already done it, and toScreen in the 2D one.
+      const THIN_PX = 0.6;
+      const strokeThin = (ctx, lines, color, to) => {
+        if (!lines || !lines.length) return;
+        ctx.save();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = THIN_PX;
+        lines.forEach(line => {
+          const pts = (line.points || []).map(to);
+          if (pts.length < 2) return;
+          ctx.beginPath();
+          pts.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+          if (line.closed) ctx.closePath();
+          ctx.stroke();
+        });
+        ctx.restore();
+      };
+      const same = p => p;
+
       // A LOOP WITH ITS OPENINGS (Movie, 3 Oct): the line broken where a door
       // or window is, and a dot at its centre -- a door's colour, a window's.
       // `cut` is boneyard-loops.js's, laid out: runs of line and dots, in
@@ -294,6 +354,30 @@
         return { runs: runs.map(r => ({ a: to(r.a), b: to(r.b) })),
           dots: dots.map(d => ({ ...to(d.p), type: d.type })) };
       });
+      // FOR THE SPECS: every thin line DRAWN, by level and kind, in the points
+      // it was drawn at. Published from the same lists the painter strokes and
+      // only for the levels it strokes them for, so "the 2D window shows the
+      // roof's lines only when the roof is picked or put behind" is a question
+      // this answers rather than one it assumes.
+      //
+      // TWICE OVER IN THE 2D WINDOW, and both earn it: `points` is where the
+      // line landed on the canvas, which is what a check on the ink needs,
+      // and `ft` is the same line in plan feet, which is what a check against
+      // the saved drawing needs -- an eave that is the roof's own outline and
+      // a bone that is that outline brought in by the overhang are a claim
+      // about the file, not about the window. In the 3D window the points
+      // have already been projected and there are no feet left to give.
+      const thinAttr = shownLines => JSON.stringify(shownLines.flatMap(({ name, lines, to }) =>
+        (lines || []).map(line => {
+          const plan = line.points[0] && line.points[0].z !== undefined;
+          return { level: name, kind: line.kind,
+            points: line.points.map(p => {
+              const q = to(p);
+              return [Number(q.x.toFixed(1)), Number(q.y.toFixed(1))];
+            }),
+            ...(plan ? { ft: line.points.map(p =>
+              [Number(p.x.toFixed(4)), Number(p.z.toFixed(4))]) } : {}) };
+        })));
       // FOR THE SPECS: every opening drawn, by level, with its dot.
       const openingsAttr = lvls => JSON.stringify(lvls.flatMap(l => (l.cut || []).flatMap(c => c.dots
         .map(d => ({ level: l.name, type: d.type, at: [Number(d.x.toFixed(1)), Number(d.y.toFixed(1))] })))));
@@ -311,6 +395,11 @@
         laid.levels.forEach(level => {
           const on = picked && picked.kind === level.kind && picked.levelId === level.levelId;
           strokeCut(ctx, level.cut, level.color, on ? 3 : 1.6);
+          // THE ROOF'S OWN LINES ARE ALWAYS IN THE 3D -- "show the roof
+          // outline in 3d" (Movie, 16 Oct), with no BG button needed. The
+          // left window is the whole building at once; it is the right one
+          // that shows a level at a time and so has to be asked.
+          strokeThin(ctx, level.thinPolys, level.color, same);
         });
         // THE POSTS (Movie, 4 Oct: "show me the veritical stick"): a pile out
         // in the open carries a post up to what it holds -- cut-view.js's
@@ -330,6 +419,8 @@
           x: post.point.x, z: post.point.z, foot: Number(post.foot.toFixed(4)),
           top: Number(post.top.toFixed(4)), carries: post.carries }))));
         c3.setAttribute('data-openings', openingsAttr(laid.levels));
+        c3.setAttribute('data-thin', thinAttr(laid.levels.map(l =>
+          ({ name: l.name, lines: l.thinPolys, to: same }))));
         document.getElementById('angle').textContent = `${angle}°`;
         c3.setAttribute('data-angle', String(angle));
         // FOR THE SPECS: what is drawn, and where each level's first corner landed.
@@ -405,8 +496,14 @@
       // another is picked and an edit does not slide the plan under the
       // finger. It is fixed for the length of a drag.
       let frame = null;
+      // THE EAVE IS PART OF THE EXTENT, whether or not the ROOF is the level
+      // showing: the frame is the whole building's, and a frame that changed
+      // shape when a roof was picked would slide the plan under the finger --
+      // which is the thing this frame exists to stop.
+      const framePoints = l => [...l.loops.flatMap(loop => loop.points),
+        ...(l.thin || []).flatMap(line => line.points)];
       const frameFor = (w, h) => {
-        const pts = levels.flatMap(l => l.loops.flatMap(loop => loop.points));
+        const pts = levels.flatMap(framePoints);
         if (!pts.length) return null;
         const xs = pts.map(p => p.x), zs = pts.map(p => p.z);
         const pad = 6;
@@ -417,10 +514,10 @@
         return { s, ox: (w - (maxX - minX) * s) / 2 - minX * s, oy: (h - (maxZ - minZ) * s) / 2 - minZ * s };
       };
       const toScreen = p => ({ x: frame.ox + p.x * frame.s, y: frame.oy + p.z * frame.s });
-      const fits = (w, h) => levels.every(l => l.loops.every(loop => loop.points.every(pt => {
+      const fits = (w, h) => levels.every(l => framePoints(l).every(pt => {
         const p = toScreen(pt);
         return p.x >= 4 && p.x <= w - 4 && p.y >= 4 && p.y <= h - 4;
-      })));
+      }));
       const toWorld = (x, y) => ({ x: (x - frame.ox) / frame.s, z: (y - frame.oy) / frame.s });
 
       // The level under the picked one, drawn faint: what an overhang hangs past.
@@ -438,22 +535,37 @@
         document.getElementById('level-title').textContent = level ? level.name : 'LEVEL';
         c2.setAttribute('data-level', level ? level.name : '');
         c2.setAttribute('data-openings', '[]');
+        c2.setAttribute('data-thin', '[]');
+        const thinDrawn = [];
         // Refitted only when something has gone off the window.
         if (!frame || (!drag && !fits(w, h))) frame = frameFor(w, h);
         if (!level || !frame) return;
         const below = under(level);
-        // EVERY OTHER BONE, FADED, for lining one floor up on another. Movie,
-        // 4 Oct: "could we show the other 'BONE lines in faded out or
-        // something so i can line up stuff if i need to floor to floor, and
-        // when they select one, bring it to top and increase thickness and
-        // opacity of that one". Each in its own colour, thin and see-through,
-        // under everything; the level under the picked one keeps its grey
-        // dashes (what an overhang hangs past) rather than drawing twice.
+        // THE BONES THE DRAFTER PUT BEHIND THIS ONE, faded, for lining one
+        // floor up on another. Movie, 4 Oct: "could we show the other 'BONE
+        // lines in faded out or something so i can line up stuff if i need to
+        // floor to floor, and when they select one, bring it to top and
+        // increase thickness and opacity of that one" -- and 16 Oct, which
+        // made it a choice rather than all of them: "won't be noticed where it
+        // overlaps but any parts that aren't aligned will show up in lighter
+        // lines".
+        //
+        // Each in its own colour, thin and see-through, under everything; the
+        // level under the picked one keeps its grey dashes (what an overhang
+        // hangs past) rather than drawing twice.
         const faded = shown().filter(l => l !== level && l !== below
-          && !(l.kind === level.kind && l.levelId === level.levelId));
+          && !(l.kind === level.kind && l.levelId === level.levelId)
+          && bg.has(keyOf(l)));
         ctx.save();
         ctx.globalAlpha = 0.5;
-        faded.forEach(l => strokePolys(ctx, l.loops.map(loop => loop.points.map(toScreen)), l.color, 1.5));
+        faded.forEach(l => {
+          strokePolys(ctx, l.loops.map(loop => loop.points.map(toScreen)), l.color, 1.5);
+          // AND ITS THIN LINES WITH IT, which is the whole of "or selected as
+          // a BACKGROUND layer": a roof behind the floor plan is how an
+          // overhang is lined up against the wall under it.
+          strokeThin(ctx, l.thin, l.color, toScreen);
+          if ((l.thin || []).length) thinDrawn.push({ name: l.name, lines: l.thin, to: toScreen });
+        });
         ctx.restore();
         c2.setAttribute('data-faded', JSON.stringify(faded.map(l => l.name)));
         if (below) {
@@ -468,7 +580,16 @@
           ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
         });
         const cut = cutOf(level.loops, toScreen);
-        // The picked bone on top of them all, heavier than it was.
+        // The picked bone on top of them all, heavier than it was -- with its
+        // own thin lines under it, so a picked ROOF shows where its overhang
+        // ends and where its hips and valleys run. Movie, 16 Oct: "only show
+        // it on the right window if the ROOF is selected (or selected as a
+        // BACKGROUND layer)".
+        strokeThin(ctx, level.thin, level.color, toScreen);
+        if ((level.thin || []).length) {
+          thinDrawn.push({ name: level.name, lines: level.thin, to: toScreen });
+        }
+        c2.setAttribute('data-thin', thinAttr(thinDrawn));
         strokeCut(ctx, cut, level.color, 3);
         c2.setAttribute('data-openings', openingsAttr([{ name: level.name, cut }]));
         // Every corner, so a BREAK can be seen.
@@ -531,6 +652,8 @@
       const paintLegend = () => {
         const legend = document.getElementById('legend');
         legend.replaceChildren(...levels.map(level => {
+          const row = document.createElement('div');
+          row.className = 'level-row';
           const b = document.createElement('button');
           b.type = 'button';
           b.dataset.boneLevel = level.name;
@@ -540,7 +663,30 @@
           sw.style.background = level.color;
           b.append(sw, level.name);
           b.addEventListener('click', () => { pick(level); });
-          return b;
+          // BG: SHOW THIS LEVEL BEHIND THE PICKED ONE (Movie, 16 Oct). Its
+          // own button, beside the level rather than inside it, because the
+          // two are different questions -- which level am I editing, and
+          // which am I looking through -- and one button cannot ask both.
+          const back = document.createElement('button');
+          back.type = 'button';
+          back.className = 'bg';
+          back.dataset.boneBg = level.name;
+          back.textContent = 'BG';
+          back.title = `Show ${level.name} faded behind the level being edited`;
+          // THE PICKED LEVEL IS ALREADY IN FRONT, so its BG is not a thing to
+          // press: a level cannot be behind itself. Disabled rather than
+          // hidden, so the row does not change shape as levels are picked.
+          const isPicked = picked === level;
+          back.disabled = isPicked;
+          back.setAttribute('aria-pressed', String(!isPicked && bg.has(keyOf(level))));
+          back.addEventListener('click', () => {
+            const key = keyOf(level);
+            if (bg.has(key)) bg.delete(key); else bg.add(key);
+            paintLegend();
+            paint2d();
+          });
+          row.append(b, back);
+          return row;
         }));
       };
 
