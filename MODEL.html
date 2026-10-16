@@ -13466,6 +13466,33 @@
     tracedGarage = null;
     tracedMasters = [];
     roomOverFt = null;
+    // ── AND THE FIRST CORNER IS ALREADY ON THE BULLSEYE ──────────────────
+    //
+    // Movie, 15 Oct: "when they select to DRAW THE OUTLINE (at the drive
+    // thru) when the drivethru window disappears and it goes to the model
+    // space screen, select the first point for them on the bullseye
+    // (registration point), and allow them to proceed from that point".
+    //
+    // The sign comes down and the drafter is left in front of an empty sheet
+    // with one mark on it. Clicking that mark is what he was going to do, so
+    // the press does it for him and his first click is the SECOND corner.
+    //
+    // ONLY FROM THE DRIVE-THRU PRESS. A type picked at the window arms this
+    // same trace and then waits for the bone -- he has not said he is about
+    // to draw, and seeding a corner under a drafter who is still choosing
+    // would put a point on his drawing he never placed.
+    //
+    // AFTER setTool, WHICH IS WHAT CLEARS THE LIST. Its listener empties
+    // outlineCorners for whatever is being armed; a seed written before it
+    // would be swept by the arming that was supposed to carry it.
+    //
+    // AND ONLY WHERE THERE IS A MARK TO START ON. gridDatum answers three
+    // ways -- a point the drawing carries, the back-filled world origin, or
+    // NOTHING -- and the painter draws the bullseye on exactly the first two.
+    // Where it draws none, there is nothing on screen for this corner to be
+    // standing on, and a point placed out of sight is worse than no point.
+    const bullseye = fromLink ? gridDatum() : null;
+    outlineCorners = bullseye ? [{ x: bullseye.x, z: bullseye.z }] : [];
     sayTraceThe(picked);
     paint();
   };

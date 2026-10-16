@@ -519,6 +519,26 @@ async function openDriveThru(page) {
   await expect(page.locator('#build-families button').first()).toBeVisible();
 }
 
+// THE OUTLINE PRESS PUTS A CORNER DOWN BEFORE THE DRAFTER DOES.
+//
+// Movie, 15 Oct: "when they select to DRAW THE OUTLINE (at the drive thru)
+// ... select the first point for them on the bullseye (registration point),
+// and allow them to proceed from that point". So every trace armed from that
+// press begins at the datum, and a spec that walks its house somewhere else
+// has to take that corner back first — which is something the page genuinely
+// offers (UNDO pops the corner in hand before it touches a saved edit), not a
+// back door this file invented to keep old checks green.
+//
+// It is ONE LINE with a long reason, which is why it lives here: several
+// specs trace a rectangle about the origin for the convenience of their own
+// arithmetic, and the reason belongs in one place rather than five. What the
+// seed itself does is checked in model-outline-starts-on-the-bullseye.spec.js;
+// here it is only in the way.
+async function dropSeededCorner(page) {
+  await page.keyboard.press('Control+z');
+  await expect(page.locator('#strip-message')).toContainText('first corner taken back');
+}
+
 // ── MODEL.html: the level and the view, now that the two SELECTs are gone ──
 //
 // §7 deleted the chrome bar, and with it `#level-pick` and `#view-pick`. The
@@ -735,6 +755,7 @@ module.exports = {
   selectTool,
   pickBuild,
   openDriveThru,
+  dropSeededCorner,
   BUILD_FAMILY,
   activeToolLabels,
   waitForSaved,
