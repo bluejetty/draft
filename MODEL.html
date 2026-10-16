@@ -449,9 +449,12 @@
   .dt-arrow path { fill:none; stroke:#fff; stroke-width:5; stroke-linecap:round; stroke-linejoin:round; }
   .dt-arrow .dt-arrow-shade { stroke:#d7262f; stroke-width:10; }
   .dt-banner-gap { flex:0 0 9%; }
-  /* THE NUMBER ON THE SIGN'S BONE, placed as the foot's is (shell-bars.css
-     #bone-balance; paintBone moves its top with the artwork). */
-  #dt-bone-balance { position:absolute; left:0; right:0; top:74%;
+  /* THE NUMBER ON THE SIGN'S PRESS, seated for THIS press's artwork rather
+     than the foot's: the sign's disc is drawn larger, and Movie placed the
+     number by eye on each (16 Oct): on the bone "lowered down because the
+     BONE is in the middle", on the house "centered up down in the blue
+     button area in the house" -- "middle". */
+  #dt-bone-balance { position:absolute; left:0; right:0; top:80%;
     transform:translateY(-50%); text-align:center; pointer-events:none;
     font-family: var(--font-ui); font-weight:700; color:#fff;
     text-shadow:0 1px 2px rgba(29,31,32,0.55); letter-spacing:0.02em;
@@ -620,6 +623,17 @@
   html[data-theme="rough"] #dt-tiles { left:6%; top:13%; width:88%; height:56%; }
   html[data-theme="rough"] #dt-banners { top:72%; height:9%; }
   html[data-theme="rough"] .dt-banner-gap { flex:0 0 12%; }
+  html[data-theme="rough"] #dt-bone-balance { top:62%; }
+  /* BLUE ON PAPER (Movie, 16 Oct: "the colors on the HOUSE / ROUGH version
+     should be BLUE not RED. Red is RUFF version"): the sheet's own ink, the
+     house press's blue, with the paper's cream for the lettering and the
+     arrows. */
+  html[data-theme="rough"] .dt-banner { background:#1f3f6b; border-color:#f1e9d2; color:#f1e9d2;
+    box-shadow:0 2px 5px rgba(31,63,107,0.35), inset 0 1px 0 rgba(255,255,255,0.18); }
+  html[data-theme="rough"] .dt-banner:hover, html[data-theme="rough"] .dt-banner:focus-visible { background:#2c5a99; }
+  html[data-theme="rough"] .dt-arrow path { stroke:#f1e9d2; }
+  html[data-theme="rough"] .dt-arrow .dt-arrow-shade { stroke:#1f3f6b; }
+  html[data-theme="rough"] .dt-arrow:hover path, html[data-theme="rough"] .dt-arrow:focus-visible path { stroke:#fff; }
   /* Inside the rule, and in the sheet's own ink. The sign's CLOSE is light
      lettering on a dark plate because it sits on a dark sign; the same plate
      on paper reads as a sticker. */

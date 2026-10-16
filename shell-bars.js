@@ -1327,10 +1327,8 @@ ${trio(true)}
       });
       // The number follows the picture it is drawn on -- low in the red on
       // the bone, in the middle of the outline on the house.
-      // Both the foot's and the sign's (MODEL.html [data-dt-balance]).
-      document.querySelectorAll('#bone-balance, [data-dt-balance]').forEach(balance => {
-        balance.style.top = art.balanceTop;
-      });
+      const balance = document.getElementById('bone-balance');
+      if (balance) balance.style.top = art.balanceTop;
     },
 
     // A PULL-OUT RAIL: the tab, the panel, and the toggle between them.
