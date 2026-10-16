@@ -34,11 +34,13 @@ const loop = (id, levelId, garage) => ({
   id, levelId, garage,
   points: [{ x: 0, y: 0, z: 0 }, { x: W, y: 0, z: 0 }, { x: W, y: 0, z: D }, { x: 0, y: 0, z: D }],
 });
-// The front wall runs x = W -> 0 at z = D, so an offset measured from its
-// start lands the door at x = W - offset.
+// THE FRONT WALL RUNS x = 0 -> W at z = D -- the other way round the loop
+// from its neighbours, on purpose: its right-hand normal points OUT of the
+// garage, so the square's "into the garage" has to be worked out and not
+// assumed from the wall's direction. An offset from its start is the door's x.
 const overhead = (x, i, width = DOOR_FT) => ({
   id: `gd-${i}`, wallId: 'g-front', levelId: 3, view: 'plan', type: 'door', layer: 'A-DOOR',
-  offset: W - x, width, sillHeight: 0, headHeight: 7, garage: true,
+  offset: x, width, sillHeight: 0, headHeight: 7, garage: true,
 });
 const FILE = ({ doors, depth = D } = {}) => ({
   version: 1,
@@ -49,7 +51,7 @@ const FILE = ({ doors, depth = D } = {}) => ({
   ],
   activeLevelIdx: 2,
   walls: [garageWall('g-back', 0, 0, W, 0), garageWall('g-right', W, 0, W, depth),
-    garageWall('g-front', W, depth, 0, depth), garageWall('g-left', 0, depth, 0, 0)],
+    garageWall('g-front', 0, depth, W, depth), garageWall('g-left', 0, depth, 0, 0)],
   fenestrations: doors,
   outlines: [
     { ...loop('garage-out', 3, true), points: loop('garage-out', 3, true).points.map(p => ({ ...p, z: Math.min(p.z, depth) })) },
