@@ -132,28 +132,36 @@ test('a letter typed into a field is a character, not a tool', async ({ page }) 
   expect(await armed(page), 'the field kept the keystrokes').toEqual(['select']);
 });
 
-test('a board that refuses a tool refuses its letter too', async ({ page }) => {
-  await open(page, base({ board: 'toy' }));
-  expect(await armed(page)).toEqual(['select']);
+test('no board swallows a letter any more, and picking up a tool does not dim the lamp',
+  async ({ page }) => {
+    await open(page, base({ board: 'toy' }));
+    expect(await armed(page)).toEqual(['select']);
 
-  // ROOF IS NOT ON THE TOY BOARD. Greying the key is presentation and
-  // presentation can be got round — a letter is exactly how — so the refusal
-  // has to hold at the register.
-  await page.keyboard.press('O');
-  expect(await armed(page), 'TOY does not offer ROOF, so its letter does nothing')
-    .toEqual(['select']);
+    // THIS TEST USED TO WATCH A LETTER BEING SWALLOWED. ROOF was off the TOY
+    // board, greying its key is presentation, presentation can be got round --
+    // a letter is exactly how -- so the refusal had to hold at the register.
+    //
+    // THE RULING CHANGED UNDER IT (Movie, 15 Oct: "the TOY should be a light
+    // not a button"). TOY says how fine the numbers are, not which tools
+    // exist. There is no board that refuses a tool, so there is no letter
+    // left to swallow, and the key arms ROOF here as it would anywhere.
+    await page.keyboard.press('O');
+    expect(await armed(page), 'O arms ROOF, on TOY as on any board').toEqual(['roof']);
 
-  // AND THE REFUSED PRESS DOES NOT PUT DOWN WHAT THE DRAFTER WAS HOLDING.
-  // setTool falls back to SELECT on a tool the board refuses, so routing the
-  // letter through it unguarded would charge the drafter his armed tool for a
-  // key that was never going to work.
-  await page.keyboard.press('W');
-  expect(await armed(page)).toEqual(['wall']);
-  await page.keyboard.press('O');
-  expect(await armed(page), 'WALL survives a refused letter').toEqual(['wall']);
+    // AND THE LIGHT IS STILL ON, which is the half of the new ruling a letter
+    // can break: only a number TOY could not have made puts it out. Picking
+    // up a tool is not a number, and a drafter reaching for ROOF has not asked
+    // to leave the whole-foot board.
+    await expect(page.locator('[data-board-light]')).toHaveAttribute('data-lit', '');
 
-  // OUTLINE IS ON THE TOY BOARD, because drawing the outline is not a drafting
-  // tool — it is how a TOY house begins (Movie, 13 Sep).
-  await page.keyboard.press('U');
-  await expect(page.locator('#strip-message')).toContainText('Trace your house');
-});
+    // A SECOND LETTER TAKES THE TOOL IT NAMES, rather than dropping the
+    // drafter back to SELECT the way a refused one used to.
+    await page.keyboard.press('W');
+    expect(await armed(page), 'W takes WALL out of ROOF\'s hand').toEqual(['wall']);
+
+    // OUTLINE, which was on the TOY board even when the board refused things,
+    // still answers its own letter — it is how a TOY house begins (Movie,
+    // 13 Sep).
+    await page.keyboard.press('U');
+    await expect(page.locator('#strip-message')).toContainText('Trace your house');
+  });
