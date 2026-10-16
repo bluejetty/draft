@@ -214,6 +214,37 @@ test('a strip that is a room but under 10 ft of floor gets no beam: the joists c
     expect(handColumns(d), 'no columns either').toEqual([]);
   });
 
+test('a carrying beam in the strip is the next support: under 10 ft of floor to it, nothing is added',
+  async ({ page }) => {
+    await open(page);
+    // 39 FT WIDE AND 40 DEEP: the joists span the 39, three bays of them, so two mid-span rows 13 ft apart. The stair hugs
+    // the middle one, so the open side's floor runs from the well's edge to
+    // the NEXT BEAM, some 7 ft away -- not the 17 ft to the wall. "10ft or
+    // more span of floor until the next beam or ext. wall": the beam is the
+    // support the joists reach first, and 7 ft of floor earns nothing.
+    await traceHouse(page, 'bungalow', [[-19.5, -20], [19.5, -20], [19.5, 20], [-19.5, 20]]);
+    const d = await saved(page);
+    const box = boxOf(wellOf(d).points);
+    const rows = [...new Set((d.beams || []).filter(b => b.auto && !(Number(b.stairId) > 0))
+      .map(b => r((b.start.x + b.end.x) / 2)))].sort((a, b) => a - b);
+    expect(rows.length, 'two rows of beams carry the floor ' + JSON.stringify(rows) + ' well ' + JSON.stringify(box)).toBe(2);
+    const house = boxOf((d.outlines || [])
+      .find(o => Number(o.levelId) === MAIN_FL && !o.garage).points);
+    // The open side is the one without a beam hugging it; the next row on
+    // that side is the support, and the floor between is under 10 ft.
+    const hug = rows.find(x => Math.abs(x - box.x0) < 0.5 || Math.abs(x - box.x1) < 0.5);
+    expect(hug, 'the well hugs a row').toBeDefined();
+    const openRight = Math.abs(hug - box.x0) < 0.5;
+    const next = openRight ? rows.find(x => x > box.x1 + 0.5) : [...rows].reverse().find(x => x < box.x0 - 0.5);
+    expect(next, 'another row stands on the open side').toBeDefined();
+    const toBeam = openRight ? next - box.x1 : box.x0 - next;
+    const toWall = (openRight ? house.x1 - box.x1 : box.x0 - house.x0) - 14.5 / 12;
+    expect(toBeam, 'the beam is nearer than the wall').toBeLessThan(toWall);
+    expect(toBeam, 'and under 10 ft of floor away').toBeLessThan(10);
+    expect(toWall, 'while the wall alone would have earned a beam').toBeGreaterThan(10);
+    expect(sideBeams(d), 'nothing is added').toEqual([]);
+  });
+
 test('they are not a suggestion: an AUTO sweep cannot carry them off',
   async ({ page }) => {
     await open(page);

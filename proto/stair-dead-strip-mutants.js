@@ -74,14 +74,13 @@ const MUTANTS = [
     with: '    return [].filter(side => side.ft >= STAIR_SIDE_BEAM_SPAN_FT - 1e-6)',
     test: 'the open side of the well gets a beam on two columns' },
 
-  { file: 'MODEL.html',
-    name: 'a side the mid-span beam already carries gets a second beam beside '
-      + 'the first, and two more columns with it',
-    find: '      .filter(side => !beams.some(beam =>\n'
-      + '        stairBeamGapFt(beam, poly) <= STAIR_SIDE_BEAM_NEAR_FT',
-    with: '      .filter(side => !beams.some(beam =>\n'
-      + '        false && stairBeamGapFt(beam, poly) <= STAIR_SIDE_BEAM_NEAR_FT',
-    test: 'the open side of the well gets a beam on two columns' },
+  // THE ROW THAT STOOD HERE -- "a side the mid-span beam already carries gets
+  // a second beam beside the first" -- is gone since 16 Oct, and not because
+  // the rule is: the floor span is measured to the first support on that side
+  // (stairSideSpans), so a beam 2" off the edge is a 2" span and the 10 ft
+  // test refuses it before the carried-side filter is asked. Bending that
+  // filter alone changed no answer (it SURVIVED), and the filter stays as a
+  // second guard, not as a rule a row can prove on its own.
 
   { file: 'MODEL.html',
     name: 'WHICH SIDE the carrying beam is on is not asked, so the beam '
@@ -117,7 +116,7 @@ const MUTANTS = [
       + 'strip does not shorten it',
     find: '        if (hit) ft = Math.min(ft, Math.hypot(hit.x - side.from.x, hit.z - side.from.z));',
     with: '        if (hit) ft = Math.min(ft, Infinity);',
-    test: 'under 10 ft of floor gets no beam' },
+    test: 'a carrying beam in the strip is the next support' },
 
   { file: 'MODEL.html',
     name: 'the two columns are both at one end of the beam',
