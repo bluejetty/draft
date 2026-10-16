@@ -31,6 +31,23 @@ if (!window.DraftCutView) {
   // always been a single.
   const ELEVATION_DOOR_STYLES = Object.freeze(['single', 'french', 'pocket', 'barn', 'slide', 'bypass', 'garden']);
   const elevationDoorStyle = f => (ELEVATION_DOOR_STYLES.includes(f.doorStyle) ? f.doorStyle : 'single');
+  // TEXT AT ITS PRINTED SIZE (Movie, 16 Oct: "can you put it at the exact size
+  // that it will PRINT when the layout is PRINTED so the user can adjust it if
+  // they need too"). Every font below is written in PAPER PIXELS -- 9px, 10px,
+  // 13px at 72 to the inch -- and a sheet drawn at some other zoom has to
+  // scale them or the lettering is the one thing on the page that is not to
+  // scale. The plan painter has taken `inkScale` since 11 Oct for the same
+  // reason ("the DIMENSIONS shouldn't change size when i zoom in and out");
+  // this is the elevations and sections catching up.
+  //
+  // A MODULE VARIABLE RATHER THAN A PARAMETER, deliberately and narrowly: the
+  // seven font sites sit in six different helpers, four of them outside
+  // drawCutView's closure, and threading an argument through all of them is a
+  // bigger change than the fix. A paint is synchronous and single-threaded, so
+  // the value set at the top of drawCutView is the value every helper under it
+  // reads. If this file is ever refactored, make it an argument.
+  let TEXT_SCALE = 1;
+  const textPx = px => px * TEXT_SCALE;
   let warnedNoPatterns = false;
   let warnedNoRoofPatterns = false;
   let warnedNoFootings = false;
@@ -42,7 +59,7 @@ if (!window.DraftCutView) {
   const fitTagText = (ctx, label, roomPx, tallPx) => {
     if (!(tallPx >= 11)) return false;
     for (const px of [9, 8, 7]) {
-      ctx.font = `600 ${px}px 'Barlow Condensed', system-ui, sans-serif`;
+      ctx.font = `600 ${textPx(px)}px 'Barlow Condensed', system-ui, sans-serif`;
       if (ctx.measureText(label).width + 4 <= roomPx) return true;
     }
     return false;
@@ -1924,7 +1941,11 @@ if (!window.DraftCutView) {
     const all = live ? marks.concat([live]) : marks;
     if (!all.length) return;
     const ink = C.line;
-    const textPx = Math.max(9, Math.min(16, pxPerFt * 0.55));
+    // THE NOTE'S OWN SIZE, which follows the drawing's scale rather than the
+    // paper: a note on a section drawn at 3 px to the foot would be unreadable
+    // at 9. Renamed off `textPx` when that name became the paper-scale helper
+    // above -- the two are different questions and were one word apart.
+    const notePx = Math.max(9, Math.min(16, pxPerFt * 0.55));
     ctx.save();
     all.forEach(m => {
       const hot = selected && m.id && m.id === selected;
@@ -1942,7 +1963,7 @@ if (!window.DraftCutView) {
       if (m.kind !== 'note' || !m.at) return;
       const tx = X(m.at.u), ty = Y(m.at.e);
       const text = String(m.text || '');
-      ctx.font = `600 ${textPx}px 'Barlow Condensed', system-ui, sans-serif`;
+      ctx.font = `600 ${textPx(notePx)}px 'Barlow Condensed', system-ui, sans-serif`;
       const width = ctx.measureText(text).width;
       if (m.tip) {
         const px = X(m.tip.u), py = Y(m.tip.e);
@@ -1953,7 +1974,7 @@ if (!window.DraftCutView) {
         // A STRAIGHT END is the line alone (Movie, 6 Oct); the arrowhead is
         // for a note that asked for one, or was drawn before the choice.
         if (m.end !== 'line') {
-          const ang = Math.atan2(py - ty, px - lx), head = Math.max(6, textPx * 0.6);
+          const ang = Math.atan2(py - ty, px - lx), head = Math.max(6, notePx * 0.6);
           ctx.setLineDash([]);
           ctx.beginPath();
           ctx.moveTo(px, py);
@@ -1995,6 +2016,8 @@ if (!window.DraftCutView) {
   };
 
   function drawCutView(env, ctx, w, h, cut, opts) {
+    // 1 unless the caller is drawing to a sheet at some zoom other than print.
+    TEXT_SCALE = Number((opts || {}).inkScale) > 0 ? Number(opts.inkScale) : 1;
     const fit = externalFit(opts);
     const C = inksFor(opts);
     const ink = a => weight(C.ink, a);
@@ -2007,7 +2030,7 @@ if (!window.DraftCutView) {
     const header = (label) => {
       if (fit || hologramPass(opts)) return;   // the sheet captions its viewports itself
       ctx.fillStyle = ink(0.55);
-      ctx.font = "600 10px 'Barlow Condensed', system-ui, sans-serif";
+      ctx.font = `600 ${textPx(10)}px 'Barlow Condensed', system-ui, sans-serif`;
       ctx.textAlign = 'left'; ctx.textBaseline = 'top';
       ctx.fillText(label, 10, 8);
     };
@@ -2020,7 +2043,7 @@ if (!window.DraftCutView) {
       if (hologramPass(opts)) return;
       header(cut.name);
       ctx.fillStyle = ink(0.55);
-      ctx.font = "600 13px 'Barlow Condensed', system-ui, sans-serif";
+      ctx.font = `600 ${textPx(13)}px 'Barlow Condensed', system-ui, sans-serif`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText('The cut line crosses no walls — draw it through the plan.', w / 2, h / 2);
       return;
@@ -2097,7 +2120,7 @@ if (!window.DraftCutView) {
       ctx.moveTo(marginL - 18, Y(elevFt)); ctx.lineTo(w - marginR, Y(elevFt));
       ctx.stroke();
       ctx.fillStyle = ink(0.6);
-      ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+      ctx.font = `600 ${textPx(9)}px 'Barlow Condensed', system-ui, sans-serif`;
       ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
       ctx.fillText(label ?? env.elevLabel(elevFt + datum), marginL - 22, Y(elevFt));
     };
@@ -2475,7 +2498,7 @@ if (!window.DraftCutView) {
         ctx.fillRect(x, Y(level.floorTop), wid, depth);
         ctx.strokeRect(x, Y(level.floorTop), wid, depth);
         ctx.fillStyle = ink(0.55);
-        ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+        ctx.font = `600 ${textPx(9)}px 'Barlow Condensed', system-ui, sans-serif`;
         ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
         // THE BAND SAYS WHAT THE JOIST IS, and until 14 Oct it said TJI
         // whatever it was. Movie, reading a detached garage's S1: "you
@@ -3346,7 +3369,7 @@ if (!window.DraftCutView) {
       ctx.lineTo(uEnd == null ? w - marginR : X(uEnd), Y(elevFt));
       ctx.stroke();
       ctx.fillStyle = ink(0.6);
-      ctx.font = "600 9px 'Barlow Condensed', system-ui, sans-serif";
+      ctx.font = `600 ${textPx(9)}px 'Barlow Condensed', system-ui, sans-serif`;
       ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
       ctx.fillText(env.elevLabel(elevFt + datum), marginL - 22, Y(elevFt));
     };
