@@ -1206,6 +1206,41 @@
   /* THE VERB IS THE ONE THAT DRAWS, so it wears the accent the other three
      do not -- the same rule [data-promote-go] follows on every other card. */
   #lot-pick [data-lot-pick-draw] { border-color: var(--accent); color: var(--accent); }
+  /* THE WAY THROUGH, AND IT LOOKS LIKE ONE. Wide as the card, filled rather
+     than outlined, and in the accent -- which is this page's red -- so it is
+     the thing a drafter sees before he has read a word of the ladder above
+     it. The four commands beside the sizes keep their outline: they are
+     choices, and this is the one that needs no choosing. */
+  #lot-pick .lot-ok { display:block; width:100%; margin-top:10px;
+    padding:10px 14px; border:1px solid var(--accent); border-radius:6px;
+    background-color: var(--accent); color: var(--accent-ink);
+    font-family: var(--font-ui); font-size:15px; font-weight:700;
+    letter-spacing:0.1em; text-transform:uppercase; cursor:pointer; }
+  #lot-pick .lot-ok:hover { filter:brightness(1.1); }
+  /* NOTHING FITS, NOTHING TO TAKE: with no lot on the ladder big enough for
+     the building there is no best fit to press OK for, and a button that
+     answered a question it cannot answer would be worse than one that waits. */
+  #lot-pick .lot-ok:disabled { opacity:0.45; cursor:default; filter:none; }
+  /* AND THE BUTTON IT WILL PRESS GLOWS WHILE IT CAN (Movie, 16 Oct:
+     "highlight the 'DRAW AUTOSITE' button so the user knows when they press
+     OK that is what will happen" ... "make it glow").
+
+     SO OK IS NOT MAGIC. The one risk in a button that answers for you is the
+     drafter not knowing what it answered; the glow names the verb before he
+     presses, and the autosite line keeps saying which SIZE. The pulse is
+     what makes it a pointer rather than a state -- the drive-thru bone's own
+     trick -- and it is STILLED for anyone who asked for less motion, with
+     the glow left on, so nothing is announced only by movement. */
+  @keyframes lot-ok-points {
+    0%, 100% { box-shadow: 0 0 4px 0 var(--accent); }
+    50%      { box-shadow: 0 0 12px 2px var(--accent); }
+  }
+  #lot-pick [data-lot-pick-draw].lot-ok-target {
+    animation: lot-ok-points 1.4s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) {
+    #lot-pick [data-lot-pick-draw].lot-ok-target {
+      animation:none; box-shadow: 0 0 9px 1px var(--accent); }
+  }
   #lot-pick [data-lot-pick-draw]:disabled { opacity:0.45; cursor:default;
     border-color: var(--edge-panel); color: var(--ink-quiet); }
   /* ONE COLUMN, SMALLEST FIRST (Movie, 14 Oct): "in the list of site sizes
@@ -1770,6 +1805,18 @@
       </div>
     </div>
     <div class="lot-note" data-lot-note></div>
+    <!-- ONE LOUD WAY THROUGH THE CARD (Movie, 16 Oct): "put a big button on
+         the bottom that says OK and make it red so it draws attention. if
+         they click that just put in the best fit based on the sizes /
+         setbacks", and the reason -- "make it easier for when the user wants
+         to think less and read less simplify it for them to get through
+         easy".
+
+         ADDED, NOT INSTEAD OF: "leave all that other stuff in the sITE menu,
+         but add the extra red OK button on the bottom". The ladder and the
+         four commands are untouched; this is the answer for a drafter who
+         does not want to read them. -->
+    <button type="button" class="lot-ok" data-lot-pick-ok>OK</button>
   </div>
 </div>
 
@@ -14127,6 +14174,13 @@
   // next door, for the same reason: one place holds the press, the fields are
   // only read when 'custom' is the press.
   let lotSizeId = null;
+  // HAS THE DRAFTER TOUCHED THE CARD HIMSELF? The OK press and the glow that
+  // points at what it will do are for someone who does not want to read the
+  // ladder (Movie, 16 Oct). The moment he presses anything else in the card
+  // he IS reading it and making his own choice -- "until they press another
+  // button" -- so the pointer stops pointing. It is not a lock: OK still
+  // works, and now draws the size he picked rather than the best fit.
+  let lotTouched = false;
   // ASKED ONCE PER VISIT, NOT ONCE PER PAINT. NOT NOW has to mean not now,
   // and the card is repainted on every repaint of the page; without this a
   // dismissed card would come straight back. Cleared on leaving SITE, so
@@ -14147,6 +14201,36 @@
     lotCard.querySelector('[data-lot-width]').value,
     lotCard.querySelector('[data-lot-depth]').value,
     { metric: lotMetric() });
+
+  // WHAT THE LADDER IS MEASURED AGAINST, lifted out of the paint so the OK
+  // press below can ask the same question and get the same answer. The
+  // reasoning is unchanged and still belongs to the card: the SIDE eave is
+  // the one that faces the property line, so it is the one the side setback
+  // is measured from; the drawing's own PROJECT value wins, then the widest
+  // roof actually built, then the panel default the next roof will use.
+  const lotFitOptions = () => {
+    const sideEave = Number(drawing?.roofSideOverhang);
+    const eaves = (drawing?.roofs || []).map(roof => Number(roof.overhang))
+      .filter(value => Number.isFinite(value));
+    return { eaveFt: Number.isFinite(sideEave) && sideEave >= 0 ? sideEave
+      : (eaves.length ? Math.max(...eaves) : roofOverhangFt) };
+  };
+  // THE SIZE THE CARD ITSELF WOULD CHOOSE -- "the first size to fit", which
+  // is the row the ladder already brightens (Movie, 14 Oct). OK takes this
+  // one, so the loud button and the bright row can never disagree.
+  //
+  // AND WITH NO BUILDING DRAWN there is no first-to-fit: every size fits and
+  // the ladder brightens none of them, which is his own rule ("if no house
+  // drawn all would be allowed nothing lighten up or faded"). A dead OK
+  // there would be the one card in the app whose way-through is missing
+  // exactly when the drafter knows least, so it falls back to the STANDARD
+  // SUBURBAN lot -- the tier the list itself calls standard, not a number
+  // typed here.
+  const STANDARD_LOT_TIER = 'L';
+  const bestLotTier = () =>
+    LS.bestLotTierFor(LS.houseBoxOf(drawing?.outlines), lotFitOptions())
+    || (LS.houseBoxOf(drawing?.outlines)
+      ? null : LS.LOT_TIERS.find(tier => tier.id === STANDARD_LOT_TIER) || null);
 
   paintLotPick = () => {
     if (!lotCard) return;
@@ -14180,11 +14264,7 @@
     // is measured from; the front and back ones answer to the front setback,
     // which is measured to the WALL.
     const house = LS.houseBoxOf(drawing?.outlines);
-    const sideEave = Number(drawing?.roofSideOverhang);
-    const eaves = (drawing?.roofs || []).map(roof => Number(roof.overhang))
-      .filter(value => Number.isFinite(value));
-    const fitOpts = { eaveFt: Number.isFinite(sideEave) && sideEave >= 0 ? sideEave
-      : (eaves.length ? Math.max(...eaves) : roofOverhangFt) };
+    const fitOpts = lotFitOptions();
     const best = LS.bestLotTierFor(house, fitOpts);
     const min = LS.minLotFor(house, fitOpts);
     tiles.replaceChildren(...LS.LOT_TIERS.map(tier => {
@@ -14229,7 +14309,9 @@
       button.append(size, tierTag, area, character);
       button.title = fits ? `${tier.id} \u2014 ${shown.character}`
         : `${tier.id} \u2014 needs at least ${lotFt(min.widthFt)} x ${lotFt(min.depthFt)}`;
-      button.addEventListener('click', () => { lotSizeId = tier.id; paintLotPick(); });
+      button.addEventListener('click', () => {
+        lotSizeId = tier.id; lotTouched = true; paintLotPick();
+      });
       return button;
     }));
     const custom = document.createElement('button');
@@ -14255,6 +14337,7 @@
     custom.append(customSize, customTag, customArea, customCharacter);
     custom.addEventListener('click', () => {
       lotSizeId = 'custom';
+      lotTouched = true;
       paintLotPick();
       lotCard.querySelector('[data-lot-width]').focus();
     });
@@ -14281,6 +14364,22 @@
     draw.disabled = !chosen;
     draw.textContent = chosen
       ? `DRAW AUTOSITE ${chosen.sizeLabel}` : 'DRAW AUTOSITE';
+    // ── AND WHAT OK WOULD DO, SAID BEFORE IT IS PRESSED ──────────────────
+    //
+    // OK draws the size already chosen, or -- with nothing chosen -- the one
+    // the ladder brightens as the first that fits. It is dead only when
+    // neither exists: no pick, and no tier big enough for the building.
+    const ok = lotCard.querySelector('[data-lot-pick-ok]');
+    const okTier = best || bestLotTier();
+    const takes = chosen || (okTier ? LS.lotSizeFor(okTier.id, '', '', { metric }) : null);
+    ok.disabled = !takes;
+    ok.title = takes
+      ? `OK \u2014 draws the autosite at ${takes.sizeLabel}`
+      : 'No lot on the list is big enough for this building \u2014 type a size';
+    // THE GLOW POINTS AT THE VERB, not at the size: a drafter who presses OK
+    // without reading should still see WHICH button answered for him. It
+    // stops the moment he presses anything else in the card.
+    draw.classList.toggle('lot-ok-target', !!takes && !lotTouched);
   };
 
   // AUTOSITE: the rectangle, on the SITE level, centred on whatever is drawn.
@@ -14319,8 +14418,35 @@
   };
 
   if (lotCard) {
-    lotCard.querySelector('[data-lot-pick-draw]').addEventListener('click', drawAutosite);
+    lotCard.querySelector('[data-lot-pick-draw]').addEventListener('click', () => {
+      lotTouched = true;
+      drawAutosite();
+    });
+    // ── OK: THE WAY THROUGH FOR SOMEONE WHO DOES NOT WANT TO CHOOSE ──────
+    //
+    // Movie, 16 Oct: "put a big button on the bottom that says OK and make it
+    // red so it draws attention. if they click that just put in the best fit
+    // based on the sizes / setbacks", and why -- "make it easier for when the
+    // user wants to think less and read less simplify it for them to get
+    // through easy".
+    //
+    // IT HONOURS A CHOICE THAT WAS MADE. With a size picked, OK draws THAT:
+    // a button that overrode the drafter's own pick because it knows better
+    // is the opposite of the simplification he asked for. With nothing
+    // picked it takes the first size that fits -- the one the ladder is
+    // already brightening -- so OK and the bright row never disagree.
+    lotCard.querySelector('[data-lot-pick-ok]').addEventListener('click', () => {
+      if (!lotChosen()) {
+        const best = bestLotTier();
+        if (!best) return;
+        lotSizeId = best.id;
+      }
+      lotTouched = true;
+      paintLotPick();
+      drawAutosite();
+    });
     lotCard.querySelector('[data-lot-pick-skip]').addEventListener('click', () => {
+      lotTouched = true;
       lotAsked = true;
       paintLotPick();
     });
@@ -14332,6 +14458,7 @@
     // cannot tell a lot line from a shed he drew, and guessing wrong would
     // quietly drop a building out of the dimension strings.
     lotCard.querySelector('[data-lot-pick-hand]').addEventListener('click', () => {
+      lotTouched = true;
       lotAsked = true;
       paintLotPick();
       setTool('outline');
@@ -14343,6 +14470,7 @@
     // the drafter has just said what he wants to do and a second menu
     // between him and the file dialog is a menu he did not ask for.
     lotCard.querySelector('[data-lot-pick-upload]').addEventListener('click', () => {
+      lotTouched = true;
       lotAsked = true;
       paintLotPick();
       const picker = document.querySelector('[data-trace-file]');
