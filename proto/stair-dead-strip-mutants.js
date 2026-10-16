@@ -70,8 +70,8 @@ const MUTANTS = [
 
   { file: 'MODEL.html',
     name: 'the open side of the well is never framed',
-    find: '    return stairSideStrips(stair).filter(side => side.ft > STAIR_SIDE_BEAM_NEAR_FT)',
-    with: '    return [].filter(side => side.ft > STAIR_SIDE_BEAM_NEAR_FT)',
+    find: '    return stairSideSpans(stair).filter(side => side.ft >= STAIR_SIDE_BEAM_SPAN_FT - 1e-6)',
+    with: '    return [].filter(side => side.ft >= STAIR_SIDE_BEAM_SPAN_FT - 1e-6)',
     test: 'the open side of the well gets a beam on two columns' },
 
   { file: 'MODEL.html',
@@ -94,9 +94,30 @@ const MUTANTS = [
   { file: 'MODEL.html',
     name: 'the beam is laid flush ON the well edge -- a beam across the '
       + 'opening it was put there to frame',
-    find: '        const off = STAIR_BEAM_CLEAR_IN / 12;',
+    find: '        const off = STAIR_FLUSH_BEAM_WIDTH_IN / 24;',
     with: '        const off = 0;',
     test: 'the open side of the well gets a beam on two columns' },
+
+  { file: 'MODEL.html',
+    name: 'the beam keeps the old 2" clearance off the edge instead of its '
+      + 'face on it (the #745 offset, 1/4" into the hole on a 3 1/2" beam)',
+    find: '        const off = STAIR_FLUSH_BEAM_WIDTH_IN / 24;',
+    with: '        const off = STAIR_BEAM_CLEAR_IN / 12;',
+    test: 'the open side of the well gets a beam on two columns' },
+
+  { file: 'MODEL.html',
+    name: 'a strip that is a room is framed from 7 ft, not 10: the 7-10 ft '
+      + 'room gets a beam and two columns the joists did not need',
+    find: '  const STAIR_SIDE_BEAM_SPAN_FT = 10;',
+    with: '  const STAIR_SIDE_BEAM_SPAN_FT = 7;',
+    test: 'under 10 ft of floor gets no beam' },
+
+  { file: 'MODEL.html',
+    name: 'the span is measured to the wall alone: a carrying beam in the '
+      + 'strip does not shorten it',
+    find: '        if (hit) ft = Math.min(ft, Math.hypot(hit.x - side.from.x, hit.z - side.from.z));',
+    with: '        if (hit) ft = Math.min(ft, Infinity);',
+    test: 'under 10 ft of floor gets no beam' },
 
   { file: 'MODEL.html',
     name: 'the two columns are both at one end of the beam',

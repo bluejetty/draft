@@ -154,14 +154,20 @@ test('the open side of the well gets a beam on two columns, and the carried side
     // cols" and "a beam" are the same instruction.
     expect(added.length, 'one open side, one beam').toBe(1);
     const [beam] = added;
-    // ALONG THE OPEN LONG EDGE, set out of the hole by the 2" every carrying
-    // beam keeps off a well -- a beam ON the edge is a beam across the
-    // opening, and the next stair press would nudge the stair off its own
-    // framing. The mid-span beam on the carried side stands exactly that far
-    // off the other edge.
-    const clear = 2 / 12;
-    expect(r(beam.start.x), 'along the open long edge of the well').toBe(r(box.x0 - clear));
-    expect(r(beam.end.x)).toBe(r(box.x0 - clear));
+    // ALONG THE OPEN LONG EDGE, with its FACE on the edge of the opening --
+    // Movie, 16 Oct: "a flush beam along the opening (edge of beam alligned
+    // with edge of opening (center a few inches inside the floor)". The
+    // centreline is half the beam inside the floor: 1 3/4" of a 3 1/2"
+    // two-ply engineered beam. (#745 set it 2" off, which put the face 1/4"
+    // inside the hole.)
+    const half = 3.5 / 24;
+    expect(r(beam.start.x), 'the beam\'s face on the open long edge of the well').toBe(r(box.x0 - half));
+    expect(r(beam.end.x)).toBe(r(box.x0 - half));
+    // TEN FEET OR MORE OF FLOOR on that side, which is what earns the beam:
+    // "when long side is exposed to 10ft or more floor span".
+    const house = boxOf((d.outlines || [])
+      .find(o => Number(o.levelId) === MAIN_FL && !o.garage).points);
+    expect(box.x0 - house.x0, 'the open side is 10 ft of floor or more').toBeGreaterThan(10);
     expect([r(beam.start.z), r(beam.end.z)].sort((a, b) => a - b),
       'end to end of the opening').toEqual([r(box.z0), r(box.z1)]);
     // AND A COLUMN AT EACH END OF IT -- "2 more columns on each end of the
@@ -177,6 +183,35 @@ test('the open side of the well gets a beam on two columns, and the carried side
     expect([beam.levelId, beam.view]).toEqual([FOUNDATION, 'foundation']);
     posts.forEach(column => expect([column.levelId, column.view])
       .toEqual([FOUNDATION, 'foundation']));
+  });
+
+test('a strip that is a room but under 10 ft of floor gets no beam: the joists carry it',
+  async ({ page }) => {
+    await open(page);
+    // 24 FT WIDE: the interior ring is 14-1/2" in off each side, the well is
+    // about 3 1/2 ft across and stands against the mid-span beam, so the
+    // open strip beside it is a room (over 7 ft) and under 10 ft of floor.
+    // Movie's two rules stack: not dead, not framed -- "when long side is
+    // exposed to 10ft or more floor span" is the trigger, and this is not it.
+    await traceHouse(page, 'bungalow', [[-12, -16], [12, -16], [12, 16], [-12, 16]]);
+    const d = await saved(page);
+    const box = boxOf(wellOf(d).points);
+    const house = boxOf((d.outlines || [])
+      .find(o => Number(o.levelId) === MAIN_FL && !o.garage).points);
+    // THE OPEN SIDE is the one the mid-span beam is not on; its floor runs
+    // from the well's edge to the interior ring, one wall assembly (the
+    // 14-1/2" the first test measures) inside the outline.
+    // (On a traced house the mid-span beam is filed as flush segments along
+    // one line, so it is read by position, not by mode.)
+    const beamX = [...new Set((d.beams || []).filter(b => b.auto && !(Number(b.stairId) > 0))
+      .map(b => r((b.start.x + b.end.x) / 2)))];
+    expect(beamX.length, 'a mid-span beam carries one side').toBe(1);
+    const openStrip = beamX[0] < box.x0 ? house.x1 - box.x1 : box.x0 - house.x0;
+    const floor = openStrip - 14.5 / 12;
+    expect(floor, 'the strip is a room').toBeGreaterThan(7);
+    expect(floor, 'and under 10 ft of floor').toBeLessThan(10);
+    expect(sideBeams(d), 'nothing is added for it').toEqual([]);
+    expect(handColumns(d), 'no columns either').toEqual([]);
   });
 
 test('they are not a suggestion: an AUTO sweep cannot carry them off',
