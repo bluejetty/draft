@@ -18,6 +18,9 @@ const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
 const BUCKET = 'model-drawing';
+// The storey every check in this file is about, by id (the fixture's
+// activeLevelIdx points at it, and the tallies below key off '3:plan').
+const MAIN_FL = 3;
 
 // THE WHOLE LEVEL STACK. A build files records across the levels, and
 // drawing-format.js drops any record whose levelId the drawing does not list
@@ -57,6 +60,30 @@ async function order(page, family, entry) {
   await page.locator(`[data-build-entry="${entry}"]`).click();
   await page.locator('#dt-bone').click();
   await page.waitForTimeout(300);
+  await answerTheLot(page);
+}
+
+// THE BUILD ASKS ABOUT THE LOT NOW, AND GOES TO THE SITE TO ASK IT.
+//
+// Movie, 15 Oct: "just ask them about the SITE right after the AUTOHOUSE is
+// built". The card comes up on the SITE level, which is where its own
+// answers belong -- and which is NOT where any check in this file is about.
+// AUTO DIMS strings "the level the drafter is standing on", so a house built
+// and then measured from the lot would be measured on the lot: the refusal
+// these tests used to get was the page telling the truth about the wrong
+// storey.
+//
+// So it is answered the way a drafter does who came to dimension his house:
+// NOT NOW, and walk back to the floor he was on. Answering it inside order()
+// rather than in each test is the same reasoning as order() itself -- the
+// build is one step, however many questions it now asks.
+async function answerTheLot(page, back = MAIN_FL) {
+  const card = page.locator('#lot-pick');
+  if (!await card.isVisible().catch(() => false)) return;
+  await card.locator('[data-lot-pick-skip]').click();
+  await expect(card).toBeHidden();
+  await h.pickModelLevel(page, back);
+  await page.waitForTimeout(150);
 }
 
 async function saveNow(page) {
@@ -499,6 +526,7 @@ async function orderGarage(page, entry = 'detached-gradebeam') {
   await page.waitForTimeout(150);
   await page.locator('#dt-bone').click();
   await page.waitForTimeout(500);
+  await answerTheLot(page);
 }
 
 test('an ordered detached garage arrives dimensioned, roof plan and all',
