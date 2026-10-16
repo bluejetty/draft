@@ -841,6 +841,17 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             //
             // So the list grows by four and the table does not change.
             'DRAW AUTOSITE', 'NOT NOW', 'DRAW IT MYSELF', 'UPLOAD A SITE PLAN',
+            // AND A FIFTH, FOR THE DRAFTER WHO WOULD RATHER NOT READ THE CARD
+            // (Movie, 16 Oct: "put a big button on the bottom that says OK and
+            // make it red ... if they click that just put in the best fit based
+            // on the sizes / setbacks", and "make it easier for when the user
+            // wants to think less and read less").
+            //
+            // NO ABSENCE ROW MOVES. OK takes the best-fitting tier and then
+            // does what DRAW AUTOSITE does -- the same press, reached without
+            // choosing a size first -- so it is a second door to the outline
+            // row that is already **present**, exactly as DRAW IT MYSELF is.
+            'OK',
             'Save', 'Cancel'].sort(),           // the SAVE AS card
           // THE PAGE ROW'S LIVE DESTINATIONS. Links, not buttons, so they
           // would have slipped past the button census entirely -- and a
