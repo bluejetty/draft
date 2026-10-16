@@ -679,6 +679,13 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // PRESS TO DRAW HOUSE WITHOUT drawing OUTLINE (Movie, 3 Oct): the
             // bone's own press in words, so a second door to the same build.
             'dt-build-now', 'dt-build-now-shelf',
+            // THE TWO BANNERS UNDER THE TILES AND THEIR ARROWS (Movie, 16
+            // Oct: "that arrow should point at the right box and that arrow
+            // and the RIGHT box go to DRAW the outline, the BONE and the left
+            // box and arrow DRAW AUTOBUILD"). Four more doors to the same two
+            // presses the bone and the OUTLINE link already open, so no
+            // absence row moves.
+            'dt-banner-build', 'dt-arrow-build', 'dt-arrow-outline', 'dt-banner-outline',
             // PRINTSCREEN PRINTS THE SCREEN, and that is the whole of it: a
             // three-page presentation made from pictures the page has
             // already painted -- this view, the whole plan, the rail's
