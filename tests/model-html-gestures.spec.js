@@ -562,15 +562,15 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
       //     instrument and this one draws nothing the old page could not.
       //   - THE LENGTH BOX COMMITS THROUGH draw-wall's own gesture: it is
       //     dead until a run is in hand, so it cannot start one.
-      //   - TOY/DRAFTING, RUFF/ROUGH and NIGHT/DAY set board and skin state.
-      //     They change what the page LOOKS like and what it remembers, and
-      //     no absence row is about either.
-      //   - CONTINUE and STAY IN TOY are the promotion confirm's two answers.
-      //     The dialog is raised by typing a length on the TOY board and it
-      //     asks one question about the BOARD; Continue moves the drawing to
-      //     DRAFTING and lets the length it interrupted commit through
-      //     draw-wall's own gesture, and Stay in TOY does nothing at all.
-      //     Neither is a way to make anything, so neither touches a row.
+      //   - RUFF/ROUGH and NIGHT/DAY set skin state. They change what the
+      //     page LOOKS like and what it remembers, and no absence row is
+      //     about either. TOY/DRAFTING sat here too until 15 Oct, when the
+      //     board became a lamp; the same sentence covered it.
+      //   - CONTINUE and STAY IN TOY were the promotion confirm's two
+      //     answers, raised by typing a length on the TOY board. The card is
+      //     gone -- the board promotes itself and says so on the strip -- and
+      //     since neither answer ever made anything, nothing here moves but
+      //     the list.
       //   - BREAK HERE and MOVE THIS WALL are §4's two answers, raised by
       //     clicking a wall that is already selected on the TOY board. BREAK
       //     HERE puts a joint in an existing bone at a foot mark; MOVE THIS
@@ -741,8 +741,15 @@ test.describe('MODEL.html gestures — parity by driving, not by reading', () =>
             // them away. Both only SHOW what the page already counted, so no
             // absence row moves.
             'readout-tab', 'readout-close',
-            'TOY', 'DRAFTING', 'RUFF', 'ROUGH', 'NIGHT', 'DAY',
-            'Continue', 'Stay in TOY',
+            // TOY AND DRAFTING ARE NOT BUTTONS ANY MORE (Movie, 15 Oct:
+            // "it ill be basically a LIGHT -- not a button"). The mode corner
+            // carries a lamp of two SPANS, which this census does not collect
+            // and should not: it is an output, and a page's controls are what
+            // can be pressed. CONTINUE and STAY IN TOY went with it -- the
+            // promotion asks nothing now -- so four entries leave this list
+            // and no absence row moves, for the reason the paragraph above
+            // gives: none of the four ever made anything.
+            'RUFF', 'ROUGH', 'NIGHT', 'DAY',
             'Break here', 'Move this wall',
             // §6'S THREE ANSWERS (Movie, 15 Oct), raised by DRAGGING A WALL
             // OFF ITS FOOTPRINT: "can we ask them if they would like a
