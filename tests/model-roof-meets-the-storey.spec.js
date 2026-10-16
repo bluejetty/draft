@@ -145,6 +145,13 @@ test('a loop that doubles back loses the tip, and nothing else does',
         diagonals,
         rawDiagonals,
         square: G.loopWithoutSpikes(loop([[0, 0], [10, 0], [10, 10], [0, 10]])).points.length,
+        // A VERTEX THAT CARRIES STRAIGHT ON is not a spike, and must survive.
+        // Its two edges are collinear like a tip's, and only the DIRECTION
+        // tells them apart -- so a clean that asked about collinearity alone
+        // would quietly merge edges a design may have named separately (the
+        // bungalow's split roofs share a line exactly that way).
+        straightThrough: G.loopWithoutSpikes(
+          loop([[0, 0], [5, 0], [10, 0], [10, 10], [0, 10]])).points.map(p => [p.x, p.z]),
         ell: G.loopWithoutSpikes(loop([[0, 0], [20, 0], [20, 10], [10, 10], [10, 20], [0, 20]])).points.length,
         // TWO SPIKES, the second only reachable once the first has gone:
         // (0,0) is a tip, and dropping it leaves (-20,0) with both its edges
@@ -166,6 +173,8 @@ test('a loop that doubles back loses the tip, and nothing else does',
     // that trimmed real corners would be a worse bug than the one it fixes.
     expect(out.square).toBe(4);
     expect(out.ell).toBe(6);
+    expect(out.straightThrough, 'a collinear corner that carries on is kept')
+      .toEqual([[0, 0], [5, 0], [10, 0], [10, 10], [0, 10]]);
     // AND IT KEEPS GOING UNTIL IT IS STABLE. One pass takes the tip it can
     // see; the vertex behind it only becomes a tip once that one is gone, and
     // a single-pass clean would hand back a loop still carrying a spike --
