@@ -4901,6 +4901,53 @@
   const garageDetached = garage =>
     garage?.detached === true || garageMaster(garage)?.detached === true;
 
+  // ── THE DOORS OF A GARAGE, AS THE SQUARE AND THE BEAM NEED THEM ───────
+  //
+  // Every door cut into a wall standing on the garage's loop: its centre on
+  // the wall line, the wall's direction, the normal INTO the garage, its
+  // clear width, whether it is the overhead door (`garage: true` on the
+  // fenestration, set by the builder), and its wall's thickness to the
+  // inside face. build-house.js garageKeepOuts and garageBeamPlan read these;
+  // nothing here guesses a door's kind from its width.
+  const garageDoorRecordsOf = garage => {
+    const G = window.DraftGeometry2D;
+    const WT = window.DraftWallTypes;
+    const loop = (garage?.points || []).map(pt => ({ x: pt.x, z: pt.z }));
+    if (loop.length < 3 || !G) return [];
+    const ring = G.loopSegments(loop);
+    const centre = loop.reduce((m, p) => ({ x: m.x + p.x / loop.length, z: m.z + p.z / loop.length }), { x: 0, z: 0 });
+    const walls = (drawing?.walls || []).filter(w => Number(w.levelId) === Number(garage.levelId)
+      && (w.view || 'plan') === 'plan' && w.start && w.end
+      && (w.body === 'garage' || G.edgeOnLoop(w.start, w.end, ring)));
+    return (drawing?.fenestrations || []).filter(f => f.type === 'door').flatMap(f => {
+      const wall = walls.find(w => w.id === f.wallId);
+      if (!wall || !(f.width > 0)) return [];
+      const dx = wall.end.x - wall.start.x, dz = wall.end.z - wall.start.z;
+      const len = Math.hypot(dx, dz);
+      if (len < 1e-6) return [];
+      const along = { x: dx / len, z: dz / len };
+      const t = f.offset / len;
+      const at = { x: wall.start.x + dx * t, z: wall.start.z + dz * t };
+      let inward = { x: -along.z, z: along.x };
+      if ((centre.x - at.x) * inward.x + (centre.z - at.z) * inward.z < 0) inward = { x: -inward.x, z: -inward.z };
+      const totalIn = (WT?.WALL_TYPES || []).find(type => type.id === wall.wallType)?.totalIn;
+      return [{ id: f.id, at, along, inward, widthFt: f.width, overhead: f.garage === true,
+        insetFt: (Number.isFinite(totalIn) ? totalIn : 5.5) / 12 }];
+    });
+  };
+  // THE GARAGE SQUARES (and the man door's landing) of one garage, and of
+  // every garage under a level's floor: the keep-outs a stair, a column or a
+  // pile on that floor must stay out of. See build-house.js garageKeepOuts.
+  const garageKeepOutsOf = garage => (window.DraftBuildHouse
+    ? window.DraftBuildHouse.garageKeepOuts(garage.points, garageDoorRecordsOf(garage)) : []);
+  const garageKeepOutsUnder = levelId => {
+    const elevOf = id => Number((drawing?.levels || []).find(l => Number(l.id) === Number(id))?.elev) || 0;
+    return (drawing?.outlines || [])
+      .filter(o => o.garage === true && (o.points || []).length >= 3
+        && (Number(o.levelId) === Number(levelId) || elevOf(o.levelId) < elevOf(levelId) - 1e-6))
+      .flatMap(garageKeepOutsOf);
+  };
+
   // WHICH FOUNDATION A GARAGE HAS, ported from _garageFoundation: the outline
   // answers first, then its master, then the section table's row for this
   // garage's kind, and a gradebeam when nothing has said.
@@ -17801,8 +17848,11 @@
     const isBeamTag = note => Number(note.levelId) === Number(levelId) && note.view === view
       && BEAM_TAG.test(String(note.body || ''));
     // EVERY GARAGE NOTE THIS PRESS OWNS GOES BEFORE ANY IS WRITTEN: the OWJ
-    // and REQ notes on the floor above, the beam tags beside the beams.
-    drawing.notes = notesNow.filter(note => !isBeamTag(note)
+    // and REQ notes on the floor above, the beam tags beside the beams, and
+    // the square's two words (no solid bearing; a garage too shallow).
+    const SQUARE_NOTE = /^(NO SOLID BEARING FOR BEAM|GARAGE SQUARE )/;
+    const isSquareNote = note => SQUARE_NOTE.test(String(note.body || ''));
+    drawing.notes = notesNow.filter(note => !isBeamTag(note) && !isSquareNote(note)
       && !(note.view === 'floor' && (OWJ_NOTE.test(String(note.body || ''))
         || REQ_NOTE.test(String(note.body || '')))
         && bodies.some(b => Number(b.storeyId) === Number(note.levelId))));
@@ -17880,16 +17930,11 @@
       const c = points.reduce((m, p) => ({ x: m.x + p.x / points.length, z: m.z + p.z / points.length }), { x: 0, z: 0 });
       return garageOutlines.find(o => elevOf(o.levelId) < elevOf(storeyId) - 1e-6 && inLoop(o.points, c)) || null;
     };
-    const garageDoorsOf = garage => {
-      const walls = (drawing.walls || []).filter(w => Number(w.levelId) === Number(garage.levelId));
-      return (drawing.fenestrations || []).filter(f => f.garage === true && f.type === 'door').flatMap(f => {
-        const wall = walls.find(w => w.id === f.wallId);
-        if (!wall) return [];
-        const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z);
-        const t = len > 1e-6 ? f.offset / len : 0;
-        return [{ x: wall.start.x + (wall.end.x - wall.start.x) * t, z: wall.start.z + (wall.end.z - wall.start.z) * t }];
-      });
-    };
+    // THE OVERHEAD DOORS' CENTRES, from the one door reader the square uses
+    // too (garageDoorRecordsOf), so the beam and the square cannot disagree
+    // about where a door is.
+    const garageDoorsOf = garage => garageDoorRecordsOf(garage)
+      .filter(door => door.overhead).map(door => door.at);
     const nearLoop = (loop, p, tol = 0.75) => loop.some((a, i) => {
       const b = loop[(i + 1) % loop.length];
       const dx = b.x - a.x, dz = b.z - a.z, len2 = dx * dx + dz * dz;
@@ -17899,10 +17944,25 @@
     let garageBeams = 0, garageColumns = 0;
     const placeGarageColumns = (points, storeyId) => {
       const garage = garageUnder(points, storeyId);
+      const keepOuts = garage ? garageKeepOutsOf(garage) : [];
+      const doorRecords = garage ? garageDoorRecordsOf(garage) : [];
+      const axis = window.DraftBuildHouse.garageJoistAxis(garage ? boxOf(garage.points) : boxOf(points),
+        garage ? garageDoorsOf(garage) : []);
+      // THE OPENINGS UNDER THE BEAM'S ENDS: every door in a wall running the
+      // joists' way -- the walls the row bears on -- as a span along the row
+      // axis. A door in a side wall is under no beam end.
+      const openings = doorRecords
+        .filter(door => Math.abs(axis === 'x' ? door.along.x : door.along.z) > 0.9)
+        .map(door => {
+          const c = axis === 'x' ? door.at.x : door.at.z;
+          return [c - door.widthFt / 2, c + door.widthFt / 2];
+        });
       const plan = window.DraftBuildHouse.garageBeamPlan(boxOf(points), {
         doors: garage ? garageDoorsOf(garage) : [],
         doorBox: garage ? boxOf(garage.points) : boxOf(points),
         onWall: p => !!garage && nearLoop(garage.points, p),
+        keepOuts,
+        openings,
       });
       plan.beams.forEach(beam => {
         const id = beamId;
@@ -17924,6 +17984,29 @@
         drawing.columns.push(record);
         placed.push({ list: drawing.columns, item: record });
       });
+      // THE SOLID SUPPORT UNDER EACH END: "a solid support column built into
+      // the wall below where the beam rests". A 6x6 in the wall, on the
+      // wall's own footing, filed with the beam it holds.
+      (plan.posts || []).forEach(p => {
+        const record = { id: columnId++, point: { ...p, y: 0 }, levelId, view, footing: 'post6', inWall: true, auto: true };
+        drawing.columns.push(record);
+        placed.push({ list: drawing.columns, item: record });
+      });
+      // AND WHAT THE RULES COULD NOT GIVE, SAID OUT LOUD rather than drawn
+      // wrong: a row with no solid wall to land on, and a garage too shallow
+      // for its own square.
+      if (plan.bearing === 'none' && plan.beams.length) {
+        const beam = plan.beams[0];
+        addNote({ x: (beam.start.x + beam.end.x) / 2, z: (beam.start.z + beam.end.z) / 2 },
+          levelId, view, 'NO SOLID BEARING FOR BEAM\nEVERY STAND LANDS OVER A DOOR -- WIDEN THE PIER OR MOVE A DOOR');
+      }
+      const shallow = keepOuts.find(k => k.kind === 'bay' && k.capped);
+      if (garage && shallow) {
+        const gb = boxOf(garage.points);
+        addNote({ x: (gb.x0 + gb.x1) / 2, z: (gb.z0 + gb.z1) / 2 + 2 }, Number(garage.levelId), 'plan',
+          `GARAGE SQUARE ${fmtFt(shallow.depthFt)} DEEP -- THIS GARAGE NEEDS MORE DEPTH\n`
+          + `${fmtFt(window.DraftBuildHouse.GARAGE_SQUARE_DEPTH_FT)} FROM THE DOOR WALL FOR A CAR`);
+      }
       garageBeams += plan.beams.length;
       garageColumns += plan.columns.length;
       owjNote(points, storeyId, { spanFt: plan.rowFt, between: 'WALL TO BEAM' });
@@ -18409,6 +18492,12 @@
       -stairOpeningSetbackFt(stair.levelId));
     if (!poly.every(pt => pointInLoop(ring, pt))) return false;
     const clearFt = STAIR_BEAM_CLEAR_IN / 12;
+    // AND NOT WHERE THE CAR GOES: the garage square under this floor is the
+    // third question, the same shape as the ring and the beams (Movie, 16
+    // Oct: "the stairs can't overlap where the garage door / car will be or
+    // the landing area for the man door").
+    const BH = window.DraftBuildHouse;
+    if (BH && BH.hitsKeepOut(garageKeepOutsUnder(stair.levelId), poly)) return false;
     return stairFloorBeams(stair.levelId)
       .every(beam => stairBeamGapFt(beam, poly) >= clearFt - 1e-4);
   };
@@ -18626,6 +18715,8 @@
       runStepFt: SG.STAIR_TREAD_RUN_IN / 12,
       softInterior: lowest,   // rule B: basement stairs prefer interior, softly
       lowerStair,
+      // THE GARAGE SQUARE under this floor: no candidate may stand in it.
+      keepOuts: garageKeepOutsUnder(levelId).map(k => k.points),
     });
     return { ...res, layout, descent };
   };

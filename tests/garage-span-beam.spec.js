@@ -103,8 +103,16 @@ test('past the span it puts a DROPPED ENGINEERED BEAM between the doors, unasked
   expect(beams[0].mode, 'dropped, "better for ducts ... and insulation"').toBe('dropped');
   expect(beams[0].start.x, 'between the doors at 9 and 27 ft').toBeCloseTo(WIDE / 2, 6);
   expect([beams[0].start.z, beams[0].end.z].sort((a, b) => a - b), 'back wall to front of the room').toEqual([0, D]);
-  const cols = (d.columns || []).filter(c => c.auto && Number(c.levelId) === 3).map(c => c.point.z).sort((a, b) => a - b);
+  const auto = (d.columns || []).filter(c => c.auto && Number(c.levelId) === 3);
+  const cols = auto.filter(c => c.footing !== 'post6').map(c => c.point.z).sort((a, b) => a - b);
   expect(cols, '10 ft apart at most, none where the beam bears on a wall').toEqual([10, 20, 30]);
+  // AND WHERE IT BEARS ON A WALL, A POST BUILT INTO THE WALL (Movie, 16 Oct:
+  // "a solid support column built into the wall below where the beam
+  // rests"): a 6x6 under each end, on the pier between the doors.
+  const posts = auto.filter(c => c.footing === 'post6');
+  expect(posts.map(c => [c.point.x, c.point.z]).sort((a, b) => a[1] - b[1]), 'a post under each end')
+    .toEqual([[WIDE / 2, 0], [WIDE / 2, D]]);
+  posts.forEach(c => expect(c.inWall, 'built into the wall').toBe(true));
   expect(notesOn(d, 3, /^DROPPED ENGINEERED BEAM$/).length, 'the beam is marked').toBe(1);
   const owj = notesOn(d, 5, /^ENGINEERED OWJ/);
   expect(owj.length).toBe(1);

@@ -615,6 +615,12 @@ if (!window.DraftBuildHouse) {
       note: '36"×36"×8" DP PAD — 3-15M @ 10" O.C. E/W' }),
     Object.freeze({ id: 'pad42', label: 'MED 42×42 PAD', sizeIn: 42,
       note: '42"×42"×10" DP PAD — 4-15M @ 9" O.C. E/W' }),
+    // THE SOLID SUPPORT UNDER A BEAM'S END, built into the wall it bears on
+    // (Movie, 16 Oct: "a solid support column built into the wall below
+    // where the beam rests"). A 6x6, 5 1/2" square, standing on the wall's
+    // own footing -- so it is no pad of its own in the schedule.
+    Object.freeze({ id: 'post6', label: '6×6 POST IN WALL', sizeIn: 5.5, post: true,
+      note: '6×6 POST BUILT INTO WALL UNDER BEAM — SOLID BEARING, NO OPENING BELOW' }),
     // Drilled piles carry a garage grade beam. Depth comes from the soils
     // report, so the PLAN marks diameter and centre only -- the schedule mark
     // (P1/P2/P3) carries the length and the steel.
@@ -893,8 +899,118 @@ if (!window.DraftBuildHouse) {
   // deck is sized from -- a 30 ft garage was told its joists were fine and
   // then told no row needed cutting, and both answers came from different
   // arithmetic. A caller may still pass its own.
+  // ── THE GARAGE SQUARE: NOTHING STANDS WHERE THE CAR GOES ─────────────
+  //
+  // Movie, 16 Oct, settling it after the parking research: "lets go 20ft total
+  // 'height (length) for square" ... "(not +4) just 20" ... "actually on the
+  // sides only make it increase by 6" so the colms can know they can be placed
+  // between the 2 doors" ... "so the stairs of other stuff to interfer with
+  // the vehicle shouldn't locate there" ... "no columns in that area either".
+  // And before that: "the landing area for the man door (42"x42" landing".
+  //
+  // ONE SQUARE PER OVERHEAD DOOR: the door's own width plus 6" each side (his
+  // 6'8" doors come to 7'-8"), 20'-0" deep from the INSIDE face of the door
+  // wall into the garage, capped at the garage's own depth so the rule always
+  // has an answer -- and says so (`capped`), because a garage shallower than
+  // its square is one the app should call out rather than quietly stand a
+  // post in front of a car. The 6" is not a clearance guess: it is what leaves
+  // the pier between two doors free for a column.
+  //
+  // A FLOOR KEEP-OUT, NOT A STAIR RULE. Nothing that stands on the garage
+  // floor may be inside one: a stair and its well, a column or pile. Overhead
+  // is a different question and is allowed -- a beam crossing the bay is how
+  // a garage is framed.
+  //
+  // THE OTHER KEEP-OUT is the 42" x 42" landing inside the man door.
+  //
+  // Doors come in as `{ at, along, inward, widthFt, overhead }`: the centre on
+  // the wall line, the wall's unit direction, the unit normal INTO the garage,
+  // the clear width in feet, and whether it is the overhead door (a man door
+  // takes the landing). `insetFt` is the door wall's thickness, wall line to
+  // inside face; the depth is measured from there.
+  const GARAGE_SQUARE_DEPTH_FT = 20;
+  const GARAGE_SQUARE_SIDE_IN = 6;
+  const MAN_DOOR_LANDING_IN = 42;
+  const garageKeepOuts = (points, doors = [], {
+    insetFt = 0, depthFt = GARAGE_SQUARE_DEPTH_FT, sideIn = GARAGE_SQUARE_SIDE_IN,
+    landingIn = MAN_DOOR_LANDING_IN,
+  } = {}) => {
+    const ring = (points || []).map(p => ({ x: p.x, z: p.z }));
+    if (ring.length < 3) return [];
+    return (doors || []).flatMap(door => {
+      const { at, along, inward } = door;
+      if (!at || !along || !inward || !(door.widthFt > 0)) return [];
+      // How far the garage runs in from this wall: the far wall's inside face.
+      // The door's own wall thickness when it says (a stud wall and a
+      // concrete one differ), else the one inset for all.
+      const inset = Number.isFinite(door.insetFt) ? door.insetFt : insetFt;
+      // The floor runs from this wall's inside face to the far wall's: the
+      // far wall taken at the same thickness.
+      const farFace = Math.max(...ring.map(p => (p.x - at.x) * inward.x + (p.z - at.z) * inward.z)) - inset;
+      const avail = farFace - inset;
+      const wantFt = door.overhead ? depthFt : landingIn / 12;
+      const halfFt = door.overhead ? door.widthFt / 2 + sideIn / 12 : landingIn / 24;
+      const deep = Math.min(wantFt, avail);
+      if (!(deep > 0.01)) return [];
+      const corner = (s, v) => ({ x: at.x + inward.x * s + along.x * v, z: at.z + inward.z * s + along.z * v });
+      return [{
+        kind: door.overhead ? 'bay' : 'landing',
+        doorId: door.id ?? null,
+        depthFt: deep,
+        capped: door.overhead && avail < depthFt - 1e-6,
+        points: [corner(inset, -halfFt), corner(inset, halfFt),
+          corner(inset + deep, halfFt), corner(inset + deep, -halfFt)],
+      }];
+    });
+  };
+  const pointInRing = (ring, p) => {
+    let hit = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const a = ring[i], b = ring[j];
+      if ((a.z > p.z) !== (b.z > p.z) && p.x < (b.x - a.x) * (p.z - a.z) / (b.z - a.z) + a.x) hit = !hit;
+    }
+    return hit;
+  };
+  const segmentsCross = (a, b, c, d) => {
+    const cross = (p, q, r) => (q.x - p.x) * (r.z - p.z) - (q.z - p.z) * (r.x - p.x);
+    const d1 = cross(c, d, a), d2 = cross(c, d, b), d3 = cross(a, b, c), d4 = cross(a, b, d);
+    return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+  };
+  const inKeepOut = (keepOuts, p) => (keepOuts || []).some(k => pointInRing(k.points, p));
+  // A polygon stands in a keep-out when a corner of either is inside the
+  // other or an edge crosses: the three ways two rectangles can meet.
+  const hitsKeepOut = (keepOuts, poly) => (keepOuts || []).some(k => {
+    if (poly.some(p => pointInRing(k.points, p))) return true;
+    if (k.points.some(p => pointInRing(poly, p))) return true;
+    for (let i = 0; i < poly.length; i += 1) {
+      const a = poly[i], b = poly[(i + 1) % poly.length];
+      for (let j = 0; j < k.points.length; j += 1) {
+        if (segmentsCross(a, b, k.points[j], k.points[(j + 1) % k.points.length])) return true;
+      }
+    }
+    return false;
+  });
+
+  // ── A BEAM MAY NOT LAND OVER AN OPENING ──────────────────────────────
+  //
+  // Movie, 16 Oct: "the beam cant rest over the garage opening or door
+  // opening either, they should have a solid support column built into the
+  // wall below where the beam rests (can't be opening)".
+  //
+  // The beam row's ends bear on the two walls it runs between -- for a
+  // garage that is the door wall and the wall facing it -- so the row's
+  // position has to be solid wall at both: clear of every opening on those
+  // walls by half a 6x6 post and the lintel's own bearing. `openings` are the
+  // spans along the row axis of the openings on EITHER end wall.
+  const BEAM_POST_IN = 5.5;          // a 6x6, which is what stands in a wall under a beam
+  const BEAM_BEARING_IN = 1.5;       // the lintel bearing the post must not take (NBC 9.23.12.3)
+  const BEAM_BEARING_CLEAR_FT = (BEAM_POST_IN / 2 + BEAM_BEARING_IN) / 12;
+  const solidAt = (u, openings) => (openings || []).every(([a, b]) =>
+    u <= Math.min(a, b) - BEAM_BEARING_CLEAR_FT + 1e-9 || u >= Math.max(a, b) + BEAM_BEARING_CLEAR_FT - 1e-9);
+
   const garageBeamPlan = (box, {
     doors = [], onWall = () => false, maxJoistFt = garageBareSpanFt(), maxColumnFt = 10, doorBox = box,
+    keepOuts = [], openings = [],
   } = {}) => {
     const axis = garageJoistAxis(doorBox, doors);   // the joists' direction
     const lo = axis === 'x' ? box.x0 : box.z0;
@@ -903,7 +1019,7 @@ if (!window.DraftBuildHouse) {
     const along1 = axis === 'x' ? box.z1 : box.x1;
     const span = hi - lo;
     const n = Math.max(0, Math.ceil(span / maxJoistFt - 1e-9) - 1);
-    if (!n) return { axis, beams: [], columns: [], rowFt: span };
+    if (!n) return { axis, beams: [], columns: [], posts: [], dropped: [], rowFt: span, bearing: 'solid' };
     const widest = cuts => {
       const edges = [lo, ...cuts, hi];
       return Math.max(...edges.slice(1).map((e, i) => e - edges[i]));
@@ -924,22 +1040,59 @@ if (!window.DraftBuildHouse) {
       }
       for (let i = start; i < from.length; i += 1) pick(from, i + 1, [...chosen, from[i]]);
     };
-    if (between.length >= n && between.length <= 12) pick(between, 0, []);
-    const cuts = best ? best.cuts : Array.from({ length: n }, (_, i) => lo + span * (i + 1) / (n + 1));
+    // SOLID BEARING ONLY: a row whose end would rest over a door is not a
+    // candidate at all (solidAt, above).
+    const even = Array.from({ length: n }, (_, i) => lo + span * (i + 1) / (n + 1));
+    const solid = u => u > lo + 0.01 && u < hi - 0.01 && solidAt(u, openings);
+    const legalBetween = between.filter(solid);
+    if (legalBetween.length >= n && legalBetween.length <= 12) pick(legalBetween, 0, []);
+    let bearing = 'solid';
+    let cuts;
+    if (best) {
+      cuts = best.cuts;
+    } else if (even.every(solid)) {
+      cuts = even;
+    } else {
+      // THE EVEN ROW LANDS IN AN OPENING -- the single centred door. Slide
+      // each cut to the nearest solid bearing: an opening's edge plus the
+      // post and its bearing, choosing the set that keeps the rows within
+      // the joists' reach; failing that, the nearest solid stand, and the
+      // plan's `rowFt` carries the long row to the note. No solid stand at
+      // all is `bearing: 'none'` for the page to say out loud.
+      const edges = (openings || []).flatMap(([a, b]) => [
+        Math.min(a, b) - BEAM_BEARING_CLEAR_FT, Math.max(a, b) + BEAM_BEARING_CLEAR_FT]);
+      const candidates = [...new Set([...legalBetween, ...edges.filter(solid)])].sort((p, q) => p - q);
+      if (candidates.length >= n && candidates.length <= 12) pick(candidates, 0, []);
+      if (best) {
+        cuts = best.cuts;
+      } else if (candidates.length >= n) {
+        cuts = [...new Set(even.map(u => candidates.reduce((near, c) =>
+          (Math.abs(c - u) < Math.abs(near - u) ? c : near))))].sort((p, q) => p - q);
+      } else {
+        cuts = even;
+        bearing = 'none';
+      }
+    }
     const at = (u, v) => (axis === 'x' ? { x: u, z: v } : { x: v, z: u });
-    const beams = [], columns = [];
+    const beams = [], columns = [], posts = [], dropped = [];
     cuts.forEach(u => {
       const start = at(u, along0), end = at(u, along1);
       beams.push({ start, end });
+      // THE SOLID SUPPORT BUILT INTO THE WALL under each end of the beam.
+      posts.push(start, end);
       const len = along1 - along0;
       const bays = Math.max(1, Math.ceil(len / maxColumnFt - 1e-9));
       for (let k = 0; k <= bays; k += 1) {
         const p = at(u, along0 + len * k / bays);
         if ((k === 0 || k === bays) && onWall(p)) continue;
+        // "no columns in that area either": a post inside a square is
+        // dropped and the beam spans to its neighbours -- the longer, deeper
+        // beam rather than a post in front of a car.
+        if (inKeepOut(keepOuts, p)) { dropped.push(p); continue; }
         columns.push(p);
       }
     });
-    return { axis, beams, columns, rowFt: widest(cuts) };
+    return { axis, beams, columns, posts, dropped, rowFt: widest(cuts), bearing };
   };
 
   // ── THE HEADER WHERE A STAIR WELL CUTS THE JOISTS ──────────────────────
@@ -989,6 +1142,13 @@ if (!window.DraftBuildHouse) {
     owjFor,
     garageBareSpanFt,
     garageBeamPlan,
+    garageKeepOuts,
+    inKeepOut,
+    hitsKeepOut,
+    GARAGE_SQUARE_DEPTH_FT,
+    GARAGE_SQUARE_SIDE_IN,
+    MAN_DOOR_LANDING_IN,
+    BEAM_BEARING_CLEAR_FT,
     garageStairHeader,
     garageJoistAxis,
     garageSpanFt,
