@@ -23,7 +23,8 @@ const openBuild = async page => {
   await h.openModel(page);
   await page.goto('/MODEL.html?right=0&left=1&lpane=build');
   await expect(page.locator('[data-assembled-row="bath"]')).toBeAttached();
-  await page.locator('[data-board="drafting"]').click();
+  // The DRAFTING press here went with the switch (15 Oct). The chip is live
+  // on the board the page opens on, which is what this asserts.
   await expect(page.locator('[data-assembled-row="bath"] [data-washroom="A"]')).toBeEnabled();
 };
 

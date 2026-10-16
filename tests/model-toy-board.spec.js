@@ -77,13 +77,18 @@ test('a drawing that never chose one opens on the default', async ({ page }) => 
   expect(await boardOf(page)).toBe('toy');
 });
 
-test('switching the board writes it to the drawing and survives reload',
+test('a promotion writes the board to the drawing and survives reload',
   async ({ page }) => {
+    // THE PRESS THAT USED TO BE HERE IS GONE (Movie, 15 Oct: "it ill be
+    // basically a LIGHT -- not a button"). The only thing that moves the
+    // board now is a number a foot cannot hold, so that is what this types --
+    // and the acceptance it guards is unchanged: a promoted drawing reloads
+    // as DRAFTING, because the board is a fact about one file.
     await open(page, base({ board: 'toy' }));
     expect(await boardOf(page)).toBe('toy');
 
-    await page.locator('[data-board="drafting"]').click();
-    await page.waitForTimeout(80);
+    await startARun(page);
+    await typeLength(page, PRECISE);
     expect(await boardOf(page)).toBe('drafting');
 
     // IT IS IN THE FILE, not only on the body. A switch that changed the
@@ -128,9 +133,11 @@ test('the board round-trips, and a file that never had one still does not',
     expect('board' in after,
       'a file that never chose is not given a choice by being opened -- not '
       + 'even a null one, which the old page never writes').toBe(false);
-    expect('boardPromptSeen' in after,
-      'and is not given an answered-the-prompt flag it never answered')
-      .toBe(false);
+    // `boardPromptSeen` WENT WITH THE CARD (Movie, 15 Oct): there is no
+    // question to have answered, so there is no flag to be given. The key is
+    // not asserted absent here because the page no longer knows the name --
+    // what would fail is nothing, which is not a check.
+
   });
 
 test('a junk board is normalised out of the file, not carried in it',
@@ -218,85 +225,58 @@ async function typeLength(page, text) {
   await page.waitForTimeout(150);
 }
 
-test('typing a length in TOY asks before it promotes', async ({ page }) => {
+test('typing a length a foot cannot hold promotes on the spot — and commits it',
+  async ({ page }) => {
+    // WHAT THIS REPLACES: a card, Continue / Stay in TOY, raised before the
+    // first finer length and remembered per drawing. Movie, 15 Oct: "if they
+    // enter a ANGLE or length other than 1ft, it will automatically place
+    // them in DRAFTING MODE". He is not being moved anywhere he could have
+    // refused to go -- TOY takes no tool away any more -- so the question had
+    // nothing left to ask.
+    await open(page, base({ board: 'toy' }));
+    await startARun(page);
+    const before = await wallCount(page);
+
+    await typeLength(page, PRECISE);
+    expect(await boardOf(page), 'promoted by the number itself').toBe('drafting');
+    expect(await wallCount(page), 'and the wall he typed was made').toBe(before + 1);
+    expect(await page.locator('[data-promote]').count(),
+      'nothing was asked').toBe(0);
+  });
+
+test('and the strip says so, in the drafter\'s own words', async ({ page }) => {
+  // A MODE THAT CHANGES SILENTLY is the "hidden mode flip" the card existed
+  // to prevent, and the lamp in the corner is too quiet for the moment it
+  // happens -- a drafter watching his wall is not watching the corner.
   await open(page, base({ board: 'toy' }));
   await startARun(page);
-  const before = await wallCount(page);
-
   await typeLength(page, PRECISE);
-  await expect(page.locator('[data-promote]'), 'the confirm is up').toBeVisible();
-  await expect(page.locator('[data-promote-text]')).toHaveText(
-    'Entering an exact length switches this drawing to DRAFTING.');
-  expect(await wallCount(page), 'nothing committed while it is asking')
-    .toBe(before);
-  expect(await boardOf(page), 'and nothing promoted yet').toBe('toy');
+  await expect(page.locator('#strip-message')).toContainText('DRAFTING now');
+  // HIS OWN TEXT, not a re-formatted number: a line that answered 12'-6" to a
+  // drafter who typed 12-6 would be the page correcting him in the middle of
+  // telling him something else.
+  await expect(page.locator('#strip-message')).toContainText(PRECISE);
 });
 
-test('Stay in TOY changes nothing at all — wall, board, or flag',
-  async ({ page }) => {
-    await open(page, base({ board: 'toy' }));
-    await startARun(page);
-    const before = await wallCount(page);
-
-    await typeLength(page, PRECISE);
-    await page.locator('[data-promote-stay]').click();
-    await page.waitForTimeout(80);
-
-    await expect(page.locator('[data-promote]')).toBeHidden();
-    expect(await wallCount(page), 'no wall').toBe(before);
-    expect(await boardOf(page), 'no board change').toBe('toy');
-
-    // AND NO FLAG, which is the half most easily dropped: a refusal that
-    // recorded itself would be a change, and the next typed length would
-    // promote silently on the strength of a "no".
-    await typeLength(page, PRECISE);
-    await expect(page.locator('[data-promote]'), 'it asks again').toBeVisible();
-  });
-
-test('Continue promotes and commits, and does not ask twice',
-  async ({ page }) => {
-    await open(page, base({ board: 'toy' }));
-    await startARun(page);
-    const before = await wallCount(page);
-
-    await typeLength(page, PRECISE);
-    await page.locator('[data-promote-go]').click();
-    await page.waitForTimeout(150);
-
-    await expect(page.locator('[data-promote]')).toBeHidden();
-    expect(await boardOf(page), 'promoted').toBe('drafting');
-    expect(await wallCount(page), 'and the length committed').toBe(before + 1);
-
-    // Back to TOY by hand, then type again: already answered, so no question.
-    await page.locator('[data-board="toy"]').click();
-    await page.waitForTimeout(80);
-    await startARun(page);
-    await typeLength(page, "6' 6\"");
-    await expect(page.locator('[data-promote]'),
-      'asked once per drawing, then remembered').toBeHidden();
-  });
-
-test('a drawing that already answered is never asked', async ({ page }) => {
-  await open(page, base({ board: 'toy', boardPromptSeen: true }));
+test('the lamp goes out with it', async ({ page }) => {
+  await open(page, base({ board: 'toy' }));
+  const lamp = page.locator('[data-board-light]');
+  await expect(lamp).toHaveAttribute('data-lit', '');
   await startARun(page);
-  const before = await wallCount(page);
-  // ON_THE_FOOT would pass here for the WRONG REASON -- it never asks now
-  // whatever the flag says -- so this one has to be a length that would
-  // otherwise raise the question.
   await typeLength(page, PRECISE);
-  await expect(page.locator('[data-promote]')).toBeHidden();
-  expect(await wallCount(page)).toBe(before + 1);
+  await expect(lamp.locator('[data-board-lamp]')).toHaveText('DRAFTING');
+  expect(await lamp.getAttribute('data-lit'), 'the light is out').toBeNull();
 });
 
 test('in DRAFTING a typed length just commits', async ({ page }) => {
   await open(page, base({ board: 'drafting' }));
   await startARun(page);
   const before = await wallCount(page);
-  // PRECISE again, for the reason above: a whole foot would pass on a page
-  // that never promotes anything, which is not what this names.
+  // PRECISE again: a whole foot would pass on a page that never promotes
+  // anything, which is not what this names.
   await typeLength(page, PRECISE);
-  await expect(page.locator('[data-promote]')).toBeHidden();
   expect(await wallCount(page)).toBe(before + 1);
+  expect(await boardOf(page)).toBe('drafting');
 });
 
 // ── A WHOLE FOOT IS TOY'S OWN LENGTH, NOT A PRECISE ONE ─────────────────────
@@ -320,37 +300,67 @@ test('a whole foot in TOY commits without asking, and stays in TOY',
 
     await typeLength(page, ON_THE_FOOT);
 
-    await expect(page.locator('[data-promote]'),
-      'a length TOY itself would make is not a promotion').toBeHidden();
-    // THE WALL IS THE CHECK, not the absent dialog. A page that refused the
-    // length outright would also show no dialog, and would be a worse answer
+    // THE WALL IS THE CHECK, not the board holding still. A page that refused
+    // the length outright would also stay on TOY, and would be a worse answer
     // than the one being replaced.
     expect(await wallCount(page), 'and the wall was built').toBe(before + 1);
     expect(await boardOf(page), 'still TOY').toBe('toy');
-    // AND THE FLAG IS UNTOUCHED, so the next PRECISE length still asks. A
-    // whole foot that quietly recorded an answer would spend the drafter's
-    // one question on something that was never a question.
+    // AND THE NEXT FINER LENGTH STILL PROMOTES. A whole foot that quietly
+    // moved the board would take TOY away from a drafter who never left it.
     await startARun(page);
     await typeLength(page, PRECISE);
-    await expect(page.locator('[data-promote]'),
-      'a precise length still asks — the whole foot answered nothing')
-      .toBeVisible();
+    expect(await boardOf(page),
+      'a precise length still promotes — the whole foot changed nothing')
+      .toBe('drafting');
   });
 
-// TOY TAKES NO ANGLE. These three checks used to type bearings into TOY and
-// watch which ones asked to promote. Movie, 5 Oct, giving the ANGLE box and
-// the PROTRACTOR a lock: "i guess this should only be allowed if not in TOY
-// mode". TOY squares every run already, so the box is dead there and the
-// protractor will not light.
-test('TOY has no ANGLE: the box is dead and the protractor will not light',
+// ── AND THE ANGLE BOX SAYS THE SAME THING THE LENGTH BOX DOES ───────────────
+//
+// It used to be dead on TOY, with the protractor refused beside it -- Movie,
+// 5 Oct, on the ANGLE lock: "i guess this should only be allowed if not in
+// TOY mode". TOY squares every run, so a box that took 37 and ignored it
+// would have been a lie.
+//
+// Movie, 15 Oct, answers it the other way instead: *"if they enter a ANGLE or
+// length other than 1ft, it will automatically place them in DRAFTING MODE"*.
+// 37 is taken now, and it MOVES THE BOARD -- which is the same bargain the
+// length box has made since the promotion was written, and the end of "they
+// all go dim i notices" for one more control.
+
+test('an angle TOY cannot draw promotes, like a length it cannot hold',
   async ({ page }) => {
     await open(page, base({ board: 'toy' }));
     await startARun(page);
-    await expect(page.locator('[data-frozen-angle]')).toBeDisabled();
-    await page.locator('[data-mode-protractor]').click({ force: true }).catch(() => {});
-    await expect(page.locator('[data-mode-protractor]')).not.toHaveClass(/lit/);
-    expect(await boardOf(page), 'still TOY').toBe('toy');
+    const box = page.locator('[data-frozen-angle]');
+    await expect(box, 'the ANGLE box is live on TOY now').toBeEnabled();
+    await box.fill('37');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(150);
+    expect(await boardOf(page), '37° is not a quarter turn').toBe('drafting');
+    await expect(page.locator('#strip-message')).toContainText('DRAFTING now');
   });
+
+test('an angle TOY DRAWS ITSELF keeps it on TOY', async ({ page }) => {
+  // The mirror, and the one that makes the check above about the VALUE rather
+  // than about typing: every multiple of 90 is a wall TOY would have drawn.
+  await open(page, base({ board: 'toy' }));
+  await startARun(page);
+  await page.locator('[data-frozen-angle]').fill('90');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(150);
+  expect(await boardOf(page), 'a quarter turn is TOY\'s own angle').toBe('toy');
+});
+
+test('the protractor lights on TOY', async ({ page }) => {
+  // Refusing the instrument was the complaint in one chip. Lighting it asks
+  // for nothing a foot cannot hold -- it is the angle typed INTO it that
+  // does, and that number now answers for itself.
+  await open(page, base({ board: 'toy' }));
+  await startARun(page);
+  await page.locator('[data-mode-protractor]').click();
+  await expect(page.locator('[data-mode-protractor]')).toHaveClass(/lit/);
+  expect(await boardOf(page), 'and lighting it moved nothing').toBe('toy');
+});
 
 // ── §1: four directions, whole feet, and no leaking into DRAFTING ───────────
 

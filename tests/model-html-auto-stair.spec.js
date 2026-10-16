@@ -109,11 +109,10 @@ const savedFile = page => page.evaluate(async bucket => {
 // holding it and take the panel down with it. That is not a visible failure --
 // the next click() waits out its timeout on a locator that is not there.
 //
-// THE BOARD IS SWITCHED FIRST: STAIR is a build tool and build tools are on
-// DRAFTING (tool-roster.js:52). On TOY the key is disabled and the click hangs.
+// THE BOARD USED TO BE SWITCHED FIRST, because STAIR was a DRAFTING-only key
+// and on TOY it was disabled and the click hung. Since 15 Oct TOY offers the
+// whole roster, so the key is live wherever this opens.
 async function armStair(page) {
-  await page.locator('[data-board-switch] [data-board="drafting"]').click();
-  await page.waitForTimeout(150);
   const key = page.locator('[data-tool-key="stair"]');
   if (await key.getAttribute('aria-pressed') !== 'true') {
     await key.click();

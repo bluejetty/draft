@@ -127,16 +127,37 @@
   // section draws nothing into the house, it only adds a way to look at it.
   // AND TRIM (Movie, 5 Oct, "this is good for now"): it only moves a wall's
   // end on to another wall, so it cannot break §1's foot and right angle.
+  // ── AND THEN THE RULING CHANGED: TOY TAKES NO TOOL AWAY ─────────────────
+  //
+  // Movie, 15 Oct: *"lets always start the users in TOY MODE, but we should
+  // allow more features (they all go dim i notices) but maybe the features
+  // will be slightly limited (to ft and 90 degrees)"*, and *"maybe don't even
+  // offer them to change to DRAFTING MODE, but if they enter a ANGLE or
+  // length other than 1ft, it will automatically place them in DRAFTING MODE.
+  // so it ill be basically a LIGHT -- not a button"*, and *"so if its in TOY
+  // MODE the user will know its 90s / and 1ft"*. Asked which tools that
+  // leaves on TOY, he answered: all of them.
+  //
+  // SO TOY IS NO LONGER A SHORTER LIST, IT IS A CONSTRAINT. The foot and the
+  // right angle are what TOY is; the tools are what the page is. A drafter in
+  // TOY reaches for DIMENSION and gets DIMENSION, and the first number he
+  // types that a foot cannot hold moves the drawing to DRAFTING by itself.
+  // That is the whole of the difference now, and it is why the board stopped
+  // being a button: there is nothing left to choose.
+  //
+  // THE OLD LIST IS KEPT, UNUSED BY availableOn, because it is the record of
+  // what TOY used to refuse and the gate and the spec both name it. Deleting
+  // it would leave the three paragraphs above arguing with nothing.
   const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline', 'cut', 'trim']);
 
-  // An unknown board is treated as DRAFTING -- the unrestricted one. The other
-  // way round, an unknown board would silently strip sixteen tools off the
-  // column and look exactly like TOY working, which is the failure mode this
-  // whole file is arranged against.
-  const availableOn = (id, board) => {
-    if (!byId.has(id)) return false;
-    return board === 'toy' ? TOY_TOOLS.includes(id) : true;
-  };
+  // EVERY TOOL, ON EVERY BOARD. An unknown id is still refused -- it would
+  // arm nothing and read as "select is on", a broken state that looks like a
+  // working one -- and an unknown BOARD now needs no special case, because
+  // there is no board that takes anything away.
+  // `_board` IS STILL IN THE SIGNATURE, and still unread on purpose: every
+  // call site passes a board, and the day a board takes something away again
+  // this is the one place that has to learn it.
+  const availableOn = (id, _board) => byId.has(id);
   const availableIn = board => TOOLS.filter(tool => availableOn(tool.id, board));
 
   // THE OTHER TWO SURFACES §6 NAMES. Its sentence is "the seventeen-key
@@ -151,10 +172,14 @@
   // controls would invite a half-lit SELECTION panel, which is the shape of
   // thing this section exists to forbid.
   const PANELS = Object.freeze(['selection', 'assembly']);
-  const panelOn = (panel, board) => {
-    if (!PANELS.includes(panel)) return false;
-    return board !== 'toy';
-  };
+  // AND THEY ARE ON IN TOY NOW, for the reason the tools are (above). "they
+  // all go dim i notices" was about exactly this -- a drafter in TOY looking
+  // at a page where half the chrome is greyed and nothing says what would
+  // turn it on. Under the ruling of 15 Oct nothing turns it on, because
+  // nothing turns it off: TOY is the foot and the right angle, and a panel is
+  // neither. A number typed into one of these that a foot cannot hold goes
+  // through the same promotion as a number typed anywhere else.
+  const panelOn = (panel, _board) => PANELS.includes(panel);
 
 
   // REMAPS COME FROM SETTINGS, and they come through the same two functions the

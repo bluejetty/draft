@@ -4,8 +4,11 @@
 // gates: an ambiguous anchor is refused rather than guessed at, and a survivor
 // is re-run against the WHOLE spec before it is called one.
 //
-// All six board checks went green first try, which is the state that means
-// nothing until each has been seen to fail.
+// REWRITTEN 16 OCT for the ruling that took the promotion card away; the six
+// mutants about Continue / Stay went with it and the ones below took their
+// place. The note under this one is kept because its lesson is not about the
+// card: a survivor that looks like a redundant line is usually a check aimed
+// at the wrong surface.
 //
 // RESULT: 6/6. Five died on the first run; the survivor is worth keeping in
 // mind because of WHERE it pointed. Dropping the load-time normalise
@@ -29,20 +32,21 @@ const ROOT = require('path').resolve(__dirname, '..');
 
 const MUTANTS = [
   { file: 'MODEL.html',
-    name: 'the drawing no longer overrides the remembered board',
+    name: 'the drawing no longer overrides the board the page is on',
     find: "    board = boardOfDrawing();\n    applyBoard();",
     with: '    applyBoard();',
     test: 'records DRAFTING opens on DRAFTING' },
   { file: 'MODEL.html',
     name: 'a file with no board is given one anyway',
-    find: "  const boardOfDrawing = () =>\n    window.DraftDrawingFormat.board(drawing?.board) || rememberedBoard;",
+    find: "  const boardOfDrawing = () =>\n    window.DraftDrawingFormat.board(drawing?.board) || 'toy';",
     with: "  const boardOfDrawing = () => 'drafting';",
     test: 'never chose one opens on the default' },
   { file: 'MODEL.html',
-    name: 'switching the board stops writing it to the drawing',
+    name: 'the promotion stops writing the board to the drawing, so the '
+      + 'drawing reopens on TOY with a wall TOY could not have made',
     find: "    if (drawing) {\n      drawing.board = window.DraftDrawingFormat.board(next);\n      markDirty();\n    }",
     with: '    if (drawing) { /* nothing */ }',
-    test: 'writes it to the drawing and survives reload' },
+    test: 'writes the board to the drawing and survives reload' },
   { file: 'MODEL.html',
     name: 'the load stops normalising and spreads the file through',
     find: "      board: F.board(parsed.board),",
@@ -58,43 +62,68 @@ const MUTANTS = [
     find: '  const board = raw => oneOf(raw, BOARDS, null);',
     with: "  const board = raw => oneOf(raw, BOARDS, 'toy');",
     test: 'round-trips' },
+
+  // ── THE PROMOTION, WHICH USED TO BE A QUESTION ──────────────────────────
+  //
+  // Six mutants here were about the Continue / Stay card: that it came up,
+  // that Stay recorded nothing, that Continue both promoted AND committed,
+  // that it asked once per drawing. Movie took the card away on 15 Oct --
+  // "it will automatically place them in DRAFTING MODE" -- and the ways to
+  // get THAT wrong are different ones: a number that moves the board and
+  // loses the wall, a wall that commits and leaves the board behind, a
+  // promotion that fires on a length TOY draws natively, and one that never
+  // tells the drafter it happened.
   { file: 'MODEL.html',
-    name: 'a typed length in TOY promotes without asking',
-    find: "    if (board === 'toy' && !toyCouldMakeLength(feet) && !drawing?.boardPromptSeen) {\n      askToPromote(() => commitTypedLength());\n      return;\n    }",
-    with: '',
-    test: 'asks before it promotes' },
+    name: 'the board is never moved, so a wall TOY cannot make is drawn on TOY',
+    find: "    if (board !== 'toy' || toyCouldHoldIt) return false;\n    setBoard('drafting');",
+    with: "    if (board !== 'toy' || toyCouldHoldIt) return false;",
+    test: 'promotes on the spot' },
   { file: 'MODEL.html',
-    name: 'Stay in TOY records itself as an answer',
-    find: "  promote.querySelector('[data-promote-stay]').addEventListener('click', closePromote);",
-    with: "  promote.querySelector('[data-promote-stay]').addEventListener('click', () => { if (drawing) drawing.boardPromptSeen = true; closePromote(); });",
-    test: 'Stay in TOY changes nothing' },
+    name: 'the promotion eats the wall it was typed for -- the old card\'s '
+      + '"nothing commits while it is asking", with nothing asking',
+    find: '    promoteForNumber(toyCouldMakeLength(feet), String(lengthBox.value).trim());',
+    with: '    if (promoteForNumber(toyCouldMakeLength(feet), String(lengthBox.value).trim())) return;',
+    test: 'promotes on the spot' },
   { file: 'MODEL.html',
-    name: 'Continue promotes but never commits the length',
-    find: '    if (go) go();',
-    with: '',
-    test: 'Continue promotes and commits' },
+    name: 'the value is never read: every typed length promotes, even one TOY '
+      + 'draws natively',
+    find: '    promoteForNumber(toyCouldMakeLength(feet), String(lengthBox.value).trim());',
+    with: '    promoteForNumber(false, String(lengthBox.value).trim());',
+    test: 'a whole foot in TOY commits without asking' },
   { file: 'MODEL.html',
-    name: 'Continue commits but forgets to promote',
-    find: "    setBoard('drafting');\n    if (go) go();",
-    with: '    if (go) go();',
-    test: 'Continue promotes and commits' },
-  { file: 'MODEL.html',
-    name: 'Continue does not remember, so it asks every time',
-    find: '    if (drawing) { drawing.boardPromptSeen = true; markDirty(); }',
-    with: '',
-    test: 'does not ask twice' },
-  { file: 'MODEL.html',
-    name: 'the confirm fires in DRAFTING too',
-    // DISAMBIGUATED. That line guards BOTH typed-length and typed-angle
-    // (:7959). This mutation is the LENGTH one -- its test says so -- and
-    // replace() taking the first match is the only reason it has been
-    // landing there. The askToPromote call names which.
-    //
-    // RE-ANCHORED 27 SEP, when the gate learned to read the VALUE as well as
-    // the board: a whole foot is TOY's own length and no longer promotes.
-    find: "    if (board === 'toy' && !toyCouldMakeLength(feet) && !drawing?.boardPromptSeen) {\n      askToPromote(() => commitTypedLength());",
-    with: "    if (!toyCouldMakeLength(feet) && !drawing?.boardPromptSeen) {\n      askToPromote(() => commitTypedLength());",
+    name: 'it fires in DRAFTING too, which is a board change to the board it '
+      + 'is already on and a strip line saying so',
+    find: "    if (board !== 'toy' || toyCouldHoldIt) return false;",
+    with: '    if (toyCouldHoldIt) return false;',
     test: 'in DRAFTING a typed length just commits' },
+  { file: 'MODEL.html',
+    name: 'the promotion says nothing, so the mode flips under a drafter who '
+      + 'is watching his wall and not the corner',
+    find: '    sayOnStrip(`${said} is finer than TOY draws — DRAFTING now`);',
+    with: '',
+    test: 'the strip says so' },
+  { file: 'MODEL.html',
+    name: 'the strip answers with a tidied number instead of what he typed',
+    find: '    promoteForNumber(toyCouldMakeLength(feet), String(lengthBox.value).trim());',
+    with: '    promoteForNumber(toyCouldMakeLength(feet), `${feet} ft`);',
+    test: 'the strip says so' },
+  { file: 'MODEL.html',
+    name: 'the ANGLE box never promotes, so an off-square bearing is kept on TOY',
+    find: '    if (!promoteForNumber(toyCouldMakeAngle(deg), `${deg}°`)) {',
+    with: '    if (!promoteForNumber(true, `${deg}°`)) {',
+    test: 'an angle TOY cannot draw promotes' },
+  { file: 'MODEL.html',
+    name: 'a quarter turn promotes too, though it is the angle TOY itself draws',
+    find: '  const toyCouldMakeAngle = deg => Math.abs(deg % 90) < 1e-9;',
+    with: '  const toyCouldMakeAngle = () => false;',
+    test: 'an angle TOY DRAWS ITSELF keeps it on TOY' },
+  { file: 'MODEL.html',
+    name: 'the lamp is never repainted, so the corner still says TOY',
+    find: '    paintBoardLamp();',
+    with: '',
+    test: 'the lamp goes out with it' },
+
+  // ── AND WHAT TOY STILL IS ───────────────────────────────────────────────
   { file: 'MODEL.html',
     name: 'TOY stops squaring when the T-square is down',
     find: "  const squaring = () => tsquareOn || board === 'toy';",

@@ -222,11 +222,9 @@ test('a build tool opens its own controls WITHOUT the drafter moving tab',
     // This is the check that fails if PROPERTIES ever goes back to taking a
     // turn with the tool tabs.
     await open(page, { pane: 'build' });
-    // THE DRAFTING BOARD, because the page opens on TOY and ROOF is not a TOY
-    // tool -- its key is correctly dead there, so clicking it would arm
-    // nothing and this check would pass for the wrong reason.
-    await page.locator('[data-board="drafting"]').click();
-    await expect(page.locator('body')).toHaveAttribute('data-board', 'drafting');
+    // THE DRAFTING BOARD USED TO BE PRESSED HERE, because ROOF was not a TOY
+    // tool and its key was dead on the board this page opens on. TOY offers
+    // the whole roster since 15 Oct, so the key arms where it stands.
 
     await page.locator('[data-tool-key="roof"]').click();
     await page.waitForTimeout(200);
@@ -245,8 +243,6 @@ test('with PROPERTIES shut, its tab says there is something behind it',
     // speaks for itself; shut, nothing else would tell him the tool he just
     // armed put its controls somewhere.
     await open(page, { pane: 'build', props: false });
-    await page.locator('[data-board="drafting"]').click();
-    await expect(page.locator('body')).toHaveAttribute('data-board', 'drafting');
     await expect(page.locator('#props-tab')).not.toHaveAttribute('data-has-props', /.*/);
 
     await page.locator('[data-tool-key="roof"]').click();

@@ -47,13 +47,11 @@ async function openNewPage(page) {
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 8000 });
 }
 
-// ROOF IS A DRAFTING-BOARD KEY, and the page opens on TOY. That is the order's
-// own rule working -- a contextual key is disabled off its board, not hidden --
-// so the test has to walk on the board first, exactly as a drafter does. Left
-// out, every assertion below fails at a disabled button and reads like the
-// gesture is missing rather than the board being wrong.
+// ROOF WAS A DRAFTING-BOARD KEY and the page opens on TOY, so this used to
+// walk onto the other board first -- without it every assertion below failed
+// at a disabled button and read like the gesture was missing. TOY offers the
+// whole roster since 15 Oct, so there is no board to walk onto.
 async function armRoof(page) {
-  await page.locator('[data-board="drafting"]').click();
   // The keypad is a drawer on this page; a key in a shut drawer is enabled and
   // unclickable, which is a different failure from a key that is off-board.
   await h.openToolRail(page);

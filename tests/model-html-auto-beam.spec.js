@@ -111,8 +111,8 @@ const savedFile = page => page.evaluate(async bucket => {
 // next `click()` waits for a locator that is not there and the test times out
 // with "waiting for [data-auto-beam]" and nothing about why.
 async function armTool(page, id) {
-  await page.locator('[data-board-switch] [data-board="drafting"]').click();
-  await page.waitForTimeout(150);
+  // NO BOARD SWITCH FIRST ANY MORE (15 Oct): every key is live on TOY, and
+  // the TOY / DRAFTING buttons are a lamp.
   // AND THE TAB THE KEY IS ON. The left rail is DRAFTING and BUILD since
   // 29 Sep; BEAM and COLUMN are build keys, so a rail sitting on DRAFTING
   // leaves them inside a pane that is not up. The board switch above answers

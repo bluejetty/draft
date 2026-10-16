@@ -514,7 +514,12 @@ test('a tap aimed at a stacked button lands on that button, not its neighbour',
 
     const STACKS = [
       ['the unit stack', '#units-corner button[data-units]'],
-      ['the board stack', '#mode-corner .set.stack button[data-board]'],
+      // THE BOARD STACK IS A LAMP SINCE 15 OCT and has no buttons, so the
+      // stack measured here is the one beside it. The hazard is about a
+      // STACKED pair's hit boxes overlapping, and the lamp's two rows are
+      // built to the same shape -- but nothing is aimed at them, so a tap
+      // landing on the wrong row of an output costs nobody anything.
+      ['the finish stack', '#mode-corner [data-theme-switch] button'],
       // THE PRECEDENT IS MEASURED TOO. The reversal's argument is that these
       // rows -- SETTINGS over STANDARDS, the same 19px -- are the shape
       // already standing beside the units without DC's fault. An argument
@@ -1004,10 +1009,10 @@ test('the shell does not put a long task back', async ({ page }) => {
   // own check (model-toy-draw.spec.js:447), which also proves putting the
   // tool down does not cancel the run. So every edit after the first was
   // correctly refused, committed nothing, and this read as a chrome
-  // regression. The subject here is what the chrome costs, not what the
-  // board allows, so the board is named rather than inherited.
-  await page.locator('#mode-corner [data-board="drafting"]').click();
-  await expect(page.locator('body')).toHaveAttribute('data-board', 'drafting');
+  // regression. The press that walked onto DRAFTING went with the switch on
+  // 15 Oct -- TOY's §1 refusal is a rule about the RUN, not about the tools,
+  // so the fix now is the fixture below starting each edit cleanly rather
+  // than a board that allowed more.
 
   // The order's bar: the last table read 31–54 ms per committed click with no
   // long tasks, and the shell must not undo that. Measured with BOTH panels

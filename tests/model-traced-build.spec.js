@@ -533,8 +533,10 @@ test('DRAFTING: CONNECT AT CORNER asks, and Enter moves the garage wall over 1 f
 });
 
 test('TOY: the garage wall is moved over 1 ft without asking', async ({ page }) => {
+  // NO PRESS ONTO TOY: it is where every drawing starts since 15 Oct, and the
+  // switch that used to put it there is a lamp. The fixture records no board,
+  // so this opens on TOY -- which is the board this check is about.
   await open(page);
-  await page.locator('[data-board-switch] [data-board="toy"]').click();
   await drawType(page, 'bungalow', 'bungalow-garage');
   await trace(page, HOUSE);
   await run(page, SIDE_RUN);

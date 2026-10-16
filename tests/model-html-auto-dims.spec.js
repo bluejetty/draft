@@ -296,27 +296,27 @@ async function openBoards(page, file = empty()) {
 }
 
 const armDimension = async page => {
-  await page.locator('[data-board-switch] [data-board="drafting"]').click();
-  await page.waitForTimeout(150);
+  // THE BOARD PRESS THAT USED TO START THIS went with the switch (15 Oct):
+  // DIMENSION is live on TOY too.
   await page.locator('[data-tool-key="dimension"]').click();
   await page.waitForTimeout(150);
 };
 
-test('the DIMENSION key is down on TOY and up on DRAFTING', async ({ page }) => {
-  // THE TOY BOARD OFFERS THREE TOOLS -- select, wall, outline -- and the panel
-  // must not be reachable where the tool is not. This is checked because the
-  // button was written before the board was looked at, and a press on a key
-  // the board refuses would arm nothing and show nothing while looking like a
-  // dead button.
+test('the DIMENSION key is live on TOY, as it is on DRAFTING', async ({ page }) => {
+  // IT USED TO BE DOWN ON TOY, and this check said so: the TOY board offered
+  // three tools and the panel must not be reachable where the tool is not.
+  // Movie opened TOY to the whole roster on 15 Oct -- "we should allow more
+  // features (they all go dim i notices)" -- so the claim turns over with it.
+  // The press is still checked rather than the attribute: a key that lights
+  // and arms nothing is the same lie in the other direction.
   await openBoards(page);
-  await page.locator('[data-board-switch] [data-board="toy"]').click();
-  await page.waitForTimeout(150);
-  await expect(page.locator('[data-tool-key="dimension"]'),
-    'TOY offered a tool it does not have').toBeDisabled();
-
-  await page.locator('[data-board-switch] [data-board="drafting"]').click();
-  await page.waitForTimeout(150);
   await expect(page.locator('[data-tool-key="dimension"]')).toBeEnabled();
+  await page.locator('[data-tool-key="dimension"]').click();
+  await page.waitForTimeout(150);
+  await expect(page.locator('[data-auto-dims]'),
+    'arming it on TOY offers the press that belongs to it').toBeVisible();
+  await expect(page.locator('body'), 'and arming it moved no board')
+    .toHaveAttribute('data-board', 'toy');
 });
 
 test('arming DIMENSION offers AUTO DIMS, and putting it down takes it away',

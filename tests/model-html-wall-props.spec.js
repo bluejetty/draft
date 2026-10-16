@@ -302,10 +302,10 @@ test.describe('MODEL.html wall properties', () => {
       // PANEL STANDING. Place a column — it selects itself and fills the box —
       // then press a wall, and COLUMN properties stayed on screen with the
       // column long since deselected.
-      // §6 puts every tool but SELECT, WALL and OUTLINE away on the TOY
-      // board, which is the board this page opens on. COLUMN is one of them,
-      // so the drafting board comes first or the key is disabled.
-      await page.locator('[data-board-switch] [data-board="drafting"]').click();
+      // THE BOARD USED TO HAVE TO BE SWITCHED HERE: §6 put every tool but
+      // SELECT, WALL and OUTLINE away on TOY, and COLUMN was one of them. TOY
+      // offers the whole roster since 15 Oct (and the switch is a lamp), so
+      // the key is live on the board this page opens on.
       await h.openToolRail(page);
       await h.selectTool(page, 'Column');
       // INSIDE THE DRAWN BOUNDS, on bare sheet. A point past them is not

@@ -398,10 +398,8 @@ test('an edit never blocks the main thread, even with four live elevations',
     // own check (model-toy-draw.spec.js:447), which also proves putting the
     // tool down does not cancel the run. So every edit after the first was
     // correctly refused, committed nothing, and this read as a chrome
-    // regression. The subject here is what the chrome costs, not what the
-    // board allows, so the board is named rather than inherited.
-    await page.locator('#mode-corner [data-board="drafting"]').click();
-    await expect(page.locator('body')).toHaveAttribute('data-board', 'drafting');
+    // regression. The press that walked onto DRAFTING went with the switch on
+    // 15 Oct -- TOY's §1 refusal is a rule about the RUN, not about the tools.
 
     // WHAT A DRAFTER FEELS, not a millisecond budget. The old assertion here
     // read `rail < 10ms`, which encoded the labels ruling; Movie reversed that
