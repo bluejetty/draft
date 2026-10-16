@@ -72,6 +72,10 @@ const drawnWalls = saved => (saved.walls || []).filter(w => !FIXTURE_IDS.include
 // while a wall is picked: one row at a time, the same words on both.
 const sideRow = page => page.locator('[data-prop-row="wall side"]');
 const sideChip = (page, value) => sideRow(page).locator(`[data-prop-value="${value}"]`);
+// PRESSED BY ITS WORD, never by its stored value: the whole point of the
+// panel is that LEFT SIDE means a wall on the left, and a check that clicks
+// the chip whose value is 'right' cannot tell the words from a swapped table.
+const pressSide = (page, word) => sideRow(page).getByRole('button', { name: word, exact: true }).click();
 
 async function drawRun(page, x1, z1, x2, z2) {
   const { at } = await frame(page);
@@ -102,8 +106,8 @@ test('LEFT SIDE puts the wall on the drafter\'s left of the line, sticks for the
   async ({ page }) => {
     await open(page, house('drafting'));
     await h.armWall(page);
-    await sideChip(page, 'right').click();
-    await expect(sideChip(page, 'right')).toHaveAttribute('aria-pressed', 'true');
+    await pressSide(page, 'LEFT SIDE');
+    await expect(sideChip(page, 'right'), 'LEFT SIDE lit, and it is the record\'s right face').toHaveAttribute('aria-pressed', 'true');
     // Drawn left to right. The body on the drafter's LEFT of that travel is
     // the record's 'right': the line is the wall's right face.
     await drawRun(page, 2, 2, 8, 2);
@@ -123,7 +127,7 @@ test('the selection panel speaks the same words, and a wall-type change leaves t
   async ({ page }) => {
     await open(page, house('drafting'));
     await h.armWall(page);
-    await sideChip(page, 'right').click();
+    await pressSide(page, 'LEFT SIDE');
     await drawRun(page, 2, 2, 8, 2);
     // Pick the wall with SELECT, on its line.
     const { at } = await frame(page);
@@ -152,7 +156,7 @@ test('along an inside face the wall takes the room side, whatever the panel says
   async ({ page }) => {
     await open(page, house('toy'));
     await h.armWall(page);
-    await sideChip(page, 'right').click();          // LEFT SIDE
+    await pressSide(page, 'LEFT SIDE');
     // Along the north wall's inside face, left to right: both ends snap to
     // z = -10 + 5½". Travelling +x the drafter's LEFT is the exterior wall,
     // so LEFT SIDE would stand the wall inside the 2x6. The face answers:
@@ -193,7 +197,7 @@ test('along an opening edge the wall goes away from the hole', async ({ page }) 
 test('a run square INTO the face is not along it: the panel\'s pick stands', async ({ page }) => {
   await open(page, house('toy'));
   await h.armWall(page);
-  await sideChip(page, 'right').click();          // LEFT SIDE
+  await pressSide(page, 'LEFT SIDE');
   await drawRun(page, 3.3, 2.2, 3.3, -9.8);         // ends on the face, runs along z
   const [w] = drawnWalls(await saveAndRead(page));
   expect(w.end.z, 'cut at the face').toBeCloseTo(-10 + T_2X6, 9);
