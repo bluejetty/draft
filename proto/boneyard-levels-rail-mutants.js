@@ -98,15 +98,15 @@ const MUTANTS = [
   { file: 'BONEYARD.html',
     name: 'the model is laid out for the window it used to have, so the '
       + 'narrower one cuts it off',
-    find: '        laid = BL.layout(shown(), angle, w, h);',
-    with: '        laid = BL.layout(shown(), angle, w * 1.6, h);',
+    find: '        laid = BL.layout(shown(), angle, w, h, 30, tilt);',
+    with: '        laid = BL.layout(shown(), angle, w * 1.6, h, 30, tilt);',
     test: 'the 3D side is the one that gave up the room' },
 
   { file: 'BONEYARD.html',
     name: 'the model is drawn small inside the window instead of to it, which '
       + 'is a smaller picture for the wrong reason',
-    find: '        laid = BL.layout(shown(), angle, w, h);',
-    with: '        laid = BL.layout(shown(), angle, w, h, 160);',
+    find: '        laid = BL.layout(shown(), angle, w, h, 30, tilt);',
+    with: '        laid = BL.layout(shown(), angle, w, h, 160, tilt);',
     test: 'the 3D side is the one that gave up the room' },
 
   { file: 'BONEYARD.html',
