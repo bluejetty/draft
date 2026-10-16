@@ -78,7 +78,20 @@
   }
   .pane-head .title { color: var(--accent-mark); font-weight: 600; flex: 1; }
   .pane canvas { flex: 1; min-height: 0; width: 100%; display: block; }
+  /* THE 3D GIVES UP THE ROOM (Movie, 16 Oct: "the 3D Model area can get
+     smaller and the 3D model smaller as well to alllow for the extra space
+     needed"). It is the pane that can afford it: the right one is where the
+     editing happens and every foot of it is worked in, while the left is a
+     picture of what the editing did. The model inside follows on its own --
+     the 3D fits itself to its box, so a narrower box IS a smaller model. */
+  .pane-3d { flex: 0 1 38%; }
   canvas#bones3d { cursor: grab; touch-action: none; }
+  /* THE LEVELS STAND BETWEEN THE PANES, top-aligned so the first one is
+     level with both heads, and no wider than the longest name needs. */
+  .levels-rail { flex: none; display: flex; align-items: flex-start; }
+  .levels-rail .legend { flex-direction: column; align-items: stretch;
+    gap: 4px; flex-wrap: nowrap; }
+  .levels-rail .legend button { justify-content: flex-start; white-space: nowrap; }
   .btn {
     appearance: none; border: 1px solid var(--edge-panel); background: var(--surface-chip);
     color: var(--ink-primary); font: inherit; font-size: 12px; letter-spacing: .07em;
@@ -108,7 +121,7 @@
     <!-- LEFT: THE BONES IN 3D. Isometric; it turns in 15-degree steps, one
          still frame per step and nothing in between (Movie, 1 Oct: stepped,
          "to save processing"). A tap on a loop picks that level for the right. -->
-    <section class="pane" aria-label="The bones in 3D">
+    <section class="pane pane-3d" aria-label="The bones in 3D">
       <div class="pane-head">
         <span class="title">BONES &mdash; 3D</span>
         <button type="button" class="btn" id="turn-left" title="Turn 15° left">&#9664;</button>
@@ -117,6 +130,21 @@
       </div>
       <canvas id="bones3d"></canvas>
     </section>
+    <!-- BETWEEN THE TWO: THE LEVELS, STACKED (Movie, 16 Oct). "can we
+         decrease the 3D model side on the left and squeeze in between the 2
+         windows the LEVELS (take them off the upper right area and move
+         those so they are stacked between the 2 windows) the 3D Model area
+         can get smaller and the 3D model smaller as well to alllow for the
+         extra space needed".
+
+         A COLUMN, NOT A ROW IN A HEAD. They sat in the right pane's head,
+         sharing it with the title and two verbs, where a fourth level
+         squeezed everything else; standing between the panes they are what
+         they are -- the thing both windows are showing -- and each is beside
+         the stack it names. -->
+    <div class="levels-rail" aria-label="Levels">
+      <div class="legend" id="legend"></div>
+    </div>
     <!-- RIGHT: THE CHOSEN LEVEL, FLAT, AND WHERE IT IS EDITED. Tap an edge,
          then drag it or use the arrow keys: whole feet, square to itself.
          BREAK puts a corner on a foot mark so part of an edge moves alone.
@@ -124,7 +152,6 @@
     <section class="pane" aria-label="The chosen level">
       <div class="pane-head">
         <span class="title" id="level-title">LEVEL</span>
-        <div class="legend" id="legend"></div>
         <button type="button" class="btn" id="break" aria-pressed="false"
           title="Put a corner on an edge at a foot mark (B)">BREAK</button>
         <button type="button" class="btn" id="undo" title="Undo the last change (Ctrl+Z)" disabled>UNDO</button>
