@@ -49,7 +49,10 @@ const MUTANTS = [
     name: 'the ladder WRAPS: past a plan comes an elevation',
     find: '    TILT_LADDER[Math.max(0, Math.min(TILT_LADDER.length - 1, tiltRung(deg) + steps))];',
     with: '    TILT_LADDER[((tiltRung(deg) + steps) % TILT_LADDER.length + TILT_LADDER.length) % TILT_LADDER.length];',
-    test: 'it tips up and down a rung at a time' },
+    // THE PURE CHECK, not the page's: the arrows are dead at the ends of the
+    // ladder, so through the page a wrap can never be reached, and the first
+    // version of this mutant survived behind a disabled button.
+    test: 'tipped flat the bones are an elevation' },
 
   { file: 'boneyard-loops.js', spec: 'tests/boneyard.spec.js',
     name: 'ISO IS NOT A RUNG: the view the page opens on cannot be stepped back to',

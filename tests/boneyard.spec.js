@@ -150,6 +150,11 @@ test('tipped flat the bones are an elevation; tipped straight down they are a pl
         flatLower: P({ x: 20, z: 15 }, 0, 0).y,
         planA: P({ x: 20, z: 15 }, 8, 90), planB: P({ x: 20, z: 15 }, 0, 90),
         ladder: BL.TILT_LADDER, iso: BL.ISO_TILT_DEG,
+        // The ends of the ladder hold. The page's arrows are dead there, so
+        // only the step itself can say whether a step past a plan is a plan
+        // or wraps round to an elevation.
+        pastTop: BL.stepTilt(90, 1), pastBottom: BL.stepTilt(0, -1),
+        upFromIso: BL.stepTilt(BL.ISO_TILT_DEG, 1), downFromIso: BL.stepTilt(BL.ISO_TILT_DEG, -1),
       };
     });
     expect(out.flatA, 'at 0°, height only').toBeCloseTo(out.flatB, 9);
@@ -158,6 +163,9 @@ test('tipped flat the bones are an elevation; tipped straight down they are a pl
     expect(out.planA.y, 'z straight down the screen').toBeCloseTo(15, 9);
     expect(out.ladder, 'every 15°, with ISO its own rung').toEqual([0, 15, 30, out.iso, 45, 60, 75, 90]);
     expect(out.iso).toBeCloseTo(35.264, 2);
+    expect(out.pastTop, 'a step past a plan is still a plan').toBe(90);
+    expect(out.pastBottom, 'a step past an elevation is still an elevation').toBe(0);
+    expect([out.upFromIso, out.downFromIso], 'ISO steps to 45 and to 30').toEqual([45, 30]);
   });
 
 test('it turns in 15-degree steps, and a full turn is where it started', async ({ page }) => {

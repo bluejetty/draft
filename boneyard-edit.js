@@ -642,7 +642,14 @@ if (!window.DraftBoneyardEdit) {
     const moveLoop = (lvl, lp, e, lo, hi, amount) => {
       const L = { axis: e.axis, c: e.c, n: e.n, lo, hi, delta: amount * e.n };
       const garage = lp.garage === true;
-      if (lvl.kind === 'foundation') pushLevelRecords(d, 1, false, L, newId);
+      // THE FOUNDATION'S GARAGE LOOP IS THE GARAGE'S OWN LINE (16 Oct: the
+      // foundation bone carries the garage as MAIN does). A push on it moves
+      // the garage's concrete -- its level-1 records -- and the cascade
+      // above carries the garage's floor and the room over it, which is
+      // exactly the push MAIN's garage loop makes. Not the house's records:
+      // `false` here walked the house's foundation wall along the garage's
+      // line and left the garage where it was.
+      if (lvl.kind === 'foundation') pushLevelRecords(d, 1, garage, L, newId);
       else {
         pushLevelRecords(d, lvl.levelId, garage, L, newId);
         if (garage) pushLevelRecords(d, 1, true, L, newId);

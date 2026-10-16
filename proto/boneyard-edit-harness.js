@@ -405,11 +405,42 @@ check('walls that do not close make no loop', E.chainLoop(ring(rect(0, 0, 4, 6))
   check('ENTRY front out 2 ft over the garage line: the room over the garage stays',
     front.ok && JSON.stringify(houseOf(front.drawing, 4)) === JSON.stringify(houseOf(m0, 4)), true);
   // FOUNDATION: [(-16,-20) (16,-20) (16,20) (-16,20)]; edge 2 is its front.
-  const fdn = mPush(m0, 'foundation', 1, 2, 2);
-  check('FOUNDATION front out 2 ft: MAIN\'s front both sides of the notch, the ENTRY front, no piles',
-    fdn.ok && [P1(fdn.drawing), houseOf(fdn.drawing, 3), houseOf(fdn.drawing, 2)],
-    [0, [[-16, -20], [16, -20], [16, 22], [2, 22], [2, 14], [-10, 14], [-10, 22], [-16, 22]],
-      [[-10, 14], [2, 14], [2, 22], [-4, 22], [-10, 22]]]);
+  //
+  // THE FOUNDATION CARRIES THE GARAGE NOW (Movie, 16 Oct: "the foundation
+  // doesn't show the garage outline, but it should show that (like the main
+  // floor does)"), and the garage's grade beam runs along the house's front
+  // from x = -4 to 16. So the whole front is a SHARED edge and refused, as
+  // it is on MAIN: this check used to push it and walk MAIN's front two feet
+  // into the garage, which is the move the refusal exists to stop. The
+  // drafter BREAKs the front where the garage parts and pushes the free
+  // part -- the status line says so -- and that is what moves below.
+  const fdnWhole = mPush(m0, 'foundation', 1, 2, 2);
+  check('FOUNDATION front out 2 ft, whole: refused -- the garage meets that line, as on MAIN',
+    !fdnWhole.ok && fdnWhole.reason, 'SHARED');
+  const fdnBroken = E.breakEdge(m0, { kind: 'foundation', levelId: 1, loopIndex: 0, edgeIndex: 2, atFt: -4 }, mCtx(m0));
+  check('FOUNDATION front broken where the garage parts: a corner at -4',
+    fdnBroken.ok && houseOf(fdnBroken.drawing, 3), [[-16, -20], [16, -20], [16, 20], [2, 20], [2, 14], [-10, 14], [-10, 20], [-16, 20]]);
+  // The free part is edge 3 of the broken loop: (-4,20) to (-16,20).
+  const fdn = fdnBroken.ok ? E.pushEdge(fdnBroken.drawing,
+    { kind: 'foundation', levelId: 1, loopIndex: 0, edgeIndex: 3, deltaFt: 2 }, mCtx(fdnBroken.drawing)) : { ok: false };
+  check('FOUNDATION free front out 2 ft: MAIN\'s free front and the ENTRY front over it, the garage stays, no piles',
+    fdn.ok && [P1(fdn.drawing), houseOf(fdn.drawing, 3), houseOf(fdn.drawing, 2),
+      fdn.drawing.outlines.find(o => Number(o.levelId) === 3 && o.garage).points.map(p => [p.x, p.z])],
+    [0, [[-16, -20], [16, -20], [16, 20], [2, 20], [2, 14], [-10, 14], [-10, 22], [-16, 22]],
+      [[-10, 14], [2, 14], [2, 20], [-4, 20], [-4, 22], [-10, 22]],
+      [[16, 20], [16, 19], [20, 19], [20, 46], [-4, 46], [-4, 20]]]);
+  // AND THE GARAGE'S OWN LOOP ON THE FOUNDATION: its far side (x = 20, edge
+  // 2) pushed from the foundation is the same drawing as pushed from MAIN --
+  // one garage, one line of concrete under it. The garage's level-1 records
+  // move, the cascade carries MAIN's garage and the room over it.
+  const bodies = d => JSON.stringify({ walls: d.walls, outlines: d.outlines, roofs: d.roofs });
+  const gFdn = mPush(m0, 'foundation', 1, 2, 0);
+  const gFromFdn = E.pushEdge(m0, { kind: 'foundation', levelId: 1, loopIndex: 1, edgeIndex: 2, deltaFt: 2 }, mCtx(m0));
+  const gFromMain = E.pushEdge(m0, { kind: 'floor', levelId: 3, loopIndex: 1, edgeIndex: 2, deltaFt: 2 }, mCtx(m0));
+  void gFdn;
+  check('the garage\'s far side pushed from the FOUNDATION is the push MAIN makes',
+    gFromFdn.ok && gFromMain.ok && bodies(gFromFdn.drawing) === bodies(gFromMain.drawing)
+      && gFromFdn.report.moves.map(m => m.name), ['FOUNDATION', 'MAIN FL', 'OVER GARAGE']);
   // The far edge facing the same way is another wall, not one hanging off
   // this line: the room over the garage, 37 ft from the back wall.
   const backIn = mPush(m0, 'foundation', 1, 0, 3);
