@@ -68,8 +68,7 @@ async function open(page, file = empty()) {
 }
 
 async function armTool(page, id) {
-  await page.locator('[data-board-switch] [data-board="drafting"]').click();
-  await page.waitForTimeout(150);
+  // NO BOARD SWITCH FIRST ANY MORE (15 Oct): every key is live on TOY.
   // AND THE TAB THE KEY IS ON -- see model-html-auto-beam's copy of this
   // helper. The board says enabled; the pane says reachable.
   await h.showLeftPane(page, h.TOOL_PANE[id] || 'drafting');

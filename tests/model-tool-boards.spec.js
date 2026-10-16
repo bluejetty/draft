@@ -1,22 +1,33 @@
-// NO OTHER TOOLS: the board decides what the column offers.
+// THE BOARD TAKES NOTHING AWAY ANY MORE: IT IS A LIGHT.
 //
-// Work order: GILLIGAN-TOY-BONES-WORKORDER §6, and §8's disclaimer removal.
+// WHAT THIS FILE USED TO SAY, because the change is the point. Under
+// GILLIGAN-TOY-BONES-WORKORDER §6 and Skipper's
+// SPEC-toy-mode-constraints.md -- "There is no drafting tool in TOY MODE" --
+// TOY offered five keys out of twenty and greyed the rest, the selection
+// filters and the assembly verbs with them. Every check here measured that:
+// fifteen keys down, a refusal in each title, the register refusing even when
+// the key was forced back on.
 //
-// THE RULING is Skipper's, written down in
-// RD-DOCUMENTS/IMPORTANT-WORK-ORDERS/SPEC-toy-mode-constraints.md: "A wall can
-// be manipulated ONLY through a grip tab. There is no drafting tool in TOY
-// MODE." That sentence is the older document. Movie ruled on 13 Sep: the
-// OUTLINE GETS DRAWN IN TOY, drawing the outline is not a drafting tool but
-// how a TOY house begins, so the rule is "no drafting tools except the one
-// gesture that makes the outline". On this page that gesture is draw-wall, and
-// §1's squaring and foot-landing is its rule. SELECT survives because it is
-// the resting state, not a drafting tool.
+// Movie overturned it on 15 Oct: *"lets always start the users in TOY MODE,
+// but we should allow more features (they all go dim i notices) but maybe the
+// features will be slightly limited (to ft and 90 degrees)"*, *"maybe don't
+// even offer them to change to DRAFTING MODE, but if they enter a ANGLE or
+// length other than 1ft, it will automatically place them in DRAFTING MODE.
+// so it ill be basically a LIGHT -- not a button"*, and, asked which tools
+// that leaves on TOY: all of them.
 //
-// WHAT THIS SPEC IS ARRANGED AGAINST is one shape of lie: the key looking
-// down while the register still takes the tool. Greying is presentation and
-// presentation can be got round, so `the register refuses even when the key is
-// forced back on` below strips the disabled attribute and clicks anyway. If
-// only the CSS were doing the work, that check is the one that goes red.
+// SO THE RULE IS A CONSTRAINT NOW, NOT A SHORTER LIST. The foot and the right
+// angle are what TOY is; the tools are what the page is. This file asks the
+// same question of the new ruling -- and the shape of lie it is arranged
+// against turned over with it. It used to be "the key looks down while the
+// register still takes the tool"; it is now "the page looks open while
+// something still refuses", which is why the checks below PRESS the keys and
+// the chips rather than reading an attribute off them.
+//
+// WHAT THE BOARD STILL DECIDES is in model-toy-board.spec.js: the foot, the
+// square, the grip tabs, and the promotion that turns the light off. The lamp
+// is checked here because it is presentation -- what the corner SAYS -- and
+// there because it is behaviour -- what makes it say it.
 const { test, expect } = require('@playwright/test');
 const h = require('./helpers');
 
@@ -52,22 +63,16 @@ async function open(page, file, pane = 'build') {
   }, { bucket: BUCKET, f: file });
   // ?left=1 OPENS THE LEFT RAIL, and without it this file measures a column
   // that is not on screen. `<aside id="left-rail" hidden>` is the default, so
-  // the three checks that CLICK a key each timed out while the four that only
-  // read `disabled`, the computed opacity and the title all passed -- against
-  // elements inside a display:none panel. Passing there proved the CSS rule
-  // and nothing about what a drafter sees, which is the same defect this file
-  // is written against, arriving in its own fixture.
-  // AND `lpane` SAYS WHICH TAB, since 29 Sep. The seventeen keys are no
-  // longer one column: DRAW / EDIT is on DRAFTING and BUILD is on its own
-  // tab, so `?left=1` alone puts two thirds of them behind a tab that is not
-  // up -- the same "measuring a column that is not on screen" this helper was
-  // written to stop, one layer further in. BUILD is the default here because
-  // every key this file clicks (`wall`, `roof`) is a build key.
+  // checks that only read `disabled`, the computed opacity and the title all
+  // passed once against elements inside a display:none panel -- proving the
+  // CSS rule and nothing about what a drafter sees, which is the same defect
+  // this file is written against, arriving in its own fixture.
+  //
+  // AND `lpane` SAYS WHICH TAB, since 29 Sep: DRAW / EDIT is on DRAFTING and
+  // BUILD is on its own tab, so `?left=1` alone puts two thirds of the keys
+  // behind a tab that is not up.
   await page.goto(`/MODEL.html?left=1&lpane=${pane}`);
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-  // The column is ON SCREEN before anything is measured on it -- and it is a
-  // key FROM THE OPENED TAB, because asserting a build key while DRAFTING is
-  // up would fail for the right reason and read like a bug in the page.
   await expect(page.locator(
     `[data-tool-key="${pane === 'build' ? 'wall' : 'select'}"]`)).toBeVisible();
 }
@@ -83,242 +88,85 @@ const downKeys = page => page.evaluate(() =>
   [...document.querySelectorAll('[data-tool-key]')]
     .filter(b => b.disabled).map(b => b.dataset.toolKey).sort());
 
-test('the roster answers per board, and every board can rest', async ({ page }) => {
-  await open(page, base({ board: 'toy' }));
-  const r = await page.evaluate(() => {
-    const R = window.DraftToolRoster;
-    return {
-      toy: R.availableIn('toy').map(t => t.id),
-      drafting: R.availableIn('drafting').length,
-      all: R.TOOLS.length,
-      // AN UNKNOWN BOARD FALLS OPEN, not shut. Falling shut would strip
-      // sixteen keys and look exactly like TOY working correctly.
-      unknown: R.availableIn('gruff').length,
-      // The fallback has to land somewhere legal on EVERY board, or putting a
-      // tool down on some future board would arm a refused one.
-      restsEverywhere: R.BOARDS.every(b => R.availableOn(R.RESTING, b)),
-      unknownId: R.availableOn('teleporter', 'drafting'),
-    };
-  });
-  // OUTLINE JOINED THE BOARD when it became a tool of its own (U, the old
-  // page's key). This file's own header carries the ruling it implements --
-  // Movie, 13 Sep: the OUTLINE GETS DRAWN IN TOY, drawing the outline is not a
-  // drafting tool but how a TOY house begins. Until there was an `outline`
-  // tool the exception had to be spelled 'wall'.
-  //
-  // AND WALL STAYS, which the roster's note predicted would not be the case.
-  // Taking it off this board moves TOY's drawing onto a path §1's squaring and
-  // foot-landing rule does not cover; that is its own rung with its own
-  // checks. Adding outline takes nothing from anybody, swapping them would.
-  // AND CUT (Movie, 5 Oct, "could be on TOY i think"): a section draws
-  // nothing into the house, it only adds a way to look at it.
-  // AND TRIM (Movie, 5 Oct): it only moves a wall's end on to another wall.
-  expect(r.toy, 'TOY offers select, trim, cut, wall and the outline gesture, and nothing else')
-    .toEqual(['select', 'trim', 'cut', 'wall', 'outline']);
-  expect(r.drafting).toBe(r.all);
-  expect(r.unknown).toBe(r.all);
-  expect(r.restsEverywhere).toBe(true);
-  expect(r.unknownId).toBe(false);
-});
-
-test('on TOY the other fifteen keys are down, and on DRAFTING none are',
+test('the roster offers every tool on every board, and every board can rest',
   async ({ page }) => {
     await open(page, base({ board: 'toy' }));
-    const down = await downKeys(page);
-    expect(down).toHaveLength(15);
-    expect(down).not.toContain('select');
-    expect(down).not.toContain('wall');
+    const r = await page.evaluate(() => {
+      const R = window.DraftToolRoster;
+      return {
+        toy: R.availableIn('toy').length,
+        drafting: R.availableIn('drafting').length,
+        all: R.TOOLS.length,
+        // AN UNKNOWN BOARD STILL FALLS OPEN. It is the same answer as every
+        // other board now, which is why the old warning about it stripping
+        // sixteen keys has nothing left to warn about.
+        unknown: R.availableIn('gruff').length,
+        restsEverywhere: R.BOARDS.every(b => R.availableOn(R.RESTING, b)),
+        // AN UNKNOWN ID IS STILL REFUSED, and it is the one refusal left in
+        // the roster: it would arm nothing and read as "select is on", a
+        // broken state that looks like a working one.
+        unknownId: R.availableOn('teleporter', 'drafting'),
+        // THE PANELS CAME WITH THEM. §6 named three surfaces, and the ruling
+        // that opened the first opened all three.
+        panelsOnToy: ['selection', 'assembly'].every(p => R.panelOn(p, 'toy')),
+      };
+    });
+    expect(r.toy, 'TOY offers the whole roster').toBe(r.all);
+    expect(r.drafting).toBe(r.all);
+    expect(r.unknown).toBe(r.all);
+    expect(r.restsEverywhere).toBe(true);
+    expect(r.unknownId).toBe(false);
+    expect(r.panelsOnToy).toBe(true);
+  });
 
-    await page.locator('[data-board="drafting"]').click();
-    await page.waitForTimeout(80);
-    // Both directions. "always down" would satisfy the half above.
+test('no key is down on TOY, and none is down on DRAFTING either',
+  async ({ page }) => {
+    await open(page, base({ board: 'toy' }));
+    expect(await downKeys(page), 'the fifteen that used to be down').toEqual([]);
+    await open(page, base({ board: 'drafting' }));
     expect(await downKeys(page)).toEqual([]);
   });
 
-test('a down key LOOKS down, measured rather than asserted', async ({ page }) => {
-  // THE CHECK THIS REPLACES would have read `disabled` and passed with no CSS
-  // behind it at all -- a broken state identical to the working one on screen.
-  // So the computed opacity is what is compared, and against a live key rather
-  // than a constant, which also catches the rule being widened to every key.
+test('a key on TOY says its own name, not a refusal', async ({ page }) => {
   await open(page, base({ board: 'toy' }));
-  const seen = await page.evaluate(() => {
-    const op = id => parseFloat(getComputedStyle(
-      document.querySelector(`[data-tool-key="${id}"]`)).opacity);
-    const cur = id => getComputedStyle(
-      document.querySelector(`[data-tool-key="${id}"]`)).cursor;
-    return { live: op('wall'), down: op('roof'), downCursor: cur('roof') };
-  });
-  expect(seen.live).toBeCloseTo(1, 2);
-  expect(seen.down).toBeLessThan(0.6);
-  expect(seen.downCursor).toBe('not-allowed');
-});
-
-test('a down key says WHY, on the face a drafter can reach', async ({ page }) => {
-  await open(page, base({ board: 'toy' }));
-  await expect(key(page, 'roof')).toHaveAttribute('title', /TOY board does not offer/);
-  // The available ones keep the plain name -- the reason is not sprayed over
-  // keys it is not true of.
+  // The refusal used to read "the TOY board does not offer ROOF". A title
+  // that still said so would be the page arguing with its own keys.
+  await expect(key(page, 'roof')).toHaveAttribute('title', 'ROOF');
   await expect(key(page, 'wall')).toHaveAttribute('title', 'WALL');
 });
 
-test('the register refuses even when the key is forced back on', async ({ page }) => {
-  // THE CHECK THE REST OF THIS FILE EXISTS FOR. Everything above measures
-  // presentation, and presentation is not a rule: a keyboard shortcut, a
-  // restored session or a tool arming itself at the end of a gesture all reach
-  // setTool without going near a disabled attribute. Removing the attribute
-  // here stands in for every one of those paths.
+test('the register ARMS a drafting tool on TOY', async ({ page }) => {
+  // THE CHECK THE REST OF THIS FILE EXISTS FOR, turned over. It used to force
+  // a disabled key back on and prove the register refused anyway; the same
+  // press now has to go through, because presentation is still not the rule
+  // and a column that merely LOOKS open would leave the register refusing
+  // behind it -- a key that lights and does nothing.
   await open(page, base({ board: 'toy' }));
-  await page.evaluate(() => {
-    document.querySelector('[data-tool-key="roof"]').disabled = false;
-  });
   await key(page, 'roof').click();
   await page.waitForTimeout(60);
-  expect(await armed(page), 'ROOF is refused; the page rests on SELECT')
-    .toEqual(['select']);
+  expect(await armed(page), 'ROOF arms on the TOY board').toEqual(['roof']);
+  expect(await boardOf(page), 'and arming it did not move the board').toBe('toy');
 });
 
-test('leaving DRAFTING puts down a tool TOY does not offer', async ({ page }) => {
-  await open(page, base({ board: 'drafting' }));
-  await key(page, 'roof').click();
-  await page.waitForTimeout(60);
-  expect(await armed(page)).toEqual(['roof']);
-
-  await page.locator('[data-board="toy"]').click();
-  await page.waitForTimeout(80);
-  // Rebuilding the faces alone would leave ROOF armed behind a greyed ROOF
-  // key: the column telling the truth about the key and a lie about the state,
-  // and the next drag still drawing a roof.
-  expect(await armed(page), 'the tool is put down, not merely greyed')
-    .toEqual(['select']);
-  expect(await downKeys(page)).toContain('roof');
-});
-
-test('a tool TOY DOES offer survives the switch', async ({ page }) => {
-  // The mirror of the check above. Putting EVERY tool down on a board change
-  // would pass that one and be wrong: WALL is offered on both boards, so
-  // crossing has no reason to disarm it.
-  await open(page, base({ board: 'drafting' }));
-  await key(page, 'wall').click();
-  await page.waitForTimeout(60);
-  expect(await armed(page)).toEqual(['wall']);
-
-  await page.locator('[data-board="toy"]').click();
-  await page.waitForTimeout(80);
-  expect(await armed(page)).toEqual(['wall']);
-});
-
-test('the load path constrains, even against a browser remembering DRAFTING',
+test('the selection filters and the assembly verbs operate on TOY',
   async ({ page }) => {
-    // THE LOAD PATH IS A THIRD ENTRY, not the switch: `board = boardOfDrawing()`
-    // runs AFTER the column is built, so a page that only constrained on click
-    // would open a TOY file with all seventeen keys live.
-    //
-    // THE FIRST HALF OF THIS TEST IS THE WHOLE POINT, and it is here because
-    // the version without it was a check whose broken state looked like its
-    // passing state. It opened a TOY file on a fresh browser, where the
-    // REMEMBERED board is already 'toy' -- so the keys were down from the
-    // initial build and the load path was never exercised. Deleting the
-    // notification that the board changed left it green; the mutation gate
-    // caught the defect on a different check, which is how the hole showed.
-    //
-    // So DRAFTING is remembered first. Now the seed and the file disagree, and
-    // only the drawing winning at load can put the keys down.
-    await open(page, base({ board: 'drafting' }));
-    expect(await downKeys(page), 'the seed is DRAFTING').toEqual([]);
-
-    await open(page, base({ board: 'toy' }));
-    expect(await downKeys(page)).toHaveLength(15);
-  });
-
-test('a browser that has never chosen opens on TOY, with the keys down',
-  async ({ page }) => {
-    // THE DEFAULT IS PINNED HERE because §6 gave it consequences. Until now
-    // `rememberedBoard = ... : 'toy'` was inert -- nothing was constrained by
-    // the board, so which one a fresh browser got did not matter. It decides
-    // what a first-time drafter can press now.
-    //
-    // RULED, not merely current: Movie, 13 Sep, confirmed TOY is the
-    // first-run default. The check stays because the reason for it does -- an
-    // incidental default that sixteen keys depend on is the thing worth
-    // refusing, and now that it is a decision it should fail loudly if
-    // something moves it by accident.
-    await open(page, base({}));   // the file records no board either
-    expect(await boardOf(page)).toBe('toy');
-    expect(await downKeys(page)).toHaveLength(15);
-  });
-
-test('a board change leaves the panels that share the tool slot alone',
-  async ({ page }) => {
-    // THE CHECK THAT WAS MISSING, and its absence cost 25 red checks in three
-    // MERGED suites while every check in this file stayed green.
-    //
-    // #tool-slot is shared. buildToolColumn called replaceChildren on it;
-    // buildSelectionPanel and buildAssemblyPanel APPEND into it. Rebuilding
-    // the column on a board change therefore deleted both of them, and the
-    // page loads with a board change in it -- `board = boardOfDrawing()` runs
-    // after all three panels exist. Every selection mode, filter and assembly
-    // control vanished on load.
-    //
-    // Nothing in this file saw it, because everything in this file looks at
-    // tool keys, and tool keys were the one thing the rebuild preserved. A
-    // suite that only inspects what its own feature touches cannot see what
-    // that feature destroys.
-    //
-    // THE HAZARD DID NOT GO AWAY WITH THE TABS, it moved: a pane is a shared
-    // parent for exactly the same reason the slot was, and the DRAFTING pane
-    // now holds the draw keys, SELECTION, OBJECT TYPE and ASSEMBLY together.
-    // buildToolColumn swaps its own `[data-tool-group]` element instead of the
-    // pane's children, which is what keeps this check green -- so this test
-    // guards the new arrangement, not a retired one.
-    //
-    // DRAFTING, since that is the pane the selection chips are on.
-    await open(page, base({ board: 'drafting' }), 'drafting');
-    await expect(page.locator('[data-sel-mode]').first()).toBeVisible();
-
-    await page.locator('[data-board="toy"]').click();
-    await page.waitForTimeout(80);
-    await expect(page.locator('[data-sel-mode]').first(),
-      'the selection panel survives a board change').toBeVisible();
-    // The keys are still doing their job, so this is not passing by having
-    // stopped constraining.
-    expect(await downKeys(page)).toHaveLength(15);
-  });
-
-test('the selection filters do not operate in TOY, and do in DRAFTING',
-  async ({ page }) => {
-    // §6 NAMES THREE SURFACES, not one: "the seventeen-key column, the
-    // selection filters, the assembly verbs -- none of them operate in TOY".
-    // I built the first and reported the section done. These are the other
-    // two, and the spec that missed them only ever looked at tool keys.
-    // DRAFTING, because that is where these chips live now: SELECTION and
-    // OBJECT TYPE modify what Select grabs, so they sit with the key that
-    // arms it rather than on BUILD.
+    // §6's other two surfaces, and the reason this check is worth keeping
+    // rather than deleting with the ruling: "they all go dim i notices" is
+    // what Movie was looking at, and these chips were two thirds of it.
     await open(page, base({ board: 'toy' }), 'drafting');
     const chips = page.locator('[data-sel-mode], [data-sel-filter]');
     const n = await chips.count();
     expect(n).toBeGreaterThan(3);
     expect(await chips.evaluateAll(els => els.filter(e => e.disabled).length),
-      'every mode and filter chip is down').toBe(n);
-    // Measured, not asserted -- the attribute with no rule behind it looks
-    // identical to a live chip.
+      'every mode and filter chip is live on TOY').toBe(0);
+    // Measured, not asserted -- a chip with the attribute off and the CSS
+    // still greying it looks disabled to the only person who matters.
     expect(await chips.first().evaluate(el =>
-      parseFloat(getComputedStyle(el).opacity))).toBeLessThan(0.6);
+      parseFloat(getComputedStyle(el).opacity))).toBeCloseTo(1, 1);
 
-    await page.locator('[data-board="drafting"]').click();
-    await page.waitForTimeout(80);
-    expect(await chips.evaluateAll(els => els.filter(e => e.disabled).length),
-      'and every one comes back on DRAFTING').toBe(0);
-  });
-
-test('the assembly verbs do not operate in TOY, even with items selected',
-  async ({ page }) => {
-    // THE BOARD BEATS THE SELECTION COUNT. ASSEMBLY is already disabled when
-    // nothing is picked, so a TOY check on an empty selection would pass
-    // against the OLD reason and prove nothing about the board. Selecting
-    // first is what makes this check about §6.
-    // DRAFTING: the assembly verbs act on what Select got hold of, so they
-    // are on that tab with the selection modes this test drives.
-    await open(page, base({ board: 'drafting' }), 'drafting');
+    // ASSEMBLY TAKES A SELECTION, so it is asked with one: it is disabled on
+    // an empty selection for its own reasons, and a check that did not select
+    // first would pass against the old reason and prove nothing.
     await page.locator('[data-sel-mode="click"]').click();
     await page.waitForTimeout(60);
     const box = await page.locator('#plan').boundingBox();
@@ -326,22 +174,86 @@ test('the assembly verbs do not operate in TOY, even with items selected',
       /scale ([\d.]+) px\/ft/.exec(document.getElementById('readout').textContent)[1]));
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2 - 10 * scale);
     await page.waitForTimeout(80);
-    const asm = page.locator('[data-assembly-start]');
-    expect(await asm.isDisabled(), 'a wall is picked, so ASSEMBLY is live')
-      .toBe(false);
-
-    await page.locator('[data-board="toy"]').click();
-    await page.waitForTimeout(80);
-    expect(await asm.isDisabled(), 'and the board puts it down anyway')
-      .toBe(true);
+    expect(await page.locator('[data-assembly-start]').isDisabled(),
+      'a wall is picked on TOY, so ASSEMBLY is live').toBe(false);
   });
 
-test('the board buttons no longer disclaim that nothing is constrained',
+test('the board is a lamp, and there is nothing to press', async ({ page }) => {
+  await open(page, base({ board: 'toy' }));
+  // NOT A BUTTON ANYWHERE ON THE PAGE. "it ill be basically a LIGHT -- not a
+  // button": a drafter who can press it can choose, and the whole of this
+  // ruling is that he no longer does.
+  expect(await page.locator('button[data-board]').count(),
+    'the TOY / DRAFTING switch is gone').toBe(0);
+  const lamp = page.locator('[data-board-light]');
+  await expect(lamp).toBeVisible();
+  await expect(lamp.locator('[data-board-lamp]')).toHaveText('TOY');
+  // THE SECOND ROW IS THE INSTRUMENT. "so if its in TOY MODE the user will
+  // know its 90s / and 1ft" -- a lamp that only said TOY would be a label.
+  await expect(lamp.locator('[data-board-lamp-note]')).toHaveText(/1 FT.*90/);
+  await expect(lamp).toHaveAttribute('data-lit', '');
+});
+
+test('on a promoted drawing the lamp says DRAFTING, and goes out',
   async ({ page }) => {
-    // §8. The disclaimer was true until §6; leaving it would now mislead.
-    await open(page, base({ board: 'toy' }));
-    const titles = await page.evaluate(() =>
-      [...document.querySelectorAll('[data-board]')].map(b => b.title));
-    expect(titles.join(' | ')).not.toContain('nothing is constrained');
-    expect(titles.join(' | ')).toContain('walls only');
+    await open(page, base({ board: 'drafting' }));
+    const lamp = page.locator('[data-board-light]');
+    await expect(lamp.locator('[data-board-lamp]')).toHaveText('DRAFTING');
+    // IT STILL SAYS WHICH BOARD. The shading is what goes; the fact does not
+    // stop being true because the rule it announces is no longer in force.
+    await expect(lamp).toBeVisible();
+    expect(await lamp.getAttribute('data-lit'), 'the light is out').toBeNull();
   });
+
+test('every new drawing starts on TOY, whatever the browser last saw',
+  async ({ page }) => {
+    // "lets ALWAYS start the users in TOY MODE". The board used to be seeded
+    // from localStorage, so one typed 12'-6" in one drawing put every later
+    // drawing on DRAFTING before its first wall -- which is the thing that
+    // sentence rules out.
+    await open(page, base({ board: 'drafting' }));
+    expect(await boardOf(page)).toBe('drafting');
+
+    await open(page, base({}));   // the file records no board
+    expect(await boardOf(page), 'a drawing that never chose is on TOY').toBe('toy');
+
+    // AND THE SEED ITSELF IS PUT BACK BY HAND, which is what makes this a
+    // check rather than a coincidence. The mutation gate caught it: a page
+    // that read the skin store again survived the two halves above, because
+    // nothing WRITES a board there any more -- so both halves passed against
+    // a page that would have honoured one if it found it. The old key is
+    // written here, and the page must still open TOY.
+    await page.evaluate(() => {
+      const keep = JSON.parse(localStorage.getItem('draft-skin') || '{}');
+      localStorage.setItem('draft-skin', JSON.stringify({ ...keep, board: 'drafting' }));
+    });
+    await page.reload();
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+    expect(await boardOf(page),
+      'the browser cannot seed the board any more').toBe('toy');
+  });
+
+test('a drawing that recorded DRAFTING reloads on DRAFTING', async ({ page }) => {
+  // THE OTHER HALF, and the reason the board lives on the drawing at all: a
+  // promotion is a fact about one file. The other way round, a drafter would
+  // be put back on TOY every time he opened the house he promoted.
+  await open(page, base({ board: 'drafting' }));
+  expect(await boardOf(page)).toBe('drafting');
+  expect(await downKeys(page)).toEqual([]);
+});
+
+test('the panels that share the pane survive the load', async ({ page }) => {
+  // THE CHECK THAT WAS MISSING ONCE, and its absence cost 25 red checks in
+  // three MERGED suites while every check in this file stayed green.
+  // buildToolColumn used to replaceChildren on a slot that
+  // buildSelectionPanel and buildAssemblyPanel APPEND into, so rebuilding the
+  // column deleted both -- and the page loads with a board change in it.
+  //
+  // THE BOARD CHANGE ON LOAD IS STILL THERE (`board = boardOfDrawing()` runs
+  // after all three panels exist), even though no drafter can cause another
+  // one, so the hazard is live and this still guards it.
+  await open(page, base({ board: 'drafting' }), 'drafting');
+  await expect(page.locator('[data-sel-mode]').first(),
+    'the selection panel survived the board the file carried').toBeVisible();
+  await expect(page.locator('[data-assembly-start]')).toBeVisible();
+});

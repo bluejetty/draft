@@ -533,8 +533,17 @@ test('DRAFTING: CONNECT AT CORNER asks, and Enter moves the garage wall over 1 f
 });
 
 test('TOY: the garage wall is moved over 1 ft without asking', async ({ page }) => {
-  await open(page);
-  await page.locator('[data-board-switch] [data-board="toy"]').click();
+  // NO PRESS ONTO TOY: it is where every drawing starts since 15 Oct, and the
+  // switch that used to put it there is a lamp.
+  //
+  // SO THIS ONE OPENS ON A FILE THAT NAMES NO BOARD. Every other check in
+  // here is about the DRAFTING board and `empty()` says so; a drawing that
+  // says nothing is on TOY, which is the board this check is about. Written
+  // as "no press, so it must be TOY" the first time, which read the file's
+  // own `board: 'drafting'` straight past -- and got asked the corner
+  // question it is here to prove TOY does not ask.
+  const { board, ...noBoard } = empty();
+  await open(page, noBoard);
   await drawType(page, 'bungalow', 'bungalow-garage');
   await trace(page, HOUSE);
   await run(page, SIDE_RUN);

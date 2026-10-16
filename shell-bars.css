@@ -567,6 +567,37 @@
   #mode-corner button[aria-pressed="true"] { color: var(--accent-ink);
     background-color: var(--accent); }
 
+  /* THE BOARD LAMP (Movie, 15 Oct: "it ill be basically a LIGHT -- not a
+     button"). It borrows the stacked pair's chip outright, for the reason the
+     pairs borrow the unit rows: a control built to a different shape reads as
+     a different KIND of thing, and this one belongs to the same family even
+     though it is the only one that cannot be pressed.
+
+     NO HOVER AND NO POINTER. The hover rule above is what tells a drafter a
+     chip can be pressed, so the lamp must not have it -- and `cursor:default`
+     says the same thing to the hand. */
+  /* HIDDEN MEANS GONE. The lamp stands down on a page that does not set it
+     (shell-bars' `board` verb), and `display:flex` on the stack would beat
+     the UA's [hidden] -- the same bug the UNGROUP button had. */
+  #mode-corner .set.stack.lamp[hidden] { display:none; }
+  #mode-corner .set.stack.lamp > span {
+    font-family: var(--font-ui); font-size:9px; font-weight:600;
+    letter-spacing:0.05em;
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:56px; padding:2px 6px;
+    border:1px solid var(--edge-panel); border-radius:3px;
+    background-color: var(--surface-chip); background-image: var(--surface-chip-tex, none);
+    color: var(--ink-quiet); cursor:default; user-select:none; }
+  /* LIT ON TOY, QUIET ON DRAFTING, and that is the whole of what a light is
+     for: TOY is the state with a rule in it, so it is the state worth
+     announcing. On DRAFTING the lamp still says which board the drawing is
+     on -- the fact does not go away when the shading does. */
+  #mode-corner .set.stack.lamp[data-lit] > [data-board-lamp] {
+    color: var(--accent-ink); background-color: var(--accent);
+    border-color: var(--accent); }
+  #mode-corner .set.stack.lamp > [data-board-lamp-note] {
+    font-size:8px; letter-spacing:0.08em; }
+
   /* AND WHAT A STACK LOOKS LIKE WHEN THE PAGE CANNOT WORK IT.
      shell-bars.js greys every bar verb a page does not wire, and these two
      pairs were the ones where greying did not SHOW: their resting colour is

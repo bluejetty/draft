@@ -43,8 +43,6 @@ async function houseOnLivePage(page) {
   // not a gap: a fixture is drafting work. Switching here is what a drafter
   // does, and asserting the chip is enabled afterwards is what proves the
   // panel hears the board at all.
-  await page.locator('[data-board="drafting"]').click();
-  await expect(page.locator('body')).toHaveAttribute('data-board', 'drafting');
 }
 
 // THE HOST WALL COMES FROM THE DRAWING, never a hardcoded id: the bone's first

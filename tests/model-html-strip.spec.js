@@ -595,42 +595,40 @@ test.describe('MODEL.html instrument strip', () => {
       .toHaveAttribute('data-mode', 'night');
   });
 
-  test('the board switch remembers the choice, and its title says what it enforces',
+  test('the board lamp says which board, and what being on it means',
     async ({ page }) => {
+      // WHAT THIS CHECK USED TO BE: the board SWITCH, pressed onto DRAFTING,
+      // reloaded, and held to a title that described what TOY enforces. Movie
+      // ruled on 15 Oct -- "it ill be basically a LIGHT -- not a button" --
+      // so the press is gone and the honesty check moves onto the lamp: it
+      // must describe what the board really does, which is the one claim this
+      // test has ever made.
       await seed(page);
       await openModel(page);
 
-      // TOY by default, which is Movie's stated default for the PC board.
+      // TOY by default, which is Movie's stated default and now his rule:
+      // "lets always start the users in TOY MODE".
       await expect(page.locator('body')).toHaveAttribute('data-board', 'toy');
-      // `body` carries the same attribute, which is the point of it -- the
-      // constraints, when they exist, read the body.
-      // Scoped to the mode corner, where §7b put the board switch.
-      const toy = page.locator('#mode-corner [data-board="toy"]');
-      await expect(toy).toHaveAttribute('aria-pressed', 'true');
+      const lamp = page.locator('#mode-corner [data-board-light]');
+      await expect(lamp).toBeVisible();
+      await expect(lamp.locator('[data-board-lamp]')).toHaveText('TOY');
+      await expect(lamp, 'the light is on').toHaveAttribute('data-lit', '');
 
-      await page.locator('#mode-corner [data-board="drafting"]').click();
-      await expect(page.locator('body')).toHaveAttribute('data-board', 'drafting');
-      await page.reload();
-      await expect(readout(page)).toContainText('walls', { timeout: 6000 });
-      await expect(page.locator('body'), 'the board outlives the tab')
-        .toHaveAttribute('data-board', 'drafting');
+      // AND THERE IS NOTHING TO PRESS. A switch left behind the lamp would
+      // make this the old page wearing a new face.
+      expect(await page.locator('#mode-corner button[data-board]').count()).toBe(0);
 
       // THE HONESTY CHECK, and the reason this test exists at all. It read
       //   await expect(toy).toHaveAttribute('title', /nothing is constrained/);
-      // for exactly as long as that was true, under a note saying "the day
-      // someone wires the constraints, this line is the one that tells them to
-      // change the title". That day came: §1–§5 square the wall, round it to
-      // the foot, and hold the shape rectilinear through a drag.
-      //
-      // THE CLAIM IS UNCHANGED — the title must describe what the board really
-      // does — and only the truth it checks has moved. The regex names a
-      // constraint a drafter can confirm by drawing one wall, so a title that
-      // goes back to promising nothing is red, and so is one that keeps
-      // promising squareness after someone unwires it.
-      await expect(toy).toHaveAttribute('title', /square and whole-foot/);
-      await expect(page.locator('#mode-corner [data-board="drafting"]'),
-        'and the other switch says what it does instead, or "square" reads as '
-        + 'a property of the strip rather than of TOY')
-        .toHaveAttribute('title', /any angle and any length/);
+      // for exactly as long as that was true, then /square and whole-foot/
+      // once §1–§5 made the board really square and round the wall. The claim
+      // is unchanged -- what the board says it does, it must do -- and only
+      // the truth it checks has moved: a lamp that goes back to promising
+      // nothing is red, and so is one that keeps promising the foot after
+      // someone unwires it.
+      await expect(lamp).toHaveAttribute('title', /whole foot/);
+      await expect(lamp.locator('[data-board-lamp-note]'),
+        'and it says so on the face, not only in a hover')
+        .toHaveText(/1 FT.*90/);
     });
 });

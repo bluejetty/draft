@@ -80,7 +80,6 @@ async function open(page, W = WIDE, opts = {}) {
   // room over the garage is the 2ND FL's.
   await page.goto('/MODEL.html?left=1&right=1&level=5&view=floor');
   await page.waitForTimeout(800);
-  await page.locator('[data-board-switch] [data-board="drafting"]').click();
   await h.showLeftPane(page, h.TOOL_PANE.beam || 'build');
   const key = page.locator('[data-tool-key="beam"]');
   if (await key.getAttribute('aria-pressed') !== 'true') await key.click();

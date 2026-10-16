@@ -279,14 +279,30 @@ if (!window.DraftShellBars) {
     <button type="button" data-skin-mode="night" aria-pressed="false">NIGHT</button>
     <button type="button" data-skin-mode="day" aria-pressed="false">DAY</button>
   </span>
-  <span class="set stack" data-board-switch>
-    <!-- NO title HERE. These two are set from script below, and a static one
-         would be overwritten -- which is exactly what happened when this
-         markup was given titles first: they read correctly in the file and
-         never reached the page. The wording, and the check that holds it to
-         the truth, live with the assignment. -->
-    <button type="button" data-board="toy" aria-pressed="false">TOY</button>
-    <button type="button" data-board="drafting" aria-pressed="false">DRAFTING</button>
+  <!-- THE BOARD IS A LIGHT NOW, NOT A SWITCH.
+
+       Movie, 15 Oct: "maybe don't even offer them to change to DRAFTING MODE,
+       but if they enter a ANGLE or length other than 1ft, it will
+       automatically place them in DRAFTING MODE. so it ill be basically a
+       LIGHT -- not a button... make sense?", and "so if its in TOY MODE the
+       user will know its 90s / and 1ft".
+
+       SO THERE IS NOTHING TO PRESS. Every drawing starts in TOY and the first
+       number a foot cannot hold moves it to DRAFTING by itself -- the drafter
+       never chooses, he is told. Two rows, because the lamp has to say both
+       WHICH board and WHAT that means: a drafter who only ever sees the word
+       TOY has been given a label, not an instrument.
+
+       IT KEEPS THE STACK'S SHAPE so it still reads as one of the family in
+       this corner, and its rows are SPANS: a thing that cannot be pressed
+       must not be a button, or the first drafter to click it learns that this
+       page's buttons sometimes do nothing.
+
+       NO title HERE, for the reason the switch had none: the wording is set
+       from script, beside the check that holds it to the truth. -->
+  <span class="set stack lamp" data-board-light>
+    <span data-board-lamp>TOY</span>
+    <span data-board-lamp-note>1 FT &middot; 90&deg;</span>
   </span>
 </div>
 <!-- RUFF/ROUGH AND NIGHT/DAY CAME BACK (Movie, 17 Sep) and now stand in the
@@ -932,7 +948,16 @@ ${trio(true)}
     'file-ext': Object.freeze({ sel: '#file-ext' }),
     printscreen: Object.freeze({ sel: '#printscreen' }),
     units: Object.freeze({ sel: '#units-corner button[data-units]' }),
-    board: Object.freeze({ sel: '[data-mode-corner] button[data-board]' }),
+    // THE BOARD LAMP IS HIDDEN, NOT GREYED, on a page that does not wire it.
+    // It used to be a pair of buttons and greying them said "this control
+    // lives elsewhere", which is a true thing to say about a control. Since
+    // 15 Oct it is an OUTPUT, and a greyed-out fact is not a sentence: a lamp
+    // reading TOY on a page that never sets it would be claiming a constraint
+    // that page does not have, and a dimmed one would claim it quietly.
+    board: Object.freeze({
+      sel: '[data-mode-corner] [data-board-light]',
+      down: el => { el.hidden = true; },
+    }),
 
     // THE INSTRUMENTS STAND DOWN BY CLASS AS WELL AS BY PROPERTY, and the
     // reasons are Construction Layout's, which found both of them the hard
@@ -1024,9 +1049,11 @@ ${trio(true)}
       // scale ladder rather than a conversion.
       construction: 'The construction sheet reads in architectural scales, '
         + 'which are imperial — see the VIEWPORT SCALE list' }),
+    // THE LAMP IS HIDDEN RATHER THAN TITLED, so this is never read -- but
+    // every verb has a WHY and the stand-down walks the table, so a verb
+    // without one would throw on the first page that lacks it.
     board: Object.freeze({
-      default: 'TOY and DRAFTING are set where the house is drawn, in the '
-        + 'MODEL space' }),
+      default: 'The board is set where the house is drawn, in the MODEL space' }),
     instruments: Object.freeze({
       default: 'Drawing instruments live in the MODEL space' }),
   });

@@ -113,7 +113,6 @@ test('AUTO DIMS run again keeps a moved row where it was left', async ({ page })
   await page.mouse.down();
   await page.mouse.move(x, y + 2 * scale, { steps: 6 });
   await page.mouse.up();
-  await page.locator('[data-board-switch] [data-board="drafting"]').click();
   await page.locator('[data-tool-key="dimension"]').click();
   await page.locator('[data-auto-dims]').click();
   await page.waitForTimeout(250);

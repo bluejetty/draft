@@ -15,8 +15,6 @@ async function houseOnLivePage(page) {
   await h.waitForSaved(page);
   await page.goto('/MODEL.html?left=1&lpane=build');
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-  await page.locator('[data-board="drafting"]').click();
-  await expect(page.locator('body')).toHaveAttribute('data-board', 'drafting');
 }
 
 // The bone's house: its plan walls and their extent on the MAIN FL.

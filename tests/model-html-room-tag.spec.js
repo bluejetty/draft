@@ -191,8 +191,19 @@ test('an emptied NAME is refused; an emptied SIZE takes the line away', async ({
   expect('size' in tag, 'no blank size kept').toBe(false);
 });
 
-test('ROOM TAG is a drafting key: TOY does not offer it', async ({ page }) => {
+test('ROOM TAG is offered on TOY, like every other key', async ({ page }) => {
+  // IT USED TO BE A DRAFTING-ONLY KEY and this check said so. Movie, 15 Oct:
+  // "we should allow more features (they all go dim i notices) but maybe the
+  // features will be slightly limited (to ft and 90 degrees)" -- TOY takes no
+  // tool away any more, it holds the foot and the right angle. The press is
+  // checked rather than the attribute, because a key that lights and arms
+  // nothing is the same lie in the other direction.
   await open(page, HOUSE({ board: 'toy' }));
   await h.showLeftPane(page, 'drafting');
-  await expect(page.locator('[data-tool-key="roomtag"]')).toBeDisabled();
+  const key = page.locator('[data-tool-key="roomtag"]');
+  await expect(key).toBeEnabled();
+  await key.click();
+  await expect(key, 'and it arms on the TOY board').toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('body'), 'arming it moved no board')
+    .toHaveAttribute('data-board', 'toy');
 });

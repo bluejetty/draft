@@ -25,8 +25,8 @@ async function openE2(page) {
   }, { bucket: h.STORAGE_BUCKET, saved: REPRO });
   await page.goto(URL);
   await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
-  // LINE and ANNOTATION are DRAFTING tools; the TOY board puts them away.
-  await page.locator('[data-board-switch] [data-board="drafting"]').click();
+  // LINE and ANNOTATION used to be DRAFTING-only, and the board was switched
+  // here to reach them. TOY puts nothing away since 15 Oct.
 }
 
 // Ink darker than the paper under one screen point, in a 5px box.

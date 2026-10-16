@@ -1027,17 +1027,13 @@
 
   /* The empty and error states say what to do, because a black screen with
      nothing on it is indistinguishable from a page that failed to boot. */
-  /* The promotion confirm sits above everything, including the notice, because
-     it is the one thing a drafter must answer before the page does what they
-     asked. [hidden] is spelled out: the author display below would otherwise
-     beat the UA rule, which is the bug the UNGROUP button had. */
-  #promote { position:fixed; inset:0; z-index:7; display:flex;
-    align-items:center; justify-content:center; padding:24px;
-    background:rgba(0,0,0,0.35); }
-  #promote[hidden] { display:none; }
-  /* SAME SHELL AS #promote, deliberately. It is the same kind of question --
-     a modal with two ways out -- and a second look would read as a second
-     kind of thing. */
+  /* #promote's OWN RULES CAME OUT WITH THE CARD (Movie, 15 Oct): the board
+     promotes itself now and asks nothing. The cards below kept the shell it
+     set -- a modal with two ways out, one look for one kind of thing -- and
+     `.promote-card` / `.promote-row` still carry its name because that is
+     where the shape was first written down. [hidden] is spelled out on every
+     one of them: the author display would otherwise beat the UA rule, which
+     is the bug the UNGROUP button had. */
   /* THE SAME SHELL for the bone's second press -- and it is a SEPARATE
      element from #bone-choice above, deliberately. That one is the TOY
      board's "break the bone here, or move this wall?", a different bone
@@ -1592,20 +1588,13 @@
      to pick a garage door out of a wall it sits in, with a dimension string and
      a room tag stacked over the same few pixels. -->
 <div id="hover-name" data-hover-name hidden aria-hidden="true"></div>
-<!-- THE PROMOTION CONFIRM. Its own element rather than a window.confirm,
-     because §7 names the two answers -- Continue, Stay in TOY -- and OK/Cancel
-     does not say which one keeps the drawing where it is. deleteLevel uses
-     window.confirm and is right to: "delete this level" needs no vocabulary of
-     its own. This one does. -->
-<div id="promote" data-promote hidden>
-  <div class="promote-card">
-    <p data-promote-text>Entering an exact length switches this drawing to DRAFTING.</p>
-    <div class="promote-row">
-      <button type="button" data-promote-go>Continue</button>
-      <button type="button" data-promote-stay>Stay in TOY</button>
-    </div>
-  </div>
-</div>
+<!-- THE PROMOTION CONFIRM IS GONE (Movie, 15 Oct). It asked Continue / Stay
+     in TOY before the first finer length, which was the right shape while
+     leaving TOY cost the drafter sixteen tools. It costs him nothing now, so
+     there is nothing to decide: the number he typed is made, and the lamp in
+     the mode corner says which board he is on. `.promote-card` and
+     `.promote-row` stay in the stylesheet -- the bone choice beside this uses
+     them, and so does the footprint card. -->
 
 <!-- §4's CHOICE. Movie: "they will be allowed to 'BREAK the bone' every foot
      if they want to by clicking on it". A click on a bone offers both ways on,
@@ -2211,7 +2200,9 @@
   let tsquareOn = false;    // T-SQUARE down: the run in hand is held square
   // THE FOOT LIGHT. A PAGE SETTING, NOT DRAWING DATA -- a drawing carrying
   // "the foot light was on" would arrive in someone else's session and start
-  // rounding his walls, so it rides in SKIN_KEY with the board and the theme.
+  // rounding his walls, so it rides in SKIN_KEY with the theme. (The board
+  // used to ride there too; it stopped on 15 Oct, when "always start the
+  // users in TOY MODE" made a remembered board the wrong answer.)
   //
   // THE ORDER SAYS IT RIDES WITH THE T-SQUARE, "same store, same restore-on-
   // load". Measured, the T-SQUARE HAS NO STORE: `tsquareOn` is a plain `let`
@@ -12700,7 +12691,10 @@
   // NOT ON TOY. Movie: "i guess this should only be allowed if not in TOY
   // mode" -- TOY holds every run to the four axes already, and §6 takes the
   // instruments away.
-  const angleLockDeg = () => (board !== 'toy' && protractorOn && typedAngle != null
+  // THE BOARD IS NOT ASKED ANY MORE: a TOY drawing can only be holding an
+  // angle a foot and a right angle can make, because anything else promoted
+  // it on the way in. So the lock is the protractor's and the number's.
+  const angleLockDeg = () => (protractorOn && typedAngle != null
     ? typedAngle : null);
   // The point along the locked bearing nearest the hand, either way along it
   // (the protractor folds a bearing to -90..90, so the hand picks the end, as
@@ -20770,7 +20764,10 @@
     protractorOut.textContent = run ? angleLabel(run.from, run.to) : '—';
     rulerChip.classList.toggle('lit', rulerOn);
     tsquareChip.classList.toggle('lit', tsquareOn);
-    protractorChip.classList.toggle('lit', protractorOn && board !== 'toy');
+    // THE BOARD IS NOT ASKED (Movie, 15 Oct). The chip was dark on TOY because
+    // the instrument was refused there; it is offered now, and a chip that
+    // took the press and stayed dark would be the worst of both.
+    protractorChip.classList.toggle('lit', protractorOn);
     scaleChip.classList.toggle('lit', footOn);
     // LIT MEANS LOADED, not merely armed, and that is the whole reason this
     // tool needs no mode indicator anywhere else: an armed-but-empty brush
@@ -20798,7 +20795,12 @@
     // not: typing it commits nothing now, it is kept for the protractor
     // (commitTypedAngle). Not on TOY, which has no instruments. While a
     // number is kept the box shows it; otherwise it reads the run, as before.
-    const angleTypable = board !== 'toy' && (drawsRun() || activeTool === 'outline');
+    // TYPABLE ON TOY TOO, since 15 Oct. It was shut there because TOY squares
+    // everything and a box that took 37 and ignored it is a lie -- but the
+    // answer now is that 37 is taken and MOVES THE BOARD, which is the
+    // drafter's own instruction. A box he cannot type in is the "they all go
+    // dim" he was complaining about.
+    const angleTypable = drawsRun() || activeTool === 'outline';
     if (angleBox.disabled === angleTypable) {
       angleBox.disabled = !angleTypable;
       if (!angleTypable) angleBox.value = '';
@@ -20869,7 +20871,10 @@
     paint();
   });
   protractorChip.addEventListener('click', () => {
-    if (board === 'toy') { sayOnStrip('the PROTRACTOR is a DRAFTING instrument'); return; }
+    // NO LONGER REFUSED ON TOY (Movie, 15 Oct). Lighting the protractor asks
+    // for nothing a foot cannot hold -- it is the ANGLE TYPED INTO it that
+    // does, and that number moves the board itself now. Refusing the
+    // instrument was the "they all go dim" complaint in one chip.
     protractorOn = !protractorOn;
     if (protractorOn) tsquareOn = false;
     if (protractorOn && typedAngle == null) {
@@ -22335,29 +22340,14 @@
   // with a mouse. The DIRECTION is the one the cursor is already giving --
   // squared first if the T-square is down -- so the typed number replaces the
   // distance and nothing else.
-  // ── the promotion, and the question that comes first ──────────────────────
-  // §7: "Entering an exact length anywhere promotes the drawing to DRAFTING",
-  // and the drafter is ASKED BEFORE it happens, not told after. Movie ruled
-  // this against a typed-length exception inside TOY, and his version is
-  // better for the reason he gave: TOY then has one law with no exceptions,
-  // and the promotion is visible instead of a hidden mode flip.
-  //
-  // WHAT "ASKS ONCE PER DRAWING" MEANS, and this is a reading of the order
-  // rather than a quotation from it. §7 says the confirm "asks once per
-  // drawing, then remembers", and separately that Stay in TOY "commits nothing
-  // and changes nothing -- no wall, no mode change, no half-application".
-  // Those two pull opposite ways on whether a Stay counts as an answer, so:
-  //
-  //   Continue  sets boardPromptSeen, promotes, and commits the length.
-  //   Stay      changes NOTHING, the flag included -- so the next typed length
-  //             asks again.
-  //
-  // The annoyance §7 names is "a dialog people learn to click through without
-  // reading", and that is the drafter who keeps saying Continue; once they
-  // have, they are never asked again. A drafter who keeps saying Stay keeps
-  // being asked because they keep trying to do the thing TOY does not allow,
-  // and the alternative -- silently promoting them later on the strength of a
-  // refusal -- is worse. FLAGGED for Movie rather than settled by me.
+  // ── the promotion, which used to be a question ──────────────────────────
+  // §7 of the TOY bones order: "Entering an exact length anywhere promotes the
+  // drawing to DRAFTING", and the drafter was ASKED before it happened --
+  // Continue / Stay in TOY, once per drawing. That was right while DRAFTING
+  // was somewhere a drafter CHOSE to go and TOY took sixteen tools away with
+  // him. Movie settled it the other way on 15 Oct and the card is gone; see
+  // promoteForNumber below for what replaced it and why the asking had to go
+  // with it.
   // ── WHAT TOY ITSELF WOULD HAVE MADE ──────────────────────────────────────
   //
   // Movie, 27 Sep: *"allow the use while in 'TOY MODE' to enter a 'L' or 'R'
@@ -22393,26 +22383,31 @@
   // axis, which is the whole of the test.
   const toyCouldMakeAngle = deg => Math.abs(deg % 90) < 1e-9;
 
-  const promote = document.getElementById('promote');
-  let pendingPromotion = null;
-
-  const askToPromote = onContinue => {
-    pendingPromotion = onContinue;
-    promote.hidden = false;
-    promote.querySelector('[data-promote-go]').focus();
-  };
-  const closePromote = () => { pendingPromotion = null; promote.hidden = true; };
-
-  promote.querySelector('[data-promote-go]').addEventListener('click', () => {
-    const go = pendingPromotion;
-    closePromote();
-    if (drawing) { drawing.boardPromptSeen = true; markDirty(); }
+  // ── THE PROMOTION IS AUTOMATIC NOW, AND IT IS NOT A QUESTION ────────────
+  //
+  // Movie, 15 Oct: "if they enter a ANGLE or length other than 1ft, it will
+  // automatically place them in DRAFTING MODE. so it ill be basically a LIGHT
+  // -- not a button".
+  //
+  // WHAT THIS REPLACES was a card -- Continue / Stay in TOY -- raised before
+  // the first finer length and remembered per drawing. It was the right shape
+  // under the older ruling, where DRAFTING was a place the drafter CHOSE to
+  // go and TOY took sixteen tools away; leaving TOY was a decision and a
+  // decision gets asked about. It is the wrong shape under this one. TOY now
+  // takes nothing away, so the drafter is not being moved anywhere he could
+  // have refused to go: he typed 12'-6", there is only one drawing that can
+  // be, and the page's job is to make it and say what happened.
+  //
+  // SAID, THOUGH. A mode that changes silently is the "hidden mode flip" the
+  // old card existed to avoid, and the lamp alone is too quiet for the moment
+  // it happens -- a drafter watching his wall is not watching the corner. So
+  // the strip says it once, in the same breath as the number that did it.
+  const promoteForNumber = (toyCouldHoldIt, said) => {
+    if (board !== 'toy' || toyCouldHoldIt) return false;
     setBoard('drafting');
-    if (go) go();
-  });
-  // NOTHING AT ALL, which is the whole of Stay's contract. No wall, no board,
-  // no flag: a refusal that recorded itself would be a change.
-  promote.querySelector('[data-promote-stay]').addEventListener('click', closePromote);
+    sayOnStrip(`${said} is finer than TOY draws — DRAFTING now`);
+    return true;
+  };
 
   // THE OUTLINE'S TYPED EDGE: whole feet only, square only, along the way
   // the cursor is pointing (or the typed bearing). No TOY question -- the
@@ -22457,14 +22452,14 @@
     if (!parsed.ok) { stripMessage.textContent = parsed.error; return; }
     const feet = parsed.inches / 12;
     if (!(feet > 0) || !drawStart || !cursorWorld) return;
-    // ASKED BEFORE ANYTHING HAPPENS. The length is re-read inside the
-    // continuation rather than captured here, so what commits is what the box
-    // says when the drafter answers -- and if the gesture has moved on, the
-    // guards above run again on the way through.
-    if (board === 'toy' && !toyCouldMakeLength(feet) && !drawing?.boardPromptSeen) {
-      askToPromote(() => commitTypedLength());
-      return;
-    }
+    // AND THE NUMBER ITSELF MOVES THE BOARD, if a whole foot cannot hold it.
+    // Nothing is asked and nothing is refused: the wall the drafter typed is
+    // the wall he gets, and the lamp changes behind it.
+    // SAID IN HIS OWN WORDS, the box's text rather than a re-formatted number:
+    // a drafter who typed 12-6 reads "12-6", and a line that answered
+    // 12'-6" would be the page correcting him in the middle of telling him
+    // something else.
+    promoteForNumber(toyCouldMakeLength(feet), String(lengthBox.value).trim());
     const aim = lockedPoint(drawStart, cursorWorld) || squareTo(drawStart, cursorWorld);
     const dx = aim.x - drawStart.x, dz = aim.z - drawStart.z;
     const len = Math.hypot(dx, dz);
@@ -22499,8 +22494,14 @@
     }
     typedAngle = deg;
     angleBox.blur();
-    if (!protractorOn) sayOnStrip(`ANGLE ${deg}° kept — light the PROTRACTOR to lock to it`);
-    else clearNotice();
+    // "if they enter a ANGLE or length other than 1ft" -- an angle TOY would
+    // have drawn is every multiple of 90, and anything else is the drafter
+    // asking for a building TOY cannot make. The promotion speaks for itself
+    // here; the ANGLE line below would otherwise talk over it.
+    if (!promoteForNumber(toyCouldMakeAngle(deg), `${deg}°`)) {
+      if (!protractorOn) sayOnStrip(`ANGLE ${deg}° kept — light the PROTRACTOR to lock to it`);
+      else clearNotice();
+    }
     stripRefresh();
     paint();
   };
@@ -22548,7 +22549,6 @@
   const { switchSet, markSwitch } = window.DraftShellBars;
   const themeButtons = switchSet('data-theme');
   const modeButtons = switchSet('data-skin-mode');
-  const boardButtons = switchSet('data-board');
 
   // THE SKIN SWITCH IS THE BAR'S; WHAT TO REPAINT AFTERWARDS IS THIS PAGE'S.
   // The module applies the palette, marks the pressed button and merges the
@@ -22593,60 +22593,62 @@
     },
   });
 
-  // THE BOARD SWITCH IS A SWITCH AND NOTHING IS WIRED BEHIND IT YET, and that
-  // is said out loud rather than implied. Movie, 13 Sep, asked for it on the
-  // PC strip; the sentence defining what TOY MODE restricts was cut off
-  // mid-word and has not arrived, so what exists is the choice, remembered
-  // across reloads and readable by whoever builds the constraints -- not a
-  // claim that they exist. The title on each button says so; when the rules
-  // land they read `body[data-board]` and nothing here moves.
-  const BOARDS = ['toy', 'drafting'];
-  // THE DRAWING OWNS THE BOARD; localStorage only seeds a drawing that has
-  // never recorded one. §7 of the TOY bones order is explicit -- a per-browser
-  // flag means "the same drafter meets it on every file while a second drafter
-  // never sees it at all" -- and acceptance #11 wants a PROMOTED DRAWING to
-  // reload as DRAFTING, which is a fact about one file.
+  // ── THE BOARD IS A LIGHT, AND EVERY DRAWING STARTS IN TOY ───────────────
   //
-  // The remembered value is kept as the seed rather than dropped, so a fresh
-  // page still opens on the board the drafter last used, which is what it does
-  // today. A drawing that HAS chosen overrides it, always.
-  const rememberedBoard = BOARDS.includes(stored.board) ? stored.board : 'toy';
-  let board = rememberedBoard;
+  // Movie, 15 Oct: *"lets always start the users in TOY MODE"*, and *"maybe
+  // don't even offer them to change to DRAFTING MODE, but if they enter a
+  // ANGLE or length other than 1ft, it will automatically place them in
+  // DRAFTING MODE. so it ill be basically a LIGHT -- not a button"*.
+  //
+  // SO THE SEED IS GONE. It used to be the board the drafter last used, kept
+  // in localStorage so a fresh page opened where he left off -- which is
+  // exactly what "always start the users in TOY MODE" rules out: one typed
+  // 12'-6" in one drawing would have put every later drawing on DRAFTING
+  // before its first wall. A drawing that has RECORDED a board still wins, so
+  // a promoted drawing still reloads as DRAFTING -- that is a fact about one
+  // file, and the reason the board was moved onto the drawing in the first
+  // place.
+  const BOARDS = ['toy', 'drafting'];
+  let board = 'toy';
 
   const boardOfDrawing = () =>
-    window.DraftDrawingFormat.board(drawing?.board) || rememberedBoard;
+    window.DraftDrawingFormat.board(drawing?.board) || 'toy';
   const applyBoard = () => {
     document.body.setAttribute('data-board', board);
-    markSwitch(boardButtons, 'board', board);
+    paintBoardLamp();
     boardListeners.forEach(fn => fn(board));
-    try {
-      const keep = JSON.parse(localStorage.getItem(SKIN_KEY) || '{}');
-      localStorage.setItem(SKIN_KEY, JSON.stringify({ ...keep, board }));
-    } catch { /* as above */ }
   };
-  boardButtons.forEach(b => {
-    // §8 of the TOY bones order: this title said "remembered, but nothing is
-    // constrained by it yet" for as long as that was true. §6 made it false
-    // -- the board decides which tools the column offers -- and the disclaimer
-    // went rather than being left to mislead.
-    //
-    // §1–§5 have since made it false a second time, in the direction a drafter
-    // meets FIRST. The tool roster is what TOY takes away; squareness and the
-    // whole foot are what it DOES, on the very first wall, and a title that
-    // named only the roster left the drafter to discover the geometry rule by
-    // being surprised by it. Both facts, one sentence each side of the comma.
-    //
-    // STILL NOT PROMISING THE UNBUILT: this names what a drafter can confirm
-    // by drawing one wall today. model-html-strip.spec.js:353 holds it to that.
-    b.title = b.dataset.board === 'toy'
-      ? 'TOY board — walls only, square and whole-foot; the other tools are put away'
-      : 'DRAFTING board — the full tool column, any angle and any length';
-    b.addEventListener('click', () => { setBoard(b.dataset.board); });
-  });
 
-  // ONE PLACE THE BOARD CHANGES, so the drawing and the switch cannot drift.
-  // Everything that moves a board -- the buttons here, and the promotion the
-  // LENGTH box will raise -- goes through this.
+  // WHAT THE LAMP SAYS. Two rows: the board, and what being on it MEANS --
+  // "so if its in TOY MODE the user will know its 90s / and 1ft". A lamp that
+  // only said TOY would be a label; the second row is the instrument.
+  //
+  // LIT ON TOY ONLY. TOY is the state with a rule in it, so it is the state
+  // worth announcing; DRAFTING is the page with nothing held back, and the
+  // lamp goes quiet without going blank -- it still says which board the
+  // drawing is on, because that does not stop being true.
+  const boardLamp = document.querySelector('[data-board-light]');
+  const paintBoardLamp = () => {
+    if (!boardLamp) return;
+    const toy = board === 'toy';
+    boardLamp.querySelector('[data-board-lamp]').textContent = toy ? 'TOY' : 'DRAFTING';
+    boardLamp.querySelector('[data-board-lamp-note]').textContent = toy
+      ? '1 FT · 90°' : 'ANY LENGTH';
+    boardLamp.toggleAttribute('data-lit', toy);
+    // THE TITLE IS THE LAMP'S OWN, set here beside the words it explains --
+    // the switch's titles were set from script for the same reason, and the
+    // one thing that must not happen is a lamp whose hover describes the
+    // other board.
+    boardLamp.title = toy
+      ? 'TOY — every tool, but square and on the whole foot. Type a finer '
+        + 'length or an off-square angle and the drawing moves to DRAFTING.'
+      : 'DRAFTING — any length, any angle. This drawing left TOY when a '
+        + 'number was typed that a whole foot could not hold.';
+  };
+
+  // ONE PLACE THE BOARD CHANGES, so the drawing and the lamp cannot drift.
+  // There is no longer anything that moves it BACK: the promotion below is
+  // the only caller, and a drafter who wants TOY again starts a drawing.
   const setBoard = next => {
     if (!BOARDS.includes(next) || next === board) return;
     board = next;
@@ -22758,13 +22760,17 @@
     document.querySelectorAll('[data-tool-key]').forEach(btn => {
       const tool = roster.get(btn.dataset.toolKey);
       if (!tool) return;
+      // STILL ASKED, THOUGH THE ANSWER IS NOW ALWAYS YES on both boards
+      // (Movie, 15 Oct). The roster is the one place that decides, and a
+      // keypad that stopped asking would be the day a board takes something
+      // away again and the keys do not hear about it.
       const usable = roster.availableOn(tool.id, board);
       btn.disabled = !usable;
       // The title is the whole name, because the face is 40px and
-      // FENESTRATION does not fit on it at a readable size. When the key is
-      // down the title is the only place the REASON fits.
-      btn.title = usable ? tool.name
-        : `${tool.name} — the TOY board does not offer this tool`;
+      // FENESTRATION does not fit on it at a readable size. The refusal that
+      // used to go here -- "the TOY board does not offer this tool" -- went
+      // with the ruling: there is no tool TOY does not offer.
+      btn.title = tool.name;
     });
   }
 
@@ -22983,9 +22989,14 @@
       // beside it: MODE_HELP describes a shortcut for a gesture this board
       // does not have, and leaving it up would teach a drafter a control that
       // is right there and dead.
+      // THE REFUSAL BRANCH IS UNREACHABLE SINCE 15 OCT -- no board puts these
+      // chips away any more -- and it is kept rather than deleted because the
+      // roster is still the one place that decides, and the day a board
+      // refuses again this is where the drafter is told. What went is the
+      // SENTENCE: "on the DRAFTING board" named a switch that no longer
+      // exists, so it would have sent him looking for a button.
       modeHelp.textContent = on ? MODE_HELP[selectionMode]
-        : 'The TOY board edits through bones. Selection modes and filters are '
-          + 'on the DRAFTING board.';
+        : 'Selection modes and filters are not offered on this board.';
       filterHelpEl.textContent = on ? filterHelp() : '';
       // RED WHENEVER A FILTER IS ENGAGED -- not when the cursor is over
       // something the filter excludes. selectFilterHelpColor (:23622) is a
@@ -23369,7 +23380,7 @@
       // The old page's own two sentences (:23631-23633), and the red is its
       // own too: nothing selected is the state that stops the button working.
       help.textContent = !on
-        ? 'Assemblies are a DRAFTING board verb.'
+        ? 'Assemblies are not offered on this board.'
         : (n ? `${n} selected item${n === 1 ? '' : 's'} · make a named assembly.`
              : 'Select drawing items before assembling them.');
       help.toggleAttribute('data-engaged', !on || n === 0);
@@ -26703,7 +26714,6 @@
       // Write Tier's job for GEOMETRY it cannot understand; a scalar the page
       // acts on gets normalised on the way in.
       board: F.board(parsed.board),
-      boardPromptSeen: F.boardPromptSeen(parsed.boardPromptSeen),
       // The drafter's lines and notes on the elevations, by view name. ONLY
       // WHEN THE FILE HAS THEM: a drawing opened and saved untouched must come
       // back key for key, so the list is made on the first mark, not here.
@@ -27093,25 +27103,28 @@
   };
 
   // READERS NORMALISE, WRITERS NEVER INVENT. The loader materialises `board`
-  // and `boardPromptSeen` on `drawing` because the page ACTS on them -- a board
-  // of "banana" must not reach the switch (see the normalise comment above) --
-  // and `...drawing` then wrote both into every file this page saved.
+  // on `drawing` because the page ACTS on it -- a board of "banana" must not
+  // reach the lamp (see the normalise comment above) -- and `...drawing` then
+  // wrote it into every file this page saved.
   //
   // THAT IS THE 12" FOUNDATION AGAIN, pointing the other way. A drafter who
   // opened a drawing and pressed SAVE had asked to draw nothing, and the file
-  // came back with two keys the page that owns the format never writes. The
-  // Write Tier's acceptance line is "every key equal, deep" and it was red for
+  // came back with keys the page that owns the format never writes. The Write
+  // Tier's acceptance line is "every key equal, deep" and it was red for
   // exactly as long as this was true; three of its checks say the same fact.
   //
   // `board: null` is the ABSENCE spelled out -- it means "never chosen", which
-  // is what a missing key already means -- and `boardPromptSeen: false` means
-  // "not yet answered", likewise. Neither carries an instruction, so neither is
-  // written. A REAL choice is: 'drafting' is a member of BOARDS and not the
-  // null, so switching back to DRAFTING persists, and `boardPromptSeen: true`
-  // persists, which is what keeps §7 from re-arming a question already answered.
+  // is what a missing key already means, and which now reads as TOY. A REAL
+  // choice is 'drafting': a drawing promoted by a number it was given reloads
+  // on the board that number put it on.
+  //
+  // `boardPromptSeen` WENT WITH THE CARD (Movie, 15 Oct). It recorded that a
+  // drafter had answered the Continue / Stay question once, and there is no
+  // question any more. Files written before that still carry the key; the
+  // loader drops it, which is what it already did with every other key the
+  // format does not name.
   const storedChoice = () => ({
     ...(drawing.board ? { board: drawing.board } : {}),
-    ...(drawing.boardPromptSeen === true ? { boardPromptSeen: true } : {}),
   });
 
   const serializeDrawing = () => {
@@ -27119,7 +27132,7 @@
     // Destructured out of the spread rather than overwritten with `undefined`,
     // so the key is genuinely absent from the OBJECT and not merely absent from
     // its JSON -- the omission must not depend on this having one caller.
-    const { board: _board, boardPromptSeen: _seen, ...rest } = drawing;
+    const { board: _board, ...rest } = drawing;
     return {
       ...rest,
       ...storedChoice(),

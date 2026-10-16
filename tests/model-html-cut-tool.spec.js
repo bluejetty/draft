@@ -120,7 +120,8 @@ test('+ CUT and three presses make a section', async ({ page }) => {
 // press lands level with the first.
 test('with the T-square down, the cut line is held level', async ({ page }) => {
   await newPageOnSavedHouse(page);
-  await page.locator('[data-board-switch] [data-board="drafting"]').click();
+  // The DRAFTING press that used to stand here went with the switch (15 Oct);
+  // the T-square is reachable on either board.
   await page.locator('[data-mode-tsquare]').click();
   await pressCut(page);
   await cutThrough(page, A, [B[0], B[1] + 1.5], SOUTH);

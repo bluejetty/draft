@@ -1,16 +1,18 @@
-// DOES THE BOARDS SPEC CATCH A BOARD THAT CONSTRAINS NOTHING?
+// DOES THE BOARDS SPEC CATCH A BOARD THAT STILL REFUSES SOMETHING?
 //
-// §6, "no other tools". Same gate and the same two hardenings as the four
-// before it: an ambiguous anchor is refused rather than guessed at, and a
-// survivor is re-run against the WHOLE spec before it is called one.
+// IT USED TO ASK THE OPPOSITE QUESTION. Under §6, "no other tools", TOY
+// offered five keys out of twenty and this gate's fear was a board that
+// constrained nothing: fifteen greyed keys over a register that still took
+// ROOF. Movie overturned that on 15 Oct -- TOY offers the whole roster, the
+// switch became a lamp, and a number a foot cannot hold promotes the drawing
+// by itself.
 //
-// THE MUTANTS ARE ARRANGED AROUND ONE FEAR. This work has a look (fifteen
-// greyed keys) and a rule (the register refusing). The look is the easy half
-// and it is the half a test naturally reaches for, so a spec can be thoroughly
-// green while the rule is not there at all -- greyed keys over a register that
-// still takes ROOF. Mutant 7 removes the rule and leaves the look untouched;
-// mutants 11 and 12 do the reverse. If any of those three survives, this file
-// is measuring a picture.
+// SO THE FEAR TURNS OVER WITH IT, and the pairing stays: this work still has
+// a LOOK (every key live, a lamp in the corner) and a RULE (the register
+// taking the tool, the board seeded nowhere but TOY). A spec can be
+// thoroughly green while only one of them is true -- live keys over a
+// register that refuses, or a lamp that says TOY on a drawing that is not.
+// The mutants below take the two apart.
 const { execSync } = require('child_process');
 const fs = require('fs');
 // THE REPO ROOT, DERIVED. This read '/home/user/draft', which resolves on
@@ -22,158 +24,78 @@ const ROOT = require('path').resolve(__dirname, '..');
 const MUTANTS = [
   // ── the one place that decides ──────────────────────────────────────────
   { file: 'tool-roster.js',
-    name: 'TOY offers everything after all',
-    find: "    return board === 'toy' ? TOY_TOOLS.includes(id) : true;",
-    with: '    return true;',
-    test: 'the other fifteen keys are down' },
-  { file: 'tool-roster.js',
-    name: 'an unknown board falls SHUT instead of open',
-    find: "    return board === 'toy' ? TOY_TOOLS.includes(id) : true;",
-    with: '    return TOY_TOOLS.includes(id);',
-    test: 'the roster answers per board' },
-  // THE ANCHOR MOVED WHEN OUTLINE BECAME A TOOL OF ITS OWN (18 Sep) and this
-  // file went red the same run, which is exactly what it is for: a mutation
-  // whose `find` no longer matches stops testing anything and says nothing.
-  { file: 'tool-roster.js',
-    name: 'TOY loses the wall tool, so §1 has nothing to run on',
-    find: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline', 'cut', 'trim']);",
-    with: "  const TOY_TOOLS = Object.freeze([RESTING, 'outline', 'cut', 'trim']);",
-    test: 'the roster answers per board' },
-  { file: 'tool-roster.js',
-    name: 'TOY loses SELECT, so the fallback lands on a refused tool',
-    find: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline', 'cut', 'trim']);",
-    with: "  const TOY_TOOLS = Object.freeze(['wall', 'outline', 'cut', 'trim']);",
-    test: 'the roster answers per board' },
-  // AND THE NEW MEMBER GETS ITS OWN. Movie's ruling is that the outline
-  // gesture survives on TOY -- "drawing the outline is not a drafting tool, it
-  // is how a TOY house begins" -- so a board that drops it is a board that
-  // will not let a TOY house start.
-  { file: 'tool-roster.js',
-    name: 'TOY loses the outline gesture, so a TOY house cannot begin',
-    find: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'outline', 'cut', 'trim']);",
-    with: "  const TOY_TOOLS = Object.freeze([RESTING, 'wall', 'cut', 'trim']);",
-    test: 'the roster answers per board' },
+    name: 'TOY goes back to its five tools',
+    find: '  const availableOn = (id, _board) => byId.has(id);',
+    with: "  const availableOn = (id, board) => byId.has(id)\n"
+      + "    && (board !== 'toy' || TOY_TOOLS.includes(id));",
+    test: 'the roster offers every tool on every board' },
   { file: 'tool-roster.js',
     name: 'an id that is not a tool is available',
-    find: '    if (!byId.has(id)) return false;',
-    with: '',
-    test: 'the roster answers per board' },
+    find: '  const availableOn = (id, _board) => byId.has(id);',
+    with: '  const availableOn = (id, _board) => true;',
+    test: 'the roster offers every tool on every board' },
+  { file: 'tool-roster.js',
+    name: 'the panels go back to being off in TOY',
+    find: '  const panelOn = (panel, _board) => PANELS.includes(panel);',
+    with: "  const panelOn = (panel, board) => PANELS.includes(panel) && board !== 'toy';",
+    test: 'the selection filters and the assembly verbs operate on TOY' },
 
   // ── the look ────────────────────────────────────────────────────────────
   { file: 'MODEL.html',
-    name: 'the keypad stops putting the keys down',
+    name: 'the keypad puts the build keys down anyway',
     find: '      btn.disabled = !usable;',
-    with: '      btn.disabled = false;',
-    test: 'the other fifteen keys are down' },
+    with: "      btn.disabled = tool.group === 'build' && board === 'toy';",
+    test: 'no key is down on TOY' },
   { file: 'MODEL.html',
-    name: 'a down key is dimmed by 2% -- the rule exists and shows nothing',
-    find: '  .tool-key:disabled, .tool-key:disabled:hover { opacity:0.35;',
-    with: '  .tool-key:disabled, .tool-key:disabled:hover { opacity:0.98;',
-    test: 'LOOKS down' },
-  { file: 'MODEL.html',
-    name: 'the down look is sprayed over every key, available or not',
-    find: '  .tool-key:disabled, .tool-key:disabled:hover { opacity:0.35;',
-    with: '  .tool-key, .tool-key:disabled:hover { opacity:0.35;',
-    test: 'LOOKS down' },
-  { file: 'MODEL.html',
-    name: 'a down key stops saying why',
-    find: "      btn.title = usable ? tool.name\n        : `${tool.name} — the TOY board does not offer this tool`;",
-    with: '      btn.title = tool.name;',
-    test: 'says WHY' },
-  { file: 'MODEL.html',
-    name: 'the reason is put on keys it is not true of',
-    find: "      btn.title = usable ? tool.name\n        : `${tool.name} — the TOY board does not offer this tool`;",
-    with: '      btn.title = `${tool.name} — the TOY board does not offer this tool`;',
-    test: 'says WHY' },
+    name: 'a key still says the board refuses it',
+    find: '      btn.title = tool.name;',
+    with: "      btn.title = board === 'toy'\n"
+      + "        ? `${tool.name} — the TOY board does not offer this tool` : tool.name;",
+    test: 'a key on TOY says its own name' },
 
   // ── the rule ────────────────────────────────────────────────────────────
   { file: 'MODEL.html',
-    name: 'THE REGISTER STOPS REFUSING and only the greying is left',
+    name: 'THE REGISTER STILL REFUSES, with every key lit over it -- the look '
+      + 'without the rule, which is what this gate is for',
     find: '    const next = roster && roster.availableOn(id, board) ? id : RESTING_TOOL;',
-    with: '    const next = roster && roster.get(id) ? id : RESTING_TOOL;',
-    test: 'forced back on' },
-  { file: 'MODEL.html',
-    name: 'a board change repaints the faces but leaves the tool armed',
-    find: '    if (roster && !roster.availableOn(activeTool, board)) setTool(RESTING_TOOL);',
-    with: '',
-    test: 'puts down a tool TOY does not offer' },
-  { file: 'MODEL.html',
-    name: 'a board change disarms EVERYTHING, including what the board offers',
-    find: '    if (roster && !roster.availableOn(activeTool, board)) setTool(RESTING_TOOL);',
-    with: '    setTool(RESTING_TOOL);',
-    test: 'survives the switch' },
-  { file: 'MODEL.html',
-    name: 'the board never tells anyone it changed',
-    find: '    boardListeners.forEach(fn => fn(board));',
-    with: '',
-    test: 'against a browser remembering DRAFTING' },
+    with: "    const next = roster && roster.availableOn(id, board)\n"
+      + "      && !(board === 'toy' && roster.get(id)?.group === 'build') ? id : RESTING_TOOL;",
+    test: 'the register ARMS a drafting tool on TOY' },
 
-  // ── THE BUG ITSELF IS NOT A ROW ANY MORE, AND IT WAS ONE ─────────────────
-  //
-  // It read: a board change calls buildToolColumn() instead of
-  // refreshToolAvailability(). Measured 30 Sep, it SURVIVED every check in
-  // the spec, and it survives for a reason worth writing down rather than
-  // hiding by leaving the row quietly in place.
-  //
-  // THE BUG TOOK TWO THINGS AND THE CODE NOW REFUSES EACH. It needed a
-  // rebuild on a board change AND a rebuild that clears the shared parent.
-  // The first is refused by the board change walking availability instead;
-  // the second by buildToolColumn swapping its own [data-tool-group] box
-  // rather than the pane's children. Restore either alone and the other
-  // holds: the rebuild above is harmless, and a clearing rebuild is never
-  // called a second time -- buildToolColumn runs once, at boot, before the
-  // selection and assembly panels exist. That one was measured too
-  // (`pane.replaceChildren(box)` in place of the swap): it SURVIVES as well.
-  //
-  // So the check is load-bearing only under a SECOND change, and a row bends
-  // one thing. The spec test stays -- it is what goes red the day both
-  // guards slip -- but a row that cannot go red is not a row.
+  // ── the lamp ────────────────────────────────────────────────────────────
+  { file: 'MODEL.html',
+    name: 'the lamp says TOY whatever board the drawing is on',
+    find: "    boardLamp.querySelector('[data-board-lamp]').textContent = toy ? 'TOY' : 'DRAFTING';",
+    with: "    boardLamp.querySelector('[data-board-lamp]').textContent = 'TOY';",
+    test: 'the lamp says DRAFTING, and goes out' },
+  { file: 'MODEL.html',
+    name: 'the light never goes out, so a promoted drawing looks like a TOY one',
+    find: "    boardLamp.toggleAttribute('data-lit', toy);",
+    with: "    boardLamp.toggleAttribute('data-lit', true);",
+    test: 'the lamp says DRAFTING, and goes out' },
+  { file: 'MODEL.html',
+    name: 'the lamp drops its second row, so it is a label rather than an '
+      + 'instrument -- "the user will know its 90s / and 1ft"',
+    find: "    boardLamp.querySelector('[data-board-lamp-note]').textContent = toy\n"
+      + "      ? '1 FT · 90°' : 'ANY LENGTH';",
+    with: "    boardLamp.querySelector('[data-board-lamp-note]').textContent = '';",
+    test: 'the board is a lamp, and there is nothing to press' },
 
-  // ── §6's OTHER TWO SURFACES ─────────────────────────────────────────────
-  { file: 'tool-roster.js',
-    name: 'every panel is on every board',
-    find: "    return board !== 'toy';\n  };",
-    with: '    return true;\n  };',
-    test: 'the selection filters do not operate in TOY' },
+  // ── where a new drawing starts ──────────────────────────────────────────
   { file: 'MODEL.html',
-    name: 'the selection chips stop obeying the board',
-    find: "      const on = window.DraftToolRoster?.panelOn('selection', board) !== false;",
-    with: '      const on = true;',
-    test: 'the selection filters do not operate in TOY' },
-  { file: 'MODEL.html',
-    name: 'the chips go down but keep looking live',
-    find: '  .sel-chip:disabled, .sel-chip:disabled:hover { opacity:0.35;',
-    with: '  .sel-chip:disabled, .sel-chip:disabled:hover { opacity:0.97;',
-    test: 'the selection filters do not operate in TOY' },
-  { file: 'MODEL.html',
-    name: 'the assembly verbs stop obeying the board',
-    find: "      const on = window.DraftToolRoster?.panelOn('assembly', board) !== false;",
-    with: '      const on = true;',
-    test: 'the assembly verbs do not operate in TOY' },
-  { file: 'MODEL.html',
-    name: 'the selection count beats the board, so TOY frees ASSEMBLY once something is picked',
-    find: '      asmBtn.disabled = !on || n === 0;',
-    with: '      asmBtn.disabled = n === 0;',
-    test: 'the assembly verbs do not operate in TOY' },
-  { file: 'MODEL.html',
-    name: 'a board change never reaches the two panels',
-    find: '    syncSelectionPanel();\n    syncAssembly();',
-    with: '',
-    test: 'the selection filters do not operate in TOY' },
-
-  // ── §8 ──────────────────────────────────────────────────────────────────
-  { file: 'MODEL.html',
-    name: 'the disclaimer comes back after the constraint landed',
-    // RE-POINTED. The anchor held the title as §6 left it; §1-§5 rewrote it
-    // to name the geometry rule too, so the old string stopped matching and
-    // this mutation reported SKIPPED -- counted in the score, checking
-    // nothing. The behaviour is unchanged: the title states what the board
-    // DOES, and must not fall back to disclaiming that nothing is
-    // constrained. Taken from the subject verbatim rather than retyped --
-    // the em dashes are why this anchor is easy to break by hand.
-    find: "    b.title = b.dataset.board === 'toy'\n      ? 'TOY board — walls only, square and whole-foot; the other tools are put away'\n      : 'DRAFTING board — the full tool column, any angle and any length';",
-    with: "    b.title = 'Board mode — remembered, but nothing is constrained by it yet';",
-    test: 'no longer disclaim' },
+    name: 'the browser seeds the board again, so one promoted drawing puts '
+      + 'every later one on DRAFTING before its first wall',
+    // THE FIRST VERSION OF THIS MUTANT SURVIVED, and it was the check that
+    // was wrong rather than the row. It read `|| board` -- the page's own
+    // live board, which is 'toy' at load on every path, so it changed
+    // nothing. The defect this row is about is the page reading the BROWSER,
+    // which is what the old seed did, so that is what it does now; the spec
+    // writes the old key by hand to meet it.
+    find: "    window.DraftDrawingFormat.board(drawing?.board) || 'toy';",
+    with: "    window.DraftDrawingFormat.board(drawing?.board)\n"
+      + "      || (JSON.parse(localStorage.getItem('draft-skin') || '{}').board === 'drafting'\n"
+      + "        ? 'drafting' : 'toy');",
+    test: 'every new drawing starts on TOY' },
 ];
 
 const run = grep => {

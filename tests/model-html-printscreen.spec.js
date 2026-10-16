@@ -82,10 +82,14 @@ test('PRINTSCREEN holds the far right corner, past the save stuff', async ({ pag
   // button's existence -- one that drifted back among the instruments would
   // pass every other check in this file.
   const order = await page.evaluate(() => {
-    const all = [...document.querySelectorAll('#strip button, #strip a')];
+    // THE LAMP IS NOT A BUTTON, so the bar list has to take it in on its own
+    // terms: since 15 Oct the board is an output in the mode corner, and a
+    // seat check that still looked for `button[data-board]` would read -1 and
+    // report the corner missing.
+    const all = [...document.querySelectorAll('#strip button, #strip a, #strip [data-board-light]')];
     return {
       units: all.indexOf(document.querySelector('#units-corner [data-units="imperial"]')),
-      toy: all.indexOf(document.querySelector('#mode-corner [data-board="toy"]')),
+      toy: all.indexOf(document.querySelector('#mode-corner [data-board-light]')),
       ruler: all.indexOf(document.getElementById('strip-ruler')),
       save: all.indexOf(document.getElementById('save')),
       print: all.indexOf(document.getElementById('printscreen')),
