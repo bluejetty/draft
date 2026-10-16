@@ -57,6 +57,11 @@ async function drawType(page) {
   await page.locator('[data-build-entry="bungalow"]').click();
   await page.locator('#dt-outline').click();
   await expect(page.locator('#drivethru')).toBeHidden();
+  // THE PRESS SEEDS A CORNER ON THE BULLSEYE. These two traces are a
+  // rectangle ABOUT the origin -- which is what makes "towards the middle"
+  // arithmetic-free above -- so the datum is not one of their corners, and
+  // the drafter takes that corner back before walking his own.
+  await h.dropSeededCorner(page);
 }
 
 async function trace(page, corners) {

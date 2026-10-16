@@ -49,6 +49,9 @@ async function drawType(page, family, entry) {
   // The sign slides down for 220 ms and takes a press until it is gone: a
   // corner in its path would land on the sign, not the plan.
   await expect(page.locator('#drivethru')).toBeHidden();
+  // AND THE PRESS SEEDS A CORNER ON THE BULLSEYE, which the houses below are
+  // not drawn around; taken back the way a drafter would.
+  await h.dropSeededCorner(page);
 }
 
 async function trace(page, corners) {

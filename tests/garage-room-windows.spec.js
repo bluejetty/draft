@@ -198,6 +198,10 @@ test('a garage the drafter traces himself opens toward E1', async ({ page }) => 
   // door into it.
   await page.locator('[data-drivethru-outline]').first().click();
   await page.waitForTimeout(200);
+  // AND THAT PRESS NOW SEEDS A CORNER ON THE BULLSEYE (Movie, 15 Oct). This
+  // garage is traced about the origin rather than from it, so the corner
+  // comes back off before the walk.
+  await h.dropSeededCorner(page);
 
   const hit = (await page.locator('#readout').textContent()).match(/scale ([\d.]+) px\/ft/);
   expect(hit, 'the readout publishes the scale').toBeTruthy();
@@ -262,6 +266,10 @@ async function traceGarage(page, corners, entry = 'detached-frostwall') {
   await page.locator(`#dt-tiles [data-build-entry="${entry}"]`).click();
   await page.locator('[data-drivethru-outline]').first().click();
   await page.waitForTimeout(200);
+  // THE SEED AGAIN. TRACED_L's first corner is ON the datum, which is worse
+  // than being away from it: the first press would land a second corner on
+  // top of the seeded one and leave a zero-length edge in the loop.
+  await h.dropSeededCorner(page);
   const hit = (await page.locator('#readout').textContent()).match(/scale ([\d.]+) px\/ft/);
   expect(hit, 'the readout publishes the scale').toBeTruthy();
   const scale = Number(hit[1]);

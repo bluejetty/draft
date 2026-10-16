@@ -153,6 +153,9 @@ test('the drive-thru offers to draw it, for a house and for a garage', async ({ 
   await expect(link).toHaveText('CLICK HERE to draw garage OUTLINE');
   await link.click();
   await expect(page.locator('#strip-message')).toContainText('Trace your garage');
+  // THE PRESS SEEDS A CORNER ON THE BULLSEYE now; this garage is drawn off
+  // to the side, so the drafter takes it back first.
+  await h.dropSeededCorner(page);
   // The sign takes a press until it has slid away; the corners come after.
   await expect(page.locator('#drivethru')).toBeHidden();
   const { at } = await h.planFrame(page);

@@ -109,6 +109,9 @@ test('the house\'s corners send rays while its garage is traced', async ({ page 
   await page.locator('[data-build-entry="bungalow-garage"]').click();
   await page.locator('#dt-outline').click();
   await expect(page.locator('#drivethru')).toBeHidden();
+  // The press seeds a corner on the bullseye; this house is traced about the
+  // origin, not from it, so it comes back off before the walk.
+  await h.dropSeededCorner(page);
   const { at } = await h.planFrame(page);
   const house = [[-10, -8], [10, -8], [10, 8], [-10, 8]];
   for (const [x, z] of [...house, house[0]]) await page.mouse.click(...at(x, z));
