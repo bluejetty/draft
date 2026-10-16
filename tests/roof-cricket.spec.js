@@ -83,61 +83,46 @@ async function buildIt(page) {
 const roofOf = saved => (saved.roofs || []).find(r => Number(r.levelId) === ROOF);
 const awayFrom = (dead, pt) => Math.hypot(pt.x - dead.x, pt.z - dead.z);
 
-test('the roof over a house and its garage has its inside corner cut back',
+// ── NO 45 OF THE ROOF'S OWN (Movie, 16 Oct) ────────────────────────────────
+//
+// "you know about these 45 degree roof corners we need to get rid of right",
+// and on the 15th: "those 45 degree corners aren't necessary ... they should
+// been all 90 degrees no 45s" ... "there might be a 45 but not in those
+// situation, only if you really need it for a cricket". So the build cuts no
+// cricket: the inside corner of the roof over a house and its garage is a
+// corner, the valley runs to it, and every edge of the ring is one of the
+// building's own. geometry-2d's cricketRing waits for the day he adds one
+// himself. proto/roof-no-45s-mutants.js is this spec's gate.
+const axisAligned = (a, b) => Math.abs(a.x - b.x) < 1e-6 || Math.abs(a.z - b.z) < 1e-6;
+
+test('the inside corner is a corner: no cricket, and no 45 anywhere on the ring',
   async ({ page }) => {
     const saved = await buildIt(page);
     const roof = roofOf(saved);
     expect(roof, 'one roof over both bodies').toBeTruthy();
     const dead = deadCornerOf(roof);
     const away = pt => awayFrom(dead, pt);
-    // THE CORNER ITSELF IS GONE, and two points stand where it was. Asked of
-    // the record rather than of a picture: this is the shape every reader
-    // downstream -- skeleton, faces, elevations, sections, DXF -- works from.
     const atCorner = roof.points.filter(pt => away(pt) < 0.01);
-    expect(atCorner, 'the dead corner is still a corner').toHaveLength(0);
+    expect(atCorner, 'the inside corner is a corner of the roof').toHaveLength(1);
     const near = roof.points.filter(pt => away(pt) < 3.5);
-    expect(near.length, `points near the corner: ${JSON.stringify(near)}`).toBe(2);
-    // AND THE CUT IS 2 FT, measured along each leg from where the corner was.
-    near.forEach(pt => expect(Math.abs(away(pt) - 2),
-      `a cricket end ${away(pt).toFixed(2)} ft off the corner, not 2`).toBeLessThan(0.01));
+    expect(near, `only the corner stands within 3 1/2 ft of it: ${JSON.stringify(near)}`).toHaveLength(1);
+    roof.points.forEach((pt, i) => {
+      const next = roof.points[(i + 1) % roof.points.length];
+      expect(axisAligned(pt, next), `edge ${i} runs at an angle: ${JSON.stringify([pt, next])}`).toBe(true);
+    });
   });
 
-test('and the valley stops 2 ft short of it instead of running in',
-  async ({ page }) => {
-    // HIS SENTENCE AS A NUMBER: "keep the valley 2ft from the corner". The
-    // skeleton is asked of the roof as built, through the page's own
-    // geometry, so this is the line that will be drawn and framed.
-    const saved = await buildIt(page);
-    const roof = roofOf(saved);
-    const dead = deadCornerOf(roof);
-    const away = pt => awayFrom(dead, pt);
-    const ends = await page.evaluate(r => {
-      const arcs = window.DraftGeometry2D.roofSkeleton(r);
-      // An arc touching the eave is a valley or a hip off the perimeter;
-      // what matters is how close any of them now gets to the corner.
-      return arcs.filter(a => Math.min(a.ta, a.tb) < 0.01)
-        .flatMap(a => [a.a, a.b]).map(p => ({ x: p.x, z: p.z }));
-    }, { points: roof.points, edges: roof.edges, pitch: roof.pitch || 6 });
-    const closest = Math.min(...ends.map(away));
-    expect(Math.abs(closest - 2),
-      `the nearest valley end is ${closest.toFixed(2)} ft from the corner, not 2`)
-      .toBeLessThan(0.05);
-  });
-
-test('the cricket is an eave, with the roof\'s own overhang along it',
-  async ({ page }) => {
-    // It is open roof over the corner, not a sheet dying into a wall -- so
-    // it carries a board like any other eave. A gable here would draw a rake
-    // across the valley and tell a framer the wrong thing.
-    const saved = await buildIt(page);
-    const roof = roofOf(saved);
-    const dead = deadCornerOf(roof);
-    const away = pt => awayFrom(dead, pt);
-    const first = roof.points.findIndex(pt => away(pt) < 3.5 && away(pt) > 0.01);
-    expect(first, 'no cricket on the roof').toBeGreaterThanOrEqual(0);
-    expect(roof.edges[first], 'the cricket is not an eave').toBe('eave');
-    if (Array.isArray(roof.edgeOverhang)) {
-      expect(roof.edgeOverhang[first], 'the cricket carries no overhang')
-        .toBeGreaterThan(0);
-    }
-  });
+test('and the valley runs to the corner', async ({ page }) => {
+  const saved = await buildIt(page);
+  const roof = roofOf(saved);
+  const dead = deadCornerOf(roof);
+  const away = pt => awayFrom(dead, pt);
+  const ends = await page.evaluate(r => {
+    const arcs = window.DraftGeometry2D.roofSkeleton(r);
+    return arcs.filter(a => Math.min(a.ta, a.tb) < 0.01)
+      .flatMap(a => [a.a, a.b]).map(p => ({ x: p.x, z: p.z }));
+  }, { points: roof.points, edges: roof.edges, pitch: roof.pitch || 6 });
+  const closest = Math.min(...ends.map(away));
+  expect(closest, `the nearest valley end is ${closest.toFixed(2)} ft from the corner, not on it`)
+    .toBeLessThan(0.05);
+});
