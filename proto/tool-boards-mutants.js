@@ -85,8 +85,16 @@ const MUTANTS = [
   { file: 'MODEL.html',
     name: 'the browser seeds the board again, so one promoted drawing puts '
       + 'every later one on DRAFTING before its first wall',
+    // THE FIRST VERSION OF THIS MUTANT SURVIVED, and it was the check that
+    // was wrong rather than the row. It read `|| board` -- the page's own
+    // live board, which is 'toy' at load on every path, so it changed
+    // nothing. The defect this row is about is the page reading the BROWSER,
+    // which is what the old seed did, so that is what it does now; the spec
+    // writes the old key by hand to meet it.
     find: "    window.DraftDrawingFormat.board(drawing?.board) || 'toy';",
-    with: '    window.DraftDrawingFormat.board(drawing?.board) || board;',
+    with: "    window.DraftDrawingFormat.board(drawing?.board)\n"
+      + "      || (JSON.parse(localStorage.getItem('draft-skin') || '{}').board === 'drafting'\n"
+      + "        ? 'drafting' : 'toy');",
     test: 'every new drawing starts on TOY' },
 ];
 

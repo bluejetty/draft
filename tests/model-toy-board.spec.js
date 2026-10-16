@@ -277,6 +277,12 @@ test('in DRAFTING a typed length just commits', async ({ page }) => {
   await typeLength(page, PRECISE);
   expect(await wallCount(page)).toBe(before + 1);
   expect(await boardOf(page)).toBe('drafting');
+  // AND IT SAYS NOTHING ABOUT A PROMOTION. The mutation gate caught this
+  // one: a promoteForNumber that stopped asking which board it was on
+  // changed no board and committed the same wall -- the two facts above --
+  // and announced "DRAFTING now" to a drafter who had been on DRAFTING all
+  // along. The line is the only place that defect shows.
+  await expect(page.locator('#strip-message')).not.toContainText('DRAFTING now');
 });
 
 // ── A WHOLE FOOT IS TOY'S OWN LENGTH, NOT A PRECISE ONE ─────────────────────

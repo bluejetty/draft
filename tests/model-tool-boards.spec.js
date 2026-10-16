@@ -210,13 +210,27 @@ test('every new drawing starts on TOY, whatever the browser last saw',
     // "lets ALWAYS start the users in TOY MODE". The board used to be seeded
     // from localStorage, so one typed 12'-6" in one drawing put every later
     // drawing on DRAFTING before its first wall -- which is the thing that
-    // sentence rules out. Opening a DRAFTING file first is what writes that
-    // seed, so this check is only worth anything with it.
+    // sentence rules out.
     await open(page, base({ board: 'drafting' }));
     expect(await boardOf(page)).toBe('drafting');
 
     await open(page, base({}));   // the file records no board
     expect(await boardOf(page), 'a drawing that never chose is on TOY').toBe('toy');
+
+    // AND THE SEED ITSELF IS PUT BACK BY HAND, which is what makes this a
+    // check rather than a coincidence. The mutation gate caught it: a page
+    // that read the skin store again survived the two halves above, because
+    // nothing WRITES a board there any more -- so both halves passed against
+    // a page that would have honoured one if it found it. The old key is
+    // written here, and the page must still open TOY.
+    await page.evaluate(() => {
+      const keep = JSON.parse(localStorage.getItem('draft-skin') || '{}');
+      localStorage.setItem('draft-skin', JSON.stringify({ ...keep, board: 'drafting' }));
+    });
+    await page.reload();
+    await expect(page.locator('#readout')).toContainText('walls', { timeout: 10000 });
+    expect(await boardOf(page),
+      'the browser cannot seed the board any more').toBe('toy');
   });
 
 test('a drawing that recorded DRAFTING reloads on DRAFTING', async ({ page }) => {
