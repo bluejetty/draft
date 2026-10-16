@@ -193,12 +193,36 @@ test('a traced MODIFIED BILEVEL gets its entry and its room over the garage', as
   expect(d.levels.some(l => Number(l.id) === 4), 'OVER GARAGE').toBe(true);
   expect(d.outlines.some(o => Number(o.levelId) === 4), 'the room').toBe(true);
   expect(d.stairs.length, 'three flights').toBeGreaterThanOrEqual(3);
-  // THE ROOM'S ROOF HIPS AT EVERY CORNER (Movie, 6 Oct: "it should be
-  // ridgeline to corner at 45"): it stands half a storey over MAIN, so no
-  // edge dies into the house as a gable.
+  // THE ROOM'S ROOF HIPS WHERE IT STANDS IN OPEN AIR (Movie, 6 Oct: "it
+  // should be ridgeline to corner at 45") AND DIES FLUSH WHERE IT STANDS
+  // OVER THE HOUSE (Movie, 15 Oct: "always flow slope away from the 2nd
+  // floor", "for modified bilevers").
+  //
+  // THIS CHECK USED TO READ `every(e => e === 'eave')`, which was the defect
+  // written down as a rule. The room stands half a storey over MAIN, and the
+  // reasoning went: nothing of the house rises past its roof, therefore no
+  // edge dies into the house, therefore every corner hips. The first step is
+  // true and the last does not follow -- hipped on the house side, this
+  // roof's north face slopes down INTO the house, and the main roof was cut
+  // away round this very ring, so what that eave discharges onto is the top
+  // of the house's gable wall. He photographed the stain and the plan.
+  //
+  // THE TRACED HOUSE IS THE ONE HE DRAWS, which is why this test is where it
+  // bit: his own .draft carries exactly this roof, six points and six eaves,
+  // and its E3 BACK drew the hip as a long diagonal straight across the
+  // house's roof -- "the elevation is mixed up".
   const upper = d.roofs.find(r => Number(r.sourceLevelId) === 4);
   expect(upper, 'the room\'s own roof').toBeTruthy();
-  expect(upper.edges.every(e => e === 'eave'), 'all eaves').toBe(true);
+  expect(upper.edges.some(e => e === 'eave'), 'hips into the open air').toBe(true);
+  expect(upper.edges.some(e => e === 'gable'), 'and dies flush into the house').toBe(true);
+  // AND A FLUSH EDGE CARRIES BOTH HALVES -- gable, and no overhang -- because
+  // a roof that dies into a wall has no eave there and no board to hang one
+  // on. A gable left overhanging would put a rake board through the house.
+  upper.edges.forEach((edge, index) => {
+    const over = upper.edgeOverhang[index];
+    if (edge === 'gable') expect(over, `edge ${index} dies into the house`).toBe(0);
+    else expect(over, `edge ${index} is open air`).toBeGreaterThan(0);
+  });
 });
 
 // THE BONE MID-TRACE IS NOT A PREMADE ORDER. Movie, 5 Oct: "i tried the
