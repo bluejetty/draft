@@ -66,6 +66,13 @@ async function expectRowAroundPress(page, pressSel) {
   [left, right, toRight, toLeft].forEach(part => {
     expect(Math.abs(centreY(part) - centreY(press)), 'on the press\'s own line').toBeLessThan(press.height / 2);
   });
+  // AND THE ARROWS MEET IT FROM EITHER SIDE ALIKE: the same air between the
+  // first arrow's head and the press as between the press and the second's
+  // tail. A row packed to one end keeps its order and loses this.
+  const mid = press.x + press.width / 2;
+  const before = mid - (toRight.x + toRight.width);
+  const after = toLeft.x - mid;
+  expect(Math.abs(before - after), 'the press stands midway between its arrows').toBeLessThan(8);
 }
 
 test('on the sign the banners rise with the order, say the short words, and the arrows meet the bone',
