@@ -64,8 +64,8 @@ const MUTANTS = [
 
   { file: 'MODEL.html',
     name: 'ROUGH keeps the press hidden: the arrows meet an empty gap',
-    find: '  html[data-theme="rough"] #dt-bone { display:block; top:70%; width:9.5%;',
-    with: '  html[data-theme="rough"] #dt-bone { display:none; top:70%; width:9.5%;',
+    find: '  html[data-theme="rough"] #dt-banners:not([hidden]) ~ #dt-bone { display:block; }',
+    with: '  html[data-theme="rough"] #dt-banners:not([hidden]) ~ #dt-bone { display:none; }',
     test: 'on ROUGH the house press stands between the banners' },
 
   { file: 'MODEL.html',

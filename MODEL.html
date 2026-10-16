@@ -618,8 +618,12 @@
      button, the same handler, wearing the house under this skin -- stands
      where the arrows meet, and the shelf gives up the bottom of the sheet
      for the row. */
-  html[data-theme="rough"] #dt-bone { display:block; top:70%; width:9.5%;
+  html[data-theme="rough"] #dt-bone { display:none; top:70%; width:9.5%;
     border-radius:8px; }
+  /* ONLY WITH THE ROW: the sheet has no post for a press to stand on, so the
+     house press rises and goes with the banners it stands between -- "pop
+     up down below once the user selects the house type". */
+  html[data-theme="rough"] #dt-banners:not([hidden]) ~ #dt-bone { display:block; }
   html[data-theme="rough"] #dt-tiles { left:6%; top:13%; width:88%; height:56%; }
   html[data-theme="rough"] #dt-banners { top:72%; height:9%; }
   html[data-theme="rough"] .dt-banner-gap { flex:0 0 12%; }
