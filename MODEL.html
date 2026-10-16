@@ -11578,8 +11578,15 @@
     const viewId = onView ?? onActiveLevel().viewId;
     return {
       wallType: wallType || contextWallType(viewId),
+      // CENTERLINE BY DEFAULT (Movie, 16 Oct: "allow the user to select the
+      // 'LEFT SIDE' CENTERLINE or 'RIGHT SIDE' for placement of the actual
+      // wall, based on where the LINE is positioned" -- CENTERLINE the
+      // default, the pick sticky between walls). 'left' was the old page's
+      // default and stayed here unread until the WALL panel gave the choice a
+      // control; the house's own exterior walls name their reference line
+      // themselves (outlineInteriorRef) and are not touched by this.
       refLine: (raw => (raw === 'centre' ? 'center' : raw))(
-        refLine || wallSetting('wallRefLine', 'left')),
+        refLine || wallSetting('wallRefLine', 'center')),
     };
   };
 
@@ -12279,7 +12286,9 @@
   // whose layer it does not know.
   const commitDrawn = (from, to) => {
     if (activeTool !== 'line') {
-      return { type: 'wall', item: commitWall(from, to, brushOptions('wall')) };
+      const justified = toyJustifyAlongHardLine(from, to);
+      return { type: 'wall', item: commitWall(from, to,
+        { ...brushOptions('wall'), ...(justified ? { refLine: justified } : {}) }) };
     }
     const { levelId, viewId } = onActiveLevel();
     const lineView = wallHomeView(viewId);
@@ -12957,17 +12966,25 @@
       const face = frame.at(frame.len / 2, faceAcross);
       const line = frame.at(frame.len / 2, 0);
       const owns = (a, b) => ({ lo: Math.min(a, b) - GRAIN_OWNS_IN / 12, hi: Math.max(a, b) + GRAIN_OWNS_IN / 12 });
-      lines.push(alongX ? { axis: 'z', c: face.z, ...owns(face.z, line.z) }
-        : { axis: 'x', c: face.x, ...owns(face.x, line.x) });
+      // AWAY is the house's side of the face: +1 or -1 along the line's axis.
+      // The frame's normal points to +n; the house is there when the probe
+      // landed inside, else on -n.
+      const nAlongAxis = alongX ? Math.sign(frame.nz) : Math.sign(frame.nx);
+      const away = inside ? nAlongAxis : -nAlongAxis;
+      lines.push(alongX ? { axis: 'z', c: face.z, away, kind: 'face', ...owns(face.z, line.z) }
+        : { axis: 'x', c: face.x, away, kind: 'face', ...owns(face.x, line.x) });
     });
     (drawing.surfaceOpenings || []).forEach(opening => {
       if (Number(opening.levelId) !== Number(levelId) || opening.hostType !== 'floor') return;
       const op = opening.points || [];
+      // AWAY from the hole: the edge seen from the opening's middle.
+      const mid = op.reduce((m, p) => ({ x: m.x + p.x / op.length, z: m.z + p.z / op.length }), { x: 0, z: 0 });
       op.forEach((p, i) => {
         const q = op[(i + 1) % op.length];
-        const band = c => ({ c, lo: c - GRAIN_OWNS_IN / 12, hi: c + GRAIN_OWNS_IN / 12 });
-        if (Math.abs(p.x - q.x) < 1e-6) lines.push({ axis: 'x', ...band(p.x) });
-        else if (Math.abs(p.z - q.z) < 1e-6) lines.push({ axis: 'z', ...band(p.z) });
+        const band = (axis, c) => ({ axis, c, kind: 'opening', away: Math.sign(c - mid[axis]) || 1,
+          lo: c - GRAIN_OWNS_IN / 12, hi: c + GRAIN_OWNS_IN / 12 });
+        if (Math.abs(p.x - q.x) < 1e-6) lines.push(band('x', p.x));
+        else if (Math.abs(p.z - q.z) < 1e-6) lines.push(band('z', p.z));
       });
     });
     return lines;
@@ -12994,6 +13011,39 @@
       y: 0,
       z: fixedAxis === 'z' ? pt.z : toyGrainCoord(grain, lines, 'z', pt.z),
     };
+  };
+
+  // ── ALONG A HARD LINE, THE SIDE IS NOT THE DRAFTER'S TO GET WRONG ──────
+  //
+  // A wall whose line lies ON an inside face or an opening edge has one side
+  // it can stand on: into the room off a face, away from the hole off an
+  // opening edge. Put it on the other and the wall sits inside the exterior
+  // wall, or hangs over the well. So a run that lies along a hard line is
+  // justified by the line, whatever the WALL panel says -- and the panel's
+  // pick is left as it was, since the drafter did not change his mind, the
+  // geometry answered for him. Asked at commit, from the geometry, not from
+  // a note left behind by the snap: the typed-length commit never passes
+  // through drawPoint, and a stale note from the preview would be wrong on
+  // exactly the run it was not written for.
+  //
+  // THE SIDE, IN THE RECORD'S TERMS: the body of a 'left' wall lies on +n
+  // of the run (n = (-uz, ux)), a 'right' wall's on -n. So the body goes
+  // where `away` points: 'left' when away agrees with n, else 'right'.
+  const toyJustifyAlongHardLine = (from, to) => {
+    const grain = toyInteriorGrain();
+    if (!grain || !from || !to) return null;
+    const dx = to.x - from.x, dz = to.z - from.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-9) return null;
+    const alongX = Math.abs(dz) < 1e-9, alongZ = Math.abs(dx) < 1e-9;
+    if (!alongX && !alongZ) return null;
+    const axis = alongX ? 'z' : 'x';
+    const line = toyHardLines(grain).find(l => l.axis === axis
+      && Math.abs(from[axis] - l.c) < 1e-6 && Math.abs(to[axis] - l.c) < 1e-6);
+    if (!line) return null;
+    const ux = dx / len, uz = dz / len;
+    const nAlongAxis = axis === 'z' ? ux : -uz;    // n = (-uz, ux), read on the line's axis
+    return line.away * nAlongAxis > 0 ? 'left' : 'right';
   };
 
   const drawPoint = at => {
@@ -15017,6 +15067,7 @@
   let doorSwingFlip = false;
   let gardenWindowFt = null;
   let openingPanelUp = false;
+  let wallPanelUp = false;
 
   // ── WHAT THE NEXT OPENING WILL MEASURE ──────────────────────────────────
   //
@@ -15276,6 +15327,47 @@
       hingeFlip: doorHingeFlip,
       swingFlip: doorSwingFlip,
     };
+  };
+
+  // ── THE WALL PANEL: WHICH SIDE OF THE LINE THE WALL GOES ─────────────
+  //
+  // Movie, 16 Oct: "allow the user to select the 'LEFT SIDE' CENTERLINE or
+  // 'RIGHT SIDE' for placement of the actual wall, based on where the LINE
+  // is positioned".
+  //
+  // HIS WORDS NAME THE BODY'S SIDE, read along the direction of travel (first
+  // press to second): LEFT SIDE puts the wall on the drafter's left of the
+  // line he draws. The record's `refLine` names the FACE the line is -- 'left'
+  // means the line is the wall's left face, so the body lies to the RIGHT.
+  // The two vocabularies are the same fact from opposite ends, and this table
+  // is the one place they meet: a label here is a side, a value is a face.
+  // The selection panel's row speaks the same words (REF_LINES) so a drafter
+  // never meets both senses.
+  //
+  // STICKY, AND THE DRAWING'S: the pick is written to drawing.wallRefLine,
+  // which every drawn wall reads (wallShape) and the save keeps. The ghost
+  // body in hand follows it at once, through the same wallShape.
+  const WALL_SIDES = [['right', 'LEFT SIDE'], ['center', 'CENTERLINE'], ['left', 'RIGHT SIDE']];
+  const wallSideNow = () => wallShape({}).refLine;
+  const showWallProps = () => {
+    const P = window.ModelProps;
+    if (!P) return;
+    const box = document.createElement('div');
+    box.append(propRow('WALL SIDE', WALL_SIDES, wallSideNow(), id => {
+      drawing.wallRefLine = id;
+      markDirty();
+      showWallProps();
+      paint();
+    }));
+    const note = document.createElement('div');
+    note.className = 'props-title';
+    note.dataset.wallSideNote = '';
+    note.textContent = 'Which side of the line you draw the wall stands on, '
+      + 'looking from the first press to the second. Along an inside face or an '
+      + 'opening edge the wall takes the room side by itself.';
+    box.append(note);
+    P.set('WALL', box);
+    wallPanelUp = true;
   };
 
   const showOpeningProps = () => {
@@ -23926,7 +24018,13 @@
   // had already adjusted, and he answered that himself: "(the user may need
   // to manually change the 'previously adjusted' height". This is the panel
   // he changes them with.
-  const REF_LINES = [['left', 'LEFT'], ['center', 'CENTRE'], ['right', 'RIGHT']];
+  // THE SAME WORDS AS THE WALL PANEL (WALL_SIDES): a label is the side the
+  // wall body stands on, read along the wall's own start -> end; the value
+  // is the face the stored line is. 'LEFT' here used to mean the line is the
+  // left face -- a wall on the RIGHT -- which is the opposite of what the
+  // same word means on the tool's panel. One vocabulary, or a drafter sets
+  // LEFT twice and gets two walls.
+  const REF_LINES = [['right', 'LEFT SIDE'], ['center', 'CENTERLINE'], ['left', 'RIGHT SIDE']];
 
   // A GUARDRAIL IS 42", and that is a HELD DEFAULT rather than a code rule --
   // the height one arrives at when it is first switched on, and Movie's to
@@ -23994,7 +24092,7 @@
       agreedOn(walls, wall => wall.wallType || 'stud_2x6'),
       id => applyToWalls(walls, { wallType: id })));
 
-    box.append(propRow('REFERENCE', REF_LINES,
+    box.append(propRow('WALL SIDE', REF_LINES,
       agreedOn(walls, wall => wall.refLine || 'center'),
       id => applyToWalls(walls, { refLine: id })));
 
@@ -25254,13 +25352,15 @@
   // thing, not a level, and rebuilding the tool's over the top of it would
   // take away what the drafter is reading.
   const refreshToolPropsOnLevel = () => {
-    if (roofPanelUp || openingPanelUp || dimensionPanelUp || beamPanelUp || stairPanelUp || notePanelUp) {
+    if (roofPanelUp || openingPanelUp || dimensionPanelUp || beamPanelUp || stairPanelUp || notePanelUp
+      || wallPanelUp) {
       showToolProps(activeTool);
     }
   };
 
   const showToolProps = tool => {
     if (tool === 'roof') { showRoofProps(); return; }
+    if (tool === 'wall') { showWallProps(); return; }
     if (tool === 'fenestration') { showOpeningProps(); return; }
     if (tool === 'dimension') { showDimensionProps(); return; }
     // COLUMN AND BEAM SHARE ONE PANEL, because AUTO BEAM places both and a
@@ -25281,6 +25381,7 @@
     // third panel arrived that does not want clearing.
     if (roofPanelUp) { window.ModelProps.clear(); roofPanelUp = false; }
     if (openingPanelUp) { window.ModelProps.clear(); openingPanelUp = false; }
+    if (wallPanelUp) { window.ModelProps.clear(); wallPanelUp = false; }
     if (dimensionPanelUp) { window.ModelProps.clear(); dimensionPanelUp = false; }
     if (beamPanelUp) { window.ModelProps.clear(); beamPanelUp = false; }
     if (stairPanelUp) { window.ModelProps.clear(); stairPanelUp = false; }
