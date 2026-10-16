@@ -144,11 +144,37 @@ if (!window.DraftFormatters) {
       return parsed.ok ? architecturalLengthResult(sign * parsed.inches) : parsed;
     }
 
+    // FEET, A SPACE, INCHES. Movie, 16 Oct: "if they type 14-6 or 14 6 or
+    // 14'6 or 14'6" or 14'-6" all interpreted as 14'-6"" -- and "14 6" was
+    // the one of his six forms this parser refused. The space is the
+    // separator a drafter reaches for when the foot mark is a shifted key
+    // away, and the hyphen branch above already reads the same two numbers
+    // the same way.
+    //
+    // AND "14 1/2" IS FOURTEEN FEET AND HALF AN INCH, not fourteen and a half
+    // inches. This field reads a bare number as feet, so the first number is
+    // feet whatever follows it -- the same reading that makes "14 6" into
+    // 14'-6". AutoCAD reads 14 1/2 as inches in an architectural field; the
+    // difference is deliberate, and said here so nobody "fixes" it.
+    //
+    // AFTER THE INCH-MARK BRANCH, not before it: `4 1/16"` ends in an inch
+    // mark and is four and a sixteenth INCHES, which that branch reads
+    // first. Only a second number with no mark on it reaches here.
+    match = raw.match(/^([+-]?\d+)\s+(\d.*)$/);
+    if (match) {
+      const parsedInches = parseInchesComponent(match[2]);
+      if (!parsedInches.ok) return parsedInches;
+      const feetValue = Number(match[1]);
+      const sign = match[1].startsWith('-') ? -1 : 1;
+      const spacedInches = parsedInches.inches;
+      return architecturalLengthResult(sign * (Math.abs(feetValue) * 12 + spacedInches));
+    }
+
     if (/^[+-]?\d+(?:\.\d+)?$/.test(raw)) {
       return architecturalLengthResult(Number(raw) * 12);
     }
 
-    return { ok: false, error: `Use 15 for feet, or specify inches as 0-5 or 5".` };
+    return { ok: false, error: `Use 15 for feet, 15-6 or 15 6 for feet and inches, or 5" for inches.` };
   }
 
   // Joist depth, spacing, and sheathing are inch-scale values, so a bare number

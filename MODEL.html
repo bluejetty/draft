@@ -22729,6 +22729,86 @@
     e.stopPropagation();
   });
 
+  // ── TYPE THE LENGTH WITHOUT CLICKING THE BOX ──────────────────────────
+  //
+  // Movie, 16 Oct: "when they get to this position and they are pointed a
+  // direction, can we allow them to start entering numbers and it will start
+  // entering into the LENGTH texbox without having to click on the texbox,
+  // just put it straight in there".
+  //
+  // THE RULE, STATED RATHER THAN DISCOVERED: while a length is typable -- a
+  // run in hand with a direction to measure along, which is exactly when
+  // stripRefresh enables the box -- a digit pressed anywhere on the page is
+  // the first character of a LENGTH. Focus follows that keystroke, so every
+  // key after it lands in the box by itself: the foot mark, the hyphen, the
+  // space of "14 6", the inch mark, Enter to commit, Escape to let go. The
+  // box's own handler above keeps those from the page, as it always did.
+  //
+  // CAPTURED ON THE WINDOW AND SPENT HERE, because the page's own keys mean
+  // something else while a run is live: 0 refits the sheet (the handler
+  // further down) and the tool letters arm tools. A 0 that reached the fit
+  // would refit the view under the drafter's hands -- the complaint the box's
+  // stopPropagation already answers for keys typed INSIDE it; this is the
+  // same answer for keys typed OUTSIDE it. So while a run is live, 0 is a
+  // digit and not a fit. Escape first, which cancels the run as it always
+  // has, and 0 is the fit again.
+  //
+  // THE FIRST KEYSTROKE REPLACES THE LIVE READING. Unfocused, the box shows
+  // the run's own length (stripRefresh writes it there), and a 1 appended to
+  // 6'-0" would read 6'-0"1. The drafter is starting a number, so the box
+  // starts empty and takes his digit.
+  //
+  // DIGITS AND THE POINT OPEN IT, nothing else. The other characters a
+  // length uses -- ' " - / and the space -- are nothing on their own, and the
+  // letters are tool keys: W mid-run still puts the WALL tool down. They all
+  // reach the box once a digit has given it the focus.
+  //
+  // THROUGH THE SAME COMMIT. Nothing here parses or promotes. Enter runs
+  // commitTypedLength exactly as a click-then-type does, so a length a whole
+  // foot cannot hold still turns the TOY light off (#746) whichever way the
+  // digits arrived -- the hole #746 closed stays closed.
+  //
+  // TAB IS THE ANGLE. Movie asked for A ("unless they press A where they will
+  // ... enter the ANGLE textbox"), and A is SHAPE on the default key profile
+  // and P on the office one, so a letter would arm a tool in the middle of a
+  // run. TAB is what AutoCAD's and Revit's dynamic input use to step from
+  // length to angle, it is the "next field" key everywhere else, and it is a
+  // tool letter in no profile. From the LENGTH box or from the sheet, Tab
+  // puts the caret in the ANGLE box while a run is in hand; Shift+Tab from
+  // the ANGLE box steps back. The box-to-box routes are written out rather
+  // than left to the browser's own Tab order so they survive a control being
+  // put between the two boxes.
+  const typedLengthOpener = /^[0-9.]$/;
+  const inAField = el => !!el && el instanceof HTMLElement
+    && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName));
+  window.addEventListener('keydown', event => {
+    if (event.ctrlKey || event.altKey || event.metaKey) return;
+    const target = event.target;
+    if (event.key === 'Tab') {
+      if (target === lengthBox && !event.shiftKey && !angleBox.disabled) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        angleBox.focus(); angleBox.select(); return;
+      }
+      if (target === angleBox && event.shiftKey && !lengthBox.disabled) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        lengthBox.focus(); lengthBox.select(); return;
+      }
+      if (!inAField(target) && !event.shiftKey && !angleBox.disabled && !lengthBox.disabled) {
+        event.preventDefault(); event.stopImmediatePropagation();
+        angleBox.focus(); angleBox.select(); return;
+      }
+      return;
+    }
+    if (inAField(target)) return;
+    if (lengthBox.disabled || !typedLengthOpener.test(event.key)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    dropLengthHint();
+    lengthBox.value = event.key;
+    lengthBox.focus();
+    lengthBox.setSelectionRange(lengthBox.value.length, lengthBox.value.length);
+  }, true);
+
   // ── the switches ──────────────────────────────────────────────────────────
   // SKIN WITHOUT A RELOAD. Every painter reads its colours from `skin` inside
   // its own body, so re-resolving the palette and repainting is the whole
