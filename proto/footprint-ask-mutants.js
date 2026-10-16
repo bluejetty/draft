@@ -39,7 +39,10 @@ const MUTANTS = [
   { file: 'MODEL.html',
     name: 'OFF THE FOOTPRINT is measured as the LENGTH OF THE PULL, so a corner '
       + 'slid along its own wall is asked about',
-    find: '    const outFt = Math.max(...moves.map(move => offLoop(move.to)));',
+    // SAME LINE AS THE `mid` MUTANT BELOW, a different lie told about it:
+    // this one swaps the distance TO THE FOOTPRINT for the length of the
+    // pull, which reads a corner slid along its own wall as 3 ft off.
+    find: '    const outFt = Math.max(offLoop(mid), ...moves.map(move => offLoop(move.to)));',
     with: '    const outFt = Math.max(...moves.map(move => '
       + 'Math.hypot(move.to.x - move.from.x, move.to.z - move.from.z)));',
     test: 'a corner slid ALONG its own wall' },
@@ -128,6 +131,52 @@ const MUTANTS = [
     find: "    if (board === 'toy' || !footprintCard) {",
     with: '    if (!footprintCard) {',
     test: 'the TOY board is never asked' },
+
+  // ── AND THE INWARD HALF ─────────────────────────────────────────────────
+  { file: 'MODEL.html',
+    name: 'the middle of what moved is never probed: a wall pushed IN reads '
+      + 'as nothing having left the footprint',
+    find: '    const outFt = Math.max(offLoop(mid), ...moves.map(move => offLoop(move.to)));',
+    with: '    const outFt = Math.max(...moves.map(move => offLoop(move.to)));',
+    test: 'pushed IN, the card offers neither overhang' },
+
+  { file: 'MODEL.html',
+    name: 'direction is read at an END, where sitting on the loop is a coin '
+      + 'toss: a wall pushed in reads as outward',
+    find: '    const outward = !pointInLoop(loop, mid);',
+    with: '    const outward = moves.some(move => !pointInLoop(loop, move.to));',
+    test: 'pushed IN, the card offers neither overhang' },
+
+  { file: 'MODEL.html',
+    name: 'a deck is offered on the lowest storey, where nothing is uncovered '
+      + 'to put a membrane on',
+    find: '    deck.hidden = found.outward || !storeyBelow(found.levelId);',
+    with: '    deck.hidden = found.outward;',
+    test: 'the lowest storey has nothing to step off' },
+
+  { file: 'MODEL.html',
+    name: 'the storey steps back and nothing says the floor it left is in the '
+      + 'weather',
+    find: '    drawing.notes.push(note);\n    (step.items = step.items || [])'
+      + '.push({ list: drawing.notes, item: note });',
+    with: '    (step.items = step.items || []).push();',
+    test: 'STEP IN FOR A ROOF DECK moves this floor' },
+
+  { file: 'MODEL.html',
+    name: 'the membrane note is filed on the floor below, not the sheet the '
+      + 'deck is read off',
+    find: "      id, anchor: at, text: { ...at }, levelId: pending.levelId, view: 'plan',",
+    with: "      id, anchor: at, text: { ...at }, "
+      + 'levelId: storeyBelow(pending.levelId).id, '
+      + "view: 'plan',",
+    test: 'STEP IN FOR A ROOF DECK moves this floor' },
+
+  { file: 'MODEL.html',
+    name: 'undo leaves the membrane note behind: a deck named on a storey that '
+      + 'never stepped back',
+    find: '    const patch = uncoveredPatch(pending);',
+    with: '    const patch = uncoveredPatch(pending); step = { items: [] };',
+    test: 'one Ctrl+Z takes the step-in and its membrane note back' },
 
   { file: 'MODEL.html',
     name: 'ESCAPE answers for him: the page decides what the drag meant',

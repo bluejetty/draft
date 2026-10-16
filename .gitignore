@@ -1,3 +1,8 @@
 node_modules/
 test-results/
 playwright-report/
+
+# The hand-over backup zips are built fresh for each branch and belong in
+# the chat, not in the history: one got swept in by a `git add -A` and was
+# half a megabyte of the repo for three commits.
+*-backup.zip
