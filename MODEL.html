@@ -12873,6 +12873,129 @@
     return { x: from.x + (dx / len) * feet, y: 0, z: from.z + (dz / len) * feet };
   };
 
+  // ── TOY'S 6" GRAIN INSIDE THE HOUSE (Movie, 16 Oct) ──────────────────
+  //
+  // "this 6" spacing should be based on the 1ft exterior grid ... if the line
+  // isn't connected to a CORNER, the GRID used for the interior 6" snap grid
+  // will be based on the 1ft exterior house wall corners", and, correcting an
+  // earlier wording: "its not measure off inside face - the 6" grid is based
+  // on the ext corners of the house (1ft grid)".
+  //
+  // THE GRID IS THE OUTLINE'S OWN FOOT GRID, HALVED. Its datum is an exterior
+  // corner of the house on this level -- every corner of a TOY outline stands
+  // a whole foot from every other, so any one of them gives the same grid,
+  // and the lowest-left is named so the answer is one answer. Not the inside
+  // faces, not a room, not the world origin: a house at 12'-0\u00bd" has its
+  // grid at 12'-0\u00bd".
+  //
+  // A POSITION, NOT A LENGTH. The foot rule (onTheFoot) rounds a run's
+  // LENGTH from wherever it started; this lands each POINT on the grid, so a
+  // run that starts on an inside face still ends on the grid. It applies only
+  // while a house outline exists on the level and the run is inside it: the
+  // house being drawn, and anything outside it, keeps the whole foot.
+  //
+  // THE HARD LINES BEAT THE GRID. "the interior walls allows the connection
+  // at the 5.5" corner (usually default) rather than the 6" so it lines up
+  // and the stair opening is a similar line-up method which deviates from the
+  // 6" grid (in most cases)" -- "the interior walls should be 'cut' at the
+  // interior wall line of the exterior wall". Two kinds of line: the INSIDE
+  // FACE of every exterior wall, read off its wall type (5\u00bd" for a 2x6, 8"
+  // concrete, whatever stands there -- "at the corners the int walls will
+  // just move to the req 1/2" for 5.5" wall or whatever in need for the
+  // thicker ... or thinner wall"), and every square edge of a floor opening
+  // (a stair well, a hole) on the level. A face line runs the width of the
+  // house, so a wall running square into the exterior wall ends on it, and a
+  // wall continuing the face line past an inside corner lies along it --
+  // "so that the interior wall line of the EXT wall is inline with the line
+  // of the interior wall so those 2 lines line up".
+  //
+  // WHY THE FACE MUST WIN, written down: 5\u00bd" and 6" are half an inch apart
+  // and indistinguishable by eye. If the grid won, every interior wall meeting
+  // an exterior wall would miss the inside face by \u00bd" -- a drawing that looks
+  // right and builds wrong. So a hard line takes the point when the hand is
+  // within half a grain of it (nearer the line than any other grid point
+  // could be), AND when the grid point the hand would otherwise get lies in
+  // the band the line owns: for a face, the whole thickness of the exterior
+  // wall behind it and an inch past it -- a hand inside the wall's body wants
+  // the face, not the wall's line -- and for an opening edge an inch either
+  // side. The face owns the grid point beside it either way.
+  //
+  // THE TOY LIGHT STAYS ON. None of this is a typed number; a 6" position,
+  // a face or an opening edge comes from the house's own geometry, not from a
+  // precision TOY cannot hold, and nothing here reaches promoteForNumber.
+  const GRAIN_OWNS_IN = 1;   // a grid point this close to a hard line is the line's
+  const HARD_LINE_REACH_FT = () => window.DraftToyConstraints.HALF_FOOT_FT / 2;
+  const toyInteriorGrain = () => {
+    if (board !== 'toy' || activeTool !== 'wall') return null;
+    const house = houseOutlineOn(activeLevelId());
+    const pts = house && house.points;
+    if (!pts || pts.length < 3) return null;
+    return { pts, datum: {
+      x: Math.min(...pts.map(p => Number(p.x))),
+      z: Math.min(...pts.map(p => Number(p.z))) } };
+  };
+  const inHouse = (grain, pt) => window.DraftBuildingBodies.pointInLoop(grain.pts, pt);
+  // Every hard line on the level, as { axis, c }: a line of constant x or z.
+  const toyHardLines = grain => {
+    const G = window.DraftGeometry2D;
+    const FG = window.DraftFixtureGeometry;
+    const levelId = activeLevelId();
+    const lines = [];
+    const ring = G.loopSegments(grain.pts);
+    (drawing.walls || []).forEach(wall => {
+      if (Number(wall.levelId) !== Number(levelId) || (wall.view || 'plan') !== 'plan') return;
+      if (!wall.start || !wall.end || !G.edgeOnLoop(wall.start, wall.end, ring)) return;
+      const frame = FG && FG.wallFrame(wall);
+      if (!frame) return;
+      const alongX = Math.abs(frame.uz) < 1e-6, alongZ = Math.abs(frame.ux) < 1e-6;
+      if (!alongX && !alongZ) return;
+      // WHICH SIDE THE HOUSE IS ON: a probe a foot in along the frame's normal.
+      // The body's far edge on that side is the inside face, whichever way the
+      // wall was drawn and whatever its reference line.
+      const inside = inHouse(grain, frame.at(frame.len / 2, 1));
+      const faceAcross = inside ? frame.endOff : frame.startOff;
+      const face = frame.at(frame.len / 2, faceAcross);
+      const line = frame.at(frame.len / 2, 0);
+      const owns = (a, b) => ({ lo: Math.min(a, b) - GRAIN_OWNS_IN / 12, hi: Math.max(a, b) + GRAIN_OWNS_IN / 12 });
+      lines.push(alongX ? { axis: 'z', c: face.z, ...owns(face.z, line.z) }
+        : { axis: 'x', c: face.x, ...owns(face.x, line.x) });
+    });
+    (drawing.surfaceOpenings || []).forEach(opening => {
+      if (Number(opening.levelId) !== Number(levelId) || opening.hostType !== 'floor') return;
+      const op = opening.points || [];
+      op.forEach((p, i) => {
+        const q = op[(i + 1) % op.length];
+        const band = c => ({ c, lo: c - GRAIN_OWNS_IN / 12, hi: c + GRAIN_OWNS_IN / 12 });
+        if (Math.abs(p.x - q.x) < 1e-6) lines.push({ axis: 'x', ...band(p.x) });
+        else if (Math.abs(p.z - q.z) < 1e-6) lines.push({ axis: 'z', ...band(p.z) });
+      });
+    });
+    return lines;
+  };
+  const toyGrainCoord = (grain, lines, axis, value) => {
+    const Q = window.DraftToyConstraints;
+    const reach = HARD_LINE_REACH_FT();
+    const grid = Q.onGrain(value, Q.HALF_FOOT_FT, axis === 'x' ? grain.datum.x : grain.datum.z);
+    let best = null;
+    lines.forEach(line => {
+      if (line.axis !== axis) return;
+      const d = Math.abs(line.c - value);
+      const owns = grid >= line.lo - 1e-9 && grid <= line.hi + 1e-9;
+      if ((d <= reach || owns) && (!best || d < best.d)) best = { c: line.c, d };
+    });
+    return best ? best.c : grid;
+  };
+  // `fixedAxis` is the coordinate the square holds (squaredAxis); it is kept
+  // exactly and only the free one lands on the grain.
+  const toyGrainPoint = (grain, pt, fixedAxis) => {
+    const lines = toyHardLines(grain);
+    return {
+      x: fixedAxis === 'x' ? pt.x : toyGrainCoord(grain, lines, 'x', pt.x),
+      y: 0,
+      z: fixedAxis === 'z' ? pt.z : toyGrainCoord(grain, lines, 'z', pt.z),
+    };
+  };
+
   const drawPoint = at => {
     // THE LOCKED BEARING BEFORE EVERYTHING ELSE: the run travels along it and
     // nothing pulls it off -- no square, no corner snap -- only the whole foot
@@ -12884,6 +13007,13 @@
     const snapped = fixed ? axisSnap(wanted, fixed) : cornerSnap(wanted, []);
     if (snapped) return snapped;
     const free = { x: wanted.x, y: 0, z: wanted.z };
+    // INSIDE THE HOUSE, TOY'S GRAIN comes before the foot: the point lands on
+    // the 6" grid or a hard line, and the run's length is whatever that makes
+    // it. A run that starts outside or leaves the house is the foot's.
+    const grain = toyInteriorGrain();
+    if (grain && inHouse(grain, free) && (!drawStart || inHouse(grain, drawStart))) {
+      return toyGrainPoint(grain, free, fixed);
+    }
     return onTheFoot_if() ? onTheFoot(drawStart, free) : free;
   };
 
@@ -15403,10 +15533,28 @@
   // it RESTARTS, because a drafter who has changed wall has plainly changed
   // their mind, and an error there would make them press twice to do what one
   // press says.
+  // CASEWORK ON TOY'S 6" GRAIN (Movie, 16 Oct: "in the TOY mode we should be
+  // able to add CABINETS right? ... for the CABINETS we allow those to shift
+  // extra to 6" scale so we could have 1ft, 18" 24" 30" 36" 42" 48" etc").
+  // Each press lands on the half foot measured from the NEARER corner of the
+  // wall the cabinet backs onto, so a run can always sit flush in a corner
+  // whatever the wall's length -- a TOY wall is whole feet long and either
+  // corner gives the same answer; an imported wall of odd length is measured
+  // from the corner the cabinet is at. Both presses on the grain means the
+  // width is on it too. TOY only, and casework only (a closet is its own
+  // table); and no light goes out, since nothing was typed.
+  const toyCaseworkAlong = (kind, placement) => {
+    const Q = window.DraftToyConstraints;
+    if (board !== 'toy' || !kind.casework || !Q) return placement.along;
+    const len = placement.frame.len;
+    const datum = placement.along <= len / 2 ? 0 : len;
+    return Math.max(0, Math.min(len, Q.onGrain(placement.along, Q.HALF_FOOT_FT, datum)));
+  };
   const fixtureRunPress = (kind, placement) => {
     const start = fixtureRunStart;
+    const along = toyCaseworkAlong(kind, placement);
     if (!start || start.wallId !== placement.wall.id || start.side !== placement.side) {
-      fixtureRunStart = { wallId: placement.wall.id, along: placement.along, side: placement.side };
+      fixtureRunStart = { wallId: placement.wall.id, along, side: placement.side };
       sayOnStrip(start
         ? `New ${start.wallId !== placement.wall.id ? 'wall' : 'face'} — the `
           + `${kind.label.toLowerCase()} run restarted: press the other end.`
@@ -15414,7 +15562,7 @@
       paint();
       return null;
     }
-    const width = Math.abs(placement.along - start.along);
+    const width = Math.abs(along - start.along);
     // THE CLOSET ASKS THE DOOR TABLE, not a number chosen here. closets.js
     // picks from the DD/D ladder and answers nothing below a D18, so "too
     // narrow" is its verdict rather than this page's guess at one.
@@ -15428,7 +15576,7 @@
     }
     fixtureRunStart = null;
     return addFixture(kind, placement.wall, {
-      offset: (placement.along + start.along) / 2, width, side: start.side,
+      offset: (along + start.along) / 2, width, side: start.side,
     });
   };
 

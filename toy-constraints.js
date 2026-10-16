@@ -159,6 +159,25 @@ if (!window.DraftToyConstraints) {
     return Math.round(d / step) * step;
   };
 
+  // A POSITION ON A GRAIN, against a datum -- the one place this module
+  // quantises a position rather than a move, and on purpose. Movie, 16 Oct:
+  // "this 6" spacing should be based on the 1ft exterior grid ... the GRID
+  // used for the interior 6" snap grid will be based on the 1ft exterior
+  // house wall corners", and for cabinets "1ft, 18" 24" 30" 36" 42" 48"
+  // etc". A wall or a cabinet being CREATED is the toy's own, so the toy may
+  // place it on its grain; a wall nobody touched is never re-gridded, which
+  // is the 31 Aug rule above and still holds -- this is never called on an
+  // existing position. The datum is the caller's (an exterior corner, a
+  // wall's own corner), never the world origin: a house standing at
+  // 12'-0\u00bd" has its grid at 12'-0\u00bd", not at 12'-0".
+  const onGrain = (value, stepFt = HALF_FOOT_FT, datum = 0) => {
+    const v = num(value);
+    const d = num(datum) ?? 0;
+    if (v === null) return d;
+    const step = num(stepFt) || HALF_FOOT_FT;
+    return d + Math.round((v - d) / step) * step;
+  };
+
   // Square within tolerance, measured on the wall's own run. A curved wall is
   // never orthogonal whatever its endpoints say.
   const isOrthogonal = wall => {
@@ -782,6 +801,7 @@ if (!window.DraftToyConstraints) {
     clearFromLineGap,
     lineGapForClear,
     quantiseFeet,
+    onGrain,
   });
 })();
 }
