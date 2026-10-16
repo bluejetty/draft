@@ -1119,18 +1119,42 @@ if (!window.DraftBuildHouse) {
   // and the cross-coordinates the joists already bear on. Answers one
   // {start, end} or null when the well touches a support on both sides and
   // there is nothing to catch.
-  const garageStairHeader = (well, { axis, supports = [] } = {}) => {
+  // ── ONLY PARALLEL, AND ONLY PAST 10 FT ───────────────────────────────
+  //
+  // Movie, 16 Oct, on a stair set across the beam: "when the stairs are
+  // alligned perp to the main beam like in ths photo above, we don't need
+  // beams on the short ends of the stairs, only when it is ll and there is
+  // 10ft or more span of floor until the next beam or ext. wall".
+  //
+  // BOTH HAVE TO HOLD. Joists span across the beam, so a well set ACROSS it
+  // runs with the joists: it interrupts few, the trimmers down its long sides
+  // carry what it does, and the edges this picks between -- its ends -- are
+  // headers with almost nothing on them. A well set ALONG the beam cuts
+  // across the joists its whole length, so the edge on the open side gathers
+  // every cut joist, and past 10 ft of remaining span that header is a beam.
+  // Under 10 ft the joists are the engineer's sheet, as a plain deck is.
+  //
+  // `axis` is the JOISTS' direction (garageJoistAxis); the well is parallel to
+  // the beam when it is longer ACROSS the joists than along them. `minRunFt`
+  // is his 10, measured from the well's edge to the next support, not from
+  // the stair's middle.
+  const STAIR_HEADER_SPAN_FT = 10;
+  const garageStairHeader = (well, { axis, supports = [], minRunFt = STAIR_HEADER_SPAN_FT } = {}) => {
     const lo = axis === 'x' ? well.x0 : well.z0;
     const hi = axis === 'x' ? well.x1 : well.z1;
     const a0 = axis === 'x' ? well.z0 : well.x0;
     const a1 = axis === 'x' ? well.z1 : well.x1;
     if (!(hi - lo > 0.01) || !(a1 - a0 > 0.01)) return null;
+    // ACROSS THE BEAM: the ends are headers, not beams.
+    if (!(a1 - a0 > hi - lo + 0.01)) return null;
     const sorted = [...supports].sort((p, q) => p - q);
     const below = sorted.filter(s => s <= lo + 1e-6);
     const above = sorted.filter(s => s >= hi - 1e-6);
     const runLo = below.length ? lo - Math.max(...below) : 0;
     const runHi = above.length ? Math.min(...above) - hi : 0;
     if (runLo <= 0.01 && runHi <= 0.01) return null;
+    // UNDER 10 FT OF FLOOR TO THE NEXT SUPPORT, nothing: the joists carry it.
+    if (Math.max(runLo, runHi) < minRunFt - 1e-6) return null;
     const u = runHi > runLo ? hi : lo;
     const at = (c, v) => (axis === 'x' ? { x: c, z: v } : { x: v, z: c });
     return { start: at(u, a0), end: at(u, a1) };
@@ -1150,6 +1174,7 @@ if (!window.DraftBuildHouse) {
     MAN_DOOR_LANDING_IN,
     BEAM_BEARING_CLEAR_FT,
     garageStairHeader,
+    STAIR_HEADER_SPAN_FT,
     garageJoistAxis,
     garageSpanFt,
     outlineInteriorRef,
