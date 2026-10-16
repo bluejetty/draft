@@ -174,6 +174,19 @@ check('a 2 STOREY only moves its garage roof to the garage plate', W => {
   return [out && `${out.length}|${r3(out[1].plateHeightFt)}|${out[0] === d.roofs[0]}`,
     `2|${r3(11 - MAIN_PKG)}|true`];
 });
+// NO 45 ON A REGROUPED ROOF EITHER (Movie, 16 Oct): the corner where the
+// garage meets the house stays a corner, and every edge is one of the
+// building's own, as the build leaves it.
+check('a regrouped house-and-garage roof keeps its inside corner square: no 45', W => {
+  const d = BUILT({ attachedGarage: { mainWallHeightFt: 9.09375 + MAIN_PKG } }, { 3: { wallHeightFt: 9.09375 } });
+  const out = W.DraftGarageRoofs.regroupRoofs(d);
+  const pts = out && out[0].points;
+  const diagonals = pts ? pts.filter((p, i) => {
+    const q = pts[(i + 1) % pts.length];
+    return Math.abs(p.x - q.x) > 1e-6 && Math.abs(p.z - q.z) > 1e-6;
+  }).length : -1;
+  return [`${pts && pts.length}|${diagonals}`, '8|0'];
+});
 check('a split is left alone', W => {
   const d = BUILT();
   d.buildType = 'modifiedBilevel';
@@ -196,6 +209,8 @@ const MUTATIONS = [
     s => s.replace('    const garageLower = !(garageTopFt > houseTopFt + SAME_TOP_FT);', '    const garageLower = true;')],
   ['the cut is the notched loop, not its rectangle', 'garage-roofs.js',
     s => s.replace('    if (square) {', '    if (false) {')],
+  ['a regrouped roof cuts the cricket again (the 45 Movie asked to lose)', 'garage-roofs.js',
+    s => s.replace('    return shape;\n  };', "    return G().cricketRing(shape.points, shape.edges, shape.edgeOverhang, { needsCricket: () => true }) || shape;\n  };")],
   // THE SQUARING, BROKEN BOTH WAYS. Not done at all is the jog coming back --
   // two gables and the pocket between them. Done onto the wrong line is the
   // end squared onto the STEP instead of the house wall, which puts the

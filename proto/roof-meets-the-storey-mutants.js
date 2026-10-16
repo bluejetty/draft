@@ -79,9 +79,8 @@ const MUTANTS = [
   { file: 'MODEL.html',
     name: 'the cut goes back to running AFTER the chamfer, which is the '
       + 'order that made the whole thing silent',
-    find: '    const notched = notch ? notchPlainRoof(plain, notch, roofOverhangFt) : null;\n'
-      + '    const base = notched || plain;',
-    with: '    const base = plain;',
+    find: '    const shaped = notched || plain;',
+    with: '    const shaped = plain;',
     test: 'the roof dies into the 2nd-storey wall' },
 
   { file: 'MODEL.html',

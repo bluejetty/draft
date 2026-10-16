@@ -16863,15 +16863,6 @@
       edges: pts.map((_, index) => (gableAt(index) ? 'gable' : 'eave')),
       ...(ring.length === pts.length ? { edgeOverhang } : {}),
     };
-    // WHICH CORNERS HAVE NOWHERE GOOD TO DISCHARGE. A valley that ends over
-    // ANOTHER ROOF lands on something built to shed; one that ends over the
-    // building's own inside corner lands on the wall, which is the one he
-    // asked to be moved 2 ft back. The roofs already raised by this press are
-    // on the drawing to be asked -- the house's goes up before the garage's
-    // and the room's, which is the order that makes this answerable at all.
-    const under = (drawing?.roofs || [])
-      .filter(other => (other.points || []).length >= 3);
-    const overRoof = pt => under.some(other => pointInLoop(other.points, pt));
     // ── THE WALL OF A TALLER BODY CUTS IT FIRST, BEFORE ANY CHAMFER ─────
     //
     // Movie, 16 Oct: "the main rule for that connection should be the roof
@@ -16896,10 +16887,20 @@
     // itself, because cricketRing already refuses a corner whose edges are
     // gables.
     const notched = notch ? notchPlainRoof(plain, notch, roofOverhangFt) : null;
-    const base = notched || plain;
-    const cricketed = G.cricketRing(base.points, base.edges, base.edgeOverhang,
-      { needsCricket: pt => !overRoof(pt) });
-    const shaped = cricketed || base;
+    // ── AND NO 45 OF ITS OWN (Movie, 16 Oct) ─────────────────────────────
+    //
+    // "you know about these 45 degree roof corners we need to get rid of
+    // right", and on the 15th: "those 45 degree corners aren't necessary ...
+    // they should been all 90 degrees no 45s" ... "there might be a 45 but
+    // not in those situation, only if you really need it for a cricket".
+    //
+    // So the build cuts NO cricket: a roof corner is an outline corner, the
+    // valley runs to it, and the plan shows right angles and the hips the
+    // skeleton makes of them. geometry-2d's cricketRing stays for the day he
+    // adds a cricket himself ("maybe later i will allow the user to design
+    // and add crickets to the roof plan if they need them"); the build no
+    // longer guesses where one is wanted. `overRoof` above went with it.
+    const shaped = notched || plain;
     drawing.roofs = drawing.roofs || [];
     const roof = {
       id: newDrawingItemId('roof'),
