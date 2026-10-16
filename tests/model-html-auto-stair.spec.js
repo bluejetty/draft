@@ -429,11 +429,14 @@ test('no stair opening lands on a beam carrying its floor', async ({ page }) => 
     // 1 3/4", off the hole by design (Movie: "edge of beam alligned with edge
     // of opening"). It carries the stair's id, and the 2" rule is for every
     // OTHER beam.
+    // THE BEAMS UNDER A FLOOR ARE FILED ON THE LEVEL BELOW IT: the
+    // FOUNDATION's carry MAIN FL, MAIN FL's floor-view beams carry the 2ND
+    // FL. (This read the opening's own level for the 2ND FL and so checked
+    // its well against nothing; the count below is what caught that.)
+    const carrier = { [MAIN_FL]: [FOUNDATION, 'foundation'], [SECOND_FL]: [MAIN_FL, 'floor'] }[opening.levelId];
     const beams = (saved.beams || []).filter(beam =>
       !(Number(beam.stairId) > 0 && Number(beam.stairId) === Number(opening.stairId))
-      && ((beam.levelId === opening.levelId && beam.view === 'floor')
-      || (opening.levelId === MAIN_FL && beam.levelId === FOUNDATION
-        && beam.view === 'foundation')));
+      && carrier && beam.levelId === carrier[0] && beam.view === carrier[1]);
     beams.forEach(beam => {
       const gap = wellGap(beam, opening.points);
       checked += 1;
@@ -447,6 +450,15 @@ test('no stair opening lands on a beam carrying its floor', async ({ page }) => 
   // [] and the check passed unconditionally.
   expect(checked, 'no beam was checked against any well, so this test proves '
     + 'nothing').toBeGreaterThan(0);
+  // AND THE 2ND FL'S WELL WAS CHECKED AGAINST THE BEAM UNDER IT, which is
+  // the floor this used to skip.
+  const upper = openings.find(o => o.levelId === SECOND_FL);
+  expect(upper, 'a well on the 2ND FL').toBeTruthy();
+  const underUpper = (saved.beams || []).filter(b => b.levelId === MAIN_FL && b.view === 'floor' && !(Number(b.stairId) > 0));
+  expect(underUpper.length, 'a beam carries the 2ND FL').toBeGreaterThan(0);
+  // The suggestion hugs the beam: 2" off its centreline, not elsewhere.
+  const nearest = Math.min(...underUpper.map(b => wellGap(b, upper.points)));
+  expect(nearest, 'the upper well stands 2" off the beam under it').toBeLessThan(2 / 12 + 0.05);
 });
 
 // ── THE THREE RULES THE BUILT HOUSE NEVER REACHES ──────────────────────────
@@ -511,9 +523,11 @@ test('a stair already standing on a beam is nudged clear before its hole is cut'
     const across = { start: { x: -20, y: 0, z: 1.7 }, end: { x: 20, y: 0, z: 1.7 } };
     await open(page, twoStoreyHouse({
       stairs: [{ id: 1, ...run(MAIN_FL) }, { id: 2, ...run(SECOND_FL) }],
+      // FILED AS THE BUILD FILES THEM: the beam under MAIN FL on the
+      // FOUNDATION, the beam under the 2ND FL on MAIN FL's floor view.
       beams: [
         { id: 1, ...across, levelId: FOUNDATION, view: 'foundation' },
-        { id: 2, ...across, levelId: SECOND_FL, view: 'floor' },
+        { id: 2, ...across, levelId: MAIN_FL, view: 'floor' },
       ],
     }));
     const said = await pressAutoStair(page);
