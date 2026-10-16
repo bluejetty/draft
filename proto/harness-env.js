@@ -386,10 +386,12 @@ function buildEnv(win, saved) {
     columns: () => columns,
     fenestrations: () => fenestrations,
     garageOutlines: id => outlines.filter(o => o.levelId === id && o.garage && o.points.length >= 3),
-    garageFoundation: g => {
-      const mode = g?.foundation || masters.find(m => m.id === g?.masterId)?.foundation;
-      return mode === 'thickened' || mode === 'frostwall' ? mode : 'gradebeam';
-    },
+    // THE PAINTER'S RULE, so the bench answers what MODEL answers: this copy
+    // never asked the section table, which is where the build files the kind.
+    garageFoundation: g => win.DraftCutView.garageFoundationKind(g, {
+      master: masters.find(m => m.id === g?.masterId) || null,
+      sectionRow: rowId => saved.sectionTable?.rows?.[rowId] ?? null,
+    }),
     buildType: () => saved.buildType ?? null,
     sectionRow: rowId => saved.sectionTable?.rows?.[rowId] ?? null,
     foundationHoldDown: () => ({ attachment: saved.foundationAttachment, ladderIn: saved.foundationLadderIn }),
