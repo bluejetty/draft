@@ -218,21 +218,27 @@ test('TAB steps into the ANGLE box, from the box and from the sheet; Shift+Tab s
   async ({ page }) => {
     await open(page, base({ board: 'drafting' }));
     await startARun(page);
-    await page.keyboard.press('7');
-    expect(await focusedId(page)).toBe('frozen-length');
-    await page.keyboard.press('Tab');
-    expect(await focusedId(page), 'Tab from LENGTH is ANGLE').toBe('frozen-angle');
-    await page.keyboard.press('Shift+Tab');
-    expect(await focusedId(page), 'Shift+Tab from ANGLE is LENGTH').toBe('frozen-length');
-    // Escape in the box lets go of the box, not the run (the box's own
-    // handler). From the sheet, with the run still in hand, Tab is the
-    // ANGLE box too -- not the first control on the page.
-    await page.keyboard.press('Escape');
-    expect(await focusedId(page)).not.toBe('frozen-length');
-    await expect(lengthBox(page), 'the run is still in hand').toBeEnabled();
+    // FROM THE SHEET FIRST, before any box has had the focus. The browser's
+    // own Tab would start from the canvas the run was clicked on and land on
+    // whatever control follows it in the page; only the page's route lands
+    // on ANGLE. Asked after a visit to the LENGTH box this check could not
+    // tell the two apart, because the browser's Tab from a just-blurred box
+    // steps to the next control, and the next control after LENGTH is ANGLE.
+    expect(await focusedId(page), 'nothing has the focus').not.toMatch(/^frozen-/);
     await page.keyboard.press('Tab');
     expect(await focusedId(page), 'Tab from the sheet is ANGLE').toBe('frozen-angle');
     await expect(angleBox(page)).toBeEnabled();
+    await page.keyboard.press('Shift+Tab');
+    expect(await focusedId(page), 'Shift+Tab from ANGLE is LENGTH').toBe('frozen-length');
+    await page.keyboard.press('7');
+    await expect(lengthBox(page), 'the box took the digit as its text').toHaveValue('7');
+    await page.keyboard.press('Tab');
+    expect(await focusedId(page), 'Tab from LENGTH is ANGLE').toBe('frozen-angle');
+    // Escape in a box lets go of the box, not the run (the box's own
+    // handler), and the run is still in hand for the next Tab.
+    await page.keyboard.press('Escape');
+    expect(await focusedId(page)).not.toMatch(/^frozen-/);
+    await expect(lengthBox(page), 'the run is still in hand').toBeEnabled();
   });
 
 test('Escape lets go of the box without letting go of the run; a second Escape cancels the run',
