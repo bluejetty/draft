@@ -417,6 +417,29 @@ check('walls that do not close make no loop', E.chainLoop(ring(rect(0, 0, 4, 6))
   const fdnWhole = mPush(m0, 'foundation', 1, 2, 2);
   check('FOUNDATION front out 2 ft, whole: refused -- the garage meets that line, as on MAIN',
     !fdnWhole.ok && fdnWhole.reason, 'SHARED');
+  // THE SAME HOUSE WITHOUT ITS GARAGE keeps the whole front free, and the
+  // push that used to stand here still holds there: MAIN's front moves on
+  // BOTH sides of the notch (the twins rule -- one side alone is the
+  // mutation this check exists to catch), the ENTRY front goes with it, and
+  // no piles. Not a second fixture: the garage's records taken off this one,
+  // AND THE ROOM OVER IT (level 4) -- left standing it hangs over air once
+  // the garage is gone, and the cascade rightly piles it: six piles that are
+  // about the room, not about the notch this check is for.
+  const OVER_GARAGE_LEVEL = 4;
+  const noGarage = d => {
+    const keep = r => !r.garage && r.body !== 'garage' && Number(r.levelId) !== OVER_GARAGE_LEVEL
+      && Number(r.sourceLevelId) !== OVER_GARAGE_LEVEL;
+    const out = { ...d };
+    ['outlines', 'walls', 'roofs', 'floors', 'fenestrations', 'columns', 'beams', 'lines', 'dimensions']
+      .forEach(k => { if (Array.isArray(d[k])) out[k] = d[k].filter(keep); });
+    return out;
+  };
+  const g0 = noGarage(m0);
+  const fdnFree = mPush(g0, 'foundation', 1, 2, 2);
+  check('FOUNDATION front out 2 ft with no garage on the house: MAIN\'s front both sides of the notch, the ENTRY front, no piles',
+    fdnFree.ok && [P1(fdnFree.drawing), houseOf(fdnFree.drawing, 3), houseOf(fdnFree.drawing, 2)],
+    [0, [[-16, -20], [16, -20], [16, 22], [2, 22], [2, 14], [-10, 14], [-10, 22], [-16, 22]],
+      [[-10, 14], [2, 14], [2, 22], [-4, 22], [-10, 22]]]);
   const fdnBroken = E.breakEdge(m0, { kind: 'foundation', levelId: 1, loopIndex: 0, edgeIndex: 2, atFt: -4 }, mCtx(m0));
   check('FOUNDATION front broken where the garage parts: a corner at -4',
     fdnBroken.ok && houseOf(fdnBroken.drawing, 3), [[-16, -20], [16, -20], [16, 20], [2, 20], [2, 14], [-10, 14], [-10, 20], [-16, 20]]);
