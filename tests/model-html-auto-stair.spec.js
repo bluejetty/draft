@@ -424,10 +424,16 @@ test('no stair opening lands on a beam carrying its floor', async ({ page }) => 
   openings.forEach(opening => {
     // The beams carrying THIS floor: its own FLOOR view, plus FOUNDATION's on
     // the lowest storey -- which is where every beam the build generates goes.
+    // NOT THE WELL'S OWN FRAMING: since 16 Oct the flush beam on a well's
+    // open side stands with its face on the opening's edge -- half a beam,
+    // 1 3/4", off the hole by design (Movie: "edge of beam alligned with edge
+    // of opening"). It carries the stair's id, and the 2" rule is for every
+    // OTHER beam.
     const beams = (saved.beams || []).filter(beam =>
-      (beam.levelId === opening.levelId && beam.view === 'floor')
+      !(Number(beam.stairId) > 0 && Number(beam.stairId) === Number(opening.stairId))
+      && ((beam.levelId === opening.levelId && beam.view === 'floor')
       || (opening.levelId === MAIN_FL && beam.levelId === FOUNDATION
-        && beam.view === 'foundation'));
+        && beam.view === 'foundation')));
     beams.forEach(beam => {
       const gap = wellGap(beam, opening.points);
       checked += 1;

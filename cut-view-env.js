@@ -81,6 +81,12 @@ if (!window.DraftCutViewEnv) {
       const points = (Array.isArray(floor?.points) ? floor.points : []).map(point).filter(Boolean);
       if (points.length < 3 || !levelIds.has(Number(floor?.levelId))) return null;
       return {
+        // THE ID TRAVELS. cut-view.js asks `env.floorOpenings(floor.id)` for
+        // the stair hole in a floor band, and this record had no id -- so on
+        // the sheet every band ran unbroken across its stair while MODEL's
+        // showed the opening (found 16 Oct, painting one section through
+        // both envs: two band fills there, one here).
+        id: String(floor?.id || ''),
         points,
         levelId: Number(floor.levelId),
         view: floor?.view || 'floor',
@@ -224,11 +230,16 @@ if (!window.DraftCutViewEnv) {
       fenestrations: () => fenestrations,
       garageOutlines: levelId => outlines.filter(outline =>
         outline.levelId === levelId && outline.garage && outline.points.length >= 3),
-      garageFoundation: garage => {
-        const mode = garage?.foundation
-          || masters.find(master => master.id === garage?.masterId)?.foundation;
-        return mode === 'thickened' ? 'thickened' : 'gradebeam';
-      },
+      // THE PAINTER'S OWN RULE, not a copy of it. This read the outline and
+      // its master and answered 'gradebeam' for everything else -- so a
+      // frost-walled garage whose kind PROJECT's table holds (which is where
+      // the build writes it) drew no floor on the SECTIONS sheet while MODEL
+      // drew the slab (Movie, 16 Oct: "the slab shows in model space but not
+      // on the construction plan layout"). See cut-view.js garageFoundationKind.
+      garageFoundation: garage => window.DraftCutView.garageFoundationKind(garage, {
+        master: masters.find(master => master.id === garage?.masterId) || null,
+        sectionRow: rowId => saved.sectionTable?.rows?.[rowId] ?? null,
+      }),
       // WHAT KIND OF BUILDING, and PROJECT's section-table row for it: a
       // BILEVEL stands its ENTRY and OVER GARAGE where PROJECT's numbers put
       // them (cut-view.js splitFloorStack), and without these two every sheet
