@@ -478,6 +478,62 @@ if (!window.DraftGeometry2D) {
     return offsetWith(flip, distances);
   };
 
+  // ── A SPIKE IS NOT A CORNER ──────────────────────────────────────────────
+  //
+  // A loop can come back along the edge it just walked: ... (-56,0) ->
+  // (0,0) -> (-6,0) ... is six feet of north wall drawn twice, with no area
+  // between the two passes. A drafter makes one by tracing a notch and
+  // carrying the wall past its mouth before turning back; Movie's own MOD
+  // BILEVEL trace carries exactly that, and it is what this was written for.
+  //
+  // IT IS NOT A HARMLESS EXTRA POINT. Every offset in this file meets a
+  // vertex by intersecting its two offset edges, and at a spike tip those
+  // edges are ANTIPARALLEL: the intersection is at infinity, the `cross < 1e-9`
+  // branch takes over and lands one point on one side, and the ring comes
+  // back with a DIAGONAL across the building. Measured on his house: the
+  // roof's offset ran (-58,2) straight to (0,-2), which then made the ring
+  // non-square, which made cutLoops refuse it, which silently cancelled the
+  // rule that stops a roof draining into a 2nd-storey wall. One stray vertex,
+  // three consequences, no error anywhere.
+  //
+  // THE TIP GOES, NOT THE PAIR. Dropping the tip joins the two passes into
+  // the single wall they always were -- (-56,0) -> (-6,0) -- which is the
+  // drawing the drafter meant and the one every other rule can work with.
+  //
+  // UNTIL IT IS STABLE, because removing one tip can make its neighbour one.
+  // `kept` is the surviving points' ORIGINAL indices: a caller that names
+  // edges by index (raiseRoofOver's flush and rake lists) has to be able to
+  // follow them across the clean, and one that cannot read the map is one
+  // that would silently gable the wrong edge.
+  const loopWithoutSpikes = points => {
+    const ring = Array.isArray(points) ? points.map(pt => ({ x: pt.x, z: pt.z })) : [];
+    let kept = ring.map((_, index) => index);
+    let live = ring;
+    let cut = true;
+    while (cut && live.length > 3) {
+      cut = false;
+      const n = live.length;
+      for (let i = 0; i < n; i += 1) {
+        const v = live[i], a = live[(i + n - 1) % n], b = live[(i + 1) % n];
+        const ax = a.x - v.x, az = a.z - v.z;
+        const bx = b.x - v.x, bz = b.z - v.z;
+        const la = Math.hypot(ax, az), lb = Math.hypot(bx, bz);
+        if (la < 1e-9 || lb < 1e-9) continue;
+        // BOTH EDGES LEAVE THE VERTEX THE SAME WAY: parallel (no cross) and
+        // pointing together (positive dot). That is a tip and nothing else
+        // is -- a straight-through vertex has them pointing apart.
+        const cross = (ax * bz - az * bx) / (la * lb);
+        const dot = (ax * bx + az * bz) / (la * lb);
+        if (Math.abs(cross) > 1e-9 || dot < 1 - 1e-9) continue;
+        live = live.filter((_, index) => index !== i);
+        kept = kept.filter((_, index) => index !== i);
+        cut = true;
+        break;
+      }
+    }
+    return { points: live, kept };
+  };
+
   const offsetOutline = (points, distance) => {
     if (!distance) return points.map(pt => ({ ...pt }));
     const count = points.length;
@@ -2619,6 +2675,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     gableOverhangFt,
     CRICKET_FT,
     cricketRing,
+    loopWithoutSpikes,
     roofSkeleton,
     mergeVertex,
     roofFaces,
