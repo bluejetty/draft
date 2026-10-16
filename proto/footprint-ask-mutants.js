@@ -178,6 +178,13 @@ const MUTANTS = [
     with: '    const patch = uncoveredPatch(pending); step = { items: [] };',
     test: 'one Ctrl+Z takes the step-in and its membrane note back' },
 
+  // ── AND THE LINE THAT IS NOT A BUILDING ─────────────────────────────────
+  { file: 'MODEL.html',
+    name: 'a dragged LINE is asked whether the foundation should follow it',
+    find: '    if (md.body && !walls().includes(md.body)) return null;',
+    with: '    if (false) return null;',
+    test: 'a LINE dragged off the footprint is not asked about' },
+
   { file: 'MODEL.html',
     name: 'ESCAPE answers for him: the page decides what the drag meant',
     find: "      if (event.key === 'Escape') { settleFootprint('off'); return; }",

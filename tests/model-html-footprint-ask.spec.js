@@ -68,7 +68,7 @@ const copyFor = (id, levelId) => ({
 // storey the gesture happens on. It defaults to MAIN FL, which has nothing
 // under it; the inward half needs 2ND FL, which has.
 const file = ({ board = 'drafting', roof = true, dims = true, master = false,
-  drag = MAIN_FL } = {}) => ({
+  drag = MAIN_FL, noNorthWall = false } = {}) => ({
   version: 1,
   levels: [
     { id: ROOF, name: 'ROOF', elev: 0 },
@@ -81,10 +81,11 @@ const file = ({ board = 'drafting', roof = true, dims = true, master = false,
   walls: [
     ['n', V(-10, -10), V(10, -10)], ['e', V(10, -10), V(10, 10)],
     ['s', V(10, 10), V(-10, 10)], ['w', V(-10, 10), V(-10, -10)],
-  ].map(([id, start, end]) => ({
-    id, start, end, levelId: drag, view: 'plan',
-    wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left',
-  })),
+  ].filter(([id]) => !(noNorthWall && id === 'n'))
+    .map(([id, start, end]) => ({
+      id, start, end, levelId: drag, view: 'plan',
+      wallType: 'stud_2x6', baseHeight: 0, topHeight: 8, refLine: 'left',
+    })),
   outlines: master
     ? [copyFor('house', MAIN_FL), copyFor('upper', SECOND_FL)]
     : [{ id: 'house', levelId: MAIN_FL, points: CORNERS.map(p => ({ ...p })) }],
@@ -97,7 +98,12 @@ const file = ({ board = 'drafting', roof = true, dims = true, master = false,
     autoDim(901, V(-10, -13), V(10, -13)),
     autoDim(902, V(13, -10), V(13, 10)),
   ] : [],
-  lines: [], floors: [], fenestrations: [], shapes: [], surfaceOpenings: [],
+  // A LINE ALONG THE NORTH WALL, corner to corner. Draughting, not the
+  // building -- and the body grab answers for a selected line now, so it can
+  // reach the card's own gesture.
+  lines: [{ id: 'l1', levelId: drag, view: 'plan', layer: 'draft',
+    start: V(-10, -10), end: V(10, -10) }],
+  floors: [], fenestrations: [], shapes: [], surfaceOpenings: [],
   stairs: [], notes: [], roomTags: [], columns: [], beams: [],
   boneyardShelves: master ? [{ id: 1, name: 'SHELF 1' }] : [],
   boneyardOutlines: master
@@ -483,4 +489,35 @@ test('one Ctrl+Z takes the step-in and its membrane note back together',
       .find(p => p.srcId === srcOf(1)).z, 'the storey is back out').toBeCloseTo(-10, 6);
     expect((saved.notes || []).filter(n => /ROOF DECK/i.test(n.body || '')),
       'and the deck it named is gone with it').toHaveLength(0);
+  });
+
+test('a LINE dragged off the footprint is not asked about: it is not the building',
+  async ({ page }) => {
+    // The body grab answers for a selected LINE as well as a wall now, so a
+    // 'wall' drag whose body is a line reaches the card's own test -- and
+    // this line runs corner to corner where the north wall was, so both its
+    // ends sit exactly on footprint corners. It is draughting all the same:
+    // it raises no storey and carries no floor, and a cantilever under one
+    // would be a cantilever under nothing.
+    //
+    // THE NORTH WALL IS TAKEN OUT OF THE FIXTURE so the press can only land
+    // on the line. With both there the grab could take either, and a test
+    // that passes whichever it took is a test of nothing.
+    await open(page, { noNorthWall: true });
+    const { at } = await h.planFrame(page);
+    await page.mouse.click(...at(0, -10));
+    await page.waitForTimeout(100);
+    await page.mouse.move(...at(0, -10));
+    await page.mouse.down();
+    await page.mouse.move(...at(0, -7), { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+
+    await expect(card(page), 'a line is not asked what it meant').toBeHidden();
+    const saved = await saveAndRead(page);
+    expect(saved.lines[0].start.z, 'and it moved, with no question asked')
+      .toBeCloseTo(-7, 1);
+    expect(saved.lines[0].end.z, 'whole, both ends').toBeCloseTo(-7, 1);
+    expect(saved.outlines.find(o => o.id === 'house').points[1].z,
+      'the footprint was left exactly where it was').toBeCloseTo(-10, 6);
   });

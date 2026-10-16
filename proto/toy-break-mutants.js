@@ -61,9 +61,22 @@ const MUTANTS = [
     test: '7a' },
   { file: 'MODEL.html',
     name: 'TOY LEAKS: DRAFTING gets the bone choice too',
-    find: "      } else if (board === 'toy' && md.kind === 'wall' && md.body) {",
-    with: "      } else if (md.kind === 'wall' && md.body) {",
+    // THE CONDITION BECAME TWO LINES when the body grab learned to answer
+    // for a selected LINE: a line is not a bone, so the click asks whether
+    // what it grabbed is a wall. The mutation is the same one -- the board
+    // test dropped, so DRAFTING gets the card too.
+    find: "      } else if (board === 'toy' && md.kind === 'wall' && md.body\n",
+    with: "      } else if (md.kind === 'wall' && md.body\n",
     test: 'DRAFTING never offers' },
+  // AND A LINE IS NOT A BONE. The body grab answers for a selected LINE now,
+  // so without this test the card is raised over one -- BREAK HERE promising
+  // to put a joint in something that holds up nothing.
+  { file: 'MODEL.html',
+    name: 'A LINE GETS THE BONE CHOICE: break here, in a draughting line',
+    find: "        && walls().includes(md.body)) {",
+    with: "        && true) {",
+    test: 'a selected LINE is offered no bone choice' },
+
   { file: 'MODEL.html',
     name: 'THE CLAMP GOES: a break can land on the corner and make a null half',
     // Re-aimed. The mutant here attacked `if (feet <= 0 || feet >= run)`,

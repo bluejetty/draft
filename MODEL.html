@@ -9690,9 +9690,10 @@
 
   // AN ALREADY-SELECTED OPENING IS A GRAB, which is the page's own two-step
   // for moving anything: press it to choose it, press it again and drag. The
-  // wall body drag reads the same way (wallBodyAt only answers for a wall
-  // already in the selection), and the reason is the same -- a press that both
-  // selected and started moving would make every mis-aimed tap a small edit.
+  // segment body drag reads the same way (segmentBodyAt only answers for a
+  // wall or line already in the selection), and the reason is the same -- a
+  // press that both selected and started moving would make every mis-aimed
+  // tap a small edit.
   const openingBodyAt = worldPt => {
     const opening = openingAt(worldPt);
     return opening && selection.some(entry => entry.item === opening)
@@ -10556,6 +10557,13 @@
     // IS the "move everything" answer, and §4 above already carries it.
     if ((drawing.boneyardOutlines || []).some(master =>
       (master.points || []).includes(md.before[0].vtx))) return null;
+    // AND NEITHER IS A LINE. The body grab answers for a selected LINE as
+    // well as a wall now, so a 'wall' drag whose body is a line reaches here
+    // -- and a line is draughting, not the building. It raises no storey and
+    // carries no floor, so a cantilever under one would be a cantilever
+    // under nothing. Without this, a line drawn along a wall and dragged off
+    // it is asked whether the foundation should follow.
+    if (md.body && !walls().includes(md.body)) return null;
     const levelId = Number(md.body?.levelId ?? activeLevelId());
     const copies = (drawing.outlines || []).filter(outline =>
       Number(outline.levelId) === levelId && outline.site !== true
@@ -11043,6 +11051,17 @@
     // the only thing that was not.
     const selectedSeg = selectedSegment();
     if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;
+    // THE TYPE FILTER GOVERNS THIS GRAB TOO, for segmentBodyAt's reason:
+    // "WALL is engaged: nothing else responds", and a press that takes hold
+    // of a point is responding.
+    //
+    // THIS HALF WAS ALREADY WRONG, and it is fixed here because the two are
+    // one rule and one gesture -- the ends and the body of the same record.
+    // Measured before the line was written: a LINE selected under ALL, WALL
+    // engaged after, and its end still dragged. Leaving it would make the
+    // note on segmentBodyAt a lie about the page rather than a description
+    // of it.
+    if (!filterAllows(walls().includes(selectedSeg) ? 'wall' : 'line')) return null;
     const G = window.DraftGeometry2D;
     const ends = [selectedSeg.start, selectedSeg.end].filter(Boolean);
     return G.nearestVertex(ends, worldPt, CORNER_GRAB_PX / view.scale);
@@ -11124,10 +11143,34 @@
   // about 60px on screen the two corner zones meet and there is no body left
   // to grab. Zoom in and it appears. That is the old page's own precedence
   // producing it, not a rule added here.
-  const wallBodyAt = worldPt => {
-    const selectedSeg = selectedWall();
-    if (!selectedSeg || !walls().includes(selectedSeg)) return null;
-    if (!selectedSeg.start || !selectedSeg.end) return null;
+  // A LINE'S BODY DRAGS TOO, and it is the other half of the gesture the LINE
+  // panel has promised since it was written. #20 gave a selected line's ENDS
+  // to cornerAt by asking selectedSegment() instead of selectedWall(); its
+  // BODY was left on the wall-only question, so a press in the middle of a
+  // selected line slid the sheet while a press on either end moved the point.
+  // One record, two grabs, two answers -- and the drafter reads the one that
+  // does nothing as the line being stuck.
+  //
+  // IT NEEDED NOTHING ELSE, for #20's own reasons: a line's ends are POOLED
+  // VERTICES like a wall's, movingEnds reads the two points any segment has,
+  // the 'move' undo step restores points whatever record holds them, and
+  // splitRunCorners leaves early on anything but a TOY wall. What the two
+  // callers below needed was to stop assuming the answer is a wall.
+  const segmentBodyAt = worldPt => {
+    const selectedSeg = selectedSegment();
+    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;
+    // AND THE TYPE FILTER GOVERNS THE GRAB, not just the pick. "WALL is
+    // engaged: nothing else responds" is the whole rule, and a press that
+    // takes hold of something is the plainest kind of responding.
+    //
+    // IT ONLY BECAME REACHABLE WHEN THE GRAB LEARNED ABOUT LINES. While this
+    // answered for walls alone, a selection the filter forbids could not also
+    // be the thing it offered -- a line selected under ALL, WALL engaged
+    // after, and the grab had nothing to say about it. Now it does, and
+    // without this the press takes the gesture: the click that should have
+    // been refused leaves the line selected instead, which is what
+    // model-tool-select caught.
+    if (!filterAllows(walls().includes(selectedSeg) ? 'wall' : 'line')) return null;
     const { d } = window.DraftGeometry2D.pointToSegment(worldPt, selectedSeg);
     return d < SELECT_GRAB_PX / view.scale ? selectedSeg : null;
   };
@@ -25110,7 +25153,7 @@
         return;
       }
     }
-    const body = corner ? null : wallBodyAt(at);
+    const body = corner ? null : segmentBodyAt(at);
     if (corner || body) {
       // A grabbed corner or wall takes the gesture whole: no pan starts, so
       // the sheet cannot slide out from under geometry being placed.
@@ -25478,7 +25521,7 @@
       stripRefresh();
       const corner = cornerAt(at);
       canvas.classList.toggle('over-corner', !!corner);
-      canvas.classList.toggle('over-wall', !corner && !!wallBodyAt(at));
+      canvas.classList.toggle('over-wall', !corner && !!segmentBodyAt(at));
       // REPAINT ONLY WHEN THE ANSWER CHANGES, and identity is what decides:
       // cornerAt hands back the POOLED VERTEX OBJECT, so `!==` is "a different
       // corner", not "different numbers". A pointermove fires on every pixel
@@ -25720,13 +25763,18 @@
         // drawing that does not exist yet. settleFootprint folds this same
         // step when it lands.
         if (!offerFootprintChoice(md, moveStep)) foldRedim(moveStep);
-      } else if (board === 'toy' && md.kind === 'wall' && md.body) {
-        // §4's CLICK, and it costs no new gesture. `wallBodyAt` only returns a
-        // wall that is ALREADY SELECTED, so reaching here means the drafter
-        // pressed a wall he had already chosen and let go without dragging --
-        // which is the click the order describes, and is not a press that
-        // could have been anything else. The drag is still the move; this is
-        // the look.
+      } else if (board === 'toy' && md.kind === 'wall' && md.body
+        && walls().includes(md.body)) {
+        // §4's CLICK, and it costs no new gesture. `segmentBodyAt` only
+        // returns a wall or line that is ALREADY SELECTED, so reaching here
+        // means the drafter pressed one he had already chosen and let go
+        // without dragging -- which is the click the order describes, and is
+        // not a press that could have been anything else. The drag is still
+        // the move; this is the look.
+        //
+        // AND IT IS A BONE'S CLICK, so it asks whether the body IS a wall.
+        // The grab answers for a selected LINE now as well, and a line is not
+        // a bone: BREAK HERE would offer to put a joint in one.
         offerBoneChoice(md.body, md.grab);
       }
       moveDrag = null;
