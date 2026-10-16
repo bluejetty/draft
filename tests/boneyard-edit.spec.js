@@ -249,19 +249,30 @@ test('the side lengths follow a drag before it is let go', async ({ page }) => {
   await page.mouse.up();
 });
 
-// THE OTHER BONES, FADED, FOR LINING UP. Movie, 4 Oct: "could we show the
-// other 'BONE lines in faded out or something so i can line up stuff if i
-// need to floor to floor, and when they select one, bring it to top and
-// increase thickness and opacity of that one". The level under the picked one
-// keeps its grey dashes; every other one is drawn faded in its own colour.
-test('the 2D window shows the other bones faded under the picked one', async ({ page }) => {
-  await boneyardOf(page, 'bungalow', 'bungalow');
-  await page.locator('[data-bone-level="MAIN FL"]').click();
-  await expect(page.locator('#bones2d')).toHaveAttribute('data-faded', '["ROOF"]');
-  await page.locator('[data-bone-level="ROOF"]').click();
-  // The roof's own floor is the dashed one; the foundation is faded.
-  await expect(page.locator('#bones2d')).toHaveAttribute('data-faded', '["FOUNDATION"]');
-});
+// THE BONES THE DRAFTER PUT BEHIND THE PICKED ONE, FADED, FOR LINING UP.
+// Movie, 4 Oct: "could we show the other 'BONE lines in faded out or
+// something so i can line up stuff if i need to floor to floor, and when they
+// select one, bring it to top and increase thickness and opacity of that
+// one". Every other level used to be drawn that way, always; 16 Oct made it a
+// choice -- "add a BG button to each of those and if they press the BG button
+// that LEVEL will show up lightweight in the background" -- because on a
+// four-storey stack a drafter lining up two of them was reading four. The
+// level under the picked one keeps its grey dashes either way.
+test('the 2D window shows the bones put behind the picked one, and only those',
+  async ({ page }) => {
+    await boneyardOf(page, 'bungalow', 'bungalow');
+    await page.locator('[data-bone-level="MAIN FL"]').click();
+    await expect(page.locator('#bones2d'), 'nothing is behind it until it is asked for')
+      .toHaveAttribute('data-faded', '[]');
+    await page.locator('[data-bone-bg="ROOF"]').click();
+    await expect(page.locator('#bones2d')).toHaveAttribute('data-faded', '["ROOF"]');
+    // PICKING THE ROOF TAKES IT OUT OF THE BACKGROUND, because it is in front
+    // now -- a level cannot be behind itself. Its own floor is the dashed one.
+    await page.locator('[data-bone-level="ROOF"]').click();
+    await expect(page.locator('#bones2d')).toHaveAttribute('data-faded', '[]');
+    await page.locator('[data-bone-bg="FOUNDATION"]').click();
+    await expect(page.locator('#bones2d')).toHaveAttribute('data-faded', '["FOUNDATION"]');
+  });
 
 // Movie, 4 Oct: "a pile was added under the roof i extended but no POST/
 // Column going from the pile to the roof" ... "show me the veritical stick".

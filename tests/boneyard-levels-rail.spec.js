@@ -59,7 +59,7 @@ async function boneyardOfTwoStorey(page) {
   await h.waitForSaved(page);
   await page.goto('/BONEYARD.html');
   await expect(page.locator('body')).toHaveAttribute('data-boneyard-ready', '1', { timeout: 10000 });
-  await expect(page.locator('#legend button')).toHaveCount(4);
+  await expect(page.locator('#legend [data-bone-level]')).toHaveCount(4);
 }
 
 const boxes = locator => locator.evaluateAll(els => els.map(el => {
@@ -94,7 +94,7 @@ test('the levels sit between the two windows, not in the right one\'s head',
 
 test('they are stacked, top-aligned, and none of them is clipped', async ({ page }) => {
   await boneyardOfTwoStorey(page);
-  const chips = await boxes(page.locator('#legend button'));
+  const chips = await boxes(page.locator('#legend [data-bone-level]'));
   expect(chips.length, 'four levels on this house').toBe(4);
   const order = [...chips].sort((a, b) => a.y - b.y);
   order.slice(1).forEach((chip, i) => {
@@ -162,7 +162,7 @@ test('the 3D side is the one that gave up the room, model and all', async ({ pag
 
 test('every chip in the rail still picks its level', async ({ page }) => {
   await boneyardOfTwoStorey(page);
-  const names = await page.locator('#legend button').evaluateAll(
+  const names = await page.locator('#legend [data-bone-level]').evaluateAll(
     els => els.map(el => el.dataset.boneLevel));
   expect(names).toEqual(['FOUNDATION', 'MAIN FL', '2ND FL', 'ROOF']);
   for (const name of names) {
@@ -172,7 +172,7 @@ test('every chip in the rail still picks its level', async ({ page }) => {
     await expect(page.locator('#level-title')).toHaveText(name);
     // AND THE RAIL SAYS WHICH ONE, which is the other half of its job: with
     // the levels out of the head, this is the only place it is written.
-    const pressed = await page.locator('#legend button[aria-pressed="true"]').evaluateAll(
+    const pressed = await page.locator('#legend [data-bone-level][aria-pressed="true"]').evaluateAll(
       els => els.map(el => el.dataset.boneLevel));
     expect(pressed, 'one level marked, the one picked').toEqual([name]);
   }

@@ -190,6 +190,35 @@ if (!window.DraftBoneyardLoops) {
           return all.length < 2 || Math.hypot(p.x - q.x, p.z - q.z) > 1e-6;
         })
       : null);
+    // THE ROOF'S OWN LINES, VERY THIN (Movie, 16 Oct: "add the ROOF lines to
+    // show how the overhang and hips/valleys will show up in the BONEYARD in
+    // really thin lines ... also very very thin lines").
+    //
+    // TWO THINGS, AND THE BONE IS NEITHER. The bone is the roof brought back
+    // in by its overhang -- the wall line it stands on, which is what lines up
+    // with the floor below. These are the other two: where the overhang
+    // actually ENDS (the roof's own outline, uninset), and where the planes
+    // meet each other -- the hips, valleys and ridges, which is the straight
+    // skeleton the roof plan already draws. Asked of geometry-2d rather than
+    // worked out again here, so the boneyard cannot come to disagree with the
+    // sheet about where a hip runs.
+    //
+    // FLAT, AT THE ROOF'S OWN HEIGHT. Every bone in this window is a plan loop
+    // stood at an elevation; a ridge drawn at its true height would be the one
+    // line in the drawing that is not, and the thing being looked for here is
+    // how the lines sit over the floor below.
+    const roofThin = [];
+    const thinOf = (roof, elev) => {
+      const pts = (roof.points || []).map(p => ({ x: Number(p.x), z: Number(p.z) }));
+      if (pts.length < 3) return;
+      roofThin.push({ kind: 'eave', closed: true, points: pts, elev });
+      const arcs = (G && G.roofSkeleton) ? G.roofSkeleton(roof) || [] : [];
+      arcs.forEach(arc => {
+        if (!arc || !arc.a || !arc.b) return;
+        roofThin.push({ kind: 'skeleton', closed: false, elev,
+          points: [{ x: arc.a.x, z: arc.a.z }, { x: arc.b.x, z: arc.b.z }] });
+      });
+    };
     const ownRoof = ((drawing && drawing.roofs) || []).find(r => r.sourceLevelId == null
       && !r.garage && (r.points || []).length >= 3);
     const inset = ownRoof ? footprint(ownRoof) : null;
@@ -202,6 +231,7 @@ if (!window.DraftBoneyardLoops) {
     // 4 Oct: "the upper roof needs a 'roof' - orange' wireframe on the bone".
     // One ROOF level still -- one button, one colour -- with each loop
     // carrying the height and the floor it stands on.
+    if (ownRoof && inset && inset.length >= 3) thinOf(ownRoof, top.floor.wallTop);
     ((drawing && drawing.roofs) || []).forEach(roof => {
       if (roof.sourceLevelId == null || roof.garage || (roof.points || []).length < 3) return;
       const on = floors.find(f => Number(f.floor.id) === Number(roof.sourceLevelId));
@@ -209,13 +239,15 @@ if (!window.DraftBoneyardLoops) {
       if (!pts || pts.length < 3) return;
       roofLoops.push({ id: roof.id, garage: false, roof: true, points: pts,
         elev: on.floor.wallTop, sourceLevelId: on.floor.id });
+      thinOf(roof, on.floor.wallTop);
     });
     if (roofLoops.length) {
       // The level stands where its first loop does: the house's roof, or the
       // first roof on a plate of its own when the house has none.
       const lead = roofLoops[0];
       out.push({ levelId: 7, kind: 'roof', name: 'ROOF', sourceLevelId: lead.sourceLevelId ?? top.floor.id,
-        elev: lead.elev ?? top.floor.wallTop, color: COLORS.roof, loops: roofLoops });
+        elev: lead.elev ?? top.floor.wallTop, color: COLORS.roof, loops: roofLoops,
+        ...(roofThin.length ? { thin: roofThin } : {}) });
     }
     return out;
   };
@@ -242,6 +274,10 @@ if (!window.DraftBoneyardLoops) {
       ...level,
       // A loop may stand at its own height (a roof on a plate of its own).
       polys: level.loops.map(loop => loop.points.map(p => project(p, loop.elev ?? level.elev, deg))),
+      // The very thin lines ride with the bone: same projection, same frame,
+      // so a hip cannot land somewhere the roof it belongs to is not.
+      thinPolys: (level.thin || []).map(line => ({ ...line,
+        points: line.points.map(p => project(p, line.elev ?? level.elev, deg)) })),
       cut: level.loops.map(loop => {
         const { runs, dots } = runsOf(loop);
         const e = loop.elev ?? level.elev;
@@ -249,7 +285,11 @@ if (!window.DraftBoneyardLoops) {
           dots: dots.map(d => ({ ...project(d.p, e, deg), type: d.type })) };
       }),
     }));
-    const all = raw.flatMap(l => l.polys.flat());
+    // THE EAVE COUNTS TOWARD THE FIT. It hangs two feet past every bone in
+    // the drawing, so a frame taken from the bones alone draws the overhang
+    // off the edge of the window -- the one line whose whole point is where
+    // it ends.
+    const all = raw.flatMap(l => [...l.polys.flat(), ...l.thinPolys.flatMap(line => line.points)]);
     if (!all.length) return { levels: [], scale: 0 };
     const xs = all.map(p => p.x), ys = all.map(p => p.y);
     const minX = Math.min(...xs), maxX = Math.max(...xs);
@@ -264,6 +304,8 @@ if (!window.DraftBoneyardLoops) {
       at: (p, e) => { const q = project(p, e, deg); return { x: ox + q.x * scale, y: oy + q.y * scale }; },
       levels: raw.map(l => ({ ...l,
         polys: l.polys.map(poly => poly.map(p => ({ x: ox + p.x * scale, y: oy + p.y * scale }))),
+        thinPolys: l.thinPolys.map(line => ({ ...line,
+          points: line.points.map(p => ({ x: ox + p.x * scale, y: oy + p.y * scale })) })),
         cut: l.cut.map(c => ({
           runs: c.runs.map(r => ({ a: { x: ox + r.a.x * scale, y: oy + r.a.y * scale },
             b: { x: ox + r.b.x * scale, y: oy + r.b.y * scale } })),
