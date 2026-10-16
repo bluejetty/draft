@@ -31,7 +31,8 @@ const MUTATIONS = [
   // against the new shape -- every stair runs to the basement slab.
   ['every stair runs down to the basement slab', 'cut-view.js',
     c => c.replace(`      const bottomFt = garageUnder
-        ? garageSlabTop(env, stack.foundation, garageUnder)
+        ? garageFloorAt(env, stack.foundation, garageUnder,
+          footOf(top.floorTop - garageSlabTop(env, stack.foundation, garageUnder)))
         : (below ? below.floorTop : stack.foundation.slabTop);`,
     '      const bottomFt = stack.foundation.slabTop;')],
   // AND A FLIGHT THE CUT ONLY PASSES IS DRAWN TOO (Movie, 14 Oct: "i cut a

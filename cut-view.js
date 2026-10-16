@@ -313,6 +313,41 @@ if (!window.DraftCutView) {
   // is attached and meets the house sill to sill.
   const isDetachedGarage = garage => garage.open !== true && garage.detached === true;
 
+  // ── WHICH FOUNDATION A GARAGE HAS, ANSWERED ONCE ────────────────────────
+  //
+  // Movie, 16 Oct, reading the SECTIONS sheet of his two-storey detached
+  // garage against MODEL: "the slab shows in model space but not on the
+  // construction plan layout".
+  //
+  // TWO ENVS, TWO RULES. MODEL.html's garageFoundationOf read the outline,
+  // then its BONEYARD master, then PROJECT's section-table row for this kind
+  // of garage -- and the build writes the drafter's choice to that ROW, not
+  // to the outline (raiseGarageConcrete). cut-view-env.js, which Construction
+  // Layout paints through, read the outline and the master and stopped: a
+  // frost-walled garage the table named answered 'gradebeam' there. The
+  // frost-wall floor pass asks for 'frostwall' and the grade-beam pass asks
+  // for walls raised off the ground, and a frost wall stands on it -- so
+  // neither pass painted, and the sheet showed a garage with no floor while
+  // MODEL, one tab over, showed the slab. Proved offline on
+  // proto/repro-detached-2storey-frostwall.draft before this was written:
+  // MODEL's rule, 1 slab fill on S1 and on S2; the sheet's rule, 0 on both.
+  //
+  // ONE FUNCTION, THREE CALLERS: MODEL.html, cut-view-env.js and the bench
+  // (proto/harness-env.js) all ask this. `master` is the outline's BONEYARD
+  // record when it has one; `sectionRow` answers PROJECT's row by its id.
+  function garageFoundationKind(garage, { master = null, sectionRow = () => null } = {}) {
+    const stored = garage?.foundation || master?.foundation;
+    if (stored === 'thickened' || stored === 'frostwall' || stored === 'gradebeam') return stored;
+    const detached = garage?.detached === true || master?.detached === true;
+    const row = detached ? 'detachedGarage' : 'attachedGarage';
+    const cell = sectionRow(row)?.garageFoundation;
+    if (cell === 'frostwall') return 'frostwall';
+    // A MONOLITHIC SLAB IS A DETACHED GARAGE'S CHOICE: an attached one meets
+    // the house footing and takes a grade beam or a frost wall.
+    if (cell === 'thickened' && detached) return 'thickened';
+    return 'gradebeam';
+  }
+
   // TAKES THE TYPE, NOT AN ENV, so the page that BUILDS the garage can ask
   // the same question the painter does. MODEL.html's raiseGarageConcrete held
   // its own copy of this rule and the copy had already drifted -- it applied
@@ -2845,8 +2880,31 @@ if (!window.DraftCutView) {
           .find(garage => Array.isArray(garage.points) && garage.points.length > 2
             && inLoop(garage.points, stairMid))
         : null;
+      // ── AND ON THE SLAB WHERE THE FLIGHT STANDS, NOT THE SLAB'S ONE NUMBER ──
+      //
+      // Movie, 16 Oct, on S1 of the same garage: "the stairs should calculate
+      // to land on the slab height under the last step but in notice there is
+      // a gap in that last drawing i showed you with the slab. how come a gap?"
+      //
+      // Because `garageSlabTop` is the LEVEL answer -- 4" under the top of the
+      // concrete -- and the slab this section draws is not level: it FALLS to
+      // the overhead door, 8" under the pour at the door and 1/8" a foot less
+      // going in (garageFloorAt, the floor the slab polygon is drawn from). So
+      // the flight stopped 4" short of the slab at the door and 5/8" short
+      // 27 ft in, which is the gap he circled. The foot is now asked of the
+      // floor at the point under the last riser -- the same question the slab
+      // polygon answers at that station, so the two cannot disagree. Laid out
+      // twice: once from the level number to find where the foot falls, then
+      // from the rise measured there.
+      const footOf = rise => {
+        const runs = SG.stairPlanParts(stair, SG.stairLayout(rise)).runs;
+        const last = runs[runs.length - 1];
+        if (!last) return stairMid;
+        return { x: last.start.x + last.dir.x * last.lenFt, z: last.start.z + last.dir.z * last.lenFt };
+      };
       const bottomFt = garageUnder
-        ? garageSlabTop(env, stack.foundation, garageUnder)
+        ? garageFloorAt(env, stack.foundation, garageUnder,
+          footOf(top.floorTop - garageSlabTop(env, stack.foundation, garageUnder)))
         : (below ? below.floorTop : stack.foundation.slabTop);
       const layout = SG.stairLayout(top.floorTop - bottomFt);
       if (!(layout.riseFt > 0.5)) return;
@@ -7331,6 +7389,7 @@ if (!window.DraftCutView) {
     gradeFromBearing,
     frostWallTop,
     garageSillDropFt,
+    garageFoundationKind,
     floorRuns,
     garageOfWall,
     garageOfRoof,

@@ -4910,16 +4910,16 @@
   // DRAW"; the build asks "what concrete should I MAKE", and a garage drawn
   // with a frost wall and built with a grade beam is a drawing that disagrees
   // with itself.
-  const garageFoundationOf = garage => {
-    const stored = garage?.foundation || garageMaster(garage)?.foundation;
-    if (stored === 'thickened' || stored === 'frostwall') return stored;
-    if (stored === 'gradebeam') return 'gradebeam';
-    const row = garageDetached(garage) ? 'detachedGarage' : 'attachedGarage';
-    const cell = drawing?.sectionTable?.rows?.[row]?.garageFoundation;
-    if (cell === 'frostwall') return 'frostwall';
-    if (cell === 'thickened' && row === 'detachedGarage') return 'thickened';
-    return 'gradebeam';
-  };
+  //
+  // THE RULE ITSELF LIVES IN cut-view.js (garageFoundationKind) since 16 Oct,
+  // when Construction Layout's copy of it turned out to stop at the master
+  // and never ask the table -- "the slab shows in model space but not on the
+  // construction plan layout". This hands it the three things only this page
+  // knows where to find.
+  const garageFoundationOf = garage => window.DraftCutView.garageFoundationKind(garage, {
+    master: garageMaster(garage),
+    sectionRow: row => drawing?.sectionTable?.rows?.[row] ?? null,
+  });
 
   // ── the cut-view env ────────────────────────────────────────────────────────
   // SPEC-model-html-cut-views.md. cut-view.js's drawCutView reads its world
