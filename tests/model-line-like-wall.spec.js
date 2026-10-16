@@ -302,3 +302,40 @@ test('one Ctrl+Z puts a body-dragged line back', async ({ page }) => {
   const [line] = saved.lines;
   expect([line.start.z, line.end.z], 'both ends are back').toEqual([2, 2]);
 });
+
+// ── AND A FILTER THAT SHUTS THE LINE OUT SHUTS BOTH GRABS OUT ────────────
+//
+// "WALL is engaged: nothing else responds" is the filter's whole rule, and a
+// press that takes hold of something is the plainest kind of responding.
+// Both halves of the gesture had to learn it: the BODY only became able to
+// break the rule when the grab learned about lines, but the ENDS could
+// already break it, and did -- a line selected under ALL kept dragging by
+// its end with WALL engaged.
+
+async function lineThenWallFilter(page) {
+  await open(page);
+  await h.armFromRail(page, 'line');
+  await tapWorld(page, 2, 2);
+  await tapWorld(page, 30, 2);
+  await page.keyboard.press('Escape');
+  await h.selectTool(page, 'Select');
+  await tapWorld(page, 16, 2);                       // pick it under ALL
+  await page.locator('[data-sel-filter="wall"]').click();
+  await page.waitForTimeout(100);
+}
+
+test('with WALL engaged a selected line does not drag by its END', async ({ page }) => {
+  await lineThenWallFilter(page);
+  await dragWorld(page, [30, 2], [30, 9]);
+  const saved = await save(page);
+  const [line] = saved.lines;
+  expect([line.start.z, line.end.z], 'the end stayed put').toEqual([2, 2]);
+});
+
+test('nor by its BODY', async ({ page }) => {
+  await lineThenWallFilter(page);
+  await dragWorld(page, [16, 2], [16, 9]);
+  const saved = await save(page);
+  const [line] = saved.lines;
+  expect([line.start.z, line.end.z], 'the line stayed put').toEqual([2, 2]);
+});

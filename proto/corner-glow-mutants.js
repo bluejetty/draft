@@ -47,8 +47,12 @@ const MUTANTS = [
     // too), which only it does, and the body grab still asks selectedWall. The
     // third line is kept all the same: a specific anchor costs nothing and the
     // day the two converge again it is already right.
-    find: "    const selectedSeg = selectedSegment();\n    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;\n    const G = window.DraftGeometry2D;",
-    with: "    const selectedSeg = selectedSegment() || walls()[0];\n    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;\n    const G = window.DraftGeometry2D;",
+    // RE-AIMED AGAIN. The type filter now governs both grabs (the ends and
+    // the body of the same record), so a line sits between the pick and the
+    // geometry. Two lines are enough to be unique: segmentBodyAt's copy is
+    // followed by pointToSegment, this one by nearestVertex.
+    find: "    const selectedSeg = selectedSegment();\n    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;\n    // THE TYPE FILTER GOVERNS THIS GRAB TOO,",
+    with: "    const selectedSeg = selectedSegment() || walls()[0];\n    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;\n    // THE TYPE FILTER GOVERNS THIS GRAB TOO,",
     test: 'UNSELECTED wall gets no ring' },
 ];
 

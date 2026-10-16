@@ -23,12 +23,15 @@ const SPEC = 'tests/model-line-like-wall.spec.js';
 const MUTANTS = [
   { file: 'MODEL.html',
     name: 'the body grab asks for a WALL again: a line is stuck in the middle',
-    find: '    const selectedSeg = selectedSegment();\n'
-      + '    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;\n'
-      + '    const { d } = window.DraftGeometry2D.pointToSegment(worldPt, selectedSeg);',
-    with: '    const selectedSeg = selectedWall();\n'
-      + '    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;\n'
-      + '    const { d } = window.DraftGeometry2D.pointToSegment(worldPt, selectedSeg);',
+    // ANCHORED ON THE PICK AND ITS GUARD, which segmentBodyAt alone has in
+    // this spelling: cornerAt's copy is followed by its own filter note and
+    // then nearestVertex, so three lines tell the two apart.
+    find: '  const segmentBodyAt = worldPt => {\n'
+      + '    const selectedSeg = selectedSegment();\n'
+      + '    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;',
+    with: '  const segmentBodyAt = worldPt => {\n'
+      + '    const selectedSeg = selectedWall();\n'
+      + '    if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;',
     test: 'a selected LINE drags by its BODY' },
 
   { file: 'MODEL.html',
@@ -46,6 +49,22 @@ const MUTANTS = [
     find: '  const movingEnds = wall => [wall.start, wall.end];',
     with: '  const movingEnds = wall => [wall.start];',
     test: 'a selected LINE drags by its BODY' },
+
+  // ── AND THE FILTER THAT SHUTS THE LINE OUT ──────────────────────────────
+  { file: 'MODEL.html',
+    name: 'the type filter does not reach the BODY grab: WALL is engaged and '
+      + 'a line still drags by its middle',
+    find: "    if (!filterAllows(walls().includes(selectedSeg) ? 'wall' : 'line')) return null;\n"
+      + '    const { d } = window.DraftGeometry2D.pointToSegment(worldPt, selectedSeg);',
+    with: '    const { d } = window.DraftGeometry2D.pointToSegment(worldPt, selectedSeg);',
+    test: 'nor by its BODY' },
+
+  { file: 'MODEL.html',
+    name: 'nor the END grab: WALL is engaged and a line still drags by its end',
+    find: "    if (!filterAllows(walls().includes(selectedSeg) ? 'wall' : 'line')) return null;\n"
+      + '    const G = window.DraftGeometry2D;',
+    with: '    const G = window.DraftGeometry2D;',
+    test: 'does not drag by its END' },
 ];
 
 const run = name => {

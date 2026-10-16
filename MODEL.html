@@ -11051,6 +11051,17 @@
     // the only thing that was not.
     const selectedSeg = selectedSegment();
     if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;
+    // THE TYPE FILTER GOVERNS THIS GRAB TOO, for segmentBodyAt's reason:
+    // "WALL is engaged: nothing else responds", and a press that takes hold
+    // of a point is responding.
+    //
+    // THIS HALF WAS ALREADY WRONG, and it is fixed here because the two are
+    // one rule and one gesture -- the ends and the body of the same record.
+    // Measured before the line was written: a LINE selected under ALL, WALL
+    // engaged after, and its end still dragged. Leaving it would make the
+    // note on segmentBodyAt a lie about the page rather than a description
+    // of it.
+    if (!filterAllows(walls().includes(selectedSeg) ? 'wall' : 'line')) return null;
     const G = window.DraftGeometry2D;
     const ends = [selectedSeg.start, selectedSeg.end].filter(Boolean);
     return G.nearestVertex(ends, worldPt, CORNER_GRAB_PX / view.scale);
@@ -11148,6 +11159,18 @@
   const segmentBodyAt = worldPt => {
     const selectedSeg = selectedSegment();
     if (!selectedSeg || !selectedSeg.start || !selectedSeg.end) return null;
+    // AND THE TYPE FILTER GOVERNS THE GRAB, not just the pick. "WALL is
+    // engaged: nothing else responds" is the whole rule, and a press that
+    // takes hold of something is the plainest kind of responding.
+    //
+    // IT ONLY BECAME REACHABLE WHEN THE GRAB LEARNED ABOUT LINES. While this
+    // answered for walls alone, a selection the filter forbids could not also
+    // be the thing it offered -- a line selected under ALL, WALL engaged
+    // after, and the grab had nothing to say about it. Now it does, and
+    // without this the press takes the gesture: the click that should have
+    // been refused leaves the line selected instead, which is what
+    // model-tool-select caught.
+    if (!filterAllows(walls().includes(selectedSeg) ? 'wall' : 'line')) return null;
     const { d } = window.DraftGeometry2D.pointToSegment(worldPt, selectedSeg);
     return d < SELECT_GRAB_PX / view.scale ? selectedSeg : null;
   };
