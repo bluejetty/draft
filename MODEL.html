@@ -16338,7 +16338,7 @@
   const raiseRoofOver = (loop, { garage = false, plateHeightFt = null,
     sourceLevelId = null, against = null, flush = null, rake = null,
     follows = garage ? 'attachedGarage' : 'house', buildType = drawing.buildType,
-    stepped = false, cuts = null } = {}) => {
+    stepped = false, cuts = null, notch = null } = {}) => {
     const G = window.DraftGeometry2D;
     // ── THE OVERHANG AND PITCH ARE THE PROJECT PAGE'S ────────────────────
     //
@@ -16348,7 +16348,27 @@
     // keeps the row so a later PROJECT change reshapes it.
     const { overhangFt: roofOverhangFt, pitch: roofPitch } =
       window.DraftLevelAssembly.projectRoofFor(drawing, follows, buildType);
-    const ring = loop.map(pt => ({ x: pt.x, z: pt.z }));
+    // ── THE LOOP IS CLEANED BEFORE IT IS A ROOF ─────────────────────────
+    //
+    // A traced house can come back along the wall it just drew -- six feet of
+    // north wall walked twice, with no area between the passes. geometry-2d's
+    // loopWithoutSpikes says what that costs: the offset meets such a vertex
+    // with two ANTIPARALLEL edges, lands a stray point, and hands back a ring
+    // with a diagonal across the building. Everything downstream then
+    // misbehaves QUIETLY -- cutLoops refuses a ring that is not square, so
+    // the rule that keeps a roof from draining into a 2nd-storey wall simply
+    // does not run, and nothing says so.
+    //
+    // AND THE NAMED EDGES FOLLOW IT. `flush` and `rake` are indices into the
+    // loop the CALLER handed in; cleaning renumbers them, and a list read
+    // against the wrong numbering would gable an edge nobody named. `kept` is
+    // the map, and an index whose vertex went is dropped rather than guessed.
+    const cleaned = G.loopWithoutSpikes(loop);
+    const ring = cleaned.points;
+    const ringIndexOf = new Map(cleaned.kept.map((was, now) => [was, now]));
+    const followClean = list => (Array.isArray(list)
+      ? list.map(index => ringIndexOf.get(index)).filter(index => index !== undefined)
+      : list);
     // ── THE EDGES AGAINST THE HOUSE ARE CUT FLUSH, NOT OVERHUNG ──────────
     //
     // A roof that dies into a house wall has no eave there and no board to
@@ -16386,7 +16406,7 @@
     // BOTH halves of "flush" -- the gable AND the zero overhang -- because
     // they are one fact: a roof that dies into a wall has no eave there and
     // no board to hang one on.
-    const named = new Set(Array.isArray(flush) ? flush : []);
+    const named = new Set(followClean(Array.isArray(flush) ? flush : []));
     // ── AND A GABLE THAT DIES INTO NOTHING, WHICH IS A RAKE ──────────────
     //
     // `flush` carries two facts as one -- gable, and no overhang -- and the
@@ -16404,7 +16424,7 @@
     // design calls a rake is one, whatever `against` happens to find under
     // it. `flush` is still a union with derived, because that pair says the
     // same thing; this one says the opposite of half of it.
-    const raked = new Set(Array.isArray(rake) ? rake : []);
+    const raked = new Set(followClean(Array.isArray(rake) ? rake : []));
     const gableEdge = index => {
       if (raked.has(index) || named.has(index)) return true;
       if (!sharedWith) return false;
@@ -16484,9 +16504,34 @@
     const under = (drawing?.roofs || [])
       .filter(other => (other.points || []).length >= 3);
     const overRoof = pt => under.some(other => pointInLoop(other.points, pt));
-    const cricketed = G.cricketRing(plain.points, plain.edges, plain.edgeOverhang,
+    // ── THE WALL OF A TALLER BODY CUTS IT FIRST, BEFORE ANY CHAMFER ─────
+    //
+    // Movie, 16 Oct: "the main rule for that connection should be the roof
+    // should be designed in a way (usually using gable design) to slope the
+    // main roof AWAY or to the SIDES of the 2nd storey wall lines", and "the
+    // rest of the roofs not involved in the connection to the second floor
+    // can be drawn as a normal HIP style roof that the user can change to
+    // gable if they desire".
+    //
+    // THE CUT USED TO RUN AFTERWARDS, on the finished record, and on his own
+    // traced house it SILENTLY DID NOTHING. Measured from the file he sent:
+    // the cricket below had already chamfered the roof's inside corner, and
+    // cutLoops refuses a ring that is not square-cornered -- it answered
+    // null, notchRoofRound returned false, and nobody was told. The main
+    // roof kept a two-foot eave running straight at the room's wall, which
+    // is the water he marked in red.
+    //
+    // SO THE ORDER IS THE FIX, and it is the right order on its own terms:
+    // where a roof dies into a wall is a fact about the BUILDING, and the
+    // chamfer is a fact about the finished roof. Decide the junction, then
+    // shape what is left -- and the chamfer at that corner then goes by
+    // itself, because cricketRing already refuses a corner whose edges are
+    // gables.
+    const notched = notch ? notchPlainRoof(plain, notch, roofOverhangFt) : null;
+    const base = notched || plain;
+    const cricketed = G.cricketRing(base.points, base.edges, base.edgeOverhang,
       { needsCricket: pt => !overRoof(pt) });
-    const shaped = cricketed || plain;
+    const shaped = cricketed || base;
     drawing.roofs = drawing.roofs || [];
     const roof = {
       id: newDrawingItemId('roof'),
@@ -18828,6 +18873,21 @@
   // A ROOF CUT ROUND A TALLER BODY'S WALL LINE (premade-plans.js cutLoops):
   // the edges on that line become flush gables. Left as it was when the
   // body takes nothing out of it, or would leave it in pieces.
+  // THE SAME CUT, ON A ROOF THAT IS NOT A RECORD YET. raiseRoofOver holds
+  // `{points, edges, edgeOverhang}` in hand before it files anything, and the
+  // cut has to happen THERE (see the note at the call) rather than on the
+  // finished roof -- so the shape is the same and only the carrier differs.
+  // Null when the loops do not cut, which is what the caller falls back on.
+  const notchPlainRoof = (plain, wallLine, overhangFt) => {
+    const cut = window.DraftPremadePlans.cutLoops(plain.points, wallLine);
+    if (!cut) return null;
+    return {
+      points: cut.points.map(pt => ({ x: pt.x, z: pt.z })),
+      edges: cut.onCut.map(onWall => (onWall ? 'gable' : 'eave')),
+      edgeOverhang: cut.onCut.map(onWall => (onWall ? 0 : overhangFt)),
+    };
+  };
+
   const notchRoofRound = (roof, wallLine) => {
     const cut = window.DraftPremadePlans.cutLoops(roof.points, wallLine);
     if (!cut) return false;
@@ -19587,6 +19647,22 @@
         houseTopFt: assemblyFor(levelId).wallHeightFt, garageTopFt: garagePlateFt })
       : null;
     const twoRoofs = grouped && !grouped.merged ? grouped : null;
+    // ── THE WALL LINE THE HOUSE ROOF DIES INTO, WORKED OUT FIRST ────────
+    //
+    // It used to be worked out at the ROOM's roof, two hundred lines down,
+    // and the house roof was cut round it afterwards -- which is the cut
+    // that silently failed on a traced house (see notchPlainRoof). The house
+    // roof is cut as it is RAISED now, so the line it is cut against has to
+    // exist by then. Nothing else moved: stairHood reads the plan and the
+    // entry deck's walls, and both are settled well above here.
+    const roomHood = (overGarageBody && plan.overGarageRoof)
+      ? stairHood(plan, overGarageLevelId, entryDeckWalls) : null;
+    // AND ONLY A BILEVEL'S ROOM IS A WALL TO DIE INTO. `plan.entry` is the
+    // half-storey family: there the room stands above MAIN's plate and the
+    // main roof must stop at it. Elsewhere the room is roofed by the house's
+    // own loop and there is nothing to cut.
+    const houseRoofNotch = (plan.entry && overGarageBody && plan.overGarageRoof)
+      ? (roomHood ? roomHood.roof : plan.overGarageRoof) : null;
     if (levelPresent(ROOF_LEVEL_ID)) {
       // THE ROOF'S OWN LOOP, which is NOT always the house's body. A
       // bungalow with a garage is roofed over the perimeter of both -- the
@@ -19595,7 +19671,8 @@
       madeRoofs.push(twoRoofs
         ? raiseRoofOver(twoRoofs.house.ring, { buildType: roofType, flush: twoRoofs.house.flush,
           stepped: true, cuts: twoRoofs.house.cuts })
-        : raiseRoofOver(plan.houseRoof || plan.house, { buildType: roofType }));
+        : raiseRoofOver(plan.houseRoof || plan.house, {
+          buildType: roofType, notch: houseRoofNotch }));
       const houseRoofMade = madeRoofs[madeRoofs.length - 1];
       if (twoRoofs) {
         madeRoofs.push(raiseRoofOver(twoRoofs.garage.ring, {
@@ -19668,7 +19745,7 @@
       // garageRoof branch above avoids. A design that one day wants the room
       // roofed separately says so by handing a loop, and nothing here moves.
       if (overGarageBody && plan.overGarageRoof) {
-        const hood = stairHood(plan, overGarageLevelId, entryDeckWalls);
+        const hood = roomHood;
         // A BILEVEL'S ROOM STANDS HALF A STOREY OVER MAIN, so nothing of the
         // house rises past its roof: every edge is an eave and every corner
         // hips up to the ridge at 45 (Movie, 6 Oct, on the traced MOD
@@ -19694,7 +19771,11 @@
         // north side drains north past the room, and the east end below the
         // strip keeps its hip (the ROOF tool's edge flip makes it a gable).
         if (plan.entry && houseRoofMade && houseRoofMade.item) {
-          notchRoofRound(houseRoofMade.item, hood ? hood.roof : plan.overGarageRoof);
+          // THE NOTCH ITSELF HAS ALREADY HAPPENED, as the roof was raised --
+          // notchRoofRound here ran on a finished record and could not cut a
+          // ring the cricket had chamfered. What is left for this branch is
+          // the second half, which is about the roof's ENDS and not its
+          // junction.
           // ── AND THE ENDS ARE GABLES, SO NOTHING RUNS AT THE ROOM ─────────
           //
           // Movie, 15 Oct, with the roof plan marked up -- red arrows for
