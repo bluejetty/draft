@@ -743,6 +743,44 @@ function run(label) {
     check('and the walls plan carries none', !draw(full.win, 5, { env: { view: 'plan' } }).texts.some(t => /^TJI|^ENGINEERED OWJ/.test(t)));
   }
 
+  // ── WHICH STAIRS A PLAN SHOWS, AND HOW (Movie, 16 Oct) ──────────────────
+  // "BASEMENT shows main->basement only; MAIN shows main->2nd and any
+  // main->basement; 2ND FL shows main->2nd normal weight and main->basement
+  // lighter." The fixture has both stairs: id 1 on MAIN FL (down to the
+  // basement), id 2 on 2ND FL (down to MAIN). The basement plan needs plan
+  // walls to be a plan at all, so the foundation's ring stands in.
+  {
+    const full = loadWith();
+    const SG = full.win.DraftStairGeometry;
+    const floors = full.win.DraftLayerViews.floorLevels(SAVED.levels);
+    const roles = id => Object.fromEntries(SG.stairsShownOn(id, SAVED.stairs, floors).map(e => [e.stair.id, e.role]));
+    check('the basement shows the MAIN stair landing on it and nothing of the 2ND\'s',
+      JSON.stringify(roles(1)) === '{"1":"lands"}', JSON.stringify(roles(1)));
+    check('MAIN shows its own stair going down and the 2ND\'s landing on it',
+      JSON.stringify(roles(3)) === '{"1":"own","2":"lands"}', JSON.stringify(roles(3)));
+    check('2ND FL shows its own and the MAIN stair under it, lighter',
+      JSON.stringify(roles(5)) === '{"1":"below","2":"own"}', JSON.stringify(roles(5)));
+    const UP = /^UP — \d+R @ /;
+    const main = draw(full.win, 3, { env: { view: 'plan' } });
+    check('the MAIN FL sheet tags one stair DN and one UP',
+      main.ok && main.texts.filter(t => STAIR.test(t)).length === 1 && main.texts.filter(t => UP.test(t)).length === 1,
+      main.ok ? main.texts.filter(t => /^(DN|UP) /.test(t)).join(' | ') : main.why);
+    const upper = draw(full.win, 5, { env: { view: 'plan' } });
+    check('the 2ND FL sheet tags its own stair DN and the one under it not at all',
+      upper.ok && upper.texts.filter(t => STAIR.test(t)).length === 1 && !upper.texts.some(t => UP.test(t)),
+      upper.ok ? upper.texts.filter(t => /^(DN|UP) /.test(t)).join(' | ') : upper.why);
+    check('and draws the stair under it lighter',
+      upper.ok && upper.strokes.some(a => Math.abs(a - 0.45) < 0.01),
+      upper.ok ? [...new Set(upper.strokes.map(a => Math.round(a * 100) / 100))].join(',') : upper.why);
+    const withBasement = { ...SAVED, walls: [...SAVED.walls,
+      ...SAVED.walls.filter(w => w.levelId === 1 && w.view === 'foundation').map((w, i) => ({ ...w, id: 90000 + i, view: 'plan' }))] };
+    const basement = draw(full.win, 1, { saved: withBasement, env: { view: 'plan' } });
+    check('the BASEMENT sheet tags the MAIN stair UP and shows no other',
+      basement.ok && basement.texts.filter(t => UP.test(t)).length === 1 && !basement.texts.some(t => STAIR.test(t))
+        && !basement.strokes.some(a => Math.abs(a - 0.45) < 0.01),
+      basement.ok ? basement.texts.filter(t => /^(DN|UP) /.test(t)).join(' | ') : basement.why);
+  }
+
   if (label) console.log(label);
 }
 
@@ -757,6 +795,23 @@ if (!MUTATE) {
 // Each edits layout-plan.js (or a module it reads) in memory and asserts the
 // checks above go red. A check that survives its own mutation is not a check.
 const MUTATIONS = [
+  // WHICH STAIRS A PLAN SHOWS (Movie, 16 Oct).
+  ['a plan shows its own stairs only',
+    'layout-plan.js', c => c.replace('        ? [...stairRoles.keys()] : null,', '        ? null : null,')],
+  ['the stair landing here is drawn going DN',
+    'render-2d.js', c => c.replace("      const up = role === 'lands';", '      const up = false;')],
+  ['the stair under this floor keeps its walk line and tag',
+    'render-2d.js', c => c.replace("      if (role === 'below') { ctx.restore(); return; }\n", '')],
+  ['the stair under this floor is drawn at full weight',
+    'render-2d.js', c => c.replace("      if (role === 'below') ctx.globalAlpha *= STAIR_BELOW_ALPHA;\n", '')],
+  ['a stair above this floor is shown too',
+    'stair-geometry.js', c => c.replace("    return top < here ? 'below' : null;", "    return 'below';")],
+  ['the landing floor is read as the stair\'s own',
+    'stair-geometry.js', c => c.replace('    return idx === 0 ? BASEMENT_PLAN_ID : Number(floors[idx - 1].id);',
+      '    return Number(floors[idx].id);')],
+  ['the composition ignores the list the sheet picked',
+    'plan-composition.js', c => c.replace('stairs: Array.isArray(env.stairsShown) ? env.stairsShown : pick(env.stairs, { strict: true })',
+      'stairs: pick(env.stairs, { strict: true })')],
   // THE FOOTPRINT AND THE JOIST CALLOUTS (Movie, 16 Oct).
   ['the footprint is not ghosted',
     'layout-plan.js', c => c.replace('return [...floorBelowLoops(saved, levelId), ...footprintLoops(saved)].filter(points => {',

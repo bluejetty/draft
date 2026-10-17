@@ -436,10 +436,12 @@ const MUTATIONS = [
   ['openings are filtered by their own level instead of their host wall',
     s => s.replace('.filter(opening => hostIds.has(opening.wallId) && shows(opening.layer));',
       '.filter(opening => opening.levelId === env.levelId && shows(opening.layer));')],
+  // RE-AIMED (17 Oct): the caller may hand the list over (`stairsShown`);
+  // the fallback pick is the half these two bend.
   ['the stair painter gets the whole collection',
-    s => s.replace('stairs: pick(env.stairs, { strict: true })', 'stairs: env.stairs')],
+    s => s.replace('env.stairsShown : pick(env.stairs, { strict: true })', 'env.stairsShown : env.stairs')],
   ['stairs take the `|| \'plan\'` fallback like everything else',
-    s => s.replace("stairs: pick(env.stairs, { strict: true })", 'stairs: pick(env.stairs)')],
+    s => s.replace("env.stairsShown : pick(env.stairs, { strict: true })", 'env.stairsShown : pick(env.stairs)')],
   ['the strict filter stops binding at all',
     s => s.replace("|| (strict ? item.view === viewId : (item.view || 'plan') === viewId);",
       "|| (item.view || 'plan') === viewId;")],
