@@ -73,6 +73,8 @@ function loadDraftModules() {
     // aim at.
     'building-bodies.js',
     'overhead-lines.js',
+    // AND THE DOOR BUCKS a garage's foundation plan cuts from its doors.
+    'door-bucks.js',
     // AND THE SHOELACE. areas.js reads window.DraftGeometry2D, but only at
     // call time, so it loads cleanly after it and adds one global. It was
     // missing here for the same reason and with the same cost: the two
