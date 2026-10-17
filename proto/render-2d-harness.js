@@ -1738,9 +1738,13 @@ suite('drawStairs2D', 'the floor a stair lands on reads it UP, the arrow turned 
   const tip = calls(ctx, 'lineTo').filter(a => a.length === 2)
     .find(a => Math.abs(a[0] - toS({ x: 0.5, z: 1.5 }).x) < 0.01 && Math.abs(a[1] - toS({ x: 0.5, z: 1.5 }).y) < 0.01);
   expect('and the arrow points up the stair', !!tip, true);
+  // ON THE OTHER SIDE OF THE WALK LINE from the DN tag, so a stacked pair's
+  // tags do not land on each other on the floor between.
+  expect('the UP tag hangs off the far side of the walk line', calls(ctx, 'fillText')[0][2] > 0, true);
   const own = recordingCtx();
   R.drawStairs2D(own, toS, stairsEnv({ roleFor: () => 'own' }));
   expect('its own floor still reads DN', calls(own, 'fillText')[0][0].startsWith('DN — 14R'), true);
+  expect('on the near side', calls(own, 'fillText')[0][2] < 0, true);
   // THE WALK LINE ITSELF ENDS AT THE FOOT, so one lineTo there is the line;
   // the arrowhead's tip is a second. Its own floor has both at the foot and
   // the landing floor has the second one at the top instead.
@@ -3633,6 +3637,8 @@ function coverage() {
       src => src.replace("      if (role === 'below') { ctx.restore(); return; }\n", '')],
     ['drawStairs2D draws the stair under this floor at full weight',
       src => src.replace("      if (role === 'below') ctx.globalAlpha *= STAIR_BELOW_ALPHA;\n", '')],
+    ['drawStairs2D hangs the UP tag on the DN tag\'s side',
+      src => src.replace("          up ? { font, offset: -3, baseline: 'top' } : { font, offset: 3 });", '          { font, offset: 3 });')],
     ['drawStairs2D turns the arrow round for its own floor too',
       src => src.replace("      const wa = up ? walk[1] : walk[walk.length - 2];", '      const wa = walk[1];')
         .replace("      const wb = up ? walk[0] : walk[walk.length - 1];", '      const wb = walk[0];')],

@@ -2017,10 +2017,14 @@ if (!window.DraftRender2D) {
       ctx.lineTo(wb.x - wux * 8 + wpx * 4, wb.y - wuy * 8 + wpy * 4);
       ctx.stroke();
       if (!env.isPrinting || std.printable) {
-        // The walk line is a line with a label on it, same as a beam.
+        // The walk line is a line with a label on it, same as a beam. THE UP
+        // TAG TAKES THE OTHER SIDE OF THE LINE: a storey's stair down and the
+        // next storey's stair up share one well (they stack), so on the
+        // floor between them both tags ride one walk line -- DN on the side
+        // it always had, UP hung from the line's other side.
         labelAlongLine2D(ctx, walk[0], walk[1],
           `${up ? 'UP' : 'DN'} — ${layout.risers}R @ ${env.formatInchesOnly(layout.riserIn)}`,
-          { font, offset: 3 });
+          up ? { font, offset: -3, baseline: 'top' } : { font, offset: 3 });
       }
       ctx.restore();
     });
