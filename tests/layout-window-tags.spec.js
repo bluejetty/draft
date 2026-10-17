@@ -99,6 +99,17 @@ test('a plan viewport tags every window with its size', async ({ page }) => {
     .toContain('W 48 X 50');
 });
 
+// AND ON A LEVEL WITH NO OUTLINE (Movie, 16 Oct: a MAIN FL window with no
+// tag): the sheet steps the tag off the wall, away from the level's middle,
+// the same way the Model Space does.
+test('a plan viewport tags the windows of a level with no outline too', async ({ page }) => {
+  await openLayout(page, { ...REPRO, outlines: [] });
+  await tape(page);
+  await placeViewport(page, PW / 2, PH / 2);
+  expect(await sizeTags(page), 'the windows went untagged without an outline')
+    .toContain('W 48 X 50');
+});
+
 test('and a door carries its D', async ({ page }) => {
   // Movie, 1 Oct: "all window/door/equipe sizes on floor plans on construction
   // plans". A door's tag is D and its width in inches -- G 16W x 8H on a

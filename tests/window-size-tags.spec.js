@@ -74,6 +74,36 @@ test('every window on the plan is tagged with its size in inches', async ({ page
     .toContain('W 48 X 50');
 });
 
+// A LEVEL WITH NO OUTLINE STILL TAGS ITS WINDOWS (Movie, 16 Oct: a MAIN FL
+// window with no tag). Walls drawn by hand carry no outline, and the tag's
+// exterior side came off the outline alone -- so every such window went
+// untagged, silently. With no outline the tag steps off the wall's own
+// normal, away from the level's middle (fen-labels planTagLine).
+test('a window on a level with no outline is still tagged, off the wall', async ({ page }) => {
+  await h.suppressEntryCoach(page);
+  await page.goto('/MODEL.html?right=0');
+  await page.waitForFunction(() => !!window.SharedFileStore, null, { timeout: 15000 });
+  const bare = { ...REPRO, outlines: [] };
+  await page.evaluate(async ({ bucket, saved }) => {
+    await window.SharedFileStore.saveSharedFile(
+      new File([JSON.stringify(saved)], 'drawing.json', { type: 'application/json' }), bucket);
+  }, { bucket: BUCKET, saved: bare });
+  await page.goto('/MODEL.html?right=0');
+  await page.evaluate(() => {
+    window.__tags = [];
+    const orig = CanvasRenderingContext2D.prototype.fillText;
+    CanvasRenderingContext2D.prototype.fillText = function (text, x, y) {
+      if (this.canvas && this.canvas.id === 'plan') window.__tags.push(String(text));
+      return orig.call(this, text, x, y);
+    };
+  });
+  await page.waitForTimeout(2000);
+  await page.setViewportSize({ width: 1360, height: 764 });
+  await page.waitForTimeout(1000);
+  const sizes = await page.evaluate(() => [...new Set(window.__tags.filter(t => /^W \d+ X \d+$/.test(t)))]);
+  expect(sizes, 'the windows went untagged without an outline').toContain('W 48 X 50');
+});
+
 test('a window carries its W, and every door on the plan its D', async ({ page }) => {
   // Movie, 1 Oct: "for later ESTIMATION purposes we should put the W before
   // the window sizes", every door D, and "all window/door/equipe sizes on
