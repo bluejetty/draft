@@ -175,7 +175,10 @@ test('LSQUARE01 wears sharp corners, LROUND01 the rounded ones; the arrow cell s
   const arcMid = r - r / Math.SQRT2 + 0.02;
   expect(await inkAround(page, 0.5 + 0.02, 0.5 + 0.02, 0.06)).toBe(0);
   expect(await inkAround(page, 0.5 + arcMid, 0.5 + arcMid, 0.08)).toBeGreaterThan(0);
-  // The north-arrow corner stays bare until the toggle raises it.
+  // The north-arrow corner stays bare until the toggle raises it. Only a
+  // SITE PLAN sheet flies it by convention (Movie, 16 Oct: "north arrow ON
+  // by default"), and this drawing deals none: it is the house alone, with
+  // no sheets dealt.
   expect(await inkAround(page, STRIP_X, ARROW_MID_Y, 0.25)).toBe(0);
 });
 

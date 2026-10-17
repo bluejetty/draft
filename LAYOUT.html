@@ -1087,6 +1087,21 @@ const SCALES = [
   { label: '1/2" = 1\'-0"',  pif: 1/2  },
   { label: '3/4" = 1\'-0"',  pif: 3/4  },
   { label: '1" = 1\'-0"',    pif: 1    },
+  // THE ENGINEER'S SCALES, for the site plan (Movie, 16 Oct: "when the lots
+  // are larger i may have problems"): 1" = 10' up to 1" = 500' for an
+  // acreage. pif is paper inches per FOOT, so 1" = 10' is 1/10.
+  { label: '1" = 10\'',  pif: 1/10 },
+  { label: '1" = 20\'',  pif: 1/20 },
+  { label: '1" = 30\'',  pif: 1/30 },
+  { label: '1" = 40\'',  pif: 1/40 },
+  { label: '1" = 50\'',  pif: 1/50 },
+  { label: '1" = 60\'',  pif: 1/60 },
+  { label: '1" = 80\'',  pif: 1/80 },
+  { label: '1" = 100\'', pif: 1/100 },
+  { label: '1" = 200\'', pif: 1/200 },
+  { label: '1" = 300\'', pif: 1/300 },
+  { label: '1" = 400\'', pif: 1/400 },
+  { label: '1" = 500\'', pif: 1/500 },
 ];
 
 // The auto composer's ladder, largest first: the working plan scale, then the
@@ -1104,12 +1119,21 @@ const AUTO_SCALE_LAST_RESORT = 3 / 32;
 // Metric (1:50/1:100/1:200, site 1:250/1:500) is a drawing-wide setting
 // rather than a per-view one, so adding it later is another entry here plus
 // a lookup by the drawing's unit -- not a rewrite of the chooser.
-const SITE_SCALE_PREFS = [1 / 120, 1 / 240, 1 / 360, 1 / 480];  // 1"=10',20',30',40'
+//
+// IN PAPER INCHES PER FOOT, like every other pif here: 1" = 10' is 1/10.
+// This list read 1/120 .. 1/480 -- 1" = 120' -- and was never walked anyway,
+// because the chooser looked for a view kind 'site' that no sheet ever
+// dealt (the site plan is a PLAN view of the SITE level). So the site plan
+// walked the architect's ladder, fell off its last rung on any real lot and
+// printed clipped. The rungs run out to 1" = 500' for an acreage.
+const SITE_SCALE_PREFS = [1 / 10, 1 / 20, 1 / 30, 1 / 40, 1 / 50, 1 / 60, 1 / 80,
+  1 / 100, 1 / 200, 1 / 300, 1 / 400, 1 / 500];
 const SCALE_FAMILIES = Object.freeze({
   architect: Object.freeze({ prefs: AUTO_SCALE_PREFS, lastResort: AUTO_SCALE_LAST_RESORT }),
-  site:      Object.freeze({ prefs: SITE_SCALE_PREFS, lastResort: 1 / 480 }),
+  site:      Object.freeze({ prefs: SITE_SCALE_PREFS, lastResort: 1 / 500 }),
 });
-const scaleFamilyFor = view => (view && view.kind === 'site' ? 'site' : 'architect');
+const isSiteView = view => !!view && view.kind === 'plan' && Number(view.levelId) === SITE_LEVEL_ID;
+const scaleFamilyFor = view => (isSiteView(view) ? 'site' : 'architect');
 
 // Composer spacing, in paper inches: air between viewports, and the caption
 // line each viewport wears under its frame.
@@ -1934,8 +1958,31 @@ class Component extends PageLogic {
       }
       if (views.length === 1) {
         // Part 1's rule stands: a single view sits in the middle of its sheet.
-        commit(views[0], region.x + region.w / 2,
-          region.y + (region.h - COMPOSE_LABEL_IN) / 2);
+        const xIn = region.x + region.w / 2, yIn = region.y + (region.h - COMPOSE_LABEL_IN) / 2;
+        // ── A PLAN'S WINDOW IS THE WHOLE SHEET (Movie, 16 Oct) ──────────
+        //
+        // "on every PLAN-view sheet (site, roof, floor, foundation) the
+        // viewport frame takes the largest area inside the border lines,
+        // the title centred near the bottom line. The drawing's scale stays
+        // as it is". The drawing is laid out on its natural frame, centred
+        // as above at the rung the ladder chose; the WINDOW is grown to the
+        // region, less the caption line under it -- the same crop a drafter
+        // makes by dragging the grips out, so nothing downstream is new.
+        // The caption sits under the window, which puts it just above the
+        // border line. Elevations and sections keep their own windows.
+        if (views[0].kind === 'plan') {
+          const natural = this._naturalRectIn({ kind: 'plan', levelId: views[0].levelId,
+            view: views[0].view, pif, xIn, yIn });
+          const crop = {
+            l: region.x - natural.xIn,
+            r: natural.xIn + natural.wIn - (region.x + region.w),
+            t: region.y - natural.yIn,
+            b: natural.yIn + natural.hIn - (region.y + region.h - COMPOSE_LABEL_IN),
+          };
+          commit(views[0], xIn, yIn, crop);
+          return;
+        }
+        commit(views[0], xIn, yIn);
         return;
       }
       const stackH = views.reduce((sum, view) => sum + view.hFt * pif + COMPOSE_LABEL_IN, 0)
@@ -2504,6 +2551,15 @@ class Component extends PageLogic {
     }
 
     this._sheetViewports(sheet).forEach(viewport => this._drawViewport(ctx, viewport, view, { thumb, print }));
+    // WHERE EACH WINDOW STANDS, in sheet inches, for a spec to read: the
+    // rect the drafter sees, crop and all, with the rung it was dealt.
+    if (!thumb && !print && this._canvas) {
+      this._canvas.setAttribute('data-layout-frames', JSON.stringify(this._sheetViewports(sheet).map(viewport => {
+        const r = this._viewportRectIn(viewport);
+        return { id: viewport.id, kind: viewport.kind, levelId: viewport.levelId ?? null, pif: viewport.pif,
+          xIn: +r.xIn.toFixed(3), yIn: +r.yIn.toFixed(3), wIn: +r.wIn.toFixed(3), hIn: +r.hIn.toFixed(3) };
+      })));
+    }
   }
 
   _sheetViewports(sheet = this.state.activeSheet) {
@@ -2811,10 +2867,12 @@ class Component extends PageLogic {
       sheet: String(sheet),
       revision: '',
       pageTitle: this._sheetTitle(sheet),
-      // The sidebar toggle flies the arrow: site plans by convention (#43),
-      // any sheet by choice. The real plumbing — true north placed in model
-      // space, construction north derived — is board #289.
-      northArrow: this.state.northArrow,
+      // The sidebar toggle flies the arrow on any sheet by choice; the SITE
+      // PLAN flies it by convention, toggle or no toggle (Movie, 16 Oct:
+      // "north arrow ON by default, up in the top-right corner area"). The
+      // real plumbing — true north placed in model space, construction
+      // north derived — is board #289.
+      northArrow: this.state.northArrow || this._sheetViewports(sheet).some(isSiteView),
       // WHICH WAY IT POINTS: construction north dark, true north grey.
       north: this.state.north,
     };
