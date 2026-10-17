@@ -235,6 +235,12 @@ if (!window.DraftPlanComposition) {
         .forEach(fixture => {
           onLayer(ctx, fixture.layer || 'A-FIXT');
           render.drawFixture2D(ctx, toS, fixture, {}, wallById.get(fixture.wallId), env.fixtureEnv);
+          // THE UPPERS OVER A KITCHEN PIECE, dashed and lighter (the overhead
+          // convention, Movie 16 Oct). Which pieces is the caller's answer.
+          if (typeof env.fixtureEnv.hasUppers === 'function' && env.fixtureEnv.hasUppers(fixture)
+            && typeof render.drawUpperCabinets2D === 'function') {
+            render.drawUpperCabinets2D(ctx, toS, fixture, wallById.get(fixture.wallId), env.fixtureEnv);
+          }
         });
     }
 
@@ -305,6 +311,12 @@ if (!window.DraftPlanComposition) {
       const beamsHere = pick(env.beams);
       const tags = typeof render.beamTagSides === 'function' ? render.beamTagSides(beamsHere, dimensions) : new Map();
       beamsHere.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { tag: tags.get(beam.id) }, env.structureEnv); });
+      // THE BEAM IN THE FLOOR SYSTEM OVER THIS PLAN (Movie, 16 Oct): dash-dot
+      // and lighter, tagged ABOVE. Worked out by the caller (layout-plan
+      // beamsAbove); this only paints them.
+      const beamsOver = pick(env.beamsAbove);
+      const overTags = typeof render.beamTagSides === 'function' ? render.beamTagSides(beamsOver, dimensions) : new Map();
+      beamsOver.forEach(beam => { onLayer(ctx, beam.layer || 'S-BEAM'); render.drawBeam2D(ctx, toS, beam, { above: true, tag: overTags.get(beam.id) }, env.structureEnv); });
       pick(env.columns).forEach(column => {
         onLayer(ctx, column.layer || 'S-COL-FOOTING');
         render.drawColumn2D(ctx, toS, column, {

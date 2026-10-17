@@ -1358,6 +1358,11 @@ if (!window.DraftLayoutPlan) {
         fixtureFill: FIXTURE_FILL,
         // The neighbours a counter piece melds with at a joint.
         fixtures: only(of('fixtures')),
+        // Which pieces carry upper cabinets, drawn dashed and lighter over
+        // them (the overhead convention): the catalogue's answer. Not on a
+        // listing, which is the furniture plan and not the construction
+        // document -- the same line planPosts and beamsAbove draw.
+        hasUppers: fixture => !listing && !!(window.DraftFixtureKinds && window.DraftFixtureKinds.hasUppers(fixture)),
       } : null,
       fixtures: only(of('fixtures')),
 
@@ -1380,6 +1385,17 @@ if (!window.DraftLayoutPlan) {
         labelFont: "600 9px 'Barlow Condensed', system-ui, sans-serif",
       }),
       beams: under ? borrowed('beams', () => true) : only(of('beams')),
+      // THE BEAM IN THE FLOOR SYSTEM OVER THIS PLAN (Movie, 16 Oct, the
+      // overhead convention): the beams this level carries, filed on it
+      // under its floor view (the basement's on 'foundation', a storey's on
+      // 'floor'), re-filed onto the plan so the composer's filter keeps them
+      // and painted dash-dot and lighter as `above`. The same rows planPosts
+      // already borrows the posts from -- "columns already shown".
+      beamsAbove: view === 'plan' && !halfLevel && !listing && !shell && !hologram
+        ? of('beams').filter(beam => beam?.levelId === levelId
+          && beam.view === (levelId === BASEMENT_LEVEL_ID ? 'foundation' : 'floor'))
+          .map(beam => ({ ...beam, view }))
+        : [],
       // THE JOIST CALLOUT IN EVERY BAY OF THIS DECK (Movie, 16 Oct): the
       // bays between the storey under's beams, the arrow clear of the
       // stairwell, the short form off this storey's schedule. A bare deck

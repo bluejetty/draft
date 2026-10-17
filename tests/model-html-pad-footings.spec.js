@@ -53,7 +53,7 @@ const SPY = `
             // grown a beam of its own.
             (window.__paintCalls[name] = window.__paintCalls[name] || []).push(
               name === 'drawColumn2D' ? (args[3]?.footing?.sizeIn ?? null)
-                : name === 'drawBeam2D' ? (args[3]?.below === true ? 'below' : 'own')
+                : name === 'drawBeam2D' ? (args[3]?.below === true ? 'below' : args[3]?.above === true ? 'above' : 'own')
                   : 1);
             return member.apply(this, args);
           };
@@ -267,9 +267,20 @@ test('a floor layout shows the beam holding it up, and the foundation still owns
 
     // AND NOT ON THE WALLS PLAN OF THE SAME LEVEL. He named the LAYOUT; the
     // walls plan is about what stands on this floor, not what is under it.
+    // What it does show is the beam OVER it -- the one this floor carries
+    // for the 2nd floor, filed on MAIN FL's floor view -- as `above`,
+    // dash-dot (the overhead convention, Movie 16 Oct), and never as its own.
     const onWalls = await paintedOn(page, MAIN_FL, 'plan');
-    expect(beams(onWalls).length,
+    expect(beams(onWalls).filter(v => v === 'below').length,
       'the beam below reached the walls plan too').toBe(0);
+    expect(beams(onWalls).filter(v => v === 'own').length,
+      'the walls plan drew a beam as though it were in this floor').toBe(0);
+    const carried = (saved.beams || [])
+      .filter(b => Number(b.levelId) === MAIN_FL && b.view === 'floor').length;
+    expect(carried, 'the build placed no beam under the 2nd floor, so the count below proves nothing')
+      .toBeGreaterThan(0);
+    expect(beams(onWalls).filter(v => v === 'above').length,
+      'the walls plan does not show the beam over it').toBe(carried);
     expect(Object.keys(onWalls).length,
       'the walls plan painted nothing at all, so that zero proves nothing')
       .toBeGreaterThan(0);

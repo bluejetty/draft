@@ -38,16 +38,22 @@ if (!window.DraftFixtureKinds) {
   const CLOSET_INSIDE_DEPTH_FT = window.DraftClosets.INSIDE_DEPTH_FT;
   const CLOSET_WALL_FT = window.DraftClosets.WALL_FT;
 
+  // `uppers`: the piece has upper cabinets over it, which a plan draws dashed
+  // and lighter (the overhead convention, Movie 16 Oct: "upper kitchen
+  // cabinets dashed as well"). The wall-hung kitchen pieces carry them -- a
+  // hood over the stove, a cabinet over the fridge, uppers over the bases and
+  // the sink; the island stands free, the pantry and the FULL HT CAB are
+  // full height already.
   const FIXTURE_KINDS = [
-    { id: 'cabinet', label: 'CABINET', group: 'KITCHEN',  widthFt: 3,      depthFt: 2,      casework: true,  run: true,
+    { id: 'cabinet', label: 'CABINET', group: 'KITCHEN',  widthFt: 3,      depthFt: 2,      casework: true,  run: true, uppers: true,
       note: 'Base cabinet run — two clicks along a wall set the run; 24" deep with a countertop line.' },
-    { id: 'sink',    label: 'SINK',    group: 'KITCHEN',  widthFt: 2.5,    depthFt: 2,      casework: false, run: false,
+    { id: 'sink',    label: 'SINK',    group: 'KITCHEN',  widthFt: 2.5,    depthFt: 2,      casework: false, run: false, uppers: true,
       note: 'Kitchen sink — click it onto a wall (usually over a cabinet run).' },
-    { id: 'fridge',  label: 'FRIDGE',  group: 'KITCHEN',  widthFt: 3,      depthFt: 2.5,    casework: false, run: false,
+    { id: 'fridge',  label: 'FRIDGE',  group: 'KITCHEN',  widthFt: 3,      depthFt: 2.5,    casework: false, run: false, uppers: true,
       note: 'Refrigerator box — click it onto a wall.' },
-    { id: 'stove',   label: 'STOVE',   group: 'KITCHEN',  widthFt: 2.5,    depthFt: 2.17,   casework: false, run: false,
+    { id: 'stove',   label: 'STOVE',   group: 'KITCHEN',  widthFt: 2.5,    depthFt: 2.17,   casework: false, run: false, uppers: true,
       note: 'Range with burners — click it onto a wall.' },
-    { id: 'dish',    label: 'DW',      group: 'KITCHEN',  widthFt: 2,      depthFt: 2,      casework: false, run: false,
+    { id: 'dish',    label: 'DW',      group: 'KITCHEN',  widthFt: 2,      depthFt: 2,      casework: false, run: false, uppers: true,
       note: '24" dishwasher — click it onto a wall, usually beside the sink.' },
     { id: 'island',  label: 'ISLAND',  group: 'KITCHEN',  widthFt: 6,      depthFt: 3,      casework: false, run: false,
       note: '36" x 72" island — click it onto a wall; it stands 42" clear of the counter and slides along the run.' },
@@ -56,15 +62,15 @@ if (!window.DraftFixtureKinds) {
     // MOVIE'S KITCHEN PIECES (KITCHENITEMS1/2.DXF, 9 Oct): each placed on its
     // own, one click onto a wall; where two touch they read as one counter
     // with a light line at the joint.
-    { id: 'sinkbase', label: 'SINK BASE', group: 'KITCHEN', widthFt: 4, depthFt: 2, casework: false, run: false,
+    { id: 'sinkbase', label: 'SINK BASE', group: 'KITCHEN', widthFt: 4, depthFt: 2, casework: false, run: false, uppers: true,
       note: '48" sink base, two doors and a double bowl — click it onto a wall.' },
-    { id: 'drawerbase', label: 'DRAWERS', group: 'KITCHEN', widthFt: 2, depthFt: 2, casework: false, run: false,
+    { id: 'drawerbase', label: 'DRAWERS', group: 'KITCHEN', widthFt: 2, depthFt: 2, casework: false, run: false, uppers: true,
       note: '24" drawer base, four drawers — click it onto a wall.' },
-    { id: 'doorbase', label: 'DOOR BASE', group: 'KITCHEN', widthFt: 2, depthFt: 2, casework: false, run: false,
+    { id: 'doorbase', label: 'DOOR BASE', group: 'KITCHEN', widthFt: 2, depthFt: 2, casework: false, run: false, uppers: true,
       note: '24" door base, a drawer over a door — click it onto a wall.' },
     { id: 'tallcab', label: 'FULL HT CAB', group: 'KITCHEN', widthFt: 17.75 / 12, depthFt: 2, casework: false, run: false,
       note: 'FULL HEIGHT CAB, the pantry piece: 17 3/4" wide, 6\'-10 3/4" tall — click it onto a wall.' },
-    { id: 'fridge30', label: 'FRIDGE 30', group: 'KITCHEN', widthFt: 2.5, depthFt: 2, casework: false, run: false,
+    { id: 'fridge30', label: 'FRIDGE 30', group: 'KITCHEN', widthFt: 2.5, depthFt: 2, casework: false, run: false, uppers: true,
       note: '30" top-freezer refrigerator, 66" tall — click it onto a wall. FRIDGE is the 36" side-by-side.' },
     { id: 'kitchenL', label: 'L PRESET', group: 'KITCHEN', widthFt: 4,     depthFt: 2,      casework: false, run: false, preset: true,
       note: 'Corner-L kitchen — click the inside corner where two walls meet: cabinets, sink, DW, fridge, and stove drop in at the proven spots; every piece stays movable.' },
@@ -102,6 +108,11 @@ if (!window.DraftFixtureKinds) {
   // Panel order, derived rather than listed: a new kind appears under its own
   // heading without a second place to edit.
   const GROUPS = [...new Set(FIXTURE_KINDS.map(kind => kind.group))];
+  // Does this fixture (a record, or a kind id) carry upper cabinets?
+  const hasUppers = fixture => {
+    const id = typeof fixture === 'string' ? fixture : fixture?.kind;
+    return FIXTURE_KINDS.some(kind => kind.id === id && kind.uppers === true);
+  };
   const kindsInGroup = group => FIXTURE_KINDS.filter(kind => kind.group === group);
 
   window.DraftFixtureKinds = Object.freeze({
@@ -111,6 +122,7 @@ if (!window.DraftFixtureKinds) {
     kindFor,
     isKind,
     kindsInGroup,
+    hasUppers,
   });
 })();
 }
