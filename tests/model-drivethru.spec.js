@@ -97,7 +97,9 @@ test('the foot bar: PROJECT and MODEL left, the bone in the middle, the sheets r
       // AND REAL ESTATE PLAN WENT RIGHT ON 1 OCT -- Movie: "the REAL ESTATE
       // LAYOUT tab is on the right side at bottom (to the left of
       // CONSTRUCTION LAYOUT)".
-      .toEqual(['PROJECT', 'MODEL', 'BONEYARD', 'EXT. FINISH']);
+      // AND MODEL WENT TO THE END ON 17 OCT -- Movie: "put MODEL at the
+      // right of that EXT FINISH like this PROJECT WIREFRAME EXT FINISH MODEL".
+      .toEqual(['PROJECT', 'BONEYARD', 'EXT. FINISH', 'MODEL']);
 
     expect(await page.locator('#sheet-row > *').evaluateAll(els => els.map(
       el => (el.textContent || '').trim().replace(/\s+/g, ' '))),
