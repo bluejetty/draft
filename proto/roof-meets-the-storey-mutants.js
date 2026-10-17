@@ -86,17 +86,15 @@ const MUTANTS = [
   { file: 'MODEL.html',
     name: 'the edges cut against the wall keep their two feet of overhang, '
       + 'so a rake hangs inside the room',
-    find: "      edges: cut.onCut.map(onWall => (onWall ? 'gable' : 'eave')),\n"
-      + '      edgeOverhang: cut.onCut.map(onWall => (onWall ? 0 : overhangFt)),',
-    with: "      edges: cut.onCut.map(onWall => (onWall ? 'gable' : 'eave')),\n"
-      + '      edgeOverhang: cut.onCut.map(() => overhangFt),',
+    find: '        if (onWall) return 0;',
+    with: '        if (onWall) return overhangFt;',
     test: 'the roof dies into the 2nd-storey wall' },
 
   { file: 'MODEL.html',
     name: 'the cut edges are left as eaves -- the roof stops at the wall and '
       + 'still drains into it',
-    find: "      edges: cut.onCut.map(onWall => (onWall ? 'gable' : 'eave')),",
-    with: "      edges: cut.onCut.map(() => 'eave'),",
+    find: "        if (onWall) return 'gable';",
+    with: "        if (onWall) return 'eave';",
     test: 'the roof dies into the 2nd-storey wall' },
 
   // AND THE DESIGN THAT WAS ALREADY RIGHT. A fix for a traced house that

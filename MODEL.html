@@ -20396,20 +20396,10 @@
       // A ROOF SPLIT OFF THE HOUSE'S (raiseRoofOver's end attachment) lands
       // in madeRoofs through `collect`, so one Ctrl+Z still takes it all.
       const collect = made => madeRoofs.push(made);
-      // AND THE SPLIT ENTRY IS UNDER THE HOUSE'S ROOF. plan.house leaves the
-      // entry's own body out (it stands on its own level, half a storey
-      // down), and the house's roof then stopped at its wall -- Movie's stub
-      // roof had been reaching over it only by the accident of an uncleaned
-      // spike. The entry's walls rise to the same plate, so its loop joins
-      // the house's here and the stub's roof runs across it to the room.
-      const houseRoofLoop = (plan.entry && !twoRoofs && !plan.houseRoof
-        && window.DraftPremadePlans.joinLoops)
-        ? (window.DraftPremadePlans.joinLoops(plan.house, plan.entry) || plan.house)
-        : (plan.houseRoof || plan.house);
       madeRoofs.push(twoRoofs
         ? raiseRoofOver(twoRoofs.house.ring, { buildType: roofType, flush: twoRoofs.house.flush,
           stepped: true, cuts: twoRoofs.house.cuts, collect })
-        : raiseRoofOver(houseRoofLoop, {
+        : raiseRoofOver(plan.houseRoof || plan.house, {
           buildType: roofType, notch: houseRoofNotch, collect }));
       const houseRoofMade = madeRoofs[madeRoofs.length - 1];
       if (twoRoofs) {
