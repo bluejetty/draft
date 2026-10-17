@@ -517,8 +517,21 @@ if (!window.DraftRender2D) {
     // why the unwelded case below is the ORIGINAL call and not a rebuild of
     // it: nothing that was right is allowed to change shape on the way past.
     const welds = (env.roofWelds && !referenceColor) ? env.roofWelds(roof) : null;
-    const welded = Array.isArray(welds) && welds.length === pts.length
-      && welds.some(list => Array.isArray(list) && list.length);
+    // ── AND WHAT RUNS UNDER A HIGHER ROOF IS LEFT OUT HERE AND DOTTED BELOW ──
+    //
+    // Movie, 16 Oct: "show it as dotted line (under the upper roof overhang)
+    // make it clear they are 2 different roofs that way". geometry-2d's
+    // roofHiddenSpans names the stretches of this roof's edges that lie
+    // under another roof's sheet; they come out of the solid stroke the same
+    // way a weld does, and go back on dotted once the solid line is down.
+    const hidden = (env.roofHidden && !referenceColor) ? env.roofHidden(roof) : null;
+    const hiddenOk = Array.isArray(hidden) && hidden.length === pts.length
+      && hidden.some(list => Array.isArray(list) && list.length);
+    const omitted = pts.map((_, index) => [
+      ...((Array.isArray(welds) && welds.length === pts.length && Array.isArray(welds[index])) ? welds[index] : []),
+      ...((hiddenOk && Array.isArray(hidden[index])) ? hidden[index] : []),
+    ]);
+    const welded = omitted.some(list => list.length);
     if (!welded) {
       ctx.stroke();
     } else {
@@ -537,7 +550,7 @@ if (!window.DraftRender2D) {
       const runs = [];
       for (let index = 0; index < pts.length; index++) {
         const a = pts[index], b = pts[(index + 1) % pts.length];
-        drawnSpans(welds[index]).forEach(([t0, t1]) => runs.push({
+        drawnSpans(omitted[index]).forEach(([t0, t1]) => runs.push({
           from: { x: a.x + (b.x - a.x) * t0, y: a.y + (b.y - a.y) * t0 },
           to: { x: a.x + (b.x - a.x) * t1, y: a.y + (b.y - a.y) * t1 },
         }));
@@ -563,6 +576,21 @@ if (!window.DraftRender2D) {
         pen = run.to;
       }
       ctx.stroke();
+    }
+    if (hiddenOk) {
+      ctx.save();
+      ctx.setLineDash([3, 3]);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let index = 0; index < pts.length; index++) {
+        const a = pts[index], b = pts[(index + 1) % pts.length];
+        (hidden[index] || []).forEach(([t0, t1]) => {
+          ctx.moveTo(a.x + (b.x - a.x) * t0, a.y + (b.y - a.y) * t0);
+          ctx.lineTo(a.x + (b.x - a.x) * t1, a.y + (b.y - a.y) * t1);
+        });
+      }
+      ctx.stroke();
+      ctx.restore();
     }
     ctx.lineWidth = referenceColor ? 1.25 : 2;
     // Gable edges read as a double line: the footprint edge is the rake

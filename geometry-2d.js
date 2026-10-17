@@ -1390,6 +1390,459 @@ const roofRiseAt = (roof, p, faces) => {
   return null;
 };
 
+// ── WHICH ENDS OF A ROOF HIP, AND WHICH GABLE (Movie, 16 Oct) ────────────
+//
+// "the peak of the roof should be at the 2nd floor wall if there is main
+// floor roof beside the 2nd floor wall slope that roof AWAY or to the SIDES
+// of that 2nd floor wall" -- and, on the ends: "the back on this one could
+// have been a hip", "the upper roof should have been 2 separate roofs with a
+// gable on both", and of the room over the garage, "the upper 2nd floor roof
+// can be hip no problem because it won't have to worry about height of other
+// walls".
+//
+// A ROOF RING IS A SET OF WINGS, each a rectangle with a long axis the ridge
+// runs along. The ring's edges are either SIDES of a wing (along the ridge:
+// eaves, unless they die into a taller wall) or ENDS of one (across the
+// ridge). An end standing in open air HIPS. An end that lands on something
+// at least as tall as the roof's own walls -- a narrower wing of the same
+// roof, a body on another level whose wall is right there -- GABLES, so that
+// whatever stands there meets a wall and not a plane falling onto it. An
+// end over something LOWER hips: the lower roof is the one that has to
+// answer to this one's wall, not the other way round. The edge against a
+// taller wall is already a gable (speed zero in the skeleton), which is
+// what puts the peak AT that wall: the wavefront walks up from the far eave
+// until it reaches it, however far that is -- "if the main peak doesn't hit
+// the 2nd floor the roof will need to go even to a higher peak where it hits
+// the 2nd floor".
+//
+// MEASURED ON HIS HOUSE (proto/repro-movie-roof-wings.draft): the main
+// block's back end is one 26 ft edge with nothing past it -> hip, his V.
+// Its garage end lands on the stub and the landing -> gable. The stub's far
+// end is open -> hip, his 45-degree line. The room over the garage stands
+// higher than the main block on one side and the garage stub on the other
+// -> hip both ends.
+//
+// SLIVERS ARE NOT WINGS. An overhang beside a flush edge, or a landing
+// standing a foot and a half proud of a wall, leaves a rectangle a few feet
+// wide in the decomposition; read as a wing of its own its "ends" are
+// nonsense. Anything narrower than SLIVER_FT joins the neighbour it shares
+// the most boundary with, and only counts toward that neighbour's end when
+// it sits at the neighbour's extreme.
+const SLIVER_FT = 4.1;   // two feet of overhang each way, and a little
+
+const ringInside = (p, ring) => {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const pi = ring[i], pj = ring[j];
+    if ((pi.z > p.z) !== (pj.z > p.z)
+      && p.x < (pj.x - pi.x) * (p.z - pi.z) / (pj.z - pi.z) + pi.x) inside = !inside;
+  }
+  return inside;
+};
+
+// The rectilinear ring as grid cells and the wings cut from them.
+const roofWingsOf = (points, { edgeOverhang = null, overhangFt = 0 } = {}) => {
+  const pts = (points || []).map(pt => ({ x: pt.x, z: pt.z }));
+  const n = pts.length;
+  const eps = 1e-6;
+  if (n < 4) return null;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % n];
+    if (Math.abs(a.x - b.x) > eps && Math.abs(a.z - b.z) > eps) return null;
+  }
+  const uniq = list => [...new Set(list.map(v => Math.round(v * 1e6) / 1e6))].sort((a, b) => a - b);
+  const xs = uniq(pts.map(p => p.x)), zs = uniq(pts.map(p => p.z));
+  const cols = xs.length - 1, rows = zs.length - 1;
+  const inside = [];
+  for (let i = 0; i < cols; i++) {
+    inside.push([]);
+    for (let j = 0; j < rows; j++) {
+      inside[i].push(ringInside({ x: (xs[i] + xs[i + 1]) / 2, z: (zs[j] + zs[j + 1]) / 2 }, pts));
+    }
+  }
+  const covered = inside.map(col => col.map(() => false));
+  const wings = [];
+  for (let guard = 0; guard < 64; guard++) {
+    let best = null;
+    for (let i0 = 0; i0 < cols; i0++) for (let i1 = i0 + 1; i1 <= cols; i1++) {
+      for (let j0 = 0; j0 < rows; j0++) for (let j1 = j0 + 1; j1 <= rows; j1++) {
+        let ok = true;
+        for (let i = i0; i < i1 && ok; i++) for (let j = j0; j < j1; j++) {
+          if (!inside[i][j] || covered[i][j]) { ok = false; break; }
+        }
+        if (!ok) continue;
+        // THE WIDEST SPAN FIRST, then the biggest. The ridge height is set by
+        // the span, so the wing that spans furthest is the main roof and
+        // everything narrower attaches to it lower down. By area alone a
+        // 24 x 22 block with a 6 ft strip beside it read as a 30 x 18 wing
+        // and a 4 ft sliver along the back -- the wrong house.
+        const span = Math.min(xs[i1] - xs[i0], zs[j1] - zs[j0]);
+        const area = (xs[i1] - xs[i0]) * (zs[j1] - zs[j0]);
+        if (!best || span > best.span + eps || (Math.abs(span - best.span) <= eps && area > best.area + eps)) {
+          best = { i0, i1, j0, j1, area, span };
+        }
+      }
+    }
+    if (!best) break;
+    for (let i = best.i0; i < best.i1; i++) for (let j = best.j0; j < best.j1; j++) covered[i][j] = true;
+    wings.push({ rects: [{ x0: xs[best.i0], x1: xs[best.i1], z0: zs[best.j0], z1: zs[best.j1] }] });
+  }
+  if (!wings.length) return null;
+  const main = wing => wing.rects[0];
+  const width = r => r.x1 - r.x0, depth = r => r.z1 - r.z0;
+  const shared = (a, b) => {
+    const ox = Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0));
+    const oz = Math.max(0, Math.min(a.z1, b.z1) - Math.max(a.z0, b.z0));
+    const touchX = Math.abs(a.x1 - b.x0) < eps || Math.abs(b.x1 - a.x0) < eps;
+    const touchZ = Math.abs(a.z1 - b.z0) < eps || Math.abs(b.z1 - a.z0) < eps;
+    return (touchX ? oz : 0) + (touchZ ? ox : 0);
+  };
+  // ── SLIVERS JOIN THE NEIGHBOUR THEY LEAN ON ──────────────────────────────
+  let merged = true;
+  while (merged) {
+    merged = false;
+    for (let w = 0; w < wings.length; w++) {
+      const r = main(wings[w]);
+      if (wings[w].rects.length > 1 || Math.min(width(r), depth(r)) >= SLIVER_FT) continue;
+      let host = -1, most = 0;
+      wings.forEach((other, k) => {
+        if (k === w) return;
+        const len = other.rects.reduce((sum, orect) => sum + shared(orect, r), 0);
+        if (len > most + eps) { most = len; host = k; }
+      });
+      if (host < 0) continue;
+      wings[host].rects.push(r);
+      wings.splice(w, 1);
+      merged = true;
+      break;
+    }
+  }
+  // THE RIDGE RUNS THE LONG WAY OF THE WALLS, not of the sheet: a wing cut
+  // flush on one side and overhung on the others reads two feet longer the
+  // wrong way. Each side of the wing that the ring runs along gives back its
+  // overhang before the two are compared.
+  const overAt = i => (Array.isArray(edgeOverhang) && Number.isFinite(Number(edgeOverhang[i]))
+    ? Number(edgeOverhang[i]) : (Number(overhangFt) || 0));
+  const sideOverhang = (r, axis, value) => {
+    const other = axis === 'x' ? 'z' : 'x';
+    for (let i = 0; i < n; i++) {
+      const a = pts[i], b = pts[(i + 1) % n];
+      if (Math.abs(a[axis] - value) > eps || Math.abs(b[axis] - value) > eps) continue;
+      const lo = Math.min(a[other], b[other]), hi = Math.max(a[other], b[other]);
+      if (hi > r[other + '0'] + eps && lo < r[other + '1'] - eps) return overAt(i);
+    }
+    return 0;
+  };
+  const wallSpan = (r, axis) => r[axis + '1'] - r[axis + '0']
+    - sideOverhang(r, axis, r[axis + '0']) - sideOverhang(r, axis, r[axis + '1']);
+  wings.forEach(wing => {
+    wing.axis = wallSpan(main(wing), 'x') >= wallSpan(main(wing), 'z') - eps ? 'x' : 'z';
+  });
+  return { pts, xs, zs, inside, wings, overAt };
+};
+
+const roofWingKinds = (points, kinds, bodies = [], { edgeOverhang = null, overhangFt = 0, top = null } = {}) => {
+  const out = (kinds || []).slice();
+  const made = roofWingsOf(points, { edgeOverhang, overhangFt });
+  if (!made || out.length !== made.pts.length) return out;
+  const { pts, xs, zs, wings, overAt } = made;
+  const n = pts.length;
+  const eps = 1e-6;
+  const rectHas = (r, p) => p.x > r.x0 - eps && p.x < r.x1 + eps && p.z > r.z0 - eps && p.z < r.z1 + eps;
+  const wingAt = p => wings.findIndex(wing => wing.rects.some(r => rectHas(r, p)));
+  // the ring runs either way round; the inward side of an edge is the side a
+  // point just off its midpoint falls inside the ring
+  const inwardOf = (a, b) => {
+    const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz) || 1;
+    const nx = -dz / len, nz = dx / len;
+    const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+    const probe = { x: mid.x + nx * 0.01, z: mid.z + nz * 0.01 };
+    return ringInside(probe, pts) ? { x: nx, z: nz } : { x: -nx, z: -nz };
+  };
+  // Which wing owns each edge: the one under the longest stretch of it.
+  const edges = pts.map((a, i) => {
+    const b = pts[(i + 1) % n];
+    const along = Math.abs(a.z - b.z) < eps ? 'x' : 'z';
+    const inward = inwardOf(a, b);
+    const stops = (along === 'x' ? xs : zs).filter(v => v > Math.min(a[along], b[along]) + eps
+      && v < Math.max(a[along], b[along]) - eps);
+    const breaks = [Math.min(a[along], b[along]), ...stops, Math.max(a[along], b[along])];
+    const share = new Map();
+    for (let k = 0; k + 1 < breaks.length; k++) {
+      const mid = { ...a };
+      mid[along] = (breaks[k] + breaks[k + 1]) / 2;
+      const probe = { x: mid.x + inward.x * 0.01, z: mid.z + inward.z * 0.01 };
+      const w = wingAt(probe);
+      if (w < 0) continue;
+      share.set(w, (share.get(w) || 0) + breaks[k + 1] - breaks[k]);
+    }
+    let owner = -1, most = 0;
+    share.forEach((len, w) => { if (len > most) { most = len; owner = w; } });
+    return { a, b, i, along, inward, owner, length: Math.hypot(b.x - a.x, b.z - a.z) };
+  });
+  // ── AN END IS ACROSS THE RIDGE, AT THE WING'S EXTREME ────────────────────
+  const endOf = edge => {
+    if (edge.owner < 0) return null;
+    const wing = wings[edge.owner];
+    const axis = wing.axis;
+    if (edge.along === axis) return null;             // a side
+    const dir = -edge.inward[axis];                    // outward, along the ridge
+    if (Math.abs(dir) < 0.5) return null;
+    const extreme = dir > 0
+      ? Math.max(...wing.rects.map(r => r[axis + '1']))
+      : Math.min(...wing.rects.map(r => r[axis + '0']));
+    const at = edge.a[axis];
+    // the edge is at the extreme, or within a sliver's width of it
+    if (Math.abs(at - extreme) > SLIVER_FT + eps) return null;
+    return { wing: edge.owner, axis, dir, extreme };
+  };
+  const ends = edges.map(endOf);
+  // How wide the wing is across its ridge, and how much of that width the
+  // ring's own end edges account for. Less is a wing attached there, which
+  // is something to gable against.
+  const across = (wing, axis) => {
+    const other = axis === 'x' ? 'z' : 'x';
+    const lo = Math.min(...wing.rects.map(r => r[other + '0']));
+    const hi = Math.max(...wing.rects.map(r => r[other + '1']));
+    return hi - lo;
+  };
+  // A body is a ring, or { points, top } with the top of its walls; a body
+  // whose top is known to be below this roof's own is not something the end
+  // has to gable for.
+  const ownTop = Number.isFinite(Number(top)) ? Number(top) : null;
+  const rings = (bodies || []).map(body => (Array.isArray(body)
+    ? { points: body, top: null }
+    : { points: body && body.points, top: Number.isFinite(Number(body && body.top)) ? Number(body.top) : null }))
+    .filter(body => Array.isArray(body.points) && body.points.length >= 3)
+    .filter(body => ownTop === null || body.top === null || body.top >= ownTop - 0.01);
+  const SAMPLE_FT = 1;
+  const meetsBody = edge => {
+    // Walk the WALL line, half a foot out: anything standing there is a
+    // body this end lands on. The wall is the ring's edge pulled IN by its
+    // overhang, so the probe sits inside the sheet's edge by all but that
+    // half foot; measured from the sheet instead it stood four and a half
+    // feet past the wall and landed on a body a yard clear of it.
+    const push = 0.5 - overAt(edge.i);
+    const dx = edge.b.x - edge.a.x, dz = edge.b.z - edge.a.z;
+    const len = edge.length;
+    if (len < 0.5) return false;
+    const steps = Math.max(1, Math.floor(len / SAMPLE_FT));
+    for (let k = 0; k <= steps; k++) {
+      const t = (k + 0.5) / (steps + 1);
+      const p = {
+        x: edge.a.x + dx * t - edge.inward.x * push,
+        z: edge.a.z + dz * t - edge.inward.z * push,
+      };
+      if (rings.some(body => ringInside(p, body.points))) return true;
+    }
+    return false;
+  };
+  edges.forEach((edge, i) => {
+    const end = ends[i];
+    if (!end) return;
+    if (out[i] === 'gable') return;                  // flush already, or named
+    const wing = wings[end.wing];
+    const own = edges.filter((e, k) => ends[k] && ends[k].wing === end.wing
+      && ends[k].dir === end.dir).reduce((sum, e) => sum + e.length, 0);
+    const attached = own < across(wing, end.axis) - 0.5;
+    out[i] = (attached || meetsBody(edge)) ? 'gable' : 'eave';
+  });
+  return out;
+};
+
+// ── A WING ON ANOTHER'S END IS ITS OWN ROOF ──────────────────────────────
+//
+// Movie, 16 Oct: "the upper roof should have been 2 separate roofs with a
+// gable on both" ... "can you draw the lower red roof that connects back to
+// the house wall gable (show it as dotted line (under the upper roof
+// overhang) make it clear they are 2 different roofs that way".
+//
+// A wing attached to the SIDE of another makes a valley with it and stays
+// in the one ring (the bungalow and its garage: "ignore the line between
+// house and garage and make the roof full perimeter"). A NARROWER wing on
+// another's END cannot: the wider wing's ridge is higher, its end is a
+// gable wall standing over the narrower roof, and the narrower roof dies
+// into that wall. So the ring comes apart there: the narrower wing is handed
+// back to be raised on its own, flush against the rest, and the rest keeps
+// its end and the rake that hangs off it.
+//
+// Read on the WALL ring, before any overhang: the attachment is a fact
+// about the walls.
+const ringFromCells = (xs, zs, has) => {
+  const edges = [];
+  const cols = xs.length - 1, rows = zs.length - 1;
+  for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+    if (!has(i, j)) continue;
+    const x0 = xs[i], x1 = xs[i + 1], z0 = zs[j], z1 = zs[j + 1];
+    if (j === 0 || !has(i, j - 1)) edges.push([{ x: x0, z: z0 }, { x: x1, z: z0 }]);
+    if (i === cols - 1 || !has(i + 1, j)) edges.push([{ x: x1, z: z0 }, { x: x1, z: z1 }]);
+    if (j === rows - 1 || !has(i, j + 1)) edges.push([{ x: x1, z: z1 }, { x: x0, z: z1 }]);
+    if (i === 0 || !has(i - 1, j)) edges.push([{ x: x0, z: z1 }, { x: x0, z: z0 }]);
+  }
+  const key = p => `${Math.round(p.x * 1e6)},${Math.round(p.z * 1e6)}`;
+  const byStart = new Map();
+  edges.forEach(e => { const k = key(e[0]); if (!byStart.has(k)) byStart.set(k, []); byStart.get(k).push(e); });
+  const used = new Set();
+  const loops = [];
+  edges.forEach(first => {
+    if (used.has(first)) return;
+    const loop = [first[0]];
+    let cur = first;
+    for (let guard = 0; guard < edges.length + 1; guard++) {
+      used.add(cur);
+      const nexts = (byStart.get(key(cur[1])) || []).filter(e => !used.has(e));
+      if (!nexts.length) break;
+      // at a pinch, carry straight on before turning
+      const dx = cur[1].x - cur[0].x, dz = cur[1].z - cur[0].z;
+      nexts.sort((p, q) => {
+        const sp = (p[1].x - p[0].x) * dx + (p[1].z - p[0].z) * dz;
+        const sq = (q[1].x - q[0].x) * dx + (q[1].z - q[0].z) * dz;
+        return sq - sp;
+      });
+      cur = nexts[0];
+      if (key(cur[0]) === key(first[0])) break;
+      loop.push(cur[0]);
+    }
+    // drop collinear points
+    const out = loop.filter((p, i) => {
+      const a = loop[(i + loop.length - 1) % loop.length], b = loop[(i + 1) % loop.length];
+      return Math.abs((p.x - a.x) * (b.z - p.z) - (p.z - a.z) * (b.x - p.x)) > 1e-9;
+    });
+    if (out.length >= 4) loops.push(out);
+  });
+  const area = ring => Math.abs(ring.reduce((sum, p, i) => {
+    const q = ring[(i + 1) % ring.length]; return sum + p.x * q.z - q.x * p.z;
+  }, 0)) / 2;
+  loops.sort((p, q) => area(q) - area(p));
+  return loops[0] || null;
+};
+
+const roofEndAttachment = (points) => {
+  const made = roofWingsOf(points);
+  if (!made || made.wings.length < 2) return null;
+  const { xs, zs, inside, wings } = made;
+  const eps = 1e-6;
+  const extent = (wing, axis) => {
+    const lo = Math.min(...wing.rects.map(r => r[axis + '0']));
+    const hi = Math.max(...wing.rects.map(r => r[axis + '1']));
+    return [lo, hi];
+  };
+  for (let h = 0; h < wings.length; h++) {
+    const host = wings[h];
+    const axis = host.axis, other = axis === 'x' ? 'z' : 'x';
+    const [lo, hi] = extent(host, axis);
+    const [alo, ahi] = extent(host, other);
+    for (let w = 0; w < wings.length; w++) {
+      if (w === h) continue;
+      const wing = wings[w];
+      const [wlo, whi] = extent(wing, axis);
+      const [blo, bhi] = extent(wing, other);
+      // on the host's end line, and narrower across it
+      const onEnd = Math.abs(wlo - hi) < eps || Math.abs(whi - lo) < eps;
+      const narrower = (bhi - blo) < (ahi - alo) - 0.5 && blo >= alo - eps && bhi <= ahi + eps;
+      if (!onEnd || !narrower) continue;
+      // EVERYTHING BEYOND THE HOST GOES WITH THE WING: whatever hangs off
+      // the wing is reached through it, and left behind it would be a
+      // piece of roof touching nothing.
+      const cellIn = (rects, i, j) => rects.some(rr =>
+        xs[i] >= rr.x0 - eps && xs[i + 1] <= rr.x1 + eps && zs[j] >= rr.z0 - eps && zs[j + 1] <= rr.z1 + eps);
+      const cols = xs.length - 1, rows = zs.length - 1;
+      const off = inside.map(col => col.map(() => false));
+      const stack = [];
+      for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+        if (inside[i][j] && cellIn(wing.rects, i, j)) { off[i][j] = true; stack.push([i, j]); }
+      }
+      while (stack.length) {
+        const [i, j] = stack.pop();
+        [[i + 1, j], [i - 1, j], [i, j + 1], [i, j - 1]].forEach(([p, q]) => {
+          if (p < 0 || q < 0 || p >= cols || q >= rows) return;
+          if (!inside[p][q] || off[p][q] || cellIn(host.rects, p, q)) return;
+          off[p][q] = true; stack.push([p, q]);
+        });
+      }
+      const rest = ringFromCells(xs, zs, (i, j) => inside[i][j] && !off[i][j]);
+      const wingRing = ringFromCells(xs, zs, (i, j) => off[i][j]);
+      if (!rest || !wingRing) return null;
+      return { wing: wingRing, rest };
+    }
+  }
+  return null;
+};
+
+// ── WHAT A ROOF'S EDGE DOES UNDER A HIGHER ROOF ────────────────────────────
+//
+// Movie, 16 Oct: "show it as dotted line (under the upper roof overhang)".
+// The stub's roof runs back to the house wall; the house's gable rake hangs
+// two feet out over it, and the plan shows the stub's edge under that rake
+// dotted, the way anything under something else is drawn. Per edge, in edge
+// parameter, like roofWeldSpans: the stretches that lie inside another
+// roof's ring where that roof's surface is the higher one.
+const ROOF_UNDER_TOL_FT = 0.05;
+
+const roofHiddenSpans = (roof, others) => {
+  const ring = ((roof && roof.points) || []).map(pt => ({ x: pt.x, z: pt.z }));
+  const none = ring.map(() => []);
+  if (ring.length < 3) return none;
+  const plateOf = r => (Number.isFinite(Number(r && r.plateHeightFt)) ? Number(r.plateHeightFt) : null);
+  const myPlate = plateOf(roof);
+  const mates = (others || []).filter(other => other && other !== roof && (other.points || []).length >= 3
+    && ((plateOf(other) === null) === (myPlate === null)))
+    .map(other => ({ roof: other, ring: other.points.map(pt => ({ x: pt.x, z: pt.z })),
+      faces: roofFaces(other, roofSkeleton(other)), plate: plateOf(other) || 0 }));
+  if (!mates.length) return none;
+  const mine = roofFaces(roof, roofSkeleton(roof));
+  const myBase = myPlate || 0;
+  const eps = 1e-9;
+  const inwardOf = (a, b) => {
+    const ex = b.x - a.x, ez = b.z - a.z, len = Math.hypot(ex, ez) || 1;
+    const nx = -ez / len, nz = ex / len;
+    const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+    return ringInside({ x: mid.x + nx * 0.01, z: mid.z + nz * 0.01 }, ring) ? { x: nx, z: nz } : { x: -nx, z: -nz };
+  };
+  return ring.map((a, index) => {
+    const b = ring[(index + 1) % ring.length];
+    const dx = b.x - a.x, dz = b.z - a.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 1e-6) return [];
+    // cut the edge wherever a mate's ring crosses it
+    const ts = new Set([0, 1]);
+    mates.forEach(mate => mate.ring.forEach((p, i) => {
+      const q = mate.ring[(i + 1) % mate.ring.length];
+      const ex = q.x - p.x, ez = q.z - p.z;
+      const den = dx * ez - dz * ex;
+      if (Math.abs(den) < eps) return;
+      const t = ((p.x - a.x) * ez - (p.z - a.z) * ex) / den;
+      const u = ((p.x - a.x) * dz - (p.z - a.z) * dx) / den;
+      if (t > 1e-6 && t < 1 - 1e-6 && u >= -1e-6 && u <= 1 + 1e-6) ts.add(Math.round(t * 1e6) / 1e6);
+    }));
+    const cuts = [...ts].sort((p, q) => p - q);
+    const spans = [];
+    for (let k = 0; k + 1 < cuts.length; k++) {
+      const t0 = cuts[k], t1 = cuts[k + 1];
+      if (t1 - t0 < 1e-6) continue;
+      // A HAIR INSIDE MY OWN RING. The sample sits on my edge, and a point
+      // on a face's boundary belongs to no face, so read straight off the
+      // edge my own height came back null and every edge under anything
+      // read as hidden. The mate's ring the sample is strictly inside of
+      // is not moved by a fiftieth of a foot.
+      const in0 = inwardOf(a, b);
+      const mid = { x: a.x + dx * (t0 + t1) / 2 + in0.x * 0.02, z: a.z + dz * (t0 + t1) / 2 + in0.z * 0.02 };
+      const myRise = roofRiseAt(roof, mid, mine);
+      const myHeight = myBase + (myRise === null ? 0 : myRise);
+      const under = mates.some(mate => {
+        if (!ringInside(mid, mate.ring)) return false;
+        const rise = roofRiseAt(mate.roof, mid, mate.faces);
+        if (rise === null) return false;
+        return mate.plate + rise > myHeight + ROOF_UNDER_TOL_FT;
+      });
+      if (!under) continue;
+      const last = spans[spans.length - 1];
+      if (last && Math.abs(last[1] - t0) < 1e-6) last[1] = t1; else spans.push([t0, t1]);
+    }
+    return spans;
+  });
+};
+
 // ── WHERE TWO SHEETS MEET IN ONE PLANE THERE IS NO LINE ──────────────────
 //
 // Movie, 24 Sep, on the 2 STOREY once the tie piece was built: *"your updated
@@ -2683,6 +3136,11 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     roofFaceRise,
     roofRiseAt,
     roofWeldSpans,
+    roofWingKinds,
+    roofWingsOf,
+    roofEndAttachment,
+    roofHiddenSpans,
+    SLIVER_FT,
     roofProfile,
     profileEnvelope,
     wallJoins,

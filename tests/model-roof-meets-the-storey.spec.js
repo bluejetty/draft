@@ -242,11 +242,21 @@ test('the roof dies into the 2nd-storey wall and sheds away from it',
     }
   });
 
-test('the stock MOD BILEVEL is exactly where it was', async ({ page }) => {
+test('the stock MOD BILEVEL is exactly where it was, with its ends hipped', async ({ page }) => {
   // THE OTHER HALF OF ANY ROOF CHANGE. The design that was already right has
   // to come out identical, or a fix for a traced house is a regression for
   // every ordered one. These numbers are the ones main built before the
   // cleaning went in, read off the build rather than typed from a drawing.
+  //
+  // THE ENDS CHANGED ONCE, ON PURPOSE (Movie, 16 Oct): "the back on this one
+  // could have been a hip" and "should be hip at first if possible". The
+  // back edge and the far ends of the two strips either side of the landing
+  // stand in open air, so they are eaves and hip. The edges cut against the
+  // landing's walls are the gables, which is what keeps every plane shedding
+  // away from the room (roofWingKinds in geometry-2d) -- and there is one
+  // more of them than there was: with the split entry under the house's roof
+  // now, the front strip runs flush along the landing's whole wall, so the
+  // strip is a shed rising to that wall with a hip at its free end.
   await open(page);
   await h.openDriveThru(page);
   await page.locator('[data-build-family="bilevel"]').click();
@@ -264,8 +274,8 @@ test('the stock MOD BILEVEL is exactly where it was', async ({ page }) => {
   expect(roofs.length).toBe(3);
   expect(roofs[0].pts).toEqual([[-18, -22], [18, -22], [18, 19], [2, 19],
     [2, 6.5], [-4, 6.5], [-4, 22], [-18, 22]]);
-  expect(roofs[0].edges).toEqual(['gable', 'eave', 'gable', 'gable', 'gable',
-    'gable', 'gable', 'eave']);
+  expect(roofs[0].edges).toEqual(['eave', 'eave', 'gable', 'gable', 'gable',
+    'gable', 'eave', 'eave']);
   expect(roofs[2].pts).toEqual([[-6, 4.5], [4, 4.5], [4, 17], [23, 17], [23, 40], [-6, 40]]);
   expect(roofs[2].edges).toEqual(['eave', 'eave', 'eave', 'eave', 'eave', 'eave']);
 });

@@ -2123,6 +2123,30 @@ suite('drawWallTops2D', 'no walls, nothing drawn', R => {
   expect('nothing painted', ctx.tape.length, 0);
 });
 
+// Movie, 16 Oct: "show it as dotted line (under the upper roof overhang) make
+// it clear they are 2 different roofs that way". The env answers which
+// stretches of which edges lie under a higher roof (geometry-2d
+// roofHiddenSpans); the painter leaves them out of the solid outline and
+// goes over them dotted.
+suite('drawRoof2D', 'what runs under a higher roof is left out of the solid line and dotted', R => {
+  const ctx = recordingCtx();
+  // the first half of edge 1, (20,0)->(20,14), lies under another roof
+  R.drawRoof2D(ctx, toS, ROOF, {}, roofEnv({ roofHidden: () => [[], [[0, 0.5]], [], []] }));
+  const tape = ctx.tape;
+  const dotted = tape.findIndex(e => e.op === 'setLineDash' && JSON.stringify(e.args[0]) === '[3,3]');
+  expect('a dotted pass is made', dotted >= 0, true);
+  const after = tape.slice(dotted);
+  const stop = after.findIndex(e => e.op === 'stroke');
+  const dots = after.slice(0, stop).filter(e => e.op === 'moveTo' || e.op === 'lineTo').map(e => e.args.join(','));
+  expect('and it runs from the corner to the middle of the edge', dots.join(' '), '600,300 600,370');
+  // the solid outline picks up again where the hidden stretch ends
+  const solid = tape.slice(0, dotted).filter(e => e.op === 'moveTo').map(e => e.args.join(','));
+  expect('the solid line starts again past it', solid.includes('600,370'), true);
+  const plain = recordingCtx();
+  R.drawRoof2D(plain, toS, ROOF, {}, roofEnv({ roofHidden: () => [[], [], [], []] }));
+  expect('nothing under: no dotted pass', calls(plain, 'setLineDash').some(a => JSON.stringify(a[0]) === '[3,3]'), false);
+});
+
 suite('drawRoof2D', 'a roof needs three points', R => {
   const ctx = recordingCtx();
   R.drawRoof2D(ctx, toS, { ...ROOF, points: RECT.slice(0, 2) }, {}, roofEnv());
@@ -3529,6 +3553,18 @@ function coverage() {
       'if (other.wallId !== fixture.wallId) return;')],
     ['drawWetFloors2D joints from the centreline', src => src.replace(
       'const uStart = halfOf(prev, o)', 'const uStart = 0 * halfOf(prev, o)')],
+    // THE DOTTED LINE UNDER A HIGHER ROOF (Movie, 16 Oct), wrong both ways:
+    // the hidden stretch stroked solid with the rest, and never dotted.
+    ['drawRoof2D strokes what is under a higher roof solid', src => {
+      const out = src.replace("      ...((hiddenOk && Array.isArray(hidden[index])) ? hidden[index] : []),\n", '');
+      if (out === src) throw new Error('the hidden spans no longer join the omitted list -- the rule moved');
+      return out;
+    }],
+    ['drawRoof2D never dots what is under a higher roof', src => {
+      const out = src.replace('    if (hiddenOk) {\n      ctx.save();\n      ctx.setLineDash([3, 3]);', '    if (false) {\n      ctx.save();\n      ctx.setLineDash([3, 3]);');
+      if (out === src) throw new Error('the dotted pass moved');
+      return out;
+    }],
   ];
   BRANCH_MUTATIONS.forEach(([label, mutate]) => {
     const caught = runAll(load(mutate)).filter(r => r.failed || r.threw);

@@ -3469,6 +3469,9 @@
     // roof list because a weld is a fact about a PAIR, and `roofs()` is what
     // this page draws.
     roofWelds: roof => window.DraftGeometry2D.roofWeldSpans(roof, roofs()),
+    // AND WHAT RUNS UNDER A HIGHER ROOF IS DOTTED (Movie, 16 Oct: "show it
+    // as dotted line (under the upper roof overhang)").
+    roofHidden: roof => window.DraftGeometry2D.roofHiddenSpans(roof, roofs()),
     // MODEL.dc.html also consults layer visibility and print flags here; this
     // page has neither yet, so an opening is shown whenever it is real.
     surfaceOpeningsFor: (hostType, hostId) => (drawing?.surfaceOpenings || [])
@@ -16882,10 +16885,11 @@
   // the same call through the same test -- an edge lying on the house outline
   // -- and it is edgeOnLoop here for the reason the garage's own walls use it:
   // one rule, one home.
-  const raiseRoofOver = (loop, { garage = false, plateHeightFt = null,
-    sourceLevelId = null, against = null, flush = null, rake = null,
-    follows = garage ? 'attachedGarage' : 'house', buildType = drawing.buildType,
-    stepped = false, cuts = null, notch = null } = {}) => {
+  const raiseRoofOver = (loop, opts = {}) => {
+    const { garage = false, plateHeightFt = null,
+      sourceLevelId = null, against = null, flush = null, rake = null,
+      follows = garage ? 'attachedGarage' : 'house', buildType = drawing.buildType,
+      stepped = false, cuts = null, notch = null, collect = null } = opts;
     const G = window.DraftGeometry2D;
     // ── THE OVERHANG AND PITCH ARE THE PROJECT PAGE'S ────────────────────
     //
@@ -16911,8 +16915,31 @@
     // against the wrong numbering would gable an edge nobody named. `kept` is
     // the map, and an index whose vertex went is dropped rather than guessed.
     const cleaned = G.loopWithoutSpikes(loop);
-    const ring = cleaned.points;
+    let ring = cleaned.points;
     const ringIndexOf = new Map(cleaned.kept.map((was, now) => [was, now]));
+    // ── A NARROWER WING ON THIS ROOF'S END IS A ROOF OF ITS OWN ──────────
+    //
+    // Movie, 16 Oct: "the upper roof should have been 2 separate roofs with
+    // a gable on both" ... "draw the lower red roof that connects back to
+    // the house wall gable ... make it clear they are 2 different roofs".
+    // geometry-2d's roofEndAttachment finds a wing standing on another's
+    // END and narrower than it; that wing is raised first, on its own and
+    // flush against the rest, and the rest carries on with its end a gable
+    // and its rake hanging over the wing's roof. A wing on another's SIDE
+    // is not this: it makes a valley and stays in the one ring. Nor is a
+    // ring whose edges are named by the design (flush / rake lists) or cut
+    // by garage-roofs.js: those designs say where their roofs part.
+    const againstLoops = Array.isArray(against) && against.length && Array.isArray(against[0])
+      ? against : (against ? [against] : []);
+    if (!stepped && !(Array.isArray(flush) && flush.length) && !(Array.isArray(rake) && rake.length)) {
+      const apart = G.roofEndAttachment(ring);
+      if (apart) {
+        const own = raiseRoofOver(apart.wing, {
+          ...opts, flush: null, rake: null, against: [apart.rest, ...againstLoops] });
+        if (own && typeof collect === 'function') collect(own);
+        ring = apart.rest;
+      }
+    }
     const followClean = list => (Array.isArray(list)
       ? list.map(index => ringIndexOf.get(index)).filter(index => index !== undefined)
       : list);
@@ -16932,7 +16959,7 @@
     // So the shared edges take zero and the rest take the overhang, which is
     // the same `against` loop the walls and the gable flags already use --
     // one question asked once, three ways round.
-    const sharedWith = against ? G.loopSegments(against) : null;
+    const sharedWith = againstLoops.length ? againstLoops.flatMap(l => G.loopSegments(l)) : null;
     // ── AND AN EDGE THE DESIGN NAMES, WHICH GEOMETRY CANNOT FIND ─────────
     //
     // Movie, 20 Sep, on the 2 STOREY's garage: "it should be gabled on the
@@ -17079,7 +17106,51 @@
     // adds a cricket himself ("maybe later i will allow the user to design
     // and add crickets to the roof plan if they need them"); the build no
     // longer guesses where one is wanted. `overRoof` above went with it.
-    const shaped = notched || plain;
+    const cut = notched || plain;
+    // ── AND THE ENDS: A HIP IN OPEN AIR, A GABLE ON ANYTHING ELSE ────────
+    //
+    // Movie, 16 Oct, on his own house: "the back on this one could have been
+    // a hip", "the upper roof should have been 2 separate roofs with a gable
+    // on both", and on the room over the garage, "hip roofs won't fit in
+    // that roof version". geometry-2d's roofWingKinds reads the ring as
+    // wings, hips a wing's end that stands in open air and gables one that
+    // lands on anything -- a narrower wing of this same roof, or a body on
+    // any level whose wall is right there. The edges already cut flush
+    // against a taller wall stay gables, which is what puts the PEAK at that
+    // wall: "the highest part of the main floor roof should be where it
+    // connects to the 2nd floor wall and slope away or to the sides".
+    //
+    // EVERY OUTLINE ON THE DRAWING IS A BODY, the site's apart, because the
+    // roof being raised cannot know which storey stands beside its end -- the
+    // garage stub beside the room's end is one storey lower, and the main
+    // block beside the room's other end is a half-storey higher. Both are
+    // walls, and either way the end is a gable.
+    //
+    // AND EACH BODY CARRIES THE TOP OF ITS WALLS, read off the same level
+    // stack the elevations are cut from, beside this roof's own bearing:
+    // "the upper 2nd floor roof can be hip no problem because it won't have
+    // to worry about height of other walls". A body whose walls stop below
+    // this roof's plate is something this roof stands OVER, and the end
+    // above it hips; a body at least as tall is a wall the end gables at.
+    const CV = window.DraftCutView;
+    const sectionEnv = CV ? cutEnv() : null;
+    const stack = sectionEnv && CV.sectionLevelStack ? CV.sectionLevelStack(sectionEnv) : null;
+    const topOf = levelId => {
+      const floor = stack?.floors?.find(level => Number(level.id) === Number(levelId));
+      return floor && Number.isFinite(Number(floor.wallTop)) ? Number(floor.wallTop) : null;
+    };
+    const ownTop = stack && CV.roofBaseElev
+      ? CV.roofBaseElev({ garage, plateHeightFt, sourceLevelId, follows }, stack, sectionEnv) : null;
+    const bodies = (drawing.outlines || [])
+      .filter(outline => Number(outline.levelId) !== SITE_LEVEL_ID
+        && Array.isArray(outline.points) && outline.points.length >= 3)
+      .map(outline => ({ points: outline.points, top: topOf(outline.levelId) }));
+    const shaped = {
+      ...cut,
+      edges: G.roofWingKinds(cut.points, cut.edges, bodies, {
+        edgeOverhang: cut.edgeOverhang || null, overhangFt: roofOverhangFt,
+        top: Number.isFinite(Number(ownTop)) ? Number(ownTop) : null }),
+    };
     drawing.roofs = drawing.roofs || [];
     const roof = {
       id: newDrawingItemId('roof'),
@@ -19536,10 +19607,40 @@
   const notchPlainRoof = (plain, wallLine, overhangFt) => {
     const cut = window.DraftPremadePlans.cutLoops(plain.points, wallLine);
     if (!cut) return null;
+    const points = cut.points.map(pt => ({ x: pt.x, z: pt.z }));
+    // AN EDGE THE CUT DID NOT MAKE KEEPS WHAT IT HAD. The ring handed in
+    // already carries a kind and an overhang per edge -- the stub's west
+    // edge is flush against the house wall, gable and zero -- and the cut
+    // renumbers the ring. Reading every uncut edge as "eave, full overhang"
+    // put two feet of overhang on a flush edge, so the plan drew its gable
+    // wall line two feet inside the stub. Each uncut edge finds the edge of
+    // the ring it lies along and takes that edge's answers.
+    const eps = 1e-6;
+    const alongOf = (a, b) => (Math.abs(a.z - b.z) < eps ? 'x' : 'z');
+    const was = (a, b) => {
+      const axis = alongOf(a, b), other = axis === 'x' ? 'z' : 'x';
+      const lo = Math.min(a[axis], b[axis]), hi = Math.max(a[axis], b[axis]);
+      for (let j = 0; j < plain.points.length; j++) {
+        const p = plain.points[j], q = plain.points[(j + 1) % plain.points.length];
+        if (alongOf(p, q) !== axis || Math.abs(p[other] - a[other]) > eps) continue;
+        const plo = Math.min(p[axis], q[axis]), phi = Math.max(p[axis], q[axis]);
+        if (lo >= plo - eps && hi <= phi + eps) return j;
+      }
+      return -1;
+    };
     return {
-      points: cut.points.map(pt => ({ x: pt.x, z: pt.z })),
-      edges: cut.onCut.map(onWall => (onWall ? 'gable' : 'eave')),
-      edgeOverhang: cut.onCut.map(onWall => (onWall ? 0 : overhangFt)),
+      points,
+      edges: cut.onCut.map((onWall, i) => {
+        if (onWall) return 'gable';
+        const j = was(points[i], points[(i + 1) % points.length]);
+        return j >= 0 && plain.edges[j] === 'gable' ? 'gable' : 'eave';
+      }),
+      edgeOverhang: cut.onCut.map((onWall, i) => {
+        if (onWall) return 0;
+        const j = was(points[i], points[(i + 1) % points.length]);
+        const own = j >= 0 && Array.isArray(plain.edgeOverhang) ? Number(plain.edgeOverhang[j]) : NaN;
+        return Number.isFinite(own) ? own : overhangFt;
+      }),
     };
   };
 
@@ -19550,37 +19651,6 @@
     roof.points = cut.points.map(pt => ({ x: pt.x, z: pt.z }));
     roof.edges = cut.onCut.map(onWall => (onWall ? 'gable' : 'eave'));
     roof.edgeOverhang = cut.onCut.map(onWall => (onWall ? 0 : overhang));
-    return true;
-  };
-
-  // ── A ROOF'S ENDS MADE GABLES ──────────────────────────────────────────
-  //
-  // The ridge runs the LONG way, so the ends are the edges across it. Every
-  // eave edge square to the long axis becomes a gable; the sides keep their
-  // eaves and every gable the notch already made keeps its own.
-  //
-  // THE OVERHANG STAYS. A gable END is open air with a rake board on it, not
-  // a roof dying into a wall -- the zero-overhang gables are notchRoofRound's,
-  // and they are already gables, so this never reaches them.
-  const gableRoofEnds = roof => {
-    const pts = roof?.points || [];
-    if (pts.length < 4) return false;
-    const xs = pts.map(p => p.x), zs = pts.map(p => p.z);
-    const long = (Math.max(...xs) - Math.min(...xs))
-      >= (Math.max(...zs) - Math.min(...zs)) ? 'x' : 'z';
-    const edges = (roof.edges || []).slice();
-    let cut = false;
-    pts.forEach((a, i) => {
-      const b = pts[(i + 1) % pts.length];
-      if (edges[i] === 'gable') return;
-      // An edge SQUARE TO the long axis runs along the other one.
-      const across = long === 'x' ? Math.abs(b.x - a.x) < 1e-6 : Math.abs(b.z - a.z) < 1e-6;
-      if (!across) return;
-      edges[i] = 'gable';
-      cut = true;
-    });
-    if (!cut) return false;
-    roof.edges = edges;
     return true;
   };
 
@@ -20323,16 +20393,30 @@
       // bungalow with a garage is roofed over the perimeter of both -- the
       // design says so through `houseRoof`, because where the two bodies
       // meet is the design's arithmetic and not this page's.
+      // A ROOF SPLIT OFF THE HOUSE'S (raiseRoofOver's end attachment) lands
+      // in madeRoofs through `collect`, so one Ctrl+Z still takes it all.
+      const collect = made => madeRoofs.push(made);
+      // AND THE SPLIT ENTRY IS UNDER THE HOUSE'S ROOF. plan.house leaves the
+      // entry's own body out (it stands on its own level, half a storey
+      // down), and the house's roof then stopped at its wall -- Movie's stub
+      // roof had been reaching over it only by the accident of an uncleaned
+      // spike. The entry's walls rise to the same plate, so its loop joins
+      // the house's here and the stub's roof runs across it to the room.
+      const houseRoofLoop = (plan.entry && !twoRoofs && !plan.houseRoof
+        && window.DraftPremadePlans.joinLoops)
+        ? (window.DraftPremadePlans.joinLoops(plan.house, plan.entry) || plan.house)
+        : (plan.houseRoof || plan.house);
       madeRoofs.push(twoRoofs
         ? raiseRoofOver(twoRoofs.house.ring, { buildType: roofType, flush: twoRoofs.house.flush,
-          stepped: true, cuts: twoRoofs.house.cuts })
-        : raiseRoofOver(plan.houseRoof || plan.house, {
-          buildType: roofType, notch: houseRoofNotch }));
+          stepped: true, cuts: twoRoofs.house.cuts, collect })
+        : raiseRoofOver(houseRoofLoop, {
+          buildType: roofType, notch: houseRoofNotch, collect }));
       const houseRoofMade = madeRoofs[madeRoofs.length - 1];
       if (twoRoofs) {
         madeRoofs.push(raiseRoofOver(twoRoofs.garage.ring, {
           buildType: roofType,
           garage: true,
+          collect,
           plateHeightFt: garagePlateFt,
           sourceLevelId: levelId,
           flush: twoRoofs.garage.flush,
@@ -20345,6 +20429,7 @@
         madeRoofs.push(raiseRoofOver(plan.garageRoof, {
           buildType: roofType,
           garage: true,
+          collect,
           plateHeightFt: garagePlateFt,
           sourceLevelId: levelId,
           // THE EDGE THE DESIGN SAYS DIES INTO THE BUILDING BEHIND IT. With a
@@ -20375,6 +20460,7 @@
         madeRoofs.push(raiseRoofOver(plan.garageTieRoof, {
           buildType: roofType,
           garage: true,
+          collect,
           plateHeightFt: garagePlateFt,
           sourceLevelId: levelId,
           flush: plan.garageTieRoofFlush,
@@ -20411,6 +20497,7 @@
           buildType: roofType,
           sourceLevelId: overGarageLevelId,
           against: plan.entry ? null : plan.house,
+          collect,
         });
         madeRoofs.push(roomRoof);
         // ── AND THE MAIN ROOF STOPS AT IT, WITH NOTHING DRAINING INTO IT ──
@@ -20425,38 +20512,14 @@
         // down into it. The ridge carries on to the strip's end wall, the
         // north side drains north past the room, and the east end below the
         // strip keeps its hip (the ROOF tool's edge flip makes it a gable).
-        if (plan.entry && houseRoofMade && houseRoofMade.item) {
-          // THE NOTCH ITSELF HAS ALREADY HAPPENED, as the roof was raised --
-          // notchRoofRound here ran on a finished record and could not cut a
-          // ring the cricket had chamfered. What is left for this branch is
-          // the second half, which is about the roof's ENDS and not its
-          // junction.
-          // ── AND THE ENDS ARE GABLES, SO NOTHING RUNS AT THE ROOM ─────────
-          //
-          // Movie, 15 Oct, with the roof plan marked up -- red arrows for
-          // water running at the 2nd floor wall, blue for where he wants it:
-          // "increase to full width of house and gabled at certain points (or
-          // could have been gabled all the way to the front but the peak
-          // would need to shift to only the right side of the gable on the
-          // front entry side". Asked which, he took the second.
-          //
-          // THE NOTCH ALONE WAS NOT ENOUGH, and the skeleton says why. Cut
-          // round the room with the outer edges still hipped, this roof's
-          // arcs are (-18,-22)->(0,-4), (-4,8)->(-18,22), (0,-4)->(0,6.5) and
-          // (18,-22)->(0,-4): two hip faces meet at each inside corner of the
-          // notch and their VALLEY discharges exactly there -- against the
-          // room's corner, which is the stain in his photograph. Gable the
-          // ends and the same ring answers with ONE arc, (0,-22)->(0,6.5): a
-          // single ridge to the room's wall, two faces, both shedding sideways
-          // to the eaves. Measured on the ring before the code was written.
-          //
-          // AND THE PEAK SHIFTS BY ITSELF. South of the notch the roof is only
-          // the strip beside the room, so the skeleton centres that stretch's
-          // ridge in the strip -- "to only the right side of the gable on the
-          // front entry side" is what a narrower front half does on its own,
-          // not a second rule.
-          gableRoofEnds(houseRoofMade.item);
-        }
+        // THE NOTCH ITSELF HAPPENS AS THE ROOF IS RAISED (see raiseRoofOver),
+        // AND SO DO THE ENDS. This branch used to gable every end of the main
+        // roof afterwards (Movie, 15 Oct: "gabled at certain points"), which
+        // on 16 Oct gabled the back of his house where "the back on this one
+        // could have been a hip". geometry-2d's roofWingKinds decides each
+        // end in raiseRoofOver now: the strip beside the room is a wing whose
+        // far end stands in open air and hips, the house's back end hips the
+        // same way, and nothing here flips an edge after the fact.
         if (hood) {
           // Tagged with the roof they close in under, so a later BONEYARD
           // push of that roof replaces them rather than adding a second set
