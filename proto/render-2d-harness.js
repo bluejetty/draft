@@ -728,6 +728,61 @@ suite('drawBeam2D', 'the label sits BESIDE the beam, not on it', R => {
   expect('and clear of the line it names', y < 0, true);
 });
 
+// ── THE TAG OPPOSITE THE STRING (Movie, 16 Oct, on the 2ND FL FLOOR LAYOUT) ──
+// The FLUSH/DROPPED BEAM note and the beam's column string on OPPOSITE sides
+// of the beam, and one note for a beam laid in pieces. beamTagSides reads the
+// string off the dimensions and answers a side per beam; drawBeam2D's `tag`
+// option draws it there.
+const COL_ROW = at => ({ start: { x: 0, z: at }, end: { x: 36, z: at }, layer: 'A-DIMS-COLS' });
+suite('beamTagSides', 'a string under the beam puts the tag over it, and the other way round', R => {
+  expect('string at +1 across (under a level beam): tag goes -across',
+    R.beamTagSides([SPAN], [COL_ROW(1)]).get(1), -1);
+  expect('string at -1 across: tag goes +across',
+    R.beamTagSides([SPAN], [COL_ROW(-1)]).get(1), 1);
+  expect('no string: the old side, -across',
+    R.beamTagSides([SPAN], []).get(1), -1);
+});
+suite('beamTagSides', 'only a column row on THIS line moves the tag', R => {
+  expect('a row 10 ft off is not this beam\'s string',
+    R.beamTagSides([SPAN], [COL_ROW(-10)]).get(1), -1);
+  expect('a row on another layer is not a column string',
+    R.beamTagSides([SPAN], [{ ...COL_ROW(-1), layer: 'A-DIMS-INT' }]).get(1), -1);
+  expect('a row that does not overlap the beam along is not its string',
+    R.beamTagSides([SPAN], [{ start: { x: 20, z: -1 }, end: { x: 30, z: -1 }, layer: 'A-DIMS-COLS' }]).get(1), -1);
+  expect('an upright beam reads its string across x',
+    R.beamTagSides([NS_SPAN], [{ start: { x: -1, z: 0 }, end: { x: -1, z: 10 }, layer: 'A-DIMS-COLS' }]).get(3), 1);
+});
+suite('beamTagSides', 'a beam laid in pieces is tagged once, on its longest piece', R => {
+  const pieces = [
+    { id: 11, start: { x: 0, z: 0 }, end: { x: 8, z: 0 }, mode: 'flush' },
+    { id: 12, start: { x: 8, z: 0 }, end: { x: 22, z: 0 }, mode: 'flush' },
+    { id: 13, start: { x: 22, z: 0 }, end: { x: 30, z: 0 }, mode: 'flush' }];
+  const sides = R.beamTagSides(pieces, [COL_ROW(-1)]);
+  expect('the longest piece carries the tag, on the side away from the string', sides.get(12), 1);
+  expect('the first piece says nothing', sides.get(11), 0);
+  expect('and the last', sides.get(13), 0);
+  expect('a beam on another line keeps its own tag',
+    R.beamTagSides([...pieces, { id: 14, start: { x: 0, z: 12 }, end: { x: 30, z: 12 }, mode: 'flush' }], [COL_ROW(-1)]).get(14), -1);
+});
+suite('drawBeam2D', 'a tag sent +across is drawn on the other side of the line', R => {
+  const ctx = recordingCtx();
+  R.drawBeam2D(ctx, toS, NS_SPAN, { tag: 1 }, structEnv());
+  const [text, x, y] = calls(ctx, 'fillText')[0];
+  expect('it still says which kind it is', text, 'FLUSH BEAM');
+  expect('centred across the span, in the rotated frame', x, 0);
+  expect('and on the +offset side of the line', y > 0, true);
+  expect('hung from its top, so it clears the line', sets(ctx, 'textBaseline').pop(), 'top');
+  const kept = recordingCtx();
+  R.drawBeam2D(kept, toS, NS_SPAN, { tag: -1 }, structEnv());
+  expect('a tag sent -across stays where it always was', calls(kept, 'fillText')[0][2] < 0, true);
+});
+suite('drawBeam2D', 'a piece told to say nothing draws the beam and no tag', R => {
+  const ctx = recordingCtx();
+  R.drawBeam2D(ctx, toS, SPAN, { tag: 0 }, structEnv());
+  expect('the line is drawn', count(ctx, 'stroke'), 1);
+  expect('and no label', count(ctx, 'fillText'), 0);
+});
+
 suite('labelAlongLine2D', 'the helper the window tags will share', R => {
   const ctx = recordingCtx();
   // offset 0 is the dimension-string case: the text sits ON the line, with a
@@ -3494,6 +3549,24 @@ function coverage() {
         '    ctx.beginPath();\n    ctx.moveTo(a.x, a.y);')],
     ['drawBeam2D does not say a beam below is below',
       src => src.replace(" + (below ? ' BELOW' : '')", '')],
+    // THE TAG OPPOSITE THE STRING (Movie, 16 Oct).
+    ['beamTagSides never moves the tag off its old side',
+      src => src.replace('const side = stringSide === 0 ? -1 : (stringSide > 0 ? -1 : 1);', 'const side = -1;')],
+    ['beamTagSides puts the tag on the SAME side as the string',
+      src => src.replace('const side = stringSide === 0 ? -1 : (stringSide > 0 ? -1 : 1);',
+        'const side = stringSide === 0 ? -1 : (stringSide > 0 ? 1 : -1);')],
+    ['beamTagSides tags every piece of a line',
+      src => src.replace('sides.set(piece.beam.id, piece === longest ? side : 0)', 'sides.set(piece.beam.id, side)')],
+    ['beamTagSides takes any dimension row for the string',
+      src => src.replace("(dim.layer || null) === layer", 'true')],
+    ['beamTagSides takes a row anywhere on the floor for this beam\'s string',
+      src => src.replace('if (Math.abs(off) <= ON_LINE_FT || Math.abs(off) > nearFt) return;', '')],
+    ['drawBeam2D draws a +across tag on the old side',
+      src => src.replace("offset: flip ? -5 : 5,", 'offset: 5,')],
+    ['drawBeam2D hangs a +across tag from its bottom, across the line',
+      src => src.replace("baseline: flip ? 'top' : 'bottom'", "baseline: 'bottom'")],
+    ['drawBeam2D tags a piece told to say nothing',
+      src => src.replace('const silent = tag === 0 || tag === false || tag === null;', 'const silent = false;')],
     ['drawColumn2D draws a post below at full weight',
       src => src.replace('    if (below) ctx.globalAlpha = 0.45;\n    if (!centreOnly) {',
         '    if (!centreOnly) {')],

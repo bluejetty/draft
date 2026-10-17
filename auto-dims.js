@@ -717,9 +717,20 @@ if (!window.DraftAutoDims) {
   // other side (Movie: "NOT on the same side as a beam if a beam is nearby").
   const BEAM_NEAR_FT = 4;
 
+  // A stair opening this close to the exterior wall has no room for its own
+  // string between the two, so the string goes OUTSIDE the plan instead
+  // (Movie, 16 Oct, marked up on the 2ND FL FLOOR LAYOUT: the opening's dims
+  // outside the plan when the opening is within 3 ft of the exterior wall's
+  // outside perimeter line, inside when farther).
+  const OPENING_OUTSIDE_FT = 3;
+
   function computeColumnDimStrings({
     beams, columns, outlines, walls, floorOpenings,
     clearFt = COLUMN_CLEAR_FT,
+    // THE PERIMETER STACK ALREADY OUTSIDE THE PLAN (computeAutoDimStrings'
+    // segments), so an opening string sent outside lands one row past it
+    // rather than across it; with no stack, `firstOffsetFt` off the wall.
+    perimeter = null, firstOffsetFt = 1.5, stringSpacingFt = STRING_SPACING_FT,
   }) {
     const columnList = Array.isArray(columns) ? columns : [];
 
@@ -813,8 +824,14 @@ if (!window.DraftAutoDims) {
       // level beam. At a foot off the line the string's figures land on
       // either one, so a side with a tag stands the string further out --
       // past a 9px tag at the 1/8" sheets these are drawn at.
+      //
+      // THE BEAM'S OWN TAG NO LONGER COUNTS: it follows the string now, to the
+      // other side of the beam (Movie, 16 Oct: the FLUSH/DROPPED BEAM note
+      // and the beam's string on opposite sides -- render-2d beamTagSides),
+      // so a string standing 2'-6" clear of a tag that has moved away was
+      // the figures drifting off the member they measure for nothing.
       const hasPile = onBeam.some(column => /pile/i.test(String(column.footing || '')));
-      const tagged = direction => direction < 0 || (direction > 0 && along === 'x' && hasPile);
+      const tagged = direction => direction > 0 && along === 'x' && hasPile;
       const distOf = direction => (tagged(direction) ? Math.max(clearFt, TAG_CLEAR_FT) : clearFt);
       const clearSide = direction => {
         const at = fixed + direction * distOf(direction);
@@ -876,9 +893,25 @@ if (!window.DraftAutoDims) {
         });
         const inside = at => at > edge[other][0] + 0.01 && at < edge[other][1] - 0.01;
         const order = beamNear(0) && !beamNear(1) ? [1, 0] : [0, 1];
-        const pick = order.find(index => inside(sides[index]));
+        // ── OUTSIDE THE PLAN when the opening hugs the exterior wall ──────
+        // Within OPENING_OUTSIDE_FT of the wall on a side, the string goes
+        // out past the perimeter stack on that side; the side away from a
+        // beam first when both hug. Farther from the wall, inside as before.
+        const hugs = [hole[other][0] - edge[other][0] <= OPENING_OUTSIDE_FT + 1e-6,
+          edge[other][1] - hole[other][1] <= OPENING_OUTSIDE_FT + 1e-6];
+        const outsideAt = index => {
+          const beyond = (Array.isArray(perimeter) ? perimeter : [])
+            .filter(seg => seg && seg.start && seg.end
+              && Math.abs(seg.start[other] - seg.end[other]) < 0.01)
+            .map(seg => (index === 0 ? edge[other][0] - seg.start[other] : seg.start[other] - edge[other][1]))
+            .filter(off => off > 0.01);
+          const off = beyond.length ? Math.max(...beyond) + stringSpacingFt : firstOffsetFt;
+          return index === 0 ? edge[other][0] - off : edge[other][1] + off;
+        };
+        const hug = order.find(index => hugs[index]);
+        const pick = hug !== undefined ? hug : order.find(index => inside(sides[index]));
         if (pick === undefined) return;
-        const at = sides[pick];
+        const at = hug !== undefined ? outsideAt(pick) : sides[pick];
         const [wallLo, wallHi] = wallsAlong(runAxis, at, hole[runAxis][0], hole[runAxis][1]);
         emit(runAxis, uniqSorted([wallLo, hole[runAxis][0], hole[runAxis][1], wallHi]), at,
           DIM_LAYERS.INTERIOR, pick === 0 ? -1 : 1);
@@ -889,7 +922,7 @@ if (!window.DraftAutoDims) {
 
   window.DraftAutoDims = Object.freeze({
     computeAutoDimStrings, computeColumnDimStrings, beamLinesOf,
-    STRING_SPACING_FT, JOG_MERGE_FT, COLUMN_CLEAR_FT, TAG_CLEAR_FT, DIM_LAYERS,
+    STRING_SPACING_FT, JOG_MERGE_FT, COLUMN_CLEAR_FT, TAG_CLEAR_FT, OPENING_OUTSIDE_FT, DIM_LAYERS,
   });
 })();
 }
