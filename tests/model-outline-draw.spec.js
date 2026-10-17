@@ -72,7 +72,11 @@ test('the band shows the corner the press will put down, not the cursor', async 
   await expect(page.locator('#strip-message')).toContainText('outline — next corner');
 });
 
-test('a typed length puts the next corner down, and a broken one is refused', async ({ page }) => {
+// INCHES AND ALL, since 17 Oct: a typed 12'-6" used to be refused here with
+// "the outline goes in whole feet" on every board. Whole feet are TOY's law,
+// and a number TOY cannot hold now moves the board instead (tests/outline-
+// typed-inches.spec.js); on DRAFTING the inches simply land.
+test('a typed length puts the next corner down, inches and all', async ({ page }) => {
   await open(page);
   const { at } = await h.planFrame(page);
   await h.selectTool(page, 'outline');
@@ -82,20 +86,17 @@ test('a typed length puts the next corner down, and a broken one is refused', as
   await expect(box).toBeEnabled();
   await box.fill('12\'-6"');
   await box.press('Enter');
-  await expect(page.locator('#strip-message')).toContainText('whole feet');
-  await page.mouse.move(...at(6, 0.5));
-  await box.fill('24');
-  await box.press('Enter');
-  await page.mouse.move(...at(24, 6));
+  await expect(page.locator('#strip-message')).not.toContainText('whole feet');
+  await page.mouse.move(...at(12.5, 6));
   await box.fill('18');
   await box.press('Enter');
-  await page.mouse.move(...at(18, 18));
-  await box.fill('24');
+  await page.mouse.move(...at(0, 18));
+  await box.fill('12-6');
   await box.press('Enter');
   // Home: the last corner is square under the first, so the press closes.
   await page.mouse.click(...at(0, 0));
   const masters = await savedMasters(page);
-  expect(offsets(masters[0])).toEqual([[0, 0], [24, 0], [24, 18], [0, 18]]);
+  expect(offsets(masters[0])).toEqual([[0, 0], [12.5, 0], [12.5, 18], [0, 18]]);
 });
 
 test('a close from a corner that does not line up is refused, and says how', async ({ page }) => {
