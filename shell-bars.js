@@ -1093,6 +1093,12 @@ ${trio(true)}
 
   window.DraftShellBars = Object.freeze({
     PAGES,
+    // A PAGE MAY SEAT ONE OF THE BAR'S TOOLS SOMEWHERE OF ITS OWN. LAYOUT
+    // moved NORTH up into its sheet rail (Movie, 17 Oct: "on construction
+    // layout move the North arrow up here"); the markup stays this file's so
+    // the button is the same button wherever it sits, and the page that
+    // seats it elsewhere passes no `tools` to bottomBar.
+    toolMarkup: name => BAR_TOOLS[name] || '',
 
     // opts.instruments  mount #strip-center (LENGTH, ANGLE, the chips).
     //                   Drawing pages only; defaults OFF, so a page that does
