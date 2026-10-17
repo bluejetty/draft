@@ -48,7 +48,8 @@ const MUTANTS = [
     test: 'REFERENCES stands left of the logo and BOOKS right of it, both level with its top' },
   { file: 'index.html',
     name: 'the phone keeps the square\'s cell numbers and opens a fourth column',
-    find: '        .ring [data-box] { grid-column: auto; grid-row: auto; }\n',
+    find: '        .ring [data-box] { grid-column: auto; grid-row: auto; }\n'
+      + '        .ring .ring-note { grid-column: 1 / -1; width: 100%; }\n',
     with: '',
     test: 'a phone lists both columns under the logo, titled, with the logo on the screen' },
   { file: 'index.html',
