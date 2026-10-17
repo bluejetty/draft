@@ -502,6 +502,10 @@ if (!window.DraftTracedPlans) {
   // The house's front edge (the straight run furthest toward +z) and where
   // on it the 12 x 6 landing goes: straddling the garage line, or centred.
   const ENTRY_HALF = () => P().ENTRY_WIDTH_FT / 2;
+  // How far behind the front line a garage point may sit and still count
+  // toward the garage's reach along it: the one-foot tie jog a traced
+  // garage carries, and a little.
+  const ENTRY_JOG_REACH_FT = 1.5;
   const entrySpot = (house, garage) => {
     const fronts = edgesOf(house).filter(e => Math.abs(e.uz) < TOL && e.n.z > 0.5)
       .sort((p, q) => q.a.z - p.a.z || q.len - p.len);
@@ -512,10 +516,23 @@ if (!window.DraftTracedPlans) {
     let line = (lo + hi) / 2;
     let mirror = false;
     if (garage) {
-      const spans = coveredSpans(front, garage);
-      if (spans.length) {
-        const xsAt = spans.flatMap(([a, b]) => [front.a.x + front.ux * a, front.a.x + front.ux * b]);
-        const gLo = Math.min(...xsAt), gHi = Math.max(...xsAt);
+      // THE GARAGE'S REACH ALONG THE FRONT, read off its footprint and not
+      // only off the stretch of it lying ON the front line. Movie, 17 Oct,
+      // on a traced MOD BILEVEL whose garage oversailed the house line by a
+      // foot (the jog): the garage touched the front line at one corner, so
+      // the line was read there, the clamp pushed it six feet in, and the
+      // garage's side wall then stood four feet inside the street half --
+      // "the Front Door can't bump into the garage like that it needs at
+      // least 4-6 from the edge of the garage wall to the side of the entry
+      // area". Every garage point at the front line or forward of it (a jog
+      // behind it allowed for) says how far along the front the garage
+      // reaches; the end of that reach inside the front is the garage line,
+      // which is where the garage's side wall really stands.
+      const reach = garage.filter(p => p.z >= z - ENTRY_JOG_REACH_FT).map(p => p.x);
+      const gLo = reach.length ? Math.min(...reach) : Infinity;
+      const gHi = reach.length ? Math.max(...reach) : -Infinity;
+      const covers = Math.min(gHi, hi) - Math.max(gLo, lo) > TOL;
+      if (covers) {
         // The end of the garage that falls inside the house's front: from
         // there the street half runs one way and the garage half the other.
         if (gLo > lo + TOL) { line = gLo; mirror = false; }

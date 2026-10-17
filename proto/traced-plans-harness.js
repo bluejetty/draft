@@ -56,6 +56,13 @@ const MUTATIONS = [
     c => c.replace('areaOf(box) - mine > mine * SQUARE_FILL_SHARE', 'false')],
   ['the entry ignores the garage line', 'traced-plans.js',
     c => c.replace('if (gLo > lo + TOL) { line = gLo; mirror = false; }', 'if (false) { line = gLo; mirror = false; }')],
+  // THE GARAGE LINE READ OFF THE FRONT LINE ALONE AGAIN: a garage a foot over
+  // the house line touches the front at one corner, the line lands there,
+  // the clamp drags it in, and the garage's side wall stands inside the
+  // street half (Movie, 17 Oct: the door against the garage).
+  ['the garage\'s reach along the front is read only where it lies on the line', 'traced-plans.js',
+    c => c.replace('const reach = garage.filter(p => p.z >= z - ENTRY_JOG_REACH_FT).map(p => p.x);',
+      'const reach = garage.filter(p => Math.abs(p.z - z) < TOL).map(p => p.x);')],
   ['the room takes the whole garage', 'traced-plans.js',
     c => c.replace(': Math.min(ROOM_OVER_GARAGE_FT, depth);', ': depth;')],
   ['the moved end wall is not held to 8 ft', 'traced-plans.js',
@@ -305,6 +312,39 @@ const plan = (entryId, garage = GARAGE) => T.planFromTrace({
   check('its garage door is on that side wall', man ? [+a.x.toFixed(2), +b.x.toFixed(2)] : 'none', [17.56, 17.56]);
   check('the room over the garage has a roof', !!(plan.overGarageRoof && plan.overGarageRoof.length >= 4), true);
 }
+// ── A GARAGE A FOOT OVER THE HOUSE LINE (Movie, 17 Oct) ──────────────────
+// His third trace (saved 1227, turned three times): the garage's wall along
+// the house stands a foot inside the house line -- the tie jog -- so the
+// garage touches the front line only at its corner. Read there, the garage
+// line landed at the corner, the clamp dragged it six feet in, and the
+// garage's side wall stood four feet inside the landing's street half: the
+// front door against the garage, two feet of entry beside it. "it needs at
+// least 4-6 from the edge of the garage wall to the side of the entry area".
+// The garage line is where the garage's side wall really stands, and the
+// street half runs its full six feet from there with the door in its middle.
+{
+  const unturn = ([x, z]) => ({ x: -z, z: x });
+  const house = [[0, 0], [0, -23], [-46, -23], [-46, 0]].map(unturn);
+  const garage = [[0, -1], [-1, -1], [-1, -10], [25, -10], [25, 15], [-1, 15], [-1, 0], [0, 0]].map(unturn);
+  const spot = T.entrySpot(house, garage);
+  check('the garage line is the garage\'s side wall, not the corner that touches the front',
+    spot && [spot.line, spot.mirror], [10, true]);
+  const plan = T.planFromTrace({ entryId: 'modifiedBilevel', house, garage });
+  check('his jogged garage builds', plan.error, undefined);
+  check('the landing straddles that wall: six feet under the garage, six feet of street',
+    plan.entry && box(plan.entry), [4, -6, 16, 0]);
+  const edges = (plan.entry || []).map((a, i, all) => [a, all[(i + 1) % all.length]]);
+  const street = (plan.entryOpenings || []).find(o => o.type === 'door' && !o.manDoor);
+  const [a, b] = street ? edges[street.edge] : [{}, {}];
+  const jamb = street ? a.x + Math.sign(b.x - a.x) * street.offsetFt : null;
+  const far = street ? jamb + Math.sign(b.x - a.x) * street.widthFt : null;
+  check('the street door stands clear of the garage wall by more than nine inches, and of the far wall too',
+    street && [Math.min(jamb, far) - 10 >= 0.75, 16 - Math.max(jamb, far) >= 0.75,
+      Math.abs((jamb + far) / 2 - 13) < 0.01], [true, true, true]);
+  check('and the street half is at least 4\'-6" clear inside its walls',
+    16 - 10 - 2 * (5.5 / 12) >= P.ENTRY_DOOR_CLEAR_FT, true);
+}
+
 // AND A ROOM THE LANDING NEVER REACHES STILL GETS ONE: a garage on the side,
 // well behind the front, leaves the landing centred on the front, so the
 // room's roof has nothing to join and is roofed on its own.
