@@ -305,6 +305,14 @@ if (!window.DraftPlanComposition) {
     //
     // THE FOOTING IS THE CALLER'S ANSWER, not the painter's -- only a pile
     // changes the drawn shape, a telepost being the default square.
+    // THE CANTILEVER OF THE FLOOR ABOVE AND THE ROOF OVERHANG (Movie, 16
+    // Oct), dashed and lighter. Worked out by the caller (layout-plan
+    // overheadLines); this only paints them, on the exterior wall layer
+    // they hang past, before the structure so a beam above reads over them.
+    if (Array.isArray(env.overheadLines) && env.overheadLines.length && typeof render.drawOverheadLines2D === 'function') {
+      onLayer(ctx, 'A-WALL-EXT');
+      render.drawOverheadLines2D(ctx, toS, env.overheadLines, env.overheadEnv || {});
+    }
     if (env.structureEnv) {
       // THE TAG OPPOSITE THE BEAM'S STRING, one per line (render-2d
       // beamTagSides), read off the dimensions this same pass draws.

@@ -17,6 +17,10 @@ const h = require('./helpers');
 
 const BUCKET = 'model-drawing';
 const REPRO = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'proto', 'repro-movie-bands.draft'), 'utf8'));
+// NO ROOFS: the garage roof's overhang is drawn on this same walls plan with
+// the uppers' dash (tests/overhead-lines.spec.js pins that), and this spec
+// counts dashed strokes as uppers. Beams and cabinets are what it is about.
+REPRO.roofs = [];
 // A base cabinet, a sink base and a fridge along the back wall (uppers over
 // each), and an island standing free (none).
 REPRO.fixtures = [

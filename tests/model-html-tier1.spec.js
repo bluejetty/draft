@@ -363,6 +363,10 @@ test.describe('MODEL.html tier 1', () => {
       // branch that loads it -- an undeclared dependency is undeclared no
       // matter whose commit brought it.
       './building-bodies.js',
+      // overhead-lines.js clips the storey above's outline and the roof to
+      // what hangs past this level's walls (the overhead convention, Movie
+      // 16 Oct); MODEL's walls plan and LAYOUT's plan sheet both draw it.
+      './overhead-lines.js',
       // door-bucks.js projects the garage doors onto the FOUNDATION plan as
       // DOOR BUCKS (2" past the door each side, through the concrete under
       // the door's wall). MODEL paints them on its foundation view and LAYOUT

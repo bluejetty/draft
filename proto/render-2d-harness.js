@@ -736,6 +736,35 @@ suite('drawUpperCabinets2D', 'the uppers are a dashed, lighter 12" box off the w
   expect('nothing with no geometry', count(gone, 'stroke'), 0);
 });
 
+// ── WHAT HANGS OVER THE WALLS PLAN ───────────────────────────────────────
+//
+// The cantilever above and the roof overhang (same note: "cantilevers,
+// overhangs and uppers dashed"): plain segments, dashed, lighter, thin, in
+// the ink the caller names, one path for the lot. Never closed -- a
+// cantilever is the part of a loop that sticks out, not the loop.
+suite('drawOverheadLines2D', 'the overhead lines are dashed, lighter, thin, open, in the caller\'s ink', R => {
+  const ctx = recordingCtx();
+  const segs = [{ start: { x: 0, z: 0 }, end: { x: 10, z: 0 } }, { start: { x: 10, z: 0 }, end: { x: 10, z: 2 } }];
+  R.drawOverheadLines2D(ctx, toS, segs, { ink: '#0a0b0c' });
+  expect('dashed, the uppers\' dash', JSON.stringify(calls(ctx, 'setLineDash')[0]), JSON.stringify([OVERHEAD_DASH]));
+  expect('lighter', sets(ctx, 'globalAlpha').pop(), OVERHEAD_ALPHA);
+  expect('thin', sets(ctx, 'lineWidth')[0], 1);
+  expect('in the ink named', sets(ctx, 'strokeStyle').includes('#0a0b0c'), true);
+  expect('one move per segment', count(ctx, 'moveTo'), 2);
+  expect('one line per segment', count(ctx, 'lineTo'), 2);
+  expect('never closed', count(ctx, 'closePath'), 0);
+  expect('stroked once for the lot', count(ctx, 'stroke'), 1);
+  expect('and never filled', count(ctx, 'fill'), 0);
+  expect('the first segment lands where it was handed', JSON.stringify(calls(ctx, 'lineTo')[0]),
+    JSON.stringify([toS({ x: 10, z: 0 }).x, toS({ x: 10, z: 0 }).y]));
+  const none = recordingCtx();
+  R.drawOverheadLines2D(none, toS, [], { ink: '#0a0b0c' });
+  expect('nothing to draw, nothing stroked', count(none, 'stroke'), 0);
+  const broken = recordingCtx();
+  R.drawOverheadLines2D(broken, toS, [{ start: { x: 0, z: 0 } }, null], {});
+  expect('a segment without both ends is skipped', count(broken, 'lineTo'), 0);
+});
+
 // THE POSTS COME WITH IT. A beam on the floor it carries, drawn over posts at
 // full weight, reads as a beam on this plan that someone dimmed by mistake.
 suite('drawColumn2D', 'a post below is drawn as lightly as the beam it holds', R => {
@@ -3762,6 +3791,14 @@ function coverage() {
         '    ctx.setLineDash([...OVERHEAD_DASH]);')],
     ['drawUpperCabinets2D hangs uppers over a tub',
       src => src.replace('if (!geo || geo.tub) return;', 'if (!geo) return;')],
+    // THE OVERHEAD LINES, wrong in each of the three ways: solid, full
+    // weight, and closed into a loop.
+    ['drawOverheadLines2D draws the overhead lines solid',
+      src => src.replace('    ctx.setLineDash([...OVERHEAD_DASH]);\n    ctx.globalAlpha *= OVERHEAD_ALPHA;', '    ctx.globalAlpha *= OVERHEAD_ALPHA;')],
+    ['drawOverheadLines2D draws the overhead lines at full weight',
+      src => src.replace('    ctx.globalAlpha *= OVERHEAD_ALPHA;\n    ctx.beginPath();\n    list.forEach(seg => {', '    ctx.beginPath();\n    list.forEach(seg => {')],
+    ['drawOverheadLines2D closes the overhead lines into a loop',
+      src => src.replace('      ctx.lineTo(b.x, b.y);\n    });\n    ctx.stroke();', '      ctx.lineTo(b.x, b.y);\n    });\n    ctx.closePath();\n    ctx.stroke();')],
     // THE DOOR BUCKS (Movie, 16 Oct).
     ['drawDoorBucks2D leaves the hatch under the buck',
       src => src.replace("      if (env.paperColor) { ctx.fillStyle = env.paperColor; ctx.fill(); }\n", '')],

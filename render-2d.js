@@ -1101,6 +1101,31 @@ if (!window.DraftRender2D) {
     ctx.restore();
   }
 
+  // WHAT HANGS OVER THIS PLAN FROM THE STOREY ABOVE AND THE ROOF: the
+  // cantilever of the floor above and the roof overhang (overhead-lines.js
+  // works out which parts), dashed and lighter in the wall-edge ink. Plain
+  // segments in plan feet; nothing is closed, because a cantilever is the
+  // part of a loop that sticks out, not the loop.
+  function drawOverheadLines2D(ctx, toS, segments, env = {}) {
+    const list = Array.isArray(segments) ? segments : [];
+    if (!list.length) return;
+    ctx.save();
+    ctx.strokeStyle = env.ink || '#1d1f20';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([...OVERHEAD_DASH]);
+    ctx.globalAlpha *= OVERHEAD_ALPHA;
+    ctx.beginPath();
+    list.forEach(seg => {
+      if (!seg?.start || !seg?.end) return;
+      const a = toS(seg.start), b = toS(seg.end);
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   // A TELEPOST IS A SQUARE, A PILE IS A CIRCLE, and both carry the cross that
   // marks their centre — the cross is what a drafter aligns to, so it extends
   // past the body and is drawn even when the body is not.
@@ -3184,6 +3209,7 @@ if (!window.DraftRender2D) {
     drawCutPreview2D,
     drawBeam2D,
     drawUpperCabinets2D,
+    drawOverheadLines2D,
     drawDoorBucks2D,
     drawJoistSpans2D,
     beamTagSides,
