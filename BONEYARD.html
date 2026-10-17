@@ -399,9 +399,10 @@
               [Number(p.x.toFixed(4)), Number(p.z.toFixed(4))]) } : {}) };
         })));
       // FOR THE SPECS: every opening drawn, by level, with its dot.
-      // The stairs standing on a bone level: a floor's, by level id, in
-      // whatever view they were drawn in (this page has no layer views).
-      const stairsOn = (level, d) => (level && level.kind === 'floor'
+      // The stairs standing on a bone level: a floor's or the foundation's
+      // (a basement stair stands on it), by level id, in whatever view they
+      // were drawn in (this page has no layer views). The roof has none.
+      const stairsOn = (level, d) => (level && (level.kind === 'floor' || level.kind === 'foundation')
         ? ((d && d.stairs) || []).filter(stair => Number(stair.levelId) === Number(level.levelId)
           && stair.start && stair.widthFt > 0)
         : []);
