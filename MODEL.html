@@ -2108,6 +2108,7 @@
 <script src="./fixture-kinds.js"></script>
 <!-- Movie's two default washrooms (9 Oct), dropped whole by the FIXTURE tool. -->
 <script src="./washroom-presets.js"></script>
+<script src="./kitchen-presets.js"></script>
 <!-- Cut marks. cut-marks.js is the geometry; profile-manager.js is here for
      ONE reason and it is worth naming, because it is the first non-drawing
      dependency this page has taken: two of the four inputs a cut needs are not
@@ -4743,7 +4744,19 @@
       ctx.closePath(); ctx.fill(); ctx.stroke();
     });
     ctx.restore();
-    const env = {
+    const env = presetPreviewEnv(all);
+    room.fixtures.forEach(f => {
+      const record = { kind: f.kind, wallId: hostId(f.host), offset: f.offset, width: f.width,
+        depth: f.depth, side: f.side,
+        ...(f.kind === 'tub' ? { endWallId: hostId(f.endWall), dir: f.dir } : {}) };
+      R.drawFixture2D(ctx, toS, record, { preview: true }, all.find(w => w.id === record.wallId), env);
+    });
+  };
+  // What a preset's faint fixtures are drawn against: the walls they would
+  // ride, in the preview's ink. One builder for the washroom and the kitchen.
+  const presetPreviewEnv = all => {
+    const FG = window.DraftFixtureGeometry;
+    return {
       fixtureGeometry: (fx, wl) => FG.fixtureGeometry(all, fx, wl),
       wallCross: (a, frame, b) => FG.wallCross(a, frame, b),
       wallFrame: wl => FG.wallFrame(wl),
@@ -4753,11 +4766,20 @@
       FIXTURE_COLOR: skin['draw-selected'],
       fixtureFill: fixtureFill(),
     };
-    room.fixtures.forEach(f => {
-      const record = { kind: f.kind, wallId: hostId(f.host), offset: f.offset, width: f.width,
-        depth: f.depth, side: f.side,
-        ...(f.kind === 'tub' ? { endWallId: hostId(f.endWall), dir: f.dir } : {}) };
-      R.drawFixture2D(ctx, toS, record, { preview: true }, all.find(w => w.id === record.wallId), env);
+  };
+  // THE KITCHEN IN HAND: its six pieces on the two walls of the corner the
+  // cursor is in, in the preview's faint ink. Nothing when no corner is
+  // within reach or a leg is short -- the press will say which.
+  const paintKitchenPreview = () => {
+    const R = window.DraftRender2D;
+    const kitchen = kitchenPlacement(cursorWorld);
+    if (!R || !kitchen || kitchen.refused) return;
+    const all = walls();
+    const env = presetPreviewEnv(all);
+    kitchen.fixtures.forEach(f => {
+      const record = { kind: f.kind, wallId: f.wall.id, offset: f.offset, width: f.width,
+        depth: f.depth, side: f.side };
+      R.drawFixture2D(ctx, toS, record, { preview: true }, f.wall, env);
     });
   };
 
@@ -6350,6 +6372,8 @@
         // bands, its fixtures and door in the preview's faint ink, the tile
         // floor showing it is the room it will be.
         if (activeTool === 'fixture' && washroomPreset && cursorWorld) paintWashroomPreview();
+        // THE KITCHEN IN HAND, in the corner within reach of the cursor.
+        if (activeTool === 'fixture' && kitchenPreset && cursorWorld) paintKitchenPreview();
         // THE WALL PICKED FOR TRIM, and the end that will move.
         if (activeTool === 'trim' && trimPick) {
           const w = trimPick.wall;
@@ -16159,6 +16183,68 @@
     return { walls: made, fixtures, door, group, levelId, viewId };
   };
 
+  // ── THE DEFAULT KITCHEN (Movie, 17 Oct) ───────────────────────────────────
+  //
+  // "can you make a WC and KITCHENS that are like on this plan ... call it
+  // ... KITCHEN L1": the studio suite's corner L (kitchen-presets.js holds
+  // what it is). Picked beside the KITCHEN title, it shows as a faint kitchen
+  // in whichever corner is within reach of the cursor -- F swaps the legs,
+  // Esc puts it down -- and a press files its six pieces as ordinary
+  // fixtures on the corner's two walls, one undo for the lot.
+  //
+  // NO WALLS AND NO ASSEMBLY, unlike the washrooms: a kitchen stands against
+  // walls already there, and its pieces are the drafter's to slide one by one
+  // afterwards, which is what Movie asked of the old page's L PRESET too.
+  let kitchenPreset = null;            // 'L1' | null
+  let kitchenFlip = false;
+
+  const kitchenPlacement = at => {
+    const KP = window.DraftKitchenPresets;
+    const FG = window.DraftFixtureGeometry;
+    const K = window.DraftFixtureKinds;
+    if (!KP || !FG || !K || !kitchenPreset || !at) return null;
+    const corner = KP.findCorner(walls(), at, FG);
+    if (!corner) return null;
+    return KP.place(kitchenPreset, corner, { flip: kitchenFlip, depthOf: kind => K.kindFor(kind).depthFt });
+  };
+
+  const dropKitchen = at => {
+    const KP = window.DraftKitchenPresets;
+    const kitchen = kitchenPlacement(at);
+    if (!kitchen) {
+      sayOnStrip(`Press inside a corner two walls make \u2014 within ${KP ? KP.REACH_FT : 4}' of it.`);
+      return null;
+    }
+    if (kitchen.refused) { sayOnStrip(kitchen.refused); return null; }
+    if (!Array.isArray(drawing.fixtures)) drawing.fixtures = [];
+    const made = kitchen.fixtures.map(f => {
+      const record = {
+        id: newDrawingItemId('fixture'),
+        wallId: f.wall.id,
+        levelId: f.wall.levelId,
+        view: f.wall.view || 'plan',
+        kind: f.kind,
+        layer: FIXTURE_LAYER,
+        offset: f.offset,
+        width: f.width,
+        depth: f.depth,
+        side: f.side,
+      };
+      drawing.fixtures.push(record);
+      return record;
+    });
+    // ONE STEP BACK TAKES THE KITCHEN: the same 'built' step a washroom
+    // files, with no walls of its own in it.
+    undoStack.push({
+      kind: 'built', walls: [], outlines: [], list: null,
+      items: made.map(item => ({ list: drawing.fixtures, item })),
+    });
+    sayOnStrip(`${kitchen.name} placed \u2014 ${made.length} pieces on two walls, each movable; one UNDO takes them all.`);
+    markDirty();
+    paint();
+    return { fixtures: made };
+  };
+
   // WHAT THIS DOES NOT DO YET, said rather than left to be discovered: the TUB
   // takes two WALLS (back, then faucet end) and the kitchen L PRESET drops
   // seven fixtures at once. Both are their own gesture on the old page and
@@ -16166,6 +16252,7 @@
   // says what is missing instead of placing the wrong thing or nothing.
   const fixturePress = at => {
     if (washroomPreset) return dropWashroom(at);
+    if (kitchenPreset) return dropKitchen(at);
     const kind = fixtureKind();
     if (kind.preset === true || kind.id === 'tub') {
       sayOnStrip(`${kind.label} is not on this page yet — it takes a gesture of its own.`);
@@ -16220,7 +16307,7 @@
   // and beamStart do -- see setTool. Carrying it across would let a cabinet run
   // started under FIXTURE finish under a later press.
   toolListeners.push(next => {
-    if (next !== 'fixture') { fixtureRunStart = null; washroomPreset = null; }
+    if (next !== 'fixture') { fixtureRunStart = null; washroomPreset = null; kitchenPreset = null; }
     syncFixturePanel();
   });
 
@@ -21873,7 +21960,7 @@
     // The house's rays light under the cursor before the garage's first corner.
     || (activeTool === 'outline' && outlineGarage && !!tracedOrder && traceStillThere(tracedHouse))
     || (rulerOn && !!rulerFrom)
-    || (activeTool === 'fixture' && !!washroomPreset);
+    || (activeTool === 'fixture' && (!!washroomPreset || !!kitchenPreset));
 
   // THE LENGTH ON THE DRAWING, beside the one on the strip. Both read
   // runInHand, so both read what commitWall will receive -- §1 asks for the
@@ -22998,14 +23085,16 @@
   }, true);
 
   // THE WASHROOM IN HAND: [ and ] turn it a quarter, F mirrors it, Esc
-  // puts it down. Not while a field has the keys.
+  // puts it down. Not while a field has the keys. THE KITCHEN IN HAND takes
+  // F and Esc the same way -- the corner it is pressed into sets its turn.
   window.addEventListener('keydown', event => {
-    if (activeTool !== 'fixture' || !washroomPreset) return;
+    if (activeTool !== 'fixture' || (!washroomPreset && !kitchenPreset)) return;
     if (event.target && /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName)) return;
     const turn = { BracketLeft: -90, BracketRight: 90 }[event.code];
-    if (turn) washroomTurn = ((washroomTurn + turn) % 360 + 360) % 360;
-    else if (event.code === 'KeyF') washroomFlip = !washroomFlip;
-    else if (event.key === 'Escape') { washroomPreset = null; syncFixturePanel(); }
+    if (turn && washroomPreset) washroomTurn = ((washroomTurn + turn) % 360 + 360) % 360;
+    else if (event.code === 'KeyF' && washroomPreset) washroomFlip = !washroomFlip;
+    else if (event.code === 'KeyF') kitchenFlip = !kitchenFlip;
+    else if (event.key === 'Escape') { washroomPreset = null; kitchenPreset = null; syncFixturePanel(); }
     else return;
     event.stopImmediatePropagation();
     event.preventDefault();
@@ -24421,6 +24510,7 @@
         btn.addEventListener('click', () => {
           fixtureKindId = kind.id;
           washroomPreset = null;
+          kitchenPreset = null;
           // A run half-made with one kind must not finish as another: the
           // second press would take the first press's `along` and file a
           // cabinet's width under a vanity. Same rule setTool applies to
@@ -24452,11 +24542,35 @@
           + 'The tub end joins an exterior wall it is dropped against.';
         btn.addEventListener('click', () => {
           washroomPreset = id;
+          kitchenPreset = null;
           fixtureRunStart = null;
           setTool('fixture');
           syncFixturePanel();
         });
         bathRow.append(btn);
+      });
+    }
+    // AND THE DEFAULT KITCHEN BESIDE THE KITCHEN TITLE (Movie, 17 Oct:
+    // "KITCHEN L1"), with the old page's L PRESET chip: a pick is a whole
+    // kitchen, held until Esc or another pick, pressed into a corner.
+    const kitchenRow = home.querySelector('[data-assembled-row="kitchen"]');
+    if (window.DraftKitchenPresets && kitchenRow) {
+      window.DraftKitchenPresets.IDS.forEach(id => {
+        const preset = window.DraftKitchenPresets.PRESETS[id];
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'sel-chip assembled';
+        btn.dataset.kitchen = id;
+        btn.textContent = preset.name;
+        btn.title = `${preset.label} — press inside a corner two walls make; F swaps the legs, Esc puts it down.`;
+        btn.addEventListener('click', () => {
+          kitchenPreset = id;
+          washroomPreset = null;
+          fixtureRunStart = null;
+          setTool('fixture');
+          syncFixturePanel();
+        });
+        kitchenRow.append(btn);
       });
     }
     home.append(help);
@@ -24468,7 +24582,7 @@
       const on = window.DraftToolRoster?.availableOn('fixture', board) !== false;
       slot.querySelectorAll('[data-fixture-kind]').forEach(btn => {
         btn.setAttribute('aria-pressed',
-          String(activeTool === 'fixture' && !washroomPreset && btn.dataset.fixtureKind === fixtureKindId));
+          String(activeTool === 'fixture' && !washroomPreset && !kitchenPreset && btn.dataset.fixtureKind === fixtureKindId));
         btn.disabled = !on;
       });
       slot.querySelectorAll('[data-washroom]').forEach(btn => {
@@ -24476,9 +24590,16 @@
           String(activeTool === 'fixture' && btn.dataset.washroom === washroomPreset));
         btn.disabled = !on;
       });
+      slot.querySelectorAll('[data-kitchen]').forEach(btn => {
+        btn.setAttribute('aria-pressed',
+          String(activeTool === 'fixture' && btn.dataset.kitchen === kitchenPreset));
+        btn.disabled = !on;
+      });
       const kind = K.kindFor(fixtureKindId);
       help.textContent = activeTool === 'fixture' && washroomPreset
         ? `${window.DraftWashroomPresets.PRESETS[washroomPreset].label}: press to drop it — [ ] turn, F mirror, Esc to put it down.`
+        : activeTool === 'fixture' && kitchenPreset
+        ? `${window.DraftKitchenPresets.PRESETS[kitchenPreset].label}: press inside a corner two walls make — F swaps the legs, Esc to put it down.`
         : activeTool === 'fixture'
         ? (fixtureRunStart
           ? `Press the other end of the ${kind.label.toLowerCase()} run.`
