@@ -1135,11 +1135,27 @@ if (!window.DraftPremadePlans) {
     opening(7, 28, 4, 'window'),
   ];
 
+  // THE STREET DOOR STANDS IN THE MIDDLE OF THE STREET HALF (Movie, 17 Oct,
+  // on a traced MOD BILEVEL whose door had landed against the garage: "it
+  // needs at least 4-6 from the edge of the garage wall to the side of the
+  // entry area ... so the door fits plus extra 9" approx on each side").
+  // The street half is six feet between the garage line and the entry's far
+  // side -- 5'-1" clear inside two 2x6 walls, over his 4'-6" -- and the
+  // three-foot door sits centred in it, a foot and a quarter off each wall,
+  // rather than hard against the far wall as it stood from 2 Oct.
+  const ENTRY_DOOR_CLEAR_FT = 4.5;
+  const FRONT_DOOR_FT = 3;
+  // Along the street half from the garage line: the door's near jamb.
+  const STREET_DOOR_IN_FT = (ENTRY_WIDTH_FT / 2 - FRONT_DOOR_FT) / 2;
+  if (ENTRY_WIDTH_FT / 2 - 2 * (5.5 / 12) < ENTRY_DOOR_CLEAR_FT) {
+    throw new Error('the bilevel landing\'s street half is too narrow for its door');
+  }
+
   // THE TWO DOORS INTO THE LANDING, on the entry's front (edge 2, which runs
   // from its right corner leftwards). The left six feet are outdoors, the
   // right six behind the garage.
   const entryOpenings = ({ garage = false } = {}) => [
-    opening(2, ENTRY_WIDTH_FT - 3, 3, 'door'),
+    opening(2, ENTRY_WIDTH_FT / 2 + STREET_DOOR_IN_FT, FRONT_DOOR_FT, 'door'),
     ...(garage ? [opening(2, 3, MAN_DOOR_WIDTH_FT, 'door', { manDoor: true })] : []),
   ];
 
@@ -1273,10 +1289,11 @@ if (!window.DraftPremadePlans) {
     return [pt(garageLeft, bl.z), br, fr, pt(garageLeft, fr.z)];
   };
   // The street door on the street half (edge 3, from the garage line
-  // leftwards); the door in from the garage on the garage half (edge 2).
+  // leftwards), centred in it as entryOpenings' is; the door in from the
+  // garage on the garage half (edge 2).
   const modifiedEntryOpenings = () => [
     opening(2, 3, MAN_DOOR_WIDTH_FT, 'door', { manDoor: true }),
-    opening(3, 3, 3, 'door'),
+    opening(3, STREET_DOOR_IN_FT, FRONT_DOOR_FT, 'door'),
   ];
   // The room's windows as the 2 STOREY's, and the door in off the landing on
   // its back wall (edge 0, from the room's left corner -- over the landing).
@@ -1492,7 +1509,7 @@ if (!window.DraftPremadePlans) {
     OVERHEAD_DOOR_WIDTHS_FT, GARAGE_ROOF_HOUSE_END,
     GARAGE_TIE_ROOF_FLUSH, GARAGE_TIE_ROOF_RAKE,
     MAN_DOOR_WIDTH_FT, ROOM_DOOR_WIDTH_FT, GARAGE_WINDOW_WIDTH_FT, GARAGE_DOOR_HEAD_FT,
-    ENTRY_WIDTH_FT, ENTRY_DEPTH_FT, ENTRY_LEFT_FT, BILEVEL_STAIR_WIDTH_FT,
+    ENTRY_WIDTH_FT, ENTRY_DEPTH_FT, ENTRY_LEFT_FT, ENTRY_DOOR_CLEAR_FT, STREET_DOOR_IN_FT, BILEVEL_STAIR_WIDTH_FT,
     BILEVEL_STAIR_GAP_FT, BILEVEL_OVERLAP_FT,
     bungalow, twoStorey, bilevel, modifiedBilevel, planFor, detachedGarageOpenings,
     detachedGarageUpperOpenings, squareOver, joinLoops, cutLoops,
