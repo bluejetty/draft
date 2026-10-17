@@ -274,8 +274,10 @@ test('the stock MOD BILEVEL is exactly where it was, with its ends hipped', asyn
   expect(roofs.length).toBe(3);
   expect(roofs[0].pts).toEqual([[-18, -22], [18, -22], [18, 19], [2, 19],
     [2, 6.5], [-4, 6.5], [-4, 22], [-18, 22]]);
+  // The stretch west of the landing is a RAKE since 17 Oct: the side the
+  // room stands on is a gable the whole way (geometry-2d roofAgainstWall).
   expect(roofs[0].edges).toEqual(['eave', 'eave', 'gable', 'gable', 'gable',
-    'gable', 'eave', 'eave']);
+    'gable', 'gable', 'eave']);
   expect(roofs[2].pts).toEqual([[-6, 4.5], [4, 4.5], [4, 17], [23, 17], [23, 40], [-6, 40]]);
   expect(roofs[2].edges).toEqual(['eave', 'eave', 'eave', 'eave', 'eave', 'eave']);
 });

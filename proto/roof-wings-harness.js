@@ -226,7 +226,157 @@ function run() {
   if (failed) process.exitCode = 1;
 }
 
+// ── BESIDE A TALLER WALL: GABLE INTO IT, SHED AWAY FROM IT ─────────────
+//
+// Movie, 17 Oct, on his MOD BILEVEL (scratchpad sample movie-roof-
+// 20261017T0911): "on main roof split the roof into 2 roofs -- front will be
+// gabled away slope from 2nd floor, and back roof can be gabled at front to
+// connect to back of 2nd floor and shed water to sides and hip at back" ...
+// "will need the main roof to have a 'gable wall' ... where the lower green
+// roof will meet the GABLE wall of the main roof". His main loop, spike
+// cleaned: the west block (x -39..-19, z -20..21, its east side stepping a
+// foot where the garage wall stands off the corner) with the middle piece
+// (x -19..-6, z -12..0) beside the room over the garage (x -20..0, z 0..21)
+// and its stair hood (x -13.5..0, z -6..0).
+const AGAINST_RING = ring([[-6, 0], [-6, -12], [-19, -12], [-19, -20], [-39, -20], [-39, 21], [-20, 21], [-20, 0]]);
+const AGAINST_WALL = ring([[0, 0], [0, 21], [-20, 21], [-20, 0], [-13.5, 0], [-13.5, -6], [0, -6]]);
+const edgeOf = (r, a, b) => r.findIndex((p, i) => {
+  const q = r[(i + 1) % r.length];
+  return Math.abs(p.x - a[0]) < 1e-6 && Math.abs(p.z - a[1]) < 1e-6 && Math.abs(q.x - b[0]) < 1e-6 && Math.abs(q.z - b[1]) < 1e-6;
+});
+const kindAt = (piece, a, b) => {
+  const i = edgeOf(piece.ring, a, b);
+  if (i < 0) return 'missing';
+  return piece.flush.includes(i) ? 'flush' : piece.rake.includes(i) ? 'rake' : 'eave';
+};
+check('beside the room the main roof comes apart into the back block and the front piece', G => {
+  const r = G.roofAgainstWall(AGAINST_RING, AGAINST_WALL);
+  return [r ? r.pieces.map(p => p.role).join(',') : 'null', 'block,shed'];
+});
+check('the block is the whole west block, the foot of step and all, and the front piece the middle piece', G => {
+  const r = G.roofAgainstWall(AGAINST_RING, AGAINST_WALL);
+  const span = p => { const xs = p.ring.map(q => q.x), zs = p.ring.map(q => q.z); return [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)].join(','); };
+  return [r.pieces.map(span).join(' | '), '-39,-19,-20,21 | -19,-6,-12,0'];
+});
+check("the block's wall side: flush on the room, a rake past it, and the foot between them flush", G => {
+  const r = G.roofAgainstWall(AGAINST_RING, AGAINST_WALL);
+  const b = r.pieces[0];
+  return [[kindAt(b, [-20, 0], [-20, 21]), kindAt(b, [-19, -20], [-19, 0]), kindAt(b, [-19, 0], [-20, 0])].join(','), 'flush,rake,flush'];
+});
+check("the block's flanks and far end are eaves: water to the sides, a hip at the back", G => {
+  const r = G.roofAgainstWall(AGAINST_RING, AGAINST_WALL);
+  const b = r.pieces[0];
+  return [[kindAt(b, [-39, -20], [-19, -20]), kindAt(b, [-20, 21], [-39, 21]), kindAt(b, [-39, 21], [-39, -20])].join(','), 'eave,eave,eave'];
+});
+check('the front piece sheds away from the room: one eave, on the side facing away', G => {
+  const r = G.roofAgainstWall(AGAINST_RING, AGAINST_WALL);
+  const s = r.pieces[1];
+  const eaves = s.ring.filter((p, i) => !s.flush.includes(i) && !s.rake.includes(i)).length;
+  return [[eaves, kindAt(s, [-19, -12], [-6, -12])].join(','), '1,eave'];
+});
+check("the front piece is flush against the block's gable wall and the room, a rake on its open end", G => {
+  const r = G.roofAgainstWall(AGAINST_RING, AGAINST_WALL);
+  const s = r.pieces[1];
+  return [[kindAt(s, [-19, 0], [-19, -12]), kindAt(s, [-6, 0], [-19, 0]), kindAt(s, [-6, -12], [-6, -6])].join(','), 'flush,flush,rake'];
+});
+check('the gable wall is the stretch where the front piece stands against the block', G => {
+  const r = G.roofAgainstWall(AGAINST_RING, AGAINST_WALL);
+  return [JSON.stringify(r.gableWalls.map(w => [w.start.x, w.start.z, w.end.x, w.end.z])), '[[-19,0,-19,-12]]'];
+});
+check('the hood reaching a foot into the block is no bite to notch it round', G => {
+  const r = G.roofAgainstWall(AGAINST_RING, AGAINST_WALL);
+  const deep = G.roofAgainstWall(AGAINST_RING, ring([[0, 0], [0, 21], [-30, 21], [-30, 0]]));
+  // The replay's hood stands half a foot into the block: a foot of overlap
+  // along the gable line, not a bite.
+  const shallow = G.roofAgainstWall(AGAINST_RING, ring([[0, 0], [0, 21], [-20, 21], [-20, 0], [-19.5, 0], [-19.5, -6], [0, -6]]));
+  return [[r.notchBlock, deep && deep.notchBlock, shallow && shallow.notchBlock].join(','), 'false,true,false'];
+});
+check('a wall touching nothing but a sliver leaves the ring to the ordinary rules', G => {
+  const far = G.roofAgainstWall(AGAINST_RING, ring([[10, 10], [20, 10], [20, 20], [10, 20]]));
+  const graze = G.roofAgainstWall(AGAINST_RING, ring([[-20, 0], [-20, 3], [-17, 3], [-17, 0]]));
+  return [[far, graze].map(v => (v === null ? 'null' : 'split')).join(','), 'null,null'];
+});
+check('a plain rectangle against a wall is one block with no arm', G => {
+  const r = G.roofAgainstWall(ring([[0, 0], [30, 0], [30, 20], [0, 20]]), ring([[30, 5], [40, 5], [40, 15], [30, 15]]));
+  const b = r.pieces[0];
+  return [[r.pieces.length, kindAt(b, [30, 5], [30, 15]), kindAt(b, [30, 0], [30, 5]), kindAt(b, [30, 15], [30, 20]), kindAt(b, [0, 0], [30, 0])].join(','), '1,flush,rake,rake,eave'];
+});
+// HIS 16 OCT HOUSE STAYS AS IT WAS: the stub on the block's end comes off
+// first, undecided, and the block touches no taller wall on a side of its
+// own -- so both go to the ordinary rules (roofWingKinds), exactly as before
+// this rule existed.
+check('his 16 Oct house: the stub comes off the end undecided and the block is handed back undecided', G => {
+  const r = G.roofAgainstWall(HOUSE_LOOP, ring([[-12, 0], [-12, 10], [14, 10], [14, 2], [24, 2], [24, -12], [0, -12], [0, 0]]));
+  return [r ? r.pieces.map(p => `${p.role}:${p.decided}`).join(',') : 'null', 'rest:false,arm:false'];
+});
+check('his 16 Oct house: the stub is the east part, flush where it stands against the block', G => {
+  const r = G.roofAgainstWall(HOUSE_LOOP, ring([[-12, 0], [-12, 10], [14, 10], [14, 2], [24, 2], [24, -12], [0, -12], [0, 0]]));
+  const arm = r.pieces[1];
+  const span = p => { const xs = p.ring.map(q => q.x), zs = p.ring.map(q => q.z); return [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)].join(','); };
+  return [span(arm) + ' ' + kindAt(arm, [-12, 0], [-12, -18]), '-12,0,-18,0 flush'];
+});
+// ── A JOG IN THE WALL IS NOT A JOG IN THE ROOF (Movie, 17 Oct) ────────────
+// "the lower garage wall should have a jog in it, should just be a normal
+// hip without the extra little hip where it jogs". His garage's front
+// stands a foot north of the house's line: the roof ring takes the outer
+// line, the wall keeps its jog.
+const JOGGED_GARAGE = ring([[0, 0], [0, -1], [6, -1], [6, 21], [-20, 21], [-20, 0]]);
+check('a foot of jog in the garage front comes out of the roof ring, onto the outer line', G => {
+  const out = G.loopWithoutJogs(JOGGED_GARAGE);
+  return [JSON.stringify(out.points.map(p => [p.x, p.z])), '[[6,-1],[6,21],[-20,21],[-20,-1]]'];
+});
+check('a jog that steps inward slides the inner edge out too', G => {
+  const out = G.loopWithoutJogs(ring([[0, 0], [10, 0], [10, 10], [6, 10], [6, 11], [0, 11]]));
+  return [JSON.stringify(out.points.map(p => [p.x, p.z])), '[[0,0],[10,0],[10,11],[0,11]]'];
+});
+check('four feet of step is a step, not a jog, and stays', G => {
+  const out = G.loopWithoutJogs(ring([[0, 0], [10, 0], [10, 10], [6, 10], [6, 14], [0, 14]]));
+  return [out.points.length, 6];
+});
+check("the caller's edge numbers follow the slide: the edge after the jog is still found", G => {
+  const out = G.loopWithoutJogs(JOGGED_GARAGE);
+  // edge 2 was (6,-1)->(6,21), the garage's front; edge 1 was the jog
+  // itself and now reads as the edge before it; edge 5, (-20,0)->(0,0),
+  // slid onto the outer line as the first edge.
+  return [[out.edgeIndexOf.get(2), out.edgeIndexOf.get(1), out.edgeIndexOf.get(5)].join(','), '0,3,3'];
+});
+check('the stepped offset steps between a flush stretch and a rake on one line', G => {
+  const out = G.offsetOutlineStepped(ring([[0, 0], [10, 0], [10, 10], [10, 20], [0, 20]]), ['eave', 'gable', 'gable', 'eave', 'eave'], [2, 2, 0, 2, 2]);
+  return [JSON.stringify(out.points.map(p => [p.x, p.z])) + ' ' + K(out.edges) + ' ' + out.edgeOverhang.join(''), '[[-2,-2],[12,-2],[12,10],[10,10],[10,22],[-2,22]] egggee 220022'];
+});
+
 const MUTATIONS = [
+  // BESIDE A TALLER WALL (Movie, 17 Oct).
+  ['a block joined from two wings a foot apart is read as two',
+    s => s.replace('          const widthClose = Math.abs(aw0 - bw0) <= JOG_FT + eps && Math.abs(aw1 - bw1) <= JOG_FT + eps;',
+      '          const widthClose = Math.abs(aw0 - bw0) <= eps && Math.abs(aw1 - bw1) <= eps;')],
+  ['a stub four feet narrower is joined into the block like a jog',
+    s => s.replace('const JOG_FT = 1.5;', 'const JOG_FT = 4.1;')],
+  ['a stub on the block\'s end is kept in the block under the wall rule',
+    s => s.replace("        if (!onEnd || !narrower) continue;\n        const stack = [];", "        continue;\n        const stack = [];")],
+  ['an arm in front of the gable wall stays in the block',
+    s => s.replace('  const armsAt = noWall ? [] : [...wallSide.sharedWith.keys()].filter(liveWing);', '  const armsAt = [];')],
+  ['the gable wall past the room is left an eave',
+    s => s.replace("        (split.hit[i] ? flush : rake).push(i);", "        if (split.hit[i]) flush.push(i);")],
+  ['the foot of step between two wall-side edges takes an overhang',
+    s => s.replace("        && wallSide.vs.some(v => Math.abs(b[axis] - v) <= sliverFt + eps)) flush.push(i);", "        && false) flush.push(i);")],
+  ['the front piece gables toward the room instead of shedding away',
+    s => s.replace("      if (!away) rake.push(i);", "      rake.push(i);")],
+  ['the front piece is not flush against the block',
+    s => s.replace("    const split = splitWhere(armRing, p => inPrimary(p) || onWall(p));", "    const split = splitWhere(armRing, p => onWall(p));")],
+  ['a foot of overlap is a bite to notch the block round',
+    s => s.replace("    && Math.min(...primaryRing.map((a, i) => segDist(p, a, primaryRing[(i + 1) % primaryRing.length]))) > sliverFt);", "    );")],
+  ['a wall grazing a sliver splits the ring',
+    s => s.replace("  if (primaryAt < 0 || !(info[primaryAt].wallSide.wallLen > sliverFt)) {", "  if (primaryAt < 0) {")],
+  ['a jog is left in the roof ring',
+    s => s.replace('        if (jl < eps || jl > jogFt + eps) continue;', '        continue;')],
+  ['a four-foot step is taken out like a jog',
+    s => s.replace('  const ROOF_JOG_FT = 1.5;', '  const ROOF_JOG_FT = 4.1;')],
+  ['the jog slides onto the inner line, leaving a foot of wall bare',
+    s => s.replace('        const jOutward = !insideOf(probe, live);', '        const jOutward = insideOf(probe, live);')],
+  ['the stepped offset slants like the variable one',
+    s => s.replace("    out.push({ p: { x: v.x + cur.nx * dPrev, z: v.z + cur.nz * dPrev }, kind: { gable: true, over: 0 } });\n    out.push({ p: { x: v.x + cur.nx * d[i], z: v.z + cur.nz * d[i] }, kind });",
+      "    out.push({ p: { x: v.x + cur.nx * d[i], z: v.z + cur.nz * d[i] }, kind });")],
   ['a spike is read as wings, and the ring quietly rebuilt clean',
     s => s.replace('    if (ul > eps && vl > eps && Math.abs(ux * vz - uz * vx) < eps && (ux * vx + uz * vz) < 0) return null;', '')],
   ['the biggest rectangle is the main wing, not the widest span',
@@ -256,8 +406,8 @@ const MUTATIONS = [
   ['every end gables',
     s => s.replace("    out[i] = (attached || meetsBody(edge)) ? 'gable' : 'eave';", "    out[i] = 'gable';")],
   ['a wing beyond the host\'s width is split off as if it stood within it',
-    s => s.replace('      const narrower = (bhi - blo) < (ahi - alo) - 0.5 && blo >= alo - eps && bhi <= ahi + eps;',
-      '      const narrower = (bhi - blo) < (ahi - alo) - 0.5;')],
+    s => s.replace('\n      const narrower = (bhi - blo) < (ahi - alo) - 0.5 && blo >= alo - eps && bhi <= ahi + eps;',
+      '\n      const narrower = (bhi - blo) < (ahi - alo) - 0.5;')],
   ['only the wing\'s own rectangle comes off; what hangs beyond it is left behind',
     s => s.replace('          off[p][q] = true; stack.push([p, q]);', '          return;')],
   ['the hidden test reads the roof\'s own height on its edge, where it has none',

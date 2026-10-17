@@ -17051,6 +17051,8 @@
   // the same call through the same test -- an edge lying on the house outline
   // -- and it is edgeOnLoop here for the reason the garage's own walls use it:
   // one rule, one home.
+  // How far under the taller wall's plate a gabled block's peak stays.
+  const GABLE_CLEAR_FT = 1;
   const raiseRoofOver = (loop, opts = {}) => {
     const { garage = false, plateHeightFt = null,
       sourceLevelId = null, against = null, flush = null, rake = null,
@@ -17081,8 +17083,18 @@
     // against the wrong numbering would gable an edge nobody named. `kept` is
     // the map, and an index whose vertex went is dropped rather than guessed.
     const cleaned = G.loopWithoutSpikes(loop);
-    let ring = cleaned.points;
-    const ringIndexOf = new Map(cleaned.kept.map((was, now) => [was, now]));
+    // AND A JOG IN THE WALL IS NOT A JOG IN THE ROOF (Movie, 17 Oct: "should
+    // just be a normal hip without the extra little hip where it jogs"):
+    // geometry-2d loopWithoutJogs takes a foot of step out of the ring, and
+    // the caller's edge numbers follow through both cleanings.
+    const unjogged = G.loopWithoutJogs ? G.loopWithoutJogs(cleaned.points)
+      : { points: cleaned.points, kept: cleaned.points.map((_, index) => index) };
+    let ring = unjogged.points;
+    const ringIndexOf = new Map();
+    cleaned.kept.forEach((was, mid) => {
+      const now = unjogged.edgeIndexOf ? unjogged.edgeIndexOf.get(mid) : unjogged.kept.indexOf(mid);
+      if (now !== undefined && now >= 0) ringIndexOf.set(was, now);
+    });
     // ── A NARROWER WING ON THIS ROOF'S END IS A ROOF OF ITS OWN ──────────
     //
     // Movie, 16 Oct: "the upper roof should have been 2 separate roofs with
@@ -17100,11 +17112,56 @@
     // THE WING TAKEN OFF IS A BODY THIS ROOF'S END LANDS ON: "a gable on
     // both" -- the wing's roof dies into this end, so this end is a wall.
     const splitOff = [];
+    // ── BESIDE A TALLER WALL IT GABLES INTO THE WALL (Movie, 17 Oct) ─────
+    //
+    // "the 2nd floor wall will be where the roof should be at highest point
+    // ... on main roof split the roof into 2 roofs -- front will be gabled
+    // away slope from 2nd floor, and back roof can be gabled at front to
+    // connect to back of 2nd floor and shed water to sides and hip at back".
+    // geometry-2d's roofAgainstWall reads the ring against the wall line it
+    // is cut by (`notch`): the block touching that wall most keeps the ring,
+    // its whole wall side a gable (flush on the wall, a gable wall past it)
+    // and its flanks eaves; every arm in front of that gable wall comes off
+    // as a roof of its own -- a shed away from the wall when it touches the
+    // wall too. Each piece comes with its edge kinds decided, in its own
+    // numbering, so the lists below take them as they are and nothing is
+    // re-read as wings afterwards.
+    let pieceLists = null;
+    let readWings = wings;
+    let notchHere = notch;
+    let endSplitDone = false;
+    if (wings && !stepped && notch && G.roofAgainstWall
+      && !(Array.isArray(flush) && flush.length) && !(Array.isArray(rake) && rake.length)) {
+      const beside = G.roofAgainstWall(ring, notch);
+      if (beside && beside.pieces.length) {
+        const [block, ...arms] = beside.pieces;
+        arms.forEach(arm => {
+          // A DECIDED ARM (the shed) comes with its kinds; an UNDECIDED one
+          // (a stub on the block's end, roofEndAttachment's case) takes the
+          // ordinary rules, flush where it stands against the block.
+          const own = raiseRoofOver(arm.ring, {
+            ...opts, flush: arm.flush, rake: arm.decided ? arm.rake : null, wings: !arm.decided,
+            against: [block.ring, ...againstLoops],
+          });
+          if (own && typeof collect === 'function') collect(own);
+          if (!arm.decided) splitOff.push(arm.ring);
+        });
+        if (typeof opts.onGableWall === 'function') beside.gableWalls.forEach(run => opts.onGableWall(run));
+        ring = block.ring;
+        if (block.decided) {
+          pieceLists = { flush: block.flush, rake: block.rake };
+          readWings = false;
+          if (!beside.notchBlock) notchHere = null;
+        } else {
+          endSplitDone = true;
+        }
+      }
+    }
     // `wings: false` is a ring the design drew as ONE roof on purpose -- the
     // bilevel's hood over the room and its landing, hipped at every corner
     // (Movie, 6 Oct: "it should be ridgeline to corner at 45") -- and it is
     // neither taken apart nor re-read as wings.
-    if (wings && !stepped && !(Array.isArray(flush) && flush.length) && !(Array.isArray(rake) && rake.length)) {
+    if (readWings && !endSplitDone && !stepped && !(Array.isArray(flush) && flush.length) && !(Array.isArray(rake) && rake.length)) {
       const apart = G.roofEndAttachment(ring);
       if (apart) {
         const own = raiseRoofOver(apart.wing, {
@@ -17117,6 +17174,50 @@
     const followClean = list => (Array.isArray(list)
       ? list.map(index => ringIndexOf.get(index)).filter(index => index !== undefined)
       : list);
+    // AN ARM COMES BACK THROUGH HERE WITH ITS KINDS NAMED and the same wall
+    // line to cut round; it is a piece too.
+    if (!pieceLists && notchHere
+      && ((Array.isArray(flush) && flush.length) || (Array.isArray(rake) && rake.length))) {
+      pieceLists = { flush: followClean(flush || []), rake: followClean(rake || []) };
+    }
+    // A PIECE IS CUT ROUND THE TALLER WALL BEFORE IT IS OFFSET, not after:
+    // cut on the sheet, the overhang beside the cut survives as a strip of
+    // roof hanging in the air along the taller wall (the shed's rake ran on
+    // past the hood's wall). Cut on the wall ring, the overhang grows from
+    // what is left. The cut edges are flush gables; every other edge keeps
+    // the kind the piece came with, found by the edge it lies along.
+    if (pieceLists && notchHere) {
+      const cut = window.DraftPremadePlans.cutLoops(ring, notchHere);
+      if (cut) {
+        const eps = 1e-6;
+        const before = ring;
+        const alongOf = (a, b) => (Math.abs(a.z - b.z) < eps ? 'x' : 'z');
+        const was = (a, b) => {
+          const axis = alongOf(a, b), other = axis === 'x' ? 'z' : 'x';
+          const lo = Math.min(a[axis], b[axis]), hi = Math.max(a[axis], b[axis]);
+          for (let j = 0; j < before.length; j++) {
+            const p = before[j], q = before[(j + 1) % before.length];
+            if (alongOf(p, q) !== axis || Math.abs(p[other] - a[other]) > eps) continue;
+            const plo = Math.min(p[axis], q[axis]), phi = Math.max(p[axis], q[axis]);
+            if (lo >= plo - eps && hi <= phi + eps) return j;
+          }
+          return -1;
+        };
+        const points = cut.points.map(pt => ({ x: pt.x, z: pt.z }));
+        const flushNow = [], rakeNow = [];
+        points.forEach((a, i) => {
+          if (cut.onCut[i]) { flushNow.push(i); return; }
+          const j = was(a, points[(i + 1) % points.length]);
+          if (j >= 0 && pieceLists.flush.includes(j)) flushNow.push(i);
+          else if (j >= 0 && pieceLists.rake.includes(j)) rakeNow.push(i);
+        });
+        ring = points;
+        pieceLists = { flush: flushNow, rake: rakeNow };
+        notchHere = null;
+      }
+      // A CUT THE WALL RING REFUSES (an edge of it lying along the wall
+      // line) is left to the cut on the sheet, as before.
+    }
     // ── THE EDGES AGAINST THE HOUSE ARE CUT FLUSH, NOT OVERHUNG ──────────
     //
     // A roof that dies into a house wall has no eave there and no board to
@@ -17154,7 +17255,7 @@
     // BOTH halves of "flush" -- the gable AND the zero overhang -- because
     // they are one fact: a roof that dies into a wall has no eave there and
     // no board to hang one on.
-    const named = new Set(followClean(Array.isArray(flush) ? flush : []));
+    const named = new Set(pieceLists ? pieceLists.flush : followClean(Array.isArray(flush) ? flush : []));
     // ── AND A GABLE THAT DIES INTO NOTHING, WHICH IS A RAKE ──────────────
     //
     // `flush` carries two facts as one -- gable, and no overhang -- and the
@@ -17172,12 +17273,31 @@
     // design calls a rake is one, whatever `against` happens to find under
     // it. `flush` is still a union with derived, because that pair says the
     // same thing; this one says the opposite of half of it.
-    const raked = new Set(followClean(Array.isArray(rake) ? rake : []));
+    const raked = new Set(pieceLists ? pieceLists.rake : followClean(Array.isArray(rake) ? rake : []));
+    // AN EDGE THAT RUNS A JOG PAST THE WALL IT DIES INTO IS STILL FLUSH:
+    // loopWithoutJogs above straightened the garage's front onto the line
+    // a foot north of the house's, so the roof's edge against the room now
+    // runs that foot past the room's corner -- all of it on the room's wall
+    // line but for the foot, which edgeOnLoop's whole-edge test refuses.
+    const mostlyOnLoop = (a, b, segments) => {
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      if (!(len > 0.01)) return false;
+      const ux = (b.x - a.x) / len, uz = (b.z - a.z) / len;
+      let covered = 0;
+      (segments || []).forEach(seg => {
+        const p = seg.start, q = seg.end;
+        const off = p2 => Math.abs((p2.x - a.x) * uz - (p2.z - a.z) * ux);
+        if (off(p) > 0.01 || off(q) > 0.01) return;            // not on this line
+        const tp = (p.x - a.x) * ux + (p.z - a.z) * uz, tq = (q.x - a.x) * ux + (q.z - a.z) * uz;
+        covered += Math.max(0, Math.min(len, Math.max(tp, tq)) - Math.max(0, Math.min(tp, tq)));
+      });
+      return covered >= len - 1.5 - 0.01 && covered > len / 2;
+    };
     const gableEdge = index => {
       if (raked.has(index) || named.has(index)) return true;
       if (!sharedWith) return false;
       const a = ring[index], b = ring[(index + 1) % ring.length];
-      return G.edgeOnLoop(a, b, sharedWith);
+      return G.edgeOnLoop(a, b, sharedWith) || mostlyOnLoop(a, b, sharedWith);
     };
     const flushAt = index => !raked.has(index) && gableEdge(index);
     const sharedEdge = gableEdge;
@@ -17238,7 +17358,14 @@
     // about the ROOF -- it is the roof's own valley that must not reach the
     // roof's own corner -- and the kinds are what tell an inside corner
     // standing in open air from one dying into a wall.
-    const plain = {
+    // A PIECE CUT BESIDE A TALLER WALL STEPS where a flush stretch and a
+    // rake share one line (geometry-2d offsetOutlineStepped): the variable
+    // offset slants between two overhangs on one line, and a slanted gable
+    // wall is not a wall.
+    const steppedPiece = pieceLists && G.offsetOutlineStepped
+      ? G.offsetOutlineStepped(ring, ring.map((_, index) => (gableEdge(index) ? 'gable' : 'eave')), edgeOverhang)
+      : null;
+    const plain = steppedPiece || {
       points: pts.map(pt => ({ x: pt.x, z: pt.z })),
       edges: pts.map((_, index) => (gableAt(index) ? 'gable' : 'eave')),
       ...(ring.length === pts.length ? { edgeOverhang } : {}),
@@ -17266,7 +17393,7 @@
     // shape what is left -- and the chamfer at that corner then goes by
     // itself, because cricketRing already refuses a corner whose edges are
     // gables.
-    const notched = notch ? notchPlainRoof(plain, notch, roofOverhangFt) : null;
+    const notched = notchHere ? notchPlainRoof(plain, notchHere, roofOverhangFt) : null;
     // ── AND NO 45 OF ITS OWN (Movie, 16 Oct) ─────────────────────────────
     //
     // "you know about these 45 degree roof corners we need to get rid of
@@ -17320,12 +17447,39 @@
         && Array.isArray(outline.points) && outline.points.length >= 3)
       .map(outline => ({ points: outline.points, top: topOf(outline.levelId) }))
       .concat(splitOff.map(points => ({ points, top: Number.isFinite(Number(ownTop)) ? Number(ownTop) : null })));
-    const shaped = wings ? {
+    const shaped = readWings ? {
       ...cut,
       edges: G.roofWingKinds(cut.points, cut.edges, bodies, {
         edgeOverhang: cut.edgeOverhang || null, overhangFt: roofOverhangFt,
         top: Number.isFinite(Number(ownTop)) ? Number(ownTop) : null }),
     } : cut;
+    // ── AND IT KEEPS UNDER THE WALL IT GABLES INTO (Movie, 17 Oct) ────────
+    //
+    // "the back roof can have a lower slope if it doesn't fit (like this
+    // one)": a block gabled into a taller wall peaks AT that wall, and at
+    // the project pitch his back block peaked above the room's plate -- a
+    // gable into a roof, not a wall. So the peak is read off the skeleton
+    // (the longest wavefront time, times the pitch) and, where it clears
+    // the taller wall's top by less than a foot, the pitch comes down to
+    // the quarter that fits, and no lower than 2 in 12.
+    let pitchHere = roofPitch;
+    if (pieceLists && notch && Number.isFinite(Number(ownTop))) {
+      const inLoop = (p, ring2) => G.pointInLoop && G.pointInLoop(p, ring2);
+      const tallerTop = bodies.reduce((best, body) => {
+        if (!Number.isFinite(Number(body.top)) || !(body.top > ownTop)) return best;
+        const touches = notch.some(p => inLoop(p, body.points)) || body.points.some(p => inLoop(p, notch));
+        return touches ? Math.max(best, Number(body.top)) : best;
+      }, -Infinity);
+      if (Number.isFinite(tallerTop)) {
+        const trial = { points: shaped.points, edges: shaped.edges, pitch: roofPitch };
+        const peakRun = G.roofSkeleton(trial).reduce((most, arc) => Math.max(most, Number(arc.ta) || 0, Number(arc.tb) || 0), 0);
+        const peak = peakRun * roofPitch / 12;
+        const allowed = tallerTop - ownTop - GABLE_CLEAR_FT;
+        if (peakRun > 0 && allowed > 0 && peak > allowed) {
+          pitchHere = Math.max(2, Math.floor((allowed / peakRun) * 12 * 4) / 4);
+        }
+      }
+    }
     drawing.roofs = drawing.roofs || [];
     const roof = {
       id: newDrawingItemId('roof'),
@@ -17339,7 +17493,11 @@
       // the edge count has made the per-edge answer meaningless, and a wrong
       // array is worse than none because the painter would trust it.
       ...(shaped.edgeOverhang ? { edgeOverhang: shaped.edgeOverhang } : {}),
-      pitch: roofPitch,
+      pitch: pitchHere,
+      // A FITTED PIECE REMEMBERS THE PITCH IT WAS ASKED FOR, so the PROJECT
+      // row's number is still on the record and a reader can tell a piece
+      // lowered to fit under a wall from one the drafter pitched low.
+      ...(pitchHere !== roofPitch ? { designPitch: roofPitch } : {}),
       fascia: ROOF_FASCIA_IN,
       garage,
       follows,
@@ -20535,6 +20693,9 @@
     // The walls that close in under the room's roof where it runs back over
     // the third flight (stairHood), for the build's one undo.
     const hoodWalls = [];
+    // AND THE GABLE WALLS a main roof stands over a shed arm with (Movie, 17
+    // Oct), raised with the roofs below and undone with them.
+    const gableWalls = [];
     // THE GARAGE'S PLATE, as the roof reads it: cut-view bears a garage roof
     // at the LOWEST floor's top plus this. On a bilevel the lowest floor is
     // the ENTRY deck, while the garage's walls stand on the sill under it --
@@ -20585,12 +20746,52 @@
       // A ROOF SPLIT OFF THE HOUSE'S (raiseRoofOver's end attachment) lands
       // in madeRoofs through `collect`, so one Ctrl+Z still takes it all.
       const collect = made => madeRoofs.push(made);
+      // THE GABLE WALL the main roof stands over a shed arm with (Movie, 17
+      // Oct: "will need the main roof to have a 'gable wall' ... where the
+      // lower green roof will meet the GABLE wall of the main roof"):
+      // raiseRoofOver hands back each run; the walls go up below, once the
+      // storey they stand in is known.
+      const gableWallRuns = [];
       madeRoofs.push(twoRoofs
         ? raiseRoofOver(twoRoofs.house.ring, { buildType: roofType, flush: twoRoofs.house.flush,
           stepped: true, cuts: twoRoofs.house.cuts, collect })
         : raiseRoofOver(plan.houseRoof || plan.house, {
-          buildType: roofType, notch: houseRoofNotch, collect }));
+          buildType: roofType, notch: houseRoofNotch, collect,
+          onGableWall: run => gableWallRuns.push(run) }));
       const houseRoofMade = madeRoofs[madeRoofs.length - 1];
+      // ── THE GABLE WALL ITSELF ─────────────────────────────────────────
+      //
+      // A knee wall standing on MAIN's ceiling along the block's gable line
+      // where the shed arm meets it, filed on OVER GARAGE the way the stair
+      // hood's walls are (stairHood): its plate IS the main roof's bearing,
+      // so the elevation climbs it to the rakes (cut-view gableTopAt) and
+      // the triangle between the shed and the main roof is wall, not sky.
+      // Its body sits on the block's side of the line, so its outside face
+      // is the line the shed dies into.
+      if (gableWallRuns.length && overGarageLevelId != null && plan.entry) {
+        const SG = window.DraftStairGeometry;
+        const LA = window.DraftLevelAssembly;
+        const descent = SG && SG.stairDescent(overGarageLevelId, stairLevels());
+        const split = LA.splitValues(drawing.buildType, drawing.sectionTable?.rows?.[drawing.buildType]);
+        const base = split.mainWallHeightFt - (descent && Number.isFinite(descent.riseFt) ? descent.riseFt : 0);
+        const blockRing = houseRoofMade && houseRoofMade.item ? houseRoofMade.item.points : null;
+        const G2 = window.DraftGeometry2D;
+        gableWallRuns.forEach(run => {
+          const dx = run.end.x - run.start.x, dz = run.end.z - run.start.z;
+          const mid = { x: (run.start.x + run.end.x) / 2, z: (run.start.z + run.end.z) / 2 };
+          const len = Math.hypot(dx, dz) || 1;
+          const left = { x: mid.x - dz / len * 0.3, z: mid.z + dx / len * 0.3 };
+          const inBlock = blockRing && G2.pointInLoop ? G2.pointInLoop(left, blockRing) : true;
+          const wall = commitWall(run.start, run.end, {
+            bone: false, levelId: overGarageLevelId, view: 'plan',
+            refLine: inBlock ? 'left' : 'right', baseHeight: base, topHeight: base,
+          });
+          if (wall) {
+            if (houseRoofMade && houseRoofMade.item) wall.gableWallOf = String(houseRoofMade.item.id);
+            gableWalls.push(wall);
+          }
+        });
+      }
       if (twoRoofs) {
         madeRoofs.push(raiseRoofOver(twoRoofs.garage.ring, {
           buildType: roofType,
@@ -20948,7 +21149,7 @@
     undoStack.push({
       kind: 'built',
       walls: raised.flatMap(body => body.walls)
-        .concat(under.walls, garageConcrete.walls, hoodWalls),
+        .concat(under.walls, garageConcrete.walls, hoodWalls, gableWalls),
       outlines: raised.map(body => body.outline).filter(Boolean),
       list: drawing.outlines,
       // EVERY OTHER RECORD THE PRESS MADE, each with the list it went into, so

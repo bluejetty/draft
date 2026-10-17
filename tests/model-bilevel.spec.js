@@ -360,7 +360,14 @@ test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight 
     const main = d.roofs.find(r => r.sourceLevelId == null && !r.garage);
     expect(main.points.map(p => [p.x, p.z])).toEqual([[-18, -22], [18, -22], [18, 19], [2, 19],
       [2, bottomZ], [-4, bottomZ], [-4, 22], [-18, 22]]);
-    expect(main.edges).toEqual(['eave', 'eave', 'gable', 'gable', 'gable', 'gable', 'eave', 'eave']);
+    // THE MAIN ROOF GABLES INTO THE ROOM (Movie, 17 Oct: "the 2nd floor
+    // wall will be where the roof should be at highest point ... gabled at
+    // front to connect to back of 2nd floor and shed water to sides and hip
+    // at back"): the whole side the room stands on is a gable -- flush on
+    // the room and the landing, a RAKE west of them, a gable wall standing
+    // in open air -- and the ridge runs square into that wall from a hip at
+    // the back. Before 17 Oct that stretch was an eave.
+    expect(main.edges).toEqual(['eave', 'eave', 'gable', 'gable', 'gable', 'gable', 'gable', 'eave']);
     // THE OVERHANGS DO NOT MOVE: a gable END is open air with a rake board on
     // it, and only the four edges that die into the room's wall are flush.
     expect(main.edgeOverhang).toEqual([2, 2, 0, 0, 0, 0, 2, 2]);

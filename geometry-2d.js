@@ -534,6 +534,106 @@ if (!window.DraftGeometry2D) {
     return { points: live, kept };
   };
 
+  // ── A JOG IN THE WALL IS NOT A JOG IN THE ROOF ────────────────────────
+  //
+  // Movie, 17 Oct, on his garage roof: "the lower garage wall should have a
+  // jog in it, should just be a normal hip without the extra little hip
+  // where it jogs". His garage's front wall stands a foot north of the
+  // house's line where the two meet, and the roof ring followed the foot:
+  // a one-foot edge between two parallel ones, which the skeleton reads as
+  // a corner pair and answers with a little hip of its own.
+  //
+  // So a short edge (JOG_FT or less) joining two parallel edges is taken
+  // out: the inner of the two is moved OUT onto the outer's line, so the
+  // roof still covers both walls, and the corner past it slides the same
+  // foot along its own edge. The wall keeps its jog; the roof does not.
+  // `kept` is the surviving vertices' old indices, moved ones included, so
+  // a caller's edge indices follow (raiseRoofOver's flush / rake lists).
+  const ROOF_JOG_FT = 1.5;
+  const loopWithoutJogs = (points, jogFt = ROOF_JOG_FT) => {
+    const ring = Array.isArray(points) ? points.map(pt => ({ x: pt.x, z: pt.z })) : [];
+    let kept = ring.map((_, index) => index);
+    let live = ring;
+    const eps = 1e-6;
+    // A removed vertex's edge is taken over by a neighbour's: the jog edge
+    // by the edge before it, the slid edge by the one it slid onto. So a
+    // caller's EDGE index (its start vertex) still finds its edge.
+    const absorbed = new Map();
+    const insideOf = (p, poly) => {
+      let on = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i, i += 1) {
+        const a = poly[i], b = poly[j];
+        if ((a.z > p.z) !== (b.z > p.z) && p.x < ((b.x - a.x) * (p.z - a.z)) / (b.z - a.z) + a.x) on = !on;
+      }
+      return on;
+    };
+    let cut = true;
+    while (cut && live.length > 4) {
+      cut = false;
+      const n = live.length;
+      for (let i = 0; i < n; i += 1) {
+        const v = live[i], b = live[(i + 1) % n];
+        const a = live[(i + n - 1) % n], c = live[(i + 2) % n];
+        const jx = b.x - v.x, jz = b.z - v.z;
+        const jl = Math.hypot(jx, jz);
+        if (jl < eps || jl > jogFt + eps) continue;
+        // A and B axis-aligned, parallel to each other and square to J.
+        const ax = v.x - a.x, az = v.z - a.z, bx = c.x - b.x, bz = c.z - b.z;
+        const al = Math.hypot(ax, az), bl = Math.hypot(bx, bz);
+        if (al < eps || bl < eps) continue;
+        const parallel = Math.abs(ax * bz - az * bx) < 1e-6 * al * bl;
+        const square = Math.abs(ax * jx + az * jz) < 1e-6 * al * jl;
+        if (!parallel || !square) continue;
+        // Which of the two lines is the outer one: J points outward when a
+        // step along it from the MIDDLE of A leaves the ring (from A's end
+        // the step lands in B's own strip and says nothing).
+        const probe = { x: (a.x + v.x) / 2 + jx / jl * 0.01, z: (a.z + v.z) / 2 + jz / jl * 0.01 };
+        const jOutward = !insideOf(probe, live);
+        const next = live.map(pt => ({ ...pt }));
+        const keptNext = kept.slice();
+        if (jOutward) {
+          // B's line is the outer: A slides out onto it -- a moves by J,
+          // and the vertex before a slides the same way along its edge.
+          const ia = (i + n - 1) % n;
+          next[ia] = { x: a.x + jx, z: a.z + jz };
+          absorbed.set(kept[i], kept[ia]);
+          next.splice(i, 1); keptNext.splice(i, 1);
+        } else {
+          // A's line is the outer: B slides out onto it -- c moves back by J.
+          const ic = (i + 2) % n;
+          next[ic] = { x: c.x - jx, z: c.z - jz };
+          absorbed.set(kept[(i + 1) % n], kept[i]);
+          next.splice((i + 1) % n, 1); keptNext.splice((i + 1) % n, 1);
+        }
+        live = next; kept = keptNext;
+        cut = true;
+        break;
+      }
+    }
+    // A VERTEX LEFT STANDING IN A STRAIGHT LINE by the slide goes too: its
+    // edge carries straight on from the one before it.
+    for (let i = 0; i < live.length && live.length > 3; i += 1) {
+      const n = live.length;
+      const v = live[i], a = live[(i + n - 1) % n], b = live[(i + 1) % n];
+      const ax = v.x - a.x, az = v.z - a.z, bx = b.x - v.x, bz = b.z - v.z;
+      const al = Math.hypot(ax, az), bl = Math.hypot(bx, bz);
+      if (al < eps || bl < eps) continue;
+      if (Math.abs(ax * bz - az * bx) > 1e-6 * al * bl || (ax * bx + az * bz) <= 0) continue;
+      absorbed.set(kept[i], kept[(i + n - 1) % n]);
+      live = live.filter((_, k) => k !== i);
+      kept = kept.filter((_, k) => k !== i);
+      i = -1;
+    }
+    const edgeIndexOf = new Map();
+    ring.forEach((_, old) => {
+      let at = old;
+      for (let guard = 0; absorbed.has(at) && guard < ring.length; guard += 1) at = absorbed.get(at);
+      const now = kept.indexOf(at);
+      if (now >= 0) edgeIndexOf.set(old, now);
+    });
+    return { points: live, kept, edgeIndexOf };
+  };
+
   const offsetOutline = (points, distance) => {
     if (!distance) return points.map(pt => ({ ...pt }));
     const count = points.length;
@@ -1429,6 +1529,10 @@ const roofRiseAt = (roof, p, faces) => {
 // the most boundary with, and only counts toward that neighbour's end when
 // it sits at the neighbour's extreme.
 const SLIVER_FT = 4.1;   // two feet of overhang each way, and a little
+// A JOG IS NOT A STEP: the foot a garage wall stands off the house's corner
+// (Movie's 17 Oct house) joins two wings into one block; four feet is a
+// narrower wing standing on the other's end (his 16 Oct stub).
+const JOG_FT = 1.5;
 
 const ringInside = (p, ring) => {
   let inside = false;
@@ -1775,6 +1879,370 @@ const roofEndAttachment = (points) => {
     }
   }
   return null;
+};
+
+// ── A MAIN ROOF BESIDE A TALLER WALL: GABLE INTO IT, SHED AWAY FROM IT ────
+//
+// Movie, 17 Oct, on his MOD BILEVEL (scratchpad sample movie-roof-
+// 20261017T0911): "the 2nd floor wall will be where the roof should be at
+// highest point, but try to keep the roof lower by making the gable from the
+// 2 closest sides (rather than 2 sides further from each other) so the peak
+// won't be as high" ... "on main roof split the roof into 2 roofs -- front
+// will be gabled away slope from 2nd floor, and back roof can be gabled at
+// front to connect to back of 2nd floor and shed water to sides and hip at
+// back" ... "will need the main roof to have a 'gable wall' ... where the
+// lower green roof will meet the GABLE wall of the main roof".
+//
+// THE RING IS READ AS WINGS (roofWingsOf), the wings that carry straight on
+// within a sliver of each other joined into one BLOCK -- his west block is
+// 20 ft deep for half its length and 19 ft for the other half, because the
+// garage wall it meets stands a foot off the house's own corner, and that
+// foot is not two roofs. The PRIMARY block is the one touching the taller
+// wall the most. Its touched side is its WALL SIDE, and that whole side is a
+// gable: flush where the taller wall actually stands, a rake standing in
+// open air everywhere else -- the gable wall. Its two flanks are eaves, so
+// the ridge runs square INTO the taller wall and the water goes to the
+// sides; its far end is an eave too, and the skeleton hips it. Any wing
+// attached to the block on that wall side is an ARM in front of the gable
+// wall and comes off as a roof of its own, flush against the block. An arm
+// that touches the taller wall itself cannot gable (one flank is the block's
+// gable wall), so it SHEDS away from the wall: eave on the side facing away,
+// gables on the rest -- flush against the block and the wall, a rake on its
+// open end. An arm touching no taller wall is handed back undecided, for the
+// ordinary rules.
+//
+// NULL when nothing touches the wall for more than a sliver: the ordinary
+// rules (roofEndAttachment, roofWingKinds) take the ring as before.
+const roofAgainstWall = (points, wall, { sliverFt = SLIVER_FT } = {}) => {
+  const made = roofWingsOf(points);
+  const wallRing = (wall || []).map(pt => ({ x: pt.x, z: pt.z }));
+  if (!made || wallRing.length < 3) return null;
+  const { xs, zs, inside } = made;
+  const wings = made.wings.map(wing => ({ rects: wing.rects.slice() }));
+  const eps = 1e-6;
+  const ext = (wing, axis) => [Math.min(...wing.rects.map(r => r[axis + '0'])), Math.max(...wing.rects.map(r => r[axis + '1']))];
+  // ── WINGS THAT CARRY ON WITHIN A SLIVER OF EACH OTHER ARE ONE BLOCK ──
+  let joined = true;
+  while (joined) {
+    joined = false;
+    for (let a = 0; a < wings.length && !joined; a++) {
+      for (let b = a + 1; b < wings.length && !joined; b++) {
+        for (const axis of ['x', 'z']) {
+          const other = axis === 'x' ? 'z' : 'x';
+          const [alo, ahi] = ext(wings[a], axis), [blo, bhi] = ext(wings[b], axis);
+          const [aw0, aw1] = ext(wings[a], other), [bw0, bw1] = ext(wings[b], other);
+          const touch = Math.abs(ahi - blo) < eps || Math.abs(bhi - alo) < eps;
+          const widthClose = Math.abs(aw0 - bw0) <= JOG_FT + eps && Math.abs(aw1 - bw1) <= JOG_FT + eps;
+          if (touch && widthClose) {
+            wings[a].rects.push(...wings[b].rects);
+            wings.splice(b, 1);
+            joined = true;
+            break;
+          }
+        }
+      }
+    }
+  }
+  const cols = xs.length - 1, rows = zs.length - 1;
+  const cellIn = (rects, i, j) => rects.some(r =>
+    xs[i] >= r.x0 - eps && xs[i + 1] <= r.x1 + eps && zs[j] >= r.z0 - eps && zs[j + 1] <= r.z1 + eps);
+  const wingAt = p => wings.findIndex(wing => wing.rects.some(r =>
+    p.x > r.x0 - eps && p.x < r.x1 + eps && p.z > r.z0 - eps && p.z < r.z1 + eps));
+  // ── A NARROWER WING ON A BLOCK'S END IS STILL A ROOF OF ITS OWN ──────
+  //
+  // roofEndAttachment's rule, read on the JOINED wings: his 16 Oct house
+  // (proto/repro-movie-roof-wings.draft) has a stub standing on the main
+  // block's end, "2 separate roofs with a gable on both", and that stays so
+  // -- the wall rule below is read on what is left, not on the stub. Read
+  // on the raw wings instead, his 17 Oct house's own west block split in
+  // two at the foot of step, which is the reading this function exists to
+  // replace. Everything beyond the host goes with the wing, as there.
+  const endArms = new Set();
+  const endArmCells = inside.map(col => col.map(() => false));
+  {
+    const extentOf = (wing, axis) => ext(wing, axis);
+    for (let h = 0; h < wings.length; h++) {
+      const host = wings[h];
+      const axis = host.rects.length && (extentOf(host, 'x')[1] - extentOf(host, 'x')[0]) >= (extentOf(host, 'z')[1] - extentOf(host, 'z')[0]) ? 'x' : 'z';
+      const other = axis === 'x' ? 'z' : 'x';
+      const [lo, hi] = extentOf(host, axis);
+      const [alo, ahi] = extentOf(host, other);
+      for (let w = 0; w < wings.length; w++) {
+        if (w === h || endArms.has(w) || endArms.has(h)) continue;
+        const [wlo, whi] = extentOf(wings[w], axis);
+        const [blo, bhi] = extentOf(wings[w], other);
+        const onEnd = Math.abs(wlo - hi) < eps || Math.abs(whi - lo) < eps;
+        const narrower = (bhi - blo) < (ahi - alo) - 0.5 && blo >= alo - eps && bhi <= ahi + eps;
+        if (!onEnd || !narrower) continue;
+        const stack = [];
+        for (let i = 0; i < cols; i++) for (let j = 0; j < rows; j++) {
+          if (inside[i][j] && cellIn(wings[w].rects, i, j) && !endArmCells[i][j]) { endArmCells[i][j] = true; stack.push([i, j]); }
+        }
+        while (stack.length) {
+          const [i, j] = stack.pop();
+          [[i + 1, j], [i - 1, j], [i, j + 1], [i, j - 1]].forEach(([p, q]) => {
+            if (p < 0 || q < 0 || p >= cols || q >= rows) return;
+            if (!inside[p][q] || endArmCells[p][q] || cellIn(host.rects, p, q)) return;
+            endArmCells[p][q] = true; stack.push([p, q]);
+          });
+        }
+        endArms.add(w);
+        wings.forEach((wing, k) => {
+          if (k === w || k === h || endArms.has(k)) return;
+          if (wing.rects.every(r => endArmCells[xs.indexOf(r.x0)] && endArmCells[xs.indexOf(r.x0)][zs.indexOf(r.z0)])) endArms.add(k);
+        });
+      }
+    }
+  }
+  const endArmRing = endArms.size ? ringFromCells(xs, zs, (i, j) => endArmCells[i][j]) : null;
+  const liveWing = k => !endArms.has(k);
+  // ── WHAT EACH SIDE OF A WING TOUCHES: the taller wall, another wing, air ─
+  const STEP = 0.25;
+  const sideOf = (wing, axis, end) => {
+    const other = axis === 'x' ? 'z' : 'x';
+    const out = end === 1 ? 1 : -1;
+    const me = wings.indexOf(wing);
+    let wallLen = 0;
+    const sharedWith = new Map();
+    const vs = [];
+    // PER RECTANGLE, not per block: a block joined from two wings whose
+    // sides stand a foot apart has that side at two coordinates, and the
+    // probe has to leave from each.
+    wing.rects.forEach(r => {
+      const v = r[axis + (end === 1 ? '1' : '0')];
+      const lo = r[other + '0'], hi = r[other + '1'];
+      let own = false;
+      for (let t = lo + STEP / 2; t < hi; t += STEP) {
+        const p = { x: 0, z: 0 }; p[axis] = v + out * STEP; p[other] = t;
+        const w = wingAt(p);
+        if (w === me) continue;                                  // inside the block itself
+        own = true;
+        if (w >= 0) { sharedWith.set(w, (sharedWith.get(w) || 0) + STEP); continue; }
+        if (ringInside(p, wallRing)) wallLen += STEP;
+      }
+      if (own) vs.push(v);
+    });
+    return { axis, end, vs, v: vs.length ? vs[0] : null, wallLen, sharedWith };
+  };
+  const sidesOf = wing => [sideOf(wing, 'x', 0), sideOf(wing, 'x', 1), sideOf(wing, 'z', 0), sideOf(wing, 'z', 1)];
+  const info = wings.map(wing => {
+    const sides = sidesOf(wing);
+    const wallSide = sides.reduce((best, side) => (side.wallLen > (best ? best.wallLen : 0) ? side : best), null);
+    return { wing, sides, wallSide, contact: sides.reduce((sum, side) => sum + side.wallLen, 0) };
+  });
+  let noWall = false;
+  const primaryAt = info.reduce((best, item, k) => (liveWing(k) && item.contact > (best < 0 ? 0 : info[best].contact) + eps ? k : best), -1);
+  const restRing = ringFromCells(xs, zs, (i, j) => inside[i][j] && !endArmCells[i][j]);
+  if (primaryAt < 0 || !(info[primaryAt].wallSide.wallLen > sliverFt)) {
+    // NO WALL TO GABLE INTO. With a stub on the block's end there is still
+    // the end split to hand back, undecided, for the ordinary rules.
+    if (!endArmRing || !restRing) return null;
+    noWall = true;
+  }
+  const primary = noWall ? null : info[primaryAt];
+  const wallSide = noWall ? null : primary.wallSide;
+  // ARMS: wings attached to the primary on its wall side.
+  const armsAt = noWall ? [] : [...wallSide.sharedWith.keys()].filter(liveWing);
+  const armSet = new Set(armsAt);
+  const primaryRing = noWall ? restRing : ringFromCells(xs, zs, (i, j) => inside[i][j] && !endArmCells[i][j]
+    && wings.some((wing, k) => !armSet.has(k) && cellIn(wing.rects, i, j)));
+  if (!primaryRing) return null;
+  // ── EDGE KINDS, READ OFF A PIECE'S RING ──────────────────────────────
+  // Along an edge, where does it stand: against the taller wall, against
+  // another piece, or in open air? The edge is split where that changes,
+  // so one wall-side edge can be flush for the room's run and a rake past
+  // it. Each returned piece is { ring, flush, rake } with edge indices into
+  // its own ring; `decided` says the kinds are this rule's.
+  const probeInside = (ring, a, b, dist, test) => {
+    const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
+    if (len < eps) return [];
+    const nx = -dz / len, nz = dx / len;
+    const mid = { x: (a.x + b.x) / 2 + nx * 0.01, z: (a.z + b.z) / 2 + nz * 0.01 };
+    const sign = ringInside(mid, ring) ? -1 : 1;    // outward normal
+    const ox = nx * sign, oz = nz * sign;
+    const marks = [];
+    const steps = Math.max(1, Math.round(len / STEP));
+    for (let k = 0; k < steps; k++) {
+      const t0 = k / steps, t1 = (k + 1) / steps;
+      const p = { x: a.x + dx * (t0 + t1) / 2 + ox * dist, z: a.z + dz * (t0 + t1) / 2 + oz * dist };
+      marks.push([t0, t1, test(p)]);
+    }
+    return marks;
+  };
+  const splitWhere = (ring, test) => {
+    const out = [];
+    const kinds = [];
+    ring.forEach((a, i) => {
+      const b = ring[(i + 1) % ring.length];
+      const marks = probeInside(ring, a, b, STEP, test);
+      const runs = [];
+      marks.forEach(([t0, t1, hit]) => {
+        const last = runs[runs.length - 1];
+        if (last && last.hit === hit) last.t1 = t1; else runs.push({ t0, t1, hit });
+      });
+      if (!runs.length) runs.push({ t0: 0, t1: 1, hit: false });
+      // A run shorter than a sliver joins its neighbour: a probe straddling
+      // a corner is not a stretch of wall.
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      for (let k = runs.length - 1; k >= 0 && runs.length > 1; k--) {
+        if ((runs[k].t1 - runs[k].t0) * len >= sliverFt / 2) continue;
+        const into = k > 0 ? runs[k - 1] : runs[k + 1];
+        into.t0 = Math.min(into.t0, runs[k].t0); into.t1 = Math.max(into.t1, runs[k].t1);
+        runs.splice(k, 1);
+      }
+      runs.sort((p, q) => p.t0 - q.t0);
+      runs.forEach(run => {
+        const at = t => ({ x: Math.round((a.x + (b.x - a.x) * t) * 1e4) / 1e4, z: Math.round((a.z + (b.z - a.z) * t) * 1e4) / 1e4 });
+        out.push(at(run.t0));
+        kinds.push(run.hit);
+      });
+    });
+    return { ring: out, hit: kinds };
+  };
+  const onWall = p => ringInside(p, wallRing);
+  const pieces = [];
+  // NO WALL TO GABLE INTO, only the stub to hand back: the block goes to
+  // the ordinary rules undecided, the stub flush where it stands against it.
+  if (noWall) {
+    const split = splitWhere(endArmRing, p => ringInside(p, restRing));
+    const flush = [];
+    split.ring.forEach((a, i) => { if (split.hit[i]) flush.push(i); });
+    return {
+      pieces: [{ ring: restRing, flush: [], rake: [], decided: false, role: 'rest' },
+        { ring: split.ring, flush, rake: [], decided: false, role: 'arm' }],
+      notchBlock: true, gableWalls: [], wallSide: null,
+    };
+  }
+  // THE PRIMARY: every edge on its wall side a gable, flush or rake; the
+  // rest eaves. "The wall side" is the whole line of it, across the block
+  // and anything carried on with it, within a sliver of the side's own
+  // coordinate.
+  {
+    const axis = wallSide.axis, out = wallSide.end === 1 ? 1 : -1;
+    const split = splitWhere(primaryRing, onWall);
+    const flush = [], rake = [];
+    split.ring.forEach((a, i) => {
+      const b = split.ring[(i + 1) % split.ring.length];
+      const along = Math.abs(a.z - b.z) < eps ? 'x' : 'z';
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      const onSide = along !== axis && wallSide.vs.some(v => Math.abs(a[axis] - v) <= sliverFt + eps);
+      if (onSide) {
+        // the side faces the wall: its outward normal points `out`
+        const mid = { x: (a.x + b.x) / 2, z: (a.z + b.z) / 2 };
+        const probe = { ...mid }; probe[axis] = mid[axis] + out * 0.01;
+        if (ringInside(probe, split.ring)) return;        // faces the other way
+        (split.hit[i] ? flush : rake).push(i);
+        return;
+      }
+      // A CONNECTOR shorter than a sliver between two wall-side edges (the
+      // foot the garage wall stands off the corner) is flush.
+      if (along === axis && len < sliverFt + eps
+        && wallSide.vs.some(v => Math.abs(a[axis] - v) <= sliverFt + eps)
+        && wallSide.vs.some(v => Math.abs(b[axis] - v) <= sliverFt + eps)) flush.push(i);
+    });
+    pieces.push({ ring: split.ring, flush, rake, decided: true, role: 'block' });
+  }
+  // THE ARMS, each its own ring.
+  armsAt.forEach(k => {
+    const armRing = ringFromCells(xs, zs, (i, j) => inside[i][j] && cellIn(wings[k].rects, i, j));
+    if (!armRing) return;
+    const armInfo = info[k];
+    const armWall = armInfo.wallSide && armInfo.wallSide.wallLen > sliverFt ? armInfo.wallSide : null;
+    const inPrimary = p => ringInside(p, primaryRing);
+    const split = splitWhere(armRing, p => inPrimary(p) || onWall(p));
+    const flush = [], rake = [];
+    if (!armWall) {
+      split.ring.forEach((a, i) => { if (split.hit[i]) flush.push(i); });
+      pieces.push({ ring: split.ring, flush, rake, decided: false, role: 'arm' });
+      return;
+    }
+    // SHED: the side facing away from the taller wall is the eave.
+    split.ring.forEach((a, i) => {
+      const b = split.ring[(i + 1) % split.ring.length];
+      if (split.hit[i]) { flush.push(i); return; }
+      const along = Math.abs(a.z - b.z) < eps ? 'x' : 'z';
+      const away = along !== armWall.axis && Math.abs(a[armWall.axis] - ext(wings[k], armWall.axis)[armWall.end === 1 ? 0 : 1]) <= eps;
+      if (!away) rake.push(i);
+    });
+    pieces.push({ ring: split.ring, flush, rake, decided: true, role: 'shed' });
+  });
+  // DOES THE TALLER WALL REACH INTO THE BLOCK? A corner of it standing more
+  // than a sliver inside the block's ring is a bite the block must be
+  // notched round; a foot of overlap along the gable line is not.
+  const segDist = (p, a, b) => {
+    const dx = b.x - a.x, dz = b.z - a.z, len2 = dx * dx + dz * dz;
+    const t = len2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / len2)) : 0;
+    return Math.hypot(p.x - (a.x + t * dx), p.z - (a.z + t * dz));
+  };
+  const notchBlock = wallRing.some(p => ringInside(p, primaryRing)
+    && Math.min(...primaryRing.map((a, i) => segDist(p, a, primaryRing[(i + 1) % primaryRing.length]))) > sliverFt);
+  // THE GABLE WALL: where a shed arm stands against the block, in the arm's
+  // own winding, so the build can raise a wall there.
+  const gableWalls = [];
+  pieces.slice(1).forEach(piece => {
+    if (piece.role !== 'shed') return;
+    piece.ring.forEach((a, i) => {
+      if (!piece.flush.includes(i)) return;
+      const b = piece.ring[(i + 1) % piece.ring.length];
+      const marks = probeInside(piece.ring, a, b, STEP, q => ringInside(q, primaryRing));
+      if (marks.length && marks.every(m => m[2])) gableWalls.push({ start: { ...a }, end: { ...b } });
+    });
+  });
+  if (endArmRing) {
+    const split = splitWhere(endArmRing, p => ringInside(p, primaryRing));
+    const flush = [];
+    split.ring.forEach((a, i) => { if (split.hit[i]) flush.push(i); });
+    pieces.push({ ring: split.ring, flush, rake: [], decided: false, role: 'arm' });
+  }
+  return { pieces, notchBlock, gableWalls, wallSide: { axis: wallSide.axis, end: wallSide.end, at: wallSide.vs } };
+};
+
+// ── AN OFFSET THAT STEPS, NOT SLANTS, WHERE TWO COLLINEAR EDGES DIFFER ────
+//
+// The sister of garage-roofs.js cutRoof, with the kinds handed in per edge:
+// a ring whose wall side is flush for the room's run and a rake past it has
+// those two stretches on ONE line with two overhangs, and offsetOutlineVariable
+// slants between them. This steps: the rake's corner goes out by its
+// overhang, the flush edge stays, and the foot between them is a gable with
+// no overhang. `kinds[i]` is 'gable' or 'eave' and `overhangs[i]` the
+// distance for edge i (from ring[i] to ring[i+1]).
+const offsetOutlineStepped = (ring, kinds, overhangs) => {
+  const n = (ring || []).length;
+  if (n < 3) return null;
+  const d = ring.map((_, i) => Math.max(0, Number(overhangs[i]) || 0));
+  const area = ring.reduce((sum, p, i) => { const q = ring[(i + 1) % n]; return sum + (p.x * q.z - q.x * p.z); }, 0);
+  const sign = area > 0 ? 1 : -1;
+  const lines = ring.map((a, i) => {
+    const b = ring[(i + 1) % n];
+    const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+    const ux = (b.x - a.x) / len, uz = (b.z - a.z) / len;
+    const nx = sign * uz, nz = -sign * ux;
+    return { ax: a.x + nx * d[i], az: a.z + nz * d[i], ux, uz, nx, nz };
+  });
+  const out = [];
+  ring.forEach((v, i) => {
+    const prev = lines[(i + n - 1) % n], cur = lines[i];
+    const cross = prev.ux * cur.uz - prev.uz * cur.ux;
+    const kind = { gable: kinds[i] === 'gable', over: d[i] };
+    if (Math.abs(cross) > 1e-9) {
+      const t = ((cur.ax - prev.ax) * cur.uz - (cur.az - prev.az) * cur.ux) / cross;
+      out.push({ p: { x: prev.ax + prev.ux * t, z: prev.az + prev.uz * t }, kind });
+      return;
+    }
+    const dPrev = d[(i + n - 1) % n];
+    if (Math.abs(dPrev - d[i]) < 1e-9) {
+      out.push({ p: { x: v.x + cur.nx * d[i], z: v.z + cur.nz * d[i] }, kind });
+      return;
+    }
+    out.push({ p: { x: v.x + cur.nx * dPrev, z: v.z + cur.nz * dPrev }, kind: { gable: true, over: 0 } });
+    out.push({ p: { x: v.x + cur.nx * d[i], z: v.z + cur.nz * d[i] }, kind });
+  });
+  if (out.some(o => !Number.isFinite(o.p.x) || !Number.isFinite(o.p.z))) return null;
+  return {
+    points: out.map(o => o.p),
+    edges: out.map(o => (o.kind.gable ? 'gable' : 'eave')),
+    edgeOverhang: out.map(o => o.kind.over),
+  };
 };
 
 // ── WHAT A ROOF'S EDGE DOES UNDER A HIGHER ROOF ────────────────────────────
@@ -3137,6 +3605,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     CRICKET_FT,
     cricketRing,
     loopWithoutSpikes,
+    loopWithoutJogs,
     roofSkeleton,
     mergeVertex,
     roofFaces,
@@ -3147,6 +3616,9 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     roofWingKinds,
     roofWingsOf,
     roofEndAttachment,
+    roofAgainstWall,
+    offsetOutlineStepped,
+    pointInLoop: (p, ring) => ringInside(p, (ring || []).map(pt => ({ x: pt.x, z: pt.z }))),
     roofHiddenSpans,
     SLIVER_FT,
     roofProfile,
