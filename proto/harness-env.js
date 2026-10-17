@@ -295,6 +295,10 @@ function buildEnv(win, saved) {
       ...(wall?.finishColor ? { finishColor: wall.finishColor } : {}),
       ...(Array.isArray(wall?.finishBands) && wall.finishBands.length
         ? { finishBands: wall.finishBands } : {}),
+      // AND WHICH FACE THE LINE IS, for the same reason cut-view-env.js
+      // carries it: the section stands the band inside the reference line,
+      // and a mirror that drops the key makes every wall read centred.
+      ...(wall?.refLine ? { refLine: wall.refLine } : {}),
     };
   }).filter(Boolean);
   const floors = (saved.floors || []).map(floor => {
