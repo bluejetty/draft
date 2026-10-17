@@ -36,7 +36,7 @@ const BASE = ['formatters.js', 'wall-types.js', 'geometry-2d.js', 'drawing-forma
   'fixture-kinds.js', 'fixture-geometry.js', 'render-2d.js', 'plan-composition.js'];
 const OPTIONAL = ['layer-views.js', 'cut-view.js', 'build-house.js', 'roof-types.js',
   'profile-manager.js', 'finish-patterns.js', 'roof-patterns.js', 'cut-marks.js',
-  'fen-labels.js', 'electric-symbols.js', 'hologram.js'];
+  'fen-labels.js', 'electric-symbols.js', 'hologram.js', 'door-bucks.js'];
 
 function loadWith(omit = [], source = {}) {
   const warnings = [];
@@ -776,6 +776,32 @@ function run(label) {
     check('and the walls plan carries none', !draw(full.win, 5, { env: { view: 'plan' } }).texts.some(t => /^TJI|^ENGINEERED OWJ/.test(t)));
   }
 
+  // ── THE DOOR BUCKS ON THE FOUNDATION SHEET (Movie, 16 Oct) ──────────────
+  // door-bucks.js cuts them (its own harness); the sheet has to ask. The
+  // inside face's lighter line (alpha 0.4) is the buck's own mark: the bands
+  // repro has two doors on garage walls, so the FOUNDATION sheet strokes it
+  // twice, and the walls plan never.
+  {
+    const full = loadWith();
+    const fdn = draw(full.win, 1, { env: { view: 'foundation' } });
+    const lighter = r => (r.ok ? r.strokes.filter(a => Math.abs(a - 0.4) < 0.01).length : -1);
+    check('the FOUNDATION sheet cuts a buck at the man door and at the overhead door', lighter(fdn) === 2,
+      fdn.ok ? `${lighter(fdn)} lighter strokes` : fdn.why);
+    const plan = draw(full.win, 3, { env: { view: 'plan' } });
+    check('the walls plan cuts none', lighter(plan) === 0, `${lighter(plan)} lighter strokes`);
+    // THE BASEMENT PLAN SHARES THE FOUNDATION'S LEVEL and must not cut them
+    // either: a buck is a note about the pour, read on the FOUNDATION sheet.
+    const withBasement = { ...SAVED, walls: [...SAVED.walls,
+      ...SAVED.walls.filter(w => w.levelId === 1 && w.view === 'foundation').map((w, i) => ({ ...w, id: 91000 + i, view: 'plan' }))] };
+    const basement = draw(full.win, 1, { saved: withBasement, env: { view: 'plan' } });
+    check('the basement plan, on the foundation\'s own level, cuts none', basement.ok && lighter(basement) === 0,
+      basement.ok ? `${lighter(basement)} lighter strokes` : basement.why);
+    const without = loadWith(['door-bucks.js']);
+    const bare = draw(without.win, 1, { env: { view: 'foundation' } });
+    check('without door-bucks.js the sheet draws the ring whole and says nothing', bare.ok && lighter(bare) === 0,
+      bare.ok ? `${lighter(bare)} lighter strokes` : bare.why);
+  }
+
   // ── WHICH STAIRS A PLAN SHOWS, AND HOW (Movie, 16 Oct) ──────────────────
   // "BASEMENT shows main->basement only; MAIN shows main->2nd and any
   // main->basement; 2ND FL shows main->2nd normal weight and main->basement
@@ -844,6 +870,15 @@ const MUTATIONS = [
     'layout-plan.js', c => c.replace('hasUppers: fixture => !listing && !!(', 'hasUppers: fixture => !!(')],
   ['the composition paints no uppers',
     'plan-composition.js', c => c.replace('            render.drawUpperCabinets2D(ctx, toS, fixture, wallById.get(fixture.wallId), env.fixtureEnv);\n', '')],
+  // THE DOOR BUCKS (Movie, 16 Oct).
+  ['the sheet cuts no bucks',
+    'layout-plan.js', c => c.replace("      doorBucks: view === 'foundation' && !shell && window.DraftDoorBucks",
+      "      doorBucks: false && window.DraftDoorBucks")],
+  ['the sheet cuts bucks on every view',
+    'layout-plan.js', c => c.replace("      doorBucks: view === 'foundation' && !shell && window.DraftDoorBucks",
+      "      doorBucks: !shell && window.DraftDoorBucks")],
+  ['the composition is handed the bucks and paints none',
+    'plan-composition.js', c => c.replace('      render.drawDoorBucks2D(ctx, toS, env.doorBucks, env.buckEnv || {});\n', '')],
   // WHICH STAIRS A PLAN SHOWS (Movie, 16 Oct).
   ['a plan shows its own stairs only',
     'layout-plan.js', c => c.replace('        ? [...stairRoles.keys()] : null,', '        ? null : null,')],

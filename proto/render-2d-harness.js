@@ -889,6 +889,49 @@ suite('drawBeam2D', 'a piece told to say nothing draws the beam and no tag', R =
   expect('and no label', count(ctx, 'fillText'), 0);
 });
 
+// ── THE DOOR BUCKS (Movie, 16 Oct) ──
+// A door's width plus 2" a side across the concrete: the hatch knocked out
+// to the paper, the slab poured through, the ends and the outside face in
+// ink, the inside face -- below the slab -- lighter.
+const BUCK = { id: 'buck:1', centre: { x: 10, z: 20 }, along: { x: 1, z: 0 }, across: { x: 0, z: 1 },
+  halfLen: 8 + 2 / 12, startOff: 0, endOff: 8 / 12, insideFace: 'end' };
+const buckEnv = (over = {}) => ({ paperColor: '#fffffe', slabFill: '#aabbcc', wallInk: '#010203', belowAlpha: 0.4, ...over });
+suite('drawDoorBucks2D', 'the hatch is knocked out to the paper and the slab poured through', R => {
+  const ctx = recordingCtx();
+  R.drawDoorBucks2D(ctx, toS, [BUCK], buckEnv());
+  expect('two fills: paper, then slab', count(ctx, 'fill'), 2);
+  const fills = sets(ctx, 'fillStyle');
+  expect('the paper first', fills[0], '#fffffe');
+  expect('the slab over it', fills[1], '#aabbcc');
+  expect('four lines: two ends, two faces', count(ctx, 'stroke'), 4);
+  expect('in the wall\'s ink', sets(ctx, 'strokeStyle').pop(), '#010203');
+});
+suite('drawDoorBucks2D', 'the inside face is the lighter line, below the slab', R => {
+  const ctx = recordingCtx();
+  R.drawDoorBucks2D(ctx, toS, [BUCK], buckEnv());
+  expect('one stroke goes lighter', sets(ctx, 'globalAlpha').some(a => Math.abs(a - 0.4) < 0.01), true);
+  // THE LIGHTER LINE IS THE LAST STROKE, and it runs along the END face
+  // (across = +z, so the end face is at z 20 + 8/12).
+  const tape = ctx.tape;
+  const lastStroke = tape.map((e, i) => (e.op === 'stroke' ? i : -1)).filter(i => i >= 0).pop();
+  const before = tape.slice(0, lastStroke).reverse();
+  const lineTo = before.find(e => e.op === 'lineTo');
+  const endY = toS({ x: 0, z: 20 + 8 / 12 }).y;
+  expect('on the end face', Math.abs(lineTo.args[1] - endY) < 0.01, true);
+  const flipped = recordingCtx();
+  R.drawDoorBucks2D(flipped, toS, [{ ...BUCK, insideFace: 'start' }], buckEnv());
+  const t2 = flipped.tape;
+  const last2 = t2.map((e, i) => (e.op === 'stroke' ? i : -1)).filter(i => i >= 0).pop();
+  const line2 = t2.slice(0, last2).reverse().find(e => e.op === 'lineTo');
+  expect('and on the start face when the garage is that way', Math.abs(line2.args[1] - toS({ x: 0, z: 20 }).y) < 0.01, true);
+});
+suite('drawDoorBucks2D', 'no bucks, nothing drawn', R => {
+  const ctx = recordingCtx();
+  R.drawDoorBucks2D(ctx, toS, [], buckEnv());
+  R.drawDoorBucks2D(ctx, toS, null, buckEnv());
+  expect('no fill and no stroke', count(ctx, 'fill') + count(ctx, 'stroke'), 0);
+});
+
 suite('labelAlongLine2D', 'the helper the window tags will share', R => {
   const ctx = recordingCtx();
   // offset 0 is the dimension-string case: the text sits ON the line, with a
@@ -3719,6 +3762,17 @@ function coverage() {
         '    ctx.setLineDash([...OVERHEAD_DASH]);')],
     ['drawUpperCabinets2D hangs uppers over a tub',
       src => src.replace('if (!geo || geo.tub) return;', 'if (!geo) return;')],
+    // THE DOOR BUCKS (Movie, 16 Oct).
+    ['drawDoorBucks2D leaves the hatch under the buck',
+      src => src.replace("      if (env.paperColor) { ctx.fillStyle = env.paperColor; ctx.fill(); }\n", '')],
+    ['drawDoorBucks2D pours no slab through the buck',
+      src => src.replace("      if (env.slabFill) { ctx.fillStyle = env.slabFill; ctx.fill(); }\n", '')],
+    ['drawDoorBucks2D draws the inside face at full weight',
+      src => src.replace("      ctx.globalAlpha *= Number.isFinite(env.belowAlpha) ? env.belowAlpha : 0.4;\n", '')],
+    ['drawDoorBucks2D lightens the outside face instead',
+      src => src.replace("      const insideIsEnd = buck.insideFace !== 'start';", "      const insideIsEnd = buck.insideFace === 'start';")],
+    ['drawDoorBucks2D draws no ends',
+      src => src.replace("      line(c[0], c[3]);\n      line(c[1], c[2]);\n", '')],
     // WHICH FLOOR IS LOOKING AT THE STAIR (Movie, 16 Oct).
     ['drawStairs2D reads the stair landing here as going DN',
       src => src.replace("      const up = role === 'lands';", '      const up = false;')],
