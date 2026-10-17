@@ -16889,7 +16889,7 @@
     const { garage = false, plateHeightFt = null,
       sourceLevelId = null, against = null, flush = null, rake = null,
       follows = garage ? 'attachedGarage' : 'house', buildType = drawing.buildType,
-      stepped = false, cuts = null, notch = null, collect = null } = opts;
+      stepped = false, cuts = null, notch = null, collect = null, wings = true } = opts;
     const G = window.DraftGeometry2D;
     // ── THE OVERHANG AND PITCH ARE THE PROJECT PAGE'S ────────────────────
     //
@@ -16931,12 +16931,20 @@
     // by garage-roofs.js: those designs say where their roofs part.
     const againstLoops = Array.isArray(against) && against.length && Array.isArray(against[0])
       ? against : (against ? [against] : []);
-    if (!stepped && !(Array.isArray(flush) && flush.length) && !(Array.isArray(rake) && rake.length)) {
+    // THE WING TAKEN OFF IS A BODY THIS ROOF'S END LANDS ON: "a gable on
+    // both" -- the wing's roof dies into this end, so this end is a wall.
+    const splitOff = [];
+    // `wings: false` is a ring the design drew as ONE roof on purpose -- the
+    // bilevel's hood over the room and its landing, hipped at every corner
+    // (Movie, 6 Oct: "it should be ridgeline to corner at 45") -- and it is
+    // neither taken apart nor re-read as wings.
+    if (wings && !stepped && !(Array.isArray(flush) && flush.length) && !(Array.isArray(rake) && rake.length)) {
       const apart = G.roofEndAttachment(ring);
       if (apart) {
         const own = raiseRoofOver(apart.wing, {
           ...opts, flush: null, rake: null, against: [apart.rest, ...againstLoops] });
         if (own && typeof collect === 'function') collect(own);
+        splitOff.push(apart.wing);
         ring = apart.rest;
       }
     }
@@ -17144,13 +17152,14 @@
     const bodies = (drawing.outlines || [])
       .filter(outline => Number(outline.levelId) !== SITE_LEVEL_ID
         && Array.isArray(outline.points) && outline.points.length >= 3)
-      .map(outline => ({ points: outline.points, top: topOf(outline.levelId) }));
-    const shaped = {
+      .map(outline => ({ points: outline.points, top: topOf(outline.levelId) }))
+      .concat(splitOff.map(points => ({ points, top: Number.isFinite(Number(ownTop)) ? Number(ownTop) : null })));
+    const shaped = wings ? {
       ...cut,
       edges: G.roofWingKinds(cut.points, cut.edges, bodies, {
         edgeOverhang: cut.edgeOverhang || null, overhangFt: roofOverhangFt,
         top: Number.isFinite(Number(ownTop)) ? Number(ownTop) : null }),
-    };
+    } : cut;
     drawing.roofs = drawing.roofs || [];
     const roof = {
       id: newDrawingItemId('roof'),
@@ -20488,6 +20497,11 @@
           sourceLevelId: overGarageLevelId,
           against: plan.entry ? null : plan.house,
           collect,
+          // ONE ROOF, AS DRAWN: the hood over the room and its landing is a
+          // designed ring, hipped at every corner (Movie, 6 Oct). Read as
+          // wings, the landing came off as a roof of its own under the
+          // room's hip; the drafter's ROOF tool still flips any edge.
+          wings: false,
         });
         madeRoofs.push(roomRoof);
         // ── AND THE MAIN ROOF STOPS AT IT, WITH NOTHING DRAINING INTO IT ──
