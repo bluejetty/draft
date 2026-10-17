@@ -174,9 +174,9 @@ function runChecks() {
     T.FRAMES.every(f => f.placement && !f.logoSrc && !f.company)
       && T.MARKS.every(m => m.logoSrc && m.company && !m.placement),
     'the old list carried both, so the rounded frame could only ever be BLUEJETTY');
-  check('three shapes for each of the four sheets this shop prints',
-    T.FRAMES.length === 12
-      && new Set(T.FRAMES.map(f => `${f.paper}/${f.orientation}`)).size === 4
+  check('three shapes for each of the eight sheets this shop prints',
+    T.FRAMES.length === 24
+      && new Set(T.FRAMES.map(f => `${f.paper}/${f.orientation}`)).size === 8
       && new Set(T.FRAMES.map(f => f.shape)).size === 3);
   check('the sets he named are the landscape 11x17 ones',
     T.framesFor('11x17', 'landscape').map(f => f.id).join(',') === 'LSQUARE01,LBAND01,LROUND01',
@@ -184,8 +184,16 @@ function runChecks() {
   check('L is landscape and P is portrait, in every id',
     T.FRAMES.every(f => f.id.startsWith(f.orientation === 'landscape' ? 'L' : 'P')),
     '"use L for landscape orientation and P for portrait"');
-  check('01 is the ledger set and 02 the letter one',
-    T.FRAMES.every(f => f.id.endsWith(f.paper === '11x17' ? '01' : '02')));
+  check('01 is the ledger set, 02 the letter one, 03 ARCH D and 04 ANSI D',
+    T.FRAMES.every(f => f.id.endsWith({ '11x17': '01', '8.5x11': '02', '24x36': '03', '22x34': '04' }[f.paper])));
+  check('a D block is wider than a ledger one, because the sheet is',
+    T.frameById('LSQUARE03').stripWIn > T.frameById('LSQUARE01').stripWIn
+      && T.frameById('LBAND04').bandHIn > T.frameById('LBAND01').bandHIn
+      && T.frameById('LROUND03').cornerRadiusIn > T.frameById('LROUND01').cornerRadiusIn,
+    '1.15" is 3.2% of a 36" sheet; the D sets carry a 2" strip and a 2.25" band');
+  check('turning to a D sheet keeps the shape too',
+    T.frameOnSheet('LROUND01', '24x36', 'landscape') === 'LROUND03'
+      && T.frameOnSheet('PBAND02', '22x34', 'portrait') === 'PBAND04');
   check('a drafter is only offered the three that fit the sheet he is on',
     T.framesFor('8.5x11', 'portrait').length === 3
       && T.framesFor('8.5x11', 'portrait').every(f => f.paper === '8.5x11' && f.orientation === 'portrait'));

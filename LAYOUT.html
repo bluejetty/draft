@@ -1076,10 +1076,21 @@ class PageLogic {
   _paintPanel() {}
 }
 
-// Paper sizes in inches [width, height] in portrait orientation
+// Paper sizes in inches [width, height] in portrait orientation.
+//
+// THE TWO D SHEETS JOINED ON 17 OCT (Movie, redrawing the North Point
+// building: "we will need to make pages sizes the same as i made for that
+// other project 11X17 won't be big enough, i think they are 22X 34 or
+// something??"). His North Point set is 24 x 36 (ARCH D); 22 x 34 (ANSI D)
+// is the other D sheet a plotter takes, and is here so a client who asks
+// for it gets it. 11x17 stays first: it is what every drawing before this
+// opened on, and drawing-format.js falls back to it for a key it does not
+// know.
 const PAPER_SIZES = {
   '11x17': { label: '11 × 17  (Ledger)', w: 11, h: 17 },
   '8.5x11': { label: '8.5 × 11  (Letter)', w: 8.5, h: 11 },
+  '24x36': { label: '24 × 36  (ARCH D)', w: 24, h: 36 },
+  '22x34': { label: '22 × 34  (ANSI D)', w: 22, h: 34 },
 };
 
 // A printed sheet is drawn at this many pixels to the paper inch and scaled
