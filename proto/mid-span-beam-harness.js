@@ -57,6 +57,32 @@ const MUTATIONS = [
     c => c.replace('  const midSpanBeams = (points, { beamAtFt = 19, maxSpanFt = 12,',
       '  const midSpanBeams = (points, { beamAtFt = 18, maxSpanFt = 12,')],
 
+  // THE JOIST CALLOUT (Movie, 16 Oct).
+  ['the arrow stands in the stairwell',
+    'build-house.js',
+    c => c.replace('      const at = candidates.find(clear) ?? candidates[0];', '      const at = candidates[0];')],
+  ['the bays ignore the beams',
+    'build-house.js',
+    c => c.replace("    const cuts = [...new Set(crossing.filter(beam => beam.along === beamAxis)", "    const cuts = [...new Set([].filter(beam => beam.along === beamAxis)")],
+  ['the joists run along the beams instead of across them',
+    'build-house.js',
+    c => c.replace("      joist = onX >= crossing.length - onX ? 'z' : 'x';", "      joist = onX >= crossing.length - onX ? 'x' : 'z';")],
+  ['a bare deck ignores the way its caller says',
+    'build-house.js',
+    c => c.replace("    } else if (axis === 'x' || axis === 'z') {", '    } else if (false) {')],
+  ['a beam beside the deck cuts it anyway',
+    'build-house.js',
+    c => c.replace('    }).filter(beam => beam.fixed > box[beam.across][0] + 0.01 && beam.fixed < box[beam.across][1] - 0.01\n      && Math.min(beam.hi, box[beam.along][1]) - Math.max(beam.lo, box[beam.along][0]) > 0.01);',
+      '    }).filter(beam => beam.fixed > box[beam.across][0] + 0.01 && beam.fixed < box[beam.across][1] - 0.01);')],
+  ['a room over a garage runs the short way',
+    'build-house.js',
+    c => c.replace('    return garageJoistAxis(box, near);', '    return null;')],
+  ['the callout names the stock TJI as an OWJ',
+    'build-house.js',
+    c => c.replace("    const name = type === 'tji' ? 'TJI' : 'ENGINEERED OWJ';", "    const name = 'ENGINEERED OWJ';")],
+  ['the depth is printed as a decimal',
+    'build-house.js',
+    c => c.replace('    const eighths = Math.round((depthIn - whole) * 8);', '    const eighths = 0; void whole;')],
   ['the garage joist ignores its minimum depth',
     'build-house.js',
     c => c.replace('const rows = OWJ_SPANS.filter(r => r.depthIn >= minDepthIn - 1e-6);', 'const rows = OWJ_SPANS;')],
@@ -186,6 +212,7 @@ if (MUTATE) {
 const { midSpanBeams, owjFor, OWJ_SPANS, garageBeamPlan, garageJoistAxis, garageSpanFt,
   garageBareSpanFt, garageStairHeader, STAIR_HEADER_SPAN_FT, garageKeepOuts, inKeepOut, hitsKeepOut,
   GARAGE_SQUARE_DEPTH_FT, GARAGE_SQUARE_SIDE_IN, MAN_DOOR_LANDING_IN, BEAM_BEARING_CLEAR_FT,
+  joistBays, deckJoistAxis, joistCallout, inchesLabel,
 } = require('./harness-env.js').loadDraftModules().DraftBuildHouse;
 
 let failed = 0, ran = 0;
@@ -704,6 +731,55 @@ const poly = list => list.map(([x, z]) => ({ x, z }));
   checkEq('a wall that is all door has no bearing to give, and the plan says so', none.bearing, 'none');
   // A side wall's door is under no beam end: not an opening to the row.
   checkEq('the plain plan still answers as before', JSON.stringify(garageBeamPlan(box, { doors: centres }).beams), JSON.stringify(plan.beams));
+}
+
+// ── THE JOIST CALLOUT, ONE PER BAY (Movie, 16 Oct) ────────────────────────
+//
+// Marked up on the 2ND FL FLOOR LAYOUT: the three-line OWJ note struck out,
+// an arrowed span line perpendicular to the beam in every bay, the short
+// form beside it. joistBays answers the bays; the sheet draws them.
+{
+  const rect = (x0, z0, x1, z1) => [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }];
+  const HOUSE = rect(0, 0, 24, 30);
+  const BEAM = { start: { x: 0.5, z: 22 }, end: { x: 23.5, z: 22 } };
+  const WELL = { points: rect(8, 24, 11, 28) };
+  const bays = joistBays(HOUSE, { beams: [BEAM], holes: [WELL] });
+  checkEq('a beam across the deck makes two bays', bays.bays.length, 2);
+  checkEq('the joists run across the beam', bays.axis, 'z');
+  checkList('wall to beam, beam to wall', bays.bays.map(b => [b.from, b.to]), [[0, 22], [22, 30]]);
+  checkEq('the deck-s span is its widest bay', bays.spanFt, 22);
+  checkEq('the first bay-s arrow stands a third of the way along', Math.round(bays.bays[0].at * 100) / 100, 8);
+  // THE ARROW IS CLEAR OF THE STAIRWELL: the second bay holds the well at
+  // x 8..11, so a third of the way (x 8) is in it and the arrow moves on.
+  checkEq('the arrow in the well-s bay stands clear of the well', Math.round(bays.bays[1].at * 100) / 100, 16);
+  checkEq('and it would have stood in the well with no well there',
+    Math.round(joistBays(HOUSE, { beams: [BEAM] }).bays[1].at * 100) / 100, 8);
+  checkEq('two beams make three bays',
+    joistBays(HOUSE, { beams: [BEAM, { start: { x: 0, z: 10 }, end: { x: 24, z: 10 } }] }).bays.length, 3);
+  checkEq('a beam that does not cross the deck cuts no bay',
+    joistBays(HOUSE, { beams: [{ start: { x: 30, z: 10 }, end: { x: 50, z: 10 } }] }).bays.length, 1);
+  checkEq('a bare deck spans the short way', joistBays(rect(0, 0, 26, 24)).axis, 'z');
+  checkEq('unless the caller says which way (a room over a garage)',
+    joistBays(rect(0, 0, 26, 24), { axis: 'x' }).axis, 'x');
+  checkEq('a bare deck is one bay wall to wall', joistBays(rect(0, 0, 26, 24), { axis: 'x' }).spanFt, 26);
+  checkEq('a body too small to frame answers null', joistBays(rect(0, 0, 24, 0.2)), null);
+  checkEq('an upright beam turns the joists', joistBays(HOUSE, { beams: [{ start: { x: 12, z: 0 }, end: { x: 12, z: 30 } }] }).axis, 'x');
+  // THE WAY A DECK OVER A GARAGE RUNS: with the door wall (garageJoistAxis),
+  // the doors read as points on their wall.
+  const GARAGE = { points: rect(0, 0, 26, 24) };
+  checkEq('over a garage with doors in the street wall, the joists run with that wall',
+    deckJoistAxis(rect(0, 0, 26, 24), { garages: [GARAGE], doorPoints: [{ x: 13, z: 24 }] }), 'x');
+  checkEq('doors in a side wall turn them',
+    deckJoistAxis(rect(0, 0, 26, 24), { garages: [GARAGE], doorPoints: [{ x: 0, z: 12 }] }), 'z');
+  checkEq('a deck over no garage says nothing (joistBays takes the short way)',
+    deckJoistAxis(rect(40, 40, 60, 60), { garages: [GARAGE], doorPoints: [{ x: 13, z: 24 }] }), null);
+  // THE SHORT FORM, off the schedule.
+  checkEq('an OWJ reads ENGINEERED OWJ and its depth', joistCallout({ joistType: 'owj', joistDepthIn: 19.25 }), 'ENGINEERED OWJ 19-1/4"');
+  checkEq('a TJI reads TJI and its depth', joistCallout({ joistType: 'tji', joistDepthIn: 11.875 }), 'TJI 11-7/8"');
+  checkEq('lumber reads its size', joistCallout({ joistType: 'conv_2x10', joistDepthIn: 9.25 }), '2x10 JOISTS');
+  checkEq('a whole depth has no fraction', inchesLabel(16), '16"');
+  checkEq('a half is reduced', inchesLabel(11.5), '11-1/2"');
+  checkEq('three quarters too', inchesLabel(23.75), '23-3/4"');
 }
 
 console.log(`\nmid-span beams: ${ran} checks, ${failed} failed`);

@@ -296,6 +296,13 @@ if (!window.DraftPlanComposition) {
           footing: env.columnFooting ? env.columnFooting(column) : null,
         }, env.structureEnv);
       });
+      // THE JOIST CALLOUTS (Movie, 16 Oct): an arrowed span line in every
+      // bay of the deck, the short form beside it. Worked out by the caller
+      // (layout-plan joistCalloutsFor); this only paints them, over the
+      // beams they span between.
+      if (Array.isArray(env.joistCallouts) && typeof render.drawJoistSpans2D === 'function') {
+        env.joistCallouts.forEach(callout => { onLayer(ctx, 'S-BEAM'); render.drawJoistSpans2D(ctx, toS, callout, {}, env.structureEnv); });
+      }
     }
 
     if (env.noteEnv) {

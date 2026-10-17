@@ -409,8 +409,10 @@ test('the room over a MOD BILEVEL garage gets OWJ wall to wall, no beam or post 
   expect(posts.length, 'no telepost stands in the garage').toBe(0);
   const beams = (d.beams || []).filter(b => inside({ x: (b.start.x + b.end.x) / 2, z: (b.start.z + b.end.z) / 2 }));
   expect(beams.length, 'no beam crosses the garage').toBe(0);
-  const note = (d.notes || []).find(n => Number(n.levelId) === 4 && n.view === 'floor' && /^ENGINEERED OWJ/.test(n.body));
-  expect(note, 'the OWJ note on the room\'s floor layout').toBeTruthy();
+  // THE DECK IS CALLED OUT ON THE SHEET, NOT IN A NOTE (Movie, 16 Oct).
+  const deck = h.deckCallouts(d, 4);
+  expect(deck.length, 'the joist callout on the room\'s floor layout').toBeGreaterThan(0);
+  expect((d.notes || []).some(n => /^ENGINEERED OWJ/.test(n.body)), 'the three-line note is gone').toBe(false);
   // ── AND THE DOORS MOVED, SO THE SPAN DID (Movie, 14 Oct) ──────────────
   //
   // This read 31 ft at 23-1/4" @ 12" o.c., and the comment said why: "these
@@ -442,8 +444,10 @@ test('the room over a MOD BILEVEL garage gets OWJ wall to wall, no beam or post 
   expect(Math.abs(wallZ - southmost),
     `the overhead doors stand at z ${wallZ}, and the street wall is at ${southmost}`)
     .toBeLessThan(1);
-  expect(note.body).toMatch(/19-1\/4" @ 16" O\.C\./);
-  expect(note.body).toMatch(/SIDE WALL TO SIDE WALL -- 20'-0" SPAN/);
+  expect(deck[0].label).toBe('ENGINEERED OWJ 19-1/4"');
+  expect(deck[0].bays.length, 'side wall to side wall').toBe(1);
+  expect(deck[0].spanFt, 'a 20 ft span').toBeCloseTo(20, 2);
+  expect(d.levelAssemblies[4].joistDepthIn, 'the schedule says the same').toBeCloseTo(19.25, 6);
   expect(d.dimensions.filter(x => Number(x.levelId) === 4 && x.view === 'floor').length,
     'the room\'s floor layout is dimensioned').toBeGreaterThan(0);
 });

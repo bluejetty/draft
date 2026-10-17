@@ -126,9 +126,14 @@ test('past the span it puts a DROPPED ENGINEERED BEAM between the doors, unasked
     .toEqual([[WIDE / 2, 0], [WIDE / 2, D]]);
   posts.forEach(c => expect(c.inWall, 'built into the wall').toBe(true));
   expect(notesOn(d, 3, /^DROPPED ENGINEERED BEAM$/).length, 'the beam is marked').toBe(1);
-  const owj = notesOn(d, 5, /^ENGINEERED OWJ/);
-  expect(owj.length).toBe(1);
-  expect(owj[0].body, 'the joists now span wall to beam').toMatch(/WALL TO BEAM -- 18'-0" SPAN/);
+  // THE DECK IS CALLED OUT ON THE SHEET, NOT IN A NOTE (Movie, 16 Oct): an
+  // arrowed span line in every bay, "ENGINEERED OWJ ..." beside it.
+  const deck = h.deckCallouts(d, 5);
+  expect(deck.length, 'the room-s deck').toBe(1);
+  expect(deck[0].bays.length, 'the joists now span wall to beam, beam to wall').toBe(2);
+  expect(deck[0].spanFt, 'an 18 ft row').toBeCloseTo(18, 6);
+  expect(deck[0].label).toMatch(/^ENGINEERED OWJ/);
+  expect(notesOn(d, 5, /^ENGINEERED OWJ/).length, 'the three-line note is gone').toBe(0);
   expect(notesOn(d, 5, /^REQ ENGINEERED BEAM/).length).toBe(0);
 
   // AND A RE-RUN GIVES THE SAME ANSWER, because the same span is still there.
@@ -151,10 +156,17 @@ test('a deck inside the span keeps the garage clear, with no beam at all', async
   const d = await saved(page);
   expect((d.beams || []).filter(b => b.auto).length, 'no beam').toBe(0);
   expect((d.columns || []).filter(c => c.auto).length, 'no column in the garage').toBe(0);
-  const owj = notesOn(d, 5, /^ENGINEERED OWJ/);
-  expect(owj.length, 'the joists are named on the room-s floor layout').toBe(1);
-  expect(owj[0].body, 'side wall to side wall, as they are').toMatch(/SIDE WALL TO SIDE WALL -- 26'-0" SPAN/);
-  expect(owj[0].body, 'and at the spacing he lays first').toMatch(/@ 16" O\.C\./);
+  const deck = h.deckCallouts(d, 5);
+  expect(deck.length, 'the joists are called out on the room-s floor layout').toBe(1);
+  expect(deck[0].bays.length, 'side wall to side wall, as they are').toBe(1);
+  expect(deck[0].spanFt).toBeCloseTo(26, 6);
+  expect(deck[0].label, 'the short form, off the schedule').toMatch(/^ENGINEERED OWJ \d/);
+  // AND AT THE SPACING HE LAYS FIRST: the depth the schedule took is the
+  // table's answer at 16" o.c., not the 12" last resort.
+  const BH = require('../proto/harness-env.js').loadDraftModules().DraftBuildHouse;
+  expect(BH.owjFor(26, { minDepthIn: 19.25 }).ocIn).toBe(16);
+  expect(d.levelAssemblies[5].joistDepthIn, 'the schedule carries that depth')
+    .toBeCloseTo(BH.owjFor(26, { minDepthIn: 19.25 }).depthIn, 6);
   expect(notesOn(d, 5, /^REQ ENGINEERED BEAM/).length, 'the engineer-s note is gone for good').toBe(0);
 });
 
@@ -186,8 +198,11 @@ test('the 30 ft detached garage -- his own -- gets its beam and its header', asy
 
   // THE DECK IS LIGHTER FOR IT: the row is half the span, so the joist the
   // table answers with is no longer its deepest at its tightest spacing.
-  expect(notesOn(d, 5, /^ENGINEERED OWJ/)[0].body).toMatch(/WALL TO BEAM/);
-  expect(notesOn(d, 5, /^ENGINEERED OWJ/)[0].body).not.toMatch(/@ 12" O\.C\./);
+  const deck = h.deckCallouts(d, 5);
+  expect(deck[0].bays.length, 'wall to beam, beam to wall').toBeGreaterThanOrEqual(2);
+  const BH = require('../proto/harness-env.js').loadDraftModules().DraftBuildHouse;
+  expect(d.levelAssemblies[5].joistDepthIn, 'shallower than the bare 30 ft deck would need')
+    .toBeLessThan(BH.owjFor(30, { minDepthIn: 19.25 }).depthIn);
 });
 
 // ── THE REFUSALS (Movie, 16 Oct) ────────────────────────────────────────────

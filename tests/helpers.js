@@ -724,7 +724,26 @@ async function disarmWall(page) {
   await expect(wallKey(page)).toHaveAttribute('aria-pressed', 'false');
 }
 
+// THE JOIST CALLOUTS A DECK IS DRAWN WITH (Movie, 16 Oct): what the LAYOUT
+// floor sheet paints for a level, read off a saved drawing through the same
+// modules the page runs (layout-plan joistCalloutsFor over build-house
+// joistBays), loaded in a sandbox so a spec can ask in node. Each answer is
+// { axis, label, spanFt, bays: [{ at, from, to, spanFt }] }, one per floor
+// body on the level; the beams are the storey under's, as on the sheet.
+let draftModules = null;
+function deckCallouts(saved, levelId) {
+  if (!draftModules) draftModules = require('../proto/harness-env.js').loadDraftModules();
+  const LP = draftModules.DraftLayoutPlan;
+  const VIEWS = draftModules.DraftLayerViews;
+  const floors = VIEWS.floorLevels(Array.isArray(saved?.levels) ? saved.levels : []);
+  const at = floors.findIndex(level => Number(level.id) === Number(levelId));
+  const under = at < 0 ? null : at === 0 ? { levelId: 1, view: 'foundation' }
+    : { levelId: Number(floors[at - 1].id), view: 'floor' };
+  return LP.joistCalloutsFor(saved, Number(levelId), under);
+}
+
 module.exports = {
+  deckCallouts,
   undesignedTile,
   HALF_HEIGHT_FT,
   STORAGE_BUCKET,

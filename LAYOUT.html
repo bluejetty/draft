@@ -1929,6 +1929,15 @@ class Component extends PageLogic {
 
     const viewports = [];
     let nextId = 1;
+    // THE BUILDING'S PLAN SHEETS SHARE ONE SCALE (Movie, 16 Oct): the faded
+    // footprint on every plan page reads as one building only when the roof
+    // plan, the floor plans, the floor layouts and the foundation are all
+    // drawn at the same rung -- the smallest any of them needs. The SITE
+    // PLAN is on its own ladder and keeps its own.
+    const buildingPlan = views => views.length
+      && views.every(view => view.kind === 'plan' && !isSiteView(view));
+    const sharedPif = sheetPlan.filter(({ views }) => buildingPlan(views))
+      .reduce((smallest, { views }) => Math.min(smallest, this._autoScaleFor(views, region)), Infinity);
     // Sheet numbering follows the order: sheet 1 is the first dealt.
     sheetPlan.forEach(({ views }, index) => {
       const sheet = index + 1;
@@ -1941,7 +1950,7 @@ class Component extends PageLogic {
       const cutSheet = views.every(view => view.kind === 'elevation' || view.kind === 'section');
       const pif = cutSheet
         ? this._autoScaleFor(views.map(view => ({ ...view, hFt: view.hFt - (view.cropFt || 0) })), region)
-        : this._autoScaleFor(views, region);
+        : buildingPlan(views) && Number.isFinite(sharedPif) ? sharedPif : this._autoScaleFor(views, region);
       const commit = (view, xIn, yIn, crop = null) => {
         const base = { id: nextId++, pif, sheet, xIn, yIn, ...(crop ? { crop } : {}) };
         if (view.kind === 'plan') {
