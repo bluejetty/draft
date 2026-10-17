@@ -101,8 +101,10 @@ test('OPEN is the biggest line, and the block sits over the logo without reachin
     // THE SIDE COLUMNS ARE NEW AND ARE BESIDE IT (Movie, 14 Oct, drawn in
     // GIMP over the page): a red box down the LEFT for the book links and a
     // blue one down the RIGHT for "the building code / span stuff. i will add
-    // more building code stuff". A column that may only start below the logo
-    // is not a column. So the rule this holds is the one he actually set: the
+    // more building code stuff". (17 Oct swapped the sides and gave each a
+    // title -- entry-columns.spec.js -- which changes nothing here.) A column
+    // that may only start below the logo is not a column. So the rule this
+    // holds is the one he actually set: the
     // BOTTOM ROW stays under the logo, and nothing on either side reaches
     // into the logo's own two columns.
     const boxes = await page.locator('a.ring-link').evaluateAll(

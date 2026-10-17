@@ -266,6 +266,34 @@
       .ring [data-box="10"] { grid-column: 1; grid-row: 4; }
       .ring [data-box="11"] { grid-column: 1; grid-row: 3; }
       .ring [data-box="12"] { grid-column: 1; grid-row: 2; }
+      /* THE SIDE COLUMNS (Movie, 17 Oct): one grid item each, standing in
+         rows 2 and 3 -- the logo's own two rows -- and hung from the top of
+         that area so the title sits level with the top of the logo. The
+         logo art carries a transparent margin inside its square, so the
+         title is dropped by an eighth of a logo to meet the ink, not the
+         box. Its links stack under it at the stacked-cell height. */
+      .ring-column {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        grid-row: 2 / 4;
+        align-self: start;
+        padding-top: calc(var(--logo-w) * 0.13);
+      }
+      .ring-column-left { grid-column: 1; }
+      .ring-column-right { grid-column: 4; }
+      .ring-column .ring-link { width: 88%; min-height: 36px; padding: 5px 8px; }
+      .ring-title {
+        font-family: "Barlow Condensed", system-ui, sans-serif;
+        font-size: clamp(18px, calc(var(--logo-w) / 15), 30px);
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--ink);
+        margin-bottom: 4px;
+      }
       .ring-link {
         display: flex;
         align-items: center;
@@ -402,6 +430,18 @@
            height and the padding that goes with it: every link is still
            there and still pressable (a 28px row with the gap either side
            clears a fingertip), and the shelf reads as the list it is. */
+        /* THE COLUMNS DISSOLVE INTO THE LIST: their links take cells two
+           to a row like everything else, and a title takes a row of its own. */
+        .ring-column { display: contents; }
+        .ring-title { grid-column: 1 / -1; margin: 6px 0 0; font-size: clamp(14px, calc(var(--logo-w) / 24), 18px); }
+        /* THE CLOCKWISE CELL NUMBERS ARE FOR THE SQUARE. On a phone there is
+           no column 4 to put box 7 in: left to the desktop rule, the note
+           and the third book opened a third and fourth implicit column, the
+           two real ones shrank to nothing and the logo was pushed off the
+           left of the screen. So here every numbered item flows in order,
+           and the partner note takes a row of its own under the books. */
+        .ring [data-box] { grid-column: auto; grid-row: auto; }
+        .ring .ring-note { grid-column: 1 / -1; width: 100%; }
         .ring-stack { grid-column: auto; grid-row: auto; gap: 0; }
         .ring-stack .ring-link {
           width: 100%;
@@ -426,53 +466,44 @@
                the numbering runs clockwise, so it counts down along the
                bottom. Boxes 2 and 3 are the words over the logo now; 1, 4, 5,
                6, 7, 11 and 12 are still free. -->
-          <!-- ── THE LEFT-HAND COLUMN IS THE BOOK SHELF (Movie, 14 Oct) ──
-               "i'd like the left column to be EBAY links to recommended
-               ARCHITECTURAL books ... make sure you get my partner info for
-               affiliate commissions", and "RED area - EBAY book links".
+          <!-- ── THE TWO SIDE COLUMNS, TITLED, HUNG FROM THE TOP OF THE LOGO ──
+               (Movie, 17 Oct, drawn in GIMP over the page): "move the side
+               columns down and switch the sides (put the books on the right
+               and reference (span tables, codes etc) on the left" ... "add
+               the titles (keep the titles aligned with approx the top of the
+               logo in the middle like in the image upload)".
 
-               THE CELLS ARE EMPTY IN THE MARKUP and filled by the script at
-               the foot of this file, because the list outgrows the column:
-               "can you keep adding them to a list and once i fill up the
-               column, just randomly show them each time show different ones
-               from the list". Boxes 1, 12 and 11 are the left column read
-               downward; box 10 is the bottom-left corner and carries the
-               partner disclosure.
+               So each side is ONE column standing in rows 2 and 3 -- the two
+               rows the logo itself fills -- hung from the top of that area,
+               with a title first and its links under it. REFERENCES on the
+               left is the code shelf: Building Codes & Span Tables is a page
+               of its own since 12 Oct (codes-catalog.js is its list), so the
+               column is a title and that one link, and the municipal bylaws
+               he is after belong in that catalog, not here. BOOKS on the
+               right is the eBay shelf (14 Oct: "make sure you get my partner
+               info for affiliate commissions"): three slots the script at the
+               foot of the page fills from entry-books.js, "randomly show them
+               each time", and a slot that gets no book draws nothing. The
+               partner disclosure sits under the books, in the bottom-right
+               cell.
 
-               A CELL WITH NO BOOK IN IT DRAWS NOTHING, which is what keeps a
-               short list from leaving three empty squares down the side. -->
-          <!-- Box 1 --><span class="ring-empty" data-book-slot="1" data-box="1"></span>
-          <!-- Box 12 --><span class="ring-empty" data-book-slot="2" data-box="12"></span>
-          <!-- Box 11 --><span class="ring-empty" data-book-slot="3" data-box="11"></span>
-          <!-- Box 10 -->
-          <span class="ring-note" data-box="10" data-book-note hidden>eBay partner links — Rough Drafter may earn a commission</span>
-          <!-- ── THE RIGHT-HAND COLUMN IS THE CODE SHELF (Movie, 14 Oct) ──
-               "on the right - put the building code / span stuff. i will add
-               more building code stuff", drawn as a blue box down the right
-               of the page with an arrow carrying BUILDING CODES / SPAN TABLES
-               up into it.
-
-               AND THEN IT MOVED OFF THIS PAGE AGAIN, which is the honest end
-               of a column that filled up in an afternoon: four editions, two
-               companions and a source line under each. Movie, 14 Oct, once he
-               saw it: "might need to make a seperate page for BUILDING CODE
-               links and just have link from the the ENTRY page".
-
-               THAT PAGE ALREADY EXISTS AND IS ALREADY LINKED FROM HERE. It is
-               called Building Codes & Span Tables, and since 12 Oct its
-               catalog has been where a code, a bylaw or a span chart goes --
-               "we will start cataloging building code, municipal bylaws etc
-               pdfs and links". So the shelf is one link again, box 4, the
-               same one that stood here before any of this, and the editions,
-               the Section 9 companion and CMHC's book live in
-               codes-catalog.js, which is the list that page draws.
-
-               BOXES 5, 6 AND 7 ARE FREE. The municipal bylaws he is going
-               after next ("i will try to find alot of municiple bylaws too
-               maybe later") belong in that catalog too, under their own
-               heading, and not down this column. -->
-          <!-- Box 4 -->
-          <a class="ring-link" href="CODES.html" data-box="4">BUILDING CODES / SPAN TABLES</a>
+               The data-box numbers are the ring's clockwise cells as before
+               (1 to 4 along the top, 5 to 7 down the right, 8 to 10 along the
+               bottom, 11 and 12 up the left); inside a column they are
+               labels, not placement -- the column is the grid item. -->
+          <div class="ring-column ring-column-left">
+            <span class="ring-title">References</span>
+            <!-- Box 12 -->
+            <a class="ring-link" href="CODES.html" data-box="12">BUILDING CODES / SPAN TABLES</a>
+          </div>
+          <div class="ring-column ring-column-right">
+            <span class="ring-title">Books</span>
+            <!-- Box 5 --><span class="ring-empty" data-book-slot="1" data-box="5"></span>
+            <!-- Box 6 --><span class="ring-empty" data-book-slot="2" data-box="6"></span>
+            <!-- Box 7 --><span class="ring-empty" data-book-slot="3" data-box="7"></span>
+          </div>
+          <!-- Box 7, the bottom-right cell -->
+          <span class="ring-note" data-box="7" data-book-note hidden>eBay partner links — Rough Drafter may earn a commission</span>
           <!-- Box 9 -->
           <a class="ring-link" href="https://pdf.bluejetty.ca/" data-box="9">PDF MANAGER</a>
           <!-- Box 8 -->
