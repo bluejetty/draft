@@ -26,6 +26,15 @@ function drawing() {
       source: { version: 1, levels: LEVELS,
         walls: [wall('e1', 16, 0, 40, 0), wall('e2', 40, 0, 40, 16), wall('e3', 40, 16, 16, 16), wall('e4', 16, 16, 16, 0)] },
     }],
+    // ONE VIEWPORT ALREADY ON SHEET 2, SO SHEET 1 STAYS BLANK FOR THE PRESS
+    // BELOW. Since 17 Oct a layout with nothing on it over a house is dealt
+    // on entry (Movie: "if its blank and there is a house in the model space,
+    // make a DEAL" -- layout-deal-on-entry.spec.js); a sheet with a hand on it
+    // is left as saved, which is the ground these mechanics stand on.
+    layout: {
+      auto: false, nextViewportId: 2, sheets: [{ title: '' }, { title: '' }],
+      viewports: [{ id: 1, kind: 'plan', levelId: 1, pif: 0.25, xIn: 8, yIn: 5, sheet: 2 }],
+    },
   };
 }
 
@@ -72,7 +81,8 @@ const ink = page => page.evaluate(() => {
   const c = document.querySelector('[data-layout-canvas]');
   const k = c.width / c.getBoundingClientRect().width;
   const { zoom, panX, panY } = app.state;
-  const r = app._viewportRectIn(app.state.viewports[0]);
+  // The first viewport ON THIS SHEET: the one the test placed (or seeded).
+  const r = app._viewportRectIn(app._sheetViewports(app.state.activeSheet)[0]);
   const x0 = Math.round((panX + r.xIn * zoom) * k) + 4, y0 = Math.round((panY + r.yIn * zoom) * k) + 4;
   const w = Math.round(r.wIn * zoom * k) - 8, h = Math.round(r.hIn * zoom * k) - 8;
   const d = c.getContext('2d').getImageData(x0, y0, w, h).data;
@@ -127,7 +137,7 @@ test('EXISTING, DEMO and NEW switch per viewport, and the sheet keeps the choice
   expect(demoOnly.blue).toBeLessThan(existingOnly.blue * 0.5);
 
   const saved = await savedDrawing(page);
-  expect(saved.layout.viewports[0].hologram).toEqual({ existing: false, new: false });
+  expect(saved.layout.viewports.at(-1).hologram).toEqual({ existing: false, new: false });
   // Opened again, the sheet is the demo plan it was left as.
   await page.reload();
   await page.waitForFunction(() => document.body.dataset.layoutReady === '1');

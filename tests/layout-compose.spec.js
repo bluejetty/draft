@@ -533,10 +533,15 @@ test('a level with nothing on a view deals no sheet for it', async ({ page }) =>
 // THESE SPECS ARE ABOUT THE VERB, not the composition. What gets dealt, in
 // what order, at what scale, onto which sheets, is already covered above and
 // none of that changed; what is new is that a drafter can ask.
+//
+// AND SINCE 17 OCT A BLANK SHEET OVER A HOUSE NEEDS NO ASKING: it is dealt on
+// entry (Movie: "if its blank and there is a house in the model space, make a
+// DEAL" -- layout-deal-on-entry.spec.js). So the verb's own ground is a sheet
+// with something already on it: here, one viewport placed by hand.
 async function openBare(page, drawing) {
   await openLayout(page, drawing);
-  // No compose on load, so nothing to wait for -- and asserting that is the
-  // precondition these specs stand on.
+  // A hand on the sheet is left as saved on load, so nothing to wait for --
+  // and asserting that is the precondition these specs stand on.
   await expect(page.locator('[data-layout-sheet]')).toHaveCount(1);
 }
 
@@ -547,16 +552,27 @@ function handDrawing() {
   return d;
 }
 
-test('DEAL SHEETS deals the set on a drawing the flag was never set on', async ({ page }) => {
-  await openBare(page, handDrawing());
-  expect(await savedLayout(page)).toBeFalsy();
+// The same drawing with one viewport a drafter placed, and the flag off.
+function handArranged() {
+  const d = handDrawing();
+  d.layout = {
+    auto: false, nextViewportId: 2, sheets: [{ title: '' }],
+    viewports: [{ id: 1, kind: 'elevation', elevId: 'E1', pif: 0.25, xIn: 8.5, yIn: 5.5, sheet: 1 }],
+  };
+  return d;
+}
+
+test('DEAL SHEETS deals the set over a sheet the flag was never set on', async ({ page }) => {
+  await openBare(page, handArranged());
+  expect((await savedLayout(page)).auto).toBe(false);
 
   const btn = page.locator('[data-layout-deal-sheets]');
   await expect(btn).toBeVisible();
   await expect(btn).toBeEnabled();
-  // It names what it would do, and with nothing dealt that is a first deal.
-  await expect(btn).toContainText(/^Deal Sheets$/i);
+  // It names what it would do, and with a hand on the sheet that is a re-deal.
+  await expect(btn).toContainText(/Re-deal/i);
 
+  page.once('dialog', d => d.accept());
   await btn.click();
   await waitForCompose(page);
 
@@ -575,7 +591,7 @@ test('DEAL SHEETS deals the set on a drawing the flag was never set on', async (
   expect(Object.keys(bySheet).length).toBeGreaterThan(2);
   await expect(page.locator('[data-layout-sheet]')).not.toHaveCount(1);
 
-  // And it now offers the re-deal, because there is a set to replace.
+  // And it still offers the re-deal, because there is a set to replace.
   await expect(btn).toContainText(/Re-deal/i);
 });
 
@@ -596,42 +612,38 @@ test('with no drawing there is nothing to deal, and the button says so by being 
 // that discards on either answer is worse than no confirm.
 test('a hand-placed sheet is confirmed before it is replaced, and Cancel keeps it',
   async ({ page }) => {
-    await openBare(page, handDrawing());
-
-    // Place one by hand, which is also what takes `auto` off.
-    await page.locator('[data-layout-add-viewport]').click();
-    const m = await sheetMetrics(page);
-    await page.mouse.click(m.box.x + m.panX + 8 * m.zoom, m.box.y + m.panY + 5 * m.zoom);
-    await page.waitForFunction(() => Number(document.body.dataset.layoutSaveSeq || 0) > 0);
+    // One viewport placed by hand, the flag off: the shape the entry deal
+    // leaves alone (layout-deal-on-entry.spec.js) and the verb must ask over.
+    await openBare(page, handArranged());
     const mine = await savedLayout(page);
     expect(mine.viewports).toHaveLength(1);
     expect(mine.auto).not.toBe(true);
+    const seq1 = await page.evaluate(() => Number(document.body.dataset.layoutSaveSeq || 0));
 
     page.once('dialog', d => d.dismiss());
     await page.locator('[data-layout-deal-sheets]').click();
     await page.waitForTimeout(400);
 
     const after = await savedLayout(page);
-    expect(after.viewports).toHaveLength(1);
-    expect(after.viewports[0].id).toBe(mine.viewports[0].id);
+    expect(after.viewports.map(v => v.id)).toEqual(mine.viewports.map(v => v.id));
     expect(after.auto).not.toBe(true);
 
     // Accepting deals it, so the confirm is a gate and not a refusal.
     page.once('dialog', d => d.accept());
     await page.locator('[data-layout-deal-sheets]').click();
-    await page.waitForFunction(() => Number(document.body.dataset.layoutSaveSeq || 0) > 1);
+    await page.waitForFunction(p => Number(document.body.dataset.layoutSaveSeq || 0) > p, seq1);
     const dealt = await savedLayout(page);
     expect(dealt.viewports.length).toBeGreaterThan(1);
     expect(dealt.auto).toBe(true);
   });
 
 // AND NO CONFIRM WHEN THERE IS NOTHING TO LOSE. A dialog over an empty sheet
-// has one sensible answer, so asking is friction rather than safety. Proven by
-// dealing with no dialog handler at all: an unhandled dialog would hang the
-// click, so a pass here means none was raised.
-test('an empty sheet is dealt without asking', async ({ page }) => {
-  await openBare(page, handDrawing());
-  await page.locator('[data-layout-deal-sheets]').click();
+// has one sensible answer, so asking is friction rather than safety -- and
+// since 17 Oct the empty sheet over a house is dealt on entry, with no press
+// at all. Proven with no dialog handler: an unhandled dialog would hang the
+// wait, so a pass here means none was raised.
+test('an empty sheet is dealt on entry without asking', async ({ page }) => {
+  await openLayout(page, handDrawing());
   await waitForCompose(page);
   expect((await savedLayout(page)).auto).toBe(true);
 });

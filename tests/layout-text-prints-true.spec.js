@@ -54,6 +54,15 @@ function houseDrawing() {
     walls: [wall(1, 0, 0, 24, 0), wall(2, 24, 0, 24, 16),
       wall(3, 24, 16, 0, 16), wall(4, 0, 16, 0, 0)],
     fenestrations: [{ id: 1, levelId: 1, wallId: 1, type: 'door', offset: 6, width: 3 }],
+    // ONE VIEWPORT ALREADY ON SHEET 2, SO SHEET 1 STAYS BLANK FOR THE PRESS
+    // BELOW. Since 17 Oct a layout with nothing on it over a house is dealt
+    // on entry (Movie: "if its blank and there is a house in the model space,
+    // make a DEAL" -- layout-deal-on-entry.spec.js); a sheet with a hand on it
+    // is left as saved, which is the ground these mechanics stand on.
+    layout: {
+      auto: false, nextViewportId: 2, sheets: [{ title: '' }, { title: '' }],
+      viewports: [{ id: 1, kind: 'plan', levelId: 1, pif: 0.25, xIn: 8, yIn: 5, sheet: 2 }],
+    },
   };
 }
 
@@ -147,7 +156,7 @@ test('the viewport caption grows exactly as fast as the sheet', async ({ page })
   await openLayout(page, houseDrawing());
   await placeViewport(page, 8, 5);
   const saved = await savedDrawing(page);
-  const vp = saved.layout.viewports[0];
+  const vp = saved.layout.viewports.at(-1);
   expect(vp, 'a viewport to caption').toBeTruthy();
 
   const box = await page.locator('[data-layout-canvas]').boundingBox();

@@ -857,7 +857,13 @@
            edited; and a drafter who has arranged sheets by hand must not lose
            them to a page visit. The confirm in _dealSheets is the other half
            of that: the composer REPLACES the hand, so it asks once when there
-           is a hand to replace. -->
+           is a hand to replace.
+
+           ONE SHAPE IS DEALT ON ENTRY AFTER ALL (Movie, 17 Oct): a layout
+           with no viewport on any sheet over a drawing with walls. There is
+           no hand there to lose, and a blank sheet over a built house was
+           exactly what he kept walking into. See _loadDrawing. The button
+           stays for the re-deal, and for a drawing that arrived blank. -->
       <button type="button" data-layout-deal-sheets id="lay-deal">Deal Sheets</button>
       <!-- PRINT, WHERE A PRINT BUTTON BELONGS. Movie, 13 Oct: "how do i
            print this layout page? or multiple pages can't see a print
@@ -1488,7 +1494,18 @@ class Component extends PageLogic {
       // The bone's request: a fresh build asks for the default sheet set, and
       // the sheets stay the composer's until a hand touches them. A drawing
       // whose sheets were ever arranged by hand loads exactly as saved.
-      if (this.state.auto) this._composeDefaultSet();
+      // A BLANK SHEET OVER A BUILT HOUSE IS DEALT ON THE WAY IN (Movie, 17
+      // Oct: "if the user created a house already, when they go into the
+      // CONSTRUCTION LAYOUT area, can you automatically DEAL the sheets when
+      // they enter so they all pop up" ... "check to make sure the sheets
+      // haven't been dealt yet first, if they have been dealt already don't
+      // do anything" ... "if its blank and there is a house in the model
+      // space, make a DEAL"). The 21 Sep worry about dealing on open was a
+      // hand's sheets lost to a page visit; a layout with no viewport on it
+      // has no hand to lose, so that is the one shape dealt without a press.
+      // Anything on the sheets -- a dealt set, a viewport placed by hand --
+      // loads exactly as saved.
+      if (this.state.auto || this._blankOverHouse()) this._composeDefaultSet();
       this._fitPaper();
       this._draw();
       // The sheet as it arrived is the state the first change undoes TO.
@@ -1507,6 +1524,13 @@ class Component extends PageLogic {
       .filter(level => !window.DraftLayoutPlan.ridesOnFullFloor(this._saved, level.id));
     if (!withWalls.length) return this._levels[0]?.id ?? null;
     return withWalls.reduce((best, level) => (level.wallCount > best.wallCount ? level : best)).id;
+  }
+
+  // "Blank" the way a drafter sees it -- no viewport on any sheet -- with a
+  // house behind it: walls on some level. A drawing with no walls deals
+  // nothing on entry; its sheets would all be named and empty.
+  _blankOverHouse() {
+    return this.state.viewports.length === 0 && this._levelsWithWalls().length > 0;
   }
 
   _levelsWithWalls() {
