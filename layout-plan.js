@@ -590,8 +590,17 @@ if (!window.DraftLayoutPlan) {
       .map(fen => wallById.get(String(fen.wallId))).filter(wall => wall?.start && wall?.end)
       .map(wall => ({ x: (wall.start.x + wall.end.x) / 2, z: (wall.start.z + wall.end.z) / 2 }));
     const label = B.joistCallout(LA.levelAssemblyFor(saved?.levelAssemblies, levelId));
-    return of('floors').filter(floor => floor?.levelId === levelId && (floor.view || 'floor') === 'floor'
-      && floor.garage !== true && Array.isArray(floor.points) && floor.points.length >= 3)
+    // THE BODIES AUTO BEAM FRAMES -- the level's outlines, the garage's own
+    // aside -- so the callout and the beam plan read one deck. A floor
+    // record can carry a stair landing's tab past the room, and its box is
+    // then wider than any joist spans; the floors stand in only where a
+    // level has no outline.
+    const bodies = of('outlines').filter(outline => outline?.levelId === levelId && outline.garage !== true
+      && outline.site !== true && Array.isArray(outline.points) && outline.points.length >= 3);
+    const decks = bodies.length ? bodies : of('floors').filter(floor => floor?.levelId === levelId
+      && (floor.view || 'floor') === 'floor' && floor.garage !== true
+      && Array.isArray(floor.points) && floor.points.length >= 3);
+    return decks
       .map(floor => {
         const points = floor.points.map(pt => ({ x: num(pt.x), z: num(pt.z) }));
         const bays = B.joistBays(points, { beams, holes, axis: B.deckJoistAxis(points, { garages, doorPoints }) });

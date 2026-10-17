@@ -3653,7 +3653,14 @@
       .map(fen => wallById.get(String(fen.wallId))).filter(Boolean)
       .map(wall => ({ x: (wall.start.x + wall.end.x) / 2, z: (wall.start.z + wall.end.z) / 2 }));
     const label = B.joistCallout(LA.levelAssemblyFor(drawing?.levelAssemblies, levelId));
-    floors().filter(floor => floor.garage !== true && (floor.points || []).length >= 3).forEach(floor => {
+    // THE BODIES AUTO BEAM FRAMES: this level's outlines, the garage's own
+    // aside (layout-plan joistCalloutsFor reads the same), the floors only
+    // where a level has no outline.
+    const bodies = (drawing?.outlines || []).filter(outline => Number(outline.levelId) === levelId
+      && outline.garage !== true && outline.site !== true && (outline.points || []).length >= 3);
+    const decks = bodies.length ? bodies
+      : floors().filter(floor => floor.garage !== true && (floor.points || []).length >= 3);
+    decks.forEach(floor => {
       const points = floor.points.map(pt => ({ x: pt.x, z: pt.z }));
       const bays = B.joistBays(points, {
         beams: belowBeams, holes,
