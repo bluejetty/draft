@@ -10,8 +10,12 @@
 //
 // The engine's own rows are proto/roof-wings-harness.js (--mutate) and the
 // dotted line's are proto/render-2d-harness.js's. The rows below are the
-// PAGE's: the split asked for, each body handed the top of its walls, the stub raised against the rest, the
-// cut keeping what the uncut edges already had, and the ends decided at all.
+// PAGE's: the split asked for, each body handed the top of its walls, the
+// stub raised against the rest, the cut keeping what the uncut edges
+// already had, and the ends decided at all. (A row that blanked the roof's
+// OWN plate was withdrawn: on his house no roof that is read as wings has
+// an end over a lower body, so nothing it drew could differ -- that guard
+// is proto/roof-wings-harness.js's, "told nothing about heights".)
 //
 // Run: node proto/roof-wings-mutants.js   (refuses a dirty tree; restores from HEAD)
 const { execSync } = require('child_process');
@@ -38,14 +42,9 @@ const MUTANTS = [
     test: 'his house: the main block hips at the back and gables at the stub; the stub is its own roof under the rake' },
   { file: 'MODEL.html',
     name: "a body's walls have no height: the room gables where the lower house and garage stand",
-    find: '      .map(outline => ({ points: outline.points, top: topOf(outline.levelId) }));',
-    with: '      .map(outline => ({ points: outline.points, top: null }));',
+    find: '      .map(outline => ({ points: outline.points, top: topOf(outline.levelId) }))',
+    with: '      .map(outline => ({ points: outline.points, top: null }))',
     test: 'his house: the main block hips at the back and gables at the stub; the stub is its own roof under the rake' },
-  { file: 'MODEL.html',
-    name: "the roof's own plate is unknown, so every body counts",
-    find: '        top: Number.isFinite(Number(ownTop)) ? Number(ownTop) : null }),',
-    with: '        top: null }),',
-    test: 'his house: the room over the garage hips both ends, and the garage stub rises to its wall with a hipped front' },
   { file: 'MODEL.html',
     name: 'the cut reads every uncut edge as a full eave again: two feet of overhang on a flush edge',
     find: '        const own = j >= 0 && Array.isArray(plain.edgeOverhang) ? Number(plain.edgeOverhang[j]) : NaN;',
