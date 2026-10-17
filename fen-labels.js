@@ -58,7 +58,11 @@ if (!window.DraftFenLabels) {
     const metric = isMetric(units);
     const size = ft => (metric ? mmTo(ft, 5) : roundInches(ft));
     if (type === 'window') {
-      if (!Number.isFinite(heightFt) || heightFt <= 0) return '';
+      // A WINDOW WITH NO HEIGHT TO SAY STILL SAYS ITS WIDTH (Movie, 16 Oct,
+      // a MAIN FL window with no tag at all): "W 36" is what is known, and
+      // a tag that borrowed the standard height would claim a size nobody
+      // set -- on a construction drawing.
+      if (!Number.isFinite(heightFt) || heightFt <= 0) return `W ${size(widthFt)}`;
       // WIDTH BY HEIGHT, off the opening's own numbers: "match the actual size
       // of the window". Nothing is snapped to the stock ladder here -- a
       // drafter who typed 37 gets 37, and the ladder is what he picks FROM,
@@ -242,13 +246,24 @@ if (!window.DraftFenLabels) {
   // the window's OWN width so it cannot be mistaken for the one next door,
   // and it is stepped off the wall by the assembly's own half thickness --
   // the corners say how far that is, rather than a guess.
-  const planTagLine = (geometry, outline, { gapFt = PLAN_TAG_GAP_FT } = {}) => {
+  //
+  // WITH NO OUTLINE TO ASK (Movie, 16 Oct: a MAIN FL window with no tag --
+  // walls drawn by hand carry no outline, and the tag went with it), the
+  // tag steps off the wall's own normal on the side AWAY from the level's
+  // middle (`centre`, the caller's: the walls' box centre). A window on an
+  // outside wall faces out from the middle of the house; the guess is only
+  // taken when the outline cannot answer, and never with no centre either.
+  const planTagLine = (geometry, outline, { gapFt = PLAN_TAG_GAP_FT, centre = null } = {}) => {
     if (!geometry || !geometry.glazing || !geometry.corners || !geometry.center) return null;
-    const out = exteriorNormalAt(outline, geometry.center);
-    if (!out) return null;
     const [ga, gb] = geometry.glazing;
     const run = Math.hypot(gb.x - ga.x, gb.z - ga.z) || 1;
     const ux = (gb.x - ga.x) / run, uz = (gb.z - ga.z) / run;
+    let out = exteriorNormalAt(outline, geometry.center);
+    if (!out && centre && Number.isFinite(centre.x) && Number.isFinite(centre.z)) {
+      const away = (geometry.center.x - centre.x) * -uz + (geometry.center.z - centre.z) * ux;
+      if (Math.abs(away) > 1e-6) out = away > 0 ? { x: -uz, z: ux } : { x: uz, z: -ux };
+    }
+    if (!out) return null;
     const half = Math.max(...geometry.corners.map(corner =>
       Math.abs((corner.x - geometry.center.x) * out.x
         + (corner.z - geometry.center.z) * out.z)));
@@ -289,18 +304,29 @@ if (!window.DraftFenLabels) {
   // WHICH LINE A TAG RUNS ALONG, for any opening: a window and a garage door
   // step outside the house; every other door steps off the face its leaf
   // does not swing to. A garage with no outline to read falls back to that.
-  const openingTagLine = (opening, geometry, outline) => {
+  const openingTagLine = (opening, geometry, outline, { centre = null } = {}) => {
     if (!opening) return null;
     const isGarage = opening.type === 'door'
       && (opening.garage === true || opening.doorType === 'garage');
     if (opening.type === 'window' || isGarage) {
-      return planTagLine(geometry, outline) || (isGarage ? doorTagLine(opening, geometry) : null);
+      return planTagLine(geometry, outline, { centre }) || (isGarage ? doorTagLine(opening, geometry) : null);
     }
     return opening.type === 'door' ? doorTagLine(opening, geometry) : null;
   };
 
+  // THE LEVEL'S MIDDLE, for planTagLine's fallback: the box centre of the
+  // walls' ends. One home, so MODEL and the sheet guess the same side.
+  const wallsCentre = walls => {
+    const pts = (Array.isArray(walls) ? walls : []).flatMap(wall => [wall?.start, wall?.end])
+      .filter(pt => pt && Number.isFinite(pt.x) && Number.isFinite(pt.z));
+    if (pts.length < 2) return null;
+    const xs = pts.map(pt => pt.x), zs = pts.map(pt => pt.z);
+    return { x: (Math.min(...xs) + Math.max(...xs)) / 2, z: (Math.min(...zs) + Math.max(...zs)) / 2 };
+  };
+
   window.DraftFenLabels = Object.freeze({
     fenLabel,
+    wallsCentre,
     MM_PER_FT,
     isMetric,
     mmTo,

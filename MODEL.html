@@ -4147,7 +4147,11 @@
       //
       // exteriorNormalAt WENT WITH IT. It had exactly one caller on this page
       // -- this tag -- so nothing is stranded and no second copy is made.
-      const line = FL.openingTagLine(opening, geometry, outlineOf(opening.levelId));
+      // AND WITH NO OUTLINE, OFF THE WALL AWAY FROM THE LEVEL'S MIDDLE
+      // (fen-labels planTagLine): hand-drawn walls carry no outline, and a
+      // window on them went untagged (Movie, 16 Oct).
+      const line = FL.openingTagLine(opening, geometry, outlineOf(opening.levelId),
+        { centre: FL.wallsCentre(shown) });
       if (!line) return;
       // OFFSET 0, ON A LINE ALREADY MOVED OUTSIDE. labelAlongLine2D's own
       // offset is perpendicular in the ROTATED frame, and its read-direction
