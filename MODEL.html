@@ -17494,6 +17494,10 @@
       // array is worse than none because the painter would trust it.
       ...(shaped.edgeOverhang ? { edgeOverhang: shaped.edgeOverhang } : {}),
       pitch: pitchHere,
+      // A FITTED PIECE REMEMBERS THE PITCH IT WAS ASKED FOR, so the PROJECT
+      // row's number is still on the record and a reader can tell a piece
+      // lowered to fit under a wall from one the drafter pitched low.
+      ...(pitchHere !== roofPitch ? { designPitch: roofPitch } : {}),
       fascia: ROOF_FASCIA_IN,
       garage,
       follows,

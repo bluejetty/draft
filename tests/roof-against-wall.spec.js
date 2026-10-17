@@ -133,7 +133,9 @@ test('his MOD BILEVEL: the back block gables into the room with a gable wall pas
   // that fits -- 2 3/4 in 12 on this house -- and the front piece kept the
   // project pitch.
   expect(block.pitch, 'the block\'s pitch is lowered to fit under the room\'s plate').toBe(2.75);
+  expect(block.designPitch, 'the lowered block remembers the project pitch').toBe(4);
   expect(front.pitch, 'the front piece keeps the project pitch').toBe(4);
+  expect(front.designPitch, 'a piece at the project pitch carries no designPitch').toBeUndefined();
 
   // THE GARAGE ROOF HAS NO LITTLE HIP where the garage's front wall stands a
   // foot north of the house's line (Movie: "should just be a normal hip

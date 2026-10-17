@@ -85,7 +85,23 @@ test('a MOD BILEVEL takes its own row: house at the split overhang, garage at it
   const house = built.roofs.filter(r => r.follows === 'house');
   const garage = built.roofs.filter(r => r.follows === 'attachedGarage');
   expect(house.length).toBeGreaterThan(0);
-  house.forEach(r => { expect(r.overhang).toBe(4); expect(r.pitch).toBe(5); });
+  // EVERY HOUSE PIECE TAKES THE ROW'S OVERHANG. The pitch too -- except a
+  // piece gabled into the 2nd-floor wall, which the roof lowers to keep its
+  // ridge under that wall (Movie, 17 Oct: "the back roof can have a lower
+  // slope if it doesn't fit"); such a piece carries the row's pitch as its
+  // designPitch and sits below it. The rest are at the row's 5, and there
+  // must be some, or the row never reached the roof at all.
+  house.forEach(r => {
+    expect(r.overhang).toBe(4);
+    if (r.designPitch !== undefined) {
+      expect(r.designPitch).toBe(5);
+      expect(r.pitch).toBeLessThan(5);
+      expect(r.pitch).toBeGreaterThanOrEqual(2);
+    } else {
+      expect(r.pitch).toBe(5);
+    }
+  });
+  expect(house.some(r => r.designPitch === undefined), 'no house piece is at the row\'s pitch').toBe(true);
   // The garage row is untouched, so it falls back to the drawing's 2 ft -- what
   // the PROJECT card shows beside it.
   garage.forEach(r => { expect(r.overhang).toBe(2); expect(r.pitch).toBe(4); });
