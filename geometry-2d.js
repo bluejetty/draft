@@ -534,6 +534,106 @@ if (!window.DraftGeometry2D) {
     return { points: live, kept };
   };
 
+  // ── A JOG IN THE WALL IS NOT A JOG IN THE ROOF ────────────────────────
+  //
+  // Movie, 17 Oct, on his garage roof: "the lower garage wall should have a
+  // jog in it, should just be a normal hip without the extra little hip
+  // where it jogs". His garage's front wall stands a foot north of the
+  // house's line where the two meet, and the roof ring followed the foot:
+  // a one-foot edge between two parallel ones, which the skeleton reads as
+  // a corner pair and answers with a little hip of its own.
+  //
+  // So a short edge (JOG_FT or less) joining two parallel edges is taken
+  // out: the inner of the two is moved OUT onto the outer's line, so the
+  // roof still covers both walls, and the corner past it slides the same
+  // foot along its own edge. The wall keeps its jog; the roof does not.
+  // `kept` is the surviving vertices' old indices, moved ones included, so
+  // a caller's edge indices follow (raiseRoofOver's flush / rake lists).
+  const ROOF_JOG_FT = 1.5;
+  const loopWithoutJogs = (points, jogFt = ROOF_JOG_FT) => {
+    const ring = Array.isArray(points) ? points.map(pt => ({ x: pt.x, z: pt.z })) : [];
+    let kept = ring.map((_, index) => index);
+    let live = ring;
+    const eps = 1e-6;
+    // A removed vertex's edge is taken over by a neighbour's: the jog edge
+    // by the edge before it, the slid edge by the one it slid onto. So a
+    // caller's EDGE index (its start vertex) still finds its edge.
+    const absorbed = new Map();
+    const insideOf = (p, poly) => {
+      let on = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i, i += 1) {
+        const a = poly[i], b = poly[j];
+        if ((a.z > p.z) !== (b.z > p.z) && p.x < ((b.x - a.x) * (p.z - a.z)) / (b.z - a.z) + a.x) on = !on;
+      }
+      return on;
+    };
+    let cut = true;
+    while (cut && live.length > 4) {
+      cut = false;
+      const n = live.length;
+      for (let i = 0; i < n; i += 1) {
+        const v = live[i], b = live[(i + 1) % n];
+        const a = live[(i + n - 1) % n], c = live[(i + 2) % n];
+        const jx = b.x - v.x, jz = b.z - v.z;
+        const jl = Math.hypot(jx, jz);
+        if (jl < eps || jl > jogFt + eps) continue;
+        // A and B axis-aligned, parallel to each other and square to J.
+        const ax = v.x - a.x, az = v.z - a.z, bx = c.x - b.x, bz = c.z - b.z;
+        const al = Math.hypot(ax, az), bl = Math.hypot(bx, bz);
+        if (al < eps || bl < eps) continue;
+        const parallel = Math.abs(ax * bz - az * bx) < 1e-6 * al * bl;
+        const square = Math.abs(ax * jx + az * jz) < 1e-6 * al * jl;
+        if (!parallel || !square) continue;
+        // Which of the two lines is the outer one: J points outward when a
+        // step along it from the MIDDLE of A leaves the ring (from A's end
+        // the step lands in B's own strip and says nothing).
+        const probe = { x: (a.x + v.x) / 2 + jx / jl * 0.01, z: (a.z + v.z) / 2 + jz / jl * 0.01 };
+        const jOutward = !insideOf(probe, live);
+        const next = live.map(pt => ({ ...pt }));
+        const keptNext = kept.slice();
+        if (jOutward) {
+          // B's line is the outer: A slides out onto it -- a moves by J,
+          // and the vertex before a slides the same way along its edge.
+          const ia = (i + n - 1) % n;
+          next[ia] = { x: a.x + jx, z: a.z + jz };
+          absorbed.set(kept[i], kept[ia]);
+          next.splice(i, 1); keptNext.splice(i, 1);
+        } else {
+          // A's line is the outer: B slides out onto it -- c moves back by J.
+          const ic = (i + 2) % n;
+          next[ic] = { x: c.x - jx, z: c.z - jz };
+          absorbed.set(kept[(i + 1) % n], kept[i]);
+          next.splice((i + 1) % n, 1); keptNext.splice((i + 1) % n, 1);
+        }
+        live = next; kept = keptNext;
+        cut = true;
+        break;
+      }
+    }
+    // A VERTEX LEFT STANDING IN A STRAIGHT LINE by the slide goes too: its
+    // edge carries straight on from the one before it.
+    for (let i = 0; i < live.length && live.length > 3; i += 1) {
+      const n = live.length;
+      const v = live[i], a = live[(i + n - 1) % n], b = live[(i + 1) % n];
+      const ax = v.x - a.x, az = v.z - a.z, bx = b.x - v.x, bz = b.z - v.z;
+      const al = Math.hypot(ax, az), bl = Math.hypot(bx, bz);
+      if (al < eps || bl < eps) continue;
+      if (Math.abs(ax * bz - az * bx) > 1e-6 * al * bl || (ax * bx + az * bz) <= 0) continue;
+      absorbed.set(kept[i], kept[(i + n - 1) % n]);
+      live = live.filter((_, k) => k !== i);
+      kept = kept.filter((_, k) => k !== i);
+      i = -1;
+    }
+    const edgeIndexOf = new Map();
+    ring.forEach((_, old) => {
+      let at = old;
+      for (let guard = 0; absorbed.has(at) && guard < ring.length; guard += 1) at = absorbed.get(at);
+      const now = kept.indexOf(at);
+      if (now >= 0) edgeIndexOf.set(old, now);
+    });
+    return { points: live, kept, edgeIndexOf };
+  };
+
   const offsetOutline = (points, distance) => {
     if (!distance) return points.map(pt => ({ ...pt }));
     const count = points.length;
@@ -3505,6 +3605,7 @@ const roofProfile = (roof, faces, cutA, cutB, axis) => {
     CRICKET_FT,
     cricketRing,
     loopWithoutSpikes,
+    loopWithoutJogs,
     roofSkeleton,
     mergeVertex,
     roofFaces,

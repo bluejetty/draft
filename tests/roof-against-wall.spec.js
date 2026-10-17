@@ -127,6 +127,24 @@ test('his MOD BILEVEL: the back block gables into the room with a gable wall pas
   expect(edgeKind(front, [-4, -6], [-19, -6]), 'flush against the hood').toBe('gable:0');
   expect(edgeKind(front, [-4, -14], [-4, -6]), 'a rake on the open end').toBe('gable:2');
 
+  // THE BLOCK KEEPS UNDER THE ROOM'S PLATE (Movie: "the back roof can have
+  // a lower slope if it doesn't fit"): at 4 in 12 its peak at the gable
+  // stood above the room's wall top, so the pitch came down to the quarter
+  // that fits -- 2 3/4 in 12 on this house -- and the front piece kept the
+  // project pitch.
+  expect(block.pitch, 'the block\'s pitch is lowered to fit under the room\'s plate').toBe(2.75);
+  expect(front.pitch, 'the front piece keeps the project pitch').toBe(4);
+
+  // THE GARAGE ROOF HAS NO LITTLE HIP where the garage's front wall stands a
+  // foot north of the house's line (Movie: "should just be a normal hip
+  // without the extra little hip where it jogs"): the roof ring takes the
+  // outer line, a plain rectangle flush against the room on its west side.
+  const garage = (d.roofs || []).find(r => r.garage === true);
+  expect(garage.points.map(p => [p.x, p.z]), 'four corners, the front on the garage wall\'s line').toEqual([[8, -3], [8, 23], [-6, 23], [-6, -3]]);
+  expect(garage.edges, 'eaves east, south and north; flush against the room west').toEqual(['eave', 'eave', 'gable', 'eave']);
+  const shortest = Math.min(...garage.points.map((p, i) => { const q = garage.points[(i + 1) % garage.points.length]; return Math.hypot(q.x - p.x, q.z - p.z); }));
+  expect(shortest, 'no edge shorter than a jog').toBeGreaterThan(1.5);
+
   // THE GABLE WALL under the block's rake where the front piece dies into
   // it: a knee wall on OVER GARAGE whose plate is the main roof's bearing,
   // so the elevation climbs it to the rakes.

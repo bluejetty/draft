@@ -64,10 +64,8 @@ const MUTANTS = [
 
   { file: 'MODEL.html',
     name: 'the roof ring is taken straight from the loop again, spike and all',
-    find: '    const cleaned = G.loopWithoutSpikes(loop);\n'
-      + '    let ring = cleaned.points;',
-    with: '    const cleaned = G.loopWithoutSpikes(loop);\n'
-      + '    let ring = loop.map(pt => ({ x: pt.x, z: pt.z }));',
+    find: '    let ring = unjogged.points;\n',
+    with: '    let ring = loop.map(pt => ({ x: pt.x, z: pt.z }));\n',
     test: 'the roof dies into the 2nd-storey wall' },
 
   { file: 'MODEL.html',
@@ -101,10 +99,8 @@ const MUTANTS = [
   // moved an ordered one would be a trade, not a fix.
   { file: 'MODEL.html',
     name: 'the clean trims a corner off the stock design',
-    find: '    const cleaned = G.loopWithoutSpikes(loop);\n'
-      + '    let ring = cleaned.points;',
-    with: '    const cleaned = G.loopWithoutSpikes(loop);\n'
-      + '    let ring = cleaned.points.slice(0, -1);',
+    find: '    let ring = unjogged.points;\n',
+    with: '    let ring = unjogged.points.slice(0, -1);\n',
     test: 'the stock MOD BILEVEL is exactly where it was' },
 ];
 

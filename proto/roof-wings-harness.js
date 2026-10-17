@@ -315,6 +315,31 @@ check('his 16 Oct house: the stub is the east part, flush where it stands agains
   const span = p => { const xs = p.ring.map(q => q.x), zs = p.ring.map(q => q.z); return [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)].join(','); };
   return [span(arm) + ' ' + kindAt(arm, [-12, 0], [-12, -18]), '-12,0,-18,0 flush'];
 });
+// ── A JOG IN THE WALL IS NOT A JOG IN THE ROOF (Movie, 17 Oct) ────────────
+// "the lower garage wall should have a jog in it, should just be a normal
+// hip without the extra little hip where it jogs". His garage's front
+// stands a foot north of the house's line: the roof ring takes the outer
+// line, the wall keeps its jog.
+const JOGGED_GARAGE = ring([[0, 0], [0, -1], [6, -1], [6, 21], [-20, 21], [-20, 0]]);
+check('a foot of jog in the garage front comes out of the roof ring, onto the outer line', G => {
+  const out = G.loopWithoutJogs(JOGGED_GARAGE);
+  return [JSON.stringify(out.points.map(p => [p.x, p.z])), '[[6,-1],[6,21],[-20,21],[-20,-1]]'];
+});
+check('a jog that steps inward slides the inner edge out too', G => {
+  const out = G.loopWithoutJogs(ring([[0, 0], [10, 0], [10, 10], [6, 10], [6, 11], [0, 11]]));
+  return [JSON.stringify(out.points.map(p => [p.x, p.z])), '[[0,0],[10,0],[10,11],[0,11]]'];
+});
+check('four feet of step is a step, not a jog, and stays', G => {
+  const out = G.loopWithoutJogs(ring([[0, 0], [10, 0], [10, 10], [6, 10], [6, 14], [0, 14]]));
+  return [out.points.length, 6];
+});
+check("the caller's edge numbers follow the slide: the edge after the jog is still found", G => {
+  const out = G.loopWithoutJogs(JOGGED_GARAGE);
+  // edge 2 was (6,-1)->(6,21), the garage's front; edge 1 was the jog
+  // itself and now reads as the edge before it; edge 5, (-20,0)->(0,0),
+  // slid onto the outer line as the first edge.
+  return [[out.edgeIndexOf.get(2), out.edgeIndexOf.get(1), out.edgeIndexOf.get(5)].join(','), '0,3,3'];
+});
 check('the stepped offset steps between a flush stretch and a rake on one line', G => {
   const out = G.offsetOutlineStepped(ring([[0, 0], [10, 0], [10, 10], [10, 20], [0, 20]]), ['eave', 'gable', 'gable', 'eave', 'eave'], [2, 2, 0, 2, 2]);
   return [JSON.stringify(out.points.map(p => [p.x, p.z])) + ' ' + K(out.edges) + ' ' + out.edgeOverhang.join(''), '[[-2,-2],[12,-2],[12,10],[10,10],[10,22],[-2,22]] egggee 220022'];
@@ -343,6 +368,12 @@ const MUTATIONS = [
     s => s.replace("    && Math.min(...primaryRing.map((a, i) => segDist(p, a, primaryRing[(i + 1) % primaryRing.length]))) > sliverFt);", "    );")],
   ['a wall grazing a sliver splits the ring',
     s => s.replace("  if (primaryAt < 0 || !(info[primaryAt].wallSide.wallLen > sliverFt)) {", "  if (primaryAt < 0) {")],
+  ['a jog is left in the roof ring',
+    s => s.replace('        if (jl < eps || jl > jogFt + eps) continue;', '        continue;')],
+  ['a four-foot step is taken out like a jog',
+    s => s.replace('  const ROOF_JOG_FT = 1.5;', '  const ROOF_JOG_FT = 4.1;')],
+  ['the jog slides onto the inner line, leaving a foot of wall bare',
+    s => s.replace('        const jOutward = !insideOf(probe, live);', '        const jOutward = insideOf(probe, live);')],
   ['the stepped offset slants like the variable one',
     s => s.replace("    out.push({ p: { x: v.x + cur.nx * dPrev, z: v.z + cur.nz * dPrev }, kind: { gable: true, over: 0 } });\n    out.push({ p: { x: v.x + cur.nx * d[i], z: v.z + cur.nz * d[i] }, kind });",
       "    out.push({ p: { x: v.x + cur.nx * d[i], z: v.z + cur.nz * d[i] }, kind });")],

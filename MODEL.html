@@ -17051,6 +17051,8 @@
   // the same call through the same test -- an edge lying on the house outline
   // -- and it is edgeOnLoop here for the reason the garage's own walls use it:
   // one rule, one home.
+  // How far under the taller wall's plate a gabled block's peak stays.
+  const GABLE_CLEAR_FT = 1;
   const raiseRoofOver = (loop, opts = {}) => {
     const { garage = false, plateHeightFt = null,
       sourceLevelId = null, against = null, flush = null, rake = null,
@@ -17081,8 +17083,18 @@
     // against the wrong numbering would gable an edge nobody named. `kept` is
     // the map, and an index whose vertex went is dropped rather than guessed.
     const cleaned = G.loopWithoutSpikes(loop);
-    let ring = cleaned.points;
-    const ringIndexOf = new Map(cleaned.kept.map((was, now) => [was, now]));
+    // AND A JOG IN THE WALL IS NOT A JOG IN THE ROOF (Movie, 17 Oct: "should
+    // just be a normal hip without the extra little hip where it jogs"):
+    // geometry-2d loopWithoutJogs takes a foot of step out of the ring, and
+    // the caller's edge numbers follow through both cleanings.
+    const unjogged = G.loopWithoutJogs ? G.loopWithoutJogs(cleaned.points)
+      : { points: cleaned.points, kept: cleaned.points.map((_, index) => index) };
+    let ring = unjogged.points;
+    const ringIndexOf = new Map();
+    cleaned.kept.forEach((was, mid) => {
+      const now = unjogged.edgeIndexOf ? unjogged.edgeIndexOf.get(mid) : unjogged.kept.indexOf(mid);
+      if (now !== undefined && now >= 0) ringIndexOf.set(was, now);
+    });
     // ── A NARROWER WING ON THIS ROOF'S END IS A ROOF OF ITS OWN ──────────
     //
     // Movie, 16 Oct: "the upper roof should have been 2 separate roofs with
@@ -17262,11 +17274,30 @@
     // it. `flush` is still a union with derived, because that pair says the
     // same thing; this one says the opposite of half of it.
     const raked = new Set(pieceLists ? pieceLists.rake : followClean(Array.isArray(rake) ? rake : []));
+    // AN EDGE THAT RUNS A JOG PAST THE WALL IT DIES INTO IS STILL FLUSH:
+    // loopWithoutJogs above straightened the garage's front onto the line
+    // a foot north of the house's, so the roof's edge against the room now
+    // runs that foot past the room's corner -- all of it on the room's wall
+    // line but for the foot, which edgeOnLoop's whole-edge test refuses.
+    const mostlyOnLoop = (a, b, segments) => {
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      if (!(len > 0.01)) return false;
+      const ux = (b.x - a.x) / len, uz = (b.z - a.z) / len;
+      let covered = 0;
+      (segments || []).forEach(seg => {
+        const p = seg.start, q = seg.end;
+        const off = p2 => Math.abs((p2.x - a.x) * uz - (p2.z - a.z) * ux);
+        if (off(p) > 0.01 || off(q) > 0.01) return;            // not on this line
+        const tp = (p.x - a.x) * ux + (p.z - a.z) * uz, tq = (q.x - a.x) * ux + (q.z - a.z) * uz;
+        covered += Math.max(0, Math.min(len, Math.max(tp, tq)) - Math.max(0, Math.min(tp, tq)));
+      });
+      return covered >= len - 1.5 - 0.01 && covered > len / 2;
+    };
     const gableEdge = index => {
       if (raked.has(index) || named.has(index)) return true;
       if (!sharedWith) return false;
       const a = ring[index], b = ring[(index + 1) % ring.length];
-      return G.edgeOnLoop(a, b, sharedWith);
+      return G.edgeOnLoop(a, b, sharedWith) || mostlyOnLoop(a, b, sharedWith);
     };
     const flushAt = index => !raked.has(index) && gableEdge(index);
     const sharedEdge = gableEdge;
@@ -17422,6 +17453,33 @@
         edgeOverhang: cut.edgeOverhang || null, overhangFt: roofOverhangFt,
         top: Number.isFinite(Number(ownTop)) ? Number(ownTop) : null }),
     } : cut;
+    // ── AND IT KEEPS UNDER THE WALL IT GABLES INTO (Movie, 17 Oct) ────────
+    //
+    // "the back roof can have a lower slope if it doesn't fit (like this
+    // one)": a block gabled into a taller wall peaks AT that wall, and at
+    // the project pitch his back block peaked above the room's plate -- a
+    // gable into a roof, not a wall. So the peak is read off the skeleton
+    // (the longest wavefront time, times the pitch) and, where it clears
+    // the taller wall's top by less than a foot, the pitch comes down to
+    // the quarter that fits, and no lower than 2 in 12.
+    let pitchHere = roofPitch;
+    if (pieceLists && notch && Number.isFinite(Number(ownTop))) {
+      const inLoop = (p, ring2) => G.pointInLoop && G.pointInLoop(p, ring2);
+      const tallerTop = bodies.reduce((best, body) => {
+        if (!Number.isFinite(Number(body.top)) || !(body.top > ownTop)) return best;
+        const touches = notch.some(p => inLoop(p, body.points)) || body.points.some(p => inLoop(p, notch));
+        return touches ? Math.max(best, Number(body.top)) : best;
+      }, -Infinity);
+      if (Number.isFinite(tallerTop)) {
+        const trial = { points: shaped.points, edges: shaped.edges, pitch: roofPitch };
+        const peakRun = G.roofSkeleton(trial).reduce((most, arc) => Math.max(most, Number(arc.ta) || 0, Number(arc.tb) || 0), 0);
+        const peak = peakRun * roofPitch / 12;
+        const allowed = tallerTop - ownTop - GABLE_CLEAR_FT;
+        if (peakRun > 0 && allowed > 0 && peak > allowed) {
+          pitchHere = Math.max(2, Math.floor((allowed / peakRun) * 12 * 4) / 4);
+        }
+      }
+    }
     drawing.roofs = drawing.roofs || [];
     const roof = {
       id: newDrawingItemId('roof'),
@@ -17435,7 +17493,7 @@
       // the edge count has made the per-edge answer meaningless, and a wrong
       // array is worse than none because the painter would trust it.
       ...(shaped.edgeOverhang ? { edgeOverhang: shaped.edgeOverhang } : {}),
-      pitch: roofPitch,
+      pitch: pitchHere,
       fascia: ROOF_FASCIA_IN,
       garage,
       follows,
