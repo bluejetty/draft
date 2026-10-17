@@ -52,7 +52,7 @@ const MUTANTS = [
   { file: 'LAYOUT.html',
     name: 'A HAND-ARRANGED SET IS RE-DEALT ON LOAD, so a drafter-s arrangement '
       + 'is replaced by the composer-s every time the page is opened',
-    find: '      if (this.state.auto) this._composeDefaultSet();',
+    find: '      if (this.state.auto || this._blankOverHouse()) this._composeDefaultSet();',
     with: '      this._composeDefaultSet();',
     test: 'the sheet set opens on the sheets it was left on' },
 
