@@ -1726,6 +1726,48 @@ suite('drawStairs2D', 'the stair wears the colour the page handed it', R => {
   expect('and fill', sets(ctx, 'fillStyle').includes('#0f0f0f'), true);
 });
 
+// ── WHICH FLOOR IS LOOKING (Movie, 16 Oct): a stair going DN from here, one
+// landing UP here, and one entirely under this floor, lighter and untagged.
+suite('drawStairs2D', 'the floor a stair lands on reads it UP, the arrow turned round', R => {
+  const ctx = recordingCtx();
+  R.drawStairs2D(ctx, toS, stairsEnv({ roleFor: () => 'lands' }));
+  const label = calls(ctx, 'fillText')[0][0];
+  expect('the tag says UP', label.startsWith('UP — 14R'), true);
+  // The arrowhead's tip is the last lineTo of the head; it sits at the top of
+  // the walk (walk[0]) rather than at its foot.
+  const tip = calls(ctx, 'lineTo').filter(a => a.length === 2)
+    .find(a => Math.abs(a[0] - toS({ x: 0.5, z: 1.5 }).x) < 0.01 && Math.abs(a[1] - toS({ x: 0.5, z: 1.5 }).y) < 0.01);
+  expect('and the arrow points up the stair', !!tip, true);
+  // ON THE OTHER SIDE OF THE WALK LINE from the DN tag, so a stacked pair's
+  // tags do not land on each other on the floor between.
+  expect('the UP tag hangs off the far side of the walk line', calls(ctx, 'fillText')[0][2] > 0, true);
+  const own = recordingCtx();
+  R.drawStairs2D(own, toS, stairsEnv({ roleFor: () => 'own' }));
+  expect('its own floor still reads DN', calls(own, 'fillText')[0][0].startsWith('DN — 14R'), true);
+  expect('on the near side', calls(own, 'fillText')[0][2] < 0, true);
+  // THE WALK LINE ITSELF ENDS AT THE FOOT, so one lineTo there is the line;
+  // the arrowhead's tip is a second. Its own floor has both at the foot and
+  // the landing floor has the second one at the top instead.
+  const at = (ctx, p) => calls(ctx, 'lineTo').filter(a => a.length === 2
+    && Math.abs(a[0] - toS(p).x) < 0.01 && Math.abs(a[1] - toS(p).y) < 0.01).length;
+  expect('with the arrowhead at the foot of the walk', at(own, { x: 9.5, z: 1.5 }), 2);
+  expect('and the landing floor\'s arrowhead at the top instead', at(ctx, { x: 0.5, z: 1.5 }), 1);
+  expect('not at its foot', at(ctx, { x: 9.5, z: 1.5 }), 1);
+  const plain = recordingCtx();
+  R.drawStairs2D(plain, toS, stairsEnv());
+  expect('and a caller that says nothing gets DN, as before', calls(plain, 'fillText')[0][0].startsWith('DN — 14R'), true);
+});
+suite('drawStairs2D', 'a stair under this floor is drawn lighter, with no walk line and no tag', R => {
+  const ctx = recordingCtx();
+  R.drawStairs2D(ctx, toS, stairsEnv({ roleFor: () => 'below' }));
+  expect('the treads are still drawn', count(ctx, 'stroke') > 0, true);
+  expect('at the ghost weight', sets(ctx, 'globalAlpha').some(a => Math.abs(a - 0.45) < 0.01), true);
+  expect('with no tag', count(ctx, 'fillText'), 0);
+  const own = recordingCtx();
+  R.drawStairs2D(own, toS, stairsEnv({ roleFor: () => 'own' }));
+  expect('where its own floor draws the walk line too', count(own, 'stroke') > count(ctx, 'stroke'), true);
+});
+
 suite('drawStairs2D', 'every stair in the list is drawn, not just the first', R => {
   const ctx = recordingCtx();
   R.drawStairs2D(ctx, toS, stairsEnv({ stairs: [STAIR, { ...STAIR, start: { x: 20, y: 0, z: 0 } }] }));
@@ -3588,6 +3630,18 @@ function coverage() {
         '    ctx.beginPath();\n    ctx.moveTo(a.x, a.y);')],
     ['drawBeam2D does not say a beam below is below',
       src => src.replace(" + (below ? ' BELOW' : '')", '')],
+    // WHICH FLOOR IS LOOKING AT THE STAIR (Movie, 16 Oct).
+    ['drawStairs2D reads the stair landing here as going DN',
+      src => src.replace("      const up = role === 'lands';", '      const up = false;')],
+    ['drawStairs2D tags the stair under this floor',
+      src => src.replace("      if (role === 'below') { ctx.restore(); return; }\n", '')],
+    ['drawStairs2D draws the stair under this floor at full weight',
+      src => src.replace("      if (role === 'below') ctx.globalAlpha *= STAIR_BELOW_ALPHA;\n", '')],
+    ['drawStairs2D hangs the UP tag on the DN tag\'s side',
+      src => src.replace("          up ? { font, offset: -3, baseline: 'top' } : { font, offset: 3 });", '          { font, offset: 3 });')],
+    ['drawStairs2D turns the arrow round for its own floor too',
+      src => src.replace("      const wa = up ? walk[1] : walk[walk.length - 2];", '      const wa = walk[1];')
+        .replace("      const wb = up ? walk[0] : walk[walk.length - 1];", '      const wb = walk[0];')],
     // THE JOIST CALLOUT (Movie, 16 Oct).
     ['drawJoistSpans2D draws the span with no arrowheads',
       src => src.replace('      arrow(a, angle + Math.PI);\n      arrow(b, angle);\n', '')],

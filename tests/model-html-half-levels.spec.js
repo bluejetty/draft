@@ -69,11 +69,18 @@ test('the 0.5 floor shows MAIN FL\'s walls, which it cannot pick', async ({ page
   await expect(page.locator('#readout')).toContainText(/walls 0\b/);
 });
 
-test('a house with no half-floor draws as before: the 2ND FL is not MAIN FL\'s partner', async ({ page }) => {
+// RE-PINNED (17 Oct): this used to assert MAIN FL's stair ink did not move
+// when the 2ND FL's stair was present, because the 2ND FL is not a half-floor
+// partner to ghost. It still is not -- but a floor now shows the stair that
+// LANDS on it, going UP, at full weight (Movie, 16 Oct: "MAIN shows main->2nd
+// and any main->basement"; tests/stairs-per-floor.spec.js), so the 2ND FL's
+// stair adds ink here. What the half-level rule must still not do is ghost
+// it: the ink gained is a whole stair's, not a faded one's.
+test('a house with no half-floor: MAIN FL draws the 2ND FL stair landing on it, not as a ghost', async ({ page }) => {
   await load(page, { ...BUNGALOW, stairs: BUNGALOW.stairs.filter(st => st.levelId === 3) }, 3);
   const own = await stairInk(page);
   await load(page, BUNGALOW, 3);
-  expect(Math.abs(await stairInk(page) - own)).toBeLessThan(20);
+  expect(await stairInk(page), 'the 2ND FL stair lands here and is drawn').toBeGreaterThan(own + 100);
 });
 
 // THE BASEMENT PLAN SHOWS THE FOUNDATION IT STANDS IN (Movie, 7 Oct): "show

@@ -259,10 +259,13 @@ if (!window.DraftPlanComposition) {
     // and this puts the filtered ones in. The alternative was a caller
     // filtering by level and view for itself, which is the one job this module
     // exists to stop being written twice.
+    // THE CALLER MAY HAVE PICKED THEM ALREADY (`stairsShown`, layout-plan):
+    // a plan shows the stairs landing on it and the ones under it too
+    // (Movie, 16 Oct), which a level filter here could not know about.
     if (env.stairEnv) {
       onLayer(ctx, 'A-STR');
       render.drawStairs2D(ctx, toS,
-        { ...env.stairEnv, stairs: pick(env.stairs, { strict: true }) });
+        { ...env.stairEnv, stairs: Array.isArray(env.stairsShown) ? env.stairsShown : pick(env.stairs, { strict: true }) });
     }
     if (env.cutMarkEnv) { onLayer(ctx, 'A-SECT-MARK'); render.drawCutMarks2D(ctx, toS, env.cutMarkEnv); }
     if (env.outlineEnv) { onLayer(ctx, 'OUTLINE'); render.drawOutlines2D(ctx, toS, env.outlineEnv); }

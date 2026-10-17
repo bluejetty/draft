@@ -244,7 +244,43 @@ if (!window.DraftStairGeometry) {
     };
   };
 
+  // ── WHICH STAIRS A PLAN SHOWS, AND HOW (Movie, 16 Oct) ─────────────────
+  //
+  // "BASEMENT shows main->basement only; MAIN shows main->2nd and any
+  // main->basement; 2ND FL shows main->2nd normal weight and main->basement
+  // lighter." Generalised: a floor shows the stairs that START on it (going
+  // DN) and the stairs that LAND on it (going UP) at normal weight, a stair
+  // entirely below it lighter, and never one above it. UP / DN and the riser
+  // tag only on the floors a stair serves.
+  //
+  // A stair is filed on the floor it descends FROM (stairDescent above), and
+  // lands on the floor under that in the ladder -- the lowest floor's lands
+  // on the basement plan (level 1), which is not a floor of the ladder but
+  // is a plan a drafter looks at.
+  const BASEMENT_PLAN_ID = 1;
+  const stairLandingLevelId = (levelId, floors) => {
+    const idx = (floors || []).findIndex(level => Number(level.id) === Number(levelId));
+    if (idx < 0) return null;
+    return idx === 0 ? BASEMENT_PLAN_ID : Number(floors[idx - 1].id);
+  };
+  const stairRoleOn = (stair, levelId, floors) => {
+    if (!stair) return null;
+    if (Number(stair.levelId) === Number(levelId)) return 'own';
+    const landing = stairLandingLevelId(stair.levelId, floors);
+    if (landing != null && landing === Number(levelId)) return 'lands';
+    const ladder = [BASEMENT_PLAN_ID, ...(floors || []).map(level => Number(level.id))];
+    const here = ladder.indexOf(Number(levelId)), top = ladder.indexOf(Number(stair.levelId));
+    if (here < 0 || top < 0) return null;
+    return top < here ? 'below' : null;
+  };
+  const stairsShownOn = (levelId, stairs, floors) => (Array.isArray(stairs) ? stairs : [])
+    .map(stair => ({ stair, role: stairRoleOn(stair, levelId, floors) }))
+    .filter(entry => entry.role);
+
   window.DraftStairGeometry = Object.freeze({
+    stairLandingLevelId,
+    stairRoleOn,
+    stairsShownOn,
     stairLayout,
     stairLandFt,
     stairDescent,

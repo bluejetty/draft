@@ -1130,6 +1130,13 @@ if (!window.DraftLayoutPlan) {
       floorFtFor: id => LEVELS.levelFloorFt(LEVELS.levelAssemblyFor(saved?.levelAssemblies, id)),
       wallTopFtFor: (id, forView) => LEVELS.levelWallTopFt(of('walls'), id, forView),
     } : null;
+    // THE STAIRS THIS LEVEL'S PLAN SHOWS, by role (stair-geometry
+    // stairsShownOn): only the plan's stairs, which is where a stair lives.
+    const stairRoles = new Map(stairLevels && typeof stairs.stairsShownOn === 'function'
+      ? stairs.stairsShownOn(levelId, of('stairs').filter(stair =>
+        (stair.view || 'plan') === (view || 'plan')), stairLevels.floors)
+        .map(entry => [entry.stair, entry.role])
+      : []);
 
     // ── THE GATE GETS ITS HANDLE ────────────────────────────────────────
     //
@@ -1298,8 +1305,14 @@ if (!window.DraftLayoutPlan) {
         layoutFor: stair => stairs.stairCurrentLayout(stair, stairLevels),
         partsFor: (stair, layout) => stairs.stairPlanParts(stair, layout),
         formatInchesOnly: fmt.formatInchesOnly,
+        roleFor: stair => (stairRoles.get(stair) || 'own'),
       } : null,
       stairs: of('stairs'),
+      // WHICH STAIRS THIS SHEET SHOWS, AND HOW (Movie, 16 Oct; stair-geometry
+      // stairsShownOn): its own going DN, the ones landing on it going UP,
+      // the ones entirely under it lighter -- the same answer MODEL gives.
+      stairsShown: !shell && stairLevels && typeof stairs.stairsShownOn === 'function'
+        ? [...stairRoles.keys()] : null,
 
       // FIXTURES -- which is what a WASHROOM actually is on a plan.
       //
