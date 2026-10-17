@@ -2128,6 +2128,9 @@
      detached garage. The bone reads it to know whether there is anything
      left to offer. -->
 <script src="./building-bodies.js"></script>
+<!-- THE DOOR BUCKS on a garage's foundation plan: the doors on its walls plan,
+     projected onto the concrete under them (Movie, 16 Oct). -->
+<script src="./door-bucks.js"></script>
 <!-- BUILD HOUSE's derivations, pure: an outline in, wall runs and the
      interior reference side out. The old page builds from the same module, so
      a house raised here and a house raised there cannot disagree about which
@@ -3990,6 +3993,36 @@
       ctx.beginPath(); ctx.arc(at.x, at.y, 6, 0, Math.PI * 2); ctx.stroke();
       ctx.restore();
     }
+  };
+
+  // THE DOOR BUCKS ON THE FOUNDATION VIEW (Movie, 16 Oct): "DOOR BUCKS at
+  // the man door and each garage door, 2" wider than the door each side ...
+  // the slab pours through the buck in the slab's light blue. The inside
+  // edge of the door buck, below the slab, is a lighter line." The garage's
+  // doors live on its walls plan and the concrete under them is a closed
+  // ring, so door-bucks.js projects each door onto the concrete beneath;
+  // the sheet (layout-plan) asks the same module. `data-door-bucks` on the
+  // plan says how many were drawn, for a spec to read.
+  const paintDoorBucks = () => {
+    const DB = window.DraftDoorBucks;
+    const R = window.DraftRender2D;
+    const G = window.DraftGeometry2D;
+    const onFoundation = activeViewId() === 'foundation';
+    const bucks = onFoundation && DB && R.drawDoorBucks2D ? DB.doorBucks({
+      walls: drawing?.walls || [],
+      fenestrations: drawing?.fenestrations || [],
+      thicknessFt: openingThicknessFt(),
+      faceOffsets: G.wallFaceOffsets,
+      concreteLevelId: activeLevelId(),
+    }) : [];
+    canvas.setAttribute('data-door-bucks', String(bucks.length));
+    if (!bucks.length) return;
+    R.drawDoorBucks2D(ctx, toS, bucks, {
+      paperColor: skin['surface-page'],
+      slabFill: skin['draw-floor'],
+      wallInk: skin['draw-wall-edge'] || skin['ink-primary'],
+      belowAlpha: 0.4,
+    });
   };
 
   const paintWalls = () => {
@@ -6063,6 +6096,8 @@
         // The WC tile under the walls, so their fill stops it at the face.
         paintWetFloors();
         paintLines(); paintWalls();
+        // THE DOOR BUCKS, over the concrete they are cut from (Movie, 16 Oct).
+        paintDoorBucks();
         // Fixtures ride ON the walls, so they go after them and before the
         // annotation -- the slot the bone puts them in (MODEL.dc.html:6993,
         // straight after the wall and opening passes and well before the
