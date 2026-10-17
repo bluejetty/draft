@@ -405,7 +405,10 @@ if (!window.DraftPlanComposition) {
         if (isWindow ? !showWin : (opening.type !== 'door' || !showDoor)) return;
         const label = FL.fenLabelForOpening(opening, { exteriorWall: isWindow, units: env.units });
         if (!label) return;
-        const line = FL.openingTagLine(opening, geometry, outlineFor(opening.levelId));
+        // AND WITH NO OUTLINE, OFF THE WALL AWAY FROM THE LEVEL'S MIDDLE,
+        // as MODEL does (fen-labels planTagLine, wallsCentre).
+        const line = FL.openingTagLine(opening, geometry, outlineFor(opening.levelId),
+          { centre: FL.wallsCentre ? FL.wallsCentre(walls) : null });
         if (!line) return;
         onLayer(ctx, isWindow ? 'A-DIMS-WIN' : 'A-DIMS-DOOR');
         R.labelAlongLine2D(ctx, toS(line.a), toS(line.b), label,

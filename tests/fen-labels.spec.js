@@ -59,9 +59,17 @@ test('the formatter encodes every quirk in the ladder', async ({ page }) => {
         { type: 'door', width: 3, headHeight: (6 * 12 + 8) / 12 }, { exteriorWall: false }),
       window: fen.fenLabelForOpening(
         { type: 'window', width: 2, sillHeight: 2.5, headHeight: 5.5 }, { exteriorWall: true }),
+      // A WINDOW WITH NO HEIGHT TO SAY STILL SAYS ITS WIDTH (Movie, 16 Oct:
+      // a MAIN FL window with no tag at all). Not the standard height -- a
+      // size nobody set is not written on a construction drawing.
+      wNoHeight: fen.fenLabel({ type: 'window', widthFt: 3 }),
+      wFlat: fen.fenLabelForOpening(
+        { type: 'window', width: 3, sillHeight: 2, headHeight: 2 }, { exteriorWall: true }),
       defaults: fen.normaliseFenStandards(null),
     };
   });
+  expect(labels.wNoHeight, 'width only, no height invented').toBe('W 36');
+  expect(labels.wFlat, 'a head at the sill is no height either').toBe('W 36');
   expect(labels.garageDouble).toBe('G 16W x 8H');
   expect(labels.garageSingle).toBe('G 9W x 8H');
   expect(labels.ed36).toBe('D36');
