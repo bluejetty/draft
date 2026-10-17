@@ -984,6 +984,45 @@ if (!window.DraftRender2D) {
     return sides;
   }
 
+  // THE DOOR BUCKS ON A GARAGE'S FOUNDATION PLAN (Movie, 16 Oct): each one a
+  // door's width plus 2" a side across the concrete, read off door-bucks.js.
+  // The concrete's hatch is knocked out to the paper (env.paperColor), the
+  // slab pours through in its own light blue (env.slabFill), the two ends
+  // across the wall and the outside face are drawn in the wall's ink, and
+  // the inside face -- below the slab -- lighter (env.belowAlpha).
+  function drawDoorBucks2D(ctx, toS, bucks, env = {}) {
+    if (!Array.isArray(bucks) || !bucks.length) return;
+    const ink = env.wallInk || '#1d1f20';
+    bucks.forEach(buck => {
+      const at = (along, across) => toS({
+        x: buck.centre.x + buck.along.x * along + buck.across.x * across,
+        y: 0,
+        z: buck.centre.z + buck.along.z * along + buck.across.z * across,
+      });
+      const c = [at(-buck.halfLen, buck.startOff), at(buck.halfLen, buck.startOff),
+        at(buck.halfLen, buck.endOff), at(-buck.halfLen, buck.endOff)];
+      const line = (a, b) => { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke(); };
+      ctx.save();
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      c.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)));
+      ctx.closePath();
+      if (env.paperColor) { ctx.fillStyle = env.paperColor; ctx.fill(); }
+      if (env.slabFill) { ctx.fillStyle = env.slabFill; ctx.fill(); }
+      ctx.strokeStyle = ink;
+      ctx.lineWidth = 1;
+      // THE ENDS, across the wall: where the concrete stops.
+      line(c[0], c[3]);
+      line(c[1], c[2]);
+      // THE OUTSIDE FACE in ink; THE INSIDE FACE, below the slab, lighter.
+      const insideIsEnd = buck.insideFace !== 'start';
+      line(insideIsEnd ? c[0] : c[3], insideIsEnd ? c[1] : c[2]);
+      ctx.globalAlpha *= Number.isFinite(env.belowAlpha) ? env.belowAlpha : 0.4;
+      line(insideIsEnd ? c[3] : c[0], insideIsEnd ? c[2] : c[1]);
+      ctx.restore();
+    });
+  }
+
   function drawBeam2D(ctx, toS, beam, options = {}, env) {
     if (!beam?.start || !beam?.end) return;
     // `tag`: undefined keeps the old label, -across on every beam; 0 or
@@ -3101,6 +3140,7 @@ if (!window.DraftRender2D) {
     drawCutMarks2D,
     drawCutPreview2D,
     drawBeam2D,
+    drawDoorBucks2D,
     drawJoistSpans2D,
     beamTagSides,
     drawColumn2D,

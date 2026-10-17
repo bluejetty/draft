@@ -363,6 +363,11 @@ test.describe('MODEL.html tier 1', () => {
       // branch that loads it -- an undeclared dependency is undeclared no
       // matter whose commit brought it.
       './building-bodies.js',
+      // door-bucks.js projects the garage doors onto the FOUNDATION plan as
+      // DOOR BUCKS (2" past the door each side, through the concrete under
+      // the door's wall). MODEL paints them on its foundation view and LAYOUT
+      // on the FOUNDATION sheet off the same module, so it is declared here.
+      './door-bucks.js',
       // build-house.js arrived with the BONE that builds the drafter's own
       // outline, and it is the DELETES-A-DUPLICATE kind this list should grow
       // by. Walking a loop into wall runs is a few lines and reading its

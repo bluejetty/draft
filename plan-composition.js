@@ -207,6 +207,14 @@ if (!window.DraftPlanComposition) {
     pieces.forEach(wall => { onLayer(ctx, 'A-WALL-PATT'); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'fill', env.wallEnv); });
     pieces.forEach(wall => { onLayer(ctx, wallLayer(wall)); render.drawWallSeg2D(ctx, toS, wall, false, joins, 'stroke', env.wallEnv); });
 
+    // THE DOOR BUCKS, over the concrete they are cut from (Movie, 16 Oct):
+    // worked out by the caller (door-bucks.js through layout-plan), painted
+    // here after the walls so the knock-out lands on the hatch.
+    if (Array.isArray(env.doorBucks) && env.doorBucks.length && typeof render.drawDoorBucks2D === 'function') {
+      onLayer(ctx, 'A-WALL-EXT');
+      render.drawDoorBucks2D(ctx, toS, env.doorBucks, env.buckEnv || {});
+    }
+
     drawOpenings(ctx, toS, env, walls, shows);
 
     // FIXTURES RIDE THEIR HOST WALL, so the painter is handed the wall as its

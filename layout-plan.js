@@ -1275,6 +1275,15 @@ if (!window.DraftLayoutPlan) {
       // to say about the look of an opening, and it is why render-2d's painter
       // takes colours at all.
       openingEnv: { openingGapColor: paperColor },
+      // THE DOOR BUCKS ON A FOUNDATION SHEET (Movie, 16 Oct; door-bucks.js):
+      // the garage's doors on the walls plan, projected onto the concrete
+      // under them. The slab's own wash pours through.
+      doorBucks: view === 'foundation' && !shell && window.DraftDoorBucks
+        ? window.DraftDoorBucks.doorBucks({
+          walls: of('walls'), fenestrations: of('fenestrations'),
+          thicknessFt, faceOffsets: geo.wallFaceOffsets, concreteLevelId: levelId,
+        }) : [],
+      buckEnv: { paperColor, slabFill: 'rgba(89,128,166,0.16)', wallInk: '#1d1f20', belowAlpha: 0.4 },
       wallEnv: { wallTypes: WALL_TYPES, solid: listing },
       floorEnv: {
         cornerMarks: false,
