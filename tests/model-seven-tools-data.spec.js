@@ -271,17 +271,24 @@ test.describe('the seven small tools — preserved, painted, linked', () => {
       console.log('PAINTER SURFACE:', painterNames,
         '| beam painter:', beamPainter, '| column painter:', columnPainter);
 
+      // THE BEAM AND COLUMN REACH THEIR PAINTERS TOO, since the overhead
+      // convention (Movie, 16 Oct): the walls plan draws the beam this level
+      // carries -- the one the BEAM tool filed on its floor view -- dash-dot
+      // as `above`, with its post under it. Before that the walls plan called
+      // no beam or column painter at all, and this row pinned that.
       expect({
         fixture: reachedBy('drawFixture2D', (after.fixtures || [])[0]?.id),
         shape: reachedBy('drawShape2D', (after.shapes || [])[0]?.id),
         annotation: reachedBy('drawNoteScreen2D', (after.notes || [])[0]?.id),
+        beam: reachedBy('drawBeam2D', (after.beams || [])[0]?.id),
+        column: reachedBy('drawColumn2D', (after.columns || [])[0]?.id),
         beamPainterExists: beamPainter !== null,
         columnPainterExists: columnPainter !== null,
-      }, 'which of the seven reached a painter of their own — MODEL.html calls '
-        + 'no beam or column painter at all')
+      }, 'which of the seven reached a painter of their own -- the walls plan '
+        + 'draws the beam it carries as above, and its post')
         .toEqual({
-          fixture: true, shape: true, annotation: true,
-          beamPainterExists: false, columnPainterExists: false,
+          fixture: true, shape: true, annotation: true, beam: true, column: true,
+          beamPainterExists: true, columnPainterExists: true,
         });
 
       // LINKED — every one of the seven carries a levelId, and the fixture also
