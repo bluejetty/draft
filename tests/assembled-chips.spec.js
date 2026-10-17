@@ -31,10 +31,12 @@ const openBuild = async page => {
 test('the kitchen and bath presets ride beside their titles, and nothing else does',
   async ({ page }) => {
     await openBuild(page);
+    // KITCHEN L1 and WC BF1 joined their rows on 17 Oct (Movie's North
+    // Point studio suite); each is the same kind of thing as its neighbour.
     await expect(page.locator('[data-assembled-row="kitchen"] .sel-chip'))
-      .toHaveText(['L PRESET']);
+      .toHaveText(['L PRESET', 'KITCHEN L1']);
     await expect(page.locator('[data-assembled-row="bath"] .sel-chip'))
-      .toHaveText(['BATH A', 'BATH B']);
+      .toHaveText(['BATH A', 'BATH B', 'WC BF1']);
     // A GROUP WITH NO ASSEMBLED UNIT LOOKS EXACTLY AS IT DID. The row is
     // there and empty, which collapses -- LAUNDRY must not grow a gap waiting
     // for a preset nobody has drawn.
