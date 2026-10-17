@@ -72,8 +72,8 @@ const MUTANTS = [
 
   { file: 'MODEL.html',
     name: 'the roof is never asked to meet the wall: the cut is not passed',
-    find: '          buildType: roofType, notch: houseRoofNotch, collect }));',
-    with: '          buildType: roofType, notch: null, collect }));',
+    find: '          buildType: roofType, notch: houseRoofNotch, collect,\n',
+    with: '          buildType: roofType, notch: null, collect,\n',
     test: 'the roof dies into the 2nd-storey wall' },
 
   { file: 'MODEL.html',
