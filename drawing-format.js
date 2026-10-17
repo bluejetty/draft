@@ -2029,7 +2029,7 @@ if (!window.DraftDrawingFormat) {
   // on a numbered page; `auto` marks a composition the bone dealt, which a
   // rebuild may replace — the flag clears on the drafter's first manual edit
   // so a hand-adjusted layout is never thrown away.
-  const LAYOUT_PAPER_KEYS = ['11x17', '8.5x11'];
+  const LAYOUT_PAPER_KEYS = ['11x17', '8.5x11', '24x36', '22x34'];
   const tbName = value => (typeof value === 'string' && value && value.length <= 64 ? value : null);
   const LAYOUT_ELEV_IDS = ['E1', 'E2', 'E3', 'E4'];
   const layout = (raw, levelIds, cutIds = new Set()) => {

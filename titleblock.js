@@ -37,12 +37,14 @@ if (!window.DraftTitleblock) {
   // 8.5x11 and 11X17 only ones we need now".
   //
   // SO IT IS A SET PER SHEET: three shapes (square strip, bottom band, round
-  // strip) for each of the four sheets this shop prints -- 11x17 and 8.5x11,
-  // each way up. Twelve frames, and a drafter sees three: the picker is
-  // filtered to the sheet in front of him, which is what keeps his list the
-  // exact three he wrote down. The LETTER is the orientation, the NUMBER is
-  // the paper -- 01 is 11x17, 02 is 8.5x11 -- and neither has to be
-  // remembered, because the wrong ones are never offered.
+  // strip) for each sheet this shop prints -- 11x17 and 8.5x11 at first,
+  // and since 17 Oct the two D sheets, 24x36 (ARCH D, his North Point set)
+  // and 22x34 (ANSI D) -- each way up. Twenty-four frames, and a drafter
+  // sees three: the picker is filtered to the sheet in front of him, which
+  // is what keeps his list the exact three he wrote down. The LETTER is the
+  // orientation, the NUMBER is the paper -- 01 is 11x17, 02 is 8.5x11, 03
+  // is 24x36, 04 is 22x34 -- and neither has to be remembered, because the
+  // wrong ones are never offered.
   //
   // EACH SET CARRIES ITS OWN WIDTHS, which is the whole reason a set per
   // sheet exists rather than one frame stretched over all four. A 1.15" strip
@@ -56,12 +58,21 @@ if (!window.DraftTitleblock) {
   // A PORTRAIT STRIP IS THE SHORT EDGE NOW: 11" of height on a portrait
   // 11x17 against 16" landscape, so the same cells have less room and the
   // strip is widened a little to get it back.
+  //
+  // THE D SHEETS GET A WIDER BLOCK, for the same reason the letter sheets
+  // got a narrower one. A 1.15" strip on a 36" sheet is 3.2% of it, and the
+  // lettering in it would be the one thing on a D sheet still sized for a
+  // ledger: a 2" strip and a 2.25" band are what a D-size titleblock is
+  // drawn at in practice, and the corner radius grows with the sheet. The
+  // same judgement, not arithmetic.
   const frame = (id, paper, orientation, shape, extra) => Object.freeze({
     id, label: id, paper, orientation, shape, ...extra,
   });
-  const STRIP = Object.freeze({ wide: 1.15, letter: 0.95, portrait: 1.3, portraitLetter: 1.05 });
-  const BAND = Object.freeze({ wide: 1.5, letter: 1.2 });
+  const STRIP = Object.freeze({ wide: 1.15, letter: 0.95, portrait: 1.3, portraitLetter: 1.05,
+    d: 2, portraitD: 2.2 });
+  const BAND = Object.freeze({ wide: 1.5, letter: 1.2, d: 2.25 });
   const ROUND_IN = 0.35;
+  const ROUND_D_IN = 0.5;
   const FRAMES = Object.freeze([
     // ── 11x17 LANDSCAPE, the three he listed. LSQUARE01 is the shape ROUGH
     //    DRAFTER has always worn, so a drawing that never chose opens on it;
@@ -95,6 +106,22 @@ if (!window.DraftTitleblock) {
       { placement: 'bottom', bandHIn: BAND.letter }),
     frame('PROUND02', '8.5x11', 'portrait', 'round',
       { placement: 'right', stripWIn: STRIP.portraitLetter, cornerRadiusIn: ROUND_IN, arrowDivider: false }),
+    // ── THE D SHEETS (17 Oct): 03 is 24x36, 04 is 22x34, the same three
+    //    shapes each way up, at the D block's widths.
+    ...[['03', '24x36'], ['04', '22x34']].flatMap(([n, paper]) => [
+      frame(`LSQUARE${n}`, paper, 'landscape', 'square',
+        { placement: 'right', stripWIn: STRIP.d, cornerRadiusIn: 0, arrowDivider: true }),
+      frame(`LBAND${n}`, paper, 'landscape', 'band',
+        { placement: 'bottom', bandHIn: BAND.d }),
+      frame(`LROUND${n}`, paper, 'landscape', 'round',
+        { placement: 'right', stripWIn: STRIP.d, cornerRadiusIn: ROUND_D_IN, arrowDivider: false }),
+      frame(`PSQUARE${n}`, paper, 'portrait', 'square',
+        { placement: 'right', stripWIn: STRIP.portraitD, cornerRadiusIn: 0, arrowDivider: true }),
+      frame(`PBAND${n}`, paper, 'portrait', 'band',
+        { placement: 'bottom', bandHIn: BAND.d }),
+      frame(`PROUND${n}`, paper, 'portrait', 'round',
+        { placement: 'right', stripWIn: STRIP.portraitD, cornerRadiusIn: ROUND_D_IN, arrowDivider: false }),
+    ]),
   ]);
 
   // THE THREE THAT FIT THE SHEET IN FRONT OF HIM. An unknown paper or
