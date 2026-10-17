@@ -348,23 +348,47 @@ test('MODIFIED BILEVEL: the room over the garage, its landing, the third flight 
     // would need to shift to only the right side of the gable on the front
     // entry side".
     //
-    // So the ENDS are gables now: the ridge runs front to back, both faces
-    // shed sideways to the eaves, and the only arc left is that ridge. The
-    // peak shifting is not a rule -- south of the cut the roof is only the
-    // strip beside the room, so the ridge of that stretch sits in the middle
-    // of the strip, which is to the right of the house's own centre line.
+    // So the ends WERE gables, until 16 Oct, when he drew the back of his
+    // own house as a hip ("the back on this one could have been a hip",
+    // "should be hip at first if possible"): geometry-2d's roofWingKinds
+    // reads the ring as wings now, and an end standing in open air hips
+    // while an end that lands on anything as tall gables. The back is open
+    // air and hips; the four edges cut against the room's walls stay flush
+    // gables, so no face runs at the room; and the front strip beside the
+    // room runs flush along the landing's whole wall (its split entry is
+    // under the roof), a shed rising to that wall with a hip at its free end.
     const main = d.roofs.find(r => r.sourceLevelId == null && !r.garage);
     expect(main.points.map(p => [p.x, p.z])).toEqual([[-18, -22], [18, -22], [18, 19], [2, 19],
       [2, bottomZ], [-4, bottomZ], [-4, 22], [-18, 22]]);
-    expect(main.edges).toEqual(['gable', 'eave', 'gable', 'gable', 'gable', 'gable', 'gable', 'eave']);
+    expect(main.edges).toEqual(['eave', 'eave', 'gable', 'gable', 'gable', 'gable', 'eave', 'eave']);
     // THE OVERHANGS DO NOT MOVE: a gable END is open air with a rake board on
     // it, and only the four edges that die into the room's wall are flush.
     expect(main.edgeOverhang).toEqual([2, 2, 0, 0, 0, 0, 2, 2]);
     const lines = await page.evaluate(roof => window.DraftGeometry2D.roofSkeleton(roof)
       .map(a => [a.a, a.b].map(p => [+p.x.toFixed(2), +p.z.toFixed(2)]).sort((p, q) => p[0] - q[0] || p[1] - q[1])),
     main);
-    expect(lines).toContainEqual([[0, -22], [0, bottomZ]]);
-    expect(lines.length, 'one ridge, and no hip valley to discharge at the room').toBe(1);
+    // The ridge still runs to the landing's wall -- from the back hip's
+    // apex now, not from the back eave -- and NO VALLEY: every line that
+    // starts at ground (t = 0) starts at a convex corner of the ring, which
+    // is a hip; a valley would start at an inside corner, and the inside
+    // corners here are the room's, where he saw the water.
+    expect(lines.some(([a, b]) => a[0] === 0 && b[0] === 0 && b[1] === bottomZ && a[1] < b[1]),
+      'the ridge runs to the landing wall').toBe(true);
+    const ring = main.points;
+    const area = ring.reduce((sum, p, i) => { const q = ring[(i + 1) % ring.length]; return sum + p.x * q.z - q.x * p.z; }, 0);
+    const convexAt = pt => ring.some((p, i) => {
+      if (Math.abs(p.x - pt.x) > 0.01 || Math.abs(p.z - pt.z) > 0.01) return false;
+      const a = ring[(i + ring.length - 1) % ring.length], b = ring[(i + 1) % ring.length];
+      const cross = (p.x - a.x) * (b.z - p.z) - (p.z - a.z) * (b.x - p.x);
+      return Math.sign(cross) === Math.sign(area);
+    });
+    const arcs = await page.evaluate(roof => window.DraftGeometry2D.roofSkeleton(roof)
+      .map(arc => ({ a: arc.a, b: arc.b, ta: arc.ta, tb: arc.tb })), main);
+    arcs.forEach(arc => {
+      [[arc.a, arc.ta], [arc.b, arc.tb]].forEach(([pt, t]) => {
+        if (t < 1e-6) expect(convexAt(pt), `a line from the ground at (${pt.x},${pt.z}) is a hip, not a valley`).toBe(true);
+      });
+    });
 
     // And the garage's walls reach the room's floor.
     d.walls.filter(w => w.body === 'garage' && (w.view || 'plan') === 'plan')

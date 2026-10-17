@@ -65,38 +65,36 @@ const MUTANTS = [
   { file: 'MODEL.html',
     name: 'the roof ring is taken straight from the loop again, spike and all',
     find: '    const cleaned = G.loopWithoutSpikes(loop);\n'
-      + '    const ring = cleaned.points;',
+      + '    let ring = cleaned.points;',
     with: '    const cleaned = G.loopWithoutSpikes(loop);\n'
-      + '    const ring = loop.map(pt => ({ x: pt.x, z: pt.z }));',
+      + '    let ring = loop.map(pt => ({ x: pt.x, z: pt.z }));',
     test: 'the roof dies into the 2nd-storey wall' },
 
   { file: 'MODEL.html',
     name: 'the roof is never asked to meet the wall: the cut is not passed',
-    find: '          buildType: roofType, notch: houseRoofNotch }));',
-    with: '          buildType: roofType, notch: null }));',
+    find: '          buildType: roofType, notch: houseRoofNotch, collect }));',
+    with: '          buildType: roofType, notch: null, collect }));',
     test: 'the roof dies into the 2nd-storey wall' },
 
   { file: 'MODEL.html',
     name: 'the cut goes back to running AFTER the chamfer, which is the '
       + 'order that made the whole thing silent',
-    find: '    const shaped = notched || plain;',
-    with: '    const shaped = plain;',
+    find: '    const cut = notched || plain;',
+    with: '    const cut = plain;',
     test: 'the roof dies into the 2nd-storey wall' },
 
   { file: 'MODEL.html',
     name: 'the edges cut against the wall keep their two feet of overhang, '
       + 'so a rake hangs inside the room',
-    find: "      edges: cut.onCut.map(onWall => (onWall ? 'gable' : 'eave')),\n"
-      + '      edgeOverhang: cut.onCut.map(onWall => (onWall ? 0 : overhangFt)),',
-    with: "      edges: cut.onCut.map(onWall => (onWall ? 'gable' : 'eave')),\n"
-      + '      edgeOverhang: cut.onCut.map(() => overhangFt),',
+    find: '        if (onWall) return 0;',
+    with: '        if (onWall) return overhangFt;',
     test: 'the roof dies into the 2nd-storey wall' },
 
   { file: 'MODEL.html',
     name: 'the cut edges are left as eaves -- the roof stops at the wall and '
       + 'still drains into it',
-    find: "      edges: cut.onCut.map(onWall => (onWall ? 'gable' : 'eave')),",
-    with: "      edges: cut.onCut.map(() => 'eave'),",
+    find: "        if (onWall) return 'gable';",
+    with: "        if (onWall) return 'eave';",
     test: 'the roof dies into the 2nd-storey wall' },
 
   // AND THE DESIGN THAT WAS ALREADY RIGHT. A fix for a traced house that
@@ -104,9 +102,9 @@ const MUTANTS = [
   { file: 'MODEL.html',
     name: 'the clean trims a corner off the stock design',
     find: '    const cleaned = G.loopWithoutSpikes(loop);\n'
-      + '    const ring = cleaned.points;',
+      + '    let ring = cleaned.points;',
     with: '    const cleaned = G.loopWithoutSpikes(loop);\n'
-      + '    const ring = cleaned.points.slice(0, -1);',
+      + '    let ring = cleaned.points.slice(0, -1);',
     test: 'the stock MOD BILEVEL is exactly where it was' },
 ];
 

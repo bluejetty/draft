@@ -307,6 +307,7 @@ if (!window.DraftLayoutPlan) {
       roofSkeleton: geo.roofSkeleton,
       cutRoofSegment: geo.cutRoofSegment,
       roofWelds: roof => geo.roofWeldSpans(roof, roofs),
+      roofHidden: roof => geo.roofHiddenSpans(roof, roofs),
       surfaceOpeningsFor: (hostType, hostId) => openings.filter(opening =>
         opening.hostType === hostType && opening.hostId === hostId
         && Array.isArray(opening.points) && opening.points.length >= 3),
@@ -1308,6 +1309,7 @@ if (!window.DraftLayoutPlan) {
         // -- so `of('roofs')` is exactly the set that reaches the painter, and
         // a roof cannot be welded to one that is not on the drawing.
         roofWelds: roof => geo.roofWeldSpans(roof, of('roofs')),
+        roofHidden: roof => geo.roofHiddenSpans(roof, of('roofs')),
         surfaceOpeningsFor,
       },
       // SHAPES ARE NOT DRAWN ON A SHEET YET and that is declared rather than

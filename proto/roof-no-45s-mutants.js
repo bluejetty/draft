@@ -18,8 +18,8 @@ const SPEC = 'tests/roof-cricket.spec.js';
 const MUTANTS = [
   { file: 'MODEL.html',
     name: 'the build cuts the cricket again: a 45 at the inside corner',
-    find: '    const shaped = notched || plain;',
-    with: "    const shaped = G.cricketRing((notched || plain).points, (notched || plain).edges, (notched || plain).edgeOverhang, { needsCricket: () => true }) || notched || plain;",
+    find: '    const cut = notched || plain;',
+    with: "    const cut = G.cricketRing((notched || plain).points, (notched || plain).edges, (notched || plain).edgeOverhang, { needsCricket: () => true }) || notched || plain;",
     test: 'the inside corner is a corner' },
 
 ];
